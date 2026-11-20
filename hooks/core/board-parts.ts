@@ -76,12 +76,13 @@ function partsOf(t: BoardTask): Record<string, unknown> {
 
 /**
  * Board `b` as saved: what board.json holds (each done and dropped task as a stub) and each parts file's tasks
- * (by file, relative to the data folder). A task whose id has no number stays whole in board.json.
+ * (by file, relative to the data folder). A task whose id has no number stays whole in board.json, and so does one in
+ * `whole` (T-681: its parts file is missing, so it is not written until the good one is put back).
  */
-export function splitBoard(b: Board): { board: Record<string, unknown>; parts: Map<string, Record<string, Record<string, unknown>>> } {
+export function splitBoard(b: Board, whole?: Set<string>): { board: Record<string, unknown>; parts: Map<string, Record<string, Record<string, unknown>>> } {
   const parts = new Map<string, Record<string, Record<string, unknown>>>()
   const tasks = b.tasks.map(t => {
-    const file = splits(t) ? partsFileOf(t.id) : ''
+    const file = splits(t) && !whole?.has(t.id) ? partsFileOf(t.id) : ''
     if (!file) return t
     const inFile = parts.get(file) ?? {}
     inFile[t.id] = partsOf(t)
@@ -106,27 +107,30 @@ export const safePartsFile = (f: unknown): f is string => typeof f === 'string' 
  * board.json's parsed content `raw` with each stub joined with its parts (read from `files`: each parts file's tasks
  * by name; a file missing from it was not there), its `parts` field gone. Where its board.json fields and its parts
  * both have a field, board.json's wins. `missing`: what could not be found, in words (e.g. "T-612: its history,
- * tries and details are missing from tasks/T-600.json"); such a task loads as its stub alone.
+ * tries and details are missing from tasks/T-600.json"); such a task loads as its stub alone. `stubbed`: those
+ * tasks' ids and parts files, in the same order as `missing` (a save must not write their empty parts over a parts file put back later, T-681).
  */
-export function joinParts(raw: unknown, files: Map<string, Record<string, Record<string, unknown>>>): { raw: unknown; missing: string[] } {
-  if (!isObj(raw) || !Array.isArray(raw.tasks)) return { raw, missing: [] }
+export function joinParts(raw: unknown, files: Map<string, Record<string, Record<string, unknown>>>): { raw: unknown; missing: string[]; stubbed: { id: string; file: string }[] } {
+  if (!isObj(raw) || !Array.isArray(raw.tasks)) return { raw, missing: [], stubbed: [] }
   const missing: string[] = []
+  const stubbed: { id: string; file: string }[] = []
   const tasks = raw.tasks.map(t => {
     if (!isObj(t) || !(PARTS_KEY in t)) return t
     const { [PARTS_KEY]: file, ...stub } = t
     const parts = typeof file === 'string' ? files.get(file)?.[String(t.id)] : undefined
     if (!parts) {
       missing.push(`${String(t.id)}: its history, tries and details are missing from ${String(file)}`)
+      stubbed.push({ id: String(t.id), file: String(file) })
       return stub
     }
     return { ...parts, ...stub }
   })
-  return { raw: { ...raw, tasks }, missing }
+  return { raw: { ...raw, tasks }, missing, stubbed }
 }
 
 /** Whether board.json's parsed content `raw` still has a done or dropped task kept whole (a board from before T-675). */
-export function hasWholeFinished(raw: unknown): boolean {
-  return isObj(raw) && Array.isArray(raw.tasks) && raw.tasks.some(t => isObj(t) && splits(t) && !(PARTS_KEY in t) && !!partsFileOf(String(t.id)))
+export function hasWholeFinished(raw: unknown, held?: Set<string>): boolean {
+  return isObj(raw) && Array.isArray(raw.tasks) && raw.tasks.some(t => isObj(t) && splits(t) && !(PARTS_KEY in t) && !!partsFileOf(String(t.id)) && !held?.has(partsFileOf(String(t.id))))
 }
 
 /** The fields a finished task leaves out of the board view file (OpenCode's TUI reads its parts file when its page opens). */

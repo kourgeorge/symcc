@@ -3,7 +3,7 @@ import { archiveChunkFile, archiveChunks } from '../core/board-parts'
 import { publish } from './lead'
 import { S } from './state'
 import type { Host } from '../host'
-import { fileName, load, locked, now, path, readWhole, safeWrite, writeBoard } from './store'
+import { fileName, isStubbed, load, locked, now, path, readWhole, safeWrite, writeBoard } from './store'
 import { emitTaskEvents } from './events'
 import { tellLead } from './tell'
 
@@ -102,7 +102,9 @@ export async function archiveOld(host: Host, nowMs = Date.now(), force = false):
   const moved = await locked(host, async () => {
     const b = await load(host)
     if (!symccOn(b)) return null
-    const old = toArchive(b, nowMs)
+    // T-681: a task loaded as a stub (its parts file missing) stays: archived now, it would keep no history, and
+    // putting the good parts file back would no longer restore it
+    const old = toArchive(b, nowMs).filter(t => !isStubbed(t.id))
     if (!old.length) return null
     const r = await readArchiveFile(host)
     if (r.broken) {

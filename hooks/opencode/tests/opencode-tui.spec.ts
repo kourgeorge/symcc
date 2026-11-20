@@ -8,7 +8,7 @@
 // OpenTUI (T-500): opencode/tui.ts imports them by their written-out names (what OpenCode swaps for its own copies),
 // and loadTuiRuntime names a package that is missing or lacks a function instead of failing with a bare import error.
 import { test, expect } from 'bun:test'
-import { SETTING_GROUPS, groupSummaryParts, taskActions, settingsKeys, mergeRoles, mergeKinds, when, addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, type Board } from '../../board'
+import { SETTING_GROUPS, groupSummaryParts, taskActions, actionButtonLabel, settingsKeys, mergeRoles, mergeKinds, when, addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, type Board } from '../../board'
 import type { PaneView } from '../../app/state'
 import { ICON } from '../../name'
 import { bandLines, bandDraw, BAND_CLICK_HINT, panelLines, panelKeys, parseViewFile, viewFileText, lineText, actionCommand, answerOptions, OWN_ANSWER, viewDefs, panelTaskActions, TASK_ACTION_COMMANDS, SETTINGS_OPEN, approveSent, APPROVE_SENT_MS, drawnLines, type ViewFile } from '../board-view'
@@ -530,6 +530,112 @@ test('T-584: a task page offers every one of core\'s taskActions with a key (but
   await board.press('v', 's')
   await board.press('x', 's')
   expect(sent).toEqual([{ sessionID: 's', ...expected.done!('T-2') }])
+  board.stop()
+})
+
+test('T-680: a task page shows Claude Code\'s row of buttons ([ Back ] [ Pause ] ...), the scout page [ Back ] [ Edit ] [ Pause ], a question [ Back ]; a click on a button sends what its key sends', async () => {
+  let b: Board = emptyBoard()
+  for (const title of ['running', 'a change', 'broke']) b = addTask(b, { origin: { why: 'a test' }, title, files: ['src/'] }, AT)[0]
+  b = patchTask(b, 'T-1', { status: 'doing' }, AT)
+  b = patchTask(b, 'T-2', { status: 'review' }, AT)
+  b = patchTask(b, 'T-3', { status: 'failed', attempts: 1 }, AT)
+  const scouts = [
+    { name: 'deps', every_minutes: 30, last_run: null, running: true, prompt: 'Check the dependencies.' },
+    { name: 'docs', every_minutes: 60, last_run: null, running: false, paused: true, prompt: 'Look for stale docs.' },
+  ]
+  const view: PaneView = { tasks: b.tasks, working: [{ task: 'T-1', since: NOW - 60_000 }], scouts, mode: 'auto', test_commands: [], max_parallel: 2, max_minutes: 30, auto_retries: 1, driving: true, branch: 'main', branch_note: '', questions: [{ id: 'Q-1', text: 'How often?', options: ['daily'], asked_at: AT }] }
+  const f: ViewFile = { root: '/work/proj', home: '/work', name: 'symcc', version: '0.9.0', written_at: NOW, view }
+  const task = (id: string) => f.view.tasks.find(t => t.id === id)!
+  const buttonRow = (id: string, tab: 'tasks' | 'scouts' = 'tasks') => panelLines(f, { tab, opened: id, cursor: 0 }, NOW, 140).lines.map(lineText).find(l => l.startsWith('[ Back ]'))
+  // the running task: the Claude Code panel's buttons for it (Back, then core's taskActions with its words), but
+  // Watch worker and Copy, which OpenCode can't do
+  expect(buttonRow('T-1')).toBe('[ Back ] [ Pause ] [ Drop ] [ Needs review: off ]')
+  for (const id of ['T-1', 'T-2', 'T-3']) {
+    const claude = ['Back', ...taskActions(task(id), { worker: id === 'T-1' }).map(actionButtonLabel)]
+    expect(buttonRow(id)).toBe(claude.filter(l => l !== 'Watch worker' && l !== 'Copy (y)').map(l => `[ ${l} ]`).join(' '))
+  }
+  expect(buttonRow('T-2')).toBe('[ Back ] [ Approve ] [ Reject ] [ Show changes ] [ Drop ] [ Needs review: off ]')
+  expect(buttonRow('T-3')).toBe('[ Back ] [ Retry ] [ Stash to backlog (z) ] [ Role (l) ] [ Already merged (h) ] [ Drop ] [ Needs review: off ]')
+  // a narrow panel puts the buttons on more rows, never cutting one
+  const narrow = panelLines(f, { opened: 'T-3', cursor: 0 }, NOW, 40).lines.map(lineText)
+  expect(narrow.filter(l => l.startsWith('[ ')).join(' ')).toContain('[ Stash to backlog (z) ]')
+  // the scout pages (as Claude Code's: Back, Run now when it isn't running, Edit, Pause or Resume) and a question's
+  expect(buttonRow('deps', 'scouts')).toBe('[ Back ] [ Edit ] [ Pause ]')
+  expect(buttonRow('docs', 'scouts')).toBe('[ Back ] [ Run now ] [ Edit ] [ Resume ]')
+  expect(buttonRow('Q-1')).toBe('[ Back ]')
+
+  // in the TUI: a click on each button sends the same command as its key (Drop in review, which has no key, drops it)
+  const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)]])
+  const sent: { sessionID: string; name: string; text: string }[] = []
+  const slots: { append: string; render: (input: never) => unknown }[] = []
+  const ctx: TuiContext = {
+    location: { directory: '/work/proj' },
+    theme: {},
+    renderer: { width: 142, height: 200 },
+    client: { session: { command: async input => void sent.push(input) } },
+    keymap: { layer: () => undefined },
+    ui: {
+      toast: { show: () => undefined },
+      dialog: { prompt: async () => 'why', select: async <V,>() => 'general' as V },
+      panel: { open: () => true, close: () => undefined, current: () => undefined },
+      slot: claim => (slots.push(claim as never), () => undefined),
+    },
+  }
+  const board = startTui(ctx, { runtime: fakeRuntime(), readText: async p => files.get(p) ?? Promise.reject(new Error('missing')), every: () => () => undefined, now: () => NOW })
+  await board.refresh()
+  const panel = slots.find(s => s.append === 'session.panel')!.render({ name: BOARD_PANEL, sessionID: 's', width: 142, focused: true, close: () => undefined } as never) as El
+  const buttons = () => rowEls(panel).find(r => r.text.startsWith('[ Back ]'))!.segs.filter(s => s.kids.join('').startsWith('['))
+  const settle = () => new Promise<void>(res => setTimeout(res, 0))
+  const open = async (id: string, tab: 'tasks' | 'scouts' = 'tasks') => {
+    await board.press('t', 's')
+    await board.press('back', 's')
+    if (tab === 'scouts') await board.press('s', 's')
+    expect([board.state().tab, board.state().opened]).toEqual([tab, ''])
+    const ids = panelLines(f, { tab, opened: '', cursor: 0 }, NOW, 140).ids
+    for (let i = 0; i < 9; i++) await board.press('up', 's')
+    for (let i = 0; i < ids.indexOf(id); i++) await board.press('down', 's')
+    await board.press('open', 's')
+    expect(board.state().opened).toBe(id)
+  }
+  const clickButton = async (label: string) => {
+    const seg = buttons().find(s => s.kids.join('') === `[ ${label} ]`)!
+    expect([label, typeof seg?.props.onMouseUp]).toEqual([label, 'function'])
+    ;(seg.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0, stopPropagation: () => undefined })
+    await settle()
+  }
+  const pages: [string, 'tasks' | 'scouts'][] = [['T-1', 'tasks'], ['T-2', 'tasks'], ['T-3', 'tasks'], ['deps', 'scouts'], ['docs', 'scouts']]
+  for (const [id, tab] of pages) {
+    await open(id, tab)
+    const labels = buttons().map(s => s.kids.join('').slice(2, -2))
+    // Approve last (while it runs, the page offers no approve or reject)
+    for (const label of labels.filter(l => l !== 'Back' && l !== 'Approve')) {
+      // what the button's key sends, then what a click on the button sends
+      await open(id, tab)
+      sent.length = 0
+      const hit = panelLines(f, { tab, opened: id, cursor: 0 }, NOW, 140).lines.flat().find(s => s.text === `[ ${label} ]`)!.hit!
+      if ('key' in hit) await board.press(hit.key, 's')
+      const byKey = [...sent]
+      await open(id, tab)
+      sent.length = 0
+      await clickButton(label)
+      expect([id, label, sent]).toEqual([id, label, 'key' in hit ? byKey : [{ sessionID: 's', name: 'symcc-task', text: `${id} drop why` }]])
+      expect(sent.length).toBe(1)
+    }
+    // Back goes back to the list
+    await open(id, tab)
+    await clickButton('Back')
+    expect(board.state().opened).toBe('')
+  }
+  // the question's Back too
+  await open('Q-1')
+  await clickButton('Back')
+  expect(board.state().opened).toBe('')
+  // Approve sends the approve, as a; then its page has no Approve or Reject button
+  await open('T-2')
+  sent.length = 0
+  await clickButton('Approve')
+  expect(sent).toEqual([{ sessionID: 's', name: 'symcc-approve', text: 'T-2' }])
+  expect(rowEls(panel).find(r => r.text.startsWith('[ Back ]'))!.text).toBe('[ Back ] [ Show changes ] [ Drop ] [ Needs review: off ]')
   board.stop()
 })
 
@@ -1800,7 +1906,9 @@ test('T-627: a long task page scrolls by drawn lines under a fixed banner, tabs,
   // the title wraps onto two drawn lines, and both stay at the top with the badge
   const title = text.slice(0, all.fixed)
   expect(title.some(l => l.startsWith('T-2 a reviewed change'))).toBe(true)
-  expect(title.filter(l => /^\[.*\]$/.test(l)).length).toBe(1)
+  expect(title.filter(l => /^\[[^ ].*\]$/.test(l)).length).toBe(1)
+  // T-680: the page's buttons stay at the top with them
+  expect(title.some(l => l.startsWith('[ Back ] [ Approve ]'))).toBe(true)
   expect(title.join(' ')).toContain('onto a second line here')
   expect(text.slice(all.fixed).some(l => l.includes('▍History'))).toBe(true)
   // the long history and report lines are broken into rows the panel's width, keeping every word in order
