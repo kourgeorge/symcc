@@ -55,7 +55,12 @@ export const boardBrand = (name: string = DEFAULT_NAME, v: string = '') => (v ? 
 export const boardWhere = (root: string) => (folderName(root) ? ` · ${folderName(root)}` : '')
 /** The board's title: "<icon> <name> v<version> · <folder>" ("<icon> <name> board · <folder>" with no version when `v` is ''), without " · <folder>" when the folder is unknown. */
 export const boardTitle = (root: string, name: string = DEFAULT_NAME, v: string = '') => `${boardBrand(name, v)}${boardWhere(root)}`
-/** The status line label, without the mark (Claude Code adds its own): "<name> board · <folder>". */
+/** The band above the prompt's header start (Claude Code's band and OpenCode's strip): "<icon> <name>", then
+ *  " · <folder>" only when the project's folder isn't called the plugin's name too (no "board", no version):
+ *  "𝄞 symcc" in the symcc project, "𝄞 symcc · wats" in another one. */
+export const bandBrand = (name: string = DEFAULT_NAME) => `${ICON} ${namesFor(name).name}`
+export const bandWhere = (root: string, name: string = DEFAULT_NAME) => (folderName(root) === namesFor(name).name ? '' : boardWhere(root))
+/** The status line label,without the mark (Claude Code adds its own): "<name> board · <folder>". */
 export const boardLabel = (root: string, name: string = DEFAULT_NAME) => `${namesFor(name).boardName}${boardWhere(root)}`
 
 /** At most this many task IDs are listed for one state in the status line; the rest show as "+N". */
