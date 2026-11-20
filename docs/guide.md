@@ -185,7 +185,8 @@ buttons would put it (an answer, more time, Allow or Don't allow, Approve, Done,
 note; a reject or "ask more" still needs the lead, which gets your reason). Close the pop-up
 without answering and the question stays on the board. The pop-up holds at most 4 choices,
 so a question with more shows the first 3 plus "the rest on the board" (or type yours under
-Other). Workers never get the pop-up. On a host with no pop-up the lead puts the question on
+Other); picking "the rest on the board" is no answer, so the question stays open on the board
+for you to answer there. Workers never get the pop-up. On a host with no pop-up the lead puts the question on
 the board itself and writes the choices as numbered plain text, plus "or answer on the
 board". The lead never puts two questions under the same numbers.
 

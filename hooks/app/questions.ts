@@ -1,6 +1,6 @@
 // The lead's questions for the owner on the board (see core/questions.ts): the lead's question tool, and the
 // owner's answer from the board panel's question page.
-import { type Board, type BoardTask, type OwnerQuestion, type QuestionClose, addQuestion, answerQuestion, dropQuestion, normQid, questionsText, closedText, boardAnswerLine, openQuestions, questionsForYou, QUESTION_MAX, QUESTION_OPTIONS, taskAsks, asksOwner, isAnswered, find } from '../board'
+import { type Board, type BoardTask, type OwnerQuestion, type QuestionClose, addQuestion, answerQuestion, dropQuestion, normQid, questionsText, closedText, boardAnswerLine, openQuestions, questionsForYou, QUESTION_MAX, QUESTION_OPTIONS, OPTION_MAX, taskAsks, asksOwner, isAnswered, find } from '../board'
 import { clean, squash } from '../core/text'
 import { S } from './state'
 import type { Host } from '../host'
@@ -11,11 +11,17 @@ import { runTool, allowAskedFiles, refuseAskedFiles } from './tools'
 
 type In = Record<string, unknown>
 
+/** The pop-up option that sends the owner to the board for the options it can't show: not an answer (T-579). */
+export const REST_ON_BOARD = 'the rest on the board'
+
+/** Does pop-up answer `a` pick REST_ON_BOARD (alone, or among a multi-select's comma-joined picks)? Then it is no answer. */
+const restOnBoard = (a: string) => a.split(',').some(p => squash(p).toLowerCase() === REST_ON_BOARD)
+
 /** How the lead offers n options in the chat: with the host's pop-up question tool (it takes at most 4, so with
  *  more the first 3 plus "the rest on the board"), or as numbered plain chat text when the host has none (T-570). */
 export const optionsVia = (n: number): string =>
   S.W.askPopup
-    ? `with ${S.W.askPopup}${n > 4 ? ` (it takes at most 4 options: show the first 3 plus "the rest on the board", or the owner types one under Other)` : ''}`
+    ? `with ${S.W.askPopup}${n > 4 ? ` (it takes at most 4 options: show the first 3 plus "${REST_ON_BOARD}", or the owner types one under Other)` : ''}`
     : 'as numbered plain chat text'
 
 /** After "If they answer on the board first …": with a pop-up, one that names task `id` is tied to its board question (T-579); '' with none. */
@@ -122,11 +128,11 @@ function popupQuestions(input: Record<string, unknown>): PopupQuestion[] {
   return qs.filter((q): q is PopupQuestion => !!q && typeof q === 'object' && typeof (q as PopupQuestion).question === 'string' && !!(q as PopupQuestion).question.trim())
 }
 
-/** A pop-up question's option labels, at most QUESTION_OPTIONS.max. */
+/** A pop-up question's option labels as the board keeps them (cleaned, no repeats, no "the rest on the board"), at most QUESTION_OPTIONS.max. */
 const labels = (q: PopupQuestion): string[] =>
-  (Array.isArray(q.options) ? q.options : [])
-    .map(o => (o && typeof o.label === 'string' ? o.label : ''))
-    .filter(Boolean)
+  [...new Set((Array.isArray(q.options) ? q.options : [])
+    .map(o => (o && typeof o.label === 'string' ? clean(squash(o.label), OPTION_MAX) : '')))]
+    .filter(l => l && l.toLowerCase() !== REST_ON_BOARD)
     .slice(0, QUESTION_OPTIONS.max)
 
 /**
@@ -143,8 +149,9 @@ async function linkQuestions(host: Host, qs: PopupQuestion[]): Promise<(PopupLin
       const text = clean(squash(q.question), QUESTION_MAX)
       const same = openQuestions(y).find(o => o.text === text)
       if (same) return { kind: 'question', id: same.id }
-      if (labels(q).length < QUESTION_OPTIONS.min) return undefined
-      const [z, nq] = addQuestion(y, q.question, labels(q), now())
+      const opts = labels(q)
+      if (opts.length < QUESTION_OPTIONS.min) return undefined
+      const [z, nq] = addQuestion(y, q.question, opts, now())
       y = z
       added.push(nq)
       return { kind: 'question', id: nq.id }
@@ -247,6 +254,10 @@ export async function popupCall<R>(host: Host, agentId: string | undefined, inpu
     }
     const a = answers[q.question]
     if (typeof a !== 'string' || !a.trim()) continue
+    if (restOnBoard(a)) {
+      notes.push(`The owner picked "${REST_ON_BOARD}" for ${link.id}: that is no answer, so ${link.id} stays open on the board. A board update tells you their answer; don't ask again.`)
+      continue
+    }
     if (link.kind === 'question') {
       await change(host, x => answerQuestion(x, link.id, a, 'chat', now())).catch(() => undefined)
       notes.push(`${name} closed ${link.id} on the board with the owner's answer "${brief(a)}".`)

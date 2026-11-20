@@ -202,3 +202,45 @@ test("a worker's call and a question with no options are passed on untouched", a
   expect(w.notices).toEqual([])
   expect(w.board().questions ?? []).toEqual([])
 })
+
+test('picking "the rest on the board" in the pop-up is no answer: the Q-n or the task stays open for the board', async () => {
+  const w = world()
+  await runTool(w.host, 'question', { action: 'add', text: 'Which one?', options: ['A', 'B', 'C', 'D', 'E'] })
+  const d = dialog()
+  const r = popupCall(w.host, undefined, { questions: [ask('Which one?', ['A', 'B', 'C', 'the rest on the board'])] }, d.open, w.notice)
+  await pause(0)
+  d.answer({ 'Which one?': 'the rest on the board' })
+  expect(((await r) as { context: string[] }).context[0]).toContain('Q-1 stays open on the board')
+  expect(openQuestions(w.board()).map(q => q.id)).toEqual(['Q-1'])
+  expect(await answerOnBoard(w.host, 'Q-1', 'E')).toBe('Q-1 answered: E; the lead will take it from here')
+
+  // a task's question: the task keeps waiting
+  const w2 = world()
+  await waitingTask(w2.host as never, { question: 'Which color?', options: ['Red', 'Blue', 'Green', 'Pink', 'Gray'] })
+  const d2 = dialog()
+  const r2 = popupCall(w2.host, undefined, { questions: [ask('T-1 asks: which color?', ['Red', 'Blue', 'Green', 'the rest on the board'])] }, d2.open, w2.notice)
+  await pause(0)
+  d2.answer({ 'T-1 asks: which color?': 'the rest on the board' })
+  expect(((await r2) as { context: string[] }).context[0]).toContain('T-1 stays open on the board')
+  expect(w2.board().tasks[0]!.status).toBe('waiting')
+})
+
+test('repeated or blank option labels are dropped before the board question is made', async () => {
+  const w = world()
+  const d = dialog()
+  const r = popupCall(w.host, undefined, { questions: [ask('Same?', ['Yes', 'Yes'])] }, d.open, w.notice)
+  await pause(0)
+  // one real option left: no board question, the dialog opens as usual
+  expect(d.calls()).toBe(1)
+  expect(w.board().questions ?? []).toEqual([])
+  d.answer({ 'Same?': 'Yes' })
+  expect(await r).toMatchObject({ ref: 'r1' })
+
+  const w2 = world()
+  const d2 = dialog()
+  const r2 = popupCall(w2.host, undefined, { questions: [ask('Which?', ['A', '  ', 'a ', 'A', 'B', 'the rest on the board'])] }, d2.open, w2.notice)
+  await pause(0)
+  expect(openQuestions(w2.board()).map(q => q.options)).toEqual([['A', 'a', 'B']])
+  d2.answer({ 'Which?': 'B' })
+  await r2
+})
