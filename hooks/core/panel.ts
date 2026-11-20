@@ -14,7 +14,7 @@ import { fmtDuration, runMs, sumRuns } from './runs'
 import { ellipsis, num } from './text'
 import { whyFailed } from './failure'
 import { statusMark } from './details'
-import { type PhaseTask, stageStep, taskPhase } from './phase'
+import { type PhaseStage, type PhaseTask, stageStep, taskPhase } from './phase'
 
 export * from './failure'
 
@@ -53,21 +53,32 @@ export function nextScoutText(scouts: (Pick<SymccScout, 'name' | 'running' | 'ne
 }
 
 /** What the workers and scouts part of the line above the prompt needs. Busy workers are the tasks being worked on;
- *  a doing task whose work symcc is testing and merging now (see finishingNow) is "merging", not a worker. */
+ *  a doing task whose work symcc is checking and merging now (see finishingNow) is counted at its step, not as a worker. */
 export type CrewBoard = { mode?: SymccMode; plan_mode?: boolean; max_parallel?: number; tasks: (Pick<BoardTask, 'status' | 'finishing'> & Partial<Pick<BoardTask, 'checking'>>)[]; scouts: (Pick<SymccScout, 'name' | 'running' | 'next_run' | 'paused'> & { every_minutes?: number })[] }
 
-/** The workers and scouts, each '' when there is nothing to say: `workers` "1/3 workers", then "1 merging" for tasks
- *  symcc is testing and merging (each left out while there are none: "all done" or the counts already say so), `scouts` "5 scouts", and `next` "next: gaps-bot in 1h 00m" or
+/** The check steps in the order a task goes through them, and how the line above the prompt counts each: "1 in checker". */
+const CREW_STEPS = ['prep', 'checker', 'queue', 'test', 'merge'] as const
+const CREW_STEP_WORD: Record<(typeof CREW_STEPS)[number], string> = { prep: 'in prep', checker: 'in checker', queue: 'in queue', test: 'testing', merge: 'merging' }
+
+/** The workers and scouts, each '' when there is nothing to say: `workers` "1/3 workers", then the tasks symcc
+ *  checks and merges counted by their step in pipeline order, "1 in prep · 1 in checker · 1 in queue · 1 testing · 1 merging" (each left out while there are none: "all done" or the counts already say so), `scouts` "5 scouts", and `next` "next: gaps-bot in 1h 00m" or
  *  "running: gaps-bot" (no "next" in plan mode or board mode paused, as no scout starts then). */
 export function crewParts(c: CrewBoard, nowMs: number): { workers: string; scouts: string; next: string } {
-  const finishing = c.tasks.filter(t => finishingNow(t, nowMs)).length
-  const busy = c.tasks.filter(t => t.status === 'doing').length - finishing
-  // an approved task in review whose approve runs (approveRunning) merges too
-  const merging = finishing + c.tasks.filter(t => approveRunning(t, nowMs)).length
+  const finishing = c.tasks.filter(t => finishingNow(t, nowMs))
+  const busy = c.tasks.filter(t => t.status === 'doing').length - finishing.length
+  // each finishing task (and an approved task in review whose approve runs, approveRunning) counts at its real step;
+  // one with no fresh check step yet is in prep
+  const counts: Partial<Record<PhaseStage, number>> = {}
+  for (const t of [...finishing, ...c.tasks.filter(t => approveRunning(t, nowMs))]) {
+    const st = taskPhase(t, nowMs).stage
+    const at = st && st !== 'worker' ? st : 'prep'
+    counts[at] = (counts[at] ?? 0) + 1
+  }
+  const steps = CREW_STEPS.filter(s => counts[s]).map(s => `${counts[s]} ${CREW_STEP_WORD[s]}`)
   const n = c.scouts.length
   const running = c.scouts.find(s => s.running)
   const next = !n ? '' : running ? `running: ${running.name}` : c.plan_mode || c.mode === 'paused' ? '' : nextScoutText(c.scouts, nowMs)
-  const workers = [busy ? `${busy}/${c.max_parallel ?? emptyBoard().max_parallel} workers` : '', merging ? `${merging} merging` : ''].filter(Boolean).join(' · ')
+  const workers = [busy ? `${busy}/${c.max_parallel ?? emptyBoard().max_parallel} workers` : '', ...steps].filter(Boolean).join(' · ')
   return { workers, scouts: !n ? '' : n === 1 ? '1 scout' : `${n} scouts`, next }
 }
 

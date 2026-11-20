@@ -1505,19 +1505,20 @@ test('T-596: an approved task in review whose approve runs leaves NEEDS YOU: lis
     return lines.slice(at + 1, end < 0 ? undefined : end)
   }
   const cases = [
-    [{ checking: { step: 'prep', at: fresh } }, '✎', '✎ prep'],
-    [{ checking: { step: 'queue', place: 2, at: fresh }, note: 'queue (2)' }, '⋯', '⋯ queue (2)'],
-    [{ checking: { step: 'testing', at: fresh } }, '⧗', '⧗ test'],
-    [{ checking: { step: 'merging', at: fresh } }, '⇢', '⇢ merge'],
+    [{ checking: { step: 'prep', at: fresh } }, '✎', '✎ prep', '1 in prep'],
+    [{ checking: { step: 'queue', place: 2, at: fresh }, note: 'queue (2)' }, '⋯', '⋯ queue (2)', '1 in queue'],
+    [{ checking: { step: 'testing', at: fresh } }, '⧗', '⧗ test', '1 testing'],
+    [{ checking: { step: 'merging', at: fresh } }, '⇢', '⇢ merge', '1 merging'],
   ] as const
-  for (const [extra, icon, badge] of cases) {
+  for (const [extra, icon, badge, crew] of cases) {
     const f = withT2(extra)
     const lines = list(f)
     expect(needsBlock(lines).some(l => /T-2 /.test(l))).toBe(false)
     expect(lines.find(l => /\bT-2 /.test(l))).toMatch(new RegExp(`T-2 +${icon} 15m`))
     const band = bandLines(f, NOW, 200, 20).map(lineText)
     expect(band[0]).toContain('2 doing')
-    expect(band[0]).toContain('1 merging')
+    // T-646: the band names the step it is at
+    expect(band[0]).toContain(crew)
     expect(band[0]).not.toContain('review')
     expect(band.find(l => l.startsWith('T-2'))).toMatch(new RegExp(`T-2 +${icon} 15m`))
     const page = panelLines(f, { opened: 'T-2', cursor: 0 }, NOW, 140).lines.map(lineText).join('\n')
