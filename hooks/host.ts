@@ -61,7 +61,7 @@ export function agentState(a: HostAgent): AgentState {
  * `prompt` is the task's own prompt only. Every agent also gets a base prompt from core/prompts.ts: WORKER_BASE for a
  * worker, SCOUT_BASE for a scout or a checker (basePromptFor picks one), given the plugin's name and the host's
  * `words.tool`. Claude Code's adapter gives them as its agent types' prompts (claude/registration.ts); a host with no
- * agent types puts the base in front of `prompt` (hosts/node/runner.ts withBasePrompt).
+ * agent types puts the base in front of `prompt` (hooks/process/agents.ts withBasePrompt, which also leaves out symcc's tools: a process agent has none).
  */
 export type HostAgentStart = { kind: HostAgentKind; prompt: string; name: string; description: string; tools?: readonly string[]; files?: readonly string[]; cwd?: string; model?: string }
 
@@ -228,6 +228,12 @@ export interface Host {
     send: (agentId: string, text: string) => Promise<unknown>
     /** ends an agent's work: `text` tells it to stop and end (a host that can, may also end it outright) */
     stop: (agentId: string, text: string) => Promise<unknown>
+    /**
+     * Only a host that runs agents as processes and records them (hooks/process/, T-474): stops the recorded agent
+     * processes an earlier run of the host left running (still alive, not started by this copy), drops the entries of
+     * ended ones, and answers the stopped agents' ids. symcc's orphan pass (stopOrphans) calls it.
+     */
+    stopLeftovers?: () => Promise<string[]>
   }
   /** the names that differ from host to host (see HostWords) */
   words: HostWords

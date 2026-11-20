@@ -5,7 +5,7 @@
 import CHANGE from '../../prompts/change'
 import INVESTIGATION from '../../prompts/investigation'
 import CHECKER from '../../prompts/checker'
-import { ASK_TOOL } from './ask'
+import { ASK_TOOL, ASK_LINE } from './ask'
 import { WEB_SAFETY_LINE } from './roles'
 
 /** The prompts there are: one per task kind. */
@@ -93,18 +93,49 @@ export function placeholdersIn(text: string): string[] {
 }
 
 /**
+ * What an agent started with no symcc tools does instead of calling ask_owner (T-474): e.g. a `claude -p` process,
+ * whose permissions give it only the host's own tools.
+ */
+export const NO_TOOLS_ASK = 'To ask the owner something, write the question in your report and stop (you have no tool for it)'
+
+/** What a base prompt says, beyond the agent's kind (see basePromptFor). */
+export type BaseOptions = {
+  /** the agent can call symcc's tools (ask_owner, board, stats); default true. False: the prompt names none of them */
+  symccTools?: boolean
+  /** the agent has web tools (its role's `tools: web`): a worker gets WEB_SAFETY_LINE, a scout is told it may use the web */
+  web?: boolean
+}
+
+/**
  * The base prompt every worker gets, before its task's prompt: who it is and how it hands back. `name` is the plugin's
  * name, `tool` what the model calls symcc's tool `t` by (HostWords.tool with the name filled in), and `web` adds
  * WEB_SAFETY_LINE (a worker whose role has web tools). Claude Code's adapter gives it as the worker agent types' prompt
  * (claude/registration.ts); a host with no agent types puts it in front of the task prompt (see basePromptFor).
+ * `symccTools` false: the worker has no ask_owner tool, so it writes its question in its report (NO_TOOLS_ASK).
  */
-export const WORKER_BASE = (name: string, tool: (t: string) => string, web = false): string =>
-  `You are a ${name} worker. You get exactly one task and the folder (your own copy of the project) to do it in. Do it there, keep the change small and inside the task's files, run the tests you were given, and finish with a one or two sentence summary. To ask the owner something, call the ${tool(ASK_TOOL)} tool; if an edit is refused as outside your files, stop and hand back.${web ? ` ${WEB_SAFETY_LINE}` : ''}`
+export const WORKER_BASE = (name: string, tool: (t: string) => string, web = false, symccTools = true): string =>
+  `You are a ${name} worker. You get exactly one task and the folder (your own copy of the project) to do it in. Do it there, keep the change small and inside the task's files, run the tests you were given, and finish with a one or two sentence summary. ${symccTools ? `To ask the owner something, call the ${tool(ASK_TOOL)} tool` : NO_TOOLS_ASK}; if an edit is refused as outside your files, stop and hand back.${web ? ` ${WEB_SAFETY_LINE}` : ''}`
 
-/** The base prompt every scout and checker gets (checkers run as scouts), before its own prompt; see WORKER_BASE. */
-export const SCOUT_BASE = (name: string, tool: (t: string) => string): string =>
-  `You are a ${name} scout. You do the job your scout file gives you, using the project, the shell and the web, and end with a short plain report (or exactly NOTHING). You never change, create or delete files in the project. To look at the board, use the ${tool('board')} and ${tool('stats')} tools (they only read), not the board file.`
+/**
+ * The base prompt every scout and checker gets (checkers run as scouts), before its own prompt; see WORKER_BASE.
+ * `o.symccTools` false: no board and stats tools are named, and the web only when `o.web` (the agent's permissions
+ * are all it has).
+ */
+export const SCOUT_BASE = (name: string, tool: (t: string) => string, o: BaseOptions = {}): string =>
+  o.symccTools === false
+    ? `You are a ${name} scout. You do the job your scout file gives you, using the project and the shell${o.web ? ' and the web' : ''}, and end with a short plain report (or exactly NOTHING). You never change, create or delete files in the project.`
+    : `You are a ${name} scout. You do the job your scout file gives you, using the project, the shell and the web, and end with a short plain report (or exactly NOTHING). You never change, create or delete files in the project. To look at the board, use the ${tool('board')} and ${tool('stats')} tools (they only read), not the board file.`
 
-/** The base prompt for an agent of `kind`: WORKER_BASE for a worker, SCOUT_BASE for a scout or a checker. */
-export const basePromptFor = (kind: 'worker' | 'scout' | 'checker', name: string, tool: (t: string) => string): string =>
-  kind === 'worker' ? WORKER_BASE(name, tool) : SCOUT_BASE(name, tool)
+/**
+ * The base prompt for an agent of `kind`: WORKER_BASE for a worker, SCOUT_BASE for a scout or a checker. A host whose
+ * agents can't call symcc's tools (a `claude -p` process, hooks/process/) passes `symccTools: false`.
+ */
+export const basePromptFor = (kind: 'worker' | 'scout' | 'checker', name: string, tool: (t: string) => string, o: BaseOptions = {}): string =>
+  kind === 'worker' ? WORKER_BASE(name, tool, o.web === true, o.symccTools !== false) : SCOUT_BASE(name, tool, o)
+
+/**
+ * A task prompt for an agent with no symcc tools: its "call the ask_owner tool" line (ASK_LINE, as the prompt was
+ * filled in with `tool`'s name for it) says to write the question in the report instead (NO_TOOLS_ASK).
+ */
+export const withoutSymccTools = (prompt: string, tool: (t: string) => string): string =>
+  prompt.split(ASK_LINE(tool(ASK_TOOL))).join(`${NO_TOOLS_ASK}. If an edit is refused as outside your files, stop and hand back.`)

@@ -5,20 +5,77 @@
 // result reader.
 import { test, expect } from 'bun:test'
 import { readFile, readdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { spawn } from 'node:child_process'
 import { runCommand, PLUGIN_ROOT } from '../host'
-import { claudePermissions, claudeResult, editRule, withBasePrompt, type AgentRunner } from '../runner'
+import { claudePermissions, claudeResult, editRule } from '../../../hooks/process/claude-runner'
+import { withBasePrompt, processAgents, type AgentRunner } from '../../../hooks/process/agents'
+import { PROCESSES_FILE, entriesText, parseEntries } from '../../../hooks/process/record'
+import { nodeProcessSystem } from '../system'
+import { nodeFs } from '../host'
 import { openSession, leadTool, closeSession } from '../session'
 import { toolCall, notLeadText } from '../../../hooks/app/symcc'
 import { TOOLS } from '../../../hooks/app/tools'
 import { toolName } from '../../../hooks/app/state'
-import { WORKER_BASE, SCOUT_BASE } from '../../../hooks/core/prompts'
+import { WORKER_BASE, SCOUT_BASE, NO_TOOLS_ASK } from '../../../hooks/core/prompts'
+import { ASK_LINE, ASK_TOOL } from '../../../hooks/core/ask'
+import CHANGE from '../../../prompts/change'
+import INVESTIGATION from '../../../prompts/investigation'
+import CHECKER from '../../../prompts/checker'
 import { SYMCC_WORDS } from '../../../hooks/host'
 
-test('withBasePrompt puts WORKER_BASE in front of a worker\'s prompt, and SCOUT_BASE in front of a scout\'s or checker\'s', () => {
+test('withBasePrompt puts WORKER_BASE in front of a worker\'s prompt, and SCOUT_BASE in front of a scout\'s or checker\'s, naming none of symcc\'s tools (T-474)', () => {
   const tool = (t: string) => SYMCC_WORDS.tool('symcc', t)
-  expect(withBasePrompt({ kind: 'worker', prompt: 'Task T-1' })).toBe(`${WORKER_BASE('symcc', tool)}\n\nTask T-1`)
-  expect(withBasePrompt({ kind: 'scout', prompt: 'Look' })).toBe(`${SCOUT_BASE('symcc', tool)}\n\nLook`)
-  expect(withBasePrompt({ kind: 'checker', prompt: 'Check' })).toBe(`${SCOUT_BASE('symcc', tool)}\n\nCheck`)
+  const no = { symccTools: false }
+  expect(withBasePrompt({ kind: 'worker', prompt: 'Task T-1' })).toBe(`${WORKER_BASE('symcc', tool, false, false)}\n\nTask T-1`)
+  expect(withBasePrompt({ kind: 'worker', prompt: 'Task T-1', tools: ['web'] })).toBe(`${WORKER_BASE('symcc', tool, true, false)}\n\nTask T-1`)
+  expect(withBasePrompt({ kind: 'scout', prompt: 'Look' })).toBe(`${SCOUT_BASE('symcc', tool, no)}\n\nLook`)
+  expect(withBasePrompt({ kind: 'checker', prompt: 'Check' })).toBe(`${SCOUT_BASE('symcc', tool, no)}\n\nCheck`)
+  // the task prompt's "call the ask_owner tool" line becomes "write the question in your report"
+  const p = withBasePrompt({ kind: 'worker', prompt: `Task T-1\n${ASK_LINE(tool(ASK_TOOL))}` })
+  expect(p).not.toContain(ASK_TOOL)
+  expect(p).toContain(NO_TOOLS_ASK)
+  // the hosts with symcc's tools keep them in the base prompt
+  expect(WORKER_BASE('symcc', tool)).toContain(ASK_TOOL)
+  expect(SCOUT_BASE('symcc', tool)).toContain('board and stats tools')
+})
+
+/** The tool names a prompt could name: the host's own (claude -p) and every one of symcc's. */
+const TOOL_NAMES = () => ['Read', 'Edit', 'Write', 'Bash', 'Glob', 'Grep', 'WebSearch', 'WebFetch', 'NotebookEdit', 'Task', 'AskUserQuestion', ASK_TOOL, ...TOOLS().map(t => t.name)]
+
+/** The tools `prompt` tells the agent to use ("the X tool", "the X and Y tools"). */
+function namedTools(prompt: string): string[] {
+  return TOOL_NAMES().filter(n => new RegExp(`\\b${n}\\b(?: and \\w+)? tools?\\b|\\b\\w+ and ${n} tools\\b`).test(prompt))
+}
+
+/** Whether permission rules `allowed` let the agent use tool `name` (a plain rule, or a rule on some paths). */
+const allows = (allowed: readonly string[], name: string) => allowed.some(r => r === name || r.startsWith(`${name}(`))
+
+test('T-474: a process worker\'s, scout\'s and checker\'s prompt names no tool its claude -p permissions don\'t allow', () => {
+  const tool = (t: string) => SYMCC_WORDS.tool('symcc', t)
+  const ask = ASK_LINE(tool(ASK_TOOL))
+  // the check itself finds a named tool
+  expect(namedTools(`call the ${ASK_TOOL} tool`)).toEqual([ASK_TOOL])
+  expect(namedTools('use the board and stats tools')).toEqual(['board', 'stats'])
+  expect(namedTools('look at the board')).toEqual([])
+  const cases = [
+    { a: { kind: 'worker' as const, files: ['src/'] }, prompt: CHANGE.replace('{{ask}}', ask) },
+    { a: { kind: 'worker' as const, tools: ['web'] }, prompt: INVESTIGATION.replace('{{ask}}', ask) },
+    { a: { kind: 'scout' as const }, prompt: 'Look for bugs and end with a short report.' },
+    { a: { kind: 'scout' as const, tools: ['web'] }, prompt: 'Check the dependencies on the web.' },
+    { a: { kind: 'checker' as const }, prompt: CHECKER },
+  ]
+  for (const scratch of [false, true]) {
+    for (const c of cases) {
+      const { allowed } = claudePermissions(c.a, scratch)
+      const prompt = withBasePrompt({ ...c.a, prompt: c.prompt })
+      const refused = namedTools(prompt).filter(n => !allows(allowed, n))
+      expect(`${c.a.kind}${scratch ? ' with scratch' : ''}: ${refused.join(', ')}`).toBe(`${c.a.kind}${scratch ? ' with scratch' : ''}: `)
+    }
+  }
+  // the checker (T-551: it never runs the project's tests itself) stays read-only, apart from .scratch/ writes
+  const c = claudePermissions({ kind: 'checker' }, true)
+  expect(c.allowed.filter(r => r.startsWith('Edit') || r.startsWith('Write'))).toEqual(['Edit(./.scratch/**)', 'Write(./.scratch/**)'])
+  expect(withBasePrompt({ kind: 'checker', prompt: CHECKER })).toContain('checker. A worker has just finished task')
 })
 
 const NODE = `${PLUGIN_ROOT}/hosts/node`
@@ -150,8 +207,14 @@ test('one task end to end on the Node host: add, a fake claude -p worker edits i
     expect(args).not.toContain('Edit(./**)')
     // the prompt starts with the worker's base prompt (T-473), in symcc's own words, then the task's prompt
     const prompt = await readFile(`${log}.prompt`, 'utf8')
-    expect(prompt.startsWith(`${WORKER_BASE('symcc', t => SYMCC_WORDS.tool('symcc', t))}\n\n`)).toBe(true)
+    expect(prompt.startsWith(`${WORKER_BASE('symcc', t => SYMCC_WORDS.tool('symcc', t), false, false)}\n\n`)).toBe(true)
     expect(prompt).toContain('Task T-1: Say hello')
+    // T-474: it names no tool its permission flags (the arguments) don't allow: no ask_owner, no board tools
+    const allowedArgs = args.split('\n').slice(args.split('\n').indexOf('--allowedTools') + 1, args.split('\n').indexOf('--disallowedTools'))
+    expect(namedTools(prompt).filter(n => !allows(allowedArgs, n))).toEqual([])
+    expect(prompt).not.toContain(ASK_TOOL)
+    // it ended, so the record of running processes has no entry left
+    expect(parseEntries(await readFile(`${repo}/.symcc/${PROCESSES_FILE}`, 'utf8').catch(() => null))).toEqual([])
 
     // merged into main, and the board keeps the try's tokens and cost
     expect((await git('log', '--format=%s', 'main')).stdout).toContain('T-1: Say hello')
@@ -228,6 +291,75 @@ async function groupGone(group: number, ms = 60_000): Promise<boolean> {
   }
   return false
 }
+
+test('T-474: a worker process left running by a CLI that was killed is in the record, and the next run stops it (and drops a dead entry)', async () => {
+  const repo = await mkdtemp('/tmp/symcc-node-left-')
+  const pidFile = `${repo}/.symcc/fake.pid`
+  const recordFile = `${repo}/.symcc/${PROCESSES_FILE}`
+  try {
+    const git = (...args: string[]) => runCommand(['git', '-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd: repo })
+    await git('init', '-q', '-b', 'main')
+    await writeFile(`${repo}/.gitignore`, '.symcc/\n')
+    await git('add', '.')
+    await git('commit', '-qm', 'init')
+    const cli = (...args: string[]) => runCommand(['bun', MAIN, '--root', repo, '--claude', FAKE, ...args], { cwd: repo, timeoutMs: 120_000 })
+    expect((await cli('add', 'Say hello', '--files', 'hello.txt')).stdout).toContain('added T-1')
+
+    // a tick whose worker waits 600 s; once the worker runs, the CLI is killed outright (no clean stop of its agents)
+    const tick = spawn('bun', [MAIN, '--root', repo, '--claude', FAKE, 'tick'], { cwd: repo, env: { ...process.env, FAKE_SLEEP: '600', FAKE_PID: pidFile }, stdio: ['ignore', 'ignore', 'ignore'] })
+    const tickClosed = new Promise<void>(r => tick.on('close', () => r()))
+    let group = 0
+    for (const end = Date.now() + 120_000; !group && Date.now() < end; await new Promise<void>(r => void setTimeout(r, 100))) {
+      group = Number((await readFile(pidFile, 'utf8').catch(() => '')).trim())
+    }
+    expect(group).toBeGreaterThan(1)
+    // the record has the worker (written when it started)
+    let entries = parseEntries(await readFile(recordFile, 'utf8').catch(() => null))
+    for (const end = Date.now() + 10_000; !entries.length && Date.now() < end; await new Promise<void>(r => void setTimeout(r, 100))) entries = parseEntries(await readFile(recordFile, 'utf8').catch(() => null))
+    tick.kill('SIGKILL')
+    await tickClosed
+    expect(entries.map(e => [e.pid, e.task, e.folder?.endsWith('/.symcc/worktrees/T-1'), e.command])).toEqual([[group, 'T-1', true, FAKE]])
+    expect(await groupGone(group, 500)).toBe(false)
+    // plus an entry whose process ended long ago (a pid that can't be one)
+    await writeFile(recordFile, entriesText([...entries, { pid: 999_999, agent: 'claude-9-old', task: 'T-9', started: '2026-01-01T00:00:00.000Z', command: FAKE }]))
+
+    // a fresh run finds the recorded worker still alive and stops it (it never got to edit), and the record is empty
+    const board = await cli('board')
+    expect(board.exitCode).toBe(0)
+    expect(await groupGone(group)).toBe(true)
+    expect(parseEntries(await readFile(recordFile, 'utf8'))).toEqual([])
+    expect(await readFile(`${repo}/.symcc/worktrees/T-1/hello.txt`, 'utf8').catch(() => 'none')).toBe('none')
+    // and the task is not stuck "doing" for the stopped worker: the next tick runs it again to the end
+    const again = await cli('tick')
+    expect(again.stdout).toContain('1 done')
+    expect(parseEntries(await readFile(recordFile, 'utf8'))).toEqual([])
+  } finally {
+    const group = Number((await readFile(pidFile, 'utf8').catch(() => '')).trim())
+    if (group > 1) await runCommand(['sh', '-c', 'kill -s KILL -- -"$1"', 'sh', String(group)])
+    await rm(repo, { recursive: true, force: true })
+  }
+}, 300_000)
+
+test('T-474: processAgents records a process while it runs, and stopLeftovers leaves this copy\'s own entries alone', async () => {
+  const dir = await mkdtemp('/tmp/symcc-node-rec-')
+  try {
+    const file = `${dir}/${PROCESSES_FILE}`
+    const runner: AgentRunner = { name: 'sh', command: () => ({ argv: ['sh', '-c', 'sleep 30'] }), result: () => ({ answer: '' }) as never }
+    const ended: string[] = []
+    const agents = processAgents(runner, id => void ended.push(id), { system: nodeProcessSystem, record: { fs: nodeFs, file: () => file } })
+    const { agentId } = await agents.spawn({ kind: 'scout', prompt: 'p', name: 'symcc-scout-bugs', description: 'd', cwd: dir })
+    let entries = parseEntries(await readFile(file, 'utf8').catch(() => null))
+    for (const end = Date.now() + 5000; !entries.length && Date.now() < end; await new Promise<void>(r => void setTimeout(r, 50))) entries = parseEntries(await readFile(file, 'utf8').catch(() => null))
+    expect(entries.map(e => [e.agent, e.folder, e.command, e.task])).toEqual([[agentId, dir, 'sh', undefined]])
+    expect(await agents.stopLeftovers()).toEqual([])
+    expect(parseEntries(await readFile(file, 'utf8')).length).toBe(1)
+    await agents.stopAll(1000)
+    expect(ended).toEqual([agentId])
+    expect(parseEntries(await readFile(file, 'utf8'))).toEqual([])
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+}, 60_000)
 
 test('T-525: on the Node host the lead (no agent id) gets its tools, and an agent id the board has no record of is refused every one of them', async () => {
   const repo = await mkdtemp('/tmp/symcc-node-lead-')
