@@ -78,8 +78,10 @@ test('T-643: a session that does not drive: a warning line under the banner and 
   const fresh = new Date(NOW - 60_000).toISOString()
   const view = (driving: boolean, updated_at = fresh): ViewFile => ({ ...f, view: { ...f.view, driving, working: [], tasks: f.view.tasks.map(t => (t.id === 'T-1' ? { ...t, updated_at } : t)) } })
   const warnLines = (g: ViewFile, w = 120) => panelLines(g, { opened: '', cursor: 0 }, NOW, w).lines.filter(l => l.some(s => s.color === 'warning' && s.text.startsWith('⚠')))
-  const full = '⚠ Another session drives this board — its workers run there, not here. /symcc-drive to drive it from here.'
-  expect(warnLines(view(false)).map(lineText)).toEqual([full])
+  // T-694: the line sits right under the tests/limits line, beside the drawing's last row when wide; its text from the ⚠ on
+  const warnText = (l: Parameters<typeof lineText>[0]) => lineText(l).slice(lineText(l).indexOf('⚠'))
+  const full = '⚠ Another session drives. /symcc-drive to drive it from here.'
+  expect(warnLines(view(false)).map(warnText)).toEqual([full])
   // narrow: a shorter form that fits
   const narrow = warnLines(view(false), 40).map(lineText)
   expect(narrow.length).toBe(1)
@@ -90,7 +92,7 @@ test('T-643: a session that does not drive: a warning line under the banner and 
   expect(band[0]![1]).toEqual({ text: ' ⚠ driven by another session', color: 'warning' })
   expect(band.map(lineText).find(l => l.startsWith('T-1'))).toMatch(/ — runs in the other session$/)
   // claimed an hour ago and still not started there: it looks idle
-  expect(warnLines(view(false, AT), 140).map(lineText)).toEqual(['⚠ Another session drives this board, but it looks idle — its workers run there, not here. /symcc-drive to drive it from here.'])
+  expect(warnLines(view(false, AT), 140).map(warnText)).toEqual(['⚠ Another session drives, but looks idle. /symcc-drive to drive it from here.'])
   expect(bandDraw(view(false, AT), NOW, 120).lines[0]![1]!.text).toBe(' ⚠ driven by another session (it looks idle)')
   // the driving session: neither, and the row keeps its own note
   expect(warnLines(view(true))).toEqual([])

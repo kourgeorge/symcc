@@ -466,11 +466,10 @@ test('the banner: the clef drawing beside the name, where, who drives and the se
     `${a0}symcc board · symcc · ⏸ paused: nothing starts`,
     `${a1}~/repositories/symcc · main · driven by another session`,
     `${a2}no test command · 3 at once · 45 min · 1 retry`,
-    `${a3}`,
+    `${a3}⚠ Another session drives. /symcc-drive to drive it from here.`,
     '2 doing · 1 to do · 1 done',
-    '⚠ Another session drives this board. /symcc-drive to drive it from here.',
   ])
-  expect(more[5]!.parts).toEqual([{ text: '⚠ Another session drives this board. /symcc-drive to drive it from here.', tone: 'warning' }])
+  expect(more[3]!.parts).toEqual([{ text: '⚠ Another session drives. /symcc-drive to drive it from here.', tone: 'warning' }])
   // no all-time total of the tries on the counts line (T-630): /symcc-stats has it
   expect(more.map(bannerText).join('\n')).not.toMatch(/tokens|8m/)
   expect(more[2]!.parts[0]).toEqual({ text: 'no test command', tone: 'warning' })

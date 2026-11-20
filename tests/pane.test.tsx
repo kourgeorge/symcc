@@ -80,12 +80,12 @@ test('T-643: the terminal panel shows the yellow "another session drives" line w
   const warn = async () => {
     const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 120 }, surface: 'terminal' })
     // the line's colored part (the outer Text of the line matches too, with no color of its own)
-    const t = (await ui.findAll({ type: 'Text', text: /^⚠ Another session drives this board/ })).find(x => x.props.color)
+    const t = (await ui.findAll({ type: 'Text', text: /^⚠ Another session drives/ })).find(x => x.props.color)
     await ui.unmount()
     return t
   }
   const t = await warn()
-  expect(t?.text).toBe('⚠ Another session drives this board — its workers run there, not here. /symcc-drive to drive it from here.')
+  expect(t?.text).toBe('⚠ Another session drives. /symcc-drive to drive it from here.')
   expect(t?.props.color).toBe('warning')
   driving = true
   expect(await warn()).toBeUndefined()
