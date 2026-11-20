@@ -5,7 +5,7 @@ import { asksMoreTime, needsYou, needsYouFirst } from './commands'
 import { boardSections, type DayGroup, dayLabel, dayOf, localOffset, taskDay } from './days'
 import { checkStepNow, finishingNow } from './lead'
 import { originOf } from './origin'
-import { overtimeQuestion, timeLimitOf } from './task'
+import { isAnswered, OVERTIME_OPTIONS, overtimeQuestion, timeLimitOf } from './task'
 import { waitFilesNote } from './review'
 import { kindMark } from './kinds'
 import { roleMark, roleOf, tryMark } from './roles'
@@ -446,27 +446,89 @@ export const viewKeys = (enter = true): KeyHint[] => [
   { key: 'c', word: 'settings' },
 ]
 
-/** The keys at the bottom of a task's page, the ones that matter most for its state first; "y copy", "↑↓ scroll" and
- *  "b back" always come last. `worker`: a worker is on the task now (w opens it). `reports`: the tries
- *  with a saved report; with more than one, their numbers (1-9) show that try's report. `answering`: a waiting
- *  task's answer buttons are shown; they then take the number keys instead of the reports, and the dim line under
- *  them tells those keys (choiceKeysHint), so they are not listed here again. `fileWait`:
- *  its finished work waits only for the owner's files (fileWaitText), so r merges it now. `investigation`: the task is an investigation (in review: a done · k keep as a note · x ask more). */
-export function taskKeys(status: SymccStatus, worker = false, reports: readonly number[] = [], answering = false, fileWait = false, investigation = false): KeyHint[] {
+/** One action of a task's page (taskActions): `id` names it for each host (the terminal's and VS Code's button key);
+ *  `label` is the button's words, `key` the terminal's hotkey (none: a button without one), `word` the key hint's word,
+ *  `main` the one action to press (at most one, none while the task asks something). `keyInLabel`: the terminal's
+ *  button also says its key, "Copy (y)". */
+export type TaskActionId = 'done' | 'keep-note' | 'ask-more' | 'approve' | 'reject' | 'show-changes' | 'watch' | 'pause' | 'resume' | 'merge-now' | 'retry' | 'to-todo' | 'stash' | 'role' | 'already-merged' | 'drop' | 'needs-review' | 'copy'
+export type TaskAction = { id: TaskActionId; label: string; word: string; key?: string; main?: boolean; keyInLabel?: boolean }
+
+/** What a task's page knows beside the task: `worker`, a worker is on it now (Watch worker); `merging`, its
+ *  Approve, Done, Keep as a note or Merge now still runs (no Approve, Reject, Done, Keep as a note, Ask more or
+ *  Merge now meanwhile; Show changes stays). */
+export type TaskActionCtx = { worker?: boolean; merging?: boolean }
+
+/** The statuses whose page offers "Already merged (h)": work that stopped short of the board's merge (the lead's tool takes more). */
+export const MARK_MERGED_FROM: readonly SymccStatus[] = ['failed', 'waiting', 'paused', 'dropped']
+
+/** Whether task `t`'s role can be picked on its page (Role (l)). */
+export const canPickRole = (t: Pick<SymccTask, 'status'>): boolean => ['todo', 'paused', 'failed', 'backlog'].includes(t.status)
+
+/** Whether task `t`'s page offers "Already merged" (T-514): its work stopped short of the board's merge and was tried. */
+export const canMarkMerged = (t: Pick<BoardTask, 'status' | 'kind' | 'attempts'>): boolean => MARK_MERGED_FROM.includes(t.status) && !isInvestigation(t) && t.attempts > 0
+
+/** Whether task `t` asks the owner something (see taskAsks): a running worker over its time limit, or a waiting task
+ *  whose finished work does not wait only for the owner's files. */
+export const asksOwner = (t: BoardTask): boolean => asksMoreTime(t) || (t.status === 'waiting' && !fileWaitText(t))
+
+/** What task `t` asks the owner, and the answer buttons (answerChoices: [] for a plain question, then only a text box
+ *  is shown); null when it asks nothing. A running worker over its time limit asks for more time (the board's
+ *  `maxMinutes`, 45 when unknown); a waiting task asks its question, else its note, else "it waits for your answer".
+ *  `files`: the files it asks to change (Allow / Don't allow), `overtime`: the "more time?" question. */
+export function taskAsks(t: BoardTask, maxMinutes?: number): { text: string; choices: string[]; files: string[]; overtime: boolean } | null {
+  if (!asksOwner(t)) return null
+  if (asksMoreTime(t)) return { text: overtimeQuestion(t.id, timeLimitOf(maxMinutes ?? 45, t)), choices: answerChoices(undefined, [...OVERTIME_OPTIONS]), files: [], overtime: true }
+  const files = t.asked_files ?? []
+  return { text: t.question || t.note || 'it waits for your answer', choices: answerChoices(files, t.options), files: [...files], overtime: false }
+}
+
+/** The actions a task's page offers now, in the order its buttons show (the terminal's, VS Code's and OpenCode's,
+ *  which keeps those it has a slash command for). An answered investigation in review gets Done, Keep as a note and
+ *  Ask more instead of Approve, Reject and Show changes. */
+export function taskActions(t: BoardTask, ctx: TaskActionCtx = {}): TaskAction[] {
+  const s = t.status
+  const open = s !== 'done' && s !== 'dropped'
+  const inReview = s === 'review'
+  const fileWait = !!fileWaitText(t)
+  const a = (id: TaskActionId, label: string, word: string, key?: string, more: Partial<TaskAction> = {}): TaskAction => ({ id, label, word, ...(key ? { key } : {}), ...more })
+  const out: (TaskAction | false)[] = ctx.merging
+    ? []
+    : isAnswered(t)
+      ? [a('done', 'Done', 'done', 'a', { main: true, keyInLabel: true }), a('keep-note', 'Keep as a note', 'keep as a note', 'k', { keyInLabel: true }), a('ask-more', 'Ask more', 'ask more', 'x', { keyInLabel: true })]
+      : [inReview && a('approve', 'Approve', 'approve', 'a', { main: true }), inReview && a('reject', 'Reject', 'reject', 'x')]
+  out.push(
+    // the changes stay open to look at while the merge runs
+    inReview && !isAnswered(t) && a('show-changes', 'Show changes', 'show changes', 'd'),
+    !!ctx.worker && a('watch', 'Watch worker', 'watch worker', 'w'),
+    (s === 'doing' || s === 'todo') && a('pause', 'Pause', 'pause', 'p'),
+    s === 'paused' && a('resume', 'Resume', 'resume', 'u', { main: true }),
+    fileWait && !ctx.merging && a('merge-now', 'Merge now', 'merge now', 'r', { main: true, keyInLabel: true }),
+    (s === 'failed' || s === 'dropped') && a('retry', 'Retry', 'retry', 'r', s === 'failed' ? { main: true } : {}),
+    s === 'backlog' && a('to-todo', 'Move to todo', 'move to todo', 'o', { main: true, keyInLabel: true }),
+    (s === 'todo' || s === 'paused' || s === 'failed') && a('stash', 'Stash to backlog', 'stash to backlog', 'k', { keyInLabel: true }),
+    canPickRole(t) && a('role', 'Role', 'role', 'l', { keyInLabel: true }),
+    canMarkMerged(t) && a('already-merged', 'Already merged', 'already merged', 'h', { keyInLabel: true }),
+    // in review x is Reject (or Ask more), so Drop has no key there
+    open && a('drop', 'Drop', 'drop', inReview ? undefined : 'x'),
+    open && a('needs-review', `Needs review: ${t.needs_review ? 'on' : 'off'}`, 'needs review', 'n'),
+    a('copy', 'Copy', 'copy', 'y', { keyInLabel: true }),
+  )
+  // one main action at most: the first, and none while the task asks something (its first answer is the one to press)
+  let main = !asksOwner(t)
+  return out.filter((x): x is TaskAction => !!x).map(x => (x.main && main ? ((main = false), x) : (({ main: _, ...rest }) => rest)(x)))
+}
+
+/** A task action's button words in the terminal: "Copy (y)" when it says its key, else its label. */
+export const actionButtonLabel = (x: TaskAction): string => (x.keyInLabel && x.key ? `${x.label} (${x.key})` : x.label)
+
+/** The keys at the bottom of a task's page: one hint per action button with a key (taskActions), in the buttons'
+ *  order; then, when more than one try has a saved report (`reports`, their try numbers), "1-3 a try's report"
+ *  (unless the answer buttons take the number keys, `answering`: the dim line under them tells those keys,
+ *  choiceKeysHint); "y copy", "↑↓ scroll" and "b back" always come last. */
+export function taskKeys(actions: readonly TaskAction[], reports: readonly number[] = [], answering = false): KeyHint[] {
   const k = (key: string, word: string): KeyHint => ({ key, word })
-  const keys: KeyHint[] = []
-  // an answered investigation: Done, Keep as a note, Ask more instead of approve and reject
-  if (status === 'review' && investigation) keys.push(k('a', 'done'), k('k', 'keep as a note'), k('x', 'ask more'))
-  else if (status === 'review') keys.push(k('a', 'approve'), k('x', 'reject'), k('d', 'show changes'))
-  if (status === 'backlog') keys.push(k('o', 'move to todo'), k('x', 'drop'))
-  if (status === 'failed') keys.push(k('r', 'retry'), k('x', 'drop'))
-  if (fileWait) keys.push(k('r', 'merge now'))
-  if (worker) keys.push(k('w', 'watch worker'))
-  if (status === 'todo' || status === 'paused' || status === 'failed') keys.push(k('k', 'stash to backlog'))
-  if (['todo', 'paused', 'failed', 'backlog'].includes(status)) keys.push(k('l', 'role'))
-  // A waiting task's answer buttons (Allow, Don't allow, Answer… or the worker's options), or a running one's
-  // "more time?" buttons, take the number keys (told under the buttons).
-  const keyed = answering && (status === 'waiting' || status === 'doing') ? [] : reports.filter(n => n >= 1 && n <= 9)
+  const keys: KeyHint[] = actions.filter(x => x.key && x.id !== 'copy').map(x => k(x.key!, x.word))
+  const keyed = answering ? [] : reports.filter(n => n >= 1 && n <= 9)
   if (reports.length > 1 && keyed.length) keys.push(k(keyed.length > 1 ? `${keyed[0]}-${keyed[keyed.length - 1]}` : `${keyed[0]}`, "a try's report"))
   return [...keys, k('y', 'copy'), k('↑↓', 'scroll'), k('b', 'back')]
 }

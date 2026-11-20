@@ -6,7 +6,8 @@
 // the tests check exactly what the TUI shows (hooks/opencode/tests/opencode-tui.spec.ts). The panel's actions go back
 // to the engine as symcc's slash commands (actionCommand), run in the TUI's session (R6 of T-468). Like the Claude Code
 // board it has three tabs (T-559): Tasks, Scouts (the list, a scout's page with its runs, a run's report) and
-// Settings (every setting in its group, with its value and default). Like it, Settings opens the Roles and Kinds
+// Settings (every setting in its group, with its value and default; the groups open and close as on the Claude Code
+// board, T-585). Like it, Settings opens the Roles and Kinds
 // pages (a list, then one role's or kind's page: turn it off or on, reset it to the built-in one, T-562) and a
 // scout's page edits the scout (how often, model, instructions); the roles and kinds come in the view file too.
 import type { SymccTask, SymccScout } from '../../types'
@@ -15,10 +16,10 @@ import type { OwnerQuestion } from '../core/questions'
 import {
   statusCounts, newestFirst, bandLeads, bandNote, bandBrand, bandWhere, boardBrand, modeLabel, modeOf, planBandText, withCrew, fileWaitText, questionsForYou,
   bannerLines, bannerRule, footerRule, type BannerTone, panelSections, localOffset, when, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, ALL_CLEAR,
-  fittedCells, TITLE_ROOM, fitRow, rowExtra, questionsLabel, archivedOf, archivedNote, statusMark, detailRows, detailRowLines, wrapSegs, answerChoices, hintLineText,
-  type KeyHint, type Seg, type BoardTask, asksMoreTime, gitNote, OVERTIME_OPTIONS, overtimeQuestion, timeLimitOf,
+  fittedCells, TITLE_ROOM, fitRow, rowExtra, questionsLabel, archivedOf, archivedNote, statusMark, detailRows, detailRowLines, wrapSegs, hintLineText,
+  type KeyHint, type Seg, type BoardTask, gitNote, taskActions, taskAsks, type TaskAction, type TaskActionId,
   waitsForYou, sortScouts, scoutListRows, scoutRow, scoutIcon, scoutTone, scoutHowTo, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem, scoutFile,
-  SETTING_GROUPS, SETTINGS, isSettingPage, settingInfo, settingValue, cantPlayNotify,
+  SETTING_GROUPS, SETTINGS, isSettingPage, settingInfo, settingValue, cantPlayNotify, groupSummaryParts,
   type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction,
   DEFAULT_ROLE, isCheckerRole, ALWAYS_ON_KINDS, checkerOn, roleNameError, kindNameError,
 } from '../board'
@@ -139,7 +140,11 @@ export function parseViewFile(text: string | null | undefined): ViewFile | null 
 }
 
 /** The panel's keys (see panelKeys for which ones each page offers). */
-export type PanelKey = 'up' | 'down' | 'open' | 'back' | 'a' | 'x' | 'close' | 't' | 's' | 'c' | 'r' | 'p' | 'o' | 'e'
+export type PanelKey = 'up' | 'down' | 'open' | 'back' | 'a' | 'x' | 'd' | 'close' | 't' | 's' | 'c' | 'r' | 'p' | 'o' | 'e' | ChoiceKey
+
+/** The number keys that pick a page's answer choice (T-583): 1 is the first choice. */
+export type ChoiceKey = '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'
+export const CHOICE_KEYS: readonly ChoiceKey[] = ['1', '2', '3', '4', '5', '6', '7', '8', '9']
 
 /** The list's groups that open and close (▸ Backlog, ▸ Done, ▸ Dropped). */
 export type PanelGroup = 'backlog' | 'done' | 'dropped'
@@ -147,8 +152,9 @@ export type PanelGroup = 'backlog' | 'done' | 'dropped'
 /** What a mouse click on a line or a piece of it does (T-558): open a task or question, open or close a group, or
  *  press one of the panel's keys (a key hint in the footer works as a button); and (T-559) go to a tab, open a scout
  *  or one of its runs, or change a setting; and (T-562) open a page under Settings: the Roles or Kinds list ("roles", "kinds") or one
- *  role's or kind's page ("role:tester", "kind:bug", see settingsPlace). */
-export type PanelHit = { open: string } | { group: PanelGroup } | { key: PanelKey } | { tab: PanelTab } | { scout: string } | { run: string } | { setting: SettingName } | { page: string }
+ *  role's or kind's page ("role:tester", "kind:bug", see settingsPlace); and (T-583) pick answer choice `choice`
+ *  (1 = the first of answerOptions) of the open task or question; and (T-585) open or close a Settings group (its title). */
+export type PanelHit = { open: string } | { group: PanelGroup } | { key: PanelKey } | { tab: PanelTab } | { scout: string } | { run: string } | { setting: SettingName } | { page: string } | { choice: number } | { settingGroup: string }
 
 /** One colored piece of a line, with what a click on it does (only the footer's key hints have one). */
 export type DrawSeg = Seg & { hit?: PanelHit }
@@ -235,6 +241,10 @@ export type PanelChoice = {
   run?: string
   /** that run's report text: undefined while it is read, null when it can't be read */
   report?: string | null
+  /** the Settings groups open (their titles, T-585; SETTINGS_OPEN when left out) */
+  settingsOpen?: readonly string[]
+  /** the answer the owner just sent from this panel (T-583): the open page says it was sent */
+  sent?: { id: string; answer: string }
 }
 
 /** The panel as drawn: its lines, what a click on each line does (null: nothing), the ids of the rows the cursor
@@ -250,7 +260,7 @@ export const groupId = (g: PanelGroup) => `group:${g}`
 export const groupOf = (id: string): PanelGroup | null => (id.startsWith('group:') ? (id.slice(6) as PanelGroup) : null)
 
 /** The key a key hint's word stands for, so a click on the hint does what the key does ('' for "move"). */
-const HINT_KEY: Record<string, PanelKey> = { open: 'open', close: 'close', back: 'back', approve: 'a', answer: 'a', reject: 'x', change: 'open', report: 'open', 'run now': 'r', pause: 'p', resume: 'p', edit: 'e', 'turn off': 'o', 'turn on': 'o', reset: 'r' }
+const HINT_KEY: Record<string, PanelKey> = { open: 'open', close: 'close', back: 'back', approve: 'a', done: 'a', answer: 'a', reject: 'x', 'ask more': 'x', 'show changes': 'd', change: 'open', report: 'open', 'run now': 'r', pause: 'p', resume: 'p', edit: 'e', 'turn off': 'o', 'turn on': 'o', reset: 'r' }
 
 /** The footer's key hints as pieces, each a button for its key: "a approve · x reject · b back". */
 export function hintSegs(keys: KeyHint[]): Line {
@@ -326,9 +336,8 @@ export function panelKeys(f: ViewFile | null, opened: string, tab: PanelTab = 't
   const t = f?.view.tasks.find(x => x.id === opened)
   const q = f?.view.questions?.find(x => x.id === opened)
   if (q) return [{ key: 'a', word: 'answer' }, back]
-  if (t?.status === 'review') return [{ key: 'a', word: 'approve' }, { key: 'x', word: 'reject' }, back]
-  if (t && asksWhat(t, f?.view.max_minutes)) return [{ key: 'a', word: 'answer' }, back]
-  return [back]
+  if (!t) return [back]
+  return [...(taskAsks(t, f?.view.max_minutes) ? [{ key: 'a', word: 'answer' }] : []), ...panelTaskActions(t).map(a => ({ key: a.key!, word: a.word })), back]
 }
 
 /** The panel's lines: the banner and rule, then the list or the open task's (or question's) page, then the keys. */
@@ -353,10 +362,10 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
     keys = panelKeys(f, choice.opened, 'scouts', choice.run ?? '')
   } else if (tab === 'settings') {
     const place = settingsPlace(f, choice.opened)
-    body = place?.def ? defPage(f, place.list, place.def, w) : place ? defsList(f, place.list, choice.cursor, w) : settingsBody(f, choice.cursor, w)
+    body = place?.def ? defPage(f, place.list, place.def, w) : place ? defsList(f, place.list, choice.cursor, w) : settingsBody(f, choice.cursor, choice.settingsOpen ?? SETTINGS_OPEN, w)
     keys = panelKeys(f, place ? choice.opened : '', 'settings')
   } else {
-    const page = choice.opened ? openedPage(f, choice.opened, nowMs, w) : null
+    const page = choice.opened ? openedPage(f, choice.opened, nowMs, w, choice.sent?.id === choice.opened ? choice.sent.answer : '') : null
     body = page ?? listBody(f, choice.cursor, { ...GROUPS_OPEN, ...choice.groups }, nowMs, w)
     keys = panelKeys(f, page ? choice.opened : '')
   }
@@ -487,9 +496,16 @@ function scoutPage(f: ViewFile, sc: SymccScout, choice: PanelChoice, nowMs: numb
   return { ...b, ids, selected }
 }
 
-/** The rows the cursor goes over on the Settings tab, in the Claude Code board's groups and order: the settings, and
- *  the Roles and Kinds rows that open their pages. */
-export const SETTING_ROWS: readonly (SettingName | SettingPage)[] = SETTING_GROUPS.flatMap(g => g.items)
+/** Which Settings groups are open at first: none, as on the Claude Code board's Settings page (S.settingsOpen). */
+export const SETTINGS_OPEN: readonly string[] = []
+
+/** A Settings group's heading as a cursor id ("settings-group:Work"), and back (null for a setting's or page's id). */
+export const settingGroupId = (title: string) => `settings-group:${title}`
+export const settingGroupOf = (id: string): string | null => (id.startsWith('settings-group:') ? id.slice(15) : null)
+
+/** The rows the cursor goes over on the Settings tab, in the Claude Code board's groups and order: each group's
+ *  heading, then (when it is open) its settings and the Roles and Kinds rows that open their pages. */
+export const settingRows = (open: readonly string[]): string[] => SETTING_GROUPS.flatMap(g => [settingGroupId(g.title), ...(open.includes(g.title) ? g.items : [])])
 
 /** "6 roles · 1 off" (the Settings row of the Roles or Kinds page). */
 function defsCount(f: ViewFile, list: SettingPage): string {
@@ -571,16 +587,28 @@ function defPage(f: ViewFile, list: SettingPage, x: ViewDef, w: number): Body {
   return { ...b, ids: [], selected: '' }
 }
 
-/** The Settings tab: each group (Work, Checks before merging, ...) with its settings: name, value, default and range,
- *  and what it does on the line under it; the Roles and Kinds rows open their pages. */
-function settingsBody(f: ViewFile, cursor: number, w: number): Body {
+/** The Settings tab: each group (Work, Checks before merging, ...) as a heading that opens or closes, like the
+ *  Claude Code board's (T-585): "▸ Work · auto · 3 at once" closed (its values in short, core's groupSummaryParts),
+ *  "▾ Work" open with its settings under it: name, value, default and range, and what it does on the line under it;
+ *  the Roles and Kinds rows open their pages. */
+function settingsBody(f: ViewFile, cursor: number, open: readonly string[], w: number): Body {
   const b = bodyMaker()
   const v = f.view
   const nameWidth = Math.max(...SETTINGS.map(x => x.name.length))
-  const selected = SETTING_ROWS[Math.min(Math.max(0, cursor), SETTING_ROWS.length - 1)]!
+  const ids = settingRows(open)
+  const selected = ids[Math.min(Math.max(0, cursor), ids.length - 1)]!
+  const pages = { roles: defsCount(f, 'roles'), kinds: defsCount(f, 'kinds') }
   for (const g of SETTING_GROUPS) {
     b.blank()
-    b.head(g.title)
+    const isOpen = open.includes(g.title)
+    const front = { text: settingGroupId(g.title) === selected ? '› ' : '  ', color: 'ide', bold: true }
+    const hit = { settingGroup: g.title }
+    if (!isOpen) {
+      const sum = groupSummaryParts(g, v, Math.max(20, w - 4), pages)
+      b.add([front, { text: `▸ ${sum.title}`, color: 'text', bold: true }, ...(sum.values ? [{ text: sum.values, color: 'inactive' }] : [])], hit)
+      continue
+    }
+    b.add([front, { text: `▾ ${g.title}`, color: 'text', bold: true }], hit)
     for (const item of g.items) {
       if (isSettingPage(item)) {
         const label = item === 'roles' ? 'Roles' : 'Kinds'
@@ -614,8 +642,8 @@ function settingsBody(f: ViewFile, cursor: number, w: number): Body {
     }
   }
   b.blank()
-  b.add([{ text: `Enter changes a setting (on/off flips) or opens a page · /${f.name}-settings NAME VALUE · or tell the lead`, color: 'inactive' }])
-  return { ...b, ids: [...SETTING_ROWS], selected }
+  b.add([{ text: `Enter on a heading opens or closes its group · Enter changes a setting (on/off flips) or opens a page · /${f.name}-settings NAME VALUE · or tell the lead`, color: 'inactive' }])
+  return { ...b, ids, selected }
 }
 
 /** The list: the questions for the owner, NEEDS YOU, what runs and waits to run, then the groups: the backlog (its
@@ -699,57 +727,71 @@ function questionRow(q: OwnerQuestion, front: string, idWidth: number, w: number
   ]
 }
 
-/** The page of the task or question `id`: its title and rows (detailRows), its question and choices; null when it is gone. */
-function openedPage(f: ViewFile, id: string, nowMs: number, w: number): { lines: Line[]; hits: null; ids: string[]; selected: string } | null {
+/** The page of the task or question `id`: its title and rows (detailRows), its question and its choices, each a
+ *  clickable line (T-583), and the answer just sent (`sent`); null when it is gone. */
+function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = ''): Body | null {
   const v = f.view
+  const b = bodyMaker()
+  const addAll = (ls: Line[]) => ls.forEach(l => b.add(l))
+  const choices = () => {
+    answerOptions(f, id).forEach((c, i) => b.add(choiceLine(c, i, w), { choice: i + 1 }))
+    if (sent) addAll(wrapSegs([{ text: '  answer sent: ', color: 'success', bold: true }, { text: sent, color: 'text' }], w))
+  }
   const q = v.questions?.find(x => x.id === id)
   if (q) {
-    const lines: Line[] = [...wrapSegs([{ text: q.id, color: 'claude', bold: true }, { text: `  ${q.text}`, color: 'text', bold: true }], w)]
-    lines.push([{ text: ' ', color: 'text' }], ...choiceLines(answerOptions(f, id), w))
-    return { lines, hits: null, ids: [], selected: id }
+    addAll(wrapSegs([{ text: q.id, color: 'claude', bold: true }, { text: `  ${q.text}`, color: 'text', bold: true }], w))
+    b.add([{ text: ' ', color: 'text' }])
+    choices()
+    return { ...b, ids: [], selected: id }
   }
   const t = v.tasks.find(x => x.id === id)
   if (!t) return null
-  const lines: Line[] = [...wrapSegs([{ text: t.id, color: 'claude', bold: true }, { text: `  ${t.title}`, color: 'text', bold: true }], w)]
-  for (const r of detailRows(t, { roles: defsIn(f, 'roles'), kinds: defsIn(f, 'kinds'), all: v.tasks, when: iso => when(iso), nowMs, ...(v.archived_done ? { archivedDone: v.archived_done } : {}) })) lines.push(...detailRowLines(r, w))
-  const asked = asksWhat(t, v.max_minutes)
+  addAll(wrapSegs([{ text: t.id, color: 'claude', bold: true }, { text: `  ${t.title}`, color: 'text', bold: true }], w))
+  for (const r of detailRows(t, { roles: defsIn(f, 'roles'), kinds: defsIn(f, 'kinds'), all: v.tasks, when: iso => when(iso), nowMs, ...(v.archived_done ? { archivedDone: v.archived_done } : {}) })) addAll(detailRowLines(r, w))
+  const asked = taskAsks(t, v.max_minutes)
   if (asked) {
-    lines.push([{ text: ' ', color: 'text' }], ...wrapSegs([{ text: 'asks: ', color: 'warning', bold: true }, { text: asked, color: 'text' }], w))
-    lines.push(...choiceLines(answerOptions(f, id), w))
+    b.add([{ text: ' ', color: 'text' }])
+    addAll(wrapSegs([{ text: 'asks: ', color: 'warning', bold: true }, { text: asked.text, color: 'text' }], w))
+    choices()
+  } else if (sent) addAll(wrapSegs([{ text: 'answer sent: ', color: 'success', bold: true }, { text: sent, color: 'text' }], w))
+  if (t.details?.trim() && t.details.trim() !== t.title) {
+    b.add([{ text: ' ', color: 'text' }])
+    addAll(wrapSegs([{ text: t.details.trim(), color: 'inactive' }], w))
   }
-  if (t.details?.trim() && t.details.trim() !== t.title) lines.push([{ text: ' ', color: 'text' }], ...wrapSegs([{ text: t.details.trim(), color: 'inactive' }], w))
-  return { lines, hits: null, ids: [], selected: id }
+  return { ...b, ids: [], selected: id }
 }
 
-/** The numbered choices of a question ("1 Allow", "2 Don't allow", "3 Answer…"). */
-const choiceLines = (choices: string[], w: number): Line[] => choices.map((c, i) => [{ text: `  ${fitRow(2, `${i + 1} ${c}`, '', w).title}`, color: c === OWN_ANSWER ? 'inactive' : 'text' }])
+/** A numbered choice of a question, a line a click picks ("  [1] Allow", "  [3] Answer…"). */
+const choiceLine = (c: string, i: number, w: number): Line => [{ text: `  ${fitRow(2, `[${i + 1}] ${c}`, '', w).title}`, color: c === OWN_ANSWER ? 'inactive' : 'text' }]
 
 /** The last choice of a question: the owner types their own answer. */
 export const OWN_ANSWER = 'Answer…'
 
-/** The choices to answer task or question `id` with (answerChoices; a question's own options), OWN_ANSWER last; [] when it asks nothing. */
+/** The choices to answer task or question `id` with (a task's from core's taskAsks; a question's own options),
+ *  OWN_ANSWER last; [] when it asks nothing. */
 export function answerOptions(f: ViewFile | null, id: string): string[] {
   const q = f?.view.questions?.find(x => x.id === id)
   if (q) return [...q.options.slice(0, 8), OWN_ANSWER]
   const t: BoardTask | undefined = f?.view.tasks.find(x => x.id === id)
-  if (!t || !asksWhat(t, f?.view.max_minutes)) return []
-  const c = asksMoreTime(t) ? answerChoices(undefined, [...OVERTIME_OPTIONS]) : answerChoices(t.asked_files, t.options)
-  return c.length ? c : [OWN_ANSWER]
+  const asks = t ? taskAsks(t, f?.view.max_minutes) : null
+  if (!asks) return []
+  return asks.choices.length ? asks.choices : [OWN_ANSWER]
 }
 
-/** What task `t` asks the owner, '' when nothing (as Claude's task page): a running worker past its time limit asks
- *  for more time; a waiting task asks its question, unless its finished work only waits for the owner's files (it
- *  merges on its own once they are committed or stashed, so there is nothing to answer). */
-export function asksWhat(t: BoardTask, maxMinutes: number | undefined): string {
-  if (asksMoreTime(t)) return overtimeQuestion(t.id, timeLimitOf(maxMinutes ?? 45, t))
-  if (!waitsForYou(t) || fileWaitText(t)) return ''
-  return t.question || t.note || 'it waits for your answer'
-}
+/** The slash command (PanelAction's kind) for each of core's task actions this panel can do; the others (pause,
+ *  resume, retry, drop, ...) have no slash command yet, so the panel leaves them out. */
+export const TASK_ACTION_COMMANDS: Partial<Record<TaskActionId, 'approve' | 'reject' | 'diff'>> = { approve: 'approve', done: 'approve', reject: 'reject', 'ask-more': 'reject', 'show-changes': 'diff' }
 
-/** A panel action as the slash command that does it, run in the TUI's session: approve, reject (with the reason) or answer. */
+/** The actions of task `t`'s page (core's taskActions, the terminal's and VS Code's buttons) that this panel has a
+ *  slash command for, with their keys. */
+export const panelTaskActions = (t: BoardTask): TaskAction[] => taskActions(t).filter(a => a.key && TASK_ACTION_COMMANDS[a.id])
+
+/** A panel action as the slash command that does it, run in the TUI's session: approve, reject (with the reason), diff or answer. */
 export type PanelAction =
   | { kind: 'approve'; id: string }
   | { kind: 'reject'; id: string; reason: string }
+  /** show the files a task in review changed */
+  | { kind: 'diff'; id: string }
   | { kind: 'answer'; id: string; answer: string }
   /** run a scout now, or (with `paused`) pause or resume its timer */
   | { kind: 'scout'; scout: string; paused?: boolean }
@@ -763,6 +805,7 @@ export type PanelAction =
 export function actionCommand(a: PanelAction, name: string = DEFAULT_NAME): { name: string; text: string } {
   if (a.kind === 'approve') return { name: `${name}-approve`, text: a.id }
   if (a.kind === 'reject') return { name: `${name}-reject`, text: `${a.id} ${a.reason.trim()}` }
+  if (a.kind === 'diff') return { name: `${name}-diff`, text: a.id }
   if (a.kind === 'scout') return { name: `${name}-scout`, text: a.paused === undefined ? a.scout : `${a.scout} ${a.paused ? 'pause' : 'resume'}` }
   if (a.kind === 'setting') return { name: `${name}-settings`, text: `${a.setting} ${a.value.trim()}` }
   if (a.kind === 'scout-edit') return { name: `${name}-scout`, text: `${a.scout} ${a.field} ${a.value.trim() || (a.field === 'model' ? 'none' : '')}`.trim() }

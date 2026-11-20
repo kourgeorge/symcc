@@ -12,6 +12,7 @@ import { tellLead, noteForLead, meanwhileText } from '../hooks/app/tell'
 import { saidNeedsYou, findPlayers, playable, playsFor, sayNext, sayDone, WIN_TEXT_VAR } from '../hooks/app/voice'
 import { workerFinished, setSymcc, setBoardMode, check, pump, startWorker, lateHandBack, WORKER_PROMPT, workerQuestionText, type TurnEnd } from '../hooks/app/workers'
 import { needsYou, waitsForYou, answeredLeadLine } from '../hooks/board'
+import { keysFor } from './task-keys'
 import { ranOutOfTime } from'../hooks/core/test-timeout'
 import { claimLead } from '../hooks/app/lead'
 import { SPEED_CAP_MS, bestMsOfAsync } from './timing'
@@ -4973,8 +4974,8 @@ test('the board list shows an answered investigation as "answer" with [investiga
 })
 
 test('the task keys of an answered investigation are done, keep as a note and ask more; a change task in review keeps approve and reject', () => {
-  expect(taskKeys('review', false, [], false, false, true).map(k => `${k.key} ${k.word}`).slice(0, 3)).toEqual(['a done', 'k keep as a note', 'x ask more'])
-  expect(taskKeys('review').map(k => `${k.key} ${k.word}`).slice(0, 3)).toEqual(['a approve', 'x reject', 'd show changes'])
+  expect(keysFor('review', { extra: { kind: 'investigation' } }).map(k => `${k.key} ${k.word}`).slice(0, 3)).toEqual(['a done', 'k keep as a note', 'x ask more'])
+  expect(keysFor('review').map(k => `${k.key} ${k.word}`).slice(0, 3)).toEqual(['a approve', 'x reject', 'd show changes'])
 })
 
 test('a researcher task added without kind is an investigation; with kind change it stays a change', () => {

@@ -8,15 +8,17 @@
 // OpenTUI (T-500): opencode/tui.ts imports them by their written-out names (what OpenCode swaps for its own copies),
 // and loadTuiRuntime names a package that is missing or lacks a function instead of failing with a bare import error.
 import { test, expect } from 'bun:test'
-import { mergeRoles, mergeKinds, when, addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, type Board } from '../../board'
+import { SETTING_GROUPS, groupSummaryParts, taskActions, mergeRoles, mergeKinds, when, addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, type Board } from '../../board'
 import type { PaneView } from '../../app/state'
 import { ICON } from '../../name'
-import { bandLines, bandDraw, BAND_CLICK_HINT, panelLines, panelKeys, parseViewFile, viewFileText, lineText, actionCommand, answerOptions, OWN_ANSWER, viewDefs, type ViewFile } from '../board-view'
+import { bandLines, bandDraw, BAND_CLICK_HINT, panelLines, panelKeys, parseViewFile, viewFileText, lineText, actionCommand, answerOptions, OWN_ANSWER, viewDefs, panelTaskActions, TASK_ACTION_COMMANDS, SETTINGS_OPEN, type ViewFile } from '../board-view'
 import { readFile } from 'node:fs/promises'
 import { PLUGIN_ROOT } from '../host'
 import { startTui, viewPaths, loadTuiRuntime, BOARD_PANEL, setupFailed, colorOf, drawLines, type TuiContext, type TuiRuntime, type TuiPanelInput, type TuiKeyLayer } from '../tui'
 
 const NOW = Date.parse('2026-11-19T12:00:00.000Z')
+/** Every Settings group's title (all of them open). */
+const ALL_GROUPS = SETTING_GROUPS.map(g => g.title)
 const AT = '2026-11-19T11:00:00.000Z'
 
 /** A board: T-1 doing (its worker just claimed it: "worker starting", started 3 minutes ago), T-2 in review, T-3
@@ -121,18 +123,28 @@ test('the panel: the banner, then the list grouped by state (NEEDS YOU, what run
   const page = panelLines(f, { opened: 'T-2', cursor: 0 }, NOW, 100).lines.map(lineText)
   expect(page.some(l => l.startsWith('T-2 a reviewed change'))).toBe(true)
   expect(page.some(l => l.startsWith('Status:') && l.includes('ready for review'))).toBe(true)
-  expect(panelKeys(f, 'T-2').map(k => k.word)).toEqual(['approve', 'reject', 'back'])
+  expect(panelKeys(f, 'T-2').map(k => k.word)).toEqual(['approve', 'reject', 'show changes', 'back'])
+  // T-575: the page's actions are core's taskActions (the terminal's and VS Code's buttons) that have a slash command
+  const t2 = f.view.tasks.find(t => t.id === 'T-2')!
+  expect(panelTaskActions(t2).map(a => a.id)).toEqual(taskActions(t2).filter(a => a.key && TASK_ACTION_COMMANDS[a.id]).map(a => a.id))
+  expect(panelTaskActions(t2).map(a => `${a.key} ${a.id}`)).toEqual(['a approve', 'x reject', 'd show-changes'])
+  // an answered investigation in review: done and ask more, as on the other hosts (keep as a note has no slash command)
+  const inv = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => (t.id === 'T-2' ? { ...t, kind: 'investigation' } : t)) } } as ViewFile
+  expect(panelKeys(inv, 'T-2').map(k => `${k.key} ${k.word}`)).toEqual(['a done', 'x ask more', 'b back'])
+  // a waiting task with no question text says its note, else that it waits (core's taskAsks)
+  const noQ = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => (t.id === 'T-3' ? { ...t, question: null, options: undefined, note: '' } : t)) } } as ViewFile
+  expect(panelLines(noQ, { opened: 'T-3', cursor: 0 }, NOW, 100).lines.map(lineText).some(l => l.includes('asks: it waits for your answer'))).toBe(true)
   // a waiting task: its question and the numbered choices, the last one the owner's own answer
   const asks = panelLines(f, { opened: 'T-3', cursor: 0 }, NOW, 100).lines.map(lineText)
   expect(asks.some(l => l.includes('asks: Which database?'))).toBe(true)
-  expect(asks).toContain('  2 postgres')
+  expect(asks).toContain('  [2] postgres')
   expect(answerOptions(f, 'T-3')).toEqual(['mysql', 'postgres', OWN_ANSWER])
   expect(panelKeys(f, 'T-3').map(k => k.word)).toEqual(['answer', 'back'])
   // a running worker whose time is up: its page asks for more time, with Claude's +30 min / +60 min / Stop it
   const over = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => (t.id === 'T-1' ? { ...t, time_ask: AT, note: 'time is up' } : t)) } }
   expect(panelKeys(over, 'T-1').map(k => k.word)).toEqual(['answer', 'back'])
   expect(answerOptions(over, 'T-1')).toEqual(['+30 min', '+60 min', 'Stop it', OWN_ANSWER])
-  expect(panelLines(over, { opened: 'T-1', cursor: 0 }, NOW, 100).lines.map(lineText)).toContain('  1 +30 min')
+  expect(panelLines(over, { opened: 'T-1', cursor: 0 }, NOW, 100).lines.map(lineText)).toContain('  [1] +30 min')
   // a waiting task whose finished work only waits for the owner's files: nothing to answer
   const files = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => (t.id === 'T-3' ? { ...t, merge_wait: { dirty: ['src/a.ts'] } } : t)) } }
   expect(panelKeys(files, 'T-3').map(k => k.word)).toEqual(['back'])
@@ -141,6 +153,7 @@ test('the panel: the banner, then the list grouped by state (NEEDS YOU, what run
   // the actions are symcc's slash commands
   expect(actionCommand({ kind: 'approve', id: 'T-2' })).toEqual({ name: 'symcc-approve', text: 'T-2' })
   expect(actionCommand({ kind: 'reject', id: 'T-2', reason: ' too big ' })).toEqual({ name: 'symcc-reject', text: 'T-2 too big' })
+  expect(actionCommand({ kind: 'diff', id: 'T-2' })).toEqual({ name: 'symcc-diff', text: 'T-2' })
   expect(actionCommand({ kind: 'answer', id: 'Q-1', answer: 'yes' })).toEqual({ name: 'symcc-answer', text: 'Q-1 yes' })
   // no view file yet: says so
   expect(panelLines(null, { opened: '', cursor: 0 }, NOW, 100).lines.map(lineText).join('\n')).toContain('No board yet')
@@ -246,6 +259,7 @@ test('startTui on a fake OpenCode TUI: reads the view file above its folder, dra
   expect(shown(panel).some(l => l.startsWith('Status:'))).toBe(true)
   await board.press('a', 'ses_1')
   await board.press('x', 'ses_1')
+  await board.press('d', 'ses_1')
   await goTo('T-3')
   await board.press('a', 'ses_1')
   answers.select = OWN_ANSWER
@@ -256,6 +270,7 @@ test('startTui on a fake OpenCode TUI: reads the view file above its folder, dra
   expect(sent).toEqual([
     { sessionID: 'ses_1', name: 'symcc-approve', text: 'T-2' },
     { sessionID: 'ses_1', name: 'symcc-reject', text: 'T-2 too big' },
+    { sessionID: 'ses_1', name: 'symcc-diff', text: 'T-2' },
     { sessionID: 'ses_1', name: 'symcc-answer', text: 'T-3 postgres' },
     { sessionID: 'ses_1', name: 'symcc-answer', text: 'T-3 sqlite, it is small' },
   ])
@@ -706,14 +721,14 @@ test('T-559: the Scouts tab lists the scouts from view.json, a scout\'s page sho
   expect(run(undefined)).toContain('  (reading the report…)')
   expect(run(null).some(l => l.includes("can't be read"))).toBe(true)
   expect(panelKeys(f, 'docs-check', 'scouts', '2026-11-19T11:50:00.000Z').map(k => k.word)).toEqual(['back'])
-  // Settings: every group's title, every setting with its value and default
-  const settings = panelLines(f, { tab: 'settings', opened: '', cursor: 0 }, NOW, 140)
+  // Settings, every group open: every group's title, every setting with its value and default
+  const settings = panelLines(f, { tab: 'settings', opened: '', cursor: 1, settingsOpen: ALL_GROUPS }, NOW, 140)
   const s = settings.lines.map(lineText)
-  for (const g of ['Work', 'Checks before merging', 'Workers', 'Scouts', 'Board and alerts']) expect(s).toContain(g)
+  for (const g of ['Work', 'Checks before merging', 'Workers', 'Scouts', 'Board and alerts']) expect(s).toContain(`  ▾ ${g}`)
   expect(s.find(l => l.includes('max_parallel'))).toMatch(/max_parallel +2 · default 3 · 1-8/)
   expect(s.find(l => l.includes('test_commands'))).toContain('bun test')
   expect(s.find(l => /^› /.test(l))).toContain('mode')
-  expect(settings.ids[0]).toBe('mode')
+  expect(settings.ids.slice(0, 2)).toEqual(['settings-group:Work', 'mode'])
   expect(settings.ids).toContain('notify')
   expect(settings.hits[s.findIndex(l => l.includes('max_minutes'))]).toEqual({ setting: 'max_minutes' })
   expect(panelKeys(f, '', 'settings').map(k => k.word)).toEqual(['move', 'change', 'views', 'close'])
@@ -776,10 +791,14 @@ test('T-559: startTui: t, s and c switch tabs (a click on a tab too); on a scout
   // c: the Settings tab; Enter on mode picks from a list, on max_parallel asks for a number, on checker flips it
   await board.press('c', 'ses_1')
   expect([board.state().tab, board.state().opened, board.state().run, board.state().cursor]).toEqual(['settings', '', '', 0])
+  // the groups start closed: Enter on the Work heading opens it
+  await board.press('open', 'ses_1')
   expect(lines().some(l => l.includes('max_parallel') && l.includes('default 3'))).toBe(true)
+  await board.press('down', 'ses_1')
   await board.press('open', 'ses_1')
   await board.press('down', 'ses_1')
   await board.press('open', 'ses_1')
+  ;(rowEls(panel).find(r => r.text.includes('▸ Checks before merging'))!.el.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0 })
   const checker = rowEls(panel).find(r => r.text.includes('checker ') && r.text.includes('default off'))!
   ;(checker.el.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0 })
   await new Promise<void>(res => setTimeout(res, 0))
@@ -788,7 +807,7 @@ test('T-559: startTui: t, s and c switch tabs (a click on a tab too); on a scout
   const maxMinutes = rowEls(panel).find(r => r.text.includes('max_minutes'))!
   ;(maxMinutes.el.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0 })
   await new Promise<void>(res => setTimeout(res, 0))
-  expect(board.state().cursor).toBe(2)
+  expect(board.state().cursor).toBe(3)
   expect(sent).toEqual([
     { sessionID: 'ses_1', name: 'symcc-scout', text: 'docs-check' },
     { sessionID: 'ses_1', name: 'symcc-scout', text: 'docs-check resume' },
@@ -862,7 +881,7 @@ test('T-562: viewDefs gives each role and kind where it comes from, whether it c
 test('T-562: the Settings tab opens the Roles and Kinds pages from view.json; a role\'s and a kind\'s page show it, and turn it off or on or reset it with /symcc-settings role|kind', () => {
   const f = defsViewFile()
   // the Settings list: the Roles and Kinds rows with their counts, each a row the cursor goes over
-  const settings = panelLines(f, { tab: 'settings', opened: '', cursor: 0 }, NOW, 140)
+  const settings = panelLines(f, { tab: 'settings', opened: '', cursor: 0, settingsOpen: ['Workers'] }, NOW, 140)
   const s = settings.lines.map(lineText)
   expect(s.find(l => l.includes('Roles'))).toMatch(/Roles +4 roles · 1 off/)
   expect(s.find(l => /^ +Kinds/.test(l))).toMatch(/Kinds +2 kinds/)
@@ -939,7 +958,8 @@ test('T-562: startTui: Settings opens Roles, a role\'s page turns it on and rese
   const lines = () => rowEls(panel).map(r => r.text)
   const clickRow = (has: string) => (rowEls(panel).find(r => r.text.includes(has))!.el.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0 })
   await board.press('c', 'ses_1')
-  // a click on the Roles row opens the Roles page; down twice and Enter opens tester
+  // a click on the Workers heading opens it; a click on the Roles row opens the Roles page; down twice and Enter opens tester
+  clickRow('▸ Workers')
   clickRow('4 roles')
   expect(board.state().opened).toBe('roles')
   expect(lines().some(l => l.includes('tester') && l.includes('replaced, off'))).toBe(true)
@@ -999,4 +1019,165 @@ test('T-574: OpenCode\'s task page shows local times with the shared when, and t
   // the owner's tester role (its description and model) and bug kind (its description)
   expect(page).toContain('tester — My tester · model opus')
   expect(page).toContain('bug — A bug to fix')
+})
+
+test('T-583: on a waiting task\'s and a question\'s page each choice is a clickable line; a click or its number key sends /symcc-answer, the page says it was sent; a right click does nothing', async () => {
+  const f0 = viewFile()
+  // T-3 asks a question with options, T-1 is over its time, T-4 asks for files; Q-3 is the owner's question
+  const tasks = f0.view.tasks.map(t =>
+    t.id === 'T-1' ? { ...t, time_ask: AT, note: 'time is up' } : t.id === 'T-4' ? { ...t, status: 'waiting' as const, question: 'May I change docs/?', asked_files: ['docs/'] } : t,
+  )
+  const f: ViewFile = { ...f0, view: { ...f0.view, tasks, questions: [{ id: 'Q-3', text: 'How often?', options: ['Once a day', 'Once a week'], asked_at: AT }] } }
+  const page = (id: string) => panelLines(f, { opened: id, cursor: 0 }, NOW, 100)
+  // the choices are numbered lines, each with its click
+  const d = page('Q-3')
+  const at = d.lines.map(lineText).indexOf('  [1] Once a day')
+  expect(at).toBeGreaterThan(0)
+  expect(d.hits[at]).toEqual({ choice: 1 })
+  expect(d.lines.map(lineText)).toContain(`  [3] ${OWN_ANSWER}`)
+  expect(page('T-4').lines.map(lineText)).toContain("  [2] Don't allow")
+  const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)]])
+  const sent: { sessionID: string; name: string; text: string }[] = []
+  const slots: { append: string; render: (input: never) => unknown }[] = []
+  const answers = { prompt: 'every hour' as string | undefined }
+  const ctx: TuiContext = {
+    location: { directory: '/work/proj' },
+    theme: {},
+    renderer: { width: 120 },
+    client: { session: { command: async input => void sent.push(input) } },
+    keymap: { layer: () => undefined },
+    ui: {
+      toast: { show: () => undefined },
+      dialog: { prompt: async () => answers.prompt, select: async () => undefined },
+      panel: { open: () => true, close: () => undefined, current: () => undefined },
+      slot: claim => (slots.push(claim as never), () => undefined),
+    },
+  }
+  const board = startTui(ctx, { runtime: fakeRuntime(), readText: async p => files.get(p) ?? Promise.reject(new Error('missing')), every: () => () => undefined, now: () => NOW })
+  await board.refresh()
+  const panel = slots.find(s => s.append === 'session.panel')!.render({ name: BOARD_PANEL, sessionID: 'ses_1', width: 100, focused: true, close: () => undefined, focus: () => undefined } as never) as El
+  const settle = () => new Promise<void>(res => setTimeout(res, 0))
+  const clickChoice = async (text: string, button = 0) => {
+    const r = rowEls(panel).find(x => x.text === text)!
+    expect(typeof r.el.props.onMouseUp).toBe('function')
+    ;(r.el.props.onMouseUp as (e: unknown) => void)({ type: 'up', button, stopPropagation: () => undefined })
+    await settle()
+  }
+  const openPage = async (id: string) => {
+    const r = rowEls(panel).find(x => x.text.includes(`${id} `))!
+    ;(r.el.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0 })
+    await settle()
+    expect(board.state().opened).toBe(id)
+  }
+  const back = () => board.press('back', 'ses_1')
+  // Q-3: a right click does nothing; a left click on a choice answers it; the page says it was sent
+  await openPage('Q-3')
+  await clickChoice('  [2] Once a week', 2)
+  expect(sent).toEqual([])
+  await clickChoice('  [2] Once a week')
+  expect(rowEls(panel).some(r => r.text.includes('answer sent: Once a week'))).toBe(true)
+  // the number key does the same; "Answer…" asks for a typed answer
+  await board.press('1', 'ses_1')
+  await board.press('3', 'ses_1')
+  // a number past the choices does nothing
+  await board.press('9', 'ses_1')
+  await back()
+  // T-3: its own options
+  await openPage('T-3')
+  expect(rowEls(panel).some(r => r.text.includes('answer sent'))).toBe(false)
+  await clickChoice('  [1] mysql')
+  await board.press('2', 'ses_1')
+  await back()
+  // T-1: more time
+  await openPage('T-1')
+  await clickChoice('  [2] +60 min')
+  await board.press('3', 'ses_1')
+  await back()
+  // T-4: Allow / Don't allow files
+  await openPage('T-4')
+  await clickChoice('  [1] Allow')
+  await board.press('2', 'ses_1')
+  // a typed answer left empty sends nothing
+  answers.prompt = ''
+  await clickChoice(`  [3] ${OWN_ANSWER}`)
+  expect(sent.map(x => `${x.name} ${x.text}`)).toEqual([
+    'symcc-answer Q-3 Once a week',
+    'symcc-answer Q-3 Once a day',
+    'symcc-answer Q-3 every hour',
+    'symcc-answer T-3 mysql',
+    'symcc-answer T-3 postgres',
+    'symcc-answer T-1 +60 min',
+    'symcc-answer T-1 Stop it',
+    'symcc-answer T-4 Allow',
+    "symcc-answer T-4 Don't allow",
+  ])
+  // on the list a number key does nothing
+  await back()
+  await board.press('1', 'ses_1')
+  expect(sent.length).toBe(9)
+  board.stop()
+})
+
+test('T-585: the Settings tab\'s groups open and close like the Claude Code board\'s: all closed at first, each "▸ title · summary"; Enter or a click opens one ("▾ title" and its rows); a closed group\'s rows are not in the cursor list; closing a group cancels its open pick list', async () => {
+  const f = viewFile()
+  // the start state: every group closed, as the Claude Code board's S.settingsOpen
+  expect(SETTINGS_OPEN).toEqual([])
+  const closed = panelLines(f, { tab: 'settings', opened: '', cursor: 0 }, NOW, 140)
+  const c = closed.lines.map(lineText)
+  const pages = { roles: '0 roles', kinds: '0 kinds' }
+  for (const g of SETTING_GROUPS) {
+    const sum = groupSummaryParts(g, f.view, 136, pages)
+    expect(c.some(l => l.endsWith(`▸ ${sum.title}${sum.values}`))).toBe(true)
+  }
+  expect(c.find(l => l.includes('▸ Work'))).toContain('auto')
+  expect(closed.ids).toEqual(SETTING_GROUPS.map(g => `settings-group:${g.title}`))
+  expect(c.some(l => l.includes('max_parallel'))).toBe(false)
+  expect(closed.hits[c.findIndex(l => l.includes('▸ Work'))]).toEqual({ settingGroup: 'Work' })
+  // startTui: Enter on a heading and a click on one open and close it
+  const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)]])
+  const sent: { sessionID: string; name: string; text: string }[] = []
+  const slots: { append: string; render: (input: never) => unknown }[] = []
+  let answerPick: (v: unknown) => void = () => undefined
+  const ctx: TuiContext = {
+    location: { directory: '/work/proj' },
+    theme: {},
+    renderer: { width: 140 },
+    client: { session: { command: async input => void sent.push(input) } },
+    keymap: { layer: () => undefined },
+    ui: {
+      toast: { show: () => undefined },
+      dialog: { prompt: async () => undefined, select: <V,>() => new Promise<V | undefined>(res => (answerPick = res as (v: unknown) => void)) },
+      panel: { open: () => true, close: () => undefined, current: () => undefined },
+      slot: claim => (slots.push(claim as never), () => undefined),
+    },
+  }
+  const board = startTui(ctx, { runtime: fakeRuntime(), readText: async p => files.get(p) ?? Promise.reject(new Error('missing')), every: () => () => undefined, now: () => NOW })
+  await board.refresh()
+  const panel = slots.find(s => s.append === 'session.panel')!.render({ name: BOARD_PANEL, sessionID: 'ses_1', width: 142, focused: true, close: () => undefined } as never) as El
+  const lines = () => rowEls(panel).map(r => r.text)
+  const clickRow = (has: string) => (rowEls(panel).find(r => r.text.includes(has))!.el.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0 })
+  await board.press('c', 'ses_1')
+  expect(board.state().settingsOpen).toEqual([])
+  await board.press('open', 'ses_1')
+  expect(board.state().settingsOpen).toEqual(['Work'])
+  expect(lines().some(l => l.includes('▾ Work'))).toBe(true)
+  expect(lines().some(l => l.includes('max_parallel'))).toBe(true)
+  await board.press('open', 'ses_1')
+  expect(board.state().settingsOpen).toEqual([])
+  expect(lines().some(l => l.includes('max_parallel'))).toBe(false)
+  // a click on Scouts opens it and puts the cursor on its heading
+  clickRow('▸ Scouts')
+  expect(board.state().settingsOpen).toEqual(['Scouts'])
+  expect(board.state().cursor).toBe(3)
+  clickRow('▾ Scouts')
+  expect(board.state().settingsOpen).toEqual([])
+  // Enter on mode opens its pick list; closing Work meanwhile cancels it: the pick is not sent
+  clickRow('▸ Work')
+  await board.press('down', 'ses_1')
+  const asked = board.press('open', 'ses_1')
+  clickRow('▾ Work')
+  answerPick('review')
+  await asked
+  expect(sent).toEqual([])
+  board.stop()
 })
