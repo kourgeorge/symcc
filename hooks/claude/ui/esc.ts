@@ -39,6 +39,8 @@ export function escStep(at: PanePlace, s: Pick<typeof S, 'settingEdit' | 'settin
     if (s.answering === at.opened) return 'cancel answer'
     return 'board list'
   }
+  // the Live tab has no search: one left over from the Tasks tab is not on screen, so Esc closes the panel
+  if (at.tab === 'live') return null
   return s.search ? 'clear search' : null
 }
 
