@@ -5,7 +5,7 @@
 //   host.ts; for Claude Code, its Edit, Write and NotebookEdit, and Bash: claude/tools.ts), so no tool name is read here.
 // Both are written to the task's current try on the board at once (try_question, try_refused), so a plugin reload
 // before the hand-back doesn't lose them; finishWork (workers.ts) decides from the board.
-import { type Board, type BoardTask, ASK_TOOL, ASK_SCHEMA, ASK_SENT, OPTIONS_MIN, OPTIONS_MAX, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, bashPathsToCheck, bashTooManyText, gitWriteIn, gitWriteText, workerGitWriteText, scoutGitWriteText, editInProject, scoutEditText, mergeStepAllow, intoOf, editTarget, find, isInvestigation, patchTask, realPathOf, brokenLinkText, guardReason, guardFailedText, type PathLookup } from '../board'
+import { type Board, type BoardTask, ASK_TOOL, ASK_SCHEMA, ASK_SENT, OPTIONS_MIN, OPTIONS_MAX, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, bashPathsToCheck, bashTooManyText, gitWriteIn, gitWriteText, workerGitWriteText, scoutGitWriteText, editInProject, scoutEditText, mergeStepAllow, scratchGitAllow, scratchTemps, eitherAllow, type GitAllow, intoOf, editTarget, find, isInvestigation, patchTask, realPathOf, brokenLinkText, guardReason, guardFailedText, type PathLookup } from '../board'
 import { S, toolName, type Worker, workers, scoutRuns, checkerRuns, stopped, isOwnAgent, boardAgents, rememberOnBoard } from './state'
 import type { FileTouch, Host } from '../host'
 import { load, change, now } from './store'
@@ -183,7 +183,7 @@ export async function checkEdit($: Host, agentId: string | undefined, touch: Fil
   if (on?.kind === 'checker') return checkerCheck($, touch, on.worktree, cwd)
   const w = mine ?? (on?.kind === 'worker' ? on.worker : undefined)
   if (!w) return unknownAgentCheck(agentId, kindOf)
-  if ('command' in touch) return (await outsideOwnFolder($, touch, w.worktree, cwd)) ?? workerGitWrite($, w, touch.command)
+  if ('command' in touch) return (await outsideOwnFolder($, touch, w.worktree, cwd)) ?? workerGitWrite($, w, touch.command, cwd)
   const real = await realEdit($, touch.path, w.worktree, S.root)
   // realEdit gives null only for an edit with a path
   if (real === null) return brokenLinkText(editTarget(touch.path)!)
@@ -241,7 +241,7 @@ export const stoppedText = () => `${S.N.name} stopped this agent. Do nothing mor
  * is; it has no file list. Undefined: allowed.
  */
 async function checkerCheck($: Host, touch: FileTouch, worktree: string, cwd?: string): Promise<string | undefined> {
-  const git = 'command' in touch ? gitWriteIn(touch.command) : undefined
+  const git = 'command' in touch && gitWriteIn(touch.command) ? gitWriteIn(touch.command, await scratchGit($, worktree), cwd) : undefined
   if (git) return gitWriteText(git)
   return outsideOwnFolder($, touch, worktree, cwd)
 }
@@ -253,13 +253,27 @@ async function checkerCheck($: Host, touch: FileTouch, worktree: string, cwd?: s
  * task, after a clash with the branch it merges into) may still run `git merge <that branch>` and `git merge --abort`
  * (mergeStepAllow), as its prompt asks; symcc adds and commits the resolved files as for any try. Undefined: allowed.
  */
-async function workerGitWrite($: Host, w: Worker, command: string): Promise<string | undefined> {
+async function workerGitWrite($: Host, w: Worker, command: string, cwd?: string): Promise<string | undefined> {
   if (!gitWriteIn(command)) return undefined
+  const scratch = await scratchGit($, w.worktree)
+  if (!gitWriteIn(command, scratch, cwd)) return undefined
   // an unreadable board throws on, so the hook's .catch refuses the command (see guardFailed)
   const t = find(await load($), w.task)
   const into = t?.merge_main ? intoOf(t) : undefined
-  const git = gitWriteIn(command, into ? mergeStepAllow(into) : undefined)
+  const git = gitWriteIn(command, into ? eitherAllow(scratch, mergeStepAllow(into)) : scratch, cwd)
   return git ? workerGitWriteText(git, into) : undefined
+}
+
+/**
+ * The git writes a worker or checker in folder `worktree` may run in a throwaway repository (scratchGitAllow, T-591):
+ * under /tmp or the system temp folder, never in the project or that folder (each by both its names). With no project
+ * folder known, none.
+ */
+async function scratchGit($: Host, worktree: string): Promise<GitAllow> {
+  if (!S.root || !worktree.startsWith('/')) return () => false
+  const look = diskLook($)
+  const [wts, tops, tmp] = await Promise.all([bothNames(look, worktree), bothNames(look, S.root), Promise.resolve().then(() => $.env('TMPDIR')).catch(() => undefined)])
+  return scratchGitAllow(scratchTemps(tmp), [...wts, ...tops])
 }
 
 /**
