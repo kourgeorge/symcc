@@ -11,7 +11,7 @@ import { test, expect } from 'bun:test'
 import { SETTING_GROUPS, groupSummaryParts, taskActions, settingsKeys, mergeRoles, mergeKinds, when, addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, type Board } from '../../board'
 import type { PaneView } from '../../app/state'
 import { ICON } from '../../name'
-import { bandLines, bandDraw, BAND_CLICK_HINT, panelLines, panelKeys, parseViewFile, viewFileText, lineText, actionCommand, answerOptions, OWN_ANSWER, viewDefs, panelTaskActions, TASK_ACTION_COMMANDS, SETTINGS_OPEN, type ViewFile } from '../board-view'
+import { bandLines, bandDraw, BAND_CLICK_HINT, panelLines, panelKeys, parseViewFile, viewFileText, lineText, actionCommand, answerOptions, OWN_ANSWER, viewDefs, panelTaskActions, TASK_ACTION_COMMANDS, SETTINGS_OPEN, approveSent, APPROVE_SENT_MS, type ViewFile } from '../board-view'
 import { readFile } from 'node:fs/promises'
 import { taskSections } from '../../core/task-sections'
 import { PLUGIN_ROOT } from '../host'
@@ -1490,4 +1490,34 @@ test('T-596: an approved task in review whose approve runs leaves NEEDS YOU: lis
     expect(needsBlock(list(f)).some(l => /T-2 /.test(l))).toBe(true)
     expect(bandLines(f, NOW, 200, 20).map(lineText)[0]).toContain('1 ready for review')
   }
+})
+
+test('T-614: right after the panel sends an approve, the page badge, the Status row and the Stage line all say prep; the board takes over once a step shows', () => {
+  const f0 = viewFile()
+  const runs = [{ started: new Date(NOW - 20 * 60_000).toISOString(), ended: new Date(NOW - 5 * 60_000).toISOString() }]
+  const withT2 = (extra: object) => ({ ...f0, view: { ...f0.view, tasks: f0.view.tasks.map(t => (t.id === 'T-2' ? { ...t, runs, ...extra } : t)) } })
+  const page = (f: ViewFile, approving?: { id: string; at: number }) => panelLines(f, { opened: 'T-2', cursor: 0, ...(approving ? { approving } : {}) }, NOW, 140).lines.map(lineText)
+  const sent = { id: 'T-2', at: NOW - 1000 }
+  const f = withT2({})
+  const lines = page(f, sent)
+  // the page itself (the banner above counts the board's statuses)
+  const all = lines.slice(lines.indexOf('T-2 a reviewed change')).join('\n')
+  expect(all).not.toContain('ready for review')
+  expect(lines).toContain('[✎ prep]')
+  expect(lines.find(l => l.trim().startsWith('Status:'))).toContain('✎ prep')
+  expect(all).toMatch(/Stage:[\s\S]*review ✓[\s\S]*● prep[\s\S]*merge/)
+  expect(approveSent(f, sent, NOW)).toBe(true)
+  // without it, or for another task, or once too old: still ready for review everywhere
+  for (const a of [undefined, { id: 'T-1', at: NOW }, { id: 'T-2', at: NOW - APPROVE_SENT_MS }]) {
+    const ls = page(f, a)
+    expect(ls).toContain('[◆ ready for review]')
+    expect(ls.find(l => l.trim().startsWith('Status:'))).toContain('ready for review')
+    expect(ls.join('\n')).toMatch(/● review/)
+  }
+  // a step on the board: the board carries the phase (the panel drops its flag)
+  const testing = withT2({ checking: { step: 'testing', at: new Date(NOW - 10_000).toISOString() } })
+  expect(approveSent(testing, sent, NOW)).toBe(false)
+  expect(page(testing, sent)).toContain('[⧗ test]')
+  // the task left review (merged): no flag either
+  expect(approveSent(withT2({ status: 'done' }), sent, NOW)).toBe(false)
 })

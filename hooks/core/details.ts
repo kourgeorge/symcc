@@ -76,8 +76,8 @@ export type StageMark = { step: StageStep; state: 'done' | 'now' | 'later' }
  * approve's step it is in now and the merge ("… test ✓ → review ✓ → ● test → merge", "… review ✓ → ● merge"); a done task: all done. null for the
  * other statuses and for an investigation (nothing is merged).
  */
-export function taskStage(t: BadgeTask & Pick<SymccTask, 'needs_review'> & { kind?: unknown; checker?: string }, nowMs: number, board: { mode?: unknown; checker?: unknown } = {}): StageMark[] | null {
-  const p = taskPhase(t, nowMs)
+export function taskStage(t: BadgeTask & Pick<SymccTask, 'needs_review'> & { kind?: unknown; checker?: string }, nowMs: number, board: { mode?: unknown; checker?: unknown } = {}, merging = false): StageMark[] | null {
+  const p = taskPhase(t, nowMs, undefined, { merging })
   // a files-merge running (a waiting task shown doing) has a Stage line too, like an approve
   if (!['doing', 'review', 'done'].includes(p.shown) || isInvestigation(t)) return null
   const hadChecker = (t.runs?.[t.runs.length - 1]?.checkers?.length ?? 0) > 0 || !!t.checker || checkStepNow(t, nowMs) === 'checker'
@@ -135,14 +135,17 @@ function originWordSegs(o: NonNullable<ReturnType<typeof originOf>>): Seg[] {
 /**
  * The labelled rows of the task page, in order: Status, Stage (`board`: its mode and checker setting, see taskStage), Now (STATE_LABEL), Role, From, Why, Request, Seen, Files, Into (the branch it
  * merges into), After (with a warning row for a task it waits for that merges into another branch), Research, Branch, Commits, Tries.
- * `when` turns an ISO time into a short date; `all` finds the tasks this one waits for.
+ * `when` turns an ISO time into a short date; `all` finds the tasks this one waits for; `merging`, an approve this
+ * page started (see statusBadge), so the Status row and the Stage line say the same step as the page's badge.
  */
-export function detailRows(t: SymccTask, o: { roles: readonly Pick<RoleDef, 'name' | 'description' | 'model'>[]; kinds?: readonly Pick<KindDef, 'name' | 'description'>[]; all: SymccTask[]; when: (iso: string) => string; nowMs: number; archivedDone?: string[]; board?: { mode?: unknown; checker?: unknown } }): DetailRow[] {
+export function detailRows(t: SymccTask, o: { roles: readonly Pick<RoleDef, 'name' | 'description' | 'model'>[]; kinds?: readonly Pick<KindDef, 'name' | 'description'>[]; all: SymccTask[]; when: (iso: string) => string; nowMs: number; archivedDone?: string[]; board?: { mode?: unknown; checker?: unknown }; merging?: boolean }): DetailRow[] {
   const R: DetailRow[] = []
   // the status names the step a doing task is in ("⌕ checker · 5m"), and the Stage line where that is on the way to the merge
-  const badge = statusBadge(t as BoardTask, o.nowMs)
+  // (`merging`, an approve the page started: its step at once, on the Status row and the Stage line alike, as on the badge)
+  const merging = !!o.merging
+  const badge = statusBadge(t as BoardTask, o.nowMs, undefined, merging)
   R.push({ label: 'Status', segs: [{ text: badge.text, color: badge.color, bold: true }, { text: ` · added ${o.when(t.created_at)} · changed ${o.when(t.updated_at)}`, color: 'inactive' }] })
-  const stage = taskStage(t as BoardTask, o.nowMs, o.board)
+  const stage = taskStage(t as BoardTask, o.nowMs, o.board, merging)
   if (stage) R.push({ label: 'Stage', segs: stageSegs(stage) })
   if (t.note) R.push({ label: STATE_LABEL, segs: [{ text: t.note, color: 'inactive', italic: true }] })
   const name = roleOf(t)
