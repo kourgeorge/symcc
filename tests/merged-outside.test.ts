@@ -4,7 +4,7 @@
 // scripted fake git (as merge.test.ts does).
 import { expect } from 'claude-code/testing'
 import { type Board, addTask, emptyBoard, patchTask, find, ready, statsReport, isSha } from '../hooks/board'
-import { S, leadQueue, meanwhile } from '../hooks/app/state'
+import { S, leadQueue, meanwhile, workers } from '../hooks/app/state'
 import { saveBoard, load } from '../hooks/app/store'
 import { runTool } from '../hooks/app/tools'
 import { test } from './reset'
@@ -22,10 +22,10 @@ const ok = (stdout = ''): Res => ({ exitCode: 0, stdout, stderr: '' })
 const fail = (stderr = ''): Res => ({ exitCode: 1, stdout: '', stderr })
 
 /** What the fake git knows: whether the branch is there, whether its tip is in main, and its commits main lacks (`missing`). */
-type Git = { branch: boolean; merged: boolean; missing: number; worktree: boolean }
+type Git = { branch: boolean; merged: boolean; missing: number; worktree: boolean; status: string }
 
 function world(g: Partial<Git> = {}) {
-  const git: Git = { branch: true, merged: true, missing: 0, worktree: true, ...g }
+  const git: Git = { branch: true, merged: true, missing: 0, worktree: true, status: '', ...g }
   const files = new Map<string, string>()
   const calls: string[] = []
   const commitRec = (sha: string, n: number) => `${sha}\x1fT-1: Do it (try ${n})\n\nSymcc-Task: T-1\nSymcc-Try: ${n}\n\x1e`
@@ -40,13 +40,13 @@ function world(g: Partial<Git> = {}) {
     if (a[0] === 'merge-base' && a[1] === '--is-ancestor') return git.merged ? ok() : fail()
     if (a[0] === 'rev-list' && a.includes('--ancestry-path')) return ok(`${MERGE} ${M0} ${C2}\n`)
     if (a[0] === 'cherry') return ok([...Array(2 - git.missing).fill(`- ${C1}`), ...Array(git.missing).fill(`+ ${C2}`)].join('\n'))
-    if (a[0] === 'status') return ok('')
+    if (a[0] === 'status') return ok(git.status)
     if (a[0] === 'worktree' && a[1] === 'list') return ok(`worktree ${ROOT}\nbranch refs/heads/main\n`)
     if (a[0] === 'worktree' && a[1] === 'remove') return files.delete(`${WT}/.git`), ok()
     if (a[0] === 'update-ref' && a[1] === '-d') return (git.branch = false), ok()
     return ok()
   }
-  const { host } = fakeHost({
+  const { host, sent } = fakeHost({
     run: async (argv, o = {}) => {
       const cwd = o.cwd ?? ROOT
       const [cmd, ...rest] = argv
@@ -67,7 +67,7 @@ function world(g: Partial<Git> = {}) {
   leadQueue.splice(0)
   meanwhile.splice(0)
   if (git.worktree) files.set(`${WT}/.git`, 'gitdir: x')
-  return { $: host, git, files, calls }
+  return { $: host, git, files, calls, sent }
 }
 
 /** A board with T-1 (in `status`, two tries, its first commit recorded) and T-2 waiting on it. */
@@ -143,6 +143,43 @@ test('a rebased branch whose commits are all in main as equal changes is marked 
   expect(find(await load(w.$), 'T-1')!.status).toBe('done')
   expect(out).toContain('its branch symcc/T-1 was kept')
   expect(w.git.branch).toBe(true)
+})
+
+test('a running task is marked done: its worker is stopped and its open try ends as finished with the note "merged"', async () => {
+  const w = world()
+  const runs = [{ started: ISO, ended: ISO, end: 'failed', commits: [C1] }, { started: ISO }]
+  await seed(w, 'doing', { runs, session: S.me })
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: 0 })
+  const out = await runTool(w.$, 'merged', { task: 'T-1' })
+  expect(out).toMatch(/; its worker was stopped$/)
+  expect(workers.has('ag1')).toBe(false)
+  expect(w.sent.map(s => s.to)).toContain('ag1')
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('done')
+  expect(t.runs?.at(-1)?.ended_by).toBe('finished')
+  expect(t.runs?.at(-1)?.ended_note).toBe('merged')
+  expect(t.runs?.at(-1)?.ended).toBeTruthy()
+  expect(mergesOrTests(w.calls)).toEqual([])
+})
+
+test('a folder with uncommitted changes is kept with its branch, and the answer says so', async () => {
+  const w = world({ status: ' M src/a.ts\n' })
+  await seed(w, 'failed')
+  const out = await runTool(w.$, 'merged', { task: 'T-1' })
+  expect(out).toContain(`; its folder ${S.N.dir}/worktrees/T-1 has uncommitted changes, so it and its branch were kept`)
+  expect(find(await load(w.$), 'T-1')!.status).toBe('done')
+  expect(w.files.has(`${WT}/.git`)).toBe(true)
+  expect(w.git.branch).toBe(true)
+  expect(w.calls.filter(c => /git (worktree remove|update-ref -d)/.test(c))).toEqual([])
+})
+
+test("a gone branch whose last recorded commit isn't in main is refused, and nothing changes", async () => {
+  const w = world({ branch: false, merged: false })
+  const before = await seed(w, 'failed')
+  const err = await runTool(w.$, 'merged', { task: 'T-1' }).then(() => '', (e: Error) => e.message)
+  expect(err).toMatch(/^T-1's last commit c1c1c1\w* isn't in main yet \(its branch symcc\/T-1 is gone\)$/)
+  expect(await load(w.$)).toEqual(before)
+  expect(mergesOrTests(w.calls)).toEqual([])
 })
 
 test('a done task, an investigation and a task not on the board are refused', async () => {

@@ -102,6 +102,17 @@ function longToken(w: string): boolean {
 /** Whether `s` looks like it holds a secret (see SECRET and longToken). */
 export const looksSecret = (s: string): boolean => SECRET.some(r => r.test(s)) || s.split(/\s+/).some(longToken)
 
+/** `s` with every secret-looking part (see looksSecret) put as "[hidden]": a key=value's value, a known token, a long random word. */
+export function hideSecrets(s: string): string {
+  let out = s.replace(/-----BEGIN [A-Z ]*KEY-----[\s\S]*/g, '[hidden]')
+  out = out.replace(/\b((?:password|passwd|pwd|secret|token|api[_ -]?key|access[_ -]?key|private[_ -]?key)\b\s*[:=]\s*)\S+/gi, '$1[hidden]')
+  out = out.replace(new RegExp(SECRET[1]!.source, 'g'), '[hidden]')
+  return out
+    .split(/(\s+)/)
+    .map(w => (longToken(w) ? '[hidden]' : w))
+    .join('')
+}
+
 /** Lines that are file contents or a diff, not a lesson: a code fence, a diff header or hunk. */
 const CONTENTS = /```|^(?:diff --git|@@ |\+\+\+ |--- )/
 
