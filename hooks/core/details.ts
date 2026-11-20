@@ -34,7 +34,7 @@ export const TRIED_TODO_MARK = '●'
 export const statusMark = (t: Pick<SymccTask, 'status'> & { runs?: readonly unknown[]; attempts?: number }): string =>
   t.status === 'todo' && ((t.runs?.length ?? 0) > 0 || (t.attempts ?? 0) > 0) ? TRIED_TODO_MARK : STATUS_MARK[t.status]
 
-/** The step a task is in on its page, its row icon and its word ("⧗ test", "⋯ queue"); '' when it is in none. */
+/** The step a task is in on its page, its row icon and its word ("◎ test", "⧗ queue"); '' when it is in none. */
 export function stepNowWord(t: Pick<BoardTask, 'status' | 'checking'> & { note?: string }, nowMs: number): string {
   const step = stageStep(taskPhase(t, nowMs).stage)
   return step ? `${STEP_ICON[step]} ${STEP_WORD[step]}` : ''
@@ -55,7 +55,7 @@ export const sessionNote = (t: Pick<SymccTask, 'status'> & { note?: string }, dr
 /**
  * The task page's status badge: the step a doing task is in, with the same icon as its row
  * (rowMark) and the step's word, then the total work time the rows show (rowTime): "▶ worker · 15m", "✎ prep · 15m",
- * "⌕ checker · 5m", "⋯ queue (2) · 9m", "⧗ test · 9m", "⇢ merge · 9m". A task in review or waiting in a check step
+ * "⌕ checker · 5m", "⧗ queue (2) · 9m", "◎ test · 9m", "⇢ merge · 9m". A task in review or waiting in a check step
  * (an approve) shows the step without a time ("⇢ merge"), and so does a task in review whose approve this page
  * started (`merging`) before its first step is on the board ("✎ prep"): not "ready for review", the owner has
  * nothing left to do on it. Every other task: its mark and status word ("◆ ready for review", "○ to do").

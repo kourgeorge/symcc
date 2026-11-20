@@ -156,8 +156,8 @@ once you have cleared them and its merge runs.
 | worker | `▶` | The worker changes the code in its own folder |
 | prep | `✎` | symcc commits, leaves out secret-looking files and checks the scope |
 | checker | `⌕` | A fresh agent tries to break the change. Only with the `checker` setting on |
-| queue | `⋯` | The task waits for its turn. Its note says "queue (n)", n being its place (1 = merging now) |
-| test | `⧗` | Your test commands run |
+| queue | `⧗` | The task waits for its turn. Its note says "queue (n)", n being its place (1 = merging now) |
+| test | `◎` | Your test commands run |
 | merge | `⇢` | The branch moves forward |
 
 The board row shows the stage icon instead of `▶`, then the time. The band above the prompt
@@ -438,15 +438,15 @@ happened to it meanwhile), or the lead is told it landed.
 Every board view (the board list, the band above
 the prompt, the VS Code list and task page, the OpenCode board and the lead's text board) shows
 the same small set of words and notes. While it waits for its turn its note says "queue (n)",
-n being its place (the task merging now is 1), and its row shows `⋯` in place of `▶`. During its
+n being its place (the task merging now is 1), and its row shows `⧗` in place of `▶`. During its
 turn the row shows the step's icon in place of `▶`, then the time: `⌕ 5m`, not `▶ checker 5m`.
-The step's word stays in the note and on the task page; the lead's text board shows both ("⧗
-doing test · title"). Legend: `▶` working · `⋯` queue · `✎` prep · `⧗` test · `⌕` checker ·
+The step's word stays in the note and on the task page; the lead's text board shows both ("◎
+doing test · title"). Legend: `▶` working · `⧗` queue · `✎` prep · `◎` test · `⌕` checker ·
 `⇢` merge.
 
 A doing task's page (terminal, VS Code and OpenCode) names its
 step in its badge and its Status line, with the icon and the total work time: `▶ worker · 15m`,
-`✎ prep`, `⌕ checker · 5m`, `⋯ queue (2)`, `⧗ test · 9m`, `⇢ merge`. Other tasks show their
+`✎ prep`, `⌕ checker · 5m`, `⧗ queue (2)`, `◎ test · 9m`, `⇢ merge`. Other tasks show their
 status as before (`○ to do`, `◆ ready for review`, ...). Under Status, a **Stage** line shows the
 whole way to the merge, the steps done marked ✓, the current one bold with ●, the later ones
 dim: `worker ✓ → prep ✓ → ● checker → queue → test → merge`. `checker` is there only when the
@@ -462,7 +462,7 @@ under the badge.
 - `⌕ checker`: a checker agent is trying to break the change (only with the `checker` setting
   on; with it off no task ever shows this step). It comes right after `prep`, before the task
   joins the merge queue. Its note says "a checker agent is trying to break it before it merges".
-- `⧗ test`: the test commands run. Its note says "running the tests".
+- `◎ test`: the test commands run. Its note says "running the tests".
 - `⇢ merge`: the task is brought up to date with the target branch and merged. Its note says
   "merging".
 
@@ -1305,7 +1305,7 @@ board (the `/3` shows the limit while the try is an automatic retry after failin
 A first try shows no mark. The time in a doing task's row is the total work time of all its
 tries, so a task that is really stuck stands out: `T-5 ▶ 1h40m (3)` (1 hour 40 over all
 three tries; on the first try it is just that try's time, `T-5 ▶ 15m`), and during a check
-step the step's icon takes the place of `▶`: `T-5 ⧗ 9m` (see "What a task shows on its way to
+step the step's icon takes the place of `▶`: `T-5 ◎ 9m` (see "What a task shows on its way to
 the merge"). This is the
 same number as the task page's "Time and cost" total: each try's time from start to end, added
 up. Time while the task was paused, waiting for you, waiting on other tasks, or in todo between

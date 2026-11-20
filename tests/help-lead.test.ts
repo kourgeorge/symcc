@@ -45,7 +45,7 @@ test('the checker texts say it runs before the merge queue, not after the tests 
   expect(help).not.toContain('merge line')
   expect(help).not.toContain('tester · try 2')
   // T-642: since T-628 only the band (and the task page) show the try, not the list rows
-  expect(help).toContain('The list rows show no try number; the band above the prompt shows a later try as "(n)" right after the row\'s time ("T-5 ⧗ 3m (3)")')
+  expect(help).toContain('The list rows show no try number; the band above the prompt shows a later try as "(n)" right after the row\'s time ("T-5 ◎ 3m (3)")')
   expect(help).toContain('the task page shows "try 3/4"')
   expect(help).not.toContain('A later try shows as "(n)"')
   const minutes = tool.description.slice(tool.description.indexOf('test_minutes ('), tool.description.indexOf('max_parallel'))
