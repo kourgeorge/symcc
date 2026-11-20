@@ -3,15 +3,18 @@
 // view to the Host's ui.panel.updateView; here that keeps it in memory and also writes it, with what the TUI needs
 // to draw the banner and band (folder, home, name, version), to .<name>/view.json in the project's main folder. The
 // TUI reads that file on a timer (board-view.ts parses it). Each scout's recent runs ride along (scout_runs, T-559:
-// the TUI's scout page lists them; a run's report stays in its own file, which the TUI reads when the run is opened).
+// the TUI's scout page lists them; a run's report stays in its own file, which the TUI reads when the run is opened),
+// and so do the roles and kinds (T-562: the TUI's Roles and Kinds pages under Settings list them).
 // The panel's own values (which task, tab and scout are
 // open) stay in the TUI; the server side keeps them in memory only, as their start values for symcc's logic.
 import type { SymccView } from '../../types'
 import type { Host, PanelValues } from '../host'
 import { type PaneView, S } from '../app/state'
 import { safeWrite } from '../app/store'
-import { parseScoutRuns, safeScoutFile, scoutRunsFile, scoutRunTasks } from '../board'
-import { VIEW_FILE, VIEW_RUNS_KEPT, viewFileText, type ScoutRuns } from './board-view'
+import { parseScoutRuns, safeScoutFile, scoutRunsFile, scoutRunTasks, mergeRoles, mergeKinds } from '../board'
+import { roleLists } from '../app/roles'
+import { kindLists } from '../app/kinds'
+import { VIEW_FILE, VIEW_RUNS_KEPT, viewFileText, viewDefs, type ScoutRuns, type ViewDef } from './board-view'
 
 /** The empty view, as a panel starts with. */
 const emptyView = (): SymccView => ({ tasks: [], working: [], scouts: [], mode: 'auto', test_commands: [] })
@@ -21,7 +24,7 @@ const emptyView = (): SymccView => ({ tasks: [], working: [], scouts: [], mode: 
  * view file (in order, one write at a time; a failed write is only logged). Nothing is written before the project's
  * folder is known, nor by a copy that only guards (S.guardOnly: the engine copy owns the file).
  */
-export function viewFilePanel(host: Pick<Host, 'fs' | 'run' | 'ui'>): PanelValues {
+export function viewFilePanel(host: Pick<Host, 'fs' | 'run' | 'ui' | 'plugin'>): PanelValues {
   let opened = ''
   let tab = ''
   let scout = ''
@@ -35,7 +38,8 @@ export function viewFilePanel(host: Pick<Host, 'fs' | 'run' | 'ui'>): PanelValue
     writing = writing
       .then(async () => {
         const scout_runs = await scoutRunsOf(host, root, v)
-        const text = viewFileText({ root, home: S.home, name: S.N.name, version: S.version, written_at: at, view: { ...(v as PaneView), ...(Object.keys(scout_runs).length ? { scout_runs } : {}) } })
+        const defs = await defsOf(host as Host).catch(() => ({}))
+        const text = viewFileText({ root, home: S.home, name: S.N.name, version: S.version, written_at: at, view: { ...(v as PaneView), ...(Object.keys(scout_runs).length ? { scout_runs } : {}), ...defs } })
         await safeWrite(host as Host, file, text, 'the board view')
       })
       .catch((err: Error) => host.ui.log(`couldn't write ${file}: ${err?.message ?? err}`))
@@ -68,4 +72,15 @@ export async function scoutRunsOf(host: Pick<Host, 'fs'>, root: string, v: Symcc
     out[sc.name] = runs.map((run, i) => ({ run, tasks: made[i]! })).reverse().slice(0, VIEW_RUNS_KEPT)
   }
   return out
+}
+
+/** The roles and kinds for the TUI's Roles and Kinds pages: each one (built-in, or the owner's over it), and the
+ *  owner's files that can't be read (see viewDefs). */
+export async function defsOf(host: Host): Promise<{ roles: ViewDef[]; kinds: ViewDef[] }> {
+  const r = await roleLists(host)
+  const k = await kindLists(host)
+  return {
+    roles: viewDefs('role', mergeRoles(r.builtIn, r.project), r.builtIn, r.project, r.broken, r.dir),
+    kinds: viewDefs('kind', mergeKinds(k.builtIn, k.project), k.builtIn, k.project, k.broken, k.dir),
+  }
 }

@@ -24,10 +24,10 @@ import { askCall, checkEdit, guardFailed, stoppedText, type AgentKindOf } from '
 import { gitReady } from './git'
 import { claimLead, publish, handOver, releaseLead, driveHere } from './lead'
 import { changedFiles, changesText } from './review'
-import { loadRoles } from './roles'
-import { loadKinds } from './kinds'
+import { loadRoles, changeRole } from './roles'
+import { loadKinds, changeKind } from './kinds'
 import { checkerFinished } from './checker'
-import { fileToolHits, saveScoutsMigrated, scheduleScouts, seedExampleScouts, scoutFinished, runScoutNow, setScoutPaused, unreadableScoutsText } from './scouts'
+import { fileToolHits, saveScoutsMigrated, scheduleScouts, seedExampleScouts, scoutFinished, runScoutNow, setScoutPaused, unreadableScoutsText, leadScouts } from './scouts'
 import { S, loadVersion, toolName, timers, heard, stopped, workers, scoutRuns, checkerRuns, scoutState, isOwnAgent } from './state'
 import { path, load, isOn, now, saveMigrated, startWait, findRoot, mainRoot, isWorkerFolder, startingText } from './store'
 import { noteForLead, brief, takeBoardUpdate } from './tell'
@@ -52,9 +52,9 @@ export function COMMANDS(features: HostFeatures = ALL_FEATURES): { name: string;
     { name: `${S.N.name}-approve`, description: `Approve a ${S.N.name} task that is ready for review (merge it): /${S.N.name}-approve T-5`, argumentHint: '<T-id>' },
     { name: `${S.N.name}-reject`, description: `Reject a ${S.N.name} task in review, with the reason: /${S.N.name}-reject T-5 <reason>`, argumentHint: '<T-id> <reason>' },
     { name: `${S.N.name}-diff`, description: `Show what a ${S.N.name} task in review changed, or one file's diff: /${S.N.name}-diff T-5 [file]`, argumentHint: '<T-id> [file]' },
-    { name: `${S.N.name}-scout`, description: `Run a ${S.N.name} scout now (/${S.N.name}-scout <name>), or pause or resume it (/${S.N.name}-scout <name> pause|resume)`, argumentHint: '<name> [pause|resume]' },
+    { name: `${S.N.name}-scout`, description: `Run a ${S.N.name} scout now (/${S.N.name}-scout <name>), pause or resume it (/${S.N.name}-scout <name> pause|resume), or change it (/${S.N.name}-scout <name> every 30, model <model|none>, prompt <instructions>)`, argumentHint: '<name> [pause|resume|every N|model M|prompt TEXT]' },
     { name: `${S.N.name}-mode`, description: `Set the ${S.N.name} board mode: off (nothing runs), review (finished work waits for you) or auto (it merges on its own); no word switches review and auto`, argumentHint: '[off|review|auto]' },
-    { name: `${S.N.name}-settings`, description: `See and change the ${S.N.name} settings: /${S.N.name}-settings opens them; /${S.N.name}-settings max_parallel 5 sets one`, argumentHint: '[name value]' },
+    { name: `${S.N.name}-settings`, description: `See and change the ${S.N.name} settings: /${S.N.name}-settings opens them; /${S.N.name}-settings max_parallel 5 sets one; /${S.N.name}-settings role tester off (or kind, with on, off or reset) changes a role or kind`, argumentHint: '[name value | role|kind <name> on|off|reset]' },
     { name: `${S.N.name}-stats`, description: `Show ${S.N.name} time and token stats: the whole team (lead, workers, scouts), totals, averages per task and per try, outcomes, by role, origin and day, with bar charts: /${S.N.name}-stats [full] [7d|T-100..T-130]`, argumentHint: '[full] [7d|T-1..T-9]' },
     { name: `${S.N.name}-off`, description: `Turn ${S.N.name} off for this project: ${S.W.assistant} works as normal, nothing runs; the board is kept` },
     { name: `${S.N.name}-on`, description: `Turn ${S.N.name} back on for this project, in the mode the board had` },
@@ -428,6 +428,20 @@ export async function runCommand(host: Host, command: string, args: string): Pro
       return { text: await runScoutNow(host, cmd.name) }
     case 'scout-pause':
       return say(await setScoutPaused(host, cmd.name, cmd.paused))
+    case 'scout-edit': {
+      // the same edit as the lead's scouts tool: the other parts of the file are kept, the scouts are rescheduled
+      const part = cmd.field === 'every' ? { every_minutes: cmd.value } : cmd.field === 'model' ? { model: cmd.value } : { prompt: cmd.value }
+      return say(await leadScouts(host, { action: 'edit', name: cmd.name, ...part }))
+    }
+    case 'def': {
+      const r = await (cmd.def === 'role' ? changeRole : changeKind)(host, { action: cmd.action, name: cmd.name })
+      if (r.ok) {
+        noteForLead(`The owner changed ${cmd.def} ${cmd.name} (${cmd.action}): ${brief(r.text)}`)
+        // the board's view carries the roles and kinds for a panel that draws from it (OpenCode's view.json)
+        await publish(host, await load(host))
+      }
+      return say(r.text)
+    }
     case 'settings': {
       S.settingEdit = null
       S.settingPick = null

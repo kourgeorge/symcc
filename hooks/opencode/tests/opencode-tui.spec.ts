@@ -8,9 +8,9 @@
 // OpenTUI (T-500): opencode/tui.ts imports them by their written-out names (what OpenCode swaps for its own copies),
 // and loadTuiRuntime names a package that is missing or lacks a function instead of failing with a bare import error.
 import { test, expect } from 'bun:test'
-import { addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, type Board } from '../../board'
+import { mergeRoles, mergeKinds, addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, type Board } from '../../board'
 import type { PaneView } from '../../app/state'
-import { bandLines, panelLines, panelKeys, parseViewFile, viewFileText, lineText, actionCommand, answerOptions, OWN_ANSWER, type ViewFile } from '../board-view'
+import { bandLines, panelLines, panelKeys, parseViewFile, viewFileText, lineText, actionCommand, answerOptions, OWN_ANSWER, viewDefs, type ViewFile } from '../board-view'
 import { readFile } from 'node:fs/promises'
 import { PLUGIN_ROOT } from '../host'
 import { startTui, viewPaths, loadTuiRuntime, BOARD_PANEL, setupFailed, colorOf, drawLines, type TuiContext, type TuiRuntime, type TuiPanelInput, type TuiKeyLayer } from '../tui'
@@ -637,10 +637,10 @@ test('T-559: the Scouts tab lists the scouts from view.json, a scout\'s page sho
   expect(p.find(l => l.includes('found · 1 finding · task T-4'))).toMatch(/^› 10m ago/)
   expect(p.some(l => l.includes('nothing · 0 findings · no tasks'))).toBe(true)
   expect(p).toContain('  .symcc/scouts/docs-check.md')
-  expect(panelKeys(f, 'docs-check', 'scouts').map(k => k.word)).toEqual(['run now', 'resume', 'move', 'report', 'back'])
+  expect(panelKeys(f, 'docs-check', 'scouts').map(k => k.word)).toEqual(['run now', 'resume', 'edit', 'move', 'report', 'back'])
   // a running scout has no "run now"; a waiting one pauses
   const running = { ...f, view: { ...f.view, scouts: f.view.scouts.map(s => ({ ...s, running: s.name === 'deps' })) } }
-  expect(panelKeys(running, 'deps', 'scouts').map(k => k.word)).toEqual(['pause', 'back'])
+  expect(panelKeys(running, 'deps', 'scouts').map(k => k.word)).toEqual(['pause', 'edit', 'back'])
   // a run's page: its line and its report (read by the TUI from its file)
   const run = (report?: string | null) => panelLines(f, { tab: 'scouts', opened: 'docs-check', run: '2026-11-19T11:50:00.000Z', report, cursor: 0 }, NOW, 100).lines.map(lineText)
   expect(run('1. README is stale\n2. no guide')).toContain('  2. no guide')
@@ -761,4 +761,172 @@ test('T-559: the view file carries each scout\'s recent runs, newest first, with
   expect(Object.keys(got)).toEqual(['docs-check'])
   expect(got['docs-check']!.map(x => x.run.ended)).toEqual(['2026-11-19T11:50:00.000Z', '2026-11-19T10:50:00.000Z'])
   expect(got['docs-check']![0]!.tasks).toEqual(['T-4'])
+})
+
+/** The view file with roles and kinds as view.ts writes them (viewDefs): general and checker built-in, tester the
+ *  owner's copy and off, oops a role file that can't be read; the kinds change (always on) and bug (the owner's copy). */
+function defsViewFile(): ViewFile {
+  const f = scoutsViewFile()
+  const general = { name: 'general', description: 'Any task', skills: [], prompt: 'Do the task.' }
+  const checker = { name: 'checker', description: 'Checks a worker\'s work', skills: [], prompt: 'Check it.', off: true }
+  const tester = { name: 'tester', description: 'Writes tests', skills: [], prompt: 'Test it.' }
+  const myTester = { name: 'tester', description: 'My tester', skills: ['tdd'], model: 'opus', prompt: 'Test it well.\nRun them twice.', off: true }
+  const broken = [{ name: 'oops', file: '.symcc/roles/oops.md', reason: 'no description' }]
+  const roles = viewDefs('role', mergeRoles([general, checker, tester], [myTester]), [general, checker, tester], [myTester], broken, '.symcc/roles')
+  const change = { name: 'change', description: 'A change to make', body: 'Make it.' }
+  const bug = { name: 'bug', description: 'Something broken', body: 'Fix it.' }
+  const myBug = { ...bug, description: 'A bug to fix', body: 'Fix it, with a test.' }
+  const kinds = viewDefs('kind', mergeKinds([change, bug], [myBug]), [change, bug], [myBug], [], '.symcc/kinds')
+  return { ...f, view: { ...f.view, roles, kinds, checker: true } }
+}
+
+test('T-562: viewDefs gives each role and kind where it comes from, whether it can be turned off and reset, and its file', () => {
+  const f = defsViewFile()
+  const roles = f.view.roles!
+  expect(roles.map(r => [r.name, r.source, r.off, r.canOff, r.canReset])).toEqual([
+    ['general', 'built-in', false, false, false],
+    ['checker', 'built-in', false, false, false],
+    ['tester', 'replaced', true, true, true],
+    ['oops', '', false, false, false],
+  ])
+  expect(roles[0]!.file).toBe('roles/general.md (in the plugin)')
+  expect([roles[2]!.file, roles[2]!.model, roles[2]!.skills, roles[2]!.text]).toEqual(['.symcc/roles/tester.md', 'opus', ['tdd'], 'Test it well.\nRun them twice.'])
+  expect(roles[3]!.broken).toBe("your file can't be read: no description")
+  expect(f.view.kinds!.map(k => [k.name, k.source, k.canOff, k.canReset, k.text])).toEqual([
+    ['change', 'built-in', false, false, 'Make it.'],
+    ['bug', 'replaced', true, true, 'Fix it, with a test.'],
+  ])
+  // they ride in the view file
+  expect(parseViewFile(viewFileText(f))!.view.roles).toEqual(roles)
+  expect(parseViewFile(viewFileText({ ...f, view: { ...f.view, roles: 'x' as never } }))!.view.roles).toBe(undefined)
+})
+
+test('T-562: the Settings tab opens the Roles and Kinds pages from view.json; a role\'s and a kind\'s page show it, and turn it off or on or reset it with /symcc-settings role|kind', () => {
+  const f = defsViewFile()
+  // the Settings list: the Roles and Kinds rows with their counts, each a row the cursor goes over
+  const settings = panelLines(f, { tab: 'settings', opened: '', cursor: 0 }, NOW, 140)
+  const s = settings.lines.map(lineText)
+  expect(s.find(l => l.includes('Roles'))).toMatch(/Roles +4 roles · 1 off/)
+  expect(s.find(l => /^ +Kinds/.test(l))).toMatch(/Kinds +2 kinds/)
+  expect(settings.ids).toContain('roles')
+  expect(settings.ids).toContain('kinds')
+  expect(settings.hits[s.findIndex(l => l.includes('4 roles'))]).toEqual({ page: 'roles' })
+  // the Roles page: a row per role, the broken one with why
+  const list = panelLines(f, { tab: 'settings', opened: 'roles', cursor: 2 }, NOW, 140)
+  const l = list.lines.map(lineText)
+  expect(l).toContain('Roles')
+  expect(list.ids).toEqual(['role:general', 'role:checker', 'role:tester', 'role:oops'])
+  expect(list.selected).toBe('role:tester')
+  expect(l.find(x => x.includes('tester'))).toMatch(/^› tester  replaced, off · My tester/)
+  expect(l.find(x => x.includes('general'))).toContain('built-in · Any task')
+  expect(l.find(x => x.includes('oops'))).toContain("— your file can't be read: no description")
+  expect(list.hits[l.findIndex(x => x.includes('tester'))]).toEqual({ page: 'role:tester' })
+  expect(panelKeys(f, 'roles', 'settings').map(k => k.word)).toEqual(['move', 'open', 'back'])
+  // a role's page: its model, skills, checklist and file; o turns it on (it is off), r resets it
+  const page = panelLines(f, { tab: 'settings', opened: 'role:tester', cursor: 0 }, NOW, 140)
+  const p = page.lines.map(lineText)
+  expect(p).toContain('tester · replaced, off')
+  expect(p).toContain('My tester')
+  expect(p).toContain('  opus')
+  expect(p).toContain('  tdd')
+  expect(p).toContain('  Run them twice.')
+  expect(p).toContain('  .symcc/roles/tester.md')
+  expect(panelKeys(f, 'role:tester', 'settings').map(k => k.word)).toEqual(['turn on', 'reset', 'back'])
+  expect(page.lines.at(-1)!.find(x => x.text === 'o turn on')?.hit).toEqual({ key: 'o' })
+  // general can't be turned off; the checker role says the checker setting runs it; a broken one can only be fixed
+  expect(panelKeys(f, 'role:general', 'settings').map(k => k.word)).toEqual(['back'])
+  expect(panelLines(f, { tab: 'settings', opened: 'role:checker', cursor: 0 }, NOW, 200).lines.map(lineText).some(x => x.includes('the checker setting runs it (Settings → checker, now on)'))).toBe(true)
+  expect(panelLines(f, { tab: 'settings', opened: 'role:oops', cursor: 0 }, NOW, 140).lines.map(lineText)).toContain('Fix the file by hand: .symcc/roles/oops.md.')
+  // the Kinds page and a kind's page
+  const kinds = panelLines(f, { tab: 'settings', opened: 'kinds', cursor: 0 }, NOW, 140)
+  expect(kinds.ids).toEqual(['kind:change', 'kind:bug'])
+  const bug = panelLines(f, { tab: 'settings', opened: 'kind:bug', cursor: 0 }, NOW, 140).lines.map(lineText)
+  expect(bug).toContain('bug · replaced')
+  expect(bug).toContain('Body')
+  expect(bug).toContain('  Fix it, with a test.')
+  expect(panelKeys(f, 'kind:bug', 'settings').map(k => k.word)).toEqual(['turn off', 'reset', 'back'])
+  expect(panelKeys(f, 'kind:change', 'settings').map(k => k.word)).toEqual(['back'])
+  // a role that left the view has no page
+  expect(panelKeys(f, 'role:gone', 'settings').map(k => k.word)).toEqual(['move', 'change', 'views', 'close'])
+  // the actions as slash commands
+  expect(actionCommand({ kind: 'def', def: 'role', name: 'tester', action: 'on' })).toEqual({ name: 'symcc-settings', text: 'role tester on' })
+  expect(actionCommand({ kind: 'def', def: 'kind', name: 'bug', action: 'reset' })).toEqual({ name: 'symcc-settings', text: 'kind bug reset' })
+  expect(actionCommand({ kind: 'scout-edit', scout: 'deps', field: 'every', value: ' 15 ' })).toEqual({ name: 'symcc-scout', text: 'deps every 15' })
+  expect(actionCommand({ kind: 'scout-edit', scout: 'deps', field: 'model', value: '' })).toEqual({ name: 'symcc-scout', text: 'deps model none' })
+})
+
+test('T-562: startTui: Settings opens Roles, a role\'s page turns it on and resets it; Kinds and a kind\'s page turn it off; e on a scout\'s page edits it with /symcc-scout', async () => {
+  const f = defsViewFile()
+  const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)]])
+  const sent: { sessionID: string; name: string; text: string }[] = []
+  const slots: { append: string; render: (input: never) => unknown }[] = []
+  const answers = { prompt: [] as (string | undefined)[], select: [] as unknown[] }
+  const toasts: string[] = []
+  const ctx: TuiContext = {
+    location: { directory: '/work/proj' },
+    theme: {},
+    renderer: { width: 140 },
+    client: { session: { command: async input => void sent.push(input) } },
+    keymap: { layer: () => undefined },
+    ui: {
+      toast: { show: o => void toasts.push(o.message) },
+      dialog: { prompt: async () => answers.prompt.shift(), select: async <V,>() => answers.select.shift() as V | undefined },
+      panel: { open: () => true, close: () => undefined, current: () => undefined },
+      slot: claim => (slots.push(claim as never), () => undefined),
+    },
+  }
+  const board = startTui(ctx, { runtime: fakeRuntime(), readText: async p => files.get(p) ?? Promise.reject(new Error('missing')), every: () => () => undefined, now: () => NOW })
+  await board.refresh()
+  const panel = slots.find(s => s.append === 'session.panel')!.render({ name: BOARD_PANEL, sessionID: 'ses_1', width: 142, focused: true, close: () => undefined } as never) as El
+  const lines = () => rowEls(panel).map(r => r.text)
+  const clickRow = (has: string) => (rowEls(panel).find(r => r.text.includes(has))!.el.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0 })
+  await board.press('c', 'ses_1')
+  // a click on the Roles row opens the Roles page; down twice and Enter opens tester
+  clickRow('4 roles')
+  expect(board.state().opened).toBe('roles')
+  expect(lines().some(l => l.includes('tester') && l.includes('replaced, off'))).toBe(true)
+  await board.press('down', 'ses_1')
+  await board.press('down', 'ses_1')
+  await board.press('open', 'ses_1')
+  expect(board.state().opened).toBe('role:tester')
+  expect(lines()).toContain('  Run them twice.')
+  await board.press('o', 'ses_1')
+  await board.press('r', 'ses_1')
+  // b: back to the Roles page, then to the Settings list
+  await board.press('back', 'ses_1')
+  expect(board.state().opened).toBe('roles')
+  await board.press('back', 'ses_1')
+  expect([board.state().tab, board.state().opened]).toEqual(['settings', ''])
+  // general can't be turned off: o does nothing on its page
+  clickRow('4 roles')
+  clickRow('Any task')
+  expect(board.state().opened).toBe('role:general')
+  await board.press('o', 'ses_1')
+  // Enter on the Kinds row (the cursor goes there), then bug, o turns it off
+  await board.press('back', 'ses_1')
+  await board.press('back', 'ses_1')
+  // the cursor is still on the Roles row: one down is Kinds
+  await board.press('down', 'ses_1')
+  await board.press('open', 'ses_1')
+  expect(board.state().opened).toBe('kinds')
+  clickRow('A bug to fix')
+  expect(board.state().opened).toBe('kind:bug')
+  await board.press('o', 'ses_1')
+  // a scout's page: e asks what to change, then the new value; a bad number is not sent
+  await board.press('s', 'ses_1')
+  await board.press('open', 'ses_1')
+  expect(board.state().opened).toBe('deps')
+  answers.select.push('every', 'model', 'prompt', 'every')
+  answers.prompt.push('15', 'none', 'Check the lock file too.', 'often')
+  for (let i = 0; i < 4; i++) await board.press('e', 'ses_1')
+  expect(toasts.some(t => t.includes('whole number'))).toBe(true)
+  expect(sent).toEqual([
+    { sessionID: 'ses_1', name: 'symcc-settings', text: 'role tester on' },
+    { sessionID: 'ses_1', name: 'symcc-settings', text: 'role tester reset' },
+    { sessionID: 'ses_1', name: 'symcc-settings', text: 'kind bug off' },
+    { sessionID: 'ses_1', name: 'symcc-scout', text: 'deps every 15' },
+    { sessionID: 'ses_1', name: 'symcc-scout', text: 'deps model none' },
+    { sessionID: 'ses_1', name: 'symcc-scout', text: 'deps prompt Check the lock file too.' },
+  ])
+  board.stop()
 })

@@ -1125,6 +1125,14 @@ test('slash commands all start with the plugin name: open, views, one task, appr
   expect(parseCommand('symcc-diff', 'T-5')).toEqual({ kind: 'diff', id: 'T-5' })
   expect(parseCommand('symcc-diff', 'T-5 hooks/board.ts')).toEqual({ kind: 'diff', id: 'T-5', file: 'hooks/board.ts' })
   expect(parseCommand('symcc-scout', 'bugs')).toEqual({ kind: 'scout', name: 'bugs' })
+  // T-562: a scout's parts, and turning a role or kind off, on or back to the built-in one
+  expect(parseCommand('symcc-scout', 'bugs every 30')).toEqual({ kind: 'scout-edit', name: 'bugs', field: 'every', value: '30' })
+  expect(parseCommand('symcc-scout', 'bugs model none')).toEqual({ kind: 'scout-edit', name: 'bugs', field: 'model', value: '' })
+  expect(parseCommand('symcc-scout', 'bugs prompt Look for  missing tests.')).toEqual({ kind: 'scout-edit', name: 'bugs', field: 'prompt', value: 'Look for  missing tests.' })
+  expect(parseCommand('symcc-settings', 'role tester off')).toEqual({ kind: 'def', def: 'role', name: 'tester', action: 'off' })
+  expect(parseCommand('symcc-settings', 'kind bug reset')).toEqual({ kind: 'def', def: 'kind', name: 'bug', action: 'reset' })
+  for (const a of ['role tester', 'role tester remove', 'kind', 'role a b on']) expect(parseCommand('symcc-settings', a)!.kind).toBe('bad')
+  expect(parseCommand('symcc-scout', 'bugs every')!.kind).toBe('bad')
   expect(parseCommand('symcc-help', '')).toEqual({ kind: 'help', topic: '' })
   expect(parseCommand('symcc-help', ' scouts ')).toEqual({ kind: 'help', topic: 'scouts' })
   expect(parseCommand('symcc-mode', 'off')).toEqual({ kind: 'mode', mode: 'off' })
@@ -2926,7 +2934,7 @@ test('/symcc-scout <name> pause and resume', () => {
   for (const args of ['bugs stop', 'bugs pause now', 'pause']) {
     const c = parseCommand('symcc-scout', args)
     if (args === 'pause') expect(c).toEqual({ kind: 'scout', name: 'pause' })
-    else expect(c).toEqual({ kind: 'bad', message: 'Use: /symcc-scout <name> (run it now), /symcc-scout <name> pause, or /symcc-scout <name> resume' })
+    else expect(c).toEqual({ kind: 'bad', message: 'Use: /symcc-scout <name> (run it now), /symcc-scout <name> pause, or /symcc-scout <name> resume; to change it: /symcc-scout <name> every <minutes>, model <model|none> or prompt <instructions>' })
   }
 })
 

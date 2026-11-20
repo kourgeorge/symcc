@@ -21,6 +21,10 @@ export type Command =
   | { kind: 'diff'; id: string; file?: string }
   | { kind: 'scout'; name: string }
   | { kind: 'scout-pause'; name: string; paused: boolean }
+  /** /<name>-scout <name> every N | model M | prompt TEXT: changes one part of the scout's file (model none clears it) */
+  | { kind: 'scout-edit'; name: string; field: ScoutEditField; value: string }
+  /** /<name>-settings role|kind <name> on|off|reset: turns a role or kind on or off, or back to the built-in one */
+  | { kind: 'def'; def: 'role' | 'kind'; name: string; action: DefAction }
   | { kind: 'mode'; mode: SymccMode }
   | { kind: 'off' }
   | { kind: 'on' }
@@ -29,6 +33,14 @@ export type Command =
   | { kind: 'settings' }
   | { kind: 'set'; setting: SettingName; input: SettingsInput }
   | { kind: 'bad'; message: string }
+
+/** The parts of a scout's file /<name>-scout <name> <part> <value> changes: how often it runs, its model, its instructions. */
+export const SCOUT_EDIT_FIELDS = ['every', 'model', 'prompt'] as const
+export type ScoutEditField = (typeof SCOUT_EDIT_FIELDS)[number]
+
+/** What /<name>-settings role|kind <name> <action> does to a role or kind. */
+export const DEF_ACTIONS = ['on', 'off', 'reset'] as const
+export type DefAction = (typeof DEF_ACTIONS)[number]
 
 /** The words after the plugin's name, one per command: /<name>-tasks, /<name>-approve, ... */
 export const COMMAND_WORDS = ['tasks', 'scouts', 'task', 'approve', 'reject', 'diff', 'scout', 'mode', 'settings', 'help', 'off', 'on', 'drive'] as const
@@ -82,14 +94,27 @@ export function parseCommand(command: string, args: string, current: SymccMode =
       const file = s.replace(/^\S+\s*/, '').trim()
       return file ? { kind: 'diff', id: normId(id!), file } : { kind: 'diff', id: normId(id!) }
     }
-    case 'scout':
+    case 'scout': {
       if (words.length === 1) return { kind: 'scout', name: id! }
       if (words.length === 2 && /^(pause|resume)$/i.test(words[1]!)) return { kind: 'scout-pause', name: id!, paused: words[1]!.toLowerCase() === 'pause' }
-      return use(`/${name}-scout <name> (run it now), /${name}-scout <name> pause, or /${name}-scout <name> resume`)
+      const field = (words[1] ?? '').toLowerCase() as ScoutEditField
+      if (words.length >= 3 && SCOUT_EDIT_FIELDS.includes(field)) {
+        // the value is the rest of the text as typed (the instructions keep their spacing)
+        const value = s.replace(/^\S+\s+\S+\s*/, '').trim()
+        return { kind: 'scout-edit', name: id!, field, value: field === 'model' && value.toLowerCase() === 'none' ? '' : value }
+      }
+      return use(`/${name}-scout <name> (run it now), /${name}-scout <name> pause, or /${name}-scout <name> resume; to change it: /${name}-scout <name> every <minutes>, model <model|none> or prompt <instructions>`)
+    }
     case 'mode':
       return parseModeCommand(s, current, name)
-    case 'settings':
+    case 'settings': {
+      const def = (id ?? '').toLowerCase()
+      if (def === 'role' || def === 'kind') {
+        const action = (words[2] ?? '').toLowerCase() as DefAction
+        return words.length === 3 && DEF_ACTIONS.includes(action) ? { kind: 'def', def, name: words[1]!, action } : use(`/${name}-settings ${def} <name> on, off or reset`)
+      }
       return parseSettingsCommand(s, name)
+    }
     case 'help':
       return { kind: 'help', topic: s }
     case 'off':

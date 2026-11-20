@@ -7,8 +7,10 @@
 //     command palette's "symcc board"; plain "/symcc" stays the server's text board, T-505): the task
 //     list grouped by state, with the terminal list's marks, short states and times, and a task's (or question's)
 //     page when one is opened; and, like the Claude Code board, the Scouts and Settings tabs (keys t, s and c, or a
-//     click on a tab, T-559): a scout's page runs it now (r) or pauses it (p) with /<name>-scout, and a setting is
-//     changed with /<name>-settings NAME VALUE;
+//     click on a tab, T-559): a scout's page runs it now (r) or pauses it (p) with /<name>-scout, and edits it (e:
+//     how often, model or instructions, /<name>-scout <name> every|model|prompt VALUE, T-562); a setting is changed
+//     with /<name>-settings NAME VALUE, and the Roles and Kinds pages under Settings turn a role or kind off or on
+//     (o) or reset it to the built-in one (r) with /<name>-settings role|kind <name> on|off|reset;
 //   - session.composer.top: the band above the prompt, like Claude Code's (the header line, then the questions, and
 //     the tasks that need the owner or run).
 // What is drawn comes from board-view.ts (bandLines, panelLines), made with hooks/core's helpers; this file only
@@ -19,8 +21,9 @@
 // modules (Solid and OpenTUI's Solid renderer) are passed in (TuiRuntime), so this file type-checks and its tests
 // run without them. The names and shapes below are @opencode/plugin 2.3.0's tui Context (only what is used).
 import { DEFAULT_NAME, dataDir } from '../name'
-import { VIEW_FILE, parseViewFile, bandLines, panelLines, panelKeys, hasPage, answerOptions, actionCommand, moveCursor, OWN_ANSWER, GROUPS_OPEN, groupOf, groupId, scoutRunsIn, PANEL_TABS, type ViewFile, type Line, type PanelAction, type PanelHit, type PanelKey, type PanelGroup, type PanelTab } from './board-view'
-import { isScoutRunReport, parseSettingValue, settingChoices, settingInfo, settingValue, type SettingName } from '../board'
+import { VIEW_FILE, parseViewFile, bandLines, panelLines, panelKeys, hasPage, answerOptions, actionCommand, moveCursor, OWN_ANSWER, GROUPS_OPEN, groupOf, groupId, scoutRunsIn, settingsPlace, PANEL_TABS, type ViewFile, type Line, type PanelAction, type PanelHit, type PanelKey, type PanelGroup, type PanelTab } from './board-view'
+import { isScoutRunReport, parseSettingValue, settingChoices, settingInfo, settingValue, isSettingPage, everyText, everyMinutesOf, type SettingName, type ScoutEditField } from '../board'
+import type { SymccScout } from '../../types'
 
 export type { PanelKey, PanelHit, PanelTab }
 
@@ -255,7 +258,7 @@ export type TuiBoard = {
 }
 
 /** The keymap bindings of the panel's keys. */
-const KEY_BINDS: Record<PanelKey, string> = { up: 'up,k', down: 'down,j', open: 'return', back: 'b,left', a: 'a', x: 'x', close: 'escape', t: 't', s: 's', c: 'c', r: 'r', p: 'p' }
+const KEY_BINDS: Record<PanelKey, string> = { up: 'up,k', down: 'down,j', open: 'return', back: 'b,left', a: 'a', x: 'x', close: 'escape', t: 't', s: 's', c: 'c', r: 'r', p: 'p', o: 'o', e: 'e' }
 
 /** The tab each tab key goes to. */
 const TAB_OF: Partial<Record<PanelKey, PanelTab>> = Object.fromEntries(PANEL_TABS.map(t => [t.key, t.tab]))
@@ -328,9 +331,10 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
       (err: Error) => say(`/${c.name} ${c.text} failed: ${err?.message ?? err}`, 'error'),
     )
   }
+  /** Whether the cursor is on a page's own rows (a scout's runs, the Roles or Kinds list), not the tab's list. */
+  const onPage = () => tab() !== 'tasks' && !!opened()
   const draw = () => {
-    const onScout = tab() === 'scouts' && !!opened()
-    return panelLines(file(), { tab: tab(), opened: opened(), run: run(), report: report(), cursor: onScout ? runCursor() : cursor(), groups: groups(), scroll: scroll(), ...(rows ? { rows } : {}) }, now(), width)
+    return panelLines(file(), { tab: tab(), opened: opened(), run: run(), report: report(), cursor: onPage() ? runCursor() : cursor(), groups: groups(), scroll: scroll(), ...(rows ? { rows } : {}) }, now(), width)
   }
   /** Changes setting `setting` (Enter or a click on its row): on/off flips, a setting with choices is picked from a
    *  list, the rest is typed; then /<name>-settings NAME VALUE sets it. */
@@ -349,8 +353,51 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     if (!ok.ok) return say(ok.message, 'error')
     await send(sessionID, { kind: 'setting', setting, value })
   }
+  /** Edits scout `sc` (e on its page): pick what to change (how often, model, instructions), then type the new value;
+   *  /<name>-scout <name> every|model|prompt VALUE saves it in the scout's file. */
+  const editScout = async (sc: SymccScout, sessionID: string) => {
+    const field = await ctx.ui.dialog.select<ScoutEditField>({
+      title: `Change scout ${sc.name}`,
+      options: [
+        { title: `How often: ${everyText(sc.every_minutes)}`, value: 'every' },
+        { title: `Model: ${sc.model || "the session's model"}`, value: 'model' },
+        { title: 'Instructions', value: 'prompt' },
+      ],
+    })
+    if (!field) return
+    const ask =
+      field === 'every'
+        ? { title: `${sc.name}: runs every how many minutes (now ${sc.every_minutes})`, description: '0 = only on demand', placeholder: 'minutes: a whole number, 0 or more' }
+        : field === 'model'
+          ? { title: `${sc.name}: model (now ${sc.model || "the session's model"})`, description: "none = the session's model", placeholder: 'a model name, or none' }
+          : { title: `${sc.name}: new instructions`, description: (sc.prompt ?? '').split('\n').find(l => l.trim())?.trim() ?? '', placeholder: 'what to look for, in plain words (longer ones: edit its file)' }
+    const value = (await ctx.ui.dialog.prompt(ask))?.trim()
+    if (!value) return
+    if (field === 'every' && everyMinutesOf(value) === null) return say('every must be a whole number of minutes: 0 for only on demand, or 1 or more', 'error')
+    await send(sessionID, { kind: 'scout-edit', scout: sc.name, field, value: field === 'model' && value.toLowerCase() === 'none' ? '' : value })
+  }
+  /** The Settings tab's keys: the list moves, changes a setting or opens the Roles or Kinds page; that page moves and
+   *  opens a role or kind; its page turns it off or on (o) or resets it (r); b goes back one page. */
+  const pressSettings = async (key: PanelKey, sessionID: string) => {
+    const f = file()
+    const open = opened()
+    const ids = draw().ids
+    const [cur, setCur] = open ? [runCursor, setRunCursor] : [cursor, setCursor]
+    if (key === 'up' || key === 'down') return void setCur(moveCursor(cur(), key === 'up' ? -1 : 1, ids.length))
+    const place = open ? settingsPlace(f, open) : null
+    if (key === 'back') return place?.def ? openPage(place.list) : open ? openPage('') : showTab('tasks')
+    if (key === 'open' && ids.length && !place?.def) {
+      const id = ids[moveCursor(cur(), 0, ids.length)]!
+      return open || isSettingPage(id) ? openPage(id) : changeSetting(id as SettingName, sessionID)
+    }
+    const d = place?.def
+    if (!d) return
+    const def = place.list === 'roles' ? 'role' : 'kind'
+    if (key === 'o' && d.canOff) return send(sessionID, { kind: 'def', def, name: d.name, action: d.off ? 'on' : 'off' })
+    if (key === 'r' && d.canReset) return send(sessionID, { kind: 'def', def, name: d.name, action: 'reset' })
+  }
   /** The Scouts tab's keys: the list moves and opens; a scout's page moves over its runs, opens one, runs the scout
-   *  now (r) and pauses or resumes it (p); a run's page goes back. */
+   *  now (r), pauses or resumes it (p) and edits it (e); a run's page goes back. */
   const pressScouts = async (key: PanelKey, sessionID: string) => {
     const f = file()
     const open = opened()
@@ -369,6 +416,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     const sc = f?.view.scouts.find(x => x.name === open)
     if (key === 'r' && offered.includes('run now')) return send(sessionID, { kind: 'scout', scout: open })
     if (key === 'p' && sc) return send(sessionID, { kind: 'scout', scout: open, paused: !sc.paused })
+    if (key === 'e' && sc) return editScout(sc, sessionID)
   }
   const press = async (key: PanelKey, sessionID: string) => {
     // Esc closes the panel (OpenCode 2.3 leaves closing to the panel's own keys)
@@ -378,13 +426,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     const f = file()
     keepPage(f)
     if (tab() === 'scouts') return pressScouts(key, sessionID)
-    if (tab() === 'settings') {
-      const ids = draw().ids
-      if (key === 'up' || key === 'down') return void setCursor(moveCursor(cursor(), key === 'up' ? -1 : 1, ids.length))
-      if (key === 'open' && ids.length) return changeSetting(ids[moveCursor(cursor(), 0, ids.length)] as SettingName, sessionID)
-      if (key === 'back') showTab('tasks')
-      return
-    }
+    if (tab() === 'settings') return pressSettings(key, sessionID)
     const open = opened()
     if (!open) {
       const ids = draw().ids
@@ -430,6 +472,11 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     if ('setting' in hit) {
       if (ids.indexOf(hit.setting) >= 0) setCursor(ids.indexOf(hit.setting))
       return changeSetting(hit.setting, sessionID)
+    }
+    if ('page' in hit) {
+      const at = ids.indexOf(hit.page)
+      if (at >= 0) (opened() ? setRunCursor : setCursor)(at)
+      return hasPage(file(), hit.page, 'settings') ? openPage(hit.page) : undefined
     }
     const id = 'open' in hit ? hit.open : groupId(hit.group)
     const at = draw().ids.indexOf(id)
@@ -529,7 +576,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   const stopTimer = d.every(REFRESH_MS, reread)
   return {
     refresh,
-    state: () => ({ tab: tab(), opened: opened(), run: run(), cursor: tab() === 'scouts' && opened() ? runCursor() : cursor(), groups: groups(), scroll: scroll() }),
+    state: () => ({ tab: tab(), opened: opened(), run: run(), cursor: onPage() ? runCursor() : cursor(), groups: groups(), scroll: scroll() }),
     press,
     stop: () => {
       stopTimer()

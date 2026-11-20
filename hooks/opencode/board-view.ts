@@ -6,7 +6,9 @@
 // the tests check exactly what the TUI shows (hooks/opencode/tests/opencode-tui.spec.ts). The panel's actions go back
 // to the engine as symcc's slash commands (actionCommand), run in the TUI's session (R6 of T-468). Like the Claude Code
 // board it has three tabs (T-559): Tasks, Scouts (the list, a scout's page with its runs, a run's report) and
-// Settings (every setting in its group, with its value and default).
+// Settings (every setting in its group, with its value and default). Like it, Settings opens the Roles and Kinds
+// pages (a list, then one role's or kind's page: turn it off or on, reset it to the built-in one, T-562) and a
+// scout's page edits the scout (how often, model, instructions); the roles and kinds come in the view file too.
 import type { SymccTask, SymccScout } from '../../types'
 import type { PaneView } from '../app/state'
 import type { OwnerQuestion } from '../core/questions'
@@ -17,8 +19,10 @@ import {
   type KeyHint, type Seg, type BoardTask, asksMoreTime, gitNote, OVERTIME_OPTIONS, overtimeQuestion, timeLimitOf,
   waitsForYou, sortScouts, scoutListRows, scoutRow, scoutIcon, scoutTone, scoutHowTo, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem, scoutFile,
   SETTING_GROUPS, SETTINGS, isSettingPage, settingInfo, settingValue, cantPlayNotify,
-  type SettingName, type ScoutRunRecord,
+  type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction,
+  DEFAULT_ROLE, isCheckerRole, ALWAYS_ON_KINDS, checkerOn, roleNameError, kindNameError,
 } from '../board'
+import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, brokenLabel, defNamed } from '../core/def-files'
 import { restFrame } from '../core/logo'
 import { DEFAULT_NAME } from '../name'
 
@@ -36,7 +40,62 @@ export type ViewFile = {
   version: string
   /** when it was written (ms) */
   written_at: number
-  view: PaneView & { scout_runs?: ScoutRuns }
+  view: PaneView & { scout_runs?: ScoutRuns; roles?: ViewDef[]; kinds?: ViewDef[] }
+}
+
+/** One role or kind as the Roles and Kinds pages show it (view.ts puts them in the view file, made with viewDefs). */
+export type ViewDef = {
+  name: string
+  description: string
+  /** built-in, replaced (the owner's copy of a built-in) or added; '' when the owner's file can't be read */
+  source: DefSource | ''
+  /** turned off (the checker role never shows as off: its off only keeps it out of the task roles) */
+  off: boolean
+  /** a role's model ('' = the session's), skills and extra tools */
+  model?: string
+  skills?: string[]
+  tools?: string[]
+  /** a role's checklist, or a kind's body */
+  text: string
+  warning?: string
+  /** why the owner's file can't be read (brokenLabel) */
+  broken?: string
+  /** its file, as the pages name it */
+  file: string
+  /** whether it can be turned off and on here (not general, the checker role, change or investigation) */
+  canOff: boolean
+  /** whether Reset to built-in works: the owner's copy of a built-in (or a broken file with a built-in's name) */
+  canReset: boolean
+}
+
+/** The roles or kinds as the view file carries them: each merged one (built-in, or the owner's over it) in order, then
+ *  the owner's files that can't be read. `dir` is the owner's folder for them (".symcc/roles"). */
+export function viewDefs(def: 'role' | 'kind', all: readonly (RoleDef | KindDef)[], builtIn: readonly { name: string }[], project: readonly { name: string }[], broken: readonly BrokenDef[], dir: string): ViewDef[] {
+  const nameError = def === 'role' ? roleNameError : kindNameError
+  const brokenRow = (b: BrokenDef): ViewDef => ({ name: b.name, description: '', source: '', off: false, text: '', broken: brokenLabel(b), file: b.file, canOff: false, canReset: !nameError(b.name) && !!defNamed(builtIn, b.name) })
+  const rows = all.map((d): ViewDef => {
+    const bad = brokenNamed(broken, d.name)
+    if (bad) return brokenRow(bad)
+    const source = defSource(d.name, builtIn, project) ?? 'built-in'
+    const checker = def === 'role' && isCheckerRole(d.name)
+    const canOff = def === 'role' ? d.name.toLowerCase() !== DEFAULT_ROLE && !checker : !ALWAYS_ON_KINDS.includes(d.name)
+    const plugin = def === 'role' ? `roles/${d.name}.md` : `kinds/${d.name}.ts`
+    const file = source === 'built-in' ? `${plugin} (in the plugin)` : `${dir}/${d.name}.md`
+    const role = def === 'role' ? (d as RoleDef) : null
+    return {
+      name: d.name,
+      description: d.description,
+      source,
+      off: !!d.off && !checker,
+      ...(role ? { model: role.model ?? '', skills: [...role.skills], tools: [...(role.tools ?? [])] } : {}),
+      text: role ? role.prompt : (d as KindDef).body,
+      ...(role?.warning ? { warning: role.warning } : {}),
+      file,
+      canOff,
+      canReset: source === 'replaced',
+    }
+  })
+  return [...rows, ...broken.filter(b => !defNamed(all, b.name)).map(brokenRow)]
 }
 
 /** One scout run as the scout's page lists it, with the ids of the tasks made from it. */
@@ -70,6 +129,8 @@ export function parseViewFile(text: string | null | undefined): ViewFile | null 
     const s = (x: unknown) => (typeof x === 'string' ? x : '')
     const { scout_runs, ...rest } = f.view
     const runs = scout_runs && typeof scout_runs === 'object' && !Array.isArray(scout_runs) ? { scout_runs } : {}
+    if (!Array.isArray(rest.roles)) delete rest.roles
+    if (!Array.isArray(rest.kinds)) delete rest.kinds
     const view = { ...rest, ...runs, working: Array.isArray(f.view.working) ? f.view.working : [], scouts: Array.isArray(f.view.scouts) ? f.view.scouts : [], test_commands: Array.isArray(f.view.test_commands) ? f.view.test_commands : [] }
     return { root: s(f.root), home: s(f.home), name: s(f.name) || DEFAULT_NAME, version: s(f.version), written_at: Number(f.written_at) || 0, view }
   } catch {
@@ -78,15 +139,16 @@ export function parseViewFile(text: string | null | undefined): ViewFile | null 
 }
 
 /** The panel's keys (see panelKeys for which ones each page offers). */
-export type PanelKey = 'up' | 'down' | 'open' | 'back' | 'a' | 'x' | 'close' | 't' | 's' | 'c' | 'r' | 'p'
+export type PanelKey = 'up' | 'down' | 'open' | 'back' | 'a' | 'x' | 'close' | 't' | 's' | 'c' | 'r' | 'p' | 'o' | 'e'
 
 /** The list's groups that open and close (▸ Backlog, ▸ Done, ▸ Dropped). */
 export type PanelGroup = 'backlog' | 'done' | 'dropped'
 
 /** What a mouse click on a line or a piece of it does (T-558): open a task or question, open or close a group, or
  *  press one of the panel's keys (a key hint in the footer works as a button); and (T-559) go to a tab, open a scout
- *  or one of its runs, or change a setting. */
-export type PanelHit = { open: string } | { group: PanelGroup } | { key: PanelKey } | { tab: PanelTab } | { scout: string } | { run: string } | { setting: SettingName }
+ *  or one of its runs, or change a setting; and (T-562) open a page under Settings: the Roles or Kinds list ("roles", "kinds") or one
+ *  role's or kind's page ("role:tester", "kind:bug", see settingsPlace). */
+export type PanelHit = { open: string } | { group: PanelGroup } | { key: PanelKey } | { tab: PanelTab } | { scout: string } | { run: string } | { setting: SettingName } | { page: string }
 
 /** One colored piece of a line, with what a click on it does (only the footer's key hints have one). */
 export type DrawSeg = Seg & { hit?: PanelHit }
@@ -173,7 +235,7 @@ export const groupId = (g: PanelGroup) => `group:${g}`
 export const groupOf = (id: string): PanelGroup | null => (id.startsWith('group:') ? (id.slice(6) as PanelGroup) : null)
 
 /** The key a key hint's word stands for, so a click on the hint does what the key does ('' for "move"). */
-const HINT_KEY: Record<string, PanelKey> = { open: 'open', close: 'close', back: 'back', approve: 'a', answer: 'a', reject: 'x', change: 'open', report: 'open', 'run now': 'r', pause: 'p', resume: 'p' }
+const HINT_KEY: Record<string, PanelKey> = { open: 'open', close: 'close', back: 'back', approve: 'a', answer: 'a', reject: 'x', change: 'open', report: 'open', 'run now': 'r', pause: 'p', resume: 'p', edit: 'e', 'turn off': 'o', 'turn on': 'o', reset: 'r' }
 
 /** The footer's key hints as pieces, each a button for its key: "a approve · x reject · b back". */
 export function hintSegs(keys: KeyHint[]): Line {
@@ -197,32 +259,56 @@ const when = (iso: string) => (iso ? iso.slice(0, 16).replace('T', ' ') : '?')
 export function hasPage(f: ViewFile | null, id: string, tab: PanelTab = 'tasks'): boolean {
   if (!id || !f) return false
   if (tab === 'scouts') return (f.view.scouts ?? []).some(x => x.name === id)
-  if (tab === 'settings') return false
+  if (tab === 'settings') return !!settingsPlace(f, id)
   return f.view.tasks.some(x => x.id === id) || (f.view.questions ?? []).some(x => x.id === id)
 }
 
 /** Scout `scout`'s recent runs in the view file, newest first. */
 export const scoutRunsIn = (f: ViewFile | null, scout: string): ScoutRun[] => (Array.isArray(f?.view.scout_runs?.[scout]) ? f!.view.scout_runs![scout]! : [])
 
+/** A page under Settings: the Roles or Kinds list (`id` "roles" or "kinds"), or one role's or kind's page ("role:tester",
+ *  "kind:bug"; its list is `list`); null when there is no such page (or the role or kind left the view). */
+export function settingsPlace(f: ViewFile | null, id: string): { list: SettingPage; def?: ViewDef } | null {
+  if (id === 'roles' || id === 'kinds') return { list: id }
+  const m = /^(role|kind):(.+)$/.exec(id)
+  if (!m) return null
+  const list = m[1] === 'role' ? 'roles' : 'kinds'
+  const def = defsIn(f, list).find(x => x.name === m[2])
+  return def ? { list, def } : null
+}
+
+/** The roles or kinds in the view file. */
+export const defsIn = (f: ViewFile | null, list: SettingPage): ViewDef[] => (Array.isArray(f?.view[list]) ? f!.view[list]! : [])
+
+/** A role's or kind's page id: "role:tester", "kind:bug". */
+export const defPageId = (list: SettingPage, name: string) => `${list === 'roles' ? 'role' : 'kind'}:${name}`
+
 /** The open scout, when the Scouts tab shows one's page. */
 const scoutNamed = (f: ViewFile | null, name: string): SymccScout | undefined => (name ? f?.view.scouts?.find(x => x.name === name) : undefined)
 
 /**
  * The keys of the list, and of a task's or question's page (the main actions only); on the Scouts tab, of the list,
- * a scout's page (r run now, p pause or resume) and a run's page; on the Settings tab, of the settings list.
+ * a scout's page (r run now, p pause or resume, e edit) and a run's page; on the Settings tab, of the settings list,
+ * the Roles and Kinds lists and a role's or kind's page (o turn off or on, r reset to the built-in one).
  */
 export function panelKeys(f: ViewFile | null, opened: string, tab: PanelTab = 'tasks', run = ''): KeyHint[] {
   const move = { key: '↑↓', word: 'move' }
   const views = { key: 't s c', word: 'views' }
   const close = { key: 'Esc', word: 'close' }
   const back = { key: 'b', word: 'back' }
-  if (tab === 'settings') return [move, { key: 'Enter', word: 'change' }, views, close]
+  if (tab === 'settings') {
+    const place = settingsPlace(f, opened)
+    if (!place) return [move, { key: 'Enter', word: 'change' }, views, close]
+    if (!place.def) return [move, { key: 'Enter', word: 'open' }, back]
+    const d = place.def
+    return [...(d.canOff ? [{ key: 'o', word: d.off ? 'turn on' : 'turn off' }] : []), ...(d.canReset ? [{ key: 'r', word: 'reset' }] : []), back]
+  }
   if (tab === 'scouts') {
     const sc = scoutNamed(f, opened)
     if (!sc) return [move, { key: 'Enter', word: 'open' }, views, close]
     if (run && scoutRunsIn(f, sc.name).some(x => x.run.ended === run)) return [back]
     const runs = scoutRunsIn(f, sc.name).length ? [move, { key: 'Enter', word: 'report' }] : []
-    return [...(sc.running ? [] : [{ key: 'r', word: 'run now' }]), { key: 'p', word: sc.paused ? 'resume' : 'pause' }, ...runs, back]
+    return [...(sc.running ? [] : [{ key: 'r', word: 'run now' }]), { key: 'p', word: sc.paused ? 'resume' : 'pause' }, { key: 'e', word: 'edit' }, ...runs, back]
   }
   if (!opened) return [move, { key: 'Enter', word: 'open' }, views, close]
   const t = f?.view.tasks.find(x => x.id === opened)
@@ -254,8 +340,9 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
     body = scoutsBody(f, choice, nowMs, w)
     keys = panelKeys(f, choice.opened, 'scouts', choice.run ?? '')
   } else if (tab === 'settings') {
-    body = settingsBody(f, choice.cursor, w)
-    keys = panelKeys(f, '', 'settings')
+    const place = settingsPlace(f, choice.opened)
+    body = place?.def ? defPage(f, place.list, place.def, w) : place ? defsList(f, place.list, choice.cursor, w) : settingsBody(f, choice.cursor, w)
+    keys = panelKeys(f, place ? choice.opened : '', 'settings')
   } else {
     const page = choice.opened ? openedPage(f, choice.opened, nowMs, w) : null
     body = page ?? listBody(f, choice.cursor, { ...GROUPS_OPEN, ...choice.groups }, nowMs, w)
@@ -388,11 +475,92 @@ function scoutPage(f: ViewFile, sc: SymccScout, choice: PanelChoice, nowMs: numb
   return { ...b, ids, selected }
 }
 
-/** The settings the cursor goes over on the Settings tab, in the Claude Code board's groups and order. */
-export const SETTING_ROWS: readonly SettingName[] = SETTING_GROUPS.flatMap(g => g.items.filter((x): x is SettingName => !isSettingPage(x)))
+/** The rows the cursor goes over on the Settings tab, in the Claude Code board's groups and order: the settings, and
+ *  the Roles and Kinds rows that open their pages. */
+export const SETTING_ROWS: readonly (SettingName | SettingPage)[] = SETTING_GROUPS.flatMap(g => g.items)
+
+/** "6 roles · 1 off" (the Settings row of the Roles or Kinds page). */
+function defsCount(f: ViewFile, list: SettingPage): string {
+  const all = defsIn(f, list)
+  const off = all.filter(x => x.off).length
+  const noun = list === 'roles' ? 'role' : 'kind'
+  return `${all.length} ${noun}${all.length === 1 ? '' : 's'}${off ? ` · ${off} off` : ''}`
+}
+
+/** The Roles or Kinds page: one row per role or kind (name, where it comes from, whether it is off, what it is for);
+ *  Enter opens one. New ones are made by the lead or as files. */
+function defsList(f: ViewFile, list: SettingPage, cursor: number, w: number): Body {
+  const b = bodyMaker()
+  const all = defsIn(f, list)
+  const noun = list === 'roles' ? 'role' : 'kind'
+  b.head(list === 'roles' ? 'Roles' : 'Kinds')
+  if (!all.length) b.add([{ text: `  (none in the board's view yet)`, color: 'inactive' }])
+  const ids = all.map(x => defPageId(list, x.name))
+  const selected = ids.length ? ids[Math.min(Math.max(0, cursor), ids.length - 1)]! : ''
+  const nameW = Math.max(0, ...all.map(x => x.name.length))
+  for (const x of all) {
+    const id = defPageId(list, x.name)
+    const front = { text: id === selected ? '› ' : '  ', color: 'ide', bold: true }
+    if (x.broken) {
+      b.add([front, { text: x.name.padEnd(nameW), color: 'inactive', bold: true }, { text: ` — ${x.broken}`, color: 'error' }], { page: id })
+      continue
+    }
+    const label = sourceLabel(x.source as DefSource, x.off)
+    const fit = fitRow(2 + nameW + 1 + label.length, ` · ${x.description}`, '', w)
+    b.add(
+      [
+        front,
+        { text: x.name.padEnd(nameW), color: x.off ? 'inactive' : 'claude', ...(x.off ? {} : { bold: true }) },
+        { text: ` ${label}`, color: x.off ? 'warning' : 'inactive' },
+        { text: fit.title, color: x.off ? 'inactive' : 'text' },
+        ...(x.warning ? [{ text: ' ⚠', color: 'warning' }] : []),
+      ],
+      { page: id },
+    )
+  }
+  b.blank()
+  b.add([{ text: `Enter opens a ${noun} · a new one: ask the lead, or add .${f.name}/${list}/<name>.md`, color: 'inactive' }])
+  return { ...b, ids, selected }
+}
+
+/** One role's or kind's page: its name, where it comes from and whether it is off, what it is for; a role's model,
+ *  skills and tools; its checklist (a role) or body (a kind); its file. A file that can't be read says why. */
+function defPage(f: ViewFile, list: SettingPage, x: ViewDef, w: number): Body {
+  const b = bodyMaker()
+  const role = list === 'roles'
+  if (x.broken) {
+    b.add([{ text: x.name, color: 'inactive', bold: true }, { text: ` · ${x.broken}`, color: 'error' }])
+    for (const l of wrapSegs([{ text: `Fix the file by hand: ${x.file}${x.canReset ? '; or Reset to built-in deletes it (the built-in one is used meanwhile)' : ''}.`, color: 'text' }], w)) b.add(l)
+  } else {
+    b.add([{ text: x.name, color: x.off ? 'inactive' : 'claude', bold: true }, { text: ` · ${sourceLabel(x.source as DefSource, x.off)}`, color: x.off ? 'warning' : 'inactive' }])
+    if (x.description) for (const l of wrapSegs([{ text: x.description, color: 'text', bold: true }], w)) b.add(l)
+    if (x.warning) b.add([{ text: x.warning, color: 'warning' }])
+    if (role && isCheckerRole(x.name)) for (const l of wrapSegs([{ text: `never a task's role, and not turned on or off here: the checker setting runs it (Settings → checker, now ${checkerOn(f.view) ? 'on' : 'off'})`, color: 'inactive' }], w)) b.add(l)
+    const section = (title: string, value: string, none: string) => {
+      b.blank()
+      b.head(title)
+      b.add([{ text: `  ${value || none}`, color: value ? 'text' : 'inactive' }])
+    }
+    if (role) {
+      section('Model', x.model ?? '', "(none: the session's model)")
+      section('Skills', (x.skills ?? []).join(', '), '(none)')
+      section('Tools', (x.tools ?? []).join(', '), '(none: the base tools only)')
+    }
+    b.blank()
+    b.head(role ? 'Checklist' : 'Body')
+    if (x.text.trim()) for (const l of textLines(x.text.trim(), 'text', w)) b.add(l)
+    else b.add([{ text: role ? '  (none: a plain worker)' : '  (none)', color: 'inactive' }])
+  }
+  b.blank()
+  b.head('File')
+  b.add([{ text: `  ${x.file}`, color: 'autoAccept' }])
+  b.blank()
+  b.add([{ text: 'To change what it says: ask the lead, or edit its file', color: 'inactive' }])
+  return { ...b, ids: [], selected: '' }
+}
 
 /** The Settings tab: each group (Work, Checks before merging, ...) with its settings: name, value, default and range,
- *  and what it does on the line under it. The Roles and Kinds pages are only on the Claude Code board. */
+ *  and what it does on the line under it; the Roles and Kinds rows open their pages. */
 function settingsBody(f: ViewFile, cursor: number, w: number): Body {
   const b = bodyMaker()
   const v = f.view
@@ -404,7 +572,16 @@ function settingsBody(f: ViewFile, cursor: number, w: number): Body {
     for (const item of g.items) {
       if (isSettingPage(item)) {
         const label = item === 'roles' ? 'Roles' : 'Kinds'
-        b.add([{ text: `  ${label.padEnd(nameWidth)}`, color: 'inactive' }, { text: ` its page is on the Claude Code board; here ask the lead`, color: 'inactive' }])
+        const hit = { page: item }
+        b.add(
+          [
+            { text: item === selected ? '› ' : '  ', color: 'ide', bold: true },
+            { text: label.padEnd(nameWidth), color: 'claude', bold: true },
+            { text: ` ${defsCount(f, item)}`, color: 'text', bold: true },
+          ],
+          hit,
+        )
+        b.add([{ text: `    Enter opens the ${label} page: the ${item === 'roles' ? 'worker roles' : 'task kinds'}, to open, turn off or reset`, color: 'inactive' }], hit)
         continue
       }
       const x = settingInfo(item)!
@@ -425,7 +602,7 @@ function settingsBody(f: ViewFile, cursor: number, w: number): Body {
     }
   }
   b.blank()
-  b.add([{ text: `Enter changes a setting (on/off flips) · /${f.name}-settings NAME VALUE · or tell the lead`, color: 'inactive' }])
+  b.add([{ text: `Enter changes a setting (on/off flips) or opens a page ·/${f.name}-settings NAME VALUE · or tell the lead`, color: 'inactive' }])
   return { ...b, ids: [...SETTING_ROWS], selected }
 }
 
@@ -565,6 +742,10 @@ export type PanelAction =
   /** run a scout now, or (with `paused`) pause or resume its timer */
   | { kind: 'scout'; scout: string; paused?: boolean }
   | { kind: 'setting'; setting: SettingName; value: string }
+  /** change one part of a scout's file: how often it runs, its model ('' = the session's), its instructions */
+  | { kind: 'scout-edit'; scout: string; field: ScoutEditField; value: string }
+  /** turn a role or kind off or on, or reset it to the built-in one */
+  | { kind: 'def'; def: 'role' | 'kind'; name: string; action: DefAction }
 
 /** The slash command (its name, without the slash, and its text) that does `a` for plugin `name`. */
 export function actionCommand(a: PanelAction, name: string = DEFAULT_NAME): { name: string; text: string } {
@@ -572,6 +753,8 @@ export function actionCommand(a: PanelAction, name: string = DEFAULT_NAME): { na
   if (a.kind === 'reject') return { name: `${name}-reject`, text: `${a.id} ${a.reason.trim()}` }
   if (a.kind === 'scout') return { name: `${name}-scout`, text: a.paused === undefined ? a.scout : `${a.scout} ${a.paused ? 'pause' : 'resume'}` }
   if (a.kind === 'setting') return { name: `${name}-settings`, text: `${a.setting} ${a.value.trim()}` }
+  if (a.kind === 'scout-edit') return { name: `${name}-scout`, text: `${a.scout} ${a.field} ${a.value.trim() || (a.field === 'model' ? 'none' : '')}`.trim() }
+  if (a.kind === 'def') return { name: `${name}-settings`, text: `${a.def} ${a.name} ${a.action}` }
   return { name: `${name}-answer`, text: `${a.id} ${a.answer.trim()}` }
 }
 
