@@ -1,6 +1,6 @@
 # Engine and clients
 
-For people who change symcc's code. symcc is split into two sides: the **engine** (the part that does the work) and the **clients** (the parts that plug the engine into one program). This page says where the line is, the rule that keeps it, and which checks watch it. The plan behind it is section 12 of [the standalone app note](research/standalone-app.md).
+For people who change symcc's code. symcc is split into two sides: the **engine** (the part that does the work) and the **clients** (the parts that plug the engine into one program). **Why split it:** symcc runs in more than one program today (Claude Code, OpenCode, and a Node command line), and the board logic should exist once, not once per program. See [Using symcc in OpenCode](guide.md#using-symcc-in-opencode) and [Running symcc without Claude Code](guide.md#running-symcc-without-claude-code). This page says where the line is, the rule that keeps it, and which checks watch it. The plan behind it is section 12 of [the standalone app note](research/standalone-app.md).
 
 ## The boundary
 

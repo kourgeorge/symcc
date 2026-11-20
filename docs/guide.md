@@ -71,7 +71,11 @@ Each part is there for a reason. Knowing it makes the rest of this guide easier 
   tokens.
 - **One merge queue.** Finished tasks take turns. Only the task at the front catches up with
   your branch, runs the tests and merges, so your branch cannot move in between and the code
-  that was tested is exactly the code that merges.
+  that was tested is exactly the code that merges. Before the queue, several tasks could merge
+  into a moving branch at once, and each had to catch up, test again and sometimes clash with the
+  others. Now no two merges race and no test run is wasted. One rule covers every way into a
+  merge (hand-back, approve, retry), so it is simple to follow and to trust. The cost is waiting:
+  see [the queue](#states-stages-and-the-queue).
 - **Guards that stop honest mistakes.** symcc refuses a scout's or checker's file edit and git
   writes, and a worker's edit outside its file list. These checks read the command text. They
   catch a worker that makes a mistake. They are not a security boundary and do not stop an agent
@@ -174,17 +178,10 @@ and then merges (or stops in `review` when you want to approve first). Any failu
 one of the `auto_retries`. The checker runs before the queue, side by side with other checkers,
 and never runs the project's tests. The tests run once per try, in the task's turn.
 
-**Why it is built this way.**
-
-- Before, several tasks could merge into a moving branch at once. Each one had to catch up, test
-  again and sometimes clash with the others. Now the branch moves only at the front of the queue.
-  So the code a task was tested with is exactly the code that merges: the main branch is always
-  tested as it will be after the merge.
-- No two merges race, and no test run is wasted because another merge came first.
-- One rule for every way into a merge (hand-back, approve, retry), so it is simple to follow and
-  to trust.
-- The cost: tasks wait their turn. When five tasks with 10-minute tests finish together, the
-  fifth waits about 40 minutes before its own turn. Testing several tasks together is not built.
+**Why one queue, and its cost.** The reasons for one queue are in
+[Why it is built this way](#why-it-is-built-this-way) above. The cost is that tasks wait their
+turn: when five tasks with 10-minute tests finish together, the fifth waits about 40 minutes
+before its own turn. Testing several tasks together is not built.
 
 **Task dependencies.** The lead sets them. A task's `after` lists the tasks that must be
 finished first: it starts only when every one of them is `done` (merged). Any other status

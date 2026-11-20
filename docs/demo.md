@@ -1,5 +1,7 @@
 # The README demo (docs/demo.svg)
 
+This page is for people who want to change the demo animation. If you only want to use symcc, skip it: see the [README](../README.md).
+
 `docs/demo.svg` is the short animation at the top of the README. It is one SVG file with
 SMIL animation only: no JavaScript, no outside fonts or images, so GitHub plays it inside
 an `<img>` tag. It loops every 58 seconds and is 900x520.
