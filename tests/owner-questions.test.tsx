@@ -290,9 +290,13 @@ test("T-651: in VS Code a question's options are numbered link lines, one under 
     const line = await vs.find({ key: `choice-${i + 1}` })
     expect([line?.type, line?.props.text]).toEqual(['Markdown', mdLink(`${i + 1}. ${c}`, vsHref('choice', String(i + 1)))])
   }
+  // the keyboard: key 2 belongs to a hidden Button (a Markdown link can't take the focus) that sends the same answer
+  const key2 = await vs.find({ key: 'choice-key-2' })
+  expect([key2?.type, key2?.props.hotkey]).toEqual(['Button', '2'])
+  expect((await vs.find({ key: 'vs-choice-keys' }))?.props.display).toBe('none')
   await vs.press({ key: 'choice-1', link: { href: vsHref('choice', '1') } })
-  const saved = Object.entries(written).filter(([p]) => /board\.json\..*\.tmp$/.test(p)).map(([, text]) => JSON.parse(text))
-  expect(saved.map(x => x.questions[0].answer)).toEqual([options[0]])
+  const saved = () => Object.entries(written).filter(([p]) => /board\.json\..*\.tmp$/.test(p)).map(([, text]) => JSON.parse(text))
+  expect(saved().map(x => x.questions[0].answer)).toEqual([options[0]])
   await vs.unmount()
 })
 

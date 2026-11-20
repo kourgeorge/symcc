@@ -65,15 +65,23 @@ export const mdLink = (text: string, href: string) => `[${mdText(text)}](${href}
  * A question's answer choices in VS Code (T-651): one numbered line each, "1. Only the first part", like Claude Code's
  * question pop-up; each line is a link (key `choice-1`) that wraps as text does and picks the choice wherever it is
  * clicked. VS Code's Buttons never wrap their label, so a long choice drawn as one ran past the panel.
+ * The keyboard: keys 1-9 pick a choice while the panel has the focus, through hidden Buttons (`choice-key-1`, in a Box
+ * drawn `display="none"`, as the terminal's answer box does). A Markdown link can't take `autoFocus`, so Enter no
+ * longer picks the first choice at once; the "Your answer" box keeps no focus either, so the number keys still reach it.
  */
 export function vsChoices(k: VsKit, choices: readonly string[], onChoice: (i: number) => () => void): RenderChildren {
-  const { Box } = k
+  const { Box, Button } = k
   return (
     <Box key="vs-answers" flexDirection="column">
       {choices.map((c, i) => {
         const href = vsHref('choice', String(i + 1))
         return vsLink(k, `choice-${i + 1}`, mdLink(`${i + 1}. ${c}`, href), [[href, onChoice(i)]])
       })}
+      <Box key="vs-choice-keys" display="none">
+        {choices.slice(0, 9).map((c, i) => (
+          <Button key={`choice-key-${i + 1}`} label={c} hotkey={String(i + 1)} onPress={onChoice(i)} />
+        ))}
+      </Box>
     </Box>
   )
 }
