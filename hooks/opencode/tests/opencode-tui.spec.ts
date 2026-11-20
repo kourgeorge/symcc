@@ -13,6 +13,7 @@ import type { PaneView } from '../../app/state'
 import { ICON } from '../../name'
 import { bandLines, bandDraw, BAND_CLICK_HINT, panelLines, panelKeys, parseViewFile, viewFileText, lineText, actionCommand, answerOptions, OWN_ANSWER, viewDefs, panelTaskActions, TASK_ACTION_COMMANDS, SETTINGS_OPEN, type ViewFile } from '../board-view'
 import { readFile } from 'node:fs/promises'
+import { taskSections } from '../../core/task-sections'
 import { PLUGIN_ROOT } from '../host'
 import { startTui, viewPaths, loadTuiRuntime, BOARD_PANEL, setupFailed, colorOf, drawLines, type TuiContext, type TuiRuntime, type TuiPanelInput, type TuiKeyLayer } from '../tui'
 
@@ -55,7 +56,12 @@ test('the band: the header, then the tasks that need you or run with the list\'s
   const lines = bandLines(f, NOW, 120).map(lineText)
   // T-576: "𝄞 symcc · proj ⏵ auto · …": no "board", no version; the project shown as it isn't called symcc
   expect(lines[0]!.startsWith(`${ICON} symcc · proj ⏵ auto`)).toBe(true)
-  expect(lines[0]).not.toContain('board')
+  // the header's own text, checked wide enough that the " (click: board)" hint is there, and without that hint
+  const wideHead = lineText(bandDraw(f, NOW, 400).lines[0]!)
+  expect(wideHead.endsWith(BAND_CLICK_HINT)).toBe(true)
+  const headText = wideHead.slice(0, -BAND_CLICK_HINT.length)
+  expect(headText).not.toContain('board')
+  expect(headText).not.toContain('0.9.0')
   expect(lines[0]).not.toContain('0.9.0')
   expect(lines[0]).toContain('1 doing')
   // in the symcc project itself the name shows once, the state right after it
@@ -96,6 +102,36 @@ test('a doing row shows only the total work time of all tries in the band and th
   // narrow: the time is left out
   expect(row(bandLines(f, NOW, 40).map(lineText))).not.toContain('1h40m')
   expect(row(panelLines(f, { opened: '', cursor: 0 }, NOW, 30).lines.map(lineText))).not.toContain('1h40m')
+})
+
+test('T-581: a doing row in a check step or the merge line shows its icon and the time, no step word, in the band and the list; the worker row keeps ▶', () => {
+  const f0 = viewFile()
+  const fresh = new Date(NOW - 10_000).toISOString()
+  const runs = [{ started: new Date(NOW - 20 * 60_000).toISOString(), ended: fresh }]
+  const steps = [['T-1', 'testing', '⧗'], ['T-6', 'prep', '✎'], ['T-7', 'checker', '⌕'], ['T-8', 'merging', '⇢']] as const
+  const base = f0.view.tasks.find(t => t.id === 'T-1')!
+  const tasks = [
+    ...f0.view.tasks.filter(t => t.id !== 'T-1'),
+    ...steps.map(([id, step]) => ({ ...base, id, title: `In ${step}`, attempts: 1, note: '', runs, checking: { step, at: fresh } })),
+    { ...base, id: 'T-9', title: 'In line', attempts: 1, note: 'in line (2)', runs, checking: { step: 'prep' as const, at: fresh } },
+    { ...base, id: 'T-10', title: 'Working', attempts: 1, note: '', runs: [{ started: new Date(NOW - 15 * 60_000).toISOString() }] },
+  ]
+  const f = { ...f0, view: { ...f0.view, tasks, working: [] } }
+  const band = bandLines(f, NOW, 200, 20).map(lineText)
+  const list = panelLines(f, { opened: '', cursor: 0 }, NOW, 120).lines.map(lineText)
+  const row = (lines: string[], id: string) => lines.find(l => new RegExp(`(^|\\s)${id} `).test(l))!
+  for (const lines of [band, list]) {
+    for (const [id, , icon] of steps) {
+      expect(row(lines, id)).toMatch(new RegExp(`${id} +${icon} 20m`))
+      expect(row(lines, id)).not.toMatch(/▶|\b(prep|test|checker|merge) \d/)
+    }
+    expect(row(lines, 'T-9')).toMatch(/T-9 +⋯ 20m/)
+    expect(row(lines, 'T-10')).toMatch(/T-10 +▶ 15m/)
+  }
+  // the titles still start in one column
+  const titleAt = (lines: string[]) => new Set([...steps.map(([id, step]) => row(lines, id).indexOf(`In ${step}`)), row(lines, 'T-9').indexOf('In line'), row(lines, 'T-10').indexOf('Working')])
+  expect(titleAt(band).size).toBe(1)
+  expect(titleAt(list).size).toBe(1)
 })
 
 test('the panel: the banner, then the list grouped by state (NEEDS YOU, what runs and waits, Done folded) with the cursor; a task\'s page with its rows, choices and keys', () => {
@@ -1277,5 +1313,90 @@ test('T-585: the Settings tab\'s groups open and close like the Claude Code boar
   answerPick('review')
   await asked
   expect(sent).toEqual([])
+  board.stop()
+})
+
+/** T-580: the view file with T-2 in review (two tries, a history, its changed files in view.json) and T-4 failed. */
+function sectionsViewFile(): ViewFile {
+  const f = viewFile()
+  const runs = (id: string) => [1, 2].map(n => ({ started: AT, ended: AT, report: `.symcc/reports/${id}-try-${n}.md` }))
+  const history = [{ kind: 'tried', at: AT, text: 'try 1: changed it → tests failed' }, { kind: 'merged', at: AT, text: 'try 2: fixed it → passed' }]
+  const tasks = f.view.tasks.map(t =>
+    t.id === 'T-2' ? { ...t, details: '## Goal\n- Fix `src/a.ts`', attempts: 2, runs: runs('T-2'), history } : t.id === 'T-4' ? { ...t, status: 'failed' as const, note: 'tests failed', attempts: 2, runs: runs('T-4'), history } : t,
+  ) as ViewFile['view']['tasks']
+  return { ...f, view: { ...f.view, tasks, changes: { 'T-2': { files: [{ file: 'src/a.ts', added: 4, removed: 2 }], error: '' } } } }
+}
+
+test('T-580: OpenCode\'s task page has the same sections as Claude Code\'s (core\'s taskSections): their ▍headings and lines, in order', () => {
+  const f = sectionsViewFile()
+  expect(parseViewFile(viewFileText(f))?.view.changes).toEqual(f.view.changes)
+  const page = (id: string, report?: { file: string; text: string | null | undefined }) => panelLines(f, { opened: id, cursor: 0, ...(report ? { taskReport: report } : {}) }, NOW, 100)
+  const heads = (id: string) => page(id).lines.map(lineText).filter(l => l.startsWith('▍'))
+  expect(heads('T-2')).toEqual(['▍Details', '▍Changes (1 file, against main)', '▍What to do', '▍History (2, newest first)', '▍Report (try 2, 2 of 2)', '▍Runs (time and cost)'])
+  expect(heads('T-4')).toEqual(['▍Why it failed', '▍Details', '▍What to do', '▍History (2, newest first)', '▍Report (try 2, 2 of 2)', '▍Runs (time and cost)'])
+  expect(heads('T-5')).toEqual(['▍Details', '▍What to do', '▍History (1, newest first)'])
+  // each section's lines are the shared model's, in order
+  const report = { file: '.symcc/reports/T-2-try-2.md', text: 'Fixed it.\n\nAll tests pass.' }
+  const t2 = f.view.tasks.find(t => t.id === 'T-2')!
+  const lines = page('T-2', report).lines.map(lineText)
+  const model = taskSections(t2, { width: 100, nowMs: NOW, detail: { roles: [], all: f.view.tasks, when }, texts: { [report.file]: report.text }, changes: f.view.changes!['T-2']!, target: 'main', dataDir: '.symcc', changesHint: '  d (or a click on a file) shows the changes' })
+  for (const s of model) {
+    const at = lines.indexOf(`▍${s.title}`)
+    expect(at).toBeGreaterThan(0)
+    expect(lines.slice(at + 1, at + 1 + s.lines.length)).toEqual(s.lines.map(l => (l.segs.length ? l.segs.map(g => g.text).join('') : ' ')))
+  }
+  expect(lines).toContain('  Fixed it.')
+  expect(lines).toContain('  folder: .symcc/worktrees/T-2 · edit files there, then approve (the tests run again)')
+  expect(lines).toContain('• Fix src/a.ts')
+  // the hint under the files says what this page does (Enter does nothing on an open task page here)
+  expect(lines).toContain('  d (or a click on a file) shows the changes')
+  expect(lines.some(l => l.includes('Enter on a file'))).toBe(false)
+  // a changed file's line: a click shows the changes (the d key)
+  const d = page('T-2')
+  expect(d.hits[d.lines.map(lineText).findIndex(l => l.startsWith('src/a.ts'))]).toEqual({ key: 'd' })
+  // the report not read yet, or unreadable
+  expect(page('T-2', { file: report.file, text: undefined }).lines.map(lineText)).toContain('  (reading the report…)')
+  expect(page('T-2', { file: report.file, text: null }).lines.map(lineText)).toContain('  Could not read the report file.')
+  // a long report is cut, saying how many lines are left
+  const long = page('T-2', { file: report.file, text: Array.from({ length: 60 }, (_, i) => `line ${i + 1}`).join('\n') }).lines.map(lineText)
+  expect(long).toContain('  line 39')
+  expect(long).not.toContain('  line 41')
+  expect(long).toContain('  … (21 more lines)')
+  // a failed task's why, and its next step
+  const t4 = page('T-4').lines.map(lineText)
+  expect(t4[t4.indexOf('▍Why it failed') + 1]).toMatch(/^ {2}\S/)
+  expect(t4.some(l => l.startsWith('  Next: '))).toBe(true)
+})
+
+test('T-580: opening a task\'s page in the TUI reads its latest report from its file and shows it under ▍Report', async () => {
+  const f = sectionsViewFile()
+  const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)], ['/work/proj/.symcc/reports/T-2-try-2.md', 'The second try worked.']])
+  const read: string[] = []
+  const slots: { append: string; render: (input: never) => unknown }[] = []
+  const ctx: TuiContext = {
+    location: { directory: '/work/proj' },
+    theme: {},
+    renderer: { width: 120 },
+    client: { session: { command: async () => undefined } },
+    keymap: { layer: () => undefined },
+    ui: {
+      toast: { show: () => undefined },
+      dialog: { prompt: async () => undefined, select: async () => undefined },
+      panel: { open: () => true, close: () => undefined, current: () => undefined },
+      slot: claim => (slots.push(claim as never), () => undefined),
+    },
+  }
+  const board = startTui(ctx, { runtime: fakeRuntime(), readText: async p => (read.push(p), files.get(p) ?? Promise.reject(new Error('missing'))), every: () => () => undefined, now: () => NOW })
+  await board.refresh()
+  const panel = slots.find(s => s.append === 'session.panel')!.render({ name: BOARD_PANEL, sessionID: 'ses_1', width: 100, focused: true, close: () => undefined, focus: () => undefined } as never)
+  const ids = panelLines(f, { opened: '', cursor: 0 }, NOW, 100).ids
+  for (let i = 0; i < ids.indexOf('T-2'); i++) await board.press('down', 'ses_1')
+  await board.press('open', 'ses_1')
+  expect(board.state().opened).toBe('T-2')
+  await new Promise<void>(res => setTimeout(res, 0))
+  expect(shown(panel)).toContain('  The second try worked.')
+  // read once, not again on each refresh
+  await board.refresh()
+  expect(read.filter(p => p.endsWith('T-2-try-2.md')).length).toBe(1)
   board.stop()
 })

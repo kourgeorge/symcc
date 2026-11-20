@@ -1,6 +1,6 @@
 // The board panel's Tasks view: the list of tasks by section.
 import type { SymccTask } from '../../../types'
-import { statusMark, archivedNote, archivedOf, localOffset, panelSections, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, groupLabel, ALL_CLEAR, fittedCells, TITLE_ROOM, bannerRule, fitRow, rowExtra, listKeys, searchTasks, SEARCH_WORDS, searchLine, searchBoxHint, tryMark, tryTone, questionsLabel, type OwnerQuestion, waitsForYou } from '../../board'
+import { statusMark, archivedNote, archivedOf, localOffset, panelSections, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, groupLabel, ALL_CLEAR, fittedCells, rowMark, TITLE_ROOM, bannerRule, fitRow, rowExtra, listKeys, searchTasks, SEARCH_WORDS, searchLine, searchBoxHint, tryMark, tryTone, questionsLabel, type OwnerQuestion, waitsForYou } from '../../board'
 import { openDays, S } from '../../app/state'
 import { type $, panelValues } from '../panel'
 import type { PaneParts } from './parts'
@@ -87,7 +87,7 @@ export function listPage($: $, pane: PaneParts) {
   const shown = list.flatMap(r => ('task' in r ? [r.task] : []))
   const since = (id: string) => v.working.find(w => w.task === id)?.since
   const idWidth = Math.max(4, ...shown.map(x => x.id.length))
-  // a doing task: the total work time of all tries, "1h40m", "test 9m"; narrow, the time is left out
+  // a doing task: the total work time of all tries, "1h40m", after its step's icon in a check step (rowMark): "⧗ 9m"; narrow, the time is left out
   const cells = fittedCells(shown, nowMs, since, width - (4 + idWidth + 3 + 2) - TITLE_ROOM)
   const cellWidth = Math.max(0, ...[...cells.values()].map(c => c.length))
   // the list's own colors: failed red, review and waiting yellow, doing blue, done green
@@ -170,7 +170,7 @@ export function listPage($: $, pane: PaneParts) {
             <Text bold={!closed} color={C(closed ? 'inactive' : 'claude')}>
               {x.id.padEnd(idWidth)}
             </Text>
-            <Text color={C(tone[x.status]!)}>{` ${statusMark(x)} ${cells.get(x.id)!.padEnd(cellWidth)}  `}</Text>
+            <Text color={C(tone[x.status]!)}>{` ${rowMark(x, nowMs)} ${cells.get(x.id)!.padEnd(cellWidth)}  `}</Text>
             <Text bold={waitsForYou(x) || x.status === 'failed' || x.status === 'review'} color={C(closed ? 'inactive' : 'text')}>
               {fit.title}
             </Text>

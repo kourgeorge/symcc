@@ -238,17 +238,20 @@ a new try as usual, an approve stays in review (approve it again).
 **What a task shows on its way to the merge.** Every board view (the board list, the band above
 the prompt, the VS Code list and task page, the OpenCode board and the lead's text board) shows
 the same small set of words and notes. While it waits for its turn its note says "in line (n)",
-n being its place (the task merging now is 1). During its turn the step shows in place of its
-time (the lead's text board shows it after the status: "doing prep · title"):
+n being its place (the task merging now is 1), and its row shows `⋯` in place of `▶`. During its
+turn the row shows the step's icon in place of `▶`, then the time: `⌕ 5m`, not `▶ checker 5m`.
+The step's word stays on the task page (its "Step" row) and in the note; the lead's text board
+shows both ("⧗ doing test · title"). Legend: `▶` working · `⋯` in line · `✎` prep · `⧗` test ·
+`⌕` checker · `⇢` merge.
 
-- `prep`: symcc's own step before the line (steps 1 and 2: commit, leave out secret-looking
+- `✎ prep`: symcc's own step before the line (steps 1 and 2: commit, leave out secret-looking
   files, scope check). Its note says "preparing to merge: committing and checking files". No
   agent runs in this step.
-- `test`: the test commands run. Its note says "running the tests".
-- `checker`: a checker agent is trying to break the change (only with the `checker` setting
-  on; with it off no task ever shows this word). It comes right after `prep`, before the task
+- `⧗ test`: the test commands run. Its note says "running the tests".
+- `⌕ checker`: a checker agent is trying to break the change (only with the `checker` setting
+  on; with it off no task ever shows this step). It comes right after `prep`, before the task
   joins the merge line. Its note says "a checker agent is trying to break it before it merges".
-- `merge`: the task is brought up to date with the target branch and merged. Its note says
+- `⇢ merge`: the task is brought up to date with the target branch and merged. Its note says
   "merging".
 
 Once the turn is over, the note says how it went: merged (the task is done), failed with the
@@ -945,6 +948,21 @@ read-only commands with options or settings that write files or run programs (su
 is a best effort, not a sandbox: git run through a variable, a script or other shell tricks can still
 get through. The real fix is the worker sandbox (T-365).
 
+**Scratch repositories in /tmp.** Workers and checkers may still run git writes (`git init`,
+`add`, `commit`, `merge`...) in a throwaway repository under `/tmp` (or the system temp folder
+under `/var/folders/...`), when every folder the command acts in is a plain literal path:
+`git init /tmp/x`, `git -C /tmp/x commit -m m`, `cd /tmp/x && git commit -am m` (the `cd` joined
+by `&&`). A git write aimed at the project, `.symcc/` or any worktree, or at a folder that can't be
+told from the text (`$TMPDIR`, `$d`, `$(mktemp -d)`, `~`, `..`, a glob, no `-C` or `cd` while the
+shell is not in the temp folder, a `cd` with a word before it such as `builtin cd`), stays refused,
+and so does `--global` or `--system` or a shortening of them (the owner's own git settings), a
+`config -f` file outside the scratch folder, and any word with a space after the git command (a
+command given in quotes, as in `rebase -x '...'`; the message of `commit`, `tag`, `merge`, `notes`
+or `stash -m` and `--author=` are fine); scouts stay read-only. This rule stops honest mistakes; it
+is not a security boundary: anything that needs a deliberate shell trick (`eval`, a script file,
+`sh -c` variants, symbolic links inside `.git`, files the same line writes, git hooks or settings)
+is the accepted risk and is not checked further.
+
 - **OK:** the task joins the merge line: catch up, tests, then review or merge, once.
 - **Problems found:** the checker's report goes to a new worker, like a failed test run. It counts
   as one of the `auto_retries`. The task never joins the merge line, so no tests run for that try.
@@ -1126,7 +1144,8 @@ board (the `/3` shows the limit while the try is an automatic retry after failin
 A first try shows no mark. The time in a doing task's row is the total work time of all its
 tries, so a task that is really stuck stands out: `T-5 ▶ 1h40m · try 3` (1 hour 40 over all
 three tries; on the first try it is just that try's time, `T-5 ▶ 15m`), and during a check
-step the step word comes first: `T-5 ▶ test 9m`. This is the
+step the step's icon takes the place of `▶`: `T-5 ⧗ 9m` (see "What a task shows on its way to
+the merge"). This is the
 same number as the task page's "Time and cost" total: each try's time from start to end, added
 up. Time while the task was paused, waiting for you, waiting on other tasks, or in todo between
 tries is not counted. When a row is short of room, the time is left out. When the status line is short of room, the try marks are left out
@@ -1533,13 +1552,13 @@ Workers, scouts and checkers are OpenCode sessions of their own. Each one is a c
 
 ### The board panel and the strip
 
-`/symcc-board` (or "symcc board" in OpenCode's command palette, ctrl+p) opens the board in OpenCode's session panel, next to the open session (run it again to close it; on OpenCode's home page, with no session open, a message says to open or start one first): the banner, then the tasks grouped as in Claude Code (Questions for you, NEEDS YOU, what runs and waits, the backlog, and Done and Dropped as counts), with the same marks, short states and times. ↑/↓ (or k/j) move, Enter opens a task or a question, b goes back, Esc closes the panel. On a task in review, a approves and x rejects (it asks for the reason); on a waiting task or a question, a answers (pick a choice, or Answer… to type your own). A task's page offers the same actions as in Claude Code, with the same keys (p pause, u resume, r retry, o move to todo, k stash to backlog or keep as a note, l role, h already merged, x drop, n needs review on/off); drop asks for an optional reason and role lets you pick from the roles. Only Copy and Watch worker are not there. These are sent as slash commands in your session (`/symcc-approve`, `/symcc-reject`, `/symcc-task T-5 pause` and the other `/symcc-task` words, `/symcc-answer T-5 <answer>` or `Q-3 <answer>`), which you can also type, in Claude Code too.
+`/symcc-board` (or "symcc board" in OpenCode's command palette, ctrl+p) opens the board in OpenCode's session panel, next to the open session (run it again to close it; on OpenCode's home page, with no session open, a message says to open or start one first): the banner, then the tasks grouped as in Claude Code (Questions for you, NEEDS YOU, what runs and waits, the backlog, and Done and Dropped as counts), with the same marks, short states and times. ↑/↓ (or k/j) move, Enter opens a task or a question, b goes back, Esc closes the panel. On a task in review, a approves and x rejects (it asks for the reason); on a waiting task or a question, a answers (pick a choice, or Answer… to type your own). A task's page has the same sections as Claude Code's task page, with the same headings: ▍Why it failed (a failed task), ▍Answer (an answered investigation), ▍Details, ▍Changes (a task in review: its changed files; a click on one shows the changes, like d), ▍What to do, ▍History, ▍Report (the latest try's, read from its file when you open the page) and ▍Runs (time and cost). A long history or report is cut after its first lines with "… (n more lines)" (the whole report stays in its file); the mouse wheel scrolls the page. It offers the same actions as in Claude Code, with the same keys (p pause, u resume, r retry, o move to todo, k stash to backlog or keep as a note, l role, h already merged, x drop, n needs review on/off); drop asks for an optional reason and role lets you pick from the roles. Only Copy and Watch worker are not there. These are sent as slash commands in your session (`/symcc-approve`, `/symcc-reject`, `/symcc-task T-5 pause` and the other `/symcc-task` words, `/symcc-answer T-5 <answer>` or `Q-3 <answer>`), which you can also type, in Claude Code too.
 
 As in Claude Code, the panel has three tabs under the banner: Tasks, Scouts and Settings. t, s and c switch between them (or click a tab). **Scouts** lists each scout with how often it runs, whether it is paused or when it runs next, and its last result; Enter opens a scout's page: its instructions, its recent runs (newest first, with the tasks made from them) and its file. On it, r runs the scout now and p pauses or resumes it (sent as `/symcc-scout <name>` and `/symcc-scout <name> pause` or `resume`), and e edits it: pick how often it runs, its model or its instructions, then type the new value (sent as `/symcc-scout <name> every 30`, `model <model>` or `model none` for the session's model, or `prompt <instructions>`; the rest of the scout's file is kept, and longer instructions are easier to write in the file itself). Enter on a run shows its report, and b goes back. **Settings** shows every setting in the same groups as Claude Code, each with its value, its default and its range, and what it does under it. Enter (or a click) changes the one under the cursor: on/off settings flip, mode, notify, scout_findings and tests_with_changes are picked from a list, and the rest are typed; it is sent as `/symcc-settings <name> <value>`. Under Workers, the Roles and Kinds rows (with how many there are, and how many are off) open their pages, as in Claude Code: a list of the roles or kinds, each with where it comes from (built-in, replaced or added), whether it is off and what it is for, and a file that can't be read says why. Enter opens one: its description, a role's model, skills and tools, its checklist (a role) or body (a kind), and its file. On it, o turns it off or on and r resets it to the built-in one (when you changed a built-in); these are sent as `/symcc-settings role <name> off` (or `on`, `reset`; `kind <name> ...` for a kind). general, the checker role, change and investigation can't be turned off. To add a role or kind, or change what one says, ask the lead (its change shows in the panel at once) or edit its file (OpenCode tells symcc of no finished edit, so the panel shows your own edit at the next board change). b goes back one page.
 
 Above the prompt of an open session, a strip shows the header line and the questions and tasks that need you or run, as the band does in Claude Code. It is there by itself; there is nothing to turn on. Click its header line to open the board panel (click again to close it), or click a task's or question's row to open its page; the header ends with a dim "(click: board)" when there is room.
 
-The panel reads `.symcc/view.json` once a second; the board writes that file on every change (also when the lead's roles or kinds tool changes one), with each scout's recent runs and the roles and kinds (a run's report is read from its own file when you open it). Plain `/symcc` (and `/symcc-tasks`) prints the board as text in the chat, as in a window without the panel.
+The panel reads `.symcc/view.json` once a second; the board writes that file on every change (also when the lead's roles or kinds tool changes one), with each scout's recent runs, the roles and kinds, and the changed files of each task in review (a run's or a task's report is read from its own file when you open it). Plain `/symcc` (and `/symcc-tasks`) prints the board as text in the chat, as in a window without the panel.
 
 **If you see no strip and no panel:** open a session first (the strip and the panel belong to a session, not to OpenCode's home page), and restart OpenCode's window after updating symcc. If the board screen can't start or draw, a red message from symcc says why, and `/plugins` lists symcc as failed with the error; the lead, its tools and the workers keep running either way.
 

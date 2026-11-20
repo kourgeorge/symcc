@@ -10,7 +10,7 @@ import { type OwnerQuestion, cleanQuestions } from './questions'
 export type Board = {
   version: 1
   next_id: number
-  /** off: nothing runs; review: work runs and finished work waits for the owner; auto (the default): finished work that passes merges on its own */
+  /** paused: nothing runs; review: work runs and finished work waits for the owner; auto (the default): finished work that passes merges on its own */
   mode: SymccMode
   /** shell commands that must pass before a task's work is merged */
   test_commands: string[]

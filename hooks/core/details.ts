@@ -8,6 +8,8 @@ import { findKind, type KindDef, kindMark } from './kinds'
 import { findRole, type RoleDef, roleOf } from './roles'
 import { fmtTotal, sumRuns } from './runs'
 import { squash } from './text'
+import { checkStepNow } from './lead'
+import { IN_LINE_ICON, STEP_ICON, STEP_LEGEND, STEP_WORD, waitsInLine } from './panel'
 
 /** A piece of text on the task page with its theme color name (see C() in claude/ui/parts.tsx). */
 export type Seg = { text: string; color: string; bold?: boolean; italic?: boolean }
@@ -30,6 +32,13 @@ export const TRIED_TODO_MARK = '●'
  *  STATUS_MARK for places that mean the state itself (a legend, a group heading). */
 export const statusMark = (t: Pick<SymccTask, 'status'> & { runs?: readonly unknown[]; attempts?: number }): string =>
   t.status === 'todo' && ((t.runs?.length ?? 0) > 0 || (t.attempts ?? 0) > 0) ? TRIED_TODO_MARK : STATUS_MARK[t.status]
+
+/** The step a task is in on its page, its row icon and its word ("⧗ test", "⋯ in line"); '' when it is in none. */
+export function stepNowWord(t: Pick<BoardTask, 'status' | 'checking'> & { note?: string }, nowMs: number): string {
+  if (waitsInLine(t)) return `${IN_LINE_ICON} in line`
+  const step = checkStepNow(t, nowMs)
+  return step ? `${STEP_ICON[step]} ${STEP_WORD[step]}` : ''
+}
 
 /**
  * Who a task came from, with its own color, after its one-width mark (ORIGIN_MARK) and a space: ♟ owner, ⌕ scout NAME,
@@ -62,6 +71,9 @@ export function detailRows(t: SymccTask, o: { roles: readonly Pick<RoleDef, 'nam
   const R: DetailRow[] = []
   R.push({ label: 'Status', segs: [{ text: `${statusMark(t)} ${STATUS_WORD[t.status]}`, color: STATUS_BADGE[t.status], bold: true }, { text: ` · added ${o.when(t.created_at)} · changed ${o.when(t.updated_at)}`, color: 'inactive' }] })
   if (t.note) R.push({ label: STATE_LABEL, segs: [{ text: t.note, color: 'inactive', italic: true }] })
+  // in a check step or the merge line: the step's icon (the rows show only it) with its word, and the icons' legend
+  const step = stepNowWord(t as BoardTask, o.nowMs)
+  if (step) R.push({ label: 'Step', segs: [{ text: step, color: 'ide', bold: true }] }, { label: '', segs: [{ text: STEP_LEGEND, color: 'inactive' }] })
   const name = roleOf(t)
   const r = findRole(o.roles, name)
   const more = [r?.description, r?.model ? `model ${r.model}` : ''].filter(Boolean).join(' · ')

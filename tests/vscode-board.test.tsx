@@ -9,7 +9,7 @@ import { shortTests, logoWidthFor, twoLines, MORE, vsHref, mdText, mdLink } from
 import { ASK_LEAD, ASK_LEAD_DRAFT } from '../hooks/claude/ui/vscode-list'
 import { drawNow } from '../hooks/claude/ui/now'
 import { mayMove } from '../hooks/core/logo'
-import { modeLabel, MODE_MEANING } from '../hooks/board'
+import { modeLabel, MODE_MEANING, STEP_LEGEND } from '../hooks/board'
 import { hist } from './history-fixture'
 
 type Node = { type?: string; key?: string; props?: Record<string, unknown>; children?: unknown[] }
@@ -512,12 +512,18 @@ test("T-542: in VS Code symcc's own pre-merge step shows \"prep\" and a running 
   seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, tasks: [...BOARD_TASKS, prep, checker] } } })
   on('ui.toast', () => ({ value: undefined }))
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
-  expect(await rowText(ui, 'T-497')).toMatch(/\n▶ prep/)
-  expect(await rowText(ui, 'T-498')).toMatch(/\n▶ checker/)
-  // only the task whose checker runs says "checker"
-  expect(texts(await ui.drawn()).join('\n').match(/▶ checker/g)?.length).toBe(1)
+  // the step's icon and the time, no step word (T-581)
+  expect(await rowText(ui, 'T-497')).toMatch(/\n✎ \d+m/)
+  expect(await rowText(ui, 'T-498')).toMatch(/\n⌕ \d+m/)
+  expect(await rowText(ui, 'T-498')).not.toMatch(/\n[▶⌕] checker/)
+  // only the task whose checker runs shows ⌕
+  expect(texts(await ui.drawn()).join('\n').match(/\n⌕ /g)?.length).toBe(1)
   await ui.press({ key: 'T-497', link: { href: vsHref('task', 'T-497') } })
-  expect(texts(await ui.drawn()).join('\n')).toContain('preparing to merge: committing and checking files')
+  const page = texts(await ui.drawn()).join('\n')
+  expect(page).toContain('preparing to merge: committing and checking files')
+  // the page keeps the step's word, with the icons' legend (T-581)
+  expect(page).toContain('✎ prep')
+  expect(page).toContain(STEP_LEGEND)
   await ui.unmount()
 })
 

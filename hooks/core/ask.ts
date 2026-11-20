@@ -910,15 +910,145 @@ const isGit = (w: string) => /(^|\/)git$/i.test(w)
  *
  * A best effort on the command's text, not a sandbox: a git run through a variable, a script file, a settings file the
  * checker wrote, or other shell tricks gets through. Closing those is the sandbox's job (T-365), not this check's.
+ * `cwd`: the folder the shell is in, which a git command with no `-C` and no `cd` before it acts in (see GitPlace).
  */
-export function gitWriteIn(command: unknown, allow?: GitAllow): string | undefined {
+export function gitWriteIn(command: unknown, allow?: GitAllow, cwd?: string): string | undefined {
   if (typeof command !== 'string') return undefined
-  const { bad, git, env } = gitScan(command, 0, allow)
+  const { bad, git, env } = gitScan(command, 0, allow, false, cwd)
   return bad ?? (git && env ? env : undefined)
 }
 
-/** A git command (`sub`, and the words after it) that gitWriteIn lets through although it writes. */
-export type GitAllow = (sub: string, args: string[]) => boolean
+/**
+ * Where a git command that starts a simple command of the line itself (not one inside `sh -c '...'`, after `sudo`,
+ * and so on) runs: `pre`, its own options before the command name as written (quotes kept, `-C /tmp/x`); `args`, the
+ * words after the command name as written; `dir`, the folder the shell is in when it runs, when that can be told
+ * (the shell's folder, or the plain literal folder of a `cd` joined to it by `&&` only, see gitFolders).
+ */
+export type GitPlace = { pre: RawWord[]; args: RawWord[]; dir?: string }
+
+/** A git command (`sub`, and the words after it; `place` when known, see GitPlace) that gitWriteIn lets through although it writes. */
+export type GitAllow = (sub: string, args: string[], place?: GitPlace) => boolean
+
+/** A git command that either of `a` and `b` lets through. */
+export const eitherAllow =
+  (a: GitAllow, b: GitAllow): GitAllow =>
+  (sub, args, place) =>
+    a(sub, args, place) || b(sub, args, place)
+
+/**
+ * Plain literal absolute path `raw` as written (quotes kept), cleaned, or undefined when it isn't one: it starts with
+ * "/", has only letters, digits and `._@%+,=-/` (spaces too inside whole-word "..." or '...'), so no `$`, backquote,
+ * `~`, glob or other quotes, and no `..` piece.
+ */
+export function literalPath(raw: string): string | undefined {
+  const q = /^"([^"]*)"$/.exec(raw) ?? /^'([^']*)'$/.exec(raw)
+  const p = q ? q[1]! : raw
+  if (!(q ? /^\/[\w./@%+,= -]*$/ : /^\/[\w./@%+,=-]*$/).test(p)) return undefined
+  if (p.split('/').includes('..')) return undefined
+  return resolvePath('/', p)
+}
+
+/** Whether clean absolute path `abs` is strictly inside one of the scratch folders `temps` and in none of `keep` (letter case ignored). */
+const inScratchTemp = (abs: string, temps: Folders, keep: Folders) => {
+  const rel = insideAny(abs, folderList(temps), true)
+  return !!rel && insideAny(abs, folderList(keep), false) === undefined
+}
+
+/**
+ * The folders git writes are allowed in for workers and checkers (T-591): /tmp (and /private/tmp), and the system
+ * temp folder `tmpdir` (from TMPDIR) when it is a plain literal path under macOS's /var/folders; anything else
+ * (unset, or a folder elsewhere) adds nothing, so a TMPDIR set to the home or project folder opens nothing.
+ */
+export function scratchTemps(tmpdir?: string): string[] {
+  const t = tmpdir ? literalPath(tmpdir.replace(/\/+$/, '')) : undefined
+  return t && /^(\/private)?\/var\/folders\/[^/]+\//.test(t) ? ['/tmp', t] : ['/tmp']
+}
+
+/** The git commands whose `-m <text>` is a message, not looked at by scratchGitAllow (`rebase -m` is --merge). */
+const MESSAGE_SUBS = new Set(['commit', 'tag', 'merge', 'notes', 'stash'])
+
+/** Options of `git init` a scratch repository may have (see scratchGitAllow); `-b` and `--initial-branch` take a branch name. */
+const SCRATCH_INIT_OPTIONS = /^(-q|--quiet|--bare|--initial-branch=[\w./-]+)$/
+
+/**
+ * T-591: the git writes a worker or checker may run in a throwaway repository: every folder the command acts in is a
+ * plain literal path (literalPath) strictly inside `temps` (scratchTemps) and in none of `keep` (the project, its
+ * worktrees). That folder is the last `-C <path>` (no other own option but --no-pager), or else the shell's folder
+ * (GitPlace.dir); `git init <path>` acts in `<path>` (absolute, or a plain relative one from that folder). Every word
+ * after the command name may not expand (`$`, backquote), start with `~`, have a `..` piece, have a space (a command
+ * given as one quoted word, as in `rebase -x '...'` or `alias.z '!...'`; only --author=... may), be --global or
+ * --system (the owner's or the system's git settings), or name an absolute path anywhere in it (`--output=/x`, a URL,
+ * `-x/x`) outside those folders; a commit message (`-m <text>`) and
+ * redirects (checked as paths elsewhere) are not looked at. A simple rule against honest mistakes, not a security
+ * boundary: links inside .git, files the same line writes, hooks and settings are not checked.
+ */
+export const scratchGitAllow =
+  (temps: Folders, keep: Folders): GitAllow =>
+  (sub, _args, place) => {
+    if (!place) return false
+    const ok = (abs: string | undefined) => abs !== undefined && inScratchTemp(abs, temps, keep)
+    let dir = place.dir
+    for (let i = 0; i < place.pre.length; i++) {
+      const o = place.pre[i]!.raw
+      if (o === '-C') {
+        dir = literalPath(place.pre[++i]?.raw ?? '')
+        if (dir === undefined) return false
+      } else if (o !== '--no-pager') return false
+    }
+    const args = place.args
+    if (sub === 'init') {
+      const names: RawWord[] = []
+      for (let i = 0; i < args.length; i++) {
+        const a = args[i]!
+        if (a.raw === '-b' || a.raw === '--initial-branch') {
+          if (!/^[\w./-]+$/.test(args[++i]?.raw ?? '')) return false
+        } else if (a.raw.startsWith('-')) {
+          if (!SCRATCH_INIT_OPTIONS.test(a.raw)) return false
+        } else names.push(a)
+      }
+      if (names.length > 1) return false
+      const name = names[0]
+      if (name) {
+        if (name.raw.startsWith('/') || /^["']\//.test(name.raw)) return ok(literalPath(name.raw))
+        // a plain relative name, taken from the folder git is in
+        return dir !== undefined && /^[\w.@%+,=-][\w./@%+,=-]*$/.test(name.raw) && !name.raw.split('/').includes('..') && ok(resolvePath(dir, name.raw))
+      }
+    }
+    if (!ok(dir)) return false
+    for (let i = 0; i < args.length; i++) {
+      const a = args[i]!
+      // a message, only for the commands whose -m is one (for rebase -m is --merge, so the next word is checked)
+      if (MESSAGE_SUBS.has(sub)) {
+        if (a.raw === '--message' || /^-[aqsvnS]*m$/.test(a.raw)) {
+          i++
+          continue
+        }
+        if (/^(-[aqsvnS]*m|--message=)/.test(a.raw)) continue
+      }
+      const redir = REDIRECT.exec(a.raw)
+      if (redir) {
+        if (!redir[4] && !redir[3]) i++
+        continue
+      }
+      // --global / --system: the owner's ~/.gitconfig or the system's, outside the scratch folder
+      // also any unique shortening of these long options (`--glob`, `--syst`), which the parser accepts the same
+      const long = a.w.split('=')[0]!
+      if (long.length > 2 && long.startsWith('--') && ('--global'.startsWith(long) || '--system'.startsWith(long))) return false
+      // `config -f<file>`: the file joined to the option (`-f~/.gitconfig`) must be a plain relative name too
+      // (`-f <file>` and `--file=<file>` are checked below as words and paths)
+      if (sub === 'config' && /^-f./.test(a.w)) {
+        const f = a.w.slice(2)
+        const plain = /^[\w.@%+,=-][\w./@%+,=-]*$/.test(f) && !f.split('/').includes('..')
+        if (!plain && !ok(literalPath(f))) return false
+      }
+      // a space: a command or path given as one quoted word (`rebase -x 'git -C /repo ...'`, `alias.z '!cd; git ...'`)
+      if (/\s/.test(a.w) && !/^--author=/.test(a.raw)) return false
+      if (a.expands || /(^|[=:,])~/.test(a.w) || /(^|[^\w.])\.\.(\/|$)/.test(a.w)) return false
+      // every absolute path anywhere in the word (`--output=/x`, `file:///x`, `-x/x`, `'!/usr/bin/git -C/x'`)
+      for (const m of a.w.matchAll(/(?:^|^-[A-Za-z]|[^\w.@%+-])(\/[^\s,:;'"|&<>()]*)/g)) if (!ok(literalPath(m[1]!))) return false
+    }
+    return true
+  }
 
 /** Options a "merge it in" try's `git merge` may have: none of them commits anything the plain merge wouldn't. */
 const MERGE_STEP_OPTIONS = new Set(['--no-edit', '--no-ff', '--no-commit'])
@@ -1219,22 +1349,69 @@ function braceTextArgs(p: { words: string[] }): Set<number> {
   return out
 }
 
+/**
+ * For each simple command of `pieces` (one command line), the folder it runs in when that can be told (T-591): the
+ * shell's folder `cwd` (when it is a plain literal path) until a `cd` or `pushd`; after a `cd <plain literal absolute
+ * path>` (literalPath) that folder, but only for the commands joined to that cd by `&&` alone, so a cd that fails
+ * stops them (`cd /tmp/x; git commit` would commit in the shell's folder when /tmp/x is missing). A cd after `||`,
+ * a cd to anything else (a variable, `$(mktemp -d)`, `~`, a relative path), any other operator after a cd, and a
+ * pipe, a group or a subshell anywhere in the line leave the folder unknown (no entry).
+ */
+/** Words that may change the shell's folder when they are not the first word of a command (gitFolders). */
+const FOLDER_WORDS = new Set(['cd', 'pushd', 'popd', 'eval', 'source', '.'])
+
+function gitFolders(pieces: ShellPiece[], cwd?: string): Map<ShellPiece, string | undefined> {
+  const out = new Map<ShellPiece, string | undefined>()
+  if (pieces.some(p => ('op' in p && (p.op === '|' || p.op === '(' || p.op === ')')) || (!('op' in p) && p.doc))) return out
+  let dir = cwd ? literalPath(cwd) : undefined
+  let moved = false
+  let prev: string | undefined
+  for (const p of pieces) {
+    if ('op' in p) {
+      if (p.op !== '&&' && moved) dir = undefined
+      prev = p.op
+      continue
+    }
+    out.set(p, dir)
+    const words = rawWords(p.text)
+    const name = words[0]?.raw
+    if (name === 'cd' || name === 'pushd' || name === 'popd') {
+      moved = true
+      dir = name !== 'popd' && prev !== '||' && words.length === 2 ? literalPath(words[1]!.raw) : undefined
+    } else if (words[0]?.expands || (!isGit(words[0]?.w ?? '') && words.some(x => FOLDER_WORDS.has(x.w)))) {
+      // a cd with a word before it (`builtin cd`, `command cd`, `x=1 cd`, `'cd'`), a command run by name from a
+      // variable, or text run again (`eval`, `source`, `.`) may change folder: the folder is unknown from here
+      moved = true
+      dir = undefined
+    }
+  }
+  return out
+}
+
 /** gitWriteIn's walk of `command`: the first git write found (`bad`), whether any git runs, and the first setting from GIT_ENV_REFUSED. */
-function gitScan(command: string, depth: number, allow?: GitAllow, broad = false): { bad?: string; git: boolean; env?: string } {
+function gitScan(command: string, depth: number, allow?: GitAllow, broad = false, cwd?: string): { bad?: string; git: boolean; env?: string } {
   const out: { bad?: string; git: boolean; env?: string } = { git: false }
   if (depth > 4) return out
   const pieces = shellPieces(command)
+  // only the line itself tells which folder its commands run in; text a shell runs again (depth > 0) never does
+  const dirs = depth === 0 ? gitFolders(pieces, cwd) : new Map<ShellPiece, string | undefined>()
   // `adds`: an xargs or parallel comes before it in the line (`xargs -I{} git {}` is cut at the braces)
   let seen = false
   const simple = pieces.flatMap(p => {
     if ('op' in p) return []
-    const words = rawWords(p.text).map(x => x.w)
+    const raws = rawWords(p.text)
+    const words = raws.map(x => x.w)
     const adds = seen
     seen ||= words.some(a => ADDS_WORDS.has(progName(a)))
-    return [{ ...p, words, braces: rawWords(p.text, braceLit).map(x => x.w), adds }]
+    return [{ ...p, words, raws, top: depth === 0 && !p.doc, dir: dirs.get(p), braces: rawWords(p.text, braceLit).map(x => x.w), adds }]
   })
-  /** The git write of the git command at `words[at]` (`git ...` or `git-xyz ...`), and the word after it, or undefined when it isn't git. */
-  const gitAt = (words: string[], at: number, adds: boolean, braces: string[]): { bad?: string } | undefined => {
+  /** Where the git command that starts simple command `p` runs (GitPlace), for `allow`; only for one at the line's top. */
+  const placeOf = (p: (typeof simple)[number]) => (p.top ? { raws: p.raws, dir: p.dir } : undefined)
+  /**
+   * The git write of the git command at `words[at]` (`git ...` or `git-xyz ...`), and the word after it, or undefined
+   * when it isn't git. `place`: the simple command's words as written and its folder, when `words[at]` starts it.
+   */
+  const gitAt = (words: string[], at: number, adds: boolean, braces: string[], place?: { raws: RawWord[]; dir?: string }): { bad?: string } | undefined => {
     const w = words[at]!
     // a git program called by its own name, as in git's libexec folder (`.../git-core/git-stash`)
     const dashed = /(?:^|\/)git-([\w-]+)$/i.exec(w)?.[1]
@@ -1265,7 +1442,8 @@ function gitScan(command: string, depth: number, allow?: GitAllow, broad = false
     if (refused) return { bad: `git ${refused}` }
     if (sub === undefined) return {}
     const args = words.slice(j)
-    if (allow?.(sub, args)) return {}
+    const where = place && at === 0 && !dashed && isGit(w) ? { pre: place.raws.slice(1, j - 1), args: place.raws.slice(j), dir: place.dir } : undefined
+    if (allow?.(sub, args, where)) return {}
     if (!gitReadOnly(sub, args)) return { bad: `git ${sub}` }
     const opt = gitBadOption(sub, args)
     return opt ? { bad: `git ${sub} ${opt}` } : {}
@@ -1274,14 +1452,14 @@ function gitScan(command: string, depth: number, allow?: GitAllow, broad = false
    * Whether a simple command's `git` words are only text: a TEXT_TOOLS command, or a read-only git command (checked
    * by gitAt), with no command run inside it and not in a here-document.
    */
-  const exempt = (p: { text: string; doc?: boolean; words: string[]; braces: string[]; adds: boolean }): boolean => {
+  const exempt = (p: (typeof simple)[number]): boolean => {
     if (p.words.length === 0) return true
     if (p.doc || RUNS_INSIDE.test(p.text)) return false
     if (textTool(p.words) || plainCd(p)) return true
     const w = p.words[0]!
     // `HEAD@{1}` braces were cut at before T-439's round 6, so a line with `@{` gets no read-only git exception
     if (command.includes('@{')) return false
-    return (isGit(w) || /(?:^|\/)git-[\w-]+$/i.test(w)) && gitAt(p.words, 0, p.adds, p.braces)?.bad === undefined
+    return (isGit(w) || /(?:^|\/)git-[\w-]+$/i.test(w)) && gitAt(p.words, 0, p.adds, p.braces, placeOf(p))?.bad === undefined
   }
   // Text one command prints may be run by another (`grep -h git notes | sh`, `grep ... > s; $SHELL s`, `./s`), and a
   // list of programs that run their input or a file can never be complete. So the exceptions hold only when every
@@ -1327,7 +1505,7 @@ function gitScan(command: string, depth: number, allow?: GitAllow, broad = false
     for (let i = 0; i < words.length; i++) {
       const w = words[i]!
       // a word given to a text tool run by find -exec is its text, not a git command (`find . -exec grep -l git {} +`)
-      const g = toolArgs.has(i) || (textBraces.has(i) && hasBrace(p.braces[i] ?? '') && plainBraces(p.braces[i] ?? '')) ? undefined : gitAt(words, i, p.adds, p.braces)
+      const g = toolArgs.has(i) || (textBraces.has(i) && hasBrace(p.braces[i] ?? '') && plainBraces(p.braces[i] ?? '')) ? undefined : gitAt(words, i, p.adds, p.braces, i === 0 ? placeOf(p) : undefined)
       if (g?.bad) return { ...out, bad: g.bad }
       if (g) continue
       const at = w.search(/git(?!\w)/i)
@@ -1344,9 +1522,12 @@ function gitScan(command: string, depth: number, allow?: GitAllow, broad = false
 const gitReadOnlyText = (what: string, who: string) =>
   `Refused: ${what} may change the repository or run another program, and ${who} may only read with git (diff, log, show, status, blame, grep, rev-parse, ls-files, branch --list, stash list/show, remote -v, config --get, reflog), without options that write a file or run a program (--output, -O, --ext-diff, -c, GIT_* settings).`
 
+/** The sentence a worker's or checker's git refusal adds: the /tmp scratch way that is allowed (scratchGitAllow, T-591). */
+export const SCRATCH_GIT_TEXT = 'A scratch repository under /tmp with a plain path is fine (e.g. git init /tmp/x, git -C /tmp/x commit -m m); no $TMPDIR, $(mktemp), ~ or ..'
+
 /** The reason a checker reads when its Bash command runs git command `what` (from gitWriteIn), which may change something. */
 export const gitWriteText = (what: string) =>
-  `${gitReadOnlyText(what, 'the checker')} Check the work without changing any branch, commit, tag or the stash.`
+  `${gitReadOnlyText(what, 'the checker')} Check the work without changing any branch, commit, tag or the stash. ${SCRATCH_GIT_TEXT}`
 
 /**
  * The reason a worker reads when its Bash command runs git command `what` (from gitWriteIn), which may change
@@ -1354,7 +1535,7 @@ export const gitWriteText = (what: string) =>
  * and merges the work. `into`: the branch a "merge it in" try may merge (mergeStepAllow), named in the reason.
  */
 export const workerGitWriteText = (what: string, into?: string) =>
-  `${gitReadOnlyText(what, 'a worker')} Don't commit, push, merge, reset, switch branches, stash or move any branch or tag: just change the files in your folder; symcc commits, tests and merges your work.${into ? ` In this try you may also run \`git merge ${into}\` (or \`git merge --abort\`) to merge ${into} in; then resolve the conflicts in the files and don't commit.` : ''}`
+  `${gitReadOnlyText(what, 'a worker')} Don't commit, push, merge, reset, switch branches, stash or move any branch or tag: just change the files in your folder; symcc commits, tests and merges your work. ${SCRATCH_GIT_TEXT}${into ? ` In this try you may also run \`git merge ${into}\` (or \`git merge --abort\`) to merge ${into} in; then resolve the conflicts in the files and don't commit.` : ''}`
 
 /**
  * The reason a scout reads when its Bash command runs git command `what` (from gitWriteIn), which may change

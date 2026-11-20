@@ -10,9 +10,8 @@ import { roleMark, tryMark } from './roles'
 import { archivedLine, archivedNote, archivedOf } from './archive'
 import { boardTotal, fmtTotal, totalLine } from './runs'
 import { PLAN_NOTE } from './plan'
-import { type CrewBoard, withCrew, parseSearch, searchTasks, BOARD_STATUSES, statusCell, STEP_NOTE, STEP_WORD, TITLE_ROOM, TOTAL_FORMS, type TotalForm, rowCell } from './panel'
+import { type CrewBoard, withCrew, parseSearch, searchTasks, BOARD_STATUSES, statusCell, STEP_NOTE, STEP_WORD, TITLE_ROOM, TOTAL_FORMS, type TotalForm, rowCell, rowMark } from './panel'
 import { checkStepNow } from './lead'
-import { statusMark } from './details'
 import { whyFailed } from './failure'
 import { offStatusParts, testCommandsText } from './settings'
 import { type OwnerQuestion, openQuestions, questionsForYou, questionLine, questionsLabel } from './questions'
@@ -60,7 +59,7 @@ export const boardTitle = (root: string, name: string = DEFAULT_NAME, v: string 
  *  "𝄞 symcc" in the symcc project, "𝄞 symcc · wats" in another one. */
 export const bandBrand = (name: string = DEFAULT_NAME) => `${ICON} ${namesFor(name).name}`
 export const bandWhere = (root: string, name: string = DEFAULT_NAME) => (folderName(root) === namesFor(name).name ? '' : boardWhere(root))
-/** The status line label,without the mark (Claude Code adds its own): "<name> board · <folder>". */
+/** The status line label, without the mark (Claude Code adds its own): "<name> board · <folder>". */
 export const boardLabel = (root: string, name: string = DEFAULT_NAME) => `${namesFor(name).boardName}${boardWhere(root)}`
 
 /** At most this many task IDs are listed for one state in the status line; the rest show as "+N". */
@@ -82,17 +81,17 @@ function triesNote(doing: (Pick<SymccTask, 'id' | 'status'> & Partial<Pick<Symcc
 
 /**
  * The front of each task row in the band above the prompt, lined up like the board list's rows (fixed-width ID and
- * state columns). Every row shows the list's own mark and short status cell (rowCell): a doing task "▶ 1h40m" (the
- * total work time of all its tries), "▶ test 9m", "▶ prep 2h5m", "▶ checker", "▶ merge 40m", with its try after it from
+ * state columns). Every row shows the list's own mark and short status cell (rowMark, rowCell): a doing task "▶ 1h40m" (the
+ * total work time of all its tries), in a check step its icon (STEP_ICON) in place of ▶ and the step word: "⧗ 9m",
+ * "✎ 2h5m", "⌕ 5m", "⇢ 40m", in the merge line "⋯ 2h5m", with its try after it from
  * try 2 on ("T-434 ▶ 1h40m · try 3"); in a row narrower than `width` the time is left out; the others "? waiting",
  * "◆ review", "✗ failed". The state column has one width (the doing rows' state plus try, or the longest other cell),
  * so every title starts in one column. `since(id)` is when this session's worker started.
  */
-export function bandLeads(tasks: (Pick<SymccTask, 'id' | 'status' | 'runs'> & Partial<Pick<SymccTask, 'attempts'>> & Pick<BoardTask, 'checking' | 'time_ask' | 'kind'>)[], nowMs: number, since: (id: string) => number | string | undefined = () => undefined, width = Infinity): Map<string, string> {
+export function bandLeads(tasks: (Pick<SymccTask, 'id' | 'status' | 'runs'> & Partial<Pick<SymccTask, 'attempts' | 'note'>> & Pick<BoardTask, 'checking' | 'time_ask' | 'kind'>)[], nowMs: number, since: (id: string) => number | string | undefined = () => undefined, width = Infinity): Map<string, string> {
   const idWidth = Math.max(4, ...tasks.map(t => t.id.length))
   const doing = tasks.filter(t => t.status === 'doing')
   const tries = new Map(doing.map(t => [t.id, tryMark({ status: t.status, attempts: t.attempts ?? 0 })]))
-  const rowMark = (t: (typeof tasks)[number]): string => statusMark(t)
   const leadsWith = (form: TotalForm) => {
     const cells = new Map(tasks.map(t => [t.id, rowCell(t, nowMs, since(t.id), form)]))
     const cellWidth = Math.max(0, ...doing.map(t => cells.get(t.id)!.length))
@@ -107,7 +106,7 @@ export function bandLeads(tasks: (Pick<SymccTask, 'id' | 'status' | 'runs'> & Pa
       }),
     )
     const stateWidth = Math.max(0, ...[...states.values()].map(s => s.length))
-    return new Map(tasks.map(t => [t.id, `${t.id.padEnd(idWidth)} ${rowMark(t)} ${states.get(t.id)!.padEnd(stateWidth)}`]))
+    return new Map(tasks.map(t => [t.id, `${t.id.padEnd(idWidth)} ${rowMark(t, nowMs)} ${states.get(t.id)!.padEnd(stateWidth)}`]))
   }
   // too narrow: the time is left out, so the titles keep TITLE_ROOM
   let leads = new Map<string, string>()
@@ -121,7 +120,7 @@ export function bandLeads(tasks: (Pick<SymccTask, 'id' | 'status' | 'runs'> & Pa
 /** Whether a doing row in the band has a state to show (see bandLeads); without one its note says what goes on. */
 export const bandHasState = (t: Pick<SymccTask, 'status' | 'runs'> & Pick<BoardTask, 'checking' | 'time_ask' | 'kind'>, nowMs: number, since?: number | string): boolean => t.status === 'doing' && statusCell(t, nowMs, since) !== ''
 
-/** The notes a doing row's state already says ("▶ 12m", "▶ test", "▶ merge"), so the band leaves them out when it shows one:
+/** The notes a doing row's state already says ("▶ 12m", "⧗ 9m", "⇢ 40s"), so the band leaves them out when it shows one:
  *  also both claim notes (app/starts.ts: QUEUED_NOTE "starting at the next turn" with the start queue, STARTING_NOTE
  *  "worker starting" without it, e.g. on OpenCode). */
 const STATE_NOTES = new Set(['worker on it', STEP_NOTE.testing, STEP_NOTE.merging, 'starting at the next turn', 'worker starting'])
@@ -335,12 +334,13 @@ function boardRow(t: SymccTask, autoRetries: number | undefined, nowMs: number):
   const role = tag ? ` [${tag}]` : ''
   // a later try: "T-5   ▶ doing   · try 2/3 <title>" (see tryMark)
   const mark = tryMark(t, autoRetries)
-  // the step a finished task is in, with the same short word as every other view (STEP_WORD): "T-5   ▶ doing   prep · title"
+  // the step a finished task is in: its icon as the mark (rowMark, like every other view) and its short word (STEP_WORD)
+  // for the lead: "T-5   ⧗ doing   test · title"
   const step = checkStepNow(t, nowMs)
   // with both, one separator between them: "prep · try 2 title" (not "prep · · try 2")
   const lead = step ? `${STEP_WORD[step]} · ${mark ? `${mark} ` : ''}` : mark ? `· ${mark} ` : ''
-  // the task's own mark first (● a to do task worked on before, see statusMark): "T-5   ● todo    title"
-  return [`${t.id.padEnd(5)} ${statusMark(t)} ${t.status.padEnd(7)} ${lead}${t.title}${role}${after}${extra}`, `${' '.repeat(16)}${fromText(t)}`]
+  // the task's own mark first (● a to do task worked on before, ⋯ in the merge line, see rowMark): "T-5   ● todo    title"
+  return [`${t.id.padEnd(5)} ${rowMark(t, nowMs)} ${t.status.padEnd(7)} ${lead}${t.title}${role}${after}${extra}`, `${' '.repeat(16)}${fromText(t)}`]
 }
 
 /** The line under the default board for the done and dropped tasks it hides: "143 done, 3 dropped; ask with status: done to see them". */

@@ -9,7 +9,7 @@
 // No key hints: the mode switch is a link and the search a box in the footer. An empty board says so, with one
 // primary button that starts a message to the lead in the prompt box.
 import type { SymccStatus, SymccTask } from '../../../types'
-import { statusMark, archivedNote, archivedOf, localOffset, panelSections, BACKLOG_SHOWN, ALL_CLEAR, statusCell, rowCell, rowExtra, searchTasks, SEARCH_WORDS, tryMark, tryTone, isInvestigation, needsYou, kindMark, fmtDuration, waitsForYou } from '../../board'
+import { statusMark, archivedNote, archivedOf, localOffset, panelSections, BACKLOG_SHOWN, ALL_CLEAR, statusCell, rowCell, rowMark, rowExtra, searchTasks, SEARCH_WORDS, tryMark, tryTone, isInvestigation, needsYou, kindMark, fmtDuration, waitsForYou } from '../../board'
 import { openDays, S } from '../../app/state'
 import { type $, panelValues } from '../panel'
 import type { PaneParts } from './parts'
@@ -60,17 +60,20 @@ export function listPageVs($: $, pane: PaneParts) {
     const at = Date.parse(iso ?? '')
     return Number.isFinite(at) ? fmtDuration(Math.max(0, nowMs - at)) : ''
   }
-  /** The status words of a row's second line: the mark and the step or running time ("▶ 2m"), how long a task has
-   *  waited for you ("? waiting for 1m", "◆ review for 5m") or since it failed ("✗ failed 3m ago"). */
+  /** The status words of a row's second line: the mark and the running time ("▶ 2m"; in a check step its icon in
+   *  place of ▶ and the step word, "⧗ 9m", see rowMark), how long a task has waited for you ("? waiting for 1m",
+   *  "◆ review for 5m") or since it failed ("✗ failed 3m ago"). */
   const statusText = (x: SymccTask) => {
+    const mark = rowMark(x, nowMs)
+    // a task in a check step or the merge line: its icon and its time, "⌕ 5m" (an approve in review: just the icon)
+    if (mark !== statusMark(x)) return `${mark} ${rowCell(x, nowMs, since(x.id))}`.trimEnd()
     const cell = statusCell(x, nowMs, since(x.id))
-    const st = x.status
     const waited = waitsForYou(x) || x.status === 'review' || x.status === 'failed' ? ago(x.updated_at) : ''
     // with a time, the short word ("waiting for 1m", not "waiting for you for 1m")
-    if (waited) return `${statusMark({ ...x, status: st })} ${cell || x.status} ${x.status === 'failed' ? `${waited} ago` : `for ${waited}`}`
-    // a doing task shows the total work time of all its tries: "▶ 1h40m", "▶ test 9m"
+    if (waited) return `${mark} ${cell || x.status} ${x.status === 'failed' ? `${waited} ago` : `for ${waited}`}`
+    // a doing task shows the total work time of all its tries: "▶ 1h40m"
     const shown = x.status === 'doing' ? rowCell(x, nowMs, since(x.id)) : cell
-    return `${statusMark({ ...x, status: st })} ${shown && shown !== x.status ? shown : word[x.status]}`
+    return `${mark} ${shown && shown !== x.status ? shown : word[x.status]}`
   }
 
   /** One task: a line of text, its ID a link that opens it, then the title (up to two lines; bold when it needs you,

@@ -344,8 +344,9 @@ test('a brace word past the length or "{" limit is not expanded: it is judged by
 test('the git write reasons keep their exact text, and quoted braces stay text (T-447)', () => {
   const head = (who: string) =>
     `Refused: git stash may change the repository or run another program, and ${who} may only read with git (diff, log, show, status, blame, grep, rev-parse, ls-files, branch --list, stash list/show, remote -v, config --get, reflog), without options that write a file or run a program (--output, -O, --ext-diff, -c, GIT_* settings).`
-  expect(gitWriteText('git stash')).toBe(`${head('the checker')} Check the work without changing any branch, commit, tag or the stash.`)
-  const worker = `${head('a worker')} Don't commit, push, merge, reset, switch branches, stash or move any branch or tag: just change the files in your folder; symcc commits, tests and merges your work.`
+  const tmp = 'A scratch repository under /tmp with a plain path is fine (e.g. git init /tmp/x, git -C /tmp/x commit -m m); no $TMPDIR, $(mktemp), ~ or ..'
+  expect(gitWriteText('git stash')).toBe(`${head('the checker')} Check the work without changing any branch, commit, tag or the stash. ${tmp}`)
+  const worker = `${head('a worker')} Don't commit, push, merge, reset, switch branches, stash or move any branch or tag: just change the files in your folder; symcc commits, tests and merges your work. ${tmp}`
   expect(workerGitWriteText('git stash')).toBe(worker)
   expect(workerGitWriteText('git stash', 'main')).toBe(`${worker} In this try you may also run \`git merge main\` (or \`git merge --abort\`) to merge main in; then resolve the conflicts in the files and don't commit.`)
   expect(scoutGitWriteText('git stash')).toBe(`${head('a scout')} You run in the owner's own folder: don't commit, push, merge, reset, switch branches, stash or move any branch or tag. Report what you find instead.`)

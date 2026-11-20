@@ -1,6 +1,6 @@
 // The board panel's page for one task: details, actions, and for a task in review its changes.
 import type { SymccTask } from '../../../types'
-import { cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, roleOf, findRole, type DiffFile, type Seg, detailRows, wrapSegs, STATUS_BADGE, statusMark, detailRowLines, fmtRun, fmtTotal, sumRuns, taskKeys, YOUR_EDITS, intoOf, taskReports, type BoardTask, boxHint, pickHint, taskCopyText, copyToast, fileWaitText, isAnswered, showsAnswer, answerText, whyFailed, taskActions, taskAsks, canPickRole as canPickRoleOf, canMarkMerged as canMarkMergedOf, actionButtonLabel, type TaskAction, type TaskActionId, failNext, failAsks, answeredLeadLine } from '../../board'
+import { cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, roleOf, findRole, type DiffFile, type Seg, detailRows, wrapSegs, STATUS_BADGE, statusMark, taskKeys, YOUR_EDITS, intoOf, taskReports, type BoardTask, boxHint, pickHint, taskCopyText, copyToast, fileWaitText, isAnswered, showsAnswer, answerText, whyFailed, taskActions, taskAsks, canPickRole as canPickRoleOf, canMarkMerged as canMarkMergedOf, actionButtonLabel, type TaskAction, type TaskActionId, failNext, failAsks, answeredLeadLine } from '../../board'
 import { folderDiff, changedFiles } from '../../app/review'
 import { loadRoles } from '../../app/roles'
 import { loadKinds } from '../../app/kinds'
@@ -13,7 +13,7 @@ import { runTool, allowAskedFiles, refuseAskedFiles } from '../../app/tools'
 import type { PaneParts } from './parts'
 import { answerBox } from './answer-box'
 import { taskPageVs } from './vscode-task'
-import { historyEvent, historyTime, HISTORY_COLOR, type HistoryEvent } from '../../core/history'
+import { taskSections, type SectionLine, type TaskSection } from '../../core/task-sections'
 import { claudeHost } from '../host'
 import { mergingNow, mergeOutcome } from '../../app/workers'
 import { boardAnswered } from '../../app/questions'
@@ -201,7 +201,6 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
         (err: Error) => ({ files: [] as DiffFile[], error: err.message }),
       )
     : null
-  const fileWidth = Math.max(4, ...(changes?.files ?? []).map(f => f.file.length))
   // One line of colored pieces (from detailRowLines / wrapSegs).
   const segLine = (segs: Seg[], key: string) => (
     <Text key={key}>
@@ -212,25 +211,6 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
       ))}
     </Text>
   )
-  // The history as a timeline (T-512), newest first: each event's mark in its tone, when it happened (T-522: "10:42"
-  // today, "Nov 18 22:49" before; nothing for an old entry with no time), its try label in bold, the words
-  // wrapped under the mark with the connector (│) beside them, and a connector line between events.
-  const historyLines = (events: HistoryEvent[]) =>
-    events.flatMap((e, i) => {
-      const last = i === events.length - 1
-      const at = historyTime(e.at, pane.nowMs)
-      const words: Seg[] = [
-        ...(at ? [{ text: `${at} `, color: 'inactive' } as Seg] : []),
-        ...(e.label ? [{ text: `${e.label}: `, color: 'text', bold: true } as Seg] : []),
-        { text: e.said, color: e.tone === 'bad' && !e.result ? 'error' : 'inactive' },
-        ...(e.result ? [{ text: ` → ${e.result}`, color: e.tone === 'good' || e.tone === 'bad' ? HISTORY_COLOR[e.tone] : 'text' } as Seg] : []),
-      ]
-      const wrapped = wrapSegs(words, Math.max(12, width - 2))
-      return [
-        ...wrapped.map((w, j) => segLine([j ? { text: last ? '  ' : '│ ', color: 'inactive' } : { text: `${e.mark} `, color: HISTORY_COLOR[e.tone], bold: true }, ...w], `history-${i}-${j}`)),
-        ...(last ? [] : [segLine([{ text: '│', color: 'inactive' }], `history-${i}-line`)]),
-      ]
-    })
   const rows = detailRows(t, { roles: S.roles, kinds: S.kinds, all: v.tasks, when, nowMs: pane.nowMs, archivedDone: v.archived_done })
   // The saved worker reports, one per try: the latest shown, unless the owner picked another try (its number key).
   const reports = taskReports(t)
@@ -242,8 +222,12 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
   // An investigation's answer: the full text from its latest report, else the answer saved on the task.
   const answerShown = showsAnswer(t as BoardTask)
   const answerFrom = answerShown ? reports[reports.length - 1] : undefined
-  const answerReport = !answerFrom ? null : answerFrom === shown ? reportBody : await $.fs.read(path(answerFrom.file)).then(x => String(x), () => null)
-  const answer = answerShown ? answerText(t as BoardTask, answerReport).trimEnd() : ''
+  const failed = t.status === 'failed'
+  const latest = reports[reports.length - 1]
+  // the report texts the sections need: the one shown, and the latest for an answer or a failed try's ask
+  const texts: Record<string, string | null> = shown ? { [shown.file]: reportBody } : {}
+  if (latest && !(latest.file in texts) && (answerShown || (failed && latest.try === t.attempts))) texts[latest.file] = await $.fs.read(path(latest.file)).then(x => String(x), () => null)
+  const answer = answerShown ? answerText(t as BoardTask, answerFrom ? texts[answerFrom.file] : null).trimEnd() : ''
   const pickReport = (n: number) => () => ((S.reportTry = { task: t.id, try: n }), $.ui.invalidate('ui.render'))
   // A waiting task: buttons for a file request (Allow / Don't allow) or the worker's options, each with a number key, plus Answer….
   // Finished work that waits only for the owner's files: nothing to answer; it merges on its own once they are
@@ -286,9 +270,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
   // A failed task: why it failed (the same sentence as its board row and the lead's board), what to do next, and
   // what the failed try's report asks for (a NEED FILES line or a question), if anything. Only the report of the
   // try that failed counts: a try that left no report (no result, could not start) must not show an older try's ask.
-  const failed = t.status === 'failed'
-  const latest = reports[reports.length - 1]
-  const latestBody = !failed || !latest || latest.try !== t.attempts ? null : latest === shown ? reportBody : await $.fs.read(path(latest.file)).then(x => String(x), () => null)
+  const latestBody = !failed || !latest || latest.try !== t.attempts ? null : (texts[latest.file] ?? null)
   const why = failed ? { reason: whyFailed(t), next: failNext(t), asks: failAsks(latestBody ?? t.history.at(-1)?.text ?? '') } : null
   // Copy (y): the task as plain text on the clipboard, with the latest worker report, and a toast saying whether it took.
   const goBack = act(async () => ((S.diffOpen = null), (S.rejecting = null), await panelValues($).updateOpened(() => '')))
@@ -325,10 +307,65 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
     'show-changes': showDiff(''), watch: watchIt, pause: pauseIt, resume: resumeIt, 'merge-now': mergeNow, retry: retryIt, 'to-todo': toTodo, stash: stashIt,
     role: openRolePick, 'already-merged': markMergedIt, drop: dropIt, 'needs-review': toggleReview, copy: copyTask,
   }
+  // The page's sections (shared with OpenCode, and their contents with VS Code; see core/task-sections.ts)
+  const sections = taskSections(t, {
+    width, nowMs: pane.nowMs, detail: { roles: S.roles, kinds: S.kinds, all: v.tasks, when, archivedDone: v.archived_done }, texts,
+    ...(shown ? { shownTry: shown.try } : {}), changes, target, dataDir: S.N.dir, numberKeysTaken: choices.length > 0,
+  })
+  const section = (id: TaskSection['id']) => sections.find(x => x.id === id)
+  /** One line of a section, as the terminal draws it. */
+  const lineEl = (l: SectionLine, i: number, name: string) =>
+    l.plain ? (
+      <Text key={l.key} bold={l.segs[0]!.bold} color={C(l.segs[0]!.color)}>{l.segs.map(g => g.text)}</Text>
+    ) : !l.segs.length ? (
+      <Text key={l.key ?? `${name}-${i}`}> </Text>
+    ) : (
+      segLine(l.segs, l.key ?? `${name}-${i}`)
+    )
+  /** A changed file's line: a button that opens its diff. */
+  const fileButton = (f: DiffFile) => (
+    <Button key={`file:${f.file}`} onPress={showDiff(f.file)}>
+      <Text color={C('autoAccept')}>{f.file.padEnd(fileWidth)}</Text>
+      {f.binary ? (
+        <Text color={C('inactive')}>  binary</Text>
+      ) : (
+        <Text>
+          {'  '}
+          <Text color={C('success')}>+{f.added}</Text> <Text color={C('error')}>-{f.removed}</Text>
+        </Text>
+      )}
+      {f.edited ? <Text color={C('warning')}>  edited by you</Text> : null}
+    </Button>
+  )
+  const fileWidth = Math.max(4, ...(changes?.files ?? []).map(f => f.file.length))
+  /** Section `id` with its heading and lines (nothing when the task has none); What to do keeps its rich drawing. */
+  const sectionEl = (id: TaskSection['id']) => {
+    const sec = section(id)
+    if (!sec) return null
+    const body =
+      id === 'what'
+        ? t.details.trim() ? paragraphs(t.details.trimEnd()) : sec.lines.map((l, i) => lineEl(l, i, id))
+        : sec.lines.map((l, i) => {
+            const file = l.action ? changes?.files.find(f => f.file === l.action!.diff) : undefined
+            return file ? fileButton(file) : lineEl(l, i, id)
+          })
+    return (
+      <Box flexDirection="column">
+        {heading(sec.title)}
+        {body}
+        {sec.tries
+          ? buttonRows(
+              sec.tries.map(r => <Button key={`report-try-${r.try}`} label={`${r.shown ? '● ' : ''}Try ${r.try}${r.key ? ` (${r.key})` : ''}`} hotkey={r.key} onPress={pickReport(r.try)} />),
+              'report-buttons',
+            )
+          : null}
+      </Box>
+    )
+  }
   // VS Code's side panel: its own wide page, with buttons and no key hints (see vscode-task.tsx)
   if (pane.vscode)
     return taskPageVs(pane, t, {
-      agentId, inReview, answered, target, merging, result, resultOk, rows, changes, reports, at, shown, reportBody, answerShown, answerFrom, answer, fileWait, overtime, answerable, askedQuestion, choices, why, canPickRole, canMarkMerged, nowRole,
+      agentId, inReview, answered, target, merging, result, resultOk, rows, changes, reports, at, shown, reportBody, answerShown, answerFrom, answer, sections, fileWait, overtime, answerable, askedQuestion, choices, why, canPickRole, canMarkMerged, nowRole,
       redraw: () => $.ui.invalidate('ui.render'),
       on: { back: goBack, open: openTask, approve: approveIt, keepNote, askReason, cancelReject, submitReject, showDiff, pause: pauseIt, resume: resumeIt, mergeNow, retry: retryIt, toTodo, stash: stashIt, markMerged: markMergedIt, drop: dropIt, watch: watchIt, toggleReview, copy: copyTask, openRolePick, pickRole, cancelRolePick: () => ((S.rolePick = null), $.ui.invalidate('ui.render')), choicePress, sendAnswer, pickReport },
     })
@@ -343,14 +380,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
         {mergeStatus}
       </Box>
 
-      {why && (
-        <Box flexDirection="column">
-          {heading('Why it failed')}
-          {wrapSegs([{ text: why.reason, color: 'text' }], Math.max(12, width - 2)).map((w, j) => segLine([{ text: '  ', color: 'text' }, ...w], `why-${j}`))}
-          {why.asks ? wrapSegs([{ text: why.asks, color: 'warning' }], Math.max(12, width - 2)).map((w, j) => segLine([{ text: '  ', color: 'text' }, ...w], `why-asks-${j}`)) : null}
-          {wrapSegs([{ text: `Next: ${why.next}`, color: 'inactive' }], Math.max(12, width - 2)).map((w, j) => segLine([{ text: '  ', color: 'text' }, ...w], `why-next-${j}`))}
-        </Box>
-      )}
+      {sectionEl('why')}
 
       {buttonRows([
         <Button key="back" label="Back" hotkey="b" autoFocus={answerable || rejectBox ? undefined : true} onPress={goBack} />,
@@ -361,45 +391,9 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
       {rejectBox}
       {roleBox}
 
-      {answerShown && (
-        <Box flexDirection="column">
-          {heading(answerFrom ? `Answer (try ${answerFrom.try})` : 'Answer')}
-          {answerFrom ? <Text color={C('inactive')}>  {answerFrom.file}</Text> : null}
-          {!answer ? <Text color={C('inactive')}>  (no answer saved)</Text> : null}
-          {answer
-            .split('\n')
-            .flatMap((l, i) => (l.trim() ? wrapSegs([{ text: l, color: 'text' }], Math.max(12, width - 2)).map((w, j) => segLine([{ text: '  ', color: 'text' }, ...w], `answer-${i}-${j}`)) : answer ? [<Text key={`answer-${i}`}> </Text>] : []))}
-        </Box>
-      )}
-
-      <Box flexDirection="column">
-        {heading('Details')}
-        {rows.flatMap((r, i) => detailRowLines(r, width).map((l, j) => segLine(l, `row-${i}-${j}`)))}
-      </Box>
-
-      {changes && (
-        <Box flexDirection="column">
-          {heading(`Changes (${changes.files.length} ${changes.files.length === 1 ? 'file' : 'files'}, against ${target})${changes.files.some(f => f.edited) ? ` ${YOUR_EDITS}` : ''}`)}
-          <Text color={C('inactive')}>  folder: {S.N.dir}/worktrees/{t.id} · edit files there, then approve (the tests run again)</Text>
-          {changes.error ? <Text color={C('error')}>  Could not read the changes: {changes.error}</Text> : null}
-          {!changes.error && !changes.files.length ? <Text color={C('inactive')}>  no changes</Text> : null}
-          {changes.files.map(f => (
-            <Button key={`file:${f.file}`} onPress={showDiff(f.file)}>
-              <Text color={C('autoAccept')}>{f.file.padEnd(fileWidth)}</Text>
-              {f.binary ? (
-                <Text color={C('inactive')}>  binary</Text>
-              ) : (
-                <Text>
-                  {'  '}
-                  <Text color={C('success')}>+{f.added}</Text> <Text color={C('error')}>-{f.removed}</Text>
-                </Text>
-              )}
-              {f.edited ? <Text color={C('warning')}>  edited by you</Text> : null}
-            </Button>
-          ))}
-          <Text color={C('inactive')}>  Enter on a file shows its diff · d all files</Text>
-        </Box>
-      )}
+      {sectionEl('answer')}
+      {sectionEl('details')}
+      {sectionEl('changes')}
 
       {fileWait && (
         <Box flexDirection="column" borderStyle="round" borderColor={C('warning')} paddingX={1}>
@@ -410,49 +404,10 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
 
       {asks && answerBox(pane, { question: asks.text, choices, typing, onChoice: choicePress, onSubmit: value => sendAnswer(value)(), onCancel: cancelAnswer })}
 
-      <Box flexDirection="column">
-        {heading('What to do')}
-        {t.details.trim() ? paragraphs(t.details.trimEnd()) : <Text color={C('inactive')}>(no details)</Text>}
-      </Box>
-
-      {t.history.length > 0 && (
-        <Box flexDirection="column">
-          {heading(`History (${t.history.length}, newest first)`)}
-          {historyLines([...t.history].reverse().map(historyEvent))}
-        </Box>
-      )}
-
-      {/* An answered investigation with one try: its report is the Answer above, so it is not shown twice. */}
-      {(reports.length > 0 || t.attempts > 0) && !(answerShown && answerFrom && reports.length === 1) && (
-        <Box flexDirection="column">
-          {heading(shown ? `Report (try ${shown.try}${reports.length > 1 ? `, ${at + 1} of ${reports.length}` : ''})` : 'Report')}
-          {!shown ? <Text color={C('inactive')}>  no saved report</Text> : null}
-          {shown ? <Text color={C('inactive')}>  {shown.file}</Text> : null}
-          {shown && reportBody === null ? <Text color={C('error')}>  Could not read the report file.</Text> : null}
-          {reportBody !== null
-            ? reportBody
-                .trimEnd()
-                .split('\n')
-                .flatMap((l, i) => (l.trim() ? wrapSegs([{ text: l, color: 'text' }], Math.max(12, width - 2)).map((w, j) => segLine([{ text: '  ', color: 'text' }, ...w], `report-${i}-${j}`)) : [<Text key={`report-${i}`}> </Text>]))
-            : null}
-          {reports.length > 1
-            ? buttonRows(
-                reports.map((r, i) => <Button key={`report-try-${r.try}`} label={`${i === at ? '● ' : ''}Try ${r.try}${r.try <= 9 && !choices.length ? ` (${r.try})` : ''}`} hotkey={r.try <= 9 && !choices.length ? String(r.try) : undefined} onPress={pickReport(r.try)} />),
-                'report-buttons',
-              )
-            : null}
-        </Box>
-      )}
-
-      {(t.runs?.length ?? 0) > 0 && (
-        <Box flexDirection="column">
-          {heading('Runs (time and cost)')}
-          {t.runs!.map((r, i) => (
-            <Text color={C(r.ended ? 'inactive' : 'success')}>{`  ${fmtRun(r, i, pane.nowMs)}`}</Text>
-          ))}
-          <Text bold color={C('text')}>{`  total: ${fmtTotal(sumRuns(t.runs, pane.nowMs))}`}</Text>
-        </Box>
-      )}
+      {sectionEl('what')}
+      {sectionEl('history')}
+      {sectionEl('report')}
+      {sectionEl('runs')}
 
       {footer(taskKeys(actions, reports.map(r => r.try), choices.length > 0), 'task-keys')}
     </Box>
