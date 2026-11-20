@@ -10,7 +10,7 @@
 import { test, expect } from 'bun:test'
 import { mergeRoles, mergeKinds, addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, type Board } from '../../board'
 import type { PaneView } from '../../app/state'
-import { bandLines, panelLines, panelKeys, parseViewFile, viewFileText, lineText, actionCommand, answerOptions, OWN_ANSWER, viewDefs, type ViewFile } from '../board-view'
+import { bandLines, bandDraw, BAND_CLICK_HINT, panelLines, panelKeys, parseViewFile, viewFileText, lineText, actionCommand, answerOptions, OWN_ANSWER, viewDefs, type ViewFile } from '../board-view'
 import { readFile } from 'node:fs/promises'
 import { PLUGIN_ROOT } from '../host'
 import { startTui, viewPaths, loadTuiRuntime, BOARD_PANEL, setupFailed, colorOf, drawLines, type TuiContext, type TuiRuntime, type TuiPanelInput, type TuiKeyLayer } from '../tui'
@@ -464,6 +464,46 @@ function rowEls(node: unknown): { text: string; el: El; segs: El[] }[] {
     flat(x).flatMap(k => (typeof k === 'string' ? [] : (k as El).props.flexDirection === 'row' ? [{ text: text((k as El).kids), el: k as El, segs: flat((k as El).kids) as El[] }] : rows((k as El).kids)))
   return rows(node)
 }
+
+test('T-567: a click on the band above the prompt: the header opens the board panel (and closes it when open), a task\'s row opens its page; the header shows "(click: board)" when there is room', async () => {
+  const f = viewFile()
+  // the hint: at the header's end when there is room, dropped first when narrow
+  const wide = bandDraw(f, NOW, 160)
+  expect(lineText(wide.lines[0]!).endsWith(BAND_CLICK_HINT)).toBe(true)
+  expect(wide.hits[0]).toEqual({ board: true })
+  expect(wide.hits.length).toBe(wide.lines.length)
+  const headLen = lineText(wide.lines[0]!).length - BAND_CLICK_HINT.length
+  expect(lineText(bandDraw(f, NOW, headLen + BAND_CLICK_HINT.length - 1).lines[0]!)).not.toContain('(click: board)')
+  expect(lineText(bandDraw(f, NOW, 40).lines[0]!)).not.toContain('(click: board)')
+  const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)]])
+  const fc = fakeCtx({})
+  const board = startTui({ ...fc.ctx, renderer: { width: 164 } }, { runtime: fakeRuntime(), readText: async p => files.get(p) ?? Promise.reject(new Error('missing')), every: () => () => undefined, now: () => NOW })
+  await board.refresh()
+  const band = fc.slots.find(s => s.append === 'session.composer.top')!.render({ sessionID: 's' } as never)
+  const rows = () => rowEls(band)
+  const click = (has: (t: string) => boolean, button = 0) => (rows().find(r => has(r.text))!.el.props.onMouseUp as (e: unknown) => void)({ type: 'up', button, stopPropagation: () => undefined })
+  expect(rows()[0]!.text).toContain('symcc v0.9.0')
+  expect(rows()[0]!.text.endsWith(BAND_CLICK_HINT)).toBe(true)
+  expect(typeof rows()[0]!.el.props.onMouseUp).toBe('function')
+  // a right click does nothing
+  click(t => t.includes('symcc v0.9.0'), 2)
+  expect(fc.current()).toBe(undefined)
+  // the header opens the board panel, and closes it when it is open (as /symcc-board does)
+  click(t => t.includes('symcc v0.9.0'))
+  expect(fc.current()?.name).toBe(BOARD_PANEL)
+  click(t => t.includes('symcc v0.9.0'))
+  expect(fc.current()).toBe(undefined)
+  // a task's row opens the panel on that task's page, and keeps it open when it is
+  click(t => t.startsWith('T-2'))
+  expect(fc.current()?.name).toBe(BOARD_PANEL)
+  expect(board.state().opened).toBe('T-2')
+  expect(board.state().tab).toBe('tasks')
+  click(t => t.startsWith('T-1'))
+  expect(fc.current()?.name).toBe(BOARD_PANEL)
+  expect(board.state().opened).toBe('T-1')
+  expect(fc.toasts).toEqual([])
+  board.stop()
+})
 
 test('T-558: the mouse works like the keys: a click on a row opens its task, on a group opens or closes it, on a key hint runs its key; the wheel scrolls the list', async () => {
   const f0 = viewFile()

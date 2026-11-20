@@ -11,7 +11,7 @@
 //     how often, model or instructions, /<name>-scout <name> every|model|prompt VALUE, T-562); a setting is changed
 //     with /<name>-settings NAME VALUE, and the Roles and Kinds pages under Settings turn a role or kind off or on
 //     (o) or reset it to the built-in one (r) with /<name>-settings role|kind <name> on|off|reset;
-//   - session.composer.top: the band above the prompt, like Claude Code's (the header line, then the questions, and
+//   - session.composer.top: the band above the prompt, like Claude Code's (the header line, a click on it opens or closes the board panel, T-567; then the questions, and
 //     the tasks that need the owner or run).
 // What is drawn comes from board-view.ts (bandLines, panelLines), made with hooks/core's helpers; this file only
 // turns those lines into OpenTUI elements (box and text) with Solid signals, and wires the keys and the mouse (T-558:
@@ -21,7 +21,7 @@
 // modules (Solid and OpenTUI's Solid renderer) are passed in (TuiRuntime), so this file type-checks and its tests
 // run without them. The names and shapes below are @opencode/plugin 2.3.0's tui Context (only what is used).
 import { DEFAULT_NAME, dataDir } from '../name'
-import { VIEW_FILE, parseViewFile, bandLines, panelLines, panelKeys, hasPage, answerOptions, actionCommand, moveCursor, OWN_ANSWER, GROUPS_OPEN, groupOf, groupId, scoutRunsIn, settingsPlace, PANEL_TABS, type ViewFile, type Line, type PanelAction, type PanelHit, type PanelKey, type PanelGroup, type PanelTab } from './board-view'
+import { VIEW_FILE, parseViewFile, bandDraw, panelLines, panelKeys, hasPage, answerOptions, actionCommand, moveCursor, OWN_ANSWER, GROUPS_OPEN, groupOf, groupId, scoutRunsIn, settingsPlace, PANEL_TABS, type ViewFile, type Line, type PanelAction, type PanelHit, type PanelKey, type PanelGroup, type PanelTab, type BandHit } from './board-view'
 import { isScoutRunReport, parseSettingValue, settingChoices, settingInfo, settingValue, isSettingPage, everyText, everyMinutesOf, type SettingName, type ScoutEditField } from '../board'
 import type { SymccScout } from '../../types'
 
@@ -188,8 +188,8 @@ const BOLD = 1
 
 /** Lines as OpenTUI elements: a column box with one row box per line, a text per colored piece. With `onHit`, a left
  *  click on a line with a hit (`hits`, by line) or on a piece with its own hit (a key hint) calls it. */
-export function drawLines(r: TuiRuntime, theme: unknown, lines: Line[], hits: (PanelHit | null)[] = [], onHit?: (hit: PanelHit) => void): TuiNode {
-  const clicked = (hit: PanelHit) => (e?: TuiMouseEvent) => {
+export function drawLines<H = PanelHit>(r: TuiRuntime, theme: unknown, lines: Line[], hits: (H | null)[] = [], onHit?: (hit: H) => void): TuiNode {
+  const clicked = (hit: H) => (e?: TuiMouseEvent) => {
     if (e?.button !== undefined && e.button !== 0) return
     e?.stopPropagation?.()
     onHit?.(hit)
@@ -213,7 +213,7 @@ export function drawLines(r: TuiRuntime, theme: unknown, lines: Line[], hits: (P
           r.setProp(text, 'wrapMode', 'none')
           r.setProp(text, 'fg', colorOf(theme, seg.color))
           if (seg.bold) r.setProp(text, 'attributes', BOLD)
-          if (seg.hit && onHit) r.setProp(text, 'onMouseUp', clicked(seg.hit))
+          if (seg.hit && onHit) r.setProp(text, 'onMouseUp', clicked(seg.hit as H))
           r.insert(text, seg.text)
           return text
         }),
@@ -502,10 +502,10 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     told.add(message)
     say(message, 'error')
   }
-  const drawn = (where: string, make: () => Line[] | { lines: Line[]; hits: (PanelHit | null)[] }, onHit?: (hit: PanelHit) => void) => {
+  const drawn = <H,>(where: string, make: () => { lines: Line[]; hits: (H | null)[] }, onHit?: (hit: H) => void) => {
     try {
       const got = make()
-      return Array.isArray(got) ? drawLines(r, ctx.theme, got) : drawLines(r, ctx.theme, got.lines, got.hits, onHit)
+      return drawLines<H>(r, ctx.theme, got.lines, got.hits, onHit)
     } catch (e) {
       failed(where, e)
       return null
@@ -555,7 +555,10 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
       render: () => {
         const col = r.createElement('box')
         r.setProp(col, 'flexDirection', 'column')
-        r.insert(col, () => drawn('band above the prompt', () => bandLines(file(), now(), Math.max(20, (ctx.renderer.width ?? 80) - 4))))
+        // a click on the header (or the "+N more" line) opens the board panel, or closes it when it is open, as
+        // /<name>-board does; a click on a task's or question's row opens its page (T-567). The slot is a plain box in
+        // OpenCode 2.3's session view (next to its own "Jump to latest" button, which uses onMouseUp too).
+        r.insert(col, () => drawn<BandHit>('band above the prompt', () => bandDraw(file(), now(), Math.max(20, (ctx.renderer.width ?? 80) - 4)), clickBand))
         return col
       },
     }),
@@ -570,6 +573,14 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   const openBoard = () => {
     if (ctx.ui.panel.current()?.name === BOARD_PANEL) return ctx.ui.panel.close()
     if (!ctx.ui.panel.open(BOARD_PANEL)) say(`Open or start a session first: the ${name} board opens next to a session (then /${name}-board, or "${name} board" in the command palette, ctrl+p).`)
+  }
+  const clickBand = (hit: BandHit) => {
+    if ('board' in hit) return openBoard()
+    if (ctx.ui.panel.current()?.name !== BOARD_PANEL && !ctx.ui.panel.open(BOARD_PANEL)) return say(`Open or start a session first: the ${name} board opens next to a session.`)
+    if (tab() !== 'tasks') showTab('tasks')
+    const at = draw().ids.indexOf(hit.open)
+    if (at >= 0) setCursor(at)
+    if (hasPage(file(), hit.open)) openPage(hit.open)
   }
   const reread = () => void refresh().catch(e => failed('board', e))
   reread()

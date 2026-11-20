@@ -171,11 +171,25 @@ const BAND_COLOR: Record<string, string> = { review: 'cyan', waiting: 'yellow', 
  * bandLeads) and its note when the state doesn't already say it (bandNote), and "+N more" when they don't all fit.
  * [] when there is nothing to show (an empty board, or symcc turned off). `rows`: at most this many rows under the header.
  */
+/** What a click on a line of the band does (T-567): open (or close) the board panel, or open a task's or question's
+ *  page in it. */
+export type BandHit = { board: true } | { open: string }
+
+/** The hint at the header's end that it is a button; dropped first when the line has no room for it. */
+export const BAND_CLICK_HINT = ' (click: board)'
+
+/** The band above the prompt (bandDraw's lines). */
 export function bandLines(f: ViewFile | null, nowMs: number, width: number, rows = 6): Line[] {
+  return bandDraw(f, nowMs, width, rows).lines
+}
+
+/** The band above the prompt with what a click on each line does: the header (and the "+N more" line) opens the
+ *  board panel, a question's or task's row opens its page. */
+export function bandDraw(f: ViewFile | null, nowMs: number, width: number, rows = 6): { lines: Line[]; hits: (BandHit | null)[] } {
   const v = f?.view
   const tasks = v?.tasks ?? []
   const questions = v?.questions ?? []
-  if (!f || !v || (!tasks.length && !questions.length) || v.enabled === false) return []
+  if (!f || !v || (!tasks.length && !questions.length) || v.enabled === false) return { lines: [], hits: [] }
   const summary = statusCounts(tasks, ['doing', 'todo', 'paused', 'review', 'waiting', 'failed', 'done']).join(' · ')
   const order = ['review', 'waiting', 'failed', 'doing']
   const live = tasks.filter(t => order.includes(t.status)).sort(newestFirst)
@@ -188,19 +202,23 @@ export function bandLines(f: ViewFile | null, nowMs: number, width: number, rows
   const plain = facts(roomFor(bare))
   const full = f.version ? facts(roomFor(boardBrand(f.name, f.version))) : ''
   const head = f.version && full === plain && full.length <= roomFor(boardBrand(f.name, f.version)) ? { brand: boardBrand(f.name, f.version), facts: full } : { brand: bare, facts: plain }
-  const out: Line[] = [[{ text: head.brand, color: 'ide', bold: true }, { text: head.facts, color: 'inactive' }]]
+  const headLen = head.brand.length + head.facts.length
+  const hint = headLen + BAND_CLICK_HINT.length <= width ? [{ text: BAND_CLICK_HINT, color: 'inactive' }] : []
+  const out: Line[] = [[{ text: head.brand, color: 'ide', bold: true }, { text: head.facts, color: 'inactive' }, ...hint]]
+  const hits: (BandHit | null)[] = [{ board: true }]
   const asks = questions.slice(0, rows)
-  for (const q of asks) out.push([{ text: `${q.id} for you`, color: 'yellow' }, { text: ` ${q.text}`, color: 'text' }, ...(q.options.length ? [{ text: ` — ${q.options.join(' | ')}`, color: 'inactive' }] : [])])
+  for (const q of asks) hits.push({ open: q.id }), out.push([{ text: `${q.id} for you`, color: 'yellow' }, { text: ` ${q.text}`, color: 'text' }, ...(q.options.length ? [{ text: ` — ${q.options.join(' | ')}`, color: 'inactive' }] : [])])
   const shown = live.slice(0, Math.max(0, rows - asks.length))
   const since = (id: string) => v.working?.find(w => w.task === id)?.since
   const leads = bandLeads(shown, nowMs, since, width)
   for (const t of shown) {
     const note = bandNote(t, nowMs, since(t.id))
     const tail = fileWaitText(t) ? ` — ${fileWaitText(t)}` : waitsForYou(t) ? ` — ${t.question ?? t.note}` : note ? ` — ${note}` : ''
+    hits.push({ open: t.id })
     out.push([{ text: leads.get(t.id)!, color: BAND_COLOR[t.status] ?? 'text' }, { text: ` ${t.title}`, color: 'text' }, ...(tail ? [{ text: tail, color: 'inactive' }] : [])])
   }
-  if (live.length + questions.length > rows) out.push([{ text: `+${live.length + questions.length - rows} more · /${f.name}`, color: 'inactive' }])
-  return out
+  if (live.length + questions.length > rows) hits.push({ board: true }), out.push([{ text: `+${live.length + questions.length - rows} more · /${f.name}`, color: 'inactive' }])
+  return { lines: out, hits }
 }
 
 // ---------------- the board panel ----------------
