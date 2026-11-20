@@ -14,14 +14,14 @@ import type { SymccTask, SymccScout } from '../../types'
 import type { PaneView } from '../app/state'
 import type { OwnerQuestion } from '../core/questions'
 import {
-  statusCounts, newestFirst, bandLeads, bandNote, bandBrand, bandWhere, boardBrand, modeLabel, modeOf, planBandText, withCrew, fileWaitText, questionsForYou,
+  statusCounts, newestFirst, bandLeads, bandNote, bandBrand, bandWhere, boardBrand, modeLabel, modeOf, planBandText, withCrew, questionsForYou,
   bannerLines, bannerRule, footerRule, type BannerTone, panelSections, localOffset, when, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, ALL_CLEAR,
   rowStates, tryTone, rowMark, TITLE_ROOM, fitRow, rowExtra, questionsLabel, archivedOf, archivedNote, statusMark, statusBadge, detailRows, detailRowLines, wrapSegs, hintLineText,
   type KeyHint, type Seg, type BoardTask, gitNote, intoOf, taskActions, taskAsks, type TaskAction, type TaskActionId,
-  waitsForYou, ownersTurn, shownStatus, sortScouts, scoutListRows, scoutRow, scoutIcon, scoutTone, scoutHowTo, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem, scoutFile,
+  ownersTurn, shownStatus, sortScouts, scoutListRows, scoutRow, scoutIcon, scoutTone, scoutHowTo, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem, scoutFile,
   SETTING_GROUPS, SETTINGS, isSettingPage, settingInfo, settingValue, cantPlayNotify, groupSummaryParts,
   type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction, type TaskVerb, settingsKeys,
-  DEFAULT_ROLE, isCheckerRole, ALWAYS_ON_KINDS, checkerOn, roleNameError, kindNameError, checkStepNow,
+  DEFAULT_ROLE, isCheckerRole, ALWAYS_ON_KINDS, checkerOn, roleNameError, kindNameError, checkStepNow, rowEndText, taskPhase,
 } from '../board'
 import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, brokenLabel, defNamed } from '../core/def-files'
 import { restFrame } from '../core/logo'
@@ -229,8 +229,9 @@ export function bandDraw(f: ViewFile | null, nowMs: number, width: number, rows 
   const since = (id: string) => v.working?.find(w => w.task === id)?.since
   const leads = bandLeads(shown, nowMs, since, width)
   for (const t of shown) {
-    const note = bandNote(t, nowMs, since(t.id))
-    const tail = fileWaitText(t) ? ` — ${fileWaitText(t)}` : waitsForYou(t, nowMs) ? ` — ${t.question ?? t.note}` : note ? ` — ${note}` : ''
+    // the row's end text, the same in Claude Code's band and the lead's board (rowEndText)
+    const end = rowEndText(t, taskPhase(t, nowMs), bandNote(t, nowMs, since(t.id)))
+    const tail = end ? ` — ${end}` : ''
     hits.push({ open: t.id })
     out.push([{ text: leads.get(t.id)!, color: BAND_COLOR[shownStatus(t, nowMs)] ?? 'text' }, { text: ` ${t.title}`, color: 'text' }, ...(tail ? [{ text: tail, color: 'inactive' }] : [])])
   }
@@ -345,10 +346,11 @@ const scoutNamed = (f: ViewFile | null, name: string): SymccScout | undefined =>
 
 /**
  * The keys of the list, and of a task's or question's page (the main actions only); on the Scouts tab, of the list,
+ * (`merging`: the task's approve is in progress, see approveInProgress, so no approve, reject or merge now),
  * a scout's page (r run now, p pause or resume, e edit) and a run's page; on the Settings tab, of the settings list,
  * the Roles and Kinds lists and a role's or kind's page (o turn off or on, r reset to the built-in one).
  */
-export function panelKeys(f: ViewFile | null, opened: string, tab: PanelTab = 'tasks', run = '', heading = false): KeyHint[] {
+export function panelKeys(f: ViewFile | null, opened: string, tab: PanelTab = 'tasks', run = '', heading = false, merging = false): KeyHint[] {
   const move = { key: '↑↓', word: 'move' }
   const views = { key: 't s c', word: 'views' }
   const close = { key: 'Esc', word: 'close' }
@@ -373,7 +375,15 @@ export function panelKeys(f: ViewFile | null, opened: string, tab: PanelTab = 't
   const q = f?.view.questions?.find(x => x.id === opened)
   if (q) return [{ key: 'a', word: 'answer' }, back]
   if (!t) return [back]
-  return [...(taskAsks(t, f?.view.max_minutes) ? [{ key: 'a', word: 'answer' }] : []), ...panelTaskActions(t).map(a => ({ key: a.key!, word: a.word })), back]
+  return [...(taskAsks(t, f?.view.max_minutes) ? [{ key: 'a', word: 'answer' }] : []), ...panelTaskActions(t, merging).map(a => ({ key: a.key!, word: a.word })), back]
+}
+
+/** Whether task `t`'s approve is in progress at `nowMs`: this panel just sent it (approveSent, `approving`), or the board
+ *  shows it running (taskPhase's `approved` with a step). Its page then offers no approve, reject or merge now, as the
+ *  terminal's while its merging line shows. */
+export function approveInProgress(f: ViewFile | null, t: BoardTask, approving: ApproveSent | undefined, nowMs: number): boolean {
+  const p = taskPhase(t, nowMs, undefined, { merging: approving?.id === t.id && approveSent(f, approving, nowMs) })
+  return p.approved && !!p.stage
 }
 
 /** The panel's lines: the banner and rule, then the list or the open task's (or question's) page, then the keys. */
@@ -403,7 +413,8 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
   } else {
     const page = choice.opened ? openedPage(f, choice.opened, nowMs, w, choice.sent?.id === choice.opened ? choice.sent.answer : '', choice.taskReport, choice.approving?.id === choice.opened && approveSent(f, choice.approving, nowMs)) : null
     body = page ?? listBody(f, choice.cursor, { ...GROUPS_OPEN, ...choice.groups }, nowMs, w)
-    keys = panelKeys(f, page ? choice.opened : '')
+    const t = page ? f.view.tasks.find(x => x.id === choice.opened) : undefined
+    keys = panelKeys(f, page ? choice.opened : '', 'tasks', '', false, !!t && approveInProgress(f, t, choice.approving, nowMs))
   }
   // the mouse wheel scrolls the list or page between the banner and the footer, down to its last screenful (its last
   // line when the panel's height isn't known)
@@ -852,7 +863,7 @@ export const TASK_ACTION_COMMANDS: Partial<Record<TaskActionId, 'approve' | 'rej
 
 /** The actions of task `t`'s page (core's taskActions, the terminal's and VS Code's buttons) this panel sends, each
  *  with its key: every one but Copy and Watch worker (and Drop in review, which has no key there). */
-export const panelTaskActions = (t: BoardTask): TaskAction[] => taskActions(t).filter(a => a.key && TASK_ACTION_COMMANDS[a.id])
+export const panelTaskActions = (t: BoardTask, merging = false): TaskAction[] => taskActions(t, { merging }).filter(a => a.key && TASK_ACTION_COMMANDS[a.id])
 
 /** The roles a task's role can be set to (Role on its page): those turned on, general first, never the checker role. */
 export const panelRoleChoices = (f: ViewFile | null): string[] => {

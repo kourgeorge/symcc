@@ -1,7 +1,7 @@
 // The band above the prompt: the board in one or a few lines.
 import { drawNow } from './now'
 import type { MatchedHook } from 'claude-code'
-import { statusCounts, newestFirst, bandLeads, bandNote, bandBrand, bandWhere, modeLabel, modeOf, planBandText, withCrew, fileWaitText, questionsForYou, waitsForYou, shownStatus } from '../../board'
+import { statusCounts, newestFirst, bandLeads, bandNote, bandBrand, bandWhere, modeLabel, modeOf, planBandText, withCrew, questionsForYou, shownStatus, rowEndText, taskPhase } from '../../board'
 import { type PaneView, S } from '../../app/state'
 import { type $, panelValues } from '../panel'
 import { openPane } from '../../app/open'
@@ -49,8 +49,11 @@ export async function renderAbovePrompt($: $, e: Parameters<AbovePromptHook>[1],
   const leads = bandLeads(shownTasks, nowMs, since, e.props.bodyColumns ?? 80)
   // a note the row's state already says ("worker on it" beside "▶ 12m") is left out; every other note stays (see bandNote)
   const note = (t: (typeof live)[number]) => bandNote(t, nowMs, since(t.id))
-  const tail = (t: (typeof live)[number]) =>
-    fileWaitText(t) ? ` — ${fileWaitText(t)}` : waitsForYou(t, nowMs) ? ` — ${t.question ?? t.note}` : note(t) ? ` — ${note(t)}` : ''
+  // the row's end text, the same in OpenCode's band and the lead's board (rowEndText)
+  const tail = (t: (typeof live)[number]) => {
+    const end = rowEndText(t, taskPhase(t, nowMs), note(t))
+    return end ? ` — ${end}` : ''
+  }
   return (
     <Box flexDirection="column">
       <Box flexDirection="row">

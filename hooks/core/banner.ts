@@ -10,8 +10,9 @@ import { roleMark, tryMark } from './roles'
 import { archivedLine, archivedNote, archivedOf } from './archive'
 import { boardTotal, fmtTotal, totalLine } from './runs'
 import { PLAN_NOTE } from './plan'
-import { type CrewBoard, withCrew, parseSearch, searchTasks, BOARD_STATUSES, statusCell, STEP_NOTE, STEP_WORD, TITLE_ROOM, rowStates, stateText, rowMark, APPROVED_NOTE } from './panel'
-import { approveRunning, checkStepNow, shownStatus } from './lead'
+import { type CrewBoard, withCrew, parseSearch, searchTasks, BOARD_STATUSES, statusCell, STEP_NOTE, STEP_WORD, TITLE_ROOM, rowStates, stateText, rowMark, APPROVED_NOTE, fileWaitText } from './panel'
+import { checkStepNow, shownStatus } from './lead'
+import { type TaskPhase, taskPhase } from './phase'
 import { whyFailed } from './failure'
 import { offStatusParts, testsShort } from './settings'
 import { type OwnerQuestion, openQuestions, questionsForYou, questionLine, questionsLabel } from './questions'
@@ -108,6 +109,21 @@ const STATE_NOTES = new Set(['worker on it', STEP_NOTE.testing, STEP_NOTE.mergin
 /** The note a doing row in the band shows as its tail: '' when its state already says it (see STATE_NOTES), else the note. */
 export const bandNote = (t: Pick<SymccTask, 'status' | 'runs' | 'note'> & Pick<BoardTask, 'checking' | 'time_ask' | 'kind'>, nowMs: number, since?: number | string): string =>
   !t.note || (STATE_NOTES.has(t.note) && bandHasState(t, nowMs, since)) ? '' : t.note
+
+/**
+ * The end text of a task's row, the same in both bands (Claude Code's and OpenCode's) and the lead's text board,
+ * read from `phase` (taskPhase): the owner's own files in the way of its merge (fileWaitText), "approved, merging"
+ * while its approve runs (APPROVED_NOTE), its question while it asks one (an answer or files outside its list),
+ * why it failed (whyFailed), else `note` (the task's note; the bands pass bandNote, which leaves out what the row's
+ * state already says). '' when there is nothing to say.
+ */
+export function rowEndText(t: Pick<SymccTask, 'note' | 'history'> & Partial<Pick<SymccTask, 'question' | 'test_output' | 'runs'>> & Pick<BoardTask, 'status' | 'merge_wait' | 'merge_into'>, phase: Pick<TaskPhase, 'waitsFor' | 'approved' | 'stage'>, note: string = t.note ?? ''): string {
+  if (phase.waitsFor === 'your-files') return fileWaitText(t)
+  if (phase.approved && phase.stage) return APPROVED_NOTE
+  if (phase.waitsFor === 'answer' || phase.waitsFor === 'files') return t.question ?? t.note ?? ''
+  if (phase.waitsFor === 'failed') return whyFailed(t)
+  return note
+}
 
 /** About how wide the line above the prompt may be: Claude Code puts "<name>: " (and its own mark) in front. */
 export const STATUS_WIDTH = 80
@@ -309,7 +325,11 @@ export function parseStatusFilter(words: unknown): SymccStatus[] | undefined {
 
 /** One row (and its "from:" line) of the board as text. */
 function boardRow(t: SymccTask, autoRetries: number | undefined, nowMs: number): string[] {
-  const extra = t.status === 'waiting' && t.question ? ` — asks: ${t.question}` : t.status === 'failed' ? ` — ${whyFailed(t)}` : t.note ? ` — ${t.note}` : approveRunning(t, nowMs) ? ` — ${APPROVED_NOTE}` : t.status === 'review' ? ` — ${STATUS_WORD.review}` : ''
+  // the end text every view shows (rowEndText); the lead also reads "asks:" before a question, and "review" when nothing else is said
+  const phase = taskPhase(t, nowMs)
+  const end = rowEndText(t, phase)
+  const asks = (phase.waitsFor === 'answer' || phase.waitsFor === 'files') && t.question ? 'asks: ' : ''
+  const extra = end ? ` — ${asks}${end}` : t.status === 'review' ? ` — ${STATUS_WORD.review}` : ''
   const after = t.after.length && (t.status === 'todo' || t.status === 'backlog') ? ` (after ${t.after.join(', ')})` : ''
   // the kind and the role, e.g. " [bug · tester]" (a plain change with the general role shows nothing)
   const tag = [kindMark(t), roleMark(t)].filter(Boolean).join(' · ')

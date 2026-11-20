@@ -13,6 +13,7 @@ import type { PaneView } from '../../app/state'
 import { ICON } from '../../name'
 import { bandLines, bandDraw, BAND_CLICK_HINT, panelLines, panelKeys, parseViewFile, viewFileText, lineText, actionCommand, answerOptions, OWN_ANSWER, viewDefs, panelTaskActions, TASK_ACTION_COMMANDS, SETTINGS_OPEN, approveSent, APPROVE_SENT_MS, type ViewFile } from '../board-view'
 import { readFile } from 'node:fs/promises'
+import { rowEndBoard, ROW_END, ROW_END_NOW } from '../../../tests/row-end-cases'
 import { taskSections } from '../../core/task-sections'
 import { PLUGIN_ROOT } from '../host'
 import { startTui, KEY_BINDS, viewPaths, loadTuiRuntime, BOARD_PANEL, setupFailed, colorOf, drawLines, type TuiContext, type TuiRuntime, type TuiPanelInput, type TuiKeyLayer, type PanelKey } from '../tui'
@@ -770,12 +771,15 @@ test('T-558: the mouse works like the keys: a click on a row opens its task, on 
   expect(focusedBy).toBe(1)
   expect(rowEls(panel).some(r => r.text.startsWith('Status:'))).toBe(true)
   // the page's key hints are buttons: approve, reject (asks the reason), back
-  await clickHint('a approve')
   await clickHint('x reject')
+  await clickHint('a approve')
   expect(sent).toEqual([
-    { sessionID: 'ses_1', name: 'symcc-approve', text: 'T-2' },
     { sessionID: 'ses_1', name: 'symcc-reject', text: 'T-2 too big' },
+    { sessionID: 'ses_1', name: 'symcc-approve', text: 'T-2' },
   ])
+  // T-615: while the approve runs, the page offers no approve or reject any more (as the terminal's)
+  expect(rowEls(panel).at(-1)!.text).not.toContain('approve')
+  expect(rowEls(panel).at(-1)!.text).not.toContain('reject')
   await clickHint('b back')
   expect(board.state().opened).toBe('')
   // a click on a group's row opens it (its tasks show), and again closes it
@@ -1520,4 +1524,25 @@ test('T-614: right after the panel sends an approve, the page badge, the Status 
   expect(page(testing, sent)).toContain('[⧗ test]')
   // the task left review (merged): no flag either
   expect(approveSent(withT2({ status: 'done' }), sent, NOW)).toBe(false)
+})
+
+test('T-615: the band ends each row with the same text as Claude Code\'s band and the lead\'s board (rowEndText)', () => {
+  const b = rowEndBoard()
+  const view: PaneView = { tasks: b.tasks, working: [], scouts: [], mode: 'auto', test_commands: [] }
+  const lines = bandLines({ root: '/work/proj', home: '/work', name: 'symcc', version: '', written_at: ROW_END_NOW, view }, ROW_END_NOW, 400, 10).map(lineText)
+  for (const [id, end] of Object.entries(ROW_END)) expect([id, lines.find(l => l.startsWith(`${id} `))!.endsWith(` — ${end}`)]).toEqual([id, true])
+})
+
+test('T-615: while a task\'s approve is in progress its page offers no approve or reject (as the terminal\'s), from the press until the approve ends', () => {
+  const f = viewFile()
+  const keys = (g: ViewFile, approving?: { id: string; at: number }, now = NOW) => panelLines(g, { opened: 'T-2', cursor: 0, ...(approving ? { approving } : {}) }, now, 100).keys.map(k => k.word)
+  expect(keys(f)).toContain('approve')
+  // just pressed: approveSent
+  expect(keys(f, { id: 'T-2', at: NOW })).toEqual(['show changes', 'needs review', 'back'])
+  // its first step is on the board: the phase says approved
+  const running = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => (t.id === 'T-2' ? { ...t, checking: { step: 'testing' as const, at: new Date(NOW - 5_000).toISOString() } } : t)) } }
+  expect(keys(running)).toEqual(['show changes', 'needs review', 'back'])
+  // an approve sent for another task, or one long gone, leaves them
+  expect(keys(f, { id: 'T-3', at: NOW })).toContain('approve')
+  expect(keys(f, { id: 'T-2', at: NOW - APPROVE_SENT_MS - 1 })).toContain('approve')
 })

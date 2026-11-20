@@ -11,6 +11,7 @@ import { sayQueue } from '../hooks/app/state'
 import { inProject } from './project'
 import { ran, readText, entry, slash, print } from './fakes'
 import { hist } from './history-fixture'
+import { rowEndBoard, ROW_END, ROW_END_NOW } from './row-end-cases'
 
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
@@ -2258,4 +2259,19 @@ test('a task that did not fail has no "Why it failed" block', async ($, on) => {
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect((await lines(ui)).some(l => l === '▍Why it failed')).toBe(false)
   await ui.unmount()
+})
+
+test('T-615: the band ends each row with the same text as OpenCode\'s band and the lead\'s board (rowEndText)', async ($, on) => {
+  mock.clock(on, { now: ROW_END_NOW })
+  const tasks = rowEndBoard().tasks
+  // the band shows six rows at most, so one task at a time
+  let shown = tasks
+  on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks: shown, working: [], scouts: [], mode: 'auto', test_commands: [] } }, version: 1 } }))
+  on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
+  for (const t of tasks) {
+    shown = [t]
+    const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 200 }, surface: 'terminal' })
+    expect([t.id, !!(await ui.find({ type: 'Text', text: new RegExp(`^ — ${esc(ROW_END[t.id]!)}$`, 'u') }))]).toEqual([t.id, true])
+    await ui.unmount()
+  }
 })
