@@ -35,6 +35,12 @@ const ALLOWED = [
   'git -C /tmp/a clone /tmp/b c',
   'git -C /tmp/x commit --author="A B <a@b>" -m "a b"',
   'git -C /tmp/x rebase -x make HEAD~1',
+  'git -C /tmp/x commit -am "fix the bug"',
+  'git -C /tmp/x tag -m "v 1" v1',
+  'git -C /tmp/x rebase -m HEAD~1',
+  'git -C /tmp/x commit -m "-- see cd here"',
+  'git -C /tmp/x config -f /tmp/x/extra.cfg user.name me',
+  'git -C /tmp/x config -fextra.cfg user.name me',
 ]
 
 const REFUSED = [
@@ -96,6 +102,31 @@ const REFUSED = [
   "sh -c 'git -C /tmp/x commit -m m'",
   'sudo git -C /tmp/x commit -m m',
   'GIT_DIR=/repo/.git git -C /tmp/x commit -m m',
+  // `-m` is a message only for commit, tag, merge, notes and stash (for rebase it is --merge)
+  `git -C /tmp/x rebase -m --exec="git -C ${WT} reset --hard HEAD~3" HEAD~1`,
+  `git -C /tmp/x push -m ${WT} HEAD:main`,
+  `git -C /tmp/x rebase -mx"git -C ${WT} reset --hard" HEAD~1`,
+  // shortened --global / --system
+  'git -C /tmp/x config --glob core.hooksPath /tmp/h',
+  'git -C /tmp/x config --glo user.name x',
+  'git -C /tmp/x config --syst user.name x',
+  'git -C /tmp/x config --global=x user.name x',
+  // config -f / --file outside the scratch folder
+  'git -C /tmp/x config -f ~/.gitconfig user.name x',
+  'git -C /tmp/x config -f~/.gitconfig user.name x',
+  'git -C /tmp/x config -f../y/.git/config user.name x',
+  `git -C /tmp/x config -f${WT}/.git/config user.name x`,
+  `git -C /tmp/x config -f ${WT}/.git/config user.name x`,
+  `git -C /tmp/x config --file=${WT}/.git/config user.name x`,
+  'git -C /tmp/x config --file ../y/config user.name x',
+  // a cd with a word before it, or text run again, may change folder
+  `cd /tmp/x && builtin cd ${WT} && git commit -am m`,
+  `cd /tmp/x && command cd ${WT} && git reset --hard HEAD~3`,
+  `cd /tmp/x && x=1 cd ${WT} && git commit -am m`,
+  `cd /tmp/x && 'cd' ${WT} && git commit -am m`,
+  `cd /tmp/x && eval cd ${WT} && git commit -am m`,
+  'cd /tmp/x && source ./f && git commit -am m',
+  'cd /tmp/x && $c /repo && git commit -am m',
 ]
 
 test('a worker and a checker may run git writes in /tmp scratch repos named by plain literal paths (T-591)', async () => {

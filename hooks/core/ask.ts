@@ -964,6 +964,9 @@ export function scratchTemps(tmpdir?: string): string[] {
   return t && /^(\/private)?\/var\/folders\/[^/]+\//.test(t) ? ['/tmp', t] : ['/tmp']
 }
 
+/** The git commands whose `-m <text>` is a message, not looked at by scratchGitAllow (`rebase -m` is --merge). */
+const MESSAGE_SUBS = new Set(['commit', 'tag', 'merge', 'notes', 'stash'])
+
 /** Options of `git init` a scratch repository may have (see scratchGitAllow); `-b` and `--initial-branch` take a branch name. */
 const SCRATCH_INIT_OPTIONS = /^(-q|--quiet|--bare|--initial-branch=[\w./-]+)$/
 
@@ -1014,18 +1017,30 @@ export const scratchGitAllow =
     if (!ok(dir)) return false
     for (let i = 0; i < args.length; i++) {
       const a = args[i]!
-      if (a.raw === '-m' || a.raw === '--message') {
-        i++
-        continue
+      // a message, only for the commands whose -m is one (for rebase -m is --merge, so the next word is checked)
+      if (MESSAGE_SUBS.has(sub)) {
+        if (a.raw === '--message' || /^-[aqsvnS]*m$/.test(a.raw)) {
+          i++
+          continue
+        }
+        if (/^(-[aqsvnS]*m|--message=)/.test(a.raw)) continue
       }
-      if (/^(-m|--message=)/.test(a.raw)) continue
       const redir = REDIRECT.exec(a.raw)
       if (redir) {
         if (!redir[4] && !redir[3]) i++
         continue
       }
       // --global / --system: the owner's ~/.gitconfig or the system's, outside the scratch folder
-      if (a.w === '--global' || a.w === '--system') return false
+      // also any unique shortening of these long options (`--glob`, `--syst`), which the parser accepts the same
+      const long = a.w.split('=')[0]!
+      if (long.length > 2 && long.startsWith('--') && ('--global'.startsWith(long) || '--system'.startsWith(long))) return false
+      // `config -f<file>`: the file joined to the option (`-f~/.gitconfig`) must be a plain relative name too
+      // (`-f <file>` and `--file=<file>` are checked below as words and paths)
+      if (sub === 'config' && /^-f./.test(a.w)) {
+        const f = a.w.slice(2)
+        const plain = /^[\w.@%+,=-][\w./@%+,=-]*$/.test(f) && !f.split('/').includes('..')
+        if (!plain && !ok(literalPath(f))) return false
+      }
       // a space: a command or path given as one quoted word (`rebase -x 'git -C /repo ...'`, `alias.z '!cd; git ...'`)
       if (/\s/.test(a.w) && !/^--author=/.test(a.raw)) return false
       if (a.expands || /(^|[=:,])~/.test(a.w) || /(^|[^\w.])\.\.(\/|$)/.test(a.w)) return false
@@ -1342,6 +1357,9 @@ function braceTextArgs(p: { words: string[] }): Set<number> {
  * a cd to anything else (a variable, `$(mktemp -d)`, `~`, a relative path), any other operator after a cd, and a
  * pipe, a group or a subshell anywhere in the line leave the folder unknown (no entry).
  */
+/** Words that may change the shell's folder when they are not the first word of a command (gitFolders). */
+const FOLDER_WORDS = new Set(['cd', 'pushd', 'popd', 'eval', 'source', '.'])
+
 function gitFolders(pieces: ShellPiece[], cwd?: string): Map<ShellPiece, string | undefined> {
   const out = new Map<ShellPiece, string | undefined>()
   if (pieces.some(p => ('op' in p && (p.op === '|' || p.op === '(' || p.op === ')')) || (!('op' in p) && p.doc))) return out
@@ -1360,6 +1378,11 @@ function gitFolders(pieces: ShellPiece[], cwd?: string): Map<ShellPiece, string 
     if (name === 'cd' || name === 'pushd' || name === 'popd') {
       moved = true
       dir = name !== 'popd' && prev !== '||' && words.length === 2 ? literalPath(words[1]!.raw) : undefined
+    } else if (words[0]?.expands || (!isGit(words[0]?.w ?? '') && words.some(x => FOLDER_WORDS.has(x.w)))) {
+      // a cd with a word before it (`builtin cd`, `command cd`, `x=1 cd`, `'cd'`), a command run by name from a
+      // variable, or text run again (`eval`, `source`, `.`) may change folder: the folder is unknown from here
+      moved = true
+      dir = undefined
     }
   }
   return out
