@@ -266,10 +266,10 @@ test('stats: a bar is scaled to the biggest value, at most 16 blocks, and a smal
 })
 
 test('stats: "full" anywhere in the words asks for the full view; the rest is the range', () => {
-  expect(parseStatsArgs('')).toEqual({ full: false, range: '' })
-  expect(parseStatsArgs('full')).toEqual({ full: true, range: '' })
-  expect(parseStatsArgs('7d FULL')).toEqual({ full: true, range: '7d' })
-  expect(parseStatsArgs('full T-1..T-9')).toEqual({ full: true, range: 'T-1..T-9' })
+  expect(parseStatsArgs('')).toEqual({ full: false, html: false, range: '' })
+  expect(parseStatsArgs('full')).toEqual({ full: true, html: false, range: '' })
+  expect(parseStatsArgs('7d FULL')).toEqual({ full: true, html: false, range: '7d' })
+  expect(parseStatsArgs('full T-1..T-9')).toEqual({ full: true, html: false, range: 'T-1..T-9' })
 })
 
 test('stats: a long line is wrapped under its text, within 80 columns', () => {

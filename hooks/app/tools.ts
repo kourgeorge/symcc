@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { allowFiles, refuseFiles, waitsForFiles, filesRefusedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, ROLE_TOOL_WORDS, DEFAULT_ROLE, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedEntry, withHistory, historyLineText, type SettingsInput, type SettingChange, testMinutesRefusal, isMode, isNotify, notifyRefusal, applySettings, intoOf, crossBranchNotes, parseGoneBranch, saysMergeInstead, type Board, settingSetText, taskReports, reportPreview, statsReport, parseStatsRange, parseStatsArgs, readArchive, archivedCount, localOffset, endedBy, stopEnd, changeRestartWhy, changedFields, addDetailsText, noteAddedLine, detailsBothRefusal, dayOf, inPlan, planBacklog, planAdded, planAddText, parseScoutUsage, parseStatusFilter, BOARD_STATUSES, type TeamInput, SETTING_NAMES, leadSettingsText, readSoundSet, findingToBacklog, isScoutFindings, isTestsWithChanges, kindFor, isAnswered, askMoreTask, isInvestigation, checkKind, kindsLeadText, kindNames, BUILT_IN_KINDS, originOf, stateLabelLower, modeOf, when } from '../board'
+import { allowFiles, refuseFiles, waitsForFiles, filesRefusedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, ROLE_TOOL_WORDS, DEFAULT_ROLE, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedEntry, withHistory, historyLineText, type SettingsInput, type SettingChange, testMinutesRefusal, isMode, isNotify, notifyRefusal, applySettings, intoOf, crossBranchNotes, parseGoneBranch, saysMergeInstead, type Board, settingSetText, taskReports, reportPreview, statsReport, statsData, parseStatsRange, parseStatsArgs, readArchive, archivedCount, localOffset, endedBy, stopEnd, changeRestartWhy, changedFields, addDetailsText, noteAddedLine, detailsBothRefusal, dayOf, inPlan, planBacklog, planAdded, planAddText, parseScoutUsage, parseStatusFilter, BOARD_STATUSES, type TeamInput, SETTING_NAMES, leadSettingsText, readSoundSet, findingToBacklog, isScoutFindings, isTestsWithChanges, kindFor, isAnswered, askMoreTask, isInvestigation, checkKind, kindsLeadText, kindNames, BUILT_IN_KINDS, originOf, stateLabelLower, modeOf, when } from '../board'
 import { scoutMemoryFile, leadScouts, linkTaskToScoutRun } from './scouts'
 import { archivedText, bringBackArchived, findArchived } from './archive'
 import { removeWorktree, worktreeDir, setupGit, branchExists, branchList, homeBranch, taskWork, resetScratch } from './git'
@@ -8,6 +8,7 @@ import { loadKinds, leadKinds } from './kinds'
 import { S, heard, workers, toolName } from './state'
 import { type Host, type HostFeatures, ALL_FEATURES } from '../host'
 import { load, change, now, path } from './store'
+import { statsHtml, openCommands } from '../core/stats-html'
 import { noteForLead, brief, tellLead } from './tell'
 import { playable, playSample } from './voice'
 import { pump, approve, mergeWaiting, checkingNow, stopAsked, CHECKING_TEXT, mergingNow, MERGING_TEXT, fullAnswer } from './workers'
@@ -115,11 +116,12 @@ ${features.panel ? `  /${S.N.name}                     open the board panel (↑
                        (a typed line is one whole shell command; several go in a list like ["npm test", "npm run lint"];
                        "none" clears them)
                        a value over its limit is cut to it, and the answer says so
-  /${S.N.name}-stats [full] [7d|T-1..T-9]  time and token stats, with bar charts:
+  /${S.N.name}-stats [full|html] [7d|T-1..T-9]  time and token stats, with bar charts:
                        tasks, worker time, tokens, the whole team (lead, workers, scouts),
                        per task and per try, the biggest tasks, how tasks ended, by role,
                        origin and day (all tasks, the last N days, or an id range);
-                       "full" adds the long explanations
+                       "full" adds the long explanations; "html" writes them as a web page
+                       with charts (${S.N.dir}/stats.html) and opens it
   /${S.N.name}-disable             disable ${S.N.name} for this project: ${S.W.assistant} works as normal (no lead
                        guide, no workers, scouts, updates, sounds or voice); the board is kept
   /${S.N.name}-enable              turn it back on, in the mode the board had
@@ -421,10 +423,12 @@ export const LEAD_USAGE_UNREAD = "the lead's calls can't be read here"
 /**
  * The stats report (see statsReport) for range words like "7d" or "T-100..T-130": the board's
  * tasks and the archived ones. Read-only. A bad range gives the usage line. The word "full" in
- * `args` (or `full`) gives the full view with every explanation; else the summary view.
+ * `args` (or `full`) gives the full view with every explanation; else the summary view. The word
+ * "html" (only the owner's command, not `readOnly`) writes the web page and opens it.
  */
-export async function statsText($: Host, args: string, full?: boolean): Promise<string> {
-  const words = parseStatsArgs(args)
+export async function statsText($: Host, args: string, full?: boolean, readOnly = false): Promise<string> {
+  const parsed = parseStatsArgs(args)
+  const words = readOnly ? { ...parsed, html: false } : parsed
   const range = parseStatsRange(words.range, S.N.name)
   if (range.kind === 'bad') return range.message
   const b = await load($)
@@ -436,7 +440,35 @@ export async function statsText($: Host, args: string, full?: boolean): Promise<
   const team: TeamInput = { ...($.features.leadUsage ? await $.lead.usage(S.root, range, nowMs) : { leadProblem: LEAD_USAGE_UNREAD }), scouts: parseScoutUsage(await $.fs.read(scoutMemoryFile()).catch(() => null)) }
   const usd = (await $.session.usage().catch(() => null))?.cost?.usd
   if (typeof usd === 'number' && Number.isFinite(usd)) team.sessionUsd = usd
-  return statsReport({ tasks: b.tasks, archived: r.broken ? [] : r.archive.tasks, archiveProblem, range, nowMs, offsetMin: localOffset(), name: S.N.name, team, full: full ?? words.full })
+  const input = { tasks: b.tasks, archived: r.broken ? [] : r.archive.tasks, archiveProblem, range, nowMs, offsetMin: localOffset(), name: S.N.name, team, full: full ?? words.full }
+  if (!words.html) return statsReport(input)
+  // "html" (T-674): the same figures (statsData) as a web page, written to .<name>/stats.html and opened in the browser
+  const out = path(`${S.N.dir}/stats.html`)
+  const project = S.root.split(/[\\/]/).filter(Boolean).pop() ?? S.root
+  await $.fs.write(out, statsHtml(statsData(input), project))
+  const opened = await openInBrowser($, out)
+  return `${S.N.name} stats written to ${out}${opened ? ' (opened in your browser)' : ' (open it in your browser)'}`
+}
+
+/** The platform's words ('darwin', 'linux', 'win32'), from `uname -s` or the OS variable; undefined when neither tells. */
+async function platformOf($: Host): Promise<string | undefined> {
+  const u = await $.run(['uname', '-s'], { timeoutMs: 5000 }).catch(() => null)
+  const name = u && u.exitCode === 0 ? u.stdout.trim().toLowerCase() : ''
+  if (name.startsWith('darwin')) return 'darwin'
+  if (name.startsWith('linux') || name.endsWith('bsd')) return 'linux'
+  if (/^(mingw|msys|cygwin)/.test(name) || (await $.env('OS').catch(() => undefined)) === 'Windows_NT') return 'win32'
+  return undefined
+}
+
+/** Tries to open `file` in the browser (open / xdg-open / start); true when one of them worked. Every failure is ignored. */
+export async function openInBrowser($: Host, file: string): Promise<boolean> {
+  try {
+    for (const argv of openCommands(file, await platformOf($))) {
+      const r = await $.run(argv, { timeoutMs: 15000 }).catch(() => null)
+      if (r && r.exitCode === 0) return true
+    }
+  } catch { /* a host that can't run commands: the path is enough */ }
+  return false
 }
 
 export type In = Record<string, unknown>
@@ -755,7 +787,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
     case 'orgmem':
       return orgMemTool($, a)
     case 'stats':
-      return statsText($, str(a.range) ?? '', a.short !== true)
+      return statsText($, str(a.range) ?? '', a.short !== true, true)
     case 'setup_git':
       return setupGit($, 'the lead')
     case 'settings': {
