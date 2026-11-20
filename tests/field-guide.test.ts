@@ -39,6 +39,9 @@ test('lines are added once with the task id and date; a near duplicate is skippe
   expect(addLearned('', 'Learned:\n- snapshots are in tests/\n- Snapshots are in tests/.', 'T-8', D).added).toEqual(['snapshots are in tests/'])
   expect(sameLesson('the guard refuses a repo made in the project', 'The guard refuses a repo made in the project folder')).toBe(true)
   expect(sameLesson('the guard refuses a repo', 'snapshots are in tests/')).toBe(false)
+  // a correction that turns a note around is not a duplicate, so it gets in
+  expect(sameLesson('use sh scripts/test-files.sh to run one test', "don't use sh scripts/test-files.sh to run one test")).toBe(false)
+  expect(sameLesson('the guard allows a repo under /tmp', 'the guard does not allow a repo under /tmp')).toBe(false)
 })
 
 test('the guide keeps at most 60 lines, oldest dropped first; hand-written lines count too', () => {

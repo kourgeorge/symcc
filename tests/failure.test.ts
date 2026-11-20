@@ -329,6 +329,10 @@ test('endedEarlyLine gives the sentence that counted; endedEarlyNote is the warn
   expect(endedEarlyLine('Changed a.ts; tests/a.test.ts covers it.')).toBe('')
   // a fenced code block with a blank line in it is code, not the writer's words (checker's example): must not flag
   expect(endedEarlyLine("Changed it.\n\n```\nfoo\n\nbar still running; I'll continue when done\n```")).toBe('')
+  // T-600: a closing "Learned:" section does not hide the warning
+  const learned = '\n\nLearned:\n- Run one test with sh scripts/test-files.sh.\n- The guard refuses a new repo inside the project.'
+  expect(endedEarlyLine(`Changed a.ts.\n\nStarted the tests. ${s}${learned}`)).toBe(s)
+  expect(failAsks(`I changed a.ts.\nShould I also change b.ts?${learned}`)).toBe("The worker's report asks: Should I also change b.ts? Answer it in the chat so the lead adds it to the task, then Retry.")
   expect(endedEarlyNote('T-5', s)).toBe(`T-5's answer may have ended before its work finished: "${s}" (only a warning: its try goes on to the tests and merge as usual)`)
 })
 

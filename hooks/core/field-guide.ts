@@ -93,12 +93,22 @@ const lessonOf = (line: string) => line.replace(/^\s*[-*•]?\s*(?:T-\d+\s+)?(?:
 /** The words of `s`, lower case, for comparing. */
 const wordsOf = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
 
-/** Whether lessons `a` and `b` say the same (case-insensitive near-match): the same words, one holding the other, or mostly the same words. */
+/** Words that turn a lesson around ("don't use …", "… no longer …"); after wordsOf, "don't" reads "don t". */
+const NEGATION = /\b(?:not|no|never|none|nor|cannot|avoid|without|instead|t)\b/g
+
+/** How many turning-around words `words` (from wordsOf) has. */
+const negations = (words: string) => (words.match(NEGATION) ?? []).length
+
+/**
+ * Whether lessons `a` and `b` say the same (case-insensitive near-match): the same words, one holding the other, or
+ * mostly the same words. Not when one turns the other around ("don't use X" corrects "use X", so it is kept).
+ */
 export function sameLesson(a: string, b: string): boolean {
   const x = wordsOf(lessonOf(a))
   const y = wordsOf(lessonOf(b))
   if (!x || !y) return false
   if (x === y) return true
+  if (negations(x) !== negations(y)) return false
   if (Math.min(x.length, y.length) >= 20 && (x.includes(y) || y.includes(x))) return true
   const xs = new Set(x.split(' '))
   const ys = new Set(y.split(' '))
