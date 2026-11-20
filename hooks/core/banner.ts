@@ -10,7 +10,7 @@ import { roleMark, tryMark } from './roles'
 import { archivedLine, archivedNote, archivedOf } from './archive'
 import { boardTotal, fmtTotal, totalLine } from './runs'
 import { PLAN_NOTE } from './plan'
-import { type CrewBoard, withCrew, parseSearch, searchTasks, BOARD_STATUSES, statusCell, STEP_NOTE, STEP_WORD, TITLE_ROOM, TOTAL_FORMS, type TotalForm, rowCell, rowMark, APPROVED_NOTE } from './panel'
+import { type CrewBoard, withCrew, parseSearch, searchTasks, BOARD_STATUSES, statusCell, STEP_NOTE, STEP_WORD, TITLE_ROOM, rowStates, stateText, rowMark, APPROVED_NOTE } from './panel'
 import { approveRunning, checkStepNow, shownStatus } from './lead'
 import { whyFailed } from './failure'
 import { offStatusParts, testCommandsText } from './settings'
@@ -84,37 +84,17 @@ function triesNote(doing: (Pick<SymccTask, 'id' | 'status'> & Partial<Pick<Symcc
  * state columns). Every row shows the list's own mark and short status cell (rowMark, rowCell): a doing task "▶ 1h40m" (the
  * total work time of all its tries), in a check step its icon (STEP_ICON) in place of ▶ and the step word: "⧗ 9m",
  * "✎ 2h5m", "⌕ 5m", "⇢ 40m", in the merge line "⋯ 2h5m", with its try after it from
- * try 2 on ("T-434 ▶ 1h40m · try 3"); in a row narrower than `width` the time is left out; the others "? waiting",
- * "◆ review", "✗ failed". The state column has one width (the doing rows' state plus try, or the longest other cell),
- * so every title starts in one column. `since(id)` is when this session's worker started.
+ * try 2 on ("T-434 ▶ 1h40m (3)", see rowStates); in a row narrower than `width` the time is left out, then the try;
+ * the others "? waiting", "◆ review", "✗ failed". The state column has one width, so every title starts in one column. `since(id)` is when this session's worker started.
  */
 export function bandLeads(tasks: (Pick<SymccTask, 'id' | 'status' | 'runs'> & Partial<Pick<SymccTask, 'attempts' | 'note'>> & Pick<BoardTask, 'checking' | 'time_ask' | 'kind'>)[], nowMs: number, since: (id: string) => number | string | undefined = () => undefined, width = Infinity): Map<string, string> {
   const idWidth = Math.max(4, ...tasks.map(t => t.id.length))
-  const doing = tasks.filter(t => t.status === 'doing')
-  const tries = new Map(doing.map(t => [t.id, tryMark({ status: t.status, attempts: t.attempts ?? 0 })]))
-  const leadsWith = (form: TotalForm) => {
-    const cells = new Map(tasks.map(t => [t.id, rowCell(t, nowMs, since(t.id), form)]))
-    const cellWidth = Math.max(0, ...doing.map(t => cells.get(t.id)!.length))
-    // the try after the time: "▶ 1h40m · try 3"; with no time in any doing row, just "▶ try 3"
-    const sep = cellWidth ? ' · ' : ''
-    const tryWidth = Math.max(0, ...[...tries.values()].map(m => (m ? `${sep}${m}`.length : 0)))
-    const states = new Map(
-      tasks.map(t => {
-        if (t.status !== 'doing') return [t.id, cells.get(t.id)!]
-        const mark = tries.get(t.id)
-        return [t.id, `${cells.get(t.id)!.padEnd(cellWidth)}${(mark ? `${sep}${mark}` : '').padEnd(tryWidth)}`]
-      }),
-    )
-    const stateWidth = Math.max(0, ...[...states.values()].map(s => s.length))
-    return new Map(tasks.map(t => [t.id, `${t.id.padEnd(idWidth)} ${rowMark(t, nowMs)} ${states.get(t.id)!.padEnd(stateWidth)}`]))
-  }
-  // too narrow: the time is left out, so the titles keep TITLE_ROOM
-  let leads = new Map<string, string>()
-  for (const form of TOTAL_FORMS) {
-    leads = leadsWith(form)
-    if (Math.max(0, ...[...leads.values()].map(l => l.length)) + 1 + TITLE_ROOM <= width) break
-  }
-  return leads
+  const rows = tasks.map(t => ({ ...t, attempts: t.attempts ?? 0 }))
+  const front = (t: (typeof rows)[number]) => `${t.id.padEnd(idWidth)} ${rowMark(t, nowMs)} `
+  const frontWidth = Math.max(0, ...rows.map(t => front(t).length))
+  // too narrow: the time is left out, then the try, so the titles keep TITLE_ROOM
+  const { states } = rowStates(rows, nowMs, since, w => frontWidth + w + 1 + TITLE_ROOM <= width)
+  return new Map(rows.map(t => [t.id, `${front(t)}${stateText(states.get(t.id))}`]))
 }
 
 /** Whether a doing row in the band has a state to show (see bandLeads); without one its note says what goes on. */

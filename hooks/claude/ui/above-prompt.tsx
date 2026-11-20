@@ -43,7 +43,7 @@ export async function renderAbovePrompt($: $, e: Parameters<AbovePromptHook>[1],
   // the questions take the first rows, then the tasks that need you or run
   const asks = questions.slice(0, rows)
   const taskRows = Math.max(0, rows - asks.length)
-  // each row's front, lined up like the board list's: "T-434 ▶ prep · try 2", "T-440 ▶ 12m" (see bandLeads)
+  // each row's front, lined up like the board list's: "T-434 ✎ 2m (2)", "T-440 ▶ 12m" (see bandLeads)
   const shownTasks = live.slice(0, taskRows)
   const since = (id: string) => v?.working?.find(w => w.task === id)?.since
   const leads = bandLeads(shownTasks, nowMs, since, e.props.bodyColumns ?? 80)
