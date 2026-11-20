@@ -3,9 +3,9 @@
 // opencode/ entries, hosts/node/) import today from the engine side (hooks/app/, hooks/core/, hooks/board.ts,
 // hooks/name.ts, hooks/host.ts, hooks/process/, hooks/opencode/board-view.ts, types/), each from the file it lives in.
 // Nothing imports this file yet; the hosts still import those files directly.
-// It must not drift: tests/engine-names.mjs (run by tests/host-free.sh) fails when a host imports an engine name that
-// is missing here, or this file lists a name no host imports; tests/engine.test.ts checks each value is the same as in
-// its source file. A name the hosts take from two files (answerChoices: hooks/board.ts and hooks/core/panel.ts) is
+// The list may lag behind the hosts (T-645): a host starting or stopping to use an engine name needs no edit here.
+// tests/engine-names.mjs (run by tests/host-free.sh) only prints the differences as notes; refresh this list from
+// them when the split starts. tests/engine.test.ts checks each value is the same as in its source file. A name the hosts take from two files (answerChoices: hooks/board.ts and hooks/core/panel.ts) is
 // listed once, from hooks/board.ts, which re-exports hooks/core/.
 export { ASK_TOOL_DEF, hookFailed, listedKind } from './app/ask'
 export { setBoardMode, stopForQuit } from './app/board-mode'

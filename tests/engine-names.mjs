@@ -1,15 +1,19 @@
-// T-635: hooks/engine.ts lists exactly the engine names the hosts import, so the list can't drift silently.
+// T-635, softened by T-645: reports how hooks/engine.ts differs from the engine names the hosts import. The list may
+// lag behind the hosts: a host starting or stopping to use an engine name only prints a note here (exit 0), it never
+// fails the tests. Refresh hooks/engine.ts from these notes when the engine/client split starts.
 // Not a `claude plugin test` file (that runtime can't read files): tests/host-free.sh runs it with node or bun.
 // Usage: node tests/engine-names.mjs [folder]. It reads every static `import ... from '...'` and `export ... from '...'`
 // in the host files (hooks/claude/, hooks/register.tsx, hooks/opencode/ but board-view.ts, hosts/node/, opencode/;
 // not their tests/ folders) that names an engine file (hooks/app/, hooks/core/, hooks/process/, hooks/board.ts,
 // hooks/name.ts, hooks/host.ts, hooks/opencode/board-view.ts, types/), and the `export { ... } from` lines of
-// hooks/engine.ts. It fails when
+// hooks/engine.ts. It notes (drift, exit 0)
 //   1. a host imports an engine name hooks/engine.ts does not export;
 //   2. a host imports a value (not `type`) that hooks/engine.ts exports only as a type;
-//   3. hooks/engine.ts exports a name no host imports, or a name twice;
-//   4. hooks/engine.ts has a line that is not a comment or an `export { ... } from '<engine file>'`.
-// tests/engine.test.ts then checks each value hooks/engine.ts exports is the same as in its source file.
+//   3. hooks/engine.ts exports a name no host imports;
+//   4. a host imports all of an engine file (`import * as`), so its names can't be listed.
+// It fails (exit 1) only on the shape of hooks/engine.ts itself, which host work never changes: a line that is not a
+// comment or an `export { ... } from '<engine file>'`, a renamed name, or a name exported twice.
+// tests/engine.test.ts checks each value hooks/engine.ts exports is the same as in its source file.
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs'
 import { join, dirname, resolve, relative } from 'node:path'
 
@@ -38,6 +42,7 @@ const namesIn = (list, allTypes) => list.replace(/[{}]/g, '').split(',').map(s =
 })
 
 const fails = []
+const notes = []
 // what the hosts import: name -> { value: imported as a value somewhere, where: ['file (module)'] }
 const used = new Map()
 for (const file of hosts) {
@@ -46,7 +51,7 @@ for (const file of hosts) {
     if (!m[4].startsWith('.')) continue
     const mod = modOf(file, m[4])
     if (!isEngine(mod)) continue
-    if (!m[3].startsWith('{')) { fails.push(`${file} imports all of ${mod} (${m[3].trim()}): name what it uses`); continue }
+    if (!m[3].startsWith('{')) { notes.push(`${file} imports all of ${mod} (${m[3].trim()}): name what it uses`); continue }
     for (const { name, type } of namesIn(m[3], !!m[2])) {
       const u = used.get(name) ?? { value: false, where: [] }
       u.value ||= !type
@@ -75,15 +80,17 @@ for (const l of rest) fails.push(`${ENGINE}: a line that is not a re-export: ${l
 
 for (const [name, u] of [...used].sort()) {
   const e = listed.get(name)
-  if (!e) fails.push(`${ENGINE} is missing ${name}, imported by ${u.where.join(', ')}`)
-  else if (u.value && !e.value) fails.push(`${ENGINE} exports ${name} as a type, but ${u.where.join(', ')} import it as a value`)
+  if (!e) notes.push(`${ENGINE} is missing ${name}, imported by ${u.where.join(', ')}`)
+  else if (u.value && !e.value) notes.push(`${ENGINE} exports ${name} as a type, but ${u.where.join(', ')} import it as a value`)
 }
 for (const name of [...listed.keys()].sort()) {
-  if (!used.has(name)) fails.push(`${ENGINE} exports ${name}, which no host imports any more`)
+  if (!used.has(name)) notes.push(`${ENGINE} exports ${name}, which no host imports any more`)
 }
 
+for (const n of notes) console.log('engine-names: note (the list lags behind the hosts): ' + n)
 if (fails.length) {
   for (const f of fails) console.error('engine-names: ' + f)
   process.exit(1)
 }
-console.log(`engine-names: hooks/engine.ts lists the ${listed.size} engine names the hosts import`)
+if (notes.length) console.log(`engine-names: hooks/engine.ts lists ${listed.size} names; ${notes.length} differences from the hosts' imports (only a note)`)
+else console.log(`engine-names: hooks/engine.ts lists the ${listed.size} engine names the hosts import`)
