@@ -8,7 +8,7 @@
 // OpenTUI (T-500): opencode/tui.ts imports them by their written-out names (what OpenCode swaps for its own copies),
 // and loadTuiRuntime names a package that is missing or lacks a function instead of failing with a bare import error.
 import { test, expect } from 'bun:test'
-import { mergeRoles, mergeKinds, addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, type Board } from '../../board'
+import { mergeRoles, mergeKinds, when, addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, type Board } from '../../board'
 import type { PaneView } from '../../app/state'
 import { bandLines, bandDraw, BAND_CLICK_HINT, panelLines, panelKeys, parseViewFile, viewFileText, lineText, actionCommand, answerOptions, OWN_ANSWER, viewDefs, type ViewFile } from '../board-view'
 import { readFile } from 'node:fs/promises'
@@ -980,4 +980,16 @@ test('T-562: startTui: Settings opens Roles, a role\'s page turns it on and rese
     { sessionID: 'ses_1', name: 'symcc-scout', text: 'deps prompt Check the lock file too.' },
   ])
   board.stop()
+})
+
+test('T-574: OpenCode\'s task page shows local times with the shared when, and the role and kind info from view.json', () => {
+  const f = defsViewFile()
+  const tasks = f.view.tasks.map(t => (t.id === 'T-4' ? { ...t, role: 'tester', kind: 'bug' } : t))
+  const page = panelLines({ ...f, view: { ...f.view, tasks } }, { opened: 'T-4', cursor: 0 }, NOW, 200).lines.map(lineText).join('\n')
+  // the same local text Claude Code's page shows, not the UTC slice of the ISO time
+  expect(page).toContain(`added ${when(AT)}`)
+  expect(page).not.toContain('2026-11-19 11:00')
+  // the owner's tester role (its description and model) and bug kind (its description)
+  expect(page).toContain('tester — My tester · model opus')
+  expect(page).toContain('bug — A bug to fix')
 })

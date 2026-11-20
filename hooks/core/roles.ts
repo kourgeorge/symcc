@@ -137,7 +137,7 @@ export const BUILT_IN_ROLES: readonly string[] = [DEFAULT_ROLE, 'docs', 'refacto
 export const roleOf = (t: Pick<SymccTask, 'role'>): string => t.role?.trim() || DEFAULT_ROLE
 
 /** Role `name` from `roles` (any case); general when the name is missing. */
-export function findRole(roles: RoleDef[], name: string | undefined): RoleDef | undefined {
+export function findRole<R extends { name: string }>(roles: readonly R[], name: string | undefined): R | undefined {
   const n = (name ?? '').trim().toLowerCase() || DEFAULT_ROLE
   return roles.find(r => r.name.toLowerCase() === n)
 }

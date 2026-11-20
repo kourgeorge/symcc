@@ -14,7 +14,7 @@ import type { PaneView } from '../app/state'
 import type { OwnerQuestion } from '../core/questions'
 import {
   statusCounts, newestFirst, bandLeads, bandNote, boardBrand, boardWhere, modeLabel, modeOf, planBandText, withCrew, fileWaitText, questionsForYou,
-  bannerLines, bannerRule, footerRule, type BannerTone, panelSections, localOffset, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, ALL_CLEAR,
+  bannerLines, bannerRule, footerRule, type BannerTone, panelSections, localOffset, when, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, ALL_CLEAR,
   fittedCells, TITLE_ROOM, fitRow, rowExtra, questionsLabel, archivedOf, archivedNote, statusMark, detailRows, detailRowLines, wrapSegs, answerChoices, hintLineText,
   type KeyHint, type Seg, type BoardTask, asksMoreTime, gitNote, OVERTIME_OPTIONS, overtimeQuestion, timeLimitOf,
   waitsForYou, sortScouts, scoutListRows, scoutRow, scoutIcon, scoutTone, scoutHowTo, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem, scoutFile,
@@ -268,9 +268,6 @@ const TONE: Record<BannerTone, string> = { accent: 'ide', plain: 'text', dim: 'i
 
 /** The list's own colors per status (as Claude Code's list): failed red, review and waiting yellow, doing blue, done green. */
 const LIST_TONE: Record<string, string> = { backlog: 'inactive', review: 'warning', waiting: 'warning', failed: 'error', doing: 'ide', paused: 'permission', todo: 'text', done: 'success', dropped: 'inactive' }
-
-/** A short date and time from an ISO time: "2026-11-19 14:05". */
-const when = (iso: string) => (iso ? iso.slice(0, 16).replace('T', ' ') : '?')
 
 /** Whether the view still has a page for this id (a task or a question); an open task that left the view
  *  (archived, removed, or the view file gone) falls back to the list. */
@@ -717,7 +714,7 @@ function openedPage(f: ViewFile, id: string, nowMs: number, w: number): { lines:
   const t = v.tasks.find(x => x.id === id)
   if (!t) return null
   const lines: Line[] = [...wrapSegs([{ text: t.id, color: 'claude', bold: true }, { text: `  ${t.title}`, color: 'text', bold: true }], w)]
-  for (const r of detailRows(t, { roles: [], all: v.tasks, when, nowMs, ...(v.archived_done ? { archivedDone: v.archived_done } : {}) })) lines.push(...detailRowLines(r, w))
+  for (const r of detailRows(t, { roles: defsIn(f, 'roles'), kinds: defsIn(f, 'kinds'), all: v.tasks, when: iso => when(iso), nowMs, ...(v.archived_done ? { archivedDone: v.archived_done } : {}) })) lines.push(...detailRowLines(r, w))
   const asked = asksWhat(t, v.max_minutes)
   if (asked) {
     lines.push([{ text: ' ', color: 'text' }], ...wrapSegs([{ text: 'asks: ', color: 'warning', bold: true }, { text: asked, color: 'text' }], w))

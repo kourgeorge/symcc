@@ -63,7 +63,7 @@ export function mergeKinds(builtIn: KindDef[], project: KindDef[]): KindDef[] {
 }
 
 /** Kind `name` (any case) from `kinds`, or undefined. */
-export const findKind = (kinds: readonly KindDef[], name: string | undefined): KindDef | undefined => {
+export const findKind = <K extends { name: string }>(kinds: readonly K[], name: string | undefined): K | undefined => {
   const n = (name ?? '').trim().toLowerCase()
   return kinds.find(k => k.name === n)
 }

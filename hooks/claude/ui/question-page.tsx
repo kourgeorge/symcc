@@ -4,7 +4,7 @@
 import { answerChoices, type OwnerQuestion, type KeyHint } from '../../board'
 import { S } from '../../app/state'
 import { type $, panelValues } from '../panel'
-import { when } from '../../app/tools'
+import { when } from '../../core/days'
 import { answerOnBoard } from '../../app/questions'
 import type { PaneParts } from './parts'
 import { answerBox } from './answer-box'

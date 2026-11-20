@@ -11,6 +11,18 @@ import { newestFirst } from './settings'
 /** The owner's time zone offset now, in minutes east of UTC. */
 export const localOffset = (atMs: number = Date.now()) => -new Date(atMs).getTimezoneOffset()
 
+/**
+ * A short local date and time from an ISO time (stored in UTC), like "Nov 11, 09:30"; "?" when there is none or it
+ * can't be read. `offsetMin` is the time zone (as localOffset; by default the owner's at that moment). Both hosts'
+ * task pages use it, so they show the same text.
+ */
+export function when(iso: string, offsetMin?: number): string {
+  const ms = Date.parse(iso || '')
+  if (!Number.isFinite(ms)) return '?'
+  const off = offsetMin ?? localOffset(ms)
+  return new Date(ms + off * 60_000).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })
+}
+
 /** The local day of a moment, as "YYYY-MM-DD"; '' when the time can't be read. */
 export function dayOf(ms: number, offsetMin: number): string {
   if (!Number.isFinite(ms)) return ''

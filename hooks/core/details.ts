@@ -58,7 +58,7 @@ function originWordSegs(o: NonNullable<ReturnType<typeof originOf>>): Seg[] {
  * merges into), After (with a warning row for a task it waits for that merges into another branch), Research, Branch, Commits, Tries.
  * `when` turns an ISO time into a short date; `all` finds the tasks this one waits for.
  */
-export function detailRows(t: SymccTask, o: { roles: RoleDef[]; kinds?: KindDef[]; all: SymccTask[]; when: (iso: string) => string; nowMs: number; archivedDone?: string[] }): DetailRow[] {
+export function detailRows(t: SymccTask, o: { roles: readonly Pick<RoleDef, 'name' | 'description' | 'model'>[]; kinds?: readonly Pick<KindDef, 'name' | 'description'>[]; all: SymccTask[]; when: (iso: string) => string; nowMs: number; archivedDone?: string[] }): DetailRow[] {
   const R: DetailRow[] = []
   R.push({ label: 'Status', segs: [{ text: `${statusMark(t)} ${STATUS_WORD[t.status]}`, color: STATUS_BADGE[t.status], bold: true }, { text: ` · added ${o.when(t.created_at)} · changed ${o.when(t.updated_at)}`, color: 'inactive' }] })
   if (t.note) R.push({ label: STATE_LABEL, segs: [{ text: t.note, color: 'inactive', italic: true }] })

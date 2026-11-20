@@ -14,7 +14,7 @@ import { type DetailRow, type DiffFile, type Seg, STATUS_BADGE, STATUS_MARK, sta
 import { squash } from '../../core/text'
 import { historyEvent, historyTime, HISTORY_COLOR } from '../../core/history'
 import { S } from '../../app/state'
-import { when } from '../../app/tools'
+import { when } from '../../core/days'
 import type { PaneParts } from './parts'
 import type { $ } from '../panel'
 import { vsBadge, vsCallout, vsFold, vsFooter, vsHref, vsLink, mdLink, vsSection, vsTags } from './vscode'
