@@ -11,7 +11,7 @@ import { test, expect } from 'bun:test'
 import { SETTING_GROUPS, groupSummaryParts, taskActions, settingsKeys, mergeRoles, mergeKinds, when, addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, type Board } from '../../board'
 import type { PaneView } from '../../app/state'
 import { ICON } from '../../name'
-import { bandLines, bandDraw, BAND_CLICK_HINT, panelLines, panelKeys, parseViewFile, viewFileText, lineText, actionCommand, answerOptions, OWN_ANSWER, viewDefs, panelTaskActions, TASK_ACTION_COMMANDS, SETTINGS_OPEN, approveSent, APPROVE_SENT_MS, type ViewFile } from '../board-view'
+import { bandLines, bandDraw, BAND_CLICK_HINT, panelLines, panelKeys, parseViewFile, viewFileText, lineText, actionCommand, answerOptions, OWN_ANSWER, viewDefs, panelTaskActions, TASK_ACTION_COMMANDS, SETTINGS_OPEN, approveSent, APPROVE_SENT_MS, drawnLines, type ViewFile } from '../board-view'
 import { readFile } from 'node:fs/promises'
 import { rowEndBoard, ROW_END, ROW_END_NOW } from '../../../tests/row-end-cases'
 import { taskSections } from '../../core/task-sections'
@@ -265,7 +265,7 @@ test('startTui on a fake OpenCode TUI: reads the view file above its folder, dra
   const ctx: TuiContext = {
     location: { directory: '/work/proj/src' },
     theme: { primary: 'blue' },
-    renderer: { width: 120 },
+    renderer: { width: 120, height: 200 },
     client: { session: { command: async input => void sent.push(input) } },
     keymap: { layer: factory => void layers.push(factory()) },
     ui: {
@@ -384,7 +384,7 @@ test('T-584: a task page offers every one of core\'s taskActions with a key (but
   const ctx: TuiContext = {
     location: { directory: '/work/proj' },
     theme: {},
-    renderer: { width: 140 },
+    renderer: { width: 140, height: 200 },
     client: { session: { command: async input => void sent.push(input) } },
     keymap: { layer: () => undefined },
     ui: {
@@ -479,7 +479,7 @@ test('startTui: when the open task leaves the view (or the view file goes away),
   const ctx: TuiContext = {
     location: { directory: '/work/proj' },
     theme: {},
-    renderer: { width: 120 },
+    renderer: { width: 120, height: 200 },
     client: { session: { command: async () => undefined } },
     keymap: { layer: () => undefined },
     ui: {
@@ -565,7 +565,7 @@ function fakeCtx(theme: unknown, opens = true) {
   const ctx: TuiContext = {
     location: { directory: '/work/proj' },
     theme,
-    renderer: { width: 120 },
+    renderer: { width: 120, height: 200 },
     client: { session: { command: async () => undefined } },
     keymap: { layer: factory => void layers.push(factory()) },
     ui: {
@@ -694,7 +694,7 @@ test('T-567: a click on the band above the prompt: the header opens the board pa
   expect(lineText(bandDraw(f, NOW, 40).lines[0]!)).not.toContain('(click: board)')
   const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)]])
   const fc = fakeCtx({})
-  const board = startTui({ ...fc.ctx, renderer: { width: 164 } }, { runtime: fakeRuntime(), readText: async p => files.get(p) ?? Promise.reject(new Error('missing')), every: () => () => undefined, now: () => NOW })
+  const board = startTui({ ...fc.ctx, renderer: { width: 164, height: 200 } }, { runtime: fakeRuntime(), readText: async p => files.get(p) ?? Promise.reject(new Error('missing')), every: () => () => undefined, now: () => NOW })
   await board.refresh()
   const band = fc.slots.find(s => s.append === 'session.composer.top')!.render({ sessionID: 's' } as never)
   const rows = () => rowEls(band)
@@ -747,7 +747,7 @@ test('T-558: the mouse works like the keys: a click on a row opens its task, on 
   const ctx: TuiContext = {
     location: { directory: '/work/proj' },
     theme: {},
-    renderer: { width: 120 },
+    renderer: { width: 120, height: 200 },
     client: { session: { command: async input => void sent.push(input) } },
     keymap: { layer: () => undefined },
     ui: {
@@ -817,21 +817,30 @@ test('T-558: the mouse works like the keys: a click on a row opens its task, on 
   await clickHint('b back')
   // the mouse wheel scrolls the list down and back up, never above its top
   const scroll = (direction: string) => (panel.props.onMouseScroll as (e: unknown) => void)({ type: 'scroll', scroll: { direction }, stopPropagation: () => undefined })
+  // T-627: OpenTUI lays the panel out 18 rows high and says so (onSizeChange): the panel is drawn exactly that high
+  const full = panelLines(f, { opened: '', cursor: 0, groups: board.state().groups }, NOW, 98)
+  ;(panel as El & { height?: number }).height = 18
+  ;(panel.props.onSizeChange as () => void)()
   const before = rowEls(panel).map(r => r.text)
+  expect(before.length).toBe(18)
   scroll('down')
   expect(board.state().scroll).toBe(3)
   const after = rowEls(panel).map(r => r.text)
-  expect(after.length).toBe(before.length - 3)
-  // the banner and the footer stay; the list's first lines scroll away
-  expect(after[0]).toBe(before[0])
-  expect(after.at(-1)).toBe(before.at(-1))
+  expect(after.length).toBe(18)
+  // the banner, the tabs and the footer stay; the list moves up by 3 drawn lines
+  expect(after.slice(0, full.fixed)).toEqual(before.slice(0, full.fixed))
+  expect(after.slice(-2)).toEqual(before.slice(-2))
+  expect(after.slice(full.fixed, -5)).toEqual(before.slice(full.fixed + 3, -2))
   scroll('up')
   scroll('up')
   expect(board.state().scroll).toBe(0)
   for (let i = 0; i < 50; i++) scroll('down')
-  // it stops at the list's last line
-  expect(rowEls(panel).map(r => r.text).filter(t => t.includes('▸ Dropped')).length).toBe(1)
-  expect(board.state().scroll).toBe(panelLines(f, { opened: '', cursor: 0, groups: board.state().groups, scroll: 999 }, NOW, 98).scroll)
+  // it stops when the list's last line is at the bottom: the last screenful is full
+  const end = rowEls(panel).map(r => r.text)
+  expect(end.length).toBe(18)
+  expect(end.at(-3)).toBe(lineText(full.lines.at(-3)!))
+  expect(board.state().scroll).toBe(full.bodyLines - (18 - full.fixed - 2))
+  expect(board.state().scroll).toBe(panelLines(f, { opened: '', cursor: 0, groups: board.state().groups, scroll: 999, rows: 18 }, NOW, 98).scroll)
   board.stop()
 })
 
@@ -952,7 +961,7 @@ test('T-559: startTui: t, s and c switch tabs (a click on a tab too); on a scout
   const ctx: TuiContext = {
     location: { directory: '/work/proj' },
     theme: {},
-    renderer: { width: 140 },
+    renderer: { width: 140, height: 200 },
     client: { session: { command: async input => void sent.push(input) } },
     keymap: { layer: () => undefined },
     ui: {
@@ -1144,7 +1153,7 @@ test('T-562: startTui: Settings opens Roles, a role\'s page turns it on and rese
   const ctx: TuiContext = {
     location: { directory: '/work/proj' },
     theme: {},
-    renderer: { width: 140 },
+    renderer: { width: 140, height: 200 },
     client: { session: { command: async input => void sent.push(input) } },
     keymap: { layer: () => undefined },
     ui: {
@@ -1245,7 +1254,7 @@ test('T-583: on a waiting task\'s and a question\'s page each choice is a clicka
   const ctx: TuiContext = {
     location: { directory: '/work/proj' },
     theme: {},
-    renderer: { width: 120 },
+    renderer: { width: 120, height: 200 },
     client: { session: { command: async input => void sent.push(input) } },
     keymap: { layer: () => undefined },
     ui: {
@@ -1343,7 +1352,7 @@ test('T-585: the Settings tab\'s groups open and close like the Claude Code boar
   const ctx: TuiContext = {
     location: { directory: '/work/proj' },
     theme: {},
-    renderer: { width: 140 },
+    renderer: { width: 140, height: 200 },
     client: { session: { command: async input => void sent.push(input) } },
     keymap: { layer: () => undefined },
     ui: {
@@ -1444,7 +1453,7 @@ test('T-580: opening a task\'s page in the TUI reads its latest report from its 
   const ctx: TuiContext = {
     location: { directory: '/work/proj' },
     theme: {},
-    renderer: { width: 120 },
+    renderer: { width: 120, height: 200 },
     client: { session: { command: async () => undefined } },
     keymap: { layer: () => undefined },
     ui: {
@@ -1646,4 +1655,137 @@ test('T-619: startTui: the Org-mem row opens the page; x on a note asks, Yes sen
   await board.press('back', 'ses_1')
   expect([board.state().tab, board.state().opened]).toEqual(['settings', ''])
   board.stop()
+})
+
+/** T-627: the view file with T-2 in review on a long page: a title that wraps, a long history with lines that wrap, and
+ *  (with `report`) a long report; `entries` history lines. */
+function longPageViewFile(entries = 24): ViewFile {
+  const f = sectionsViewFile()
+  const long = 'and then it went on to change a good many other things in the same folder, which takes more than one line'
+  const history = Array.from({ length: entries }, (_, i) => ({ kind: 'step', at: AT, text: `step ${i + 1}: ${i % 3 ? 'short' : long}` }))
+  const tasks = f.view.tasks.map(t => (t.id === 'T-2' ? { ...t, title: 'a reviewed change whose title is long enough to wrap onto a second line here', history } : t)) as ViewFile['view']['tasks']
+  return { ...f, view: { ...f.view, tasks } }
+}
+
+const LONG_REPORT = { file: '.symcc/reports/T-2-try-2.md', text: Array.from({ length: 30 }, (_, i) => (i % 4 ? `report line ${i + 1}` : `report line ${i + 1} is a long one that says a lot about what was done, so it has to wrap in a narrow panel`)).join('\n') }
+
+/** Checks one page at every scroll from 0 to past its end, `rows` high and `w` wide: the same fixed first lines (the
+ *  banner, tabs, rule and the page's title), then a contiguous window of the body's drawn lines (no repeats, no gaps,
+ *  nothing wider than the panel), blank rows only past the body's end, the footer last; and the last screenful full. */
+function checkScrolling(draw: (scroll: number, rows?: number) => ReturnType<typeof panelLines>, rows: number, w: number, head: string[]) {
+  const all = draw(0)
+  for (const l of all.lines.slice(0, -1)) expect(lineText(l).length <= w).toBe(true)
+  for (const l of all.lines) for (const s of l) expect(s.text).not.toContain('\n')
+  // what stays at the top this high (a panel too low for the page's title lets the title scroll with the rest)
+  const fixed = draw(0, rows).fixed
+  expect(fixed <= all.fixed).toBe(true)
+  const body = all.lines.slice(fixed, -2).map(lineText)
+  expect(body.length).toBe(all.bodyLines + all.fixed - fixed)
+  const top = all.lines.slice(0, fixed).map(lineText)
+  for (const h of head) expect(top).toContain(h)
+  const room = rows - fixed - 2
+  expect(body.length).toBeGreaterThan(room)
+  const last = body.length - room
+  const seen: string[] = []
+  for (let s = 0; s <= last + 10; s++) {
+    const d = draw(s, rows)
+    const text = d.lines.map(lineText)
+    expect(text.length).toBe(rows)
+    expect(d.hits.length).toBe(rows)
+    expect(d.fixed).toBe(fixed)
+    expect(text.slice(0, d.fixed)).toEqual(top)
+    expect(d.scroll).toBe(Math.min(s, last))
+    // the window: exactly the body's drawn lines from the scroll on, as many as fit (the last screenful stays full)
+    expect(text.slice(d.fixed, -2)).toEqual(body.slice(d.scroll, d.scroll + room))
+    expect(text.slice(-2)).toEqual(all.lines.slice(-2).map(lineText))
+    if (s % room === 0 && s <= last) seen.push(...text.slice(d.fixed, -2))
+  }
+  // screen after screen, the windows go over the whole body with no gap and no repeat
+  const tail = draw(last, rows).lines.slice(fixed, -2).map(lineText)
+  const covered = [...seen, ...tail.slice(seen.length - last)]
+  expect(covered).toEqual(body)
+}
+
+test('T-627: a long task page scrolls by drawn lines under a fixed banner, tabs, title and badge; the last screenful stays full', () => {
+  const f = longPageViewFile()
+  const w = 60
+  const draw = (scroll: number, rows?: number) => panelLines(f, { opened: 'T-2', cursor: 0, scroll, taskReport: LONG_REPORT, ...(rows ? { rows } : {}) }, NOW, w)
+  const all = draw(0)
+  const text = all.lines.map(lineText)
+  // the title wraps onto two drawn lines, and both stay at the top with the badge
+  const title = text.slice(0, all.fixed)
+  expect(title.some(l => l.startsWith('T-2 a reviewed change'))).toBe(true)
+  expect(title.filter(l => /^\[.*\]$/.test(l)).length).toBe(1)
+  expect(title.join(' ')).toContain('onto a second line here')
+  expect(text.slice(all.fixed).some(l => l.includes('▍History'))).toBe(true)
+  // the long history and report lines are broken into rows the panel's width, keeping every word in order
+  expect(text.join(' ').replace(/\s+/g, ' ')).toContain('report line 1 is a long one that says a lot about what was done, so it has to wrap in a narrow panel')
+  const firstTitle = title.findIndex(l => l.startsWith('T-2'))
+  checkScrolling(draw, 25, w, [title[firstTitle]!, title.find(l => l.startsWith('['))!])
+  // too low to keep the title too: the banner and tabs stay, the title scrolls with the page
+  checkScrolling(draw, 12, w, [title.find(l => l.startsWith('[Tasks]'))!])
+  expect(draw(0, 12).fixed < all.fixed).toBe(true)
+})
+
+test('T-627: the list, a scout page and Settings scroll the same way: fixed banner and tabs (and the page title), a contiguous window, a full last screenful', () => {
+  const f = scoutsViewFile()
+  const w = 50
+  const longPrompt = Array.from({ length: 12 }, (_, i) => `Look at part ${i + 1} of the docs and say what is stale in it, with the file name and the line`).join('\n')
+  const g = { ...f, view: { ...f.view, scouts: f.view.scouts.map(x => (x.name === 'docs-check' ? { ...x, prompt: longPrompt } : x)) } }
+  checkScrolling((scroll, rows) => panelLines(g, { tab: 'scouts', opened: 'docs-check', cursor: 0, scroll, ...(rows ? { rows } : {}) }, NOW, w), 20, w, [])
+  const scoutTop = panelLines(g, { tab: 'scouts', opened: 'docs-check', cursor: 0 }, NOW, w)
+  expect(scoutTop.lines.slice(0, scoutTop.fixed).map(lineText).some(l => l.startsWith('docs-check'))).toBe(true)
+  checkScrolling((scroll, rows) => panelLines(f, { tab: 'settings', opened: '', cursor: 0, settingsOpen: ALL_GROUPS, scroll, ...(rows ? { rows } : {}) }, NOW, w), 20, w, [])
+  const lf = longPageViewFile()
+  checkScrolling((scroll, rows) => panelLines(lf, { opened: '', cursor: 0, groups: { done: true }, scroll, ...(rows ? { rows } : {}) }, NOW, w), 14, w, [])
+})
+
+test('T-627: in the TUI, the panel is drawn exactly its height; a page that gets shorter after scrolling leaves no rows behind', async () => {
+  const f = longPageViewFile(40)
+  const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)], ['/work/proj/.symcc/reports/T-2-try-2.md', LONG_REPORT.text]])
+  const fc = fakeCtx({})
+  const board = startTui(fc.ctx, { runtime: fakeRuntime(), readText: async p => files.get(p) ?? Promise.reject(new Error('missing')), every: () => () => undefined, now: () => NOW })
+  await board.refresh()
+  const panel = fc.slots.find(s => s.append === 'session.panel')!.render({ name: BOARD_PANEL, sessionID: 's', width: 62, focused: true, close: () => undefined, focus: () => undefined } as never) as El
+  // before OpenTUI lays the panel out, its height is the screen's less OpenCode's own lines
+  expect(shown(panel).length).toBe(200 - 2)
+  ;(panel as El & { height?: number }).height = 22
+  ;(panel.props.onSizeChange as () => void)()
+  expect(shown(panel).length).toBe(22)
+  const ids = panelLines(f, { opened: '', cursor: 0 }, NOW, 60).ids
+  for (let i = 0; i < ids.indexOf('T-2'); i++) await board.press('down', 's')
+  await board.press('open', 's')
+  await new Promise<void>(res => setTimeout(res, 0))
+  const head = shown(panel).slice(0, panelLines(f, { opened: 'T-2', cursor: 0 }, NOW, 60).fixed)
+  const wheel = (direction: string) => (panel.props.onMouseScroll as (e: unknown) => void)({ type: 'scroll', scroll: { direction }, stopPropagation: () => undefined })
+  for (let i = 0; i < 100; i++) wheel('down')
+  const end = shown(panel)
+  expect(end.length).toBe(22)
+  expect(end.slice(0, head.length)).toEqual(head)
+  expect(board.state().scroll).toBeGreaterThan(0)
+  // the page gets much shorter (a short history, no report): the scroll comes back within it, and every row is drawn
+  // again, from the page's own lines and blank rows, with nothing of the long page left
+  const short = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => (t.id === 'T-2' ? { ...t, title: 'short', history: [], runs: [] } : t)) } }
+  files.set('/work/proj/.symcc/view.json', viewFileText(short))
+  await board.refresh()
+  const after = shown(panel)
+  expect(after.length).toBe(22)
+  expect(board.state().scroll).toBe(panelLines(short, { opened: 'T-2', cursor: 0, scroll: 999, rows: 22 }, NOW, 60).scroll)
+  expect(after).toEqual(panelLines(short, { opened: 'T-2', cursor: 0, scroll: board.state().scroll, rows: 22 }, NOW, 60).lines.map(lineText))
+  expect(after.some(l => l.includes('step ') || l.includes('report line'))).toBe(false)
+  board.stop()
+})
+
+test('T-627: drawnLines cuts a line into the rows it takes: at line breaks, and between words at the width, under its indent, keeping colors and hits', () => {
+  const hit = { key: 'd' as const }
+  const rows = drawnLines([{ text: '  first part of a line', color: 'text', bold: true }, { text: ' that goes on in grey\nand a second one', color: 'inactive', hit }], 16)
+  expect(rows.map(lineText)).toEqual(['  first part of', '  a line that', '  goes on in', '  grey', 'and a second one'])
+  for (const r of rows) expect(lineText(r).length <= 16).toBe(true)
+  expect(rows[1]!.find(s => s.text.includes('that'))).toEqual({ text: ' that', color: 'inactive', hit })
+  expect(rows[1]!.find(s => s.text === 'a line')?.bold).toBe(true)
+  // a short line is kept as it is; an empty one is one blank row; a word longer than the row is cut
+  const short = [{ text: 'ok', color: 'text' }]
+  expect(drawnLines(short, 16)).toEqual([short])
+  expect(drawnLines([], 16).map(lineText)).toEqual([' '])
+  expect(drawnLines([{ text: 'x'.repeat(20), color: 'text' }], 8).map(lineText)).toEqual(['xxxxxxxx', 'xxxxxxxx', 'xxxx'])
 })

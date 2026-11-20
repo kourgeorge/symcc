@@ -104,6 +104,18 @@ export type TuiMouseEvent = { readonly type?: string; readonly button?: number; 
 /** How many lines one turn of the mouse wheel scrolls (as OpenTUI's own scroll boxes). */
 export const WHEEL_LINES = 3
 
+/** How many rows of OpenCode's screen are not the panel's (its own header and status lines), for the panel's height
+ *  while OpenTUI has not laid the panel out yet. */
+export const SCREEN_ROWS_AROUND = 2
+
+/** The panel's height in rows (T-627): the panel box's own height once OpenTUI has laid it out; before that the
+ *  terminal's height less OpenCode's lines around the panel; and 24 rows (a plain terminal) when neither is known. */
+export function panelRows(boxHeight: unknown, screenHeight: unknown): number {
+  if (typeof boxHeight === 'number' && boxHeight > 0) return Math.floor(boxHeight)
+  if (typeof screenHeight === 'number' && screenHeight > SCREEN_ROWS_AROUND) return Math.floor(screenHeight) - SCREEN_ROWS_AROUND
+  return 24
+}
+
 /** One keymap command (KeymapCommand), as far as symcc uses it. */
 export type TuiKeyCommand = {
   readonly id?: string
@@ -125,7 +137,7 @@ export type TuiKeyLayer = { readonly mode?: string; readonly enabled?: boolean |
 export type TuiContext = {
   readonly location: { readonly directory: string } | undefined
   readonly theme: unknown
-  readonly renderer: { readonly width?: number }
+  readonly renderer: { readonly width?: number; readonly height?: number }
   readonly client: { readonly session: { readonly command: (input: { sessionID: string; name: string; text: string }) => Promise<void> } }
   readonly keymap: { readonly layer: (factory: () => TuiKeyLayer) => void }
   readonly ui: {
@@ -296,8 +308,9 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   // row and Stage line show it started ("✎ prep"), not "ready for review"
   const [approving, setApproving] = r.createSignal<ApproveSent | undefined>(undefined)
   let width = 80
-  // the panel's height in rows, once OpenTUI has laid it out (it bounds the scroll)
-  let rows: number | undefined
+  // the panel's height in rows (panelRows): it bounds the scroll, and the panel is drawn exactly that high, so the
+  // footer stays at the bottom and no row of a longer page is left over; OpenTUI says when the box's size changes
+  const [rows, setRows] = r.createSignal(panelRows(undefined, ctx.renderer.height))
   /** Back to the list when the open task or scout left the view, and to the scout's page when its open run did. */
   const keepPage = (f: ViewFile | null) => {
     if (opened() && !hasPage(f, opened(), tab())) openPage('')
@@ -307,6 +320,8 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     const f = await readViewFile(dir, d.readText, name)
     setFile(f)
     setNow(d.now())
+    // a page that got shorter keeps its scroll within its new length
+    setScroll(draw().scroll)
     // once the board shows the approve's step (or the task left review, or it is too old), the board carries it
     if (approving() && !approveSent(f, approving(), now())) setApproving(undefined)
     // the open task left the view: back to the list, so the list's keys work again
@@ -378,7 +393,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   /** Whether the cursor is on a page's own rows (a scout's runs, the Roles or Kinds list), not the tab's list. */
   const onPage = () => tab() !== 'tasks' && !!opened()
   const draw = () => {
-    return panelLines(file(), { tab: tab(), opened: opened(), run: run(), report: report(), cursor: onPage() ? runCursor() : cursor(), groups: groups(), settingsOpen: settingsOpen(), scroll: scroll(), ...(rows ? { rows } : {}), ...(sent() ? { sent: sent()! } : {}), ...(taskReport() ? { taskReport: taskReport()! } : {}), ...(approving() ? { approving: approving()! } : {}) }, now(), width)
+    return panelLines(file(), { tab: tab(), opened: opened(), run: run(), report: report(), cursor: onPage() ? runCursor() : cursor(), groups: groups(), settingsOpen: settingsOpen(), scroll: scroll(), rows: rows(), ...(sent() ? { sent: sent()! } : {}), ...(taskReport() ? { taskReport: taskReport()! } : {}), ...(approving() ? { approving: approving()! } : {}) }, now(), width)
   }
   /** The rows of the Tasks tab's list, even while a task's page is open (whose draw has no rows), so "open this id"
    *  can put the list cursor on that task and b comes back to it (T-568). */
@@ -645,11 +660,16 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
           void click(hit, session())
         }
         r.setProp(col, 'onMouseScroll', (e: TuiMouseEvent) => input.name === BOARD_PANEL && wheel(e))
+        // OpenTUI calls onSizeChange when the laid-out box changes size (as on a terminal resize): draw that high
+        r.setProp(col, 'onSizeChange', () => {
+          const n = panelRows((col as { height?: unknown }).height, ctx.renderer.height)
+          if (n !== rows()) setRows(n)
+        })
         r.insert(col, () => {
           if (input.name !== BOARD_PANEL) return null
           width = Math.max(20, (input.width || 80) - 2)
           const h = (col as { height?: unknown }).height
-          rows = typeof h === 'number' && h > 0 ? h : undefined
+          if (typeof h === 'number' && h > 0 && Math.floor(h) !== rows()) setRows(Math.floor(h))
           panelSession = input.sessionID
           return drawn('board panel', draw, onHit)
         })
