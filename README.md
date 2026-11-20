@@ -29,37 +29,36 @@
   <img src="docs/demo.svg" alt="symcc demo" width="860">
 </p>
 
-You give a coding agent a task and watch it work. Meanwhile new ideas come up, and you
-either interrupt the agent or try to remember them. Big jobs get worse: a dozen things
-to fix, no clear view of which change belongs to which item, and the small ones quietly
-drop out. The bottleneck isn't how fast the agent writes code. It's keeping track of the work.
+## What symcc is
 
-symcc turns your Claude Code chat into a lead that takes your ideas at any time, puts
-them on a board, and has a team of workers build them. It is vibe coding, with a team
-behind it: you keep talking, and the work keeps moving.
+You give a coding agent a task and watch it work. Meanwhile new ideas come up, and you either interrupt the agent or try to remember them. With a big job it gets worse: a dozen things to fix, no clear view of which change belongs to which item, and the small ones quietly drop out.
+
+The slow part is not writing code. It is keeping track of the work.
+
+symcc is an agent organization that runs inside your coding agent. Your chat becomes a lead that takes your ideas at any time, puts them on a board, and has workers build them. You keep talking, and the work keeps moving.
 
 ## Why symcc
 
 - **See everything.** A live board shows what is running, what is waiting and what needs you.
 - **Know why.** Every task and commit records who asked for it and why, so you can go from a line of code back to the request.
-- **Order handled for you.** The lead decides which tasks wait for others and which run in parallel. You think about the next question while the team works on the next task.
-- **Stay in control.** Review each diff before it merges, edit it, reject it, or disable symcc entirely with `/symcc-disable`.
+- **Order handled for you.** The lead decides which tasks wait for others and which run in parallel.
+- **Stay in control.** Review each diff before it merges, edit it, reject it, or turn symcc off with `/symcc-disable`.
 
-The main parts:
+## The parts, and why each one exists
 
-- **Scouts:** helpers on a timer that look but don't change your project (symcc refuses their file edits and git writes; see [what is enforced](docs/guide.md#scouts)). A scout is a short instruction file ("look for code with no tests") that runs again and again and reports what it finds. See [scouts](docs/guide.md#scouts).
-- **Lead:** your normal Claude Code chat. It turns scout findings and your ideas into tasks, leads the workers, tests and merges, and tells you what matters. Change your mind any time: "do T-6 first".
-- **Board:** one list for work you asked for and work scouts found: todo / doing / review / done.
-- **Workers:** parallel agents, each in its own git worktree and branch, so your branch is untouched until merge.
-- **Tests before merge:** your test commands must pass; if they fail, a new worker gets the output and tries again.
-- **Review:** see the diff, then approve, or reject with a reason. See [approval before merge](docs/guide.md#approval-before-merge).
+- **Lead.** It is your normal chat. You talk to one place, and the lead turns ideas into tasks and decides their order, so you do not have to split and track the work yourself. Change your mind any time: "do T-6 first".
+- **Board.** One list for work you asked for and work scouts found: todo, doing, review, done. It is a plain file, so the work is still there after the chat ends.
+- **Workers.** Parallel agents, each with its own git folder and branch, so they cannot overwrite each other and your branch stays untouched until a merge. Each task also lists the files it may change. That list makes a check possible: an edit outside it is refused and becomes a question to you, instead of a surprise in the diff.
+- **Scouts.** Helpers on a timer that only look. They find bugs, missing tests and outdated parts while you are away. A scout cannot change your project: symcc refuses its file edits and git writes, and its findings become tasks only if the lead adds them. See [scouts](docs/guide.md#scouts).
+- **Checker (optional).** A fresh agent that did not write the change tries to break it before the tests run. It is off by default because it costs time and tokens.
+- **Tests before merge.** Your test commands must pass. If they fail, a new worker gets the output and tries again.
+- **Review.** You can see the diff, then approve, or reject with a reason. See [approval before merge](docs/guide.md#approval-before-merge).
+
+The file checks above (the guards) catch honest mistakes. They are not a security boundary and do not stop an agent that works around them on purpose. The guide explains this and the other design choices in [Why it is built this way](docs/guide.md#why-it-is-built-this-way): why one merge queue, why shared agent notes (org-mem) go through the lead, and why investigations wait for you.
 
 ### How a change gets merged
 
-Finished tasks do not merge all at once into a moving branch. They take turns in one queue for the
-whole project, so the code a task was tested with is exactly the code that merges. At its turn a
-task catches up with your branch, runs your tests and then merges (or waits for your review). Any
-failure counts as one normal failed try. Details: [the way to the merge](docs/guide.md#the-way-to-the-merge).
+Finished tasks do not all merge at once into a moving branch. They take turns in one queue for the whole project. This way the code a task was tested with is exactly the code that merges. At its turn a task catches up with your branch, runs your tests, and then merges (or waits for your review). Any failure counts as one normal failed try. Details: [the way to the merge](docs/guide.md#the-way-to-the-merge).
 
     hand-back → prep → checker (if on) → queue → catch up → tests → review or merge
 
@@ -91,7 +90,7 @@ The lead keeps it moving; you come back to merged work and a few questions.
 - scouts, retries and a health check keep the work going without you pushing it
 - scouts keep finding work and the lead keeps it moving while you are away
 
-**Today** symcc runs inside Claude Code, and work runs while your session is open (it stops when you close it and picks up next time). A standalone version that works with other coding agents too is being planned.
+**Where it runs.** symcc is a plugin for Claude Code and for OpenCode. Work runs while your session is open: it stops when you close it and picks up next time. A small command-line version that runs the same engine without a chat window exists as a test of the idea (see the [guide](docs/guide.md#running-symcc-without-claude-code)).
 
 
 ## How it works
@@ -104,7 +103,7 @@ The lead keeps it moving; you come back to merged work and a few questions.
   <a href="docs/video/symcc.mp4"><b>▶ Watch the full video</b></a> (78 seconds, no sound)
 </p>
 
-You ask (or a scout finds something). The lead makes tasks, sets their order and the files each may change. Workers build in parallel. symcc checks the scope and runs your tests, you review, and it merges. The [steps in full](docs/reference.md#how-it-works-step-by-step) and the [guide](docs/guide.md#a-tasks-life) have the rest.
+In short: you ask, or a scout finds something. The lead makes tasks and sets their order and files. Workers build in parallel. symcc checks the files and runs your tests, you review, and it merges. The [steps in full](docs/reference.md#how-it-works-step-by-step) and the [guide](docs/guide.md#a-tasks-life) have the rest.
 
 ## Install
 

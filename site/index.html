@@ -32,17 +32,19 @@
 
   <section>
     <h2 id="what-it-is">What it is</h2>
+    <p>Coding agents are fast. The hard part is keeping track of the work: new ideas come up while an agent is busy, and small items quietly drop out. symcc keeps that list for you and has a team work through it.</p>
     <ul class="parts">
-      <li><strong>The lead</strong> is your normal chat. It takes your ideas at any time, turns them into tasks, decides their order and asks you only for real decisions.</li>
-      <li><strong>Workers</strong> build tasks in parallel, each in its own git worktree and branch, so your branch is untouched until merge.</li>
-      <li><strong>Scouts</strong> run on a timer and only look: they find bugs, missing tests and outdated parts, and the lead turns what they find into tasks.</li>
-      <li><strong>The merge queue</strong> checks each change stays inside its files, runs your tests, lets you review the diff, and merges one change at a time.</li>
+      <li><strong>The lead</strong> is your normal chat. You talk to one place, at any time. It turns your ideas into tasks, decides their order and asks you only for real decisions.</li>
+      <li><strong>Workers</strong> build tasks in parallel. Each has its own folder and branch, so they cannot overwrite each other and your branch is untouched until merge. Each task lists the files it may change, so a stray edit is refused instead of showing up in the diff.</li>
+      <li><strong>Scouts</strong> run on a timer and only look. They find bugs, missing tests and outdated parts while you are away. The lead turns what they find into tasks, so a scout never changes your project by itself.</li>
+      <li><strong>The merge queue</strong> lets finished changes take turns: it runs your tests, lets you review the diff, and merges one change at a time. This way the code that was tested is exactly the code that merges.</li>
     </ul>
+    <p>symcc also has an optional checker, an agent that tries to break each change before the tests run. The file checks catch honest mistakes; they are not a security boundary. The <a href="guide.html#why-it-is-built-this-way">guide</a> explains why each part is there.</p>
   </section>
 
   <section>
     <h2 id="the-board">The board</h2>
-    <p>One list for work you asked for and work scouts found: todo, doing, review, done.</p>
+    <p>One list for work you asked for and work scouts found: todo, doing, review, done. It is a plain file, so the work is still there after the chat ends.</p>
     <figure>
       <img src="docs/demo.svg" alt="symcc demo: you ask the lead, tasks appear on the board, workers move them from todo to doing to review to done" width="900">
     </figure>
@@ -65,8 +67,8 @@
   <section>
     <h2 id="read-more">Read more</h2>
     <ul class="links">
-      <li><a href="overview.html">Overview</a>: the README, with every feature in one table</li>
-      <li><a href="guide.html">Guide</a>: a task's life, review, the panel, scouts, branches, safety</li>
+      <li><a href="overview.html">Overview</a>: the README: what symcc is, why, and every feature in one table</li>
+      <li><a href="guide.html">Guide</a>: a task's life, review, the panel, scouts, branches, and why it is built this way</li>
       <li><a href="reference.html">Reference</a>: install details, modes, commands, settings, statuses</li>
       <li><a href="engine-and-clients.html">Engine and clients</a>: what the engine is, what a client is, and the rule between them</li>
       <li><a href="research/index.html">Research notes</a>: answers from investigation tasks</li>
