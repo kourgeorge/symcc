@@ -8,7 +8,7 @@
 // OpenTUI (T-500): opencode/tui.ts imports them by their written-out names (what OpenCode swaps for its own copies),
 // and loadTuiRuntime names a package that is missing or lacks a function instead of failing with a bare import error.
 import { test, expect } from 'bun:test'
-import { SETTING_GROUPS, groupSummaryParts, taskActions, mergeRoles, mergeKinds, when, addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, type Board } from '../../board'
+import { SETTING_GROUPS, groupSummaryParts, taskActions, settingsKeys, mergeRoles, mergeKinds, when, addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, type Board } from '../../board'
 import type { PaneView } from '../../app/state'
 import { ICON } from '../../name'
 import { bandLines, bandDraw, BAND_CLICK_HINT, panelLines, panelKeys, parseViewFile, viewFileText, lineText, actionCommand, answerOptions, OWN_ANSWER, viewDefs, panelTaskActions, TASK_ACTION_COMMANDS, SETTINGS_OPEN, type ViewFile } from '../board-view'
@@ -124,14 +124,14 @@ test('the panel: the banner, then the list grouped by state (NEEDS YOU, what run
   const page = panelLines(f, { opened: 'T-2', cursor: 0 }, NOW, 100).lines.map(lineText)
   expect(page.some(l => l.startsWith('T-2 a reviewed change'))).toBe(true)
   expect(page.some(l => l.startsWith('Status:') && l.includes('ready for review'))).toBe(true)
-  expect(panelKeys(f, 'T-2').map(k => k.word)).toEqual(['approve', 'reject', 'show changes', 'back'])
-  // T-575: the page's actions are core's taskActions (the terminal's and VS Code's buttons) that have a slash command
+  expect(panelKeys(f, 'T-2').map(k => k.word)).toEqual(['approve', 'reject', 'show changes', 'needs review', 'back'])
+  // T-575/T-584: the page's actions are core's taskActions (the terminal's and VS Code's buttons) with a key, but Copy
   const t2 = f.view.tasks.find(t => t.id === 'T-2')!
-  expect(panelTaskActions(t2).map(a => a.id)).toEqual(taskActions(t2).filter(a => a.key && TASK_ACTION_COMMANDS[a.id]).map(a => a.id))
-  expect(panelTaskActions(t2).map(a => `${a.key} ${a.id}`)).toEqual(['a approve', 'x reject', 'd show-changes'])
-  // an answered investigation in review: done and ask more, as on the other hosts (keep as a note has no slash command)
+  expect(panelTaskActions(t2).map(a => a.id)).toEqual(taskActions(t2).filter(a => a.key && a.id !== 'copy').map(a => a.id))
+  expect(panelTaskActions(t2).map(a => `${a.key} ${a.id}`)).toEqual(['a approve', 'x reject', 'd show-changes', 'n needs-review'])
+  // an answered investigation in review: done, keep as a note and ask more, as on the other hosts
   const inv = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => (t.id === 'T-2' ? { ...t, kind: 'investigation' } : t)) } } as ViewFile
-  expect(panelKeys(inv, 'T-2').map(k => `${k.key} ${k.word}`)).toEqual(['a done', 'x ask more', 'b back'])
+  expect(panelKeys(inv, 'T-2').map(k => `${k.key} ${k.word}`)).toEqual(['a done', 'k keep as a note', 'x ask more', 'n needs review', 'b back'])
   // a waiting task with no question text says its note, else that it waits (core's taskAsks)
   const noQ = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => (t.id === 'T-3' ? { ...t, question: null, options: undefined, note: '' } : t)) } } as ViewFile
   expect(panelLines(noQ, { opened: 'T-3', cursor: 0 }, NOW, 100).lines.map(lineText).some(l => l.includes('asks: it waits for your answer'))).toBe(true)
@@ -140,15 +140,15 @@ test('the panel: the banner, then the list grouped by state (NEEDS YOU, what run
   expect(asks.some(l => l.includes('asks: Which database?'))).toBe(true)
   expect(asks).toContain('  [2] postgres')
   expect(answerOptions(f, 'T-3')).toEqual(['mysql', 'postgres', OWN_ANSWER])
-  expect(panelKeys(f, 'T-3').map(k => k.word)).toEqual(['answer', 'back'])
+  expect(panelKeys(f, 'T-3').map(k => k.word)).toEqual(['answer', 'drop', 'needs review', 'back'])
   // a running worker whose time is up: its page asks for more time, with Claude's +30 min / +60 min / Stop it
   const over = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => (t.id === 'T-1' ? { ...t, time_ask: AT, note: 'time is up' } : t)) } }
-  expect(panelKeys(over, 'T-1').map(k => k.word)).toEqual(['answer', 'back'])
+  expect(panelKeys(over, 'T-1').map(k => k.word)).toEqual(['answer', 'pause', 'drop', 'needs review', 'back'])
   expect(answerOptions(over, 'T-1')).toEqual(['+30 min', '+60 min', 'Stop it', OWN_ANSWER])
   expect(panelLines(over, { opened: 'T-1', cursor: 0 }, NOW, 100).lines.map(lineText)).toContain('  [1] +30 min')
   // a waiting task whose finished work only waits for the owner's files: nothing to answer
   const files = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => (t.id === 'T-3' ? { ...t, merge_wait: { dirty: ['src/a.ts'] } } : t)) } }
-  expect(panelKeys(files, 'T-3').map(k => k.word)).toEqual(['back'])
+  expect(panelKeys(files, 'T-3').map(k => k.word)).toEqual(['merge now', 'drop', 'needs review', 'back'])
   expect(answerOptions(files, 'T-3')).toEqual([])
   expect(panelLines(files, { opened: 'T-3', cursor: 0 }, NOW, 100).lines.map(lineText).some(l => l.includes('asks:'))).toBe(false)
   // the actions are symcc's slash commands
@@ -266,8 +266,8 @@ test('startTui on a fake OpenCode TUI: reads the view file above its folder, dra
   answers.select = OWN_ANSWER
   answers.prompt = 'sqlite, it is small'
   await board.press('a', 'ses_1')
-  // a key a page doesn't offer does nothing
-  await board.press('x', 'ses_1')
+  // a key a page doesn't offer does nothing (a waiting task has no show changes)
+  await board.press('d', 'ses_1')
   expect(sent).toEqual([
     { sessionID: 'ses_1', name: 'symcc-approve', text: 'T-2' },
     { sessionID: 'ses_1', name: 'symcc-reject', text: 'T-2 too big' },
@@ -277,6 +277,100 @@ test('startTui on a fake OpenCode TUI: reads the view file above its folder, dra
   ])
   board.stop()
   expect(stopped).toBe(true)
+})
+
+test('T-584: a task page offers every one of core\'s taskActions with a key (but Copy) for a failed, doing, backlog and answered-investigation task, and each key sends its slash command', async () => {
+  let b: Board = emptyBoard()
+  for (const title of ['running', 'what is slow', 'broke', 'later']) b = addTask(b, { origin: { why: 'a test' }, title, files: ['src/'] }, AT)[0]
+  b = patchTask(b, 'T-1', { status: 'doing' }, AT)
+  b = patchTask(b, 'T-2', { status: 'review', kind: 'investigation' }, AT)
+  b = patchTask(b, 'T-3', { status: 'failed', attempts: 1, needs_review: true }, AT)
+  b = patchTask(b, 'T-4', { status: 'backlog' }, AT)
+  const view: PaneView = { tasks: b.tasks, working: [{ task: 'T-1', since: NOW - 60_000 }], scouts: [], mode: 'auto', test_commands: [], max_parallel: 2, max_minutes: 30, auto_retries: 1, driving: true, branch: 'main', branch_note: '' }
+  const f: ViewFile = { root: '/work/proj', home: '/work', name: 'symcc', version: '0.9.0', written_at: NOW, view }
+  const task = (id: string) => f.view.tasks.find(t => t.id === id)!
+  // the same actions as taskActions, in its order, with its keys and words; only Copy (no clipboard here) is left out
+  for (const id of ['T-1', 'T-2', 'T-3', 'T-4']) {
+    const t = task(id)
+    expect(panelTaskActions(t)).toEqual(taskActions(t).filter(a => a.key && a.id !== 'copy'))
+    for (const a of panelTaskActions(t)) expect(!!TASK_ACTION_COMMANDS[a.id]).toBe(true)
+  }
+  const keysOf = (id: string) => panelTaskActions(task(id)).map(a => `${a.key} ${a.id}`)
+  expect(keysOf('T-1')).toEqual(['p pause', 'x drop', 'n needs-review'])
+  expect(keysOf('T-2')).toEqual(['a done', 'k keep-note', 'x ask-more', 'n needs-review'])
+  expect(keysOf('T-3')).toEqual(['r retry', 'k stash', 'l role', 'h already-merged', 'x drop', 'n needs-review'])
+  expect(keysOf('T-4')).toEqual(['o to-todo', 'l role', 'x drop', 'n needs-review'])
+  // the footer's hints are buttons for their own keys (u, k, l, h, n too)
+  const footer = panelLines(f, { opened: 'T-3', cursor: 0 }, NOW, 140).lines.at(-1)!
+  expect(footer.filter(x => x.hit).map(x => x.hit)).toEqual([{ key: 'r' }, { key: 'k' }, { key: 'l' }, { key: 'h' }, { key: 'x' }, { key: 'n' }, { key: 'back' }])
+
+  const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)]])
+  const sent: { sessionID: string; name: string; text: string }[] = []
+  const answers = { prompt: 'not needed' as string | undefined, select: 'tester' as string | undefined }
+  const ctx: TuiContext = {
+    location: { directory: '/work/proj' },
+    theme: {},
+    renderer: { width: 140 },
+    client: { session: { command: async input => void sent.push(input) } },
+    keymap: { layer: () => undefined },
+    ui: {
+      toast: { show: () => undefined },
+      dialog: { prompt: async () => answers.prompt, select: async <V,>() => answers.select as V | undefined },
+      panel: { open: () => true, close: () => undefined, current: () => undefined },
+      slot: () => () => undefined,
+    },
+  }
+  const board = startTui(ctx, { runtime: fakeRuntime(), readText: async p => files.get(p) ?? Promise.reject(new Error('missing')), every: () => () => undefined, now: () => NOW })
+  await board.refresh()
+  const ids = panelLines(f, { opened: '', cursor: 0 }, NOW, 138).ids
+  const goTo = async (id: string) => {
+    await board.press('back', 's')
+    for (let i = 0; i < 9; i++) await board.press('up', 's')
+    for (let i = 0; i < ids.indexOf(id); i++) await board.press('down', 's')
+    await board.press('open', 's')
+    expect(board.state().opened).toBe(id)
+  }
+  const expected: Record<string, (id: string) => { name: string; text: string }> = {
+    pause: id => ({ name: 'symcc-task', text: `${id} pause` }),
+    retry: id => ({ name: 'symcc-task', text: `${id} retry` }),
+    stash: id => ({ name: 'symcc-task', text: `${id} stash` }),
+    'to-todo': id => ({ name: 'symcc-task', text: `${id} todo` }),
+    role: id => ({ name: 'symcc-task', text: `${id} role tester` }),
+    'already-merged': id => ({ name: 'symcc-task', text: `${id} merged` }),
+    drop: id => ({ name: 'symcc-task', text: `${id} drop not needed` }),
+    'needs-review': id => ({ name: 'symcc-task', text: `${id} review ${task(id).needs_review ? 'off' : 'on'}` }),
+    done: id => ({ name: 'symcc-approve', text: id }),
+    'keep-note': id => ({ name: 'symcc-task', text: `${id} note` }),
+    'ask-more': id => ({ name: 'symcc-reject', text: `${id} not needed` }),
+  }
+  for (const id of ['T-1', 'T-2', 'T-3', 'T-4']) {
+    for (const a of panelTaskActions(task(id))) {
+      await goTo(id)
+      sent.length = 0
+      await board.press(a.key as never, 's')
+      expect([a.id, sent]).toEqual([a.id, [{ sessionID: 's', ...expected[a.id]!(id) }]])
+    }
+  }
+  expect(task('T-3').needs_review).toBe(true)
+  // drop with an empty reason drops it without one; Esc (no answer) sends nothing
+  await goTo('T-1')
+  sent.length = 0
+  answers.prompt = ''
+  await board.press('x', 's')
+  answers.prompt = undefined
+  await board.press('x', 's')
+  answers.select = undefined
+  await goTo('T-4')
+  await board.press('l', 's')
+  expect(sent).toEqual([{ sessionID: 's', name: 'symcc-task', text: 'T-1 drop' }])
+  // on the list (and on a page with no k action) k moves up, as ↑ does
+  await board.press('back', 's')
+  await board.press('down', 's')
+  const at = board.state().cursor
+  await board.press('k', 's')
+  expect(board.state().cursor).toBe(at - 1)
+  expect(actionCommand({ kind: 'task', id: 'T-5', verb: 'review', arg: 'off' })).toEqual({ name: 'symcc-task', text: 'T-5 review off' })
+  board.stop()
 })
 
 test('startTui: when the open task leaves the view (or the view file goes away), the panel goes back to the list and its keys work again', async () => {
@@ -732,7 +826,11 @@ test('T-559: the Scouts tab lists the scouts from view.json, a scout\'s page sho
   expect(settings.ids.slice(0, 2)).toEqual(['settings-group:Work', 'mode'])
   expect(settings.ids).toContain('notify')
   expect(settings.hits[s.findIndex(l => l.includes('max_minutes'))]).toEqual({ setting: 'max_minutes' })
-  expect(panelKeys(f, '', 'settings').map(k => k.word)).toEqual(['move', 'change', 'views', 'close'])
+  expect(panelKeys(f, '', 'settings').map(k => k.word)).toEqual(['change', 'move', 'views', 'back'])
+  // the footer is core's settingsKeys, as Claude Code's: on a group heading Enter opens or closes it (T-584)
+  expect(settings.keys).toEqual(settingsKeys(false))
+  expect(panelLines(f, { tab: 'settings', opened: '', cursor: 0, settingsOpen: ALL_GROUPS }, NOW, 140).keys).toEqual(settingsKeys(true))
+  expect(lineText(panelLines(f, { tab: 'settings', opened: '', cursor: 0, settingsOpen: ALL_GROUPS }, NOW, 140).lines.at(-1)!)).toContain('Enter open/close')
   // the actions as slash commands
   expect(actionCommand({ kind: 'scout', scout: 'deps' })).toEqual({ name: 'symcc-scout', text: 'deps' })
   expect(actionCommand({ kind: 'scout', scout: 'deps', paused: true })).toEqual({ name: 'symcc-scout', text: 'deps pause' })
@@ -925,7 +1023,7 @@ test('T-562: the Settings tab opens the Roles and Kinds pages from view.json; a 
   expect(panelKeys(f, 'kind:bug', 'settings').map(k => k.word)).toEqual(['turn off', 'reset', 'back'])
   expect(panelKeys(f, 'kind:change', 'settings').map(k => k.word)).toEqual(['back'])
   // a role that left the view has no page
-  expect(panelKeys(f, 'role:gone', 'settings').map(k => k.word)).toEqual(['move', 'change', 'views', 'close'])
+  expect(panelKeys(f, 'role:gone', 'settings').map(k => k.word)).toEqual(['change', 'move', 'views', 'back'])
   // the actions as slash commands
   expect(actionCommand({ kind: 'def', def: 'role', name: 'tester', action: 'on' })).toEqual({ name: 'symcc-settings', text: 'role tester on' })
   expect(actionCommand({ kind: 'def', def: 'kind', name: 'bug', action: 'reset' })).toEqual({ name: 'symcc-settings', text: 'kind bug reset' })

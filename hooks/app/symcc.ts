@@ -16,7 +16,7 @@
 // render hooks) stays in register.tsx and hooks/claude/.
 //
 // Before calling an entry point, the host calls useName (app/state.ts) with its plugin name, so S.N is right.
-import { boardText, shortHome, LEAD_BEAT_MS, openOnStart, symccOn, offAnswer, commandNames, parseCommand, modeOf, settingsText, notifyOf, find, STATUS_WORD, statText, cutDiff, everyText, intoOf, ASK_TOOL, guardReason, scoutToolRefusal } from '../board'
+import { type Command, boardText, shortHome, LEAD_BEAT_MS, openOnStart, symccOn, offAnswer, commandNames, parseCommand, modeOf, settingsText, notifyOf, find, STATUS_WORD, statText, cutDiff, everyText, intoOf, ASK_TOOL, guardReason, scoutToolRefusal } from '../board'
 import { type FileTouch, type Host, type HostFeatures, ALL_FEATURES } from '../host'
 import type { SymccTokens } from '../../types'
 import { findArchived, saveArchiveMigrated } from './archive'
@@ -48,7 +48,7 @@ export function COMMANDS(features: HostFeatures = ALL_FEATURES): { name: string;
     { name: S.N.name, description: features.panel ? `Open the ${S.N.name} board panel: tasks and scouts` : `Show the ${S.N.name} board as text (the panel: /${S.N.name}-board)` },
     { name: `${S.N.name}-tasks`, description: `Open the ${S.N.name} board panel on the tasks view` },
     { name: `${S.N.name}-scouts`, description: `Open the ${S.N.name} board panel on the scouts view and reload the scout files` },
-    { name: `${S.N.name}-task`, description: `Open one ${S.N.name} task: /${S.N.name}-task T-3`, argumentHint: '<T-id>' },
+    { name: `${S.N.name}-task`, description: `Open one ${S.N.name} task (/${S.N.name}-task T-3), or do one of its page's actions: /${S.N.name}-task T-3 pause, resume, retry, drop [reason], merged (already merged by hand), review on|off, stash (to the backlog), todo (out of the backlog), role <name>, or note (an answered investigation: keep it as a note)`, argumentHint: '<T-id> [pause|resume|retry|drop [reason]|merged|review on|off|stash|todo|role <name>|note]' },
     { name: `${S.N.name}-approve`, description: `Approve a ${S.N.name} task that is ready for review (merge it): /${S.N.name}-approve T-5`, argumentHint: '<T-id>' },
     { name: `${S.N.name}-reject`, description: `Reject a ${S.N.name} task in review, with the reason: /${S.N.name}-reject T-5 <reason>`, argumentHint: '<T-id> <reason>' },
     { name: `${S.N.name}-diff`, description: `Show what a ${S.N.name} task in review changed, or one file's diff: /${S.N.name}-diff T-5 [file]`, argumentHint: '<T-id> [file]' },
@@ -375,6 +375,48 @@ export function agentFinished(host: Host, agentId: string | undefined, run: Agen
 
 // ---------------- commands ----------------
 
+type TaskDo = Extract<Command, { kind: 'task-do' }>
+
+/** The lead's tool (and its input) that does /<name>-task T-5 <verb>: the same calls as the task page's buttons. */
+export function taskDoTool(id: string, c: TaskDo): [string, In] {
+  switch (c.verb) {
+    case 'pause':
+      return ['pause', { task: id, reason: 'paused by the owner' }]
+    case 'resume':
+    case 'retry':
+      return [c.verb, { task: id }]
+    case 'drop':
+      return ['drop', { task: id, reason: c.reason || 'dropped by the owner' }]
+    case 'merged':
+      return ['merged', { task: id, by: 'the owner' }]
+    case 'review':
+      return ['change', { task: id, needs_review: !!c.on }]
+    case 'stash':
+    case 'todo':
+      return ['change', { task: id, backlog: c.verb === 'stash' }]
+    case 'role':
+      return ['change', { task: id, role: c.role ?? '' }]
+    case 'note':
+      return ['approve', { task: id, keep_note: true }]
+  }
+}
+
+/** What the lead is told the owner did with /<name>-task T-5 <verb> (the tool's answer follows). */
+function taskDoLine(id: string, c: TaskDo): string {
+  switch (c.verb) {
+    case 'pause': return `The owner paused ${id}`
+    case 'resume': return `The owner resumed ${id}`
+    case 'retry': return `The owner retried ${id}`
+    case 'drop': return `The owner dropped ${id}${c.reason ? ` ("${brief(c.reason)}")` : ''}`
+    case 'merged': return `The owner marked ${id} done: its work was already merged outside the board`
+    case 'review': return `The owner turned needs_review ${c.on ? 'on' : 'off'} for ${id}`
+    case 'stash': return `The owner moved ${id} to the backlog`
+    case 'todo': return `The owner moved ${id} from the backlog to todo`
+    case 'role': return `The owner set the role of ${id} to ${c.role}`
+    case 'note': return `The owner chose Keep as a note for ${id}`
+  }
+}
+
 /** What a slash command answers: its text, and whether it is only shown to the owner (not given to the lead). */
 export type CommandAnswer = { text: string; isTextDisplayOnly?: true }
 
@@ -472,6 +514,13 @@ export async function runCommand(host: Host, command: string, args: string): Pro
       }
       await openPane(host, { tab: 'tasks', task: t.id })
       return say(taskText(t, [...workers.values()].some(w => w.task === t.id), b.tasks, await latestReport(host, t), b.archived_done))
+    }
+    case 'task-do': {
+      const t = find(b, cmd.id)
+      if (!t) return say((await findArchived(host, cmd.id)) ? `${cmd.id} is archived.` : `${cmd.id} is not on the board.`)
+      const r = await runTool(host, ...taskDoTool(t.id, cmd)).catch((err: Error) => `error: ${err.message}`)
+      noteForLead(`${taskDoLine(t.id, cmd)}: ${brief(r)}`)
+      return say(r)
     }
     case 'approve':
     case 'reject': {

@@ -20,7 +20,7 @@ import {
   type KeyHint, type Seg, type BoardTask, gitNote, intoOf, taskActions, taskAsks, type TaskAction, type TaskActionId,
   waitsForYou, sortScouts, scoutListRows, scoutRow, scoutIcon, scoutTone, scoutHowTo, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem, scoutFile,
   SETTING_GROUPS, SETTINGS, isSettingPage, settingInfo, settingValue, cantPlayNotify, groupSummaryParts,
-  type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction,
+  type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction, type TaskVerb, settingsKeys,
   DEFAULT_ROLE, isCheckerRole, ALWAYS_ON_KINDS, checkerOn, roleNameError, kindNameError,
 } from '../board'
 import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, brokenLabel, defNamed } from '../core/def-files'
@@ -147,7 +147,13 @@ export function parseViewFile(text: string | null | undefined): ViewFile | null 
 }
 
 /** The panel's keys (see panelKeys for which ones each page offers). */
-export type PanelKey = 'up' | 'down' | 'open' | 'back' | 'a' | 'x' | 'd' | 'close' | 't' | 's' | 'c' | 'r' | 'p' | 'o' | 'e' | ChoiceKey
+export type PanelKey = 'up' | 'down' | 'open' | 'back' | 'close' | LetterKey | ChoiceKey
+
+/** The letter keys the panel takes, each pressed as itself (the task page's take core's taskActions keys: u resume,
+ *  k stash or keep as a note, l role, h already merged, n needs review). k is also "up" where no action has it. */
+export const LETTER_KEYS = ['a', 'x', 'd', 't', 's', 'c', 'r', 'p', 'o', 'e', 'u', 'k', 'l', 'h', 'n'] as const
+export type LetterKey = (typeof LETTER_KEYS)[number]
+const isLetterKey = (k: string): k is LetterKey => (LETTER_KEYS as readonly string[]).includes(k)
 
 /** The number keys that pick a page's answer choice (T-583): 1 is the first choice. */
 export type ChoiceKey = '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'
@@ -269,13 +275,16 @@ export const groupId = (g: PanelGroup) => `group:${g}`
 export const groupOf = (id: string): PanelGroup | null => (id.startsWith('group:') ? (id.slice(6) as PanelGroup) : null)
 
 /** The key a key hint's word stands for, so a click on the hint does what the key does ('' for "move"). */
-const HINT_KEY: Record<string, PanelKey> = { open: 'open', close: 'close', back: 'back', approve: 'a', done: 'a', answer: 'a', reject: 'x', 'ask more': 'x', 'show changes': 'd', change: 'open', report: 'open', 'run now': 'r', pause: 'p', resume: 'p', edit: 'e', 'turn off': 'o', 'turn on': 'o', reset: 'r' }
+const HINT_KEY: Record<string, PanelKey> = { open: 'open', 'open/close': 'open', close: 'close', back: 'back', change: 'open', report: 'open' }
+
+/** What a click on key hint `k` presses: its own letter key, else the key its word stands for (Enter opens, b back...). */
+export const hintKey = (k: KeyHint): PanelKey | undefined => (isLetterKey(k.key) ? k.key : HINT_KEY[k.word])
 
 /** The footer's key hints as pieces, each a button for its key: "a approve · x reject · b back". */
 export function hintSegs(keys: KeyHint[]): Line {
   return keys.flatMap((k, i) => [
     ...(i ? [{ text: ' · ', color: 'inactive' }] : []),
-    { text: hintLineText([k]), color: 'inactive', ...(HINT_KEY[k.word] ? { hit: { key: HINT_KEY[k.word]! } } : {}) },
+    { text: hintLineText([k]), color: 'inactive', ...(hintKey(k) ? { hit: { key: hintKey(k)! } } : {}) },
   ])
 }
 
@@ -322,14 +331,15 @@ const scoutNamed = (f: ViewFile | null, name: string): SymccScout | undefined =>
  * a scout's page (r run now, p pause or resume, e edit) and a run's page; on the Settings tab, of the settings list,
  * the Roles and Kinds lists and a role's or kind's page (o turn off or on, r reset to the built-in one).
  */
-export function panelKeys(f: ViewFile | null, opened: string, tab: PanelTab = 'tasks', run = ''): KeyHint[] {
+export function panelKeys(f: ViewFile | null, opened: string, tab: PanelTab = 'tasks', run = '', heading = false): KeyHint[] {
   const move = { key: '↑↓', word: 'move' }
   const views = { key: 't s c', word: 'views' }
   const close = { key: 'Esc', word: 'close' }
   const back = { key: 'b', word: 'back' }
   if (tab === 'settings') {
     const place = settingsPlace(f, opened)
-    if (!place) return [move, { key: 'Enter', word: 'change' }, views, close]
+    // the settings list: core's keys, as Claude Code's (Enter open/close on a group heading, else change)
+    if (!place) return settingsKeys(heading)
     if (!place.def) return [move, { key: 'Enter', word: 'open' }, back]
     const d = place.def
     return [...(d.canOff ? [{ key: 'o', word: d.off ? 'turn on' : 'turn off' }] : []), ...(d.canReset ? [{ key: 'r', word: 'reset' }] : []), back]
@@ -372,7 +382,7 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
   } else if (tab === 'settings') {
     const place = settingsPlace(f, choice.opened)
     body = place?.def ? defPage(f, place.list, place.def, w) : place ? defsList(f, place.list, choice.cursor, w) : settingsBody(f, choice.cursor, choice.settingsOpen ?? SETTINGS_OPEN, w)
-    keys = panelKeys(f, place ? choice.opened : '', 'settings')
+    keys = panelKeys(f, place ? choice.opened : '', 'settings', '', !place && !!settingGroupOf(body.selected))
   } else {
     const page = choice.opened ? openedPage(f, choice.opened, nowMs, w, choice.sent?.id === choice.opened ? choice.sent.answer : '', choice.taskReport) : null
     body = page ?? listBody(f, choice.cursor, { ...GROUPS_OPEN, ...choice.groups }, nowMs, w)
@@ -806,13 +816,23 @@ export function answerOptions(f: ViewFile | null, id: string): string[] {
   return asks.choices.length ? asks.choices : [OWN_ANSWER]
 }
 
-/** The slash command (PanelAction's kind) for each of core's task actions this panel can do; the others (pause,
- *  resume, retry, drop, ...) have no slash command yet, so the panel leaves them out. */
-export const TASK_ACTION_COMMANDS: Partial<Record<TaskActionId, 'approve' | 'reject' | 'diff'>> = { approve: 'approve', done: 'approve', reject: 'reject', 'ask-more': 'reject', 'show-changes': 'diff' }
+/** What sends each of core's task actions: /<name>-approve, -reject (it asks the reason) or -diff, else a word of
+ *  /<name>-task T-5 (TaskVerb: merge now is retry, as on the terminal's page). Copy and Watch worker have none: this
+ *  panel can't copy or show a worker, so it leaves them out. */
+export const TASK_ACTION_COMMANDS: Partial<Record<TaskActionId, 'approve' | 'reject' | 'diff' | TaskVerb>> = {
+  approve: 'approve', done: 'approve', reject: 'reject', 'ask-more': 'reject', 'show-changes': 'diff', 'keep-note': 'note',
+  pause: 'pause', resume: 'resume', 'merge-now': 'retry', retry: 'retry', 'to-todo': 'todo', stash: 'stash', role: 'role', 'already-merged': 'merged', drop: 'drop', 'needs-review': 'review',
+}
 
-/** The actions of task `t`'s page (core's taskActions, the terminal's and VS Code's buttons) that this panel has a
- *  slash command for, with their keys. */
+/** The actions of task `t`'s page (core's taskActions, the terminal's and VS Code's buttons) this panel sends, each
+ *  with its key: every one but Copy and Watch worker (and Drop in review, which has no key there). */
 export const panelTaskActions = (t: BoardTask): TaskAction[] => taskActions(t).filter(a => a.key && TASK_ACTION_COMMANDS[a.id])
+
+/** The roles a task's role can be set to (Role on its page): those turned on, general first, never the checker role. */
+export const panelRoleChoices = (f: ViewFile | null): string[] => {
+  const names = defsIn(f, 'roles').filter(d => !d.off && !d.broken && !isCheckerRole(d.name)).map(d => d.name)
+  return names.some(n => n.toLowerCase() === DEFAULT_ROLE) ? names : [DEFAULT_ROLE, ...names]
+}
 
 /** A panel action as the slash command that does it, run in the TUI's session: approve, reject (with the reason), diff or answer. */
 export type PanelAction =
@@ -821,6 +841,8 @@ export type PanelAction =
   /** show the files a task in review changed */
   | { kind: 'diff'; id: string }
   | { kind: 'answer'; id: string; answer: string }
+  /** one of the task page's other actions: /<name>-task T-5 <verb> [arg] (drop's reason, role's name, review's on|off) */
+  | { kind: 'task'; id: string; verb: TaskVerb; arg?: string }
   /** run a scout now, or (with `paused`) pause or resume its timer */
   | { kind: 'scout'; scout: string; paused?: boolean }
   | { kind: 'setting'; setting: SettingName; value: string }
@@ -834,6 +856,7 @@ export function actionCommand(a: PanelAction, name: string = DEFAULT_NAME): { na
   if (a.kind === 'approve') return { name: `${name}-approve`, text: a.id }
   if (a.kind === 'reject') return { name: `${name}-reject`, text: `${a.id} ${a.reason.trim()}` }
   if (a.kind === 'diff') return { name: `${name}-diff`, text: a.id }
+  if (a.kind === 'task') return { name: `${name}-task`, text: `${a.id} ${a.verb} ${a.arg?.trim() ?? ''}`.trim() }
   if (a.kind === 'scout') return { name: `${name}-scout`, text: a.paused === undefined ? a.scout : `${a.scout} ${a.paused ? 'pause' : 'resume'}` }
   if (a.kind === 'setting') return { name: `${name}-settings`, text: `${a.setting} ${a.value.trim()}` }
   if (a.kind === 'scout-edit') return { name: `${name}-scout`, text: `${a.scout} ${a.field} ${a.value.trim() || (a.field === 'model' ? 'none' : '')}`.trim() }
