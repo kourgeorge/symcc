@@ -2556,6 +2556,45 @@ test('change add_details adds a note to the details, keeps the old text and writ
   if (before.status === 'doing') expect(String(said)).toMatch(/restarting/)
 })
 
+/** T-1 on try 2: try 1 was sent back by the checker, try 2 started `ageMs` ago (board paused, so nothing claims it again). */
+function sentBackBoard(ageMs: number): Board {
+  const started = new Date(Date.now() - ageMs).toISOString()
+  const [b] = boardWith('review', [], {
+    attempts: 2,
+    runs: [{ started: ISO, ended: ISO, ended_by: 'finished', ended_note: 'checker found problems' }, { started }],
+    history: hist('created by the lead', 'try 1: checker found problems'),
+  })
+  return { ...b, mode: 'paused' }
+}
+
+test('T-678: a note within a minute of the retry after a checker send-back joins that try: same try number, no "restarted" run', async () => {
+  const w = world()
+  await saveBoard(w.$, sentBackBoard(10_000))
+  const said = await runTool(w.$, 'change', { task: 'T-1', add_details: 'also check the README' })
+  expect(String(said)).toMatch(/same try number/)
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('todo')
+  // try 2 is taken back, so the next claim starts it again as try 2, with the note
+  expect(t.attempts).toBe(1)
+  expect(t.runs!.length).toBe(1)
+  expect(t.runs!.some(r => r.ended_by === 'restarted')).toBe(false)
+  expect(t.history.some(h => h.kind === 'restarted')).toBe(false)
+  expect(t.history.map(h => h.text)).toContain('the lead added a note: “also check the README”')
+  expect(t.details).toMatch(/also check the README$/)
+})
+
+test('T-678: a note on a try that has run over a minute still restarts it as before', async () => {
+  const w = world()
+  await saveBoard(w.$, sentBackBoard(120_000))
+  const said = await runTool(w.$, 'change', { task: 'T-1', add_details: 'also check the README' })
+  expect(String(said)).toMatch(/restarting with the note/)
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.attempts).toBe(2)
+  expect(t.runs!.length).toBe(2)
+  expect(t.runs![1]!.ended_by).toBe('restarted')
+  expect(t.history.some(h => h.kind === 'restarted')).toBe(true)
+})
+
 test('change with both details and add_details is refused and changes nothing', async () => {
   const w = world()
   const [b] = boardWith('review')
