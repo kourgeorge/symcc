@@ -19,7 +19,7 @@ import {
   statusCounts, newestFirst, bandLeads, bandNote, bandBrand, bandWhere, boardBrand, modeLabel, modeOf, planBandText, withCrew, questionsForYou,
   bannerLines, bannerRule, footerRule, type BannerTone, panelSections, localOffset, when, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, ALL_CLEAR,
   rowStates, rowMark, TITLE_ROOM, fitRow, rowExtra, questionsLabel, archivedOf, archivedNote, statusMark, statusBadge, detailRows, detailRowLines, wrapSegs, hintLineText,
-  type KeyHint, type Seg, type BoardTask, gitNote, intoOf, taskActions, taskAsks, type TaskAction, type TaskActionId,
+  type KeyHint, type Seg, type BoardTask, gitNote, intoOf, taskActions, taskAsks, actionButtonLabel, packRows, type TaskAction, type TaskActionId,
   ownersTurn, shownStatus, sortScouts, scoutListRows, scoutRow, scoutIcon, scoutTone, scoutHowTo, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem, scoutFile,
   SETTING_GROUPS, SETTINGS, isSettingPage, settingInfo, settingValue, cantPlayNotify, groupSummaryParts,
   type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction, type TaskVerb, settingsKeys,
@@ -171,8 +171,9 @@ export type PanelGroup = 'backlog' | 'done' | 'dropped'
  *  press one of the panel's keys (a key hint in the footer works as a button); and (T-559) go to a tab, open a scout
  *  or one of its runs, or change a setting; and (T-562) open a page under Settings: the Roles or Kinds list ("roles", "kinds") or one
  *  role's or kind's page ("role:tester", "kind:bug", see settingsPlace); and (T-583) pick answer choice `choice`
- *  (1 = the first of answerOptions) of the open task or question; and (T-585) open or close a Settings group (its title). */
-export type PanelHit = { open: string } | { group: PanelGroup } | { key: PanelKey } | { tab: PanelTab } | { scout: string } | { run: string } | { setting: SettingName } | { page: string } | { choice: number } | { settingGroup: string }
+ *  (1 = the first of answerOptions) of the open task or question; and (T-585) open or close a Settings group (its title);
+ *  and (T-680) press a task page's button that has no key (Drop in review): `action`, its id in core's taskActions. */
+export type PanelHit = { open: string } | { group: PanelGroup } | { key: PanelKey } | { tab: PanelTab } | { scout: string } | { run: string } | { setting: SettingName } | { page: string } | { choice: number } | { settingGroup: string } | { action: TaskActionId }
 
 /** One colored piece of a line, with what a click on it does (only the footer's key hints have one). */
 export type DrawSeg = Seg & { hit?: PanelHit }
@@ -435,10 +436,12 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
     body = place?.list === 'orgmem' ? orgMemBody(f, choice.cursor, w) : place?.def ? defPage(f, place.list as DefList, place.def, w) : place ? defsList(f, place.list as DefList, choice.cursor, w) : settingsBody(f, choice.cursor, choice.settingsOpen ?? SETTINGS_OPEN, w)
     keys = panelKeys(f, place ? choice.opened : '', 'settings', '', !place && !!settingGroupOf(body.selected))
   } else {
-    const page = choice.opened ? openedPage(f, choice.opened, nowMs, w, choice.sent?.id === choice.opened ? choice.sent.answer : '', choice.taskReport, choice.approving?.id === choice.opened && approveSent(f, choice.approving, nowMs)) : null
+    const t = choice.opened ? f.view.tasks.find(x => x.id === choice.opened) : undefined
+    // the approve in progress takes the same buttons and keys away (approveInProgress)
+    const busy = !!t && approveInProgress(f, t, choice.approving, nowMs)
+    const page = choice.opened ? openedPage(f, choice.opened, nowMs, w, choice.sent?.id === choice.opened ? choice.sent.answer : '', choice.taskReport, choice.approving?.id === choice.opened && approveSent(f, choice.approving, nowMs), busy) : null
     body = page ?? listBody(f, choice.cursor, { ...GROUPS_OPEN, ...choice.groups }, nowMs, w)
-    const t = page ? f.view.tasks.find(x => x.id === choice.opened) : undefined
-    keys = panelKeys(f, page ? choice.opened : '', 'tasks', '', false, !!t && approveInProgress(f, t, choice.approving, nowMs))
+    keys = panelKeys(f, page ? choice.opened : '', 'tasks', '', false, !!page && busy)
   }
   // T-627: every line is cut into the rows it really takes (drawn lines: no line wider than the panel, none with a
   // line break inside), so the scroll counts what is on screen. The page's own title (and a task's badge) stays with
@@ -599,6 +602,7 @@ function scoutPage(f: ViewFile, sc: SymccScout, choice: PanelChoice, nowMs: numb
   const opened = choice.run ? shown.find(x => x.run.ended === choice.run) : undefined
   if (opened) {
     b.add([{ text: sc.name, color: 'claude', bold: true }, { text: ` · run that ended ${opened.run.ended}`, color: 'inactive' }])
+    for (const l of buttonLines([BACK_BUTTON], w)) b.add(l)
     const head = b.lines.length
     b.add([{ text: scoutRunLine(opened.run, opened.tasks, nowMs), color: scoutOutcomeTone(opened.run.outcome) }])
     if (opened.run.why) b.add([{ text: opened.run.why, color: 'error' }])
@@ -623,6 +627,8 @@ function scoutPage(f: ViewFile, sc: SymccScout, choice: PanelChoice, nowMs: numb
     { text: ` · ${r.every}${r.model ? ` · ${r.model}` : ''} · ${r.ran}`, color: 'inactive' },
   ], w)
   for (const l of head) b.add(l)
+  // T-680: the page's buttons, as Claude Code's scout page has them; they stay at the top with its name
+  for (const l of buttonLines(scoutButtons(sc), w)) b.add(l)
   const headLines = b.lines.length
   const firstLine = (sc.prompt ?? '').split('\n').map(l => l.trim()).find(Boolean) ?? ''
   const title = sc.summary?.trim() || firstLine
@@ -933,7 +939,7 @@ export const SECTION_LINES: Partial<Record<TaskSection['id'], number>> = { histo
  *  and the answer just sent (`sent`); then a task's sections as on Claude Code's task page (core's taskSections,
  *  T-580: Why it failed, Answer, Details, Changes, What to do, History, Report, Runs), with the latest report's text
  *  (`report`, read by the TUI) and the changed files from the view file; null when it is gone. */
-function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = '', report?: PanelChoice['taskReport'], merging = false): Body | null {
+function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = '', report?: PanelChoice['taskReport'], merging = false, busy = false): Body | null {
   const v = f.view
   const b = bodyMaker()
   const addAll = (ls: Line[]) => ls.forEach(l => b.add(l))
@@ -944,6 +950,8 @@ function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = ''
   const q = v.questions?.find(x => x.id === id)
   if (q) {
     addAll(wrapSegs([{ text: q.id, color: 'claude', bold: true }, { text: `  ${q.text}`, color: 'text', bold: true }], w))
+    // its Back button, as Claude Code's question page has; it stays at the top with the question
+    addAll(buttonLines([BACK_BUTTON], w))
     const head = b.lines.length
     b.add([{ text: ' ', color: 'text' }])
     choices()
@@ -956,7 +964,9 @@ function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = ''
   // (`merging`, an approve this panel just sent: its step at once, on the badge, the Status row and the Stage line alike)
   const badge = statusBadge(t, nowMs, undefined, merging)
   b.add([{ text: `[${badge.text}]`, color: badge.color, bold: true }])
-  // the title and the badge stay at the top while the rest of the page scrolls
+  // T-680: the page's buttons, as Claude Code's terminal page draws them ([ Back ] [ Pause ] ...); a click presses one
+  addAll(buttonLines(taskButtons(t, busy), w))
+  // the title, the badge and the buttons stay at the top while the rest of the page scrolls
   const head = b.lines.length
   const asked = taskAsks(t, v.max_minutes)
   if (asked) {
@@ -1014,6 +1024,40 @@ export const TASK_ACTION_COMMANDS: Partial<Record<TaskActionId, 'approve' | 'rej
 /** The actions of task `t`'s page (core's taskActions, the terminal's and VS Code's buttons) this panel sends, each
  *  with its key: every one but Copy and Watch worker (and Drop in review, which has no key there). */
 export const panelTaskActions = (t: BoardTask, merging = false): TaskAction[] => taskActions(t, { merging }).filter(a => a.key && TASK_ACTION_COMMANDS[a.id])
+
+/** One button of a page's row of buttons (T-680, as on Claude Code's terminal page): its words, and what a click on
+ *  it does (its key, or a task action that has no key). */
+export type PanelButton = { label: string; hit: PanelHit }
+
+/** The Back button every page starts with (b). */
+export const BACK_BUTTON: PanelButton = { label: 'Back', hit: { key: 'back' } }
+
+/** How a button looks: "[ Back ]". */
+export const buttonText = (b: PanelButton) => `[ ${b.label} ]`
+
+/** The buttons of task `t`'s page, in Claude Code's order: Back, then core's taskActions with Claude Code's words
+ *  (actionButtonLabel: "Stash to backlog (z)"), but Copy and Watch worker, which this panel can't do (`merging`: see
+ *  panelKeys). A button with a key presses that key; one without (Drop in review) sends its action. */
+export const taskButtons = (t: BoardTask, merging = false): PanelButton[] => [
+  BACK_BUTTON,
+  ...taskActions(t, { merging }).filter(a => TASK_ACTION_COMMANDS[a.id]).map(a => ({ label: actionButtonLabel(a), hit: a.key ? { key: a.key as PanelKey } : { action: a.id } })),
+]
+
+/** The buttons of scout `sc`'s page, as Claude Code's: Back, Run now (not while it runs), Edit, Pause or Resume. */
+export const scoutButtons = (sc: Pick<SymccScout, 'running' | 'paused'>): PanelButton[] => [
+  BACK_BUTTON,
+  ...(sc.running ? [] : [{ label: 'Run now', hit: { key: 'r' as const } }]),
+  { label: 'Edit', hit: { key: 'e' } },
+  { label: sc.paused ? 'Resume' : 'Pause', hit: { key: 'p' } },
+]
+
+/** A row of buttons, going on to more rows when it doesn't fit `w` (core's packRows, as Claude Code's buttonRows),
+ *  never cutting a button; each button is a piece a click presses. */
+export function buttonLines(buttons: readonly PanelButton[], w: number): Line[] {
+  return packRows(buttons.map(b => buttonText(b).length), Math.max(1, Math.floor(w)), 1).map(row =>
+    row.flatMap((k, i) => [...(i ? [{ text: ' ', color: 'inactive' }] : []), { text: buttonText(buttons[k]!), color: 'ide', hit: buttons[k]!.hit }]),
+  )
+}
 
 /** The roles a task's role can be set to (Role on its page): those turned on, general first, never the checker role. */
 export const panelRoleChoices = (f: ViewFile | null): string[] => {
