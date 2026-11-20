@@ -972,8 +972,10 @@ const SCRATCH_INIT_OPTIONS = /^(-q|--quiet|--bare|--initial-branch=[\w./-]+)$/
  * plain literal path (literalPath) strictly inside `temps` (scratchTemps) and in none of `keep` (the project, its
  * worktrees). That folder is the last `-C <path>` (no other own option but --no-pager), or else the shell's folder
  * (GitPlace.dir); `git init <path>` acts in `<path>` (absolute, or a plain relative one from that folder). Every word
- * after the command name may not expand (`$`, backquote), start with `~`, have a `..` piece, or name an absolute path
- * (also after `=` or `:`, as in `--output=/x` or a URL) outside those folders; a commit message (`-m <text>`) and
+ * after the command name may not expand (`$`, backquote), start with `~`, have a `..` piece, have a space (a command
+ * given as one quoted word, as in `rebase -x '...'` or `alias.z '!...'`; only --author=... may), be --global or
+ * --system (the owner's or the system's git settings), or name an absolute path anywhere in it (`--output=/x`, a URL,
+ * `-x/x`) outside those folders; a commit message (`-m <text>`) and
  * redirects (checked as paths elsewhere) are not looked at. A simple rule against honest mistakes, not a security
  * boundary: links inside .git, files the same line writes, hooks and settings are not checked.
  */
@@ -1022,8 +1024,13 @@ export const scratchGitAllow =
         if (!redir[4] && !redir[3]) i++
         continue
       }
-      if (a.expands || /(^|[=:,])~/.test(a.w) || /(^|[/=:])\.\.(\/|$)/.test(a.w)) return false
-      for (const m of a.w.matchAll(/(?:^|[=:,]|^-[A-Za-z])(\/[^\s,:]*)/g)) if (!ok(literalPath(m[1]!))) return false
+      // --global / --system: the owner's ~/.gitconfig or the system's, outside the scratch folder
+      if (a.w === '--global' || a.w === '--system') return false
+      // a space: a command or path given as one quoted word (`rebase -x 'git -C /repo ...'`, `alias.z '!cd; git ...'`)
+      if (/\s/.test(a.w) && !/^--author=/.test(a.raw)) return false
+      if (a.expands || /(^|[=:,])~/.test(a.w) || /(^|[^\w.])\.\.(\/|$)/.test(a.w)) return false
+      // every absolute path anywhere in the word (`--output=/x`, `file:///x`, `-x/x`, `'!/usr/bin/git -C/x'`)
+      for (const m of a.w.matchAll(/(?:^|^-[A-Za-z]|[^\w.@%+-])(\/[^\s,:;'"|&<>()]*)/g)) if (!ok(literalPath(m[1]!))) return false
     }
     return true
   }

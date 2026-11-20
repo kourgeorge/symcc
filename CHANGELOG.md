@@ -6,7 +6,7 @@ When a set of user-facing changes is ready to release, bump the version in both 
 
 ### Changed
 - The two "off"s have different names now. `/symcc-off` and `/symcc-on` are now `/symcc-disable` and `/symcc-enable` (symcc steps aside entirely; the texts say "symcc is disabled · /symcc-enable to turn it back on"). The old commands are gone. The board mode `off` is now `paused` (modes `paused` / `review` / `auto`, shown `⏸ paused`; `/symcc-mode paused`). A board saved with mode `off` is changed to `paused` once.
-- Workers and checkers may run git writes in throwaway repositories under `/tmp` (or the system temp folder) named by plain literal paths: `git init /tmp/x`, `git -C /tmp/x commit -m m`, `cd /tmp/x && git commit -am m`. Git aimed at the project, `.symcc/` or a worktree, or at a folder given by a variable, `$(mktemp -d)`, `~` or `..`, is still refused, and scouts stay read-only. A simple rule against mistakes, not a security boundary (see the guide).
+- Workers and checkers may run git writes in throwaway repositories under `/tmp` (or the system temp folder) named by plain literal paths: `git init /tmp/x`, `git -C /tmp/x commit -m m`, `cd /tmp/x && git commit -am m`. Git aimed at the project, `.symcc/` or a worktree, or at a folder given by a variable, `$(mktemp -d)`, `~` or `..`, is still refused, as are `--global` / `--system` settings and quoted commands handed to git (`rebase -x '...'`, `alias.z '!...'`), and scouts stay read-only. A simple rule against mistakes, not a security boundary (see the guide).
 
 ## 0.5.8 (2026-11-20)
 

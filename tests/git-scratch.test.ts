@@ -33,6 +33,8 @@ const ALLOWED = [
   'git -C /tmp/x commit -m m > /dev/null 2>&1',
   'cd /tmp && git init x',
   'git -C /tmp/a clone /tmp/b c',
+  'git -C /tmp/x commit --author="A B <a@b>" -m "a b"',
+  'git -C /tmp/x rebase -x make HEAD~1',
 ]
 
 const REFUSED = [
@@ -75,6 +77,21 @@ const REFUSED = [
   'git -C /tmp/x --work-tree /repo add .',
   'git init --separate-git-dir /repo/.git /tmp/x',
   'git -C /tmp/x push ~/r',
+  // the owner's or the system's git settings, outside the scratch folder
+  'git -C /tmp/x config --global user.name x',
+  'git -C /tmp/x config --system user.name x',
+  'git -C /tmp/x config --global core.hooksPath /tmp/h',
+  'cd /tmp/x && git config --global user.email me@x',
+  // a command given as one quoted word, aimed at the worktree
+  `git -C /tmp/x rebase -x 'git -C ${WT} commit -am x' HEAD~1`,
+  `git -C /tmp/x rebase -x 'cd ${WT} && git reset --hard HEAD~3' HEAD~1`,
+  `git -C /tmp/x config alias.z '!git -C ${WT} reset --hard'`,
+  "git -C /tmp/x config alias.z '!cd; git reset --hard'",
+  `git -C /tmp/x filter-branch --tree-filter 'cp f ${WT}/f' HEAD`,
+  `git -C /tmp/x bisect run sh -c 'git -C ${WT} commit -am x'`,
+  `git -C /tmp/x push --receive-pack='git -C ${WT} receive-pack' /tmp/y`,
+  `git -C /tmp/x fetch --upload-pack=${WT}/up /tmp/y`,
+  `git -C /tmp/x rebase -x"cd ../.." HEAD~1`,
   // not at the line's top
   "sh -c 'git -C /tmp/x commit -m m'",
   'sudo git -C /tmp/x commit -m m',
