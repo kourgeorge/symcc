@@ -13,7 +13,7 @@ import type { On } from 'claude-code'
 import { SETTINGS, SETTING_GROUPS } from '../hooks/board'
 import { CLICK_HINT } from '../hooks/claude/ui/surface'
 import { reportStart } from '../hooks/claude/ui/vscode-scouts'
-import { vsHref } from '../hooks/claude/ui/vscode'
+import { mdLink, vsHref } from '../hooks/claude/ui/vscode'
 
 type Node = { type?: string; key?: string; props?: Record<string, unknown>; children?: unknown[] }
 
@@ -41,7 +41,7 @@ function texts(tree: unknown): string[] {
 }
 const KEY_HINTS = [/\[[a-z]\]:/, /Enter open/, /Enter on a heading/, /Enter changes/, /Enter saves/, /Enter picks/, /Enter goes on/, /open\/close/, /→ \/ ←/, /↑↓/, /t s c views/, /Esc back/, /\s\([a-z]\)(\s|$)/]
 const STATUS_COLORS = new Set(['warning', 'error', 'ide', 'permission', 'success', 'suggestion'])
-const CHOICES = ['mode', 'notify', 'checker', 'scout_findings', 'tests_with_changes', 'open_on_start', 'enabled']
+const CHOICES = ['mode', 'notify', 'sound_set', 'checker', 'scout_findings', 'tests_with_changes', 'open_on_start', 'enabled']
 const BOXES = ['max_parallel', 'max_minutes', 'auto_retries', 'archive_days', 'test_commands']
 
 /** The drawn tree without the scout page's "Results · …" line (T-622 added it after these trees were saved; scout-runs.test.tsx checks it). */
@@ -235,6 +235,9 @@ test('Settings in VS Code at width 50: groups as headings, a Select for each cho
   expect((await ui.find({ key: 'setting:notify' }))?.props.options).toEqual([{ value: 'off' }, { value: 'sound' }, { value: 'voice' }])
   expect((await ui.find({ key: 'setting:notify' }))?.props.value).toBe('sound')
   expect((await ui.find({ key: 'setting:scout_findings' }))?.props.value).toBe('backlog')
+  // T-650: the sound set is picked from 1, 2 and 3, and shows the one in use
+  expect((await ui.find({ key: 'setting:sound_set' }))?.props.options).toEqual([{ value: '1' }, { value: '2' }, { value: '3' }])
+  expect((await ui.find({ key: 'setting:sound_set' }))?.props.value).toBe('2')
   for (const name of BOXES) expect((await ui.find({ key: `setting:${name}` }))?.type, name).toBe('Input')
   expect((await ui.find({ key: 'setting:max_parallel' }))?.props.value).toBe('2')
   // T-460: Roles and Kinds open their pages from links, not Buttons
@@ -432,9 +435,10 @@ test("T-460 a scout's edit page in VS Code: one Save Button and a Cancel link, n
 })
 
 // the checker's case: a question's page in VS Code had its answers in a row of Buttons that doesn't wrap, plus a Back Button
+// (T-651: now one numbered link line per answer)
 const QUESTION = { id: 'Q-3', text: 'Should the board open by itself?', options: ['Yes', 'No'], asked_at: new Date(T0 - 5 * 60_000).toISOString() }
 for (const bodyColumns of [40, 80]) {
-  test(`T-460 a question's page in VS Code at width ${bodyColumns}: answers in a row that wraps, one primary, "← Tasks" a link`, async ($, on) => {
+  test(`T-460 a question's page in VS Code at width ${bodyColumns}: answers as numbered link lines, "← Tasks" a link`, async ($, on) => {
     seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, questions: [QUESTION] } } })
     on('ui.toast', () => ({ value: undefined }))
     const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'vscode' })
@@ -442,9 +446,13 @@ for (const bodyColumns of [40, 80]) {
     const tree = await ui.drawn()
     tidy(tree, `question at width ${bodyColumns}`)
     expect(texts(tree).join(' ')).toContain(QUESTION.text)
+    // T-651: the answers are numbered link lines, one under the other (they wrap as text does), not a row of Buttons;
+    // the only Buttons are the hidden ones holding the number keys
     const row = await ui.find({ key: 'vs-answers' })
-    expect([row?.props.flexDirection, row?.props.flexWrap]).toEqual(['row', 'wrap'])
-    expect(elements(tree).filter(n => n.type === 'Button').map(n => [n.props?.label, n.props?.variant])).toEqual([['Yes', 'primary'], ['No', 'secondary']])
+    expect(row?.props.flexDirection).toBe('column')
+    for (const [i, c] of QUESTION.options.entries())
+      expect((await ui.find({ key: `choice-${i + 1}` }))?.props.text).toBe(mdLink(`${i + 1}. ${c}`, vsHref('choice', String(i + 1))))
+    expect(elements(tree).filter(n => n.type === 'Button').map(n => [n.props?.label, n.props?.hotkey])).toEqual([['Yes', '1'], ['No', '2']])
     expect((await ui.find({ key: 'answer' }))?.type).toBe('Input')
     expect((await ui.find({ key: 'question-back' }))?.props.pressableLinks).toEqual([vsHref('page', 'back/question-back')])
     await follow(ui, 'question-back', vsHref('page', 'back/question-back'))
