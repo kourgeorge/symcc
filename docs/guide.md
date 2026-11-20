@@ -87,7 +87,7 @@ picks up again next time.
 | `todo` | Ready to be picked up (once the tasks it waits for are done) |
 | `doing` | A worker is on it right now |
 | `waiting` | It needs an answer from you (shown under NEEDS YOU) |
-| `review` | Ready for review: the worker is done and the checks passed, but nothing is merged until you approve it |
+| `review` | Ready for review: the worker is done and the checks passed, but nothing is merged until you approve it. Once you approve, the task leaves NEEDS YOU and shows with the running tasks (prep, queue, test, merge) until the merge ends |
 | `paused` | Stopped on purpose, until resumed |
 | `failed` | It could not be finished; the lead decides what next. Its page starts with a "Why it failed" block: one plain sentence for the reason (tests failed, the checker found problems, files outside the task, no change, no result, out of time, an API error or refusal, the worker ended its turn before its work finished, could not start, a merge conflict), what the worker's report asks for (a `NEED FILES:` line or a question), and what to do next (Retry, ask the lead in the chat to change the task, or Drop). Its key line lists `r retry` and `x drop`. The board row and the lead's board show the same sentence |
 | `done` | Merged into your branch. This is final |
@@ -1015,7 +1015,7 @@ switch, reset, stash, branch or tag changes, merge, rebase, push and so on) is r
 read-only commands with options or settings that write files or run programs (such as
 `git diff --output=...` or `-c` settings that run a program). This check works on the command text and
 is a best effort, not a sandbox: git run through a variable, a script or other shell tricks can still
-get through. The real fix is the worker sandbox (T-365).
+get through. There is no sandbox yet.
 
 **Scratch repositories in /tmp.** Workers and checkers may still run git writes (`git init`,
 `add`, `commit`, `merge`...) in a throwaway repository under `/tmp` (or the system temp folder
@@ -1027,7 +1027,10 @@ shell is not in the temp folder, a `cd` with a word before it such as `builtin c
 and so does `--global` or `--system` or a shortening of them (the owner's own git settings), a
 `config -f` file outside the scratch folder, and any word with a space after the git command (a
 command given in quotes, as in `rebase -x '...'`; the message of `commit`, `tag`, `merge`, `notes`
-or `stash -m` and `--author=` are fine); scouts stay read-only. This rule stops honest mistakes; it
+or `stash -m` and `--author=` are fine); scouts stay read-only. When symcc stops an agent process it
+started earlier (after a reload or a crash), it first checks that the process is still that agent
+(same program, started at about the recorded time), so a process that took over a reused number is
+never stopped. This rule stops honest mistakes; it
 is not a security boundary: anything that needs a deliberate shell trick (`eval`, a script file,
 `sh -c` variants, symbolic links inside `.git`, files the same line writes, git hooks or settings)
 is the accepted risk and is not checked further.
@@ -1416,7 +1419,10 @@ its read-only `stats` tool.
   investigations on their own (how many, answered, time, tokens, tries; see
   [investigation tasks](#investigation-tasks)); by role and where tasks came from (lead,
   you, all scouts with each scout on its own line under them, workers), each with its share,
-  average tokens and time; done per day for the last 7 days with activity, oldest first.
+  average tokens and time. Each scout's line has a small scorecard under it: how many tasks its
+  findings became (how many merged, were dropped or are still open), its own tokens in the range,
+  and the tokens per merged fix (its tokens plus its merged tasks' tokens, divided by the number
+  merged; "—" when none merged). A scout that used tokens but made no task is listed too; done per day for the last 7 days with activity, oldest first.
 - **What is left out:** tasks with no tries recorded are left out of the averages (the
   report says how many). Time waiting for you is not shown: history
   entries from older boards have no times.
