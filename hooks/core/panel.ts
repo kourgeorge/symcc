@@ -13,7 +13,7 @@ import { onDemand } from './scouts'
 import { fmtDuration, runMs, sumRuns } from './runs'
 import { ellipsis, num } from './text'
 import { whyFailed } from './failure'
-import { statusMark } from './details'
+import { statusMark, wrapSegs } from './details'
 import { type PhaseStage, type PhaseTask, stageStep, taskPhase } from './phase'
 
 export * from './failure'
@@ -625,6 +625,16 @@ export function answerChoices(files: readonly string[] | undefined, options: rea
   if (files?.length) return ['Allow', "Don't allow", 'Answer…']
   if (options?.length) return [...options.slice(0, 8), 'Answer…']
   return []
+}
+
+/** Answer choice number `n` as the numbered lines of a question page, like Claude Code's question pop-up:
+ *  "1. Invalid: doctor and run reject it" wrapped at spaces to `width` columns, the next lines under its text
+ *  (after the "1. "); a word longer than the room is cut. Every line starts with `indent`. */
+export function choiceLines(text: string, n: number, width: number, indent = ''): string[] {
+  const mark = `${n}. `
+  const room = Math.max(1, width - indent.length - mark.length)
+  const lines = wrapSegs([{ text, color: 'text' }], room).map(l => l.map(s => s.text).join(''))
+  return (lines.length ? lines : ['']).map((l, i) => `${indent}${i ? ' '.repeat(mark.length) : mark}${l}`)
 }
 
 /** The keys at the bottom of a task's diff view: a and x while it is in review, d when one file is shown. */

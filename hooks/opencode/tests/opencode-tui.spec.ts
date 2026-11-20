@@ -267,14 +267,14 @@ test('the panel: the banner, then the list grouped by state (NEEDS YOU, what run
   // a waiting task: its question and the numbered choices, the last one the owner's own answer
   const asks = panelLines(f, { opened: 'T-3', cursor: 0 }, NOW, 100).lines.map(lineText)
   expect(asks.some(l => l.includes('asks: Which database?'))).toBe(true)
-  expect(asks).toContain('  [2] postgres')
+  expect(asks).toContain('  2. postgres')
   expect(answerOptions(f, 'T-3')).toEqual(['mysql', 'postgres', OWN_ANSWER])
   expect(panelKeys(f, 'T-3').map(k => k.word)).toEqual(['answer', 'drop', 'needs review', 'back'])
   // a running worker whose time is up: its page asks for more time, with Claude's +30 min / +60 min / Stop it
   const over = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => (t.id === 'T-1' ? { ...t, time_ask: AT, note: 'time is up' } : t)) } }
   expect(panelKeys(over, 'T-1').map(k => k.word)).toEqual(['answer', 'pause', 'drop', 'needs review', 'back'])
   expect(answerOptions(over, 'T-1')).toEqual(['+30 min', '+60 min', 'Stop it', OWN_ANSWER])
-  expect(panelLines(over, { opened: 'T-1', cursor: 0 }, NOW, 100).lines.map(lineText)).toContain('  [1] +30 min')
+  expect(panelLines(over, { opened: 'T-1', cursor: 0 }, NOW, 100).lines.map(lineText)).toContain('  1. +30 min')
   // a waiting task whose finished work only waits for the owner's files: nothing to answer
   const files = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => (t.id === 'T-3' ? { ...t, merge_wait: { dirty: ['src/a.ts'] } } : t)) } }
   expect(panelKeys(files, 'T-3').map(k => k.word)).toEqual(['merge now', 'drop', 'needs review', 'back'])
@@ -1304,11 +1304,19 @@ test('T-583: on a waiting task\'s and a question\'s page each choice is a clicka
   const page = (id: string) => panelLines(f, { opened: id, cursor: 0 }, NOW, 100)
   // the choices are numbered lines, each with its click
   const d = page('Q-3')
-  const at = d.lines.map(lineText).indexOf('  [1] Once a day')
+  const at = d.lines.map(lineText).indexOf('  1. Once a day')
   expect(at).toBeGreaterThan(0)
   expect(d.hits[at]).toEqual({ choice: 1 })
-  expect(d.lines.map(lineText)).toContain(`  [3] ${OWN_ANSWER}`)
-  expect(page('T-4').lines.map(lineText)).toContain("  [2] Don't allow")
+  expect(d.lines.map(lineText)).toContain(`  3. ${OWN_ANSWER}`)
+  expect(page('T-4').lines.map(lineText)).toContain("  2. Don't allow")
+  // T-651: a long choice wraps under its text inside the width, and a click on any of its lines picks it
+  const long = { ...f, view: { ...f.view, questions: [{ id: 'Q-4', text: 'Cap?', options: ["Invalid: doctor and run reject it (scout's suggestion)", 'Unlimited: run until another cap stops it'], asked_at: AT }] } }
+  const narrow = panelLines(long, { opened: 'Q-4', cursor: 0 }, NOW, 40)
+  const first = narrow.lines.map(lineText).indexOf('  1. Invalid: doctor and run reject it')
+  expect(first).toBeGreaterThan(0)
+  expect(narrow.lines.map(lineText).slice(first, first + 4)).toEqual(['  1. Invalid: doctor and run reject it', "     (scout's suggestion)", '  2. Unlimited: run until another cap', '     stops it'])
+  expect(narrow.hits.slice(first, first + 4)).toEqual([{ choice: 1 }, { choice: 1 }, { choice: 2 }, { choice: 2 }])
+  expect(narrow.lines.map(lineText).every(l => l.length <= 40)).toBe(true)
   const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)]])
   const sent: { sessionID: string; name: string; text: string }[] = []
   const slots: { append: string; render: (input: never) => unknown }[] = []
@@ -1345,9 +1353,9 @@ test('T-583: on a waiting task\'s and a question\'s page each choice is a clicka
   const back = () => board.press('back', 'ses_1')
   // Q-3: a right click does nothing; a left click on a choice answers it; the page says it was sent
   await openPage('Q-3')
-  await clickChoice('  [2] Once a week', 2)
+  await clickChoice('  2. Once a week', 2)
   expect(sent).toEqual([])
-  await clickChoice('  [2] Once a week')
+  await clickChoice('  2. Once a week')
   expect(rowEls(panel).some(r => r.text.includes('answer sent: Once a week'))).toBe(true)
   // the number key does the same; "Answer…" asks for a typed answer
   await board.press('1', 'ses_1')
@@ -1358,21 +1366,21 @@ test('T-583: on a waiting task\'s and a question\'s page each choice is a clicka
   // T-3: its own options
   await openPage('T-3')
   expect(rowEls(panel).some(r => r.text.includes('answer sent'))).toBe(false)
-  await clickChoice('  [1] mysql')
+  await clickChoice('  1. mysql')
   await board.press('2', 'ses_1')
   await back()
   // T-1: more time
   await openPage('T-1')
-  await clickChoice('  [2] +60 min')
+  await clickChoice('  2. +60 min')
   await board.press('3', 'ses_1')
   await back()
   // T-4: Allow / Don't allow files
   await openPage('T-4')
-  await clickChoice('  [1] Allow')
+  await clickChoice('  1. Allow')
   await board.press('2', 'ses_1')
   // a typed answer left empty sends nothing
   answers.prompt = ''
-  await clickChoice(`  [3] ${OWN_ANSWER}`)
+  await clickChoice(`  3. ${OWN_ANSWER}`)
   expect(sent.map(x => `${x.name} ${x.text}`)).toEqual([
     'symcc-answer Q-3 Once a week',
     'symcc-answer Q-3 Once a day',

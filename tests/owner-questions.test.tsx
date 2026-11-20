@@ -15,6 +15,7 @@ import { answerOnBoard } from '../hooks/app/questions'
 import { SYMCC_WORDS } from '../hooks/host'
 import { CLAUDE_WORDS } from '../hooks/claude/host'
 import { tellLead, noteForLead } from '../hooks/app/tell'
+import { vsHref, mdLink } from '../hooks/claude/ui/vscode'
 
 const ROOT = '/repo'
 const ISO = '2026-11-18T10:00:00.000Z'
@@ -230,6 +231,9 @@ test('the panel lists the open questions above the tasks; a button answers one a
   expect((await ui.find({ key: 'choice-1' }))?.props.label).toBe('Yes')
   expect((await ui.find({ key: 'choice-2' }))?.props.label).toBe('No')
   expect((await ui.find({ key: 'choice-3' }))?.props.label).toBe('Answer…')
+  // T-651: numbered lines, as Claude Code's question pop-up, Answer… the last one
+  expect([(await ui.find({ key: 'choice-1' }))?.text, (await ui.find({ key: 'choice-2' }))?.text, (await ui.find({ key: 'choice-3' }))?.text]).toEqual(['1. Yes', '2. No', '3. Answer…'])
+  expect((await ui.find({ key: 'choice-key-1' }))?.props.hotkey).toBe('1')
   expect(await ui.find({ type: 'Text', text: 'keys 1-3 pick a choice' })).toBeDefined()
   // told once: the bottom key list has only b back (T-513)
   expect(JSON.stringify(await ui.drawn()).match(/pick/g)?.length).toBe(1)
@@ -250,6 +254,77 @@ test('the panel lists the open questions above the tasks; a button answers one a
   expect(await ui.find({ type: 'Text', text: /Questions for you/ })).toBeUndefined()
   expect(await ui.find({ type: 'Text', text: /Docs/ })).toBeDefined()
   await ui.unmount()
+})
+
+test("T-651: a question's page with long options shows them as numbered lines inside the box; a click on any line answers", async ($, on) => {
+  const options = ["Invalid: doctor and run reject it (scout's suggestion)", 'Unlimited: run until another cap stops it']
+  const [b] = addQuestion({ ...emptyBoard(), tasks: [] as never }, 'What should a cap of 0 mean?', options, ISO)
+  const view = { tasks: b.tasks, working: [], scouts: [], mode: 'auto', test_commands: [], questions: b.questions }
+  stateOf(on, { opened: b.questions![0]!.id, view: { shape: 'view-1', value: view } })
+  const written = fakeFiles(on, { '/board.json': JSON.stringify(b), '/board.lock': null })
+  on('ui.toast', () => ({ value: undefined }))
+  const answers = () => Object.entries(written).filter(([p]) => /board\.json\..*\.tmp$/.test(p)).map(([, text]) => JSON.parse(text).questions[0].answer)
+  // the terminal, 44 columns: 40 inside the box; each option wraps under its text, never past the border
+  const term = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 44 }, surface: 'terminal' })
+  const keys = ['choice-1', 'choice-1-line-2', 'choice-2', 'choice-2-line-2', 'choice-3']
+  const shown: string[] = []
+  for (const key of keys) shown.push(String((await term.find({ key }))?.text))
+  expect(shown).toEqual(['1. Invalid: doctor and run reject it', "   (scout's suggestion)", '2. Unlimited: run until another cap', '   stops it', '3. Answer…'])
+  expect(shown.every(l => l.length <= 40)).toBe(true)
+  expect((await term.find({ key: 'choice-key-2' }))?.props.hotkey).toBe('2')
+  await term.press({ key: 'choice-2-line-2' })
+  expect(answers()).toEqual([options[1]])
+  await term.unmount()
+})
+
+test("T-651: on desktop and mobile each long option is one native Button labelled \"1. …\" (it wraps by itself); a press answers", async ($, on) => {
+  const options = ["Invalid: doctor and run reject it (scout's suggestion)", 'Unlimited: run until another cap stops it']
+  const [b] = addQuestion({ ...emptyBoard(), tasks: [] as never }, 'What should a cap of 0 mean?', options, ISO)
+  const view = { tasks: b.tasks, working: [], scouts: [], mode: 'auto', test_commands: [], questions: b.questions }
+  stateOf(on, { opened: b.questions![0]!.id, view: { shape: 'view-1', value: view } })
+  const written = fakeFiles(on, { '/board.json': JSON.stringify(b), '/board.lock': null })
+  on('ui.toast', () => ({ value: undefined }))
+  const answers = () => Object.entries(written).filter(([p]) => /board\.json\..*\.tmp$/.test(p)).map(([, text]) => JSON.parse(text).questions[0].answer)
+  // mobile first: the press on desktop (the last) answers the question, and its page then goes away
+  for (const surface of ['mobile', 'desktop'] as const) {
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 44 }, surface })
+    const buttons = (await ui.findAll({ type: 'Button' })).filter(x => /^choice-\d/.test(String(x.props.key ?? '')))
+    expect(buttons.map(x => [x.props.key, x.props.label]), surface).toEqual([
+      ['choice-1', `1. ${options[0]}`],
+      ['choice-2', `2. ${options[1]}`],
+      ['choice-3', '3. Answer…'],
+    ])
+    expect(await ui.find({ key: 'choice-1-line-2' }), surface).toBeUndefined()
+    expect((await ui.find({ key: 'choice-key-2' }))?.props.hotkey, surface).toBe('2')
+    if (surface === 'desktop') {
+      await ui.press({ key: 'choice-2' })
+      expect(answers()).toEqual([options[1]])
+    }
+    await ui.unmount()
+  }
+})
+
+test("T-651: in VS Code a question's options are numbered link lines, one under the other; a click on one answers", async ($, on) => {
+  const options = ["Invalid: doctor and run reject it (scout's suggestion)", 'Unlimited: run until another cap stops it']
+  const [b] = addQuestion({ ...emptyBoard(), tasks: [] as never }, 'What should a cap of 0 mean?', options, ISO)
+  const view = { tasks: b.tasks, working: [], scouts: [], mode: 'auto', test_commands: [], questions: b.questions }
+  stateOf(on, { opened: b.questions![0]!.id, view: { shape: 'view-1', value: view } })
+  const written = fakeFiles(on, { '/board.json': JSON.stringify(b), '/board.lock': null })
+  on('ui.toast', () => ({ value: undefined }))
+  const vs = await $.ui.mount({ ...PANE, surface: 'vscode' })
+  expect((await vs.find({ key: 'vs-answers' }))?.props.flexDirection).toBe('column')
+  for (const [i, c] of options.entries()) {
+    const line = await vs.find({ key: `choice-${i + 1}` })
+    expect([line?.type, line?.props.text]).toEqual(['Markdown', mdLink(`${i + 1}. ${c}`, vsHref('choice', String(i + 1)))])
+  }
+  // the keyboard: key 2 belongs to a hidden Button (a Markdown link can't take the focus) that sends the same answer
+  const key2 = await vs.find({ key: 'choice-key-2' })
+  expect([key2?.type, key2?.props.hotkey]).toEqual(['Button', '2'])
+  expect((await vs.find({ key: 'vs-choice-keys' }))?.props.display).toBe('none')
+  await vs.press({ key: 'choice-1', link: { href: vsHref('choice', '1') } })
+  const saved = () => Object.entries(written).filter(([p]) => /board\.json\..*\.tmp$/.test(p)).map(([, text]) => JSON.parse(text))
+  expect(saved().map(x => x.questions[0].answer)).toEqual([options[0]])
+  await vs.unmount()
 })
 
 test('the band says "2 questions for you" and lists them, also with no task on the board', async ($, on) => {

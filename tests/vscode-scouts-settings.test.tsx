@@ -13,7 +13,7 @@ import type { On } from 'claude-code'
 import { SETTINGS, SETTING_GROUPS } from '../hooks/board'
 import { CLICK_HINT } from '../hooks/claude/ui/surface'
 import { reportStart } from '../hooks/claude/ui/vscode-scouts'
-import { vsHref } from '../hooks/claude/ui/vscode'
+import { mdLink, vsHref } from '../hooks/claude/ui/vscode'
 
 type Node = { type?: string; key?: string; props?: Record<string, unknown>; children?: unknown[] }
 
@@ -435,9 +435,10 @@ test("T-460 a scout's edit page in VS Code: one Save Button and a Cancel link, n
 })
 
 // the checker's case: a question's page in VS Code had its answers in a row of Buttons that doesn't wrap, plus a Back Button
+// (T-651: now one numbered link line per answer)
 const QUESTION = { id: 'Q-3', text: 'Should the board open by itself?', options: ['Yes', 'No'], asked_at: new Date(T0 - 5 * 60_000).toISOString() }
 for (const bodyColumns of [40, 80]) {
-  test(`T-460 a question's page in VS Code at width ${bodyColumns}: answers in a row that wraps, one primary, "← Tasks" a link`, async ($, on) => {
+  test(`T-460 a question's page in VS Code at width ${bodyColumns}: answers as numbered link lines, "← Tasks" a link`, async ($, on) => {
     seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, questions: [QUESTION] } } })
     on('ui.toast', () => ({ value: undefined }))
     const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'vscode' })
@@ -445,9 +446,13 @@ for (const bodyColumns of [40, 80]) {
     const tree = await ui.drawn()
     tidy(tree, `question at width ${bodyColumns}`)
     expect(texts(tree).join(' ')).toContain(QUESTION.text)
+    // T-651: the answers are numbered link lines, one under the other (they wrap as text does), not a row of Buttons;
+    // the only Buttons are the hidden ones holding the number keys
     const row = await ui.find({ key: 'vs-answers' })
-    expect([row?.props.flexDirection, row?.props.flexWrap]).toEqual(['row', 'wrap'])
-    expect(elements(tree).filter(n => n.type === 'Button').map(n => [n.props?.label, n.props?.variant])).toEqual([['Yes', 'primary'], ['No', 'secondary']])
+    expect(row?.props.flexDirection).toBe('column')
+    for (const [i, c] of QUESTION.options.entries())
+      expect((await ui.find({ key: `choice-${i + 1}` }))?.props.text).toBe(mdLink(`${i + 1}. ${c}`, vsHref('choice', String(i + 1))))
+    expect(elements(tree).filter(n => n.type === 'Button').map(n => [n.props?.label, n.props?.hotkey])).toEqual([['Yes', '1'], ['No', '2']])
     expect((await ui.find({ key: 'answer' }))?.type).toBe('Input')
     expect((await ui.find({ key: 'question-back' }))?.props.pressableLinks).toEqual([vsHref('page', 'back/question-back')])
     await follow(ui, 'question-back', vsHref('page', 'back/question-back'))
