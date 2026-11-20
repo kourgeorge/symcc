@@ -3,7 +3,7 @@ import type { SymccMode, SymccScout, SymccStatus, SymccTask } from '../../types'
 import { asBlockers, type BoardTask, type CheckStep, emptyBoard, OPEN, intoOf, isInvestigation, kindOf, STATUS_WORD, waitsForFiles } from './board-file'
 import { asksMoreTime, needsYou, needsYouFirst } from './commands'
 import { boardSections, type DayGroup, dayLabel, dayOf, localOffset, taskDay } from './days'
-import { checkStepNow, finishingNow } from './lead'
+import { approveRunning, checkStepNow, finishingNow, shownStatus } from './lead'
 import { originOf } from './origin'
 import { isAnswered, OVERTIME_OPTIONS, overtimeQuestion, timeLimitOf } from './task'
 import { waitFilesNote } from './review'
@@ -53,14 +53,16 @@ export function nextScoutText(scouts: (Pick<SymccScout, 'name' | 'running' | 'ne
 
 /** What the workers and scouts part of the line above the prompt needs. Busy workers are the tasks being worked on;
  *  a doing task whose work symcc is testing and merging now (see finishingNow) is "merging", not a worker. */
-export type CrewBoard = { mode?: SymccMode; plan_mode?: boolean; max_parallel?: number; tasks: Pick<BoardTask, 'status' | 'finishing'>[]; scouts: (Pick<SymccScout, 'name' | 'running' | 'next_run' | 'paused'> & { every_minutes?: number })[] }
+export type CrewBoard = { mode?: SymccMode; plan_mode?: boolean; max_parallel?: number; tasks: (Pick<BoardTask, 'status' | 'finishing'> & Partial<Pick<BoardTask, 'checking'>>)[]; scouts: (Pick<SymccScout, 'name' | 'running' | 'next_run' | 'paused'> & { every_minutes?: number })[] }
 
 /** The workers and scouts, each '' when there is nothing to say: `workers` "1/3 workers", then "1 merging" for tasks
  *  symcc is testing and merging (each left out while there are none: "all done" or the counts already say so), `scouts` "5 scouts", and `next` "next: gaps-bot in 1h 00m" or
  *  "running: gaps-bot" (no "next" in plan mode or board mode paused, as no scout starts then). */
 export function crewParts(c: CrewBoard, nowMs: number): { workers: string; scouts: string; next: string } {
-  const merging = c.tasks.filter(t => finishingNow(t, nowMs)).length
-  const busy = c.tasks.filter(t => t.status === 'doing').length - merging
+  const finishing = c.tasks.filter(t => finishingNow(t, nowMs)).length
+  const busy = c.tasks.filter(t => t.status === 'doing').length - finishing
+  // an approved task in review whose approve runs (approveRunning) merges too
+  const merging = finishing + c.tasks.filter(t => approveRunning(t, nowMs)).length
   const n = c.scouts.length
   const running = c.scouts.find(s => s.running)
   const next = !n ? '' : running ? `running: ${running.name}` : c.plan_mode || c.mode === 'paused' ? '' : nextScoutText(c.scouts, nowMs)
@@ -90,6 +92,9 @@ export const STEP_WORD: Record<CheckStep, string> = { prep: 'prep', testing: 'te
  *  The word (STEP_WORD) stays on the task page and in the notes; STEP_LEGEND explains the icons. */
 export const STEP_ICON: Record<CheckStep, string> = { prep: '✎', testing: '⧗', checker: '⌕', merging: '⇢' }
 
+/** What the row of an approved task in review says while its approve runs (approveRunning), in place of "Enter to review". */
+export const APPROVED_NOTE = 'approved, merging'
+
 /** The row icon of a task waiting for its turn in the merge line (its note is "in line (n)"): "⋯ 2h5m". */
 export const IN_LINE_ICON = '⋯'
 
@@ -102,7 +107,8 @@ export const waitsInLine = (t: { status: SymccStatus; note?: string }): boolean 
 /** The mark at the front of a task's row: ⋯ while it waits in the merge line, its step's icon (STEP_ICON) during a
  *  check step, else its own mark (statusMark: ▶ while its worker works). */
 export function rowMark(t: Pick<SymccTask, 'status'> & { note?: string; runs?: readonly unknown[]; attempts?: number } & Pick<BoardTask, 'checking'>, nowMs: number): string {
-  if (waitsInLine(t)) return IN_LINE_ICON
+  // an approved task in review waits in the merge line too while its approve runs (approveRunning)
+  if (waitsInLine({ ...t, status: approveRunning(t, nowMs) ? 'doing' : t.status })) return IN_LINE_ICON
   const step = checkStepNow(t, nowMs)
   return step ? STEP_ICON[step] : statusMark(t)
 }
@@ -173,7 +179,7 @@ export const rowDuration = (ms: number): string => fmtDuration(ms).replace(/h 0?
  * '' for a task not doing, or with nothing to count.
  */
 export function rowTime(t: Pick<SymccTask, 'status' | 'runs'> & Pick<BoardTask, 'checking'>, nowMs: number, since?: number | string): string {
-  if (t.status !== 'doing') return ''
+  if (shownStatus(t, nowMs) !== 'doing') return ''
   const runs = t.runs ?? []
   const last = runs[runs.length - 1]
   const at = typeof since === 'number' ? since : Date.parse(since ?? '')
@@ -185,10 +191,9 @@ export function rowTime(t: Pick<SymccTask, 'status' | 'runs'> & Pick<BoardTask, 
 /** The status cell of a list or band row (see statusCell): a doing task shows the total work time of all its tries,
  *  "1h40m", also in a check step or in the merge line, where the row's mark (rowMark) is the step's icon in place of
  *  the step word ("⧗ 9m"); with `form` 'none' (narrow rows) the time is left out (''). A task in review or waiting in
- *  a check step (an approve) shows '' (its icon says it). The other rows: just statusCell. */
+ *  a check step (an approve, approveRunning) shows the total work time too, like a doing row. The other rows: just statusCell. */
 export function rowCell(t: Parameters<typeof statusCell>[0] & { note?: string }, nowMs: number, since?: number | string, form: TotalForm = 'total'): string {
-  const step = checkStepNow(t, nowMs)
-  if (step && t.status !== 'doing') return ''
+  if (approveRunning(t, nowMs)) return form === 'none' ? '' : rowTime(t, nowMs, since)
   const cell = statusCell(t, nowMs, since)
   if (t.status !== 'doing' || (!cell && !waitsInLine(t)) || cell === MORE_TIME_CELL) return cell
   return form === 'none' ? '' : rowTime(t, nowMs, since)
@@ -229,10 +234,11 @@ export const roleTag = (t: { kind?: unknown; role?: string }): string => {
  *  waiting task, why a failed one failed (whyFailed, the same sentence as the lead's board and its page), the note of a backlog one, and '' for finished ones. With `here` (the branch checked
  *  out now), a task that merges into another branch starts with "→ that-branch", so the usual case stays clean.
  *  `maxMinutes`: the board's max_minutes, for the time limit in the more-time question. */
-export function rowExtra(t: BoardTask, tasks: Pick<SymccTask, 'id' | 'status'>[], here = '', maxMinutes: number = emptyBoard().max_minutes): string {
+export function rowExtra(t: BoardTask, tasks: Pick<SymccTask, 'id' | 'status'>[], here = '', maxMinutes: number = emptyBoard().max_minutes, nowMs: number = Date.now()): string {
   const into = intoOf(t)
   const other = here && into !== here ? `→ ${into}` : ''
-  const rest = fileWaitText(t) || rowExtraOf(t, tasks, maxMinutes)
+  // an approved task whose approve runs: nothing to review any more, its row says so (APPROVED_NOTE)
+  const rest = approveRunning(t, nowMs) ? APPROVED_NOTE : fileWaitText(t) || rowExtraOf(t, tasks, maxMinutes)
   return [other, rest].filter(Boolean).join(' · ')
 }
 
@@ -702,8 +708,9 @@ export function panelSections<T extends SymccTask>(tasks: T[], nowMs: number, of
     .sort(([a], [b]) => b.localeCompare(a))
     .map(([day, ts]) => ({ day, label: dayLabel(day, today), done: ts.length, dropped: 0, tasks: ts }))
   return {
-    needsYou: needsYouFirst(s.open.filter(needsYou)),
-    doing: s.open.filter(t => t.status === 'doing' && !asksMoreTime(t)),
+    needsYou: needsYouFirst(s.open.filter(t => needsYou(t, nowMs))),
+    // with the running tasks: an approved task in review (or waiting) while its approve runs (approveRunning)
+    doing: s.open.filter(t => shownStatus(t, nowMs) === 'doing' && !asksMoreTime(t)),
     todo: waitOrder(s.open.filter(t => t.status === 'todo' || t.status === 'paused'), (x, y) => +(x.status === 'paused') - +(y.status === 'paused') || runOrder(x, y)),
     backlog: s.backlog,
     done,

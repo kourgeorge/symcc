@@ -51,12 +51,14 @@ type BadgeTask = Pick<SymccTask, 'status' | 'runs'> & { note?: string; attempts?
  * The task page's status badge (and its Status line): the step a doing task is in, with the same icon as its row
  * (rowMark) and the step's word, then the total work time the rows show (rowTime): "▶ worker · 15m", "✎ prep · 15m",
  * "⌕ checker · 5m", "⋯ in line (2) · 9m", "⧗ test · 9m", "⇢ merge · 9m". A task in review or waiting in a check step
- * (an approve) shows the step without a time ("⇢ merge"). Every other task: its mark and status word ("◆ ready for
- * review", "○ to do"). `color`: the badge color of its status.
+ * (an approve) shows the step without a time ("⇢ merge"), and so does a task in review whose approve this page
+ * started (`merging`) before its first step is on the board ("✎ prep"): not "ready for review", the owner has
+ * nothing left to do on it. Every other task: its mark and status word ("◆ ready for review", "○ to do").
+ * `color`: the badge color of its status (doing's while an approve runs, see shownStatus).
  */
-export function statusBadge(t: BadgeTask, nowMs: number, since?: number | string): { text: string; color: string } {
-  const color = STATUS_BADGE[t.status]
-  const step = checkStepNow(t, nowMs)
+export function statusBadge(t: BadgeTask, nowMs: number, since?: number | string, merging = false): { text: string; color: string } {
+  const step = checkStepNow(t, nowMs) || (merging && t.status === 'review' ? 'prep' : '')
+  const color = STATUS_BADGE[step ? 'doing' : t.status]
   if (t.status !== 'doing') return { text: inLineNow(t) ? `${IN_LINE_ICON} ${t.note}` : step ? `${STEP_ICON[step]} ${STEP_WORD[step]}` : `${statusMark(t)} ${STATUS_WORD[t.status]}`, color }
   const word = inLineNow(t) ? `${IN_LINE_ICON} ${t.note}` : step ? `${STEP_ICON[step]} ${STEP_WORD[step]}` : `${STATUS_MARK.doing} worker`
   const time = rowTime(t, nowMs, since)
@@ -73,8 +75,8 @@ export type StageMark = { step: StageStep; state: 'done' | 'now' | 'later' }
  * merge, with "checker" only when the checker setting is on (`board.checker`) or a checker ran on this try, and
  * "review" after "test" when the task waits for the owner's review (any mode but auto, or needs review; always for a
  * task in review). A doing task: the steps before its step done, its step now, the rest later; a task in review: all
- * done up to review, review now; once approved and in a check step, all done up to "review ✓", then the approve's own
- * prep → line → test → merge with its step now ("… test ✓ → review ✓ → ● prep → line → test → merge"); a done task: all done. null for the
+ * done up to review, review now; once approved and in a check step, all done up to "review ✓", then only the
+ * approve's step it is in now and the merge ("… test ✓ → review ✓ → ● test → merge", "… review ✓ → ● merge"); a done task: all done. null for the
  * other statuses and for an investigation (nothing is merged).
  */
 export function taskStage(t: BadgeTask & Pick<SymccTask, 'needs_review'> & { kind?: unknown; checker?: string }, nowMs: number, board: { mode?: unknown; checker?: unknown } = {}): StageMark[] | null {
@@ -84,13 +86,14 @@ export function taskStage(t: BadgeTask & Pick<SymccTask, 'needs_review'> & { kin
   const review = t.status === 'review' || modeOf(board) !== 'auto' || t.needs_review === true
   const first: StageStep[] = ['worker', 'prep', ...(board.checker === true || hadChecker ? ['checker' as const] : []), 'line', 'test']
   // an approved task in review runs prep → line → test → merge again (its status stays review): every step up to
-  // "review ✓" done, then the approve's own steps with the one it is in now, so the line agrees with the badge
-  // (waiting in the merge line, note "in line (n)", it is at "line" even while its step still says prep)
+  // "review ✓" done, then only the approve's step it is in now and the merge, never its own finished steps again, so
+  // the line agrees with the badge and names no step twice (waiting in the merge line, note "in line (n)", it is at
+  // "line" even while its step still says prep)
   const inLine = inLineNow(t)
   if (t.status === 'review' && (step || inLine)) {
-    const again: StageStep[] = ['prep', ...(step === 'checker' && !inLine ? ['checker' as const] : []), 'line', 'test', 'merge']
-    const at = again.indexOf(inLine ? 'line' : step === 'testing' ? 'test' : step === 'merging' ? 'merge' : step || 'prep')
-    return [...[...first, 'review' as const].map(s => ({ step: s, state: 'done' as const })), ...again.map((s, i) => ({ step: s, state: i < at ? 'done' as const : i === at ? 'now' as const : 'later' as const }))]
+    const cur: StageStep = inLine ? 'line' : step === 'testing' ? 'test' : step === 'merging' ? 'merge' : step || 'prep'
+    const after: StageMark[] = cur === 'merge' ? [{ step: 'merge', state: 'now' }] : [{ step: cur, state: 'now' }, { step: 'merge', state: 'later' }]
+    return [...[...first, 'review' as const].map(s => ({ step: s, state: 'done' as const })), ...after]
   }
   const steps: StageStep[] = [...first, ...(review ? ['review' as const] : []), 'merge']
   const now: StageStep | 'all' =

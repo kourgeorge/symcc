@@ -1440,3 +1440,43 @@ test('T-580: opening a task\'s page in the TUI reads its latest report from its 
   expect(read.filter(p => p.endsWith('T-2-try-2.md')).length).toBe(1)
   board.stop()
 })
+
+test('T-596: an approved task in review whose approve runs leaves NEEDS YOU: listed and counted with the running tasks, with its step icon and time; its page badge names the step; a failed approve puts it back', () => {
+  const f0 = viewFile()
+  const fresh = new Date(NOW - 10_000).toISOString()
+  const runs = [{ started: new Date(NOW - 20 * 60_000).toISOString(), ended: new Date(NOW - 5 * 60_000).toISOString() }]
+  const withT2 = (extra: object) => ({ ...f0, view: { ...f0.view, tasks: f0.view.tasks.map(t => (t.id === 'T-2' ? { ...t, runs, ...extra } : t)) } })
+  const list = (f: ViewFile) => panelLines(f, { opened: '', cursor: 0 }, NOW, 120).lines.map(lineText)
+  const needsBlock = (lines: string[]) => {
+    const at = lines.findIndex(l => l.trim() === 'NEEDS YOU')
+    if (at < 0) return [] as string[]
+    const end = lines.findIndex((l, i) => i > at && !l.trim())
+    return lines.slice(at + 1, end < 0 ? undefined : end)
+  }
+  const cases = [
+    [{ checking: { step: 'prep', at: fresh } }, '✎', '✎ prep'],
+    [{ checking: { step: 'prep', at: fresh }, note: 'in line (2)' }, '⋯', '⋯ in line (2)'],
+    [{ checking: { step: 'testing', at: fresh } }, '⧗', '⧗ test'],
+    [{ checking: { step: 'merging', at: fresh } }, '⇢', '⇢ merge'],
+  ] as const
+  for (const [extra, icon, badge] of cases) {
+    const f = withT2(extra)
+    const lines = list(f)
+    expect(needsBlock(lines).some(l => /T-2 /.test(l))).toBe(false)
+    expect(lines.find(l => /\bT-2 /.test(l))).toMatch(new RegExp(`T-2 +${icon} 15m`))
+    const band = bandLines(f, NOW, 200, 20).map(lineText)
+    expect(band[0]).toContain('2 doing')
+    expect(band[0]).toContain('1 merging')
+    expect(band[0]).not.toContain('review')
+    expect(band.find(l => l.startsWith('T-2'))).toMatch(new RegExp(`T-2 +${icon} 15m`))
+    const page = panelLines(f, { opened: 'T-2', cursor: 0 }, NOW, 140).lines.map(lineText).join('\n')
+    expect(page).toContain(badge)
+    expect(page).not.toContain('ready for review')
+  }
+  // no approve running (or it ended, failed: its step is cleared, or its mark went stale): back under NEEDS YOU
+  for (const extra of [{}, { checking: { step: 'testing', at: new Date(NOW - 3_600_000).toISOString() } }]) {
+    const f = withT2(extra)
+    expect(needsBlock(list(f)).some(l => /T-2 /.test(l))).toBe(true)
+    expect(bandLines(f, NOW, 200, 20).map(lineText)[0]).toContain('1 ready for review')
+  }
+})

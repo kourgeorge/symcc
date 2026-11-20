@@ -1,7 +1,7 @@
 // The band above the prompt: the board in one or a few lines.
 import { drawNow } from './now'
 import type { MatchedHook } from 'claude-code'
-import { statusCounts, newestFirst, bandLeads, bandNote, bandBrand, bandWhere, modeLabel, modeOf, planBandText, withCrew, fileWaitText, questionsForYou, waitsForYou } from '../../board'
+import { statusCounts, newestFirst, bandLeads, bandNote, bandBrand, bandWhere, modeLabel, modeOf, planBandText, withCrew, fileWaitText, questionsForYou, waitsForYou, shownStatus } from '../../board'
 import { type PaneView, S } from '../../app/state'
 import { type $, panelValues } from '../panel'
 import { openPane } from '../../app/open'
@@ -27,7 +27,9 @@ export async function renderAbovePrompt($: $, e: Parameters<AbovePromptHook>[1],
   const questions = (v as PaneView | undefined)?.questions ?? []
   if ((!tasks.length && !questions.length) || (v as PaneView | undefined)?.enabled === false) return next(e)
   const { Box, Text, Button } = $.ui.resolve(e)
-  const summary = statusCounts(tasks, ['doing', 'todo', 'paused', 'review', 'waiting', 'failed', 'done']).join(' · ')
+  const nowMs = await drawNow($)
+  // an approved task whose approve runs counts and shows as doing (shownStatus)
+  const summary = statusCounts(tasks, ['doing', 'todo', 'paused', 'review', 'waiting', 'failed', 'done'], nowMs).join(' · ')
   const order = ['review', 'waiting', 'failed', 'doing']
   const live = tasks.filter(t => order.includes(t.status)).sort(newestFirst)
   const rows = Math.max(1, Math.min(6, (e.props.maxRows ?? 8) - 1))
@@ -36,7 +38,6 @@ export async function renderAbovePrompt($: $, e: Parameters<AbovePromptHook>[1],
   const plan = (v as PaneView | undefined)?.plan_mode ? planBandText(tasks.filter(t => t.status === 'doing').length) : ''
   // the mode, the busy workers, the counts and the scouts, fitted beside the name and the "open board" button:
   // "(next: …)" goes first when short of room, then the scouts (see withCrew)
-  const nowMs = await drawNow($)
   const crew = { mode: modeOf(v), plan_mode: !!plan, max_parallel: (v as PaneView | undefined)?.max_parallel, tasks, scouts: v?.scouts ?? [] }
   const { brand, facts } = bandTitle(e.props.bodyColumns ?? 80, room => withCrew((w, s) => `${bandWhere(S.root, S.N.name)} ${[modeLabel(modeOf(v)), questionsForYou(questions.length), w, summary, s, plan].filter(Boolean).join(' · ')} `, crew, nowMs, room))
   // the questions take the first rows, then the tasks that need you or run
@@ -49,7 +50,7 @@ export async function renderAbovePrompt($: $, e: Parameters<AbovePromptHook>[1],
   // a note the row's state already says ("worker on it" beside "▶ 12m") is left out; every other note stays (see bandNote)
   const note = (t: (typeof live)[number]) => bandNote(t, nowMs, since(t.id))
   const tail = (t: (typeof live)[number]) =>
-    fileWaitText(t) ? ` — ${fileWaitText(t)}` : waitsForYou(t) ? ` — ${t.question ?? t.note}` : note(t) ? ` — ${note(t)}` : ''
+    fileWaitText(t) ? ` — ${fileWaitText(t)}` : waitsForYou(t, nowMs) ? ` — ${t.question ?? t.note}` : note(t) ? ` — ${note(t)}` : ''
   return (
     <Box flexDirection="column">
       <Box flexDirection="row">
@@ -68,7 +69,7 @@ export async function renderAbovePrompt($: $, e: Parameters<AbovePromptHook>[1],
       ))}
       {shownTasks.map(t => (
         <Text wrap="truncate">
-          <Text color={color[t.status] as never}>
+          <Text color={color[shownStatus(t, nowMs)] as never}>
             {leads.get(t.id)}
           </Text>
           <Text> {t.title}</Text>

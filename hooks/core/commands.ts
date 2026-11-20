@@ -1,7 +1,8 @@
 // The slash commands.
 import type { SymccMode, SymccStatus, SymccTask } from '../../types'
 import { DEFAULT_NAME } from '../name'
-import { isMode, modeOf, normId, STATUS_WORD } from './board-file'
+import { type BoardTask, isMode, modeOf, normId, STATUS_WORD } from './board-file'
+import { approveRunning } from './lead'
 import { type DiffFile, statCount, YOUR_EDITS } from './review'
 import { parseSettingsCommand, type SettingName, type SettingsInput } from './settings'
 
@@ -166,11 +167,16 @@ export const NEEDS_YOU: SymccStatus[] = ['review', 'waiting', 'failed']
 /** A task being worked on whose worker ran over its time limit while the owner is asked "give it more time?" (time_ask set). */
 export const asksMoreTime = (t: Pick<SymccTask, 'status'> & { time_ask?: string }): boolean => t.status === 'doing' && !!t.time_ask
 
-/** Whether a task needs the owner: review, waiting or failed (NEEDS_YOU), or a running task asking for more time. */
-export const needsYou = (t: Pick<SymccTask, 'status'> & { time_ask?: string }): boolean => NEEDS_YOU.includes(t.status) || asksMoreTime(t)
+/** Whether a task needs the owner: review, waiting or failed (NEEDS_YOU), or a running task asking for more time. A task
+ *  in review (or waiting) whose approve runs at `nowMs` (approveRunning: prep, in line, test, merge) does not: it is
+ *  listed and counted with the running tasks until the approve ends. */
+export const needsYou = (t: Pick<SymccTask, 'status'> & { time_ask?: string } & Pick<BoardTask, 'checking'>, nowMs: number = Date.now()): boolean =>
+  (NEEDS_YOU.includes(t.status) && !approveRunning(t, nowMs)) || asksMoreTime(t)
 
-/** Whether a task waits for the owner's answer ("waiting"). Every view uses this for "waiting for you". */
-export const waitsForYou = (t: { status?: unknown }): boolean => t.status === 'waiting'
+/** Whether a task waits for the owner's answer ("waiting"), and no merge of it runs at `nowMs` (approveRunning).
+ *  Every view uses this for "waiting for you". */
+export const waitsForYou = (t: { status?: unknown } & Pick<BoardTask, 'checking'>, nowMs: number = Date.now()): boolean =>
+  t.status === 'waiting' && !approveRunning(t as Pick<BoardTask, 'status' | 'checking'>, nowMs)
 
 /** The lead's line after the owner answered task `t`'s question with `answer` on a board panel. */
 export const answeredLeadLine = (t: { id: string }, answer: string, brief: (s: string) => string = s => s): string => `The owner answered ${t.id} ("${brief(answer)}"); it went back to work.`

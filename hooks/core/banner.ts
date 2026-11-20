@@ -10,8 +10,8 @@ import { roleMark, tryMark } from './roles'
 import { archivedLine, archivedNote, archivedOf } from './archive'
 import { boardTotal, fmtTotal, totalLine } from './runs'
 import { PLAN_NOTE } from './plan'
-import { type CrewBoard, withCrew, parseSearch, searchTasks, BOARD_STATUSES, statusCell, STEP_NOTE, STEP_WORD, TITLE_ROOM, TOTAL_FORMS, type TotalForm, rowCell, rowMark } from './panel'
-import { checkStepNow } from './lead'
+import { type CrewBoard, withCrew, parseSearch, searchTasks, BOARD_STATUSES, statusCell, STEP_NOTE, STEP_WORD, TITLE_ROOM, TOTAL_FORMS, type TotalForm, rowCell, rowMark, APPROVED_NOTE } from './panel'
+import { approveRunning, checkStepNow, shownStatus } from './lead'
 import { whyFailed } from './failure'
 import { offStatusParts, testCommandsText } from './settings'
 import { type OwnerQuestion, openQuestions, questionsForYou, questionLine, questionsLabel } from './questions'
@@ -143,11 +143,12 @@ export const statusRoom = (name: string = DEFAULT_NAME) => STATUS_WIDTH - `⚠ $
  * The text itself never has a "⚠": it says what needs attention in words ("1 failed (T-7)", "1 waiting for you", "⏸ paused").
  * undefined when there is nothing to say: an empty board this session drives, in mode auto, with no branch note and no scouts.
  */
-export function statusLine(b: { tasks: (Pick<SymccTask, 'id' | 'status'> & Partial<Pick<SymccTask, 'attempts'>>)[]; questions?: readonly Pick<OwnerQuestion, 'answered_at' | 'dropped'>[] }, driving: boolean, branch_note = '', mode: SymccMode = 'auto', plan = false, crew?: CrewBoard, nowMs = Date.now(), width = Infinity): string | undefined {
+export function statusLine(b: { tasks: (Pick<SymccTask, 'id' | 'status'> & Partial<Pick<SymccTask, 'attempts'>> & Pick<BoardTask, 'checking'>)[]; questions?: readonly Pick<OwnerQuestion, 'answered_at' | 'dropped'>[] }, driving: boolean, branch_note = '', mode: SymccMode = 'auto', plan = false, crew?: CrewBoard, nowMs = Date.now(), width = Infinity): string | undefined {
   const join0 = (xs: (string | false | undefined)[]) => xs.filter(Boolean).join(' · ')
   // in plan mode the line says so first (see core/plan.ts)
   const join = (xs: (string | false | undefined)[]) => join0(plan ? [PLAN_NOTE, ...xs] : xs)
-  const ids = (st: SymccStatus) => b.tasks.filter(t => t.status === st).map(t => t.id)
+  // an approved task in review whose approve runs is listed as doing (see shownStatus)
+  const ids = (st: SymccStatus) => b.tasks.filter(t => shownStatus(t, nowMs) === st).map(t => t.id)
   const other = driving ? '' : ' (driven by another session)'
   const m = modeOf({ mode })
   const label = modeLabel(m)
@@ -161,7 +162,7 @@ export function statusLine(b: { tasks: (Pick<SymccTask, 'id' | 'status'> & Parti
       const parts = [
         doing.length && `${idList(doing)} ${STATUS_WORD.doing}${tries}`,
         review.length && `${review.length} to review (${idList(review)})`,
-        ...statusCounts(b.tasks, ['todo', 'paused', 'waiting']),
+        ...statusCounts(b.tasks, ['todo', 'paused', 'waiting'], nowMs),
         failed.length && `${failed.length} ${STATUS_WORD.failed} (${idList(failed)})`,
       ].filter((x): x is string => !!x)
       // backlog stays out of the line, except when it is all that is left: then say so, so parked ideas aren't hidden
@@ -193,11 +194,12 @@ export type BannerLine = { art: string; parts: BannerPart[] }
 /** What the banner needs from the board. */
 /** `branch`: the branch checked out in the project now (new tasks merge into it); `branch_note`: a warning (e.g. no git), shown in place of it.
  *  `enabled` false (symcc disabled) or `mode` 'paused' puts a warning on the first line, after the name. */
-export type BannerBoard = Pick<Board, 'test_commands' | 'max_parallel' | 'max_minutes' | 'auto_retries'> & Partial<Pick<Board, 'archived'>> & { tasks: Pick<SymccTask, 'status' | 'runs'>[]; branch?: string; branch_note?: string; mode?: SymccMode; enabled?: boolean }
+export type BannerBoard = Pick<Board, 'test_commands' | 'max_parallel' | 'max_minutes' | 'auto_retries'> & Partial<Pick<Board, 'archived'>> & { tasks: (Pick<SymccTask, 'status' | 'runs'> & Pick<BoardTask, 'checking'>)[]; branch?: string; branch_note?: string; mode?: SymccMode; enabled?: boolean }
 
 /** "2 doing", "1 to do", ... for each status in `order` that has tasks, in that order. */
-export function statusCounts(tasks: Pick<SymccTask, 'status'>[], order: SymccStatus[]): string[] {
-  return order.map(st => [tasks.filter(t => t.status === st).length, STATUS_WORD[st]] as const).filter(([n]) => n > 0).map(([n, word]) => `${n} ${word}`)
+export function statusCounts(tasks: (Pick<SymccTask, 'status'> & Pick<BoardTask, 'checking'>)[], order: SymccStatus[], nowMs: number = Date.now()): string[] {
+  // an approved task in review whose approve runs counts as doing (see shownStatus)
+  return order.map(st => [tasks.filter(t => shownStatus(t, nowMs) === st).length, STATUS_WORD[st]] as const).filter(([n]) => n > 0).map(([n, word]) => `${n} ${word}`)
 }
 
 const BANNER_ORDER: SymccStatus[] = ['doing', 'review', 'waiting', 'failed', 'paused', 'todo', 'backlog', 'done']
@@ -210,7 +212,7 @@ export type BannerCount = { text: string; status?: SymccStatus }
 export function bannerCounts(b: BannerBoard, nowMs?: number): BannerCount[] {
   const gone = archivedOf(b).done
   if (!b.tasks.length && !gone) return []
-  const counts: BannerCount[] = BANNER_ORDER.map(st => [st, b.tasks.filter(t => t.status === st).length] as const)
+  const counts: BannerCount[] = BANNER_ORDER.map(st => [st, b.tasks.filter(t => shownStatus(t, nowMs ?? Date.now()) === st).length] as const)
     .filter(([, n]) => n > 0)
     .map(([st, n]) => ({ status: st, text: st === 'backlog' ? `${n} in backlog` : st === 'done' ? `${n} done${gone ? ` ${archivedNote(gone)}` : ''}` : `${n} ${STATUS_WORD[st]}` }))
   if (gone && !b.tasks.some(t => t.status === 'done')) counts.push({ status: 'done', text: `${gone} done (archived)` })
@@ -327,7 +329,7 @@ export function parseStatusFilter(words: unknown): SymccStatus[] | undefined {
 
 /** One row (and its "from:" line) of the board as text. */
 function boardRow(t: SymccTask, autoRetries: number | undefined, nowMs: number): string[] {
-  const extra = t.status === 'waiting' && t.question ? ` — asks: ${t.question}` : t.status === 'failed' ? ` — ${whyFailed(t)}` : t.note ? ` — ${t.note}` : t.status === 'review' ? ` — ${STATUS_WORD.review}` : ''
+  const extra = t.status === 'waiting' && t.question ? ` — asks: ${t.question}` : t.status === 'failed' ? ` — ${whyFailed(t)}` : t.note ? ` — ${t.note}` : approveRunning(t, nowMs) ? ` — ${APPROVED_NOTE}` : t.status === 'review' ? ` — ${STATUS_WORD.review}` : ''
   const after = t.after.length && (t.status === 'todo' || t.status === 'backlog') ? ` (after ${t.after.join(', ')})` : ''
   // the kind and the role, e.g. " [bug · tester]" (a plain change with the general role shows nothing)
   const tag = [kindMark(t), roleMark(t)].filter(Boolean).join(' · ')

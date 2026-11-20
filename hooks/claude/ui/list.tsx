@@ -1,6 +1,6 @@
 // The board panel's Tasks view: the list of tasks by section.
 import type { SymccTask } from '../../../types'
-import { statusMark, archivedNote, archivedOf, localOffset, panelSections, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, groupLabel, ALL_CLEAR, fittedCells, rowMark, TITLE_ROOM, bannerRule, fitRow, rowExtra, listKeys, searchTasks, SEARCH_WORDS, searchLine, searchBoxHint, tryMark, tryTone, questionsLabel, type OwnerQuestion, waitsForYou } from '../../board'
+import { statusMark, archivedNote, archivedOf, localOffset, panelSections, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, groupLabel, ALL_CLEAR, fittedCells, rowMark, TITLE_ROOM, bannerRule, fitRow, rowExtra, listKeys, searchTasks, SEARCH_WORDS, searchLine, searchBoxHint, tryMark, tryTone, questionsLabel, type OwnerQuestion, waitsForYou, shownStatus, approveRunning } from '../../board'
 import { openDays, S } from '../../app/state'
 import { type $, panelValues } from '../panel'
 import type { PaneParts } from './parts'
@@ -163,15 +163,16 @@ export function listPage($: $, pane: PaneParts) {
         const lead = r.indent + idWidth + 3 + cellWidth + 2
         // a later try ("try 2") is dim, from try 3 on in the warning colour (see tryMark)
         const tried = tryMark(x)
-        const fit = fitRow(lead, x.title, rowExtra(x, v.tasks, v.branch ?? '', v.max_minutes), width, x.status === 'failed')
+        const fit = fitRow(lead, x.title, rowExtra(x, v.tasks, v.branch ?? '', v.max_minutes, nowMs), width, x.status === 'failed')
         return (
           <Button key={row(x.id)} plain autoFocus={i === firstButton ? true : undefined} onPress={act(() => panelValues($).updateOpened(() => x.id))}>
             {r.indent ? <Text>{' '.repeat(r.indent)}</Text> : null}
             <Text bold={!closed} color={C(closed ? 'inactive' : 'claude')}>
               {x.id.padEnd(idWidth)}
             </Text>
-            <Text color={C(tone[x.status]!)}>{` ${rowMark(x, nowMs)} ${cells.get(x.id)!.padEnd(cellWidth)}  `}</Text>
-            <Text bold={waitsForYou(x) || x.status === 'failed' || x.status === 'review'} color={C(closed ? 'inactive' : 'text')}>
+            {/* an approved task whose approve runs is shown as running (shownStatus): the doing tone, not bold */}
+            <Text color={C(tone[shownStatus(x, nowMs)]!)}>{` ${rowMark(x, nowMs)} ${cells.get(x.id)!.padEnd(cellWidth)}  `}</Text>
+            <Text bold={waitsForYou(x, nowMs) || x.status === 'failed' || (x.status === 'review' && !approveRunning(x, nowMs))} color={C(closed ? 'inactive' : 'text')}>
               {fit.title}
             </Text>
             {fit.extra && tried && fit.extra.endsWith(tried)

@@ -10,7 +10,7 @@
 // No key hints: the mode switch is a link and the search a box in the footer. An empty board says so, with one
 // primary button that starts a message to the lead in the prompt box.
 import type { SymccStatus, SymccTask } from '../../../types'
-import { statusMark, archivedNote, archivedOf, localOffset, panelSections, BACKLOG_SHOWN, ALL_CLEAR, statusCell, rowCell, rowMark, rowExtra, roleTag, kindTag, searchTasks, SEARCH_WORDS, tryMark, tryTone, isInvestigation, needsYou, kindMark, roleMark, fmtDuration, waitsForYou } from '../../board'
+import { statusMark, archivedNote, archivedOf, localOffset, panelSections, BACKLOG_SHOWN, ALL_CLEAR, statusCell, rowCell, rowMark, rowExtra, roleTag, kindTag, searchTasks, SEARCH_WORDS, tryMark, tryTone, isInvestigation, needsYou, kindMark, roleMark, fmtDuration, waitsForYou, shownStatus, approveRunning } from '../../board'
 import { openDays, S } from '../../app/state'
 import { type $, panelValues } from '../panel'
 import type { PaneParts } from './parts'
@@ -117,10 +117,10 @@ export function listPageVs($: $, pane: PaneParts) {
    *  "◆ review for 5m") or since it failed ("✗ failed 3m ago"). */
   const statusText = (x: SymccTask) => {
     const mark = rowMark(x, nowMs)
-    // a task in a check step or the merge line: its icon and its time, "⌕ 5m" (an approve in review: just the icon)
+    // a task in a check step or the merge line: its icon and its time, "⌕ 5m" (an approve in review too)
     if (mark !== statusMark(x)) return `${mark} ${rowCell(x, nowMs, since(x.id))}`.trimEnd()
     const cell = statusCell(x, nowMs, since(x.id))
-    const waited = waitsForYou(x) || x.status === 'review' || x.status === 'failed' ? ago(x.updated_at) : ''
+    const waited = waitsForYou(x, nowMs) || (x.status === 'review' && !approveRunning(x, nowMs)) || x.status === 'failed' ? ago(x.updated_at) : ''
     // with a time, the short word ("waiting for 1m", not "waiting for you for 1m")
     if (waited) return `${mark} ${cell || x.status} ${x.status === 'failed' ? `${waited} ago` : `for ${waited}`}`
     // a doing task shows the total work time of all its tries: "▶ 1h40m"
@@ -137,8 +137,8 @@ export function listPageVs($: $, pane: PaneParts) {
     const closed = x.status === 'done' || x.status === 'dropped' || x.status === 'backlog'
     // a done or dropped task is one line: its mark (the terminal list's), the ID link, the dim title; no status line
     const ended = x.status === 'done' || x.status === 'dropped'
-    const needs = needsYou(x)
-    const extra = rowExtra(x, v.tasks, v.branch ?? '', v.max_minutes).replace(/^Enter to review$/, isInvestigation(x) ? '' : 'ready for your review')
+    const needs = needsYou(x, nowMs)
+    const extra = rowExtra(x, v.tasks, v.branch ?? '', v.max_minutes, nowMs).replace(/^Enter to review$/, isInvestigation(x) ? '' : 'ready for your review')
     const tried = tryMark(x)
     let body = tried && extra.endsWith(tried) ? extra.slice(0, extra.length - tried.length).replace(/ · $/, '') : extra
     // "→ other-branch" first, when it merges elsewhere (kept whole)
@@ -188,7 +188,7 @@ export function listPageVs($: $, pane: PaneParts) {
           {ended ? null : (
             <Text key={`vs-task-${x.id}-info`} wrap="truncate" color={C('inactive')}>
               {' · '}
-              <Text color={C(tone[x.status]!)}>{state}</Text>
+              <Text color={C(tone[shownStatus(x, nowMs)]!)}>{state}</Text>
               {rest ? ` · ${rest}` : ''}
               {tried ? <Text color={C(tryTone(x))}>{` · ${tried}`}</Text> : null}
             </Text>
@@ -199,7 +199,8 @@ export function listPageVs($: $, pane: PaneParts) {
   }
 
   const open = [...parts.needsYou, ...parts.doing, ...parts.todo]
-  const groups = GROUPS.map(g => ({ ...g, tasks: open.filter(t => g.has.includes(t.status)) })).filter(g => g.tasks.length)
+  // an approved task whose approve runs is listed under Doing (shownStatus)
+  const groups = GROUPS.map(g => ({ ...g, tasks: open.filter(t => g.has.includes(shownStatus(t, nowMs))) })).filter(g => g.tasks.length)
   // the lead's open questions for the owner, first of all (not while searching); each row opens its answer page
   const questions = filtering ? [] : (v.questions ?? [])
   const asks = questions.length

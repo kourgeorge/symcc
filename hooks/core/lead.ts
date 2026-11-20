@@ -184,6 +184,15 @@ export function checkStepNow(t: Pick<BoardTask, 'status' | 'checking'>, nowMs: n
   return Number.isFinite(at) && isFresh(at, nowMs, staleMs) ? t.checking.step : ''
 }
 
+/** Whether task `t` waits in review (or waiting) while the owner's approve (or a merge once their files are clear) runs:
+ *  its check step is set and fresh (prep, in line, test, merge). The owner has nothing to do on it then: every board
+ *  lists and counts it with the running tasks, not under NEEDS YOU. Once the approve ends (merged, or failed and back in
+ *  review) its step is cleared, so it needs the owner again. */
+export const approveRunning = (t: Pick<BoardTask, 'status' | 'checking'>, nowMs: number): boolean => t.status !== 'doing' && !!checkStepNow(t, nowMs)
+
+/** The status task `t` is grouped and counted under on every board: "doing" while its approve runs (approveRunning), else its own. */
+export const shownStatus = <S extends BoardTask['status']>(t: { status: S; checking?: BoardTask['checking'] }, nowMs: number): S | 'doing' => (approveRunning(t, nowMs) ? 'doing' : t.status)
+
 /**
  * Whether task `t`'s worker has already handed back its try: it is "doing" and has a finishing mark,
  * or its last try has an end time (set at the hand-back). Its agent may still be listed (idle), but it

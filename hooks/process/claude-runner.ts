@@ -3,7 +3,7 @@
 // it only builds a command line and reads text.
 import type { HostAgentStart } from '../host'
 import { cleanTokens } from '../core/runs'
-import { SCRATCH_DIR } from '../core/ask'
+import { SCRATCH_DIR } from '../core/path-guard'
 import type { AgentRunner, ProcessOutput, RunnerEnd } from './agents'
 import type { ProcessSystem } from './system'
 
