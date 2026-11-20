@@ -21,8 +21,8 @@
 // modules (Solid and OpenTUI's Solid renderer) are passed in (TuiRuntime), so this file type-checks and its tests
 // run without them. The names and shapes below are @opencode/plugin 2.3.0's tui Context (only what is used).
 import { DEFAULT_NAME, dataDir } from '../name'
-import { VIEW_FILE, parseViewFile, bandDraw, panelLines, panelKeys, panelTaskActions, approveInProgress, panelRoleChoices, TASK_ACTION_COMMANDS, LETTER_KEYS, type LetterKey, hasPage, answerOptions, actionCommand, moveCursor, OWN_ANSWER, GROUPS_OPEN, groupOf, groupId, scoutRunsIn, settingsPlace, orgMemNoteOf, SETTINGS_OPEN, settingGroupOf, settingGroupId, PANEL_TABS, CHOICE_KEYS, approveSent, type ApproveSent, type ChoiceKey, type ViewFile, type Line, type PanelAction, type PanelHit, type PanelKey, type PanelGroup, type PanelTab, type BandHit } from './board-view'
-import { SETTING_GROUPS, isScoutRunReport, taskReports, taskActions, type TaskAction, type TaskActionId, parseSettingValue, settingChoices, settingInfo, settingValue, isSettingPage, everyText, everyMinutesOf, type SettingName, type ScoutEditField } from '../board'
+import { VIEW_FILE, parseViewFile, bandDraw, panelLines, panelKeys, panelTaskActions, approveInProgress, panelRoleChoices, TASK_ACTION_COMMANDS, LETTER_KEYS, type LetterKey, hasPage, answerOptions, actionCommand, moveCursor, OWN_ANSWER, GROUPS_OPEN, groupOf, groupId, scoutRunsIn, settingsPlace, orgMemNoteOf, defPageId, rolePromptId, SETTINGS_OPEN, settingGroupOf, settingGroupId, PANEL_TABS, CHOICE_KEYS, approveSent, type ApproveSent, type ChoiceKey, type ViewFile, type Line, type PanelAction, type PanelHit, type PanelKey, type PanelGroup, type PanelTab, type BandHit } from './board-view'
+import { SETTING_GROUPS, isScoutRunReport, taskReports, taskActions, type TaskAction, type TaskActionId, parseSettingValue, settingChoices, settingInfo, settingValue, isSettingPage, everyText, everyMinutesOf, nextMode, modeOf, promptsOfRole, SEARCH_WORDS, type SettingName, type ScoutEditField } from '../board'
 import type { SymccScout } from '../../types'
 import { orgMemDeleteAsk, orgMemFile, orgMemNoteKey } from '../core/org-mem'
 import { PARTS_KEY, safePartsFile, viewStubFilled, withViewParts } from '../core/board-parts'
@@ -240,13 +240,14 @@ export function drawLines<H = PanelHit>(r: TuiRuntime, theme: unknown, lines: Li
   return col
 }
 
-/** How many lines at the end of the panel's drawing are its footer (the rule and the key hints). */
+/** How many lines at the end of the panel's drawing are its footer when it doesn't say (the rule and the key hints). */
 export const FOOTER_LINES = 2
 
-/** The panel's lines as OpenTUI elements (T-649): a column with the body (every line but the footer) in a box that
- *  shrinks and cuts what does not fit, and the footer in a box that never shrinks, so the footer stays in sight. */
-export function drawPanel<H = PanelHit>(r: TuiRuntime, theme: unknown, lines: Line[], hits: (H | null)[] = [], onHit?: (hit: H) => void): TuiNode {
-  const cut = Math.max(0, lines.length - FOOTER_LINES)
+/** The panel's lines as OpenTUI elements (T-649): a column with the body (every line but the last `footer`, the
+ *  footer: its rule, the list's mode row and the key hints, T-685) in a box that shrinks and cuts what does not fit,
+ *  and the footer in a box that never shrinks, so the footer stays in sight. */
+export function drawPanel<H = PanelHit>(r: TuiRuntime, theme: unknown, lines: Line[], hits: (H | null)[] = [], onHit?: (hit: H) => void, footer = FOOTER_LINES): TuiNode {
+  const cut = Math.max(0, lines.length - footer)
   const col = r.createElement('box')
   r.setProp(col, 'flexDirection', 'column')
   r.setProp(col, 'flexGrow', 1)
@@ -332,6 +333,8 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   // the approve just sent from a task's page (T-614): until its first step is on the board, the page's badge, Status
   // row and Stage line show it started ("✎ prep"), not "ready for review"
   const [approving, setApproving] = r.createSignal<ApproveSent | undefined>(undefined)
+  // the task list's search (T-685, Claude Code's [f] search: core's searchTasks words; '' = none)
+  const [search, setSearch] = r.createSignal('')
   let width = 80
   // the panel's height in rows (panelRows): it bounds the scroll, and the panel is drawn exactly that high, so the
   // footer stays at the bottom and no row of a longer page is left over; OpenTUI says when the box's size changes
@@ -447,11 +450,24 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   /** Whether the cursor is on a page's own rows (a scout's runs, the Roles or Kinds list), not the tab's list. */
   const onPage = () => tab() !== 'tasks' && !!opened()
   const draw = () => {
-    return panelLines(file(), { tab: tab(), opened: opened(), run: run(), report: report(), cursor: onPage() ? runCursor() : cursor(), groups: groups(), settingsOpen: settingsOpen(), scroll: scroll(), ...(rows() ? { rows: rows()! } : {}), ...(sent() ? { sent: sent()! } : {}), ...(taskReport() ? { taskReport: taskReport()! } : {}), ...(approving() ? { approving: approving()! } : {}) }, now(), width)
+    return panelLines(file(), { tab: tab(), opened: opened(), run: run(), report: report(), cursor: onPage() ? runCursor() : cursor(), groups: groups(), settingsOpen: settingsOpen(), scroll: scroll(), ...(rows() ? { rows: rows()! } : {}), ...(sent() ? { sent: sent()! } : {}), ...(taskReport() ? { taskReport: taskReport()! } : {}), ...(approving() ? { approving: approving()! } : {}), ...(search() ? { search: search() } : {}) }, now(), width)
   }
   /** The rows of the Tasks tab's list, even while a task's page is open (whose draw has no rows), so "open this id"
    *  can put the list cursor on that task and b comes back to it (T-568). */
-  const listIds = () => panelLines(file(), { tab: 'tasks', opened: '', cursor: cursor(), groups: groups(), scroll: 0 }, now(), width).ids
+  const listIds = () => panelLines(file(), { tab: 'tasks', opened: '', cursor: cursor(), groups: groups(), scroll: 0, ...(search() ? { search: search() } : {}) }, now(), width).ids
+  /** Sets the list's search ('' = none), from the list's top. */
+  const searchFor = (text: string) => {
+    setSearch(text.trim())
+    setCursor(0)
+    setScroll(0)
+  }
+  /** f on the list ([f] search, [f] change search): asks for the search words; Enter on an empty box clears it, Esc
+   *  keeps it as it was. */
+  const askSearch = async () => {
+    const now = search()
+    const text = await ctx.ui.dialog.prompt({ title: now ? `Search the tasks (now: ${now})` : 'Search the tasks', description: `words, or ${SEARCH_WORDS} · Enter on empty clears`, placeholder: `words, or ${SEARCH_WORDS}` })
+    if (text !== undefined) searchFor(text)
+  }
   /** Changes setting `setting` (Enter or a click on its row): on/off flips, a setting with choices is picked from a
    *  list, the rest is typed; then /<name>-settings NAME VALUE sets it. */
   const changeSetting = async (setting: SettingName, sessionID: string) => {
@@ -507,7 +523,9 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     const [cur, setCur] = open ? [runCursor, setRunCursor] : [cursor, setCursor]
     if (key === 'up' || key === 'down') return void setCur(moveCursor(cur(), key === 'up' ? -1 : 1, ids.length))
     const place = open ? settingsPlace(f, open) : null
-    if (key === 'back') return place?.def ? openPage(place.list) : open ? openPage('') : showTab('tasks')
+    if (key === 'back') return place?.prompt && place.def ? openPage(defPageId('roles', place.def.name)) : place?.def ? openPage(place.list) : open ? openPage('') : showTab('tasks')
+    // the built-in prompt page is view only: b goes back to the role
+    if (place?.prompt) return
     // the Organizational memory page: Enter or x on a note asks, then deletes it with /<name>-settings orgmem delete N
     if (place?.list === 'orgmem') {
       const note = ids.length ? orgMemNoteOf(f, ids[moveCursor(cur(), 0, ids.length)]!) : undefined
@@ -527,6 +545,8 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     const def = place.list === 'roles' ? 'role' : 'kind'
     if (key === 'o' && d.canOff) return send(sessionID, { kind: 'def', def, name: d.name, action: d.off ? 'on' : 'off' })
     if (key === 'r' && d.canReset) return send(sessionID, { kind: 'def', def, name: d.name, action: 'reset' })
+    // See the prompt (T-685): the first built-in prompt the role goes in
+    if (key === 'p' && def === 'role' && !d.broken) return openPage(rolePromptId(d.name, promptsOfRole(d.name)[0]!))
   }
   /** The Scouts tab's keys: the list moves and opens; a scout's page moves over its runs, opens one, runs the scout
    *  now (r), pauses or resumes it (p) and edits it (e); a run's page goes back. */
@@ -569,6 +589,10 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
         if (g) toggle(g)
         else if (id) openPage(id)
       }
+      // T-685: Claude Code's list buttons: [f] search (or change it), [x] clear search, [m] the board mode
+      if (key === 'f') return askSearch()
+      if (key === 'x' && search()) return searchFor('')
+      if (key === 'm' && f) return send(sessionID, { kind: 'mode', mode: nextMode(modeOf(f.view)) })
       return
     }
     if (key === 'back') return openPage('')
@@ -696,10 +720,10 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     told.add(message)
     say(message, 'error')
   }
-  const drawn = <H,>(where: string, make: () => { lines: Line[]; hits: (H | null)[] }, onHit?: (hit: H) => void, footer = false) => {
+  const drawn = <H,>(where: string, make: () => { lines: Line[]; hits: (H | null)[]; footer?: number }, onHit?: (hit: H) => void, footer = false) => {
     try {
       const got = make()
-      return footer ? drawPanel<H>(r, ctx.theme, got.lines, got.hits, onHit) : drawLines<H>(r, ctx.theme, got.lines, got.hits, onHit)
+      return footer ? drawPanel<H>(r, ctx.theme, got.lines, got.hits, onHit, got.footer) : drawLines<H>(r, ctx.theme, got.lines, got.hits, onHit)
     } catch (e) {
       failed(where, e)
       return null

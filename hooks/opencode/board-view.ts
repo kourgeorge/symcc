@@ -11,8 +11,10 @@
 // pages (a list, then one role's or kind's page: turn it off or on, reset it to the built-in one, T-562) and a
 // scout's page edits the scout (how often, model, instructions); the roles and kinds come in the view file too.
 // Settings also opens the Organizational memory page (T-619): org-mem's notes, newest first, x deletes one (after a
-// yes) with /<name>-settings orgmem delete N; the notes come in the view file too (org_mem).
-import type { SymccTask, SymccScout } from '../../types'
+// yes) with /<name>-settings orgmem delete N; the notes come in the view file too (org_mem). Every screen has the
+// Claude Code panel's buttons (T-680, T-685): its tab row, the list's [m] mode and [f] search buttons, Back (b) on the
+// list pages, a role's or kind's page buttons; each a click on it presses its key.
+import type { SymccTask, SymccScout, SymccMode } from '../../types'
 import type { PaneView } from '../app/state'
 import type { OwnerQuestion } from '../core/questions'
 import {
@@ -24,6 +26,7 @@ import {
   SETTING_GROUPS, SETTINGS, isSettingPage, settingInfo, settingValue, cantPlayNotify, groupSummaryParts,
   type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction, type TaskVerb, settingsKeys,
   DEFAULT_ROLE, isCheckerRole, ALWAYS_ON_KINDS, checkerOn, roleNameError, kindNameError, checkStepNow, rowEndText, taskPhase, choiceLines, driveWarning,
+  PANE_TABS, tabLabel, TAB_GAP, searchTasks, searchLine, modeButton, hintLines, roleKeys, rolePromptKeys, ROLE_PROMPTS, ROLE_SLOT, promptsOfRole, type RolePromptKind,
 } from '../board'
 import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, brokenLabel, defNamed } from '../core/def-files'
 import { restFrame } from '../core/logo'
@@ -120,12 +123,8 @@ export const VIEW_RUNS_KEPT = 20
 /** The panel's three views, as the Claude Code board's tabs: Tasks, Scouts and Settings (keys t, s and c). */
 export type PanelTab = 'tasks' | 'scouts' | 'settings'
 
-/** The tabs in order, with their keys. */
-export const PANEL_TABS: readonly { tab: PanelTab; label: string; key: 't' | 's' | 'c' }[] = [
-  { tab: 'tasks', label: 'Tasks', key: 't' },
-  { tab: 'scouts', label: 'Scouts', key: 's' },
-  { tab: 'settings', label: 'Settings', key: 'c' },
-]
+/** The tabs in order, with their keys (core's PANE_TABS, as the Claude Code board's tab row). */
+export const PANEL_TABS: readonly { tab: PanelTab; label: string; key: 't' | 's' | 'c' }[] = PANE_TABS
 
 /** The view file's text. */
 export const viewFileText = (f: ViewFile) => JSON.stringify(f) + '\n'
@@ -155,8 +154,9 @@ export function parseViewFile(text: string | null | undefined): ViewFile | null 
 export type PanelKey = 'up' | 'down' | 'open' | 'back' | 'close' | LetterKey | ChoiceKey
 
 /** The letter keys the panel takes, each pressed as itself (the task page's take core's taskActions keys: u resume,
- *  z stash to backlog, v keep as a note, l role, h already merged, n needs review). j and k are not here: they always move (KEY_BINDS). */
-export const LETTER_KEYS = ['a', 'x', 'd', 't', 's', 'c', 'r', 'p', 'o', 'e', 'u', 'z', 'v', 'l', 'h', 'n'] as const
+ *  z stash to backlog, v keep as a note, l role, h already merged, n needs review); and on the list (T-685) f search
+ *  and m the board mode, as on Claude Code's list. j and k are not here: they always move (KEY_BINDS). */
+export const LETTER_KEYS = ['a', 'x', 'd', 't', 's', 'c', 'r', 'p', 'o', 'e', 'u', 'z', 'v', 'l', 'h', 'n', 'f', 'm'] as const
 export type LetterKey = (typeof LETTER_KEYS)[number]
 const isLetterKey = (k: string): k is LetterKey => (LETTER_KEYS as readonly string[]).includes(k)
 
@@ -274,6 +274,8 @@ export type PanelChoice = {
   /** the task whose approve this panel just sent, and when (ms): its page shows the approve's first step at once (see
    *  approveSent), as Claude Code's task page does */
   approving?: ApproveSent
+  /** the task list's search (T-685, core's searchTasks words, as Claude Code's [f] search); '' or left out = none */
+  search?: string
 }
 
 /** An approve this panel sent: the task and when (ms). */
@@ -303,6 +305,8 @@ export type PanelDraw = {
   fixed: number
   /** how many drawn lines the body has in all (what scrolls) */
   bodyLines: number
+  /** how many of the last lines are the footer (its rule, the list's mode row, the key hints), which never scroll */
+  footer: number
 }
 
 /** Which groups are open at first: the backlog (its first rows), not Done and Dropped. */
@@ -348,10 +352,16 @@ export const scoutRunsIn = (f: ViewFile | null, scout: string): ScoutRun[] => (A
 type DefList = Exclude<SettingPage, 'orgmem'>
 
 /** A page under Settings: the Roles or Kinds list (`id` "roles" or "kinds"), the Organizational memory page ("orgmem"),
- *  or one role's or kind's page ("role:tester", "kind:bug"; its list is `list`); null when there is no such page (or
- *  the role or kind left the view). */
-export function settingsPlace(f: ViewFile | null, id: string): { list: SettingPage; def?: ViewDef } | null {
+ *  or one role's or kind's page ("role:tester", "kind:bug"; its list is `list`), or (T-685) the built-in prompt a role
+ *  goes in, view only ("prompt:tester:change", `prompt`); null when there is no such page (or the role or kind left the view). */
+export function settingsPlace(f: ViewFile | null, id: string): { list: SettingPage; def?: ViewDef; prompt?: RolePromptKind } | null {
   if (id === 'roles' || id === 'kinds' || id === 'orgmem') return { list: id }
+  const p = /^prompt:(.+):([^:]+)$/.exec(id)
+  if (p) {
+    const def = defsIn(f, 'roles').find(x => x.name === p[1])
+    const kind = promptsOfRole(p[1]!).find(k => k === p[2])
+    return def && !def.broken && kind ? { list: 'roles', def, prompt: kind } : null
+  }
   const m = /^(role|kind):(.+)$/.exec(id)
   if (!m) return null
   const list = m[1] === 'role' ? 'roles' : 'kinds'
@@ -364,6 +374,24 @@ export const defsIn = (f: ViewFile | null, list: DefList): ViewDef[] => (Array.i
 
 /** A role's or kind's page id: "role:tester", "kind:bug". */
 export const defPageId = (list: DefList, name: string) => `${list === 'roles' ? 'role' : 'kind'}:${name}`
+
+/** The page id of the built-in prompt role `role` goes in: "prompt:tester:change". */
+export const rolePromptId = (role: string, kind: RolePromptKind) => `prompt:${role}:${kind}`
+
+/** The buttons of a role's or kind's page, in Claude Code's order (T-685): Back, See the prompt (a role, p), Turn off
+ *  or Turn on (o), Reset to built-in (r). Claude Code's Edit and Remove are not here: no slash command does them. */
+export const defButtons = (list: DefList, d: ViewDef): PanelButton[] => [
+  BACK_BUTTON,
+  ...(list === 'roles' && !d.broken ? [{ label: 'See the prompt', hit: { key: 'p' as const } }] : []),
+  ...(d.canOff ? [{ label: d.off ? 'Turn on' : 'Turn off', hit: { key: 'o' as const } }] : []),
+  ...(d.canReset ? [{ label: 'Reset to built-in', hit: { key: 'r' as const } }] : []),
+]
+
+/** The buttons of the built-in prompt page: Back (to the role), then the role's other prompts ("The checker prompt"). */
+export const rolePromptButtons = (role: string, kind: RolePromptKind): PanelButton[] => [
+  BACK_BUTTON,
+  ...promptsOfRole(role).filter(k => k !== kind).map(k => ({ label: `The ${k} prompt`, hit: { page: rolePromptId(role, k) } })),
+]
 
 /** The open scout, when the Scouts tab shows one's page. */
 const scoutNamed = (f: ViewFile | null, name: string): SymccScout | undefined => (name ? f?.view.scouts?.find(x => x.name === name) : undefined)
@@ -385,8 +413,10 @@ export function panelKeys(f: ViewFile | null, opened: string, tab: PanelTab = 't
     if (!place) return settingsKeys(heading)
     if (place.list === 'orgmem') return orgMemKeys(false, orgMemIn(f).length > 0)
     if (!place.def) return [move, { key: 'Enter', word: 'open' }, back]
+    if (place.prompt) return rolePromptKeys()
+    // core's keys of Claude Code's role page, but Edit and Remove (no slash command does them here)
     const d = place.def
-    return [...(d.canOff ? [{ key: 'o', word: d.off ? 'turn on' : 'turn off' }] : []), ...(d.canReset ? [{ key: 'r', word: 'reset' }] : []), back]
+    return roleKeys({ canEdit: false, canOff: d.canOff, off: d.off, canReset: d.canReset, canRemove: false, canSeePrompt: place.list === 'roles' && !d.broken })
   }
   if (tab === 'scouts') {
     const sc = scoutNamed(f, opened)
@@ -416,7 +446,7 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
   const w = Math.max(20, Math.floor(width))
   if (!f) {
     const lines: Line[] = [[{ text: `${boardBrand(DEFAULT_NAME)}`, color: 'ide', bold: true }], [{ text: 'No board yet: start symcc in this project (the board is written by the server part).', color: 'inactive' }]]
-    return { lines, hits: lines.map(() => null), ids: [], selected: '', keys: [], scroll: 0, fixed: lines.length, bodyLines: 0 }
+    return { lines, hits: lines.map(() => null), ids: [], selected: '', keys: [], scroll: 0, fixed: lines.length, bodyLines: 0, footer: 0 }
   }
   // the shared note's "(g)" names the Claude Code panel's key; this panel has none, so it says to ask the lead (setup_git)
   const v = { ...f.view, ...(f.view.git_state && f.view.branch_note ? { branch_note: [gitNote(f.view.git_state, 'ask the lead'), f.view.size_note ?? ''].filter(Boolean).join('; ') } : {}) }
@@ -425,7 +455,9 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
     ...l.parts.map(p => ({ text: p.text, color: TONE[p.tone], ...(p.bold ? { bold: true } : {}) })),
   ])
   const tab = choice.tab ?? 'tasks'
-  const top = [...banner, tabsLine(tab), [{ text: bannerRule(w), color: 'ide' }]]
+  const top = [...banner, ...tabsLines(tab, w, v.tasks.length, (v.scouts ?? []).length), [{ text: bannerRule(w), color: 'ide' }]]
+  // the list's footer has Claude Code's board-mode row (T-685): the mode, its [m] button and (no search on) [f] search
+  let modeRow: Line[] = []
   let body: { lines: Line[]; hits?: (PanelHit | null)[] | null; ids: string[]; selected: string; head?: number }
   let keys: KeyHint[]
   if (tab === 'scouts') {
@@ -433,16 +465,18 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
     keys = panelKeys(f, choice.opened, 'scouts', choice.run ?? '')
   } else if (tab === 'settings') {
     const place = settingsPlace(f, choice.opened)
-    body = place?.list === 'orgmem' ? orgMemBody(f, choice.cursor, w) : place?.def ? defPage(f, place.list as DefList, place.def, w) : place ? defsList(f, place.list as DefList, choice.cursor, w) : settingsBody(f, choice.cursor, choice.settingsOpen ?? SETTINGS_OPEN, w)
+    body = place?.list === 'orgmem' ? orgMemBody(f, choice.cursor, w) : place?.prompt && place.def ? rolePromptPage(place.def, place.prompt, w) : place?.def ? defPage(f, place.list as DefList, place.def, w) : place ? defsList(f, place.list as DefList, choice.cursor, w) : settingsBody(f, choice.cursor, choice.settingsOpen ?? SETTINGS_OPEN, w)
     keys = panelKeys(f, place ? choice.opened : '', 'settings', '', !place && !!settingGroupOf(body.selected))
   } else {
     const t = choice.opened ? f.view.tasks.find(x => x.id === choice.opened) : undefined
     // the approve in progress takes the same buttons and keys away (approveInProgress)
     const busy = !!t && approveInProgress(f, t, choice.approving, nowMs)
     const page = choice.opened ? openedPage(f, choice.opened, nowMs, w, choice.sent?.id === choice.opened ? choice.sent.answer : '', choice.taskReport, choice.approving?.id === choice.opened && approveSent(f, choice.approving, nowMs), busy) : null
-    body = page ?? listBody(f, choice.cursor, { ...GROUPS_OPEN, ...choice.groups }, nowMs, w)
+    body = page ?? listBody(f, choice.cursor, { ...GROUPS_OPEN, ...choice.groups }, nowMs, w, choice.search ?? '')
     keys = panelKeys(f, page ? choice.opened : '', 'tasks', '', false, !!page && busy)
+    if (!page) modeRow = modeLines(f, !!choice.search?.trim(), w)
   }
+  const foot: Line[] = [[{ text: footerRule(w), color: 'subtle' }], ...modeRow, ...hintLines(keys, w).map(hintSegs)]
   // T-627: every line is cut into the rows it really takes (drawn lines: no line wider than the panel, none with a
   // line break inside), so the scroll counts what is on screen. The page's own title (and a task's badge) stays with
   // the banner and the tabs at the top; the mouse wheel scrolls only the rest, between them and the footer, down to its
@@ -458,28 +492,40 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
     }
   })
   // a panel too low to keep the page's title and still show 3 lines of the rest: the title scrolls with the rest
-  if (choice.rows && drawnHead.length && Math.floor(choice.rows) - top.length - drawnHead.length - 2 < 3) {
+  if (choice.rows && drawnHead.length && Math.floor(choice.rows) - top.length - drawnHead.length - foot.length < 3) {
     drawnBody.unshift(...drawnHead)
     bodyHits.unshift(...drawnHead.map(() => null))
     drawnHead.length = 0
   }
   const fixed = [...top, ...drawnHead]
-  const room = choice.rows ? Math.max(1, Math.floor(choice.rows) - fixed.length - 2) : 0
+  const room = choice.rows ? Math.max(1, Math.floor(choice.rows) - fixed.length - foot.length) : 0
   const scroll = Math.max(0, Math.min(Math.floor(choice.scroll ?? 0), drawnBody.length - Math.max(1, room)))
   // with the height known, exactly one screenful: the window of the body, then blank rows down to the footer, so the
   // footer stays at the bottom and every row is drawn again (nothing left over from a longer page)
   const shown = room ? drawnBody.slice(scroll, scroll + room) : drawnBody.slice(scroll)
   const pad = room ? room - shown.length : 0
   return {
-    lines: [...fixed, ...shown, ...Array.from({ length: pad }, (): Line => [{ text: ' ', color: 'text' }]), [{ text: footerRule(w), color: 'subtle' }], hintSegs(keys)],
-    hits: [...fixed.map(() => null), ...bodyHits.slice(scroll, scroll + shown.length), ...Array.from({ length: pad }, () => null), null, null],
+    lines: [...fixed, ...shown, ...Array.from({ length: pad }, (): Line => [{ text: ' ', color: 'text' }]), ...foot],
+    hits: [...fixed.map(() => null), ...bodyHits.slice(scroll, scroll + shown.length), ...Array.from({ length: pad }, () => null), ...foot.map(() => null)],
     ids: body.ids,
     selected: body.selected,
     keys,
     scroll,
     fixed: fixed.length,
     bodyLines: drawnBody.length,
+    footer: foot.length,
   }
+}
+
+/** The list footer's board-mode row, as Claude Code's (T-685): the mode in its color, its "[m] review merge" button
+ *  (it sends /<name>-mode with the mode it switches to), and "[f] search" when no search is on; going on to another row
+ *  when it doesn't fit, never cutting a button. */
+function modeLines(f: ViewFile, searching: boolean, w: number): Line[] {
+  const mode = modeOf(f.view)
+  const label: DrawSeg = { text: modeLabel(mode), color: mode === 'paused' ? 'warning' : mode === 'review' ? 'suggestion' : 'text', bold: true }
+  const buttons: PanelButton[] = [{ label: modeButton(mode), hit: { key: 'm' } }, ...(searching ? [] : [SEARCH_BUTTON])]
+  const pieces: DrawSeg[] = [label, ...buttons.map(b => ({ text: buttonText(b), color: 'inactive', hit: b.hit }))]
+  return packRows(pieces.map(p => p.text.length), Math.max(1, Math.floor(w)), 2).map(row => row.flatMap((k, i) => [...(i ? [{ text: i === 1 ? ' ' : '  ', color: 'inactive' }] : []), pieces[k]!]))
 }
 
 /** Line `l` as the rows it takes in a panel `w` wide: split at its line breaks, and a row wider than `w` broken
@@ -534,17 +580,21 @@ export function drawnLines(l: Line, w: number): Line[] {
   return out
 }
 
-/** The tabs under the banner: "[Tasks]  Scouts   Settings", the shown one bright; each one a button for its tab. */
-export function tabsLine(tab: PanelTab): Line {
-  return PANEL_TABS.flatMap((t, i) => [
-    ...(i ? [{ text: ' ', color: 'inactive' }] : []),
-    { text: t.tab === tab ? `[${t.label}]` : ` ${t.label} `, color: t.tab === tab ? 'ide' : 'inactive', ...(t.tab === tab ? { bold: true } : {}), hit: { tab: t.tab } },
-  ])
+/** The tabs under the banner, as Claude Code's tab row (T-685): "[t]: Tasks (12) │ [s]: Scouts (3) │ [c]: Settings"
+ *  (core's PANE_TABS and tabLabel), the shown one bright and bold; each one a button for its tab. A narrow panel puts
+ *  them on more rows, never cutting one. */
+export function tabsLines(tab: PanelTab, w: number, tasks: number, scouts: number): Line[] {
+  const count: Record<PanelTab, number | undefined> = { tasks, scouts, settings: undefined }
+  const segs: DrawSeg[] = PANEL_TABS.map(t => ({ text: tabLabel(t.key, t.label, count[t.tab]), color: t.tab === tab ? 'ide' : 'inactive', ...(t.tab === tab ? { bold: true } : {}), hit: { tab: t.tab } }))
+  return packRows(segs.map(s => s.text.length), Math.max(1, Math.floor(w)), TAB_GAP.length).map(row => row.flatMap((k, i) => [...(i ? [{ text: TAB_GAP, color: 'subtle' }] : []), segs[k]!]))
 }
 
 /** What a body of the panel holds (between the tabs and the footer); its first `head` lines (the page's title) stay
  *  at the top while the rest scrolls. */
 type Body = { lines: Line[]; hits: (PanelHit | null)[]; ids: string[]; selected: string; head?: number }
+
+/** The Back (b) button at the end of a list page (Scouts, Settings, Roles, Kinds, Organizational memory), as Claude Code's. */
+const backButton = (b: ReturnType<typeof bodyMaker>, w: number) => buttonLines([LIST_BACK_BUTTON], w).forEach(l => b.add(l))
 
 /** A body being made: lines, each with what a click on it does. */
 function bodyMaker() {
@@ -570,6 +620,8 @@ function scoutsBody(f: ViewFile, choice: PanelChoice, nowMs: number, w: number):
   if (!scouts.length) {
     // the Claude Code board's "New scout" button has no place here
     for (const [i, l] of scoutHowTo(f.name).filter(l => !l.includes('New scout')).entries()) b.add([{ text: l, color: i === 0 ? 'text' : 'inactive' }])
+    b.blank()
+    backButton(b, w)
     return { ...b, ids: [], selected: '' }
   }
   const ids = scouts.map(x => x.name)
@@ -592,6 +644,8 @@ function scoutsBody(f: ViewFile, choice: PanelChoice, nowMs: number, w: number):
   })
   b.blank()
   b.add([{ text: `Enter opens a scout · /${f.name}-scout <name> runs one now`, color: 'inactive' }])
+  b.blank()
+  backButton(b, w)
   return { ...b, ids, selected }
 }
 
@@ -706,6 +760,8 @@ function defsList(f: ViewFile, list: DefList, cursor: number, w: number): Body {
   }
   b.blank()
   b.add([{ text: `Enter opens a ${noun} · a new one: ask the lead, or add .${f.name}/${list}/<name>.md (a file you add or edit yourself shows here at the next board change)`, color: 'inactive' }])
+  b.blank()
+  backButton(b, w)
   return { ...b, ids, selected, head: 1 }
 }
 
@@ -714,14 +770,22 @@ function defsList(f: ViewFile, list: DefList, cursor: number, w: number): Body {
 function defPage(f: ViewFile, list: DefList, x: ViewDef, w: number): Body {
   const b = bodyMaker()
   const role = list === 'roles'
+  // T-685: its title and what it is, then its buttons (as Claude Code's page), all staying at the top
+  let head = 0
+  const buttons = () => {
+    for (const l of buttonLines(defButtons(list, x), w)) b.add(l)
+    head = b.lines.length
+  }
   if (x.broken) {
     b.add([{ text: x.name, color: 'inactive', bold: true }, { text: ` · ${x.broken}`, color: 'error' }])
     for (const l of wrapSegs([{ text: `Fix the file by hand: ${x.file}${x.canReset ? '; or Reset to built-in deletes it (the built-in one is used meanwhile)' : ''}.`, color: 'text' }], w)) b.add(l)
+    buttons()
   } else {
     b.add([{ text: x.name, color: x.off ? 'inactive' : 'claude', bold: true }, { text: ` · ${sourceLabel(x.source as DefSource, x.off)}`, color: x.off ? 'warning' : 'inactive' }])
     if (x.description) for (const l of wrapSegs([{ text: x.description, color: 'text', bold: true }], w)) b.add(l)
     if (x.warning) b.add([{ text: x.warning, color: 'warning' }])
     if (role && isCheckerRole(x.name)) for (const l of wrapSegs([{ text: `never a task's role, and not turned on or off here: the checker setting runs it (Settings → checker, now ${checkerOn(f.view) ? 'on' : 'off'})`, color: 'inactive' }], w)) b.add(l)
+    buttons()
     const section = (title: string, value: string, none: string) => {
       b.blank()
       b.heading(title)
@@ -742,7 +806,33 @@ function defPage(f: ViewFile, list: DefList, x: ViewDef, w: number): Body {
   b.add([{ text: `  ${x.file}`, color: 'autoAccept' }])
   b.blank()
   b.add([{ text: 'To change what it says: ask the lead, or edit its file (your own edit shows here at the next board change)', color: 'inactive' }])
-  return { ...b, ids: [], selected: '', head: 1 }
+  return { ...b, ids: [], selected: '', head }
+}
+
+/** The built-in prompt role `x` goes in, view only (T-685, Claude Code's See the prompt page): its name, what it is,
+ *  the buttons (Back, the role's other prompts), then its text with the {{role}} slot marked. */
+function rolePromptPage(x: ViewDef, kind: RolePromptKind, w: number): Body {
+  const b = bodyMaker()
+  b.add([{ text: `${kind} prompt`, color: 'claude', bold: true }, { text: ' · built-in, view only', color: 'inactive' }])
+  for (const l of wrapSegs([{ text: `${kind === 'checker' ? 'what a checker is told' : `what a worker on a ${kind} task is told`}; role ${x.name}'s checklist goes where ${ROLE_SLOT} is`, color: 'inactive' }], w)) b.add(l)
+  for (const l of buttonLines(rolePromptButtons(x.name, kind), w)) b.add(l)
+  const head = b.lines.length
+  b.blank()
+  b.add([{ text: '▍Text', color: 'suggestion', bold: true }])
+  for (const line of ROLE_PROMPTS[kind].trimEnd().split('\n')) {
+    if (!line.includes(ROLE_SLOT)) {
+      b.add([{ text: line || ' ', color: 'text' }])
+      continue
+    }
+    const [before, ...after] = line.split(ROLE_SLOT)
+    b.add([
+      ...(before ? [{ text: before, color: 'text' }] : []),
+      { text: ROLE_SLOT, color: 'warning', bold: true },
+      ...(after.join(ROLE_SLOT) ? [{ text: after.join(ROLE_SLOT), color: 'text' }] : []),
+      { text: `  ◀ role ${x.name}'s checklist goes here`, color: 'warning' },
+    ])
+  }
+  return { ...b, ids: [], selected: '', head }
 }
 
 /** Org-mem's notes in the view file, newest first. */
@@ -773,6 +863,9 @@ function orgMemBody(f: ViewFile, cursor: number, w: number): Body {
   }
   b.blank()
   b.add([{ text: `↑↓ picks a note · x deletes it (asks first) · or edit ${orgMemFile(dataDir(f.name))} by hand`, color: 'inactive' }])
+  b.blank()
+  // Delete (x) (when there are notes) and Back (b), each on its own row as on Claude Code's page
+  for (const x of [...(notes.length ? [DELETE_NOTE_BUTTON] : []), LIST_BACK_BUTTON]) buttonLines([x], w).forEach(l => b.add(l))
   return { ...b, ids, selected, head: 1 }
 }
 
@@ -845,19 +938,28 @@ function settingsBody(f: ViewFile, cursor: number, open: readonly string[], w: n
   }
   b.blank()
   b.add([{ text: `Enter on a heading opens or closes its group · Enter changes a setting (on/off flips) or opens a page · /${f.name}-settings NAME VALUE · or tell the lead`, color: 'inactive' }])
+  b.blank()
+  backButton(b, w)
   return { ...b, ids, selected }
 }
 
 /** The list: the questions for the owner, NEEDS YOU, what runs and waits to run, then the groups: the backlog (its
- *  first rows when open), done and dropped (their rows when open); the row under the cursor is marked with "›". */
-function listBody(f: ViewFile, cursor: number, open: Record<PanelGroup, boolean>, nowMs: number, w: number): { lines: Line[]; hits: (PanelHit | null)[]; ids: string[]; selected: string } {
+ *  first rows when open), done and dropped (their rows when open); the row under the cursor is marked with "›".
+ *  With a search on (`search`, core's searchTasks words, T-685) only the matching tasks are listed, as on Claude Code's
+ *  list: no questions, every group with a match open (the whole backlog), none without one; the search line and the
+ *  [f] change search and [x] clear search buttons stay at the top. */
+function listBody(f: ViewFile, cursor: number, open0: Record<PanelGroup, boolean>, nowMs: number, w: number, search = ''): Body {
   const v = f.view
-  const parts = panelSections(v.tasks, nowMs, localOffset(nowMs))
-  const questions = v.questions ?? []
-  const backlog = open.backlog ? parts.backlog.slice(0, BACKLOG_SHOWN) : []
+  const query = search.trim()
+  const filtering = query !== ''
+  const matching = filtering ? searchTasks(v.tasks, query, nowMs) : v.tasks
+  const parts = panelSections(matching, nowMs, localOffset(nowMs))
+  const questions = filtering ? [] : (v.questions ?? [])
+  const open: Record<PanelGroup, boolean> = filtering ? { backlog: true, done: true, dropped: true } : open0
+  const backlog = open.backlog ? (filtering ? parts.backlog : parts.backlog.slice(0, BACKLOG_SHOWN)) : []
   const done = open.done ? parts.done : []
   const dropped = open.dropped ? parts.dropped : []
-  const gone = archivedOf(v).done
+  const gone = filtering ? 0 : archivedOf(v).done
   const groups: { g: PanelGroup; label: string; all: SymccTask[]; rows: SymccTask[] }[] = [
     { g: 'backlog' as const, label: 'Backlog', all: parts.backlog, rows: backlog },
     { g: 'done' as const, label: 'Done', all: parts.done, rows: done },
@@ -878,8 +980,14 @@ function listBody(f: ViewFile, cursor: number, open: Record<PanelGroup, boolean>
   const lines: Line[] = []
   const hits: (PanelHit | null)[] = []
   const add = (l: Line, hit: PanelHit | null = null) => (lines.push(l), hits.push(hit))
-  const blank = () => lines.length && add([{ text: ' ', color: 'text' }])
+  const blank = () => lines.length > top && add([{ text: ' ', color: 'text' }])
   const head = (text: string) => add([{ text, color: 'text', bold: true }])
+  // the search line and its buttons, as Claude Code's (two columns between the buttons)
+  if (filtering) {
+    add([{ text: searchLine(query, matching.length, v.tasks.length), color: 'warning', bold: true }])
+    for (const l of buttonLines([CHANGE_SEARCH_BUTTON, CLEAR_SEARCH_BUTTON], w, 2, 'inactive')) add(l)
+  }
+  const top = lines.length
   if (questions.length) {
     head(questionsLabel(questions.length))
     for (const q of questions) add(questionRow(q, pointer(q.id, 2), idWidth, w), { open: q.id })
@@ -909,7 +1017,7 @@ function listBody(f: ViewFile, cursor: number, open: Record<PanelGroup, boolean>
     blank()
     for (const t of running) task(t, 2)
   }
-  if (!questions.length && !parts.needsYou.length && !running.length) for (const l of ALL_CLEAR) add([{ text: `  ${l}`, color: 'inactive' }])
+  if (!filtering && !questions.length && !parts.needsYou.length && !running.length) for (const l of ALL_CLEAR) add([{ text: `  ${l}`, color: 'inactive' }])
   const countWidth = Math.max(1, ...[parts.backlog, parts.done, parts.dropped].map(ts => String(ts.length).length))
   if (groups.length) blank()
   for (const x of groups) {
@@ -918,7 +1026,7 @@ function listBody(f: ViewFile, cursor: number, open: Record<PanelGroup, boolean>
     for (const t of x.rows) task(t, 4)
     if (x.g === 'backlog' && x.rows.length && x.all.length > x.rows.length) add([{ text: `    ${backlogMoreLabel(x.all.length - x.rows.length).replace(/ \(Enter to show all\)$/, '')}`, color: 'inactive' }])
   }
-  return { lines, hits, ids, selected }
+  return { lines, hits, ids, selected, head: top }
 }
 
 /** A question's row in the list: "  Q-3 ? Which database?". */
@@ -1032,6 +1140,15 @@ export type PanelButton = { label: string; hit: PanelHit }
 /** The Back button every page starts with (b). */
 export const BACK_BUTTON: PanelButton = { label: 'Back', hit: { key: 'back' } }
 
+/** The buttons of the list pages (T-685), with Claude Code's words: the task list's search buttons ([f] search in
+ *  the footer; [f] change search and [x] clear search under the search line while one is on), and the Back (b) and
+ *  Delete (x) buttons at the end of the Scouts, Settings, Roles, Kinds and Organizational memory pages. */
+export const SEARCH_BUTTON: PanelButton = { label: '[f] search', hit: { key: 'f' } }
+export const CHANGE_SEARCH_BUTTON: PanelButton = { label: '[f] change search', hit: { key: 'f' } }
+export const CLEAR_SEARCH_BUTTON: PanelButton = { label: '[x] clear search', hit: { key: 'x' } }
+export const LIST_BACK_BUTTON: PanelButton = { label: 'Back (b)', hit: { key: 'back' } }
+export const DELETE_NOTE_BUTTON: PanelButton = { label: 'Delete (x)', hit: { key: 'x' } }
+
 /** How a button looks: "[ Back ]". */
 export const buttonText = (b: PanelButton) => `[ ${b.label} ]`
 
@@ -1053,9 +1170,9 @@ export const scoutButtons = (sc: Pick<SymccScout, 'running' | 'paused'>): PanelB
 
 /** A row of buttons, going on to more rows when it doesn't fit `w` (core's packRows, as Claude Code's buttonRows),
  *  never cutting a button; each button is a piece a click presses. */
-export function buttonLines(buttons: readonly PanelButton[], w: number): Line[] {
-  return packRows(buttons.map(b => buttonText(b).length), Math.max(1, Math.floor(w)), 1).map(row =>
-    row.flatMap((k, i) => [...(i ? [{ text: ' ', color: 'inactive' }] : []), { text: buttonText(buttons[k]!), color: 'ide', hit: buttons[k]!.hit }]),
+export function buttonLines(buttons: readonly PanelButton[], w: number, gap = 1, color = 'ide'): Line[] {
+  return packRows(buttons.map(b => buttonText(b).length), Math.max(1, Math.floor(w)), gap).map(row =>
+    row.flatMap((k, i) => [...(i ? [{ text: ' '.repeat(gap), color: 'inactive' }] : []), { text: buttonText(buttons[k]!), color, hit: buttons[k]!.hit }]),
   )
 }
 
@@ -1084,6 +1201,8 @@ export type PanelAction =
   /** delete note `n` (its place in the file) from organizational memory (T-619); `key`: its check word
    *  (orgMemNoteKey), so a note that moved meanwhile is not the one deleted */
   | { kind: 'orgmem-delete'; n: number; key?: string }
+  /** set the board mode (the list's [m] button, T-685): /<name>-mode review|auto */
+  | { kind: 'mode'; mode: SymccMode }
 
 /** The slash command (its name, without the slash, and its text) that does `a` for plugin `name`. */
 export function actionCommand(a: PanelAction, name: string = DEFAULT_NAME): { name: string; text: string } {
@@ -1095,6 +1214,7 @@ export function actionCommand(a: PanelAction, name: string = DEFAULT_NAME): { na
   if (a.kind === 'setting') return { name: `${name}-settings`, text: `${a.setting} ${a.value.trim()}` }
   if (a.kind === 'scout-edit') return { name: `${name}-scout`, text: `${a.scout} ${a.field} ${a.value.trim() || (a.field === 'model' ? 'none' : '')}`.trim() }
   if (a.kind === 'def') return { name: `${name}-settings`, text: `${a.def} ${a.name} ${a.action}` }
+  if (a.kind === 'mode') return { name: `${name}-mode`, text: a.mode }
   if (a.kind === 'orgmem-delete') return { name: `${name}-settings`, text: `orgmem delete ${a.n}${a.key ? ` ${a.key}` : ''}` }
   return { name: `${name}-answer`, text: `${a.id} ${a.answer.trim()}` }
 }

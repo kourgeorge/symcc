@@ -524,6 +524,19 @@ export const listKeys = (): KeyHint[] => [
   { key: 't s c', word: 'views' },
 ]
 
+/** The board panel's tabs in order, with their keys (the terminal's tab row and OpenCode's draw them). */
+export const PANE_TABS = [
+  { tab: 'tasks', label: 'Tasks', key: 't' },
+  { tab: 'scouts', label: 'Scouts', key: 's' },
+  { tab: 'settings', label: 'Settings', key: 'c' },
+] as const
+
+/** A tab's words in the tab row: "[t]: Tasks (12)", "[c]: Settings" (no count). */
+export const tabLabel = (key: string, label: string, count?: number): string => `[${key}]: ${label}${count === undefined ? '' : ` (${count})`}`
+
+/** What goes between two tabs in the tab row. */
+export const TAB_GAP = ' │ '
+
 /** The view keys under the scouts and settings pages; `enter` adds "Enter opens" first. */
 export const viewKeys = (enter = true): KeyHint[] => [
   ...(enter ? [{ key: 'Enter', word: 'opens' }] : []),

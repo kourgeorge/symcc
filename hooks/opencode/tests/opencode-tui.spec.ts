@@ -8,10 +8,10 @@
 // OpenTUI (T-500): opencode/tui.ts imports them by their written-out names (what OpenCode swaps for its own copies),
 // and loadTuiRuntime names a package that is missing or lacks a function instead of failing with a bare import error.
 import { test, expect } from 'bun:test'
-import { SETTING_GROUPS, groupSummaryParts, taskActions, actionButtonLabel, settingsKeys, mergeRoles, mergeKinds, when, addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, type Board } from '../../board'
+import { PANE_TABS, tabLabel, TAB_GAP, modeLabel, modeButton, promptsOfRole, ROLE_SLOT, SETTING_GROUPS, groupSummaryParts, taskActions, actionButtonLabel, settingsKeys, mergeRoles, mergeKinds, when, addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, type Board } from '../../board'
 import type { PaneView } from '../../app/state'
 import { ICON } from '../../name'
-import { bandLines, bandDraw, BAND_CLICK_HINT, panelLines, panelKeys, parseViewFile, viewFileText, lineText, actionCommand, answerOptions, OWN_ANSWER, viewDefs, panelTaskActions, TASK_ACTION_COMMANDS, SETTINGS_OPEN, approveSent, APPROVE_SENT_MS, drawnLines, type ViewFile } from '../board-view'
+import { bandLines, bandDraw, BAND_CLICK_HINT, panelLines, panelKeys, parseViewFile, viewFileText, lineText, actionCommand, answerOptions, OWN_ANSWER, viewDefs, panelTaskActions, TASK_ACTION_COMMANDS, SETTINGS_OPEN, approveSent, APPROVE_SENT_MS, drawnLines, type ViewFile, type PanelChoice } from '../board-view'
 import { readFile } from 'node:fs/promises'
 import { rowEndBoard, ROW_END, ROW_END_NOW } from '../../../tests/row-end-cases'
 import { taskSections } from '../../core/task-sections'
@@ -995,8 +995,8 @@ test('T-558: the mouse works like the keys: a click on a row opens its task, on 
   expect(after.length).toBe(18)
   // the banner, the tabs and the footer stay; the list moves up by 3 drawn lines
   expect(after.slice(0, full.fixed)).toEqual(before.slice(0, full.fixed))
-  expect(after.slice(-2)).toEqual(before.slice(-2))
-  expect(after.slice(full.fixed, -5)).toEqual(before.slice(full.fixed + 3, -2))
+  expect(after.slice(-full.footer)).toEqual(before.slice(-full.footer))
+  expect(after.slice(full.fixed, -full.footer - 3)).toEqual(before.slice(full.fixed + 3, -full.footer))
   scroll('up')
   scroll('up')
   expect(board.state().scroll).toBe(0)
@@ -1004,8 +1004,8 @@ test('T-558: the mouse works like the keys: a click on a row opens its task, on 
   // it stops when the list's last line is at the bottom: the last screenful is full
   const end = rowEls(panel).map(r => r.text)
   expect(end.length).toBe(18)
-  expect(end.at(-3)).toBe(lineText(full.lines.at(-3)!))
-  expect(board.state().scroll).toBe(full.bodyLines - (18 - full.fixed - 2))
+  expect(end.at(-full.footer - 1)).toBe(lineText(full.lines.at(-full.footer - 1)!))
+  expect(board.state().scroll).toBe(full.bodyLines - (18 - full.fixed - full.footer))
   expect(board.state().scroll).toBe(panelLines(f, { opened: '', cursor: 0, groups: board.state().groups, scroll: 999, rows: 18 }, NOW, 98).scroll)
   board.stop()
 })
@@ -1050,14 +1050,14 @@ test('T-559: the Scouts tab lists the scouts from view.json, a scout\'s page sho
   expect(parseViewFile(viewFileText(f))).toEqual(f)
   // the tabs under the banner, on every tab, each a button
   const tasks = panelLines(f, { opened: '', cursor: 0 }, NOW, 100)
-  const tabs = tasks.lines.find(l => lineText(l).includes('[Tasks]'))!
+  const tabs = tasks.lines.find(l => lineText(l).includes('[t]: Tasks'))!
   expect(lineText(tabs)).toContain('Scouts')
   expect(tabs.find(s => s.text.includes('Settings'))?.hit).toEqual({ tab: 'settings' })
   expect(lineText(tasks.lines.at(-1)!)).toContain('t s c views')
   // the list: name, how often, paused or the next run, last result; the waiting one first, the paused one after
   const list = panelLines(f, { tab: 'scouts', opened: '', cursor: 0 }, NOW, 100)
   const text = list.lines.map(lineText)
-  expect(text.some(l => l.includes('[Scouts]'))).toBe(true)
+  expect(text.some(l => l.includes('[s]: Scouts (2)'))).toBe(true)
   expect(list.ids).toEqual(['deps', 'docs-check'])
   const deps = text.find(l => l.includes('deps'))!
   expect(deps).toMatch(/^› /)
@@ -1197,7 +1197,7 @@ test('T-559: startTui: t, s and c switch tabs (a click on a tab too); on a scout
     { sessionID: 'ses_1', name: 'symcc-settings', text: 'checker on' },
   ])
   // a click on the Tasks tab goes back to the task list; t does too
-  const tabSeg = rowEls(panel).find(r => r.text.includes('[Settings]'))!.segs.find(s => s.kids.join('').includes('Tasks'))!
+  const tabSeg = rowEls(panel).find(r => r.text.includes('[c]: Settings'))!.segs.find(s => s.kids.join('').includes('Tasks'))!
   ;(tabSeg.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0 })
   expect(board.state().tab).toBe('tasks')
   expect(lines().some(l => l.includes('NEEDS YOU'))).toBe(true)
@@ -1289,10 +1289,10 @@ test('T-562: the Settings tab opens the Roles and Kinds pages from view.json; a 
   expect(p).toContain('  tdd')
   expect(p).toContain('  Run them twice.')
   expect(p).toContain('  .symcc/roles/tester.md')
-  expect(panelKeys(f, 'role:tester', 'settings').map(k => k.word)).toEqual(['turn on', 'reset', 'back'])
+  expect(panelKeys(f, 'role:tester', 'settings').map(k => k.word)).toEqual(['the prompt it goes in', 'turn on', 'reset to built-in', 'back'])
   expect(page.lines.at(-1)!.find(x => x.text === 'o turn on')?.hit).toEqual({ key: 'o' })
   // general can't be turned off; the checker role says the checker setting runs it; a broken one can only be fixed
-  expect(panelKeys(f, 'role:general', 'settings').map(k => k.word)).toEqual(['back'])
+  expect(panelKeys(f, 'role:general', 'settings').map(k => k.word)).toEqual(['the prompt it goes in', 'back'])
   expect(panelLines(f, { tab: 'settings', opened: 'role:checker', cursor: 0 }, NOW, 200).lines.map(lineText).some(x => x.includes('the checker setting runs it (Settings → checker, now on)'))).toBe(true)
   expect(panelLines(f, { tab: 'settings', opened: 'role:oops', cursor: 0 }, NOW, 140).lines.map(lineText)).toContain('Fix the file by hand: .symcc/roles/oops.md.')
   // the Kinds page and a kind's page
@@ -1302,7 +1302,7 @@ test('T-562: the Settings tab opens the Roles and Kinds pages from view.json; a 
   expect(bug).toContain('bug · replaced')
   expect(bug).toContain('Body')
   expect(bug).toContain('  Fix it, with a test.')
-  expect(panelKeys(f, 'kind:bug', 'settings').map(k => k.word)).toEqual(['turn off', 'reset', 'back'])
+  expect(panelKeys(f, 'kind:bug', 'settings').map(k => k.word)).toEqual(['turn off', 'reset to built-in', 'back'])
   expect(panelKeys(f, 'kind:change', 'settings').map(k => k.word)).toEqual(['back'])
   // a role that left the view has no page
   expect(panelKeys(f, 'role:gone', 'settings').map(k => k.word)).toEqual(['change', 'move', 'views', 'back'])
@@ -1865,16 +1865,17 @@ const LONG_REPORT = { file: '.symcc/reports/T-2-try-2.md', text: Array.from({ le
  *  nothing wider than the panel), blank rows only past the body's end, the footer last; and the last screenful full. */
 function checkScrolling(draw: (scroll: number, rows?: number) => ReturnType<typeof panelLines>, rows: number, w: number, head: string[]) {
   const all = draw(0)
+  const ft = all.footer
   for (const l of all.lines.slice(0, -1)) expect(lineText(l).length <= w).toBe(true)
   for (const l of all.lines) for (const s of l) expect(s.text).not.toContain('\n')
   // what stays at the top this high (a panel too low for the page's title lets the title scroll with the rest)
   const fixed = draw(0, rows).fixed
   expect(fixed <= all.fixed).toBe(true)
-  const body = all.lines.slice(fixed, -2).map(lineText)
+  const body = all.lines.slice(fixed, -ft).map(lineText)
   expect(body.length).toBe(all.bodyLines + all.fixed - fixed)
   const top = all.lines.slice(0, fixed).map(lineText)
   for (const h of head) expect(top).toContain(h)
-  const room = rows - fixed - 2
+  const room = rows - fixed - ft
   expect(body.length).toBeGreaterThan(room)
   const last = body.length - room
   const seen: string[] = []
@@ -1887,12 +1888,12 @@ function checkScrolling(draw: (scroll: number, rows?: number) => ReturnType<type
     expect(text.slice(0, d.fixed)).toEqual(top)
     expect(d.scroll).toBe(Math.min(s, last))
     // the window: exactly the body's drawn lines from the scroll on, as many as fit (the last screenful stays full)
-    expect(text.slice(d.fixed, -2)).toEqual(body.slice(d.scroll, d.scroll + room))
-    expect(text.slice(-2)).toEqual(all.lines.slice(-2).map(lineText))
-    if (s % room === 0 && s <= last) seen.push(...text.slice(d.fixed, -2))
+    expect(text.slice(d.fixed, -ft)).toEqual(body.slice(d.scroll, d.scroll + room))
+    expect(text.slice(-ft)).toEqual(all.lines.slice(-ft).map(lineText))
+    if (s % room === 0 && s <= last) seen.push(...text.slice(d.fixed, -ft))
   }
   // screen after screen, the windows go over the whole body with no gap and no repeat
-  const tail = draw(last, rows).lines.slice(fixed, -2).map(lineText)
+  const tail = draw(last, rows).lines.slice(fixed, -ft).map(lineText)
   const covered = [...seen, ...tail.slice(seen.length - last)]
   expect(covered).toEqual(body)
 }
@@ -1916,7 +1917,7 @@ test('T-627: a long task page scrolls by drawn lines under a fixed banner, tabs,
   const firstTitle = title.findIndex(l => l.startsWith('T-2'))
   checkScrolling(draw, 25, w, [title[firstTitle]!, title.find(l => l.startsWith('['))!])
   // too low to keep the title too: the banner and tabs stay, the title scrolls with the page
-  checkScrolling(draw, 12, w, [title.find(l => l.startsWith('[Tasks]'))!])
+  checkScrolling(draw, 12, w, [title.find(l => l.startsWith('[t]: Tasks'))!])
   expect(draw(0, 12).fixed < all.fixed).toBe(true)
 })
 
@@ -2119,5 +2120,214 @@ test('T-675: a done task\'s history is not in the view file; opening its page re
   // the same page as with the task whole in the view file
   const wholeFile: ViewFile = { ...f0, view: { ...f0.view, tasks: whole as ViewFile['view']['tasks'] } }
   expect(shown(panel).some(l => l.includes('the old details'))).toBe(panelLines(wholeFile, { opened: 'T-5', cursor: 0 }, NOW, 100).lines.map(lineText).some(l => l.includes('the old details')))
+  board.stop()
+})
+
+test('T-685: every board screen has Claude Code\'s buttons: the tab row, the list\'s [m] mode and [f] search (then [f] change search, [x] clear search), Back (b) on the Scouts, Settings, Roles, Kinds and org-mem pages, Delete (x), a role\'s and a kind\'s page buttons and its prompt page', () => {
+  const f = orgMemViewFile()
+  const W = 140
+  const draw = (c: Partial<PanelChoice>, w = W) => panelLines(f, { opened: '', cursor: 0, ...c }, NOW, w)
+  const texts = (c: Partial<PanelChoice>, w = W) => draw(c, w).lines.map(lineText)
+  // the tab row is Claude Code's, made from core's PANE_TABS, tabLabel and TAB_GAP: "[t]: Tasks (5) │ [s]: Scouts (2) │ [c]: Settings"
+  const tabRow = '[t]: Tasks (5) │ [s]: Scouts (2) │ [c]: Settings'
+  expect(PANE_TABS.map(t => tabLabel(t.key, t.label, t.tab === 'tasks' ? 5 : t.tab === 'scouts' ? 2 : undefined)).join(TAB_GAP)).toBe(tabRow)
+  const screens: Partial<PanelChoice>[] = [
+    {}, { opened: 'T-2' }, { opened: 'T-3' }, { tab: 'scouts' }, { tab: 'scouts', opened: 'deps' }, { tab: 'settings' }, { tab: 'settings', opened: 'roles' }, { tab: 'settings', opened: 'kinds' },
+    { tab: 'settings', opened: 'role:tester' }, { tab: 'settings', opened: 'kind:bug' }, { tab: 'settings', opened: 'orgmem' }, { tab: 'settings', opened: 'prompt:tester:change' },
+  ]
+  for (const c of screens) {
+    const d = draw(c)
+    const row = d.lines.find(l => lineText(l) === tabRow)
+    expect([c, !!row]).toEqual([c, true])
+    // each tab a button for its tab; the shown one bold
+    expect(row!.filter(s => s.hit).map(s => [s.text, s.hit, !!s.bold])).toEqual(PANE_TABS.map(t => [tabLabel(t.key, t.label, t.tab === 'tasks' ? 5 : t.tab === 'scouts' ? 2 : undefined), { tab: t.tab }, t.tab === (c.tab ?? 'tasks')]))
+  }
+  // a narrow panel puts the tabs on more rows, never cutting one
+  const narrow = texts({}, 40)
+  expect(narrow).toContain('[t]: Tasks (5) │ [s]: Scouts (2)')
+  expect(narrow).toContain('[c]: Settings')
+
+  // the list's footer: Claude Code's board-mode row (the mode, its [m] button, [f] search), then the key hints
+  const list = draw({})
+  const modeRow = list.lines.at(-list.footer + 1)!
+  expect(lineText(modeRow)).toBe(`${modeLabel('auto')} [ ${modeButton('auto')} ]  [ [f] search ]`)
+  expect(lineText(modeRow)).toBe('⏵ auto [ [m] review merge ]  [ [f] search ]')
+  expect(modeRow.filter(s => s.hit).map(s => s.hit)).toEqual([{ key: 'm' }, { key: 'f' }])
+  // a task's page has no mode row (as Claude Code's)
+  expect(texts({ opened: 'T-2' }).some(l => l.includes('[m]'))).toBe(false)
+  // a search on: the search line, then [f] change search and [x] clear search; only the matches, no questions; no [f] search in the footer
+  const found = draw({ search: 'reviewed' })
+  const ft = found.lines.map(lineText)
+  expect(ft).toContain('search: reviewed · 1 of 5 tasks')
+  expect(ft).toContain('[ [f] change search ]  [ [x] clear search ]')
+  expect(found.lines.flat().filter(s => s.text === '[ [f] change search ]' || s.text === '[ [x] clear search ]').map(s => s.hit)).toEqual([{ key: 'f' }, { key: 'x' }])
+  expect(found.ids).toEqual(['T-2'])
+  expect(lineText(found.lines.at(-found.footer + 1)!)).toBe('⏵ auto [ [m] review merge ]')
+  // they stay at the top with the tabs when the list scrolls
+  expect(found.lines.slice(0, found.fixed).map(lineText)).toContain('search: reviewed · 1 of 5 tasks')
+  expect(texts({ search: 'nothing-like-this' })).toContain('search: nothing-like-this · no tasks match')
+
+  // Back (b) at the end of each list page, as Claude Code's; org-mem's Delete (x) before it (only with notes)
+  const back = (c: Partial<PanelChoice>) => draw(c).lines.flat().filter(s => s.text === '[ Back (b) ]').map(s => s.hit)
+  for (const c of [{ tab: 'scouts' }, { tab: 'settings' }, { tab: 'settings', opened: 'roles' }, { tab: 'settings', opened: 'kinds' }, { tab: 'settings', opened: 'orgmem' }] as const) expect([c, back(c)]).toEqual([c, [{ key: 'back' }]])
+  const om = texts({ tab: 'settings', opened: 'orgmem' })
+  expect(om.indexOf('[ Delete (x) ]') >= 0 && om.indexOf('[ Delete (x) ]') < om.indexOf('[ Back (b) ]')).toBe(true)
+  expect(draw({ tab: 'settings', opened: 'orgmem' }).lines.flat().find(s => s.text === '[ Delete (x) ]')?.hit).toEqual({ key: 'x' })
+  const noNotes = orgMemViewFile('')
+  expect(panelLines(noNotes, { tab: 'settings', opened: 'orgmem', cursor: 0 }, NOW, W).lines.map(lineText).filter(l => l.startsWith('[ '))).toEqual(['[ Back (b) ]'])
+  // an empty Scouts tab has its Back (b) too
+  const noScouts: ViewFile = { ...f, view: { ...f.view, scouts: [] } }
+  expect(panelLines(noScouts, { tab: 'scouts', opened: '', cursor: 0 }, NOW, W).lines.map(lineText)).toContain('[ Back (b) ]')
+
+  // a role's and a kind's page: Claude Code's buttons in its order (Back, See the prompt, Turn off / on, Reset to built-in)
+  const buttonRow = (opened: string) => texts({ tab: 'settings', opened }).find(l => l.startsWith('[ Back ]'))
+  expect(buttonRow('role:tester')).toBe('[ Back ] [ See the prompt ] [ Turn on ] [ Reset to built-in ]')
+  expect(buttonRow('role:general')).toBe('[ Back ] [ See the prompt ]')
+  expect(buttonRow('role:checker')).toBe('[ Back ] [ See the prompt ]')
+  expect(buttonRow('role:oops')).toBe('[ Back ]')
+  expect(buttonRow('kind:bug')).toBe('[ Back ] [ Turn off ] [ Reset to built-in ]')
+  expect(buttonRow('kind:change')).toBe('[ Back ]')
+  // the buttons stay at the top with the page's name
+  const role = draw({ tab: 'settings', opened: 'role:tester' })
+  expect(role.lines.slice(0, role.fixed).map(lineText)).toContain('[ Back ] [ See the prompt ] [ Turn on ] [ Reset to built-in ]')
+  expect(role.lines.flat().filter(s => s.text.startsWith('[ ') && s.hit).map(s => s.hit)).toEqual([{ key: 'back' }, { key: 'p' }, { key: 'o' }, { key: 'r' }])
+  // the prompt page (Claude Code's See the prompt): view only, Back and the role's other prompts, its text with the slot marked
+  const prompt = draw({ tab: 'settings', opened: 'prompt:tester:change' })
+  const pt = prompt.lines.map(lineText)
+  expect(pt).toContain('change prompt · built-in, view only')
+  expect(pt).toContain('[ Back ] [ The investigation prompt ]')
+  expect(prompt.lines.flat().find(s => s.text === '[ The investigation prompt ]')?.hit).toEqual({ page: 'prompt:tester:investigation' })
+  expect(pt.some(l => l.includes(ROLE_SLOT) && l.endsWith("◀ role tester's checklist goes here"))).toBe(true)
+  expect(texts({ tab: 'settings', opened: 'prompt:checker:checker' })).toContain('[ Back ]')
+  expect(panelKeys(f, 'prompt:tester:change', 'settings').map(k => k.word)).toEqual(['back'])
+  // a role that isn't there, or a prompt it doesn't go in, has no page
+  expect(texts({ tab: 'settings', opened: 'prompt:tester:checker' }).some(l => l.includes('built-in, view only'))).toBe(false)
+  expect(promptsOfRole('tester')).toEqual(['change', 'investigation'])
+  expect(actionCommand({ kind: 'mode', mode: 'review' })).toEqual({ name: 'symcc-mode', text: 'review' })
+})
+
+test('T-685: in the TUI a click on each of those buttons does exactly what its key does (tabs, [m], [f] search, [x] clear search, Back (b), Delete (x), a role\'s and a kind\'s page, the prompt page)', async () => {
+  const f = orgMemViewFile()
+  const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)]])
+  const sent: { sessionID: string; name: string; text: string }[] = []
+  const slots: { append: string; render: (input: never) => unknown }[] = []
+  const answers = { prompt: [] as (string | undefined)[], select: [] as unknown[] }
+  const ctx: TuiContext = {
+    location: { directory: '/work/proj' },
+    theme: {},
+    renderer: { width: 142, height: 200 },
+    client: { session: { command: async input => void sent.push(input) } },
+    keymap: { layer: () => undefined },
+    ui: {
+      toast: { show: () => undefined },
+      dialog: { prompt: async () => answers.prompt.shift(), select: async <V,>() => answers.select.shift() as V | undefined },
+      panel: { open: () => true, close: () => undefined, current: () => undefined },
+      slot: claim => (slots.push(claim as never), () => undefined),
+    },
+  }
+  const board = startTui(ctx, { runtime: fakeRuntime(), readText: async p => files.get(p) ?? Promise.reject(new Error('missing')), every: () => () => undefined, now: () => NOW })
+  await board.refresh()
+  const panel = slots.find(s => s.append === 'session.panel')!.render({ name: BOARD_PANEL, sessionID: 's', width: 142, focused: true, close: () => undefined } as never) as El
+  const lines = () => rowEls(panel).map(r => r.text)
+  const settle = () => new Promise<void>(res => setTimeout(res, 0))
+  const clickRow = (has: string) => (rowEls(panel).find(r => r.text.includes(has))!.el.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0 })
+  const click = async (label: string) => {
+    const seg = rowEls(panel).flatMap(r => r.segs).find(s => s.kids?.join('') === label)
+    expect([label, typeof seg?.props.onMouseUp]).toEqual([label, 'function'])
+    ;(seg!.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0, stopPropagation: () => undefined })
+    await settle()
+  }
+  // the pages, each reached the same way every time
+  const toList = async (search = '') => {
+    await board.press('t', 's')
+    await board.press('back', 's')
+    // x takes off a search left on (on the list it does nothing else)
+    await board.press('x', 's')
+    if (search) {
+      answers.prompt.push(search)
+      await board.press('f', 's')
+    }
+  }
+  const toSettings = async (row = '', then = '') => {
+    await board.press('t', 's')
+    await board.press('c', 's')
+    for (const g of lines().filter(l => l.includes('▸ '))) clickRow(g.trim().split(' · ')[0]!)
+    if (row) clickRow(row)
+    if (then) clickRow(then)
+  }
+  // a click on `label` and a press of `key`, each from the same page and with the same answers: the same commands
+  // sent, the same state and the same drawing after
+  const same = async (go: () => Promise<void>, label: string, key: PanelKey, give: { prompt?: (string | undefined)[]; select?: unknown[] } = {}) => {
+    const run = async (act: () => Promise<void>) => {
+      await go()
+      sent.length = 0
+      answers.prompt = [...(give.prompt ?? [])]
+      answers.select = [...(give.select ?? [])]
+      await act()
+      return { sent: [...sent], state: board.state(), lines: lines() }
+    }
+    const byKey = await run(() => board.press(key, 's'))
+    const byClick = await run(() => click(label))
+    expect([label, byClick]).toEqual([label, byKey])
+    return byClick
+  }
+  // the list's footer (its rule, the mode row and the key hints) is the box that never shrinks, so it stays in view
+  await toList()
+  const flatEls = (x: unknown): El[] => (typeof x === 'function' ? flatEls(x()) : Array.isArray(x) ? x.flatMap(flatEls) : x && typeof x === 'object' ? [x as El, ...flatEls((x as El).kids)] : [])
+  const foot = flatEls(panel).find(e => e.props.flexShrink === 0 && e.props.flexDirection === 'column')!
+  const footRows = rowEls(foot).map(r => r.text)
+  expect(footRows.slice(1)).toEqual(['⏵ auto [ [m] review merge ]  [ [f] search ]', '↑↓ move · Enter open · t s c views · Esc close'])
+  // the tabs, from every tab
+  for (const go of [() => toList(), () => toSettings(), async () => (await toList(), await board.press('s', 's'))]) {
+    expect((await same(go, '[t]: Tasks (5)', 't')).state.tab).toBe('tasks')
+    expect((await same(go, '[s]: Scouts (2)', 's')).state.tab).toBe('scouts')
+    expect((await same(go, '[c]: Settings', 'c')).state.tab).toBe('settings')
+  }
+  // the list: [m] sends /symcc-mode with the mode it switches to; [f] search asks and filters; [f] change search with
+  // an empty answer clears it; [x] clear search clears it
+  expect((await same(() => toList(), '[ [m] review merge ]', 'm')).sent).toEqual([{ sessionID: 's', name: 'symcc-mode', text: 'review' }])
+  expect((await same(() => toList(), '[ [f] search ]', 'f', { prompt: ['reviewed'] })).lines).toContain('search: reviewed · 1 of 5 tasks')
+  // Esc on the box keeps the list as it was
+  expect((await same(() => toList(), '[ [f] search ]', 'f', { prompt: [undefined] })).lines.some(l => l.startsWith('search:'))).toBe(false)
+  expect((await same(() => toList('reviewed'), '[ [f] change search ]', 'f', { prompt: ['a later'] })).lines).toContain('search: a later · 1 of 5 tasks')
+  expect((await same(() => toList('reviewed'), '[ [f] change search ]', 'f', { prompt: [''] })).lines.some(l => l.startsWith('search:'))).toBe(false)
+  const cleared = await same(() => toList('reviewed'), '[ [x] clear search ]', 'x')
+  expect(cleared.lines.some(l => l.startsWith('search:'))).toBe(false)
+  expect(cleared.sent).toEqual([])
+  // with the search on, the list has only the match: Enter opens it
+  await toList('reviewed')
+  await board.press('open', 's')
+  expect(board.state().opened).toBe('T-2')
+  await toList()
+  // Back (b) on the list pages: Scouts and Settings go to the task list, Roles, Kinds and org-mem to Settings
+  expect((await same(async () => (await toList(), await board.press('s', 's')), '[ Back (b) ]', 'back')).state.tab).toBe('tasks')
+  expect((await same(() => toSettings(), '[ Back (b) ]', 'back')).state.tab).toBe('tasks')
+  for (const row of ['4 roles', '2 kinds', '3 notes']) expect((await same(() => toSettings(row), '[ Back (b) ]', 'back')).state).toEqual({ ...board.state(), tab: 'settings', opened: '' })
+  // org-mem's Delete (x): asks, then deletes the note under the cursor (the newest)
+  expect((await same(() => toSettings('3 notes'), '[ Delete (x) ]', 'x', { select: ['yes'] })).sent).toEqual([{ sessionID: 's', name: 'symcc-settings', text: `orgmem delete 3 ${orgMemNoteKey('the type check is separate')}` }])
+  // a role's page: Back, See the prompt, Turn on, Reset to built-in
+  const tester = () => toSettings('4 roles', 'My tester')
+  await tester()
+  expect(board.state().opened).toBe('role:tester')
+  expect((await same(tester, '[ Back ]', 'back')).state.opened).toBe('roles')
+  expect((await same(tester, '[ See the prompt ]', 'p')).state.opened).toBe('prompt:tester:change')
+  expect((await same(tester, '[ Turn on ]', 'o')).sent).toEqual([{ sessionID: 's', name: 'symcc-settings', text: 'role tester on' }])
+  expect((await same(tester, '[ Reset to built-in ]', 'r')).sent).toEqual([{ sessionID: 's', name: 'symcc-settings', text: 'role tester reset' }])
+  // a kind's page: Back, Turn off, Reset to built-in
+  const bug = () => toSettings('2 kinds', 'A bug to fix')
+  expect((await same(bug, '[ Back ]', 'back')).state.opened).toBe('kinds')
+  expect((await same(bug, '[ Turn off ]', 'o')).sent).toEqual([{ sessionID: 's', name: 'symcc-settings', text: 'kind bug off' }])
+  expect((await same(bug, '[ Reset to built-in ]', 'r')).sent).toEqual([{ sessionID: 's', name: 'symcc-settings', text: 'kind bug reset' }])
+  // the prompt page: Back goes back to the role; its other prompt's button opens that one; o and r do nothing there
+  const promptPage = async () => (await tester(), await board.press('p', 's'))
+  expect((await same(promptPage, '[ Back ]', 'back')).state.opened).toBe('role:tester')
+  await promptPage()
+  await click('[ The investigation prompt ]')
+  expect(board.state().opened).toBe('prompt:tester:investigation')
+  expect(lines()).toContain('[ Back ] [ The change prompt ]')
+  sent.length = 0
+  await board.press('o', 's')
+  await board.press('r', 's')
+  expect(sent).toEqual([])
   board.stop()
 })
