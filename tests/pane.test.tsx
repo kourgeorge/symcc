@@ -2063,7 +2063,9 @@ test('plan mode: add puts the task in the backlog and says so; leaving plan mode
   // the plugin writes board.json to a temp file, then moves it in place with mv: keep the fake board in step
   const temp: Record<string, string> = {}
   const fileOf = (p: string) => Object.keys(files).find(f => p.endsWith(f))
-  on('fs.exists', (_, e, next) => (fileOf(e.path) ? { value: files[fileOf(e.path)!] !== null } : next(e)))
+  // the fake keeps only board.json: a parts file (.symcc/tasks/T-0.json) is never there (an exists check that fails
+  // would make the board broken, T-681)
+  on('fs.exists', (_, e, next) => (fileOf(e.path) ? { value: files[fileOf(e.path)!] !== null } : /\/tasks\/T-\d+\.json$/.test(e.path) ? { value: false } : next(e)))
   on('fs.read', (_, e, next) => (fileOf(e.path) ? readText(files[fileOf(e.path)!]) : next(e)))
   on('fs.write', (_, e) => ((temp[e.path] = String(e.text)), { value: undefined }))
   on('ui.status', () => ({ value: undefined }))
