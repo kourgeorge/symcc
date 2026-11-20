@@ -7,7 +7,7 @@ import type { SymccHistoryEntry, SymccRun } from '../types'
 import { type Board, type BoardTask, addTask, emptyBoard, parseBoard, readBoard } from '../hooks/board'
 import { ARCHIVE_FILE_BYTES, READ_LIMIT_BYTES, SIZE_WARN_BYTES, archiveChunks, fieldSizes, joinedText, partsFileOf, sizeWarnText, viewStubFilled, viewTask, withViewParts } from '../hooks/core/board-parts'
 import { scoutToolLines } from '../hooks/core/scouts'
-import { change, load, readWhole, saveBoard, saveMigrated } from '../hooks/app/store'
+import { change, load, readWhole, resetStore, saveBoard, saveMigrated } from '../hooks/app/store'
 import { readArchiveFile, saveArchive } from '../hooks/app/archive'
 import { publish } from '../hooks/app/lead'
 import { cleanLeftoverTmp } from '../hooks/app/cleanup'
@@ -193,6 +193,19 @@ test('T-681: a save after a parts file went missing never writes empty parts ove
   const back = await load(w.host)
   expect(back.tasks[120]!.history.length).toBe(30)
   expect(back.tasks[699]!.note).toBe('queued')
+})
+
+test('T-681: a reload forgets which tasks the last read loaded as stubs, so a fresh save writes their parts again', async () => {
+  const w = world()
+  await saveBoard(w.host, bigBoard())
+  const file = `${ROOT}/.symcc/tasks/T-100.json`
+  w.files.delete(file)
+  await load(w.host)
+  resetStore()
+  const fresh = world()
+  await saveBoard(fresh.host, bigBoard())
+  expect(fresh.files.has(file)).toBe(true)
+  expect((await load(fresh.host)).tasks[120]!.history.length).toBe(30)
 })
 
 test('T-675: a data file past 3 MB warns the owner, the lead and the board once; a read refused for size says so', async () => {

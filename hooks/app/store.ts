@@ -222,6 +222,7 @@ export function resetStore() {
   queues.clear()
   reported.clear()
   partsSeen.clear()
+  stubbed = new Set()
   sizeNotes.clear()
   toldTooBig.clear()
 }
