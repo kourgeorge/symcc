@@ -1,10 +1,16 @@
-// T-600, T-620: organizational memory (org-mem) on disk (<project>/.<name>/org-mem.md; the pure parts are in core/org-mem.ts).
-// A worker's or checker's report adds its "Learned:" lines (learnFrom); every new worker, checker and scout gets the
-// org-mem in its prompt (orgMemText). The owner and the lead may edit or trim the file by hand.
-import { addLearned, deleteOrgMemNote, orgMemFile, orgMemNotes, orgMemSection, type OrgMemNote } from '../core/org-mem'
+// T-600, T-620, T-632: organizational memory (org-mem) on disk (<project>/.<name>/org-mem.md; the pure parts are in core/org-mem.ts).
+// Every new worker, checker and scout gets org-mem in its prompt (orgMemText). A report's "Learned:" lines are only
+// suggestions: they are kept on the task (keepSuggestions) and listed in the lead's board update when the task is
+// done (a dropped task's are thrown away; see the task event listener below). Only the lead changes org-mem, with its
+// orgmem tool (orgMemTool); the owner may delete notes on the Settings page or edit the file by hand.
+import { addSuggestions, deleteOrgMemNote, dropTaskIds, orgMemAdd, orgMemFile, orgMemList, orgMemNotes, orgMemRemove, orgMemReplace, orgMemSection, suggestedText, ORG_MEM_MAX_LINES, type OrgMemNote } from '../core/org-mem'
+import { find, type Board, type BoardTask } from '../core/board-file'
+import { patchTask } from '../core/task'
 import type { Host } from '../host'
-import { S } from './state'
-import { now, oneAtATime, path, safeWrite } from './store'
+import { onTaskEvent } from './events'
+import { S, toolName } from './state'
+import { change, load, now, oneAtATime, path, safeWrite } from './store'
+import { tellLead } from './tell'
 
 /** Org-mem's text, or null when it is missing or can't be read. */
 async function readGuide(host: Host): Promise<string | null> {
@@ -21,32 +27,125 @@ export async function orgMemText(host: Host): Promise<string> {
 }
 
 /**
- * Adds the "Learned:" lines of task `id`'s report `answer` to org-mem (see addLearned), one save at a time. Nothing
- * is written when the report has no new lines. Never throws: org-mem is a help, so a failure only loses the lines.
+ * Keeps the "Learned:" lines of task `id`'s report `answer` on the task as org-mem suggestions (see addSuggestions);
+ * org-mem itself is not touched. Nothing is written when the report has no new ones. Never throws: a failure only
+ * loses the suggestions.
  */
-export async function learnFrom(host: Host, id: string, answer: string): Promise<void> {
-  if (S.guardOnly || !S.root) return
-  const file = orgMemFile(S.N.dir)
-  await oneAtATime(file, async () => {
-    const old = await readGuide(host)
-    const { text, added } = addLearned(old, answer, id, now().slice(0, 10))
-    if (added.length) await safeWrite(host, path(file), text, 'the organizational memory (org-mem)')
+export async function keepSuggestions(host: Host, id: string, answer: string): Promise<void> {
+  if (!S.root) return
+  const b = await load(host).catch(() => null)
+  const t = b ? (find(b, id) as BoardTask | undefined) : undefined
+  if (!t) return
+  const next = addSuggestions(t.suggested, answer)
+  if (next.length === (t.suggested?.length ?? 0)) return
+  await change(host, b => {
+    const cur = find(b, id) as BoardTask | undefined
+    if (!cur) return b
+    const all = addSuggestions(cur.suggested, answer)
+    return all.length === (cur.suggested?.length ?? 0) ? b : patchTask(b, id, { suggested: all }, now(), S.N.dir)
   }).catch(() => undefined)
 }
 
 /**
+ * T-632: when a task becomes done, the lead's next board update lists its org-mem suggestions (suggestedText) and
+ * they are taken off the task; when it is dropped, they are thrown away. Nothing happens for a task without any.
+ */
+async function onDoneOrDropped(events: readonly { task: string; kind: string; to: string | null }[], host: Host): Promise<void> {
+  if (S.guardOnly || !S.root) return
+  const ends = events.filter(e => e.kind === 'state' && (e.to === 'done' || e.to === 'dropped'))
+  if (!ends.length) return
+  const b = await load(host)
+  const ids = ends.map(e => e.task).filter(id => ((find(b, id) as BoardTask | undefined)?.suggested?.length ?? 0) > 0)
+  if (!ids.length) return
+  const told = await change(host, x => {
+    const out: [string, string[]][] = []
+    let y = x
+    for (const id of ids) {
+      const t = find(y, id) as BoardTask | undefined
+      if (!t?.suggested?.length || (t.status !== 'done' && t.status !== 'dropped')) continue
+      if (t.status === 'done') out.push([id, t.suggested])
+      y = { ...y, tasks: y.tasks.map(z => (z.id === id ? (({ suggested: _, ...rest }) => rest)(z as BoardTask) : z)) }
+    }
+    return [y, out] as [Board, [string, string[]][]]
+  })
+  for (const [id, lines] of told) tellLead(host, suggestedText(id, lines, toolName('orgmem')))
+}
+
+onTaskEvent(onDoneOrDropped)
+
+/** What the lead's orgmem tool gets (see TOOLS in tools.ts). */
+export type OrgMemInput = { action?: unknown; notes?: unknown; note?: unknown; which?: unknown; by?: unknown }
+
+/**
+ * T-632: the lead's orgmem tool. list (the default): every note with its number; add: `notes` (one or more) at the
+ * end, refused past ORG_MEM_MAX_LINES lines or as a near repeat (sameLesson); remove: the note `which` names (its
+ * number or text); replace: the note `which` names by `by`, in its place. Writes org-mem one save at a time with the
+ * other writers. Answers what happened, in short lines.
+ */
+export async function orgMemTool(host: Host, a: OrgMemInput): Promise<string> {
+  if (!S.root) return 'No project folder yet.'
+  const file = orgMemFile(S.N.dir)
+  const action = typeof a.action === 'string' && a.action.trim() ? a.action.trim().toLowerCase() : 'list'
+  const date = now().slice(0, 10)
+  const save = (text: string) => safeWrite(host, path(file), text, 'the organizational memory (org-mem)')
+  const which = typeof a.which === 'number' || typeof a.which === 'string' ? a.which : undefined
+  if (action === 'list') return orgMemList(await readGuide(host), file)
+  return oneAtATime(file, async (): Promise<string> => {
+    const old = await readGuide(host)
+    if (action === 'add') {
+      const notes = (Array.isArray(a.notes) ? a.notes : [a.notes ?? a.note]).filter(x => typeof x === 'string' && x.trim()).map(String)
+      if (!notes.length) throw new Error('add needs notes: one or more short lines')
+      const r = orgMemAdd(old, notes, date)
+      const parts: string[] = []
+      if (r.full) parts.push(`Not added: ${file} would go past ${ORG_MEM_MAX_LINES} lines. Remove or replace a note first (action list shows them).`)
+      if (r.added.length) {
+        await save(r.text)
+        parts.push(`Added to ${file}: ${r.added.map(x => `"${x}"`).join(', ')}.`)
+      }
+      if (r.repeats.length) parts.push(`Not added, already there (or close to a note there; use replace to improve it): ${r.repeats.map(x => `"${x}"`).join(', ')}.`)
+      if (r.bad.length) parts.push(`Not added (empty, looks secret or is file contents): ${r.bad.length}.`)
+      return parts.join('\n')
+    }
+    if (which === undefined) throw new Error(`${action} needs which: the note's number (see action list) or its text`)
+    if (action === 'remove') {
+      const r = orgMemRemove(old, which)
+      if (!r.removed) return `No note ${JSON.stringify(which)} in ${file} (a number from action list, or the note's text): nothing removed.`
+      await save(r.text)
+      return `Removed note ${r.removed.n} from ${file}: "${r.removed.text}".`
+    }
+    if (action === 'replace') {
+      const by = typeof a.by === 'string' ? a.by : typeof a.note === 'string' ? a.note : ''
+      const r = orgMemReplace(old, which, by, date)
+      if (r.why) return `Not replaced: ${r.why}.`
+      await save(r.text)
+      return `Replaced note ${r.old!.n} in ${file}: "${r.old!.text}" is now "${r.now}".`
+    }
+    throw new Error(`action must be list, add, remove or replace (got ${JSON.stringify(a.action)})`)
+  })
+}
+
+/**
  * T-620: the one-time move of the old notes file (.<name>/field-guide.md, its name before T-620) to org-mem.md, at
- * session start. Only when the old file exists and org-mem.md doesn't; nothing else reads the old name. Never throws.
+ * session start. Only when the old file exists and org-mem.md doesn't; nothing else reads the old name.
+ * T-632: then the task ids are taken off org-mem's old lines ("- T-12 2026-11-20: x" becomes "- 2026-11-20: x",
+ * see dropTaskIds); a file without any is not written. Never throws.
  */
 export async function moveOldOrgMem(host: Host): Promise<void> {
   if (S.guardOnly || !S.root) return
   const from = path(`${S.N.dir}/field-guide.md`)
   const to = path(orgMemFile(S.N.dir))
   try {
-    if (!(await host.fs.exists(from)) || (await host.fs.exists(to))) return
-    await host.run(['mv', '-f', from, to])
+    if ((await host.fs.exists(from)) && !(await host.fs.exists(to))) await host.run(['mv', '-f', from, to])
   } catch {
     // the old notes stay where they are; org-mem starts empty
+  }
+  try {
+    await oneAtATime(orgMemFile(S.N.dir), async () => {
+      const r = dropTaskIds(await readGuide(host))
+      if (r.changed) await safeWrite(host, to, r.text, 'the organizational memory (org-mem)')
+    })
+  } catch {
+    // the old lines keep their ids
   }
 }
 
@@ -78,6 +177,6 @@ export async function deleteOrgMem(host: Host, n: number, expect?: string, key?:
     const { text, removed } = deleteOrgMemNote(old, n, expect, key)
     if (!removed) return { ok: false, text: `No note ${n} in ${file} (it may have changed): nothing deleted.` }
     await safeWrite(host, path(file), text, 'the organizational memory (org-mem)')
-    return { ok: true, text: `Deleted note ${n} from ${file}${removed.id ? ` (${removed.id}${removed.date ? ` ${removed.date}` : ''})` : ''}.` }
+    return { ok: true, text: `Deleted note ${n} from ${file}${removed.date ? ` (${removed.date})` : ''}.` }
   }).catch((err: Error) => ({ ok: false, text: `Couldn't delete note ${n}: ${err?.message ?? err}` }))
 }

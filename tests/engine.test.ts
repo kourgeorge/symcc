@@ -1,8 +1,8 @@
-// T-635: hooks/engine.ts re-exports the engine names the hosts use, and each one must be the very same value as in
-// the file it comes from. tests/engine-names.mjs (run by tests/host-free.sh) checks the list against the hosts'
-// import lines; this test checks the values: every value name below (one row per `export { ... } from` line of
-// hooks/engine.ts, types left out) is exported by hooks/engine.ts and is the same value as in its source file, and
-// hooks/engine.ts exports no value this table does not name. Add a row here when a line is added to hooks/engine.ts.
+// T-635, softened by T-645: hooks/engine.ts re-exports engine names, and each value it exports must be the very same
+// value as in the file it comes from. The list of names is built from hooks/engine.ts itself (its exports), so no
+// table here needs a row per name, and a host starting or stopping to use an engine name never makes this test fail.
+// Whether the list still matches what the hosts import is only reported, as a note, by tests/engine-names.mjs.
+// SOURCES lists the engine files hooks/engine.ts re-exports from; add one only when hooks/engine.ts gets a new file.
 import { expect, test } from 'claude-code/testing'
 import * as engine from '../hooks/engine'
 import * as m_app_ask from '../hooks/app/ask'
@@ -47,67 +47,64 @@ import * as m_opencode_board_view from '../hooks/opencode/board-view'
 import * as m_process_agents from '../hooks/process/agents'
 import * as m_process_claude_runner from '../hooks/process/claude-runner'
 import * as m_process_record from '../hooks/process/record'
-const SOURCES: [string, Record<string, unknown>, string[]][] = [
-  ['./app/ask', m_app_ask, ["ASK_TOOL_DEF","hookFailed","listedKind"]],
-  ['./app/board-mode', m_app_board_mode, ["setBoardMode","stopForQuit"]],
-  ['./app/git', m_app_git, ["setupGit"]],
-  ['./app/kinds', m_app_kinds, ["changeKind","kindDraftOf","kindLists","kindView","loadKinds","newKindFile","saveKindDraft"]],
-  ['./app/logo', m_app_logo, ["logoNow","noteLogoWidth"]],
-  ['./app/open', m_app_open, ["openPane","paneArgs","resetPane"]],
-  ['./app/org-mem', m_app_org_mem, ["deleteOrgMem","orgMemNow","orgMemView","resetOrgMemView"]],
-  ['./app/plan', m_app_plan, ["seePlan"]],
-  ['./app/questions', m_app_questions, ["answerOnBoard","boardAnswered","popupCall"]],
-  ['./app/review', m_app_review, ["changedFiles","folderDiff"]],
-  ['./app/roles', m_app_roles, ["changeRole","loadRoles","newRoleFile","roleDraftOf","roleLists","roleView","saveRoleDraft"]],
-  ['./app/scouts', m_app_scouts, ["cancelScoutEdit","editScout","loadScoutResults","loadScoutRunHistory","newScout","readScoutRunReport","runScoutNow","saveScout","scoutPlace","scoutPlaceValue","setScoutPaused"]],
-  ['./app/starts', m_app_starts, ["drainStarts","leadTurn","StartCancelled"]],
-  ['./app/state', m_app_state, ["approving","changesCache","checkerRuns","finishing","openDays","queuedWorkers","S","scoutRuns","starting","toolName","useName","workers"]],
-  ['./app/store', m_app_store, ["findRoot","isAbsolute","isWorkerFolder","load","mainRoot","normalPath","path","safeWrite"]],
-  ['./app/symcc', m_app_symcc, ["agentFinished","BOARD_OPENED","COMMANDS","guardStart","leadGuideText","leadUpdate","otherToolDone","ownerTyped","runCommand","sessionCleared","sessionEnd","sessionStart","sessionStarting","toolCall","toolCallFailed","toolCheck","toolCheckFailed"]],
-  ['./app/tell', m_app_tell, ["brief","noteForLead","tellLead"]],
-  ['./app/tools', m_app_tools, ["allowAskedFiles","ownerSettings","refuseAskedFiles","runTool","TOOLS"]],
-  ['./app/workers', m_app_workers, ["agentOnBoard","mergeOutcome","mergingNow","pump"]],
-  ['./board', m_board, ["actionButtonLabel","ALL_CLEAR","ALWAYS_ON_KINDS","answerChoices","answeredLeadLine","answerText","archivedNote","archivedOf","BACKLOG_SHOWN","backlogMoreLabel","BAD_EVERY_STATE","bandBrand","bandLeads","bandNote","bandWhere","bannerCounts","bannerLines","bannerRule","boxHint","canMarkMerged","canPickRole","cantPlayNotify","checkerOn","copyToast","crossBranchNotes","cutDiff","DEFAULT_ROLE","detailRows","DIFF_COLOR","DIFF_LINES","diffKeys","diffKinds","emptyBoard","everyMinutesOf","everyText","failAsks","failNext","fileWaitText","findKind","findRole","fitRow","fmtDuration","fmtRun","fmtTotal","foldedRow","folderName","footerRule","groupLabel","groupSummaryParts","hintLines","intoOf","isAnswered","isCheckerRole","isInvestigation","isNothing","isScoutRunReport","isSettingPage","kindMark","kindNameError","kindsKeys","kindTag","listKeys","localOffset","mergeKinds","mergeRoles","MODE_MEANING","MODE_NAME","modeButton","modeLabel","modeOf","needsYou","newestFirst","nextMode","offStatusParts","originOf","originSegs","ownersTurn","packRows","panelSections","parseScoutRuns","parseSettingValue","pickHint","planBandText","promptsOfRole","questionsForYou","questionsLabel","ROLE_PLACEHOLDERS","ROLE_PROMPTS","ROLE_SLOT","roleChoices","roleEditKeys","roleKeys","roleMark","roleNameError","roleOf","rolePromptKeys","rolesKeys","roleTag","rowCell","rowEndText","rowExtra","rowMark","rowStates","safeScoutFile","scoutEditKeys","scoutFile","scoutHowTo","scoutIcon","scoutKeys","scoutLastRunProblem","scoutLastText","scoutListKeys","scoutListRows","scoutOutcomeTone","scoutRow","scoutRunLine","scoutRunsFile","scoutRunTasks","scoutTone","SEARCH_WORDS","searchBoxHint","searchLine","searchTasks","SECTION_LABEL","SETTING_GROUPS","settingChoices","settingInfo","SETTINGS","settingsKeys","settingValue","shownStatus","showsAnswer","sortScouts","stageSegs","STATE_LABEL","stateText","STATUS_BADGE","STATUS_MARK","STATUS_WORD","statusBadge","statusCell","statusCounts","statusMark","sumRuns","taskActions","taskAsks","taskCopyText","taskKeys","taskPhase","taskReports","taskStage","testsShort","TITLE_ROOM","versionMark","whyFailed","withCrew","wrapSegs","YOUR_EDITS"]],
-  ['./core/ask', m_core_ask, ["ASK_TOOL"]],
-  ['./core/banner', m_core_banner, ["shortHome"]],
-  ['./core/board-file', m_core_board_file, ["normId"]],
-  ['./core/days', m_core_days, ["when"]],
-  ['./core/def-files', m_core_def_files, ["brokenLabel","brokenNamed","defNamed","defSource","sourceLabel"]],
-  ['./core/history', m_core_history, ["HISTORY_COLOR","historyEvent","historyTime"]],
-  ['./core/org-mem', m_core_org_mem, ["ORG_MEM_EMPTY","ORG_MEM_TITLE","orgMemAbout","orgMemCount","orgMemDeleteAsk","orgMemFile","orgMemKeys","orgMemNoteHead","orgMemNoteKey","orgMemSummary"]],
-  ['./core/path-guard', m_core_path_guard, ["spawnFailedText"]],
-  ['./core/prompts', m_core_prompts, ["basePromptFor","SCOUT_BASE","WORKER_BASE"]],
-  ['./core/questions', m_core_questions, ["normQid"]],
-  ['./core/roles', m_core_roles, ["ROLE_TOOL_WORDS"]],
-  ['./core/runs', m_core_runs, ["cleanTokens","fmtTokens","sumTokens","TOKEN_KINDS","tokenCount"]],
-  ['./core/scouts', m_core_scouts, ["SCOUT_BOARD_TOOLS"]],
-  ['./core/stats', m_core_stats, ["rangeSpan"]],
-  ['./core/task-sections', m_core_task_sections, ["taskSections"]],
-  ['./core/text', m_core_text, ["jsonObj","squash"]],
-  ['./host', m_host, ["ALL_FEATURES","manifestVersion","noUi","SYMCC_WORDS"]],
-  ['./name', m_name, ["cleanName","dataDir","DEFAULT_NAME","ICON","namesFor"]],
-  ['./opencode/board-view', m_opencode_board_view, ["actionCommand","answerOptions","approveInProgress","approveSent","bandDraw","CHOICE_KEYS","groupId","groupOf","GROUPS_OPEN","hasPage","LETTER_KEYS","moveCursor","orgMemNoteOf","OWN_ANSWER","PANEL_TABS","panelKeys","panelLines","panelRoleChoices","panelTaskActions","parseViewFile","scoutRunsIn","settingGroupId","settingGroupOf","SETTINGS_OPEN","settingsPlace","TASK_ACTION_COMMANDS","VIEW_FILE","VIEW_RUNS_KEPT","viewDefs","viewFileText"]],
-  ['./process/agents', m_process_agents, ["processAgents"]],
-  ['./process/claude-runner', m_process_claude_runner, ["claudeRunner"]],
-  ['./process/record', m_process_record, ["PROCESSES_FILE"]],
+const SOURCES: [string, Record<string, unknown>][] = [
+  ['./app/ask', m_app_ask],
+  ['./app/board-mode', m_app_board_mode],
+  ['./app/git', m_app_git],
+  ['./app/kinds', m_app_kinds],
+  ['./app/logo', m_app_logo],
+  ['./app/open', m_app_open],
+  ['./app/org-mem', m_app_org_mem],
+  ['./app/plan', m_app_plan],
+  ['./app/questions', m_app_questions],
+  ['./app/review', m_app_review],
+  ['./app/roles', m_app_roles],
+  ['./app/scouts', m_app_scouts],
+  ['./app/starts', m_app_starts],
+  ['./app/state', m_app_state],
+  ['./app/store', m_app_store],
+  ['./app/symcc', m_app_symcc],
+  ['./app/tell', m_app_tell],
+  ['./app/tools', m_app_tools],
+  ['./app/workers', m_app_workers],
+  ['./board', m_board],
+  ['./core/ask', m_core_ask],
+  ['./core/banner', m_core_banner],
+  ['./core/board-file', m_core_board_file],
+  ['./core/days', m_core_days],
+  ['./core/def-files', m_core_def_files],
+  ['./core/history', m_core_history],
+  ['./core/org-mem', m_core_org_mem],
+  ['./core/path-guard', m_core_path_guard],
+  ['./core/prompts', m_core_prompts],
+  ['./core/questions', m_core_questions],
+  ['./core/roles', m_core_roles],
+  ['./core/runs', m_core_runs],
+  ['./core/scouts', m_core_scouts],
+  ['./core/stats', m_core_stats],
+  ['./core/task-sections', m_core_task_sections],
+  ['./core/text', m_core_text],
+  ['./host', m_host],
+  ['./name', m_name],
+  ['./opencode/board-view', m_opencode_board_view],
+  ['./process/agents', m_process_agents],
+  ['./process/claude-runner', m_process_claude_runner],
+  ['./process/record', m_process_record],
 ]
 
 const E = engine as Record<string, unknown>
 
-test('every value hooks/engine.ts re-exports is defined and the same value as in its source file', () => {
+test('every value hooks/engine.ts exports is defined and the same value as in an engine file it re-exports from', () => {
   const wrong: string[] = []
-  for (const [from, src, names] of SOURCES) {
-    for (const name of names) {
-      if (!(name in src) || src[name] === undefined) wrong.push(`${name}: not a value in ${from}`)
-      else if (E[name] !== src[name]) wrong.push(`${name}: hooks/engine.ts differs from ${from}`)
-    }
+  for (const name of Object.keys(E).sort()) {
+    if (E[name] === undefined) { wrong.push(`${name}: undefined in hooks/engine.ts`); continue }
+    const from = SOURCES.filter(([, src]) => name in src)
+    if (!from.length) wrong.push(`${name}: in none of the engine files listed in SOURCES (add its file there)`)
+    else if (!from.some(([, src]) => src[name] === E[name])) wrong.push(`${name}: hooks/engine.ts differs from ${from.map(([f]) => f).join(', ')}`)
   }
   expect(wrong).toEqual([])
 })
 
-test('hooks/engine.ts exports no value the table above leaves out, and each name once', () => {
-  const named = SOURCES.flatMap(([, , names]) => names)
-  expect(named.length).toBe(new Set(named).size)
-  expect(Object.keys(engine).filter(k => !named.includes(k)).sort()).toEqual([])
-  expect(named.filter(k => !(k in E)).sort()).toEqual([])
+test('hooks/engine.ts exports some values (the check above is not empty)', () => {
+  expect(Object.keys(E).length > 0).toBe(true)
 })

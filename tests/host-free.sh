@@ -56,11 +56,15 @@ if [ -f hooks/opencode/board-view.ts ]; then
   fi
 fi
 
-# hooks/engine.ts (T-635) lists exactly the engine names the hosts import, each re-exported from its own file:
-# tests/engine-names.mjs (tests/engine.test.ts checks the values are the same as in those files)
+# hooks/engine.ts (T-635) lists the engine names the hosts import; tests/engine-names.mjs prints where it lags behind
+# the hosts as notes only (T-645: drift never fails), and fails only when hooks/engine.ts itself is not re-exports only
 if [ -f hooks/engine.ts ] && [ -f tests/engine-names.mjs ]; then
   if command -v node >/dev/null 2>&1; then js=node; else js=bun; fi
-  "$js" tests/engine-names.mjs "$root" >/dev/null || bad "hooks/engine.ts does not match what the hosts import (see above)"
+  "$js" tests/engine-names.mjs "$root" || bad "hooks/engine.ts is not a plain list of engine re-exports (see above)"
+  # drift (a host starting or stopping to use an engine name) is only noted, never a failure
+  if [ -f tests/engine-drift.sh ]; then
+    sh tests/engine-drift.sh "$root" >/dev/null || bad "tests/engine-drift.sh: drift in hooks/engine.ts must only be noted (see above)"
+  fi
 fi
 
 # Claude Code's tool names, quoted. Role files use symcc's words (tools: web); only hooks/claude/ maps them.
@@ -138,4 +142,4 @@ if [ -n "$oc_files" ]; then
   fi
 fi
 
-if [ "$fails" -eq 0 ]; then echo "host-free: hooks/app/, hooks/core/, hooks/process/, hosts/node/ and hooks/opencode/ need no Claude Code, and hooks/engine.ts matches the hosts' imports"; else exit 1; fi
+if [ "$fails" -eq 0 ]; then echo "host-free: hooks/app/, hooks/core/, hooks/process/, hosts/node/ and hooks/opencode/ need no Claude Code, and hooks/engine.ts is re-exports only"; else exit 1; fi

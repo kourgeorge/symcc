@@ -1549,19 +1549,20 @@ test('T-596: an approved task in review whose approve runs leaves NEEDS YOU: lis
     return lines.slice(at + 1, end < 0 ? undefined : end)
   }
   const cases = [
-    [{ checking: { step: 'prep', at: fresh } }, '✎', '✎ prep'],
-    [{ checking: { step: 'queue', place: 2, at: fresh }, note: 'queue (2)' }, '⋯', '⋯ queue (2)'],
-    [{ checking: { step: 'testing', at: fresh } }, '⧗', '⧗ test'],
-    [{ checking: { step: 'merging', at: fresh } }, '⇢', '⇢ merge'],
+    [{ checking: { step: 'prep', at: fresh } }, '✎', '✎ prep', '1 in prep'],
+    [{ checking: { step: 'queue', place: 2, at: fresh }, note: 'queue (2)' }, '⋯', '⋯ queue (2)', '1 in queue'],
+    [{ checking: { step: 'testing', at: fresh } }, '⧗', '⧗ test', '1 testing'],
+    [{ checking: { step: 'merging', at: fresh } }, '⇢', '⇢ merge', '1 merging'],
   ] as const
-  for (const [extra, icon, badge] of cases) {
+  for (const [extra, icon, badge, crew] of cases) {
     const f = withT2(extra)
     const lines = list(f)
     expect(needsBlock(lines).some(l => /T-2 /.test(l))).toBe(false)
     expect(lines.find(l => /\bT-2 /.test(l))).toMatch(new RegExp(`T-2 +${icon} 15m`))
     const band = bandLines(f, NOW, 200, 20).map(lineText)
     expect(band[0]).toContain('2 doing')
-    expect(band[0]).toContain('1 merging')
+    // T-646: the band names the step it is at
+    expect(band[0]).toContain(crew)
     expect(band[0]).not.toContain('review')
     expect(band.find(l => l.startsWith('T-2'))).toMatch(new RegExp(`T-2 +${icon} 15m`))
     const page = panelLines(f, { opened: 'T-2', cursor: 0 }, NOW, 140).lines.map(lineText).join('\n')
@@ -1630,12 +1631,12 @@ test('T-615: while a task\'s approve is in progress its page offers no approve o
 // ---------------- T-619: the Organizational memory page under Settings ----------------
 
 /** The roles-and-kinds view file with three org-mem notes (newest first, as view.ts writes them). */
-function orgMemViewFile(text = `- T-3 2026-11-18: run one test file\n- written by hand\n- T-7 2026-11-20: the type check is separate\n`): ViewFile {
+function orgMemViewFile(text = `- 2026-11-18: run one test file\n- written by hand\n- 2026-11-20: the type check is separate\n`): ViewFile {
   const f = defsViewFile()
   return { ...f, view: { ...f.view, org_mem: orgMemNotes(text) } }
 }
 
-test('T-619: the Settings tab has an Org-mem row with the count; its page lists the notes newest first with id and date; an empty one says "No notes yet."', () => {
+test('T-619: the Settings tab has an Org-mem row with the count; its page lists the notes newest first with their date; an empty one says "No notes yet."', () => {
   const f = orgMemViewFile()
   // the notes ride in the view file
   expect(parseViewFile(viewFileText(f))!.view.org_mem).toEqual(f.view.org_mem)
@@ -1651,13 +1652,13 @@ test('T-619: the Settings tab has an Org-mem row with the count; its page lists 
   const page = panelLines(f, { tab: 'settings', opened: 'orgmem', cursor: 0 }, NOW, 140)
   const p = page.lines.map(lineText)
   expect(p).toContain('Organizational memory (org-mem)')
-  expect(p.join(' ')).toContain('.symcc/org-mem.md (the newest 60 lines)')
+  expect(p.join(' ')).toContain('.symcc/org-mem.md (at most 60 lines)')
   expect(page.ids).toEqual(['note:3', 'note:2', 'note:1'])
   const at = (x: string) => p.findIndex(l => l.includes(x))
-  expect(p[at('#3')]).toBe('› #3 · T-7 · 2026-11-20')
+  expect(p[at('#3')]).toBe('› #3 · 2026-11-20')
   expect(p[at('#3') + 1]).toBe('    the type check is separate')
   expect(p[at('#2')]).toBe('  #2 · written by hand')
-  expect(p[at('#1')]).toBe('  #1 · T-3 · 2026-11-18')
+  expect(p[at('#1')]).toBe('  #1 · 2026-11-18')
   expect(at('#2')).toBeGreaterThan(at('#3'))
   expect(at('#1')).toBeGreaterThan(at('#2'))
   expect(panelKeys(f, 'orgmem', 'settings').map(k => k.word)).toEqual(['move', 'delete', 'views', 'back'])
@@ -1700,13 +1701,13 @@ test('T-619: startTui: the Org-mem row opens the page; x on a note asks, Yes sen
   clickRow('▸ Workers')
   clickRow('3 notes')
   expect(board.state().opened).toBe('orgmem')
-  expect(lines().some(l => l.includes('#3 · T-7 · 2026-11-20'))).toBe(true)
+  expect(lines().some(l => l.includes('#3 · 2026-11-20'))).toBe(true)
   // x on the newest note, Cancel: nothing sent; down, x, Yes: note 2 is deleted
   answers.select.push('no', 'yes')
   await board.press('x', 'ses_1')
   await board.press('down', 'ses_1')
   await board.press('x', 'ses_1')
-  expect(asked).toEqual(['Delete note #3 · T-7 · 2026-11-20 from .symcc/org-mem.md?', 'Delete note #2 · written by hand from .symcc/org-mem.md?'])
+  expect(asked).toEqual(['Delete note #3 · 2026-11-20 from .symcc/org-mem.md?', 'Delete note #2 · written by hand from .symcc/org-mem.md?'])
   // the note's check word goes along, so a number that moved meanwhile deletes nothing
   expect(sent).toEqual([{ sessionID: 'ses_1', name: 'symcc-settings', text: `orgmem delete 2 ${orgMemNoteKey('written by hand')}` }])
   // b: back to the Settings list
@@ -1817,8 +1818,9 @@ test('T-627: in the TUI, the panel is drawn exactly its height; a page that gets
   const board = startTui(fc.ctx, { runtime: fakeRuntime(), readText: async p => files.get(p) ?? Promise.reject(new Error('missing')), every: () => () => undefined, now: () => NOW })
   await board.refresh()
   const panel = fc.slots.find(s => s.append === 'session.panel')!.render({ name: BOARD_PANEL, sessionID: 's', width: 62, focused: true, close: () => undefined, focus: () => undefined } as never) as El
-  // before OpenTUI lays the panel out, its height is the screen's less OpenCode's own lines
-  expect(shown(panel).length).toBe(200 - 2)
+  // before OpenTUI lays the panel out, its height isn't known (T-649): the panel has no padding, the footer comes
+  // right after the page
+  expect(shown(panel)).toEqual(panelLines(f, { opened: '', cursor: 0 }, NOW, 60).lines.map(lineText))
   ;(panel as El & { height?: number }).height = 22
   ;(panel.props.onSizeChange as () => void)()
   expect(shown(panel).length).toBe(22)
@@ -1844,6 +1846,48 @@ test('T-627: in the TUI, the panel is drawn exactly its height; a page that gets
   expect(after).toEqual(panelLines(short, { opened: 'T-2', cursor: 0, scroll: board.state().scroll, rows: 22 }, NOW, 60).lines.map(lineText))
   expect(after.some(l => l.includes('step ') || l.includes('report line'))).toBe(false)
   board.stop()
+})
+
+test('T-649: a backlog and a doing task page show their footer with the buttons: with no height known, a small one, and a box taller than the screen', async () => {
+  const base = viewFile()
+  const f = { ...base, view: { ...base.view, tasks: base.view.tasks.map(t => (t.id === 'T-4' ? { ...t, status: 'backlog' } : t)) as ViewFile['view']['tasks'] } }
+  const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)]])
+  for (const [id, words] of [['T-4', ['o move to todo', 'x drop', 'b back']], ['T-1', ['p pause', 'x drop', 'b back']]] as const) {
+    const fc = fakeCtx({})
+    const board = startTui({ ...fc.ctx, renderer: { width: 120, height: 40 } }, { runtime: fakeRuntime(), readText: async p => files.get(p) ?? Promise.reject(new Error('missing')), every: () => () => undefined, now: () => NOW })
+    await board.refresh()
+    const panel = fc.slots.find(s => s.append === 'session.panel')!.render({ name: BOARD_PANEL, sessionID: 's', width: 62, focused: true, close: () => undefined, focus: () => undefined } as never) as El
+    const ids = panelLines(f, { opened: '', cursor: 0 }, NOW, 60).ids
+    for (let i = 0; i < ids.indexOf(id); i++) await board.press('down', 's')
+    await board.press('open', 's')
+    expect(board.state().opened).toBe(id)
+    const footerOk = (rows: string[]) => {
+      expect(rows.at(-2)).toBe('─'.repeat(60))
+      for (const w of words) expect(rows.at(-1)).toContain(w)
+    }
+    // no height known: no padding, the footer right after the page
+    const page = panelLines(f, { opened: id, cursor: 0 }, NOW, 60).lines.map(lineText)
+    expect(shown(panel)).toEqual(page)
+    footerOk(shown(panel))
+    // the footer is its own box that never shrinks, under a body box that does (the layout keeps it in sight)
+    const tree = (panel.kids.map(k => (typeof k === 'function' ? (k as () => unknown)() : k)) as El[])[0]!
+    const [body, foot] = tree.kids.flat() as El[]
+    expect(body!.props.flexShrink).toBe(1)
+    expect(body!.props.overflow).toBe('hidden')
+    expect(foot!.props.flexShrink).toBe(0)
+    expect(shown(foot)).toEqual(page.slice(-2))
+    // a small known height: exactly that many rows, the footer last
+    ;(panel as El & { height?: number }).height = 12
+    ;(panel.props.onSizeChange as () => void)()
+    expect(shown(panel).length).toBe(12)
+    footerOk(shown(panel))
+    // a box said to be taller than the screen is never trusted past the screen's height less OpenCode's lines
+    ;(panel as El & { height?: number }).height = 300
+    ;(panel.props.onSizeChange as () => void)()
+    expect(shown(panel).length).toBe(40 - 2)
+    footerOk(shown(panel))
+    board.stop()
+  }
 })
 
 test('T-627: drawnLines cuts a line into the rows it takes: at line breaks, and between words at the width, under its indent, keeping colors and hits', () => {
