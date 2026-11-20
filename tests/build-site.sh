@@ -23,7 +23,7 @@ bun "$here/tests/build-site-check.mjs" "$tmp/real" "$here/.github/workflows/page
 mkdir -p "$tmp/src/docs/research"
 cp -R "$here/site" "$tmp/src/site"
 cp "$here/README.md" "$tmp/src/README.md"
-cp "$here/docs/reference.md" "$tmp/src/docs/reference.md"
+cp "$here/docs/reference.md" "$here/docs/engine-and-clients.md" "$tmp/src/docs/"
 cp "$here/docs/"*.svg "$here/docs/"*.jpg "$tmp/src/docs/" 2>/dev/null
 cat > "$tmp/src/docs/guide.md" <<'EOF'
 # Guide

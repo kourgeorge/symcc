@@ -14,7 +14,7 @@ import { cleanFiles, taskCopyText, copyToast, realPathOf, brokenLinkText } from 
 import { fakeDisk } from './fake-disk'
 import { rowEndBoard, ROW_END, LEAD_BEFORE, ROW_END_NOW } from './row-end-cases'
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
-import { STEP_WORD, asChecking, stepNote, STEP_NOTE, isMergeNote, inLineNote, PREP_NOTE, CHECKER_NOTE, everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, goneBranchQuestion, goneBranchOptions, parseGoneBranch, saysMergeInstead, crossBranchNotes, intoOf, branchesToDelete, worktreesToRemove, cleanupText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, notifyOf, notifyChoices, notifyRefusal, unplayableNote, bestNotify, startRun, endRun, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_NOT_READY, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, needFilesQuestion, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, bashPathsToCheck, bashTooManyText, BASH_TOO_MANY, BASH_PATHS_MAX, pathAliases, resolvePath, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, panelSections, sectionHeader, foldedRow, crewParts, withCrew, statusRoom, STATUS_WIDTH, nextScoutText, statusCell, rowExtra, fileWaitText, fitRow, hintLines, hintLineText, hintText, packRows, listKeys, viewKeys, taskKeys, diffKeys, scoutKeys, scoutListKeys, scoutIcon, scoutTone, scoutLastText, countFindings, scoutListRows, scoutListText, scoutPausedText, scoutMayRun, scoutWhyNot, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, rolesLeadText, BUILT_IN_ROLES, WEB_SAFETY_LINE, leftoverTmpFiles, tmpName, normId, dayOf, runMs, isNothing, agentSafeName, onDemand, readBoard } from '../hooks/board'
+import { STEP_WORD, asChecking, stepNote, STEP_NOTE, isMergeNote, inLineNote, PREP_NOTE, CHECKER_NOTE, everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, goneBranchQuestion, goneBranchOptions, parseGoneBranch, saysMergeInstead, crossBranchNotes, intoOf, branchesToDelete, worktreesToRemove, cleanupText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, notifyOf, notifyChoices, notifyRefusal, unplayableNote, bestNotify, startRun, endRun, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_NOT_READY, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, needFilesQuestion, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, bashPathsToCheck, CWD_LOST, BASH_LOST, shellCwd, bashTooManyText, BASH_TOO_MANY, BASH_PATHS_MAX, pathAliases, resolvePath, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, panelSections, sectionHeader, foldedRow, crewParts, withCrew, statusRoom, STATUS_WIDTH, nextScoutText, statusCell, rowExtra, fileWaitText, fitRow, hintLines, hintLineText, hintText, packRows, listKeys, viewKeys, taskKeys, diffKeys, scoutKeys, scoutListKeys, scoutIcon, scoutTone, scoutLastText, countFindings, scoutListRows, scoutListText, scoutPausedText, scoutMayRun, scoutWhyNot, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, rolesLeadText, BUILT_IN_ROLES, WEB_SAFETY_LINE, leftoverTmpFiles, tmpName, normId, dayOf, runMs, isNothing, agentSafeName, onDemand, readBoard } from '../hooks/board'
 import { usageTokens } from '../hooks/claude/usage'
 import { EXTRA_TOOLS, ROLE_TOOL_MAP, claudeRoleTools, BASE_WORKER_TOOLS, workerTypeFor, workerTypeSuffix, workerAgentTypes, isWorkerType, asBaseWorkers, claudeNames } from '../hooks/claude/agent-types'
 import { type AgentInfo, hostAgent, isNotReady } from '../hooks/claude/agents'
@@ -1550,6 +1550,50 @@ test("a worker's shell command: plain relative paths are looked up for links, th
   expect(no('cat ../x', `${root}/src`)).toBe('.symcc/worktrees/x')
   expect(paths('cat a.ts', '/tmp/c').paths).toEqual(['/tmp/c/a.ts'])
   expect(paths('cat a.ts', '/').paths).toEqual([`${wt}/a.ts`])
+})
+
+test("T-671: a shell folder that couldn't be read (CWD_LOST): '..' words are tried from deeper folders too, and the refusal says why", () => {
+  const root = '/repo'
+  const wt = `${root}/.symcc/worktrees/T-5`
+  const no = (c: string, cwd?: string) => bashOutsideFolder(c, wt, root, '/home/me', cwd)
+  // as on main, a folder not read at all (undefined) starts at the top folder
+  expect(no('echo x > ../../../../README.md')).toBeUndefined()
+  // couldn't be read: the shell may be deeper, where four ".." reach the owner's copy
+  expect(no('echo x > ../../../../README.md', CWD_LOST)).toBe(`${BASH_LOST}README.md`)
+  expect(no('cd src && echo x > ../../../../../README.md', CWD_LOST)).toBe(`${BASH_LOST}README.md`)
+  expect(bashOutsideText(`${BASH_LOST}README.md`, wt)).toBe(`${bashOutsideText('README.md', wt)} symcc couldn't tell the shell's folder; use a full path.`)
+  // the shell may have climbed (`"cd" ../..` is a cd bash runs): a ".." write from the top folder is refused too
+  expect(no('echo x > ../../x', CWD_LOST)).toBe(`${BASH_LOST}.symcc/x`)
+  // as on main (folder unknown), a ".." read that leaves the worker's folder is refused
+  expect(no('cat ../package.json', CWD_LOST)).toBe(`${BASH_LOST}.symcc/worktrees/package.json`)
+  // words with no "..", and full paths, are judged as before
+  expect(no('cat src/a.ts', CWD_LOST)).toBeUndefined()
+  expect(no(`echo x > ${wt}/a`, CWD_LOST)).toBeUndefined()
+  expect(no('cat /repo/README.md', CWD_LOST)).toBe('README.md')
+  // the made-up deeper folders are not looked up on disk
+  expect(bashPathsToCheck('cat ../a', wt, '/home/me', CWD_LOST, root).paths).toEqual([`${root}/.symcc/worktrees/a`])
+  // which folder is used: a read (absolute) one; else CWD_LOST, with nothing kept from earlier
+  expect(shellCwd('/x/y')).toBe('/x/y')
+  expect(shellCwd('')).toBe(CWD_LOST)
+  expect(shellCwd('src')).toBe(CWD_LOST)
+  expect(shellCwd(undefined)).toBe(CWD_LOST)
+})
+
+test("T-671: with the shell folder unread, a long '..' word is still judged quickly and the same way", () => {
+  const root = '/repo'
+  const wt = `${root}/.symcc/worktrees/T-5`
+  const no = (c: string, cwd?: string) => bashOutsideFolder(c, wt, root, '/home/me', cwd)
+  // words that go down and back up are cut down first: the deeper tries still catch them
+  expect(no('echo x > a/../../../../../README.md', CWD_LOST)).toBe(`${BASH_LOST}README.md`)
+  expect(no('echo x > ./../../../.././README.md', CWD_LOST)).toBe(`${BASH_LOST}README.md`)
+  expect(no('cat a/b/c/../../..', CWD_LOST)).toBeUndefined()
+  // a word with thousands of ".." parts: on the last try it took seconds (each ".." re-walked the whole word)
+  const n = 20000
+  const long = `${'a/'.repeat(n)}${'../'.repeat(n)}x`
+  const t0 = Date.now()
+  expect(no(`cd d1; cd d2; cd d3; cd d4; cat ${long}`, CWD_LOST)).toBeUndefined()
+  expect(no(`echo y > ${long}/../../../../../README.md`, CWD_LOST)).toBe(`${BASH_LOST}README.md`)
+  expect(Date.now() - t0).toBeLessThan(1500)
 })
 
 test("a worker's shell command: relative paths in quoted text are taken from the folder the command is really in (T-417)", () => {
@@ -3729,7 +3773,7 @@ test('a doing task on its 2nd or later try says "try N" in the status line, the 
   expect(text.split('\n').find(l => l.includes('First'))).not.toContain('try')
 })
 
-test('a doing row shows one time, the total work time of all tries without the gaps, no Σ; a step row "⧗ 9m" (T-581); narrow rows drop the time (T-557)', () => {
+test('a doing row shows one time, the total work time of all tries without the gaps, no Σ; a step row "⊛ 9m" (T-581); narrow rows drop the time (T-557)', () => {
   const at = (min: number) => new Date(Date.parse(T) + min * 60_000).toISOString()
   const now = Date.parse(T) + 1000 * 60_000
   // try 1 alone: just this try's time
@@ -3754,7 +3798,7 @@ test('a doing row shows one time, the total work time of all tries without the g
   expect(core.rowCell(testing, now, undefined, 'none')).toBe('')
   const prep = { ...testing, id: 'T-4', runs: [{ started: at(0), ended: at(80) }, { started: at(900), ended: at(945) }] as SymccTask['runs'], checking: { step: 'prep' as const, at: new Date(now).toISOString() } }
   expect(core.rowCell(prep, now)).toBe('2h5m')
-  expect(bandLeads([testing], now).get('T-3')).toBe('T-3  ⧗ 9m')
+  expect(bandLeads([testing], now).get('T-3')).toBe('T-3  ⊛ 9m')
   // the band: lined up, the try after the one time
   const leads = bandLeads([first, third], now)
   expect(leads.get('T-2')).toBe('T-2  ▶ 1h40m (3)')
@@ -3823,8 +3867,8 @@ test('T-581: a row in a check step or the merge line shows one icon in place of 
   const now = Date.parse(T) + 1000 * 60_000
   const fresh = new Date(now - 10_000).toISOString()
   // one shared table, next to STEP_WORD
-  expect(core.STEP_ICON).toEqual({ prep: '✎', testing: '⧗', checker: '⌕', queue: '⋯', merging: '⇢' })
-  expect(core.IN_LINE_ICON).toBe('⋯')
+  expect(core.STEP_ICON).toEqual({ prep: '✎', testing: '⊛', checker: '⌕', queue: '⧗', merging: '⇢' })
+  expect(core.IN_LINE_ICON).toBe('⧗')
   // each icon one column wide: one UTF-16 unit (the width fitRow and cutTo count), no emoji look and not an East Asian
   // wide or ambiguous symbol (those can take two terminal columns)
   const ambiguous = /[\u2460-\u24FF\u2500-\u257F\u25A0-\u25FF\u2600-\u26FF\u2E80-\uA4CF\uAC00-\uD7A3\uF900-\uFAFF\uFE30-\uFE4F\uFF00-\uFF60\uFFE0-\uFFE6]/u
@@ -3838,26 +3882,27 @@ test('T-581: a row in a check step or the merge line shows one icon in place of 
   const rows = [inStep('T-1', 'prep'), inStep('T-2', 'testing'), inStep('T-3', 'checker'), inStep('T-4', 'merging'), inStep('T-5', 'queue', 'queue (2)')]
   const worker = { id: 'T-6', status: 'doing' as const, attempts: 1, runs: [{ started: at(985) }] as SymccTask['runs'] }
   const leads = bandLeads([...rows, worker], now)
-  expect([...leads.values()]).toEqual(['T-1  ✎ 9m ', 'T-2  ⧗ 9m ', 'T-3  ⌕ 9m ', 'T-4  ⇢ 9m ', 'T-5  ⋯ 9m ', 'T-6  ▶ 15m'])
+  expect([...leads.values()]).toEqual(['T-1  ✎ 9m ', 'T-2  ⊛ 9m ', 'T-3  ⌕ 9m ', 'T-4  ⇢ 9m ', 'T-5  ⧗ 9m ', 'T-6  ▶ 15m'])
   for (const l of leads.values()) expect(l).not.toMatch(/prep|test|checker|merge/)
   // columns line up: every lead has one length
   expect(new Set([...leads.values()].map(l => l.length)).size).toBe(1)
-  expect(rows.map(t => core.rowMark(t, now))).toEqual(['✎', '⧗', '⌕', '⇢', '⋯'])
+  expect(rows.map(t => core.rowMark(t, now))).toEqual(['✎', '⊛', '⌕', '⇢', '⧗'])
   expect(core.rowMark(worker, now)).toBe('▶')
   // a stale step: back to ▶
   expect(core.rowMark({ ...inStep('T-7', 'checker'), checking: { step: 'checker' as const, at: at(0) } }, now)).toBe('▶')
   // the step's word stays on the task page, with the legend
   expect(core.stepNowWord(inStep('T-3', 'checker'), now)).toBe('⌕ checker')
-  expect(core.stepNowWord(inStep('T-5', 'queue', 'queue (2)'), now)).toBe('⋯ queue')
+  expect(core.stepNowWord(inStep('T-5', 'queue', 'queue (2)'), now)).toBe('⧗ queue')
   expect(core.stepNowWord(worker, now)).toBe('')
-  expect(core.STEP_LEGEND).toBe('▶ working · ⋯ queue · ✎ prep · ⧗ test · ⌕ checker · ⇢ merge')
+  expect(core.STEP_LEGEND).toBe('▶ working · ⧗ queue · ✎ prep · ⊛ test · ⌕ checker · ⇢ merge')
   const [b0] = addTask(emptyBoard(), { origin: W, title: 'Fix it' }, fresh)
   const b = { ...b0, tasks: [{ ...b0.tasks[0]!, status: 'doing' as const, note: 'running the tests', runs: ran, checking: { step: 'testing' as const, at: fresh } }] }
   const page = core.detailRows(b.tasks[0]!, { roles: [], all: b.tasks, when: () => '', nowMs: now })
-  // the Status row names the step with its icon (T-587)
-  expect(page.find(r => r.label === 'Status')!.segs[0]!.text).toBe('⧗ test · 9m')
+  // the Status row names the state, the Stage line the step (T-647)
+  expect(page.find(r => r.label === 'Status')!.segs[0]!.text).toBe('▶ doing · 9m')
+  expect(page.find(r => r.label === 'Stage')!.segs.map(g => g.text).join('')).toContain('● test')
   // the lead's text board: the icon as the mark, the word kept for the lead
-  expect(boardText(b, now).split('\n').find(l => l.startsWith('T-1'))).toContain('T-1   ⧗ doing   test · Fix it')
+  expect(boardText(b, now).split('\n').find(l => l.startsWith('T-1'))).toContain('T-1   ⊛ doing   test · Fix it')
 })
 
 test('T-587: the task page badge and Status row name the step a task is in; the Stage line marks it now, the steps before done; checker only when it runs', () => {
@@ -3872,8 +3917,8 @@ test('T-587: the task page badge and Status row name the step a task is in; the 
   expect(core.statusBadge(worker, now).text).toBe('▶ worker · 15m')
   expect(core.statusBadge(inStep('prep'), now).text).toBe('✎ prep · 9m')
   expect(core.statusBadge(inStep('checker'), now).text).toBe('⌕ checker · 9m')
-  expect(core.statusBadge(inLine, now).text).toBe('⋯ queue (2) · 9m')
-  expect(core.statusBadge(inStep('testing'), now).text).toBe('⧗ test · 9m')
+  expect(core.statusBadge(inLine, now).text).toBe('⧗ queue (2) · 9m')
+  expect(core.statusBadge(inStep('testing'), now).text).toBe('⊛ test · 9m')
   expect(core.statusBadge(inStep('merging'), now).text).toBe('⇢ merge · 9m')
   // other statuses as before
   expect(core.statusBadge({ status: 'todo' }, now).text).toBe('○ to do')
@@ -3898,14 +3943,14 @@ test('T-587: the task page badge and Status row name the step a task is in; the 
   expect(core.stageText(core.taskStage({ status: 'review', runs: ran }, now, on)!)).toBe('worker ✓ → prep ✓ → checker ✓ → queue ✓ → test ✓ → ● review → merge')
   // an approved task in review running prep / test / merge again: the Stage line agrees with the badge
   const approving = (step: 'prep' | 'testing' | 'merging') => ({ status: 'review' as const, runs: ran, checking: { step, at: fresh } })
-  expect(core.statusBadge(approving('testing'), now).text).toBe('⧗ test')
+  expect(core.statusBadge(approving('testing'), now).text).toBe('⊛ test')
   expect(core.stageText(core.taskStage(approving('testing'), now, { mode: 'review' })!)).toBe('worker ✓ → prep ✓ → queue ✓ → test ✓ → review ✓ → ● test → merge')
   expect(core.statusBadge(approving('prep'), now).text).toBe('✎ prep')
   expect(core.stageText(core.taskStage(approving('prep'), now, { mode: 'review' })!)).toBe('worker ✓ → prep ✓ → queue ✓ → test ✓ → review ✓ → ● prep → merge')
   expect(core.stageText(core.taskStage(approving('merging'), now, { mode: 'review' })!)).toBe('worker ✓ → prep ✓ → queue ✓ → test ✓ → review ✓ → ● merge')
   // an approved task in review waiting in the merge line (its step the queue, kept fresh while it waits): "queue" on both
   const queued = { status: 'review' as const, runs: ran, note: 'queue (2)', checking: { step: 'queue' as const, place: 2, at: fresh } }
-  expect(core.statusBadge(queued, now).text).toBe('⋯ queue (2)')
+  expect(core.statusBadge(queued, now).text).toBe('⧗ queue (2)')
   expect(core.stageText(core.taskStage(queued, now, { mode: 'review' })!)).toBe('worker ✓ → prep ✓ → queue ✓ → test ✓ → review ✓ → ● queue → merge')
   // its step gone stale (the copy merging it is gone, T-611): it waits for review on both, like its row
   const leftover = { ...queued, checking: { ...queued.checking, at: new Date(now - 10 * 60_000).toISOString() } }
@@ -3933,13 +3978,43 @@ test('T-587: the task page badge and Status row name the step a task is in; the 
   const segs = core.stageSegs(core.taskStage(inStep('checker'), now, on)!)
   expect(segs.find(g => g.text === '● checker')).toMatchObject({ bold: true, color: 'ide' })
   expect(segs.find(g => g.text === 'merge')!.color).toBe('inactive')
-  // on the task page: Status names the step, Stage comes right under it
+  // on the task page: Status names the state (T-647), Stage comes right under it with the step
   const [b0] = addTask(emptyBoard(), { origin: W, title: 'Fix it' }, fresh)
   const t = { ...b0.tasks[0]!, ...inStep('checker', 'a checker agent is trying to break it before it merges') }
   const page = core.detailRows(t, { roles: [], all: [t], when: () => '', nowMs: now, board: on })
-  expect(page[0]!.segs[0]!.text).toBe('⌕ checker · 9m')
+  expect(page[0]!.segs[0]!.text).toBe('▶ doing · 9m')
   expect(page[1]!.label).toBe('Stage')
   expect(page[1]!.segs.map(g => g.text).join('')).toBe('worker ✓ → prep ✓ → ● checker → queue → test → merge')
+})
+
+test('T-647: the task page\'s Status row shows the state with its time ("▶ doing · 48m"), the Stage line the step; review, waiting and failed show their state', () => {
+  const at = (min: number) => new Date(Date.parse(T) + min * 60_000).toISOString()
+  const now = Date.parse(T) + 1000 * 60_000
+  const fresh = new Date(now - 10_000).toISOString()
+  const ran = [{ started: at(952), ended: at(1000) }] as SymccTask['runs']
+  const [b0] = addTask(emptyBoard(), { origin: W, title: 'Fix it' }, fresh)
+  const base = b0.tasks[0]!
+  const rows = (x: Partial<core.BoardTask>) => {
+    const t = { ...base, ...x } as SymccTask
+    const page = core.detailRows(t, { roles: [], all: [t], when: () => '', nowMs: now, board: { mode: 'review' } })
+    return { status: page.find(r => r.label === 'Status')!.segs[0]!, stage: page.find(r => r.label === 'Stage')?.segs.map(g => g.text).join('') ?? null }
+  }
+  // a doing task in the test step: the state on Status, the step on Stage; the page's badge keeps the step
+  const testing = rows({ status: 'doing', attempts: 1, runs: ran, checking: { step: 'testing', at: fresh } })
+  expect(testing.status).toMatchObject({ text: '▶ doing · 48m', color: core.STATUS_BADGE.doing })
+  expect(testing.stage).toBe('worker ✓ → prep ✓ → queue ✓ → ● test → review → merge')
+  expect(core.statusBadge({ status: 'doing', attempts: 1, runs: ran, checking: { step: 'testing', at: fresh } }, now).text).toBe('⊛ test · 48m')
+  // its worker still working: doing too
+  expect(rows({ status: 'doing', attempts: 1, runs: [{ started: at(952) }] }).status.text).toBe('▶ doing · 48m')
+  // an approved task whose approve runs shows doing (shownStatus), the approve's step on Stage
+  const approving = rows({ status: 'review', attempts: 1, runs: ran, checking: { step: 'merging', at: fresh } })
+  expect(approving.status).toMatchObject({ text: '▶ doing · 48m', color: core.STATUS_BADGE.doing })
+  expect(approving.stage).toContain('review ✓ → ● merge')
+  // the states that run nothing: their mark and word
+  expect(rows({ status: 'review', runs: ran }).status).toMatchObject({ text: `◆ ${STATUS_WORD.review}`, color: core.STATUS_BADGE.review })
+  expect(rows({ status: 'review', runs: ran }).stage).toContain('● review')
+  expect(rows({ status: 'waiting', runs: ran, question: 'Which one?' }).status).toMatchObject({ text: `? ${STATUS_WORD.waiting}`, color: core.STATUS_BADGE.waiting })
+  expect(rows({ status: 'failed', runs: ran }).status).toMatchObject({ text: `✗ ${STATUS_WORD.failed}`, color: core.STATUS_BADGE.failed })
 })
 
 test('a to do task that was worked on before shows ● (a fresh one keeps ○) in the band, the text board and the task page; other states keep their mark (T-528)', () => {
@@ -3978,7 +4053,7 @@ test('T-596: an approved task in review whose approve runs is counted and listed
   const fresh = new Date(now - 10_000).toISOString()
   const [b0] = addTask(emptyBoard(), { origin: W, title: 'Fix it' }, fresh)
   const idle = { ...b0.tasks[0]!, status: 'review' as const, runs: [{ started: new Date(now - 20 * 60_000).toISOString(), ended: new Date(now - 5 * 60_000).toISOString() }] }
-  for (const [checking, note, icon] of [[{ step: 'prep', at: fresh }, PREP_NOTE, '✎'], [{ step: 'queue', place: 2, at: fresh }, 'queue (2)', '⋯'], [{ step: 'testing', at: fresh }, STEP_NOTE.testing, '⧗'], [{ step: 'merging', at: fresh }, STEP_NOTE.merging, '⇢']] as const) {
+  for (const [checking, note, icon] of [[{ step: 'prep', at: fresh }, PREP_NOTE, '✎'], [{ step: 'queue', place: 2, at: fresh }, 'queue (2)', '⧗'], [{ step: 'testing', at: fresh }, STEP_NOTE.testing, '⊛'], [{ step: 'merging', at: fresh }, STEP_NOTE.merging, '⇢']] as const) {
     const t = { ...idle, checking, note }
     expect(core.approveRunning(t, now)).toBe(true)
     expect(core.needsYou(t, now)).toBe(false)

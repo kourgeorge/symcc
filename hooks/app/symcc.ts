@@ -39,6 +39,7 @@ import { debriefFinished } from './debrief'
 import { check, pump, workerFinished, lateHandBack, agentOnBoard, stoppedHandBack, type TurnEnd } from './workers'
 import { setSymcc, setBoardMode } from './board-mode'
 import { cleanLeftoverTmp } from './cleanup'
+import { logRefusal, type Who } from './evidence'
 
 /** What /symcc and /symcc-tasks answer after opening the board. No Esc hint: Esc doesn't reach the panel (T-158). */
 export const BOARD_OPENED = 'Board opened: ↑↓ to move, Enter to open, f to search, t tasks, s scouts, c settings.'
@@ -276,18 +277,26 @@ export function isSymccTool(tool: string): boolean {
  * the lead.
  */
 export async function toolCall(host: Host, tool: string, agentId: string | undefined, input: Record<string, unknown>): Promise<{ deny: string } | { result: string } | null> {
-  if (agentId && stopped.has(agentId)) return { deny: stoppedText() }
+  // T-660: every refusal of an agent's call is logged (in the background, after the decision)
+  const refuse = (text: string, guard: 'stopped' | 'tools', who: Who): { deny: string } => {
+    logRefusal(host, who, { text, guard, what: tool })
+    return { deny: text }
+  }
+  if (agentId && stopped.has(agentId)) return refuse(stoppedText(), 'stopped', { role: 'agent' })
   const on = agentId && !isOwnAgent(agentId) && (await findRoot(host)) ? await agentOnBoard(host, agentId) : undefined
-  if (on?.kind === 'ended') return { deny: stoppedText() }
+  if (on?.kind === 'ended') return refuse(stoppedText(), 'stopped', { role: 'agent', task: on.task })
   // a scout or checker only reads the board: board and stats run, every other symcc tool (ask_owner too) is refused
   if (agentId && (scoutRuns.has(agentId) || checkerRuns.has(agentId) || on?.kind === 'checker')) {
     const short = tool === toolName(ASK_TOOL) ? ASK_TOOL : toolNames().find(t => tool === toolName(t))
     const why = short ? scoutToolRefusal(short, S.N.name) : null
-    if (why) return { deny: why }
+    const scout = scoutRuns.get(agentId)
+    const task = checkerRuns.get(agentId)?.task ?? (on?.kind === 'checker' ? on.task : undefined)
+    if (why) return refuse(why, 'tools', scout !== undefined ? { role: 'scout', scout } : { role: 'checker', ...(task ? { task } : {}) })
   } else if (agentId) {
     // T-525: an agent that is no scout or checker (a worker, one symcc no longer has on record, or any other) never gets the lead's tools
     const lead = toolNames().find(t => tool === toolName(t))
-    if (lead) return { deny: notLeadText(lead) }
+    const w = workers.get(agentId) ?? (on?.kind === 'worker' ? on.worker : undefined)
+    if (lead) return refuse(notLeadText(lead), 'tools', w ? { role: 'worker', task: w.task } : { role: 'agent' })
   }
   if (tool === toolName(ASK_TOOL)) {
     if (!(await findRoot(host))) return { result: startingText() }
@@ -464,7 +473,7 @@ export async function runCommand(host: Host, command: string, args: string): Pro
     case 'open':
     case 'tasks':
       // a host with no panel: the text board, as the board tool answers it (or why the board can't be read)
-      if (!host.features.panel) return say(loaded.board ? boardText(b, Date.now(), shortHome(S.root, S.home), S.N.name, undefined, undefined, S.version) : `${loaded.broken} Then try again.`)
+      if (!host.features.panel) return say(loaded.board ? boardText(b, Date.now(), shortHome(S.root, S.home), S.N.name, undefined, { driving: S.driving }, S.version) : `${loaded.broken} Then try again.`)
       await openPane(host, cmd.kind === 'tasks' ? { tab: 'tasks' } : {})
       return say(boardOpened())
     case 'scouts': {

@@ -3,7 +3,8 @@
 // task's row, and "it looks idle" when a task has waited more than 5 minutes for its worker to start in the driving session.
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { bandNote, bannerLines, bannerText, driveWarning, driverLooksIdle, statusLine, DRIVER_IDLE_MS, OTHER_SESSION_NOTE } from '../hooks/core/banner'
+import { bandNote, bannerLines, bannerText, driveWarning, driverLooksIdle, statusLine, DRIVER_IDLE_MS, boardText } from '../hooks/core/banner'
+import { detailRows, OTHER_SESSION_NOTE, STATE_LABEL } from '../hooks/core/details'
 import { emptyBoard } from '../hooks/core/board-file'
 
 const NOW = Date.parse('2026-11-20T12:00:00.000Z')
@@ -74,4 +75,17 @@ test('T-643: a claimed doing task says it runs in the other session when this on
   expect(bandNote(t as never, NOW)).toBe('starting at the next turn')
   // other notes stay as they are
   expect(bandNote({ ...t, note: 'tests failed' } as never, NOW, undefined, false)).toBe('tests failed')
+})
+
+test('T-647: the task page\'s Now row and the lead\'s text board say "runs in the other session" for a claimed doing task when this session does not drive', () => {
+  const t = { ...claimed(60_000), title: 'Search', details: '', files: [], after: [], created_at: ago(60_000), history: [], runs: [] } as never
+  const now = (driving?: boolean) => detailRows(t, { roles: [], all: [t], when: s => s, nowMs: NOW, ...(driving === undefined ? {} : { driving }) }).find(r => r.label === STATE_LABEL)!.segs[0]!.text
+  expect(now(false)).toBe(OTHER_SESSION_NOTE)
+  expect(now(true)).toBe('starting at the next turn')
+  expect(now()).toBe('starting at the next turn')
+  const b = { ...emptyBoard(), tasks: [t] }
+  expect(boardText(b, NOW, undefined, undefined, 0, { driving: false })).toContain(`— ${OTHER_SESSION_NOTE}`)
+  expect(boardText(b, NOW, undefined, undefined, 0)).toContain('— starting at the next turn')
+  // driving alone is no filter: the whole board, not a "1 of 1 tasks (...)" list
+  expect(boardText(b, NOW, undefined, undefined, 0, { driving: false })).not.toMatch(/tasks \(/)
 })

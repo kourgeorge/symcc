@@ -83,13 +83,14 @@ export function taskFigures(t: Pick<SymccTask, 'runs'>, nowMs?: number): TaskFig
 }
 
 /** Why a try failed, read from one history line; null when the line is not a clear failure. */
-export type FailReason = 'tests' | 'clash' | 'scope' | 'stopped' | 'rejected'
+export type FailReason = 'tests' | 'clash' | 'scope' | 'changed' | 'stopped' | 'rejected'
 
 export function failReason(line: string): FailReason | null {
   const l = String(line ?? '')
   if (!/^try \d+\b/.test(l)) return null
   const head = l.replace(/^try \d+(?: \([^)]*\))?:\s*/, '')
   if (/^rejected by the owner\b/.test(head)) return 'rejected'
+  if (/^restarted: the task was changed\b/.test(head)) return 'changed'
   if (/^(stopped\b|restarted\b)/.test(head)) return 'stopped'
   const cut = l.lastIndexOf(' → ')
   const outcome = cut < 0 ? '' : l.slice(cut + 3)
@@ -359,7 +360,7 @@ export function statsReport(input: StatsInput & { full?: boolean }): string {
   const answeredDone = how.filter(h => h === 'answered').length
   const outside = how.filter(h => h === 'outside').length
   const unclear = finished.length - own - approved - answeredDone - outside
-  const reasons: Record<FailReason, number> = { tests: 0, clash: 0, scope: 0, stopped: 0, rejected: 0 }
+  const reasons: Record<FailReason, number> = { tests: 0, clash: 0, scope: 0, changed: 0, stopped: 0, rejected: 0 }
   for (const t of all) for (const l of t.history) {
     const r = failReason(l.text)
     if (r) reasons[r]++
@@ -368,7 +369,7 @@ export function statsReport(input: StatsInput & { full?: boolean }): string {
   out.push('', `How tasks ended (${plural(finished.length, 'done task')})`)
   const maxEnd = Math.max(...ended.map(([, n]) => n))
   for (const [k, n] of ended) out.push(barRow(k, 24, n, maxEnd, finished.length))
-  const failed: [string, number][] = [['tests failed', reasons.tests], ['clash with main', reasons.clash], ['files out of scope', reasons.scope], ['stopped', reasons.stopped], ['rejected by you', reasons.rejected]]
+  const failed: [string, number][] = [['tests failed', reasons.tests], ['clash with main', reasons.clash], ['files out of scope', reasons.scope], ['restarted by a change', reasons.changed], ['stopped', reasons.stopped], ['rejected by you', reasons.rejected]]
   const maxFail = Math.max(...failed.map(([, n]) => n))
   out.push(`  Failed tries (${Object.values(reasons).reduce((s, n) => s + n, 0)}, from history)`)
   for (const [k, n] of failed) out.push(barRow(`  ${k}`, 24, n, maxFail, null))

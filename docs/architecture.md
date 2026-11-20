@@ -1,5 +1,7 @@
 # The team picture (docs/architecture.svg)
 
+This page is for people who want to change the team animation. If you only want to use symcc, skip it: see the [README](../README.md).
+
 `docs/architecture.svg` is the moving picture at the start of "How it works" in the README.
 It shows who does what in symcc: you (the owner), the lead, the board, the workers and the scouts.
 It is one SVG file with SMIL animation only: no JavaScript, no outside fonts or images, so

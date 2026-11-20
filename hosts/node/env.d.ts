@@ -42,6 +42,7 @@ declare module 'bun:test' {
     toContain(v: unknown): void
     toMatch(v: RegExp | string): void
     toBeGreaterThan(v: number): void
+    toBeLessThan(v: number): void
     not: { toBe(v: unknown): void; toContain(v: unknown): void; toMatch(v: RegExp | string): void }
   }
 }
@@ -49,6 +50,8 @@ declare module 'bun:test' {
 type NodeTimer = { unref?: () => unknown }
 
 declare var process: {
+  pid: number
+  uptime(): number
   argv: string[]
   env: Record<string, string | undefined>
   exitCode: number | undefined

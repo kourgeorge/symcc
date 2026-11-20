@@ -7,15 +7,17 @@ import { test, expect } from 'bun:test'
 import { readFile, readdir, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
 import { runCommand, PLUGIN_ROOT } from '../host'
-import { claudePermissions, claudeResult, editRule } from '../../../hooks/process/claude-runner'
+import { claudePermissions, claudeResult, editRule, claudeRunner } from '../../../hooks/process/claude-runner'
 import { withBasePrompt, processAgents, type AgentRunner } from '../../../hooks/process/agents'
 import { PROCESSES_FILE, entriesText, parseEntries } from '../../../hooks/process/record'
 import { nodeProcessSystem, runsProgram, elapsedSeconds } from '../system'
-import { nodeFs } from '../host'
-import { openSession, leadTool, closeSession } from '../session'
+import { nodeFs, nodeProcesses, nodeProcessesWith } from '../host'
+import { lockText, LOCK_STALE_MS } from '../../../hooks/core/board-file'
+import { openSession, leadTool, closeSession, settle } from '../session'
 import { toolCall, notLeadText } from '../../../hooks/app/symcc'
 import { TOOLS } from '../../../hooks/app/tools'
-import { toolName } from '../../../hooks/app/state'
+import { toolName, starting } from '../../../hooks/app/state'
+import { pump } from '../../../hooks/app/workers'
 import { WORKER_BASE, SCOUT_BASE, NO_TOOLS_ASK } from '../../../hooks/core/prompts'
 import { ASK_LINE, ASK_TOOL } from '../../../hooks/core/ask'
 import CHANGE from '../../../prompts/change'
@@ -266,7 +268,8 @@ test('a tick that stops waiting stops its claude -p worker: the task goes back t
     await writeFile(`${repo}/.gitignore`, '.symcc/\n')
     await git('add', '.')
     await git('commit', '-qm', 'init')
-    const cli = (env: Record<string, string>, ...args: string[]) => runCommand(['bun', MAIN, '--root', repo, '--claude', FAKE, ...args], { cwd: repo, env, timeoutMs: 120_000 })
+    // the longest tick waits 3 minutes, then stops its worker
+    const cli = (env: Record<string, string>, ...args: string[]) => runCommand(['bun', MAIN, '--root', repo, '--claude', FAKE, ...args], { cwd: repo, env, timeoutMs: 300_000 })
     expect((await cli({}, 'add', 'Say hello', '--files', 'hello.txt')).stdout).toContain('added T-1')
 
     // the fake worker waits 600 s before it writes, far past the tick's wait, however busy the machine is
@@ -274,9 +277,11 @@ test('a tick that stops waiting stops its claude -p worker: the task goes back t
     const board = async () => JSON.parse(await readFile(`${repo}/.symcc/board.json`, 'utf8')).tasks[0]
     // T-524: on a busy machine the worker's start (its worktree, its settings) can outlast the tick's wait, and then no
     // worker process ever ran, so there was nothing to stop. That tick must also leave the task "todo" with no worker
-    // (no pid, no edit); the next tick waits longer, until one stops a worker that really ran.
+    // (no pid, no edit); the next tick waits longer, until one stops a worker that really ran. T-652: a tick that stops
+    // waiting while the start is still on its way waits for it in closeSession, so the task is "todo" here too (the
+    // T-652 test below checks that on its own, without the clock).
     let tick = { stdout: '', stderr: '' }
-    for (const minutes of ['0.05', '0.25', '1']) {
+    for (const minutes of ['0.05', '0.25', '1', '3']) {
       tick = await cli({ FAKE_SLEEP: '600', FAKE_PID: pidFile }, '--wait-minutes', minutes, 'tick')
       expect(tick.stdout).toContain('stopped waiting')
       if (tick.stderr.includes('stopped T-1')) break
@@ -301,6 +306,53 @@ test('a tick that stops waiting stops its claude -p worker: the task goes back t
     if (group > 1) await runCommand(['sh', '-c', 'kill -s KILL -- -"$1"', 'sh', String(group)])
     await rm(repo, { recursive: true, force: true })
   }
+}, 600_000)
+
+test('T-652: a session that closes while a worker start is still on its way ends with the task back in todo and no worker running', async () => {
+  const repo = await mkdtemp('/tmp/symcc-node-close-')
+  const pidFile = `${repo}/.symcc/fake.pid`
+  const env = { FAKE_SLEEP: process.env.FAKE_SLEEP, FAKE_PID: process.env.FAKE_PID }
+  try {
+    const git = (...args: string[]) => runCommand(['git', '-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd: repo })
+    await git('init', '-q', '-b', 'main')
+    await writeFile(`${repo}/.gitignore`, '.symcc/\n')
+    await git('add', '.')
+    await git('commit', '-qm', 'init')
+    // the fake worker, if it gets to start, waits 600 s before it writes, and leaves its process group's id
+    process.env.FAKE_SLEEP = '600'
+    process.env.FAKE_PID = pidFile
+    const s = await openSession({ root: repo, runner: claudeRunner(nodeProcessSystem, { bin: FAKE }), say: () => undefined, sessionId: 'node-t652' })
+    let closed = false
+    try {
+      expect(await leadTool(s, 'add', { title: 'Say hello', details: 'Done when: hello.txt says hello.', files: ['hello.txt'], why: 'a test', origin_by: 'owner' })).toContain('T-1')
+      expect(await settle(s, false)).toBe(true)
+      const board = async () => JSON.parse(await readFile(`${repo}/.symcc/board.json`, 'utf8')).tasks[0]
+      expect((await board()).status).toBe('todo')
+      // a tick's start, as settle(s, true) begins it, but the session closes as soon as the task is claimed: the start
+      // is still on its way then (its worker isn't spawned or not yet known), as when a busy tick stops waiting
+      s.working = true
+      const started = pump(s.host).catch(() => undefined)
+      for (const end = Date.now() + 120_000; (await board()).status !== 'doing' && Date.now() < end; ) await new Promise<void>(r => void setTimeout(r, 5))
+      expect((await board()).status).toBe('doing')
+      await closeSession(s)
+      closed = true
+      // right when closeSession is done (the CLI ends here): no start left, the task is back in todo, and no worker runs
+      expect(starting.size).toBe(0)
+      const t = await board()
+      expect(t.status).toBe('todo')
+      const group = Number((await readFile(pidFile, 'utf8').catch(() => '')).trim())
+      if (group > 1) expect(await groupGone(group)).toBe(true)
+      await started
+    } finally {
+      if (!closed) await closeSession(s).catch(() => undefined)
+    }
+  } finally {
+    for (const [k, v] of Object.entries(env)) if (v === undefined) delete process.env[k]
+    else process.env[k] = v
+    const group = Number((await readFile(pidFile, 'utf8').catch(() => '')).trim())
+    if (group > 1) await runCommand(['sh', '-c', 'kill -s KILL -- -"$1"', 'sh', String(group)])
+    await rm(repo, { recursive: true, force: true })
+  }
 }, 300_000)
 
 /**
@@ -313,6 +365,87 @@ async function groupGone(group: number, ms = 60_000): Promise<boolean> {
   }
   return false
 }
+
+test('T-669: a Bun Worker started seconds after the process names this process with its real start time, so it is alive', async () => {
+  // the worker must start well after the process (more than the 5 s slack): wait out the rest
+  const late = 7_000 - process.uptime() * 1000
+  if (late > 0) await new Promise<void>(r => void setTimeout(r, late))
+  type BunWorker = { onmessage: unknown; onerror: unknown; terminate: () => void }
+  const WorkerClass = (globalThis as unknown as { Worker: new (url: string) => BunWorker }).Worker
+  const worker = new WorkerClass(import.meta.url.replace(/[^/]*$/, 'self-worker.ts'))
+  const got = await new Promise<{ me?: { pid: number; started: number }; alive?: boolean; uptime: number }>((resolve, reject) => {
+    worker.onmessage = (e: { data: never }) => resolve(e.data)
+    worker.onerror = (e: unknown) => reject(e)
+  })
+  worker.terminate()
+  expect(got.me?.pid).toBe(process.pid)
+  expect(await nodeProcesses.alive(got.me!)).toBe(true)
+  expect(got.alive).toBe(true)
+  // the worker and the process name the same start time (ps counts whole seconds)
+  expect(Math.abs(got.me!.started - nodeProcesses.self()!.started)).toBeLessThan(1_501)
+}, 30_000)
+
+test('T-669: a dead pid is gone at once; when ps fails, self() names no holder and alive() can not tell', async () => {
+  const child = spawn('sh', ['-c', 'exit 0'], { stdio: ['ignore', 'ignore', 'ignore'] })
+  await new Promise<void>(r => child.on('close', () => r()))
+  let asked = 0
+  const broken = nodeProcessesWith({
+    runSync: () => ((asked++, { exitCode: 127, stdout: '' })),
+    run: async () => ((asked++, { exitCode: 127, stdout: '', stderr: 'no ps' })),
+  })
+  // dead: no ps needed
+  expect(await broken.alive({ pid: child.pid!, started: Date.now() })).toBe(false)
+  expect(asked).toBe(0)
+  expect(broken.self()).toBe(undefined)
+  expect(await broken.alive({ pid: process.pid, started: Date.now() })).toBe(undefined)
+  // ps that throws or prints something unreadable: can't tell either
+  const odd = nodeProcessesWith({
+    runSync: () => {
+      throw new Error('no ps')
+    },
+    run: async () => ({ exitCode: 0, stdout: 'what\n', stderr: '' }),
+  })
+  expect(odd.self()).toBe(undefined)
+  expect(await odd.alive({ pid: process.pid, started: Date.now() })).toBe(undefined)
+  // self() asks ps once and keeps the answer
+  let n = 0
+  const counted = nodeProcessesWith({ runSync: () => ((n++, { exitCode: 0, stdout: '00:10\n' })), run: async () => ({ exitCode: 0, stdout: '00:10\n', stderr: '' }) })
+  const a = counted.self()!
+  expect(counted.self()).toEqual(a)
+  expect(n).toBe(1)
+  expect(Math.abs(Date.now() - 10_000 - a.started)).toBeLessThan(1_501)
+  expect(await counted.alive(a)).toBe(true)
+})
+
+test('T-659: the Node host names this process as a board lock holder, and tells a running holder from an ended one or a reused pid', async () => {
+  const me = nodeProcesses.self()!
+  expect(me.pid).toBe(process.pid)
+  expect(await nodeProcesses.alive(me)).toBe(true)
+  // the same pid, started at another time: someone else now
+  expect(await nodeProcesses.alive({ pid: me.pid, started: me.started - 3_600_000 })).toBe(false)
+  // a process that ended (and was reaped)
+  const child = spawn('sh', ['-c', 'exit 0'], { stdio: ['ignore', 'ignore', 'ignore'] })
+  await new Promise<void>(r => child.on('close', () => r()))
+  expect(await nodeProcesses.alive({ pid: child.pid!, started: Date.now() })).toBe(false)
+
+  // a CLI run finds a fresh lock left by an ended process and takes it at once (no 30 s wait); its own lock names it
+  const repo = await mkdtemp('/tmp/symcc-node-lock-')
+  try {
+    const git = (...args: string[]) => runCommand(['git', '-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd: repo })
+    await git('init', '-q', '-b', 'main')
+    await writeFile(`${repo}/.gitignore`, '.symcc/\n')
+    await git('add', '.')
+    await git('commit', '-qm', 'init')
+    await mkdir(`${repo}/.symcc`, { recursive: true })
+    await writeFile(`${repo}/.symcc/board.lock`, lockText('gone:1', Date.now(), { pid: child.pid!, started: Date.now() - 1_000 }))
+    const t0 = Date.now()
+    const r = await runCommand(['bun', MAIN, '--root', repo, '--claude', FAKE, 'add', 'Say hello', '--files', 'hello.txt'], { cwd: repo, timeoutMs: 120_000 })
+    expect(r.stdout).toContain('added T-1')
+    expect(Date.now() - t0).toBeLessThan(LOCK_STALE_MS)
+  } finally {
+    await rm(repo, { recursive: true, force: true })
+  }
+}, 120_000)
 
 test('T-474: a worker process left running by a CLI that was killed is in the record, and the next run stops it (and drops a dead entry)', async () => {
   const repo = await mkdtemp('/tmp/symcc-node-left-')
@@ -341,6 +474,8 @@ test('T-474: a worker process left running by a CLI that was killed is in the re
     // the record has the worker (written when it started)
     let entries = parseEntries(await readFile(recordFile, 'utf8').catch(() => null))
     for (const end = Date.now() + 10_000; !entries.length && Date.now() < end; await new Promise<void>(r => void setTimeout(r, 100))) entries = parseEntries(await readFile(recordFile, 'utf8').catch(() => null))
+    // killed at any moment, maybe while it holds board.lock: T-659, the lock has the CLI's pid, so the runs below
+    // take it over at once (they don't wait out LOCK_STALE_MS)
     tick.kill('SIGKILL')
     await tickClosed
     expect(entries.map(e => [e.pid, e.task, e.folder?.endsWith('/.symcc/worktrees/T-1'), e.command])).toEqual([[group, 'T-1', true, FAKE]])

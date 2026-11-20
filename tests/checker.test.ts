@@ -15,7 +15,7 @@ import { runTool, leadGuide } from '../hooks/app/tools'
 import { test, resetPlugin } from './reset'
 import { agentFinished, toolCall } from '../hooks/app/symcc'
 import { moveOldOrgMem } from '../hooks/app/org-mem'
-import { fakeHost, memoryFs } from './fake-host'
+import { appendLineRun, fakeHost, memoryFs } from './fake-host'
 import type { Host, HostAgent } from '../hooks/host'
 import { drainStarts, queuedStarts } from '../hooks/app/starts'
 import { withStarts } from './starts'
@@ -25,6 +25,8 @@ import { parseMergeLine } from '../hooks/board'
 import { onTaskEvent, type TaskEvent } from '../hooks/app/events'
 import { debriefs, learnedAsk } from '../hooks/app/debrief'
 import { DEBRIEF_MS, DEBRIEF_TEXT, LEARNED_ASK } from '../hooks/core/org-mem'
+import type { EvidenceEvent } from '../hooks/core/evidence'
+import { evidenceWritten } from '../hooks/app/evidence'
 
 const ROOT = '/repo'
 const WT = `${ROOT}/.symcc/worktrees/T-1`
@@ -86,6 +88,7 @@ function world(changed: string[] = ['src/a.ts', 'src/a.test.ts']) {
       const [cmd, ...rest] = argv
       calls.push(argv.join(' '))
       if (cmd === 'git') return runGit(rest)
+      if (appendLineRun(files, argv)) return ok()
       if (cmd === '/bin/sh') {
         if (tests.hold && o.cwd === tests.hold.cwd) await tests.hold.until
         if (tests.fails) return { exitCode: 1, stdout: tests.output, stderr: '' }
@@ -356,6 +359,13 @@ test('T-616: a worker finish → checker → queue → test → merge emits each
   // the activity log has the same events, one JSON line each
   const log = (await w.$.fs.read(`${ROOT}/.symcc/events.jsonl`)).trim().split('\n').map(l => JSON.parse(l) as TaskEvent)
   expect(log).toEqual(got)
+  // T-660: the checker's verdict and the merge-queue outcome are logged as evidence (in their own file), once each
+  await evidenceWritten()
+  const evidence = (await w.$.fs.read(`${ROOT}/.symcc/evidence.jsonl`)).trim().split('\n').map(l => ({ ...(JSON.parse(l) as EvidenceEvent), at: 'x' }))
+  expect(evidence).toEqual([
+    { kind: 'verdict', at: 'x', task: 'T-1', try: 1, verdict: 'ok' },
+    { kind: 'queue', at: 'x', task: 'T-1', try: 1, outcome: 'merged', commit: H1 },
+  ])
   // the history shows the whole path, each stage once, between the outcome lines it already had
   expect(t.history.map(h => [h.kind, h.text])).toEqual([
     ['created', 'created by the lead because a test'],

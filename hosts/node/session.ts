@@ -87,9 +87,13 @@ export async function settle(s: NodeSession, work: boolean, timeoutMs = 60 * 60_
  * stopped waiting) are stopped first and their tasks go back to "todo", so the next run starts them again instead of
  * finding them "doing" with no worker; then every agent process is ended for sure, and the timers stop.
  */
-export async function closeSession(s: NodeSession, why = 'the command line stopped waiting'): Promise<string | undefined> {
+export async function closeSession(s: NodeSession, why = 'the command line stopped waiting', startsMs = 120_000): Promise<string | undefined> {
   s.closing = true
   s.working = false
+  // T-652: a worker start still on its way (its task already claimed "doing") is waited for first: from here its spawn
+  // is taken back and the start puts its task back to "todo", or it has just started and stopForQuit below stops it.
+  // Without the wait the CLI could end in between, leaving the task "doing" with no worker (and maybe board.lock taken).
+  for (const until = Date.now() + startsMs; starting.size > 0 && Date.now() < until; ) await s.host.clock.sleep(50)
   const back = await stopForQuit(s.host, why).catch(() => [] as string[])
   await s.agents.stopAll()
   await sessionEnd(s.host)

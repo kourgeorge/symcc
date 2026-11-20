@@ -210,9 +210,9 @@ test("the band's doing rows show the list's state and time, lined up, with the t
   const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 120 }, surface: 'terminal' })
   // the same labels the board list gives (statusCell), fixed-width state and try columns
   expect(tasks.map(t => statusCell(t as never, T0))).toEqual(['12m', 'test', 'prep', 'merge', '5m'])
-  // the row shows the total work time of all tries (T-557), a step row its step's icon in place of ▶ and the word: "⧗ 20m" (T-581)
+  // the row shows the total work time of all tries (T-557), a step row its step's icon in place of ▶ and the word: "⊛ 20m" (T-581)
   // a later try "(n)" right after the time (T-604)
-  for (const text of ['T-40 ▶ 12m    ', 'T-41 ⧗ 20m    ', 'T-42 ✎ 20m (2)', 'T-43 ⇢ 20m    ', 'T-44 ▶ 5m  (3)']) expect(await row(ui, text)).toBeDefined()
+  for (const text of ['T-40 ▶ 12m    ', 'T-41 ⊛ 20m    ', 'T-42 ✎ 20m (2)', 'T-43 ⇢ 20m    ', 'T-44 ▶ 5m  (3)']) expect(await row(ui, text)).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /try \d/ })).toBeUndefined()
   // the titles start in one column
   expect(await ui.find({ type: 'Text', text: /^T-40 ▶ 12m {5}Running worker$/ })).toBeDefined()
@@ -246,6 +246,29 @@ test("T-542: the band shows symcc's own pre-merge step as \"prep\" with its plai
   expect(await ui.find({ type: 'Text', text: new RegExp(`^T-51 ⌕ 20m +Checked one — ${esc(CHECKER_NOTE)}`, 'u') })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /T-5\d [▶✎⌕] (prep|checker)/ })).toBeUndefined()
   await ui.unmount()
+})
+
+test('T-648: a task in the queue shows ⧗ and one in the test step ⊛, on the terminal list and the band', async ($, on) => {
+  const T0 = Date.parse('2026-03-02T10:00:00Z')
+  mock.clock(on, { now: T0 })
+  const iso = (ms: number) => new Date(ms).toISOString()
+  const fresh = iso(T0 - 10_000)
+  const ran = [{ started: iso(T0 - 20 * 60_000), ended: fresh }]
+  const tasks = [
+    task('T-71', 'doing', 'Queued one', { note: 'queue (2)', attempts: 1, runs: ran, checking: { step: 'queue', place: 2, at: fresh } }),
+    task('T-72', 'doing', 'Tested one', { note: 'running the tests', attempts: 1, runs: ran, checking: { step: 'testing', at: fresh } }),
+  ]
+  on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [] } }, version: 1 } }))
+  on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
+  for (const where of [{ ...PANE, props: { ...PANE.props, bodyColumns: 160 } }, { ...BAND, props: { ...BAND.props, bodyColumns: 160 } }]) {
+    const ui = await $.ui.mount({ ...where, surface: 'terminal' } as never) as TestMounted<"terminal", "AbovePrompt">
+    // the list's row is keyed by its id; the band's is one Text line
+    const line = async (id: string) => (await ui.find({ key: id }))?.text ?? (await ui.find({ type: 'Text', text: new RegExp(`^${id} `) }))?.text
+    expect(await line('T-71')).toMatch(/^T-71 ⧗ 20m +Queued one/)
+    expect(await line('T-72')).toMatch(/^T-72 ⊛ 20m +Tested one/)
+    expect(await ui.find({ type: 'Text', text: /⋯/ })).toBeUndefined()
+    await ui.unmount()
+  }
 })
 
 test("every band row lines up in one title column, with the board list's short status for each state (T-461)", async ($, on) => {
@@ -1426,7 +1449,7 @@ test('From shows a scout or a split task in its own color', async ($, on) => {
   await ui.unmount()
 })
 
-test('T-587: the terminal task page badge names the step ("[⌕ checker · 9m]") and its Stage row marks it now, the steps before done', async ($, on) => {
+test('T-587: the terminal task page badge names the step ("[⌕ checker · 9m]"), the Status row the state (T-647), and its Stage row marks the step now, the steps before done', async ($, on) => {
   const T0 = Date.parse('2026-03-02T10:00:00Z')
   mock.clock(on, { now: T0 })
   const iso = (ms: number) => new Date(ms).toISOString()
@@ -1437,7 +1460,7 @@ test('T-587: the terminal task page badge names the step ("[⌕ checker · 9m]")
   const L = await lines(ui)
   expect(L).toContain('[⌕ checker · 9m]')
   const status = L.findIndex(l => l.startsWith('Status:'))
-  expect(L[status]).toContain('⌕ checker · 9m')
+  expect(L[status]).toContain('▶ doing · 9m')
   // the Stage row right under Status (it may wrap onto a second line)
   expect(L.slice(status + 1, status + 3).join(' ').replace(/\s+/g, ' ')).toMatch(/^Stage: worker ✓ → prep ✓ → ● checker → queue → test → merge/)
   await ui.unmount()
@@ -1452,7 +1475,7 @@ test('T-587: with the checker setting off the Stage row leaves "checker" out; a 
   stateOf(on, { opened: 'T-4', view: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   const L = await lines(ui)
-  expect(L).toContain('[⧗ test · 9m]')
+  expect(L).toContain('[⊛ test · 9m]')
   const at = L.findIndex(l => l.startsWith('Stage:'))
   expect(L.slice(at, at + 2).join(' ').replace(/\s+/g, ' ')).toMatch(/^Stage: worker ✓ → prep ✓ → queue ✓ → ● test → merge/)
   await ui.unmount()

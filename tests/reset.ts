@@ -16,6 +16,7 @@ import { saidNeedsYou } from '../hooks/app/voice'
 import { guardLogged } from '../hooks/app/ask'
 import { resetBackground } from '../hooks/claude/background'
 import { resetDebriefs } from '../hooks/app/debrief'
+import { resetEvidence } from '../hooks/app/evidence'
 
 /** Empties the plugin's in-memory state (agents, tasks being checked, queues for the lead, timers, S): what a reload starts with. */
 export function resetPlugin() {
@@ -38,6 +39,7 @@ export function resetPlugin() {
   resetLogo()
   resetBackground()
   resetDebriefs()
+  resetEvidence()
   for (const m of [workers, queuedWorkers, onPurpose, scoutRuns, checkerRuns, reminded, scoutState, notReady, checkerNotReady, changesCache, scratchUse, skippedRoles, skippedKinds, stopAsked, offAsked]) m.clear()
   for (const s of [starting, finishing, stopped, boardAgents, healthTold, openDays, keptDirty, approving, tmpWarned, seenEnded, saidNeedsYou, guardLogged]) s.clear()
   for (const q of [leadQueue, meanwhile, sayQueue]) q.length = 0

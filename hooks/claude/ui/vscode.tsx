@@ -239,9 +239,6 @@ export function vsHeading(k: VsKit, key: string, mark: string, tone: string, lab
   )
 }
 
-/** A fold's words, as a screen reader would say them: "▸ Backlog (6)", "▾ Done (3 (+12 archived))". */
-export const foldLabel = (label: string, n: number | string, open: boolean, note = '') => `${open ? '▾' : '▸'} ${label} (${n}${note ? ` ${note}` : ''})`
-
 /** A fold row in VS Code: a link that reads as a heading, "**▸ Backlog 6**" bold, then a note ("(+12 archived)");
  *  a press opens or closes it. `top` false: a smaller, dim fold (a day under Done). Not a Button (see the top). */
 export function vsFold(k: VsKit, key: string, label: string, n: number | string, open: boolean, onPress: () => void, top = true, note = ''): RenderChildren {

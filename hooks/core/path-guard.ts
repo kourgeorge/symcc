@@ -157,6 +157,42 @@ export const BASH_FOLDERS_MAX = 16
  */
 export const BASH_TOO_MANY = '\u0000too many'
 
+/**
+ * The `cwd` walkBash is given when the shell's folder couldn't be read (T-671): relative words start at the worker's
+ * top folder and ".." words are also tried from deeper folders. It doesn't start with "/", so the git guard
+ * (literalPath) takes it as an unknown folder too.
+ */
+export const CWD_LOST = '\u0000lost:'
+
+/**
+ * What bashOutsideFolder answers before a project path that a ".." word may reach from a shell folder symcc couldn't
+ * read (T-671); bashOutsideText adds a note saying so.
+ */
+export const BASH_LOST = '\u0000lost path:'
+
+/**
+ * The `cwd` to check a worker's shell command with (T-671): `got`, the shell's folder as read, when it is an absolute
+ * path; else (it couldn't be read) CWD_LOST alone. No earlier folder is kept: the shell may have moved since (a cd can
+ * be written in many ways), so trusting one could make the guard weaker than not knowing the folder at all.
+ */
+export const shellCwd = (got: unknown): string => (typeof got === 'string' && got.startsWith('/') ? got : CWD_LOST)
+
+/**
+ * Relative word `w` (a leading "/" dropped) cut down by its own parts: how many ".." it climbs at the start (`ups`)
+ * and the path left after them (`rest`, '' for none), so `a/../../x/./y` gives 1 and `x/y`. One pass over the word (T-671).
+ */
+function climbParts(w: string): { ups: number; rest: string } {
+  const kept: string[] = []
+  let ups = 0
+  for (const part of w.split('/')) {
+    if (part === '' || part === '.') continue
+    if (part !== '..') kept.push(part)
+    else if (kept.length > 0) kept.pop()
+    else ups++
+  }
+  return { ups, rest: kept.join('/') }
+}
+
 /** A word that may be a plain relative path (`src/a.ts`, `lnk`): letters, digits and `._@%+~/-`, not an option. */
 const PLAIN_PATH = /^(?!-)[\w.@%+~/-]+$/
 
@@ -216,7 +252,10 @@ function walkBash(command: string, wts: readonly string[], home: string | undefi
   const tops = opts.tops ?? []
   // the shell's folder counts inside the worker's own folder, and outside the project when the project is known and
   // not inside it (a throwaway copy in /tmp, T-436); anywhere else (the owner's copy, "/") it starts from the worker's folder
-  const sh = cwd?.startsWith('/') ? resolvePath('/', cwd) : undefined
+  // the shell's folder couldn't be read (CWD_LOST, T-671): it starts from the worker's folder, and a ".." word is also
+  // tried from deeper folders under it, since the shell may be in one of them
+  const lost = cwd === CWD_LOST
+  const sh = !lost && cwd?.startsWith('/') ? resolvePath('/', cwd) : undefined
   const away = sh !== undefined && tops.length > 0 && insideAny(sh, tops, false) === undefined && !tops.some(t => inside(t, sh, false) !== undefined)
   const start = [sh !== undefined && (away || insideAny(sh, wts, true) !== undefined) ? sh : wt]
   // past BASH_FOLDERS_MAX folders the list stops growing (it doubles with every cd that may fail): from then on a
@@ -272,7 +311,23 @@ function walkBash(command: string, wts: readonly string[], home: string | undefi
       if (climbs && w.startsWith('/')) tries.push(...dirs.map(d => resolvePath(d, w.replace(/^\/+/, ''))))
       for (const abs of tries) {
         const rel = visit(abs)
-        if (rel !== undefined) return rel
+        if (rel !== undefined) return lost && climbs && rel !== BASH_TOO_MANY ? BASH_LOST + rel : rel
+      }
+      // from a folder that couldn't be read, a ".." word may climb from any depth under the folders tried. The word is
+      // cut down once to its leading ".." parts (`ups`) and the rest; from k folders deeper it lands on the folder
+      // ups - k above d plus the rest (k >= ups only reaches inside d). So each folder above d is tried with the rest,
+      // at most as many as d has parts, which keeps a long word cheap (T-671). Not for the paths looked up on disk
+      // (opts.plain): the made-up folders don't exist
+      if (lost && climbs && !opts.plain) {
+        const { ups, rest } = climbParts(w)
+        for (const d of dirs) {
+          const depth = d.split('/').filter(Boolean).length
+          // highest first, as one folder deeper is the likeliest place
+          for (let j = Math.min(ups - 1, depth); j >= 1; j--) {
+            const rel = visit(resolvePath(d, `${'../'.repeat(j)}${rest || '.'}`))
+            if (rel !== undefined) return BASH_LOST + rel
+          }
+        }
       }
     }
     // a command word with expansion braces (`{cd,} /tmp`, `c{d..d} /tmp`) may be a cd: the folder it names is added,
@@ -387,10 +442,12 @@ export const bashTooManyText = (worktree: string) =>
   `Refused: this command has too many paths or folder changes (cd) to check where they lead (more than ${BASH_PATHS_MAX} paths, or more than ${BASH_FOLDERS_MAX} folders it may be in). Split it into shorter commands, use absolute paths inside your own folder ${worktree}, or write files with the Write tool.`
 
 /** The reason a worker reads when its shell command naming project path `rel` is refused for being outside its own folder `worktree` (or for BASH_TOO_MANY). */
-export const bashOutsideText = (rel: string, worktree: string) =>
+export const bashOutsideText = (rel: string, worktree: string): string =>
   rel === BASH_TOO_MANY
     ? bashTooManyText(worktree)
-    : `Refused: this command names ${rel || 'the project folder'} in the owner's copy of the project, outside your own folder. Work only in your own folder ${worktree}: use paths inside it (relative paths start there), never the owner's copy, even to read.`
+    : rel.startsWith(BASH_LOST)
+      ? `${bashOutsideText(rel.slice(BASH_LOST.length), worktree)} symcc couldn't tell the shell's folder; use a full path.`
+      : `Refused: this command names ${rel || 'the project folder'} in the owner's copy of the project, outside your own folder. Work only in your own folder ${worktree}: use paths inside it (relative paths start there), never the owner's copy, even to read.`
 
 /**
  * Where an edit of `path` would write inside the project folder `root` (any of its names), relative to it; relative

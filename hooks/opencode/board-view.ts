@@ -865,7 +865,7 @@ function listBody(f: ViewFile, cursor: number, open: Record<PanelGroup, boolean>
   const selected = at >= 0 ? ids[at]! : ''
   const since = (id: string) => v.working.find(x => x.task === id)?.since
   const idWidth = Math.max(4, ...ids.filter(id => !groupOf(id)).map(id => id.length))
-  // a doing task: the total work time of all tries, "1h40m", "⧗ 9m", with no try mark (T-628: the band and the task
+  // a doing task: the total work time of all tries, "1h40m", "⊛ 9m", with no try mark (T-628: the band and the task
   // page show it); narrow, the time is left out (see rowStates)
   const { states, width: cellWidth } = rowStates(listed, nowMs, since, cw => cw <= w - (4 + idWidth + 3 + 2) - TITLE_ROOM, false)
   const pointer = (id: string, indent: number) => (id === selected ? `${' '.repeat(Math.max(0, indent - 2))}› ` : ' '.repeat(indent))
@@ -967,7 +967,7 @@ function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = ''
   const sections = taskSections(t, {
     width: w,
     nowMs,
-    detail: { roles: defsIn(f, 'roles'), kinds: defsIn(f, 'kinds'), all: v.tasks, when: iso => when(iso), board: v, merging, ...(v.archived_done ? { archivedDone: v.archived_done } : {}) },
+    detail: { roles: defsIn(f, 'roles'), kinds: defsIn(f, 'kinds'), all: v.tasks, when: iso => when(iso), board: v, merging, driving: v.driving ?? false, ...(v.archived_done ? { archivedDone: v.archived_done } : {}) },
     ...(report ? { texts: { [report.file]: report.text } } : {}),
     changes: v.changes?.[t.id] ?? null,
     target: intoOf(t),

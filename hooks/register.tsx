@@ -16,7 +16,7 @@ import { sessionStarting, sessionStart, sessionCleared, sessionEnd, leadGuideTex
 import { S, useName } from './app/state'
 import { hookFailed } from './app/ask'
 import { popupCall } from './app/questions'
-import { spawnFailedText } from './core/path-guard'
+import { spawnFailedText, shellCwd } from './core/path-guard'
 import { DEFAULT_NAME, cleanName } from './name'
 import { drainStarts, leadTurn } from './app/starts'
 import { findRoot } from './app/store'
@@ -165,8 +165,9 @@ export const register: Register = on => {
   on('tool.check', async ($, e, next) => {
     const host = claudeHost($)
     useName(host)
-    // read inside the hook, $.session.cwd() is the calling agent's own folder, which follows its shell's cd
-    const cwd = e.agentId && e.tool === 'Bash' ? await Promise.resolve().then(() => $.session.cwd()).catch(() => undefined) : undefined
+    // read inside the hook, $.session.cwd() is the calling agent's own folder, which follows its shell's cd; when it
+    // can't be read, nothing earlier is trusted: ".." words are judged from deeper folders too (shellCwd, T-671)
+    const cwd = e.agentId && e.tool === 'Bash' ? shellCwd(await Promise.resolve().then(() => $.session.cwd()).catch(() => undefined)) : undefined
     // an error in toolCheck is not swallowed here: the .catch below refuses the call of symcc's own agents
     const deny = await toolCheck(host, e.agentId, editTouch(e.tool, e.input), cwd)
     return deny ? { decision: 'deny', reason: deny } : next(e)

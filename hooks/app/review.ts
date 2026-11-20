@@ -6,6 +6,7 @@ import type { Host } from '../host'
 import { change, now, path, safeWrite } from './store'
 import { inMergeLine, type TurnLimit } from './merge-line'
 import { tellLead } from './tell'
+import { logQueue } from './evidence'
 import { ranOutOfTime, limitMinutes, timedOutDetail, timedOutHead } from '../core/test-timeout'
 import { PASSED_TREES_FILE, parsePassedTrees, treePassed, addPassedTree, passedTreesText, isTreeId, testsSkippedText } from '../core/passed-trees'
 
@@ -103,7 +104,7 @@ export async function changesText($: Host, target: string, t: SymccTask, file = 
  * `timedOut`: a test command was stopped by its time limit (these minutes); it fails like a failing test, with its
  * output in `testOutput` (T-547), only its note says so (see settle).
  */
-export type CheckResult = { ok: boolean; detail: string; timedOut?: number; conflict?: boolean; testOutput?: string; review?: boolean; merged?: string; notes?: string[]; blocked?: Blockers; untested?: string; checker?: boolean; again?: boolean; noVerdict?: string; secrets?: string[]; ask?: string; gone?: boolean }
+export type CheckResult = { ok: boolean; detail: string; timedOut?: number; command?: string; conflict?: boolean; testOutput?: string; review?: boolean; merged?: string; notes?: string[]; blocked?: Blockers; untested?: string; checker?: boolean; again?: boolean; noVerdict?: string; secrets?: string[]; ask?: string; gone?: boolean }
 
 /** T-440: the branch the task merges into (`target`) was deleted while it was checked: nothing merged; the caller makes the task wait with the "branch is gone" question (waitIfBranchGone). */
 export const goneResult = (target: string): CheckResult => ({ ok: false, gone: true, detail: `not merged: branch ${target} is gone` })
@@ -224,6 +225,8 @@ export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board
     ...(release ? { release } : {}),
     ...(limit ? { limit } : {}),
   })
+  // T-660: the turn's outcome goes to the evidence file (in the background)
+  logQueue($, t.id, Number(t.attempts) || 0, r)
   return withSecrets(r)
 }
 
@@ -396,11 +399,11 @@ async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mo
         // T-547: stopped by its time limit: it fails like a failing test, its output goes to a new try (see settle)
         if (r.exitCode !== 0 && ranOutOfTime(r, thrown)) {
           const min = limitMinutes(testTimeoutMs(b))
-          return stopped() ?? { ok: false, timedOut: min, detail: timedOutDetail(cmd, min), testOutput: testTail(`${timedOutHead(cmd, min)}\n${r.stdout}\n${r.stderr}`) }
+          return stopped() ?? { ok: false, timedOut: min, command: cmd, detail: timedOutDetail(cmd, min), testOutput: testTail(`${timedOutHead(cmd, min)}\n${r.stdout}\n${r.stderr}`) }
         }
         if (r.exitCode !== 0) {
           const tail = `${r.stdout}\n${r.stderr}`.trim().split('\n').slice(-8).join(' | ').slice(0, 700)
-          return stopped() ?? { ok: false, detail: `tests failed: \`${cmd}\` (exit ${r.exitCode}). ${tail}`, testOutput: testTail(`$ ${cmd} (exit ${r.exitCode})\n${r.stdout}\n${r.stderr}`) }
+          return stopped() ?? { ok: false, command: cmd, detail: `tests failed: \`${cmd}\` (exit ${r.exitCode}). ${tail}`, testOutput: testTail(`$ ${cmd} (exit ${r.exitCode})\n${r.stdout}\n${r.stderr}`) }
         }
         const s = stopped()
         if (s) return s

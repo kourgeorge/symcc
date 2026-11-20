@@ -12,6 +12,7 @@ import { type Host, notReadyYet } from '../host'
 import type { TurnEnd } from './workers'
 import { change, now } from './store'
 import { startAgent } from './starts'
+import { logVerdict } from './evidence'
 import { orgMemText, keepSuggestions } from './org-mem'
 import { learnedAsk, startDebrief } from './debrief'
 
@@ -113,6 +114,7 @@ export async function runChecker($: Host, t: SymccTask, b: Board, dir: string, s
     why = `it moved the task's branch ${taskBranch(t)} and it could not be put back`
   }
   await record($, t, verdict, why, end.tokens, back === 'moved' ? `${tryLabel(t)}: the checker moved the branch ${taskBranch(t)}; it was put back at ${saved!.head.slice(0, 10)}, so nothing it made is merged` : undefined)
+  logVerdict($, t.id, Number(t.attempts) || 0, verdict)
   return { verdict, ...(why ? { why } : {}) }
 }
 

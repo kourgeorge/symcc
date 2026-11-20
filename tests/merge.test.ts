@@ -2474,6 +2474,29 @@ test('change on a running task adds a restart line naming the fields that change
   expect(t.history.map(h => h.text)).toContain('files widened: + docs/a.md, + tests/')
 })
 
+test('changing only order or after on a running task keeps its worker and saves the change; details still restarts it', async () => {
+  const w = world()
+  const [b0] = boardWith('review')
+  const [b] = addTask(b0, { origin: { why: 'a test' }, title: 'Other', files: ['docs/'] }, ISO)
+  await saveBoard(w.$, b)
+  expect(find(b, 'T-1')!.status).toBe('doing')
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
+  const said = await runTool(w.$, 'change', { task: 'T-1', order: 7, after: ['T-2'] })
+  const t = find(await load(w.$), 'T-1')!
+  expect(String(said)).toContain('its worker keeps running')
+  expect(t.status).toBe('doing')
+  expect(t.order).toBe(7)
+  expect(t.after).toEqual(['T-2'])
+  expect(t.history.some(h => h.text.includes('restarted'))).toBe(false)
+  expect(t.history.map(h => h.text)).toContain('waits on changed: nothing → T-2')
+  expect(workers.has('ag1')).toBe(true)
+  await runTool(w.$, 'change', { task: 'T-1', details: 'new plan' })
+  const r = find(await load(w.$), 'T-1')!
+  expect(r.history.map(h => h.text)).toContain('try 1: restarted: the task was changed (details)')
+  expect(workers.has('ag1')).toBe(false)
+  workers.delete('ag1')
+})
+
 test("the owner's answer to a waiting task goes into its details and its history", async () => {
   const w = world()
   const [b] = boardWith('review')
