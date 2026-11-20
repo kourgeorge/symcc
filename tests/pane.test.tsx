@@ -1338,7 +1338,7 @@ test('T-587: the terminal task page badge names the step ("[⌕ checker · 9m]")
   const status = L.findIndex(l => l.startsWith('Status:'))
   expect(L[status]).toContain('⌕ checker · 9m')
   // the Stage row right under Status (it may wrap onto a second line)
-  expect(L.slice(status + 1, status + 3).join(' ').replace(/\s+/g, ' ')).toMatch(/^Stage: worker ✓ → prep ✓ → ● checker → line → test → merge/)
+  expect(L.slice(status + 1, status + 3).join(' ').replace(/\s+/g, ' ')).toMatch(/^Stage: worker ✓ → prep ✓ → ● checker → queue → test → merge/)
   await ui.unmount()
 })
 
@@ -1353,7 +1353,7 @@ test('T-587: with the checker setting off the Stage row leaves "checker" out; a 
   const L = await lines(ui)
   expect(L).toContain('[⧗ test · 9m]')
   const at = L.findIndex(l => l.startsWith('Stage:'))
-  expect(L.slice(at, at + 2).join(' ').replace(/\s+/g, ' ')).toMatch(/^Stage: worker ✓ → prep ✓ → line ✓ → ● test → merge/)
+  expect(L.slice(at, at + 2).join(' ').replace(/\s+/g, ' ')).toMatch(/^Stage: worker ✓ → prep ✓ → queue ✓ → ● test → merge/)
   await ui.unmount()
 })
 

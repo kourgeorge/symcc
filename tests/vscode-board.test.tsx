@@ -524,7 +524,7 @@ test("T-542: in VS Code symcc's own pre-merge step shows \"prep\" and a running 
   expect(page).toContain('preparing to merge: committing and checking files')
   // the badge names the step with its icon and the time (T-587), and the Stage stepper marks it now
   expect((await ui.find({ key: 'vs-status' }))?.text).toMatch(/✎ prep · \d+m/)
-  expect((await ui.find({ key: 'vs-stage' }))?.text).toBe('Stageworker ✓→● prep→line→test→merge')
+  expect((await ui.find({ key: 'vs-stage' }))?.text).toBe('Stageworker ✓→● prep→queue→test→merge')
   await ui.unmount()
 })
 
@@ -538,10 +538,10 @@ test('T-587: in VS Code the task page badge names the step and the Stage stepper
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
   await ui.press({ key: 'T-498', link: { href: vsHref('task', 'T-498') } })
   expect((await ui.find({ key: 'vs-status' }))?.text).toMatch(/⌕ checker · \d+m/)
-  expect((await ui.find({ key: 'vs-stage' }))?.text).toBe('Stageworker ✓→prep ✓→● checker→line→test→merge')
+  expect((await ui.find({ key: 'vs-stage' }))?.text).toBe('Stageworker ✓→prep ✓→● checker→queue→test→merge')
   await ui.press({ key: 'back' })
   await ui.press({ key: 'T-499', link: { href: vsHref('task', 'T-499') } })
-  expect((await ui.find({ key: 'vs-stage' }))?.text).toBe('Stageworker ✓→prep ✓→checker ✓→line ✓→test ✓→● review→merge')
+  expect((await ui.find({ key: 'vs-stage' }))?.text).toBe('Stageworker ✓→prep ✓→checker ✓→queue ✓→test ✓→● review→merge')
   await ui.unmount()
 })
 

@@ -5314,7 +5314,7 @@ test('two tasks in the merge line take turns; the second waits noted "in line (2
   expect(lineTasks(w)).toEqual(['T-1', 'T-2'])
   expect(turn1).toEqual(['start'])
   expect(turn2).toEqual([])
-  expect(inLineNote(3)).toBe('in line (3)')
+  expect(inLineNote(3)).toBe('queue (3)')
   open()
   expect(await one).toBe('one')
   expect(await two).toBe('two')

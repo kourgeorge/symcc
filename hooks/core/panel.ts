@@ -95,20 +95,20 @@ export const STEP_ICON: Record<CheckStep, string> = { prep: '✎', testing: '⧗
 /** What the row of an approved task in review says while its approve runs (approveRunning), in place of "Enter to review". */
 export const APPROVED_NOTE = 'approved, merging'
 
-/** The row icon of a task waiting for its turn in the merge line (its note is "in line (n)"): "⋯ 2h5m". */
+/** The row icon of a task waiting for its turn in the merge line (its note is "queue (n)"): "⋯ 2h5m". */
 export const IN_LINE_ICON = '⋯'
 
 /** The one-line legend of the row icons (task page and guide). */
-export const STEP_LEGEND = `▶ working · ${IN_LINE_ICON} in line · ${STEP_ICON.prep} prep · ${STEP_ICON.testing} test · ${STEP_ICON.checker} checker · ${STEP_ICON.merging} merge`
+export const STEP_LEGEND = `▶ working · ${IN_LINE_ICON} queue · ${STEP_ICON.prep} prep · ${STEP_ICON.testing} test · ${STEP_ICON.checker} checker · ${STEP_ICON.merging} merge`
 
-/** Whether task `t` waits for its turn in the merge line (its note is "in line (n)", see inLineNote). */
-export const waitsInLine = (t: { status: SymccStatus; note?: string }): boolean => t.status === 'doing' && /^in line \(\d+\)$/.test(t.note ?? '')
+/** Whether task `t` waits for its turn in the merge line (its note is "queue (n)", see inLineNote). */
+export const waitsInLine = (t: { status: SymccStatus; note?: string }): boolean => t.status === 'doing' && /^queue \(\d+\)$/.test(t.note ?? '')
 
 /** The mark at the front of a task's row: ⋯ while it waits in the merge line, its step's icon (STEP_ICON) during a
  *  check step, else its own mark (statusMark: ▶ while its worker works). */
 export function rowMark(t: Pick<SymccTask, 'status'> & { note?: string; runs?: readonly unknown[]; attempts?: number } & Pick<BoardTask, 'checking'>, nowMs: number): string {
-  // an approved task in review waits in the merge line too while its approve runs (approveRunning)
-  if (waitsInLine({ ...t, status: approveRunning(t, nowMs) ? 'doing' : t.status })) return IN_LINE_ICON
+  // an approved task in review waits in the merge line too while its approve runs (shownStatus is then doing)
+  if (waitsInLine({ ...t, status: shownStatus(t, nowMs) })) return IN_LINE_ICON
   const step = checkStepNow(t, nowMs)
   return step ? STEP_ICON[step] : statusMark(t)
 }
@@ -116,7 +116,7 @@ export function rowMark(t: Pick<SymccTask, 'status'> & { note?: string; runs?: r
 /**
  * The one small set of notes a task shows between its hand-back (or the owner's approve, or "your files are clear") and its
  * merge, the same in every board view (terminal list, band, VS Code, OpenCode, text board):
- * - while it waits for its merge turn: "in line (n)" (inLineNote, in board-file.ts);
+ * - while it waits for its merge turn: "queue (n)" (inLineNote, in board-file.ts);
  * - during its turn, the note of its step: prep, test, merge (and checker, only while a checker agent runs);
  * - once the turn is over, how it went: merged (done), failed with the reason, waiting for your files (waitFilesNote), or in review.
  */
@@ -134,7 +134,7 @@ export const PREP_NOTE = STEP_NOTE.prep
 export const CHECKER_NOTE = STEP_NOTE.checker
 
 /** Whether `note` is one of the notes a task shows during its merge turn or while it waits for it (see STEP_NOTE). */
-export const isMergeNote = (note: string | undefined): boolean => !!note && (Object.values(STEP_NOTE).includes(note) || /^in line \(\d+\)$/.test(note))
+export const isMergeNote = (note: string | undefined): boolean => !!note && (Object.values(STEP_NOTE).includes(note) || /^queue \(\d+\)$/.test(note))
 
 /** The note task `note` gets when check step `step` begins: the step's note (STEP_NOTE) in place of any other merge note;
  *  the checker step keeps it (runChecker then sets CHECKER_NOTE), and a note that is not a merge note stays. */
