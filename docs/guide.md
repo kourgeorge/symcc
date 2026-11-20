@@ -94,6 +94,68 @@ picks up again next time.
 | `dropped` | Cancelled. It never runs on its own; retry brings it back to todo on purpose |
 | `backlog` | A parked idea or unclear work. It never starts until you move it to todo. In the board panel it sits in a folded "▸ Backlog  N" row below the active tasks |
 
+### States, stages and the queue
+
+A task has one **state**. Inside `doing`, a change also goes through **stages**. All finished
+tasks then take turns in **one merge queue**. Here is each part in plain words.
+
+**States: what the task is.**
+
+| State | What it means for you | What moves it on |
+|---|---|---|
+| `backlog` | A parked idea. Nothing happens | You (or the lead on your word) move it to `todo` |
+| `todo` | Waits for a free worker and for the tasks it comes after | A worker is started: `doing` |
+| `doing` | A worker works, or the change is on its way to the merge | The merge ends: `done`. A failed try: back to `todo`, or `failed` when the retries are used up |
+| `paused` | Stopped on purpose | You resume it |
+| `waiting` | A worker or the lead asked you something, or your own files block the merge | Your answer, your OK for files, or clearing your files |
+| `review` | Done and tested, waiting for your approve | Approve: it merges. Reject: back to `todo` with your reason |
+| `failed` | Could not be finished; its page says why | You retry it, change it, or drop it |
+| `done` | Merged. Final | Nothing |
+| `dropped` | Cancelled. Never runs on its own | Retry brings it back to `todo` |
+
+**Needs you.** A task is under NEEDS YOU when the next move is yours: it is in `review`,
+`waiting` or `failed`, or a running worker asked for more time. A task leaves NEEDS YOU when
+you act on it. When you approve a task in review, it leaves NEEDS YOU at once and shows with the
+running tasks (as `doing`) until the merge ends. A task waiting for your own files does the same
+once you have cleared them and its merge runs.
+
+**Stages: the steps inside `doing`.** Each has an icon:
+
+| Stage | Icon | What happens |
+|---|---|---|
+| worker | `▶` | The worker changes the code in its own folder |
+| prep | `✎` | symcc commits, leaves out secret-looking files and checks the scope |
+| checker | `⌕` | A fresh agent tries to break the change. Only with the `checker` setting on |
+| queue | `⋯` | The task waits for its turn. Its note says "queue (n)", n being its place (1 = merging now) |
+| test | `⧗` | Your test commands run |
+| merge | `⇢` | The branch moves forward |
+
+The board row shows the stage icon instead of `▶`, then the time. The band above the prompt
+counts the same tasks. A doing task's page names the stage in its badge and has a **Stage** line
+for the whole way, such as `worker ✓ → prep ✓ → ● checker → queue → test → merge` (see
+[What a task shows on its way to the merge](#what-a-task-shows-on-its-way-to-the-merge)). A task
+in review or waiting shows as `doing` while its approve or merge runs.
+
+**The queue.** There is one merge queue for the whole project (all sessions, all target
+branches), oldest first. Only the task at the front has its turn. In its turn, in one go, it
+catches up with the target branch, runs the tests (skipped when this exact code already passed),
+and then merges (or stops in `review` when you want to approve first). Any failure on the way
+(a clash, failing tests, out of time, the branch moved by hand) is one normal failed try and uses
+one of the `auto_retries`. The checker runs before the queue, side by side with other checkers,
+and never runs the project's tests. The tests run once per try, in the task's turn.
+
+**Why it is built this way.**
+
+- Before, several tasks could merge into a moving branch at once. Each one had to catch up, test
+  again and sometimes clash with the others. Now the branch moves only at the front of the queue.
+  So the code a task was tested with is exactly the code that merges: the main branch is always
+  tested as it will be after the merge.
+- No two merges race, and no test run is wasted because another merge came first.
+- One rule for every way into a merge (hand-back, approve, retry), so it is simple to follow and
+  to trust.
+- The cost: tasks wait their turn. When five tasks with 10-minute tests finish together, the
+  fifth waits about 40 minutes before its own turn. Testing several tasks together is not built.
+
 **Task dependencies.** The lead sets them. A task's `after` lists the tasks that must be
 finished first: it starts only when every one of them is `done` (merged). Any other status
 keeps it waiting, also `dropped` or `failed`; then the lead changes or clears its `after`.
@@ -216,13 +278,7 @@ happens, never the words in its hand-back:
 - otherwise it is finished, and its work goes through these steps (an investigation goes to
   review with its answer instead):
 
-### Why finished tasks take turns
-
-Before, several tasks could merge into a moving branch at the same time. Each one had to catch up,
-test again and sometimes clash with the others (one task once needed 7 tries). Now every finished
-task joins **one queue** for the whole project (all sessions, all target branches, oldest first),
-and only the task at the front has its turn. The branch it merges into moves only at the front of
-the queue, so the code a task was tested with is exactly the code that merges.
+The reasons for the queue are in [States, stages and the queue](#states-stages-and-the-queue).
 
 ### The way to the merge
 
@@ -287,9 +343,7 @@ The steps, in this order:
    never joins the queue, so no tests run for that try (see [The checker](#the-checker)).
 4. **Queue.** The task joins the merge queue and waits for its turn. The queue is kept in
    `.symcc/merge-line.json`; it survives a reload (a task that was in the queue just joins again), and
-   a stale entry is cleared by itself, so you never need to edit it. Merges go one at a time, so when
-   several tasks finish together the last one waits longer: the fifth of five tasks with 10-minute
-   tests waits about 40 minutes before its own turn.
+   a stale entry is cleared by itself, so you never need to edit it. Merges go one at a time.
 5. **Catch up.** At its turn, if the target branch has moved since the worker started (another
    task was merged), symcc brings those changes into the task's copy first. If they clash, that
    try failed like failing tests do: it uses one of the `auto_retries`, and the next worker is told
@@ -1419,7 +1473,7 @@ its read-only `stats` tool.
   investigations on their own (how many, answered, time, tokens, tries; see
   [investigation tasks](#investigation-tasks)); by role and where tasks came from (lead,
   you, all scouts with each scout on its own line under them, workers), each with its share,
-  average tokens and time. Each scout's line has a small scorecard under it: how many tasks its
+  average tokens and time. Each scout's line has a small scorecard under it (what its findings became is also on each scout's page, as "Results · last 7 days: … · in all: …"): how many tasks its
   findings became (how many merged, were dropped or are still open), its own tokens in the range,
   and the tokens per merged fix (its tokens plus its merged tasks' tokens, divided by the number
   merged; "—" when none merged). A scout that used tokens but made no task is listed too; done per day for the last 7 days with activity, oldest first.
