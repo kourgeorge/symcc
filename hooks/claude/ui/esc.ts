@@ -50,7 +50,8 @@ export async function escBack($: $): Promise<boolean> {
   if (!step) return false
   if (step === 'cancel scout edit') cancelScoutEdit(claudeHost($))
   else if (step === 'scouts list') await resetPane(claudeHost($), 'scouts')
-  else if (step === 'board list') await resetPane(claudeHost($), 'tasks')
+  // from a task opened on the Live tab, back to the Live tab
+  else if (step === 'board list') await resetPane(claudeHost($), (await panelValues($).readTab()) === 'live' ? 'live' : 'tasks')
   else if (step === 'close run') await panelValues($).updateScoutOpen(v => scoutPlace(v).scout)
   else {
     if (step === 'cancel setting') (S.settingEdit = null), (S.settingPick = null)

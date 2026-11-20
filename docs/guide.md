@@ -741,9 +741,11 @@ are about changes; under "How tasks ended" a read investigation shows as
   A word like `foo:bar` that is not one of these is looked for as a plain word. The lead's
   board tool also takes `limit` and `sort` (`newest` or `order`), the same as `last:` and
   `top:`, and says how many matched in all (`10 of 37 matching shown`).
-- The panel has three views, Tasks, Scouts and Settings, shown as tabs under the banner:
-  `[t]: Tasks (12) │ [s]: Scouts (3) │ [c]: Settings`, the open one bold, blue and
-  underlined. Press `t`, `s` or `c` (or click a tab) to switch. The Scouts view lists each scout on one
+- The panel has four views, Tasks, Live, Scouts and Settings, shown as tabs under the banner:
+  `[t]: Tasks (12) │ [l]: Live │ [s]: Scouts (3) │ [c]: Settings`, the open one bold, blue and
+  underlined (on a narrow panel the tabs get shorter, `[t] Tasks (12)│[l] Live…`, never cut).
+  Press `t`, `l`, `s` or `c` (or click a tab) to switch. The Live tab is in the Claude Code
+  terminal panel only for now (see [Live tab](#live-tab)). The Scouts view lists each scout on one
   row: an icon (`◉` running, `◎` waiting for its next run, `○` paused), its name, how often
   it runs, when it runs next, what its last run found (`last: found 2`, `last: nothing` or
   `never ran`) and its model. On a narrow panel the model column goes first, then the
@@ -817,7 +819,7 @@ are about changes; under "How tasks ended" a read investigation shows as
   projects usually differ with no setup; the Settings page shows the one in use, and picking one there plays its chime.
 - Panel keys: `a` approve, `x` reject or drop, `d` changes, `p` pause, `u` resume,
   `r` retry, `m` switch review / auto, `f` search the tasks, `n` needs review, `1`-`9` a try's report on the task
-  page, `t` / `s` / `c` switch views, `b` back.
+  page, `t` / `l` / `s` / `c` switch views, `b` back.
 - Copy, `y` on the task page: puts the task on the clipboard as plain text (its title, status, role,
   where it came from, why, what to do with the notes and your answers, the files it may change,
   what it waits for and the latest worker report). A toast says `T-12 copied`, or why it
@@ -826,6 +828,42 @@ are about changes; under "How tasks ended" a read investigation shows as
 - Each task lists how long each try took and the tokens it used, with the task's total
   ("In all" means every kind of token added up). The board shows no all-time total;
   `/symcc-stats` has the totals, with the kinds of tokens apart (see below).
+
+### Live tab
+
+The Live tab (`l`) shows the tasks that run now as "railway lanes", one lane per task in doing:
+
+```
+                     work·    check·   queue    tests    merged
+ T-684 /symcc-doc…   ●━━━━━━━━●━━━━━━━━◉────────○────────○      #2
+  change try 2/3     ▕████████░░░░░▏ 1.1M  ↺×1
+```
+
+- Lanes are in the order the tasks started their current try, so a new one joins at the bottom
+  and the lanes don't jump around. Each shows the task id and its title (cut with `…`, wider
+  on a wider panel).
+- The stations are work → check → queue → tests → merged; check is left out when the
+  `checker` setting is off (its prep step then counts as work). Passed stations are `●━━`, the
+  ones ahead `──○`, and the current one blinks between `◉` and `◎` (Claude Code doesn't tell
+  plugins about reduced motion, so it always blinks; the tab redraws itself every second while
+  it is shown). The `·` after work and check means those stations need an agent slot (a
+  worker or a checker); queue and tests use none, so there can be more lanes than
+  `max_parallel`.
+- On the right: the time at the current station, or the place in the merge queue (`#2`).
+- The second row: the kind, the try (`try 2/3`, auto retries after failing tests included),
+  the current try's tokens with a bar scaled so the board's usual tokens per merged task fill
+  half of it (yellow with `⚠` past twice that), and `↺×N` for the checker's send-backs. A running
+  worker's tokens are only known when it hands back, so until then the row says `tokens at
+  hand-back`.
+- The header line says the board mode and `agents N/M busy` (workers and checkers running
+  against `max_parallel`). Under the lanes: `next up` (the todo tasks in the order they will
+  start, `(after T-n)` for one waiting on another task, then `N more in todo`) and `today`
+  (merged, sent back by the checker, failed, and the tries' tokens today). With nothing
+  running it says `No task is running right now.` and still shows next up.
+- Keys: ↑↓ move between lanes, Enter opens the task's page (Back returns to the Live tab), `w`
+  watches the worker of the lane with the focus, `t l s c` switch views, Esc closes the panel.
+  On a narrow panel the title column and the gaps between stations shrink (the station names
+  get shorter too); a lane is never wrapped or cut.
 
 ### In VS Code
 
