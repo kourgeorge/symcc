@@ -124,9 +124,9 @@ const T504_LATER: [string, string][] = [
   ['["tokens"]', '["4.6k tokens"]'],
   ['"  try 2: 5m (running)"', '"  try 2: 15m (running)"'],
   ['"  total: 25m · 4.6k', '"  total: 35m · 4.6k'],
-  // the badge and the Status row name the step with the total work time (T-587)
+  // the badge names the step with the total work time (T-587), the Status row the state with it (T-647)
   ['"[▶ worker · 25m]"', '"[▶ worker · 35m]"'],
-  ['"▶ worker · 25m"', '"▶ worker · 35m"'],
+  ['"▶ doing · 25m"', '"▶ doing · 35m"'],
 ]
 
 test("T-504's task page follows the host clock: 10 minutes later only its running times change", async ($, on) => {
@@ -226,7 +226,7 @@ for (const surface of ['terminal', 'vscode'] as const)
 // its color, tags on one line, clear sections, the less-used ones folded (closed by default, with a count), what needs
 // you boxed at the top in its tone with its buttons right there, at most one primary button, no "…" and no key hints.
 const CARDS: Record<string, { badge: string; tone: string; callout?: [string, string, string] }> = {
-  'T-504': { badge: ' ▶ worker · 25m ', tone: 'ide' },
+  'T-504': { badge: ' ▶ doing · 25m ', tone: 'ide' },
   'T-502': { badge: ' ✗ failed ', tone: 'error', callout: ['vs-sec-why-failed', 'error', 'retry'] },
   'T-503': { badge: ' ? waiting for you ', tone: 'warning', callout: ['vs-sec-question', 'warning', 'choice-1'] },
   'T-510': { badge: ' ◆ answered: read it ', tone: 'success' },

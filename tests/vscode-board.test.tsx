@@ -535,6 +535,21 @@ test('in VS Code a to do task worked on before shows ● in the list and on its 
   await ui.unmount()
 })
 
+test('T-648: in VS Code a task in the queue shows ⧗ and one in the test step ◎', async ($, on) => {
+  const fresh = new Date(T0 - 10_000).toISOString()
+  const base = BOARD_TASKS.find(t => t.id === 'T-401')!
+  const ran = [{ started: new Date(T0 - 600_000).toISOString(), ended: fresh }]
+  const queued = { ...base, id: 'T-493', title: 'Queued one', status: 'doing', note: 'queue (2)', runs: ran, checking: { step: 'queue', place: 2, at: fresh } }
+  const tested = { ...base, id: 'T-494', title: 'Tested one', status: 'doing', note: 'running the tests', runs: ran, checking: { step: 'testing', at: fresh } }
+  seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, tasks: [...BOARD_TASKS, queued, tested] } } as never })
+  on('ui.toast', () => ({ value: undefined }))
+  const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
+  expect(await rowText(ui, 'T-493')).toMatch(/^T-493 ⧗ \d+m\s+Queued one/)
+  expect(await rowText(ui, 'T-494')).toMatch(/^T-494 ◎ \d+m\s+Tested one/)
+  expect(texts(await ui.drawn()).join('\n')).not.toContain('⋯')
+  await ui.unmount()
+})
+
 test("T-542: in VS Code symcc's own pre-merge step shows \"prep\" and a running checker \"checker\"; the page says what each does", async ($, on) => {
   const fresh = new Date(T0 - 10_000).toISOString()
   const base = BOARD_TASKS.find(t => t.id === 'T-401')!
@@ -552,13 +567,13 @@ test("T-542: in VS Code symcc's own pre-merge step shows \"prep\" and a running 
   await ui.press({ key: 'T-497', link: { href: vsHref('task', 'T-497') } })
   const page = texts(await ui.drawn()).join('\n')
   expect(page).toContain('preparing to merge: committing and checking files')
-  // the badge names the step with its icon and the time (T-587), and the Stage stepper marks it now
-  expect((await ui.find({ key: 'vs-status' }))?.text).toMatch(/✎ prep · \d+m/)
+  // the badge names the state and the time (T-647), and the Stage stepper marks the step now
+  expect((await ui.find({ key: 'vs-status' }))?.text).toMatch(/▶ doing · \d+m/)
   expect((await ui.find({ key: 'vs-stage' }))?.text).toBe('Stageworker ✓→● prep→queue→test→merge')
   await ui.unmount()
 })
 
-test('T-587: in VS Code the task page badge names the step and the Stage stepper shows checker only when it runs; a task in review passed every step before review', async ($, on) => {
+test('T-587: in VS Code the task page badge names the state (T-647) and the Stage stepper the step, with checker only when it runs; a task in review passed every step before review', async ($, on) => {
   const fresh = new Date(T0 - 10_000).toISOString()
   const base = BOARD_TASKS.find(t => t.id === 'T-401')!
   const checker = { ...base, id: 'T-498', title: 'Checker on it', status: 'doing', note: 'a checker agent is trying to break it before it merges', runs: [{ started: new Date(T0 - 600_000).toISOString(), ended: fresh }], checking: { step: 'checker', at: fresh } }
@@ -567,11 +582,12 @@ test('T-587: in VS Code the task page badge names the step and the Stage stepper
   on('ui.toast', () => ({ value: undefined }))
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
   await ui.press({ key: 'T-498', link: { href: vsHref('task', 'T-498') } })
-  expect((await ui.find({ key: 'vs-status' }))?.text).toMatch(/⌕ checker · \d+m/)
+  expect((await ui.find({ key: 'vs-status' }))?.text).toMatch(/▶ doing · \d+m/)
   expect((await ui.find({ key: 'vs-stage' }))?.text).toBe('Stageworker ✓→prep ✓→● checker→queue→test→merge')
   await ui.press({ key: 'back' })
   await ui.press({ key: 'T-499', link: { href: vsHref('task', 'T-499') } })
   expect((await ui.find({ key: 'vs-stage' }))?.text).toBe('Stageworker ✓→prep ✓→checker ✓→queue ✓→test ✓→● review→merge')
+  expect((await ui.find({ key: 'vs-status' }))?.text).toContain('◆ ready for review')
   await ui.unmount()
 })
 

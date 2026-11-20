@@ -99,13 +99,13 @@ export const MORE_TIME_CELL = 'more time?'
  *  "prep" for symcc's own pre-merge step, "checker" only while a checker agent runs (the checker setting). */
 export const STEP_WORD: Record<CheckStep, string> = { prep: 'prep', testing: 'test', checker: 'checker', queue: 'queue', merging: 'merge' }
 
-/** The row icon of a task waiting for its turn in the merge line (its check step is "queue"): "⋯ 2h5m". */
-export const IN_LINE_ICON = '⋯'
+/** The row icon of a task waiting for its turn in the merge line (its check step is "queue"): "⧗ 2h5m". */
+export const IN_LINE_ICON = '⧗'
 
 /** The one-column icon every row view (band, terminal list, VS Code list, OpenCode band and panel, the lead's text
  *  board) shows in place of the mark ▶ and the step word while a task is in a check step: "⌕ 5m", not "▶ checker 5m".
  *  The word (STEP_WORD) stays on the task page and in the notes; STEP_LEGEND explains the icons. */
-export const STEP_ICON: Record<CheckStep, string> = { prep: '✎', testing: '⧗', checker: '⌕', queue: IN_LINE_ICON, merging: '⇢' }
+export const STEP_ICON: Record<CheckStep, string> = { prep: '✎', testing: '◎', checker: '⌕', queue: IN_LINE_ICON, merging: '⇢' }
 
 /** What the row of an approved task in review says while its approve runs (approveRunning), in place of "Enter to review". */
 export const APPROVED_NOTE = 'approved, merging'
@@ -113,7 +113,7 @@ export const APPROVED_NOTE = 'approved, merging'
 /** The one-line legend of the row icons (task page and guide). */
 export const STEP_LEGEND = `▶ working · ${IN_LINE_ICON} queue · ${STEP_ICON.prep} prep · ${STEP_ICON.testing} test · ${STEP_ICON.checker} checker · ${STEP_ICON.merging} merge`
 
-/** The mark at the front of a task's row: ⋯ while it waits in the merge line, its step's icon (STEP_ICON) during a
+/** The mark at the front of a task's row: ⧗ while it waits in the merge line, its step's icon (STEP_ICON) during a
  *  check step, else its own mark (statusMark: ▶ while its worker works). */
 export function rowMark(t: Pick<SymccTask, 'status'> & { note?: string; runs?: readonly unknown[]; attempts?: number } & Pick<BoardTask, 'checking'>, nowMs: number): string {
   const step = stageStep(taskPhase(t as PhaseTask, nowMs).stage)
@@ -198,7 +198,7 @@ export function rowTime(t: Pick<SymccTask, 'status' | 'runs'> & Pick<BoardTask, 
 
 /** The status cell of a list or band row (see statusCell): a doing task shows the total work time of all its tries,
  *  "1h40m", also in a check step or in the merge line, where the row's mark (rowMark) is the step's icon in place of
- *  the step word ("⧗ 9m"); with `form` 'none' (narrow rows) the time is left out (''). A task in review or waiting in
+ *  the step word ("◎ 9m"); with `form` 'none' (narrow rows) the time is left out (''). A task in review or waiting in
  *  a check step (an approve, approveRunning) shows the total work time too, like a doing row. The other rows: just statusCell. */
 export function rowCell(t: Parameters<typeof statusCell>[0] & { note?: string }, nowMs: number, since?: number | string, form: TotalForm = 'total'): string {
   const p = taskPhase(t, nowMs)
@@ -233,7 +233,7 @@ const STATE_FORMS: readonly { form: TotalForm; tries: boolean }[] = [
 
 /**
  * The state column of list or band rows, lined up: each row's status cell (rowCell) and, on a doing row's later try,
- * its try tag right after the time ("▶ 1h40m (3)", tryTag), or right after the step icon with no time ("⧗ (3)"). The
+ * its try tag right after the time ("▶ 1h40m (3)", tryTag), or right after the step icon with no time ("◎ (3)"). The
  * doing rows' cells share one width so their tags line up; every state is padded to `width`. The first form whose
  * `width` passes `fits` is used: with the time, then without it, then without the try too (narrow rows).
  * `withTries` false leaves every try tag out (the board's task lists, T-628: only the band and the task page show it).

@@ -133,7 +133,7 @@ export function listPageVs($: $, pane: PaneParts) {
     return Number.isFinite(at) ? fmtDuration(Math.max(0, nowMs - at)) : ''
   }
   /** The status words of a row's state part: the mark and the running time ("▶ 2m"; in a check step its icon in
-   *  place of ▶ and the step word, "⧗ 9m", see rowMark), how long a task has waited for you ("? waiting for 1m",
+   *  place of ▶ and the step word, "◎ 9m", see rowMark), how long a task has waited for you ("? waiting for 1m",
    *  "◆ review for 5m") or since it failed ("✗ failed 3m ago"). */
   const statusText = (x: SymccTask) => {
     const mark = rowMark(x, nowMs)

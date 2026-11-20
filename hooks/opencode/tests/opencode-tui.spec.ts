@@ -179,7 +179,7 @@ test('T-581: a doing row in a check step or the merge line shows its icon and th
   const f0 = viewFile()
   const fresh = new Date(NOW - 10_000).toISOString()
   const runs = [{ started: new Date(NOW - 20 * 60_000).toISOString(), ended: fresh }]
-  const steps = [['T-1', 'testing', '⧗'], ['T-6', 'prep', '✎'], ['T-7', 'checker', '⌕'], ['T-8', 'merging', '⇢']] as const
+  const steps = [['T-1', 'testing', '◎'], ['T-6', 'prep', '✎'], ['T-7', 'checker', '⌕'], ['T-8', 'merging', '⇢']] as const
   const base = f0.view.tasks.find(t => t.id === 'T-1')!
   const tasks = [
     ...f0.view.tasks.filter(t => t.id !== 'T-1'),
@@ -196,26 +196,27 @@ test('T-581: a doing row in a check step or the merge line shows its icon and th
       expect(row(lines, id)).toMatch(new RegExp(`${id} +${icon} 20m`))
       expect(row(lines, id)).not.toMatch(/▶|\b(prep|test|checker|merge) \d/)
     }
-    expect(row(lines, 'T-9')).toMatch(/T-9 +⋯ 20m/)
+    expect(row(lines, 'T-9')).toMatch(/T-9 +⧗ 20m/)
     expect(row(lines, 'T-10')).toMatch(/T-10 +▶ 15m/)
   }
   // the titles still start in one column
   const titleAt = (lines: string[]) => new Set([...steps.map(([id, step]) => row(lines, id).indexOf(`In ${step}`)), row(lines, 'T-9').indexOf('In line'), row(lines, 'T-10').indexOf('Working')])
   expect(titleAt(band).size).toBe(1)
   expect(titleAt(list).size).toBe(1)
-  // T-587: the task page's badge and Status line name the step, and the Stage line marks it now (checker off: none)
+  // T-587: the task page's badge names the step, the Status line the state (T-647), and the Stage line marks the step now (checker off: none)
   const page = (id: string, v = f) => panelLines(v, { opened: id, cursor: 0 }, NOW, 140).lines.map(lineText)
   const want: [string, string, string][] = [
     ['T-10', '▶ worker · 15m', '● worker → prep → queue → test → merge'],
     ['T-6', '✎ prep · 20m', 'worker ✓ → ● prep → queue → test → merge'],
-    ['T-9', '⋯ queue (2) · 20m', 'worker ✓ → prep ✓ → ● queue → test → merge'],
-    ['T-1', '⧗ test · 20m', 'worker ✓ → prep ✓ → queue ✓ → ● test → merge'],
+    ['T-9', '⧗ queue (2) · 20m', 'worker ✓ → prep ✓ → ● queue → test → merge'],
+    ['T-1', '◎ test · 20m', 'worker ✓ → prep ✓ → queue ✓ → ● test → merge'],
     ['T-8', '⇢ merge · 20m', 'worker ✓ → prep ✓ → queue ✓ → test ✓ → ● merge'],
   ]
   for (const [id, badge, stage] of want) {
     const p = page(id)
     expect(p).toContain(`[${badge}]`)
-    expect(p.find(l => l.startsWith('Status:'))).toContain(badge)
+    expect(p.find(l => l.startsWith('Status:'))).toContain(`▶ doing · ${badge.split(' · ')[1]}`)
+    expect(p.find(l => l.startsWith('Status:'))).not.toContain(badge)
     expect(p.find(l => l.startsWith('Stage:'))?.replace(/^Stage:\s+/, '')).toBe(stage)
   }
   // a running checker shows its step even with the setting off; with it on every task's Stage has it
@@ -1562,8 +1563,8 @@ test('T-596: an approved task in review whose approve runs leaves NEEDS YOU: lis
   }
   const cases = [
     [{ checking: { step: 'prep', at: fresh } }, '✎', '✎ prep', '1 in prep'],
-    [{ checking: { step: 'queue', place: 2, at: fresh }, note: 'queue (2)' }, '⋯', '⋯ queue (2)', '1 in queue'],
-    [{ checking: { step: 'testing', at: fresh } }, '⧗', '⧗ test', '1 testing'],
+    [{ checking: { step: 'queue', place: 2, at: fresh }, note: 'queue (2)' }, '⧗', '⧗ queue (2)', '1 in queue'],
+    [{ checking: { step: 'testing', at: fresh } }, '◎', '◎ test', '1 testing'],
     [{ checking: { step: 'merging', at: fresh } }, '⇢', '⇢ merge', '1 merging'],
   ] as const
   for (const [extra, icon, badge, crew] of cases) {
@@ -1589,7 +1590,7 @@ test('T-596: an approved task in review whose approve runs leaves NEEDS YOU: lis
   }
 })
 
-test('T-614: right after the panel sends an approve, the page badge, the Status row and the Stage line all say prep; the board takes over once a step shows', () => {
+test('T-614: right after the panel sends an approve, the page badge and the Stage line say prep, the Status row doing (T-647); the board takes over once a step shows', () => {
   const f0 = viewFile()
   const runs = [{ started: new Date(NOW - 20 * 60_000).toISOString(), ended: new Date(NOW - 5 * 60_000).toISOString() }]
   const withT2 = (extra: object) => ({ ...f0, view: { ...f0.view, tasks: f0.view.tasks.map(t => (t.id === 'T-2' ? { ...t, runs, ...extra } : t)) } })
@@ -1601,7 +1602,7 @@ test('T-614: right after the panel sends an approve, the page badge, the Status 
   const all = lines.slice(lines.indexOf('T-2 a reviewed change')).join('\n')
   expect(all).not.toContain('ready for review')
   expect(lines).toContain('[✎ prep]')
-  expect(lines.find(l => l.trim().startsWith('Status:'))).toContain('✎ prep')
+  expect(lines.find(l => l.trim().startsWith('Status:'))).toContain('▶ doing')
   expect(all).toMatch(/Stage:[\s\S]*review ✓[\s\S]*● prep[\s\S]*merge/)
   expect(approveSent(f, sent, NOW)).toBe(true)
   // without it, or for another task, or once too old: still ready for review everywhere
@@ -1614,7 +1615,7 @@ test('T-614: right after the panel sends an approve, the page badge, the Status 
   // a step on the board: the board carries the phase (the panel drops its flag)
   const testing = withT2({ checking: { step: 'testing', at: new Date(NOW - 10_000).toISOString() } })
   expect(approveSent(testing, sent, NOW)).toBe(false)
-  expect(page(testing, sent)).toContain('[⧗ test]')
+  expect(page(testing, sent)).toContain('[◎ test]')
   // the task left review (merged): no flag either
   expect(approveSent(withT2({ status: 'done' }), sent, NOW)).toBe(false)
 })

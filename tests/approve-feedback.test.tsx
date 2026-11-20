@@ -141,10 +141,11 @@ for (const surface of ['terminal', 'vscode'] as const)
     await ui.unmount()
   })
 
-// T-614: right after an approve, before the merge's first step is on the board, the whole page says the same step:
-// the badge, the Status row and the Stage line all say "prep", none says "ready for review"
+// T-614: right after an approve, before the merge's first step is on the board, the whole page says it runs:
+// the terminal badge and the Stage line say "prep", the Status row (VS Code: its badge) "doing" (T-647), none says
+// "ready for review"
 for (const surface of ['terminal', 'vscode'] as const)
-  test(`${surface}: right after Approve the badge, the Status row and the Stage line all say prep`, async ($, on) => {
+  test(`${surface}: right after Approve the Status row says doing and the Stage line prep`, async ($, on) => {
     const gate: Gate = { reads: 0 }
     seed(on, task('T-5', 'review', 'Blue button'), gate)
     const ui = await $.ui.mount({ ...PANE, surface })
@@ -158,8 +159,8 @@ for (const surface of ['terminal', 'vscode'] as const)
     expect(page).not.toContain('ready for review')
     if (surface === 'terminal') {
       expect(all).toContain('[✎ prep]')
-      expect(all).toContain('Status:   ✎ prep · added ? · changed ?')
-    } else expect(all).toContain(' ✎ prep ')
+      expect(all).toContain('Status:   ▶ doing · added ? · changed ?')
+    } else expect(all).toContain(' ▶ doing ')
     // the Stage line: every step up to review done, then the approve's prep now
     expect(page).toMatch(/review ✓[\s\S]*● prep[\s\S]*merge/)
     await finish(ui, release)

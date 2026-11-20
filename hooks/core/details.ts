@@ -34,7 +34,7 @@ export const TRIED_TODO_MARK = '●'
 export const statusMark = (t: Pick<SymccTask, 'status'> & { runs?: readonly unknown[]; attempts?: number }): string =>
   t.status === 'todo' && ((t.runs?.length ?? 0) > 0 || (t.attempts ?? 0) > 0) ? TRIED_TODO_MARK : STATUS_MARK[t.status]
 
-/** The step a task is in on its page, its row icon and its word ("⧗ test", "⋯ queue"); '' when it is in none. */
+/** The step a task is in on its page, its row icon and its word ("◎ test", "⧗ queue"); '' when it is in none. */
 export function stepNowWord(t: Pick<BoardTask, 'status' | 'checking'> & { note?: string }, nowMs: number): string {
   const step = stageStep(taskPhase(t, nowMs).stage)
   return step ? `${STEP_ICON[step]} ${STEP_WORD[step]}` : ''
@@ -43,19 +43,35 @@ export function stepNowWord(t: Pick<BoardTask, 'status' | 'checking'> & { note?:
 /** What the task page's badge and Status line need of a task. */
 type BadgeTask = Pick<SymccTask, 'status' | 'runs'> & { note?: string; attempts?: number } & Pick<BoardTask, 'checking'>
 
+/** The notes a task gets when claimed, before its worker started (app/starts.ts: QUEUED_NOTE and STARTING_NOTE). */
+export const CLAIM_NOTES = new Set(['starting at the next turn', 'worker starting'])
+/** The end text of a doing task whose worker starts in the session that drives the board, shown in the other sessions. */
+export const OTHER_SESSION_NOTE = 'runs in the other session'
+/** A task's note as a session shows it: `driving` false (another session drives the board) turns a doing task's claim
+ *  note ("starting at the next turn") into OTHER_SESSION_NOTE, as its worker starts in the driving session, not here (T-643). */
+export const sessionNote = (t: Pick<SymccTask, 'status'> & { note?: string }, driving = true): string =>
+  !driving && t.status === 'doing' && CLAIM_NOTES.has(t.note ?? '') ? OTHER_SESSION_NOTE : t.note ?? ''
+
 /**
- * The task page's status badge (and its Status line): the step a doing task is in, with the same icon as its row
+ * The task page's status badge: the step a doing task is in, with the same icon as its row
  * (rowMark) and the step's word, then the total work time the rows show (rowTime): "▶ worker · 15m", "✎ prep · 15m",
- * "⌕ checker · 5m", "⋯ queue (2) · 9m", "⧗ test · 9m", "⇢ merge · 9m". A task in review or waiting in a check step
+ * "⌕ checker · 5m", "⧗ queue (2) · 9m", "◎ test · 9m", "⇢ merge · 9m". A task in review or waiting in a check step
  * (an approve) shows the step without a time ("⇢ merge"), and so does a task in review whose approve this page
  * started (`merging`) before its first step is on the board ("✎ prep"): not "ready for review", the owner has
  * nothing left to do on it. Every other task: its mark and status word ("◆ ready for review", "○ to do").
+ * `form` 'state' (the Status row, T-647): the state in place of the step, its mark and word and, while it is shown
+ * doing (an approve running too, see shownStatus), the total work time: "▶ doing · 48m"; the step is on the Stage line.
  * `color`: the badge color of its status (doing's while an approve runs, see shownStatus).
  */
-export function statusBadge(t: BadgeTask, nowMs: number, since?: number | string, merging = false): { text: string; color: string } {
+export function statusBadge(t: BadgeTask, nowMs: number, since?: number | string, merging = false, form: 'stage' | 'state' = 'stage'): { text: string; color: string } {
   const p = taskPhase(t, nowMs, undefined, { merging })
   const step = stageStep(p.stage)
   const color = STATUS_BADGE[p.shown]
+  if (form === 'state') {
+    const word = `${p.shown === t.status ? statusMark(t) : STATUS_MARK[p.shown]} ${STATUS_WORD[p.shown]}`
+    const time = p.shown === 'doing' ? rowTime(t, nowMs, since) : ''
+    return { text: time ? `${word} · ${time}` : word, color }
+  }
   const word = p.stage === 'queue' && p.place ? `${IN_LINE_ICON} ${inLineNote(p.place)}` : step ? `${STEP_ICON[step]} ${STEP_WORD[step]}` : p.state === 'doing' ? `${STATUS_MARK.doing} worker` : `${statusMark(t)} ${STATUS_WORD[t.status]}`
   if (p.state !== 'doing') return { text: word, color }
   const time = rowTime(t, nowMs, since)
@@ -136,18 +152,21 @@ function originWordSegs(o: NonNullable<ReturnType<typeof originOf>>): Seg[] {
  * The labelled rows of the task page, in order: Status, Stage (`board`: its mode and checker setting, see taskStage), Now (STATE_LABEL), Role, From, Why, Request, Seen, Files, Into (the branch it
  * merges into), After (with a warning row for a task it waits for that merges into another branch), Research, Branch, Commits, Tries.
  * `when` turns an ISO time into a short date; `all` finds the tasks this one waits for; `merging`, an approve this
- * page started (see statusBadge), so the Status row and the Stage line say the same step as the page's badge.
+ * page started (see statusBadge), so the Status row says doing and the Stage line the same step as the page's badge;
+ * `driving` false: another session drives the board (see sessionNote).
  */
-export function detailRows(t: SymccTask, o: { roles: readonly Pick<RoleDef, 'name' | 'description' | 'model'>[]; kinds?: readonly Pick<KindDef, 'name' | 'description'>[]; all: SymccTask[]; when: (iso: string) => string; nowMs: number; archivedDone?: string[]; board?: { mode?: unknown; checker?: unknown }; merging?: boolean }): DetailRow[] {
+export function detailRows(t: SymccTask, o: { roles: readonly Pick<RoleDef, 'name' | 'description' | 'model'>[]; kinds?: readonly Pick<KindDef, 'name' | 'description'>[]; all: SymccTask[]; when: (iso: string) => string; nowMs: number; archivedDone?: string[]; board?: { mode?: unknown; checker?: unknown }; merging?: boolean; driving?: boolean }): DetailRow[] {
   const R: DetailRow[] = []
-  // the status names the step a doing task is in ("⌕ checker · 5m"), and the Stage line where that is on the way to the merge
-  // (`merging`, an approve the page started: its step at once, on the Status row and the Stage line alike, as on the badge)
+  // the status names the state ("▶ doing · 48m"), and the Stage line the step it is in on the way to the merge (T-647)
+  // (`merging`, an approve the page started: shown doing at once, and its step on the Stage line, as on the badge)
   const merging = !!o.merging
-  const badge = statusBadge(t as BoardTask, o.nowMs, undefined, merging)
+  const badge = statusBadge(t as BoardTask, o.nowMs, undefined, merging, 'state')
   R.push({ label: 'Status', segs: [{ text: badge.text, color: badge.color, bold: true }, { text: ` · added ${o.when(t.created_at)} · changed ${o.when(t.updated_at)}`, color: 'inactive' }] })
   const stage = taskStage(t as BoardTask, o.nowMs, o.board, merging)
   if (stage) R.push({ label: 'Stage', segs: stageSegs(stage) })
-  if (t.note) R.push({ label: STATE_LABEL, segs: [{ text: t.note, color: 'inactive', italic: true }] })
+  // in a session that doesn't drive the board (`driving` false) a claim note says the worker runs in the other session
+  const note = sessionNote(t, o.driving)
+  if (note) R.push({ label: STATE_LABEL, segs: [{ text: note, color: 'inactive', italic: true }] })
   const name = roleOf(t)
   const r = findRole(o.roles, name)
   const more = [r?.description, r?.model ? `model ${r.model}` : ''].filter(Boolean).join(' · ')

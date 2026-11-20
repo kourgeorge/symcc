@@ -95,13 +95,13 @@ test('T-610 taskPhase: the saved status never changes, and anything running wait
 // lists (shownStatus, needsYou) and the task page (statusBadge, stepNowWord, taskStage) give one answer.
 test("T-611: T-608's disagreement 1, a files-merge waiting in the queue, is in the queue on the row, the band and the page", () => {
   const t = task('waiting', { ...endedRun, ...files, ...inQueue(3) })
-  expect(rowMark(t, NOW)).toBe('⋯')
+  expect(rowMark(t, NOW)).toBe('⧗')
   expect(shownStatus(t, NOW)).toBe('doing')
   expect(needsYou(t, NOW)).toBe(false)
   expect(waitsForYou(t, NOW)).toBe(false)
   expect(rowCell(t, NOW)).toBe('19m')
-  expect(statusBadge(t, NOW)).toEqual({ text: '⋯ queue (3)', color: STATUS_BADGE.doing })
-  expect(stepNowWord(t, NOW)).toBe('⋯ queue')
+  expect(statusBadge(t, NOW)).toEqual({ text: '⧗ queue (3)', color: STATUS_BADGE.doing })
+  expect(stepNowWord(t, NOW)).toBe('⧗ queue')
   expect(stageText(taskStage(t, NOW, { mode: 'review' })!)).toBe('worker ✓ → prep ✓ → queue ✓ → test ✓ → review ✓ → ● queue → merge')
   // in auto mode it had no review step
   expect(stageText(taskStage(t, NOW, { mode: 'auto' })!)).toBe('worker ✓ → prep ✓ → queue ✓ → test ✓ → ● queue → merge')
