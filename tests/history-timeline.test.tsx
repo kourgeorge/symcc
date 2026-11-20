@@ -128,16 +128,18 @@ test('the terminal task page draws the history as a timeline, newest first, with
   expect(lines.slice(lines.indexOf(firsts[4]!) + 1).every(l => l.startsWith('  '))).toBe(true)
 })
 
-test('the VS Code task page uses the same kinds and marks, with a connector between events', async ($, on) => {
+test('the VS Code task page uses the same kinds and marks, on one rail with no "│" rows (T-699)', async ($, on) => {
   seed(on)
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
   const marks: string[] = []
   for (let i = 0; i < HISTORY.length; i++) marks.push(String((await ui.find({ key: `vs-history-${i}` }))?.text).slice(0, 1))
   expect(marks).toEqual([...HISTORY].reverse().map(l => old(l).mark))
   expect(marks).toEqual(['✓', '○', '○', '✗', '○'])
-  const body = section(await ui.drawn(), 'History').map(textOf)
-  expect(body.filter(l => l === '│').length).toBe(HISTORY.length - 1)
-  expect(body.at(-1)).not.toBe('│')
+  // the line of the rail is a Box beside each event (all but the oldest), never a "│" text
+  expect(textOf(section(await ui.drawn(), 'History'))).not.toContain('│')
+  const lines: boolean[] = []
+  for (let i = 0; i < HISTORY.length; i++) lines.push(!!(await ui.find({ key: `vs-history-${i}` }))?.children?.flat(9).some(c => c && typeof c === 'object' && ((c as Node).children ?? []).flat(9).some(d => d && typeof d === 'object' && (d as Node).type === 'Box')))
+  expect(lines).toEqual([true, true, true, true, false])
   await ui.unmount()
 })
 

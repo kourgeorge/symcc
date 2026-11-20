@@ -86,11 +86,11 @@ for (const id of RICH_IDS) {
     expect(title, id).toBeDefined()
     expect(title!.props.wrap).toBe('wrap')
     expect(t.title.startsWith(LONG_TITLE)).toBe(true)
-    // the id and the title on top, then the sections; no status badge under the title, a labelled Status line instead (T-693)
+    // the id and the title on top, then the sections; no status badge under the title, the Status row in the Details instead (T-693, T-699)
     expect(await ui.find({ type: 'Text', text: id }), id).toBeDefined()
-    expect((await ui.find({ key: 'vs-status' }))?.text, id).toMatch(/^Status\S+ .+/)
+    expect((await ui.find({ key: 'vs-row-status' }))?.text, id).toMatch(/^Status\S+ .+/)
     expect(await ui.find({ key: 'vs-badge' }), id).toBeUndefined()
-    const want = ['Why / where it came from', 'What to do', '▸ Files it may change 3', '▸ Waits for 2', `▸ Time and cost ${'runs' in t ? t.runs.length : 0}`]
+    const want = ['Details', 'What to do', `▸ Time and cost ${'runs' in t ? t.runs.length : 0}`]
     if (t.history.length) want.push('History (2, newest first)')
     if (t.attempts) want.push(t.status === 'doing' ? 'Report (try 1)' : 'Report (try 2, 2 of 2)') // the running try has no report yet
     if (t.status === 'failed') want.push('✗ Why it failed')
@@ -104,10 +104,9 @@ for (const id of RICH_IDS) {
     expect(elements(row!.children).filter(n => n.type === 'Button').map(n => n.props?.key), id).toEqual(ACTIONS[id]!.keys)
     const primary = elements(tree).filter(n => n.type === 'Button' && n.props?.variant === 'primary').map(n => n.props?.key)
     expect(primary, id).toEqual(ACTIONS[id]!.primary ? [ACTIONS[id]!.primary] : [])
-    // the tasks it waits for (in their fold, closed at first) are links that open them; back to the list is a clear button; no key hints
-    expect(await ui.find({ key: 'after-T-499' })).toBeUndefined()
-    await ui.press({ key: 'fold-after', link: { href: vsHref('fold', 'fold-after') } })
+    // the tasks it waits for (the After rows of the Details) are links that open them; back to the list is a clear button; no key hints
     expect((await ui.find({ key: 'after-T-499' }))?.type).toBe('Markdown')
+    expect((await ui.find({ key: 'vs-row-after-1' }))?.text).toContain('T-498')
     expect((await ui.find({ key: 'back' }))?.props.label).toBe('← Tasks')
     for (const re of KEY_HINTS) expect(hints(all, re), `${id} ${re}`).toEqual([])
     expect(await ui.find({ type: 'Text', text: CLICK_HINT })).toBeDefined()
@@ -194,11 +193,10 @@ test('in VS Code a task it waits for opens by its button, and "← Tasks" goes b
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
   await ui.press({ key: 'T-506', link: { href: vsHref('task', 'T-506') } })
   expect(await ui.find({ type: 'Text', text: 'T-506' })).toBeDefined()
-  expect((await ui.find({ key: 'vs-status' }))?.text).toMatch(/^Status○ to do/)
-  await ui.press({ key: 'fold-after', link: { href: vsHref('fold', 'fold-after') } })
+  expect((await ui.find({ key: 'vs-row-status' }))?.text).toMatch(/^Status○ to do/)
   await ui.press({ key: 'after-T-499', link: { href: vsHref('task', 'T-499') } })
   expect(await ui.find({ type: 'Text', text: 'T-499' })).toBeDefined()
-  expect((await ui.find({ key: 'vs-status' }))?.text).toMatch(/^Status✓ done/)
+  expect((await ui.find({ key: 'vs-row-status' }))?.text).toMatch(/^Status✓ done/)
   await ui.press({ key: 'back' })
   expect(await ui.find({ key: 'vs-actions' })).toBeUndefined()
   expect(await ui.find({ key: 'vs-task-T-506' })).toBeDefined()
@@ -229,7 +227,7 @@ const CARDS: Record<string, { badge: string; tone: string; callout?: [string, st
   'T-504': { badge: '▶ doing · 25m', tone: 'ide' },
   'T-502': { badge: '✗ failed', tone: 'error', callout: ['vs-sec-why-failed', 'error', 'retry'] },
   'T-503': { badge: '? waiting for you', tone: 'warning', callout: ['vs-sec-question', 'warning', 'choice-1'] },
-  'T-510': { badge: '◆ answered: read it', tone: 'success' },
+  'T-510': { badge: '◆ ready for review', tone: 'warning' },
 }
 for (const [id, want] of Object.entries(CARDS))
   for (const bodyColumns of [40, 80])
@@ -243,21 +241,23 @@ for (const [id, want] of Object.entries(CARDS))
       const t = RICH_TASKS.find(x => x.id === id)!
       expect((await ui.find({ type: 'Text', text: id }))?.props, at).toMatchObject({ bold: true, size: 'title' })
       expect((await ui.find({ type: 'Text', text: t.title }))?.props, at).toMatchObject({ bold: true, size: 'title', wrap: 'wrap' })
-      // T-693: no status badge under the title; the tags row first, then a labelled Status line in the status's color
+      // T-693, T-699: no status badge under the title and no tags row: the title block holds only the id and the
+      // title, and the Status row of the Details shows the state in the status's color
       expect(await ui.find({ key: 'vs-badge' }), at).toBeUndefined()
-      const head = ((await ui.find({ key: 'vs-head' }))!.children as Node[]).filter(n => n && typeof n === 'object').map(n => n.key ?? n.props?.key)
-      expect(head.slice(2, 4), at).toEqual(['vs-tags-row', 'vs-status'])
-      const [label, badge] = elements((await ui.find({ key: 'vs-status' }))!.children).filter(n => n.type === 'Text')
+      expect(await ui.find({ key: 'vs-tags-row' }), at).toBeUndefined()
+      const head = ((await ui.find({ key: 'vs-head' }))!.children as Node[]).filter(n => n && typeof n === 'object')
+      expect(head.length, at).toBe(2)
+      const status = (await ui.find({ key: 'vs-row-status' }))!
+      const [label, badge] = elements(status.children).filter(n => n.type === 'Text' && typeof n.children?.[0] === 'string')
       expect(label?.children, at).toEqual(['Status'])
       expect(badge?.children, at).toEqual([want.badge])
       expect(badge?.props, at).toMatchObject({ bold: true, color: want.tone })
-      const tags = elements((await ui.find({ key: 'vs-tags-row' }))!.children).find(n => n.type === 'Text')
-      expect(tags?.props, at).toMatchObject({ wrap: 'wrap', size: 'caption', color: 'inactive' })
-      expect(String(tags?.children), at).toMatch(/worker · try 2/)
+      expect((await ui.find({ key: 'vs-row-role' }))?.text, at).toMatch(/^Roleworker/)
+      expect((await ui.find({ key: 'vs-row-tries' }))?.text, at).toMatch(/^Tries2/)
       // the sections, with their headings
-      for (const h of ['Why / where it came from', 'What to do', 'History (2, newest first)']) expect(all, `${at} ${h}`).toContain(h)
+      for (const h of ['Details', 'What to do', 'History (2, newest first)']) expect(all, `${at} ${h}`).toContain(h)
       // the folds, closed by default, each with its count; pressing one opens it
-      for (const f of ['files', 'after', 'time']) {
+      for (const f of ['time']) {
         expect(mdPlain(String((await ui.find({ key: `fold-${f}` }))?.props.text)), `${at} ${f}`).toMatch(/^▸ .+ \w+$/)
         expect(await ui.find({ key: `vs-sec-${f}-body` }), `${at} ${f}`).toBeUndefined()
       }
@@ -287,7 +287,6 @@ for (const [id, want] of Object.entries(CARDS))
       await ui.press({ key: 'fold-time', link: { href: vsHref('fold', 'fold-time') } })
       expect(mdPlain(String((await ui.find({ key: 'fold-time' }))?.props.text)), at).toMatch(/^▾ Time and cost/)
       expect(await ui.find({ key: 'vs-sec-time-body' }), at).toBeDefined()
-      expect(await ui.find({ key: 'vs-sec-files-body' }), at).toBeUndefined()
       await ui.unmount()
     })
 

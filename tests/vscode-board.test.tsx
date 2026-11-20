@@ -531,7 +531,7 @@ test('in VS Code a to do task worked on before shows ● in the list and on its 
   expect(await rowText(ui, 'T-408')).toMatch(/^T-408 ●\s+Add/)
   expect(await rowText(ui, 'T-406')).toMatch(/^T-406 ○\s+Write/)
   await ui.press({ key: 'T-408', link: { href: vsHref('task', 'T-408') } })
-  expect((await ui.find({ key: 'vs-status' }))?.text).toMatch(/^Status● to do/)
+  expect((await ui.find({ key: 'vs-row-status' }))?.text).toMatch(/^Status● to do/)
   await ui.unmount()
 })
 
@@ -568,8 +568,8 @@ test("T-542: in VS Code symcc's own pre-merge step shows \"prep\" and a running 
   const page = texts(await ui.drawn()).join('\n')
   expect(page).toContain('preparing to merge: committing and checking files')
   // the badge names the state and the time (T-647), and the Stage stepper marks the step now
-  expect((await ui.find({ key: 'vs-status' }))?.text).toMatch(/▶ doing · \d+m/)
-  expect((await ui.find({ key: 'vs-stage' }))?.text).toBe('Stageworker ✓→● prep→queue→test→merge')
+  expect((await ui.find({ key: 'vs-row-status' }))?.text).toMatch(/▶ doing · \d+m/)
+  expect((await ui.find({ key: 'vs-row-stage' }))?.text).toBe('Stageworker ✓ → ● prep → queue → test → merge')
   await ui.unmount()
 })
 
@@ -582,12 +582,12 @@ test('T-587: in VS Code the task page badge names the state (T-647) and the Stag
   on('ui.toast', () => ({ value: undefined }))
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
   await ui.press({ key: 'T-498', link: { href: vsHref('task', 'T-498') } })
-  expect((await ui.find({ key: 'vs-status' }))?.text).toMatch(/▶ doing · \d+m/)
-  expect((await ui.find({ key: 'vs-stage' }))?.text).toBe('Stageworker ✓→prep ✓→● checker→queue→test→merge')
+  expect((await ui.find({ key: 'vs-row-status' }))?.text).toMatch(/▶ doing · \d+m/)
+  expect((await ui.find({ key: 'vs-row-stage' }))?.text).toBe('Stageworker ✓ → prep ✓ → ● checker → queue → test → merge')
   await ui.press({ key: 'back' })
   await ui.press({ key: 'T-499', link: { href: vsHref('task', 'T-499') } })
-  expect((await ui.find({ key: 'vs-stage' }))?.text).toBe('Stageworker ✓→prep ✓→checker ✓→queue ✓→test ✓→● review→merge')
-  expect((await ui.find({ key: 'vs-status' }))?.text).toContain('◆ ready for review')
+  expect((await ui.find({ key: 'vs-row-stage' }))?.text).toBe('Stageworker ✓ → prep ✓ → checker ✓ → queue ✓ → test ✓ → ● review → merge')
+  expect((await ui.find({ key: 'vs-row-status' }))?.text).toContain('◆ ready for review')
   await ui.unmount()
 })
 
