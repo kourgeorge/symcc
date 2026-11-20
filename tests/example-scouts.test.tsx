@@ -6,11 +6,34 @@ import type { On } from 'claude-code'
 import { SCOUT_SOON_MS, SCOUT_SPREAD_MS, PAUSED_RECHECK_MS } from '../hooks/app/scouts'
 import { ran, entry } from './fakes'
 import type { ProcessRunResult } from 'claude-code'
+import { parseScout } from '../hooks/board'
 
 const T0 = 1_800_000_000_000
-const EXAMPLES = ['bugs', 'deps', 'docs-check', 'gaps', 'recent-changes', 'secrets', 'simplify', 'test-gaps']
+const EXAMPLES = ['big-files', 'bugs', 'deps', 'docs-check', 'gaps', 'recent-changes', 'secrets', 'simplify', 'test-gaps']
 const EVERY_MINUTES = 5
 const example = (n: string) => `---\nevery_minutes: ${EVERY_MINUTES}\n---\nExample ${n}.\n`
+// A copy of the shipped examples/scouts/big-files.md (plugin tests can't read the real folder). The shell check
+// tests/example-scouts.sh fails when this copy and the file differ, or when EXAMPLES and the folder differ.
+const BIG_FILES = `---
+every_minutes: 1440
+---
+Find source files that have grown too large and say how to split them. Skip tests,
+generated files, lock files, snapshots and vendored or third-party code. Look for:
+- files much larger than the rest of the project: over about 800 lines, or the top few
+  by size (count lines with wc -l and give the numbers),
+- files that keep growing: check git log --stat over the last few weeks,
+- files that many recent changes touched at once: check git log --name-only for the
+  files that show up in the most commits.
+
+For each file worth splitting, propose a concrete split: which functions or sections go
+to which new file (give the new file names), and why it is safe (which imports and
+callers change, and which tests cover the moved code). Only propose a split that clearly
+helps, such as a file that mixes unrelated jobs or one that many tasks keep editing at the
+same time; a big file that does one thing well can stay as it is.
+Skip typos, style and anything already on the board or just finished. If nothing is worth
+splitting, start your report with NOTHING.
+`
+const shipped = (file: string) => (file === 'big-files.md' ? BIG_FILES : example(file.replace(/\.md$/, '')))
 type Res = ProcessRunResult
 const ok = (stdout = ''): Res => ran({ stdout })
 
@@ -19,7 +42,7 @@ const ok = (stdout = ''): Res => ran({ stdout })
  * folders made with mkdir -p. `failWrite` makes writes of a path with that text in it fail; `failExamples`
  * makes the examples folder unreadable.
  */
-function world(on: On, o: { files?: Record<string, string>; dirs?: string[]; failWrite?: string; failExamples?: boolean } = {}) {
+function world(on: On, o: { files?: Record<string, string>; dirs?: string[]; failWrite?: string; failExamples?: boolean; real?: boolean } = {}) {
   const files = new Map<string, string>(Object.entries(o.files ?? {}))
   const dirs = new Set<string>(o.dirs ?? [])
   const toasts: string[] = []
@@ -29,7 +52,7 @@ function world(on: On, o: { files?: Record<string, string>; dirs?: string[]; fai
   on('fs.exists', (_, e) => ({ value: files.has(key(e.path)) || dirs.has(key(e.path)) }))
   on('fs.read', (_, e) => {
     const m = ex(e.path)
-    if (m?.[1]) return o.failExamples ? Promise.reject(new Error('no access')) : { value: example(m[1].replace(/\.md$/, '')) }
+    if (m?.[1]) return o.failExamples ? Promise.reject(new Error('no access')) : { value: o.real ? shipped(m[1]) : example(m[1].replace(/\.md$/, '')) }
     return files.has(key(e.path)) ? { value: files.get(key(e.path))! } : Promise.reject(new Error(`no file ${e.path}`))
   })
   on('fs.write', (_, e) => {
@@ -183,9 +206,25 @@ test('examples that cannot be read: symcc still starts, and the owner is told on
 test('a copy that fails: symcc still starts, the owner is told once, and what was copied stays paused', async ($, on) => {
   const w = world(on, { files: { '/.symcc/board.json': board() }, failWrite: 'scouts/deps.md' })
   await start($)
-  expect(scoutFiles(w.files)).toEqual(['/.symcc/scouts/bugs.md'])
+  expect(scoutFiles(w.files)).toEqual(['/.symcc/scouts/big-files.md', '/.symcc/scouts/bugs.md'])
   expect(paused(w.files)).toEqual(EXAMPLES)
   expect(w.toasts.filter(t => t.includes("couldn't add the example scouts")).length).toBe(1)
   await w.clock.advance(PAST_EVERY_TIMER)
   expect(scoutSpawns(w.spawned)).toEqual([])
+})
+
+test('the shipped big-files scout is copied paused with the others on first setup, and parses as a daily scout', async ($, on) => {
+  const w = world(on, { files: { '/.symcc/board.json': board({ mode: 'auto' }) }, real: true })
+  await start($)
+  expect(scoutFiles(w.files)).toEqual(EXAMPLES.map(n => `/.symcc/scouts/${n}.md`))
+  expect(paused(w.files)).toEqual(EXAMPLES)
+  const text = w.files.get('/.symcc/scouts/big-files.md')!
+  expect(text).toBe(BIG_FILES)
+  const s = parseScout('big-files', text)!
+  expect(s.name).toBe('big-files')
+  expect(s.every_minutes).toBe(1440)
+  expect(s.warning).toBeUndefined()
+  expect(s.prompt.startsWith('Find source files that have grown too large')).toBe(true)
+  expect(s.prompt).toContain('git log --name-only')
+  expect(s.prompt).toContain('start your report with NOTHING')
 })
