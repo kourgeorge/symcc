@@ -1,5 +1,5 @@
 import type { SymccScout, SymccTask, SymccTokens } from '../../types'
-import { type ScoutDef, parseScout, modeOf, symccOn, OPEN, scoutPrompt, recentClosed, scoutAgentName, scoutDescription, parseScoutMemory, scoutMemoryText, scoutPausedText, everyText, SCOUT_REPORT_CHARS, scoutLeadMessage, scoutWhyNot, scoutFile, scoutNameError, scoutDraftError, scoutText, everyMinutesOf, onDemand, onNotReady, SCOUT_RETRY_MS, inPlan, addScoutRun, keepScoutUsage, migrateScoutUsage, leadScoutNameError, leadScoutText, leadScoutsText, safeScoutFile, SCOUT_FILE_NAME, SCOUT_FILE_NAME_RULE, scoutFileNameError, type ScoutRunRecord, parseScoutRuns, scoutRunsText, addScoutRunRecord, migratedScoutRun, scoutRunsFile, scoutRunReportFile, isScoutRunReport, scoutRunOutcome, scoutRunTasks, linkScoutRunTask, countFindings, reportText } from '../board'
+import { type ScoutDef, parseScout, modeOf, symccOn, OPEN, scoutPrompt, recentClosed, scoutAgentName, scoutDescription, parseScoutMemory, scoutMemoryText, scoutPausedText, everyText, SCOUT_REPORT_CHARS, scoutLeadMessage, scoutWhyNot, scoutFile, scoutNameError, scoutDraftError, scoutText, everyMinutesOf, onDemand, onNotReady, SCOUT_RETRY_MS, inPlan, addScoutRun, keepScoutUsage, migrateScoutUsage, leadScoutNameError, leadScoutText, leadScoutsText, safeScoutFile, SCOUT_FILE_NAME, SCOUT_FILE_NAME_RULE, scoutFileNameError, type ScoutRunRecord, parseScoutRuns, scoutRunsText, addScoutRunRecord, migratedScoutRun, scoutRunsFile, scoutRunReportFile, isScoutRunReport, scoutRunOutcome, scoutRunTasks, linkScoutRunTask, countFindings, reportText, parseScoutUsage, readArchive, scoutResultsLine } from '../board'
 import { publish, refreshStatus } from './lead'
 import { S, scoutState, scoutRuns, heard, timers, updateScoutOpen } from './state'
 import { type FileTouch, type Host, type HostAgentStarted, notReadyYet } from '../host'
@@ -127,6 +127,18 @@ async function writeRunReport(host: Host, rel: string, text: string) {
 export async function loadScoutRunHistory(host: Host, scout: string): Promise<ScoutRunRecord[]> {
   if (safeScoutFile(scout, S.N.name) === null) return []
   return parseScoutRuns(await host.fs.read(runsPath(scout)).catch(() => null))
+}
+
+/**
+ * Each named scout's "Results" line for its page (T-622): what its findings became in the last 7 days and in all,
+ * from the board's `tasks` plus the archived ones and its tokens in scouts.json. A file that can't be read counts as empty.
+ */
+export async function loadScoutResults(host: Pick<Host, 'fs'>, scouts: string[], tasks: SymccTask[], nowMs: number): Promise<Record<string, string>> {
+  const usage = parseScoutUsage(await host.fs.read(scoutMemoryFile()).catch(() => null))
+  const r = readArchive(await host.fs.read(path(S.N.archiveFile)).catch(() => null))
+  const onBoard = new Set(tasks.map(t => t.id))
+  const all = [...tasks, ...(r.broken ? [] : r.archive.tasks.filter(t => !onBoard.has(t.id)))]
+  return Object.fromEntries(scouts.map(s => [s, scoutResultsLine(all, s, Object.hasOwn(usage, s) ? usage[s] : undefined, nowMs)]))
 }
 
 /** The full report of a run (its file's text), or null when it has none or it can't be read. */

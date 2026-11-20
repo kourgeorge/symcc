@@ -43,6 +43,16 @@ test('the view file round-trips, and a broken or foreign one reads as none', () 
   expect(viewPaths('/work/proj/.symcc/worktrees/T-1')).toContain('/work/proj/.symcc/view.json')
 })
 
+test('T-630: the panel and the band show no all-time total of the tries ("total: … tokens in all over N tries"); a task page keeps its own', () => {
+  const f = viewFile()
+  const runs = [{ started: '2026-11-19T10:00:00.000Z', ended: '2026-11-19T10:12:00.000Z', tokens: { input: 40_000 } }]
+  const g: ViewFile = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => ({ ...t, runs })) } }
+  const list = panelLines(g, { opened: '', cursor: 0 }, NOW, 120).lines.map(lineText).join('\n')
+  const band = bandLines(g, NOW, 120).map(lineText).join('\n')
+  for (const text of [list, band]) expect(text).not.toMatch(/total:|tokens in all over|40k tokens/)
+  expect(panelLines(g, { opened: 'T-5', cursor: 0 }, NOW, 120).lines.map(lineText).join('\n')).toMatch(/total: 12m · 40k tokens in all/)
+})
+
 test('T-517: with no git repo the banner warns without the "(g)" key hint (this panel has no g key) and says to ask the lead', () => {
   const f = viewFile()
   for (const git_state of ['no-repo', 'no-commits'] as const) {
@@ -93,13 +103,17 @@ test('a doing row shows only the total work time of all tries in the band and th
   const f = { ...f0, view: { ...f0.view, tasks: f0.view.tasks.map(t => (t.id === 'T-1' ? { ...t, attempts: 3, runs, note: '' } : t)), working: [] } }
   const row = (lines: string[]) => lines.find(l => /T-1 /.test(l))!
   const band = bandLines(f, NOW, 120).map(lineText)
-  // the try "(3)" right after the time, in the band and the list, in the warning colour in the list (T-604)
+  // the try "(3)" right after the time in the band (T-604); the board list shows no try mark (T-628)
   expect(row(band)).toContain('▶ 1h40m (3)')
   const drawn = panelLines(f, { opened: '', cursor: 0 }, NOW, 100).lines
   const list = drawn.map(lineText)
-  expect(row(list)).toContain('▶ 1h40m (3)')
+  expect(row(list)).toContain('▶ 1h40m')
+  expect(row(list)).not.toContain('(3)')
   for (const l of [row(band), row(list)]) expect(l).not.toContain('try 3')
-  expect(drawn.find(l => /T-1 /.test(lineText(l)))!.find(s => s.text === '(3)')?.color).toBe('warning')
+  // the list's titles still start in one column
+  const starts = f.view.tasks.filter(t => ['T-1', 'T-2', 'T-3', 'T-4'].includes(t.id)).map(t => list.find(l => l.includes(` ${t.id} `))!.indexOf(t.title))
+  expect(starts.every(n => n > 0)).toBe(true)
+  expect(new Set(starts).size).toBe(1)
   // try 1: nothing
   const first = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => (t.id === 'T-1' ? { ...t, attempts: 1 } : t)) } }
   expect(row(bandLines(first, NOW, 120).map(lineText))).not.toMatch(/\(1\)|try/)
@@ -1566,6 +1580,18 @@ test('T-615: while a task\'s approve is in progress its page offers no approve o
   // an approve sent for another task, or one long gone, leaves them
   expect(keys(f, { id: 'T-3', at: NOW })).toContain('approve')
   expect(keys(f, { id: 'T-2', at: NOW - APPROVE_SENT_MS - 1 })).toContain('approve')
+})
+
+test("T-622: a scout's page shows its Results line from view.json; a scout without one shows none", () => {
+  const f = scoutsViewFile()
+  const line = 'Results · last 7 days: 1 task (1 merged, 0 dropped, 0 open) · 2k scout tokens · 5k per merged · in all: 1 task (1 merged, 0 dropped, 0 open) · 2k scout tokens · 5k per merged'
+  const withResults: ViewFile = { ...f, view: { ...f.view, scout_results: { 'docs-check': line } } }
+  expect(parseViewFile(viewFileText(withResults))).toEqual(withResults)
+  const p = panelLines(withResults, { tab: 'scouts', opened: 'docs-check', cursor: 0 }, NOW, 400).lines.map(lineText)
+  expect(p).toContain(line)
+  expect(panelLines(withResults, { tab: 'scouts', opened: 'deps', cursor: 0 }, NOW, 400).lines.map(lineText).some(l => l.startsWith('Results'))).toBe(false)
+  // a broken scout_results is dropped when read
+  expect(parseViewFile(viewFileText({ ...f, view: { ...f.view, scout_results: [] as never } }))?.view.scout_results).toBe(undefined)
 })
 
 /** T-627: the view file with T-2 in review on a long page: a title that wraps, a long history with lines that wrap, and

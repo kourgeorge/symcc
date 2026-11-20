@@ -2,7 +2,7 @@ import { expect, mock, type Engine, type Mounted as TestMounted } from 'claude-c
 import { test } from './reset'
 import type { On } from 'claude-code'
 import { ICON, ICON_ART } from '../hooks/name'
-import { SETTING_GROUPS, groupSummary, hintLines, hintLineText, listKeys, scoutKeys, scoutListKeys, settingsKeys, rolesKeys, statusCell, STATUS_MARK, PREP_NOTE, type KeyHint } from '../hooks/board'
+import { SETTING_GROUPS, groupSummary, hintLines, hintLineText, listKeys, scoutKeys, scoutListKeys, settingsKeys, rolesKeys, statusCell, STATUS_MARK, PREP_NOTE, bandLeads, type KeyHint } from '../hooks/board'
 import { keysFor } from './task-keys'
 import { CHECKER_NOTE } from '../hooks/app/checker'
 import { arrowTarget, focusStops, isArrow, rowStops, saysArrowsMove } from '../hooks/claude/ui/arrows'
@@ -635,11 +635,11 @@ test('an opened task shows the time of each try and the total', async ($, on) =>
   await ui.unmount()
 })
 
-test('the banner shows the counts and the total time and cost of all tries', async ($, on) => {
+test('the banner shows the counts but no all-time total of the tries (T-630: /symcc-stats has it)', async ($, on) => {
   stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Timed', { runs: RUNS }), task('T-2', 'todo', 'Other')], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
-  // the whole line fits in 50 columns (the banner says just "tokens"; the task page says "tokens in all")
   const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 50 }, surface: 'terminal' })
-  expect(await ui.find({ type: 'Text', text: /^1 to do · 1 done · 1h 12m · 40k tokens · ~\$0\.42$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^1 to do · 1 done$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /tokens|total:|1h 12m/ })).toBeUndefined()
   await ui.unmount()
 })
 
@@ -1193,29 +1193,31 @@ const ROLE_FILES = {
   '/roles/security.md': '---\ndescription: checks for holes\n---\n',
 }
 
-test('a running task shows its role at the right end in the inactive color, and its try "(n)" after its time from its 2nd try (warning from try 3); general shows only the try', async ($, on) => {
-  stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'doing', 'Plain work', { role: 'general', attempts: 2 }), task('T-12', 'doing', 'Cover the parser errors', { role: 'tester', attempts: 1 }), task('T-13', 'doing', 'Fix the parser', { role: 'tester', attempts: 3 })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+test('a running task shows its role at the right end in the inactive color; the list shows no try "(n)" (T-628), the band keeps it; general shows no role', async ($, on) => {
+  const tasks = [task('T-1', 'doing', 'Plain work', { role: 'general', attempts: 2 }), task('T-12', 'doing', 'Cover the parser errors', { role: 'tester', attempts: 1 }), task('T-13', 'doing', 'Fix the parser', { role: 'tester', attempts: 3 })]
+  stateOf(on, { view: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 60 }, surface: 'terminal' })
-  // a first try: only the role, no try mark
   const mark = await ui.find({ type: 'Text', text: /^ +tester$/ })
   expect(mark).toBeDefined()
   expect(mark?.props.color).toBe('inactive')
   expect((await ui.find({ key: 'T-12' }))?.text.length).toBe(60)
-  expect((await ui.find({ key: 'T-12' }))?.text).not.toMatch(/try/)
-  // try 2: dim; try 3: the warning colour; "(n)" right after the state, not "try n" (T-604)
-  const two = await ui.find({ type: 'Text', text: /^\(2\)$/ })
-  expect(two?.props.color).toBe('inactive')
-  expect((await ui.find({ key: 'T-1' }))?.text).toMatch(/T-1 +▶ \(2\) +Plain work$/)
-  const three = await ui.find({ type: 'Text', text: /^\(3\)$/ })
-  expect(three?.props.color).toBe('warning')
-  expect((await ui.find({ key: 'T-13' }))?.text).toMatch(/T-13 ▶ \(3\) +Fix the parser +tester$/)
-  for (const id of ['T-1', 'T-12', 'T-13']) expect((await ui.find({ key: id }))?.text).not.toMatch(/try/)
+  // no try mark on any list row, not "(n)" and not "try n" (T-628: the band and the task page show it)
+  expect(await ui.find({ type: 'Text', text: /^ ?\([23]\)$/ })).toBeUndefined()
+  expect((await ui.find({ key: 'T-1' }))?.text).toMatch(/T-1 +▶ +Plain work$/)
+  expect((await ui.find({ key: 'T-13' }))?.text).toMatch(/T-13 ▶ +Fix the parser +tester$/)
+  for (const id of ['T-1', 'T-12', 'T-13']) expect((await ui.find({ key: id }))?.text).not.toMatch(/try|\(\d\)/)
+  // the titles still start in one column
+  const starts = await Promise.all(['T-1', 'T-12', 'T-13'].map(async id => {
+    const text = (await ui.find({ key: id }))!.text
+    return text.indexOf(tasks.find(t => t.id === id)!.title)
+  }))
+  expect(new Set(starts).size).toBe(1)
   expect(await ui.find({ type: 'Text', text: /general/ })).toBeUndefined()
   await ui.unmount()
-  // narrow: the try is left out
-  const narrow = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 28 }, surface: 'terminal' })
-  expect((await narrow.find({ key: 'T-13' }))?.text).not.toMatch(/\(3\)/)
-  await narrow.unmount()
+  // the band above the prompt keeps the try (bandLeads)
+  const leads = bandLeads(tasks as Parameters<typeof bandLeads>[0], Date.now())
+  expect(leads.get('T-13')).toMatch(/^T-13 ▶ \(3\)$/)
+  expect(leads.get('T-1')).toMatch(/^T-1 +▶ \(2\) *$/)
 })
 
 test('an open task shows its role and model; "Role" (l) opens a pick list of the roles, and picking one sets it', async ($, on) => {

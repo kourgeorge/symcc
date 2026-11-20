@@ -16,7 +16,7 @@ import type { OwnerQuestion } from '../core/questions'
 import {
   statusCounts, newestFirst, bandLeads, bandNote, bandBrand, bandWhere, boardBrand, modeLabel, modeOf, planBandText, withCrew, questionsForYou,
   bannerLines, bannerRule, footerRule, type BannerTone, panelSections, localOffset, when, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, ALL_CLEAR,
-  rowStates, tryTone, rowMark, TITLE_ROOM, fitRow, rowExtra, questionsLabel, archivedOf, archivedNote, statusMark, statusBadge, detailRows, detailRowLines, wrapSegs, hintLineText,
+  rowStates, rowMark, TITLE_ROOM, fitRow, rowExtra, questionsLabel, archivedOf, archivedNote, statusMark, statusBadge, detailRows, detailRowLines, wrapSegs, hintLineText,
   type KeyHint, type Seg, type BoardTask, gitNote, intoOf, taskActions, taskAsks, type TaskAction, type TaskActionId,
   ownersTurn, shownStatus, sortScouts, scoutListRows, scoutRow, scoutIcon, scoutTone, scoutHowTo, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem, scoutFile,
   SETTING_GROUPS, SETTINGS, isSettingPage, settingInfo, settingValue, cantPlayNotify, groupSummaryParts,
@@ -43,7 +43,7 @@ export type ViewFile = {
   version: string
   /** when it was written (ms) */
   written_at: number
-  view: PaneView & { scout_runs?: ScoutRuns; roles?: ViewDef[]; kinds?: ViewDef[]; changes?: ViewChanges }
+  view: PaneView & { scout_runs?: ScoutRuns; scout_results?: Record<string, string>; roles?: ViewDef[]; kinds?: ViewDef[]; changes?: ViewChanges }
 }
 
 /** The files each task in review changed (not an answered investigation's), or why they can't be read (view.ts puts
@@ -136,6 +136,7 @@ export function parseViewFile(text: string | null | undefined): ViewFile | null 
     const s = (x: unknown) => (typeof x === 'string' ? x : '')
     const { scout_runs, ...rest } = f.view
     const runs = scout_runs && typeof scout_runs === 'object' && !Array.isArray(scout_runs) ? { scout_runs } : {}
+    if (!rest.scout_results || typeof rest.scout_results !== 'object' || Array.isArray(rest.scout_results)) delete rest.scout_results
     if (!Array.isArray(rest.roles)) delete rest.roles
     if (!Array.isArray(rest.kinds)) delete rest.kinds
     if (!rest.changes || typeof rest.changes !== 'object' || Array.isArray(rest.changes)) delete rest.changes
@@ -617,6 +618,8 @@ function scoutPage(f: ViewFile, sc: SymccScout, choice: PanelChoice, nowMs: numb
   if (sc.warning) b.add([{ text: sc.warning, color: 'warning' }])
   const problem = scoutLastRunProblem([...shown].reverse().map(x => x.run))
   if (problem && !sc.running) b.add([{ text: problem, color: 'error' }])
+  const results = f.view.scout_results?.[sc.name]
+  if (typeof results === 'string' && results) for (const l of wrapSegs([{ text: results, color: 'inactive' }], w)) b.add(l)
   b.blank()
   b.heading('Instructions')
   if (sc.prompt?.trim()) for (const l of textLines(sc.prompt.trim(), 'text', w)) b.add(l)
@@ -806,9 +809,9 @@ function listBody(f: ViewFile, cursor: number, open: Record<PanelGroup, boolean>
   const selected = at >= 0 ? ids[at]! : ''
   const since = (id: string) => v.working.find(x => x.task === id)?.since
   const idWidth = Math.max(4, ...ids.filter(id => !groupOf(id)).map(id => id.length))
-  // a doing task: the total work time of all tries, "1h40m", "⧗ 9m", then its try from try 2 on, "⧗ 9m (3)";
-  // narrow, the time is left out, then the try (see rowStates)
-  const { states, width: cellWidth } = rowStates(listed, nowMs, since, cw => cw <= w - (4 + idWidth + 3 + 2) - TITLE_ROOM)
+  // a doing task: the total work time of all tries, "1h40m", "⧗ 9m", with no try mark (T-628: the band and the task
+  // page show it); narrow, the time is left out (see rowStates)
+  const { states, width: cellWidth } = rowStates(listed, nowMs, since, cw => cw <= w - (4 + idWidth + 3 + 2) - TITLE_ROOM, false)
   const pointer = (id: string, indent: number) => (id === selected ? `${' '.repeat(Math.max(0, indent - 2))}› ` : ' '.repeat(indent))
   const lines: Line[] = []
   const hits: (PanelHit | null)[] = []
@@ -829,10 +832,7 @@ function listBody(f: ViewFile, cursor: number, open: Record<PanelGroup, boolean>
       { text: pointer(x.id, indent), color: 'ide', bold: true },
       { text: x.id.padEnd(idWidth), color: closed ? 'inactive' : 'claude', bold: !closed || sel },
       // an approved task whose approve runs is shown as running (shownStatus): the doing tone, not bold
-      { text: ` ${rowMark(x, nowMs)} ${state.front}`, color: LIST_TONE[shownStatus(x, nowMs)]! },
-      // a later try ("(2)") is dim, from try 3 on in the warning colour (see tryTone)
-      ...(state.tag ? [{ text: state.tag, color: tryTone(x) }] : []),
-      { text: `${state.back}  `, color: LIST_TONE[shownStatus(x, nowMs)]! },
+      { text: ` ${rowMark(x, nowMs)} ${state.front}${state.back}  `, color: LIST_TONE[shownStatus(x, nowMs)]! },
       { text: fit.title, color: closed ? 'inactive' : 'text', ...(sel || ownersTurn(x, nowMs) ? { bold: true } : {}) },
       ...(fit.extra ? [{ text: `${fit.pad}${fit.extra}`, color: 'inactive' }] : []),
     ]
