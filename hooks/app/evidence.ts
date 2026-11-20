@@ -1,14 +1,14 @@
-// Evidence events (T-660, core/evidence.ts) added to the activity log: a guard refusal, a "needs files" stop, a
-// worker's question, a checker's verdict, a merge-queue outcome. Each one is its own small append of one JSON line
-// (appendLine), outside the board lock and its write queue, never waited on by the caller; a failure to log is
-// ignored: logging never changes or slows what the guard answers. Two appends at once each still add one whole line;
-// the log's trimming (and the move of its older lines to the archive) happens on the next task-event write (logEvents).
+// Evidence events (T-660, core/evidence.ts): a guard refusal, a "needs files" stop, a worker's question, a checker's
+// verdict, a merge-queue outcome. They go to their own file, .symcc/evidence.jsonl (never the activity log
+// events.jsonl, which symcc reads and rewrites), each as one small append of one JSON line (appendLine), outside the
+// board lock and its write queue, never waited on by the caller; a failure to log is ignored: logging never changes or
+// slows what the guard answers. symcc never reads that file back or rewrites it, so no line can be lost; past
+// EVIDENCE_MAX_BYTES the same append first renames it to evidence-archive-<time>.jsonl and starts a fresh one.
 import type { Host } from '../host'
 import { find, readBoard } from '../board'
 import { type EvidenceEvent, type EvidenceGuard, type EvidenceRole, cleanBit, cleanFiles, commandHead, programName, problemCount, shortReason, WHAT_MAX } from '../core/evidence'
 import type { CheckerVerdict } from '../core/checker'
 import type { FileTouch } from '../host'
-import { eventsFile } from './events'
 import { S } from './state'
 import { path } from './store'
 
@@ -23,9 +23,24 @@ export function resetEvidence() {
   pending = Promise.resolve()
 }
 
-/** Appends `line` and a newline to `file` with one shell append (no read, no lock). */
+/** The evidence file, inside the project's data folder. */
+export const evidenceFile = () => `${S.root}/${S.N.dir}/evidence.jsonl`
+
+/** Past this size the evidence file is renamed to an archive (evidenceArchiveFile) and a fresh one started. */
+export const EVIDENCE_MAX_BYTES = 2 * 1024 * 1024
+
+/** Where a full evidence file goes: evidence-archive-<UTC time>.jsonl, next to it. */
+export const evidenceArchiveFile = (d = new Date()) => `${S.root}/${S.N.dir}/evidence-archive-${d.toISOString().replace(/[:.]/g, '-')}.jsonl`
+
+/**
+ * The shell script of one evidence append: $1 the line, $2 the file, $3 its size limit, $4 the archive. A file past
+ * the limit (its size from `wc -c`, never read by symcc) is renamed to the archive first; then the line is appended.
+ */
+export const APPEND_SCRIPT = 'if [ -f "$2" ] && [ "$(wc -c < "$2")" -gt "$3" ]; then mv -n "$2" "$4"; fi; printf "%s\\n" "$1" >> "$2"'
+
+/** Appends `line` and a newline to `file` with one shell command (no read by symcc, no lock), moving a full file to its archive first. */
 async function appendLine(host: Host, file: string, line: string) {
-  await host.run(['sh', '-c', 'printf "%s\\n" "$1" >> "$2"', 'sh', line, file])
+  await host.run(['sh', '-c', APPEND_SCRIPT, 'sh', line, file, String(EVIDENCE_MAX_BYTES), evidenceArchiveFile()])
 }
 
 /** Task `id`'s try number, read from the board file without the lock (0 when it can't be read). */
@@ -36,13 +51,13 @@ async function tryOf(host: Host, id: string): Promise<number> {
 }
 
 /**
- * Adds `e` to the activity log in the background, as one appended line. An event of a task with no `try` gets the
+ * Adds `e` to the evidence file in the background, as one appended line. An event of a task with no `try` gets the
  * task's try number from the board. Never throws and never waits: it answers at once.
  */
 export function logEvidence(host: Host, e: EvidenceEvent): void {
   try {
     if (!S.root) return
-    const file = eventsFile()
+    const file = evidenceFile()
     const run = (async () => {
       const ev = e.task && e.try === undefined ? ({ ...e, try: await tryOf(host, e.task) } as EvidenceEvent) : e
       await appendLine(host, file, JSON.stringify(ev))

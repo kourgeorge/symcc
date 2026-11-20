@@ -22,7 +22,8 @@ import { withStarts } from './starts'
 import { checkerPrompt, checkerTestsText } from '../hooks/core/checker'
 import { inMergeLine } from '../hooks/app/merge-line'
 import { parseMergeLine } from '../hooks/board'
-import { onTaskEvent, type TaskEvent, type LogEvent } from '../hooks/app/events'
+import { onTaskEvent, type TaskEvent } from '../hooks/app/events'
+import type { EvidenceEvent } from '../hooks/core/evidence'
 import { evidenceWritten } from '../hooks/app/evidence'
 
 const ROOT = '/repo'
@@ -354,12 +355,11 @@ test('T-616: a worker finish → checker → queue → test → merge emits each
   expect(got.every(e => e.task === 'T-1' && e.try === 1 && typeof e.at === 'string')).toBe(true)
   expect(got.find(e => e.to === 'queue')!.place).toBe(2)
   // the activity log has the same events, one JSON line each
+  const log = (await w.$.fs.read(`${ROOT}/.symcc/events.jsonl`)).trim().split('\n').map(l => JSON.parse(l) as TaskEvent)
+  expect(log).toEqual(got)
+  // T-660: the checker's verdict and the merge-queue outcome are logged as evidence (in their own file), once each
   await evidenceWritten()
-  const all = (await w.$.fs.read(`${ROOT}/.symcc/events.jsonl`)).trim().split('\n').map(l => JSON.parse(l) as LogEvent)
-  const taskKinds = ['state', 'stage', 'wait', 'created', 'removed']
-  expect(all.filter(e => taskKinds.includes(e.kind))).toEqual(got)
-  // T-660: the checker's verdict and the merge-queue outcome are logged as evidence, once each
-  const evidence = all.filter(e => !taskKinds.includes(e.kind)).map(e => ({ ...e, at: 'x' }))
+  const evidence = (await w.$.fs.read(`${ROOT}/.symcc/evidence.jsonl`)).trim().split('\n').map(l => ({ ...(JSON.parse(l) as EvidenceEvent), at: 'x' }))
   expect(evidence).toEqual([
     { kind: 'verdict', at: 'x', task: 'T-1', try: 1, verdict: 'ok' },
     { kind: 'queue', at: 'x', task: 'T-1', try: 1, outcome: 'merged', commit: H1 },

@@ -1,16 +1,16 @@
-// T-660: evidence in the activity log. A guard refusal adds one 'refused' event (who, which guard, a short cleaned
+// T-660: evidence, in its own file .symcc/evidence.jsonl (never the activity log events.jsonl). A guard refusal adds one 'refused' event (who, which guard, a short cleaned
 // reason, the refused path or the command's head: never the full command or a secret); a "needs files" stop, a worker's
 // question, a checker verdict and a queue outcome add theirs. Logging runs after the decision, in the background: it
-// never changes the guard's answer or holds it up. Lines past the log's limit move to events-archive.jsonl.
+// never changes the guard's answer or holds it up. symcc never reads the file back; a full one is renamed to an archive.
 // The checker verdict and the queue outcome of a real run are checked in checker.test.ts (the T-616 flow test).
 import { expect } from 'claude-code/testing'
 import { addTask, emptyBoard, patchTask, workerGitWriteText, blockedEditText, ASK_SENT } from '../hooks/board'
 import { checkEdit, askCall } from '../hooks/app/ask'
 import { toolCall } from '../hooks/app/symcc'
 import { finishWork } from '../hooks/app/workers'
-import { evidenceWritten, logQueue, logVerdict } from '../hooks/app/evidence'
-import { EVENT_LOG_KEEP, EVENT_LOG_LINES, logEvents, type LogEvent } from '../hooks/app/events'
-import { cleanBit, commandHead, programName, shortReason, problemCount, REASON_MAX } from '../hooks/core/evidence'
+import { EVIDENCE_MAX_BYTES, evidenceArchiveFile, evidenceWritten, logAsked, logQueue, logVerdict } from '../hooks/app/evidence'
+import { logEvents, type TaskEvent } from '../hooks/app/events'
+import { type EvidenceEvent, cleanBit, commandHead, programName, shortReason, problemCount, REASON_MAX } from '../hooks/core/evidence'
 import { saveBoard } from '../hooks/app/store'
 import { S, workers, scoutRuns, stopped, toolName } from '../hooks/app/state'
 import type { HostRunResult } from '../hooks/host'
@@ -21,30 +21,26 @@ import { pause } from './fakes'
 const ROOT = '/repo'
 const WT = `${ROOT}/.symcc/worktrees/T-1`
 const AT = '2026-11-20T12:00:00.000Z'
-const LOG = `${ROOT}/.symcc/events.jsonl`
+const LOG = `${ROOT}/.symcc/evidence.jsonl`
+const EVENTS = `${ROOT}/.symcc/events.jsonl`
 const SECRET = 'sk-abcdefghijklmnopqrstuvwxyz0123'
 
 /** A host with in-memory files and the commands the board's lock and safe writes use; `hang` makes the log's writes never finish. */
-function world(opts: { hang?: boolean; failLog?: boolean; maxRead?: number } = {}) {
+function world(opts: { hang?: boolean; failLog?: boolean } = {}) {
   const files = new Map<string, string>()
   const fs = memoryFs(files)
   const { host } = fakeHost({
     fs: {
       ...fs,
-      // like the Claude host, which refuses to read a file over 4 MiB
-      read: async (p: string) => {
-        if (opts.maxRead !== undefined && (files.get(p)?.length ?? 0) > opts.maxRead) throw new Error('file too big')
-        return fs.read(p)
-      },
       write: async (p: string, text: string) => {
-        if (opts.failLog && p.includes('events')) throw new Error('disk full')
-        if (opts.hang && p.includes('events')) return new Promise<void>(() => undefined)
+        if (opts.failLog && p.includes('evidence')) throw new Error('disk full')
+        if (opts.hang && p.includes('evidence')) return new Promise<void>(() => undefined)
         return fs.write(p, text)
       },
     },
     run: async (argv): Promise<HostRunResult> => {
       const [cmd, ...a] = argv
-      if (argv[0] === 'sh' && argv[2]?.startsWith('printf ')) {
+      if (argv[0] === 'sh' && argv[2]?.includes('printf ')) {
         if (opts.failLog) throw new Error('disk full')
         if (opts.hang) return new Promise<HostRunResult>(() => undefined)
         return (appendLineRun(files, argv), done())
@@ -52,7 +48,6 @@ function world(opts: { hang?: boolean; failLog?: boolean; maxRead?: number } = {
       const [x, y] = a.filter(v => !v.startsWith('-'))
       if (cmd === 'ln') return files.has(y!) ? done({ exitCode: 1 }) : (files.set(y!, files.get(x!)!), done())
       if (cmd === 'mv') return (files.set(y!, files.get(x!)!), files.delete(x!), done())
-      if (cmd === 'sh' && a[1] === 'cat "$1" >> "$2"') return (files.set(a[4]!, (files.get(a[4]!) ?? '') + files.get(a[3]!)!), done())
       if (cmd === 'rm') for (const f of a.filter(v => !v.startsWith('-'))) files.delete(f)
       return done()
     },
@@ -72,7 +67,7 @@ async function withWorker(w: ReturnType<typeof world>) {
 const evidence = async (w: ReturnType<typeof world>) => {
   await evidenceWritten()
   const text = w.files.get(LOG) ?? ''
-  return text.trim() ? text.trim().split('\n').map(l => JSON.parse(l) as LogEvent).filter(e => !['state', 'stage', 'wait', 'created', 'removed'].includes(e.kind)) : []
+  return text.trim() ? text.trim().split('\n').map(l => JSON.parse(l) as EvidenceEvent) : []
 }
 
 test('a refused git command adds one "refused" event: who, the guard, a short cleaned reason and the command head, never the full command', async () => {
@@ -82,7 +77,7 @@ test('a refused git command adds one "refused" event: who, the guard, a short cl
   expect(await checkEdit(w.host, 'w1', { command }, WT)).toBe(workerGitWriteText('git commit'))
   const got = await evidence(w)
   expect(got.length).toBe(1)
-  const e = got[0] as Extract<LogEvent, { kind: 'refused' }>
+  const e = got[0] as Extract<EvidenceEvent, { kind: 'refused' }>
   expect([e.kind, e.task, e.try, e.role, e.guard, e.what]).toEqual(['refused', 'T-1', 2, 'worker', 'git', 'git commit'])
   expect(e.reason.length <= REASON_MAX).toBe(true)
   expect(e.reason.startsWith('Refused')).toBe(false)
@@ -95,7 +90,7 @@ test('an edit outside the task files adds a "files" refusal with the path; an al
   await withWorker(w)
   expect(await checkEdit(w.host, 'w1', { path: `${WT}/src/a.ts` }, WT)).toBe(undefined)
   expect(await checkEdit(w.host, 'w1', { path: `${WT}/docs/x.md` }, WT)).toBe(blockedEditText('docs/x.md'))
-  const got = (await evidence(w)) as Extract<LogEvent, { kind: 'refused' }>[]
+  const got = (await evidence(w)) as Extract<EvidenceEvent, { kind: 'refused' }>[]
   expect(got.map(e => [e.guard, e.what, e.role, e.task])).toEqual([['files', 'docs/x.md', 'worker', 'T-1']])
 })
 
@@ -143,7 +138,7 @@ test('a refusal with no "what" logs only the program name: no URL, no flags, no 
   stopped.add('w9')
   for (const command of ['curl https://user:pass@host/x', 'mysql -pSecret'])
     expect(await checkEdit(w.host, 'w9', { command }, '/repo')).not.toBe(undefined)
-  const got = (await evidence(w)) as Extract<LogEvent, { kind: 'refused' }>[]
+  const got = (await evidence(w)) as Extract<EvidenceEvent, { kind: 'refused' }>[]
   expect(got.map(e => e.what)).toEqual(['curl', 'mysql'])
   expect(['pass@', 'Secret', 'https'].filter(x => w.files.get(LOG)!.includes(x))).toEqual([])
   expect([programName('curl https://user:pass@host/x'), programName('mysql -pSecret'), programName('PGPASSWORD=x env A=1 psql -h db')]).toEqual(['curl', 'mysql', 'psql'])
@@ -172,7 +167,7 @@ test('verdict and queue events: ok / problems with a count, and each queue outco
   logQueue(w.host, 'T-1', 1, { ok: true, merged: 'abc123' })
   logQueue(w.host, 'T-1', 1, { ok: true, review: true })
   const got = (await evidence(w)).map(e => {
-    const { at, task, try: n, ...rest } = e as LogEvent & { try: number }
+    const { at, task, try: n, ...rest } = e as EvidenceEvent & { try: number }
     return rest
   })
   expect(got).toEqual([
@@ -193,36 +188,34 @@ test('the cleaning: secrets hidden, one line, cut short', () => {
   expect(problemCount('just one thing')).toBe(1)
 })
 
-test('past the log limit, older lines move to events-archive.jsonl instead of being dropped', async () => {
+test('a full evidence file is renamed to a dated archive (never read by symcc) and a fresh one started', async () => {
   const w = world()
-  const ARCH = `${ROOT}/.symcc/events-archive.jsonl`
-  const line = (i: number): LogEvent => ({ kind: 'asked', at: AT, task: `T-${i}`, try: 1 })
-  w.files.set(ARCH, `${JSON.stringify(line(-1))}\n`)
-  w.files.set(LOG, Array.from({ length: EVENT_LOG_LINES }, (_, i) => JSON.stringify(line(i))).join('\n') + '\n')
-  await logEvents([line(EVENT_LOG_LINES), line(EVENT_LOG_LINES + 1)], w.host)
-  const log = w.files.get(LOG)!.trim().split('\n')
-  const arch = w.files.get(ARCH)!.trim().split('\n')
-  const moved = EVENT_LOG_LINES + 2 - EVENT_LOG_KEEP
-  expect(log.length).toBe(EVENT_LOG_KEEP)
-  expect((JSON.parse(log[0]!) as { task: string }).task).toBe(`T-${moved}`)
-  expect(arch.map(l => (JSON.parse(l) as { task: string }).task)).toEqual(['T--1', ...Array.from({ length: moved }, (_, i) => `T-${i}`)])
-  expect([...w.files.keys()].filter(f => f.includes('.add-') || f.includes('.tmp-'))).toEqual([])
+  const ARCH = evidenceArchiveFile(new Date('2026-11-20T10:00:00.000Z'))
+  expect(ARCH).toBe(`${ROOT}/.symcc/evidence-archive-2026-11-20T10-00-00-000Z.jsonl`)
+  const full = 'x'.repeat(EVIDENCE_MAX_BYTES + 1) + '\n'
+  w.files.set(LOG, full)
+  logAsked(w.host, 'T-1', 1)
+  await evidenceWritten()
+  const arch = [...w.files.keys()].filter(f => f.includes('evidence-archive-'))
+  expect(arch.length).toBe(1)
+  expect(w.files.get(arch[0]!)).toBe(full)
+  expect((await evidence(w)).map(e => e.kind)).toEqual(['asked'])
 })
 
-test('an archive too big to read keeps its history: new lines are added to its end, it is never rewritten', async () => {
-  const w = world({ maxRead: 1_000_000 })
-  const ARCH = `${ROOT}/.symcc/events-archive.jsonl`
-  const line = (i: number): LogEvent => ({ kind: 'asked', at: AT, task: `T-${i}`, try: 1 })
-  const big = Array.from({ length: 22000 }, (_, i) => JSON.stringify(line(-1 - i))).join('\n') + '\n'
-  w.files.set(ARCH, big)
-  w.files.set(LOG, Array.from({ length: EVENT_LOG_LINES }, (_, i) => JSON.stringify(line(i))).join('\n') + '\n')
-  await logEvents([line(EVENT_LOG_LINES)], w.host)
-  const arch = w.files.get(ARCH)!
-  expect(arch.startsWith(big)).toBe(true)
-  expect(arch.trim().split('\n').length).toBe(22000 + EVENT_LOG_LINES + 1 - EVENT_LOG_KEEP)
-  // the next write, now under the limit, moves nothing
-  await logEvents([line(EVENT_LOG_LINES + 1)], w.host)
-  expect(w.files.get(ARCH)!.length).toBe(arch.length)
+test('evidence never goes to events.jsonl: 300 evidence appends interleaved with logEvents writes keep all 300 lines', async () => {
+  const w = world()
+  const state = (i: number) => ({ kind: 'state', at: AT, task: 'T-1', try: 1, from: 'doing', to: 'checking', n: i }) as unknown as TaskEvent
+  const writes: Promise<void>[] = []
+  for (let i = 0; i < 300; i++) {
+    logVerdict(w.host, 'T-1', i, { ok: true })
+    writes.push(logEvents([state(i)], w.host))
+    if (i % 7 === 0) await pause(0)
+  }
+  await Promise.all(writes)
+  const got = await evidence(w)
+  expect(got.length).toBe(300)
+  expect(got.map(e => e.try)).toEqual(Array.from({ length: 300 }, (_, i) => i))
+  expect(w.files.get(EVENTS)!.includes('"verdict"')).toBe(false)
 })
 
 test('a secret set in front of a refused command is never logged', async () => {

@@ -225,7 +225,7 @@ export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board
     ...(release ? { release } : {}),
     ...(limit ? { limit } : {}),
   })
-  // T-660: the turn's outcome goes to the activity log (in the background)
+  // T-660: the turn's outcome goes to the evidence file (in the background)
   logQueue($, t.id, Number(t.attempts) || 0, r)
   return withSecrets(r)
 }

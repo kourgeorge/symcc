@@ -1,6 +1,6 @@
-// Evidence events (T-660): besides the task events of a board write (core/events.ts), the activity log keeps what
+// Evidence events (T-660): besides the task events of a board write (core/events.ts), the evidence file keeps what
 // shows where agents struggle: a guard refusing a tool call, a "needs files" stop, a worker's question to the owner,
-// a checker's verdict and a merge-queue outcome. Pure: the app side (app/evidence.ts) adds them to the log after the
+// a checker's verdict and a merge-queue outcome. Pure: the app side (app/evidence.ts) appends them to its file after the
 // decision, in the background. Nothing in them is a full command, file contents or anything secret-looking.
 import { hideSecrets } from './org-mem'
 
