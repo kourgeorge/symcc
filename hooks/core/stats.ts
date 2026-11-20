@@ -407,8 +407,8 @@ export function statsReport(input: StatsInput & { full?: boolean }): string {
   for (const [k, ts] of origins) {
     out.push(barRow(ORIGIN_LABEL[k] ?? k, originW, ts.length, maxOrigin, all.length, ts.length ? figsOf(ts) : ''))
     if (k !== 'scout') continue
-    for (const [s, st] of scouts) out.push(barRow(`    ${s}`, originW, st.length, maxOrigin, all.length, figsOf(st)), `        ${scoutResultsText(scoutResults(st, s, scoutTok(s)))}`)
-    for (const s of idle) out.push(barRow(`    ${s}`, originW, 0, maxOrigin, all.length), `        ${scoutResultsText(scoutResults([], s, scoutTok(s)))}`)
+    for (const [s, st] of scouts) out.push(barRow(`    ${s}`, originW, st.length, maxOrigin, all.length, figsOf(st)), `        ${scoutResultsText(countResults(st, scoutTok(s)))}`)
+    for (const s of idle) out.push(barRow(`    ${s}`, originW, 0, maxOrigin, all.length), `        ${scoutResultsText(countResults([], scoutTok(s)))}`)
   }
 
   // Done per day
@@ -554,7 +554,11 @@ export type ScoutResults = { tasks: number; merged: number; dropped: number; ope
 
 /** Scout `scout`'s results among `tasks` (only those whose origin names it count), with its own `scoutTokens`. */
 export function scoutResults(tasks: Pick<SymccTask, 'status' | 'runs' | 'origin'>[], scout: string, scoutTokens: number): ScoutResults {
-  const mine = tasks.filter(t => originKey(t) === `scout ${scout}`)
+  return countResults(tasks.filter(t => originKey(t) === `scout ${scout}`), scoutTokens)
+}
+
+/** The results of tasks `mine` (already one scout's, e.g. a /symcc-stats group, whose unnamed "scout" group has no name to match). */
+export function countResults(mine: Pick<SymccTask, 'status' | 'runs'>[], scoutTokens: number): ScoutResults {
   const merged = mine.filter(t => t.status === 'done')
   const dropped = mine.filter(t => t.status === 'dropped').length
   return { tasks: mine.length, merged: merged.length, dropped, open: mine.length - merged.length - dropped, scoutTokens, mergedTokens: merged.reduce((s, t) => s + (taskFigures(t).tok ?? 0), 0) }

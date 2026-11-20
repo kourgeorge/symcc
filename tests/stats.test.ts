@@ -465,3 +465,13 @@ test('stats: scouts named like built-in object names (constructor, toString, __p
   expect(Object.hasOwn(u, '__proto__')).toBe(true)
   expect(statsReport({ tasks, nowMs: NOW, range: { kind: 'days', days: 7 }, team: { scouts: u } })).toContain('1 task (0 merged, 0 dropped, 1 open) · 3k scout tokens')
 })
+
+test('stats: tasks from a scout with no name show their results under "scout" (T-622)', () => {
+  const tasks = [
+    task('T-1', { origin: { by: 'scout', why: '', at: '' } }),
+    task('T-2', { origin: { by: 'scout', scout: '', why: '', at: '' }, status: 'dropped' }),
+  ]
+  const text = statsReport({ tasks, nowMs: NOW, team: { scouts: {} } })
+  expect(text).toMatch(/\n {6}scout +[▇▅▂]+ +2 +100%.*\n {8}2 tasks \(1 merged, 1 dropped, 0 open\) · 0 scout tokens · 0 per merged\n/)
+  expect(text).not.toContain('no tasks')
+})
