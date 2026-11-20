@@ -4,6 +4,7 @@ import type { SymccTask } from '../../types'
 import { type Board, type BoardTask, kindOf, kindSection, ASK_TOOL, ASK_LINE, askedMore, intoOf, isCheckerOutput, checkerRetryText, testOutputHeading } from '../board'
 import { taskBranch } from './git'
 import { S, toolName } from './state'
+import { LEARNED_ASK } from '../core/field-guide'
 
 /** A task's history without the "created by ..." line: what earlier tries did. */
 export const tries = (t: SymccTask) => t.history.filter(h => h.kind !== 'created').map(h => h.text)
@@ -23,6 +24,9 @@ export const sharedValues = (t: SymccTask, dir: string): Record<string, string> 
   kind: kindSection(kindOf(t), S.kinds),
   // How a worker asks the owner and what a refused edit means (see hooks/app/ask.ts).
   ask: ASK_LINE(toolName(ASK_TOOL)),
+  // T-600: the Field Guide's lines go in {{field_guide}} (see WORKER_PROMPT and fieldGuideText); the report may end with "Learned:" lines
+  field_guide: '',
+  learned: LEARNED_ASK,
 })
 
 /** The placeholders of an investigation's prompt: find the answer and hand it back in full; nothing it changes is kept. */

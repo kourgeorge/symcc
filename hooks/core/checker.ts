@@ -11,6 +11,7 @@ import { CHECKER_ROLE } from './roles'
 import { DEFAULT_NAME, namesFor } from '../name'
 import { TEST_OUTPUT_CHARS } from './settings'
 import { fillPlaceholders } from './prompts'
+import { LEARNED_ASK, splitLearned } from './field-guide'
 
 export { CHECKER_ROLE }
 
@@ -69,7 +70,8 @@ const OK_LINE = /^[*_`"'\s]*ok[.!]?[*_`"'\s]*$/i
 
 /** A checker's answer as its verdict: OK when its last line is OK on its own (see OK_LINE), else its whole text is the problems report; null for an empty answer. */
 export function checkerVerdict(answer: string): CheckerVerdict | null {
-  const text = String(answer ?? '').trim()
+  // T-600: the optional "Learned:" section at its end is for the Field Guide, not part of the verdict
+  const text = splitLearned(String(answer ?? '')).body.trim()
   if (!text) return null
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
   return OK_LINE.test(lines.at(-1) ?? '') ? { ok: true } : { ok: false, report: text }
@@ -102,7 +104,7 @@ export const checkerDiff = (diff: string): string => {
 }
 
 /** The values of a checker's prompt. */
-export type CheckerValues = { name: string; task_id: string; title: string; details: string; branch: string; folder: string; into: string; role: string; diff: string; changed_files: string; tests: string }
+export type CheckerValues = { name: string; task_id: string; title: string; details: string; branch: string; folder: string; into: string; role: string; diff: string; changed_files: string; tests: string; field_guide?: string }
 
 /** The most changed files a checker's prompt lists; the rest it reads with git diff --name-only. */
 export const CHECKER_FILES_MAX = 200
@@ -126,8 +128,11 @@ export function checkerTestsText(name: string, commands: readonly string[]): str
   return `Don't run the project's own tests (its test files or test commands): ${where}. Check the change with your own throwaway probe tests and scripts (in .scratch/ or /tmp) instead, and say a new test would pass without the change only where your own probe shows it.`
 }
 
-/** A checker's prompt (prompts/checker.ts) with `v` filled in. */
-export const checkerPrompt = (v: CheckerValues): string => fillPlaceholders(CHECKER_PROMPT, v, v).trimEnd()
+/** A checker's prompt (prompts/checker.ts) with `v` filled in; {{learned}} is always LEARNED_ASK, {{field_guide}} '' unless given (see guideSection). */
+export const checkerPrompt = (v: CheckerValues): string => {
+  const all = { ...v, field_guide: v.field_guide ?? '', learned: LEARNED_ASK }
+  return fillPlaceholders(CHECKER_PROMPT, all, all).trimEnd()
+}
 
 /** The history line of a checker's verdict. */
 export const checkerLine = (tryLabel: string, v: CheckerVerdict | null, why = ''): string =>

@@ -236,6 +236,18 @@ export function twoLines(title: string, columns: number, lead = 0): { text: stri
   const space = head.lastIndexOf(' ')
   return { text: (space > room / 2 ? head.slice(0, space) : head).trimEnd(), cut: true }
 }
+/** `text` on one line of at most `max` characters: a longer one is cut (at a word when one ends near the cut) and ends
+ *  with "…". The VS Code list's open rows cut their title this way so the row stays one line. */
+export function cutEnd(text: string, max: number): string {
+  const t = text.replace(/\s+/g, ' ').trim()
+  if (t.length <= max) return t
+  if (max <= 1) return max === 1 ? '…' : ''
+  const head = t.slice(0, max - 1)
+  const space = head.lastIndexOf(' ')
+  return `${(space > (max - 1) * 0.6 ? head.slice(0, space) : head).trimEnd()}…`
+}
+/** The fewest title characters an open row keeps before its state part is cut too (see vscode-list.tsx). */
+export const MIN_TITLE = 12
 /** What a cut title ends with (see twoLines). */
 export const MORE = ' (more)'
 /** What a row with an empty title (or question text) shows, dim, beside its id: never "****" from empty bold marks. */

@@ -2,6 +2,7 @@
 // task page (so all three agree), what to do next, and whether the worker's report asks for something.
 import type { SymccTask } from '../../types'
 import { CHECKER_MARK, isCheckerOutput } from './checker'
+import { splitLearned } from './field-guide'
 import { cutLine } from './reports'
 import { failBlocks, moreFailingLine } from './settings'
 
@@ -57,8 +58,9 @@ const QUOTED = /```[\s\S]*?```|`[^`\n]*`|"[^"\n]*"|“[^”\n]*”|‘[^’\n]*�
  * Returns the sentence that counted, '' if none.
  */
 export function endedEarlyLine(answer: string | null | undefined): string {
-  // quotes and code go first, so a fenced code block with a blank line in it is not cut into paragraphs
-  const paras = String(answer ?? '').replace(QUOTED, ' (quote) ').split(/\n\s*\n/).map(p => p.trim()).filter(Boolean)
+  // quotes and code go first, so a fenced code block with a blank line in it is not cut into paragraphs; a closing
+  // "Learned:" section (T-600) is not the answer's last paragraph
+  const paras = splitLearned(String(answer ?? '')).body.replace(QUOTED, ' (quote) ').split(/\n\s*\n/).map(p => p.trim()).filter(Boolean)
   const last = paras.at(-1) ?? ''
   if (!last || last.split('\n').some(l => BULLET.test(l))) return ''
   const sentences = last.split(/(?<=[.!?])\s+|\n+/)
@@ -325,7 +327,8 @@ export function failNext(t: Failed): string {
  * a "NEED FILES:" line, or a question it ends on; '' when it asks nothing.
  */
 export function failAsks(report: string | null | undefined): string {
-  const lines = (report ?? '').split('\n').map(l => l.trim()).filter(Boolean)
+  // a closing "Learned:" section (T-600) is left out, so the question before it is still among the last lines
+  const lines = splitLearned(report ?? '').body.split('\n').map(l => l.trim()).filter(Boolean)
   // Workers write "NEED FILES:" at the start of a line, in capitals; a report that only mentions the phrase doesn't count.
   const need = lines.find(l => /^NEED FILES:/.test(l))
   if (need) {

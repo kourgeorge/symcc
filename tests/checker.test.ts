@@ -1039,3 +1039,43 @@ for (const how of ['answers just "stopped"', 'was stopped by symcc (its agent is
     expect(end.test_tries ?? 0).toBe(0)
   })
 }
+
+// ---------------- T-600: the Field Guide ----------------
+
+const GUIDE = `${ROOT}/.symcc/field-guide.md`
+
+test('T-600: a worker\'s and its checker\'s "Learned:" lines go into the Field Guide once; the checker\'s prompt has the guide, and its verdict ignores the section', async () => {
+  const w = world()
+  await saveBoard(w.$, boardWith(true))
+  await w.$.fs.write(GUIDE, '- T-0 2026-11-01: Run one test file with sh scripts/test-files.sh <file>.\n')
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: 0 })
+  const report = 'made the change\n\nLearned:\n- run one test file with sh scripts/test-files.sh <file>\n- The guard refuses a new repo inside the project; use /tmp.'
+  const done = withStarts(w.$, workerFinished(w.$, 'ag1', report))
+  await until(() => checkerRuns.size > 0)
+  const prompt = w.spawns[0]!.prompt
+  expect(prompt).toContain('Notes earlier agents left about this project')
+  expect(prompt).toContain('Run one test file with sh scripts/test-files.sh <file>.')
+  expect(prompt).toContain('The guard refuses a new repo inside the project; use /tmp.')
+  expect(prompt).toContain('"Learned:" section')
+  await checkerFinished([...checkerRuns.keys()][0]!, 'I tried empty input.\nOK\n\nLearned:\n- Snapshot files live in tests/*-snapshot.ts.')
+  await done
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.history.map(h => h.text)).toContain('try 1: checker: OK')
+  const lines = (await w.$.fs.read(GUIDE)).trim().split('\n')
+  expect(lines).toHaveLength(3)
+  expect(lines[1]).toMatch(/^- T-1 \d{4}-\d{2}-\d{2}: The guard refuses a new repo inside the project; use \/tmp\.$/)
+  expect(lines[2]).toMatch(/: Snapshot files live in tests\/\*-snapshot\.ts\.$/)
+})
+
+test('T-600: a report without a "Learned:" section adds nothing, and with no guide file the prompts have no notes heading', async () => {
+  const w = world()
+  await saveBoard(w.$, boardWith(true))
+  const t = await finish(w, async id => {
+    expect(w.spawns[0]!.prompt).not.toContain('Notes earlier agents left')
+    await checkerFinished(id, 'OK')
+  })
+  expect(t.status).toBe('done')
+  expect(await w.$.fs.exists(GUIDE)).toBe(false)
+  expect(WORKER_PROMPT(t, await load(w.$), WT)).not.toContain('Notes earlier agents left')
+  expect(WORKER_PROMPT(t, await load(w.$), WT, undefined, '\nNotes earlier agents left about this project (from .symcc/field-guide.md; they may be out of date):\n- x\n')).toContain('they may be out of date):\n- x')
+})
