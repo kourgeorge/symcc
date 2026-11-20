@@ -6,7 +6,7 @@ import { shortSha, taskCommits } from './commits'
 import { originMark, originOf } from './origin'
 import { findKind, type KindDef, kindMark } from './kinds'
 import { findRole, type RoleDef, roleOf } from './roles'
-import { fmtTotal, sumRuns } from './runs'
+import { triesSummary } from './runs'
 import { squash } from './text'
 import { checkStepNow } from './lead'
 import { IN_LINE_ICON, rowTime, STEP_ICON, STEP_WORD } from './panel'
@@ -189,8 +189,10 @@ export function detailRows(t: SymccTask, o: { roles: readonly Pick<RoleDef, 'nam
       ]),
     })
   }
-  const tries: Seg[] = [{ text: `${t.attempts} ${t.attempts === 1 ? 'try' : 'tries'}`, color: t.attempts > 2 ? 'warning' : 'text', bold: t.attempts > 2 }]
-  if (t.runs?.length) tries.push({ text: ` · ${fmtTotal(sumRuns(t.runs, o.nowMs))}`, color: 'inactive' })
+  // "3 · last: 6m · 0.9M tokens · all: 17m · 2.7M tokens" (one try: "1 · 6m · 0.9M tokens"); every try is under "Time and cost"
+  const tries: Seg[] = [{ text: String(t.attempts), color: t.attempts > 2 ? 'warning' : 'text', bold: t.attempts > 2 }]
+  const summary = triesSummary(t.runs, o.nowMs)
+  if (summary) tries.push({ text: summary, color: 'inactive' })
   R.push({ label: 'Tries', segs: tries })
   return R
 }

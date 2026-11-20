@@ -2602,6 +2602,24 @@ test('a task lists its commits newest first with the merged one marked', () => {
   expect(detailRows(base, { roles: [], all: [], when: s => s, nowMs: 0 }).some(r => r.label === 'Commits')).toBe(false)
 })
 
+test('T-631: the Tries row shows the last try and the sum of all on one line', () => {
+  const [, base] = addTask(emptyBoard(), { origin: W, title: 'x' }, T)
+  const at = (m: number) => new Date(Date.parse('2026-11-20T10:00:00.000Z') + m * 60_000).toISOString()
+  const NOW = Date.parse(at(40))
+  const tries = (attempts: number, runs: { started: string; ended?: string; tokens?: { input: number } }[]) =>
+    detailRows({ ...base, attempts, runs }, { roles: [], all: [], when: s => s, nowMs: NOW }).find(r => r.label === 'Tries')!.segs.map(s => s.text).join('')
+  const done = (from: number, mins: number, input?: number) => ({ started: at(from), ended: at(from + mins), ...(input !== undefined && { tokens: { input } }) })
+  // one try: no "last" / "all" split
+  expect(tries(1, [done(0, 6, 1_200_000)])).toBe('1 · 6m · 1.2M tokens')
+  // three tries: the last one and the sum
+  expect(tries(3, [done(0, 5, 1_200_000), done(10, 6, 1_200_000), done(20, 6, 1_200_000)])).toBe('3 · last: 6m · 1.2M tokens · all: 17m · 3.6M tokens')
+  // the last try still running counts up to now and says so
+  expect(tries(2, [done(0, 6, 1_200_000), { started: at(36), tokens: { input: 300_000 } }])).toBe('2 · last: 4m (running) · 300k tokens · all: 10m · 1.5M tokens')
+  // no tokens known: the token parts are left out
+  expect(tries(3, [done(0, 5), done(10, 6), done(20, 6)])).toBe('3 · last: 6m · all: 17m')
+  expect(tries(0, [])).toBe('0')
+})
+
 import { mergedDone, alreadyMergedLine } from '../hooks/board'
 
 test('a task found already merged names its commit by the short sha', () => {
