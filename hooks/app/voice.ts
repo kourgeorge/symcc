@@ -202,7 +202,7 @@ export async function playsFor(host: Host, wanted: Notify | null, items: string[
   const text = spokenLine(items)
   if (!text) return []
   const p = await players(host)
-  const can: Playable = { system: p.system, sound: p.sound.length > 0, voice: p.voice.length > 0 }
+  const can = await playable(host)
   const n = notifyOf({ notify: wanted ?? undefined }, can)
   if (n === 'off') return []
   if (!canPlay(n, can)) {

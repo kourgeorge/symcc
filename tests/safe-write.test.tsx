@@ -3,6 +3,8 @@ import { test } from './reset'
 import { fakeHost } from './fake-host'
 import { changeScoutMemory, recordScoutRun } from '../hooks/app/scouts'
 import { tmpFor } from '../hooks/app/store'
+import * as storeModule from '../hooks/app/store'
+import * as vscodeModule from '../hooks/claude/ui/vscode'
 import { parseScoutMemory, parseScoutUsage } from '../hooks/board'
 import { setRoot } from './project'
 import { pause } from './fakes'
@@ -86,4 +88,12 @@ test('temp file names are new for every save', () => {
   const names = Array.from({ length: 50 }, () => tmpFor('/p/.symcc/scouts.json'))
   expect(new Set(names).size).toBe(50)
   for (const n of names) expect(n).toMatch(/^\/p\/\.symcc\/scouts\.json\.[\w-]+\.[\w-]+\.tmp$/)
+})
+
+test('the unused tryLock and foldLabel are gone (T-670)', () => {
+  const store: Record<string, unknown> = storeModule
+  const vscode: Record<string, unknown> = vscodeModule
+  expect('tryLock' in store).toBe(false)
+  expect('foldLabel' in vscode).toBe(false)
+  expect(typeof store.dropIfSame).toBe('function')
 })
