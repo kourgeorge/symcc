@@ -62,7 +62,7 @@ export function COMMANDS(features: HostFeatures = ALL_FEATURES): { name: string;
     { name: `${S.N.name}-mode`, description: `Set the ${S.N.name} board mode: paused (nothing runs), review (finished work waits for you) or auto (it merges on its own); no word switches review and auto`, argumentHint: '[paused|review|auto]' },
     { name: `${S.N.name}-settings`, description: `See and change the ${S.N.name} settings: /${S.N.name}-settings opens them; /${S.N.name}-settings max_parallel 5 sets one; /${S.N.name}-settings role tester off (or kind, with on, off or reset) changes a role or kind`, argumentHint: '[name value | role|kind <name> on|off|reset]' },
     { name: `${S.N.name}-stats`, description: `Show ${S.N.name} time and token stats: the whole team (lead, workers, scouts), totals, averages per task and per try, outcomes, by role, origin and day, with bar charts; html writes them as a web page with charts and opens it: /${S.N.name}-stats [full|html] [7d|T-100..T-130]`, argumentHint: '[full|html] [7d|T-1..T-9]' },
-    { name: `${S.N.name}-doctor`, description: `Check ${S.N.dir}/ and git: old migration backups, task branches already merged, leftover task folders, files near the 4 MB limit, a stuck board; lists them with sizes and cleans up only with /${S.N.name}-doctor fix (all) or fix 1 3 (those)`, argumentHint: '[fix [all|N ...]]' },
+    { name: `${S.N.name}-doctor`, description: `Check ${S.N.dir}/ and git: old migration backups, task branches already merged, leftover task folders, files near the 4 MB limit, a stuck board; lists them with sizes and cleans up only with /${S.N.name}-doctor fix (all) or fix b-T-5 m-1101-1000 (the items with those ids)`, argumentHint: '[fix [all|id ...]]' },
     { name: `${S.N.name}-disable`, description: `Disable ${S.N.name} for this project: ${S.W.assistant} works as normal, nothing runs; the board is kept` },
     { name: `${S.N.name}-enable`, description: `Enable ${S.N.name} again for this project, in the mode the board had` },
     { name: `${S.N.name}-drive`, description: `Make this session drive the ${S.N.name} board (start workers, merge, run scouts); another driving session hands over first` },
@@ -457,7 +457,7 @@ export async function runCommand(host: Host, command: string, args: string): Pro
   if (S.guardOnly) return { text: guardOnlyText(), isTextDisplayOnly: true }
   // /<name>-stats: a read-only text report (see statsText); it changes nothing on the board.
   if (isStats) return { text: await statsText(host, args ?? '').catch((err: Error) => `Could not build the stats: ${err.message}`), isTextDisplayOnly: true }
-  // /<name>-doctor (T-676): checks .<name>/ and git; cleans up only with "fix" (all) or "fix 1 3" (those)
+  // /<name>-doctor (T-676): checks .<name>/ and git; cleans up only with "fix" (all) or "fix <id> ..." (those)
   if (isDoctor) return { text: await doctor(host, args ?? '').catch((err: Error) => `${S.N.name} doctor failed: ${err.message}`), isTextDisplayOnly: true }
   // A broken board.json makes load throw (it is never written over): the commands that don't need the
   // board (help, opening the panel, a usage line) still work; the others answer with the reason.

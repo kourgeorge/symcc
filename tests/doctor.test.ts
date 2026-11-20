@@ -3,7 +3,7 @@
 // scripted fake git and an in-memory folder tree.
 import { expect } from 'claude-code/testing'
 import { type BoardTask, emptyBoard, leadText } from '../hooks/board'
-import { oldBackups, parseDoctorArgs } from '../hooks/core/doctor'
+import { oldBackups, parseDoctorArgs, backupIds } from '../hooks/core/doctor'
 import { doctor } from '../hooks/app/doctor'
 import { runCommand, COMMANDS } from '../hooks/app/symcc'
 import { runTool, TOOLS } from '../hooks/app/tools'
@@ -49,8 +49,8 @@ function world(over: { tasks?: BoardTask[] } = {}) {
     add(`${D}/worktrees/${id}/.git`, 40)
   }
   const dirty = new Set([`${D}/worktrees/T-6`, `${D}/worktrees/T-7`])
-  const branches = new Map([['symcc/T-2', sha('a')], ['symcc/T-3', sha('b')], ['symcc/T-5', sha('c')], ['symcc/T-494', sha('e')], ['symcc/T-7', sha('f')]])
-  const inMain = new Set([sha('a'), sha('b'), sha('c')])
+  const branches = new Map([['symcc/T-2', sha('a')], ['symcc/T-3', sha('b')], ['symcc/T-5', sha('c')], ['symcc/T-6', sha('d')], ['symcc/T-494', sha('e')], ['symcc/T-7', sha('f')]])
+  const inMain = new Set([sha('a'), sha('b'), sha('c'), sha('d')])
   let stale = 1
   let merging = false
   const writes: string[] = []
@@ -130,15 +130,20 @@ test('T-676: the doctor lists each case it finds, with sizes, and changes nothin
   const before = new Map(w.files)
   const text = (await runCommand(w.host, 'symcc-doctor', ''))!.text
   // every finding of the owner's case, the fixable ones numbered
-  expect(text).toContain('1. old migration backup .symcc/board.json.before-migrate-2026-11-01')
+  expect(text).toContain('m-1101-1000  old migration backup .symcc/board.json.before-migrate-2026-11-01')
   expect(text).not.toContain('archive.json.before-migrate')
   expect(text).not.toContain('board.json.before-migrate-2026-11-03')
   expect(text).toContain('.symcc/board.json.before-migrate-2026-11-01T10-00-00-000Z (a newer one is kept)  (1.5 MB)')
   expect(text).toContain('.symcc/board.json.before-migrate-2026-11-02T10-00-00-000Z')
-  expect(text).toContain('folder .symcc/worktrees/T-5/ (T-5 is done)  (2.0 MB)')
-  expect(text).toContain('1 git worktree entry whose folder is gone')
-  expect(text).toContain('branch symcc/T-2 (T-2 is done; all of it is already in main)')
-  expect(text).toContain('branch symcc/T-3 (T-3 is dropped; all of it is already in main)')
+  expect(text).toContain('m-1102-1000  old migration backup')
+  expect(text).toContain('w-T-5  folder .symcc/worktrees/T-5/ (T-5 is done)  (2.0 MB)')
+  expect(text).toContain('p-worktrees  1 git worktree entry whose folder is gone')
+  expect(text).toContain('b-T-2  branch symcc/T-2 (T-2 is done; all of it is already in main)')
+  expect(text).toContain('b-T-5  branch symcc/T-5 (T-5 is done; all of it is already in main) (goes after its folder, w-T-5)')
+  // merged, but checked out in a folder kept for its uncommitted changes: git can't delete it, so it is only listed
+  expect(text).toContain('- branch symcc/T-6 (T-6 is dropped; all of it is already in main): kept: checked out in a folder with uncommitted changes')
+  expect(text).not.toContain('b-T-6')
+  expect(text).toContain('b-T-3  branch symcc/T-3 (T-3 is dropped; all of it is already in main)')
   expect(text).toContain('branch symcc/T-494 (T-494 is dropped) holds unmerged work (3 commits not in main); never deleted')
   expect(text).toContain('folder .symcc/worktrees/T-6/ (T-6 is dropped) has uncommitted changes, kept')
   expect(text).toContain('.symcc/view.json is close to the 4.0 MB limit')
@@ -147,14 +152,14 @@ test('T-676: the doctor lists each case it finds, with sizes, and changes nothin
   expect(text).toContain('.symcc/lead.json names a session that stopped 60 min ago')
   expect(text).toContain('/symcc-drive')
   expect(text).toContain('T-7 is running but has no live worker (for 30 min): /symcc-task T-7 retry')
-  expect(text).toContain('/symcc-doctor fix')
+  expect(text).toContain('To clean up all 7: /symcc-doctor fix · only some: /symcc-doctor fix m-1101-1000 m-1102-1000')
   // a running task's folder and branch are not offered
   expect(text).not.toContain('worktrees/T-7/ (')
   expect(text).not.toContain('symcc/T-7 (')
   // nothing was changed
   expect(w.writes).toEqual([])
   expect([...w.files.keys()]).toEqual([...before.keys()])
-  expect(w.branches.size).toBe(5)
+  expect(w.branches.size).toBe(6)
 })
 
 test('T-676: fix cleans up every listed item, and never an unmerged branch, a folder with changes, reports or org-mem', async () => {
@@ -174,22 +179,32 @@ test('T-676: fix cleans up every listed item, and never an unmerged branch, a fo
   expect(w.writes.some(x => x.includes('--force'))).toBe(false)
   expect(w.writes).toContain('git worktree prune')
   // branches: the merged ones of done and dropped tasks are gone (T-5's after its folder went); unmerged and running stay
-  expect([...w.branches.keys()].sort()).toEqual(['symcc/T-494', 'symcc/T-7'])
+  expect([...w.branches.keys()].sort()).toEqual(['symcc/T-494', 'symcc/T-6', 'symcc/T-7'])
+  expect(said).not.toContain('✗')
   // never touched
   for (const f of ['org-mem.md', 'reports/T-2-try-1.md', 'board.json', 'lead.json', 'view.json', '.DS_Store']) expect(w.files.has(`${D}/${f}`)).toBe(true)
   // checked again: only the listed items are left
   const again = await doctor(w.host, '')
-  expect(again).not.toContain('1. ')
+  expect(again).not.toContain('Can be cleaned up')
   expect(again).toContain('holds unmerged work')
 })
 
-test('T-676: fix with numbers cleans up only those; a wrong number changes nothing', async () => {
+test('T-676: fix with ids cleans up only those; an id no longer offered is skipped, never matched to another item', async () => {
   const w = world()
-  expect(await doctor(w.host, 'fix 9')).toContain('Nothing changed: there is no item 9')
+  expect(await doctor(w.host, 'fix b-T-99')).toContain('Not offered any more, nothing done: b-T-99')
+  expect('bad' in parseDoctorArgs('fix 2', 'symcc')).toBe(true)
   expect(w.writes).toEqual([])
-  const said = await doctor(w.host, 'fix 2')
-  expect(said).toContain('cleaned up 1 of 1')
-  expect(w.writes).toEqual([`rm -f ${D}/board.json.before-migrate-2026-11-02T10-00-00-000Z`])
+  // the owner sees the list, then one item goes away before the fix (here the oldest backup)
+  const seen = await doctor(w.host, '')
+  expect(seen).toContain('m-1101-1000  ')
+  expect(seen).toContain('m-1102-1000  ')
+  w.files.delete(`${D}/board.json.before-migrate-2026-11-01T10-00-00-000Z`)
+  const said = await doctor(w.host, 'fix m-1101-1000 m-1102-1000 b-t-2')
+  expect(said).toContain('cleaned up 2 of 2')
+  expect(said).toContain('Not offered any more, nothing done: m-1101-1000')
+  // only the confirmed ones that were still offered went; the newest backup and every other item stay
+  expect(w.writes).toEqual([`rm -f ${D}/board.json.before-migrate-2026-11-02T10-00-00-000Z`, 'git update-ref -d refs/heads/symcc/T-2 ' + sha('a')])
+  expect(w.files.has(`${D}/board.json.before-migrate-2026-11-03T10-00-00-000Z`)).toBe(true)
   expect(w.branches.size).toBe(5)
 })
 
@@ -208,10 +223,13 @@ test('T-676: the lead tool, the command and the words', async () => {
   const w = world()
   expect(await runTool(w.host, 'doctor', {})).toContain('Can be cleaned up')
   expect(w.writes).toEqual([])
-  expect(await runTool(w.host, 'doctor', { fix: '1' })).toContain('cleaned up 1 of 1')
+  expect(await runTool(w.host, 'doctor', { fix: 'w-T-5' })).toContain('cleaned up 1 of 1')
+  expect(w.dirs.has(`${D}/worktrees/T-5`)).toBe(false)
   expect(parseDoctorArgs('', 'symcc')).toEqual({ fix: null })
   expect(parseDoctorArgs('fix all', 'symcc')).toEqual({ fix: 'all' })
-  expect(parseDoctorArgs('fix 3, 1 3', 'symcc')).toEqual({ fix: [1, 3] })
+  expect(parseDoctorArgs('fix b-T-3, w-T-3 b-t-3', 'symcc')).toEqual({ fix: ['b-T-3', 'w-T-3'] })
   expect('bad' in parseDoctorArgs('clean', 'symcc')).toBe(true)
+  const ids = backupIds(['board.json.before-migrate-2026-11-13T09-05-01-000Z', 'board.json.before-migrate-2026-11-13T09-05-30-000Z', 'board.json.before-migrate-2026-11-14T08-00-00-000Z', 'archive.json.before-migrate-2026-11-14T08-00-00-000Z'])
+  expect([...ids.values()]).toEqual(['m-1113-090501', 'm-1113-090530', 'm-1114-0800', 'm-archive-1114-0800'])
   expect(oldBackups([{ name: 'board.json.before-migrate-b' }, { name: 'board.json.before-migrate-a' }, { name: 'board.json' }]).map(f => f.name)).toEqual(['board.json.before-migrate-a'])
 })

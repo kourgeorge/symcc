@@ -129,10 +129,10 @@ ${features.panel ? `  /${S.N.name}                     open the board panel (↑
   /${S.N.name}-drive               make this session drive the board (start workers, merge, run scouts);
                        a session that drives now hands over within 30 s, its running workers
                        restart here without using up a try
-  /${S.N.name}-doctor [fix [N ...]]  check ${S.N.dir}/ and git: old migration backups, task branches
+  /${S.N.name}-doctor [fix [id ...]] check ${S.N.dir}/ and git: old migration backups, task branches
                        already merged, folders of finished tasks, stale worktree entries,
                        files near the 4 MB limit, stray files and a stuck board, with sizes;
-                       "fix" cleans up every numbered item, "fix 1 3" only those. Unmerged
+                       "fix" cleans up every item it offers, "fix b-T-5 w-T-5" only those. Unmerged
                        branches and folders with uncommitted changes are only listed
   /${S.N.help} [TOPIC]           this manual
 ${features.panel ? `On the board: t tasks · s scouts · c settings · m switch review / auto.
@@ -424,8 +424,8 @@ export const TOOLS = () => [
   },
   {
     name: 'doctor',
-    description: `Check the project's ${S.N.dir}/ folder and git (like the owner's /${S.N.name}-doctor): old migration backups (the newest is kept), task branches of done or dropped tasks already in their branch, folders of finished tasks with no changes, stale git worktree entries, data files near the 4 MB read limit, stray files, and running tasks with no worker or a lead.json of a gone session. Without fix it only lists them, the ones that can be cleaned up numbered, with sizes. fix cleans up: "all", or the numbers from the list (e.g. "1 3"). Only give fix after the owner said yes in the chat (once for all, or for the items they picked). Branches with unmerged work, folders with uncommitted changes, reports, org-mem, scouts, roles and kinds are never deleted; it does nothing while a merge runs.`,
-    inputSchema: { type: 'object', properties: { fix: { type: 'string', description: 'Only after the owner confirmed: "all", or the item numbers from the list, e.g. "1 3".' } } },
+    description: `Check the project's ${S.N.dir}/ folder and git (like the owner's /${S.N.name}-doctor): old migration backups (the newest is kept), task branches of done or dropped tasks already in their branch, folders of finished tasks with no changes, stale git worktree entries, data files near the 4 MB read limit, stray files, and running tasks with no worker or a lead.json of a gone session. Without fix it only lists them, with sizes; each one that can be cleaned up has a short id made from what it is (b-T-5 a branch, w-T-5 a task folder, m-1101-1000 a backup by its date and time, p-worktrees the stale worktree entries). fix cleans up: "all", or the ids from the list (e.g. "b-T-5 m-1101-1000"); an id the list no longer offers is skipped and named, never matched to another item. Only give fix after the owner said yes in the chat (once for all, or for the items they picked). Branches with unmerged work, folders with uncommitted changes, reports, org-mem, scouts, roles and kinds are never deleted; it does nothing while a merge runs.`,
+    inputSchema: { type: 'object', properties: { fix: { type: 'string', description: 'Only after the owner confirmed: "all", or the item ids from the list, e.g. "b-T-5 m-1101-1000".' } } },
   },
 ]
 

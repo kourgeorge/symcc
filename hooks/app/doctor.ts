@@ -4,7 +4,7 @@
 // roles and kinds are never touched: only migration backups, task folders of finished tasks, stale git worktree
 // entries and task branches already in their branch can be cleaned up.
 import { type BoardTask, type Board, liveWorkersFor, intoOf, finishingNow, checkStepNow, parseLead, isFresh, liveDriver } from '../board'
-import { type DoctorItem, oldBackups, parseDoctorArgs, doctorText, fixedText, type DoctorFixed, mergeRunsText, pruneLines, STRAY_DIRS, DOCTOR_STUCK_MIN, BACKUP_MARK } from '../core/doctor'
+import { type DoctorItem, oldBackups, backupIds, branchId, folderId, PRUNE_ID, parseDoctorArgs, doctorText, fixedText, type DoctorFixed, mergeRunsText, pruneLines, STRAY_DIRS, DOCTOR_STUCK_MIN, BACKUP_MARK } from '../core/doctor'
 import { SIZE_WARN_BYTES, READ_LIMIT_BYTES, PARTS_DIR, mbText } from '../core/board-parts'
 import { type Host, agentState } from '../host'
 import { S, workers, starting, finishing, approving } from './state'
@@ -53,7 +53,7 @@ async function folderBytes(host: Host, dir: string): Promise<number | undefined>
 }
 
 /**
- * Everything the doctor finds now, in the order the list shows it (the fixable ones numbered in this order), or the
+ * Everything the doctor finds now, in the order the list shows it (and the fixes run in), or the
  * reason it doesn't run (a merge is in progress, or the project folder isn't known).
  */
 export async function doctorCheck(host: Host): Promise<Found[] | string> {
@@ -74,10 +74,11 @@ export async function doctorCheck(host: Host): Promise<Found[] | string> {
 
   // 1. the data folder: old migration backups, files near the read limit, stray files
   const top = await host.fs.list(dir).catch(() => [])
+  const ids = backupIds(top.filter(e => e.kind === 'file' && e.name.includes(BACKUP_MARK)).map(e => e.name))
   for (const f of oldBackups(top.filter(e => e.kind === 'file'))) {
     const file = `${dir}/${f.name}`
     backups.push({
-      kind: 'backup', fixable: true, bytes: f.size, text: `old migration backup ${shown(file)} (a newer one is kept)`,
+      kind: 'backup', fixable: true, id: ids.get(f.name)!, bytes: f.size, text: `old migration backup ${shown(file)} (a newer one is kept)`,
       fix: async () => {
         if (!f.name.includes(BACKUP_MARK)) return 'not a backup'
         const r = await host.run(['rm', '-f', file]).catch((e: unknown) => ({ exitCode: 1, stdout: '', stderr: String(e) }))
@@ -98,6 +99,8 @@ export async function doctorCheck(host: Host): Promise<Found[] | string> {
 
   // 2. task folders (.<name>/worktrees/T-n) of tasks that are done, dropped or gone from the board
   const wtRoot = path(S.N.worktrees)
+  /** The folders kept below (not offered), by path: a branch checked out in one of them can't be deleted. */
+  const keptDirs = new Map<string, string>()
   for (const e of (await host.fs.list(wtRoot).catch(() => [])).filter(x => x.kind === 'dir').sort((x, y) => x.name.localeCompare(y.name, undefined, { numeric: true }))) {
     const id = e.name
     const t = taskOf(id)
@@ -106,19 +109,22 @@ export async function doctorCheck(host: Host): Promise<Found[] | string> {
     const why = t ? `${id} is ${t.status}` : `${id} is not on the board`
     if (inUse(id, t, agents)) {
       listed.push({ kind: 'worktree', fixable: false, text: `folder ${shown(wt)}/ (${why}): an agent may still use it, kept` })
+      keptDirs.set(wt, 'an agent may still use it')
       continue
     }
     if (!(await host.fs.exists(`${wt}/.git`).catch(() => false))) {
       listed.push({ kind: 'worktree', fixable: false, text: `folder ${shown(wt)}/ (${why}) is not a git worktree; remove it by hand if you don't need it` })
+      keptDirs.set(wt, 'is not a git worktree')
       continue
     }
     const bytes = await folderBytes(host, wt)
     if (await dirty(host, wt)) {
       listed.push({ kind: 'worktree', fixable: false, bytes, text: `folder ${shown(wt)}/ (${why}) has uncommitted changes, kept` })
+      keptDirs.set(wt, 'has uncommitted changes')
       continue
     }
     trees.push({
-      kind: 'worktree', fixable: true, bytes, text: `folder ${shown(wt)}/ (${why})`,
+      kind: 'worktree', fixable: true, id: folderId(id), bytes, text: `folder ${shown(wt)}/ (${why})`,
       fix: async () => {
         if (inUse(id, taskOf(id), await agentsNow(host))) return 'an agent may still use it'
         if (await dirty(host, wt)) return 'it has uncommitted changes now'
@@ -134,7 +140,7 @@ export async function doctorCheck(host: Host): Promise<Found[] | string> {
   const stale = dry && dry.exitCode === 0 ? pruneLines(`${dry.stdout}\n${dry.stderr}`) : []
   if (stale.length)
     prunes.push({
-      kind: 'prune', fixable: true, text: `${stale.length} git worktree ${stale.length === 1 ? 'entry' : 'entries'} whose folder is gone (git worktree prune)`,
+      kind: 'prune', fixable: true, id: PRUNE_ID, text: `${stale.length} git worktree ${stale.length === 1 ? 'entry' : 'entries'} whose folder is gone (git worktree prune)`,
       fix: async () => {
         const r = await git(host, ['worktree', 'prune'])
         return r.exitCode === 0 ? '' : `git worktree prune: ${(r.stderr || r.stdout).trim().slice(0, 150)}`
@@ -142,6 +148,15 @@ export async function doctorCheck(host: Host): Promise<Found[] | string> {
     })
 
   // 4. task branches (<name>/T-n) of done and dropped tasks: deleted only when their tip is in the branch they merge into
+  // where each branch is checked out (git worktree list): such a branch can't be deleted while its folder stays
+  const wl = await git(host, ['worktree', 'list', '--porcelain']).catch(() => null)
+  const outAt = new Map<string, string>()
+  let at = ''
+  for (const l of (wl?.exitCode === 0 ? wl.stdout : '').split('\n').map(x => x.trim())) {
+    if (l.startsWith('worktree ')) at = l.slice('worktree '.length)
+    else if (l.startsWith('branch refs/heads/')) outAt.set(l.slice('branch refs/heads/'.length), at)
+  }
+  const offered = new Set(trees.map(f => f.id))
   const refs = await git(host, ['for-each-ref', '--format=%(refname:short) %(objectname)', `refs/heads/${S.N.branch('')}`]).catch(() => null)
   const rows = (refs?.exitCode === 0 ? refs.stdout : '').split('\n').map(l => l.trim().split(/\s+/)).filter(r => r.length === 2) as [string, string][]
   for (const [br, sha] of rows.sort((x, y) => x[0].localeCompare(y[0], undefined, { numeric: true }))) {
@@ -151,7 +166,18 @@ export async function doctorCheck(host: Host): Promise<Found[] | string> {
     const into = intoOf(t)
     const anc = await git(host, ['merge-base', '--is-ancestor', sha, `refs/heads/${into}`]).catch(() => null)
     if (anc?.exitCode === 0) {
-      branches.push({ kind: 'branch', fixable: true, text: `branch ${br} (${id} is ${t.status}; all of it is already in ${into})`, fix: async () => ((await deleteMergedBranch(host, br, into)) ? '' : `it is no longer all in ${into}, or it is still checked out in a folder`) })
+      const folder = outAt.get(br)
+      // checked out in a folder that is kept (or the project folder itself): git refuses to delete it, so only list it
+      if (wl?.exitCode !== 0 || (folder !== undefined && !(folder === `${wtRoot}/${id}` && offered.has(folderId(id))))) {
+        const why = wl?.exitCode !== 0 ? 'git could not tell where it is checked out' : keptDirs.get(folder!) === 'has uncommitted changes' ? 'checked out in a folder with uncommitted changes' : `checked out in ${shown(folder!)}/`
+        listed.push({ kind: 'branch', fixable: false, text: `branch ${br} (${id} is ${t.status}; all of it is already in ${into}): kept: ${why}` })
+        continue
+      }
+      const after = folder !== undefined ? ` (goes after its folder, ${folderId(id)})` : ''
+      branches.push({
+        kind: 'branch', fixable: true, id: branchId(id), text: `branch ${br} (${id} is ${t.status}; all of it is already in ${into})${after}`,
+        fix: async () => ((await deleteMergedBranch(host, br, into)) ? '' : `it is no longer all in ${into}, or it is still checked out in a folder${after ? ` (clean up ${folderId(id)} too)` : ''}`),
+      })
       continue
     }
     const n = anc?.exitCode === 1 ? await git(host, ['rev-list', '--count', `refs/heads/${into}..${sha}`]).catch(() => null) : null
@@ -181,7 +207,8 @@ export async function doctorCheck(host: Host): Promise<Found[] | string> {
 
 /**
  * /<name>-doctor with its words `args` (and the lead's doctor tool): no words lists what it finds; "fix" cleans up
- * every numbered item, "fix 1 3" only those (the numbers of the list as it is now).
+ * every item offered now, "fix b-T-5 m-1101-1000" only the items with those ids that are still offered (an id the
+ * list no longer has is named and skipped, never matched to another item).
  */
 export async function doctor(host: Host, args: string): Promise<string> {
   const ask = parseDoctorArgs(args, S.N.name)
@@ -189,16 +216,16 @@ export async function doctor(host: Host, args: string): Promise<string> {
   const found = await doctorCheck(host)
   if (typeof found === 'string') return found
   if (ask.fix === null) return doctorText(found, S.N.name, S.N.dir)
-  const fixable = found.filter(f => f.fixable && f.fix)
-  const wrong = ask.fix === 'all' ? [] : ask.fix.filter(n => n > fixable.length)
-  if (wrong.length) return `Nothing changed: there is no item ${wrong.join(', ')} (the list has ${fixable.length} to clean up). See /${S.N.name}-doctor.`
-  const picked = ask.fix === 'all' ? fixable.map((_, i) => i + 1) : ask.fix
+  const fixable = found.filter(f => f.fixable && f.fix && f.id)
+  const want = ask.fix
+  const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase()
+  const picked = want === 'all' ? fixable : fixable.filter(f => want.some(w => same(w, f.id!)))
+  const gone = want === 'all' ? [] : want.filter(w => !fixable.some(f => same(w, f.id!)))
   const done: DoctorFixed[] = []
   // in list order: task folders go before their branches, so a branch freed by its folder's removal can go too
-  for (const n of picked) {
-    const f = fixable[n - 1]!
+  for (const f of picked) {
     const failed = await f.fix!().catch((e: Error) => String(e?.message ?? e).slice(0, 150))
-    done.push({ n, text: f.text, ...(f.bytes !== undefined ? { bytes: f.bytes } : {}), failed })
+    done.push({ id: f.id!, text: f.text, ...(f.bytes !== undefined ? { bytes: f.bytes } : {}), failed })
   }
-  return fixedText(done, S.N.name)
+  return fixedText(done, S.N.name, gone)
 }

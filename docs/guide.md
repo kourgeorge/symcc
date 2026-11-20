@@ -1501,19 +1501,22 @@ tasks, folders of tasks that ended. They take space and make `git branch` long, 
 can't tell on its own which of them you still want. `/symcc-doctor` looks and tells you, with
 sizes. It changes nothing until you say so.
 
-- **What it offers to clean up (numbered):** old `board.json.before-migrate-<time>` copies
+- **What it offers to clean up (each with a short id):** old `board.json.before-migrate-<time>` copies
   (the newest one is kept); folders in `.symcc/worktrees/` of done or dropped tasks with no
   uncommitted changes; git worktree entries whose folder is gone (`git worktree prune`);
   `symcc/T-<n>` branches of done or dropped tasks whose work is all in the branch they merge
-  into.
+  into. The id says what the item is: `m-1101-1000` is the backup made on 1 November at
+  10:00, `w-T-5` is T-5's folder, `b-T-5` its branch, `p-worktrees` the stale entries.
 - **What it only lists:** a branch that holds unmerged work (it says how many commits), a
-  folder with uncommitted changes, data files close to the 4 MB limit, stray files like
+  folder with uncommitted changes (and a merged branch still checked out in such a folder), data files close to the 4 MB limit, stray files like
   `.DS_Store` and empty `scratch/`, `ideas/` or `artifacts/` folders, a running task with no
   live worker (with the fix: `/symcc-task T-5 retry`), and a `lead.json` left by a session
   that is gone (with the fix: `/symcc-drive`).
-- **Cleaning up:** `/symcc-doctor fix` cleans up every numbered item; `/symcc-doctor fix 1 3`
-  only those. Each item is checked again right before it goes, so work added in between is
-  kept. The same works in OpenCode and on the command line (`cmd symcc-doctor fix`), and the
+- **Cleaning up:** `/symcc-doctor fix` cleans up every item it offers; `/symcc-doctor fix
+  b-T-5 m-1101-1000` only those. Ids, not list numbers, so an item that went away in the
+  meantime (the regular check also removes finished tasks' folders and branches) can never
+  make you delete a different one: an id no longer offered is named and skipped. Each item is
+  checked again right before it goes, so work added in between is kept. The same works in OpenCode and on the command line (`cmd symcc-doctor fix`), and the
   lead has a `doctor` tool, which it uses to clean up only after you said yes.
 - **Never touched:** reports, org-mem, scouts, roles and kinds, a running task's folder or
   branch, and anything unmerged or uncommitted. While a merge is going on, the doctor doesn't
