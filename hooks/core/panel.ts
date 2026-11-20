@@ -299,6 +299,10 @@ export function rowExtra(t: BoardTask, tasks: Pick<SymccTask, 'id' | 'status'>[]
   return [other, rest].filter(Boolean).join(' · ')
 }
 
+/** The words before the ids a task to do still waits for, on a board row ("waits for T-3, T-4"); the VS Code list
+ *  reads them back to keep that part whole and to make its short form ("waits for T-3 +1"). */
+export const WAITS_FOR = 'waits for'
+
 function rowExtraOf(t: BoardTask, tasks: Pick<SymccTask, 'id' | 'status'>[], maxMinutes: number): string {
   switch (t.status) {
     case 'doing':
@@ -307,7 +311,7 @@ function rowExtraOf(t: BoardTask, tasks: Pick<SymccTask, 'id' | 'status'>[], max
     case 'todo':
     case 'paused': {
       const open = (t.after ?? []).filter(id => tasks.some(x => x.id === id && x.status !== 'done'))
-      return open.length ? `waits for ${open.join(', ')}` : roleTag(t)
+      return open.length ? `${WAITS_FOR} ${open.join(', ')}` : roleTag(t)
     }
     case 'review':
       return isInvestigation(t) ? kindTag(t) : 'Enter to review'

@@ -107,7 +107,7 @@ test('the board snapshot comparison still fails when the drawn tree really chang
   const drawn = drawnData(await ui.drawn())
   expect(drawn).toEqual(BEFORE['terminal 50'])
   // one word of one title, one running time, one color: each alone is caught
-  expect(drawn).not.toEqual(changedTree(BEFORE['terminal 50'], [['Show the plugin version in the', 'Show the plugin release in the']]))
+  expect(drawn).not.toEqual(changedTree(BEFORE['terminal 50'], [['Show the plugin version', 'Show the plugin release']]))
   expect(drawn).not.toEqual(changedTree(BEFORE['terminal 50'], [['▶ 2m       ', '▶ 3m       ']]))
   expect(drawn).not.toEqual(changedTree(BEFORE['terminal 50'], [['"color":"ide"', '"color":"text"']]))
   await ui.unmount()
@@ -642,12 +642,12 @@ test('T-590: in VS Code each open task and question is one line: id, state, then
     expect(await rowText(ui, 'T-401'), at).toMatch(bodyColumns === 40 ? /^T-401 ▶ 2m\s+Show\S*( \S+)*…$/ : /^T-401 ▶ 2m\s+Show the.*… · \[investigation · researcher\]$/)
     expect(await rowText(ui, 'T-406'), at).toMatch(/^T-406 ○\s+Write the guide/)
     expect(await rowText(ui, 'T-404'), at).toMatch(/^● T-404 \? waiting for 1m\s+Pick the/)
-    // a long title is cut with "…" and "after T-406" stays on the line
+    // a long title is cut with "…" and "waits for T-406" stays on the line
     const line = await rowText(ui, 'T-578')
-    expect(line, at).toMatch(/^T-578 ○\s+Let the.*… · after T-406/)
+    expect(line, at).toMatch(/^T-578 ○\s+Let.*… · waits for T-406/)
     expect(line.length, at).toBeLessThanOrEqual(bodyColumns)
-    // the kind comes after "after T-406" and is dropped whole first when the line is narrow, never cut mid-word
-    expect(line, at).toMatch(bodyColumns === 40 ? / · after T-406$/ : / · after T-406 · feature$/)
+    // the kind comes after "waits for T-406" and is dropped whole first when the line is narrow, never cut mid-word
+    expect(line, at).toMatch(bodyColumns === 40 ? / · waits for T-406$/ : / · waits for T-406 · feature$/)
     const q = await rowText(ui, 'Q-3')
     expect(q, at).toMatch(bodyColumns === 40 ? /^● Q-3 \? 5m\s+Sh\S*( \S+)*…( · 2 choices)?$/ : /^● Q-3 \? 5m\s+Should the.*… · 2 choices$/)
     // never wider than the row: the title is cut (below its floor when it must) before the state part
