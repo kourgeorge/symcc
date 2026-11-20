@@ -1,9 +1,10 @@
 // The board panel's Tasks view in VS Code's side panel (see surface.ts and vscode.tsx). The terminal's list
-// (list.tsx) packs each task on one cut line of a button; here each task is two readable lines of text that wrap:
-//   ● T-404  Pick the colors for the review mark on light themes   (the ID a link that opens the task, the title plain,
-//   ? waiting for 1m · Yellow or blue for review?                    up to two lines, then "(more)"; "●": it needs you)
-// (a done or dropped task is one line: "✓ T-12 title", its mark first, no second line), the second line dim: the status in its color and how long it has run or waited, the kind or role, the try, the
-// question or why it failed. Grouped under headings with their colored mark and a count badge (Questions for you,
+// (list.tsx) packs each task on one cut line of a button; here each open task is one line of text too:
+//   ● T-404  Pick the colors for the review… · ? waiting for 1m · Yellow or blue for review?
+// the ID a link that opens the task, the title ("●" first when it needs you), then dim the state part: the status in
+// its color and how long it has run or waited, the kind or role, "after …", the question or why it failed, the try.
+// When the line is too wide the title is cut with "…" first (the whole title is on the task's page). A done or dropped
+// task is one line: "✓ T-12 title", its mark first, no state part. Grouped under headings with their colored mark and a count badge (Questions for you,
 // Waiting for you, Review, Failed, Doing, To do), a line of space between them, then Backlog, Done and Dropped, folded
 // (each fold a link). No Buttons for rows or folds: VS Code draws a Button as a filled blue box whose label never wraps.
 // No key hints: the mode switch is a link and the search a box in the footer. An empty board says so, with one
@@ -14,7 +15,7 @@ import { openDays, S } from '../../app/state'
 import { type $, panelValues } from '../panel'
 import type { PaneParts } from './parts'
 import { row } from './arrows'
-import { vsFold, vsFooter, vsHeading, vsHref, vsLink, mdLink, mdText, twoLines, MORE, NO_TITLE } from './vscode'
+import { vsFold, vsFooter, vsHeading, vsHref, vsLink, mdLink, mdText, twoLines, cutEnd, MORE, MIN_TITLE, NO_TITLE } from './vscode'
 
 /** The status groups of the VS Code list, top to bottom: what needs you first, then what runs and what waits. */
 const GROUPS: { label: string; has: SymccStatus[] }[] = [
@@ -60,7 +61,7 @@ export function listPageVs($: $, pane: PaneParts) {
     const at = Date.parse(iso ?? '')
     return Number.isFinite(at) ? fmtDuration(Math.max(0, nowMs - at)) : ''
   }
-  /** The status words of a row's second line: the mark and the running time ("▶ 2m"; in a check step its icon in
+  /** The status words of a row's state part: the mark and the running time ("▶ 2m"; in a check step its icon in
    *  place of ▶ and the step word, "⧗ 9m", see rowMark), how long a task has waited for you ("? waiting for 1m",
    *  "◆ review for 5m") or since it failed ("✗ failed 3m ago"). */
   const statusText = (x: SymccTask) => {
@@ -76,9 +77,25 @@ export function listPageVs($: $, pane: PaneParts) {
     return `${mark} ${shown && shown !== x.status ? shown : word[x.status]}`
   }
 
-  /** One task: a line of text, its ID a link that opens it, then the title (up to two lines; bold when it needs you,
-   *  dim when closed), with "●" first in the status color when it needs you; under it a dim line with the rest.
-   *  Text, not a Button, so it wraps (VS Code draws a Button as a blue box on one line). */
+  /** An open row's one line, cut to `room` columns: the title first (down to MIN_TITLE, with "…"), then the rest of
+   *  the state part (the kind, "after T-578", the question...); the status words and the try always stay whole. */
+  const fitRow = (title: string, room: number, status: string, rest: string, tried: string) => {
+    const fixed = 3 + status.length + (tried ? 3 + tried.length : 0)
+    const restLen = (r: string) => (r ? 3 + r.length : 0)
+    let t = title.replace(/\s+/g, ' ').trim()
+    let r = rest
+    if (t.length + fixed + restLen(r) <= room) return { title: t, rest: r }
+    t = cutEnd(t, Math.max(Math.min(t.length, MIN_TITLE), room - fixed - restLen(r)))
+    const left = room - t.length - fixed - 3
+    if (r && t.length + fixed + restLen(r) > room) r = left >= 4 ? cutEnd(r, left) : ''
+    return { title: t, rest: r }
+  }
+
+  /** One task on one line of text: its ID a link that opens it, then the title (bold when it needs you, dim when
+   *  closed), with "●" first in the status color when it needs you; then, dim on the same line, the state part: the
+   *  status in its color and its time, the kind, "after …", the try. When the line is too wide the title is cut with
+   *  "…" (the whole title is on the task's page). A done or dropped task: its mark, the ID and the title, no state part.
+   *  Text, not a Button (VS Code draws a Button as a blue box). */
   const taskRow = (x: SymccTask, depth = 0) => {
     const closed = x.status === 'done' || x.status === 'dropped' || x.status === 'backlog'
     // a done or dropped task is one line: its mark (the terminal list's), the ID link, the dim title; no status line
@@ -92,26 +109,36 @@ export function listPageVs($: $, pane: PaneParts) {
     // or failure reason that only mentions the word does not count
     const tagged = rest.split(' · ').some(p => p === `[${kind}]` || p === `[${kind}`)
     if (kind && !tagged) rest = rest ? `${kind} · ${rest}` : kind
-    const title = twoLines(x.title, width - depth, (needs || ended ? 2 : 0) + x.id.length + 2)
     const href = vsHref('task', x.id)
-    const words = `${mdText(title.text)}${title.cut ? ` ${mdText(MORE)}` : ''}`
+    const lead = (needs || ended ? 2 : 0) + x.id.length + 2
+    const status = ended ? '' : statusText(x)
+    let words: string
+    if (ended) {
+      const title = twoLines(x.title, width - depth, lead)
+      words = `${mdText(title.text)}${title.cut ? ` ${mdText(MORE)}` : ''}`
+    } else {
+      const fit = fitRow(x.title.trim() || NO_TITLE, width - depth - lead, status, rest, tried)
+      words = x.title.trim() ? mdText(fit.title) : ''
+      rest = fit.rest
+    }
     return (
       <Box key={`vs-task-${x.id}`} flexDirection="column" paddingLeft={depth}>
         <Box key={`vs-task-${x.id}-top`} flexDirection="row">
           {needs ? <Text key="needs" bold color={C(tone[x.status] ?? 'warning')}>● </Text> : null}
           {ended ? <Text key="ended" color={C(tone[x.status]!)}>{`${statusMark(x)} `}</Text> : null}
-          <Box key="title" flexDirection="column" flexGrow={words ? 1 : 0} flexShrink={1}>
+          <Box key="title" flexDirection="column" flexGrow={ended && words ? 1 : 0} flexShrink={1}>
             {vsLink(vs, row(x.id), words ? `${mdLink(x.id, href)} \u00a0${needs ? `**${words}**` : words}` : mdLink(x.id, href), [[href, act(() => panelValues($).updateOpened(() => x.id))]], closed)}
           </Box>
           {words ? null : <Text key="no-title" color={C('inactive')}>{` \u00a0${NO_TITLE}`}</Text>}
+          {ended ? null : (
+            <Text key={`vs-task-${x.id}-info`} wrap="truncate" color={C('inactive')}>
+              {' · '}
+              <Text color={C(tone[x.status]!)}>{status}</Text>
+              {rest ? ` · ${rest}` : ''}
+              {tried ? <Text color={C(tryTone(x))}>{` · ${tried}`}</Text> : null}
+            </Text>
+          )}
         </Box>
-        {ended ? null : (
-          <Text key={`vs-task-${x.id}-info`} wrap="wrap" color={C('inactive')}>
-            <Text color={C(tone[x.status]!)}>{statusText(x)}</Text>
-            {rest ? ` · ${rest}` : ''}
-            {tried ? <Text color={C(tryTone(x))}>{` · ${tried}`}</Text> : null}
-          </Text>
-        )}
       </Box>
     )
   }
@@ -128,19 +155,24 @@ export function listPageVs($: $, pane: PaneParts) {
             const asked = ago(q.asked_at)
             const choices = q.options?.length ?? 0
             const href = vsHref('question', q.id)
+            const state = `? question for you${asked ? ` for ${asked}` : ''}`
+            const more = choices ? `${choices} ${choices === 1 ? 'choice' : 'choices'}` : ''
+            const fit = fitRow(q.text.trim() || NO_TITLE, width - 2 - q.id.length - 2, state, more, '')
+            const words = q.text.trim() ? mdText(fit.title) : ''
             return (
               <Box key={`vs-question-${q.id}`} flexDirection="column">
                 <Box key={`vs-question-${q.id}-top`} flexDirection="row">
                   <Text key="needs" bold color={C('warning')}>● </Text>
-                  <Box key="title" flexDirection="column" flexGrow={mdText(q.text) ? 1 : 0} flexShrink={1}>
-                    {vsLink(vs, row(q.id), mdText(q.text) ? `${mdLink(q.id, href)} \u00a0**${mdText(q.text)}**` : mdLink(q.id, href), [[href, act(() => panelValues($).updateOpened(() => q.id))]])}
+                  <Box key="title" flexDirection="column" flexGrow={0} flexShrink={1}>
+                    {vsLink(vs, row(q.id), words ? `${mdLink(q.id, href)} \u00a0**${words}**` : mdLink(q.id, href), [[href, act(() => panelValues($).updateOpened(() => q.id))]])}
                   </Box>
-                  {mdText(q.text) ? null : <Text key="no-title" color={C('inactive')}>{` \u00a0${NO_TITLE}`}</Text>}
+                  {words ? null : <Text key="no-title" color={C('inactive')}>{` \u00a0${NO_TITLE}`}</Text>}
+                  <Text key={`vs-question-${q.id}-info`} wrap="truncate" color={C('inactive')}>
+                    {' · '}
+                    <Text color={C('warning')}>{state}</Text>
+                    {fit.rest ? ` · ${fit.rest}` : ''}
+                  </Text>
                 </Box>
-                <Text key={`vs-question-${q.id}-info`} wrap="wrap" color={C('inactive')}>
-                  <Text color={C('warning')}>{`? question for you${asked ? ` for ${asked}` : ''}`}</Text>
-                  {choices ? ` · ${choices} ${choices === 1 ? 'choice' : 'choices'}` : ''}
-                </Text>
               </Box>
             )
           })}

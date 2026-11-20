@@ -133,17 +133,18 @@ test('in VS Code the Tasks page shows whole titles, status colors on the marks, 
   for (const k of ['day:backlog', 'day:done', 'day:dropped']) await ui.press({ key: k, link: { href: vsHref('fold', k) } })
   const tree = await ui.drawn()
   const all = texts(tree)
-  // every row is text that wraps: a Markdown whose ID is a link to the task, then the title (cut at a word after about
-  // two lines, then "(more)"); nothing anywhere is cut with "…"
+  // every row is text: a Markdown whose ID is a link to the task, then the title (an open row's cut with "…" when its
+  // line is too wide; a done one's at a word after about two lines, then "(more)")
   for (const t of BOARD_TASKS) {
     const open = await ui.find({ key: t.id })
     expect([open?.type, open?.props.pressableLinks], t.id).toEqual(['Markdown', [vsHref('task', t.id)]])
     const md = String(open!.props.text)
     expect(md.startsWith(mdLink(t.id, vsHref('task', t.id))), t.id).toBe(true)
-    const shown = mdPlain(md).slice(t.id.length).trim().replace(new RegExp(`${MORE.replace(/[()]/g, '\\$&')}$`), '')
-    expect(t.title.startsWith(shown) && shown.length > 8, t.id).toBe(true)
+    const shown = mdPlain(md).slice(t.id.length).trim().replace(new RegExp(`${MORE.replace(/[()]/g, '\\$&')}$`), '').replace(/…$/, '')
+    expect(t.title.startsWith(shown) && shown.length >= 6, t.id).toBe(true)
   }
-  expect(all.filter(s => s.includes('…'))).toEqual([])
+  // "…" only in an open row's title or state part (cut to its one line), never "(more)" there
+  for (const t of BOARD_TASKS.filter(t => t.status !== 'done' && t.status !== 'dropped')) expect(await rowText(ui, t.id), t.id).not.toContain(MORE.trim())
   // no Button in a row; the status color is on the status words only, not on the row's box or its title
   for (const t of BOARD_TASKS) {
     const rowBox = await ui.find({ key: `vs-task-${t.id}` })
@@ -283,13 +284,12 @@ const MIXED_VIEW = { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, tasks: [...BOA
 const EMPTY_VIEW = { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, working: [], tasks: [] } }
 
 type Mounted = { find: (q: { key: string }) => Promise<unknown> }
-/** A row's two lines as they read ("● T-404  title" and its dim line), "\n" between; `kind` the row's key start. */
+/** A row as it reads, on its one line ("● T-404  title · ? waiting for 1m · …"); `kind` the row's key start. */
 async function rowText(ui: Mounted, id: string, kind = id.startsWith('Q-') ? 'vs-question' : 'vs-task') {
-  const [top, info] = ((await ui.find({ key: `${kind}-${id}` })) as Node).children!.filter(n => n && typeof n === 'object')
-  return `${texts(top).join('')}\n${texts(info).join('')}`
+  return texts((await ui.find({ key: `${kind}-${id}` })) as Node).join('')
 }
-/** A row's dim second line. */
-const infoLine = async (ui: Mounted, id: string) => ((await ui.find({ key: `vs-task-${id}` })) as Node).children!.filter(n => n && typeof n === 'object')[1]
+/** A row's one line (its title and then its dim state part). */
+const infoLine = async (ui: Mounted, id: string) => (await ui.find({ key: `vs-task-${id}-top` })) as Node
 
 test('in VS Code the Tasks list at widths 40 and 80: headings with counts, rows and folds as links, no Buttons', async ($, on) => {
   seedBoard(on, { view: MIXED_VIEW })
@@ -315,9 +315,9 @@ test('in VS Code the Tasks list at widths 40 and 80: headings with counts, rows 
       expect([badge?.props?.backgroundColor, badge?.props?.color, badge?.props?.bold], `${at} ${k}`).toEqual([tone, 'inverseText', true])
     }
     // no Button anywhere on the busy Tasks page: rows, folds, tabs and the mode switch are links; nothing is cut to one
-    // line but the rules, so nothing runs off the right edge
+    // line but the rules and a row's state part (already fitted to the width), so nothing runs off the right edge
     expect(elements(tree).filter(n => n.type === 'Button').map(n => n.props?.key), at).toEqual([])
-    expect(elements(tree).filter(n => n.type === 'Text' && n.props?.wrap === 'truncate' && !/^[─━]+$/.test(texts(n).join(''))), at).toEqual([])
+    expect(elements(tree).filter(n => n.type === 'Text' && n.props?.wrap === 'truncate' && !/^[─━]+$/.test(texts(n).join('')) && !texts(n).join('').startsWith(' · ')), at).toEqual([])
     // a line of space between the folded sections too (the open ones sit in the page's column, gap 1)
     expect((await ui.find({ key: 'vs-folded' }))?.props.gap, at).toBe(1)
     // Backlog, Done and Dropped are folded: bold links that read as headings, with their count; none of their tasks drawn
@@ -337,12 +337,13 @@ test('in VS Code the Tasks list at widths 40 and 80: headings with counts, rows 
       expect([b?.type, b?.props.pressableLinks], `${at} ${t.id}`).toEqual(['Markdown', [vsHref('task', t.id)]])
       expect(String(b?.props.text).startsWith(mdLink(t.id, vsHref('task', t.id))), `${at} ${t.id}`).toBe(true)
     }
-    // the dim line: the status in its color and its time, the kind or role, the question or why it failed, the try
-    expect(await rowText(ui, 'T-404'), at).toContain('\n? waiting for 1m · Yellow or blue for review?')
-    expect(await rowText(ui, 'T-405'), at).toContain('\n✗ failed 1m ago')
-    expect(await rowText(ui, 'T-401'), at).toContain('\n▶ 2m')
-    expect(await rowText(ui, 'T-403'), at).toContain('\n◆ review for 1m · ready for your review')
-    expect(await rowText(ui, 'T-420'), at).toMatch(/\n.*investigation/)
+    // on the same line, dim: the status in its color and its time, the kind or role, the question or why it failed, the
+    // try (at 40 the question does not fit beside the cut title: the status words stay)
+    expect(await rowText(ui, 'T-404'), at).toContain(bodyColumns === 80 ? ' · ? waiting for 1m · Yellow or blue for review?' : ' · ? waiting for 1m')
+    expect(await rowText(ui, 'T-405'), at).toContain(' · ✗ failed 1m ago')
+    expect(await rowText(ui, 'T-401'), at).toContain(' · ▶ 2m')
+    expect(await rowText(ui, 'T-403'), at).toContain(bodyColumns === 80 ? ' · ◆ review for 1m · ready for your review' : ' · ◆ review for 1m')
+    expect(await rowText(ui, 'T-420'), at).toMatch(bodyColumns === 80 ? / · .*investigation/ : / · ◆ answer for 1m/)
     const status = elements(await infoLine(ui, 'T-405')).find(n => texts(n).join('') === '✗ failed 1m ago')
     expect(status?.props?.color, at).toBe('error')
     // a task that needs you gets a clear "●" mark first (in its tone) and a bold title; one that runs starts with its ID
@@ -351,23 +352,21 @@ test('in VS Code the Tasks list at widths 40 and 80: headings with counts, rows 
       expect(String((await ui.find({ key: id }))?.props.text), `${at} ${id}`).toMatch(/\*\*.+\*\*$/)
     }
     expect(await rowText(ui, 'T-401'), at).toMatch(/^T-401\s+\S/)
-    // a long title: whole when it fits two lines, at 80; at 40 cut at a word after about two lines, then "(more)" (the
-    // whole title is on its page)
-    const long = LONG.title
-    const shown = (await rowText(ui, 'T-421')).split('\n')[0]!.replace(/^T-421\s+/, '')
-    if (bodyColumns === 80) expect(shown, at).toBe(long)
-    else {
-      expect(shown.endsWith(MORE), at).toBe(true)
-      const cut = shown.slice(0, -MORE.length)
-      expect(long.startsWith(cut) && cut.length > 20 && long.charAt(cut.length) === ' ', at).toBe(true)
-    }
+    // a long title: one line, the title cut with "…" so the state part stays on it (the whole title is on its page)
+    const line = await rowText(ui, 'T-421')
+    expect(line.length, at).toBeLessThanOrEqual(bodyColumns)
+    expect(line, at).toMatch(/^T-421\s+Draw the board list.*… · ○ to do/)
+    const cut = line.replace(/^T-421\s+/, '').split('…')[0]!
+    expect(LONG.title.startsWith(cut) && cut.length >= 8, at).toBe(true)
     // the lead's question: a row like a task's, in the warning tone; its ID links to its answer page
     const q = await ui.find({ key: 'Q-3' })
     expect([q?.type, q?.props.pressableLinks], at).toEqual(['Markdown', [vsHref('question', 'Q-3')]])
-    expect((await rowText(ui, 'Q-3')).replace(/^● Q-3\s+/, '● Q-3 '), at).toBe(`● Q-3 ${QUESTION.text}\n? question for you for 5m · 2 choices`)
+    const ask = (await rowText(ui, 'Q-3')).replace(/^● Q-3\s+/, '● Q-3 ')
+    // one line: the question cut with "…" so its state stays on the line (at 40 the choices do not fit too)
+    expect(ask, at).toMatch(bodyColumns === 80 ? /^● Q-3 Should the board open by itself… · \? question for you for 5m · 2 choices$/ : /^● Q-3 Should the.*… · \? question for you for 5m/)
     expect(elements(await ui.find({ key: 'vs-question-Q-3-top' })).find(n => texts(n).join('') === '● ')?.props?.color, at).toBe('warning')
-    // nothing cut with "…", no key hints, no primary button on a busy board
-    expect(all.filter(s => s.includes('…')), at).toEqual([])
+    // no "(more)" on an open row, no key hints, no primary button on a busy board
+    for (const t of [...BOARD_TASKS.filter(t => !['done', 'dropped', 'backlog'].includes(t.status)), LONG]) expect(await rowText(ui, t.id), `${at} ${t.id}`).not.toContain(MORE.trim())
     for (const re of KEY_HINTS) expect(all.filter(s => re.test(s)), `${at} ${re}`).toEqual([])
     // a press on a fold's link opens it: Done's tasks are then rows too (links); a second press closes it
     await ui.press({ key: 'day:done', link: { href: vsHref('fold', 'day:done') } })
@@ -405,8 +404,8 @@ test('in VS Code a done or dropped task is one line: its mark, the ID link, the 
     expect(String(md?.props.text).startsWith(mdLink(id, vsHref('task', id))), id).toBe(true)
   }
   // a doing and a waiting task keep their dim status line
-  expect(await rowText(ui, 'T-401')).toContain('\n▶ 2m')
-  expect(await rowText(ui, 'T-404')).toMatch(/\n\? waiting/)
+  expect(await rowText(ui, 'T-401')).toContain(' · ▶ 2m')
+  expect(await rowText(ui, 'T-404')).toMatch(/ · \? waiting/)
   // the done row's link still opens its page
   await ui.press({ key: 'T-414', link: { href: vsHref('task', 'T-414') } })
   expect((await ui.find({ key: 'vs-head' }))?.text).toMatch(/^T-414/)
@@ -441,8 +440,8 @@ test('in VS Code a row keeps its kind when its question or reason has the same w
   const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 80 }, surface: 'vscode' })
   await ui.drawn()
   const line = (id: string) => rowText(ui, id)
-  expect(await line('T-501')).toContain('\n? waiting for 1m · docs · Should the docs page list every setting?')
-  expect(await line('T-502')).toMatch(/\n✗ failed 1m ago · bug · .*bug/)
+  expect(await line('T-501')).toMatch(/ · \? waiting for 1m · docs · Should the docs page list every/)
+  expect(await line('T-502')).toMatch(/ · ✗ failed 1m ago · bug · .*bug/)
   expect(await line('Q-4')).toMatch(/ · 1 choice$/)
   // an investigation's tag is not shown twice
   expect((await line('T-420')).match(/investigation/g)?.length).toBe(1)
@@ -497,8 +496,8 @@ test('in VS Code a to do task worked on before shows ● in the list and on its 
   seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, tasks: tried } } })
   on('ui.toast', () => ({ value: undefined }))
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
-  expect((await rowText(ui, 'T-408')).split('\n')[1]).toMatch(/^● /)
-  expect((await rowText(ui, 'T-406')).split('\n')[1]).toMatch(/^○ /)
+  expect(await rowText(ui, 'T-408')).toMatch(/ · ● to do/)
+  expect(await rowText(ui, 'T-406')).toMatch(/ · ○ to do/)
   await ui.press({ key: 'T-408', link: { href: vsHref('task', 'T-408') } })
   expect((await ui.find({ key: 'vs-status' }))?.text).toMatch(/^ ● to do /)
   await ui.unmount()
@@ -513,9 +512,9 @@ test("T-542: in VS Code symcc's own pre-merge step shows \"prep\" and a running 
   on('ui.toast', () => ({ value: undefined }))
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
   // the step's icon and the time, no step word (T-581)
-  expect(await rowText(ui, 'T-497')).toMatch(/\n✎ \d+m/)
-  expect(await rowText(ui, 'T-498')).toMatch(/\n⌕ \d+m/)
-  expect(await rowText(ui, 'T-498')).not.toMatch(/\n[▶⌕] checker/)
+  expect(await rowText(ui, 'T-497')).toMatch(/ · ✎ \d+m/)
+  expect(await rowText(ui, 'T-498')).toMatch(/ · ⌕ \d+m/)
+  expect(await rowText(ui, 'T-498')).not.toMatch(/ · [▶⌕] checker/)
   // only the task whose checker runs shows ⌕
   expect(texts(await ui.drawn()).join('\n').match(/\n⌕ /g)?.length).toBe(1)
   await ui.press({ key: 'T-497', link: { href: vsHref('task', 'T-497') } })
@@ -555,4 +554,45 @@ test('in VS Code a doing row shows only the total work time of all tries, no Σ,
   expect(await rowText(ui, 'T-402')).not.toContain('in all')
   expect(await rowText(ui, 'T-401')).not.toContain('Σ')
   await ui.unmount()
+})
+
+test('T-590: in VS Code each open task and question is one line: id, title, then the state; a long title is cut with "…" first', async ($, on) => {
+  const long = 'Let the lead read every archived task and its whole history when the owner asks about old work from months ago'
+  const after = { ...BOARD_TASKS.find(t => t.id === 'T-407')!, id: 'T-578', order: 578, kind: 'feature', title: long, after: ['T-406'] }
+  const doing = { ...BOARD_TASKS.find(t => t.id === 'T-401')!, kind: 'investigation' }
+  const tasks = [...BOARD_TASKS.map(t => (t.id === 'T-401' ? doing : t)), after]
+  const ask = { ...QUESTION, text: 'Should the board open by itself when a session starts, or only when the owner asks for it?' }
+  seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, tasks, questions: [ask] } } })
+  on('ui.toast', () => ({ value: undefined }))
+  for (const bodyColumns of [60, 80]) {
+    const at = `width ${bodyColumns}`
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'vscode' })
+    await ui.drawn()
+    // a row is one row box: no second info line under it, never "(more)"
+    for (const [id, kind] of [['T-401', 'vs-task'], ['T-406', 'vs-task'], ['T-404', 'vs-task'], ['T-578', 'vs-task'], ['Q-3', 'vs-question']] as const) {
+      const box = (await ui.find({ key: `${kind}-${id}` })) as Node
+      const parts = box.children!.filter(n => n && typeof n === 'object') as Node[]
+      expect(parts.length, `${at} ${id}`).toBe(1)
+      expect(parts[0]!.props?.flexDirection, `${at} ${id}`).toBe('row')
+      const line = await rowText(ui, id)
+      expect(line, `${at} ${id}`).not.toContain('(more)')
+      expect(line, `${at} ${id}`).not.toContain('\n')
+    }
+    // doing, to do and waiting: id, title, then the state on the same line
+    expect(await rowText(ui, 'T-401'), at).toMatch(/^T-401\s+Show the.* · ▶ 2m · .*investigation/)
+    expect(await rowText(ui, 'T-406'), at).toMatch(/^T-406\s+Write the guide.* · ○ to do/)
+    expect(await rowText(ui, 'T-404'), at).toMatch(/^● T-404\s+Pick the.* · \? waiting for 1m/)
+    // a long title is cut with "…" and the state part, "after T-406", stays on the line
+    const line = await rowText(ui, 'T-578')
+    expect(line, at).toMatch(/^T-578\s+Let the.*… · ○ to do · feature · (.* · )?after T-406/)
+    expect(line.length, at).toBeLessThanOrEqual(bodyColumns)
+    const q = await rowText(ui, 'Q-3')
+    expect(q, at).toMatch(/^● Q-3\s+Should the.*… · \? question for you for 5m · 2 choices$/)
+    expect(q.length, at).toBeLessThanOrEqual(bodyColumns)
+    // the row still opens the task page, where the whole title is shown
+    await ui.press({ key: 'T-578', link: { href: vsHref('task', 'T-578') } })
+    expect(texts(await ui.drawn()).join(' ').replace(/\s+/g, ' '), at).toContain(long)
+    await ui.press({ key: 'back' })
+    await ui.unmount()
+  }
 })
