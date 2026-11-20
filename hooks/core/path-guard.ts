@@ -177,8 +177,21 @@ export const BASH_LOST = '\u0000lost path:'
  */
 export const shellCwd = (got: unknown): string => (typeof got === 'string' && got.startsWith('/') ? got : CWD_LOST)
 
-/** A made-up folder name walkBash puts under a folder to try deeper places the shell may be in (T-671). */
-const DEEPER = '\u0000deeper'
+/**
+ * Relative word `w` (a leading "/" dropped) cut down by its own parts: how many ".." it climbs at the start (`ups`)
+ * and the path left after them (`rest`, '' for none), so `a/../../x/./y` gives 1 and `x/y`. One pass over the word (T-671).
+ */
+function climbParts(w: string): { ups: number; rest: string } {
+  const kept: string[] = []
+  let ups = 0
+  for (const part of w.split('/')) {
+    if (part === '' || part === '.') continue
+    if (part !== '..') kept.push(part)
+    else if (kept.length > 0) kept.pop()
+    else ups++
+  }
+  return { ups, rest: kept.join('/') }
+}
 
 /** A word that may be a plain relative path (`src/a.ts`, `lnk`): letters, digits and `._@%+~/-`, not an option. */
 const PLAIN_PATH = /^(?!-)[\w.@%+~/-]+$/
@@ -300,15 +313,18 @@ function walkBash(command: string, wts: readonly string[], home: string | undefi
         const rel = visit(abs)
         if (rel !== undefined) return lost && climbs && rel !== BASH_TOO_MANY ? BASH_LOST + rel : rel
       }
-      // from a folder that couldn't be read, a ".." word may climb from any depth under the folders tried: each depth
-      // up to its number of ".." parts is tried too (deeper ones only reach inside those folders). Not for the paths
-      // looked up on disk (opts.plain): the made-up folders don't exist
+      // from a folder that couldn't be read, a ".." word may climb from any depth under the folders tried. The word is
+      // cut down once to its leading ".." parts (`ups`) and the rest; from k folders deeper it lands on the folder
+      // ups - k above d plus the rest (k >= ups only reaches inside d). So each folder above d is tried with the rest,
+      // at most as many as d has parts, which keeps a long word cheap (T-671). Not for the paths looked up on disk
+      // (opts.plain): the made-up folders don't exist
       if (lost && climbs && !opts.plain) {
-        const ups = w.split('/').filter(x => x === '..').length
-        const word = w.replace(/^\/+/, '')
-        for (let k = 1; k <= ups; k++) {
-          for (const d of dirs) {
-            const rel = visit(resolvePath(`${d}${`/${DEEPER}`.repeat(k)}`, word))
+        const { ups, rest } = climbParts(w)
+        for (const d of dirs) {
+          const depth = d.split('/').filter(Boolean).length
+          // highest first, as one folder deeper is the likeliest place
+          for (let j = Math.min(ups - 1, depth); j >= 1; j--) {
+            const rel = visit(resolvePath(d, `${'../'.repeat(j)}${rest || '.'}`))
             if (rel !== undefined) return BASH_LOST + rel
           }
         }

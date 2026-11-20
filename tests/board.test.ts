@@ -1579,6 +1579,23 @@ test("T-671: a shell folder that couldn't be read (CWD_LOST): '..' words are tri
   expect(shellCwd(undefined)).toBe(CWD_LOST)
 })
 
+test("T-671: with the shell folder unread, a long '..' word is still judged quickly and the same way", () => {
+  const root = '/repo'
+  const wt = `${root}/.symcc/worktrees/T-5`
+  const no = (c: string, cwd?: string) => bashOutsideFolder(c, wt, root, '/home/me', cwd)
+  // words that go down and back up are cut down first: the deeper tries still catch them
+  expect(no('echo x > a/../../../../../README.md', CWD_LOST)).toBe(`${BASH_LOST}README.md`)
+  expect(no('echo x > ./../../../.././README.md', CWD_LOST)).toBe(`${BASH_LOST}README.md`)
+  expect(no('cat a/b/c/../../..', CWD_LOST)).toBeUndefined()
+  // a word with thousands of ".." parts: on the last try it took seconds (each ".." re-walked the whole word)
+  const n = 20000
+  const long = `${'a/'.repeat(n)}${'../'.repeat(n)}x`
+  const t0 = Date.now()
+  expect(no(`cd d1; cd d2; cd d3; cd d4; cat ${long}`, CWD_LOST)).toBeUndefined()
+  expect(no(`echo y > ${long}/../../../../../README.md`, CWD_LOST)).toBe(`${BASH_LOST}README.md`)
+  expect(Date.now() - t0).toBeLessThan(1500)
+})
+
 test("a worker's shell command: relative paths in quoted text are taken from the folder the command is really in (T-417)", () => {
   const root = '/repo'
   const wt = `${root}/.symcc/worktrees/T-5`
