@@ -670,3 +670,23 @@ test('T-590: fitRow never returns a line wider than its room; the role tag goes 
   expect(fitWidth(q, '')).toBeLessThanOrEqual(33)
   expect(q.status).toBe('? question for you for 5m')
 })
+
+test('T-590: a waiting question that starts with "after you …" is a normal long text, not an "after T-…" list', async ($, on) => {
+  const question = 'after you look at the earlier task, should I also update the docs page and the readme?'
+  const tasks = BOARD_TASKS.map(t => (t.id === 'T-404' ? { ...t, title: 'Pick the colors for the review mark on light themes', question } : t))
+  seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, tasks } } })
+  // "● T-404  " takes 9 columns: bodyColumns 82 leaves the row 73
+  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 82 }, surface: 'vscode' })
+  await ui.drawn()
+  const line = await rowText(ui, 'T-404')
+  expect(line.length).toBeLessThanOrEqual(82)
+  expect(line).not.toContain('+')
+  const [title, status, rest] = line.replace(/^● T-404\s+/, '').split(' · ')
+  // the title keeps more than its 12-column floor; the question is capped and cut at a word
+  expect(title!.length).toBeGreaterThan(12)
+  expect(status).toMatch(/^\? waiting for 1m$/)
+  expect(rest).toMatch(/…$/)
+  const shown = rest!.replace(/…$/, '')
+  expect(question.startsWith(shown) && question.charAt(shown.length) === ' ').toBe(true)
+  await ui.unmount()
+})

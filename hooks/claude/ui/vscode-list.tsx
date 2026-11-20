@@ -150,13 +150,15 @@ export function listPageVs($: $, pane: PaneParts) {
     const tagged = body.split(' · ').some(p => p === `[${kind}]` || p === `[${kind}`)
     // "after T-3" stays longest ("after T-1 +2" when narrow); the role tag goes first ("[researcher]" before that), then
     // the kind, then a question or reason (cut at a word)
-    const after = body.startsWith('after ') ? body : ''
-    const ids = after ? after.slice('after '.length).split(', ') : []
+    // the "after" list comes from the task's own `after` field (its unfinished ones, as rowExtra shows them), never
+    // from text that only starts with the word: a question or note "after you look at …" is a normal long part
+    const ids = x.status === 'todo' || x.status === 'paused' ? (x.after ?? []).filter(id => v.tasks.some(t => t.id === id && t.status !== 'done')) : []
+    const after = ids.length && body === `after ${ids.join(', ')}` ? body : ''
     const role = !after && body && (body === roleTag(x) || body === kindTag(x)) ? body : ''
     const roleOnly = roleMark(x)
     const parts: RowPart[] = [
       { text: branch, drop: 0 },
-      { text: after, drop: 0, short: ids.length > 1 ? `after ${ids[0]} +${ids.length - 1}` : undefined },
+      { text: after, drop: 0, short: after && ids.length > 1 ? `after ${ids[0]} +${ids.length - 1}` : undefined },
       { text: kind && !tagged ? kind : '', drop: 3 },
       { text: role, drop: 4, short: role.startsWith('[') && roleOnly && role !== `[${roleOnly}]` ? `[${roleOnly}]` : undefined },
       { text: after || role ? '' : body, drop: 1, long: true },
