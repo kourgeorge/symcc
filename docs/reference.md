@@ -117,8 +117,13 @@ Scouts and Settings tabs. **Ctrl+T** shows running workers. More in the
 | `/symcc-diff T-5 [file]` | The files a task in review changed (+/- lines), or one file's full diff |
 | `/symcc-scout <name>` | Run a scout now |
 | `/symcc-scout <name> pause` / `resume` | Pause a scout's timer (it doesn't run on its timer until you resume it; run now still runs it once and it stays paused), or resume it. `p` on the scout's page in the panel does the same |
+| `/symcc-scout <name> every <minutes>` | Change how often a scout runs on its timer |
+| `/symcc-scout <name> model <model\|none>` | Change a scout's model; `none` clears it, so the scout uses the default model |
+| `/symcc-scout <name> prompt <instructions>` | Replace the scout's instructions (one line of text) |
 | `/symcc-mode [off\|review\|auto]` | Set the board mode; no word switches `review` and `auto` (from `off`: `review`) |
 | `/symcc-settings [name value]` | Open the Settings view, or set one setting: `/symcc-settings max_parallel 5`, `/symcc-settings notify sound`, `/symcc-settings test_commands "npm test"` |
+| `/symcc-settings role <name> on\|off\|reset` | Turn a role on or off, or reset it back to the built-in one |
+| `/symcc-settings kind <name> on\|off\|reset` | Turn a kind on or off, or reset it back to the built-in one |
 | `/symcc-stats [full] [7d\|T-100..T-130]` | Time and token stats from the board (archived tasks too), easy to read with plain bar charts: a one-line summary, totals, the whole team, averages and medians per task and per try, the biggest tasks, how tasks ended (merged, approved or answered), investigations counted on their own, by role, origin and day. `7d` limits it to the last 7 days, `T-100..T-130` to an id range; `full` adds the long explanations |
 | `/symcc-off` | Turn symcc off for this project: Claude works as normal (no lead guide, workers, scouts, updates, sounds or voice); the board is kept |
 | `/symcc-on` | Turn symcc back on, in the mode the board had |
