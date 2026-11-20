@@ -129,8 +129,10 @@ question, shows under NEEDS YOU on the board, and with `notify` on you hear "sym
 (once per question, only in the session that drives the board). The lead is told too. It
 answers it itself only when you already clearly said the answer, and then tells you what it
 answered. Otherwise it asks you in the chat, short and plain, with the worker's options (if
-any) as numbered choices in plain text (not a pop-up dialog, which would stay open if you answer on the board). You can answer in the chat or on the board, whichever comes
-first (if you answer on the board, the lead doesn't ask again): the answer goes into the
+any). In Claude Code it asks with the chat pop-up (AskUserQuestion) with the same choices;
+on a host with no pop-up it writes them as numbered choices in plain text. You can answer in
+the chat or on the board, whichever comes first (if you answer on the board, the lead doesn't
+ask again, and says once that you can close the pop-up): the answer goes into the
 task and sends it back to work, and a new try continues with it. What the worker already
 changed is kept.
 
@@ -164,6 +166,16 @@ briefly in the chat too. Each gets an id like `Q-3` and is kept in `board.json` 
   history). The lead gets a board update right away (like a finished task), with a block like
   "The owner answered your question Q-3 (…): Yes. … Act on it.". Answer in the chat instead and the lead closes it with your words. The
   lead can also drop a question that no longer matters.
+
+**Both on the board and in the chat.** Where the host has a chat pop-up for questions
+(AskUserQuestion in Claude Code), the lead asks every question both ways: it stays on the
+board (a `Q-` question, or the task's own question: a review, an answered investigation, a
+worker's question or file request, more time) and also opens in the chat pop-up with the
+same choices. Answer in the pop-up and the lead closes the board question for you. Answer on
+the board first and the pop-up stays open; the lead says once "answered on the board; you can
+close the pop-up". On a host with no pop-up the lead writes the choices as numbered plain
+text, plus "or answer on the board". The lead never puts two questions under the same
+numbers.
 
 ---
 
