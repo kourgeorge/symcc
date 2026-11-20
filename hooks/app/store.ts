@@ -1,5 +1,5 @@
 import { type Board, type BoardRead, parseBoard, readBoard, readBoardValue, brokenBoardText, emptyBoard, symccOn, lockText, lockHolder, isLockStale, tmpName } from '../board'
-import { PARTS_DIR, READ_LIMIT_BYTES, SIZE_WARN_BYTES, hasWholeFinished, joinParts, partsFilesNamed, partsText, readParts, sizeWarnText, splitBoard, tooBigText, utf8Bytes } from '../core/board-parts'
+import { PARTS_DIR, READ_LIMIT_BYTES, SIZE_WARN_BYTES, hasWholeFinished, joinParts, partsFileOf, partsFilesNamed, partsText, readParts, sizeWarnText, splitBoard, tooBigText, utf8Bytes } from '../core/board-parts'
 import { checkHealth } from './health'
 import { publish } from './lead'
 import { tellLead } from './tell'
@@ -223,6 +223,7 @@ export function resetStore() {
   reported.clear()
   partsSeen.clear()
   stubbed = new Set()
+  missingParts = new Set()
   sizeNotes.clear()
   toldTooBig.clear()
 }
@@ -325,6 +326,13 @@ const partsSeen = new Map<string, { text: string; tasks: Record<string, Record<s
  */
 let stubbed = new Set<string>()
 
+/**
+ * The parts files (relative, "tasks/T-600.json") that board.json named but the last read did not find (T-681). Until
+ * one is back, a save never writes it: a task newly finished in its range stays whole in board.json instead, so
+ * putting the good file back restores every task (the next save then moves that task's parts into it).
+ */
+let missingParts = new Set<string>()
+
 /** A parts file's path, from its name in board.json ("tasks/T-600.json"). */
 const partsPath = (rel: string) => path(`${S.N.dir}/${rel}`)
 
@@ -349,9 +357,8 @@ async function readJoined(host: Host, again = true): Promise<{ text: string; rea
     noteRead(host, file, text)
     return { text, read: readBoard(text), whole: false }
   }
-  const whole = hasWholeFinished(raw)
-  if (!whole) noteRead(host, file, text)
   const files = new Map<string, Record<string, Record<string, unknown>>>()
+  const missingNow = new Set<string>()
   for (const rel of partsFilesNamed(raw)) {
     const file = partsPath(rel)
     const there = await host.fs.exists(file).then(
@@ -361,6 +368,7 @@ async function readJoined(host: Host, again = true): Promise<{ text: string; rea
     if (typeof there === 'object') return { text, read: { ...readBoard(null), broken: `its parts file ${S.N.dir}/${rel} can't be checked (${there.failed})` }, whole: false }
     if (!there) {
       partsSeen.delete(file)
+      missingNow.add(rel)
       continue
     }
     const t = await readWhole(host, file)
@@ -372,6 +380,10 @@ async function readJoined(host: Host, again = true): Promise<{ text: string; rea
   const j = joinParts(raw, files)
   if (j.missing.length && again) return readJoined(host, false)
   stubbed = new Set(j.stubbed)
+  missingParts = missingNow
+  // a finished task kept whole only because its parts file is missing is not one to migrate (see missingParts)
+  const whole = hasWholeFinished(raw, missingNow)
+  if (!whole) noteRead(host, file, text)
   const read = readBoardValue(j.raw)
   return { text, read: { ...read, fixed: [...read.fixed, ...j.missing] }, whole }
 }
@@ -458,7 +470,9 @@ export async function dropIfSame(host: Host, file: string, text: string) {
  * entries no task needs any more are taken out (a file left with none is removed).
  */
 export async function saveBoard(host: Host, b: Board) {
-  const { board: slim, parts } = splitBoard(b)
+  // a finished task whose parts file is missing stays whole, unless it loaded as a stub (it keeps pointing there)
+  const hold = new Set(b.tasks.filter(t => !stubbed.has(t.id) && missingParts.has(partsFileOf(t.id))).map(t => t.id))
+  const { board: slim, parts } = splitBoard(b, hold)
   const want = new Map<string, Record<string, Record<string, unknown>>>()
   for (const [rel, all] of parts) {
     const file = partsPath(rel)

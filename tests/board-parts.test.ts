@@ -195,6 +195,30 @@ test('T-681: a save after a parts file went missing never writes empty parts ove
   expect(back.tasks[699]!.note).toBe('queued')
 })
 
+test('T-681: a task finished while its parts file is missing stays whole in board.json; putting the file back keeps both', async () => {
+  const w = world()
+  await saveBoard(w.host, bigBoard())
+  const file = `${ROOT}/.symcc/tasks/T-650.json`
+  const good = w.files.get(file)!
+  w.files.delete(file)
+  await load(w.host)
+  const line: SymccHistoryEntry = { at: iso(NOW), kind: 'state', text: 'finished by hand' }
+  await change(w.host, x => ({ ...x, tasks: x.tasks.map(t => (t.id === 'T-661' ? { ...t, status: 'done', history: [line] } : t)) }))
+  expect(w.files.has(file)).toBe(false)
+  expect((await load(w.host)).tasks[660]!.history.length).toBe(1)
+  expect(w.toasts.join('\n')).not.toMatch(/moved to \.symcc\/tasks/)
+  w.files.set(file, good)
+  const back = await load(w.host)
+  expect(back.tasks[650]!.history.length).toBe(30)
+  expect(back.tasks[660]!.history.length).toBe(1)
+  // the next save moves T-661's parts into the good file, next to the others
+  await saveBoard(w.host, back)
+  const again = await load(w.host)
+  expect(again.tasks[650]!.history.length).toBe(30)
+  expect(again.tasks[660]!.history.length).toBe(1)
+  expect((JSON.parse(w.files.get(BOARD)!) as { tasks: Record<string, unknown>[] }).tasks[660]!.parts).toBe('tasks/T-650.json')
+})
+
 test('T-681: a reload forgets which tasks the last read loaded as stubs, so a fresh save writes their parts again', async () => {
   const w = world()
   await saveBoard(w.host, bigBoard())
