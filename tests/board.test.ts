@@ -3016,6 +3016,12 @@ test('git status -z is read into codes and paths; a rename keeps its old path in
     { code: 'R ', path: 'b.txt', from: 'old.txt' },
   ])
   expect(parseStatusZ('')).toEqual([])
+  // a work-tree rename (" R") also has its old path next; it must not be read as its own entry and swallow the next one
+  expect(parseStatusZ(' R new.txt\0README.md\0 M a.txt\0')).toEqual([
+    { code: ' R', path: 'new.txt', from: 'README.md' },
+    { code: ' M', path: 'a.txt' },
+  ])
+  expect(mergeBlockers(' R new.txt\0README.md\0 M a.txt\0', ['a.txt'], '.symcc').dirty).toEqual(['a.txt'])
 })
 
 test('a merge waits only for the owner\'s files it changes: uncommitted changes there and untracked files it would overwrite', () => {
