@@ -186,19 +186,33 @@ export const DATA_DIR = dataDir()
 /** a lock older than this was left by a session that died, and may be taken over */
 export const LOCK_STALE_MS = 30_000
 
-export type Lock = { session: string; at: number }
+/** A board lock: who holds it, since when, and (T-659, when the host can tell) the holder's process: its pid and start time. */
+export type Lock = { session: string; at: number; pid?: number; started?: number }
 
-export const lockText = (session: string, at: number) => JSON.stringify({ session, at }) + '\n'
+export const lockText = (session: string, at: number, holder?: { pid: number; started: number }) =>
+  JSON.stringify(holder ? { session, at, pid: holder.pid, started: holder.started } : { session, at }) + '\n'
 
 export function parseLock(text: string | null): Lock | null {
-  return parseStamp(text, 'at', true)
+  const l = parseStamp(text, 'at', true)
+  if (!l) return null
+  const o = JSON.parse(text ?? '') as { pid?: unknown; started?: unknown }
+  const ok = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n)
+  return ok(o.pid) && Number.isInteger(o.pid) && o.pid > 0 && ok(o.started) ? { ...l, pid: o.pid, started: o.started } : l
+}
+
+/** The process lock text `text` names as its holder, or undefined (an older lock, or one from a host that can't see processes). */
+export function lockHolder(text: string | null): { pid: number; started: number } | undefined {
+  const l = parseLock(text)
+  return l?.pid !== undefined && l.started !== undefined ? { pid: l.pid, started: l.started } : undefined
 }
 
 /**
- * Whether a lock may be taken over: it is older than LOCK_STALE_MS (or dated far in
- * the future, a broken clock). A lock we can't read is judged by the file's own time.
+ * Whether a lock may be taken over: its holder's process is gone (`holderAlive` false, T-659), or it is older than
+ * LOCK_STALE_MS (or dated far in the future, a broken clock). `holderAlive` undefined (no pid in the lock, or the host
+ * can't tell) keeps the time rule alone. A lock we can't read is judged by the file's own time.
  */
-export function isLockStale(text: string | null, nowMs: number, fileMs?: number, maxAgeMs = LOCK_STALE_MS): boolean {
+export function isLockStale(text: string | null, nowMs: number, fileMs?: number, maxAgeMs = LOCK_STALE_MS, holderAlive?: boolean): boolean {
+  if (holderAlive === false) return true
   const at = parseLock(text)?.at ?? fileMs
   if (at === undefined || !Number.isFinite(at)) return true
   return nowMs - at > maxAgeMs || at - nowMs > maxAgeMs

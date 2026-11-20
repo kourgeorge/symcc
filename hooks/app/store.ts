@@ -1,4 +1,4 @@
-import { type Board, parseBoard, readBoard, brokenBoardText, emptyBoard, symccOn, lockText, isLockStale, tmpName } from '../board'
+import { type Board, parseBoard, readBoard, brokenBoardText, emptyBoard, symccOn, lockText, lockHolder, isLockStale, tmpName } from '../board'
 import { checkHealth } from './health'
 import { publish } from './lead'
 import { tellLead } from './tell'
@@ -268,7 +268,7 @@ export const aboutToWait = () => startWait.mark?.()
 export async function takeLock(host: Host): Promise<string> {
   const lock = path(S.N.lockFile)
   const me = `${await host.session.id().catch(() => 'unknown')}:${Math.random().toString(36).slice(2, 10)}`
-  const mine = lockText(me, Date.now())
+  const mine = lockText(me, Date.now(), selfProcess(host))
   const tmp = tmpFor(lock)
   await host.fs.write(tmp, mine)
   try {
@@ -277,7 +277,7 @@ export async function takeLock(host: Host): Promise<string> {
       if ((await host.run(['ln', tmp, lock])).exitCode === 0) return mine
       const held = await host.fs.read(lock).catch(() => null)
       const st = await host.fs.stat(lock).catch(() => null)
-      if (held !== null && isLockStale(held, Date.now(), st?.mtimeMs)) {
+      if (held !== null && isLockStale(held, Date.now(), st?.mtimeMs, undefined, await holderAlive(host, held))) {
         // remove it only if it is still the same stale lock we just read
         await dropIfSame(host, lock, held)
         continue
@@ -289,6 +289,25 @@ export async function takeLock(host: Host): Promise<string> {
   } finally {
     await host.run(['rm', '-f', tmp]).catch(() => undefined)
   }
+}
+
+/** This program's process for a lock it writes (host.processes.self), or undefined when the host can't tell. Never throws. */
+function selfProcess(host: Host): { pid: number; started: number } | undefined {
+  try {
+    return host.processes?.self()
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Whether the process lock text `held` names still runs (T-659): undefined when the lock names none, or the host
+ * can't tell (then the lock's age decides). Never throws.
+ */
+export async function holderAlive(host: Host, held: string): Promise<boolean | undefined> {
+  const p = lockHolder(held)
+  if (!p || !host.processes) return undefined
+  return host.processes.alive(p).catch(() => undefined)
 }
 
 export async function dropLock(host: Host, mine: string) {
