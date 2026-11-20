@@ -10,7 +10,7 @@
 // (each fold, and each task it waits for, is a link: VS Code draws a Button as a filled blue box)
 // No key hints: every action is a button.
 import type { SymccTask } from '../../../types'
-import { type DetailRow, type DiffFile, type Seg, STATUS_BADGE, STATUS_MARK, statusMark, STATUS_WORD, originSegs, originOf, crossBranchNotes, intoOf, roleOf, findRole, kindMark, fmtDuration, fmtRun, fmtTotal, sumRuns, STATE_LABEL, taskActions, type TaskActionId, type BoardTask } from '../../board'
+import { type DetailRow, type DiffFile, type Seg, STATUS_BADGE, STATUS_MARK, statusMark, STATUS_WORD, originSegs, originOf, crossBranchNotes, intoOf, roleOf, findRole, kindMark, fmtDuration, fmtRun, fmtTotal, sumRuns, STATE_LABEL, taskActions, type TaskActionId, type BoardTask, stepNowWord, STEP_LEGEND } from '../../board'
 import { squash } from '../../core/text'
 import type { TaskSection } from '../../core/task-sections'
 import { historyEvent, historyTime, HISTORY_COLOR } from '../../core/history'
@@ -273,12 +273,16 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
 
   // where it came from: who, why, the owner's words, what was seen, and the note
   const og = originOf(t)
+  const step = stepNowWord(t as BoardTask, nowMs)
   const origin = section('origin', 'Why / where it came from', [
     segs('vs-from', [{ text: 'From ', color: 'inactive' }, ...originSegs(t)]),
     og?.why ? plain('vs-why', squash(og.why)) : null,
     og?.by === 'owner' && og.request?.trim() ? plain('vs-request', `“${squash(og.request)}”`, 'text', { italic: true }) : null,
     og?.evidence ? plain('vs-seen', `Seen: ${squash(og.evidence)}`, 'inactive') : null,
     t.note ? plain('vs-note', `${STATE_LABEL}: ${t.note}`, 'inactive', { italic: true }) : null,
+    // in a check step or the merge line: the step's icon (the list shows only it) with its word, and the icons' legend
+    step ? plain('vs-step', `Step: ${step}`, 'ide', { bold: true }) : null,
+    step ? plain('vs-step-legend', STEP_LEGEND, 'inactive') : null,
   ])
 
   const details = section('details', 'What to do', [t.details.trim() ? <Markdown key="vs-details-md" text={t.details.trimEnd()} /> : plain('vs-details-none', '(no details)', 'inactive')])

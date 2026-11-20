@@ -13,6 +13,7 @@ import { onDemand } from './scouts'
 import { fmtDuration, runMs, sumRuns } from './runs'
 import { ellipsis, num } from './text'
 import { whyFailed } from './failure'
+import { statusMark } from './details'
 
 export * from './failure'
 
@@ -83,6 +84,28 @@ export const MORE_TIME_CELL = 'more time?'
 /** The short word every board view (terminal list, band, VS Code, OpenCode, text board) shows for each check step:
  *  "prep" for symcc's own pre-merge step, "checker" only while a checker agent runs (the checker setting). */
 export const STEP_WORD: Record<CheckStep, string> = { prep: 'prep', testing: 'test', checker: 'checker', merging: 'merge' }
+
+/** The one-column icon every row view (band, terminal list, VS Code list, OpenCode band and panel, the lead's text
+ *  board) shows in place of the mark ▶ and the step word while a task is in a check step: "⌕ 5m", not "▶ checker 5m".
+ *  The word (STEP_WORD) stays on the task page and in the notes; STEP_LEGEND explains the icons. */
+export const STEP_ICON: Record<CheckStep, string> = { prep: '✎', testing: '⧗', checker: '⌕', merging: '⇢' }
+
+/** The row icon of a task waiting for its turn in the merge line (its note is "in line (n)"): "⋯ 2h5m". */
+export const IN_LINE_ICON = '⋯'
+
+/** The one-line legend of the row icons (task page and guide). */
+export const STEP_LEGEND = `▶ working · ${IN_LINE_ICON} in line · ${STEP_ICON.prep} prep · ${STEP_ICON.testing} test · ${STEP_ICON.checker} checker · ${STEP_ICON.merging} merge`
+
+/** Whether task `t` waits for its turn in the merge line (its note is "in line (n)", see inLineNote). */
+export const waitsInLine = (t: { status: SymccStatus; note?: string }): boolean => t.status === 'doing' && /^in line \(\d+\)$/.test(t.note ?? '')
+
+/** The mark at the front of a task's row: ⋯ while it waits in the merge line, its step's icon (STEP_ICON) during a
+ *  check step, else its own mark (statusMark: ▶ while its worker works). */
+export function rowMark(t: Pick<SymccTask, 'status'> & { note?: string; runs?: readonly unknown[]; attempts?: number } & Pick<BoardTask, 'checking'>, nowMs: number): string {
+  if (waitsInLine(t)) return IN_LINE_ICON
+  const step = checkStepNow(t, nowMs)
+  return step ? STEP_ICON[step] : statusMark(t)
+}
 
 /**
  * The one small set of notes a task shows between its hand-back (or the owner's approve, or "your files are clear") and its
@@ -160,15 +183,15 @@ export function rowTime(t: Pick<SymccTask, 'status' | 'runs'> & Pick<BoardTask, 
 }
 
 /** The status cell of a list or band row (see statusCell): a doing task shows the total work time of all its tries,
- *  "1h40m", and in a check step the step word and that total, "test 9m"; with `form` 'none' (narrow rows) the time
- *  is left out ("test", '' while it runs). The other rows: just statusCell. */
-export function rowCell(t: Parameters<typeof statusCell>[0], nowMs: number, since?: number | string, form: TotalForm = 'total'): string {
-  const cell = statusCell(t, nowMs, since)
-  if (t.status !== 'doing' || !cell || cell === MORE_TIME_CELL) return cell
+ *  "1h40m", also in a check step or in the merge line, where the row's mark (rowMark) is the step's icon in place of
+ *  the step word ("⧗ 9m"); with `form` 'none' (narrow rows) the time is left out (''). A task in review or waiting in
+ *  a check step (an approve) shows '' (its icon says it). The other rows: just statusCell. */
+export function rowCell(t: Parameters<typeof statusCell>[0] & { note?: string }, nowMs: number, since?: number | string, form: TotalForm = 'total'): string {
   const step = checkStepNow(t, nowMs)
-  const time = form === 'none' ? '' : rowTime(t, nowMs, since)
-  if (step) return time ? `${cell} ${time}` : cell
-  return time
+  if (step && t.status !== 'doing') return ''
+  const cell = statusCell(t, nowMs, since)
+  if (t.status !== 'doing' || (!cell && !waitsInLine(t)) || cell === MORE_TIME_CELL) return cell
+  return form === 'none' ? '' : rowTime(t, nowMs, since)
 }
 
 /** The status cells of a list's rows (rowCell), with the time when the widest cell still fits in `room`

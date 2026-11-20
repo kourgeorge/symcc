@@ -1,7 +1,7 @@
 // What OpenCode's TUI part (opencode/tui.ts, T-466) draws, as plain data: the band above the prompt
 // (session.composer.top) and the board panel (session.panel), each as lines of colored text (core's Seg), made from
 // the view file the engine writes (view.ts) with hooks/core's own helpers: the band's row fronts and notes
-// (bandLeads, bandNote), the list's sections, marks and short states (panelSections, statusMark, fittedCells,
+// (bandLeads, bandNote), the list's sections, marks and short states (panelSections, rowMark, fittedCells,
 // rowExtra, fitRow), the banner (bannerLines) and a task's page sections (taskSections, T-580). Nothing here draws or reads a file, so
 // the tests check exactly what the TUI shows (hooks/opencode/tests/opencode-tui.spec.ts). The panel's actions go back
 // to the engine as symcc's slash commands (actionCommand), run in the TUI's session (R6 of T-468). Like the Claude Code
@@ -16,7 +16,7 @@ import type { OwnerQuestion } from '../core/questions'
 import {
   statusCounts, newestFirst, bandLeads, bandNote, bandBrand, bandWhere, boardBrand, modeLabel, modeOf, planBandText, withCrew, fileWaitText, questionsForYou,
   bannerLines, bannerRule, footerRule, type BannerTone, panelSections, localOffset, when, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, ALL_CLEAR,
-  fittedCells, TITLE_ROOM, fitRow, rowExtra, questionsLabel, archivedOf, archivedNote, statusMark, detailRows, detailRowLines, wrapSegs, hintLineText,
+  fittedCells, rowMark, TITLE_ROOM, fitRow, rowExtra, questionsLabel, archivedOf, archivedNote, statusMark, detailRows, detailRowLines, wrapSegs, hintLineText,
   type KeyHint, type Seg, type BoardTask, gitNote, intoOf, taskActions, taskAsks, type TaskAction, type TaskActionId,
   waitsForYou, sortScouts, scoutListRows, scoutRow, scoutIcon, scoutTone, scoutHowTo, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem, scoutFile,
   SETTING_GROUPS, SETTINGS, isSettingPage, settingInfo, settingValue, cantPlayNotify, groupSummaryParts,
@@ -183,13 +183,6 @@ export const lineText = (l: Line) => l.map(s => s.text).join('')
 /** The colors of the band's rows, as Claude Code's band has them (above-prompt.tsx). */
 const BAND_COLOR: Record<string, string> = { review: 'cyan', waiting: 'yellow', failed: 'red', doing: 'green' }
 
-/**
- * The band above the prompt, like Claude Code's (T-455/T-461): the header line (brand, folder, mode, questions for
- * you, workers, counts, scouts; the version dropped first when short of room), the owner's open questions, then the
- * tasks that need the owner or run, newest first, each with its lined-up front ("T-434 ▶ prep · try 2", see
- * bandLeads) and its note when the state doesn't already say it (bandNote), and "+N more" when they don't all fit.
- * [] when there is nothing to show (an empty board, or symcc disabled). `rows`: at most this many rows under the header.
- */
 /** What a click on a line of the band does (T-567): open (or close) the board panel, or open a task's or question's
  *  page in it. */
 export type BandHit = { board: true } | { open: string }
@@ -202,8 +195,15 @@ export function bandLines(f: ViewFile | null, nowMs: number, width: number, rows
   return bandDraw(f, nowMs, width, rows).lines
 }
 
-/** The band above the prompt with what a click on each line does: the header (and the "+N more" line) opens the
- *  board panel, a question's or task's row opens its page. */
+/**
+ * The band above the prompt, like Claude Code's (T-455/T-461), with what a click on each line does (the header and
+ * the "+N more" line open the board panel, a question's or task's row opens its page): the header line (brand,
+ * folder, mode, questions for you, workers, counts, scouts, then the " (click: board)" hint, dropped first when short
+ * of room), the owner's open questions, then the tasks that need the owner or run, newest first, each with its
+ * lined-up front ("T-434 ✎ 2m · try 2", "T-440 ▶ 12m", see bandLeads) and its note when the state doesn't already say
+ * it (bandNote), and "+N more" when they don't all fit. No lines when there is nothing to show (an empty board, or
+ * symcc disabled). `rows`: at most this many rows under the header.
+ */
 export function bandDraw(f: ViewFile | null, nowMs: number, width: number, rows = 6): { lines: Line[]; hits: (BandHit | null)[] } {
   const v = f?.view
   const tasks = v?.tasks ?? []
@@ -709,7 +709,7 @@ function listBody(f: ViewFile, cursor: number, open: Record<PanelGroup, boolean>
     return [
       { text: pointer(x.id, indent), color: 'ide', bold: true },
       { text: x.id.padEnd(idWidth), color: closed ? 'inactive' : 'claude', bold: !closed || sel },
-      { text: ` ${statusMark(x)} ${(cells.get(x.id) ?? '').padEnd(cellWidth)}  `, color: LIST_TONE[x.status]! },
+      { text: ` ${rowMark(x, nowMs)} ${(cells.get(x.id) ?? '').padEnd(cellWidth)}  `, color: LIST_TONE[x.status]! },
       { text: fit.title, color: closed ? 'inactive' : 'text', ...(sel || waitsForYou(x) || x.status === 'failed' || x.status === 'review' ? { bold: true } : {}) },
       ...(fit.extra ? [{ text: `${fit.pad}${fit.extra}`, color: 'inactive' }] : []),
     ]
