@@ -1,7 +1,7 @@
 // What OpenCode's TUI part (opencode/tui.ts, T-466) draws, as plain data: the band above the prompt
 // (session.composer.top) and the board panel (session.panel), each as lines of colored text (core's Seg), made from
 // the view file the engine writes (view.ts) with hooks/core's own helpers: the band's row fronts and notes
-// (bandLeads, bandNote), the list's sections, marks and short states (panelSections, rowMark, fittedCells,
+// (bandLeads, bandNote), the list's sections, marks and short states (panelSections, rowMark, rowStates,
 // rowExtra, fitRow), the banner (bannerLines) and a task's page sections (taskSections, T-580). Nothing here draws or reads a file, so
 // the tests check exactly what the TUI shows (hooks/opencode/tests/opencode-tui.spec.ts). The panel's actions go back
 // to the engine as symcc's slash commands (actionCommand), run in the TUI's session (R6 of T-468). Like the Claude Code
@@ -16,7 +16,7 @@ import type { OwnerQuestion } from '../core/questions'
 import {
   statusCounts, newestFirst, bandLeads, bandNote, bandBrand, bandWhere, boardBrand, modeLabel, modeOf, planBandText, withCrew, fileWaitText, questionsForYou,
   bannerLines, bannerRule, footerRule, type BannerTone, panelSections, localOffset, when, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, ALL_CLEAR,
-  fittedCells, rowMark, TITLE_ROOM, fitRow, rowExtra, questionsLabel, archivedOf, archivedNote, statusMark, statusBadge, detailRows, detailRowLines, wrapSegs, hintLineText,
+  rowStates, tryTone, rowMark, TITLE_ROOM, fitRow, rowExtra, questionsLabel, archivedOf, archivedNote, statusMark, statusBadge, detailRows, detailRowLines, wrapSegs, hintLineText,
   type KeyHint, type Seg, type BoardTask, gitNote, intoOf, taskActions, taskAsks, type TaskAction, type TaskActionId,
   waitsForYou, shownStatus, approveRunning, sortScouts, scoutListRows, scoutRow, scoutIcon, scoutTone, scoutHowTo, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem, scoutFile,
   SETTING_GROUPS, SETTINGS, isSettingPage, settingInfo, settingValue, cantPlayNotify, groupSummaryParts,
@@ -200,7 +200,7 @@ export function bandLines(f: ViewFile | null, nowMs: number, width: number, rows
  * the "+N more" line open the board panel, a question's or task's row opens its page): the header line (brand,
  * folder, mode, questions for you, workers, counts, scouts, then the " (click: board)" hint, dropped first when short
  * of room), the owner's open questions, then the tasks that need the owner or run, newest first, each with its
- * lined-up front ("T-434 ✎ 2m · try 2", "T-440 ▶ 12m", see bandLeads) and its note when the state doesn't already say
+ * lined-up front ("T-434 ✎ 2m (2)", "T-440 ▶ 12m", see bandLeads) and its note when the state doesn't already say
  * it (bandNote), and "+N more" when they don't all fit. No lines when there is nothing to show (an empty board, or
  * symcc disabled). `rows`: at most this many rows under the header.
  */
@@ -689,9 +689,9 @@ function listBody(f: ViewFile, cursor: number, open: Record<PanelGroup, boolean>
   const selected = at >= 0 ? ids[at]! : ''
   const since = (id: string) => v.working.find(x => x.task === id)?.since
   const idWidth = Math.max(4, ...ids.filter(id => !groupOf(id)).map(id => id.length))
-  // a doing task: the total work time of all tries, "1h40m", "test 9m"; narrow, the time is left out
-  const cells = fittedCells(listed, nowMs, since, w - (4 + idWidth + 3 + 2) - TITLE_ROOM)
-  const cellWidth = Math.max(0, ...[...cells.values()].map(c => c.length))
+  // a doing task: the total work time of all tries, "1h40m", "⧗ 9m", then its try from try 2 on, "⧗ 9m (3)";
+  // narrow, the time is left out, then the try (see rowStates)
+  const { states, width: cellWidth } = rowStates(listed, nowMs, since, cw => cw <= w - (4 + idWidth + 3 + 2) - TITLE_ROOM)
   const pointer = (id: string, indent: number) => (id === selected ? `${' '.repeat(Math.max(0, indent - 2))}› ` : ' '.repeat(indent))
   const lines: Line[] = []
   const hits: (PanelHit | null)[] = []
@@ -706,12 +706,16 @@ function listBody(f: ViewFile, cursor: number, open: Record<PanelGroup, boolean>
     const closed = x.status === 'done' || x.status === 'dropped' || x.status === 'backlog'
     const lead = indent + idWidth + 3 + cellWidth + 2
     const fit = fitRow(lead, x.title, rowExtra(x, v.tasks, v.branch ?? '', v.max_minutes, nowMs), w, x.status === 'failed')
+    const state = states.get(x.id) ?? { front: '', tag: '', back: '' }
     const sel = x.id === selected
     return [
       { text: pointer(x.id, indent), color: 'ide', bold: true },
       { text: x.id.padEnd(idWidth), color: closed ? 'inactive' : 'claude', bold: !closed || sel },
       // an approved task whose approve runs is shown as running (shownStatus): the doing tone, not bold
-      { text: ` ${rowMark(x, nowMs)} ${(cells.get(x.id) ?? '').padEnd(cellWidth)}  `, color: LIST_TONE[shownStatus(x, nowMs)]! },
+      { text: ` ${rowMark(x, nowMs)} ${state.front}`, color: LIST_TONE[shownStatus(x, nowMs)]! },
+      // a later try ("(2)") is dim, from try 3 on in the warning colour (see tryTone)
+      ...(state.tag ? [{ text: state.tag, color: tryTone(x) }] : []),
+      { text: `${state.back}  `, color: LIST_TONE[shownStatus(x, nowMs)]! },
       { text: fit.title, color: closed ? 'inactive' : 'text', ...(sel || waitsForYou(x, nowMs) || x.status === 'failed' || (x.status === 'review' && !approveRunning(x, nowMs)) ? { bold: true } : {}) },
       ...(fit.extra ? [{ text: `${fit.pad}${fit.extra}`, color: 'inactive' }] : []),
     ]

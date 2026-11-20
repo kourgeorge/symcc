@@ -181,8 +181,7 @@ export function tryLabel(t: Pick<SymccTask, 'role'> & { attempts: number | strin
 }
 
 /**
- * The try mark of a task being worked on, the same words in the board list, the band above the prompt, the status line
- * and the lead's text board: '' on a first try (or when not "doing"); "try 2" on a later one; "try 2/3" with
+ * The try mark of a task being worked on in the status line and the lead's text board (rows show tryTag's "(2)"): '' on a first try (or when not "doing"); "try 2" on a later one; "try 2/3" with
  * `autoRetries` (the board's auto_retries) while the try is an automatic retry after failing tests (test_tries > 0),
  * so the limit shows. The task page's "2 tries" uses the same word.
  */
@@ -192,6 +191,16 @@ export function tryMark(t: Pick<SymccTask, 'status' | 'attempts'> & { test_tries
   const auto = Number(t.test_tries ?? 0)
   const limit = autoRetries !== undefined && auto > 0 ? n - auto + autoRetries : 0
   return limit >= n ? `try ${n}/${limit}` : `try ${n}`
+}
+
+/**
+ * The short try mark of a row in the band above the prompt and in the board's task lists (terminal, VS Code, OpenCode),
+ * right after the row's time: "(3)" ("T-582 ⧗ 3m (3)"); '' on a first try (or when not "doing"). The task page keeps
+ * its own "try 3/4" wording, the status line and the lead's text board tryMark's.
+ */
+export function tryTag(t: Pick<SymccTask, 'status' | 'attempts'>): string {
+  const n = Number(t.attempts)
+  return t.status === 'doing' && n > 1 ? `(${n})` : ''
 }
 
 /** How loud a try mark is drawn: dim on try 2, the warning colour from try 3 on (see tryMark). */

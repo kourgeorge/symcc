@@ -8,7 +8,7 @@ import { originOf } from './origin'
 import { isAnswered, OVERTIME_OPTIONS, overtimeQuestion, timeLimitOf } from './task'
 import { waitFilesNote } from './review'
 import { kindMark } from './kinds'
-import { roleMark, roleOf, tryMark } from './roles'
+import { roleMark, roleOf, tryTag } from './roles'
 import { onDemand } from './scouts'
 import { fmtDuration, runMs, sumRuns } from './runs'
 import { ellipsis, num } from './text'
@@ -210,6 +210,50 @@ export function fittedCells<T extends Parameters<typeof statusCell>[0] & { id: s
   return cells
 }
 
+/** One row's state column (see rowStates): `front` (its status cell, and the space before a try tag), `tag` (its
+ *  try tag, "(3)", or ''), `back` (the padding), so a view can draw the tag in its own colour (tryTone). */
+export type RowState = { front: string; tag: string; back: string }
+
+/** The forms a too narrow row's state tries, in order: the time and the try, then the try alone, then neither. */
+const STATE_FORMS: readonly { form: TotalForm; tries: boolean }[] = [
+  { form: 'total', tries: true },
+  { form: 'none', tries: true },
+  { form: 'none', tries: false },
+]
+
+/**
+ * The state column of list or band rows, lined up: each row's status cell (rowCell) and, on a doing row's later try,
+ * its try tag right after the time ("▶ 1h40m (3)", tryTag), or right after the step icon with no time ("⧗ (3)"). The
+ * doing rows' cells share one width so their tags line up; every state is padded to `width`. The first form whose
+ * `width` passes `fits` is used: with the time, then without it, then without the try too (narrow rows).
+ */
+export function rowStates<T extends Parameters<typeof statusCell>[0] & Pick<SymccTask, 'id' | 'attempts'>>(tasks: T[], nowMs: number, since: (id: string) => number | string | undefined, fits: (width: number) => boolean): { states: Map<string, RowState>; width: number } {
+  let out = { states: new Map<string, RowState>(), width: 0 }
+  for (const { form, tries } of STATE_FORMS) {
+    const cells = new Map(tasks.map(x => [x.id, rowCell(x, nowMs, since(x.id), form)]))
+    const tags = new Map(tasks.map(x => [x.id, tries ? tryTag(x) : '']))
+    const doing = tasks.filter(x => x.status === 'doing')
+    const cellWidth = Math.max(0, ...doing.map(x => cells.get(x.id)!.length))
+    const sep = cellWidth ? ' ' : ''
+    const tagWidth = Math.max(0, ...doing.map(x => (tags.get(x.id) ? sep.length + tags.get(x.id)!.length : 0)))
+    const parts = new Map(
+      tasks.map(x => {
+        const cell = cells.get(x.id)!
+        if (x.status !== 'doing') return [x.id, { front: cell, tag: '' }]
+        const tag = tags.get(x.id)!
+        return [x.id, { front: tag ? `${cell.padEnd(cellWidth)}${sep}` : cell.padEnd(cellWidth + tagWidth), tag }]
+      }),
+    )
+    const width = Math.max(0, ...[...parts.values()].map(p => p.front.length + p.tag.length))
+    out = { states: new Map([...parts].map(([id, p]) => [id, { ...p, back: ' '.repeat(width - p.front.length - p.tag.length) }])), width }
+    if (fits(width)) break
+  }
+  return out
+}
+
+/** A row's whole state text (see rowStates). */
+export const stateText = (s: RowState | undefined): string => (s ? s.front + s.tag + s.back : '')
+
 /** Room for a list row's title that a status cell must leave (see fittedCells). */
 export const TITLE_ROOM = 20
 
@@ -226,7 +270,8 @@ export const roleTag = (t: { kind?: unknown; role?: string }): string => {
   return kind ? `[${[kind, role].filter(Boolean).join(' · ')}]` : role
 }
 
-/** The secondary-color (inactive) text at the right end of a task row: "tester", or "tester · try 2" on a later try (see tryMark), for a task being worked on (its
+/** The secondary-color (inactive) text at the right end of a task row: "tester" for a task being worked on (its try shows
+ *  after its time instead, see rowStates; its
  *  question, "T-4 has run 50 min. Give it more time?", while it asks the owner for more time), "after T-3" for
  *  one waiting on unfinished tasks (else its role; an investigation's starts with "[investigation]"), "Enter to review"
  *  in review ("[investigation]" for an answered investigation, whose status column says "answer"; a and x only work on the task's
@@ -246,7 +291,7 @@ function rowExtraOf(t: BoardTask, tasks: Pick<SymccTask, 'id' | 'status'>[], max
   switch (t.status) {
     case 'doing':
       if (asksMoreTime(t)) return overtimeQuestion(t.id, timeLimitOf(maxMinutes, t))
-      return [roleTag(t), tryMark(t)].filter(Boolean).join(' · ')
+      return roleTag(t)
     case 'todo':
     case 'paused': {
       const open = (t.after ?? []).filter(id => tasks.some(x => x.id === id && x.status !== 'done'))

@@ -2,7 +2,7 @@
 // (list.tsx) packs each task on one cut line of a button; here each open task is one line of text too:
 //   ● T-404  Pick the colors for the review… · ? waiting for 1m · Yellow or blue for review?
 // the ID a link that opens the task, the title ("●" first when it needs you), then dim the state part: the status in
-// its color and how long it has run or waited, the kind or role, "after …", the question or why it failed, the try.
+// its color and how long it has run or waited, a later try ("(3)"), the kind or role, "after …", the question or why it failed.
 // When the line is too wide the title is cut with "…" first (the whole title is on the task's page). A done or dropped
 // task is one line: "✓ T-12 title", its mark first, no state part. Grouped under headings with their colored mark and a count badge (Questions for you,
 // Waiting for you, Review, Failed, Doing, To do), a line of space between them, then Backlog, Done and Dropped, folded
@@ -10,7 +10,7 @@
 // No key hints: the mode switch is a link and the search a box in the footer. An empty board says so, with one
 // primary button that starts a message to the lead in the prompt box.
 import type { SymccStatus, SymccTask } from '../../../types'
-import { statusMark, archivedNote, archivedOf, localOffset, panelSections, BACKLOG_SHOWN, ALL_CLEAR, statusCell, rowCell, rowMark, rowExtra, roleTag, kindTag, searchTasks, SEARCH_WORDS, tryMark, tryTone, isInvestigation, needsYou, kindMark, roleMark, fmtDuration, waitsForYou, shownStatus, approveRunning } from '../../board'
+import { statusMark, archivedNote, archivedOf, localOffset, panelSections, BACKLOG_SHOWN, ALL_CLEAR, statusCell, rowCell, rowMark, rowExtra, roleTag, kindTag, searchTasks, SEARCH_WORDS, tryTag, tryTone, isInvestigation, needsYou, kindMark, roleMark, fmtDuration, waitsForYou, shownStatus, approveRunning } from '../../board'
 import { openDays, S } from '../../app/state'
 import { type $, panelValues } from '../panel'
 import type { PaneParts } from './parts'
@@ -53,7 +53,7 @@ const cutWords = (text: string, max: number) => {
  *  words from their end ("for 5m"). The try always stays whole; a part is never cut mid-word. */
 export function fitRow(title: string, room: number, status: string, parts: RowPart[], tried: string): { title: string; status: string; rest: string } {
   const t = title.replace(/\s+/g, ' ').trim()
-  const size = (st: string, ps: RowPart[]) => 3 + st.length + (tried ? 3 + tried.length : 0) + ps.reduce((n, p) => n + 3 + p.text.length, 0)
+  const size = (st: string, ps: RowPart[]) => 3 + st.length + (tried ? 1 + tried.length : 0) + ps.reduce((n, p) => n + 3 + p.text.length, 0)
   let kept = parts.filter(p => p.text)
   let st = status
   const left = () => room - size(st, kept)
@@ -130,7 +130,7 @@ export function listPageVs($: $, pane: PaneParts) {
 
   /** One task on one line of text: its ID a link that opens it, then the title (bold when it needs you, dim when
    *  closed), with "●" first in the status color when it needs you; then, dim on the same line, the state part: the
-   *  status in its color and its time, the kind, "after …", the try. When the line is too wide the title is cut with
+   *  status in its color and its time, a later try ("(3)"), the kind, "after …". When the line is too wide the title is cut with
    *  "…" (the whole title is on the task's page). A done or dropped task: its mark, the ID and the title, no state part.
    *  Text, not a Button (VS Code draws a Button as a blue box). */
   const taskRow = (x: SymccTask, depth = 0) => {
@@ -139,8 +139,9 @@ export function listPageVs($: $, pane: PaneParts) {
     const ended = x.status === 'done' || x.status === 'dropped'
     const needs = needsYou(x, nowMs)
     const extra = rowExtra(x, v.tasks, v.branch ?? '', v.max_minutes, nowMs).replace(/^Enter to review$/, isInvestigation(x) ? '' : 'ready for your review')
-    const tried = tryMark(x)
-    let body = tried && extra.endsWith(tried) ? extra.slice(0, extra.length - tried.length).replace(/ · $/, '') : extra
+    // a later try right after the time: "▶ 12m (3)" (see tryTag)
+    const tried = tryTag(x)
+    let body = extra
     // "→ other-branch" first, when it merges elsewhere (kept whole)
     const branch = body.startsWith('→ ') ? body.split(' · ')[0]! : ''
     if (branch) body = body.slice(branch.length).replace(/^ · /, '')
@@ -191,8 +192,8 @@ export function listPageVs($: $, pane: PaneParts) {
             <Text key={`vs-task-${x.id}-info`} wrap="truncate" color={C('inactive')}>
               {' · '}
               <Text color={C(tone[shownStatus(x, nowMs)]!)}>{state}</Text>
+              {tried ? <Text color={C(tryTone(x))}>{` ${tried}`}</Text> : null}
               {rest ? ` · ${rest}` : ''}
-              {tried ? <Text color={C(tryTone(x))}>{` · ${tried}`}</Text> : null}
             </Text>
           )}
         </Box>

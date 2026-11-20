@@ -1169,20 +1169,21 @@ skills: [code-review]
 You can change a task's role yourself: say "use the security role for T-12", or open the task
 in the board panel and press `l` (Role) to pick one. That works on a task to do, paused,
 failed or in the backlog. The board list shows a role at the right end
-of the task's row (`tester · try 2`); `general` shows nothing.
+of the task's row (`tester`); `general` shows nothing.
 
-When a task is doing and this is not its first try, the board says which try it is: `try 2`
-at the right end of its row (dim; from `try 3` on in the warning colour), `T-5 doing (try 2)`
-in the band above the prompt and the status line, and `T-5 doing · try 2/3` in the lead's
+When a task is doing and this is not its first try, the board says which try it is: `(2)`
+right after the time in its row, in the band above the prompt and in the board's task list
+(terminal, VS Code and OpenCode; dim, from `(3)` on in the warning colour), `T-5 doing (try 2)`
+in the status line, and `T-5 doing · try 2/3` in the lead's
 board (the `/3` shows the limit while the try is an automatic retry after failing tests).
 A first try shows no mark. The time in a doing task's row is the total work time of all its
-tries, so a task that is really stuck stands out: `T-5 ▶ 1h40m · try 3` (1 hour 40 over all
+tries, so a task that is really stuck stands out: `T-5 ▶ 1h40m (3)` (1 hour 40 over all
 three tries; on the first try it is just that try's time, `T-5 ▶ 15m`), and during a check
 step the step's icon takes the place of `▶`: `T-5 ⧗ 9m` (see "What a task shows on its way to
 the merge"). This is the
 same number as the task page's "Time and cost" total: each try's time from start to end, added
 up. Time while the task was paused, waiting for you, waiting on other tasks, or in todo between
-tries is not counted. When a row is short of room, the time is left out. When the status line is short of room, the try marks are left out
+tries is not counted. When a row is short of room, the time is left out, then the try. When the status line is short of room, the try marks are left out
 first, so failed tasks and reviews always stay in view.
 
 **One task, one role.** When a feature needs several kinds of work and each part is big

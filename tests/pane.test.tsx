@@ -158,9 +158,11 @@ test("the band's doing rows show the list's state and time, lined up, with the t
   // the same labels the board list gives (statusCell), fixed-width state and try columns
   expect(tasks.map(t => statusCell(t as never, T0))).toEqual(['12m', 'test', 'prep', 'merge', '5m'])
   // the row shows the total work time of all tries (T-557), a step row its step's icon in place of ▶ and the word: "⧗ 20m" (T-581)
-  for (const text of ['T-40 ▶ 12m        ', 'T-41 ⧗ 20m        ', 'T-42 ✎ 20m · try 2', 'T-43 ⇢ 20m        ', 'T-44 ▶ 5m  · try 3']) expect(await row(ui, text)).toBeDefined()
+  // a later try "(n)" right after the time (T-604)
+  for (const text of ['T-40 ▶ 12m    ', 'T-41 ⧗ 20m    ', 'T-42 ✎ 20m (2)', 'T-43 ⇢ 20m    ', 'T-44 ▶ 5m  (3)']) expect(await row(ui, text)).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /try \d/ })).toBeUndefined()
   // the titles start in one column
-  expect(await ui.find({ type: 'Text', text: /^T-40 ▶ 12m {9}Running worker$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^T-40 ▶ 12m {5}Running worker$/ })).toBeDefined()
   // no "doing" word and no "— worker on it" tail: the state says it
   expect(await ui.find({ type: 'Text', text: /^T-\d+ .*doing/ })).toBeUndefined()
   expect(await ui.find({ type: 'Text', text: /worker on it/ })).toBeUndefined()
@@ -207,7 +209,7 @@ test("every band row lines up in one title column, with the board list's short s
   on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [] } }, version: 1 } }))
   on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 120 }, surface: 'terminal' })
-  const leads = ['T-62 ▶ 12m        ', 'T-63 ▶ 3m  · try 2', 'T-60 ? waiting    ', 'T-61 ◆ review     ', 'T-59 ✗ failed     ']
+  const leads = ['T-62 ▶ 12m    ', 'T-63 ▶ 3m  (2)', 'T-60 ? waiting', 'T-61 ◆ review ', 'T-59 ✗ failed ']
   // each state is the list's own mark and short cell
   expect(tasks.map(t => `${STATUS_MARK[t.status as SymccStatus]} ${statusCell(t as never, T0)}`)).toEqual(['▶ 12m', '▶ 3m', '? waiting', '◆ review', '✗ failed'])
   for (const lead of leads) expect(await ui.find({ type: 'Text', text: new RegExp(`^${esc(lead)}$`, 'u') })).toBeDefined()
@@ -1190,7 +1192,7 @@ const ROLE_FILES = {
   '/roles/security.md': '---\ndescription: checks for holes\n---\n',
 }
 
-test('a running task shows its role at the right end in the inactive color, and "try N" from its 2nd try (warning from try 3); general shows only the try', async ($, on) => {
+test('a running task shows its role at the right end in the inactive color, and its try "(n)" after its time from its 2nd try (warning from try 3); general shows only the try', async ($, on) => {
   stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'doing', 'Plain work', { role: 'general', attempts: 2 }), task('T-12', 'doing', 'Cover the parser errors', { role: 'tester', attempts: 1 }), task('T-13', 'doing', 'Fix the parser', { role: 'tester', attempts: 3 })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 60 }, surface: 'terminal' })
   // a first try: only the role, no try mark
@@ -1199,15 +1201,20 @@ test('a running task shows its role at the right end in the inactive color, and 
   expect(mark?.props.color).toBe('inactive')
   expect((await ui.find({ key: 'T-12' }))?.text.length).toBe(60)
   expect((await ui.find({ key: 'T-12' }))?.text).not.toMatch(/try/)
-  // try 2: dim; try 3: the warning colour
-  const two = await ui.find({ type: 'Text', text: /^try 2$/ })
+  // try 2: dim; try 3: the warning colour; "(n)" right after the state, not "try n" (T-604)
+  const two = await ui.find({ type: 'Text', text: /^\(2\)$/ })
   expect(two?.props.color).toBe('inactive')
-  expect((await ui.find({ key: 'T-1' }))?.text).toMatch(/\s+try 2$/)
-  const three = await ui.find({ type: 'Text', text: /^try 3$/ })
+  expect((await ui.find({ key: 'T-1' }))?.text).toMatch(/T-1 +▶ \(2\) +Plain work$/)
+  const three = await ui.find({ type: 'Text', text: /^\(3\)$/ })
   expect(three?.props.color).toBe('warning')
-  expect((await ui.find({ key: 'T-13' }))?.text).toMatch(/tester · try 3$/)
+  expect((await ui.find({ key: 'T-13' }))?.text).toMatch(/T-13 ▶ \(3\) +Fix the parser +tester$/)
+  for (const id of ['T-1', 'T-12', 'T-13']) expect((await ui.find({ key: id }))?.text).not.toMatch(/try/)
   expect(await ui.find({ type: 'Text', text: /general/ })).toBeUndefined()
   await ui.unmount()
+  // narrow: the try is left out
+  const narrow = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 28 }, surface: 'terminal' })
+  expect((await narrow.find({ key: 'T-13' }))?.text).not.toMatch(/\(3\)/)
+  await narrow.unmount()
 })
 
 test('an open task shows its role and model; "Role" (l) opens a pick list of the roles, and picking one sets it', async ($, on) => {
