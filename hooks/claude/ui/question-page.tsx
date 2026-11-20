@@ -8,7 +8,7 @@ import { when } from '../../core/days'
 import { answerOnBoard } from '../../app/questions'
 import type { PaneParts } from './parts'
 import { answerBox } from './answer-box'
-import { vsCallout, vsFooter, vsHref, vsLink, mdLink } from './vscode'
+import { vsCallout, vsChoices, vsFooter, vsHref, vsLink, mdLink } from './vscode'
 import { claudeHost } from '../host'
 
 /** The keys at the bottom of a question's page: only b back; the answer keys are told under the buttons (choiceKeysHint). */
@@ -47,11 +47,10 @@ export function questionPage($: $, pane: PaneParts, q: OwnerQuestion) {
   )
 }
 
-/** The question's page in VS Code: a "← Tasks" link back, then the question in a box with its answers as Buttons in a
- *  row that wraps (the first the primary) and a "Your answer" box always there. VS Code draws every Button as a filled
- *  box that never wraps its label, so the terminal's row of "1 Yes  2 No  3 Answer…" ran together there. No key hints. */
+/** The question's page in VS Code: a "← Tasks" link back, then the question in a box with its answers as numbered
+ *  lines you click (vsChoices) and a "Your answer" box always there. No key hints. */
 function questionPageVs(pane: PaneParts, q: OwnerQuestion, answers: string[], back: () => void, send: (text: string) => () => void) {
-  const { Box, Text, Button, Input, C, vs } = pane
+  const { Box, Text, Input, C, vs } = pane
   const backHref = vsHref('page', 'back/question-back')
   return (
     <Box flexDirection="column" gap={1}>
@@ -65,13 +64,7 @@ function questionPageVs(pane: PaneParts, q: OwnerQuestion, answers: string[], ba
       </Box>
       {vsCallout(vs, 'vs-sec-question', '?', 'The lead asks', 'warning', [
         <Text key="vs-question" wrap="wrap" bold color={C('text')}>{q.text}</Text>,
-        answers.length ? (
-          <Box key="vs-answers" flexDirection="row" flexWrap="wrap" gap={1}>
-            {answers.map((c, i) => (
-              <Button key={`choice-${i + 1}`} label={c} variant={i === 0 ? 'primary' : 'secondary'} autoFocus={i === 0 ? true : undefined} onPress={send(c)} />
-            ))}
-          </Box>
-        ) : null,
+        answers.length ? vsChoices(vs, answers, i => send(answers[i]!)) : null,
         <Input key="answer" label="Your answer" submitLabel="Send" placeholder={answers.length ? 'or type your own answer' : 'type your answer'} autoFocus={answers.length ? undefined : true} onSubmit={value => send(value)()} />,
       ].filter(Boolean) as never[])}
       {vsFooter(vs, 'question-keys')}

@@ -18,7 +18,7 @@ import { S } from '../../app/state'
 import { when } from '../../core/days'
 import type { PaneParts } from './parts'
 import type { $ } from '../panel'
-import { vsBadge, vsCallout, vsFold, vsFooter, vsHref, vsLink, mdLink, vsSection, vsTags } from './vscode'
+import { vsBadge, vsCallout, vsChoices, vsFold, vsFooter, vsHref, vsLink, mdLink, vsSection, vsTags } from './vscode'
 
 /** How many lines of a report VS Code's task page shows before its "Show all" button. */
 export const REPORT_FIRST_LINES = 12
@@ -249,20 +249,14 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
     </Box>
   ) : null
 
-  // a question that waits: shown plainly, its answers as buttons (the first the primary) and a box for your own answer
+  // a question that waits: shown plainly, its answers as numbered lines you click (vsChoices) and a box for your own answer
   const answers = x.choices.slice(0, -1) // the last one is "Answer…": the box below is always there
   const askedFiles = !x.overtime ? ((t as { asked_files?: string[] }).asked_files ?? []) : []
   const question = x.answerable
     ? vsCallout(vs, 'vs-sec-question', '?', x.overtime ? 'Time is up' : 'Question for you', 'warning', [
         plain('vs-question', x.askedQuestion ?? '', 'text', { bold: true }),
         ...askedFiles.map(f => plain(`vs-asked-${f}`, `  ${f}`, 'autoAccept')),
-        answers.length ? (
-          <Box key="vs-answers" flexDirection="row" flexWrap="wrap" gap={1}>
-            {answers.map((c, i) => (
-              <Button key={`choice-${i + 1}`} label={askedFiles.length && i === 0 ? 'Allow files' : c} variant={i === 0 ? 'primary' : 'secondary'} autoFocus={i === 0 ? true : undefined} onPress={on.choicePress(i)} />
-            ))}
-          </Box>
-        ) : null,
+        answers.length ? vsChoices(vs, answers.map((c, i) => (askedFiles.length && i === 0 ? 'Allow files' : c)), on.choicePress) : null,
         <Input key="answer" label="Your answer" submitLabel="Send" placeholder={answers.length ? 'or type your own answer' : 'type your answer'} autoFocus={answers.length ? undefined : true} onSubmit={value => on.sendAnswer(value)()} />,
       ].filter(Boolean) as never[])
     : null
