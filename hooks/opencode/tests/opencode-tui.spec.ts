@@ -135,14 +135,14 @@ test('the panel: the banner, then the list grouped by state (NEEDS YOU, what run
   // a waiting task: its question and the numbered choices, the last one the owner's own answer
   const asks = panelLines(f, { opened: 'T-3', cursor: 0 }, NOW, 100).lines.map(lineText)
   expect(asks.some(l => l.includes('asks: Which database?'))).toBe(true)
-  expect(asks).toContain('  2 postgres')
+  expect(asks).toContain('  [2] postgres')
   expect(answerOptions(f, 'T-3')).toEqual(['mysql', 'postgres', OWN_ANSWER])
   expect(panelKeys(f, 'T-3').map(k => k.word)).toEqual(['answer', 'back'])
   // a running worker whose time is up: its page asks for more time, with Claude's +30 min / +60 min / Stop it
   const over = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => (t.id === 'T-1' ? { ...t, time_ask: AT, note: 'time is up' } : t)) } }
   expect(panelKeys(over, 'T-1').map(k => k.word)).toEqual(['answer', 'back'])
   expect(answerOptions(over, 'T-1')).toEqual(['+30 min', '+60 min', 'Stop it', OWN_ANSWER])
-  expect(panelLines(over, { opened: 'T-1', cursor: 0 }, NOW, 100).lines.map(lineText)).toContain('  1 +30 min')
+  expect(panelLines(over, { opened: 'T-1', cursor: 0 }, NOW, 100).lines.map(lineText)).toContain('  [1] +30 min')
   // a waiting task whose finished work only waits for the owner's files: nothing to answer
   const files = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => (t.id === 'T-3' ? { ...t, merge_wait: { dirty: ['src/a.ts'] } } : t)) } }
   expect(panelKeys(files, 'T-3').map(k => k.word)).toEqual(['back'])
@@ -1012,4 +1012,101 @@ test('T-574: OpenCode\'s task page shows local times with the shared when, and t
   // the owner's tester role (its description and model) and bug kind (its description)
   expect(page).toContain('tester — My tester · model opus')
   expect(page).toContain('bug — A bug to fix')
+})
+
+test('T-583: on a waiting task\'s and a question\'s page each choice is a clickable line; a click or its number key sends /symcc-answer, the page says it was sent; a right click does nothing', async () => {
+  const f0 = viewFile()
+  // T-3 asks a question with options, T-1 is over its time, T-4 asks for files; Q-3 is the owner's question
+  const tasks = f0.view.tasks.map(t =>
+    t.id === 'T-1' ? { ...t, time_ask: AT, note: 'time is up' } : t.id === 'T-4' ? { ...t, status: 'waiting' as const, question: 'May I change docs/?', asked_files: ['docs/'] } : t,
+  )
+  const f: ViewFile = { ...f0, view: { ...f0.view, tasks, questions: [{ id: 'Q-3', text: 'How often?', options: ['Once a day', 'Once a week'], asked_at: AT }] } }
+  const page = (id: string) => panelLines(f, { opened: id, cursor: 0 }, NOW, 100)
+  // the choices are numbered lines, each with its click
+  const d = page('Q-3')
+  const at = d.lines.map(lineText).indexOf('  [1] Once a day')
+  expect(at).toBeGreaterThan(0)
+  expect(d.hits[at]).toEqual({ choice: 1 })
+  expect(d.lines.map(lineText)).toContain(`  [3] ${OWN_ANSWER}`)
+  expect(page('T-4').lines.map(lineText)).toContain("  [2] Don't allow")
+  const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)]])
+  const sent: { sessionID: string; name: string; text: string }[] = []
+  const slots: { append: string; render: (input: never) => unknown }[] = []
+  const answers = { prompt: 'every hour' as string | undefined }
+  const ctx: TuiContext = {
+    location: { directory: '/work/proj' },
+    theme: {},
+    renderer: { width: 120 },
+    client: { session: { command: async input => void sent.push(input) } },
+    keymap: { layer: () => undefined },
+    ui: {
+      toast: { show: () => undefined },
+      dialog: { prompt: async () => answers.prompt, select: async () => undefined },
+      panel: { open: () => true, close: () => undefined, current: () => undefined },
+      slot: claim => (slots.push(claim as never), () => undefined),
+    },
+  }
+  const board = startTui(ctx, { runtime: fakeRuntime(), readText: async p => files.get(p) ?? Promise.reject(new Error('missing')), every: () => () => undefined, now: () => NOW })
+  await board.refresh()
+  const panel = slots.find(s => s.append === 'session.panel')!.render({ name: BOARD_PANEL, sessionID: 'ses_1', width: 100, focused: true, close: () => undefined, focus: () => undefined } as never) as El
+  const settle = () => new Promise<void>(res => setTimeout(res, 0))
+  const clickChoice = async (text: string, button = 0) => {
+    const r = rowEls(panel).find(x => x.text === text)!
+    expect(typeof r.el.props.onMouseUp).toBe('function')
+    ;(r.el.props.onMouseUp as (e: unknown) => void)({ type: 'up', button, stopPropagation: () => undefined })
+    await settle()
+  }
+  const openPage = async (id: string) => {
+    const r = rowEls(panel).find(x => x.text.includes(`${id} `))!
+    ;(r.el.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0 })
+    await settle()
+    expect(board.state().opened).toBe(id)
+  }
+  const back = () => board.press('back', 'ses_1')
+  // Q-3: a right click does nothing; a left click on a choice answers it; the page says it was sent
+  await openPage('Q-3')
+  await clickChoice('  [2] Once a week', 2)
+  expect(sent).toEqual([])
+  await clickChoice('  [2] Once a week')
+  expect(rowEls(panel).some(r => r.text.includes('answer sent: Once a week'))).toBe(true)
+  // the number key does the same; "Answer…" asks for a typed answer
+  await board.press('1', 'ses_1')
+  await board.press('3', 'ses_1')
+  // a number past the choices does nothing
+  await board.press('9', 'ses_1')
+  await back()
+  // T-3: its own options
+  await openPage('T-3')
+  expect(rowEls(panel).some(r => r.text.includes('answer sent'))).toBe(false)
+  await clickChoice('  [1] mysql')
+  await board.press('2', 'ses_1')
+  await back()
+  // T-1: more time
+  await openPage('T-1')
+  await clickChoice('  [2] +60 min')
+  await board.press('3', 'ses_1')
+  await back()
+  // T-4: Allow / Don't allow files
+  await openPage('T-4')
+  await clickChoice('  [1] Allow')
+  await board.press('2', 'ses_1')
+  // a typed answer left empty sends nothing
+  answers.prompt = ''
+  await clickChoice(`  [3] ${OWN_ANSWER}`)
+  expect(sent.map(x => `${x.name} ${x.text}`)).toEqual([
+    'symcc-answer Q-3 Once a week',
+    'symcc-answer Q-3 Once a day',
+    'symcc-answer Q-3 every hour',
+    'symcc-answer T-3 mysql',
+    'symcc-answer T-3 postgres',
+    'symcc-answer T-1 +60 min',
+    'symcc-answer T-1 Stop it',
+    'symcc-answer T-4 Allow',
+    "symcc-answer T-4 Don't allow",
+  ])
+  // on the list a number key does nothing
+  await back()
+  await board.press('1', 'ses_1')
+  expect(sent.length).toBe(9)
+  board.stop()
 })

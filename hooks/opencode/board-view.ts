@@ -139,7 +139,11 @@ export function parseViewFile(text: string | null | undefined): ViewFile | null 
 }
 
 /** The panel's keys (see panelKeys for which ones each page offers). */
-export type PanelKey = 'up' | 'down' | 'open' | 'back' | 'a' | 'x' | 'd' | 'close' | 't' | 's' | 'c' | 'r' | 'p' | 'o' | 'e'
+export type PanelKey = 'up' | 'down' | 'open' | 'back' | 'a' | 'x' | 'd' | 'close' | 't' | 's' | 'c' | 'r' | 'p' | 'o' | 'e' | ChoiceKey
+
+/** The number keys that pick a page's answer choice (T-583): 1 is the first choice. */
+export type ChoiceKey = '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'
+export const CHOICE_KEYS: readonly ChoiceKey[] = ['1', '2', '3', '4', '5', '6', '7', '8', '9']
 
 /** The list's groups that open and close (▸ Backlog, ▸ Done, ▸ Dropped). */
 export type PanelGroup = 'backlog' | 'done' | 'dropped'
@@ -147,8 +151,9 @@ export type PanelGroup = 'backlog' | 'done' | 'dropped'
 /** What a mouse click on a line or a piece of it does (T-558): open a task or question, open or close a group, or
  *  press one of the panel's keys (a key hint in the footer works as a button); and (T-559) go to a tab, open a scout
  *  or one of its runs, or change a setting; and (T-562) open a page under Settings: the Roles or Kinds list ("roles", "kinds") or one
- *  role's or kind's page ("role:tester", "kind:bug", see settingsPlace). */
-export type PanelHit = { open: string } | { group: PanelGroup } | { key: PanelKey } | { tab: PanelTab } | { scout: string } | { run: string } | { setting: SettingName } | { page: string }
+ *  role's or kind's page ("role:tester", "kind:bug", see settingsPlace); and (T-583) pick answer choice `choice`
+ *  (1 = the first of answerOptions) of the open task or question. */
+export type PanelHit = { open: string } | { group: PanelGroup } | { key: PanelKey } | { tab: PanelTab } | { scout: string } | { run: string } | { setting: SettingName } | { page: string } | { choice: number }
 
 /** One colored piece of a line, with what a click on it does (only the footer's key hints have one). */
 export type DrawSeg = Seg & { hit?: PanelHit }
@@ -235,6 +240,8 @@ export type PanelChoice = {
   run?: string
   /** that run's report text: undefined while it is read, null when it can't be read */
   report?: string | null
+  /** the answer the owner just sent from this panel (T-583): the open page says it was sent */
+  sent?: { id: string; answer: string }
 }
 
 /** The panel as drawn: its lines, what a click on each line does (null: nothing), the ids of the rows the cursor
@@ -355,7 +362,7 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
     body = place?.def ? defPage(f, place.list, place.def, w) : place ? defsList(f, place.list, choice.cursor, w) : settingsBody(f, choice.cursor, w)
     keys = panelKeys(f, place ? choice.opened : '', 'settings')
   } else {
-    const page = choice.opened ? openedPage(f, choice.opened, nowMs, w) : null
+    const page = choice.opened ? openedPage(f, choice.opened, nowMs, w, choice.sent?.id === choice.opened ? choice.sent.answer : '') : null
     body = page ?? listBody(f, choice.cursor, { ...GROUPS_OPEN, ...choice.groups }, nowMs, w)
     keys = panelKeys(f, page ? choice.opened : '')
   }
@@ -698,30 +705,42 @@ function questionRow(q: OwnerQuestion, front: string, idWidth: number, w: number
   ]
 }
 
-/** The page of the task or question `id`: its title and rows (detailRows), its question and choices; null when it is gone. */
-function openedPage(f: ViewFile, id: string, nowMs: number, w: number): { lines: Line[]; hits: null; ids: string[]; selected: string } | null {
+/** The page of the task or question `id`: its title and rows (detailRows), its question and its choices, each a
+ *  clickable line (T-583), and the answer just sent (`sent`); null when it is gone. */
+function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = ''): Body | null {
   const v = f.view
+  const b = bodyMaker()
+  const addAll = (ls: Line[]) => ls.forEach(l => b.add(l))
+  const choices = () => {
+    answerOptions(f, id).forEach((c, i) => b.add(choiceLine(c, i, w), { choice: i + 1 }))
+    if (sent) addAll(wrapSegs([{ text: '  answer sent: ', color: 'success', bold: true }, { text: sent, color: 'text' }], w))
+  }
   const q = v.questions?.find(x => x.id === id)
   if (q) {
-    const lines: Line[] = [...wrapSegs([{ text: q.id, color: 'claude', bold: true }, { text: `  ${q.text}`, color: 'text', bold: true }], w)]
-    lines.push([{ text: ' ', color: 'text' }], ...choiceLines(answerOptions(f, id), w))
-    return { lines, hits: null, ids: [], selected: id }
+    addAll(wrapSegs([{ text: q.id, color: 'claude', bold: true }, { text: `  ${q.text}`, color: 'text', bold: true }], w))
+    b.add([{ text: ' ', color: 'text' }])
+    choices()
+    return { ...b, ids: [], selected: id }
   }
   const t = v.tasks.find(x => x.id === id)
   if (!t) return null
-  const lines: Line[] = [...wrapSegs([{ text: t.id, color: 'claude', bold: true }, { text: `  ${t.title}`, color: 'text', bold: true }], w)]
-  for (const r of detailRows(t, { roles: defsIn(f, 'roles'), kinds: defsIn(f, 'kinds'), all: v.tasks, when: iso => when(iso), nowMs, ...(v.archived_done ? { archivedDone: v.archived_done } : {}) })) lines.push(...detailRowLines(r, w))
+  addAll(wrapSegs([{ text: t.id, color: 'claude', bold: true }, { text: `  ${t.title}`, color: 'text', bold: true }], w))
+  for (const r of detailRows(t, { roles: defsIn(f, 'roles'), kinds: defsIn(f, 'kinds'), all: v.tasks, when: iso => when(iso), nowMs, ...(v.archived_done ? { archivedDone: v.archived_done } : {}) })) addAll(detailRowLines(r, w))
   const asked = taskAsks(t, v.max_minutes)
   if (asked) {
-    lines.push([{ text: ' ', color: 'text' }], ...wrapSegs([{ text: 'asks: ', color: 'warning', bold: true }, { text: asked.text, color: 'text' }], w))
-    lines.push(...choiceLines(answerOptions(f, id), w))
+    b.add([{ text: ' ', color: 'text' }])
+    addAll(wrapSegs([{ text: 'asks: ', color: 'warning', bold: true }, { text: asked.text, color: 'text' }], w))
+    choices()
+  } else if (sent) addAll(wrapSegs([{ text: 'answer sent: ', color: 'success', bold: true }, { text: sent, color: 'text' }], w))
+  if (t.details?.trim() && t.details.trim() !== t.title) {
+    b.add([{ text: ' ', color: 'text' }])
+    addAll(wrapSegs([{ text: t.details.trim(), color: 'inactive' }], w))
   }
-  if (t.details?.trim() && t.details.trim() !== t.title) lines.push([{ text: ' ', color: 'text' }], ...wrapSegs([{ text: t.details.trim(), color: 'inactive' }], w))
-  return { lines, hits: null, ids: [], selected: id }
+  return { ...b, ids: [], selected: id }
 }
 
-/** The numbered choices of a question ("1 Allow", "2 Don't allow", "3 Answer…"). */
-const choiceLines = (choices: string[], w: number): Line[] => choices.map((c, i) => [{ text: `  ${fitRow(2, `${i + 1} ${c}`, '', w).title}`, color: c === OWN_ANSWER ? 'inactive' : 'text' }])
+/** A numbered choice of a question, a line a click picks ("  [1] Allow", "  [3] Answer…"). */
+const choiceLine = (c: string, i: number, w: number): Line => [{ text: `  ${fitRow(2, `[${i + 1}] ${c}`, '', w).title}`, color: c === OWN_ANSWER ? 'inactive' : 'text' }]
 
 /** The last choice of a question: the owner types their own answer. */
 export const OWN_ANSWER = 'Answer…'

@@ -21,7 +21,7 @@
 // modules (Solid and OpenTUI's Solid renderer) are passed in (TuiRuntime), so this file type-checks and its tests
 // run without them. The names and shapes below are @opencode/plugin 2.3.0's tui Context (only what is used).
 import { DEFAULT_NAME, dataDir } from '../name'
-import { VIEW_FILE, parseViewFile, bandDraw, panelLines, panelKeys, panelTaskActions, TASK_ACTION_COMMANDS, hasPage, answerOptions, actionCommand, moveCursor, OWN_ANSWER, GROUPS_OPEN, groupOf, groupId, scoutRunsIn, settingsPlace, PANEL_TABS, type ViewFile, type Line, type PanelAction, type PanelHit, type PanelKey, type PanelGroup, type PanelTab, type BandHit } from './board-view'
+import { VIEW_FILE, parseViewFile, bandDraw, panelLines, panelKeys, panelTaskActions, TASK_ACTION_COMMANDS, hasPage, answerOptions, actionCommand, moveCursor, OWN_ANSWER, GROUPS_OPEN, groupOf, groupId, scoutRunsIn, settingsPlace, PANEL_TABS, CHOICE_KEYS, type ChoiceKey, type ViewFile, type Line, type PanelAction, type PanelHit, type PanelKey, type PanelGroup, type PanelTab, type BandHit } from './board-view'
 import { isScoutRunReport, parseSettingValue, settingChoices, settingInfo, settingValue, isSettingPage, everyText, everyMinutesOf, type SettingName, type ScoutEditField } from '../board'
 import type { SymccScout } from '../../types'
 
@@ -258,7 +258,7 @@ export type TuiBoard = {
 }
 
 /** The keymap bindings of the panel's keys. */
-const KEY_BINDS: Record<PanelKey, string> = { up: 'up,k', down: 'down,j', open: 'return', back: 'b,left', a: 'a', x: 'x', d: 'd', close: 'escape', t: 't', s: 's', c: 'c', r: 'r', p: 'p', o: 'o', e: 'e' }
+const KEY_BINDS: Record<PanelKey, string> = { up: 'up,k', down: 'down,j', open: 'return', back: 'b,left', a: 'a', x: 'x', d: 'd', close: 'escape', t: 't', s: 's', c: 'c', r: 'r', p: 'p', o: 'o', e: 'e', ...(Object.fromEntries(CHOICE_KEYS.map(k => [k, k])) as Record<ChoiceKey, string>) }
 
 /** The tab each tab key goes to. */
 const TAB_OF: Partial<Record<PanelKey, PanelTab>> = Object.fromEntries(PANEL_TABS.map(t => [t.key, t.tab]))
@@ -280,6 +280,8 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   const [run, setRun] = r.createSignal('')
   const [runCursor, setRunCursor] = r.createSignal(0)
   const [report, setReport] = r.createSignal<string | null | undefined>(undefined)
+  // the answer just sent from the open page (T-583), so the page says it was sent
+  const [sent, setSent] = r.createSignal<{ id: string; answer: string } | undefined>(undefined)
   let width = 80
   // the panel's height in rows, once OpenTUI has laid it out (it bounds the scroll)
   let rows: number | undefined
@@ -298,6 +300,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   /** Opens a page ('' = back to the list), from its top. */
   const openPage = (id: string) => {
     setOpened(id)
+    setSent(undefined)
     setRun('')
     setRunCursor(0)
     setScroll(0)
@@ -324,17 +327,19 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   }
   const toggle = (g: PanelGroup) => setGroups({ ...groups(), [g]: !groups()[g] })
   const say = (message: string, variant: 'info' | 'error' = 'info') => ctx.ui.toast.show({ title: name, message, variant })
-  const send = async (sessionID: string, a: PanelAction) => {
+  /** Runs `a`'s slash command; false (and a toast) when it failed. */
+  const sendOk = async (sessionID: string, a: PanelAction): Promise<boolean> => {
     const c = actionCommand(a, name)
-    await ctx.client.session.command({ sessionID, name: c.name, text: c.text }).then(
-      () => setTimeout(() => void refresh(), 300),
-      (err: Error) => say(`/${c.name} ${c.text} failed: ${err?.message ?? err}`, 'error'),
+    return ctx.client.session.command({ sessionID, name: c.name, text: c.text }).then(
+      () => (setTimeout(() => void refresh(), 300), true),
+      (err: Error) => (say(`/${c.name} ${c.text} failed: ${err?.message ?? err}`, 'error'), false),
     )
   }
+  const send = async (sessionID: string, a: PanelAction): Promise<void> => void (await sendOk(sessionID, a))
   /** Whether the cursor is on a page's own rows (a scout's runs, the Roles or Kinds list), not the tab's list. */
   const onPage = () => tab() !== 'tasks' && !!opened()
   const draw = () => {
-    return panelLines(file(), { tab: tab(), opened: opened(), run: run(), report: report(), cursor: onPage() ? runCursor() : cursor(), groups: groups(), scroll: scroll(), ...(rows ? { rows } : {}) }, now(), width)
+    return panelLines(file(), { tab: tab(), opened: opened(), run: run(), report: report(), cursor: onPage() ? runCursor() : cursor(), groups: groups(), scroll: scroll(), ...(rows ? { rows } : {}), ...(sent() ? { sent: sent()! } : {}) }, now(), width)
   }
   /** The rows of the Tasks tab's list, even while a task's page is open (whose draw has no rows), so "open this id"
    *  can put the list cursor on that task and b comes back to it (T-568). */
@@ -456,18 +461,34 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
       return
     }
     if (command) return send(sessionID, { kind: command, id: open })
+    // a number key picks that choice of the page, as a click on its line does (T-583)
+    const n = CHOICE_KEYS.indexOf(key as ChoiceKey)
+    if (n >= 0) return pick(n + 1, sessionID)
     if (key !== 'a' || !panelKeys(f, open).some(k => k.word === 'answer')) return
     const choices = answerOptions(f, open)
     const picked = choices.length > 1 ? await ctx.ui.dialog.select({ title: `Answer ${open}`, options: choices.map(c => ({ title: c, value: c })) }) : OWN_ANSWER
-    if (!picked) return
+    if (picked) await answerWith(picked, sessionID)
+  }
+  /** Answers the open task or question with `picked` (OWN_ANSWER: the owner types it first), and the page says so. */
+  const answerWith = async (picked: string, sessionID: string) => {
+    const open = opened()
     const answer = picked === OWN_ANSWER ? (await ctx.ui.dialog.prompt({ title: `Your answer to ${open}`, placeholder: 'type and press Enter' }))?.trim() : picked
-    if (answer) await send(sessionID, { kind: 'answer', id: open, answer })
+    if (!answer) return
+    if ((await sendOk(sessionID, { kind: 'answer', id: open, answer })) && opened() === open) setSent({ id: open, answer })
+  }
+  /** Picks choice `n` (1 = the first) of the open page's answer choices (a click on its line, or its number key). */
+  const pick = async (n: number, sessionID: string) => {
+    const open = opened()
+    if (tab() !== 'tasks' || !open) return
+    const c = answerOptions(file(), open)[n - 1]
+    if (c) await answerWith(c, sessionID)
   }
   /** A click on the panel (T-558): a row opens its task or question, a group's row opens or closes it, a key hint
    *  does what its key does. The cursor goes to the clicked row, so the keys go on from there. */
   const click = (hit: PanelHit, sessionID: string) => {
     if ('key' in hit) return press(hit.key, sessionID)
     if ('tab' in hit) return showTab(hit.tab)
+    if ('choice' in hit) return pick(hit.choice, sessionID)
     const ids = draw().ids
     if ('scout' in hit) {
       if (ids.indexOf(hit.scout) >= 0) setCursor(ids.indexOf(hit.scout))
