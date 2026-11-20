@@ -7,7 +7,7 @@ import { fakeHost, memoryFs } from './fake-host'
 import { emptyBoard, parseStatsArgs, statsData, statsReport, headlineParts, type Board } from '../hooks/board'
 import { statsHtml, headlineCards, escapeHtml, openCommands } from '../hooks/core/stats-html'
 import { S } from '../hooks/app/state'
-import { statsText, runTool } from '../hooks/app/tools'
+import { statsText, runTool, TOOLS } from '../hooks/app/tools'
 
 const ROOT = '/repo/my-project'
 const NOW = Date.now()
@@ -74,10 +74,14 @@ test('stats html: writes .<name>/stats.html for all tasks, 7d and an id range, s
   expect(page(w)).not.toContain('Old one')
 })
 
-test("stats html: the lead's stats tool takes html too", async () => {
+test("stats html: the shared stats tool stays read-only (no html, even slipped into the range)", async () => {
   const w = world()
-  expect(await runTool(w.host, 'stats', { html: true, range: '7d' })).toContain('stats.html')
-  expect(page(w).length > 1000).toBe(true)
+  const said = await runTool(w.host, 'stats', { html: true, range: '7d' })
+  expect(said).not.toContain('stats.html')
+  await runTool(w.host, 'stats', { range: 'html 7d' })
+  expect(page(w)).toBe('')
+  const def = TOOLS().find(t => t.name === 'stats')
+  expect(JSON.stringify(def?.inputSchema ?? {})).not.toContain('html')
 })
 
 test('stats html: a failed or impossible open step is ignored, and the path is still given', async () => {

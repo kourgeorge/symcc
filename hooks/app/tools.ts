@@ -404,7 +404,7 @@ export const TOOLS = () => [
     description: `Read or change organizational memory (org-mem, ${S.N.dir}/org-mem.md): short notes every new worker, checker and scout gets in its prompt, one line each ("- 2026-11-20: the note"), at most ${ORG_MEM_MAX_LINES}. Only you change it (agents only suggest notes; see "Suggested for org-mem" in board updates). action "list" (the default): every note with its number, oldest first. "add": notes (one or more short plain sentences, no task ids) go at the end with today's date; one that repeats a note there, even in other words, is refused (use replace to improve that note), and an add that would go past ${ORG_MEM_MAX_LINES} lines adds nothing (remove or replace first). "remove": takes out the note which names (its number from list, or its text). "replace": puts by in the place of the note which names (refused if by repeats another note).`,
     inputSchema: { type: 'object', properties: { action: { type: 'string', enum: ['list', 'add', 'remove', 'replace'], description: 'What to do; list when left out.' }, notes: { type: 'array', items: { type: 'string' }, description: 'For add: the new notes, each one short plain sentence.' }, which: { type: 'string', description: 'For remove / replace: the note, by its number from list (e.g. "3") or its text.' }, by: { type: 'string', description: 'For replace: the new note.' } } },
   },
-  { name: 'stats', description: `Read-only: time and token stats of the ${S.N.name} board (incl. archived tasks): the whole team's tokens (lead, workers, scouts) and per merged task, totals, averages and medians per task and per try, outcomes, by role, origin and day. Use it when the owner asks e.g. "how much did we spend this week?" (range "7d"). Gives the full text with every detail; short: true gives the owner's shorter summary.`, inputSchema: { type: 'object', properties: { range: { type: 'string', description: 'Optional: "7d" (the last 7 days) or "T-100..T-130" (an id range); empty = all tasks.' }, short: { type: 'boolean', description: 'Optional: true for the shorter summary the owner sees with /stats (the same figures, fewer explanations).' }, html: { type: 'boolean', description: 'Optional: true writes the report as a web page with charts (.symcc/stats.html), tries to open it in the browser, and answers where it is.' } } } },
+  { name: 'stats', description: `Read-only: time and token stats of the ${S.N.name} board (incl. archived tasks): the whole team's tokens (lead, workers, scouts) and per merged task, totals, averages and medians per task and per try, outcomes, by role, origin and day. Use it when the owner asks e.g. "how much did we spend this week?" (range "7d"). Gives the full text with every detail; short: true gives the owner's shorter summary.`, inputSchema: { type: 'object', properties: { range: { type: 'string', description: 'Optional: "7d" (the last 7 days) or "T-100..T-130" (an id range); empty = all tasks.' }, short: { type: 'boolean', description: 'Optional: true for the shorter summary the owner sees with /stats (the same figures, fewer explanations).' } } } },
   {
     name: 'setup_git',
     description: `Set up git in a project folder that has no git repo or no commits yet (${S.N.name} needs one: each worker gets its own git worktree). Only run it after the owner said yes. It runs git init on branch main (if there is no repo), writes or adds to .gitignore (${S.N.dir}/, node_modules/, .env, .env.* but not templates like .env.example (!.env*.example etc.), .DS_Store, dist/, build/, __pycache__/, .venv/), and makes a first commit of the current files, leaving out (and ignoring) files that look like secrets or are over 50 MB. Open tasks then merge into that branch. Never pushes, adds no remote.`,
@@ -423,10 +423,12 @@ export const LEAD_USAGE_UNREAD = "the lead's calls can't be read here"
 /**
  * The stats report (see statsReport) for range words like "7d" or "T-100..T-130": the board's
  * tasks and the archived ones. Read-only. A bad range gives the usage line. The word "full" in
- * `args` (or `full`) gives the full view with every explanation; else the summary view.
+ * `args` (or `full`) gives the full view with every explanation; else the summary view. The word
+ * "html" (only the owner's command, not `readOnly`) writes the web page and opens it.
  */
-export async function statsText($: Host, args: string, full?: boolean): Promise<string> {
-  const words = parseStatsArgs(args)
+export async function statsText($: Host, args: string, full?: boolean, readOnly = false): Promise<string> {
+  const parsed = parseStatsArgs(args)
+  const words = readOnly ? { ...parsed, html: false } : parsed
   const range = parseStatsRange(words.range, S.N.name)
   if (range.kind === 'bad') return range.message
   const b = await load($)
@@ -785,7 +787,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
     case 'orgmem':
       return orgMemTool($, a)
     case 'stats':
-      return statsText($, `${a.html === true ? 'html ' : ''}${str(a.range) ?? ''}`, a.short !== true)
+      return statsText($, str(a.range) ?? '', a.short !== true, true)
     case 'setup_git':
       return setupGit($, 'the lead')
     case 'settings': {
