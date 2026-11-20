@@ -6,7 +6,8 @@
 // OpenCode plugin or a standalone client builds its Host the same way.
 import { readFile, writeFile, mkdir, readdir, lstat, stat, realpath, access } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
-import { type Host, type HostFeatures, type HostFileEntry, type HostFileStat, type HostRunResult, SYMCC_WORDS, manifestVersion, noUi } from '../../hooks/host'
+import { type Host, type HostFeatures, type HostFileEntry, type HostFileStat, type HostProcesses, type HostRunResult, SYMCC_WORDS, manifestVersion, noUi } from '../../hooks/host'
+import { elapsedSeconds } from './system'
 
 /** What this host can do: no screen, and the lead is told when the CLI asks (it prints the update). */
 export const NODE_FEATURES: HostFeatures = { panel: false, band: false, wakeLead: 'next-turn', planMode: false, leadUsage: false, startQueue: false }
@@ -79,6 +80,35 @@ export const nodeFs: Host['fs'] = {
   },
 }
 
+/** How far a process's start (from ps, which counts whole seconds) may be from a lock's `started` and still be the lock's holder. */
+const HOLDER_SLACK_MS = 5_000
+
+/** When this process started (ms since 1970), worked out once from its uptime. */
+const SELF_STARTED = Date.now() - Math.round(process.uptime() * 1000)
+
+/**
+ * host.processes over Node (T-659): this process is the board lock's holder; a holder is alive while `kill -0` finds
+ * its pid and ps says that process started at about the lock's `started` (else the pid was given to another program).
+ * When ps can't tell, the answer is undefined and the lock's age decides.
+ */
+export const nodeProcesses: HostProcesses = {
+  self: () => ({ pid: process.pid, started: SELF_STARTED }),
+  async alive({ pid, started }) {
+    if (!Number.isInteger(pid) || pid <= 1) return undefined
+    try {
+      process.kill(pid, 0)
+    } catch (err) {
+      // EPERM: it runs, as another user; anything else (ESRCH): no such process
+      if ((err as { code?: string }).code !== 'EPERM') return false
+    }
+    const r = await runCommand(['ps', '-o', 'etime=', '-p', String(pid)], { timeoutMs: 5_000 })
+    const elapsed = r.exitCode === 0 ? elapsedSeconds(r.stdout.trim()) : undefined
+    // ps found no such process (it ended just now): gone; ps could not run or its line can't be read: can't tell
+    if (elapsed === undefined) return r.exitCode === 1 && !r.stdout.trim() ? false : undefined
+    return Math.abs(Date.now() - elapsed * 1000 - started) <= HOLDER_SLACK_MS
+  },
+}
+
 /** A timer that doesn't keep the process alive by itself (the CLI ends when its command is done). */
 const loose = <T extends { unref?: () => unknown }>(t: T): T => (t.unref?.(), t)
 
@@ -121,6 +151,7 @@ export function nodeHost(o: NodeHostOptions): Host {
     words: SYMCC_WORDS,
     env: async name => process.env[name],
     fs: nodeFs,
+    processes: nodeProcesses,
     run: runCommand,
     clock: nodeClock,
     ui: {
