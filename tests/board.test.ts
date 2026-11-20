@@ -3116,6 +3116,36 @@ test('a dry run that fails stops the merge before the branch moves', async () =>
   expect(g.calls.some(c => c[0] === 'update-ref')).toBe(false)
 })
 
+test('a failing git diff stops the merge before the branch moves', async () => {
+  const g = fakeGit({ diff: [{ exitCode: 128, stderr: 'fatal: bad object aaaa' }] })
+  const r = await moveTarget(g.run, MOVE)
+  expect(r).toEqual({ ok: false, detail: 'could not list the changes to merge: fatal: bad object aaaa' })
+  expect(g.calls.some(c => c[0] === 'update-ref' || c[0] === 'read-tree')).toBe(false)
+})
+
+test('a failing git status stops the merge before the branch moves', async () => {
+  const g = fakeGit({ diff: [{ exitCode: 0, stdout: 'a.txt\0' }], status: [{ exitCode: 128, stderr: 'fatal: not a git repository' }] })
+  const r = await moveTarget(g.run, MOVE)
+  expect(r).toEqual({ ok: false, detail: 'could not check your files on main: fatal: not a git repository' })
+  expect(g.calls.some(c => c[0] === 'update-ref' || c[0] === 'read-tree')).toBe(false)
+})
+
+test('when the file update and putting the branch back both fail, it says how to undo the move by hand', async () => {
+  const g = fakeGit({ diff: [{ exitCode: 0, stdout: 'a.txt\0' }], 'read-tree': [{ exitCode: 128, stderr: 'error: boom' }], 'update-ref': [{ exitCode: 0 }, { exitCode: 1, stderr: 'fatal: lock' }] })
+  const r = await moveTarget(g.run, MOVE)
+  expect(r).toEqual({ ok: false, detail: 'not merged: your files on main could not be updated (error: boom); and putting main back failed too (fatal: lock); run "git reset --soft aaaa" on main to undo it. Fix that, then say "retry T-3"' })
+  expect(r.detail).not.toContain('back where it was')
+  const refs = g.calls.filter(c => c[0] === 'update-ref')
+  expect(refs.map(c => c.slice(-3))).toEqual([['refs/heads/main', 'bbbb', 'aaaa'], ['refs/heads/main', 'aaaa', 'bbbb']])
+})
+
+test('the hand undo after a failed put-back names the old commit cut to 12 characters', async () => {
+  const from = '0123456789abcdef0123456789abcdef01234567'
+  const g = fakeGit({ diff: [{ exitCode: 0, stdout: 'a.txt\0' }], 'read-tree': [{ exitCode: 128, stderr: 'error: boom' }], 'update-ref': [{ exitCode: 0 }, { exitCode: 1, stderr: 'fatal: lock' }] })
+  const r = await moveTarget(g.run, { ...MOVE, from })
+  expect(r.detail).toContain('run "git reset --soft 0123456789ab" on main')
+})
+
 test('a merge blocked during an approve says to approve again, never "retry"', async () => {
   const g = fakeGit({ diff: [{ exitCode: 0, stdout: 'a.txt\0new.txt\0' }], status: [{ exitCode: 0, stdout: '?? new.txt\0' }] })
   const r = await moveTarget(g.run, { ...MOVE, action: 'approve' })
