@@ -1,7 +1,7 @@
 // symcc's OpenCode TUI part (T-466): what opencode/tui.ts exports. OpenCode runs it in its TUI, apart from the server
 // part that runs symcc's engine, so it draws from the view file the engine writes on every publish
 // (.<name>/view.json, see view.ts), read again every second, and sends the owner's actions back as symcc's slash
-// commands in the TUI's session (approve, reject, answer: board-view.ts's actionCommand). It claims two places of
+// commands in the TUI's session (approve, reject, diff, answer: board-view.ts's actionCommand). It claims two places of
 // OpenCode's screen (docs/research/opencode-spike-can-a-small-symcc-plugin-refuse-edits-start-a.md, point 4):
 //   - session.panel: the board (opened with ui.panel.open(BOARD_PANEL), from the "/symcc-board" keymap command or the
 //     command palette's "symcc board"; plain "/symcc" stays the server's text board, T-505): the task
@@ -21,7 +21,7 @@
 // modules (Solid and OpenTUI's Solid renderer) are passed in (TuiRuntime), so this file type-checks and its tests
 // run without them. The names and shapes below are @opencode/plugin 2.3.0's tui Context (only what is used).
 import { DEFAULT_NAME, dataDir } from '../name'
-import { VIEW_FILE, parseViewFile, bandDraw, panelLines, panelKeys, hasPage, answerOptions, actionCommand, moveCursor, OWN_ANSWER, GROUPS_OPEN, groupOf, groupId, scoutRunsIn, settingsPlace, PANEL_TABS, type ViewFile, type Line, type PanelAction, type PanelHit, type PanelKey, type PanelGroup, type PanelTab, type BandHit } from './board-view'
+import { VIEW_FILE, parseViewFile, bandDraw, panelLines, panelKeys, panelTaskActions, TASK_ACTION_COMMANDS, hasPage, answerOptions, actionCommand, moveCursor, OWN_ANSWER, GROUPS_OPEN, groupOf, groupId, scoutRunsIn, settingsPlace, PANEL_TABS, type ViewFile, type Line, type PanelAction, type PanelHit, type PanelKey, type PanelGroup, type PanelTab, type BandHit } from './board-view'
 import { isScoutRunReport, parseSettingValue, settingChoices, settingInfo, settingValue, isSettingPage, everyText, everyMinutesOf, type SettingName, type ScoutEditField } from '../board'
 import type { SymccScout } from '../../types'
 
@@ -258,7 +258,7 @@ export type TuiBoard = {
 }
 
 /** The keymap bindings of the panel's keys. */
-const KEY_BINDS: Record<PanelKey, string> = { up: 'up,k', down: 'down,j', open: 'return', back: 'b,left', a: 'a', x: 'x', close: 'escape', t: 't', s: 's', c: 'c', r: 'r', p: 'p', o: 'o', e: 'e' }
+const KEY_BINDS: Record<PanelKey, string> = { up: 'up,k', down: 'down,j', open: 'return', back: 'b,left', a: 'a', x: 'x', d: 'd', close: 'escape', t: 't', s: 's', c: 'c', r: 'r', p: 'p', o: 'o', e: 'e' }
 
 /** The tab each tab key goes to. */
 const TAB_OF: Partial<Record<PanelKey, PanelTab>> = Object.fromEntries(PANEL_TABS.map(t => [t.key, t.tab]))
@@ -443,15 +443,20 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
       return
     }
     if (key === 'back') return openPage('')
-    const offered = panelKeys(f, open).map(k => k.word)
-    if (key === 'x' && offered.includes('reject')) {
-      const reason = (await ctx.ui.dialog.prompt({ title: `Reject ${open}`, description: 'What is wrong and what to change, for the next worker', placeholder: 'the reason' }))?.trim()
+    // the task's own actions (core's taskActions that have a slash command, panelTaskActions), each by its key
+    const t = f?.view.tasks.find(x => x.id === open)
+    const act = t ? panelTaskActions(t).find(x => x.key === key) : undefined
+    const command = act ? TASK_ACTION_COMMANDS[act.id] : undefined
+    if (command === 'reject') {
+      const ask = act!.id === 'ask-more'
+        ? { title: `Ask more on ${open}`, description: 'What else to find out; it gets a fresh try with your question', placeholder: 'your follow-up question' }
+        : { title: `Reject ${open}`, description: 'What is wrong and what to change, for the next worker', placeholder: 'the reason' }
+      const reason = (await ctx.ui.dialog.prompt(ask))?.trim()
       if (reason) await send(sessionID, { kind: 'reject', id: open, reason })
       return
     }
-    if (key !== 'a') return
-    if (offered.includes('approve')) return send(sessionID, { kind: 'approve', id: open })
-    if (!offered.includes('answer')) return
+    if (command) return send(sessionID, { kind: command, id: open })
+    if (key !== 'a' || !panelKeys(f, open).some(k => k.word === 'answer')) return
     const choices = answerOptions(f, open)
     const picked = choices.length > 1 ? await ctx.ui.dialog.select({ title: `Answer ${open}`, options: choices.map(c => ({ title: c, value: c })) }) : OWN_ANSWER
     if (!picked) return

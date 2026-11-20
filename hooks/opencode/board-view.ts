@@ -15,8 +15,8 @@ import type { OwnerQuestion } from '../core/questions'
 import {
   statusCounts, newestFirst, bandLeads, bandNote, boardBrand, boardWhere, modeLabel, modeOf, planBandText, withCrew, fileWaitText, questionsForYou,
   bannerLines, bannerRule, footerRule, type BannerTone, panelSections, localOffset, when, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, ALL_CLEAR,
-  fittedCells, TITLE_ROOM, fitRow, rowExtra, questionsLabel, archivedOf, archivedNote, statusMark, detailRows, detailRowLines, wrapSegs, answerChoices, hintLineText,
-  type KeyHint, type Seg, type BoardTask, asksMoreTime, gitNote, OVERTIME_OPTIONS, overtimeQuestion, timeLimitOf,
+  fittedCells, TITLE_ROOM, fitRow, rowExtra, questionsLabel, archivedOf, archivedNote, statusMark, detailRows, detailRowLines, wrapSegs, hintLineText,
+  type KeyHint, type Seg, type BoardTask, gitNote, taskActions, taskAsks, type TaskAction, type TaskActionId,
   waitsForYou, sortScouts, scoutListRows, scoutRow, scoutIcon, scoutTone, scoutHowTo, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem, scoutFile,
   SETTING_GROUPS, SETTINGS, isSettingPage, settingInfo, settingValue, cantPlayNotify,
   type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction,
@@ -139,7 +139,7 @@ export function parseViewFile(text: string | null | undefined): ViewFile | null 
 }
 
 /** The panel's keys (see panelKeys for which ones each page offers). */
-export type PanelKey = 'up' | 'down' | 'open' | 'back' | 'a' | 'x' | 'close' | 't' | 's' | 'c' | 'r' | 'p' | 'o' | 'e'
+export type PanelKey = 'up' | 'down' | 'open' | 'back' | 'a' | 'x' | 'd' | 'close' | 't' | 's' | 'c' | 'r' | 'p' | 'o' | 'e'
 
 /** The list's groups that open and close (▸ Backlog, ▸ Done, ▸ Dropped). */
 export type PanelGroup = 'backlog' | 'done' | 'dropped'
@@ -253,7 +253,7 @@ export const groupId = (g: PanelGroup) => `group:${g}`
 export const groupOf = (id: string): PanelGroup | null => (id.startsWith('group:') ? (id.slice(6) as PanelGroup) : null)
 
 /** The key a key hint's word stands for, so a click on the hint does what the key does ('' for "move"). */
-const HINT_KEY: Record<string, PanelKey> = { open: 'open', close: 'close', back: 'back', approve: 'a', answer: 'a', reject: 'x', change: 'open', report: 'open', 'run now': 'r', pause: 'p', resume: 'p', edit: 'e', 'turn off': 'o', 'turn on': 'o', reset: 'r' }
+const HINT_KEY: Record<string, PanelKey> = { open: 'open', close: 'close', back: 'back', approve: 'a', done: 'a', answer: 'a', reject: 'x', 'ask more': 'x', 'show changes': 'd', change: 'open', report: 'open', 'run now': 'r', pause: 'p', resume: 'p', edit: 'e', 'turn off': 'o', 'turn on': 'o', reset: 'r' }
 
 /** The footer's key hints as pieces, each a button for its key: "a approve · x reject · b back". */
 export function hintSegs(keys: KeyHint[]): Line {
@@ -329,9 +329,8 @@ export function panelKeys(f: ViewFile | null, opened: string, tab: PanelTab = 't
   const t = f?.view.tasks.find(x => x.id === opened)
   const q = f?.view.questions?.find(x => x.id === opened)
   if (q) return [{ key: 'a', word: 'answer' }, back]
-  if (t?.status === 'review') return [{ key: 'a', word: 'approve' }, { key: 'x', word: 'reject' }, back]
-  if (t && asksWhat(t, f?.view.max_minutes)) return [{ key: 'a', word: 'answer' }, back]
-  return [back]
+  if (!t) return [back]
+  return [...(taskAsks(t, f?.view.max_minutes) ? [{ key: 'a', word: 'answer' }] : []), ...panelTaskActions(t).map(a => ({ key: a.key!, word: a.word })), back]
 }
 
 /** The panel's lines: the banner and rule, then the list or the open task's (or question's) page, then the keys. */
@@ -715,9 +714,9 @@ function openedPage(f: ViewFile, id: string, nowMs: number, w: number): { lines:
   if (!t) return null
   const lines: Line[] = [...wrapSegs([{ text: t.id, color: 'claude', bold: true }, { text: `  ${t.title}`, color: 'text', bold: true }], w)]
   for (const r of detailRows(t, { roles: defsIn(f, 'roles'), kinds: defsIn(f, 'kinds'), all: v.tasks, when: iso => when(iso), nowMs, ...(v.archived_done ? { archivedDone: v.archived_done } : {}) })) lines.push(...detailRowLines(r, w))
-  const asked = asksWhat(t, v.max_minutes)
+  const asked = taskAsks(t, v.max_minutes)
   if (asked) {
-    lines.push([{ text: ' ', color: 'text' }], ...wrapSegs([{ text: 'asks: ', color: 'warning', bold: true }, { text: asked, color: 'text' }], w))
+    lines.push([{ text: ' ', color: 'text' }], ...wrapSegs([{ text: 'asks: ', color: 'warning', bold: true }, { text: asked.text, color: 'text' }], w))
     lines.push(...choiceLines(answerOptions(f, id), w))
   }
   if (t.details?.trim() && t.details.trim() !== t.title) lines.push([{ text: ' ', color: 'text' }], ...wrapSegs([{ text: t.details.trim(), color: 'inactive' }], w))
@@ -730,29 +729,31 @@ const choiceLines = (choices: string[], w: number): Line[] => choices.map((c, i)
 /** The last choice of a question: the owner types their own answer. */
 export const OWN_ANSWER = 'Answer…'
 
-/** The choices to answer task or question `id` with (answerChoices; a question's own options), OWN_ANSWER last; [] when it asks nothing. */
+/** The choices to answer task or question `id` with (a task's from core's taskAsks; a question's own options),
+ *  OWN_ANSWER last; [] when it asks nothing. */
 export function answerOptions(f: ViewFile | null, id: string): string[] {
   const q = f?.view.questions?.find(x => x.id === id)
   if (q) return [...q.options.slice(0, 8), OWN_ANSWER]
   const t: BoardTask | undefined = f?.view.tasks.find(x => x.id === id)
-  if (!t || !asksWhat(t, f?.view.max_minutes)) return []
-  const c = asksMoreTime(t) ? answerChoices(undefined, [...OVERTIME_OPTIONS]) : answerChoices(t.asked_files, t.options)
-  return c.length ? c : [OWN_ANSWER]
+  const asks = t ? taskAsks(t, f?.view.max_minutes) : null
+  if (!asks) return []
+  return asks.choices.length ? asks.choices : [OWN_ANSWER]
 }
 
-/** What task `t` asks the owner, '' when nothing (as Claude's task page): a running worker past its time limit asks
- *  for more time; a waiting task asks its question, unless its finished work only waits for the owner's files (it
- *  merges on its own once they are committed or stashed, so there is nothing to answer). */
-export function asksWhat(t: BoardTask, maxMinutes: number | undefined): string {
-  if (asksMoreTime(t)) return overtimeQuestion(t.id, timeLimitOf(maxMinutes ?? 45, t))
-  if (!waitsForYou(t) || fileWaitText(t)) return ''
-  return t.question || t.note || 'it waits for your answer'
-}
+/** The slash command (PanelAction's kind) for each of core's task actions this panel can do; the others (pause,
+ *  resume, retry, drop, ...) have no slash command yet, so the panel leaves them out. */
+export const TASK_ACTION_COMMANDS: Partial<Record<TaskActionId, 'approve' | 'reject' | 'diff'>> = { approve: 'approve', done: 'approve', reject: 'reject', 'ask-more': 'reject', 'show-changes': 'diff' }
 
-/** A panel action as the slash command that does it, run in the TUI's session: approve, reject (with the reason) or answer. */
+/** The actions of task `t`'s page (core's taskActions, the terminal's and VS Code's buttons) that this panel has a
+ *  slash command for, with their keys. */
+export const panelTaskActions = (t: BoardTask): TaskAction[] => taskActions(t).filter(a => a.key && TASK_ACTION_COMMANDS[a.id])
+
+/** A panel action as the slash command that does it, run in the TUI's session: approve, reject (with the reason), diff or answer. */
 export type PanelAction =
   | { kind: 'approve'; id: string }
   | { kind: 'reject'; id: string; reason: string }
+  /** show the files a task in review changed */
+  | { kind: 'diff'; id: string }
   | { kind: 'answer'; id: string; answer: string }
   /** run a scout now, or (with `paused`) pause or resume its timer */
   | { kind: 'scout'; scout: string; paused?: boolean }
@@ -766,6 +767,7 @@ export type PanelAction =
 export function actionCommand(a: PanelAction, name: string = DEFAULT_NAME): { name: string; text: string } {
   if (a.kind === 'approve') return { name: `${name}-approve`, text: a.id }
   if (a.kind === 'reject') return { name: `${name}-reject`, text: `${a.id} ${a.reason.trim()}` }
+  if (a.kind === 'diff') return { name: `${name}-diff`, text: a.id }
   if (a.kind === 'scout') return { name: `${name}-scout`, text: a.paused === undefined ? a.scout : `${a.scout} ${a.paused ? 'pause' : 'resume'}` }
   if (a.kind === 'setting') return { name: `${name}-settings`, text: `${a.setting} ${a.value.trim()}` }
   if (a.kind === 'scout-edit') return { name: `${name}-scout`, text: `${a.scout} ${a.field} ${a.value.trim() || (a.field === 'model' ? 'none' : '')}`.trim() }

@@ -8,9 +8,9 @@
 // OpenTUI (T-500): opencode/tui.ts imports them by their written-out names (what OpenCode swaps for its own copies),
 // and loadTuiRuntime names a package that is missing or lacks a function instead of failing with a bare import error.
 import { test, expect } from 'bun:test'
-import { mergeRoles, mergeKinds, when, addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, type Board } from '../../board'
+import { taskActions, mergeRoles, mergeKinds, when, addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, type Board } from '../../board'
 import type { PaneView } from '../../app/state'
-import { bandLines, bandDraw, BAND_CLICK_HINT, panelLines, panelKeys, parseViewFile, viewFileText, lineText, actionCommand, answerOptions, OWN_ANSWER, viewDefs, type ViewFile } from '../board-view'
+import { bandLines, bandDraw, BAND_CLICK_HINT, panelLines, panelKeys, parseViewFile, viewFileText, lineText, actionCommand, answerOptions, OWN_ANSWER, viewDefs, panelTaskActions, TASK_ACTION_COMMANDS, type ViewFile } from '../board-view'
 import { readFile } from 'node:fs/promises'
 import { PLUGIN_ROOT } from '../host'
 import { startTui, viewPaths, loadTuiRuntime, BOARD_PANEL, setupFailed, colorOf, drawLines, type TuiContext, type TuiRuntime, type TuiPanelInput, type TuiKeyLayer } from '../tui'
@@ -114,7 +114,17 @@ test('the panel: the banner, then the list grouped by state (NEEDS YOU, what run
   const page = panelLines(f, { opened: 'T-2', cursor: 0 }, NOW, 100).lines.map(lineText)
   expect(page.some(l => l.startsWith('T-2 a reviewed change'))).toBe(true)
   expect(page.some(l => l.startsWith('Status:') && l.includes('ready for review'))).toBe(true)
-  expect(panelKeys(f, 'T-2').map(k => k.word)).toEqual(['approve', 'reject', 'back'])
+  expect(panelKeys(f, 'T-2').map(k => k.word)).toEqual(['approve', 'reject', 'show changes', 'back'])
+  // T-575: the page's actions are core's taskActions (the terminal's and VS Code's buttons) that have a slash command
+  const t2 = f.view.tasks.find(t => t.id === 'T-2')!
+  expect(panelTaskActions(t2).map(a => a.id)).toEqual(taskActions(t2).filter(a => a.key && TASK_ACTION_COMMANDS[a.id]).map(a => a.id))
+  expect(panelTaskActions(t2).map(a => `${a.key} ${a.id}`)).toEqual(['a approve', 'x reject', 'd show-changes'])
+  // an answered investigation in review: done and ask more, as on the other hosts (keep as a note has no slash command)
+  const inv = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => (t.id === 'T-2' ? { ...t, kind: 'investigation' } : t)) } } as ViewFile
+  expect(panelKeys(inv, 'T-2').map(k => `${k.key} ${k.word}`)).toEqual(['a done', 'x ask more', 'b back'])
+  // a waiting task with no question text says its note, else that it waits (core's taskAsks)
+  const noQ = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => (t.id === 'T-3' ? { ...t, question: null, options: undefined, note: '' } : t)) } } as ViewFile
+  expect(panelLines(noQ, { opened: 'T-3', cursor: 0 }, NOW, 100).lines.map(lineText).some(l => l.includes('asks: it waits for your answer'))).toBe(true)
   // a waiting task: its question and the numbered choices, the last one the owner's own answer
   const asks = panelLines(f, { opened: 'T-3', cursor: 0 }, NOW, 100).lines.map(lineText)
   expect(asks.some(l => l.includes('asks: Which database?'))).toBe(true)
@@ -134,6 +144,7 @@ test('the panel: the banner, then the list grouped by state (NEEDS YOU, what run
   // the actions are symcc's slash commands
   expect(actionCommand({ kind: 'approve', id: 'T-2' })).toEqual({ name: 'symcc-approve', text: 'T-2' })
   expect(actionCommand({ kind: 'reject', id: 'T-2', reason: ' too big ' })).toEqual({ name: 'symcc-reject', text: 'T-2 too big' })
+  expect(actionCommand({ kind: 'diff', id: 'T-2' })).toEqual({ name: 'symcc-diff', text: 'T-2' })
   expect(actionCommand({ kind: 'answer', id: 'Q-1', answer: 'yes' })).toEqual({ name: 'symcc-answer', text: 'Q-1 yes' })
   // no view file yet: says so
   expect(panelLines(null, { opened: '', cursor: 0 }, NOW, 100).lines.map(lineText).join('\n')).toContain('No board yet')
@@ -239,6 +250,7 @@ test('startTui on a fake OpenCode TUI: reads the view file above its folder, dra
   expect(shown(panel).some(l => l.startsWith('Status:'))).toBe(true)
   await board.press('a', 'ses_1')
   await board.press('x', 'ses_1')
+  await board.press('d', 'ses_1')
   await goTo('T-3')
   await board.press('a', 'ses_1')
   answers.select = OWN_ANSWER
@@ -249,6 +261,7 @@ test('startTui on a fake OpenCode TUI: reads the view file above its folder, dra
   expect(sent).toEqual([
     { sessionID: 'ses_1', name: 'symcc-approve', text: 'T-2' },
     { sessionID: 'ses_1', name: 'symcc-reject', text: 'T-2 too big' },
+    { sessionID: 'ses_1', name: 'symcc-diff', text: 'T-2' },
     { sessionID: 'ses_1', name: 'symcc-answer', text: 'T-3 postgres' },
     { sessionID: 'ses_1', name: 'symcc-answer', text: 'T-3 sqlite, it is small' },
   ])

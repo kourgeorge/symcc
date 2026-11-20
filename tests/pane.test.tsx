@@ -2,7 +2,8 @@ import { expect, mock, type Engine, type Mounted as TestMounted } from 'claude-c
 import { test } from './reset'
 import type { On } from 'claude-code'
 import { ICON, ICON_ART } from '../hooks/name'
-import { SETTING_GROUPS, groupSummary, hintLines, hintLineText, listKeys, taskKeys, scoutKeys, scoutListKeys, settingsKeys, rolesKeys, statusCell, STATUS_MARK, PREP_NOTE, type KeyHint } from '../hooks/board'
+import { SETTING_GROUPS, groupSummary, hintLines, hintLineText, listKeys, scoutKeys, scoutListKeys, settingsKeys, rolesKeys, statusCell, STATUS_MARK, PREP_NOTE, type KeyHint } from '../hooks/board'
+import { keysFor } from './task-keys'
 import { CHECKER_NOTE } from '../hooks/app/checker'
 import { arrowTarget, focusStops, isArrow, rowStops, saysArrowsMove } from '../hooks/claude/ui/arrows'
 import type { SymccStatus } from '../types'
@@ -1496,17 +1497,20 @@ test('a task in review on a narrow or wide panel shows every key and every butto
   for (const w of [30, 50, 80]) {
     const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: w }, surface: 'terminal' })
     const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
-    const lines = keyLines(texts, taskKeys('review'), w)
+    const lines = keyLines(texts, keysFor('review'), w)
     for (const l of lines) expect(l.length).toBeLessThanOrEqual(w)
-    expect(lines.join(' · ')).toBe('a approve · x reject · d show changes · y copy · ↑↓ scroll · b back')
-    if (w === 30) expect(lines).toEqual(['a approve · x reject', 'd show changes · y copy', '↑↓ scroll · b back'])
-    if (w === 80) expect(lines).toEqual(['a approve · x reject · d show changes · y copy · ↑↓ scroll · b back'])
+    expect(lines.join(' · ')).toBe('a approve · x reject · d show changes · n needs review · y copy · ↑↓ scroll · b back')
+    if (w === 30) expect(lines).toEqual(['a approve · x reject', 'd show changes', 'n needs review · y copy', '↑↓ scroll · b back'])
+    if (w === 80) expect(lines).toEqual(['a approve · x reject · d show changes · n needs review · y copy · ↑↓ scroll', 'b back'])
     // the keys are bold, the words in the inactive color
     expect((await ui.find({ type: 'Text', text: /^a$/ }))?.props.bold).toBe(true)
     expect((await ui.find({ type: 'Text', text: /^ approve$/ }))?.props.color).toBe('inactive')
     // every action button is there, in the same order as before
     const keys = (await ui.findAll({ type: 'Button' })).map(b => String(b.key))
     expect(keys).toEqual(['back', 'approve', 'reject', 'show-changes', 'drop', 'needs-review', 'copy'])
+    // T-575: the key hints are the buttons that have a key, in their order (b back and ↑↓ scroll last)
+    const hotkeys = (await ui.findAll({ type: 'Button' })).map(b => b.props.hotkey).filter((k): k is string => typeof k === 'string' && k !== 'b')
+    expect(hotkeys).toEqual(keysFor('review').map(k => k.key).filter(k => k !== 'b' && k !== '↑↓'))
     await ui.unmount()
   }
 })
@@ -1963,7 +1967,7 @@ test('the Tasks page ends with a footer: the light rule, the mode line with [m],
 })
 
 const NO_MODE_PAGES: [string, Record<string, unknown>, string | null, KeyHint[]][] = [
-  ['task page', { opened: 'T-5' }, null, taskKeys('review')],
+  ['task page', { opened: 'T-5' }, null, keysFor('review')],
   ['diff view', { opened: 'T-5' }, 'show-changes', [{ key: 'a', word: 'approve' }, { key: 'x', word: 'reject' }, { key: '↑↓', word: 'scroll' }, { key: 'b', word: 'back to the task' }]],
   ['scouts list', { tab: 'scouts' }, null, [{ key: 'Enter', word: 'open' }, { key: '↑↓', word: 'move' }, { key: 't s c', word: 'views' }, { key: 'b', word: 'back' }]],
   ['scout page', { tab: 'scouts', scout: 'bugs' }, null, [{ key: 'r', word: 'run now' }, { key: 'e', word: 'edit' }, { key: 'p', word: 'pause' }, { key: '↑↓', word: 'scroll' }, { key: 'b', word: 'back' }]],
@@ -2037,7 +2041,7 @@ test('↑↓ move between the elements Tab walks, in order; past the first or la
   expect(saysArrowsMove(scoutListKeys())).toBe(true)
   expect(saysArrowsMove(settingsKeys())).toBe(true)
   expect(saysArrowsMove(rolesKeys())).toBe(true)
-  expect(saysArrowsMove(taskKeys('todo'))).toBe(false)
+  expect(saysArrowsMove(keysFor('todo'))).toBe(false)
   expect(saysArrowsMove(scoutKeys())).toBe(false)
 })
 

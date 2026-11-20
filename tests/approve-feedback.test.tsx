@@ -105,9 +105,9 @@ for (const surface of ['terminal', 'vscode'] as const)
     gate.hold = true
     await ui.press({ key: 'approve' })
     expect(await mergingShown(ui)).toBeDefined()
-    // VS Code drops Show changes with the review buttons; the terminal keeps it, so its changes view is checked there
-    if (surface === 'vscode') expect(await ui.find({ key: 'show-changes' })).toBeUndefined()
-    else await ui.press({ key: 'show-changes' })
+    // Show changes stays while it merges (core's taskActions, T-575), on both surfaces; the terminal's changes view is checked
+    expect(await ui.find({ key: 'show-changes' })).toBeDefined()
+    if (surface === 'terminal') await ui.press({ key: 'show-changes' })
     await ui.redraw()
     // the changes view is open (its Back button), but offers neither approve nor reject while the merge runs
     if (surface === 'terminal') expect(await ui.find({ key: 'diff-back' })).toBeDefined()

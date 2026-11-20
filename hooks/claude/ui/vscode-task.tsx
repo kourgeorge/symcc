@@ -10,7 +10,7 @@
 // (each fold, and each task it waits for, is a link: VS Code draws a Button as a filled blue box)
 // No key hints: every action is a button.
 import type { SymccTask } from '../../../types'
-import { type DetailRow, type DiffFile, type Seg, STATUS_BADGE, STATUS_MARK, statusMark, STATUS_WORD, originSegs, originOf, crossBranchNotes, intoOf, roleOf, findRole, kindMark, fmtDuration, fmtRun, fmtTotal, sumRuns, YOUR_EDITS, STATE_LABEL } from '../../board'
+import { type DetailRow, type DiffFile, type Seg, STATUS_BADGE, STATUS_MARK, statusMark, STATUS_WORD, originSegs, originOf, crossBranchNotes, intoOf, roleOf, findRole, kindMark, fmtDuration, fmtRun, fmtTotal, sumRuns, YOUR_EDITS, STATE_LABEL, taskActions, type TaskActionId, type BoardTask } from '../../board'
 import { squash } from '../../core/text'
 import { historyEvent, historyTime, HISTORY_COLOR } from '../../core/history'
 import { S } from '../../app/state'
@@ -98,42 +98,15 @@ export type VsTaskCtx = {
 type Press = { surface?: Parameters<$['ui']['copy']>[0]['surface'] }
 type Action = { key: string; label: string; onPress: (press?: Press) => void; main?: boolean }
 
-/** The action buttons that fit task `t` now, in order; `main` marks the one to press (one at most, none while a question waits). */
-export function vsActions(t: SymccTask, x: Pick<VsTaskCtx, 'agentId' | 'inReview' | 'answered' | 'fileWait' | 'answerable' | 'canPickRole' | 'canMarkMerged'> & Partial<Pick<VsTaskCtx, 'merging'>>, on: VsTaskCtx['on']): Action[] {
-  const s = t.status
-  const open = s !== 'done' && s !== 'dropped'
-  // while it merges: no Approve, Reject, Done, Keep as a note, Ask more or Merge now (see MERGING_LINE)
-  const out: (Action | false)[] = x.merging
-    ? []
-    : x.answered
-    ? [
-        { key: 'done', label: 'Done', onPress: on.approve, main: true },
-        { key: 'keep-note', label: 'Keep as a note', onPress: on.keepNote },
-        { key: 'ask-more', label: 'Ask more', onPress: on.askReason },
-      ]
-    : [
-        x.inReview && { key: 'approve', label: 'Approve', onPress: on.approve, main: true },
-        x.inReview && { key: 'reject', label: 'Reject', onPress: on.askReason },
-        x.inReview && { key: 'show-changes', label: 'Show changes', onPress: on.showDiff('') },
-      ]
-  out.push(
-    !!x.agentId && { key: 'watch', label: 'Watch worker', onPress: on.watch },
-    (s === 'doing' || s === 'todo') && { key: 'pause', label: 'Pause', onPress: on.pause },
-    s === 'paused' && { key: 'resume', label: 'Resume', onPress: on.resume, main: true },
-    !!x.fileWait && !x.merging && { key: 'merge-now', label: 'Merge now', onPress: on.mergeNow, main: true },
-    (s === 'failed' || s === 'dropped') && { key: 'retry', label: 'Retry', onPress: on.retry, main: s === 'failed' },
-    s === 'backlog' && { key: 'to-todo', label: 'Move to todo', onPress: on.toTodo, main: true },
-    (s === 'todo' || s === 'paused' || s === 'failed') && { key: 'stash', label: 'Stash to backlog', onPress: on.stash },
-    x.canPickRole && { key: 'role', label: 'Role', onPress: on.openRolePick },
-    !!x.canMarkMerged && { key: 'already-merged', label: 'Already merged', onPress: on.markMerged },
-    open && { key: 'drop', label: 'Drop', onPress: on.drop },
-    open && { key: 'needs-review', label: `Needs review: ${t.needs_review ? 'on' : 'off'}`, onPress: on.toggleReview },
-    { key: 'copy', label: 'Copy', onPress: (press?: Press) => on.copy(press) },
-  )
-  const list = out.filter((a): a is Action => !!a)
-  // one primary at most: the first main one, and none while a question waits (its first answer is the primary then)
-  let primary = !x.answerable
-  return list.map(a => (a.main && primary ? ((primary = false), a) : { ...a, main: false }))
+/** The action buttons that fit task `t` now, in order (taskActions, shared with the terminal and OpenCode); `main`
+ *  marks the one to press (one at most, none while a question waits). VS Code's buttons say no keys. */
+export function vsActions(t: SymccTask, x: Pick<VsTaskCtx, 'agentId'> & Partial<Pick<VsTaskCtx, 'merging'>>, on: VsTaskCtx['on']): Action[] {
+  const press: Record<TaskActionId, (press?: Press) => void> = {
+    done: on.approve, approve: on.approve, 'keep-note': on.keepNote, 'ask-more': on.askReason, reject: on.askReason, 'show-changes': on.showDiff(''),
+    watch: on.watch, pause: on.pause, resume: on.resume, 'merge-now': on.mergeNow, retry: on.retry, 'to-todo': on.toTodo, stash: on.stash,
+    role: on.openRolePick, 'already-merged': on.markMerged, drop: on.drop, 'needs-review': on.toggleReview, copy: (p?: Press) => on.copy(p),
+  }
+  return taskActions(t as BoardTask, { worker: !!x.agentId, merging: !!x.merging }).map(a => ({ key: a.id, label: a.label, onPress: press[a.id], main: !!a.main }))
 }
 
 /** The task page in VS Code. */
@@ -264,7 +237,7 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
   const askedFiles = !x.overtime ? ((t as { asked_files?: string[] }).asked_files ?? []) : []
   const question = x.answerable
     ? vsCallout(vs, 'vs-sec-question', '?', x.overtime ? 'Time is up' : 'Question for you', 'warning', [
-        plain('vs-question', x.askedQuestion ?? (askedFiles.length ? 'The worker asks to change more files:' : '(no question)'), 'text', { bold: true }),
+        plain('vs-question', x.askedQuestion ?? '', 'text', { bold: true }),
         ...askedFiles.map(f => plain(`vs-asked-${f}`, `  ${f}`, 'autoAccept')),
         answers.length ? (
           <Box key="vs-answers" flexDirection="row" flexWrap="wrap" gap={1}>

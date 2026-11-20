@@ -17,6 +17,7 @@ import { usageTokens } from '../hooks/claude/usage'
 import { EXTRA_TOOLS, ROLE_TOOL_MAP, claudeRoleTools, BASE_WORKER_TOOLS, workerTypeFor, workerTypeSuffix, workerAgentTypes, isWorkerType, asBaseWorkers, claudeNames } from '../hooks/claude/agent-types'
 import { type AgentInfo, hostAgent, isNotReady } from '../hooks/claude/agents'
 import * as core from '../hooks/board'
+import { keysFor } from './task-keys'
 import { type HostAgentStarted, agentState } from '../hooks/host'
 
 // The core role functions (role tools in symcc's words), and $.agent.list() entries through the Claude adapter
@@ -599,8 +600,8 @@ test("a task waiting only for the owner's files: its row and keys say to commit 
   const asked = { ...base, question: 'Which one?' }
   expect(fileWaitText(asked)).toBe('')
   expect(rowExtra(asked, [asked])).toBe('Which one?')
-  expect(taskKeys('waiting', false, [], false, true).map(k => `${k.key} ${k.word}`)).toContain('r merge now')
-  expect(taskKeys('waiting').map(k => k.key)).not.toContain('r')
+  expect(keysFor('waiting', { extra: { merge_wait: { dirty: ['a.ts'], untracked: [], ignored: [] } } }).map(k => `${k.key} ${k.word}`)).toContain('r merge now')
+  expect(keysFor('waiting').map(k => k.key)).not.toContain('r')
 })
 
 test('an old board: each task without its own branch gets the old target_branch, and target_branch is dropped', () => {
@@ -2832,13 +2833,13 @@ test('task rows: a short status column and an inactive-colored extra; the extra 
 
 test('key hints: in order for the task state, laid out at 30, 50 and 80 columns, never split or cut', () => {
   const words = (hs: { key: string; word: string }[]) => hs.map(hintText)
-  expect(words(taskKeys('review'))).toEqual(['a approve', 'x reject', 'd show changes', 'y copy', '↑↓ scroll', 'b back'])
-  expect(words(taskKeys('review', true))).toEqual(['a approve', 'x reject', 'd show changes', 'w watch worker', 'y copy', '↑↓ scroll', 'b back'])
-  expect(words(taskKeys('backlog'))).toEqual(['o move to todo', 'x drop', 'l role', 'y copy', '↑↓ scroll', 'b back'])
-  expect(words(taskKeys('todo', true))).toEqual(['w watch worker', 'k stash to backlog', 'l role', 'y copy', '↑↓ scroll', 'b back'])
-  // a failed task's key line lists the two actions its "Next:" text points to
-  expect(words(taskKeys('failed'))).toEqual(['r retry', 'x drop', 'k stash to backlog', 'l role', 'y copy', '↑↓ scroll', 'b back'])
-  expect(words(taskKeys('done'))).toEqual(['y copy', '↑↓ scroll', 'b back'])
+  expect(words(keysFor('review'))).toEqual(['a approve', 'x reject', 'd show changes', 'n needs review', 'y copy', '↑↓ scroll', 'b back'])
+  expect(words(keysFor('review', { worker: true }))).toEqual(['a approve', 'x reject', 'd show changes', 'w watch worker', 'n needs review', 'y copy', '↑↓ scroll', 'b back'])
+  expect(words(keysFor('backlog'))).toEqual(['o move to todo', 'l role', 'x drop', 'n needs review', 'y copy', '↑↓ scroll', 'b back'])
+  expect(words(keysFor('todo', { worker: true }))).toEqual(['w watch worker', 'p pause', 'k stash to backlog', 'l role', 'x drop', 'n needs review', 'y copy', '↑↓ scroll', 'b back'])
+  // a failed task's key line lists the two actions its "Next:" text points to, and every other button with a key
+  expect(words(keysFor('failed'))).toEqual(['r retry', 'k stash to backlog', 'l role', 'h already merged', 'x drop', 'n needs review', 'y copy', '↑↓ scroll', 'b back'])
+  expect(words(keysFor('done'))).toEqual(['y copy', '↑↓ scroll', 'b back'])
   expect(words(diffKeys(true, true))).toEqual(['a approve', 'x reject', 'd all files', '↑↓ scroll', 'b back to the task'])
   expect(words(diffKeys(false, false))).toEqual(['↑↓ scroll', 'b back to the task'])
   expect(words(scoutKeys())).toEqual(['r run now', 'e edit', 'p pause', '↑↓ scroll', 'b back'])
@@ -2847,7 +2848,7 @@ test('key hints: in order for the task state, laid out at 30, 50 and 80 columns,
   expect(words(scoutKeys(false, true))).toEqual(['e edit', 'p pause', '↑↓ scroll', 'b back'])
   expect(words(scoutListKeys())).toEqual(['Enter open', '↑↓ move', 't s c views', 'b back'])
   expect(words(viewKeys(false))).toEqual(['t tasks', 's scouts', 'c settings'])
-  const all = [taskKeys('review', true), taskKeys('backlog'), taskKeys('todo', true), listKeys(), viewKeys(), scoutKeys(), diffKeys(true, true)]
+  const all = [keysFor('review', { worker: true }), keysFor('backlog'), keysFor('todo', { worker: true }), listKeys(), viewKeys(), scoutKeys(), diffKeys(true, true)]
   for (const w of [30, 50, 80])
     for (const hs of all) {
       const lines = hintLines(hs, w)
@@ -2857,8 +2858,8 @@ test('key hints: in order for the task state, laid out at 30, 50 and 80 columns,
       // no line could take the next line's first item
       for (let i = 1; i < lines.length; i++) expect(hintLineText([...lines[i - 1]!, lines[i]![0]!]).length).toBeGreaterThan(w)
     }
-  expect(hintLines(taskKeys('review', true), 80).map(hintLineText)).toEqual(['a approve · x reject · d show changes · w watch worker · y copy · ↑↓ scroll', 'b back'])
-  expect(hintLines(taskKeys('review', true), 30).map(hintLineText)).toEqual(['a approve · x reject', 'd show changes', 'w watch worker · y copy', '↑↓ scroll · b back'])
+  expect(hintLines(keysFor('review', { worker: true }), 80).map(hintLineText)).toEqual(['a approve · x reject · d show changes · w watch worker · n needs review · y copy', '↑↓ scroll · b back'])
+  expect(hintLines(keysFor('review', { worker: true }), 30).map(hintLineText)).toEqual(['a approve · x reject', 'd show changes', 'w watch worker', 'n needs review · y copy', '↑↓ scroll · b back'])
   // the list only offers keys that work there: never a or x
   expect(words(listKeys())).toEqual(['Enter open', '↑↓ move', 't s c views'])
   expect(listKeys().some(h => h.key === 'a' || h.key === 'x')).toBe(false)
@@ -3518,9 +3519,9 @@ test('reportPreview shows the first lines and then where the full report is', ()
 
 test("taskKeys shows the try number keys for reports only when more than one try has a report", () => {
   const words = (k: { key: string; word: string }[]) => k.map(x => `${x.key} ${x.word}`)
-  expect(words(taskKeys('done', false, [1]))).toEqual(['y copy', '↑↓ scroll', 'b back'])
-  expect(words(taskKeys('done', false, [1, 2, 3]))).toEqual(["1-3 a try's report", 'y copy', '↑↓ scroll', 'b back'])
-  expect(words(taskKeys('done', false, [9, 10]))).toEqual(["9 a try's report", 'y copy', '↑↓ scroll', 'b back'])
+  expect(words(keysFor('done', { reports: [1] }))).toEqual(['y copy', '↑↓ scroll', 'b back'])
+  expect(words(keysFor('done', { reports: [1, 2, 3] }))).toEqual(["1-3 a try's report", 'y copy', '↑↓ scroll', 'b back'])
+  expect(words(keysFor('done', { reports: [9, 10] }))).toEqual(["9 a try's report", 'y copy', '↑↓ scroll', 'b back'])
 })
 
 test('a scout answer that starts with a NOTHING line, then what it checked, is saved but not sent to the lead', async () => {
