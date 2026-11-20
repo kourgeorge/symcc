@@ -2,6 +2,15 @@
 
 When a set of user-facing changes is ready to release, bump the version in both `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` and add an entry here.
 
+## 0.5.15 (2026-11-20)
+
+### Changed
+- Step icons: ⧗ queue and ⊛ test (▶ worker · ✎ prep · ⌕ checker · ⧗ queue · ⊛ test · ⇢ merge), on every board, band, task page and in the docs.
+- README, the landing page, the reference and the other docs pages rewritten to be plainer and to say why, not only how; the guide keeps each reason once.
+
+### Fixed
+- The board lock records which process holds it, so a lock left by a process that is gone is taken at once (Node host and OpenCode) instead of after 30 s; the holder's start time comes from `ps`, so a live holder is never taken for gone (e.g. in OpenCode's background worker).
+
 ## 0.5.14 (2026-11-20)
 
 ### Added
