@@ -43,6 +43,8 @@ export const BOARD_VIEW = {
     mode: 'auto',
     branch: 'main',
     test_commands: ['claude plugin test .', 'sh scripts/typecheck.sh'],
+    // this session drives, so the saved pictures have no "another session drives" warning line (T-643)
+    driving: true,
   },
 }
 
