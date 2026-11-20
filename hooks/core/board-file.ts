@@ -24,12 +24,10 @@ export type Board = {
   /** open the board panel by itself when a session starts (true unless turned off) */
   open_on_start: boolean
   /**
-   * what plays when a task is merged or a question waits for the owner: off, sound (a chime) or
-   * voice ("T-3 done"); absent: the best this machine can play (see notifyOf)
+   * what plays when a task is merged or a question waits for the owner: voice ("T-3 done"), sound 1 / 2 / 3
+   * (a chime from that sound set) or off; absent: the best this machine can play (see notifyOf)
    */
   notify?: Notify
-  /** which of the 3 sound sets notify "sound" plays (1, 2 or 3); absent: picked from the project's folder name (see soundSetOf) */
-  sound_set?: SoundSet
   /** the whole plugin enabled or disabled (/<name>-enable, /<name>-disable); disabled: Claude works as normal, the board is kept. true unless disabled */
   enabled: boolean
   /** done and dropped tasks older than this many days move to archive.json (0 = never) */
@@ -60,15 +58,35 @@ export type Board = {
   next_question?: number
 }
 
-/** What plays when a task is merged or waits for the owner. */
-export type Notify = 'off' | 'sound' | 'voice'
-export const NOTIFY_CHOICES: Notify[] = ['off', 'sound', 'voice']
-export const isNotify = (x: unknown): x is Notify => NOTIFY_CHOICES.includes(x as Notify)
-
-/** The 3 sound sets notify "sound" can play, so the owner can tell which project chimed. */
+/** The 3 sound sets a "sound N" notify can play, so the owner can tell which project chimed. */
 export type SoundSet = 1 | 2 | 3
 export const SOUND_SETS: SoundSet[] = [1, 2, 3]
 export const isSoundSet = (x: unknown): x is SoundSet => SOUND_SETS.includes(x as SoundSet)
+
+/** What plays when a task is merged or waits for the owner: the voice, a chime of sound set N, or nothing. */
+export type Notify = 'voice' | `sound ${SoundSet}` | 'off'
+export const NOTIFY_CHOICES: Notify[] = ['voice', 'sound 1', 'sound 2', 'sound 3', 'off']
+export const isNotify = (x: unknown): x is Notify => NOTIFY_CHOICES.includes(x as Notify)
+/** The notify choice that chimes sound set `set` ("sound 2"). */
+export const soundNotify = (set: SoundSet): Notify => `sound ${set}`
+/** The sound set a notify choice chimes (2 for "sound 2"), or null for voice and off. */
+export const notifySet = (n: Notify): SoundSet | null => (n.startsWith('sound ') ? (Number(n.slice(6)) as SoundSet) : null)
+/** What kind of thing a notify choice plays: off, sound (any set) or voice. */
+export const notifyKind = (n: Notify): 'off' | 'sound' | 'voice' => (n === 'off' || n === 'voice' ? n : 'sound')
+
+/** The project's folder name: the last part of `root` ('' when there is none). */
+export const projectFolder = (root: string): string => String(root ?? '').replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? ''
+
+/**
+ * The sound set a project gets when none is chosen: a stable hash (FNV-1a) of its folder name, as 1, 2 or 3,
+ * so two projects usually chime differently with no setup. The same name always gives the same set.
+ */
+export function soundSetFor(root: string): SoundSet {
+  const name = projectFolder(root).toLowerCase()
+  let h = 0x811c9dc5
+  for (let i = 0; i < name.length; i++) h = Math.imul(h ^ name.charCodeAt(i), 0x01000193) >>> 0
+  return SOUND_SETS[h % SOUND_SETS.length]!
+}
 
 /** Where tasks added from a scout finding go: auto (the lead decides) or backlog (always the backlog). */
 export type ScoutFindings = 'auto' | 'backlog'
@@ -331,7 +349,6 @@ const SETTING_OK: { [K in Exclude<keyof Board, 'version' | 'tasks' | 'next_id' |
   test_minutes: v => isNum(v) && v >= 1,
   open_on_start: v => typeof v === 'boolean',
   notify: v => isNotify(v),
-  sound_set: v => isSoundSet(v),
   enabled: v => typeof v === 'boolean',
   archive_days: v => isNum(v) && v >= 0,
   scout_findings: v => isScoutFindings(v),
@@ -539,8 +556,9 @@ export function withoutTestRerun(t: BoardTask): BoardTask | null {
  * not a board object, is `broken`: the board returned then is only a stand-in and must never be
  * saved over the file. Inside a readable file it is forgiving: a bad task entry is skipped (and
  * counted), a bad setting gets its default (and is named in `fixed`), every good value is kept.
+ * `root` is the project folder: an old notify "sound" with no sound_set gets the set of its name (see soundSetFor).
  */
-export function readBoard(text: string | null): BoardRead {
+export function readBoard(text: string | null, root = ''): BoardRead {
   if (text === null || text === undefined || !String(text).trim()) return { board: emptyBoard(), skipped: 0, fixed: [], migrated: 0 }
   let raw: unknown
   try {
@@ -548,11 +566,11 @@ export function readBoard(text: string | null): BoardRead {
   } catch (e) {
     return { board: emptyBoard(), broken: `not valid JSON (${String((e as Error)?.message ?? e).slice(0, 120)})`, skipped: 0, fixed: [], migrated: 0 }
   }
-  return readBoardValue(raw)
+  return readBoardValue(raw, root)
 }
 
 /** readBoard for board.json's content already parsed (e.g. joined with its finished tasks' parts, see core/board-parts.ts). */
-export function readBoardValue(raw: unknown): BoardRead {
+export function readBoardValue(raw: unknown, root = ''): BoardRead {
   if (!isObj(raw)) return { board: emptyBoard(), broken: 'it is not a board (the file holds no JSON object)', skipped: 0, fixed: [], migrated: 0 }
   if ('tasks' in raw && !Array.isArray(raw.tasks)) return { board: emptyBoard(), broken: '"tasks" is not a list', skipped: 0, fixed: [], migrated: 0 }
   const board = emptyBoard()
@@ -566,6 +584,13 @@ export function readBoardValue(raw: unknown): BoardRead {
   if (archived) board.archived = archived
   else if ('archived' in raw) fixed.push('archived')
   let migrated = archived && isObj(raw.archived) && isNum(raw.archived.tokens) ? 1 : 0
+  // Migration (T-695): notify "sound" and sound_set N became the one choice "sound N" (no sound_set: the
+  // project's own set); a sound_set next to voice or off is dropped. The board is saved once in the new shape.
+  if (raw.notify === 'sound') {
+    board.notify = soundNotify(isSoundSet(raw.sound_set) ? raw.sound_set : soundSetFor(root))
+    if (fixed.includes('notify')) fixed.splice(fixed.indexOf('notify'), 1)
+    migrated++
+  } else if ('sound_set' in raw) migrated++
   // Migration (T-578): the old board mode "off" is now "paused"; the board is saved once with the new name.
   if (raw.mode === 'off') {
     board.mode = 'paused'

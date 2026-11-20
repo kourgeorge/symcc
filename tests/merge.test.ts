@@ -4,7 +4,7 @@ import { checkAndMerge, changedFiles, changesText, ownerEdits } from '../hooks/a
 import { inMergeLine, MERGE_LINE_POLL_MS, resetMergeLine } from '../hooks/app/merge-line'
 import { joinedText } from '../hooks/core/board-parts'
 import { mergeLineText, parseMergeLine, inLineNote, MERGE_LINE_STALE_MS, mergeLineStaleMs, type LineEntry, testMinutesOf, testTimeoutMs, lineEntryStale, readBoard, TEST_RERUN_GONE_NOTE, DEFAULT_TEST_MINUTES, BASH_PATHS_MAX, bashTooManyText } from '../hooks/board'
-import { PREP_NOTE, STEP_NOTE, isMergeNote, type Board, type BoardTask, workerGitWriteText, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, readArchive, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, untestedChange, isTestFile, isPlainRelPath, parseSettingValue, type WorkerQuestion, isAnswered, boardText, taskMatches, onRuns } from '../hooks/board'
+import { PREP_NOTE, STEP_NOTE, isMergeNote, type Board, type Notify, soundSetFor, type BoardTask, workerGitWriteText, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, readArchive, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, untestedChange, isTestFile, isPlainRelPath, parseSettingValue, type WorkerQuestion, isAnswered, boardText, taskMatches, onRuns } from '../hooks/board'
 import { removeWorktree, cleanupMerged, deleteMergedBranch } from '../hooks/app/git'
 import { addPassedTree, parsePassedTrees, passedTreesText, treePassed, PASSED_TREES_MAX } from '../hooks/core/passed-trees'
 import { S, leadQueue, workers, sayQueue, meanwhile, scoutRuns } from '../hooks/app/state'
@@ -23,7 +23,7 @@ import { finishing as finishingSet } from '../hooks/app/state'
 import { CLAUDE_WORDS } from '../hooks/claude/host'
 import { SYMCC_WORDS } from '../hooks/host'
 import { change, load, saveBoard, saveMigrated, takeLock, dropLock } from '../hooks/app/store'
-import { runTool, ownerSettings, allowAskedFiles, refuseAskedFiles } from '../hooks/app/tools'
+import { TOOLS, runTool, ownerSettings, allowAskedFiles, refuseAskedFiles } from '../hooks/app/tools'
 import { archiveOld, saveArchiveMigrated } from '../hooks/app/archive'
 import { commandsOf, pause } from './fakes'
 import { runCommand } from '../hooks/app/symcc'
@@ -2236,7 +2236,7 @@ test('an archived task can still be looked up, is read-only, and an archived dro
  * T-1's worker (files src/; its folder holds edits in src/a.ts) hands back `answer`. `ask` / `requested`: what its
  * try recorded (an ask_owner call, edits refused as outside its files); `end`: why its turn ended.
  */
-async function workerAnswers(answer: string, o: { notify?: 'off' | 'sound' | 'voice'; driving?: boolean; git?: Partial<Git>; ask?: WorkerQuestion; requested?: string[]; end?: TurnEnd } = {}) {
+async function workerAnswers(answer: string, o: { notify?: Notify; driving?: boolean; git?: Partial<Git>; ask?: WorkerQuestion; requested?: string[]; end?: TurnEnd } = {}) {
   const w = world(o.git)
   const [b0] = boardWith('auto', ['npm test'], { history: hist('created by the lead') })
   await saveBoard(w.$, recorded({ ...b0, notify: o.notify ?? 'voice' }, { question: o.ask, requested: o.requested }))
@@ -2853,14 +2853,14 @@ test('sound plays a chime (a different one when a question waits), voice says th
   const evil = "T-3'; rm -rf ~; echo '"
   const mac = machine('Darwin', ['say', 'afplay'], MAC_FILES)
   expect(await playsFor(mac.$, 'voice', ['T-3'])).toEqual([{ argv: ['say', '-r', '200', 'repo: T-3 done'] }])
-  expect(await playsFor(mac.$, 'sound', ['T-3'])).toEqual([{ argv: ['afplay', '/System/Library/Sounds/Glass.aiff'] }])
-  expect(await playsFor(mac.$, 'sound', ['T-3', '?T-5'])).toEqual([{ argv: ['afplay', '/System/Library/Sounds/Ping.aiff'] }])
+  expect(await playsFor(mac.$, 'sound 1', ['T-3'])).toEqual([{ argv: ['afplay', '/System/Library/Sounds/Glass.aiff'] }])
+  expect(await playsFor(mac.$, 'sound 1', ['T-3', '?T-5'])).toEqual([{ argv: ['afplay', '/System/Library/Sounds/Ping.aiff'] }])
   expect(await playsFor(mac.$, 'off', ['T-3'])).toEqual([])
   expect(await playsFor(mac.$, 'voice', [evil])).toEqual([{ argv: ['say', '-r', '200', `repo: ${evil} done`] }])
 
   const linux = machine('Linux', ['spd-say', 'espeak', 'paplay', 'canberra-gtk-play'], [`${FD}/complete.oga`, `${FD}/bell.oga`])
   expect((await playsFor(linux.$, 'voice', ['T-3'])).map(p => p.argv)).toEqual([['spd-say', '-w', 'repo: T-3 done'], ['espeak', 'repo: T-3 done']])
-  expect((await playsFor(linux.$, 'sound', ['?T-5'])).map(p => p.argv)).toEqual([['paplay', `${FD}/bell.oga`], ['canberra-gtk-play', '-i', 'bell']])
+  expect((await playsFor(linux.$, 'sound 1', ['?T-5'])).map(p => p.argv)).toEqual([['paplay', `${FD}/bell.oga`], ['canberra-gtk-play', '-i', 'bell']])
   // none saved: the best this machine has (voice)
   expect((await playsFor(linux.$, null, ['T-3']))[0]!.argv[0]).toBe('spd-say')
 
@@ -2871,9 +2871,9 @@ test('sound plays a chime (a different one when a question waits), voice says th
   expect(speak!.argv[4]).toBe(`Add-Type -AssemblyName System.Speech; (New-Object System.Speech.Synthesis.SpeechSynthesizer).Speak($env:${WIN_TEXT_VAR})`)
   expect(speak!.argv.join(' ')).not.toContain('rm -rf')
   expect(speak!.env).toEqual({ [WIN_TEXT_VAR]: `repo: ${evil} done` })
-  const [chime] = await playsFor(win.$, 'sound', ['T-3'])
+  const [chime] = await playsFor(win.$, 'sound 1', ['T-3'])
   expect(chime!.argv[4]).toContain('[System.Media.SystemSounds]::Asterisk.Play()')
-  expect((await playsFor(win.$, 'sound', ['?T-3']))[0]!.argv[4]).toContain('Exclamation')
+  expect((await playsFor(win.$, 'sound 1', ['?T-3']))[0]!.argv[4]).toContain('Exclamation')
 })
 
 test('only the driving session plays, lines are joined, and the first command that works is the last one tried', async () => {
@@ -2911,25 +2911,55 @@ test("notify can't be set to a choice this machine can't play: the owner and the
   expect(await ownerSettings(m.$, { notify: 'voice' }, 'with /symcc-settings')).toBe(why)
   expect(await runTool(m.$, 'settings', { notify: 'voice' })).toBe(why)
   expect((await load(m.$)).notify).toBe('off')
-  expect(await ownerSettings(m.$, { notify: 'loud' }, 'from the board')).toContain('notify must be "off", "sound" or "voice"')
-  expect(await ownerSettings(m.$, { notify: 'sound' }, 'from the board')).toBe('notify set to sound')
-  expect((await load(m.$)).notify).toBe('sound')
+  expect(await ownerSettings(m.$, { notify: 'loud' }, 'from the board')).toContain('notify must be "voice", "sound 1", "sound 2", "sound 3" or "off"')
+  expect(await ownerSettings(m.$, { notify: 'sound' }, 'from the board')).toContain('notify must be "voice", "sound 1", "sound 2", "sound 3" or "off"')
+  expect(await ownerSettings(m.$, { notify: 'sound 2' }, 'from the board')).toBe('notify set to sound 2')
+  expect((await load(m.$)).notify).toBe('sound 2')
 })
 
-test('T-650: the owner and the lead set sound_set; the owner hears the picked set once; a bad value is refused', async () => {
+test('T-695: the owner and the lead pick notify "sound N"; the owner hears the picked set once; sound_set is gone', async () => {
   const m = machine('Darwin', ['afplay'], ['Glass', 'Ping', 'Hero', 'Pop', 'Submarine', 'Funk'].map(n => `/System/Library/Sounds/${n}.aiff`))
   await saveBoard(m.$, emptyBoard())
-  expect(await ownerSettings(m.$, { sound_set: '3' }, 'from the board')).toBe('sound_set set to 3')
-  expect((await load(m.$)).sound_set).toBe(3)
+  expect(await ownerSettings(m.$, { notify: 'sound 3' }, 'from the board')).toBe('notify set to sound 3')
+  expect((await load(m.$)).notify).toBe('sound 3')
   await pause(0)
   expect(m.ran.filter(r => r.argv[0] === 'afplay').map(r => r.argv)).toEqual([['afplay', '/System/Library/Sounds/Submarine.aiff']])
-  expect(await runTool(m.$, 'settings', { sound_set: 2 })).toBe('notify sound plays sound set 2')
-  expect(await runTool(m.$, 'settings', { sound_set: 5 })).toBe('sound_set must be 1, 2 or 3 (got 5)')
-  expect((await load(m.$)).sound_set).toBe(2)
+  expect(await runTool(m.$, 'settings', { notify: 'sound 2' })).toBe('a chime from sound set 2 plays when a task is merged or a question waits')
+  expect((await load(m.$)).notify).toBe('sound 2')
   // the lead only changes it: nothing more is played
   expect(m.ran.filter(r => r.argv[0] === 'afplay').length).toBe(1)
-  // the settings list shows the set in use
-  expect(await runTool(m.$, 'settings', {})).toContain('sound_set: 2 (default picked from the project name')
+  // the old sound_set gets a short hint, alone or with other settings, and changes nothing
+  const hint = 'there is no sound_set setting any more: use notify "sound 1", "sound 2" or "sound 3"'
+  expect(await runTool(m.$, 'settings', { sound_set: 1 })).toBe(hint)
+  expect(await runTool(m.$, 'settings', { sound_set: 1, max_parallel: 4 })).toBe(hint)
+  expect(await ownerSettings(m.$, { sound_set: '1' }, 'from the board')).toBe(hint)
+  expect((await load(m.$)).notify).toBe('sound 2')
+  // the settings list shows the set in use in notify, and no sound_set
+  const list = String(await runTool(m.$, 'settings', {}))
+  expect(list).toContain('notify: sound 2 (default voice')
+  expect(list).not.toContain('sound_set')
+})
+
+test('T-695: an old board.json with notify "sound" and sound_set is saved once as notify "sound N", without sound_set', async () => {
+  const w = world()
+  w.put(BOARD, JSON.stringify({ version: 1, next_id: 1, tasks: [], notify: 'sound', sound_set: 2 }))
+  expect((await load(w.$)).notify).toBe('sound 2')
+  await saveMigrated(w.$)
+  const saved = JSON.parse(w.files.get(BOARD)!)
+  expect(saved.notify).toBe('sound 2')
+  expect('sound_set' in saved).toBe(false)
+  // no sound_set: the set picked from the project folder's name
+  w.put(BOARD, JSON.stringify({ version: 1, next_id: 1, tasks: [], notify: 'sound' }))
+  expect((await load(w.$)).notify).toBe(`sound ${soundSetFor(S.root)}`)
+})
+
+test('T-695: the settings tool schema takes notify voice / sound 1 / sound 2 / sound 3 / off and has no sound_set', () => {
+  const def = TOOLS().find(t => t.name === 'settings')!
+  const props = (def.inputSchema as unknown as { properties: Record<string, { enum?: string[] }> }).properties
+  expect(props.notify!.enum).toEqual(['voice', 'sound 1', 'sound 2', 'sound 3', 'off'])
+  expect('sound_set' in props).toBe(false)
+  expect(def.description).not.toContain('sound_set (')
+  expect(def.description).toContain('"sound 1", "sound 2", "sound 3"')
 })
 
 // ---------------- how each try ended ----------------

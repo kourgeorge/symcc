@@ -1,6 +1,6 @@
-// Notify: a chime (sound) or "symcc: T-3 done" said out loud (voice) when a task is merged or a question waits.
+// Notify: a chime (sound 1, 2 or 3: one of the sound sets) or "symcc: T-3 done" said out loud (voice) when a task is merged or a question waits.
 import type { SymccTask } from '../../types'
-import { type Board, type Notify, type NotifySystem, type Playable, type SoundSet, SOUND_SETS, notifyOf, canPlay, unplayableNote, symccOn, spokenLine, soundSetOf, soundSetFor, projectFolder, NEEDS_YOU_MARK } from '../board'
+import { type Board, type Notify, type NotifySystem, type Playable, type SoundSet, SOUND_SETS, notifyOf, notifyKind, notifySet, canPlay, unplayableNote, symccOn, spokenLine, soundSetFor, projectFolder, NEEDS_YOU_MARK } from '../board'
 import { S, sayQueue } from './state'
 import type { Host } from '../host'
 
@@ -177,14 +177,10 @@ export function sayQuestion(host: Host, b: Board, id: string) {
   if (queueSay(host, b, NEEDS_YOU_MARK + id)) saidNeedsYou.add(key)
 }
 
-/** The sound set of the board that queued the last line (see queueSay). */
-let soundSetWanted: SoundSet | null = null
-
 /** Adds `item` to the queue and plays it soon; false when nothing plays here (not the driver, notify or plugin off). */
 function queueSay(host: Host, b: Board, item: string): boolean {
   if (!S.driving || !symccOn(b) || b.notify === 'off') return false
   S.notifyWanted = b.notify ?? null
-  soundSetWanted = soundSetOf(b, S.root)
   sayQueue.push(item)
   if (S.sayTimer || S.saying) return true
   S.sayTimer = host.clock.after(1500, () => {
@@ -196,14 +192,15 @@ function queueSay(host: Host, b: Board, item: string): boolean {
 
 /**
  * The commands to try for one queued line, in order; [] when nothing plays (off, or it can't play here: told once).
- * `set` is the sound set for a chime: the board's, else the one picked from the project's folder name.
+ * A "sound N" choice chimes sound set N; with no choice saved the default is used (see notifyOf: voice, else the
+ * project's own set).
  */
-export async function playsFor(host: Host, wanted: Notify | null, items: string[], set: SoundSet = soundSetFor(S.root)): Promise<Play[]> {
+export async function playsFor(host: Host, wanted: Notify | null, items: string[]): Promise<Play[]> {
   const text = spokenLine(items)
   if (!text) return []
   const p = await players(host)
   const can = await playable(host)
-  const n = notifyOf({ notify: wanted ?? undefined }, can)
+  const n = notifyOf({ notify: wanted ?? undefined }, can, S.root)
   if (n === 'off') return []
   if (!canPlay(n, can)) {
     if (!S.toldUnplayable) {
@@ -215,7 +212,8 @@ export async function playsFor(host: Host, wanted: Notify | null, items: string[
   const needsYou = items.some(x => String(x ?? '').startsWith(NEEDS_YOU_MARK))
   // the spoken line says the project's name; a chime tells projects apart by its sound set
   const line = n === 'voice' ? withProject(text, S.root) : text
-  return p[n].map(make => make(line, needsYou, set))
+  const set = notifySet(n) ?? soundSetFor(S.root)
+  return p[notifyKind(n) as 'sound' | 'voice'].map(make => make(line, needsYou, set))
 }
 
 export async function sayNext(host: Host) {
@@ -224,7 +222,7 @@ export async function sayNext(host: Host) {
   if (!items.length) return
   S.saying = true
   try {
-    for (const c of await playsFor(host, S.notifyWanted, items, soundSetWanted ?? soundSetFor(S.root))) {
+    for (const c of await playsFor(host, S.notifyWanted, items)) {
       const r = await host.run(c.argv, { timeoutMs: 30_000, ...(c.env ? { env: c.env } : {}) }).catch(() => null)
       if (r && r.exitCode === 0) break
     }
@@ -237,7 +235,7 @@ export async function sayNext(host: Host) {
 }
 
 /**
- * Plays sound set `set`'s "done" chime once, so the owner hears the set just picked (Settings, sound_set).
+ * Plays sound set `set`'s "done" chime once, so the owner hears the set just picked (Settings, notify "sound N").
  * Nothing when this machine has no sound player; never waits, never shows an error.
  */
 export async function playSample(host: Host, set: SoundSet): Promise<Play | null> {
