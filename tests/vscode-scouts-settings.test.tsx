@@ -44,9 +44,10 @@ const STATUS_COLORS = new Set(['warning', 'error', 'ide', 'permission', 'success
 const CHOICES = ['mode', 'notify', 'sound_set', 'checker', 'scout_findings', 'tests_with_changes', 'open_on_start', 'enabled']
 const BOXES = ['max_parallel', 'max_minutes', 'auto_retries', 'archive_days', 'test_commands']
 
-/** The drawn tree without the scout page's "Results · …" line (T-622 added it after these trees were saved; scout-runs.test.tsx checks it). */
+/** The drawn tree without the scout page's Results section (T-622 added it after these trees were saved, T-686 moved
+ *  it to its own section before File; scout-runs.test.tsx checks it). */
 function withoutResults(tree: unknown): unknown {
-  const isResults = (n: unknown) => !!n && typeof n === 'object' && (n as Node).type === 'Text' && typeof (n as Node).children?.[0] === 'string' && ((n as Node).children![0] as string).startsWith('Results · ')
+  const isResults = (n: unknown) => !!n && typeof n === 'object' && (n as Node).props?.key === 'scout-results'
   const walk = (n: unknown): unknown => {
     if (Array.isArray(n)) return n.filter(c => !isResults(c)).map(walk)
     if (!n || typeof n !== 'object') return n

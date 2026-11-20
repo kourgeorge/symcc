@@ -196,7 +196,7 @@ test("the scout's page lists its runs, newest first, and opening one shows its f
   expect(await ui.find({ type: 'Text', text: /^▍Runs$/ })).toBeDefined()
   // T-516: no report text on the scout's page (no "Last report" section); a hint says how to see a run's report
   const heads = (await ui.findAll({ type: 'Text', text: /^▍/ })).map(x => x.text)
-  expect(heads).toEqual(['▍Instructions', '▍Runs', '▍File'])
+  expect(heads).toEqual(['▍Instructions', '▍Runs', '▍Results', '▍File'])
   expect(await ui.find({ type: 'Text', text: /Old crash/ })).toBeUndefined()
   expect(await ui.find({ type: 'Text', text: /The parser crashes/ })).toBeUndefined()
   expect(await ui.find({ type: 'Text', text: /^  Enter on a run shows its report$/ })).toBeDefined()
@@ -357,7 +357,8 @@ test("the scout's page in VS Code says when its last run ended on an API error, 
 
 // ---------------- the scout's results (T-622) ----------------
 
-const RESULTS = /^Results · last 7 days: .* · in all: 2 tasks \(1 merged, 0 dropped, 1 open\) · 2k scout tokens · 5k per merged$/
+const WEEK = /^ {0,2}last 7 days: .* · 2k scout tokens · .* per merged$/
+const ALL = /^ {0,2}in all: 2 tasks \(1 merged, 0 dropped, 1 open\) · 2k scout tokens · 5k per merged$/
 
 /** Scout bugs with one merged task (3k tokens) and one open, and 2k tokens of its own in scouts.json. */
 function resultsPage(on: On) {
@@ -367,16 +368,35 @@ function resultsPage(on: On) {
   page(on, { '/.symcc/scouts/bugs.runs.json': scoutRunsText([{ started: null, ended: LAST_RUN, outcome: 'found', findings: 2, tasks: ['T-7', 'T-8'] }]), '/.symcc/scouts.json': memory }, tasks)
 }
 
-test("the scout's page shows a Results line: what its findings became, its tokens and tokens per merged task", async ($, on) => {
+test("T-686: the scout's page keeps the Results figures out of its header, in their own section right before File", async ($, on) => {
   resultsPage(on)
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect((await texts(ui)).filter(x => RESULTS.test(x)).length).toBe(1)
+  const all = await texts(ui)
+  const inst = all.indexOf('▍Instructions')
+  const res = all.indexOf('▍Results')
+  expect(inst > 0 && res > inst).toBe(true)
+  // the header (before Instructions): no first line of the instructions, no Results figures
+  const head = all.slice(0, inst)
+  expect(head.some(x => x.includes('Look for crashes.') || x.includes('last 7 days') || x.includes('in all:') || x.startsWith('Results'))).toBe(false)
+  // the Results section: its heading, the last 7 days, in all, and then File
+  expect(WEEK.test(all[res + 1]!)).toBe(true)
+  expect(ALL.test(all[res + 2]!)).toBe(true)
+  expect(all[res + 3]).toBe('▍File')
+  expect(all.filter(x => x.includes('last 7 days')).length).toBe(1)
   await ui.unmount()
 })
 
-test("the scout's page in VS Code shows the same Results line", async ($, on) => {
+test("T-686: the scout's page in VS Code has the same Results section right before File, and none in its header", async ($, on) => {
   resultsPage(on)
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
-  expect((await texts(ui)).filter(x => RESULTS.test(x)).length).toBe(1)
+  const all = await texts(ui)
+  const inst = all.indexOf('Instructions')
+  const res = all.indexOf('Results')
+  expect(inst > 0 && res > inst).toBe(true)
+  expect(all.slice(0, inst).some(x => x.includes('Look for crashes.') || x.includes('last 7 days') || x.includes('in all:'))).toBe(false)
+  expect(WEEK.test(all[res + 1]!)).toBe(true)
+  expect(ALL.test(all[res + 2]!)).toBe(true)
+  expect(all[res + 3]).toBe('File')
   await ui.unmount()
 })
+

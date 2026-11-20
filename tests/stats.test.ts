@@ -439,11 +439,11 @@ test("stats: a scout's page Results line gives the same numbers for the last 7 d
   const u = scoutUsage()
   const week = statsReport({ tasks, nowMs: NOW, range: { kind: 'days', days: 7 }, team: { scouts: u } })
   const line = scoutResultsLine(tasks, 'bugs', u.bugs, NOW)
-  expect(line).toBe('Results · last 7 days: 4 tasks (1 merged, 1 dropped, 2 open) · 2k scout tokens · 6k per merged · in all: 5 tasks (2 merged, 1 dropped, 2 open) · 3k scout tokens · 4.5k per merged')
+  expect(line).toBe('last 7 days: 4 tasks (1 merged, 1 dropped, 2 open) · 2k scout tokens · 6k per merged\nin all: 5 tasks (2 merged, 1 dropped, 2 open) · 3k scout tokens · 4.5k per merged')
   // the page's week part matches /stats 7d
   expect(week).toContain('4 tasks (1 merged, 1 dropped, 2 open) · 2k scout tokens · 6k per merged')
-  expect(scoutResultsLine(tasks, 'secrets', u.secrets, NOW)).toBe('Results · last 7 days: 1 task (0 merged, 0 dropped, 1 open) · 6k scout tokens · — per merged · in all: 1 task (0 merged, 0 dropped, 1 open) · 6k scout tokens · — per merged')
-  expect(scoutResultsLine([], 'new', undefined, NOW)).toBe('Results · last 7 days: no tasks · 0 scout tokens · — per merged · in all: no tasks · 0 scout tokens · — per merged')
+  expect(scoutResultsLine(tasks, 'secrets', u.secrets, NOW)).toBe('last 7 days: 1 task (0 merged, 0 dropped, 1 open) · 6k scout tokens · — per merged\nin all: 1 task (0 merged, 0 dropped, 1 open) · 6k scout tokens · — per merged')
+  expect(scoutResultsLine([], 'new', undefined, NOW)).toBe('last 7 days: no tasks · 0 scout tokens · — per merged\nin all: no tasks · 0 scout tokens · — per merged')
 })
 
 test('stats: with no scouts the report says nothing extra about scouts (T-622)', () => {

@@ -196,7 +196,6 @@ export async function scoutPageVs($: $, pane: PaneParts, sc: SymccScout, run = '
         {title ? plain('vs-scout-summary', title, 'text', true) : null}
         {sc.warning ? plain('vs-scout-warning', sc.warning, 'warning') : null}
         {problem ? plain('vs-scout-problem', problem, 'error') : null}
-        {results ? plain('vs-scout-results', results) : null}
       </Box>
       <Box key="vs-scout-facts" flexDirection="column">
         {plain('every', `runs: ${r.every}`)}
@@ -234,6 +233,8 @@ export async function scoutPageVs($: $, pane: PaneParts, sc: SymccScout, run = '
             ]
           : [plain('vs-runs-none', '(no runs yet)')],
       )}
+      {/* T-686: its Results figures (last 7 days, then in all) in their own section, just before File */}
+      {results ? section('results', 'Results', results.split('\n').map((l, i) => plain(`vs-scout-results-${i}`, l))) : null}
       {section('file', 'File', [plain('vs-scout-file', file, 'autoAccept')])}
       {vsFooter(vs, 'scout-keys')}
     </Box>

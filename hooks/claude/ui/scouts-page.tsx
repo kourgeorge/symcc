@@ -118,9 +118,8 @@ export async function scoutsPage($: $, pane: PaneParts) {
         </Box>
       )
     }
-    // the subheader: the summary from the file's front matter, else the first line of the instructions (in the inactive colour)
-    const firstLine = (sc.prompt ?? '').split('\n').map(l => l.trim()).find(Boolean) ?? ''
-    const title = sc.summary?.trim() || firstLine
+    // the subheader: the summary from the file's front matter, if one is set (the instructions show in full below)
+    const title = sc.summary?.trim() ?? ''
     return (
       <Box flexDirection="column" gap={1}>
         <Box flexDirection="column">
@@ -137,13 +136,12 @@ export async function scoutsPage($: $, pane: PaneParts) {
             </Text>
           </Text>
           {title ? (
-            <Text bold={!!sc.summary?.trim()} color={C(sc.summary?.trim() ? 'text' : 'inactive')}>
+            <Text bold color={C('text')}>
               {title}
             </Text>
           ) : null}
           {sc.warning ? <Text color={C('warning')}>{sc.warning}</Text> : null}
           {problem && !sc.running ? <Text color={C('error')}>{problem}</Text> : null}
-          {results ? <Text color={C('inactive')}>{results}</Text> : null}
         </Box>
 
         {buttonRows([
@@ -169,6 +167,16 @@ export async function scoutsPage($: $, pane: PaneParts) {
             </Button>
           ))}
         </Box>
+
+        {/* T-686: its Results figures (last 7 days, then in all) in their own section, just before File */}
+        {results ? (
+          <Box key="scout-results" flexDirection="column">
+            {heading('Results')}
+            {results.split('\n').map((l, i) => (
+              <Text key={`scout-results-${i}`} color={C('inactive')}>{`  ${l}`}</Text>
+            ))}
+          </Box>
+        ) : null}
 
         <Box flexDirection="column">
           {heading('File')}

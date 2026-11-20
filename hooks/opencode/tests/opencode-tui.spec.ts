@@ -1836,14 +1836,20 @@ test('T-619: startTui: the Org-mem row opens the page; x on a note asks, Yes sen
   board.stop()
 })
 
-test("T-622: a scout's page shows its Results line from view.json; a scout without one shows none", () => {
+test("T-622/T-686: a scout's page shows its Results figures from view.json in their own section right before File, not in its header; a scout without them shows none", () => {
   const f = scoutsViewFile()
-  const line = 'Results · last 7 days: 1 task (1 merged, 0 dropped, 0 open) · 2k scout tokens · 5k per merged · in all: 1 task (1 merged, 0 dropped, 0 open) · 2k scout tokens · 5k per merged'
-  const withResults: ViewFile = { ...f, view: { ...f.view, scout_results: { 'docs-check': line } } }
+  const week = 'last 7 days: 1 task (1 merged, 0 dropped, 0 open) · 2k scout tokens · 5k per merged'
+  const all = 'in all: 1 task (1 merged, 0 dropped, 0 open) · 2k scout tokens · 5k per merged'
+  const withResults: ViewFile = { ...f, view: { ...f.view, scout_results: { 'docs-check': `${week}\n${all}` } } }
   expect(parseViewFile(viewFileText(withResults))).toEqual(withResults)
-  const p = panelLines(withResults, { tab: 'scouts', opened: 'docs-check', cursor: 0 }, NOW, 400).lines.map(lineText)
-  expect(p).toContain(line)
-  expect(panelLines(withResults, { tab: 'scouts', opened: 'deps', cursor: 0 }, NOW, 400).lines.map(lineText).some(l => l.startsWith('Results'))).toBe(false)
+  const p = panelLines(withResults, { tab: 'scouts', opened: 'docs-check', cursor: 0 }, NOW, 400).lines.map(lineText).map(l => l.trim())
+  const inst = p.indexOf('Instructions')
+  const res = p.indexOf('Results')
+  expect(inst > 0 && res > inst).toBe(true)
+  // the header (before Instructions): no first line of the instructions (no summary is set), no figures
+  expect(p.slice(0, inst).some(l => l.includes('Look for stale docs.') || l.includes('last 7 days') || l.includes('in all:'))).toBe(false)
+  expect(p.slice(res, res + 5)).toEqual(['Results', week, all, '', 'File'])
+  expect(panelLines(withResults, { tab: 'scouts', opened: 'deps', cursor: 0 }, NOW, 400).lines.map(lineText).some(l => l.trim() === 'Results' || l.includes('last 7 days'))).toBe(false)
   // a broken scout_results is dropped when read
   expect(parseViewFile(viewFileText({ ...f, view: { ...f.view, scout_results: [] as never } }))?.view.scout_results).toBe(undefined)
 })

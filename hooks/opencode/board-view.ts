@@ -684,14 +684,12 @@ function scoutPage(f: ViewFile, sc: SymccScout, choice: PanelChoice, nowMs: numb
   // T-680: the page's buttons, as Claude Code's scout page has them; they stay at the top with its name
   for (const l of buttonLines(scoutButtons(sc), w)) b.add(l)
   const headLines = b.lines.length
-  const firstLine = (sc.prompt ?? '').split('\n').map(l => l.trim()).find(Boolean) ?? ''
-  const title = sc.summary?.trim() || firstLine
-  if (title) b.add([{ text: title, color: sc.summary?.trim() ? 'text' : 'inactive', ...(sc.summary?.trim() ? { bold: true } : {}) }])
+  // the summary from the file's front matter, if one is set (the instructions show in full below)
+  const title = sc.summary?.trim() ?? ''
+  if (title) b.add([{ text: title, color: 'text', bold: true }])
   if (sc.warning) b.add([{ text: sc.warning, color: 'warning' }])
   const problem = scoutLastRunProblem([...shown].reverse().map(x => x.run))
   if (problem && !sc.running) b.add([{ text: problem, color: 'error' }])
-  const results = f.view.scout_results?.[sc.name]
-  if (typeof results === 'string' && results) for (const l of wrapSegs([{ text: results, color: 'inactive' }], w)) b.add(l)
   b.blank()
   b.heading('Instructions')
   if (sc.prompt?.trim()) for (const l of textLines(sc.prompt.trim(), 'text', w)) b.add(l)
@@ -702,6 +700,13 @@ function scoutPage(f: ViewFile, sc: SymccScout, choice: PanelChoice, nowMs: numb
   const selected = ids.length ? ids[Math.min(Math.max(0, choice.cursor), ids.length - 1)]! : ''
   b.add([{ text: shown.length ? '  Enter on a run shows its report' : '  (no runs yet)', color: 'inactive' }])
   for (const x of shown) b.add([{ text: x.run.ended === selected ? '› ' : '  ', color: 'ide', bold: true }, { text: scoutRunLine(x.run, x.tasks, nowMs), color: scoutOutcomeTone(x.run.outcome) }], { run: x.run.ended })
+  // T-686: its Results figures (last 7 days, then in all) in their own section, just before File
+  const results = f.view.scout_results?.[sc.name]
+  if (typeof results === 'string' && results) {
+    b.blank()
+    b.heading('Results')
+    for (const part of results.split('\n')) for (const l of wrapSegs([{ text: `  ${part}`, color: 'inactive' }], w)) b.add(l)
+  }
   b.blank()
   b.heading('File')
   b.add([{ text: `  ${scoutFile(sc.name, f.name)}`, color: 'autoAccept' }])

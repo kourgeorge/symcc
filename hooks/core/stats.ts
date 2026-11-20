@@ -704,15 +704,15 @@ export function scoutResultsText(r: ScoutResults): string {
 }
 
 /**
- * A scout page's "Results" line: the same numbers for the last 7 days (tasks made or changed then, its tokens of
- * those days) and in all. `usage` is its entry in scouts.json; `tasks` the board's tasks plus the archived ones.
+ * A scout page's "Results" figures, shown under its own "Results" heading just before File (T-686): two lines, the
+ * last 7 days (tasks made or changed then, its tokens of those days) and then in all, joined by a newline. `usage` is its entry in scouts.json; `tasks` the board's tasks plus the archived ones.
  */
 export function scoutResultsLine(tasks: Pick<SymccTask, 'id' | 'status' | 'runs' | 'origin' | 'created_at' | 'updated_at'>[], scout: string, usage: ScoutUsage | undefined, nowMs: number): string {
   const week: StatsRange = { kind: 'days', days: 7 }
   const tok = (s: { from?: number; to?: number }) => (usage ? tokenCount(scoutTotals({ [scout]: usage }, s).tokens) : 0)
   const w = scoutResults(tasks.filter(t => inRange(t, week, nowMs)), scout, tok(rangeSpan(week, [], nowMs)))
   const a = scoutResults(tasks, scout, tok({}))
-  return `Results · last 7 days: ${scoutResultsText(w)} · in all: ${scoutResultsText(a)}`
+  return `last 7 days: ${scoutResultsText(w)}\nin all: ${scoutResultsText(a)}`
 }
 
 /** The lead's calls and tokens within span `s`. */

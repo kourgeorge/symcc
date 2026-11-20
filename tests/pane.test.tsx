@@ -901,7 +901,7 @@ test('"s" and the Scouts tab switch the panel to the scouts, and Enter opens one
   }
 })
 
-test('a scout\'s page shows its summary as the subheader, else the first line of its instructions in the inactive colour', async ($, on) => {
+test('a scout\'s page shows its summary as the subheader', async ($, on) => {
   stateOf(on, { tab: 'scouts', scout: 'bugs', view: { shape: 'view-1', value: { tasks: [], working: [], scouts: [scout('bugs', { summary: 'Crash hunter', prompt: 'Look for crashes.\nAnd leaks.' }), scout('docs', { prompt: 'Read the docs.\nFix typos.' })], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   const sub = await ui.find({ type: 'Text', text: /^Crash hunter$/ })
@@ -909,17 +909,17 @@ test('a scout\'s page shows its summary as the subheader, else the first line of
   // Instructions is always the whole text
   expect(await ui.find({ type: 'Text', text: /Look for crashes/ })).toBeDefined()
   const heads = (await ui.findAll({ type: 'Text', text: /^▍/ })).map(x => x.text)
-  expect(heads).toEqual(['▍Instructions', '▍Runs', '▍File'])
+  expect(heads).toEqual(['▍Instructions', '▍Runs', '▍Results', '▍File'])
   await ui.press({ key: 'scout-edit' })
   expect((await ui.find({ key: 'scout-summary' }))?.props.value).toBe('Crash hunter')
   await ui.unmount()
 })
 
-test('with no summary, a scout\'s page shows the first line of its instructions in the inactive colour', async ($, on) => {
+test('with no summary, a scout\'s page has no subheader: the first line of its instructions shows only under Instructions (T-686)', async ($, on) => {
   stateOf(on, { tab: 'scouts', scout: 'docs', view: { shape: 'view-1', value: { tasks: [], working: [], scouts: [scout('docs', { prompt: 'Read the docs.\nFix typos.' })], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  const first = (await ui.findAll({ type: 'Text', text: /^Read the docs\.$/ })).find(x => x.props.color === 'inactive')
-  expect(first).toBeDefined()
+  expect((await ui.findAll({ type: 'Text', text: /^Read the docs\.$/ })).find(x => x.props.color === 'inactive')).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /Read the docs/ })).toBeDefined()
   await ui.unmount()
 })
 
