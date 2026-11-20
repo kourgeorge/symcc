@@ -134,7 +134,7 @@ function stationSince(t: BoardTask, station: LiveStation, startMs: number | unde
   if (station === 'work') return startMs
   const stageAt = (stages: PhaseStage[], first: boolean) => {
     const words = stages.map(s => STAGE_LINE[s]).filter((w): w is string => !!w)
-    const hits = t.history.filter(h => h.kind === 'stage' && words.some(w => h.text.includes(`: ${w}`))).map(h => ms(h.at)).filter((n): n is number => n !== undefined && (startMs === undefined || n >= startMs))
+    const hits = (t.history ?? []).filter(h => h.kind === 'stage' && words.some(w => h.text.includes(`: ${w}`))).map(h => ms(h.at)).filter((n): n is number => n !== undefined && (startMs === undefined || n >= startMs))
     return hits.length ? (first ? Math.min(...hits) : Math.max(...hits)) : undefined
   }
   const found = station === 'check' ? stageAt(['prep', 'checker'], true) : station === 'queue' ? stageAt(['queue'], false) : station === 'tests' ? stageAt(['test'], false) : stageAt(['merge'], false)
@@ -175,7 +175,7 @@ export function liveLanes(view: LiveView, nowMs: number): LiveLane[] {
         tries: Math.max(tryNo, tryNo - auto + retries),
         ...(run?.tokens ? { tokens: tokenCount(run.tokens) } : {}),
         ...(usual ? { usual } : {}),
-        sentBack: t.history.filter(h => h.kind === 'checker-problems').length,
+        sentBack: (t.history ?? []).filter(h => h.kind === 'checker-problems').length,
         enteredMs,
         agent: stage === 'worker' || (stage === 'checker' && !!t.checker),
       }
@@ -338,7 +338,8 @@ export function nextUpLine(items: readonly NextUp[], width: number): string {
 export type LiveToday = { merged: number; sentBack: number; failed: number; tokens: number }
 
 /** Today's numbers at `nowMs` (the owner's day, `offsetMin` east of UTC): merged (a "merged" history line today), sent back
- *  (the checker's send-backs today), failed (tasks failed now that failed today), tokens (of the tries that ended today, or run today). */
+ *  (the checker's send-backs today; a task given without its history, as a board view's done one, counts as merged
+ *  today by its `merged` commit and `updated_at`, and adds no send-backs), failed (tasks failed now that failed today), tokens (of the tries that ended today, or run today). */
 export function liveToday(tasks: readonly SymccTask[], nowMs: number, offsetMin: number = localOffset(nowMs)): LiveToday {
   const today = dayOf(nowMs, offsetMin)
   const isToday = (iso: string | undefined) => {
@@ -350,8 +351,11 @@ export function liveToday(tasks: readonly SymccTask[], nowMs: number, offsetMin:
   let failed = 0
   let tokens = 0
   for (const t of tasks) {
-    if (t.history.some(h => h.kind === 'merged' && isToday(h.at))) merged++
-    sentBack += t.history.filter(h => h.kind === 'checker-problems' && isToday(h.at)).length
+    // A board view's done or dropped task (viewTask, e.g. OpenCode's) comes without its history: its `merged` commit and
+    // last change time stand in for the "merged" line; its send-backs are not in the view (read its parts for them).
+    const history = Array.isArray(t.history) ? t.history : undefined
+    if (history ? history.some(h => h.kind === 'merged' && isToday(h.at)) : t.status === 'done' && !!t.merged && isToday(t.updated_at)) merged++
+    sentBack += (history ?? []).filter(h => h.kind === 'checker-problems' && isToday(h.at)).length
     if (t.status === 'failed' && isToday(t.updated_at)) failed++
     for (const r of t.runs ?? []) if (r.tokens && isToday(r.ended ?? r.started)) tokens += tokenCount(r.tokens)
   }

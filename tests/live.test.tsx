@@ -5,6 +5,7 @@ import { test } from './reset'
 import { liveLanes, liveLayout, laneLines, liveLabelLine, liveStations, nextUp, nextUpLine, liveToday, todayLines, segText, liveBlink, liveHeader, tabRow, withLiveKey, LIVE_TABS, LIVE_EMPTY, LIVE_LEGEND } from '../hooks/core/live'
 import { textWidth } from '../hooks/core/stats'
 import { listKeys } from '../hooks/board'
+import { viewTask } from '../hooks/core/board-parts'
 import { LIVE_TICK_MS } from '../hooks/claude/ui/live'
 import { PANE, T0, seedBoard } from './board-fixture'
 
@@ -72,6 +73,12 @@ test('T-690: today counts merges, send-backs, failures and tokens of today', () 
   expect(d).toEqual({ merged: 1, sentBack: 1, failed: 1, tokens: 1_100_000 + 1_100_000 + 540_000 + 3_400_000 + 200_000 + 800_000 })
   expect(todayLines(d, 80)).toEqual(['today    ✓ 1 merged   ↺ 1 sent back   ✗ 1 failed   Σ 7.1M tokens'])
   for (const l of todayLines(d, 30)) expect(textWidth(l)).toBeLessThanOrEqual(30)
+})
+
+test('T-690: today works on a board view whose done tasks come without their history (as OpenCode reads it)', () => {
+  const slim: Record<string, unknown>[] = TASKS.map(t => viewTask((t.id === 'T-600' ? { ...t, merged: 'abc1234', updated_at: iso(30) } : t) as never))
+  expect('history' in slim.find(t => t.id === 'T-600')!).toBe(false)
+  expect(liveToday(slim as never[], T0, 0)).toEqual({ merged: 1, sentBack: 1, failed: 1, tokens: 1_100_000 + 1_100_000 + 540_000 + 3_400_000 + 200_000 + 800_000 })
 })
 
 test('T-690: lane lines fit the width with nothing cut, and the current station blinks', () => {
