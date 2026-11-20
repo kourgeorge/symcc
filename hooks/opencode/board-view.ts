@@ -18,7 +18,7 @@ import {
   bannerLines, bannerRule, footerRule, type BannerTone, panelSections, localOffset, when, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, ALL_CLEAR,
   fittedCells, rowMark, TITLE_ROOM, fitRow, rowExtra, questionsLabel, archivedOf, archivedNote, statusMark, statusBadge, detailRows, detailRowLines, wrapSegs, hintLineText,
   type KeyHint, type Seg, type BoardTask, gitNote, intoOf, taskActions, taskAsks, type TaskAction, type TaskActionId,
-  waitsForYou, sortScouts, scoutListRows, scoutRow, scoutIcon, scoutTone, scoutHowTo, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem, scoutFile,
+  waitsForYou, shownStatus, approveRunning, sortScouts, scoutListRows, scoutRow, scoutIcon, scoutTone, scoutHowTo, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem, scoutFile,
   SETTING_GROUPS, SETTINGS, isSettingPage, settingInfo, settingValue, cantPlayNotify, groupSummaryParts,
   type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction, type TaskVerb, settingsKeys,
   DEFAULT_ROLE, isCheckerRole, ALWAYS_ON_KINDS, checkerOn, roleNameError, kindNameError,
@@ -209,7 +209,8 @@ export function bandDraw(f: ViewFile | null, nowMs: number, width: number, rows 
   const tasks = v?.tasks ?? []
   const questions = v?.questions ?? []
   if (!f || !v || (!tasks.length && !questions.length) || v.enabled === false) return { lines: [], hits: [] }
-  const summary = statusCounts(tasks, ['doing', 'todo', 'paused', 'review', 'waiting', 'failed', 'done']).join(' · ')
+  // an approved task whose approve runs counts and shows as doing (shownStatus)
+  const summary = statusCounts(tasks, ['doing', 'todo', 'paused', 'review', 'waiting', 'failed', 'done'], nowMs).join(' · ')
   const order = ['review', 'waiting', 'failed', 'doing']
   const live = tasks.filter(t => order.includes(t.status)).sort(newestFirst)
   const plan = v.plan_mode ? planBandText(tasks.filter(t => t.status === 'doing').length) : ''
@@ -229,9 +230,9 @@ export function bandDraw(f: ViewFile | null, nowMs: number, width: number, rows 
   const leads = bandLeads(shown, nowMs, since, width)
   for (const t of shown) {
     const note = bandNote(t, nowMs, since(t.id))
-    const tail = fileWaitText(t) ? ` — ${fileWaitText(t)}` : waitsForYou(t) ? ` — ${t.question ?? t.note}` : note ? ` — ${note}` : ''
+    const tail = fileWaitText(t) ? ` — ${fileWaitText(t)}` : waitsForYou(t, nowMs) ? ` — ${t.question ?? t.note}` : note ? ` — ${note}` : ''
     hits.push({ open: t.id })
-    out.push([{ text: leads.get(t.id)!, color: BAND_COLOR[t.status] ?? 'text' }, { text: ` ${t.title}`, color: 'text' }, ...(tail ? [{ text: tail, color: 'inactive' }] : [])])
+    out.push([{ text: leads.get(t.id)!, color: BAND_COLOR[shownStatus(t, nowMs)] ?? 'text' }, { text: ` ${t.title}`, color: 'text' }, ...(tail ? [{ text: tail, color: 'inactive' }] : [])])
   }
   if (live.length + questions.length > rows) hits.push({ board: true }), out.push([{ text: `+${live.length + questions.length - rows} more · /${f.name}`, color: 'inactive' }])
   return { lines: out, hits }
@@ -704,13 +705,14 @@ function listBody(f: ViewFile, cursor: number, open: Record<PanelGroup, boolean>
   const row = (x: SymccTask, indent: number): Line => {
     const closed = x.status === 'done' || x.status === 'dropped' || x.status === 'backlog'
     const lead = indent + idWidth + 3 + cellWidth + 2
-    const fit = fitRow(lead, x.title, rowExtra(x, v.tasks, v.branch ?? '', v.max_minutes), w, x.status === 'failed')
+    const fit = fitRow(lead, x.title, rowExtra(x, v.tasks, v.branch ?? '', v.max_minutes, nowMs), w, x.status === 'failed')
     const sel = x.id === selected
     return [
       { text: pointer(x.id, indent), color: 'ide', bold: true },
       { text: x.id.padEnd(idWidth), color: closed ? 'inactive' : 'claude', bold: !closed || sel },
-      { text: ` ${rowMark(x, nowMs)} ${(cells.get(x.id) ?? '').padEnd(cellWidth)}  `, color: LIST_TONE[x.status]! },
-      { text: fit.title, color: closed ? 'inactive' : 'text', ...(sel || waitsForYou(x) || x.status === 'failed' || x.status === 'review' ? { bold: true } : {}) },
+      // an approved task whose approve runs is shown as running (shownStatus): the doing tone, not bold
+      { text: ` ${rowMark(x, nowMs)} ${(cells.get(x.id) ?? '').padEnd(cellWidth)}  `, color: LIST_TONE[shownStatus(x, nowMs)]! },
+      { text: fit.title, color: closed ? 'inactive' : 'text', ...(sel || waitsForYou(x, nowMs) || x.status === 'failed' || (x.status === 'review' && !approveRunning(x, nowMs)) ? { bold: true } : {}) },
       ...(fit.extra ? [{ text: `${fit.pad}${fit.extra}`, color: 'inactive' }] : []),
     ]
   }

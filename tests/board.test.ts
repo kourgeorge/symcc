@@ -3810,3 +3810,31 @@ test('a to do task that was worked on before shows ● (a fresh one keeps ○) i
   expect(after[0]).toContain(`T-1 ○ ${STATUS_WORD.todo}`)
   expect(after[1]).toContain(`T-2 ● ${STATUS_WORD.todo}`)
 })
+
+test('T-596: an approved task in review whose approve runs is counted and listed with the running tasks in the status line, the banner counts, the crew and the text board; with no approve running it is "to review" again', () => {
+  const now = Date.parse('2026-11-11T12:00:00Z')
+  const fresh = new Date(now - 10_000).toISOString()
+  const [b0] = addTask(emptyBoard(), { origin: W, title: 'Fix it' }, fresh)
+  const idle = { ...b0.tasks[0]!, status: 'review' as const, runs: [{ started: new Date(now - 20 * 60_000).toISOString(), ended: new Date(now - 5 * 60_000).toISOString() }] }
+  for (const [checking, note, icon] of [[{ step: 'prep', at: fresh }, PREP_NOTE, '✎'], [{ step: 'prep', at: fresh }, 'in line (2)', '⋯'], [{ step: 'testing', at: fresh }, STEP_NOTE.testing, '⧗'], [{ step: 'merging', at: fresh }, STEP_NOTE.merging, '⇢']] as const) {
+    const t = { ...idle, checking, note }
+    expect(core.approveRunning(t, now)).toBe(true)
+    expect(core.needsYou(t, now)).toBe(false)
+    expect(core.rowMark(t, now)).toBe(icon)
+    expect(core.rowCell(t, now)).toBe('15m')
+    expect(rowExtra(t, [t], '', 45, now)).toBe(core.APPROVED_NOTE)
+    const line = statusLine({ tasks: [t] }, true, '', 'review', false, undefined, now)!
+    expect(line).toContain('T-1 doing')
+    expect(line).not.toContain('to review')
+    expect(core.bannerCounts({ ...emptyBoard(), tasks: [t] }, now).map(c => c.text)[0]).toBe('1 doing')
+    expect(crewParts({ tasks: [t], scouts: [] }, now).workers).toBe('1 merging')
+    expect(boardText({ ...emptyBoard(), tasks: [t] }, now)).toMatch(new RegExp(`T-1 +${icon} review`))
+  }
+  // no approve (or a stale mark, its copy gone): it needs the owner, "to review"
+  for (const t of [idle, { ...idle, checking: { step: 'testing' as const, at: new Date(now - 3_600_000).toISOString() } }]) {
+    expect(core.needsYou(t, now)).toBe(true)
+    expect(statusLine({ tasks: [t] }, true, '', 'review', false, undefined, now)).toContain('1 to review (T-1)')
+    expect(rowExtra(t, [t], '', 45, now)).toBe('Enter to review')
+    expect(boardText({ ...emptyBoard(), tasks: [t] }, now)).toContain('— ready for review')
+  }
+})

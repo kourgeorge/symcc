@@ -11,7 +11,7 @@ import { askCall, checkEdit } from '../hooks/app/ask'
 import { tellLead, noteForLead, meanwhileText } from '../hooks/app/tell'
 import { saidNeedsYou, findPlayers, playable, playsFor, sayNext, sayDone, WIN_TEXT_VAR } from '../hooks/app/voice'
 import { workerFinished, setSymcc, setBoardMode, check, pump, startWorker, lateHandBack, WORKER_PROMPT, workerQuestionText, type TurnEnd } from '../hooks/app/workers'
-import { needsYou, waitsForYou, answeredLeadLine } from '../hooks/board'
+import { needsYou, waitsForYou, answeredLeadLine, approveRunning, panelSections, statusBadge, statusCounts, STEP_ICON, STEP_WORD } from '../hooks/board'
 import { keysFor } from './task-keys'
 import { ranOutOfTime } from'../hooks/core/test-timeout'
 import { claimLead } from '../hooks/app/lead'
@@ -1423,6 +1423,34 @@ test('a commit of the owner newer than the reviewed one also makes approve run t
   const t = find(await load(w.$), 'T-1')!
   expect(t.status).toBe('done')
   expect(t.history.map(h => h.text)).toContain('owner edited files before approving: src/c.ts')
+})
+
+test('T-596: while an approve runs its tests the task in review does not need the owner (listed with the running tasks, its step on the badge); once it failed it needs them again', async () => {
+  const tests = { 'npm test': { exitCode: 1, stdout: 'FAIL b.test', stderr: '' } }
+  const w = await inReview({ dirty: true, wtStatus: ' M src/a.ts\0' }, tests, ['npm test'], { runs: [{ started: ISO, commits: [H1] }] })
+  let during: BoardTask | undefined
+  const run = w.$.run
+  w.$.run = async (argv, o) => {
+    if (argv[0] === '/bin/sh' && !during) during = find(await load(w.$), 'T-1')
+    return run(argv, o)
+  }
+  await runTool(w.$, 'approve', { task: 'T-1' })
+  const mid = during!
+  expect(mid.status).toBe('review')
+  const at = Date.parse(mid.checking!.at)
+  expect(approveRunning(mid, at)).toBe(true)
+  expect(needsYou(mid, at)).toBe(false)
+  expect(panelSections([mid], at, 0).needsYou).toEqual([])
+  expect(panelSections([mid], at, 0).doing.map(t => t.id)).toEqual(['T-1'])
+  expect(statusBadge(mid, at).text).toBe(`${STEP_ICON[mid.checking!.step]} ${STEP_WORD[mid.checking!.step]}`)
+  expect(statusCounts([mid], ['doing', 'review'], at)).toEqual(['1 doing'])
+  // the approve failed (tests): its step is cleared and it is back under NEEDS YOU, "ready for review"
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('review')
+  expect(t.checking).toBeUndefined()
+  expect(needsYou(t, at)).toBe(true)
+  expect(panelSections([t], at, 0).needsYou.map(x => x.id)).toEqual(['T-1'])
+  expect(statusBadge(t, at).text).toBe('◆ ready for review')
 })
 
 test('approve whose edits fail the tests keeps the task in review with the output; approving again tests again', async () => {

@@ -213,7 +213,8 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
   )
   const rows = detailRows(t, { roles: S.roles, kinds: S.kinds, all: v.tasks, when, nowMs: pane.nowMs, archivedDone: v.archived_done, board: v })
   // the badge names the step a doing task is in ("⌕ checker · 5m"), like the Status row
-  const badge = statusBadge(t as BoardTask, pane.nowMs)
+  // (an approve this page started shows its step at once, not "ready for review")
+  const badge = statusBadge(t as BoardTask, pane.nowMs, undefined, !!mergingLine(t.id))
   // The saved worker reports, one per try: the latest shown, unless the owner picked another try (its number key).
   const reports = taskReports(t)
   if (S.reportTry && S.reportTry.task !== t.id) S.reportTry = null

@@ -51,12 +51,14 @@ type BadgeTask = Pick<SymccTask, 'status' | 'runs'> & { note?: string; attempts?
  * The task page's status badge (and its Status line): the step a doing task is in, with the same icon as its row
  * (rowMark) and the step's word, then the total work time the rows show (rowTime): "▶ worker · 15m", "✎ prep · 15m",
  * "⌕ checker · 5m", "⋯ in line (2) · 9m", "⧗ test · 9m", "⇢ merge · 9m". A task in review or waiting in a check step
- * (an approve) shows the step without a time ("⇢ merge"). Every other task: its mark and status word ("◆ ready for
- * review", "○ to do"). `color`: the badge color of its status.
+ * (an approve) shows the step without a time ("⇢ merge"), and so does a task in review whose approve this page
+ * started (`merging`) before its first step is on the board ("✎ prep"): not "ready for review", the owner has
+ * nothing left to do on it. Every other task: its mark and status word ("◆ ready for review", "○ to do").
+ * `color`: the badge color of its status (doing's while an approve runs, see shownStatus).
  */
-export function statusBadge(t: BadgeTask, nowMs: number, since?: number | string): { text: string; color: string } {
-  const color = STATUS_BADGE[t.status]
-  const step = checkStepNow(t, nowMs)
+export function statusBadge(t: BadgeTask, nowMs: number, since?: number | string, merging = false): { text: string; color: string } {
+  const step = checkStepNow(t, nowMs) || (merging && t.status === 'review' ? 'prep' : '')
+  const color = STATUS_BADGE[step ? 'doing' : t.status]
   if (t.status !== 'doing') return { text: inLineNow(t) ? `${IN_LINE_ICON} ${t.note}` : step ? `${STEP_ICON[step]} ${STEP_WORD[step]}` : `${statusMark(t)} ${STATUS_WORD[t.status]}`, color }
   const word = inLineNow(t) ? `${IN_LINE_ICON} ${t.note}` : step ? `${STEP_ICON[step]} ${STEP_WORD[step]}` : `${STATUS_MARK.doing} worker`
   const time = rowTime(t, nowMs, since)

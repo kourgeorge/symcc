@@ -165,7 +165,8 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
   const tags = [kind, role, t.attempts ? `try ${t.attempts}` : '', t.runs?.length ? fmtDuration(total.ms) : '', x.agentId ? 'a worker is on it now' : ''].filter(Boolean)
   const statusWord = 'answered: read it'
   // the badge names the step a doing task is in ("⌕ checker · 5m"); under it the Stage stepper (worker ✓ → ● checker → …)
-  const badge = statusBadge(t as BoardTask, nowMs)
+  // (an approve the page started shows its step at once, not "ready for review")
+  const badge = statusBadge(t as BoardTask, nowMs, undefined, !!x.merging)
   const stage = taskStage(t as BoardTask, nowMs, pane.v)
   const vsStage = (marks: StageMark[]) => (
     <Box key="vs-stage" flexDirection="row" flexWrap="wrap" columnGap={1}>
