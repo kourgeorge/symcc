@@ -1420,7 +1420,7 @@ your-project/
     ├── roles/            your own worker roles (*.md), see Worker roles
     ├── reports/          each try's full worker report (T-3-try-2.md), and scouts/ with
     │                     each scout run's full report (bugs-2026-11-18T10-20-30-000Z.md)
-    ├── field-guide.md    the Field Guide: short notes agents left for the next ones (see below)
+    ├── org-mem.md        organizational memory (org-mem): short notes agents left for the next ones (see below)
     └── worktrees/
         └── T-3/          a worker's private copy of the project (branch symcc/T-3),
                           kept while it waits for review, removed after it is merged
@@ -1436,9 +1436,9 @@ nothing that isn't merged is lost. A dropped task loses
 its folder but keeps its branch, in case you want to look at its work. Branches that don't
 start with `symcc/` are never touched.
 
-### The Field Guide
+### Organizational memory (org-mem)
 
-`.symcc/field-guide.md` holds short notes about your project that agents left for the ones
+`.symcc/org-mem.md`, the organizational memory (org-mem), holds short notes about your project that agents left for the ones
 after them, so the next worker doesn't have to find the same things again (how to run one
 test, a trap, where something is).
 
@@ -1447,10 +1447,11 @@ test, a trap, where something is).
   line that isn't a `- ` line; code blocks in it are left out). When its report comes in (merged or not), symcc
   adds them as `- T-12 2026-11-20: the note`. Each line is made one line and cut at 200
   characters; lines that look like a secret or like file contents are left out, and a line
-  that says about the same as one already in the guide is skipped.
+  that says about the same as one already in org-mem is skipped.
 - **The limit:** the file keeps at most 60 lines; when more come in, the oldest are dropped first.
 - **Who reads it:** every new worker, checker and scout gets the whole file in its prompt,
-  under "Notes earlier agents left about this project". A missing or empty file adds nothing.
+  under "Organizational memory (org-mem): notes earlier agents left about this project". A missing
+  or empty file adds nothing.
 - **Editing:** you (or the lead) may edit, fix or trim the file by hand at any time; any line
   counts, with or without the task id and date.
 

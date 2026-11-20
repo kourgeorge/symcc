@@ -18,18 +18,18 @@ import { tellLead, noteForLead } from './tell'
 import { sayDone, sayNeedsYou } from './voice'
 import { optionsVia, popupTied } from './questions'
 import { changeValues, investigationValues } from './prompt-values'
-import { fieldGuideText, learnFrom } from './field-guide'
+import { orgMemText, learnFrom } from './org-mem'
 import { cleanLeftoverTmp, stopOrphans, timedOut, askOvertime, wrapUp } from './cleanup'
 
 // ---------------- workers ----------------
 
 /** The prompt a worker on task `t` is started with: its kind's built-in prompt with the placeholders filled in for this task.
- *  The role's checklist goes in {{role}}, with its own placeholders filled in from the same values. `guide`: the Field Guide as
- *  the prompt shows it (fieldGuideText; '' for none). */
+ *  The role's checklist goes in {{role}}, with its own placeholders filled in from the same values. `guide`: organizational memory (org-mem) as
+ *  the prompt shows it (orgMemText; '' for none). */
 export const WORKER_PROMPT = (t: BoardTask, b: Board, dir: string, role?: RoleDef, guide = '') => {
   const kind = isInvestigation(t) ? 'investigation' : 'change'
   const values = kind === 'investigation' ? investigationValues(t, dir) : changeValues(t, b, dir)
-  return fillPrompt(kind, { ...values, role: roleSection(role, values), field_guide: guide })
+  return fillPrompt(kind, { ...values, role: roleSection(role, values), org_mem: guide })
 }
 
 /**
@@ -133,7 +133,7 @@ async function queueWorker(host: Host, id: string): Promise<{ started: Promise<v
       const cur = find(await load(host), id)
       return cur?.status === 'doing' && cur.session === S.me && cur.attempts === t.attempts
     }
-    const spawn = startAgent(host, { kind: 'worker', prompt: WORKER_PROMPT(t, b, dir, role, await fieldGuideText(host)) + behindNote(behind, intoOf(t), why), name: workerName(S.N.name, t.id), description: workerDescription(t.title), ...(role?.tools ? { tools: role.tools } : {}), ...(!isInvestigation(t) && t.files?.length ? { files: t.files } : {}), cwd: dir, ...(role?.model ? { model: role.model } : {}) }, still)
+    const spawn = startAgent(host, { kind: 'worker', prompt: WORKER_PROMPT(t, b, dir, role, await orgMemText(host)) + behindNote(behind, intoOf(t), why), name: workerName(S.N.name, t.id), description: workerDescription(t.title), ...(role?.tools ? { tools: role.tools } : {}), ...(!isInvestigation(t) && t.files?.length ? { files: t.files } : {}), cwd: dir, ...(role?.model ? { model: role.model } : {}) }, still)
     queued = true
     queuedWorkers.set(id, { task: id, worktree: dir, branch, since: Date.now() })
     return { started: workerStarted(host, id, before, dir, branch, spawn, t.attempts).finally(() => (starting.delete(id), queuedWorkers.delete(id))) }

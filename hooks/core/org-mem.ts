@@ -1,17 +1,17 @@
-// T-600: the Field Guide. Workers, checkers and investigations may end their report with a "Learned:" section: up to
+// T-600, T-620: organizational memory (org-mem). Workers, checkers and investigations may end their report with a "Learned:" section: up to
 // LEARNED_MAX short lines about the project that would save the next agent time (how to test, a trap, where something
-// is). symcc keeps them in <project>/.<name>/field-guide.md (one line each, with the task id and date, duplicates
-// skipped, at most GUIDE_MAX_LINES lines, oldest dropped first) and puts the whole file into every new worker's,
+// is). symcc keeps them in <project>/.<name>/org-mem.md (one line each, with the task id and date, duplicates
+// skipped, at most ORG_MEM_MAX_LINES lines, oldest dropped first) and puts the whole file into every new worker's,
 // checker's and scout's prompt. The owner and the lead may edit or trim the file by hand. Everything here is pure.
 
-/** The file's name inside symcc's data folder (e.g. .symcc/field-guide.md). */
-export const GUIDE_FILE_NAME = 'field-guide.md'
+/** The file's name inside symcc's data folder (e.g. .symcc/org-mem.md). */
+export const ORG_MEM_FILE_NAME = 'org-mem.md'
 
-/** The guide's path inside the project, for data folder `dir` (e.g. ".symcc"). */
-export const guideFile = (dir: string) => `${dir}/${GUIDE_FILE_NAME}`
+/** Org-mem's path inside the project, for data folder `dir` (e.g. ".symcc"). */
+export const orgMemFile = (dir: string) => `${dir}/${ORG_MEM_FILE_NAME}`
 
-/** The most lines the guide keeps (older ones are dropped first). */
-export const GUIDE_MAX_LINES = 60
+/** The most lines org-mem keeps (older ones are dropped first). */
+export const ORG_MEM_MAX_LINES = 60
 
 /** The most "Learned:" lines taken from one report. */
 export const LEARNED_MAX = 3
@@ -37,7 +37,7 @@ const FENCE = /^\s*(?:```|~~~)/
  * heading (with any text after it on the same line) and the list lines right after it; it ends at its first blank
  * line or first line that isn't a list line, and whatever comes after (a question, a "NEED FILES:" line, a checker's
  * OK) stays in the body. A fenced code block inside the section is dropped whole (fences and all): file contents
- * never go into the guide. No section: the whole answer is the body and there are no lines.
+ * never go into org-mem. No section: the whole answer is the body and there are no lines.
  */
 export function splitLearned(answer: string): { body: string; lines: string[] } {
   const text = String(answer ?? '').replace(/\r\n?/g, '\n')
@@ -120,7 +120,7 @@ export function cleanLearned(lines: readonly string[]): string[] {
   return out
 }
 
-/** A guide line's lesson, without its "- T-12 2026-11-20:" front (lines the owner wrote by hand are taken as they are). */
+/** An org-mem line's lesson, without its "- T-12 2026-11-20:" front (lines the owner wrote by hand are taken as they are). */
 const lessonOf = (line: string) => line.replace(/^\s*[-*•]?\s*(?:T-\d+\s+)?(?:\d{4}-\d{2}-\d{2})?\s*:?\s*/, '')
 
 /** The words of `s`, lower case, for comparing. */
@@ -150,17 +150,17 @@ export function sameLesson(a: string, b: string): boolean {
   return both / new Set([...xs, ...ys]).size >= 0.8
 }
 
-/** The guide's lines: its non-empty lines, as written. */
-export const guideLines = (guide: string | null | undefined): string[] => String(guide ?? '').split('\n').map(l => l.trimEnd()).filter(l => l.trim())
+/** Org-mem's lines: its non-empty lines, as written. */
+export const orgMemLines = (guide: string | null | undefined): string[] => String(guide ?? '').split('\n').map(l => l.trimEnd()).filter(l => l.trim())
 
 /**
- * The guide `guide` with the "Learned:" lines of `answer` (task `id`'s report, on day `date`, e.g. "2026-11-20") added
- * at its end as "- T-12 2026-11-20: lesson", each once (a line that near-matches one already in the guide, or one
+ * Org-mem `guide` with the "Learned:" lines of `answer` (task `id`'s report, on day `date`, e.g. "2026-11-20") added
+ * at its end as "- T-12 2026-11-20: lesson", each once (a line that near-matches one already in org-mem, or one
  * added just before, is skipped), and cut to its last `max` lines. `added`: the lessons added (none: `text` is the
- * guide as it was, so nothing needs writing).
+ * memory as it was, so nothing needs writing).
  */
-export function addLearned(guide: string | null | undefined, answer: string, id: string, date: string, max = GUIDE_MAX_LINES): { text: string; added: string[] } {
-  const old = guideLines(guide)
+export function addLearned(guide: string | null | undefined, answer: string, id: string, date: string, max = ORG_MEM_MAX_LINES): { text: string; added: string[] } {
+  const old = orgMemLines(guide)
   const added: string[] = []
   for (const s of cleanLearned(splitLearned(answer).lines)) {
     if ([...old, ...added].some(l => sameLesson(l, s))) continue
@@ -172,11 +172,11 @@ export function addLearned(guide: string | null | undefined, answer: string, id:
 }
 
 /**
- * The guide as a prompt shows it: a short heading, then its last GUIDE_MAX_LINES lines (each cut, so a hand-edited
- * file can't flood the prompt). `file`: where it is, named in the heading. '' when the guide is missing or empty.
+ * Org-mem as a prompt shows it: a short heading, then its last ORG_MEM_MAX_LINES lines (each cut, so a hand-edited
+ * file can't flood the prompt). `file`: where it is, named in the heading. '' when org-mem is missing or empty.
  */
-export function guideSection(guide: string | null | undefined, file: string): string {
-  const lines = guideLines(guide).slice(-GUIDE_MAX_LINES).map(l => (l.length > 400 ? `${l.slice(0, 399)}…` : l))
+export function orgMemSection(guide: string | null | undefined, file: string): string {
+  const lines = orgMemLines(guide).slice(-ORG_MEM_MAX_LINES).map(l => (l.length > 400 ? `${l.slice(0, 399)}…` : l))
   if (!lines.length) return ''
-  return `\nNotes earlier agents left about this project (from ${file}; they may be out of date):\n${lines.join('\n')}\n`
+  return `\nOrganizational memory (org-mem): notes earlier agents left about this project (from ${file}; they may be out of date):\n${lines.join('\n')}\n`
 }

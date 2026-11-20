@@ -4971,12 +4971,12 @@ test('T-470: on a host with no start queue (features.startQueue off) a worker st
   workers.clear()
 })
 
-test('T-600: a worker started by startWorker gets the lines of .symcc/field-guide.md in its prompt; no file: no guide heading', async () => {
+test('T-600: a worker started by startWorker gets the lines of .symcc/org-mem.md in its prompt; no file: no guide heading', async () => {
   for (const guide of ['- T-5 2026-11-20: run one test file with sh scripts/test-files.sh\n', null]) {
     const w = world({ current: 'main' })
     const [b0] = boardWith('auto')
     await saveBoard(w.$, patchTask(b0, 'T-1', { status: 'todo', attempts: 0 }, ISO))
-    if (guide) w.put(`${ROOT}/.symcc/field-guide.md`, guide)
+    if (guide) w.put(`${ROOT}/.symcc/org-mem.md`, guide)
     S.me = 'me'
     S.startupDone = true
     S.driving = true
@@ -4990,9 +4990,9 @@ test('T-600: a worker started by startWorker gets the lines of .symcc/field-guid
     await startWorker(w.$, 'T-1')
     expect(prompt).toContain('Task T-1')
     if (guide) {
-      expect(prompt).toContain('Notes earlier agents left about this project')
+      expect(prompt).toContain('Organizational memory (org-mem): notes earlier agents left about this project')
       expect(prompt).toContain('- T-5 2026-11-20: run one test file with sh scripts/test-files.sh')
-    } else expect(prompt).not.toContain('Notes earlier agents')
+    } else expect(prompt).not.toContain('notes earlier agents')
     workers.clear()
   }
 })

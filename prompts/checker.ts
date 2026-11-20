@@ -12,7 +12,7 @@ Do NOT run git commands that change anything (commit, reset, checkout, switch, s
 
 Task {{task_id}}: {{title}}
 {{details}}
-{{role}}{{field_guide}}
+{{role}}{{org_mem}}
 Look for:
 - cases the change now handles wrongly (edge cases, error paths, inputs it did not think of);
 - old behavior it lost or broke;

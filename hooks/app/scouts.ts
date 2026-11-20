@@ -7,7 +7,7 @@ import { startAgent, startCancelled } from './starts'
 import type { TurnEnd } from './workers'
 import { path, load, now, oneAtATime, safeWrite } from './store'
 import { tellLead } from './tell'
-import { fieldGuideText } from './field-guide'
+import { orgMemText } from './org-mem'
 
 // ---------------- scouts ----------------
 
@@ -239,7 +239,7 @@ async function queueScout(host: Host, s: ScoutDef, misses = 0, byHand = false): 
   st.running = true
   await publish(host, b)
   const open = b.tasks.filter(t => OPEN.includes(t.status) || t.status === 'backlog').map(t => `${t.id} ${t.title}${t.status === 'backlog' ? ' (backlog)' : ''}`)
-  const prompt = scoutPrompt({ scout: s.name, root: S.root, instructions: s.prompt, open, closed: recentClosed(b.tasks), lastReport, lastRun, name: S.N.name, guide: await fieldGuideText(host) })
+  const prompt = scoutPrompt({ scout: s.name, root: S.root, instructions: s.prompt, open, closed: recentClosed(b.tasks), lastReport, lastRun, name: S.N.name, guide: await orgMemText(host) })
   const spawn = startAgent(host, { kind: 'scout', prompt, name: scoutAgentName(S.N.name, s.name), description: scoutDescription(s.name, s.prompt), ...(s.model ? { model: s.model } : {}) })
   return { started: scoutStarted(host, s, st, spawn, lastRun, misses, byHand) }
 }

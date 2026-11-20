@@ -14,6 +14,7 @@ import { load, saveBoard } from '../hooks/app/store'
 import { runTool } from '../hooks/app/tools'
 import { test, resetPlugin } from './reset'
 import { agentFinished, toolCall } from '../hooks/app/symcc'
+import { moveOldOrgMem } from '../hooks/app/org-mem'
 import { fakeHost, memoryFs } from './fake-host'
 import type { Host, HostAgent } from '../hooks/host'
 import { drainStarts, queuedStarts } from '../hooks/app/starts'
@@ -1042,11 +1043,11 @@ for (const how of ['answers just "stopped"', 'was stopped by symcc (its agent is
   })
 }
 
-// ---------------- T-600: the Field Guide ----------------
+// ---------------- T-600: organizational memory (org-mem) ----------------
 
-const GUIDE = `${ROOT}/.symcc/field-guide.md`
+const GUIDE = `${ROOT}/.symcc/org-mem.md`
 
-test('T-600: a worker\'s and its checker\'s "Learned:" lines go into the Field Guide once; the checker\'s prompt has the guide, and its verdict ignores the section', async () => {
+test('T-600: a worker\'s and its checker\'s "Learned:" lines go into organizational memory (org-mem) once; the checker\'s prompt has the guide, and its verdict ignores the section', async () => {
   const w = world()
   await saveBoard(w.$, boardWith(true))
   await w.$.fs.write(GUIDE, '- T-0 2026-11-01: Run one test file with sh scripts/test-files.sh <file>.\n')
@@ -1055,7 +1056,7 @@ test('T-600: a worker\'s and its checker\'s "Learned:" lines go into the Field G
   const done = withStarts(w.$, workerFinished(w.$, 'ag1', report))
   await until(() => checkerRuns.size > 0)
   const prompt = w.spawns[0]!.prompt
-  expect(prompt).toContain('Notes earlier agents left about this project')
+  expect(prompt).toContain('Organizational memory (org-mem): notes earlier agents left about this project')
   expect(prompt).toContain('Run one test file with sh scripts/test-files.sh <file>.')
   expect(prompt).toContain('The guard refuses a new repo inside the project; use /tmp.')
   expect(prompt).toContain('"Learned:" section')
@@ -1073,11 +1074,36 @@ test('T-600: a report without a "Learned:" section adds nothing, and with no gui
   const w = world()
   await saveBoard(w.$, boardWith(true))
   const t = await finish(w, async id => {
-    expect(w.spawns[0]!.prompt).not.toContain('Notes earlier agents left')
+    expect(w.spawns[0]!.prompt).not.toContain('notes earlier agents left')
     await checkerFinished(id, 'OK')
   })
   expect(t.status).toBe('done')
   expect(await w.$.fs.exists(GUIDE)).toBe(false)
-  expect(WORKER_PROMPT(t, await load(w.$), WT)).not.toContain('Notes earlier agents left')
-  expect(WORKER_PROMPT(t, await load(w.$), WT, undefined, '\nNotes earlier agents left about this project (from .symcc/field-guide.md; they may be out of date):\n- x\n')).toContain('they may be out of date):\n- x')
+  expect(WORKER_PROMPT(t, await load(w.$), WT)).not.toContain('notes earlier agents left')
+  expect(WORKER_PROMPT(t, await load(w.$), WT, undefined, '\nOrganizational memory (org-mem): notes earlier agents left about this project (from .symcc/org-mem.md; they may be out of date):\n- x\n')).toContain('they may be out of date):\n- x')
+})
+
+test('T-620: an old .symcc/field-guide.md moves to org-mem.md once, with its notes; an existing org-mem.md is never overwritten', async () => {
+  const OLD = `${ROOT}/.symcc/field-guide.md`
+  const w = world()
+  await w.$.fs.write(OLD, '- T-0 2026-11-01: an old note\n')
+  await moveOldOrgMem(w.$)
+  expect(await w.$.fs.exists(OLD)).toBe(false)
+  expect(await w.$.fs.read(GUIDE)).toBe('- T-0 2026-11-01: an old note\n')
+  // a new note lands in org-mem.md, after the moved one
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: 0 })
+  await saveBoard(w.$, boardWith(true))
+  const done = withStarts(w.$, workerFinished(w.$, 'ag1', 'done\n\nLearned:\n- Snapshot files live in tests/*-snapshot.ts.'))
+  await until(() => checkerRuns.size > 0)
+  expect(w.spawns[0]!.prompt).toContain('Organizational memory (org-mem): notes earlier agents left about this project (from .symcc/org-mem.md')
+  expect(w.spawns[0]!.prompt).toContain('an old note')
+  await checkerFinished([...checkerRuns.keys()][0]!, 'OK')
+  await done
+  expect((await w.$.fs.read(GUIDE)).trim().split('\n')[1]).toMatch(/: Snapshot files live in tests\/\*-snapshot\.ts\.$/)
+  // a second start with both files: nothing moves
+  await w.$.fs.write(OLD, '- T-9 2026-11-02: left behind\n')
+  const before = await w.$.fs.read(GUIDE)
+  await moveOldOrgMem(w.$)
+  expect(await w.$.fs.read(GUIDE)).toBe(before)
+  expect(await w.$.fs.exists(OLD)).toBe(true)
 })
