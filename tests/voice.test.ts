@@ -37,7 +37,7 @@ test('the spoken line starts with the project name, for done and for needs you',
   S.root = '/work/my-app'
   expect(await playsFor($, 'voice', ['T-3', '?T-5'])).toEqual([{ argv: ['say', '-r', '200', 'my app: T-3 done. T-5 needs you'] }])
   // the chime stays the same in every project
-  const sound = await playsFor($, 'sound', ['T-3'])
+  const sound = await playsFor($, 'sound 1', ['T-3'])
   expect(sound.every(p => !p.argv.join(' ').includes('my app'))).toBe(true)
 })
 

@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { allowFiles, refuseFiles, waitsForFiles, filesRefusedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, ROLE_TOOL_WORDS, DEFAULT_ROLE, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedEntry, withHistory, historyLineText, type SettingsInput, type SettingChange, testMinutesRefusal, isMode, isNotify, notifyRefusal, applySettings, intoOf, crossBranchNotes, parseGoneBranch, saysMergeInstead, type Board, settingSetText, taskReports, reportPreview, statsReport, statsData, parseStatsRange, parseStatsArgs, archivedCount, localOffset, endedBy, freshTry, withoutOpenRun, stopEnd, changeRestartWhy, changedFields, addDetailsText, noteAddedLine, detailsBothRefusal, dayOf, inPlan, planBacklog, planAdded, planAddText, parseScoutUsage, parseStatusFilter, BOARD_STATUSES, type TeamInput, SETTING_NAMES, leadSettingsText, readSoundSet, findingToBacklog, isScoutFindings, isTestsWithChanges, kindFor, isAnswered, askMoreTask, isInvestigation, checkKind, kindsLeadText, kindNames, BUILT_IN_KINDS, originOf, stateLabelLower, modeOf, when } from '../board'
+import { allowFiles, refuseFiles, waitsForFiles, filesRefusedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, ROLE_TOOL_WORDS, DEFAULT_ROLE, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedEntry, withHistory, historyLineText, type SettingsInput, type SettingChange, testMinutesRefusal, isMode, readNotify, notifySet, notifyRefusal, applySettings, intoOf, crossBranchNotes, parseGoneBranch, saysMergeInstead, type Board, settingSetText, taskReports, reportPreview, statsReport, statsData, parseStatsRange, parseStatsArgs, archivedCount, localOffset, endedBy, freshTry, withoutOpenRun, stopEnd, changeRestartWhy, changedFields, addDetailsText, noteAddedLine, detailsBothRefusal, dayOf, inPlan, planBacklog, planAdded, planAddText, parseScoutUsage, parseStatusFilter, BOARD_STATUSES, type TeamInput, SETTING_NAMES, leadSettingsText, findingToBacklog, isScoutFindings, isTestsWithChanges, kindFor, isAnswered, askMoreTask, isInvestigation, checkKind, kindsLeadText, kindNames, BUILT_IN_KINDS, originOf, stateLabelLower, modeOf, when } from '../board'
 import { scoutMemoryFile, leadScouts, linkTaskToScoutRun } from './scouts'
 import { archivedText, bringBackArchived, findArchived, readArchiveFile } from './archive'
 import { removeWorktree, worktreeDir, setupGit, branchExists, branchList, homeBranch, taskWork, resetScratch } from './git'
@@ -112,7 +112,7 @@ ${features.panel ? `  /${S.N.name}                     open the board panel (↑
                        review: work runs; finished tasks wait for your approve or reject
                        auto: work runs; finished tasks that pass merge on their own
   /${S.N.name}-settings [NAME VALUE]  ${features.panel ? 'open the settings view' : 'show the settings'}, or set one setting, e.g.
-                       /${S.N.name}-settings max_parallel 5 · /${S.N.name}-settings notify sound
+                       /${S.N.name}-settings max_parallel 5 · /${S.N.name}-settings notify sound 2
                        /${S.N.name}-settings mode review · /${S.N.name}-settings test_commands "npm test"
                        (a typed line is one whole shell command; several go in a list like ["npm test", "npm run lint"];
                        "none" clears them)
@@ -201,12 +201,12 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
   max_minutes (a worker running longer makes symcc ask you for more time), auto_retries (new tries on their own
   after failing tests, 2 by default), archive_days (done and dropped tasks older than this
   many days move to the archive, 14 by default, 0 = never), ${features.panel ? `open_on_start (open the board panel when a
-  session starts, on by default), ` : ''}notify (off, sound or voice: when a task is merged or a worker
-  asks you something, play a chime, or say "symcc: T-3 done" / "symcc: T-5 needs you" out loud (the project's name first); only the
-  session driving the board plays; voice by default where this machine can speak, else sound,
-  else off; a choice this machine can't play is refused), sound_set (1, 2 or 3: which chimes
-  sound plays, so you can tell projects apart; picked from the project's folder name unless set,
-  and picking one plays its chime), scout_findings (auto, the default:
+  session starts, on by default), ` : ''}notify (voice, sound 1, sound 2, sound 3 or off: when a task is merged or a worker
+  asks you something, say "symcc: T-3 done" / "symcc: T-5 needs you" out loud (the project's name first), or play a chime
+  from sound set 1, 2 or 3, so you can tell projects apart (on macOS 1: Glass / Ping, 2: Hero / Pop, 3: Submarine / Funk);
+  only the session driving the board plays; voice by default where this machine can speak, else the sound set
+  picked from the project's folder name, else off; picking a sound plays its chime; a choice this machine can't play
+  is refused), scout_findings (auto, the default:
   the lead decides and a scout finding it adds goes to todo and runs; backlog: every task
   added from a scout finding goes to the backlog and waits for you), tests_with_changes (a change
   task whose commit edits code but no test file: ask, the default, merges it and tells the lead
@@ -419,8 +419,8 @@ export const TOOLS = () => [
   },
   {
     name: 'settings',
-    description: 'Read or change how the team works. Called with no params it lists every setting with its current value and default, one per line, under the same category headings as the Settings view (Work, Checks before merging, Workers, Scouts, Board and alerts; notify also lists the choices this machine can play). Give one or more of these to change them (there is no branch setting: each task merges into the branch you were on when it was made): test_commands (shell commands that must pass before merging), test_minutes (how many minutes each test command may run before merging, a whole number 1-120, default 10; a test command past it fails like a failing test: a new worker try starts with the output, using one of the auto_retries; anything else is refused), max_parallel (workers at once), max_minutes (a worker running longer makes symcc ask the owner for more time: +N min or Stop it), auto_retries (new tries a task gets on its own after failing tests, 0-10, default 2), archive_days (done and dropped tasks older than this many days move to archive.json, 0 = never), open_on_start (open the board panel by itself when a session starts, default true), notify ("off", "sound" or "voice": what plays when a task is merged or a question from a worker waits for the owner: "sound" a short chime, "voice" says "symcc: T-3 done" / "symcc: T-5 needs you" out loud (the project name first); only the session driving the board plays; default voice where this machine can speak, else sound, else off; a choice this machine cannot play is refused with the reason), sound_set (1, 2 or 3: which of 3 sets of chimes "sound" plays, each with its own "done" and "needs you" chime, so the owner can tell which project chimed; absent: picked from the folder name of the project; the settings list shows the one in use), scout_findings ("auto", the default: you decide, and a scout finding you add goes to todo and runs; "backlog": every task added with origin_by scout goes to the backlog, whatever you ask, and starts only when the owner moves it to todo), tests_with_changes ("ask", the default: a change task whose commit edits code but no test file still merges and you are told "T-3 changed code but no test"; "review": such a task waits for the owner to review it instead of merging; "off": not checked; docs-only changes are never flagged), checker ("off", the default, or "on": after the prep step and before a change task joins the merge queue (its tests run once in the queue, after the checker), a fresh checker agent tries to break it; OK goes on as usual, a list of problems sends the task back to its worker with the report, counting as one of its auto_retries, and fails it once those are used up (no test run for that try); investigations and docs-only changes skip it), mode ("paused": stop every running worker and scout now and start nothing new, tasks in review can still be approved or rejected; "review": work runs and every finished task that passes waits for the owner to approve or reject it; "auto", the default: work runs and finished work that passes merges on its own; going from paused to review or auto starts work again, and going from review to auto does not merge tasks already in review).',
-    inputSchema: { type: 'object', properties: { test_commands: { type: 'array', items: { type: 'string' } }, test_minutes: { type: 'number', description: 'Minutes each test command may run before merging: a whole number 1-120 (default 10).' }, max_parallel: { type: 'number' }, max_minutes: { type: 'number' }, auto_retries: { type: 'number' }, archive_days: { type: 'number', description: 'Done and dropped tasks older than this many days move to archive.json; 0 = never.' }, open_on_start: { type: 'boolean' }, notify: { type: 'string', enum: ['off', 'sound', 'voice'] }, sound_set: { type: 'number', enum: [1, 2, 3], description: 'Which of the 3 sound sets notify sound plays; absent: picked from the project name.' }, scout_findings: { type: 'string', enum: ['auto', 'backlog'], description: 'auto (default): you decide where a scout finding goes; backlog: every task added with origin_by scout goes to the backlog.' }, tests_with_changes: { type: 'string', enum: ['off', 'ask', 'review'], description: 'A change task that edits code but no test file: ask (default) merges and tells you; review waits for the owner; off does nothing.' }, checker: { type: 'string', enum: ['off', 'on'], description: 'on: a fresh checker tries to break each change before it joins the merge queue, where its tests run; off (default): no checker.' }, mode: { type: 'string', enum: ['paused', 'review', 'auto'] } } },
+    description: 'Read or change how the team works. Called with no params it lists every setting with its current value and default, one per line, under the same category headings as the Settings view (Work, Checks before merging, Workers, Scouts, Board and alerts; notify also lists the choices this machine can play). Give one or more of these to change them (there is no branch setting: each task merges into the branch you were on when it was made): test_commands (shell commands that must pass before merging), test_minutes (how many minutes each test command may run before merging, a whole number 1-120, default 10; a test command past it fails like a failing test: a new worker try starts with the output, using one of the auto_retries; anything else is refused), max_parallel (workers at once), max_minutes (a worker running longer makes symcc ask the owner for more time: +N min or Stop it), auto_retries (new tries a task gets on its own after failing tests, 0-10, default 2), archive_days (done and dropped tasks older than this many days move to archive.json, 0 = never), open_on_start (open the board panel by itself when a session starts, default true), notify ("voice", "sound 1", "sound 2", "sound 3" or "off": what plays when a task is merged or a question from a worker waits for the owner: "voice" says "symcc: T-3 done" / "symcc: T-5 needs you" out loud (the project name first), "sound N" a short chime from sound set N, each set with its own "done" and "needs you" chime so the owner can tell which project chimed (on macOS 1: Glass / Ping, 2: Hero / Pop, 3: Submarine / Funk); only the session driving the board plays; default voice where this machine can speak, else the sound set picked from the project folder name, else off; a choice this machine cannot play is refused with the reason; there is no sound_set setting), scout_findings ("auto", the default: you decide, and a scout finding you add goes to todo and runs; "backlog": every task added with origin_by scout goes to the backlog, whatever you ask, and starts only when the owner moves it to todo), tests_with_changes ("ask", the default: a change task whose commit edits code but no test file still merges and you are told "T-3 changed code but no test"; "review": such a task waits for the owner to review it instead of merging; "off": not checked; docs-only changes are never flagged), checker ("off", the default, or "on": after the prep step and before a change task joins the merge queue (its tests run once in the queue, after the checker), a fresh checker agent tries to break it; OK goes on as usual, a list of problems sends the task back to its worker with the report, counting as one of its auto_retries, and fails it once those are used up (no test run for that try); investigations and docs-only changes skip it), mode ("paused": stop every running worker and scout now and start nothing new, tasks in review can still be approved or rejected; "review": work runs and every finished task that passes waits for the owner to approve or reject it; "auto", the default: work runs and finished work that passes merges on its own; going from paused to review or auto starts work again, and going from review to auto does not merge tasks already in review).',
+    inputSchema: { type: 'object', properties: { test_commands: { type: 'array', items: { type: 'string' } }, test_minutes: { type: 'number', description: 'Minutes each test command may run before merging: a whole number 1-120 (default 10).' }, max_parallel: { type: 'number' }, max_minutes: { type: 'number' }, auto_retries: { type: 'number' }, archive_days: { type: 'number', description: 'Done and dropped tasks older than this many days move to archive.json; 0 = never.' }, open_on_start: { type: 'boolean' }, notify: { type: 'string', enum: ['voice', 'sound 1', 'sound 2', 'sound 3', 'off'] }, scout_findings: { type: 'string', enum: ['auto', 'backlog'], description: 'auto (default): you decide where a scout finding goes; backlog: every task added with origin_by scout goes to the backlog.' }, tests_with_changes: { type: 'string', enum: ['off', 'ask', 'review'], description: 'A change task that edits code but no test file: ask (default) merges and tells you; review waits for the owner; off does nothing.' }, checker: { type: 'string', enum: ['off', 'on'], description: 'on: a fresh checker tries to break each change before it joins the merge queue, where its tests run; off (default): no checker.' }, mode: { type: 'string', enum: ['paused', 'review', 'auto'] } } },
   },
   {
     name: 'doctor',
@@ -805,6 +805,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
     case 'setup_git':
       return setupGit($, 'the lead')
     case 'settings': {
+      if (a.sound_set !== undefined) return SOUND_SET_GONE
       if (!SETTING_NAMES.some(k => a[k] !== undefined)) return leadSettingsText(await load($), await playable($), S.root)
       const r = await saveSettings($, a, 'the lead')
       if (r.error) return r.error
@@ -818,6 +819,9 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
   throw new Error(`unknown tool ${name}`)
 }
 
+/** What a settings call with the old sound_set is told (T-695: the sound set is part of notify now). */
+export const SOUND_SET_GONE = 'there is no sound_set setting any more: use notify "sound 1", "sound 2" or "sound 3"'
+
 /**
  * Saves settings for the lead's settings tool and for the owner (/<name>-settings, the Settings
  * view): the same checks and limits (see applySettings). `error` when nothing changed because
@@ -828,11 +832,12 @@ export async function saveSettings($: Host, a: SettingsInput, who: string): Prom
   if (a.scout_findings !== undefined && !isScoutFindings(a.scout_findings)) return { error: `scout_findings must be "auto" or "backlog" (got ${JSON.stringify(a.scout_findings)})`, changes: [] }
   if (a.tests_with_changes !== undefined && !isTestsWithChanges(a.tests_with_changes)) return { error: `tests_with_changes must be "off", "ask" or "review" (got ${JSON.stringify(a.tests_with_changes)})`, changes: [] }
   if (a.checker !== undefined && typeof a.checker !== 'boolean' && a.checker !== 'on' && a.checker !== 'off') return { error: `checker must be "off" or "on" (got ${JSON.stringify(a.checker)})`, changes: [] }
-  if (a.sound_set !== undefined && !readSoundSet(a.sound_set)) return { error: `sound_set must be 1, 2 or 3 (got ${JSON.stringify(a.sound_set)})`, changes: [] }
+  if (a.sound_set !== undefined) return { error: SOUND_SET_GONE, changes: [] }
   if (a.test_minutes !== undefined && testMinutesRefusal(a.test_minutes)) return { error: testMinutesRefusal(a.test_minutes), changes: [] }
   if (a.notify !== undefined) {
-    if (!isNotify(a.notify)) return { error: `notify must be "off", "sound" or "voice" (got ${JSON.stringify(a.notify)})`, changes: [] }
-    const refused = notifyRefusal(a.notify, await playable($))
+    const n = readNotify(a.notify)
+    if (!n) return { error: `notify must be "voice", "sound 1", "sound 2", "sound 3" or "off" (got ${JSON.stringify(a.notify)})`, changes: [] }
+    const refused = notifyRefusal(n, await playable($))
     if (refused) return { error: refused, changes: [] }
   }
   const changes = await change($, b => {
@@ -854,8 +859,9 @@ export async function ownerSettings($: Host, a: SettingsInput, where: string): P
   }
   const r = await saveSettings($, a, 'you')
   if (r.error) return r.error
-  // the owner just picked a sound set: play its chime once so they hear it
-  const set = r.changes.some(c => c.name === 'sound_set') ? readSoundSet(a.sound_set) : null
+  // the owner just picked a sound: play its set's chime once so they hear it
+  const n = r.changes.some(c => c.name === 'notify') ? readNotify(a.notify) : null
+  const set = n ? notifySet(n) : null
   if (set) void playSample($, set)
   const parts = r.changes.map(settingSetText)
   if (r.mode) parts.push(`mode set to ${a.mode}: ${r.mode}`)
