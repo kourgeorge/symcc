@@ -132,6 +132,29 @@ test('T-581: a doing row in a check step or the merge line shows its icon and th
   const titleAt = (lines: string[]) => new Set([...steps.map(([id, step]) => row(lines, id).indexOf(`In ${step}`)), row(lines, 'T-9').indexOf('In line'), row(lines, 'T-10').indexOf('Working')])
   expect(titleAt(band).size).toBe(1)
   expect(titleAt(list).size).toBe(1)
+  // T-587: the task page's badge and Status line name the step, and the Stage line marks it now (checker off: none)
+  const page = (id: string, v = f) => panelLines(v, { opened: id, cursor: 0 }, NOW, 140).lines.map(lineText)
+  const want: [string, string, string][] = [
+    ['T-10', '▶ worker · 15m', '● worker → prep → line → test → merge'],
+    ['T-6', '✎ prep · 20m', 'worker ✓ → ● prep → line → test → merge'],
+    ['T-9', '⋯ in line (2) · 20m', 'worker ✓ → prep ✓ → ● line → test → merge'],
+    ['T-1', '⧗ test · 20m', 'worker ✓ → prep ✓ → line ✓ → ● test → merge'],
+    ['T-8', '⇢ merge · 20m', 'worker ✓ → prep ✓ → line ✓ → test ✓ → ● merge'],
+  ]
+  for (const [id, badge, stage] of want) {
+    const p = page(id)
+    expect(p).toContain(`[${badge}]`)
+    expect(p.find(l => l.startsWith('Status:'))).toContain(badge)
+    expect(p.find(l => l.startsWith('Stage:'))?.replace(/^Stage:\s+/, '')).toBe(stage)
+  }
+  // a running checker shows its step even with the setting off; with it on every task's Stage has it
+  expect(page('T-7')).toContain('[⌕ checker · 20m]')
+  expect(page('T-7').find(l => l.startsWith('Stage:'))).toContain('worker ✓ → prep ✓ → ● checker → line → test → merge')
+  const on = { ...f, view: { ...f.view, checker: true } }
+  expect(page('T-1', on).find(l => l.startsWith('Stage:'))).toContain('worker ✓ → prep ✓ → checker ✓ → line ✓ → ● test → merge')
+  // a done task: every step done
+  const done = { ...f, view: { ...f.view, tasks: [...tasks, { ...base, id: 'T-11', title: 'Merged', status: 'done' as const, note: '', runs }] } }
+  expect(page('T-11', done).find(l => l.startsWith('Stage:'))).toContain('worker ✓ → prep ✓ → line ✓ → test ✓ → merge ✓')
 })
 
 test('the panel: the banner, then the list grouped by state (NEEDS YOU, what runs and waits, Done folded) with the cursor; a task\'s page with its rows, choices and keys', () => {

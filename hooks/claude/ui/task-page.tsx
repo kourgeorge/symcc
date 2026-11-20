@@ -1,6 +1,6 @@
 // The board panel's page for one task: details, actions, and for a task in review its changes.
 import type { SymccTask } from '../../../types'
-import { cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, roleOf, findRole, type DiffFile, type Seg, detailRows, wrapSegs, STATUS_BADGE, statusMark, taskKeys, YOUR_EDITS, intoOf, taskReports, type BoardTask, boxHint, pickHint, taskCopyText, copyToast, fileWaitText, isAnswered, showsAnswer, answerText, whyFailed, taskActions, taskAsks, canPickRole as canPickRoleOf, canMarkMerged as canMarkMergedOf, actionButtonLabel, type TaskAction, type TaskActionId, failNext, failAsks, answeredLeadLine } from '../../board'
+import { cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, roleOf, findRole, type DiffFile, type Seg, detailRows, wrapSegs, STATUS_BADGE, statusMark, statusBadge, taskKeys, YOUR_EDITS, intoOf, taskReports, type BoardTask, boxHint, pickHint, taskCopyText, copyToast, fileWaitText, isAnswered, showsAnswer, answerText, whyFailed, taskActions, taskAsks, canPickRole as canPickRoleOf, canMarkMerged as canMarkMergedOf, actionButtonLabel, type TaskAction, type TaskActionId, failNext, failAsks, answeredLeadLine } from '../../board'
 import { folderDiff, changedFiles } from '../../app/review'
 import { loadRoles } from '../../app/roles'
 import { loadKinds } from '../../app/kinds'
@@ -211,7 +211,9 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
       ))}
     </Text>
   )
-  const rows = detailRows(t, { roles: S.roles, kinds: S.kinds, all: v.tasks, when, nowMs: pane.nowMs, archivedDone: v.archived_done })
+  const rows = detailRows(t, { roles: S.roles, kinds: S.kinds, all: v.tasks, when, nowMs: pane.nowMs, archivedDone: v.archived_done, board: v })
+  // the badge names the step a doing task is in ("⌕ checker · 5m"), like the Status row
+  const badge = statusBadge(t as BoardTask, pane.nowMs)
   // The saved worker reports, one per try: the latest shown, unless the owner picked another try (its number key).
   const reports = taskReports(t)
   if (S.reportTry && S.reportTry.task !== t.id) S.reportTry = null
@@ -309,7 +311,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
   }
   // The page's sections (shared with OpenCode, and their contents with VS Code; see core/task-sections.ts)
   const sections = taskSections(t, {
-    width, nowMs: pane.nowMs, detail: { roles: S.roles, kinds: S.kinds, all: v.tasks, when, archivedDone: v.archived_done }, texts,
+    width, nowMs: pane.nowMs, detail: { roles: S.roles, kinds: S.kinds, all: v.tasks, when, archivedDone: v.archived_done, board: v }, texts,
     ...(shown ? { shownTry: shown.try } : {}), changes, target, dataDir: S.N.dir, numberKeysTaken: choices.length > 0,
   })
   const section = (id: TaskSection['id']) => sections.find(x => x.id === id)
@@ -374,7 +376,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
       <Box flexDirection="column">
         {wrapSegs([{ text: t.id, color: 'claude', bold: true }, { text: `  ${t.title}`, color: 'text', bold: true }], width).map((l, i) => segLine(l, `title-${i}`))}
         <Text>
-          <Text bold color={C(STATUS_BADGE[t.status])}>{`[${statusMark(t)} ${answered ? 'answered: read it' : word[t.status]}]`}</Text>
+          <Text bold color={C(badge.color)}>{`[${answered ? `${statusMark(t)} answered: read it` : badge.text}]`}</Text>
           {agentId ? <Text color={C('inactive')}> · a worker is on it now</Text> : null}
         </Text>
         {mergeStatus}

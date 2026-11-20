@@ -1,6 +1,6 @@
 // The task page: its labelled rows and wrapping them to the panel width.
 import type { SymccStatus, SymccTask } from '../../types'
-import { type BoardTask, intoOf, isInvestigation, STATUS_WORD } from './board-file'
+import { type BoardTask, intoOf, isInvestigation, modeOf, STATUS_WORD } from './board-file'
 import { crossBranchNotes } from './git-setup'
 import { shortSha, taskCommits } from './commits'
 import { originMark, originOf } from './origin'
@@ -9,7 +9,7 @@ import { findRole, type RoleDef, roleOf } from './roles'
 import { fmtTotal, sumRuns } from './runs'
 import { squash } from './text'
 import { checkStepNow } from './lead'
-import { IN_LINE_ICON, STEP_ICON, STEP_LEGEND, STEP_WORD, waitsInLine } from './panel'
+import { IN_LINE_ICON, rowTime, STEP_ICON, STEP_WORD, waitsInLine } from './panel'
 
 /** A piece of text on the task page with its theme color name (see C() in claude/ui/parts.tsx). */
 export type Seg = { text: string; color: string; bold?: boolean; italic?: boolean }
@@ -35,10 +35,86 @@ export const statusMark = (t: Pick<SymccTask, 'status'> & { runs?: readonly unkn
 
 /** The step a task is in on its page, its row icon and its word ("⧗ test", "⋯ in line"); '' when it is in none. */
 export function stepNowWord(t: Pick<BoardTask, 'status' | 'checking'> & { note?: string }, nowMs: number): string {
-  if (waitsInLine(t)) return `${IN_LINE_ICON} in line`
+  if (inLineNow(t)) return `${IN_LINE_ICON} in line`
   const step = checkStepNow(t, nowMs)
   return step ? `${STEP_ICON[step]} ${STEP_WORD[step]}` : ''
 }
+
+/** Whether task `t` waits in the merge line: a doing task (waitsInLine) or an approved review task (its approve runs
+ *  prep → line → test → merge while its status stays review, and the merge line sets its note to "in line (n)"). */
+const inLineNow = (t: { status: SymccStatus; note?: string }): boolean => waitsInLine({ ...t, status: t.status === 'review' ? 'doing' : t.status })
+
+/** What the task page's badge and Status line need of a task. */
+type BadgeTask = Pick<SymccTask, 'status' | 'runs'> & { note?: string; attempts?: number } & Pick<BoardTask, 'checking'>
+
+/**
+ * The task page's status badge (and its Status line): the step a doing task is in, with the same icon as its row
+ * (rowMark) and the step's word, then the total work time the rows show (rowTime): "▶ worker · 15m", "✎ prep · 15m",
+ * "⌕ checker · 5m", "⋯ in line (2) · 9m", "⧗ test · 9m", "⇢ merge · 9m". A task in review or waiting in a check step
+ * (an approve) shows the step without a time ("⇢ merge"). Every other task: its mark and status word ("◆ ready for
+ * review", "○ to do"). `color`: the badge color of its status.
+ */
+export function statusBadge(t: BadgeTask, nowMs: number, since?: number | string): { text: string; color: string } {
+  const color = STATUS_BADGE[t.status]
+  const step = checkStepNow(t, nowMs)
+  if (t.status !== 'doing') return { text: inLineNow(t) ? `${IN_LINE_ICON} ${t.note}` : step ? `${STEP_ICON[step]} ${STEP_WORD[step]}` : `${statusMark(t)} ${STATUS_WORD[t.status]}`, color }
+  const word = inLineNow(t) ? `${IN_LINE_ICON} ${t.note}` : step ? `${STEP_ICON[step]} ${STEP_WORD[step]}` : `${STATUS_MARK.doing} worker`
+  const time = rowTime(t, nowMs, since)
+  return { text: time ? `${word} · ${time}` : word, color }
+}
+
+/** The steps of a task's way to the merge, in order, as its Stage line names them. */
+export type StageStep = 'worker' | 'prep' | 'checker' | 'line' | 'test' | 'review' | 'merge'
+/** One step on the Stage line: done (✓), the one it is in now (●), or later (dim). */
+export type StageMark = { step: StageStep; state: 'done' | 'now' | 'later' }
+
+/**
+ * Where task `t` is on its way to the merge (the task page's Stage line): worker → prep → checker → line → test →
+ * merge, with "checker" only when the checker setting is on (`board.checker`) or a checker ran on this try, and
+ * "review" after "test" when the task waits for the owner's review (any mode but auto, or needs review; always for a
+ * task in review). A doing task: the steps before its step done, its step now, the rest later; a task in review: all
+ * done up to review, review now; once approved and in a check step, all done up to "review ✓", then the approve's own
+ * prep → line → test → merge with its step now ("… test ✓ → review ✓ → ● prep → line → test → merge"); a done task: all done. null for the
+ * other statuses and for an investigation (nothing is merged).
+ */
+export function taskStage(t: BadgeTask & Pick<SymccTask, 'needs_review'> & { kind?: unknown; checker?: string }, nowMs: number, board: { mode?: unknown; checker?: unknown } = {}): StageMark[] | null {
+  if (!['doing', 'review', 'done'].includes(t.status) || isInvestigation(t)) return null
+  const step = checkStepNow(t, nowMs)
+  const hadChecker = (t.runs?.[t.runs.length - 1]?.checkers?.length ?? 0) > 0 || !!t.checker || step === 'checker'
+  const review = t.status === 'review' || modeOf(board) !== 'auto' || t.needs_review === true
+  const first: StageStep[] = ['worker', 'prep', ...(board.checker === true || hadChecker ? ['checker' as const] : []), 'line', 'test']
+  // an approved task in review runs prep → line → test → merge again (its status stays review): every step up to
+  // "review ✓" done, then the approve's own steps with the one it is in now, so the line agrees with the badge
+  // (waiting in the merge line, note "in line (n)", it is at "line" even while its step still says prep)
+  const inLine = inLineNow(t)
+  if (t.status === 'review' && (step || inLine)) {
+    const again: StageStep[] = ['prep', ...(step === 'checker' && !inLine ? ['checker' as const] : []), 'line', 'test', 'merge']
+    const at = again.indexOf(inLine ? 'line' : step === 'testing' ? 'test' : step === 'merging' ? 'merge' : step || 'prep')
+    return [...[...first, 'review' as const].map(s => ({ step: s, state: 'done' as const })), ...again.map((s, i) => ({ step: s, state: i < at ? 'done' as const : i === at ? 'now' as const : 'later' as const }))]
+  }
+  const steps: StageStep[] = [...first, ...(review ? ['review' as const] : []), 'merge']
+  const now: StageStep | 'all' =
+    t.status === 'done' ? 'all'
+    : t.status === 'review' ? 'review'
+    : inLine ? 'line'
+    : step === 'testing' ? 'test'
+    : step === 'merging' ? 'merge'
+    : step || 'worker'
+  const at = now === 'all' ? steps.length : steps.indexOf(now)
+  return steps.map((s, i) => ({ step: s, state: i < at ? 'done' : i === at ? 'now' : 'later' }))
+}
+
+/** The Stage line's pieces: "worker ✓ → prep ✓ → ● checker → line → test → merge", the steps done with ✓, the one it is
+ *  in bold with ●, the later ones dim. */
+export function stageSegs(stage: readonly StageMark[]): Seg[] {
+  return stage.flatMap((m, i): Seg[] => [
+    ...(i ? [{ text: ' → ', color: 'inactive' }] : []),
+    m.state === 'done' ? { text: `${m.step} ✓`, color: 'success' } : m.state === 'now' ? { text: `● ${m.step}`, color: 'ide', bold: true } : { text: m.step, color: 'inactive' },
+  ])
+}
+
+/** The Stage line as plain text (see stageSegs). */
+export const stageText = (stage: readonly StageMark[]): string => stageSegs(stage).map(g => g.text).join('')
 
 /**
  * Who a task came from, with its own color, after its one-width mark (ORIGIN_MARK) and a space: ♟ owner, ⌕ scout NAME,
@@ -63,17 +139,18 @@ function originWordSegs(o: NonNullable<ReturnType<typeof originOf>>): Seg[] {
 }
 
 /**
- * The labelled rows of the task page, in order: Status, Now (STATE_LABEL), Role, From, Why, Request, Seen, Files, Into (the branch it
+ * The labelled rows of the task page, in order: Status, Stage (`board`: its mode and checker setting, see taskStage), Now (STATE_LABEL), Role, From, Why, Request, Seen, Files, Into (the branch it
  * merges into), After (with a warning row for a task it waits for that merges into another branch), Research, Branch, Commits, Tries.
  * `when` turns an ISO time into a short date; `all` finds the tasks this one waits for.
  */
-export function detailRows(t: SymccTask, o: { roles: readonly Pick<RoleDef, 'name' | 'description' | 'model'>[]; kinds?: readonly Pick<KindDef, 'name' | 'description'>[]; all: SymccTask[]; when: (iso: string) => string; nowMs: number; archivedDone?: string[] }): DetailRow[] {
+export function detailRows(t: SymccTask, o: { roles: readonly Pick<RoleDef, 'name' | 'description' | 'model'>[]; kinds?: readonly Pick<KindDef, 'name' | 'description'>[]; all: SymccTask[]; when: (iso: string) => string; nowMs: number; archivedDone?: string[]; board?: { mode?: unknown; checker?: unknown } }): DetailRow[] {
   const R: DetailRow[] = []
-  R.push({ label: 'Status', segs: [{ text: `${statusMark(t)} ${STATUS_WORD[t.status]}`, color: STATUS_BADGE[t.status], bold: true }, { text: ` · added ${o.when(t.created_at)} · changed ${o.when(t.updated_at)}`, color: 'inactive' }] })
+  // the status names the step a doing task is in ("⌕ checker · 5m"), and the Stage line where that is on the way to the merge
+  const badge = statusBadge(t as BoardTask, o.nowMs)
+  R.push({ label: 'Status', segs: [{ text: badge.text, color: badge.color, bold: true }, { text: ` · added ${o.when(t.created_at)} · changed ${o.when(t.updated_at)}`, color: 'inactive' }] })
+  const stage = taskStage(t as BoardTask, o.nowMs, o.board)
+  if (stage) R.push({ label: 'Stage', segs: stageSegs(stage) })
   if (t.note) R.push({ label: STATE_LABEL, segs: [{ text: t.note, color: 'inactive', italic: true }] })
-  // in a check step or the merge line: the step's icon (the rows show only it) with its word, and the icons' legend
-  const step = stepNowWord(t as BoardTask, o.nowMs)
-  if (step) R.push({ label: 'Step', segs: [{ text: step, color: 'ide', bold: true }] }, { label: '', segs: [{ text: STEP_LEGEND, color: 'inactive' }] })
   const name = roleOf(t)
   const r = findRole(o.roles, name)
   const more = [r?.description, r?.model ? `model ${r.model}` : ''].filter(Boolean).join(' · ')

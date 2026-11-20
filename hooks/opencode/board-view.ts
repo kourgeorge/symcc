@@ -16,7 +16,7 @@ import type { OwnerQuestion } from '../core/questions'
 import {
   statusCounts, newestFirst, bandLeads, bandNote, bandBrand, bandWhere, boardBrand, modeLabel, modeOf, planBandText, withCrew, fileWaitText, questionsForYou,
   bannerLines, bannerRule, footerRule, type BannerTone, panelSections, localOffset, when, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, ALL_CLEAR,
-  fittedCells, rowMark, TITLE_ROOM, fitRow, rowExtra, questionsLabel, archivedOf, archivedNote, statusMark, detailRows, detailRowLines, wrapSegs, hintLineText,
+  fittedCells, rowMark, TITLE_ROOM, fitRow, rowExtra, questionsLabel, archivedOf, archivedNote, statusMark, statusBadge, detailRows, detailRowLines, wrapSegs, hintLineText,
   type KeyHint, type Seg, type BoardTask, gitNote, intoOf, taskActions, taskAsks, type TaskAction, type TaskActionId,
   waitsForYou, sortScouts, scoutListRows, scoutRow, scoutIcon, scoutTone, scoutHowTo, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem, scoutFile,
   SETTING_GROUPS, SETTINGS, isSettingPage, settingInfo, settingValue, cantPlayNotify, groupSummaryParts,
@@ -772,6 +772,9 @@ function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = ''
   const t = v.tasks.find(x => x.id === id)
   if (!t) return null
   addAll(wrapSegs([{ text: t.id, color: 'claude', bold: true }, { text: `  ${t.title}`, color: 'text', bold: true }], w))
+  // the status badge, as on Claude Code's task page: the step a doing task is in ("[⌕ checker · 5m]"), else its status
+  const badge = statusBadge(t, nowMs)
+  b.add([{ text: `[${badge.text}]`, color: badge.color, bold: true }])
   const asked = taskAsks(t, v.max_minutes)
   if (asked) {
     b.add([{ text: ' ', color: 'text' }])
@@ -781,7 +784,7 @@ function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = ''
   const sections = taskSections(t, {
     width: w,
     nowMs,
-    detail: { roles: defsIn(f, 'roles'), kinds: defsIn(f, 'kinds'), all: v.tasks, when: iso => when(iso), ...(v.archived_done ? { archivedDone: v.archived_done } : {}) },
+    detail: { roles: defsIn(f, 'roles'), kinds: defsIn(f, 'kinds'), all: v.tasks, when: iso => when(iso), board: v, ...(v.archived_done ? { archivedDone: v.archived_done } : {}) },
     ...(report ? { texts: { [report.file]: report.text } } : {}),
     changes: v.changes?.[t.id] ?? null,
     target: intoOf(t),
