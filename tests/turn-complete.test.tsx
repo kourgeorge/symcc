@@ -391,6 +391,45 @@ test("a worker's Bash command starts from its shell's current folder (session.cw
   expect((await check($, 'a1', 'Bash', { command: 'cat ../x' })).decision).toBe('deny')
 })
 
+test("T-671: when the shell's folder can't be read, a '..' path that may climb into the owner's copy is refused, never judged from the top folder alone", async ($, on) => {
+  let here: string | null = null
+  on('session.cwd', () => {
+    if (here === null) throw new Error('no folder')
+    return { value: here } as never
+  })
+  await trackedWorker($, on)
+  const bash = async (command: string) => check($, 'a1', 'Bash', { command })
+  // nothing read yet: from the top folder four ".." leave the project, but from <worktree>/src they reach the owner's copy
+  const out = await bash('echo x > ../../../../README.md')
+  expect(out.decision).toBe('deny')
+  expect(out.reason).toMatch(/names README\.md in the owner's copy/)
+  expect(out.reason).toMatch(/symcc couldn't tell the shell's folder; use a full path\.$/)
+  // paths inside the worker's folder, and full paths, are judged as before
+  expect((await bash('cat src/a.ts')).decision).toBe('allow')
+  expect((await bash(`echo x > ${WT1}/src/a.ts`)).decision).toBe('allow')
+  // after "cd src" the folder was read once; a later failing read keeps it, so ".." reads the worker's own files
+  here = `${WT1}/src`
+  expect((await bash('ls')).decision).toBe('allow')
+  here = null
+  expect((await bash('cat ../package.json')).decision).toBe('allow')
+  const up = await bash('echo x > ../../../../README.md')
+  expect(up.decision).toBe('deny')
+  expect(up.reason).toMatch(/symcc couldn't tell the shell's folder/)
+  // a command that may have moved the shell (a cd) makes the last folder read unsure: it isn't kept
+  here = `${WT1}/src`
+  expect((await bash('cd a')).decision).toBe('allow')
+  here = null
+  expect((await bash('cat ../package.json')).decision).toBe('deny')
+  // with the folder read, behaviour is unchanged
+  here = `${WT1}/src`
+  expect((await bash('cat ../package.json')).decision).toBe('allow')
+  const known = await bash('echo x > ../../../../README.md')
+  expect(known.decision).toBe('deny')
+  expect(known.reason).not.toMatch(/couldn't tell/)
+  here = WT1
+  expect((await bash('echo x > ../../../../README.md')).decision).toBe('allow')
+})
+
 test("an investigation's edits are never refused (it has no file list), and its hand-back is its answer", async ($, on) => {
   const w = await trackedWorker($, on, { investigation: true })
   expect((await check($, 'a1', 'Write', { file_path: `${WT1}/README.md`, content: 'x' })).decision).toBe('allow')

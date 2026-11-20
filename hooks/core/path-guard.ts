@@ -157,6 +157,42 @@ export const BASH_FOLDERS_MAX = 16
  */
 export const BASH_TOO_MANY = '\u0000too many'
 
+/**
+ * The start of the `cwd` walkBash is given when the shell's folder couldn't be read (T-671): what follows it is the
+ * last folder that was read for that agent and still holds (empty when there is none). It doesn't start with "/",
+ * so the git guard (literalPath) takes it as an unknown folder too.
+ */
+export const CWD_LOST = '\u0000lost:'
+
+/**
+ * What bashOutsideFolder answers before a project path that a ".." word may reach from a shell folder symcc couldn't
+ * read (T-671); bashOutsideText adds a note saying so.
+ */
+export const BASH_LOST = '\u0000lost path:'
+
+/** Words that may move the shell to another folder, or run text that may (mayMoveShell). */
+const MOVES_SHELL = /(?:^|[\s;&|(){}`$])(?:cd|pushd|popd|eval|source|exec|builtin|command|\.)(?=$|[\s;&|()<>])/
+
+/**
+ * Whether shell `command` may leave the shell in another folder than it started in (T-671): a cd, pushd or popd, text
+ * run again (eval, source, "."), or anything run by a name built at run time ("$", "`"). A function or alias defined
+ * earlier is not seen; walkBash also tries deeper folders for that.
+ */
+export const mayMoveShell = (command: unknown): boolean => typeof command !== 'string' || MOVES_SHELL.test(command) || /[$`]/.test(command)
+
+/**
+ * The `cwd` to check a worker's shell command with (T-671): `got`, the shell's folder as read, when it is an absolute
+ * path; else (it couldn't be read) CWD_LOST followed by `last`, the last folder read for that agent, when the command
+ * run from it could not have moved the shell (mayMoveShell is false for `lastCommand`).
+ */
+export function shellCwd(got: unknown, last?: { cwd: string; command: unknown }): string {
+  if (typeof got === 'string' && got.startsWith('/')) return got
+  return CWD_LOST + (last && !mayMoveShell(last.command) ? last.cwd : '')
+}
+
+/** A made-up folder name walkBash puts under a folder to try deeper places the shell may be in (T-671). */
+const DEEPER = '\u0000deeper'
+
 /** A word that may be a plain relative path (`src/a.ts`, `lnk`): letters, digits and `._@%+~/-`, not an option. */
 const PLAIN_PATH = /^(?!-)[\w.@%+~/-]+$/
 
@@ -216,7 +252,11 @@ function walkBash(command: string, wts: readonly string[], home: string | undefi
   const tops = opts.tops ?? []
   // the shell's folder counts inside the worker's own folder, and outside the project when the project is known and
   // not inside it (a throwaway copy in /tmp, T-436); anywhere else (the owner's copy, "/") it starts from the worker's folder
-  const sh = cwd?.startsWith('/') ? resolvePath('/', cwd) : undefined
+  // the shell's folder couldn't be read (T-671): the last one read, if any, is used, and a ".." word is also tried
+  // from deeper folders under it, since the shell may have moved there since
+  const lost = cwd?.startsWith(CWD_LOST) === true
+  const known = lost ? cwd!.slice(CWD_LOST.length) : cwd
+  const sh = known?.startsWith('/') ? resolvePath('/', known) : undefined
   const away = sh !== undefined && tops.length > 0 && insideAny(sh, tops, false) === undefined && !tops.some(t => inside(t, sh, false) !== undefined)
   const start = [sh !== undefined && (away || insideAny(sh, wts, true) !== undefined) ? sh : wt]
   // past BASH_FOLDERS_MAX folders the list stops growing (it doubles with every cd that may fail): from then on a
@@ -272,7 +312,20 @@ function walkBash(command: string, wts: readonly string[], home: string | undefi
       if (climbs && w.startsWith('/')) tries.push(...dirs.map(d => resolvePath(d, w.replace(/^\/+/, ''))))
       for (const abs of tries) {
         const rel = visit(abs)
-        if (rel !== undefined) return rel
+        if (rel !== undefined) return lost && climbs && rel !== BASH_TOO_MANY ? BASH_LOST + rel : rel
+      }
+      // from a folder that couldn't be read, a ".." word may climb from any depth under the folders tried: each depth
+      // up to its number of ".." parts is tried too (deeper ones only reach inside those folders). Not for the paths
+      // looked up on disk (opts.plain): the made-up folders don't exist
+      if (lost && climbs && !opts.plain) {
+        const ups = w.split('/').filter(x => x === '..').length
+        const word = w.replace(/^\/+/, '')
+        for (let k = 1; k <= ups; k++) {
+          for (const d of dirs) {
+            const rel = visit(resolvePath(`${d}${`/${DEEPER}`.repeat(k)}`, word))
+            if (rel !== undefined) return BASH_LOST + rel
+          }
+        }
       }
     }
     // a command word with expansion braces (`{cd,} /tmp`, `c{d..d} /tmp`) may be a cd: the folder it names is added,
@@ -387,10 +440,12 @@ export const bashTooManyText = (worktree: string) =>
   `Refused: this command has too many paths or folder changes (cd) to check where they lead (more than ${BASH_PATHS_MAX} paths, or more than ${BASH_FOLDERS_MAX} folders it may be in). Split it into shorter commands, use absolute paths inside your own folder ${worktree}, or write files with the Write tool.`
 
 /** The reason a worker reads when its shell command naming project path `rel` is refused for being outside its own folder `worktree` (or for BASH_TOO_MANY). */
-export const bashOutsideText = (rel: string, worktree: string) =>
+export const bashOutsideText = (rel: string, worktree: string): string =>
   rel === BASH_TOO_MANY
     ? bashTooManyText(worktree)
-    : `Refused: this command names ${rel || 'the project folder'} in the owner's copy of the project, outside your own folder. Work only in your own folder ${worktree}: use paths inside it (relative paths start there), never the owner's copy, even to read.`
+    : rel.startsWith(BASH_LOST)
+      ? `${bashOutsideText(rel.slice(BASH_LOST.length), worktree)} symcc couldn't tell the shell's folder; use a full path.`
+      : `Refused: this command names ${rel || 'the project folder'} in the owner's copy of the project, outside your own folder. Work only in your own folder ${worktree}: use paths inside it (relative paths start there), never the owner's copy, even to read.`
 
 /**
  * Where an edit of `path` would write inside the project folder `root` (any of its names), relative to it; relative

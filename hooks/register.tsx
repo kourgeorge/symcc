@@ -16,7 +16,7 @@ import { sessionStarting, sessionStart, sessionCleared, sessionEnd, leadGuideTex
 import { S, useName } from './app/state'
 import { hookFailed } from './app/ask'
 import { popupCall } from './app/questions'
-import { spawnFailedText } from './core/path-guard'
+import { spawnFailedText, shellCwd } from './core/path-guard'
 import { DEFAULT_NAME, cleanName } from './name'
 import { drainStarts, leadTurn } from './app/starts'
 import { findRoot } from './app/store'
@@ -27,6 +27,9 @@ import { renderPane } from './claude/ui/pane'
 
 export { BOARD_OPENED } from './app/symcc'
 export { registerAll } from './claude/registration'
+
+/** Per agent, the last shell folder $.session.cwd() gave in tool.check and the command checked from it (T-671). */
+const lastCwd = new Map<string, { cwd: string; command: unknown }>()
 
 /** The plan mode a main session event carries (see seeMainMode). */
 function mainMode($: $, e: { permission_mode?: string; agent_id?: string }) {
@@ -165,8 +168,17 @@ export const register: Register = on => {
   on('tool.check', async ($, e, next) => {
     const host = claudeHost($)
     useName(host)
-    // read inside the hook, $.session.cwd() is the calling agent's own folder, which follows its shell's cd
-    const cwd = e.agentId && e.tool === 'Bash' ? await Promise.resolve().then(() => $.session.cwd()).catch(() => undefined) : undefined
+    // read inside the hook, $.session.cwd() is the calling agent's own folder, which follows its shell's cd; when it
+    // can't be read, the last one read is used only if the command run from it couldn't move the shell, and ".."
+    // words are judged from deeper folders too (shellCwd, T-671), so the guard never gets weaker than with it
+    let cwd: string | undefined
+    if (e.agentId && e.tool === 'Bash') {
+      const got = await Promise.resolve().then(() => $.session.cwd()).catch(() => undefined)
+      const command = (e.input as { command?: unknown } | undefined)?.command
+      cwd = shellCwd(got, lastCwd.get(e.agentId))
+      if (typeof got === 'string' && got.startsWith('/')) lastCwd.set(e.agentId, { cwd: got, command })
+      else lastCwd.delete(e.agentId)
+    }
     // an error in toolCheck is not swallowed here: the .catch below refuses the call of symcc's own agents
     const deny = await toolCheck(host, e.agentId, editTouch(e.tool, e.input), cwd)
     return deny ? { decision: 'deny', reason: deny } : next(e)
