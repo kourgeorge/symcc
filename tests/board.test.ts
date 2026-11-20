@@ -3764,15 +3764,27 @@ test('T-587: the task page badge and Status row name the step a task is in; the 
   // an approved task in review running prep / test / merge again: the Stage line agrees with the badge
   const approving = (step: 'prep' | 'testing' | 'merging') => ({ status: 'review' as const, runs: ran, checking: { step, at: fresh } })
   expect(core.statusBadge(approving('testing'), now).text).toBe('⧗ test')
-  expect(core.stageText(core.taskStage(approving('testing'), now, { mode: 'review' })!)).toBe('worker ✓ → prep ✓ → line ✓ → test ✓ → review ✓ → prep ✓ → line ✓ → ● test → merge')
+  expect(core.stageText(core.taskStage(approving('testing'), now, { mode: 'review' })!)).toBe('worker ✓ → prep ✓ → line ✓ → test ✓ → review ✓ → ● test → merge')
   expect(core.statusBadge(approving('prep'), now).text).toBe('✎ prep')
-  expect(core.stageText(core.taskStage(approving('prep'), now, { mode: 'review' })!)).toBe('worker ✓ → prep ✓ → line ✓ → test ✓ → review ✓ → ● prep → line → test → merge')
-  expect(core.stageText(core.taskStage(approving('merging'), now, { mode: 'review' })!)).toBe('worker ✓ → prep ✓ → line ✓ → test ✓ → review ✓ → prep ✓ → line ✓ → test ✓ → ● merge')
+  expect(core.stageText(core.taskStage(approving('prep'), now, { mode: 'review' })!)).toBe('worker ✓ → prep ✓ → line ✓ → test ✓ → review ✓ → ● prep → merge')
+  expect(core.stageText(core.taskStage(approving('merging'), now, { mode: 'review' })!)).toBe('worker ✓ → prep ✓ → line ✓ → test ✓ → review ✓ → ● merge')
   // an approved task in review waiting in the merge line (its step still prep, fresh or stale): "in line" on both
   for (const at of [fresh, new Date(now - 10 * 60_000).toISOString()]) {
     const queued = { status: 'review' as const, runs: ran, note: 'in line (2)', checking: { step: 'prep' as const, at } }
     expect(core.statusBadge(queued, now).text).toBe('⋯ in line (2)')
-    expect(core.stageText(core.taskStage(queued, now, { mode: 'review' })!)).toBe('worker ✓ → prep ✓ → line ✓ → test ✓ → review ✓ → prep ✓ → ● line → test → merge')
+    expect(core.stageText(core.taskStage(queued, now, { mode: 'review' })!)).toBe('worker ✓ → prep ✓ → line ✓ → test ✓ → review ✓ → ● line → merge')
+  }
+  // after "review ✓": exactly one "review ✓", no step name twice, the current step the badge's
+  const queuedAt = { status: 'review' as const, runs: ran, note: 'in line (1)', checking: { step: 'prep' as const, at: fresh } }
+  for (const [t, word] of [[approving('prep'), 'prep'], [queuedAt, 'line'], [approving('testing'), 'test'], [approving('merging'), 'merge']] as const) {
+    const stage = core.taskStage(t, now, { mode: 'review' })!
+    const text = core.stageText(stage)
+    expect(text.split('review ✓').length).toBe(2)
+    const tail = stage.slice(stage.findIndex(m => m.step === 'review') + 1).map(m => m.step)
+    expect(new Set(tail).size).toBe(tail.length)
+    expect(stage.slice(0, stage.findIndex(m => m.step === 'review')).some(m => m.state !== 'done')).toBe(false)
+    expect(stage.find(m => m.state === 'now')!.step).toBe(word)
+    expect(core.statusBadge(t, now).text).toContain(word === 'line' ? 'in line' : word)
   }
   const done = core.taskStage({ status: 'done', runs: ran }, now, auto)!
   expect(done.every(m => m.state === 'done')).toBe(true)
