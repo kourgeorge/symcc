@@ -10,7 +10,7 @@
 // (each fold, and each task it waits for, is a link: VS Code draws a Button as a filled blue box)
 // No key hints: every action is a button.
 import type { SymccTask } from '../../../types'
-import { type DetailRow, type DiffFile, type Seg, STATUS_BADGE, STATUS_MARK, statusMark, STATUS_WORD, originSegs, originOf, crossBranchNotes, intoOf, roleOf, findRole, kindMark, fmtDuration, fmtRun, fmtTotal, sumRuns, STATE_LABEL, taskActions, type TaskActionId, type BoardTask, stepNowWord, STEP_LEGEND } from '../../board'
+import { type DetailRow, type DiffFile, type Seg, STATUS_BADGE, STATUS_MARK, statusMark, STATUS_WORD, originSegs, originOf, crossBranchNotes, intoOf, roleOf, findRole, kindMark, fmtDuration, fmtRun, fmtTotal, sumRuns, STATE_LABEL, taskActions, type TaskActionId, type BoardTask, statusBadge, taskStage, stageSegs, type StageMark } from '../../board'
 import { squash } from '../../core/text'
 import type { TaskSection } from '../../core/task-sections'
 import { historyEvent, historyTime, HISTORY_COLOR } from '../../core/history'
@@ -163,16 +163,28 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
   const kind = kindMark(t)
   const total = sumRuns(t.runs, nowMs)
   const tags = [kind, role, t.attempts ? `try ${t.attempts}` : '', t.runs?.length ? fmtDuration(total.ms) : '', x.agentId ? 'a worker is on it now' : ''].filter(Boolean)
-  const statusWord = x.answered ? 'answered: read it' : STATUS_WORD[t.status]
+  const statusWord = 'answered: read it'
+  // the badge names the step a doing task is in ("⌕ checker · 5m"); under it the Stage stepper (worker ✓ → ● checker → …)
+  const badge = statusBadge(t as BoardTask, nowMs)
+  const stage = taskStage(t as BoardTask, nowMs, pane.v)
+  const vsStage = (marks: StageMark[]) => (
+    <Box key="vs-stage" flexDirection="row" flexWrap="wrap" columnGap={1}>
+      <Text key="vs-stage-label" color={C('inactive')}>Stage</Text>
+      {stageSegs(marks).map((g, i) => (
+        <Text key={`vs-stage-${i}`} bold={g.bold} color={C(g.color)}>{g.text.trim()}</Text>
+      ))}
+    </Box>
+  )
   const shown = t.status
   const head = (
     <Box key="vs-head" flexDirection="column">
       <Text key="vs-id" bold size="title" color={C('claude')}>{t.id}</Text>
       <Text key="vs-title" wrap="wrap" bold size="title" color={C('text')}>{t.title}</Text>
       <Box key="vs-status" flexDirection="row" flexWrap="wrap" columnGap={1}>
-        {vsBadge(vs, 'vs-badge', `${statusMark({ ...t, status: shown })} ${statusWord}`, x.answered ? 'success' : STATUS_BADGE[shown])}
+        {vsBadge(vs, 'vs-badge', x.answered ? `${statusMark({ ...t, status: shown })} ${statusWord}` : badge.text, x.answered ? 'success' : badge.color)}
         {tags.length ? vsTags(vs, 'vs-tags', tags) : null}
       </Box>
+      {stage ? vsStage(stage) : null}
     </Box>
   )
   const typingBox = S.rejecting?.task === t.id && x.inReview && !x.merging
@@ -273,16 +285,12 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
 
   // where it came from: who, why, the owner's words, what was seen, and the note
   const og = originOf(t)
-  const step = stepNowWord(t as BoardTask, nowMs)
   const origin = section('origin', 'Why / where it came from', [
     segs('vs-from', [{ text: 'From ', color: 'inactive' }, ...originSegs(t)]),
     og?.why ? plain('vs-why', squash(og.why)) : null,
     og?.by === 'owner' && og.request?.trim() ? plain('vs-request', `“${squash(og.request)}”`, 'text', { italic: true }) : null,
     og?.evidence ? plain('vs-seen', `Seen: ${squash(og.evidence)}`, 'inactive') : null,
     t.note ? plain('vs-note', `${STATE_LABEL}: ${t.note}`, 'inactive', { italic: true }) : null,
-    // in a check step or the merge line: the step's icon (the list shows only it) with its word, and the icons' legend
-    step ? plain('vs-step', `Step: ${step}`, 'ide', { bold: true }) : null,
-    step ? plain('vs-step-legend', STEP_LEGEND, 'inactive') : null,
   ])
 
   const details = section('details', 'What to do', [t.details.trim() ? <Markdown key="vs-details-md" text={t.details.trimEnd()} /> : plain('vs-details-none', '(no details)', 'inactive')])

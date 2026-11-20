@@ -223,9 +223,21 @@ the prompt, the VS Code list and task page, the OpenCode board and the lead's te
 the same small set of words and notes. While it waits for its turn its note says "in line (n)",
 n being its place (the task merging now is 1), and its row shows `⋯` in place of `▶`. During its
 turn the row shows the step's icon in place of `▶`, then the time: `⌕ 5m`, not `▶ checker 5m`.
-The step's word stays on the task page (its "Step" row) and in the note; the lead's text board
-shows both ("⧗ doing test · title"). Legend: `▶` working · `⋯` in line · `✎` prep · `⧗` test ·
-`⌕` checker · `⇢` merge.
+The step's word stays in the note and on the task page; the lead's text board shows both ("⧗
+doing test · title"). Legend: `▶` working · `⋯` in line · `✎` prep · `⧗` test · `⌕` checker ·
+`⇢` merge.
+
+**Where a task is, on its page.** A doing task's page (terminal, VS Code and OpenCode) names its
+step in its badge and its Status line, with the icon and the total work time: `▶ worker · 15m`,
+`✎ prep`, `⌕ checker · 5m`, `⋯ in line (2)`, `⧗ test · 9m`, `⇢ merge`. Other tasks show their
+status as before (`○ to do`, `◆ ready for review`, ...). Under Status, a **Stage** line shows the
+whole way to the merge, the steps done marked ✓, the current one bold with ●, the later ones
+dim: `worker ✓ → prep ✓ → ● checker → line → test → merge`. `checker` is there only when the
+checker setting is on (or a checker ran on this try); `review` comes after `test` when the task
+will wait for your review (any mode but auto, or the task's "needs review"). A task in review
+shows every step before review done (`… → test ✓ → ● review → merge`), a done task every step
+done. Investigations have no Stage line (nothing is merged). VS Code draws it as a small stepper
+under the badge.
 
 - `✎ prep`: symcc's own step before the line (steps 1 and 2: commit, leave out secret-looking
   files, scope check). Its note says "preparing to merge: committing and checking files". No

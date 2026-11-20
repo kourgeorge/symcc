@@ -1313,8 +1313,40 @@ test('From shows a scout or a split task in its own color', async ($, on) => {
   stateOf(on, { opened: 'T-4', view: { shape: 'view-1', value: { tasks: [task('T-4', 'doing', 'Fix it', { origin: { by: 'scout', scout: 'bugs', why: 'it breaks', at: '' } }), task('T-5', 'todo', 'Part', { origin: { by: 'lead', task: 'T-4', how: 'split', why: 'too big', at: '' } })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect((await ui.find({ type: 'Text', text: /^scout bugs$/ }))?.props.color).toBe('suggestion')
-  expect((await ui.findAll({ type: 'Text', text: /^\[▶ doing\]$/ })).find(t => t.props.color)?.props.color).toBe('ide')
+  expect((await ui.findAll({ type: 'Text', text: /^\[▶ worker\]$/ })).find(t => t.props.color)?.props.color).toBe('ide')
   expect((await lines(ui)).some(l => /^Request:/.test(l))).toBe(false)
+  await ui.unmount()
+})
+
+test('T-587: the terminal task page badge names the step ("[⌕ checker · 9m]") and its Stage row marks it now, the steps before done', async ($, on) => {
+  const T0 = Date.parse('2026-03-02T10:00:00Z')
+  mock.clock(on, { now: T0 })
+  const iso = (ms: number) => new Date(ms).toISOString()
+  const fresh = iso(T0 - 10_000)
+  const tasks = [task('T-4', 'doing', 'Fix it', { note: 'a checker agent is trying to break it before it merges', attempts: 1, runs: [{ started: iso(T0 - 9 * 60_000), ended: fresh }], checking: { step: 'checker', at: fresh } })]
+  stateOf(on, { opened: 'T-4', view: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', checker: true, test_commands: [] } } })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const L = await lines(ui)
+  expect(L).toContain('[⌕ checker · 9m]')
+  const status = L.findIndex(l => l.startsWith('Status:'))
+  expect(L[status]).toContain('⌕ checker · 9m')
+  // the Stage row right under Status (it may wrap onto a second line)
+  expect(L.slice(status + 1, status + 3).join(' ').replace(/\s+/g, ' ')).toMatch(/^Stage: worker ✓ → prep ✓ → ● checker → line → test → merge/)
+  await ui.unmount()
+})
+
+test('T-587: with the checker setting off the Stage row leaves "checker" out; a task in test shows the steps before done', async ($, on) => {
+  const T0 = Date.parse('2026-03-02T10:00:00Z')
+  mock.clock(on, { now: T0 })
+  const iso = (ms: number) => new Date(ms).toISOString()
+  const fresh = iso(T0 - 10_000)
+  const tasks = [task('T-4', 'doing', 'Fix it', { note: 'running the tests', attempts: 1, runs: [{ started: iso(T0 - 9 * 60_000), ended: fresh }], checking: { step: 'testing', at: fresh } })]
+  stateOf(on, { opened: 'T-4', view: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const L = await lines(ui)
+  expect(L).toContain('[⧗ test · 9m]')
+  const at = L.findIndex(l => l.startsWith('Stage:'))
+  expect(L.slice(at, at + 2).join(' ').replace(/\s+/g, ' ')).toMatch(/^Stage: worker ✓ → prep ✓ → line ✓ → ● test → merge/)
   await ui.unmount()
 })
 
