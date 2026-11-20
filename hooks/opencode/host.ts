@@ -10,6 +10,7 @@
 // `lead`, a board update goes nowhere.
 import { type Host, type HostFeatures, type HostWords, noUi } from '../host'
 import { viewFilePanel } from './view'
+import { writeSync } from 'node:fs'
 import { nodeFs, runCommand, nodeClock } from '../../hosts/node/host'
 
 /**
@@ -38,6 +39,25 @@ export function serverId(): string {
   return g[key] as string
 }
 
+/**
+ * symcc's default notice writer: a line to stderr (file descriptor `fd`), written at once and in a try, so a closed
+ * pipe never becomes an error nobody catches (T-586). OpenCode's background service keeps the stderr of the command
+ * that started it (`opencode plugin list`), which has often exited by the time symcc's first notice comes; a stream
+ * write there failed later with EPIPE, which OpenCode logged as "unhandled rejection". After one failed write the
+ * writer stays quiet, as nobody reads that stderr any more.
+ */
+export function stderrSay(fd = 2): (line: string) => void {
+  let gone = false
+  return line => {
+    if (gone) return
+    try {
+      writeSync(fd, `[symcc] ${line}\n`)
+    } catch {
+      gone = true
+    }
+  }
+}
+
 /** A start the host can't do yet: marked "not ready", so symcc tries again later and the task stays waiting. */
 const notBuilt = (what: string) => Object.assign(new Error(`${what} is not built yet in symcc's OpenCode plugin`), { notReady: true })
 
@@ -58,7 +78,7 @@ export type OpencodeHostOptions = {
 
 /** The Host for one copy of the OpenCode plugin, for folder `o.dir`. */
 export function opencodeHost(o: OpencodeHostOptions): Host {
-  const say = o.say ?? ((line: string) => void process.stderr.write(`[symcc] ${line}\n`))
+  const say = o.say ?? stderrSay()
   const id = o.sessionId ?? `opencode-${serverId()}`
   const host: Host = {
     features: OPENCODE_FEATURES,

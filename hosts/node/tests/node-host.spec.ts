@@ -4,7 +4,7 @@
 // shows it done. Also: hosts/node/ never imports Claude Code or hooks/claude/, and the claude -p runner's flags and
 // result reader.
 import { test, expect } from 'bun:test'
-import { readFile, readdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { readFile, readdir, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
 import { runCommand, PLUGIN_ROOT } from '../host'
 import { claudePermissions, claudeResult, editRule } from '../../../hooks/process/claude-runner'
@@ -317,8 +317,11 @@ test('T-474: a worker process left running by a CLI that was killed is in the re
     const cli = (...args: string[]) => runCommand(['bun', MAIN, '--root', repo, '--claude', FAKE, ...args], { cwd: repo, timeoutMs: 120_000 })
     expect((await cli('add', 'Say hello', '--files', 'hello.txt')).stdout).toContain('added T-1')
 
-    // a tick whose worker waits 600 s; once the worker runs, the CLI is killed outright (no clean stop of its agents)
-    const tick = spawn('bun', [MAIN, '--root', repo, '--claude', FAKE, 'tick'], { cwd: repo, env: { ...process.env, FAKE_SLEEP: '600', FAKE_PID: pidFile }, stdio: ['ignore', 'ignore', 'ignore'] })
+    // a tick whose worker waits 600 s; once the worker runs, the CLI is killed outright (no clean stop of its agents).
+    // T-588: it runs from a subfolder, yet its record goes next to board.json (the project's top folder), so the run
+    // below from the top folder finds it
+    await mkdir(`${repo}/sub`, { recursive: true })
+    const tick = spawn('bun', [MAIN, '--root', `${repo}/sub`, '--claude', FAKE, 'tick'], { cwd: `${repo}/sub`, env: { ...process.env, FAKE_SLEEP: '600', FAKE_PID: pidFile }, stdio: ['ignore', 'ignore', 'ignore'] })
     const tickClosed = new Promise<void>(r => tick.on('close', () => r()))
     let group = 0
     for (const end = Date.now() + 120_000; !group && Date.now() < end; await new Promise<void>(r => void setTimeout(r, 100))) {
@@ -331,6 +334,8 @@ test('T-474: a worker process left running by a CLI that was killed is in the re
     tick.kill('SIGKILL')
     await tickClosed
     expect(entries.map(e => [e.pid, e.task, e.folder?.endsWith('/.symcc/worktrees/T-1'), e.command])).toEqual([[group, 'T-1', true, FAKE]])
+    // no stray record (or any .symcc/) in the subfolder the CLI ran from
+    expect((await readdir(`${repo}/sub`, { withFileTypes: true })).map(d => d.name)).toEqual([])
     expect(await groupGone(group, 500)).toBe(false)
     // plus an entry whose process ended long ago (a pid that can't be one)
     await writeFile(recordFile, entriesText([...entries, { pid: 999_999, agent: 'claude-9-old', task: 'T-9', started: '2026-01-01T00:00:00.000Z', command: FAKE }]))
