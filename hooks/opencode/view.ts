@@ -4,17 +4,18 @@
 // to draw the banner and band (folder, home, name, version), to .<name>/view.json in the project's main folder. The
 // TUI reads that file on a timer (board-view.ts parses it). Each scout's recent runs ride along (scout_runs, T-559:
 // the TUI's scout page lists them; a run's report stays in its own file, which the TUI reads when the run is opened),
-// and so do the roles and kinds (T-562: the TUI's Roles and Kinds pages under Settings list them).
+// and so do the roles and kinds (T-562: the TUI's Roles and Kinds pages under Settings list them) and each task in review's changed files (T-580: the TUI runs no git).
 // The panel's own values (which task, tab and scout are
 // open) stay in the TUI; the server side keeps them in memory only, as their start values for symcc's logic.
 import type { SymccView } from '../../types'
 import type { Host, PanelValues } from '../host'
 import { type PaneView, S } from '../app/state'
 import { safeWrite } from '../app/store'
-import { parseScoutRuns, safeScoutFile, scoutRunsFile, scoutRunTasks, mergeRoles, mergeKinds } from '../board'
+import { parseScoutRuns, safeScoutFile, scoutRunsFile, scoutRunTasks, mergeRoles, mergeKinds, intoOf, isAnswered, type BoardTask } from '../board'
+import { changedFiles } from '../app/review'
 import { roleLists } from '../app/roles'
 import { kindLists } from '../app/kinds'
-import { VIEW_FILE, VIEW_RUNS_KEPT, viewFileText, viewDefs, type ScoutRuns, type ViewDef } from './board-view'
+import { VIEW_FILE, VIEW_RUNS_KEPT, viewFileText, viewDefs, type ScoutRuns, type ViewDef, type ViewChanges } from './board-view'
 
 /** The empty view, as a panel starts with. */
 const emptyView = (): SymccView => ({ tasks: [], working: [], scouts: [], mode: 'auto', test_commands: [] })
@@ -39,7 +40,8 @@ export function viewFilePanel(host: Pick<Host, 'fs' | 'run' | 'ui' | 'plugin'>):
       .then(async () => {
         const scout_runs = await scoutRunsOf(host, root, v)
         const defs = await defsOf(host as Host).catch(() => ({}))
-        const text = viewFileText({ root, home: S.home, name: S.N.name, version: S.version, written_at: at, view: { ...(v as PaneView), ...(Object.keys(scout_runs).length ? { scout_runs } : {}), ...defs } })
+        const changes = await changesOf(host as Host, v)
+        const text = viewFileText({ root, home: S.home, name: S.N.name, version: S.version, written_at: at, view: { ...(v as PaneView), ...(Object.keys(scout_runs).length ? { scout_runs } : {}), ...defs, ...(Object.keys(changes).length ? { changes } : {}) } })
         await safeWrite(host as Host, file, text, 'the board view')
       })
       .catch((err: Error) => host.ui.log(`couldn't write ${file}: ${err?.message ?? err}`))
@@ -70,6 +72,20 @@ export async function scoutRunsOf(host: Pick<Host, 'fs'>, root: string, v: Symcc
     if (!runs.length) continue
     const made = scoutRunTasks(runs, v.tasks ?? [], sc.name)
     out[sc.name] = runs.map((run, i) => ({ run, tasks: made[i]! })).reverse().slice(0, VIEW_RUNS_KEPT)
+  }
+  return out
+}
+
+/** The files each task in review changed (T-580; not an answered investigation's: nothing to merge), against the
+ *  branch it merges into, or why they can't be read: the TUI's task page lists them under Changes. */
+export async function changesOf(host: Host, v: SymccView): Promise<ViewChanges> {
+  const out: ViewChanges = {}
+  for (const t of v.tasks ?? []) {
+    if (t.status !== 'review' || isAnswered(t as BoardTask)) continue
+    out[t.id] = await changedFiles(host, intoOf(t), t).then(
+      files => ({ files, error: '' }),
+      (err: Error) => ({ files: [], error: err?.message ?? String(err) }),
+    )
   }
   return out
 }

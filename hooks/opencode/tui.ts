@@ -21,8 +21,8 @@
 // modules (Solid and OpenTUI's Solid renderer) are passed in (TuiRuntime), so this file type-checks and its tests
 // run without them. The names and shapes below are @opencode/plugin 2.3.0's tui Context (only what is used).
 import { DEFAULT_NAME, dataDir } from '../name'
-import { VIEW_FILE, parseViewFile, bandDraw, panelLines, panelKeys, panelTaskActions, TASK_ACTION_COMMANDS, hasPage, answerOptions, actionCommand, moveCursor, OWN_ANSWER, GROUPS_OPEN, groupOf, groupId, scoutRunsIn, settingsPlace, SETTINGS_OPEN, settingGroupOf, settingGroupId, PANEL_TABS, CHOICE_KEYS, type ChoiceKey, type ViewFile, type Line, type PanelAction, type PanelHit, type PanelKey, type PanelGroup, type PanelTab, type BandHit } from './board-view'
-import { SETTING_GROUPS, isScoutRunReport, parseSettingValue, settingChoices, settingInfo, settingValue, isSettingPage, everyText, everyMinutesOf, type SettingName, type ScoutEditField } from '../board'
+import { VIEW_FILE, parseViewFile, bandDraw, panelLines, panelKeys, panelTaskActions, panelRoleChoices, TASK_ACTION_COMMANDS, LETTER_KEYS, type LetterKey, hasPage, answerOptions, actionCommand, moveCursor, OWN_ANSWER, GROUPS_OPEN, groupOf, groupId, scoutRunsIn, settingsPlace, SETTINGS_OPEN, settingGroupOf, settingGroupId, PANEL_TABS, CHOICE_KEYS, type ChoiceKey, type ViewFile, type Line, type PanelAction, type PanelHit, type PanelKey, type PanelGroup, type PanelTab, type BandHit } from './board-view'
+import { SETTING_GROUPS, isScoutRunReport, taskReports, parseSettingValue, settingChoices, settingInfo, settingValue, isSettingPage, everyText, everyMinutesOf, type SettingName, type ScoutEditField } from '../board'
 import type { SymccScout } from '../../types'
 
 export type { PanelKey, PanelHit, PanelTab }
@@ -258,7 +258,11 @@ export type TuiBoard = {
 }
 
 /** The keymap bindings of the panel's keys. */
-const KEY_BINDS: Record<PanelKey, string> = { up: 'up,k', down: 'down,j', open: 'return', back: 'b,left', a: 'a', x: 'x', d: 'd', close: 'escape', t: 't', s: 's', c: 'c', r: 'r', p: 'p', o: 'o', e: 'e', ...(Object.fromEntries(CHOICE_KEYS.map(k => [k, k])) as Record<ChoiceKey, string>) }
+const KEY_BINDS: Record<PanelKey, string> = {
+  up: 'up', down: 'down,j', open: 'return', back: 'b,left', close: 'escape',
+  ...(Object.fromEntries(LETTER_KEYS.map(k => [k, k])) as Record<LetterKey, string>),
+  ...(Object.fromEntries(CHOICE_KEYS.map(k => [k, k])) as Record<ChoiceKey, string>),
+}
 
 /** The tab each tab key goes to. */
 const TAB_OF: Partial<Record<PanelKey, PanelTab>> = Object.fromEntries(PANEL_TABS.map(t => [t.key, t.tab]))
@@ -285,6 +289,8 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   const [report, setReport] = r.createSignal<string | null | undefined>(undefined)
   // the answer just sent from the open page (T-583), so the page says it was sent
   const [sent, setSent] = r.createSignal<{ id: string; answer: string } | undefined>(undefined)
+  // the open task's latest report (T-580), read from its file when the page opens or a newer try's report comes
+  const [taskReport, setTaskReport] = r.createSignal<{ file: string; text: string | null | undefined } | undefined>(undefined)
   let width = 80
   // the panel's height in rows, once OpenTUI has laid it out (it bounds the scroll)
   let rows: number | undefined
@@ -299,11 +305,28 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     setNow(d.now())
     // the open task left the view: back to the list, so the list's keys work again
     keepPage(f)
+    readTaskReport()
+  }
+  /** Reads the open task's latest report, unless it is the one already read (or being read). */
+  const readTaskReport = () => {
+    const f = file()
+    const t = tab() === 'tasks' && opened() ? f?.view.tasks.find(x => x.id === opened()) : undefined
+    const latest = t ? taskReports(t).at(-1) : undefined
+    if (!f || !latest) return void (taskReport() && setTaskReport(undefined))
+    if (taskReport()?.file === latest.file) return
+    const id = opened()
+    setTaskReport({ file: latest.file, text: undefined })
+    void d.readText(`${f.root}/${latest.file}`).then(
+      text => opened() === id && taskReport()?.file === latest.file && setTaskReport({ file: latest.file, text }),
+      () => opened() === id && taskReport()?.file === latest.file && setTaskReport({ file: latest.file, text: null }),
+    )
   }
   /** Opens a page ('' = back to the list), from its top. */
   const openPage = (id: string) => {
     setOpened(id)
     setSent(undefined)
+    setTaskReport(undefined)
+    readTaskReport()
     setRun('')
     setRunCursor(0)
     setScroll(0)
@@ -349,7 +372,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   /** Whether the cursor is on a page's own rows (a scout's runs, the Roles or Kinds list), not the tab's list. */
   const onPage = () => tab() !== 'tasks' && !!opened()
   const draw = () => {
-    return panelLines(file(), { tab: tab(), opened: opened(), run: run(), report: report(), cursor: onPage() ? runCursor() : cursor(), groups: groups(), settingsOpen: settingsOpen(), scroll: scroll(), ...(rows ? { rows } : {}), ...(sent() ? { sent: sent()! } : {}) }, now(), width)
+    return panelLines(file(), { tab: tab(), opened: opened(), run: run(), report: report(), cursor: onPage() ? runCursor() : cursor(), groups: groups(), settingsOpen: settingsOpen(), scroll: scroll(), ...(rows ? { rows } : {}), ...(sent() ? { sent: sent()! } : {}), ...(taskReport() ? { taskReport: taskReport()! } : {}) }, now(), width)
   }
   /** The rows of the Tasks tab's list, even while a task's page is open (whose draw has no rows), so "open this id"
    *  can put the list cursor on that task and b comes back to it (T-568). */
@@ -444,9 +467,12 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     if (key === 'p' && sc) return send(sessionID, { kind: 'scout', scout: open, paused: !sc.paused })
     if (key === 'e' && sc) return editScout(sc, sessionID)
   }
-  const press = async (key: PanelKey, sessionID: string) => {
+  const press = async (pressed: PanelKey, sessionID: string) => {
     // Esc closes the panel (OpenCode 2.3 leaves closing to the panel's own keys)
-    if (key === 'close') return ctx.ui.panel.close()
+    if (pressed === 'close') return ctx.ui.panel.close()
+    // k moves up (as ↑), except on a task's page that has an action on k (Stash to backlog, Keep as a note)
+    const onTask = tab() === 'tasks' && opened() ? file()?.view.tasks.find(x => x.id === opened()) : undefined
+    const key: PanelKey = pressed === 'k' && !(onTask && panelTaskActions(onTask).some(a => a.key === 'k')) ? 'up' : pressed
     const to = TAB_OF[key]
     if (to) return showTab(to)
     const f = file()
@@ -466,7 +492,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
       return
     }
     if (key === 'back') return openPage('')
-    // the task's own actions (core's taskActions that have a slash command, panelTaskActions), each by its key
+    // the task's own actions (core's taskActions, panelTaskActions), each by its key, sent as a slash command
     const t = f?.view.tasks.find(x => x.id === open)
     const act = t ? panelTaskActions(t).find(x => x.key === key) : undefined
     const command = act ? TASK_ACTION_COMMANDS[act.id] : undefined
@@ -478,7 +504,21 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
       if (reason) await send(sessionID, { kind: 'reject', id: open, reason })
       return
     }
-    if (command) return send(sessionID, { kind: command, id: open })
+    if (command === 'approve' || command === 'diff') return send(sessionID, { kind: command, id: open })
+    if (command === 'drop') {
+      // the reason is optional: Enter on the empty box drops it without one; Esc keeps the task
+      const reason = await ctx.ui.dialog.prompt({ title: `Drop ${open}`, description: 'Why (optional): Enter on an empty box drops it without a reason', placeholder: 'the reason, or nothing' })
+      if (reason === undefined) return
+      return send(sessionID, { kind: 'task', id: open, verb: 'drop', ...(reason.trim() ? { arg: reason.trim() } : {}) })
+    }
+    if (command === 'role') {
+      const now = (t!.role || 'general').toLowerCase()
+      const role = await ctx.ui.dialog.select({ title: `Pick a role for ${open}`, options: panelRoleChoices(f).map(r => ({ title: r.toLowerCase() === now ? `${r} (now)` : r, value: r })) })
+      if (role) await send(sessionID, { kind: 'task', id: open, verb: 'role', arg: role })
+      return
+    }
+    if (command === 'review') return send(sessionID, { kind: 'task', id: open, verb: 'review', arg: t!.needs_review ? 'off' : 'on' })
+    if (command) return send(sessionID, { kind: 'task', id: open, verb: command })
     // a number key picks that choice of the page, as a click on its line does (T-583)
     const n = CHOICE_KEYS.indexOf(key as ChoiceKey)
     if (n >= 0) return pick(n + 1, sessionID)

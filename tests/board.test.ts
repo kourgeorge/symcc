@@ -1151,7 +1151,7 @@ test('slash commands all start with the plugin name: open, views, one task, appr
   // a renamed plugin gets its own prefix
   expect(parseCommand('crew-approve', 'T-5', 'auto', 'crew')).toEqual({ kind: 'approve', id: 'T-5' })
   expect(parseCommand('symcc-approve', 'T-5', 'auto', 'crew')).toBeNull()
-  expect((parseCommand('crew-task', '', 'auto', 'crew') as { message: string }).message).toBe('Use: /crew-task T-3')
+  expect((parseCommand('crew-task', '', 'auto', 'crew') as { message: string }).message).toBe('Use: /crew-task T-3 (open it), or /crew-task T-3 pause|resume|retry|drop [reason]|merged|review on|off|stash|todo|role <name>|note')
 })
 
 test('in the panel, tasks in review, waiting and failed come first, the rest keep their order', () => {

@@ -2,7 +2,7 @@
 // (session.composer.top) and the board panel (session.panel), each as lines of colored text (core's Seg), made from
 // the view file the engine writes (view.ts) with hooks/core's own helpers: the band's row fronts and notes
 // (bandLeads, bandNote), the list's sections, marks and short states (panelSections, statusMark, fittedCells,
-// rowExtra, fitRow), the banner (bannerLines) and a task's rows (detailRows). Nothing here draws or reads a file, so
+// rowExtra, fitRow), the banner (bannerLines) and a task's page sections (taskSections, T-580). Nothing here draws or reads a file, so
 // the tests check exactly what the TUI shows (hooks/opencode/tests/opencode-tui.spec.ts). The panel's actions go back
 // to the engine as symcc's slash commands (actionCommand), run in the TUI's session (R6 of T-468). Like the Claude Code
 // board it has three tabs (T-559): Tasks, Scouts (the list, a scout's page with its runs, a run's report) and
@@ -17,15 +17,17 @@ import {
   statusCounts, newestFirst, bandLeads, bandNote, bandBrand, bandWhere, boardBrand, modeLabel, modeOf, planBandText, withCrew, fileWaitText, questionsForYou,
   bannerLines, bannerRule, footerRule, type BannerTone, panelSections, localOffset, when, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, ALL_CLEAR,
   fittedCells, TITLE_ROOM, fitRow, rowExtra, questionsLabel, archivedOf, archivedNote, statusMark, detailRows, detailRowLines, wrapSegs, hintLineText,
-  type KeyHint, type Seg, type BoardTask, gitNote, taskActions, taskAsks, type TaskAction, type TaskActionId,
+  type KeyHint, type Seg, type BoardTask, gitNote, intoOf, taskActions, taskAsks, type TaskAction, type TaskActionId,
   waitsForYou, sortScouts, scoutListRows, scoutRow, scoutIcon, scoutTone, scoutHowTo, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem, scoutFile,
   SETTING_GROUPS, SETTINGS, isSettingPage, settingInfo, settingValue, cantPlayNotify, groupSummaryParts,
-  type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction,
+  type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction, type TaskVerb, settingsKeys,
   DEFAULT_ROLE, isCheckerRole, ALWAYS_ON_KINDS, checkerOn, roleNameError, kindNameError,
 } from '../board'
 import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, brokenLabel, defNamed } from '../core/def-files'
 import { restFrame } from '../core/logo'
-import { DEFAULT_NAME } from '../name'
+import { taskSections, type TaskSection } from '../core/task-sections'
+import type { DiffFile } from '../core/review'
+import { DEFAULT_NAME, dataDir } from '../name'
 
 /** The view file's name, in the data folder (.<name>/view.json). */
 export const VIEW_FILE = 'view.json'
@@ -41,8 +43,12 @@ export type ViewFile = {
   version: string
   /** when it was written (ms) */
   written_at: number
-  view: PaneView & { scout_runs?: ScoutRuns; roles?: ViewDef[]; kinds?: ViewDef[] }
+  view: PaneView & { scout_runs?: ScoutRuns; roles?: ViewDef[]; kinds?: ViewDef[]; changes?: ViewChanges }
 }
+
+/** The files each task in review changed (not an answered investigation's), or why they can't be read (view.ts puts
+ *  them in the view file, T-580: the TUI can't run git; its task page lists them under Changes). */
+export type ViewChanges = Record<string, { files: DiffFile[]; error: string }>
 
 /** One role or kind as the Roles and Kinds pages show it (view.ts puts them in the view file, made with viewDefs). */
 export type ViewDef = {
@@ -132,6 +138,7 @@ export function parseViewFile(text: string | null | undefined): ViewFile | null 
     const runs = scout_runs && typeof scout_runs === 'object' && !Array.isArray(scout_runs) ? { scout_runs } : {}
     if (!Array.isArray(rest.roles)) delete rest.roles
     if (!Array.isArray(rest.kinds)) delete rest.kinds
+    if (!rest.changes || typeof rest.changes !== 'object' || Array.isArray(rest.changes)) delete rest.changes
     const view = { ...rest, ...runs, working: Array.isArray(f.view.working) ? f.view.working : [], scouts: Array.isArray(f.view.scouts) ? f.view.scouts : [], test_commands: Array.isArray(f.view.test_commands) ? f.view.test_commands : [] }
     return { root: s(f.root), home: s(f.home), name: s(f.name) || DEFAULT_NAME, version: s(f.version), written_at: Number(f.written_at) || 0, view }
   } catch {
@@ -140,7 +147,13 @@ export function parseViewFile(text: string | null | undefined): ViewFile | null 
 }
 
 /** The panel's keys (see panelKeys for which ones each page offers). */
-export type PanelKey = 'up' | 'down' | 'open' | 'back' | 'a' | 'x' | 'd' | 'close' | 't' | 's' | 'c' | 'r' | 'p' | 'o' | 'e' | ChoiceKey
+export type PanelKey = 'up' | 'down' | 'open' | 'back' | 'close' | LetterKey | ChoiceKey
+
+/** The letter keys the panel takes, each pressed as itself (the task page's take core's taskActions keys: u resume,
+ *  k stash or keep as a note, l role, h already merged, n needs review). k is also "up" where no action has it. */
+export const LETTER_KEYS = ['a', 'x', 'd', 't', 's', 'c', 'r', 'p', 'o', 'e', 'u', 'k', 'l', 'h', 'n'] as const
+export type LetterKey = (typeof LETTER_KEYS)[number]
+const isLetterKey = (k: string): k is LetterKey => (LETTER_KEYS as readonly string[]).includes(k)
 
 /** The number keys that pick a page's answer choice (T-583): 1 is the first choice. */
 export type ChoiceKey = '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'
@@ -245,6 +258,8 @@ export type PanelChoice = {
   settingsOpen?: readonly string[]
   /** the answer the owner just sent from this panel (T-583): the open page says it was sent */
   sent?: { id: string; answer: string }
+  /** the open task's latest report (T-580), read from its file: its text undefined while it is read, null when it can't be */
+  taskReport?: { file: string; text: string | null | undefined }
 }
 
 /** The panel as drawn: its lines, what a click on each line does (null: nothing), the ids of the rows the cursor
@@ -260,13 +275,16 @@ export const groupId = (g: PanelGroup) => `group:${g}`
 export const groupOf = (id: string): PanelGroup | null => (id.startsWith('group:') ? (id.slice(6) as PanelGroup) : null)
 
 /** The key a key hint's word stands for, so a click on the hint does what the key does ('' for "move"). */
-const HINT_KEY: Record<string, PanelKey> = { open: 'open', close: 'close', back: 'back', approve: 'a', done: 'a', answer: 'a', reject: 'x', 'ask more': 'x', 'show changes': 'd', change: 'open', report: 'open', 'run now': 'r', pause: 'p', resume: 'p', edit: 'e', 'turn off': 'o', 'turn on': 'o', reset: 'r' }
+const HINT_KEY: Record<string, PanelKey> = { open: 'open', 'open/close': 'open', close: 'close', back: 'back', change: 'open', report: 'open' }
+
+/** What a click on key hint `k` presses: its own letter key, else the key its word stands for (Enter opens, b back...). */
+export const hintKey = (k: KeyHint): PanelKey | undefined => (isLetterKey(k.key) ? k.key : HINT_KEY[k.word])
 
 /** The footer's key hints as pieces, each a button for its key: "a approve · x reject · b back". */
 export function hintSegs(keys: KeyHint[]): Line {
   return keys.flatMap((k, i) => [
     ...(i ? [{ text: ' · ', color: 'inactive' }] : []),
-    { text: hintLineText([k]), color: 'inactive', ...(HINT_KEY[k.word] ? { hit: { key: HINT_KEY[k.word]! } } : {}) },
+    { text: hintLineText([k]), color: 'inactive', ...(hintKey(k) ? { hit: { key: hintKey(k)! } } : {}) },
   ])
 }
 
@@ -313,14 +331,15 @@ const scoutNamed = (f: ViewFile | null, name: string): SymccScout | undefined =>
  * a scout's page (r run now, p pause or resume, e edit) and a run's page; on the Settings tab, of the settings list,
  * the Roles and Kinds lists and a role's or kind's page (o turn off or on, r reset to the built-in one).
  */
-export function panelKeys(f: ViewFile | null, opened: string, tab: PanelTab = 'tasks', run = ''): KeyHint[] {
+export function panelKeys(f: ViewFile | null, opened: string, tab: PanelTab = 'tasks', run = '', heading = false): KeyHint[] {
   const move = { key: '↑↓', word: 'move' }
   const views = { key: 't s c', word: 'views' }
   const close = { key: 'Esc', word: 'close' }
   const back = { key: 'b', word: 'back' }
   if (tab === 'settings') {
     const place = settingsPlace(f, opened)
-    if (!place) return [move, { key: 'Enter', word: 'change' }, views, close]
+    // the settings list: core's keys, as Claude Code's (Enter open/close on a group heading, else change)
+    if (!place) return settingsKeys(heading)
     if (!place.def) return [move, { key: 'Enter', word: 'open' }, back]
     const d = place.def
     return [...(d.canOff ? [{ key: 'o', word: d.off ? 'turn on' : 'turn off' }] : []), ...(d.canReset ? [{ key: 'r', word: 'reset' }] : []), back]
@@ -363,9 +382,9 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
   } else if (tab === 'settings') {
     const place = settingsPlace(f, choice.opened)
     body = place?.def ? defPage(f, place.list, place.def, w) : place ? defsList(f, place.list, choice.cursor, w) : settingsBody(f, choice.cursor, choice.settingsOpen ?? SETTINGS_OPEN, w)
-    keys = panelKeys(f, place ? choice.opened : '', 'settings')
+    keys = panelKeys(f, place ? choice.opened : '', 'settings', '', !place && !!settingGroupOf(body.selected))
   } else {
-    const page = choice.opened ? openedPage(f, choice.opened, nowMs, w, choice.sent?.id === choice.opened ? choice.sent.answer : '') : null
+    const page = choice.opened ? openedPage(f, choice.opened, nowMs, w, choice.sent?.id === choice.opened ? choice.sent.answer : '', choice.taskReport) : null
     body = page ?? listBody(f, choice.cursor, { ...GROUPS_OPEN, ...choice.groups }, nowMs, w)
     keys = panelKeys(f, page ? choice.opened : '')
   }
@@ -727,9 +746,15 @@ function questionRow(q: OwnerQuestion, front: string, idWidth: number, w: number
   ]
 }
 
-/** The page of the task or question `id`: its title and rows (detailRows), its question and its choices, each a
- *  clickable line (T-583), and the answer just sent (`sent`); null when it is gone. */
-function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = ''): Body | null {
+/** How many lines of a long History or Report section the task page shows; the rest is cut with "… (n more lines)"
+ *  (the whole report stays in its file, named in the section). */
+export const SECTION_LINES: Partial<Record<TaskSection['id'], number>> = { history: 30, report: 40 }
+
+/** The page of the task or question `id`: its title, its question and its choices, each a clickable line (T-583),
+ *  and the answer just sent (`sent`); then a task's sections as on Claude Code's task page (core's taskSections,
+ *  T-580: Why it failed, Answer, Details, Changes, What to do, History, Report, Runs), with the latest report's text
+ *  (`report`, read by the TUI) and the changed files from the view file; null when it is gone. */
+function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = '', report?: PanelChoice['taskReport']): Body | null {
   const v = f.view
   const b = bodyMaker()
   const addAll = (ls: Line[]) => ls.forEach(l => b.add(l))
@@ -747,16 +772,29 @@ function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = ''
   const t = v.tasks.find(x => x.id === id)
   if (!t) return null
   addAll(wrapSegs([{ text: t.id, color: 'claude', bold: true }, { text: `  ${t.title}`, color: 'text', bold: true }], w))
-  for (const r of detailRows(t, { roles: defsIn(f, 'roles'), kinds: defsIn(f, 'kinds'), all: v.tasks, when: iso => when(iso), nowMs, ...(v.archived_done ? { archivedDone: v.archived_done } : {}) })) addAll(detailRowLines(r, w))
   const asked = taskAsks(t, v.max_minutes)
   if (asked) {
     b.add([{ text: ' ', color: 'text' }])
     addAll(wrapSegs([{ text: 'asks: ', color: 'warning', bold: true }, { text: asked.text, color: 'text' }], w))
     choices()
   } else if (sent) addAll(wrapSegs([{ text: 'answer sent: ', color: 'success', bold: true }, { text: sent, color: 'text' }], w))
-  if (t.details?.trim() && t.details.trim() !== t.title) {
+  const sections = taskSections(t, {
+    width: w,
+    nowMs,
+    detail: { roles: defsIn(f, 'roles'), kinds: defsIn(f, 'kinds'), all: v.tasks, when: iso => when(iso), ...(v.archived_done ? { archivedDone: v.archived_done } : {}) },
+    ...(report ? { texts: { [report.file]: report.text } } : {}),
+    changes: v.changes?.[t.id] ?? null,
+    target: intoOf(t),
+    dataDir: dataDir(f.name || DEFAULT_NAME),
+    // here a click on a file, like d, shows all the task's changes (there is no one-file diff)
+    changesHint: '  d (or a click on a file) shows the changes',
+  })
+  for (const sec of sections) {
     b.add([{ text: ' ', color: 'text' }])
-    addAll(wrapSegs([{ text: t.details.trim(), color: 'inactive' }], w))
+    b.add([{ text: `▍${sec.title}`, color: 'suggestion', bold: true }])
+    const most = SECTION_LINES[sec.id] ?? Infinity
+    sec.lines.slice(0, most).forEach(l => b.add(l.segs.length ? l.segs : [{ text: ' ', color: 'text' }], l.action ? { key: 'd' } : null))
+    if (sec.lines.length > most) b.add([{ text: `  … (${sec.lines.length - most} more lines)`, color: 'inactive' }])
   }
   return { ...b, ids: [], selected: id }
 }
@@ -778,13 +816,23 @@ export function answerOptions(f: ViewFile | null, id: string): string[] {
   return asks.choices.length ? asks.choices : [OWN_ANSWER]
 }
 
-/** The slash command (PanelAction's kind) for each of core's task actions this panel can do; the others (pause,
- *  resume, retry, drop, ...) have no slash command yet, so the panel leaves them out. */
-export const TASK_ACTION_COMMANDS: Partial<Record<TaskActionId, 'approve' | 'reject' | 'diff'>> = { approve: 'approve', done: 'approve', reject: 'reject', 'ask-more': 'reject', 'show-changes': 'diff' }
+/** What sends each of core's task actions: /<name>-approve, -reject (it asks the reason) or -diff, else a word of
+ *  /<name>-task T-5 (TaskVerb: merge now is retry, as on the terminal's page). Copy and Watch worker have none: this
+ *  panel can't copy or show a worker, so it leaves them out. */
+export const TASK_ACTION_COMMANDS: Partial<Record<TaskActionId, 'approve' | 'reject' | 'diff' | TaskVerb>> = {
+  approve: 'approve', done: 'approve', reject: 'reject', 'ask-more': 'reject', 'show-changes': 'diff', 'keep-note': 'note',
+  pause: 'pause', resume: 'resume', 'merge-now': 'retry', retry: 'retry', 'to-todo': 'todo', stash: 'stash', role: 'role', 'already-merged': 'merged', drop: 'drop', 'needs-review': 'review',
+}
 
-/** The actions of task `t`'s page (core's taskActions, the terminal's and VS Code's buttons) that this panel has a
- *  slash command for, with their keys. */
+/** The actions of task `t`'s page (core's taskActions, the terminal's and VS Code's buttons) this panel sends, each
+ *  with its key: every one but Copy and Watch worker (and Drop in review, which has no key there). */
 export const panelTaskActions = (t: BoardTask): TaskAction[] => taskActions(t).filter(a => a.key && TASK_ACTION_COMMANDS[a.id])
+
+/** The roles a task's role can be set to (Role on its page): those turned on, general first, never the checker role. */
+export const panelRoleChoices = (f: ViewFile | null): string[] => {
+  const names = defsIn(f, 'roles').filter(d => !d.off && !d.broken && !isCheckerRole(d.name)).map(d => d.name)
+  return names.some(n => n.toLowerCase() === DEFAULT_ROLE) ? names : [DEFAULT_ROLE, ...names]
+}
 
 /** A panel action as the slash command that does it, run in the TUI's session: approve, reject (with the reason), diff or answer. */
 export type PanelAction =
@@ -793,6 +841,8 @@ export type PanelAction =
   /** show the files a task in review changed */
   | { kind: 'diff'; id: string }
   | { kind: 'answer'; id: string; answer: string }
+  /** one of the task page's other actions: /<name>-task T-5 <verb> [arg] (drop's reason, role's name, review's on|off) */
+  | { kind: 'task'; id: string; verb: TaskVerb; arg?: string }
   /** run a scout now, or (with `paused`) pause or resume its timer */
   | { kind: 'scout'; scout: string; paused?: boolean }
   | { kind: 'setting'; setting: SettingName; value: string }
@@ -806,6 +856,7 @@ export function actionCommand(a: PanelAction, name: string = DEFAULT_NAME): { na
   if (a.kind === 'approve') return { name: `${name}-approve`, text: a.id }
   if (a.kind === 'reject') return { name: `${name}-reject`, text: `${a.id} ${a.reason.trim()}` }
   if (a.kind === 'diff') return { name: `${name}-diff`, text: a.id }
+  if (a.kind === 'task') return { name: `${name}-task`, text: `${a.id} ${a.verb} ${a.arg?.trim() ?? ''}`.trim() }
   if (a.kind === 'scout') return { name: `${name}-scout`, text: a.paused === undefined ? a.scout : `${a.scout} ${a.paused ? 'pause' : 'resume'}` }
   if (a.kind === 'setting') return { name: `${name}-settings`, text: `${a.setting} ${a.value.trim()}` }
   if (a.kind === 'scout-edit') return { name: `${name}-scout`, text: `${a.scout} ${a.field} ${a.value.trim() || (a.field === 'model' ? 'none' : '')}`.trim() }

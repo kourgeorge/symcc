@@ -90,6 +90,10 @@ ${features.panel ? `  /${S.N.name}                     open the board panel (↑
   /${S.N.name}-tasks               show the tasks
   /${S.N.name}-scouts              show the scouts and reload the scout files`}
   /${S.N.name}-task T-3            ${features.panel ? 'open' : 'show'} one task
+  /${S.N.name}-task T-3 WORD       do one of its page's actions: pause, resume, retry,
+                       drop [REASON], merged (already merged by hand), review on|off,
+                       stash (to the backlog), todo (out of the backlog), role NAME,
+                       note (an answered investigation: keep it as a note)
   /${S.N.name}-approve T-5         merge a task that is ready for review
   /${S.N.name}-reject T-5 REASON   send it back to "todo" with the reason
   /${S.N.name}-diff T-5 [FILE]     the files it changed (+/- lines), or one file's diff

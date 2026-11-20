@@ -23,6 +23,7 @@ import { change, load, saveBoard, saveMigrated, takeLock, dropLock } from '../ho
 import { runTool, ownerSettings, allowAskedFiles, refuseAskedFiles } from '../hooks/app/tools'
 import { archiveOld, saveArchiveMigrated } from '../hooks/app/archive'
 import { commandsOf } from './fakes'
+import { runCommand } from '../hooks/app/symcc'
 // test() from ./reset starts each test with the plugin's memory empty, whatever ran before it (T-291)
 import { test } from './reset'
 import { fakeDisk } from './fake-disk'
@@ -4779,6 +4780,18 @@ test('Keep as a note (approve with keep_note) ends it like Done and adds a docs 
   expect(n.details).toContain('Write docs/research/do-it.md')
   expect(n.details).toContain('The cache is never cleared.\nI read src/cache.ts.')
   expect(n.details).toContain('.symcc/reports/T-1-try-1.md')
+})
+
+test('T-584: /symcc-task T-1 note is Keep as a note: the task ends done and the docs task is added, as approve with keep_note', async () => {
+  const { w } = await investigationAnswers('auto', 'The cache is never cleared.', { runs: startRun([], ISO) })
+  const out = await runCommand(w.$, 'symcc-task', 'T-1 note')
+  expect(out?.text).toContain('T-1 done: the answer was read; nothing was merged. Added T-2')
+  const b = await load(w.$)
+  expect(find(b, 'T-1')!.note).toBe('answered; kept as a note by T-2')
+  expect(find(b, 'T-2')!.files).toEqual(['docs/research/do-it.md'])
+  // a change task is no answered investigation: the tool's refusal comes back, nothing changes
+  expect((await runCommand(w.$, 'symcc-task', 'T-2 note'))?.text).toMatch(/^error: /)
+  expect(find(await load(w.$), 'T-2')!.status).toBe('todo')
 })
 
 test('Ask more (reject) on an answered investigation sends it back to todo with the follow-up and the earlier answer in its details', async () => {

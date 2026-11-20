@@ -10,8 +10,9 @@
 // (each fold, and each task it waits for, is a link: VS Code draws a Button as a filled blue box)
 // No key hints: every action is a button.
 import type { SymccTask } from '../../../types'
-import { type DetailRow, type DiffFile, type Seg, STATUS_BADGE, STATUS_MARK, statusMark, STATUS_WORD, originSegs, originOf, crossBranchNotes, intoOf, roleOf, findRole, kindMark, fmtDuration, fmtRun, fmtTotal, sumRuns, YOUR_EDITS, STATE_LABEL, taskActions, type TaskActionId, type BoardTask } from '../../board'
+import { type DetailRow, type DiffFile, type Seg, STATUS_BADGE, STATUS_MARK, statusMark, STATUS_WORD, originSegs, originOf, crossBranchNotes, intoOf, roleOf, findRole, kindMark, fmtDuration, fmtRun, fmtTotal, sumRuns, STATE_LABEL, taskActions, type TaskActionId, type BoardTask } from '../../board'
 import { squash } from '../../core/text'
+import type { TaskSection } from '../../core/task-sections'
 import { historyEvent, historyTime, HISTORY_COLOR } from '../../core/history'
 import { S } from '../../app/state'
 import { when } from '../../core/days'
@@ -47,6 +48,8 @@ export type VsTaskCtx = {
   answerShown: boolean
   answerFrom: { try: number; file: string } | undefined
   answer: string
+  /** the page's sections (core/task-sections.ts): which ones show, their headings and lines */
+  sections: TaskSection[]
   fileWait: string
   /** the line shown while its Approve, Done, Keep as a note or Merge now runs ('' when none does): no review buttons meanwhile */
   merging: string
@@ -258,8 +261,11 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
     ? vsCallout(vs, 'vs-sec-why-failed', '✗', 'Why it failed', 'error', [plain('vs-why-reason', x.why.reason), x.why.asks ? plain('vs-why-asks', x.why.asks, 'warning') : null, plain('vs-why-next', `Next: ${x.why.next}`, 'inactive'), calloutButtons('retry')].filter(Boolean) as never[])
     : null
 
-  const answer = x.answerShown
-    ? section('answer', x.answerFrom ? `Answer (try ${x.answerFrom.try})` : 'Answer', [
+  // which of the shared sections show, and their headings, come from core's taskSections (as on the terminal)
+  const sec = (id: TaskSection['id']) => x.sections.find(s => s.id === id)
+  const answerSec = sec('answer')
+  const answer = answerSec
+    ? section('answer', answerSec.title, [
         x.answerFrom ? plain('vs-answer-file', x.answerFrom.file, 'inactive') : null,
         x.answer ? <Markdown key="vs-answer-md" text={x.answer} /> : plain('vs-answer-none', '(no answer saved)', 'inactive'),
       ])
@@ -316,8 +322,9 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
     : null
 
   // a task in review: the files it changed, each opening its diff
-  const changes = x.changes
-    ? section('changes', `Changes (${x.changes.files.length} ${x.changes.files.length === 1 ? 'file' : 'files'}, against ${x.target})${x.changes.files.some(f => f.edited) ? ` ${YOUR_EDITS}` : ''}`, [
+  const changesSec = sec('changes')
+  const changes = x.changes && changesSec
+    ? section('changes', changesSec.title, [
         plain('vs-changes-folder', `folder: ${S.N.dir}/worktrees/${t.id}; edit files there, then approve (the tests run again)`, 'inactive'),
         x.changes.error ? plain('vs-changes-error', `Could not read the changes: ${x.changes.error}`, 'error') : null,
         !x.changes.error && !x.changes.files.length ? plain('vs-changes-none', 'no changes', 'inactive') : null,
@@ -337,8 +344,9 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
   // the history as a timeline (T-512), newest first: the same events and marks as the terminal page (historyEvent),
   // each mark in its tone, when it happened (T-522, historyTime) and its try, then the words, wrapped whole; a dim connector (│) between events
   const events = [...t.history].reverse().map(historyEvent)
-  const history = events.length
-    ? section('history', `History (${events.length}, newest first)`, events.flatMap((e, i) => {
+  const historySec = sec('history')
+  const history = historySec
+    ? section('history', historySec.title, events.flatMap((e, i) => {
         const stamp = [historyTime(e.at, nowMs), e.label].filter(Boolean).join(' · ')
         const resultColor = e.tone === 'good' || e.tone === 'bad' ? HISTORY_COLOR[e.tone] : 'text'
         const event = (
@@ -368,9 +376,10 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
   const all = S.reportAll === t.id
   const part = x.reportBody !== null ? (all ? { text: x.reportBody.trimEnd(), more: 0 } : reportPart(x.reportBody)) : null
   const longReport = x.reportBody !== null && reportPart(x.reportBody).more > 0
+  const reportSec = sec('report')
   const report =
-    (x.reports.length > 0 || t.attempts > 0) && !(x.answerShown && x.answerFrom && x.reports.length === 1)
-      ? section('report', x.shown ? `Report (try ${x.shown.try}${x.reports.length > 1 ? `, ${x.at + 1} of ${x.reports.length}` : ''})` : 'Report', [
+    reportSec
+      ? section('report', reportSec.title, [
           !x.shown ? plain('vs-report-none', 'no saved report', 'inactive') : null,
           x.shown ? plain('vs-report-file', x.shown.file, 'inactive') : null,
           x.shown && x.reportBody === null ? plain('vs-report-error', 'Could not read the report file.', 'error') : null,
