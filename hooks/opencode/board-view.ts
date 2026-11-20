@@ -283,7 +283,18 @@ export function approveSent(f: ViewFile | null, a: ApproveSent | undefined, nowM
 /** The panel as drawn: its lines, what a click on each line does (null: nothing), the ids of the rows the cursor
  *  goes over (tasks, questions and the groups' rows, see groupId; in order), the one under the cursor, its keys, and
  *  the scroll it was drawn with (kept within the list's or page's length). */
-export type PanelDraw = { lines: Line[]; hits: (PanelHit | null)[]; ids: string[]; selected: string; keys: KeyHint[]; scroll: number }
+export type PanelDraw = {
+  lines: Line[]
+  hits: (PanelHit | null)[]
+  ids: string[]
+  selected: string
+  keys: KeyHint[]
+  scroll: number
+  /** how many of the first lines stay put when the body scrolls (the banner, the tabs, the rule and the page's title) */
+  fixed: number
+  /** how many drawn lines the body has in all (what scrolls) */
+  bodyLines: number
+}
 
 /** Which groups are open at first: the backlog (its first rows), not Done and Dropped. */
 export const GROUPS_OPEN: Record<PanelGroup, boolean> = { backlog: true, done: false, dropped: false }
@@ -391,7 +402,7 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
   const w = Math.max(20, Math.floor(width))
   if (!f) {
     const lines: Line[] = [[{ text: `${boardBrand(DEFAULT_NAME)}`, color: 'ide', bold: true }], [{ text: 'No board yet: start symcc in this project (the board is written by the server part).', color: 'inactive' }]]
-    return { lines, hits: lines.map(() => null), ids: [], selected: '', keys: [], scroll: 0 }
+    return { lines, hits: lines.map(() => null), ids: [], selected: '', keys: [], scroll: 0, fixed: lines.length, bodyLines: 0 }
   }
   // the shared note's "(g)" names the Claude Code panel's key; this panel has none, so it says to ask the lead (setup_git)
   const v = { ...f.view, ...(f.view.git_state && f.view.branch_note ? { branch_note: gitNote(f.view.git_state, 'ask the lead') } : {}) }
@@ -401,7 +412,7 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
   ])
   const tab = choice.tab ?? 'tasks'
   const top = [...banner, tabsLine(tab), [{ text: bannerRule(w), color: 'ide' }]]
-  let body: { lines: Line[]; hits?: (PanelHit | null)[] | null; ids: string[]; selected: string }
+  let body: { lines: Line[]; hits?: (PanelHit | null)[] | null; ids: string[]; selected: string; head?: number }
   let keys: KeyHint[]
   if (tab === 'scouts') {
     body = scoutsBody(f, choice, nowMs, w)
@@ -416,19 +427,95 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
     const t = page ? f.view.tasks.find(x => x.id === choice.opened) : undefined
     keys = panelKeys(f, page ? choice.opened : '', 'tasks', '', false, !!t && approveInProgress(f, t, choice.approving, nowMs))
   }
-  // the mouse wheel scrolls the list or page between the banner and the footer, down to its last screenful (its last
-  // line when the panel's height isn't known)
-  const room = choice.rows ? choice.rows - top.length - 2 : 1
-  const scroll = Math.max(0, Math.min(Math.floor(choice.scroll ?? 0), body.lines.length - Math.max(1, room)))
-  const hits = body.hits ?? body.lines.map(() => null)
+  // T-627: every line is cut into the rows it really takes (drawn lines: no line wider than the panel, none with a
+  // line break inside), so the scroll counts what is on screen. The page's own title (and a task's badge) stays with
+  // the banner and the tabs at the top; the mouse wheel scrolls only the rest, between them and the footer, down to its
+  // last screenful (its last line when the panel's height isn't known).
+  const hits0 = body.hits ?? body.lines.map(() => null)
+  const drawnHead: Line[] = []
+  const drawnBody: Line[] = []
+  const bodyHits: (PanelHit | null)[] = []
+  body.lines.forEach((l, i) => {
+    for (const d of drawnLines(l, w)) {
+      if (i < (body.head ?? 0)) drawnHead.push(d)
+      else drawnBody.push(d), bodyHits.push(hits0[i] ?? null)
+    }
+  })
+  // a panel too low to keep the page's title and still show 3 lines of the rest: the title scrolls with the rest
+  if (choice.rows && drawnHead.length && Math.floor(choice.rows) - top.length - drawnHead.length - 2 < 3) {
+    drawnBody.unshift(...drawnHead)
+    bodyHits.unshift(...drawnHead.map(() => null))
+    drawnHead.length = 0
+  }
+  const fixed = [...top, ...drawnHead]
+  const room = choice.rows ? Math.max(1, Math.floor(choice.rows) - fixed.length - 2) : 0
+  const scroll = Math.max(0, Math.min(Math.floor(choice.scroll ?? 0), drawnBody.length - Math.max(1, room)))
+  // with the height known, exactly one screenful: the window of the body, then blank rows down to the footer, so the
+  // footer stays at the bottom and every row is drawn again (nothing left over from a longer page)
+  const shown = room ? drawnBody.slice(scroll, scroll + room) : drawnBody.slice(scroll)
+  const pad = room ? room - shown.length : 0
   return {
-    lines: [...top, ...body.lines.slice(scroll), [{ text: footerRule(w), color: 'subtle' }], hintSegs(keys)],
-    hits: [...top.map(() => null), ...hits.slice(scroll), null, null],
+    lines: [...fixed, ...shown, ...Array.from({ length: pad }, (): Line => [{ text: ' ', color: 'text' }]), [{ text: footerRule(w), color: 'subtle' }], hintSegs(keys)],
+    hits: [...fixed.map(() => null), ...bodyHits.slice(scroll, scroll + shown.length), ...Array.from({ length: pad }, () => null), null, null],
     ids: body.ids,
     selected: body.selected,
     keys,
     scroll,
+    fixed: fixed.length,
+    bodyLines: drawnBody.length,
   }
+}
+
+/** Line `l` as the rows it takes in a panel `w` wide: split at its line breaks, and a row wider than `w` broken
+ *  (between words when it can) with the next row starting under the line's own indent. Each piece keeps its color,
+ *  bold and hit. An empty line is one blank row. */
+export function drawnLines(l: Line, w: number): Line[] {
+  const width = Math.max(1, Math.floor(w))
+  // split at line breaks first
+  const rows: Line[] = [[]]
+  for (const s of l) {
+    s.text.replace(/\r/g, '').split('\n').forEach((part, i) => {
+      if (i) rows.push([])
+      if (part) rows[rows.length - 1]!.push({ ...s, text: part.replace(/\t/g, '  ') })
+    })
+  }
+  const out: Line[] = []
+  for (const row of rows) {
+    const chars = row.flatMap((s, si) => [...s.text].map(c => ({ c, si })))
+    if (chars.length <= width) {
+      out.push(row.length ? row : [{ text: ' ', color: l[0]?.color ?? 'text' }])
+      continue
+    }
+    // the line's own indent (at most half the width), repeated in front of each row it goes on to
+    const firstText = chars.findIndex(x => x.c !== ' ')
+    const lead = Math.min(Math.max(0, firstText), Math.floor(width / 2))
+    let rest = chars
+    let first = true
+    while (rest.length) {
+      const room = first ? width : width - lead
+      let take = rest
+      if (rest.length > room) {
+        // break at the last space within the room, after the indent; a word longer than the room is cut
+        const space = rest.slice(0, room + 1).map(x => x.c).lastIndexOf(' ')
+        take = rest.slice(0, space > (first ? lead : 0) ? space : room)
+      }
+      rest = rest.slice(take.length)
+      while (rest.length && rest[0]!.c === ' ') rest = rest.slice(1)
+      // the row's pieces: runs of characters from the same piece of the line
+      const pieces: { si: number; text: string }[] = []
+      for (const x of take) {
+        const last = pieces[pieces.length - 1]
+        if (last && last.si === x.si) last.text += x.c
+        else pieces.push({ si: x.si, text: x.c })
+      }
+      const out1: Line = [...(first || !lead ? [] : [{ text: ' '.repeat(lead), color: row[0]!.color }]), ...pieces.map(p => ({ ...row[p.si]!, text: p.text }))]
+      const end = out1[out1.length - 1]
+      if (end) end.text = end.text.trimEnd() || ' '
+      out.push(out1.length ? out1 : [{ text: ' ', color: 'text' }])
+      first = false
+    }
+  }
+  return out
 }
 
 /** The tabs under the banner: "[Tasks]  Scouts   Settings", the shown one bright; each one a button for its tab. */
@@ -439,8 +526,9 @@ export function tabsLine(tab: PanelTab): Line {
   ])
 }
 
-/** What a body of the panel holds (between the tabs and the footer). */
-type Body = { lines: Line[]; hits: (PanelHit | null)[]; ids: string[]; selected: string }
+/** What a body of the panel holds (between the tabs and the footer); its first `head` lines (the page's title) stay
+ *  at the top while the rest scrolls. */
+type Body = { lines: Line[]; hits: (PanelHit | null)[]; ids: string[]; selected: string; head?: number }
 
 /** A body being made: lines, each with what a click on it does. */
 function bodyMaker() {
@@ -448,8 +536,8 @@ function bodyMaker() {
   const hits: (PanelHit | null)[] = []
   const add = (l: Line, hit: PanelHit | null = null) => (lines.push(l), hits.push(hit))
   const blank = () => lines.length && add([{ text: ' ', color: 'text' }])
-  const head = (text: string) => add([{ text, color: 'text', bold: true }])
-  return { lines, hits, add, blank, head }
+  const heading = (text: string) => add([{ text, color: 'text', bold: true }])
+  return { lines, hits, add, blank, heading }
 }
 
 /** Text as lines of one color, each of its own lines wrapped to `w` after `indent` spaces. */
@@ -498,10 +586,11 @@ function scoutPage(f: ViewFile, sc: SymccScout, choice: PanelChoice, nowMs: numb
   const opened = choice.run ? shown.find(x => x.run.ended === choice.run) : undefined
   if (opened) {
     b.add([{ text: sc.name, color: 'claude', bold: true }, { text: ` · run that ended ${opened.run.ended}`, color: 'inactive' }])
+    const head = b.lines.length
     b.add([{ text: scoutRunLine(opened.run, opened.tasks, nowMs), color: scoutOutcomeTone(opened.run.outcome) }])
     if (opened.run.why) b.add([{ text: opened.run.why, color: 'error' }])
     b.blank()
-    b.head('Report')
+    b.heading('Report')
     const report = opened.run.report
     if (!report) b.add([{ text: '  (this run reported nothing)', color: 'inactive' }])
     else if (choice.report === undefined) b.add([{ text: '  (reading the report…)', color: 'inactive' }])
@@ -509,10 +598,10 @@ function scoutPage(f: ViewFile, sc: SymccScout, choice: PanelChoice, nowMs: numb
     else for (const l of textLines(choice.report.trim(), 'text', w)) b.add(l)
     if (report) {
       b.blank()
-      b.head('File')
+      b.heading('File')
       b.add([{ text: `  ${report}`, color: 'autoAccept' }])
     }
-    return { ...b, ids: [], selected: '' }
+    return { ...b, ids: [], selected: '', head }
   }
   const r = scoutRow(sc, nowMs)
   const head = wrapSegs([
@@ -521,6 +610,7 @@ function scoutPage(f: ViewFile, sc: SymccScout, choice: PanelChoice, nowMs: numb
     { text: ` · ${r.every}${r.model ? ` · ${r.model}` : ''} · ${r.ran}`, color: 'inactive' },
   ], w)
   for (const l of head) b.add(l)
+  const headLines = b.lines.length
   const firstLine = (sc.prompt ?? '').split('\n').map(l => l.trim()).find(Boolean) ?? ''
   const title = sc.summary?.trim() || firstLine
   if (title) b.add([{ text: title, color: sc.summary?.trim() ? 'text' : 'inactive', ...(sc.summary?.trim() ? { bold: true } : {}) }])
@@ -528,19 +618,19 @@ function scoutPage(f: ViewFile, sc: SymccScout, choice: PanelChoice, nowMs: numb
   const problem = scoutLastRunProblem([...shown].reverse().map(x => x.run))
   if (problem && !sc.running) b.add([{ text: problem, color: 'error' }])
   b.blank()
-  b.head('Instructions')
+  b.heading('Instructions')
   if (sc.prompt?.trim()) for (const l of textLines(sc.prompt.trim(), 'text', w)) b.add(l)
   else b.add([{ text: `  (not loaded yet: run /${f.name}-scouts)`, color: 'inactive' }])
   b.blank()
-  b.head('Runs')
+  b.heading('Runs')
   const ids = shown.map(x => x.run.ended)
   const selected = ids.length ? ids[Math.min(Math.max(0, choice.cursor), ids.length - 1)]! : ''
   b.add([{ text: shown.length ? '  Enter on a run shows its report' : '  (no runs yet)', color: 'inactive' }])
   for (const x of shown) b.add([{ text: x.run.ended === selected ? '› ' : '  ', color: 'ide', bold: true }, { text: scoutRunLine(x.run, x.tasks, nowMs), color: scoutOutcomeTone(x.run.outcome) }], { run: x.run.ended })
   b.blank()
-  b.head('File')
+  b.heading('File')
   b.add([{ text: `  ${scoutFile(sc.name, f.name)}`, color: 'autoAccept' }])
-  return { ...b, ids, selected }
+  return { ...b, ids, selected, head: headLines }
 }
 
 /** Which Settings groups are open at first: none, as on the Claude Code board's Settings page (S.settingsOpen). */
@@ -568,7 +658,7 @@ function defsList(f: ViewFile, list: SettingPage, cursor: number, w: number): Bo
   const b = bodyMaker()
   const all = defsIn(f, list)
   const noun = list === 'roles' ? 'role' : 'kind'
-  b.head(list === 'roles' ? 'Roles' : 'Kinds')
+  b.heading(list === 'roles' ? 'Roles' : 'Kinds')
   if (!all.length) b.add([{ text: `  (none in the board's view yet)`, color: 'inactive' }])
   const ids = all.map(x => defPageId(list, x.name))
   const selected = ids.length ? ids[Math.min(Math.max(0, cursor), ids.length - 1)]! : ''
@@ -595,7 +685,7 @@ function defsList(f: ViewFile, list: SettingPage, cursor: number, w: number): Bo
   }
   b.blank()
   b.add([{ text: `Enter opens a ${noun} · a new one: ask the lead, or add .${f.name}/${list}/<name>.md (a file you add or edit yourself shows here at the next board change)`, color: 'inactive' }])
-  return { ...b, ids, selected }
+  return { ...b, ids, selected, head: 1 }
 }
 
 /** One role's or kind's page: its name, where it comes from and whether it is off, what it is for; a role's model,
@@ -613,7 +703,7 @@ function defPage(f: ViewFile, list: SettingPage, x: ViewDef, w: number): Body {
     if (role && isCheckerRole(x.name)) for (const l of wrapSegs([{ text: `never a task's role, and not turned on or off here: the checker setting runs it (Settings → checker, now ${checkerOn(f.view) ? 'on' : 'off'})`, color: 'inactive' }], w)) b.add(l)
     const section = (title: string, value: string, none: string) => {
       b.blank()
-      b.head(title)
+      b.heading(title)
       b.add([{ text: `  ${value || none}`, color: value ? 'text' : 'inactive' }])
     }
     if (role) {
@@ -622,16 +712,16 @@ function defPage(f: ViewFile, list: SettingPage, x: ViewDef, w: number): Body {
       section('Tools', (x.tools ?? []).join(', '), '(none: the base tools only)')
     }
     b.blank()
-    b.head(role ? 'Checklist' : 'Body')
+    b.heading(role ? 'Checklist' : 'Body')
     if (x.text.trim()) for (const l of textLines(x.text.trim(), 'text', w)) b.add(l)
     else b.add([{ text: role ? '  (none: a plain worker)' : '  (none)', color: 'inactive' }])
   }
   b.blank()
-  b.head('File')
+  b.heading('File')
   b.add([{ text: `  ${x.file}`, color: 'autoAccept' }])
   b.blank()
   b.add([{ text: 'To change what it says: ask the lead, or edit its file (your own edit shows here at the next board change)', color: 'inactive' }])
-  return { ...b, ids: [], selected: '' }
+  return { ...b, ids: [], selected: '', head: 1 }
 }
 
 /** The Settings tab: each group (Work, Checks before merging, ...) as a heading that opens or closes, like the
@@ -798,9 +888,10 @@ function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = ''
   const q = v.questions?.find(x => x.id === id)
   if (q) {
     addAll(wrapSegs([{ text: q.id, color: 'claude', bold: true }, { text: `  ${q.text}`, color: 'text', bold: true }], w))
+    const head = b.lines.length
     b.add([{ text: ' ', color: 'text' }])
     choices()
-    return { ...b, ids: [], selected: id }
+    return { ...b, ids: [], selected: id, head }
   }
   const t = v.tasks.find(x => x.id === id)
   if (!t) return null
@@ -809,6 +900,8 @@ function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = ''
   // (`merging`, an approve this panel just sent: its step at once, on the badge, the Status row and the Stage line alike)
   const badge = statusBadge(t, nowMs, undefined, merging)
   b.add([{ text: `[${badge.text}]`, color: badge.color, bold: true }])
+  // the title and the badge stay at the top while the rest of the page scrolls
+  const head = b.lines.length
   const asked = taskAsks(t, v.max_minutes)
   if (asked) {
     b.add([{ text: ' ', color: 'text' }])
@@ -833,7 +926,7 @@ function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = ''
     sec.lines.slice(0, most).forEach(l => b.add(l.segs.length ? l.segs : [{ text: ' ', color: 'text' }], l.action ? { key: 'd' } : null))
     if (sec.lines.length > most) b.add([{ text: `  … (${sec.lines.length - most} more lines)`, color: 'inactive' }])
   }
-  return { ...b, ids: [], selected: id }
+  return { ...b, ids: [], selected: id, head }
 }
 
 /** A numbered choice of a question, a line a click picks ("  [1] Allow", "  [3] Answer…"). */
