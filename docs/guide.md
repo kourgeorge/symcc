@@ -957,6 +957,18 @@ Two things listen today:
   failed, ...) are written as before. These stage lines are left out of the "Earlier tries"
   list a retrying worker sees, so they never push out what went wrong.
 
+A second log, `.symcc/evidence.jsonl`, shows where agents struggle. It gets one JSON line for
+each of these:
+
+- a guard refusing a tool call (which guard, and a short reason),
+- a worker stopping because it needs files outside its list,
+- a worker asking you a question (only that it asked, never the text),
+- a checker's verdict,
+- how a task's turn in the merge queue ended (merged, review, tests failed, timed out, clash).
+
+No full commands, file contents or secret-looking text are kept. When the file passes 2 MB it is
+renamed to `evidence-archive-<time>.jsonl` and a fresh one starts.
+
 For developers: code that wants these events calls `onTaskEvent(fn)` from
 `hooks/app/events.ts`. `fn` gets the events of each save, and the call returns a function that
 stops listening.
@@ -1044,19 +1056,21 @@ Without one, the page shows the first line of the instructions there instead, in
 colour.
 
 Under those, **Runs** lists the scout's recent runs, newest first, one line each:
-when it ended, how it ended (found, nothing, stopped, API error, refusal or couldn't start),
-how many findings its report numbers, and the tasks made from it (a task the lead adds from
-this scout's finding is saved in the scout's latest run that reported something, so it stays
-listed after the task is archived). Open one to read that run's whole report; in VS Code's
-side panel each run is a button, and "← <scout>" goes back. Esc on a run's page goes back to
-the scout's page too, and leaving the scout's page any other way (Esc again, another view,
-closing the panel) closes the run, so the scout opens on its own page next time.
-When the last run ended on an API error or a refusal, the page says so under the header
-("Its last run ended on an API error, so nothing was reported."). Each scout keeps its last
-50 runs in `.symcc/scouts/<name>.runs.json` and each run's full report in
-`.symcc/reports/scouts/<name>-<time>.md`; older runs and their report files are removed.
-The first time, a scout's last report from `.symcc/scouts.json` becomes its first run (its
-tasks are worked out from the board: the scout's tasks added after it).
+
+- when it ended,
+- how it ended (found, nothing, stopped, API error, refusal or couldn't start),
+- how many findings its report numbers,
+- the tasks made from it. A task the lead adds from a finding is saved in the scout's latest run
+  that reported something, so it stays listed after the task is archived.
+
+Open a run to read its whole report. In VS Code's side panel each run is a button, and
+"← <scout>" goes back. Esc goes back too. Leaving the scout's page any other way closes the run,
+so the scout opens on its own page next time.
+
+When the last run ended on an API error or a refusal, the page says so under the header ("Its
+last run ended on an API error, so nothing was reported."). Each scout keeps its last 50 runs in
+`.symcc/scouts/<name>.runs.json` and each run's full report in
+`.symcc/reports/scouts/<name>-<time>.md`. Older runs and their report files are removed.
 
 You can also make and change scouts right in the board panel: on the Scouts view, "New
 scout" asks for a name, and "Edit" on a scout's page opens its edit page. It shows the same
@@ -1066,14 +1080,18 @@ instructions is used) and **Instructions**. The name is the file's name, so the 
 can't change it: to rename a scout, rename its file. Save writes the file (other front
 matter keys are kept) and the new timing applies at once. `/symcc-scout <name>` runs a scout now.
 
-Or just ask the lead: it has a `scouts` tool. It can list the scouts (how often each runs,
-like "every 2 days" or "on demand", whether it is paused or running, its next and last run
-and the first lines of its last report), show one in full (its instructions, whole last
-report and its last few runs), add or change one (name of lowercase letters, digits and dashes, every_minutes with
-0 for only on demand, an optional model, and the instructions), remove one (it checks with
-you first) and run one now, just like "run now" (a paused scout runs too, once, and stays paused;
-refused, with the reason, when the scout is already running or git isn't set up). Every change shows on the board at once. Only
-you pause or resume scouts; the lead can't.
+Or just ask the lead. It has a `scouts` tool that can:
+
+- **list** the scouts: how often each runs ("every 2 days" or "on demand"), whether it is paused
+  or running, its next and last run, and the first lines of its last report;
+- **show** one in full: its instructions, its whole last report and its last few runs;
+- **add or change** one: a name of lowercase letters, digits and dashes, `every_minutes` (0 for
+  only on demand), an optional model, and the instructions;
+- **remove** one (it checks with you first);
+- **run** one now, like "run now". A paused scout runs once and stays paused. The run is refused,
+  with the reason, when the scout is already running or the project has no git yet.
+
+Every change shows on the board at once. Only you pause or resume scouts; the lead can't.
 
 ### Scouts that run only on demand
 
@@ -1456,9 +1474,6 @@ So `board.json` stays small, done and dropped tasks that have not changed for
   answer "T-12 is archived". Retrying an archived *dropped* task brings it back to the
   board as `todo`, with a history line.
 
----
-
-
 ### A worker over its time limit
 
 When a worker runs past `max_minutes` (45 by default), symcc does not stop it. The task stays
@@ -1477,6 +1492,8 @@ board. The worker keeps working while you decide.
 - **No answer**: once the worker has run its limit plus `max_minutes` again (twice the limit when
   no time was added), the same as Stop it happens.
 
+---
+
 ## Stats: time and tokens
 
 `/symcc-stats` prints a plain text report built only from what the board already keeps (each
@@ -1494,7 +1511,10 @@ its read-only `stats` tool.
   range, e.g. `/symcc-stats full 7d`) adds them back: the billed-equivalent lines with how they
   are weighed, where the lead's tokens come from, and why waiting time is not shown. The lead's
   `stats` tool gets the full text, unless it asks for the short one.
-- **Web page:** `/symcc-stats html` (also with a range, e.g. `/symcc-stats html 7d`) writes the same figures as one self-contained page with charts, `.symcc/stats.html` (no outside links, works offline, light and dark, fits a phone, prints well), says where it is and tries to open it in your browser.
+- **Web page:** `/symcc-stats html` (also with a range, e.g. `/symcc-stats html 7d`) writes the
+  same figures as one page with charts, `.symcc/stats.html`. The page is self-contained: no outside
+  links, so it works offline. It follows light and dark, fits a phone and prints well. symcc says
+  where the file is and tries to open it in your browser.
 - **Kinds of tokens:** symcc keeps four counts apart wherever it records tokens (each try,
   each scout run, the lead's calls): *input*, *output*, *cache write* (input saved to the
   prompt cache) and *cache read* (input read back from it). They cost very different amounts:
@@ -1531,14 +1551,20 @@ its read-only `stats` tool.
   tokens, tries per task, share done on the first try, lead time: from made to done); per
   try (average time and tokens); the 5 biggest tasks by tokens and by time (bars); how tasks
   ended (merged on its own, approved by you, or answered for an investigation; failed
-  tries by reason: tests, clash with main, files out of scope, stopped, rejected);
+  tries by reason: tests, clash with main, files out of scope, restarted by a change, stopped,
+  rejected);
   investigations on their own (how many, answered, time, tokens, tries; see
   [investigation tasks](#investigation-tasks)); by role and where tasks came from (lead,
   you, all scouts with each scout on its own line under them, workers), each with its share,
-  average tokens and time. Each scout's line has a small scorecard under it (what its findings became is also on each scout's page, as "Results · last 7 days: … · in all: …"): how many tasks its
-  findings became (how many merged, were dropped or are still open), its own tokens in the range,
-  and the tokens per merged fix (its tokens plus its merged tasks' tokens, divided by the number
-  merged; "—" when none merged). A scout that used tokens but made no task is listed too; done per day for the last 7 days with activity, oldest first.
+  average tokens and time. Each scout's line has a small scorecard under it (the scout's own page shows the
+  same as "Results · last 7 days: … · in all: …"):
+  - how many tasks its findings became (merged, dropped or still open),
+  - its own tokens in the range,
+  - the tokens per merged fix: its tokens plus its merged tasks' tokens, divided by the number
+    merged ("—" when none merged).
+
+  A scout that used tokens but made no task is listed too. The last part is tasks done per day,
+  for the last 7 days with activity, oldest first.
 - **What is left out:** tasks with no tries recorded are left out of the averages (the
   report says how many). Time waiting for you is not shown: history
   entries from older boards have no times.
@@ -1578,6 +1604,9 @@ your-project/
     ├── reports/          each try's full worker report (T-3-try-2.md), and scouts/ with
     │                     each scout run's full report (bugs-2026-11-18T10-20-30-000Z.md)
     ├── events.jsonl      the activity log: every task event, one JSON line each (see Task events)
+    ├── evidence.jsonl    where agents struggled: refusals, stops, questions, verdicts (see Task events)
+    ├── stats.html        the page `/symcc-stats html` writes
+    ├── processes.json    the agent processes running now (Node host only)
     ├── org-mem.md        organizational memory (org-mem): short notes for the agents, kept by the lead (see below)
     └── worktrees/
         └── T-3/          a worker's private copy of the project (branch symcc/T-3),
