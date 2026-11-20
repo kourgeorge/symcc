@@ -2,6 +2,22 @@
 
 When a set of user-facing changes is ready to release, bump the version in both `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` and add an entry here.
 
+## 0.5.13 (2026-11-20)
+
+### Added
+- Org-mem goes through the lead: agents only suggest notes at the end of a report (surprising, useful to other tasks, short, not already there); a merged task's suggestions reach the lead, who adds, replaces or removes notes with the new `orgmem` tool. Notes have no task id, only a date; a dropped task's suggestions are thrown away.
+- A yellow warning when another session drives the board, on every board and above the prompt, with `/symcc-drive` to take over; tasks running there say "runs in the other session", and "it looks idle" is added when it hasn't started them for 5 minutes.
+- `hooks/engine.ts`: one list of what the hosts use from the engine (nothing imports it yet; drift is only reported), and a short "engine and clients" docs page.
+
+### Changed
+- The line above the prompt names each task's real step ("1 in checker · 1 in queue · 1 merging") instead of calling them all "merging".
+- The task page's Tries row shows the last try and the sum: "Tries: 3 · last: 6m · 0.9M tokens · all: 17m · 2.7M tokens".
+- VS Code: doing and to do are one list like the terminal's, each row "T-5 ▶ 5m title", using the panel's real width.
+- The guide explains task states, stages and the single merge queue, and why it works that way; other docs brought up to date.
+
+### Fixed
+- OpenCode: the task page's buttons at the bottom were drawn below the visible area; the footer now always shows.
+
 ## 0.5.12 (2026-11-20)
 
 ### Added
