@@ -59,9 +59,9 @@ test('the add reply says to ask with the pop-up when the host has one, else as n
   expect(plain).not.toContain('pop-up')
   S.W = CLAUDE_WORDS
   const popup = await call(w.host, { action: 'add', text: 'Add a scout?', options: ['Yes', 'No'] })
-  expect(popup).toContain('offering the options with AskUserQuestion, plus "or answer on the board"')
+  expect(popup).toContain('offering the options with AskUserQuestion, with the same question text: symcc ties that pop-up to Q-2')
   expect(popup).not.toContain('numbered plain chat text')
-  expect(popup).toContain('say once "answered on the board; you can close the pop-up"')
+  expect(popup).not.toContain('you can close the pop-up')
   const many = await call(w.host, { action: 'add', text: 'Which one?', options: ['A', 'B', 'C', 'D', 'E'] })
   expect(many).toContain('show the first 3 plus "the rest on the board"')
 })

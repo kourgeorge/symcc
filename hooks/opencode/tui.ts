@@ -257,9 +257,9 @@ export type TuiBoard = {
   stop: () => void
 }
 
-/** The keymap bindings of the panel's keys. */
-const KEY_BINDS: Record<PanelKey, string> = {
-  up: 'up', down: 'down,j', open: 'return', back: 'b,left', close: 'escape',
+/** The keymap bindings of the panel's keys: k and j always move (as ↑ and ↓), on every page; no action has them. */
+export const KEY_BINDS: Record<PanelKey, string> = {
+  up: 'up,k', down: 'down,j', open: 'return', back: 'b,left', close: 'escape',
   ...(Object.fromEntries(LETTER_KEYS.map(k => [k, k])) as Record<LetterKey, string>),
   ...(Object.fromEntries(CHOICE_KEYS.map(k => [k, k])) as Record<ChoiceKey, string>),
 }
@@ -467,12 +467,9 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     if (key === 'p' && sc) return send(sessionID, { kind: 'scout', scout: open, paused: !sc.paused })
     if (key === 'e' && sc) return editScout(sc, sessionID)
   }
-  const press = async (pressed: PanelKey, sessionID: string) => {
+  const press = async (key: PanelKey, sessionID: string) => {
     // Esc closes the panel (OpenCode 2.3 leaves closing to the panel's own keys)
-    if (pressed === 'close') return ctx.ui.panel.close()
-    // k moves up (as ↑), except on a task's page that has an action on k (Stash to backlog, Keep as a note)
-    const onTask = tab() === 'tasks' && opened() ? file()?.view.tasks.find(x => x.id === opened()) : undefined
-    const key: PanelKey = pressed === 'k' && !(onTask && panelTaskActions(onTask).some(a => a.key === 'k')) ? 'up' : pressed
+    if (key === 'close') return ctx.ui.panel.close()
     const to = TAB_OF[key]
     if (to) return showTab(to)
     const f = file()

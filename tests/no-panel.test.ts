@@ -212,7 +212,7 @@ test("no pop-up question tool: the lead guide and lead notes don't name one; Cla
   expect(notes).toContain('offering the options as numbered plain chat text, plus "or answer on the board"')
   expect(notes).toContain('offering these as numbered plain chat text, plus "or answer on the board"')
   S.W = CLAUDE_WORDS
-  expect(leadGuide()).toContain('and you ask them in the chat with AskUserQuestion, with the same options')
+  expect(leadGuide()).toContain('you ask in the chat with AskUserQuestion, with the same options')
   expect(leadGuide()).not.toContain('Never use AskUserQuestion')
   expect(workerQuestionText('T-2', 'Which one?', ['A', 'B'])).toContain('offering the options with AskUserQuestion, plus "or answer on the board"')
   expect(overtimeLeadText('T-3', 'Add search', 30)).toContain('offering these with AskUserQuestion, plus "or answer on the board"')

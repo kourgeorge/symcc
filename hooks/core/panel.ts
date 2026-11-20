@@ -517,7 +517,7 @@ export function taskActions(t: BoardTask, ctx: TaskActionCtx = {}): TaskAction[]
   const out: (TaskAction | false)[] = ctx.merging
     ? []
     : isAnswered(t)
-      ? [a('done', 'Done', 'done', 'a', { main: true, keyInLabel: true }), a('keep-note', 'Keep as a note', 'keep as a note', 'k', { keyInLabel: true }), a('ask-more', 'Ask more', 'ask more', 'x', { keyInLabel: true })]
+      ? [a('done', 'Done', 'done', 'a', { main: true, keyInLabel: true }), a('keep-note', 'Keep as a note', 'keep as a note', 'v', { keyInLabel: true }), a('ask-more', 'Ask more', 'ask more', 'x', { keyInLabel: true })]
       : [inReview && a('approve', 'Approve', 'approve', 'a', { main: true }), inReview && a('reject', 'Reject', 'reject', 'x')]
   out.push(
     // the changes stay open to look at while the merge runs
@@ -528,7 +528,7 @@ export function taskActions(t: BoardTask, ctx: TaskActionCtx = {}): TaskAction[]
     fileWait && !ctx.merging && a('merge-now', 'Merge now', 'merge now', 'r', { main: true, keyInLabel: true }),
     (s === 'failed' || s === 'dropped') && a('retry', 'Retry', 'retry', 'r', s === 'failed' ? { main: true } : {}),
     s === 'backlog' && a('to-todo', 'Move to todo', 'move to todo', 'o', { main: true, keyInLabel: true }),
-    (s === 'todo' || s === 'paused' || s === 'failed') && a('stash', 'Stash to backlog', 'stash to backlog', 'k', { keyInLabel: true }),
+    (s === 'todo' || s === 'paused' || s === 'failed') && a('stash', 'Stash to backlog', 'stash to backlog', 'z', { keyInLabel: true }),
     canPickRole(t) && a('role', 'Role', 'role', 'l', { keyInLabel: true }),
     canMarkMerged(t) && a('already-merged', 'Already merged', 'already merged', 'h', { keyInLabel: true }),
     // in review x is Reject (or Ask more), so Drop has no key there

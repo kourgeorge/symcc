@@ -15,7 +15,7 @@ import { bandLines, bandDraw, BAND_CLICK_HINT, panelLines, panelKeys, parseViewF
 import { readFile } from 'node:fs/promises'
 import { taskSections } from '../../core/task-sections'
 import { PLUGIN_ROOT } from '../host'
-import { startTui, viewPaths, loadTuiRuntime, BOARD_PANEL, setupFailed, colorOf, drawLines, type TuiContext, type TuiRuntime, type TuiPanelInput, type TuiKeyLayer } from '../tui'
+import { startTui, KEY_BINDS, viewPaths, loadTuiRuntime, BOARD_PANEL, setupFailed, colorOf, drawLines, type TuiContext, type TuiRuntime, type TuiPanelInput, type TuiKeyLayer, type PanelKey } from '../tui'
 
 const NOW = Date.parse('2026-11-19T12:00:00.000Z')
 /** Every Settings group's title (all of them open). */
@@ -189,7 +189,7 @@ test('the panel: the banner, then the list grouped by state (NEEDS YOU, what run
   expect(panelTaskActions(t2).map(a => `${a.key} ${a.id}`)).toEqual(['a approve', 'x reject', 'd show-changes', 'n needs-review'])
   // an answered investigation in review: done, keep as a note and ask more, as on the other hosts
   const inv = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => (t.id === 'T-2' ? { ...t, kind: 'investigation' } : t)) } } as ViewFile
-  expect(panelKeys(inv, 'T-2').map(k => `${k.key} ${k.word}`)).toEqual(['a done', 'k keep as a note', 'x ask more', 'n needs review', 'b back'])
+  expect(panelKeys(inv, 'T-2').map(k => `${k.key} ${k.word}`)).toEqual(['a done', 'v keep as a note', 'x ask more', 'n needs review', 'b back'])
   // a waiting task with no question text says its note, else that it waits (core's taskAsks)
   const noQ = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => (t.id === 'T-3' ? { ...t, question: null, options: undefined, note: '' } : t)) } } as ViewFile
   expect(panelLines(noQ, { opened: 'T-3', cursor: 0 }, NOW, 100).lines.map(lineText).some(l => l.includes('asks: it waits for your answer'))).toBe(true)
@@ -355,12 +355,12 @@ test('T-584: a task page offers every one of core\'s taskActions with a key (but
   }
   const keysOf = (id: string) => panelTaskActions(task(id)).map(a => `${a.key} ${a.id}`)
   expect(keysOf('T-1')).toEqual(['p pause', 'x drop', 'n needs-review'])
-  expect(keysOf('T-2')).toEqual(['a done', 'k keep-note', 'x ask-more', 'n needs-review'])
-  expect(keysOf('T-3')).toEqual(['r retry', 'k stash', 'l role', 'h already-merged', 'x drop', 'n needs-review'])
+  expect(keysOf('T-2')).toEqual(['a done', 'v keep-note', 'x ask-more', 'n needs-review'])
+  expect(keysOf('T-3')).toEqual(['r retry', 'z stash', 'l role', 'h already-merged', 'x drop', 'n needs-review'])
   expect(keysOf('T-4')).toEqual(['o to-todo', 'l role', 'x drop', 'n needs-review'])
-  // the footer's hints are buttons for their own keys (u, k, l, h, n too)
+  // the footer's hints are buttons for their own keys (u, z, l, h, n too)
   const footer = panelLines(f, { opened: 'T-3', cursor: 0 }, NOW, 140).lines.at(-1)!
-  expect(footer.filter(x => x.hit).map(x => x.hit)).toEqual([{ key: 'r' }, { key: 'k' }, { key: 'l' }, { key: 'h' }, { key: 'x' }, { key: 'n' }, { key: 'back' }])
+  expect(footer.filter(x => x.hit).map(x => x.hit)).toEqual([{ key: 'r' }, { key: 'z' }, { key: 'l' }, { key: 'h' }, { key: 'x' }, { key: 'n' }, { key: 'back' }])
 
   const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)]])
   const sent: { sessionID: string; name: string; text: string }[] = []
@@ -421,11 +421,28 @@ test('T-584: a task page offers every one of core\'s taskActions with a key (but
   await goTo('T-4')
   await board.press('l', 's')
   expect(sent).toEqual([{ sessionID: 's', name: 'symcc-task', text: 'T-1 drop' }])
-  // on the list (and on a page with no k action) k moves up, as ↑ does
+  // k (and j) are bound to moving only, on every page (T-592): no letter key the panel takes is j or k
+  const bound = (ch: string) => (Object.keys(KEY_BINDS) as PanelKey[]).filter(key => KEY_BINDS[key].split(',').includes(ch))
+  expect(bound('k')).toEqual(['up'])
+  expect(bound('j')).toEqual(['down'])
+  expect(bound('z')).toEqual(['z'])
+  expect(bound('v')).toEqual(['v'])
+  // on the pages with Stash to backlog (T-3) and Keep as a note (T-2), k moves up and sends nothing;
+  // z stashes and v keeps the note
+  for (const [id, ch, text] of [['T-3', 'z', 'T-3 stash'], ['T-2', 'v', 'T-2 note']] as const) {
+    await goTo(id)
+    sent.length = 0
+    await board.press(bound('k')[0]!, 's')
+    expect(board.state().opened).toBe(id)
+    expect(sent).toEqual([])
+    await board.press(bound(ch)[0]!, 's')
+    expect(sent).toEqual([{ sessionID: 's', name: 'symcc-task', text }])
+  }
+  // on the list k moves the cursor up, as ↑ does
   await board.press('back', 's')
   await board.press('down', 's')
   const at = board.state().cursor
-  await board.press('k', 's')
+  await board.press(bound('k')[0]!, 's')
   expect(board.state().cursor).toBe(at - 1)
   expect(actionCommand({ kind: 'task', id: 'T-5', verb: 'review', arg: 'off' })).toEqual({ name: 'symcc-task', text: 'T-5 review off' })
   board.stop()

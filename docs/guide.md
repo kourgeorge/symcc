@@ -78,7 +78,7 @@ picks up again next time.
    ├── dropped  cancelled; stays on the list and never runs on its own;
    │            retry (r on its page, or ask the lead) brings it back to todo
    └── backlog  a parked idea or unclear work; never starts until you move it
-                to todo ("move T-5 to todo"); "stash" sends a todo, paused or
+                to todo ("move T-5 to todo"); "stash" (z on its page) sends a todo, paused or
                 failed task back here
 ```
 
@@ -131,8 +131,8 @@ answers it itself only when you already clearly said the answer, and then tells 
 answered. Otherwise it asks you in the chat, short and plain, with the worker's options (if
 any). In Claude Code it asks with the chat pop-up (AskUserQuestion) with the same choices;
 on a host with no pop-up it writes them as numbered choices in plain text. You can answer in
-the chat or on the board, whichever comes first (if you answer on the board, the lead doesn't
-ask again, and says once that you can close the pop-up): the answer goes into the
+the pop-up or on the board, whichever comes first (the pop-up is tied to the task's board
+question: answer on the board and the pop-up closes by itself): the answer goes into the
 task and sends it back to work, and a new try continues with it. What the worker already
 changed is kept.
 
@@ -168,15 +168,32 @@ briefly in the chat too. Each gets an id like `Q-3` and is kept in `board.json` 
   lead can also drop a question that no longer matters.
 
 **Both on the board and in the chat.** Where the host has a chat pop-up for questions
-(AskUserQuestion in Claude Code), the lead asks every question both ways: it stays on the
-board (a `Q-` question, or the task's own question: a review, an answered investigation, a
-worker's question or file request, more time) and also opens in the chat pop-up with the
-same choices. Answer in the pop-up and the lead closes the board question for you. Answer on
-the board first and the pop-up stays open; the lead says once "answered on the board; you can
-close the pop-up". The pop-up holds at most 4 choices, so a question with more shows the
-first 3 plus "the rest on the board" (or type yours under Other). On a host with no pop-up the lead writes the choices as numbered plain
-text, plus "or answer on the board". The lead never puts two questions under the same
-numbers.
+(AskUserQuestion in Claude Code), the lead just asks with the pop-up, and symcc puts each
+question on the board by itself:
+
+- A question about a task that waits for you (a review, an answered investigation, a
+  worker's question or file request, more time) has the task's id (T-5) as its header and is
+  tied to that task's own board question: no extra `Q-` entry. A task id only mentioned in
+  the question's text doesn't tie it.
+- Any other question becomes a `Q-` question with the same text and choices (or, when the
+  lead already put that exact question on the board, that one is used).
+
+The pop-up says "or answer on the board (Q-3)" under its choices. Whichever you answer first
+closes the other: answer on the board and the pop-up closes, and the lead reads your board
+answer as the pop-up's answer (no extra board update for it). Answer in the pop-up and the
+`Q-` question closes with your answer, or your answer goes into the task as the board's
+buttons would put it (an answer, more time, Allow or Don't allow, Approve, Done, Keep as a
+note; a reject or "ask more" still needs the lead, which gets your reason). Close the pop-up
+without answering and the question stays on the board. When one pop-up holds several
+questions and one of them can't go on the board (say a free-text one), your board answers are
+kept but the pop-up stays open for the rest. If you type your own words instead of picking,
+they answer the question when the pop-up has only one; with several, the lead is told which
+board questions are still open. The pop-up holds at most 4 choices,
+so a question with more shows the first 3 plus "the rest on the board" (or type yours under
+Other); picking "the rest on the board" is no answer, so the question stays open on the board
+for you to answer there. Workers never get the pop-up. On a host with no pop-up the lead puts the question on
+the board itself and writes the choices as numbered plain text, plus "or answer on the
+board". The lead never puts two questions under the same numbers.
 
 ---
 
@@ -522,7 +539,7 @@ The life of an investigation:
    - **Done** (`a`, "T-5 is done", tool `symcc approve`): the task ends `done` with the note
      "answered". Nothing is merged; its folder is removed, and its branch too, unless it
      has commits from earlier tries: then the branch is kept (the reply says so).
-   - **Keep as a note** (`k`, tool `symcc approve` with `keep_note: true`): Done, plus a
+   - **Keep as a note** (`v`, tool `symcc approve` with `keep_note: true`): Done, plus a
      new small docs task that writes the answer to `docs/research/<topic>.md`. That task is
      a normal change: tested and merged as usual.
    - **Ask more** (`x`, tool `symcc reject` with your follow-up question): the task goes
@@ -1547,7 +1564,7 @@ Workers, scouts and checkers are OpenCode sessions of their own. Each one is a c
 
 ### The board panel and the strip
 
-`/symcc-board` (or "symcc board" in OpenCode's command palette, ctrl+p) opens the board in OpenCode's session panel, next to the open session (run it again to close it; on OpenCode's home page, with no session open, a message says to open or start one first): the banner, then the tasks grouped as in Claude Code (Questions for you, NEEDS YOU, what runs and waits, the backlog, and Done and Dropped as counts), with the same marks, short states and times. ↑/↓ (or k/j) move, Enter opens a task or a question, b goes back, Esc closes the panel. On a task in review, a approves and x rejects (it asks for the reason); on a waiting task or a question, a answers (pick a choice, or Answer… to type your own). A task's page has the same sections as Claude Code's task page, with the same headings: ▍Why it failed (a failed task), ▍Answer (an answered investigation), ▍Details, ▍Changes (a task in review: its changed files; a click on one shows the changes, like d), ▍What to do, ▍History, ▍Report (the latest try's, read from its file when you open the page) and ▍Runs (time and cost). A long history or report is cut after its first lines with "… (n more lines)" (the whole report stays in its file); the mouse wheel scrolls the page. It offers the same actions as in Claude Code, with the same keys (p pause, u resume, r retry, o move to todo, k stash to backlog or keep as a note, l role, h already merged, x drop, n needs review on/off); drop asks for an optional reason and role lets you pick from the roles. Only Copy and Watch worker are not there. These are sent as slash commands in your session (`/symcc-approve`, `/symcc-reject`, `/symcc-task T-5 pause` and the other `/symcc-task` words, `/symcc-answer T-5 <answer>` or `Q-3 <answer>`), which you can also type, in Claude Code too.
+`/symcc-board` (or "symcc board" in OpenCode's command palette, ctrl+p) opens the board in OpenCode's session panel, next to the open session (run it again to close it; on OpenCode's home page, with no session open, a message says to open or start one first): the banner, then the tasks grouped as in Claude Code (Questions for you, NEEDS YOU, what runs and waits, the backlog, and Done and Dropped as counts), with the same marks, short states and times. ↑/↓ (or k/j, on every page, a task's page too) move, Enter opens a task or a question, b goes back, Esc closes the panel. On a task in review, a approves and x rejects (it asks for the reason); on a waiting task or a question, a answers (pick a choice, or Answer… to type your own). A task's page has the same sections as Claude Code's task page, with the same headings: ▍Why it failed (a failed task), ▍Answer (an answered investigation), ▍Details, ▍Changes (a task in review: its changed files; a click on one shows the changes, like d), ▍What to do, ▍History, ▍Report (the latest try's, read from its file when you open the page) and ▍Runs (time and cost). A long history or report is cut after its first lines with "… (n more lines)" (the whole report stays in its file); the mouse wheel scrolls the page. It offers the same actions as in Claude Code, with the same keys (p pause, u resume, r retry, o move to todo, z stash to backlog, v keep as a note, l role, h already merged, x drop, n needs review on/off); drop asks for an optional reason and role lets you pick from the roles. Only Copy and Watch worker are not there. These are sent as slash commands in your session (`/symcc-approve`, `/symcc-reject`, `/symcc-task T-5 pause` and the other `/symcc-task` words, `/symcc-answer T-5 <answer>` or `Q-3 <answer>`), which you can also type, in Claude Code too.
 
 As in Claude Code, the panel has three tabs under the banner: Tasks, Scouts and Settings. t, s and c switch between them (or click a tab). **Scouts** lists each scout with how often it runs, whether it is paused or when it runs next, and its last result; Enter opens a scout's page: its instructions, its recent runs (newest first, with the tasks made from them) and its file. On it, r runs the scout now and p pauses or resumes it (sent as `/symcc-scout <name>` and `/symcc-scout <name> pause` or `resume`), and e edits it: pick how often it runs, its model or its instructions, then type the new value (sent as `/symcc-scout <name> every 30`, `model <model>` or `model none` for the session's model, or `prompt <instructions>`; the rest of the scout's file is kept, and longer instructions are easier to write in the file itself). Enter on a run shows its report, and b goes back. **Settings** shows every setting in the same groups as Claude Code, each with its value, its default and its range, and what it does under it. Enter (or a click) changes the one under the cursor: on/off settings flip, mode, notify, scout_findings and tests_with_changes are picked from a list, and the rest are typed; it is sent as `/symcc-settings <name> <value>`. Under Workers, the Roles and Kinds rows (with how many there are, and how many are off) open their pages, as in Claude Code: a list of the roles or kinds, each with where it comes from (built-in, replaced or added), whether it is off and what it is for, and a file that can't be read says why. Enter opens one: its description, a role's model, skills and tools, its checklist (a role) or body (a kind), and its file. On it, o turns it off or on and r resets it to the built-in one (when you changed a built-in); these are sent as `/symcc-settings role <name> off` (or `on`, `reset`; `kind <name> ...` for a kind). general, the checker role, change and investigation can't be turned off. To add a role or kind, or change what one says, ask the lead (its change shows in the panel at once) or edit its file (OpenCode tells symcc of no finished edit, so the panel shows your own edit at the next board change). b goes back one page.
 

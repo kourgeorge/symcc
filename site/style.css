@@ -1,0 +1,82 @@
+/* symcc site: one shared style for the landing page and the doc pages (T-593). */
+:root {
+  --bg: #ffffff;
+  --fg: #1f2328;
+  --dim: #59636e;
+  --line: #d1d9e0;
+  --soft: #f6f8fa;
+  --link: #0969da;
+  --accent: #d97757;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1117;
+    --fg: #e6edf3;
+    --dim: #9198a1;
+    --line: #30363d;
+    --soft: #161b22;
+    --link: #4493f8;
+    --accent: #e08a6c;
+  }
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+a { color: var(--link); text-decoration: none; }
+a:hover { text-decoration: underline; }
+img { max-width: 100%; height: auto; }
+
+header.site {
+  display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1.5rem;
+  padding: .75rem 1.25rem; border-bottom: 1px solid var(--line); background: var(--soft);
+}
+header.site .brand { font-weight: 700; font-size: 1.2rem; color: var(--accent); }
+header.site nav { display: flex; flex-wrap: wrap; gap: .25rem 1rem; }
+header.site nav a { color: var(--fg); }
+
+main { max-width: 52rem; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; }
+footer.site { border-top: 1px solid var(--line); color: var(--dim); text-align: center; padding: 1rem 1.25rem; font-size: .9rem; }
+
+h1, h2, h3, h4 { line-height: 1.25; margin: 1.6em 0 .6em; }
+h1 { font-size: 2rem; }
+h2 { font-size: 1.5rem; padding-bottom: .3em; border-bottom: 1px solid var(--line); }
+h3 { font-size: 1.2rem; }
+.anchor { color: var(--dim); font-weight: 400; opacity: 0; margin-left: .25rem; }
+h1:hover .anchor, h2:hover .anchor, h3:hover .anchor, h4:hover .anchor, h5:hover .anchor, h6:hover .anchor, .anchor:focus { opacity: 1; }
+
+code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .88em; }
+code { background: var(--soft); padding: .1em .35em; border-radius: 4px; }
+pre { background: var(--soft); border: 1px solid var(--line); border-radius: 6px; padding: .8rem 1rem; overflow-x: auto; line-height: 1.45; }
+pre code { background: none; padding: 0; font-size: 1em; }
+
+blockquote { margin: 1em 0; padding: 0 1em; border-left: 4px solid var(--line); color: var(--dim); }
+.table { overflow-x: auto; margin: 1em 0; }
+table { border-collapse: collapse; width: 100%; }
+th, td { border: 1px solid var(--line); padding: .4rem .7rem; vertical-align: top; text-align: left; }
+th { background: var(--soft); }
+hr { border: 0; border-top: 1px solid var(--line); margin: 2em 0; }
+
+.hero { text-align: center; padding: 1.5rem 0 .5rem; }
+.hero h1 { margin-top: .5em; font-size: 2.4rem; }
+.hero .lead { font-size: 1.15rem; color: var(--dim); max-width: 40rem; margin: 0 auto; }
+.cta { margin: 1.5rem 0; display: flex; justify-content: center; flex-wrap: wrap; gap: .75rem; }
+.button { display: inline-block; padding: .55rem 1.2rem; border-radius: 6px; background: var(--accent); color: #fff; font-weight: 600; }
+.button:hover { text-decoration: none; filter: brightness(1.08); }
+.button.ghost { background: none; color: var(--fg); border: 1px solid var(--line); }
+figure { margin: 1rem 0; text-align: center; }
+.parts li, .links li { margin: .4em 0; }
+
+@media (max-width: 600px) {
+  body { font-size: 15px; }
+  main { padding: 1rem .9rem 2rem; }
+  .hero h1 { font-size: 1.8rem; }
+  h1 { font-size: 1.6rem; }
+  header.site { padding: .6rem .9rem; }
+}
