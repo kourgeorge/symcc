@@ -22,7 +22,7 @@
 // run without them. The names and shapes below are @opencode/plugin 2.3.0's tui Context (only what is used).
 import { DEFAULT_NAME, dataDir } from '../name'
 import { VIEW_FILE, parseViewFile, bandDraw, panelLines, panelKeys, panelTaskActions, TASK_ACTION_COMMANDS, hasPage, answerOptions, actionCommand, moveCursor, OWN_ANSWER, GROUPS_OPEN, groupOf, groupId, scoutRunsIn, settingsPlace, SETTINGS_OPEN, settingGroupOf, settingGroupId, PANEL_TABS, CHOICE_KEYS, type ChoiceKey, type ViewFile, type Line, type PanelAction, type PanelHit, type PanelKey, type PanelGroup, type PanelTab, type BandHit } from './board-view'
-import { SETTING_GROUPS, isScoutRunReport, parseSettingValue, settingChoices, settingInfo, settingValue, isSettingPage, everyText, everyMinutesOf, type SettingName, type ScoutEditField } from '../board'
+import { SETTING_GROUPS, isScoutRunReport, taskReports, parseSettingValue, settingChoices, settingInfo, settingValue, isSettingPage, everyText, everyMinutesOf, type SettingName, type ScoutEditField } from '../board'
 import type { SymccScout } from '../../types'
 
 export type { PanelKey, PanelHit, PanelTab }
@@ -285,6 +285,8 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   const [report, setReport] = r.createSignal<string | null | undefined>(undefined)
   // the answer just sent from the open page (T-583), so the page says it was sent
   const [sent, setSent] = r.createSignal<{ id: string; answer: string } | undefined>(undefined)
+  // the open task's latest report (T-580), read from its file when the page opens or a newer try's report comes
+  const [taskReport, setTaskReport] = r.createSignal<{ file: string; text: string | null | undefined } | undefined>(undefined)
   let width = 80
   // the panel's height in rows, once OpenTUI has laid it out (it bounds the scroll)
   let rows: number | undefined
@@ -299,11 +301,28 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     setNow(d.now())
     // the open task left the view: back to the list, so the list's keys work again
     keepPage(f)
+    readTaskReport()
+  }
+  /** Reads the open task's latest report, unless it is the one already read (or being read). */
+  const readTaskReport = () => {
+    const f = file()
+    const t = tab() === 'tasks' && opened() ? f?.view.tasks.find(x => x.id === opened()) : undefined
+    const latest = t ? taskReports(t).at(-1) : undefined
+    if (!f || !latest) return void (taskReport() && setTaskReport(undefined))
+    if (taskReport()?.file === latest.file) return
+    const id = opened()
+    setTaskReport({ file: latest.file, text: undefined })
+    void d.readText(`${f.root}/${latest.file}`).then(
+      text => opened() === id && taskReport()?.file === latest.file && setTaskReport({ file: latest.file, text }),
+      () => opened() === id && taskReport()?.file === latest.file && setTaskReport({ file: latest.file, text: null }),
+    )
   }
   /** Opens a page ('' = back to the list), from its top. */
   const openPage = (id: string) => {
     setOpened(id)
     setSent(undefined)
+    setTaskReport(undefined)
+    readTaskReport()
     setRun('')
     setRunCursor(0)
     setScroll(0)
@@ -349,7 +368,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   /** Whether the cursor is on a page's own rows (a scout's runs, the Roles or Kinds list), not the tab's list. */
   const onPage = () => tab() !== 'tasks' && !!opened()
   const draw = () => {
-    return panelLines(file(), { tab: tab(), opened: opened(), run: run(), report: report(), cursor: onPage() ? runCursor() : cursor(), groups: groups(), settingsOpen: settingsOpen(), scroll: scroll(), ...(rows ? { rows } : {}), ...(sent() ? { sent: sent()! } : {}) }, now(), width)
+    return panelLines(file(), { tab: tab(), opened: opened(), run: run(), report: report(), cursor: onPage() ? runCursor() : cursor(), groups: groups(), settingsOpen: settingsOpen(), scroll: scroll(), ...(rows ? { rows } : {}), ...(sent() ? { sent: sent()! } : {}), ...(taskReport() ? { taskReport: taskReport()! } : {}) }, now(), width)
   }
   /** The rows of the Tasks tab's list, even while a task's page is open (whose draw has no rows), so "open this id"
    *  can put the list cursor on that task and b comes back to it (T-568). */
