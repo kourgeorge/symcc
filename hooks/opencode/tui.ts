@@ -21,7 +21,7 @@
 // modules (Solid and OpenTUI's Solid renderer) are passed in (TuiRuntime), so this file type-checks and its tests
 // run without them. The names and shapes below are @opencode/plugin 2.3.0's tui Context (only what is used).
 import { DEFAULT_NAME, dataDir } from '../name'
-import { VIEW_FILE, parseViewFile, bandDraw, panelLines, panelKeys, panelTaskActions, panelRoleChoices, TASK_ACTION_COMMANDS, LETTER_KEYS, type LetterKey, hasPage, answerOptions, actionCommand, moveCursor, OWN_ANSWER, GROUPS_OPEN, groupOf, groupId, scoutRunsIn, settingsPlace, SETTINGS_OPEN, settingGroupOf, settingGroupId, PANEL_TABS, CHOICE_KEYS, type ChoiceKey, type ViewFile, type Line, type PanelAction, type PanelHit, type PanelKey, type PanelGroup, type PanelTab, type BandHit } from './board-view'
+import { VIEW_FILE, parseViewFile, bandDraw, panelLines, panelKeys, panelTaskActions, panelRoleChoices, TASK_ACTION_COMMANDS, LETTER_KEYS, type LetterKey, hasPage, answerOptions, actionCommand, moveCursor, OWN_ANSWER, GROUPS_OPEN, groupOf, groupId, scoutRunsIn, settingsPlace, SETTINGS_OPEN, settingGroupOf, settingGroupId, PANEL_TABS, CHOICE_KEYS, approveSent, type ApproveSent, type ChoiceKey, type ViewFile, type Line, type PanelAction, type PanelHit, type PanelKey, type PanelGroup, type PanelTab, type BandHit } from './board-view'
 import { SETTING_GROUPS, isScoutRunReport, taskReports, parseSettingValue, settingChoices, settingInfo, settingValue, isSettingPage, everyText, everyMinutesOf, type SettingName, type ScoutEditField } from '../board'
 import type { SymccScout } from '../../types'
 
@@ -291,6 +291,9 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   const [sent, setSent] = r.createSignal<{ id: string; answer: string } | undefined>(undefined)
   // the open task's latest report (T-580), read from its file when the page opens or a newer try's report comes
   const [taskReport, setTaskReport] = r.createSignal<{ file: string; text: string | null | undefined } | undefined>(undefined)
+  // the approve just sent from a task's page (T-614): until its first step is on the board, the page's badge, Status
+  // row and Stage line show it started ("✎ prep"), not "ready for review"
+  const [approving, setApproving] = r.createSignal<ApproveSent | undefined>(undefined)
   let width = 80
   // the panel's height in rows, once OpenTUI has laid it out (it bounds the scroll)
   let rows: number | undefined
@@ -303,6 +306,8 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     const f = await readViewFile(dir, d.readText, name)
     setFile(f)
     setNow(d.now())
+    // once the board shows the approve's step (or the task left review, or it is too old), the board carries it
+    if (approving() && !approveSent(f, approving(), now())) setApproving(undefined)
     // the open task left the view: back to the list, so the list's keys work again
     keepPage(f)
     readTaskReport()
@@ -372,7 +377,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   /** Whether the cursor is on a page's own rows (a scout's runs, the Roles or Kinds list), not the tab's list. */
   const onPage = () => tab() !== 'tasks' && !!opened()
   const draw = () => {
-    return panelLines(file(), { tab: tab(), opened: opened(), run: run(), report: report(), cursor: onPage() ? runCursor() : cursor(), groups: groups(), settingsOpen: settingsOpen(), scroll: scroll(), ...(rows ? { rows } : {}), ...(sent() ? { sent: sent()! } : {}), ...(taskReport() ? { taskReport: taskReport()! } : {}) }, now(), width)
+    return panelLines(file(), { tab: tab(), opened: opened(), run: run(), report: report(), cursor: onPage() ? runCursor() : cursor(), groups: groups(), settingsOpen: settingsOpen(), scroll: scroll(), ...(rows ? { rows } : {}), ...(sent() ? { sent: sent()! } : {}), ...(taskReport() ? { taskReport: taskReport()! } : {}), ...(approving() ? { approving: approving()! } : {}) }, now(), width)
   }
   /** The rows of the Tasks tab's list, even while a task's page is open (whose draw has no rows), so "open this id"
    *  can put the list cursor on that task and b comes back to it (T-568). */
@@ -501,7 +506,12 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
       if (reason) await send(sessionID, { kind: 'reject', id: open, reason })
       return
     }
-    if (command === 'approve' || command === 'diff') return send(sessionID, { kind: command, id: open })
+    if (command === 'approve') {
+      setApproving({ id: open, at: d.now() })
+      if (!(await sendOk(sessionID, { kind: 'approve', id: open })) && approving()?.id === open) setApproving(undefined)
+      return
+    }
+    if (command === 'diff') return send(sessionID, { kind: command, id: open })
     if (command === 'drop') {
       // the reason is optional: Enter on the empty box drops it without one; Esc keeps the task
       const reason = await ctx.ui.dialog.prompt({ title: `Drop ${open}`, description: 'Why (optional): Enter on an empty box drops it without a reason', placeholder: 'the reason, or nothing' })
