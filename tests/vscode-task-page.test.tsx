@@ -118,7 +118,10 @@ for (const id of RICH_IDS) {
 const TEN_MIN = 10 * 60_000
 /** T-504's running times at T0 (in the snapshot) and 10 minutes later. */
 const T504_LATER: [string, string][] = [
-  ['" · 25m · 4.6k tokens in all ·"', '" · 35m · 4.6k tokens in all ·"'],
+  // the Tries row: the running last try and the sum (T-631)
+  // (one character longer, so "4.6k" moves down to the next line with "tokens")
+  ['" · last: 5m (running) · all: 25m · 4.6k"', '" · last: 15m (running) · all: 35m ·"'],
+  ['["tokens"]', '["4.6k tokens"]'],
   ['"  try 2: 5m (running)"', '"  try 2: 15m (running)"'],
   ['"  total: 25m · 4.6k', '"  total: 35m · 4.6k'],
   // the badge and the Status row name the step with the total work time (T-587)
