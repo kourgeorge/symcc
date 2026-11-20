@@ -29,7 +29,7 @@ function task(id: string, status: BoardTask['status'], over: Partial<BoardTask> 
  * changes) and a running one; branches of done and dropped tasks in main, and one of a dropped task with unmerged
  * work; a stale worktree entry; a lead.json of a session gone an hour ago and a running task with no worker.
  */
-function world(over: { tasks?: BoardTask[] } = {}) {
+function world(over: { tasks?: BoardTask[]; folders?: string[] } = {}) {
   const files = new Map<string, { size: number; text?: string }>()
   const dirs = new Set<string>([D, `${D}/worktrees`, `${D}/reports`, `${D}/scratch`, `${D}/tasks`])
   const tasks = over.tasks ?? [task('T-2', 'done'), task('T-3', 'dropped'), task('T-5', 'done'), task('T-6', 'dropped'), task('T-494', 'dropped'), task('T-7', 'doing', { runs: [{ started: iso(30) }] }), task('T-8', 'todo')]
@@ -44,13 +44,17 @@ function world(over: { tasks?: BoardTask[] } = {}) {
   add(`${D}/.DS_Store`, 6000)
   add(`${D}/org-mem.md`, 500)
   add(`${D}/reports/T-2-try-1.md`, 300)
-  for (const id of ['T-5', 'T-6', 'T-7']) {
+  for (const id of ['T-5', 'T-6', 'T-7', ...(over.folders ?? [])]) {
     dirs.add(`${D}/worktrees/${id}`)
     add(`${D}/worktrees/${id}/.git`, 40)
   }
   const dirty = new Set([`${D}/worktrees/T-6`, `${D}/worktrees/T-7`])
   const branches = new Map([['symcc/T-2', sha('a')], ['symcc/T-3', sha('b')], ['symcc/T-5', sha('c')], ['symcc/T-6', sha('d')], ['symcc/T-494', sha('e')], ['symcc/T-7', sha('f')]])
   const inMain = new Set([sha('a'), sha('b'), sha('c'), sha('d')])
+  /** HEAD commits of folders that are not on their task's branch (a detached HEAD) */
+  const heads = new Map<string, string>()
+  /** HEAD commits a folder gets after its first look (a commit made between the list and the fix) */
+  const later = new Map<string, string>()
   let stale = 1
   let merging = false
   const writes: string[] = []
@@ -74,6 +78,13 @@ function world(over: { tasks?: BoardTask[] } = {}) {
     const g = a.slice(1)
     const s = g.join(' ')
     if (s === 'rev-parse -q --verify MERGE_HEAD') return merging ? done({ stdout: sha('9') }) : done({ exitCode: 1 })
+    if (s === 'rev-parse -q --verify HEAD') {
+      const dir = init?.cwd ?? ''
+      const h = heads.get(dir) ?? branches.get(`symcc/${dir.split('/').pop()}`)
+      if (later.has(dir)) heads.set(dir, later.get(dir)!)
+      return h ? done({ stdout: `${h}\n` }) : done({ exitCode: 1 })
+    }
+    if (g[0] === 'branch' && g[1] === '--contains') return done({ stdout: [...branches].filter(([, h]) => h === g[2]).map(([b]) => `${b}\n`).join('') })
     if (s === 'status --porcelain') return done({ stdout: dirty.has(init?.cwd ?? '') ? ' M a.txt\n' : '' })
     if (s === 'worktree prune --dry-run -v') return done({ stderr: stale ? 'Removing worktrees/T-9: gitdir file points to non-existent location\n' : '' })
     if (s === 'worktree prune') return (writes.push(j), (stale = 0), done())
@@ -122,7 +133,7 @@ function world(over: { tasks?: BoardTask[] } = {}) {
   S.root = ROOT
   S.me = 'me'
   S.writing = Promise.resolve()
-  return { ...w, files, dirs, branches, writes, setMerging: (on: boolean) => void (merging = on) }
+  return { ...w, files, dirs, branches, writes, heads, later, setMerging: (on: boolean) => void (merging = on) }
 }
 
 test('T-676: the doctor lists each case it finds, with sizes, and changes nothing without fix', async () => {
@@ -232,4 +243,58 @@ test('T-676: the lead tool, the command and the words', async () => {
   const ids = backupIds(['board.json.before-migrate-2026-11-13T09-05-01-000Z', 'board.json.before-migrate-2026-11-13T09-05-30-000Z', 'board.json.before-migrate-2026-11-14T08-00-00-000Z', 'archive.json.before-migrate-2026-11-14T08-00-00-000Z'])
   expect([...ids.values()]).toEqual(['m-1113-090501', 'm-1113-090530', 'm-1114-0800', 'm-archive-1114-0800'])
   expect(oldBackups([{ name: 'board.json.before-migrate-b' }, { name: 'board.json.before-migrate-a' }, { name: 'board.json' }]).map(f => f.name)).toEqual(['board.json.before-migrate-a'])
+})
+
+test('T-676: a board that can not be read: no folder, worktree entry or branch is offered, only the file checks', async () => {
+  const w = world({ folders: ['T-20'] })
+  w.files.set(`${D}/board.json`, { size: 9, text: '{ broken' })
+  const text = await doctor(w.host, '')
+  expect(text).toContain("the board can't be read, so folders and branches are left alone")
+  expect(text).toContain('m-1101-1000  old migration backup')
+  expect(text).toContain('.symcc/view.json is close to the 4.0 MB limit')
+  expect(text).not.toContain('w-T-')
+  expect(text).not.toContain('b-T-')
+  expect(text).not.toContain('p-worktrees')
+  expect(text).not.toContain('worktrees/T-20')
+  const said = await doctor(w.host, 'fix')
+  expect(said).toContain('cleaned up 2 of 2')
+  expect(w.dirs.has(`${D}/worktrees/T-20`)).toBe(true)
+  expect(w.dirs.has(`${D}/worktrees/T-5`)).toBe(true)
+  expect(w.branches.size).toBe(6)
+  expect(w.writes.some(x => x.startsWith('git '))).toBe(false)
+})
+
+test('T-676: a folder of a task not on the board is only listed, never offered', async () => {
+  const w = world({ folders: ['T-20'] })
+  const text = await doctor(w.host, '')
+  expect(text).toContain('- folder .symcc/worktrees/T-20/ (T-20 is not on the board), kept')
+  expect(text).not.toContain('w-T-20')
+  expect(await doctor(w.host, 'fix w-T-20')).toContain('Not offered any more, nothing done: w-T-20')
+  await doctor(w.host, 'fix')
+  expect(w.dirs.has(`${D}/worktrees/T-20`)).toBe(true)
+  expect(w.writes.some(x => x.includes('T-20'))).toBe(false)
+})
+
+test('T-676: a clean folder whose HEAD holds commits on no branch is kept, also when they come between the list and the fix', async () => {
+  const w = world()
+  w.heads.set(`${D}/worktrees/T-5`, sha('z'))
+  const text = await doctor(w.host, '')
+  expect(text).toContain('- folder .symcc/worktrees/T-5/ (T-5 is done) holds commits on no branch, kept')
+  expect(text).not.toContain('w-T-5')
+  expect(text).not.toContain('b-T-5')
+  await doctor(w.host, 'fix')
+  expect(w.dirs.has(`${D}/worktrees/T-5`)).toBe(true)
+  expect(w.branches.has('symcc/T-5')).toBe(true)
+  // a HEAD on some branch (here not in main) is safe: the folder can go
+  const o = world()
+  o.heads.set(`${D}/worktrees/T-5`, sha('e'))
+  expect(await doctor(o.host, '')).toContain('w-T-5  folder')
+  // checked again right before removal: a commit made after the check keeps the folder
+  const r = world()
+  r.later.set(`${D}/worktrees/T-5`, sha('z'))
+  const said = await doctor(r.host, 'fix w-T-5')
+  expect(said).toContain('✗ w-T-5')
+  expect(said).toContain('holds commits on no branch now')
+  expect(r.dirs.has(`${D}/worktrees/T-5`)).toBe(true)
+  expect(r.writes.some(x => x.startsWith('git worktree remove'))).toBe(false)
 })

@@ -45,6 +45,30 @@ async function dirty(host: Host, dir: string): Promise<boolean> {
   return !st || st.exitCode !== 0 || !!st.stdout.trim()
 }
 
+/**
+ * Whether folder `dir`'s HEAD commit is safe to lose the folder over: already in `into` or on some branch. False
+ * also when git can't tell, so a detached HEAD with commits on no branch is never removed.
+ */
+async function headKept(host: Host, dir: string, into: string): Promise<boolean> {
+  const h = await git(host, ['rev-parse', '-q', '--verify', 'HEAD'], dir).catch(() => null)
+  const head = h?.exitCode === 0 ? h.stdout.trim() : ''
+  if (!/^[0-9a-f]{7,64}$/i.test(head)) return false
+  const anc = await git(host, ['merge-base', '--is-ancestor', head, `refs/heads/${into}`]).catch(() => null)
+  if (anc?.exitCode === 0) return true
+  const on = await git(host, ['branch', '--contains', head, '--format=%(refname:short)']).catch(() => null)
+  return on?.exitCode === 0 && !!on.stdout.trim()
+}
+
+/** Lists a lead file held by a session that stopped (into `listed`); gives back the file's text. */
+async function leadCheck(host: Host, listed: Found[]): Promise<string | null> {
+  const nowMs = Date.now()
+  const leadText = await host.fs.read(path(S.N.leadFile)).catch(() => null)
+  const lead = parseLead(leadText)
+  if (lead && !isFresh(lead.heartbeat, nowMs))
+    listed.push({ kind: 'board', fixable: false, text: `${S.N.leadFile} names a session that stopped ${Math.round((nowMs - lead.heartbeat) / 60_000)} min ago, so no session drives the board: /${S.N.name}-drive makes this one drive it` })
+  return leadText
+}
+
 /** A folder's size in bytes by `du -sk`, or undefined when it can't be told. */
 async function folderBytes(host: Host, dir: string): Promise<number | undefined> {
   const r = await host.run(['du', '-sk', dir], { timeoutMs: 30_000 }).catch(() => null)
@@ -97,7 +121,14 @@ export async function doctorCheck(host: Host): Promise<Found[] | string> {
       listed.push({ kind: 'stray', fixable: false, text: `empty folder ${shown(`${dir}/${f.name}`)}/` })
   }
 
-  // 2. task folders (.<name>/worktrees/T-n) of tasks that are done, dropped or gone from the board
+  // without a board, no task's state is known: folders, worktree entries and branches are all left alone
+  if (!b) {
+    listed.push({ kind: 'board', fixable: false, text: `the board can't be read, so folders and branches are left alone (${S.N.boardFile} needs fixing first)` })
+    await leadCheck(host, listed)
+    return [...backups, ...listed]
+  }
+
+  // 2. task folders (.<name>/worktrees/T-n) of tasks that are done or dropped (a folder of a task not on the board is only listed)
   const wtRoot = path(S.N.worktrees)
   /** The folders kept below (not offered), by path: a branch checked out in one of them can't be deleted. */
   const keptDirs = new Map<string, string>()
@@ -106,7 +137,13 @@ export async function doctorCheck(host: Host): Promise<Found[] | string> {
     const t = taskOf(id)
     if (t && !FINISHED.includes(t.status)) continue
     const wt = `${wtRoot}/${id}`
-    const why = t ? `${id} is ${t.status}` : `${id} is not on the board`
+    if (!t) {
+      listed.push({ kind: 'worktree', fixable: false, text: `folder ${shown(wt)}/ (${id} is not on the board), kept; remove it by hand if you don't need it` })
+      keptDirs.set(wt, 'is not on the board')
+      continue
+    }
+    const why = `${id} is ${t.status}`
+    const into = intoOf(t)
     if (inUse(id, t, agents)) {
       listed.push({ kind: 'worktree', fixable: false, text: `folder ${shown(wt)}/ (${why}): an agent may still use it, kept` })
       keptDirs.set(wt, 'an agent may still use it')
@@ -123,11 +160,21 @@ export async function doctorCheck(host: Host): Promise<Found[] | string> {
       keptDirs.set(wt, 'has uncommitted changes')
       continue
     }
+    if (!(await headKept(host, wt, into))) {
+      listed.push({ kind: 'worktree', fixable: false, bytes, text: `folder ${shown(wt)}/ (${why}) holds commits on no branch, kept` })
+      keptDirs.set(wt, 'holds commits on no branch')
+      continue
+    }
     trees.push({
       kind: 'worktree', fixable: true, id: folderId(id), bytes, text: `folder ${shown(wt)}/ (${why})`,
       fix: async () => {
-        if (inUse(id, taskOf(id), await agentsNow(host))) return 'an agent may still use it'
+        const nb = await load(host).catch(() => null)
+        if (!nb) return "the board can't be read now"
+        const nt = nb.tasks.find(x => x.id === id)
+        if (nt && !FINISHED.includes(nt.status)) return `${id} is ${nt.status} now`
+        if (inUse(id, nt ?? taskOf(id), await agentsNow(host))) return 'an agent may still use it'
         if (await dirty(host, wt)) return 'it has uncommitted changes now'
+        if (!(await headKept(host, wt, into))) return 'it holds commits on no branch now'
         // no --force: git itself refuses a folder with changes
         const r = await git(host, ['worktree', 'remove', wt])
         return r.exitCode === 0 ? '' : `git worktree remove: ${(r.stderr || r.stdout).trim().slice(0, 150)}`
@@ -187,10 +234,7 @@ export async function doctorCheck(host: Host): Promise<Found[] | string> {
 
   // 5. the board: who drives it, and running tasks with no worker
   const nowMs = Date.now()
-  const leadText = await host.fs.read(path(S.N.leadFile)).catch(() => null)
-  const lead = parseLead(leadText)
-  if (lead && !isFresh(lead.heartbeat, nowMs))
-    listed.push({ kind: 'board', fixable: false, text: `${S.N.leadFile} names a session that stopped ${Math.round((nowMs - lead.heartbeat) / 60_000)} min ago, so no session drives the board: /${S.N.name}-drive makes this one drive it` })
+  const leadText = await leadCheck(host, listed)
   const driver = liveDriver(leadText, nowMs)
   // another live session's workers aren't in this session's agent list: only the driver (or nobody) can tell
   if (b && agents && (!driver || driver === S.me))

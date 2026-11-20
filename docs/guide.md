@@ -1508,7 +1508,8 @@ sizes. It changes nothing until you say so.
   into. The id says what the item is: `m-1101-1000` is the backup made on 1 November at
   10:00, `w-T-5` is T-5's folder, `b-T-5` its branch, `p-worktrees` the stale entries.
 - **What it only lists:** a branch that holds unmerged work (it says how many commits), a
-  folder with uncommitted changes (and a merged branch still checked out in such a folder), data files close to the 4 MB limit, stray files like
+  folder with uncommitted changes (and a merged branch still checked out in such a folder), a
+  folder whose commits are on no branch, a folder of a task that isn't on the board, data files close to the 4 MB limit, stray files like
   `.DS_Store` and empty `scratch/`, `ideas/` or `artifacts/` folders, a running task with no
   live worker (with the fix: `/symcc-task T-5 retry`), and a `lead.json` left by a session
   that is gone (with the fix: `/symcc-drive`).
@@ -1520,7 +1521,8 @@ sizes. It changes nothing until you say so.
   lead has a `doctor` tool, which it uses to clean up only after you said yes.
 - **Never touched:** reports, org-mem, scouts, roles and kinds, a running task's folder or
   branch, and anything unmerged or uncommitted. While a merge is going on, the doctor doesn't
-  run at all; try again when it is done.
+  run at all; try again when it is done. When `board.json` can't be read, it can't tell which
+  tasks are finished, so it leaves every folder and branch alone and only checks the files.
 
 ### A worker over its time limit
 
