@@ -2,6 +2,11 @@
 
 When a set of user-facing changes is ready to release, bump the version in both `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` and add an entry here.
 
+## Unreleased
+
+### Changed
+- The two "off"s have different names now. `/symcc-off` and `/symcc-on` are now `/symcc-disable` and `/symcc-enable` (symcc steps aside entirely; the texts say "symcc is disabled · /symcc-enable to turn it back on"). The old commands are gone. The board mode `off` is now `paused` (modes `paused` / `review` / `auto`, shown `⏸ paused`; `/symcc-mode paused`). A board saved with mode `off` is changed to `paused` once.
+
 ## 0.5.8 (2026-11-20)
 
 ### Added

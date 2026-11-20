@@ -175,7 +175,7 @@ const BAND_COLOR: Record<string, string> = { review: 'cyan', waiting: 'yellow', 
  * you, workers, counts, scouts; the version dropped first when short of room), the owner's open questions, then the
  * tasks that need the owner or run, newest first, each with its lined-up front ("T-434 ▶ prep · try 2", see
  * bandLeads) and its note when the state doesn't already say it (bandNote), and "+N more" when they don't all fit.
- * [] when there is nothing to show (an empty board, or symcc turned off). `rows`: at most this many rows under the header.
+ * [] when there is nothing to show (an empty board, or symcc disabled). `rows`: at most this many rows under the header.
  */
 /** What a click on a line of the band does (T-567): open (or close) the board panel, or open a task's or question's
  *  page in it. */

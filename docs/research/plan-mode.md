@@ -95,7 +95,7 @@ Keep one value, "the lead's mode", and refresh it from events:
    `e.permission_mode` when `e.agent_id` is absent (the main session, not a worker), store it, and
    call `next(e)`.
 2. `on('prompt.attachment', { type: 'plan_mode' })` → plan mode on;
-   `{ type: 'plan_mode_exit' }` → plan mode off. Always return `next(e)` so the text is unchanged.
+   `{ type: 'plan_mode_exit' }` → plan mode ends. Always return `next(e)` so the text is unchanged.
    This catches a switch made between two prompts sooner than the next `classic.Stop`.
 
 While the mode is `plan`:

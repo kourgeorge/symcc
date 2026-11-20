@@ -50,7 +50,7 @@ export async function pump(host: Host) {
   if (!S.driving) return // another session drives the board and starts its work
   if (inPlan(S.plan)) return // plan mode: nothing starts; workers already running keep going
   const b = await load(host)
-  if (modeOf(b) === 'off' || !symccOn(b)) return
+  if (modeOf(b) === 'paused' || !symccOn(b)) return
   if (!ready(b).length) return
   if (!(await gitReady(host, b))) return // no git, no repo or no commit yet: nothing starts until it is set up
   const failed = (id: string) => async (err: Error) => {
@@ -577,11 +577,11 @@ export async function workerOf(host: Host, agentId: string): Promise<Worker | un
 /** Tasks dropped, paused or sent to the owner while their work was being checked: task id → what happened. */
 export const stopAsked = new Map<string, string>()
 
-/** Tasks whose check was stopped because symcc or the board was turned off: task id → why (e.g. "symcc was turned off"). */
+/** Tasks whose check was stopped because symcc was disabled or the board paused: task id → why (e.g. "symcc was disabled"). */
 export const offAsked = new Map<string, string>()
 
 /**
- * Symcc or the board was turned off (`why`): every check and merge running now stops before the
+ * Symcc was disabled or the board paused (`why`): every check and merge running now stops before the
  * merge. A finishing task goes back to "todo" at once (its files are kept); an approve in progress
  * stays in review. Tasks already stopped another way are left alone. Returns the ids of both kinds.
  */
@@ -1088,11 +1088,11 @@ async function holdForFiles(host: Host, t: SymccTask, b: Board, r: CheckResult, 
 /**
  * The regular check's part for tasks whose finished work waits only for the owner's files
  * (BoardTask.merge_wait): each one whose files are out of the way now (or whose branch is not
- * checked out any more) is merged again, with no worker (see mergeWaiting). Not in mode off.
+ * checked out any more) is merged again, with no worker (see mergeWaiting). Not while the board is paused.
  */
 export async function retryFileWaits(host: Host) {
   const b = await load(host)
-  if (modeOf(b) === 'off') return
+  if (modeOf(b) === 'paused') return
   const waiting = b.tasks.filter(t => waitsForFiles(t) && !checkingNow(t.id))
   let current: string | null = null
   let status: string | null = null
@@ -1469,9 +1469,9 @@ export async function stopWorker(host: Host, taskId: string, why: string) {
 }
 
 /**
- * Sets the board mode to `m`; `who` is said in the notes of stopped tasks. "off" stops every
+ * Sets the board mode to `m`; `who` is said in the notes of stopped tasks. "paused" stops every
  * worker and scout at once (their tasks go back to "todo" and continue when work runs again);
- * "review" or "auto" from "off" starts work again. Going to "auto" does not merge tasks already
+ * "review" or "auto" from "paused" starts work again. Going to "auto" does not merge tasks already
  * in review. Returns one short line: the new mode, what it means, and what happened.
  */
 export async function setBoardMode(host: Host, m: SymccMode, who: string): Promise<string> {
@@ -1481,23 +1481,23 @@ export async function setBoardMode(host: Host, m: SymccMode, who: string): Promi
     return [y, y] as [Board, Board]
   })
   const extra: string[] = []
-  if (m === 'off') {
+  if (m === 'paused') {
     const ids: string[] = []
-    await haltAll(host, `${who} turned the board off`, async w => {
+    await haltAll(host, `${who} paused the board`, async w => {
       ids.push(w.task)
       await change(host, x => {
         const cur = find(x, w.task)
-        return patchTask(x, w.task, { status: 'todo', note: `stopped by ${who}; continues when the board is on again`, ...(cur ? { history: withHistory(cur.history, now(), stoppedEntry(cur, `${who} turned the board off`)), ...endedBy(cur, now(), 'stopped', `${who} turned the board off`) } : {}) }, now())
+        return patchTask(x, w.task, { status: 'todo', note: `stopped by ${who}; continues when the board runs again`, ...(cur ? { history: withHistory(cur.history, now(), stoppedEntry(cur, `${who} paused the board`)), ...endedBy(cur, now(), 'stopped', `${who} paused the board`) } : {}) }, now())
       })
     })
     if (ids.length) extra.push(`stopped ${ids.join(', ')}`)
-    const checks = stoppedChecksText(await stopChecks(host, 'the board was turned off'))
+    const checks = stoppedChecksText(await stopChecks(host, 'the board was paused'))
     if (checks) extra.push(checks)
     await publish(host, await load(host))
   } else {
     const inReview = b.tasks.filter(t => t.status === 'review').length
     if (m === 'auto' && inReview) extra.push(`${inReview} already in review still ${inReview === 1 ? 'waits' : 'wait'} for approve or reject`)
-    if (before === 'off') extra.push('work starts again')
+    if (before === 'paused') extra.push('work starts again')
     void pump(host)
   }
   return [modeText(m), ...extra].join('; ')
@@ -1514,15 +1514,15 @@ function dropLeadUpdates() {
 }
 
 /**
- * Turns the whole plugin on or off (/<name>-on, /<name>-off, the enabled setting). Off: every
+ * Enables or disables the whole plugin (/<name>-enable, /<name>-disable, the enabled setting). Disabled: every
  * worker and scout stops (their tasks go back to "todo"), nothing new starts, the lead is not
  * told anything and the lead's guide leaves the system prompt from the next message. The board,
- * its mode, tasks and scouts are kept, so on brings everything back as it was.
+ * its mode, tasks and scouts are kept, so enabling brings everything back as it was.
  */
 export async function setSymcc(host: Host, on: boolean): Promise<string> {
   const before = symccOn(await load(host))
-  // (T-540) off counts from now: a board update waiting for its moment (tellLead's timer) must not go out while the
-  // board write and the stops below run, or the lead gets it next to the /<name>-off answer
+  // (T-540) disabling counts from now: a board update waiting for its moment (tellLead's timer) must not go out while the
+  // board write and the stops below run, or the lead gets it next to the /<name>-disable answer
   // (nor a new one queued meanwhile: tellLead sends nothing once enabledNow is false)
   const was = S.enabledNow
   if (!on) {
@@ -1539,23 +1539,23 @@ export async function setSymcc(host: Host, on: boolean): Promise<string> {
   S.enabledNow = on
   if (!on) {
     const ids: string[] = []
-    await haltAll(host, `you turned ${S.N.name} off`, async w => {
+    await haltAll(host, `you disabled ${S.N.name}`, async w => {
       ids.push(w.task)
-      await change(host, x => patchTask(x, w.task, { status: 'todo', note: `stopped: ${S.N.name} was turned off; continues when it is on again`, ...endedBy(find(x, w.task), now(), 'stopped', `${S.N.name} was turned off`) }, now()))
+      await change(host, x => patchTask(x, w.task, { status: 'todo', note: `stopped: ${S.N.name} was disabled; continues when it is enabled again`, ...endedBy(find(x, w.task), now(), 'stopped', `${S.N.name} was disabled`) }, now()))
     })
-    const checks = stoppedChecksText(await stopChecks(host, `${S.N.name} was turned off`))
+    const checks = stoppedChecksText(await stopChecks(host, `${S.N.name} was disabled`))
     dropLeadUpdates()
     await publish(host, await load(host))
     const stopped = `${ids.length ? ` Stopped ${ids.join(', ')}.` : ''}${checks ? ` ${checks[0]!.toUpperCase()}${checks.slice(1)}.` : ''}`
-    return `${S.N.name} is ${before ? 'now ' : ''}off: ${S.W.assistant} works as normal from your next message. The board, tasks and scouts are kept.${stopped} Turn it back on with /${S.N.name}-on.`
+    return `${S.N.name} is ${before ? 'now ' : 'already '}disabled: ${S.W.assistant} works as normal from your next message. The board, tasks and scouts are kept.${stopped} Turn it back on with /${S.N.name}-enable.`
   }
   await publish(host, b)
   void pump(host)
-  if (!before) tellLead(host, `The owner turned ${S.N.name} back on with /${S.N.name}-on. You are the lead again; the board is in mode ${modeOf(b)}.`)
-  // (T-571) the board's mode "off" (/<name>-mode off) is not the same as turning symcc off: the strip shows "⏹ off"
-  // for it, and /<name>-on (which only turns symcc itself on) keeps the mode, so say plainly why nothing starts yet
-  const modeOff = modeOf(b) === 'off' ? ` ${S.N.name} itself is on, but the board's mode is off, so no work starts; start work with /${S.N.name}-mode review or /${S.N.name}-mode auto.` : ''
-  return `${S.N.name} is ${before ? 'already ' : ''}on, in mode ${modeOf(b)}: ${modeText(modeOf(b))}.${modeOff}`
+  if (!before) tellLead(host, `The owner enabled ${S.N.name} again with /${S.N.name}-enable. You are the lead again; the board is in mode ${modeOf(b)}.`)
+  // (T-571) a paused board (/<name>-mode paused) is not the same as a disabled symcc: the strip shows "⏸ paused"
+  // for it, and /<name>-enable (which only enables symcc itself) keeps the mode, so say plainly why nothing starts yet
+  const paused = modeOf(b) === 'paused' ? ` ${S.N.name} itself is enabled, but the board is paused, so no work starts; start work with /${S.N.name}-mode review or /${S.N.name}-mode auto.` : ''
+  return `${S.N.name} is ${before ? 'already ' : ''}enabled, in mode ${modeOf(b)}: ${modeText(modeOf(b))}.${paused}`
 }
 
 /**

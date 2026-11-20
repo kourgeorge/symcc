@@ -1,7 +1,7 @@
 // symcc's values the panel and status line draw from.
 /** "review": the worker is done and the checks passed, but nothing is merged until the owner approves. */
-/** The board mode: "off" (nothing runs), "review" (finished work waits for the owner), "auto" (finished work that passes merges on its own; the default). */
-export type SymccMode = 'off' | 'review' | 'auto'
+/** The board mode: "paused" (nothing runs), "review" (finished work waits for the owner), "auto" (finished work that passes merges on its own; the default). */
+export type SymccMode = 'paused' | 'review' | 'auto'
 
 /** "backlog": an idea or not-yet-clear work; it never starts a worker until it is moved to "todo". */
 export type SymccStatus = 'backlog' | 'todo' | 'doing' | 'paused' | 'waiting' | 'review' | 'failed' | 'done' | 'dropped'

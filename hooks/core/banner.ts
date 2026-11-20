@@ -137,11 +137,11 @@ export const statusRoom = (name: string = DEFAULT_NAME) => STATUS_WIDTH - `⚠ $
 
 /**
  * The short status text Claude Code shows after "symcc:", e.g. "⏵ auto · 1/3 workers · T-26 doing · 1 to do · 5 scouts (next: gaps-bot in 1h 00m)".
- * It starts with the board mode (modeLabel: "⏹ off", "⏸ review merge", "⏵ auto"), so the mode is always in the same spot.
+ * It starts with the board mode (modeLabel: "⏸ paused", "⏸ review merge", "⏵ auto"), so the mode is always in the same spot.
  * With `crew` (see withCrew): the busy workers right after the mode (left out while none run) and the scouts after the
  * counts; when the text is wider than `width`, the try marks of the doing tasks go first, then the "(next: …)" part, then the scouts.
  * Tasks being done, in review and failed are listed by ID; other open states are counts. No folder name (the pane title has it).
- * The text itself never has a "⚠": it says what needs attention in words ("1 failed (T-7)", "1 waiting for you", "⏹ off").
+ * The text itself never has a "⚠": it says what needs attention in words ("1 failed (T-7)", "1 waiting for you", "⏸ paused").
  * undefined when there is nothing to say: an empty board this session drives, in mode auto, with no branch note and no scouts.
  */
 export function statusLine(b: { tasks: (Pick<SymccTask, 'id' | 'status'> & Partial<Pick<SymccTask, 'attempts'>>)[]; questions?: readonly Pick<OwnerQuestion, 'answered_at' | 'dropped'>[] }, driving: boolean, branch_note = '', mode: SymccMode = 'auto', plan = false, crew?: CrewBoard, nowMs = Date.now(), width = Infinity): string | undefined {
@@ -193,7 +193,7 @@ export type BannerPart = { text: string; tone: BannerTone; bold?: boolean }
 export type BannerLine = { art: string; parts: BannerPart[] }
 /** What the banner needs from the board. */
 /** `branch`: the branch checked out in the project now (new tasks merge into it); `branch_note`: a warning (e.g. no git), shown in place of it.
- *  `enabled` false (symcc turned off) or `mode` 'off' puts a warning on the first line, after the name. */
+ *  `enabled` false (symcc disabled) or `mode` 'paused' puts a warning on the first line, after the name. */
 export type BannerBoard = Pick<Board, 'test_commands' | 'max_parallel' | 'max_minutes' | 'auto_retries'> & Partial<Pick<Board, 'archived'>> & { tasks: Pick<SymccTask, 'status' | 'runs'>[]; branch?: string; branch_note?: string; mode?: SymccMode; enabled?: boolean }
 
 /** "2 doing", "1 to do", ... for each status in `order` that has tasks, in that order. */
@@ -250,13 +250,13 @@ export function bannerLines(b: BannerBoard, root: string, home: string, driving:
   const join = (groups: BannerPart[][]) => groups.flatMap((g, i) => (i ? [sep, ...g] : g))
   const fact = (text: string): BannerPart[] => [{ text, tone: 'plain' }]
   const folder = folderName(root)
-  // nothing starts while symcc is turned off or the board is in mode off: say so on the first line, in the warning color
-  // turned off: "symcc is off · /symcc-on to turn it on", the command in the accent color (bold) so it stands out
+  // nothing starts while symcc is disabled or the board is paused: say so on the first line, in the warning color
+  // disabled: "symcc is disabled · /symcc-enable to turn it back on", the command in the accent color (bold) so it stands out
   const off: BannerPart[] =
     b.enabled === false
       ? offStatusParts(name).map(p => (p.command ? { text: p.text, tone: 'accent' as const, bold: true } : { text: p.text, tone: 'warning' as const }))
-      : b.mode && modeOf({ mode: b.mode }) === 'off'
-        ? [{ text: `${modeLabel('off')}: nothing starts`, tone: 'warning' }]
+      : b.mode && modeOf({ mode: b.mode }) === 'paused'
+        ? [{ text: `${modeLabel('paused')}: nothing starts`, tone: 'warning' }]
         : []
   const line1 = (v: string): BannerPart[] => [
     ...(v

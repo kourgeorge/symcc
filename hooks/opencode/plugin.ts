@@ -188,7 +188,7 @@ export function symccServer(o: ServerOptions = {}): OcServerPlugin {
       regs.push(await ctx.command.transform(c => commands.forEach(x => c.add(x))))
       // each model request: a session is offered only the symcc tools it may call (callerOf), and the lead (in the
       // copy running the engine) gets its guide in the system prompt, read on every request as Claude Code's
-      // prompt.compose does (so /symcc-off counts from the next message)
+      // prompt.compose does (so /symcc-disable counts from the next message)
       regs.push(
         await ctx.session.hook('context', async e => {
           useName(host)

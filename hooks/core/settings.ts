@@ -194,30 +194,30 @@ export function unplayableNote(n: Notify, can: Playable): string {
   return `notify is '${n}' but no ${n === 'voice' ? 'speech program' : 'sound player'} was found here; nothing will play`
 }
 
-/** Is the plugin on for this project? Yes unless /<name>-off turned it off (a board without `enabled`, or no board: on). */
+/** Is the plugin on for this project? Yes unless /<name>-disable disabled it (a board without `enabled`, or no board: on). */
 export const symccOn = (b: Partial<Pick<Board, 'enabled'>>) => b.enabled !== false
 
-/** The board with the plugin turned on or off; nothing else changes (tasks, mode and scouts are kept). */
+/** The board with the plugin enabled or disabled; nothing else changes (tasks, mode and scouts are kept). */
 export const setEnabled = (b: Board, on: boolean): Board => ({ ...b, enabled: on })
 
-/** What every lead tool answers while the plugin is off. */
-export const offAnswer = (name: string = DEFAULT_NAME) => `${name} is off. The owner can turn it on with /${name}-on.`
+/** What every lead tool answers while the plugin is disabled. */
+export const offAnswer = (name: string = DEFAULT_NAME) => `${name} is disabled. The owner can turn it back on with /${name}-enable.`
 
-/** A piece of the "off" line; `command` marks the part a view draws in its own color (the /<name>-on command). */
+/** A piece of the "disabled" line; `command` marks the part a view draws in its own color (the /<name>-enable command). */
 export type OffPart = { text: string; command?: boolean }
 
 /**
- * The "off" line in pieces, so every view says the same and can color the command:
- * "symcc is off · /symcc-on to turn it on". `withName` false leaves the name out ("off · /symcc-on to turn it on"),
+ * The "disabled" line in pieces, so every view says the same and can color the command:
+ * "symcc is disabled · /symcc-enable to turn it back on". `withName` false leaves the name out ("disabled · /symcc-enable to turn it back on"),
  * for the line under the prompt, where Claude Code already puts "⚠ symcc: " in front.
  */
 export const offStatusParts = (name: string = DEFAULT_NAME, withName = true): OffPart[] => [
-  { text: withName ? `${name} is off · ` : 'off · ' },
-  { text: `/${name}-on`, command: true },
-  { text: ' to turn it on' },
+  { text: withName ? `${name} is disabled · ` : 'disabled · ' },
+  { text: `/${name}-enable`, command: true },
+  { text: ' to turn it back on' },
 ]
 
-/** The "off" line as plain text (see offStatusParts). */
+/** The "disabled" line as plain text (see offStatusParts). */
 export const offStatusLine = (name: string = DEFAULT_NAME, withName = true) => offStatusParts(name, withName).map(p => p.text).join('')
 
 /** The spoken line for tasks just merged: "T-3 done", "T-3 and T-4 done", "T-3, T-4 and T-5 done". '' for none. */
@@ -254,7 +254,7 @@ export const clampRetries = (n: number) => Math.max(0, Math.min(10, Math.round(N
 
 export const SETTING_NAMES = ['test_commands', 'test_minutes', 'max_parallel', 'max_minutes', 'auto_retries', 'archive_days', 'open_on_start', 'notify', 'scout_findings', 'tests_with_changes', 'checker', 'mode', 'enabled'] as const
 export type SettingName = (typeof SETTING_NAMES)[number]
-/** commands: test_commands; number: a whole number within min-max; onoff: true/false; mode: off/review/auto; notify: off/sound/voice; findings: auto/backlog; untested: off/ask/review */
+/** commands: test_commands; number: a whole number within min-max; onoff: true/false; mode: paused/review/auto; notify: off/sound/voice; findings: auto/backlog; untested: off/ask/review */
 export type SettingKind = 'commands' | 'number' | 'onoff' | 'mode' | 'notify' | 'findings' | 'untested'
 export type SettingInfo = { name: SettingName; kind: SettingKind; min?: number; max?: number; default: string; range: string; meaning: string }
 
@@ -283,7 +283,7 @@ export const SETTINGS: SettingInfo[] = [
   { name: 'scout_findings', kind: 'findings', default: 'auto', range: 'auto / backlog', meaning: 'auto: the lead decides, a scout finding it adds goes to todo and runs; backlog: every task added from a scout finding goes to the backlog and waits for you' },
   { name: 'tests_with_changes', kind: 'untested', default: 'ask', range: 'off / ask / review', meaning: 'a change task that edits code but no test file: ask: it merges and the lead is told "T-3 changed code but no test"; review: it waits for your review instead; off: nothing (test files are in test/, tests/, __tests__/, spec/, e2e/ or cypress/ folders or have a test name like a.test.ts, a-test.ts, a.cy.ts, login.e2e.ts, FooTest.java; docs-only changes such as .md files, images and non-code files under docs/ are never flagged)' },
   { name: 'checker', kind: 'onoff', default: 'off', range: 'off / on', meaning: 'on: after the prep step and before a change joins the merge line (where its tests run), a fresh checker tries to break it; OK goes on, a list of problems sends it back to its worker (counts as a retry); investigations and docs-only changes skip it' },
-  { name: 'mode', kind: 'mode', default: 'auto', range: 'off / review / auto', meaning: 'off: nothing runs; review: finished work waits for you; auto: it merges on its own' },
+  { name: 'mode', kind: 'mode', default: 'auto', range: 'paused / review / auto', meaning: 'paused: nothing runs; review: finished work waits for you; auto: it merges on its own' },
   { name: 'enabled', kind: 'onoff', default: 'on', range: 'on / off', get meaning() {
     return `off: the whole plugin rests and ${assistantWord} works as normal`
   } },
@@ -341,7 +341,7 @@ function shortValue(b: Partial<Board>, name: SettingName): string {
     case 'auto_retries':
       return `${v} ${v === '1' ? 'retry' : 'retries'}`
     case 'enabled':
-      return v === 'on' ? '' : 'plugin off'
+      return v === 'on' ? '' : 'disabled'
     case 'test_commands': {
       const cmds = b.test_commands ?? []
       return !cmds.length ? 'no tests' : cmds.length === 1 ? ellipsis(cmds[0]!, 24) : `${cmds.length} test commands`
@@ -530,7 +530,7 @@ export function parseSettingValue(name: SettingName, raw: string): { ok: true; i
     }
     case 'mode': {
       const w = v.toLowerCase()
-      return isMode(w) ? { ok: true, input: { mode: w } } : bad('mode must be off, review or auto')
+      return isMode(w) ? { ok: true, input: { mode: w } } : bad('mode must be paused, review or auto')
     }
     case 'commands': {
       const list = v.toLowerCase() === 'none' ? [] : commandList(v)

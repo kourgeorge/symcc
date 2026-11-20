@@ -36,7 +36,7 @@ export const shortTests = (cmds: readonly string[]): string => {
 }
 
 /** The color a mode's word is drawn in (the same as the terminal footer's). */
-export const modeColor = (m: SymccMode) => (m === 'off' ? 'warning' : m === 'review' ? 'suggestion' : 'text')
+export const modeColor = (m: SymccMode) => (m === 'paused' ? 'warning' : m === 'review' ? 'suggestion' : 'text')
 
 /** The mode switch's label in VS Code: "Switch to review merge" in auto (and off), "Switch to auto" in review. */
 export const switchLabel = (m: SymccMode) => `Switch to ${MODE_NAME[nextMode(m)]}`
@@ -82,7 +82,7 @@ export function vsLink(k: VsKit, key: string, text: string, links: [href: string
  *    the name, version and folder; the mode as a pill with its meaning dim beside it; the branch and who drives on one dim line;
  *    the tests and the limits on one dim line;
  *  - under it the counts as small badges ("● 2 doing · 6 to do · 1 waiting for you"), and the "no git" row (`gitRow`).
- * A warning line when symcc is turned off sits under the name.
+ * A warning line when symcc is disabled sits under the name.
  */
 export function vsBanner(k: VsKit, v: PaneView, mode: SymccMode, gitRow: RenderChildren[]): RenderChildren[] {
   const { Box, Text, C } = k

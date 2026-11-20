@@ -46,7 +46,7 @@ export async function paneParts($: $, e: PaneEvent) {
   const C = (c: string) => c as never
   const scouts = sortScouts(Array.isArray(v.scouts) ? v.scouts : [])
   const mode = modeOf(v)
-  /** What the m key switches to: review and auto swap; from off it goes to review (m never turns the board off). */
+  /** What the m key switches to: review and auto swap; from paused it goes to review (m never pauses the board). */
   const switchTo: SymccMode = nextMode(mode)
   /** Switches the board mode between review and auto, the same as /<name>-mode with no word. */
   const switchMode = act(async () => {
@@ -151,7 +151,7 @@ export async function paneParts($: $, e: PaneEvent) {
       {withMode ? (
         <Box key="footer-mode" flexDirection="row">
           <Text wrap="truncate">
-            <Text bold color={C(mode === 'off' ? 'warning' : mode === 'review' ? 'suggestion' : 'text')}>{modeLabel(mode)}</Text>{' '}
+            <Text bold color={C(mode === 'paused' ? 'warning' : mode === 'review' ? 'suggestion' : 'text')}>{modeLabel(mode)}</Text>{' '}
           </Text>
           <Button key="mode" label={modeButton(mode)} hotkey="m" dimColor onPress={switchMode} />
           {extra as never}

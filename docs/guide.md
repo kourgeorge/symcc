@@ -15,7 +15,7 @@ The full details. For the short version, see the [README](../README.md).
 - [Which branch work goes into](#which-branch-work-goes-into)
 - [Keeping work moving on its own](#keeping-work-moving-on-its-own)
 - [Stats: time and tokens](#stats-time-and-tokens)
-- [Turning symcc off](#turning-symcc-off)
+- [Disabling symcc](#disabling-symcc)
 - [Where everything lives](#where-everything-lives)
 - [Good to know](#good-to-know)
 - [Renaming the plugin](#renaming-the-plugin)
@@ -45,7 +45,7 @@ And the ideas that tie them together:
 | **Scope check** | Each task lists the files it may change (its scope); anything else is not merged; a worker's edit outside it is refused and becomes a file request to you |
 | **Automatic retries** | Failing tests, or a clash with your branch, send the task back to a new worker (with the failing test output, or told to merge your branch in first), up to `auto_retries` times in all (2 by default) |
 | **Test gate** | Your test commands must pass before anything is merged |
-| **Approval before merge** | Human-in-the-loop review: modes `auto`, `review` or `off`; see the diff, approve, or reject with a reason; one task can be marked "needs review" |
+| **Approval before merge** | Human-in-the-loop review: modes `auto`, `review` or `paused`; see the diff, approve, or reject with a reason; one task can be marked "needs review" |
 | **Merge into the target branch** | Commit, scope check, update on the latest target branch, re-run tests, then merge; your branch only moves this way |
 | **Live status** | The board panel and the status line |
 
@@ -388,7 +388,7 @@ top of the next board update (at most 10, then "+N more"). They are still in eac
 
 The board has one mode, set with `/symcc-mode`, `/symcc-settings mode …` or by telling the lead (the setting `mode`):
 
-- **`off`**: every running worker and scout stops at once and nothing new starts. Tasks
+- **`paused`**: every running worker and scout stops at once and nothing new starts. Tasks
   already in review can still be approved or rejected.
 - **`review`**: work runs; every finished task that passes waits as `review` for you.
   The lead also asks you before it adds any task (yours, a scout's finding, a worker's
@@ -439,14 +439,14 @@ You can also do it yourself:
   lines in red. `a` approves, `x` rejects (it asks for a short reason first), `b` goes back.
   A very long diff is cut, with a note like `… 340 more lines (see /symcc-diff T-5)`.
 - The banner shows the mode: `⏵ auto` (finished tasks that pass merge on their own),
-  `⏸ review merge` (finished tasks wait for your approve or reject) or `⏹ off` (no work runs).
-  Press `m` to switch between `review merge` and `auto` (`m` never turns the board off).
+  `⏸ review merge` (finished tasks wait for your approve or reject) or `⏸ paused` (no work runs).
+  Press `m` to switch between `review merge` and `auto` (`m` never pauses the board).
 - In any open task, `n` turns that task's own "needs review" on or off.
 - **Slash commands:** `/symcc-approve T-5`, `/symcc-reject T-5 <reason>`,
   `/symcc-diff T-5` (the changed files with `+`/`-` counts) or `/symcc-diff T-5 <file>`
-  (that file's full diff), and `/symcc-mode [off|review|auto]` (with no word it switches
-  between `review` and `auto`; from `off` it goes to `review`).
-- The status line (the `symcc:` line by the prompt) starts with the mode, `⏹ off`,
+  (that file's full diff), and `/symcc-mode [paused|review|auto]` (with no word it switches
+  between `review` and `auto`; from `paused` it goes to `review`).
+- The status line (the `symcc:` line by the prompt) starts with the mode, `⏸ paused`,
   `⏸ review merge` or `⏵ auto`, then the busy workers, the task counts (tasks to review by
   ID) and the scouts, e.g.
   `⏵ auto · 1/3 workers · T-26 doing · 1 to review (T-5) · 5 scouts (next: gaps-bot in 1h 00m)`.
@@ -455,7 +455,7 @@ You can also do it yourself:
   The "next" time is redrawn every minute. With an empty board and no scouts it shows nothing
   in `auto`, so a fresh project stays quiet.
 - symcc's own text never has a `⚠`: what needs you is said in words (`1 failed (T-7)`,
-  `1 waiting for you`, `⏹ off`, `symcc is off · /symcc-on to turn it on`). A `⚠` in front of `symcc:` is drawn
+  `1 waiting for you`, `⏸ paused`, `symcc is disabled · /symcc-enable to turn it back on`). A `⚠` in front of `symcc:` is drawn
   by Claude Code itself for a plugin's status line, and plugins can't change it.
 
 ### Plan mode
@@ -535,8 +535,8 @@ are about changes; under "How tasks ended" a read investigation shows as
   off with the `open_on_start` setting). It shows a small banner (folder, branch, test
   command, limits, counts) and the task list. The workers and scouts are not in the banner;
   they are in the status line and the band above the prompt. When nothing starts, the
-  banner's first line says so in the warning color: `⏹ off: nothing starts` (board mode off)
-  or `symcc is off · /symcc-on to turn it on` (symcc turned off).
+  banner's first line says so in the warning color: `⏸ paused: nothing starts` (board paused)
+  or `symcc is disabled · /symcc-enable to turn it back on` (symcc disabled).
   The clef drawn at the left of the banner moves now and then, about 4 frames a second, each
   move played once before it rests: it sways one column right and left about every 5 minutes
   while the panel is open and nothing else plays; it dissolves into a check mark when a task
@@ -544,7 +544,7 @@ are about changes; under "How tasks ended" a read investigation shows as
   about a second and dissolves back; and when the board becomes all done (nothing to do,
   doing, in review or waiting) little notes ♪ ♫ float up beside it. Only one move plays at a
   time (one that comes meanwhile is dropped). Nothing moves on a panel too narrow to show the
-  logo or while the board is off.
+  logo or while the board is paused.
 - **The band above the prompt** shows the mode, the busy workers, the counts and the scouts,
   e.g. `⏵ auto · 1/3 workers · 1 doing · 1 to do · 2 scouts (next: gaps-bot in 38m)`, and under
   it the tasks that need you or are running. When narrow, the `(next: …)` part goes first,
@@ -623,7 +623,7 @@ are about changes; under "How tasks ended" a read investigation shows as
   groups only. The panel remembers which groups are open until the session ends. The lead's
   `settings` tool and `/symcc-settings` text always list every setting under the same
   headings. Enter on a row changes it: `open_on_start`
-  `checker` and `enabled` flip on/off; `mode`, `notify`, `scout_findings` and `tests_with_changes` open a pick list (off / review
+  `checker` and `enabled` flip on/off; `mode`, `notify`, `scout_findings` and `tests_with_changes` open a pick list (paused / review
   / auto; only the notify choices this computer can play; off / ask / review); numbers and `test_commands` open an edit box (the typed line is one
   command, run as one shell line, so `cd web && npm test` works as in a shell; several commands go in a list,
   `["npm test", "npm run lint"]`, up to 5; `none` clears them). Enter on an empty box or Cancel (`x`) cancels; Back (`b`) goes to the Tasks list. Saving uses the same checks and limits as
@@ -1317,19 +1317,19 @@ its read-only `stats` tool.
 
 ---
 
-## Turning symcc off
+## Disabling symcc
 
-The board mode `off` only stops the workers: Claude still acts as the lead. To have Claude
-go back to normal, type `/symcc-off` (or set `enabled` to off in the Settings view). From
+The board mode `paused` only stops the workers: Claude still acts as the lead. To have Claude
+go back to normal, type `/symcc-disable` (or set `enabled` to off in the Settings view). From
 your next message, no restart needed:
 
 - the lead instructions are no longer added to Claude's prompt,
 - running workers and scouts are stopped (their tasks go back to `todo`) and nothing new starts,
 - no "[symcc] Board update" messages and no sounds or voice,
-- the panel does not open by itself and the status line just says `symcc is off · /symcc-on to turn it on`,
-- the symcc tools answer "symcc is off. The owner can turn it on with /symcc-on." and change nothing.
+- the panel does not open by itself and the status line just says `symcc is disabled · /symcc-enable to turn it back on`,
+- the symcc tools answer "symcc is disabled. The owner can turn it back on with /symcc-enable." and change nothing.
 
-The board, its tasks, its mode and the scouts are kept. `/symcc-on` turns everything back
+The board, its tasks, its mode and the scouts are kept. `/symcc-enable` turns everything back
 on, in the mode the board had. The switch is kept per project, as `enabled` in
 `.symcc/board.json` (a board without it is on).
 
@@ -1498,7 +1498,7 @@ opencode plugin add github:kourgeorge/symcc
 
 The lead is the OpenCode session you type in, in your project's folder (or a folder inside it). There is nothing to start: talk to it as you would in Claude Code ("add a dark mode toggle", "what's going on?"). symcc gives it its guide on every request, and its tools as normal OpenCode tools (`symcc_board`, `symcc_add` and so on). Board updates come into its chat as a message: a normal one waits until its turn ends, and an urgent one (a worker needs you, or its time is up) is taken in mid-turn. When one of symcc's agents ends, OpenCode also posts its own "subagent completed" message; the lead is told to act on symcc's update only.
 
-The slash commands are the same as in Claude Code: `/symcc` (the board), `/symcc-drive`, `/symcc-settings`, `/symcc-stats`, `/symcc-off`, `/symcc-help` and the rest.
+The slash commands are the same as in Claude Code: `/symcc` (the board), `/symcc-drive`, `/symcc-settings`, `/symcc-stats`, `/symcc-disable`, `/symcc-help` and the rest.
 
 symcc's board runs in OpenCode's server, not in its window. By default the window uses OpenCode's background server (`opencode --standalone` starts a private one that ends with the window), so the board and its workers can keep running after you close the window. `opencode service stop` stops the background server, and the board with it; the next start picks the board up again.
 

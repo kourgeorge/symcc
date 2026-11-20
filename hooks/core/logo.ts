@@ -123,7 +123,7 @@ export const LOGO_MIN_WIDTH = 50
 
 /** May a move play: the panel is shown and wide enough to show the logo, and the board is not off. */
 export function mayMove(o: { enabled?: boolean; mode?: string; width: number; shown: boolean }): boolean {
-  return o.shown && o.enabled !== false && o.mode !== 'off' && o.width >= LOGO_MIN_WIDTH
+  return o.shown && o.enabled !== false && o.mode !== 'paused' && o.width >= LOGO_MIN_WIDTH
 }
 
 /** The statuses that mean "not done yet": while any task has one, the board is not all done. */

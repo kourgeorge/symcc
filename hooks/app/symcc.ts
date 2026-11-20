@@ -53,11 +53,11 @@ export function COMMANDS(features: HostFeatures = ALL_FEATURES): { name: string;
     { name: `${S.N.name}-reject`, description: `Reject a ${S.N.name} task in review, with the reason: /${S.N.name}-reject T-5 <reason>`, argumentHint: '<T-id> <reason>' },
     { name: `${S.N.name}-diff`, description: `Show what a ${S.N.name} task in review changed, or one file's diff: /${S.N.name}-diff T-5 [file]`, argumentHint: '<T-id> [file]' },
     { name: `${S.N.name}-scout`, description: `Run a ${S.N.name} scout now (/${S.N.name}-scout <name>), pause or resume it (/${S.N.name}-scout <name> pause|resume), or change it (/${S.N.name}-scout <name> every 30, model <model|none>, prompt <instructions>)`, argumentHint: '<name> [pause|resume|every N|model M|prompt TEXT]' },
-    { name: `${S.N.name}-mode`, description: `Set the ${S.N.name} board mode: off (nothing runs), review (finished work waits for you) or auto (it merges on its own); no word switches review and auto`, argumentHint: '[off|review|auto]' },
+    { name: `${S.N.name}-mode`, description: `Set the ${S.N.name} board mode: paused (nothing runs), review (finished work waits for you) or auto (it merges on its own); no word switches review and auto`, argumentHint: '[paused|review|auto]' },
     { name: `${S.N.name}-settings`, description: `See and change the ${S.N.name} settings: /${S.N.name}-settings opens them; /${S.N.name}-settings max_parallel 5 sets one; /${S.N.name}-settings role tester off (or kind, with on, off or reset) changes a role or kind`, argumentHint: '[name value | role|kind <name> on|off|reset]' },
     { name: `${S.N.name}-stats`, description: `Show ${S.N.name} time and token stats: the whole team (lead, workers, scouts), totals, averages per task and per try, outcomes, by role, origin and day, with bar charts: /${S.N.name}-stats [full] [7d|T-100..T-130]`, argumentHint: '[full] [7d|T-1..T-9]' },
-    { name: `${S.N.name}-off`, description: `Turn ${S.N.name} off for this project: ${S.W.assistant} works as normal, nothing runs; the board is kept` },
-    { name: `${S.N.name}-on`, description: `Turn ${S.N.name} back on for this project, in the mode the board had` },
+    { name: `${S.N.name}-disable`, description: `Disable ${S.N.name} for this project: ${S.W.assistant} works as normal, nothing runs; the board is kept` },
+    { name: `${S.N.name}-enable`, description: `Enable ${S.N.name} again for this project, in the mode the board had` },
     { name: `${S.N.name}-drive`, description: `Make this session drive the ${S.N.name} board (start workers, merge, run scouts); another driving session hands over first` },
     { name: S.N.help, description: `Show the ${S.N.name} manual: how the board, lead, workers and scouts work, and every command`, argumentHint: '[topic]' },
   ]
@@ -218,12 +218,12 @@ export async function sessionEnd(host: Host) {
 
 // ---------------- the lead's prompt ----------------
 
-/** The lead's guide, for the host to add to the lead's system prompt; undefined: add nothing (symcc is off, or the project is not known yet). */
+/** The lead's guide, for the host to add to the lead's system prompt; undefined: add nothing (symcc is disabled, or the project is not known yet). */
 export async function leadGuideText(host: Host): Promise<string | undefined> {
   // Before session start set the project folder (a plugin reload): learn it first; unknown, add nothing.
   if (!(await findRoot(host))) return undefined
   if (S.guardOnly) return undefined
-  // Read on every call, so /<name>-off and /<name>-on count from the next message.
+  // Read on every call, so /<name>-disable and /<name>-enable count from the next message.
   if (!(await isOn(host))) return undefined
   return leadGuide(host.features)
 }
@@ -452,9 +452,9 @@ export async function runCommand(host: Host, command: string, args: string): Pro
     }
     case 'set':
       return say(await ownerSettings(host, cmd.input, `with /${S.N.name}-settings`))
-    case 'off':
-    case 'on':
-      return say(await setSymcc(host, cmd.kind === 'on'))
+    case 'disable':
+    case 'enable':
+      return say(await setSymcc(host, cmd.kind === 'enable'))
     case 'drive':
       return say(await driveHere(host))
     case 'mode': {

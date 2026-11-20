@@ -1171,7 +1171,7 @@ test('each slash command is added and runs symcc\'s runCommand: an answer only f
     expect(c.commands.get('symcc')!.description).toBe('Show the symcc board as text (the panel: /symcc-board)')
     const lead = f.lead(p.main)
     // (T-515) only the lead's chat counts: the engine starts T-2's worker on its own (at its start, or again after
-    // /symcc-on), and on a busy machine that worker's first prompt (into its own session) landed while a command ran
+    // /symcc-enable), and on a busy machine that worker's first prompt (into its own session) landed while a command ran
     const toLead = <T extends { sessionID: string }>(xs: T[]) => xs.filter(x => x.sessionID === lead)
     const run = async (name: string, text = '') => {
       const before = toLead(f.synthetic).length + toLead(f.prompts).length
@@ -1211,7 +1211,7 @@ test('each slash command is added and runs symcc\'s runCommand: an answer only f
   }
 }, LONG_TEST_MS)
 
-test('/symcc-off posts only its answer into the lead\'s chat (T-540): a board update whose moment comes while the off is being saved is never sent', async () => {
+test('/symcc-disable posts only its answer into the lead\'s chat (T-540): a board update whose moment comes while the disable is being saved is never sent', async () => {
   reset()
   const p = await project()
   try {
@@ -1271,9 +1271,9 @@ test('/symcc-off posts only its answer into the lead\'s chat (T-540): a board up
     expect(typeof fire).toBe('function')
     onOffWrite = fire
     const before = toLead().length
-    await c.commands.get('symcc-off')!.execute({ sessionID: lead, prompt: { text: '' }, delivery: 'steer' })
+    await c.commands.get('symcc-disable')!.execute({ sessionID: lead, prompt: { text: '' }, delivery: 'steer' })
     onOffWrite = undefined
-    expect(toLead().slice(before).map(x => x.text.split(':')[0])).toEqual(['symcc is now off'])
+    expect(toLead().slice(before).map(x => x.text.split(':')[0])).toEqual(['symcc is now disabled'])
     // and nothing is left to go later
     expect(S.leadTimer).toBe(null)
     expect(leadQueue).toEqual([])
@@ -1287,7 +1287,7 @@ test('/symcc-off posts only its answer into the lead\'s chat (T-540): a board up
   }
 }, LONG_TEST_MS)
 
-test('/symcc-off then /symcc-on through OpenCode\'s commands in the lead\'s session (T-571): symcc is on again and the answer says so; with the board in mode off the answer says why nothing starts', async () => {
+test('/symcc-disable then /symcc-enable through OpenCode\'s commands in the lead\'s session (T-571, T-578): symcc is enabled again and the answer says so; with the board paused the answer says why nothing starts; /symcc-off and /symcc-on are gone', async () => {
   reset()
   const p = await project()
   try {
@@ -1306,20 +1306,22 @@ test('/symcc-off then /symcc-on through OpenCode\'s commands in the lead\'s sess
       expect(answers.length).toBe(1)
       return answers[0]!.text
     }
-    expect((await run('symcc-off')).startsWith('symcc is now off')).toBe(true)
+    expect(c.commands.has('symcc-off')).toBe(false)
+    expect(c.commands.has('symcc-on')).toBe(false)
+    expect((await run('symcc-disable')).startsWith('symcc is now disabled')).toBe(true)
     expect(JSON.parse(await readFile(`${p.main}/.symcc/board.json`, 'utf8')).enabled).toBe(false)
-    const on = await run('symcc-on')
-    expect(on.startsWith('symcc is on, in mode ')).toBe(true)
-    expect(on).not.toContain("the board's mode is off")
+    const on = await run('symcc-enable')
+    expect(on.startsWith('symcc is enabled, in mode ')).toBe(true)
+    expect(on).not.toContain('the board is paused')
     expect(JSON.parse(await readFile(`${p.main}/.symcc/board.json`, 'utf8')).enabled !== false).toBe(true)
-    expect((await run('symcc-on')).startsWith('symcc is already on, in mode ')).toBe(true)
-    // the owner's case: the strip says "⏹ off" because the board's mode is off (not symcc turned off)
-    expect(await run('symcc-mode', 'off')).toContain('off')
-    const modeOff = await run('symcc-on')
-    expect(modeOff.startsWith('symcc is already on, in mode off: ')).toBe(true)
-    expect(modeOff).toContain('start work with /symcc-mode review or /symcc-mode auto')
+    expect((await run('symcc-enable')).startsWith('symcc is already enabled, in mode ')).toBe(true)
+    // the owner's case: the strip says "⏸ paused" because the board is paused (not symcc disabled)
+    expect(await run('symcc-mode', 'paused')).toContain('⏸ paused')
+    const paused = await run('symcc-enable')
+    expect(paused.startsWith('symcc is already enabled, in mode paused: ')).toBe(true)
+    expect(paused).toContain('the board is paused, so no work starts; start work with /symcc-mode review or /symcc-mode auto')
     const b = JSON.parse(await readFile(`${p.main}/.symcc/board.json`, 'utf8'))
-    expect([b.enabled !== false, b.mode]).toEqual([true, 'off'])
+    expect([b.enabled !== false, b.mode]).toEqual([true, 'paused'])
     await settle()
     await end!()
     await settle()

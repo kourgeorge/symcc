@@ -223,10 +223,10 @@ test('/symcc-help still shows the manual when board.json is broken', async ($, o
   expect(w.files.get(BOARD)).toBe('{ not json')
 })
 
-test('/symcc-off and /symcc-approve T-1 answer that board.json can\'t be read, and leave it as it was', async ($, on) => {
+test('/symcc-disable and /symcc-approve T-1 answer that board.json can\'t be read, and leave it as it was', async ($, on) => {
   const w = world(on)
   w.files.set(BOARD, '{ not json')
-  const off = await run($, 'symcc-off', '')
+  const off = await run($, 'symcc-disable', '')
   expect(off.text).toContain("board.json can't be read")
   const ok = await run($, 'symcc-approve', 'T-1')
   expect(ok.text).toContain("board.json can't be read")
@@ -331,11 +331,11 @@ function doingBoard(): Board {
   return patchTask(b, 'T-1', { status: 'doing', attempts: 1, session: 'me', agent: 'a1', branch: 'symcc/T-1', runs: [{ started: ISO }] }, ISO)
 }
 
-test('/symcc-mode off then review: work starts again, T-1 gets a worker, and the lead hears the owner set review', async ($, on) => {
+test('/symcc-mode paused then review: work starts again, T-1 gets a worker, and the lead hears the owner set review', async ($, on) => {
   const w = world(on, { agents: [{ id: 'a1', type: 'symcc:worker' }] })
   w.files.set(BOARD, JSON.stringify(doingBoard()))
   await $.session.start({ cwd: '/repo' } as never)
-  const off = await run($, 'symcc-mode', 'off')
+  const off = await run($, 'symcc-mode', 'paused')
   expect(off.text).not.toContain('work starts again')
   expect(w.sent).toContain('a1')
   expect(w.board().tasks[0]!.status).toBe('todo')

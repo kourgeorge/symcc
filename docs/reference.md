@@ -85,7 +85,7 @@ Change the mode with `/symcc-mode`, the `m` key in the panel, or by telling the 
 |---|---|---|
 | `auto` (default) | `⏵ auto` | A finished task that passes the checks is merged at once. |
 | `review` | `⏸ review merge` | Every finished task waits for you to approve or reject it. |
-| `off` | `⏹ off` | Every worker and scout stops at once. Nothing new starts. |
+| `paused` | `⏸ paused` | Every worker and scout stops at once. Nothing new starts. |
 
 Claude Code's own **plan mode** (Shift+Tab) also counts: while the main chat is in it, new tasks go
 to the backlog and no new worker or scout starts (running workers keep going); the band shows
@@ -120,13 +120,13 @@ Scouts and Settings tabs. **Ctrl+T** shows running workers. More in the
 | `/symcc-scout <name> every <minutes>` | Change how often a scout runs on its timer |
 | `/symcc-scout <name> model <model\|none>` | Change a scout's model; `none` clears it, so the scout uses the default model |
 | `/symcc-scout <name> prompt <instructions>` | Replace the scout's instructions (one line of text) |
-| `/symcc-mode [off\|review\|auto]` | Set the board mode; no word switches `review` and `auto` (from `off`: `review`) |
+| `/symcc-mode [paused\|review\|auto]` | Set the board mode; no word switches `review` and `auto` (from `paused`: `review`) |
 | `/symcc-settings [name value]` | Open the Settings view, or set one setting: `/symcc-settings max_parallel 5`, `/symcc-settings notify sound`, `/symcc-settings test_commands "npm test"` |
 | `/symcc-settings role <name> on\|off\|reset` | Turn a role on or off, or reset it back to the built-in one |
 | `/symcc-settings kind <name> on\|off\|reset` | Turn a kind on or off, or reset it back to the built-in one |
 | `/symcc-stats [full] [7d\|T-100..T-130]` | Time and token stats from the board (archived tasks too), easy to read with plain bar charts: a one-line summary, totals, the whole team, averages and medians per task and per try, the biggest tasks, how tasks ended (merged, approved or answered), investigations counted on their own, by role, origin and day. `7d` limits it to the last 7 days, `T-100..T-130` to an id range; `full` adds the long explanations |
-| `/symcc-off` | Turn symcc off for this project: Claude works as normal (no lead guide, workers, scouts, updates, sounds or voice); the board is kept |
-| `/symcc-on` | Turn symcc back on, in the mode the board had |
+| `/symcc-disable` | Disable symcc for this project: Claude works as normal (no lead guide, workers, scouts, updates, sounds or voice); the board is kept |
+| `/symcc-enable` | Turn symcc back on, in the mode the board had |
 | `/symcc-drive` | Make this session drive the board (start workers, merge, run scouts). If another session drives, it hands over within 30 s: its running workers stop and restart here from their kept folders and branches, without using up a try. If it doesn't answer within 3 minutes, this session takes over anyway |
 | `/symcc-help [topic]` | The built-in manual |
 
@@ -150,8 +150,8 @@ setting, opens a pick list for `mode`, `notify`, `scout_findings` and `tests_wit
 | `scout_findings` | `auto` | `auto` / `backlog` | Where tasks from a scout's finding go. `auto`: the lead decides, and a finding it adds goes to `todo` and runs. `backlog`: every task added from a scout finding goes to the backlog, whatever the lead asks, and starts only when you move it to `todo` (the lead still tells you what was found) |
 | `tests_with_changes` | `ask` | `off` / `ask` / `review` | A change task whose commit edits code but no test file (a test file is in a `test/`, `tests/`, `__tests__/`, `spec/`, `e2e/` or `cypress/` folder or a folder ending in `.Test` / `.Tests`, or has `test` or `spec` as a name part split by `.`, `_` or `-` (`a.test.ts`, `a_test.py`, `test_a.py`, `a-test.ts`), a `.cy.` or `e2e` name part (`a.cy.ts`, `login.e2e.ts`), or a CamelCase name ending in `Test` or `Tests` (`FooTest.java`, `FooTests.cs`, `LoginUITests.swift`); a name that only contains those letters (`latest.ts`, `run-tests.sh`, all-capital `LATEST.ts`) is not a test). `ask`: it still merges and the lead is told "T-3 changed code but no test". `review`: it waits for your review instead of merging. `off`: not checked. A change to docs only is never flagged (docs are `.md`/`.mdx` files, README / CHANGELOG / LICENSE-style names (no extension or a text one), images, video, audio, fonts and subtitles anywhere, and non-code files under `docs/`; code under `docs/` (`docs/build.ts`) or with a docs-style name (`Notice.tsx`) is code) |
 | `checker` | `off` | `off` / `on` | A fresh checker tries to break each change (not docs-only) after the prep step (commit, scope and secret check) and before it joins the merge line; the tests run once in the line, after it. Problems go back to the worker as a retry, with no test run for that try. See [the checker](guide.md#the-checker) |
-| `mode` | `auto` | `off` / `review` / `auto` | See Modes above |
-| `enabled` | on | on / off | The whole plugin on or off, same as `/symcc-on` and `/symcc-off` |
+| `mode` | `auto` | `paused` / `review` / `auto` | See Modes above |
+| `enabled` | on | on / off | The whole plugin enabled or disabled, same as `/symcc-enable` and `/symcc-disable` |
 
 ### What `notify` uses on each system
 

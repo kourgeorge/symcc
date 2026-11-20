@@ -26,7 +26,7 @@ export function meanwhileText(lines: readonly string[], shown = MEANWHILE_SHOWN)
  * them, a worker's time is up); the update it goes in is sent as urgent (LeadSend: OpenCode gives it mid-turn).
  */
 export function tellLead(host: Host, text: string, how?: { urgent?: boolean }) {
-  if (!S.enabledNow) return // the plugin is off: no "[name] Board update" messages
+  if (!S.enabledNow) return // the plugin is disabled: no "[name] Board update" messages
   leadQueue.push(text)
   if (how?.urgent) S.leadUrgent = true
   if (host.features.wakeLead !== 'now') return
@@ -70,7 +70,7 @@ function sendBoardUpdate(host: Host) {
 
 /**
  * The board update waiting for the lead, taken from the queue (with the "Meanwhile the owner:" lines at its top);
- * undefined when nothing waits (only "Meanwhile" lines don't make one) or the plugin is off.
+ * undefined when nothing waits (only "Meanwhile" lines don't make one) or the plugin is disabled.
  */
 export function takeBoardUpdate(): string | undefined {
   S.leadUrgent = false

@@ -28,7 +28,7 @@ export type Board = {
    * voice ("T-3 done"); absent: the best this machine can play (see notifyOf)
    */
   notify?: Notify
-  /** the whole plugin on or off (/<name>-on, /<name>-off); off: Claude works as normal, the board is kept. true unless turned off */
+  /** the whole plugin enabled or disabled (/<name>-enable, /<name>-disable); disabled: Claude works as normal, the board is kept. true unless disabled */
   enabled: boolean
   /** done and dropped tasks older than this many days move to archive.json (0 = never) */
   archive_days: number
@@ -528,6 +528,12 @@ export function readBoard(text: string | null): BoardRead {
   if (archived) board.archived = archived
   else if ('archived' in raw) fixed.push('archived')
   let migrated = archived && isObj(raw.archived) && isNum(raw.archived.tokens) ? 1 : 0
+  // Migration (T-578): the old board mode "off" is now "paused"; the board is saved once with the new name.
+  if (raw.mode === 'off') {
+    board.mode = 'paused'
+    if (fixed.includes('mode')) fixed.splice(fixed.indexOf('mode'), 1)
+    migrated++
+  }
   // Migration: the board-wide target_branch is gone; each task without its own branch gets it, and
   // the board is saved once without it (it counts as one migrated entry even with no task to move).
   const oldTarget = typeof raw.target_branch === 'string' && raw.target_branch.trim() ? raw.target_branch.trim() : 'main'
@@ -591,12 +597,12 @@ export function cleanFiles(files: unknown, dir: string = DATA_DIR): string[] {
     .slice(0, 30)
 }
 /** The three board modes, in the order they are shown. */
-export const MODES: SymccMode[] = ['off', 'review', 'auto']
+export const MODES: SymccMode[] = ['paused', 'review', 'auto']
 
 /** Whether `m` is one of the board modes. */
 export const isMode = (m: unknown): m is SymccMode => typeof m === 'string' && (MODES as string[]).includes(m)
 
-/** The board's mode: "off", "review" or "auto"; a missing or bad value is "auto". */
+/** The board's mode: "paused", "review" or "auto"; a missing or bad value is "auto". */
 export const modeOf = (b: { mode?: unknown } | null | undefined): SymccMode => (isMode(b?.mode) ? b!.mode as SymccMode : 'auto')
 /** A full git commit id: 40 hex characters (SHA-1) or 64 (SHA-256). */
 export const isSha = (x: unknown): x is string => typeof x === 'string' && /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(x)

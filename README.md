@@ -43,7 +43,7 @@ behind it: you keep talking, and the work keeps moving.
 - **See everything.** A live board shows what is running, what is waiting and what needs you.
 - **Know why.** Every task and commit records who asked for it and why, so you can go from a line of code back to the request.
 - **Order handled for you.** The lead decides which tasks wait for others and which run in parallel. You think about the next question while the team works on the next task.
-- **Stay in control.** Review each diff before it merges, edit it, reject it, or switch everything off with `/symcc-off`.
+- **Stay in control.** Review each diff before it merges, edit it, reject it, or disable symcc entirely with `/symcc-disable`.
 
 The main parts:
 
@@ -174,7 +174,7 @@ You never have to type a command. Just talk to the lead:
 - "stash this idea" · "show the backlog" · "move T-5 to todo"
 - "use the security role for T-12"
 
-A few things are slash commands: `/symcc` opens the board, `/symcc-off` and `/symcc-on` switch symcc off and on, and `/symcc-drive` makes the window you type it in drive the board (when several windows have the project open). `/symcc-help` lists them all.
+A few things are slash commands: `/symcc` opens the board, `/symcc-disable` and `/symcc-enable` disable and enable symcc, and `/symcc-drive` makes the window you type it in drive the board (when several windows have the project open). `/symcc-help` lists them all.
 
 ## More
 

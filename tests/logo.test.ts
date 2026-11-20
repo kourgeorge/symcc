@@ -123,14 +123,14 @@ test('a scout run plays the note when its report arrives, not when it starts', (
   expect(pickMove(started, old, isNothing)).toBe(null)
 })
 
-test('nothing plays on a narrow panel, a panel not shown, or the board off', () => {
+test('nothing plays on a narrow panel, a panel not shown, or the board paused', () => {
   const ok = { width: 80, shown: true }
   expect(mayMove(ok)).toBe(true)
   expect(mayMove({ ...ok, mode: 'auto', enabled: true })).toBe(true)
   expect(mayMove({ ...ok, width: BANNER_NARROW - 1 })).toBe(false)
   expect(mayMove({ ...ok, width: BANNER_NARROW })).toBe(true)
   expect(mayMove({ ...ok, shown: false })).toBe(false)
-  expect(mayMove({ ...ok, mode: 'off' })).toBe(false)
+  expect(mayMove({ ...ok, mode: 'paused' })).toBe(false)
   expect(mayMove({ ...ok, enabled: false })).toBe(false)
   // a narrow panel draws no logo at all
   expect(bannerLines({ ...emptyBoard(), tasks: [] }, '/x/app', '/x', true, BANNER_NARROW - 1).every(l => l.art === '')).toBe(true)

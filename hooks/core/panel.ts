@@ -56,13 +56,13 @@ export type CrewBoard = { mode?: SymccMode; plan_mode?: boolean; max_parallel?: 
 
 /** The workers and scouts, each '' when there is nothing to say: `workers` "1/3 workers", then "1 merging" for tasks
  *  symcc is testing and merging (each left out while there are none: "all done" or the counts already say so), `scouts` "5 scouts", and `next` "next: gaps-bot in 1h 00m" or
- *  "running: gaps-bot" (no "next" in plan mode or board mode off, as no scout starts then). */
+ *  "running: gaps-bot" (no "next" in plan mode or board mode paused, as no scout starts then). */
 export function crewParts(c: CrewBoard, nowMs: number): { workers: string; scouts: string; next: string } {
   const merging = c.tasks.filter(t => finishingNow(t, nowMs)).length
   const busy = c.tasks.filter(t => t.status === 'doing').length - merging
   const n = c.scouts.length
   const running = c.scouts.find(s => s.running)
-  const next = !n ? '' : running ? `running: ${running.name}` : c.plan_mode || c.mode === 'off' ? '' : nextScoutText(c.scouts, nowMs)
+  const next = !n ? '' : running ? `running: ${running.name}` : c.plan_mode || c.mode === 'paused' ? '' : nextScoutText(c.scouts, nowMs)
   const workers = [busy ? `${busy}/${c.max_parallel ?? emptyBoard().max_parallel} workers` : '', merging ? `${merging} merging` : ''].filter(Boolean).join(' · ')
   return { workers, scouts: !n ? '' : n === 1 ? '1 scout' : `${n} scouts`, next }
 }

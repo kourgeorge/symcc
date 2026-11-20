@@ -264,7 +264,7 @@ export function scoutOrder(a: Pick<SymccScout, 'name' | 'running' | 'next_run' |
 }
 
 /** True when scout `s` may start a run now: not running already, in the session that drives the board, with a
- *  usable git repo, the board on and not in mode off. A pause doesn't matter here: it only stops the timer (the
+ *  usable git repo, the board on and not paused. A pause doesn't matter here: it only stops the timer (the
  *  timer checks it itself), so "run now" still runs a paused scout. */
 export function scoutMayRun(s: Pick<SymccScout, 'running' | 'paused'>, o: { driving: boolean; gitOk: boolean; mode: SymccMode; on: boolean }): boolean {
   return scoutWhyNot({ name: '', ...s }, o) === ''
@@ -276,7 +276,7 @@ export function scoutWhyNot(s: Pick<SymccScout, 'name' | 'running' | 'paused'>, 
   if (!o.driving) return `scouts run in the session that drives the board; run /${name}-scout ${s.name} there`
   if (!o.gitOk) return "git isn't set up in this folder yet (no repo or no commit); nothing runs until it is"
   if (!o.on) return offAnswer(name)
-  if (o.mode === 'off') return `the board is off, so no scout runs; turn it on with /${name}-mode review or /${name}-mode auto`
+  if (o.mode === 'paused') return `the board is paused, so no scout runs; start work again with /${name}-mode review or /${name}-mode auto`
   if (o.plan) return planScoutText(s.name)
   return ''
 }

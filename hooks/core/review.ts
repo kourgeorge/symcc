@@ -91,23 +91,23 @@ export function setMode(b: Board, m: SymccMode): Board {
   return { ...b, mode: isMode(m) ? m : 'auto' }
 }
 
-/** The short name of a mode, as shown at a glance: "off", "review merge", "auto". */
-export const MODE_NAME: Record<SymccMode, string> = { off: 'off', review: 'review merge', auto: 'auto' }
-const MODE_ICON: Record<SymccMode, string> = { off: '⏹', review: '⏸', auto: '⏵' }
+/** The short name of a mode, as shown at a glance: "paused", "review merge", "auto". */
+export const MODE_NAME: Record<SymccMode, string> = { paused: 'paused', review: 'review merge', auto: 'auto' }
+const MODE_ICON: Record<SymccMode, string> = { paused: '⏸', review: '⏸', auto: '⏵' }
 
-/** The label for a mode, in the panel banner and at the start of the status line: "⏹ off", "⏸ review merge", "⏵ auto". */
-export const MODE_LABEL: Record<SymccMode, string> = { off: `${MODE_ICON.off} ${MODE_NAME.off}`, review: `${MODE_ICON.review} ${MODE_NAME.review}`, auto: `${MODE_ICON.auto} ${MODE_NAME.auto}` }
+/** The label for a mode, in the panel banner and at the start of the status line: "⏸ paused", "⏸ review merge", "⏵ auto". */
+export const MODE_LABEL: Record<SymccMode, string> = { paused: `${MODE_ICON.paused} ${MODE_NAME.paused}`, review: `${MODE_ICON.review} ${MODE_NAME.review}`, auto: `${MODE_ICON.auto} ${MODE_NAME.auto}` }
 export const modeLabel = (m: SymccMode): string => MODE_LABEL[isMode(m) ? m : 'auto']
 
-/** The mode the panel's m button switches to: review and auto swap; off goes to review. */
+/** The mode the panel's m button switches to: review and auto swap; paused goes to review. */
 export const nextMode = (m: SymccMode): SymccMode => (modeOf({ mode: m }) === 'review' ? 'auto' : 'review')
 
-/** The panel's m button: "[m] review merge" in auto (and off), "[m] auto" in review. */
+/** The panel's m button: "[m] review merge" in auto (and paused), "[m] auto" in review. */
 export const modeButton = (m: SymccMode): string => `[m] ${MODE_NAME[nextMode(m)]}`
 
 /** What a mode means, in a few words. */
 export const MODE_MEANING: Record<SymccMode, string> = {
-  off: 'no work runs; tasks in review can still be approved or rejected',
+  paused: 'no work runs; tasks in review can still be approved or rejected',
   review: 'work runs; finished tasks wait for your approve or reject',
   auto: 'work runs; finished tasks that pass merge on their own',
 }

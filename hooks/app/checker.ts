@@ -194,7 +194,7 @@ function checkerNoVerdict(end: TurnEnd): string | undefined {
   return undefined
 }
 
-/** Stops every running checker (`why`, e.g. the board was turned off): each one's step goes on with no verdict. */
+/** Stops every running checker (`why`, e.g. the board was paused): each one's step goes on with no verdict. */
 export async function haltCheckers($: Host, why: string) {
   await haltCheckersOf($, why, () => true)
 }

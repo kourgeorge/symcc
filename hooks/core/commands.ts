@@ -26,8 +26,8 @@ export type Command =
   /** /<name>-settings role|kind <name> on|off|reset: turns a role or kind on or off, or back to the built-in one */
   | { kind: 'def'; def: 'role' | 'kind'; name: string; action: DefAction }
   | { kind: 'mode'; mode: SymccMode }
-  | { kind: 'off' }
-  | { kind: 'on' }
+  | { kind: 'disable' }
+  | { kind: 'enable' }
   | { kind: 'drive' }
   | { kind: 'help'; topic: string }
   | { kind: 'settings' }
@@ -43,7 +43,7 @@ export const DEF_ACTIONS = ['on', 'off', 'reset'] as const
 export type DefAction = (typeof DEF_ACTIONS)[number]
 
 /** The words after the plugin's name, one per command: /<name>-tasks, /<name>-approve, ... */
-export const COMMAND_WORDS = ['tasks', 'scouts', 'task', 'approve', 'reject', 'diff', 'scout', 'mode', 'settings', 'help', 'off', 'on', 'drive'] as const
+export const COMMAND_WORDS = ['tasks', 'scouts', 'task', 'approve', 'reject', 'diff', 'scout', 'mode', 'settings', 'help', 'disable', 'enable', 'drive'] as const
 
 /** Every slash command's name (without the slash): "<name>" and "<name>-<word>". */
 export const commandNames = (name: string = DEFAULT_NAME): string[] => [name, ...COMMAND_WORDS.map(w => `${name}-${w}`)]
@@ -51,14 +51,14 @@ export const commandNames = (name: string = DEFAULT_NAME): string[] => [name, ..
 const isId = (s: string | undefined) => !!s && /^t-?\d+$/i.test(s)
 
 /**
- * The new mode for /<name>-mode: with no word, review and auto switch (off goes to review, never
- * to off); "off", "review" or "auto" set it; anything else gives a usage line.
+ * The new mode for /<name>-mode: with no word, review and auto switch (paused goes to review, never
+ * to paused); "paused", "review" or "auto" set it; anything else gives a usage line.
  */
 export function parseModeCommand(args: string, current: SymccMode, name: string = DEFAULT_NAME): { kind: 'mode'; mode: SymccMode } | { kind: 'bad'; message: string } {
   const s = String(args ?? '').trim().toLowerCase()
   if (!s) return { kind: 'mode', mode: modeOf({ mode: current }) === 'review' ? 'auto' : 'review' }
   if (isMode(s)) return { kind: 'mode', mode: s }
-  return { kind: 'bad', message: `Use: /${name}-mode (switch review and auto), or /${name}-mode off|review|auto` }
+  return { kind: 'bad', message: `Use: /${name}-mode (switch review and auto), or /${name}-mode paused|review|auto` }
 }
 
 /**
@@ -117,10 +117,10 @@ export function parseCommand(command: string, args: string, current: SymccMode =
     }
     case 'help':
       return { kind: 'help', topic: s }
-    case 'off':
-      return s ? use(`/${name}-off (turn ${name} off; /${name}-on turns it back on)`) : { kind: 'off' }
-    case 'on':
-      return s ? use(`/${name}-on`) : { kind: 'on' }
+    case 'disable':
+      return s ? use(`/${name}-disable (turn ${name} off entirely; /${name}-enable turns it back on)`) : { kind: 'disable' }
+    case 'enable':
+      return s ? use(`/${name}-enable`) : { kind: 'enable' }
     case 'drive':
       return s ? use(`/${name}-drive (make this session drive the board)`) : { kind: 'drive' }
   }

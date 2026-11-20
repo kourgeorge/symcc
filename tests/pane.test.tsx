@@ -889,7 +889,7 @@ test('a task in review is listed near the top as "review" with its keys, and the
 
 const MODE_CASES = [
   ['auto', /^⏵ auto $/, '[m] review merge'],
-  ['off', /^⏹ off $/, '[m] review merge'],
+  ['paused', /^⏸ paused $/, '[m] review merge'],
   ['later', /^⏵ auto $/, '[m] review merge'],
 ] as const
 for (const [mode, text, label] of MODE_CASES)
@@ -984,16 +984,17 @@ test('"c" and the Settings tab show one row per setting, with value, default and
   expect(await ui.find({ type: 'Text', text: /one shell line, or a list of up to 5 lines/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /^ off$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /^ review$/ })).toBeDefined()
-  // Enter on a number opens an edit box; on mode a pick list of off / review / auto
+  // Enter on a number opens an edit box; on mode a pick list of paused / review / auto
   await ui.press({ key: 'setting:max_parallel' })
   expect(await ui.find({ key: 'setting-edit' })).toBeDefined()
   await ui.press({ key: 'setting:mode' })
   expect(await ui.find({ key: 'setting-edit' })).toBeUndefined()
-  expect(await ui.find({ key: 'pick:off' })).toBeDefined()
+  expect(await ui.find({ key: 'pick:paused' })).toBeDefined()
+  expect(await ui.find({ key: 'pick:off' })).toBeUndefined()
   expect(await ui.find({ key: 'pick:review' })).toBeDefined()
   expect(await ui.find({ key: 'pick:auto' })).toBeDefined()
   await ui.press({ key: 'setting-cancel' })
-  expect(await ui.find({ key: 'pick:off' })).toBeUndefined()
+  expect(await ui.find({ key: 'pick:paused' })).toBeUndefined()
   // notify: a pick list of only what this machine can play (here no speech program: no voice)
   await ui.press({ key: 'setting:notify' })
   expect(await ui.find({ key: 'pick:off' })).toBeDefined()
@@ -1091,7 +1092,7 @@ test('a closed group summary is cut to fit', () => {
   const work = SETTING_GROUPS[0]!
   expect(groupSummary(work, { mode: 'auto', max_parallel: 3, max_minutes: 45, auto_retries: 2 }, 80)).toBe('Work · auto · 3 at once · 45 min · 2 retries')
   expect(groupSummary(work, { mode: 'auto', max_parallel: 3, max_minutes: 45, auto_retries: 2 }, 20)).toBe('Work · auto · 3 at…')
-  expect(groupSummary(work, { mode: 'auto', enabled: false }, 80)).toContain('plugin off')
+  expect(groupSummary(work, { mode: 'auto', enabled: false }, 80)).toContain('disabled')
   const board = SETTING_GROUPS.find(g => g.title === 'Board and alerts')!
   expect(groupSummary(board, { archive_days: 0 }, 80)).toContain('never archive')
   expect(groupSummary(board, { archive_days: 0 }, 80)).not.toContain('archive after')
@@ -1385,7 +1386,7 @@ test('the task page shows a Commits row: short ids, newest first, the merged one
 
 const COMPOSE = { model: 'claude-opus-5-5', promptModel: 'claude-opus-5-5', surfaces: ['terminal'], tools: [], outputStyle: null, traits: [] } as never
 
-test('the lead guide is in the system prompt while symcc is on, and left out once it is off', async ($, on) => {
+test('the lead guide is in the system prompt while symcc is enabled, and left out once it is disabled', async ($, on) => {
   const files: Record<string, string | null> = { '/board.json': JSON.stringify({ tasks: [] }), '/board.lock': null }
   fakeFiles(on, files)
   // the engine's own sections, beneath the plugin
@@ -1399,11 +1400,11 @@ test('the lead guide is in the system prompt while symcc is on, and left out onc
   expect(await ids()).toContain('symcc:lead')
 })
 
-test('while symcc is off its tools answer that it is off and leave the board alone', async ($, on) => {
+test('while symcc is disabled its tools answer that it is disabled and leave the board alone', async ($, on) => {
   const board = { tasks: [task('T-1', 'todo', 'Build it')], enabled: false }
   const written = fakeFiles(on, { '/board.json': JSON.stringify(board), '/board.lock': null })
   const r = (await $.tool.call({ tool: 'mcp__symcc__add', title: 'More', why: 'test' } as never)) as { result?: unknown }
-  expect(JSON.stringify(r.result)).toContain('symcc is off. The owner can turn it on with /symcc-on.')
+  expect(JSON.stringify(r.result)).toContain('symcc is disabled. The owner can turn it back on with /symcc-enable.')
   expect(Object.keys(written).some(p => /board\.json/.test(p))).toBe(false)
 })
 
@@ -1465,8 +1466,8 @@ test('the Tasks view: no workers/scouts strip in the banner, NEEDS YOU then one 
 })
 
 const OFF_CASES = [
-  ['symcc is turned off', { enabled: false }, /^symcc is off · $/],
-  ['the board is in mode off', { mode: 'off' }, /^⏹ off: nothing starts$/],
+  ['symcc is disabled', { enabled: false }, /^symcc is disabled · $/],
+  ['the board is paused', { mode: 'paused' }, /^⏸ paused: nothing starts$/],
 ] as const
 for (const [when, extra, want] of OFF_CASES)
   test(`the banner's first line warns when ${when}`, async ($, on) => {
@@ -1480,13 +1481,13 @@ for (const [when, extra, want] of OFF_CASES)
   })
 
 for (const surface of ['terminal', 'vscode'] as const)
-  test(`symcc turned off (${surface}): the header says "symcc is off · /symcc-on to turn it on", the command in the accent color`, async ($, on) => {
+  test(`symcc disabled (${surface}): the header says "symcc is disabled · /symcc-enable to turn it back on", the command in the accent color`, async ($, on) => {
     stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'Write it up')], working: [], scouts: [], mode: 'auto', test_commands: [], enabled: false } } })
     const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 100 }, surface })
     const all = (await ui.findAll({ type: 'Text' })).map(t => t.text)
-    expect(all.some(t => /symcc is off · \/symcc-on to turn it on/.test(t))).toBe(true)
+    expect(all.some(t => /symcc is disabled · \/symcc-enable to turn it back on/.test(t))).toBe(true)
     expect(all.some(t => /symcc off|symcc: symcc/.test(t))).toBe(false)
-    const cmd = await ui.find({ type: 'Text', text: /^\/symcc-on$/ })
+    const cmd = await ui.find({ type: 'Text', text: /^\/symcc-enable$/ })
     expect(cmd?.props.color).toBe('ide')
     expect(cmd?.props.bold).toBe(true)
     await ui.unmount()

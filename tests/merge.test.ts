@@ -1737,18 +1737,18 @@ test('symcc turned off while a finished task\'s tests run: not merged, back to t
   expect(movedMain(w)).toBe(false)
   expect(w.git.main).toBe(M1)
   expect(t.status).toBe('todo')
-  expect(t.note).toMatch(/symcc was turned off/)
-  expect(t.history.map(h => h.text)).toContain('try 1: stopped: symcc was turned off while its work was being checked; nothing merged, its files are kept')
-  expect(t.history.at(-1)?.text).toMatch(/\(not used: symcc was turned off\)$/)
+  expect(t.note).toMatch(/symcc was disabled/)
+  expect(t.history.map(h => h.text)).toContain('try 1: stopped: symcc was disabled while its work was being checked; nothing merged, its files are kept')
+  expect(t.history.at(-1)?.text).toMatch(/\(not used: symcc was disabled\)$/)
   expect(w.calls.some(c => c.includes('worktree remove'))).toBe(false)
 })
 
 test('the board turned off while a finished task\'s tests run: not merged, back to todo', async () => {
-  const { w, said, t } = await finishing(w => setBoardMode(w.$, 'off', 'you'))
+  const { w, said, t } = await finishing(w => setBoardMode(w.$, 'paused', 'you'))
   expect(String(said[0])).toMatch(/T-1 was being tested and merged and went back to todo/)
   expect(w.git.main).toBe(M1)
   expect(t.status).toBe('todo')
-  expect(t.history.map(h => h.text)).toContain('try 1: stopped: the board was turned off while its work was being checked; nothing merged, its files are kept')
+  expect(t.history.map(h => h.text)).toContain('try 1: stopped: the board was paused while its work was being checked; nothing merged, its files are kept')
 })
 
 test('symcc turned off during an approve: not merged, stays in review', async () => {
@@ -1756,13 +1756,13 @@ test('symcc turned off during an approve: not merged, stays in review', async ()
   expect(String(said[0])).toMatch(/T-1 was already merging and stayed in review/)
   expect(movedMain(w)).toBe(false)
   expect(w.git.main).toBe(M1)
-  expect(out).toBe('T-1 was not merged and stays in review: symcc was turned off while it was being merged. Approve it again.')
+  expect(out).toBe('T-1 was not merged and stays in review: symcc was disabled while it was being merged. Approve it again.')
   expect(t.status).toBe('review')
-  expect(t.history.at(-1)?.text).toBe('try 1: approved by the owner → not merged: symcc was turned off while it was being merged; it stays in review')
+  expect(t.history.at(-1)?.text).toBe('try 1: approved by the owner → not merged: symcc was disabled while it was being merged; it stays in review')
 })
 
 test('the board turned off during an approve: not merged, stays in review', async () => {
-  const { w, said, t } = await approving(w => setBoardMode(w.$, 'off', 'you'), /git merge-base/)
+  const { w, said, t } = await approving(w => setBoardMode(w.$, 'paused', 'you'), /git merge-base/)
   expect(String(said[0])).toMatch(/T-1 was already merging and stayed in review/)
   expect(w.git.main).toBe(M1)
   expect(t.status).toBe('review')
@@ -1772,15 +1772,15 @@ test('symcc turned off only after the merge keeps the task done, with a line say
   const { w, t } = await finishing(turnOff, {}, /git update-ref/)
   expect(w.git.main).toBe(H1)
   expect(t.status).toBe('done')
-  expect(t.history.at(-1)?.text).toBe('try 1: symcc was turned off while it was being merged, too late: the work was already merged, so it stays done')
+  expect(t.history.at(-1)?.text).toBe('try 1: symcc was disabled while it was being merged, too late: the work was already merged, so it stays done')
 })
 
 test('the board turned off only after an approve\'s merge keeps the task done, with a "too late" line', async () => {
-  const { w, out, t } = await approving(w => setBoardMode(w.$, 'off', 'you'))
+  const { w, out, t } = await approving(w => setBoardMode(w.$, 'paused', 'you'))
   expect(w.git.main).toBe(H1)
-  expect(out).toBe(`T-1 was merged into main (${H1.slice(0, 8)}) before the board was turned off; it is done`)
+  expect(out).toBe(`T-1 was merged into main (${H1.slice(0, 8)}) before the board was paused; it is done`)
   expect(t.status).toBe('done')
-  expect(t.history.at(-1)?.text).toBe('try 1: the board was turned off while it was being merged, too late: the work was already merged, so it stays done')
+  expect(t.history.at(-1)?.text).toBe('try 1: the board was paused while it was being merged, too late: the work was already merged, so it stays done')
 })
 
 // ---------------- symcc or the board turned back on (T-213) ----------------
@@ -1825,14 +1825,14 @@ function cleanUp() {
   S.enabledNow = true
 }
 
-test('/symcc-off then /symcc-on: the reply names the mode, the lead is told once, and T-1 gets a new worker', async () => {
+test('/symcc-disable then /symcc-enable: the reply names the mode, the lead is told once, and T-1 gets a new worker', async () => {
   const { w, spawned } = await liveWorld()
   try {
     await setSymcc(w.$, false)
     expect(find(await load(w.$), 'T-1')!.status).toBe('todo')
     expect(workerOn('T-1')).toBe(false)
     const on = await setSymcc(w.$, true)
-    expect(on.startsWith('symcc is on, in mode auto')).toBe(true)
+    expect(on.startsWith('symcc is enabled, in mode auto')).toBe(true)
     await settle(w, () => workerOn('T-1'))
     expect(leadQueue.filter(m => m.includes('You are the lead again; the board is in mode auto')).length).toBe(1)
     expect(spawned.length).toBe(1)
@@ -1843,7 +1843,7 @@ test('/symcc-off then /symcc-on: the reply names the mode, the lead is told once
   }
 })
 
-test('/symcc-on when symcc is already on says "already on" and tells the lead nothing new', async () => {
+test('/symcc-enable when symcc is already enabled says "already enabled" and tells the lead nothing new', async () => {
   const { w, spawned } = await liveWorld()
   try {
     await setSymcc(w.$, false)
@@ -1851,7 +1851,7 @@ test('/symcc-on when symcc is already on says "already on" and tells the lead no
     await settle(w, () => workerOn('T-1'))
     const told = leadQueue.length
     const again = await setSymcc(w.$, true)
-    expect(again.startsWith('symcc is already on, in mode auto: ')).toBe(true)
+    expect(again.startsWith('symcc is already enabled, in mode auto: ')).toBe(true)
     for (let i = 0; i < 200; i++) await Promise.resolve()
     expect(leadQueue.length).toBe(told)
     // T-1 already has its worker: no second one
@@ -1861,20 +1861,20 @@ test('/symcc-on when symcc is already on says "already on" and tells the lead no
   }
 })
 
-test('T-571: /symcc-on with the board in mode off says plainly that the mode stops the work and how to start it, and keeps the mode', async () => {
+test('T-571: /symcc-enable with the board paused says plainly that the mode stops the work and how to start it, and keeps the mode', async () => {
   const { w, spawned } = await liveWorld()
   try {
     await setSymcc(w.$, false)
-    await change(w.$, b => [{ ...b, mode: 'off' as const }, null])
+    await change(w.$, b => [{ ...b, mode: 'paused' as const }, null])
     const on = await setSymcc(w.$, true)
-    expect(on.startsWith('symcc is on, in mode off: ')).toBe(true)
-    expect(on).toContain("the board's mode is off, so no work starts; start work with /symcc-mode review or /symcc-mode auto.")
+    expect(on.startsWith('symcc is enabled, in mode paused: ')).toBe(true)
+    expect(on).toContain('symcc itself is enabled, but the board is paused, so no work starts; start work with /symcc-mode review or /symcc-mode auto.')
     const again = await setSymcc(w.$, true)
-    expect(again.startsWith('symcc is already on, in mode off: ')).toBe(true)
+    expect(again.startsWith('symcc is already enabled, in mode paused: ')).toBe(true)
     expect(again).toContain('/symcc-mode review or /symcc-mode auto')
     const b = await load(w.$)
     expect(b.enabled).toBe(true)
-    expect(b.mode).toBe('off')
+    expect(b.mode).toBe('paused')
     for (let i = 0; i < 200; i++) await Promise.resolve()
     expect(spawned.length).toBe(0)
   } finally {
@@ -2880,8 +2880,8 @@ test('a try stopped by the lead says why: changed (which fields), paused, droppe
 })
 
 test('a try stopped by turning symcc or the board off says so, and so does a stop during its check', async () => {
-  expect((await tryEnds(turnOff)).end).toEqual(['stopped', 'symcc was turned off'])
-  expect((await tryEnds(w => setBoardMode(w.$, 'off', 'you'))).end).toEqual(['stopped', 'you turned the board off'])
+  expect((await tryEnds(turnOff)).end).toEqual(['stopped', 'symcc was disabled'])
+  expect((await tryEnds(w => setBoardMode(w.$, 'paused', 'you'))).end).toEqual(['stopped', 'you paused the board'])
   // paused while its tests run: the pause is the reason, not the check's "not merged"
   const paused = await tryEnds(async w => {
     let done = false

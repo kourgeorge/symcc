@@ -142,7 +142,7 @@ export const HISTORY_KINDS = {
   step: 'step',
   /** a running worker was stopped and its task starts again (the task was changed) */
   restarted: 'step',
-  /** a running worker was stopped (paused, the board off, the lead's handover …) */
+  /** a running worker was stopped (paused, the board paused, the lead's handover …) */
   stopped: 'bad',
   /** a try ran out of time, or went over its limit */
   'out-of-time': 'bad',

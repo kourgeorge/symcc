@@ -457,25 +457,25 @@ test('the banner: the clef drawing beside the name, where, who drives and the se
   // driven elsewhere, no test command, and a counts line under the drawing, at full width
   const run = { started: '2026-01-01T00:00:00.000Z', ended: '2026-01-01T00:08:00.000Z', tokens: { cache_read: 600_000, input: 43_700 } }
   const tasks = [{ status: 'doing', runs: [run] }, { status: 'doing' }, { status: 'todo' }, { status: 'done' }] as never[]
-  const more = bannerLines({ ...emptyBoard(), branch: 'main', mode: 'off', auto_retries: 1, tasks }, '/Users/me/repositories/symcc', '/Users/me', false, 80)
-  // mode off: a warning on the first line, as nothing starts (the workers/scouts strip is gone from the banner)
+  const more = bannerLines({ ...emptyBoard(), branch: 'main', mode: 'paused', auto_retries: 1, tasks }, '/Users/me/repositories/symcc', '/Users/me', false, 80)
+  // mode paused: a warning on the first line, as nothing starts (the workers/scouts strip is gone from the banner)
   expect(more.map(bannerText)).toEqual([
-    `${a0}symcc board · symcc · ⏹ off: nothing starts`,
+    `${a0}symcc board · symcc · ⏸ paused: nothing starts`,
     `${a1}~/repositories/symcc · main · driven by another session`,
     `${a2}no test command · 3 at once · 45 min · 1 retry`,
     `${a3}`,
     '2 doing · 1 to do · 1 done · 8m · 643.7k tokens',
   ])
   expect(more[2]!.parts[0]).toEqual({ text: 'no test command', tone: 'warning' })
-  expect(more[0]!.parts.at(-1)).toEqual({ text: '⏹ off: nothing starts', tone: 'warning' })
-  // turned off: the header says how to turn it on in words, the command in the accent color (as the name), the rest a warning
+  expect(more[0]!.parts.at(-1)).toEqual({ text: '⏸ paused: nothing starts', tone: 'warning' })
+  // disabled: the header says how to turn it back on in words, the command in the accent color (as the name), the rest a warning
   const offLine = bannerLines({ ...b, enabled: false }, '', '', true, 80, undefined, 'symcc', undefined, '0.4.1')[0]!
   expect(offLine.parts.slice(-3)).toEqual([
-    { text: 'symcc is off · ', tone: 'warning' },
-    { text: '/symcc-on', tone: 'accent', bold: true },
-    { text: ' to turn it on', tone: 'warning' },
+    { text: 'symcc is disabled · ', tone: 'warning' },
+    { text: '/symcc-enable', tone: 'accent', bold: true },
+    { text: ' to turn it back on', tone: 'warning' },
   ])
-  expect(bannerText(offLine)).toMatch(/symcc is off · \/symcc-on to turn it on$/)
+  expect(bannerText(offLine)).toMatch(/symcc is disabled · \/symcc-enable to turn it back on$/)
   expect(bannerText(offLine)).not.toMatch(/symcc off/)
   expect(more.some(l => /workers|scouts?\b/.test(bannerText(l)))).toBe(false)
   expect(more[4]!.parts.some(p => p.bold)).toBe(false)
@@ -895,7 +895,7 @@ test('the status line lists running and failed task IDs, without the folder or "
     statusLine({ tasks: [t('doing', 'T-26'), t('doing', 'T-27'), t('todo'), t('todo')] }, true),
     statusLine({ tasks: [t('failed', 'T-28'), t('done')] }, true),
     statusLine({ tasks: [t('failed', 'T-28'), t('failed', 'T-29')] }, true),
-    statusLine({ tasks: [t('todo')] }, true, '', 'off'),
+    statusLine({ tasks: [t('todo')] }, true, '', 'paused'),
     statusLine({ tasks: [t('waiting'), t('paused')] }, true),
     statusLine({ tasks: [t('done')] }, false),
     statusLine({ tasks: [] }, false),
@@ -908,7 +908,7 @@ test('the status line lists running and failed task IDs, without the folder or "
     '⏵ auto · T-26, T-27 doing · 2 to do',
     '⏵ auto · 1 failed (T-28)',
     '⏵ auto · 2 failed (T-28, T-29)',
-    '⏹ off · 1 to do',
+    '⏸ paused · 1 to do',
     '⏵ auto · 1 paused · 1 waiting for you',
     '⏵ auto · all done (driven by another session)',
     '⏵ auto · empty (driven by another session)',
@@ -932,35 +932,35 @@ test('the status line keeps the backlog quiet, but says "all done · N in backlo
   expect(backlogLabel(3, true)).toBe('▾ Backlog (3)')
 })
 
-test('the status line starts with the board mode: off, review or auto', () => {
+test('the status line starts with the board mode: paused, review or auto', () => {
   const t = (status: SymccTask['status'], id: string) => ({ id, status })
   const tasks = [t('doing', 'T-26'), t('review', 'T-27')]
-  expect(MODE_LABEL).toEqual({ off: '⏹ off', review: '⏸ review merge', auto: '⏵ auto' })
-  expect(MODE_NAME).toEqual({ off: 'off', review: 'review merge', auto: 'auto' })
+  expect(MODE_LABEL).toEqual({ paused: '⏸ paused', review: '⏸ review merge', auto: '⏵ auto' })
+  expect(MODE_NAME).toEqual({ paused: 'paused', review: 'review merge', auto: 'auto' })
   expect(modeButton('auto')).toBe('[m] review merge')
   expect(modeButton('review')).toBe('[m] auto')
-  expect(modeButton('off')).toBe('[m] review merge')
-  expect(nextMode('off')).toBe('review')
+  expect(modeButton('paused')).toBe('[m] review merge')
+  expect(nextMode('paused')).toBe('review')
   expect(nextMode('review')).toBe('auto')
   expect(nextMode('auto')).toBe('review')
-  expect(statusLine({ tasks }, true, '', 'off')).toBe('⏹ off · T-26 doing · 1 to review (T-27)')
+  expect(statusLine({ tasks }, true, '', 'paused')).toBe('⏸ paused · T-26 doing · 1 to review (T-27)')
   expect(statusLine({ tasks }, true, '', 'review')).toBe('⏸ review merge · T-26 doing · 1 to review (T-27)')
   expect(statusLine({ tasks }, true, '', 'auto')).toBe('⏵ auto · T-26 doing · 1 to review (T-27)')
   expect(statusLine({ tasks }, true)).toBe('⏵ auto · T-26 doing · 1 to review (T-27)')
-  // empty board this session drives: off and review show the label; auto stays quiet
-  expect(statusLine({ tasks: [] }, true, '', 'off')).toBe('⏹ off')
+  // empty board this session drives: paused and review show the label; auto stays quiet
+  expect(statusLine({ tasks: [] }, true, '', 'paused')).toBe('⏸ paused')
   expect(statusLine({ tasks: [] }, true, '', 'review')).toBe('⏸ review merge')
   expect(statusLine({ tasks: [] }, true, 'on dev, not main', 'review')).toBe('⏸ review merge · on dev, not main')
   expect(statusLine({ tasks: [] }, true, '', 'auto')).toBeUndefined()
   expect(statusLine({ tasks: [] }, true, 'on dev, not main', 'auto')).toBe('on dev, not main')
   // driven by another session: the label shows in every mode
-  expect(statusLine({ tasks: [] }, false, '', 'off')).toBe('⏹ off · empty (driven by another session)')
+  expect(statusLine({ tasks: [] }, false, '', 'paused')).toBe('⏸ paused · empty (driven by another session)')
   expect(statusLine({ tasks: [] }, false, '', 'review')).toBe('⏸ review merge · empty (driven by another session)')
   expect(statusLine({ tasks: [] }, false, '', 'auto')).toBe('⏵ auto · empty (driven by another session)')
   expect(statusLine({ tasks: [t('todo', 'T-1')] }, false, '', 'review')).toBe('⏸ review merge · 1 to do (driven by another session)')
   // a bad mode shows as auto
   expect(statusLine({ tasks }, true, '', 'later' as never)).toBe('⏵ auto · T-26 doing · 1 to review (T-27)')
-  expect(modeLabel('off')).toBe('⏹ off')
+  expect(modeLabel('paused')).toBe('⏸ paused')
 })
 
 // ---------------- review before merge ----------------
@@ -969,18 +969,22 @@ test('the board mode is "auto" by default, also for a board without it or with a
   expect(emptyBoard().mode).toBe('auto')
   expect(parseBoard(null).mode).toBe('auto')
   expect(parseBoard(JSON.stringify({ version: 1, next_id: 1, tasks: [] })).mode).toBe('auto')
-  expect(parseBoard(JSON.stringify({ mode: 'off', tasks: [] })).mode).toBe('off')
+  // T-578: the old mode "off" is "paused" now: a board saved with it is converted once (and saved, as migrated)
+  expect(parseBoard(JSON.stringify({ mode: 'off', tasks: [] })).mode).toBe('paused')
+  expect(readBoard(JSON.stringify({ mode: 'off', tasks: [] }))).toMatchObject({ migrated: 1, fixed: [] })
+  expect(readBoard(JSON.stringify({ mode: 'paused', tasks: [] }))).toMatchObject({ migrated: 0, fixed: [] })
+  expect(parseBoard(JSON.stringify({ mode: 'paused', tasks: [] })).mode).toBe('paused')
   expect(parseBoard(JSON.stringify({ mode: 'review', tasks: [] })).mode).toBe('review')
   expect(parseBoard(JSON.stringify({ mode: 'auto', tasks: [] })).mode).toBe('auto')
-  for (const bad of ['later', 'OFF', '', 1, true, null, ['off']]) expect(parseBoard(JSON.stringify({ mode: bad, tasks: [] })).mode).toBe('auto')
+  for (const bad of ['later', 'OFF', 'PAUSED', '', 1, true, null, ['paused']]) expect(parseBoard(JSON.stringify({ mode: bad, tasks: [] })).mode).toBe('auto')
   expect(modeOf({})).toBe('auto')
   expect(modeOf(undefined)).toBe('auto')
   // keys a board does not have are not kept
   expect(Object.keys(parseBoard(JSON.stringify({ old_key: true, tasks: [] }))).includes('old_key')).toBe(false)
 })
 
-test('needsReview: mode review (or off) makes every task wait; in auto only a task with needs_review waits', () => {
-  for (const mode of ['review', 'off'] as const) {
+test('needsReview: mode review (or paused) makes every task wait; in auto only a task with needs_review waits', () => {
+  for (const mode of ['review', 'paused'] as const) {
     expect(needsReview({ mode }, {})).toBe(true)
     expect(needsReview({ mode }, { needs_review: true })).toBe(true)
   }
@@ -1112,7 +1116,7 @@ test('diff lines are colored: added in success, removed in error, headers and hu
 })
 
 test('slash commands all start with the plugin name: open, views, one task, approve, reject, diff, scout, help', () => {
-  expect(commandNames()).toEqual(['symcc', 'symcc-tasks', 'symcc-scouts', 'symcc-task', 'symcc-approve', 'symcc-reject', 'symcc-diff', 'symcc-scout', 'symcc-mode', 'symcc-settings', 'symcc-help', 'symcc-off', 'symcc-on', 'symcc-drive'])
+  expect(commandNames()).toEqual(['symcc', 'symcc-tasks', 'symcc-scouts', 'symcc-task', 'symcc-approve', 'symcc-reject', 'symcc-diff', 'symcc-scout', 'symcc-mode', 'symcc-settings', 'symcc-help', 'symcc-disable', 'symcc-enable', 'symcc-drive'])
   expect(commandNames('crew')[0]).toBe('crew')
   expect(commandNames('crew')).toContain('crew-help')
   expect(parseCommand('symcc', '')).toEqual({ kind: 'open' })
@@ -1136,7 +1140,7 @@ test('slash commands all start with the plugin name: open, views, one task, appr
   expect(parseCommand('symcc-scout', 'bugs every')!.kind).toBe('bad')
   expect(parseCommand('symcc-help', '')).toEqual({ kind: 'help', topic: '' })
   expect(parseCommand('symcc-help', ' scouts ')).toEqual({ kind: 'help', topic: 'scouts' })
-  expect(parseCommand('symcc-mode', 'off')).toEqual({ kind: 'mode', mode: 'off' })
+  expect(parseCommand('symcc-mode', 'paused')).toEqual({ kind: 'mode', mode: 'paused' })
   const bads: [string, string][] = [['symcc-tasks', 'x'], ['symcc-scouts', 'run bugs'], ['symcc-task', ''], ['symcc-task', 'banana'], ['symcc-task', 'T-3 T-4'], ['symcc-approve', ''], ['symcc-approve', 'banana'], ['symcc-approve', 'T-5 now'], ['symcc-reject', 'T-5'], ['symcc-reject', ''], ['symcc-diff', ''], ['symcc-diff', 'x.ts'], ['symcc-scout', ''], ['symcc-scout', 'a b'], ['symcc-mode', 'later']]
   for (const [c, a] of bads) expect(parseCommand(c, a)!.kind).toBe('bad')
   expect((parseCommand('symcc-reject', 'T-5') as { message: string }).message).toContain('/symcc-reject T-5 <reason>')
@@ -1155,25 +1159,25 @@ test('in the panel, tasks in review, waiting and failed come first, the rest kee
   expect(needsYouFirst(ts).map(t => t.id)).toEqual(['T-4', 'T-6', 'T-5', 'T-2', 'T-0', 'T-1', 'T-3'])
 })
 
-test('/symcc-mode: no word switches review and auto (off goes to review), a word sets it, junk gives usage', () => {
+test('/symcc-mode: no word switches review and auto (paused goes to review), a word sets it, junk gives usage', () => {
   expect(parseModeCommand('', 'auto')).toEqual({ kind: 'mode', mode: 'review' })
   expect(parseModeCommand('', 'review')).toEqual({ kind: 'mode', mode: 'auto' })
-  expect(parseModeCommand('  ', 'off')).toEqual({ kind: 'mode', mode: 'review' })
-  for (const now of ['off', 'review', 'auto'] as const) {
-    expect(parseModeCommand('off', now)).toEqual({ kind: 'mode', mode: 'off' })
+  expect(parseModeCommand('  ', 'paused')).toEqual({ kind: 'mode', mode: 'review' })
+  for (const now of ['paused', 'review', 'auto'] as const) {
+    expect(parseModeCommand('paused', now)).toEqual({ kind: 'mode', mode: 'paused' })
     expect(parseModeCommand(' Review ', now)).toEqual({ kind: 'mode', mode: 'review' })
     expect(parseModeCommand('AUTO', now)).toEqual({ kind: 'mode', mode: 'auto' })
   }
-  for (const junk of ['on', 'paused', 'auto review', 'maybe']) {
+  for (const junk of ['on', 'off', 'auto review', 'maybe']) {
     const r = parseModeCommand(junk, 'auto')
     expect(r.kind).toBe('bad')
     expect((r as { message: string }).message).toContain('/symcc-mode')
   }
-  expect((parseModeCommand('x', 'auto', 'crew') as { message: string }).message).toContain('/crew-mode off|review|auto')
+  expect((parseModeCommand('x', 'auto', 'crew') as { message: string }).message).toContain('/crew-mode paused|review|auto')
   // the same through parseCommand, with the board's mode
   expect(parseCommand('symcc-mode', '', 'review')).toEqual({ kind: 'mode', mode: 'auto' })
-  expect(parseCommand('symcc-mode', '', 'off')).toEqual({ kind: 'mode', mode: 'review' })
-  expect(modeText('off')).toBe('⏹ off: no work runs; tasks in review can still be approved or rejected')
+  expect(parseCommand('symcc-mode', '', 'paused')).toEqual({ kind: 'mode', mode: 'review' })
+  expect(modeText('paused')).toBe('⏸ paused: no work runs; tasks in review can still be approved or rejected')
   expect(modeText('review')).toBe('⏸ review merge: work runs; finished tasks wait for your approve or reject')
   expect(modeText('auto')).toBe('⏵ auto: work runs; finished tasks that pass merge on their own')
 })
@@ -1606,7 +1610,7 @@ test('a backlog task never starts until it is moved to todo', async () => {
   expect(mayStart(b.tasks[0], [])).toBe(false)
   expect(OPEN).not.toContain('backlog')
   // modes do not change it
-  for (const m of ['off', 'review', 'auto'] as const) expect(ready(setMode(b, m)).map(t => t.id)).toEqual([])
+  for (const m of ['paused', 'review', 'auto'] as const) expect(ready(setMode(b, m)).map(t => t.id)).toEqual([])
   // promote: backlog -> todo, with a history line
   b = promoteTask(b, idea.id, T)
   const p = b.tasks.find(t => t.id === idea.id)!
@@ -1755,7 +1759,7 @@ test('/symcc-settings: no words opens the view; NAME VALUE sets one setting; bad
   expect(bad('max_parallel')).toContain('/symcc-settings max_parallel <1-8>')
   expect(bad('notify loud')).toBe('notify must be off, sound or voice')
   expect(bad('open_on_start maybe')).toBe('open_on_start must be on or off')
-  expect(bad('mode later')).toBe('mode must be off, review or auto')
+  expect(bad('mode later')).toBe('mode must be paused, review or auto')
   expect(parseSettingValue('max_minutes', '90')).toEqual({ ok: true, input: { max_minutes: 90 } })
   expect(bad('tests_with_changes maybe')).toBe('tests_with_changes must be off, ask or review')
   expect(parseSettingValue('tests_with_changes', 'Review')).toEqual({ ok: true, input: { tests_with_changes: 'review' } })
@@ -2583,21 +2587,25 @@ test('symcc is on for a board without the setting and new ones, and off only whe
   expect(b.mode).toBe('review')
   expect(settingValue(off, 'enabled')).toBe('off')
   expect(settingValue(b, 'enabled')).toBe('on')
-  expect(offAnswer()).toBe('symcc is off. The owner can turn it on with /symcc-on.')
-  expect(offStatusLine()).toBe('symcc is off · /symcc-on to turn it on')
+  expect(offAnswer()).toBe('symcc is disabled. The owner can turn it back on with /symcc-enable.')
+  expect(offStatusLine()).toBe('symcc is disabled · /symcc-enable to turn it back on')
   // under the prompt Claude Code already puts "⚠ symcc: " in front, so the name is left out there
-  expect(offStatusLine('symcc', false)).toBe('off · /symcc-on to turn it on')
-  expect(offStatusParts().filter(p => p.command)).toEqual([{ text: '/symcc-on', command: true }])
+  expect(offStatusLine('symcc', false)).toBe('disabled · /symcc-enable to turn it back on')
+  expect(offStatusParts().filter(p => p.command)).toEqual([{ text: '/symcc-enable', command: true }])
 })
 
-test('/symcc-off and /symcc-on parse, and take no words', () => {
-  expect(parseCommand('symcc-off', '')).toEqual({ kind: 'off' })
-  expect(parseCommand('/symcc-on', '  ')).toEqual({ kind: 'on' })
-  expect(parseCommand('symcc-off', 'now')?.kind).toBe('bad')
-  expect(parseCommand('symcc-on', 'x')?.kind).toBe('bad')
-  expect(commandNames()).toContain('symcc-off')
-  expect(commandNames()).toContain('symcc-on')
-  expect(parseCommand('other-off', '')).toBe(null)
+test('/symcc-disable and /symcc-enable parse, and take no words; /symcc-off and /symcc-on are gone (T-578)', () => {
+  expect(parseCommand('symcc-disable', '')).toEqual({ kind: 'disable' })
+  expect(parseCommand('/symcc-enable', '  ')).toEqual({ kind: 'enable' })
+  expect(parseCommand('symcc-disable', 'now')?.kind).toBe('bad')
+  expect(parseCommand('symcc-enable', 'x')?.kind).toBe('bad')
+  expect(commandNames()).toContain('symcc-disable')
+  expect(commandNames()).toContain('symcc-enable')
+  expect(commandNames()).not.toContain('symcc-off')
+  expect(commandNames()).not.toContain('symcc-on')
+  expect(parseCommand('symcc-off', '')).toBe(null)
+  expect(parseCommand('symcc-on', '')).toBe(null)
+  expect(parseCommand('other-disable', '')).toBe(null)
 })
 
 test('/symcc-settings enabled off reads as the on/off switch', () => {
@@ -2718,9 +2726,9 @@ test('the line above the prompt: mode, busy workers, counts, scouts and the next
   // no workers running: they are left out ("all done" already says it); the scouts stay
   const done = [{ id: 'T-1', status: 'done' as const }, { id: 'T-2', status: 'backlog' as const }, { id: 'T-3', status: 'backlog' as const }]
   expect(statusLine({ tasks: done }, true, '', 'auto', false, { max_parallel: 3, tasks: done, scouts: [scouts[0]!] }, now)).toBe('⏵ auto · all done · 2 in backlog · 1 scout (next: tests in 1h 00m)')
-  // mode off: no next scout; a running scout is always named
-  expect(statusLine({ tasks }, true, '', 'off', false, crew, now)).toBe('⏹ off · 1/3 workers · T-1 doing · 1 to do · 3 scouts')
-  expect(statusLine({ tasks }, true, '', 'off', false, { ...crew, scouts: [{ ...scouts[0]!, running: true }] }, now)).toBe('⏹ off · 1/3 workers · T-1 doing · 1 to do · 1 scout (running: tests)')
+  // mode paused: no next scout; a running scout is always named
+  expect(statusLine({ tasks }, true, '', 'paused', false, crew, now)).toBe('⏸ paused · 1/3 workers · T-1 doing · 1 to do · 3 scouts')
+  expect(statusLine({ tasks }, true, '', 'paused', false, { ...crew, scouts: [{ ...scouts[0]!, running: true }] }, now)).toBe('⏸ paused · 1/3 workers · T-1 doing · 1 to do · 1 scout (running: tests)')
   // an empty board with scouts says so; without scouts it stays quiet
   expect(statusLine({ tasks: [] }, true, '', 'auto', false, { tasks: [], scouts }, now)).toBe('⏵ auto · 3 scouts (next: secrets in 38m)')
   expect(statusLine({ tasks: [] }, true, '', 'auto', false, { tasks: [], scouts: [] }, now)).toBeUndefined()
@@ -2904,7 +2912,7 @@ test('a pause does not stop run now (only the timer checks it)', () => {
   expect(scoutMayRun({ running: true }, ok)).toBe(false)
   expect(scoutMayRun({ running: false }, { ...ok, driving: false })).toBe(false)
   expect(scoutMayRun({ running: false }, { ...ok, gitOk: false })).toBe(false)
-  expect(scoutMayRun({ running: false }, { ...ok, mode: 'off' })).toBe(false)
+  expect(scoutMayRun({ running: false }, { ...ok, mode: 'paused' })).toBe(false)
   expect(scoutMayRun({ running: false }, { ...ok, on: false })).toBe(false)
   // run now says why it can't start, one message for each check; '' (so "started") only when it may run
   const why = (s: { running: boolean; paused?: boolean }, o = ok) => scoutWhyNot({ name: 'gaps-bot', ...s }, o)
@@ -2913,10 +2921,10 @@ test('a pause does not stop run now (only the timer checks it)', () => {
   expect(why({ running: false, paused: true })).toBe('')
   expect(why({ running: false }, { ...ok, driving: false })).toBe('scouts run in the session that drives the board; run /symcc-scout gaps-bot there')
   expect(why({ running: false }, { ...ok, gitOk: false })).toBe("git isn't set up in this folder yet (no repo or no commit); nothing runs until it is")
-  expect(why({ running: false }, { ...ok, on: false })).toBe('symcc is off. The owner can turn it on with /symcc-on.')
-  expect(why({ running: false }, { ...ok, mode: 'off' })).toBe('the board is off, so no scout runs; turn it on with /symcc-mode review or /symcc-mode auto')
+  expect(why({ running: false }, { ...ok, on: false })).toBe('symcc is disabled. The owner can turn it back on with /symcc-enable.')
+  expect(why({ running: false }, { ...ok, mode: 'paused' })).toBe('the board is paused, so no scout runs; start work again with /symcc-mode review or /symcc-mode auto')
   for (const s of [{ running: false }, { running: true }, { running: false, paused: true }])
-    for (const o of [ok, { ...ok, driving: false }, { ...ok, gitOk: false }, { ...ok, on: false }, { ...ok, mode: 'off' as const }])
+    for (const o of [ok, { ...ok, driving: false }, { ...ok, gitOk: false }, { ...ok, on: false }, { ...ok, mode: 'paused' as const }])
       expect(why(s, o) === '').toBe(scoutMayRun(s, o))
   // the status strip's next scout skips a paused one
   const at = Date.parse('2026-11-12T10:00:00.000Z')

@@ -12,15 +12,15 @@ import { COMMANDS } from '../hooks/app/symcc'
 import { manual } from '../hooks/app/tools'
 import { settingInfo } from '../hooks/board'
 
-const offCommand = () => COMMANDS().find(c => c.name === `${S.N.name}-off`)!.description
+const offCommand = () => COMMANDS().find(c => c.name === `${S.N.name}-disable`)!.description
 
 test("Claude Code's words keep its texts as they were", () => {
   useName(fakeHost({ words: CLAUDE_WORDS }).host)
   expect(S.W.assistant).toBe('Claude')
   expect(S.W.app).toBe('Claude Code')
   expect(S.W.backToBoard).toBe('ctrl+x tab')
-  expect(offCommand()).toBe(`Turn ${S.N.name} off for this project: Claude works as normal, nothing runs; the board is kept`)
-  expect(manual('')).toContain(`turn ${S.N.name} off for this project: Claude works as normal (no lead`)
+  expect(offCommand()).toBe(`Disable ${S.N.name} for this project: Claude works as normal, nothing runs; the board is kept`)
+  expect(manual('')).toContain(`disable ${S.N.name} for this project: Claude works as normal (no lead`)
   expect(settingInfo('enabled')!.meaning).toBe('off: the whole plugin rests and Claude works as normal')
 })
 

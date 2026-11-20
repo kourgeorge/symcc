@@ -57,7 +57,7 @@ test('a slash command run before the project folder is known answers "still star
   const w = watch(on)
   on('session.repo', () => ({ value: null }) as never)
   on('session.root', () => ({ value: '' }) as never)
-  for (const [command, args] of [['symcc-off', ''], ['symcc-scouts', ''], ['symcc-stats', ''], ['symcc', '']] as const) {
+  for (const [command, args] of [['symcc-disable', ''], ['symcc-scouts', ''], ['symcc-stats', ''], ['symcc', '']] as const) {
     const r = (await $.command.run({ command, args } as never)) as { text?: string }
     expect(r?.text).toBe('symcc is still starting, try again in a moment')
   }

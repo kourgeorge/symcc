@@ -276,11 +276,11 @@ test('loaded: an agent\'s turn.complete (a worker finishing) starts the queue to
   expect(w.task('T-2').attempts).toBe(1)
 })
 
-// A worker still waiting in the queue is stopped like a running one: drop, pause and /symcc-off take it back out, so it never starts.
+// A worker still waiting in the queue is stopped like a running one: drop, pause and /symcc-disable take it back out, so it never starts.
 for (const [what, stop, status] of [
   ['dropped', ($: Engine) => $.tool.call({ tool: 'mcp__symcc__drop', task: 'T-1' } as never), 'dropped'],
   ['paused', ($: Engine) => $.tool.call({ tool: 'mcp__symcc__pause', task: 'T-1' } as never), 'paused'],
-  ['turned off (/symcc-off)', ($: Engine) => $.command.run({ command: 'symcc-off', args: '', origin: { kind: 'composer' }, presentation: 'text' } as never), 'todo'],
+  ['disabled (/symcc-disable)', ($: Engine) => $.command.run({ command: 'symcc-disable', args: '', origin: { kind: 'composer' }, presentation: 'text' } as never), 'todo'],
 ] as const) {
   test(`loaded: a queued worker whose task is ${what} before the next turn never starts`, async ($, on) => {
     const w = world(on)

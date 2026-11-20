@@ -446,7 +446,7 @@ function armScout(host: Host, s: ScoutDef, st: SymccScout) {
           timers.push(host.clock.after(PAUSED_RECHECK_MS, () => scoutState.get(s.name) === st && armScout(host, s, st)))
           return
         }
-        // if it didn't start (another session drives the board, the board is off, …) try again an interval later
+        // if it didn't start (another session drives the board, the board is paused, …) try again an interval later
         st.next_run = new Date(Date.now() + s.every_minutes * 60_000).toISOString()
         await runScout(host, s).catch(() => undefined)
         if (scoutState.get(s.name) === st) armScout(host, s, st)

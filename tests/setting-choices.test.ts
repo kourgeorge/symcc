@@ -14,7 +14,7 @@ test('settingChoices gives the pick list of each kind of setting, [] for on/off 
   expect(settingChoices('test_commands')).toEqual([])
   // a copy each time: changing it does not change MODES
   settingChoices('mode').push('x')
-  expect(MODES).toEqual(['off', 'review', 'auto'])
+  expect(MODES).toEqual(['paused', 'review', 'auto'])
 })
 
 test('cantPlayNotify is true only when notify is set to something this machine does not list', () => {
