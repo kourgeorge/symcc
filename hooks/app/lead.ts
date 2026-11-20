@@ -1,6 +1,6 @@
 import { testMinutesOf, openQuestions, liveWorkersFor, whoDrives, drivesAfter, driveAsk, handRequest, noHandRequest, handedText, handedOff, HANDOVER_NOTE, putTask, leadText, resetDoing, find, parseLead, relabelSession, openOnStart, type Board, gitNote, modeOf, notifyOf, notifyChoices, symccOn, statusLine, statusRoom, offStatusLine, inPlan, liveDriver, soundSetOf } from '../board'
 import { homeBranch } from './git'
-import { S, workers, queuedWorkers, type PaneView, scoutState, updateView } from './state'
+import { S, workers, queuedWorkers, type PaneView, scoutState, updateView, sizeNotes } from './state'
 import { type Host, agentState } from '../host'
 import { path, locked, change, now, load, safeWrite, boardMtime } from './store'
 import { openPane } from './open'
@@ -211,10 +211,12 @@ export async function publish(host: Host, b: Board) {
   // Which branch the owner is on is looked at here, once per publish, not on every render.
   // (new tasks merge into it; a task that merges elsewhere shows "→ branch" in the list)
   const branch = S.gitState === 'ok' ? await homeBranch(host) : ''
-  const branch_note = gitNote(S.gitState)
+  // T-675: a data file close to the 4 MB read limit is warned about where the git warning goes (banner and status line)
+  const size_note = [...sizeNotes.values()].join('; ')
+  const branch_note = [gitNote(S.gitState), size_note].filter(Boolean).join('; ')
   // The banner's facts ride along in the view (extra fields; SymccView itself is shared with other code).
   const can = await playable(host)
-  const v: PaneView = { tasks: b.tasks, working, scouts: [...scoutState.values()], mode: modeOf(b), test_commands: b.test_commands, branch, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, test_minutes: testMinutesOf(b), archive_days: b.archive_days, ...(b.archived ? { archived: b.archived } : {}), ...(b.archived_done?.length ? { archived_done: b.archived_done } : {}), open_on_start: openOnStart(b), notify: notifyOf(b, can), sound_set: soundSetOf(b, S.root), scout_findings: b.scout_findings, tests_with_changes: b.tests_with_changes, checker: b.checker, notify_choices: notifyChoices(can), enabled: symccOn(b), driving: S.driving, branch_note, git_state: S.gitState, plan_mode: inPlan(S.plan), ...(openQuestions(b).length ? { questions: openQuestions(b) } : {}) }
+  const v: PaneView = { tasks: b.tasks, working, scouts: [...scoutState.values()], mode: modeOf(b), test_commands: b.test_commands, branch, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, test_minutes: testMinutesOf(b), archive_days: b.archive_days, ...(b.archived ? { archived: b.archived } : {}), ...(b.archived_done?.length ? { archived_done: b.archived_done } : {}), open_on_start: openOnStart(b), notify: notifyOf(b, can), sound_set: soundSetOf(b, S.root), scout_findings: b.scout_findings, tests_with_changes: b.tests_with_changes, checker: b.checker, notify_choices: notifyChoices(can), enabled: symccOn(b), driving: S.driving, branch_note, ...(size_note ? { size_note } : {}), git_state: S.gitState, plan_mode: inPlan(S.plan), ...(openQuestions(b).length ? { questions: openQuestions(b) } : {}) }
   await updateView(host, () => v)
   // the banner logo plays a move when something happened (a merge, a worker start, a scout finding, all done)
   void logoOnPublish(host, v).catch(() => undefined)

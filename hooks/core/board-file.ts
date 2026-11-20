@@ -547,6 +547,11 @@ export function readBoard(text: string | null): BoardRead {
   } catch (e) {
     return { board: emptyBoard(), broken: `not valid JSON (${String((e as Error)?.message ?? e).slice(0, 120)})`, skipped: 0, fixed: [], migrated: 0 }
   }
+  return readBoardValue(raw)
+}
+
+/** readBoard for board.json's content already parsed (e.g. joined with its finished tasks' parts, see core/board-parts.ts). */
+export function readBoardValue(raw: unknown): BoardRead {
   if (!isObj(raw)) return { board: emptyBoard(), broken: 'it is not a board (the file holds no JSON object)', skipped: 0, fixed: [], migrated: 0 }
   if ('tasks' in raw && !Array.isArray(raw.tasks)) return { board: emptyBoard(), broken: '"tasks" is not a list', skipped: 0, fixed: [], migrated: 0 }
   const board = emptyBoard()

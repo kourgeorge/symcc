@@ -194,7 +194,7 @@ export async function loadVersion(host: Pick<Host, 'plugin' | 'fs'>) {
 export const toolName = (tool: string): string => S.W.tool(S.N.name, tool)
 
 /** The view as published: SymccView plus the facts the panel's banner shows. */
-export type PaneView = SymccView & Partial<Pick<Board, 'max_parallel' | 'max_minutes' | 'auto_retries' | 'test_minutes' | 'archive_days' | 'archived' | 'archived_done' | 'open_on_start' | 'notify' | 'sound_set' | 'scout_findings' | 'tests_with_changes' | 'checker' | 'enabled'> & { /** the lead's open questions for the owner (see core/questions.ts), oldest first; absent when none */ questions: OwnerQuestion[]; driving: boolean; /** the branch checked out now: new tasks merge into it (see homeBranch) */ branch: string; notify_choices: Notify[]; branch_note: string; git_state: GitState; plan_mode: boolean }>
+export type PaneView = SymccView & Partial<Pick<Board, 'max_parallel' | 'max_minutes' | 'auto_retries' | 'test_minutes' | 'archive_days' | 'archived' | 'archived_done' | 'open_on_start' | 'notify' | 'sound_set' | 'scout_findings' | 'tests_with_changes' | 'checker' | 'enabled'> & { /** the lead's open questions for the owner (see core/questions.ts), oldest first; absent when none */ questions: OwnerQuestion[]; driving: boolean; /** the branch checked out now: new tasks merge into it (see homeBranch) */ branch: string; notify_choices: Notify[]; branch_note: string; /** T-675: the data files close to the 4 MB read limit, in words (also in branch_note) */ size_note: string; git_state: GitState; plan_mode: boolean }>
 
 /** the role files already reported as skipped (file → reason), so the owner and the lead hear it once */
 export const skippedRoles = new Map<string, string>()
@@ -250,6 +250,8 @@ export async function halt(host: Host, agentId: string, why: string) {
 export const reminded = new Map<string, string>()
 /** the board health findings already told to the lead (their keys; see newFindings) */
 export const healthTold = new Set<string>()
+/** T-675: the data files close to the 4 MB read limit (their name as the owner knows it → the warning), shown on the board */
+export const sizeNotes = new Map<string, string>()
 export const scoutState = new Map<string, SymccScout>()
 export const timers: { cancel(): void }[] = []
 export const leadQueue: string[] = []

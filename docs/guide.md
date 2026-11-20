@@ -1429,6 +1429,25 @@ So `board.json` stays small, done and dropped tasks that have not changed for
   it up with its `board` tool). Archived tasks are read-only: change, ask, approve and so on
   answer "T-12 is archived". Retrying an archived *dropped* task brings it back to the
   board as `todo`, with a history line.
+- **Never one huge file:** a big archive goes on in `archive-2.json`, `archive-3.json`, ...,
+  each kept under 2 MB.
+
+### Keeping the board files small
+
+Claude Code reads and writes a file whole and refuses one over 4 MB, so symcc keeps its files
+well under that, without you lowering `archive_days`:
+
+- **Done and dropped tasks keep a short stub in `board.json`** (id, title, status, order,
+  branch, times). Their history, tries, details, origin and notes are in
+  `.symcc/tasks/T-<n>.json`, one file for every 50 task numbers (`tasks/T-600.json` holds
+  T-600 to T-649). symcc joins them back whenever it reads the board, so the board, the task
+  pages, search, `/symcc-stats` and the lead's tools still show every task whole. A board from
+  before this is moved over once, with a copy kept as `board.json.before-migrate-<time>`.
+- **The OpenCode view file** (`.symcc/view.json`) leaves out finished tasks' long parts too;
+  a done task's page reads them from its `tasks/` file when you open it.
+- **Early warning:** when a file symcc reads whole passes 3 MB, you get a toast, the lead is
+  told, and the board shows "board.json is 3.2 MB, close to the 4 MB limit ..." where the git
+  warning goes. A file over 4 MB that can't be read gives an error that says so.
 
 ---
 

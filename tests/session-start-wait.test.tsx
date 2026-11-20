@@ -2,6 +2,7 @@
 // old workers it stopped to end (up to ORPHAN_WAIT_MS, 20 s) and for the reload settle (RELOAD_SETTLE_MS, 2 s).
 // session.start goes on without those waits; pump starts no work until they are over.
 // The plugin runs as loaded by the test kit; files, git and agents are the fake world below, time is the fake clock.
+import { joinedText } from '../hooks/core/board-parts'
 import { expect, mock, type Engine } from 'claude-code/testing'
 import { test } from './reset'
 import type { On } from 'claude-code'
@@ -67,7 +68,8 @@ function world(on: On, o: { agents?: { id: string; type: string }[] } = {}) {
   on('session.id', () => ({ value: 'me' }) as never)
   on('env.get', () => ({ value: undefined }) as never)
   const clock = mock.clock(on, { now: T0 })
-  const board = () => JSON.parse(files.get(BOARD)!) as Board
+  // a done task's history and tries are in its parts file (T-675): joined back here
+  const board = () => JSON.parse(joinedText(files.get(BOARD)!, rel => files.get(BOARD.replace('board.json', rel)) ?? null)) as Board
   return { files, spawned, sent, clock, board, task: (id: string) => board().tasks.find(t => t.id === id)! }
 }
 

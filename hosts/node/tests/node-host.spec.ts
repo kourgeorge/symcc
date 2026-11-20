@@ -3,6 +3,7 @@
 // (fake-claude.sh, no model): add, the worker "edits" a file in its worktree, the tests run, it merges, and the board
 // shows it done. Also: hosts/node/ never imports Claude Code or hooks/claude/, and the claude -p runner's flags and
 // result reader.
+import { joinedText, partsFilesNamed } from '../../../hooks/core/board-parts'
 import { test, expect } from 'bun:test'
 import { readFile, readdir, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
@@ -236,7 +237,11 @@ test('one task end to end on the Node host: add, a fake claude -p worker edits i
     // the worker's throwaway script under .scratch/ was not committed (T-456), and real git staged the rest (T-477)
     expect((await git('ls-tree', '-r', '--name-only', 'main')).stdout.split('\n')).not.toContain('.scratch/edit.py')
     expect((await git('log', '--all', '--name-only', '--format=')).stdout).not.toContain('.scratch')
-    const t = JSON.parse(await readFile(`${repo}/.symcc/board.json`, 'utf8')).tasks[0]
+    // a done task's tries are in its parts file (T-675), joined back here
+    const saved = await readFile(`${repo}/.symcc/board.json`, 'utf8')
+    const parts = new Map<string, string | null>()
+    for (const rel of partsFilesNamed(JSON.parse(saved))) parts.set(rel, await readFile(`${repo}/.symcc/${rel}`, 'utf8').catch(() => null))
+    const t = JSON.parse(joinedText(saved, rel => parts.get(rel) ?? null)).tasks[0]
     expect(t.status).toBe('done')
     expect(t.runs[0].cost).toBe(0.0123)
     expect(t.runs[0].tokens).toEqual({ input: 100, output: 20, cache_write: 7, cache_read: 5 })

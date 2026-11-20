@@ -3,6 +3,7 @@
 // task, so its task goes back to "todo" (folder and branch kept) at its hand-back or by the next regular
 // check, and the lead is told. The plugin runs as loaded by the test kit, against the in-memory world
 // below and the kit's fake clock.
+import { joinedText } from '../hooks/core/board-parts'
 import { expect, mock, type Engine } from 'claude-code/testing'
 import { test } from './reset'
 import type { On } from 'claude-code'
@@ -69,7 +70,8 @@ function world(on: On, agents: Agent[], sid = 's1', gate: { wait?: Promise<void>
   on('session.id', () => ({ value: sid }) as never)
   on('env.get', () => ({ value: undefined }) as never)
   const clock = mock.clock(on, { now: T0 })
-  const board = () => JSON.parse(files.get(BOARD)!) as Board
+  // a done task's history and tries are in its parts file (T-675): joined back here
+  const board = () => JSON.parse(joinedText(files.get(BOARD)!, rel => files.get(BOARD.replace('board.json', rel)) ?? null)) as Board
   return { files, sent, prompts, spawned, clock, board, task: (id: string) => board().tasks.find(t => t.id === id)! }
 }
 

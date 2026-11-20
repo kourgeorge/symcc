@@ -13,6 +13,7 @@
 // codemode false and run through toolCall, a scout's add and a worker's lead tool refused, each session offered only
 // what it may call, the lead's guide in its system prompt, and each slash command run through runCommand. T-467: a lead.json left by an OpenCode server stopped without its cleanup never blocks the next start, and
 // scripts/install-opencode.sh links opencode/ into OpenCode's plugins folder. Also: hooks/opencode/ never imports Claude Code or hooks/claude/.
+import { partsText, splitBoard } from '../../core/board-parts'
 import { test, expect } from 'bun:test'
 import { mkdtemp, mkdir, readFile, lstat, readdir, realpath, rm, writeFile } from 'node:fs/promises'
 import { addTask, emptyBoard, patchTask, blockedEditText, parseLead, whoDrives, leadText as symccLeadText, LEAD_STALE_MS } from '../../board'
@@ -757,7 +758,11 @@ test('the main folder\'s copy starts a worker as an OpenCode session: the role\'
     await writeFile(`${p.main}/.symcc/roles/fast.md`, '---\ndescription: a fast one\nmodel: openai/gpt-5\n---\nBe quick.\n')
     const at = '2026-11-18T00:00:00.000Z'
     const [b] = addTask(JSON.parse(await readFile(`${p.main}/.symcc/board.json`, 'utf8')), { origin: { why: 'a test' }, title: 'a quick one', files: ['src/'] }, at)
-    await writeFile(`${p.main}/.symcc/board.json`, JSON.stringify(patchTask(patchTask(patchTask(b, 'T-1', { status: 'done' }, at), 'T-2', { status: 'done' }, at), 'T-3', { role: 'fast' }, at)))
+    // saved as symcc saves it (T-675): the done tasks' parts in .symcc/tasks/, so there is nothing to migrate
+    const saved = splitBoard(patchTask(patchTask(patchTask(b, 'T-1', { status: 'done' }, at), 'T-2', { status: 'done' }, at), 'T-3', { role: 'fast' }, at))
+    await mkdir(`${p.main}/.symcc/tasks`, { recursive: true })
+    for (const [rel, tasks] of saved.parts) await writeFile(`${p.main}/.symcc/${rel}`, partsText(tasks))
+    await writeFile(`${p.main}/.symcc/board.json`, JSON.stringify(saved.board))
     const f = fakeSessions(2)
     let host: Host | undefined
     const plugin = symccServer({ engine: SYMCC_ENGINE, host: o => (host = opencodeHost(o)), hostOptions: { say: () => undefined, sessionId: 'opencode-run' }, agentOptions: { pollMs: 10 } })

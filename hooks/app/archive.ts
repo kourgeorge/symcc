@@ -1,8 +1,9 @@
-import { type Archive, type BoardTask, ARCHIVE_EVERY_MS, addToArchive, archiveText, bringBack, brokenArchiveText, emptyArchive, find, normId, readArchive, removeArchived, symccOn, toArchive } from '../board'
+import { type Archive, type BoardTask, ARCHIVE_EVERY_MS, addToArchive, bringBack, brokenArchiveText, emptyArchive, find, normId, readArchive, removeArchived, symccOn, toArchive } from '../board'
+import { archiveChunkFile, archiveChunks } from '../core/board-parts'
 import { publish } from './lead'
 import { S } from './state'
 import type { Host } from '../host'
-import { load, locked, now, path, safeWrite, writeBoard } from './store'
+import { fileName, load, locked, now, path, readWhole, safeWrite, writeBoard } from './store'
 import { emitTaskEvents } from './events'
 import { tellLead } from './tell'
 
@@ -10,12 +11,34 @@ import { tellLead } from './tell'
 // Done and dropped tasks older than archive_days move from board.json to archive.json, so the board
 // file stays small. The archive is written first; only then are the tasks taken off the board.
 
-/** archive.json as it is now: missing is an empty archive; `broken` (with its text) when it can't be read. */
-async function readArchiveFile(host: Host): Promise<{ archive: Archive; text: string | null; broken?: string; migrated?: number }> {
-  const file = path(S.N.archiveFile)
-  if (!(await host.fs.exists(file).catch(() => false))) return { archive: emptyArchive(), text: null }
-  const text = await host.fs.read(file)
-  return { ...readArchive(text), text }
+/** The most archive files read (archive.json, archive-2.json, ...): far more than a project fills. */
+const MOST_ARCHIVE_FILES = 1000
+
+/**
+ * The archive as it is now (T-675: archive.json, then archive-2.json, archive-3.json, ... while they are there, each
+ * kept under ARCHIVE_FILE_BYTES; see archiveChunks): missing is an empty archive; `broken` (the reason, `text` that
+ * file's text) when one can't be read. An id in two files (a save cut short) counts once, the later one.
+ * `texts`: each file read, in order.
+ */
+export async function readArchiveFile(host: Host): Promise<{ archive: Archive; text: string | null; texts: { file: string; text: string }[]; broken?: string; migrated?: number }> {
+  const base = path(S.N.archiveFile)
+  const texts: { file: string; text: string }[] = []
+  const tasks = new Map<string, BoardTask>()
+  let migrated = 0
+  for (let i = 0; i < MOST_ARCHIVE_FILES; i++) {
+    const file = archiveChunkFile(base, i)
+    if (!(await host.fs.exists(file).catch(() => false))) break
+    const text = await readWhole(host, file)
+    texts.push({ file, text })
+    const r = readArchive(text)
+    if (r.broken) return { archive: emptyArchive(), text, texts, broken: i ? `${fileName(file)}: ${r.broken}` : r.broken }
+    migrated += r.migrated ?? 0
+    for (const t of r.archive.tasks) {
+      tasks.delete(t.id)
+      tasks.set(t.id, t)
+    }
+  }
+  return { archive: { version: 1, tasks: [...tasks.values()] }, text: texts[0]?.text ?? null, texts, ...(migrated ? { migrated } : {}) }
 }
 
 /** Keeps a copy of a broken archive.json beside it and tells the owner and the lead, once per text. */
@@ -29,9 +52,25 @@ async function reportBroken(host: Host, text: string, reason: string) {
   tellLead(host, msg)
 }
 
-/** Writes archive.json through a temp file and a rename, like board.json, so a crash never leaves half a file. */
+/**
+ * Writes the archive through a temp file and a rename, like board.json, so a crash never leaves half a file. It is
+ * split by size (T-675, see archiveChunks) into archive.json, archive-2.json, ...; only the files whose text changed
+ * are written, in order (a task moving to an earlier file is there before it leaves the later one), then any file
+ * after the last one is removed.
+ */
 export async function saveArchive(host: Host, a: Archive) {
-  await safeWrite(host, path(S.N.archiveFile), archiveText(a), 'the archive')
+  const base = path(S.N.archiveFile)
+  const chunks = archiveChunks(a.tasks)
+  for (let i = 0; i < chunks.length; i++) {
+    const file = archiveChunkFile(base, i)
+    const now = await host.fs.exists(file).catch(() => false) ? await readWhole(host, file).catch(() => null) : null
+    if (now !== chunks[i]) await safeWrite(host, file, chunks[i]!, i ? `the archive (${fileName(file)})` : 'the archive')
+  }
+  for (let i = chunks.length; i < MOST_ARCHIVE_FILES; i++) {
+    const file = archiveChunkFile(base, i)
+    if (!(await host.fs.exists(file).catch(() => false))) break
+    await host.run(['rm', '-f', file]).catch(() => undefined)
+  }
 }
 
 /**
@@ -43,9 +82,9 @@ export async function saveArchiveMigrated(host: Host): Promise<void> {
   await locked(host, async () => {
     const r = await readArchiveFile(host)
     if (r.broken || !r.migrated) return
-    if (r.text !== null) {
-      const copy = `${S.N.archiveFile}.before-migrate-${now().replace(/[:.]/g, '-')}`
-      if (!(await host.fs.write(path(copy), r.text).then(() => true, () => false))) return
+    for (const { file, text } of r.texts) {
+      const copy = `${fileName(file)}.before-migrate-${now().replace(/[:.]/g, '-')}`
+      if (!(await host.fs.write(path(copy), text).then(() => true, () => false))) return
     }
     await saveArchive(host, r.archive)
   })

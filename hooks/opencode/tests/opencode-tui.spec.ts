@@ -15,6 +15,7 @@ import { bandLines, bandDraw, BAND_CLICK_HINT, panelLines, panelKeys, parseViewF
 import { readFile } from 'node:fs/promises'
 import { rowEndBoard, ROW_END, ROW_END_NOW } from '../../../tests/row-end-cases'
 import { taskSections } from '../../core/task-sections'
+import { viewTask } from '../../core/board-parts'
 import { orgMemNotes, orgMemNoteKey } from '../../core/org-mem'
 import { PLUGIN_ROOT } from '../host'
 import { startTui, KEY_BINDS, viewPaths, loadTuiRuntime, BOARD_PANEL, setupFailed, colorOf, drawLines, type TuiContext, type TuiRuntime, type TuiPanelInput, type TuiKeyLayer, type PanelKey } from '../tui'
@@ -1915,4 +1916,46 @@ test('T-627: drawnLines cuts a line into the rows it takes: at line breaks, and 
   expect(drawnLines(short, 16)).toEqual([short])
   expect(drawnLines([], 16).map(lineText)).toEqual([' '])
   expect(drawnLines([{ text: 'x'.repeat(20), color: 'text' }], 8).map(lineText)).toEqual(['xxxxxxxx', 'xxxxxxxx', 'xxxx'])
+})
+
+test('T-675: a done task\'s history is not in the view file; opening its page reads it from its parts file and shows it', async () => {
+  const f0 = viewFile()
+  const history = [{ kind: 'merged', at: AT, text: 'try 1: merged after a long road' }]
+  const whole = f0.view.tasks.map(t => (t.id === 'T-5' ? { ...t, details: 'the old details', history } : t))
+  // as the engine writes it: T-5 without its history and details, naming its parts file
+  const slim = whole.map(t => viewTask(t))
+  const f: ViewFile = { ...f0, view: { ...f0.view, tasks: slim as ViewFile['view']['tasks'] } }
+  expect(viewFileText(f)).not.toContain('a long road')
+  const t5 = whole.find(t => t.id === 'T-5')!
+  const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)], ['/work/proj/.symcc/tasks/T-0.json', JSON.stringify({ version: 1, tasks: { 'T-5': { details: t5.details, history } } })]])
+  const slots: { append: string; render: (input: never) => unknown }[] = []
+  const ctx: TuiContext = {
+    location: { directory: '/work/proj' },
+    theme: {},
+    renderer: { width: 120, height: 200 },
+    client: { session: { command: async () => undefined } },
+    keymap: { layer: () => undefined },
+    ui: {
+      toast: { show: () => undefined },
+      dialog: { prompt: async () => undefined, select: async () => undefined },
+      panel: { open: () => true, close: () => undefined, current: () => undefined },
+      slot: claim => (slots.push(claim as never), () => undefined),
+    },
+  }
+  const board = startTui(ctx, { runtime: fakeRuntime(), readText: async p => files.get(p) ?? Promise.reject(new Error('missing')), every: () => () => undefined, now: () => NOW })
+  await board.refresh()
+  const panel = slots.find(s => s.append === 'session.panel')!.render({ name: BOARD_PANEL, sessionID: 'ses_1', width: 100, focused: true, close: () => undefined, focus: () => undefined } as never)
+  const ids = panelLines(f, { opened: '', cursor: 0 }, NOW, 100).ids
+  // the Done group is closed at first: open it, then go down onto T-5
+  for (let i = 0; i < ids.indexOf('group:done'); i++) await board.press('down', 'ses_1')
+  await board.press('open', 'ses_1')
+  await board.press('down', 'ses_1')
+  await board.press('open', 'ses_1')
+  expect(board.state().opened).toBe('T-5')
+  await new Promise<void>(res => setTimeout(res, 0))
+  expect(shown(panel).some(l => l.includes('a long road'))).toBe(true)
+  // the same page as with the task whole in the view file
+  const wholeFile: ViewFile = { ...f0, view: { ...f0.view, tasks: whole as ViewFile['view']['tasks'] } }
+  expect(shown(panel).some(l => l.includes('the old details'))).toBe(panelLines(wholeFile, { opened: 'T-5', cursor: 0 }, NOW, 100).lines.map(lineText).some(l => l.includes('the old details')))
+  board.stop()
 })

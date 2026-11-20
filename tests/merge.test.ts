@@ -2,6 +2,7 @@ import { expect } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 import { checkAndMerge, changedFiles, changesText, ownerEdits } from '../hooks/app/review'
 import { inMergeLine, MERGE_LINE_POLL_MS, resetMergeLine } from '../hooks/app/merge-line'
+import { joinedText } from '../hooks/core/board-parts'
 import { mergeLineText, parseMergeLine, inLineNote, MERGE_LINE_STALE_MS, mergeLineStaleMs, type LineEntry, testMinutesOf, testTimeoutMs, lineEntryStale, readBoard, TEST_RERUN_GONE_NOTE, DEFAULT_TEST_MINUTES, BASH_PATHS_MAX, bashTooManyText } from '../hooks/board'
 import { PREP_NOTE, STEP_NOTE, isMergeNote, type Board, type BoardTask, workerGitWriteText, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, readArchive, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, untestedChange, isTestFile, isPlainRelPath, parseSettingValue, type WorkerQuestion, isAnswered, boardText, taskMatches } from '../hooks/board'
 import { removeWorktree, cleanupMerged, deleteMergedBranch } from '../hooks/app/git'
@@ -2106,6 +2107,8 @@ test('T-548: the old conflict_tries field is dropped from the board (once) and f
 // ---------------- old tasks: archive.json ----------------
 
 const ARCHIVE = `${ROOT}/.symcc/archive.json`
+/** the parts file of done and dropped tasks T-0 to T-49 (T-675) */
+const PARTS = `${ROOT}/.symcc/tasks/T-0.json`
 const LONG_AGO = '2026-01-01T00:00:00.000Z'
 
 /** A saved board: T-1 done long ago, T-2 dropped long ago, T-3 done just now, T-4 to do; this session drives. */
@@ -2129,8 +2132,10 @@ test('archiving moves old done and dropped tasks to archive.json, written first,
   expect(await archiveOld(w.$, T0)).toEqual(['T-1', 'T-2'])
   // the activity log (T-616) is saved through a temp file of its own too
   const moves = w.calls.filter(c => c.startsWith('mv ') && !c.includes('events.jsonl'))
-  expect(moves.length).toBe(2)
-  expect(tmpMove(moves[0]!, ARCHIVE) && tmpMove(moves[1]!, BOARD)).toBe(true)
+  // T-675: then T-3's parts file (T-3 is done) is saved once more without T-1 and T-2, which the board no longer has
+  expect(moves.length).toBe(3)
+  expect(tmpMove(moves[0]!, ARCHIVE) && tmpMove(moves[1]!, BOARD) && tmpMove(moves[2]!, PARTS)).toBe(true)
+  expect(Object.keys(JSON.parse(w.files.get(PARTS)!).tasks)).toEqual(['T-3'])
   const after = await load(w.$)
   expect(after.tasks.map(t => t.id)).toEqual(['T-3', 'T-4'])
   expect(after.next_id).toBe(b.next_id)
@@ -4577,7 +4582,8 @@ function notesOf(w: ReturnType<typeof world>) {
   const seen: string[] = []
   const look = () => {
     const text = w.files.get(BOARD)
-    const n = text ? find(parseBoard(text), 'T-1')?.note : undefined
+    // a done task keeps its note in its parts file (T-675)
+    const n = text ? find(parseBoard(joinedText(text, rel => w.files.get(`${ROOT}/.symcc/${rel}`) ?? null)), 'T-1')?.note : undefined
     if (n !== undefined && seen.at(-1) !== n) seen.push(n)
   }
   w.onRun(async () => look())

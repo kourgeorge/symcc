@@ -4,6 +4,7 @@
 // finish at the same moment must both be merged and neither one's board save may be lost.
 // The plugin runs as loaded by the test kit; files, git and agents are the fake world below. The hook starts its
 // work without waiting for it, so each test lets that work finish with the fake clock's settle(), never a real wait.
+import { joinedText } from '../hooks/core/board-parts'
 import { expect, mock, type Engine } from 'claude-code/testing'
 import { test } from './reset'
 import type { On } from 'claude-code'
@@ -175,7 +176,8 @@ function world(on: On, o: { work?: Record<string, string[]>; agents?: { id: stri
   on('session.id', () => ({ value: 'me' }) as never)
   on('env.get', () => ({ value: undefined }) as never)
   const clock = mock.clock(on, { now: T0 })
-  const board = () => JSON.parse(files.get(BOARD)!) as Board
+  // a done task's history and tries are in its parts file (T-675): joined back here
+  const board = () => JSON.parse(joinedText(files.get(BOARD)!, rel => files.get(BOARD.replace('board.json', rel)) ?? null)) as Board
   return { files, git, prompts, reached, toasts, clock, board, release: () => release?.(), task: (id: string) => board().tasks.find(t => t.id === id)! }
 }
 

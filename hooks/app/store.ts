@@ -1,8 +1,9 @@
-import { type Board, parseBoard, readBoard, brokenBoardText, emptyBoard, symccOn, lockText, lockHolder, isLockStale, tmpName } from '../board'
+import { type Board, type BoardRead, parseBoard, readBoard, readBoardValue, brokenBoardText, emptyBoard, symccOn, lockText, lockHolder, isLockStale, tmpName } from '../board'
+import { PARTS_DIR, READ_LIMIT_BYTES, SIZE_WARN_BYTES, hasWholeFinished, joinParts, partsFilesNamed, partsText, readParts, sizeWarnText, splitBoard, tooBigText, utf8Bytes } from '../core/board-parts'
 import { checkHealth } from './health'
 import { publish } from './lead'
 import { tellLead } from './tell'
-import { S } from './state'
+import { S, sizeNotes } from './state'
 import { boardEvents, withStageHistory } from '../core/events'
 import { emitTaskEvents, logTaskEvents, type TaskEvent } from './events'
 import type { Host } from '../host'
@@ -122,9 +123,13 @@ export const tmpFor = (file: string) => tmpName(file, S.me || 'unknown', `${++tm
  */
 export async function safeWrite(host: Host, file: string, text: string, what: string): Promise<void> {
   const tmp = tmpFor(file)
+  const bytes = text.length * 3 > SIZE_WARN_BYTES ? utf8Bytes(text) : text.length
+  noteSize(host, file, bytes)
   let r: { exitCode: number; stdout: string; stderr: string }
   try {
-    await host.fs.write(tmp, text)
+    await host.fs.write(tmp, text).catch((e: Error) => {
+      throw bytes > READ_LIMIT_BYTES ? new Error(`couldn't save ${what}: ${tooBigText(fileName(file), bytes, 'write')}`) : e
+    })
     // host.fs has no rename; mv within one folder is an atomic rename
     r = await host.run(['mv', '-f', tmp, file])
   } catch (e) {
@@ -134,6 +139,58 @@ export async function safeWrite(host: Host, file: string, text: string, what: st
   if (r.exitCode === 0) return
   await host.run(['rm', '-f', tmp]).catch(() => undefined)
   throw new Error(`couldn't save ${what}: ${(r.stderr || r.stdout).trim().slice(0, 200) || `mv exit ${r.exitCode}`}`)
+}
+
+/** File `file` as the owner knows it: inside the project from its top (".symcc/board.json"), else the full path. */
+export const fileName = (file: string) => (S.root && file.startsWith(`${S.root}/`) ? file.slice(S.root.length + 1) : file)
+
+/**
+ * Notes how big data file `file` is, as read or written whole (T-675): past SIZE_WARN_BYTES the owner (a toast) and the
+ * lead are told once (until it is smaller again) and the board shows the warning (sizeNotes, see publish). Never throws.
+ */
+export function noteSize(host: Host, file: string, bytes: number) {
+  const name = fileName(file)
+  if (bytes <= SIZE_WARN_BYTES) {
+    sizeNotes.delete(name)
+    return
+  }
+  const told = sizeNotes.has(name)
+  const msg = sizeWarnText(name, bytes)
+  sizeNotes.set(name, msg)
+  if (told || S.guardOnly) return
+  try {
+    host.ui.toast(S.N.toast(msg))
+    tellLead(host, `${msg}. Tell the owner.`)
+  } catch {
+    // a host that can't show it: the board still does
+  }
+}
+
+/** File sizes symcc already told the lead it can't read (once each). */
+const toldTooBig = new Set<string>()
+
+/**
+ * Reads data file `file` whole, noting its size (noteSize). A read refused because the file is over the 4 MB limit
+ * throws a clear error saying so (and the owner and the lead are told once), never a bare host error.
+ */
+export async function readWhole(host: Host, file: string): Promise<string> {
+  let text: string
+  try {
+    text = await host.fs.read(file)
+  } catch (e) {
+    const st = await host.fs.stat(file).catch(() => null)
+    if (!st || !(st.size > READ_LIMIT_BYTES)) throw e
+    const msg = tooBigText(fileName(file), st.size)
+    noteSize(host, file, st.size)
+    if (!toldTooBig.has(file) && !S.guardOnly) {
+      toldTooBig.add(file)
+      host.ui.toast(S.N.toast(msg))
+      tellLead(host, `${msg}. Tell the owner.`)
+    }
+    throw new Error(msg)
+  }
+  if (typeof text === 'string' && (text.length * 3 > SIZE_WARN_BYTES || sizeNotes.has(fileName(file)))) noteSize(host, file, utf8Bytes(text))
+  return text
 }
 
 /** The last job queued for each key (see oneAtATime). */
@@ -160,6 +217,9 @@ const reported = new Map<string, string>()
 export function resetStore() {
   queues.clear()
   reported.clear()
+  partsSeen.clear()
+  sizeNotes.clear()
+  toldTooBig.clear()
 }
 
 /**
@@ -167,14 +227,16 @@ export function resetStore() {
  * (a toast) and the lead, once per distinct text. Returns the copy's name ('' if it couldn't be written).
  */
 async function keepCopy(host: Host, text: string, what: string, say: (copy: string) => string): Promise<string> {
-  const known = reported.get(text)
+  // the same board.json text can come with other news (T-675: its parts files changed), so the news is part of the key
+  const key = `${what}\n${say('')}\n${text}`
+  const known = reported.get(key)
   if (known !== undefined) return known
   // a guard-only copy (guardStart, in a worker's folder) never writes; the copy that drives the board keeps it
   if (S.guardOnly) return ''
   const copy = `${S.N.boardFile}.${what}-${now().replace(/[:.]/g, '-')}`
   const ok = await host.fs.write(path(copy), text).then(() => true, () => false)
   const name = ok ? copy : ''
-  reported.set(text, name)
+  reported.set(key, name)
   const msg = say(name)
   host.ui.toast(S.N.toast(msg))
   tellLead(host, msg)
@@ -218,8 +280,7 @@ export async function load(host: Host): Promise<Board> {
     S.enabledNow = symccOn(b)
     return b
   }
-  const text = await host.fs.read(path(S.N.boardFile))
-  const r = readBoard(text)
+  const { text, read: r } = await readJoined(host)
   if (r.broken) {
     // Never go on with a stand-in board: it would be saved over the file and lose every task.
     // Throwing here refuses every change, start and merge until the file is fixed; workers already running are left alone.
@@ -237,17 +298,59 @@ export async function load(host: Host): Promise<Board> {
  * migrateTask), keeping a copy of the file as it was. Nothing happens for a board already current.
  */
 export async function saveMigrated(host: Host): Promise<void> {
-  const text = await host.fs.read(path(S.N.boardFile)).catch(() => null)
-  if (typeof text !== 'string') return
-  const r = readBoard(text)
-  if (r.broken || !r.migrated) return
-  await keepCopy(host, text, 'before-migrate', c => `${S.N.boardFile}: ${r.migrated} older entr${r.migrated > 1 ? 'ies' : 'y'} (tasks or archived totals) ${r.migrated > 1 ? 'were' : 'was'} brought to the current shape${c ? `. The file as it was is kept in ${c}` : ''}.`)
+  if (!(await host.fs.exists(path(S.N.boardFile)).catch(() => false))) return
+  const got = await readJoined(host).catch(() => null)
+  if (!got) return
+  const { text, read: r, whole } = got
+  // T-675: done and dropped tasks kept whole in board.json (from before their parts went to .<name>/tasks/) count too
+  const n = r.migrated + (whole ? 1 : 0)
+  if (r.broken || !n) return
+  const what = [r.migrated ? `${r.migrated} older entr${r.migrated > 1 ? 'ies' : 'y'} (tasks or archived totals) ${r.migrated > 1 ? 'were' : 'was'} brought to the current shape` : '', whole ? `the done and dropped tasks' history, tries and details were moved to ${S.N.dir}/${PARTS_DIR}/, so the board file stays small` : ''].filter(Boolean).join('; ')
+  await keepCopy(host, text, 'before-migrate', c => `${S.N.boardFile}: ${what}${c ? `. The file as it was is kept in ${c}` : ''}.`)
   await change(host, b => b)
+}
+
+/** The parts files last read or written (path → their text and tasks), so a save writes only the ones that changed. */
+const partsSeen = new Map<string, { text: string; tasks: Record<string, Record<string, unknown>> }>()
+
+/** A parts file's path, from its name in board.json ("tasks/T-600.json"). */
+const partsPath = (rel: string) => path(`${S.N.dir}/${rel}`)
+
+/**
+ * Reads board.json and joins each done or dropped task's stub with its parts from .<name>/tasks/ (T-675, see
+ * core/board-parts.ts), then reads it as a board (readBoardValue). A parts file that is there but is not one makes the
+ * board broken (never saved over); a task whose parts are missing loads as its stub, and that is said in `fixed`.
+ * `whole`: board.json still keeps a finished task whole (saveMigrated moves its parts out once).
+ */
+async function readJoined(host: Host): Promise<{ text: string; read: BoardRead; whole: boolean }> {
+  const text = await readWhole(host, path(S.N.boardFile))
+  let raw: unknown
+  try {
+    raw = JSON.parse(text)
+  } catch {
+    return { text, read: readBoard(text), whole: false }
+  }
+  const files = new Map<string, Record<string, Record<string, unknown>>>()
+  for (const rel of partsFilesNamed(raw)) {
+    const file = partsPath(rel)
+    if (!(await host.fs.exists(file).catch(() => false))) {
+      partsSeen.delete(file)
+      continue
+    }
+    const t = await readWhole(host, file)
+    const p = readParts(t)
+    if (p.broken) return { text, read: { ...readBoard(null), broken: `its parts file ${S.N.dir}/${rel} can't be read (${p.broken})` }, whole: false }
+    files.set(rel, p.tasks)
+    partsSeen.set(file, { text: t, tasks: p.tasks })
+  }
+  const j = joinParts(raw, files)
+  const read = readBoardValue(j.raw)
+  return { text, read: { ...read, fixed: [...read.fixed, ...j.missing] }, whole: hasWholeFinished(raw) }
 }
 
 /** Is the plugin on for this project? Read from the board file each time (a missing or broken board: on). Never throws. */
 export async function isOn(host: Host): Promise<boolean> {
-  const text = await host.fs.read(path(S.N.boardFile)).catch(() => null)
+  const text = await readWhole(host, path(S.N.boardFile)).catch(() => null)
   return (S.enabledNow = symccOn(parseBoard(typeof text === 'string' ? text : null)))
 }
 
@@ -319,9 +422,36 @@ export async function dropIfSame(host: Host, file: string, text: string) {
   if ((await host.fs.read(file).catch(() => null)) === text) await host.run(['rm', '-f', file]).catch(() => undefined)
 }
 
-/** Write to a temp file, then rename it over board.json, so a crash mid-write never leaves a broken board. */
+/**
+ * Write to a temp file, then rename it over board.json, so a crash mid-write never leaves a broken board. Done and
+ * dropped tasks keep only a stub in board.json; the rest goes to their parts files (T-675, see core/board-parts.ts),
+ * and only the parts files that changed are written. The parts files are written first and still keep what the board
+ * file on disk needs, so a crash between the writes never loses a task's parts; once board.json is saved, the
+ * entries no task needs any more are taken out (a file left with none is removed).
+ */
 export async function saveBoard(host: Host, b: Board) {
-  await safeWrite(host, path(S.N.boardFile), JSON.stringify(b, null, 2) + '\n', 'the board')
+  const { board: slim, parts } = splitBoard(b)
+  const want = new Map([...parts].map(([rel, tasks]) => [partsPath(rel), tasks] as const))
+  if (want.size) await host.run(['mkdir', '-p', path(`${S.N.dir}/${PARTS_DIR}`)]).catch(() => undefined)
+  const first = new Map<string, string>()
+  for (const [file, tasks] of want) {
+    const seen = partsSeen.get(file)
+    const text = partsText({ ...(seen?.tasks ?? {}), ...tasks })
+    if (text !== seen?.text) await safeWrite(host, file, text, `the board's ${fileName(file)}`)
+    first.set(file, text)
+  }
+  await safeWrite(host, path(S.N.boardFile), JSON.stringify(slim, null, 2) + '\n', 'the board')
+  for (const [file, tasks] of want) {
+    const text = partsText(tasks)
+    if (text !== first.get(file)) await safeWrite(host, file, text, `the board's ${fileName(file)}`)
+    partsSeen.set(file, { text, tasks })
+  }
+  const dir = path(`${S.N.dir}/${PARTS_DIR}/`)
+  for (const file of [...partsSeen.keys()]) {
+    if (want.has(file) || !file.startsWith(dir)) continue
+    partsSeen.delete(file)
+    await host.run(['rm', '-f', file]).catch(() => undefined)
+  }
   await noteMtime(host, true)
 }
 

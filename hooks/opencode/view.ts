@@ -17,6 +17,7 @@ import { changedFiles } from '../app/review'
 import { roleLists } from '../app/roles'
 import { kindLists } from '../app/kinds'
 import { orgMemNow } from '../app/org-mem'
+import { viewTask } from '../core/board-parts'
 import { VIEW_FILE, VIEW_RUNS_KEPT, viewFileText, viewDefs, type ScoutRuns, type ViewDef, type ViewChanges } from './board-view'
 
 /** The empty view, as a panel starts with. */
@@ -47,7 +48,7 @@ export function viewFilePanel(host: Pick<Host, 'fs' | 'run' | 'ui' | 'plugin'>):
         const defs = await defsOf(host as Host).catch(() => ({}))
         const changes = await changesOf(host as Host, v)
         const org_mem = await orgMemNow(host as Host).then(r => r.notes).catch(() => [])
-        const text = viewFileText({ root, home: S.home, name: S.N.name, version: S.version, written_at: at, view: { ...(v as PaneView), ...(Object.keys(scout_runs).length ? { scout_runs } : {}), ...(Object.keys(scout_results).length ? { scout_results } : {}), ...defs, ...(Object.keys(changes).length ? { changes } : {}), org_mem } })
+        const text = viewFileText({ root, home: S.home, name: S.N.name, version: S.version, written_at: at, view: { ...(v as PaneView), tasks: (v.tasks ?? []).map(viewTask), ...(Object.keys(scout_runs).length ? { scout_runs } : {}), ...(Object.keys(scout_results).length ? { scout_results } : {}), ...defs, ...(Object.keys(changes).length ? { changes } : {}), org_mem } })
         await safeWrite(host as Host, file, text, 'the board view')
       })
       .catch((err: Error) => host.ui.log(`couldn't write ${file}: ${err?.message ?? err}`))

@@ -25,6 +25,7 @@ import { VIEW_FILE, parseViewFile, bandDraw, panelLines, panelKeys, panelTaskAct
 import { SETTING_GROUPS, isScoutRunReport, taskReports, parseSettingValue, settingChoices, settingInfo, settingValue, isSettingPage, everyText, everyMinutesOf, type SettingName, type ScoutEditField } from '../board'
 import type { SymccScout } from '../../types'
 import { orgMemDeleteAsk, orgMemFile, orgMemNoteKey } from '../core/org-mem'
+import { PARTS_KEY, safePartsFile, withViewParts } from '../core/board-parts'
 
 export type { PanelKey, PanelHit, PanelTab }
 
@@ -340,9 +341,35 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     if (opened() && !hasPage(f, opened(), tab())) openPage('')
     if (run() && !scoutRunsIn(f, opened()).some(x => x.run.ended === run())) setRun('')
   }
+  // T-675: a done or dropped task's long parts (history, details, ...) are not in the view file; its page reads them
+  // from its parts file (.<name>/tasks/T-n.json), read again on each refresh while the page is open
+  let rawFile: ViewFile | null = null
+  let parts: { id: string; file: string; text: string | null } | undefined
+  const openTask = (f: ViewFile | null) => (f && tab() === 'tasks' && opened() ? f.view.tasks.find(x => x.id === opened()) : undefined)
+  const withParts = (f: ViewFile | null): ViewFile | null => {
+    const t = openTask(f) as (Record<string, unknown> & { id: string }) | undefined
+    if (!f || !t || !parts || parts.id !== t.id || parts.file !== t[PARTS_KEY]) return f
+    return { ...f, view: { ...f.view, tasks: f.view.tasks.map(x => (x.id === t.id ? withViewParts(x, parts!.text) : x)) } }
+  }
+  const readTaskParts = () => {
+    const f = rawFile
+    const t = openTask(f) as Record<string, unknown> | undefined
+    const rel = t?.[PARTS_KEY]
+    if (!f || !t || !safePartsFile(rel)) return
+    const id = String(t.id)
+    void d.readText(`${f.root}/${dataDir(f.name || name)}/${rel}`).then(
+      text => {
+        parts = { id, file: rel, text }
+        if (opened() === id) setFile(withParts(rawFile))
+      },
+      () => undefined,
+    )
+  }
   const refresh = async () => {
     const f = await readViewFile(dir, d.readText, name)
-    setFile(f)
+    rawFile = f
+    setFile(withParts(f))
+    readTaskParts()
     setNow(d.now())
     // a page that got shorter keeps its scroll within its new length
     setScroll(draw().scroll)
@@ -372,6 +399,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     setSent(undefined)
     setTaskReport(undefined)
     readTaskReport()
+    readTaskParts()
     setRun('')
     setRunCursor(0)
     setScroll(0)
