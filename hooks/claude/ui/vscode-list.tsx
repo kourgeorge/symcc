@@ -32,8 +32,9 @@ const GROUPS: { label: string; has: SymccStatus[] }[] = [
  *  columns in its code font's cells, but draws a row's title in its narrower text font: in the owner's 950px panel it
  *  reported about 70-80 columns, yet a 66-character row filled less than half the line. So a row is fitted to this many
  *  times the reported columns (a bit under the 2 that screenshot shows, so a title of wide letters still fits on its
- *  one line); only a really narrow panel cuts the title with "…". */
-export const VS_ROW_SCALE = 1.8
+ *  one line); only a really narrow panel cuts the title with "…". At 1.8 a cut row still ended at about 80-85% of the
+ *  line (T-698), so it is 2.1 now: the row fills the line and stays one line (the Questions-for-you rows use it too). */
+export const VS_ROW_SCALE = 2.1
 /** The characters a VS Code list row is fitted to, for a panel of `columns` reported columns (see VS_ROW_SCALE). */
 export const vsRowRoom = (columns: number) => Math.floor(columns * VS_ROW_SCALE)
 
