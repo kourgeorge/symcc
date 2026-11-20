@@ -69,7 +69,8 @@ export type StageMark = { step: StageStep; state: 'done' | 'now' | 'later' }
  * merge, with "checker" only when the checker setting is on (`board.checker`) or a checker ran on this try, and
  * "review" after "test" when the task waits for the owner's review (any mode but auto, or needs review; always for a
  * task in review). A doing task: the steps before its step done, its step now, the rest later; a task in review: all
- * done up to review, review now (merge now once approved and in a check step); a done task: all done. null for the
+ * done up to review, review now; once approved and in a check step, all done up to "review ✓", then the approve's own
+ * prep → line → test → merge with its step now ("… test ✓ → review ✓ → ● prep → line → test → merge"); a done task: all done. null for the
  * other statuses and for an investigation (nothing is merged).
  */
 export function taskStage(t: BadgeTask & Pick<SymccTask, 'needs_review'> & { kind?: unknown; checker?: string }, nowMs: number, board: { mode?: unknown; checker?: unknown } = {}): StageMark[] | null {
@@ -77,10 +78,18 @@ export function taskStage(t: BadgeTask & Pick<SymccTask, 'needs_review'> & { kin
   const step = checkStepNow(t, nowMs)
   const hadChecker = (t.runs?.[t.runs.length - 1]?.checkers?.length ?? 0) > 0 || !!t.checker || step === 'checker'
   const review = t.status === 'review' || modeOf(board) !== 'auto' || t.needs_review === true
-  const steps: StageStep[] = ['worker', 'prep', ...(board.checker === true || hadChecker ? ['checker' as const] : []), 'line', 'test', ...(review ? ['review' as const] : []), 'merge']
+  const first: StageStep[] = ['worker', 'prep', ...(board.checker === true || hadChecker ? ['checker' as const] : []), 'line', 'test']
+  // an approved task in review runs prep → line → test → merge again (its status stays review): every step up to
+  // "review ✓" done, then the approve's own steps with the one it is in now, so the line agrees with the badge
+  if (t.status === 'review' && step) {
+    const again: StageStep[] = ['prep', ...(step === 'checker' ? ['checker' as const] : []), 'line', 'test', 'merge']
+    const at = again.indexOf(step === 'testing' ? 'test' : step === 'merging' ? 'merge' : step)
+    return [...[...first, 'review' as const].map(s => ({ step: s, state: 'done' as const })), ...again.map((s, i) => ({ step: s, state: i < at ? 'done' as const : i === at ? 'now' as const : 'later' as const }))]
+  }
+  const steps: StageStep[] = [...first, ...(review ? ['review' as const] : []), 'merge']
   const now: StageStep | 'all' =
     t.status === 'done' ? 'all'
-    : t.status === 'review' ? (step ? 'merge' : 'review')
+    : t.status === 'review' ? 'review'
     : waitsInLine(t) ? 'line'
     : step === 'testing' ? 'test'
     : step === 'merging' ? 'merge'

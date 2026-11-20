@@ -3748,6 +3748,13 @@ test('T-587: the task page badge and Status row name the step a task is in; the 
   expect(core.stageText(core.taskStage(inStep('testing'), now, { mode: 'review' })!)).toBe('worker ✓ → prep ✓ → line ✓ → ● test → review → merge')
   // a task in review passed every step before review; a done task every step
   expect(core.stageText(core.taskStage({ status: 'review', runs: ran }, now, on)!)).toBe('worker ✓ → prep ✓ → checker ✓ → line ✓ → test ✓ → ● review → merge')
+  // an approved task in review running prep / test / merge again: the Stage line agrees with the badge
+  const approving = (step: 'prep' | 'testing' | 'merging') => ({ status: 'review' as const, runs: ran, checking: { step, at: fresh } })
+  expect(core.statusBadge(approving('testing'), now).text).toBe('⧗ test')
+  expect(core.stageText(core.taskStage(approving('testing'), now, { mode: 'review' })!)).toBe('worker ✓ → prep ✓ → line ✓ → test ✓ → review ✓ → prep ✓ → line ✓ → ● test → merge')
+  expect(core.statusBadge(approving('prep'), now).text).toBe('✎ prep')
+  expect(core.stageText(core.taskStage(approving('prep'), now, { mode: 'review' })!)).toBe('worker ✓ → prep ✓ → line ✓ → test ✓ → review ✓ → ● prep → line → test → merge')
+  expect(core.stageText(core.taskStage(approving('merging'), now, { mode: 'review' })!)).toBe('worker ✓ → prep ✓ → line ✓ → test ✓ → review ✓ → prep ✓ → line ✓ → test ✓ → ● merge')
   const done = core.taskStage({ status: 'done', runs: ran }, now, auto)!
   expect(done.every(m => m.state === 'done')).toBe(true)
   expect(core.stageText(done)).toBe('worker ✓ → prep ✓ → line ✓ → test ✓ → merge ✓')
