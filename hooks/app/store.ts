@@ -319,20 +319,6 @@ export async function dropIfSame(host: Host, file: string, text: string) {
   if ((await host.fs.read(file).catch(() => null)) === text) await host.run(['rm', '-f', file]).catch(() => undefined)
 }
 
-/**
- * One try at taking lock file `file` with `text`, the same safe way as takeLock: written to its own temp file,
- * then hard-linked into place (`ln` fails if the lock exists). True when the lock is ours now.
- */
-export async function tryLock(host: Host, file: string, text: string): Promise<boolean> {
-  const tmp = tmpFor(file)
-  await host.fs.write(tmp, text)
-  try {
-    return (await host.run(['ln', tmp, file])).exitCode === 0
-  } finally {
-    await host.run(['rm', '-f', tmp]).catch(() => undefined)
-  }
-}
-
 /** Write to a temp file, then rename it over board.json, so a crash mid-write never leaves a broken board. */
 export async function saveBoard(host: Host, b: Board) {
   await safeWrite(host, path(S.N.boardFile), JSON.stringify(b, null, 2) + '\n', 'the board')
