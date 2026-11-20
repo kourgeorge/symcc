@@ -250,7 +250,13 @@ test('Settings in VS Code at width 50: groups as headings, a Select for each cho
 function boardFile(on: On) {
   const { tasks, mode, test_commands, scout_findings, max_parallel, notify } = SCOUTS_VIEW.value
   const files: Record<string, string | null> = { '/board.json': JSON.stringify({ tasks, mode, test_commands, scout_findings, max_parallel, notify }), '/board.lock': null }
-  const fileOf = (p: string) => Object.keys(files).find(f => p.endsWith(`.symcc${f}`))
+  // a parts file (.symcc/tasks/T-n.json) is kept as soon as it is written (an exists check that fails would make the
+  // board broken, T-681)
+  const fileOf = (p: string) => {
+    const parts = /\.symcc(\/tasks\/T-\d+\.json)$/.exec(p)?.[1]
+    if (parts && !(parts in files)) files[parts] = null
+    return Object.keys(files).find(f => p.endsWith(`.symcc${f}`))
+  }
   on('fs.exists', (_, e, next) => (fileOf(e.path) ? { value: files[fileOf(e.path)!] !== null } : next(e)))
   on('fs.read', (_, e, next) => (fileOf(e.path) ? readText(files[fileOf(e.path)!]) : next(e)))
   const temp: Record<string, string> = {}

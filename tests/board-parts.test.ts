@@ -7,8 +7,8 @@ import type { SymccHistoryEntry, SymccRun } from '../types'
 import { type Board, type BoardTask, addTask, emptyBoard, parseBoard, readBoard } from '../hooks/board'
 import { ARCHIVE_FILE_BYTES, READ_LIMIT_BYTES, SIZE_WARN_BYTES, archiveChunks, fieldSizes, joinedText, partsFileOf, sizeWarnText, viewStubFilled, viewTask, withViewParts } from '../hooks/core/board-parts'
 import { scoutToolLines } from '../hooks/core/scouts'
-import { load, readWhole, saveBoard, saveMigrated } from '../hooks/app/store'
-import { readArchiveFile, saveArchive } from '../hooks/app/archive'
+import { change, load, readWhole, resetStore, saveBoard, saveMigrated } from '../hooks/app/store'
+import { archiveOld, readArchiveFile, saveArchive } from '../hooks/app/archive'
 import { publish } from '../hooks/app/lead'
 import { cleanLeftoverTmp } from '../hooks/app/cleanup'
 import { statsText } from '../hooks/app/tools'
@@ -160,6 +160,146 @@ test('T-675: a parts file that is not one makes the board broken (never saved ov
   expect(w.toasts.join('\n')).toMatch(/T-121: its history, tries and details are missing from tasks\/T-100\.json/)
   w.files.set(file, good)
   expect((await load(w.host)).tasks[120]!.history.length).toBe(30)
+})
+
+test('T-681: a parts file whose exists check fails makes the board broken: the load throws, a save is refused, the file is kept', async () => {
+  const w = world()
+  await saveBoard(w.host, bigBoard())
+  const file = `${ROOT}/.symcc/tasks/T-100.json`
+  const good = w.files.get(file)!
+  const exists = w.host.fs.exists
+  w.host.fs.exists = async p => (p === file ? Promise.reject(new Error('timed out')) : exists(p))
+  await expect(load(w.host)).rejects.toThrow(/its parts file \.symcc\/tasks\/T-100\.json can't be checked \(timed out\)/)
+  await expect(change(w.host, b => ({ ...b, tasks: b.tasks.map(t => (t.id === 'T-700' ? { ...t, note: 'queued' } : t)) }))).rejects.toThrow(/T-100\.json can't be checked/)
+  expect(w.files.get(file) === good).toBe(true)
+  w.host.fs.exists = exists
+  expect((await load(w.host)).tasks[120]!.history.length).toBe(30)
+})
+
+test('T-681: a save after a parts file went missing never writes empty parts over it; putting it back restores every task', async () => {
+  const w = world()
+  await saveBoard(w.host, bigBoard())
+  const file = `${ROOT}/.symcc/tasks/T-100.json`
+  const good = w.files.get(file)!
+  w.files.delete(file)
+  const b = await load(w.host)
+  expect(b.tasks[120]!.history).toEqual([])
+  expect(w.toasts.join('\n')).toMatch(/T-121: its history, tries and details are missing from tasks\/T-100\.json/)
+  await change(w.host, x => ({ ...x, tasks: x.tasks.map(t => (t.id === 'T-700' ? { ...t, note: 'queued' } : t)) }))
+  expect(w.files.has(file)).toBe(false)
+  // the stubs still point to the parts file
+  expect((JSON.parse(w.files.get(BOARD)!) as { tasks: Record<string, unknown>[] }).tasks[120]!.parts).toBe('tasks/T-100.json')
+  w.files.set(file, good)
+  const back = await load(w.host)
+  expect(back.tasks[120]!.history.length).toBe(30)
+  expect(back.tasks[699]!.note).toBe('queued')
+})
+
+test('T-681: a task finished while its parts file is missing stays whole in board.json; putting the file back keeps both', async () => {
+  const w = world()
+  await saveBoard(w.host, bigBoard())
+  const file = `${ROOT}/.symcc/tasks/T-650.json`
+  const good = w.files.get(file)!
+  w.files.delete(file)
+  await load(w.host)
+  const line: SymccHistoryEntry = { at: iso(NOW), kind: 'state', text: 'finished by hand' }
+  await change(w.host, x => ({ ...x, tasks: x.tasks.map(t => (t.id === 'T-661' ? { ...t, status: 'done', history: [line] } : t)) }))
+  expect(w.files.has(file)).toBe(false)
+  expect((await load(w.host)).tasks[660]!.history.length).toBe(1)
+  expect(w.toasts.join('\n')).not.toMatch(/moved to \.symcc\/tasks/)
+  w.files.set(file, good)
+  const back = await load(w.host)
+  expect(back.tasks[650]!.history.length).toBe(30)
+  expect(back.tasks[660]!.history.length).toBe(1)
+  // the next save moves T-661's parts into the good file, next to the others
+  await saveBoard(w.host, back)
+  const again = await load(w.host)
+  expect(again.tasks[650]!.history.length).toBe(30)
+  expect(again.tasks[660]!.history.length).toBe(1)
+  expect((JSON.parse(w.files.get(BOARD)!) as { tasks: Record<string, unknown>[] }).tasks[660]!.parts).toBe('tasks/T-650.json')
+})
+
+test('T-681: a reload forgets which tasks the last read loaded as stubs, so a fresh save writes their parts again', async () => {
+  const w = world()
+  await saveBoard(w.host, bigBoard())
+  const file = `${ROOT}/.symcc/tasks/T-100.json`
+  w.files.delete(file)
+  await load(w.host)
+  resetStore()
+  const fresh = world()
+  await saveBoard(fresh.host, bigBoard())
+  expect(fresh.files.has(file)).toBe(true)
+  expect((await load(fresh.host)).tasks[120]!.history.length).toBe(30)
+})
+
+test('T-681: archiving while a parts file is missing leaves its stubbed tasks on the board; putting the file back restores them', async () => {
+  const w = world()
+  await saveBoard(w.host, { ...bigBoard(), archive_days: 1 })
+  const file = `${ROOT}/.symcc/tasks/T-100.json`
+  const good = w.files.get(file)!
+  w.files.delete(file)
+  await load(w.host)
+  S.driving = true
+  const moved = await archiveOld(w.host, NOW + 400 * 86_400_000, true)
+  expect(moved.length > 0).toBe(true)
+  expect(moved.includes('T-121')).toBe(false)
+  expect(moved.includes('T-1')).toBe(true)
+  const b = await load(w.host)
+  const t = b.tasks.find(x => x.id === 'T-121')
+  expect(t?.history.length).toBe(0)
+  expect(w.files.has(file)).toBe(false)
+  w.files.set(file, good)
+  expect((await load(w.host)).tasks.find(x => x.id === 'T-121')?.history.length).toBe(30)
+})
+
+test('T-681: while a parts file is missing, several changes warn once and keep one board.json copy', async () => {
+  const w = world()
+  await saveBoard(w.host, bigBoard())
+  const file = `${ROOT}/.symcc/tasks/T-100.json`
+  w.files.delete(file)
+  const copies: string[] = []
+  const write = w.host.fs.write
+  w.host.fs.write = async (p, t) => {
+    if (p.includes('board.json.before-fix-')) copies.push(p)
+    return write(p, t)
+  }
+  for (const note of ['one', 'two', 'three']) {
+    await change(w.host, x => ({ ...x, tasks: x.tasks.map(t => (t.id === 'T-700' ? { ...t, note } : t)) }))
+    await load(w.host)
+  }
+  expect(w.toasts.filter(t => t.includes('missing from tasks/T-100.json')).length).toBe(1)
+  expect(copies.length).toBe(1)
+  expect((await load(w.host)).tasks[699]!.note).toBe('three')
+})
+
+test('T-681: a parts file that is there but lacks one task\'s entry gets it back on the first save: one warning, one copy', async () => {
+  const w = world()
+  const b = emptyBoard()
+  for (const id of ['T-1', 'T-2', 'T-3']) {
+    const at = iso(NOW)
+    b.tasks.push({ id, title: id, details: 'd', files: [], status: id === 'T-3' ? 'todo' : 'done', note: '', question: null, order: 1, after: [], attempts: 1, history: [{ at, kind: 'state', text: 'x' }], branch: null, merge_into: 'main', kind: 'bug', role: 'general', created_at: at, updated_at: at } as BoardTask)
+  }
+  b.next_id = 4
+  await saveBoard(w.host, b)
+  const file = `${ROOT}/.symcc/tasks/T-0.json`
+  const p = JSON.parse(w.files.get(file)!) as { tasks: Record<string, unknown> }
+  delete p.tasks['T-1']
+  w.files.set(file, JSON.stringify(p))
+  resetStore()
+  S.root = ROOT
+  S.writing = Promise.resolve()
+  S.enabledNow = true
+  const copies: string[] = []
+  const write = w.host.fs.write
+  w.host.fs.write = async (f, t) => {
+    if (f.includes('board.json.before-fix-')) copies.push(f)
+    return write(f, t)
+  }
+  for (const note of ['one', 'two', 'three']) await change(w.host, x => ({ ...x, tasks: x.tasks.map(t => (t.id === 'T-3' ? { ...t, note } : t)) }))
+  await load(w.host)
+  expect(w.toasts.filter(t => t.includes('missing from tasks/T-0.json')).length).toBe(1)
+  expect(copies.length).toBe(1)
+  expect('T-1' in (JSON.parse(w.files.get(file)!) as { tasks: Record<string, unknown> }).tasks).toBe(true)
 })
 
 test('T-675: a data file past 3 MB warns the owner, the lead and the board once; a read refused for size says so', async () => {
