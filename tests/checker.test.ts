@@ -22,6 +22,7 @@ import { withStarts } from './starts'
 import { checkerPrompt, checkerTestsText } from '../hooks/core/checker'
 import { inMergeLine } from '../hooks/app/merge-line'
 import { parseMergeLine } from '../hooks/board'
+import { onTaskEvent, type TaskEvent } from '../hooks/app/events'
 
 const ROOT = '/repo'
 const WT = `${ROOT}/.symcc/worktrees/T-1`
@@ -322,6 +323,48 @@ test('T-551: with the checker on, the checker runs before the task joins the mer
   expect(w.git.main).toBe(H1)
   const texts = t.history.map(h => h.text)
   expect(texts).toContain('try 1: checker: OK')
+})
+
+test('T-616: a worker finish → checker → queue → test → merge emits each event once, logs them to events.jsonl and puts each stage in the history once', async () => {
+  const w = world()
+  await saveBoard(w.$, boardWith(true))
+  const T2 = `${ROOT}/.symcc/worktrees/T-2`
+  let letGo = () => {}
+  w.tests.hold = { cwd: T2, until: new Promise<void>(r => (letGo = r)) }
+  // another task holds the merge line, so T-1 waits its turn in the queue after its checker's OK
+  const t2 = inMergeLine(w.$, 'T-2', async () => void (await w.$.run(['/bin/sh', '-c', 'npm test'], { cwd: T2 })))
+  await until(() => testRuns(w).length === 1)
+  const got: TaskEvent[] = []
+  const off = onTaskEvent(es => void got.push(...es))
+  let t: Awaited<ReturnType<typeof finish>>
+  try {
+    t = await finish(w, async id => {
+      checkerFinished(id, 'OK')
+      await until(() => got.some(e => e.to === 'queue'))
+      letGo()
+      await t2
+    })
+  } finally {
+    off()
+  }
+  expect(t.status).toBe('done')
+  expect(got.map(e => `${e.kind} ${e.from}→${e.to}`)).toEqual(['stage worker→prep', 'stage prep→checker', 'stage checker→queue', 'stage queue→test', 'stage test→merge', 'state doing→done', 'stage merge→null'])
+  expect(got.every(e => e.task === 'T-1' && e.try === 1 && typeof e.at === 'string')).toBe(true)
+  expect(got.find(e => e.to === 'queue')!.place).toBe(2)
+  // the activity log has the same events, one JSON line each
+  const log = (await w.$.fs.read(`${ROOT}/.symcc/events.jsonl`)).trim().split('\n').map(l => JSON.parse(l) as TaskEvent)
+  expect(log).toEqual(got)
+  // the history shows the whole path, each stage once, between the outcome lines it already had
+  expect(t.history.map(h => [h.kind, h.text])).toEqual([
+    ['created', 'created by the lead because a test'],
+    ['step', 'try 1: prep started'],
+    ['step', 'try 1: checker started'],
+    ['checker-ok', 'try 1: checker: OK'],
+    ['step', 'try 1: waits in the merge queue (place 2)'],
+    ['step', 'try 1: tests started'],
+    ['step', 'try 1: merge started'],
+    ['merged', 'try 1: made the change → merged into main (b1b1b1b1); tests passed'],
+  ])
 })
 
 test('T-551: a checker that finds problems is one normal failed try: the task never joins the merge line and no test runs', async () => {

@@ -2,7 +2,7 @@ import { type Archive, type BoardTask, ARCHIVE_EVERY_MS, addToArchive, archiveTe
 import { publish } from './lead'
 import { S } from './state'
 import type { Host } from '../host'
-import { load, locked, now, path, safeWrite, saveBoard } from './store'
+import { load, locked, now, path, safeWrite, writeBoard } from './store'
 import { tellLead } from './tell'
 
 // ---------------- old tasks: archive.json ----------------
@@ -76,8 +76,7 @@ export async function archiveOld(host: Host, nowMs = Date.now(), force = false):
       host.ui.toast(S.N.toast(`old tasks were not archived: ${(e as Error).message}`))
       return null
     }
-    const after = removeArchived(b, old)
-    await saveBoard(host, after)
+    const after = await writeBoard(host, b, removeArchived(b, old))
     return [after, old.map(t => t.id)] as const
   })
   if (!moved) return []
@@ -107,8 +106,7 @@ export async function bringBackArchived(host: Host, id: string): Promise<string>
   const after = await locked(host, async () => {
     const b = await load(host)
     if (find(b, t.id)) return b
-    const y = bringBack(b, t, now())
-    await saveBoard(host, y)
+    const y = await writeBoard(host, b, bringBack(b, t, now()))
     const r = await readArchiveFile(host)
     if (!r.broken) await saveArchive(host, { version: 1, tasks: r.archive.tasks.filter(x => x.id !== t.id) }).catch(() => undefined)
     return y

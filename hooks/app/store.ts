@@ -3,6 +3,8 @@ import { checkHealth } from './health'
 import { publish } from './lead'
 import { tellLead } from './tell'
 import { S } from './state'
+import { boardEvents, withStageHistory } from '../core/events'
+import { emitTaskEvents } from './events'
 import type { Host } from '../host'
 
 // ---------------- the board on disk ----------------
@@ -319,6 +321,21 @@ export async function saveBoard(host: Host, b: Board) {
 }
 
 /**
+ * Saves board `after` over `before` (read under the board lock, which the caller holds): the task events of the write
+ * (boardEvents) put their stage lines in the tasks' history (withStageHistory), the board is saved, and then the
+ * events go to their listeners (emitTaskEvents, which never throws). Answers the board as saved. Every board write
+ * goes through here (change, the archive).
+ */
+export async function writeBoard(host: Host, before: Board, after: Board): Promise<Board> {
+  const nowMs = Date.now()
+  const events = boardEvents(before, after, nowMs)
+  const saved = withStageHistory(after, events)
+  await saveBoard(host, saved)
+  await emitTaskEvents(host, events)
+  return saved
+}
+
+/**
  * Every change goes through here, one at a time, so two workers finishing together
  * never lose an update; the lock file does the same between sessions.
  */
@@ -326,8 +343,8 @@ export function change<T>(host: Host, fn: (b: Board) => [Board, T] | Board): Pro
   return locked(host, async () => {
     const before = await load(host)
     const out = fn(before)
-    const [after, value] = Array.isArray(out) ? out : [out, undefined as T]
-    await saveBoard(host, after)
+    const [next, value] = Array.isArray(out) ? out : [out, undefined as T]
+    const after = await writeBoard(host, before, next)
     return [after, value] as const
   }).then(async ([after, value]) => {
     // a guard-only copy (guardStart, in a worker's folder) saves the board but never shows it: no panel, no status line
