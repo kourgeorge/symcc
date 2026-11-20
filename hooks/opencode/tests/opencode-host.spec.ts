@@ -1323,6 +1323,12 @@ test('the TUI\'s view file (T-466, R6): each publish writes .symcc/view.json; /s
     expect(meanwhile.some(l => l.startsWith('The owner answered T-2 ("postgres")'))).toBe(true)
     await until(async () => (await view())!.view.tasks.find(t => t.id === 'T-2')!.status !== 'waiting')
     expect((await view())!.view.tasks.find(t => t.id === 'T-2')!.history.some(l => l.text.includes('postgres'))).toBe(true)
+    // (T-562) the lead's roles and kinds tools publish a change, so the panel's Roles and Kinds pages show it at once
+    expect((await view())!.view.roles?.some(r => r.name === 'docsy')).toBe(false)
+    expect(JSON.stringify(await tool('symcc_roles', { action: 'add', name: 'docsy', description: 'writes the docs', body: 'Check the docs.' }))).toContain('docsy')
+    await until(async () => !!(await view())!.view.roles?.some(r => r.name === 'docsy' && r.description === 'writes the docs'))
+    await tool('symcc_kinds', { action: 'off', name: 'feature' })
+    await until(async () => !!(await view())!.view.kinds?.some(k => k.name === 'feature' && k.off))
     // a question for the owner, answered from the board panel
     await tool('symcc_question', { action: 'add', text: 'Add a scout?', options: ['yes', 'no'] })
     await until(async () => ((await view())!.view.questions ?? []).length === 1)

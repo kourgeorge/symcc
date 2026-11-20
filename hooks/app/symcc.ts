@@ -308,18 +308,19 @@ export const notLeadText = (tool: string) =>
 /**
  * A tool that is not symcc's ran, and touched what `touch` says (a file it wrote or edited, or a shell command it ran;
  * null: none of those, as the host tells it from its own tool names, e.g. claude/tools.ts). Writing, editing or
- * deleting a scout file reschedules the scouts, a role file reloads the roles, and the board is published again.
+ * deleting a scout file reschedules the scouts, a role or kind file reloads the roles or kinds, and the board is published again.
  * Runs in the background.
  */
 export function otherToolDone(host: Host, touch: FileTouch | null) {
   if (!touch || S.guardOnly) return
-  const hit = fileToolHits(touch, S.N.scouts, `${S.N.dir}/roles`)
-  if (!hit.scouts && !hit.roles) return
+  const hit = fileToolHits(touch, S.N.scouts, `${S.N.dir}/roles`, `${S.N.dir}/kinds`)
+  if (!hit.scouts && !hit.roles && !hit.kinds) return
   void (async () => {
     // before session start (a plugin reload): learn the project folder first; unknown, change nothing
     if (!(await findRoot(host))) return
     if (hit.scouts) await scheduleScouts(host)
     if (hit.roles) await loadRoles(host).catch(() => undefined)
+    if (hit.kinds) await loadKinds(host).catch(() => undefined)
     await publish(host, await load(host))
   })().catch(() => undefined)
 }

@@ -50,13 +50,15 @@ const settle = async (until: () => boolean) => {
 }
 const lastView = (views: string[]) => views[views.length - 1] ?? ''
 
-test('fileToolHits: a written or edited scout or role file counts; a command only when it changes files', () => {
-  const S = '.symcc/scouts', R = '.symcc/roles'
-  expect(fileToolHits({ path: '/p/.symcc/scouts/x.md' }, S, R)).toEqual({ scouts: true, roles: false })
-  expect(fileToolHits({ path: '/p/.symcc/roles/docs.md' }, S, R)).toEqual({ scouts: false, roles: true })
-  expect(fileToolHits({ path: '/p/src/a.ts' }, S, R)).toEqual({ scouts: false, roles: false })
-  expect(fileToolHits({ command: 'rm .symcc/scouts/x.md' }, S, R)).toEqual({ scouts: true, roles: false })
-  expect(fileToolHits({ command: 'cat .symcc/scouts/x.md' }, S, R)).toEqual({ scouts: false, roles: false })
+test('fileToolHits: a written or edited scout, role or kind file counts; a command only when it changes files', () => {
+  const S = '.symcc/scouts', R = '.symcc/roles', K = '.symcc/kinds'
+  expect(fileToolHits({ path: '/p/.symcc/scouts/x.md' }, S, R, K)).toEqual({ scouts: true, roles: false, kinds: false })
+  expect(fileToolHits({ path: '/p/.symcc/roles/docs.md' }, S, R, K)).toEqual({ scouts: false, roles: true, kinds: false })
+  expect(fileToolHits({ path: '/p/.symcc/kinds/spike.md' }, S, R, K)).toEqual({ scouts: false, roles: false, kinds: true })
+  expect(fileToolHits({ path: '/p/src/a.ts' }, S, R, K)).toEqual({ scouts: false, roles: false, kinds: false })
+  expect(fileToolHits({ command: 'rm .symcc/scouts/x.md' }, S, R, K)).toEqual({ scouts: true, roles: false, kinds: false })
+  expect(fileToolHits({ command: 'rm .symcc/kinds/spike.md' }, S, R, K)).toEqual({ scouts: false, roles: false, kinds: true })
+  expect(fileToolHits({ command: 'cat .symcc/scouts/x.md' }, S, R, K)).toEqual({ scouts: false, roles: false, kinds: false })
 })
 
 test("Claude Code's tool calls in symcc's words: Write, Edit and MultiEdit write a file, Bash runs a command, others touch nothing", () => {

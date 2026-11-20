@@ -14,6 +14,7 @@ import { pump, stopWorker, approve, mergeWaiting, setBoardMode, setSymcc, checki
 import { haltChecker } from './checker'
 import { questionTool } from './questions'
 import { markMerged } from './merged'
+import { publish } from './lead'
 
 // ---------------- the lead's tools ----------------
 
@@ -462,6 +463,13 @@ async function kindIn($: Host, a: In): Promise<string | undefined> {
 /** The lead's tools that act on one task. */
 const TASK_TOOLS = ['change', 'approve', 'reject', 'retry', 'ask', 'drop', 'merged', 'pause', 'resume']
 
+/** The roles or kinds tool answered `said`; any action but list may have changed one, so the view is published again. */
+async function defChanged($: Host, a: In, said: string): Promise<string> {
+  const action = typeof a.action === 'string' ? a.action.trim().toLowerCase() : ''
+  if (action && action !== 'list') await publish($, await load($))
+  return said
+}
+
 export async function runTool($: Host, name: string, a: In): Promise<string> {
   const id = str(a.task) ?? ''
   // A task moved to archive.json is read-only; only retry brings back a dropped one.
@@ -707,10 +715,11 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
     }
     case 'scouts':
       return leadScouts($, a)
+    // A change (any action but list) is published, so a board that draws roles and kinds from the view (OpenCode's) shows it.
     case 'roles':
-      return leadRoles($, a)
+      return defChanged($, a, await leadRoles($, a))
     case 'kinds':
-      return leadKinds($, a)
+      return defChanged($, a, await leadKinds($, a))
     case 'stats':
       return statsText($, str(a.range) ?? '', a.short !== true)
     case 'setup_git':

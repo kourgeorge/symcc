@@ -663,13 +663,13 @@ export function cancelScoutEdit(host: Host) {
  * (`command`). For a command only those that can change files count (rm, mv, cp, a redirect, ...),
  * so reading a scout file with cat doesn't start the timers over.
  */
-export function fileToolHits(touch: FileTouch, scouts: string, roles: string): { scouts: boolean; roles: boolean } {
+export function fileToolHits(touch: FileTouch, scouts: string, roles: string, kinds: string): { scouts: boolean; roles: boolean; kinds: boolean } {
   const inDir = (text: string, dir: string, needSlash: boolean) => text.replace(/\\/g, '/').includes(needSlash ? `${dir}/` : dir)
   if ('path' in touch) {
     const p = touch.path
-    return { scouts: inDir(p, scouts, true), roles: inDir(p, roles, true) }
+    return { scouts: inDir(p, scouts, true), roles: inDir(p, roles, true), kinds: inDir(p, kinds, true) }
   }
   const c = touch.command
-  if (!/(^|[\s;&|(])(rm|mv|cp|unlink|touch|tee|sed\s+-i|git\s+(rm|mv|checkout|restore))\b|>/.test(c)) return { scouts: false, roles: false }
-  return { scouts: inDir(c, scouts, false), roles: inDir(c, roles, false) }
+  if (!/(^|[\s;&|(])(rm|mv|cp|unlink|touch|tee|sed\s+-i|git\s+(rm|mv|checkout|restore))\b|>/.test(c)) return { scouts: false, roles: false, kinds: false }
+  return { scouts: inDir(c, scouts, false), roles: inDir(c, roles, false), kinds: inDir(c, kinds, false) }
 }

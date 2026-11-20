@@ -519,7 +519,7 @@ function defsList(f: ViewFile, list: SettingPage, cursor: number, w: number): Bo
     )
   }
   b.blank()
-  b.add([{ text: `Enter opens a ${noun} · a new one: ask the lead, or add .${f.name}/${list}/<name>.md`, color: 'inactive' }])
+  b.add([{ text: `Enter opens a ${noun} · a new one: ask the lead, or add .${f.name}/${list}/<name>.md (a file you add or edit yourself shows here at the next board change)`, color: 'inactive' }])
   return { ...b, ids, selected }
 }
 
@@ -555,7 +555,7 @@ function defPage(f: ViewFile, list: SettingPage, x: ViewDef, w: number): Body {
   b.head('File')
   b.add([{ text: `  ${x.file}`, color: 'autoAccept' }])
   b.blank()
-  b.add([{ text: 'To change what it says: ask the lead, or edit its file', color: 'inactive' }])
+  b.add([{ text: 'To change what it says: ask the lead, or edit its file (your own edit shows here at the next board change)', color: 'inactive' }])
   return { ...b, ids: [], selected: '' }
 }
 
@@ -602,7 +602,7 @@ function settingsBody(f: ViewFile, cursor: number, w: number): Body {
     }
   }
   b.blank()
-  b.add([{ text: `Enter changes a setting (on/off flips) or opens a page ·/${f.name}-settings NAME VALUE · or tell the lead`, color: 'inactive' }])
+  b.add([{ text: `Enter changes a setting (on/off flips) or opens a page · /${f.name}-settings NAME VALUE · or tell the lead`, color: 'inactive' }])
   return { ...b, ids: [...SETTING_ROWS], selected }
 }
 
