@@ -492,10 +492,12 @@ export async function saveBoard(host: Host, b: Board) {
   for (const [rel, all] of parts) {
     const file = partsPath(rel)
     const seen = partsSeen.get(file)?.tasks ?? {}
-    // a task loaded as a stub keeps no parts here: its real ones may come back (T-681). Accepted losses while its file
-    // is missing: history added to it meanwhile is not kept, and a stubbed task reopened meanwhile is saved whole
-    // with an empty history and details (it then no longer points to the parts file put back later).
-    const tasks = Object.fromEntries(Object.entries(all).filter(([id]) => !stubbed.has(id) || id in seen))
+    // a task loaded as a stub whose parts file is wholly missing keeps no parts here: the real file may come back
+    // (T-681). Accepted losses while its file is missing: history added to it meanwhile is not kept, and a stubbed
+    // task reopened meanwhile is saved whole with an empty history and details (it then no longer points to the parts
+    // file put back later). A parts file that is there but lacks the task's entry gets its stub entry written, as before.
+    const gone = missingParts.has(rel)
+    const tasks = Object.fromEntries(Object.entries(all).filter(([id]) => !gone || !stubbed.has(id) || id in seen))
     if (Object.keys(tasks).length) want.set(file, tasks)
   }
   if (want.size) await host.run(['mkdir', '-p', path(`${S.N.dir}/${PARTS_DIR}`)]).catch(() => undefined)

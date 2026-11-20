@@ -272,6 +272,36 @@ test('T-681: while a parts file is missing, several changes warn once and keep o
   expect((await load(w.host)).tasks[699]!.note).toBe('three')
 })
 
+test('T-681: a parts file that is there but lacks one task\'s entry gets it back on the first save: one warning, one copy', async () => {
+  const w = world()
+  const b = emptyBoard()
+  for (const id of ['T-1', 'T-2', 'T-3']) {
+    const at = iso(NOW)
+    b.tasks.push({ id, title: id, details: 'd', files: [], status: id === 'T-3' ? 'todo' : 'done', note: '', question: null, order: 1, after: [], attempts: 1, history: [{ at, kind: 'state', text: 'x' }], branch: null, merge_into: 'main', kind: 'bug', role: 'general', created_at: at, updated_at: at } as BoardTask)
+  }
+  b.next_id = 4
+  await saveBoard(w.host, b)
+  const file = `${ROOT}/.symcc/tasks/T-0.json`
+  const p = JSON.parse(w.files.get(file)!) as { tasks: Record<string, unknown> }
+  delete p.tasks['T-1']
+  w.files.set(file, JSON.stringify(p))
+  resetStore()
+  S.root = ROOT
+  S.writing = Promise.resolve()
+  S.enabledNow = true
+  const copies: string[] = []
+  const write = w.host.fs.write
+  w.host.fs.write = async (f, t) => {
+    if (f.includes('board.json.before-fix-')) copies.push(f)
+    return write(f, t)
+  }
+  for (const note of ['one', 'two', 'three']) await change(w.host, x => ({ ...x, tasks: x.tasks.map(t => (t.id === 'T-3' ? { ...t, note } : t)) }))
+  await load(w.host)
+  expect(w.toasts.filter(t => t.includes('missing from tasks/T-0.json')).length).toBe(1)
+  expect(copies.length).toBe(1)
+  expect('T-1' in (JSON.parse(w.files.get(file)!) as { tasks: Record<string, unknown> }).tasks).toBe(true)
+})
+
 test('T-675: a data file past 3 MB warns the owner, the lead and the board once; a read refused for size says so', async () => {
   const w = world()
   const b0 = addTask(emptyBoard(), { origin: { why: 'a test' }, title: 'Big one' }, iso(NOW))[0]
