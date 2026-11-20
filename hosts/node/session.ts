@@ -28,7 +28,9 @@ export async function openSession(o: SessionOptions): Promise<NodeSession> {
     useName(host)
     for (const d of end.denied ?? []) say(`${agentId}: its permission rules refused ${d}`)
     agentFinished(host, agentId, end)
-  }, { system: nodeProcessSystem, record: { fs: nodeFs, file: () => `${o.root}/${S.N.dir}/${PROCESSES_FILE}` } })
+    // the record sits next to board.json, in the project's top folder that sessionStart set as S.root (T-588), not in
+    // o.root, which may be a subfolder; read only when used, so after sessionStart
+  }, { system: nodeProcessSystem, record: { fs: nodeFs, file: () => `${S.root || o.root}/${S.N.dir}/${PROCESSES_FILE}` } })
   // Agents start only while a tick runs and the session isn't closing; any other start is taken back.
   const gated: ProcessAgents = { ...agents, spawn: a => (ref.s?.working && !ref.s.closing ? agents.spawn(a) : Promise.reject(new StartCancelled('started only by a tick'))) }
   const host = nodeHost({ root: o.root, agents: gated, say, cost: agents.cost, ...(o.sessionId ? { sessionId: o.sessionId } : {}), ...(o.pluginRoot ? { pluginRoot: o.pluginRoot } : {}) })
