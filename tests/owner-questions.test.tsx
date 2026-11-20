@@ -12,6 +12,8 @@ import { boardAnswerLine } from '../hooks/core/questions'
 import { S, sayQueue, meanwhile } from '../hooks/app/state'
 import { runTool, leadGuide, TOOLS } from '../hooks/app/tools'
 import { answerOnBoard } from '../hooks/app/questions'
+import { SYMCC_WORDS } from '../hooks/host'
+import { CLAUDE_WORDS } from '../hooks/claude/host'
 import { tellLead, noteForLead } from '../hooks/app/tell'
 
 const ROOT = '/repo'
@@ -47,6 +49,22 @@ function world() {
 }
 
 const call = (host: unknown, args: Record<string, unknown>) => runTool(host as never, 'question', args as never)
+
+// T-570: with a pop-up question tool the add reply says to ask with it too (at most 4 options); with none, numbered text.
+test('the add reply says to ask with the pop-up when the host has one, else as numbered plain chat text', async () => {
+  const w = world()
+  S.W = SYMCC_WORDS
+  const plain = await call(w.host, { action: 'add', text: 'Raise the version?', options: ['Yes', 'No'] })
+  expect(plain).toContain('offering the options as numbered plain chat text, plus "or answer on the board"')
+  expect(plain).not.toContain('pop-up')
+  S.W = CLAUDE_WORDS
+  const popup = await call(w.host, { action: 'add', text: 'Add a scout?', options: ['Yes', 'No'] })
+  expect(popup).toContain('offering the options with AskUserQuestion, plus "or answer on the board"')
+  expect(popup).not.toContain('numbered plain chat text')
+  expect(popup).toContain('say once "answered on the board; you can close the pop-up"')
+  const many = await call(w.host, { action: 'add', text: 'Which one?', options: ['A', 'B', 'C', 'D', 'E'] })
+  expect(many).toContain('show the first 3 plus "the rest on the board"')
+})
 
 test('a question the lead adds is saved on the board, shown to the panel, in the status line, and says "needs you" once', async () => {
   const w = world()

@@ -20,6 +20,14 @@ test('the lead asks board questions both on the board and with AskUserQuestion',
   expect(guide).toContain('offer the three choices as numbered plain chat text (1 Done, 2 Keep as a note, 3 Ask more), plus "or answer on the board"')
   for (const text of [workerQuestionText('T-5', 'Which one?', ['A', 'B']), overtimeLeadText('T-5', 'x', 45)]) {
     expect(text).not.toContain('e.g. with AskUserQuestion')
-    expect(text).toContain('numbered plain chat text (not AskUserQuestion: its dialog stays open if they answer on the board), plus "or answer on the board"')
+    expect(text).not.toContain('not AskUserQuestion')
+    expect(text).not.toContain('numbered plain chat text')
+    expect(text).toContain('say once "answered on the board; you can close the pop-up"')
   }
+  expect(workerQuestionText('T-5', 'Which one?', ['A', 'B'])).toContain('offering the options with AskUserQuestion, plus "or answer on the board"')
+  expect(overtimeLeadText('T-5', 'x', 45)).toContain('offering these with AskUserQuestion, plus "or answer on the board"')
+  // more than 4 options: the pop-up shows the first 3 plus "the rest on the board"
+  expect(guide).toContain('AskUserQuestion takes at most 4 options per question: when a question has more, show the first 3 plus "the rest on the board"')
+  expect(workerQuestionText('T-5', 'Which?', ['A', 'B', 'C', 'D', 'E'])).toContain('show the first 3 plus "the rest on the board"')
+  expect(workerQuestionText('T-5', 'Which?', ['A', 'B', 'C', 'D'])).not.toContain('the rest on the board')
 })

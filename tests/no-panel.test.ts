@@ -214,8 +214,8 @@ test("no pop-up question tool: the lead guide and lead notes don't name one; Cla
   S.W = CLAUDE_WORDS
   expect(leadGuide()).toContain('and you ask them in the chat with AskUserQuestion, with the same options')
   expect(leadGuide()).not.toContain('Never use AskUserQuestion')
-  expect(workerQuestionText('T-2', 'Which one?', ['A', 'B'])).toContain('numbered plain chat text (not AskUserQuestion: its dialog stays open if they answer on the board), plus "or answer on the board"')
-  expect(overtimeLeadText('T-3', 'Add search', 30)).toContain('numbered plain chat text (not AskUserQuestion: its dialog stays open if they answer on the board), plus "or answer on the board"')
+  expect(workerQuestionText('T-2', 'Which one?', ['A', 'B'])).toContain('offering the options with AskUserQuestion, plus "or answer on the board"')
+  expect(overtimeLeadText('T-3', 'Add search', 30)).toContain('offering these with AskUserQuestion, plus "or answer on the board"')
 })
 
 test('no panel: /symcc-help says /symcc shows the board, not that it opens the panel; with a panel it opens it', async () => {

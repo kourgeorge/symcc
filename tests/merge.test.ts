@@ -2213,7 +2213,7 @@ test("a worker's question with options saves the options, and the lead is told t
   expect(leadQueue.join('\n')).toContain('Otherwise ask the owner in the chat now, plain and short, offering the options as numbered plain chat text, plus "or answer on the board"')
   // Claude Code's words name its pop-up question tool (T-371: another host may have none)
   S.W = CLAUDE_WORDS
-  expect(workerQuestionText('T-1', 'Which colour?', ['red', 'blue', 'green'])).toContain('Otherwise ask the owner in the chat now, plain and short, offering the options as numbered plain chat text (not AskUserQuestion: its dialog stays open if they answer on the board), plus "or answer on the board"')
+  expect(workerQuestionText('T-1', 'Which colour?', ['red', 'blue', 'green'])).toContain('Otherwise ask the owner in the chat now, plain and short, offering the options with AskUserQuestion, plus "or answer on the board"')
 })
 
 test('a change worker whose edits outside its files were refused waits for those files, and nothing is merged even with half-done edits', async () => {

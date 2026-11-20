@@ -173,7 +173,8 @@ board (a `Q-` question, or the task's own question: a review, an answered invest
 worker's question or file request, more time) and also opens in the chat pop-up with the
 same choices. Answer in the pop-up and the lead closes the board question for you. Answer on
 the board first and the pop-up stays open; the lead says once "answered on the board; you can
-close the pop-up". On a host with no pop-up the lead writes the choices as numbered plain
+close the pop-up". The pop-up holds at most 4 choices, so a question with more shows the
+first 3 plus "the rest on the board" (or type yours under Other). On a host with no pop-up the lead writes the choices as numbered plain
 text, plus "or answer on the board". The lead never puts two questions under the same
 numbers.
 

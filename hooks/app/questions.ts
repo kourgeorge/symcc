@@ -9,6 +9,16 @@ import { sayQuestion } from './voice'
 
 type In = Record<string, unknown>
 
+/** How the lead offers n options in the chat: with the host's pop-up question tool (it takes at most 4, so with
+ *  more the first 3 plus "the rest on the board"), or as numbered plain chat text when the host has none (T-570). */
+export const optionsVia = (n: number): string =>
+  S.W.askPopup
+    ? `with ${S.W.askPopup}${n > 4 ? ` (it takes at most 4 options: show the first 3 plus "the rest on the board", or the owner types one under Other)` : ''}`
+    : 'as numbered plain chat text'
+
+/** After "If they answer on the board first …": with a pop-up, it stays open, so say so once; '' with none. */
+export const popupStaysOpen = (): string => (S.W.askPopup ? ` The ${S.W.askPopup} pop-up then stays open: say once "answered on the board; you can close the pop-up".` : '')
+
 /** The question tool's actions. */
 export const QUESTION_ACTIONS = ['add', 'list', 'answer', 'drop'] as const
 
@@ -28,7 +38,7 @@ export async function questionTool(host: Host, a: In): Promise<string> {
       return [y, [q, y]] as [Board, [typeof q, Board]]
     })
     sayQuestion(host, b, q.id)
-    return `added ${q.id} "${q.text}" with the options ${q.options.join(' | ')} (the owner can also type their own). It shows on the board under "Questions for you" until it is answered. Ask it briefly in the chat too, with the options as numbered plain chat text, plus "or answer on the board". If the owner answers in the chat, close it with ${S.N.name} question action answer, id ${q.id} and their answer; a board answer reaches you at once in a board update ("The owner answered your question ${q.id} …: … Act on it.").`
+    return `added ${q.id} "${q.text}" with the options ${q.options.join(' | ')} (the owner can also type their own). It shows on the board under "Questions for you" until it is answered. Ask it briefly in the chat too, offering the options ${optionsVia(q.options.length)}, plus "or answer on the board". If the owner answers in the chat, close it with ${S.N.name} question action answer, id ${q.id} and their answer; a board answer reaches you at once in a board update ("The owner answered your question ${q.id} …: … Act on it.").${popupStaysOpen()}`
   }
   if (action === 'answer' || action === 'drop') {
     const id = normQid(a.id)
