@@ -22,6 +22,7 @@ import CHANGE from '../../../prompts/change'
 import INVESTIGATION from '../../../prompts/investigation'
 import CHECKER from '../../../prompts/checker'
 import { SYMCC_WORDS } from '../../../hooks/host'
+import { scoutPrompt } from '../../../hooks/core/scouts'
 
 test('withBasePrompt puts WORKER_BASE in front of a worker\'s prompt, and SCOUT_BASE in front of a scout\'s or checker\'s, naming none of symcc\'s tools (T-474)', () => {
   const tool = (t: string) => SYMCC_WORDS.tool('symcc', t)
@@ -44,7 +45,10 @@ const TOOL_NAMES = () => ['Read', 'Edit', 'Write', 'Bash', 'Glob', 'Grep', 'WebS
 
 /** The tools `prompt` tells the agent to use ("the X tool", "the X and Y tools"). */
 function namedTools(prompt: string): string[] {
-  return TOOL_NAMES().filter(n => new RegExp(`\\b${n}\\b(?: and \\w+)? tools?\\b|\\b\\w+ and ${n} tools\\b`).test(prompt))
+  // "the X tool", "the X and Y tools", and "the symcc tools X and Y"; the web counts as WebSearch and WebFetch
+  const web = /\bthe web\b/.test(prompt) ? ['WebSearch', 'WebFetch'] : []
+  const named = TOOL_NAMES().filter(n => new RegExp(`\\b${n}\\b(?: and \\w+)? tools?\\b|\\b\\w+ and ${n} tools\\b|\\btools ${n}\\b|\\btools \\w+ and ${n}\\b`).test(prompt))
+  return [...new Set([...named, ...web])]
 }
 
 /** Whether permission rules `allowed` let the agent use tool `name` (a plain rule, or a rule on some paths). */
@@ -57,11 +61,19 @@ test('T-474: a process worker\'s, scout\'s and checker\'s prompt names no tool i
   expect(namedTools(`call the ${ASK_TOOL} tool`)).toEqual([ASK_TOOL])
   expect(namedTools('use the board and stats tools')).toEqual(['board', 'stats'])
   expect(namedTools('look at the board')).toEqual([])
+  expect(namedTools('use the symcc tools board and stats rather than reading')).toEqual(['board', 'stats'])
+  expect(namedTools('search or fetch pages on the web')).toEqual(['WebSearch', 'WebFetch'])
+  // the real scout prompt names them (a scout agent type has them), the process scout's doesn't
+  const real = scoutPrompt({ scout: 'bugs', root: '/r', instructions: 'x', open: [] })
+  expect(namedTools(real)).toEqual(['board', 'stats', 'WebSearch', 'WebFetch'])
+  expect(withBasePrompt({ kind: 'scout', prompt: real })).toContain('read .symcc/board.json yourself')
+  expect(withBasePrompt({ kind: 'scout', prompt: real, tools: ['web'] })).toContain('search or fetch pages on the web')
   const cases = [
     { a: { kind: 'worker' as const, files: ['src/'] }, prompt: CHANGE.replace('{{ask}}', ask) },
     { a: { kind: 'worker' as const, tools: ['web'] }, prompt: INVESTIGATION.replace('{{ask}}', ask) },
-    { a: { kind: 'scout' as const }, prompt: 'Look for bugs and end with a short report.' },
-    { a: { kind: 'scout' as const, tools: ['web'] }, prompt: 'Check the dependencies on the web.' },
+    { a: { kind: 'scout' as const }, prompt: scoutPrompt({ scout: 'bugs', root: '/r', instructions: 'find bugs', open: [] }) },
+    { a: { kind: 'scout' as const }, prompt: scoutPrompt({ scout: 'bugs', root: '/r', instructions: 'find bugs', open: ['T-1 a task'], name: 'symcc', lastRun: '2026-11-01T00:00:00Z' }) },
+    { a: { kind: 'scout' as const, tools: ['web'] }, prompt: scoutPrompt({ scout: 'deps', root: '/r', instructions: 'Check the dependencies on the web.', open: [] }) },
     { a: { kind: 'checker' as const }, prompt: CHECKER },
   ]
   for (const scratch of [false, true]) {

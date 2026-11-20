@@ -7,6 +7,7 @@
 import type { Host, HostAgent, HostAgentStart } from '../host'
 import type { AgentRunEnd } from '../app/symcc'
 import { basePromptFor, withoutSymccTools } from '../core/prompts'
+import { scoutWithoutSymccTools } from '../core/scouts'
 import { SYMCC_WORDS } from '../host'
 import { DEFAULT_NAME } from '../name'
 import type { ProcessChild, ProcessSignal, ProcessSystem } from './system'
@@ -21,8 +22,10 @@ import { recordEditor, taskInName, type ProcessEntry, type ProcessRecord } from 
  */
 export const withBasePrompt = (a: Pick<HostAgentStart, 'kind' | 'prompt' | 'tools'>): string => {
   const tool = (t: string) => SYMCC_WORDS.tool(DEFAULT_NAME, t)
-  const base = basePromptFor(a.kind, DEFAULT_NAME, tool, { symccTools: false, web: a.tools?.includes('web') === true })
-  return `${base}\n\n${withoutSymccTools(a.prompt, tool)}`
+  const web = a.tools?.includes('web') === true
+  const base = basePromptFor(a.kind, DEFAULT_NAME, tool, { symccTools: false, web })
+  const prompt = withoutSymccTools(a.prompt, tool)
+  return `${base}\n\n${a.kind === 'worker' ? prompt : scoutWithoutSymccTools(prompt, web)}`
 }
 
 /** What a finished agent process gave: its output, exit code, and whether symcc ended it (stop). */
