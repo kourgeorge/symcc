@@ -65,7 +65,7 @@ async function editLine($: Host, fn: (line: LineEntry[]) => LineEntry[]): Promis
       const before = await readFile($)
       const after = fn(before.filter(e => !departed.has(e.key)))
       if (after.length === before.length && after.every((e, i) => e === before[i])) return after
-      if (after.length) await safeWrite($, lineFile(), mergeLineText(after), 'the merge line')
+      if (after.length) await safeWrite($, lineFile(), mergeLineText(after), 'the merge queue')
       else await $.run(['rm', '-f', lineFile()])
       return after
     })

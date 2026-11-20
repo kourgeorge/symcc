@@ -229,8 +229,8 @@ export function parseMergeLine(text: string | null): LineEntry[] {
 }
 /** Whether line entry `e` is older (or dated further ahead) than `maxAgeMs`. */
 export const lineEntryStale = (e: Pick<LineEntry, 'at'>, nowMs: number, maxAgeMs: number) => nowMs - e.at > maxAgeMs || e.at - nowMs > maxAgeMs
-/** A task's note while it waits in the merge line, `n` being its place in line (the task whose turn it is now is 1). */
-export const inLineNote = (n: number) => `in line (${n})`
+/** A task's note while it waits in the merge queue ("queue (n)"), `n` being its place in it (the task whose turn it is now is 1). */
+export const inLineNote = (n: number) => `queue (${n})`
 
 /** The files of the data folder that are saved through a temp file (see tmpName). */
 const TMP_OWNERS = ['board.lock', 'merge-line.json', 'lead.json', 'board.json', 'scouts.json', 'archive.json', 'passed-trees.json']
@@ -444,7 +444,8 @@ const OLD_ROLES: Record<string, string> = { tests: 'tester', backend: 'general',
  * - history lines saved as plain strings (before T-522): records { at, kind, text }, the time and kind guessed (see migrateHistory);
  * - test_rerun and rerun_minutes (from the tests-only rerun, removed in T-547): dropped; a task that waited for that
  *   rerun (or for the owner's answer after two time-outs) goes back to "todo" for a new try (see withoutTestRerun);
- * - conflict_tries (the separate count of tries to merge main in, removed in T-548): dropped (see withoutConflictTries).
+ * - conflict_tries (the separate count of tries to merge main in, removed in T-548): dropped (see withoutConflictTries);
+ * - the old waiting note "in line (n)" (before T-605): "queue (n)" (see inLineNote).
  */
 export function migrateTask(t: BoardTask, into = 'main'): BoardTask | null {
   let out = withoutStages(t) ?? t
@@ -472,6 +473,9 @@ export function migrateTask(t: BoardTask, into = 'main'): BoardTask | null {
   if (rerun) out = rerun
   const clash = withoutConflictTries(out)
   if (clash) out = clash
+  // T-605: the merge line's waiting note was "in line (n)" before it became "queue (n)" (inLineNote)
+  const oldLine = typeof out.note === 'string' ? /^in line \((\d+)\)$/.exec(out.note) : null
+  if (oldLine) out = { ...out, note: inLineNote(Number(oldLine[1])) }
   return out === t ? null : out
 }
 

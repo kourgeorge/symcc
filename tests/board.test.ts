@@ -3683,6 +3683,20 @@ test('a doing row shows one time, the total work time of all tries without the g
   expect(core.rowCell(ended, now, now - 10 * 60_000)).toBe('2h30m')
 })
 
+test('T-605: the merge queue\'s waiting note is "queue (n)"; a saved board\'s old "in line (n)" note becomes "queue (n)" once', () => {
+  expect(inLineNote(2)).toBe('queue (2)')
+  expect(isMergeNote('queue (2)')).toBe(true)
+  expect(isMergeNote('in line (2)')).toBe(false)
+  const task = { id: 'T-1', title: 'x', status: 'doing', attempts: 1, note: 'in line (3)', merge_into: 'main', origin: { by: 'lead', why: 'w', at: '' }, created_at: '', updated_at: '' }
+  const read = readBoard(JSON.stringify({ version: 1, tasks: [task] }))
+  expect(read.board.tasks[0]!.note).toBe('queue (3)')
+  expect(read.migrated).toBe(1)
+  // once saved, nothing changes again
+  const again = readBoard(JSON.stringify(read.board))
+  expect(again.board.tasks[0]!.note).toBe('queue (3)')
+  expect(again.migrated).toBe(0)
+})
+
 test('T-581: a row in a check step or the merge line shows one icon in place of "▶ <word>", then the time; each icon is one column; the worker row keeps ▶', () => {
   const at = (min: number) => new Date(Date.parse(T) + min * 60_000).toISOString()
   const now = Date.parse(T) + 1000 * 60_000
@@ -3700,7 +3714,7 @@ test('T-581: a row in a check step or the merge line shows one icon in place of 
   }
   const ran = [{ started: at(985), ended: at(994) }] as SymccTask['runs']
   const inStep = (id: string, step: 'prep' | 'testing' | 'checker' | 'merging', note = '') => ({ id, status: 'doing' as const, attempts: 1, note, runs: ran, checking: { step, at: fresh } })
-  const rows = [inStep('T-1', 'prep'), inStep('T-2', 'testing'), inStep('T-3', 'checker'), inStep('T-4', 'merging'), inStep('T-5', 'prep', 'in line (2)')]
+  const rows = [inStep('T-1', 'prep'), inStep('T-2', 'testing'), inStep('T-3', 'checker'), inStep('T-4', 'merging'), inStep('T-5', 'prep', 'queue (2)')]
   const worker = { id: 'T-6', status: 'doing' as const, attempts: 1, runs: [{ started: at(985) }] as SymccTask['runs'] }
   const leads = bandLeads([...rows, worker], now)
   expect([...leads.values()]).toEqual(['T-1  ✎ 9m ', 'T-2  ⧗ 9m ', 'T-3  ⌕ 9m ', 'T-4  ⇢ 9m ', 'T-5  ⋯ 9m ', 'T-6  ▶ 15m'])
@@ -3713,9 +3727,9 @@ test('T-581: a row in a check step or the merge line shows one icon in place of 
   expect(core.rowMark({ ...inStep('T-7', 'checker'), checking: { step: 'checker' as const, at: at(0) } }, now)).toBe('▶')
   // the step's word stays on the task page, with the legend
   expect(core.stepNowWord(inStep('T-3', 'checker'), now)).toBe('⌕ checker')
-  expect(core.stepNowWord(inStep('T-5', 'prep', 'in line (2)'), now)).toBe('⋯ in line')
+  expect(core.stepNowWord(inStep('T-5', 'prep', 'queue (2)'), now)).toBe('⋯ queue')
   expect(core.stepNowWord(worker, now)).toBe('')
-  expect(core.STEP_LEGEND).toBe('▶ working · ⋯ in line · ✎ prep · ⧗ test · ⌕ checker · ⇢ merge')
+  expect(core.STEP_LEGEND).toBe('▶ working · ⋯ queue · ✎ prep · ⧗ test · ⌕ checker · ⇢ merge')
   const [b0] = addTask(emptyBoard(), { origin: W, title: 'Fix it' }, fresh)
   const b = { ...b0, tasks: [{ ...b0.tasks[0]!, status: 'doing' as const, note: 'running the tests', runs: ran, checking: { step: 'testing' as const, at: fresh } }] }
   const page = core.detailRows(b.tasks[0]!, { roles: [], all: b.tasks, when: () => '', nowMs: now })
@@ -3732,12 +3746,12 @@ test('T-587: the task page badge and Status row name the step a task is in; the 
   const ran = [{ started: at(985), ended: at(994) }] as SymccTask['runs']
   const inStep = (step: 'prep' | 'testing' | 'checker' | 'merging', note = '') => ({ id: 'T-1', status: 'doing' as const, attempts: 1, note, runs: ran, checking: { step, at: fresh } })
   const worker = { id: 'T-1', status: 'doing' as const, attempts: 1, runs: [{ started: at(985) }] as SymccTask['runs'] }
-  const inLine = { id: 'T-1', status: 'doing' as const, attempts: 1, note: 'in line (2)', runs: ran }
+  const inLine = { id: 'T-1', status: 'doing' as const, attempts: 1, note: 'queue (2)', runs: ran }
   // the badge: the step's icon, its word and the time
   expect(core.statusBadge(worker, now).text).toBe('▶ worker · 15m')
   expect(core.statusBadge(inStep('prep'), now).text).toBe('✎ prep · 9m')
   expect(core.statusBadge(inStep('checker'), now).text).toBe('⌕ checker · 9m')
-  expect(core.statusBadge(inLine, now).text).toBe('⋯ in line (2) · 9m')
+  expect(core.statusBadge(inLine, now).text).toBe('⋯ queue (2) · 9m')
   expect(core.statusBadge(inStep('testing'), now).text).toBe('⧗ test · 9m')
   expect(core.statusBadge(inStep('merging'), now).text).toBe('⇢ merge · 9m')
   // other statuses as before
@@ -3748,35 +3762,35 @@ test('T-587: the task page badge and Status row name the step a task is in; the 
   // the Stage line (auto mode, checker off: no checker, no review)
   const auto = { mode: 'auto' as const }
   const on = { mode: 'auto' as const, checker: true }
-  expect(core.stageText(core.taskStage(worker, now, auto)!)).toBe('● worker → prep → line → test → merge')
-  expect(core.stageText(core.taskStage(inStep('prep'), now, auto)!)).toBe('worker ✓ → ● prep → line → test → merge')
-  expect(core.stageText(core.taskStage(inStep('checker'), now, on)!)).toBe('worker ✓ → prep ✓ → ● checker → line → test → merge')
-  expect(core.stageText(core.taskStage(inLine, now, on)!)).toBe('worker ✓ → prep ✓ → checker ✓ → ● line → test → merge')
-  expect(core.stageText(core.taskStage(inStep('testing'), now, auto)!)).toBe('worker ✓ → prep ✓ → line ✓ → ● test → merge')
-  expect(core.stageText(core.taskStage(inStep('merging'), now, auto)!)).toBe('worker ✓ → prep ✓ → line ✓ → test ✓ → ● merge')
+  expect(core.stageText(core.taskStage(worker, now, auto)!)).toBe('● worker → prep → queue → test → merge')
+  expect(core.stageText(core.taskStage(inStep('prep'), now, auto)!)).toBe('worker ✓ → ● prep → queue → test → merge')
+  expect(core.stageText(core.taskStage(inStep('checker'), now, on)!)).toBe('worker ✓ → prep ✓ → ● checker → queue → test → merge')
+  expect(core.stageText(core.taskStage(inLine, now, on)!)).toBe('worker ✓ → prep ✓ → checker ✓ → ● queue → test → merge')
+  expect(core.stageText(core.taskStage(inStep('testing'), now, auto)!)).toBe('worker ✓ → prep ✓ → queue ✓ → ● test → merge')
+  expect(core.stageText(core.taskStage(inStep('merging'), now, auto)!)).toBe('worker ✓ → prep ✓ → queue ✓ → test ✓ → ● merge')
   // checker off, but this try had a checker: shown
   const checked = { ...inLine, runs: [{ ...ran![0]!, checkers: ['a1234567890abcdef'] }] as SymccTask['runs'] }
   expect(core.stageText(core.taskStage(checked, now, auto)!)).toContain('checker ✓')
   // review mode: review after test
-  expect(core.stageText(core.taskStage(inStep('testing'), now, { mode: 'review' })!)).toBe('worker ✓ → prep ✓ → line ✓ → ● test → review → merge')
+  expect(core.stageText(core.taskStage(inStep('testing'), now, { mode: 'review' })!)).toBe('worker ✓ → prep ✓ → queue ✓ → ● test → review → merge')
   // a task in review passed every step before review; a done task every step
-  expect(core.stageText(core.taskStage({ status: 'review', runs: ran }, now, on)!)).toBe('worker ✓ → prep ✓ → checker ✓ → line ✓ → test ✓ → ● review → merge')
+  expect(core.stageText(core.taskStage({ status: 'review', runs: ran }, now, on)!)).toBe('worker ✓ → prep ✓ → checker ✓ → queue ✓ → test ✓ → ● review → merge')
   // an approved task in review running prep / test / merge again: the Stage line agrees with the badge
   const approving = (step: 'prep' | 'testing' | 'merging') => ({ status: 'review' as const, runs: ran, checking: { step, at: fresh } })
   expect(core.statusBadge(approving('testing'), now).text).toBe('⧗ test')
-  expect(core.stageText(core.taskStage(approving('testing'), now, { mode: 'review' })!)).toBe('worker ✓ → prep ✓ → line ✓ → test ✓ → review ✓ → ● test → merge')
+  expect(core.stageText(core.taskStage(approving('testing'), now, { mode: 'review' })!)).toBe('worker ✓ → prep ✓ → queue ✓ → test ✓ → review ✓ → ● test → merge')
   expect(core.statusBadge(approving('prep'), now).text).toBe('✎ prep')
-  expect(core.stageText(core.taskStage(approving('prep'), now, { mode: 'review' })!)).toBe('worker ✓ → prep ✓ → line ✓ → test ✓ → review ✓ → ● prep → merge')
-  expect(core.stageText(core.taskStage(approving('merging'), now, { mode: 'review' })!)).toBe('worker ✓ → prep ✓ → line ✓ → test ✓ → review ✓ → ● merge')
-  // an approved task in review waiting in the merge line (its step still prep, fresh or stale): "in line" on both
+  expect(core.stageText(core.taskStage(approving('prep'), now, { mode: 'review' })!)).toBe('worker ✓ → prep ✓ → queue ✓ → test ✓ → review ✓ → ● prep → merge')
+  expect(core.stageText(core.taskStage(approving('merging'), now, { mode: 'review' })!)).toBe('worker ✓ → prep ✓ → queue ✓ → test ✓ → review ✓ → ● merge')
+  // an approved task in review waiting in the merge line (its step still prep, fresh or stale): "queue" on both
   for (const at of [fresh, new Date(now - 10 * 60_000).toISOString()]) {
-    const queued = { status: 'review' as const, runs: ran, note: 'in line (2)', checking: { step: 'prep' as const, at } }
-    expect(core.statusBadge(queued, now).text).toBe('⋯ in line (2)')
-    expect(core.stageText(core.taskStage(queued, now, { mode: 'review' })!)).toBe('worker ✓ → prep ✓ → line ✓ → test ✓ → review ✓ → ● line → merge')
+    const queued = { status: 'review' as const, runs: ran, note: 'queue (2)', checking: { step: 'prep' as const, at } }
+    expect(core.statusBadge(queued, now).text).toBe('⋯ queue (2)')
+    expect(core.stageText(core.taskStage(queued, now, { mode: 'review' })!)).toBe('worker ✓ → prep ✓ → queue ✓ → test ✓ → review ✓ → ● queue → merge')
   }
   // after "review ✓": exactly one "review ✓", no step name twice, the current step the badge's
-  const queuedAt = { status: 'review' as const, runs: ran, note: 'in line (1)', checking: { step: 'prep' as const, at: fresh } }
-  for (const [t, word] of [[approving('prep'), 'prep'], [queuedAt, 'line'], [approving('testing'), 'test'], [approving('merging'), 'merge']] as const) {
+  const queuedAt = { status: 'review' as const, runs: ran, note: 'queue (1)', checking: { step: 'prep' as const, at: fresh } }
+  for (const [t, word] of [[approving('prep'), 'prep'], [queuedAt, 'queue'], [approving('testing'), 'test'], [approving('merging'), 'merge']] as const) {
     const stage = core.taskStage(t, now, { mode: 'review' })!
     const text = core.stageText(stage)
     expect(text.split('review ✓').length).toBe(2)
@@ -3784,11 +3798,11 @@ test('T-587: the task page badge and Status row name the step a task is in; the 
     expect(new Set(tail).size).toBe(tail.length)
     expect(stage.slice(0, stage.findIndex(m => m.step === 'review')).some(m => m.state !== 'done')).toBe(false)
     expect(stage.find(m => m.state === 'now')!.step).toBe(word)
-    expect(core.statusBadge(t, now).text).toContain(word === 'line' ? 'in line' : word)
+    expect(core.statusBadge(t, now).text).toContain(word)
   }
   const done = core.taskStage({ status: 'done', runs: ran }, now, auto)!
   expect(done.every(m => m.state === 'done')).toBe(true)
-  expect(core.stageText(done)).toBe('worker ✓ → prep ✓ → line ✓ → test ✓ → merge ✓')
+  expect(core.stageText(done)).toBe('worker ✓ → prep ✓ → queue ✓ → test ✓ → merge ✓')
   // none for other statuses or an investigation
   expect(core.taskStage({ status: 'todo' }, now, auto)).toBeNull()
   expect(core.taskStage({ ...worker, kind: 'investigation' }, now, auto)).toBeNull()
@@ -3802,7 +3816,7 @@ test('T-587: the task page badge and Status row name the step a task is in; the 
   const page = core.detailRows(t, { roles: [], all: [t], when: () => '', nowMs: now, board: on })
   expect(page[0]!.segs[0]!.text).toBe('⌕ checker · 9m')
   expect(page[1]!.label).toBe('Stage')
-  expect(page[1]!.segs.map(g => g.text).join('')).toBe('worker ✓ → prep ✓ → ● checker → line → test → merge')
+  expect(page[1]!.segs.map(g => g.text).join('')).toBe('worker ✓ → prep ✓ → ● checker → queue → test → merge')
 })
 
 test('a to do task that was worked on before shows ● (a fresh one keeps ○) in the band, the text board and the task page; other states keep their mark (T-528)', () => {
@@ -3841,7 +3855,7 @@ test('T-596: an approved task in review whose approve runs is counted and listed
   const fresh = new Date(now - 10_000).toISOString()
   const [b0] = addTask(emptyBoard(), { origin: W, title: 'Fix it' }, fresh)
   const idle = { ...b0.tasks[0]!, status: 'review' as const, runs: [{ started: new Date(now - 20 * 60_000).toISOString(), ended: new Date(now - 5 * 60_000).toISOString() }] }
-  for (const [checking, note, icon] of [[{ step: 'prep', at: fresh }, PREP_NOTE, '✎'], [{ step: 'prep', at: fresh }, 'in line (2)', '⋯'], [{ step: 'testing', at: fresh }, STEP_NOTE.testing, '⧗'], [{ step: 'merging', at: fresh }, STEP_NOTE.merging, '⇢']] as const) {
+  for (const [checking, note, icon] of [[{ step: 'prep', at: fresh }, PREP_NOTE, '✎'], [{ step: 'prep', at: fresh }, 'queue (2)', '⋯'], [{ step: 'testing', at: fresh }, STEP_NOTE.testing, '⧗'], [{ step: 'merging', at: fresh }, STEP_NOTE.merging, '⇢']] as const) {
     const t = { ...idle, checking, note }
     expect(core.approveRunning(t, now)).toBe(true)
     expect(core.needsYou(t, now)).toBe(false)

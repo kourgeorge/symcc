@@ -295,7 +295,7 @@ test('T-542: after the checker says OK, the prep and merge steps no longer say a
 
 // ---------------- the checker runs before the merge line; the tests run once, in it (T-551) ----------------
 
-const NO_PROJECT_TESTS = "Tests: Don't run the project's own tests (its test files or test commands): symcc runs the project's test commands once, in the merge line, after you. Check the change with your own throwaway probe tests and scripts (in .scratch/ or /tmp) instead, and say a new test would pass without the change only where your own probe shows it."
+const NO_PROJECT_TESTS = "Tests: Don't run the project's own tests (its test files or test commands): symcc runs the project's test commands once, in the merge queue, after you. Check the change with your own throwaway probe tests and scripts (in .scratch/ or /tmp) instead, and say a new test would pass without the change only where your own probe shows it."
 
 /** The test commands the fake host ran, in order. */
 const testRuns = (w: ReturnType<typeof world>) => w.calls.filter(c => c.startsWith('/bin/sh -c '))
@@ -425,7 +425,7 @@ test('T-551: with no test commands set, the checker is still told not to look fo
   await saveBoard(w.$, boardWith(true, {}, { test_commands: [] }))
   await finish(w, async id => checkerFinished(id, 'OK'))
   const q = w.spawns[0]!.prompt
-  expect(q).toContain("Tests: Don't run the project's own tests (its test files or test commands): no test commands are set for this project, so nothing runs its tests in the merge line after you; still, don't look for them.")
+  expect(q).toContain("Tests: Don't run the project's own tests (its test files or test commands): no test commands are set for this project, so nothing runs its tests in the merge queue after you; still, don't look for them.")
 })
 
 test("a checker role's checklist gets its placeholders filled in, as a worker's role does ({{files}}, {{test_command}}, {{kind}}, ...)", async () => {
@@ -441,7 +441,7 @@ test("a checker role's checklist gets its placeholders filled in, as a worker's 
   await finish(w, async id => checkerFinished(id, 'OK'))
   const p = w.spawns[0]!.prompt
   expect(p).toContain('files: Files you may change: src/.')
-  expect(p).toContain("tests: Don't run the project's own tests (its test files or test commands): symcc runs the project's test commands once, in the merge line, after you.")
+  expect(p).toContain("tests: Don't run the project's own tests (its test files or test commands): symcc runs the project's test commands once, in the merge queue, after you.")
   expect(p).toContain('id T-1 \nKind of task: change.')
   expect(p).toContain('{{nope}}')
   expect(p).not.toContain('{{files}}')

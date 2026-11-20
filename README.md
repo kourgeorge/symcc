@@ -61,7 +61,7 @@ whole project, so the code a task was tested with is exactly the code that merge
 task catches up with your branch, runs your tests and then merges (or waits for your review). Any
 failure counts as one normal failed try. Details: [the way to the merge](docs/guide.md#the-way-to-the-merge).
 
-    hand-back → prep → checker (if on) → in line → catch up → tests → review or merge
+    hand-back → prep → checker (if on) → queue → catch up → tests → review or merge
 
 ### Scouts at work
 
@@ -157,12 +157,12 @@ The details are in the [guide](docs/guide.md#using-symcc-in-opencode).
 | **Worker roles** | The lead picks a role per task: general, docs, refactor, researcher, security, tester, or your own in `.symcc/roles/`. Each brings its own checklist, skills and model, and may add web tools (`tools: web`; in Claude Code that is WebSearch and WebFetch): only `researcher` has web access built in. A role fills the `{{role}}` slot of the fixed, built-in worker prompt, and its checklist may use `{{files}}`, `{{test_command}}` and other placeholders. |
 | **Dependencies** | A task with `after: T-1` waits until T-1 is merged. Tasks that change the same files are put one after another. |
 | **Scope check** | Each task lists the files it may change. A worker's edit outside that scope is refused and asks you for the file; other changes outside it are not merged. |
-| **Test gate and retries** | Finished tasks take turns in one merge line. At its turn a task catches up with the branch, runs your test commands (skipped if this exact code already passed), then merges. If anything fails (tests, time-out, a clash), a new worker gets the output and tries again (2 times by default). See [the way to the merge](docs/guide.md#the-way-to-the-merge). |
+| **Test gate and retries** | Finished tasks take turns in one merge queue. At its turn a task catches up with the branch, runs your test commands (skipped if this exact code already passed), then merges. If anything fails (tests, time-out, a clash), a new worker gets the output and tries again (2 times by default). See [the way to the merge](docs/guide.md#the-way-to-the-merge). |
 | **Approval before merge** | In review mode, see the diff, then approve, or reject with a reason. The lead also asks you before it adds any task. |
 | **Workers ask you** | A worker that needs a decision asks with its `ask_owner` tool (with choices, if any) and its task waits for your answer. symcc never reads questions or file requests out of a worker's text. |
 | **Investigations** | Of the task kinds, a *change* (the default) edits files, which are tested and merged. An *investigation* answers a question ("is it possible…", "should we…", "how does X work?"): nothing is committed or merged, and it always waits for you to read the answer, then **Done**, **Keep as a note** (a docs task saves it as `docs/research/<topic>.md`) or **Ask more** (a follow-up question for a fresh try). Researcher tasks are investigations by default. See [investigation tasks](docs/guide.md#investigation-tasks). |
 | **Task kinds** | Every task has a kind, a label with a description that says what it is for: `change` (the default), `bug`, `feature`, `refactor`, `docs` or `investigation`. The lead picks one ("make T-5 a bug" changes it); add your own in `.symcc/kinds/`. See [task kinds](docs/guide.md#task-kinds). |
-| **Checker** | Off by default. With `checker` on, a fresh checker tries to break each change (not docs-only ones) after the prep step and before it joins the merge line, where the tests run; problems go back to the worker. See [the checker](docs/guide.md#the-checker). |
+| **Checker** | Off by default. With `checker` on, a fresh checker tries to break each change (not docs-only ones) after the prep step and before it joins the merge queue, where the tests run; problems go back to the worker. See [the checker](docs/guide.md#the-checker). |
 | **Traceability** | Each task keeps who made it, why, your own words, and the history of its tries (time, tokens, failed test output). Each merge commit starts with the task ID (`T-58: ...`). |
 
 symcc works while your Claude Code session is open; work stops when you close it and

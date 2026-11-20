@@ -28,7 +28,7 @@ test('the lead help says secret-looking files are left out of a worker\'s commit
   expect(text).toContain('left-out/<task>/')
 })
 
-test('the checker texts say it runs before the merge line, not after the tests pass; a test time-out is a normal failed try', () => {
+test('the checker texts say it runs before the merge queue, not after the tests pass; a test time-out is a normal failed try', () => {
   const view = SETTINGS.find(s => s.name === 'checker')!.meaning
   const tool = TOOLS().find(t => t.name === 'settings')!
   const props = (tool.inputSchema as unknown as { properties: Record<string, { description?: string }> }).properties
@@ -37,10 +37,14 @@ test('the checker texts say it runs before the merge line, not after the tests p
     expect(text).not.toContain('whose tests passed')
     expect(text).not.toContain('after its tests pass')
   }
-  expect(view).toContain('before a change joins the merge line')
-  expect(help).toContain('before a change joins the merge line')
-  expect(tool.description).toContain('before a change task joins the merge line')
-  expect(props.checker!.description).toContain('before it joins the merge line')
+  expect(view).toContain('before a change joins the merge queue')
+  expect(help).toContain('before a change joins the merge queue')
+  expect(tool.description).toContain('before a change task joins the merge queue')
+  expect(props.checker!.description).toContain('before it joins the merge queue')
+  // T-605: the merge queue's words, and a row's later try as "(n)" after its time (T-604)
+  expect(help).not.toContain('merge line')
+  expect(help).not.toContain('tester · try 2')
+  expect(help).toContain('"(n)" right after the row\'s time ("T-5 ⧗ 3m (3)")')
   const minutes = tool.description.slice(tool.description.indexOf('test_minutes ('), tool.description.indexOf('max_parallel'))
   expect(minutes).toContain('fails like a failing test')
   expect(minutes).not.toContain('run again')

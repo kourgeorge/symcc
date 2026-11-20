@@ -222,14 +222,14 @@ Before, several tasks could merge into a moving branch at the same time. Each on
 test again and sometimes clash with the others (one task once needed 7 tries). Now every finished
 task joins **one line** for the whole project (all sessions, all target branches, oldest first),
 and only the task at the front has its turn. The branch it merges into moves only at the front of
-the line, so the code a task was tested with is exactly the code that merges.
+the queue, so the code a task was tested with is exactly the code that merges.
 
 ### The way to the merge
 
     hand-back (also: approve, "your files are clear", reload)
       → prep: commit, leave out secret-looking files, scope check
-      → checker (only if the setting is on; outside the line, side by side)
-      → in line (n)
+      → checker (only if the setting is on; outside the queue, side by side)
+      → queue (n)
       → at its turn, in one go:
           catch up with the target branch
           → tests (skipped if this exact code already passed)
@@ -282,11 +282,11 @@ The steps, in this order:
    every file. This is a best effort: a path put together while the command runs (for example from a
    variable) is not seen. Paths outside the project, such as `/tmp`, are not checked, and the lead is never refused.
 3. **Checker (optional).** With the `checker` setting on, a fresh checker reads the task and its
-   changes and tries to break them. It runs outside the line, side by side with other checkers, and
+   changes and tries to break them. It runs outside the queue, side by side with other checkers, and
    runs no project tests. If it finds problems, they go to a new worker as a failed try and the task
-   never joins the line, so no tests run for that try (see [The checker](#the-checker)).
-4. **In line.** The task joins the merge line and waits for its turn. The line is kept in
-   `.symcc/merge-line.json`; it survives a reload (a task that was in line just joins again), and
+   never joins the queue, so no tests run for that try (see [The checker](#the-checker)).
+4. **Queue.** The task joins the merge queue and waits for its turn. The queue is kept in
+   `.symcc/merge-line.json`; it survives a reload (a task that was in the queue just joins again), and
    a stale entry is cleared by itself, so you never need to edit it. Merges go one at a time, so when
    several tasks finish together the last one waits longer: the fifth of five tasks with 10-minute
    tests waits about 40 minutes before its own turn.
@@ -301,7 +301,7 @@ The steps, in this order:
    lead). See "Tests run once per try" below.
 7. **Review (optional).** In review mode (see below), or when the task has "needs review", the
    task stops here as `review` ("ready for review") with its tests already passed, and nothing is
-   merged until you approve. Your approve joins the line again and merges.
+   merged until you approve. Your approve joins the queue again and merges.
 8. **Merge.** Only now does your branch move forward. If you have that branch checked
    out, your files are updated too, but your own work is never overwritten: uncommitted
    changes (staged or not) in files the task doesn't change are simply kept as they are.
@@ -346,38 +346,38 @@ happened to it meanwhile), or the lead is told it landed.
 |---|---|
 | One test command | `test_minutes` (10 by default; raise it for a slow suite, e.g. "set test_minutes to 20") |
 | The whole turn (catch up, tests, merge) | `test_minutes` for each test command (at least one) plus 5 minutes for git and the board: 15 minutes with one command by default, 35 with three |
-| Waiting in line | Does not count: the limit starts at the task's own turn, so each task has its own limit and the line keeps moving |
-| A stale line entry (left by a session that died) | Older than twice `test_minutes`: cleared by itself |
+| Waiting in the queue | Does not count: the limit starts at the task's own turn, so each task has its own limit and the queue keeps moving |
+| A stale queue entry (left by a session that died) | Older than twice `test_minutes`: cleared by itself |
 
 ### What a task shows on its way to the merge
 
 Every board view (the board list, the band above
 the prompt, the VS Code list and task page, the OpenCode board and the lead's text board) shows
-the same small set of words and notes. While it waits for its turn its note says "in line (n)",
+the same small set of words and notes. While it waits for its turn its note says "queue (n)",
 n being its place (the task merging now is 1), and its row shows `⋯` in place of `▶`. During its
 turn the row shows the step's icon in place of `▶`, then the time: `⌕ 5m`, not `▶ checker 5m`.
 The step's word stays in the note and on the task page; the lead's text board shows both ("⧗
-doing test · title"). Legend: `▶` working · `⋯` in line · `✎` prep · `⧗` test · `⌕` checker ·
+doing test · title"). Legend: `▶` working · `⋯` queue · `✎` prep · `⧗` test · `⌕` checker ·
 `⇢` merge.
 
 A doing task's page (terminal, VS Code and OpenCode) names its
 step in its badge and its Status line, with the icon and the total work time: `▶ worker · 15m`,
-`✎ prep`, `⌕ checker · 5m`, `⋯ in line (2)`, `⧗ test · 9m`, `⇢ merge`. Other tasks show their
+`✎ prep`, `⌕ checker · 5m`, `⋯ queue (2)`, `⧗ test · 9m`, `⇢ merge`. Other tasks show their
 status as before (`○ to do`, `◆ ready for review`, ...). Under Status, a **Stage** line shows the
 whole way to the merge, the steps done marked ✓, the current one bold with ●, the later ones
-dim: `worker ✓ → prep ✓ → ● checker → line → test → merge`. `checker` is there only when the
+dim: `worker ✓ → prep ✓ → ● checker → queue → test → merge`. `checker` is there only when the
 checker setting is on (or a checker ran on this try); `review` comes after `test` when the task
 will wait for your review (any mode but auto, or the task's "needs review"). A task in review
 shows every step before review done (`… → test ✓ → ● review → merge`), a done task every step
 done. Investigations have no Stage line (nothing is merged). VS Code draws it as a small stepper
 under the badge.
 
-- `✎ prep`: symcc's own step before the line (steps 1 and 2: commit, leave out secret-looking
+- `✎ prep`: symcc's own step before the queue (steps 1 and 2: commit, leave out secret-looking
   files, scope check). Its note says "preparing to merge: committing and checking files". No
   agent runs in this step.
 - `⌕ checker`: a checker agent is trying to break the change (only with the `checker` setting
   on; with it off no task ever shows this step). It comes right after `prep`, before the task
-  joins the merge line. Its note says "a checker agent is trying to break it before it merges".
+  joins the merge queue. Its note says "a checker agent is trying to break it before it merges".
 - `⧗ test`: the test commands run. Its note says "running the tests".
 - `⇢ merge`: the task is brought up to date with the target branch and merged. Its note says
   "merging".
@@ -390,15 +390,15 @@ reason (tests failed, a clash, out of time, ...), waiting for your files, or in 
 
 ### Tests run once per try
 
-The full test commands run once per try, by symcc, during the task's turn in the merge line
+The full test commands run once per try, by symcc, during the task's turn in the merge queue
 (step 6), and not even then when the same code, with the same commands, already passed (see
-`passed-trees.json` in the board folder). As only the task at the front of the line merges, a
+`passed-trees.json` in the board folder). As only the task at the front of the queue merges, a
 try never needs a second test run because another merge came first.
 The worker is told the commands, but while it works it runs only the tests for the
 files it changed (one test file, say) and a cheap type check if the project has one; it does
 not run the full commands at the end, as symcc does that and sends it the output if any
 fail. The checker never runs the project's own test files or test commands: it runs before
-the task joins the merge line, and is told the tests run there, once, after it. It reads the
+the task joins the merge queue, and is told the tests run there, once, after it. It reads the
 task and the diff and checks the change with its own throwaway probe tests (in `.scratch/` or
 `/tmp`). A worker that skips the full run may now and then hand back work that fails symcc's
 run; that costs one new try, with the failing output.
@@ -970,10 +970,10 @@ changed. Only you can pause or resume a scout; the lead is told a paused scout d
 The `checker` setting is `off` by default. Turn it on with `/symcc-settings checker on` (or tell
 the lead "turn on the checker"). Then, when a worker hands back and symcc's prep step passes
 (commit, scope and secret check), a fresh checker (the built-in `checker` role) starts in the
-task's folder, before the task joins the merge line. Checkers of several tasks run side by side.
+task's folder, before the task joins the merge queue. Checkers of several tasks run side by side.
 It cannot edit files. It reads the task and the diff and tries to break the change with its own
 throwaway probes, for example by running it with odd input. It never runs the project's own
-tests: they run once, in the merge line, after it.
+tests: they run once, in the merge queue, after it.
 
 The checker may only read with git. Any git command that changes something (commit, checkout,
 switch, reset, stash, branch or tag changes, merge, rebase, push and so on) is refused, and so are
@@ -997,13 +997,13 @@ is not a security boundary: anything that needs a deliberate shell trick (`eval`
 `sh -c` variants, symbolic links inside `.git`, files the same line writes, git hooks or settings)
 is the accepted risk and is not checked further.
 
-- **OK:** the task joins the merge line: catch up, tests, then review or merge, once.
+- **OK:** the task joins the merge queue: catch up, tests, then review or merge, once.
 - **Problems found:** the checker's report goes to a new worker, like a failed test run. It counts
-  as one of the `auto_retries`. The task never joins the merge line, so no tests run for that try.
+  as one of the `auto_retries`. The task never joins the merge queue, so no tests run for that try.
 - **No answer** (the checker was stopped, ran longer than `max_minutes`, or could not start): the
-  task joins the merge line for its tests, and then waits for your review instead of merging.
+  task joins the merge queue for its tests, and then waits for your review instead of merging.
 - After a reload while a checker ran, the task gets a new checker on the same work (no retry
-  counted), and then joins the line as above.
+  counted), and then joins the queue as above.
 - **Skipped** for investigations and for changes that touch only prose or media. Only these count:
   `README`, `CHANGELOG`, `LICENSE`-style names (no extension, `.txt` or `.rst`), `.md` files that are not
   instructions for agents, and images, video, audio, subtitles and fonts. A `.md` file is instructions

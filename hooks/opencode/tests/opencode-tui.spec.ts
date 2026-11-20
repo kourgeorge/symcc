@@ -124,7 +124,7 @@ test('T-581: a doing row in a check step or the merge line shows its icon and th
   const tasks = [
     ...f0.view.tasks.filter(t => t.id !== 'T-1'),
     ...steps.map(([id, step]) => ({ ...base, id, title: `In ${step}`, attempts: 1, note: '', runs, checking: { step, at: fresh } })),
-    { ...base, id: 'T-9', title: 'In line', attempts: 1, note: 'in line (2)', runs, checking: { step: 'prep' as const, at: fresh } },
+    { ...base, id: 'T-9', title: 'In line', attempts: 1, note: 'queue (2)', runs, checking: { step: 'prep' as const, at: fresh } },
     { ...base, id: 'T-10', title: 'Working', attempts: 1, note: '', runs: [{ started: new Date(NOW - 15 * 60_000).toISOString() }] },
   ]
   const f = { ...f0, view: { ...f0.view, tasks, working: [] } }
@@ -146,11 +146,11 @@ test('T-581: a doing row in a check step or the merge line shows its icon and th
   // T-587: the task page's badge and Status line name the step, and the Stage line marks it now (checker off: none)
   const page = (id: string, v = f) => panelLines(v, { opened: id, cursor: 0 }, NOW, 140).lines.map(lineText)
   const want: [string, string, string][] = [
-    ['T-10', '▶ worker · 15m', '● worker → prep → line → test → merge'],
-    ['T-6', '✎ prep · 20m', 'worker ✓ → ● prep → line → test → merge'],
-    ['T-9', '⋯ in line (2) · 20m', 'worker ✓ → prep ✓ → ● line → test → merge'],
-    ['T-1', '⧗ test · 20m', 'worker ✓ → prep ✓ → line ✓ → ● test → merge'],
-    ['T-8', '⇢ merge · 20m', 'worker ✓ → prep ✓ → line ✓ → test ✓ → ● merge'],
+    ['T-10', '▶ worker · 15m', '● worker → prep → queue → test → merge'],
+    ['T-6', '✎ prep · 20m', 'worker ✓ → ● prep → queue → test → merge'],
+    ['T-9', '⋯ queue (2) · 20m', 'worker ✓ → prep ✓ → ● queue → test → merge'],
+    ['T-1', '⧗ test · 20m', 'worker ✓ → prep ✓ → queue ✓ → ● test → merge'],
+    ['T-8', '⇢ merge · 20m', 'worker ✓ → prep ✓ → queue ✓ → test ✓ → ● merge'],
   ]
   for (const [id, badge, stage] of want) {
     const p = page(id)
@@ -160,12 +160,12 @@ test('T-581: a doing row in a check step or the merge line shows its icon and th
   }
   // a running checker shows its step even with the setting off; with it on every task's Stage has it
   expect(page('T-7')).toContain('[⌕ checker · 20m]')
-  expect(page('T-7').find(l => l.startsWith('Stage:'))).toContain('worker ✓ → prep ✓ → ● checker → line → test → merge')
+  expect(page('T-7').find(l => l.startsWith('Stage:'))).toContain('worker ✓ → prep ✓ → ● checker → queue → test → merge')
   const on = { ...f, view: { ...f.view, checker: true } }
-  expect(page('T-1', on).find(l => l.startsWith('Stage:'))).toContain('worker ✓ → prep ✓ → checker ✓ → line ✓ → ● test → merge')
+  expect(page('T-1', on).find(l => l.startsWith('Stage:'))).toContain('worker ✓ → prep ✓ → checker ✓ → queue ✓ → ● test → merge')
   // a done task: every step done
   const done = { ...f, view: { ...f.view, tasks: [...tasks, { ...base, id: 'T-11', title: 'Merged', status: 'done' as const, note: '', runs }] } }
-  expect(page('T-11', done).find(l => l.startsWith('Stage:'))).toContain('worker ✓ → prep ✓ → line ✓ → test ✓ → merge ✓')
+  expect(page('T-11', done).find(l => l.startsWith('Stage:'))).toContain('worker ✓ → prep ✓ → queue ✓ → test ✓ → merge ✓')
 })
 
 test('the panel: the banner, then the list grouped by state (NEEDS YOU, what runs and waits, Done folded) with the cursor; a task\'s page with its rows, choices and keys', () => {
@@ -1466,7 +1466,7 @@ test('T-596: an approved task in review whose approve runs leaves NEEDS YOU: lis
   }
   const cases = [
     [{ checking: { step: 'prep', at: fresh } }, '✎', '✎ prep'],
-    [{ checking: { step: 'prep', at: fresh }, note: 'in line (2)' }, '⋯', '⋯ in line (2)'],
+    [{ checking: { step: 'prep', at: fresh }, note: 'queue (2)' }, '⋯', '⋯ queue (2)'],
     [{ checking: { step: 'testing', at: fresh } }, '⧗', '⧗ test'],
     [{ checking: { step: 'merging', at: fresh } }, '⇢', '⇢ merge'],
   ] as const

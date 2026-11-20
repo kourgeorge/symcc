@@ -121,8 +121,8 @@ export const checkerChangedFiles = (changed: readonly string[]): string => {
  */
 export function checkerTestsText(name: string, commands: readonly string[]): string {
   const where = commands.length
-    ? `${name} runs the project's test commands once, in the merge line, after you`
-    : `no test commands are set for this project, so nothing runs its tests in the merge line after you; still, don't look for them`
+    ? `${name} runs the project's test commands once, in the merge queue, after you`
+    : `no test commands are set for this project, so nothing runs its tests in the merge queue after you; still, don't look for them`
   return `Don't run the project's own tests (its test files or test commands): ${where}. Check the change with your own throwaway probe tests and scripts (in .scratch/ or /tmp) instead, and say a new test would pass without the change only where your own probe shows it.`
 }
 
