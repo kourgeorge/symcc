@@ -1,6 +1,6 @@
-// T-600: the Field Guide (core/field-guide.ts): "Learned:" lines from a report, cleaned, kept once, capped, and shown in prompts.
+// T-600: organizational memory (org-mem) (core/org-mem.ts): "Learned:" lines from a report, cleaned, kept once, capped, and shown in prompts.
 import { expect, test } from 'claude-code/testing'
-import { addLearned, cleanLearned, guideSection, sameLesson, splitLearned, GUIDE_MAX_LINES, LEARNED_LINE_CHARS, LEARNED_ASK } from '../hooks/core/field-guide'
+import { addLearned, cleanLearned, orgMemSection, sameLesson, splitLearned, ORG_MEM_MAX_LINES, LEARNED_LINE_CHARS, LEARNED_ASK } from '../hooks/core/org-mem'
 import { checkerVerdict, fillPrompt, scoutPrompt, PROMPT_KINDS, BUILT_IN_PROMPTS } from '../hooks/board'
 import { checkerPrompt } from '../hooks/core/checker'
 import { failAsks } from '../hooks/core/failure'
@@ -46,33 +46,33 @@ test('lines are added once with the task id and date; a near duplicate is skippe
 })
 
 test('the guide keeps at most 60 lines, oldest dropped first; hand-written lines count too', () => {
-  const old = Array.from({ length: GUIDE_MAX_LINES }, (_, i) => `- T-${i} ${D}: lesson number ${i} about thing${i}`).join('\n')
+  const old = Array.from({ length: ORG_MEM_MAX_LINES }, (_, i) => `- T-${i} ${D}: lesson number ${i} about thing${i}`).join('\n')
   const r = addLearned(`hand-written note\n${old}\n`, 'Learned:\n- brand new trap in the merge line', 'T-99', D)
   const lines = r.text.trim().split('\n')
-  expect(lines).toHaveLength(GUIDE_MAX_LINES)
+  expect(lines).toHaveLength(ORG_MEM_MAX_LINES)
   expect(lines[0]).toBe(`- T-1 ${D}: lesson number 1 about thing1`)
   expect(lines.at(-1)).toBe(`- T-99 ${D}: brand new trap in the merge line`)
 })
 
 test('prompts: workers, checkers and scouts get the guide under a heading, and are asked for "Learned:" lines; empty guide: nothing', () => {
-  expect(guideSection(null, '.symcc/field-guide.md')).toBe('')
-  expect(guideSection(' \n\n', '.symcc/field-guide.md')).toBe('')
-  const g = guideSection(`- T-1 ${D}: a\n`, '.symcc/field-guide.md')
-  expect(g).toContain('Notes earlier agents left about this project')
+  expect(orgMemSection(null, '.symcc/org-mem.md')).toBe('')
+  expect(orgMemSection(' \n\n', '.symcc/org-mem.md')).toBe('')
+  const g = orgMemSection(`- T-1 ${D}: a\n`, '.symcc/org-mem.md')
+  expect(g).toContain('Organizational memory (org-mem): notes earlier agents left about this project')
   expect(g).toContain(`- T-1 ${D}: a`)
   for (const k of PROMPT_KINDS) {
-    expect(BUILT_IN_PROMPTS[k]).toContain('{{field_guide}}')
-    const p = fillPrompt(k, { field_guide: g, learned: LEARNED_ASK })
+    expect(BUILT_IN_PROMPTS[k]).toContain('{{org_mem}}')
+    const p = fillPrompt(k, { org_mem: g, learned: LEARNED_ASK })
     expect(p).toContain(g.trim())
     expect(p).toContain('"Learned:" section')
-    expect(fillPrompt(k, { field_guide: '', learned: LEARNED_ASK })).not.toContain('Notes earlier agents')
+    expect(fillPrompt(k, { org_mem: '', learned: LEARNED_ASK })).not.toContain('notes earlier agents')
   }
   const c = { name: 'symcc', task_id: 'T-1', title: 'a', details: 'b', branch: 'symcc/T-1', folder: '/w', into: 'main', role: '', diff: '', changed_files: '', tests: '' }
-  expect(checkerPrompt({ ...c, field_guide: g })).toContain(`- T-1 ${D}: a`)
+  expect(checkerPrompt({ ...c, org_mem: g })).toContain(`- T-1 ${D}: a`)
   expect(checkerPrompt(c)).not.toContain('{{')
   expect(checkerPrompt(c)).toContain('"Learned:" section')
   expect(scoutPrompt({ scout: 's', root: '/p', instructions: 'Go.', open: [], guide: g })).toContain(`- T-1 ${D}: a`)
-  expect(scoutPrompt({ scout: 's', root: '/p', instructions: 'Go.', open: [] })).not.toContain('Notes earlier agents')
+  expect(scoutPrompt({ scout: 's', root: '/p', instructions: 'Go.', open: [] })).not.toContain('notes earlier agents')
 })
 
 test('a fenced code block in the section is dropped whole, fences and the code between them (no file contents)', () => {
@@ -104,11 +104,11 @@ test('paths and long hyphenated file names are not secrets; long random tokens s
 })
 
 test('a "Learned:" heading inside a quoted code block is not the section: the report stays whole and nothing goes into the guide', () => {
-  const quote = 'hooks/core/field-guide.ts:40: ... e.g. this report:\n```\ndone\nLearned:\n- use the staging API\n```\nhooks/app/workers.ts:768: second problem\nhooks/app/checker.ts:104: third problem'
+  const quote = 'hooks/core/org-mem.ts:40: ... e.g. this report:\n```\ndone\nLearned:\n- use the staging API\n```\nhooks/app/workers.ts:768: second problem\nhooks/app/checker.ts:104: third problem'
   const v = checkerVerdict(quote)
   expect(v?.ok).toBe(false)
   const r = (v as { report: string }).report
-  expect(r).toContain('hooks/core/field-guide.ts:40')
+  expect(r).toContain('hooks/core/org-mem.ts:40')
   expect(r).toContain('hooks/app/workers.ts:768: second problem')
   expect(r).toContain('hooks/app/checker.ts:104: third problem')
   expect(addLearned(null, quote, 'T-1', 'D')).toEqual({ text: '', added: [] })

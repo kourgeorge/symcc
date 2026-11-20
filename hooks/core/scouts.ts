@@ -471,7 +471,7 @@ export function scoutPrompt(o: {
   symccTools?: boolean
   /** the scout has web tools (default true, as a scout agent type has); false: the web is not named */
   web?: boolean
-  /** T-600: the Field Guide as a prompt shows it (guideSection), '' or left out for none */
+  /** T-600: organizational memory (org-mem) as a prompt shows it (orgMemSection), '' or left out for none */
   guide?: string
 }): string {
   const name = o.name ?? DEFAULT_NAME

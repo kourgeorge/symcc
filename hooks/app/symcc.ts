@@ -20,6 +20,7 @@ import { type Command, boardText, shortHome, LEAD_BEAT_MS, openOnStart, symccOn,
 import { type FileTouch, type Host, type HostFeatures, ALL_FEATURES } from '../host'
 import type { SymccTokens } from '../../types'
 import { findArchived, saveArchiveMigrated } from './archive'
+import { moveOldOrgMem } from './org-mem'
 import { askCall, checkEdit, guardFailed, stoppedText, type AgentKindOf } from './ask'
 import { gitReady } from './git'
 import { claimLead, publish, handOver, releaseLead, driveHere } from './lead'
@@ -119,9 +120,11 @@ export async function sessionStart(host: Host) {
     S.me = await host.session.id().catch(() => `session-${Math.random().toString(36).slice(2, 10)}`)
     // An older board is saved once in the current shape (before anything else saves it), with a copy as it was;
     // so are archive.json and scouts.json (tokens saved as one number become "unsplit").
+    // An old .<name>/field-guide.md becomes org-mem.md once (T-620).
     await saveMigrated(host).catch(() => undefined)
     await saveArchiveMigrated(host).catch(() => undefined)
     await saveScoutsMigrated(host).catch(() => undefined)
+    await moveOldOrgMem(host).catch(() => undefined)
     // Become the driver if nobody drives the board. As the driver, old workers still running
     // from before a reload are stopped first and their tasks go back to "todo".
     const waits = new Promise<void>(r => (startWait.mark = r))

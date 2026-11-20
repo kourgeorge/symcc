@@ -2,7 +2,7 @@
 // task page (so all three agree), what to do next, and whether the worker's report asks for something.
 import type { SymccTask } from '../../types'
 import { CHECKER_MARK, isCheckerOutput } from './checker'
-import { splitLearned } from './field-guide'
+import { splitLearned } from './org-mem'
 import { cutLine } from './reports'
 import { failBlocks, moreFailingLine } from './settings'
 

@@ -11,7 +11,7 @@ import { CHECKER_ROLE } from './roles'
 import { DEFAULT_NAME, namesFor } from '../name'
 import { TEST_OUTPUT_CHARS } from './settings'
 import { fillPlaceholders } from './prompts'
-import { LEARNED_ASK, splitLearned } from './field-guide'
+import { LEARNED_ASK, splitLearned } from './org-mem'
 
 export { CHECKER_ROLE }
 
@@ -70,7 +70,7 @@ const OK_LINE = /^[*_`"'\s]*ok[.!]?[*_`"'\s]*$/i
 
 /** A checker's answer as its verdict: OK when its last line is OK on its own (see OK_LINE), else its whole text is the problems report; null for an empty answer. */
 export function checkerVerdict(answer: string): CheckerVerdict | null {
-  // T-600: the optional "Learned:" section at its end is for the Field Guide, not part of the verdict
+  // T-600: the optional "Learned:" section at its end is for organizational memory (org-mem), not part of the verdict
   const text = splitLearned(String(answer ?? '')).body.trim()
   if (!text) return null
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
@@ -104,7 +104,7 @@ export const checkerDiff = (diff: string): string => {
 }
 
 /** The values of a checker's prompt. */
-export type CheckerValues = { name: string; task_id: string; title: string; details: string; branch: string; folder: string; into: string; role: string; diff: string; changed_files: string; tests: string; field_guide?: string }
+export type CheckerValues = { name: string; task_id: string; title: string; details: string; branch: string; folder: string; into: string; role: string; diff: string; changed_files: string; tests: string; org_mem?: string }
 
 /** The most changed files a checker's prompt lists; the rest it reads with git diff --name-only. */
 export const CHECKER_FILES_MAX = 200
@@ -128,9 +128,9 @@ export function checkerTestsText(name: string, commands: readonly string[]): str
   return `Don't run the project's own tests (its test files or test commands): ${where}. Check the change with your own throwaway probe tests and scripts (in .scratch/ or /tmp) instead, and say a new test would pass without the change only where your own probe shows it.`
 }
 
-/** A checker's prompt (prompts/checker.ts) with `v` filled in; {{learned}} is always LEARNED_ASK, {{field_guide}} '' unless given (see guideSection). */
+/** A checker's prompt (prompts/checker.ts) with `v` filled in; {{learned}} is always LEARNED_ASK, {{org_mem}} '' unless given (see orgMemSection). */
 export const checkerPrompt = (v: CheckerValues): string => {
-  const all = { ...v, field_guide: v.field_guide ?? '', learned: LEARNED_ASK }
+  const all = { ...v, org_mem: v.org_mem ?? '', learned: LEARNED_ASK }
   return fillPlaceholders(CHECKER_PROMPT, all, all).trimEnd()
 }
 
