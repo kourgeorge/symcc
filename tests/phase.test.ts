@@ -14,8 +14,10 @@ const CHANGED = iso(NOW - 60_000)
 const STARTED = iso(NOW - 20 * 60_000)
 const ASKED = iso(NOW - 2 * 60_000)
 
-const task = (status: PhaseTask['status'], extra: Partial<PhaseTask> & Record<string, unknown> = {}): PhaseTask => ({ status, note: '', updated_at: CHANGED, ...extra })
+const task = (status: PhaseTask['status'], extra: Partial<PhaseTask> & Record<string, unknown> = {}): PhaseTask => ({ status, updated_at: CHANGED, note: '', ...extra }) as PhaseTask
 const at = (step: CheckStep, when = FRESH) => ({ checking: { step, at: when } })
+/** waiting in the merge queue at `place` (T-612: a check step of its own; the note only says it for people) */
+const inQueue = (place: number, when = FRESH) => ({ checking: { step: 'queue' as const, place, at: when }, note: `queue (${place})` })
 const openRun = { runs: [{ started: STARTED }] }
 const endedRun = { runs: [{ started: STARTED, ended: CHANGED }] }
 const files = { merge_wait: { dirty: ['a.ts'], untracked: [], ignored: [] } }
@@ -44,26 +46,28 @@ const TABLE: [string, PhaseTask, TaskPhase, { merging?: boolean }?][] = [
   ['doing, checker fresh', task('doing', { ...endedRun, ...at('checker') }), runs('doing', 'checker')],
   ['doing, test fresh', task('doing', { ...endedRun, ...at('testing') }), runs('doing', 'test')],
   ['doing, merge fresh', task('doing', { ...endedRun, ...at('merging') }), runs('doing', 'merge')],
-  ['doing, in the queue', task('doing', { ...endedRun, ...at('prep'), note: 'queue (2)' }), runs('doing', 'queue', { place: 2 })],
+  ['doing, in the queue', task('doing', { ...endedRun, ...inQueue(2) }), runs('doing', 'queue', { place: 2 })],
   ['doing, prep stale', task('doing', { ...endedRun, ...at('prep', STALE) }), runs('doing', 'worker')],
   ['doing, checker stale', task('doing', { ...endedRun, ...at('checker', STALE) }), runs('doing', 'worker')],
   ['doing, test stale', task('doing', { ...endedRun, ...at('testing', STALE) }), runs('doing', 'worker')],
+  ['doing, in the queue, stale', task('doing', { ...endedRun, ...inQueue(2, STALE) }), runs('doing', 'worker')],
+  ['doing, only a queue note, no queue step', task('doing', { ...endedRun, ...at('prep'), note: 'queue (2)' }), runs('doing', 'prep')],
   ['doing, merge stale', task('doing', { ...endedRun, ...at('merging', STALE) }), runs('doing', 'worker')],
   // an approve running in each step: shown doing, approved, waits for nothing
   ['approve, prep', task('review', { ...endedRun, ...at('prep') }), runs('review', 'prep')],
   ['approve, checker', task('review', { ...endedRun, ...at('checker') }), runs('review', 'checker')],
-  ['approve, in the queue', task('review', { ...endedRun, ...at('prep'), note: 'queue (1)' }), runs('review', 'queue', { place: 1 })],
+  ['approve, in the queue', task('review', { ...endedRun, ...inQueue(1) }), runs('review', 'queue', { place: 1 })],
   ['approve, test', task('review', { ...endedRun, ...at('testing') }), runs('review', 'test')],
   ['approve, merge', task('review', { ...endedRun, ...at('merging') }), runs('review', 'merge')],
   ['approve started on this page, no step yet', task('review', endedRun), runs('review', 'prep'), { merging: true }],
   ['approve with a stale step', task('review', { ...endedRun, ...at('testing', STALE) }), idle('review', 'review')],
   ['approve waiting for the owner\'s files', task('review', { ...endedRun, ...files }), { ...idle('review', 'your-files'), approved: true }],
   // a files-merge (a waiting task whose owner's files cleared) waiting its turn in the queue, and in a step
-  ['files-merge in the queue', task('waiting', { ...endedRun, ...files, ...at('prep'), note: 'queue (3)' }), runs('waiting', 'queue', { place: 3 })],
+  ['files-merge in the queue', task('waiting', { ...endedRun, ...files, ...inQueue(3) }), runs('waiting', 'queue', { place: 3 })],
   ['files-merge, test', task('waiting', { ...endedRun, ...files, ...at('testing') }), runs('waiting', 'test')],
   // leftovers: a review task with an old queue note and no fresh step is the owner's turn, not in the queue
   ['review, leftover queue note, no step', task('review', { ...endedRun, note: 'queue (2)' }), idle('review', 'review')],
-  ['review, leftover queue note, stale step', task('review', { ...endedRun, ...at('prep', STALE), note: 'queue (2)' }), idle('review', 'review')],
+  ['review, leftover queue note, stale step', task('review', { ...endedRun, ...inQueue(2, STALE) }), idle('review', 'review')],
   // more time asked: only in the worker stage; in a check step the step wins
   ['doing, asks for more time', task('doing', { ...openRun, time_ask: ASKED }), runs('doing', 'worker', { waitsFor: 'time', since: ASKED })],
   ['doing, asks for more time in a check step', task('doing', { ...endedRun, ...at('testing'), time_ask: ASKED }), runs('doing', 'test')],
@@ -90,7 +94,7 @@ test('T-610 taskPhase: the saved status never changes, and anything running wait
 // T-611 (taskPhase 2/6): the helpers are thin wrappers over taskPhase, so the row (rowMark, rowCell), the band and
 // lists (shownStatus, needsYou) and the task page (statusBadge, stepNowWord, taskStage) give one answer.
 test("T-611: T-608's disagreement 1, a files-merge waiting in the queue, is in the queue on the row, the band and the page", () => {
-  const t = task('waiting', { ...endedRun, ...files, ...at('prep'), note: 'queue (3)' })
+  const t = task('waiting', { ...endedRun, ...files, ...inQueue(3) })
   expect(rowMark(t, NOW)).toBe('⋯')
   expect(shownStatus(t, NOW)).toBe('doing')
   expect(needsYou(t, NOW)).toBe(false)

@@ -1,6 +1,6 @@
 // The Tasks view of the board panel: sections, rows and key hints; and the workers and scouts of the line above the prompt.
 import type { SymccMode, SymccScout, SymccStatus, SymccTask } from '../../types'
-import { asBlockers, type BoardTask, type CheckStep, emptyBoard, OPEN, intoOf, isInvestigation, kindOf, STATUS_WORD, waitsForFiles } from './board-file'
+import { asBlockers, type BoardTask, type CheckStep, type TurnStep, emptyBoard, OPEN, intoOf, isInvestigation, kindOf, STATUS_WORD, waitsForFiles } from './board-file'
 import { asksMoreTime, needsYou, needsYouFirst } from './commands'
 import { boardSections, type DayGroup, dayLabel, dayOf, localOffset, taskDay } from './days'
 import { approveRunning, checkStepNow, finishingNow, shownStatus } from './lead'
@@ -86,44 +86,37 @@ export const MORE_TIME_CELL = 'more time?'
 
 /** The short word every board view (terminal list, band, VS Code, OpenCode, text board) shows for each check step:
  *  "prep" for symcc's own pre-merge step, "checker" only while a checker agent runs (the checker setting). */
-export const STEP_WORD: Record<CheckStep, string> = { prep: 'prep', testing: 'test', checker: 'checker', merging: 'merge' }
+export const STEP_WORD: Record<CheckStep, string> = { prep: 'prep', testing: 'test', checker: 'checker', queue: 'queue', merging: 'merge' }
+
+/** The row icon of a task waiting for its turn in the merge line (its check step is "queue"): "⋯ 2h5m". */
+export const IN_LINE_ICON = '⋯'
 
 /** The one-column icon every row view (band, terminal list, VS Code list, OpenCode band and panel, the lead's text
  *  board) shows in place of the mark ▶ and the step word while a task is in a check step: "⌕ 5m", not "▶ checker 5m".
  *  The word (STEP_WORD) stays on the task page and in the notes; STEP_LEGEND explains the icons. */
-export const STEP_ICON: Record<CheckStep, string> = { prep: '✎', testing: '⧗', checker: '⌕', merging: '⇢' }
+export const STEP_ICON: Record<CheckStep, string> = { prep: '✎', testing: '⧗', checker: '⌕', queue: IN_LINE_ICON, merging: '⇢' }
 
 /** What the row of an approved task in review says while its approve runs (approveRunning), in place of "Enter to review". */
 export const APPROVED_NOTE = 'approved, merging'
 
-/** The row icon of a task waiting for its turn in the merge line (its note is "queue (n)"): "⋯ 2h5m". */
-export const IN_LINE_ICON = '⋯'
-
 /** The one-line legend of the row icons (task page and guide). */
 export const STEP_LEGEND = `▶ working · ${IN_LINE_ICON} queue · ${STEP_ICON.prep} prep · ${STEP_ICON.testing} test · ${STEP_ICON.checker} checker · ${STEP_ICON.merging} merge`
-
-/** Whether doing task `t` waits for its turn in the merge line (its note is "queue (n)", see inLineNote): taskPhase's
- *  queue stage (the time does not matter for a doing task). */
-export const waitsInLine = (t: { status: SymccStatus; note?: string }): boolean => t.status === 'doing' && taskPhase(t, 0).stage === 'queue'
 
 /** The mark at the front of a task's row: ⋯ while it waits in the merge line, its step's icon (STEP_ICON) during a
  *  check step, else its own mark (statusMark: ▶ while its worker works). */
 export function rowMark(t: Pick<SymccTask, 'status'> & { note?: string; runs?: readonly unknown[]; attempts?: number } & Pick<BoardTask, 'checking'>, nowMs: number): string {
-  // an approved task in review (or a files-merge) waits in the merge line too while it runs (taskPhase's queue stage)
-  const p = taskPhase(t as PhaseTask, nowMs)
-  if (p.stage === 'queue') return IN_LINE_ICON
-  const step = stageStep(p.stage)
+  const step = stageStep(taskPhase(t as PhaseTask, nowMs).stage)
   return step ? STEP_ICON[step] : statusMark(t)
 }
 
 /**
  * The one small set of notes a task shows between its hand-back (or the owner's approve, or "your files are clear") and its
  * merge, the same in every board view (terminal list, band, VS Code, OpenCode, text board):
- * - while it waits for its merge turn: "queue (n)" (inLineNote, in board-file.ts);
+ * - while it waits for its merge turn (its check step "queue"): "queue (n)" (inLineNote, in board-file.ts);
  * - during its turn, the note of its step: prep, test, merge (and checker, only while a checker agent runs);
  * - once the turn is over, how it went: merged (done), failed with the reason, waiting for your files (waitFilesNote), or in review.
  */
-export const STEP_NOTE: Record<CheckStep, string> = {
+export const STEP_NOTE: Record<TurnStep, string> = {
   prep: 'preparing to merge: committing and checking files',
   testing: 'running the tests',
   checker: 'a checker agent is trying to break it before it merges',
@@ -141,7 +134,7 @@ export const isMergeNote = (note: string | undefined): boolean => !!note && (Obj
 
 /** The note task `note` gets when check step `step` begins: the step's note (STEP_NOTE) in place of any other merge note;
  *  the checker step keeps it (runChecker then sets CHECKER_NOTE), and a note that is not a merge note stays. */
-export function stepNote(step: CheckStep, note: string | undefined): string | undefined {
+export function stepNote(step: TurnStep, note: string | undefined): string | undefined {
   if (step === 'checker') return note
   return isMergeNote(note) ? STEP_NOTE[step] : note
 }
@@ -153,8 +146,7 @@ export function stepNote(step: CheckStep, note: string | undefined): string | un
  *  this session's worker started, used when the task has no open try. */
 export function statusCell(t: Pick<SymccTask, 'status' | 'runs'> & Pick<BoardTask, 'checking' | 'time_ask' | 'kind'>, nowMs: number, since?: number | string): string {
   const p = taskPhase(t, nowMs)
-  // in the queue there is no step word: the check step it waits in (still fresh) says it, as before
-  const step = p.stage === 'queue' ? checkStepNow(t, nowMs) : stageStep(p.stage)
+  const step = stageStep(p.stage)
   if (step) return STEP_WORD[step]
   if (asksMoreTime(t)) return MORE_TIME_CELL
   if (t.status === 'doing') {

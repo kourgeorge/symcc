@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { type Blockers, type BoardTask, type CheckStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, testTimeoutMs, isInvestigation, testsWithChangesOf, untestedChange, untestedText, shortSha, secretFiles, secretsLeftText, onlySecretsQuestion, nameList, isPlainRelPath, SCRATCH_DIR, stepNote } from '../board'
+import { type Blockers, type BoardTask, type TurnStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, testTimeoutMs, isInvestigation, testsWithChangesOf, untestedChange, untestedText, shortSha, secretFiles, secretsLeftText, onlySecretsQuestion, nameList, isPlainRelPath, SCRATCH_DIR, stepNote } from '../board'
 import { gitOk, git, worktreeDir, asSymcc, taskBranch, branchExists, scratchOn } from './git'
 import { S, changesCache } from './state'
 import type { Host } from '../host'
@@ -341,7 +341,7 @@ async function commitTry($: Host, t: SymccTask, dir: string, made: string[], sub
  * shows it; only while the task is still as it was when the check began and the check was not
  * stopped or given up; the prep step also says it in the note (stepNote). Never fails the check: a board that can't be written only misses the word.
  */
-export async function markStep($: Host, t: SymccTask, step: CheckStep, stopped: () => CheckResult | undefined) {
+export async function markStep($: Host, t: SymccTask, step: TurnStep, stopped: () => CheckResult | undefined) {
   if (stopped()) return
   await change($, x => {
     const cur = find(x, t.id)
@@ -366,7 +366,8 @@ async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mo
   const main = await gitOk($, ['rev-parse', `refs/heads/${target}`])
   const tip = await gitOk($, ['rev-parse', 'HEAD'], dir)
   let candidate = tip
-  await markStep($, t, 'merging', stopped)
+  // the catch-up with the target shows as "test" (owner's choice, Q-30), so the Stage line only moves on: queue → test → merge
+  await markStep($, t, 'testing', stopped)
   if ((await git($, ['merge-base', '--is-ancestor', main, tip])).exitCode !== 0) {
     const m = await git($, [...asSymcc(), 'merge', '--no-edit', '--no-verify', '-m', commitMessage(t, { name: S.N.name, subject: `${t.id}: bring up to date with ${target}` }), main], dir)
     if (m.exitCode !== 0) {

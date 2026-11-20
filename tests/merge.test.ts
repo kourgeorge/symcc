@@ -12,7 +12,7 @@ import { tellLead, noteForLead, meanwhileText } from '../hooks/app/tell'
 import { saidNeedsYou, findPlayers, playable, playsFor, sayNext, sayDone, WIN_TEXT_VAR } from '../hooks/app/voice'
 import { workerFinished, check, pump, startWorker, lateHandBack, WORKER_PROMPT, workerQuestionText, type TurnEnd } from '../hooks/app/workers'
 import { setSymcc, setBoardMode } from '../hooks/app/board-mode'
-import { needsYou, waitsForYou, answeredLeadLine, approveRunning, panelSections, statusBadge, statusCounts, STEP_ICON, STEP_WORD } from '../hooks/board'
+import { taskPhase, FINISH_STALE_MS, needsYou, waitsForYou, answeredLeadLine, approveRunning, panelSections, statusBadge, statusCounts, STEP_ICON, STEP_WORD } from '../hooks/board'
 import { keysFor } from './task-keys'
 import { ranOutOfTime } from'../hooks/core/test-timeout'
 import { claimLead } from '../hooks/app/lead'
@@ -4586,12 +4586,50 @@ test('T-550: every note symcc sets between a hand-back and its merge is in the o
   expect(t.status).toBe('done')
   // the first note is the one the worker had before it handed back
   const before = seen.slice(1, -1)
-  expect(before).toEqual([STEP_NOTE.prep, inLineNote(2), STEP_NOTE.prep, STEP_NOTE.merging, STEP_NOTE.testing, STEP_NOTE.merging])
+  // T-612: the catch-up with main at the start of its turn is part of the test step, so it goes straight on to the tests
+  expect(before).toEqual([STEP_NOTE.prep, inLineNote(2), STEP_NOTE.prep, STEP_NOTE.testing, STEP_NOTE.merging])
   expect(before.filter(n => !SMALL_SET.includes(n))).toEqual([])
   expect(before.every(isMergeNote)).toBe(true)
   // the outcome note is not one of them
   expect(seen.at(-1)).toBe(t.note)
   expect(isMergeNote(t.note)).toBe(false)
+})
+
+/** Records the check steps task T-1 has on the board (with the queue's place), like notesOf. */
+function stepsOf(w: ReturnType<typeof world>) {
+  const seen: string[] = []
+  const look = () => {
+    const text = w.files.get(BOARD)
+    const c = text ? find(parseBoard(text), 'T-1')?.checking : undefined
+    const s = c ? (c.place ? `${c.step} ${c.place}` : c.step) : ''
+    if (s && seen.at(-1) !== s) seen.push(s)
+  }
+  w.onRun(async () => look())
+  return { seen, look }
+}
+
+test('T-612: a task waiting in the merge queue has the check step "queue" with its place; the catch-up with main shows as "testing"; the steps only move on', async () => {
+  S.me = 'me'
+  const w = world()
+  await aboutToFinish(w)
+  const { seen, look } = stepsOf(w)
+  const { free, ran, all } = earlierMerges(w, 1)
+  let ended = false
+  void workerFinished(w.$, 'ag1', 'made the change').then(() => (ended = true))
+  await turns(w, () => (look(), ran.length === 1 && seen.includes('queue 2')))
+  const waiting = find(await load(w.$), 'T-1')!
+  expect(waiting.checking).toEqual({ step: 'queue', place: 2, at: expect.any(String) })
+  expect(waiting.note).toBe(inLineNote(2))
+  const now = Date.parse(waiting.checking!.at)
+  expect(taskPhase(waiting, now)).toMatchObject({ stage: 'queue', place: 2 })
+  // the queue goes stale like every other step: its copy gone, the task is back in its worker stage
+  expect(taskPhase(waiting, now + FINISH_STALE_MS + 1).stage).toBe('worker')
+  free[0]!()
+  await all[0]
+  await turns(w, () => (look(), ended))
+  expect(find(await load(w.$), 'T-1')!.status).toBe('done')
+  // after the queue its step goes back to prep for a moment, then the catch-up and the tests are "testing", then the merge
+  expect(seen).toEqual(['prep', 'queue 2', 'prep', 'testing', 'merging'])
 })
 
 test('T-550: an approve shows the same small set of notes as a worker\'s hand-back, then its outcome', async () => {
@@ -5297,7 +5335,7 @@ const lineTasks = (w: ReturnType<typeof world>) => parseMergeLine(w.files.get(LI
 /** A merge line entry of task `task` from session `session` (by default another one), dated `at`. */
 const lineEntry = (task: string, session = 'other-session', at = Date.now()): LineEntry => ({ task, key: `${session}:${task}`, session, joined: new Date(at).toISOString(), at })
 
-test('two tasks in the merge line take turns; the second waits noted "in line (2)", its time limit not started, with no polling between tasks of one copy', async () => {
+test('two tasks in the merge line take turns; the second waits noted "queue (2)", its time limit not started, with no polling between tasks of one copy', async () => {
   S.me = 'me'
   const w = world()
   const [t1, t2] = await twoChecking(w)
@@ -5315,6 +5353,8 @@ test('two tasks in the merge line take turns; the second waits noted "in line (2
   expect(turn1).toEqual(['start'])
   expect(turn2).toEqual([])
   expect(inLineNote(3)).toBe('queue (3)')
+  // T-612: its check step is the queue with its place while it waits
+  expect(find(await load(w.$), 'T-2')!.checking).toMatchObject({ step: 'queue', place: 2 })
   open()
   expect(await one).toBe('one')
   expect(await two).toBe('two')
@@ -5324,6 +5364,8 @@ test('two tasks in the merge line take turns; the second waits noted "in line (2
   expect(turn1).toEqual(['start', 'stop'])
   expect(turn2).toEqual(['start', 'stop'])
   expect(noteOf(w, 'T-2')).toBe(CHECKING_NOTE)
+  // and its step goes back to the one it had, fresh
+  expect(find(await load(w.$), 'T-2')!.checking).toEqual({ step: 'merging', at: expect.any(String) })
   expect(w.files.has(LINE)).toBe(false)
 })
 

@@ -1,6 +1,6 @@
 import type { SymccTask } from '../../types'
 import type { Host } from '../host'
-import { MERGE_LINE_FILE, type LineEntry, parseMergeLine, mergeLineText, mergeLineStaleMs, lineEntryStale, testMinutesOf, find, checkStepNow, inLineNote, patchTask } from '../board'
+import { type BoardTask, MERGE_LINE_FILE, type LineEntry, parseMergeLine, mergeLineText, mergeLineStaleMs, lineEntryStale, testMinutesOf, find, checkStepNow, inLineNote, patchTask } from '../board'
 import { S } from './state'
 import { change, load, locked, now, path, safeWrite } from './store'
 
@@ -152,18 +152,26 @@ async function place($: Host, me: Mine): Promise<{ ahead: number; others: number
   return { ahead: ahead.length, others: ahead.filter(e => !keys.has(e.key)).length }
 }
 
-/** Sets task `t`'s note to what `note` makes of it, while the task is still as it was. Never throws. */
-async function noteTask($: Host, t: Pick<SymccTask, 'id' | 'status' | 'attempts'>, note: (now: string | undefined) => string | undefined) {
+/** What a task in the merge line shows of its wait: its note and its check step. */
+type LineMark = Pick<BoardTask, 'note' | 'checking'>
+
+/**
+ * Sets task `t`'s note and check step to what `mark` makes of them (like markStep in review.ts, for the queue step),
+ * while the task is still as it was and its check not stopped. Never throws.
+ */
+async function markLine($: Host, t: Pick<SymccTask, 'id' | 'status' | 'attempts'>, mark: (cur: LineMark) => Partial<LineMark>, stopped?: () => unknown) {
   await change($, x => {
     const cur = find(x, t.id)
-    if (!cur || cur.status !== t.status || cur.attempts !== t.attempts) return x
-    const next = note(cur.note)
-    return next === cur.note ? x : patchTask(x, t.id, { note: next }, now())
+    if (!cur || cur.status !== t.status || cur.attempts !== t.attempts || stopped?.() !== undefined) return x
+    const next = mark(cur)
+    const changed = ('note' in next && next.note !== cur.note) || ('checking' in next && next.checking !== cur.checking)
+    return changed ? patchTask(x, t.id, next, now()) : x
   }).catch(() => undefined)
 }
 
 export type LineOptions<T> = {
-  /** the task as its check began: while it waits, its note says its place ("in line (n)", see inLineNote) */
+  /** the task as its check began: while it waits, its check step is the queue with its place (checking { step: 'queue',
+   *  place }), and its note says the place too ("queue (n)", see inLineNote) */
   t?: Pick<SymccTask, 'id' | 'status' | 'attempts'>
   /** asked before each look: when it gives a value (the task was dropped, paused or given up), the task leaves the line and that value is returned, `run` never runs */
   stopped?: () => T | undefined
@@ -189,7 +197,7 @@ export async function inMergeLine<T>($: Host, task: string, run: (refresh: () =>
   const { me, joined } = join($, task)
   void o.release?.then(() => leave($, me), () => leave($, me))
   let shown = 0
-  let before: string | undefined
+  let before: LineMark | undefined
   try {
     await joined
     // a go given up as stuck (`release`) is out of the line: the ones behind it no longer wait, and it waits for no one
@@ -206,10 +214,10 @@ export async function inMergeLine<T>($: Host, task: string, run: (refresh: () =>
       if (o.t && n !== shown) {
         const first = !shown
         shown = n
-        await noteTask($, o.t, note => {
-          if (first) before = note
-          return inLineNote(n)
-        })
+        await markLine($, o.t, cur => {
+          if (first) before = { note: cur.note, checking: cur.checking }
+          return { note: inLineNote(n), checking: { step: 'queue', place: n, at: now() } }
+        }, o.stopped)
       }
       if (Date.now() - me.entry.at > REDATE_MS) await redate($)
       // another session's task is in front: look again in a while; else one of ours is, and its leaving wakes this one
@@ -220,8 +228,14 @@ export async function inMergeLine<T>($: Host, task: string, run: (refresh: () =>
     await leave($, me)
     throw e
   } finally {
-    // the waiting note goes back to what it was, unless something else changed it meanwhile
-    if (o.t && shown) await noteTask($, o.t, note => (note === inLineNote(shown) ? before : note))
+    // the waiting note and the check step go back to what they were (the step fresh), unless something else changed them meanwhile
+    if (o.t && shown) {
+      const was = before
+      await markLine($, o.t, cur => ({
+        ...(cur.note === inLineNote(shown) ? { note: was?.note } : {}),
+        ...(cur.checking?.step === 'queue' ? { checking: was?.checking && { ...was.checking, at: now() } } : {}),
+      }))
+    }
   }
   o.limit?.start()
   try {

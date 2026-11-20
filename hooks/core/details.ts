@@ -1,6 +1,6 @@
 // The task page: its labelled rows and wrapping them to the panel width.
 import type { SymccStatus, SymccTask } from '../../types'
-import { type BoardTask, intoOf, isInvestigation, modeOf, STATUS_WORD } from './board-file'
+import { type BoardTask, inLineNote, intoOf, isInvestigation, modeOf, STATUS_WORD } from './board-file'
 import { crossBranchNotes } from './git-setup'
 import { shortSha, taskCommits } from './commits'
 import { originMark, originOf } from './origin'
@@ -36,9 +36,7 @@ export const statusMark = (t: Pick<SymccTask, 'status'> & { runs?: readonly unkn
 
 /** The step a task is in on its page, its row icon and its word ("⧗ test", "⋯ queue"); '' when it is in none. */
 export function stepNowWord(t: Pick<BoardTask, 'status' | 'checking'> & { note?: string }, nowMs: number): string {
-  const { stage } = taskPhase(t, nowMs)
-  if (stage === 'queue') return `${IN_LINE_ICON} queue`
-  const step = stageStep(stage)
+  const step = stageStep(taskPhase(t, nowMs).stage)
   return step ? `${STEP_ICON[step]} ${STEP_WORD[step]}` : ''
 }
 
@@ -58,7 +56,7 @@ export function statusBadge(t: BadgeTask, nowMs: number, since?: number | string
   const p = taskPhase(t, nowMs, undefined, { merging })
   const step = stageStep(p.stage)
   const color = STATUS_BADGE[p.shown]
-  const word = p.stage === 'queue' ? `${IN_LINE_ICON} ${t.note}` : step ? `${STEP_ICON[step]} ${STEP_WORD[step]}` : p.state === 'doing' ? `${STATUS_MARK.doing} worker` : `${statusMark(t)} ${STATUS_WORD[t.status]}`
+  const word = p.stage === 'queue' && p.place ? `${IN_LINE_ICON} ${inLineNote(p.place)}` : step ? `${STEP_ICON[step]} ${STEP_WORD[step]}` : p.state === 'doing' ? `${STATUS_MARK.doing} worker` : `${statusMark(t)} ${STATUS_WORD[t.status]}`
   if (p.state !== 'doing') return { text: word, color }
   const time = rowTime(t, nowMs, since)
   return { text: time ? `${word} · ${time}` : word, color }

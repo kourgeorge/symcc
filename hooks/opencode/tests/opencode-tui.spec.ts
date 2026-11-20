@@ -124,7 +124,7 @@ test('T-581: a doing row in a check step or the merge line shows its icon and th
   const tasks = [
     ...f0.view.tasks.filter(t => t.id !== 'T-1'),
     ...steps.map(([id, step]) => ({ ...base, id, title: `In ${step}`, attempts: 1, note: '', runs, checking: { step, at: fresh } })),
-    { ...base, id: 'T-9', title: 'In line', attempts: 1, note: 'queue (2)', runs, checking: { step: 'prep' as const, at: fresh } },
+    { ...base, id: 'T-9', title: 'In line', attempts: 1, note: 'queue (2)', runs, checking: { step: 'queue' as const, place: 2, at: fresh } },
     { ...base, id: 'T-10', title: 'Working', attempts: 1, note: '', runs: [{ started: new Date(NOW - 15 * 60_000).toISOString() }] },
   ]
   const f = { ...f0, view: { ...f0.view, tasks, working: [] } }
@@ -1466,7 +1466,7 @@ test('T-596: an approved task in review whose approve runs leaves NEEDS YOU: lis
   }
   const cases = [
     [{ checking: { step: 'prep', at: fresh } }, '✎', '✎ prep'],
-    [{ checking: { step: 'prep', at: fresh }, note: 'queue (2)' }, '⋯', '⋯ queue (2)'],
+    [{ checking: { step: 'queue', place: 2, at: fresh }, note: 'queue (2)' }, '⋯', '⋯ queue (2)'],
     [{ checking: { step: 'testing', at: fresh } }, '⧗', '⧗ test'],
     [{ checking: { step: 'merging', at: fresh } }, '⇢', '⇢ merge'],
   ] as const

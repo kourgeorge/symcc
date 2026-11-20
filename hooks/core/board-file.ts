@@ -130,22 +130,24 @@ export const isInvestigation = (t: { kind?: unknown } | string | undefined): boo
 export const ANSWER_MAX_CHARS = 4000
 
 /** The step of checking a task's finished work: "prep" (symcc's own commit, secret-name and scope check before the merge),
- *  "testing" (the test commands), "checker" (a checker agent tries to break it; only with the checker setting on),
- *  "merging" (bringing it up to date and moving the branch). */
-export type CheckStep = 'prep' | 'testing' | 'checker' | 'merging'
-export type Checking = { step: CheckStep; at: string }
-export const CHECK_STEPS: readonly CheckStep[] = ['prep', 'testing', 'checker', 'merging']
+ *  "checker" (a checker agent tries to break it; only with the checker setting on), "queue" (waiting for its turn in
+ *  the merge line, see inMergeLine), "testing" (catching up with its target branch and running the test commands),
+ *  "merging" (moving the branch). */
+export type CheckStep = 'prep' | 'testing' | 'checker' | 'queue' | 'merging'
+/** The check steps a merge turn marks with markStep (the queue is marked by the merge line itself). */
+export type TurnStep = Exclude<CheckStep, 'queue'>
+/** A task's check step and when it was last marked fresh; `place` only in the queue (1 = its turn is next). */
+export type Checking = { step: CheckStep; at: string; place?: number }
+export const CHECK_STEPS: readonly CheckStep[] = ['prep', 'testing', 'checker', 'queue', 'merging']
 /** The statuses a task may be checked in: a finished try ("doing"), an approve ("review"), a merge waiting for the owner's files ("waiting"). */
 export const CHECKED_STATUSES: readonly SymccStatus[] = ['doing', 'review', 'waiting']
 
 /** `c` when it is a proper checking step, else undefined. */
 export function asChecking(c: unknown): Checking | undefined {
   if (!c || typeof c !== 'object') return undefined
-  const { at } = c as Checking
-  // a board saved before the step was split keeps symcc's own pre-merge step as "checking": read it as "prep"
-  const raw = (c as { step?: unknown }).step
-  const step = (raw === 'checking' ? 'prep' : raw) as CheckStep
-  return CHECK_STEPS.includes(step) && typeof at === 'string' && at ? { step, at } : undefined
+  const { step, at, place } = c as Checking
+  if (!CHECK_STEPS.includes(step) || typeof at !== 'string' || !at) return undefined
+  return step === 'queue' && Number.isInteger(place) && place! > 0 ? { step, at, place } : { step, at }
 }
 
 /** The owner's files that stop a merge: uncommitted changes (`dirty`), untracked and git-ignored files, each only where the merge changes files. */
@@ -445,7 +447,8 @@ const OLD_ROLES: Record<string, string> = { tests: 'tester', backend: 'general',
  * - test_rerun and rerun_minutes (from the tests-only rerun, removed in T-547): dropped; a task that waited for that
  *   rerun (or for the owner's answer after two time-outs) goes back to "todo" for a new try (see withoutTestRerun);
  * - conflict_tries (the separate count of tries to merge main in, removed in T-548): dropped (see withoutConflictTries);
- * - the old waiting note "in line (n)" (before T-605): "queue (n)" (see inLineNote).
+ * - the merge queue's place kept only in the note "queue (n)" (before T-612): a task with a check step gets the queue
+ *   step with that place (checking { step: 'queue', place: n }); without one the leftover note is cleared.
  */
 export function migrateTask(t: BoardTask, into = 'main'): BoardTask | null {
   let out = withoutStages(t) ?? t
@@ -473,9 +476,10 @@ export function migrateTask(t: BoardTask, into = 'main'): BoardTask | null {
   if (rerun) out = rerun
   const clash = withoutConflictTries(out)
   if (clash) out = clash
-  // T-605: the merge line's waiting note was "in line (n)" before it became "queue (n)" (inLineNote)
-  const oldLine = typeof out.note === 'string' ? /^in line \((\d+)\)$/.exec(out.note) : null
-  if (oldLine) out = { ...out, note: inLineNote(Number(oldLine[1])) }
+  // T-612: the queue was only in the note "queue (n)" (inLineNote) before it became a check step of its own
+  const queue = typeof out.note === 'string' ? /^queue \((\d+)\)$/.exec(out.note) : null
+  const checking = out.checking as Checking | undefined
+  if (queue && checking?.step !== 'queue') out = checking ? { ...out, checking: { ...checking, step: 'queue', place: Number(queue[1]) } } : { ...out, note: '' }
   return out === t ? null : out
 }
 
