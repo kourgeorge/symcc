@@ -9,10 +9,10 @@ import { checkEdit, askCall } from '../hooks/app/ask'
 import { toolCall } from '../hooks/app/symcc'
 import { finishWork } from '../hooks/app/workers'
 import { evidenceWritten, logQueue, logVerdict } from '../hooks/app/evidence'
-import { EVENT_LOG_LINES, logEvents, type LogEvent } from '../hooks/app/events'
-import { cleanBit, shortReason, problemCount, REASON_MAX } from '../hooks/core/evidence'
+import { EVENT_LOG_KEEP, EVENT_LOG_LINES, logEvents, type LogEvent } from '../hooks/app/events'
+import { cleanBit, commandHead, shortReason, problemCount, REASON_MAX } from '../hooks/core/evidence'
 import { saveBoard } from '../hooks/app/store'
-import { S, workers, scoutRuns, toolName } from '../hooks/app/state'
+import { S, workers, scoutRuns, stopped, toolName } from '../hooks/app/state'
 import type { HostRunResult } from '../hooks/host'
 import { fakeHost, memoryFs, done } from './fake-host'
 import { test } from './reset'
@@ -25,12 +25,17 @@ const LOG = `${ROOT}/.symcc/events.jsonl`
 const SECRET = 'sk-abcdefghijklmnopqrstuvwxyz0123'
 
 /** A host with in-memory files and the commands the board's lock and safe writes use; `hang` makes the log's writes never finish. */
-function world(opts: { hang?: boolean; failLog?: boolean } = {}) {
+function world(opts: { hang?: boolean; failLog?: boolean; maxRead?: number } = {}) {
   const files = new Map<string, string>()
   const fs = memoryFs(files)
   const { host } = fakeHost({
     fs: {
       ...fs,
+      // like the Claude host, which refuses to read a file over 4 MiB
+      read: async (p: string) => {
+        if (opts.maxRead !== undefined && (files.get(p)?.length ?? 0) > opts.maxRead) throw new Error('file too big')
+        return fs.read(p)
+      },
       write: async (p: string, text: string) => {
         if (opts.failLog && p.includes('events')) throw new Error('disk full')
         if (opts.hang && p.includes('events')) return new Promise<void>(() => undefined)
@@ -41,6 +46,7 @@ function world(opts: { hang?: boolean; failLog?: boolean } = {}) {
       const [x, y] = a.filter(v => !v.startsWith('-'))
       if (cmd === 'ln') return files.has(y!) ? done({ exitCode: 1 }) : (files.set(y!, files.get(x!)!), done())
       if (cmd === 'mv') return (files.set(y!, files.get(x!)!), files.delete(x!), done())
+      if (cmd === 'sh' && a[1] === 'cat "$1" >> "$2"') return (files.set(a[4]!, (files.get(a[4]!) ?? '') + files.get(a[3]!)!), done())
       if (cmd === 'rm') for (const f of a.filter(v => !v.startsWith('-'))) files.delete(f)
       return done()
     },
@@ -159,13 +165,46 @@ test('the cleaning: secrets hidden, one line, cut short', () => {
 
 test('past the log limit, older lines move to events-archive.jsonl instead of being dropped', async () => {
   const w = world()
+  const ARCH = `${ROOT}/.symcc/events-archive.jsonl`
   const line = (i: number): LogEvent => ({ kind: 'asked', at: AT, task: `T-${i}`, try: 1 })
-  w.files.set(`${ROOT}/.symcc/events-archive.jsonl`, `${JSON.stringify(line(-1))}\n`)
+  w.files.set(ARCH, `${JSON.stringify(line(-1))}\n`)
   w.files.set(LOG, Array.from({ length: EVENT_LOG_LINES }, (_, i) => JSON.stringify(line(i))).join('\n') + '\n')
   await logEvents([line(EVENT_LOG_LINES), line(EVENT_LOG_LINES + 1)], w.host)
   const log = w.files.get(LOG)!.trim().split('\n')
-  const arch = w.files.get(`${ROOT}/.symcc/events-archive.jsonl`)!.trim().split('\n')
-  expect(log.length).toBe(EVENT_LOG_LINES)
-  expect((JSON.parse(log[0]!) as { task: string }).task).toBe('T-2')
-  expect(arch.map(l => (JSON.parse(l) as { task: string }).task)).toEqual(['T--1', 'T-0', 'T-1'])
+  const arch = w.files.get(ARCH)!.trim().split('\n')
+  const moved = EVENT_LOG_LINES + 2 - EVENT_LOG_KEEP
+  expect(log.length).toBe(EVENT_LOG_KEEP)
+  expect((JSON.parse(log[0]!) as { task: string }).task).toBe(`T-${moved}`)
+  expect(arch.map(l => (JSON.parse(l) as { task: string }).task)).toEqual(['T--1', ...Array.from({ length: moved }, (_, i) => `T-${i}`)])
+  expect([...w.files.keys()].filter(f => f.includes('.add-') || f.includes('.tmp-'))).toEqual([])
+})
+
+test('an archive too big to read keeps its history: new lines are added to its end, it is never rewritten', async () => {
+  const w = world({ maxRead: 1_000_000 })
+  const ARCH = `${ROOT}/.symcc/events-archive.jsonl`
+  const line = (i: number): LogEvent => ({ kind: 'asked', at: AT, task: `T-${i}`, try: 1 })
+  const big = Array.from({ length: 22000 }, (_, i) => JSON.stringify(line(-1 - i))).join('\n') + '\n'
+  w.files.set(ARCH, big)
+  w.files.set(LOG, Array.from({ length: EVENT_LOG_LINES }, (_, i) => JSON.stringify(line(i))).join('\n') + '\n')
+  await logEvents([line(EVENT_LOG_LINES)], w.host)
+  const arch = w.files.get(ARCH)!
+  expect(arch.startsWith(big)).toBe(true)
+  expect(arch.trim().split('\n').length).toBe(22000 + EVENT_LOG_LINES + 1 - EVENT_LOG_KEEP)
+  // the next write, now under the limit, moves nothing
+  await logEvents([line(EVENT_LOG_LINES + 1)], w.host)
+  expect(w.files.get(ARCH)!.length).toBe(arch.length)
+})
+
+test('a secret set in front of a refused command is never logged', async () => {
+  const w = world()
+  await withWorker(w)
+  stopped.add('w9')
+  for (const command of ['PGPASSWORD=hunter2 psql -h db', 'GITHUB_TOKEN=abc123 gh pr', 'export DB_PASSWORD=hunter2', 'env FOO=bar1x make'])
+    expect(await checkEdit(w.host, 'w9', { command }, '/repo')).not.toBe(undefined)
+  const line = (await evidenceWritten(), w.files.get(LOG) ?? '')
+  expect(line.includes('"refused"')).toBe(true)
+  expect(['hunter2', 'abc123', 'bar1x'].filter(s => line.includes(s))).toEqual([])
+  expect(commandHead('PGPASSWORD=hunter2 psql -h db')).toBe('PGPASSWORD=[hidden] psql')
+  expect(commandHead('export DB_PASSWORD=hunter2')).toBe('export DB_PASSWORD=[hidden]')
+  expect(cleanBit('GITHUB_TOKEN=abc123 gh', 60)).toBe('GITHUB_TOKEN=[hidden] gh')
 })

@@ -33,9 +33,12 @@ export const WHAT_MAX = 60
 /** The most files kept on a 'needs-files' event. */
 export const FILES_MAX = 20
 
-/** `s` made one line, secret-looking parts hidden (hideSecrets), cut at `max` characters with "…". */
+/** A name that looks like it holds a secret (PGPASSWORD, GITHUB_TOKEN, db_secret, API_KEY...), then "=" or ":". */
+const SECRET_NAME = /\b([\w.-]*(?:pass|pwd|secret|token|key|auth|cred|session|cookie)[\w.-]*\s*[:=]\s*)\S+/gi
+
+/** `s` made one line, secret-looking parts hidden (hideSecrets, plus any secret-named `NAME=value`), cut at `max` characters with "…". */
 export function cleanBit(s: unknown, max: number): string {
-  const one = hideSecrets(String(s ?? '').replace(/\s+/g, ' ').trim())
+  const one = hideSecrets(String(s ?? '').replace(/\s+/g, ' ').trim()).replace(SECRET_NAME, '$1[hidden]')
   return one.length > max ? `${one.slice(0, max - 1).trimEnd()}…` : one
 }
 
@@ -46,10 +49,14 @@ export function shortReason(text: string): string {
   return cleanBit(end >= 0 ? s.slice(0, end + 1) : s, REASON_MAX)
 }
 
-/** The first `words` words of shell command `command`, cleaned and cut short: never the whole command. */
+/**
+ * The first `words` words of shell command `command`, cleaned and cut short: never the whole command. A setting in
+ * front (`NAME=value`, also after `export` or `env`) keeps only its name, since its value may be a secret.
+ */
 export function commandHead(command: string, words = 2): string {
   const parts = String(command ?? '').trim().split(/\s+/).filter(Boolean)
-  return cleanBit(parts.slice(0, words).join(' '), WHAT_MAX)
+  const head = parts.slice(0, words).map(w => w.replace(/^([A-Za-z_][\w]*)=.*$/, '$1=[hidden]'))
+  return cleanBit(head.join(' '), WHAT_MAX)
 }
 
 /** A checker's problems report counted: its list items ("- ", "* ", "1. "), or 1 when it has none. */

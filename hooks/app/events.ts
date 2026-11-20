@@ -12,7 +12,7 @@ export type { TaskEvent } from '../core/events'
 /** A listener gets the events of one board write (never empty), in order, and the host that wrote it. */
 export type TaskEventListener = (events: readonly TaskEvent[], host: Host) => void | Promise<void>
 
-/** The most lines kept in the activity log; older ones move to the archive (eventsArchiveFile). */
+/** The most lines kept in the activity log; older ones move to the archive (eventsArchiveFile, see logEvents). */
 export const EVENT_LOG_LINES = 5000
 
 /** The activity log, inside the project's data folder. */
@@ -34,9 +34,31 @@ async function writeWhole(host: Host, file: string, name: string, text: string) 
   }
 }
 
+/** Lines kept in the log after older ones move to the archive: moving a batch at a time keeps it rare. */
+export const EVENT_LOG_KEEP = EVENT_LOG_LINES - 1000
+
 /**
- * Appends `events` to the activity log, one JSON line each, keeping the last EVENT_LOG_LINES lines; the older ones
- * are added to the end of the archive first (an archive that can't be written keeps them in the log for now).
+ * Adds `lines` to the end of the archive without reading it (it only grows, and may get too big to read): they go to
+ * a temp file that `cat` appends. Answers whether that worked; a failure leaves the archive as it was.
+ */
+async function appendArchive(host: Host, lines: readonly string[]): Promise<boolean> {
+  const arch = eventsArchiveFile()
+  const tmp = `${arch}.add-${Math.random().toString(36).slice(2, 10)}`
+  try {
+    await host.fs.write(tmp, lines.join('\n') + '\n')
+    const r = await host.run(['sh', '-c', 'cat "$1" >> "$2"', 'sh', tmp, arch])
+    return r.exitCode === 0
+  } catch {
+    return false
+  } finally {
+    await host.run(['rm', '-f', tmp]).catch(() => undefined)
+  }
+}
+
+/**
+ * Appends `events` to the activity log, one JSON line each. Past EVENT_LOG_LINES lines, the older ones move to the
+ * end of the archive (appendArchive) until EVENT_LOG_KEEP are left; an archive that can't be written keeps them in
+ * the log for now.
  */
 export async function logEvents(events: readonly LogEvent[], host: Host): Promise<void> {
   if (!S.root) return
@@ -44,15 +66,9 @@ export async function logEvents(events: readonly LogEvent[], host: Host): Promis
   const old = await host.fs.read(file).catch(() => '')
   let lines = [...String(old ?? '').split('\n').filter(l => l.trim()), ...events.map(e => JSON.stringify(e))]
   if (lines.length > EVENT_LOG_LINES) {
-    const older = lines.slice(0, lines.length - EVENT_LOG_LINES)
-    const arch = eventsArchiveFile()
-    const kept = String((await host.fs.read(arch).catch(() => '')) ?? '')
-    const moved = await writeWhole(host, arch, 'events-archive.jsonl', `${kept}${kept && !kept.endsWith('\n') ? '\n' : ''}${older.join('\n')}\n`).then(
-      () => true,
-      () => false,
-    )
+    const moved = await appendArchive(host, lines.slice(0, lines.length - EVENT_LOG_KEEP))
     // an archive that keeps failing never lets the log grow past twice its limit
-    lines = lines.slice(moved ? -EVENT_LOG_LINES : -2 * EVENT_LOG_LINES)
+    lines = lines.slice(moved ? -EVENT_LOG_KEEP : -2 * EVENT_LOG_LINES)
   }
   await writeWhole(host, file, 'events.jsonl', lines.join('\n') + '\n')
 }
