@@ -10,7 +10,7 @@
 // No key hints: the mode switch is a link and the search a box in the footer. An empty board says so, with one
 // primary button that starts a message to the lead in the prompt box.
 import type { SymccStatus, SymccTask } from '../../../types'
-import { statusMark, archivedNote, archivedOf, localOffset, panelSections, BACKLOG_SHOWN, ALL_CLEAR, statusCell, rowCell, rowMark, rowExtra, searchTasks, SEARCH_WORDS, tryMark, tryTone, isInvestigation, needsYou, kindMark, fmtDuration, waitsForYou } from '../../board'
+import { statusMark, archivedNote, archivedOf, localOffset, panelSections, BACKLOG_SHOWN, ALL_CLEAR, statusCell, rowCell, rowMark, rowExtra, roleTag, kindTag, searchTasks, SEARCH_WORDS, tryMark, tryTone, isInvestigation, needsYou, kindMark, roleMark, fmtDuration, waitsForYou } from '../../board'
 import { openDays, S } from '../../app/state'
 import { type $, panelValues } from '../panel'
 import type { PaneParts } from './parts'
@@ -32,8 +32,10 @@ export const ASK_LEAD = 'Tell the lead what to do next'
 export const ASK_LEAD_DRAFT = 'Next task: '
 
 /** A piece of an open row's state part after its status words: `drop` says which goes first when the line is too
- *  wide (higher first; 0 never), `long` marks a question, failure reason or note, capped to about half the free room. */
-export type RowPart = { text: string; drop: number; long?: boolean }
+ *  wide (higher first; 0 only after the title is down to "…"), `long` marks a question, failure reason or note, capped
+ *  to about half the free room, `short` a shorter form used before the part is dropped ("[researcher]" for
+ *  "[investigation · researcher]", "after T-1 +2" for "after T-1, T-2, T-3"). */
+export type RowPart = { text: string; drop: number; long?: boolean; short?: string }
 
 /** `text` cut at a word to at most `max` columns, ending with "…"; '' when not even one whole word fits. */
 const cutWords = (text: string, max: number) => {
@@ -43,30 +45,41 @@ const cutWords = (text: string, max: number) => {
   return space > 0 ? `${head.slice(0, space).replace(/[\s,;:·-]+$/, '')}…` : ''
 }
 
-/** An open row's one line, fitted to `room` columns: the status words and the try always stay whole; a long part (the
- *  question, why it failed) takes at most about half the free room, cut at a word; then whole parts are dropped, the
- *  highest `drop` first (the kind, then the choices count, then the long text), until the title keeps MIN_TITLE; then
- *  the title is cut with "…". A part is never cut mid-word. */
-export function fitRow(title: string, room: number, status: string, parts: RowPart[], tried: string): { title: string; rest: string } {
-  const fixed = 3 + status.length + (tried ? 3 + tried.length : 0)
-  const width = (ps: RowPart[]) => ps.reduce((n, p) => n + 3 + p.text.length, 0)
+/** An open row's one line, fitted to `room` columns, never wider (but for a room too small for even the status mark
+ *  and the try). In order, until it fits: a long part (the question, why it failed) is held to about half the free
+ *  room, cut at a word; parts with a `drop` are shortened (their `short` form) or dropped whole, the highest first (the
+ *  role tag, the kind, the choices count, the long text), until the title keeps MIN_TITLE; "after …" takes its short
+ *  form; the title is cut with "…", down to just "…"; "after …" and "→ branch" are dropped; last, the status words lose
+ *  words from their end ("for 5m"). The try always stays whole; a part is never cut mid-word. */
+export function fitRow(title: string, room: number, status: string, parts: RowPart[], tried: string): { title: string; status: string; rest: string } {
   const t = title.replace(/\s+/g, ' ').trim()
+  const size = (st: string, ps: RowPart[]) => 3 + st.length + (tried ? 3 + tried.length : 0) + ps.reduce((n, p) => n + 3 + p.text.length, 0)
   let kept = parts.filter(p => p.text)
-  const rest = () => kept.map(p => p.text).join(' · ')
-  if (t.length + fixed + width(kept) <= room) return { title: t, rest: rest() }
+  let st = status
+  const left = () => room - size(st, kept)
+  const done = (shown: string) => ({ title: shown, status: st, rest: kept.map(p => p.text).join(' · ') })
+  const shorten = (at: number) => {
+    const p = kept[at]!
+    kept = p.short && p.short !== p.text ? kept.map((q, i) => (i === at ? { ...q, text: p.short!, short: undefined } : q)) : kept.filter((_, i) => i !== at)
+  }
+  if (t.length <= left()) return done(t)
   // a long part: at most about half the room the status, the try and the short parts leave (more when the whole title
   // needs less), so the title keeps the rest
-  const free = room - fixed - width(kept.filter(p => !p.long))
+  const free = room - size(st, kept.filter(p => !p.long))
   const cap = Math.max(Math.floor(free / 2), free - t.length) - 3
   kept = kept.map(p => (p.long ? { ...p, text: cutWords(p.text, cap) } : p)).filter(p => p.text)
   const floor = Math.min(t.length, MIN_TITLE)
-  while (room - fixed - width(kept) < floor) {
+  while (left() < floor) {
     const top = Math.max(0, ...kept.map(p => p.drop))
     if (!top) break
-    const at = kept.map(p => p.drop).lastIndexOf(top)
-    kept = kept.filter((_, i) => i !== at)
+    shorten(kept.map(p => p.drop).lastIndexOf(top))
   }
-  return { title: cutEnd(t, Math.max(floor, room - fixed - width(kept))), rest: rest() }
+  for (let i = 0; i < kept.length && left() < floor; i++) if (kept[i]!.short) shorten(i)
+  // the title goes below its floor, down to "…", before the state part loses anything more
+  while (left() < 1 && kept.length) kept = kept.slice(0, -1)
+  const words = status.split(' ')
+  while (left() < 1 && words.length > 1) st = (words.pop(), words.join(' '))
+  return done(cutEnd(t, Math.max(1, left())))
 }
 
 async function askLead($: $) {
@@ -135,15 +148,21 @@ export function listPageVs($: $, pane: PaneParts) {
     // the kind once: rowExtra already shows it as a tag ("[bug · tester]", "[investigation]") for some rows; a question
     // or failure reason that only mentions the word does not count
     const tagged = body.split(' · ').some(p => p === `[${kind}]` || p === `[${kind}`)
-    // "after T-3" and a role tag are short and stay; the kind goes first, then a question or reason (cut at a word)
-    const short = /^(after |\[)/.test(body)
+    // "after T-3" stays longest ("after T-1 +2" when narrow); the role tag goes first ("[researcher]" before that), then
+    // the kind, then a question or reason (cut at a word)
+    const after = body.startsWith('after ') ? body : ''
+    const ids = after ? after.slice('after '.length).split(', ') : []
+    const role = !after && body && (body === roleTag(x) || body === kindTag(x)) ? body : ''
+    const roleOnly = roleMark(x)
     const parts: RowPart[] = [
       { text: branch, drop: 0 },
-      { text: short ? body : '', drop: 0 },
+      { text: after, drop: 0, short: ids.length > 1 ? `after ${ids[0]} +${ids.length - 1}` : undefined },
       { text: kind && !tagged ? kind : '', drop: 3 },
-      { text: short ? '' : body, drop: 1, long: true },
+      { text: role, drop: 4, short: role.startsWith('[') && roleOnly && role !== `[${roleOnly}]` ? `[${roleOnly}]` : undefined },
+      { text: after || role ? '' : body, drop: 1, long: true },
     ]
     let rest = ''
+    let state = ''
     const href = vsHref('task', x.id)
     const lead = (needs || ended ? 2 : 0) + x.id.length + 2
     const status = ended ? '' : statusText(x)
@@ -155,6 +174,7 @@ export function listPageVs($: $, pane: PaneParts) {
       const fit = fitRow(x.title.trim() || NO_TITLE, width - depth - lead, status, parts, tried)
       words = x.title.trim() ? mdText(fit.title) : ''
       rest = fit.rest
+      state = fit.status
     }
     return (
       <Box key={`vs-task-${x.id}`} flexDirection="column" paddingLeft={depth}>
@@ -168,7 +188,7 @@ export function listPageVs($: $, pane: PaneParts) {
           {ended ? null : (
             <Text key={`vs-task-${x.id}-info`} wrap="truncate" color={C('inactive')}>
               {' · '}
-              <Text color={C(tone[x.status]!)}>{status}</Text>
+              <Text color={C(tone[x.status]!)}>{state}</Text>
               {rest ? ` · ${rest}` : ''}
               {tried ? <Text color={C(tryTone(x))}>{` · ${tried}`}</Text> : null}
             </Text>
@@ -204,7 +224,7 @@ export function listPageVs($: $, pane: PaneParts) {
                   {words ? null : <Text key="no-title" color={C('inactive')}>{` \u00a0${NO_TITLE}`}</Text>}
                   <Text key={`vs-question-${q.id}-info`} wrap="truncate" color={C('inactive')}>
                     {' · '}
-                    <Text color={C('warning')}>{state}</Text>
+                    <Text color={C('warning')}>{fit.status}</Text>
                     {fit.rest ? ` · ${fit.rest}` : ''}
                   </Text>
                 </Box>
