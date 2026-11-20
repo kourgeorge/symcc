@@ -23,6 +23,8 @@ import { checkerPrompt, checkerTestsText } from '../hooks/core/checker'
 import { inMergeLine } from '../hooks/app/merge-line'
 import { parseMergeLine } from '../hooks/board'
 import { onTaskEvent, type TaskEvent } from '../hooks/app/events'
+import { debriefs, learnedAsk } from '../hooks/app/debrief'
+import { DEBRIEF_MS, DEBRIEF_TEXT, LEARNED_ASK } from '../hooks/core/org-mem'
 
 const ROOT = '/repo'
 const WT = `${ROOT}/.symcc/worktrees/T-1`
@@ -1153,7 +1155,93 @@ test('T-632: the lead\'s orgmem tool adds, replaces, removes and lists notes in 
   expect(await w.$.fs.read(GUIDE)).toBe(full)
   // the lead's guide: decide briefly, add only what is surprising and new, merge close ones with replace, don't ask the owner
   const g = leadGuide()
-  for (const words of ['Suggested for org-mem', "don't ask the owner about each", 'surprising', 'useful to agents on other tasks', 'replace it with the better one', 'most suggestions are skipped', 'Mention in one line what you added']) expect(g).toContain(words)
+  for (const words of ['Suggested for org-mem', "don't ask the owner about each", 'useful to agents on other tasks in this project', 'true beyond that task', 'at most about 100 characters', 'prefer replacing an old note with a better one over adding', 'most suggestions are skipped', 'Mention in one line what you added']) expect(g).toContain(words)
+  expect(g).not.toContain('surprising')
+})
+
+test('T-656: a host that can continue an agent gets main prompts without the org-mem ask; a host that can\'t keeps the ask (the fallback)', async () => {
+  const w = world()
+  await saveBoard(w.$, boardWith(true))
+  const b = await load(w.$)
+  const t = find(b, 'T-1')!
+  // no followUp (the fake host's default): the ask stays at the end of the worker's and checker's prompts
+  expect(learnedAsk(w.$)).toBe(LEARNED_ASK)
+  w.$.agents.followUp = async () => undefined
+  expect(learnedAsk(w.$)).toBe('')
+  // the main prompts are only about the task
+  expect(WORKER_PROMPT(t, b, WT)).not.toContain('"Learned:" section')
+  expect(WORKER_PROMPT(t, b, WT)).not.toContain('Suggested for org-mem')
+  expect(WORKER_PROMPT(t, b, WT, undefined, '', LEARNED_ASK)).toContain('"Learned:" section')
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: 0 })
+  const done = withStarts(w.$, workerFinished(w.$, 'ag1', 'made the change'))
+  await until(() => checkerRuns.size > 0)
+  expect(w.spawns[0]!.prompt).not.toContain('"Learned:" section')
+  await checkerFinished([...checkerRuns.keys()][0]!, 'OK')
+  await done
+})
+
+test('T-656: after a hand-back one debrief goes to the same worker and checker; nothing waits for it, and its suggestions reach the task and the lead', async () => {
+  const w = world()
+  const follow: { to: string; text: string }[] = []
+  w.$.agents.followUp = async (to, text) => void follow.push({ to, text })
+  await saveBoard(w.$, boardWith(true))
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: 0 })
+  const done = withStarts(w.$, workerFinished(w.$, 'ag1', 'made the change', { reason: 'answer' }, { input: 100, output: 10 }))
+  await until(() => checkerRuns.size > 0)
+  // sent at once, and the checker started without waiting for an answer
+  expect(follow).toEqual([{ to: 'ag1', text: DEBRIEF_TEXT }])
+  // the worker answers while its checker runs: its suggestions are kept on the task, its tokens on the try
+  agentFinished(w.$, 'ag1', { answer: 'Suggested for org-mem:\n- Run one test file with sh scripts/test-files.sh.', end: { reason: 'answer' }, isAborted: false, tokens: { input: 7, output: 3 } })
+  await until(() => debriefs.size === 0)
+  await turns(50)
+  expect((find(await load(w.$), 'T-1') as { suggested?: string[] }).suggested).toEqual(['Run one test file with sh scripts/test-files.sh.'])
+  const chk = [...checkerRuns.keys()][0]!
+  await checkerFinished(chk, 'OK')
+  await done
+  await turns(50)
+  expect(follow.map(f => f.to)).toEqual(['ag1', chk])
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('done')
+  expect(t.runs!.at(-1)!.tokens).toEqual({ input: 107, output: 13 })
+  expect(leadQueue.join('\n')).toContain('T-1: Suggested for org-mem')
+  expect(leadQueue.join('\n')).toContain('- Run one test file with sh scripts/test-files.sh.')
+  // the checker's answer comes after the task is done: its suggestion goes to the lead at once; "none" adds nothing
+  leadQueue.splice(0)
+  agentFinished(w.$, chk, { answer: '- Snapshot files live in tests/*-snapshot.ts.', end: { reason: 'answer' }, isAborted: false, tokens: undefined })
+  await turns(50)
+  expect(leadQueue.join('\n')).toContain('T-1: Suggested for org-mem')
+  expect(leadQueue.join('\n')).toContain('- Snapshot files live in tests/*-snapshot.ts.')
+  expect((find(await load(w.$), 'T-1') as { suggested?: string[] }).suggested).toBe(undefined)
+})
+
+test('T-656: a debrief with no answer in time (or one that can\'t be sent) changes nothing and never holds up the merge', async () => {
+  const w = world()
+  const fire: (() => void)[] = []
+  const after = w.$.clock.after
+  w.$.clock.after = (ms, fn) => (ms === DEBRIEF_MS ? fire.push(fn) : 0, after(ms, fn))
+  const follow: string[] = []
+  w.$.agents.followUp = async to => void follow.push(to)
+  await saveBoard(w.$, boardWith(false))
+  const t = await finish(w)
+  // merged without any answer
+  expect(t.status).toBe('done')
+  expect(follow).toEqual(['ag1'])
+  expect(fire).toHaveLength(1)
+  // time is up: the agent is told to stop, and an answer after that is not kept
+  fire[0]!()
+  expect(debriefs.size).toBe(0)
+  expect(w.sends.some(s => s.to === 'ag1' && s.text.startsWith('Stop now'))).toBe(true)
+  agentFinished(w.$, 'ag1', { answer: 'Suggested for org-mem:\n- A trap that came too late.', end: { reason: 'answer' }, isAborted: false, tokens: undefined })
+  await turns(50)
+  expect(leadQueue.join('\n')).not.toContain('A trap that came too late')
+  expect((find(await load(w.$), 'T-1') as { suggested?: string[] }).suggested).toBe(undefined)
+  // a host whose follow-up fails: the work still merges, and nothing waits
+  const w2 = world()
+  w2.$.agents.followUp = async () => Promise.reject(new Error('the agent is gone'))
+  await saveBoard(w2.$, boardWith(false))
+  expect((await finish(w2)).status).toBe('done')
+  await turns(20)
+  expect(debriefs.size).toBe(0)
 })
 
 test('T-600: a report without a "Learned:" section adds nothing, and with no guide file the prompts have no notes heading', async () => {

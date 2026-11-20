@@ -1,6 +1,6 @@
 // T-600, T-620, T-632: organizational memory (org-mem) on disk (<project>/.<name>/org-mem.md; the pure parts are in core/org-mem.ts).
-// Every new worker, checker and scout gets org-mem in its prompt (orgMemText). A report's "Learned:" lines are only
-// suggestions: they are kept on the task (keepSuggestions) and listed in the lead's board update when the task is
+// Every new worker, checker and scout gets org-mem in its prompt (orgMemText). The debrief's answer (app/debrief.ts,
+// T-656) and a report's "Learned:" lines (a host with no debrief) are only suggestions: they are kept on the task (keepSuggestions) and listed in the lead's board update when the task is
 // done (a dropped task's are thrown away; see the task event listener below). Only the lead changes org-mem, with its
 // orgmem tool (orgMemTool); the owner may delete notes on the Settings page or edit the file by hand.
 import { addSuggestions, deleteOrgMemNote, dropTaskIds, orgMemAdd, orgMemFile, orgMemList, orgMemNotes, orgMemRemove, orgMemReplace, orgMemSection, suggestedText, ORG_MEM_MAX_LINES, type OrgMemNote } from '../core/org-mem'

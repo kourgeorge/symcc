@@ -23,6 +23,7 @@ import INVESTIGATION from '../../../prompts/investigation'
 import CHECKER from '../../../prompts/checker'
 import { SYMCC_WORDS } from '../../../hooks/host'
 import { scoutPrompt } from '../../../hooks/core/scouts'
+import { DEBRIEF_TEXT } from '../../../hooks/core/org-mem'
 
 test('withBasePrompt puts WORKER_BASE in front of a worker\'s prompt, and SCOUT_BASE in front of a scout\'s or checker\'s, naming none of symcc\'s tools (T-474)', () => {
   const tool = (t: string) => SYMCC_WORDS.tool('symcc', t)
@@ -198,7 +199,7 @@ test('one task end to end on the Node host: add, a fake claude -p worker edits i
     await writeFile(`${repo}/.gitignore`, '.symcc/\n')
     await git('add', '.')
     await git('commit', '-qm', 'init')
-    const cli = (...args: string[]) => runCommand(['bun', MAIN, '--root', repo, '--claude', FAKE, ...args], { cwd: repo, env: { FAKE_LOG: log, FAKE_SCRATCH: '1' }, timeoutMs: 120_000 })
+    const cli = (...args: string[]) => runCommand(['bun', MAIN, '--root', repo, '--claude', FAKE, ...args], { cwd: repo, env: { FAKE_LOG: log, FAKE_SCRATCH: '1', FAKE_DEBRIEF: 'Suggested for org-mem:\n- Run one test file with sh check.sh.' }, timeoutMs: 120_000 })
 
     expect((await cli('tool', 'settings', JSON.stringify({ test_commands: ['sh check.sh'] }))).stdout).toContain('sh check.sh')
     const added = await cli('add', 'Say hello', 'Write hello.txt with a greeting', '--files', 'hello.txt')
@@ -236,15 +237,24 @@ test('one task end to end on the Node host: add, a fake claude -p worker edits i
     expect((await git('log', '--all', '--name-only', '--format=')).stdout).not.toContain('.scratch')
     const t = JSON.parse(await readFile(`${repo}/.symcc/board.json`, 'utf8')).tasks[0]
     expect(t.status).toBe('done')
-    expect(t.runs[0].cost).toBe(0.0123)
-    expect(t.runs[0].tokens).toEqual({ input: 100, output: 20, cache_write: 7, cache_read: 5 })
+    // T-656: the debrief resumed the same claude -p session for one read-only turn; its tokens and cost count on the try
+    expect(args).not.toContain('--no-session-persistence')
+    const resumeArgs = (await readFile(`${log}.resume.args`, 'utf8')).split('\n')
+    expect(resumeArgs.slice(resumeArgs.indexOf('--resume'), resumeArgs.indexOf('--resume') + 2)).toEqual(['--resume', 'fake'])
+    expect(resumeArgs.slice(resumeArgs.indexOf('--allowedTools') + 1, resumeArgs.indexOf('--disallowedTools'))).toEqual(['Read', 'Glob', 'Grep'])
+    expect(resumeArgs).toContain('Bash')
+    expect(await readFile(`${log}.resume.prompt`, 'utf8')).toBe(DEBRIEF_TEXT)
+    expect(prompt).not.toContain('"Learned:" section')
+    expect(tick.stdout).toContain('- Run one test file with sh check.sh.')
+    expect(t.runs[0].cost).toBeCloseTo(0.0133, 6)
+    expect(t.runs[0].tokens).toEqual({ input: 110, output: 23, cache_write: 7, cache_read: 5 })
 
     const board = await cli('board')
     expect(board.stdout).toContain('1 done')
     expect((await cli('tool', 'board', JSON.stringify({ task: 'T-1' }))).stdout).toContain('done')
   } finally {
     await rm(repo, { recursive: true, force: true })
-    for (const f of ['args', 'prompt', 'cwd']) await rm(`${log}.${f}`, { recursive: true, force: true })
+    for (const f of ['args', 'prompt', 'cwd', 'resume.args', 'resume.prompt']) await rm(`${log}.${f}`, { recursive: true, force: true })
   }
 }, 300_000)
 

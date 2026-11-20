@@ -62,6 +62,8 @@ export function claudeAgents($: EngineInterface): Host['agents'] {
     list: async () => (await $.agent.list()).map(a => hostAgent(a, S.N.name)),
     send: (agentId, text) => $.session.send({ to: { agentId }, text }),
     stop: (agentId, text) => $.session.send({ to: { agentId }, text }),
+    // T-656: a message to a subagent that has handed back resumes it with its whole context; its answer comes as another turn.complete
+    followUp: (agentId, text) => $.session.send({ to: { agentId }, text }),
   }
 }
 

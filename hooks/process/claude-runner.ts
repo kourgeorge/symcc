@@ -84,6 +84,7 @@ export function scratchInUse(sys: Pick<ProcessSystem, 'run'>, cwd: string | unde
 /** One line of `claude -p --output-format stream-json` output, as far as the runner reads it. */
 type ClaudeLine = {
   type?: string
+  session_id?: string
   subtype?: string
   is_error?: boolean
   result?: string
@@ -119,10 +120,34 @@ export function claudeResult(out: ProcessOutput): RunnerEnd {
   }
 }
 
+/** T-656: the `claude -p` session a run's stream-json output names (its last line with a session_id), for `--resume`. */
+export function claudeSession(out: ProcessOutput): string | undefined {
+  let id: string | undefined
+  for (const l of out.stdout.split('\n')) {
+    const t = l.trim()
+    if (!t.startsWith('{')) continue
+    try {
+      const j = JSON.parse(t) as ClaudeLine
+      if (typeof j.session_id === 'string' && j.session_id) id = j.session_id
+    } catch {
+      // a broken line: skipped
+    }
+  }
+  return id
+}
+
+/** T-656: what a follow-up turn (the debrief) may use: reading only; no commands, no edits. */
+export const FOLLOW_UP_ALLOWED = ['Read', 'Glob', 'Grep']
+export const FOLLOW_UP_DENIED = ['Bash', 'Edit', 'Write', 'NotebookEdit', 'WebSearch', 'WebFetch']
+
 /** Options of claudeRunner: the claude binary (default `claude`, or SYMCC_CLAUDE), and a model for agents that name none. */
 export type ClaudeRunnerOptions = { bin?: string; model?: string }
 
-/** Agents as `claude -p` processes: the prompt on stdin, stream-json out, Claude Code's permission flags as the edit guard. */
+/**
+ * Agents as `claude -p` processes: the prompt on stdin, stream-json out, Claude Code's permission flags as the edit guard.
+ * T-656: the session is kept (no --no-session-persistence), so a finished agent can be given one more turn with
+ * `--resume <session>` (followUp, the debrief), which may only read.
+ */
 export function claudeRunner(sys: Pick<ProcessSystem, 'run' | 'env'>, o: ClaudeRunnerOptions = {}): AgentRunner {
   return {
     name: 'claude',
@@ -130,9 +155,15 @@ export function claudeRunner(sys: Pick<ProcessSystem, 'run' | 'env'>, o: ClaudeR
       const { allowed, denied } = claudePermissions(a, a.kind !== 'scout' && scratchInUse(sys, a.cwd))
       const model = a.model ?? o.model
       // --allowedTools and --disallowedTools take a list each, so the prompt goes on stdin (not as a word after them)
-      const argv = [o.bin ?? sys.env('SYMCC_CLAUDE') ?? 'claude', '-p', '--output-format', 'stream-json', '--verbose', '--no-session-persistence', '--permission-mode', 'dontAsk', ...(model ? ['--model', model] : []), '--allowedTools', ...allowed, '--disallowedTools', ...denied]
+      const argv = [o.bin ?? sys.env('SYMCC_CLAUDE') ?? 'claude', '-p', '--output-format', 'stream-json', '--verbose', '--permission-mode', 'dontAsk', ...(model ? ['--model', model] : []), '--allowedTools', ...allowed, '--disallowedTools', ...denied]
       return { argv, stdin: a.prompt }
     },
     result: claudeResult,
+    session: claudeSession,
+    followUp(session, text, a) {
+      const model = a.model ?? o.model
+      const argv = [o.bin ?? sys.env('SYMCC_CLAUDE') ?? 'claude', '-p', '--resume', session, '--output-format', 'stream-json', '--verbose', '--permission-mode', 'dontAsk', ...(model ? ['--model', model] : []), '--allowedTools', ...FOLLOW_UP_ALLOWED, '--disallowedTools', ...FOLLOW_UP_DENIED]
+      return { argv, stdin: text }
+    },
   }
 }

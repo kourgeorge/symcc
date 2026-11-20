@@ -229,6 +229,14 @@ export interface Host {
     /** ends an agent's work: `text` tells it to stop and end (a host that can, may also end it outright) */
     stop: (agentId: string, text: string) => Promise<unknown>
     /**
+     * T-656: only a host that can continue an agent that has handed back, with its whole memory of the task (Claude
+     * Code: a message resumes the finished subagent; a `claude -p` process: `--resume` of its session; OpenCode: one
+     * more prompt in its session): gives agent `agentId` one more turn with `text`. Resolves once it is sent; the
+     * agent's answer comes back like a run end, for the same `agentId` (symcc's agentFinished). Without it, the prompts
+     * ask for org-mem suggestions at the end of the report instead (see app/debrief.ts).
+     */
+    followUp?: (agentId: string, text: string) => Promise<unknown>
+    /**
      * Only a host that runs agents as processes and records them (hooks/process/, T-474): stops the recorded agent
      * processes an earlier run of the host left running (still alive, not started by this copy), drops the entries of
      * ended ones, and answers the stopped agents' ids. symcc's orphan pass (stopOrphans) calls it.

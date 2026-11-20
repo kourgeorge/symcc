@@ -31,7 +31,7 @@ The change (from where it left {{into}}; run \`git diff {{into}}...HEAD\` in the
 \`\`\`
 
 Don't run long commands in the background. Run your own probes with the Bash tool's longest timeout (timeout: 600000); if one still gets moved to the background, wait for it (read its output until it finishes) before you answer: ending your turn ends your work, so never answer that you will continue later.
-End your answer with exactly one of these (only the optional "Learned:" section below may come after it):
+End your answer with exactly one of these (only optional "Learned:" lines, when asked for below, may come after it):
 - the single word OK on its own last line, when you found no real problem;
 - or a list of the problems, one per line: file:line, what is wrong, and how to show it (a command, an input, or a test that fails).
 Only list real problems you checked; no style wishes.

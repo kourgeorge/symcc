@@ -5,6 +5,7 @@ import { type Board, type BoardTask, orphanMove, liveWorkersFor, putTask, find, 
 import { worktreeDir, taskBranch } from './git'
 import { alreadyMerged } from './review'
 import { S, workers, starting, finishing, stopped, isOwnAgent, halt, tmpWarned } from './state'
+import { debriefs } from './debrief'
 import { type Host, type HostAgent, ENDED_STATUSES, agentState } from '../host'
 import { load, change, now, path, aboutToWait } from './store'
 import { tellLead } from './tell'
@@ -39,6 +40,8 @@ export async function stopOrphans(host: Host, leadNow?: string | null): Promise<
     if (a.kind === 'other') continue
     // Already tracked, or already told to stop: not taken back, and not messaged again (a message would wake it up).
     if (isOwnAgent(a.id)) continue
+    // T-656: an agent answering its debrief (a follow-up after its hand-back) is no orphan; its time limit stops it
+    if (debriefs.has(a.id)) continue
     if (ENDED_STATUSES.includes(a.status)) continue
     if (a.kind === 'worker' && !b) continue
     if (a.kind === 'worker' && b) {

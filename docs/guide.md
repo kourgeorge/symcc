@@ -1546,15 +1546,26 @@ start with `symcc/` are never touched.
 after them, so the next worker doesn't have to find the same things again (how to run one
 test, a trap, where something is).
 
-- **Agents suggest, the lead decides:** a worker, a checker or an investigation may end its report
-  with a `Learned:` section of up to 3 suggested notes, one `- ` line each (the section ends at the
-  first blank line or line that isn't a `- ` line; code blocks in it are left out). A note should be
-  surprising (a careful agent would not guess it), useful to agents on other tasks (not about this
-  task), one short plain sentence, and not already in org-mem; most reports have none. Nothing goes
-  into org-mem from a report. symcc keeps the suggestions on the task (each made one line and cut
-  at about 120 characters; secret-looking lines, file contents and exact repeats are left out).
-  When the task merges (or an investigation is marked Done), the lead's board update lists them
-  under "Suggested for org-mem"; a dropped task's suggestions are thrown away.
+- **The debrief: agents suggest, the lead decides:** a worker's or checker's main prompt is only
+  about its task. Right after it hands back, symcc sends the same agent one short follow-up
+  question, so it answers with the whole task still in mind: is there a fact from this task that
+  would help agents on other tasks in this project (how to test or check something quickly, a trap
+  or a refusal and the way around it, where something lives, a step that wasted time, or a note
+  that turned out wrong)? It may suggest 0 to 3 notes under "Suggested for org-mem:", each one short
+  plain sentence that is true beyond the task and not already in org-mem; most answer "none". It
+  only answers: it changes no files and runs nothing (a file change then is refused or ignored).
+- **It never holds up the work:** the checks, the checker and the merge line start at once from the
+  main hand-back; the debrief's answer is used when it comes, and its tokens count on the task's
+  try. No answer within about 3 minutes: nothing is kept. In Claude Code the message resumes the
+  finished subagent; in the Node host the same `claude -p` session is resumed (`--resume`) for one
+  turn that may only read; in OpenCode the agent's session gets one more prompt. A host that can't
+  continue an agent asks instead for a `Learned:` section at the end of the report (up to 3 `- `
+  lines; the section ends at the first blank line or line that isn't a `- ` line).
+- **Kept for the lead:** nothing goes into org-mem on its own. symcc keeps the suggestions on the
+  task (each made one line and cut at about 100 characters; secret-looking lines, file contents and
+  exact repeats are left out). When the task merges (or an investigation is marked Done), the lead's
+  board update lists them under "Suggested for org-mem" (an answer that comes after that is listed
+  on its own); a dropped task's suggestions are thrown away.
 - **The lead's orgmem tool:** the lead adds what is worth keeping (most suggestions are skipped),
   or replaces a close note with a better one, and tells you in one line what it added. The tool
   can `list` the notes, `add` one or more, `remove` one (by number or text) and `replace` one. New

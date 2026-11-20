@@ -611,6 +611,32 @@ test("no model (none, inherit, default) runs on the lead's current model for a w
   }
 })
 
+test('T-656: an OpenCode agent that handed back gets one follow-up prompt in its own session (the debrief); its end reaches onEnd again with only that turn\'s tokens and cost', async () => {
+  const f = fakeSessions(0)
+  const base = await realpath(await mkdtemp('/tmp/symcc-oc-follow-'))
+  try {
+    const ends: { id: string; end: unknown }[] = []
+    const agents = opencodeAgents(f.api, { dir: base, onEnd: (id, end) => void ends.push({ id, end }), pollMs: 5, waitMs: WAIT_MS })
+    const { agentId } = await agents.spawn({ kind: 'worker', prompt: 'do T-1', name: 'symcc-T-1', description: 'a change' })
+    await until(() => f.calls.some(c => c.startsWith(`prompt ${agentId}`)))
+    // not finished yet: no follow-up
+    await expect(agents.followUp(agentId!, 'x')).rejects.toThrow()
+    f.end(agentId!, 'Changed src/a.ts.')
+    await until(() => ends.length === 1)
+    await agents.followUp(agentId!, 'Before you finish: anything for org-mem?')
+    expect(f.prompts.at(-1)).toEqual({ sessionID: agentId!, text: 'Before you finish: anything for org-mem?', delivery: 'queue' })
+    expect((await agents.list())[0]!.status).toBe('running')
+    const s = f.sessions.get(agentId!)!
+    s.messages.push({ type: 'assistant', content: [{ type: 'text', text: 'none' }], finish: 'stop', tokens: { input: 4, output: 2, reasoning: 1, cache: { read: 0, write: 0 } }, cost: 0.01 })
+    s.ended?.()
+    await until(() => ends.length === 2)
+    expect(ends[1]).toEqual({ id: agentId!, end: { answer: 'none', end: { reason: 'answer' }, isAborted: false, tokens: { input: 4, output: 3 }, cost: 0.01 } })
+    expect((await agents.list())[0]!.status).toBe('completed')
+  } finally {
+    await rm(base, { recursive: true, force: true })
+  }
+})
+
 test('an OpenCode session agent: create (child of the lead) -> move into its folder, waited for -> prompt once symcc recorded it -> its end reaches onEnd with tokens and the final text; an interrupt ends one as aborted', async () => {
   const f = fakeSessions(2)
   const base = await realpath(await mkdtemp('/tmp/symcc-oc-agents-'))
