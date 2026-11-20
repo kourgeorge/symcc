@@ -195,7 +195,7 @@ export function tryMark(t: Pick<SymccTask, 'status' | 'attempts'> & { test_tries
 
 /**
  * The short try mark of a row in the band above the prompt (Claude Code and OpenCode; the board's task lists show none,
- * T-628), right after the row's time: "(3)" ("T-582 ◎ 3m (3)"); '' on a first try (or when not "doing"). The task page keeps
+ * T-628), right after the row's time: "(3)" ("T-582 ⊛ 3m (3)"); '' on a first try (or when not "doing"). The task page keeps
  * its own "try 3/4" wording, the status line and the lead's text board tryMark's.
  */
 export function tryTag(t: Pick<SymccTask, 'status' | 'attempts'>): string {

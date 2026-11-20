@@ -105,7 +105,7 @@ export const IN_LINE_ICON = '⧗'
 /** The one-column icon every row view (band, terminal list, VS Code list, OpenCode band and panel, the lead's text
  *  board) shows in place of the mark ▶ and the step word while a task is in a check step: "⌕ 5m", not "▶ checker 5m".
  *  The word (STEP_WORD) stays on the task page and in the notes; STEP_LEGEND explains the icons. */
-export const STEP_ICON: Record<CheckStep, string> = { prep: '✎', testing: '◎', checker: '⌕', queue: IN_LINE_ICON, merging: '⇢' }
+export const STEP_ICON: Record<CheckStep, string> = { prep: '✎', testing: '⊛', checker: '⌕', queue: IN_LINE_ICON, merging: '⇢' }
 
 /** What the row of an approved task in review says while its approve runs (approveRunning), in place of "Enter to review". */
 export const APPROVED_NOTE = 'approved, merging'
@@ -198,7 +198,7 @@ export function rowTime(t: Pick<SymccTask, 'status' | 'runs'> & Pick<BoardTask, 
 
 /** The status cell of a list or band row (see statusCell): a doing task shows the total work time of all its tries,
  *  "1h40m", also in a check step or in the merge line, where the row's mark (rowMark) is the step's icon in place of
- *  the step word ("◎ 9m"); with `form` 'none' (narrow rows) the time is left out (''). A task in review or waiting in
+ *  the step word ("⊛ 9m"); with `form` 'none' (narrow rows) the time is left out (''). A task in review or waiting in
  *  a check step (an approve, approveRunning) shows the total work time too, like a doing row. The other rows: just statusCell. */
 export function rowCell(t: Parameters<typeof statusCell>[0] & { note?: string }, nowMs: number, since?: number | string, form: TotalForm = 'total'): string {
   const p = taskPhase(t, nowMs)
@@ -233,7 +233,7 @@ const STATE_FORMS: readonly { form: TotalForm; tries: boolean }[] = [
 
 /**
  * The state column of list or band rows, lined up: each row's status cell (rowCell) and, on a doing row's later try,
- * its try tag right after the time ("▶ 1h40m (3)", tryTag), or right after the step icon with no time ("◎ (3)"). The
+ * its try tag right after the time ("▶ 1h40m (3)", tryTag), or right after the step icon with no time ("⊛ (3)"). The
  * doing rows' cells share one width so their tags line up; every state is padded to `width`. The first form whose
  * `width` passes `fits` is used: with the time, then without it, then without the try too (narrow rows).
  * `withTries` false leaves every try tag out (the board's task lists, T-628: only the band and the task page show it).
