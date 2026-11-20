@@ -18,7 +18,7 @@ import { tellLead, noteForLead } from './tell'
 import { sayDone, sayNeedsYou } from './voice'
 import { optionsVia, popupTied } from './questions'
 import { changeValues, investigationValues } from './prompt-values'
-import { orgMemText, learnFrom } from './org-mem'
+import { orgMemText, keepSuggestions } from './org-mem'
 import { cleanLeftoverTmp, stopOrphans, timedOut, askOvertime, wrapUp } from './cleanup'
 
 // ---------------- workers ----------------
@@ -768,7 +768,8 @@ async function finishTry(host: Host, agentId: string, w: Pick<Worker, 'task' | '
   const t = find(b, w.task)
   if (!t || t.status !== 'doing') return false // changed or dropped meanwhile
   await saveReport(host, t, answer)
-  await learnFrom(host, t.id, answer)
+  // T-632: its "Learned:" lines are only suggestions for org-mem, kept on the task for the lead (see keepSuggestions)
+  await keepSuggestions(host, t.id, answer)
   const summary = cutLine(answer, 600) || '(no summary)'
   // Its time was up: what it handed back is its report; the task fails with its work kept, nothing is merged.
   if (t.wrap_up) {
