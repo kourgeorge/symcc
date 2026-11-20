@@ -149,6 +149,16 @@ export function viewTask<T extends { id: string; status: SymccStatus }>(t: T): T
   return { ...x, [PARTS_KEY]: file } as unknown as T
 }
 
+/**
+ * View task `t` safe to draw while its parts are not (yet) read: a task viewTask slimmed gets an empty `details` and
+ * `history` where they are missing (pages read both). Any other task comes back as it is.
+ */
+export function viewStubFilled<T extends object>(t: T): T {
+  const x = t as Record<string, unknown>
+  if (!(PARTS_KEY in x) || (typeof x.details === 'string' && Array.isArray(x.history))) return t
+  return { ...x, details: typeof x.details === 'string' ? x.details : '', history: Array.isArray(x.history) ? x.history : [] } as T
+}
+
 /** View task `t` with its parts (from its parts file's text) put back; `t` itself when it has none or they can't be read. */
 export function withViewParts<T extends object>(t: T, text: string | null): T {
   const file = (t as Record<string, unknown>)[PARTS_KEY]
@@ -209,7 +219,9 @@ export const mbText = (bytes: number) => `${(bytes / (1024 * 1024)).toFixed(1)} 
 
 /** The warning for file `file` (as the owner knows it, e.g. ".symcc/board.json") of `bytes` bytes, past SIZE_WARN_BYTES. */
 export const sizeWarnText = (file: string, bytes: number) =>
-  `${file} is ${mbText(bytes)}, close to the 4 MB limit on reading or writing one file; past it symcc can't read it`
+  bytes > READ_LIMIT_BYTES
+    ? `${file} is ${mbText(bytes)}, over the 4 MB limit on reading or writing one file, so symcc can't read it`
+    : `${file} is ${mbText(bytes)}, close to the 4 MB limit on reading or writing one file; past it symcc can't read it`
 
 /** The error for file `file` of `bytes` bytes, too big to be read (or written). */
 export const tooBigText = (file: string, bytes: number, doing: 'read' | 'write' = 'read') =>

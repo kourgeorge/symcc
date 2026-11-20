@@ -5,7 +5,8 @@
 import { expect } from 'claude-code/testing'
 import type { SymccHistoryEntry, SymccRun } from '../types'
 import { type Board, type BoardTask, addTask, emptyBoard, parseBoard, readBoard } from '../hooks/board'
-import { ARCHIVE_FILE_BYTES, READ_LIMIT_BYTES, SIZE_WARN_BYTES, archiveChunks, fieldSizes, joinedText, partsFileOf, viewTask, withViewParts } from '../hooks/core/board-parts'
+import { ARCHIVE_FILE_BYTES, READ_LIMIT_BYTES, SIZE_WARN_BYTES, archiveChunks, fieldSizes, joinedText, partsFileOf, sizeWarnText, viewStubFilled, viewTask, withViewParts } from '../hooks/core/board-parts'
+import { scoutToolLines } from '../hooks/core/scouts'
 import { load, readWhole, saveBoard, saveMigrated } from '../hooks/app/store'
 import { readArchiveFile, saveArchive } from '../hooks/app/archive'
 import { publish } from '../hooks/app/lead'
@@ -221,4 +222,22 @@ test('T-675: the board view file leaves out a finished task\'s long parts; its p
   // the page joins the parts file back: the history, details and full origin are there again
   expect(withViewParts(slim, w.files.get(`${ROOT}/.symcc/tasks/T-600.json`)!)).toEqual(done)
   expect(withViewParts(slim, null)).toEqual(slim)
+})
+
+test('T-675: a file already over the 4 MB limit is said to be over it, not close to it', () => {
+  expect(sizeWarnText('.symcc/board.json', 5 * 1024 * 1024)).toBe('.symcc/board.json is 5.0 MB, over the 4 MB limit on reading or writing one file, so symcc can\'t read it')
+  expect(sizeWarnText('.symcc/board.json', SIZE_WARN_BYTES + 200_000)).toContain('3.2 MB, close to the 4 MB limit')
+})
+
+test('T-675: a scout without symcc\'s tools is told where a done task\'s history, runs and details are', () => {
+  const line = scoutToolLines('symcc', { symccTools: false }).board
+  expect(line).toContain('.symcc/board.json')
+  expect(line).toContain('its history, runs and details are in the file its parts field names (e.g. .symcc/tasks/T-600.json, under its id)')
+})
+
+test('T-675: a slim view task gets empty details and history to draw with; a whole one is left as it is', () => {
+  const b = bigBoard()
+  const slim = viewTask(b.tasks[611]!)
+  expect(viewStubFilled(slim)).toEqual({ ...slim, details: '', history: [] })
+  expect(viewStubFilled(b.tasks[690]!)).toBe(b.tasks[690]!)
 })

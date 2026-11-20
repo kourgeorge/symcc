@@ -25,7 +25,7 @@ import { VIEW_FILE, parseViewFile, bandDraw, panelLines, panelKeys, panelTaskAct
 import { SETTING_GROUPS, isScoutRunReport, taskReports, parseSettingValue, settingChoices, settingInfo, settingValue, isSettingPage, everyText, everyMinutesOf, type SettingName, type ScoutEditField } from '../board'
 import type { SymccScout } from '../../types'
 import { orgMemDeleteAsk, orgMemFile, orgMemNoteKey } from '../core/org-mem'
-import { PARTS_KEY, safePartsFile, withViewParts } from '../core/board-parts'
+import { PARTS_KEY, safePartsFile, viewStubFilled, withViewParts } from '../core/board-parts'
 
 export type { PanelKey, PanelHit, PanelTab }
 
@@ -347,9 +347,11 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   let parts: { id: string; file: string; text: string | null } | undefined
   const openTask = (f: ViewFile | null) => (f && tab() === 'tasks' && opened() ? f.view.tasks.find(x => x.id === opened()) : undefined)
   const withParts = (f: ViewFile | null): ViewFile | null => {
+    if (!f) return f
     const t = openTask(f) as (Record<string, unknown> & { id: string }) | undefined
-    if (!f || !t || !parts || parts.id !== t.id || parts.file !== t[PARTS_KEY]) return f
-    return { ...f, view: { ...f.view, tasks: f.view.tasks.map(x => (x.id === t.id ? withViewParts(x, parts!.text) : x)) } }
+    const p = t && parts && parts.id === t.id && parts.file === t[PARTS_KEY] ? parts : undefined
+    // a slim task is drawn with empty details and history until (or if never) its parts are read
+    return { ...f, view: { ...f.view, tasks: f.view.tasks.map(x => viewStubFilled(p && x.id === p.id ? withViewParts(x, p.text) : x)) } }
   }
   const readTaskParts = () => {
     const f = rawFile

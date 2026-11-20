@@ -1447,7 +1447,8 @@ well under that, without you lowering `archive_days`:
   a done task's page reads them from its `tasks/` file when you open it.
 - **Early warning:** when a file symcc reads whole passes 3 MB, you get a toast, the lead is
   told, and the board shows "board.json is 3.2 MB, close to the 4 MB limit ..." where the git
-  warning goes. A file over 4 MB that can't be read gives an error that says so.
+  warning goes (past 4 MB it says "over the 4 MB limit" instead). A file over 4 MB that can't
+  be read gives an error that says so.
 
 ---
 

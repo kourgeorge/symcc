@@ -1918,6 +1918,60 @@ test('T-627: drawnLines cuts a line into the rows it takes: at line breaks, and 
   expect(drawnLines([{ text: 'x'.repeat(20), color: 'text' }], 8).map(lineText)).toEqual(['xxxxxxxx', 'xxxxxxxx', 'xxxx'])
 })
 
+test('T-675: a done task\'s page draws before its parts file is read, and when it is missing (empty history, no error)', async () => {
+  const f0 = viewFile()
+  const history = [{ kind: 'merged', at: AT, text: 'try 1: merged after a long road' }]
+  const whole = f0.view.tasks.map(t => (t.id === 'T-5' ? { ...t, details: 'the old details', history } : t))
+  const f: ViewFile = { ...f0, view: { ...f0.view, tasks: whole.map(t => viewTask(t)) as ViewFile['view']['tasks'] } }
+  const partsPath = '/work/proj/.symcc/tasks/T-0.json'
+  for (const partsThere of [true, false]) {
+    let release: () => void = () => undefined
+    const gate = new Promise<void>(res => (release = res))
+    const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)]])
+    if (partsThere) files.set(partsPath, JSON.stringify({ version: 1, tasks: { 'T-5': { details: 'the old details', history } } }))
+    const toasts: string[] = []
+    const slots: { append: string; render: (input: never) => unknown }[] = []
+    const ctx: TuiContext = {
+      location: { directory: '/work/proj' },
+      theme: {},
+      renderer: { width: 120, height: 200 },
+      client: { session: { command: async () => undefined } },
+      keymap: { layer: () => undefined },
+      ui: {
+        toast: { show: (o: unknown) => void toasts.push(JSON.stringify(o)) },
+        dialog: { prompt: async () => undefined, select: async () => undefined },
+        panel: { open: () => true, close: () => undefined, current: () => undefined },
+        slot: claim => (slots.push(claim as never), () => undefined),
+      },
+    }
+    // the parts file answers only once released: the page is drawn before that
+    const readText = async (p: string) => {
+      if (p === partsPath) await gate
+      return files.get(p) ?? Promise.reject(new Error('missing'))
+    }
+    const board = startTui(ctx, { runtime: fakeRuntime(), readText, every: () => () => undefined, now: () => NOW })
+    await board.refresh()
+    const panel = slots.find(s => s.append === 'session.panel')!.render({ name: BOARD_PANEL, sessionID: 'ses_1', width: 100, focused: true, close: () => undefined, focus: () => undefined } as never)
+    const ids = panelLines(f, { opened: '', cursor: 0 }, NOW, 100).ids
+    for (let i = 0; i < ids.indexOf('group:done'); i++) await board.press('down', 'ses_1')
+    await board.press('open', 'ses_1')
+    await board.press('down', 'ses_1')
+    await board.press('open', 'ses_1')
+    expect(board.state().opened).toBe('T-5')
+    const before = shown(panel)
+    expect(before.some(l => l.includes('T-5'))).toBe(true)
+    expect(before.some(l => l.includes('a long road'))).toBe(false)
+    await board.refresh()
+    release()
+    await new Promise<void>(res => setTimeout(res, 0))
+    await board.refresh()
+    await new Promise<void>(res => setTimeout(res, 0))
+    expect(shown(panel).some(l => l.includes('a long road'))).toBe(partsThere)
+    expect(toasts.filter(t => t.includes('could not be drawn'))).toEqual([])
+    board.stop()
+  }
+})
+
 test('T-675: a done task\'s history is not in the view file; opening its page reads it from its parts file and shows it', async () => {
   const f0 = viewFile()
   const history = [{ kind: 'merged', at: AT, text: 'try 1: merged after a long road' }]
