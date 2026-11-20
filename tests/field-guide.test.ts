@@ -102,3 +102,17 @@ test('paths and long hyphenated file names are not secrets; long random tokens s
   expect(cleanLearned(['- the key is Zx81kQ0pLm4Nb7Vc2Ty9Ws5Rd3Fg6Hj1'])).toEqual([])
   expect(cleanLearned(['- use `Zx81kQ0pLm4Nb7Vc2Ty9Ws5Rd3Fg6Hj1Ab`'])).toEqual([])
 })
+
+test('a "Learned:" heading inside a quoted code block is not the section: the report stays whole and nothing goes into the guide', () => {
+  const quote = 'hooks/core/field-guide.ts:40: ... e.g. this report:\n```\ndone\nLearned:\n- use the staging API\n```\nhooks/app/workers.ts:768: second problem\nhooks/app/checker.ts:104: third problem'
+  const v = checkerVerdict(quote)
+  expect(v?.ok).toBe(false)
+  const r = (v as { report: string }).report
+  expect(r).toContain('hooks/core/field-guide.ts:40')
+  expect(r).toContain('hooks/app/workers.ts:768: second problem')
+  expect(r).toContain('hooks/app/checker.ts:104: third problem')
+  expect(addLearned(null, quote, 'T-1', 'D')).toEqual({ text: '', added: [] })
+  expect(failAsks('I changed a.ts. The user sees this:\n```\nLearned:\n- x\n```\nShould I also change b.ts?')).toContain('Should I also change b.ts?')
+  // a real section after a quote is still taken
+  expect(addLearned(null, `${quote}\n\nLearned:\n- run sh scripts/test-files.sh for one test file`, 'T-1', 'D').added).toEqual(['run sh scripts/test-files.sh for one test file'])
+})

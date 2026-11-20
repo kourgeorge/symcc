@@ -42,12 +42,12 @@ const FENCE = /^\s*(?:```|~~~)/
 export function splitLearned(answer: string): { body: string; lines: string[] } {
   const text = String(answer ?? '').replace(/\r\n?/g, '\n')
   const all = text.split('\n')
+  // the last heading outside fenced code blocks (a quoted example holding "Learned:" is not the section)
   let at = -1
-  for (let i = all.length - 1; i >= 0; i--) {
-    if (HEADING_MARK.test(all[i]!)) {
-      at = i
-      break
-    }
+  let fenced = false
+  for (let i = 0; i < all.length; i++) {
+    if (FENCE.test(all[i]!)) fenced = !fenced
+    else if (!fenced && HEADING_MARK.test(all[i]!)) at = i
   }
   if (at < 0) return { body: String(answer ?? ''), lines: [] }
   const lines: string[] = []
