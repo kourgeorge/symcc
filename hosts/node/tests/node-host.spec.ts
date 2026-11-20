@@ -11,7 +11,7 @@ import { claudePermissions, claudeResult, editRule, claudeRunner } from '../../.
 import { withBasePrompt, processAgents, type AgentRunner } from '../../../hooks/process/agents'
 import { PROCESSES_FILE, entriesText, parseEntries } from '../../../hooks/process/record'
 import { nodeProcessSystem, runsProgram, elapsedSeconds } from '../system'
-import { nodeFs, nodeProcesses } from '../host'
+import { nodeFs, nodeProcesses, nodeProcessesWith } from '../host'
 import { lockText, LOCK_STALE_MS } from '../../../hooks/core/board-file'
 import { openSession, leadTool, closeSession, settle } from '../session'
 import { toolCall, notLeadText } from '../../../hooks/app/symcc'
@@ -355,6 +355,57 @@ async function groupGone(group: number, ms = 60_000): Promise<boolean> {
   }
   return false
 }
+
+test('T-669: a Bun Worker started seconds after the process names this process with its real start time, so it is alive', async () => {
+  // the worker must start well after the process (more than the 5 s slack): wait out the rest
+  const late = 7_000 - process.uptime() * 1000
+  if (late > 0) await new Promise<void>(r => void setTimeout(r, late))
+  type BunWorker = { onmessage: unknown; onerror: unknown; terminate: () => void }
+  const WorkerClass = (globalThis as unknown as { Worker: new (url: string) => BunWorker }).Worker
+  const worker = new WorkerClass(import.meta.url.replace(/[^/]*$/, 'self-worker.ts'))
+  const got = await new Promise<{ me?: { pid: number; started: number }; alive?: boolean; uptime: number }>((resolve, reject) => {
+    worker.onmessage = (e: { data: never }) => resolve(e.data)
+    worker.onerror = (e: unknown) => reject(e)
+  })
+  worker.terminate()
+  expect(got.me?.pid).toBe(process.pid)
+  expect(await nodeProcesses.alive(got.me!)).toBe(true)
+  expect(got.alive).toBe(true)
+  // the worker and the process name the same start time (ps counts whole seconds)
+  expect(Math.abs(got.me!.started - nodeProcesses.self()!.started)).toBeLessThan(1_501)
+}, 30_000)
+
+test('T-669: a dead pid is gone at once; when ps fails, self() names no holder and alive() can not tell', async () => {
+  const child = spawn('sh', ['-c', 'exit 0'], { stdio: ['ignore', 'ignore', 'ignore'] })
+  await new Promise<void>(r => child.on('close', () => r()))
+  let asked = 0
+  const broken = nodeProcessesWith({
+    runSync: () => ((asked++, { exitCode: 127, stdout: '' })),
+    run: async () => ((asked++, { exitCode: 127, stdout: '', stderr: 'no ps' })),
+  })
+  // dead: no ps needed
+  expect(await broken.alive({ pid: child.pid!, started: Date.now() })).toBe(false)
+  expect(asked).toBe(0)
+  expect(broken.self()).toBe(undefined)
+  expect(await broken.alive({ pid: process.pid, started: Date.now() })).toBe(undefined)
+  // ps that throws or prints something unreadable: can't tell either
+  const odd = nodeProcessesWith({
+    runSync: () => {
+      throw new Error('no ps')
+    },
+    run: async () => ({ exitCode: 0, stdout: 'what\n', stderr: '' }),
+  })
+  expect(odd.self()).toBe(undefined)
+  expect(await odd.alive({ pid: process.pid, started: Date.now() })).toBe(undefined)
+  // self() asks ps once and keeps the answer
+  let n = 0
+  const counted = nodeProcessesWith({ runSync: () => ((n++, { exitCode: 0, stdout: '00:10\n' })), run: async () => ({ exitCode: 0, stdout: '00:10\n', stderr: '' }) })
+  const a = counted.self()!
+  expect(counted.self()).toEqual(a)
+  expect(n).toBe(1)
+  expect(Math.abs(Date.now() - 10_000 - a.started)).toBeLessThan(1_501)
+  expect(await counted.alive(a)).toBe(true)
+})
 
 test('T-659: the Node host names this process as a board lock holder, and tells a running holder from an ended one or a reused pid', async () => {
   const me = nodeProcesses.self()!

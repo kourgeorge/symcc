@@ -535,7 +535,7 @@ test('in VS Code a to do task worked on before shows ● in the list and on its 
   await ui.unmount()
 })
 
-test('T-648: in VS Code a task in the queue shows ⧗ and one in the test step ◎', async ($, on) => {
+test('T-648: in VS Code a task in the queue shows ⧗ and one in the test step ⊛', async ($, on) => {
   const fresh = new Date(T0 - 10_000).toISOString()
   const base = BOARD_TASKS.find(t => t.id === 'T-401')!
   const ran = [{ started: new Date(T0 - 600_000).toISOString(), ended: fresh }]
@@ -545,7 +545,7 @@ test('T-648: in VS Code a task in the queue shows ⧗ and one in the test step �
   on('ui.toast', () => ({ value: undefined }))
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
   expect(await rowText(ui, 'T-493')).toMatch(/^T-493 ⧗ \d+m\s+Queued one/)
-  expect(await rowText(ui, 'T-494')).toMatch(/^T-494 ◎ \d+m\s+Tested one/)
+  expect(await rowText(ui, 'T-494')).toMatch(/^T-494 ⊛ \d+m\s+Tested one/)
   expect(texts(await ui.drawn()).join('\n')).not.toContain('⋯')
   await ui.unmount()
 })

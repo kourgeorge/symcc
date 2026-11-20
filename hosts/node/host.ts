@@ -5,8 +5,8 @@
 // are external processes (hooks/process/, with hosts/node/system.ts). This is the proof that hooks/app/ and hooks/core/ run outside Claude Code; an
 // OpenCode plugin or a standalone client builds its Host the same way.
 import { readFile, writeFile, mkdir, readdir, lstat, stat, realpath, access } from 'node:fs/promises'
-import { spawn } from 'node:child_process'
-import { type Host, type HostFeatures, type HostFileEntry, type HostFileStat, type HostProcesses, type HostRunResult, SYMCC_WORDS, manifestVersion, noUi } from '../../hooks/host'
+import { spawn, spawnSync } from 'node:child_process'
+import { type Host, type HostFeatures, type HostFileEntry, type HostFileStat, type HostProcess, type HostProcesses, type HostRunResult, SYMCC_WORDS, manifestVersion, noUi } from '../../hooks/host'
 import { elapsedSeconds } from './system'
 
 /** What this host can do: no screen, and the lead is told when the CLI asks (it prints the update). */
@@ -83,31 +83,74 @@ export const nodeFs: Host['fs'] = {
 /** How far a process's start (from ps, which counts whole seconds) may be from a lock's `started` and still be the lock's holder. */
 const HOLDER_SLACK_MS = 5_000
 
-/** When this process started (ms since 1970), worked out once from its uptime. */
-const SELF_STARTED = Date.now() - Math.round(process.uptime() * 1000)
+/** The ps line that says how long process `pid` has run (`[[dd-]hh:]mm:ss`). */
+const etimeArgv = (pid: number) => ['ps', '-o', 'etime=', '-p', String(pid)]
+
+/** How the Node processes ask ps (tests swap these to make ps fail). */
+export type PsRunners = {
+  /** for self(), which can't wait: runs ps at once */
+  runSync: (argv: readonly string[]) => { exitCode: number; stdout: string }
+  /** for alive() */
+  run: (argv: readonly string[]) => Promise<HostRunResult>
+}
+
+const realPs: PsRunners = {
+  runSync(argv) {
+    const [cmd, ...args] = argv
+    const r = spawnSync(cmd ?? 'ps', args, { encoding: 'utf8' })
+    return { exitCode: r.status ?? 1, stdout: r.stdout ?? '' }
+  },
+  run: argv => runCommand(argv, { timeoutMs: 5_000 }),
+}
 
 /**
  * host.processes over Node (T-659): this process is the board lock's holder; a holder is alive while `kill -0` finds
  * its pid and ps says that process started at about the lock's `started` (else the pid was given to another program).
  * When ps can't tell, the answer is undefined and the lock's age decides.
+ *
+ * T-669: self()'s start time comes from ps too (the same source alive() checks against), asked once and kept. Not
+ * process.uptime(): inside a Bun Worker (OpenCode runs plugins in its TUI worker) that counts from the worker's start,
+ * so a live holder looked gone. When ps can't answer, self() names no holder, and the 30 s rule applies.
  */
-export const nodeProcesses: HostProcesses = {
-  self: () => ({ pid: process.pid, started: SELF_STARTED }),
-  async alive({ pid, started }) {
-    if (!Number.isInteger(pid) || pid <= 1) return undefined
-    try {
-      process.kill(pid, 0)
-    } catch (err) {
-      // EPERM: it runs, as another user; anything else (ESRCH): no such process
-      if ((err as { code?: string }).code !== 'EPERM') return false
-    }
-    const r = await runCommand(['ps', '-o', 'etime=', '-p', String(pid)], { timeoutMs: 5_000 })
-    const elapsed = r.exitCode === 0 ? elapsedSeconds(r.stdout.trim()) : undefined
-    // ps found no such process (it ended just now): gone; ps could not run or its line can't be read: can't tell
-    if (elapsed === undefined) return r.exitCode === 1 && !r.stdout.trim() ? false : undefined
-    return Math.abs(Date.now() - elapsed * 1000 - started) <= HOLDER_SLACK_MS
-  },
+export function nodeProcessesWith(ps: PsRunners): HostProcesses {
+  let mine: HostProcess | null | undefined
+  return {
+    self() {
+      if (mine === undefined) {
+        let r: { exitCode: number; stdout: string } | undefined
+        try {
+          r = ps.runSync(etimeArgv(process.pid))
+        } catch {
+          r = undefined
+        }
+        const elapsed = r && r.exitCode === 0 ? elapsedSeconds(r.stdout.trim()) : undefined
+        // ps counts whole seconds (rounded down), so the start lies in the second before; take its middle
+        mine = elapsed === undefined ? null : { pid: process.pid, started: Date.now() - elapsed * 1000 - 500 }
+      }
+      return mine ?? undefined
+    },
+    async alive({ pid, started }) {
+      if (!Number.isInteger(pid) || pid <= 1) return undefined
+      try {
+        process.kill(pid, 0)
+      } catch (err) {
+        // EPERM: it runs, as another user; anything else (ESRCH): no such process
+        if ((err as { code?: string }).code !== 'EPERM') return false
+      }
+      // the pid runs; with no start time to compare, can't tell
+      if (typeof started !== 'number' || !Number.isFinite(started)) return undefined
+      const r = await ps.run(etimeArgv(pid)).catch(() => undefined)
+      if (!r) return undefined
+      const elapsed = r.exitCode === 0 ? elapsedSeconds(r.stdout.trim()) : undefined
+      // ps found no such process (it ended just now): gone; ps could not run or its line can't be read: can't tell
+      if (elapsed === undefined) return r.exitCode === 1 && !r.stdout.trim() ? false : undefined
+      return Math.abs(Date.now() - elapsed * 1000 - started) <= HOLDER_SLACK_MS
+    },
+  }
 }
+
+/** host.processes over Node, with the real ps (see nodeProcessesWith). */
+export const nodeProcesses: HostProcesses = nodeProcessesWith(realPs)
 
 /** A timer that doesn't keep the process alive by itself (the CLI ends when its command is done). */
 const loose = <T extends { unref?: () => unknown }>(t: T): T => (t.unref?.(), t)
