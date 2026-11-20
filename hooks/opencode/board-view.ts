@@ -150,8 +150,8 @@ export function parseViewFile(text: string | null | undefined): ViewFile | null 
 export type PanelKey = 'up' | 'down' | 'open' | 'back' | 'close' | LetterKey | ChoiceKey
 
 /** The letter keys the panel takes, each pressed as itself (the task page's take core's taskActions keys: u resume,
- *  k stash or keep as a note, l role, h already merged, n needs review). k is also "up" where no action has it. */
-export const LETTER_KEYS = ['a', 'x', 'd', 't', 's', 'c', 'r', 'p', 'o', 'e', 'u', 'k', 'l', 'h', 'n'] as const
+ *  z stash to backlog, v keep as a note, l role, h already merged, n needs review). j and k are not here: they always move (KEY_BINDS). */
+export const LETTER_KEYS = ['a', 'x', 'd', 't', 's', 'c', 'r', 'p', 'o', 'e', 'u', 'z', 'v', 'l', 'h', 'n'] as const
 export type LetterKey = (typeof LETTER_KEYS)[number]
 const isLetterKey = (k: string): k is LetterKey => (LETTER_KEYS as readonly string[]).includes(k)
 

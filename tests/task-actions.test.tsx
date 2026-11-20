@@ -51,11 +51,27 @@ test('taskKeys: the hints are the buttons that have a key, in their order (p, u,
     const a = taskActions(t, { worker: true })
     expect(taskKeys(a).map(k => `${k.key} ${k.word}`).slice(0, -3)).toEqual(keyed(a).filter(k => k !== 'y copy'))
   }
-  expect(hints(tk('todo'))).toEqual(['p pause', 'k stash to backlog', 'l role', 'x drop', 'n needs review', 'y copy', '↑↓ scroll', 'b back'])
-  expect(hints(tk('paused'))).toEqual(['u resume', 'k stash to backlog', 'l role', 'h already merged', 'x drop', 'n needs review', 'y copy', '↑↓ scroll', 'b back'])
+  expect(hints(tk('todo'))).toEqual(['p pause', 'z stash to backlog', 'l role', 'x drop', 'n needs review', 'y copy', '↑↓ scroll', 'b back'])
+  expect(hints(tk('paused'))).toEqual(['u resume', 'z stash to backlog', 'l role', 'h already merged', 'x drop', 'n needs review', 'y copy', '↑↓ scroll', 'b back'])
   expect(hints(tk('dropped'))).toEqual(['r retry', 'h already merged', 'y copy', '↑↓ scroll', 'b back'])
   expect(hints(tk('review'))).toEqual(['a approve', 'x reject', 'd show changes', 'n needs review', 'y copy', '↑↓ scroll', 'b back'])
   expect(hints(tk('done'))).toEqual(['y copy', '↑↓ scroll', 'b back'])
+})
+
+test('taskActions keys: none is j or k (they always move), none clashes on one page, stash is z and keep as a note v (T-592)', () => {
+  // the page's own keys beside its actions: b back, t s c the views, the number keys of the answer buttons
+  const pageKeys = ['b', 't', 's', 'c', 'j', 'k', '1', '2', '3', '4', '5', '6', '7', '8', '9']
+  const all = [tk('todo'), tk('doing'), tk('doing', { time_ask: T }), tk('paused'), tk('waiting', { question: 'Which?' }), tk('waiting', FILE_WAIT), tk('review'), tk('review', { kind: 'investigation' }), tk('failed'), tk('failed', { attempts: 0 }), tk('dropped'), tk('backlog'), tk('done')]
+  for (const t of all) for (const ctx of [{}, { worker: true }, { merging: true }]) {
+    const keys = taskActions(t, ctx).flatMap(x => (x.key ? [x.key] : []))
+    expect(keys.filter(k => k === 'j' || k === 'k')).toEqual([])
+    expect(keys.filter(k => pageKeys.includes(k))).toEqual([])
+    expect(keys.map(k => k.toLowerCase())).toEqual([...new Set(keys.map(k => k.toLowerCase()))])
+  }
+  for (const s of ['todo', 'paused', 'failed']) expect(taskActions(tk(s)).find(x => x.id === 'stash')?.key).toBe('z')
+  expect(taskActions(tk('review', { kind: 'investigation' })).find(x => x.id === 'keep-note')?.key).toBe('v')
+  expect(taskActions(tk('todo')).map(actionButtonLabel)).toContain('Stash to backlog (z)')
+  expect(taskActions(tk('review', { kind: 'investigation' })).map(actionButtonLabel)).toContain('Keep as a note (v)')
 })
 
 test('taskAsks: what a task asks and its choices, for each status', () => {

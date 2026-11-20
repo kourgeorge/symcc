@@ -2844,9 +2844,9 @@ test('key hints: in order for the task state, laid out at 30, 50 and 80 columns,
   expect(words(keysFor('review'))).toEqual(['a approve', 'x reject', 'd show changes', 'n needs review', 'y copy', '↑↓ scroll', 'b back'])
   expect(words(keysFor('review', { worker: true }))).toEqual(['a approve', 'x reject', 'd show changes', 'w watch worker', 'n needs review', 'y copy', '↑↓ scroll', 'b back'])
   expect(words(keysFor('backlog'))).toEqual(['o move to todo', 'l role', 'x drop', 'n needs review', 'y copy', '↑↓ scroll', 'b back'])
-  expect(words(keysFor('todo', { worker: true }))).toEqual(['w watch worker', 'p pause', 'k stash to backlog', 'l role', 'x drop', 'n needs review', 'y copy', '↑↓ scroll', 'b back'])
+  expect(words(keysFor('todo', { worker: true }))).toEqual(['w watch worker', 'p pause', 'z stash to backlog', 'l role', 'x drop', 'n needs review', 'y copy', '↑↓ scroll', 'b back'])
   // a failed task's key line lists the two actions its "Next:" text points to, and every other button with a key
-  expect(words(keysFor('failed'))).toEqual(['r retry', 'k stash to backlog', 'l role', 'h already merged', 'x drop', 'n needs review', 'y copy', '↑↓ scroll', 'b back'])
+  expect(words(keysFor('failed'))).toEqual(['r retry', 'z stash to backlog', 'l role', 'h already merged', 'x drop', 'n needs review', 'y copy', '↑↓ scroll', 'b back'])
   expect(words(keysFor('done'))).toEqual(['y copy', '↑↓ scroll', 'b back'])
   expect(words(diffKeys(true, true))).toEqual(['a approve', 'x reject', 'd all files', '↑↓ scroll', 'b back to the task'])
   expect(words(diffKeys(false, false))).toEqual(['↑↓ scroll', 'b back to the task'])
