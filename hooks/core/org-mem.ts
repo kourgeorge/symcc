@@ -122,10 +122,11 @@ export const looksSecret = (s: string): boolean => SECRET.some(r => r.test(s)) |
 const CONTENTS = /```|^(?:diff --git|@@ |\+\+\+ |--- )/
 
 /**
- * A line that says there is nothing: "-", "na", or one that starts with "none", "nothing", "no new", "no facts" or
- * "n/a" (any case, any words after: "None — nothing here is true beyond this task.", "No new facts.").
+ * A line that says there is nothing: "-", "na", or one that starts with the whole word "no", "none", "nothing" or
+ * "n/a" (any case, any words after: "None — nothing here is true beyond this task.", "No new facts.", "No."); "Nonetheless"
+ * and "Note" are kept.
  */
-const NOTHING = /^[\s("'*_]*(?:(?:none|nothing|no new|no facts?|n\/a)\b|(?:na|-+)[\s.)]*$)/i
+const NOTHING = /^[\s("'*_]*(?:(?:no|none|nothing|n\/a)\b|(?:na|-+)[\s.)]*$)/i
 
 /**
  * Raw "Learned:" lines cleaned: the list mark taken off, made one line (spaces squeezed), cut at LEARNED_LINE_CHARS;
