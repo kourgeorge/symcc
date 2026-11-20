@@ -3877,3 +3877,28 @@ test('T-596: an approved task in review whose approve runs is counted and listed
     expect(boardText({ ...emptyBoard(), tasks: [t] }, now)).toContain('— ready for review')
   }
 })
+
+test("T-606: ownersTurn is review, waiting or failed with no approve running; needsYou is ownersTurn or a doing task asking for more time", () => {
+  const now = Date.parse('2026-11-11T12:00:00Z')
+  const fresh = new Date(now - 10_000).toISOString()
+  const [b0] = addTask(emptyBoard(), { origin: W, title: 'Fix it' }, fresh)
+  const base = b0.tasks[0]!
+  const running = { step: 'testing' as const, at: fresh }
+  const cases: [string, typeof base, boolean, boolean][] = [
+    ['review', { ...base, status: 'review' }, true, true],
+    ['review, approve running', { ...base, status: 'review', checking: running }, false, false],
+    ['waiting', { ...base, status: 'waiting' }, true, true],
+    ['waiting, approve running', { ...base, status: 'waiting', checking: running }, false, false],
+    ['failed', { ...base, status: 'failed' }, true, true],
+    ['doing', { ...base, status: 'doing' }, false, false],
+    ['doing, in a check step', { ...base, status: 'doing', checking: running }, false, false],
+    ['doing, asking for more time', { ...base, status: 'doing', time_ask: fresh }, false, true],
+    ['todo', { ...base, status: 'todo' }, false, false],
+  ]
+  for (const [name, t, turn, needs] of cases) {
+    expect([name, core.ownersTurn(t, now)]).toEqual([name, turn])
+    expect([name, core.needsYou(t, now)]).toEqual([name, needs])
+    // the hand-written check T-596 used in the lists (bold titles, VS Code's waited time)
+    expect([name, core.waitsForYou(t, now) || t.status === 'failed' || (t.status === 'review' && !core.approveRunning(t, now))]).toEqual([name, turn])
+  }
+})

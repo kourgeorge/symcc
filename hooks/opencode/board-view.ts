@@ -18,7 +18,7 @@ import {
   bannerLines, bannerRule, footerRule, type BannerTone, panelSections, localOffset, when, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, ALL_CLEAR,
   rowStates, tryTone, rowMark, TITLE_ROOM, fitRow, rowExtra, questionsLabel, archivedOf, archivedNote, statusMark, statusBadge, detailRows, detailRowLines, wrapSegs, hintLineText,
   type KeyHint, type Seg, type BoardTask, gitNote, intoOf, taskActions, taskAsks, type TaskAction, type TaskActionId,
-  waitsForYou, shownStatus, approveRunning, sortScouts, scoutListRows, scoutRow, scoutIcon, scoutTone, scoutHowTo, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem, scoutFile,
+  waitsForYou, ownersTurn, shownStatus, sortScouts, scoutListRows, scoutRow, scoutIcon, scoutTone, scoutHowTo, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem, scoutFile,
   SETTING_GROUPS, SETTINGS, isSettingPage, settingInfo, settingValue, cantPlayNotify, groupSummaryParts,
   type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction, type TaskVerb, settingsKeys,
   DEFAULT_ROLE, isCheckerRole, ALWAYS_ON_KINDS, checkerOn, roleNameError, kindNameError,
@@ -716,7 +716,7 @@ function listBody(f: ViewFile, cursor: number, open: Record<PanelGroup, boolean>
       // a later try ("(2)") is dim, from try 3 on in the warning colour (see tryTone)
       ...(state.tag ? [{ text: state.tag, color: tryTone(x) }] : []),
       { text: `${state.back}  `, color: LIST_TONE[shownStatus(x, nowMs)]! },
-      { text: fit.title, color: closed ? 'inactive' : 'text', ...(sel || waitsForYou(x, nowMs) || x.status === 'failed' || (x.status === 'review' && !approveRunning(x, nowMs)) ? { bold: true } : {}) },
+      { text: fit.title, color: closed ? 'inactive' : 'text', ...(sel || ownersTurn(x, nowMs) ? { bold: true } : {}) },
       ...(fit.extra ? [{ text: `${fit.pad}${fit.extra}`, color: 'inactive' }] : []),
     ]
   }

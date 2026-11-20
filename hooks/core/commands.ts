@@ -167,11 +167,17 @@ export const NEEDS_YOU: SymccStatus[] = ['review', 'waiting', 'failed']
 /** A task being worked on whose worker ran over its time limit while the owner is asked "give it more time?" (time_ask set). */
 export const asksMoreTime = (t: Pick<SymccTask, 'status'> & { time_ask?: string }): boolean => t.status === 'doing' && !!t.time_ask
 
-/** Whether a task needs the owner: review, waiting or failed (NEEDS_YOU), or a running task asking for more time. A task
- *  in review (or waiting) whose approve runs at `nowMs` (approveRunning: prep, in line, test, merge) does not: it is
- *  listed and counted with the running tasks until the approve ends. */
+/** Whether it is the owner's turn on task `t`: it is in review, waiting or failed (NEEDS_YOU) and no approve of it runs
+ *  at `nowMs` (approveRunning: prep, in line, test, merge). The lists show such a task's title in bold; VS Code shows how
+ *  long it has waited. */
+export const ownersTurn = (t: Pick<SymccTask, 'status'> & Pick<BoardTask, 'checking'>, nowMs: number = Date.now()): boolean =>
+  NEEDS_YOU.includes(t.status) && !approveRunning(t, nowMs)
+
+/** Whether a task needs the owner: its owner's turn (ownersTurn), or a running task asking for more time. A task
+ *  in review (or waiting) whose approve runs at `nowMs` does not: it is listed and counted with the running tasks
+ *  until the approve ends. */
 export const needsYou = (t: Pick<SymccTask, 'status'> & { time_ask?: string } & Pick<BoardTask, 'checking'>, nowMs: number = Date.now()): boolean =>
-  (NEEDS_YOU.includes(t.status) && !approveRunning(t, nowMs)) || asksMoreTime(t)
+  ownersTurn(t, nowMs) || asksMoreTime(t)
 
 /** Whether a task waits for the owner's answer ("waiting"), and no merge of it runs at `nowMs` (approveRunning).
  *  Every view uses this for "waiting for you". */

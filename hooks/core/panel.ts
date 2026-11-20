@@ -107,8 +107,8 @@ export const waitsInLine = (t: { status: SymccStatus; note?: string }): boolean 
 /** The mark at the front of a task's row: ⋯ while it waits in the merge line, its step's icon (STEP_ICON) during a
  *  check step, else its own mark (statusMark: ▶ while its worker works). */
 export function rowMark(t: Pick<SymccTask, 'status'> & { note?: string; runs?: readonly unknown[]; attempts?: number } & Pick<BoardTask, 'checking'>, nowMs: number): string {
-  // an approved task in review waits in the merge line too while its approve runs (approveRunning)
-  if (waitsInLine({ ...t, status: approveRunning(t, nowMs) ? 'doing' : t.status })) return IN_LINE_ICON
+  // an approved task in review waits in the merge line too while its approve runs (shownStatus is then doing)
+  if (waitsInLine({ ...t, status: shownStatus(t, nowMs) })) return IN_LINE_ICON
   const step = checkStepNow(t, nowMs)
   return step ? STEP_ICON[step] : statusMark(t)
 }
