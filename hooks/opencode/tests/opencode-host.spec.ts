@@ -1287,6 +1287,47 @@ test('/symcc-off posts only its answer into the lead\'s chat (T-540): a board up
   }
 }, LONG_TEST_MS)
 
+test('/symcc-off then /symcc-on through OpenCode\'s commands in the lead\'s session (T-571): symcc is on again and the answer says so; with the board in mode off the answer says why nothing starts', async () => {
+  reset()
+  const p = await project()
+  try {
+    const f = fakeSessions()
+    const plugin = symccServer({ engine: SYMCC_ENGINE, hostOptions: { say: () => undefined, sessionId: 'opencode-onoff' } })
+    const c = fakeCtx(p.main, f.api)
+    const end = await plugin.setup(c.ctx)
+    await until(() => S.startupDone === true)
+    const lead = f.lead(p.main)
+    await c.hooks.prompt!({ sessionID: lead })
+    expect([...leads().values()]).toEqual([lead])
+    const run = async (name: string, text = '') => {
+      const before = f.synthetic.filter(x => x.sessionID === lead).length
+      await c.commands.get(name)!.execute({ sessionID: lead, prompt: { text }, delivery: 'steer' })
+      const answers = f.synthetic.filter(x => x.sessionID === lead).slice(before)
+      expect(answers.length).toBe(1)
+      return answers[0]!.text
+    }
+    expect((await run('symcc-off')).startsWith('symcc is now off')).toBe(true)
+    expect(JSON.parse(await readFile(`${p.main}/.symcc/board.json`, 'utf8')).enabled).toBe(false)
+    const on = await run('symcc-on')
+    expect(on.startsWith('symcc is on, in mode ')).toBe(true)
+    expect(on).not.toContain("the board's mode is off")
+    expect(JSON.parse(await readFile(`${p.main}/.symcc/board.json`, 'utf8')).enabled !== false).toBe(true)
+    expect((await run('symcc-on')).startsWith('symcc is already on, in mode ')).toBe(true)
+    // the owner's case: the strip says "⏹ off" because the board's mode is off (not symcc turned off)
+    expect(await run('symcc-mode', 'off')).toContain('off')
+    const modeOff = await run('symcc-on')
+    expect(modeOff.startsWith('symcc is already on, in mode off: ')).toBe(true)
+    expect(modeOff).toContain('start work with /symcc-mode review or /symcc-mode auto')
+    const b = JSON.parse(await readFile(`${p.main}/.symcc/board.json`, 'utf8'))
+    expect([b.enabled !== false, b.mode]).toEqual([true, 'off'])
+    await settle()
+    await end!()
+    await settle()
+  } finally {
+    await finish(p)
+  }
+}, LONG_TEST_MS)
+
 test('the TUI\'s view file (T-466, R6): each publish writes .symcc/view.json; /symcc-answer answers a waiting task (the change tool, the lead hears of it) and a question on the board', async () => {
   reset()
   const p = await project()

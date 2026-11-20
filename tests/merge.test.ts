@@ -1860,6 +1860,27 @@ test('/symcc-on when symcc is already on says "already on" and tells the lead no
   }
 })
 
+test('T-571: /symcc-on with the board in mode off says plainly that the mode stops the work and how to start it, and keeps the mode', async () => {
+  const { w, spawned } = await liveWorld()
+  try {
+    await setSymcc(w.$, false)
+    await change(w.$, b => [{ ...b, mode: 'off' as const }, null])
+    const on = await setSymcc(w.$, true)
+    expect(on.startsWith('symcc is on, in mode off: ')).toBe(true)
+    expect(on).toContain("the board's mode is off, so no work starts; start work with /symcc-mode review or /symcc-mode auto.")
+    const again = await setSymcc(w.$, true)
+    expect(again.startsWith('symcc is already on, in mode off: ')).toBe(true)
+    expect(again).toContain('/symcc-mode review or /symcc-mode auto')
+    const b = await load(w.$)
+    expect(b.enabled).toBe(true)
+    expect(b.mode).toBe('off')
+    for (let i = 0; i < 200; i++) await Promise.resolve()
+    expect(spawned.length).toBe(0)
+  } finally {
+    cleanUp()
+  }
+})
+
 // T-391: a worker's start waits in the queue until a turn starts or ends; the board says so honestly meanwhile
 test('a queued worker: its task shows "starting at the next turn" and no agent until the queue is emptied, then "worker on it" with its agent', async () => {
   const { w, spawned } = await liveWorld()
