@@ -31,6 +31,44 @@ export const ASK_LEAD = 'Tell the lead what to do next'
 /** What that button puts in the prompt box (only when the box is empty, so what the owner typed stays). */
 export const ASK_LEAD_DRAFT = 'Next task: '
 
+/** A piece of an open row's state part after its status words: `drop` says which goes first when the line is too
+ *  wide (higher first; 0 never), `long` marks a question, failure reason or note, capped to about half the free room. */
+export type RowPart = { text: string; drop: number; long?: boolean }
+
+/** `text` cut at a word to at most `max` columns, ending with "…"; '' when not even one whole word fits. */
+const cutWords = (text: string, max: number) => {
+  if (text.length <= max) return text
+  const head = text.slice(0, Math.max(0, max - 1))
+  const space = head.lastIndexOf(' ')
+  return space > 0 ? `${head.slice(0, space).replace(/[\s,;:·-]+$/, '')}…` : ''
+}
+
+/** An open row's one line, fitted to `room` columns: the status words and the try always stay whole; a long part (the
+ *  question, why it failed) takes at most about half the free room, cut at a word; then whole parts are dropped, the
+ *  highest `drop` first (the kind, then the choices count, then the long text), until the title keeps MIN_TITLE; then
+ *  the title is cut with "…". A part is never cut mid-word. */
+export function fitRow(title: string, room: number, status: string, parts: RowPart[], tried: string): { title: string; rest: string } {
+  const fixed = 3 + status.length + (tried ? 3 + tried.length : 0)
+  const width = (ps: RowPart[]) => ps.reduce((n, p) => n + 3 + p.text.length, 0)
+  const t = title.replace(/\s+/g, ' ').trim()
+  let kept = parts.filter(p => p.text)
+  const rest = () => kept.map(p => p.text).join(' · ')
+  if (t.length + fixed + width(kept) <= room) return { title: t, rest: rest() }
+  // a long part: at most about half the room the status, the try and the short parts leave (more when the whole title
+  // needs less), so the title keeps the rest
+  const free = room - fixed - width(kept.filter(p => !p.long))
+  const cap = Math.max(Math.floor(free / 2), free - t.length) - 3
+  kept = kept.map(p => (p.long ? { ...p, text: cutWords(p.text, cap) } : p)).filter(p => p.text)
+  const floor = Math.min(t.length, MIN_TITLE)
+  while (room - fixed - width(kept) < floor) {
+    const top = Math.max(0, ...kept.map(p => p.drop))
+    if (!top) break
+    const at = kept.map(p => p.drop).lastIndexOf(top)
+    kept = kept.filter((_, i) => i !== at)
+  }
+  return { title: cutEnd(t, Math.max(floor, room - fixed - width(kept))), rest: rest() }
+}
+
 async function askLead($: $) {
   const box = await $.prompt.read().catch(() => ({ text: '' }))
   if (!box.text.trim()) await $.prompt.fill({ text: ASK_LEAD_DRAFT }).catch(() => undefined)
@@ -77,20 +115,6 @@ export function listPageVs($: $, pane: PaneParts) {
     return `${mark} ${shown && shown !== x.status ? shown : word[x.status]}`
   }
 
-  /** An open row's one line, cut to `room` columns: the title first (down to MIN_TITLE, with "…"), then the rest of
-   *  the state part (the kind, "after T-578", the question...); the status words and the try always stay whole. */
-  const fitRow = (title: string, room: number, status: string, rest: string, tried: string) => {
-    const fixed = 3 + status.length + (tried ? 3 + tried.length : 0)
-    const restLen = (r: string) => (r ? 3 + r.length : 0)
-    let t = title.replace(/\s+/g, ' ').trim()
-    let r = rest
-    if (t.length + fixed + restLen(r) <= room) return { title: t, rest: r }
-    t = cutEnd(t, Math.max(Math.min(t.length, MIN_TITLE), room - fixed - restLen(r)))
-    const left = room - t.length - fixed - 3
-    if (r && t.length + fixed + restLen(r) > room) r = left >= 4 ? cutEnd(r, left) : ''
-    return { title: t, rest: r }
-  }
-
   /** One task on one line of text: its ID a link that opens it, then the title (bold when it needs you, dim when
    *  closed), with "●" first in the status color when it needs you; then, dim on the same line, the state part: the
    *  status in its color and its time, the kind, "after …", the try. When the line is too wide the title is cut with
@@ -103,12 +127,23 @@ export function listPageVs($: $, pane: PaneParts) {
     const needs = needsYou(x)
     const extra = rowExtra(x, v.tasks, v.branch ?? '', v.max_minutes).replace(/^Enter to review$/, isInvestigation(x) ? '' : 'ready for your review')
     const tried = tryMark(x)
-    let rest = tried && extra.endsWith(tried) ? extra.slice(0, extra.length - tried.length).replace(/ · $/, '') : extra
+    let body = tried && extra.endsWith(tried) ? extra.slice(0, extra.length - tried.length).replace(/ · $/, '') : extra
+    // "→ other-branch" first, when it merges elsewhere (kept whole)
+    const branch = body.startsWith('→ ') ? body.split(' · ')[0]! : ''
+    if (branch) body = body.slice(branch.length).replace(/^ · /, '')
     const kind = kindMark(x)
     // the kind once: rowExtra already shows it as a tag ("[bug · tester]", "[investigation]") for some rows; a question
     // or failure reason that only mentions the word does not count
-    const tagged = rest.split(' · ').some(p => p === `[${kind}]` || p === `[${kind}`)
-    if (kind && !tagged) rest = rest ? `${kind} · ${rest}` : kind
+    const tagged = body.split(' · ').some(p => p === `[${kind}]` || p === `[${kind}`)
+    // "after T-3" and a role tag are short and stay; the kind goes first, then a question or reason (cut at a word)
+    const short = /^(after |\[)/.test(body)
+    const parts: RowPart[] = [
+      { text: branch, drop: 0 },
+      { text: short ? body : '', drop: 0 },
+      { text: kind && !tagged ? kind : '', drop: 3 },
+      { text: short ? '' : body, drop: 1, long: true },
+    ]
+    let rest = ''
     const href = vsHref('task', x.id)
     const lead = (needs || ended ? 2 : 0) + x.id.length + 2
     const status = ended ? '' : statusText(x)
@@ -117,7 +152,7 @@ export function listPageVs($: $, pane: PaneParts) {
       const title = twoLines(x.title, width - depth, lead)
       words = `${mdText(title.text)}${title.cut ? ` ${mdText(MORE)}` : ''}`
     } else {
-      const fit = fitRow(x.title.trim() || NO_TITLE, width - depth - lead, status, rest, tried)
+      const fit = fitRow(x.title.trim() || NO_TITLE, width - depth - lead, status, parts, tried)
       words = x.title.trim() ? mdText(fit.title) : ''
       rest = fit.rest
     }
@@ -157,7 +192,7 @@ export function listPageVs($: $, pane: PaneParts) {
             const href = vsHref('question', q.id)
             const state = `? question for you${asked ? ` for ${asked}` : ''}`
             const more = choices ? `${choices} ${choices === 1 ? 'choice' : 'choices'}` : ''
-            const fit = fitRow(q.text.trim() || NO_TITLE, width - 2 - q.id.length - 2, state, more, '')
+            const fit = fitRow(q.text.trim() || NO_TITLE, width - 2 - q.id.length - 2, state, [{ text: more, drop: 2 }], '')
             const words = q.text.trim() ? mdText(fit.title) : ''
             return (
               <Box key={`vs-question-${q.id}`} flexDirection="column">

@@ -6,7 +6,7 @@ import { PANE, BOARD_TASKS, BOARD_VIEW, T0, seedBoard, drawnData, changedTree } 
 import { BEFORE, BEFORE_DROPPED } from './board-snapshot'
 import { plainLabel, CLICK_HINT } from '../hooks/claude/ui/surface'
 import { shortTests, logoWidthFor, twoLines, MORE, vsHref, mdText, mdLink } from '../hooks/claude/ui/vscode'
-import { ASK_LEAD, ASK_LEAD_DRAFT } from '../hooks/claude/ui/vscode-list'
+import { ASK_LEAD, ASK_LEAD_DRAFT, fitRow } from '../hooks/claude/ui/vscode-list'
 import { drawNow } from '../hooks/claude/ui/now'
 import { mayMove } from '../hooks/core/logo'
 import { modeLabel, MODE_MEANING } from '../hooks/board'
@@ -338,8 +338,9 @@ test('in VS Code the Tasks list at widths 40 and 80: headings with counts, rows 
       expect(String(b?.props.text).startsWith(mdLink(t.id, vsHref('task', t.id))), `${at} ${t.id}`).toBe(true)
     }
     // on the same line, dim: the status in its color and its time, the kind or role, the question or why it failed, the
-    // try (at 40 the question does not fit beside the cut title: the status words stay)
-    expect(await rowText(ui, 'T-404'), at).toContain(bodyColumns === 80 ? ' · ? waiting for 1m · Yellow or blue for review?' : ' · ? waiting for 1m')
+    // try (a question takes about half the free room, cut at a word; at 40 it does not fit beside the cut title: the
+    // status words stay)
+    expect(await rowText(ui, 'T-404'), at).toMatch(bodyColumns === 80 ? / · \? waiting for 1m · Yellow or blue for( review\?|…)$/ : / · \? waiting for 1m/)
     expect(await rowText(ui, 'T-405'), at).toContain(' · ✗ failed 1m ago')
     expect(await rowText(ui, 'T-401'), at).toContain(' · ▶ 2m')
     expect(await rowText(ui, 'T-403'), at).toContain(bodyColumns === 80 ? ' · ◆ review for 1m · ready for your review' : ' · ◆ review for 1m')
@@ -440,7 +441,7 @@ test('in VS Code a row keeps its kind when its question or reason has the same w
   const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 80 }, surface: 'vscode' })
   await ui.drawn()
   const line = (id: string) => rowText(ui, id)
-  expect(await line('T-501')).toMatch(/ · \? waiting for 1m · docs · Should the docs page list every/)
+  expect(await line('T-501')).toMatch(/ · \? waiting for 1m · docs · Should the docs( \S+)*…?$/)
   expect(await line('T-502')).toMatch(/ · ✗ failed 1m ago · bug · .*bug/)
   expect(await line('Q-4')).toMatch(/ · 1 choice$/)
   // an investigation's tag is not shown twice
@@ -560,11 +561,13 @@ test('T-590: in VS Code each open task and question is one line: id, title, then
   const long = 'Let the lead read every archived task and its whole history when the owner asks about old work from months ago'
   const after = { ...BOARD_TASKS.find(t => t.id === 'T-407')!, id: 'T-578', order: 578, kind: 'feature', title: long, after: ['T-406'] }
   const doing = { ...BOARD_TASKS.find(t => t.id === 'T-401')!, kind: 'investigation' }
-  const tasks = [...BOARD_TASKS.map(t => (t.id === 'T-401' ? doing : t)), after]
+  const reason = 'the tests still fail because the merge line runs the old copy of the plugin and never sees the new code that the worker wrote'
+  const failed = { ...BOARD_TASKS.find(t => t.id === 'T-405')!, id: 'T-579', order: 579, kind: 'bug', title: long, note: reason, history: hist(`try 1: ${reason}`) }
+  const tasks = [...BOARD_TASKS.map(t => (t.id === 'T-401' ? doing : t)), after, failed]
   const ask = { ...QUESTION, text: 'Should the board open by itself when a session starts, or only when the owner asks for it?' }
   seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, tasks, questions: [ask] } } })
   on('ui.toast', () => ({ value: undefined }))
-  for (const bodyColumns of [60, 80]) {
+  for (const bodyColumns of [40, 60, 80]) {
     const at = `width ${bodyColumns}`
     const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'vscode' })
     await ui.drawn()
@@ -584,15 +587,47 @@ test('T-590: in VS Code each open task and question is one line: id, title, then
     expect(await rowText(ui, 'T-404'), at).toMatch(/^● T-404\s+Pick the.* · \? waiting for 1m/)
     // a long title is cut with "…" and the state part, "after T-406", stays on the line
     const line = await rowText(ui, 'T-578')
-    expect(line, at).toMatch(/^T-578\s+Let the.*… · ○ to do · feature · (.* · )?after T-406/)
+    expect(line, at).toMatch(/^T-578\s+Let the.*… · ○ to do · after T-406/)
     expect(line.length, at).toBeLessThanOrEqual(bodyColumns)
+    // the kind comes after "after T-406" and is dropped whole first when the line is narrow, never cut mid-word
+    expect(line, at).toMatch(bodyColumns === 40 ? / · after T-406$/ : / · after T-406 · feature$/)
     const q = await rowText(ui, 'Q-3')
-    expect(q, at).toMatch(/^● Q-3\s+Should the.*… · \? question for you for 5m · 2 choices$/)
-    expect(q.length, at).toBeLessThanOrEqual(bodyColumns)
+    expect(q, at).toMatch(bodyColumns === 40 ? /^● Q-3\s+Should the.*… · \? question for you for 5m$/ : /^● Q-3\s+Should the.*… · \? question for you for 5m · 2 choices$/)
+    // (at 40 the question's status words alone are wider than the row; the info text's truncate wrap cuts them there)
+    if (bodyColumns > 40) expect(q.length, at).toBeLessThanOrEqual(bodyColumns)
+    // a long failure reason takes about half the free room, cut at a word; the title keeps the rest
+    const why = await rowText(ui, 'T-579')
+    if (bodyColumns > 40) expect(why.length, at).toBeLessThanOrEqual(bodyColumns)
+    expect(why, at).toMatch(/^● T-579\s+Let the.*… · ✗ failed 1m ago/)
+    if (bodyColumns === 80) {
+      expect(why, at).toMatch(/ · ✗ failed 1m ago · bug · It failed: the\S*( \S+)*…$/)
+      const shownWhy = why.split(' · bug · ')[1]!.replace(/…$/, '')
+      const whole = `It failed: ${reason}`
+      expect(whole.startsWith(shownWhy) && whole.charAt(shownWhy.length) === ' ', at).toBe(true)
+      const title = why.replace(/^● T-579\s+/, '').split(' · ')[0]!
+      expect(title.length, at).toBeGreaterThan(16)
+    }
     // the row still opens the task page, where the whole title is shown
     await ui.press({ key: 'T-578', link: { href: vsHref('task', 'T-578') } })
     expect(texts(await ui.drawn()).join(' ').replace(/\s+/g, ' '), at).toContain(long)
     await ui.press({ key: 'back' })
     await ui.unmount()
   }
+})
+
+test('T-590: fitRow drops whole parts from the least important end, never cuts a word, caps a long text', () => {
+  const long = 'Let the lead read every archived task and its whole history when the owner asks about old work from months ago'
+  const after = [{ text: 'after T-406', drop: 0 }, { text: 'feature', drop: 3 }]
+  // bodyColumns 40: T-578 leaves 33 columns; the kind goes, "after T-406" stays
+  expect(fitRow(long, 33, '○ to do', after, '')).toEqual({ title: 'Let the…', rest: 'after T-406' })
+  // room for all: the kind stays, after it
+  expect(fitRow(long, 60, '○ to do', after, '').rest).toBe('after T-406 · feature')
+  // a long reason at 74 columns: cut at a word to about half, the title gets the rest (more than its floor)
+  const why = 'x '.repeat(60).trim()
+  const fit = fitRow(long, 74, '✗ failed 1m ago', [{ text: 'bug', drop: 3 }, { text: why, drop: 1, long: true }], '')
+  expect(fit.title.length).toBeGreaterThan(16)
+  expect(fit.rest).toMatch(/^bug · (x )+x…$/)
+  expect(fit.title.length + 3 + 15 + 3 + fit.rest.length).toBeLessThanOrEqual(74)
+  // a question with choices: the choices count goes before the title is squeezed below its floor
+  expect(fitRow(long, 31, '? question for you for 5m', [{ text: '2 choices', drop: 2 }], '').rest).toBe('')
 })
