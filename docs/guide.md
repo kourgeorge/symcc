@@ -220,7 +220,7 @@ happens, never the words in its hand-back:
 
 Before, several tasks could merge into a moving branch at the same time. Each one had to catch up,
 test again and sometimes clash with the others (one task once needed 7 tries). Now every finished
-task joins **one line** for the whole project (all sessions, all target branches, oldest first),
+task joins **one queue** for the whole project (all sessions, all target branches, oldest first),
 and only the task at the front has its turn. The branch it merges into moves only at the front of
 the queue, so the code a task was tested with is exactly the code that merges.
 

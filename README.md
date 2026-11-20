@@ -56,7 +56,7 @@ The main parts:
 
 ### How a change gets merged
 
-Finished tasks do not merge all at once into a moving branch. They take turns in one line for the
+Finished tasks do not merge all at once into a moving branch. They take turns in one queue for the
 whole project, so the code a task was tested with is exactly the code that merges. At its turn a
 task catches up with your branch, runs your tests and then merges (or waits for your review). Any
 failure counts as one normal failed try. Details: [the way to the merge](docs/guide.md#the-way-to-the-merge).
