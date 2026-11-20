@@ -211,10 +211,12 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
       ))}
     </Text>
   )
-  const rows = detailRows(t, { roles: S.roles, kinds: S.kinds, all: v.tasks, when, nowMs: pane.nowMs, archivedDone: v.archived_done, board: v })
+  // an approve this page started shows its step at once, not "ready for review": on the badge, the Status row and the
+  // Stage line alike (one flag for the whole page)
+  const pageMerging = !!mergingLine(t.id)
+  const rows = detailRows(t, { roles: S.roles, kinds: S.kinds, all: v.tasks, when, nowMs: pane.nowMs, archivedDone: v.archived_done, board: v, merging: pageMerging })
   // the badge names the step a doing task is in ("⌕ checker · 5m"), like the Status row
-  // (an approve this page started shows its step at once, not "ready for review")
-  const badge = statusBadge(t as BoardTask, pane.nowMs, undefined, !!mergingLine(t.id))
+  const badge = statusBadge(t as BoardTask, pane.nowMs, undefined, pageMerging)
   // The saved worker reports, one per try: the latest shown, unless the owner picked another try (its number key).
   const reports = taskReports(t)
   if (S.reportTry && S.reportTry.task !== t.id) S.reportTry = null
@@ -312,7 +314,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
   }
   // The page's sections (shared with OpenCode, and their contents with VS Code; see core/task-sections.ts)
   const sections = taskSections(t, {
-    width, nowMs: pane.nowMs, detail: { roles: S.roles, kinds: S.kinds, all: v.tasks, when, archivedDone: v.archived_done, board: v }, texts,
+    width, nowMs: pane.nowMs, detail: { roles: S.roles, kinds: S.kinds, all: v.tasks, when, archivedDone: v.archived_done, board: v, merging: pageMerging }, texts,
     ...(shown ? { shownTry: shown.try } : {}), changes, target, dataDir: S.N.dir, numberKeysTaken: choices.length > 0,
   })
   const section = (id: TaskSection['id']) => sections.find(x => x.id === id)

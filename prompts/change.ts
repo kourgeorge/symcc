@@ -8,6 +8,7 @@ Work ONLY inside this folder, your own copy of the project on branch {{branch}}:
   {{folder}}
 Use absolute paths under that folder for every {{file_tools}}. Never touch the main project folder.
 Make code changes with the Edit tool; put any throwaway script or note under .scratch/ in your folder (never commit it); /tmp also works.
+Write throwaway scripts (probes, edit scripts) with the Write tool into .scratch/ (or /tmp), then run them in a separate command; don't write them with a here-document in Bash: the guard refuses those when they mention git or paths outside your folder.
 
 Task {{task_id}}: {{title}}
 {{details}}

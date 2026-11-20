@@ -21,7 +21,7 @@ import {
   waitsForYou, ownersTurn, shownStatus, sortScouts, scoutListRows, scoutRow, scoutIcon, scoutTone, scoutHowTo, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem, scoutFile,
   SETTING_GROUPS, SETTINGS, isSettingPage, settingInfo, settingValue, cantPlayNotify, groupSummaryParts,
   type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction, type TaskVerb, settingsKeys,
-  DEFAULT_ROLE, isCheckerRole, ALWAYS_ON_KINDS, checkerOn, roleNameError, kindNameError,
+  DEFAULT_ROLE, isCheckerRole, ALWAYS_ON_KINDS, checkerOn, roleNameError, kindNameError, checkStepNow,
 } from '../board'
 import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, brokenLabel, defNamed } from '../core/def-files'
 import { restFrame } from '../core/logo'
@@ -261,6 +261,22 @@ export type PanelChoice = {
   sent?: { id: string; answer: string }
   /** the open task's latest report (T-580), read from its file: its text undefined while it is read, null when it can't be */
   taskReport?: { file: string; text: string | null | undefined }
+  /** the task whose approve this panel just sent, and when (ms): its page shows the approve's first step at once (see
+   *  approveSent), as Claude Code's task page does */
+  approving?: ApproveSent
+}
+
+/** An approve this panel sent: the task and when (ms). */
+export type ApproveSent = { id: string; at: number }
+/** How long an approve sent from the panel shows as started while the board shows none of its steps yet. */
+export const APPROVE_SENT_MS = 60_000
+
+/** Whether approve `a` (sent from this panel) still counts as started before its first step is on the board: its task
+ *  is still in review with no check step yet, and it was sent less than APPROVE_SENT_MS ago. Once a step shows, the
+ *  board carries it (and when that step ends with the task back in review, the approve is over). */
+export function approveSent(f: ViewFile | null, a: ApproveSent | undefined, nowMs: number): boolean {
+  const t = a ? f?.view.tasks.find(x => x.id === a.id) : undefined
+  return !!a && !!t && t.status === 'review' && !checkStepNow(t, nowMs) && nowMs - a.at < APPROVE_SENT_MS
 }
 
 /** The panel as drawn: its lines, what a click on each line does (null: nothing), the ids of the rows the cursor
@@ -385,7 +401,7 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
     body = place?.def ? defPage(f, place.list, place.def, w) : place ? defsList(f, place.list, choice.cursor, w) : settingsBody(f, choice.cursor, choice.settingsOpen ?? SETTINGS_OPEN, w)
     keys = panelKeys(f, place ? choice.opened : '', 'settings', '', !place && !!settingGroupOf(body.selected))
   } else {
-    const page = choice.opened ? openedPage(f, choice.opened, nowMs, w, choice.sent?.id === choice.opened ? choice.sent.answer : '', choice.taskReport) : null
+    const page = choice.opened ? openedPage(f, choice.opened, nowMs, w, choice.sent?.id === choice.opened ? choice.sent.answer : '', choice.taskReport, choice.approving?.id === choice.opened && approveSent(f, choice.approving, nowMs)) : null
     body = page ?? listBody(f, choice.cursor, { ...GROUPS_OPEN, ...choice.groups }, nowMs, w)
     keys = panelKeys(f, page ? choice.opened : '')
   }
@@ -760,7 +776,7 @@ export const SECTION_LINES: Partial<Record<TaskSection['id'], number>> = { histo
  *  and the answer just sent (`sent`); then a task's sections as on Claude Code's task page (core's taskSections,
  *  T-580: Why it failed, Answer, Details, Changes, What to do, History, Report, Runs), with the latest report's text
  *  (`report`, read by the TUI) and the changed files from the view file; null when it is gone. */
-function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = '', report?: PanelChoice['taskReport']): Body | null {
+function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = '', report?: PanelChoice['taskReport'], merging = false): Body | null {
   const v = f.view
   const b = bodyMaker()
   const addAll = (ls: Line[]) => ls.forEach(l => b.add(l))
@@ -779,7 +795,8 @@ function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = ''
   if (!t) return null
   addAll(wrapSegs([{ text: t.id, color: 'claude', bold: true }, { text: `  ${t.title}`, color: 'text', bold: true }], w))
   // the status badge, as on Claude Code's task page: the step a doing task is in ("[⌕ checker · 5m]"), else its status
-  const badge = statusBadge(t, nowMs)
+  // (`merging`, an approve this panel just sent: its step at once, on the badge, the Status row and the Stage line alike)
+  const badge = statusBadge(t, nowMs, undefined, merging)
   b.add([{ text: `[${badge.text}]`, color: badge.color, bold: true }])
   const asked = taskAsks(t, v.max_minutes)
   if (asked) {
@@ -790,7 +807,7 @@ function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = ''
   const sections = taskSections(t, {
     width: w,
     nowMs,
-    detail: { roles: defsIn(f, 'roles'), kinds: defsIn(f, 'kinds'), all: v.tasks, when: iso => when(iso), board: v, ...(v.archived_done ? { archivedDone: v.archived_done } : {}) },
+    detail: { roles: defsIn(f, 'roles'), kinds: defsIn(f, 'kinds'), all: v.tasks, when: iso => when(iso), board: v, merging, ...(v.archived_done ? { archivedDone: v.archived_done } : {}) },
     ...(report ? { texts: { [report.file]: report.text } } : {}),
     changes: v.changes?.[t.id] ?? null,
     target: intoOf(t),
