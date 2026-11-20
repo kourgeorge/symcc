@@ -196,3 +196,16 @@ test('literalPath takes only plain literal absolute paths (T-591)', () => {
   expect(literalPath("'/tmp/x/'")).toBe('/tmp/x')
   for (const bad of ['tmp/x', '$TMPDIR/x', '"$TMPDIR"', '~/x', '/tmp/../repo', '/tmp/*', '/tmp/"x"', '/tmp/a b', '`mktemp`', '/tmp/x\\y']) expect([bad, literalPath(bad)]).toEqual([bad, undefined])
 })
+
+test('a refused git write tells a worker and a checker the /tmp way, but not a scout (T-591)', async () => {
+  const $ = setup()
+  const tip = 'A scratch repository under /tmp with a plain path is fine (e.g. git init /tmp/x, git -C /tmp/x commit -m m); no $TMPDIR, $(mktemp), ~ or ..'
+  const command = 'git -C $TMPDIR/x commit -m m'
+  const w = await checkEdit($, 'w1', { command }, WT)
+  const c = await checkEdit($, 'c1', { command }, WT)
+  expect(w).toBe(workerGitWriteText('git commit'))
+  expect(c).toBe(gitWriteText('git commit'))
+  expect(w).toContain(tip)
+  expect(c).toContain(tip)
+  expect(scoutGitWriteText('git commit')).not.toContain('/tmp')
+})

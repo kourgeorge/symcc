@@ -1522,9 +1522,12 @@ function gitScan(command: string, depth: number, allow?: GitAllow, broad = false
 const gitReadOnlyText = (what: string, who: string) =>
   `Refused: ${what} may change the repository or run another program, and ${who} may only read with git (diff, log, show, status, blame, grep, rev-parse, ls-files, branch --list, stash list/show, remote -v, config --get, reflog), without options that write a file or run a program (--output, -O, --ext-diff, -c, GIT_* settings).`
 
+/** The sentence a worker's or checker's git refusal adds: the /tmp scratch way that is allowed (scratchGitAllow, T-591). */
+export const SCRATCH_GIT_TEXT = 'A scratch repository under /tmp with a plain path is fine (e.g. git init /tmp/x, git -C /tmp/x commit -m m); no $TMPDIR, $(mktemp), ~ or ..'
+
 /** The reason a checker reads when its Bash command runs git command `what` (from gitWriteIn), which may change something. */
 export const gitWriteText = (what: string) =>
-  `${gitReadOnlyText(what, 'the checker')} Check the work without changing any branch, commit, tag or the stash.`
+  `${gitReadOnlyText(what, 'the checker')} Check the work without changing any branch, commit, tag or the stash. ${SCRATCH_GIT_TEXT}`
 
 /**
  * The reason a worker reads when its Bash command runs git command `what` (from gitWriteIn), which may change
@@ -1532,7 +1535,7 @@ export const gitWriteText = (what: string) =>
  * and merges the work. `into`: the branch a "merge it in" try may merge (mergeStepAllow), named in the reason.
  */
 export const workerGitWriteText = (what: string, into?: string) =>
-  `${gitReadOnlyText(what, 'a worker')} Don't commit, push, merge, reset, switch branches, stash or move any branch or tag: just change the files in your folder; symcc commits, tests and merges your work.${into ? ` In this try you may also run \`git merge ${into}\` (or \`git merge --abort\`) to merge ${into} in; then resolve the conflicts in the files and don't commit.` : ''}`
+  `${gitReadOnlyText(what, 'a worker')} Don't commit, push, merge, reset, switch branches, stash or move any branch or tag: just change the files in your folder; symcc commits, tests and merges your work. ${SCRATCH_GIT_TEXT}${into ? ` In this try you may also run \`git merge ${into}\` (or \`git merge --abort\`) to merge ${into} in; then resolve the conflicts in the files and don't commit.` : ''}`
 
 /**
  * The reason a scout reads when its Bash command runs git command `what` (from gitWriteIn), which may change
