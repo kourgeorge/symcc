@@ -56,7 +56,12 @@ test('the band: the header, then the tasks that need you or run with the list\'s
   const lines = bandLines(f, NOW, 120).map(lineText)
   // T-576: "𝄞 symcc · proj ⏵ auto · …": no "board", no version; the project shown as it isn't called symcc
   expect(lines[0]!.startsWith(`${ICON} symcc · proj ⏵ auto`)).toBe(true)
-  expect(lines[0]).not.toContain('board')
+  // the header's own text, checked wide enough that the " (click: board)" hint is there, and without that hint
+  const wideHead = lineText(bandDraw(f, NOW, 400).lines[0]!)
+  expect(wideHead.endsWith(BAND_CLICK_HINT)).toBe(true)
+  const headText = wideHead.slice(0, -BAND_CLICK_HINT.length)
+  expect(headText).not.toContain('board')
+  expect(headText).not.toContain('0.9.0')
   expect(lines[0]).not.toContain('0.9.0')
   expect(lines[0]).toContain('1 doing')
   // in the symcc project itself the name shows once, the state right after it
@@ -97,6 +102,36 @@ test('a doing row shows only the total work time of all tries in the band and th
   // narrow: the time is left out
   expect(row(bandLines(f, NOW, 40).map(lineText))).not.toContain('1h40m')
   expect(row(panelLines(f, { opened: '', cursor: 0 }, NOW, 30).lines.map(lineText))).not.toContain('1h40m')
+})
+
+test('T-581: a doing row in a check step or the merge line shows its icon and the time, no step word, in the band and the list; the worker row keeps ▶', () => {
+  const f0 = viewFile()
+  const fresh = new Date(NOW - 10_000).toISOString()
+  const runs = [{ started: new Date(NOW - 20 * 60_000).toISOString(), ended: fresh }]
+  const steps = [['T-1', 'testing', '⧗'], ['T-6', 'prep', '✎'], ['T-7', 'checker', '⌕'], ['T-8', 'merging', '⇢']] as const
+  const base = f0.view.tasks.find(t => t.id === 'T-1')!
+  const tasks = [
+    ...f0.view.tasks.filter(t => t.id !== 'T-1'),
+    ...steps.map(([id, step]) => ({ ...base, id, title: `In ${step}`, attempts: 1, note: '', runs, checking: { step, at: fresh } })),
+    { ...base, id: 'T-9', title: 'In line', attempts: 1, note: 'in line (2)', runs, checking: { step: 'prep' as const, at: fresh } },
+    { ...base, id: 'T-10', title: 'Working', attempts: 1, note: '', runs: [{ started: new Date(NOW - 15 * 60_000).toISOString() }] },
+  ]
+  const f = { ...f0, view: { ...f0.view, tasks, working: [] } }
+  const band = bandLines(f, NOW, 200, 20).map(lineText)
+  const list = panelLines(f, { opened: '', cursor: 0 }, NOW, 120).lines.map(lineText)
+  const row = (lines: string[], id: string) => lines.find(l => new RegExp(`(^|\\s)${id} `).test(l))!
+  for (const lines of [band, list]) {
+    for (const [id, , icon] of steps) {
+      expect(row(lines, id)).toMatch(new RegExp(`${id} +${icon} 20m`))
+      expect(row(lines, id)).not.toMatch(/▶|\b(prep|test|checker|merge) \d/)
+    }
+    expect(row(lines, 'T-9')).toMatch(/T-9 +⋯ 20m/)
+    expect(row(lines, 'T-10')).toMatch(/T-10 +▶ 15m/)
+  }
+  // the titles still start in one column
+  const titleAt = (lines: string[]) => new Set([...steps.map(([id, step]) => row(lines, id).indexOf(`In ${step}`)), row(lines, 'T-9').indexOf('In line'), row(lines, 'T-10').indexOf('Working')])
+  expect(titleAt(band).size).toBe(1)
+  expect(titleAt(list).size).toBe(1)
 })
 
 test('the panel: the banner, then the list grouped by state (NEEDS YOU, what runs and waits, Done folded) with the cursor; a task\'s page with its rows, choices and keys', () => {

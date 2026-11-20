@@ -221,17 +221,20 @@ a new try as usual, an approve stays in review (approve it again).
 **What a task shows on its way to the merge.** Every board view (the board list, the band above
 the prompt, the VS Code list and task page, the OpenCode board and the lead's text board) shows
 the same small set of words and notes. While it waits for its turn its note says "in line (n)",
-n being its place (the task merging now is 1). During its turn the step shows in place of its
-time (the lead's text board shows it after the status: "doing prep · title"):
+n being its place (the task merging now is 1), and its row shows `⋯` in place of `▶`. During its
+turn the row shows the step's icon in place of `▶`, then the time: `⌕ 5m`, not `▶ checker 5m`.
+The step's word stays on the task page (its "Step" row) and in the note; the lead's text board
+shows both ("⧗ doing test · title"). Legend: `▶` working · `⋯` in line · `✎` prep · `⧗` test ·
+`⌕` checker · `⇢` merge.
 
-- `prep`: symcc's own step before the line (steps 1 and 2: commit, leave out secret-looking
+- `✎ prep`: symcc's own step before the line (steps 1 and 2: commit, leave out secret-looking
   files, scope check). Its note says "preparing to merge: committing and checking files". No
   agent runs in this step.
-- `test`: the test commands run. Its note says "running the tests".
-- `checker`: a checker agent is trying to break the change (only with the `checker` setting
-  on; with it off no task ever shows this word). It comes right after `prep`, before the task
+- `⧗ test`: the test commands run. Its note says "running the tests".
+- `⌕ checker`: a checker agent is trying to break the change (only with the `checker` setting
+  on; with it off no task ever shows this step). It comes right after `prep`, before the task
   joins the merge line. Its note says "a checker agent is trying to break it before it merges".
-- `merge`: the task is brought up to date with the target branch and merged. Its note says
+- `⇢ merge`: the task is brought up to date with the target branch and merged. Its note says
   "merging".
 
 Once the turn is over, the note says how it went: merged (the task is done), failed with the
@@ -1109,7 +1112,8 @@ board (the `/3` shows the limit while the try is an automatic retry after failin
 A first try shows no mark. The time in a doing task's row is the total work time of all its
 tries, so a task that is really stuck stands out: `T-5 ▶ 1h40m · try 3` (1 hour 40 over all
 three tries; on the first try it is just that try's time, `T-5 ▶ 15m`), and during a check
-step the step word comes first: `T-5 ▶ test 9m`. This is the
+step the step's icon takes the place of `▶`: `T-5 ⧗ 9m` (see "What a task shows on its way to
+the merge"). This is the
 same number as the task page's "Time and cost" total: each try's time from start to end, added
 up. Time while the task was paused, waiting for you, waiting on other tasks, or in todo between
 tries is not counted. When a row is short of room, the time is left out. When the status line is short of room, the try marks are left out

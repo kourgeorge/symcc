@@ -3,7 +3,7 @@
 // its settings under it, each on its own row:
 //   Work                                      (the group's heading)
 //   mode  [auto ▾]                            (VS Code's Select: a pick saves it)
-//   default auto · off: nothing runs; …       (what it means, dim, wrapped)
+//   default auto · paused: nothing runs; …    (what it means, dim, wrapped)
 //   max_parallel  [2      ] Save              (an Input for numbers and the test commands: Save saves it)
 //   Roles  7 roles · 1 off                  (a link that opens the Roles page; Kinds the same)
 // Only real actions are Buttons (an Input's Save). No key hints.
