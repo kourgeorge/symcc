@@ -1,6 +1,6 @@
 // The board panel's Scouts view: the list, one scout's page, and its edit mode.
 import { scoutRow, scoutFile, scoutTone, scoutIcon, scoutKeys, scoutListRows, scoutHowTo, scoutListKeys, scoutEditKeys, boxHint, scoutRunTasks, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem } from '../../board'
-import { saveScout, cancelScoutEdit, runScoutNow, editScout, setScoutPaused, newScout, loadScoutRunHistory, readScoutRunReport, scoutPlace, scoutPlaceValue } from '../../app/scouts'
+import { saveScout, cancelScoutEdit, runScoutNow, editScout, setScoutPaused, newScout, loadScoutRunHistory, loadScoutResults, readScoutRunReport, scoutPlace, scoutPlaceValue } from '../../app/scouts'
 import { S } from '../../app/state'
 import { type $, panelValues } from '../panel'
 import type { PaneParts } from './parts'
@@ -83,6 +83,7 @@ export async function scoutsPage($: $, pane: PaneParts) {
     const made = scoutRunTasks(runs, pane.v.tasks ?? [], sc.name)
     const shown = runs.map((run, i) => ({ run, tasks: made[i]! })).reverse()
     const problem = scoutLastRunProblem(runs)
+    const results = (await loadScoutResults(host, [sc.name], pane.v.tasks ?? [], nowMs))[sc.name] ?? ''
     const opened = place.run ? shown.find(x => x.run.ended === place.run) : undefined
     // the open run is kept in the panel's saved scout value, next to the scout (scoutPlace); then the page is drawn again
     const showRun = (run: string) => act(async () => (await panelValues($).updateScoutOpen(() => scoutPlaceValue(sc.name, run)), $.ui.invalidate('ui.render')))
@@ -142,6 +143,7 @@ export async function scoutsPage($: $, pane: PaneParts) {
           ) : null}
           {sc.warning ? <Text color={C('warning')}>{sc.warning}</Text> : null}
           {problem && !sc.running ? <Text color={C('error')}>{problem}</Text> : null}
+          {results ? <Text color={C('inactive')}>{results}</Text> : null}
         </Box>
 
         {buttonRows([

@@ -394,12 +394,21 @@ export function statsReport(input: StatsInput & { full?: boolean }): string {
   const byOrigin = groupBy(all, t => (originKey(t).startsWith('scout') ? 'scout' : originKey(t)))
   const origins = sorted(byOrigin)
   const scouts = sorted(groupBy(byOrigin.get('scout') ?? [], t => originKey(t).replace(/^scout ?/, '') || 'scout'))
-  const originW = Math.max(14, ...scouts.map(([k]) => k.length + 4))
+  // T-622: each scout's results (merged / dropped / open, its own tokens in the range, tokens per merged task);
+  // scouts that used tokens in the range but made no task here are listed too
+  const usage = input.team?.scouts ?? {}
+  const span = rangeSpan(range, all, nowMs)
+  const scoutTok = (s: string) => (usage[s] ? tokenCount(scoutTotals({ [s]: usage[s]! }, span).tokens) : 0)
+  const idle = Object.keys(usage).filter(s => !scouts.some(([k]) => k === s) && scoutTok(s) > 0).sort()
+  if (idle.length && !byOrigin.has('scout')) origins.push(['scout', []])
+  const originW = Math.max(14, ...[...scouts.map(([k]) => k), ...idle].map(k => k.length + 4))
   const maxOrigin = origins[0]![1].length
   out.push('', 'Where tasks came from (tasks · share · avg tokens · avg time)')
   for (const [k, ts] of origins) {
-    out.push(barRow(ORIGIN_LABEL[k] ?? k, originW, ts.length, maxOrigin, all.length, figsOf(ts)))
-    if (k === 'scout') for (const [s, st] of scouts) out.push(barRow(`    ${s}`, originW, st.length, maxOrigin, all.length, figsOf(st)))
+    out.push(barRow(ORIGIN_LABEL[k] ?? k, originW, ts.length, maxOrigin, all.length, ts.length ? figsOf(ts) : ''))
+    if (k !== 'scout') continue
+    for (const [s, st] of scouts) out.push(barRow(`    ${s}`, originW, st.length, maxOrigin, all.length, figsOf(st)), `        ${scoutResultsText(scoutResults(st, s, scoutTok(s)))}`)
+    for (const s of idle) out.push(barRow(`    ${s}`, originW, 0, maxOrigin, all.length), `        ${scoutResultsText(scoutResults([], s, scoutTok(s)))}`)
   }
 
   // Done per day
@@ -533,6 +542,43 @@ export function scoutTotals(usage: Record<string, ScoutUsage>, s: { from?: numbe
     }
   }
   return out
+}
+
+// ---------------- a scout's results (T-622) ----------------
+
+/**
+ * What one scout's findings became: the tasks whose origin names it, split into merged (done), dropped and open
+ * (every other status, backlog too); the scout's own tokens; and the merged tasks' worker tokens.
+ */
+export type ScoutResults = { tasks: number; merged: number; dropped: number; open: number; scoutTokens: number; mergedTokens: number }
+
+/** Scout `scout`'s results among `tasks` (only those whose origin names it count), with its own `scoutTokens`. */
+export function scoutResults(tasks: Pick<SymccTask, 'status' | 'runs' | 'origin'>[], scout: string, scoutTokens: number): ScoutResults {
+  const mine = tasks.filter(t => originKey(t) === `scout ${scout}`)
+  const merged = mine.filter(t => t.status === 'done')
+  const dropped = mine.filter(t => t.status === 'dropped').length
+  return { tasks: mine.length, merged: merged.length, dropped, open: mine.length - merged.length - dropped, scoutTokens, mergedTokens: merged.reduce((s, t) => s + (taskFigures(t).tok ?? 0), 0) }
+}
+
+/** Tokens per merged task: the scout's tokens plus its merged tasks' tokens, divided by how many merged; null when none merged. */
+export const perMergedTokens = (r: ScoutResults): number | null => (r.merged ? (r.scoutTokens + r.mergedTokens) / r.merged : null)
+
+/** The results in words: "3 tasks (1 merged, 1 dropped, 1 open) · 2k scout tokens · 7k per merged" ("—" when none merged). */
+export function scoutResultsText(r: ScoutResults): string {
+  const per = perMergedTokens(r)
+  return `${r.tasks ? `${plural(r.tasks, 'task')} (${r.merged} merged, ${r.dropped} dropped, ${r.open} open)` : 'no tasks'} · ${fmtTokens(r.scoutTokens)} scout tokens · ${per === null ? '—' : fmtTokens(per)} per merged`
+}
+
+/**
+ * A scout page's "Results" line: the same numbers for the last 7 days (tasks made or changed then, its tokens of
+ * those days) and in all. `usage` is its entry in scouts.json; `tasks` the board's tasks plus the archived ones.
+ */
+export function scoutResultsLine(tasks: Pick<SymccTask, 'id' | 'status' | 'runs' | 'origin' | 'created_at' | 'updated_at'>[], scout: string, usage: ScoutUsage | undefined, nowMs: number): string {
+  const week: StatsRange = { kind: 'days', days: 7 }
+  const tok = (s: { from?: number; to?: number }) => (usage ? tokenCount(scoutTotals({ [scout]: usage }, s).tokens) : 0)
+  const w = scoutResults(tasks.filter(t => inRange(t, week, nowMs)), scout, tok(rangeSpan(week, [], nowMs)))
+  const a = scoutResults(tasks, scout, tok({}))
+  return `Results · last 7 days: ${scoutResultsText(w)} · in all: ${scoutResultsText(a)}`
 }
 
 /** The lead's calls and tokens within span `s`. */

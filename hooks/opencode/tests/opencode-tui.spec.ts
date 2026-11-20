@@ -1558,3 +1558,15 @@ test('T-615: while a task\'s approve is in progress its page offers no approve o
   expect(keys(f, { id: 'T-3', at: NOW })).toContain('approve')
   expect(keys(f, { id: 'T-2', at: NOW - APPROVE_SENT_MS - 1 })).toContain('approve')
 })
+
+test("T-622: a scout's page shows its Results line from view.json; a scout without one shows none", () => {
+  const f = scoutsViewFile()
+  const line = 'Results · last 7 days: 1 task (1 merged, 0 dropped, 0 open) · 2k scout tokens · 5k per merged · in all: 1 task (1 merged, 0 dropped, 0 open) · 2k scout tokens · 5k per merged'
+  const withResults: ViewFile = { ...f, view: { ...f.view, scout_results: { 'docs-check': line } } }
+  expect(parseViewFile(viewFileText(withResults))).toEqual(withResults)
+  const p = panelLines(withResults, { tab: 'scouts', opened: 'docs-check', cursor: 0 }, NOW, 400).lines.map(lineText)
+  expect(p).toContain(line)
+  expect(panelLines(withResults, { tab: 'scouts', opened: 'deps', cursor: 0 }, NOW, 400).lines.map(lineText).some(l => l.startsWith('Results'))).toBe(false)
+  // a broken scout_results is dropped when read
+  expect(parseViewFile(viewFileText({ ...f, view: { ...f.view, scout_results: [] as never } }))?.view.scout_results).toBe(undefined)
+})
