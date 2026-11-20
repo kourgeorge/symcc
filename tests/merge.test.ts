@@ -13,7 +13,7 @@ import { saidNeedsYou, findPlayers, playable, playsFor, sayNext, sayDone, WIN_TE
 import { workerFinished, check, pump, startWorker, lateHandBack, WORKER_PROMPT, workerQuestionText, type TurnEnd } from '../hooks/app/workers'
 import { setSymcc, setBoardMode } from '../hooks/app/board-mode'
 import { taskStage, stageText } from '../hooks/core/details'
-import { taskPhase, FINISH_STALE_MS, needsYou, waitsForYou, answeredLeadLine, approveRunning, panelSections, statusBadge, statusCounts, STEP_ICON, STEP_WORD } from '../hooks/board'
+import { taskPhase, taskAsks, FINISH_STALE_MS, needsYou, waitsForYou, answeredLeadLine, approveRunning, panelSections, statusBadge, statusCounts, STEP_ICON, STEP_WORD } from '../hooks/board'
 import { keysFor } from './task-keys'
 import { ranOutOfTime } from'../hooks/core/test-timeout'
 import { claimLead } from '../hooks/app/lead'
@@ -4637,6 +4637,40 @@ test('T-612: a task waiting in the merge queue has the check step "queue" with i
   // after the queue its turn starts straight at "testing" (the catch-up and the tests), then the merge: never back to prep
   expect(seen).toEqual(['prep', 'queue 2', 'testing', 'merging'])
   expect(stages.slice(stages.findIndex(s => s.includes('● queue')))).not.toContainEqual(expect.stringContaining('● prep'))
+})
+
+test('T-613: a task that asked for more time and then handed back is not in needs-you and offers no more-time choice in prep / queue / testing / merging', async () => {
+  S.me = 'me'
+  const w = world()
+  await aboutToFinish(w)
+  await change(w.$, x => patchTask(x, 'T-1', { time_ask: ISO, note: 'over time; asked the owner' }, ISO))
+  const asked = find(await load(w.$), 'T-1') as BoardTask
+  expect(needsYou(asked, Date.now())).toBe(true)
+  expect(taskAsks(asked, 45)?.overtime).toBe(true)
+  const steps: string[] = []
+  const bad: string[] = []
+  const look = () => {
+    const text = w.files.get(BOARD)
+    const t = text ? (find(parseBoard(text), 'T-1') as BoardTask | undefined) : undefined
+    const c = t?.checking
+    if (!t || !c) return
+    if (steps.at(-1) !== c.step) steps.push(c.step)
+    const at = Date.parse(c.at)
+    if (t.time_ask || needsYou(t, at) || taskAsks(t, 45) || taskPhase(t, at).waitsFor === 'time') bad.push(c.step)
+  }
+  w.onRun(async () => look())
+  const { free, ran, all } = earlierMerges(w, 1)
+  let ended = false
+  void workerFinished(w.$, 'ag1', 'made the change').then(() => (ended = true))
+  await turns(w, () => (look(), ran.length === 1 && steps.includes('queue')))
+  free[0]!()
+  await all[0]
+  await turns(w, () => (look(), ended))
+  expect(steps).toEqual(['prep', 'queue', 'testing', 'merging'])
+  expect(bad).toEqual([])
+  const t = find(await load(w.$), 'T-1') as BoardTask
+  expect(t.status).toBe('done')
+  expect(t.time_ask).toBeUndefined()
 })
 
 test('T-550: an approve shows the same small set of notes as a worker\'s hand-back, then its outcome', async () => {
