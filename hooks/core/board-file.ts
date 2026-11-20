@@ -43,8 +43,8 @@ export type Board = {
    */
   tests_with_changes?: TestsWithChanges
   /**
-   * the checker setting: true (on) makes a fresh checker try to break each change whose tests passed, before it
-   * merges (see core/checker.ts); absent or false: off, the default
+   * the checker setting: true (on) makes a fresh checker try to break each change after the prep step, before it
+   * joins the merge line where its tests run (see core/checker.ts); absent or false: off, the default
    */
   checker?: boolean
   tasks: BoardTask[]

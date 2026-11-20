@@ -27,3 +27,22 @@ test('the lead help says secret-looking files are left out of a worker\'s commit
   expect(text).toContain('are left out')
   expect(text).toContain('left-out/<task>/')
 })
+
+test('the checker texts say it runs before the merge line, not after the tests pass; a test time-out is a normal failed try', () => {
+  const view = SETTINGS.find(s => s.name === 'checker')!.meaning
+  const tool = TOOLS().find(t => t.name === 'settings')!
+  const props = (tool.inputSchema as unknown as { properties: Record<string, { description?: string }> }).properties
+  const help = manual('lead') + manual('')
+  for (const text of [view, help, tool.description, props.checker!.description!]) {
+    expect(text).not.toContain('whose tests passed')
+    expect(text).not.toContain('after its tests pass')
+  }
+  expect(view).toContain('before a change joins the merge line')
+  expect(help).toContain('before a change joins the merge line')
+  expect(tool.description).toContain('before a change task joins the merge line')
+  expect(props.checker!.description).toContain('before it joins the merge line')
+  const minutes = tool.description.slice(tool.description.indexOf('test_minutes ('), tool.description.indexOf('max_parallel'))
+  expect(minutes).toContain('fails like a failing test')
+  expect(minutes).not.toContain('run again')
+  expect(minutes).not.toContain('owner is asked')
+})

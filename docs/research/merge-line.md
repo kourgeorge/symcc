@@ -36,7 +36,7 @@ normal failed try.
   (`upToDateTestMove`: catch-up, tests, move) through it, so every entry point joins the same line:
   `finishTry`/`finishWork`, `afterChecker`'s second `checkAndMerge`, approve
   (`mergeFinished`/`mergeWork`), `rerunTests`, `retryFileWaits` → `mergeWaiting`, and
-  `restartCheckers` → `checkHeldAgain`.
+  `restartCheckers` → `checkerStepAgain` (which starts the checker again before the line).
 - Changes to the file are made under the board lock, so two sessions never lose each other's change.
 - Tasks of one copy wake each other when one leaves (no polling); a task with another session's task
   in front looks again every 2 seconds (`MERGE_LINE_POLL_MS`).

@@ -60,8 +60,11 @@ test('the built-in prompts are filled in for the task: no placeholder is left, a
   const BG_TIMEOUT = "Don't run long commands in the background. Run test commands with the Bash tool's longest timeout (timeout: 600000); if one still gets moved to the background, wait for it (read its output until it finishes) before you answer: ending your turn ends your work, so never answer that you will continue later."
   expect(p).toContain(BG_TIMEOUT)
   expect(q).toContain(BG_TIMEOUT)
-  for (const k of Object.keys(ROLE_PROMPTS) as (keyof typeof ROLE_PROMPTS)[]) expect([k, ROLE_PROMPTS[k].includes(BG_TIMEOUT)]).toEqual([k, true])
+  for (const k of Object.keys(ROLE_PROMPTS) as (keyof typeof ROLE_PROMPTS)[]) if (k !== 'checker') expect([k, ROLE_PROMPTS[k].includes(BG_TIMEOUT)]).toEqual([k, true])
   expect(Object.keys(ROLE_PROMPTS)).toContain('checker')
+  // T-561: the checker never runs the project's tests, so its timeout line is for its own probes
+  expect(ROLE_PROMPTS.checker).toContain(BG_TIMEOUT.replace('Run test commands', 'Run your own probes'))
+  expect(ROLE_PROMPTS.checker).not.toContain('Run test commands')
   expect(scoutPrompt({ scout: 's', root: ROOT, instructions: 'Go.', open: [] })).toContain(BG)
   // T-456: workers are told to edit with the Edit tool and keep throwaway scripts and notes under .scratch/ (or /tmp); so is the checker
   const SCRATCH = 'Make code changes with the Edit tool; put any throwaway script or note under .scratch/ in your folder (never commit it); /tmp also works.'

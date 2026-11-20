@@ -1,4 +1,5 @@
-// The checker setting (T-349): with it on, a change whose tests passed is checked by a fresh checker before it merges.
+// The checker setting (T-349): with it on, a change is checked by a fresh checker after the prep step and before it
+// joins the merge line, where its tests then run once (T-551).
 // Like merge.test.ts, these run the real finish, merge and board code against a small scripted git and in-memory files.
 import { expect } from 'claude-code/testing'
 import type { SymccTask } from '../types'
@@ -15,6 +16,7 @@ import { fakeHost, memoryFs } from './fake-host'
 import type { Host, HostAgent } from '../hooks/host'
 import { drainStarts, queuedStarts } from '../hooks/app/starts'
 import { withStarts } from './starts'
+import { checkerPrompt, checkerTestsText } from '../hooks/core/checker'
 
 const ROOT = '/repo'
 const WT = `${ROOT}/.symcc/worktrees/T-1`
@@ -144,6 +146,16 @@ async function finish(w: ReturnType<typeof world>, checker?: (agentId: string) =
 }
 
 // ---------------- the setting ----------------
+
+test('T-561: the filled checker prompt has no "where it was tested" and no instruction to run test commands', () => {
+  for (const cmds of [['npm test'], []]) {
+    const p = checkerPrompt({ name: 'symcc', task_id: 'T-1', title: 'a', details: 'b', branch: 'symcc/T-1', folder: WT, into: 'main', role: '', diff: '(no diff)', changed_files: '  a.ts', tests: checkerTestsText('symcc', cmds) })
+    expect(p).not.toContain('where it was tested')
+    expect(p).not.toMatch(/\bRun (the )?(project's )?test commands/i)
+    expect(p).toContain("Don't run the project's own tests")
+    expect(p).toContain('the branch must stay where the worker left it')
+  }
+})
 
 test('the checker setting is off by default; on/off (or true/false) set it, and anything else is refused', async () => {
   expect(checkerOn(emptyBoard())).toBe(false)

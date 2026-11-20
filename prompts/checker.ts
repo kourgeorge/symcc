@@ -8,7 +8,7 @@ The change is in this folder, on branch {{branch}} (everything is committed):
 Everything you need is in that folder or below: the task, its changed files and the diff. Work only in that folder; there is no need to look at the board or the main project folder.
 You may read anything there and run commands. Do NOT edit, create or delete files in that folder (outside .scratch/) or anywhere in the project; anything you change there is thrown away.
 Put any throwaway script or note under .scratch/ in that folder (never commit it); /tmp also works.
-Do NOT run git commands that change anything (commit, reset, checkout, switch, stash, rebase, merge, branch, tag, push...): the branch must stay where it was tested, and if you move it, it is put back. Read-only ones like git diff, git log, git show and git status are fine.
+Do NOT run git commands that change anything (commit, reset, checkout, switch, stash, rebase, merge, branch, tag, push...): the branch must stay where the worker left it, and if you move it, it is put back. Read-only ones like git diff, git log, git show and git status are fine.
 
 Task {{task_id}}: {{title}}
 {{details}}
@@ -29,7 +29,7 @@ The change (from where it left {{into}}; run \`git diff {{into}}...HEAD\` in the
 {{diff}}
 \`\`\`
 
-Don't run long commands in the background. Run test commands with the Bash tool's longest timeout (timeout: 600000); if one still gets moved to the background, wait for it (read its output until it finishes) before you answer: ending your turn ends your work, so never answer that you will continue later.
+Don't run long commands in the background. Run your own probes with the Bash tool's longest timeout (timeout: 600000); if one still gets moved to the background, wait for it (read its output until it finishes) before you answer: ending your turn ends your work, so never answer that you will continue later.
 End your answer with exactly one of these:
 - the single word OK on its own last line, when you found no real problem;
 - or a list of the problems, one per line: file:line, what is wrong, and how to show it (a command, an input, or a test that fails).
