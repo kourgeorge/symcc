@@ -1242,6 +1242,16 @@ test('T-656: a debrief with no answer in time (or one that can\'t be sent) chang
   expect((await finish(w2)).status).toBe('done')
   await turns(20)
   expect(debriefs.size).toBe(0)
+  // a clock that gives no timer: no debrief is sent, so none can stay waiting for good
+  const w3 = world()
+  const follow3: string[] = []
+  w3.$.agents.followUp = async to => void follow3.push(to)
+  w3.$.clock.after = (() => undefined) as unknown as typeof w3.$.clock.after
+  await saveBoard(w3.$, boardWith(false))
+  expect((await finish(w3)).status).toBe('done')
+  await turns(20)
+  expect(follow3).toEqual([])
+  expect(debriefs.size).toBe(0)
 })
 
 test('T-600: a report without a "Learned:" section adds nothing, and with no guide file the prompts have no notes heading', async () => {

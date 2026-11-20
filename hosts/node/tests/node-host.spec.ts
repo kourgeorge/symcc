@@ -246,7 +246,7 @@ test('one task end to end on the Node host: add, a fake claude -p worker edits i
     expect(await readFile(`${log}.resume.prompt`, 'utf8')).toBe(DEBRIEF_TEXT)
     expect(prompt).not.toContain('"Learned:" section')
     expect(tick.stdout).toContain('- Run one test file with sh check.sh.')
-    expect(t.runs[0].cost).toBeCloseTo(0.0133, 6)
+    expect(Math.round(t.runs[0].cost * 1e6)).toBe(13300)
     expect(t.runs[0].tokens).toEqual({ input: 110, output: 23, cache_write: 7, cache_read: 5 })
 
     const board = await cli('board')

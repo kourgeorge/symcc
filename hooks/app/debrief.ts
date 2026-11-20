@@ -48,6 +48,11 @@ export function startDebrief(host: Host, agentId: string, task: string, attempts
   } catch {
     d.timer = null
   }
+  // no time limit (a clock that gives no timer): no debrief, so an unanswered one can't stay waiting for good
+  if (!d.timer) {
+    debriefs.delete(agentId)
+    return
+  }
   void Promise.resolve()
     .then(() => followUp(agentId, DEBRIEF_TEXT))
     .catch(() => {

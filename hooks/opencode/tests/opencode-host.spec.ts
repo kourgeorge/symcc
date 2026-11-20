@@ -620,7 +620,7 @@ test('T-656: an OpenCode agent that handed back gets one follow-up prompt in its
     const { agentId } = await agents.spawn({ kind: 'worker', prompt: 'do T-1', name: 'symcc-T-1', description: 'a change' })
     await until(() => f.calls.some(c => c.startsWith(`prompt ${agentId}`)))
     // not finished yet: no follow-up
-    await expect(agents.followUp(agentId!, 'x')).rejects.toThrow()
+    expect(await agents.followUp(agentId!, 'x').then(() => 'sent', () => 'refused')).toBe('refused')
     f.end(agentId!, 'Changed src/a.ts.')
     await until(() => ends.length === 1)
     await agents.followUp(agentId!, 'Before you finish: anything for org-mem?')
