@@ -968,6 +968,10 @@ test('T-559: the Scouts tab lists the scouts from view.json, a scout\'s page sho
   expect(s.find(l => /^› /.test(l))).toContain('mode')
   expect(settings.ids.slice(0, 2)).toEqual(['settings-group:Work', 'mode'])
   expect(settings.ids).toContain('notify')
+  // T-650: the sound set row, right after notify, with the set in use
+  expect(settings.ids[settings.ids.indexOf('notify') + 1]).toBe('sound_set')
+  expect(s.find(l => l.includes('sound_set'))).toMatch(/sound_set +\d · default picked from the project name · 1 \/ 2 \/ 3/)
+  expect(panelLines({ ...f, view: { ...f.view, sound_set: 3 } as typeof f.view }, { tab: 'settings', opened: '', cursor: 1, settingsOpen: ALL_GROUPS }, NOW, 140).lines.map(lineText).find(l => l.includes('sound_set'))).toMatch(/sound_set +3 · /)
   expect(settings.hits[s.findIndex(l => l.includes('max_minutes'))]).toEqual({ setting: 'max_minutes' })
   expect(panelKeys(f, '', 'settings').map(k => k.word)).toEqual(['change', 'move', 'views', 'back'])
   // the footer is core's settingsKeys, as Claude Code's: on a group heading Enter opens or closes it (T-584)

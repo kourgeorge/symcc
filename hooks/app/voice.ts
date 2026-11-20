@@ -1,13 +1,13 @@
 // Notify: a chime (sound) or "symcc: T-3 done" said out loud (voice) when a task is merged or a question waits.
 import type { SymccTask } from '../../types'
-import { type Board, type Notify, type NotifySystem, type Playable, notifyOf, canPlay, unplayableNote, symccOn, spokenLine, NEEDS_YOU_MARK } from '../board'
+import { type Board, type Notify, type NotifySystem, type Playable, type SoundSet, SOUND_SETS, notifyOf, canPlay, unplayableNote, symccOn, spokenLine, soundSetOf, soundSetFor, projectFolder, NEEDS_YOU_MARK } from '../board'
 import { S, sayQueue } from './state'
 import type { Host } from '../host'
 
 /** One command to run: the text is always its own argument (or, on Windows, an environment value), never part of a shell string. */
 export type Play = { argv: string[]; env?: Record<string, string> }
-/** Makes the command for one line: `text` the words, `needsYou` when a question waits (a different chime). */
-export type Player = (text: string, needsYou: boolean) => Play
+/** Makes the command for one line: `text` the words, `needsYou` when a question waits (a different chime), `set` the sound set (chimes only). */
+export type Player = (text: string, needsYou: boolean, set: SoundSet) => Play
 /** What this machine has, found once per session: its system, and the speech and sound commands to try in order. */
 export type Players = { system: NotifySystem; voice: Player[]; sound: Player[] }
 
@@ -17,9 +17,21 @@ const PS = ['powershell', '-NoProfile', '-NonInteractive', '-Command']
 const WIN_SPEAK = `Add-Type -AssemblyName System.Speech; (New-Object System.Speech.Synthesis.SpeechSynthesizer).Speak($env:${WIN_TEXT_VAR})`
 // Play() returns at once; the short wait lets the chime finish before PowerShell exits
 const winChime = (name: string) => `[System.Media.SystemSounds]::${name}.Play(); Start-Sleep -Milliseconds 900`
+/** A Windows media file (in %windir%\Media) played to the end, or set 1's system sound `fallback` when the file is missing. */
+const winMedia = (file: string, fallback: string) =>
+  `$p = Join-Path $env:windir 'Media\\${file}'; if (Test-Path $p) { (New-Object System.Media.SoundPlayer $p).PlaySync() } else { ${winChime(fallback)} }`
 
 const MAC_SOUNDS = '/System/Library/Sounds'
 const FD_SOUNDS = '/usr/share/sounds/freedesktop/stereo'
+
+/** The sound sets as [done, needs you] sounds, per system. Set 1 is the one every project used before (T-650). */
+export const MAC_SETS: Record<SoundSet, [string, string]> = { 1: ['Glass', 'Ping'], 2: ['Hero', 'Pop'], 3: ['Submarine', 'Funk'] }
+export const FD_SETS: Record<SoundSet, [string, string]> = { 1: ['complete', 'bell'], 2: ['message-new-instant', 'dialog-warning'], 3: ['service-login', 'window-attention'] }
+/** Windows: set 1 is the system sounds; sets 2 and 3 are media files, each falling back to set 1's sound when missing. */
+export const WIN_SETS: Record<SoundSet, [string, string]> = { 1: ['Asterisk', 'Exclamation'], 2: ['tada.wav', 'chord.wav'], 3: ['chimes.wav', 'notify.wav'] }
+
+/** A sound file for each set and each of done / needs you: [done, needs]. */
+type SetFiles = Record<SoundSet, [string, string]>
 
 function run(host: Host, argv: string[]) {
   return host.run(argv, { timeoutMs: 5000 }).catch(() => null)
@@ -47,12 +59,29 @@ function hasProgram(host: Host, system: NotifySystem, name: string) {
 function hasFile(host: Host, path: string) {
   return okRun(host, ['test', '-f', path])
 }
-/** The freedesktop "complete" and "bell" sounds with extension `ext`, or null when there is no "complete" one. */
-async function fdSounds(host: Host, ext: string) {
-  if (!(await hasFile(host, `${FD_SOUNDS}/complete.${ext}`))) return null
-  const done = `${FD_SOUNDS}/complete.${ext}`
-  return { done, needs: (await hasFile(host, `${FD_SOUNDS}/bell.${ext}`)) ? `${FD_SOUNDS}/bell.${ext}` : done }
+
+/**
+ * The files of every set, from the sound names in `sets` (`file` turns a name into its path), or null when set 1's
+ * "done" file is missing (nothing to chime). A missing file falls back to set 1's file for the same moment
+ * (and set 1's "needs you" to its "done").
+ */
+async function setFiles(host: Host, sets: Record<SoundSet, [string, string]>, file: (name: string) => string): Promise<SetFiles | null> {
+  const has = new Map<string, boolean>()
+  const ok = async (name: string) => {
+    if (!has.has(name)) has.set(name, await hasFile(host, file(name)))
+    return has.get(name)!
+  }
+  const [done1, needs1] = sets[1]
+  if (!(await ok(done1))) return null
+  const base: [string, string] = [done1, (await ok(needs1)) ? needs1 : done1]
+  const out = {} as SetFiles
+  for (const set of SOUND_SETS) {
+    const [done, needs] = sets[set]
+    out[set] = [(await ok(done)) ? done : base[0], (await ok(needs)) ? needs : base[1]]
+  }
+  return out
 }
+const pick = (files: SetFiles, set: SoundSet, needs: boolean) => (files[set] ?? files[1])[needs ? 1 : 0]
 
 /** Finds this machine's speech and sound commands by looking for the programs (and sound files), playing nothing. */
 export async function findPlayers(host: Host): Promise<Players> {
@@ -61,23 +90,31 @@ export async function findPlayers(host: Host): Promise<Players> {
   const sound: Player[] = []
   if (system === 'mac') {
     if (await hasProgram(host, system, 'say')) voice.push(text => ({ argv: ['say', '-r', '200', text] }))
-    if ((await hasProgram(host, system, 'afplay')) && (await hasFile(host, `${MAC_SOUNDS}/Glass.aiff`))) {
-      const ping = (await hasFile(host, `${MAC_SOUNDS}/Ping.aiff`)) ? 'Ping' : 'Glass'
-      sound.push((_, needs) => ({ argv: ['afplay', `${MAC_SOUNDS}/${needs ? ping : 'Glass'}.aiff`] }))
-    }
+    const mac = (await hasProgram(host, system, 'afplay')) ? await setFiles(host, MAC_SETS, n => `${MAC_SOUNDS}/${n}.aiff`) : null
+    if (mac) sound.push((_, needs, set) => ({ argv: ['afplay', `${MAC_SOUNDS}/${pick(mac, set, needs)}.aiff`] }))
   } else if (system === 'linux') {
     if (await hasProgram(host, system, 'spd-say')) voice.push(text => ({ argv: ['spd-say', '-w', text] }))
     if (await hasProgram(host, system, 'espeak-ng')) voice.push(text => ({ argv: ['espeak-ng', text] }))
     if (await hasProgram(host, system, 'espeak')) voice.push(text => ({ argv: ['espeak', text] }))
-    const oga = await fdSounds(host, 'oga')
-    if (oga && (await hasProgram(host, system, 'paplay'))) sound.push((_, needs) => ({ argv: ['paplay', needs ? oga.needs : oga.done] }))
-    if (await hasProgram(host, system, 'canberra-gtk-play')) sound.push((_, needs) => ({ argv: ['canberra-gtk-play', '-i', needs ? 'bell' : 'complete'] }))
-    const wav = await fdSounds(host, 'wav')
-    if (wav && (await hasProgram(host, system, 'aplay'))) sound.push((_, needs) => ({ argv: ['aplay', '-q', needs ? wav.needs : wav.done] }))
+    const paplay = await hasProgram(host, system, 'paplay')
+    const canberra = await hasProgram(host, system, 'canberra-gtk-play')
+    const oga = paplay || canberra ? await setFiles(host, FD_SETS, n => `${FD_SOUNDS}/${n}.oga`) : null
+    if (oga && paplay) sound.push((_, needs, set) => ({ argv: ['paplay', `${FD_SOUNDS}/${pick(oga, set, needs)}.oga`] }))
+    if (canberra) {
+      // canberra finds the sound by its name in the theme; with no files to look at, set 1's names (always in the theme)
+      const names = oga ?? { 1: FD_SETS[1], 2: FD_SETS[1], 3: FD_SETS[1] }
+      sound.push((_, needs, set) => ({ argv: ['canberra-gtk-play', '-i', pick(names, set, needs)] }))
+    }
+    const wav = (await hasProgram(host, system, 'aplay')) ? await setFiles(host, FD_SETS, n => `${FD_SOUNDS}/${n}.wav`) : null
+    if (wav) sound.push((_, needs, set) => ({ argv: ['aplay', '-q', `${FD_SOUNDS}/${pick(wav, set, needs)}.wav`] }))
   } else if (system === 'windows') {
     if (await hasProgram(host, system, 'powershell')) {
       voice.push(text => ({ argv: [...PS, WIN_SPEAK], env: { [WIN_TEXT_VAR]: text } }))
-      sound.push((_, needs) => ({ argv: [...PS, winChime(needs ? 'Exclamation' : 'Asterisk')] }))
+      sound.push((_, needs, set) => {
+        const i = needs ? 1 : 0
+        const name = (WIN_SETS[set] ?? WIN_SETS[1])[i]
+        return { argv: [...PS, set === 1 || !name.endsWith('.wav') ? winChime(WIN_SETS[1][i]) : winMedia(name, WIN_SETS[1][i])] }
+      })
     }
   }
   return { system, voice, sound }
@@ -101,7 +138,7 @@ export async function playable(host: Host): Promise<Playable> {
  * words when it is long. '' when there is no folder name.
  */
 export function spokenProject(root: string, maxWords = 3): string {
-  const folder = String(root ?? '').replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? ''
+  const folder = projectFolder(root)
   const words = folder.replace(/[-_.]+/g, ' ').split(/\s+/).filter(Boolean)
   return words.slice(0, maxWords).join(' ')
 }
@@ -140,10 +177,14 @@ export function sayQuestion(host: Host, b: Board, id: string) {
   if (queueSay(host, b, NEEDS_YOU_MARK + id)) saidNeedsYou.add(key)
 }
 
+/** The sound set of the board that queued the last line (see queueSay). */
+let soundSetWanted: SoundSet | null = null
+
 /** Adds `item` to the queue and plays it soon; false when nothing plays here (not the driver, notify or plugin off). */
 function queueSay(host: Host, b: Board, item: string): boolean {
   if (!S.driving || !symccOn(b) || b.notify === 'off') return false
   S.notifyWanted = b.notify ?? null
+  soundSetWanted = soundSetOf(b, S.root)
   sayQueue.push(item)
   if (S.sayTimer || S.saying) return true
   S.sayTimer = host.clock.after(1500, () => {
@@ -153,8 +194,11 @@ function queueSay(host: Host, b: Board, item: string): boolean {
   return true
 }
 
-/** The commands to try for one queued line, in order; [] when nothing plays (off, or it can't play here: told once). */
-export async function playsFor(host: Host, wanted: Notify | null, items: string[]): Promise<Play[]> {
+/**
+ * The commands to try for one queued line, in order; [] when nothing plays (off, or it can't play here: told once).
+ * `set` is the sound set for a chime: the board's, else the one picked from the project's folder name.
+ */
+export async function playsFor(host: Host, wanted: Notify | null, items: string[], set: SoundSet = soundSetFor(S.root)): Promise<Play[]> {
   const text = spokenLine(items)
   if (!text) return []
   const p = await players(host)
@@ -169,9 +213,9 @@ export async function playsFor(host: Host, wanted: Notify | null, items: string[
     return []
   }
   const needsYou = items.some(x => String(x ?? '').startsWith(NEEDS_YOU_MARK))
-  // only the spoken line has the project's name; the chime is the same in every project
+  // the spoken line says the project's name; a chime tells projects apart by its sound set
   const line = n === 'voice' ? withProject(text, S.root) : text
-  return p[n].map(make => make(line, needsYou))
+  return p[n].map(make => make(line, needsYou, set))
 }
 
 export async function sayNext(host: Host) {
@@ -180,7 +224,7 @@ export async function sayNext(host: Host) {
   if (!items.length) return
   S.saying = true
   try {
-    for (const c of await playsFor(host, S.notifyWanted, items)) {
+    for (const c of await playsFor(host, S.notifyWanted, items, soundSetWanted ?? soundSetFor(S.root))) {
       const r = await host.run(c.argv, { timeoutMs: 30_000, ...(c.env ? { env: c.env } : {}) }).catch(() => null)
       if (r && r.exitCode === 0) break
     }
@@ -190,4 +234,22 @@ export async function sayNext(host: Host) {
     S.saying = false
   }
   if (sayQueue.length) void sayNext(host)
+}
+
+/**
+ * Plays sound set `set`'s "done" chime once, so the owner hears the set just picked (Settings, sound_set).
+ * Nothing when this machine has no sound player; never waits, never shows an error.
+ */
+export async function playSample(host: Host, set: SoundSet): Promise<Play | null> {
+  if (!SOUND_SETS.includes(set)) return null
+  try {
+    for (const make of (await players(host)).sound) {
+      const c = make('', false, set)
+      const r = await host.run(c.argv, { timeoutMs: 10_000 }).catch(() => null)
+      if (r && r.exitCode === 0) return c
+    }
+  } catch {
+    // stay silent
+  }
+  return null
 }

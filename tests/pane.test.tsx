@@ -980,7 +980,7 @@ test('"c" and the Settings tab show one row per setting, with value, default and
   expect(tasksTab?.props.color).toBe('inactive')
   for (const g of SETTING_GROUPS) await ui.press({ key: `group:${g.title}` })
   const keys = (await ui.findAll({ type: 'Button' })).map(r => String(r.props.key)).filter(k => k.startsWith('setting:'))
-  expect(keys).toEqual(['mode', 'max_parallel', 'max_minutes', 'auto_retries', 'enabled', 'test_commands', 'test_minutes', 'tests_with_changes', 'checker', 'scout_findings', 'notify', 'open_on_start', 'archive_days'].map(n => `setting:${n}`))
+  expect(keys).toEqual(['mode', 'max_parallel', 'max_minutes', 'auto_retries', 'enabled', 'test_commands', 'test_minutes', 'tests_with_changes', 'checker', 'scout_findings', 'notify', 'sound_set', 'open_on_start', 'archive_days'].map(n => `setting:${n}`))
   expect(await ui.find({ type: 'Text', text: /^ npm test$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /^ 5$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /default 3 · 1-8 · how many workers run at once/ })).toBeDefined()
@@ -1029,7 +1029,7 @@ test('Settings groups its rows under 5 headings, in order; with every group open
     'Checks before merging': ['test_commands', 'test_minutes', 'tests_with_changes', 'checker'],
     Workers: ['Roles', 'Kinds'],
     Scouts: ['scout_findings'],
-    'Board and alerts': ['notify', 'open_on_start', 'archive_days'],
+    'Board and alerts': ['notify', 'sound_set', 'open_on_start', 'archive_days'],
   }
   titles.forEach((t, i) => {
     const from = at[i]!
@@ -1100,7 +1100,7 @@ test('a closed group summary is cut to fit', () => {
   const board = SETTING_GROUPS.find(g => g.title === 'Board and alerts')!
   expect(groupSummary(board, { archive_days: 0 }, 80)).toContain('never archive')
   expect(groupSummary(board, { archive_days: 0 }, 80)).not.toContain('archive after')
-  expect(groupSummary(board, { archive_days: 1 }, 80)).toContain('archive after 1 day')
+  expect(groupSummary(board, { archive_days: 1 }, 100)).toContain('archive after 1 day')
   // a long title is kept whole even when narrow; the values that don't fit are left out
   const checks = SETTING_GROUPS.find(g => g.title === 'Checks before merging')!
   expect(groupSummary(checks, { test_commands: ['npm test'] }, 20)).toBe('Checks before merging')

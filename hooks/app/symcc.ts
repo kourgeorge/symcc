@@ -501,7 +501,7 @@ export async function runCommand(host: Host, command: string, args: string): Pro
       S.settingPick = null
       const placed = await openPane(host, { tab: 'settings' }).then(r => r?.isPlaced ?? false).catch(() => false)
       if (placed) return say(`Settings opened: Enter on a row changes it, t tasks, s scouts, b goes back to the tasks.`)
-      return say(settingsText({ ...b, notify: notifyOf(b, await playable(host)) }, S.N.name))
+      return say(settingsText({ ...b, notify: notifyOf(b, await playable(host)) }, S.N.name, S.root))
     }
     case 'set':
       return say(await ownerSettings(host, cmd.input, `with /${S.N.name}-settings`))

@@ -718,6 +718,10 @@ are about changes; under "How tasks ended" a read investigation shows as
   `/symcc-settings` and from the lead. If the saved choice can't play on this computer (the
   board was set on another one), you are told once and nothing plays; the setting is kept.
   Task text is always passed to these programs as a plain argument, never as shell code.
+- `sound_set` (1, 2 or 3) picks which chimes `sound` plays, so you can tell which project chimed: each set has its own
+  "done" and "needs you" chime (macOS: Glass / Ping, Hero / Pop, Submarine / Funk; Linux and Windows use other system sounds,
+  and a sound missing on this computer falls back to set 1's). Unset, it is picked from the project folder's name, so two
+  projects usually differ with no setup; the Settings page shows the one in use, and picking one there plays its chime.
 - Panel keys: `a` approve, `x` reject or drop, `d` changes, `p` pause, `u` resume,
   `r` retry, `m` switch review / auto, `f` search the tasks, `n` needs review, `1`-`9` a try's report on the task
   page, `t` / `s` / `c` switch views, `b` back.

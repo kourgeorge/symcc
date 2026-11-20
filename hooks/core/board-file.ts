@@ -28,6 +28,8 @@ export type Board = {
    * voice ("T-3 done"); absent: the best this machine can play (see notifyOf)
    */
   notify?: Notify
+  /** which of the 3 sound sets notify "sound" plays (1, 2 or 3); absent: picked from the project's folder name (see soundSetOf) */
+  sound_set?: SoundSet
   /** the whole plugin enabled or disabled (/<name>-enable, /<name>-disable); disabled: Claude works as normal, the board is kept. true unless disabled */
   enabled: boolean
   /** done and dropped tasks older than this many days move to archive.json (0 = never) */
@@ -62,6 +64,11 @@ export type Board = {
 export type Notify = 'off' | 'sound' | 'voice'
 export const NOTIFY_CHOICES: Notify[] = ['off', 'sound', 'voice']
 export const isNotify = (x: unknown): x is Notify => NOTIFY_CHOICES.includes(x as Notify)
+
+/** The 3 sound sets notify "sound" can play, so the owner can tell which project chimed. */
+export type SoundSet = 1 | 2 | 3
+export const SOUND_SETS: SoundSet[] = [1, 2, 3]
+export const isSoundSet = (x: unknown): x is SoundSet => SOUND_SETS.includes(x as SoundSet)
 
 /** Where tasks added from a scout finding go: auto (the lead decides) or backlog (always the backlog). */
 export type ScoutFindings = 'auto' | 'backlog'
@@ -309,6 +316,7 @@ const SETTING_OK: { [K in Exclude<keyof Board, 'version' | 'tasks' | 'next_id' |
   test_minutes: v => isNum(v) && v >= 1,
   open_on_start: v => typeof v === 'boolean',
   notify: v => isNotify(v),
+  sound_set: v => isSoundSet(v),
   enabled: v => typeof v === 'boolean',
   archive_days: v => isNum(v) && v >= 0,
   scout_findings: v => isScoutFindings(v),
