@@ -9,7 +9,8 @@ import { shortTests, logoWidthFor, twoLines, MORE, vsHref, mdText, mdLink } from
 import { ASK_LEAD, ASK_LEAD_DRAFT, fitRow } from '../hooks/claude/ui/vscode-list'
 import { drawNow } from '../hooks/claude/ui/now'
 import { mayMove } from '../hooks/core/logo'
-import { modeLabel, MODE_MEANING } from '../hooks/board'
+import { modeLabel, MODE_MEANING, panelSections } from '../hooks/board'
+import { paneWidth, VS_WIDE } from '../hooks/claude/ui/parts'
 import { hist } from './history-fixture'
 
 type Node = { type?: string; key?: string; props?: Record<string, unknown>; children?: unknown[] }
@@ -140,7 +141,9 @@ test('in VS Code the Tasks page shows whole titles, status colors on the marks, 
     expect([open?.type, open?.props.pressableLinks], t.id).toEqual(['Markdown', [vsHref('task', t.id)]])
     const md = String(open!.props.text)
     expect(md.startsWith(mdLink(t.id, vsHref('task', t.id))), t.id).toBe(true)
-    const shown = mdPlain(md).slice(t.id.length).trim().replace(new RegExp(`${MORE.replace(/[()]/g, '\\$&')}$`), '').replace(/…$/, '')
+    // an open row's title is its own Markdown after the state cell (T-644); a done one's follows the ID
+    const own = await ui.find({ key: `${t.id}-title` })
+    const shown = (own ? mdPlain(String(own.props.text)) : mdPlain(md).slice(t.id.length)).trim().replace(new RegExp(`${MORE.replace(/[()]/g, '\\$&')}$`), '').replace(/…$/, '')
     expect(t.title.startsWith(shown) && shown.length >= 6, t.id).toBe(true)
   }
   // "…" only in an open row's title or state part (cut to its one line), never "(more)" there
@@ -155,11 +158,13 @@ test('in VS Code the Tasks page shows whole titles, status colors on the marks, 
     expect(colored.length, t.id).toBeLessThanOrEqual(3) // the needs-you mark, the status words, a later try's "(3)"
     for (const n of colored) expect(texts(n).join(''), t.id).not.toContain(t.title)
   }
-  expect((await ui.find({ key: 'vs-task-T-405' }))?.text).toMatch(/✗ failed/)
-  // grouped by status under headings with a count badge, the folded groups as heading rows
-  for (const [k, h] of [['Waiting for you', '? Waiting for you  1 '], ['Review', '◆ Review  2 '], ['Failed', '✗ Failed  1 '], ['Doing', '▶ Doing  2 '], ['To do', '○ To do  6 ']]) {
+  expect((await ui.find({ key: 'vs-task-T-405' }))?.text).toMatch(/✗\sfailed/)
+  // what needs you under headings with a count badge, doing and to do as one list with no heading (T-644), the
+  // folded groups as heading rows
+  for (const [k, h] of [['Waiting for you', '? Waiting for you  1 '], ['Review', '◆ Review  2 '], ['Failed', '✗ Failed  1 ']]) {
     expect((await ui.find({ key: `vs-head-${k}` }))?.text, k).toBe(h)
   }
+  for (const k of ['Doing', 'To do']) expect(await ui.find({ key: `vs-head-${k}` }), k).toBeUndefined()
   expect(all).toContain('▾ Backlog 3')
   expect(all).toContain('▾ Dropped 2')
   // tabs without key labels, the one shown bold and not a link
@@ -290,7 +295,7 @@ const EMPTY_VIEW = { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, working: [], t
 type Mounted = { find: (q: { key: string }) => Promise<unknown> }
 /** A row as it reads, on its one line ("● T-404  title · ? waiting for 1m · …"); `kind` the row's key start. */
 async function rowText(ui: Mounted, id: string, kind = id.startsWith('Q-') ? 'vs-question' : 'vs-task') {
-  return texts((await ui.find({ key: `${kind}-${id}` })) as Node).join('')
+  return texts((await ui.find({ key: `${kind}-${id}` })) as Node).join('').replace(/\u00a0/g, ' ')
 }
 /** A row's one line (its title and then its dim state part). */
 const infoLine = async (ui: Mounted, id: string) => (await ui.find({ key: `vs-task-${id}-top` })) as Node
@@ -309,8 +314,6 @@ test('in VS Code the Tasks list at widths 40 and 80: headings with counts, rows 
       ['Waiting for you', '? Waiting for you  1 ', 'warning'],
       ['Review', '◆ Review  2 ', 'warning'],
       ['Failed', '✗ Failed  1 ', 'error'],
-      ['Doing', '▶ Doing  2 ', 'ide'],
-      ['To do', '○ To do  7 ', 'inactive'],
     ]
     for (const [k, text, tone] of heads) {
       const head = await ui.find({ key: `vs-head-${k}` })
@@ -318,6 +321,7 @@ test('in VS Code the Tasks list at widths 40 and 80: headings with counts, rows 
       const badge = elements(head!.children).find(n => n.type === 'Text' && n.props?.backgroundColor)
       expect([badge?.props?.backgroundColor, badge?.props?.color, badge?.props?.bold], `${at} ${k}`).toEqual([tone, 'inverseText', true])
     }
+    for (const k of ['Doing', 'To do']) expect(await ui.find({ key: `vs-head-${k}` }), `${at} ${k}`).toBeUndefined()
     // no Button anywhere on the busy Tasks page: rows, folds, tabs and the mode switch are links; nothing is cut to one
     // line but the rules and a row's state part (already fitted to the width), so nothing runs off the right edge
     expect(elements(tree).filter(n => n.type === 'Button').map(n => n.props?.key), at).toEqual([])
@@ -341,35 +345,36 @@ test('in VS Code the Tasks list at widths 40 and 80: headings with counts, rows 
       expect([b?.type, b?.props.pressableLinks], `${at} ${t.id}`).toEqual(['Markdown', [vsHref('task', t.id)]])
       expect(String(b?.props.text).startsWith(mdLink(t.id, vsHref('task', t.id))), `${at} ${t.id}`).toBe(true)
     }
-    // on the same line, dim: the status in its color and its time, the kind or role, the question or why it failed, the
-    // try (a question takes about half the free room, cut at a word; at 40 it does not fit beside the cut title: the
-    // status words stay)
-    expect(await rowText(ui, 'T-404'), at).toMatch(bodyColumns === 80 ? / · \? waiting for 1m · Yellow or blue for( review\?|…)$/ : / · \? waiting for 1m/)
-    expect(await rowText(ui, 'T-405'), at).toContain(' · ✗ failed 1m ago')
-    expect(await rowText(ui, 'T-401'), at).toContain(' · ▶ 2m')
-    expect(await rowText(ui, 'T-403'), at).toContain(bodyColumns === 80 ? ' · ◆ review for 1m · ready for your review' : ' · ◆ review for 1m')
-    expect(await rowText(ui, 'T-420'), at).toMatch(bodyColumns === 80 ? / · .*investigation/ : / · ◆ answer for 1m/)
-    const status = elements(await infoLine(ui, 'T-405')).find(n => texts(n).join('') === '✗ failed 1m ago')
+    // between the ID and the title the status in its color and its time; after the title, dim, the kind or role, the
+    // question or why it failed (a question takes about half the free room, cut at a word; at 40 it does not fit
+    // beside the cut title)
+    expect(await rowText(ui, 'T-404'), at).toMatch(bodyColumns === 80 ? /^● T-404 \? waiting for 1m\s+Pick.* · Yellow or blue for( review\?|…)$/ : /^● T-404 \? waiting for 1m\s+\S/)
+    expect(await rowText(ui, 'T-405'), at).toMatch(/^● T-405 ✗ failed 1m ago\s+\S/)
+    expect(await rowText(ui, 'T-401'), at).toMatch(/^T-401 ▶ 2m\s+Show/)
+    expect(await rowText(ui, 'T-403'), at).toMatch(bodyColumns === 80 ? /^● T-403 ◆ review for 1m\s+.* · ready for your review$/ : /^● T-403 ◆ review for 1m\s+\S/)
+    expect(await rowText(ui, 'T-420'), at).toMatch(bodyColumns === 80 ? /^● T-420 ◆ answer for 1m\s+.* · .*investigation/ : /^● T-420 ◆ answer for 1m\s+\S/)
+    const status = elements(await infoLine(ui, 'T-405')).find(n => n.type === 'Text' && texts(n).join('').replace(/\u00a0/g, ' ').trim() === '✗ failed 1m ago')
     expect(status?.props?.color, at).toBe('error')
     // a task that needs you gets a clear "●" mark first (in its tone) and a bold title; one that runs starts with its ID
     for (const id of ['T-403', 'T-404', 'T-405', 'T-420']) {
       expect(await rowText(ui, id), `${at} ${id}`).toMatch(new RegExp(`^● ${id}\\s+\\S`))
-      expect(String((await ui.find({ key: id }))?.props.text), `${at} ${id}`).toMatch(/\*\*.+\*\*$/)
+      expect(String((await ui.find({ key: `${id}-title` }))?.props.text), `${at} ${id}`).toMatch(/^\*\*.+\*\*$/)
     }
     expect(await rowText(ui, 'T-401'), at).toMatch(/^T-401\s+\S/)
     // a long title: one line, the title cut with "…" so the state part stays on it (the whole title is on its page)
     const line = await rowText(ui, 'T-421')
     expect(line.length, at).toBeLessThanOrEqual(bodyColumns)
-    expect(line, at).toMatch(/^T-421\s+Draw the board list.*… · ○ to do/)
-    const cut = line.replace(/^T-421\s+/, '').split('…')[0]!
+    expect(line, at).toMatch(/^T-421 ○\s+Draw the board list.*…/)
+    const cut = line.replace(/^T-421 ○\s+/, '').split('…')[0]!
     expect(LONG.title.startsWith(cut) && cut.length >= 8, at).toBe(true)
     // the lead's question: a row like a task's, in the warning tone; its ID links to its answer page
     const q = await ui.find({ key: 'Q-3' })
     expect([q?.type, q?.props.pressableLinks], at).toEqual(['Markdown', [vsHref('question', 'Q-3')]])
-    const ask = (await rowText(ui, 'Q-3')).replace(/^● Q-3\s+/, '● Q-3 ')
-    // one line: the question cut with "…" so its state stays on the line (at 40 the choices do not fit too, and the
-    // question goes below its floor so the row is no wider than the panel)
-    expect(ask, at).toMatch(bodyColumns === 80 ? /^● Q-3 Should the board open by itself… · \? question for you for 5m · 2 choices$/ : /^● Q-3 Sh\S*… · \? question for you for 5m$/)
+    const ask = await rowText(ui, 'Q-3')
+    // one line: how long ago it was asked between the ID and the question, the question cut with "…" (at 40 the
+    // choices do not fit too) so the row is no wider than the panel
+    expect(ask, at).toMatch(bodyColumns === 80 ? /^● Q-3 \? 5m\s+Should the board open by itself.* · 2 choices$/ : /^● Q-3 \? 5m\s+Sh\S*( \S+)*…( · 2 choices)?$/)
+    expect(ask.length, at).toBeLessThanOrEqual(bodyColumns)
     expect(elements(await ui.find({ key: 'vs-question-Q-3-top' })).find(n => texts(n).join('') === '● ')?.props?.color, at).toBe('warning')
     // no "(more)" on an open row, no key hints, no primary button on a busy board
     for (const t of [...BOARD_TASKS.filter(t => !['done', 'dropped', 'backlog'].includes(t.status)), LONG]) expect(await rowText(ui, t.id), `${at} ${t.id}`).not.toContain(MORE.trim())
@@ -410,8 +415,8 @@ test('in VS Code a done or dropped task is one line: its mark, the ID link, the 
     expect(String(md?.props.text).startsWith(mdLink(id, vsHref('task', id))), id).toBe(true)
   }
   // a doing and a waiting task keep their dim status line
-  expect(await rowText(ui, 'T-401')).toContain(' · ▶ 2m')
-  expect(await rowText(ui, 'T-404')).toMatch(/ · \? waiting/)
+  expect(await rowText(ui, 'T-401')).toMatch(/^T-401 ▶ 2m\s+\S/)
+  expect(await rowText(ui, 'T-404')).toMatch(/^● T-404 \? waiting/)
   // the done row's link still opens its page
   await ui.press({ key: 'T-414', link: { href: vsHref('task', 'T-414') } })
   expect((await ui.find({ key: 'vs-head' }))?.text).toMatch(/^T-414/)
@@ -446,8 +451,8 @@ test('in VS Code a row keeps its kind when its question or reason has the same w
   const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 80 }, surface: 'vscode' })
   await ui.drawn()
   const line = (id: string) => rowText(ui, id)
-  expect(await line('T-501')).toMatch(/ · \? waiting for 1m · docs · Should the docs( \S+)*…?$/)
-  expect(await line('T-502')).toMatch(/ · ✗ failed 1m ago · bug · .*bug/)
+  expect(await line('T-501')).toMatch(/^● T-501 \? waiting for 1m\s+.* · docs · Should the docs( \S+)*…?$/)
+  expect(await line('T-502')).toMatch(/^● T-502 ✗ failed 1m ago\s+.* · bug · .*bug/)
   expect(await line('Q-4')).toMatch(/ · 1 choice$/)
   // an investigation's tag is not shown twice
   expect((await line('T-420')).match(/investigation/g)?.length).toBe(1)
@@ -502,8 +507,8 @@ test('in VS Code a to do task worked on before shows ● in the list and on its 
   seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, tasks: tried } } })
   on('ui.toast', () => ({ value: undefined }))
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
-  expect(await rowText(ui, 'T-408')).toMatch(/ · ● to do/)
-  expect(await rowText(ui, 'T-406')).toMatch(/ · ○ to do/)
+  expect(await rowText(ui, 'T-408')).toMatch(/^T-408 ●\s+Add/)
+  expect(await rowText(ui, 'T-406')).toMatch(/^T-406 ○\s+Write/)
   await ui.press({ key: 'T-408', link: { href: vsHref('task', 'T-408') } })
   expect((await ui.find({ key: 'vs-status' }))?.text).toMatch(/^ ● to do /)
   await ui.unmount()
@@ -518,11 +523,11 @@ test("T-542: in VS Code symcc's own pre-merge step shows \"prep\" and a running 
   on('ui.toast', () => ({ value: undefined }))
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
   // the step's icon and the time, no step word (T-581)
-  expect(await rowText(ui, 'T-497')).toMatch(/ · ✎ \d+m/)
-  expect(await rowText(ui, 'T-498')).toMatch(/ · ⌕ \d+m/)
-  expect(await rowText(ui, 'T-498')).not.toMatch(/ · [▶⌕] checker/)
+  expect(await rowText(ui, 'T-497')).toMatch(/^T-497 ✎ \d+m\s+In the prep step/)
+  expect(await rowText(ui, 'T-498')).toMatch(/^T-498 ⌕ \d+m\s+Checker on it/)
+  expect(await rowText(ui, 'T-498')).not.toMatch(/[▶⌕] checker/)
   // only the task whose checker runs shows ⌕
-  expect(texts(await ui.drawn()).join('\n').match(/\n⌕ /g)?.length).toBe(1)
+  expect(texts(await ui.drawn()).join('\n').match(/\n\u00a0⌕\u00a0/g)?.length).toBe(1)
   await ui.press({ key: 'T-497', link: { href: vsHref('task', 'T-497') } })
   const page = texts(await ui.drawn()).join('\n')
   expect(page).toContain('preparing to merge: committing and checking files')
@@ -565,7 +570,7 @@ test('in VS Code a doing row shows only the total work time of all tries, no Σ,
   await ui.unmount()
 })
 
-test('T-590: in VS Code each open task and question is one line: id, title, then the state; a long title is cut with "…" first', async ($, on) => {
+test('T-590: in VS Code each open task and question is one line: id, state, then the title; a long title is cut with "…" first', async ($, on) => {
   const long = 'Let the lead read every archived task and its whole history when the owner asks about old work from months ago'
   const after = { ...BOARD_TASKS.find(t => t.id === 'T-407')!, id: 'T-578', order: 578, kind: 'feature', title: long, after: ['T-406'] }
   const doing = { ...BOARD_TASKS.find(t => t.id === 'T-401')!, kind: 'investigation', role: 'researcher', attempts: 2 }
@@ -589,32 +594,32 @@ test('T-590: in VS Code each open task and question is one line: id, title, then
       expect(line, `${at} ${id}`).not.toContain('(more)')
       expect(line, `${at} ${id}`).not.toContain('\n')
     }
-    // doing, to do and waiting: id, title, then the state on the same line
+    // doing, to do and waiting: id, state, title on the same line (T-644)
     // the role tag goes first when narrow (whole at 60 now that no try "(2)" takes room, T-628; gone at 40)
-    expect(await rowText(ui, 'T-401'), at).toMatch(bodyColumns === 40 ? /^T-401\s+Show\S*( \S+)*… · ▶ 2m$/ : /^T-401\s+Show the.*… · ▶ 2m · \[investigation · researcher\]$/)
-    expect(await rowText(ui, 'T-406'), at).toMatch(/^T-406\s+Write the guide.* · ○ to do/)
-    expect(await rowText(ui, 'T-404'), at).toMatch(/^● T-404\s+Pick the.* · \? waiting for 1m/)
-    // a long title is cut with "…" and the state part, "after T-406", stays on the line
+    expect(await rowText(ui, 'T-401'), at).toMatch(bodyColumns === 40 ? /^T-401 ▶ 2m\s+Show\S*( \S+)*…$/ : /^T-401 ▶ 2m\s+Show the.*… · \[investigation · researcher\]$/)
+    expect(await rowText(ui, 'T-406'), at).toMatch(/^T-406 ○\s+Write the guide/)
+    expect(await rowText(ui, 'T-404'), at).toMatch(/^● T-404 \? waiting for 1m\s+Pick the/)
+    // a long title is cut with "…" and "after T-406" stays on the line
     const line = await rowText(ui, 'T-578')
-    expect(line, at).toMatch(/^T-578\s+Let the.*… · ○ to do · after T-406/)
+    expect(line, at).toMatch(/^T-578 ○\s+Let the.*… · after T-406/)
     expect(line.length, at).toBeLessThanOrEqual(bodyColumns)
     // the kind comes after "after T-406" and is dropped whole first when the line is narrow, never cut mid-word
     expect(line, at).toMatch(bodyColumns === 40 ? / · after T-406$/ : / · after T-406 · feature$/)
     const q = await rowText(ui, 'Q-3')
-    expect(q, at).toMatch(bodyColumns === 40 ? /^● Q-3\s+Sh\S*… · \? question for you for 5m$/ : /^● Q-3\s+Should the.*… · \? question for you for 5m · 2 choices$/)
+    expect(q, at).toMatch(bodyColumns === 40 ? /^● Q-3 \? 5m\s+Sh\S*( \S+)*…( · 2 choices)?$/ : /^● Q-3 \? 5m\s+Should the.*… · 2 choices$/)
     // never wider than the row: the title is cut (below its floor when it must) before the state part
     expect(q.length, at).toBeLessThanOrEqual(bodyColumns)
     for (const id of ['T-401', 'T-404', 'T-406']) expect((await rowText(ui, id)).length, `${at} ${id}`).toBeLessThanOrEqual(bodyColumns)
     // a long failure reason takes about half the free room, cut at a word; the title keeps the rest
     const why = await rowText(ui, 'T-579')
     expect(why.length, at).toBeLessThanOrEqual(bodyColumns)
-    expect(why, at).toMatch(/^● T-579\s+Let the.*… · ✗ failed 1m ago/)
+    expect(why, at).toMatch(/^● T-579 ✗ failed 1m ago\s+Let the.*…/)
     if (bodyColumns === 80) {
-      expect(why, at).toMatch(/ · ✗ failed 1m ago · bug · It failed: the\S*( \S+)*…$/)
+      expect(why, at).toMatch(/… · bug · It failed: the\S*( \S+)*…$/)
       const shownWhy = why.split(' · bug · ')[1]!.replace(/…$/, '')
       const whole = `It failed: ${reason}`
       expect(whole.startsWith(shownWhy) && whole.charAt(shownWhy.length) === ' ', at).toBe(true)
-      const title = why.replace(/^● T-579\s+/, '').split(' · ')[0]!
+      const title = why.replace(/^● T-579 ✗ failed 1m ago\s+/, '').split(' · ')[0]!
       expect(title.length, at).toBeGreaterThan(16)
     }
     // the row still opens the task page, where the whole title is shown
@@ -689,12 +694,91 @@ test('T-590: a waiting question that starts with "after you …" is a normal lon
   const line = await rowText(ui, 'T-404')
   expect(line.length).toBeLessThanOrEqual(82)
   expect(line).not.toContain('+')
-  const [title, status, rest] = line.replace(/^● T-404\s+/, '').split(' · ')
+  const [, status, after] = line.match(/^● T-404 (\? waiting for 1m)\s+(.*)$/) ?? []
+  const [title, rest] = (after ?? '').split(' · ')
   // the title keeps more than its 12-column floor; the question is capped and cut at a word
   expect(title!.length).toBeGreaterThan(12)
   expect(status).toMatch(/^\? waiting for 1m$/)
   expect(rest).toMatch(/…$/)
   const shown = rest!.replace(/…$/, '')
   expect(question.startsWith(shown) && question.charAt(shown.length) === ' ').toBe(true)
+  await ui.unmount()
+})
+
+test('T-644: paneWidth: VS Code takes the wider of the pane and the surface, and a wide default when it tells neither', () => {
+  expect(paneWidth(true, undefined, undefined)).toBe(VS_WIDE)
+  expect(VS_WIDE).toBeGreaterThanOrEqual(150)
+  expect(paneWidth(true, 60, 140)).toBe(140)
+  expect(paneWidth(true, undefined, 120)).toBe(120)
+  expect(paneWidth(true, 90, undefined)).toBe(90)
+  expect(paneWidth(true, 0, undefined)).toBe(VS_WIDE)
+  // the terminal keeps its own width, 60 when none
+  expect(paneWidth(false, undefined, 140)).toBe(60)
+  expect(paneWidth(false, 50, 140)).toBe(50)
+  expect(paneWidth(true, 10, undefined)).toBe(20)
+})
+
+test('T-644: in VS Code a wide panel shows a long title whole on one line with its state; only a narrow one cuts it with "…"', async ($, on) => {
+  const long = 'Engine/client split: add the engine-only entry point and move the host-free view helpers next to it'
+  const doing = { ...BOARD_TASKS.find(t => t.id === 'T-401')!, title: long }
+  const todo = { ...BOARD_TASKS.find(t => t.id === 'T-406')!, id: 'T-635', order: 635, kind: 'refactor', title: long }
+  seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, tasks: [...BOARD_TASKS.map(t => (t.id === 'T-401' ? doing : t)), todo] } } })
+  on('ui.toast', () => ({ value: undefined }))
+  // wide: as the panel tells it (bodyColumns), as the surface measured it, or not told at all
+  const wide = [
+    { at: 'bodyColumns 160', props: { ...PANE.props, bodyColumns: 160 } },
+    { at: 'viewport 160', props: { ...PANE.props, bodyColumns: undefined as never }, viewport: { columns: 160, rows: 50 } },
+    { at: 'no width', props: { ...PANE.props, bodyColumns: undefined as never } },
+  ]
+  for (const { at, props, viewport } of wide) {
+    const ui = await $.ui.mount({ ...PANE, props, ...(viewport ? { viewport } : {}), surface: 'vscode' })
+    const row = await rowText(ui, 'T-401')
+    expect(row, at).toMatch(/^T-401 ▶ 2m\s+/)
+    expect(row, at).toContain(long)
+    expect(row, at).not.toContain('…')
+    const box = (await ui.find({ key: 'vs-task-T-401' })) as Node
+    expect(box.children!.filter(n => n && typeof n === 'object').length, at).toBe(1)
+    const other = await rowText(ui, 'T-635')
+    expect(other, at).toMatch(/^T-635 ○\s+Engine\/client split/)
+    expect(other, at).toContain(`${long} · [refactor]`)
+    await ui.unmount()
+  }
+  // narrow: the title is cut with "…", the state stays between the ID and the title
+  for (const bodyColumns of [40, 60]) {
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'vscode' })
+    const row = await rowText(ui, 'T-401')
+    expect(row, `width ${bodyColumns}`).toMatch(/^T-401 ▶ 2m\s+Engine\S*( \S+)*…/)
+    expect(row.length, `width ${bodyColumns}`).toBeLessThanOrEqual(bodyColumns)
+    await ui.unmount()
+  }
+})
+
+test('T-644: in VS Code doing and to do are one list with no heading, in the terminal list\'s order, each row id, state, title with the states in one column', async ($, on) => {
+  seedBoard(on)
+  on('ui.toast', () => ({ value: undefined }))
+  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 100 }, surface: 'vscode' })
+  for (const k of ['Doing', 'To do']) expect(await ui.find({ key: `vs-head-${k}` }), k).toBeUndefined()
+  const list = (await ui.find({ key: 'vs-group-running' })) as Node
+  expect(list).toBeDefined()
+  // no heading in it: only rows
+  const rows = list.children!.filter(n => n && typeof n === 'object') as Node[]
+  expect(rows.every(n => String(n.key ?? n.props?.key).startsWith('vs-task-'))).toBe(true)
+  // the terminal list's order: the doing tasks, then the to do ones (panelSections)
+  const sections = panelSections(BOARD_TASKS as never[], T0, 0) as { doing: { id: string }[]; todo: { id: string }[] }
+  const order = [...sections.doing, ...sections.todo].map(t => t.id)
+  const ids = rows.map(n => String(n.key ?? n.props?.key).replace(/^vs-task-/, ''))
+  expect(ids).toEqual(order)
+  // each row: the ID, the state cell (▶ and the time, ○ for to do, ‖ paused), then the title; the titles start in one column
+  const lines = await Promise.all(ids.map(id => rowText(ui, id)))
+  const starts = new Set<number>()
+  for (const [i, line] of lines.entries()) {
+    const t = BOARD_TASKS.find(x => x.id === ids[i])!
+    expect(line, t.id).toMatch(new RegExp(`^${t.id} (▶( \\d+[smh])?|○|‖ paused)\\s+\\S`))
+    starts.add(line.indexOf(t.title.slice(0, 10)))
+  }
+  expect(starts.size).toBe(1)
+  // the state cells themselves are one width
+  const cells = await Promise.all(ids.map(async id => texts((await ui.find({ key: `vs-task-${id}-state` })) as Node).join('')))
+  expect(new Set(cells.map(c => c.length)).size).toBe(1)
   await ui.unmount()
 })
