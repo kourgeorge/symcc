@@ -619,7 +619,7 @@ export function leadSettingsText(b: Partial<Board>, can: Pick<Playable, 'sound' 
         const extra = s.name === 'notify' ? `; this machine can play: ${notifyChoices(can).join(', ')}` : s.name === 'enabled' ? '; only the owner can change it' : ''
         return `${s.name}: ${value} (default ${s.default}, can be ${s.range}) ${s.meaning}${extra}`
       }),
-      ...(g.items.some(isSettingPage) ? ['roles and kinds: use the roles and kinds tools (the owner sees them as pages in the Settings view)', 'org-mem (organizational memory): the owner sees its notes on a page in the Settings view and may delete them there'] : []),
+      ...(g.items.some(isSettingPage) ? ['roles and kinds: use the roles and kinds tools (the owner sees them as pages in the Settings view)', 'org-mem (organizational memory): change it with the orgmem tool (the owner sees its notes on a page in the Settings view and may delete them there)'] : []),
     ]),
   ].join('\n')
 }

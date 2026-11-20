@@ -1586,12 +1586,12 @@ test('T-615: while a task\'s approve is in progress its page offers no approve o
 // ---------------- T-619: the Organizational memory page under Settings ----------------
 
 /** The roles-and-kinds view file with three org-mem notes (newest first, as view.ts writes them). */
-function orgMemViewFile(text = `- T-3 2026-11-18: run one test file\n- written by hand\n- T-7 2026-11-20: the type check is separate\n`): ViewFile {
+function orgMemViewFile(text = `- 2026-11-18: run one test file\n- written by hand\n- 2026-11-20: the type check is separate\n`): ViewFile {
   const f = defsViewFile()
   return { ...f, view: { ...f.view, org_mem: orgMemNotes(text) } }
 }
 
-test('T-619: the Settings tab has an Org-mem row with the count; its page lists the notes newest first with id and date; an empty one says "No notes yet."', () => {
+test('T-619: the Settings tab has an Org-mem row with the count; its page lists the notes newest first with their date; an empty one says "No notes yet."', () => {
   const f = orgMemViewFile()
   // the notes ride in the view file
   expect(parseViewFile(viewFileText(f))!.view.org_mem).toEqual(f.view.org_mem)
@@ -1607,13 +1607,13 @@ test('T-619: the Settings tab has an Org-mem row with the count; its page lists 
   const page = panelLines(f, { tab: 'settings', opened: 'orgmem', cursor: 0 }, NOW, 140)
   const p = page.lines.map(lineText)
   expect(p).toContain('Organizational memory (org-mem)')
-  expect(p.join(' ')).toContain('.symcc/org-mem.md (the newest 60 lines)')
+  expect(p.join(' ')).toContain('.symcc/org-mem.md (at most 60 lines)')
   expect(page.ids).toEqual(['note:3', 'note:2', 'note:1'])
   const at = (x: string) => p.findIndex(l => l.includes(x))
-  expect(p[at('#3')]).toBe('› #3 · T-7 · 2026-11-20')
+  expect(p[at('#3')]).toBe('› #3 · 2026-11-20')
   expect(p[at('#3') + 1]).toBe('    the type check is separate')
   expect(p[at('#2')]).toBe('  #2 · written by hand')
-  expect(p[at('#1')]).toBe('  #1 · T-3 · 2026-11-18')
+  expect(p[at('#1')]).toBe('  #1 · 2026-11-18')
   expect(at('#2')).toBeGreaterThan(at('#3'))
   expect(at('#1')).toBeGreaterThan(at('#2'))
   expect(panelKeys(f, 'orgmem', 'settings').map(k => k.word)).toEqual(['move', 'delete', 'views', 'back'])
@@ -1656,13 +1656,13 @@ test('T-619: startTui: the Org-mem row opens the page; x on a note asks, Yes sen
   clickRow('▸ Workers')
   clickRow('3 notes')
   expect(board.state().opened).toBe('orgmem')
-  expect(lines().some(l => l.includes('#3 · T-7 · 2026-11-20'))).toBe(true)
+  expect(lines().some(l => l.includes('#3 · 2026-11-20'))).toBe(true)
   // x on the newest note, Cancel: nothing sent; down, x, Yes: note 2 is deleted
   answers.select.push('no', 'yes')
   await board.press('x', 'ses_1')
   await board.press('down', 'ses_1')
   await board.press('x', 'ses_1')
-  expect(asked).toEqual(['Delete note #3 · T-7 · 2026-11-20 from .symcc/org-mem.md?', 'Delete note #2 · written by hand from .symcc/org-mem.md?'])
+  expect(asked).toEqual(['Delete note #3 · 2026-11-20 from .symcc/org-mem.md?', 'Delete note #2 · written by hand from .symcc/org-mem.md?'])
   // the note's check word goes along, so a number that moved meanwhile deletes nothing
   expect(sent).toEqual([{ sessionID: 'ses_1', name: 'symcc-settings', text: `orgmem delete 2 ${orgMemNoteKey('written by hand')}` }])
   // b: back to the Settings list

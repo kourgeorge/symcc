@@ -17,6 +17,8 @@ import { haltChecker } from './checker'
 import { questionTool } from './questions'
 import { markMerged } from './merged'
 import { publish } from './lead'
+import { orgMemTool } from './org-mem'
+import { ORG_MEM_MAX_LINES } from '../core/org-mem'
 
 // ---------------- the lead's tools ----------------
 
@@ -175,6 +177,7 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
   scouts lists, adds, changes, removes or runs scouts; roles lists, adds, edits, resets,
   removes or turns off / on worker roles; kinds does the same for the task kinds (roles are how you shape what a worker
   does: a role fills the {{role}} slot of the fixed, built-in worker prompt); stats shows time and token use;
+  orgmem lists and changes the org-mem notes (agents only suggest notes; the lead decides what goes in);
   setup_git sets up git in a folder without it (only after you say yes).
   question puts a question for you that is not about one task on the board${features.panel ? ` ("Questions for you" at the
   top of the task list${features.band ? ', and "1 question for you" in the band' : ''}); answer it there with a button or your own
@@ -341,6 +344,7 @@ ${features.planMode ? `- Plan mode (${S.W.planMode}): only plan. Nothing starts:
 ${rolesLeadText(S.roles, S.N.name)}
 ${kindsLeadText(S.kinds, S.N.name)}
 - Manage worker roles with ${S.N.name} roles, never by writing ${S.N.dir}/roles/ files by hand: action list (the default) shows each role and where it comes from (built-in, replaced, added, off), list with name shows one in full; add (name, description, optional model, skills, tools, checklist); edit changes what you give (a built-in role is copied to ${S.N.dir}/roles/ first); reset brings a built-in back; remove deletes an added role (ask the owner first); off / on turns a role off or on (${DEFAULT_ROLE} can't be turned off; checker can't be turned on or off and is never a task's role: the checker setting runs it). An off role is never picked for a new task.
+- Organizational memory (org-mem, ${S.N.dir}/org-mem.md) is short notes every new worker, checker and scout reads in its prompt. Agents only suggest notes; you decide what goes in, with ${toolName('orgmem')} (action list, add, replace, remove). When a board update lists "Suggested for org-mem" for a task, decide briefly, on your own (don't ask the owner about each): add only what is surprising (a careful agent would not guess it), useful to agents on other tasks (not about that task) and not already there, as one short plain sentence without a task id; when a note there says nearly the same, replace it with the better one instead; most suggestions are skipped. Mention in one line what you added (or nothing). At ${ORG_MEM_MAX_LINES} lines add is refused: remove or replace an old note first.
 - Manage task kinds with ${S.N.name} kinds, never by writing ${S.N.dir}/kinds/ files by hand: action list (the default) shows each kind and where it comes from (built-in, replaced, added, off), list with name shows one in full; add (name, description, optional body); edit changes what you give (a built-in kind is copied to ${S.N.dir}/kinds/ first); reset brings a built-in back; remove deletes an added kind (ask the owner first); off / on turns a kind off or on (change and investigation can't be turned off). An off kind is never picked for a new task, and ${S.N.name} add refuses it. Only change kinds when the owner asks.
 - Don't do the tasks' work yourself in the main conversation; let the workers do it. Talk about tasks by ID (T-3). Use ${S.N.name} board to see the board: with nothing it lists the open tasks and the backlog, and done / dropped only as counts; status (todo, doing, review, waiting, failed, paused, done, dropped, backlog, or open) and search (words, matched like the panel's search, plus filter words last:N, top:N, since:2d, status:, kind:, role:) narrow it, e.g. status: ["done"], search: "notify", or search: "last:5 status:done" for the 5 latest done tasks (not the whole list); with task it shows that task in full with its latest worker report (no need to read ${S.N.dir}/reports by hand).`
 
@@ -390,6 +394,11 @@ export const TOOLS = () => [
     name: 'kinds',
     description: `List, add, edit, reset, remove, turn off or turn on the task kinds (built-in ones in the plugin's kinds/ folder, the owner's own in ${S.N.dir}/kinds/<name>.md). action "list" (the default): every kind with its description and where it comes from (built-in, replaced = the owner's file over a built-in, added = the owner's own, off); with name, that kind in full (front matter and body). "add": writes ${S.N.dir}/kinds/<name>.md (name: letters, digits, - and _; description needed; optional body); refused when the name exists (use edit). "edit": changes what you give and keeps the rest; a built-in kind is first copied to ${S.N.dir}/kinds/<name>.md. "reset": removes the owner's file for a built-in name, so the built-in comes back. "remove": deletes an added kind's file (confirm with the owner first). "off": the kind is never picked for a new task and add refuses it (change and investigation can't be turned off; tasks that already have it keep it); "on" turns it back on. Only change kinds when the owner asks.`,
     inputSchema: { type: 'object', properties: { action: { type: 'string', enum: ['list', 'add', 'edit', 'reset', 'remove', 'off', 'on'], description: 'What to do; list when left out.' }, name: { type: 'string', description: 'The kind, e.g. chore (letters, digits, - and _).' }, description: { type: 'string', description: 'For add / edit: what this kind of task is, in a few words (the lead reads it to choose).' }, body: { type: 'string', description: 'For add / edit: free text about the kind (the file\'s body).' } } },
+  },
+  {
+    name: 'orgmem',
+    description: `Read or change organizational memory (org-mem, ${S.N.dir}/org-mem.md): short notes every new worker, checker and scout gets in its prompt, one line each ("- 2026-11-20: the note"), at most ${ORG_MEM_MAX_LINES}. Only you change it (agents only suggest notes; see "Suggested for org-mem" in board updates). action "list" (the default): every note with its number, oldest first. "add": notes (one or more short plain sentences, no task ids) go at the end with today's date; one that repeats a note there, even in other words, is refused (use replace to improve that note), and an add that would go past ${ORG_MEM_MAX_LINES} lines adds nothing (remove or replace first). "remove": takes out the note which names (its number from list, or its text). "replace": puts by in the place of the note which names (refused if by repeats another note).`,
+    inputSchema: { type: 'object', properties: { action: { type: 'string', enum: ['list', 'add', 'remove', 'replace'], description: 'What to do; list when left out.' }, notes: { type: 'array', items: { type: 'string' }, description: 'For add: the new notes, each one short plain sentence.' }, which: { type: 'string', description: 'For remove / replace: the note, by its number from list (e.g. "3") or its text.' }, by: { type: 'string', description: 'For replace: the new note.' } } },
   },
   { name: 'stats', description: `Read-only: time and token stats of the ${S.N.name} board (incl. archived tasks): the whole team's tokens (lead, workers, scouts) and per merged task, totals, averages and medians per task and per try, outcomes, by role, origin and day. Use it when the owner asks e.g. "how much did we spend this week?" (range "7d"). Gives the full text with every detail; short: true gives the owner's shorter summary.`, inputSchema: { type: 'object', properties: { range: { type: 'string', description: 'Optional: "7d" (the last 7 days) or "T-100..T-130" (an id range); empty = all tasks.' }, short: { type: 'boolean', description: 'Optional: true for the shorter summary the owner sees with /stats (the same figures, fewer explanations).' } } } },
   {
@@ -729,6 +738,8 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       return defChanged($, a, await leadRoles($, a))
     case 'kinds':
       return defChanged($, a, await leadKinds($, a))
+    case 'orgmem':
+      return orgMemTool($, a)
     case 'stats':
       return statsText($, str(a.range) ?? '', a.short !== true)
     case 'setup_git':

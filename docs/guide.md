@@ -1456,7 +1456,7 @@ your-project/
     ├── reports/          each try's full worker report (T-3-try-2.md), and scouts/ with
     │                     each scout run's full report (bugs-2026-11-18T10-20-30-000Z.md)
     ├── events.jsonl      the activity log: every task event, one JSON line each (see Task events)
-    ├── org-mem.md        organizational memory (org-mem): short notes agents left for the next ones (see below)
+    ├── org-mem.md        organizational memory (org-mem): short notes for the agents, kept by the lead (see below)
     └── worktrees/
         └── T-3/          a worker's private copy of the project (branch symcc/T-3),
                           kept while it waits for review, removed after it is merged
@@ -1478,21 +1478,30 @@ start with `symcc/` are never touched.
 after them, so the next worker doesn't have to find the same things again (how to run one
 test, a trap, where something is).
 
-- **How lines get in:** a worker, a checker or an investigation may end its report with a
-  `Learned:` section of up to 3 short `- ` lines (the section ends at the first blank line or
-  line that isn't a `- ` line; code blocks in it are left out). When its report comes in (merged or not), symcc
-  adds them as `- T-12 2026-11-20: the note`. Each line is made one line and cut at 200
-  characters; lines that look like a secret or like file contents are left out, and a line
-  that says about the same as one already in org-mem is skipped.
-- **The limit:** the file keeps at most 60 lines; when more come in, the oldest are dropped first.
+- **Agents suggest, the lead decides:** a worker, a checker or an investigation may end its report
+  with a `Learned:` section of up to 3 suggested notes, one `- ` line each (the section ends at the
+  first blank line or line that isn't a `- ` line; code blocks in it are left out). A note should be
+  surprising (a careful agent would not guess it), useful to agents on other tasks (not about this
+  task), one short plain sentence, and not already in org-mem; most reports have none. Nothing goes
+  into org-mem from a report. symcc keeps the suggestions on the task (each made one line and cut
+  at about 120 characters; secret-looking lines, file contents and exact repeats are left out).
+  When the task merges (or an investigation is marked Done), the lead's board update lists them
+  under "Suggested for org-mem"; a dropped task's suggestions are thrown away.
+- **The lead's orgmem tool:** the lead adds what is worth keeping (most suggestions are skipped),
+  or replaces a close note with a better one, and tells you in one line what it added. The tool
+  can `list` the notes, `add` one or more, `remove` one (by number or text) and `replace` one. New
+  lines look like `- 2026-11-20: the note` (no task id). It refuses a note that repeats one already
+  there (even in other words).
+- **The limit:** the file keeps at most 60 lines; an add past that is refused until a note is
+  removed or replaced.
 - **Who reads it:** every new worker, checker and scout gets the whole file in its prompt,
   under "Organizational memory (org-mem): notes earlier agents left about this project". A missing
   or empty file adds nothing.
-- **Editing:** you (or the lead) may edit, fix or trim the file by hand at any time; any line
-  counts, with or without the task id and date.
+- **Editing:** you may edit, fix or trim the file by hand at any time; any line counts, with or
+  without a date.
 - **Seeing and deleting notes:** Settings → Workers has an **Org-mem: n notes** row (in VS Code
   **Organizational memory**). It opens the "Organizational memory (org-mem)" page: every note, newest
-  first, with its number, task id, date and text ("No notes yet." when there are none). To delete
+  first, with its number, date and text ("No notes yet." when there are none). To delete
   a note, put the cursor on it and press `x` (or Enter; in VS Code click its Delete link), then
   `y` to confirm: exactly that line is taken out of the file. From the prompt (and in OpenCode,
   where the page does it for you): `/symcc-settings orgmem delete N`, N being the note's number on the page.
