@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 import { SETTINGS } from '../hooks/board'
-import { TOOLS, manual } from '../hooks/app/tools'
+import { TOOLS, manual, MANUAL, leadGuide } from '../hooks/app/tools'
 
 test('/symcc-help lead names every lead tool and every setting', () => {
   const text = manual('lead')
@@ -45,4 +45,13 @@ test('the checker texts say it runs before the merge line, not after the tests p
   expect(minutes).toContain('fails like a failing test')
   expect(minutes).not.toContain('run again')
   expect(minutes).not.toContain('owner is asked')
+})
+
+test('the help, the lead guide and the settings tool call the stopped board mode paused, never off', () => {
+  const settings = TOOLS().find(t => t.name === 'settings')!
+  const text = Object.values(MANUAL()).join('\n') + leadGuide() + settings.description
+  expect(text).toContain('one mode: paused (nothing runs)')
+  expect(text).toContain('The mode (paused, review, auto)')
+  expect(text).toContain('going from paused to review or auto')
+  for (const old of ['mode: off', 'never to off', 'also off.', '(off, review, auto)', 'from off to review']) expect(text).not.toContain(old)
 })
