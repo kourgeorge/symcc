@@ -121,8 +121,11 @@ export const looksSecret = (s: string): boolean => SECRET.some(r => r.test(s)) |
 /** Lines that are file contents or a diff, not a lesson: a code fence, a diff header or hunk. */
 const CONTENTS = /```|^(?:diff --git|@@ |\+\+\+ |--- )/
 
-/** A line that says there is nothing: "none", "nothing", "n/a", "-". */
-const NOTHING = /^[\s(]*(?:none|nothing|nothing new|n\/a|na|-+)[\s.)]*$/i
+/**
+ * A line that says there is nothing: "-", "na", or one that starts with "none", "nothing", "no new", "no facts" or
+ * "n/a" (any case, any words after: "None — nothing here is true beyond this task.", "No new facts.").
+ */
+const NOTHING = /^[\s("'*_]*(?:(?:none|nothing|no new|no facts?|n\/a)\b|(?:na|-+)[\s.)]*$)/i
 
 /**
  * Raw "Learned:" lines cleaned: the list mark taken off, made one line (spaces squeezed), cut at LEARNED_LINE_CHARS;

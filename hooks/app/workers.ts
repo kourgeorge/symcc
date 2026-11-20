@@ -18,7 +18,7 @@ import { tellLead, noteForLead } from './tell'
 import { sayDone, sayNeedsYou } from './voice'
 import { optionsVia, popupTied } from './questions'
 import { changeValues, investigationValues } from './prompt-values'
-import { learnedAsk, startDebrief } from './debrief'
+import { debriefing, learnedAsk, startDebrief } from './debrief'
 import { orgMemText, keepSuggestions } from './org-mem'
 import { cleanLeftoverTmp, stopOrphans, timedOut, askOvertime, wrapUp } from './cleanup'
 
@@ -101,7 +101,7 @@ async function queueWorker(host: Host, id: string): Promise<{ started: Promise<v
     // An agent this copy stopped (an orphan, see stopOrphans) doesn't hold its task any more, even
     // while it stays listed: every tool it tries is refused, so a fresh worker may start (sendBackIdle
     // sent its task back to todo for exactly that).
-    const agents = [...listed, ...knownWorkers()].filter(a => !stopped.has(a.id))
+    const agents = [...listed, ...knownWorkers()].filter(a => !stopped.has(a.id) && !debriefing(a.id))
     const b = await load(host)
     const t0 = find(b, id)
     if (!mayStart(t0, agents.map(agentState), S.N.name)) return null

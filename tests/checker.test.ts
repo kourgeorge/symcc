@@ -1254,6 +1254,74 @@ test('T-656: a debrief with no answer in time (or one that can\'t be sent) chang
   expect(debriefs.size).toBe(0)
 })
 
+/**
+ * T-1's worker (ag1) hands back with a debrief host, and its checker finds problems, so T-1 goes back to "todo". While
+ * ag1's debrief waits, the host lists ag1 as running (as Claude Code does for a resumed subagent). `startup`: whether
+ * symcc's start is done (pump starts work only then).
+ */
+async function failFastWithDebrief(startup: boolean) {
+  const w = world()
+  w.$.agents.followUp = async () => undefined
+  // a repo with a commit (gitReady), so pump may start the retry
+  const run = w.$.run
+  w.$.run = async (argv, o) =>
+    argv[0] === 'git' && argv.includes('--is-inside-work-tree') ? ok('true')
+    : argv[0] === 'git' && argv.includes('for-each-ref') ? ok('main\nsymcc/T-1')
+    : run(argv, o)
+  w.$.agents.list = async () => [{ id: 'ag1', name: 'symcc-T-1', kind: 'worker', status: debriefs.has('ag1') ? 'running' : 'completed' }]
+  await saveBoard(w.$, boardWith(true))
+  S.driving = true
+  S.gitState = 'ok'
+  S.startupDone = startup
+  S.me = 'me'
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: 0 })
+  const done = withStarts(w.$, workerFinished(w.$, 'ag1', 'made the change', { reason: 'answer' }))
+  await until(() => checkerRuns.size > 0)
+  await checkerFinished([...checkerRuns.keys()][0]!, 'src/a.ts:12 bug: it breaks on empty input')
+  await done
+  await until(() => !checkingNow('T-1'))
+  expect(debriefs.has('ag1')).toBe(true)
+  return w
+}
+
+test('T-656: an agent only answering its debrief holds no task: a fast retry starts at once, and a debrief answer runs pump like any agent end', async () => {
+  // the retry starts while ag1's debrief still waits (ag1 is listed as running, under its task's worker name)
+  const w = await failFastWithDebrief(true)
+  await until(() => w.spawns.some(s => s.name === 'symcc-T-1'))
+  expect(debriefs.has('ag1')).toBe(true)
+  expect(find(await load(w.$), 'T-1')!.status).toBe('doing')
+  expect(find(await load(w.$), 'T-1')!.attempts).toBe(2)
+  resetPlugin()
+  // nothing pumped at the checker's end (start not done yet); the debrief answer pumps, so the retry starts then
+  const w2 = await failFastWithDebrief(false)
+  await turns(50)
+  expect(w2.spawns.some(s => s.name === 'symcc-T-1')).toBe(false)
+  S.startupDone = true
+  agentFinished(w2.$, 'ag1', { answer: 'none', end: { reason: 'answer' }, isAborted: false, tokens: undefined })
+  await until(() => w2.spawns.some(s => s.name === 'symcc-T-1'))
+  expect(find(await load(w2.$), 'T-1')!.attempts).toBe(2)
+})
+
+test('T-656: a debrief the host answers as not delivered ({ isDelivered: false }, as Claude Code does) is dropped at once', async () => {
+  const w = world()
+  const fire: (() => void)[] = []
+  const after = w.$.clock.after
+  w.$.clock.after = (ms, fn) => (ms === DEBRIEF_MS ? fire.push(fn) : 0, after(ms, fn))
+  w.$.agents.followUp = async () => ({ isDelivered: false, reason: 'gone' })
+  await saveBoard(w.$, boardWith(false))
+  expect((await finish(w)).status).toBe('done')
+  await turns(20)
+  expect(fire).toHaveLength(1)
+  expect(debriefs.size).toBe(0)
+  // delivered: it waits for the answer
+  const w2 = world()
+  w2.$.agents.followUp = async () => ({ isDelivered: true })
+  await saveBoard(w2.$, boardWith(false))
+  expect((await finish(w2)).status).toBe('done')
+  await turns(20)
+  expect(debriefs.has('ag1')).toBe(true)
+})
+
 test('T-600: a report without a "Learned:" section adds nothing, and with no guide file the prompts have no notes heading', async () => {
   const w = world()
   await saveBoard(w.$, boardWith(true))

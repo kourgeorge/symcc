@@ -53,14 +53,22 @@ export function startDebrief(host: Host, agentId: string, task: string, attempts
     debriefs.delete(agentId)
     return
   }
+  const drop = () => {
+    if (debriefs.get(agentId) !== d) return
+    debriefs.delete(agentId)
+    d.timer?.cancel()
+  }
+  // a send that fails, or one the host answers as not delivered (Claude Code: `{ isDelivered: false }`): dropped at once
   void Promise.resolve()
     .then(() => followUp(agentId, DEBRIEF_TEXT))
-    .catch(() => {
-      if (debriefs.get(agentId) !== d) return
-      debriefs.delete(agentId)
-      d.timer?.cancel()
+    .then(r => {
+      if (r && typeof r === 'object' && (r as { isDelivered?: unknown }).isDelivered === false) drop()
     })
+    .catch(drop)
 }
+
+/** Whether agent `agentId` is only answering its debrief (it has handed back: it holds no task any more). */
+export const debriefing = (agentId: string): boolean => debriefs.has(agentId)
 
 /** What a debrief's run end carries (the part of AgentRunEnd it reads). */
 export type DebriefEnd = { answer: string; end: { reason: string }; isAborted: boolean; tokens?: SymccTokens; cost?: number }

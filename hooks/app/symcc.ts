@@ -368,7 +368,11 @@ export type AgentRunEnd = { answer: string; end: TurnEnd; isAborted: boolean; to
 /** An agent's run ended (a worker, scout or checker of symcc's, or one this copy lost track of in a reload); other agents are left alone. */
 export function agentFinished(host: Host, agentId: string | undefined, run: AgentRunEnd) {
   // T-656: the answer to a debrief (the follow-up after a hand-back) only brings org-mem suggestions
-  if (agentId && debriefFinished(host, agentId, run)) return
+  // (and, like any agent's end, it runs pump: a fast retry of its task, held back by nothing now, starts at once)
+  if (agentId && debriefFinished(host, agentId, run)) {
+    void pump(host).catch(() => undefined)
+    return
+  }
   const { answer, end, isAborted, tokens, cost } = run
   // a scout's or checker's turn that ended on an API error or a refusal: its half-written last text is no report or verdict
   const broken = !isAborted && (end.reason === 'error' || end.reason === 'refusal')

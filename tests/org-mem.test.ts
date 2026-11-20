@@ -241,4 +241,7 @@ test('T-656: the debrief asks for 0-3 short facts for other agents under "Sugges
   expect(debriefLines('I think nothing here.\n- maybe this')).toEqual([])
   expect(addSuggestions(['x'], 'Suggested for org-mem:\n- Run one test with sh scripts/test-files.sh.', true)).toEqual(['x', 'Run one test with sh scripts/test-files.sh.'])
   expect(addSuggestions(['x'], 'none', true)).toEqual(['x'])
+  // any "no" answer after the heading is nothing, with or without a list mark and words after it
+  for (const no of ['Suggested for org-mem: none — nothing here is true beyond this task.', 'Suggested for org-mem: No new facts.', 'Suggested for org-mem: nothing to add', 'Suggested for org-mem:\n- None from this task.', 'Suggested for org-mem:\n- N/A here', 'Suggested for org-mem:\n- no facts beyond this task']) expect(addSuggestions(undefined, no, true)).toEqual([])
+  expect(addSuggestions(undefined, 'Suggested for org-mem:\n- Nonetheless, one test file runs fast.\n- No new facts.', true)).toEqual(['Nonetheless, one test file runs fast.'])
 })
