@@ -491,7 +491,7 @@ export async function runCommand(host: Host, command: string, args: string): Pro
       return say(r.text)
     }
     case 'orgmem-delete': {
-      const r = await deleteOrgMem(host, cmd.n)
+      const r = await deleteOrgMem(host, cmd.n, undefined, cmd.key)
       // the board's view carries the notes for a panel that draws from it (OpenCode's view.json)
       if (r.ok) await publish(host, await load(host))
       return say(r.text)

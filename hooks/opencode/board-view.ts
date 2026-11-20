@@ -940,8 +940,9 @@ export type PanelAction =
   | { kind: 'scout-edit'; scout: string; field: ScoutEditField; value: string }
   /** turn a role or kind off or on, or reset it to the built-in one */
   | { kind: 'def'; def: 'role' | 'kind'; name: string; action: DefAction }
-  /** delete note `n` (its place in the file) from organizational memory (T-619) */
-  | { kind: 'orgmem-delete'; n: number }
+  /** delete note `n` (its place in the file) from organizational memory (T-619); `key`: its check word
+   *  (orgMemNoteKey), so a note that moved meanwhile is not the one deleted */
+  | { kind: 'orgmem-delete'; n: number; key?: string }
 
 /** The slash command (its name, without the slash, and its text) that does `a` for plugin `name`. */
 export function actionCommand(a: PanelAction, name: string = DEFAULT_NAME): { name: string; text: string } {
@@ -953,7 +954,7 @@ export function actionCommand(a: PanelAction, name: string = DEFAULT_NAME): { na
   if (a.kind === 'setting') return { name: `${name}-settings`, text: `${a.setting} ${a.value.trim()}` }
   if (a.kind === 'scout-edit') return { name: `${name}-scout`, text: `${a.scout} ${a.field} ${a.value.trim() || (a.field === 'model' ? 'none' : '')}`.trim() }
   if (a.kind === 'def') return { name: `${name}-settings`, text: `${a.def} ${a.name} ${a.action}` }
-  if (a.kind === 'orgmem-delete') return { name: `${name}-settings`, text: `orgmem delete ${a.n}` }
+  if (a.kind === 'orgmem-delete') return { name: `${name}-settings`, text: `orgmem delete ${a.n}${a.key ? ` ${a.key}` : ''}` }
   return { name: `${name}-answer`, text: `${a.id} ${a.answer.trim()}` }
 }
 

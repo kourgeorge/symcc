@@ -1,6 +1,6 @@
 // T-600: organizational memory (org-mem) (core/org-mem.ts): "Learned:" lines from a report, cleaned, kept once, capped, and shown in prompts.
 import { expect, test } from 'claude-code/testing'
-import { addLearned, cleanLearned, orgMemSection, sameLesson, splitLearned, ORG_MEM_MAX_LINES, LEARNED_LINE_CHARS, LEARNED_ASK, orgMemNotes, orgMemNoteHead, orgMemCount, orgMemSummary, orgMemAbout, deleteOrgMemNote, ORG_MEM_EMPTY } from '../hooks/core/org-mem'
+import { addLearned, cleanLearned, orgMemSection, sameLesson, splitLearned, ORG_MEM_MAX_LINES, LEARNED_LINE_CHARS, LEARNED_ASK, orgMemNotes, orgMemNoteHead, orgMemCount, orgMemSummary, orgMemAbout, deleteOrgMemNote, orgMemNoteKey, ORG_MEM_EMPTY } from '../hooks/core/org-mem'
 import { parseCommand } from '../hooks/core/commands'
 import { checkerVerdict, fillPrompt, scoutPrompt, PROMPT_KINDS, BUILT_IN_PROMPTS } from '../hooks/board'
 import { checkerPrompt } from '../hooks/core/checker'
@@ -155,9 +155,27 @@ test('T-619: deleteOrgMemNote takes out exactly that line; a wrong number or a c
 test('T-619: /symcc-settings orgmem delete N is read as a delete of note N; anything else gets the usage line', () => {
   expect(parseCommand('symcc-settings', 'orgmem delete 3')).toEqual({ kind: 'orgmem-delete', n: 3 })
   expect(parseCommand('symcc-settings', 'OrgMem DELETE 12')).toEqual({ kind: 'orgmem-delete', n: 12 })
-  for (const args of ['orgmem', 'orgmem delete', 'orgmem delete 0', 'orgmem delete x', 'orgmem remove 2', 'orgmem delete 2 3']) {
+  expect(parseCommand('symcc-settings', 'orgmem delete 3 A1B2C3')).toEqual({ kind: 'orgmem-delete', n: 3, key: 'a1b2c3' })
+  for (const args of ['orgmem', 'orgmem delete', 'orgmem delete 0', 'orgmem delete x', 'orgmem remove 2', 'orgmem delete 2 3', 'orgmem delete 2 abc123 x']) {
     const c = parseCommand('symcc-settings', args)
     expect(c?.kind, args).toBe('bad')
     expect((c as { message: string }).message, args).toContain('/symcc-settings orgmem delete <n>')
   }
+})
+
+test('T-619: a delete by number with the note\'s check word deletes nothing when a new note at the limit moved the numbers', () => {
+  const D = '2026-11-20'
+  let g = Array.from({ length: ORG_MEM_MAX_LINES }, (_, i) => `- T-${i + 1} ${D}: lesson number ${i + 1}`).join('\n') + '\n'
+  const shown = orgMemNotes(g).find(x => x.n === 30)!
+  expect(shown.text).toBe('lesson number 30')
+  const key = orgMemNoteKey(shown.text)
+  expect(key).toMatch(/^[0-9a-f]{6}$/)
+  expect(orgMemNoteKey('lesson number 31')).not.toBe(key)
+  g = addLearned(g, 'Learned: brand new thing about caching', 'T-99', D).text
+  expect(deleteOrgMemNote(g, 30, undefined, key)).toEqual({ text: g, removed: null })
+  // the note's new number with its check word still deletes it, and only it
+  const r = deleteOrgMemNote(g, 29, undefined, key)
+  expect(r.removed?.text).toBe('lesson number 30')
+  expect(orgMemNotes(r.text).map(x => x.text)).not.toContain('lesson number 30')
+  expect(orgMemNotes(r.text)).toHaveLength(ORG_MEM_MAX_LINES - 1)
 })

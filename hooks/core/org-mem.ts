@@ -223,14 +223,26 @@ export function orgMemNotes(guide: string | null | undefined): OrgMemNote[] {
 }
 
 /**
- * Org-mem `guide` without note `n` (its place in the file, see OrgMemNote): exactly that line goes, every other line
- * (blank ones too) stays as written. `expect`: the note's text as the page showed it; when given and the line no
- * longer says it (the file changed meanwhile), nothing is removed. `removed`: the note taken out, or null.
+ * A short check word for a note's text (6 hex letters), sent with a delete that only carries the note's number
+ * (OpenCode's slash command): if a new note pushed the oldest one out, or the file was edited, the number now points
+ * at another note, whose check word differs, so nothing is deleted (see deleteOrgMemNote).
  */
-export function deleteOrgMemNote(guide: string | null | undefined, n: number, expect?: string): { text: string; removed: OrgMemNote | null } {
+export function orgMemNoteKey(text: string): string {
+  let h = 0x811c9dc5
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193) >>> 0
+  return h.toString(16).padStart(8, '0').slice(0, 6)
+}
+
+/**
+ * Org-mem `guide` without note `n` (its place in the file, see OrgMemNote): exactly that line goes, every other line
+ * (blank ones too) stays as written. `expect`: the note's text as the page showed it; `key`: its check word
+ * (orgMemNoteKey); when either is given and the line no longer matches it (the file changed meanwhile), nothing is
+ * removed. `removed`: the note taken out, or null.
+ */
+export function deleteOrgMemNote(guide: string | null | undefined, n: number, expect?: string, key?: string): { text: string; removed: OrgMemNote | null } {
   const text = String(guide ?? '')
   const note = orgMemNotes(text).find(x => x.n === n)
-  if (!note || (expect !== undefined && note.text !== expect)) return { text, removed: null }
+  if (!note || (expect !== undefined && note.text !== expect) || (key !== undefined && orgMemNoteKey(note.text) !== key.toLowerCase())) return { text, removed: null }
   const raw = text.split('\n')
   let seen = 0
   const at = raw.findIndex(l => l.trim() && ++seen === n)

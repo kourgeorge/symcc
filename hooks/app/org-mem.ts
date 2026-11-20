@@ -68,14 +68,14 @@ export async function orgMemNow(host: Host): Promise<{ notes: OrgMemNote[]; file
 
 /**
  * T-619: deletes note `n` (its place in the file, see OrgMemNote) from org-mem, one save at a time with the other
- * writers; `expect`: its text as the page showed it (see deleteOrgMemNote). What happened, in a short line.
+ * writers; `expect`: its text as the page showed it, `key`: its check word (orgMemNoteKey; see deleteOrgMemNote). What happened, in a short line.
  */
-export async function deleteOrgMem(host: Host, n: number, expect?: string): Promise<{ ok: boolean; text: string }> {
+export async function deleteOrgMem(host: Host, n: number, expect?: string, key?: string): Promise<{ ok: boolean; text: string }> {
   if (!S.root) return { ok: false, text: 'No project folder yet.' }
   const file = orgMemFile(S.N.dir)
   return oneAtATime(file, async () => {
     const old = await readGuide(host)
-    const { text, removed } = deleteOrgMemNote(old, n, expect)
+    const { text, removed } = deleteOrgMemNote(old, n, expect, key)
     if (!removed) return { ok: false, text: `No note ${n} in ${file} (it may have changed): nothing deleted.` }
     await safeWrite(host, path(file), text, 'the organizational memory (org-mem)')
     return { ok: true, text: `Deleted note ${n} from ${file}${removed.id ? ` (${removed.id}${removed.date ? ` ${removed.date}` : ''})` : ''}.` }

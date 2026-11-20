@@ -24,7 +24,7 @@ import { DEFAULT_NAME, dataDir } from '../name'
 import { VIEW_FILE, parseViewFile, bandDraw, panelLines, panelKeys, panelTaskActions, approveInProgress, panelRoleChoices, TASK_ACTION_COMMANDS, LETTER_KEYS, type LetterKey, hasPage, answerOptions, actionCommand, moveCursor, OWN_ANSWER, GROUPS_OPEN, groupOf, groupId, scoutRunsIn, settingsPlace, orgMemNoteOf, SETTINGS_OPEN, settingGroupOf, settingGroupId, PANEL_TABS, CHOICE_KEYS, approveSent, type ApproveSent, type ChoiceKey, type ViewFile, type Line, type PanelAction, type PanelHit, type PanelKey, type PanelGroup, type PanelTab, type BandHit } from './board-view'
 import { SETTING_GROUPS, isScoutRunReport, taskReports, parseSettingValue, settingChoices, settingInfo, settingValue, isSettingPage, everyText, everyMinutesOf, type SettingName, type ScoutEditField } from '../board'
 import type { SymccScout } from '../../types'
-import { orgMemDeleteAsk, orgMemFile } from '../core/org-mem'
+import { orgMemDeleteAsk, orgMemFile, orgMemNoteKey } from '../core/org-mem'
 
 export type { PanelKey, PanelHit, PanelTab }
 
@@ -444,7 +444,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
       const note = ids.length ? orgMemNoteOf(f, ids[moveCursor(cur(), 0, ids.length)]!) : undefined
       if ((key !== 'x' && key !== 'open') || !note) return
       const yes = await ctx.ui.dialog.select({ title: orgMemDeleteAsk(note, orgMemFile(dataDir(f?.name || name))), options: [{ title: 'Yes, delete', value: 'yes' }, { title: 'Cancel', value: 'no' }] })
-      if (yes === 'yes') return send(sessionID, { kind: 'orgmem-delete', n: note.n })
+      if (yes === 'yes') return send(sessionID, { kind: 'orgmem-delete', n: note.n, key: orgMemNoteKey(note.text) })
       return
     }
     if (key === 'open' && ids.length && !place?.def) {

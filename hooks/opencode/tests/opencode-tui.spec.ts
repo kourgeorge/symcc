@@ -15,7 +15,7 @@ import { bandLines, bandDraw, BAND_CLICK_HINT, panelLines, panelKeys, parseViewF
 import { readFile } from 'node:fs/promises'
 import { rowEndBoard, ROW_END, ROW_END_NOW } from '../../../tests/row-end-cases'
 import { taskSections } from '../../core/task-sections'
-import { orgMemNotes } from '../../core/org-mem'
+import { orgMemNotes, orgMemNoteKey } from '../../core/org-mem'
 import { PLUGIN_ROOT } from '../host'
 import { startTui, KEY_BINDS, viewPaths, loadTuiRuntime, BOARD_PANEL, setupFailed, colorOf, drawLines, type TuiContext, type TuiRuntime, type TuiPanelInput, type TuiKeyLayer, type PanelKey } from '../tui'
 
@@ -1601,6 +1601,7 @@ test('T-619: the Settings tab has an Org-mem row with the count; its page lists 
   expect(panelKeys(empty, 'orgmem', 'settings').map(k => k.word)).toEqual(['views', 'back'])
   // the delete as a slash command
   expect(actionCommand({ kind: 'orgmem-delete', n: 3 })).toEqual({ name: 'symcc-settings', text: 'orgmem delete 3' })
+  expect(actionCommand({ kind: 'orgmem-delete', n: 3, key: 'a1b2c3' })).toEqual({ name: 'symcc-settings', text: 'orgmem delete 3 a1b2c3' })
 })
 
 test('T-619: startTui: the Org-mem row opens the page; x on a note asks, Yes sends /symcc-settings orgmem delete N, Cancel sends nothing', async () => {
@@ -1639,7 +1640,8 @@ test('T-619: startTui: the Org-mem row opens the page; x on a note asks, Yes sen
   await board.press('down', 'ses_1')
   await board.press('x', 'ses_1')
   expect(asked).toEqual(['Delete note #3 · T-7 · 2026-11-20 from .symcc/org-mem.md?', 'Delete note #2 · written by hand from .symcc/org-mem.md?'])
-  expect(sent).toEqual([{ sessionID: 'ses_1', name: 'symcc-settings', text: 'orgmem delete 2' }])
+  // the note's check word goes along, so a number that moved meanwhile deletes nothing
+  expect(sent).toEqual([{ sessionID: 'ses_1', name: 'symcc-settings', text: `orgmem delete 2 ${orgMemNoteKey('written by hand')}` }])
   // b: back to the Settings list
   await board.press('back', 'ses_1')
   expect([board.state().tab, board.state().opened]).toEqual(['settings', ''])
