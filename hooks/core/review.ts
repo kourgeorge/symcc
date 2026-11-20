@@ -231,7 +231,8 @@ export function parseStatusZ(text: string): StatusEntry[] {
     if (s.length < 4) continue
     const code = s.slice(0, 2)
     const e: StatusEntry = { code, path: s.slice(3) }
-    if ((code[0] === 'R' || code[0] === 'C') && parts[i + 1]) e.from = parts[++i]!
+    // the old path follows as its own part when either column says renamed or copied ("R ", " R", "C ", " C", "RM", ...)
+    if (/[RC]/.test(code) && parts[i + 1]) e.from = parts[++i]!
     out.push(e)
   }
   return out
