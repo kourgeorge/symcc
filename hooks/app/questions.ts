@@ -77,7 +77,8 @@ export async function answerOnBoard(host: Host, id: string, answer: string): Pro
   const r = await change(host, x => answerQuestion(x, id, text, 'board', now()))
   if (!r.closed) return `${r.q.id} was already closed (${closedText(r.q)})`
   // the lead's pop-up asks this very question: it gets the answer (and closes), so no board update as well
-  if (boardAnswered(r.q.id, r.q.answer ?? text)) return `${r.q.id} answered: ${r.q.answer}; the lead's pop-up got it`
+  const q = r.q
+  if (boardAnswered(q.id, q.answer ?? text, () => tellLead(host, boardAnswerLine(q)))) return `${r.q.id} answered: ${r.q.answer}; the lead's pop-up got it`
   tellLead(host, boardAnswerLine(r.q))
   return `${r.q.id} answered: ${r.q.answer}; the lead will take it from here`
 }
@@ -95,18 +96,21 @@ type PopupQuestion = { question: string; header?: string; options?: { label?: un
 /** A pop-up question's board question: a Q-n, or task `id`'s own question. */
 type PopupLink = { kind: 'question' | 'task'; id: string }
 
-/** The pop-ups open now, by the board question they are tied to (Q-3, T-5): each takes the board's answer. */
-const popupWaits = new Map<string, (answer: string) => void>()
+/** The pop-ups open now, by the board question they are tied to (Q-3, T-5): each takes the board's answer, and the
+ *  usual lead update for it, sent only if the pop-up ends without passing the answer on (the dialog was ended). */
+const popupWaits = new Map<string, (answer: string, tell: () => void) => void>()
 
 /**
  * The owner answered board question `id` (a Q-n, or a task's own question: T-5) on the board with `answer`: an open
- * pop-up tied to it gets that answer. Whether one was waiting (then the lead reads the answer there).
+ * pop-up tied to it gets that answer. Whether one was waiting (then the lead reads the answer there). `tell` sends
+ * the lead the usual board update instead; the pop-up runs it (once) if it ends without a result, so the answer
+ * isn't lost.
  */
-export function boardAnswered(id: string, answer: string): boolean {
+export function boardAnswered(id: string, answer: string, tell: () => void = () => {}): boolean {
   const take = popupWaits.get(id)
   if (!take) return false
   popupWaits.delete(id)
-  take(answer)
+  take(answer, tell)
   return true
 }
 
@@ -226,9 +230,21 @@ export async function popupCall<R>(host: Host, agentId: string | undefined, inpu
   let left = ids.length
   let allIn = () => {}
   const boardDone = new Promise<void>(res => (allIn = res))
-  const takers = new Map<string, (answer: string) => void>()
+  const takers = new Map<string, (answer: string, tell: () => void) => void>()
+  // the lead updates of the board answers taken so far: sent only when the pop-up ends without passing them on
+  const tells: (() => void)[] = []
+  const tellBoardAnswers = () => {
+    for (const t of tells.splice(0)) {
+      try {
+        t()
+      } catch {
+        // one failed update doesn't stop the others
+      }
+    }
+  }
   for (const id of ids) {
-    const take = (answer: string) => {
+    const take = (answer: string, tell: () => void) => {
+      tells.push(tell)
       for (const x of tied) if (x.link.id === id) fromBoard[x.q.question] = answer
       if (--left === 0) allIn()
     }
@@ -244,6 +260,10 @@ export async function popupCall<R>(host: Host, agentId: string | undefined, inpu
     opened.catch(() => undefined)
     const dialog = opened.then(r => ({ dialog: r }))
     won = await (boardCloses ? Promise.race([dialog, boardDone.then(() => ({ board: true as const }))]) : dialog)
+  } catch (err) {
+    // the dialog (or the turn) ended without a result: the board answers already taken reach the lead the usual way
+    tellBoardAnswers()
+    throw err
   } finally {
     for (const [id, take] of takers) if (popupWaits.get(id) === take) popupWaits.delete(id)
   }
@@ -281,7 +301,12 @@ export async function popupCall<R>(host: Host, agentId: string | undefined, inpu
       notes.push(`${name} closed ${link.id} on the board with the owner's answer "${brief(a)}".`)
     } else notes.push(await popupToTask(host, link.id, a))
   }
-  if (!notes.length || !r || typeof r !== 'object') return r
+  if (!r || typeof r !== 'object') {
+    // no result to carry the notes: the board answers reach the lead the usual way
+    tellBoardAnswers()
+    return r
+  }
+  if (!notes.length) return r
   const had = (r as { context?: readonly string[] }).context ?? []
   return { ...r, context: [...had, ...notes] }
 }

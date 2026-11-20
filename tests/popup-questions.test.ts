@@ -329,3 +329,50 @@ test("a typed answer (only response) answers a one-question call; with more the 
   expect(out3.context[0]).toContain('Q-1, Q-2 still wait on the board')
   expect(openQuestions(w3.board()).map(q => q.id)).toEqual(['Q-1', 'Q-2'])
 })
+
+/** A fake next(e) whose dialog (or turn) ends without a result: `end` rejects it. */
+function endedDialog() {
+  let end: () => void = () => undefined
+  const shown = new Promise<never>((_, rej) => (end = () => rej(new Error('aborted'))))
+  return { open: () => shown, end: () => end() }
+}
+
+test('a board answer taken while the dialog waits reaches the lead once if the dialog ends without a result', async () => {
+  const cases = [
+    [ask('Which color?', ['Red', 'Blue']), { question: 'Anything else?', header: 'More', kind: 'text', options: [], multiSelect: false }],
+    [ask('Which color?', ['Red', 'Blue']), ask('Which part?', ['Top', 'Side'])],
+  ]
+  for (const questions of cases) {
+    const w = world()
+    const d = endedDialog()
+    const r = popupCall(w.host, undefined, { questions }, d.open, w.notice)
+    await pause(0)
+    expect(await answerOnBoard(w.host, 'Q-1', 'Blue')).toBe("Q-1 answered: Blue; the lead's pop-up got it")
+    await pause(0)
+    expect(w.toLead).toEqual([])
+    d.end()
+    await expect(r).rejects.toThrow('aborted')
+    await pause(0)
+    expect(w.toLead.length).toBe(1)
+    expect(JSON.stringify(w.toLead)).toContain('The owner answered your question Q-1')
+    expect(JSON.stringify(w.toLead)).toContain('Blue')
+    // later board answers go the usual way, and Q-1's update is not sent again
+    if (questions[1]!.options!.length) {
+      await answerOnBoard(w.host, 'Q-2', 'Top')
+      await pause(0)
+      expect(w.toLead.length).toBe(2)
+      expect(JSON.stringify(w.toLead).split('Q-1 (').length).toBe(2)
+    }
+  }
+
+  // the dialog resolves after a board answer: the lead reads it in the result's context, with no board update too
+  const w = world()
+  const d = dialog()
+  const r = popupCall(w.host, undefined, { questions: cases[1]! }, d.open, w.notice)
+  await pause(0)
+  await answerOnBoard(w.host, 'Q-1', 'Blue')
+  d.answer({ 'Which color?': 'Red', 'Which part?': 'Side' })
+  expect(((await r) as { context: string[] }).context[0]).toContain('Q-1 was already answered on the board')
+  await pause(0)
+  expect(w.toLead).toEqual([])
+})

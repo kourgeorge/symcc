@@ -267,9 +267,11 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
       if (!text.trim()) return leaveAnswer()
       S.answering = null
       await runTool(claudeHost($), 'change', { task: t.id, answer: text.trim() })
-      // a pop-up asking about this task gets the answer; then the lead needs no "Meanwhile" line as well (T-579)
-      if (boardAnswered(t.id, text.trim())) return
-      noteForLead(overtime ? `The owner answered ${t.id}'s "more time?" question: "${brief(text.trim())}".` : answeredLeadLine(t, text.trim(), brief))
+      // a pop-up asking about this task gets the answer; then the lead needs no "Meanwhile" line as well, unless the
+      // pop-up ends without a result (T-579)
+      const note = () => noteForLead(overtime ? `The owner answered ${t.id}'s "more time?" question: "${brief(text.trim())}".` : answeredLeadLine(t, text.trim(), brief))
+      if (boardAnswered(t.id, text.trim(), note)) return
+      note()
     })
   const choicePress = (i: number) => {
     if (i === choices.length - 1) return () => ((S.answering = t.id), $.ui.invalidate('ui.render'))
