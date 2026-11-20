@@ -960,10 +960,10 @@ test('"Edit" on a scout\'s page opens its edit mode, and "Cancel" goes back', as
   // the same section names, in the same order, as the scout's page
   const heads = (await ui.findAll({ type: 'Text', text: /^▍/ })).map(x => x.text)
   expect(heads).toEqual(['▍Runs every', '▍Model', '▍Summary', '▍Instructions'])
-  // no summary in the file: its box is empty and says the first line of the instructions is used
+  // no summary in the file: its box is empty and says the scouts list uses the first line of the instructions
   const summary = await ui.find({ key: 'scout-summary' })
   expect(summary?.props.value).toBe('')
-  expect(summary?.props.placeholder).toBe('empty: the first line of the instructions')
+  expect(summary?.props.placeholder).toBe('empty: the scouts list shows the first line of the instructions')
   // the panel can't rename: it says how
   expect(await ui.find({ type: 'Text', text: /to rename the scout, rename \.symcc\/scouts\/bugs\.md/ })).toBeDefined()
   // a bad every_minutes is refused with a short error

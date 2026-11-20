@@ -1849,6 +1849,12 @@ test("T-622/T-686: a scout's page shows its Results figures from view.json in th
   // the header (before Instructions): no first line of the instructions (no summary is set), no figures
   expect(p.slice(0, inst).some(l => l.includes('Look for stale docs.') || l.includes('last 7 days') || l.includes('in all:'))).toBe(false)
   expect(p.slice(res, res + 5)).toEqual(['Results', week, all, '', 'File'])
+  // its figures are indented like the other sections' bodies, also on the lines a narrow panel wraps them onto
+  const raw = panelLines(withResults, { tab: 'scouts', opened: 'docs-check', cursor: 0 }, NOW, 400).lines.map(lineText)
+  expect(raw.slice(raw.indexOf('Results') + 1, raw.indexOf('Results') + 3).map(l => l.trimEnd())).toEqual([`  ${week}`, `  ${all}`])
+  const narrow = panelLines(withResults, { tab: 'scouts', opened: 'docs-check', cursor: 0 }, NOW, 40).lines.map(lineText)
+  const body = narrow.slice(narrow.indexOf('Results') + 1, narrow.indexOf('File') - 1)
+  expect(body.length > 2 && body.every(l => l.startsWith('  ') && l.trim() !== '' && l.length <= 40)).toBe(true)
   expect(panelLines(withResults, { tab: 'scouts', opened: 'deps', cursor: 0 }, NOW, 400).lines.map(lineText).some(l => l.trim() === 'Results' || l.includes('last 7 days'))).toBe(false)
   // a broken scout_results is dropped when read
   expect(parseViewFile(viewFileText({ ...f, view: { ...f.view, scout_results: [] as never } }))?.view.scout_results).toBe(undefined)

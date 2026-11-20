@@ -705,7 +705,7 @@ function scoutPage(f: ViewFile, sc: SymccScout, choice: PanelChoice, nowMs: numb
   if (typeof results === 'string' && results) {
     b.blank()
     b.heading('Results')
-    for (const part of results.split('\n')) for (const l of wrapSegs([{ text: `  ${part}`, color: 'inactive' }], w)) b.add(l)
+    for (const l of textLines(results, 'inactive', w)) b.add(l)
   }
   b.blank()
   b.heading('File')

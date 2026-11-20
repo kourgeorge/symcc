@@ -54,7 +54,7 @@ export function scoutEditPage($: $, pane: PaneParts) {
 
       <Box flexDirection="column">
         {heading('Summary')}
-        <Input key="scout-summary" value={d.summary} placeholder="empty: the first line of the instructions" submitLabel="keep" onInput={value => void (d.summary = value)} onSubmit={value => void (d.summary = value)} />
+        <Input key="scout-summary" value={d.summary} placeholder="empty: the scouts list shows the first line of the instructions" submitLabel="keep" onInput={value => void (d.summary = value)} onSubmit={value => void (d.summary = value)} />
       </Box>
 
       <Box flexDirection="column">

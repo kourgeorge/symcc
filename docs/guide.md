@@ -1052,8 +1052,8 @@ A scout's page in the board panel shows a header line (its name, state, how ofte
 e.g. "every 7 days", its model and when it last ran), then its summary, then the sections
 **Instructions** (the whole text of its file) and **File**. The summary is
 the optional `summary:` line in the file's front matter, e.g. `summary: Looks for crashes`.
-Without one, the page shows the first line of the instructions there instead, in a dimmer
-colour.
+Without one, the page shows no summary line (the scouts list still shows the first line of
+the instructions instead).
 
 Under those, **Runs** lists the scout's recent runs, newest first, one line each:
 
@@ -1609,7 +1609,8 @@ its read-only `stats` tool.
   [investigation tasks](#investigation-tasks)); by role and where tasks came from (lead,
   you, all scouts with each scout on its own line under them, workers), each with its share,
   average tokens and time. Each scout's line has a small scorecard under it (the scout's own page shows the
-  same as "Results · last 7 days: … · in all: …"):
+  same figures in its own **Results** section just before **File**, on two lines: "last 7 days: …"
+and "in all: …"):
   - how many tasks its findings became (merged, dropped or still open),
   - its own tokens in the range,
   - the tokens per merged fix: its tokens plus its merged tasks' tokens, divided by the number
