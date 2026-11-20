@@ -35,10 +35,14 @@ export const statusMark = (t: Pick<SymccTask, 'status'> & { runs?: readonly unkn
 
 /** The step a task is in on its page, its row icon and its word ("⧗ test", "⋯ in line"); '' when it is in none. */
 export function stepNowWord(t: Pick<BoardTask, 'status' | 'checking'> & { note?: string }, nowMs: number): string {
-  if (waitsInLine(t)) return `${IN_LINE_ICON} in line`
+  if (inLineNow(t)) return `${IN_LINE_ICON} in line`
   const step = checkStepNow(t, nowMs)
   return step ? `${STEP_ICON[step]} ${STEP_WORD[step]}` : ''
 }
+
+/** Whether task `t` waits in the merge line: a doing task (waitsInLine) or an approved review task (its approve runs
+ *  prep → line → test → merge while its status stays review, and the merge line sets its note to "in line (n)"). */
+const inLineNow = (t: { status: SymccStatus; note?: string }): boolean => waitsInLine({ ...t, status: t.status === 'review' ? 'doing' : t.status })
 
 /** What the task page's badge and Status line need of a task. */
 type BadgeTask = Pick<SymccTask, 'status' | 'runs'> & { note?: string; attempts?: number } & Pick<BoardTask, 'checking'>
@@ -53,8 +57,8 @@ type BadgeTask = Pick<SymccTask, 'status' | 'runs'> & { note?: string; attempts?
 export function statusBadge(t: BadgeTask, nowMs: number, since?: number | string): { text: string; color: string } {
   const color = STATUS_BADGE[t.status]
   const step = checkStepNow(t, nowMs)
-  if (t.status !== 'doing') return { text: step ? `${STEP_ICON[step]} ${STEP_WORD[step]}` : `${statusMark(t)} ${STATUS_WORD[t.status]}`, color }
-  const word = waitsInLine(t) ? `${IN_LINE_ICON} ${t.note}` : step ? `${STEP_ICON[step]} ${STEP_WORD[step]}` : `${STATUS_MARK.doing} worker`
+  if (t.status !== 'doing') return { text: inLineNow(t) ? `${IN_LINE_ICON} ${t.note}` : step ? `${STEP_ICON[step]} ${STEP_WORD[step]}` : `${statusMark(t)} ${STATUS_WORD[t.status]}`, color }
+  const word = inLineNow(t) ? `${IN_LINE_ICON} ${t.note}` : step ? `${STEP_ICON[step]} ${STEP_WORD[step]}` : `${STATUS_MARK.doing} worker`
   const time = rowTime(t, nowMs, since)
   return { text: time ? `${word} · ${time}` : word, color }
 }
@@ -81,16 +85,18 @@ export function taskStage(t: BadgeTask & Pick<SymccTask, 'needs_review'> & { kin
   const first: StageStep[] = ['worker', 'prep', ...(board.checker === true || hadChecker ? ['checker' as const] : []), 'line', 'test']
   // an approved task in review runs prep → line → test → merge again (its status stays review): every step up to
   // "review ✓" done, then the approve's own steps with the one it is in now, so the line agrees with the badge
-  if (t.status === 'review' && step) {
-    const again: StageStep[] = ['prep', ...(step === 'checker' ? ['checker' as const] : []), 'line', 'test', 'merge']
-    const at = again.indexOf(step === 'testing' ? 'test' : step === 'merging' ? 'merge' : step)
+  // (waiting in the merge line, note "in line (n)", it is at "line" even while its step still says prep)
+  const inLine = inLineNow(t)
+  if (t.status === 'review' && (step || inLine)) {
+    const again: StageStep[] = ['prep', ...(step === 'checker' && !inLine ? ['checker' as const] : []), 'line', 'test', 'merge']
+    const at = again.indexOf(inLine ? 'line' : step === 'testing' ? 'test' : step === 'merging' ? 'merge' : step || 'prep')
     return [...[...first, 'review' as const].map(s => ({ step: s, state: 'done' as const })), ...again.map((s, i) => ({ step: s, state: i < at ? 'done' as const : i === at ? 'now' as const : 'later' as const }))]
   }
   const steps: StageStep[] = [...first, ...(review ? ['review' as const] : []), 'merge']
   const now: StageStep | 'all' =
     t.status === 'done' ? 'all'
     : t.status === 'review' ? 'review'
-    : waitsInLine(t) ? 'line'
+    : inLine ? 'line'
     : step === 'testing' ? 'test'
     : step === 'merging' ? 'merge'
     : step || 'worker'

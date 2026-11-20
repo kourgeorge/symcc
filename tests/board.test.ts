@@ -3755,6 +3755,12 @@ test('T-587: the task page badge and Status row name the step a task is in; the 
   expect(core.statusBadge(approving('prep'), now).text).toBe('✎ prep')
   expect(core.stageText(core.taskStage(approving('prep'), now, { mode: 'review' })!)).toBe('worker ✓ → prep ✓ → line ✓ → test ✓ → review ✓ → ● prep → line → test → merge')
   expect(core.stageText(core.taskStage(approving('merging'), now, { mode: 'review' })!)).toBe('worker ✓ → prep ✓ → line ✓ → test ✓ → review ✓ → prep ✓ → line ✓ → test ✓ → ● merge')
+  // an approved task in review waiting in the merge line (its step still prep, fresh or stale): "in line" on both
+  for (const at of [fresh, new Date(now - 10 * 60_000).toISOString()]) {
+    const queued = { status: 'review' as const, runs: ran, note: 'in line (2)', checking: { step: 'prep' as const, at } }
+    expect(core.statusBadge(queued, now).text).toBe('⋯ in line (2)')
+    expect(core.stageText(core.taskStage(queued, now, { mode: 'review' })!)).toBe('worker ✓ → prep ✓ → line ✓ → test ✓ → review ✓ → prep ✓ → ● line → test → merge')
+  }
   const done = core.taskStage({ status: 'done', runs: ran }, now, auto)!
   expect(done.every(m => m.state === 'done')).toBe(true)
   expect(core.stageText(done)).toBe('worker ✓ → prep ✓ → line ✓ → test ✓ → merge ✓')
