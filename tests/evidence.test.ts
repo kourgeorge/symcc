@@ -10,11 +10,11 @@ import { toolCall } from '../hooks/app/symcc'
 import { finishWork } from '../hooks/app/workers'
 import { evidenceWritten, logQueue, logVerdict } from '../hooks/app/evidence'
 import { EVENT_LOG_KEEP, EVENT_LOG_LINES, logEvents, type LogEvent } from '../hooks/app/events'
-import { cleanBit, commandHead, shortReason, problemCount, REASON_MAX } from '../hooks/core/evidence'
+import { cleanBit, commandHead, programName, shortReason, problemCount, REASON_MAX } from '../hooks/core/evidence'
 import { saveBoard } from '../hooks/app/store'
 import { S, workers, scoutRuns, stopped, toolName } from '../hooks/app/state'
 import type { HostRunResult } from '../hooks/host'
-import { fakeHost, memoryFs, done } from './fake-host'
+import { appendLineRun, fakeHost, memoryFs, done } from './fake-host'
 import { test } from './reset'
 import { pause } from './fakes'
 
@@ -42,7 +42,13 @@ function world(opts: { hang?: boolean; failLog?: boolean; maxRead?: number } = {
         return fs.write(p, text)
       },
     },
-    run: async ([cmd, ...a]): Promise<HostRunResult> => {
+    run: async (argv): Promise<HostRunResult> => {
+      const [cmd, ...a] = argv
+      if (argv[0] === 'sh' && argv[2]?.startsWith('printf ')) {
+        if (opts.failLog) throw new Error('disk full')
+        if (opts.hang) return new Promise<HostRunResult>(() => undefined)
+        return (appendLineRun(files, argv), done())
+      }
       const [x, y] = a.filter(v => !v.startsWith('-'))
       if (cmd === 'ln') return files.has(y!) ? done({ exitCode: 1 }) : (files.set(y!, files.get(x!)!), done())
       if (cmd === 'mv') return (files.set(y!, files.get(x!)!), files.delete(x!), done())
@@ -118,6 +124,30 @@ test('logging never changes the guard answer or holds it up: a log write that fa
     // a hung write still lets the board be read
     if (opts.failLog) expect((await evidence(w)).length).toBe(0)
   }
+})
+
+test('evidence is never written under the board lock: three refused edits in a row all answer at once while each log write never ends', async () => {
+  const w = world({ hang: true })
+  await withWorker(w)
+  const t0 = Date.now()
+  for (const f of ['docs/a.md', 'docs/b.md', 'docs/c.md']) {
+    const answer = await Promise.race([checkEdit(w.host, 'w1', { path: `${WT}/${f}` }, WT), pause(2000).then(() => 'held up')])
+    expect(answer).toBe(blockedEditText(f))
+  }
+  expect(Date.now() - t0 < 1500).toBe(true)
+})
+
+test('a refusal with no "what" logs only the program name: no URL, no flags, no values', async () => {
+  const w = world()
+  await withWorker(w)
+  stopped.add('w9')
+  for (const command of ['curl https://user:pass@host/x', 'mysql -pSecret'])
+    expect(await checkEdit(w.host, 'w9', { command }, '/repo')).not.toBe(undefined)
+  const got = (await evidence(w)) as Extract<LogEvent, { kind: 'refused' }>[]
+  expect(got.map(e => e.what)).toEqual(['curl', 'mysql'])
+  expect(['pass@', 'Secret', 'https'].filter(x => w.files.get(LOG)!.includes(x))).toEqual([])
+  expect([programName('curl https://user:pass@host/x'), programName('mysql -pSecret'), programName('PGPASSWORD=x env A=1 psql -h db')]).toEqual(['curl', 'mysql', 'psql'])
+  expect(cleanBit('see https://me:hunter2@api.example.com/x', 80)).toBe('see https://[hidden]@api.example.com/x')
 })
 
 test('a needs-files stop adds a "needs-files" event with the files asked for', async () => {
@@ -204,6 +234,7 @@ test('a secret set in front of a refused command is never logged', async () => {
   const line = (await evidenceWritten(), w.files.get(LOG) ?? '')
   expect(line.includes('"refused"')).toBe(true)
   expect(['hunter2', 'abc123', 'bar1x'].filter(s => line.includes(s))).toEqual([])
+  expect(programName('PGPASSWORD=hunter2 psql -h db')).toBe('psql')
   expect(commandHead('PGPASSWORD=hunter2 psql -h db')).toBe('PGPASSWORD=[hidden] psql')
   expect(commandHead('export DB_PASSWORD=hunter2')).toBe('export DB_PASSWORD=[hidden]')
   expect(cleanBit('GITHUB_TOKEN=abc123 gh', 60)).toBe('GITHUB_TOKEN=[hidden] gh')

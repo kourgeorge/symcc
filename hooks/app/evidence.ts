@@ -1,15 +1,16 @@
 // Evidence events (T-660, core/evidence.ts) added to the activity log: a guard refusal, a "needs files" stop, a
-// worker's question, a checker's verdict, a merge-queue outcome. Written in the background, after the decision, under
-// the board lock (as the task events are, so two sessions never lose each other's lines); the caller never waits on
-// it, and a failure to log is ignored: logging never changes or slows what the guard answers.
+// worker's question, a checker's verdict, a merge-queue outcome. Each one is its own small append of one JSON line
+// (appendLine), outside the board lock and its write queue, never waited on by the caller; a failure to log is
+// ignored: logging never changes or slows what the guard answers. Two appends at once each still add one whole line;
+// the log's trimming (and the move of its older lines to the archive) happens on the next task-event write (logEvents).
 import type { Host } from '../host'
-import { find } from '../board'
-import { type EvidenceEvent, type EvidenceGuard, type EvidenceRole, cleanBit, cleanFiles, commandHead, problemCount, shortReason, WHAT_MAX } from '../core/evidence'
+import { find, readBoard } from '../board'
+import { type EvidenceEvent, type EvidenceGuard, type EvidenceRole, cleanBit, cleanFiles, commandHead, programName, problemCount, shortReason, WHAT_MAX } from '../core/evidence'
 import type { CheckerVerdict } from '../core/checker'
 import type { FileTouch } from '../host'
-import { logEvents } from './events'
+import { eventsFile } from './events'
 import { S } from './state'
-import { load, locked } from './store'
+import { path } from './store'
 
 /** The evidence writes started and not yet done (tests wait on them with evidenceWritten). */
 let pending: Promise<unknown> = Promise.resolve()
@@ -22,23 +23,31 @@ export function resetEvidence() {
   pending = Promise.resolve()
 }
 
+/** Appends `line` and a newline to `file` with one shell append (no read, no lock). */
+async function appendLine(host: Host, file: string, line: string) {
+  await host.run(['sh', '-c', 'printf "%s\\n" "$1" >> "$2"', 'sh', line, file])
+}
+
+/** Task `id`'s try number, read from the board file without the lock (0 when it can't be read). */
+async function tryOf(host: Host, id: string): Promise<number> {
+  const text = await host.fs.read(path(S.N.boardFile)).catch(() => null)
+  const r = readBoard(text)
+  return r.broken ? 0 : Number(find(r.board, id)?.attempts) || 0
+}
+
 /**
- * Adds `e` to the activity log in the background. An event of a task with no `try` gets the task's try number from
- * the board. Never throws and never waits: it answers at once.
+ * Adds `e` to the activity log in the background, as one appended line. An event of a task with no `try` gets the
+ * task's try number from the board. Never throws and never waits: it answers at once.
  */
 export function logEvidence(host: Host, e: EvidenceEvent): void {
   try {
     if (!S.root) return
-    const run = locked(host, async () => {
-      let ev = e
-      if (ev.task && ev.try === undefined) {
-        const b = await load(host).catch(() => null)
-        const t = b ? find(b, ev.task) : undefined
-        ev = { ...ev, try: Number(t?.attempts) || 0 } as EvidenceEvent
-      }
-      await logEvents([ev], host)
-    }).catch(() => undefined)
-    pending = pending.then(() => run)
+    const file = eventsFile()
+    const run = (async () => {
+      const ev = e.task && e.try === undefined ? ({ ...e, try: await tryOf(host, e.task) } as EvidenceEvent) : e
+      await appendLine(host, file, JSON.stringify(ev))
+    })().catch(() => undefined)
+    pending = Promise.all([pending, run])
   } catch {
     // no log: the decision still stands
   }
@@ -55,7 +64,7 @@ export type Refusal = { text: string; guard: EvidenceGuard; what?: string }
 /** Logs refusal `r` of `who`'s call that touched `touch` (see logEvidence): a short cleaned reason, and the refused path or the command's head. */
 export function logRefusal(host: Host, who: Who, r: Refusal, touch?: FileTouch | null): void {
   try {
-    const what = r.what !== undefined ? cleanBit(r.what, WHAT_MAX) : touch ? ('command' in touch ? commandHead(touch.command) : cleanBit(touch.path, WHAT_MAX)) : undefined
+    const what = r.what !== undefined ? cleanBit(r.what, WHAT_MAX) : touch ? ('command' in touch ? programName(touch.command) : cleanBit(touch.path, WHAT_MAX)) : undefined
     logEvidence(host, { kind: 'refused', at: at(), ...who, guard: r.guard, reason: shortReason(r.text), ...(what ? { what } : {}) })
   } catch {
     // no log: the decision still stands

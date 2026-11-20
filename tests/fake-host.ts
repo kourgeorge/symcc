@@ -25,6 +25,13 @@ export type HostParts = {
 /** A command's answer: exit 0 with no output unless given. */
 export const done = (r: Partial<HostRunResult> = {}): HostRunResult => ({ exitCode: 0, stdout: '', stderr: '', ...r })
 
+/** When `argv` is the evidence log's one-line append (`sh -c 'printf "%s\n" "$1" >> "$2"' sh LINE FILE`), does it on `files` and answers true. */
+export function appendLineRun(files: Map<string, string>, argv: readonly string[]): boolean {
+  if (argv[0] !== 'sh' || argv[1] !== '-c' || !argv[2]?.startsWith('printf ')) return false
+  files.set(argv[5]!, (files.get(argv[5]!) ?? '') + argv[4]! + '\n')
+  return true
+}
+
 /** The board panel's values kept in memory, as a host with a panel keeps them (each starts as the panel's start value). */
 export function memoryPanel(): PanelValues & { view: () => SymccView } {
   let opened = ''

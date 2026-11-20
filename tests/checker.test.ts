@@ -15,7 +15,7 @@ import { runTool, leadGuide } from '../hooks/app/tools'
 import { test, resetPlugin } from './reset'
 import { agentFinished, toolCall } from '../hooks/app/symcc'
 import { moveOldOrgMem } from '../hooks/app/org-mem'
-import { fakeHost, memoryFs } from './fake-host'
+import { appendLineRun, fakeHost, memoryFs } from './fake-host'
 import type { Host, HostAgent } from '../hooks/host'
 import { drainStarts, queuedStarts } from '../hooks/app/starts'
 import { withStarts } from './starts'
@@ -85,6 +85,7 @@ function world(changed: string[] = ['src/a.ts', 'src/a.test.ts']) {
       const [cmd, ...rest] = argv
       calls.push(argv.join(' '))
       if (cmd === 'git') return runGit(rest)
+      if (appendLineRun(files, argv)) return ok()
       if (cmd === '/bin/sh') {
         if (tests.hold && o.cwd === tests.hold.cwd) await tests.hold.until
         if (tests.fails) return { exitCode: 1, stdout: tests.output, stderr: '' }

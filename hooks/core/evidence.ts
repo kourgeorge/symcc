@@ -38,7 +38,10 @@ const SECRET_NAME = /\b([\w.-]*(?:pass|pwd|secret|token|key|auth|cred|session|co
 
 /** `s` made one line, secret-looking parts hidden (hideSecrets, plus any secret-named `NAME=value`), cut at `max` characters with "…". */
 export function cleanBit(s: unknown, max: number): string {
-  const one = hideSecrets(String(s ?? '').replace(/\s+/g, ' ').trim()).replace(SECRET_NAME, '$1[hidden]')
+  const one = hideSecrets(String(s ?? '').replace(/\s+/g, ' ').trim())
+    .replace(SECRET_NAME, '$1[hidden]')
+    // a password inside a URL (https://user:pass@host)
+    .replace(/(:\/\/)[^\s/@]+@/g, '$1[hidden]@')
   return one.length > max ? `${one.slice(0, max - 1).trimEnd()}…` : one
 }
 
@@ -57,6 +60,18 @@ export function commandHead(command: string, words = 2): string {
   const parts = String(command ?? '').trim().split(/\s+/).filter(Boolean)
   const head = parts.slice(0, words).map(w => w.replace(/^([A-Za-z_][\w]*)=.*$/, '$1=[hidden]'))
   return cleanBit(head.join(' '), WHAT_MAX)
+}
+
+/**
+ * Only the program name of shell command `command`: its first word after any `NAME=value` settings in front (and an
+ * `env` or `export` before them), never its arguments (no URLs, no flags, no values). Cleaned and cut short.
+ */
+export function programName(command: string): string {
+  const parts = String(command ?? '').trim().split(/\s+/).filter(Boolean)
+  let i = 0
+  while (i < parts.length && (/^[A-Za-z_]\w*=/.test(parts[i]!) || ((parts[i] === 'env' || parts[i] === 'export') && /^[A-Za-z_]\w*=/.test(parts[i + 1] ?? '')))) i++
+  const word = parts[i] ?? ''
+  return /^[\w./+-]+$/.test(word) ? cleanBit(word, WHAT_MAX) : ''
 }
 
 /** A checker's problems report counted: its list items ("- ", "* ", "1. "), or 1 when it has none. */
