@@ -1817,7 +1817,7 @@ test('T-607: the header shows 0, 1 and 5 long test commands short, without brack
   const long = 'AI_API_KEY=test-not-a-real-key node --test $(ls tests/*.test.js) --reporter spec'
   const five = ['npx tsc --noEmit', long, 'sh scripts/test-opencode-host.sh', 'sh scripts/test-node-host.sh', 'claude plugin test .']
   const part = (cmds: string[]) => {
-    const [t] = addTask({ ...emptyBoard(), branch: 'main', test_commands: cmds }, { origin: W, title: 'A' }, T)
+    const [t] = addTask({ ...emptyBoard(), test_commands: cmds }, { origin: W, title: 'A' }, T)
     return / · tests: (.*?) · up to /.exec(boardText(t).split('\n')[0]!)![1]!
   }
   expect(part([])).toBe('none set')
@@ -1833,6 +1833,11 @@ test('T-607: the header shows 0, 1 and 5 long test commands short, without brack
   }
   expect(testsShort([long])).toBe('node')
   expect(testsShort(['x'.repeat(40)])).toBe('1 command')
+  // no stray comma when a command is only VAR=value words, and no quotes from a single short command
+  expect(testsShort(['FOO=1', 'npm test'])).toBe('2 commands')
+  expect(testsShort(['A=1 B=2', 'C=3'])).toBe('2 commands')
+  expect(testsShort(["echo 'hi'"])).toBe('echo')
+  expect(testsShort(["sh -c 'x'"])).toBe('sh')
   expect(testName('npx tsc --noEmit')).toBe('tsc')
   expect(testName('sh scripts/typecheck.sh')).toBe('typecheck')
   // Settings and the settings tool still give the whole list

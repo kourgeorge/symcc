@@ -419,9 +419,10 @@ export function testName(cmd: string): string {
 export function testsShort(cmds: readonly string[]): string {
   const list = cmds.map(c => c.trim()).filter(Boolean)
   if (!list.length) return 'none set'
-  if (list.length === 1 && list[0]!.length <= TESTS_SHORT_MAX && !/[\["]/.test(list[0]!)) return list[0]!
-  const names = list.map(testName).join(', ')
-  if (names.length <= TESTS_SHORT_MAX && !/[\["']/.test(names)) return names
+  if (list.length === 1 && list[0]!.length <= TESTS_SHORT_MAX && !/[\["']/.test(list[0]!)) return list[0]!
+  const parts = list.map(testName)
+  const names = parts.join(', ')
+  if (parts.every(Boolean) && names.length <= TESTS_SHORT_MAX && !/[\["']/.test(names)) return names
   return `${list.length} ${list.length === 1 ? 'command' : 'commands'}`
 }
 
