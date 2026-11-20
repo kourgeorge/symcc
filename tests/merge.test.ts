@@ -4,7 +4,7 @@ import { checkAndMerge, changedFiles, changesText, ownerEdits } from '../hooks/a
 import { inMergeLine, MERGE_LINE_POLL_MS, resetMergeLine } from '../hooks/app/merge-line'
 import { joinedText } from '../hooks/core/board-parts'
 import { mergeLineText, parseMergeLine, inLineNote, MERGE_LINE_STALE_MS, mergeLineStaleMs, type LineEntry, testMinutesOf, testTimeoutMs, lineEntryStale, readBoard, TEST_RERUN_GONE_NOTE, DEFAULT_TEST_MINUTES, BASH_PATHS_MAX, bashTooManyText } from '../hooks/board'
-import { PREP_NOTE, STEP_NOTE, isMergeNote, type Board, type BoardTask, workerGitWriteText, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, readArchive, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, untestedChange, isTestFile, isPlainRelPath, parseSettingValue, type WorkerQuestion, isAnswered, boardText, taskMatches } from '../hooks/board'
+import { PREP_NOTE, STEP_NOTE, isMergeNote, type Board, type BoardTask, workerGitWriteText, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, readArchive, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, untestedChange, isTestFile, isPlainRelPath, parseSettingValue, type WorkerQuestion, isAnswered, boardText, taskMatches, onRuns } from '../hooks/board'
 import { removeWorktree, cleanupMerged, deleteMergedBranch } from '../hooks/app/git'
 import { addPassedTree, parsePassedTrees, passedTreesText, treePassed, PASSED_TREES_MAX } from '../hooks/core/passed-trees'
 import { S, leadQueue, workers, sayQueue, meanwhile, scoutRuns } from '../hooks/app/state'
@@ -2561,7 +2561,8 @@ function sentBackBoard(ageMs: number): Board {
   const started = new Date(Date.now() - ageMs).toISOString()
   const [b] = boardWith('review', [], {
     attempts: 2,
-    runs: [{ started: ISO, ended: ISO, ended_by: 'finished', ended_note: 'checker found problems' }, { started }],
+    runs: [{ started: ISO, ended: ISO, ended_by: 'finished', ended_note: 'checker found problems', agent: 'agent-one' }, { started, agent: 'agent-two' }],
+    agent: 'agent-two',
     history: hist('created by the lead', 'try 1: checker found problems'),
   })
   return { ...b, mode: 'paused' }
@@ -2581,6 +2582,15 @@ test('T-678: a note within a minute of the retry after a checker send-back joins
   expect(t.history.some(h => h.kind === 'restarted')).toBe(false)
   expect(t.history.map(h => h.text)).toContain('the lead added a note: “also check the README”')
   expect(t.details).toMatch(/also check the README$/)
+  // T-479: the stopped try's worker id is still kept on the board after the next claim, so every copy refuses it
+  const at = new Date().toISOString()
+  const y = patchTask(await load(w.$), 'T-1', { status: 'doing', attempts: t.attempts + 1, runs: startRun(t.runs, at) }, at)
+  const z = patchTask(y, 'T-1', { agent: 'agent-three' }, at)
+  const c = find(z, 'T-1')!
+  expect(c.attempts).toBe(2)
+  expect(onRuns(c.runs, 'agent-two')).toBe(true)
+  expect(onRuns(c.runs, 'agent-one')).toBe(true)
+  expect(c.runs![1]!.agent).toBe('agent-three')
 })
 
 test('T-678: a note on a try that has run over a minute still restarts it as before', async () => {
