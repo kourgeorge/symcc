@@ -277,6 +277,33 @@ test("T-651: a question's page with long options shows them as numbered lines in
   await term.unmount()
 })
 
+test("T-651: on desktop and mobile each long option is one native Button labelled \"1. …\" (it wraps by itself); a press answers", async ($, on) => {
+  const options = ["Invalid: doctor and run reject it (scout's suggestion)", 'Unlimited: run until another cap stops it']
+  const [b] = addQuestion({ ...emptyBoard(), tasks: [] as never }, 'What should a cap of 0 mean?', options, ISO)
+  const view = { tasks: b.tasks, working: [], scouts: [], mode: 'auto', test_commands: [], questions: b.questions }
+  stateOf(on, { opened: b.questions![0]!.id, view: { shape: 'view-1', value: view } })
+  const written = fakeFiles(on, { '/board.json': JSON.stringify(b), '/board.lock': null })
+  on('ui.toast', () => ({ value: undefined }))
+  const answers = () => Object.entries(written).filter(([p]) => /board\.json\..*\.tmp$/.test(p)).map(([, text]) => JSON.parse(text).questions[0].answer)
+  // mobile first: the press on desktop (the last) answers the question, and its page then goes away
+  for (const surface of ['mobile', 'desktop'] as const) {
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 44 }, surface })
+    const buttons = (await ui.findAll({ type: 'Button' })).filter(x => /^choice-\d/.test(String(x.props.key ?? '')))
+    expect(buttons.map(x => [x.props.key, x.props.label]), surface).toEqual([
+      ['choice-1', `1. ${options[0]}`],
+      ['choice-2', `2. ${options[1]}`],
+      ['choice-3', '3. Answer…'],
+    ])
+    expect(await ui.find({ key: 'choice-1-line-2' }), surface).toBeUndefined()
+    expect((await ui.find({ key: 'choice-key-2' }))?.props.hotkey, surface).toBe('2')
+    if (surface === 'desktop') {
+      await ui.press({ key: 'choice-2' })
+      expect(answers()).toEqual([options[1]])
+    }
+    await ui.unmount()
+  }
+})
+
 test("T-651: in VS Code a question's options are numbered link lines, one under the other; a click on one answers", async ($, on) => {
   const options = ["Invalid: doctor and run reject it (scout's suggestion)", 'Unlimited: run until another cap stops it']
   const [b] = addQuestion({ ...emptyBoard(), tasks: [] as never }, 'What should a cap of 0 mean?', options, ISO)

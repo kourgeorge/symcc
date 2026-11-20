@@ -31,10 +31,13 @@ export const answerRoom = (width: number) => Math.max(10, width - 4)
  *  Each choice is "1. Invalid: …" wrapped inside the box (choiceLines), every line of it a `plain` Button that picks it, so a
  *  click anywhere on the choice picks it; the first line has the key `choice-1` and the choice as its label. The number keys
  *  belong to hidden Buttons (`choice-key-1`, a Box drawn `display="none"`, as the tab keys): a plain Button with a hotkey
- *  would draw its own "1: " before the line. */
+ *  would draw its own "1: " before the line. Desktop and mobile draw every Button as a native button (which wraps its own
+ *  label), so there each choice is one Button labelled "1. Invalid: …" instead of one per wrapped line. */
 export function answerBox(pane: PaneParts, a: AnswerBox) {
   const { Box, Text, Button, Input, C, width } = pane
   const room = answerRoom(width)
+  /** Only the terminal draws the wrapped choice lines as plain rows; desktop and mobile get one native button per choice. */
+  const terminal = pane.vs.surface === 'terminal'
   return (
     <Box flexDirection="column" borderStyle="round" borderColor={C('warning')} paddingX={1}>
       <Text>
@@ -45,7 +48,10 @@ export function answerBox(pane: PaneParts, a: AnswerBox) {
         <Box key="answer-choices" flexDirection="column">
           {a.choices.map((c, i) => (
             <Box key={`choice-row-${i + 1}`} flexDirection="column">
-              {choiceLines(c, i + 1, room).map((l, j) => (
+              {!terminal ? (
+                // desktop and mobile draw every Button as a native button, which wraps its own label: one per choice
+                <Button key={`choice-${i + 1}`} label={`${i + 1}. ${c}`} autoFocus={i === 0 && !a.typing ? true : undefined} onPress={a.onChoice(i)} />
+              ) : choiceLines(c, i + 1, room).map((l, j) => (
                 <Button key={j ? `choice-${i + 1}-line-${j + 1}` : `choice-${i + 1}`} plain label={c} autoFocus={i === 0 && j === 0 && !a.typing ? true : undefined} hover={{ inverse: true }} onPress={a.onChoice(i)}>
                   <Text color={C(c === 'Answer…' ? 'inactive' : 'text')}>{l}</Text>
                 </Button>
