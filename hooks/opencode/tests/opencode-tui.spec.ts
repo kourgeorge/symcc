@@ -93,13 +93,17 @@ test('a doing row shows only the total work time of all tries in the band and th
   const f = { ...f0, view: { ...f0.view, tasks: f0.view.tasks.map(t => (t.id === 'T-1' ? { ...t, attempts: 3, runs, note: '' } : t)), working: [] } }
   const row = (lines: string[]) => lines.find(l => /T-1 /.test(l))!
   const band = bandLines(f, NOW, 120).map(lineText)
-  // the try "(3)" right after the time, in the band and the list, in the warning colour in the list (T-604)
+  // the try "(3)" right after the time in the band (T-604); the board list shows no try mark (T-628)
   expect(row(band)).toContain('▶ 1h40m (3)')
   const drawn = panelLines(f, { opened: '', cursor: 0 }, NOW, 100).lines
   const list = drawn.map(lineText)
-  expect(row(list)).toContain('▶ 1h40m (3)')
+  expect(row(list)).toContain('▶ 1h40m')
+  expect(row(list)).not.toContain('(3)')
   for (const l of [row(band), row(list)]) expect(l).not.toContain('try 3')
-  expect(drawn.find(l => /T-1 /.test(lineText(l)))!.find(s => s.text === '(3)')?.color).toBe('warning')
+  // the list's titles still start in one column
+  const starts = f.view.tasks.filter(t => ['T-1', 'T-2', 'T-3', 'T-4'].includes(t.id)).map(t => list.find(l => l.includes(` ${t.id} `))!.indexOf(t.title))
+  expect(starts.every(n => n > 0)).toBe(true)
+  expect(new Set(starts).size).toBe(1)
   // try 1: nothing
   const first = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => (t.id === 'T-1' ? { ...t, attempts: 1 } : t)) } }
   expect(row(bandLines(first, NOW, 120).map(lineText))).not.toMatch(/\(1\)|try/)
