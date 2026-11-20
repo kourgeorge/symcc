@@ -224,6 +224,7 @@ export function resetStore() {
   partsSeen.clear()
   stubbed = new Set()
   missingParts = new Set()
+  toldMissing.clear()
   sizeNotes.clear()
   toldTooBig.clear()
 }
@@ -286,15 +287,19 @@ export async function load(host: Host): Promise<Board> {
     S.enabledNow = symccOn(b)
     return b
   }
-  const { text, read: r } = await readJoined(host)
+  const { text, read: r, missing, missingFiles } = await readJoined(host)
   if (r.broken) {
     // Never go on with a stand-in board: it would be saved over the file and lose every task.
     // Throwing here refuses every change, start and merge until the file is fixed; workers already running are left alone.
     const copy = await keepCopy(host, text, 'broken', c => brokenBoardText(S.N.boardFile, r.broken!, c || undefined))
     throw new Error(brokenBoardText(S.N.boardFile, r.broken, copy || undefined))
   }
-  if (r.skipped || r.fixed.length)
-    await keepCopy(host, text, 'before-fix', c => `${S.N.boardFile}: ${fixText(r.skipped, r.fixed)}${c ? `. The file as it was is kept in ${c}` : ''}.`)
+  // T-681: a missing parts file is warned about (and a copy kept) once per session, not on every load and save
+  for (const f of toldMissing) if (!missingFiles.has(f)) toldMissing.delete(f)
+  const fixed = [...r.fixed, ...missing.filter(m => !toldMissing.has(m.file)).map(m => m.text)]
+  for (const f of missingFiles) toldMissing.add(f)
+  if (r.skipped || fixed.length)
+    await keepCopy(host, text, 'before-fix', c => `${S.N.boardFile}: ${fixText(r.skipped, fixed)}${c ? `. The file as it was is kept in ${c}` : ''}.`)
   S.enabledNow = symccOn(r.board)
   return r.board
 }
@@ -326,6 +331,9 @@ const partsSeen = new Map<string, { text: string; tasks: Record<string, Record<s
  */
 let stubbed = new Set<string>()
 
+/** Whether task `id` loaded as a stub in the last read, its parts file missing (T-681: archiveOld leaves it on the board). */
+export const isStubbed = (id: string) => stubbed.has(id)
+
 /**
  * The parts files (relative, "tasks/T-600.json") that board.json named but the last read did not find (T-681). Until
  * one is back, a save never writes it: a task newly finished in its range stays whole in board.json instead, so
@@ -347,7 +355,7 @@ const partsPath = (rel: string) => path(`${S.N.dir}/${rel}`)
  * the parts files already trimmed for the new one), so parts found missing are read once more (board.json and all)
  * before they count as missing.
  */
-async function readJoined(host: Host, again = true): Promise<{ text: string; read: BoardRead; whole: boolean }> {
+async function readJoined(host: Host, again = true): Promise<{ text: string; read: BoardRead; whole: boolean; missing: { text: string; file: string }[]; missingFiles: Set<string> }> {
   const file = path(S.N.boardFile)
   const text = await readWhole(host, file, true)
   let raw: unknown
@@ -355,7 +363,7 @@ async function readJoined(host: Host, again = true): Promise<{ text: string; rea
     raw = JSON.parse(text)
   } catch {
     noteRead(host, file, text)
-    return { text, read: readBoard(text), whole: false }
+    return { text, read: readBoard(text), whole: false, missing: [], missingFiles: new Set<string>() }
   }
   const files = new Map<string, Record<string, Record<string, unknown>>>()
   const missingNow = new Set<string>()
@@ -365,7 +373,7 @@ async function readJoined(host: Host, again = true): Promise<{ text: string; rea
       x => x,
       (e: unknown) => ({ failed: String((e as Error)?.message ?? e).slice(0, 120) }),
     )
-    if (typeof there === 'object') return { text, read: { ...readBoard(null), broken: `its parts file ${S.N.dir}/${rel} can't be checked (${there.failed})` }, whole: false }
+    if (typeof there === 'object') return { text, read: { ...readBoard(null), broken: `its parts file ${S.N.dir}/${rel} can't be checked (${there.failed})` }, whole: false, missing: [], missingFiles: new Set<string>() }
     if (!there) {
       partsSeen.delete(file)
       missingNow.add(rel)
@@ -373,20 +381,27 @@ async function readJoined(host: Host, again = true): Promise<{ text: string; rea
     }
     const t = await readWhole(host, file)
     const p = readParts(t)
-    if (p.broken) return { text, read: { ...readBoard(null), broken: `its parts file ${S.N.dir}/${rel} can't be read (${p.broken})` }, whole: false }
+    if (p.broken) return { text, read: { ...readBoard(null), broken: `its parts file ${S.N.dir}/${rel} can't be read (${p.broken})` }, whole: false, missing: [], missingFiles: new Set<string>() }
     files.set(rel, p.tasks)
     partsSeen.set(file, { text: t, tasks: p.tasks })
   }
   const j = joinParts(raw, files)
   if (j.missing.length && again) return readJoined(host, false)
-  stubbed = new Set(j.stubbed)
+  stubbed = new Set(j.stubbed.map(s => s.id))
   missingParts = missingNow
   // a finished task kept whole only because its parts file is missing is not one to migrate (see missingParts)
   const whole = hasWholeFinished(raw, missingNow)
   if (!whole) noteRead(host, file, text)
   const read = readBoardValue(j.raw)
-  return { text, read: { ...read, fixed: [...read.fixed, ...j.missing] }, whole }
+  return { text, read, whole, missing: j.missing.map((text, i) => ({ text, file: j.stubbed[i]!.file })), missingFiles: missingNow }
 }
+
+/**
+ * The missing parts files (relative) this session already warned about (T-681): while one stays missing, every load
+ * and save would warn and keep a board.json copy again (board.json's text changes with each save), so it is said once.
+ * A file that comes back is taken out, so losing it again is warned about again.
+ */
+const toldMissing = new Set<string>()
 
 /** Is the plugin on for this project? Read from the board file each time (a missing or broken board: on). Never throws. */
 export async function isOn(host: Host): Promise<boolean> {
@@ -477,7 +492,9 @@ export async function saveBoard(host: Host, b: Board) {
   for (const [rel, all] of parts) {
     const file = partsPath(rel)
     const seen = partsSeen.get(file)?.tasks ?? {}
-    // a task loaded as a stub keeps no parts here: its real ones may come back (T-681)
+    // a task loaded as a stub keeps no parts here: its real ones may come back (T-681). Accepted losses while its file
+    // is missing: history added to it meanwhile is not kept, and a stubbed task reopened meanwhile is saved whole
+    // with an empty history and details (it then no longer points to the parts file put back later).
     const tasks = Object.fromEntries(Object.entries(all).filter(([id]) => !stubbed.has(id) || id in seen))
     if (Object.keys(tasks).length) want.set(file, tasks)
   }

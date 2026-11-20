@@ -8,7 +8,7 @@ import { type Board, type BoardTask, addTask, emptyBoard, parseBoard, readBoard 
 import { ARCHIVE_FILE_BYTES, READ_LIMIT_BYTES, SIZE_WARN_BYTES, archiveChunks, fieldSizes, joinedText, partsFileOf, sizeWarnText, viewStubFilled, viewTask, withViewParts } from '../hooks/core/board-parts'
 import { scoutToolLines } from '../hooks/core/scouts'
 import { change, load, readWhole, resetStore, saveBoard, saveMigrated } from '../hooks/app/store'
-import { readArchiveFile, saveArchive } from '../hooks/app/archive'
+import { archiveOld, readArchiveFile, saveArchive } from '../hooks/app/archive'
 import { publish } from '../hooks/app/lead'
 import { cleanLeftoverTmp } from '../hooks/app/cleanup'
 import { statsText } from '../hooks/app/tools'
@@ -230,6 +230,46 @@ test('T-681: a reload forgets which tasks the last read loaded as stubs, so a fr
   await saveBoard(fresh.host, bigBoard())
   expect(fresh.files.has(file)).toBe(true)
   expect((await load(fresh.host)).tasks[120]!.history.length).toBe(30)
+})
+
+test('T-681: archiving while a parts file is missing leaves its stubbed tasks on the board; putting the file back restores them', async () => {
+  const w = world()
+  await saveBoard(w.host, { ...bigBoard(), archive_days: 1 })
+  const file = `${ROOT}/.symcc/tasks/T-100.json`
+  const good = w.files.get(file)!
+  w.files.delete(file)
+  await load(w.host)
+  S.driving = true
+  const moved = await archiveOld(w.host, NOW + 400 * 86_400_000, true)
+  expect(moved.length > 0).toBe(true)
+  expect(moved.includes('T-121')).toBe(false)
+  expect(moved.includes('T-1')).toBe(true)
+  const b = await load(w.host)
+  const t = b.tasks.find(x => x.id === 'T-121')
+  expect(t?.history.length).toBe(0)
+  expect(w.files.has(file)).toBe(false)
+  w.files.set(file, good)
+  expect((await load(w.host)).tasks.find(x => x.id === 'T-121')?.history.length).toBe(30)
+})
+
+test('T-681: while a parts file is missing, several changes warn once and keep one board.json copy', async () => {
+  const w = world()
+  await saveBoard(w.host, bigBoard())
+  const file = `${ROOT}/.symcc/tasks/T-100.json`
+  w.files.delete(file)
+  const copies: string[] = []
+  const write = w.host.fs.write
+  w.host.fs.write = async (p, t) => {
+    if (p.includes('board.json.before-fix-')) copies.push(p)
+    return write(p, t)
+  }
+  for (const note of ['one', 'two', 'three']) {
+    await change(w.host, x => ({ ...x, tasks: x.tasks.map(t => (t.id === 'T-700' ? { ...t, note } : t)) }))
+    await load(w.host)
+  }
+  expect(w.toasts.filter(t => t.includes('missing from tasks/T-100.json')).length).toBe(1)
+  expect(copies.length).toBe(1)
+  expect((await load(w.host)).tasks[699]!.note).toBe('three')
 })
 
 test('T-675: a data file past 3 MB warns the owner, the lead and the board once; a read refused for size says so', async () => {
