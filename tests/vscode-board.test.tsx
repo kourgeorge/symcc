@@ -554,10 +554,9 @@ test('in VS Code a doing row shows only the total work time of all tries, no Σ,
   seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, tasks } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
   expect(await rowText(ui, 'T-402')).toContain('▶ 1h27m')
-  // the try "(3)" right after the time, in the warning colour; never "try 3" (T-604)
-  expect(await rowText(ui, 'T-402')).toContain('▶ 1h27m (3)')
+  // no try mark on the list row, not "(3)" and not "try 3" (T-628: the band and the task page show it)
+  expect(await rowText(ui, 'T-402')).not.toContain('(3)')
   expect(await rowText(ui, 'T-402')).not.toContain('try 3')
-  expect((await ui.find({ key: `vs-task-T-402` }).then(r => elements(r!.children).find(n => n.type === 'Text' && texts(n).join('') === ' (3)')))?.props?.color).toBe('warning')
   expect(await rowText(ui, 'T-402')).not.toContain('Σ')
   expect(await rowText(ui, 'T-402')).not.toContain('in all')
   expect(await rowText(ui, 'T-401')).not.toContain('Σ')
@@ -589,8 +588,8 @@ test('T-590: in VS Code each open task and question is one line: id, title, then
       expect(line, `${at} ${id}`).not.toContain('\n')
     }
     // doing, to do and waiting: id, title, then the state on the same line
-    // the role tag goes first when narrow ("[researcher]" at 60, gone at 40); the try "(2)" stays whole right after the time
-    expect(await rowText(ui, 'T-401'), at).toMatch(bodyColumns === 80 ? /^T-401\s+Show the.*… · ▶ 2m \(2\) · \[investigation · researcher\]$/ : bodyColumns === 60 ? /^T-401\s+Show the.*… · ▶ 2m \(2\) · \[researcher\]$/ : /^T-401\s+Show\S*( \S+)*… · ▶ 2m \(2\)$/)
+    // the role tag goes first when narrow (whole at 60 now that no try "(2)" takes room, T-628; gone at 40)
+    expect(await rowText(ui, 'T-401'), at).toMatch(bodyColumns === 40 ? /^T-401\s+Show\S*( \S+)*… · ▶ 2m$/ : /^T-401\s+Show the.*… · ▶ 2m · \[investigation · researcher\]$/)
     expect(await rowText(ui, 'T-406'), at).toMatch(/^T-406\s+Write the guide.* · ○ to do/)
     expect(await rowText(ui, 'T-404'), at).toMatch(/^● T-404\s+Pick the.* · \? waiting for 1m/)
     // a long title is cut with "…" and the state part, "after T-406", stays on the line
@@ -628,52 +627,53 @@ test('T-590: fitRow drops whole parts from the least important end, never cuts a
   const long = 'Let the lead read every archived task and its whole history when the owner asks about old work from months ago'
   const after = [{ text: 'after T-406', drop: 0 }, { text: 'feature', drop: 3 }]
   // bodyColumns 40: T-578 leaves 33 columns; the kind goes, "after T-406" stays
-  expect(fitRow(long, 33, '○ to do', after, '')).toEqual({ title: 'Let the…', status: '○ to do', rest: 'after T-406' })
+  expect(fitRow(long, 33, '○ to do', after)).toEqual({ title: 'Let the…', status: '○ to do', rest: 'after T-406' })
   // room for all: the kind stays, after it
-  expect(fitRow(long, 60, '○ to do', after, '').rest).toBe('after T-406 · feature')
+  expect(fitRow(long, 60, '○ to do', after).rest).toBe('after T-406 · feature')
   // a long reason at 74 columns: cut at a word to about half, the title gets the rest (more than its floor)
   const why = 'x '.repeat(60).trim()
-  const fit = fitRow(long, 74, '✗ failed 1m ago', [{ text: 'bug', drop: 3 }, { text: why, drop: 1, long: true }], '')
+  const fit = fitRow(long, 74, '✗ failed 1m ago', [{ text: 'bug', drop: 3 }, { text: why, drop: 1, long: true }])
   expect(fit.title.length).toBeGreaterThan(16)
   expect(fit.rest).toMatch(/^bug · (x )+x…$/)
   expect(fit.title.length + 3 + 15 + 3 + fit.rest.length).toBeLessThanOrEqual(74)
   // a question with choices: the choices count goes before the title is squeezed below its floor
-  expect(fitRow(long, 31, '? question for you for 5m', [{ text: '2 choices', drop: 2 }], '').rest).toBe('')
+  expect(fitRow(long, 31, '? question for you for 5m', [{ text: '2 choices', drop: 2 }]).rest).toBe('')
 })
 
-/** The width of a fitted row's one line, as taskRow draws it: title, " · " status, " " try, " · " rest. */
-const fitWidth = (f: { title: string; status: string; rest: string }, tried: string) => f.title.length + 3 + f.status.length + (f.rest ? 3 + f.rest.length : 0) + (tried ? 1 + tried.length : 0)
+/** The width of a fitted row's one line, as taskRow draws it: title, " · " status, " · " rest (no try mark, T-628). */
+const fitWidth = (f: { title: string; status: string; rest: string }) => f.title.length + 3 + f.status.length + (f.rest ? 3 + f.rest.length : 0)
 
-test('T-590: fitRow never returns a line wider than its room; the role tag goes first, the try stays whole', () => {
+test('T-590: fitRow never returns a line wider than its room; the role tag goes first', () => {
   const title = 'Show the plugin version in the board title and the band above the prompt'
   const role = () => [{ text: '', drop: 0 }, { text: '[investigation · researcher]', drop: 4, short: '[researcher]' }, { text: '', drop: 3 }]
   // T-401 doing, kind investigation, role researcher, try 2: at bodyColumns 40 (room 33) and 60 (room 53)
   for (const room of [33, 53, 20]) {
-    const fit = fitRow(title, room, '▶ 2m', role(), '(2)')
-    expect(fitWidth(fit, '(2)'), `room ${room}`).toBeLessThanOrEqual(room)
+    const fit = fitRow(title, room, '▶ 2m', role())
+    expect(fitWidth(fit), `room ${room}`).toBeLessThanOrEqual(room)
     expect(fit.status, `room ${room}`).toBe('▶ 2m')
     expect(fit.title.endsWith('…'), `room ${room}`).toBe(true)
   }
-  // 14: the role goes and the title is cut below its floor; "▶ 2m (2)" stays whole
-  const fourteen = fitRow(title, 14, '▶ 2m', role(), '(2)')
-  expect(fourteen).toEqual({ title: 'Sh…', status: '▶ 2m', rest: '' })
-  expect(fitWidth(fourteen, '(2)')).toBeLessThanOrEqual(14)
-  // 53: the role is shortened to "[researcher]" so the title keeps its floor; 33: the role is dropped whole
-  expect(fitRow(title, 53, '▶ 2m', role(), '(2)').rest).toBe('[researcher]')
-  expect(fitRow(title, 33, '▶ 2m', role(), '(2)').rest).toBe('')
-  expect(fitRow(title, 80, '▶ 2m', role(), '(2)').rest).toBe('[investigation · researcher]')
+  // 14: the role goes and the title is cut below its floor; "▶ 2m" stays whole
+  const fourteen = fitRow(title, 14, '▶ 2m', role())
+  expect(fourteen).toEqual({ title: 'Show…', status: '▶ 2m', rest: '' })
+  expect(fitWidth(fourteen)).toBeLessThanOrEqual(14)
+  // 45: the role is shortened to "[researcher]" so the title keeps its floor; 33: the role is dropped whole
+  expect(fitRow(title, 53, '▶ 2m', role()).rest).toBe('[investigation · researcher]')
+  expect(fitRow(title, 45, '▶ 2m', role()).rest).toBe('[researcher]')
+  expect(fitRow(title, 33, '▶ 2m', role()).rest).toBe('')
+  expect(fitRow(title, 80, '▶ 2m', role()).rest).toBe('[investigation · researcher]')
   // a long "after" list: "after T-1 +2", then the title goes below its floor before "after" is dropped
   const after = [{ text: 'after T-401, T-402, T-403', drop: 0, short: 'after T-401 +2' }]
-  const narrow = fitRow(title, 30, '○ to do', after, '')
+  const narrow = fitRow(title, 30, '○ to do', after)
   expect(narrow.rest).toBe('after T-401 +2')
-  expect(fitWidth(narrow, '')).toBeLessThanOrEqual(30)
-  // too narrow even for "…" and the status words: only the status words' end goes, never the try
-  const tiny = fitRow(title, 22, '? waiting for you for 5m', [], '(2)')
+  expect(fitWidth(narrow)).toBeLessThanOrEqual(30)
+  // too narrow even for "…" and the status words: only the status words' end goes
+  const tiny = fitRow(title, 18, '? waiting for you for 5m', [])
   expect(tiny).toEqual({ title: 'S…', status: '? waiting for', rest: '' })
-  expect(fitWidth(tiny, '(2)')).toBeLessThanOrEqual(22)
+  expect(fitWidth(tiny)).toBeLessThanOrEqual(18)
   // the question row at bodyColumns 40 (room 33): no wider than its room
-  const q = fitRow('Should the board open by itself when a session starts, or only when the owner asks for it?', 33, '? question for you for 5m', [{ text: '2 choices', drop: 2 }], '')
-  expect(fitWidth(q, '')).toBeLessThanOrEqual(33)
+  const q = fitRow('Should the board open by itself when a session starts, or only when the owner asks for it?', 33, '? question for you for 5m', [{ text: '2 choices', drop: 2 }])
+  expect(fitWidth(q)).toBeLessThanOrEqual(33)
   expect(q.status).toBe('? question for you for 5m')
 })
 

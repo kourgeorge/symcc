@@ -225,10 +225,12 @@ const STATE_FORMS: readonly { form: TotalForm; tries: boolean }[] = [
  * its try tag right after the time ("▶ 1h40m (3)", tryTag), or right after the step icon with no time ("⧗ (3)"). The
  * doing rows' cells share one width so their tags line up; every state is padded to `width`. The first form whose
  * `width` passes `fits` is used: with the time, then without it, then without the try too (narrow rows).
+ * `withTries` false leaves every try tag out (the board's task lists, T-628: only the band and the task page show it).
  */
-export function rowStates<T extends Parameters<typeof statusCell>[0] & Pick<SymccTask, 'id' | 'attempts'>>(tasks: T[], nowMs: number, since: (id: string) => number | string | undefined, fits: (width: number) => boolean): { states: Map<string, RowState>; width: number } {
+export function rowStates<T extends Parameters<typeof statusCell>[0] & Pick<SymccTask, 'id' | 'attempts'>>(tasks: T[], nowMs: number, since: (id: string) => number | string | undefined, fits: (width: number) => boolean, withTries = true): { states: Map<string, RowState>; width: number } {
   let out = { states: new Map<string, RowState>(), width: 0 }
-  for (const { form, tries } of STATE_FORMS) {
+  const forms = withTries ? STATE_FORMS : STATE_FORMS.filter(f => f.form === 'total' || !f.tries).map(f => ({ ...f, tries: false }))
+  for (const { form, tries } of forms) {
     const cells = new Map(tasks.map(x => [x.id, rowCell(x, nowMs, since(x.id), form)]))
     const tags = new Map(tasks.map(x => [x.id, tries ? tryTag(x) : '']))
     const doing = tasks.filter(x => x.status === 'doing')

@@ -1,6 +1,6 @@
 // The board panel's Tasks view: the list of tasks by section.
 import type { SymccTask } from '../../../types'
-import { statusMark, archivedNote, archivedOf, localOffset, panelSections, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, groupLabel, ALL_CLEAR, rowStates, stateText, rowMark, TITLE_ROOM, bannerRule, fitRow, rowExtra, listKeys, searchTasks, SEARCH_WORDS, searchLine, searchBoxHint, tryTone, questionsLabel, type OwnerQuestion, ownersTurn, shownStatus } from '../../board'
+import { statusMark, archivedNote, archivedOf, localOffset, panelSections, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, groupLabel, ALL_CLEAR, rowStates, stateText, rowMark, TITLE_ROOM, bannerRule, fitRow, rowExtra, listKeys, searchTasks, SEARCH_WORDS, searchLine, searchBoxHint, questionsLabel, type OwnerQuestion, ownersTurn, shownStatus } from '../../board'
 import { openDays, S } from '../../app/state'
 import { type $, panelValues } from '../panel'
 import type { PaneParts } from './parts'
@@ -88,8 +88,8 @@ export function listPage($: $, pane: PaneParts) {
   const since = (id: string) => v.working.find(w => w.task === id)?.since
   const idWidth = Math.max(4, ...shown.map(x => x.id.length))
   // a doing task: the total work time of all tries, "1h40m", after its step's icon in a check step (rowMark): "⧗ 9m",
-  // then its try from try 2 on: "⧗ 9m (3)"; narrow, the time is left out, then the try (see rowStates)
-  const { states, width: cellWidth } = rowStates(shown, nowMs, since, w => w <= width - (4 + idWidth + 3 + 2) - TITLE_ROOM)
+  // with no try mark (T-628: the band and the task page show it); narrow, the time is left out (see rowStates)
+  const { states, width: cellWidth } = rowStates(shown, nowMs, since, w => w <= width - (4 + idWidth + 3 + 2) - TITLE_ROOM, false)
   // the list's own colors: failed red, review and waiting yellow, doing blue, done green
   const tone: Record<string, string> = { backlog: 'inactive', review: 'warning', waiting: 'warning', failed: 'error', doing: 'ide', paused: 'permission', todo: 'text', done: 'success', dropped: 'inactive' }
   const pressDay = (day: string) => (day === 'backlog' ? toggleBacklog : day === 'backlog-more' ? showAllBacklog : day === 'done' ? toggleDone : day === 'dropped' ? toggleDropped : toggleDay(day))
@@ -170,14 +170,7 @@ export function listPage($: $, pane: PaneParts) {
               {x.id.padEnd(idWidth)}
             </Text>
             {/* an approved task whose approve runs is shown as running (shownStatus): the doing tone, not bold */}
-            {/* a later try ("(2)") is dim, from try 3 on in the warning colour (see tryTone) */}
-            {state.tag
-              ? [
-                  <Text key="state" color={C(tone[shownStatus(x, nowMs)]!)}>{` ${rowMark(x, nowMs)} ${state.front}`}</Text>,
-                  <Text key="try" color={C(tryTone(x))}>{state.tag}</Text>,
-                  <Text key="pad" color={C(tone[shownStatus(x, nowMs)]!)}>{`${state.back}  `}</Text>,
-                ]
-              : <Text color={C(tone[shownStatus(x, nowMs)]!)}>{` ${rowMark(x, nowMs)} ${stateText(state)}  `}</Text>}
+            <Text color={C(tone[shownStatus(x, nowMs)]!)}>{` ${rowMark(x, nowMs)} ${stateText(state)}  `}</Text>
             <Text bold={ownersTurn(x, nowMs)} color={C(closed ? 'inactive' : 'text')}>
               {fit.title}
             </Text>
