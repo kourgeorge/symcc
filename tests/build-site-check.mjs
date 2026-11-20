@@ -1,10 +1,10 @@
 // Used by tests/build-site.sh (T-593): checks a built site folder.
-//   bun tests/build-site-check.mjs <built folder> <workflow file>
+//   bun tests/build-site-check.mjs <built folder> <workflow file> [<repo folder, for GitHub links>]
 // Prints one "FAIL: ..." line per problem and exits 1 if there were any.
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
 
-const [out, workflow] = process.argv.slice(2)
+const [out, workflow, root] = process.argv.slice(2)
 const fails = []
 const bad = m => fails.push(m)
 
@@ -39,6 +39,53 @@ for (const file of html) {
   }
 }
 if (checked < 50) bad(`only ${checked} internal links checked; expected many more`)
+
+// (T-601) llms.txt: starts with "# symcc", lists every built page (but the two index pages) with a link to
+// its .md copy that exists in the build; each .md copy links only to files in the build or in the repo on GitHub.
+const SITE = 'https://kourgeorge.github.io/symcc/'
+const GITHUB = /^https:\/\/github\.com\/kourgeorge\/symcc\/(blob|tree)\/main\/([^#?]+)/
+const llmsFile = join(out, 'llms.txt')
+const pages = html.map(f => relative(out, f)).filter(p => p !== 'index.html' && p !== 'research/index.html')
+if (!existsSync(llmsFile)) bad('missing llms.txt')
+else {
+  const llms = readFileSync(llmsFile, 'utf8')
+  if (!llms.startsWith('# symcc\n')) bad('llms.txt does not start with "# symcc"')
+  if (!/^> \S/m.test(llms)) bad('llms.txt has no "> " summary')
+  if (/swarm/i.test(llms.split('## Docs')[0])) bad('llms.txt calls symcc a swarm')
+  for (const s of ['## Docs', '## Research notes']) if (!llms.includes(`\n${s}\n`)) bad(`llms.txt has no ${s} section`)
+  const listed = [...llms.matchAll(/^- \[[^\]]+\]\(([^)]+)\)(: .+)?$/gm)]
+  for (const m of listed) {
+    if (!m[1].startsWith(SITE) || !m[1].endsWith('.md')) { bad(`llms.txt: link is not a .md page on the site: ${m[1]}`); continue }
+    if (!existsSync(join(out, m[1].slice(SITE.length)))) bad(`llms.txt: link to a missing file: ${m[1]}`)
+    if (!m[2]) bad(`llms.txt: no summary for ${m[1]}`)
+  }
+  const links = new Set(listed.map(m => m[1].slice(SITE.length)))
+  for (const p of pages) if (!links.has(p.replace(/\.html$/, '.md'))) bad(`llms.txt does not list ${p}`)
+}
+let mdChecked = 0
+for (const p of pages) {
+  const file = join(out, p.replace(/\.html$/, '.md'))
+  if (!existsSync(file)) { bad(`missing .md copy of ${p}`); continue }
+  // links outside code blocks and inline code
+  const text = readFileSync(file, 'utf8').replace(/^(\s*)(`{3,}|~{3,})[\s\S]*?^\s*\2\s*$/gm, '').replace(/`+[^`\n]*`+/g, '')
+  const found = [...text.matchAll(/!?\[[^\]]*\]\(([^)\s]+)/g), ...text.matchAll(/\b(?:href|src)="([^"]*)"/g)].map(m => m[1])
+  for (const link of found) {
+    const gh = GITHUB.exec(link)
+    if (gh) {
+      mdChecked++
+      if (!root) continue
+      if (!existsSync(join(root, decodeURIComponent(gh[2])))) bad(`${p}.md: GitHub link to a file not in the repo: ${link}`)
+      continue
+    }
+    if (/^[a-z][a-z0-9+.-]*:/i.test(link) || link.startsWith('//') || link.startsWith('#')) continue
+    mdChecked++
+    const path = link.split('#')[0]
+    const target = join(dirname(file), decodeURIComponent(path))
+    if (!existsSync(target) || statSync(target).isDirectory()) bad(`${relative(out, file)}: link to a file not on the site: ${link}`)
+    else if (target.endsWith('.html')) bad(`${relative(out, file)}: links to the HTML page, not its .md copy: ${link}`)
+  }
+}
+if (mdChecked < 50) bad(`only ${mdChecked} links checked in the .md copies; expected many more`)
 
 // The workflow file: valid YAML with the Pages permissions and steps.
 const wf = Bun.YAML.parse(readFileSync(workflow, 'utf8'))

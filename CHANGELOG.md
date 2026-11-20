@@ -2,6 +2,19 @@
 
 When a set of user-facing changes is ready to release, bump the version in both `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` and add an entry here.
 
+## 0.5.10 (2026-11-20)
+
+### Added
+- A question the lead asks with the chat pop-up also goes on the board, and whichever you answer first closes the other. A pop-up whose header is a task id (T-5) is tied to that task's own board question instead of a new Q-n; picking "the rest on the board" leaves the board question open.
+- Task pages show where the task is: the badge names the step with its icon and time ("⌕ checker · 5m"), and a "Stage" line shows worker → prep → checker → line → test → merge with the current step marked.
+- A website: https://kourgeorge.github.io/symcc/ (a landing page plus the overview, guide, reference and research notes), built by `scripts/build-site.ts` and published by `.github/workflows/pages.yml` on every push to main; `/llms.txt` and a plain `.md` copy of every page for AI tools. The build refuses a dangerous output folder.
+- A shipped example scout, `big-files`: finds source files grown too large and proposes how to split them.
+
+### Changed
+- Rows show one icon for each step instead of the word: ⋯ in line, ✎ prep, ⧗ test, ⌕ checker, ⇢ merge (▶ stays for a working worker).
+- Stash to backlog is now z and keep as a note is v on every board, so k always moves up.
+- The research notes no longer call symcc a swarm.
+
 ## 0.5.9 (2026-11-20)
 
 ### Added

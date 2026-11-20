@@ -216,60 +216,33 @@ happens, never the words in its hand-back:
 - otherwise it is finished, and its work goes through these steps (an investigation goes to
   review with its answer instead):
 
-**The merge line.** Every way into a merge (a worker's hand-back, your approve, finished work
-whose files are clear again, a checker's OK, a reload) joins one line for the whole project,
-shared by all sessions and target branches, oldest first. Only the task at the front of the line
-has its turn, and does it all in one go:
+### Why finished tasks take turns
 
-    hand-back / approve / "your files are clear" / reload
-      → (with the checker on: prep, then the checker, outside the line)
-      → the merge line (whole project, all sessions, oldest first)
+Before, several tasks could merge into a moving branch at the same time. Each one had to catch up,
+test again and sometimes clash with the others (one task once needed 7 tries). Now every finished
+task joins **one line** for the whole project (all sessions, all target branches, oldest first),
+and only the task at the front has its turn. The branch it merges into moves only at the front of
+the line, so the code a task was tested with is exactly the code that merges.
+
+### The way to the merge
+
+    hand-back (also: approve, "your files are clear", reload)
+      → prep: commit, leave out secret-looking files, scope check
+      → checker (only if the setting is on; outside the line, side by side)
+      → in line (n)
       → at its turn, in one go:
-          catch up with the branch it merges into
+          catch up with the target branch
           → tests (skipped if this exact code already passed)
-          → merge
+          → review (review mode, or the task needs review) or merge
+          → tell
 
-So the branch it merges into only moves at the front of the line: nobody else's merge can slip
-in between a task's tests and its merge. If the branch still moved during a turn (you committed
-to it by hand meanwhile), nothing is merged and that turn fails as one normal try ("main moved
-during the merge (someone committed to it by hand), so nothing was merged"): a worker's task gets
-a new try as usual, an approve stays in review (approve it again).
+    Any failure on the way (checker problems, a clash, failing tests, out of time,
+    ran over, the branch moved by hand) = one normal failed try (uses an auto_retry).
+    Your own files in the way = the task waits, then merges by itself.
 
-**What a task shows on its way to the merge.** Every board view (the board list, the band above
-the prompt, the VS Code list and task page, the OpenCode board and the lead's text board) shows
-the same small set of words and notes. While it waits for its turn its note says "in line (n)",
-n being its place (the task merging now is 1), and its row shows `⋯` in place of `▶`. During its
-turn the row shows the step's icon in place of `▶`, then the time: `⌕ 5m`, not `▶ checker 5m`.
-The step's word stays in the note and on the task page; the lead's text board shows both ("⧗
-doing test · title"). Legend: `▶` working · `⋯` in line · `✎` prep · `⧗` test · `⌕` checker ·
-`⇢` merge.
+The steps, in this order:
 
-**Where a task is, on its page.** A doing task's page (terminal, VS Code and OpenCode) names its
-step in its badge and its Status line, with the icon and the total work time: `▶ worker · 15m`,
-`✎ prep`, `⌕ checker · 5m`, `⋯ in line (2)`, `⧗ test · 9m`, `⇢ merge`. Other tasks show their
-status as before (`○ to do`, `◆ ready for review`, ...). Under Status, a **Stage** line shows the
-whole way to the merge, the steps done marked ✓, the current one bold with ●, the later ones
-dim: `worker ✓ → prep ✓ → ● checker → line → test → merge`. `checker` is there only when the
-checker setting is on (or a checker ran on this try); `review` comes after `test` when the task
-will wait for your review (any mode but auto, or the task's "needs review"). A task in review
-shows every step before review done (`… → test ✓ → ● review → merge`), a done task every step
-done. Investigations have no Stage line (nothing is merged). VS Code draws it as a small stepper
-under the badge.
-
-- `✎ prep`: symcc's own step before the line (steps 1 and 2: commit, leave out secret-looking
-  files, scope check). Its note says "preparing to merge: committing and checking files". No
-  agent runs in this step.
-- `⧗ test`: the test commands run. Its note says "running the tests".
-- `⌕ checker`: a checker agent is trying to break the change (only with the `checker` setting
-  on; with it off no task ever shows this step). It comes right after `prep`, before the task
-  joins the merge line. Its note says "a checker agent is trying to break it before it merges".
-- `⇢ merge`: the task is brought up to date with the target branch and merged. Its note says
-  "merging".
-
-Once the turn is over, the note says how it went: merged (the task is done), failed with the
-reason (tests failed, a clash, out of time, ...), waiting for your files, or in review.
-
-1. **Commit.** symcc commits what the worker changed in its private copy. (Workers are
+1. **Prep: commit.** symcc commits what the worker changed in its private copy. (Workers are
    not allowed to commit, push or merge themselves.)
    **Secret-looking files.** Files whose names look like secrets (`.env`, `.env.*`, `*.pem`,
    `*.key`, `id_rsa` and other SSH private keys) are left out of the commit and the merge, even if
@@ -282,7 +255,7 @@ reason (tests failed, a clash, out of time, ...), waiting for your files, or in 
    commit them itself.
    Deleting such a file merges normally. If a task changed only such files, nothing is merged and
    the task waits for you with a question: try again without them, or drop it.
-2. **Scope check.** Every task lists the files it may change (its scope). If the worker changed
+2. **Prep: scope check.** Every task lists the files it may change (its scope). If the worker changed
    anything else, nothing is merged (the note says which files; add them to `files` with
    `change`, or split the task). When a worker tries to edit (Edit, Write or
    NotebookEdit) a file outside its list, symcc refuses that edit, records the path, and tells
@@ -308,20 +281,28 @@ reason (tests failed, a clash, out of time, ...), waiting for your files, or in 
    only reads can't be told apart reliably from one that writes, and the worker has its own copy of
    every file. This is a best effort: a path put together while the command runs (for example from a
    variable) is not seen. Paths outside the project, such as `/tmp`, are not checked, and the lead is never refused.
-3. **Update on the latest branch.** If your branch has moved on since the worker started (for example,
-   another task was merged), symcc brings those changes into the task's copy first.
-   If they clash, that try failed like failing tests do: it uses one of the `auto_retries`, and the
-   next worker is told to merge your branch in first and sort out the clash. When the retries are used
-   up, the task is marked `failed` with the clash as its reason.
-4. **Test gate.** symcc runs your test commands on the combined code. If they fail,
-   automatic retries kick in: the task goes back to `todo` and the next worker is shown the end of the failing output and
-   told to fix it (2 times by itself; then it is marked `failed` for the lead).
-   **Checker (optional).** With the `checker` setting on, a fresh checker reads the task and
-   its changes and tries to break them before the task joins the merge line, so the tests here
-   run only after its OK, and only once (see [The checker](#the-checker)).
-5. **Approval (optional).** In review mode (see below), the task stops here as
-   `review` ("ready for review") and nothing is merged until you say so.
-6. **Merge.** Only now does your branch move forward. If you have that branch checked
+3. **Checker (optional).** With the `checker` setting on, a fresh checker reads the task and its
+   changes and tries to break them. It runs outside the line, side by side with other checkers, and
+   runs no project tests. If it finds problems, they go to a new worker as a failed try and the task
+   never joins the line, so no tests run for that try (see [The checker](#the-checker)).
+4. **In line.** The task joins the merge line and waits for its turn. The line is kept in
+   `.symcc/merge-line.json`; it survives a reload (a task that was in line just joins again), and
+   a stale entry is cleared by itself, so you never need to edit it. Merges go one at a time, so when
+   several tasks finish together the last one waits longer: the fifth of five tasks with 10-minute
+   tests waits about 40 minutes before its own turn.
+5. **Catch up.** At its turn, if the target branch has moved since the worker started (another
+   task was merged), symcc brings those changes into the task's copy first. If they clash, that
+   try failed like failing tests do: it uses one of the `auto_retries`, and the next worker is told
+   to merge your branch in first and sort out the clash. When the retries are used up, the task is
+   marked `failed` with the clash as its reason.
+6. **Tests.** symcc runs your test commands on the combined code, unless this exact code already
+   passed them. If they fail, the task goes back to `todo` and the next worker is shown the end of
+   the failing output and told to fix it (2 times by itself; then it is marked `failed` for the
+   lead). See "Tests run once per try" below.
+7. **Review (optional).** In review mode (see below), or when the task has "needs review", the
+   task stops here as `review` ("ready for review") with its tests already passed, and nothing is
+   merged until you approve. Your approve joins the line again and merges.
+8. **Merge.** Only now does your branch move forward. If you have that branch checked
    out, your files are updated too, but your own work is never overwritten: uncommitted
    changes (staged or not) in files the task doesn't change are simply kept as they are.
    Only your uncommitted changes, untracked or git-ignored files in files the task changes
@@ -331,47 +312,86 @@ reason (tests failed, a clash, out of time, ...), waiting for your files, or in 
    two minutes) merges it by itself (it is brought up to date, and tested again only if
    the branch moved meanwhile). "retry T-3" (or approve, for a task in review) does that
    merge at once. If the branch moved and the task now clashes or fails its tests, it gets
-   a new try as usual.
-   **One merge line.** Steps 3, 4 and 6 are one turn in the merge line (see "The merge line"
-   above): only one task merges at a time, so the next task catches up with that merge before
-   its own tests. Merges go one at a time, so when several tasks finish together the last one
-   waits longer: the fifth of five tasks with 10-minute tests waits about 40 minutes before its
-   own turn. The line is kept in the file `.symcc/merge-line.json`; it survives a reload (a task
-   that was in line just joins again), and a stale entry (left by a session that died, or older
-   than twice `test_minutes`) is cleared by itself, so you never need to edit or delete it by hand.
-   **Tests that run out of time.** A test command stopped by its time limit (`test_minutes`,
-   10 minutes by default) fails like a failing test: a new worker try starts with the output
-   (it counts as one of the `auto_retries`), and the task's note says the tests ran out of time
-   after so many minutes and to raise `test_minutes` if the tests are just slow. When no
-   automatic retries are left, the task fails as usual. An approve whose tests run out of time
-   is handled like an approve whose tests fail.
-   **Time limit.** Each test command may run up to `test_minutes` (10 minutes by default; a
-   project with a slow test suite can raise it, e.g. "set test_minutes to 20"). The whole
-   merge turn (catch up, tests, merge) has one time limit: `test_minutes` for each test
-   command (at least one), plus 5 minutes for git and the board: with the default, 15
-   minutes with one test command, 35 with three. A merge line entry is taken as stale after
-   twice `test_minutes`. The limit counts only from the start of the task's own turn: waiting
-   in the merge line behind other tasks doesn't count (each of those has its own limit, so the
-   line keeps moving).
-   A turn still running past the limit is taken as stuck and given up, as one normal failed
-   try: like failing tests it uses one of the `auto_retries`, so the task goes back to `todo`
-   for a new try (its folder and branch are kept), and once they are used up it is marked
-   `failed` ("ran over 15 min and was stopped; nothing was merged"); the lead is told. A merge
-   that waited for your files is handled the same way. An approve that runs over is not a
-   try: the task stays in review with a note (approve it again). If a given-up step still ends
-   later and its work did reach the branch after all, the task is marked done with that
-   commit (when nothing else happened to it meanwhile), or the lead is told it landed.
-7. **Tell.** The lead gets one line: merged, or why not (see "What reaches the lead" below). On a Mac you also hear
+   a new try as usual. If the branch still moved during the turn (you committed to it by hand
+   meanwhile), nothing is merged and the turn fails as one normal try; an approve stays in
+   review (approve it again).
+9. **Tell.** The lead gets one line: merged, or why not (see "What reaches the lead" below). On a Mac you also hear
    "symcc: T-3 done" (and "symcc: T-5 needs you" when a task waits for your answer), starting with
    the project's name so you know which project spoke.
 
-> **Set a test command.** With no test command, step 4 is skipped and any change
+### When something goes wrong
+
+Every failure on the way is one normal failed try. A worker's task uses one of the `auto_retries`
+and goes back to `todo` (its folder and branch are kept); when they are used up it is marked
+`failed` and the lead is told.
+
+| What happened | What you see | What the next try gets |
+|---|---|---|
+| Checker found problems | A new try; no tests ran | The checker's report |
+| Clash while catching up | The clash as the note | A note to merge your branch in first and sort it out |
+| Tests failed | The failing tests in the note | The end of the failing output |
+| Tests ran out of time | A note that the tests ran out of time after so many minutes, to raise `test_minutes` if they are just slow | The output so far |
+| The turn ran over its limit | "ran over 15 min and was stopped; nothing was merged" | A fresh try on the kept folder |
+| The branch moved by hand during the turn | "main moved during the merge (someone committed to it by hand), so nothing was merged" | A fresh try |
+| Your files are in the way of the merge | The task waits (`waiting`) with the file names | Nothing: it merges by itself once they are clear |
+
+An approve that fails (failing tests, out of time, ran over, branch moved) is not a try: the task
+stays in review with a note, and you approve it again. If a given-up step still ends later and its
+work did reach the branch after all, the task is marked done with that commit (when nothing else
+happened to it meanwhile), or the lead is told it landed.
+
+### Time limits
+
+| Limit | Value |
+|---|---|
+| One test command | `test_minutes` (10 by default; raise it for a slow suite, e.g. "set test_minutes to 20") |
+| The whole turn (catch up, tests, merge) | `test_minutes` for each test command (at least one) plus 5 minutes for git and the board: 15 minutes with one command by default, 35 with three |
+| Waiting in line | Does not count: the limit starts at the task's own turn, so each task has its own limit and the line keeps moving |
+| A stale line entry (left by a session that died) | Older than twice `test_minutes`: cleared by itself |
+
+### What a task shows on its way to the merge
+
+Every board view (the board list, the band above
+the prompt, the VS Code list and task page, the OpenCode board and the lead's text board) shows
+the same small set of words and notes. While it waits for its turn its note says "in line (n)",
+n being its place (the task merging now is 1), and its row shows `⋯` in place of `▶`. During its
+turn the row shows the step's icon in place of `▶`, then the time: `⌕ 5m`, not `▶ checker 5m`.
+The step's word stays in the note and on the task page; the lead's text board shows both ("⧗
+doing test · title"). Legend: `▶` working · `⋯` in line · `✎` prep · `⧗` test · `⌕` checker ·
+`⇢` merge.
+
+A doing task's page (terminal, VS Code and OpenCode) names its
+step in its badge and its Status line, with the icon and the total work time: `▶ worker · 15m`,
+`✎ prep`, `⌕ checker · 5m`, `⋯ in line (2)`, `⧗ test · 9m`, `⇢ merge`. Other tasks show their
+status as before (`○ to do`, `◆ ready for review`, ...). Under Status, a **Stage** line shows the
+whole way to the merge, the steps done marked ✓, the current one bold with ●, the later ones
+dim: `worker ✓ → prep ✓ → ● checker → line → test → merge`. `checker` is there only when the
+checker setting is on (or a checker ran on this try); `review` comes after `test` when the task
+will wait for your review (any mode but auto, or the task's "needs review"). A task in review
+shows every step before review done (`… → test ✓ → ● review → merge`), a done task every step
+done. Investigations have no Stage line (nothing is merged). VS Code draws it as a small stepper
+under the badge.
+
+- `✎ prep`: symcc's own step before the line (steps 1 and 2: commit, leave out secret-looking
+  files, scope check). Its note says "preparing to merge: committing and checking files". No
+  agent runs in this step.
+- `⌕ checker`: a checker agent is trying to break the change (only with the `checker` setting
+  on; with it off no task ever shows this step). It comes right after `prep`, before the task
+  joins the merge line. Its note says "a checker agent is trying to break it before it merges".
+- `⧗ test`: the test commands run. Its note says "running the tests".
+- `⇢ merge`: the task is brought up to date with the target branch and merged. Its note says
+  "merging".
+
+Once the turn is over, the note says how it went: merged (the task is done), failed with the
+reason (tests failed, a clash, out of time, ...), waiting for your files, or in review.
+
+> **Set a test command.** With no test command, step 6 is skipped and any change
 > that passes the scope check is merged. Say "set the test command to …" to the lead.
 
 ### Tests run once per try
 
 The full test commands run once per try, by symcc, during the task's turn in the merge line
-(step 4), and not even then when the same code, with the same commands, already passed (see
+(step 6), and not even then when the same code, with the same commands, already passed (see
 `passed-trees.json` in the board folder). As only the task at the front of the line merges, a
 try never needs a second test run because another merge came first.
 The worker is told the commands, but while it works it runs only the tests for the
@@ -1471,7 +1491,7 @@ Old task branches keep their old names (`symcc/T-1`); they still work.
 | [`hooks/name.ts`](../hooks/name.ts) | Everything made from the plugin's name |
 | [`types/index.d.ts`](../types/index.d.ts) | The shapes of a task, a try, a scout |
 | [`tests/`](../tests/) | The tests: one file per area (the board logic, the panel, merging, scouts, stats, and so on) |
-| [`hosts/node/`](../hosts/node/) | symcc with no Claude Code: a `Host` made of plain Node/Bun calls (`host.ts`), agents as `claude -p` processes (`runner.ts`), and a tiny command line (`main.ts`). See "Running symcc without Claude Code" below |
+| [`hosts/node/`](../hosts/node/) | symcc with no Claude Code: a `Host` made of plain Node/Bun calls (`host.ts`), the running of agents as `claude -p` processes (shared code in [`hooks/process/`](../hooks/process/): `agents.ts`, `claude-runner.ts`, `record.ts`, `system.ts`; the Node version of the system calls is `system.ts` here), and a tiny command line (`main.ts`). See "Running symcc without Claude Code" below |
 | [`hooks/opencode/`](../hooks/opencode/), [`opencode/`](../opencode/) | symcc in OpenCode 2.x: the plugin's setup and which copy runs the board (`plugin.ts`), its `Host` (`host.ts`), the edit guard (`guard.ts`), workers and scouts as OpenCode sessions (`agents.ts`), the lead (`lead.ts`), symcc's tools and slash commands (`tools.ts`), the view file for the TUI (`view.ts`), what the TUI draws (`board-view.ts`) and how (`tui.ts`), and the plugin entries OpenCode loads (`opencode/server.ts`, `opencode/tui.ts`). See [Using symcc in OpenCode](#using-symcc-in-opencode) |
 
 **Where to add a new feature:** pure logic goes in `hooks/core/`; what symcc does goes in `hooks/app/`; Claude Code wiring goes in `hooks/claude/`; panel pages go in `hooks/claude/ui/`. `hooks/app/` and `hooks/core/` must not import `claude-code` or `node:` modules, or name Claude Code's tools: `sh tests/host-free.sh` (run by `sh scripts/typecheck.sh`) checks this.
@@ -1504,7 +1524,7 @@ bun hosts/node/main.ts --root <project> board
 bun hosts/node/main.ts --root <project> cmd symcc-mode review    # any slash command
 ```
 
-What the lead would be told is printed after each answer, under `[lead]`. A worker's file list is handed to `claude -p` as its own permission rules (`--permission-mode dontAsk`, with `Edit(...)` and `Write(...)` rules for the task's files, and git writes denied). There is no symcc hook guard there, so those rules are the only check on git, and they are stricter than in Claude Code: a worker or checker may not change git at all, not even in a scratch repository under `.scratch/` or `/tmp`. Claude Code's rules match the start of a command, not the folder it acts on, so every git call that starts with an option (`git -C <dir> ...`, `git --git-dir=...`, `git -c ...`) is refused, as are `commit`, `merge`, `init`, `reset`, `checkout`, `branch`, `push`, `stash`, `add`, `config` and the other writing subcommands, and `env git`, `xargs git` and the like. Reading with git (`status`, `diff`, `log`, `show`, `blame`, `grep`) still works. A command that hides git inside another program (`sh -c "git commit"`, a script) is not caught by these rules. The scope check at merge time still stands behind it. A `claude -p` worker has no `ask_owner` tool, and it can't be sent messages while it runs: to stop it, its process is ended.
+What the lead would be told is printed after each answer, under `[lead]`. A worker's file list is handed to `claude -p` as its own permission rules (`--permission-mode dontAsk`, with `Edit(...)` and `Write(...)` rules for the task's files, and git writes denied). There is no symcc hook guard there, so those rules are the only check on git, and they are stricter than in Claude Code: a worker or checker may not change git at all, not even in a scratch repository under `.scratch/` or `/tmp`. Claude Code's rules match the start of a command, not the folder it acts on, so every git call that starts with an option (`git -C <dir> ...`, `git --git-dir=...`, `git -c ...`) is refused, as are `commit`, `merge`, `init`, `reset`, `checkout`, `branch`, `push`, `stash`, `add`, `config` and the other writing subcommands, and `env git`, `xargs git` and the like. Reading with git (`status`, `diff`, `log`, `show`, `blame`, `grep`) still works. A command that hides git inside another program (`sh -c "git commit"`, a script) is not caught by these rules. The scope check at merge time still stands behind it. A `claude -p` worker has no `ask_owner` tool, and it can't be sent messages while it runs: to stop it, its process is ended. Every running worker, scout or checker process is written to `.symcc/processes.json` (its pid, task, folder and start time) and removed when it ends; on a fresh start symcc stops the ones an earlier run left alive and clears the rest.
 
 ---
 
