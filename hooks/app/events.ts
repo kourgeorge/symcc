@@ -1,6 +1,7 @@
 // Task events (T-616): every board write (see writeBoard in store.ts) compares each task before and after and emits
-// what changed (phaseEvents in core/events.ts) to the listeners here. The first listener keeps the activity log,
-// .<name>/events.jsonl; the history's stage lines are added to the board by writeBoard itself (withStageHistory).
+// what changed (phaseEvents in core/events.ts). writeBoard itself keeps the activity log, .<name>/events.jsonl
+// (logTaskEvents, under the board lock), and adds the history's stage lines (withStageHistory); the listeners here
+// get the events only after the board lock is let go, so a listener may write the board itself.
 import type { TaskEvent } from '../core/events'
 import type { Host } from '../host'
 import { S } from './state'
@@ -32,9 +33,9 @@ export async function logEvents(events: readonly TaskEvent[], host: Host): Promi
   }
 }
 
-const listeners = new Set<TaskEventListener>([logEvents])
+const listeners = new Set<TaskEventListener>()
 /** Listeners that failed and were already reported (each one is reported once). */
-const failed = new WeakSet<TaskEventListener>()
+const failed = new WeakSet<object>()
 
 /** Calls `fn` with the events of every board write from now on; answers a function that stops it. */
 export function onTaskEvent(fn: TaskEventListener): () => void {
@@ -42,9 +43,27 @@ export function onTaskEvent(fn: TaskEventListener): () => void {
   return () => void listeners.delete(fn)
 }
 
+/** Reports a failed listener (or log write) `fn` once. Never throws. */
+function reportOnce(host: Host, fn: object, what: string, e: unknown) {
+  if (failed.has(fn)) return
+  failed.add(fn)
+  try {
+    host.ui.toast(S.N.toast(`${what}: ${(e as Error)?.message ?? String(e)}`))
+  } catch {
+    // nothing more to do
+  }
+}
+
+/** Appends `events` to the activity log (logEvents); a failure is reported once and never stops the board write. */
+export async function logTaskEvents(host: Host, events: readonly TaskEvent[]): Promise<void> {
+  if (!events.length) return
+  await logEvents(events, host).catch(e => reportOnce(host, logEvents, 'the activity log was not written', e))
+}
+
 /**
  * Hands `events` to every listener, one after the other. A listener that throws (or whose promise fails) never
- * stops the others or the board write; the owner is told once per listener. Never throws.
+ * stops the others or the board write; the owner is told once per listener. Never throws. Called after the board
+ * lock is let go (never inside `locked`), so a listener that writes the board (change) doesn't wait on itself.
  */
 export async function emitTaskEvents(host: Host, events: readonly TaskEvent[]): Promise<void> {
   if (!events.length) return
@@ -52,13 +71,7 @@ export async function emitTaskEvents(host: Host, events: readonly TaskEvent[]): 
     try {
       await fn(events, host)
     } catch (e) {
-      if (failed.has(fn)) continue
-      failed.add(fn)
-      try {
-        host.ui.toast(S.N.toast(`a task event listener failed: ${(e as Error)?.message ?? String(e)}`))
-      } catch {
-        // nothing more to do
-      }
+      reportOnce(host, fn, 'a task event listener failed', e)
     }
   }
 }

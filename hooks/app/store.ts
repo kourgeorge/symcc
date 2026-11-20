@@ -4,7 +4,7 @@ import { publish } from './lead'
 import { tellLead } from './tell'
 import { S } from './state'
 import { boardEvents, withStageHistory } from '../core/events'
-import { emitTaskEvents } from './events'
+import { emitTaskEvents, logTaskEvents, type TaskEvent } from './events'
 import type { Host } from '../host'
 
 // ---------------- the board on disk ----------------
@@ -322,17 +322,18 @@ export async function saveBoard(host: Host, b: Board) {
 
 /**
  * Saves board `after` over `before` (read under the board lock, which the caller holds): the task events of the write
- * (boardEvents) put their stage lines in the tasks' history (withStageHistory), the board is saved, and then the
- * events go to their listeners (emitTaskEvents, which never throws). Answers the board as saved. Every board write
- * goes through here (change, the archive).
+ * (boardEvents) put their stage lines in the tasks' history (withStageHistory), the board is saved and the events are
+ * added to the activity log (logTaskEvents, never throws). Answers the board as saved and the events; the caller hands
+ * the events to the listeners (emitTaskEvents) only after it lets go of the lock, so a listener may write the board.
+ * Every board write goes through here (change, the archive).
  */
-export async function writeBoard(host: Host, before: Board, after: Board): Promise<Board> {
+export async function writeBoard(host: Host, before: Board, after: Board): Promise<{ board: Board; events: TaskEvent[] }> {
   const nowMs = Date.now()
   const events = boardEvents(before, after, nowMs)
   const saved = withStageHistory(after, events)
   await saveBoard(host, saved)
-  await emitTaskEvents(host, events)
-  return saved
+  await logTaskEvents(host, events)
+  return { board: saved, events }
 }
 
 /**
@@ -344,9 +345,11 @@ export function change<T>(host: Host, fn: (b: Board) => [Board, T] | Board): Pro
     const before = await load(host)
     const out = fn(before)
     const [next, value] = Array.isArray(out) ? out : [out, undefined as T]
-    const after = await writeBoard(host, before, next)
-    return [after, value] as const
-  }).then(async ([after, value]) => {
+    const { board: after, events } = await writeBoard(host, before, next)
+    return [after, value, events] as const
+  }).then(async ([after, value, events]) => {
+    // after the lock is let go (S.writing no longer waits on this write), so a listener may change the board itself
+    await emitTaskEvents(host, events)
     // a guard-only copy (guardStart, in a worker's folder) saves the board but never shows it: no panel, no status line
     if (S.guardOnly) return value
     await publish(host, after)

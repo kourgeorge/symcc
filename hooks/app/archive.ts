@@ -3,6 +3,7 @@ import { publish } from './lead'
 import { S } from './state'
 import type { Host } from '../host'
 import { load, locked, now, path, safeWrite, writeBoard } from './store'
+import { emitTaskEvents } from './events'
 import { tellLead } from './tell'
 
 // ---------------- old tasks: archive.json ----------------
@@ -76,10 +77,11 @@ export async function archiveOld(host: Host, nowMs = Date.now(), force = false):
       host.ui.toast(S.N.toast(`old tasks were not archived: ${(e as Error).message}`))
       return null
     }
-    const after = await writeBoard(host, b, removeArchived(b, old))
-    return [after, old.map(t => t.id)] as const
+    const { board: after, events } = await writeBoard(host, b, removeArchived(b, old))
+    return [after, old.map(t => t.id), events] as const
   })
   if (!moved) return []
+  await emitTaskEvents(host, moved[2])
   await publish(host, moved[0])
   return [...moved[1]]
 }
@@ -103,14 +105,15 @@ export async function bringBackArchived(host: Host, id: string): Promise<string>
   const t = await findArchived(host, id)
   if (!t) throw new Error(`${normId(id)} is not on the board`)
   if (t.status !== 'dropped') throw new Error(archivedText(t.id))
-  const after = await locked(host, async () => {
+  const [after, events] = await locked(host, async () => {
     const b = await load(host)
-    if (find(b, t.id)) return b
+    if (find(b, t.id)) return [b, []] as const
     const y = await writeBoard(host, b, bringBack(b, t, now()))
     const r = await readArchiveFile(host)
     if (!r.broken) await saveArchive(host, { version: 1, tasks: r.archive.tasks.filter(x => x.id !== t.id) }).catch(() => undefined)
-    return y
+    return [y.board, y.events] as const
   })
+  await emitTaskEvents(host, events)
   await publish(host, after)
   return `${t.id} brought back from the archive and queued`
 }

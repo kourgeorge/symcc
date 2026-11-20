@@ -863,7 +863,9 @@ Code that wants to know (a host, a future feature) calls `onTaskEvent(fn)` from
 `hooks/app/events.ts`: `fn` gets the events of each save, and the call answers a function
 that stops listening. The events come from `phaseEvents` in `hooks/core/events.ts` (pure, the
 same on every host); `writeBoard` in `hooks/app/store.ts` is the one place every board save
-goes through. A listener that fails never stops the save; you are told once.
+goes through. A listener that fails never stops the save; you are told once. Listeners are
+called after the board lock is let go, so a listener may change the board itself (the
+activity log is written while the lock is still held).
 
 ## Scouts
 

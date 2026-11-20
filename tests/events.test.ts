@@ -10,6 +10,7 @@ import { addTask, emptyBoard, find } from '../hooks/board'
 import { S } from '../hooks/app/state'
 import { fakeHost, memoryFs, done } from './fake-host'
 import { test } from './reset'
+import { pause } from './fakes'
 
 const NOW = Date.parse('2026-11-20T12:00:00.000Z')
 const AT = new Date(NOW).toISOString()
@@ -90,4 +91,39 @@ test('a listener that throws never stops the board write; the owner is told once
   const log = files.get('/repo/.symcc/events.jsonl')!.trim().split('\n').map(l => JSON.parse(l) as TaskEvent)
   expect(log.map(e => `${e.kind} ${e.to}`)).toEqual(['state doing', 'stage worker', 'state review', 'stage null', 'wait review'])
   await emitTaskEvents(host, [])
+})
+
+test('a listener that writes the board itself (change) gets its own write done: listeners run after the board lock is let go', async () => {
+  const files = new Map<string, string>()
+  const { host } = fakeHost({
+    fs: memoryFs(files),
+    run: async ([cmd, ...a]) => {
+      const [x, y] = a.filter(v => !v.startsWith('-'))
+      if (cmd === 'ln') return files.has(y!) ? done({ exitCode: 1 }) : (files.set(y!, files.get(x!)!), done())
+      if (cmd === 'mv') return (files.set(y!, files.get(x!)!), files.delete(x!), done())
+      if (cmd === 'rm') for (const f of a.filter(v => !v.startsWith('-'))) files.delete(f)
+      return done()
+    },
+  })
+  S.root = '/repo'
+  S.writing = Promise.resolve()
+  await saveBoard(host, addTask(emptyBoard(), { origin: { why: 'a test' }, title: 'Do it', details: 'x', files: ['src/'] }, AT)[0])
+  let n = 0
+  const off = onTaskEvent(async () => {
+    if (n++ === 0) await change(host, b => ({ ...b, tasks: b.tasks.map(t => ({ ...t, note: 'seen' })) }))
+  })
+  try {
+    const hung = Symbol('hung')
+    const r = await Promise.race([
+      change(host, b => ({ ...b, tasks: b.tasks.map(t => ({ ...t, status: 'doing' as const, attempts: 1 })) })).then(() => 'done'),
+      pause(2000).then(() => hung),
+    ])
+    expect(r).toBe('done')
+    // and later writes still go through
+    await change(host, b => ({ ...b, tasks: b.tasks.map(t => ({ ...t, status: 'review' as const })) }))
+  } finally {
+    off()
+  }
+  const t = find(await load(host), 'T-1')!
+  expect([t.status, t.note]).toEqual(['review', 'seen'])
 })
