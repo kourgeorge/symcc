@@ -4,7 +4,7 @@
 // approve running in each step, a files-merge waiting in the queue, leftovers, more time asked, an answered investigation.
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { taskPhase, type TaskPhase, type PhaseTask, type CheckStep } from '../hooks/board'
+import { taskPhase, type TaskPhase, type PhaseTask, type CheckStep, rowMark, rowCell, shownStatus, approveRunning, needsYou, ownersTurn, waitsForYou, statusBadge, stepNowWord, taskStage, stageText, STATUS_BADGE } from '../hooks/board'
 
 const NOW = Date.parse('2026-11-20T12:00:00.000Z')
 const iso = (ms: number) => new Date(ms).toISOString()
@@ -84,5 +84,35 @@ test('T-610 taskPhase: the saved status never changes, and anything running wait
     if (p.stage && p.stage !== 'worker') expect(p.waitsFor).toBe(null)
     if (p.waitsFor === 'time') expect(p.stage).toBe('worker')
     if (p.place !== undefined) expect(p.stage).toBe('queue')
+  }
+})
+
+// T-611 (taskPhase 2/6): the helpers are thin wrappers over taskPhase, so the row (rowMark, rowCell), the band and
+// lists (shownStatus, needsYou) and the task page (statusBadge, stepNowWord, taskStage) give one answer.
+test("T-611: T-608's disagreement 1, a files-merge waiting in the queue, is in the queue on the row, the band and the page", () => {
+  const t = task('waiting', { ...endedRun, ...files, ...at('prep'), note: 'queue (3)' })
+  expect(rowMark(t, NOW)).toBe('⋯')
+  expect(shownStatus(t, NOW)).toBe('doing')
+  expect(needsYou(t, NOW)).toBe(false)
+  expect(waitsForYou(t, NOW)).toBe(false)
+  expect(rowCell(t, NOW)).toBe('19m')
+  expect(statusBadge(t, NOW)).toEqual({ text: '⋯ queue (3)', color: STATUS_BADGE.doing })
+  expect(stepNowWord(t, NOW)).toBe('⋯ queue')
+  expect(stageText(taskStage(t, NOW, { mode: 'review' })!)).toBe('worker ✓ → prep ✓ → queue ✓ → test ✓ → review ✓ → ● queue → merge')
+  // in auto mode it had no review step
+  expect(stageText(taskStage(t, NOW, { mode: 'auto' })!)).toBe('worker ✓ → prep ✓ → queue ✓ → test ✓ → ● queue → merge')
+})
+
+test("T-611: T-608's disagreement 2, a review task with a leftover queue note and no fresh step, waits for review on the row, the band and the page", () => {
+  for (const t of [task('review', { ...endedRun, note: 'queue (2)' }), task('review', { ...endedRun, ...at('prep', STALE), note: 'queue (2)' })]) {
+    expect(rowMark(t, NOW)).toBe('◆')
+    expect(shownStatus(t, NOW)).toBe('review')
+    expect(approveRunning(t, NOW)).toBe(false)
+    expect(needsYou(t, NOW)).toBe(true)
+    expect(ownersTurn(t, NOW)).toBe(true)
+    expect(rowCell(t, NOW)).toBe('review')
+    expect(statusBadge(t, NOW)).toEqual({ text: '◆ ready for review', color: STATUS_BADGE.review })
+    expect(stepNowWord(t, NOW)).toBe('')
+    expect(stageText(taskStage(t, NOW, { mode: 'review' })!)).toBe('worker ✓ → prep ✓ → queue ✓ → test ✓ → ● review → merge')
   }
 })

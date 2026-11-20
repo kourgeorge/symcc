@@ -14,6 +14,7 @@ import { fmtDuration, runMs, sumRuns } from './runs'
 import { ellipsis, num } from './text'
 import { whyFailed } from './failure'
 import { statusMark } from './details'
+import { type PhaseTask, stageStep, taskPhase } from './phase'
 
 export * from './failure'
 
@@ -101,15 +102,17 @@ export const IN_LINE_ICON = '⋯'
 /** The one-line legend of the row icons (task page and guide). */
 export const STEP_LEGEND = `▶ working · ${IN_LINE_ICON} queue · ${STEP_ICON.prep} prep · ${STEP_ICON.testing} test · ${STEP_ICON.checker} checker · ${STEP_ICON.merging} merge`
 
-/** Whether task `t` waits for its turn in the merge line (its note is "queue (n)", see inLineNote). */
-export const waitsInLine = (t: { status: SymccStatus; note?: string }): boolean => t.status === 'doing' && /^queue \(\d+\)$/.test(t.note ?? '')
+/** Whether doing task `t` waits for its turn in the merge line (its note is "queue (n)", see inLineNote): taskPhase's
+ *  queue stage (the time does not matter for a doing task). */
+export const waitsInLine = (t: { status: SymccStatus; note?: string }): boolean => t.status === 'doing' && taskPhase(t, 0).stage === 'queue'
 
 /** The mark at the front of a task's row: ⋯ while it waits in the merge line, its step's icon (STEP_ICON) during a
  *  check step, else its own mark (statusMark: ▶ while its worker works). */
 export function rowMark(t: Pick<SymccTask, 'status'> & { note?: string; runs?: readonly unknown[]; attempts?: number } & Pick<BoardTask, 'checking'>, nowMs: number): string {
-  // an approved task in review waits in the merge line too while its approve runs (shownStatus is then doing)
-  if (waitsInLine({ ...t, status: shownStatus(t, nowMs) })) return IN_LINE_ICON
-  const step = checkStepNow(t, nowMs)
+  // an approved task in review (or a files-merge) waits in the merge line too while it runs (taskPhase's queue stage)
+  const p = taskPhase(t as PhaseTask, nowMs)
+  if (p.stage === 'queue') return IN_LINE_ICON
+  const step = stageStep(p.stage)
   return step ? STEP_ICON[step] : statusMark(t)
 }
 
@@ -149,7 +152,9 @@ export function stepNote(step: CheckStep, note: string | undefined): string | un
  *  "failed" or "paused", and '' for the rest (the mark says enough). `since` is when
  *  this session's worker started, used when the task has no open try. */
 export function statusCell(t: Pick<SymccTask, 'status' | 'runs'> & Pick<BoardTask, 'checking' | 'time_ask' | 'kind'>, nowMs: number, since?: number | string): string {
-  const step = checkStepNow(t, nowMs)
+  const p = taskPhase(t, nowMs)
+  // in the queue there is no step word: the check step it waits in (still fresh) says it, as before
+  const step = p.stage === 'queue' ? checkStepNow(t, nowMs) : stageStep(p.stage)
   if (step) return STEP_WORD[step]
   if (asksMoreTime(t)) return MORE_TIME_CELL
   if (t.status === 'doing') {
@@ -193,9 +198,11 @@ export function rowTime(t: Pick<SymccTask, 'status' | 'runs'> & Pick<BoardTask, 
  *  the step word ("⧗ 9m"); with `form` 'none' (narrow rows) the time is left out (''). A task in review or waiting in
  *  a check step (an approve, approveRunning) shows the total work time too, like a doing row. The other rows: just statusCell. */
 export function rowCell(t: Parameters<typeof statusCell>[0] & { note?: string }, nowMs: number, since?: number | string, form: TotalForm = 'total'): string {
-  if (approveRunning(t, nowMs)) return form === 'none' ? '' : rowTime(t, nowMs, since)
+  const p = taskPhase(t, nowMs)
+  // an approve (or files-merge) running: shown doing while its status is not (approveRunning)
+  if (p.shown !== p.state) return form === 'none' ? '' : rowTime(t, nowMs, since)
   const cell = statusCell(t, nowMs, since)
-  if (t.status !== 'doing' || (!cell && !waitsInLine(t)) || cell === MORE_TIME_CELL) return cell
+  if (p.state !== 'doing' || (!cell && p.stage !== 'queue') || cell === MORE_TIME_CELL) return cell
   return form === 'none' ? '' : rowTime(t, nowMs, since)
 }
 

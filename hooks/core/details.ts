@@ -9,7 +9,8 @@ import { findRole, type RoleDef, roleOf } from './roles'
 import { fmtTotal, sumRuns } from './runs'
 import { squash } from './text'
 import { checkStepNow } from './lead'
-import { IN_LINE_ICON, rowTime, STEP_ICON, STEP_WORD, waitsInLine } from './panel'
+import { IN_LINE_ICON, rowTime, STEP_ICON, STEP_WORD } from './panel'
+import { stageStep, taskPhase } from './phase'
 
 /** A piece of text on the task page with its theme color name (see C() in claude/ui/parts.tsx). */
 export type Seg = { text: string; color: string; bold?: boolean; italic?: boolean }
@@ -35,14 +36,11 @@ export const statusMark = (t: Pick<SymccTask, 'status'> & { runs?: readonly unkn
 
 /** The step a task is in on its page, its row icon and its word ("⧗ test", "⋯ queue"); '' when it is in none. */
 export function stepNowWord(t: Pick<BoardTask, 'status' | 'checking'> & { note?: string }, nowMs: number): string {
-  if (inLineNow(t)) return `${IN_LINE_ICON} queue`
-  const step = checkStepNow(t, nowMs)
+  const { stage } = taskPhase(t, nowMs)
+  if (stage === 'queue') return `${IN_LINE_ICON} queue`
+  const step = stageStep(stage)
   return step ? `${STEP_ICON[step]} ${STEP_WORD[step]}` : ''
 }
-
-/** Whether task `t` waits in the merge line: a doing task (waitsInLine) or an approved review task (its approve runs
- *  prep → queue → test → merge while its status stays review, and the merge line sets its note to "queue (n)"). */
-const inLineNow = (t: { status: SymccStatus; note?: string }): boolean => waitsInLine({ ...t, status: t.status === 'review' ? 'doing' : t.status })
 
 /** What the task page's badge and Status line need of a task. */
 type BadgeTask = Pick<SymccTask, 'status' | 'runs'> & { note?: string; attempts?: number } & Pick<BoardTask, 'checking'>
@@ -57,10 +55,11 @@ type BadgeTask = Pick<SymccTask, 'status' | 'runs'> & { note?: string; attempts?
  * `color`: the badge color of its status (doing's while an approve runs, see shownStatus).
  */
 export function statusBadge(t: BadgeTask, nowMs: number, since?: number | string, merging = false): { text: string; color: string } {
-  const step = checkStepNow(t, nowMs) || (merging && t.status === 'review' ? 'prep' : '')
-  const color = STATUS_BADGE[step ? 'doing' : t.status]
-  if (t.status !== 'doing') return { text: inLineNow(t) ? `${IN_LINE_ICON} ${t.note}` : step ? `${STEP_ICON[step]} ${STEP_WORD[step]}` : `${statusMark(t)} ${STATUS_WORD[t.status]}`, color }
-  const word = inLineNow(t) ? `${IN_LINE_ICON} ${t.note}` : step ? `${STEP_ICON[step]} ${STEP_WORD[step]}` : `${STATUS_MARK.doing} worker`
+  const p = taskPhase(t, nowMs, undefined, { merging })
+  const step = stageStep(p.stage)
+  const color = STATUS_BADGE[p.shown]
+  const word = p.stage === 'queue' ? `${IN_LINE_ICON} ${t.note}` : step ? `${STEP_ICON[step]} ${STEP_WORD[step]}` : p.state === 'doing' ? `${STATUS_MARK.doing} worker` : `${statusMark(t)} ${STATUS_WORD[t.status]}`
+  if (p.state !== 'doing') return { text: word, color }
   const time = rowTime(t, nowMs, since)
   return { text: time ? `${word} · ${time}` : word, color }
 }
@@ -80,29 +79,23 @@ export type StageMark = { step: StageStep; state: 'done' | 'now' | 'later' }
  * other statuses and for an investigation (nothing is merged).
  */
 export function taskStage(t: BadgeTask & Pick<SymccTask, 'needs_review'> & { kind?: unknown; checker?: string }, nowMs: number, board: { mode?: unknown; checker?: unknown } = {}): StageMark[] | null {
-  if (!['doing', 'review', 'done'].includes(t.status) || isInvestigation(t)) return null
-  const step = checkStepNow(t, nowMs)
-  const hadChecker = (t.runs?.[t.runs.length - 1]?.checkers?.length ?? 0) > 0 || !!t.checker || step === 'checker'
+  const p = taskPhase(t, nowMs)
+  // a files-merge running (a waiting task shown doing) has a Stage line too, like an approve
+  if (!['doing', 'review', 'done'].includes(p.shown) || isInvestigation(t)) return null
+  const hadChecker = (t.runs?.[t.runs.length - 1]?.checkers?.length ?? 0) > 0 || !!t.checker || checkStepNow(t, nowMs) === 'checker'
   const review = t.status === 'review' || modeOf(board) !== 'auto' || t.needs_review === true
   const first: StageStep[] = ['worker', 'prep', ...(board.checker === true || hadChecker ? ['checker' as const] : []), 'queue', 'test']
-  // an approved task in review runs prep → queue → test → merge again (its status stays review): every step up to
-  // "review ✓" done, then only the approve's step it is in now and the merge, never its own finished steps again, so
-  // the line agrees with the badge and names no step twice (waiting in the merge line, note "queue (n)", it is at
-  // "queue" even while its step still says prep)
-  const inLine = inLineNow(t)
-  if (t.status === 'review' && (step || inLine)) {
-    const cur: StageStep = inLine ? 'queue' : step === 'testing' ? 'test' : step === 'merging' ? 'merge' : step || 'prep'
+  // an approved task in review runs prep → queue → test → merge again (its status stays review), and so does a
+  // files-merge of a waiting task: every step up to "review ✓" done (review only when it had one), then only the
+  // step it is in now (taskPhase's stage, so the line agrees with the badge and the row) and the merge, never its
+  // own finished steps again
+  if (p.state !== 'doing' && p.stage) {
+    const cur: StageStep = p.stage === 'worker' ? 'prep' : p.stage
     const after: StageMark[] = cur === 'merge' ? [{ step: 'merge', state: 'now' }] : [{ step: cur, state: 'now' }, { step: 'merge', state: 'later' }]
-    return [...[...first, 'review' as const].map(s => ({ step: s, state: 'done' as const })), ...after]
+    return [...[...first, ...(review ? ['review' as const] : [])].map(s => ({ step: s, state: 'done' as const })), ...after]
   }
   const steps: StageStep[] = [...first, ...(review ? ['review' as const] : []), 'merge']
-  const now: StageStep | 'all' =
-    t.status === 'done' ? 'all'
-    : t.status === 'review' ? 'review'
-    : inLine ? 'queue'
-    : step === 'testing' ? 'test'
-    : step === 'merging' ? 'merge'
-    : step || 'worker'
+  const now: StageStep | 'all' = t.status === 'done' ? 'all' : t.status === 'review' ? 'review' : (p.stage ?? 'worker')
   const at = now === 'all' ? steps.length : steps.indexOf(now)
   return steps.map((s, i) => ({ step: s, state: i < at ? 'done' : i === at ? 'now' : 'later' }))
 }

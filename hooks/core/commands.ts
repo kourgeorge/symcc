@@ -2,7 +2,7 @@
 import type { SymccMode, SymccStatus, SymccTask } from '../../types'
 import { DEFAULT_NAME } from '../name'
 import { type BoardTask, isMode, modeOf, normId, STATUS_WORD } from './board-file'
-import { approveRunning } from './lead'
+import { taskPhase } from './phase'
 import { type DiffFile, statCount, YOUR_EDITS } from './review'
 import { parseSettingsCommand, type SettingName, type SettingsInput } from './settings'
 
@@ -170,8 +170,10 @@ export const asksMoreTime = (t: Pick<SymccTask, 'status'> & { time_ask?: string 
 /** Whether it is the owner's turn on task `t`: it is in review, waiting or failed (NEEDS_YOU) and no approve of it runs
  *  at `nowMs` (approveRunning: prep, in line, test, merge). The lists show such a task's title in bold; VS Code shows how
  *  long it has waited. */
-export const ownersTurn = (t: Pick<SymccTask, 'status'> & Pick<BoardTask, 'checking'>, nowMs: number = Date.now()): boolean =>
-  NEEDS_YOU.includes(t.status) && !approveRunning(t, nowMs)
+export const ownersTurn = (t: Pick<SymccTask, 'status'> & Pick<BoardTask, 'checking'>, nowMs: number = Date.now()): boolean => {
+  const w = taskPhase(t, nowMs).waitsFor
+  return !!w && w !== 'time'
+}
 
 /** Whether a task needs the owner: its owner's turn (ownersTurn), or a running task asking for more time. A task
  *  in review (or waiting) whose approve runs at `nowMs` does not: it is listed and counted with the running tasks
@@ -182,7 +184,7 @@ export const needsYou = (t: Pick<SymccTask, 'status'> & { time_ask?: string } & 
 /** Whether a task waits for the owner's answer ("waiting"), and no merge of it runs at `nowMs` (approveRunning).
  *  Every view uses this for "waiting for you". */
 export const waitsForYou = (t: { status?: unknown } & Pick<BoardTask, 'checking'>, nowMs: number = Date.now()): boolean =>
-  t.status === 'waiting' && !approveRunning(t as Pick<BoardTask, 'status' | 'checking'>, nowMs)
+  t.status === 'waiting' && !taskPhase(t as Pick<BoardTask, 'status' | 'checking'>, nowMs).stage
 
 /** The lead's line after the owner answered task `t`'s question with `answer` on a board panel. */
 export const answeredLeadLine = (t: { id: string }, answer: string, brief: (s: string) => string = s => s): string => `The owner answered ${t.id} ("${brief(answer)}"); it went back to work.`

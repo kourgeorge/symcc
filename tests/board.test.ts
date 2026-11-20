@@ -3817,12 +3817,14 @@ test('T-587: the task page badge and Status row name the step a task is in; the 
   expect(core.statusBadge(approving('prep'), now).text).toBe('✎ prep')
   expect(core.stageText(core.taskStage(approving('prep'), now, { mode: 'review' })!)).toBe('worker ✓ → prep ✓ → queue ✓ → test ✓ → review ✓ → ● prep → merge')
   expect(core.stageText(core.taskStage(approving('merging'), now, { mode: 'review' })!)).toBe('worker ✓ → prep ✓ → queue ✓ → test ✓ → review ✓ → ● merge')
-  // an approved task in review waiting in the merge line (its step still prep, fresh or stale): "queue" on both
-  for (const at of [fresh, new Date(now - 10 * 60_000).toISOString()]) {
-    const queued = { status: 'review' as const, runs: ran, note: 'queue (2)', checking: { step: 'prep' as const, at } }
-    expect(core.statusBadge(queued, now).text).toBe('⋯ queue (2)')
-    expect(core.stageText(core.taskStage(queued, now, { mode: 'review' })!)).toBe('worker ✓ → prep ✓ → queue ✓ → test ✓ → review ✓ → ● queue → merge')
-  }
+  // an approved task in review waiting in the merge line (its step still prep, kept fresh while it waits): "queue" on both
+  const queued = { status: 'review' as const, runs: ran, note: 'queue (2)', checking: { step: 'prep' as const, at: fresh } }
+  expect(core.statusBadge(queued, now).text).toBe('⋯ queue (2)')
+  expect(core.stageText(core.taskStage(queued, now, { mode: 'review' })!)).toBe('worker ✓ → prep ✓ → queue ✓ → test ✓ → review ✓ → ● queue → merge')
+  // its step gone stale (the copy merging it is gone, T-611): the leftover "queue (2)" note no longer counts, it waits for review on both, like its row
+  const leftover = { ...queued, checking: { step: 'prep' as const, at: new Date(now - 10 * 60_000).toISOString() } }
+  expect(core.statusBadge(leftover, now).text).toBe('◆ ready for review')
+  expect(core.stageText(core.taskStage(leftover, now, { mode: 'review' })!)).toBe('worker ✓ → prep ✓ → queue ✓ → test ✓ → ● review → merge')
   // after "review ✓": exactly one "review ✓", no step name twice, the current step the badge's
   const queuedAt = { status: 'review' as const, runs: ran, note: 'queue (1)', checking: { step: 'prep' as const, at: fresh } }
   for (const [t, word] of [[approving('prep'), 'prep'], [queuedAt, 'queue'], [approving('testing'), 'test'], [approving('merging'), 'merge']] as const) {

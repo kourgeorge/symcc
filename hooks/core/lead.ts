@@ -5,6 +5,7 @@ import { stoppedEntry, stopEnd, withHistory } from './history'
 import { addCommits, shortSha } from './commits'
 import { tryLabel } from './roles'
 import { endedBy, withEnd } from './runs'
+import { taskPhase } from './phase'
 
 // ---------------- who drives the board ----------------
 // Several sessions may have the same project open. Only one of them, the driver, starts
@@ -188,10 +189,13 @@ export function checkStepNow(t: Pick<BoardTask, 'status' | 'checking'>, nowMs: n
  *  its check step is set and fresh (prep, in line, test, merge). The owner has nothing to do on it then: every board
  *  lists and counts it with the running tasks, not under NEEDS YOU. Once the approve ends (merged, or failed and back in
  *  review) its step is cleared, so it needs the owner again. */
-export const approveRunning = (t: Pick<BoardTask, 'status' | 'checking'>, nowMs: number): boolean => t.status !== 'doing' && !!checkStepNow(t, nowMs)
+export const approveRunning = (t: Pick<BoardTask, 'status' | 'checking'>, nowMs: number): boolean => {
+  const p = taskPhase(t, nowMs)
+  return p.shown !== p.state
+}
 
-/** The status task `t` is grouped and counted under on every board: "doing" while its approve runs (approveRunning), else its own. */
-export const shownStatus = <S extends BoardTask['status']>(t: { status: S; checking?: BoardTask['checking'] }, nowMs: number): S | 'doing' => (approveRunning(t, nowMs) ? 'doing' : t.status)
+/** The status task `t` is grouped and counted under on every board: "doing" while its approve runs (approveRunning), else its own (taskPhase's `shown`). */
+export const shownStatus = <S extends BoardTask['status']>(t: { status: S; checking?: BoardTask['checking'] }, nowMs: number): S | 'doing' => taskPhase(t, nowMs).shown as S | 'doing'
 
 /**
  * Whether task `t`'s worker has already handed back its try: it is "doing" and has a finishing mark,

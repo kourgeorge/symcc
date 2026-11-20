@@ -1,11 +1,11 @@
 // Where a task is now, worked out in one place (T-610, step 1 of 6 from investigation T-608): its saved status, the
 // status the boards show it under, the step it is in on its way to the merge, and what (if anything) it waits for
 // from the owner. For now it reads today's fields (status, checking, the "queue (n)" note, time_ask, merge_wait,
-// asked_files); nothing uses it yet, the views still work it out on their own.
+// asked_files). The helpers that decide a task's stage or wait (approveRunning, shownStatus, ownersTurn, waitsForYou,
+// rowMark, statusCell, rowCell, stepNowWord, statusBadge, taskStage) are thin wrappers over it (T-611).
 import type { SymccStatus } from '../../types'
 import { type BoardTask, type CheckStep, waitsForFiles } from './board-file'
-import { checkStepNow, shownStatus } from './lead'
-import { asksMoreTime } from './commands'
+import { checkStepNow } from './lead'
 
 /** The step a task is in on its way to the merge: its worker works, or one of the check steps, or it waits its turn in the merge queue. */
 export type PhaseStage = 'worker' | 'prep' | 'checker' | 'queue' | 'test' | 'merge'
@@ -31,22 +31,27 @@ export type PhaseWait = 'answer' | 'files' | 'your-files' | 'review' | 'time' | 
  */
 export type TaskPhase = { state: SymccStatus; shown: SymccStatus; stage: PhaseStage | null; place?: number; waitsFor: PhaseWait | null; approved: boolean; since?: string }
 
-/** What taskPhase reads of a task. */
-export type PhaseTask = Pick<BoardTask, 'status' | 'note' | 'updated_at' | 'runs' | 'checking' | 'time_ask' | 'merge_wait' | 'asked_files'>
+/** What taskPhase reads of a task (only its status must be there). */
+export type PhaseTask = Pick<BoardTask, 'status'> & Partial<Pick<BoardTask, 'note' | 'updated_at' | 'runs' | 'checking' | 'time_ask' | 'merge_wait' | 'asked_files'>>
 
 const STEP_STAGE: Record<CheckStep, PhaseStage> = { prep: 'prep', testing: 'test', checker: 'checker', merging: 'merge' }
+/** The check step of stage `stage` (its icon and word are STEP_ICON and STEP_WORD), '' for the worker, the queue and none. */
+export const stageStep = (stage: PhaseStage | null): CheckStep | '' => (stage === 'prep' ? 'prep' : stage === 'test' ? 'testing' : stage === 'checker' ? 'checker' : stage === 'merge' ? 'merging' : '')
 const QUEUE_NOTE = /^queue \((\d+)\)$/
 
 export function taskPhase(t: PhaseTask, nowMs: number, _board?: { mode?: unknown; checker?: unknown }, o: { merging?: boolean } = {}): TaskPhase {
   const state = t.status
-  const shown: SymccStatus = o.merging && state === 'review' ? 'doing' : shownStatus(t, nowMs)
+  const step = checkStepNow(t, nowMs)
+  // a task in review or waiting shows as doing while its approve (or files-merge) runs: a fresh check step, or an
+  // approve this page started
+  const shown: SymccStatus = state !== 'doing' && (step || (o.merging && state === 'review')) ? 'doing' : state
   const base = { state, shown, approved: false }
   if (shown !== 'doing') return { ...base, stage: null, ...ownerWait(t) }
   const queue = QUEUE_NOTE.exec(t.note ?? '')
-  const step = checkStepNow(t, nowMs)
   const stage: PhaseStage = queue ? 'queue' : step ? STEP_STAGE[step] : state === 'doing' ? 'worker' : 'prep'
   const last = t.runs?.[t.runs.length - 1]
-  const time = stage === 'worker' && asksMoreTime(t)
+  // more time asked (asksMoreTime in commands.ts reads the same fields)
+  const time = stage === 'worker' && !!t.time_ask
   return {
     ...base,
     stage,
