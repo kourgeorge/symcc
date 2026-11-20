@@ -83,8 +83,8 @@ function triesNote(doing: (Pick<SymccTask, 'id' | 'status'> & Partial<Pick<Symcc
 /**
  * The front of each task row in the band above the prompt, lined up like the board list's rows (fixed-width ID and
  * state columns). Every row shows the list's own mark and short status cell (rowMark, rowCell): a doing task "▶ 1h40m" (the
- * total work time of all its tries), in a check step its icon (STEP_ICON) in place of ▶ and the step word: "⧗ 9m",
- * "✎ 2h5m", "⌕ 5m", "⇢ 40m", in the merge line "⋯ 2h5m", with its try after it from
+ * total work time of all its tries), in a check step its icon (STEP_ICON) in place of ▶ and the step word: "⊛ 9m",
+ * "✎ 2h5m", "⌕ 5m", "⇢ 40m", in the merge line "⧗ 2h5m", with its try after it from
  * try 2 on ("T-434 ▶ 1h40m (3)", see rowStates); in a row narrower than `width` the time is left out, then the try;
  * the others "? waiting", "◆ review", "✗ failed". The state column has one width, so every title starts in one column. `since(id)` is when this session's worker started.
  */
@@ -101,7 +101,7 @@ export function bandLeads(tasks: (Pick<SymccTask, 'id' | 'status' | 'runs'> & Pa
 /** Whether a doing row in the band has a state to show (see bandLeads); without one its note says what goes on. */
 export const bandHasState = (t: Pick<SymccTask, 'status' | 'runs'> & Pick<BoardTask, 'checking' | 'time_ask' | 'kind'>, nowMs: number, since?: number | string): boolean => t.status === 'doing' && statusCell(t, nowMs, since) !== ''
 
-/** The notes a doing row's state already says ("▶ 12m", "⧗ 9m", "⇢ 40s"), so the band leaves them out when it shows one:
+/** The notes a doing row's state already says ("▶ 12m", "⊛ 9m", "⇢ 40s"), so the band leaves them out when it shows one:
  *  also both claim notes (app/starts.ts: QUEUED_NOTE "starting at the next turn" with the start queue, STARTING_NOTE
  *  "worker starting" without it, e.g. on OpenCode). */
 const STATE_NOTES = new Set(['worker on it', STEP_NOTE.testing, STEP_NOTE.merging, 'starting at the next turn', 'worker starting'])
@@ -380,11 +380,11 @@ function boardRow(t: SymccTask, autoRetries: number | undefined, nowMs: number, 
   // a later try: "T-5   ▶ doing   · try 2/3 <title>" (see tryMark)
   const mark = tryMark(t, autoRetries)
   // the step a finished task is in: its icon as the mark (rowMark, like every other view) and its short word (STEP_WORD)
-  // for the lead: "T-5   ⧗ doing   test · title"
+  // for the lead: "T-5   ⊛ doing   test · title"
   const step = checkStepNow(t, nowMs)
   // with both, one separator between them: "prep · try 2 title" (not "prep · · try 2")
   const lead = step ? `${STEP_WORD[step]} · ${mark ? `${mark} ` : ''}` : mark ? `· ${mark} ` : ''
-  // the task's own mark first (● a to do task worked on before, ⋯ in the merge line, see rowMark): "T-5   ● todo    title"
+  // the task's own mark first (● a to do task worked on before, ⧗ in the merge line, see rowMark): "T-5   ● todo    title"
   return [`${t.id.padEnd(5)} ${rowMark(t, nowMs)} ${t.status.padEnd(7)} ${lead}${t.title}${role}${after}${extra}`, `${' '.repeat(16)}${fromText(t)}`]
 }
 

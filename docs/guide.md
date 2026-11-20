@@ -71,7 +71,11 @@ Each part is there for a reason. Knowing it makes the rest of this guide easier 
   tokens.
 - **One merge queue.** Finished tasks take turns. Only the task at the front catches up with
   your branch, runs the tests and merges, so your branch cannot move in between and the code
-  that was tested is exactly the code that merges.
+  that was tested is exactly the code that merges. Before the queue, several tasks could merge
+  into a moving branch at once, and each had to catch up, test again and sometimes clash with the
+  others. Now no two merges race and no test run is wasted. One rule covers every way into a
+  merge (hand-back, approve, retry), so it is simple to follow and to trust. The cost is waiting:
+  see [the queue](#states-stages-and-the-queue).
 - **Guards that stop honest mistakes.** symcc refuses a scout's or checker's file edit and git
   writes, and a worker's edit outside its file list. These checks read the command text. They
   catch a worker that makes a mistake. They are not a security boundary and do not stop an agent
@@ -156,8 +160,8 @@ once you have cleared them and its merge runs.
 | worker | `▶` | The worker changes the code in its own folder |
 | prep | `✎` | symcc commits, leaves out secret-looking files and checks the scope |
 | checker | `⌕` | A fresh agent tries to break the change. Only with the `checker` setting on |
-| queue | `⋯` | The task waits for its turn. Its note says "queue (n)", n being its place (1 = merging now) |
-| test | `⧗` | Your test commands run |
+| queue | `⧗` | The task waits for its turn. Its note says "queue (n)", n being its place (1 = merging now) |
+| test | `⊛` | Your test commands run |
 | merge | `⇢` | The branch moves forward |
 
 The board row shows the stage icon instead of `▶`, then the time. The band above the prompt
@@ -174,17 +178,10 @@ and then merges (or stops in `review` when you want to approve first). Any failu
 one of the `auto_retries`. The checker runs before the queue, side by side with other checkers,
 and never runs the project's tests. The tests run once per try, in the task's turn.
 
-**Why it is built this way.**
-
-- Before, several tasks could merge into a moving branch at once. Each one had to catch up, test
-  again and sometimes clash with the others. Now the branch moves only at the front of the queue.
-  So the code a task was tested with is exactly the code that merges: the main branch is always
-  tested as it will be after the merge.
-- No two merges race, and no test run is wasted because another merge came first.
-- One rule for every way into a merge (hand-back, approve, retry), so it is simple to follow and
-  to trust.
-- The cost: tasks wait their turn. When five tasks with 10-minute tests finish together, the
-  fifth waits about 40 minutes before its own turn. Testing several tasks together is not built.
+**Why one queue, and its cost.** The reasons for one queue are in
+[Why it is built this way](#why-it-is-built-this-way) above. The cost is that tasks wait their
+turn: when five tasks with 10-minute tests finish together, the fifth waits about 40 minutes
+before its own turn. Testing several tasks together is not built.
 
 **Task dependencies.** The lead sets them. A task's `after` lists the tasks that must be
 finished first: it starts only when every one of them is `done` (merged). Any other status
@@ -438,15 +435,15 @@ happened to it meanwhile), or the lead is told it landed.
 Every board view (the board list, the band above
 the prompt, the VS Code list and task page, the OpenCode board and the lead's text board) shows
 the same small set of words and notes. While it waits for its turn its note says "queue (n)",
-n being its place (the task merging now is 1), and its row shows `⋯` in place of `▶`. During its
+n being its place (the task merging now is 1), and its row shows `⧗` in place of `▶`. During its
 turn the row shows the step's icon in place of `▶`, then the time: `⌕ 5m`, not `▶ checker 5m`.
-The step's word stays in the note and on the task page; the lead's text board shows both ("⧗
-doing test · title"). Legend: `▶` working · `⋯` queue · `✎` prep · `⧗` test · `⌕` checker ·
+The step's word stays in the note and on the task page; the lead's text board shows both ("⊛
+doing test · title"). Legend: `▶` working · `⧗` queue · `✎` prep · `⊛` test · `⌕` checker ·
 `⇢` merge.
 
 A doing task's page (terminal, VS Code and OpenCode) names its
 step in its badge and its Status line, with the icon and the total work time: `▶ worker · 15m`,
-`✎ prep`, `⌕ checker · 5m`, `⋯ queue (2)`, `⧗ test · 9m`, `⇢ merge`. Other tasks show their
+`✎ prep`, `⌕ checker · 5m`, `⧗ queue (2)`, `⊛ test · 9m`, `⇢ merge`. Other tasks show their
 status as before (`○ to do`, `◆ ready for review`, ...). Under Status, a **Stage** line shows the
 whole way to the merge, the steps done marked ✓, the current one bold with ●, the later ones
 dim: `worker ✓ → prep ✓ → ● checker → queue → test → merge`. `checker` is there only when the
@@ -462,7 +459,7 @@ under the badge.
 - `⌕ checker`: a checker agent is trying to break the change (only with the `checker` setting
   on; with it off no task ever shows this step). It comes right after `prep`, before the task
   joins the merge queue. Its note says "a checker agent is trying to break it before it merges".
-- `⧗ test`: the test commands run. Its note says "running the tests".
+- `⊛ test`: the test commands run. Its note says "running the tests".
 - `⇢ merge`: the task is brought up to date with the target branch and merged. Its note says
   "merging".
 
@@ -1305,7 +1302,7 @@ board (the `/3` shows the limit while the try is an automatic retry after failin
 A first try shows no mark. The time in a doing task's row is the total work time of all its
 tries, so a task that is really stuck stands out: `T-5 ▶ 1h40m (3)` (1 hour 40 over all
 three tries; on the first try it is just that try's time, `T-5 ▶ 15m`), and during a check
-step the step's icon takes the place of `▶`: `T-5 ⧗ 9m` (see "What a task shows on its way to
+step the step's icon takes the place of `▶`: `T-5 ⊛ 9m` (see "What a task shows on its way to
 the merge"). This is the
 same number as the task page's "Time and cost" total: each try's time from start to end, added
 up. Time while the task was paused, waiting for you, waiting on other tasks, or in todo between

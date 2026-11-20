@@ -3,11 +3,11 @@
 // as another program (an OpenCode plugin, a standalone app) would build one, must be enough to run the logic.
 import { expect } from 'claude-code/testing'
 import type { EngineInterface } from 'claude-code'
-import { type Host, type HostRunResult, type PanelValues, ALL_FEATURES, SYMCC_WORDS, noUi, notReadyYet } from '../hooks/host'
+import { type Host, type HostProcess, type HostRunResult, type PanelValues, ALL_FEATURES, SYMCC_WORDS, noUi, notReadyYet } from '../hooks/host'
 import { S, type PaneView } from '../hooks/app/state'
 import { findRoot, load, saveBoard, takeLock, dropLock, change } from '../hooks/app/store'
 import { tellLead } from '../hooks/app/tell'
-import { addTask, emptyBoard, type Board } from '../hooks/board'
+import { addTask, emptyBoard, type Board, lockText, parseLock, lockHolder, isLockStale, LOCK_STALE_MS } from '../hooks/board'
 import { test } from './reset'
 import { claudeHost } from '../hooks/claude/host'
 
@@ -98,6 +98,63 @@ test('a Host written by hand runs the board store: find the project, take the lo
   expect((await load(host)).max_parallel).toBe(3)
   expect(ran).toEqual(['git', 'mv', 'ln', 'rm', 'mv', 'rm'])
   expect([...files.keys()]).toEqual([`/proj/${S.N.boardFile}`])
+})
+
+test('T-659: the board lock names its holder process; a lock whose process is gone is taken at once, a live one is waited for, one with no pid keeps the 30 s rule', async () => {
+  const { host, files } = memoryHost('/proj')
+  expect(await findRoot(host)).toBe(true)
+  const lock = `/proj/${S.N.lockFile}`
+  const asked: HostProcess[] = []
+  let answer: boolean | undefined = false
+  host.processes = { self: () => ({ pid: 4242, started: 1_000 }), alive: async p => (asked.push(p), answer) }
+  // a sleep means "it waits for the lock": the test stops it there
+  host.clock.sleep = async () => Promise.reject(new Error('waited'))
+
+  // ours names this process
+  const mine = await takeLock(host)
+  expect(parseLock(mine)).toMatchObject({ pid: 4242, started: 1_000 })
+  await dropLock(host, mine)
+
+  // a fresh lock whose holder is gone: taken over at once, with no wait
+  files.set(lock, lockText('other:1', Date.now(), { pid: 777, started: 5_000 }))
+  const taken = await takeLock(host)
+  expect(asked).toEqual([{ pid: 777, started: 5_000 }])
+  expect(files.get(lock)).toBe(taken)
+  await dropLock(host, taken)
+
+  // a fresh lock whose holder runs: respected (it waits)
+  answer = true
+  files.set(lock, lockText('other:2', Date.now(), { pid: 778, started: 5_000 }))
+  expect(await takeLock(host).catch((e: Error) => e.message)).toBe('waited')
+  // the host can't tell: the lock's age decides, and it is fresh
+  answer = undefined
+  expect(await takeLock(host).catch((e: Error) => e.message)).toBe('waited')
+  // a live holder still can't keep a lock older than LOCK_STALE_MS
+  answer = true
+  files.set(lock, lockText('other:3', Date.now() - LOCK_STALE_MS - 1_000, { pid: 779, started: 5_000 }))
+  await dropLock(host, await takeLock(host))
+
+  // a fresh lock with no pid (an older copy, or a host that can't see processes): the 30 s rule, the host isn't asked
+  asked.length = 0
+  answer = false
+  files.set(lock, lockText('other:4', Date.now()))
+  expect(await takeLock(host).catch((e: Error) => e.message)).toBe('waited')
+  expect(asked).toEqual([])
+  files.set(lock, lockText('other:5', Date.now() - LOCK_STALE_MS - 1_000))
+  await dropLock(host, await takeLock(host))
+  expect(files.has(lock)).toBe(false)
+})
+
+test('T-659: the lock text keeps a holder pid and start time; a pid that is not a whole positive number is left out', () => {
+  expect(parseLock(lockText('s', 10, { pid: 5, started: 3 }))).toEqual({ session: 's', at: 10, pid: 5, started: 3 })
+  expect(lockHolder(lockText('s', 10, { pid: 5, started: 3 }))).toEqual({ pid: 5, started: 3 })
+  expect(parseLock(lockText('s', 10))).toEqual({ session: 's', at: 10 })
+  expect(lockHolder(lockText('s', 10))).toBe(undefined)
+  for (const bad of ['{"session":"s","at":10,"pid":0,"started":3}', '{"session":"s","at":10,"pid":1.5,"started":3}', '{"session":"s","at":10,"pid":5}']) expect(lockHolder(bad)).toBe(undefined)
+  // a holder known gone makes even a fresh lock stale; known alive or unknown keeps the time rule
+  expect(isLockStale(lockText('s', 10), 10, undefined, LOCK_STALE_MS, false)).toBe(true)
+  expect(isLockStale(lockText('s', 10), 10, undefined, LOCK_STALE_MS, true)).toBe(false)
+  expect(isLockStale(lockText('s', 10), 10 + LOCK_STALE_MS + 1, undefined, LOCK_STALE_MS, true)).toBe(true)
 })
 
 const addOne = (b: Board) => addTask(b, { origin: { why: 'a test' }, title: 'Do it', files: ['src/'] }, '2026-11-18T00:00:00Z')[0]

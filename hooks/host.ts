@@ -198,6 +198,15 @@ export type PanelValues = {
   updateView: (change: (value: SymccView) => SymccView) => Promise<unknown>
 }
 
+/** A process as the board lock records it: its id and when it started (ms since 1970). */
+export type HostProcess = { pid: number; started: number }
+
+/** What a host that can see processes offers (see Host.processes). */
+export type HostProcesses = {
+  self: () => HostProcess | undefined
+  alive: (p: HostProcess) => Promise<boolean | undefined>
+}
+
 export interface Host {
   /** what this host can do (see HostFeatures) */
   features: HostFeatures
@@ -246,8 +255,16 @@ export interface Host {
     list: (path: string) => Promise<HostFileEntry[]>
     stat: (path: string, options?: { resolve: boolean }) => Promise<HostFileStat>
   }
+  /**
+   * Only a host that can see processes (T-659): `self` is the process symcc runs in (its pid and when it started, ms
+   * since 1970), written into .<name>/board.lock; `alive` tells whether process `pid`, started at `started`, still runs
+   * (false also when the pid now belongs to a process started at another time), or undefined when it can't tell. A
+   * lock whose holder is gone is taken over at once; without this member (or with no answer) a lock waits out
+   * LOCK_STALE_MS.
+   */
+  processes?: HostProcesses
   /** runs a command (no shell) and answers its exit code and output */
-  run: (argv: readonly string[], init?: { cwd?: string; env?: Record<string, string>; timeoutMs?: number }) => Promise<HostRunResult>
+  run:(argv: readonly string[], init?: { cwd?: string; env?: Record<string, string>; timeoutMs?: number }) => Promise<HostRunResult>
   clock: {
     after: (ms: number, fn: () => void) => HostTimer
     every: (ms: number, fn: () => void) => HostTimer

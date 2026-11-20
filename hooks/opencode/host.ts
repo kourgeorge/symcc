@@ -11,7 +11,7 @@
 import { type Host, type HostFeatures, type HostWords, noUi } from '../host'
 import { viewFilePanel } from './view'
 import { writeSync } from 'node:fs'
-import { nodeFs, runCommand, nodeClock } from '../../hosts/node/host'
+import { nodeFs, runCommand, nodeClock, nodeProcesses } from '../../hosts/node/host'
 
 /**
  * What OpenCode can do here, for now: no panel and no band yet (the TUI part comes later), and no plan mode. The lead
@@ -102,6 +102,7 @@ export function opencodeHost(o: OpencodeHostOptions): Host {
     words: OPENCODE_WORDS,
     env: async name => process.env[name],
     fs: nodeFs,
+    processes: nodeProcesses,
     run: runCommand,
     clock: nodeClock,
     ui: {

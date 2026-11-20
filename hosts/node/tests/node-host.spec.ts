@@ -11,7 +11,8 @@ import { claudePermissions, claudeResult, editRule, claudeRunner } from '../../.
 import { withBasePrompt, processAgents, type AgentRunner } from '../../../hooks/process/agents'
 import { PROCESSES_FILE, entriesText, parseEntries } from '../../../hooks/process/record'
 import { nodeProcessSystem, runsProgram, elapsedSeconds } from '../system'
-import { nodeFs } from '../host'
+import { nodeFs, nodeProcesses, nodeProcessesWith } from '../host'
+import { lockText, LOCK_STALE_MS } from '../../../hooks/core/board-file'
 import { openSession, leadTool, closeSession, settle } from '../session'
 import { toolCall, notLeadText } from '../../../hooks/app/symcc'
 import { TOOLS } from '../../../hooks/app/tools'
@@ -355,6 +356,87 @@ async function groupGone(group: number, ms = 60_000): Promise<boolean> {
   return false
 }
 
+test('T-669: a Bun Worker started seconds after the process names this process with its real start time, so it is alive', async () => {
+  // the worker must start well after the process (more than the 5 s slack): wait out the rest
+  const late = 7_000 - process.uptime() * 1000
+  if (late > 0) await new Promise<void>(r => void setTimeout(r, late))
+  type BunWorker = { onmessage: unknown; onerror: unknown; terminate: () => void }
+  const WorkerClass = (globalThis as unknown as { Worker: new (url: string) => BunWorker }).Worker
+  const worker = new WorkerClass(import.meta.url.replace(/[^/]*$/, 'self-worker.ts'))
+  const got = await new Promise<{ me?: { pid: number; started: number }; alive?: boolean; uptime: number }>((resolve, reject) => {
+    worker.onmessage = (e: { data: never }) => resolve(e.data)
+    worker.onerror = (e: unknown) => reject(e)
+  })
+  worker.terminate()
+  expect(got.me?.pid).toBe(process.pid)
+  expect(await nodeProcesses.alive(got.me!)).toBe(true)
+  expect(got.alive).toBe(true)
+  // the worker and the process name the same start time (ps counts whole seconds)
+  expect(Math.abs(got.me!.started - nodeProcesses.self()!.started)).toBeLessThan(1_501)
+}, 30_000)
+
+test('T-669: a dead pid is gone at once; when ps fails, self() names no holder and alive() can not tell', async () => {
+  const child = spawn('sh', ['-c', 'exit 0'], { stdio: ['ignore', 'ignore', 'ignore'] })
+  await new Promise<void>(r => child.on('close', () => r()))
+  let asked = 0
+  const broken = nodeProcessesWith({
+    runSync: () => ((asked++, { exitCode: 127, stdout: '' })),
+    run: async () => ((asked++, { exitCode: 127, stdout: '', stderr: 'no ps' })),
+  })
+  // dead: no ps needed
+  expect(await broken.alive({ pid: child.pid!, started: Date.now() })).toBe(false)
+  expect(asked).toBe(0)
+  expect(broken.self()).toBe(undefined)
+  expect(await broken.alive({ pid: process.pid, started: Date.now() })).toBe(undefined)
+  // ps that throws or prints something unreadable: can't tell either
+  const odd = nodeProcessesWith({
+    runSync: () => {
+      throw new Error('no ps')
+    },
+    run: async () => ({ exitCode: 0, stdout: 'what\n', stderr: '' }),
+  })
+  expect(odd.self()).toBe(undefined)
+  expect(await odd.alive({ pid: process.pid, started: Date.now() })).toBe(undefined)
+  // self() asks ps once and keeps the answer
+  let n = 0
+  const counted = nodeProcessesWith({ runSync: () => ((n++, { exitCode: 0, stdout: '00:10\n' })), run: async () => ({ exitCode: 0, stdout: '00:10\n', stderr: '' }) })
+  const a = counted.self()!
+  expect(counted.self()).toEqual(a)
+  expect(n).toBe(1)
+  expect(Math.abs(Date.now() - 10_000 - a.started)).toBeLessThan(1_501)
+  expect(await counted.alive(a)).toBe(true)
+})
+
+test('T-659: the Node host names this process as a board lock holder, and tells a running holder from an ended one or a reused pid', async () => {
+  const me = nodeProcesses.self()!
+  expect(me.pid).toBe(process.pid)
+  expect(await nodeProcesses.alive(me)).toBe(true)
+  // the same pid, started at another time: someone else now
+  expect(await nodeProcesses.alive({ pid: me.pid, started: me.started - 3_600_000 })).toBe(false)
+  // a process that ended (and was reaped)
+  const child = spawn('sh', ['-c', 'exit 0'], { stdio: ['ignore', 'ignore', 'ignore'] })
+  await new Promise<void>(r => child.on('close', () => r()))
+  expect(await nodeProcesses.alive({ pid: child.pid!, started: Date.now() })).toBe(false)
+
+  // a CLI run finds a fresh lock left by an ended process and takes it at once (no 30 s wait); its own lock names it
+  const repo = await mkdtemp('/tmp/symcc-node-lock-')
+  try {
+    const git = (...args: string[]) => runCommand(['git', '-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd: repo })
+    await git('init', '-q', '-b', 'main')
+    await writeFile(`${repo}/.gitignore`, '.symcc/\n')
+    await git('add', '.')
+    await git('commit', '-qm', 'init')
+    await mkdir(`${repo}/.symcc`, { recursive: true })
+    await writeFile(`${repo}/.symcc/board.lock`, lockText('gone:1', Date.now(), { pid: child.pid!, started: Date.now() - 1_000 }))
+    const t0 = Date.now()
+    const r = await runCommand(['bun', MAIN, '--root', repo, '--claude', FAKE, 'add', 'Say hello', '--files', 'hello.txt'], { cwd: repo, timeoutMs: 120_000 })
+    expect(r.stdout).toContain('added T-1')
+    expect(Date.now() - t0).toBeLessThan(LOCK_STALE_MS)
+  } finally {
+    await rm(repo, { recursive: true, force: true })
+  }
+}, 120_000)
+
 test('T-474: a worker process left running by a CLI that was killed is in the record, and the next run stops it (and drops a dead entry)', async () => {
   const repo = await mkdtemp('/tmp/symcc-node-left-')
   const pidFile = `${repo}/.symcc/fake.pid`
@@ -382,20 +464,8 @@ test('T-474: a worker process left running by a CLI that was killed is in the re
     // the record has the worker (written when it started)
     let entries = parseEntries(await readFile(recordFile, 'utf8').catch(() => null))
     for (const end = Date.now() + 10_000; !entries.length && Date.now() < end; await new Promise<void>(r => void setTimeout(r, 100))) entries = parseEntries(await readFile(recordFile, 'utf8').catch(() => null))
-    // T-652: killed while it holds board.lock (it writes the board around its worker's start), the lock would look
-    // fresh for 30 s (LOCK_STALE_MS), so the runs below couldn't take it and wouldn't drive (see the T-652 report).
-    // So the CLI is frozen, its own commands (an `ln` taking the lock) are let finish, and it is killed only when it
-    // holds no lock; else it runs on a moment and is looked at again.
-    const lockFile = `${repo}/.symcc/board.lock`
-    // the CLI's child processes apart from the worker
-    const commands = async () => (await runCommand(['pgrep', '-P', String(tick.pid)])).stdout.split(/\s+/).filter(p => p && p !== String(group))
-    for (const end = Date.now() + 120_000; Date.now() < end; await new Promise<void>(r => void setTimeout(r, 20))) {
-      tick.kill('SIGSTOP')
-      for (const until = Date.now() + 10_000; Date.now() < until && (await commands()).length; ) await new Promise<void>(r => void setTimeout(r, 20))
-      if ((await readFile(lockFile, 'utf8').catch(() => null)) === null) break
-      tick.kill('SIGCONT')
-    }
-    expect(await readFile(lockFile, 'utf8').catch(() => 'none')).toBe('none')
+    // killed at any moment, maybe while it holds board.lock: T-659, the lock has the CLI's pid, so the runs below
+    // take it over at once (they don't wait out LOCK_STALE_MS)
     tick.kill('SIGKILL')
     await tickClosed
     expect(entries.map(e => [e.pid, e.task, e.folder?.endsWith('/.symcc/worktrees/T-1'), e.command])).toEqual([[group, 'T-1', true, FAKE]])

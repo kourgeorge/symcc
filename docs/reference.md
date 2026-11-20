@@ -1,6 +1,6 @@
 # symcc reference
 
-The long lists and tables that don't fit on the [README](../README.md): the install details, modes, commands, settings and statuses. For how things work in detail, see the [guide](guide.md).
+Look things up here: exact names of modes, commands, settings and statuses, and the install details. This page lists *what* exists. The [guide](guide.md) explains *how it works and why*, and the [README](../README.md) is the short start.
 
 - [How it works, step by step](#how-it-works-step-by-step)
 - [Install: other ways and fixes](#install-other-ways-and-fixes)
@@ -79,7 +79,7 @@ a wide enough terminal; if not, run `/symcc`. The status line starts with the mo
 
 ## Modes
 
-Change the mode with `/symcc-mode`, the `m` key in the panel, or by telling the lead.
+The mode decides whether finished work merges by itself. Change the mode with `/symcc-mode`, the `m` key in the panel, or by telling the lead.
 
 | Mode | Shown as | What happens |
 |---|---|---|
@@ -97,14 +97,14 @@ merge, and scouts can't edit files. See [approval before merge](guide.md#approva
 
 ## Live status: seeing the board
 
-`/symcc` opens the board panel. Keys: `a` approve, `x` reject or drop, `d` show changes,
+The board panel shows every task, scout and setting in one place. `/symcc` opens it. Keys: `a` approve, `x` reject or drop, `d` show changes,
 `p` pause, `u` resume, `r` retry, `m` switch review / auto, `t` / `s` / `c` the Tasks,
 Scouts and Settings tabs. **Ctrl+T** shows running workers. More in the
 [guide](guide.md#live-status-seeing-the-board).
 
 ## Commands
 
-`/symcc` opens everything; `/symcc-<word>` does one thing.
+Type these in the chat. `/symcc` opens everything; `/symcc-<word>` does one thing. Each row says what the command is for.
 
 | Command | What it does |
 |---|---|
@@ -139,9 +139,9 @@ Scouts and Settings tabs. **Ctrl+T** shows running workers. More in the
 
 ## Settings
 
-Change with `/symcc-settings` or by telling the lead (e.g. "give workers 90 minutes").
+Settings are the board's rules (how many workers, which tests, when to ask you). Change with `/symcc-settings` or by telling the lead (e.g. "give workers 90 minutes").
 The Settings tab (`c` in the panel) has one row per setting; Enter flips an on/off
-setting, opens a pick list for `mode`, `notify`, `scout_findings` and `tests_with_changes`, or an edit box for numbers and
+setting, opens a pick list for `mode`, `notify`, `sound_set`, `scout_findings` and `tests_with_changes`, or an edit box for numbers and
 `test_commands`. A value over its limit is cut to it, and the answer says so.
 
 | Setting | Default | Allowed | Meaning |
@@ -154,6 +154,7 @@ setting, opens a pick list for `mode`, `notify`, `scout_findings` and `tests_wit
 | `archive_days` | 14 | 0–3650 (0 = never) | Done and dropped tasks older than this move from `board.json` to `.symcc/archive.json` |
 | `open_on_start` | on | on / off | Open the board panel when a session starts |
 | `notify` | `voice` where this computer can speak, else `sound`, else `off` | `off` / `sound` / `voice` | What plays when a task is merged or a worker asks you something: `sound` a short chime, `voice` says "symcc: T-3 done" / "symcc: T-5 needs you" out loud (the project folder's name first). Only choices this computer can play can be picked (see below) |
+| `sound_set` | picked from the project name | `1` / `2` / `3` | Which chimes `notify sound` plays, so you can tell which project chimed (set 1: `Glass` and `Ping` on macOS, 2: `Hero` and `Pop`, 3: `Submarine` and `Funk`; the second sound is for a waiting question). Picking one plays its chime |
 | `scout_findings` | `auto` | `auto` / `backlog` | Where tasks from a scout's finding go. `auto`: the lead decides, and a finding it adds goes to `todo` and runs. `backlog`: every task added from a scout finding goes to the backlog, whatever the lead asks, and starts only when you move it to `todo` (the lead still tells you what was found) |
 | `tests_with_changes` | `ask` | `off` / `ask` / `review` | A change task whose commit edits code but no test file (a test file is in a `test/`, `tests/`, `__tests__/`, `spec/`, `e2e/` or `cypress/` folder or a folder ending in `.Test` / `.Tests`, or has `test` or `spec` as a name part split by `.`, `_` or `-` (`a.test.ts`, `a_test.py`, `test_a.py`, `a-test.ts`), a `.cy.` or `e2e` name part (`a.cy.ts`, `login.e2e.ts`), or a CamelCase name ending in `Test` or `Tests` (`FooTest.java`, `FooTests.cs`, `LoginUITests.swift`); a name that only contains those letters (`latest.ts`, `run-tests.sh`, all-capital `LATEST.ts`) is not a test). `ask`: it still merges and the lead is told "T-3 changed code but no test". `review`: it waits for your review instead of merging. `off`: not checked. A change to docs only is never flagged (docs are `.md`/`.mdx` files, README / CHANGELOG / LICENSE-style names (no extension or a text one), images, video, audio, fonts and subtitles anywhere, and non-code files under `docs/`; code under `docs/` (`docs/build.ts`) or with a docs-style name (`Notice.tsx`) is code) |
 | `checker` | `off` | `off` / `on` | A fresh checker tries to break each change (not docs-only) after the prep step (commit, scope and secret check) and before it joins the merge queue; the tests run once in the queue, after it. Problems go back to the worker as a retry, with no test run for that try. See [the checker](guide.md#the-checker) |

@@ -2,6 +2,28 @@
 
 When a set of user-facing changes is ready to release, bump the version in both `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` and add an entry here.
 
+## 0.5.15 (2026-11-20)
+
+### Changed
+- Step icons: ⧗ queue and ⊛ test (▶ worker · ✎ prep · ⌕ checker · ⧗ queue · ⊛ test · ⇢ merge), on every board, band, task page and in the docs.
+- README, the landing page, the reference and the other docs pages rewritten to be plainer and to say why, not only how; the guide keeps each reason once.
+
+### Fixed
+- The board lock records which process holds it, so a lock left by a process that is gone is taken at once (Node host and OpenCode) instead of after 30 s; the holder's start time comes from `ps`, so a live holder is never taken for gone (e.g. in OpenCode's background worker).
+
+## 0.5.14 (2026-11-20)
+
+### Added
+- Three notify sound sets, so you can tell projects apart by ear (macOS: Glass / Ping, Hero / Pop, Submarine / Funk; Linux and Windows use their own sounds). A `sound_set` setting (1, 2, 3) on every Settings page; by default it is picked from the project's folder name; picking a set plays it once.
+
+### Changed
+- Question pages list the answers one per line, numbered ("1. …"), wrapping inside the box; click a line or press its number (terminal, VS Code, OpenCode; one native button per answer on desktop and mobile).
+- The task page's Status row shows the state ("▶ doing · 48m", "◆ ready for review", "✗ failed"); the Stage line shows the step. In a session that doesn't drive the board, a task running elsewhere says "runs in the other session" there and on the lead's board.
+- The guide has a "Why it is built this way" section, and "Engine and clients" is in the site's menu.
+
+### Fixed
+- A Node host session that closed while a worker was starting could leave the task "doing" with no worker; the Node host's process tests are no longer flaky.
+
 ## 0.5.13 (2026-11-20)
 
 ### Added

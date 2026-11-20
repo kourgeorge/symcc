@@ -406,8 +406,8 @@ export function build(root: string, out: string): string[] {
     { src: 'README.md', out: 'overview.html', title: 'Overview', dropHtml: true },
     { src: 'docs/guide.md', out: 'guide.html', title: 'Guide' },
     { src: 'docs/reference.md', out: 'reference.html', title: 'Reference' },
+    { src: 'docs/engine-and-clients.md', out: 'engine-and-clients.html', title: 'Engine and clients' },
   ]
-  if (existsSync(join(root, 'docs/engine-and-clients.md'))) pages.push({ src: 'docs/engine-and-clients.md', out: 'engine-and-clients.html', title: 'Engine and clients' })
   const researchDir = join(root, 'docs/research')
   const research = existsSync(researchDir) ? readdirSync(researchDir).filter(n => n.endsWith('.md')).sort() : []
   for (const n of research) {

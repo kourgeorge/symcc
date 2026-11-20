@@ -179,7 +179,7 @@ test('T-581: a doing row in a check step or the merge line shows its icon and th
   const f0 = viewFile()
   const fresh = new Date(NOW - 10_000).toISOString()
   const runs = [{ started: new Date(NOW - 20 * 60_000).toISOString(), ended: fresh }]
-  const steps = [['T-1', 'testing', '⧗'], ['T-6', 'prep', '✎'], ['T-7', 'checker', '⌕'], ['T-8', 'merging', '⇢']] as const
+  const steps = [['T-1', 'testing', '⊛'], ['T-6', 'prep', '✎'], ['T-7', 'checker', '⌕'], ['T-8', 'merging', '⇢']] as const
   const base = f0.view.tasks.find(t => t.id === 'T-1')!
   const tasks = [
     ...f0.view.tasks.filter(t => t.id !== 'T-1'),
@@ -196,7 +196,7 @@ test('T-581: a doing row in a check step or the merge line shows its icon and th
       expect(row(lines, id)).toMatch(new RegExp(`${id} +${icon} 20m`))
       expect(row(lines, id)).not.toMatch(/▶|\b(prep|test|checker|merge) \d/)
     }
-    expect(row(lines, 'T-9')).toMatch(/T-9 +⋯ 20m/)
+    expect(row(lines, 'T-9')).toMatch(/T-9 +⧗ 20m/)
     expect(row(lines, 'T-10')).toMatch(/T-10 +▶ 15m/)
   }
   // the titles still start in one column
@@ -208,8 +208,8 @@ test('T-581: a doing row in a check step or the merge line shows its icon and th
   const want: [string, string, string][] = [
     ['T-10', '▶ worker · 15m', '● worker → prep → queue → test → merge'],
     ['T-6', '✎ prep · 20m', 'worker ✓ → ● prep → queue → test → merge'],
-    ['T-9', '⋯ queue (2) · 20m', 'worker ✓ → prep ✓ → ● queue → test → merge'],
-    ['T-1', '⧗ test · 20m', 'worker ✓ → prep ✓ → queue ✓ → ● test → merge'],
+    ['T-9', '⧗ queue (2) · 20m', 'worker ✓ → prep ✓ → ● queue → test → merge'],
+    ['T-1', '⊛ test · 20m', 'worker ✓ → prep ✓ → queue ✓ → ● test → merge'],
     ['T-8', '⇢ merge · 20m', 'worker ✓ → prep ✓ → queue ✓ → test ✓ → ● merge'],
   ]
   for (const [id, badge, stage] of want) {
@@ -1563,8 +1563,8 @@ test('T-596: an approved task in review whose approve runs leaves NEEDS YOU: lis
   }
   const cases = [
     [{ checking: { step: 'prep', at: fresh } }, '✎', '✎ prep', '1 in prep'],
-    [{ checking: { step: 'queue', place: 2, at: fresh }, note: 'queue (2)' }, '⋯', '⋯ queue (2)', '1 in queue'],
-    [{ checking: { step: 'testing', at: fresh } }, '⧗', '⧗ test', '1 testing'],
+    [{ checking: { step: 'queue', place: 2, at: fresh }, note: 'queue (2)' }, '⧗', '⧗ queue (2)', '1 in queue'],
+    [{ checking: { step: 'testing', at: fresh } }, '⊛', '⊛ test', '1 testing'],
     [{ checking: { step: 'merging', at: fresh } }, '⇢', '⇢ merge', '1 merging'],
   ] as const
   for (const [extra, icon, badge, crew] of cases) {
@@ -1615,7 +1615,7 @@ test('T-614: right after the panel sends an approve, the page badge and the Stag
   // a step on the board: the board carries the phase (the panel drops its flag)
   const testing = withT2({ checking: { step: 'testing', at: new Date(NOW - 10_000).toISOString() } })
   expect(approveSent(testing, sent, NOW)).toBe(false)
-  expect(page(testing, sent)).toContain('[⧗ test]')
+  expect(page(testing, sent)).toContain('[⊛ test]')
   // the task left review (merged): no flag either
   expect(approveSent(withT2({ status: 'done' }), sent, NOW)).toBe(false)
 })

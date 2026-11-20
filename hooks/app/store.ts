@@ -1,4 +1,4 @@
-import { type Board, parseBoard, readBoard, brokenBoardText, emptyBoard, symccOn, lockText, isLockStale, tmpName } from '../board'
+import { type Board, parseBoard, readBoard, brokenBoardText, emptyBoard, symccOn, lockText, lockHolder, isLockStale, tmpName } from '../board'
 import { checkHealth } from './health'
 import { publish } from './lead'
 import { tellLead } from './tell'
@@ -268,7 +268,7 @@ export const aboutToWait = () => startWait.mark?.()
 export async function takeLock(host: Host): Promise<string> {
   const lock = path(S.N.lockFile)
   const me = `${await host.session.id().catch(() => 'unknown')}:${Math.random().toString(36).slice(2, 10)}`
-  const mine = lockText(me, Date.now())
+  const mine = lockText(me, Date.now(), selfProcess(host))
   const tmp = tmpFor(lock)
   await host.fs.write(tmp, mine)
   try {
@@ -277,7 +277,7 @@ export async function takeLock(host: Host): Promise<string> {
       if ((await host.run(['ln', tmp, lock])).exitCode === 0) return mine
       const held = await host.fs.read(lock).catch(() => null)
       const st = await host.fs.stat(lock).catch(() => null)
-      if (held !== null && isLockStale(held, Date.now(), st?.mtimeMs)) {
+      if (held !== null && isLockStale(held, Date.now(), st?.mtimeMs, undefined, await holderAlive(host, held))) {
         // remove it only if it is still the same stale lock we just read
         await dropIfSame(host, lock, held)
         continue
@@ -291,6 +291,25 @@ export async function takeLock(host: Host): Promise<string> {
   }
 }
 
+/** This program's process for a lock it writes (host.processes.self), or undefined when the host can't tell. Never throws. */
+function selfProcess(host: Host): { pid: number; started: number } | undefined {
+  try {
+    return host.processes?.self()
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Whether the process lock text `held` names still runs (T-659): undefined when the lock names none, or the host
+ * can't tell (then the lock's age decides). Never throws.
+ */
+export async function holderAlive(host: Host, held: string): Promise<boolean | undefined> {
+  const p = lockHolder(held)
+  if (!p || !host.processes) return undefined
+  return host.processes.alive(p).catch(() => undefined)
+}
+
 export async function dropLock(host: Host, mine: string) {
   await dropIfSame(host, path(S.N.lockFile), mine)
 }
@@ -298,20 +317,6 @@ export async function dropLock(host: Host, mine: string) {
 /** Removes lock file `file` only while it still holds `text` (ours, or the stale one just read). Never throws. */
 export async function dropIfSame(host: Host, file: string, text: string) {
   if ((await host.fs.read(file).catch(() => null)) === text) await host.run(['rm', '-f', file]).catch(() => undefined)
-}
-
-/**
- * One try at taking lock file `file` with `text`, the same safe way as takeLock: written to its own temp file,
- * then hard-linked into place (`ln` fails if the lock exists). True when the lock is ours now.
- */
-export async function tryLock(host: Host, file: string, text: string): Promise<boolean> {
-  const tmp = tmpFor(file)
-  await host.fs.write(tmp, text)
-  try {
-    return (await host.run(['ln', tmp, file])).exitCode === 0
-  } finally {
-    await host.run(['rm', '-f', tmp]).catch(() => undefined)
-  }
 }
 
 /** Write to a temp file, then rename it over board.json, so a crash mid-write never leaves a broken board. */

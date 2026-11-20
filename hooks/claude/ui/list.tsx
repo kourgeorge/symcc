@@ -87,7 +87,7 @@ export function listPage($: $, pane: PaneParts) {
   const shown = list.flatMap(r => ('task' in r ? [r.task] : []))
   const since = (id: string) => v.working.find(w => w.task === id)?.since
   const idWidth = Math.max(4, ...shown.map(x => x.id.length))
-  // a doing task: the total work time of all tries, "1h40m", after its step's icon in a check step (rowMark): "⧗ 9m",
+  // a doing task: the total work time of all tries, "1h40m", after its step's icon in a check step (rowMark): "⊛ 9m",
   // with no try mark (T-628: the band and the task page show it); narrow, the time is left out (see rowStates)
   const { states, width: cellWidth } = rowStates(shown, nowMs, since, w => w <= width - (4 + idWidth + 3 + 2) - TITLE_ROOM, false)
   // the list's own colors: failed red, review and waiting yellow, doing blue, done green
