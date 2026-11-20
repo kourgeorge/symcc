@@ -215,13 +215,14 @@ test('T-581: a doing row in a check step or the merge line shows its icon and th
   ]
   for (const [id, badge, stage] of want) {
     const p = page(id)
-    expect(p).toContain(`[${badge}]`)
+    // no status badge under the title (T-693): the Status and Stage rows say it
+    expect(p).not.toContain(`[${badge}]`)
     expect(p.find(l => l.startsWith('Status:'))).toContain(`▶ doing · ${badge.split(' · ')[1]}`)
     expect(p.find(l => l.startsWith('Status:'))).not.toContain(badge)
     expect(p.find(l => l.startsWith('Stage:'))?.replace(/^Stage:\s+/, '')).toBe(stage)
   }
   // a running checker shows its step even with the setting off; with it on every task's Stage has it
-  expect(page('T-7')).toContain('[⌕ checker · 20m]')
+  expect(page('T-7')).not.toContain('[⌕ checker · 20m]')
   expect(page('T-7').find(l => l.startsWith('Stage:'))).toContain('worker ✓ → prep ✓ → ● checker → queue → test → merge')
   const on = { ...f, view: { ...f.view, checker: true } }
   expect(page('T-1', on).find(l => l.startsWith('Stage:'))).toContain('worker ✓ → prep ✓ → checker ✓ → queue ✓ → ● test → merge')
@@ -563,6 +564,14 @@ test('T-680: a task page shows Claude Code\'s row of buttons ([ Back ] [ Pause ]
   expect(buttonRow('deps', 'scouts')).toBe('[ Back ] [ Edit ] [ Pause ]')
   expect(buttonRow('docs', 'scouts')).toBe('[ Back ] [ Run now ] [ Edit ] [ Resume ]')
   expect(buttonRow('Q-1')).toBe('[ Back ]')
+  // T-693: no status badge line under a task's title: the buttons come right after it; the status is in the Status row
+  for (const id of ['T-1', 'T-2', 'T-3']) {
+    const lines = panelLines(f, { opened: id, cursor: 0 }, NOW, 140).lines.map(lineText)
+    const at = lines.findIndex(l => l.startsWith(`${id} `))
+    expect(lines[at + 1]?.startsWith('[ Back ]')).toBe(true)
+    expect(lines.some(l => /^\[[^ ].*\]$/.test(l))).toBe(false)
+    expect(lines.find(l => l.trim().startsWith('Status:'))).toContain({ 'T-1': '▶ doing', 'T-2': '◆ ready for review', 'T-3': '✗ failed' }[id]!)
+  }
 
   // in the TUI: a click on each button sends the same command as its key (Drop in review, which has no key, drops it)
   const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)]])
@@ -1686,7 +1695,9 @@ test('T-596: an approved task in review whose approve runs leaves NEEDS YOU: lis
     expect(band[0]).not.toContain('review')
     expect(band.find(l => l.startsWith('T-2'))).toMatch(new RegExp(`T-2 +${icon} 15m`))
     const page = panelLines(f, { opened: 'T-2', cursor: 0 }, NOW, 140).lines.map(lineText).join('\n')
-    expect(page).toContain(badge)
+    // no badge under the title (T-693): the Stage row names the step
+    expect(page).not.toContain(`[${badge}`)
+    expect(page).toMatch(new RegExp(`Stage:.*● ${badge.split(' ')[1]}`))
     expect(page).not.toContain('ready for review')
   }
   // no approve running (or it ended, failed: its step is cleared, or its mark went stale): back under NEEDS YOU
@@ -1708,21 +1719,21 @@ test('T-614: right after the panel sends an approve, the page badge and the Stag
   // the page itself (the banner above counts the board's statuses)
   const all = lines.slice(lines.indexOf('T-2 a reviewed change')).join('\n')
   expect(all).not.toContain('ready for review')
-  expect(lines).toContain('[✎ prep]')
+  expect(lines).not.toContain('[✎ prep]')
   expect(lines.find(l => l.trim().startsWith('Status:'))).toContain('▶ doing')
   expect(all).toMatch(/Stage:[\s\S]*review ✓[\s\S]*● prep[\s\S]*merge/)
   expect(approveSent(f, sent, NOW)).toBe(true)
   // without it, or for another task, or once too old: still ready for review everywhere
   for (const a of [undefined, { id: 'T-1', at: NOW }, { id: 'T-2', at: NOW - APPROVE_SENT_MS }]) {
     const ls = page(f, a)
-    expect(ls).toContain('[◆ ready for review]')
+    expect(ls).not.toContain('[◆ ready for review]')
     expect(ls.find(l => l.trim().startsWith('Status:'))).toContain('ready for review')
     expect(ls.join('\n')).toMatch(/● review/)
   }
   // a step on the board: the board carries the phase (the panel drops its flag)
   const testing = withT2({ checking: { step: 'testing', at: new Date(NOW - 10_000).toISOString() } })
   expect(approveSent(testing, sent, NOW)).toBe(false)
-  expect(page(testing, sent)).toContain('[⊛ test]')
+  expect(page(testing, sent).find(l => l.trim().startsWith('Stage:'))).toContain('● test')
   // the task left review (merged): no flag either
   expect(approveSent(withT2({ status: 'done' }), sent, NOW)).toBe(false)
 })
@@ -1916,10 +1927,10 @@ test('T-627: a long task page scrolls by drawn lines under a fixed banner, tabs,
   const draw = (scroll: number, rows?: number) => panelLines(f, { opened: 'T-2', cursor: 0, scroll, taskReport: LONG_REPORT, ...(rows ? { rows } : {}) }, NOW, w)
   const all = draw(0)
   const text = all.lines.map(lineText)
-  // the title wraps onto two drawn lines, and both stay at the top with the badge
+  // the title wraps onto two drawn lines, and both stay at the top (no status badge under it, T-693)
   const title = text.slice(0, all.fixed)
   expect(title.some(l => l.startsWith('T-2 a reviewed change'))).toBe(true)
-  expect(title.filter(l => /^\[[^ ].*\]$/.test(l)).length).toBe(1)
+  expect(title.filter(l => /^\[[^ ].*\]$/.test(l)).length).toBe(0)
   // T-680: the page's buttons stay at the top with them
   expect(title.some(l => l.startsWith('[ Back ] [ Approve ]'))).toBe(true)
   expect(title.join(' ')).toContain('onto a second line here')
@@ -1927,7 +1938,7 @@ test('T-627: a long task page scrolls by drawn lines under a fixed banner, tabs,
   // the long history and report lines are broken into rows the panel's width, keeping every word in order
   expect(text.join(' ').replace(/\s+/g, ' ')).toContain('report line 1 is a long one that says a lot about what was done, so it has to wrap in a narrow panel')
   const firstTitle = title.findIndex(l => l.startsWith('T-2'))
-  checkScrolling(draw, 25, w, [title[firstTitle]!, title.find(l => l.startsWith('['))!])
+  checkScrolling(draw, 25, w, [title[firstTitle]!, title.find(l => l.startsWith('[ Back ]'))!])
   // too low to keep the title too: the banner and tabs stay, the title scrolls with the page
   checkScrolling(draw, 12, w, [title.find(l => l.startsWith('[t]: Tasks'))!])
   expect(draw(0, 12).fixed < all.fixed).toBe(true)

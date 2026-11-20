@@ -1402,10 +1402,12 @@ test('the task page shows one labelled row per fact, From and Why on their own r
   stateOf(on, { opened: 'T-3', view: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Base work'), task('T-3', 'review', 'Better scouts', { origin, files: ['hooks/a.ts'], after: ['T-1'], branch: 'symcc/T-3', attempts: 2 })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   const L = await lines(ui)
-  // the header: id and title in bold, then the status badge in its own color
+  // the header: id and title in bold; no status badge under it (T-693): the Status row shows it, in its own color
   const id = await ui.find({ type: 'Text', text: /^T-3$/ })
   expect(id?.props.bold).toBe(true)
-  const badge = (await ui.findAll({ type: 'Text', text: /^\[◆ ready for review\]$/ })).find(t => t.props.color)
+  expect(L.some(l => /^\[.*\]$/.test(l))).toBe(false)
+  expect(L.find(l => l.startsWith('Status:'))).toMatch(/^Status:\s+◆ ready for review/)
+  const badge = (await ui.findAll({ type: 'Text', text: /^◆ ready for review$/ })).find(t => t.props.color)
   expect(badge?.props.color).toBe('warning')
   expect(badge?.props.bold).toBe(true)
   for (const label of ['Status', 'Role', 'From', 'Why', 'Request', 'Seen', 'Files', 'After', 'Branch', 'Tries']) {
@@ -1444,12 +1446,12 @@ test('From shows a scout or a split task in its own color', async ($, on) => {
   stateOf(on, { opened: 'T-4', view: { shape: 'view-1', value: { tasks: [task('T-4', 'doing', 'Fix it', { origin: { by: 'scout', scout: 'bugs', why: 'it breaks', at: '' } }), task('T-5', 'todo', 'Part', { origin: { by: 'lead', task: 'T-4', how: 'split', why: 'too big', at: '' } })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect((await ui.find({ type: 'Text', text: /^scout bugs$/ }))?.props.color).toBe('suggestion')
-  expect((await ui.findAll({ type: 'Text', text: /^\[▶ worker\]$/ })).find(t => t.props.color)?.props.color).toBe('ide')
+  expect((await ui.findAll({ type: 'Text', text: /^▶ doing$/ })).find(t => t.props.color)?.props.color).toBe('ide')
   expect((await lines(ui)).some(l => /^Request:/.test(l))).toBe(false)
   await ui.unmount()
 })
 
-test('T-587: the terminal task page badge names the step ("[⌕ checker · 9m]"), the Status row the state (T-647), and its Stage row marks the step now, the steps before done', async ($, on) => {
+test('T-587: the terminal task page Status row names the state (T-647), and its Stage row marks the step now, the steps before done; no badge under the title (T-693)', async ($, on) => {
   const T0 = Date.parse('2026-03-02T10:00:00Z')
   mock.clock(on, { now: T0 })
   const iso = (ms: number) => new Date(ms).toISOString()
@@ -1458,7 +1460,7 @@ test('T-587: the terminal task page badge names the step ("[⌕ checker · 9m]")
   stateOf(on, { opened: 'T-4', view: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', checker: true, test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   const L = await lines(ui)
-  expect(L).toContain('[⌕ checker · 9m]')
+  expect(L).not.toContain('[⌕ checker · 9m]')
   const status = L.findIndex(l => l.startsWith('Status:'))
   expect(L[status]).toContain('▶ doing · 9m')
   // the Stage row right under Status (it may wrap onto a second line)
@@ -1475,7 +1477,7 @@ test('T-587: with the checker setting off the Stage row leaves "checker" out; a 
   stateOf(on, { opened: 'T-4', view: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   const L = await lines(ui)
-  expect(L).toContain('[⊛ test · 9m]')
+  expect(L).not.toContain('[⊛ test · 9m]')
   const at = L.findIndex(l => l.startsWith('Stage:'))
   expect(L.slice(at, at + 2).join(' ').replace(/\s+/g, ' ')).toMatch(/^Stage: worker ✓ → prep ✓ → queue ✓ → ● test → merge/)
   await ui.unmount()
@@ -1953,7 +1955,9 @@ test('an answered investigation opens with its full answer and Done, Keep as a n
   expect(await ui.find({ type: 'Text', text: /Changes \(/ })).toBeUndefined()
   expect(L.some(l => /^a done · v keep as a note · x ask more/.test(l))).toBe(true)
   expect(L.some(l => /^Kind:\s+investigation — nothing is merged$/.test(l))).toBe(true)
-  expect(L.some(l => /^\[◆ answered: read it\]$/.test(l))).toBe(true)
+  // no badge under the title (T-693); the Status row says it is in review
+  expect(L.some(l => /^\[◆ answered: read it\]$/.test(l))).toBe(false)
+  expect(L.find(l => l.startsWith('Status:'))).toMatch(/^Status:\s+◆ ready for review/)
   // one try: its report is the answer, so it is not shown twice
   expect(L.filter(l => /Checked in src\/cache\.ts\./.test(l)).length).toBe(1)
   // Ask more opens a box for the follow-up question
@@ -1988,7 +1992,7 @@ test('the board list and the task page show ● for a to do task worked on befor
   expect((await ui.find({ key: 'T-2' }))!.text).toMatch(/^T-2\s+● /)
   expect((await ui.find({ key: 'T-3' }))!.text).toMatch(/^T-3\s+◆ review/)
   await ui.press({ key: 'T-2' })
-  expect((await lines(ui)).some(l => l.includes('[● '))).toBe(true)
+  expect((await lines(ui)).find(l => l.startsWith('Status:'))).toMatch(/^Status:\s+● to do/)
   await ui.unmount()
 })
 

@@ -20,7 +20,7 @@ import type { OwnerQuestion } from '../core/questions'
 import {
   statusCounts, newestFirst, bandLeads, bandNote, bandBrand, bandWhere, boardBrand, modeLabel, modeOf, planBandText, withCrew, questionsForYou,
   bannerLines, bannerRule, footerRule, type BannerTone, panelSections, localOffset, when, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, ALL_CLEAR,
-  rowStates, rowMark, TITLE_ROOM, fitRow, rowExtra, questionsLabel, archivedOf, archivedNote, statusMark, statusBadge, detailRows, detailRowLines, wrapSegs, hintLineText,
+  rowStates, rowMark, TITLE_ROOM, fitRow, rowExtra, questionsLabel, archivedOf, archivedNote, statusMark, detailRows, detailRowLines, wrapSegs, hintLineText,
   type KeyHint, type Seg, type BoardTask, gitNote, intoOf, taskActions, taskAsks, actionButtonLabel, packRows, type TaskAction, type TaskActionId,
   ownersTurn, shownStatus, sortScouts, scoutListRows, scoutRow, scoutIcon, scoutTone, scoutHowTo, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem, scoutFile,
   SETTING_GROUPS, SETTINGS, isSettingPage, settingInfo, settingValue, cantPlayNotify, groupSummaryParts,
@@ -478,7 +478,7 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
   }
   const foot: Line[] = [[{ text: footerRule(w), color: 'subtle' }], ...modeRow, ...hintLines(keys, w).map(hintSegs)]
   // T-627: every line is cut into the rows it really takes (drawn lines: no line wider than the panel, none with a
-  // line break inside), so the scroll counts what is on screen. The page's own title (and a task's badge) stays with
+  // line break inside), so the scroll counts what is on screen. The page's own title stays with
   // the banner and the tabs at the top; the mouse wheel scrolls only the rest, between them and the footer, down to its
   // last screenful (its last line when the panel's height isn't known).
   const hits0 = body.hits ?? body.lines.map(() => null)
@@ -1073,13 +1073,10 @@ function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = ''
   const t = v.tasks.find(x => x.id === id)
   if (!t) return null
   addAll(wrapSegs([{ text: t.id, color: 'claude', bold: true }, { text: `  ${t.title}`, color: 'text', bold: true }], w))
-  // the status badge, as on Claude Code's task page: the step a doing task is in ("[⌕ checker · 5m]"), else its status
-  // (`merging`, an approve this panel just sent: its step at once, on the badge, the Status row and the Stage line alike)
-  const badge = statusBadge(t, nowMs, undefined, merging)
-  b.add([{ text: `[${badge.text}]`, color: badge.color, bold: true }])
+  // no status badge under the title (T-693): the Status and Stage rows in the details show it
   // T-680: the page's buttons, as Claude Code's terminal page draws them ([ Back ] [ Pause ] ...); a click presses one
   addAll(buttonLines(taskButtons(t, busy), w))
-  // the title, the badge and the buttons stay at the top while the rest of the page scrolls
+  // the title and the buttons stay at the top while the rest of the page scrolls
   const head = b.lines.length
   const asked = taskAsks(t, v.max_minutes)
   if (asked) {

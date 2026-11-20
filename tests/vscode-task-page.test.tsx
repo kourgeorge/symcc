@@ -86,9 +86,10 @@ for (const id of RICH_IDS) {
     expect(title, id).toBeDefined()
     expect(title!.props.wrap).toBe('wrap')
     expect(t.title.startsWith(LONG_TITLE)).toBe(true)
-    // the id and the title on top, the status badge, then the sections
+    // the id and the title on top, then the sections; no status badge under the title, a labelled Status line instead (T-693)
     expect(await ui.find({ type: 'Text', text: id }), id).toBeDefined()
-    expect((await ui.find({ key: 'vs-status' }))?.text, id).toMatch(/^ \S+ .+ /)
+    expect((await ui.find({ key: 'vs-status' }))?.text, id).toMatch(/^Status\S+ .+/)
+    expect(await ui.find({ key: 'vs-badge' }), id).toBeUndefined()
     const want = ['Why / where it came from', 'What to do', '▸ Files it may change 3', '▸ Waits for 2', `▸ Time and cost ${'runs' in t ? t.runs.length : 0}`]
     if (t.history.length) want.push('History (2, newest first)')
     if (t.attempts) want.push(t.status === 'doing' ? 'Report (try 1)' : 'Report (try 2, 2 of 2)') // the running try has no report yet
@@ -124,8 +125,7 @@ const T504_LATER: [string, string][] = [
   ['["tokens"]', '["4.6k tokens"]'],
   ['"  try 2: 5m (running)"', '"  try 2: 15m (running)"'],
   ['"  total: 25m · 4.6k', '"  total: 35m · 4.6k'],
-  // the badge names the step with the total work time (T-587), the Status row the state with it (T-647)
-  ['"[▶ worker · 25m]"', '"[▶ worker · 35m]"'],
+  // the Status row names the state with the total work time (T-647); no badge under the title (T-693)
   ['"▶ doing · 25m"', '"▶ doing · 35m"'],
 ]
 
@@ -194,11 +194,11 @@ test('in VS Code a task it waits for opens by its button, and "← Tasks" goes b
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
   await ui.press({ key: 'T-506', link: { href: vsHref('task', 'T-506') } })
   expect(await ui.find({ type: 'Text', text: 'T-506' })).toBeDefined()
-  expect((await ui.find({ key: 'vs-status' }))?.text).toMatch(/^ ○ to do /)
+  expect((await ui.find({ key: 'vs-status' }))?.text).toMatch(/^Status○ to do/)
   await ui.press({ key: 'fold-after', link: { href: vsHref('fold', 'fold-after') } })
   await ui.press({ key: 'after-T-499', link: { href: vsHref('task', 'T-499') } })
   expect(await ui.find({ type: 'Text', text: 'T-499' })).toBeDefined()
-  expect((await ui.find({ key: 'vs-status' }))?.text).toMatch(/^ ✓ done /)
+  expect((await ui.find({ key: 'vs-status' }))?.text).toMatch(/^Status✓ done/)
   await ui.press({ key: 'back' })
   expect(await ui.find({ key: 'vs-actions' })).toBeUndefined()
   expect(await ui.find({ key: 'vs-task-T-506' })).toBeDefined()
@@ -226,10 +226,10 @@ for (const surface of ['terminal', 'vscode'] as const)
 // its color, tags on one line, clear sections, the less-used ones folded (closed by default, with a count), what needs
 // you boxed at the top in its tone with its buttons right there, at most one primary button, no "…" and no key hints.
 const CARDS: Record<string, { badge: string; tone: string; callout?: [string, string, string] }> = {
-  'T-504': { badge: ' ▶ doing · 25m ', tone: 'ide' },
-  'T-502': { badge: ' ✗ failed ', tone: 'error', callout: ['vs-sec-why-failed', 'error', 'retry'] },
-  'T-503': { badge: ' ? waiting for you ', tone: 'warning', callout: ['vs-sec-question', 'warning', 'choice-1'] },
-  'T-510': { badge: ' ◆ answered: read it ', tone: 'success' },
+  'T-504': { badge: '▶ doing · 25m', tone: 'ide' },
+  'T-502': { badge: '✗ failed', tone: 'error', callout: ['vs-sec-why-failed', 'error', 'retry'] },
+  'T-503': { badge: '? waiting for you', tone: 'warning', callout: ['vs-sec-question', 'warning', 'choice-1'] },
+  'T-510': { badge: '◆ answered: read it', tone: 'success' },
 }
 for (const [id, want] of Object.entries(CARDS))
   for (const bodyColumns of [40, 80])
@@ -243,10 +243,15 @@ for (const [id, want] of Object.entries(CARDS))
       const t = RICH_TASKS.find(x => x.id === id)!
       expect((await ui.find({ type: 'Text', text: id }))?.props, at).toMatchObject({ bold: true, size: 'title' })
       expect((await ui.find({ type: 'Text', text: t.title }))?.props, at).toMatchObject({ bold: true, size: 'title', wrap: 'wrap' })
-      const status = await ui.find({ key: 'vs-status' })
-      const [badge, tags] = elements(status!.children).filter(n => n.type === 'Text')
+      // T-693: no status badge under the title; the tags row first, then a labelled Status line in the status's color
+      expect(await ui.find({ key: 'vs-badge' }), at).toBeUndefined()
+      const head = ((await ui.find({ key: 'vs-head' }))!.children as Node[]).filter(n => n && typeof n === 'object').map(n => n.key ?? n.props?.key)
+      expect(head.slice(2, 4), at).toEqual(['vs-tags-row', 'vs-status'])
+      const [label, badge] = elements((await ui.find({ key: 'vs-status' }))!.children).filter(n => n.type === 'Text')
+      expect(label?.children, at).toEqual(['Status'])
       expect(badge?.children, at).toEqual([want.badge])
-      expect(badge?.props, at).toMatchObject({ bold: true, backgroundColor: want.tone })
+      expect(badge?.props, at).toMatchObject({ bold: true, color: want.tone })
+      const tags = elements((await ui.find({ key: 'vs-tags-row' }))!.children).find(n => n.type === 'Text')
       expect(tags?.props, at).toMatchObject({ wrap: 'wrap', size: 'caption', color: 'inactive' })
       expect(String(tags?.children), at).toMatch(/worker · try 2/)
       // the sections, with their headings

@@ -1,7 +1,7 @@
 // The task page in VS Code's side panel (see surface.ts and vscode.tsx), drawn as a card. The terminal's task page
 // (task-page.tsx) packs labelled rows cut to the panel and lists its keys; here the page uses the whole panel width and wraps every line:
 //   ← Tasks                                  (back to the list)
-//   T-414 and the title, large and bold; the status badge in its color, then the kind, role, try and time as small dim tags
+//   T-414 and the title, large and bold; the kind, role, try and time as small dim tags
 //   the question (its answers as buttons and a box for your own), why it failed (with Retry), waiting for your files
 //   (with Merge now): boxed in their tone, at the top
 //   the action buttons in one row (only the ones that fit the status, at most one primary on the page)
@@ -18,7 +18,7 @@ import { S } from '../../app/state'
 import { when } from '../../core/days'
 import type { PaneParts } from './parts'
 import type { $ } from '../panel'
-import { vsBadge, vsCallout, vsChoices, vsFold, vsFooter, vsHref, vsLink, mdLink, vsSection, vsTags } from './vscode'
+import { vsCallout, vsChoices, vsFold, vsFooter, vsHref, vsLink, mdLink, vsSection, vsTags } from './vscode'
 
 /** How many lines of a report VS Code's task page shows before its "Show all" button. */
 export const REPORT_FIRST_LINES = 12
@@ -158,13 +158,13 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
     </Box>
   )
 
-  // the top: the id and the title large and bold, the status badge in its color, then the kind, role, try and time as small tags
+  // the top: the id and the title large and bold, the kind, role, try and time as small tags, then the Status and Stage lines
   const role = findRole(S.roles, roleOf(t))?.name ?? roleOf(t)
   const kind = kindMark(t)
   const total = sumRuns(t.runs, nowMs)
   const tags = [kind, role, t.attempts ? `try ${t.attempts}` : '', t.runs?.length ? fmtDuration(total.ms) : '', x.agentId ? 'a worker is on it now' : ''].filter(Boolean)
   const statusWord = 'answered: read it'
-  // the badge is this page's Status row: the state and its time ("▶ doing · 48m", T-647), as the Status row on the
+  // the Status line: the state and its time ("▶ doing · 48m", T-647), as the Status row on the
   // terminal and OpenCode pages; under it the Stage stepper names the step (worker ✓ → ● checker → …)
   // (an approve the page started shows doing at once, not "ready for review")
   const badge = statusBadge(t as BoardTask, nowMs, undefined, !!x.merging, 'state')
@@ -182,9 +182,16 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
     <Box key="vs-head" flexDirection="column">
       <Text key="vs-id" bold size="title" color={C('claude')}>{t.id}</Text>
       <Text key="vs-title" wrap="wrap" bold size="title" color={C('text')}>{t.title}</Text>
+      {tags.length ? (
+        <Box key="vs-tags-row" flexDirection="row" flexWrap="wrap" columnGap={1}>
+          {vsTags(vs, 'vs-tags', tags)}
+        </Box>
+      ) : null}
+      {/* T-693: no status badge under the title; this page has no Status row in its sections, so a labelled
+          Status line (as the terminal's details row) sits with the Stage line */}
       <Box key="vs-status" flexDirection="row" flexWrap="wrap" columnGap={1}>
-        {vsBadge(vs, 'vs-badge', x.answered ? `${statusMark({ ...t, status: shown })} ${statusWord}` : badge.text, x.answered ? 'success' : badge.color)}
-        {tags.length ? vsTags(vs, 'vs-tags', tags) : null}
+        <Text key="vs-status-label" color={C('inactive')}>Status</Text>
+        <Text key="vs-status-text" bold color={C(x.answered ? 'success' : badge.color)}>{x.answered ? `${statusMark({ ...t, status: shown })} ${statusWord}` : badge.text}</Text>
       </Box>
       {stage ? vsStage(stage) : null}
     </Box>
