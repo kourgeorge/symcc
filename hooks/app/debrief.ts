@@ -84,7 +84,7 @@ export function debriefFinished(host: Host, agentId: string, run: DebriefEnd): b
   if (d.report && String(run.answer ?? '').trim() === d.report) return true
   debriefs.delete(agentId)
   d.timer?.cancel()
-  void applyDebrief(host, d, run).catch(() => undefined)
+  void applyDebrief(host, agentId, d, run).catch(() => undefined)
   return true
 }
 
@@ -92,15 +92,22 @@ export function debriefFinished(host: Host, agentId: string, run: DebriefEnd): b
  * A debrief's answer: its suggestions are kept on the task (a done task's are told to the lead at once, as its own were
  * listed at done already; a dropped task's are thrown away), and its tokens and cost are added to the task's try.
  */
-async function applyDebrief(host: Host, d: Debrief, run: DebriefEnd) {
+async function applyDebrief(host: Host, agentId: string, d: Debrief, run: DebriefEnd) {
   const answered = !run.isAborted && run.end.reason === 'answer'
   const late = await change(host, x => {
     const cur = find(x, d.task) as BoardTask | undefined
     if (!cur) return [x, [] as string[]] as [Board, string[]]
     const patch: Partial<BoardTask> = {}
-    const last = cur.runs?.at(-1)
-    if (cur.attempts === d.attempts && last && (run.tokens || run.cost !== undefined)) {
-      patch.runs = [...cur.runs!.slice(0, -1), { ...last, ...(run.tokens ? { tokens: addTokens(last.tokens, run.tokens) } : {}), ...(run.cost !== undefined ? { cost: (last.cost ?? 0) + run.cost } : {}) }]
+    // the agent's own try, even when a new try started since: the run that names the agent, else the one as many
+    // runs back from the last as tries started since (each new try adds one run and one to attempts)
+    const runs = cur.runs ?? []
+    let i = runs.findLastIndex(r => r?.agent === agentId || (Array.isArray(r?.checkers) && r.checkers.includes(agentId)))
+    if (i < 0) i = runs.length - 1 - (cur.attempts - d.attempts)
+    const mine = i >= 0 && i < runs.length ? runs[i] : undefined
+    if (mine && (run.tokens || run.cost !== undefined)) {
+      const out = [...runs]
+      out[i] = { ...mine, ...(run.tokens ? { tokens: addTokens(mine.tokens, run.tokens) } : {}), ...(run.cost !== undefined ? { cost: (mine.cost ?? 0) + run.cost } : {}) }
+      patch.runs = out
     }
     let told: string[] = []
     if (answered && cur.status !== 'dropped') {

@@ -21,7 +21,7 @@ import { drainStarts, queuedStarts } from '../hooks/app/starts'
 import { withStarts } from './starts'
 import { checkerPrompt, checkerTestsText } from '../hooks/core/checker'
 import { inMergeLine } from '../hooks/app/merge-line'
-import { parseMergeLine } from '../hooks/board'
+import { parseMergeLine, addTokens } from '../hooks/board'
 import { onTaskEvent, type TaskEvent } from '../hooks/app/events'
 import { debriefs, learnedAsk } from '../hooks/app/debrief'
 import { DEBRIEF_MS, DEBRIEF_TEXT, LEARNED_ASK } from '../hooks/core/org-mem'
@@ -1301,6 +1301,17 @@ test('T-656: an agent only answering its debrief holds no task: a fast retry sta
   expect(debriefs.has('ag1')).toBe(true)
   expect(find(await load(w.$), 'T-1')!.status).toBe('doing')
   expect(find(await load(w.$), 'T-1')!.attempts).toBe(2)
+  // the old worker's answer comes during the new try: its tokens and cost go on its own try (the first run), not the new one
+  const before = find(await load(w.$), 'T-1')!.runs!
+  expect(before).toHaveLength(2)
+  agentFinished(w.$, 'ag1', { answer: 'none', end: { reason: 'answer' }, isAborted: false, tokens: { input: 50, output: 5 }, cost: 0.25 })
+  await until(() => !debriefs.has('ag1'))
+  await turns(50)
+  const after = find(await load(w.$), 'T-1')!.runs!
+  expect(after[0]!.tokens).toEqual(addTokens(before[0]!.tokens, { input: 50, output: 5 }))
+  expect(after[0]!.cost).toBe((before[0]!.cost ?? 0) + 0.25)
+  expect(after[1]!.tokens).toEqual(before[1]!.tokens)
+  expect(after[1]!.cost).toBe(before[1]!.cost)
   resetPlugin()
   // nothing pumped at the checker's end (start not done yet); the debrief answer pumps, so the retry starts then
   const w2 = await failFastWithDebrief(false)
