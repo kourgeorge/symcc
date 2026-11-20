@@ -138,7 +138,7 @@ In an open task: b back · p pause · u resume · r retry · x drop · w watch t
   · l pick the worker role (a task to do, paused, failed or in the backlog).
   · h already merged: marks a failed, waiting, paused or dropped task done whose work was merged by hand (checked with git first; nothing is merged or tested).
 In a backlog task: o move to todo · x drop · l role.
-On the board list a task's role shows at the right end of its row ("tester"); general shows nothing. The list rows show no try number; the band above the prompt shows a later try as "(n)" right after the row's time ("T-5 ◎ 3m (3)"), and the task page shows "try 3/4". A task to do that waits on others shows "after T-x"; a task in review shows "Enter to review"; a task that merges into another branch than the one you are on shows "→ that-branch".
+On the board list a task's role shows at the right end of its row ("tester"); general shows nothing. The list rows show no try number; the band above the prompt shows a later try as "(n)" right after the row's time ("T-5 ⊛ 3m (3)"), and the task page shows "try 3/4". A task to do that waits on others shows "after T-x"; a task in review shows "Enter to review"; a task that merges into another branch than the one you are on shows "→ that-branch".
 The board list goes top to bottom: NEEDS YOU (with its title); then the tasks doing and to do in one list without a title (running first, then to do, then paused); a blank line; then the folded rows "▸ Backlog  N", "▸ Done  N" and "▸ Dropped  N". Enter on a folded row opens it (the backlog shows 5 items, then "… N more").
 Backlog tasks are ideas and unclear work; they start only when you move them to todo (o).
 In a task ready for review: a approve · x reject (asks for a reason) · d show changes.
