@@ -153,7 +153,7 @@ export function processAgents(runner: AgentRunner, onEnd: (agentId: string, end:
       return rec
         .edit(async entries => {
           const mine = entries.filter(e => runs.has(e.agent))
-          const theirs = entries.filter(e => !runs.has(e.agent) && sys.alive(e.pid, e.command))
+          const theirs = entries.filter(e => !runs.has(e.agent) && sys.alive(e.pid, e.command, e.started))
           const send = (e: ProcessEntry, sig: ProcessSignal) => {
             try {
               sys.signalGroup(e.pid, sig)
@@ -162,8 +162,8 @@ export function processAgents(runner: AgentRunner, onEnd: (agentId: string, end:
             }
           }
           for (const e of theirs) send(e, 'SIGTERM')
-          for (let waited = 0; waited < grace && theirs.some(e => sys.alive(e.pid, e.command)); waited += 100) await sys.sleep(100)
-          for (const e of theirs) if (sys.alive(e.pid, e.command)) send(e, 'SIGKILL')
+          for (let waited = 0; waited < grace && theirs.some(e => sys.alive(e.pid, e.command, e.started)); waited += 100) await sys.sleep(100)
+          for (const e of theirs) if (sys.alive(e.pid, e.command, e.started)) send(e, 'SIGKILL')
           // the dead entries, and the ones just stopped, are dropped; this copy's own stay
           return { entries: mine, out: theirs.map(e => e.agent) }
         })

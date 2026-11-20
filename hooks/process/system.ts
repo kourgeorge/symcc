@@ -25,10 +25,11 @@ export interface ProcessSystem {
   /** Sends `sig` to process group `pid`; throws when there is no such group. */
   signalGroup(pid: number, sig: ProcessSignal): void
   /**
-   * Whether process `pid` still runs and is the agent process started as `command` (a pid can be given to another
-   * program once its process ended: then it answers false).
+   * Whether process `pid` still runs and is the agent process started as `command` at time `started` (an ISO date): a
+   * pid can be given to another program once its process ended, so the program must be `command` itself (not just a
+   * command line that mentions its name) and the process must have started at about `started`; else it answers false.
    */
-  alive(pid: number, command: string): boolean
+  alive(pid: number, command: string, started: string): boolean
   /** Runs `argv` in `cwd` and waits for it: its exit status (null when it couldn't run) and output. */
   run(argv: readonly string[], cwd: string | undefined): { status: number | null; stdout: string }
   /** an environment variable */

@@ -10,7 +10,7 @@ import { runCommand, PLUGIN_ROOT } from '../host'
 import { claudePermissions, claudeResult, editRule } from '../../../hooks/process/claude-runner'
 import { withBasePrompt, processAgents, type AgentRunner } from '../../../hooks/process/agents'
 import { PROCESSES_FILE, entriesText, parseEntries } from '../../../hooks/process/record'
-import { nodeProcessSystem } from '../system'
+import { nodeProcessSystem, runsProgram, elapsedSeconds } from '../system'
 import { nodeFs } from '../host'
 import { openSession, leadTool, closeSession } from '../session'
 import { toolCall, notLeadText } from '../../../hooks/app/symcc'
@@ -357,6 +357,44 @@ test('T-474: processAgents records a process while it runs, and stopLeftovers le
     expect(ended).toEqual([agentId])
     expect(parseEntries(await readFile(file, 'utf8'))).toEqual([])
   } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+}, 60_000)
+
+test('T-474: a recorded pid now used by another program, or by the same program started at another time, is not stopped', async () => {
+  const dir = await mkdtemp('/tmp/symcc-node-reuse-')
+  // an unrelated process that leads its own group and has "claude" only in an argument
+  const other = spawn('sh', ['-c', 'sleep 30; true', 'x', '/Users/me/.claude/plugins/thing'], { detached: true, stdio: ['ignore', 'ignore', 'ignore'] })
+  try {
+    const pid = other.pid ?? 0
+    expect(pid).toBeGreaterThan(1)
+    const now = new Date().toISOString()
+    await new Promise<void>(r => void setTimeout(r, 200))
+    // "claude" in an argument is not the program; the right program started long before the entry is not it either
+    expect(nodeProcessSystem.alive(pid, '/usr/local/bin/claude', now)).toBe(false)
+    expect(nodeProcessSystem.alive(pid, '/bin/sh', '2020-01-01T00:00:00Z')).toBe(false)
+    expect(nodeProcessSystem.alive(pid, 'sh', 'not a date')).toBe(false)
+    // the same program started at the recorded time is the recorded process
+    expect(nodeProcessSystem.alive(pid, 'sh', now)).toBe(true)
+    expect(runsProgram('/bin/sh /x/hosts/node/tests/fake-claude.sh -p', '/x/hosts/node/tests/fake-claude.sh')).toBe(true)
+    expect(runsProgram('node /usr/local/bin/claude -p', '/usr/local/bin/claude')).toBe(true)
+    expect(runsProgram('vim /Users/me/.claude/settings.json', '/usr/local/bin/claude')).toBe(false)
+    expect([elapsedSeconds('01:02'), elapsedSeconds('03:01:02'), elapsedSeconds('2-03:01:02'), elapsedSeconds('x')]).toEqual([62, 10862, 183662, undefined])
+
+    const file = `${dir}/${PROCESSES_FILE}`
+    await writeFile(file, entriesText([{ pid, agent: 'claude-1-old', started: '2020-01-01T00:00:00Z', command: '/usr/local/bin/claude' }]))
+    const runner: AgentRunner = { name: 'none', command: () => ({ argv: ['true'] }), result: () => ({ answer: '' }) as never }
+    const agents = processAgents(runner, () => undefined, { system: nodeProcessSystem, record: { fs: nodeFs, file: () => file }, leftoverGraceMs: 300 })
+    expect(await agents.stopLeftovers()).toEqual([])
+    // the stale entry is dropped and the unrelated process still runs
+    expect(parseEntries(await readFile(file, 'utf8'))).toEqual([])
+    expect(await groupGone(pid, 500)).toBe(false)
+  } finally {
+    try {
+      if (other.pid) process.kill(-other.pid, 'SIGKILL')
+    } catch {
+      // gone already
+    }
     await rm(dir, { recursive: true, force: true })
   }
 }, 60_000)

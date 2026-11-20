@@ -22,7 +22,7 @@ export function parseEntries(text: string | null): ProcessEntry[] {
     const list = Array.isArray(j.processes) ? j.processes : []
     return list.filter((e): e is ProcessEntry => {
       const x = e as Partial<ProcessEntry> | null
-      return !!x && Number.isInteger(x.pid) && (x.pid ?? 0) > 1 && typeof x.agent === 'string' && typeof x.command === 'string'
+      return !!x && Number.isInteger(x.pid) && (x.pid ?? 0) > 1 && typeof x.agent === 'string' && typeof x.command === 'string' && typeof x.started === 'string'
     })
   } catch {
     return []
