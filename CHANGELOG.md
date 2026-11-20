@@ -2,6 +2,16 @@
 
 When a set of user-facing changes is ready to release, bump the version in both `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` and add an entry here.
 
+## 0.5.8 (2026-11-20)
+
+### Added
+- OpenCode: the mouse works on the board panel: a click on a task or question row opens it, a click on Backlog / Done / Dropped opens or closes it (Done and Dropped can be opened now), a click on a key hint does what its key does, and the wheel scrolls the list or page.
+- OpenCode: the board panel has Tasks / Scouts / Settings tabs (t / s / c, or a click). Scouts: the list, a scout's page with its runs and reports, r to run it now, p to pause or resume. Settings: every setting grouped as in Claude Code, changed with Enter or a click (the value is checked first). Roles, Kinds and editing a scout are still only on the Claude Code board.
+
+### Changed
+- `opencode plugin add github:kourgeorge/symcc` is seen working (OpenCode 2.3.2); the README and guide say what it does. Use it or `scripts/install-opencode.sh`, not both.
+- The checker's texts (Settings, help, the lead's tools, README, reference) say it runs before the merge line, and its prompt no longer tells it to run test commands; the reference lists `test_minutes`.
+
 ## 0.5.7 (2026-11-20)
 
 ### Changed
