@@ -6,8 +6,8 @@
 // site/index.html. Links to these pages are rewritten from .md to .html; links to other files in the
 // repo point to GitHub; images that pages use are copied next to them. HTML in the markdown text is
 // escaped (README's centered <p> banner blocks at the top are left out: the landing page covers them).
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
-import { dirname, join, posix, resolve } from 'node:path'
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { basename, dirname, isAbsolute, join, posix, relative, resolve, sep } from 'node:path'
 
 const GITHUB = 'https://github.com/kourgeorge/symcc'
 
@@ -269,7 +269,43 @@ function firstHeading(md: string): string | undefined {
   return /^#\s+(.*)$/m.exec(md)?.[1]?.replace(/[`*_]/g, '').trim()
 }
 
+// The build writes this file into its output folder; a folder that has it may be deleted and rebuilt.
+export const MARKER = '.symcc-site'
+const PROTECTED = ['site', 'docs', '.git', '.symcc', 'hooks', 'scripts', 'tests', '.github']
+
+// true when `child` is `parent` or a folder inside it
+function within(parent: string, child: string): boolean {
+  const rel = relative(parent, child)
+  return rel === '' || (!rel.startsWith(`..${sep}`) && rel !== '..' && !isAbsolute(rel))
+}
+
+// The full path with links followed (/var and /private/var on macOS are the same), also for a path that does not exist yet.
+function real(p: string): string {
+  const abs = resolve(p)
+  if (existsSync(abs)) return realpathSync(abs)
+  const up = dirname(abs)
+  return up === abs ? abs : join(real(up), basename(abs))
+}
+
+// Says why `out` must not be deleted, or undefined when it is safe: it is not the repo folder, a folder
+// above it or one of the repo's source folders, and it is missing, empty, or holds an earlier build's marker.
+export function unsafeOut(root: string, out: string): string | undefined {
+  const r = real(root)
+  const o = real(out)
+  if (within(o, r)) return `${o} is the repo folder or a folder above it`
+  if (within(r, o)) {
+    const top = relative(r, o).split(sep)[0]!
+    if (PROTECTED.includes(top)) return `${o} is in the repo's ${top}/ folder`
+  }
+  if (!existsSync(o)) return undefined
+  if (!statSync(o).isDirectory()) return `${o} is a file, not a folder`
+  if (readdirSync(o).length === 0 || existsSync(join(o, MARKER))) return undefined
+  return `${o} is not empty and was not made by this script (it has no ${MARKER} file); delete it yourself or pick another --out`
+}
+
 export function build(root: string, out: string): string[] {
+  const why = unsafeOut(root, out)
+  if (why) throw new Error(`build-site: refusing --out ${out}: ${why}. Nothing was deleted.`)
   const indexHtml = readFileSync(join(root, 'site/index.html'), 'utf8')
   const f = frame(indexHtml)
   const pages: Page[] = [
@@ -290,6 +326,7 @@ export function build(root: string, out: string): string[] {
   mkdirSync(out, { recursive: true })
   cpSync(join(root, 'site'), out, { recursive: true })
   writeFileSync(join(out, '.nojekyll'), '')
+  writeFileSync(join(out, MARKER), 'Made by scripts/build-site.ts; this folder is deleted and rebuilt on each build.\n')
 
   const written = ['index.html']
   for (const page of pages) {
@@ -327,6 +364,7 @@ if (import.meta.main) {
   const opt = (name: string) => { const k = args.indexOf(name); return k >= 0 ? args[k + 1] : undefined }
   const root = resolve(opt('--root') ?? join(import.meta.dir, '..'))
   const out = resolve(opt('--out') ?? join(root, '_site'))
-  const written = build(root, out)
+  let written: string[]
+  try { written = build(root, out) } catch (e) { console.error((e as Error).message); process.exit(1) }
   console.log(`build-site: wrote ${written.length} pages to ${out}`)
 }
