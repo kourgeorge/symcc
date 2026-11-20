@@ -1562,21 +1562,20 @@ test("T-671: a shell folder that couldn't be read (CWD_LOST): '..' words are tri
   expect(no('echo x > ../../../../README.md', CWD_LOST)).toBe(`${BASH_LOST}README.md`)
   expect(no('cd src && echo x > ../../../../../README.md', CWD_LOST)).toBe(`${BASH_LOST}README.md`)
   expect(bashOutsideText(`${BASH_LOST}README.md`, wt)).toBe(`${bashOutsideText('README.md', wt)} symcc couldn't tell the shell's folder; use a full path.`)
-  // the last folder read is used: ".." reads the worker's own files from it
-  expect(no('cat ../package.json', `${CWD_LOST}${wt}/src`)).toBeUndefined()
-  expect(no('echo x > ../../../../README.md', `${CWD_LOST}${wt}/src`)).toBe(`${BASH_LOST}README.md`)
+  // the shell may have climbed (`"cd" ../..` is a cd bash runs): a ".." write from the top folder is refused too
+  expect(no('echo x > ../../x', CWD_LOST)).toBe(`${BASH_LOST}.symcc/x`)
+  // as on main (folder unknown), a ".." read that leaves the worker's folder is refused
+  expect(no('cat ../package.json', CWD_LOST)).toBe(`${BASH_LOST}.symcc/worktrees/package.json`)
   // words with no "..", and full paths, are judged as before
   expect(no('cat src/a.ts', CWD_LOST)).toBeUndefined()
   expect(no(`echo x > ${wt}/a`, CWD_LOST)).toBeUndefined()
   expect(no('cat /repo/README.md', CWD_LOST)).toBe('README.md')
   // the made-up deeper folders are not looked up on disk
   expect(bashPathsToCheck('cat ../a', wt, '/home/me', CWD_LOST, root).paths).toEqual([`${root}/.symcc/worktrees/a`])
-  // which folder is used: a read one; else the last one, only when the command from it couldn't move the shell
-  expect(shellCwd('/x/y', { cwd: '/a', command: 'ls' })).toBe('/x/y')
-  expect(shellCwd(undefined, { cwd: '/a', command: 'ls -la src' })).toBe(`${CWD_LOST}/a`)
-  expect(shellCwd('', { cwd: '/a', command: 'ls' })).toBe(`${CWD_LOST}/a`)
-  for (const c of ['cd src', 'ls && cd ..', 'pushd x', 'popd', '. env.sh', 'source x', 'eval "$X"', '$CMD', '`f`', 'builtin cd x', 'command cd x', 'exec bash'])
-    expect(shellCwd(undefined, { cwd: '/a', command: c })).toBe(CWD_LOST)
+  // which folder is used: a read (absolute) one; else CWD_LOST, with nothing kept from earlier
+  expect(shellCwd('/x/y')).toBe('/x/y')
+  expect(shellCwd('')).toBe(CWD_LOST)
+  expect(shellCwd('src')).toBe(CWD_LOST)
   expect(shellCwd(undefined)).toBe(CWD_LOST)
 })
 

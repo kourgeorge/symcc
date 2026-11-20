@@ -158,9 +158,9 @@ export const BASH_FOLDERS_MAX = 16
 export const BASH_TOO_MANY = '\u0000too many'
 
 /**
- * The start of the `cwd` walkBash is given when the shell's folder couldn't be read (T-671): what follows it is the
- * last folder that was read for that agent and still holds (empty when there is none). It doesn't start with "/",
- * so the git guard (literalPath) takes it as an unknown folder too.
+ * The `cwd` walkBash is given when the shell's folder couldn't be read (T-671): relative words start at the worker's
+ * top folder and ".." words are also tried from deeper folders. It doesn't start with "/", so the git guard
+ * (literalPath) takes it as an unknown folder too.
  */
 export const CWD_LOST = '\u0000lost:'
 
@@ -170,25 +170,12 @@ export const CWD_LOST = '\u0000lost:'
  */
 export const BASH_LOST = '\u0000lost path:'
 
-/** Words that may move the shell to another folder, or run text that may (mayMoveShell). */
-const MOVES_SHELL = /(?:^|[\s;&|(){}`$])(?:cd|pushd|popd|eval|source|exec|builtin|command|\.)(?=$|[\s;&|()<>])/
-
-/**
- * Whether shell `command` may leave the shell in another folder than it started in (T-671): a cd, pushd or popd, text
- * run again (eval, source, "."), or anything run by a name built at run time ("$", "`"). A function or alias defined
- * earlier is not seen; walkBash also tries deeper folders for that.
- */
-export const mayMoveShell = (command: unknown): boolean => typeof command !== 'string' || MOVES_SHELL.test(command) || /[$`]/.test(command)
-
 /**
  * The `cwd` to check a worker's shell command with (T-671): `got`, the shell's folder as read, when it is an absolute
- * path; else (it couldn't be read) CWD_LOST followed by `last`, the last folder read for that agent, when the command
- * run from it could not have moved the shell (mayMoveShell is false for `lastCommand`).
+ * path; else (it couldn't be read) CWD_LOST alone. No earlier folder is kept: the shell may have moved since (a cd can
+ * be written in many ways), so trusting one could make the guard weaker than not knowing the folder at all.
  */
-export function shellCwd(got: unknown, last?: { cwd: string; command: unknown }): string {
-  if (typeof got === 'string' && got.startsWith('/')) return got
-  return CWD_LOST + (last && !mayMoveShell(last.command) ? last.cwd : '')
-}
+export const shellCwd = (got: unknown): string => (typeof got === 'string' && got.startsWith('/') ? got : CWD_LOST)
 
 /** A made-up folder name walkBash puts under a folder to try deeper places the shell may be in (T-671). */
 const DEEPER = '\u0000deeper'
@@ -252,11 +239,10 @@ function walkBash(command: string, wts: readonly string[], home: string | undefi
   const tops = opts.tops ?? []
   // the shell's folder counts inside the worker's own folder, and outside the project when the project is known and
   // not inside it (a throwaway copy in /tmp, T-436); anywhere else (the owner's copy, "/") it starts from the worker's folder
-  // the shell's folder couldn't be read (T-671): the last one read, if any, is used, and a ".." word is also tried
-  // from deeper folders under it, since the shell may have moved there since
-  const lost = cwd?.startsWith(CWD_LOST) === true
-  const known = lost ? cwd!.slice(CWD_LOST.length) : cwd
-  const sh = known?.startsWith('/') ? resolvePath('/', known) : undefined
+  // the shell's folder couldn't be read (CWD_LOST, T-671): it starts from the worker's folder, and a ".." word is also
+  // tried from deeper folders under it, since the shell may be in one of them
+  const lost = cwd === CWD_LOST
+  const sh = !lost && cwd?.startsWith('/') ? resolvePath('/', cwd) : undefined
   const away = sh !== undefined && tops.length > 0 && insideAny(sh, tops, false) === undefined && !tops.some(t => inside(t, sh, false) !== undefined)
   const start = [sh !== undefined && (away || insideAny(sh, wts, true) !== undefined) ? sh : wt]
   // past BASH_FOLDERS_MAX folders the list stops growing (it doubles with every cd that may fail): from then on a

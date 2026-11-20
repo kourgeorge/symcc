@@ -407,17 +407,18 @@ test("T-671: when the shell's folder can't be read, a '..' path that may climb i
   // paths inside the worker's folder, and full paths, are judged as before
   expect((await bash('cat src/a.ts')).decision).toBe('allow')
   expect((await bash(`echo x > ${WT1}/src/a.ts`)).decision).toBe('allow')
-  // after "cd src" the folder was read once; a later failing read keeps it, so ".." reads the worker's own files
+  // nothing from an earlier read is kept: after `"cd" ../..` (a cd bash runs) from <worktree>/a/b, the shell is at the
+  // top folder, so a later `../../x` would reach the owner's copy; with the folder unread it is refused
+  here = `${WT1}/a/b`
+  expect((await bash('"cd" ../..')).decision).toBe('allow')
+  here = null
+  const up = await bash('echo x > ../../x')
+  expect(up.decision).toBe('deny')
+  expect(up.reason).toMatch(/names \.symcc\/x in the owner's copy/)
+  expect(up.reason).toMatch(/symcc couldn't tell the shell's folder/)
+  // as on main with the folder unknown, a ".." read leaving the worker's folder is refused
   here = `${WT1}/src`
   expect((await bash('ls')).decision).toBe('allow')
-  here = null
-  expect((await bash('cat ../package.json')).decision).toBe('allow')
-  const up = await bash('echo x > ../../../../README.md')
-  expect(up.decision).toBe('deny')
-  expect(up.reason).toMatch(/symcc couldn't tell the shell's folder/)
-  // a command that may have moved the shell (a cd) makes the last folder read unsure: it isn't kept
-  here = `${WT1}/src`
-  expect((await bash('cd a')).decision).toBe('allow')
   here = null
   expect((await bash('cat ../package.json')).decision).toBe('deny')
   // with the folder read, behaviour is unchanged
