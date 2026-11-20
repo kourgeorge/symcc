@@ -1791,8 +1791,9 @@ test('T-627: in the TUI, the panel is drawn exactly its height; a page that gets
   const board = startTui(fc.ctx, { runtime: fakeRuntime(), readText: async p => files.get(p) ?? Promise.reject(new Error('missing')), every: () => () => undefined, now: () => NOW })
   await board.refresh()
   const panel = fc.slots.find(s => s.append === 'session.panel')!.render({ name: BOARD_PANEL, sessionID: 's', width: 62, focused: true, close: () => undefined, focus: () => undefined } as never) as El
-  // before OpenTUI lays the panel out, its height is the screen's less OpenCode's own lines
-  expect(shown(panel).length).toBe(200 - 2)
+  // before OpenTUI lays the panel out, its height isn't known (T-649): the panel has no padding, the footer comes
+  // right after the page
+  expect(shown(panel)).toEqual(panelLines(f, { opened: '', cursor: 0 }, NOW, 60).lines.map(lineText))
   ;(panel as El & { height?: number }).height = 22
   ;(panel.props.onSizeChange as () => void)()
   expect(shown(panel).length).toBe(22)
@@ -1818,6 +1819,48 @@ test('T-627: in the TUI, the panel is drawn exactly its height; a page that gets
   expect(after).toEqual(panelLines(short, { opened: 'T-2', cursor: 0, scroll: board.state().scroll, rows: 22 }, NOW, 60).lines.map(lineText))
   expect(after.some(l => l.includes('step ') || l.includes('report line'))).toBe(false)
   board.stop()
+})
+
+test('T-649: a backlog and a doing task page show their footer with the buttons: with no height known, a small one, and a box taller than the screen', async () => {
+  const base = viewFile()
+  const f = { ...base, view: { ...base.view, tasks: base.view.tasks.map(t => (t.id === 'T-4' ? { ...t, status: 'backlog' } : t)) as ViewFile['view']['tasks'] } }
+  const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)]])
+  for (const [id, words] of [['T-4', ['o move to todo', 'x drop', 'b back']], ['T-1', ['p pause', 'x drop', 'b back']]] as const) {
+    const fc = fakeCtx({})
+    const board = startTui({ ...fc.ctx, renderer: { width: 120, height: 40 } }, { runtime: fakeRuntime(), readText: async p => files.get(p) ?? Promise.reject(new Error('missing')), every: () => () => undefined, now: () => NOW })
+    await board.refresh()
+    const panel = fc.slots.find(s => s.append === 'session.panel')!.render({ name: BOARD_PANEL, sessionID: 's', width: 62, focused: true, close: () => undefined, focus: () => undefined } as never) as El
+    const ids = panelLines(f, { opened: '', cursor: 0 }, NOW, 60).ids
+    for (let i = 0; i < ids.indexOf(id); i++) await board.press('down', 's')
+    await board.press('open', 's')
+    expect(board.state().opened).toBe(id)
+    const footerOk = (rows: string[]) => {
+      expect(rows.at(-2)).toBe('─'.repeat(60))
+      for (const w of words) expect(rows.at(-1)).toContain(w)
+    }
+    // no height known: no padding, the footer right after the page
+    const page = panelLines(f, { opened: id, cursor: 0 }, NOW, 60).lines.map(lineText)
+    expect(shown(panel)).toEqual(page)
+    footerOk(shown(panel))
+    // the footer is its own box that never shrinks, under a body box that does (the layout keeps it in sight)
+    const tree = (panel.kids.map(k => (typeof k === 'function' ? (k as () => unknown)() : k)) as El[])[0]!
+    const [body, foot] = tree.kids.flat() as El[]
+    expect(body!.props.flexShrink).toBe(1)
+    expect(body!.props.overflow).toBe('hidden')
+    expect(foot!.props.flexShrink).toBe(0)
+    expect(shown(foot)).toEqual(page.slice(-2))
+    // a small known height: exactly that many rows, the footer last
+    ;(panel as El & { height?: number }).height = 12
+    ;(panel.props.onSizeChange as () => void)()
+    expect(shown(panel).length).toBe(12)
+    footerOk(shown(panel))
+    // a box said to be taller than the screen is never trusted past the screen's height less OpenCode's lines
+    ;(panel as El & { height?: number }).height = 300
+    ;(panel.props.onSizeChange as () => void)()
+    expect(shown(panel).length).toBe(40 - 2)
+    footerOk(shown(panel))
+    board.stop()
+  }
 })
 
 test('T-627: drawnLines cuts a line into the rows it takes: at line breaks, and between words at the width, under its indent, keeping colors and hits', () => {
