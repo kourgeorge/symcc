@@ -3,6 +3,7 @@ import { expect, test } from 'claude-code/testing'
 import { addLearned, cleanLearned, guideSection, sameLesson, splitLearned, GUIDE_MAX_LINES, LEARNED_LINE_CHARS, LEARNED_ASK } from '../hooks/core/field-guide'
 import { checkerVerdict, fillPrompt, scoutPrompt, PROMPT_KINDS, BUILT_IN_PROMPTS } from '../hooks/board'
 import { checkerPrompt } from '../hooks/core/checker'
+import { failAsks } from '../hooks/core/failure'
 
 const D = '2026-11-20'
 
@@ -24,7 +25,7 @@ test('lines are cleaned: one line, list mark off, cut, no secrets, no file conte
   expect(cleanLearned(['-   run   tests with  npm test ', '1. second', '* third', '- fourth'])).toEqual(['run tests with npm test', 'second', 'third'])
   expect(cleanLearned([long])[0]!.length).toBe(LEARNED_LINE_CHARS)
   expect(cleanLearned([long])[0]!.endsWith('…')).toBe(true)
-  expect(cleanLearned(['- API_KEY=abc123', '- token: sk-abcdefghijklmnop', '- ghp_abcdefghijklmnopqrstu', '- key is ' + 'A'.repeat(45), '```ts', '- none', 'n/a', '- ok line'])).toEqual(['ok line'])
+  expect(cleanLearned(['- API_KEY=abc123', '- token: sk-abcdefghijklmnop', '- ghp_abcdefghijklmnopqrstu', '- key is ' + 'aB3xK9qZ7mN2'.repeat(4), '```ts', '- none', 'n/a', '- ok line'])).toEqual(['ok line'])
   // paths are not secrets
   expect(cleanLearned(['- see hooks/app/prompt-values.ts and tests/scouts-settings-snapshot.ts'])).toHaveLength(1)
 })
@@ -72,4 +73,32 @@ test('prompts: workers, checkers and scouts get the guide under a heading, and a
   expect(checkerPrompt(c)).toContain('"Learned:" section')
   expect(scoutPrompt({ scout: 's', root: '/p', instructions: 'Go.', open: [], guide: g })).toContain(`- T-1 ${D}: a`)
   expect(scoutPrompt({ scout: 's', root: '/p', instructions: 'Go.', open: [] })).not.toContain('Notes earlier agents')
+})
+
+test('a fenced code block in the section is dropped whole, fences and the code between them (no file contents)', () => {
+  const r = addLearned(null, 'done\n\nLearned:\n- the config looks like this:\n```json\n{ "apiUrl": "x" }\n```\n- run sh scripts/test-files.sh', 'T-1', 'D')
+  expect(r.added).toEqual(['the config looks like this:', 'run sh scripts/test-files.sh'])
+  expect(r.text).not.toContain('apiUrl')
+  // an unclosed fence drops the rest
+  expect(splitLearned('done\nLearned:\n- a\n```\nsecret file text').lines).toEqual(['- a'])
+})
+
+test('the section ends at its first blank line or non-list line: a question or "NEED FILES:" after it stays in the report', () => {
+  expect(failAsks('did it\n\nLearned:\n- a\n\nShould I also change b.ts?')).toContain('Should I also change b.ts?')
+  expect(failAsks('did it\n\nLearned:\n- a\n\nNEED FILES: b.ts')).toContain('more files: b.ts')
+  expect(failAsks('did it\n\nLearned:\n- a\nNEED FILES: b.ts')).toContain('more files: b.ts')
+  const r = addLearned(null, 'did it\n\nLearned:\n- a trap here\n\nShould I also change b.ts too?', 'T-1', 'D')
+  expect(r.added).toEqual(['a trap here'])
+  expect(splitLearned('did it\n\nLearned:\n- a trap here\n\nShould I also change b.ts too?').body).toBe('did it\n\nShould I also change b.ts too?')
+  // a blank line right after the heading is still allowed
+  expect(splitLearned('did it\n\nLearned:\n\n- a\n- b').lines).toEqual(['- a', '- b'])
+  expect(splitLearned('did it\r\nLearned:\r\n- a\r\n').lines).toEqual(['- a'])
+})
+
+test('paths and long hyphenated file names are not secrets; long random tokens still are', () => {
+  const r = addLearned(null, 'done\n\nLearned:\n- notes are in docs/research-a-short-notice-channel-on-the-board-where-workers-p.md', 'T-1', 'D')
+  expect(r.added).toEqual(['notes are in docs/research-a-short-notice-channel-on-the-board-where-workers-p.md'])
+  expect(cleanLearned(['- see research-a-short-notice-channel-on-the-board-where-workers-p.md'])).toHaveLength(1)
+  expect(cleanLearned(['- the key is Zx81kQ0pLm4Nb7Vc2Ty9Ws5Rd3Fg6Hj1'])).toEqual([])
+  expect(cleanLearned(['- use `Zx81kQ0pLm4Nb7Vc2Ty9Ws5Rd3Fg6Hj1Ab`'])).toEqual([])
 })

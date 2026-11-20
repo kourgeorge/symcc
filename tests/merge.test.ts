@@ -4970,6 +4970,32 @@ test('T-470: on a host with no start queue (features.startQueue off) a worker st
   workers.clear()
 })
 
+test('T-600: a worker started by startWorker gets the lines of .symcc/field-guide.md in its prompt; no file: no guide heading', async () => {
+  for (const guide of ['- T-5 2026-11-20: run one test file with sh scripts/test-files.sh\n', null]) {
+    const w = world({ current: 'main' })
+    const [b0] = boardWith('auto')
+    await saveBoard(w.$, patchTask(b0, 'T-1', { status: 'todo', attempts: 0 }, ISO))
+    if (guide) w.put(`${ROOT}/.symcc/field-guide.md`, guide)
+    S.me = 'me'
+    S.startupDone = true
+    S.driving = true
+    workers.clear()
+    let prompt = ''
+    const x = w.$
+    x.features = { ...x.features, startQueue: false }
+    x.agents.spawn = async e => ((prompt = e.prompt), { agentId: 'ag1' })
+    x.plugin = { name: 'symcc', root: '/plugin' }
+    x.fs.list = async () => []
+    await startWorker(w.$, 'T-1')
+    expect(prompt).toContain('Task T-1')
+    if (guide) {
+      expect(prompt).toContain('Notes earlier agents left about this project')
+      expect(prompt).toContain('- T-5 2026-11-20: run one test file with sh scripts/test-files.sh')
+    } else expect(prompt).not.toContain('Notes earlier agents')
+    workers.clear()
+  }
+})
+
 test('the investigation worker prompt after Ask more asks for the complete answer, not only what changed', () => {
   const [b0] = boardWith('auto', [], { kind: 'investigation', status: 'review' } as Partial<BoardTask>)
   expect(WORKER_PROMPT(b0.tasks[0]!, b0, WT)).not.toContain('complete answer')

@@ -15,6 +15,6 @@ Task {{task_id}}: {{title}}
 {{kind}}{{role}}{{earlier_tries}}{{field_guide}}
 Don't run long commands in the background. Run test commands with the Bash tool's longest timeout (timeout: 600000); if one still gets moved to the background, wait for it (read its output until it finishes) before you answer: ending your turn ends your work, so never answer that you will continue later.
 When you are done, hand back the full answer: what you found, how you know (the files, commands or sources you checked), and anything still unsure. Write it for the owner, in plain words.{{ask_more}}
-{{learned}}
 {{ask}}
+{{learned}}
 `

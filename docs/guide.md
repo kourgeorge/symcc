@@ -1442,7 +1442,8 @@ after them, so the next worker doesn't have to find the same things again (how t
 test, a trap, where something is).
 
 - **How lines get in:** a worker, a checker or an investigation may end its report with a
-  `Learned:` section of up to 3 short lines. When its report comes in (merged or not), symcc
+  `Learned:` section of up to 3 short `- ` lines (the section ends at the first blank line or
+  line that isn't a `- ` line; code blocks in it are left out). When its report comes in (merged or not), symcc
   adds them as `- T-12 2026-11-20: the note`. Each line is made one line and cut at 200
   characters; lines that look like a secret or like file contents are left out, and a line
   that says about the same as one already in the guide is skipped.

@@ -20,23 +20,27 @@ export const LEARNED_MAX = 3
 export const LEARNED_LINE_CHARS = 200
 
 /** What the prompts ask for at the end of a report (the same words in every prompt). */
-export const LEARNED_ASK = `At the very end of your report you may add a "Learned:" section: 0 to ${LEARNED_MAX} short lines, each starting with "- ", about this project that would save the next agent time (how to test, a trap, where something is). Not about this task's own content, no file contents, and nothing secret. Leave it out when there is nothing new.`
+export const LEARNED_ASK = `As the very last part of your report (after everything else) you may add a "Learned:" section: 0 to ${LEARNED_MAX} short lines, each starting with "- ", about this project that would save the next agent time (how to test, a trap, where something is). Not about this task's own content, no file contents, and nothing secret. Leave it out when there is nothing new.`
 
 /** The heading line of the section: "Learned:", maybe as **Learned:** or "## Learned", with an optional first line after it. */
 const HEADING = /^\s*(?:#{1,6}\s*)?(?:\*\*|__)?\s*learned\s*(?:\*\*|__)?\s*:?\s*(?:\*\*|__)?\s*(.*)$/i
 /** A heading must have a colon or be a markdown heading, so a sentence starting with "Learned" is not taken for one. */
 const HEADING_MARK = /^\s*(?:#{1,6}\s*(?:\*\*|__)?\s*learned\b|(?:\*\*|__)?\s*learned\s*(?:\*\*|__)?\s*:)/i
 
-/** A checker's OK line (see checkerVerdict), which may still come after the section. */
-const OK_LINE = /^[*_`"'\s]*ok[.!]?[*_`"'\s]*$/i
+/** A list line of the section: "- x" (or "* x", "• x", "1. x"). */
+const BULLET = /^\s*(?:[-*•+]|\d+[.)])\s+\S/
+/** A code fence line (``` or ~~~), which opens or closes a block of file contents. */
+const FENCE = /^\s*(?:```|~~~)/
 
 /**
  * `answer` split into its body and its "Learned:" lines (raw, not cleaned yet). The section is the last "Learned:"
- * heading and everything after it; a lone OK line at its very end (a checker that put its verdict last anyway)
- * stays with the body. No section: the whole answer is the body and there are no lines.
+ * heading (with any text after it on the same line) and the list lines right after it; it ends at its first blank
+ * line or first line that isn't a list line, and whatever comes after (a question, a "NEED FILES:" line, a checker's
+ * OK) stays in the body. A fenced code block inside the section is dropped whole (fences and all): file contents
+ * never go into the guide. No section: the whole answer is the body and there are no lines.
  */
 export function splitLearned(answer: string): { body: string; lines: string[] } {
-  const text = String(answer ?? '')
+  const text = String(answer ?? '').replace(/\r\n?/g, '\n')
   const all = text.split('\n')
   let at = -1
   for (let i = all.length - 1; i >= 0; i--) {
@@ -45,25 +49,54 @@ export function splitLearned(answer: string): { body: string; lines: string[] } 
       break
     }
   }
-  if (at < 0) return { body: text, lines: [] }
-  const first = HEADING.exec(all[at]!)?.[1] ?? ''
-  const rest = [first, ...all.slice(at + 1)].map(l => l.trim()).filter(Boolean)
-  let ok = ''
-  if (rest.length && OK_LINE.test(rest.at(-1)!)) ok = rest.pop()!
-  const body = [...all.slice(0, at), ...(ok ? ['', ok] : [])].join('\n').trimEnd()
-  return { body, lines: rest }
+  if (at < 0) return { body: String(answer ?? ''), lines: [] }
+  const lines: string[] = []
+  const first = (HEADING.exec(all[at]!)?.[1] ?? '').trim()
+  if (first) lines.push(first)
+  let i = at + 1
+  // a blank line right after the heading line (before any list line) is allowed
+  if (!first) while (i < all.length && !all[i]!.trim() && i + 1 < all.length && (BULLET.test(all[i + 1]!) || !all[i + 1]!.trim())) i++
+  while (i < all.length) {
+    const l = all[i]!
+    if (FENCE.test(l)) {
+      // the whole block goes: skip to its closing fence (or the end)
+      i++
+      while (i < all.length && !FENCE.test(all[i]!)) i++
+      i++
+      continue
+    }
+    if (!BULLET.test(l)) break
+    lines.push(l.trim())
+    i++
+  }
+  const before = all.slice(0, at).join('\n').trimEnd()
+  const after = all.slice(i).join('\n').trim()
+  const body = after ? (before ? `${before}\n\n${after}` : after) : before
+  return { body, lines }
 }
 
-/** Text that looks like a secret: a key=value with a secret-ish name, a known token prefix, a private key, or one long unbroken token. */
+/** Text that looks like a secret: a key=value with a secret-ish name, a known token prefix, or a private key (long random tokens: see longToken). */
 const SECRET = [
   /\b(?:password|passwd|pwd|secret|token|api[_ -]?key|access[_ -]?key|private[_ -]?key)\b\s*[:=]\s*\S+/i,
   /\b(?:sk-[A-Za-z0-9_-]{10,}|ghp_[A-Za-z0-9]{10,}|gho_[A-Za-z0-9]{10,}|github_pat_[A-Za-z0-9_]{10,}|xox[abprs]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{20,})/,
   /-----BEGIN [A-Z ]*KEY-----/,
-  /[A-Za-z0-9+=_-]{40,}/,
 ]
 
-/** Whether `s` looks like it holds a secret (see SECRET). */
-export const looksSecret = (s: string): boolean => SECRET.some(r => r.test(s))
+/** A file or folder name made of short words: "word-word-word", maybe with an ".ext" (e.g. research-a-short-notice.md). */
+const NAME_LIKE = /^[A-Za-z0-9]{1,24}(?:[-_.][A-Za-z0-9]{1,24})+$/
+
+/**
+ * Whether word `w` looks like a long random token (a key or password): 32 or more characters of letters and digits
+ * mixed, with no path or name separators. A path (has "/") or a hyphenated name (NAME_LIKE) is not one.
+ */
+function longToken(w: string): boolean {
+  const s = w.replace(/^[`'"([{<]+|[`'")\]}>.,;:!?]+$/g, '')
+  if (s.length < 32 || s.includes('/') || NAME_LIKE.test(s)) return false
+  return /^[A-Za-z0-9+=_-]+$/.test(s) && /[A-Za-z]/.test(s) && /\d/.test(s)
+}
+
+/** Whether `s` looks like it holds a secret (see SECRET and longToken). */
+export const looksSecret = (s: string): boolean => SECRET.some(r => r.test(s)) || s.split(/\s+/).some(longToken)
 
 /** Lines that are file contents or a diff, not a lesson: a code fence, a diff header or hunk. */
 const CONTENTS = /```|^(?:diff --git|@@ |\+\+\+ |--- )/

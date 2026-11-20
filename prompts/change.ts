@@ -19,6 +19,6 @@ Do not run git commands that change anything (commit, push, merge, reset, checko
 {{merge_main}}{{test_output}}{{earlier_tries}}{{field_guide}}
 Don't run long commands in the background. Run test commands with the Bash tool's longest timeout (timeout: 600000); if one still gets moved to the background, wait for it (read its output until it finishes) before you answer: ending your turn ends your work, so never answer that you will continue later.
 When you are done, answer in one or two plain sentences: what you changed.
-{{learned}}
 {{ask}}
+{{learned}}
 `
