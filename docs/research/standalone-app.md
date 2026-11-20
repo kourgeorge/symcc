@@ -12,6 +12,15 @@ It builds on these notes and does not redo them:
 [research-can-symcc-start-each-worker-in-a-sandbox-that-only.md](research-can-symcc-start-each-worker-in-a-sandbox-that-only.md)
 and [merge-line.md](merge-line.md).
 
+## Update 2026-11-20 (T-633): the owner answered, and the plan is narrower
+
+The owner answered the open questions (section 11) and said: "i dont want to start implementing this
+now, just building the design and infrastructure that would separate the client from the symcc
+engine". So **only Phase 1 (section 12) is planned to be built now.** `symcc serve`, the API, MCP, the
+lead chat, the TUI and the runners (section 13, the old build plan) are **later, not started**. The
+rest of this note stays as the design for that later work. Where it says "the engine stays in this
+repo" (section 3), the decision below replaces it.
+
 ## Short answer
 
 Standalone symcc should grow out of the Node host (`hosts/node/`, T-377) step by step. It is not
@@ -110,14 +119,11 @@ this design.
 - **The engine is a Host.** `symcc serve` is `hosts/node` plus: a session that stays open, an API,
   an MCP endpoint and a lead sink. It is not new logic. The engine claims `lead.json` like any
   driver, so a Claude Code session on the same project stops driving on its own (`claimLead`).
-- **Which parts go in the separate project.** The owner asked for the new UI in a separate project,
-  but has not decided which parts. My recommendation, for the owner to confirm: **the engine stays
-  in this repo** (it is `hooks/app` + `hooks/core` + `hooks/process` + `hosts/node`, which the
-  Claude Code and OpenCode plugins share, and its tests run here). **Only the TUI goes to the new
-  repo** (working name `symcc-tui`). The TUI imports the shared view helpers from this repo through
-  a package export (this repo's `package.json` already has `exports` for OpenCode), and talks to the
-  engine only over the API. If the owner later wants the engine as its own package, the API is the
-  line to cut along. No code would change.
+- **Which parts go in the separate project.** Decided on 2026-11-20 (see section 11): **the engine
+  and the TUI both move out later**, not only the TUI. So the shared code (`hooks/core`, `hooks/app`,
+  `hooks/process` and the view helpers) must become a package that this repo's plugins (Claude Code,
+  OpenCode, Node) and the future standalone repo all use. Phase 1 (section 12) prepares that.
+  (My first recommendation, "only the TUI leaves", is dropped.)
 
 ## 4. The engine API
 
@@ -384,20 +390,20 @@ Config:
 | Plan mode (Shift+Tab) | none for lead (a) (`planMode:false`). **(guess:** `--permission-mode plan` for a planning-only lead chat could be a TUI key later.) |
 | The `AskUserQuestion` pop-up | a TUI dialog for each open question, plus NEEDS YOU |
 | "Watch worker" (a subagent view) | the worker log pane (`/agents/{id}/log`) |
-| `ask_owner` and "wrap up" in the middle of a run | `--input-format stream-json` for Claude workers (5a), and a worker-scope MCP endpoint with `ask_owner` (build step S10) |
+| `ask_owner` and "wrap up" in the middle of a run | `--input-format stream-json` for Claude workers (5a), and a worker-scope MCP endpoint with `ask_owner` (build step L10) |
 | The edit guard on Bash (the plugin's tool hook sees every Bash call) | `--permission-prompt-tool` with the path guard (5a), or the OS sandbox (T-365, "not now"). The merge-time check catches it in every case. |
 | The VS Code board (VS Code is where users mostly work) | Run the TUI in VS Code's terminal, or keep the Claude Code plugin's VS Code board as the screen (b). Later, a web or MCP App board. |
 | The lead's usage from Claude Code's session log | from the lead chat's `result` lines (section 6) |
 
 Lead (b) loses nothing compared with today, except that workers are processes, not subagents.
 
-## 11. Risks and open questions
+## 11. Risks and decisions
 
 **Risks**
 
 - **Two drivers.** The engine and a Claude Code session could both believe they drive. Mitigation:
   `lead.json` plus `engine.json`, and the plugin never claims while an engine answers. A test runs
-  both on one board (S9).
+  both on one board (L9).
 - **Fast-moving CLIs.** `claude -p` and `codex exec` change their flags and events. Mitigation: each
   runner reads only a few fields, and keeps a recorded sample in its tests (like
   `hosts/node/tests/fake-claude.sh`).
@@ -409,16 +415,109 @@ Lead (b) loses nothing compared with today, except that workers are processes, n
 - **Bash writes outside the file list** stay possible for Claude and ACP workers until the merge check
   catches them (same as the Node host today).
 
-**Open questions for the owner**
+**Decisions (the owner's answers, 2026-11-20)**
 
-1. Which parts go in the separate project: only the TUI (my recommendation), or the engine too?
-2. Should lead (a) start with Claude only, or should Codex app-server be part of the first version?
-3. In lead (b), should the plugin forward its tools to the engine (one writer) or keep running them
-   in-process?
-4. When the engine runs, should it start by itself with the TUI, or be started on its own
-   (`symcc serve`)? I suggest: the TUI starts it if `engine.json` is missing or stale.
+1. **Separate project: the engine and the TUI both move out later.** Not only the TUI. The shared
+   code (`hooks/core`, `hooks/app`, `hooks/process`, and the view helpers) must become a package
+   that this repo's plugins (Claude Code, OpenCode, Node) and the future standalone repo all use.
+2. **Lead (a): Claude only first.** Codex app-server as a lead comes later.
+3. **Lead (b): the plugin forwards its tools to the engine.** One place changes the board. (This
+   needs the `fetch` check in section 14, but that is later work.)
+4. **Engine start and building the app: not now.** The owner: "i dont want to start implementing
+   this now, just building the design and infrastructure that would separate the client from the
+   symcc engine". So the old question "does the TUI start the engine, or `symcc serve`?" waits. It is
+   not decided and not needed for Phase 1.
 
-## 12. Build plan (small tasks, in order)
+## 12. Phase 1: separate the engine from its clients (now)
+
+This is the only part planned for now. No new feature, no server. It only draws one clear line
+between "the engine" and "the things that use it", and makes the code and tests keep to that line.
+The goal is that, later, the engine can move to its own package or repo without a big rewrite.
+
+### The boundary
+
+| Side | What | Where |
+|---|---|---|
+| **Engine** (will become the shared package) | board logic, prompts, the entry functions, the Host interface, the process runner, and the host-free view helpers | `hooks/core/`, `hooks/app/`, `hooks/process/`, `hooks/host.ts`, `hooks/board.ts`, `hooks/name.ts`, `prompts/`, `kinds/`, `types/`, and (after S1) `hooks/view/` |
+| **Client or host adapter** (stays a client) | the code that knows one program: its tools, screens, hooks and plugin files | `hooks/claude/`, `hooks/register.tsx`, `hooks/opencode/`, `opencode/`, `hosts/node/` |
+
+Two files sit in the wrong place today: `hooks/opencode/board-view.ts` and the host-free part of
+`hooks/opencode/view.ts`. They hold no OpenCode code (`board-view.ts` imports only `core/`, `app/state`
+and `name`). S1 moves them to the engine side.
+
+### The one entry point
+
+Today a host reaches the engine through several paths (`hooks/app/symcc.ts` for the lifecycle and tool
+calls, `hooks/board.ts` for the board functions, `hooks/process/agents.ts` for the runner, and, for
+OpenCode, `hooks/opencode/board-view.ts` for the screen helpers). Phase 1 adds one file, `hooks/engine.ts`,
+that only re-exports what hosts use. It has these groups:
+
+- **Lifecycle and calls** from `hooks/app/symcc.ts`: `sessionStart`, `sessionEnd`, `sessionCleared`,
+  `toolCall`, `toolCheck`, `runCommand`, `agentFinished`, `leadUpdate`, `leadGuideText`, `ownerTyped`,
+  `COMMANDS`.
+- **The contract** from `hooks/host.ts`: `Host`, `HostFeatures`, `HostWords`, `noUi`, `FileTouch`.
+- **Lead tools** from `hooks/app/tools.ts`: `TOOLS`.
+- **Runner** from `hooks/process/`: `processAgents`, `claudePermissions`, and the `ProcessSystem` type.
+- **Screen helpers** from `hooks/view/`: `parseViewFile`, `bandDraw`, `panelLines`, `PANEL_TABS`,
+  `actionCommand`, `answerOptions`, and the view-file writer.
+
+The names above are the ones that exist today; S3 lists the exact set from the code. `package.json`
+`exports` gets `"./engine"` (and `"./view"`) next to the OpenCode ones. A host or the future repo
+writes `import { sessionStart } from 'symcc/engine'` and nothing deeper. (The exact package name is
+not decided; the old note's working name is `symcc`.)
+
+### The rule
+
+**Engine code never imports a host.** Nothing in the engine side may import `hooks/claude/`,
+`hooks/opencode/`, `hosts/node/`, `hooks/register.tsx`, `claude-code`, OpenCode, a Node built-in or
+Bun. Clients import the engine, never the other way round.
+
+This rule is already checked for `hooks/app/` and `hooks/core/` by `tests/host-free.sh` (run by
+`scripts/typecheck.sh`). It does not yet cover `hooks/process/` or the view helpers. S2 adds them.
+Comments that only name a host (for example `hooks/process/agents.ts:6`) are fine. Only imports count.
+
+### How each host becomes a thin client
+
+A thin client does three things only: build a `Host` (files, clock, commands, screens, agents), call the
+entry point's functions, and draw. It holds no board logic.
+
+- **Claude Code** (`hooks/claude/`, `hooks/register.tsx`): builds its `Host` in `hooks/claude/host.ts`
+  and calls the entry from its hooks. S4 changes its imports to `hooks/engine.ts`.
+- **OpenCode** (`hooks/opencode/`, `opencode/`): builds its `Host` in `hooks/opencode/host.ts`; its TUI
+  draws with the view helpers. After S1 and S4 it imports them from the engine side only.
+- **Node** (`hosts/node/`): builds its `Host` in `hosts/node/host.ts`, with `hosts/node/system.ts` for the
+  process runner. S4 changes its imports the same way.
+
+The same three hosts keep working, with no change in what the owner sees.
+
+### Tasks (small, in order)
+
+Each keeps the four standard commands green (`claude plugin test .`, `sh scripts/typecheck.sh`,
+`sh scripts/test-opencode-host.sh`, `sh scripts/test-node-host.sh`). These are plans. They are not
+created yet.
+
+| # | Title | Files | After | How tested |
+|---|---|---|---|---|
+| S1 | Move the view helpers out of `hooks/opencode/` (pure move, no behaviour change) | `hooks/opencode/board-view.ts` to `hooks/view/board-view.ts`; the host-free part of `hooks/opencode/view.ts` to `hooks/view/view-file.ts`; import lines in `hooks/opencode/*` and `tests/` | none | `sh scripts/test-opencode-host.sh` passes unchanged; the new check from S2 (or a small grep) fails if `hooks/view/` imports a host |
+| S2 | Make the rule a test: extend `tests/host-free.sh` to `hooks/process/` and `hooks/view/` (imports only; the type check part loads no host types) | `tests/host-free.sh`, a case in `tests/typecheck-script.sh` if it needs one | S1 | `sh tests/host-free.sh` passes; a scratch copy with a planted `import '../claude/host'` in `hooks/view/` makes it fail |
+| S3 | Add the one entry `hooks/engine.ts` (re-exports only) and the `package.json` `exports` for it | `hooks/engine.ts` (new), `package.json`, `tests/` (a test that the exports list exactly the names above) | S2 | `claude plugin test` file: every name is exported and is the same function as in its source file; `tests/host-free.sh` covers `hooks/engine.ts` |
+| S4 | Point the three hosts at the entry: they import the engine only through `hooks/engine.ts` | `hooks/claude/*`, `hooks/register.tsx`, `hooks/opencode/*`, `opencode/*`, `hosts/node/*` (import lines only) | S3 | the four standard commands pass unchanged |
+| S5 | Make the line a test for hosts too: a check that no file outside the host folders imports a host folder, and that hosts import the engine only through `hooks/engine.ts` | `tests/` (new shell check, run by `scripts/typecheck.sh`) | S4 | the check passes; a planted deep import in a scratch copy makes it fail |
+| S6 | Write down the boundary for contributors: a short "engine and clients" page, with the rule and the export list | `docs/` (a new page), `CLAUDE.md` if the owner wants it | S5 | `sh tests/build-site.sh` |
+
+Notes:
+
+- S1 and S2 touch different files, but S2 needs S1's new folder, so they run in order.
+- S4 touches many files but only their import lines. If a host needs a name the entry does not
+  export, add it to the entry in that task (and its test), not a deep import.
+- Moving the code into its own package or repo is **not** part of Phase 1. After S5, it is a copy plus
+  a package name, because nothing in the engine side points at a host.
+
+## 13. Build plan (later, not started)
+
+**None of this is started, and none of it is planned for now.** The owner said not to start building
+the app. The steps are labelled L1, L2 and so on, so they are not mixed up with Phase 1's S1 to S6.
+Old L1 (the view move) is now Phase 1's S1. Old L2 is `symcc serve`, the first step of the later work.
 
 The Host refactor steps (T-240..T-246, T-371..T-373) and the reuse proof (T-377, T-474) are done and
 are the base. Each task below is one symcc task. "Tests" says how it is checked. All tasks in this
@@ -427,43 +526,43 @@ repo keep the four standard commands green (`claude plugin test .`, `sh scripts/
 
 | # | Title | Files | After | How tested |
 |---|---|---|---|---|
-| S1 | Move the view helpers out of `hooks/opencode/` (pure move, no behaviour change) | `hooks/opencode/board-view.ts` → `hooks/view/board-view.ts`; host-free part of `hooks/opencode/view.ts` → `hooks/app/view-file.ts`; import lines in `hooks/opencode/*`, `tests/` | — | `sh scripts/test-opencode-host.sh` passes unchanged; `tests/host-free.sh` (or a new grep test) fails if `hooks/view/` imports OpenCode or Claude Code |
-| S2 | `symcc serve`: a Node session that stays open (agents start any time, timers run, Ctrl+C stops all) | `hosts/node/serve.ts` (new), `hosts/node/session.ts`, `hosts/node/main.ts`, `hosts/node/tests/serve.spec.ts` | S1 | bun spec: serve on a scratch git repo with `fake-claude.sh`; add a task in-process; it reaches review with no `tick`; stop leaves no process (`processes.json` empty) |
-| S3 | Engine API: `engine.json`, `GET /view`, `GET /events` (SSE from `onTaskEvent` + view + toast), `POST /tool`, `POST /command`, `POST /stop`, token check | `hosts/node/api.ts` (new), `serve.ts`, `hosts/node/tests/api.spec.ts` | S2 | bun spec with `fetch`: no token → 401; add via `/tool/add`; the SSE stream shows `created` then `stage` events; `/view` lists the task; `/command/symcc-approve` merges it |
-| S4 | MCP endpoint `/mcp` (Streamable HTTP, hand-written JSON-RPC: `initialize`, `tools/list`, `tools/call`) | `hosts/node/mcp.ts` (new), `api.ts`, `hosts/node/tests/mcp.spec.ts` | S3 | spec: `tools/list` names equal `TOOLS()` names; `tools/call board` equals `/tool/board`; one optional manual check with a real `claude -p --mcp-config` |
-| S5 | Runner progress and messages: `AgentRunner.progress`/`message`; `agent` SSE events; `/agents/{id}/log`; Claude runner reads stream-json lines | `hooks/process/agents.ts`, `hooks/process/claude-runner.ts`, `hosts/node/api.ts`, `hosts/node/tests/fake-claude.sh`, a spec | S3 | spec: the fake prints three lines slowly; progress events arrive before the end; the log endpoint returns them; existing node-host tests pass |
-| S6 | Codex runner (`codex exec --json -C -s workspace-write`; read-only for scouts and checkers) | `hooks/process/codex-runner.ts` (new), `hosts/node/main.ts` (`--codex <bin>`), `hosts/node/tests/fake-codex.sh`, a spec | S5 | spec with a fake that prints recorded JSONL (`thread.started`, `item.completed`, `turn.completed` with usage): answer and tokens read; a killed run reads as aborted; one manual run with real Codex when the account has quota |
-| S7 | Agent per role, kind and board default (`agent:` front matter, `HostAgentStart.agent`, runner registry) | `hooks/core/roles.ts`, `hooks/core/kinds.ts`, `hooks/host.ts`, `hooks/app/workers.ts`, `hooks/process/agents.ts`, `tests/` (roles), a node spec | S6 | `claude plugin test` file for parsing and writing `agent:`; node spec: a task with a codex role runs `fake-codex`, others `fake-claude`; an unknown agent is refused with its reason on the task |
-| S8 | Lead (a): the lead chat (`claude -p` stream-json in and out, `--mcp-config` to `/mcp`, lead guide, resume, transcript, usage); `POST /lead/message`, `GET /lead/transcript`, `wakeLead:'now'` | `hosts/node/lead-chat.ts` (new), `hosts/node/host.ts`, `api.ts`, a spec + `fake-claude-lead.sh` | S4 | spec: a fake lead that reads stdin lines and echoes; a board update (task to review) reaches its stdin; its answer comes out as a `lead` SSE event; a restart passes `--resume <id>` |
-| S9 | Claude Code plugin as a client of a running engine: no driving while `engine.json` answers; `POST /lead/attach` + `lead` events → `prompt.submit`; tools forwarded to `/tool` | `hooks/claude/*`, `hooks/app/lead.ts`, `hosts/node/api.ts`, `tests/` (a new engine-client test) | S8 | first a small probe that `fetch` works in the plugin runtime; then a `claude plugin test` file with a fake engine: the plugin does not claim `lead.json`; an engine update becomes one `prompt.submit`; the node spec runs the engine and a second "plugin" session on one board and checks one driver |
-| S10 | Worker-scope tools for process workers (`ask_owner` over MCP, with the worker's token) and "wrap up" via stdin | `hosts/node/mcp.ts`, `hooks/process/claude-runner.ts`, `hooks/core/prompts.ts` (base prompt words), spec | S5, S4 | spec: a fake worker calls `ask_owner`; the task shows the question; the answer reaches the worker; prompts test (`tests/prompts.test.tsx`) for the new words |
-| T1 | New repo `symcc-tui`: skeleton that finds `engine.json` (or starts `symcc serve`), draws band and board from `/view` + SSE with the shared view helpers, board keys, actions via `/command` | new repo; in this repo only `package.json` `exports` for `hooks/view/` | S3 | in the new repo: `bun test` screen snapshots from recorded views (as `hooks/opencode/tests/opencode-tui.spec.ts` does); a test against a fake engine (a tiny HTTP server) that a key sends the right command |
-| T2 | TUI task page, NEEDS YOU dialog, Scouts and Settings tabs, worker log | `symcc-tui` | T1, S5 | snapshot tests per page; fake-engine test that an answer posts the right `/command` |
-| T3 | TUI chat pane for lead (a) | `symcc-tui` | T1, S8 | fake-engine test: typed text is posted to `/lead/message`; `lead` events show in order; transcript loads on open |
-| S11 | ACP runner (`acpAgents`: initialize, session/new, prompt, cancel; `fs/write_text_file` and `session/request_permission` through the path guard) | `hooks/process/acp.ts` (new), a fake ACP agent script, a spec | S7 | spec with a fake ACP agent that asks to write one file inside and one outside the list: inside written, outside refused; cancel stops it |
-| S12 | (option) Codex chat as lead (b): MCP tools from `/mcp`, updates via `codex queue` | `hosts/node/codex-lead.ts` | S4, S9 | spec with a fake `codex` that records its `queue` calls; manual check with real Codex |
-| S13 | (option, owner said "not yet") MCP App board inside T3 Code, Claude or Codex | `hosts/node/mcp.ts` (an MCP App resource drawing `/view`) | S4 | manual spike in T3 Code, as in T-337's step (a). The other T-337 spike (a small OpenCode plugin) was done as T-370 and led to the OpenCode adapter. |
-| S14 | (later) a web board as one more client of the same API | new | S3 | browser-free test of its view code; manual check |
+| L1 | Move the view helpers out of `hooks/opencode/` (pure move, no behaviour change) | `hooks/opencode/board-view.ts` → `hooks/view/board-view.ts`; host-free part of `hooks/opencode/view.ts` → `hooks/app/view-file.ts`; import lines in `hooks/opencode/*`, `tests/` | — | `sh scripts/test-opencode-host.sh` passes unchanged; `tests/host-free.sh` (or a new grep test) fails if `hooks/view/` imports OpenCode or Claude Code |
+| L2 | `symcc serve`: a Node session that stays open (agents start any time, timers run, Ctrl+C stops all) | `hosts/node/serve.ts` (new), `hosts/node/session.ts`, `hosts/node/main.ts`, `hosts/node/tests/serve.spec.ts` | L1 | bun spec: serve on a scratch git repo with `fake-claude.sh`; add a task in-process; it reaches review with no `tick`; stop leaves no process (`processes.json` empty) |
+| L3 | Engine API: `engine.json`, `GET /view`, `GET /events` (SSE from `onTaskEvent` + view + toast), `POST /tool`, `POST /command`, `POST /stop`, token check | `hosts/node/api.ts` (new), `serve.ts`, `hosts/node/tests/api.spec.ts` | L2 | bun spec with `fetch`: no token → 401; add via `/tool/add`; the SSE stream shows `created` then `stage` events; `/view` lists the task; `/command/symcc-approve` merges it |
+| L4 | MCP endpoint `/mcp` (Streamable HTTP, hand-written JSON-RPC: `initialize`, `tools/list`, `tools/call`) | `hosts/node/mcp.ts` (new), `api.ts`, `hosts/node/tests/mcp.spec.ts` | L3 | spec: `tools/list` names equal `TOOLS()` names; `tools/call board` equals `/tool/board`; one optional manual check with a real `claude -p --mcp-config` |
+| L5 | Runner progress and messages: `AgentRunner.progress`/`message`; `agent` SSE events; `/agents/{id}/log`; Claude runner reads stream-json lines | `hooks/process/agents.ts`, `hooks/process/claude-runner.ts`, `hosts/node/api.ts`, `hosts/node/tests/fake-claude.sh`, a spec | L3 | spec: the fake prints three lines slowly; progress events arrive before the end; the log endpoint returns them; existing node-host tests pass |
+| L6 | Codex runner (`codex exec --json -C -s workspace-write`; read-only for scouts and checkers) | `hooks/process/codex-runner.ts` (new), `hosts/node/main.ts` (`--codex <bin>`), `hosts/node/tests/fake-codex.sh`, a spec | L5 | spec with a fake that prints recorded JSONL (`thread.started`, `item.completed`, `turn.completed` with usage): answer and tokens read; a killed run reads as aborted; one manual run with real Codex when the account has quota |
+| L7 | Agent per role, kind and board default (`agent:` front matter, `HostAgentStart.agent`, runner registry) | `hooks/core/roles.ts`, `hooks/core/kinds.ts`, `hooks/host.ts`, `hooks/app/workers.ts`, `hooks/process/agents.ts`, `tests/` (roles), a node spec | L6 | `claude plugin test` file for parsing and writing `agent:`; node spec: a task with a codex role runs `fake-codex`, others `fake-claude`; an unknown agent is refused with its reason on the task |
+| L8 | Lead (a): the lead chat (`claude -p` stream-json in and out, `--mcp-config` to `/mcp`, lead guide, resume, transcript, usage); `POST /lead/message`, `GET /lead/transcript`, `wakeLead:'now'` | `hosts/node/lead-chat.ts` (new), `hosts/node/host.ts`, `api.ts`, a spec + `fake-claude-lead.sh` | L4 | spec: a fake lead that reads stdin lines and echoes; a board update (task to review) reaches its stdin; its answer comes out as a `lead` SSE event; a restart passes `--resume <id>` |
+| L9 | Claude Code plugin as a client of a running engine: no driving while `engine.json` answers; `POST /lead/attach` + `lead` events → `prompt.submit`; tools forwarded to `/tool` | `hooks/claude/*`, `hooks/app/lead.ts`, `hosts/node/api.ts`, `tests/` (a new engine-client test) | L8 | first a small probe that `fetch` works in the plugin runtime; then a `claude plugin test` file with a fake engine: the plugin does not claim `lead.json`; an engine update becomes one `prompt.submit`; the node spec runs the engine and a second "plugin" session on one board and checks one driver |
+| L10 | Worker-scope tools for process workers (`ask_owner` over MCP, with the worker's token) and "wrap up" via stdin | `hosts/node/mcp.ts`, `hooks/process/claude-runner.ts`, `hooks/core/prompts.ts` (base prompt words), spec | L5, L4 | spec: a fake worker calls `ask_owner`; the task shows the question; the answer reaches the worker; prompts test (`tests/prompts.test.tsx`) for the new words |
+| T1 | New repo `symcc-tui`: skeleton that finds `engine.json` (or starts `symcc serve`), draws band and board from `/view` + SSE with the shared view helpers, board keys, actions via `/command` | new repo; in this repo only `package.json` `exports` for `hooks/view/` | L3 | in the new repo: `bun test` screen snapshots from recorded views (as `hooks/opencode/tests/opencode-tui.spec.ts` does); a test against a fake engine (a tiny HTTP server) that a key sends the right command |
+| T2 | TUI task page, NEEDS YOU dialog, Scouts and Settings tabs, worker log | `symcc-tui` | T1, L5 | snapshot tests per page; fake-engine test that an answer posts the right `/command` |
+| T3 | TUI chat pane for lead (a) | `symcc-tui` | T1, L8 | fake-engine test: typed text is posted to `/lead/message`; `lead` events show in order; transcript loads on open |
+| L11 | ACP runner (`acpAgents`: initialize, session/new, prompt, cancel; `fs/write_text_file` and `session/request_permission` through the path guard) | `hooks/process/acp.ts` (new), a fake ACP agent script, a spec | L7 | spec with a fake ACP agent that asks to write one file inside and one outside the list: inside written, outside refused; cancel stops it |
+| L12 | (option) Codex chat as lead (b): MCP tools from `/mcp`, updates via `codex queue` | `hosts/node/codex-lead.ts` | L4, L9 | spec with a fake `codex` that records its `queue` calls; manual check with real Codex |
+| L13 | (option, owner said "not yet") MCP App board inside T3 Code, Claude or Codex | `hosts/node/mcp.ts` (an MCP App resource drawing `/view`) | L4 | manual spike in T3 Code, as in T-337's step (a). The other T-337 spike (a small OpenCode plugin) was done as T-370 and led to the OpenCode adapter. |
+| L14 | (later) a web board as one more client of the same API | new | L3 | browser-free test of its view code; manual check |
 
-Order notes: S1..S4 are the base. S5..S7 (runners) and S8 (lead a) can go in parallel after them.
-T1 needs only S3, so the TUI can start early, against a running `symcc serve` with lead (b).
+Order notes: L1..L4 are the base. L5..L7 (runners) and L8 (lead a) can go in parallel after them.
+T1 needs only L3, so the TUI can start early, against a running `symcc serve` with lead (b).
 
-## 13. What I couldn't check
+## 14. What I couldn't check
 
 - I ran no `symcc serve`, MCP server, lead chat, Codex worker or ACP agent. Everything new above is
   a design.
 - Whether `claude -p --input-format stream-json` takes a message or an interrupt in the middle of a
   turn, and whether it compacts long chats by itself.
 - Whether `--permission-prompt-tool` works together with `--permission-mode dontAsk`.
-- Whether the Claude Code plugin runtime has `fetch` (needed for S9's forwarding).
+- Whether the Claude Code plugin runtime has `fetch` (needed for L9's forwarding).
 - Whether the Codex `workspace-write` sandbox blocks writes to the main repo's `.git/worktrees/`.
 - Token reports from ACP agents.
 
 ## Recommended next step
 
-Start S1 (move the view helpers to `hooks/view/`, a pure move) and S2 (`symcc serve`). They are
-small, they change no behaviour for the three existing hosts, and everything else builds on them.
-Before T1, ask the owner open question 1 (what goes in the separate project).
+Phase 1 (section 12): create S1 (move the view helpers to `hooks/view/`, a pure move) and then S2 to S6
+in order. They change nothing the owner sees. Do not start L2 (`symcc serve`) or anything after it
+until the owner says so.
 
 ## Sources
 
