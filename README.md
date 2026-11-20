@@ -178,6 +178,7 @@ A few things are slash commands: `/symcc` opens the board, `/symcc-disable` and 
 
 ## More
 
+- [Website](https://kourgeorge.github.io/symcc/): the landing page, the guide and the reference as web pages
 - [Guide](docs/guide.md): a task's life, review, the panel, scouts, branches, where files live, safety
 - [Reference](docs/reference.md): install details, modes, commands, settings, statuses
 - [Architecture picture](docs/architecture.md) and [demo](docs/demo.md): how the pictures are made

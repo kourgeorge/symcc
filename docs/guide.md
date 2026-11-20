@@ -131,8 +131,8 @@ answers it itself only when you already clearly said the answer, and then tells 
 answered. Otherwise it asks you in the chat, short and plain, with the worker's options (if
 any). In Claude Code it asks with the chat pop-up (AskUserQuestion) with the same choices;
 on a host with no pop-up it writes them as numbered choices in plain text. You can answer in
-the chat or on the board, whichever comes first (if you answer on the board, the lead doesn't
-ask again, and says once that you can close the pop-up): the answer goes into the
+the pop-up or on the board, whichever comes first (the pop-up is tied to the task's board
+question: answer on the board and the pop-up closes by itself): the answer goes into the
 task and sends it back to work, and a new try continues with it. What the worker already
 changed is kept.
 
@@ -168,15 +168,32 @@ briefly in the chat too. Each gets an id like `Q-3` and is kept in `board.json` 
   lead can also drop a question that no longer matters.
 
 **Both on the board and in the chat.** Where the host has a chat pop-up for questions
-(AskUserQuestion in Claude Code), the lead asks every question both ways: it stays on the
-board (a `Q-` question, or the task's own question: a review, an answered investigation, a
-worker's question or file request, more time) and also opens in the chat pop-up with the
-same choices. Answer in the pop-up and the lead closes the board question for you. Answer on
-the board first and the pop-up stays open; the lead says once "answered on the board; you can
-close the pop-up". The pop-up holds at most 4 choices, so a question with more shows the
-first 3 plus "the rest on the board" (or type yours under Other). On a host with no pop-up the lead writes the choices as numbered plain
-text, plus "or answer on the board". The lead never puts two questions under the same
-numbers.
+(AskUserQuestion in Claude Code), the lead just asks with the pop-up, and symcc puts each
+question on the board by itself:
+
+- A question about a task that waits for you (a review, an answered investigation, a
+  worker's question or file request, more time) has the task's id (T-5) as its header and is
+  tied to that task's own board question: no extra `Q-` entry. A task id only mentioned in
+  the question's text doesn't tie it.
+- Any other question becomes a `Q-` question with the same text and choices (or, when the
+  lead already put that exact question on the board, that one is used).
+
+The pop-up says "or answer on the board (Q-3)" under its choices. Whichever you answer first
+closes the other: answer on the board and the pop-up closes, and the lead reads your board
+answer as the pop-up's answer (no extra board update for it). Answer in the pop-up and the
+`Q-` question closes with your answer, or your answer goes into the task as the board's
+buttons would put it (an answer, more time, Allow or Don't allow, Approve, Done, Keep as a
+note; a reject or "ask more" still needs the lead, which gets your reason). Close the pop-up
+without answering and the question stays on the board. When one pop-up holds several
+questions and one of them can't go on the board (say a free-text one), your board answers are
+kept but the pop-up stays open for the rest. If you type your own words instead of picking,
+they answer the question when the pop-up has only one; with several, the lead is told which
+board questions are still open. The pop-up holds at most 4 choices,
+so a question with more shows the first 3 plus "the rest on the board" (or type yours under
+Other); picking "the rest on the board" is no answer, so the question stays open on the board
+for you to answer there. Workers never get the pop-up. On a host with no pop-up the lead puts the question on
+the board itself and writes the choices as numbered plain text, plus "or answer on the
+board". The lead never puts two questions under the same numbers.
 
 ---
 

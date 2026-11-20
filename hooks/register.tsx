@@ -15,6 +15,7 @@ import { noteBackground, stopSeen, takeBackground } from './claude/background'
 import { sessionStarting, sessionStart, sessionCleared, sessionEnd, leadGuideText, ownerTyped, toolCall, otherToolDone, toolCallFailed, toolCheck, toolCheckFailed, agentFinished, runCommand } from './app/symcc'
 import { S, useName } from './app/state'
 import { hookFailed } from './app/ask'
+import { popupCall } from './app/questions'
 import { spawnFailedText } from './core/ask'
 import { DEFAULT_NAME, cleanName } from './name'
 import { drainStarts, leadTurn } from './app/starts'
@@ -137,6 +138,17 @@ export const register: Register = on => {
     const call = e as unknown as Record<string, unknown>
     const ours = await toolCall(host, e.tool, e.agentId, call)
     if (ours) return ours
+    // T-579: the lead's AskUserQuestion also goes on the board; whichever the owner answers first closes the other (see popupCall)
+    if (!e.agentId && e.tool === S.W.askPopup) {
+      const notice = (text: string | undefined) => {
+        try {
+          if (e.tool_use_id) $.ui.notice(e.tool_use_id, text)
+        } catch {
+          // no line under the dialog: the board still takes the answer
+        }
+      }
+      return (await popupCall(host, e.agentId, call, () => next(e), notice)) as Awaited<ReturnType<typeof next>>
+    }
     const r = await next(e)
     // a Bash command an agent sent to the background: noted as its own (see claude/background.ts)
     noteBackground(e.agentId, call, r)
