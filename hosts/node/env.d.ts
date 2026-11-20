@@ -53,7 +53,7 @@ declare var process: {
   env: Record<string, string | undefined>
   exitCode: number | undefined
   exit(code?: number): never
-  kill(pid: number, signal?: string): boolean
+  kill(pid: number, signal?: string | number): boolean
   on(event: 'SIGINT' | 'SIGTERM', fn: () => void): void
   cwd(): string
   stdout: { write(text: string): boolean }

@@ -6,7 +6,8 @@
 //     tool <name> ['<json input>']                           any of the lead's tools, e.g. tool settings '{"test_commands":["sh test.sh"]}'
 //     cmd <name> [args]                                      a slash command, e.g. cmd symcc-mode review
 // What symcc would tell the lead is printed after the answer, under "[lead]".
-import { claudeRunner } from './runner'
+import { claudeRunner } from '../../hooks/process/claude-runner'
+import { nodeProcessSystem } from './system'
 import { openSession, leadTool, slashCommand, settle, closeSession, type NodeSession } from './session'
 
 /**
@@ -89,7 +90,7 @@ async function main() {
     console.log(USAGE)
     return 2
   }
-  const runner = claudeRunner({ ...(opts.claude ? { bin: opts.claude } : {}), ...(opts.model ? { model: opts.model } : {}) })
+  const runner = claudeRunner(nodeProcessSystem, { ...(opts.claude ? { bin: opts.claude } : {}), ...(opts.model ? { model: opts.model } : {}) })
   const s = await openSession({ root: opts.root ?? process.cwd(), runner })
   // Ctrl-C or a kill: the agents are stopped and their tasks put back before the CLI ends (they run in their own groups)
   const quit = (sig: string) => () => void closeSession(s, `the command line got ${sig}`).finally(() => process.exit(130))

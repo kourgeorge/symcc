@@ -9,8 +9,10 @@ import { sessionStarting, sessionStart, sessionEnd, toolCall, runCommand, agentF
 import { S, useName, toolName, workers, starting, finishing, approving, queuedWorkers, scoutRuns, checkerRuns } from '../../hooks/app/state'
 import { StartCancelled } from '../../hooks/app/starts'
 import { stopForQuit, pump } from '../../hooks/app/workers'
-import { nodeHost } from './host'
-import { processAgents, type AgentRunner, type ProcessAgents } from './runner'
+import { processAgents, type AgentRunner, type ProcessAgents } from '../../hooks/process/agents'
+import { PROCESSES_FILE } from '../../hooks/process/record'
+import { nodeHost, nodeFs } from './host'
+import { nodeProcessSystem } from './system'
 
 /** `working`: a tick runs now, so agents may start (see settle). */
 export type NodeSession = { host: Host; agents: ProcessAgents; say: (line: string) => void; closing: boolean; working: boolean }
@@ -26,7 +28,9 @@ export async function openSession(o: SessionOptions): Promise<NodeSession> {
     useName(host)
     for (const d of end.denied ?? []) say(`${agentId}: its permission rules refused ${d}`)
     agentFinished(host, agentId, end)
-  })
+    // the record sits next to board.json, in the project's top folder that sessionStart set as S.root (T-588), not in
+    // o.root, which may be a subfolder; read only when used, so after sessionStart
+  }, { system: nodeProcessSystem, record: { fs: nodeFs, file: () => `${S.root || o.root}/${S.N.dir}/${PROCESSES_FILE}` } })
   // Agents start only while a tick runs and the session isn't closing; any other start is taken back.
   const gated: ProcessAgents = { ...agents, spawn: a => (ref.s?.working && !ref.s.closing ? agents.spawn(a) : Promise.reject(new StartCancelled('started only by a tick'))) }
   const host = nodeHost({ root: o.root, agents: gated, say, cost: agents.cost, ...(o.sessionId ? { sessionId: o.sessionId } : {}), ...(o.pluginRoot ? { pluginRoot: o.pluginRoot } : {}) })
@@ -49,9 +53,13 @@ export async function slashCommand(s: NodeSession, command: string, args: string
   return (await runCommand(s.host, command, args))?.text ?? `/${command} is not one of ${S.N.name}'s commands`
 }
 
-/** Whether nothing of symcc's runs or waits now: no agent process, no start, no check or merge. */
+/**
+ * Whether nothing of symcc's runs or waits now: no agent process, no start, no check or merge, and the session start
+ * has finished (its claimLead may still wait for old workers it stopped, e.g. ones from the record of running processes,
+ * before their tasks go back to "todo" and the start's own pump starts them again).
+ */
 function idle(s: NodeSession): boolean {
-  return s.agents.running() === 0 && workers.size === 0 && starting.size === 0 && queuedWorkers.size === 0 && finishing.size === 0 && approving.size === 0 && scoutRuns.size === 0 && checkerRuns.size === 0
+  return (S.startupDone || S.guardOnly) && s.agents.running() === 0 && workers.size === 0 && starting.size === 0 && queuedWorkers.size === 0 && finishing.size === 0 && approving.size === 0 && scoutRuns.size === 0 && checkerRuns.size === 0
 }
 
 /**

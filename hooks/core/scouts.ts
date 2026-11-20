@@ -431,12 +431,49 @@ export function recentClosed(tasks: Pick<SymccTask, 'id' | 'title' | 'status' | 
 }
 
 /**
+ * The two lines of scoutPrompt's rules that depend on the scout's tools: what it may use (`may`: the web only when
+ * `o.web`, default true) and how it looks at the board (`board`: symcc's board and stats tools, or, with `o.symccTools`
+ * false, e.g. a `claude -p` process with only Read, Glob, Grep and Bash (T-474), the board file itself).
+ */
+export function scoutToolLines(name: string, o: { symccTools?: boolean; web?: boolean } = {}): { may: string; board: string } {
+  const may = o.web === false ? '- You may read files and run shell commands that only look.' : '- You may read files, run shell commands that only look, and search or fetch pages on the web.'
+  const board =
+    o.symccTools === false
+      ? `- To look at the board, read ${namesFor(name).dir}/board.json yourself (only read it, never change it): its tasks list has each task's id, title and status, and a try's report file is named in its runs.`
+      : `- To look at the board, use the ${name} tools board and stats rather than reading ${namesFor(name).dir}/board.json: board with no arguments lists the open tasks; status (e.g. ["done"]) and search (words) narrow it; task (e.g. "T-12") shows one task in full with its latest report. stats shows time and token use. They only read: every ${name} tool that changes the board (add, change, drop, approve, ...) is refused for you.`
+  return { may, board }
+}
+
+/**
+ * Scout prompt `prompt` (from scoutPrompt with symcc's tools and the web) for a scout started with only the host's own
+ * tools (T-474): its tool lines (see scoutToolLines) become the ones for no symcc tools, and the web only when `web`.
+ * A prompt without those lines (a checker's, say) comes back as it was.
+ */
+export function scoutWithoutSymccTools(prompt: string, web: boolean): string {
+  return prompt.replace(/^- To look at the board, use the (\S+) tools board and stats .*$/m, (_l, name: string) => scoutToolLines(name, { symccTools: false }).board).replace(scoutToolLines(DEFAULT_NAME).may, scoutToolLines(DEFAULT_NAME, { web }).may)
+}
+
+/**
  * The prompt a scout run gets: its file's instructions as its job, the project folder,
  * the open tasks on the board (`open`: "T-3 title" lines), the recently closed ones (`closed`),
  * its own last report and last run time (both optional), and the rules for a good finding.
  */
-export function scoutPrompt(o: { scout: string; root: string; instructions: string; open: string[]; name?: string; closed?: string[]; lastReport?: string | null; lastRun?: string | null }): string {
+export function scoutPrompt(o: {
+  scout: string
+  root: string
+  instructions: string
+  open: string[]
+  name?: string
+  closed?: string[]
+  lastReport?: string | null
+  lastRun?: string | null
+  /** the scout can call symcc's board and stats tools (default true); false: it reads the board file itself */
+  symccTools?: boolean
+  /** the scout has web tools (default true, as a scout agent type has); false: the web is not named */
+  web?: boolean
+}): string {
   const name = o.name ?? DEFAULT_NAME
+  const lines = scoutToolLines(name, o)
   const closed = Array.isArray(o.closed) ? o.closed : []
   const report = typeof o.lastReport === 'string' && !isNothing(o.lastReport) ? o.lastReport.trim() : ''
   const runAt = typeof o.lastRun === 'string' && Number.isFinite(Date.parse(o.lastRun)) ? o.lastRun : ''
@@ -468,9 +505,9 @@ What makes a good finding:
 
 Rules:
 - Don't change, create or delete files in the project: no edits, no installs, no git commands that change anything (commit, checkout, reset, stash, ...). Changes are made through board tasks, not by you.
-- You may read files, run shell commands that only look, and search or fetch pages on the web.
+${lines.may}
 - Don't run long commands in the background. If you do, wait for them to finish before you answer: ending your turn ends your work, so never answer that you will continue later.
-- To look at the board, use the ${name} tools board and stats rather than reading ${namesFor(name).dir}/board.json: board with no arguments lists the open tasks; status (e.g. ["done"]) and search (words) narrow it; task (e.g. "T-12") shows one task in full with its latest report. stats shows time and token use. They only read: every ${name} tool that changes the board (add, change, drop, approve, ...) is refused for you.
+${lines.board}
 - End with a short plain report of your findings. If there is nothing worth reporting, answer exactly: NOTHING`
 }
 

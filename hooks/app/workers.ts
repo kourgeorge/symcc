@@ -1589,6 +1589,9 @@ export const LIVE = new Set(['pending', 'running', 'waiting'])
  * Only live agents are messaged: a message to an ended agent would wake it up again.
  */
 export async function stopOrphans(host: Host, leadNow?: string | null): Promise<string[]> {
+  // T-474: agent processes an earlier run of the host recorded and left running (it was killed): not in list() any
+  // more, so they are stopped from the record (dead entries are dropped); their tasks go back like any orphan's
+  const leftovers = (await host.agents.stopLeftovers?.().catch(() => [] as string[])) ?? []
   // Every worker type (worker, worker-web, ...) is listed as a worker (see HostAgent).
   const agents = await host.agents.list().catch(() => [])
   // host.agents.list() names this session's agents only, but in case it ever lists another
@@ -1598,7 +1601,7 @@ export async function stopOrphans(host: Host, leadNow?: string | null): Promise<
   // A board that can't be read (being fixed, or a read failing now) says nothing about whose
   // worker is whose: then no worker is stopped (the next check looks again), only scouts are.
   const b = agents.some(a => a.kind === 'worker') ? await load(host).catch(() => null) : emptyBoard()
-  const out: string[] = []
+  const out: string[] = [...leftovers]
   for (const a of agents) {
     if (a.kind === 'other') continue
     // Already tracked, or already told to stop: not taken back, and not messaged again (a message would wake it up).

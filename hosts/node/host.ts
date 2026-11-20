@@ -2,7 +2,7 @@
 // and git are child processes, timers are setTimeout/setInterval, the environment is process.env. It has no screen
 // (no panel, no band, no plan mode, no lead usage): the board is the text board, and a board update for the lead is
 // kept until the CLI takes it (wakeLead 'next-turn', see leadUpdate in hooks/app/symcc.ts) and prints it. The agents
-// are external processes (runner.ts). This is the proof that hooks/app/ and hooks/core/ run outside Claude Code; an
+// are external processes (hooks/process/, with hosts/node/system.ts). This is the proof that hooks/app/ and hooks/core/ run outside Claude Code; an
 // OpenCode plugin or a standalone client builds its Host the same way.
 import { readFile, writeFile, mkdir, readdir, lstat, stat, realpath, access } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
@@ -17,7 +17,7 @@ export const PLUGIN_ROOT = decodeURIComponent(import.meta.url.replace(/^file:\/\
 export type NodeHostOptions = {
   /** the project folder (a git repository, or the folder to make one in) */
   root: string
-  /** the workers, scouts and checkers (runner.ts processAgents) */
+  /** the workers, scouts and checkers (hooks/process/agents.ts processAgents) */
   agents: Host['agents']
   /** this session's id; the CLI uses one fixed id, so each run takes the board over from the last one */
   sessionId?: string
@@ -95,7 +95,7 @@ export const nodeClock: Host['clock'] = {
   sleep: ms => new Promise<void>(r => void setTimeout(r, ms)),
 }
 
-/** The Host for project `o.root`, with plain Node/Bun APIs and `o.agents` (runner.ts). */
+/** The Host for project `o.root`, with plain Node/Bun APIs and `o.agents` (hooks/process/agents.ts). */
 export function nodeHost(o: NodeHostOptions): Host {
   const pluginRoot = o.pluginRoot ?? PLUGIN_ROOT
   const say = o.say ?? ((line: string) => void process.stderr.write(`${line}\n`))
