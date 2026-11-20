@@ -507,7 +507,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       return questionTool($, a)
     case 'board': {
       const b = await load($)
-      if (!id) return boardText(b, Date.now(), shortHome(S.root, S.home), S.N.name, undefined, { status: parseStatusFilter(a.status), search: str(a.search), limit: typeof a.limit === 'number' ? a.limit : undefined, sort: a.sort === 'order' || a.sort === 'newest' ? a.sort : undefined, kinds: [...BUILT_IN_KINDS, ...kindNames(S.kinds)] }, S.version)
+      if (!id) return boardText(b, Date.now(), shortHome(S.root, S.home), S.N.name, undefined, { status: parseStatusFilter(a.status), search: str(a.search), limit: typeof a.limit === 'number' ? a.limit : undefined, sort: a.sort === 'order' || a.sort === 'newest' ? a.sort : undefined, kinds: [...BUILT_IN_KINDS, ...kindNames(S.kinds)], driving: S.driving }, S.version)
       const t = find(b, id) ?? (await findArchived($, id))
       if (!t) throw new Error(`${id} is not on the board or in the archive`)
       const archived = !find(b, id)

@@ -164,9 +164,10 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
   const total = sumRuns(t.runs, nowMs)
   const tags = [kind, role, t.attempts ? `try ${t.attempts}` : '', t.runs?.length ? fmtDuration(total.ms) : '', x.agentId ? 'a worker is on it now' : ''].filter(Boolean)
   const statusWord = 'answered: read it'
-  // the badge names the step a doing task is in ("⌕ checker · 5m"); under it the Stage stepper (worker ✓ → ● checker → …)
-  // (an approve the page started shows its step at once, not "ready for review")
-  const badge = statusBadge(t as BoardTask, nowMs, undefined, !!x.merging)
+  // the badge is this page's Status row: the state and its time ("▶ doing · 48m", T-647), as the Status row on the
+  // terminal and OpenCode pages; under it the Stage stepper names the step (worker ✓ → ● checker → …)
+  // (an approve the page started shows doing at once, not "ready for review")
+  const badge = statusBadge(t as BoardTask, nowMs, undefined, !!x.merging, 'state')
   const stage = taskStage(t as BoardTask, nowMs, pane.v, !!x.merging)
   const vsStage = (marks: StageMark[]) => (
     <Box key="vs-stage" flexDirection="row" flexWrap="wrap" columnGap={1}>
@@ -285,13 +286,15 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
     : null
 
   // where it came from: who, why, the owner's words, what was seen, and the note
+  const nowNote = x.rows.find(r => r.label === STATE_LABEL)?.segs.map(g => g.text).join('') ?? ''
   const og = originOf(t)
   const origin = section('origin', 'Why / where it came from', [
     segs('vs-from', [{ text: 'From ', color: 'inactive' }, ...originSegs(t)]),
     og?.why ? plain('vs-why', squash(og.why)) : null,
     og?.by === 'owner' && og.request?.trim() ? plain('vs-request', `“${squash(og.request)}”`, 'text', { italic: true }) : null,
     og?.evidence ? plain('vs-seen', `Seen: ${squash(og.evidence)}`, 'inactive') : null,
-    t.note ? plain('vs-note', `${STATE_LABEL}: ${t.note}`, 'inactive', { italic: true }) : null,
+    // the Now row of the shared rows (detailRows): in a session that doesn't drive the board, "runs in the other session"
+    nowNote ? plain('vs-note', `${STATE_LABEL}: ${nowNote}`, 'inactive', { italic: true }) : null,
   ])
 
   const details = section('details', 'What to do', [t.details.trim() ? <Markdown key="vs-details-md" text={t.details.trimEnd()} /> : plain('vs-details-none', '(no details)', 'inactive')])

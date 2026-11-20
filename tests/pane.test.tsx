@@ -1380,7 +1380,7 @@ test('From shows a scout or a split task in its own color', async ($, on) => {
   await ui.unmount()
 })
 
-test('T-587: the terminal task page badge names the step ("[⌕ checker · 9m]") and its Stage row marks it now, the steps before done', async ($, on) => {
+test('T-587: the terminal task page badge names the step ("[⌕ checker · 9m]"), the Status row the state (T-647), and its Stage row marks the step now, the steps before done', async ($, on) => {
   const T0 = Date.parse('2026-03-02T10:00:00Z')
   mock.clock(on, { now: T0 })
   const iso = (ms: number) => new Date(ms).toISOString()
@@ -1391,7 +1391,7 @@ test('T-587: the terminal task page badge names the step ("[⌕ checker · 9m]")
   const L = await lines(ui)
   expect(L).toContain('[⌕ checker · 9m]')
   const status = L.findIndex(l => l.startsWith('Status:'))
-  expect(L[status]).toContain('⌕ checker · 9m')
+  expect(L[status]).toContain('▶ doing · 9m')
   // the Stage row right under Status (it may wrap onto a second line)
   expect(L.slice(status + 1, status + 3).join(' ').replace(/\s+/g, ' ')).toMatch(/^Stage: worker ✓ → prep ✓ → ● checker → queue → test → merge/)
   await ui.unmount()

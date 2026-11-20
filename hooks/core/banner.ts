@@ -13,6 +13,7 @@ import { type CrewBoard, withCrew, parseSearch, searchTasks, BOARD_STATUSES, sta
 import { checkStepNow, shownStatus } from './lead'
 import { type TaskPhase, taskPhase } from './phase'
 import { whyFailed } from './failure'
+import { CLAIM_NOTES, sessionNote } from './details'
 import { offStatusParts, testsShort } from './settings'
 import { type OwnerQuestion, openQuestions, questionsForYou, questionLine, questionsLabel } from './questions'
 import { type LogoFrame, LOGO_MIN_WIDTH, restFrame } from './logo'
@@ -109,14 +110,10 @@ const STATE_NOTES = new Set(['worker on it', STEP_NOTE.testing, STEP_NOTE.mergin
  *  `driving` false (another session drives the board): a claim note ("starting at the next turn") becomes
  *  OTHER_SESSION_NOTE, as that task's worker starts in the driving session, not here (T-643). */
 export const bandNote = (t: Pick<SymccTask, 'status' | 'runs' | 'note'> & Pick<BoardTask, 'checking' | 'time_ask' | 'kind'>, nowMs: number, since?: number | string, driving = true): string =>
-  !t.note || (STATE_NOTES.has(t.note) && bandHasState(t, nowMs, since)) ? '' : !driving && t.status === 'doing' && CLAIM_NOTES.has(t.note) ? OTHER_SESSION_NOTE : t.note
+  !t.note || (STATE_NOTES.has(t.note) && bandHasState(t, nowMs, since)) ? '' : sessionNote(t, driving)
 
 // ---------------- another session drives the board (T-643) ----------------
 
-/** The notes a task gets when claimed, before its worker started (app/starts.ts: QUEUED_NOTE and STARTING_NOTE). */
-const CLAIM_NOTES = new Set(['starting at the next turn', 'worker starting'])
-/** The end text of a doing task whose worker starts in the session that drives the board, shown in the other sessions. */
-export const OTHER_SESSION_NOTE = 'runs in the other session'
 /** A task claimed this long ago whose worker still hasn't started makes the "another session drives" warning add "it looks idle". */
 export const DRIVER_IDLE_MS = 5 * 60_000
 
@@ -352,7 +349,7 @@ export const bannerText = (l: BannerLine) => l.art + l.parts.map(p => p.text).jo
 /** What the lead's board tool lists: tasks with one of `status` and matching `search` (see parseSearch: plain words and
  *  filter words like last:5 or kind:bug); `limit` and `sort` are the same as last:N ("newest", the default) and
  *  top:N ("order"). `kinds`: the known kinds, so an unknown kind: word gives an error. */
-export type BoardFilter = { status?: SymccStatus[]; search?: string; limit?: number; sort?: 'newest' | 'order'; kinds?: readonly string[] }
+export type BoardFilter = { status?: SymccStatus[]; search?: string; limit?: number; sort?: 'newest' | 'order'; kinds?: readonly string[]; /** false: another session drives the board (see sessionNote) */ driving?: boolean }
 
 /** The board tool's status words (a list, or one string like "todo, doing") as statuses; "open" adds every OPEN one.
  *  Undefined when none were given; throws on an unknown word. */
@@ -369,10 +366,11 @@ export function parseStatusFilter(words: unknown): SymccStatus[] | undefined {
 }
 
 /** One row (and its "from:" line) of the board as text. */
-function boardRow(t: SymccTask, autoRetries: number | undefined, nowMs: number): string[] {
+function boardRow(t: SymccTask, autoRetries: number | undefined, nowMs: number, driving = true): string[] {
   // the end text every view shows (rowEndText); the lead also reads "asks:" before a question, and "review" when nothing else is said
   const phase = taskPhase(t, nowMs)
-  const end = rowEndText(t, phase)
+  // in a session that doesn't drive the board a claim note says the worker runs in the other session (sessionNote)
+  const end = rowEndText(t, phase, sessionNote(t, driving))
   const asks = (phase.waitsFor === 'answer' || phase.waitsFor === 'files') && t.question ? 'asks: ' : ''
   const extra = end ? ` — ${asks}${end}` : t.status === 'review' ? ` — ${STATUS_WORD.review}` : ''
   const after = t.after.length && (t.status === 'todo' || t.status === 'backlog') ? ` (after ${t.after.join(', ')})` : ''
@@ -430,10 +428,10 @@ export function boardText(b: Board, nowMs?: number, where?: string, name: string
     const asked = [picked, filter.status?.length ? `status: ${filter.status.join(', ')}` : '', search ? `search: ${search}` : ''].filter(Boolean).join('; ')
     // with last / top the line says how many matched in all: "10 of 37 matching shown (484 tasks on the board; ...)"
     const count = q.pick ? `${rows.length} of ${q.pick.by === 'order' && !q.status ? matched.filter(t => t.status === 'todo').length : matched.length} matching shown (${b.tasks.length} tasks on the board; ${asked})` : `${rows.length} of ${b.tasks.length} tasks (${asked})`
-    body = rows.length ? [...rows.flatMap(t => boardRow(t, b.auto_retries, nowMs ?? Date.now())), count] : [`No tasks match (${asked}).`]
+    body = rows.length ? [...rows.flatMap(t => boardRow(t, b.auto_retries, nowMs ?? Date.now(), filter.driving)), count] : [`No tasks match (${asked}).`]
   } else {
     const hidden = hiddenLine(closed.filter(t => t.status === 'done').length, closed.filter(t => t.status === 'dropped').length)
-    body = [...[...s.open, ...s.backlog].flatMap(t => boardRow(t, b.auto_retries, nowMs ?? Date.now())), ...(hidden ? [hidden] : [])]
+    body = [...[...s.open, ...s.backlog].flatMap(t => boardRow(t, b.auto_retries, nowMs ?? Date.now(), filter.driving)), ...(hidden ? [hidden] : [])]
   }
   return [...top, head, ...asks, ...body, ...(gone ? [gone] : [])].join('\n')
 }

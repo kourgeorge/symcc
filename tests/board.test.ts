@@ -3854,8 +3854,9 @@ test('T-581: a row in a check step or the merge line shows one icon in place of 
   const [b0] = addTask(emptyBoard(), { origin: W, title: 'Fix it' }, fresh)
   const b = { ...b0, tasks: [{ ...b0.tasks[0]!, status: 'doing' as const, note: 'running the tests', runs: ran, checking: { step: 'testing' as const, at: fresh } }] }
   const page = core.detailRows(b.tasks[0]!, { roles: [], all: b.tasks, when: () => '', nowMs: now })
-  // the Status row names the step with its icon (T-587)
-  expect(page.find(r => r.label === 'Status')!.segs[0]!.text).toBe('⧗ test · 9m')
+  // the Status row names the state, the Stage line the step (T-647)
+  expect(page.find(r => r.label === 'Status')!.segs[0]!.text).toBe('▶ doing · 9m')
+  expect(page.find(r => r.label === 'Stage')!.segs.map(g => g.text).join('')).toContain('● test')
   // the lead's text board: the icon as the mark, the word kept for the lead
   expect(boardText(b, now).split('\n').find(l => l.startsWith('T-1'))).toContain('T-1   ⧗ doing   test · Fix it')
 })
@@ -3933,13 +3934,43 @@ test('T-587: the task page badge and Status row name the step a task is in; the 
   const segs = core.stageSegs(core.taskStage(inStep('checker'), now, on)!)
   expect(segs.find(g => g.text === '● checker')).toMatchObject({ bold: true, color: 'ide' })
   expect(segs.find(g => g.text === 'merge')!.color).toBe('inactive')
-  // on the task page: Status names the step, Stage comes right under it
+  // on the task page: Status names the state (T-647), Stage comes right under it with the step
   const [b0] = addTask(emptyBoard(), { origin: W, title: 'Fix it' }, fresh)
   const t = { ...b0.tasks[0]!, ...inStep('checker', 'a checker agent is trying to break it before it merges') }
   const page = core.detailRows(t, { roles: [], all: [t], when: () => '', nowMs: now, board: on })
-  expect(page[0]!.segs[0]!.text).toBe('⌕ checker · 9m')
+  expect(page[0]!.segs[0]!.text).toBe('▶ doing · 9m')
   expect(page[1]!.label).toBe('Stage')
   expect(page[1]!.segs.map(g => g.text).join('')).toBe('worker ✓ → prep ✓ → ● checker → queue → test → merge')
+})
+
+test('T-647: the task page\'s Status row shows the state with its time ("▶ doing · 48m"), the Stage line the step; review, waiting and failed show their state', () => {
+  const at = (min: number) => new Date(Date.parse(T) + min * 60_000).toISOString()
+  const now = Date.parse(T) + 1000 * 60_000
+  const fresh = new Date(now - 10_000).toISOString()
+  const ran = [{ started: at(952), ended: at(1000) }] as SymccTask['runs']
+  const [b0] = addTask(emptyBoard(), { origin: W, title: 'Fix it' }, fresh)
+  const base = b0.tasks[0]!
+  const rows = (x: Partial<core.BoardTask>) => {
+    const t = { ...base, ...x } as SymccTask
+    const page = core.detailRows(t, { roles: [], all: [t], when: () => '', nowMs: now, board: { mode: 'review' } })
+    return { status: page.find(r => r.label === 'Status')!.segs[0]!, stage: page.find(r => r.label === 'Stage')?.segs.map(g => g.text).join('') ?? null }
+  }
+  // a doing task in the test step: the state on Status, the step on Stage; the page's badge keeps the step
+  const testing = rows({ status: 'doing', attempts: 1, runs: ran, checking: { step: 'testing', at: fresh } })
+  expect(testing.status).toMatchObject({ text: '▶ doing · 48m', color: core.STATUS_BADGE.doing })
+  expect(testing.stage).toBe('worker ✓ → prep ✓ → queue ✓ → ● test → review → merge')
+  expect(core.statusBadge({ status: 'doing', attempts: 1, runs: ran, checking: { step: 'testing', at: fresh } }, now).text).toBe('⧗ test · 48m')
+  // its worker still working: doing too
+  expect(rows({ status: 'doing', attempts: 1, runs: [{ started: at(952) }] }).status.text).toBe('▶ doing · 48m')
+  // an approved task whose approve runs shows doing (shownStatus), the approve's step on Stage
+  const approving = rows({ status: 'review', attempts: 1, runs: ran, checking: { step: 'merging', at: fresh } })
+  expect(approving.status).toMatchObject({ text: '▶ doing · 48m', color: core.STATUS_BADGE.doing })
+  expect(approving.stage).toContain('review ✓ → ● merge')
+  // the states that run nothing: their mark and word
+  expect(rows({ status: 'review', runs: ran }).status).toMatchObject({ text: `◆ ${STATUS_WORD.review}`, color: core.STATUS_BADGE.review })
+  expect(rows({ status: 'review', runs: ran }).stage).toContain('● review')
+  expect(rows({ status: 'waiting', runs: ran, question: 'Which one?' }).status).toMatchObject({ text: `? ${STATUS_WORD.waiting}`, color: core.STATUS_BADGE.waiting })
+  expect(rows({ status: 'failed', runs: ran }).status).toMatchObject({ text: `✗ ${STATUS_WORD.failed}`, color: core.STATUS_BADGE.failed })
 })
 
 test('a to do task that was worked on before shows ● (a fresh one keeps ○) in the band, the text board and the task page; other states keep their mark (T-528)', () => {

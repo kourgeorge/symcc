@@ -967,7 +967,7 @@ function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = ''
   const sections = taskSections(t, {
     width: w,
     nowMs,
-    detail: { roles: defsIn(f, 'roles'), kinds: defsIn(f, 'kinds'), all: v.tasks, when: iso => when(iso), board: v, merging, ...(v.archived_done ? { archivedDone: v.archived_done } : {}) },
+    detail: { roles: defsIn(f, 'roles'), kinds: defsIn(f, 'kinds'), all: v.tasks, when: iso => when(iso), board: v, merging, driving: v.driving ?? false, ...(v.archived_done ? { archivedDone: v.archived_done } : {}) },
     ...(report ? { texts: { [report.file]: report.text } } : {}),
     changes: v.changes?.[t.id] ?? null,
     target: intoOf(t),
