@@ -104,16 +104,18 @@ export type TuiMouseEvent = { readonly type?: string; readonly button?: number; 
 /** How many lines one turn of the mouse wheel scrolls (as OpenTUI's own scroll boxes). */
 export const WHEEL_LINES = 3
 
-/** How many rows of OpenCode's screen are not the panel's (its own header and status lines), for the panel's height
- *  while OpenTUI has not laid the panel out yet. */
+/** How many rows of OpenCode's screen are surely not the panel's (its own header and status lines): the panel is
+ *  never taken to be taller than the terminal less these. */
 export const SCREEN_ROWS_AROUND = 2
 
-/** The panel's height in rows (T-627): the panel box's own height once OpenTUI has laid it out; before that the
- *  terminal's height less OpenCode's lines around the panel; and 24 rows (a plain terminal) when neither is known. */
-export function panelRows(boxHeight: unknown, screenHeight: unknown): number {
-  if (typeof boxHeight === 'number' && boxHeight > 0) return Math.floor(boxHeight)
-  if (typeof screenHeight === 'number' && screenHeight > SCREEN_ROWS_AROUND) return Math.floor(screenHeight) - SCREEN_ROWS_AROUND
-  return 24
+/** The panel's height in rows (T-627, T-649): the panel box's own height once OpenTUI has laid it out, but never more
+ *  than the terminal's height less OpenCode's lines around the panel. Before the layout it is not known (undefined):
+ *  a guess from the terminal's height was too tall when the prompt area sits below the panel, and the padding pushed
+ *  the footer with the buttons out of sight, so with no height the panel is drawn with no padding. */
+export function panelRows(boxHeight: unknown, screenHeight: unknown): number | undefined {
+  if (typeof boxHeight !== 'number' || !(boxHeight > 0)) return undefined
+  const box = Math.floor(boxHeight)
+  return typeof screenHeight === 'number' && screenHeight > SCREEN_ROWS_AROUND ? Math.min(box, Math.floor(screenHeight) - SCREEN_ROWS_AROUND) : box
 }
 
 /** One keymap command (KeymapCommand), as far as symcc uses it. */
@@ -237,6 +239,28 @@ export function drawLines<H = PanelHit>(r: TuiRuntime, theme: unknown, lines: Li
   return col
 }
 
+/** How many lines at the end of the panel's drawing are its footer (the rule and the key hints). */
+export const FOOTER_LINES = 2
+
+/** The panel's lines as OpenTUI elements (T-649): a column with the body (every line but the footer) in a box that
+ *  shrinks and cuts what does not fit, and the footer in a box that never shrinks, so the footer stays in sight. */
+export function drawPanel<H = PanelHit>(r: TuiRuntime, theme: unknown, lines: Line[], hits: (H | null)[] = [], onHit?: (hit: H) => void): TuiNode {
+  const cut = Math.max(0, lines.length - FOOTER_LINES)
+  const col = r.createElement('box')
+  r.setProp(col, 'flexDirection', 'column')
+  r.setProp(col, 'flexGrow', 1)
+  r.setProp(col, 'minHeight', 0)
+  const body = drawLines<H>(r, theme, lines.slice(0, cut), hits.slice(0, cut), onHit)
+  r.setProp(body, 'flexGrow', 1)
+  r.setProp(body, 'flexShrink', 1)
+  r.setProp(body, 'minHeight', 0)
+  r.setProp(body, 'overflow', 'hidden')
+  const foot = drawLines<H>(r, theme, lines.slice(cut), hits.slice(cut), onHit)
+  r.setProp(foot, 'flexShrink', 0)
+  r.insert(col, [body, foot])
+  return col
+}
+
 /** The view file's folders to look in: `dir` and each folder above it (a worker's folder is inside the main one's). */
 export function viewPaths(dir: string, name: string = DEFAULT_NAME): string[] {
   const out: string[] = []
@@ -310,7 +334,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   let width = 80
   // the panel's height in rows (panelRows): it bounds the scroll, and the panel is drawn exactly that high, so the
   // footer stays at the bottom and no row of a longer page is left over; OpenTUI says when the box's size changes
-  const [rows, setRows] = r.createSignal(panelRows(undefined, ctx.renderer.height))
+  const [rows, setRows] = r.createSignal<number | undefined>(undefined)
   /** Back to the list when the open task or scout left the view, and to the scout's page when its open run did. */
   const keepPage = (f: ViewFile | null) => {
     if (opened() && !hasPage(f, opened(), tab())) openPage('')
@@ -393,7 +417,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   /** Whether the cursor is on a page's own rows (a scout's runs, the Roles or Kinds list), not the tab's list. */
   const onPage = () => tab() !== 'tasks' && !!opened()
   const draw = () => {
-    return panelLines(file(), { tab: tab(), opened: opened(), run: run(), report: report(), cursor: onPage() ? runCursor() : cursor(), groups: groups(), settingsOpen: settingsOpen(), scroll: scroll(), rows: rows(), ...(sent() ? { sent: sent()! } : {}), ...(taskReport() ? { taskReport: taskReport()! } : {}), ...(approving() ? { approving: approving()! } : {}) }, now(), width)
+    return panelLines(file(), { tab: tab(), opened: opened(), run: run(), report: report(), cursor: onPage() ? runCursor() : cursor(), groups: groups(), settingsOpen: settingsOpen(), scroll: scroll(), ...(rows() ? { rows: rows()! } : {}), ...(sent() ? { sent: sent()! } : {}), ...(taskReport() ? { taskReport: taskReport()! } : {}), ...(approving() ? { approving: approving()! } : {}) }, now(), width)
   }
   /** The rows of the Tasks tab's list, even while a task's page is open (whose draw has no rows), so "open this id"
    *  can put the list cursor on that task and b comes back to it (T-568). */
@@ -625,10 +649,10 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     told.add(message)
     say(message, 'error')
   }
-  const drawn = <H,>(where: string, make: () => { lines: Line[]; hits: (H | null)[] }, onHit?: (hit: H) => void) => {
+  const drawn = <H,>(where: string, make: () => { lines: Line[]; hits: (H | null)[] }, onHit?: (hit: H) => void, footer = false) => {
     try {
       const got = make()
-      return drawLines<H>(r, ctx.theme, got.lines, got.hits, onHit)
+      return footer ? drawPanel<H>(r, ctx.theme, got.lines, got.hits, onHit) : drawLines<H>(r, ctx.theme, got.lines, got.hits, onHit)
     } catch (e) {
       failed(where, e)
       return null
@@ -661,17 +685,22 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
         }
         r.setProp(col, 'onMouseScroll', (e: TuiMouseEvent) => input.name === BOARD_PANEL && wheel(e))
         // OpenTUI calls onSizeChange when the laid-out box changes size (as on a terminal resize): draw that high
-        r.setProp(col, 'onSizeChange', () => {
+        // the box may shrink to the panel's place, so its laid-out height is the place's, not the drawn rows'
+        r.setProp(col, 'flexShrink', 1)
+        const sized = () => {
           const n = panelRows((col as { height?: unknown }).height, ctx.renderer.height)
-          if (n !== rows()) setRows(n)
-        })
+          if (n !== undefined && n !== rows()) setRows(n)
+        }
+        r.setProp(col, 'onSizeChange', sized)
         r.insert(col, () => {
           if (input.name !== BOARD_PANEL) return null
           width = Math.max(20, (input.width || 80) - 2)
-          const h = (col as { height?: unknown }).height
-          if (typeof h === 'number' && h > 0 && Math.floor(h) !== rows()) setRows(Math.floor(h))
+          sized()
           panelSession = input.sessionID
-          return drawn('board panel', draw, onHit)
+          // T-649: the footer (its rule and the key hints, the page's buttons) is its own box that never shrinks,
+          // under a body box that does: even if the height is wrong, the layout keeps the footer in sight and cuts
+          // the body instead
+          return drawn('board panel', draw, onHit, true)
         })
         return col
       },

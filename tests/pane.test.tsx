@@ -73,6 +73,24 @@ test('the panel shows the board, newest task first, with their question', async 
   }
 })
 
+// T-643: the terminal panel of a session that doesn't drive: a warning line under the banner with how to take over
+test('T-643: the terminal panel shows the yellow "another session drives" line when not driving, and none when driving', async ($, on) => {
+  let driving = false
+  on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks: [task('T-3', 'doing', 'Search command', { note: 'worker on it' })], working: [], scouts: [], mode: 'auto', test_commands: ['npm test'], driving } }, version: 1 } }))
+  const warn = async () => {
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 120 }, surface: 'terminal' })
+    // the line's colored part (the outer Text of the line matches too, with no color of its own)
+    const t = (await ui.findAll({ type: 'Text', text: /^⚠ Another session drives this board/ })).find(x => x.props.color)
+    await ui.unmount()
+    return t
+  }
+  const t = await warn()
+  expect(t?.text).toBe('⚠ Another session drives this board — its workers run there, not here. /symcc-drive to drive it from here.')
+  expect(t?.props.color).toBe('warning')
+  driving = true
+  expect(await warn()).toBeUndefined()
+})
+
 test('an empty board says what to do', async $ => {
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect((await ui.find({ type: 'Text', text: /^All clear\. Nothing running or waiting\.$/ }))?.props.color).toBe('inactive')
@@ -121,7 +139,7 @@ test('the band above the prompt shows the busy workers and the scouts; when narr
   const soon = new Date(Date.now() + 38.2 * 60_000).toISOString()
   on('state.get', () => ({
     value: {
-      value: { shape: 'view-1', value: { tasks: [task('T-3', 'doing', 'Search command'), task('T-4', 'todo', 'Docs')], working: [], scouts: [scout('gaps-bot', { next_run: soon }), scout('bugs')], mode: 'auto', max_parallel: 3, test_commands: [] } },
+      value: { shape: 'view-1', value: { tasks: [task('T-3', 'doing', 'Search command'), task('T-4', 'todo', 'Docs')], working: [], scouts: [scout('gaps-bot', { next_run: soon }), scout('bugs')], mode: 'auto', max_parallel: 3, test_commands: [], driving: true } },
       version: 1,
     },
   }))
@@ -138,6 +156,40 @@ test('the band above the prompt shows the busy workers and the scouts; when narr
   const tight = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 70 }, surface: 'terminal' })
   expect(await tight.find({ type: 'Text', text: /1\/3 workers · 1 doing · 1 to do $/ })).toBeDefined()
   await tight.unmount()
+})
+
+// T-643: a session that doesn't drive: a yellow mark right after the brand, and a claimed doing task's row says it runs
+// in the other session (not "starting at the next turn", which never comes here); "it looks idle" after 5 minutes.
+test('T-643: the band of a session that does not drive has a yellow "driven by another session" mark and "runs in the other session" rows', async ($, on) => {
+  const T0 = Date.parse('2026-03-02T10:00:00Z')
+  mock.clock(on, { now: T0 })
+  const iso = (ms: number) => new Date(ms).toISOString()
+  const view = (driving: boolean, ago: number) => ({ tasks: [task('T-3', 'doing', 'Search command', { note: 'starting at the next turn', updated_at: iso(T0 - ago) }), task('T-4', 'todo', 'Docs')], working: [], scouts: [], mode: 'auto', test_commands: [], driving })
+  let v = view(false, 60_000)
+  on('state.get', () => ({ value: { value: { shape: 'view-1', value: v }, version: 1 } }))
+  on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
+  const band = async (columns = 80) => {
+    const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: columns }, surface: 'terminal' })
+    const all = await ui.findAll({ type: 'Text' })
+    await ui.unmount()
+    return all
+  }
+  const mark = (all: Awaited<ReturnType<typeof band>>) => all.find(t => /^ ⚠ driven by another session/.test(String(t.text)))
+  let all = await band()
+  expect(mark(all)?.text).toBe(' ⚠ driven by another session')
+  expect(mark(all)?.props.color).toBe('warning')
+  expect(all.some(t => t.text === ' — runs in the other session')).toBe(true)
+  expect(all.some(t => /starting at the next turn/.test(String(t.text)))).toBe(false)
+  // still there when the band is narrow: it comes right after the brand
+  expect(mark(await band(50))).toBeDefined()
+  // claimed 6 minutes ago and still not started there: it looks idle
+  v = view(false, 6 * 60_000)
+  expect(mark(await band())?.text).toBe(' ⚠ driven by another session (it looks idle)')
+  // the driving session: no mark, and the row keeps its own note
+  v = view(true, 60_000)
+  all = await band()
+  expect(mark(all)).toBeUndefined()
+  expect(all.some(t => t.text === ' — starting at the next turn')).toBe(true)
 })
 
 test("the band's doing rows show the list's state and time, lined up, with the try from try 2 on (T-455)", async ($, on) => {

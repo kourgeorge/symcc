@@ -6,7 +6,7 @@
 // answers (`onLinkPress`, see vsLink); real Buttons stay for the actions on a page (Approve, Retry, Save ...).
 import type { SymccMode } from '../../../types'
 import type { BoxProps, ButtonProps, ElementConstructor, InputProps, MarkdownProps, RenderChildren, RenderSurface, SelectProps, TextProps } from 'claude-code'
-import { emptyBoard, bannerCounts, folderName, versionMark, modeLabel, MODE_MEANING, MODE_NAME, nextMode, offStatusParts, footerRule, testsShort } from '../../board'
+import { emptyBoard, bannerCounts, folderName, versionMark, modeLabel, MODE_MEANING, MODE_NAME, nextMode, offStatusParts, footerRule, testsShort, driveWarning } from '../../board'
 import { ICON, namesFor } from '../../name'
 import { type PaneView, S } from '../../app/state'
 import type { PaneTab } from '../../app/open'
@@ -78,7 +78,7 @@ export function vsLink(k: VsKit, key: string, text: string, links: [href: string
  *    the name, version and folder; the mode as a pill with its meaning dim beside it; the branch and who drives on one dim line;
  *    the tests and the limits on one dim line;
  *  - under it the counts as small badges ("● 2 doing · 6 to do · 1 waiting for you"), and the "no git" row (`gitRow`).
- * A warning line when symcc is disabled sits under the name.
+ * A warning line when symcc is disabled sits under the name; one when another session drives the board sits under the counts.
  */
 export function vsBanner(k: VsKit, v: PaneView, mode: SymccMode, gitRow: RenderChildren[]): RenderChildren[] {
   const { Box, Text, C } = k
@@ -91,6 +91,7 @@ export function vsBanner(k: VsKit, v: PaneView, mode: SymccMode, gitRow: RenderC
   const retries = v.auto_retries ?? d.auto_retries
   const limits = `${v.max_parallel ?? d.max_parallel} at once · ${v.max_minutes ?? d.max_minutes} min · ${retries} ${retries === 1 ? 'retry' : 'retries'}`
   const counts = bannerCounts({ ...v, max_parallel: v.max_parallel ?? d.max_parallel, max_minutes: v.max_minutes ?? d.max_minutes, auto_retries: retries, mode }, k.nowMs)
+  const warn = driveWarning(driving, v.tasks ?? [], k.nowMs, S.N.name, 'board')
   const dot = (key: string) => <Text key={key} color={C('subtle')}> · </Text>
   return [
     <Box key="vs-top" flexDirection="row" gap={1}>
@@ -137,6 +138,8 @@ export function vsBanner(k: VsKit, v: PaneView, mode: SymccMode, gitRow: RenderC
           </Box>,
         ]
       : []),
+    // T-643: a session that doesn't drive says so in the warning color, with how to take over (VS Code wraps it)
+    ...(warn ? [<Text key="vs-drive" wrap="wrap" color={C('warning')}>{warn}</Text>] : []),
     ...gitRow,
   ]
 }
