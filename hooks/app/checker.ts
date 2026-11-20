@@ -12,6 +12,7 @@ import { type Host, notReadyYet } from '../host'
 import type { TurnEnd } from './workers'
 import { change, now } from './store'
 import { startAgent } from './starts'
+import { fieldGuideText, learnFrom } from './field-guide'
 
 /** What a checker came to: its verdict, or null with why there is none (it was stopped, ran over its time, or didn't start). */
 export type CheckerOutcome = { verdict: CheckerVerdict | null; why?: string; again?: boolean }
@@ -47,7 +48,7 @@ export async function runChecker($: Host, t: SymccTask, b: Board, dir: string, s
   const tests = checkerTestsText(S.N.name, b.test_commands)
   // the checker role's checklist gets the same placeholders a change worker's role does (the task's files, kind, ...); its {{test_command}} is the checker's own tests line
   const facts = { ...changeValues(t, b, dir), test_command: tests }
-  const prompt = checkerPrompt({ name: S.N.name, task_id: t.id, title: t.title, branch: taskBranch(t), folder: dir, details: t.details, into, role: roleSection(role, facts), diff: checkerDiff(d && d.exitCode === 0 ? d.stdout : ''), changed_files: checkerChangedFiles(changed), tests })
+  const prompt = checkerPrompt({ name: S.N.name, task_id: t.id, title: t.title, branch: taskBranch(t), folder: dir, details: t.details, into, role: roleSection(role, facts), diff: checkerDiff(d && d.exitCode === 0 ? d.stdout : ''), changed_files: checkerChangedFiles(changed), tests, field_guide: await fieldGuideText($) })
   const early = stop()
   if (early) {
     const why = `not started: the task was ${early}`
@@ -99,6 +100,8 @@ export async function runChecker($: Host, t: SymccTask, b: Board, dir: string, s
   await markChecker($, t, agentId, false)
   await cleanFolder($, dir)
   const back = await putBack($, dir, saved)
+  // T-600: its "Learned:" lines go into the Field Guide, whatever its verdict
+  if (end.answer) await learnFrom($, t.id, end.answer)
   let verdict = end.answer === null ? null : checkerVerdict(end.answer)
   let why = end.answer === null ? end.why : verdict ? undefined : 'it handed back nothing'
   if (back === 'failed') {

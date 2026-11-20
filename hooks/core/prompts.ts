@@ -24,6 +24,8 @@ const SHARED_PLACEHOLDERS: Record<string, string> = {
   folder: 'the worker\'s own folder (its copy of the project)',
   role: 'the role\'s checklist, skills and web rule (empty for general)',
   kind: 'the task\'s kind and what it is for, e.g. "Kind of task: bug (something that works wrongly)."',
+  field_guide: 'only when the Field Guide (.symcc/field-guide.md) has lines: "Notes earlier agents left about this project", then its lines',
+  learned: 'how to end the report with an optional "Learned:" section for the Field Guide',
 }
 
 /** The placeholders of each prompt and what they become; any other {{word}} is left as written. */

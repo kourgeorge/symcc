@@ -8,6 +8,7 @@ import type { SymccTask } from '../types'
 import { addTask, emptyBoard, patchTask, fillPrompt, placeholdersIn, fillRole, ROLE_PLACEHOLDERS, type RoleDef, BUILT_IN_PROMPTS, PROMPT_KINDS, scoutPrompt, ROLE_PROMPTS, PROMPT_PLACEHOLDERS, type Board } from '../hooks/board'
 import { S } from '../hooks/app/state'
 import { WORKER_PROMPT } from '../hooks/app/workers'
+import { LEARNED_ASK } from '../hooks/core/field-guide'
 import { TOOLS } from '../hooks/app/tools'
 import { ICON } from '../hooks/name'
 import { inProject } from './project'
@@ -45,7 +46,7 @@ test('the built-in prompts are filled in for the task: no placeholder is left, a
   expect(p).toContain('These test commands must pass. symcc runs them all, each one on its own from your folder, before merging, and sends you the output if any fail:\n  npm test\n')
   expect(p).toContain(TEST_RULE)
   expect(p).toContain("Earlier tries:\n- try 1 failed its tests\nDon't repeat those mistakes.")
-  expect(p.endsWith(`what you changed.\n${ASK}`)).toBe(true)
+  expect(p.endsWith(`what you changed.\n${LEARNED_ASK}\n${ASK}`)).toBe(true)
   // the investigation prompt has no test rule and no files list
   const i = boardWith(['npm test'], { kind: 'investigation' } as Partial<SymccTask>)
   const q = WORKER_PROMPT(i.tasks[0]!, i, WT)

@@ -471,6 +471,8 @@ export function scoutPrompt(o: {
   symccTools?: boolean
   /** the scout has web tools (default true, as a scout agent type has); false: the web is not named */
   web?: boolean
+  /** T-600: the Field Guide as a prompt shows it (guideSection), '' or left out for none */
+  guide?: string
 }): string {
   const name = o.name ?? DEFAULT_NAME
   const lines = scoutToolLines(name, o)
@@ -495,7 +497,7 @@ ${report || '(none)'}
 
 Since when to look:
 ${since}
-
+${o.guide ? o.guide : ''}
 What makes a good finding:
 - Check before you report. Read the code around it. Reproduce it if you can: run the tests, run a command that only looks, or try the input. Check that it isn't already handled somewhere else or already on the board.
 - For each finding give: where (file:line); the proof (the command and its output, or the exact lines); what goes wrong for a user, and when; how sure you are (sure or likely); and a suggested task (a title and the files to change).
