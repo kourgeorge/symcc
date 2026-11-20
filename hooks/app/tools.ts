@@ -9,6 +9,7 @@ import { S, heard, workers, toolName } from './state'
 import { type Host, type HostFeatures, ALL_FEATURES } from '../host'
 import { load, change, now, path } from './store'
 import { statsHtml, openCommands } from '../core/stats-html'
+import { doctor } from './doctor'
 import { noteForLead, brief, tellLead } from './tell'
 import { playable, playSample } from './voice'
 import { pump, approve, mergeWaiting, checkingNow, stopAsked, CHECKING_TEXT, mergingNow, MERGING_TEXT, fullAnswer } from './workers'
@@ -128,6 +129,11 @@ ${features.panel ? `  /${S.N.name}                     open the board panel (↑
   /${S.N.name}-drive               make this session drive the board (start workers, merge, run scouts);
                        a session that drives now hands over within 30 s, its running workers
                        restart here without using up a try
+  /${S.N.name}-doctor [fix [N ...]]  check ${S.N.dir}/ and git: old migration backups, task branches
+                       already merged, folders of finished tasks, stale worktree entries,
+                       files near the 4 MB limit, stray files and a stuck board, with sizes;
+                       "fix" cleans up every numbered item, "fix 1 3" only those. Unmerged
+                       branches and folders with uncommitted changes are only listed
   /${S.N.help} [TOPIC]           this manual
 ${features.panel ? `On the board: t tasks · s scouts · c settings · m switch review / auto.
 In the settings view: Enter on a row changes it: on/off flips, mode, notify, scout_findings and
@@ -181,6 +187,7 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
   does: a role fills the {{role}} slot of the fixed, built-in worker prompt); stats shows time and token use;
   orgmem lists and changes the org-mem notes (agents only suggest notes; the lead decides what goes in);
   setup_git sets up git in a folder without it (only after you say yes).
+  doctor checks ${S.N.dir}/ and git and lists what can be cleaned up (fix only after you say yes).
   question puts a question for you that is not about one task on the board${features.panel ? ` ("Questions for you" at the
   top of the task list${features.band ? ', and "1 question for you" in the band' : ''}); answer it there with a button or your own
   words, or in the chat (the lead closes it then).` : `, where it waits until it is
@@ -414,6 +421,11 @@ export const TOOLS = () => [
     name: 'settings',
     description: 'Read or change how the team works. Called with no params it lists every setting with its current value and default, one per line, under the same category headings as the Settings view (Work, Checks before merging, Workers, Scouts, Board and alerts; notify also lists the choices this machine can play). Give one or more of these to change them (there is no branch setting: each task merges into the branch you were on when it was made): test_commands (shell commands that must pass before merging), test_minutes (how many minutes each test command may run before merging, a whole number 1-120, default 10; a test command past it fails like a failing test: a new worker try starts with the output, using one of the auto_retries; anything else is refused), max_parallel (workers at once), max_minutes (a worker running longer makes symcc ask the owner for more time: +N min or Stop it), auto_retries (new tries a task gets on its own after failing tests, 0-10, default 2), archive_days (done and dropped tasks older than this many days move to archive.json, 0 = never), open_on_start (open the board panel by itself when a session starts, default true), notify ("off", "sound" or "voice": what plays when a task is merged or a question from a worker waits for the owner: "sound" a short chime, "voice" says "symcc: T-3 done" / "symcc: T-5 needs you" out loud (the project name first); only the session driving the board plays; default voice where this machine can speak, else sound, else off; a choice this machine cannot play is refused with the reason), sound_set (1, 2 or 3: which of 3 sets of chimes "sound" plays, each with its own "done" and "needs you" chime, so the owner can tell which project chimed; absent: picked from the folder name of the project; the settings list shows the one in use), scout_findings ("auto", the default: you decide, and a scout finding you add goes to todo and runs; "backlog": every task added with origin_by scout goes to the backlog, whatever you ask, and starts only when the owner moves it to todo), tests_with_changes ("ask", the default: a change task whose commit edits code but no test file still merges and you are told "T-3 changed code but no test"; "review": such a task waits for the owner to review it instead of merging; "off": not checked; docs-only changes are never flagged), checker ("off", the default, or "on": after the prep step and before a change task joins the merge queue (its tests run once in the queue, after the checker), a fresh checker agent tries to break it; OK goes on as usual, a list of problems sends the task back to its worker with the report, counting as one of its auto_retries, and fails it once those are used up (no test run for that try); investigations and docs-only changes skip it), mode ("paused": stop every running worker and scout now and start nothing new, tasks in review can still be approved or rejected; "review": work runs and every finished task that passes waits for the owner to approve or reject it; "auto", the default: work runs and finished work that passes merges on its own; going from paused to review or auto starts work again, and going from review to auto does not merge tasks already in review).',
     inputSchema: { type: 'object', properties: { test_commands: { type: 'array', items: { type: 'string' } }, test_minutes: { type: 'number', description: 'Minutes each test command may run before merging: a whole number 1-120 (default 10).' }, max_parallel: { type: 'number' }, max_minutes: { type: 'number' }, auto_retries: { type: 'number' }, archive_days: { type: 'number', description: 'Done and dropped tasks older than this many days move to archive.json; 0 = never.' }, open_on_start: { type: 'boolean' }, notify: { type: 'string', enum: ['off', 'sound', 'voice'] }, sound_set: { type: 'number', enum: [1, 2, 3], description: 'Which of the 3 sound sets notify sound plays; absent: picked from the project name.' }, scout_findings: { type: 'string', enum: ['auto', 'backlog'], description: 'auto (default): you decide where a scout finding goes; backlog: every task added with origin_by scout goes to the backlog.' }, tests_with_changes: { type: 'string', enum: ['off', 'ask', 'review'], description: 'A change task that edits code but no test file: ask (default) merges and tells you; review waits for the owner; off does nothing.' }, checker: { type: 'string', enum: ['off', 'on'], description: 'on: a fresh checker tries to break each change before it joins the merge queue, where its tests run; off (default): no checker.' }, mode: { type: 'string', enum: ['paused', 'review', 'auto'] } } },
+  },
+  {
+    name: 'doctor',
+    description: `Check the project's ${S.N.dir}/ folder and git (like the owner's /${S.N.name}-doctor): old migration backups (the newest is kept), task branches of done or dropped tasks already in their branch, folders of finished tasks with no changes, stale git worktree entries, data files near the 4 MB read limit, stray files, and running tasks with no worker or a lead.json of a gone session. Without fix it only lists them, the ones that can be cleaned up numbered, with sizes. fix cleans up: "all", or the numbers from the list (e.g. "1 3"). Only give fix after the owner said yes in the chat (once for all, or for the items they picked). Branches with unmerged work, folders with uncommitted changes, reports, org-mem, scouts, roles and kinds are never deleted; it does nothing while a merge runs.`,
+    inputSchema: { type: 'object', properties: { fix: { type: 'string', description: 'Only after the owner confirmed: "all", or the item numbers from the list, e.g. "1 3".' } } },
   },
 ]
 
@@ -796,6 +808,8 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       if (r.mode) parts.push(r.mode)
       return parts.join('; ') || 'nothing changed'
     }
+    case 'doctor':
+      return doctor($, a.fix === undefined || a.fix === null || a.fix === '' ? '' : `fix ${Array.isArray(a.fix) ? a.fix.join(' ') : String(a.fix)}`)
   }
   throw new Error(`unknown tool ${name}`)
 }

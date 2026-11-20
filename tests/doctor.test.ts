@@ -1,0 +1,217 @@
+// /symcc-doctor (T-676): each check finds its case, nothing changes without "fix", unmerged branches and folders with
+// uncommitted changes are never deleted, and after "fix" the listed items are gone. Runs on the fake Host with a
+// scripted fake git and an in-memory folder tree.
+import { expect } from 'claude-code/testing'
+import { type BoardTask, emptyBoard, leadText } from '../hooks/board'
+import { oldBackups, parseDoctorArgs } from '../hooks/core/doctor'
+import { doctor } from '../hooks/app/doctor'
+import { runCommand, COMMANDS } from '../hooks/app/symcc'
+import { runTool, TOOLS } from '../hooks/app/tools'
+import { S } from '../hooks/app/state'
+import type { HostFileEntry, HostRunResult } from '../hooks/host'
+import { test } from './reset'
+import { fakeHost, done } from './fake-host'
+
+const ROOT = '/repo'
+const D = `${ROOT}/.symcc`
+const MB = 1024 * 1024
+const NOW = Date.now()
+const iso = (minAgo: number) => new Date(NOW - minAgo * 60_000).toISOString()
+const sha = (c: string) => c.repeat(40)
+
+function task(id: string, status: BoardTask['status'], over: Partial<BoardTask> = {}): BoardTask {
+  return { id, title: `task ${id}`, details: '', files: [], status, note: '', question: null, order: 0, after: [], attempts: 1, history: [], branch: `symcc/${id}`, merge_into: 'main', created_at: iso(60), updated_at: iso(60), ...over } as BoardTask
+}
+
+/**
+ * The owner's case in small: three board.json migration backups (the newest is kept) and one of archive.json, a big
+ * view.json, a .DS_Store and an empty scratch/ folder; task folders of a done task (clean), a dropped one (with
+ * changes) and a running one; branches of done and dropped tasks in main, and one of a dropped task with unmerged
+ * work; a stale worktree entry; a lead.json of a session gone an hour ago and a running task with no worker.
+ */
+function world(over: { tasks?: BoardTask[] } = {}) {
+  const files = new Map<string, { size: number; text?: string }>()
+  const dirs = new Set<string>([D, `${D}/worktrees`, `${D}/reports`, `${D}/scratch`, `${D}/tasks`])
+  const tasks = over.tasks ?? [task('T-2', 'done'), task('T-3', 'dropped'), task('T-5', 'done'), task('T-6', 'dropped'), task('T-494', 'dropped'), task('T-7', 'doing', { runs: [{ started: iso(30) }] }), task('T-8', 'todo')]
+  const add = (p: string, size: number, text?: string) => files.set(p, { size, ...(text !== undefined ? { text } : {}) })
+  add(`${D}/board.json`, 2000, JSON.stringify({ ...emptyBoard(), tasks }))
+  add(`${D}/lead.json`, 60, leadText('old-session', NOW - 60 * 60_000))
+  add(`${D}/board.json.before-migrate-2026-11-01T10-00-00-000Z`, 1.5 * MB)
+  add(`${D}/board.json.before-migrate-2026-11-02T10-00-00-000Z`, 1.5 * MB)
+  add(`${D}/board.json.before-migrate-2026-11-03T10-00-00-000Z`, 1.5 * MB)
+  add(`${D}/archive.json.before-migrate-2026-11-02T10-00-00-000Z`, 1 * MB)
+  add(`${D}/view.json`, 3.5 * MB)
+  add(`${D}/.DS_Store`, 6000)
+  add(`${D}/org-mem.md`, 500)
+  add(`${D}/reports/T-2-try-1.md`, 300)
+  for (const id of ['T-5', 'T-6', 'T-7']) {
+    dirs.add(`${D}/worktrees/${id}`)
+    add(`${D}/worktrees/${id}/.git`, 40)
+  }
+  const dirty = new Set([`${D}/worktrees/T-6`, `${D}/worktrees/T-7`])
+  const branches = new Map([['symcc/T-2', sha('a')], ['symcc/T-3', sha('b')], ['symcc/T-5', sha('c')], ['symcc/T-494', sha('e')], ['symcc/T-7', sha('f')]])
+  const inMain = new Set([sha('a'), sha('b'), sha('c')])
+  let stale = 1
+  let merging = false
+  const writes: string[] = []
+  const list = async (p: string): Promise<HostFileEntry[]> => {
+    if (!dirs.has(p)) throw new Error(`no folder ${p}`)
+    const kids = new Map<string, HostFileEntry>()
+    for (const [f, v] of files) if (f.startsWith(`${p}/`) && !f.slice(p.length + 1).includes('/')) kids.set(f, { name: f.slice(p.length + 1), kind: 'file', size: v.size, mtimeMs: 0, isLink: false })
+    for (const d of dirs) if (d.startsWith(`${p}/`) && !d.slice(p.length + 1).includes('/')) kids.set(d, { name: d.slice(p.length + 1), kind: 'dir', size: 0, mtimeMs: 0, isLink: false })
+    return [...kids.values()]
+  }
+  const run = async (argv: readonly string[], init?: { cwd?: string }): Promise<HostRunResult> => {
+    const a = [...argv]
+    const j = a.join(' ')
+    if (a[0] === 'rm') {
+      writes.push(j)
+      files.delete(a[2]!)
+      return done()
+    }
+    if (a[0] === 'du') return done({ stdout: `2048\t${a[2]}\n` })
+    if (a[0] !== 'git') return done()
+    const g = a.slice(1)
+    const s = g.join(' ')
+    if (s === 'rev-parse -q --verify MERGE_HEAD') return merging ? done({ stdout: sha('9') }) : done({ exitCode: 1 })
+    if (s === 'status --porcelain') return done({ stdout: dirty.has(init?.cwd ?? '') ? ' M a.txt\n' : '' })
+    if (s === 'worktree prune --dry-run -v') return done({ stderr: stale ? 'Removing worktrees/T-9: gitdir file points to non-existent location\n' : '' })
+    if (s === 'worktree prune') return (writes.push(j), (stale = 0), done())
+    if (g[0] === 'worktree' && g[1] === 'remove') {
+      writes.push(j)
+      const dir = g[2]!
+      if (g.includes('--force')) return done({ exitCode: 1, stderr: 'no --force here' })
+      if (dirty.has(dir)) return done({ exitCode: 128, stderr: 'contains modified files' })
+      dirs.delete(dir)
+      for (const f of [...files.keys()]) if (f.startsWith(`${dir}/`)) files.delete(f)
+      return done()
+    }
+    if (s === 'worktree list --porcelain') return done({ stdout: [...dirs].filter(d => d.startsWith(`${D}/worktrees/`)).map(d => `worktree ${d}\nbranch refs/heads/symcc/${d.split('/').pop()}\n`).join('\n') })
+    if (g[0] === 'for-each-ref') return done({ stdout: [...branches].map(([b, h]) => `${b} ${h}`).join('\n') + '\n' })
+    if (g[0] === 'merge-base' && g[1] === '--is-ancestor') return done({ exitCode: inMain.has(g[2]!) ? 0 : 1 })
+    if (g[0] === 'rev-list' && g[1] === '--count') return done({ stdout: '3\n' })
+    if (g[0] === 'rev-parse' && g[1] === '--verify' && g[2] === '-q') {
+      const h = branches.get(String(g[3]).replace('refs/heads/', ''))
+      return h ? done({ stdout: `${h}\n` }) : done({ exitCode: 1 })
+    }
+    if (g[0] === 'update-ref' && g[1] === '-d') {
+      writes.push(j)
+      branches.delete(g[2]!.replace('refs/heads/', ''))
+      return done()
+    }
+    return done()
+  }
+  const w = fakeHost({
+    run,
+    fs: {
+      read: async p => {
+        const f = files.get(p)
+        if (f?.text === undefined) throw new Error(`no file ${p}`)
+        return f.text
+      },
+      write: async (p, text) => (writes.push(`write ${p}`), void files.set(p, { size: text.length, text })),
+      exists: async p => files.has(p) || dirs.has(p),
+      list,
+      stat: async p => {
+        const f = files.get(p)
+        if (!f) throw new Error(`no file ${p}`)
+        return { kind: 'file', size: f.size, mtimeMs: 0, isLink: false }
+      },
+    },
+  })
+  S.root = ROOT
+  S.me = 'me'
+  S.writing = Promise.resolve()
+  return { ...w, files, dirs, branches, writes, setMerging: (on: boolean) => void (merging = on) }
+}
+
+test('T-676: the doctor lists each case it finds, with sizes, and changes nothing without fix', async () => {
+  const w = world()
+  const before = new Map(w.files)
+  const text = (await runCommand(w.host, 'symcc-doctor', ''))!.text
+  // every finding of the owner's case, the fixable ones numbered
+  expect(text).toContain('1. old migration backup .symcc/board.json.before-migrate-2026-11-01')
+  expect(text).not.toContain('archive.json.before-migrate')
+  expect(text).not.toContain('board.json.before-migrate-2026-11-03')
+  expect(text).toContain('.symcc/board.json.before-migrate-2026-11-01T10-00-00-000Z (a newer one is kept)  (1.5 MB)')
+  expect(text).toContain('.symcc/board.json.before-migrate-2026-11-02T10-00-00-000Z')
+  expect(text).toContain('folder .symcc/worktrees/T-5/ (T-5 is done)  (2.0 MB)')
+  expect(text).toContain('1 git worktree entry whose folder is gone')
+  expect(text).toContain('branch symcc/T-2 (T-2 is done; all of it is already in main)')
+  expect(text).toContain('branch symcc/T-3 (T-3 is dropped; all of it is already in main)')
+  expect(text).toContain('branch symcc/T-494 (T-494 is dropped) holds unmerged work (3 commits not in main); never deleted')
+  expect(text).toContain('folder .symcc/worktrees/T-6/ (T-6 is dropped) has uncommitted changes, kept')
+  expect(text).toContain('.symcc/view.json is close to the 4.0 MB limit')
+  expect(text).toContain('stray file .symcc/.DS_Store')
+  expect(text).toContain('empty folder .symcc/scratch/')
+  expect(text).toContain('.symcc/lead.json names a session that stopped 60 min ago')
+  expect(text).toContain('/symcc-drive')
+  expect(text).toContain('T-7 is running but has no live worker (for 30 min): /symcc-task T-7 retry')
+  expect(text).toContain('/symcc-doctor fix')
+  // a running task's folder and branch are not offered
+  expect(text).not.toContain('worktrees/T-7/ (')
+  expect(text).not.toContain('symcc/T-7 (')
+  // nothing was changed
+  expect(w.writes).toEqual([])
+  expect([...w.files.keys()]).toEqual([...before.keys()])
+  expect(w.branches.size).toBe(5)
+})
+
+test('T-676: fix cleans up every listed item, and never an unmerged branch, a folder with changes, reports or org-mem', async () => {
+  const w = world()
+  const said = await doctor(w.host, 'fix')
+  expect(said).toContain('cleaned up 7 of 7')
+  expect(said).toContain('Freed about')
+  // backups: the newest one of each file is kept
+  expect(w.files.has(`${D}/board.json.before-migrate-2026-11-01T10-00-00-000Z`)).toBe(false)
+  expect(w.files.has(`${D}/board.json.before-migrate-2026-11-02T10-00-00-000Z`)).toBe(false)
+  expect(w.files.has(`${D}/board.json.before-migrate-2026-11-03T10-00-00-000Z`)).toBe(true)
+  expect(w.files.has(`${D}/archive.json.before-migrate-2026-11-02T10-00-00-000Z`)).toBe(true)
+  // folders: the done task's is gone (without --force), the dropped one with changes and the running one stay
+  expect(w.dirs.has(`${D}/worktrees/T-5`)).toBe(false)
+  expect(w.dirs.has(`${D}/worktrees/T-6`)).toBe(true)
+  expect(w.dirs.has(`${D}/worktrees/T-7`)).toBe(true)
+  expect(w.writes.some(x => x.includes('--force'))).toBe(false)
+  expect(w.writes).toContain('git worktree prune')
+  // branches: the merged ones of done and dropped tasks are gone (T-5's after its folder went); unmerged and running stay
+  expect([...w.branches.keys()].sort()).toEqual(['symcc/T-494', 'symcc/T-7'])
+  // never touched
+  for (const f of ['org-mem.md', 'reports/T-2-try-1.md', 'board.json', 'lead.json', 'view.json', '.DS_Store']) expect(w.files.has(`${D}/${f}`)).toBe(true)
+  // checked again: only the listed items are left
+  const again = await doctor(w.host, '')
+  expect(again).not.toContain('1. ')
+  expect(again).toContain('holds unmerged work')
+})
+
+test('T-676: fix with numbers cleans up only those; a wrong number changes nothing', async () => {
+  const w = world()
+  expect(await doctor(w.host, 'fix 9')).toContain('Nothing changed: there is no item 9')
+  expect(w.writes).toEqual([])
+  const said = await doctor(w.host, 'fix 2')
+  expect(said).toContain('cleaned up 1 of 1')
+  expect(w.writes).toEqual([`rm -f ${D}/board.json.before-migrate-2026-11-02T10-00-00-000Z`])
+  expect(w.branches.size).toBe(5)
+})
+
+test('T-676: the doctor does nothing while a merge is in progress', async () => {
+  const w = world({ tasks: [task('T-2', 'done'), task('T-9', 'doing', { finishing: new Date().toISOString() })] })
+  expect(await doctor(w.host, 'fix')).toContain("doesn't run while a merge is in progress (T-9's work is being checked and merged)")
+  const g = world()
+  g.setMerging(true)
+  expect(await doctor(g.host, 'fix')).toContain('git is in the middle of a merge')
+  expect([...w.writes, ...g.writes]).toEqual([])
+})
+
+test('T-676: the lead tool, the command and the words', async () => {
+  expect(COMMANDS().some(c => c.name === 'symcc-doctor')).toBe(true)
+  expect(TOOLS().some(t => t.name === 'doctor')).toBe(true)
+  const w = world()
+  expect(await runTool(w.host, 'doctor', {})).toContain('Can be cleaned up')
+  expect(w.writes).toEqual([])
+  expect(await runTool(w.host, 'doctor', { fix: '1' })).toContain('cleaned up 1 of 1')
+  expect(parseDoctorArgs('', 'symcc')).toEqual({ fix: null })
+  expect(parseDoctorArgs('fix all', 'symcc')).toEqual({ fix: 'all' })
+  expect(parseDoctorArgs('fix 3, 1 3', 'symcc')).toEqual({ fix: [1, 3] })
+  expect('bad' in parseDoctorArgs('clean', 'symcc')).toBe(true)
+  expect(oldBackups([{ name: 'board.json.before-migrate-b' }, { name: 'board.json.before-migrate-a' }, { name: 'board.json' }]).map(f => f.name)).toEqual(['board.json.before-migrate-a'])
+})

@@ -27,7 +27,7 @@ test('register.tsx still exports BOARD_OPENED and registerAll, now from app/ and
 test('the slash commands symcc registers are the ones runCommand takes', () => {
   const names = app.COMMANDS().map(c => c.name)
   expect(names).toContain(S.N.name)
-  for (const n of names) expect(commandNames(S.N.name).includes(n) || n === `${S.N.name}-stats`).toBe(true)
+  for (const n of names) expect(commandNames(S.N.name).includes(n) || n === `${S.N.name}-stats` || n === `${S.N.name}-doctor`).toBe(true)
 })
 
 test('runCommand answers null for a command that is not symcc\'s', async () => {

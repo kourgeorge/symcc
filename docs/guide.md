@@ -1494,6 +1494,31 @@ well under that, without you lowering `archive_days`:
   warning goes (past 4 MB it says "over the 4 MB limit" instead). A file over 4 MB that can't
   be read gives an error that says so.
 
+### Cleaning up with /symcc-doctor
+
+Over weeks, `.symcc/` and git collect leftovers: migration backups, branches of finished
+tasks, folders of tasks that ended. They take space and make `git branch` long, but symcc
+can't tell on its own which of them you still want. `/symcc-doctor` looks and tells you, with
+sizes. It changes nothing until you say so.
+
+- **What it offers to clean up (numbered):** old `board.json.before-migrate-<time>` copies
+  (the newest one is kept); folders in `.symcc/worktrees/` of done or dropped tasks with no
+  uncommitted changes; git worktree entries whose folder is gone (`git worktree prune`);
+  `symcc/T-<n>` branches of done or dropped tasks whose work is all in the branch they merge
+  into.
+- **What it only lists:** a branch that holds unmerged work (it says how many commits), a
+  folder with uncommitted changes, data files close to the 4 MB limit, stray files like
+  `.DS_Store` and empty `scratch/`, `ideas/` or `artifacts/` folders, a running task with no
+  live worker (with the fix: `/symcc-task T-5 retry`), and a `lead.json` left by a session
+  that is gone (with the fix: `/symcc-drive`).
+- **Cleaning up:** `/symcc-doctor fix` cleans up every numbered item; `/symcc-doctor fix 1 3`
+  only those. Each item is checked again right before it goes, so work added in between is
+  kept. The same works in OpenCode and on the command line (`cmd symcc-doctor fix`), and the
+  lead has a `doctor` tool, which it uses to clean up only after you said yes.
+- **Never touched:** reports, org-mem, scouts, roles and kinds, a running task's folder or
+  branch, and anything unmerged or uncommitted. While a merge is going on, the doctor doesn't
+  run at all; try again when it is done.
+
 ### A worker over its time limit
 
 When a worker runs past `max_minutes` (45 by default), symcc does not stop it. The task stays
