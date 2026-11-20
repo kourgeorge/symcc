@@ -9,7 +9,7 @@ import { findRoot, load, saveBoard, takeLock, dropLock, change } from '../hooks/
 import { tellLead } from '../hooks/app/tell'
 import { addTask, emptyBoard, type Board, lockText, parseLock, lockHolder, isLockStale, LOCK_STALE_MS } from '../hooks/board'
 import { test } from './reset'
-import { claudeHost } from '../hooks/claude/host'
+import { claudeHost, selfFromScript } from '../hooks/claude/host'
 
 // Fails the type check (scripts/typecheck.sh) if Claude Code's `$`, with the adapter's agents added, stops fitting a Host.
 const fromClaude = (claude: EngineInterface): Host => claudeHost(claude)
@@ -141,6 +141,93 @@ test('T-659: the board lock names its holder process; a lock whose process is go
   expect(await takeLock(host).catch((e: Error) => e.message)).toBe('waited')
   expect(asked).toEqual([])
   files.set(lock, lockText('other:5', Date.now() - LOCK_STALE_MS - 1_000))
+  await dropLock(host, await takeLock(host))
+  expect(files.has(lock)).toBe(false)
+})
+
+/** Claude Code's `$` with only $.process.run, answered by `answer`; the calls are kept in `calls`. */
+function claudePsWorld(answer: (argv: readonly string[]) => Promise<{ exitCode: number; stdout: string }>) {
+  const calls: { argv: readonly string[]; timeoutMs?: number }[] = []
+  const claude = {
+    process: {
+      run: async (argv: readonly string[], init?: { timeoutMs?: number }) => {
+        calls.push({ argv, timeoutMs: init?.timeoutMs })
+        return { stderr: '', isStdoutTruncated: false, isStderrTruncated: false, ...(await answer(argv)) }
+      },
+    },
+  }
+  return { host: claudeHost(claude as unknown as EngineInterface), calls }
+}
+
+test("T-662: Claude Code's host checks a lock holder with ps: alive, gone, or can't tell (never throws, 2 s limit)", async () => {
+  const now = Date.now()
+  let reply: () => Promise<{ exitCode: number; stdout: string }> = async () => ({ exitCode: 0, stdout: '   01:40\n' })
+  const w = claudePsWorld(() => reply())
+  const alive = w.host.processes!.alive
+  // ps says it has run 100 s, and the lock says it started 100 s ago: the same process
+  expect(await alive({ pid: 4321, started: now - 100_000 })).toBe(true)
+  expect(w.calls).toEqual([{ argv: ['ps', '-o', 'etime=', '-p', '4321'], timeoutMs: 2_000 }])
+  // the pid now belongs to a process started an hour later: gone
+  expect(await alive({ pid: 4321, started: now - 3_700_000 })).toBe(false)
+  // ps found no such process
+  reply = async () => ({ exitCode: 1, stdout: '' })
+  expect(await alive({ pid: 4321, started: now })).toBe(false)
+  // ps failed, timed out, isn't there (Windows), or said something odd: can't tell
+  reply = async () => Promise.reject(new Error('aborted: still running after 2000ms'))
+  expect(await alive({ pid: 4321, started: now })).toBe(undefined)
+  reply = async () => ({ exitCode: 127, stdout: '' })
+  expect(await alive({ pid: 4321, started: now })).toBe(undefined)
+  reply = async () => ({ exitCode: 0, stdout: 'what\n' })
+  expect(await alive({ pid: 4321, started: now })).toBe(undefined)
+  // a pid that can't be one, or no start time: can't tell, ps isn't asked
+  w.calls.length = 0
+  expect(await alive({ pid: 1, started: now })).toBe(undefined)
+  expect(await alive({ pid: 4321, started: Number.NaN })).toBe(undefined)
+  expect(w.calls).toEqual([])
+})
+
+test("T-662: Claude Code's self() is the Claude Code process (the shell's parent), timed by ps; anything else names no holder", async () => {
+  const w = claudePsWorld(async () => ({ exitCode: 0, stdout: '60274\n 1-02:03:04\n/Users/me/.local/bin/claude --resume\n' }))
+  // self() can't wait: the first call asks and names none; the answer is kept for later locks (asked once)
+  expect(w.host.processes!.self()).toBe(undefined)
+  for (let i = 0; i < 10; i++) await Promise.resolve()
+  const me = w.host.processes!.self()!
+  expect(me.pid).toBe(60274)
+  expect(Math.abs(Date.now() - 93_784_000 - 500 - me.started)).toBeLessThan(1_000)
+  expect(w.calls).toEqual([{ argv: ['sh', '-c', 'p=$PPID; echo "$p"; ps -o etime= -p "$p"; ps -o args= -p "$p"'], timeoutMs: 2_000 }])
+  // a fresh host in the same load still knows it
+  expect(claudePsWorld(async () => ({ exitCode: 1, stdout: '' })).host.processes!.self()).toEqual(me)
+
+  expect(selfFromScript({ exitCode: 0, stdout: '77\n00:05\nnode /opt/claude-code/cli.js\n' })?.pid).toBe(77)
+  // the parent isn't Claude Code (a wrapper shell), ps can't time it, or the script failed: no holder
+  expect(selfFromScript({ exitCode: 0, stdout: '77\n00:05\n/bin/sh -c x\n' })).toBe(undefined)
+  expect(selfFromScript({ exitCode: 0, stdout: '77\n\n/usr/bin/claude\n' })).toBe(undefined)
+  expect(selfFromScript({ exitCode: 127, stdout: '' })).toBe(undefined)
+  expect(selfFromScript(undefined)).toBe(undefined)
+})
+
+test("T-662: in a Claude Code session a dead holder's lock is taken at once, a live one is waited for, and a ps error keeps the 30 s rule", async () => {
+  const { host, files } = memoryHost('/proj')
+  expect(await findRoot(host)).toBe(true)
+  const lock = `/proj/${S.N.lockFile}`
+  let reply: () => Promise<{ exitCode: number; stdout: string }> = async () => ({ exitCode: 1, stdout: '' })
+  host.processes = claudePsWorld(() => reply()).host.processes
+  host.clock.sleep = async () => Promise.reject(new Error('waited'))
+  const started = Date.now() - 60_000
+
+  // its process is gone: taken over at once
+  files.set(lock, lockText('other:1', Date.now(), { pid: 777, started }))
+  const taken = await takeLock(host)
+  expect(files.get(lock)).toBe(taken)
+  await dropLock(host, taken)
+  // its process runs (ps: up for a minute): respected
+  reply = async () => ({ exitCode: 0, stdout: '01:00\n' })
+  files.set(lock, lockText('other:2', Date.now(), { pid: 778, started }))
+  expect(await takeLock(host).catch((e: Error) => e.message)).toBe('waited')
+  // ps fails: can't tell, so the fresh lock is waited for, and an old one is taken
+  reply = async () => Promise.reject(new Error('ps: not found'))
+  expect(await takeLock(host).catch((e: Error) => e.message)).toBe('waited')
+  files.set(lock, lockText('other:3', Date.now() - LOCK_STALE_MS - 1_000, { pid: 779, started }))
   await dropLock(host, await takeLock(host))
   expect(files.has(lock)).toBe(false)
 })

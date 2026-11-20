@@ -6,8 +6,7 @@
 // OpenCode plugin or a standalone client builds its Host the same way.
 import { readFile, writeFile, mkdir, readdir, lstat, stat, realpath, access } from 'node:fs/promises'
 import { spawn, spawnSync } from 'node:child_process'
-import { type Host, type HostFeatures, type HostFileEntry, type HostFileStat, type HostProcess, type HostProcesses, type HostRunResult, SYMCC_WORDS, manifestVersion, noUi } from '../../hooks/host'
-import { elapsedSeconds } from './system'
+import { type Host, type HostFeatures, type HostFileEntry, type HostFileStat, type HostProcess, type HostProcesses, type HostRunResult, SYMCC_WORDS, etimeArgv, holderFromPs, manifestVersion, noUi, startFromEtime } from '../../hooks/host'
 
 /** What this host can do: no screen, and the lead is told when the CLI asks (it prints the update). */
 export const NODE_FEATURES: HostFeatures = { panel: false, band: false, wakeLead: 'next-turn', planMode: false, leadUsage: false, startQueue: false }
@@ -80,12 +79,6 @@ export const nodeFs: Host['fs'] = {
   },
 }
 
-/** How far a process's start (from ps, which counts whole seconds) may be from a lock's `started` and still be the lock's holder. */
-const HOLDER_SLACK_MS = 5_000
-
-/** The ps line that says how long process `pid` has run (`[[dd-]hh:]mm:ss`). */
-const etimeArgv = (pid: number) => ['ps', '-o', 'etime=', '-p', String(pid)]
-
 /** How the Node processes ask ps (tests swap these to make ps fail). */
 export type PsRunners = {
   /** for self(), which can't wait: runs ps at once */
@@ -123,9 +116,8 @@ export function nodeProcessesWith(ps: PsRunners): HostProcesses {
         } catch {
           r = undefined
         }
-        const elapsed = r && r.exitCode === 0 ? elapsedSeconds(r.stdout.trim()) : undefined
-        // ps counts whole seconds (rounded down), so the start lies in the second before; take its middle
-        mine = elapsed === undefined ? null : { pid: process.pid, started: Date.now() - elapsed * 1000 - 500 }
+        const started = r && r.exitCode === 0 ? startFromEtime(r.stdout) : undefined
+        mine = started === undefined ? null : { pid: process.pid, started }
       }
       return mine ?? undefined
     },
@@ -139,12 +131,8 @@ export function nodeProcessesWith(ps: PsRunners): HostProcesses {
       }
       // the pid runs; with no start time to compare, can't tell
       if (typeof started !== 'number' || !Number.isFinite(started)) return undefined
-      const r = await ps.run(etimeArgv(pid)).catch(() => undefined)
-      if (!r) return undefined
-      const elapsed = r.exitCode === 0 ? elapsedSeconds(r.stdout.trim()) : undefined
-      // ps found no such process (it ended just now): gone; ps could not run or its line can't be read: can't tell
-      if (elapsed === undefined) return r.exitCode === 1 && !r.stdout.trim() ? false : undefined
-      return Math.abs(Date.now() - elapsed * 1000 - started) <= HOLDER_SLACK_MS
+      // ps found no such process (it ended just now): gone; ps could not run or its line can't be read: can't tell (hooks/host.ts)
+      return holderFromPs(await ps.run(etimeArgv(pid)).catch(() => undefined), started)
     },
   }
 }
