@@ -11,7 +11,7 @@
 // the page itself shows no report text). It says when its last run ended on an API error or a refusal. No key hints.
 import type { SymccScout } from '../../../types'
 import { scoutRow, scoutFile, scoutIcon, scoutHowTo, scoutLastText, everyText, isNothing, fmtDuration, BAD_EVERY_STATE, scoutRunTasks, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem } from '../../board'
-import { cancelScoutEdit, saveScout, runScoutNow, editScout, setScoutPaused, newScout, loadScoutRunHistory, readScoutRunReport, scoutPlaceValue } from '../../app/scouts'
+import { cancelScoutEdit, saveScout, runScoutNow, editScout, setScoutPaused, newScout, loadScoutRunHistory, loadScoutResults, readScoutRunReport, scoutPlaceValue } from '../../app/scouts'
 import { S } from '../../app/state'
 import { type $, panelValues } from '../panel'
 import type { PaneParts } from './parts'
@@ -156,6 +156,7 @@ export async function scoutPageVs($: $, pane: PaneParts, sc: SymccScout, run = '
   const made = scoutRunTasks(runs, pane.v.tasks ?? [], sc.name)
   const shown = runs.map((run, i) => ({ run, tasks: made[i]! })).reverse()
   const problem = sc.running ? '' : scoutLastRunProblem(runs)
+  const results = (await loadScoutResults(host, [sc.name], pane.v.tasks ?? [], nowMs))[sc.name] ?? ''
   const opened = run ? shown.find(x => x.run.ended === run) : undefined
   // the open run is kept in the panel's saved scout value, next to the scout (scoutPlace); then the page is drawn again
   const showRun = (run: string) => act(async () => (await panelValues($).updateScoutOpen(() => scoutPlaceValue(sc.name, run)), $.ui.invalidate('ui.render')))
@@ -195,6 +196,7 @@ export async function scoutPageVs($: $, pane: PaneParts, sc: SymccScout, run = '
         {title ? plain('vs-scout-summary', title, 'text', true) : null}
         {sc.warning ? plain('vs-scout-warning', sc.warning, 'warning') : null}
         {problem ? plain('vs-scout-problem', problem, 'error') : null}
+        {results ? plain('vs-scout-results', results) : null}
       </Box>
       <Box key="vs-scout-facts" flexDirection="column">
         {plain('every', `runs: ${r.every}`)}

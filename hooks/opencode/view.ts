@@ -11,6 +11,7 @@ import type { SymccView } from '../../types'
 import type { Host, PanelValues } from '../host'
 import { type PaneView, S } from '../app/state'
 import { safeWrite } from '../app/store'
+import { loadScoutResults } from '../app/scouts'
 import { parseScoutRuns, safeScoutFile, scoutRunsFile, scoutRunTasks, mergeRoles, mergeKinds, intoOf, isAnswered, type BoardTask } from '../board'
 import { changedFiles } from '../app/review'
 import { roleLists } from '../app/roles'
@@ -40,10 +41,13 @@ export function viewFilePanel(host: Pick<Host, 'fs' | 'run' | 'ui' | 'plugin'>):
     writing = writing
       .then(async () => {
         const scout_runs = await scoutRunsOf(host, root, v)
+        // T-622: each scout's "Results" line for its page (the TUI can't read scouts.json or the archive itself)
+        const names = (v.scouts ?? []).map(sc => sc.name)
+        const scout_results = names.length ? await loadScoutResults(host, names, v.tasks ?? [], at).catch(() => ({})) : {}
         const defs = await defsOf(host as Host).catch(() => ({}))
         const changes = await changesOf(host as Host, v)
         const org_mem = await orgMemNow(host as Host).then(r => r.notes).catch(() => [])
-        const text = viewFileText({ root, home: S.home, name: S.N.name, version: S.version, written_at: at, view: { ...(v as PaneView), ...(Object.keys(scout_runs).length ? { scout_runs } : {}), ...defs, ...(Object.keys(changes).length ? { changes } : {}), org_mem } })
+        const text = viewFileText({ root, home: S.home, name: S.N.name, version: S.version, written_at: at, view: { ...(v as PaneView), ...(Object.keys(scout_runs).length ? { scout_runs } : {}), ...(Object.keys(scout_results).length ? { scout_results } : {}), ...defs, ...(Object.keys(changes).length ? { changes } : {}), org_mem } })
         await safeWrite(host as Host, file, text, 'the board view')
       })
       .catch((err: Error) => host.ui.log(`couldn't write ${file}: ${err?.message ?? err}`))

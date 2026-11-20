@@ -44,6 +44,18 @@ const STATUS_COLORS = new Set(['warning', 'error', 'ide', 'permission', 'success
 const CHOICES = ['mode', 'notify', 'checker', 'scout_findings', 'tests_with_changes', 'open_on_start', 'enabled']
 const BOXES = ['max_parallel', 'max_minutes', 'auto_retries', 'archive_days', 'test_commands']
 
+/** The drawn tree without the scout page's "Results · …" line (T-622 added it after these trees were saved; scout-runs.test.tsx checks it). */
+function withoutResults(tree: unknown): unknown {
+  const isResults = (n: unknown) => !!n && typeof n === 'object' && (n as Node).type === 'Text' && typeof (n as Node).children?.[0] === 'string' && ((n as Node).children![0] as string).startsWith('Results · ')
+  const walk = (n: unknown): unknown => {
+    if (Array.isArray(n)) return n.filter(c => !isResults(c)).map(walk)
+    if (!n || typeof n !== 'object') return n
+    const node = n as Node
+    return node.children ? { ...node, children: walk(node.children) } : node
+  }
+  return walk(tree)
+}
+
 // one test per surface: what a page keeps in memory (the open groups, a box being typed in) starts fresh in each
 for (const sc of SCENES) {
   for (const surface of OLD_SURFACES) {
@@ -51,7 +63,7 @@ for (const sc of SCENES) {
       sc.seed(on)
       const ui = await $.ui.mount({ ...PANE, surface })
       await sc.go(ui as never)
-      expect(drawnData(await ui.drawn()), `${surface} ${sc.name}`).toEqual(SCOUTS_SETTINGS_BEFORE[`${surface} ${sc.name}`])
+      expect(withoutResults(drawnData(await ui.drawn())), `${surface} ${sc.name}`).toEqual(SCOUTS_SETTINGS_BEFORE[`${surface} ${sc.name}`])
       await ui.unmount()
     })
   }
@@ -92,7 +104,7 @@ test("the scouts follow the host clock: 10 minutes later only the list's next ru
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(drawnData(await ui.drawn())).toEqual(changedTree(SCOUTS_SETTINGS_BEFORE['terminal scouts list'], [['next in 3h 00m', 'next in 2h 50m']]))
   await ui.press({ key: 'scout:dependency-updates' })
-  expect(drawnData(await ui.drawn())).toEqual(changedTree(SCOUTS_SETTINGS_BEFORE['terminal scout dependency-updates'], [['ran 40m ago', 'ran 50m ago']]))
+  expect(withoutResults(drawnData(await ui.drawn()))).toEqual(changedTree(SCOUTS_SETTINGS_BEFORE['terminal scout dependency-updates'], [['ran 40m ago', 'ran 50m ago']]))
   await ui.unmount()
 })
 
