@@ -112,6 +112,13 @@ Scouts and Settings tabs. **Ctrl+T** shows running workers. More in the
 | `/symcc-tasks` | Open the panel on the tasks view |
 | `/symcc-scouts` | Open the panel on the scouts view and reload the scout files (a text list if the panel can't be shown) |
 | `/symcc-task T-3` | Open one task |
+| `/symcc-task T-3 pause` / `resume` / `retry` | Pause a task (its worker stops), resume a paused one, or put a failed or dropped one back to `todo` (on a task whose finished work waited for your files: merge it now) |
+| `/symcc-task T-3 drop [reason]` | Drop a task, with an optional reason |
+| `/symcc-task T-3 merged` | Mark a task done whose work you already merged by hand (symcc looks it up in the history; nothing is merged or tested) |
+| `/symcc-task T-3 review on\|off` | Turn `needs_review` on or off for the task |
+| `/symcc-task T-3 stash` / `todo` | Move a task to the backlog, or from the backlog to `todo` |
+| `/symcc-task T-3 role <name>` | Change the task's role |
+| `/symcc-task T-3 note` | An answered investigation: Keep as a note (Done, plus a docs task that writes the answer to `docs/research/`) |
 | `/symcc-approve T-5` | Merge a task that is ready for review (an answered investigation: Done) |
 | `/symcc-reject T-5 <reason>` | Send a task in review back to `todo` with the reason (an answered investigation: Ask more, the reason is your follow-up question) |
 | `/symcc-diff T-5 [file]` | The files a task in review changed (+/- lines), or one file's full diff |
