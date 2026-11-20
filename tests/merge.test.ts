@@ -2127,7 +2127,8 @@ async function archiveWorld() {
 test('archiving moves old done and dropped tasks to archive.json, written first, and keeps next_id and the totals', async () => {
   const { w, b } = await archiveWorld()
   expect(await archiveOld(w.$, T0)).toEqual(['T-1', 'T-2'])
-  const moves = w.calls.filter(c => c.startsWith('mv '))
+  // the activity log (T-616) is saved through a temp file of its own too
+  const moves = w.calls.filter(c => c.startsWith('mv ') && !c.includes('events.jsonl'))
   expect(moves.length).toBe(2)
   expect(tmpMove(moves[0]!, ARCHIVE) && tmpMove(moves[1]!, BOARD)).toBe(true)
   const after = await load(w.$)
@@ -2595,7 +2596,7 @@ test("a try's full report is saved to .symcc/reports through a temp file, with i
   expect([...w.files.keys()].filter(p => p.startsWith(`${REPORT1}.`) && p.endsWith('.tmp'))).toEqual([])
   expect(w.calls.some(c => tmpMove(c, REPORT1))).toBe(true)
   // the history line stays short and ends cleanly, never inside a word
-  const line = t.history.find(l => l.text.startsWith('try 1: '))!.text
+  const line = t.history.find(l => l.text.startsWith('try 1: ') && l.text.includes(' → '))!.text
   const said = line.slice('try 1: '.length, line.indexOf(' → '))
   expect(said.length).toBeLessThanOrEqual(300)
   expect(said.endsWith('…')).toBe(true)

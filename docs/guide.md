@@ -739,8 +739,9 @@ unchanged.
 - **Header**: the symcc logo (the clef, in the accent color; it sways now and then and turns
   into a check mark, a robot or a note on a merge, a start or a scout finding, as in the
   terminal) with four short lines beside it: the name, version and folder; the board mode as a
-  colored pill (`⏵ auto`) with what it means, dim; the branch and who drives; the tests (the
-  first command, then "(+1 more)") and the limits. Under it the counts as small badges
+  colored pill (`⏵ auto`) with what it means, dim; the branch and who drives; the tests, short
+  ("none set", one short command, short names up to 24 characters like "claude, typecheck",
+  or "5 commands") and the limits. Under it the counts as small badges
   (`● 2 doing · ● 6 to do · ● 1 waiting for you`), each dot in its status color. Every line
   wraps, never cut.
 - **Tabs**: a segmented row of small boxes, `Tasks 20`, `Scouts 1`, `Settings`. The one shown
@@ -831,6 +832,40 @@ before this was kept show `from: unknown`.
   `docs/research/`, the task page shows it in Details as `Research: docs/research/<file>.md`.
 - **Claude Code's agent list** (Ctrl+T) shows a worker's whole conversation, but only for a
   while: it is not kept. The report file and the commit are what stay.
+
+### Task events
+
+Every time the board is saved, symcc compares each task before and after and sends out one
+event for each thing that changed:
+
+- `state`: its status changed (`todo` → `doing`, `doing` → `done`, ...);
+- `stage`: its step on the way to the merge changed (`worker`, `prep`, `checker`, `queue`,
+  `test`, `merge`, or none), with its place on the way into `queue`;
+- `wait`: what it waits for from you changed (`answer`, `files`, `your-files`, `review`,
+  `time`, `failed`, or none);
+- `created` and `removed`: it came onto the board, or left it (archived).
+
+Each event looks like `{"task":"T-3","kind":"stage","from":"checker","to":"queue","place":2,"at":"2026-11-20T10:42:00.000Z","try":1}`.
+Nothing is sent when nothing changed. A check step that went stale counts as the step it was
+until a save takes it away; then it is one stage change, once.
+
+Two things listen today:
+
+- **The activity log**, `.symcc/events.jsonl`: every event as one JSON line, the last 5,000
+  kept.
+- **The history**: each step a try goes into (prep, checker, queue, test, merge) gets a
+  line with its time, such as "try 1: checker started" or "try 1: waits in the merge queue
+  (place 2)", so the task page shows the whole path. The outcome lines (checker OK, merged,
+  failed, ...) are written as before. These stage lines are left out of the "Earlier tries"
+  list a retrying worker sees, so they never push out what went wrong.
+
+Code that wants to know (a host, a future feature) calls `onTaskEvent(fn)` from
+`hooks/app/events.ts`: `fn` gets the events of each save, and the call answers a function
+that stops listening. The events come from `phaseEvents` in `hooks/core/events.ts` (pure, the
+same on every host); `writeBoard` in `hooks/app/store.ts` is the one place every board save
+goes through. A listener that fails never stops the save; you are told once. Listeners are
+called after the board lock is let go, so a listener may change the board itself (the
+activity log is written while the lock is still held).
 
 ## Scouts
 
@@ -1420,6 +1455,7 @@ your-project/
     ├── roles/            your own worker roles (*.md), see Worker roles
     ├── reports/          each try's full worker report (T-3-try-2.md), and scouts/ with
     │                     each scout run's full report (bugs-2026-11-18T10-20-30-000Z.md)
+    ├── events.jsonl      the activity log: every task event, one JSON line each (see Task events)
     ├── org-mem.md        organizational memory (org-mem): short notes agents left for the next ones (see below)
     └── worktrees/
         └── T-3/          a worker's private copy of the project (branch symcc/T-3),

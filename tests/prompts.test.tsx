@@ -35,6 +35,20 @@ function setup() {
   S.enabledNow = true
 }
 
+test("T-616: the 'stage' history lines stay out of Earlier tries, so an earlier try's failure is not pushed out", () => {
+  setup()
+  const step = (text: string) => ({ kind: 'stage', text }) as SymccTask['history'][number]
+  const history = [
+    ...hist('created by the lead', 'try 1: checker found problems: X broken'),
+    step('try 2: checker started'), step('try 2: checker: OK'), step('try 2: waits in the merge queue (place 2)'), step('try 2: tests started'),
+    ...hist('try 2: tests failed: Y'),
+  ]
+  const b = boardWith(['npm test'], { history })
+  const p = WORKER_PROMPT(b.tasks[0]!, b, WT)
+  expect(p).toContain("Earlier tries:\n- try 1: checker found problems: X broken\n- try 2: tests failed: Y\nDon't repeat those mistakes.")
+  expect(p).not.toContain('checker started')
+})
+
 test('the built-in prompts are filled in for the task: no placeholder is left, and the change prompt has the test rule', () => {
   setup()
   const b = boardWith(['npm test'], { history: hist('created by the lead', 'try 1 failed its tests') })
@@ -79,8 +93,11 @@ test('the built-in prompts are filled in for the task: no placeholder is left, a
   expect(q).toContain(`${SCRATCH}\n${WRITE_SCRIPTS}\n`)
   const c = checkerPrompt({ name: 'symcc', task_id: 'T-1', title: 'a', details: 'b', branch: 'symcc/T-1', folder: WT, into: 'main', role: '', diff: '(no diff)', changed_files: '  a.ts', tests: '' })
   expect(c).not.toContain('{{')
-  // the checker's line names no tool: on the Node host a checker may have no Write tool (T-474)
-  expect(c).toContain(`/tmp also works.\n${WRITE_SCRIPTS.replace('with the Write tool into .scratch/ (or /tmp)', 'as files into .scratch/ (or /tmp) with your file-writing tool')}\n`)
+  // T-626: the checker may have no Write tool at all (Claude Code runs it read-only; on the Node host only with
+  // .scratch/, T-474), so it is told to probe with bun -e / node -e by absolute path, and no tool is named
+  expect(c).toContain(`/tmp also works.\nProbe with bun -e "…" (or node -e "…") run from /tmp, importing the code by its absolute path in your folder (for example: cd /tmp && bun -e "const m = await import('${WT}/hooks/board.ts'); console.log(m)"); if you need a file, a here-document is fine only when its text has no git command and no path outside your folder (build such words from pieces, like 'gi'+'t').\n`)
+  expect(c).not.toContain('file-writing tool')
+  expect(c).not.toContain('Write tool')
   // every placeholder written in a built-in prompt is one symcc knows
   for (const k of PROMPT_KINDS) for (const p of placeholdersIn(BUILT_IN_PROMPTS[k])) expect(PROMPT_PLACEHOLDERS[k]).toHaveProperty(p)
 })

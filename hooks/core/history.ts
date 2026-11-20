@@ -140,6 +140,8 @@ export const HISTORY_KINDS = {
   'try-result': 'step',
   /** any other step of a try (a warning, more time given, the tests run again …) */
   step: 'step',
+  /** T-616: a try went into a check stage ("checker started", "waits in the merge queue (place 2)"; see withStageHistory) */
+  stage: 'step',
   /** a running worker was stopped and its task starts again (the task was changed) */
   restarted: 'step',
   /** a running worker was stopped (paused, the board paused, the lead's handover …) */
