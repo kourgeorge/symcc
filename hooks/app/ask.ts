@@ -5,12 +5,13 @@
 //   host.ts; for Claude Code, its Edit, Write and NotebookEdit, and Bash: claude/tools.ts), so no tool name is read here.
 // Both are written to the task's current try on the board at once (try_question, try_refused), so a plugin reload
 // before the hand-back doesn't lose them; finishWork (workers.ts) decides from the board.
-import { type Board, type BoardTask, ASK_TOOL, ASK_SCHEMA, ASK_SENT, OPTIONS_MIN, OPTIONS_MAX, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, bashPathsToCheck, bashTooManyText, gitWriteIn, gitWriteText, workerGitWriteText, scoutGitWriteText, editInProject, scoutEditText, mergeStepAllow, scratchGitAllow, scratchTemps, eitherAllow, type GitAllow, intoOf, editTarget, find, isInvestigation, patchTask, realPathOf, brokenLinkText, guardReason, guardFailedText, type PathLookup } from '../board'
+import { type Board, type BoardTask, ASK_TOOL, ASK_SCHEMA, ASK_SENT, OPTIONS_MIN, OPTIONS_MAX, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, bashPathsToCheck, bashTooManyText, BASH_TOO_MANY, gitWriteIn, gitWriteText, workerGitWriteText, scoutGitWriteText, editInProject, scoutEditText, mergeStepAllow, scratchGitAllow, scratchTemps, eitherAllow, type GitAllow, intoOf, editTarget, find, isInvestigation, patchTask, realPathOf, brokenLinkText, guardReason, guardFailedText, type PathLookup } from '../board'
 import { S, toolName, type Worker, workers, scoutRuns, checkerRuns, stopped, isOwnAgent, boardAgents, rememberOnBoard } from './state'
 import type { FileTouch, Host } from '../host'
 import { load, change, now } from './store'
 import { workerOf, agentOnBoard } from './workers'
 import { scratchOn } from './git'
+import { logRefusal, logAsked, type Refusal, type Who } from './evidence'
 
 /** Writes `patch` (from the task as it is now) to worker `w`'s task, only while it is still "doing" on the same try. */
 function recordOnTry($: Host, w: Worker, attempts: number, patch: (cur: BoardTask) => Partial<BoardTask> | null): Promise<boolean> {
@@ -35,14 +36,34 @@ export const ASK_TOOL_DEF = () => ({
  * replaces it). Everyone else is refused.
  */
 export async function askCall($: Host, agentId: string | undefined, a: Record<string, unknown>): Promise<string> {
+  const who: Who = { role: 'agent' }
+  const text = await askAnswer($, agentId, a, who)
+  // T-660: an agent's refused call (the lead's is not evidence of an agent struggling) and a question sent are logged, never its text
+  if (agentId && text !== ASK_SENT) logRefusal($, who, { text, guard: 'ask' })
+  else if (text === ASK_SENT && who.task) logAsked($, who.task, who.try ?? 0)
+  return text
+}
+
+/** askCall's answer; `who` is filled in with the caller's role and task as they are found. */
+async function askAnswer($: Host, agentId: string | undefined, a: Record<string, unknown>, who: Who): Promise<string> {
   const tool = toolName(ASK_TOOL)
   if (!agentId) return `Refused: ${tool} is only for ${S.N.name} workers; the lead (the main chat) never calls it (use ${toolName('ask')} to make a task wait for the owner).`
-  if (scoutRuns.has(agentId)) return `Refused: ${tool} is only for ${S.N.name} workers, not scouts. End with your report as usual.`
-  if (checkerRuns.has(agentId)) return `Refused: ${tool} is only for ${S.N.name} workers, not checkers. End with your verdict as usual.`
+  const scout = scoutRuns.get(agentId)
+  if (scout !== undefined) {
+    Object.assign(who, { role: 'scout', scout })
+    return `Refused: ${tool} is only for ${S.N.name} workers, not scouts. End with your report as usual.`
+  }
+  const chk = checkerRuns.get(agentId)
+  if (chk) {
+    Object.assign(who, { role: 'checker', task: chk.task })
+    return `Refused: ${tool} is only for ${S.N.name} workers, not checkers. End with your verdict as usual.`
+  }
   const w = await workerOf($, agentId)
   if (!w) return `Refused: ${tool} is only for running ${S.N.name} workers, and you are not one (or your try already handed back).`
+  Object.assign(who, { role: 'worker', task: w.task })
   const t = find(await load($), w.task)
   if (!t || t.status !== 'doing') return `Refused: your task ${w.task} is not running any more${t ? ` (it is ${t.status})` : ''}. Stop and hand back.`
+  who.try = t.attempts
   const q = parseAsk(a)
   if (typeof q === 'string') return `Refused: ${q}. Nothing was sent; call ${tool} again with a valid question.`
   if (!(await recordOnTry($, w, t.attempts, () => ({ try_question: q })))) return `Refused: your task ${w.task} is not running any more. Stop and hand back.`
@@ -87,15 +108,15 @@ async function realEdit($: Host, path: string, worktree: string, root: string): 
  * leads into the project, in its own folder or elsewhere (each looked up on disk, see bashPathsToCheck), or for
  * having too many paths or folder changes to check (T-436). Undefined: allowed.
  */
-async function bashOutside($: Host, command: string, worktree: string, root: string, cwd?: string): Promise<string | undefined> {
+async function bashOutside($: Host, command: string, worktree: string, root: string, cwd?: string): Promise<Refusal | undefined> {
   if (!root) return undefined
   const home = S.home || undefined
   const look = diskLook($)
   const [wts, tops] = await Promise.all([bothNames(look, worktree), bothNames(look, root)])
   const rel = bashOutsideFolder(command, wts, tops, home, cwd)
-  if (rel !== undefined) return bashOutsideText(rel, worktree)
+  if (rel !== undefined) return { text: bashOutsideText(rel, worktree), guard: rel === BASH_TOO_MANY ? 'too-many' : 'path', ...(rel === BASH_TOO_MANY ? {} : { what: rel }) }
   const { paths, tooMany } = bashPathsToCheck(command, wts, home, cwd, tops)
-  if (tooMany) return bashTooManyText(worktree)
+  if (tooMany) return { text: bashTooManyText(worktree), guard: 'too-many' }
   // only where links lead matters here (a link that leads nowhere is no way into the project), so no folder is listed
   const bashLook: PathLookup = { real: look.real, isLink: async () => false }
   const linky = linkFinder($, wts)
@@ -105,7 +126,7 @@ async function bashOutside($: Host, command: string, worktree: string, root: str
   for (const [i, real] of reals.entries()) {
     // a path that can't be looked up is judged as written
     const via = editOutsideFolder(real || paths[i]!, wts, tops)
-    if (via !== undefined) return bashOutsideText(via, worktree)
+    if (via !== undefined) return { text: bashOutsideText(via, worktree), guard: 'path', what: via }
   }
   return undefined
 }
@@ -168,35 +189,59 @@ function linkFinder($: Host, wts: readonly string[]): (abs: string) => Promise<b
  */
 export async function checkEdit($: Host, agentId: string | undefined, touch: FileTouch | null, cwd?: string, kindOf: AgentKindOf = () => listedKind($, agentId!)): Promise<string | undefined> {
   if (!agentId || !touch) return undefined
-  if (stopped.has(agentId)) return stoppedText()
+  const who: Who = { role: 'agent' }
+  const r = await judgeEdit($, agentId, touch, who, cwd, kindOf)
+  // T-660: logged after the decision, in the background (never waited on, a failure ignored)
+  if (r) logRefusal($, who, r, touch)
+  return r?.text
+}
+
+/** checkEdit's decision: the refusal (and which guard), or undefined; `who` is filled in with the caller's role and task. */
+async function judgeEdit($: Host, agentId: string, touch: FileTouch, who: Who, cwd: string | undefined, kindOf: AgentKindOf): Promise<Refusal | undefined> {
+  if (stopped.has(agentId)) return { text: stoppedText(), guard: 'stopped' }
   // a checker (the checker setting) is kept inside the task's folder it checks, as a worker is; it has no file list
   const chk = checkerRuns.get(agentId)
-  if (chk) return checkerCheck($, touch, chk.worktree, cwd)
+  if (chk) {
+    Object.assign(who, { role: 'checker', task: chk.task })
+    return checkerCheck($, touch, chk.worktree, cwd)
+  }
   // a scout runs in the owner's own folder: it may run tests and read with git, and write throwaway files outside the
   // project (such as /tmp), but never write with git or edit a file inside the project
-  if (scoutRuns.has(agentId)) return scoutCheck($, touch)
+  const scout = scoutRuns.get(agentId)
+  if (scout !== undefined) {
+    Object.assign(who, { role: 'scout', scout })
+    return scoutCheck($, touch)
+  }
   // a worker or checker this copy doesn't hold (another session's copy started it, or this copy lost it in a reload)
   // is found from the board (T-471), as for ask_owner; an unreadable board throws, so the call is refused (guardFailed).
   const mine = workers.get(agentId)
   const on = mine ? undefined : await agentOnBoard($, agentId)
-  if (on?.kind === 'ended') return stoppedText()
-  if (on?.kind === 'checker') return checkerCheck($, touch, on.worktree, cwd)
+  if (on?.kind === 'ended') {
+    who.task = on.task
+    return { text: stoppedText(), guard: 'stopped' }
+  }
+  if (on?.kind === 'checker') {
+    Object.assign(who, { role: 'checker', task: on.task })
+    return checkerCheck($, touch, on.worktree, cwd)
+  }
   const w = mine ?? (on?.kind === 'worker' ? on.worker : undefined)
   if (!w) return unknownAgentCheck(agentId, kindOf)
+  Object.assign(who, { role: 'worker', task: w.task })
   if ('command' in touch) return (await outsideOwnFolder($, touch, w.worktree, cwd)) ?? workerGitWrite($, w, touch.command, cwd)
   const real = await realEdit($, touch.path, w.worktree, S.root)
   // realEdit gives null only for an edit with a path
-  if (real === null) return brokenLinkText(editTarget(touch.path)!)
+  if (real === null) return { text: brokenLinkText(editTarget(touch.path)!), guard: 'link' }
   const outside = real.root.length ? editOutsideFolder(real.path, real.worktree, real.root) : undefined
-  if (outside !== undefined) return outsideFolderText(outside, w.worktree, S.N.dir)
+  if (outside !== undefined) return { text: outsideFolderText(outside, w.worktree, S.N.dir), guard: 'path', what: outside }
   // an unreadable board throws on, so the hook's .catch refuses the edit (see guardFailed): never let it through unchecked
   const t = find(await load($), w.task)
   if (!t || isInvestigation(t)) return undefined
+  who.try = t.attempts
   // the throwaway .scratch/ is free to edit only where the project keeps no file there in git (T-456)
   const path = blockedEdit(real.path, real.worktree, t.files, S.N.dir, await scratchOn($, w.worktree))
   if (!path) return undefined
   if (!t.try_refused?.includes(path)) await recordOnTry($, w, t.attempts, cur => (cur.try_refused?.includes(path) ? null : { try_refused: [...(cur.try_refused ?? []), path] })).catch(() => false)
-  return blockedEditText(path)
+  return { text: blockedEditText(path), guard: 'files', what: path }
 }
 
 /**
@@ -222,10 +267,10 @@ export async function listedKind($: Host, agentId: string): Promise<'symcc' | 'o
  * touch nothing. It is remembered (boardAgents), so a guard that crashes later still refuses it. Any other agent
  * (the lead's own subagents) is left alone, as is one the host can't tell: undefined.
  */
-async function unknownAgentCheck(agentId: string, kindOf: AgentKindOf): Promise<string | undefined> {
+async function unknownAgentCheck(agentId: string, kindOf: AgentKindOf): Promise<Refusal | undefined> {
   if ((await kindOf().catch(() => undefined)) !== 'symcc') return undefined
   rememberOnBoard(agentId)
-  return unknownAgentText()
+  return { text: unknownAgentText(), guard: 'unknown-agent' }
 }
 
 /** What an agent of symcc's that symcc has no record of any more is told when it tries to edit a file or run a shell command (see unknownAgentCheck). */
@@ -240,9 +285,9 @@ export const stoppedText = () => `${S.N.name} stopped this agent. Do nothing mor
  * are shared with the owner's folder, main too, and so is the stash), and it is kept inside that folder as a worker
  * is; it has no file list. Undefined: allowed.
  */
-async function checkerCheck($: Host, touch: FileTouch, worktree: string, cwd?: string): Promise<string | undefined> {
+async function checkerCheck($: Host, touch: FileTouch, worktree: string, cwd?: string): Promise<Refusal | undefined> {
   const git = 'command' in touch && gitWriteIn(touch.command) ? gitWriteIn(touch.command, await scratchGit($, worktree), cwd) : undefined
-  if (git) return gitWriteText(git)
+  if (git) return { text: gitWriteText(git), guard: 'git', what: git }
   return outsideOwnFolder($, touch, worktree, cwd)
 }
 
@@ -253,7 +298,7 @@ async function checkerCheck($: Host, touch: FileTouch, worktree: string, cwd?: s
  * task, after a clash with the branch it merges into) may still run `git merge <that branch>` and `git merge --abort`
  * (mergeStepAllow), as its prompt asks; symcc adds and commits the resolved files as for any try. Undefined: allowed.
  */
-async function workerGitWrite($: Host, w: Worker, command: string, cwd?: string): Promise<string | undefined> {
+async function workerGitWrite($: Host, w: Worker, command: string, cwd?: string): Promise<Refusal | undefined> {
   if (!gitWriteIn(command)) return undefined
   const scratch = await scratchGit($, w.worktree)
   if (!gitWriteIn(command, scratch, cwd)) return undefined
@@ -261,7 +306,7 @@ async function workerGitWrite($: Host, w: Worker, command: string, cwd?: string)
   const t = find(await load($), w.task)
   const into = t?.merge_main ? intoOf(t) : undefined
   const git = gitWriteIn(command, into ? eitherAllow(scratch, mergeStepAllow(into)) : scratch, cwd)
-  return git ? workerGitWriteText(git, into) : undefined
+  return git ? { text: workerGitWriteText(git, into), guard: 'git', what: git } : undefined
 }
 
 /**
@@ -281,29 +326,29 @@ async function scratchGit($: Host, worktree: string): Promise<GitAllow> {
  * an edit of a file inside the project (symbolic links followed, see realEdit). Its other shell commands are not
  * checked here (it is only asked in its prompt not to install or change files that way). Undefined: allowed.
  */
-async function scoutCheck($: Host, touch: FileTouch): Promise<string | undefined> {
+async function scoutCheck($: Host, touch: FileTouch): Promise<Refusal | undefined> {
   if ('command' in touch) {
     const git = gitWriteIn(touch.command)
-    return git ? scoutGitWriteText(git) : undefined
+    return git ? { text: scoutGitWriteText(git), guard: 'git', what: git } : undefined
   }
   const real = await realEdit($, touch.path, S.root, S.root)
-  if (real === null) return brokenLinkText(editTarget(touch.path)!)
+  if (real === null) return { text: brokenLinkText(editTarget(touch.path)!), guard: 'link' }
   const rel = editInProject(real.path, real.root)
-  return rel !== undefined ? scoutEditText(rel) : undefined
+  return rel !== undefined ? { text: scoutEditText(rel), guard: 'scout-edit', what: rel } : undefined
 }
 
 /**
  * Why a shell command or an edit of a checker in folder `worktree` is refused: it names a path in the project outside
  * that folder (the owner's copy, the board, another worker's folder). Undefined: allowed.
  */
-async function outsideOwnFolder($: Host, touch: FileTouch, worktree: string, cwd?: string): Promise<string | undefined> {
+async function outsideOwnFolder($: Host, touch: FileTouch, worktree: string, cwd?: string): Promise<Refusal | undefined> {
   if ('command' in touch) {
     return bashOutside($, touch.command, worktree, S.root, cwd)
   }
   const real = await realEdit($, touch.path, worktree, S.root)
-  if (real === null) return brokenLinkText(editTarget(touch.path)!)
+  if (real === null) return { text: brokenLinkText(editTarget(touch.path)!), guard: 'link' }
   const outside = real.root.length ? editOutsideFolder(real.path, real.worktree, real.root) : undefined
-  return outside !== undefined ? outsideFolderText(outside, worktree, S.N.dir) : undefined
+  return outside !== undefined ? { text: outsideFolderText(outside, worktree, S.N.dir), guard: 'path', what: outside } : undefined
 }
 
 /** The guard failures already logged (hook and reason), so each is logged once; kept small. */

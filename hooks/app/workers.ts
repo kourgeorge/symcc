@@ -7,6 +7,7 @@ import { publish } from './lead'
 import { type BeforeLine, type CheckResult, checkAndMerge, recordCommits, ownerEdits, alreadyMerged } from './review'
 import type { TurnLimit } from './merge-line'
 import { timedOutRetryNote } from '../core/test-timeout'
+import { logNeedsFiles } from './evidence'
 import { loadRoles } from './roles'
 import { runChecker, checkerName, cleanFolder, CHECKER_NOTE } from './checker'
 import { loadKinds } from './kinds'
@@ -795,6 +796,7 @@ async function finishTry(host: Host, agentId: string, w: Pick<Worker, 'task' | '
   } else if (need.length) {
     const question = needFilesQuestion(t.id, need)
     if (await writeIfSame(host, t, cur => ({ status: 'waiting', question: question.slice(0, 1000), asked_files: need, note: 'waiting for you', history: withHistory(cur.history, now(), ['asked', `${tryLabel(t)}: worker asked for more files: ${need.join(', ')}`]), ...endedBy(cur, now(), 'asked', 'files outside its list') }))) return false
+    logNeedsFiles(host, t.id, Number(t.attempts) || 0, need)
     sayNeedsYou(host, b, t, question)
     tellLead(host, `${question}\nThe task now waits for the owner, who can allow the files from the board (Allow on its page). If they agree here instead, ${S.N.name} change ${t.id} with the wider files (that sends it back to work; what the worker already changed is kept). Otherwise ${S.N.name} drop it, or change it to a narrower plan that fits its files.`, { urgent: true })
   } else if (end.reason === 'aborted') {

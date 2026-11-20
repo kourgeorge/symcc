@@ -3,6 +3,7 @@
 // (logTaskEvents, under the board lock), and adds the history's stage lines (withStageHistory); the listeners here
 // get the events only after the board lock is let go, so a listener may write the board itself.
 import type { TaskEvent } from '../core/events'
+import type { EvidenceEvent } from '../core/evidence'
 import type { Host } from '../host'
 import { S } from './state'
 
@@ -11,26 +12,49 @@ export type { TaskEvent } from '../core/events'
 /** A listener gets the events of one board write (never empty), in order, and the host that wrote it. */
 export type TaskEventListener = (events: readonly TaskEvent[], host: Host) => void | Promise<void>
 
-/** The most lines kept in the activity log; older ones are dropped. */
+/** The most lines kept in the activity log; older ones move to the archive (eventsArchiveFile). */
 export const EVENT_LOG_LINES = 5000
 
 /** The activity log, inside the project's data folder. */
 export const eventsFile = () => `${S.root}/${S.N.dir}/events.jsonl`
+/** Where the activity log's older lines go (T-660), so the history is never lost. */
+export const eventsArchiveFile = () => `${S.root}/${S.N.dir}/events-archive.jsonl`
 
-/** Appends `events` to the activity log, one JSON line each, keeping the last EVENT_LOG_LINES lines. */
-export async function logEvents(events: readonly TaskEvent[], host: Host): Promise<void> {
-  if (!S.root) return
-  const file = eventsFile()
-  const old = await host.fs.read(file).catch(() => '')
-  const lines = [...String(old ?? '').split('\n').filter(l => l.trim()), ...events.map(e => JSON.stringify(e))]
-  // a temp file renamed over the log (as the board is saved), so a crash never leaves half a line
+/** One line of the activity log: a task event (core/events.ts) or an evidence event (core/evidence.ts). */
+export type LogEvent = TaskEvent | EvidenceEvent
+
+/** Writes `text` to `file` through a temp file renamed over it (as the board is saved), so a crash never leaves half a line. */
+async function writeWhole(host: Host, file: string, name: string, text: string) {
   const tmp = `${file}.tmp-${Math.random().toString(36).slice(2, 10)}`
-  await host.fs.write(tmp, lines.slice(-EVENT_LOG_LINES).join('\n') + '\n')
+  await host.fs.write(tmp, text)
   const r = await host.run(['mv', '-f', tmp, file])
   if (r.exitCode !== 0) {
     await host.run(['rm', '-f', tmp]).catch(() => undefined)
-    throw new Error(`couldn't save ${S.N.dir}/events.jsonl: ${(r.stderr || r.stdout).trim().slice(0, 200)}`)
+    throw new Error(`couldn't save ${S.N.dir}/${name}: ${(r.stderr || r.stdout).trim().slice(0, 200)}`)
   }
+}
+
+/**
+ * Appends `events` to the activity log, one JSON line each, keeping the last EVENT_LOG_LINES lines; the older ones
+ * are added to the end of the archive first (an archive that can't be written keeps them in the log for now).
+ */
+export async function logEvents(events: readonly LogEvent[], host: Host): Promise<void> {
+  if (!S.root) return
+  const file = eventsFile()
+  const old = await host.fs.read(file).catch(() => '')
+  let lines = [...String(old ?? '').split('\n').filter(l => l.trim()), ...events.map(e => JSON.stringify(e))]
+  if (lines.length > EVENT_LOG_LINES) {
+    const older = lines.slice(0, lines.length - EVENT_LOG_LINES)
+    const arch = eventsArchiveFile()
+    const kept = String((await host.fs.read(arch).catch(() => '')) ?? '')
+    const moved = await writeWhole(host, arch, 'events-archive.jsonl', `${kept}${kept && !kept.endsWith('\n') ? '\n' : ''}${older.join('\n')}\n`).then(
+      () => true,
+      () => false,
+    )
+    // an archive that keeps failing never lets the log grow past twice its limit
+    lines = lines.slice(moved ? -EVENT_LOG_LINES : -2 * EVENT_LOG_LINES)
+  }
+  await writeWhole(host, file, 'events.jsonl', lines.join('\n') + '\n')
 }
 
 const listeners = new Set<TaskEventListener>()

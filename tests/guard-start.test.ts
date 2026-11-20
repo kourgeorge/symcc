@@ -3,6 +3,7 @@
 // no scouts and writes no file, while toolCheck still refuses a worker's edit outside its task's files. findRoot from
 // a worktree path gives the main project too.
 import { expect } from 'claude-code/testing'
+import { evidenceWritten } from '../hooks/app/evidence'
 import { addTask, emptyBoard, patchTask, blockedEditText } from '../hooks/board'
 import { S, workers } from '../hooks/app/state'
 import { findRoot, mainRoot, isAbsolute, normalPath } from '../hooks/app/store'
@@ -61,8 +62,10 @@ test('guardStart from a worktree: the main project, no file, no timer, no lead, 
   workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: Date.now() })
   expect(await toolCheck(w.host, 'ag1', { path: `${WT}/src/b.ts` }, WT)).toBe(blockedEditText('src/b.ts'))
   workers.clear()
+  // T-660: and logged in the main project's activity log, in the background
+  await evidenceWritten()
   // the refusal is recorded on the task in the main project's board (as for any worker), never a new board
-  expect(w.writes.every(p => p.startsWith(`${ROOT}/.symcc/board.`))).toBe(true)
+  expect(w.writes.every(p => p.startsWith(`${ROOT}/.symcc/board.`) || p.startsWith(`${ROOT}/.symcc/events.jsonl`))).toBe(true)
   expect(w.files.has(`${WT}/.symcc/board.json`)).toBe(false)
   w.writes.length = 0
   // symcc's own tools and commands do nothing here
