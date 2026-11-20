@@ -2,6 +2,26 @@
 
 When a set of user-facing changes is ready to release, bump the version in both `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` and add an entry here.
 
+## 0.5.12 (2026-11-20)
+
+### Added
+- Organizational memory (org-mem): the Field Guide is renamed, its file is now `.symcc/org-mem.md`, and Settings has an "Org-mem: n notes" row that opens a page listing the notes, where a note can be deleted (terminal, VS Code, OpenCode).
+- Task events: every state and stage change emits one event; the first listener writes an activity log, `.symcc/events.jsonl` (the last 5000 lines), and stage changes show in the task's history.
+- Scout scorecard: `/symcc-stats` and each scout's page show how many tasks a scout's findings became, how many merged, were dropped or are open, and the tokens per merged task.
+- Design notes for a standalone symcc (`docs/research/standalone-app.md`): for now only the engine/client boundary, kept by a check that engine code never imports a host.
+
+### Changed
+- One shared way to work out a task's stage and what it waits for, used by every board, band and task page; "queue" is a real step, and the wording is the same everywhere ("approved, merging").
+- The board header shows "tests: 5 commands" instead of the whole list; the full list stays in Settings.
+- Board list rows no longer show the try number; the band keeps "(3)" and the task page keeps "try 3/4".
+- The all-time time and token total is gone from the board; `/symcc-stats` keeps it.
+- OpenCode: the banner, tabs and page title stay fixed and only the page body scrolls, by drawn lines, with no stale text left behind.
+- Worker and checker instructions explain how to write probe and edit scripts so the guards don't refuse them.
+
+### Fixed
+- A renamed file in the owner's uncommitted changes was misread, which could hide the next changed file from the merge check.
+- More tests for moving the owner's files when git fails halfway.
+
 ## 0.5.11 (2026-11-20)
 
 ### Added
