@@ -1344,6 +1344,10 @@ A stopped worker can't do anything more: symcc refuses every tool it tries to us
 **Several Claude Code windows on the same project?** Only one of them *drives* the
 board (starts workers, merges, runs scouts). The others can see and change the board but
 start nothing. If the driving window closes, another one takes over within a few minutes.
+A window that doesn't drive shows a yellow warning under the board's banner ("Another session
+drives this board … /symcc-drive to drive it from here") and "⚠ driven by another session" in the
+band above the prompt. Its doing tasks say "runs in the other session", and the warning adds
+"it looks idle" when a task has waited over 5 minutes for the driving window to start it.
 To move driving to the window you are in, type `/symcc-drive` there. If another window
 drives, symcc asks it to hand over: within 30 s it stops its workers (the answer says which
 ones), steps down, and your window starts driving and restarts those tasks from their kept
