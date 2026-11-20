@@ -31,7 +31,7 @@ When a set of user-facing changes is ready to release, bump the version in both 
 - "queue" instead of "line": the Stage line ("… checker ✓ → queue ✓ → ● test → merge"), the waiting note and badge ("⋯ queue (2)"), and "merge queue" in the guide, README, help and site.
 - An approved task that is merging leaves "needs you": it shows with the running tasks, with its step icon, and goes back if the approve fails.
 - An approved task's Stage line shows only the approval's current step after "review ✓", with no step repeated.
-- A later try shows as "(3)" right after the row's time, in the band and the task lists.
+- A later try shows as "(3)" right after the row's time, in the band.
 - VS Code: each open task is one line; parts are dropped whole, least important first, and a row is never wider than the panel.
 - The guide explains the way from a hand-back to the merge in one section, with a diagram and tables; the README has "How a change gets merged".
 - Internal: hooks/core/ask.ts split into ask, shell-words, path-guard and git-guard; board-mode and cleanup moved out of hooks/app/workers.ts; one shared "owner's turn" check.
