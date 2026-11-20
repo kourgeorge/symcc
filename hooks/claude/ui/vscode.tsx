@@ -286,16 +286,6 @@ export function vsSection(k: VsKit, key: string, label: string): RenderChildren 
   )
 }
 
-/** Small dim tags in VS Code, on one line that wraps between them ("feature · worker · try 2 · 40m"). */
-export function vsTags(k: VsKit, key: string, tags: string[]): RenderChildren {
-  const { Text, C } = k
-  return (
-    <Text key={key} wrap="wrap" size="caption" color={C('inactive')}>
-      {tags.join(' · ')}
-    </Text>
-  )
-}
-
 /** A callout in VS Code: a box with a rounded border in its tone (warning, error) around a heading in that tone and
  *  what it holds (the words and their buttons), so it stands out at the top of a page. */
 export function vsCallout(k: VsKit, key: string, mark: string, label: string, tone: string, body: RenderChildren[]): RenderChildren {

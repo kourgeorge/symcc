@@ -1,27 +1,45 @@
 // The task page in VS Code's side panel (see surface.ts and vscode.tsx), drawn as a card. The terminal's task page
 // (task-page.tsx) packs labelled rows cut to the panel and lists its keys; here the page uses the whole panel width and wraps every line:
 //   ← Tasks                                  (back to the list)
-//   T-414 and the title, large and bold; the kind, role, try and time as small dim tags
+//   T-414 and the title, large and bold
 //   the question (its answers as buttons and a box for your own), why it failed (with Retry), waiting for your files
 //   (with Merge now): boxed in their tone, at the top
 //   the action buttons in one row (only the ones that fit the status, at most one primary on the page)
-//   Why / where it came from · What to do (Markdown) · Changes · History (a timeline, newest first) · Report (Markdown,
-//   its first part with a "Show all" button), then the folds, closed by default: Files it may change · Waits for · Time and cost
-// (each fold, and each task it waits for, is a link: VS Code draws a Button as a filled blue box)
+//   Details: the labelled rows the terminal and OpenCode show (detailRows: Status, Stage, Now, Role, Kind, From, Why,
+//   Files, Into, After, …, Tries) as a two-column label / value grid that wraps (T-699); each task it waits for is a link
+//   Answer · What to do (Markdown) · Changes · History (a timeline on one rail, newest first, the newest HISTORY_FIRST
+//   with a "Show all" button) · Report (Markdown, its first part with a "Show all" button), then the Time and cost fold
+// (a fold and a task id are links: VS Code draws a Button as a filled blue box)
 // No key hints: every action is a button.
 import type { SymccTask } from '../../../types'
-import { type DetailRow, type DiffFile, type Seg, STATUS_BADGE, STATUS_MARK, statusMark, STATUS_WORD, originSegs, originOf, crossBranchNotes, intoOf, roleOf, findRole, kindMark, fmtDuration, fmtRun, fmtTotal, sumRuns, STATE_LABEL, taskActions, type TaskActionId, type BoardTask, statusBadge, taskStage, stageSegs, type StageMark } from '../../board'
-import { squash } from '../../core/text'
+import { type DetailRow, type DiffFile, type Seg, findRole, fmtRun, fmtTotal, sumRuns, taskActions, type TaskActionId, type BoardTask } from '../../board'
 import type { TaskSection } from '../../core/task-sections'
 import { historyEvent, historyTime, HISTORY_COLOR } from '../../core/history'
 import { S } from '../../app/state'
-import { when } from '../../core/days'
 import type { PaneParts } from './parts'
 import type { $ } from '../panel'
-import { vsCallout, vsChoices, vsFold, vsFooter, vsHref, vsLink, mdLink, vsSection, vsTags } from './vscode'
+import { vsCallout, vsChoices, vsFold, vsFooter, vsHref, vsLink, mdLink, vsSection } from './vscode'
 
 /** How many lines of a report VS Code's task page shows before its "Show all" button. */
 export const REPORT_FIRST_LINES = 12
+/** How many history events (the newest) VS Code's task page shows before its "Show all" button. */
+export const HISTORY_FIRST = 10
+/** The width of the Details grid's label column, in cells: the longest label ("Research") and a space. */
+export const VS_LABEL_WIDTH = 'Research'.length + 1
+
+/** The key of a Details row on VS Code's task page: "vs-row-status", "vs-row-stage"; a row with no label (one that
+ *  goes on from the row above) gets the label above it and its place: "vs-row-after-1". */
+export function vsRowKeys(rows: readonly DetailRow[]): string[] {
+  let label = ''
+  const seen = new Map<string, number>()
+  return rows.map(r => {
+    if (r.label) label = r.label
+    const name = label.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'row'
+    const n = seen.get(name) ?? 0
+    seen.set(name, n + 1)
+    return n ? `vs-row-${name}-${n}` : `vs-row-${name}`
+  })
+}
 
 /** The first part of a report: its first `n` lines (a code block left open there closed), and how many lines are left. */
 export function reportPart(body: string, n = REPORT_FIRST_LINES): { text: string; more: number } {
@@ -158,42 +176,12 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
     </Box>
   )
 
-  // the top: the id and the title large and bold, the kind, role, try and time as small tags, then the Status and Stage lines
-  const role = findRole(S.roles, roleOf(t))?.name ?? roleOf(t)
-  const kind = kindMark(t)
+  // the top: the id and the title, large and bold; the status and the rest are in the Details grid below
   const total = sumRuns(t.runs, nowMs)
-  const tags = [kind, role, t.attempts ? `try ${t.attempts}` : '', t.runs?.length ? fmtDuration(total.ms) : '', x.agentId ? 'a worker is on it now' : ''].filter(Boolean)
-  const statusWord = 'answered: read it'
-  // the Status line: the state and its time ("▶ doing · 48m", T-647), as the Status row on the
-  // terminal and OpenCode pages; under it the Stage stepper names the step (worker ✓ → ● checker → …)
-  // (an approve the page started shows doing at once, not "ready for review")
-  const badge = statusBadge(t as BoardTask, nowMs, undefined, !!x.merging, 'state')
-  const stage = taskStage(t as BoardTask, nowMs, pane.v, !!x.merging)
-  const vsStage = (marks: StageMark[]) => (
-    <Box key="vs-stage" flexDirection="row" flexWrap="wrap" columnGap={1}>
-      <Text key="vs-stage-label" color={C('inactive')}>Stage</Text>
-      {stageSegs(marks).map((g, i) => (
-        <Text key={`vs-stage-${i}`} bold={g.bold} color={C(g.color)}>{g.text.trim()}</Text>
-      ))}
-    </Box>
-  )
-  const shown = t.status
   const head = (
     <Box key="vs-head" flexDirection="column">
       <Text key="vs-id" bold size="title" color={C('claude')}>{t.id}</Text>
       <Text key="vs-title" wrap="wrap" bold size="title" color={C('text')}>{t.title}</Text>
-      {tags.length ? (
-        <Box key="vs-tags-row" flexDirection="row" flexWrap="wrap" columnGap={1}>
-          {vsTags(vs, 'vs-tags', tags)}
-        </Box>
-      ) : null}
-      {/* T-693: no status badge under the title; this page has no Status row in its sections, so a labelled
-          Status line (as the terminal's details row) sits with the Stage line */}
-      <Box key="vs-status" flexDirection="row" flexWrap="wrap" columnGap={1}>
-        <Text key="vs-status-label" color={C('inactive')}>Status</Text>
-        <Text key="vs-status-text" bold color={C(x.answered ? 'success' : badge.color)}>{x.answered ? `${statusMark({ ...t, status: shown })} ${statusWord}` : badge.text}</Text>
-      </Box>
-      {stage ? vsStage(stage) : null}
     </Box>
   )
   const typingBox = S.rejecting?.task === t.id && x.inReview && !x.merging
@@ -286,57 +274,42 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
       ])
     : null
 
-  // where it came from: who, why, the owner's words, what was seen, and the note
-  const nowNote = x.rows.find(r => r.label === STATE_LABEL)?.segs.map(g => g.text).join('') ?? ''
-  const og = originOf(t)
-  const origin = section('origin', 'Why / where it came from', [
-    segs('vs-from', [{ text: 'From ', color: 'inactive' }, ...originSegs(t)]),
-    og?.why ? plain('vs-why', squash(og.why)) : null,
-    og?.by === 'owner' && og.request?.trim() ? plain('vs-request', `“${squash(og.request)}”`, 'text', { italic: true }) : null,
-    og?.evidence ? plain('vs-seen', `Seen: ${squash(og.evidence)}`, 'inactive') : null,
-    // the Now row of the shared rows (detailRows): in a session that doesn't drive the board, "runs in the other session"
-    nowNote ? plain('vs-note', `${STATE_LABEL}: ${nowNote}`, 'inactive', { italic: true }) : null,
-  ])
-
-  const details = section('details', 'What to do', [t.details.trim() ? <Markdown key="vs-details-md" text={t.details.trimEnd()} /> : plain('vs-details-none', '(no details)', 'inactive')])
-
-  // the rows the sections above don't cover: the branch, the commits and research notes
-  const more: DetailRow[] = []
-  let label = ''
-  for (const r of x.rows) {
-    if (r.label) label = r.label
-    if (['Branch', 'Commits', 'Research'].includes(label)) more.push(r)
+  // the Details (T-699): the same labelled rows as the terminal's and OpenCode's task pages (detailRows, in their
+  // order and colours), as a two-column grid: the label on the left in a fixed column, the value beside it, wrapped
+  // whole; a row with no label goes on under the one above. A task it waits for (an After row) is a link that opens it.
+  const detailsSec = sec('details')
+  const rowKeys = vsRowKeys(x.rows)
+  let rowLabel = ''
+  const gridRow = (r: DetailRow, i: number) => {
+    if (r.label) rowLabel = r.label
+    const key = rowKeys[i]!
+    const dep = rowLabel === 'After' && r.segs[0] && t.after.includes(r.segs[0].text) ? v.tasks.find(d => d.id === r.segs[0]!.text) : undefined
+    const value = dep ? (
+      <Box key={`${key}-value`} flexDirection="row" flexWrap="wrap" columnGap={1} flexGrow={1} flexShrink={1}>
+        {vsLink(vs, `after-${dep.id}`, `**${mdLink(dep.id, vsHref('task', dep.id))}**`, [[vsHref('task', dep.id), on.open(dep.id)]])}
+        {segs(`${key}-rest`, r.segs.slice(1).map((g, j) => (j === 0 ? { ...g, text: g.text.trimStart() } : g)).filter(g => g.text))}
+      </Box>
+    ) : (
+      <Box key={`${key}-value`} flexDirection="column" flexGrow={1} flexShrink={1}>
+        {segs(`${key}-text`, r.segs)}
+      </Box>
+    )
+    return (
+      <Box key={key} flexDirection="row">
+        <Box key={`${key}-label`} width={VS_LABEL_WIDTH} flexShrink={0}>
+          <Text key={`${key}-label-text`} color={C('inactive')}>{r.label}</Text>
+        </Box>
+        {value}
+      </Box>
+    )
   }
-  const files = fold('files', 'Files it may change', t.files.length || 'any', [
-    ...(t.files.length ? t.files.map(f => plain(`vs-file-${f}`, f, 'autoAccept')) : [plain('vs-files-any', 'anywhere in the project', 'inactive')]),
-    segs('vs-into', [{ text: 'merges into ', color: 'inactive' }, { text: intoOf(t), color: 'ide', bold: true }]),
-    ...more.map((r, i) => segs(`vs-more-${i}`, [...(r.label ? [{ text: `${r.label}: `, color: 'inactive' }] : []), ...r.segs])),
+  const detailGrid = section('details', detailsSec?.title ?? 'Details', [
+    <Box key="vs-details-grid" flexDirection="column">
+      {x.rows.map(gridRow)}
+    </Box>,
   ])
 
-  // the tasks it waits for: each id a link that opens it, its status and title beside
-  const waits = t.after.length
-    ? fold('after', 'Waits for', t.after.length, [
-        ...t.after.map(id => {
-          const dep = v.tasks.find(d => d.id === id)
-          const gone = !dep && (v.archived_done ?? []).includes(id)
-          const state = dep ? `${statusMark(dep)} ${STATUS_WORD[dep.status]}` : gone ? `${STATUS_MARK.done} done (archived)` : 'missing'
-          return (
-            <Box key={`vs-after-${id}`} flexDirection="column">
-              <Box key={`vs-after-${id}-top`} flexDirection="row" gap={1}>
-                {dep ? (
-                  vsLink(vs, `after-${id}`, `**${mdLink(id, vsHref('task', id))}**`, [[vsHref('task', id), on.open(id)]])
-                ) : (
-                  <Text key="id" bold color={C('inactive')}>{id}</Text>
-                )}
-                <Text key="state" color={C(dep ? STATUS_BADGE[dep.status] : gone ? STATUS_BADGE.done : 'error')}>{state}</Text>
-              </Box>
-              {dep ? <Box key={`vs-after-${id}-title`} paddingLeft={2}>{plain('title', dep.title, 'inactive')}</Box> : null}
-            </Box>
-          )
-        }),
-        ...crossBranchNotes(t, v.tasks).map((n, i) => plain(`vs-cross-${i}`, `⚠ ${n}`, 'warning')),
-      ])
-    : null
+  const details = section('what', 'What to do', [t.details.trim() ? <Markdown key="vs-details-md" text={t.details.trimEnd()} /> : plain('vs-details-none', '(no details)', 'inactive')])
 
   // a task in review: the files it changed, each opening its diff
   const changesSec = sec('changes')
@@ -358,32 +331,52 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
       ])
     : null
 
-  // the history as a timeline (T-512), newest first: the same events and marks as the terminal page (historyEvent),
-  // each mark in its tone, when it happened (T-522, historyTime) and its try, then the words, wrapped whole; a dim connector (│) between events
+  // the history as a timeline (T-512, T-699), newest first: the same events and marks as the terminal page (historyEvent).
+  // A left rail: each event is a row, its mark (in its tone) at the top of a one-cell column and, under it, a thin
+  // line (a Box that grows to the event's whole height, not a "│" row of its own) that meets the next event's mark, so
+  // the marks sit on one unbroken line; the oldest event has none below it. To the right: when it happened
+  // (T-522, historyTime) and its try, then the words, wrapped whole. A long history shows its newest HISTORY_FIRST
+  // events and a "Show all (N more)" button.
   const events = [...t.history].reverse().map(historyEvent)
+  const historyAll = isOpen('history-all')
+  const shownEvents = historyAll ? events : events.slice(0, HISTORY_FIRST)
+  const hidden = events.length - shownEvents.length
   const historySec = sec('history')
   const history = historySec
-    ? section('history', historySec.title, events.flatMap((e, i) => {
-        const stamp = [historyTime(e.at, nowMs), e.label].filter(Boolean).join(' · ')
-        const resultColor = e.tone === 'good' || e.tone === 'bad' ? HISTORY_COLOR[e.tone] : 'text'
-        const event = (
-          <Box key={`vs-history-${i}`} flexDirection="row" gap={1}>
-            <Text key="mark" bold color={C(HISTORY_COLOR[e.tone])}>{e.mark}</Text>
-            <Box key="body" flexDirection="column" flexShrink={1}>
-              {stamp ? <Text key="when" wrap="wrap" size="caption" bold color={C('inactive')}>{stamp}</Text> : null}
-              <Text key="text" wrap="wrap">
-                <Text color={C(e.tone === 'bad' && !e.result ? 'error' : 'text')}>{e.said}</Text>
-                {e.result ? <Text color={C(resultColor)}>{` → ${e.result}`}</Text> : null}
-              </Text>
-            </Box>
+    ? section('history', historySec.title, [
+        <Box key="vs-history" flexDirection="column">
+          {shownEvents.map((e, i) => {
+            const stamp = [historyTime(e.at, nowMs), e.label].filter(Boolean).join(' · ')
+            const resultColor = e.tone === 'good' || e.tone === 'bad' ? HISTORY_COLOR[e.tone] : 'text'
+            // the line goes on below the last shown event when older ones are hidden behind "Show all"
+            const line = i < shownEvents.length - 1 || hidden > 0
+            return (
+              <Box key={`vs-history-${i}`} flexDirection="row" columnGap={1}>
+                <Box key="rail" flexDirection="column" alignItems="center" width={1} flexShrink={0}>
+                  <Text key="mark" bold color={C(HISTORY_COLOR[e.tone])}>{e.mark}</Text>
+                  {line ? <Box key="line" flexGrow={1} width={1} minHeight={1} backgroundColor={C('subtle')} /> : null}
+                </Box>
+                <Box key="body" flexDirection="column" flexGrow={1} flexShrink={1} paddingBottom={line ? 1 : 0}>
+                  {stamp ? <Text key="when" wrap="wrap" size="caption" bold color={C('inactive')}>{stamp}</Text> : null}
+                  <Text key="text" wrap="wrap">
+                    <Text color={C(e.tone === 'bad' && !e.result ? 'error' : 'text')}>{e.said}</Text>
+                    {e.result ? <Text color={C(resultColor)}>{` → ${e.result}`}</Text> : null}
+                  </Text>
+                </Box>
+              </Box>
+            )
+          })}
+        </Box>,
+        events.length > HISTORY_FIRST ? (
+          <Box key="vs-history-buttons" flexDirection="row">
+            <Button key="history-all" label={historyAll ? 'Show less' : `Show all (${hidden} more)`} variant="secondary" onPress={toggle('history-all')} />
           </Box>
-        )
-        return i === events.length - 1 ? [event] : [event, <Text key={`vs-history-${i}-line`} color={C('inactive')}>│</Text>]
-      }))
+        ) : null,
+      ])
     : null
 
+  // the tries, one line each, and their total (the dates are on the Status row)
   const time = fold('time', 'Time and cost', t.runs?.length ?? 0, [
-    plain('vs-dates', `added ${when(t.created_at)} · changed ${when(t.updated_at)}`, 'inactive'),
     ...(t.runs ?? []).map((r, i) => plain(`vs-run-${i}`, fmtRun(r, i, nowMs), r.ended ? 'inactive' : 'success')),
     t.runs?.length ? plain('vs-total', `total: ${fmtTotal(total)}`, 'text', { bold: true }) : plain('vs-no-runs', 'no tries yet', 'inactive'),
   ])
@@ -427,14 +420,12 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
       {actionRow}
       {rejectBox}
       {roleBox}
+      {detailGrid}
       {answer}
-      {origin}
       {details}
       {changes}
       {history}
       {report}
-      {files}
-      {waits}
       {time}
       {vsFooter(vs, 'task-keys')}
     </Box>
