@@ -185,9 +185,10 @@ export function suggestedText(id: string, lines: readonly string[], tool: string
 /** An org-mem line for lesson `text` on day `date`: "- 2026-11-20: lesson". */
 export const orgMemLine = (date: string, text: string) => `- ${date}: ${text}`
 
-/** A note the lead gives, made one plain line (list mark and any "2026-11-20:" front off, cut at LEARNED_LINE_CHARS); '' when it is empty, secret-looking or file contents. */
+/** A note the lead gives, made one plain line (list mark, any old "T-12 " task id and any "2026-11-20:" front off, cut at LEARNED_LINE_CHARS); '' when it is empty, secret-looking or file contents. */
 export function cleanNote(raw: string): string {
-  return cleanLearned([lessonOf(String(raw ?? '').replace(/\s+/g, ' ').trim().replace(/^(?:[-*•+]|\d+[.)])\s+/, ''))])[0] ?? ''
+  const s = String(raw ?? '').replace(/\s+/g, ' ').trim().replace(/^(?:[-*•+]|\d+[.)])\s+/, '').replace(/^T-\d+\s+/, '')
+  return cleanLearned([lessonOf(s)])[0] ?? ''
 }
 
 /** Org-mem `lines` joined back into the file's text ('' with none). */

@@ -69,6 +69,8 @@ test('T-632: the lead adds notes as "- date: lesson" (no task id); a near repeat
   expect(again.text).toBe(`${one.text}- ${D}: The guard refuses a repo in the project\n`)
   // two near-same notes in one add: only the first
   expect(orgMemAdd('', ['snapshots are in tests/', 'Snapshots are in tests/.'], D).added).toEqual(['snapshots are in tests/'])
+  // a note copied from an old line keeps no task id (or old date)
+  expect(orgMemAdd('', ['- T-12 2026-11-19: copied old note', 'T-3 another old note'], D).text).toBe(`- ${D}: copied old note\n- ${D}: another old note\n`)
   const full = Array.from({ length: ORG_MEM_MAX_LINES }, (_, i) => `- ${D}: lesson number ${i} about thing${i}`).join('\n') + '\n'
   const r = orgMemAdd(full, ['brand new trap in the merge line'], D)
   expect(r.full).toBe(true)
