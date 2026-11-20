@@ -1206,7 +1206,7 @@ test('T-580: OpenCode\'s task page has the same sections as Claude Code\'s (core
   const report = { file: '.symcc/reports/T-2-try-2.md', text: 'Fixed it.\n\nAll tests pass.' }
   const t2 = f.view.tasks.find(t => t.id === 'T-2')!
   const lines = page('T-2', report).lines.map(lineText)
-  const model = taskSections(t2, { width: 100, nowMs: NOW, detail: { roles: [], all: f.view.tasks, when }, texts: { [report.file]: report.text }, changes: f.view.changes!['T-2']!, target: 'main', dataDir: '.symcc' })
+  const model = taskSections(t2, { width: 100, nowMs: NOW, detail: { roles: [], all: f.view.tasks, when }, texts: { [report.file]: report.text }, changes: f.view.changes!['T-2']!, target: 'main', dataDir: '.symcc', changesHint: '  d (or a click on a file) shows the changes' })
   for (const s of model) {
     const at = lines.indexOf(`▍${s.title}`)
     expect(at).toBeGreaterThan(0)
@@ -1215,6 +1215,9 @@ test('T-580: OpenCode\'s task page has the same sections as Claude Code\'s (core
   expect(lines).toContain('  Fixed it.')
   expect(lines).toContain('  folder: .symcc/worktrees/T-2 · edit files there, then approve (the tests run again)')
   expect(lines).toContain('• Fix src/a.ts')
+  // the hint under the files says what this page does (Enter does nothing on an open task page here)
+  expect(lines).toContain('  d (or a click on a file) shows the changes')
+  expect(lines.some(l => l.includes('Enter on a file'))).toBe(false)
   // a changed file's line: a click shows the changes (the d key)
   const d = page('T-2')
   expect(d.hits[d.lines.map(lineText).findIndex(l => l.startsWith('src/a.ts'))]).toEqual({ key: 'd' })

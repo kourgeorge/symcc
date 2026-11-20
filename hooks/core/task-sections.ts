@@ -46,6 +46,8 @@ export type TaskSectionFacts = {
   target?: string
   /** the data folder, as the page names the task's own folder under it (".symcc": ".symcc/worktrees/T-3") */
   dataDir?: string
+  /** the hint under the changed files: how this page shows a diff (default: Claude Code's, Enter on a file or d) */
+  changesHint?: string
   /** the number keys answer a question, so the report's tries get none */
   numberKeysTaken?: boolean
 }
@@ -166,7 +168,7 @@ export function taskSections(t: SymccTask, f: TaskSectionFacts): TaskSection[] {
         ...(f.changes.error ? [plainLine(`  Could not read the changes: ${f.changes.error}`, 'error')] : []),
         ...(!f.changes.error && !files.length ? [plainLine('  no changes', 'inactive')] : []),
         ...files.map((x): SectionLine => ({ segs: changedFileSegs(x, fileWidth), action: { diff: x.file }, key: `file:${x.file}` })),
-        plainLine('  Enter on a file shows its diff · d all files', 'inactive'),
+        plainLine(f.changesHint ?? '  Enter on a file shows its diff · d all files', 'inactive'),
       ],
     })
   }

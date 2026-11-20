@@ -776,6 +776,8 @@ function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = ''
     changes: v.changes?.[t.id] ?? null,
     target: intoOf(t),
     dataDir: dataDir(f.name || DEFAULT_NAME),
+    // here a click on a file, like d, shows all the task's changes (there is no one-file diff)
+    changesHint: '  d (or a click on a file) shows the changes',
   })
   for (const sec of sections) {
     b.add([{ text: ' ', color: 'text' }])
