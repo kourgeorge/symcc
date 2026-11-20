@@ -22,7 +22,7 @@
 // run without them. The names and shapes below are @opencode/plugin 2.3.0's tui Context (only what is used).
 import { DEFAULT_NAME, dataDir } from '../name'
 import { VIEW_FILE, parseViewFile, bandDraw, panelLines, panelKeys, panelTaskActions, approveInProgress, panelRoleChoices, TASK_ACTION_COMMANDS, LETTER_KEYS, type LetterKey, hasPage, answerOptions, actionCommand, moveCursor, OWN_ANSWER, GROUPS_OPEN, groupOf, groupId, scoutRunsIn, settingsPlace, orgMemNoteOf, SETTINGS_OPEN, settingGroupOf, settingGroupId, PANEL_TABS, CHOICE_KEYS, approveSent, type ApproveSent, type ChoiceKey, type ViewFile, type Line, type PanelAction, type PanelHit, type PanelKey, type PanelGroup, type PanelTab, type BandHit } from './board-view'
-import { SETTING_GROUPS, isScoutRunReport, taskReports, parseSettingValue, settingChoices, settingInfo, settingValue, isSettingPage, everyText, everyMinutesOf, type SettingName, type ScoutEditField } from '../board'
+import { SETTING_GROUPS, isScoutRunReport, taskReports, taskActions, type TaskAction, type TaskActionId, parseSettingValue, settingChoices, settingInfo, settingValue, isSettingPage, everyText, everyMinutesOf, type SettingName, type ScoutEditField } from '../board'
 import type { SymccScout } from '../../types'
 import { orgMemDeleteAsk, orgMemFile, orgMemNoteKey } from '../core/org-mem'
 import { PARTS_KEY, safePartsFile, viewStubFilled, withViewParts } from '../core/board-parts'
@@ -575,9 +575,32 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     // the task's own actions (core's taskActions, panelTaskActions), each by its key, sent as a slash command
     const t = f?.view.tasks.find(x => x.id === open)
     const act = t ? panelTaskActions(t, approveInProgress(f, t, approving(), now())).find(x => x.key === key) : undefined
-    const command = act ? TASK_ACTION_COMMANDS[act.id] : undefined
+    if (act) return doAction(act, sessionID)
+    // a number key picks that choice of the page, as a click on its line does (T-583)
+    const n = CHOICE_KEYS.indexOf(key as ChoiceKey)
+    if (n >= 0) return pick(n + 1, sessionID)
+    if (key !== 'a' || !panelKeys(f, open).some(k => k.word === 'answer')) return
+    const choices = answerOptions(f, open)
+    const picked = choices.length > 1 ? await ctx.ui.dialog.select({ title: `Answer ${open}`, options: choices.map(c => ({ title: c, value: c })) }) : OWN_ANSWER
+    if (picked) await answerWith(picked, sessionID)
+  }
+  /** A click on a task page's button without a key (T-680: Drop in review): the open task's action `id`, when its
+   *  page still offers it. */
+  const pressAction = (id: TaskActionId, sessionID: string) => {
+    const f = file()
+    const t = tab() === 'tasks' ? f?.view.tasks.find(x => x.id === opened()) : undefined
+    const act = t ? taskActions(t, { merging: approveInProgress(f, t, approving(), now()) }).find(x => x.id === id && TASK_ACTION_COMMANDS[x.id]) : undefined
+    if (act) return doAction(act, sessionID)
+  }
+  /** Sends the open task's action `act` (core's taskActions) as its slash command (TASK_ACTION_COMMANDS); reject,
+   *  ask more, drop and role ask first. */
+  const doAction = async (act: TaskAction, sessionID: string) => {
+    const f = file()
+    const open = opened()
+    const t = f?.view.tasks.find(x => x.id === open)
+    const command = TASK_ACTION_COMMANDS[act.id]
     if (command === 'reject') {
-      const ask = act!.id === 'ask-more'
+      const ask = act.id === 'ask-more'
         ? { title: `Ask more on ${open}`, description: 'What else to find out; it gets a fresh try with your question', placeholder: 'your follow-up question' }
         : { title: `Reject ${open}`, description: 'What is wrong and what to change, for the next worker', placeholder: 'the reason' }
       const reason = (await ctx.ui.dialog.prompt(ask))?.trim()
@@ -604,13 +627,6 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     }
     if (command === 'review') return send(sessionID, { kind: 'task', id: open, verb: 'review', arg: t!.needs_review ? 'off' : 'on' })
     if (command) return send(sessionID, { kind: 'task', id: open, verb: command })
-    // a number key picks that choice of the page, as a click on its line does (T-583)
-    const n = CHOICE_KEYS.indexOf(key as ChoiceKey)
-    if (n >= 0) return pick(n + 1, sessionID)
-    if (key !== 'a' || !panelKeys(f, open).some(k => k.word === 'answer')) return
-    const choices = answerOptions(f, open)
-    const picked = choices.length > 1 ? await ctx.ui.dialog.select({ title: `Answer ${open}`, options: choices.map(c => ({ title: c, value: c })) }) : OWN_ANSWER
-    if (picked) await answerWith(picked, sessionID)
   }
   /** Answers the open task or question with `picked` (OWN_ANSWER: the owner types it first), and the page says so. */
   const answerWith = async (picked: string, sessionID: string) => {
@@ -632,6 +648,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     if ('key' in hit) return press(hit.key, sessionID)
     if ('tab' in hit) return showTab(hit.tab)
     if ('choice' in hit) return pick(hit.choice, sessionID)
+    if ('action' in hit) return pressAction(hit.action, sessionID)
     const ids = draw().ids
     if ('scout' in hit) {
       if (ids.indexOf(hit.scout) >= 0) setCursor(ids.indexOf(hit.scout))
