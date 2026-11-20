@@ -7,15 +7,16 @@ import { test, expect } from 'bun:test'
 import { readFile, readdir, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
 import { runCommand, PLUGIN_ROOT } from '../host'
-import { claudePermissions, claudeResult, editRule } from '../../../hooks/process/claude-runner'
+import { claudePermissions, claudeResult, editRule, claudeRunner } from '../../../hooks/process/claude-runner'
 import { withBasePrompt, processAgents, type AgentRunner } from '../../../hooks/process/agents'
 import { PROCESSES_FILE, entriesText, parseEntries } from '../../../hooks/process/record'
 import { nodeProcessSystem, runsProgram, elapsedSeconds } from '../system'
 import { nodeFs } from '../host'
-import { openSession, leadTool, closeSession } from '../session'
+import { openSession, leadTool, closeSession, settle } from '../session'
 import { toolCall, notLeadText } from '../../../hooks/app/symcc'
 import { TOOLS } from '../../../hooks/app/tools'
-import { toolName } from '../../../hooks/app/state'
+import { toolName, starting } from '../../../hooks/app/state'
+import { pump } from '../../../hooks/app/workers'
 import { WORKER_BASE, SCOUT_BASE, NO_TOOLS_ASK } from '../../../hooks/core/prompts'
 import { ASK_LINE, ASK_TOOL } from '../../../hooks/core/ask'
 import CHANGE from '../../../prompts/change'
@@ -256,7 +257,8 @@ test('a tick that stops waiting stops its claude -p worker: the task goes back t
     await writeFile(`${repo}/.gitignore`, '.symcc/\n')
     await git('add', '.')
     await git('commit', '-qm', 'init')
-    const cli = (env: Record<string, string>, ...args: string[]) => runCommand(['bun', MAIN, '--root', repo, '--claude', FAKE, ...args], { cwd: repo, env, timeoutMs: 120_000 })
+    // the longest tick waits 3 minutes, then stops its worker
+    const cli = (env: Record<string, string>, ...args: string[]) => runCommand(['bun', MAIN, '--root', repo, '--claude', FAKE, ...args], { cwd: repo, env, timeoutMs: 300_000 })
     expect((await cli({}, 'add', 'Say hello', '--files', 'hello.txt')).stdout).toContain('added T-1')
 
     // the fake worker waits 600 s before it writes, far past the tick's wait, however busy the machine is
@@ -264,9 +266,11 @@ test('a tick that stops waiting stops its claude -p worker: the task goes back t
     const board = async () => JSON.parse(await readFile(`${repo}/.symcc/board.json`, 'utf8')).tasks[0]
     // T-524: on a busy machine the worker's start (its worktree, its settings) can outlast the tick's wait, and then no
     // worker process ever ran, so there was nothing to stop. That tick must also leave the task "todo" with no worker
-    // (no pid, no edit); the next tick waits longer, until one stops a worker that really ran.
+    // (no pid, no edit); the next tick waits longer, until one stops a worker that really ran. T-652: a tick that stops
+    // waiting while the start is still on its way waits for it in closeSession, so the task is "todo" here too (the
+    // T-652 test below checks that on its own, without the clock).
     let tick = { stdout: '', stderr: '' }
-    for (const minutes of ['0.05', '0.25', '1']) {
+    for (const minutes of ['0.05', '0.25', '1', '3']) {
       tick = await cli({ FAKE_SLEEP: '600', FAKE_PID: pidFile }, '--wait-minutes', minutes, 'tick')
       expect(tick.stdout).toContain('stopped waiting')
       if (tick.stderr.includes('stopped T-1')) break
@@ -288,6 +292,53 @@ test('a tick that stops waiting stops its claude -p worker: the task goes back t
   } finally {
     // a failed stop must not leave the fake's sleep running after the test
     const group = Number((await readFile(`${repo}/.symcc/fake.pid`, 'utf8').catch(() => '')).trim())
+    if (group > 1) await runCommand(['sh', '-c', 'kill -s KILL -- -"$1"', 'sh', String(group)])
+    await rm(repo, { recursive: true, force: true })
+  }
+}, 600_000)
+
+test('T-652: a session that closes while a worker start is still on its way ends with the task back in todo and no worker running', async () => {
+  const repo = await mkdtemp('/tmp/symcc-node-close-')
+  const pidFile = `${repo}/.symcc/fake.pid`
+  const env = { FAKE_SLEEP: process.env.FAKE_SLEEP, FAKE_PID: process.env.FAKE_PID }
+  try {
+    const git = (...args: string[]) => runCommand(['git', '-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd: repo })
+    await git('init', '-q', '-b', 'main')
+    await writeFile(`${repo}/.gitignore`, '.symcc/\n')
+    await git('add', '.')
+    await git('commit', '-qm', 'init')
+    // the fake worker, if it gets to start, waits 600 s before it writes, and leaves its process group's id
+    process.env.FAKE_SLEEP = '600'
+    process.env.FAKE_PID = pidFile
+    const s = await openSession({ root: repo, runner: claudeRunner(nodeProcessSystem, { bin: FAKE }), say: () => undefined, sessionId: 'node-t652' })
+    let closed = false
+    try {
+      expect(await leadTool(s, 'add', { title: 'Say hello', details: 'Done when: hello.txt says hello.', files: ['hello.txt'], why: 'a test', origin_by: 'owner' })).toContain('T-1')
+      expect(await settle(s, false)).toBe(true)
+      const board = async () => JSON.parse(await readFile(`${repo}/.symcc/board.json`, 'utf8')).tasks[0]
+      expect((await board()).status).toBe('todo')
+      // a tick's start, as settle(s, true) begins it, but the session closes as soon as the task is claimed: the start
+      // is still on its way then (its worker isn't spawned or not yet known), as when a busy tick stops waiting
+      s.working = true
+      const started = pump(s.host).catch(() => undefined)
+      for (const end = Date.now() + 120_000; (await board()).status !== 'doing' && Date.now() < end; ) await new Promise<void>(r => void setTimeout(r, 5))
+      expect((await board()).status).toBe('doing')
+      await closeSession(s)
+      closed = true
+      // right when closeSession is done (the CLI ends here): no start left, the task is back in todo, and no worker runs
+      expect(starting.size).toBe(0)
+      const t = await board()
+      expect(t.status).toBe('todo')
+      const group = Number((await readFile(pidFile, 'utf8').catch(() => '')).trim())
+      if (group > 1) expect(await groupGone(group)).toBe(true)
+      await started
+    } finally {
+      if (!closed) await closeSession(s).catch(() => undefined)
+    }
+  } finally {
+    for (const [k, v] of Object.entries(env)) if (v === undefined) delete process.env[k]
+    else process.env[k] = v
+    const group = Number((await readFile(pidFile, 'utf8').catch(() => '')).trim())
     if (group > 1) await runCommand(['sh', '-c', 'kill -s KILL -- -"$1"', 'sh', String(group)])
     await rm(repo, { recursive: true, force: true })
   }
@@ -331,6 +382,20 @@ test('T-474: a worker process left running by a CLI that was killed is in the re
     // the record has the worker (written when it started)
     let entries = parseEntries(await readFile(recordFile, 'utf8').catch(() => null))
     for (const end = Date.now() + 10_000; !entries.length && Date.now() < end; await new Promise<void>(r => void setTimeout(r, 100))) entries = parseEntries(await readFile(recordFile, 'utf8').catch(() => null))
+    // T-652: killed while it holds board.lock (it writes the board around its worker's start), the lock would look
+    // fresh for 30 s (LOCK_STALE_MS), so the runs below couldn't take it and wouldn't drive (see the T-652 report).
+    // So the CLI is frozen, its own commands (an `ln` taking the lock) are let finish, and it is killed only when it
+    // holds no lock; else it runs on a moment and is looked at again.
+    const lockFile = `${repo}/.symcc/board.lock`
+    // the CLI's child processes apart from the worker
+    const commands = async () => (await runCommand(['pgrep', '-P', String(tick.pid)])).stdout.split(/\s+/).filter(p => p && p !== String(group))
+    for (const end = Date.now() + 120_000; Date.now() < end; await new Promise<void>(r => void setTimeout(r, 20))) {
+      tick.kill('SIGSTOP')
+      for (const until = Date.now() + 10_000; Date.now() < until && (await commands()).length; ) await new Promise<void>(r => void setTimeout(r, 20))
+      if ((await readFile(lockFile, 'utf8').catch(() => null)) === null) break
+      tick.kill('SIGCONT')
+    }
+    expect(await readFile(lockFile, 'utf8').catch(() => 'none')).toBe('none')
     tick.kill('SIGKILL')
     await tickClosed
     expect(entries.map(e => [e.pid, e.task, e.folder?.endsWith('/.symcc/worktrees/T-1'), e.command])).toEqual([[group, 'T-1', true, FAKE]])
