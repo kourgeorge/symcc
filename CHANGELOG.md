@@ -2,11 +2,23 @@
 
 When a set of user-facing changes is ready to release, bump the version in both `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` and add an entry here.
 
-## Unreleased
+## 0.5.9 (2026-11-20)
+
+### Added
+- The lead asks every question both on the board and with the chat pop-up (AskUserQuestion), with the same options (at most 4 in the pop-up: the first 3 plus "the rest on the board").
+- OpenCode board: Roles and Kinds pages and scout editing; click the strip above the prompt to open the board (and a task row to open its page); click an answer choice (or press its number) to answer; Settings groups open and close; every task action, through new `/symcc-task T-5 pause | resume | retry | drop [reason] | merged | review on|off | stash | todo | role <name> | note` commands (they work in Claude Code too).
+- OpenCode's task page has the same sections as Claude Code's (Why it failed, Answer, Details, Changes, What to do, History, Report, Runs), built from one shared model.
+- The node host's process runner is shared (`hooks/process/`), with a record of running worker processes (`.symcc/processes.json`, next to board.json) so a fresh start stops leftover workers; a process-run agent's prompt names only the tools it has.
 
 ### Changed
+- The band above the prompt starts "𝄞 symcc" (no "board", no version), and names the project only when it isn't called symcc.
+- One shared list of task-page actions and one "what does it ask" rule for the terminal, VS Code and OpenCode: the key hints now show every button that has a key; a waiting task with no question shows its note or "it waits for your answer".
+- Task times use one shared format, so OpenCode shows local time (it showed UTC).
 - The two "off"s have different names now. `/symcc-off` and `/symcc-on` are now `/symcc-disable` and `/symcc-enable` (symcc steps aside entirely; the texts say "symcc is disabled · /symcc-enable to turn it back on"). The old commands are gone. The board mode `off` is now `paused` (modes `paused` / `review` / `auto`, shown `⏸ paused`; `/symcc-mode paused`). A board saved with mode `off` is changed to `paused` once.
 - Workers and checkers may run git writes in throwaway repositories under `/tmp` (or the system temp folder) named by plain literal paths: `git init /tmp/x`, `git -C /tmp/x commit -m m`, `cd /tmp/x && git commit -am m`. Git aimed at the project, `.symcc/` or a worktree, or at a folder given by a variable, `$(mktemp -d)`, `~` or `..`, is still refused, as are `--global` / `--system` settings (and their shortenings such as `--glob`), a `config -f` file outside the scratch folder, a `cd` with a word before it (`builtin cd`), and quoted commands handed to git (`rebase -x '...'`, `alias.z '!...'`), and scouts stay read-only. A simple rule against honest mistakes, not a security boundary: deliberate shell tricks are the accepted risk (see the guide).
+
+### Fixed
+- OpenCode: `/symcc-on` (now `/symcc-enable`) on a paused board says why no work starts; symcc's first-start notice no longer causes an "EPIPE: broken pipe" unhandled rejection; the task's role and kind show on its page; `b` after opening a task from the strip lands on that task.
 
 ## 0.5.8 (2026-11-20)
 
