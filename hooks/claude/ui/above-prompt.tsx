@@ -1,7 +1,7 @@
 // The band above the prompt: the board in one or a few lines.
 import { drawNow } from './now'
 import type { MatchedHook } from 'claude-code'
-import { statusCounts, newestFirst, bandLeads, bandNote, boardBrand, boardWhere, modeLabel, modeOf, planBandText, withCrew, fileWaitText, questionsForYou, waitsForYou } from '../../board'
+import { statusCounts, newestFirst, bandLeads, bandNote, bandBrand, bandWhere, modeLabel, modeOf, planBandText, withCrew, fileWaitText, questionsForYou, waitsForYou } from '../../board'
 import { type PaneView, S } from '../../app/state'
 import { type $, panelValues } from '../panel'
 import { openPane } from '../../app/open'
@@ -10,19 +10,12 @@ import { claudeHost } from '../host'
 export type AbovePromptHook = MatchedHook<'ui.render', { component: 'AbovePrompt' }>
 
 /**
- * The band's first line: the brand ("𝄞 symcc v0.3.0") and the facts after it, made by `facts(room)` for the room
- * left in `columns` beside the brand and the "open board" button. The version is dropped first: it stays only when the
- * facts are as long with it as without it (nothing else had to be cut or left out for it) and the line still fits.
+ * The band's first line: the brand ("𝄞 symcc", no version, see bandBrand) and the facts after it, made by `facts(room)`
+ * for the room left in `columns` beside the brand and the "open board" button.
  */
 export function bandTitle(columns: number, facts: (room: number) => string): { brand: string; facts: string } {
-  const roomFor = (brand: string) => columns - brand.length - ' open board'.length - 2
-  const bare = boardBrand(S.N.name, '')
-  const plain = facts(roomFor(bare))
-  if (!S.version) return { brand: bare, facts: plain }
-  const brand = boardBrand(S.N.name, S.version)
-  const room = roomFor(brand)
-  const full = facts(room)
-  return full === plain && full.length <= room ? { brand, facts: full } : { brand: bare, facts: plain }
+  const brand = bandBrand(S.N.name)
+  return { brand, facts: facts(columns - brand.length - ' open board'.length - 2) }
 }
 
 /** The band above the prompt: the board, always in view inside Claude Code's own screen. */
@@ -45,7 +38,7 @@ export async function renderAbovePrompt($: $, e: Parameters<AbovePromptHook>[1],
   // "(next: …)" goes first when short of room, then the scouts (see withCrew)
   const nowMs = await drawNow($)
   const crew = { mode: modeOf(v), plan_mode: !!plan, max_parallel: (v as PaneView | undefined)?.max_parallel, tasks, scouts: v?.scouts ?? [] }
-  const { brand, facts } = bandTitle(e.props.bodyColumns ?? 80, room => withCrew((w, s) => `${boardWhere(S.root)} ${[modeLabel(modeOf(v)), questionsForYou(questions.length), w, summary, s, plan].filter(Boolean).join(' · ')} `, crew, nowMs, room))
+  const { brand, facts } = bandTitle(e.props.bodyColumns ?? 80, room => withCrew((w, s) => `${bandWhere(S.root, S.N.name)} ${[modeLabel(modeOf(v)), questionsForYou(questions.length), w, summary, s, plan].filter(Boolean).join(' · ')} `, crew, nowMs, room))
   // the questions take the first rows, then the tasks that need you or run
   const asks = questions.slice(0, rows)
   const taskRows = Math.max(0, rows - asks.length)

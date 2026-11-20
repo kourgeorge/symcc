@@ -13,7 +13,7 @@ import type { SymccTask, SymccScout } from '../../types'
 import type { PaneView } from '../app/state'
 import type { OwnerQuestion } from '../core/questions'
 import {
-  statusCounts, newestFirst, bandLeads, bandNote, boardBrand, boardWhere, modeLabel, modeOf, planBandText, withCrew, fileWaitText, questionsForYou,
+  statusCounts, newestFirst, bandLeads, bandNote, bandBrand, bandWhere, boardBrand, modeLabel, modeOf, planBandText, withCrew, fileWaitText, questionsForYou,
   bannerLines, bannerRule, footerRule, type BannerTone, panelSections, localOffset, when, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, ALL_CLEAR,
   fittedCells, TITLE_ROOM, fitRow, rowExtra, questionsLabel, archivedOf, archivedNote, statusMark, detailRows, detailRowLines, wrapSegs, answerChoices, hintLineText,
   type KeyHint, type Seg, type BoardTask, asksMoreTime, gitNote, OVERTIME_OPTIONS, overtimeQuestion, timeLimitOf,
@@ -195,13 +195,10 @@ export function bandDraw(f: ViewFile | null, nowMs: number, width: number, rows 
   const live = tasks.filter(t => order.includes(t.status)).sort(newestFirst)
   const plan = v.plan_mode ? planBandText(tasks.filter(t => t.status === 'doing').length) : ''
   const crew = { mode: modeOf(v), plan_mode: !!plan, max_parallel: v.max_parallel, tasks, scouts: v.scouts ?? [] }
-  const facts = (room: number) => withCrew((w, s) => `${boardWhere(f.root)} ${[modeLabel(modeOf(v)), questionsForYou(questions.length), w, summary, s, plan].filter(Boolean).join(' · ')}`, crew, nowMs, room)
-  // the version is dropped first: kept only when the facts are the same with it and the line still fits
-  const roomFor = (brand: string) => width - brand.length - 1
-  const bare = boardBrand(f.name, '')
-  const plain = facts(roomFor(bare))
-  const full = f.version ? facts(roomFor(boardBrand(f.name, f.version))) : ''
-  const head = f.version && full === plain && full.length <= roomFor(boardBrand(f.name, f.version)) ? { brand: boardBrand(f.name, f.version), facts: full } : { brand: bare, facts: plain }
+  const facts = (room: number) => withCrew((w, s) => `${bandWhere(f.root, f.name)} ${[modeLabel(modeOf(v)), questionsForYou(questions.length), w, summary, s, plan].filter(Boolean).join(' · ')}`, crew, nowMs, room)
+  // "𝄞 symcc", then " · <project>" only when it isn't called symcc too (see bandBrand), then the state
+  const brand = bandBrand(f.name)
+  const head = { brand, facts: facts(width - brand.length - 1) }
   const headLen = head.brand.length + head.facts.length
   const hint = headLen + BAND_CLICK_HINT.length <= width ? [{ text: BAND_CLICK_HINT, color: 'inactive' }] : []
   const out: Line[] = [[{ text: head.brand, color: 'ide', bold: true }, { text: head.facts, color: 'inactive' }, ...hint]]

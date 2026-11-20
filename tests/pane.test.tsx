@@ -105,7 +105,7 @@ test('the band above the prompt sums up the board and lists what needs you or is
   on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...BAND, surface })
-    expect((await ui.find({ type: 'Text', text: new RegExp(`^${ICON} symcc board$`, 'u') }))).toBeDefined()
+    expect((await ui.find({ type: 'Text', text: new RegExp(`^${ICON} symcc$`, 'u') }))).toBeDefined()
     expect((await ui.find({ type: 'Text', text: /1 doing · 1 to do · 1 waiting for you · 1 done/ }))).toBeDefined()
     expect((await ui.find({ type: 'Text', text: /^T-2  \? waiting$/ }))).toBeDefined()
     expect((await ui.find({ type: 'Text', text: /Case-sensitive/ }))).toBeDefined()

@@ -10,6 +10,7 @@
 import { test, expect } from 'bun:test'
 import { mergeRoles, mergeKinds, when, addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, type Board } from '../../board'
 import type { PaneView } from '../../app/state'
+import { ICON } from '../../name'
 import { bandLines, bandDraw, BAND_CLICK_HINT, panelLines, panelKeys, parseViewFile, viewFileText, lineText, actionCommand, answerOptions, OWN_ANSWER, viewDefs, type ViewFile } from '../board-view'
 import { readFile } from 'node:fs/promises'
 import { PLUGIN_ROOT } from '../host'
@@ -50,9 +51,15 @@ test('T-517: with no git repo the banner warns without the "(g)" key hint (this 
 test('the band: the header, then the tasks that need you or run with the list\'s marks and short states; a "worker starting" row shows its time and no stray note', () => {
   const f = viewFile()
   const lines = bandLines(f, NOW, 120).map(lineText)
-  expect(lines[0]).toContain('symcc v0.9.0')
-  expect(lines[0]).toContain('· proj')
+  // T-576: "𝄞 symcc · proj ⏵ auto · …": no "board", no version; the project shown as it isn't called symcc
+  expect(lines[0]!.startsWith(`${ICON} symcc · proj ⏵ auto`)).toBe(true)
+  expect(lines[0]).not.toContain('board')
+  expect(lines[0]).not.toContain('0.9.0')
   expect(lines[0]).toContain('1 doing')
+  // in the symcc project itself the name shows once, the state right after it
+  const own = bandLines({ ...f, root: '/work/symcc' }, NOW, 120).map(lineText)[0]!
+  expect(own.startsWith(`${ICON} symcc ⏵ auto`)).toBe(true)
+  expect(own).toContain('1 doing')
   const t1 = f.view.tasks.find(t => t.id === 'T-1')!
   const row1 = lines.find(l => l.startsWith('T-1'))!
   expect(row1).toContain(`${STATUS_MARK.doing} ${statusCell(t1, NOW, NOW - 3 * 60_000)}`)
@@ -482,16 +489,16 @@ test('T-567: a click on the band above the prompt: the header opens the board pa
   const band = fc.slots.find(s => s.append === 'session.composer.top')!.render({ sessionID: 's' } as never)
   const rows = () => rowEls(band)
   const click = (has: (t: string) => boolean, button = 0) => (rows().find(r => has(r.text))!.el.props.onMouseUp as (e: unknown) => void)({ type: 'up', button, stopPropagation: () => undefined })
-  expect(rows()[0]!.text).toContain('symcc v0.9.0')
+  expect(rows()[0]!.text).toContain('symcc · proj')
   expect(rows()[0]!.text.endsWith(BAND_CLICK_HINT)).toBe(true)
   expect(typeof rows()[0]!.el.props.onMouseUp).toBe('function')
   // a right click does nothing
-  click(t => t.includes('symcc v0.9.0'), 2)
+  click(t => t.includes('symcc · proj'), 2)
   expect(fc.current()).toBe(undefined)
   // the header opens the board panel, and closes it when it is open (as /symcc-board does)
-  click(t => t.includes('symcc v0.9.0'))
+  click(t => t.includes('symcc · proj'))
   expect(fc.current()?.name).toBe(BOARD_PANEL)
-  click(t => t.includes('symcc v0.9.0'))
+  click(t => t.includes('symcc · proj'))
   expect(fc.current()).toBe(undefined)
   // a task's row opens the panel on that task's page, and keeps it open when it is
   click(t => t.startsWith('T-2'))
