@@ -5,6 +5,8 @@
 #    file that exists (and to an anchor on that page), no internal link still ends in .md.
 # 2. A copy with HTML and a .md link added to the guide: the HTML comes out escaped, the link as guide.html.
 # 3. The workflow file is valid YAML with the Pages permissions.
+# (T-601) llms.txt lists every page with a working .md link, and each .md copy links only to files on the
+#    site or in the repo (on GitHub); the small copy checks how links in the .md copies are rewritten.
 set -u
 here="$(cd "$(dirname "$0")/.." && pwd)"
 tmp="$(mktemp -d)"
@@ -15,7 +17,7 @@ bad() { echo "FAIL: $1"; fails=$((fails + 1)); }
 if ! bun "$here/scripts/build-site.ts" --root "$here" --out "$tmp/real" >"$tmp/log" 2>&1; then
   bad "build failed: $(cat "$tmp/log")"
 fi
-bun "$here/tests/build-site-check.mjs" "$tmp/real" "$here/.github/workflows/pages.yml" || bad "checks on the real build failed (see above)"
+bun "$here/tests/build-site-check.mjs" "$tmp/real" "$here/.github/workflows/pages.yml" "$here" || bad "checks on the real build failed (see above)"
 
 # a small copy with tricky text in the guide
 mkdir -p "$tmp/src/docs/research"
@@ -37,7 +39,7 @@ See [the reference](reference.md#modes) and [this guide](guide.md) and [the read
 - one <img src=x onerror=alert(2)>
 - two
 EOF
-printf '# A note\n\nBack to the [guide](../guide.md).\n' > "$tmp/src/docs/research/note.md"
+printf '# A note\n\nBack to the [guide](../guide.md) for the whole story.\n' > "$tmp/src/docs/research/note.md"
 if ! bun "$here/scripts/build-site.ts" --root "$tmp/src" --out "$tmp/small" >"$tmp/log" 2>&1; then
   bad "small build failed: $(cat "$tmp/log")"
 else
@@ -55,6 +57,15 @@ else
   grep -q 'href="note.html"' "$tmp/small/research/index.html" || bad "research index does not list the note"
   grep -q 'href="../style.css"' "$tmp/small/research/note.html" || bad "research page style.css path"
   grep -q 'href="../guide.html">Guide' "$tmp/small/research/note.html" || bad "research page nav not relinked"
+  # (T-601) the .md copies, llms.txt and the footer link
+  m="$tmp/small/guide.md"
+  grep -q '\[the reference\](reference.md#modes)' "$m" || bad "guide.md copy: reference.md#modes link wrong"
+  grep -q '\[the readme\](overview.md#install)' "$m" || bad "guide.md copy: ../README.md#install not rewritten to overview.md"
+  grep -q '<script>alert(1)</script>' "$m" || bad "guide.md copy is not the source Markdown"
+  grep -q '\[guide\](../guide.md)' "$tmp/small/research/note.md" || bad "research note .md copy: link not ../guide.md"
+  grep -q '^- \[A note\](https://kourgeorge.github.io/symcc/research/note.md): Back to the guide for the whole story.$' "$tmp/small/llms.txt" || bad "llms.txt: no line for the research note: $(cat "$tmp/small/llms.txt")"
+  grep -q 'href="../llms.txt"' "$tmp/small/research/note.html" || bad "footer of a research page has no llms.txt link"
+  grep -q 'href="llms.txt"' "$tmp/small/index.html" || bad "footer of the landing page has no llms.txt link"
 fi
 
 # 4. (T-594) a dangerous --out is refused and nothing is deleted; an earlier build is rebuilt fine

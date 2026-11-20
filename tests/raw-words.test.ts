@@ -2,7 +2,7 @@
 // plainWords gave, with and without braceLit.
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { braceLit, rawWords } from '../hooks/core/ask'
+import { braceLit, rawWords } from '../hooks/core/shell-words'
 
 /** [command, words, words with braceLit], the expected words written out from what plainWords gave. */
 const SAMPLES: [string, string[], string[]][] = [

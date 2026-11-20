@@ -12,7 +12,11 @@ import { basename, dirname, isAbsolute, join, posix, relative, resolve, sep } fr
 const GITHUB = 'https://github.com/kourgeorge/symcc'
 
 type Page = { src: string; out: string; title: string; dropHtml?: boolean }
-type Ctx = { page: Page; slugs: Map<string, number>; images: Set<string>; pages: Map<string, Page>; root: string }
+// md: links to pages point to their .md copies (for the plain Markdown copy of a page, T-601)
+type Ctx = { page: Page; slugs: Map<string, number>; images: Set<string>; pages: Map<string, Page>; root: string; md?: boolean }
+
+const SITE = 'https://kourgeorge.github.io/symcc'
+const mdOut = (p: Page) => p.out.replace(/\.html$/, '.md')
 
 // ---------- small markdown to HTML converter ----------
 
@@ -217,7 +221,7 @@ function rewrite(href: string, ctx: Ctx, image: boolean): string {
   const target = posix.normalize(posix.join(posix.dirname(ctx.page.src), path)).replace(/^\.\//, '')
   const from = posix.dirname(ctx.page.out)
   const page = ctx.pages.get(target.replace(/\/$/, ''))
-  if (page) return (page.out === ctx.page.out ? '' : posix.relative(from, page.out)) + frag
+  if (page) return (page.out === ctx.page.out ? '' : posix.relative(from, ctx.md ? mdOut(page) : page.out)) + frag
   const full = join(ctx.root, target)
   if ((image || IMAGE.test(target)) && existsSync(full) && statSync(full).isFile() && IMAGE.test(target)) {
     ctx.images.add(target)
@@ -225,6 +229,95 @@ function rewrite(href: string, ctx: Ctx, image: boolean): string {
   }
   const isDir = path.endsWith('/') || (existsSync(full) && statSync(full).isDirectory())
   return `${GITHUB}/${isDir ? 'tree' : 'blob'}/main/${target.replace(/\/$/, '')}${frag}`
+}
+
+// ---------- plain Markdown copies and llms.txt (T-601) ----------
+
+// The page's Markdown with links (markdown links and href/src in raw HTML) rewritten like the HTML:
+// links to other pages go to their .md copies, images to the copied images, other repo files to GitHub.
+// Code blocks and inline code are left alone.
+export function mdCopy(md: string, ctx: Ctx): string {
+  const fix = (text: string) => text
+    .replace(/(!?\[[^\]]*\]\()([^)\s]+)((?:\s+"[^"]*")?\))/g, (_, a: string, href: string, b: string) => `${a}${rewrite(href, ctx, a.startsWith('!'))}${b}`)
+    .replace(/\b(href|src)="([^"]*)"/g, (_, attr: string, href: string) => `${attr}="${rewrite(href, ctx, attr === 'src')}"`)
+  let fence = ''
+  return md.split('\n').map(line => {
+    const f = FENCE.exec(line)
+    if (fence) { if (f && line.trim().startsWith(fence) && /^(`+|~+)$/.test(line.trim())) fence = ''; return line }
+    if (f) { fence = f[2]!; return line }
+    const code: string[] = []
+    const held = line.replace(/`+[^`]*`+/g, c => `\u0000${code.push(c) - 1}\u0000`)
+    return fix(held).replace(/\u0000(\d+)\u0000/g, (_, k: string) => code[Number(k)]!)
+  }).join('\n')
+}
+
+// Plain text of a markdown paragraph: links become their labels, marks and HTML are dropped.
+function plain(text: string): string {
+  return text.replace(/!\[[^\]]*\]\([^)]*\)/g, '').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/<[^>]*>/g, '').replace(/[`*]/g, '').replace(/(^|\s)_|_(\s|$)/g, '$1$2').replace(/\s+/g, ' ').trim()
+}
+
+function cut(s: string, n = 150): string {
+  if (s.length <= n) return s
+  const t = s.slice(0, n)
+  const k = t.lastIndexOf(' ')
+  return `${(k > 80 ? t.slice(0, k) : t).replace(/[\s,;:.]+$/, '')}…`
+}
+
+// One-line summary of a note: the first paragraph under a "Question"/"Short answer" heading if there is
+// one, else the first paragraph after the title. HTML, comments, images, tables and code are skipped.
+export function summary(md: string): string {
+  const lines = md.replace(/<!--[\s\S]*?-->/g, '').split('\n')
+  const paras: { text: string; under: string }[] = []
+  let under = ''
+  let fence = false
+  let cur: string[] = []
+  const end = () => { if (cur.length) paras.push({ text: plain(cur.join(' ')), under }); cur = [] }
+  for (const l of lines) {
+    if (FENCE.test(l)) { end(); fence = !fence; continue }
+    if (fence) continue
+    const h = HEADING.exec(l)
+    if (h) { end(); under = h[1]!.length > 1 ? h[2]! : ''; continue }
+    if (blank(l) || HR.test(l) || /^\s*[<|!]/.test(l)) { end(); continue }
+    const item = LIST.exec(l)
+    if (item) { end(); cur.push(item[4]!); continue } // each list item counts as a paragraph
+    cur.push(l.replace(/^\s{0,3}>\s?/, '').trim())
+  }
+  end()
+  const ok = paras.filter(p => p.text.length > 20)
+  const pick = ok.find(p => /question|short answer/i.test(p.under)) ?? ok[0]
+  return pick ? cut(pick.text) : ''
+}
+
+const MAIN_SUMMARY: Record<string, string> = {
+  'README.md': 'What symcc is, how to install it, a quick start, how it works, and the full feature list.',
+  'docs/guide.md': 'How to use symcc day to day: talking to the lead, the board, tasks, workers, scouts and merges.',
+  'docs/reference.md': 'Every command, setting, file and board key of symcc, in one place.',
+}
+
+export function llmsTxt(pages: Page[], root: string): string {
+  const line = (p: Page) => {
+    const md = readFileSync(join(root, p.src), 'utf8').replace(/\r\n?/g, '\n')
+    const title = p.src === 'README.md' ? 'Overview' : firstHeading(md) ?? p.title
+    const sum = MAIN_SUMMARY[p.src] ?? summary(md)
+    return `- [${title}](${SITE}/${mdOut(p)})${sum ? `: ${sum}` : ''}`
+  }
+  const main = pages.filter(p => !p.src.startsWith('docs/research/'))
+  const notes = pages.filter(p => p.src.startsWith('docs/research/'))
+  return `# symcc
+
+> symcc is an agent organization for coding agents, as a plugin for Claude Code and OpenCode. You talk to one lead, which plans the work and keeps a shared task board. Workers build the tasks in parallel, each in its own git worktree and branch, and may change only the files their task allows. Scouts look for bugs, missing tests and outdated parts on their own timers. One merge line tests each finished task and merges it into main, and the lead asks the owner only for real decisions.
+
+Each link below is a plain Markdown copy of a page on ${SITE}/.
+
+## Docs
+
+${main.map(line).join('\n')}
+
+## Research notes
+
+${notes.map(line).join('\n')}
+`
 }
 
 // ---------- pages ----------
@@ -336,7 +429,9 @@ export function build(root: string, out: string): string[] {
     mkdirSync(dirname(file), { recursive: true })
     writeFileSync(file, render(page, blocks(md.split('\n'), ctx), f))
     written.push(page.out)
+    writeFileSync(join(out, mdOut(page)), mdCopy(md, { ...ctx, md: true }))
   }
+  writeFileSync(join(out, 'llms.txt'), llmsTxt(pages, root))
 
   const indexPage: Page = { src: 'docs/research/index.md', out: 'research/index.html', title: 'Research notes' }
   const list = pages.filter(p => p.src.startsWith('docs/research/'))

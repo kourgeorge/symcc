@@ -54,6 +54,15 @@ The main parts:
 - **Tests before merge:** your test commands must pass; if they fail, a new worker gets the output and tries again.
 - **Review:** see the diff, then approve, or reject with a reason. See [approval before merge](docs/guide.md#approval-before-merge).
 
+### How a change gets merged
+
+Finished tasks do not merge all at once into a moving branch. They take turns in one line for the
+whole project, so the code a task was tested with is exactly the code that merges. At its turn a
+task catches up with your branch, runs your tests and then merges (or waits for your review). Any
+failure counts as one normal failed try. Details: [the way to the merge](docs/guide.md#the-way-to-the-merge).
+
+    hand-back → prep → checker (if on) → in line → catch up → tests → review or merge
+
 ### Scouts at work
 
 Examples of what scouts do while you are away:
@@ -148,7 +157,7 @@ The details are in the [guide](docs/guide.md#using-symcc-in-opencode).
 | **Worker roles** | The lead picks a role per task: general, docs, refactor, researcher, security, tester, or your own in `.symcc/roles/`. Each brings its own checklist, skills and model, and may add web tools (`tools: web`; in Claude Code that is WebSearch and WebFetch): only `researcher` has web access built in. A role fills the `{{role}}` slot of the fixed, built-in worker prompt, and its checklist may use `{{files}}`, `{{test_command}}` and other placeholders. |
 | **Dependencies** | A task with `after: T-1` waits until T-1 is merged. Tasks that change the same files are put one after another. |
 | **Scope check** | Each task lists the files it may change. A worker's edit outside that scope is refused and asks you for the file; other changes outside it are not merged. |
-| **Test gate and retries** | Your test commands must pass before a merge. If they fail, a new worker gets the failing output and tries again (2 times by default). |
+| **Test gate and retries** | Finished tasks take turns in one merge line. At its turn a task catches up with the branch, runs your test commands (skipped if this exact code already passed), then merges. If anything fails (tests, time-out, a clash), a new worker gets the output and tries again (2 times by default). See [the way to the merge](docs/guide.md#the-way-to-the-merge). |
 | **Approval before merge** | In review mode, see the diff, then approve, or reject with a reason. The lead also asks you before it adds any task. |
 | **Workers ask you** | A worker that needs a decision asks with its `ask_owner` tool (with choices, if any) and its task waits for your answer. symcc never reads questions or file requests out of a worker's text. |
 | **Investigations** | Of the task kinds, a *change* (the default) edits files, which are tested and merged. An *investigation* answers a question ("is it possible…", "should we…", "how does X work?"): nothing is committed or merged, and it always waits for you to read the answer, then **Done**, **Keep as a note** (a docs task saves it as `docs/research/<topic>.md`) or **Ask more** (a follow-up question for a fresh try). Researcher tasks are investigations by default. See [investigation tasks](docs/guide.md#investigation-tasks). |

@@ -16,7 +16,7 @@ import { sessionStarting, sessionStart, sessionCleared, sessionEnd, leadGuideTex
 import { S, useName } from './app/state'
 import { hookFailed } from './app/ask'
 import { popupCall } from './app/questions'
-import { spawnFailedText } from './core/ask'
+import { spawnFailedText } from './core/path-guard'
 import { DEFAULT_NAME, cleanName } from './name'
 import { drainStarts, leadTurn } from './app/starts'
 import { findRoot } from './app/store'
