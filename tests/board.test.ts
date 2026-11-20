@@ -2968,6 +2968,13 @@ test('task rows: a short status column and an inactive-colored extra; the extra 
   // very narrow: the extra goes, the title is cut to the room
   expect(fitRow(10, long, 'waits for T-690', 35)).toEqual({ title: 'Board list: keep the row…', pad: '', extra: '' })
   expect(fitRow(10, long, 'waits for T-690', 11)).toEqual({ title: '…', pad: '', extra: '' })
+  // a cut that lands after a space (the "…" drops it) still ends the extra right at the width
+  expect(fitRow(10, long, 'waits for T-690', 49)).toEqual({ title: 'Board list: keep the…', pad: '   ', extra: 'waits for T-690' })
+  for (const extra of ['waits for T-690', '[feature]'])
+    for (let w = 30; w <= 80; w++) {
+      const f = fitRow(10, long, extra, w)
+      if (f.extra) expect([w, 10 + f.title.length + f.pad.length + f.extra.length]).toEqual([w, w])
+    }
   expect(fitRow(20, 'Secrets scout example', 'frontend · try 2', 30)).toEqual({ title: 'Secrets s…', pad: '', extra: '' })
 })
 

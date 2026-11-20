@@ -336,6 +336,11 @@ const cutTo = (s: string, n: number) => (n <= 0 ? '' : ellipsis(s, n))
 /** The fewest columns a cut extra keeps (see fitRow): less than that says nothing, so the extra goes instead. */
 const EXTRA_ROOM = 8
 
+/** A cut row whose `pad` comes from the cut parts' real lengths, so the extra ends right at the room's end even when
+ *  a cut (ellipsis trims a trailing space) leaves a part a column shorter than asked for. */
+const padded = (title: string, extra: string, room: number) =>
+  ({ title, pad: ' '.repeat(Math.max(2, room - title.length - extra.length)), extra })
+
 /** Fits a task row's title and extra after `lead` columns (indent, id, mark and status) in `width` columns: the
  *  extra goes to the right end (`pad` fills the gap, at least two spaces) when the whole title fits beside it;
  *  otherwise the title is cut with "…" so the whole extra still shows, as long as TITLE_ROOM columns (or the whole
@@ -350,9 +355,9 @@ export function fitRow(lead: number, title: string, extra: string, width: number
   if (cutExtra && room - title.length - 2 >= 12) return { title, pad: '  ', extra: cutTo(extra, room - title.length - 2) }
   const floor = Math.min(title.length, TITLE_ROOM)
   // the title is cut so the whole extra stays at the right end
-  if (room - 2 - extra.length >= floor) return { title: cutTo(title, room - 2 - extra.length), pad: '  ', extra }
+  if (room - 2 - extra.length >= floor) return padded(cutTo(title, room - 2 - extra.length), extra, room)
   // the title keeps its floor and the extra is cut, keeping its start
-  if (room - floor - 2 >= EXTRA_ROOM) return { title: cutTo(title, floor), pad: '  ', extra: cutTo(extra, room - floor - 2) }
+  if (room - floor - 2 >= EXTRA_ROOM) return padded(cutTo(title, floor), cutTo(extra, room - floor - 2), room)
   return { title: cutTo(title, room), pad: '', extra: '' }
 }
 
