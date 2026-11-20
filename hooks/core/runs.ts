@@ -77,6 +77,36 @@ export function endedBy(t: Pick<SymccTask, 'status' | 'runs'> | undefined, now: 
   return { runs: withEnd(endRun(t.runs, now), by, note) }
 }
 
+/** How long a try counts as just started (see freshTry): a change in that time joins it instead of using up a try. */
+export const FRESH_TRY_MS = 60_000
+
+/**
+ * T-678: whether task `t`'s running try started less than FRESH_TRY_MS before `nowMs` and is still in its worker
+ * step (not finishing, not being checked), e.g. the retry symcc started at once after a checker send-back. A change
+ * then (the lead's note) starts that try again on the same try number, with no "restarted" line.
+ */
+export function freshTry(t: Pick<SymccTask, 'status' | 'runs'> & { finishing?: string; checking?: unknown }, nowMs: number): boolean {
+  if (t.status !== 'doing' || t.finishing || t.checking) return false
+  const last = t.runs?.at(-1)
+  if (!last || last.ended) return false
+  // its agent ids must be kept somewhere when its run is taken off (withoutOpenRun): on the try before it
+  if (t.runs!.length < 2 && (last.agent || last.checkers?.length)) return false
+  const age = nowMs - Date.parse(last.started)
+  return Number.isFinite(age) && age >= 0 && age < FRESH_TRY_MS
+}
+
+/**
+ * The runs with the last try taken off when it is still running (a fresh try started again on its number, see freshTry).
+ * T-479: its worker's and checkers' ids move to the try before it (as checkers), so every copy still refuses them.
+ */
+export function withoutOpenRun(runs: SymccRun[] | undefined): SymccRun[] | undefined {
+  if (!runs?.length || runs.at(-1)!.ended) return runs
+  const open = runs.at(-1)!
+  let out = runs.slice(0, -1)
+  for (const id of [open.agent, ...(open.checkers ?? [])]) out = withAgentId(out, 'checker', id) ?? out
+  return out
+}
+
 /** The outcome of an investigation's try that handed back an answer (nothing committed, tested or merged). */
 export const ANSWERED = 'answered'
 
