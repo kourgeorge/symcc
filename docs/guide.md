@@ -1490,6 +1490,12 @@ test, a trap, where something is).
   or empty file adds nothing.
 - **Editing:** you (or the lead) may edit, fix or trim the file by hand at any time; any line
   counts, with or without the task id and date.
+- **Seeing and deleting notes:** Settings → Workers has an **Org-mem: n notes** row (in VS Code
+  **Organizational memory**). It opens the "Organizational memory (org-mem)" page: every note, newest
+  first, with its number, task id, date and text ("No notes yet." when there are none). To delete
+  a note, put the cursor on it and press `x` (or Enter; in VS Code click its Delete link), then
+  `y` to confirm: exactly that line is taken out of the file. From the prompt (and in OpenCode,
+  where the page does it for you): `/symcc-settings orgmem delete N`, N being the note's number on the page.
 
 ---
 

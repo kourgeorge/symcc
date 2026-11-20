@@ -20,7 +20,7 @@ import { type Command, boardText, shortHome, LEAD_BEAT_MS, openOnStart, symccOn,
 import { type FileTouch, type Host, type HostFeatures, ALL_FEATURES } from '../host'
 import type { SymccTokens } from '../../types'
 import { findArchived, saveArchiveMigrated } from './archive'
-import { moveOldOrgMem } from './org-mem'
+import { moveOldOrgMem, deleteOrgMem } from './org-mem'
 import { askCall, checkEdit, guardFailed, stoppedText, type AgentKindOf } from './ask'
 import { gitReady } from './git'
 import { claimLead, publish, handOver, releaseLead, driveHere } from './lead'
@@ -488,6 +488,12 @@ export async function runCommand(host: Host, command: string, args: string): Pro
         // the board's view carries the roles and kinds for a panel that draws from it (OpenCode's view.json)
         await publish(host, await load(host))
       }
+      return say(r.text)
+    }
+    case 'orgmem-delete': {
+      const r = await deleteOrgMem(host, cmd.n)
+      // the board's view carries the notes for a panel that draws from it (OpenCode's view.json)
+      if (r.ok) await publish(host, await load(host))
       return say(r.text)
     }
     case 'settings': {

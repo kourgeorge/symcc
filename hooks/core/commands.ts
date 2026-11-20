@@ -28,6 +28,8 @@ export type Command =
   | { kind: 'scout-edit'; name: string; field: ScoutEditField; value: string }
   /** /<name>-settings role|kind <name> on|off|reset: turns a role or kind on or off, or back to the built-in one */
   | { kind: 'def'; def: 'role' | 'kind'; name: string; action: DefAction }
+  /** /<name>-settings orgmem delete <n>: deletes note n (its place in the file) from organizational memory (T-619) */
+  | { kind: 'orgmem-delete'; n: number }
   | { kind: 'mode'; mode: SymccMode }
   | { kind: 'disable' }
   | { kind: 'enable' }
@@ -137,6 +139,10 @@ export function parseCommand(command: string, args: string, current: SymccMode =
       if (def === 'role' || def === 'kind') {
         const action = (words[2] ?? '').toLowerCase() as DefAction
         return words.length === 3 && DEF_ACTIONS.includes(action) ? { kind: 'def', def, name: words[1]!, action } : use(`/${name}-settings ${def} <name> on, off or reset`)
+      }
+      if (def === 'orgmem') {
+        const n = Number(words[2])
+        return words.length === 3 && (words[1] ?? '').toLowerCase() === 'delete' && Number.isInteger(n) && n > 0 ? { kind: 'orgmem-delete', n } : use(`/${name}-settings orgmem delete <n> (n: the note's number on the Organizational memory page)`)
       }
       return parseSettingsCommand(s, name)
     }

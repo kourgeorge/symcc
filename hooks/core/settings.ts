@@ -290,7 +290,7 @@ export const SETTINGS: SettingInfo[] = [
 ]
 
 /** Rows on the Settings page that open a page of their own instead of holding a value. */
-export const SETTING_PAGES = ['roles', 'kinds'] as const
+export const SETTING_PAGES = ['roles', 'kinds', 'orgmem'] as const
 export type SettingPage = (typeof SETTING_PAGES)[number]
 export type SettingGroup = { title: string; items: readonly (SettingName | SettingPage)[] }
 
@@ -301,7 +301,7 @@ export type SettingGroup = { title: string; items: readonly (SettingName | Setti
 export const SETTING_GROUPS: readonly SettingGroup[] = [
   { title: 'Work', items: ['mode', 'max_parallel', 'max_minutes', 'auto_retries', 'enabled'] },
   { title: 'Checks before merging', items: ['test_commands', 'test_minutes', 'tests_with_changes', 'checker'] },
-  { title: 'Workers', items: ['roles', 'kinds'] },
+  { title: 'Workers', items: ['roles', 'kinds', 'orgmem'] },
   { title: 'Scouts', items: ['scout_findings'] },
   { title: 'Board and alerts', items: ['notify', 'open_on_start', 'archive_days'] },
 ]
@@ -598,7 +598,7 @@ export function settingsText(b: Partial<Board>, name: string = DEFAULT_NAME): st
   return [
     ...SETTING_GROUPS.flatMap(g => {
       const rows = groupSettings(g)
-      const pages = g.items.some(isSettingPage) ? ['  roles and kinds: open them from the Settings view, or tell the lead'] : []
+      const pages = g.items.some(isSettingPage) ? ['  roles and kinds: open them from the Settings view, or tell the lead', `  org-mem (organizational memory): its notes are in .${name}/org-mem.md, listed and deleted from the Settings view (/${name}-settings orgmem delete N)`] : []
       return [`${g.title}:`, ...rows.map(s => `  ${s.name.padEnd(w)}  ${settingValue(b, s.name)}  (default ${s.default} · ${s.range}) ${s.meaning}`), ...pages]
     }),
     `Change one: /${name}-settings NAME VALUE, e.g. /${name}-settings max_parallel 5`,
@@ -619,7 +619,7 @@ export function leadSettingsText(b: Partial<Board>, can: Pick<Playable, 'sound' 
         const extra = s.name === 'notify' ? `; this machine can play: ${notifyChoices(can).join(', ')}` : s.name === 'enabled' ? '; only the owner can change it' : ''
         return `${s.name}: ${value} (default ${s.default}, can be ${s.range}) ${s.meaning}${extra}`
       }),
-      ...(g.items.some(isSettingPage) ? ['roles and kinds: use the roles and kinds tools (the owner sees them as pages in the Settings view)'] : []),
+      ...(g.items.some(isSettingPage) ? ['roles and kinds: use the roles and kinds tools (the owner sees them as pages in the Settings view)', 'org-mem (organizational memory): the owner sees its notes on a page in the Settings view and may delete them there'] : []),
     ]),
   ].join('\n')
 }

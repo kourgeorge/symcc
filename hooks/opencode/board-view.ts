@@ -10,6 +10,8 @@
 // board, T-585). Like it, Settings opens the Roles and Kinds
 // pages (a list, then one role's or kind's page: turn it off or on, reset it to the built-in one, T-562) and a
 // scout's page edits the scout (how often, model, instructions); the roles and kinds come in the view file too.
+// Settings also opens the Organizational memory page (T-619): org-mem's notes, newest first, x deletes one (after a
+// yes) with /<name>-settings orgmem delete N; the notes come in the view file too (org_mem).
 import type { SymccTask, SymccScout } from '../../types'
 import type { PaneView } from '../app/state'
 import type { OwnerQuestion } from '../core/questions'
@@ -28,6 +30,7 @@ import { restFrame } from '../core/logo'
 import { taskSections, type TaskSection } from '../core/task-sections'
 import type { DiffFile } from '../core/review'
 import { DEFAULT_NAME, dataDir } from '../name'
+import { ORG_MEM_TITLE, ORG_MEM_EMPTY, orgMemAbout, orgMemCount, orgMemSummary, orgMemKeys, orgMemNoteHead, orgMemFile, type OrgMemNote } from '../core/org-mem'
 
 /** The view file's name, in the data folder (.<name>/view.json). */
 export const VIEW_FILE = 'view.json'
@@ -43,7 +46,7 @@ export type ViewFile = {
   version: string
   /** when it was written (ms) */
   written_at: number
-  view: PaneView & { scout_runs?: ScoutRuns; roles?: ViewDef[]; kinds?: ViewDef[]; changes?: ViewChanges }
+  view: PaneView & { scout_runs?: ScoutRuns; roles?: ViewDef[]; kinds?: ViewDef[]; changes?: ViewChanges; org_mem?: OrgMemNote[] }
 }
 
 /** The files each task in review changed (not an answered investigation's), or why they can't be read (view.ts puts
@@ -138,6 +141,7 @@ export function parseViewFile(text: string | null | undefined): ViewFile | null 
     const runs = scout_runs && typeof scout_runs === 'object' && !Array.isArray(scout_runs) ? { scout_runs } : {}
     if (!Array.isArray(rest.roles)) delete rest.roles
     if (!Array.isArray(rest.kinds)) delete rest.kinds
+    if (!Array.isArray(rest.org_mem)) delete rest.org_mem
     if (!rest.changes || typeof rest.changes !== 'object' || Array.isArray(rest.changes)) delete rest.changes
     const view = { ...rest, ...runs, working: Array.isArray(f.view.working) ? f.view.working : [], scouts: Array.isArray(f.view.scouts) ? f.view.scouts : [], test_commands: Array.isArray(f.view.test_commands) ? f.view.test_commands : [] }
     return { root: s(f.root), home: s(f.home), name: s(f.name) || DEFAULT_NAME, version: s(f.version), written_at: Number(f.written_at) || 0, view }
@@ -324,10 +328,14 @@ export function hasPage(f: ViewFile | null, id: string, tab: PanelTab = 'tasks')
 /** Scout `scout`'s recent runs in the view file, newest first. */
 export const scoutRunsIn = (f: ViewFile | null, scout: string): ScoutRun[] => (Array.isArray(f?.view.scout_runs?.[scout]) ? f!.view.scout_runs![scout]! : [])
 
-/** A page under Settings: the Roles or Kinds list (`id` "roles" or "kinds"), or one role's or kind's page ("role:tester",
- *  "kind:bug"; its list is `list`); null when there is no such page (or the role or kind left the view). */
+/** The Settings pages that list roles or kinds. */
+type DefList = Exclude<SettingPage, 'orgmem'>
+
+/** A page under Settings: the Roles or Kinds list (`id` "roles" or "kinds"), the Organizational memory page ("orgmem"),
+ *  or one role's or kind's page ("role:tester", "kind:bug"; its list is `list`); null when there is no such page (or
+ *  the role or kind left the view). */
 export function settingsPlace(f: ViewFile | null, id: string): { list: SettingPage; def?: ViewDef } | null {
-  if (id === 'roles' || id === 'kinds') return { list: id }
+  if (id === 'roles' || id === 'kinds' || id === 'orgmem') return { list: id }
   const m = /^(role|kind):(.+)$/.exec(id)
   if (!m) return null
   const list = m[1] === 'role' ? 'roles' : 'kinds'
@@ -336,10 +344,10 @@ export function settingsPlace(f: ViewFile | null, id: string): { list: SettingPa
 }
 
 /** The roles or kinds in the view file. */
-export const defsIn = (f: ViewFile | null, list: SettingPage): ViewDef[] => (Array.isArray(f?.view[list]) ? f!.view[list]! : [])
+export const defsIn = (f: ViewFile | null, list: DefList): ViewDef[] => (Array.isArray(f?.view[list]) ? f!.view[list]! : [])
 
 /** A role's or kind's page id: "role:tester", "kind:bug". */
-export const defPageId = (list: SettingPage, name: string) => `${list === 'roles' ? 'role' : 'kind'}:${name}`
+export const defPageId = (list: DefList, name: string) => `${list === 'roles' ? 'role' : 'kind'}:${name}`
 
 /** The open scout, when the Scouts tab shows one's page. */
 const scoutNamed = (f: ViewFile | null, name: string): SymccScout | undefined => (name ? f?.view.scouts?.find(x => x.name === name) : undefined)
@@ -359,6 +367,7 @@ export function panelKeys(f: ViewFile | null, opened: string, tab: PanelTab = 't
     const place = settingsPlace(f, opened)
     // the settings list: core's keys, as Claude Code's (Enter open/close on a group heading, else change)
     if (!place) return settingsKeys(heading)
+    if (place.list === 'orgmem') return orgMemKeys(false, orgMemIn(f).length > 0)
     if (!place.def) return [move, { key: 'Enter', word: 'open' }, back]
     const d = place.def
     return [...(d.canOff ? [{ key: 'o', word: d.off ? 'turn on' : 'turn off' }] : []), ...(d.canReset ? [{ key: 'r', word: 'reset' }] : []), back]
@@ -408,7 +417,7 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
     keys = panelKeys(f, choice.opened, 'scouts', choice.run ?? '')
   } else if (tab === 'settings') {
     const place = settingsPlace(f, choice.opened)
-    body = place?.def ? defPage(f, place.list, place.def, w) : place ? defsList(f, place.list, choice.cursor, w) : settingsBody(f, choice.cursor, choice.settingsOpen ?? SETTINGS_OPEN, w)
+    body = place?.list === 'orgmem' ? orgMemBody(f, choice.cursor, w) : place?.def ? defPage(f, place.list as DefList, place.def, w) : place ? defsList(f, place.list as DefList, choice.cursor, w) : settingsBody(f, choice.cursor, choice.settingsOpen ?? SETTINGS_OPEN, w)
     keys = panelKeys(f, place ? choice.opened : '', 'settings', '', !place && !!settingGroupOf(body.selected))
   } else {
     const page = choice.opened ? openedPage(f, choice.opened, nowMs, w, choice.sent?.id === choice.opened ? choice.sent.answer : '', choice.taskReport, choice.approving?.id === choice.opened && approveSent(f, choice.approving, nowMs)) : null
@@ -555,7 +564,7 @@ export const settingGroupOf = (id: string): string | null => (id.startsWith('set
 export const settingRows = (open: readonly string[]): string[] => SETTING_GROUPS.flatMap(g => [settingGroupId(g.title), ...(open.includes(g.title) ? g.items : [])])
 
 /** "6 roles · 1 off" (the Settings row of the Roles or Kinds page). */
-function defsCount(f: ViewFile, list: SettingPage): string {
+function defsCount(f: ViewFile, list: DefList): string {
   const all = defsIn(f, list)
   const off = all.filter(x => x.off).length
   const noun = list === 'roles' ? 'role' : 'kind'
@@ -564,7 +573,7 @@ function defsCount(f: ViewFile, list: SettingPage): string {
 
 /** The Roles or Kinds page: one row per role or kind (name, where it comes from, whether it is off, what it is for);
  *  Enter opens one. New ones are made by the lead or as files. */
-function defsList(f: ViewFile, list: SettingPage, cursor: number, w: number): Body {
+function defsList(f: ViewFile, list: DefList, cursor: number, w: number): Body {
   const b = bodyMaker()
   const all = defsIn(f, list)
   const noun = list === 'roles' ? 'role' : 'kind'
@@ -600,7 +609,7 @@ function defsList(f: ViewFile, list: SettingPage, cursor: number, w: number): Bo
 
 /** One role's or kind's page: its name, where it comes from and whether it is off, what it is for; a role's model,
  *  skills and tools; its checklist (a role) or body (a kind); its file. A file that can't be read says why. */
-function defPage(f: ViewFile, list: SettingPage, x: ViewDef, w: number): Body {
+function defPage(f: ViewFile, list: DefList, x: ViewDef, w: number): Body {
   const b = bodyMaker()
   const role = list === 'roles'
   if (x.broken) {
@@ -634,6 +643,37 @@ function defPage(f: ViewFile, list: SettingPage, x: ViewDef, w: number): Body {
   return { ...b, ids: [], selected: '' }
 }
 
+/** Org-mem's notes in the view file, newest first. */
+export const orgMemIn = (f: ViewFile | null): OrgMemNote[] => (Array.isArray(f?.view.org_mem) ? f!.view.org_mem! : [])
+
+/** A note's cursor id on the Organizational memory page ("note:3"), and back (null for any other id). */
+export const orgMemNoteId = (n: number) => `note:${n}`
+export const orgMemNoteOf = (f: ViewFile | null, id: string): OrgMemNote | undefined => {
+  const m = /^note:(\d+)$/.exec(id)
+  return m ? orgMemIn(f).find(x => x.n === Number(m[1])) : undefined
+}
+
+/** The Organizational memory page (T-619): what org-mem is, then its notes newest first, each its number, task id and
+ *  date, then its text wrapped; the cursor's note is the one x deletes. "No notes yet." when there are none. */
+function orgMemBody(f: ViewFile, cursor: number, w: number): Body {
+  const b = bodyMaker()
+  const notes = orgMemIn(f)
+  b.head(ORG_MEM_TITLE)
+  for (const l of wrapSegs([{ text: orgMemAbout(orgMemFile(dataDir(f.name))), color: 'inactive' }], w)) b.add(l)
+  b.blank()
+  if (!notes.length) b.add([{ text: `  ${ORG_MEM_EMPTY}`, color: 'inactive' }])
+  const ids = notes.map(x => orgMemNoteId(x.n))
+  const selected = ids.length ? ids[Math.min(Math.max(0, cursor), ids.length - 1)]! : ''
+  for (const x of notes) {
+    const id = orgMemNoteId(x.n)
+    b.add([{ text: id === selected ? '› ' : '  ', color: 'ide', bold: true }, { text: orgMemNoteHead(x), color: 'claude', bold: true }])
+    for (const l of wrapSegs([{ text: x.text, color: 'text' }], w - 4)) b.add([{ text: '    ', color: 'text' }, ...l])
+  }
+  b.blank()
+  b.add([{ text: `↑↓ picks a note · x deletes it (asks first) · or edit ${orgMemFile(dataDir(f.name))} by hand`, color: 'inactive' }])
+  return { ...b, ids, selected }
+}
+
 /** The Settings tab: each group (Work, Checks before merging, ...) as a heading that opens or closes, like the
  *  Claude Code board's (T-585): "▸ Work · auto · 3 at once" closed (its values in short, core's groupSummaryParts),
  *  "▾ Work" open with its settings under it: name, value, default and range, and what it does on the line under it;
@@ -644,7 +684,7 @@ function settingsBody(f: ViewFile, cursor: number, open: readonly string[], w: n
   const nameWidth = Math.max(...SETTINGS.map(x => x.name.length))
   const ids = settingRows(open)
   const selected = ids[Math.min(Math.max(0, cursor), ids.length - 1)]!
-  const pages = { roles: defsCount(f, 'roles'), kinds: defsCount(f, 'kinds') }
+  const pages = { roles: defsCount(f, 'roles'), kinds: defsCount(f, 'kinds'), orgmem: orgMemSummary(orgMemIn(f).length) }
   for (const g of SETTING_GROUPS) {
     b.blank()
     const isOpen = open.includes(g.title)
@@ -657,6 +697,19 @@ function settingsBody(f: ViewFile, cursor: number, open: readonly string[], w: n
     }
     b.add([front, { text: `▾ ${g.title}`, color: 'text', bold: true }], hit)
     for (const item of g.items) {
+      if (item === 'orgmem') {
+        const hit = { page: item }
+        b.add(
+          [
+            { text: item === selected ? '› ' : '  ', color: 'ide', bold: true },
+            { text: 'Org-mem'.padEnd(nameWidth), color: 'claude', bold: true },
+            { text: ` ${orgMemCount(orgMemIn(f).length)}`, color: 'text', bold: true },
+          ],
+          hit,
+        )
+        b.add([{ text: '    Enter opens the Organizational memory page: the notes agents left for the next ones, to read or delete', color: 'inactive' }], hit)
+        continue
+      }
       if (isSettingPage(item)) {
         const label = item === 'roles' ? 'Roles' : 'Kinds'
         const hit = { page: item }
@@ -887,6 +940,8 @@ export type PanelAction =
   | { kind: 'scout-edit'; scout: string; field: ScoutEditField; value: string }
   /** turn a role or kind off or on, or reset it to the built-in one */
   | { kind: 'def'; def: 'role' | 'kind'; name: string; action: DefAction }
+  /** delete note `n` (its place in the file) from organizational memory (T-619) */
+  | { kind: 'orgmem-delete'; n: number }
 
 /** The slash command (its name, without the slash, and its text) that does `a` for plugin `name`. */
 export function actionCommand(a: PanelAction, name: string = DEFAULT_NAME): { name: string; text: string } {
@@ -898,6 +953,7 @@ export function actionCommand(a: PanelAction, name: string = DEFAULT_NAME): { na
   if (a.kind === 'setting') return { name: `${name}-settings`, text: `${a.setting} ${a.value.trim()}` }
   if (a.kind === 'scout-edit') return { name: `${name}-scout`, text: `${a.scout} ${a.field} ${a.value.trim() || (a.field === 'model' ? 'none' : '')}`.trim() }
   if (a.kind === 'def') return { name: `${name}-settings`, text: `${a.def} ${a.name} ${a.action}` }
+  if (a.kind === 'orgmem-delete') return { name: `${name}-settings`, text: `orgmem delete ${a.n}` }
   return { name: `${name}-answer`, text: `${a.id} ${a.answer.trim()}` }
 }
 

@@ -4,6 +4,7 @@ import { boardTitle } from '../board'
 import { S, updateOpened, updateScoutOpen, updateTab } from './state'
 import { resetRoleView } from './roles'
 import { resetKindView } from './kinds'
+import { resetOrgMemView } from './org-mem'
 import type { Host } from '../host'
 
 /** The board panel's views: its tabs. */
@@ -18,6 +19,7 @@ export async function resetPane($: Host, which?: PaneTab, task = '') {
   if (!which) return
   resetRoleView()
   resetKindView()
+  resetOrgMemView()
   await updateScoutOpen($, () => '')
   await updateTab($, () => which)
 }

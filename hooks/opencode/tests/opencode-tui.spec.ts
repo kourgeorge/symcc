@@ -15,6 +15,7 @@ import { bandLines, bandDraw, BAND_CLICK_HINT, panelLines, panelKeys, parseViewF
 import { readFile } from 'node:fs/promises'
 import { rowEndBoard, ROW_END, ROW_END_NOW } from '../../../tests/row-end-cases'
 import { taskSections } from '../../core/task-sections'
+import { orgMemNotes } from '../../core/org-mem'
 import { PLUGIN_ROOT } from '../host'
 import { startTui, KEY_BINDS, viewPaths, loadTuiRuntime, BOARD_PANEL, setupFailed, colorOf, drawLines, type TuiContext, type TuiRuntime, type TuiPanelInput, type TuiKeyLayer, type PanelKey } from '../tui'
 
@@ -1557,4 +1558,90 @@ test('T-615: while a task\'s approve is in progress its page offers no approve o
   // an approve sent for another task, or one long gone, leaves them
   expect(keys(f, { id: 'T-3', at: NOW })).toContain('approve')
   expect(keys(f, { id: 'T-2', at: NOW - APPROVE_SENT_MS - 1 })).toContain('approve')
+})
+
+// ---------------- T-619: the Organizational memory page under Settings ----------------
+
+/** The roles-and-kinds view file with three org-mem notes (newest first, as view.ts writes them). */
+function orgMemViewFile(text = `- T-3 2026-11-18: run one test file\n- written by hand\n- T-7 2026-11-20: the type check is separate\n`): ViewFile {
+  const f = defsViewFile()
+  return { ...f, view: { ...f.view, org_mem: orgMemNotes(text) } }
+}
+
+test('T-619: the Settings tab has an Org-mem row with the count; its page lists the notes newest first with id and date; an empty one says "No notes yet."', () => {
+  const f = orgMemViewFile()
+  // the notes ride in the view file
+  expect(parseViewFile(viewFileText(f))!.view.org_mem).toEqual(f.view.org_mem)
+  expect(parseViewFile(viewFileText({ ...f, view: { ...f.view, org_mem: 'x' as never } }))!.view.org_mem).toBe(undefined)
+  const settings = panelLines(f, { tab: 'settings', opened: '', cursor: 0, settingsOpen: ['Workers'] }, NOW, 140)
+  const s = settings.lines.map(lineText)
+  expect(s.find(l => l.includes('Org-mem'))).toMatch(/^ +Org-mem +3 notes$/)
+  expect(settings.ids).toContain('orgmem')
+  expect(settings.hits[s.findIndex(l => l.includes('3 notes'))]).toEqual({ page: 'orgmem' })
+  // closed, the Workers heading sums it up too
+  expect(panelLines(f, { tab: 'settings', opened: '', cursor: 0 }, NOW, 200).lines.map(lineText).find(l => l.includes('Workers'))).toContain('org-mem 3 notes')
+  // the page: title, what it is, the notes newest first (number, task id, date, then the text)
+  const page = panelLines(f, { tab: 'settings', opened: 'orgmem', cursor: 0 }, NOW, 140)
+  const p = page.lines.map(lineText)
+  expect(p).toContain('Organizational memory (org-mem)')
+  expect(p.join(' ')).toContain('.symcc/org-mem.md (the newest 60 lines)')
+  expect(page.ids).toEqual(['note:3', 'note:2', 'note:1'])
+  const at = (x: string) => p.findIndex(l => l.includes(x))
+  expect(p[at('#3')]).toBe('› #3 · T-7 · 2026-11-20')
+  expect(p[at('#3') + 1]).toBe('    the type check is separate')
+  expect(p[at('#2')]).toBe('  #2 · written by hand')
+  expect(p[at('#1')]).toBe('  #1 · T-3 · 2026-11-18')
+  expect(at('#2')).toBeGreaterThan(at('#3'))
+  expect(at('#1')).toBeGreaterThan(at('#2'))
+  expect(panelKeys(f, 'orgmem', 'settings').map(k => k.word)).toEqual(['move', 'delete', 'views', 'back'])
+  // no notes
+  const empty = orgMemViewFile('')
+  expect(panelLines(empty, { tab: 'settings', opened: '', cursor: 0, settingsOpen: ['Workers'] }, NOW, 140).lines.map(lineText).find(l => l.includes('Org-mem'))).toMatch(/0 notes$/)
+  expect(panelLines(empty, { tab: 'settings', opened: 'orgmem', cursor: 0 }, NOW, 140).lines.map(lineText)).toContain('  No notes yet.')
+  expect(panelKeys(empty, 'orgmem', 'settings').map(k => k.word)).toEqual(['views', 'back'])
+  // the delete as a slash command
+  expect(actionCommand({ kind: 'orgmem-delete', n: 3 })).toEqual({ name: 'symcc-settings', text: 'orgmem delete 3' })
+})
+
+test('T-619: startTui: the Org-mem row opens the page; x on a note asks, Yes sends /symcc-settings orgmem delete N, Cancel sends nothing', async () => {
+  const f = orgMemViewFile()
+  const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)]])
+  const sent: { sessionID: string; name: string; text: string }[] = []
+  const slots: { append: string; render: (input: never) => unknown }[] = []
+  const asked: string[] = []
+  const answers = { select: [] as unknown[] }
+  const ctx: TuiContext = {
+    location: { directory: '/work/proj' },
+    theme: {},
+    renderer: { width: 140 },
+    client: { session: { command: async input => void sent.push(input) } },
+    keymap: { layer: () => undefined },
+    ui: {
+      toast: { show: () => undefined },
+      dialog: { prompt: async () => undefined, select: async <V,>(o: { title: string }) => (asked.push(o.title), answers.select.shift() as V | undefined) },
+      panel: { open: () => true, close: () => undefined, current: () => undefined },
+      slot: claim => (slots.push(claim as never), () => undefined),
+    },
+  }
+  const board = startTui(ctx, { runtime: fakeRuntime(), readText: async p => files.get(p) ?? Promise.reject(new Error('missing')), every: () => () => undefined, now: () => NOW })
+  await board.refresh()
+  const panel = slots.find(s => s.append === 'session.panel')!.render({ name: BOARD_PANEL, sessionID: 'ses_1', width: 142, focused: true, close: () => undefined } as never) as El
+  const lines = () => rowEls(panel).map(r => r.text)
+  const clickRow = (has: string) => (rowEls(panel).find(r => r.text.includes(has))!.el.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0 })
+  await board.press('c', 'ses_1')
+  clickRow('▸ Workers')
+  clickRow('3 notes')
+  expect(board.state().opened).toBe('orgmem')
+  expect(lines().some(l => l.includes('#3 · T-7 · 2026-11-20'))).toBe(true)
+  // x on the newest note, Cancel: nothing sent; down, x, Yes: note 2 is deleted
+  answers.select.push('no', 'yes')
+  await board.press('x', 'ses_1')
+  await board.press('down', 'ses_1')
+  await board.press('x', 'ses_1')
+  expect(asked).toEqual(['Delete note #3 · T-7 · 2026-11-20 from .symcc/org-mem.md?', 'Delete note #2 · written by hand from .symcc/org-mem.md?'])
+  expect(sent).toEqual([{ sessionID: 'ses_1', name: 'symcc-settings', text: 'orgmem delete 2' }])
+  // b: back to the Settings list
+  await board.press('back', 'ses_1')
+  expect([board.state().tab, board.state().opened]).toEqual(['settings', ''])
+  board.stop()
 })

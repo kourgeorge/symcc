@@ -3,6 +3,8 @@
 // is). symcc keeps them in <project>/.<name>/org-mem.md (one line each, with the task id and date, duplicates
 // skipped, at most ORG_MEM_MAX_LINES lines, oldest dropped first) and puts the whole file into every new worker's,
 // checker's and scout's prompt. The owner and the lead may edit or trim the file by hand. Everything here is pure.
+// T-619: the owner sees the notes on a page under Settings (orgMemNotes) and may delete one there (deleteOrgMemNote).
+import type { KeyHint } from './panel'
 
 /** The file's name inside symcc's data folder (e.g. .symcc/org-mem.md). */
 export const ORG_MEM_FILE_NAME = 'org-mem.md'
@@ -180,3 +182,70 @@ export function orgMemSection(guide: string | null | undefined, file: string): s
   if (!lines.length) return ''
   return `\nOrganizational memory (org-mem): notes earlier agents left about this project (from ${file}; they may be out of date):\n${lines.join('\n')}\n`
 }
+
+// ---------------- T-619: the Organizational memory page under Settings ----------------
+
+/** One note of org-mem as the Settings page lists it: `n` is its place in the file (1 = the first, oldest line), so
+ *  appending new notes keeps the numbers; `id` and `date` are '' for a line the owner wrote by hand without them. */
+export type OrgMemNote = { n: number; id: string; date: string; text: string }
+
+/** The page's title. */
+export const ORG_MEM_TITLE = 'Organizational memory (org-mem)'
+
+/** What the page says when org-mem has no notes. */
+export const ORG_MEM_EMPTY = 'No notes yet.'
+
+/** "3 notes" (the Settings row's count). */
+export const orgMemCount = (n: number) => `${n} note${n === 1 ? '' : 's'}`
+
+/** A closed Settings group's short value for org-mem: "org-mem 3 notes"; '' (left out) with no notes. */
+export const orgMemSummary = (n: number) => (n ? `org-mem ${orgMemCount(n)}` : '')
+
+/** The page's one-line explanation: where the file is, who adds to it, and its limit. */
+export const orgMemAbout = (file: string) =>
+  `Notes agents left for the next ones: a worker's or checker's report may end with "Learned:" lines, which symcc keeps in ${file} (the newest ${ORG_MEM_MAX_LINES} lines) and puts into every new worker's, checker's and scout's prompt. You may edit the file by hand too.`
+
+/** The front of a note line: "- T-12 2026-11-20: ". */
+const NOTE_FRONT = /^\s*(?:[-*•]\s+)?(?:(T-\d+)\s+)?(?:(\d{4}-\d{2}-\d{2}))?\s*:?\s*/
+
+/** Org-mem's notes, newest (last in the file) first, each with its id, date and text (see OrgMemNote). */
+export function orgMemNotes(guide: string | null | undefined): OrgMemNote[] {
+  return orgMemLines(guide)
+    .map((line, i): OrgMemNote => {
+      const m = NOTE_FRONT.exec(line)!
+      const id = m[1] ?? ''
+      const date = m[2] ?? ''
+      // a hand-written line without an id or date keeps its text whole (only its list mark is taken off)
+      const text = id || date ? line.slice(m[0].length).trim() : line.replace(/^\s*[-*•]\s+/, '').trim()
+      return { n: i + 1, id, date, text }
+    })
+    .reverse()
+}
+
+/**
+ * Org-mem `guide` without note `n` (its place in the file, see OrgMemNote): exactly that line goes, every other line
+ * (blank ones too) stays as written. `expect`: the note's text as the page showed it; when given and the line no
+ * longer says it (the file changed meanwhile), nothing is removed. `removed`: the note taken out, or null.
+ */
+export function deleteOrgMemNote(guide: string | null | undefined, n: number, expect?: string): { text: string; removed: OrgMemNote | null } {
+  const text = String(guide ?? '')
+  const note = orgMemNotes(text).find(x => x.n === n)
+  if (!note || (expect !== undefined && note.text !== expect)) return { text, removed: null }
+  const raw = text.split('\n')
+  let seen = 0
+  const at = raw.findIndex(l => l.trim() && ++seen === n)
+  raw.splice(at, 1)
+  return { text: raw.join('\n'), removed: note }
+}
+
+/** A note's line on the page above its text: "#3 · T-12 · 2026-11-20" ("#3 · written by hand" without an id or date). */
+export const orgMemNoteHead = (x: OrgMemNote) => [`#${x.n}`, ...(x.id || x.date ? [x.id, x.date].filter(Boolean) : ['written by hand'])].join(' · ')
+
+/** The page's key hints: x deletes the note under the cursor (after a confirm step: y yes, x cancel). */
+export const orgMemKeys = (confirming = false, notes = true): KeyHint[] =>
+  confirming
+    ? [{ key: 'y', word: 'yes, delete' }, { key: 'x', word: 'cancel' }]
+    : [...(notes ? [{ key: '↑↓', word: 'move' }, { key: 'x', word: 'delete' }] : []), { key: 't s c', word: 'views' }, { key: 'b', word: 'back' }]
+
+/** The confirm step's question: "Delete note #3 · T-12 · 2026-11-20 from .symcc/org-mem.md?" */
+export const orgMemDeleteAsk = (x: OrgMemNote, file: string) => `Delete note ${orgMemNoteHead(x)} from ${file}?`

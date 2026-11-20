@@ -1,6 +1,7 @@
 // T-600: organizational memory (org-mem) (core/org-mem.ts): "Learned:" lines from a report, cleaned, kept once, capped, and shown in prompts.
 import { expect, test } from 'claude-code/testing'
-import { addLearned, cleanLearned, orgMemSection, sameLesson, splitLearned, ORG_MEM_MAX_LINES, LEARNED_LINE_CHARS, LEARNED_ASK } from '../hooks/core/org-mem'
+import { addLearned, cleanLearned, orgMemSection, sameLesson, splitLearned, ORG_MEM_MAX_LINES, LEARNED_LINE_CHARS, LEARNED_ASK, orgMemNotes, orgMemNoteHead, orgMemCount, orgMemSummary, orgMemAbout, deleteOrgMemNote, ORG_MEM_EMPTY } from '../hooks/core/org-mem'
+import { parseCommand } from '../hooks/core/commands'
 import { checkerVerdict, fillPrompt, scoutPrompt, PROMPT_KINDS, BUILT_IN_PROMPTS } from '../hooks/board'
 import { checkerPrompt } from '../hooks/core/checker'
 import { failAsks } from '../hooks/core/failure'
@@ -115,4 +116,48 @@ test('a "Learned:" heading inside a quoted code block is not the section: the re
   expect(failAsks('I changed a.ts. The user sees this:\n```\nLearned:\n- x\n```\nShould I also change b.ts?')).toContain('Should I also change b.ts?')
   // a real section after a quote is still taken
   expect(addLearned(null, `${quote}\n\nLearned:\n- run sh scripts/test-files.sh for one test file`, 'T-1', 'D').added).toEqual(['run sh scripts/test-files.sh for one test file'])
+})
+
+// ---------------- T-619: the notes as the Settings page lists them, and deleting one ----------------
+
+test('T-619: orgMemNotes lists the notes newest first, each its place in the file, task id, date and text', () => {
+  const text = `- T-3 2026-11-18: one\n\n  \n- by hand: with a colon\n- T-7 ${D}: three\n`
+  expect(orgMemNotes(text)).toEqual([
+    { n: 3, id: 'T-7', date: D, text: 'three' },
+    { n: 2, id: '', date: '', text: 'by hand: with a colon' },
+    { n: 1, id: 'T-3', date: '2026-11-18', text: 'one' },
+  ])
+  expect(orgMemNotes(null)).toEqual([])
+  expect(orgMemNotes(' \n\n')).toEqual([])
+  expect(orgMemNoteHead(orgMemNotes(text)[0]!)).toBe(`#3 · T-7 · ${D}`)
+  expect(orgMemNoteHead(orgMemNotes(text)[1]!)).toBe('#2 · written by hand')
+  expect([orgMemCount(0), orgMemCount(1), orgMemCount(4)]).toEqual(['0 notes', '1 note', '4 notes'])
+  expect([orgMemSummary(0), orgMemSummary(2)]).toEqual(['', 'org-mem 2 notes'])
+  expect(ORG_MEM_EMPTY).toBe('No notes yet.')
+  expect(orgMemAbout('.symcc/org-mem.md')).toContain('"Learned:"')
+  expect(orgMemAbout('.symcc/org-mem.md')).toContain(`.symcc/org-mem.md (the newest ${ORG_MEM_MAX_LINES} lines)`)
+})
+
+test('T-619: deleteOrgMemNote takes out exactly that line; a wrong number or a changed line takes out nothing', () => {
+  const text = `- T-3 2026-11-18: one\n\n- two\n- T-7 ${D}: three\n`
+  const r = deleteOrgMemNote(text, 2)
+  expect(r.text).toBe(`- T-3 2026-11-18: one\n\n- T-7 ${D}: three\n`)
+  expect(r.removed).toEqual({ n: 2, id: '', date: '', text: 'two' })
+  expect(deleteOrgMemNote(text, 3).text).toBe('- T-3 2026-11-18: one\n\n- two\n')
+  expect(deleteOrgMemNote(text, 1, 'one').text).toBe(`\n- two\n- T-7 ${D}: three\n`)
+  for (const [n, expect_] of [[0, undefined], [4, undefined], [1, 'not what it says']] as const) {
+    const bad = deleteOrgMemNote(text, n, expect_)
+    expect(bad).toEqual({ text, removed: null })
+  }
+  expect(deleteOrgMemNote(`- T-1 ${D}: only\n`, 1).text).toBe('')
+})
+
+test('T-619: /symcc-settings orgmem delete N is read as a delete of note N; anything else gets the usage line', () => {
+  expect(parseCommand('symcc-settings', 'orgmem delete 3')).toEqual({ kind: 'orgmem-delete', n: 3 })
+  expect(parseCommand('symcc-settings', 'OrgMem DELETE 12')).toEqual({ kind: 'orgmem-delete', n: 12 })
+  for (const args of ['orgmem', 'orgmem delete', 'orgmem delete 0', 'orgmem delete x', 'orgmem remove 2', 'orgmem delete 2 3']) {
+    const c = parseCommand('symcc-settings', args)
+    expect(c?.kind, args).toBe('bad')
+    expect((c as { message: string }).message, args).toContain('/symcc-settings orgmem delete <n>')
+  }
 })

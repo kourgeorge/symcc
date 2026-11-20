@@ -1,5 +1,5 @@
 // The board panel's Settings view.
-import { SETTINGS, SETTING_GROUPS, groupSummaryParts, isSettingPage, settingChoices, cantPlayNotify, type SettingsInput, type SettingName, settingValue, parseSettingValue, settingsKeys, boxHint, pickHint, type RoleDef, DEFAULT_ROLE, mergeRoles, roleKeys, roleEditKeys, rolesKeys, roleNameError, rolePromptKeys, ROLE_PLACEHOLDERS, ROLE_SLOT, ROLE_PROMPTS, promptsOfRole, type RolePromptKind, type KindDef, mergeKinds, kindsKeys, findKind, kindNameError, ALWAYS_ON_KINDS, isCheckerRole, checkerOn } from '../../board'
+import { SETTINGS, SETTING_GROUPS, groupSummaryParts, isSettingPage, settingChoices, cantPlayNotify, type SettingsInput, type SettingName, type SettingPage, settingValue, parseSettingValue, settingsKeys, boxHint, pickHint, type RoleDef, DEFAULT_ROLE, mergeRoles, roleKeys, roleEditKeys, rolesKeys, roleNameError, rolePromptKeys, ROLE_PLACEHOLDERS, ROLE_SLOT, ROLE_PROMPTS, promptsOfRole, type RolePromptKind, type KindDef, mergeKinds, kindsKeys, findKind, kindNameError, ALWAYS_ON_KINDS, isCheckerRole, checkerOn } from '../../board'
 import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, brokenLabel, defNamed } from '../../core/def-files'
 import { S } from '../../app/state'
 import { type $ } from '../panel'
@@ -12,6 +12,9 @@ import { arrows, headingFocused, row } from './arrows'
 import { settingsPageVs } from './vscode-settings'
 import { rolesPageVs, rolePageVs, brokenRolePageVs, rolePromptPageVs, roleEditPageVs, kindsPageVs, kindPageVs, kindEditPageVs } from './vscode-roles'
 import { claudeHost } from '../host'
+import { ORG_MEM_TITLE, ORG_MEM_EMPTY, orgMemAbout, orgMemCount, orgMemSummary, orgMemDeleteAsk, orgMemKeys, orgMemNoteHead, type OrgMemNote } from '../../core/org-mem'
+import { orgMemView, orgMemNow, deleteOrgMem, resetOrgMemView } from '../../app/org-mem'
+import { orgMemPageVs } from './vscode-orgmem'
 
 /** A role's file as the panel names it: .<name>/roles/<role>.md. */
 const roleFileOf = (name: string) => `${S.N.dir}/roles/${name}.md`
@@ -475,6 +478,64 @@ function kindsPage($: $, pane: PaneParts, kinds: KindDef[], builtIn: KindDef[], 
   )
 }
 
+// ---------------- the Organizational memory page (T-619) ----------------
+
+/** The note a press of Delete (x) is about: the note row that holds the focus, else the first (newest) one. */
+const focusedNote = (notes: readonly OrgMemNote[]) => {
+  const m = /^orgmemRow:(\d+)$/.exec(arrows.focused ?? '')
+  return (m ? notes.find(x => x.n === Number(m[1])) : undefined) ?? notes[0]
+}
+
+/** The Organizational memory page, opened from Settings' Org-mem row: what org-mem is, then its notes newest first
+ *  (number, task id, date, text); Enter on a note or Delete (x) asks to delete it (y yes, x cancel); Back (b) to Settings. */
+function orgMemPage($: $, pane: PaneParts, notes: OrgMemNote[], file: string) {
+  if (pane.vscode) return orgMemPageVs($, pane, notes, file)
+  const { Box, Text, Button, act, C, header, footer, heading } = pane
+  const redraw = () => $.ui.invalidate('ui.render')
+  const ask = orgMemView.confirm === null ? undefined : notes.find(x => x.n === orgMemView.confirm)
+  const askDelete = (x: OrgMemNote | undefined) => () => void (x && ((orgMemView.confirm = x.n), redraw()))
+  const del = (x: OrgMemNote) => act(async () => {
+    const r = await deleteOrgMem(claudeHost($), x.n, x.text)
+    orgMemView.confirm = null
+    $.ui.toast(S.N.toast(r.text))
+    redraw()
+  })
+  const confirmBox = (x: OrgMemNote) => (
+    <Box key="orgmem-delete-box" flexDirection="column" borderStyle="round" borderColor={C('warning')} paddingX={1}>
+      <Text color={C('warning')}>{orgMemDeleteAsk(x, file)}</Text>
+      <Box flexDirection="row" gap={1}>
+        <Button key="orgmem-delete-yes" label="Yes, delete (y)" hotkey="y" autoFocus onPress={del(x)} />
+        <Button key="orgmem-delete-cancel" label="Cancel (x)" hotkey="x" onPress={() => ((orgMemView.confirm = null), redraw())} />
+      </Box>
+    </Box>
+  )
+  return (
+    <Box flexDirection="column">
+      {header()}
+      {heading(ORG_MEM_TITLE)}
+      <Text key="orgmem-about" wrap="wrap" color={C('inactive')}>{orgMemAbout(file)}</Text>
+      <Text key="orgmem-about-blank"> </Text>
+      {notes.length ? (
+        notes.flatMap((x, i) => [
+          <Button key={row(`orgmemRow:${x.n}`)} plain label={`${orgMemNoteHead(x)}: ${x.text}`} autoFocus={i === 0 && !ask ? true : undefined} onPress={askDelete(x)}>
+            <Text wrap="wrap">
+              <Text bold color={C('claude')}>{`  ${orgMemNoteHead(x)}`}</Text>
+              <Text color={C('text')}>{`  ${x.text}`}</Text>
+            </Text>
+          </Button>,
+          ...(ask?.n === x.n ? [confirmBox(x)] : []),
+        ])
+      ) : (
+        <Text key="orgmem-empty" color={C('inactive')}>{`  ${ORG_MEM_EMPTY}`}</Text>
+      )}
+      <Text key="orgmem-blank"> </Text>
+      {notes.length && !ask ? <Button key="orgmem-delete" label="Delete (x)" hotkey="x" onPress={() => askDelete(focusedNote(notes))()} /> : null}
+      <Button key="orgmem-back" label="Back (b)" hotkey="b" onPress={() => (resetOrgMemView(), redraw())} />
+      {footer(orgMemKeys(!!ask, notes.length > 0), 'orgmem-keys')}
+    </Box>
+  )
+}
+
 /** The Settings view: the settings under their category headings (SETTING_GROUPS), one row each; Enter changes it.
  *  Each heading is a row too: Enter opens or closes its group (S.settingsOpen, all closed at first, the first heading
  *  focused); a closed one shows its values in short on its line, and ↑↓ skip its rows (they aren't drawn). Every box and pick list has a Cancel button (x), and
@@ -502,6 +563,9 @@ export async function settingsPage($: $, pane: PaneParts) {
   if (openedKind && kindView.draft && !openedBrokenKind) return kindEditPage($, pane, defSource(openedKind.name, kl.builtIn, kl.project))
   if (openedKind || openedBrokenKind) return kindPage($, pane, openedBrokenKind ? undefined : openedKind, openedKind ? defSource(openedKind.name, kl.builtIn, kl.project) : undefined, openedBrokenKind, kl.builtIn)
   if (kindView.list) return kindsPage($, pane, kinds, kl.builtIn, kl.project, kl.broken)
+  const om = await orgMemNow(claudeHost($))
+  if (orgMemView.open) return orgMemPage($, pane, om.notes, om.file)
+  const orgMemCountText = orgMemCount(om.notes.length)
   const nameWidth = Math.max(...SETTINGS.map(x => x.name.length))
   const offCount = roles.filter(r => r.off && !isCheckerRole(r.name)).length
   const rolesCount = `${roles.length} role${roles.length === 1 ? '' : 's'}${offCount ? ` · ${offCount} off` : ''}`
@@ -593,10 +657,17 @@ export async function settingsPage($: $, pane: PaneParts) {
   }
   const openRoles = () => ((S.settingEdit = null), (S.settingPick = null), (roleView.list = true), $.ui.invalidate('ui.render'))
   const openKinds = () => ((S.settingEdit = null), (S.settingPick = null), (kindView.list = true), $.ui.invalidate('ui.render'))
+  const openOrgMem = () => ((S.settingEdit = null), (S.settingPick = null), (orgMemView.open = true), (orgMemView.confirm = null), $.ui.invalidate('ui.render'))
   // VS Code's side panel: groups as headings, a Select or a box per setting, no key hints (see vscode-settings.tsx)
-  if (pane.vscode) return settingsPageVs($, pane, { rolesCount, kindsCount, save: saveIt, openRoles, openKinds })
-  const pageRow = (page: 'roles' | 'kinds') =>
-    page === 'roles' ? (
+  if (pane.vscode) return settingsPageVs($, pane, { rolesCount, kindsCount, orgMemCount: orgMemCountText, save: saveIt, openRoles, openKinds, openOrgMem })
+  const pageRow = (page: SettingPage) =>
+    page === 'orgmem' ? (
+      <Button key={row('settings-orgmem')} plain label={`Org-mem: ${orgMemCountText}`} onPress={openOrgMem}>
+        <Text bold color={C('claude')}>{'Org-mem'.padEnd(nameWidth)}</Text>
+        <Text bold color={C('text')}> {orgMemCountText}</Text>
+        <Text color={C('inactive')}> · Enter opens the Organizational memory page: the notes agents left for the next ones, to read or delete</Text>
+      </Button>
+    ) : page === 'roles' ? (
       <Button key={row('settings-roles')} plain label={`Roles: ${rolesCount}`} onPress={() => ((S.settingEdit = null), (S.settingPick = null), (roleView.list = true), $.ui.invalidate('ui.render'))}>
         <Text bold color={C('claude')}>{'Roles'.padEnd(nameWidth)}</Text>
         <Text bold color={C('text')}> {rolesCount}</Text>
@@ -614,7 +685,7 @@ export async function settingsPage($: $, pane: PaneParts) {
       {header()}
       {SETTING_GROUPS.flatMap((g, gi) => {
         const open = S.settingsOpen.includes(g.title)
-        const sum = groupSummaryParts(g, v, Math.max(20, pane.width - 4), { roles: rolesCount, kinds: kindsCount })
+        const sum = groupSummaryParts(g, v, Math.max(20, pane.width - 4), { roles: rolesCount, kinds: kindsCount, orgmem: orgMemSummary(om.notes.length) })
         const label = open ? `▾ ${g.title}` : `▸ ${sum.title}${sum.values}`
         return [
           ...(gi ? [<Text key={`group-blank:${g.title}`}> </Text>] : []),

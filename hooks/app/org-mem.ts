@@ -1,7 +1,7 @@
 // T-600, T-620: organizational memory (org-mem) on disk (<project>/.<name>/org-mem.md; the pure parts are in core/org-mem.ts).
 // A worker's or checker's report adds its "Learned:" lines (learnFrom); every new worker, checker and scout gets the
 // org-mem in its prompt (orgMemText). The owner and the lead may edit or trim the file by hand.
-import { addLearned, orgMemFile, orgMemSection } from '../core/org-mem'
+import { addLearned, deleteOrgMemNote, orgMemFile, orgMemNotes, orgMemSection, type OrgMemNote } from '../core/org-mem'
 import type { Host } from '../host'
 import { S } from './state'
 import { now, oneAtATime, path, safeWrite } from './store'
@@ -48,4 +48,36 @@ export async function moveOldOrgMem(host: Host): Promise<void> {
   } catch {
     // the old notes stay where they are; org-mem starts empty
   }
+}
+
+/** T-619: what the Organizational memory page under Settings shows: whether it is open, and the note whose delete
+ *  waits for a yes (its number, see OrgMemNote; null for none). */
+export const orgMemView = { open: false, confirm: null as number | null }
+
+/** Closes the Organizational memory page. */
+export function resetOrgMemView() {
+  orgMemView.open = false
+  orgMemView.confirm = null
+}
+
+/** T-619: org-mem's notes for the Settings page (newest first, see orgMemNotes) and its file's path in the project
+ *  (".symcc/org-mem.md"); no notes when the file is missing or can't be read. */
+export async function orgMemNow(host: Host): Promise<{ notes: OrgMemNote[]; file: string }> {
+  return { notes: S.root ? orgMemNotes(await readGuide(host)) : [], file: orgMemFile(S.N.dir) }
+}
+
+/**
+ * T-619: deletes note `n` (its place in the file, see OrgMemNote) from org-mem, one save at a time with the other
+ * writers; `expect`: its text as the page showed it (see deleteOrgMemNote). What happened, in a short line.
+ */
+export async function deleteOrgMem(host: Host, n: number, expect?: string): Promise<{ ok: boolean; text: string }> {
+  if (!S.root) return { ok: false, text: 'No project folder yet.' }
+  const file = orgMemFile(S.N.dir)
+  return oneAtATime(file, async () => {
+    const old = await readGuide(host)
+    const { text, removed } = deleteOrgMemNote(old, n, expect)
+    if (!removed) return { ok: false, text: `No note ${n} in ${file} (it may have changed): nothing deleted.` }
+    await safeWrite(host, path(file), text, 'the organizational memory (org-mem)')
+    return { ok: true, text: `Deleted note ${n} from ${file}${removed.id ? ` (${removed.id}${removed.date ? ` ${removed.date}` : ''})` : ''}.` }
+  }).catch((err: Error) => ({ ok: false, text: `Couldn't delete note ${n}: ${err?.message ?? err}` }))
 }

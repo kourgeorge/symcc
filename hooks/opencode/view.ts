@@ -4,7 +4,7 @@
 // to draw the banner and band (folder, home, name, version), to .<name>/view.json in the project's main folder. The
 // TUI reads that file on a timer (board-view.ts parses it). Each scout's recent runs ride along (scout_runs, T-559:
 // the TUI's scout page lists them; a run's report stays in its own file, which the TUI reads when the run is opened),
-// and so do the roles and kinds (T-562: the TUI's Roles and Kinds pages under Settings list them) and each task in review's changed files (T-580: the TUI runs no git).
+// and so do the roles and kinds (T-562: the TUI's Roles and Kinds pages under Settings list them), org-mem's notes (T-619: its Organizational memory page) and each task in review's changed files (T-580: the TUI runs no git).
 // The panel's own values (which task, tab and scout are
 // open) stay in the TUI; the server side keeps them in memory only, as their start values for symcc's logic.
 import type { SymccView } from '../../types'
@@ -15,6 +15,7 @@ import { parseScoutRuns, safeScoutFile, scoutRunsFile, scoutRunTasks, mergeRoles
 import { changedFiles } from '../app/review'
 import { roleLists } from '../app/roles'
 import { kindLists } from '../app/kinds'
+import { orgMemNow } from '../app/org-mem'
 import { VIEW_FILE, VIEW_RUNS_KEPT, viewFileText, viewDefs, type ScoutRuns, type ViewDef, type ViewChanges } from './board-view'
 
 /** The empty view, as a panel starts with. */
@@ -41,7 +42,8 @@ export function viewFilePanel(host: Pick<Host, 'fs' | 'run' | 'ui' | 'plugin'>):
         const scout_runs = await scoutRunsOf(host, root, v)
         const defs = await defsOf(host as Host).catch(() => ({}))
         const changes = await changesOf(host as Host, v)
-        const text = viewFileText({ root, home: S.home, name: S.N.name, version: S.version, written_at: at, view: { ...(v as PaneView), ...(Object.keys(scout_runs).length ? { scout_runs } : {}), ...defs, ...(Object.keys(changes).length ? { changes } : {}) } })
+        const org_mem = await orgMemNow(host as Host).then(r => r.notes).catch(() => [])
+        const text = viewFileText({ root, home: S.home, name: S.N.name, version: S.version, written_at: at, view: { ...(v as PaneView), ...(Object.keys(scout_runs).length ? { scout_runs } : {}), ...defs, ...(Object.keys(changes).length ? { changes } : {}), org_mem } })
         await safeWrite(host as Host, file, text, 'the board view')
       })
       .catch((err: Error) => host.ui.log(`couldn't write ${file}: ${err?.message ?? err}`))

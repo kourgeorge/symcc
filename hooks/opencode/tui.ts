@@ -21,9 +21,10 @@
 // modules (Solid and OpenTUI's Solid renderer) are passed in (TuiRuntime), so this file type-checks and its tests
 // run without them. The names and shapes below are @opencode/plugin 2.3.0's tui Context (only what is used).
 import { DEFAULT_NAME, dataDir } from '../name'
-import { VIEW_FILE, parseViewFile, bandDraw, panelLines, panelKeys, panelTaskActions, approveInProgress, panelRoleChoices, TASK_ACTION_COMMANDS, LETTER_KEYS, type LetterKey, hasPage, answerOptions, actionCommand, moveCursor, OWN_ANSWER, GROUPS_OPEN, groupOf, groupId, scoutRunsIn, settingsPlace, SETTINGS_OPEN, settingGroupOf, settingGroupId, PANEL_TABS, CHOICE_KEYS, approveSent, type ApproveSent, type ChoiceKey, type ViewFile, type Line, type PanelAction, type PanelHit, type PanelKey, type PanelGroup, type PanelTab, type BandHit } from './board-view'
+import { VIEW_FILE, parseViewFile, bandDraw, panelLines, panelKeys, panelTaskActions, approveInProgress, panelRoleChoices, TASK_ACTION_COMMANDS, LETTER_KEYS, type LetterKey, hasPage, answerOptions, actionCommand, moveCursor, OWN_ANSWER, GROUPS_OPEN, groupOf, groupId, scoutRunsIn, settingsPlace, orgMemNoteOf, SETTINGS_OPEN, settingGroupOf, settingGroupId, PANEL_TABS, CHOICE_KEYS, approveSent, type ApproveSent, type ChoiceKey, type ViewFile, type Line, type PanelAction, type PanelHit, type PanelKey, type PanelGroup, type PanelTab, type BandHit } from './board-view'
 import { SETTING_GROUPS, isScoutRunReport, taskReports, parseSettingValue, settingChoices, settingInfo, settingValue, isSettingPage, everyText, everyMinutesOf, type SettingName, type ScoutEditField } from '../board'
 import type { SymccScout } from '../../types'
+import { orgMemDeleteAsk, orgMemFile } from '../core/org-mem'
 
 export type { PanelKey, PanelHit, PanelTab }
 
@@ -438,6 +439,14 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     if (key === 'up' || key === 'down') return void setCur(moveCursor(cur(), key === 'up' ? -1 : 1, ids.length))
     const place = open ? settingsPlace(f, open) : null
     if (key === 'back') return place?.def ? openPage(place.list) : open ? openPage('') : showTab('tasks')
+    // the Organizational memory page: Enter or x on a note asks, then deletes it with /<name>-settings orgmem delete N
+    if (place?.list === 'orgmem') {
+      const note = ids.length ? orgMemNoteOf(f, ids[moveCursor(cur(), 0, ids.length)]!) : undefined
+      if ((key !== 'x' && key !== 'open') || !note) return
+      const yes = await ctx.ui.dialog.select({ title: orgMemDeleteAsk(note, orgMemFile(dataDir(f?.name || name))), options: [{ title: 'Yes, delete', value: 'yes' }, { title: 'Cancel', value: 'no' }] })
+      if (yes === 'yes') return send(sessionID, { kind: 'orgmem-delete', n: note.n })
+      return
+    }
     if (key === 'open' && ids.length && !place?.def) {
       const id = ids[moveCursor(cur(), 0, ids.length)]!
       const g = open ? null : settingGroupOf(id)
