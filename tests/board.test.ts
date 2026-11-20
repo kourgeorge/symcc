@@ -9,6 +9,7 @@ import { parseScoutMemory, parseScoutUsage, scoutMemoryText } from '../hooks/boa
 import { type Board, type Playable, DEFAULT_ARCHIVE_DAYS, toArchive, removeArchived, archivedCount, archivedNote, depDone, readArchive, emptyArchive, addToArchive, archiveText, bringBack, parseSettingsCommand } from '../hooks/board'
 import { detailRows, wrapSegs, makeOrigin, fromText, originWho, createdLine, evidenceText, emptyHeard, utcTime } from '../hooks/board'
 import { putTask, tryMark, tryTag, tryTone, bandLeads } from '../hooks/board'
+import { testsShort, testName } from '../hooks/board'
 import { cleanFiles, taskCopyText, copyToast, realPathOf, brokenLinkText } from '../hooks/board'
 import { fakeDisk } from './fake-disk'
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
@@ -1798,16 +1799,50 @@ test('a typed test_commands line is one whole command; several go in a list or o
   expect(applySettings(emptyBoard(), { test_commands: ['a', 'b', 'c', 'd', 'e', 'f'] }).board.test_commands).toEqual(['a', 'b', 'c', 'd', 'e'])
 })
 
-test('the board shows several test commands as a list, not joined with &&', () => {
+test('the board shows several test commands short, not joined with && (T-607: no JSON list in the header)', () => {
   const b = { ...emptyBoard(), branch: 'main', test_commands: ['cd web && npm test', 'npm run lint'] }
   const banner = bannerLines(b, '/Users/me/repositories/symcc', '/Users/me', true, 120).map(bannerText).join('\n')
-  expect(banner).toContain('tests: ["cd web && npm test","npm run lint"]')
+  expect(banner).toContain('tests: npm, npm ·')
   expect(banner).not.toContain('npm test && npm run lint')
   const [withTask] = addTask(b, { origin: W, title: 'A' }, T)
   const text = boardText(withTask)
-  expect(text).toContain('tests: ["cd web && npm test","npm run lint"]')
+  expect(text).toContain('tests: npm, npm ·')
   expect(text).not.toContain('npm test && npm run lint')
   expect(boardText({ ...withTask, test_commands: ['npm test'] })).toContain('tests: npm test ·')
+  // Settings still shows the full list
+  expect(settingValue(b, 'test_commands')).toBe('["cd web && npm test","npm run lint"]')
+})
+
+test('T-607: the header shows 0, 1 and 5 long test commands short, without brackets or quotes', () => {
+  const long = 'AI_API_KEY=test-not-a-real-key node --test $(ls tests/*.test.js) --reporter spec'
+  const five = ['npx tsc --noEmit', long, 'sh scripts/test-opencode-host.sh', 'sh scripts/test-node-host.sh', 'claude plugin test .']
+  const part = (cmds: string[]) => {
+    const [t] = addTask({ ...emptyBoard(), test_commands: cmds }, { origin: W, title: 'A' }, T)
+    return / · tests: (.*?) · up to /.exec(boardText(t).split('\n')[0]!)![1]!
+  }
+  expect(part([])).toBe('none set')
+  expect(part([long])).toBe('node')
+  expect(part(five)).toBe('5 commands')
+  expect(part(['claude plugin test .', 'sh scripts/typecheck.sh'])).toBe('claude, typecheck')
+  for (const cmds of [[], [long], five]) {
+    const p = part(cmds)
+    expect(p.length).toBeLessThan(30)
+    expect(p).not.toMatch(/[\["']/)
+    const banner = bannerLines({ ...emptyBoard(), branch: 'main', test_commands: cmds }, '/r', '/h', true, 200).map(bannerText).join('\n')
+    expect(banner).not.toMatch(/tests: .*[\["]/)
+  }
+  expect(testsShort([long])).toBe('node')
+  expect(testsShort(['x'.repeat(40)])).toBe('1 command')
+  // no stray comma when a command is only VAR=value words, and no quotes from a single short command
+  expect(testsShort(['FOO=1', 'npm test'])).toBe('2 commands')
+  expect(testsShort(['A=1 B=2', 'C=3'])).toBe('2 commands')
+  expect(testsShort(["echo 'hi'"])).toBe('echo')
+  expect(testsShort(["sh -c 'x'"])).toBe('sh')
+  expect(testName('npx tsc --noEmit')).toBe('tsc')
+  expect(testName('sh scripts/typecheck.sh')).toBe('typecheck')
+  // Settings and the settings tool still give the whole list
+  expect(settingValue({ test_commands: five }, 'test_commands')).toBe(JSON.stringify(five))
+  expect(applySettings(emptyBoard(), { test_commands: five }).changes[0]!.said).toBe(`tests: ${JSON.stringify(five)}`)
 })
 
 test('typed test_commands: outer quotes are stripped only when they wrap the whole value', () => {

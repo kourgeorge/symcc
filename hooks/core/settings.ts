@@ -389,6 +389,43 @@ export function groupSummary(g: SettingGroup, b: Partial<Board>, width: number, 
  */
 export const testCommandsText = (cmds: readonly string[]): string => (!cmds.length ? 'none' : cmds.length === 1 && !cmds[0]!.trim().startsWith('[') ? cmds[0]! : JSON.stringify(cmds))
 
+/** The longest the short tests text in a header may be (T-607); longer, it says how many commands there are. */
+export const TESTS_SHORT_MAX = 24
+
+/** Words that only run another program ("sh scripts/typecheck.sh", "npx tsc"): the short name is the next word. */
+const RUNNERS = new Set(['sh', 'bash', 'zsh', 'npx', 'bunx', 'pnpx', 'node', 'deno', 'python', 'python3', 'env', 'exec'])
+
+/**
+ * A test command's short name: its program, without "VAR=value" in front, "cd dir &&", or a runner like sh or npx;
+ * a script path gives its file name without the ending. "sh scripts/typecheck.sh" → "typecheck",
+ * "claude plugin test ." → "claude", "npx tsc --noEmit" → "tsc".
+ */
+export function testName(cmd: string): string {
+  let words = cmd.trim().split(/\s+/)
+  if (words[0] === 'cd' && words.includes('&&')) words = words.slice(words.indexOf('&&') + 1)
+  words = words.filter((w, i) => !(/^[A-Za-z_]\w*=/.test(w) && words.slice(0, i).every(x => /^[A-Za-z_]\w*=/.test(x))))
+  const first = words[0] ?? ''
+  const name = (w: string) => w.replace(/\/+$/, '').split('/').pop()!.replace(/\.[A-Za-z]+$/, '')
+  const next = words[1]
+  if (RUNNERS.has(first) && next && /^[\w@.\/:-]+$/.test(next) && !next.startsWith('-')) return name(next) || first
+  return name(first) || first
+}
+
+/**
+ * The test commands for a header line, short (T-607): "none set"; one short command whole ("npm test");
+ * else their short names ("claude, typecheck") when they fit in TESTS_SHORT_MAX; else "5 commands".
+ * Never the JSON list: the Settings page and the settings tool show that (testCommandsText).
+ */
+export function testsShort(cmds: readonly string[]): string {
+  const list = cmds.map(c => c.trim()).filter(Boolean)
+  if (!list.length) return 'none set'
+  if (list.length === 1 && list[0]!.length <= TESTS_SHORT_MAX && !/[\["']/.test(list[0]!)) return list[0]!
+  const parts = list.map(testName)
+  const names = parts.join(', ')
+  if (parts.every(Boolean) && names.length <= TESTS_SHORT_MAX && !/[\["']/.test(names)) return names
+  return `${list.length} ${list.length === 1 ? 'command' : 'commands'}`
+}
+
 /** A setting's current value as text: "npm test", '["npm test", "npm run lint"]', "on", "5", "none". */
 export function settingValue(b: Partial<Board>, name: SettingName): string {
   const d = emptyBoard()

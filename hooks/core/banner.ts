@@ -13,7 +13,7 @@ import { PLAN_NOTE } from './plan'
 import { type CrewBoard, withCrew, parseSearch, searchTasks, BOARD_STATUSES, statusCell, STEP_NOTE, STEP_WORD, TITLE_ROOM, rowStates, stateText, rowMark, APPROVED_NOTE } from './panel'
 import { approveRunning, checkStepNow, shownStatus } from './lead'
 import { whyFailed } from './failure'
-import { offStatusParts, testCommandsText } from './settings'
+import { offStatusParts, testsShort } from './settings'
 import { type OwnerQuestion, openQuestions, questionsForYou, questionLine, questionsLabel } from './questions'
 import { type LogoFrame, LOGO_MIN_WIDTH, restFrame } from './logo'
 
@@ -252,7 +252,7 @@ export function bannerLines(b: BannerBoard, root: string, home: string, driving:
     fact(driving ? 'this session drives' : 'driven by another session'),
   ])
   const l3 = join([
-    b.test_commands.length ? fact(`tests: ${testCommandsText(b.test_commands)}`) : [{ text: 'no test command', tone: 'warning' as const }],
+    b.test_commands.length ? fact(`tests: ${testsShort(b.test_commands)}`) : [{ text: 'no test command', tone: 'warning' as const }],
     fact(`${b.max_parallel} at once`),
     fact(`${b.max_minutes} min`),
     fact(`${b.auto_retries} ${b.auto_retries === 1 ? 'retry' : 'retries'}`),
@@ -347,7 +347,7 @@ export function boardText(b: Board, nowMs?: number, where?: string, name: string
   const s: BoardSections = boardSections(b.tasks, nowMs ?? NaN, offsetMin)
   const closed = [...s.today, ...s.days.flatMap(g => g.tasks)]
   const all = [...s.open, ...s.backlog, ...closed]
-  const head = `${modeText(modeOf(b))} · tests: ${b.test_commands.length ? testCommandsText(b.test_commands) : 'none set'} · up to ${b.max_parallel} at once · a worker may run ${b.max_minutes} min · ${b.auto_retries} auto retries on failing tests`
+  const head = `${modeText(modeOf(b))} · tests: ${testsShort(b.test_commands)} · up to ${b.max_parallel} at once · a worker may run ${b.max_minutes} min · ${b.auto_retries} auto retries on failing tests`
   const total = totalLine(b, nowMs)
   const search = filter.search?.trim() ?? ''
   let body: string[]
