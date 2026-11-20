@@ -57,4 +57,21 @@ else
   grep -q 'href="../guide.html">Guide' "$tmp/small/research/note.html" || bad "research page nav not relinked"
 fi
 
+# 4. (T-594) a dangerous --out is refused and nothing is deleted; an earlier build is rebuilt fine
+for o in . site docs scripts ..; do
+  if (cd "$tmp/src" && bun "$here/scripts/build-site.ts" --root "$tmp/src" --out "$o") >"$tmp/log" 2>&1; then
+    bad "--out $o was not refused"
+  else
+    grep -q 'Nothing was deleted' "$tmp/log" || bad "--out $o: no clear refusal message: $(cat "$tmp/log")"
+  fi
+done
+[ -f "$tmp/src/README.md" ] && [ -f "$tmp/src/site/index.html" ] && [ -f "$tmp/src/docs/guide.md" ] || bad "a refused --out still deleted files"
+mkdir -p "$tmp/other" && echo keep > "$tmp/other/keep.txt"
+bun "$here/scripts/build-site.ts" --root "$tmp/src" --out "$tmp/other" >"$tmp/log" 2>&1 && bad "a non-empty folder without the marker was not refused"
+[ -f "$tmp/other/keep.txt" ] || bad "a refused non-empty folder lost its file"
+[ -f "$tmp/small/.symcc-site" ] || bad "the build does not write its .symcc-site marker"
+bun "$here/scripts/build-site.ts" --root "$tmp/src" --out "$tmp/small" >"$tmp/log" 2>&1 || bad "rebuilding into an earlier build failed: $(cat "$tmp/log")"
+bun "$here/scripts/build-site.ts" --root "$tmp/src" >"$tmp/log" 2>&1 || bad "default build (--out _site) failed: $(cat "$tmp/log")"
+[ -f "$tmp/src/_site/guide.html" ] || bad "default build did not write _site/guide.html"
+
 if [ "$fails" -eq 0 ]; then echo "build-site: all checks passed"; else echo "build-site: $fails check(s) failed"; exit 1; fi
