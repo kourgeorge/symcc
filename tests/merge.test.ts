@@ -2488,6 +2488,7 @@ test('changing only order or after on a running task keeps its worker and saves 
   expect(t.order).toBe(7)
   expect(t.after).toEqual(['T-2'])
   expect(t.history.some(h => h.text.includes('restarted'))).toBe(false)
+  expect(t.history.map(h => h.text)).toContain('waits on changed: nothing → T-2')
   expect(workers.has('ag1')).toBe(true)
   await runTool(w.$, 'change', { task: 'T-1', details: 'new plan' })
   const r = find(await load(w.$), 'T-1')!

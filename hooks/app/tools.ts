@@ -631,7 +631,11 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       const queueOnly = t.status === 'doing' && ['order', 'after', 'needs_review'].some(k => a[k] !== undefined) && ['title', 'details', 'add_details', 'files', 'role', 'kind', 'answer', 'merge_into'].every(k => a[k] === undefined)
       if (queueOnly) {
         const p = fields()
-        await change($, x => patchTask(x, t.id, p, now(), S.N.dir))
+        // No restart line, but a changed after-list still gets its "waits on changed" line (the health check counts them).
+        await change($, x => {
+          const lines = changeLines(t, p, false)
+          return patchTask(x, t.id, { ...p, ...(lines.length ? { history: withHistory(find(x, t.id)?.history ?? t.history, now(), ...lines) } : {}) }, now(), S.N.dir)
+        })
         return `${t.id} updated (its worker keeps running; this counts from its next try)`
       }
       const wasDoing = t.status === 'doing'
