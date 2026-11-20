@@ -284,7 +284,7 @@ export const roleTag = (t: { kind?: unknown; role?: string }): string => {
 
 /** The secondary-color (inactive) text at the right end of a task row: "tester" for a task being worked on (its try shows
  *  after its time instead, see rowStates; its
- *  question, "T-4 has run 50 min. Give it more time?", while it asks the owner for more time), "after T-3" for
+ *  question, "T-4 has run 50 min. Give it more time?", while it asks the owner for more time), "waits for T-3" for
  *  one waiting on unfinished tasks (else its role; an investigation's starts with "[investigation]"), "Enter to review"
  *  in review ("[investigation]" for an answered investigation, whose status column says "answer"; a and x only work on the task's
  *  own page, so the list does not offer them), the question of a
@@ -307,7 +307,7 @@ function rowExtraOf(t: BoardTask, tasks: Pick<SymccTask, 'id' | 'status'>[], max
     case 'todo':
     case 'paused': {
       const open = (t.after ?? []).filter(id => tasks.some(x => x.id === id && x.status !== 'done'))
-      return open.length ? `after ${open.join(', ')}` : roleTag(t)
+      return open.length ? `waits for ${open.join(', ')}` : roleTag(t)
     }
     case 'review':
       return isInvestigation(t) ? kindTag(t) : 'Enter to review'
@@ -333,14 +333,26 @@ export function fileWaitText(t: Pick<BoardTask, 'status' | 'merge_wait' | 'merge
 /** Cuts text to `n` columns, ending with "…" when cut. */
 const cutTo = (s: string, n: number) => (n <= 0 ? '' : ellipsis(s, n))
 
+/** The fewest columns a cut extra keeps (see fitRow): less than that says nothing, so the extra goes instead. */
+const EXTRA_ROOM = 8
+
 /** Fits a task row's title and extra after `lead` columns (indent, id, mark and status) in `width` columns: the
  *  extra goes to the right end (`pad` fills the gap, at least two spaces) when the whole title fits beside it;
- *  otherwise the extra is left out first (or, with `cutExtra`, cut to fit), then the title is cut with "…". */
+ *  otherwise the title is cut with "…" so the whole extra still shows, as long as TITLE_ROOM columns (or the whole
+ *  title, when shorter) stay for it; then the extra is cut with "…" too (its start kept, at least EXTRA_ROOM
+ *  columns); only when even that does not fit is the extra left out and the title cut to the room. With `cutExtra`
+ *  (a failed task's reason) the extra is cut first, keeping the whole title, when that leaves it 12 columns or more. */
 export function fitRow(lead: number, title: string, extra: string, width: number, cutExtra = false): { title: string; pad: string; extra: string } {
   const room = Math.max(1, width - lead)
-  if (extra && title.length + 2 + extra.length <= room) return { title, pad: ' '.repeat(room - title.length - extra.length), extra }
+  if (!extra) return { title: cutTo(title, room), pad: '', extra: '' }
+  if (title.length + 2 + extra.length <= room) return { title, pad: ' '.repeat(room - title.length - extra.length), extra }
   // `cutExtra` (a failed task's reason): the extra is cut with "…" to the room the whole title leaves, when that is 12 columns or more
-  if (extra && cutExtra && room - title.length - 2 >= 12) return { title, pad: '  ', extra: cutTo(extra, room - title.length - 2) }
+  if (cutExtra && room - title.length - 2 >= 12) return { title, pad: '  ', extra: cutTo(extra, room - title.length - 2) }
+  const floor = Math.min(title.length, TITLE_ROOM)
+  // the title is cut so the whole extra stays at the right end
+  if (room - 2 - extra.length >= floor) return { title: cutTo(title, room - 2 - extra.length), pad: '  ', extra }
+  // the title keeps its floor and the extra is cut, keeping its start
+  if (room - floor - 2 >= EXTRA_ROOM) return { title: cutTo(title, floor), pad: '  ', extra: cutTo(extra, room - floor - 2) }
   return { title: cutTo(title, room), pad: '', extra: '' }
 }
 

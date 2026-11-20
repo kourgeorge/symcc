@@ -585,7 +585,7 @@ test('the board list shows "→ branch" only for a task that merges into another
   expect(rowExtra(t, [t, u], 'main')).toBe('→ feature-x')
   expect(rowExtra(u, [t, u], 'main')).toBe('')
   expect(rowExtra(t, [t, u], 'feature-x')).toBe('')
-  expect(rowExtra({ ...t, after: [u.id] }, [t, u], 'main')).toBe('→ feature-x · after T-2')
+  expect(rowExtra({ ...t, after: [u.id] }, [t, u], 'main')).toBe('→ feature-x · waits for T-2')
 })
 
 test("a task waiting only for the owner's files: its row and keys say to commit or stash them; a question is unchanged", () => {
@@ -2943,7 +2943,7 @@ test('task rows: a short status column and an inactive-colored extra; the extra 
   expect(rowExtra({ ...base, attempts: 2 }, tasks)).toBe('frontend')
   expect(rowExtra({ ...base, role: 'general', attempts: 1 }, tasks)).toBe('')
   expect(rowExtra({ ...base, role: 'general', attempts: 3 }, tasks)).toBe('')
-  expect(rowExtra(tasks[1]!, tasks)).toBe('after T-5')
+  expect(rowExtra(tasks[1]!, tasks)).toBe('waits for T-5')
   expect(rowExtra({ ...tasks[1]!, after: ['T-1'] }, tasks)).toBe('')
   expect(rowExtra(tasks[3]!, tasks)).toBe('Enter to review')
   expect(rowExtra(tasks[2]!, tasks)).toBe('')
@@ -2952,11 +2952,22 @@ test('task rows: a short status column and an inactive-colored extra; the extra 
   expect(statusCell(asking, now)).toBe('more time?')
   expect(rowExtra(asking, tasks, '', 45)).toBe('T-5 has run 55 min. Give it more time?')
   expect(rowExtra({ ...asking, extra_minutes: undefined }, tasks)).toBe(`T-5 has run ${emptyBoard().max_minutes} min. Give it more time?`)
-  // the extra sits at the right end; when the whole title does not fit beside it, it goes, then the title is cut
+  // the extra sits at the right end; when the whole title does not fit beside it, the title is cut first (down to
+  // TITLE_ROOM), then the extra is cut (keeping its start), and only at a very narrow width does the extra go (T-696)
   const wide = fitRow(20, 'Secrets scout example', 'frontend · try 2', 60)
   expect(20 + wide.title.length + wide.pad.length + wide.extra.length).toBe(60)
   expect(wide.title).toBe('Secrets scout example')
-  expect(fitRow(20, 'Secrets scout example', 'frontend · try 2', 50)).toEqual({ title: 'Secrets scout example', pad: '', extra: '' })
+  expect(fitRow(20, 'Secrets scout example', 'frontend · try 2', 50)).toEqual({ title: 'Secrets scout examp…', pad: '  ', extra: 'fronten…' })
+  const long = 'Board list: keep the row end visible by cutting the title instead'
+  const cut = fitRow(10, long, 'waits for T-690', 60)
+  expect(cut).toEqual({ title: 'Board list: keep the row end vis…', pad: '  ', extra: 'waits for T-690' })
+  expect(10 + cut.title.length + cut.pad.length + cut.extra.length).toBe(60)
+  expect(fitRow(10, long, '[feature]', 45)).toEqual({ title: 'Board list: keep the ro…', pad: '  ', extra: '[feature]' })
+  // narrow: the title keeps 20 columns and the extra is cut, keeping its start
+  expect(fitRow(10, long, 'waits for T-690', 40)).toEqual({ title: 'Board list: keep th…', pad: '  ', extra: 'waits f…' })
+  // very narrow: the extra goes, the title is cut to the room
+  expect(fitRow(10, long, 'waits for T-690', 35)).toEqual({ title: 'Board list: keep the row…', pad: '', extra: '' })
+  expect(fitRow(10, long, 'waits for T-690', 11)).toEqual({ title: '…', pad: '', extra: '' })
   expect(fitRow(20, 'Secrets scout example', 'frontend · try 2', 30)).toEqual({ title: 'Secrets s…', pad: '', extra: '' })
 })
 

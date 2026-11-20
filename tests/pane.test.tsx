@@ -1615,7 +1615,7 @@ test('the Tasks view: no workers/scouts strip in the banner, NEEDS YOU then one 
   const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 100 }, surface: 'terminal' })
   expect((await ui.find({ key: 'T-95' }))!.text).toMatch(/^T-95 ▶ 4m\s+Secrets scout example\s+frontend$/)
   expect((await ui.find({ key: 'T-95' }))!.text.length).toBe(100)
-  expect((await ui.find({ key: 'T-97' }))!.text).toMatch(/^T-97 ○\s+Rename "off" to "pause"\s+after T-96$/)
+  expect((await ui.find({ key: 'T-97' }))!.text).toMatch(/^T-97 ○\s+Rename "off" to "pause"\s+waits for T-96$/)
   expect((await ui.find({ key: 'T-94' }))!.text).toMatch(/^T-94 ◆ review\s+Clearer board view\s+Enter to review$/)
   // focus starts on the first task, and the order is tasks first, then folded rows
   const buttons = (await ui.findAll({ type: 'Button' })).filter(b => /^T-\d+$|^day:/.test(String(b.key)))
@@ -1629,6 +1629,34 @@ test('the Tasks view: no workers/scouts strip in the banner, NEEDS YOU then one 
   expect(row).toMatch(/…$/)
   expect(row.length).toBeLessThanOrEqual(30)
   await narrow.unmount()
+})
+
+test('T-696: a long-title row in the terminal list keeps "waits for T-1" / "[feature]" at its end and cuts the title with "…"', async ($, on) => {
+  const now = Date.now()
+  const long = 'Board list: keep the row end visible by cutting the title instead of dropping the extra part'
+  const tasks = [
+    task('T-1', 'doing', 'Short one', { attempts: 1, runs: [{ started: new Date(now - 60_000).toISOString() }] }),
+    task('T-2', 'todo', long, { after: ['T-1'] }),
+    task('T-3', 'todo', long, { kind: 'feature' }),
+  ]
+  stateOf(on, { view: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'review', max_parallel: 3, test_commands: [] } } })
+  for (const w of [60, 100]) {
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: w }, surface: 'terminal' })
+    const t2 = (await ui.find({ key: 'T-2' }))!.text
+    const t3 = (await ui.find({ key: 'T-3' }))!.text
+    expect(t2).toMatch(/^T-2\s+○\s+Board list: .*…  +waits for T-1$/)
+    expect(t3).toMatch(/^T-3\s+○\s+Board list: .*…  +\[feature\]$/)
+    expect(t2.length).toBe(w)
+    await ui.unmount()
+  }
+  // very narrow: the title keeps 20 columns and the extra is cut, then left out
+  for (const w of [45, 30]) {
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: w }, surface: 'terminal' })
+    const t2 = (await ui.find({ key: 'T-2' }))!.text
+    expect(t2.length).toBeLessThanOrEqual(w)
+    expect(t2).toMatch(w === 45 ? /^T-2\s+○\s+Board list: keep th…  waits.*…$/ : /^T-2\s+○\s+Board list: [^…]*…$/)
+    await ui.unmount()
+  }
 })
 
 const OFF_CASES = [
@@ -1890,8 +1918,8 @@ test('archived tasks are only counted on the Done row, and /symcc-task still fin
   const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 80 }, surface: 'terminal' })
   expect(await ui.find({ type: 'Text', text: /^▸ Done +1 \(\+96 archived\)$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /An old one/ })).toBeUndefined()
-  // T-12 waits on T-5, which is archived as done: no "after T-5"
-  expect(await ui.find({ type: 'Text', text: /after T-5/ })).toBeUndefined()
+  // T-12 waits on T-5, which is archived as done: no "waits for T-5"
+  expect(await ui.find({ type: 'Text', text: /waits for T-5/ })).toBeUndefined()
   await ui.unmount()
   const shown = String((await $.command.run(slash('symcc-task', 'T-5'))).text)
   expect(shown).toMatch(/^T-5 is archived \(in \.symcc\/archive\.json; read-only\)/)
