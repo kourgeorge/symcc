@@ -6,7 +6,8 @@
 // the tests check exactly what the TUI shows (hooks/opencode/tests/opencode-tui.spec.ts). The panel's actions go back
 // to the engine as symcc's slash commands (actionCommand), run in the TUI's session (R6 of T-468). Like the Claude Code
 // board it has three tabs (T-559): Tasks, Scouts (the list, a scout's page with its runs, a run's report) and
-// Settings (every setting in its group, with its value and default). Like it, Settings opens the Roles and Kinds
+// Settings (every setting in its group, with its value and default; the groups open and close as on the Claude Code
+// board, T-585). Like it, Settings opens the Roles and Kinds
 // pages (a list, then one role's or kind's page: turn it off or on, reset it to the built-in one, T-562) and a
 // scout's page edits the scout (how often, model, instructions); the roles and kinds come in the view file too.
 import type { SymccTask, SymccScout } from '../../types'
@@ -18,7 +19,7 @@ import {
   fittedCells, TITLE_ROOM, fitRow, rowExtra, questionsLabel, archivedOf, archivedNote, statusMark, detailRows, detailRowLines, wrapSegs, hintLineText,
   type KeyHint, type Seg, type BoardTask, gitNote, taskActions, taskAsks, type TaskAction, type TaskActionId,
   waitsForYou, sortScouts, scoutListRows, scoutRow, scoutIcon, scoutTone, scoutHowTo, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem, scoutFile,
-  SETTING_GROUPS, SETTINGS, isSettingPage, settingInfo, settingValue, cantPlayNotify,
+  SETTING_GROUPS, SETTINGS, isSettingPage, settingInfo, settingValue, cantPlayNotify, groupSummaryParts,
   type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction,
   DEFAULT_ROLE, isCheckerRole, ALWAYS_ON_KINDS, checkerOn, roleNameError, kindNameError,
 } from '../board'
@@ -152,8 +153,8 @@ export type PanelGroup = 'backlog' | 'done' | 'dropped'
  *  press one of the panel's keys (a key hint in the footer works as a button); and (T-559) go to a tab, open a scout
  *  or one of its runs, or change a setting; and (T-562) open a page under Settings: the Roles or Kinds list ("roles", "kinds") or one
  *  role's or kind's page ("role:tester", "kind:bug", see settingsPlace); and (T-583) pick answer choice `choice`
- *  (1 = the first of answerOptions) of the open task or question. */
-export type PanelHit = { open: string } | { group: PanelGroup } | { key: PanelKey } | { tab: PanelTab } | { scout: string } | { run: string } | { setting: SettingName } | { page: string } | { choice: number }
+ *  (1 = the first of answerOptions) of the open task or question; and (T-585) open or close a Settings group (its title). */
+export type PanelHit = { open: string } | { group: PanelGroup } | { key: PanelKey } | { tab: PanelTab } | { scout: string } | { run: string } | { setting: SettingName } | { page: string } | { choice: number } | { settingGroup: string }
 
 /** One colored piece of a line, with what a click on it does (only the footer's key hints have one). */
 export type DrawSeg = Seg & { hit?: PanelHit }
@@ -240,6 +241,8 @@ export type PanelChoice = {
   run?: string
   /** that run's report text: undefined while it is read, null when it can't be read */
   report?: string | null
+  /** the Settings groups open (their titles, T-585; SETTINGS_OPEN when left out) */
+  settingsOpen?: readonly string[]
   /** the answer the owner just sent from this panel (T-583): the open page says it was sent */
   sent?: { id: string; answer: string }
 }
@@ -359,7 +362,7 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
     keys = panelKeys(f, choice.opened, 'scouts', choice.run ?? '')
   } else if (tab === 'settings') {
     const place = settingsPlace(f, choice.opened)
-    body = place?.def ? defPage(f, place.list, place.def, w) : place ? defsList(f, place.list, choice.cursor, w) : settingsBody(f, choice.cursor, w)
+    body = place?.def ? defPage(f, place.list, place.def, w) : place ? defsList(f, place.list, choice.cursor, w) : settingsBody(f, choice.cursor, choice.settingsOpen ?? SETTINGS_OPEN, w)
     keys = panelKeys(f, place ? choice.opened : '', 'settings')
   } else {
     const page = choice.opened ? openedPage(f, choice.opened, nowMs, w, choice.sent?.id === choice.opened ? choice.sent.answer : '') : null
@@ -493,9 +496,16 @@ function scoutPage(f: ViewFile, sc: SymccScout, choice: PanelChoice, nowMs: numb
   return { ...b, ids, selected }
 }
 
-/** The rows the cursor goes over on the Settings tab, in the Claude Code board's groups and order: the settings, and
- *  the Roles and Kinds rows that open their pages. */
-export const SETTING_ROWS: readonly (SettingName | SettingPage)[] = SETTING_GROUPS.flatMap(g => g.items)
+/** Which Settings groups are open at first: none, as on the Claude Code board's Settings page (S.settingsOpen). */
+export const SETTINGS_OPEN: readonly string[] = []
+
+/** A Settings group's heading as a cursor id ("settings-group:Work"), and back (null for a setting's or page's id). */
+export const settingGroupId = (title: string) => `settings-group:${title}`
+export const settingGroupOf = (id: string): string | null => (id.startsWith('settings-group:') ? id.slice(15) : null)
+
+/** The rows the cursor goes over on the Settings tab, in the Claude Code board's groups and order: each group's
+ *  heading, then (when it is open) its settings and the Roles and Kinds rows that open their pages. */
+export const settingRows = (open: readonly string[]): string[] => SETTING_GROUPS.flatMap(g => [settingGroupId(g.title), ...(open.includes(g.title) ? g.items : [])])
 
 /** "6 roles · 1 off" (the Settings row of the Roles or Kinds page). */
 function defsCount(f: ViewFile, list: SettingPage): string {
@@ -577,16 +587,28 @@ function defPage(f: ViewFile, list: SettingPage, x: ViewDef, w: number): Body {
   return { ...b, ids: [], selected: '' }
 }
 
-/** The Settings tab: each group (Work, Checks before merging, ...) with its settings: name, value, default and range,
- *  and what it does on the line under it; the Roles and Kinds rows open their pages. */
-function settingsBody(f: ViewFile, cursor: number, w: number): Body {
+/** The Settings tab: each group (Work, Checks before merging, ...) as a heading that opens or closes, like the
+ *  Claude Code board's (T-585): "▸ Work · auto · 3 at once" closed (its values in short, core's groupSummaryParts),
+ *  "▾ Work" open with its settings under it: name, value, default and range, and what it does on the line under it;
+ *  the Roles and Kinds rows open their pages. */
+function settingsBody(f: ViewFile, cursor: number, open: readonly string[], w: number): Body {
   const b = bodyMaker()
   const v = f.view
   const nameWidth = Math.max(...SETTINGS.map(x => x.name.length))
-  const selected = SETTING_ROWS[Math.min(Math.max(0, cursor), SETTING_ROWS.length - 1)]!
+  const ids = settingRows(open)
+  const selected = ids[Math.min(Math.max(0, cursor), ids.length - 1)]!
+  const pages = { roles: defsCount(f, 'roles'), kinds: defsCount(f, 'kinds') }
   for (const g of SETTING_GROUPS) {
     b.blank()
-    b.head(g.title)
+    const isOpen = open.includes(g.title)
+    const front = { text: settingGroupId(g.title) === selected ? '› ' : '  ', color: 'ide', bold: true }
+    const hit = { settingGroup: g.title }
+    if (!isOpen) {
+      const sum = groupSummaryParts(g, v, Math.max(20, w - 4), pages)
+      b.add([front, { text: `▸ ${sum.title}`, color: 'text', bold: true }, ...(sum.values ? [{ text: sum.values, color: 'inactive' }] : [])], hit)
+      continue
+    }
+    b.add([front, { text: `▾ ${g.title}`, color: 'text', bold: true }], hit)
     for (const item of g.items) {
       if (isSettingPage(item)) {
         const label = item === 'roles' ? 'Roles' : 'Kinds'
@@ -620,8 +642,8 @@ function settingsBody(f: ViewFile, cursor: number, w: number): Body {
     }
   }
   b.blank()
-  b.add([{ text: `Enter changes a setting (on/off flips) or opens a page · /${f.name}-settings NAME VALUE · or tell the lead`, color: 'inactive' }])
-  return { ...b, ids: [...SETTING_ROWS], selected }
+  b.add([{ text: `Enter on a heading opens or closes its group · Enter changes a setting (on/off flips) or opens a page · /${f.name}-settings NAME VALUE · or tell the lead`, color: 'inactive' }])
+  return { ...b, ids, selected }
 }
 
 /** The list: the questions for the owner, NEEDS YOU, what runs and waits to run, then the groups: the backlog (its

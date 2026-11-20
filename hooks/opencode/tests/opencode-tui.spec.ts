@@ -8,15 +8,17 @@
 // OpenTUI (T-500): opencode/tui.ts imports them by their written-out names (what OpenCode swaps for its own copies),
 // and loadTuiRuntime names a package that is missing or lacks a function instead of failing with a bare import error.
 import { test, expect } from 'bun:test'
-import { taskActions, mergeRoles, mergeKinds, when, addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, type Board } from '../../board'
+import { SETTING_GROUPS, groupSummaryParts, taskActions, mergeRoles, mergeKinds, when, addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, type Board } from '../../board'
 import type { PaneView } from '../../app/state'
 import { ICON } from '../../name'
-import { bandLines, bandDraw, BAND_CLICK_HINT, panelLines, panelKeys, parseViewFile, viewFileText, lineText, actionCommand, answerOptions, OWN_ANSWER, viewDefs, panelTaskActions, TASK_ACTION_COMMANDS, type ViewFile } from '../board-view'
+import { bandLines, bandDraw, BAND_CLICK_HINT, panelLines, panelKeys, parseViewFile, viewFileText, lineText, actionCommand, answerOptions, OWN_ANSWER, viewDefs, panelTaskActions, TASK_ACTION_COMMANDS, SETTINGS_OPEN, type ViewFile } from '../board-view'
 import { readFile } from 'node:fs/promises'
 import { PLUGIN_ROOT } from '../host'
 import { startTui, viewPaths, loadTuiRuntime, BOARD_PANEL, setupFailed, colorOf, drawLines, type TuiContext, type TuiRuntime, type TuiPanelInput, type TuiKeyLayer } from '../tui'
 
 const NOW = Date.parse('2026-11-19T12:00:00.000Z')
+/** Every Settings group's title (all of them open). */
+const ALL_GROUPS = SETTING_GROUPS.map(g => g.title)
 const AT = '2026-11-19T11:00:00.000Z'
 
 /** A board: T-1 doing (its worker just claimed it: "worker starting", started 3 minutes ago), T-2 in review, T-3
@@ -719,14 +721,14 @@ test('T-559: the Scouts tab lists the scouts from view.json, a scout\'s page sho
   expect(run(undefined)).toContain('  (reading the report…)')
   expect(run(null).some(l => l.includes("can't be read"))).toBe(true)
   expect(panelKeys(f, 'docs-check', 'scouts', '2026-11-19T11:50:00.000Z').map(k => k.word)).toEqual(['back'])
-  // Settings: every group's title, every setting with its value and default
-  const settings = panelLines(f, { tab: 'settings', opened: '', cursor: 0 }, NOW, 140)
+  // Settings, every group open: every group's title, every setting with its value and default
+  const settings = panelLines(f, { tab: 'settings', opened: '', cursor: 1, settingsOpen: ALL_GROUPS }, NOW, 140)
   const s = settings.lines.map(lineText)
-  for (const g of ['Work', 'Checks before merging', 'Workers', 'Scouts', 'Board and alerts']) expect(s).toContain(g)
+  for (const g of ['Work', 'Checks before merging', 'Workers', 'Scouts', 'Board and alerts']) expect(s).toContain(`  ▾ ${g}`)
   expect(s.find(l => l.includes('max_parallel'))).toMatch(/max_parallel +2 · default 3 · 1-8/)
   expect(s.find(l => l.includes('test_commands'))).toContain('bun test')
   expect(s.find(l => /^› /.test(l))).toContain('mode')
-  expect(settings.ids[0]).toBe('mode')
+  expect(settings.ids.slice(0, 2)).toEqual(['settings-group:Work', 'mode'])
   expect(settings.ids).toContain('notify')
   expect(settings.hits[s.findIndex(l => l.includes('max_minutes'))]).toEqual({ setting: 'max_minutes' })
   expect(panelKeys(f, '', 'settings').map(k => k.word)).toEqual(['move', 'change', 'views', 'close'])
@@ -789,10 +791,14 @@ test('T-559: startTui: t, s and c switch tabs (a click on a tab too); on a scout
   // c: the Settings tab; Enter on mode picks from a list, on max_parallel asks for a number, on checker flips it
   await board.press('c', 'ses_1')
   expect([board.state().tab, board.state().opened, board.state().run, board.state().cursor]).toEqual(['settings', '', '', 0])
+  // the groups start closed: Enter on the Work heading opens it
+  await board.press('open', 'ses_1')
   expect(lines().some(l => l.includes('max_parallel') && l.includes('default 3'))).toBe(true)
+  await board.press('down', 'ses_1')
   await board.press('open', 'ses_1')
   await board.press('down', 'ses_1')
   await board.press('open', 'ses_1')
+  ;(rowEls(panel).find(r => r.text.includes('▸ Checks before merging'))!.el.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0 })
   const checker = rowEls(panel).find(r => r.text.includes('checker ') && r.text.includes('default off'))!
   ;(checker.el.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0 })
   await new Promise<void>(res => setTimeout(res, 0))
@@ -801,7 +807,7 @@ test('T-559: startTui: t, s and c switch tabs (a click on a tab too); on a scout
   const maxMinutes = rowEls(panel).find(r => r.text.includes('max_minutes'))!
   ;(maxMinutes.el.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0 })
   await new Promise<void>(res => setTimeout(res, 0))
-  expect(board.state().cursor).toBe(2)
+  expect(board.state().cursor).toBe(3)
   expect(sent).toEqual([
     { sessionID: 'ses_1', name: 'symcc-scout', text: 'docs-check' },
     { sessionID: 'ses_1', name: 'symcc-scout', text: 'docs-check resume' },
@@ -875,7 +881,7 @@ test('T-562: viewDefs gives each role and kind where it comes from, whether it c
 test('T-562: the Settings tab opens the Roles and Kinds pages from view.json; a role\'s and a kind\'s page show it, and turn it off or on or reset it with /symcc-settings role|kind', () => {
   const f = defsViewFile()
   // the Settings list: the Roles and Kinds rows with their counts, each a row the cursor goes over
-  const settings = panelLines(f, { tab: 'settings', opened: '', cursor: 0 }, NOW, 140)
+  const settings = panelLines(f, { tab: 'settings', opened: '', cursor: 0, settingsOpen: ['Workers'] }, NOW, 140)
   const s = settings.lines.map(lineText)
   expect(s.find(l => l.includes('Roles'))).toMatch(/Roles +4 roles · 1 off/)
   expect(s.find(l => /^ +Kinds/.test(l))).toMatch(/Kinds +2 kinds/)
@@ -952,7 +958,8 @@ test('T-562: startTui: Settings opens Roles, a role\'s page turns it on and rese
   const lines = () => rowEls(panel).map(r => r.text)
   const clickRow = (has: string) => (rowEls(panel).find(r => r.text.includes(has))!.el.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0 })
   await board.press('c', 'ses_1')
-  // a click on the Roles row opens the Roles page; down twice and Enter opens tester
+  // a click on the Workers heading opens it; a click on the Roles row opens the Roles page; down twice and Enter opens tester
+  clickRow('▸ Workers')
   clickRow('4 roles')
   expect(board.state().opened).toBe('roles')
   expect(lines().some(l => l.includes('tester') && l.includes('replaced, off'))).toBe(true)
@@ -1108,5 +1115,69 @@ test('T-583: on a waiting task\'s and a question\'s page each choice is a clicka
   await back()
   await board.press('1', 'ses_1')
   expect(sent.length).toBe(9)
+  board.stop()
+})
+
+test('T-585: the Settings tab\'s groups open and close like the Claude Code board\'s: all closed at first, each "▸ title · summary"; Enter or a click opens one ("▾ title" and its rows); a closed group\'s rows are not in the cursor list; closing a group cancels its open pick list', async () => {
+  const f = viewFile()
+  // the start state: every group closed, as the Claude Code board's S.settingsOpen
+  expect(SETTINGS_OPEN).toEqual([])
+  const closed = panelLines(f, { tab: 'settings', opened: '', cursor: 0 }, NOW, 140)
+  const c = closed.lines.map(lineText)
+  const pages = { roles: '0 roles', kinds: '0 kinds' }
+  for (const g of SETTING_GROUPS) {
+    const sum = groupSummaryParts(g, f.view, 136, pages)
+    expect(c.some(l => l.endsWith(`▸ ${sum.title}${sum.values}`))).toBe(true)
+  }
+  expect(c.find(l => l.includes('▸ Work'))).toContain('auto')
+  expect(closed.ids).toEqual(SETTING_GROUPS.map(g => `settings-group:${g.title}`))
+  expect(c.some(l => l.includes('max_parallel'))).toBe(false)
+  expect(closed.hits[c.findIndex(l => l.includes('▸ Work'))]).toEqual({ settingGroup: 'Work' })
+  // startTui: Enter on a heading and a click on one open and close it
+  const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)]])
+  const sent: { sessionID: string; name: string; text: string }[] = []
+  const slots: { append: string; render: (input: never) => unknown }[] = []
+  let answerPick: (v: unknown) => void = () => undefined
+  const ctx: TuiContext = {
+    location: { directory: '/work/proj' },
+    theme: {},
+    renderer: { width: 140 },
+    client: { session: { command: async input => void sent.push(input) } },
+    keymap: { layer: () => undefined },
+    ui: {
+      toast: { show: () => undefined },
+      dialog: { prompt: async () => undefined, select: <V,>() => new Promise<V | undefined>(res => (answerPick = res as (v: unknown) => void)) },
+      panel: { open: () => true, close: () => undefined, current: () => undefined },
+      slot: claim => (slots.push(claim as never), () => undefined),
+    },
+  }
+  const board = startTui(ctx, { runtime: fakeRuntime(), readText: async p => files.get(p) ?? Promise.reject(new Error('missing')), every: () => () => undefined, now: () => NOW })
+  await board.refresh()
+  const panel = slots.find(s => s.append === 'session.panel')!.render({ name: BOARD_PANEL, sessionID: 'ses_1', width: 142, focused: true, close: () => undefined } as never) as El
+  const lines = () => rowEls(panel).map(r => r.text)
+  const clickRow = (has: string) => (rowEls(panel).find(r => r.text.includes(has))!.el.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0 })
+  await board.press('c', 'ses_1')
+  expect(board.state().settingsOpen).toEqual([])
+  await board.press('open', 'ses_1')
+  expect(board.state().settingsOpen).toEqual(['Work'])
+  expect(lines().some(l => l.includes('▾ Work'))).toBe(true)
+  expect(lines().some(l => l.includes('max_parallel'))).toBe(true)
+  await board.press('open', 'ses_1')
+  expect(board.state().settingsOpen).toEqual([])
+  expect(lines().some(l => l.includes('max_parallel'))).toBe(false)
+  // a click on Scouts opens it and puts the cursor on its heading
+  clickRow('▸ Scouts')
+  expect(board.state().settingsOpen).toEqual(['Scouts'])
+  expect(board.state().cursor).toBe(3)
+  clickRow('▾ Scouts')
+  expect(board.state().settingsOpen).toEqual([])
+  // Enter on mode opens its pick list; closing Work meanwhile cancels it: the pick is not sent
+  clickRow('▸ Work')
+  await board.press('down', 'ses_1')
+  const asked = board.press('open', 'ses_1')
+  clickRow('▾ Work')
+  answerPick('review')
+  await asked
+  expect(sent).toEqual([])
   board.stop()
 })
