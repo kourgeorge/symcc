@@ -501,6 +501,17 @@ test('T-567: a click on the band above the prompt: the header opens the board pa
   click(t => t.startsWith('T-1'))
   expect(fc.current()?.name).toBe(BOARD_PANEL)
   expect(board.state().opened).toBe('T-1')
+  // T-568: with T-1's page open, a click on T-2 in the band opens T-2's page, and b puts the list cursor on T-2
+  const listIds = panelLines(f, { tab: 'tasks', opened: '', cursor: 0 }, NOW, 120).ids
+  expect(listIds.indexOf('T-1')).not.toBe(listIds.indexOf('T-2'))
+  click(t => t.startsWith('T-2'))
+  expect(board.state().opened).toBe('T-2')
+  await board.press('back', 's')
+  expect(board.state().opened).toBe('')
+  expect(board.state().cursor).toBe(listIds.indexOf('T-2'))
+  click(t => t.startsWith('T-1'))
+  await board.press('back', 's')
+  expect(board.state().cursor).toBe(listIds.indexOf('T-1'))
   expect(fc.toasts).toEqual([])
   board.stop()
 })
