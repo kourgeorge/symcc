@@ -16,6 +16,7 @@ import { taskPageVs } from './vscode-task'
 import { historyEvent, historyTime, HISTORY_COLOR, type HistoryEvent } from '../../core/history'
 import { claudeHost } from '../host'
 import { mergingNow, mergeOutcome } from '../../app/workers'
+import { boardAnswered } from '../../app/questions'
 
 /** The line a task's page shows in place of its review buttons while it merges. */
 export const MERGING_LINE = 'Merging… (tests running)'
@@ -61,13 +62,14 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
   const approveIt = startMerge(
     answered ? 'Marking it done…' : MERGING_LINE,
     answered ? `Marking ${t.id} done…` : `Approving ${t.id}: running the tests, then merging…`,
-    () => runTool(claudeHost($), 'approve', { task: t.id }),
+    // a pop-up asking about this task gets the press as its answer (T-579)
+    () => (boardAnswered(t.id, answered ? 'Done' : 'Approve'), runTool(claudeHost($), 'approve', { task: t.id })),
     r => noteForLead(answered ? `The owner read the answer of ${t.id} and marked it done: ${brief(r)}` : `The owner approved ${t.id}: ${brief(r)}`),
   )
   const keepNote = startMerge(
     'Keeping the answer as a note…',
     `Keeping the answer of ${t.id} as a note…`,
-    () => runTool(claudeHost($), 'approve', { task: t.id, keep_note: true }),
+    () => (boardAnswered(t.id, 'Keep as a note'), runTool(claudeHost($), 'approve', { task: t.id, keep_note: true })),
     r => tellLead(claudeHost($), `The owner kept the answer of ${t.id} as a note: ${brief(r)}`),
   )
   const last = merging ? undefined : lastResult.get(t.id)
@@ -91,6 +93,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
       const why = value.trim()
       if (!why) return cancelReject()
       const r = await runTool(claudeHost($), 'reject', { task: t.id, reason: why })
+      boardAnswered(t.id, `${answered ? 'Ask more' : 'Reject'}: ${why}`)
       S.rejecting = null
       S.diffOpen = null
       $.ui.toast(S.N.toast(r))
@@ -264,11 +267,18 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
       if (!text.trim()) return leaveAnswer()
       S.answering = null
       await runTool(claudeHost($), 'change', { task: t.id, answer: text.trim() })
+      // a pop-up asking about this task gets the answer; then the lead needs no "Meanwhile" line as well (T-579)
+      if (boardAnswered(t.id, text.trim())) return
       noteForLead(overtime ? `The owner answered ${t.id}'s "more time?" question: "${brief(text.trim())}".` : answeredLeadLine(t, text.trim(), brief))
     })
   const choicePress = (i: number) => {
     if (i === choices.length - 1) return () => ((S.answering = t.id), $.ui.invalidate('ui.render'))
-    if (asks?.files.length) return act(async () => $.ui.toast(S.N.toast(i === 0 ? await allowAskedFiles(claudeHost($), t.id) : await refuseAskedFiles(claudeHost($), t.id))))
+    if (asks?.files.length)
+      return act(async () => {
+        const said = i === 0 ? await allowAskedFiles(claudeHost($), t.id) : await refuseAskedFiles(claudeHost($), t.id)
+        boardAnswered(t.id, choices[i]!)
+        $.ui.toast(S.N.toast(said))
+      })
     return sendAnswer(choices[i]!)
   }
   // A failed task: why it failed (the same sentence as its board row and the lead's board), what to do next, and
