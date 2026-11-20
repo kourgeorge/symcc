@@ -103,7 +103,7 @@ export function vsLink(k: VsKit, key: string, text: string, links: [href: string
  *    the name, version and folder; the mode as a pill with its meaning dim beside it; the branch and who drives on one dim line;
  *    the tests and the limits on one dim line;
  *  - under it the counts as small badges ("● 2 doing · 6 to do · 1 waiting for you"), and the "no git" row (`gitRow`).
- * A warning line when symcc is disabled sits under the name; one when another session drives the board sits under the counts.
+ * A warning line when symcc is disabled sits under the name; one when another session drives the board sits right under the settings line.
  */
 export function vsBanner(k: VsKit, v: PaneView, mode: SymccMode, gitRow: RenderChildren[]): RenderChildren[] {
   const { Box, Text, C } = k
@@ -148,6 +148,8 @@ export function vsBanner(k: VsKit, v: PaneView, mode: SymccMode, gitRow: RenderC
           {dot('vs-settings-dot')}
           <Text color={C('inactive')}>{limits}</Text>
         </Text>
+        {/* T-643/T-694: a session that doesn't drive says so right under the settings line, in the warning color, with how to take over (VS Code wraps it) */}
+        {warn ? <Text key="vs-drive" wrap="wrap" color={C('warning')}>{warn}</Text> : null}
       </Box>
     </Box>,
     ...(counts.length
@@ -163,8 +165,6 @@ export function vsBanner(k: VsKit, v: PaneView, mode: SymccMode, gitRow: RenderC
           </Box>,
         ]
       : []),
-    // T-643: a session that doesn't drive says so in the warning color, with how to take over (VS Code wraps it)
-    ...(warn ? [<Text key="vs-drive" wrap="wrap" color={C('warning')}>{warn}</Text>] : []),
     ...gitRow,
   ]
 }

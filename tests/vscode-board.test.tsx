@@ -283,22 +283,28 @@ test('in VS Code the header shows the logo, a short banner and a tab strip with 
   }
 })
 
-// T-643: a session that doesn't drive the board gets a warning line in the warning color, with how to take over, and
+// T-643, T-694: a session that doesn't drive the board gets a short warning line in the warning color right under the
+// tests/limits line (inside the facts column), with how to take over, and
 // "it looks idle" when a task has waited more than 5 minutes for its worker to start in the driving session.
 const QUEUED_402 = { ...BOARD_TASKS.find(t => t.id === 'T-402')!, note: 'starting at the next turn', updated_at: new Date(T0 - 6 * 60_000).toISOString() }
 for (const [name, driving, tasks, want] of [
   ['the driving session has no warning line', true, BOARD_TASKS, undefined],
-  ['another session drives: the warning line', false, BOARD_TASKS, '⚠ Another session drives this board — its workers run there, not here. /symcc-drive to drive it from here.'],
-  ['another session drives and a task waits 6 min to start: "it looks idle"', false, [...BOARD_TASKS.filter(t => t.id !== 'T-402'), QUEUED_402], '⚠ Another session drives this board, but it looks idle — its workers run there, not here. /symcc-drive to drive it from here.'],
+  ['another session drives: the warning line', false, BOARD_TASKS, '⚠ Another session drives. /symcc-drive to drive it from here.'],
+  ['another session drives and a task waits 6 min to start: "it looks idle"', false, [...BOARD_TASKS.filter(t => t.id !== 'T-402'), QUEUED_402], '⚠ Another session drives, but looks idle. /symcc-drive to drive it from here.'],
 ] as const)
   test(`T-643: in VS Code ${name}`, async ($, on) => {
     on('ui.toast', () => ({ value: undefined }))
     seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, tasks, driving } } })
     const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 40 }, surface: 'vscode' })
-    // the line under the counts, in the warning color, wrapped (never cut)
+    // the line right under the tests/limits line, in the facts column, in the warning color, wrapped (never cut)
     const warn = elements(await ui.find({ key: 'vs-header' })).find(n => n.type === 'Text' && texts(n).join('').startsWith('⚠'))
     expect(warn ? texts(warn).join('') : undefined).toBe(want)
     if (warn) expect([warn.props?.color, warn.props?.wrap]).toEqual(['warning', 'wrap'])
+    // inside the facts column, the last line there, right after the tests/limits line's text
+    const facts = texts(await ui.find({ key: 'vs-facts' }))
+    const limits = facts.findIndex(t => / at once · /.test(t))
+    expect(limits >= 0).toBe(true)
+    expect(facts.slice(limits + 1)).toEqual(want ? [want] : [])
     await ui.unmount()
   })
 

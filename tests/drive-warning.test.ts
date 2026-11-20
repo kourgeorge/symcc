@@ -14,7 +14,7 @@ const claimed = (ms: number, note = 'starting at the next turn') => ({ id: 'T-1'
 test('T-643: the board warning: the full text when it fits, shorter forms when narrow, none when this session drives', () => {
   const tasks = [claimed(60_000)]
   expect(driveWarning(true, tasks, NOW)).toBe('')
-  expect(driveWarning(false, tasks, NOW)).toBe('⚠ Another session drives this board — its workers run there, not here. /symcc-drive to drive it from here.')
+  expect(driveWarning(false, tasks, NOW)).toBe('⚠ Another session drives. /symcc-drive to drive it from here.')
   for (const w of [30, 40, 60, 80]) {
     const t = driveWarning(false, tasks, NOW, 'symcc', 'board', w)
     expect(t.length <= w).toBe(true)
@@ -33,24 +33,27 @@ test('T-643: "it looks idle" only when a claimed doing task has waited past DRIV
   expect(driverLooksIdle([claimed(DRIVER_IDLE_MS + 1000, 'worker on it')], NOW)).toBe(false)
   expect(driverLooksIdle([{ ...claimed(DRIVER_IDLE_MS + 1000), status: 'todo' as const }], NOW)).toBe(false)
   const idle = [claimed(6 * 60_000)]
-  expect(driveWarning(false, idle, NOW)).toBe('⚠ Another session drives this board, but it looks idle — its workers run there, not here. /symcc-drive to drive it from here.')
+  expect(driveWarning(false, idle, NOW)).toBe('⚠ Another session drives, but looks idle. /symcc-drive to drive it from here.')
   expect(driveWarning(false, idle, NOW, 'symcc', 'band')).toBe('⚠ driven by another session (it looks idle)')
   expect(driveWarning(false, [claimed(60_000)], NOW, 'symcc', 'band')).toBe('⚠ driven by another session')
 })
 
-test('T-643: the terminal banner ends with the warning line in the warning tone when not driving, and has none when driving', () => {
+test('T-643, T-694: the terminal banner has the warning line in the warning tone right under the tests/limits line when not driving, and none when driving', () => {
   const b = { ...emptyBoard(), branch: 'main', tasks: [claimed(60_000)] }
   const other = bannerLines(b, '/Users/me/repositories/symcc', '/Users/me', false, 200, NOW)
-  expect(other.at(-1)!.parts).toEqual([{ text: '⚠ Another session drives this board — its workers run there, not here. /symcc-drive to drive it from here.', tone: 'warning' }])
-  expect(bannerText(other.at(-1)!)).toBe(other.at(-1)!.parts[0]!.text)
+  const at = other.findIndex(l => bannerText(l).includes('⚠'))
+  expect(bannerText(other[at - 1]!)).toContain('no test command · 3 at once')
+  expect(other[at]!.parts).toEqual([{ text: '⚠ Another session drives. /symcc-drive to drive it from here.', tone: 'warning' }])
+  // the counts line still comes after it
+  expect(bannerText(other.at(-1)!)).toContain('1 doing')
   // narrow: a short form, no drawing, never wider than the panel
   const narrow = bannerLines(b, '/Users/me/repositories/symcc', '/Users/me', false, 40, NOW)
-  expect(narrow.at(-1)!.parts[0]!.tone).toBe('warning')
+  expect(narrow[3]!.parts[0]!.tone).toBe('warning')
   expect(narrow.every(l => bannerText(l).length <= 40)).toBe(true)
-  expect(bannerText(narrow.at(-1)!)).toContain('/symcc-drive')
+  expect(bannerText(narrow[3]!)).toContain('/symcc-drive')
   // idle
   const idle = bannerLines({ ...b, tasks: [claimed(10 * 60_000)] }, '/Users/me/repositories/symcc', '/Users/me', false, 200, NOW)
-  expect(bannerText(idle.at(-1)!)).toContain('but it looks idle')
+  expect(idle.map(bannerText).join('\n')).toContain('⚠ Another session drives, but looks idle. /symcc-drive to drive it from here.')
   // driving: no warning line anywhere
   const own = bannerLines(b, '/Users/me/repositories/symcc', '/Users/me', true, 200, NOW)
   expect(own.some(l => bannerText(l).includes('⚠'))).toBe(false)
