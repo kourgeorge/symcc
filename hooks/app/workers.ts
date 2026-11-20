@@ -1552,7 +1552,10 @@ export async function setSymcc(host: Host, on: boolean): Promise<string> {
   await publish(host, b)
   void pump(host)
   if (!before) tellLead(host, `The owner turned ${S.N.name} back on with /${S.N.name}-on. You are the lead again; the board is in mode ${modeOf(b)}.`)
-  return `${S.N.name} is ${before ? 'already ' : ''}on, in mode ${modeOf(b)}: ${modeText(modeOf(b))}`
+  // (T-571) the board's mode "off" (/<name>-mode off) is not the same as turning symcc off: the strip shows "⏹ off"
+  // for it, and /<name>-on (which only turns symcc itself on) keeps the mode, so say plainly why nothing starts yet
+  const modeOff = modeOf(b) === 'off' ? ` ${S.N.name} itself is on, but the board's mode is off, so no work starts; start work with /${S.N.name}-mode review or /${S.N.name}-mode auto.` : ''
+  return `${S.N.name} is ${before ? 'already ' : ''}on, in mode ${modeOf(b)}: ${modeText(modeOf(b))}.${modeOff}`
 }
 
 /**
