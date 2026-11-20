@@ -1,7 +1,8 @@
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { leadGuide } from '../hooks/app/tools'
-import { workerQuestionText, overtimeLeadText } from '../hooks/app/workers'
+import { workerQuestionText } from '../hooks/app/workers'
+import { overtimeLeadText } from '../hooks/app/cleanup'
 import { S } from '../hooks/app/state'
 import { CLAUDE_WORDS } from '../hooks/claude/host'
 

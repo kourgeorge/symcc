@@ -6,7 +6,9 @@ import { path, locked, change, now, load, safeWrite, boardMtime } from './store'
 import { openPane } from './open'
 import { playable } from './voice'
 import { logoIdle, logoOnPublish } from './logo'
-import { stopOrphans, waitEnded, ORPHAN_WAIT_MS, haltAll, haltWorkers, unclaimQueued, queuedNeverStarted, unclaimed } from './workers'
+import { waitEnded, ORPHAN_WAIT_MS, unclaimQueued, queuedNeverStarted, unclaimed } from './workers'
+import { haltAll, haltWorkers } from './board-mode'
+import { stopOrphans } from './cleanup'
 
 // ---------------- who drives the board ----------------
 // Only one session (the driver) starts workers, merges, runs scouts and the regular check.

@@ -34,7 +34,9 @@ import { noteForLead, brief, takeBoardUpdate } from './tell'
 import { playable } from './voice'
 import { TOOLS, leadGuide, runTool, type In, manual, ownerSettings, taskText, latestReport, statsText } from './tools'
 import { openPane } from './open'
-import { cleanLeftoverTmp, check, pump, workerFinished, lateHandBack, agentOnBoard, stoppedHandBack, setSymcc, setBoardMode, type TurnEnd } from './workers'
+import { check, pump, workerFinished, lateHandBack, agentOnBoard, stoppedHandBack, type TurnEnd } from './workers'
+import { setSymcc, setBoardMode } from './board-mode'
+import { cleanLeftoverTmp } from './cleanup'
 
 /** What /symcc and /symcc-tasks answer after opening the board. No Esc hint: Esc doesn't reach the panel (T-158). */
 export const BOARD_OPENED = 'Board opened: ↑↓ to move, Enter to open, f to search, t tasks, s scouts, c settings.'

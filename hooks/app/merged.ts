@@ -5,7 +5,8 @@ import { S } from './state'
 import { type Host } from '../host'
 import { load, change, now } from './store'
 import { git, gitReady, branchExists, taskBranch, worktreeDir, removeWorktree, deleteMergedBranch } from './git'
-import { pump, stopWorker, checkingNow, mergingNow, CHECKING_TEXT, MERGING_TEXT } from './workers'
+import { pump, checkingNow, mergingNow, CHECKING_TEXT, MERGING_TEXT } from './workers'
+import { stopWorker } from './board-mode'
 
 /** What git found: the commit on the target that holds the work (`sha`) and the task's own commits (`commits`, oldest first). */
 export type MergedFound = { sha: string; commits: string[]; rebased?: boolean }
