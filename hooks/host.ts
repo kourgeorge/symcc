@@ -207,6 +207,42 @@ export type HostProcesses = {
   alive: (p: HostProcess) => Promise<boolean | undefined>
 }
 
+// The host-free part of the process check (T-659, T-669, T-662), shared by the Node host (hosts/node/host.ts) and
+// Claude Code's (claude/host.ts): both ask `ps -o etime=` how long a process has run, so a lock written by one is
+// judged the same way by the other.
+
+/** How far a process's start (from ps, which counts whole seconds) may be from a lock's `started` and still be the lock's holder. */
+export const HOLDER_SLACK_MS = 5_000
+
+/** The ps line that says how long process `pid` has run (`[[dd-]hh:]mm:ss`). */
+export const etimeArgv = (pid: number): string[] => ['ps', '-o', 'etime=', '-p', String(pid)]
+
+/** Seconds in ps's elapsed time `[[dd-]hh:]mm:ss`, or undefined when the text isn't one. */
+export function etimeSeconds(etime: string): number | undefined {
+  const m = /^(?:(?:(\d+)-)?(\d+):)?(\d+):(\d+)$/.exec(etime.trim())
+  if (!m) return undefined
+  const [d, h, mi, se] = [m[1], m[2], m[3], m[4]].map(x => Number(x ?? 0)) as [number, number, number, number]
+  return ((d * 24 + h) * 60 + mi) * 60 + se
+}
+
+/** When a process started (ms since 1970) by ps's elapsed time `etime`, or undefined when it can't be read. ps rounds down, so the start lies in the second before: its middle. */
+export function startFromEtime(etime: string, nowMs: number = Date.now()): number | undefined {
+  const s = etimeSeconds(etime)
+  return s === undefined ? undefined : nowMs - s * 1000 - 500
+}
+
+/**
+ * Whether a lock's holder, started at `started`, is the process ps answered `r` about (`ps -o etime= -p <pid>`): true
+ * when it started at about `started`, false when ps found no such process (exit 1, no output) or it started at another
+ * time (the pid was given to another program), undefined when ps didn't run or its answer can't be read.
+ */
+export function holderFromPs(r: { exitCode: number; stdout: string } | undefined, started: number, nowMs: number = Date.now()): boolean | undefined {
+  if (!r || typeof started !== 'number' || !Number.isFinite(started)) return undefined
+  const elapsed = r.exitCode === 0 ? etimeSeconds(r.stdout) : undefined
+  if (elapsed === undefined) return r.exitCode === 1 && !r.stdout.trim() ? false : undefined
+  return Math.abs(nowMs - elapsed * 1000 - started) <= HOLDER_SLACK_MS
+}
+
 export interface Host {
   /** what this host can do (see HostFeatures) */
   features: HostFeatures
@@ -237,6 +273,14 @@ export interface Host {
     send: (agentId: string, text: string) => Promise<unknown>
     /** ends an agent's work: `text` tells it to stop and end (a host that can, may also end it outright) */
     stop: (agentId: string, text: string) => Promise<unknown>
+    /**
+     * T-656: only a host that can continue an agent that has handed back, with its whole memory of the task (Claude
+     * Code: a message resumes the finished subagent; a `claude -p` process: `--resume` of its session; OpenCode: one
+     * more prompt in its session): gives agent `agentId` one more turn with `text`. Resolves once it is sent; the
+     * agent's answer comes back like a run end, for the same `agentId` (symcc's agentFinished). Without it, the prompts
+     * ask for org-mem suggestions at the end of the report instead (see app/debrief.ts).
+     */
+    followUp?: (agentId: string, text: string) => Promise<unknown>
     /**
      * Only a host that runs agents as processes and records them (hooks/process/, T-474): stops the recorded agent
      * processes an earlier run of the host left running (still alive, not started by this copy), drops the entries of

@@ -1,5 +1,6 @@
-// T-600, T-620, T-632: organizational memory (org-mem). Workers, checkers and investigations may end their report with a
-// "Learned:" section: up to LEARNED_MAX suggested notes (surprising, useful to agents on other tasks, short). symcc
+// T-600, T-620, T-632: organizational memory (org-mem). T-656: right after a worker or checker hands back, symcc asks the
+// same agent one follow-up question (DEBRIEF_TEXT) for up to LEARNED_MAX suggested notes (useful to agents on other
+// tasks, short); a host that can't continue an agent asks for a "Learned:" section at the end of the report instead. symcc
 // keeps the suggestions on the task (addSuggestions); when the task merges (or an investigation is Done) the lead's
 // board update lists them (suggestedText), and the lead decides what goes into <project>/.<name>/org-mem.md with its
 // orgmem tool (orgMemAdd, orgMemRemove, orgMemReplace, orgMemList). A note is one line, "- 2026-11-20: lesson", at
@@ -20,16 +21,31 @@ export const ORG_MEM_MAX_LINES = 60
 /** The most "Learned:" suggestions taken from one report. */
 export const LEARNED_MAX = 3
 
-/** The longest a kept line may be (longer ones are cut, with "…"). */
-export const LEARNED_LINE_CHARS = 120
+/** The longest a kept line may be (longer ones are cut, with "…"); org-mem goes into every prompt, so notes stay short. */
+export const LEARNED_LINE_CHARS = 100
 
-/** What the prompts ask for at the end of a report (the same words in every prompt). */
-export const LEARNED_ASK = `As the very last part of your report (after everything else) you may add a "Learned:" section: 0 to ${LEARNED_MAX} suggested notes for org-mem, each one line starting with "- ". Nothing goes into org-mem on its own: the lead reads your suggestions when the task ends and decides. Suggest a note only when it is all of these: surprising (a careful agent would not guess it), useful to agents working on other tasks (not about this task or its content), one short plain sentence, and not already in the org-mem notes shown above (not even in other words). No file contents, nothing secret, no task ids. Leaving the section out is the normal case.`
+/**
+ * T-656: the debrief. After a worker or checker hands back, symcc sends the same agent this one follow-up message (it
+ * still holds its whole task in mind), so its main prompt is only about the task. Its answer's "Suggested for
+ * org-mem:" lines are kept as suggestions, like "Learned:" lines (addSuggestions).
+ */
+export const DEBRIEF_TEXT = `Before you finish: is there a fact from this task that would help other agents on other tasks in this project? For example: how to test or check something quickly, a trap or a refusal and the way around it, where something lives, a workflow step that wasted time and what works instead, or a rule in the notes above that turned out wrong. Suggest 0-${LEARNED_MAX}, under "Suggested for org-mem:", each one short plain sentence (at most ~20 words) that is true beyond this task, not already in the org-mem notes above (not even in other words), with no task ids, file contents or secrets. The lead decides what goes in. Most tasks have nothing to add: then answer "none". Answer only; change no files and run nothing.`
 
+/** T-656: how long symcc waits for a debrief answer; none by then: nothing is kept. */
+export const DEBRIEF_MS = 3 * 60_000
+
+/**
+ * What the prompts ask for at the end of a report, only on a host that can't send an agent a follow-up message (no
+ * debrief there, T-656); elsewhere the debrief asks instead and the prompts leave it out.
+ */
+export const LEARNED_ASK = `As the very last part of your report (after everything else) you may add a "Learned:" section: 0 to ${LEARNED_MAX} suggested notes for org-mem, each one line starting with "- ". Nothing goes into org-mem on its own: the lead reads your suggestions when the task ends and decides. Suggest a note only when it is all of these: useful to agents working on other tasks in this project (how to test or check something quickly, a trap or a refusal and the way around it, where something lives, a workflow step that wasted time), true beyond this task, one short plain sentence (at most ~20 words), and not already in the org-mem notes shown above (not even in other words). No file contents, nothing secret, no task ids. Leaving the section out is the normal case.`
+
+/** The words of a heading: "Learned", or the debrief's "Suggested for org-mem" (T-656). */
+const HEAD_WORDS = '(?:learned|suggested\\s+for\\s+org-?mem(?:ory)?)'
 /** The heading line of the section: "Learned:", maybe as **Learned:** or "## Learned", with an optional first line after it. */
-const HEADING = /^\s*(?:#{1,6}\s*)?(?:\*\*|__)?\s*learned\s*(?:\*\*|__)?\s*:?\s*(?:\*\*|__)?\s*(.*)$/i
+const HEADING = new RegExp(`^\\s*(?:#{1,6}\\s*)?(?:\\*\\*|__)?\\s*${HEAD_WORDS}\\s*(?:\\*\\*|__)?\\s*:?\\s*(?:\\*\\*|__)?\\s*(.*)$`, 'i')
 /** A heading must have a colon or be a markdown heading, so a sentence starting with "Learned" is not taken for one. */
-const HEADING_MARK = /^\s*(?:#{1,6}\s*(?:\*\*|__)?\s*learned\b|(?:\*\*|__)?\s*learned\s*(?:\*\*|__)?\s*:)/i
+const HEADING_MARK = new RegExp(`^\\s*(?:#{1,6}\\s*(?:\\*\\*|__)?\\s*${HEAD_WORDS}\\b|(?:\\*\\*|__)?\\s*${HEAD_WORDS}\\s*(?:\\*\\*|__)?\\s*:)`, 'i')
 
 /** A list line of the section: "- x" (or "* x", "• x", "1. x"). */
 const BULLET = /^\s*(?:[-*•+]|\d+[.)])\s+\S/
@@ -116,8 +132,12 @@ export function hideSecrets(s: string): string {
 /** Lines that are file contents or a diff, not a lesson: a code fence, a diff header or hunk. */
 const CONTENTS = /```|^(?:diff --git|@@ |\+\+\+ |--- )/
 
-/** A line that says there is nothing: "none", "nothing", "n/a", "-". */
-const NOTHING = /^[\s(]*(?:none|nothing|nothing new|n\/a|na|-+)[\s.)]*$/i
+/**
+ * A line that says there is nothing: "-", "na", or one that starts with the whole word "no", "none", "nothing" or
+ * "n/a" (any case, any words after: "None — nothing here is true beyond this task.", "No new facts.", "No."); "Nonetheless"
+ * and "Note" are kept.
+ */
+const NOTHING = /^[\s("'*_]*(?:(?:no|none|nothing|n\/a)\b|(?:na|-+)[\s.)]*$)/i
 
 /**
  * Raw "Learned:" lines cleaned: the list mark taken off, made one line (spaces squeezed), cut at LEARNED_LINE_CHARS;
@@ -168,6 +188,18 @@ export function sameLesson(a: string, b: string): boolean {
 /** Org-mem's lines: its non-empty lines, as written. */
 export const orgMemLines = (guide: string | null | undefined): string[] => String(guide ?? '').split('\n').map(l => l.trimEnd()).filter(l => l.trim())
 
+/**
+ * T-656: the suggested lines of a debrief answer (raw, see splitLearned): its "Suggested for org-mem:" (or "Learned:")
+ * section; with no heading, an answer made only of list lines is taken as the list. Anything else ("none", a
+ * sentence) gives none.
+ */
+export function debriefLines(answer: string): string[] {
+  const split = splitLearned(answer)
+  if (split.lines.length) return split.lines
+  const lines = String(answer ?? '').split(/\r?\n/).filter(l => l.trim())
+  return lines.length && lines.every(l => BULLET.test(l)) ? lines.map(l => l.trim()) : []
+}
+
 /** The most suggestions one task keeps (over all its tries, workers and checkers). */
 export const SUGGESTIONS_MAX = 12
 
@@ -175,9 +207,9 @@ export const SUGGESTIONS_MAX = 12
  * Task suggestions `kept` with the "Learned:" lines of report `answer` added at the end (cleaned, see cleanLearned);
  * an exact repeat (the same words, case and marks aside) of one already kept is skipped. At most SUGGESTIONS_MAX.
  */
-export function addSuggestions(kept: readonly string[] | undefined, answer: string): string[] {
+export function addSuggestions(kept: readonly string[] | undefined, answer: string, debrief = false): string[] {
   const out = [...(kept ?? [])]
-  for (const s of cleanLearned(splitLearned(answer).lines)) {
+  for (const s of cleanLearned(debrief ? debriefLines(answer) : splitLearned(answer).lines)) {
     if (out.length >= SUGGESTIONS_MAX) break
     if (!out.some(x => wordsOf(x) === wordsOf(s))) out.push(s)
   }
@@ -319,7 +351,7 @@ export const orgMemSummary = (n: number) => (n ? `org-mem ${orgMemCount(n)}` : '
 
 /** The page's one-line explanation: where the file is, who adds to it, and its limit. */
 export const orgMemAbout = (file: string) =>
-  `Notes for the agents: symcc puts ${file} (at most ${ORG_MEM_MAX_LINES} lines) into every new worker's, checker's and scout's prompt. Agents may suggest notes at the end of a task ("Learned:" lines); the lead decides what goes in. You may edit the file by hand too.`
+  `Notes for the agents: symcc puts ${file} (at most ${ORG_MEM_MAX_LINES} lines) into every new worker's, checker's and scout's prompt. Agents may suggest notes right after they hand back a task (one short follow-up question); the lead decides what goes in. You may edit the file by hand too.`
 
 /** The front of a note line: "- 2026-11-20: ". */
 const NOTE_FRONT = /^\s*(?:[-*•]\s+)?(\d{4}-\d{2}-\d{2})\s*:?\s*/

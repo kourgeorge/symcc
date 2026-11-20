@@ -19,6 +19,7 @@ import { tellLead, noteForLead } from './tell'
 import { sayDone, sayNeedsYou } from './voice'
 import { optionsVia, popupTied } from './questions'
 import { changeValues, investigationValues } from './prompt-values'
+import { debriefing, learnedAsk, startDebrief } from './debrief'
 import { orgMemText, keepSuggestions } from './org-mem'
 import { cleanLeftoverTmp, stopOrphans, timedOut, askOvertime, wrapUp } from './cleanup'
 
@@ -26,10 +27,11 @@ import { cleanLeftoverTmp, stopOrphans, timedOut, askOvertime, wrapUp } from './
 
 /** The prompt a worker on task `t` is started with: its kind's built-in prompt with the placeholders filled in for this task.
  *  The role's checklist goes in {{role}}, with its own placeholders filled in from the same values. `guide`: organizational memory (org-mem) as
- *  the prompt shows it (orgMemText; '' for none). */
-export const WORKER_PROMPT = (t: BoardTask, b: Board, dir: string, role?: RoleDef, guide = '') => {
+ *  the prompt shows it (orgMemText; '' for none). `learned`: the end-of-report ask for org-mem suggestions, only on a host
+ *  with no debrief (learnedAsk, T-656); '' by default: the debrief asks after the hand-back instead. */
+export const WORKER_PROMPT = (t: BoardTask, b: Board, dir: string, role?: RoleDef, guide = '', learned = '') => {
   const kind = isInvestigation(t) ? 'investigation' : 'change'
-  const values = kind === 'investigation' ? investigationValues(t, dir) : changeValues(t, b, dir)
+  const values = { ...(kind === 'investigation' ? investigationValues(t, dir) : changeValues(t, b, dir)), learned }
   return fillPrompt(kind, { ...values, role: roleSection(role, values), org_mem: guide })
 }
 
@@ -100,7 +102,7 @@ async function queueWorker(host: Host, id: string): Promise<{ started: Promise<v
     // An agent this copy stopped (an orphan, see stopOrphans) doesn't hold its task any more, even
     // while it stays listed: every tool it tries is refused, so a fresh worker may start (sendBackIdle
     // sent its task back to todo for exactly that).
-    const agents = [...listed, ...knownWorkers()].filter(a => !stopped.has(a.id))
+    const agents = [...listed, ...knownWorkers()].filter(a => !stopped.has(a.id) && !debriefing(a.id))
     const b = await load(host)
     const t0 = find(b, id)
     if (!mayStart(t0, agents.map(agentState), S.N.name)) return null
@@ -134,7 +136,7 @@ async function queueWorker(host: Host, id: string): Promise<{ started: Promise<v
       const cur = find(await load(host), id)
       return cur?.status === 'doing' && cur.session === S.me && cur.attempts === t.attempts
     }
-    const spawn = startAgent(host, { kind: 'worker', prompt: WORKER_PROMPT(t, b, dir, role, await orgMemText(host)) + behindNote(behind, intoOf(t), why), name: workerName(S.N.name, t.id), description: workerDescription(t.title), ...(role?.tools ? { tools: role.tools } : {}), ...(!isInvestigation(t) && t.files?.length ? { files: t.files } : {}), cwd: dir, ...(role?.model ? { model: role.model } : {}) }, still)
+    const spawn = startAgent(host, { kind: 'worker', prompt: WORKER_PROMPT(t, b, dir, role, await orgMemText(host), learnedAsk(host)) + behindNote(behind, intoOf(t), why), name: workerName(S.N.name, t.id), description: workerDescription(t.title), ...(role?.tools ? { tools: role.tools } : {}), ...(!isInvestigation(t) && t.files?.length ? { files: t.files } : {}), cwd: dir, ...(role?.model ? { model: role.model } : {}) }, still)
     queued = true
     queuedWorkers.set(id, { task: id, worktree: dir, branch, since: Date.now() })
     return { started: workerStarted(host, id, before, dir, branch, spawn, t.attempts).finally(() => (starting.delete(id), queuedWorkers.delete(id))) }
@@ -300,6 +302,8 @@ export async function workerFinished(host: Host, agentId: string, answer: string
     finishing.delete(w.task)
     return
   }
+  // T-656: the same agent is asked for org-mem suggestions in one follow-up turn; nothing below waits for its answer
+  if (tryNo !== undefined && end.reason === 'answer' && !stopped.has(agentId)) startDebrief(host, agentId, w.task, tryNo, answer)
   try {
     if (tryNo !== undefined) beat = everyMs(host, FINISH_BEAT_MS, () => void markFinishing(host, w.task, tryNo!).catch(() => undefined))
     // Its merge turn has a time limit (finishLimitMs: it grows with the test commands): the heartbeat above keeps going even when

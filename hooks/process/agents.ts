@@ -42,6 +42,13 @@ export interface AgentRunner {
   command(a: HostAgentStart): { argv: string[]; stdin?: string; env?: Record<string, string> }
   /** how the run ended, from the process's output */
   result(out: ProcessOutput): RunnerEnd
+  /**
+   * T-656, only a runner that can continue a finished agent: the session a run's output names (`session`), and the
+   * command that gives that session one more turn with `text` (`followUp`), in agent `a`'s folder. Without them the
+   * agents have no followUp, so the prompts ask for org-mem suggestions at the end of the report instead.
+   */
+  session?(out: ProcessOutput): string | undefined
+  followUp?(session: string, text: string, a: HostAgentStart): { argv: string[]; stdin?: string; env?: Record<string, string> }
 }
 
 /** The agents processAgents keeps: Host['agents'], plus what a host waits on. */
@@ -70,7 +77,8 @@ export type ProcessAgentsOptions = {
 /** host.agents over `runner`'s processes; `onEnd` is called once per run when its process has ended. */
 export function processAgents(runner: AgentRunner, onEnd: (agentId: string, end: RunnerEnd) => void, o: ProcessAgentsOptions): ProcessAgents {
   const sys = o.system
-  type Run = { agent: HostAgent; child: ProcessChild; killed: boolean; closed: Promise<void> }
+  // `start`: what it was started with, and `session`: what its last run's output named (both for a follow-up, T-656)
+  type Run = { agent: HostAgent; child: ProcessChild; killed: boolean; closed: Promise<void>; start: HostAgentStart; session?: string }
   const runs = new Map<string, Run>()
   const rec = o.record ? recordEditor(o.record) : undefined
   const note = (fn: (entries: ProcessEntry[]) => ProcessEntry[]) => rec?.edit(e => ({ entries: fn(e), out: undefined })).catch(() => undefined)
@@ -93,44 +101,24 @@ export function processAgents(runner: AgentRunner, onEnd: (agentId: string, end:
   return {
     async spawn(a) {
       const { argv, stdin, env } = runner.command({ ...a, prompt: withBasePrompt(a) })
-      const [cmd, ...args] = argv
-      if (!cmd) throw new Error(`${runner.name}: no command for ${a.name}`)
       const id = `${runner.name}-${++n}-${Date.now().toString(36)}`
-      const child = sys.spawn(cmd, args, { ...(a.cwd ? { cwd: a.cwd } : {}), ...(env ? { env } : {}), stdin: stdin !== undefined })
-      const closed = new Promise<void>(res => {
-        child.on('close', () => res())
-        child.on('error', () => res())
-      })
-      const run: Run = { agent: { id, kind: a.kind === 'worker' ? 'worker' : 'scout', status: 'running', name: a.name, description: a.description }, child, killed: false, closed }
-      runs.set(id, run)
-      const pid = child.pid
-      if (pid) {
-        const task = taskInName(a.name)
-        const entry: ProcessEntry = { pid, agent: id, ...(task ? { task } : {}), ...(a.cwd ? { folder: a.cwd } : {}), started: new Date().toISOString(), command: cmd }
-        void note(e => [...e.filter(x => x.pid !== pid), entry])
-      }
-      let stdout = ''
-      let stderr = ''
-      child.stdout.on('data', c => void (stdout += c.toString()))
-      child.stderr.on('data', c => void (stderr += c.toString()))
-      let ended = false
-      const end = (exitCode: number, why = '') => {
-        if (ended) return
-        ended = true
-        run.agent = { ...run.agent, status: run.killed ? 'killed' : exitCode === 0 ? 'completed' : 'failed' }
-        void note(e => e.filter(x => x.agent !== id))
-        const r = runner.result({ stdout, stderr: stderr + why, exitCode, killed: run.killed })
-        if (r.cost !== undefined) cost = (cost ?? 0) + r.cost
-        onEnd(id, r)
-      }
-      child.on('error', err => end(127, err.message))
-      child.on('close', code => end(code ?? 1))
-      if (stdin !== undefined) child.stdin?.end(stdin)
+      launch(id, a, argv, stdin, env)
       return { agentId: id }
     },
     list: async () => [...runs.values()].map(r => r.agent),
     // A process started with -p takes no more messages: what symcc would tell a running agent is dropped.
     send: async () => undefined,
+    // T-656: a finished agent whose runner names its session gets one more run of that session, under the same id
+    ...(runner.followUp && runner.session
+      ? {
+          async followUp(agentId: string, text: string) {
+            const r = runs.get(agentId)
+            if (!r || r.agent.status !== 'completed' || !r.session) throw new Error(`${agentId} is no finished agent with a session`)
+            const { argv, stdin, env } = runner.followUp!(r.session, text, r.start)
+            launch(agentId, r.start, argv, stdin, env)
+          },
+        }
+      : {}),
     async stop(agentId) {
       const r = runs.get(agentId)
       if (r) stop(r)
@@ -172,5 +160,43 @@ export function processAgents(runner: AgentRunner, onEnd: (agentId: string, end:
         })
         .catch(() => [] as string[])
     },
+  }
+
+  /** Runs `argv` as agent `id`'s process (started as `a`), recorded while it runs; its end goes to `onEnd` once. */
+  function launch(id: string, a: HostAgentStart, argv: string[], stdin?: string, env?: Record<string, string>) {
+    const [cmd, ...args] = argv
+    if (!cmd) throw new Error(`${runner.name}: no command for ${a.name}`)
+    const child = sys.spawn(cmd, args, { ...(a.cwd ? { cwd: a.cwd } : {}), ...(env ? { env } : {}), stdin: stdin !== undefined })
+    const closed = new Promise<void>(res => {
+      child.on('close', () => res())
+      child.on('error', () => res())
+    })
+    const run: Run = { agent: { id, kind: a.kind === 'worker' ? 'worker' : 'scout', status: 'running', name: a.name, description: a.description }, child, killed: false, closed, start: a }
+    runs.set(id, run)
+    const pid = child.pid
+    if (pid) {
+      const task = taskInName(a.name)
+      const entry: ProcessEntry = { pid, agent: id, ...(task ? { task } : {}), ...(a.cwd ? { folder: a.cwd } : {}), started: new Date().toISOString(), command: cmd }
+      void note(e => [...e.filter(x => x.pid !== pid), entry])
+    }
+    let stdout = ''
+    let stderr = ''
+    child.stdout.on('data', c => void (stdout += c.toString()))
+    child.stderr.on('data', c => void (stderr += c.toString()))
+    let ended = false
+    const end = (exitCode: number, why = '') => {
+      if (ended) return
+      ended = true
+      run.agent = { ...run.agent, status: run.killed ? 'killed' : exitCode === 0 ? 'completed' : 'failed' }
+      void note(e => e.filter(x => x.agent !== id))
+      const out = { stdout, stderr: stderr + why, exitCode, killed: run.killed }
+      const r = runner.result(out)
+      run.session = runner.session?.(out)
+      if (r.cost !== undefined) cost = (cost ?? 0) + r.cost
+      onEnd(id, r)
+    }
+    child.on('error', err => end(127, err.message))
+    child.on('close', code => end(code ?? 1))
+    if (stdin !== undefined) child.stdin?.end(stdin)
   }
 }

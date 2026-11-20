@@ -6,11 +6,12 @@
 // The prompt waits until symcc has recorded the agent (`ready`): a worker's tool calls are judged by the copy of the
 // plugin for its folder, which only knows it from the board. End: session.wait, then session.get (outcome, tokens,
 // cost) and session.context (its final text) go to `onEnd`, which hands them to symcc's agentFinished. Stop:
-// session.interrupt. See docs/research/opencode-spike-can-a-small-symcc-plugin-refuse-edits-start-a.md, points 2 and 7.
+// session.interrupt. Follow-up (T-656, the debrief): one more queued prompt in a finished agent's session; its end
+// goes to `onEnd` again, with only that turn's tokens. See docs/research/opencode-spike-can-a-small-symcc-plugin-refuse-edits-start-a.md, points 2 and 7.
 import type { HostAgent, HostAgentKind, HostAgentStart } from '../host'
 import type { AgentRunEnd } from '../app/symcc'
 import type { SymccTokens } from '../../types'
-import { cleanTokens } from '../core/runs'
+import { addTokens, cleanTokens } from '../core/runs'
 import { basePromptFor } from '../core/prompts'
 import type { OcModelRef, OcSessionApi, OcSessionInfo, OcSessionMessage, OcTokens } from './ctx'
 import { realPathOf } from './guard'
@@ -112,6 +113,23 @@ export function sessionEnd(info: OcSessionInfo, messages: ReadonlyArray<OcSessio
   return { answer: answer || (failed ? errorText(last?.error) : ''), end: { reason: failed ? 'error' : 'answer' }, isAborted: false, tokens, ...cost }
 }
 
+/**
+ * T-656: how a follow-up turn of a finished session ended: as sessionEnd, but with the tokens and cost of only the
+ * messages after the first `before` ones (the session's own counts are for its whole life).
+ */
+export function followUpEnd(info: OcSessionInfo, messages: ReadonlyArray<OcSessionMessage>, before: number): AgentRunEnd {
+  const fresh = messages.slice(before)
+  const end = sessionEnd({ ...info, tokens: undefined, cost: undefined }, fresh)
+  const mine = fresh.filter(m => m.type === 'assistant')
+  let tokens: SymccTokens | undefined
+  for (const m of mine) {
+    const t = ocTokens(m.tokens)
+    if (t) tokens = tokens ? addTokens(tokens, t) : t
+  }
+  const cost = mine.reduce((n, m) => n + (typeof m.cost === 'number' ? m.cost : 0), 0)
+  return { ...end, tokens, ...(cost > 0 ? { cost } : {}) }
+}
+
 /** A session error's message, as far as it says one. */
 function errorText(e: unknown): string {
   const o = e && typeof e === 'object' ? (e as Record<string, unknown>) : {}
@@ -144,6 +162,8 @@ export type OpencodeAgents = {
   list: () => Promise<HostAgent[]>
   send: (agentId: string, text: string) => Promise<unknown>
   stop: (agentId: string, text: string) => Promise<unknown>
+  /** T-656: one more prompt in a finished agent's session (see Host['agents'].followUp); its end goes to `onEnd` again */
+  followUp: (agentId: string, text: string) => Promise<unknown>
   /** whether `sessionID` is an agent this started */
   has: (sessionID: string) => boolean
 }
@@ -270,6 +290,30 @@ export function opencodeAgents(api: OcSessionApi, o: OpencodeAgentsOptions): Ope
       if (r.status === 'pending') runs.set(agentId, { ...r, status: 'stopping' })
       await api.interrupt({ sessionID: agentId }).catch(() => undefined)
       if (r.status === 'pending') await finish(agentId, { answer: '', end: { reason: 'aborted' }, isAborted: true, tokens: undefined })
+    },
+    async followUp(agentId, text) {
+      const r = runs.get(agentId)
+      if (!r || r.status !== 'completed') throw new Error(`${agentId} is no finished agent session of ${name}'s`)
+      const before = (await api.context({ sessionID: agentId }).catch(() => [])).length
+      runs.set(agentId, { ...r, status: 'running' })
+      try {
+        await api.prompt({ sessionID: agentId, text, delivery: 'queue' })
+      } catch (err) {
+        runs.set(agentId, r)
+        throw err
+      }
+      void (async () => {
+        let end: AgentRunEnd
+        try {
+          await api.wait({ sessionID: agentId })
+          end = followUpEnd(await api.get({ sessionID: agentId }), await api.context({ sessionID: agentId }).catch(() => []), before)
+        } catch (err) {
+          end = { answer: `the OpenCode session failed: ${(err as Error)?.message ?? err}`, end: { reason: 'error' }, isAborted: false, tokens: undefined }
+        }
+        if (runs.get(agentId)?.status !== 'running') return
+        runs.set(agentId, { ...r, status: end.isAborted ? 'killed' : end.end.reason === 'error' ? 'failed' : 'completed' })
+        o.onEnd(agentId, end)
+      })()
     },
     has: id => runs.has(id),
   }

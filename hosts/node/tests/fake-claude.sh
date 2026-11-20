@@ -6,6 +6,21 @@
 # FAKE_SLEEP (seconds) makes it wait first, like a slow model: a stop while it waits must mean the file never changes.
 # FAKE_PID set: it first writes its process id there (its process group's id too: symcc starts it detached), so a
 # test can check the group is gone instead of waiting out the sleep on the clock (T-509).
+# Started with --resume <session> (T-656, the debrief after a hand-back): it edits nothing, saves its arguments and
+# message to FAKE_LOG.resume.*, and answers FAKE_DEBRIEF (default "none") with its own tokens.
+case " $* " in
+  *" --resume "*)
+    msg=$(cat)
+    if [ -n "${FAKE_LOG:-}" ]; then
+      for a in "$@"; do printf '%s\n' "$a"; done > "$FAKE_LOG.resume.args"
+      printf '%s' "$msg" > "$FAKE_LOG.resume.prompt"
+    fi
+    answer=$(printf '%s\n' "${FAKE_DEBRIEF:-none}" | awk 'BEGIN { ORS = "\\n" } { print }')
+    echo '{"type":"system","subtype":"init","session_id":"fake"}'
+    printf '%s\n' '{"type":"result","subtype":"success","is_error":false,"session_id":"fake","result":"'"$answer"'","total_cost_usd":0.001,"usage":{"input_tokens":10,"output_tokens":3}}'
+    exit 0
+    ;;
+esac
 [ -n "${FAKE_PID:-}" ] && echo $$ > "$FAKE_PID"
 prompt=$(cat)
 file=${FAKE_EDIT:-hello.txt}

@@ -25,7 +25,7 @@ const SHARED_PLACEHOLDERS: Record<string, string> = {
   role: 'the role\'s checklist, skills and web rule (empty for general)',
   kind: 'the task\'s kind and what it is for, e.g. "Kind of task: bug (something that works wrongly)."',
   org_mem: 'only when organizational memory (.symcc/org-mem.md) has lines: "Organizational memory (org-mem): notes earlier agents left about this project", then its lines',
-  learned: 'how to end the report with an optional "Learned:" section for organizational memory (org-mem)',
+  learned: 'how to end the report with an optional "Learned:" section for organizational memory (org-mem); only on a host that can\'t send the debrief after the hand-back (T-656), else empty',
 }
 
 /** The placeholders of each prompt and what they become; any other {{word}} is left as written. */

@@ -1,7 +1,7 @@
 // T-600, T-632: organizational memory (org-mem) (core/org-mem.ts): "Learned:" suggestions from a report, cleaned and kept once; the
 // lead's add / remove / replace / list; the limit; and org-mem shown in prompts.
 import { expect, test } from 'claude-code/testing'
-import { addSuggestions, suggestedText, orgMemAdd, orgMemRemove, orgMemReplace, orgMemList, dropTaskIds, cleanLearned, orgMemSection, sameLesson, splitLearned, ORG_MEM_MAX_LINES, LEARNED_LINE_CHARS, LEARNED_ASK, orgMemNotes, orgMemNoteHead, orgMemCount, orgMemSummary, orgMemAbout, deleteOrgMemNote, orgMemNoteKey, ORG_MEM_EMPTY } from '../hooks/core/org-mem'
+import { addSuggestions, suggestedText, orgMemAdd, orgMemRemove, orgMemReplace, orgMemList, dropTaskIds, cleanLearned, orgMemSection, sameLesson, splitLearned, ORG_MEM_MAX_LINES, LEARNED_LINE_CHARS, LEARNED_ASK, DEBRIEF_TEXT, debriefLines, orgMemNotes, orgMemNoteHead, orgMemCount, orgMemSummary, orgMemAbout, deleteOrgMemNote, orgMemNoteKey, ORG_MEM_EMPTY } from '../hooks/core/org-mem'
 import { parseCommand } from '../hooks/core/commands'
 import { checkerVerdict, fillPrompt, scoutPrompt, PROMPT_KINDS, BUILT_IN_PROMPTS } from '../hooks/board'
 import { checkerPrompt } from '../hooks/core/checker'
@@ -50,7 +50,7 @@ test('T-632: suggestions are kept once (exact repeats skipped), cleaned, and lis
   expect(sameLesson('the guard allows a repo under /tmp', 'the guard does not allow a repo under /tmp')).toBe(false)
 })
 
-test('T-632: a 150-character suggestion is cut near 120, with "…"', () => {
+test('T-632: a 150-character suggestion is cut near 100 (T-656), with "…"', () => {
   const long = 'word '.repeat(30).trim()
   expect(long.length).toBeGreaterThan(140)
   const [s] = addSuggestions(undefined, `done\n\nLearned:\n- ${long}`)
@@ -105,7 +105,7 @@ test('T-632: the one-time conversion takes the task ids off old lines and leaves
 
 test('prompts: workers, checkers and scouts get the guide under a heading, and are asked for "Learned:" lines; empty guide: nothing', () => {
   // T-632: the ask is for suggestions the lead decides on: surprising, for other tasks, short, not already there
-  for (const words of ['suggested notes', 'the lead reads your suggestions', 'surprising (a careful agent would not guess it)', 'useful to agents working on other tasks', 'one short plain sentence', 'not already in the org-mem notes shown above (not even in other words)', 'no task ids', 'Leaving the section out is the normal case']) expect(LEARNED_ASK).toContain(words)
+  for (const words of ['suggested notes', 'the lead reads your suggestions', 'useful to agents working on other tasks in this project', 'true beyond this task', 'one short plain sentence', 'not already in the org-mem notes shown above (not even in other words)', 'no task ids', 'Leaving the section out is the normal case']) expect(LEARNED_ASK).toContain(words)
   expect(orgMemSection(null, '.symcc/org-mem.md')).toBe('')
   expect(orgMemSection(' \n\n', '.symcc/org-mem.md')).toBe('')
   const g = orgMemSection(`- ${D}: a\n`, '.symcc/org-mem.md')
@@ -121,7 +121,9 @@ test('prompts: workers, checkers and scouts get the guide under a heading, and a
   const c = { name: 'symcc', task_id: 'T-1', title: 'a', details: 'b', branch: 'symcc/T-1', folder: '/w', into: 'main', role: '', diff: '', changed_files: '', tests: '' }
   expect(checkerPrompt({ ...c, org_mem: g })).toContain(`- ${D}: a`)
   expect(checkerPrompt(c)).not.toContain('{{')
-  expect(checkerPrompt(c)).toContain('"Learned:" section')
+  // T-656: the ask is only there when given (a host with no debrief)
+  expect(checkerPrompt(c)).not.toContain('"Learned:" section')
+  expect(checkerPrompt({ ...c, learned: LEARNED_ASK })).toContain('"Learned:" section')
   expect(scoutPrompt({ scout: 's', root: '/p', instructions: 'Go.', open: [], guide: g })).toContain(`- ${D}: a`)
   expect(scoutPrompt({ scout: 's', root: '/p', instructions: 'Go.', open: [] })).not.toContain('notes earlier agents')
 })
@@ -181,7 +183,7 @@ test('T-619, T-632: orgMemNotes lists the notes newest first, each its place in 
   expect([orgMemCount(0), orgMemCount(1), orgMemCount(4)]).toEqual(['0 notes', '1 note', '4 notes'])
   expect([orgMemSummary(0), orgMemSummary(2)]).toEqual(['', 'org-mem 2 notes'])
   expect(ORG_MEM_EMPTY).toBe('No notes yet.')
-  expect(orgMemAbout('.symcc/org-mem.md')).toContain('"Learned:"')
+  expect(orgMemAbout('.symcc/org-mem.md')).toContain('right after they hand back a task (one short follow-up question)')
   expect(orgMemAbout('.symcc/org-mem.md')).toContain(`.symcc/org-mem.md (at most ${ORG_MEM_MAX_LINES} lines)`)
   expect(orgMemAbout('.symcc/org-mem.md')).toContain('the lead decides what goes in')
 })
@@ -226,4 +228,20 @@ test('T-619: a delete by number with the note\'s check word deletes nothing when
   expect(r.removed?.text).toBe('lesson number 30')
   expect(orgMemNotes(r.text).map(x => x.text)).not.toContain('lesson number 30')
   expect(orgMemNotes(r.text)).toHaveLength(ORG_MEM_MAX_LINES - 2)
+})
+
+test('T-656: the debrief asks for 0-3 short facts for other agents under "Suggested for org-mem:"; its answer\'s lines are kept, "none" gives nothing', () => {
+  for (const words of ['help other agents on other tasks in this project', 'how to test or check something quickly', 'a trap or a refusal', 'Suggest 0-3, under "Suggested for org-mem:"', 'at most ~20 words', 'not already in the org-mem notes above (not even in other words)', 'no task ids, file contents or secrets', 'The lead decides what goes in', 'answer "none"', 'change no files and run nothing']) expect(DEBRIEF_TEXT).toContain(words)
+  expect(LEARNED_LINE_CHARS).toBe(100)
+  expect(debriefLines('none')).toEqual([])
+  expect(debriefLines('None.')).toEqual([])
+  expect(debriefLines('Suggested for org-mem:\n- a\n- b')).toEqual(['- a', '- b'])
+  expect(debriefLines('**Suggested for org-mem:**\n- a')).toEqual(['- a'])
+  expect(debriefLines('- only a list')).toEqual(['- only a list'])
+  expect(debriefLines('I think nothing here.\n- maybe this')).toEqual([])
+  expect(addSuggestions(['x'], 'Suggested for org-mem:\n- Run one test with sh scripts/test-files.sh.', true)).toEqual(['x', 'Run one test with sh scripts/test-files.sh.'])
+  expect(addSuggestions(['x'], 'none', true)).toEqual(['x'])
+  // any "no" answer after the heading is nothing, with or without a list mark and words after it
+  for (const no of ['Suggested for org-mem: none — nothing here is true beyond this task.', 'Suggested for org-mem: No new facts.', 'Suggested for org-mem: nothing to add', 'Suggested for org-mem:\n- None from this task.', 'Suggested for org-mem:\n- N/A here', 'Suggested for org-mem:\n- no facts beyond this task', 'Suggested for org-mem: No.', 'Suggested for org-mem: No, nothing to add.', 'Suggested for org-mem:\n- No suggestions.', 'Suggested for org-mem:\n- No notes to add.']) expect(addSuggestions(undefined, no, true)).toEqual([])
+  expect(addSuggestions(undefined, 'Suggested for org-mem:\n- Nonetheless, one test file runs fast.\n- Note the slow step.\n- No new facts.', true)).toEqual(['Nonetheless, one test file runs fast.', 'Note the slow step.'])
 })

@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { allowFiles, refuseFiles, waitsForFiles, filesRefusedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, ROLE_TOOL_WORDS, DEFAULT_ROLE, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedEntry, withHistory, historyLineText, type SettingsInput, type SettingChange, testMinutesRefusal, isMode, isNotify, notifyRefusal, applySettings, intoOf, crossBranchNotes, parseGoneBranch, saysMergeInstead, type Board, settingSetText, taskReports, reportPreview, statsReport, parseStatsRange, parseStatsArgs, archivedCount, localOffset, endedBy, stopEnd, changeRestartWhy, changedFields, addDetailsText, noteAddedLine, detailsBothRefusal, dayOf, inPlan, planBacklog, planAdded, planAddText, parseScoutUsage, parseStatusFilter, BOARD_STATUSES, type TeamInput, SETTING_NAMES, leadSettingsText, readSoundSet, findingToBacklog, isScoutFindings, isTestsWithChanges, kindFor, isAnswered, askMoreTask, isInvestigation, checkKind, kindsLeadText, kindNames, BUILT_IN_KINDS, originOf, stateLabelLower, modeOf, when } from '../board'
+import { allowFiles, refuseFiles, waitsForFiles, filesRefusedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, ROLE_TOOL_WORDS, DEFAULT_ROLE, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedEntry, withHistory, historyLineText, type SettingsInput, type SettingChange, testMinutesRefusal, isMode, isNotify, notifyRefusal, applySettings, intoOf, crossBranchNotes, parseGoneBranch, saysMergeInstead, type Board, settingSetText, taskReports, reportPreview, statsReport, statsData, parseStatsRange, parseStatsArgs, archivedCount, localOffset, endedBy, stopEnd, changeRestartWhy, changedFields, addDetailsText, noteAddedLine, detailsBothRefusal, dayOf, inPlan, planBacklog, planAdded, planAddText, parseScoutUsage, parseStatusFilter, BOARD_STATUSES, type TeamInput, SETTING_NAMES, leadSettingsText, readSoundSet, findingToBacklog, isScoutFindings, isTestsWithChanges, kindFor, isAnswered, askMoreTask, isInvestigation, checkKind, kindsLeadText, kindNames, BUILT_IN_KINDS, originOf, stateLabelLower, modeOf, when } from '../board'
 import { scoutMemoryFile, leadScouts, linkTaskToScoutRun } from './scouts'
 import { archivedText, bringBackArchived, findArchived, readArchiveFile } from './archive'
 import { removeWorktree, worktreeDir, setupGit, branchExists, branchList, homeBranch, taskWork, resetScratch } from './git'
@@ -8,6 +8,7 @@ import { loadKinds, leadKinds } from './kinds'
 import { S, heard, workers, toolName } from './state'
 import { type Host, type HostFeatures, ALL_FEATURES } from '../host'
 import { load, change, now, path } from './store'
+import { statsHtml, openCommands } from '../core/stats-html'
 import { noteForLead, brief, tellLead } from './tell'
 import { playable, playSample } from './voice'
 import { pump, approve, mergeWaiting, checkingNow, stopAsked, CHECKING_TEXT, mergingNow, MERGING_TEXT, fullAnswer } from './workers'
@@ -115,11 +116,12 @@ ${features.panel ? `  /${S.N.name}                     open the board panel (↑
                        (a typed line is one whole shell command; several go in a list like ["npm test", "npm run lint"];
                        "none" clears them)
                        a value over its limit is cut to it, and the answer says so
-  /${S.N.name}-stats [full] [7d|T-1..T-9]  time and token stats, with bar charts:
+  /${S.N.name}-stats [full|html] [7d|T-1..T-9]  time and token stats, with bar charts:
                        tasks, worker time, tokens, the whole team (lead, workers, scouts),
                        per task and per try, the biggest tasks, how tasks ended, by role,
                        origin and day (all tasks, the last N days, or an id range);
-                       "full" adds the long explanations
+                       "full" adds the long explanations; "html" writes them as a web page
+                       with charts (${S.N.dir}/stats.html) and opens it
   /${S.N.name}-disable             disable ${S.N.name} for this project: ${S.W.assistant} works as normal (no lead
                        guide, no workers, scouts, updates, sounds or voice); the board is kept
   /${S.N.name}-enable              turn it back on, in the mode the board had
@@ -331,7 +333,7 @@ ${
 - A worker that needs the owner to decide something calls its own question tool, ${toolName('ask_owner')} (maybe with options, which the board shows as buttons), and stops; that tool is for workers only: you never call it (to make a task wait with your own question, use ${S.N.name} ask). The task then waits for the owner (NEEDS YOU) with that question, and with notify on the owner hears "symcc: T-5 needs you" (the project's name first) (or a chime). You are told too. Answer it yourself only if the owner already clearly said the answer: then ${S.N.name} change the task with answer: that answer, and tell the owner what you answered. Otherwise always ask the owner in the chat, plain and short; if there are options, offer them as numbered plain chat text, plus "or answer on the board". Put their chat answer into the task with ${S.N.name} change and answer: their words. If they answer on the board first (a "Meanwhile" line), don't ask again. If ${S.N.name} change says the task was already answered, tell the owner their board answer was used.
 - A worker whose run ended on an API error (retries used up, the context limit) or a refusal fails its try with that reason, and nothing is checked or merged; its work stays in its folder and branch, so ${S.N.name} retry continues from there. What a worker writes in its hand-back is only its report: symcc never reads a question or a file request out of it.
 - A worker that runs past its time limit (max_minutes, plus any time the owner added) is not stopped: it keeps working, its task stays doing with the note "over time; asked the owner", and you are told "T-5 has run 45 min. Give it more time?" with the options +30 min | +60 min | Stop it (the owner hears "needs you" too, and the board shows them as buttons). Ask the owner in the chat, offering those choices as numbered plain chat text, plus "or answer on the board"; put their pick into the task with ${S.N.name} change and answer: "+30 min", "+60 min" (any "+N min" works) or "Stop it". More time moves that task's limit later and the worker goes on. Stop it (or no answer by the limit plus max_minutes again) tells the worker to write down what it has and hand back; a few minutes later it is stopped and the task fails, with its work kept in its folder, branch and report, so a retry continues from there.
-- To add a note or one more line to a task's details, use ${S.N.name} change add_details: the note (added at the end as "Note (lead, <date>): ...", the rest kept, written in its history; a running task restarts). details rewrites the whole text, so use it only for a full rewrite, never both at once.
+- To add a note or one more line to a task's details, use ${S.N.name} change add_details: the note (added at the end as "Note (lead, <date>): ...", the rest kept, written in its history; a running task restarts). A change to a running task's details, title or files (add_details too) restarts its try, so put a note in the same change as an answer instead of sending it a moment later; changing only its order or after-list keeps it running (saved for its next try). details rewrites the whole text, so use it only for a full rewrite, never both at once.
 - When the owner answers a waiting task, put the answer into the task with ${S.N.name} change and answer: their words (that sends it back to work; what the worker already changed is kept).
 - If you are told the folder has no git repo (or no commits), ask the owner whether to set one up; only when they say yes, run ${S.N.name} setup_git. Never do it without asking.
 - Set the test command with ${S.N.name} settings (e.g. ["npm test"]); for a new project pick the stack and test command when you plan the first tasks.
@@ -346,7 +348,7 @@ ${features.planMode ? `- Plan mode (${S.W.planMode}): only plan. Nothing starts:
 ${rolesLeadText(S.roles, S.N.name)}
 ${kindsLeadText(S.kinds, S.N.name)}
 - Manage worker roles with ${S.N.name} roles, never by writing ${S.N.dir}/roles/ files by hand: action list (the default) shows each role and where it comes from (built-in, replaced, added, off), list with name shows one in full; add (name, description, optional model, skills, tools, checklist); edit changes what you give (a built-in role is copied to ${S.N.dir}/roles/ first); reset brings a built-in back; remove deletes an added role (ask the owner first); off / on turns a role off or on (${DEFAULT_ROLE} can't be turned off; checker can't be turned on or off and is never a task's role: the checker setting runs it). An off role is never picked for a new task.
-- Organizational memory (org-mem, ${S.N.dir}/org-mem.md) is short notes every new worker, checker and scout reads in its prompt. Agents only suggest notes; you decide what goes in, with ${toolName('orgmem')} (action list, add, replace, remove). When a board update lists "Suggested for org-mem" for a task, decide briefly, on your own (don't ask the owner about each): add only what is surprising (a careful agent would not guess it), useful to agents on other tasks (not about that task) and not already there, as one short plain sentence without a task id; when a note there says nearly the same, replace it with the better one instead; most suggestions are skipped. Mention in one line what you added (or nothing). At ${ORG_MEM_MAX_LINES} lines add is refused: remove or replace an old note first.
+- Organizational memory (org-mem, ${S.N.dir}/org-mem.md) is short notes every new worker, checker and scout reads in its prompt. Agents only suggest notes; you decide what goes in, with ${toolName('orgmem')} (action list, add, replace, remove). When a board update lists "Suggested for org-mem" for a task, decide briefly, on your own (don't ask the owner about each): add only what is useful to agents on other tasks in this project, true beyond that task, short (one plain sentence, at most about 100 characters, without a task id) and not already there (not even in other words); org-mem goes into every prompt, so prefer replacing an old note with a better one over adding, and replace it with the better one when a note there says nearly the same; most suggestions are skipped. Mention in one line what you added (or nothing). At ${ORG_MEM_MAX_LINES} lines add is refused: remove or replace an old note first.
 - Manage task kinds with ${S.N.name} kinds, never by writing ${S.N.dir}/kinds/ files by hand: action list (the default) shows each kind and where it comes from (built-in, replaced, added, off), list with name shows one in full; add (name, description, optional body); edit changes what you give (a built-in kind is copied to ${S.N.dir}/kinds/ first); reset brings a built-in back; remove deletes an added kind (ask the owner first); off / on turns a kind off or on (change and investigation can't be turned off). An off kind is never picked for a new task, and ${S.N.name} add refuses it. Only change kinds when the owner asks.
 - Don't do the tasks' work yourself in the main conversation; let the workers do it. Talk about tasks by ID (T-3). Use ${S.N.name} board to see the board: with nothing it lists the open tasks and the backlog, and done / dropped only as counts; status (todo, doing, review, waiting, failed, paused, done, dropped, backlog, or open) and search (words, matched like the panel's search, plus filter words last:N, top:N, since:2d, status:, kind:, role:) narrow it, e.g. status: ["done"], search: "notify", or search: "last:5 status:done" for the 5 latest done tasks (not the whole list); with task it shows that task in full with its latest worker report (no need to read ${S.N.dir}/reports by hand).`
 
@@ -366,7 +368,7 @@ export const TOOLS = () => [
   },
   {
     name: 'change',
-    description: 'Rewrite a task. details replaces the whole text; add_details adds a note to the end and keeps the rest (not both at once). A running task restarts on the new version; a waiting, failed or in-review one goes back to work; a paused one stays paused with the change saved (only resume or retry starts it again); a backlog one stays in the backlog. Changing only needs_review (wait for the owner before merging) just sets that flag. backlog: true stashes the task in the backlog (a running one is stopped first); backlog: false moves it from the backlog to todo.',
+    description: 'Rewrite a task. details replaces the whole text; add_details adds a note to the end and keeps the rest (not both at once). A running task restarts on the new version (except when only order, after or needs_review change: those are saved and its worker keeps running); a waiting, failed or in-review one goes back to work; a paused one stays paused with the change saved (only resume or retry starts it again); a backlog one stays in the backlog. Changing only needs_review (wait for the owner before merging) just sets that flag. backlog: true stashes the task in the backlog (a running one is stopped first); backlog: false moves it from the backlog to todo.',
     inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, title: { type: 'string' }, details: { type: 'string', description: 'The new details: replaces the whole text. To add a line, use add_details instead.' }, add_details: { type: 'string', description: 'A note added to the end of the details as a new paragraph ("Note (lead, <date>): ..."), keeping the old text; it is written in the task\'s history too. Not together with details.' }, files: { type: 'array', items: { type: 'string' } }, after: { type: 'array', items: { type: 'string' } }, order: { type: 'number' }, needs_review: { type: 'boolean' }, backlog: { type: 'boolean', description: 'true: stash in the backlog (never starts); false: move from the backlog to todo.' }, role: { type: 'string', description: `The worker role for the task (${BUILT_IN_ROLES.join(', ')} or a project role): researcher for "find out whether / how ..." tasks whose result is a note, not code; general when unsure.` }, kind: KIND_PARAM(), answer: { type: 'string', description: "The owner's answer to a waiting task's question, in their words: it is added to the details and the task's history." }, merge_into: { type: 'string', description: 'Move the task to another existing local branch: it merges into that one (a task merges into the branch the owner was on when it was made).' } } },
   },
   { name: 'approve', description: 'Approve a task that is ready for review: its work is merged into its branch (the one the owner was on when it was made) by the same checked merge as always (brought up to date, scope checked, tests run again if it had to merge). Only for a task in "review". For an answered investigation it is Done: the task ends done, nothing is merged, its folder is removed, and its branch too unless it has commits from earlier tries, which are kept (the reply says so); with keep_note: true (Keep as a note) a new small docs task is added too that writes docs/research/<topic>.md from the saved answer and merges as usual.', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, keep_note: { type: 'boolean', description: 'Only for an answered investigation: also add a docs task that keeps its answer as docs/research/<topic>.md.' } } } },
@@ -421,10 +423,12 @@ export const LEAD_USAGE_UNREAD = "the lead's calls can't be read here"
 /**
  * The stats report (see statsReport) for range words like "7d" or "T-100..T-130": the board's
  * tasks and the archived ones. Read-only. A bad range gives the usage line. The word "full" in
- * `args` (or `full`) gives the full view with every explanation; else the summary view.
+ * `args` (or `full`) gives the full view with every explanation; else the summary view. The word
+ * "html" (only the owner's command, not `readOnly`) writes the web page and opens it.
  */
-export async function statsText($: Host, args: string, full?: boolean): Promise<string> {
-  const words = parseStatsArgs(args)
+export async function statsText($: Host, args: string, full?: boolean, readOnly = false): Promise<string> {
+  const parsed = parseStatsArgs(args)
+  const words = readOnly ? { ...parsed, html: false } : parsed
   const range = parseStatsRange(words.range, S.N.name)
   if (range.kind === 'bad') return range.message
   const b = await load($)
@@ -434,7 +438,35 @@ export async function statsText($: Host, args: string, full?: boolean): Promise<
   const team: TeamInput = { ...($.features.leadUsage ? await $.lead.usage(S.root, range, nowMs) : { leadProblem: LEAD_USAGE_UNREAD }), scouts: parseScoutUsage(await $.fs.read(scoutMemoryFile()).catch(() => null)) }
   const usd = (await $.session.usage().catch(() => null))?.cost?.usd
   if (typeof usd === 'number' && Number.isFinite(usd)) team.sessionUsd = usd
-  return statsReport({ tasks: b.tasks, archived: r.broken ? [] : r.archive.tasks, archiveProblem, range, nowMs, offsetMin: localOffset(), name: S.N.name, team, full: full ?? words.full })
+  const input = { tasks: b.tasks, archived: r.broken ? [] : r.archive.tasks, archiveProblem, range, nowMs, offsetMin: localOffset(), name: S.N.name, team, full: full ?? words.full }
+  if (!words.html) return statsReport(input)
+  // "html" (T-674): the same figures (statsData) as a web page, written to .<name>/stats.html and opened in the browser
+  const out = path(`${S.N.dir}/stats.html`)
+  const project = S.root.split(/[\\/]/).filter(Boolean).pop() ?? S.root
+  await $.fs.write(out, statsHtml(statsData(input), project))
+  const opened = await openInBrowser($, out)
+  return `${S.N.name} stats written to ${out}${opened ? ' (opened in your browser)' : ' (open it in your browser)'}`
+}
+
+/** The platform's words ('darwin', 'linux', 'win32'), from `uname -s` or the OS variable; undefined when neither tells. */
+async function platformOf($: Host): Promise<string | undefined> {
+  const u = await $.run(['uname', '-s'], { timeoutMs: 5000 }).catch(() => null)
+  const name = u && u.exitCode === 0 ? u.stdout.trim().toLowerCase() : ''
+  if (name.startsWith('darwin')) return 'darwin'
+  if (name.startsWith('linux') || name.endsWith('bsd')) return 'linux'
+  if (/^(mingw|msys|cygwin)/.test(name) || (await $.env('OS').catch(() => undefined)) === 'Windows_NT') return 'win32'
+  return undefined
+}
+
+/** Tries to open `file` in the browser (open / xdg-open / start); true when one of them worked. Every failure is ignored. */
+export async function openInBrowser($: Host, file: string): Promise<boolean> {
+  try {
+    for (const argv of openCommands(file, await platformOf($))) {
+      const r = await $.run(argv, { timeoutMs: 15000 }).catch(() => null)
+      if (r && r.exitCode === 0) return true
+    }
+  } catch { /* a host that can't run commands: the path is enough */ }
+  return false
 }
 
 export type In = Record<string, unknown>
@@ -624,6 +656,18 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
         await change($, x => patchTask(x, t.id, { needs_review: a.needs_review as boolean }, now(), S.N.dir))
         return `${t.id} ${a.needs_review ? 'will wait for review before merging' : 'no longer needs its own review'}`
       }
+      // A running task whose change touches only its order, after-list or needs_review keeps its worker:
+      // the new values are saved and count from its next try.
+      const queueOnly = t.status === 'doing' && ['order', 'after', 'needs_review'].some(k => a[k] !== undefined) && ['title', 'details', 'add_details', 'files', 'role', 'kind', 'answer', 'merge_into'].every(k => a[k] === undefined)
+      if (queueOnly) {
+        const p = fields()
+        // No restart line, but a changed after-list still gets its "waits on changed" line (the health check counts them).
+        await change($, x => {
+          const lines = changeLines(t, p, false)
+          return patchTask(x, t.id, { ...p, ...(lines.length ? { history: withHistory(find(x, t.id)?.history ?? t.history, now(), ...lines) } : {}) }, now(), S.N.dir)
+        })
+        return `${t.id} updated (its worker keeps running; this counts from its next try)`
+      }
       const wasDoing = t.status === 'doing'
       if (wasDoing) await stopWorker($, t.id, 'the task changed')
       await scratchGone()
@@ -741,7 +785,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
     case 'orgmem':
       return orgMemTool($, a)
     case 'stats':
-      return statsText($, str(a.range) ?? '', a.short !== true)
+      return statsText($, str(a.range) ?? '', a.short !== true, true)
     case 'setup_git':
       return setupGit($, 'the lead')
     case 'settings': {

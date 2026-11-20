@@ -6,7 +6,7 @@
 // `ui.refresh` is $.ui.invalidate('ui.render'), `ui.panel` carries the board panel's values, which only Claude Code's
 // `$` holds (claude/panel.ts), `words` gives symcc's tools their "mcp__<name>__<tool>" names, and `features` are all on.
 import type { EngineInterface } from 'claude-code'
-import { type Host, type HostAgentStart, type HostWords, ALL_FEATURES, manifestVersion } from '../host'
+import { type Host, type HostAgentStart, type HostProcess, type HostProcesses, type HostWords, ALL_FEATURES, etimeArgv, holderFromPs, manifestVersion, startFromEtime } from '../host'
 import { S } from '../app/state'
 import { claudeNames, workerTypeFor } from './agent-types'
 import { hostAgent, isNotReady, scoutNotReady } from './agents'
@@ -62,6 +62,83 @@ export function claudeAgents($: EngineInterface): Host['agents'] {
     list: async () => (await $.agent.list()).map(a => hostAgent(a, S.N.name)),
     send: (agentId, text) => $.session.send({ to: { agentId }, text }),
     stop: (agentId, text) => $.session.send({ to: { agentId }, text }),
+    // T-656: a message to a subagent that has handed back resumes it with its whole context; its answer comes as another turn.complete
+    followUp: (agentId, text) => $.session.send({ to: { agentId }, text }),
+  }
+}
+
+/** How long one ps question may take before the answer is "can't tell" (the board lock waits on it). */
+export const PS_TIME_LIMIT_MS = 2_000
+
+/**
+ * The shell line that names the process symcc's commands are started from, which is Claude Code itself (the plugin
+ * has no pid of its own to read): its pid ($PPID of the shell $.process.run starts), how long it has run, and its
+ * command line, one per line.
+ */
+export const SELF_SCRIPT = 'p=$PPID; echo "$p"; ps -o etime= -p "$p"; ps -o args= -p "$p"'
+
+/** Whether ps's command line `args` is Claude Code: the `claude` program, or a script run by node/bun whose path names claude. */
+export function looksLikeClaude(args: string): boolean {
+  const [first = '', second = ''] = args.trim().split(/\s+/)
+  const base = (w: string) => w.split('/').pop() ?? ''
+  if (base(first) === 'claude') return true
+  return /^(node|bun)$/.test(base(first)) && /claude/.test(second)
+}
+
+/** This plugin's holder process from SELF_SCRIPT's output, or undefined when it isn't a Claude Code process ps could time. */
+export function selfFromScript(r: { exitCode: number; stdout: string } | undefined, nowMs: number = Date.now()): HostProcess | undefined {
+  if (!r || r.exitCode !== 0) return undefined
+  const [pidLine = '', etime = '', args = ''] = r.stdout.split('\n')
+  const pid = Number(pidLine.trim())
+  if (!Number.isInteger(pid) || pid <= 1 || !looksLikeClaude(args)) return undefined
+  const started = startFromEtime(etime, nowMs)
+  return started === undefined ? undefined : { pid, started }
+}
+
+/** The holder this plugin names (asked once per load: the Claude Code process does not change): undefined = not asked yet, null = can't tell. */
+let selfKnown: HostProcess | null | undefined
+let selfAsking = false
+let selfFailed = 0
+/** Forgets what self() found (for tests). */
+export function resetClaudeSelf() {
+  selfKnown = undefined
+  selfAsking = false
+  selfFailed = 0
+}
+
+/** Never rejects: undefined on any error, or when it takes longer than PS_TIME_LIMIT_MS. */
+async function ps($: EngineInterface, argv: readonly string[]): Promise<{ exitCode: number; stdout: string } | undefined> {
+  try {
+    return await $.process.run(argv, { timeoutMs: PS_TIME_LIMIT_MS })
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * host.processes for Claude Code (T-662), the same check the Node host makes (hooks/host.ts holderFromPs).
+ * self(): the Claude Code process (the parent of the shell $.process.run starts, kept only when ps names it as
+ * claude), with its start time from ps (T-669). self() can't wait, so its first call only starts the question and
+ * names no holder (that lock keeps the 30 s rule); later calls give the answer. alive(p): `ps -o etime= -p <pid>`,
+ * at most PS_TIME_LIMIT_MS; any error is "can't tell". Never throws. On Windows ps is missing: "can't tell".
+ */
+export function claudeProcesses($: EngineInterface): HostProcesses {
+  return {
+    self() {
+      if (selfKnown === undefined && !selfAsking) {
+        selfAsking = true
+        void ps($, ['sh', '-c', SELF_SCRIPT]).then(r => {
+          // the call failed (e.g. its hook ended first): ask again next time, a few times at most
+          if (r || ++selfFailed >= 3) selfKnown = selfFromScript(r) ?? null
+          selfAsking = false
+        })
+      }
+      return selfKnown ?? undefined
+    },
+    async alive({ pid, started }) {
+      if (!Number.isInteger(pid) || pid <= 1 || typeof started !== 'number' || !Number.isFinite(started)) return undefined
+      return holderFromPs(await ps($, etimeArgv(pid)), started)
+    },
   }
 }
 
@@ -109,6 +186,7 @@ export function claudeHost($: EngineInterface): ClaudeHost {
       stat: (p, options) => $.fs.stat(p, options),
     },
     run: (argv, init) => $.process.run(argv, init),
+    processes: claudeProcesses($),
     clock: { after: (ms, fn) => $.clock.after(ms, fn), every: (ms, fn) => $.clock.every(ms, fn), sleep: ms => $.clock.sleep(ms) },
     ui: {
       toast: text => $.ui.toast(text),

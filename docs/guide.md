@@ -130,22 +130,23 @@ Each part is there for a reason. Knowing it makes the rest of this guide easier 
 
 ### States, stages and the queue
 
-A task has one **state**. Inside `doing`, a change also goes through **stages**. All finished
-tasks then take turns in **one merge queue**. Here is each part in plain words.
+A task has one **state**. While it is `doing`, it also moves through **stages**. Finished tasks
+then take turns in **one merge queue**. This section explains all three.
 
-**States: what the task is.**
+**States: what moves a task on.** What each state means is in the table under
+[A task's life](#a-tasks-life). This table adds what changes it next:
 
-| State | What it means for you | What moves it on |
-|---|---|---|
-| `backlog` | A parked idea. Nothing happens | You (or the lead on your word) move it to `todo` |
-| `todo` | Waits for a free worker and for the tasks it comes after | A worker is started: `doing` |
-| `doing` | A worker works, or the change is on its way to the merge | The merge ends: `done`. A failed try: back to `todo`, or `failed` when the retries are used up |
-| `paused` | Stopped on purpose | You resume it |
-| `waiting` | A worker or the lead asked you something, or your own files block the merge | Your answer, your OK for files, or clearing your files |
-| `review` | Done and tested, waiting for your approve | Approve: it merges. Reject: back to `todo` with your reason |
-| `failed` | Could not be finished; its page says why | You retry it, change it, or drop it |
-| `done` | Merged. Final | Nothing |
-| `dropped` | Cancelled. Never runs on its own | Retry brings it back to `todo` |
+| State | What moves it on |
+|---|---|
+| `backlog` | You (or the lead, on your word) move it to `todo` |
+| `todo` | A worker is started: `doing` |
+| `doing` | The merge ends: `done`. A failed try: back to `todo`, or `failed` when the retries are used up |
+| `paused` | You resume it |
+| `waiting` | Your answer, your OK for files, or clearing your files |
+| `review` | Approve: it merges. Reject: back to `todo` with your reason |
+| `failed` | You retry it, change it, or drop it |
+| `done` | Nothing. It is final |
+| `dropped` | Retry brings it back to `todo` |
 
 **Needs you.** A task is under NEEDS YOU when the next move is yours: it is in `review`,
 `waiting` or `failed`, or a running worker asked for more time. A task leaves NEEDS YOU when
@@ -178,10 +179,9 @@ and then merges (or stops in `review` when you want to approve first). Any failu
 one of the `auto_retries`. The checker runs before the queue, side by side with other checkers,
 and never runs the project's tests. The tests run once per try, in the task's turn.
 
-**Why one queue, and its cost.** The reasons for one queue are in
-[Why it is built this way](#why-it-is-built-this-way) above. The cost is that tasks wait their
-turn: when five tasks with 10-minute tests finish together, the fifth waits about 40 minutes
-before its own turn. Testing several tasks together is not built.
+**The cost of one queue.** Tasks wait their turn. When five tasks with 10-minute tests finish
+together, the fifth waits about 40 minutes. Testing several tasks together is not built. The
+reasons for one queue are in [Why it is built this way](#why-it-is-built-this-way).
 
 **Task dependencies.** The lead sets them. A task's `after` lists the tasks that must be
 finished first: it starts only when every one of them is `done` (merged). Any other status
@@ -189,10 +189,10 @@ keeps it waiting, also `dropped` or `failed`; then the lead changes or clears it
 Among the `todo` tasks that are free to start, the lowest `order` goes first (on a tie, the
 lower task number).
 
-**Work merged by hand.** Sometimes a task's branch gets merged outside the board, for
-example by you or by the lead on your word after its only failure was the merge tests
-timing out. Don't drop such a task (it would count as dropped) and don't retry it (a new
-worker would redo finished work). Mark it as merged instead: press `h` (Already merged) on
+**Work merged by hand.** Sometimes a task's branch gets merged outside the board. For
+example, you or the lead (on your word) merged it after its only failure was the merge tests
+timing out. Don't drop such a task: it would count as dropped. Don't retry it either: a new
+worker would redo finished work. Mark it as merged instead: press `h` (Already merged) on
 its page (offered for a failed, waiting, paused or dropped task), or ask the lead, whose
 `merged` tool also takes a task that is to do, running (its worker is stopped first) or in
 review. symcc checks it with git first: every commit on the task's branch must already be
@@ -210,18 +210,21 @@ can start. Nothing is merged and no test runs: the work is already in. Stats cou
 
 A worker that can't go on without a decision from you calls its `ask_owner` tool
 (a tool only workers have, since Claude Code gives subagents no way to ask you
-directly) with the question and, if it likes, 2 to 6 choices, and then stops. (A worker
-that tries to edit a file outside its list is refused, and that becomes a file request;
-see the scope check below.) symcc never reads a question or a file request out of what
-a worker writes in its hand-back: that text is only its report. The task does not fail: it goes straight to `waiting` with the
-question, shows under NEEDS YOU on the board, and with `notify` on you hear "symcc: T-5 needs you" (or a chime)
-(once per question, only in the session that drives the board). The lead is told too. It
-answers it itself only when you already clearly said the answer, and then tells you what it
-answered. Otherwise it asks you in the chat, short and plain, with the worker's options (if
-any). In Claude Code it asks with the chat pop-up (AskUserQuestion) with the same choices;
-on a host with no pop-up it writes them as numbered choices in plain text. You can answer in
-the pop-up or on the board, whichever comes first (the pop-up is tied to the task's board
-question: answer on the board and the pop-up closes by itself): the answer goes into the
+directly) with the question and, if it likes, 2 to 6 choices, and then stops. A worker
+that tries to edit a file outside its list is refused, and that becomes a file request (see
+the scope check under [The way to the merge](#the-way-to-the-merge)). symcc never reads a question or a file request out of what
+a worker writes in its hand-back: that text is only its report.
+
+The task does not fail. It goes straight to `waiting` with the question and shows under
+NEEDS YOU on the board. With `notify` on, you hear "symcc: T-5 needs you" (or a chime), once per
+question, in the session that drives the board. The lead is told too.
+
+The lead answers it itself only when you already clearly said the answer, and then it tells
+you what it answered. Otherwise it asks you in the chat, short and plain, with the worker's
+options (if any). In Claude Code it uses the chat pop-up (AskUserQuestion) with the same
+choices. On a host with no pop-up it writes them as numbered choices in plain text.
+
+You can answer in the pop-up or on the board, whichever comes first. Your answer goes into the
 task and sends it back to work, and a new try continues with it. What the worker already
 changed is kept.
 
@@ -240,10 +243,9 @@ changed is kept.
 
 ### When the lead asks you something
 
-Questions from the lead that are not about one task ("raise the version?", "add a scout?",
-a settings choice) used to live only in the chat, where they scroll away. Now the lead puts
-each one on the board with its `question` tool, with 2 to 6 short choices, and asks it
-briefly in the chat too. Each gets an id like `Q-3` and is kept in `board.json` (under
+Some questions from the lead are not about one task ("raise the version?", "add a scout?",
+a settings choice). In the chat they would scroll away. So the lead puts each one on the
+board with its `question` tool, with 2 to 6 short choices, and asks it briefly in the chat too. Each gets an id like `Q-3` and is kept in `board.json` (under
 `questions`), not in the chat.
 
 - The board list shows **Questions for you (2)** at the top, above the tasks. Enter on one
@@ -268,21 +270,30 @@ question on the board by itself:
   lead already put that exact question on the board, that one is used).
 
 The pop-up says "or answer on the board (Q-3)" under its choices. Whichever you answer first
-closes the other: answer on the board and the pop-up closes, and the lead reads your board
-answer as the pop-up's answer (no extra board update for it). Answer in the pop-up and the
-`Q-` question closes with your answer, or your answer goes into the task as the board's
-buttons would put it (an answer, more time, Allow or Don't allow, Approve, Done, Keep as a
-note; a reject or "ask more" still needs the lead, which gets your reason). Close the pop-up
-without answering and the question stays on the board. When one pop-up holds several
-questions and one of them can't go on the board (say a free-text one), your board answers are
-kept but the pop-up stays open for the rest. If you type your own words instead of picking,
-they answer the question when the pop-up has only one; with several, the lead is told which
-board questions are still open. The pop-up holds at most 4 choices,
-so a question with more shows the first 3 plus "the rest on the board" (or type yours under
-Other); picking "the rest on the board" is no answer, so the question stays open on the board
-for you to answer there. Workers never get the pop-up. On a host with no pop-up the lead puts the question on
-the board itself and writes the choices as numbered plain text, plus "or answer on the
-board". The lead never puts two questions under the same numbers.
+closes the other:
+
+- Answer on the board and the pop-up closes. The lead reads your board answer as the pop-up's
+  answer, with no extra board update.
+- Answer in the pop-up and the `Q-` question closes with your answer. For a task, your answer
+  goes in as the board's buttons would put it (an answer, more time, Allow or Don't allow,
+  Approve, Done, Keep as a note). A reject or "ask more" still needs the lead, which gets your
+  reason.
+- Close the pop-up without answering and the question stays on the board.
+
+Some edge cases:
+
+- When one pop-up holds several questions and one of them can't go on the board (say a
+  free-text one), your board answers are kept but the pop-up stays open for the rest.
+- If you type your own words instead of picking, they answer the question when the pop-up has
+  only one. With several, the lead is told which board questions are still open.
+- The pop-up holds at most 4 choices. A question with more shows the first 3 plus "the rest
+  on the board" (or type yours under Other). Picking "the rest on the board" is no answer, so
+  the question stays open on the board.
+- Workers never get the pop-up.
+
+On a host with no pop-up, the lead puts the question on the board itself and writes the choices
+as numbered plain text, plus "or answer on the board". The lead never puts two questions under
+the same numbers.
 
 ---
 
@@ -305,7 +316,7 @@ happens, never the words in its hand-back:
 - otherwise it is finished, and its work goes through these steps (an investigation goes to
   review with its answer instead):
 
-The reasons for the queue are in [States, stages and the queue](#states-stages-and-the-queue).
+How the queue works is in [States, stages and the queue](#states-stages-and-the-queue); why there is one is in [Why it is built this way](#why-it-is-built-this-way).
 
 ### The way to the merge
 
@@ -527,9 +538,10 @@ The board has one mode, set with `/symcc-mode`, `/symcc-settings mode …` or by
   The lead also asks you before it adds any task (yours, a scout's finding, a worker's
   report or its own idea): it says what the task would be in a line or two and adds it
   only after your yes.
-- **`auto`** (the default): work runs; a task that passes steps 1–4 is merged at once.
+- **`auto`** (the default): work runs; a task that passes the steps up to the tests is merged at
+  once (see [The way to the merge](#the-way-to-the-merge)).
 
-Going from `off` to `review` or `auto` starts work again. In `auto` you can still mark one
+Going from `paused` to `review` or `auto` starts work again. In `auto` you can still mark one
 task: "T-5 needs review" (`needs_review` on `symcc add` / `symcc change`); that task waits.
 
 The lead tells you "T-5 is ready for review". The task's branch (`symcc/T-5`) and copy
@@ -560,8 +572,8 @@ So there are three ways to change a task in review before it is merged:
 The diff (`d` on the task page, `/symcc-diff T-5`) shows the folder as it is now, your
 edits included, against your branch; it says `(includes your edits)` when there are some.
 
-Both only work on a task in `review`. Switching back to `auto` does not merge tasks
-already waiting; approve or reject each of them.
+Approve, reject and the diff only work on a task in `review`. Switching back to `auto` does not
+merge tasks already waiting; approve or reject each of them.
 
 You can also do it yourself:
 
@@ -744,9 +756,9 @@ are about changes; under "How tasks ended" a read investigation shows as
   - **Checks before merging**: `test_commands`, `test_minutes` (how many minutes each test
     command may run before merging, a whole number from 1 to 120, 10 by default; any other value
     is refused), `tests_with_changes`, `checker`
-  - **Workers**: the **Roles** and **Kinds** rows
+  - **Workers**: the **Roles**, **Kinds** and org-mem rows
   - **Scouts**: `scout_findings`
-  - **Board and alerts**: `notify`, `open_on_start`, `archive_days`
+  - **Board and alerts**: `notify`, `sound_set`, `open_on_start`, `archive_days`
 
   Each heading is a group you open and close with Enter (→/← do not, since the panel's
   buttons only get Enter and letter or digit keys). When the page opens, all groups
@@ -755,7 +767,7 @@ are about changes; under "How tasks ended" a read investigation shows as
   one shows `▾ Work` with its rows under it. ↑↓ go over the headings and the rows of open
   groups only. The panel remembers which groups are open until the session ends. The lead's
   `settings` tool and `/symcc-settings` text always list every setting under the same
-  headings. Enter on a row changes it: `open_on_start`
+  headings. Enter on a row changes it: `open_on_start`,
   `checker` and `enabled` flip on/off; `mode`, `notify`, `scout_findings` and `tests_with_changes` open a pick list (paused / review
   / auto; only the notify choices this computer can play; off / ask / review); numbers and `test_commands` open an edit box (the typed line is one
   command, run as one shell line, so `cd web && npm test` works as in a shell; several commands go in a list,
@@ -884,12 +896,13 @@ unchanged.
 
 ## Tracing a task back
 
-Every task records who made it, why, and your words that started it. Open the board
-with `/symcc`, or one task with `/symcc-task T-3`: the `from:` line says, for example,
-`from: owner — “add a search command…”` or `from: scout bugs`, and the history lists each
-try. Every merge commit starts with the task ID, so `git log --grep "T-3"` finds the work
-for a task, and the ID on a commit takes you back to the task and your request. Tasks made
-before this was kept show `from: unknown`.
+Every task records who made it, why, and the words that started it.
+
+Open the board with `/symcc`, or one task with `/symcc-task T-3`. The `from:` line says, for
+example, `from: owner — “add a search command…”` or `from: scout bugs`. The history lists each try.
+
+Every merge commit starts with the task ID. So `git log --grep "T-3"` finds the work for a
+task, and the ID on a commit takes you back to the task and your request.
 
 ## Where to see what a task did
 
@@ -911,8 +924,8 @@ before this was kept show `from: unknown`.
   everything not done, dropped or backlog) and `search` (words, matched the same way as the
   board panel's `f` search) narrow the list.
 - **The report files.** Every try's full final answer (the worker's hand-back, also
-  when it asked you something) is saved in `.symcc/reports/T-3-try-2.md` (plain text, up to 50 KB).
-  Tasks from before this was kept say "no saved report".
+  also when it asked you something) is saved in `.symcc/reports/T-3-try-2.md` (plain text,
+  up to 50 KB; longer ones are cut, and the file says so).
 - **The research note.** When a task's merged work adds or changes a file under
   `docs/research/`, the task page shows it in Details as `Research: docs/research/<file>.md`.
 - **Claude Code's agent list** (Ctrl+T) shows a worker's whole conversation, but only for a
@@ -944,13 +957,28 @@ Two things listen today:
   failed, ...) are written as before. These stage lines are left out of the "Earlier tries"
   list a retrying worker sees, so they never push out what went wrong.
 
-Code that wants to know (a host, a future feature) calls `onTaskEvent(fn)` from
-`hooks/app/events.ts`: `fn` gets the events of each save, and the call answers a function
-that stops listening. The events come from `phaseEvents` in `hooks/core/events.ts` (pure, the
-same on every host); `writeBoard` in `hooks/app/store.ts` is the one place every board save
-goes through. A listener that fails never stops the save; you are told once. Listeners are
-called after the board lock is let go, so a listener may change the board itself (the
-activity log is written while the lock is still held).
+A second log, `.symcc/evidence.jsonl`, shows where agents struggle. It gets one JSON line for
+each of these:
+
+- a guard refusing a tool call (which guard, and a short reason),
+- a worker stopping because it needs files outside its list,
+- a worker asking you a question (only that it asked, never the text),
+- a checker's verdict,
+- how a task's turn in the merge queue ended (merged, review, tests failed, timed out, clash).
+
+No full commands, file contents or secret-looking text are kept. When the file passes 2 MB it is
+renamed to `evidence-archive-<time>.jsonl` and a fresh one starts.
+
+For developers: code that wants these events calls `onTaskEvent(fn)` from
+`hooks/app/events.ts`. `fn` gets the events of each save, and the call returns a function that
+stops listening.
+
+The events come from `phaseEvents` in `hooks/core/events.ts` (pure, the same on every host).
+`writeBoard` in `hooks/app/store.ts` is the one place every board save goes through.
+
+A listener that fails never stops the save; you are told once. Listeners run after the board
+lock is let go, so a listener may change the board itself. (The activity log is written while
+the lock is still held.)
 
 ## Scouts
 
@@ -1028,19 +1056,21 @@ Without one, the page shows the first line of the instructions there instead, in
 colour.
 
 Under those, **Runs** lists the scout's recent runs, newest first, one line each:
-when it ended, how it ended (found, nothing, stopped, API error, refusal or couldn't start),
-how many findings its report numbers, and the tasks made from it (a task the lead adds from
-this scout's finding is saved in the scout's latest run that reported something, so it stays
-listed after the task is archived). Open one to read that run's whole report; in VS Code's
-side panel each run is a button, and "← <scout>" goes back. Esc on a run's page goes back to
-the scout's page too, and leaving the scout's page any other way (Esc again, another view,
-closing the panel) closes the run, so the scout opens on its own page next time.
-When the last run ended on an API error or a refusal, the page says so under the header
-("Its last run ended on an API error, so nothing was reported."). Each scout keeps its last
-50 runs in `.symcc/scouts/<name>.runs.json` and each run's full report in
-`.symcc/reports/scouts/<name>-<time>.md`; older runs and their report files are removed.
-The first time, a scout's last report from `.symcc/scouts.json` becomes its first run (its
-tasks are worked out from the board: the scout's tasks added after it).
+
+- when it ended,
+- how it ended (found, nothing, stopped, API error, refusal or couldn't start),
+- how many findings its report numbers,
+- the tasks made from it. A task the lead adds from a finding is saved in the scout's latest run
+  that reported something, so it stays listed after the task is archived.
+
+Open a run to read its whole report. In VS Code's side panel each run is a button, and
+"← <scout>" goes back. Esc goes back too. Leaving the scout's page any other way closes the run,
+so the scout opens on its own page next time.
+
+When the last run ended on an API error or a refusal, the page says so under the header ("Its
+last run ended on an API error, so nothing was reported."). Each scout keeps its last 50 runs in
+`.symcc/scouts/<name>.runs.json` and each run's full report in
+`.symcc/reports/scouts/<name>-<time>.md`. Older runs and their report files are removed.
 
 You can also make and change scouts right in the board panel: on the Scouts view, "New
 scout" asks for a name, and "Edit" on a scout's page opens its edit page. It shows the same
@@ -1050,14 +1080,18 @@ instructions is used) and **Instructions**. The name is the file's name, so the 
 can't change it: to rename a scout, rename its file. Save writes the file (other front
 matter keys are kept) and the new timing applies at once. `/symcc-scout <name>` runs a scout now.
 
-Or just ask the lead: it has a `scouts` tool. It can list the scouts (how often each runs,
-like "every 2 days" or "on demand", whether it is paused or running, its next and last run
-and the first lines of its last report), show one in full (its instructions, whole last
-report and its last few runs), add or change one (name of lowercase letters, digits and dashes, every_minutes with
-0 for only on demand, an optional model, and the instructions), remove one (it checks with
-you first) and run one now, just like "run now" (a paused scout runs too, once, and stays paused;
-refused, with the reason, when the scout is already running or git isn't set up). Every change shows on the board at once. Only
-you pause or resume scouts; the lead can't.
+Or just ask the lead. It has a `scouts` tool that can:
+
+- **list** the scouts: how often each runs ("every 2 days" or "on demand"), whether it is paused
+  or running, its next and last run, and the first lines of its last report;
+- **show** one in full: its instructions, its whole last report and its last few runs;
+- **add or change** one: a name of lowercase letters, digits and dashes, `every_minutes` (0 for
+  only on demand), an optional model, and the instructions;
+- **remove** one (it checks with you first);
+- **run** one now, like "run now". A paused scout runs once and stays paused. The run is refused,
+  with the reason, when the scout is already running or the project has no git yet.
+
+Every change shows on the board at once. Only you pause or resume scouts; the lead can't.
 
 ### Scouts that run only on demand
 
@@ -1104,21 +1138,25 @@ get through. There is no sandbox yet.
 
 **Scratch repositories in /tmp.** Workers and checkers may still run git writes (`git init`,
 `add`, `commit`, `merge`...) in a throwaway repository under `/tmp` (or the system temp folder
-under `/var/folders/...`), when every folder the command acts in is a plain literal path:
+under `/var/folders/...`). Every folder the command acts in must be a plain literal path:
 `git init /tmp/x`, `git -C /tmp/x commit -m m`, `cd /tmp/x && git commit -am m` (the `cd` joined
-by `&&`). A git write aimed at the project, `.symcc/` or any worktree, or at a folder that can't be
+by `&&`).
+
+A git write aimed at the project, `.symcc/` or any worktree, or at a folder that can't be
 told from the text (`$TMPDIR`, `$d`, `$(mktemp -d)`, `~`, `..`, a glob, no `-C` or `cd` while the
 shell is not in the temp folder, a `cd` with a word before it such as `builtin cd`), stays refused,
 and so does `--global` or `--system` or a shortening of them (the owner's own git settings), a
 `config -f` file outside the scratch folder, and any word with a space after the git command (a
 command given in quotes, as in `rebase -x '...'`; the message of `commit`, `tag`, `merge`, `notes`
-or `stash -m` and `--author=` are fine); scouts stay read-only. When symcc stops an agent process it
-started earlier (after a reload or a crash), it first checks that the process is still that agent
-(same program, started at about the recorded time), so a process that took over a reused number is
-never stopped. This rule stops honest mistakes; it
-is not a security boundary: anything that needs a deliberate shell trick (`eval`, a script file,
+or `stash -m` and `--author=` are fine); scouts stay read-only.
+
+This rule stops honest mistakes; it is not a security boundary: anything that needs a deliberate shell trick (`eval`, a script file,
 `sh -c` variants, symbolic links inside `.git`, files the same line writes, git hooks or settings)
 is the accepted risk and is not checked further.
+
+Separately, when symcc stops an agent process it started earlier (after a reload or a crash),
+it first checks that the process is still that agent (same program, started at about the
+recorded time). A process that took over a reused number is never stopped.
 
 - **OK:** the task joins the merge queue: catch up, tests, then review or merge, once.
 - **Problems found:** the checker's report goes to a new worker, like a failed test run. It counts
@@ -1205,7 +1243,7 @@ Roles page (Enter opens a kind, `n` adds a new one, `b` goes back).
 - **Off** means the lead never picks the kind for a new task. A task that already has it keeps
   it. `change` and `investigation` can't be turned off. **On** turns it back.
 
-A separate workflow for each kind was designed but is not built; the owner chose against it. See
+A separate workflow for each kind was designed but never built, by choice. See
 [the old design](research/task-kinds-and-workflows.md) for the history.
 
 ---
@@ -1233,8 +1271,6 @@ skills: [code-review]
   the word into its own tools: in Claude Code, `web` is WebSearch and WebFetch, on top of Read,
   Edit, Write, Glob, Grep and Bash, and the task starts as the `symcc:worker-web` worker type;
   other roles keep the usual tools.
-- Role files from before that name Claude Code's tools (`tools: WebSearch, WebFetch`) are
-  changed to `tools: web` once, the first time symcc reads them.
 - The built-in roles live in the plugin's `roles/` folder: `general`, `docs`, `refactor`,
   `researcher`, `security` and `tester`.
 - `researcher` is for "find out whether / how ..." tasks. The worker reads the project, the
@@ -1294,20 +1330,28 @@ in the board panel and press `l` (Role) to pick one. That works on a task to do,
 failed or in the backlog. The board list shows a role at the right end
 of the task's row (`tester`); `general` shows nothing.
 
-When a task is doing and this is not its first try, the board says which try it is: `(2)`
-right after the time in its row, in the band above the prompt and in the board's task list
-(terminal, VS Code and OpenCode; dim, from `(3)` on in the warning colour), `T-5 doing (try 2)`
-in the status line, and `T-5 doing · try 2/3` in the lead's
-board (the `/3` shows the limit while the try is an automatic retry after failing tests).
-A first try shows no mark. The time in a doing task's row is the total work time of all its
-tries, so a task that is really stuck stands out: `T-5 ▶ 1h40m (3)` (1 hour 40 over all
-three tries; on the first try it is just that try's time, `T-5 ▶ 15m`), and during a check
-step the step's icon takes the place of `▶`: `T-5 ⊛ 9m` (see "What a task shows on its way to
-the merge"). This is the
-same number as the task page's "Time and cost" total: each try's time from start to end, added
-up. Time while the task was paused, waiting for you, waiting on other tasks, or in todo between
-tries is not counted. When a row is short of room, the time is left out, then the try. When the status line is short of room, the try marks are left out
-first, so failed tasks and reviews always stay in view.
+**Which try is it?** When a task is doing and this is not its first try, the board says so. A
+first try shows no mark.
+
+- In a task's row (the band above the prompt and the board's task list in the terminal, VS
+  Code and OpenCode): `(2)` right after the time. It is dim, and from `(3)` on it uses the
+  warning colour.
+- In the status line: `T-5 doing (try 2)`.
+- In the lead's board: `T-5 doing · try 2/3`. The `/3` shows the limit while the try is an
+  automatic retry after failing tests.
+
+**How long has it worked?** The time in a doing task's row is the total work time of all its
+tries, so a task that is really stuck stands out: `T-5 ▶ 1h40m (3)` is 1 hour 40 over three
+tries. On the first try it is just that try's time, `T-5 ▶ 15m`. During a check step the
+step's icon takes the place of `▶`: `T-5 ⊛ 9m` (see "What a task shows on its way to the
+merge").
+
+This is the same number as the "Time and cost" total on the task page: each try's time from
+start to end, added up. Time while the task was paused, waiting for you, waiting on other
+tasks, or in todo between tries is not counted.
+
+When a row is short of room, the time is left out first, then the try. When the status line
+is short of room, the try marks go first, so failed tasks and reviews always stay in view.
 
 **One task, one role.** When a feature needs several kinds of work and each part is big
 enough to stand alone, the lead splits it into one task per role and links them with `after`:
@@ -1450,9 +1494,6 @@ well under that, without you lowering `archive_days`:
   warning goes (past 4 MB it says "over the 4 MB limit" instead). A file over 4 MB that can't
   be read gives an error that says so.
 
----
-
-
 ### A worker over its time limit
 
 When a worker runs past `max_minutes` (45 by default), symcc does not stop it. The task stays
@@ -1471,6 +1512,8 @@ board. The worker keeps working while you decide.
 - **No answer**: once the worker has run its limit plus `max_minutes` again (twice the limit when
   no time was added), the same as Stop it happens.
 
+---
+
 ## Stats: time and tokens
 
 `/symcc-stats` prints a plain text report built only from what the board already keeps (each
@@ -1488,6 +1531,10 @@ its read-only `stats` tool.
   range, e.g. `/symcc-stats full 7d`) adds them back: the billed-equivalent lines with how they
   are weighed, where the lead's tokens come from, and why waiting time is not shown. The lead's
   `stats` tool gets the full text, unless it asks for the short one.
+- **Web page:** `/symcc-stats html` (also with a range, e.g. `/symcc-stats html 7d`) writes the
+  same figures as one page with charts, `.symcc/stats.html`. The page is self-contained: no outside
+  links, so it works offline. It follows light and dark, fits a phone and prints well. symcc says
+  where the file is and tries to open it in your browser.
 - **Kinds of tokens:** symcc keeps four counts apart wherever it records tokens (each try,
   each scout run, the lead's calls): *input*, *output*, *cache write* (input saved to the
   prompt cache) and *cache read* (input read back from it). They cost very different amounts:
@@ -1524,14 +1571,20 @@ its read-only `stats` tool.
   tokens, tries per task, share done on the first try, lead time: from made to done); per
   try (average time and tokens); the 5 biggest tasks by tokens and by time (bars); how tasks
   ended (merged on its own, approved by you, or answered for an investigation; failed
-  tries by reason: tests, clash with main, files out of scope, stopped, rejected);
+  tries by reason: tests, clash with main, files out of scope, restarted by a change, stopped,
+  rejected);
   investigations on their own (how many, answered, time, tokens, tries; see
   [investigation tasks](#investigation-tasks)); by role and where tasks came from (lead,
   you, all scouts with each scout on its own line under them, workers), each with its share,
-  average tokens and time. Each scout's line has a small scorecard under it (what its findings became is also on each scout's page, as "Results · last 7 days: … · in all: …"): how many tasks its
-  findings became (how many merged, were dropped or are still open), its own tokens in the range,
-  and the tokens per merged fix (its tokens plus its merged tasks' tokens, divided by the number
-  merged; "—" when none merged). A scout that used tokens but made no task is listed too; done per day for the last 7 days with activity, oldest first.
+  average tokens and time. Each scout's line has a small scorecard under it (the scout's own page shows the
+  same as "Results · last 7 days: … · in all: …"):
+  - how many tasks its findings became (merged, dropped or still open),
+  - its own tokens in the range,
+  - the tokens per merged fix: its tokens plus its merged tasks' tokens, divided by the number
+    merged ("—" when none merged).
+
+  A scout that used tokens but made no task is listed too. The last part is tasks done per day,
+  for the last 7 days with activity, oldest first.
 - **What is left out:** tasks with no tries recorded are left out of the averages (the
   report says how many). Time waiting for you is not shown: history
   entries from older boards have no times.
@@ -1571,6 +1624,9 @@ your-project/
     ├── reports/          each try's full worker report (T-3-try-2.md), and scouts/ with
     │                     each scout run's full report (bugs-2026-11-18T10-20-30-000Z.md)
     ├── events.jsonl      the activity log: every task event, one JSON line each (see Task events)
+    ├── evidence.jsonl    where agents struggled: refusals, stops, questions, verdicts (see Task events)
+    ├── stats.html        the page `/symcc-stats html` writes
+    ├── processes.json    the agent processes running now (Node host only)
     ├── org-mem.md        organizational memory (org-mem): short notes for the agents, kept by the lead (see below)
     └── worktrees/
         └── T-3/          a worker's private copy of the project (branch symcc/T-3),
@@ -1593,15 +1649,26 @@ start with `symcc/` are never touched.
 after them, so the next worker doesn't have to find the same things again (how to run one
 test, a trap, where something is).
 
-- **Agents suggest, the lead decides:** a worker, a checker or an investigation may end its report
-  with a `Learned:` section of up to 3 suggested notes, one `- ` line each (the section ends at the
-  first blank line or line that isn't a `- ` line; code blocks in it are left out). A note should be
-  surprising (a careful agent would not guess it), useful to agents on other tasks (not about this
-  task), one short plain sentence, and not already in org-mem; most reports have none. Nothing goes
-  into org-mem from a report. symcc keeps the suggestions on the task (each made one line and cut
-  at about 120 characters; secret-looking lines, file contents and exact repeats are left out).
-  When the task merges (or an investigation is marked Done), the lead's board update lists them
-  under "Suggested for org-mem"; a dropped task's suggestions are thrown away.
+- **The debrief: agents suggest, the lead decides:** a worker's or checker's main prompt is only
+  about its task. Right after it hands back, symcc sends the same agent one short follow-up
+  question, so it answers with the whole task still in mind: is there a fact from this task that
+  would help agents on other tasks in this project (how to test or check something quickly, a trap
+  or a refusal and the way around it, where something lives, a step that wasted time, or a note
+  that turned out wrong)? It may suggest 0 to 3 notes under "Suggested for org-mem:", each one short
+  plain sentence that is true beyond the task and not already in org-mem; most answer "none". It
+  only answers: it changes no files and runs nothing (a file change then is refused or ignored).
+- **It never holds up the work:** the checks, the checker and the merge line start at once from the
+  main hand-back; the debrief's answer is used when it comes, and its tokens count on the task's
+  try. No answer within about 3 minutes: nothing is kept. In Claude Code the message resumes the
+  finished subagent; in the Node host the same `claude -p` session is resumed (`--resume`) for one
+  turn that may only read; in OpenCode the agent's session gets one more prompt. A host that can't
+  continue an agent asks instead for a `Learned:` section at the end of the report (up to 3 `- `
+  lines; the section ends at the first blank line or line that isn't a `- ` line).
+- **Kept for the lead:** nothing goes into org-mem on its own. symcc keeps the suggestions on the
+  task (each made one line and cut at about 100 characters; secret-looking lines, file contents and
+  exact repeats are left out). When the task merges (or an investigation is marked Done), the lead's
+  board update lists them under "Suggested for org-mem" (an answer that comes after that is listed
+  on its own); a dropped task's suggestions are thrown away.
 - **The lead's orgmem tool:** the lead adds what is worth keeping (most suggestions are skipped),
   or replaces a close note with a better one, and tells you in one line what it added. The tool
   can `list` the notes, `add` one or more, `remove` one (by number or text) and `replace` one. New

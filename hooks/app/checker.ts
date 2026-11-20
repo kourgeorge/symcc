@@ -14,6 +14,7 @@ import { change, now } from './store'
 import { startAgent } from './starts'
 import { logVerdict } from './evidence'
 import { orgMemText, keepSuggestions } from './org-mem'
+import { learnedAsk, startDebrief } from './debrief'
 
 /** What a checker came to: its verdict, or null with why there is none (it was stopped, ran over its time, or didn't start). */
 export type CheckerOutcome = { verdict: CheckerVerdict | null; why?: string; again?: boolean }
@@ -49,7 +50,7 @@ export async function runChecker($: Host, t: SymccTask, b: Board, dir: string, s
   const tests = checkerTestsText(S.N.name, b.test_commands)
   // the checker role's checklist gets the same placeholders a change worker's role does (the task's files, kind, ...); its {{test_command}} is the checker's own tests line
   const facts = { ...changeValues(t, b, dir), test_command: tests }
-  const prompt = checkerPrompt({ name: S.N.name, task_id: t.id, title: t.title, branch: taskBranch(t), folder: dir, details: t.details, into, role: roleSection(role, facts), diff: checkerDiff(d && d.exitCode === 0 ? d.stdout : ''), changed_files: checkerChangedFiles(changed), tests, org_mem: await orgMemText($) })
+  const prompt = checkerPrompt({ name: S.N.name, task_id: t.id, title: t.title, branch: taskBranch(t), folder: dir, details: t.details, into, role: roleSection(role, facts), diff: checkerDiff(d && d.exitCode === 0 ? d.stdout : ''), changed_files: checkerChangedFiles(changed), tests, org_mem: await orgMemText($), learned: learnedAsk($) })
   const early = stop()
   if (early) {
     const why = `not started: the task was ${early}`
@@ -103,6 +104,8 @@ export async function runChecker($: Host, t: SymccTask, b: Board, dir: string, s
   const back = await putBack($, dir, saved)
   // T-600, T-632: its "Learned:" lines are kept on the task as org-mem suggestions for the lead, whatever its verdict
   if (end.answer) await keepSuggestions($, t.id, end.answer)
+  // T-656: it handed back: one follow-up turn asks it for org-mem suggestions; nothing waits for that answer
+  if (end.answer !== null) startDebrief($, agentId, t.id, t.attempts, end.answer)
   let verdict = end.answer === null ? null : checkerVerdict(end.answer)
   let why = end.answer === null ? end.why : verdict ? undefined : 'it handed back nothing'
   if (back === 'failed') {

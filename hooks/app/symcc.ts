@@ -35,6 +35,7 @@ import { noteForLead, brief, takeBoardUpdate } from './tell'
 import { playable } from './voice'
 import { TOOLS, leadGuide, runTool, type In, manual, ownerSettings, taskText, latestReport, statsText } from './tools'
 import { openPane } from './open'
+import { debriefFinished } from './debrief'
 import { check, pump, workerFinished, lateHandBack, agentOnBoard, stoppedHandBack, type TurnEnd } from './workers'
 import { setSymcc, setBoardMode } from './board-mode'
 import { cleanLeftoverTmp } from './cleanup'
@@ -59,7 +60,7 @@ export function COMMANDS(features: HostFeatures = ALL_FEATURES): { name: string;
     { name: `${S.N.name}-scout`, description: `Run a ${S.N.name} scout now (/${S.N.name}-scout <name>), pause or resume it (/${S.N.name}-scout <name> pause|resume), or change it (/${S.N.name}-scout <name> every 30, model <model|none>, prompt <instructions>)`, argumentHint: '<name> [pause|resume|every N|model M|prompt TEXT]' },
     { name: `${S.N.name}-mode`, description: `Set the ${S.N.name} board mode: paused (nothing runs), review (finished work waits for you) or auto (it merges on its own); no word switches review and auto`, argumentHint: '[paused|review|auto]' },
     { name: `${S.N.name}-settings`, description: `See and change the ${S.N.name} settings: /${S.N.name}-settings opens them; /${S.N.name}-settings max_parallel 5 sets one; /${S.N.name}-settings role tester off (or kind, with on, off or reset) changes a role or kind`, argumentHint: '[name value | role|kind <name> on|off|reset]' },
-    { name: `${S.N.name}-stats`, description: `Show ${S.N.name} time and token stats: the whole team (lead, workers, scouts), totals, averages per task and per try, outcomes, by role, origin and day, with bar charts: /${S.N.name}-stats [full] [7d|T-100..T-130]`, argumentHint: '[full] [7d|T-1..T-9]' },
+    { name: `${S.N.name}-stats`, description: `Show ${S.N.name} time and token stats: the whole team (lead, workers, scouts), totals, averages per task and per try, outcomes, by role, origin and day, with bar charts; html writes them as a web page with charts and opens it: /${S.N.name}-stats [full|html] [7d|T-100..T-130]`, argumentHint: '[full|html] [7d|T-1..T-9]' },
     { name: `${S.N.name}-disable`, description: `Disable ${S.N.name} for this project: ${S.W.assistant} works as normal, nothing runs; the board is kept` },
     { name: `${S.N.name}-enable`, description: `Enable ${S.N.name} again for this project, in the mode the board had` },
     { name: `${S.N.name}-drive`, description: `Make this session drive the ${S.N.name} board (start workers, merge, run scouts); another driving session hands over first` },
@@ -375,6 +376,12 @@ export type AgentRunEnd = { answer: string; end: TurnEnd; isAborted: boolean; to
 
 /** An agent's run ended (a worker, scout or checker of symcc's, or one this copy lost track of in a reload); other agents are left alone. */
 export function agentFinished(host: Host, agentId: string | undefined, run: AgentRunEnd) {
+  // T-656: the answer to a debrief (the follow-up after a hand-back) only brings org-mem suggestions
+  // (and, like any agent's end, it runs pump: a fast retry of its task, held back by nothing now, starts at once)
+  if (agentId && debriefFinished(host, agentId, run)) {
+    void pump(host).catch(() => undefined)
+    return
+  }
   const { answer, end, isAborted, tokens, cost } = run
   // a scout's or checker's turn that ended on an API error or a refusal: its half-written last text is no report or verdict
   const broken = !isAborted && (end.reason === 'error' || end.reason === 'refusal')

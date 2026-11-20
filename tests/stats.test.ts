@@ -78,7 +78,11 @@ test('stats: outcomes, origins and days are read from what the board keeps', () 
   expect(failReason('try 2 (role docs): ok → conflicts with the latest main')).toBe('clash')
   expect(failReason('try 1: done → changed files outside the task (a.ts); allowed: b.ts')).toBe('scope')
   expect(failReason('try 3: stopped: paused by the owner')).toBe('stopped')
-  expect(failReason('try 1: restarted: the task was changed (details)')).toBe('stopped')
+  expect(failReason('try 1: restarted: the task was changed (details)')).toBe('changed')
+  expect(failReason('try 1: restarted: the plugin reloaded and the old worker was gone')).toBe('stopped')
+  const rep = statsReport({ tasks: [{ ...knownTasks()[0]!, history: [{ at: '2026-01-01T00:00:00Z', kind: 'restarted', text: 'try 1: restarted: the task was changed (details)' }] }], nowMs: NOW })
+  expect(rep).toMatch(/restarted by a change +▇+ +1/)
+  expect(rep).toMatch(/ stopped +0/)
   expect(failReason('try 1: rejected by the owner: too long')).toBe('rejected')
   expect(failReason('try 1: tests failed → merged into main (abc)')).toBe(null)
   expect(failReason('moved to the backlog')).toBe(null)
@@ -262,10 +266,10 @@ test('stats: a bar is scaled to the biggest value, at most 16 blocks, and a smal
 })
 
 test('stats: "full" anywhere in the words asks for the full view; the rest is the range', () => {
-  expect(parseStatsArgs('')).toEqual({ full: false, range: '' })
-  expect(parseStatsArgs('full')).toEqual({ full: true, range: '' })
-  expect(parseStatsArgs('7d FULL')).toEqual({ full: true, range: '7d' })
-  expect(parseStatsArgs('full T-1..T-9')).toEqual({ full: true, range: 'T-1..T-9' })
+  expect(parseStatsArgs('')).toEqual({ full: false, html: false, range: '' })
+  expect(parseStatsArgs('full')).toEqual({ full: true, html: false, range: '' })
+  expect(parseStatsArgs('7d FULL')).toEqual({ full: true, html: false, range: '7d' })
+  expect(parseStatsArgs('full T-1..T-9')).toEqual({ full: true, html: false, range: 'T-1..T-9' })
 })
 
 test('stats: a long line is wrapped under its text, within 80 columns', () => {

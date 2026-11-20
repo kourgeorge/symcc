@@ -7,6 +7,7 @@
 import { joinedText } from '../hooks/core/board-parts'
 import { expect, mock, type Engine } from 'claude-code/testing'
 import { test } from './reset'
+import { DEBRIEF_TEXT } from '../hooks/core/org-mem'
 import type { On } from 'claude-code'
 import { type Board, addTask, emptyBoard, patchTask } from '../hooks/board'
 import { entry, ran } from './fakes'
@@ -160,9 +161,11 @@ function world(on: On, o: { work?: Record<string, string[]>; agents?: { id: stri
   on('tool.check', () => ({ decision: 'allow' }) as never)
   on('prompt.submit', (_, e) => (prompts.push(e.text), { text: e.text }) as never)
   on('agent.list', () => ({ value: (o.agents ?? []).map(a => ({ ...a, status: ended.has(a.id) ? 'completed' : 'running' })) }) as never)
+  const sends: { to: string; text: string }[] = []
   on('session.send', (_, e) => {
     const to = (e as unknown as { to: string | { agentId: string } }).to
     ended.add(typeof to === 'string' ? to : to.agentId)
+    sends.push({ to: typeof to === 'string' ? to : to.agentId, text: String((e as unknown as { text?: string }).text ?? '') })
     return { isDelivered: true } as never
   })
   on('turn.complete', (_, e) => {
@@ -178,7 +181,7 @@ function world(on: On, o: { work?: Record<string, string[]>; agents?: { id: stri
   const clock = mock.clock(on, { now: T0 })
   // a done task's history and tries are in its parts file (T-675): joined back here
   const board = () => JSON.parse(joinedText(files.get(BOARD)!, rel => files.get(BOARD.replace('board.json', rel)) ?? null)) as Board
-  return { files, git, prompts, reached, toasts, clock, board, release: () => release?.(), task: (id: string) => board().tasks.find(t => t.id === id)! }
+  return { files, git, prompts, sends, reached, toasts, clock, board, release: () => release?.(), task: (id: string) => board().tasks.find(t => t.id === id)! }
 }
 
 type Eng = Engine
@@ -293,6 +296,23 @@ test("a tracked worker's report is taken once: the same report again changes not
   await w.clock.settle()
   expect(w.files.get(BOARD)).toBe(text)
   expect(w.git.state.main).toBe(main)
+})
+
+test('T-656: in Claude Code a worker that handed back is sent one debrief message (resuming it); the checks did not wait, and its answer\'s suggestions are kept on the task', async ($, on) => {
+  const w = world(on, { work: { 'T-1': ['src/a.ts'] }, agents: [{ id: 'a1', type: 'symcc:worker' }] })
+  w.files.set(BOARD, JSON.stringify(doingBoard('review', [{ agent: 'a1', files: ['src/'] }])))
+  await $.session.start({ cwd: ROOT } as never)
+  await finish($, 'a1', 'made the change')
+  // the debrief goes out right after the hand-back (the clock is not moved: its 3-minute limit must not run out here)
+  for (let i = 0; i < 5000 && !w.sends.some(s => s.text === DEBRIEF_TEXT); i++) await Promise.resolve()
+  expect(w.sends.filter(s => s.text === DEBRIEF_TEXT).map(s => s.to)).toEqual(['a1'])
+  // the resumed worker answers with another turn.complete for the same agent
+  await finish($, 'a1', 'Suggested for org-mem:\n- Run one test file with sh scripts/test-files.sh.')
+  await w.clock.settle()
+  const t = w.task('T-1') as { status: string; suggested?: string[] }
+  expect(t.status).toBe('review')
+  expect(t.suggested).toEqual(['Run one test file with sh scripts/test-files.sh.'])
+  expect(w.sends.filter(s => s.text === DEBRIEF_TEXT)).toHaveLength(1)
 })
 
 // ---------------- how a tracked worker's try ends: ask_owner, refused edits, the turn's end reason ----------------

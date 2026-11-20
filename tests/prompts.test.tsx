@@ -61,14 +61,17 @@ test('the built-in prompts are filled in for the task: no placeholder is left, a
   expect(p).toContain('These test commands must pass. symcc runs them all, each one on its own from your folder, before merging, and sends you the output if any fail:\n  npm test\n')
   expect(p).toContain(TEST_RULE)
   expect(p).toContain("Earlier tries:\n- try 1 failed its tests\nDon't repeat those mistakes.")
-  expect(p.endsWith(`what you changed.\n${ASK}\n${LEARNED_ASK}`)).toBe(true)
+  // T-656: the main prompt ends at the ask line; the org-mem ask is only added on a host with no debrief
+  expect(p.endsWith(`what you changed.\n${ASK}`)).toBe(true)
+  expect(WORKER_PROMPT(b.tasks[0]!, b, WT, undefined, '', LEARNED_ASK).endsWith(`what you changed.\n${ASK}\n${LEARNED_ASK}`)).toBe(true)
   // the investigation prompt has no test rule and no files list
   const i = boardWith(['npm test'], { kind: 'investigation' } as Partial<SymccTask>)
   const q = WORKER_PROMPT(i.tasks[0]!, i, WT)
   expect(q).not.toContain('{{')
   expect(q).toContain('This task is an investigation')
   expect(q).not.toContain(TEST_RULE)
-  expect(q.endsWith(`${ASK}\n${LEARNED_ASK}`)).toBe(true)
+  expect(q.endsWith(ASK)).toBe(true)
+  expect(WORKER_PROMPT(i.tasks[0]!, i, WT, undefined, '', LEARNED_ASK).endsWith(`${ASK}\n${LEARNED_ASK}`)).toBe(true)
   // T-411: every built-in prompt (and the scout prompt) says to wait for background commands before answering
   const BG = "Don't run long commands in the background. If you do, wait for them to finish before you answer: ending your turn ends your work, so never answer that you will continue later."
   // T-487: the change, investigation and checker prompts also say to run test commands with the longest Bash timeout,
