@@ -17,6 +17,8 @@ import type { Host, HostAgent } from '../hooks/host'
 import { drainStarts, queuedStarts } from '../hooks/app/starts'
 import { withStarts } from './starts'
 import { checkerPrompt, checkerTestsText } from '../hooks/core/checker'
+import { inMergeLine } from '../hooks/app/merge-line'
+import { parseMergeLine } from '../hooks/board'
 
 const ROOT = '/repo'
 const WT = `${ROOT}/.symcc/worktrees/T-1`
@@ -31,7 +33,10 @@ const fail = (stderr = ''): Res => ({ exitCode: 1, stdout: '', stderr })
 function world(changed: string[] = ['src/a.ts', 'src/a.test.ts']) {
   // gone: branch main was deleted (T-440)
   // tree: what `rev-parse <commit>^{tree}` gives (T-526); empty: git can't tell, so no passed tree is recorded
-  const git = { main: M1, head: H0, dirty: true, detached: false, checkoutFails: false, gone: false, tree: '' }
+  // moves: each commit main was moved to, in order
+  const git = { main: M1, head: H0, dirty: true, detached: false, checkoutFails: false, gone: false, tree: '', moves: [] as string[] }
+  // the project's test commands (T-565): fails makes each one exit 1 with output; hold: a run in folder `cwd` waits for `until`
+  const tests = { fails: false, output: '(fail) src/a.test.ts > doIt handles empty input\n 0 pass\n 1 fail', hold: null as { cwd: string; until: Promise<void> } | null }
   const files = new Map<string, string>()
   const calls: string[] = []
   function runGit(a0: string[]): Res {
@@ -65,6 +70,7 @@ function world(changed: string[] = ['src/a.ts', 'src/a.test.ts']) {
       const [, , , ref, to, from] = a
       if (ref !== 'refs/heads/main' || git.main !== from) return fail('cannot lock ref')
       git.main = to!
+      git.moves.push(to!)
       return ok()
     }
     return ok()
@@ -74,6 +80,11 @@ function world(changed: string[] = ['src/a.ts', 'src/a.test.ts']) {
       const [cmd, ...rest] = argv
       calls.push(argv.join(' '))
       if (cmd === 'git') return runGit(rest)
+      if (cmd === '/bin/sh') {
+        if (tests.hold && o.cwd === tests.hold.cwd) await tests.hold.until
+        if (tests.fails) return { exitCode: 1, stdout: tests.output, stderr: '' }
+        return ok()
+      }
       if (cmd === 'ln') {
         if (files.has(rest[1]!)) return fail('File exists')
         files.set(rest[1]!, files.get(rest[0]!)!)
@@ -104,7 +115,7 @@ function world(changed: string[] = ['src/a.ts', 'src/a.test.ts']) {
   leadQueue.splice(0)
   meanwhile.splice(0)
   current = host
-  return { $: host, git, calls, spawns, sends }
+  return { $: host, git, calls, spawns, sends, tests }
 }
 
 /** The last world's host: until and turns start the queued agents with it, as a turn's start or end does (T-391). */
@@ -326,6 +337,71 @@ test('T-551: with the checker off, the tests run once and the change merges, as 
   const t = await finish(w)
   expect(testRuns(w)).toEqual(['/bin/sh -c npm test'])
   expect(t.status).toBe('done')
+})
+
+test('T-565: checker on, the checker says OK but the merge line\'s tests fail: a normal failed try, and the next prompt shows the test output (not a checker report)', async () => {
+  const w = world()
+  w.tests.fails = true
+  await saveBoard(w.$, boardWith(true))
+  const t = await finish(w, async id => checkerFinished(id, 'OK'))
+  expect(testRuns(w)).toEqual(['/bin/sh -c npm test'])
+  expect(t.status).toBe('todo')
+  expect(t.test_tries).toBe(1)
+  expect(w.git.main).toBe(M1)
+  expect(t.history.map(h => h.text)).toContain('try 1: checker: OK')
+  const prompt = WORKER_PROMPT(t, await load(w.$), WT)
+  expect(prompt).toContain('Your last try failed these tests; fix it.')
+  expect(prompt).toContain('(fail) src/a.test.ts > doIt handles empty input')
+  expect(prompt).not.toContain('A checker reviewed your last try')
+})
+
+test('T-565: checker on, the checker gives no verdict and the merge line\'s tests fail: a failed try (todo), not review', async () => {
+  const w = world()
+  w.tests.fails = true
+  await saveBoard(w.$, boardWith(true))
+  const t = await finish(w, async id => checkerFinished(id, 'stopped', true))
+  expect(testRuns(w)).toEqual(['/bin/sh -c npm test'])
+  expect(t.status).toBe('todo')
+  expect(t.test_tries).toBe(1)
+  expect(t.note ?? '').not.toMatch(/checker gave no verdict.*ready for review/)
+  expect(t.note ?? '').not.toContain('ready for review')
+  expect(w.git.main).toBe(M1)
+})
+
+test("T-565: a task's checker runs while another task holds the merge line; after its OK it waits behind it, and main moves to the other task first", async () => {
+  const w = world()
+  await saveBoard(w.$, boardWith(true))
+  const T2 = `${ROOT}/.symcc/worktrees/T-2`
+  const M2 = 'c2'.repeat(20)
+  const line = async () => parseMergeLine((await w.$.fs.read(`${ROOT}/.symcc/merge-line.json`).catch(() => null)) ?? null).map(e => e.task)
+  let letGo = () => {}
+  w.tests.hold = { cwd: T2, until: new Promise<void>(r => (letGo = r)) }
+  // T-2's merge turn: its test command waits until let go, then main moves to its commit
+  const t2 = inMergeLine(w.$, 'T-2', async () => {
+    await w.$.run(['/bin/sh', '-c', 'npm test'], { cwd: T2 })
+    await w.$.run(['git', 'update-ref', '-m', 'T-2', 'refs/heads/main', M2, w.git.main])
+  })
+  await until(() => testRuns(w).length === 1)
+  const t = await finish(w, async id => {
+    // T-1's checker runs while T-2 still holds the line
+    expect(checkerRuns.size).toBeGreaterThan(0)
+    expect(await line()).toEqual(['T-2'])
+    expect(w.git.main).toBe(M1)
+    checkerFinished(id, 'OK')
+    // after the OK, T-1 joins the line behind T-2 and waits there: its tests don't run, nothing merges
+    for (let i = 0; i < 200 && !(await line()).includes('T-1'); i++) await turn()
+    expect(await line()).toEqual(['T-2', 'T-1'])
+    await turns(500)
+    expect(testRuns(w).length).toBe(1)
+    expect(w.git.moves).toEqual([])
+    expect(find(await load(w.$), 'T-1')!.status).toBe('doing')
+    letGo()
+    await t2
+  })
+  expect(testRuns(w).length).toBe(2)
+  expect(w.git.moves).toEqual([M2, H1])
+  expect(t.status).toBe('done')
+  expect(t.history.map(h => h.text)).toContain('try 1: checker: OK')
 })
 
 test('T-551: the checker prompt names no test command to run and says the tests run in the merge line after it', async () => {
