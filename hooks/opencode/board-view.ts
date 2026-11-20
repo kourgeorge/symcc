@@ -43,7 +43,7 @@ export type ViewFile = {
   version: string
   /** when it was written (ms) */
   written_at: number
-  view: PaneView & { scout_runs?: ScoutRuns; roles?: ViewDef[]; kinds?: ViewDef[]; changes?: ViewChanges }
+  view: PaneView & { scout_runs?: ScoutRuns; scout_results?: Record<string, string>; roles?: ViewDef[]; kinds?: ViewDef[]; changes?: ViewChanges }
 }
 
 /** The files each task in review changed (not an answered investigation's), or why they can't be read (view.ts puts
@@ -136,6 +136,7 @@ export function parseViewFile(text: string | null | undefined): ViewFile | null 
     const s = (x: unknown) => (typeof x === 'string' ? x : '')
     const { scout_runs, ...rest } = f.view
     const runs = scout_runs && typeof scout_runs === 'object' && !Array.isArray(scout_runs) ? { scout_runs } : {}
+    if (!rest.scout_results || typeof rest.scout_results !== 'object' || Array.isArray(rest.scout_results)) delete rest.scout_results
     if (!Array.isArray(rest.roles)) delete rest.roles
     if (!Array.isArray(rest.kinds)) delete rest.kinds
     if (!rest.changes || typeof rest.changes !== 'object' || Array.isArray(rest.changes)) delete rest.changes
@@ -617,6 +618,8 @@ function scoutPage(f: ViewFile, sc: SymccScout, choice: PanelChoice, nowMs: numb
   if (sc.warning) b.add([{ text: sc.warning, color: 'warning' }])
   const problem = scoutLastRunProblem([...shown].reverse().map(x => x.run))
   if (problem && !sc.running) b.add([{ text: problem, color: 'error' }])
+  const results = f.view.scout_results?.[sc.name]
+  if (typeof results === 'string' && results) for (const l of wrapSegs([{ text: results, color: 'inactive' }], w)) b.add(l)
   b.blank()
   b.heading('Instructions')
   if (sc.prompt?.trim()) for (const l of textLines(sc.prompt.trim(), 'text', w)) b.add(l)

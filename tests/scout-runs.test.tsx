@@ -6,7 +6,7 @@ import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import type { On } from 'claude-code'
 import type { SymccScout } from '../types'
-import { emptyBoard, leadScoutText, parseScoutRuns, scoutRunTasks, scoutRunsText, scoutRunLine, scoutLastRunProblem, linkScoutRunTask, SCOUT_RUNS_KEPT, type ScoutRunRecord } from '../hooks/board'
+import { addScoutRun, emptyBoard, leadScoutText, parseScoutRuns, scoutRunTasks, scoutRunsText, scoutRunLine, scoutLastRunProblem, linkScoutRunTask, SCOUT_RUNS_KEPT, type ScoutRunRecord } from '../hooks/board'
 import { scoutFinished, scheduleScouts, scoutPlace, scoutPlaceValue } from '../hooks/app/scouts'
 import { runTool } from '../hooks/app/tools'
 import { S, scoutRuns, scoutState } from '../hooks/app/state'
@@ -354,3 +354,29 @@ test("the scout's page in VS Code says when its last run ended on an API error, 
   await ui.unmount()
 })
 
+
+// ---------------- the scout's results (T-622) ----------------
+
+const RESULTS = /^Results · last 7 days: .* · in all: 2 tasks \(1 merged, 0 dropped, 1 open\) · 2k scout tokens · 5k per merged$/
+
+/** Scout bugs with one merged task (3k tokens) and one open, and 2k tokens of its own in scouts.json. */
+function resultsPage(on: On) {
+  const t = (id: string, status: string, runs: unknown[] = []) => ({ id, title: id, details: '', files: [], status, note: '', question: null, order: 1, after: [], attempts: runs.length, history: [], branch: null, created_at: '2026-11-12T01:00:00.000Z', updated_at: '2026-11-12T02:00:00.000Z', runs, origin: { by: 'scout', scout: 'bugs', why: '', at: '' } })
+  const tasks = [t('T-7', 'done', [{ started: '2026-11-12T01:00:00.000Z', ended: '2026-11-12T01:10:00.000Z', tokens: { input: 3000 } }]), t('T-8', 'todo')]
+  const memory = addScoutRun(null, 'bugs', { endMs: Date.parse(LAST_RUN), ms: 60_000, tokens: { input: 2000 } })
+  page(on, { '/.symcc/scouts/bugs.runs.json': scoutRunsText([{ started: null, ended: LAST_RUN, outcome: 'found', findings: 2, tasks: ['T-7', 'T-8'] }]), '/.symcc/scouts.json': memory }, tasks)
+}
+
+test("the scout's page shows a Results line: what its findings became, its tokens and tokens per merged task", async ($, on) => {
+  resultsPage(on)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect((await texts(ui)).filter(x => RESULTS.test(x)).length).toBe(1)
+  await ui.unmount()
+})
+
+test("the scout's page in VS Code shows the same Results line", async ($, on) => {
+  resultsPage(on)
+  const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
+  expect((await texts(ui)).filter(x => RESULTS.test(x)).length).toBe(1)
+  await ui.unmount()
+})

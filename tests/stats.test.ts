@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { addScoutRun, bar, cutTitle, textWidth, parseStatsArgs, wrapLine, billedTokens, billedText, failReason, migrateScoutUsage, readArchive, archiveText, tokenCount, fmtTokenKinds, inRange, keepScoutUsage, leadTotals, mean, median, mergedHow, originKey, parseScoutMemory, parseScoutUsage, parseStatsRange, rangeSpan, scoutMemoryText, scoutTotals, statsReport, taskFigures, readBoard, boardTotal } from '../hooks/board'
+import { addScoutRun, bar, cutTitle, textWidth, parseStatsArgs, wrapLine, billedTokens, billedText, failReason, migrateScoutUsage, readArchive, archiveText, tokenCount, fmtTokenKinds, inRange, keepScoutUsage, leadTotals, mean, median, mergedHow, originKey, parseScoutMemory, parseScoutUsage, parseStatsRange, rangeSpan, scoutMemoryText, scoutTotals, statsReport, scoutResultsLine, taskFigures, readBoard, boardTotal } from '../hooks/board'
 import { leadCalls, projectFolderName } from '../hooks/claude/lead-usage'
 import { hist } from './history-fixture'
 
@@ -395,4 +395,83 @@ test('stats: investigations end "answered", are counted on their own, and stay o
   const none = statsReport({ tasks: knownTasks(), nowMs: NOW })
   expect(none).toContain('Investigations (0, 0 answered;')
   expect(none.split('\n')[2]).toBe('4 done · 1h 45m of work · 15k tokens · 75% right first try')
+})
+
+/** T-622: two scouts: bugs (one merged, one dropped, two open incl. backlog) and secrets (one open, none merged). */
+function scoutTasks(): SymccTask[] {
+  const scout = (s: string) => ({ origin: { by: 'scout' as const, scout: s, why: '', at: '' } })
+  return [
+    task('T-1', { ...scout('bugs'), history: hist('try 1: x → merged into main (1)') }, [[10, 4000]]),
+    task('T-2', { ...scout('bugs'), status: 'dropped' }, [[5, 500]]),
+    task('T-3', { ...scout('bugs'), status: 'backlog' }),
+    task('T-4', { ...scout('bugs'), status: 'todo' }),
+    task('T-5', { ...scout('secrets'), status: 'todo' }),
+    task('T-6', { origin: { by: 'lead', why: '', at: '' } }, [[10, 1000]]),
+  ]
+}
+const scoutUsage = () => {
+  let text = addScoutRun(null, 'bugs', { endMs: NOW, ms: 60_000, tokens: { input: 2000 } })
+  text = addScoutRun(text, 'bugs', { endMs: NOW - 30 * 86_400_000, ms: 60_000, tokens: { input: 1000 } })
+  text = addScoutRun(text, 'secrets', { endMs: NOW, ms: 60_000, tokens: { input: 6000 } })
+  text = addScoutRun(text, 'quiet', { endMs: NOW, ms: 60_000, tokens: { input: 1000 } })
+  return parseScoutUsage(text)
+}
+
+test('stats: each scout shows its tasks merged / dropped / open, its tokens and tokens per merged task (T-622)', () => {
+  const text = statsReport({ tasks: scoutTasks(), nowMs: NOW, range: { kind: 'days', days: 7 }, team: { leadProblem: 'no logs', scouts: scoutUsage() } })
+  // bugs: (2k scout tokens this week + 4k for the merged T-1) / 1 merged
+  expect(text).toMatch(/\n {6}bugs +[▇▅▂]+ +4 +67%.*\n {8}4 tasks \(1 merged, 1 dropped, 2 open\) · 2k scout tokens · 6k per merged\n/)
+  expect(text).toMatch(/\n {6}secrets +[▇▅▂]+ +1 +17%.*\n {8}1 task \(0 merged, 0 dropped, 1 open\) · 6k scout tokens · — per merged\n/)
+  // a scout that used tokens but made no task is listed too
+  expect(text).toMatch(/\n {6}quiet +0 +0%\n {8}no tasks · 1k scout tokens · — per merged\n/)
+  // in all: bugs' older run counts too
+  expect(statsReport({ tasks: scoutTasks(), nowMs: NOW, team: { scouts: scoutUsage() } })).toContain('4 tasks (1 merged, 1 dropped, 2 open) · 3k scout tokens · 7k per merged')
+  for (const l of text.split('\n')) expect(l.length).toBeLessThanOrEqual(80)
+})
+
+test("stats: a scout's page Results line gives the same numbers for the last 7 days and in all (T-622)", () => {
+  const old = task('T-0', { origin: { by: 'scout', scout: 'bugs', why: '', at: '' }, history: hist('try 1: x → merged into main (1)'), updated_at: iso(60 * 24 * 30) }, [[10, 2000]], 60 * 24 * 31)
+  const tasks = [old, ...scoutTasks()]
+  const u = scoutUsage()
+  const week = statsReport({ tasks, nowMs: NOW, range: { kind: 'days', days: 7 }, team: { scouts: u } })
+  const line = scoutResultsLine(tasks, 'bugs', u.bugs, NOW)
+  expect(line).toBe('Results · last 7 days: 4 tasks (1 merged, 1 dropped, 2 open) · 2k scout tokens · 6k per merged · in all: 5 tasks (2 merged, 1 dropped, 2 open) · 3k scout tokens · 4.5k per merged')
+  // the page's week part matches /stats 7d
+  expect(week).toContain('4 tasks (1 merged, 1 dropped, 2 open) · 2k scout tokens · 6k per merged')
+  expect(scoutResultsLine(tasks, 'secrets', u.secrets, NOW)).toBe('Results · last 7 days: 1 task (0 merged, 0 dropped, 1 open) · 6k scout tokens · — per merged · in all: 1 task (0 merged, 0 dropped, 1 open) · 6k scout tokens · — per merged')
+  expect(scoutResultsLine([], 'new', undefined, NOW)).toBe('Results · last 7 days: no tasks · 0 scout tokens · — per merged · in all: no tasks · 0 scout tokens · — per merged')
+})
+
+test('stats: with no scouts the report says nothing extra about scouts (T-622)', () => {
+  const tasks = scoutTasks().filter(t => t.origin?.by !== 'scout')
+  const text = statsReport({ tasks, nowMs: NOW, team: { leadProblem: 'no logs', scouts: {} } })
+  expect(text).not.toContain('scout tokens')
+  expect(text).not.toContain('all scouts')
+  expect(statsReport({ tasks, nowMs: NOW })).not.toContain('scout tokens')
+})
+
+test('stats: scouts named like built-in object names (constructor, toString, __proto__) work (T-622)', () => {
+  const names = ['constructor', 'toString', 'valueOf', '__proto__']
+  const tasks = names.map((s, i) => task(`T-${i + 1}`, { origin: { by: 'scout', scout: s, why: '', at: '' }, status: 'todo' }))
+  for (const range of [{ kind: 'days' as const, days: 7 }, undefined]) {
+    const text = statsReport({ tasks, nowMs: NOW, ...(range ? { range } : {}), team: { scouts: {} } })
+    expect(text).not.toContain('NaN')
+    expect(text).toContain('1 task (0 merged, 0 dropped, 1 open) · 0 scout tokens · — per merged')
+  }
+  const empty = parseScoutUsage(null)
+  for (const s of names) expect(scoutResultsLine(tasks, s, Object.hasOwn(empty, s) ? empty[s] : undefined, NOW)).toContain('last 7 days: 1 task (0 merged, 0 dropped, 1 open) · 0 scout tokens')
+  // a scout really named __proto__ keeps its own usage
+  const u = parseScoutUsage(addScoutRun(null, '__proto__', { endMs: NOW, ms: 1000, tokens: { input: 3000 } }))
+  expect(Object.hasOwn(u, '__proto__')).toBe(true)
+  expect(statsReport({ tasks, nowMs: NOW, range: { kind: 'days', days: 7 }, team: { scouts: u } })).toContain('1 task (0 merged, 0 dropped, 1 open) · 3k scout tokens')
+})
+
+test('stats: tasks from a scout with no name show their results under "scout" (T-622)', () => {
+  const tasks = [
+    task('T-1', { origin: { by: 'scout', why: '', at: '' } }),
+    task('T-2', { origin: { by: 'scout', scout: '', why: '', at: '' }, status: 'dropped' }),
+  ]
+  const text = statsReport({ tasks, nowMs: NOW, team: { scouts: {} } })
+  expect(text).toMatch(/\n {6}scout +[▇▅▂]+ +2 +100%.*\n {8}2 tasks \(1 merged, 1 dropped, 0 open\) · 0 scout tokens · 0 per merged\n/)
+  expect(text).not.toContain('no tasks')
 })
