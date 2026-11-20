@@ -106,22 +106,25 @@ export const safePartsFile = (f: unknown): f is string => typeof f === 'string' 
  * board.json's parsed content `raw` with each stub joined with its parts (read from `files`: each parts file's tasks
  * by name; a file missing from it was not there), its `parts` field gone. Where its board.json fields and its parts
  * both have a field, board.json's wins. `missing`: what could not be found, in words (e.g. "T-612: its history,
- * tries and details are missing from tasks/T-600.json"); such a task loads as its stub alone.
+ * tries and details are missing from tasks/T-600.json"); such a task loads as its stub alone. `stubbed`: those
+ * tasks' ids (a save must not write their empty parts over a parts file put back later, T-681).
  */
-export function joinParts(raw: unknown, files: Map<string, Record<string, Record<string, unknown>>>): { raw: unknown; missing: string[] } {
-  if (!isObj(raw) || !Array.isArray(raw.tasks)) return { raw, missing: [] }
+export function joinParts(raw: unknown, files: Map<string, Record<string, Record<string, unknown>>>): { raw: unknown; missing: string[]; stubbed: string[] } {
+  if (!isObj(raw) || !Array.isArray(raw.tasks)) return { raw, missing: [], stubbed: [] }
   const missing: string[] = []
+  const stubbed: string[] = []
   const tasks = raw.tasks.map(t => {
     if (!isObj(t) || !(PARTS_KEY in t)) return t
     const { [PARTS_KEY]: file, ...stub } = t
     const parts = typeof file === 'string' ? files.get(file)?.[String(t.id)] : undefined
     if (!parts) {
       missing.push(`${String(t.id)}: its history, tries and details are missing from ${String(file)}`)
+      stubbed.push(String(t.id))
       return stub
     }
     return { ...parts, ...stub }
   })
-  return { raw: { ...raw, tasks }, missing }
+  return { raw: { ...raw, tasks }, missing, stubbed }
 }
 
 /** Whether board.json's parsed content `raw` still has a done or dropped task kept whole (a board from before T-675). */

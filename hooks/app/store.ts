@@ -317,13 +317,21 @@ export async function saveMigrated(host: Host): Promise<void> {
 /** The parts files last read or written (path → their text and tasks), so a save writes only the ones that changed. */
 const partsSeen = new Map<string, { text: string; tasks: Record<string, Record<string, unknown>> }>()
 
+/**
+ * The finished tasks the last read loaded as stubs, their parts missing (T-681): a save leaves them out of their parts
+ * files, so it never writes their empty parts over the real ones (a file deleted by hand and put back later, or one
+ * still being written). A parts file that would hold only such tasks is not written at all.
+ */
+let stubbed = new Set<string>()
+
 /** A parts file's path, from its name in board.json ("tasks/T-600.json"). */
 const partsPath = (rel: string) => path(`${S.N.dir}/${rel}`)
 
 /**
  * Reads board.json and joins each done or dropped task's stub with its parts from .<name>/tasks/ (T-675, see
  * core/board-parts.ts), then reads it as a board (readBoardValue). A parts file that is there but is not one makes the
- * board broken (never saved over); a task whose parts are missing loads as its stub, and that is said in `fixed`.
+ * board broken (never saved over), and so does one whose exists check fails (T-681: it may well be there); a task
+ * whose parts are missing loads as its stub, and that is said in `fixed` (and kept in `stubbed`).
  * `whole`: board.json still keeps a finished task whole (saveMigrated moves its parts out once); then its size is not
  * warned about, as the migration's save makes it small (and notes its new size).
  * A read without the board lock can see another session's save half done (its new board.json, or the old one with
@@ -345,7 +353,12 @@ async function readJoined(host: Host, again = true): Promise<{ text: string; rea
   const files = new Map<string, Record<string, Record<string, unknown>>>()
   for (const rel of partsFilesNamed(raw)) {
     const file = partsPath(rel)
-    if (!(await host.fs.exists(file).catch(() => false))) {
+    const there = await host.fs.exists(file).then(
+      x => x,
+      (e: unknown) => ({ failed: String((e as Error)?.message ?? e).slice(0, 120) }),
+    )
+    if (typeof there === 'object') return { text, read: { ...readBoard(null), broken: `its parts file ${S.N.dir}/${rel} can't be checked (${there.failed})` }, whole: false }
+    if (!there) {
       partsSeen.delete(file)
       continue
     }
@@ -357,6 +370,7 @@ async function readJoined(host: Host, again = true): Promise<{ text: string; rea
   }
   const j = joinParts(raw, files)
   if (j.missing.length && again) return readJoined(host, false)
+  stubbed = new Set(j.stubbed)
   const read = readBoardValue(j.raw)
   return { text, read: { ...read, fixed: [...read.fixed, ...j.missing] }, whole }
 }
@@ -444,7 +458,14 @@ export async function dropIfSame(host: Host, file: string, text: string) {
  */
 export async function saveBoard(host: Host, b: Board) {
   const { board: slim, parts } = splitBoard(b)
-  const want = new Map([...parts].map(([rel, tasks]) => [partsPath(rel), tasks] as const))
+  const want = new Map<string, Record<string, Record<string, unknown>>>()
+  for (const [rel, all] of parts) {
+    const file = partsPath(rel)
+    const seen = partsSeen.get(file)?.tasks ?? {}
+    // a task loaded as a stub keeps no parts here: its real ones may come back (T-681)
+    const tasks = Object.fromEntries(Object.entries(all).filter(([id]) => !stubbed.has(id) || id in seen))
+    if (Object.keys(tasks).length) want.set(file, tasks)
+  }
   if (want.size) await host.run(['mkdir', '-p', path(`${S.N.dir}/${PARTS_DIR}`)]).catch(() => undefined)
   const first = new Map<string, string>()
   for (const [file, tasks] of want) {

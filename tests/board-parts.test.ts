@@ -7,7 +7,7 @@ import type { SymccHistoryEntry, SymccRun } from '../types'
 import { type Board, type BoardTask, addTask, emptyBoard, parseBoard, readBoard } from '../hooks/board'
 import { ARCHIVE_FILE_BYTES, READ_LIMIT_BYTES, SIZE_WARN_BYTES, archiveChunks, fieldSizes, joinedText, partsFileOf, sizeWarnText, viewStubFilled, viewTask, withViewParts } from '../hooks/core/board-parts'
 import { scoutToolLines } from '../hooks/core/scouts'
-import { load, readWhole, saveBoard, saveMigrated } from '../hooks/app/store'
+import { change, load, readWhole, saveBoard, saveMigrated } from '../hooks/app/store'
 import { readArchiveFile, saveArchive } from '../hooks/app/archive'
 import { publish } from '../hooks/app/lead'
 import { cleanLeftoverTmp } from '../hooks/app/cleanup'
@@ -160,6 +160,39 @@ test('T-675: a parts file that is not one makes the board broken (never saved ov
   expect(w.toasts.join('\n')).toMatch(/T-121: its history, tries and details are missing from tasks\/T-100\.json/)
   w.files.set(file, good)
   expect((await load(w.host)).tasks[120]!.history.length).toBe(30)
+})
+
+test('T-681: a parts file whose exists check fails makes the board broken: the load throws, a save is refused, the file is kept', async () => {
+  const w = world()
+  await saveBoard(w.host, bigBoard())
+  const file = `${ROOT}/.symcc/tasks/T-100.json`
+  const good = w.files.get(file)!
+  const exists = w.host.fs.exists
+  w.host.fs.exists = async p => (p === file ? Promise.reject(new Error('timed out')) : exists(p))
+  await expect(load(w.host)).rejects.toThrow(/its parts file \.symcc\/tasks\/T-100\.json can't be checked \(timed out\)/)
+  await expect(change(w.host, b => ({ ...b, tasks: b.tasks.map(t => (t.id === 'T-700' ? { ...t, note: 'queued' } : t)) }))).rejects.toThrow(/T-100\.json can't be checked/)
+  expect(w.files.get(file) === good).toBe(true)
+  w.host.fs.exists = exists
+  expect((await load(w.host)).tasks[120]!.history.length).toBe(30)
+})
+
+test('T-681: a save after a parts file went missing never writes empty parts over it; putting it back restores every task', async () => {
+  const w = world()
+  await saveBoard(w.host, bigBoard())
+  const file = `${ROOT}/.symcc/tasks/T-100.json`
+  const good = w.files.get(file)!
+  w.files.delete(file)
+  const b = await load(w.host)
+  expect(b.tasks[120]!.history).toEqual([])
+  expect(w.toasts.join('\n')).toMatch(/T-121: its history, tries and details are missing from tasks\/T-100\.json/)
+  await change(w.host, x => ({ ...x, tasks: x.tasks.map(t => (t.id === 'T-700' ? { ...t, note: 'queued' } : t)) }))
+  expect(w.files.has(file)).toBe(false)
+  // the stubs still point to the parts file
+  expect((JSON.parse(w.files.get(BOARD)!) as { tasks: Record<string, unknown>[] }).tasks[120]!.parts).toBe('tasks/T-100.json')
+  w.files.set(file, good)
+  const back = await load(w.host)
+  expect(back.tasks[120]!.history.length).toBe(30)
+  expect(back.tasks[699]!.note).toBe('queued')
 })
 
 test('T-675: a data file past 3 MB warns the owner, the lead and the board once; a read refused for size says so', async () => {
