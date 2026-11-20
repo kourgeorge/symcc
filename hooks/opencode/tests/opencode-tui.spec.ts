@@ -328,6 +328,9 @@ test('startTui on a fake OpenCode TUI: reads the view file above its folder, dra
   }
   await goTo('T-2')
   expect(shown(panel).some(l => l.startsWith('Status:'))).toBe(true)
+  await board.press('x', 'ses_1')
+  await board.press('a', 'ses_1')
+  // T-615: while that approve runs, a and x do nothing (no second approve, no reject box), as the terminal's; d still shows the changes
   await board.press('a', 'ses_1')
   await board.press('x', 'ses_1')
   await board.press('d', 'ses_1')
@@ -339,8 +342,8 @@ test('startTui on a fake OpenCode TUI: reads the view file above its folder, dra
   // a key a page doesn't offer does nothing (a waiting task has no show changes)
   await board.press('d', 'ses_1')
   expect(sent).toEqual([
-    { sessionID: 'ses_1', name: 'symcc-approve', text: 'T-2' },
     { sessionID: 'ses_1', name: 'symcc-reject', text: 'T-2 too big' },
+    { sessionID: 'ses_1', name: 'symcc-approve', text: 'T-2' },
     { sessionID: 'ses_1', name: 'symcc-diff', text: 'T-2' },
     { sessionID: 'ses_1', name: 'symcc-answer', text: 'T-3 postgres' },
     { sessionID: 'ses_1', name: 'symcc-answer', text: 'T-3 sqlite, it is small' },
@@ -414,7 +417,8 @@ test('T-584: a task page offers every one of core\'s taskActions with a key (but
     'ask-more': id => ({ name: 'symcc-reject', text: `${id} not needed` }),
   }
   for (const id of ['T-1', 'T-2', 'T-3', 'T-4']) {
-    for (const a of panelTaskActions(task(id))) {
+    // Done (an approve) is pressed at the end: while it runs, the page takes none of its other keys
+    for (const a of panelTaskActions(task(id)).filter(x => x.id !== 'done')) {
       await goTo(id)
       sent.length = 0
       await board.press(a.key as never, 's')
@@ -457,6 +461,14 @@ test('T-584: a task page offers every one of core\'s taskActions with a key (but
   await board.press(bound('k')[0]!, 's')
   expect(board.state().cursor).toBe(at - 1)
   expect(actionCommand({ kind: 'task', id: 'T-5', verb: 'review', arg: 'off' })).toEqual({ name: 'symcc-task', text: 'T-5 review off' })
+  // Done on the answered investigation sends its approve; while that runs, v (keep as a note) and x (ask more) do nothing
+  expect(panelTaskActions(task('T-2')).some(a => a.id === 'done' && a.key === 'a')).toBe(true)
+  await goTo('T-2')
+  sent.length = 0
+  await board.press('a', 's')
+  await board.press('v', 's')
+  await board.press('x', 's')
+  expect(sent).toEqual([{ sessionID: 's', ...expected.done!('T-2') }])
   board.stop()
 })
 
