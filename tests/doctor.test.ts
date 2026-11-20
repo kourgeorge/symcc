@@ -232,6 +232,9 @@ test('T-684: during a merge the doctor still lists (leaving out the merging task
   expect(text).toContain('- branch symcc/T-7 (T-7 is being merged), left alone')
   expect(text).not.toContain('w-T-7')
   expect(text).not.toContain('b-T-7')
+  // nobody drives the board and T-7 has no worker, yet it is not called stuck: it is being merged
+  expect(text).not.toContain('T-7 is running but has no live worker')
+  expect(text).not.toContain('T-7 retry')
   expect(w.writes).toEqual([])
   // a done task this copy is merging now (in `finishing`): its folder and branch are not offered either
   const m = world()

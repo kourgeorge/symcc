@@ -256,7 +256,8 @@ async function findAll(host: Host, b: Board | null, mergingId: string | undefine
   // another live session's workers aren't in this session's agent list: only the driver (or nobody) can tell
   if (b && agents && (!driver || driver === S.me))
     for (const t of b.tasks) {
-      if (t.status !== 'doing' || inUse(t.id, t, agents)) continue
+      // the task being merged has no worker on purpose: never tell the owner to retry it
+      if (t.status !== 'doing' || t.id === mergingId || inUse(t.id, t, agents)) continue
       const since = Date.parse(t.runs?.at(-1)?.started ?? t.updated_at)
       const min = Number.isFinite(since) ? Math.round((nowMs - since) / 60_000) : NaN
       if (!(min >= DOCTOR_STUCK_MIN)) continue
