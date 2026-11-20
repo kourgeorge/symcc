@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>symcc · a team lead for your coding agents</title>
+<meta name="description" content="symcc turns your coding agent chat into a lead that plans, a board everyone shares, and workers that build in parallel.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="site">
+  <a class="brand" href="index.html">symcc</a>
+  <nav>
+    <a href="overview.html">Overview</a>
+    <a href="guide.html">Guide</a>
+    <a href="reference.html">Reference</a>
+    <a href="research/index.html">Research notes</a>
+    <a href="https://github.com/kourgeorge/symcc">GitHub</a>
+  </nav>
+</header>
+
+<main class="home">
+  <section class="hero">
+    <h1>A team lead for your coding agents</h1>
+    <p class="lead">symcc is an agent organization that runs inside your coding agent. You talk to a lead; the lead puts the work on a board, workers build it in parallel, and nothing merges until your tests pass.</p>
+    <p class="cta">
+      <a class="button" href="#install">Install</a>
+      <a class="button ghost" href="guide.html">Read the guide</a>
+    </p>
+  </section>
+
+  <section>
+    <h2 id="what-it-is">What it is</h2>
+    <ul class="parts">
+      <li><strong>The lead</strong> is your normal chat. It takes your ideas at any time, turns them into tasks, decides their order and asks you only for real decisions.</li>
+      <li><strong>Workers</strong> build tasks in parallel, each in its own git worktree and branch, so your branch is untouched until merge.</li>
+      <li><strong>Scouts</strong> run on a timer and only look: they find bugs, missing tests and outdated parts, and the lead turns what they find into tasks.</li>
+      <li><strong>The merge line</strong> checks each change stays inside its files, runs your tests, lets you review the diff, and merges one change at a time.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2 id="the-board">The board</h2>
+    <p>One list for work you asked for and work scouts found: todo, doing, review, done.</p>
+    <figure>
+      <img src="docs/demo.svg" alt="symcc demo: you ask the lead, tasks appear on the board, workers move them from todo to doing to review to done" width="900">
+    </figure>
+  </section>
+
+  <section>
+    <h2 id="install">Install</h2>
+    <h3 id="claude-code">Claude Code</h3>
+    <p>You need Claude Code and git. There is no build step.</p>
+    <pre><code>claude plugin install symcc --marketplace kourgeorge/symcc</code></pre>
+    <p>Then start Claude Code in your project. The board opens by itself; if not, run <code>/symcc</code>.</p>
+    <h3 id="opencode">OpenCode</h3>
+    <p>symcc also runs in OpenCode 2.3 or newer (a first version). From a clone of symcc:</p>
+    <pre><code>git clone https://github.com/kourgeorge/symcc &amp;&amp; sh symcc/scripts/install-opencode.sh</code></pre>
+    <p>Or, with no clone:</p>
+    <pre><code>opencode plugin add github:kourgeorge/symcc</code></pre>
+    <p>Pick one of the two ways. The details are in the <a href="guide.html#using-symcc-in-opencode">guide</a>.</p>
+  </section>
+
+  <section>
+    <h2 id="read-more">Read more</h2>
+    <ul class="links">
+      <li><a href="overview.html">Overview</a>: the README, with every feature in one table</li>
+      <li><a href="guide.html">Guide</a>: a task's life, review, the panel, scouts, branches, safety</li>
+      <li><a href="reference.html">Reference</a>: install details, modes, commands, settings, statuses</li>
+      <li><a href="research/index.html">Research notes</a>: answers from investigation tasks</li>
+      <li><a href="https://github.com/kourgeorge/symcc">Source on GitHub</a></li>
+    </ul>
+  </section>
+</main>
+
+<footer class="site">
+  <p>symcc is open source under the MIT license · <a href="https://github.com/kourgeorge/symcc">github.com/kourgeorge/symcc</a></p>
+</footer>
+</body>
+</html>
