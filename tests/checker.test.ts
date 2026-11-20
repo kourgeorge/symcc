@@ -357,12 +357,12 @@ test('T-616: a worker finish → checker → queue → test → merge emits each
   // the history shows the whole path, each stage once, between the outcome lines it already had
   expect(t.history.map(h => [h.kind, h.text])).toEqual([
     ['created', 'created by the lead because a test'],
-    ['step', 'try 1: prep started'],
-    ['step', 'try 1: checker started'],
+    ['stage', 'try 1: prep started'],
+    ['stage', 'try 1: checker started'],
     ['checker-ok', 'try 1: checker: OK'],
-    ['step', 'try 1: waits in the merge queue (place 2)'],
-    ['step', 'try 1: tests started'],
-    ['step', 'try 1: merge started'],
+    ['stage', 'try 1: waits in the merge queue (place 2)'],
+    ['stage', 'try 1: tests started'],
+    ['stage', 'try 1: merge started'],
     ['merged', 'try 1: made the change → merged into main (b1b1b1b1); tests passed'],
   ])
 })

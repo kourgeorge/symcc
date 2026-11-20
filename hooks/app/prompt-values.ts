@@ -6,8 +6,12 @@ import { taskBranch } from './git'
 import { S, toolName } from './state'
 import { LEARNED_ASK } from '../core/org-mem'
 
-/** A task's history without the "created by ..." line: what earlier tries did. */
-export const tries = (t: SymccTask) => t.history.filter(h => h.kind !== 'created').map(h => h.text)
+/**
+ * A task's history without the "created by ..." line and without the 'stage' lines (T-616: "checker started", "waits in
+ * the merge queue" ...; they say where a try went, not what went wrong, and would push the outcomes out of the last 5):
+ * what earlier tries did.
+ */
+export const tries = (t: SymccTask) => t.history.filter(h => h.kind !== 'created' && h.kind !== 'stage').map(h => h.text)
 
 /** The last tries, as the prompts list them. */
 const triesList = (t: SymccTask) => tries(t).slice(-5).map(line => `- ${line}`).join('\n')

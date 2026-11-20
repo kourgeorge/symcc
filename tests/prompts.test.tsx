@@ -34,6 +34,20 @@ function setup() {
   S.enabledNow = true
 }
 
+test("T-616: the 'stage' history lines stay out of Earlier tries, so an earlier try's failure is not pushed out", () => {
+  setup()
+  const step = (text: string) => ({ kind: 'stage', text }) as SymccTask['history'][number]
+  const history = [
+    ...hist('created by the lead', 'try 1: checker found problems: X broken'),
+    step('try 2: checker started'), step('try 2: checker: OK'), step('try 2: waits in the merge queue (place 2)'), step('try 2: tests started'),
+    ...hist('try 2: tests failed: Y'),
+  ]
+  const b = boardWith(['npm test'], { history })
+  const p = WORKER_PROMPT(b.tasks[0]!, b, WT)
+  expect(p).toContain("Earlier tries:\n- try 1: checker found problems: X broken\n- try 2: tests failed: Y\nDon't repeat those mistakes.")
+  expect(p).not.toContain('checker started')
+})
+
 test('the built-in prompts are filled in for the task: no placeholder is left, and the change prompt has the test rule', () => {
   setup()
   const b = boardWith(['npm test'], { history: hist('created by the lead', 'try 1 failed its tests') })

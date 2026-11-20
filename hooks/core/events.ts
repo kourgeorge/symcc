@@ -66,13 +66,13 @@ export function stageLine(e: TaskEvent, t: Pick<BoardTask, 'role'>): string | nu
   return `${tryLabel({ role: t.role, attempts: e.try })}: ${words}${e.place ? ` (place ${e.place})` : ''}`
 }
 
-/** Board `b` with a 'step' history entry on its task for each stage event in `events` (see stageLine), at the event's time. */
+/** Board `b` with a 'stage' history entry on its task for each stage event in `events` (see stageLine), at the event's time. */
 export function withStageHistory(b: Board, events: readonly TaskEvent[]): Board {
   const lines = new Map<string, [string, HistoryAdd][]>()
   for (const e of events) {
     const t = b.tasks.find(x => x.id === e.task)
     const line = t ? stageLine(e, t) : null
-    if (line) lines.set(e.task, [...(lines.get(e.task) ?? []), [e.at, ['step', line]]])
+    if (line) lines.set(e.task, [...(lines.get(e.task) ?? []), [e.at, ['stage', line]]])
   }
   if (!lines.size) return b
   return {

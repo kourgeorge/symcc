@@ -856,7 +856,8 @@ Two things listen today:
 - **The history**: each step a try goes into (prep, checker, queue, test, merge) gets a
   line with its time, such as "try 1: checker started" or "try 1: waits in the merge queue
   (place 2)", so the task page shows the whole path. The outcome lines (checker OK, merged,
-  failed, ...) are written as before.
+  failed, ...) are written as before. These stage lines are left out of the "Earlier tries"
+  list a retrying worker sees, so they never push out what went wrong.
 
 Code that wants to know (a host, a future feature) calls `onTaskEvent(fn)` from
 `hooks/app/events.ts`: `fn` gets the events of each save, and the call answers a function
