@@ -141,3 +141,26 @@ test('stats (T-719): the stats tool and /stats take "inside", and a scout task i
   w.files.set(`${ROOT}/${scoutRunsFile('bugs', S.N.name)}`, JSON.stringify({ runs: [{ started: iso(20), ended: iso(10), outcome: 'found', findings: 2, tasks: ['T-50'] }] }))
   expect(await statsText(w.host, '')).toContain('        1 task not linked to a run')
 })
+
+test('stats html (T-731): "Each failed try" and "Tests that failed most" from the same figures, and empty notes when none', () => {
+  const fail = (min: number, tests?: string[]) => ({ started: iso(min + 5), ended: iso(min), ended_by: 'finished' as const, ended_note: 'tests failed', failed_command: 'npm test <x>', ...(tests ? { failed_tests: tests } : {}) })
+  const ok = { started: iso(4), ended: iso(2), ended_by: 'finished' as const, ended_note: 'merged' }
+  const tasks = [
+    task('T-1', 'One', { runs: [fail(50, ['flaky <one>']), ok] }),
+    task('T-2', 'Two', { runs: [fail(40, ['flaky <one>', 'only here']), ok] }),
+    task('T-3', 'Three', { runs: [fail(30, ['flaky <one>']), ok] }),
+  ]
+  const d = statsData({ tasks, nowMs: NOW, name: S.N.name })
+  const html = statsHtml(d, 'p')
+  expect(html).toContain('<h2>Each failed try (3)</h2>')
+  expect(html).toContain('<tr><td>T-2 Two</td><td>1</td><td><code>npm test &lt;x&gt;</code></td><td>tests failed</td><td>flaky &lt;one&gt;</td></tr>')
+  expect(html).toContain('<h2>Tests that failed most</h2>')
+  const most = html.slice(html.indexOf('Tests that failed most'))
+  expect(most).toContain('<div class="num">3 tasks · 3 tries</div>')
+  expect(most).toContain('<div class="num">1 task · 1 try</div>')
+  expect(most.indexOf('flaky &lt;one&gt;')).toBeLessThan(most.indexOf('only here'))
+  const none = statsHtml(statsData({ tasks: [task('T-1', 'One', { runs: [ok] })], nowMs: NOW, name: S.N.name }), 'p')
+  expect(none).toContain('No failed tries.')
+  expect(none).toContain('No failing tests recorded.')
+  expect(none).not.toContain('<td>tests failed</td>')
+})
