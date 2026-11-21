@@ -2956,6 +2956,66 @@ test('T-715: in the TUI, ↓ to a train and Enter (or a click on it) opens that 
   board.stop()
 })
 
+// T-771: a task merged in the last 10 minutes keeps a finished lane (dim, ✓ at "merged", "merged 3m ago") under the
+// running ones, at most 3, newest first; one merged 11 minutes ago, failed or dropped tasks get none.
+const finishedTasks = (): SymccTask[] => {
+  const ago = (min: number) => new Date(NOW - min * 60_000).toISOString()
+  const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', question: null, order: Number(id.slice(2)), after: [], attempts: 1, history: [], branch: null, created_at: ago(300), updated_at: ago(1), ...x }) as unknown as SymccTask
+  const merged = (id: string, title: string, min: number) => task(id, title, { status: 'done', runs: [{ started: ago(min + 20), ended: ago(min + 2), tokens: { input: 900_000 } }], history: [{ kind: 'merged', at: ago(min), text: 'try 1 → merged into main' }] })
+  return [
+    task('T-760', 'A running one', { runs: [{ started: ago(4) }] }),
+    merged('T-747', 'Live tab: each section starts with a heading', 3),
+    merged('T-748', 'Merged one minute ago', 1),
+    merged('T-749', 'Merged five minutes ago', 5),
+    merged('T-750', 'Merged seven minutes ago', 7),
+    merged('T-740', 'Merged a while ago', 11),
+    task('T-741', 'A failed one', { status: 'failed', updated_at: ago(2) }),
+    task('T-742', 'A dropped one', { status: 'dropped', updated_at: ago(2) }),
+  ]
+}
+
+test('T-771: the OpenCode Live tab keeps up to 3 just-merged lanes (dim, ✓ at merged, "merged 3m ago") under the running one; Enter on one opens its page', async () => {
+  const f0 = viewFile()
+  const f: ViewFile = { ...f0, view: { ...f0.view, tasks: finishedTasks().map(t => viewTask(t)), checker: true, max_parallel: 3 } }
+  for (const w of [120, 40]) {
+    const d = panelLines(parseViewFile(viewFileText(f)), { tab: 'live', opened: '', cursor: 0 }, NOW, w)
+    const texts = d.lines.map(lineText).map(x => x.replace(/^›/, ' '))
+    for (const x of texts) expect([w, x, x.length <= w]).toEqual([w, x, true])
+    expect(d.ids.slice(0, 4)).toEqual(['T-760', 'T-748', 'T-747', 'T-749'])
+    expect(d.ids.includes('T-750') || d.ids.includes('T-740') || d.ids.includes('T-741') || d.ids.includes('T-742')).toBe(false)
+    const at = texts.findIndex(x => x.startsWith(`${LIVE_INDENT}  T-747 `))
+    expect(at > texts.findIndex(x => x.startsWith(`${LIVE_INDENT}▶ T-760 `))).toBe(true)
+    if (w === 120) expect(texts[at]!).toMatch(/●━+●━+●━+●━+✓ +merged 3m ago$/)
+    const lane = d.lines[at]!
+    expect(lane.filter(x => x.text.includes('T-747')).map(x => x.color)).toEqual(['inactive'])
+    expect(lane.find(x => x.text === '✓')?.color).toBe('success')
+    expect(d.lines[at + 1]!.filter(x => x.text.trim()).every(x => x.color === 'inactive')).toBe(true)
+  }
+  // Enter on the finished lane opens its page
+  const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)]])
+  const ctx: TuiContext = {
+    location: { directory: '/work/proj' },
+    theme: {},
+    renderer: { width: 100, height: 200 },
+    client: { session: { command: async () => undefined } },
+    keymap: { layer: () => undefined },
+    ui: {
+      toast: { show: () => undefined },
+      dialog: { prompt: async () => undefined, select: async () => undefined },
+      panel: { open: () => true, close: () => undefined, current: () => undefined },
+      slot: () => () => undefined,
+    },
+  }
+  const board = startTui(ctx, { runtime: fakeRuntime(), readText: async p => files.get(p) ?? Promise.reject(new Error('missing')), every: () => () => undefined, now: () => NOW })
+  await board.refresh()
+  await board.press('l', 's')
+  await board.press('down', 's')
+  await board.press('down', 's')
+  await board.press('open', 's')
+  expect([board.state().tab, board.state().opened]).toEqual(['tasks', 'T-747'])
+  board.stop()
+})
+
 test('T-700: the board header (banner, tests/limits line, drive warning, tabs) shows on the list pages only, as on the terminal panel (core\'s showsHeader); a task, question, scout, scout run, role, kind, prompt or (T-704) org-mem page starts with its own title and keeps its footer and buttons', () => {
   const f0 = orgMemViewFile()
   // a session that does not drive, so the banner has its drive warning too
