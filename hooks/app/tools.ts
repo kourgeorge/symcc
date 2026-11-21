@@ -792,7 +792,9 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       }
       const wasDoing = t.status === 'doing'
       if (wasDoing) await stopWorker($, t.id, reason ?? 'the lead paused this task')
-      await change($, x => patchTask(x, t.id, { status: 'paused', note: paused, ...(failedOnClash(t) ? { merge_main: true } : {}), ...(wasDoing ? { history: withHistory((find(x, t.id) ?? t).history, now(), stoppedEntry(t, paused)) } : {}), ...endedBy(find(x, t.id), now(), 'stopped', paused) }, now()))
+      // T-737: a to-do task's pause gets its own line too ("paused: <reason>"), so the stats can tell an owner-wait pause
+      const line: HistoryAdd | null = wasDoing ? stoppedEntry(t, paused) : t.status === 'todo' ? ['stopped', paused] : null
+      await change($, x => patchTask(x, t.id, { status: 'paused', note: paused, ...(failedOnClash(t) ? { merge_main: true } : {}), ...(line ? { history: withHistory((find(x, t.id) ?? t).history, now(), line) } : {}), ...endedBy(find(x, t.id), now(), 'stopped', paused) }, now()))
       void pump($)
       return `${t.id} paused${wasDoing ? ' (its worker was stopped)' : ''}; ${S.N.name} resume ${t.id} continues it`
     }
