@@ -562,6 +562,30 @@ settings changes, answering a task) and merges you approved don't wake the lead.
 kept as short lines ("The owner approved T-5: …") and put under "Meanwhile the owner:" at the
 top of the next board update (at most 10, then "+N more"). They are still in each task's history.
 
+### How the lead talks to you
+
+The lead's guide (given to it on every request, in Claude Code and in OpenCode) has fixed short
+shapes for its replies, so they read like a team lead talking about the board. The first line
+always says what happened ("T-743 merged", not "Good news: …").
+
+- **A board update:** one line per task, with a mark and what it means in a few words:
+
+      ✓ T-743  merged (b089022)    a reopen keeps the same try
+      ▶ T-745  started             catch up with main before each try
+
+  The marks: ✓ merged, ✗ failed, ↺ sent back / retrying, ▶ started, ⌕ checker, ◐ needs your
+  review. Then, only if something needs you, one line saying what.
+- **Routine news** (a worker, checker or scout started, a retry on its own, nothing to do): one
+  short line at most, e.g. "▶ T-751 retrying (2/4)." Each board update symcc sends the lead
+  reminds it of this.
+- **A new task:** "Added T-n  <short title>", then one line for what waits on what, if anything.
+- **A question for you:** the question in one sentence, the choices numbered, then "(or answer on
+  the board)". In Claude Code it is the AskUserQuestion pop-up, as before.
+- **A worker's or checker's report:** at most 3 short bullets of what matters to you (what
+  changed for you, any limit or risk), not the list of files.
+- **When you ask how, why or what it thinks:** the normal style, plain English and short
+  sentences, with a table or a sketch when it helps.
+
 ---
 
 ## Approval before merge
