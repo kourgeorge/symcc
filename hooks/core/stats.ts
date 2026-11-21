@@ -731,7 +731,7 @@ export const FAILED_TRIES_SHORT = 10
  */
 export function failedCountsNote(d: Pick<StatsData, 'failedTries' | 'failedTotal'>): string {
   if (d.failedTries.length === d.failedTotal) return ''
-  return `${d.failedTries.length} here, ${d.failedTotal} under "Failed tries": this list reads how each saved try ended, that count reads the history lines (it also counts restarts by a change and older tries with no end saved)`
+  return `${d.failedTries.length} here, ${d.failedTotal} under "Failed tries": this list has every saved try that ended in a failure; that count reads the history lines and has only failed tests, clashes, files outside the task, restarts by a change, stops and tries rejected by the owner`
 }
 export const FAILED_TESTS_SHORT = 5
 

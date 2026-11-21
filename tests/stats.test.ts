@@ -542,7 +542,9 @@ test('T-735: tries stopped on purpose (paused, dropped, backlog, turned off) are
   const other = [...tasks, task('T-8', { status: 'failed', runs: [stop(20, 'the worker ended without a result')] })]
   const t2 = statsReport({ tasks: other, nowMs: NOW, full: true })
   expect(t2).toMatch(/T-8 +try 1 +the worker ended without a result/)
-  expect(t2).toContain('2 here, 1 under "Failed tries"')
+  const flat = t2.replace(/\s+/g, ' ')
+  expect(flat).toContain('2 here, 1 under "Failed tries": this list has every saved try that ended in a failure; that count reads the history lines and has only failed tests, clashes, files outside the task, restarts by a change, stops and tries rejected by the owner')
+  expect(flat).not.toContain('older tries with no end saved')
 })
 
 test('T-721: a try waiting for the owner\'s files is not a failed try, and with "inside" a try keeps its own number', () => {
