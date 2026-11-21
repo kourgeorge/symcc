@@ -167,7 +167,8 @@ once you have cleared them and its merge runs.
 | merge | `⇢` | The branch moves forward |
 
 The board row shows the stage icon instead of `▶`, then the time. In Claude Code the band above
-the prompt shows the stage's icon and name, then the time in that stage: `T-740 ⌕ checker 8m`. A doing task's page names the stage in its badge and has a **Stage** line
+the prompt shows the stage's icon and name, then the time in that stage: `T-740 ⌕ checker 8m`. A doing task's page names the stage on the state line of its header
+(see [The task page and the scout page](#the-task-page-and-the-scout-page)) and has a **Steps** row in Details
 for the whole way, such as `worker ✓ → prep ✓ → ● checker → queue → test → merge` (see
 [What a task shows on its way to the merge](#what-a-task-shows-on-its-way-to-the-merge)). A task
 in review or waiting shows as `doing` while its approve or merge runs.
@@ -799,70 +800,6 @@ are about changes; under "How tasks ended" a read investigation shows as
   Organizational memory lists. A page of one thing (a task, a question, a scout or one of its
   runs, a role, a kind, a role's prompt) starts with its own title instead; its buttons and the
   key line at the bottom stay. This is the same in the terminal panel, VS Code and OpenCode.
-
-### The task page and the scout page
-
-A task's page and a scout's page start with the same 4-line header on every board (terminal,
-desktop, mobile, VS Code and OpenCode), then a heavy rule:
-
-```
- ‹ Tasks                                              T-738 · ‹ 2 of 6 ›
- T-738  Live tab: an empty line before each section (all boards)
- ▶ doing · worker · 4m   change · general · try 1/3   ♟ from you
- ▐Pause▌   [Role] [Watch worker]   [Drop]   ☐ needs review copy
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-▍Details
-```
-
-1. **Where you are** (dim). `‹ Tasks` is Back: it names the tab you came from (`‹ Tasks`,
-   `‹ Live`, `‹ Scouts`). On the right is the page's place in the list it was opened from
-   (the same filter or search): `T-738 · ‹ 2 of 6 ›`. A click on `‹` or `›` goes to the
-   previous or the next task (or scout) of that list, going round at the ends; so do the keys
-   `k` and `j` on the Claude Code boards and `[` and `]` in OpenCode (where `k` and `j` move).
-   A page alone in its list shows no place. A task opened from the Live tab goes through the
-   Live tab's tasks.
-2. **The title**: the id in the color of its status, then the title in bold. A long title wraps,
-   indented under itself.
-3. **The state**: the status mark and word in its color, and for a running task its step and
-   its work time; then kind · role · try n/m (n of the tries it may get, its automatic retries
-   counted); then where it came from (`♟ from you`, `⌕ scout bugs`, `◆ lead`, `↳ from T-5`,
-   `▸ from T-5` for a worker's report); then its note, dim, when it has one. There are no
-   Status, Stage or Now rows in Details any more: Details starts with the **Steps** row (the
-   way to the merge) and the **Added** row (when it was added and last changed).
-4. **The buttons**, in groups, with words only (their keys are in the key line at the bottom,
-   never inside a button): first the one next step, filled in the accent color (Pause, Approve,
-   Retry, Resume, Merge now, Move to todo or Done; none while the task asks you something);
-   then the other task actions, framed (Role, Watch worker, Show changes, Stash to backlog,
-   Already merged, Keep as a note, Ask more); then the ones that throw work away, in red and
-   set apart (Reject, Drop); then, dim at the end, the page's own: `☐ needs review` (a
-   checkbox: `n` turns it on, `☑ needs review`, and off) and `copy` (`y`).
-
-On a narrow panel lines 3 and 4 wrap between their groups, never inside a button; a group wider
-than the panel wraps between its buttons, and with no room left the page group goes to its own
-line. In OpenCode the header stays at the top while the rest of the page scrolls under it; in
-Claude Code the panel scrolls as a whole (it has no fixed area), so the header is the top of the
-page. The key line keeps every key it had, plus `k j prev/next` (`[ ] prev/next` in OpenCode)
-when the list has more than one.
-
-A scout's page has the same shape:
-
-```
- ‹ Scouts                                           bugs · ‹ 3 of 10 ›
- bugs  Looks for real bugs in recent changes
- ◷ every 2 days · next in 38m   last ran 2h 00m ago: 2 findings → T-736, T-739
- ▐Run now▌   [Edit]   Pause
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-```
-
-Line 2 is its name and its summary (just the name when its file has no summary); line 3 how
-often it runs (or `◉ running now`), when it runs next, its model, and its last run with what
-came of it; line 4 Run now (not while it runs), Edit and Pause or Resume, with `⏸ paused` said
-at the end while it is paused.
-
-VS Code draws the same 4 lines with its own controls: a `‹ Tasks` back button and a `‹ 2 of 6 ›`
-pager, the title as a heading, the state as small chips (the status one filled in its color),
-the buttons (the next step the primary one, Drop in red, needs review a checkbox link, copy a
-small button), then a divider.
   Back from a task opened on the Live tab goes back to the Live tab. The Live tab is on all three
   boards: the Claude Code terminal panel, VS Code (which draws the lanes as real lines and the
   token bar as a bar that fills; each waiting train is a link) and OpenCode (which has no `w` key to watch a worker); see
@@ -952,6 +889,70 @@ small button), then a divider.
 - Each task lists how long each try took and the tokens it used, with the task's total
   ("In all" means every kind of token added up). The board shows no all-time total;
   `/symcc-stats` has the totals, with the kinds of tokens apart (see below).
+
+### The task page and the scout page
+
+A task's page and a scout's page start with the same 4-line header on every board (terminal,
+desktop, mobile, VS Code and OpenCode), then a heavy rule:
+
+```
+ ‹ Tasks                                              T-738 · ‹ 2 of 6 ›
+ T-738  Live tab: an empty line before each section (all boards)
+ ▶ doing · worker · 4m   change · general · try 1/3   ♟ from you
+ ▐Pause▌   [Role] [Watch worker]   [Drop]   ☐ needs review copy
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+▍Details
+```
+
+1. **Where you are** (dim). `‹ Tasks` is Back: it names the tab you came from (`‹ Tasks`,
+   `‹ Live`, `‹ Scouts`). On the right is the page's place in the list it was opened from
+   (the same filter or search): `T-738 · ‹ 2 of 6 ›`. A click on `‹` or `›` goes to the
+   previous or the next task (or scout) of that list, going round at the ends; so do the keys
+   `k` and `j` on the Claude Code boards and `[` and `]` in OpenCode (where `k` and `j` move).
+   A page alone in its list shows no place. A task opened from the Live tab goes through the
+   Live tab's tasks.
+2. **The title**: the id in the color of its status, then the title in bold. A long title wraps,
+   indented under itself.
+3. **The state**: the status mark and word in its color, and for a running task its step and
+   its work time; then kind · role · try n/m (n of the tries it may get, its automatic retries
+   counted); then where it came from (`♟ from you`, `⌕ scout bugs`, `◆ lead`, `↳ from T-5`,
+   `▸ from T-5` for a worker's report); then its note, dim, when it has one. There are no
+   Status, Stage or Now rows in Details any more: Details starts with the **Steps** row (the
+   way to the merge) and the **Added** row (when it was added and last changed).
+4. **The buttons**, in groups, with words only (their keys are in the key line at the bottom,
+   never inside a button): first the one next step, filled in the accent color (Pause, Approve,
+   Retry, Resume, Merge now, Move to todo or Done; none while the task asks you something);
+   then the other task actions, framed (Role, Watch worker, Show changes, Stash to backlog,
+   Already merged, Keep as a note, Ask more); then the ones that throw work away, in red and
+   set apart (Reject, Drop); then, dim at the end, the page's own: `☐ needs review` (a
+   checkbox: `n` turns it on, `☑ needs review`, and off) and `copy` (`y`).
+
+On a narrow panel lines 3 and 4 wrap between their groups, never inside a button; a group wider
+than the panel wraps between its buttons, and with no room left the page group goes to its own
+line. In OpenCode the header stays at the top while the rest of the page scrolls under it; in
+Claude Code the panel scrolls as a whole (it has no fixed area), so the header is the top of the
+page. The key line keeps every key it had, plus `k j prev/next` (`[ ] prev/next` in OpenCode)
+when the list has more than one.
+
+A scout's page has the same shape:
+
+```
+ ‹ Scouts                                           bugs · ‹ 3 of 10 ›
+ bugs  Looks for real bugs in recent changes
+ ◷ every 2 days · next in 38m   last ran 2h 00m ago: 2 findings → T-736, T-739
+ ▐Run now▌   [Edit]   Pause
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+Line 2 is its name and its summary (just the name when its file has no summary); line 3 how
+often it runs (or `◉ running now`), when it runs next, its model, and its last run with what
+came of it; line 4 Run now (not while it runs), Edit and Pause or Resume, with `⏸ paused` said
+at the end while it is paused.
+
+VS Code draws the same 4 lines with its own controls: a `‹ Tasks` back button and a `‹ 2 of 6 ›`
+pager, the title as a heading, the state as small chips (the status one filled in its color),
+the buttons (the next step the primary one, Drop in red, needs review a checkbox link, copy a
+small button), then a divider.
 
 ### Live tab
 
