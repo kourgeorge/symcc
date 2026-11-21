@@ -8,7 +8,7 @@ import { ran, readText } from './fakes'
 
 /** A fake board.json: a save (write to a temp file, then mv over it) is kept, so the next read sees it. */
 function setup(on: On, board: Record<string, unknown>) {
-  const files: Record<string, string | null> = { '/board.json': JSON.stringify(board), '/board.lock': null, '/scouts.json': null }
+  const files: Record<string, string | null> = { '/board.json': JSON.stringify(board), '/board.lock': null, '/scouts.json': null, '/scouts/bugs.md': '---\nevery_minutes: 30\n---\nLook for crashes.\n' }
   const fileOf = (p: string) => Object.keys(files).find(f => p.endsWith(f))
   on('fs.exists', (_, e, next) => (fileOf(e.path) ? { value: files[fileOf(e.path)!] !== null } : next(e)))
   on('fs.read', (_, e, next) => (fileOf(e.path) ? readText(files[fileOf(e.path)!]) : next(e)))

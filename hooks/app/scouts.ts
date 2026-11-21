@@ -1,11 +1,11 @@
 import type { SymccScout, SymccTask, SymccTokens } from '../../types'
-import { type ScoutDef, parseScout, modeOf, symccOn, OPEN, scoutPrompt, recentClosed, scoutAgentName, scoutDescription, parseScoutMemory, scoutMemoryText, scoutPausedText, everyText, SCOUT_REPORT_CHARS, scoutLeadMessage, scoutWhyNot, scoutFile, scoutNameError, scoutDraftError, scoutText, everyMinutesOf, onDemand, onNotReady, SCOUT_RETRY_MS, inPlan, addScoutRun, keepScoutUsage, migrateScoutUsage, leadScoutNameError, leadScoutText, leadScoutsText, safeScoutFile, SCOUT_FILE_NAME, SCOUT_FILE_NAME_RULE, scoutFileNameError, type ScoutRunRecord, parseScoutRuns, scoutRunsText, addScoutRunRecord, migratedScoutRun, scoutRunsFile, scoutRunReportFile, isScoutRunReport, scoutRunOutcome, scoutRunTasks, linkScoutRunTask, countFindings, reportText, parseScoutUsage, scoutResultsLine } from '../board'
+import { type ScoutDef, parseScout, modeOf, symccOn, OPEN, scoutPrompt, recentClosed, scoutAgentName, scoutDescription, parseScoutMemory, scoutMemoryText, scoutPausedText, everyText, SCOUT_REPORT_CHARS, scoutLeadMessage, scoutWhyNot, scoutFile, scoutNameError, scoutDraftError, scoutText, everyMinutesOf, onDemand, onNotReady, SCOUT_RETRY_MS, inPlan, addScoutRun, keepScoutUsage, migrateScoutUsage, leadScoutNameError, leadScoutText, leadScoutsText, safeScoutFile, SCOUT_FILE_NAME, SCOUT_FILE_NAME_RULE, scoutFileNameError, type ScoutRunRecord, parseScoutRuns, scoutRunsText, addScoutRunRecord, migratedScoutRun, scoutRunsFile, scoutRunReportFile, isScoutRunReport, scoutRunOutcome, scoutRunTasks, linkScoutRunTask, countFindings, reportText, parseScoutUsage, scoutResultsLine, renameScoutOrigins, linkScoutRunTaskAt, type Board } from '../board'
 import { publish, refreshStatus } from './lead'
 import { S, scoutState, scoutRuns, heard, timers, updateScoutOpen } from './state'
 import { type FileTouch, type Host, type HostAgentStarted, notReadyYet } from '../host'
 import { startAgent, startCancelled } from './starts'
 import type { TurnEnd } from './workers'
-import { path, load, now, oneAtATime, safeWrite } from './store'
+import { path, load, change, now, oneAtATime, safeWrite } from './store'
 import { tellLead } from './tell'
 import { readArchiveFile } from './archive'
 import { orgMemText } from './org-mem'
@@ -40,6 +40,27 @@ export async function loadScouts(host: Host): Promise<ScoutDef[]> {
   }
   unreadableScouts = bad
   return out
+}
+
+/** The scouts a task may come from: the ones loaded, every scout file in <dir>/scouts/ and every scout with a run
+ *  history there (a scout removed after it reported). A folder that can't be listed adds nothing. */
+export async function knownScouts(host: Host): Promise<string[]> {
+  const names = new Set(scoutState.keys())
+  const files = await host.fs.list(path(S.N.scouts)).catch(() => [])
+  for (const f of files) {
+    if (f.kind !== 'file') continue
+    const m = /^(.+?)(\.runs\.json|\.md)$/.exec(f.name)
+    if (m) names.add(m[1]!)
+  }
+  return [...names]
+}
+
+/** Whether a task may come from scout `name` (see knownScouts): it is loaded, or has a scout file or a run history. */
+export async function isKnownScout(host: Host, name: string): Promise<boolean> {
+  if (scoutState.has(name)) return true
+  if (safeScoutFile(name, S.N.name) === null) return false
+  for (const f of [scoutFile(name, S.N.name), scoutRunsFile(name, S.N.name)]) if (await host.fs.exists(path(f)).catch(() => false)) return true
+  return false
 }
 
 /**
@@ -306,6 +327,32 @@ export async function loadScoutMemory(host: Host) {
 /** Saves scouts.json once with old one-number token totals marked unsplit (see migrateScoutUsage); nothing when already current. */
 export async function saveScoutsMigrated(host: Host) {
   await changeScoutMemory(host, old => migrateScoutUsage(old))
+  await migrateScoutOrigins(host)
+}
+
+/**
+ * The one-time fix of tasks added with a scout's agent name ("symcc-scout-bugs") as their scout (before T-712): the
+ * board (board.json and its <dir>/tasks/ parts files) gets the scout's own name ("bugs"), and each such task is saved
+ * in the run whose report it came from (the latest run of that scout that ended before the task was made). A board
+ * already current changes nothing. Returns the ids renamed.
+ */
+export async function migrateScoutOrigins(host: Host): Promise<string[]> {
+  const b = await load(host)
+  if (!renameScoutOrigins(b.tasks, S.N.name).renamed.length) return []
+  const renamed = await change(host, y => {
+    const r = renameScoutOrigins(y.tasks, S.N.name)
+    return [{ ...y, tasks: r.tasks }, r.renamed] as [Board, typeof r.renamed]
+  })
+  for (const scout of new Set(renamed.map(r => r.scout))) {
+    if (safeScoutFile(scout, S.N.name) === null) continue
+    const mine = renamed.filter(r => r.scout === scout)
+    await changeScoutRuns(host, scout, runs => {
+      let next = runs
+      for (const r of mine) next = linkScoutRunTaskAt(next, r.id, r.at) ?? next
+      return next === runs ? null : { runs: next, dropped: [] }
+    }).catch(() => undefined)
+  }
+  return renamed.map(r => r.id)
 }
 
 /**
