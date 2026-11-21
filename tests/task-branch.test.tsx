@@ -53,15 +53,25 @@ test('T-761: the Branch section: the heading, main\'s line, the fork, the commit
 })
 
 /** A fake git for T-733 (open) and T-734 (merged): the branch's first-parent log with its Symcc lines, its counts, the
- *  fork's time and main's commits since it. */
-function fakeGit(calls: string[][]) {
+ *  fork's time and main's commits since it; `after` is main's commits after T-734's merge (oldest first; ef). */
+function fakeGit(calls: string[][], after = [{ sha: sha('ef'), at: T0 - 2 * 60_000 }]) {
   const d = taskBranchDoing(T0)
   const ct = (ms: number) => Math.floor(ms / 1000)
+  const shaLines = (cs: { sha: string; at: number }[]) => cs.map(c => `${c.sha} ${ct(c.at)}`).join('\n') + '\n'
+  const mergedRange = `${sha('cd')}..main`
   const line = (c: { sha: string; at: number; try?: number; catchUp?: boolean }, task: string, parent: string) => [c.sha, c.catchUp ? `${parent} ${sha('e4')}` : parent, ct(c.at), task, c.try ?? ''].join('\t')
   const chain = (cs: typeof d.commits, task: string) => cs.map((c, i) => line(c, task, i ? cs[i - 1]!.sha : sha('f0'))).reverse()
   return async (argv: readonly string[]) => {
     calls.push([...argv])
     const a = argv.slice(1)
+    // a merged task: main between the fork and the merge (newest -40 of it), main's tip, the count and first few after it
+    if (a[0] === 'log' && a[3] === `${sha('f0')}..${sha('cd')}`) return done({ stdout: shaLines([...d.main].reverse().slice(0, Number(a[1]!.slice(1)))) })
+    if (a[0] === 'log' && a[1] === '-1' && a[3] === 'main') return done({ stdout: shaLines(after.slice(-1)) })
+    if (a[0] === 'rev-list' && a[1] === '--count' && a[2] === mergedRange) return done({ stdout: `${after.length}\n` })
+    if (a[0] === 'log' && a[1]!.startsWith('--skip=') && a[4] === mergedRange) {
+      const skip = Number(a[1]!.slice(7))
+      return done({ stdout: shaLines([...after].reverse().slice(skip, skip + Number(a[2]!.slice(1)))) })
+    }
     if (a[0] === 'rev-list') return a[3] === 'main...symcc/T-733' ? done({ stdout: '10\t4\n' }) : done({ exitCode: 128 })
     if (a[0] === 'log' && a[1] === '--first-parent' && a[4] === 'main..symcc/T-733') return done({ stdout: chain(d.commits, 'T-733').join('\n') + '\n' })
     if (a[0] === 'log' && a[1] === '--first-parent' && a[4] === sha('cd')) {
@@ -95,6 +105,8 @@ test('T-761: the app reads a task\'s branch with read-only git: its commits and 
   expect(m.merged).toEqual({ sha: sha('cd'), at: T0 - 5 * 60_000 })
   expect(m.fork?.sha).toBe(sha('f0'))
   expect([m.ahead, m.behind]).toEqual([undefined, undefined])
+  expect(m.main.map(c => c.sha)).toEqual(taskBranchMerged(T0).main.map(c => c.sha))
+  expect(m.tip.sha).toBe(sha('ef'))
   // a branch git can't read: none
   expect(await readTaskBranch(f.host, { ...doing, branch: 'symcc/gone' } as never, 'main', T0)).toBe(null)
   // to do, no branch: no read at all; the open and the merged ones are what publish reads
@@ -125,6 +137,26 @@ test('T-761: the app reads a task\'s branch with read-only git: its commits and 
   S.gitState = 'no-git'
   await publish(f.host, { ...emptyBoard(), tasks: taskBranchTasks(T0) as never[] })
   expect('task_branches' in f.panel.view()).toBe(false)
+})
+
+test('T-761: a task merged long ago (main has more than 40 commits since its fork): main\'s line shows the commits between the fork and the merge', async () => {
+  S.root = '/repo'
+  S.gitState = 'ok'
+  const hex = (i: number) => i.toString(16).padStart(2, '0')
+  // 60 of main's commits after the merge (at -5 min)
+  const after = Array.from({ length: 60 }, (_, i) => ({ sha: sha(`9${hex(i)}0`), at: T0 - 4 * 60_000 + i * 2000 }))
+  const f = fakeHost({ run: fakeGit([], after) })
+  const m = (await readTaskBranch(f.host, taskBranchTasks(T0)[1] as never, 'main', T0))!
+  const between = taskBranchDoing(T0).main.map(c => c.sha)
+  expect(m.main.map(c => c.sha)).toEqual([...between, ...after.slice(0, 3).map(c => c.sha)])
+  expect(m.tip.sha).toBe(after[59]!.sha)
+  // drawn: main's dots between the fork and the merge, then the merge mark
+  const lines = linesOf('T-734', m, 100)
+  const mergeAt = lines[2]!.indexOf('╯')
+  const dots = [...lines[0]!.slice(0, mergeAt)].filter(ch => ch === '●').length
+  expect(dots).toBeGreaterThan(1)
+  expect(lines[0]).toContain(`   ${after[59]!.sha.slice(0, 7)} · `)
+  for (const l of lines) expect(textWidth(l), l).toBeLessThanOrEqual(100)
 })
 
 type Node = { type?: string; props?: Record<string, unknown>; children?: unknown[] }

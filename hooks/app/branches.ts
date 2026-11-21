@@ -134,6 +134,8 @@ function logLines(stdout: string): LogLine[] {
       return { sha: p[0]!.trim(), parents: String(p[1] ?? '').trim().split(/\s+/).filter(Boolean), at: Number(p[2]) * 1000, task: String(p[3] ?? '').split(',')[0]!.trim(), ...(tryNo > 0 ? { tryNo } : {}) }
     })
 }
+/** How many of main's commits after a merged task's merge are read (the first ones after it). */
+const MAIN_AFTER_MERGE = 3
 /** "sha time" lines (git log --format=%H %ct) as commits. */
 const shaTimes = (stdout: string): BranchCommit[] =>
   stdout
@@ -147,7 +149,8 @@ const shaTimes = (stdout: string): BranchCommit[] =>
  * commits are the first-parent line down from the merged commit while they carry its Symcc-Task line, and the commit
  * under them is the fork. An open one: `git rev-list --left-right --count <into>...<branch>` (behind, ahead) and
  * `git log --first-parent <into>..<branch>` (its commits; a merge is a catch-up), the fork the first parent of the
- * oldest (else `git merge-base`). Then into's commits since the fork (`git log <fork>..<into>`), the newest one its tip.
+ * oldest (else `git merge-base`). Then into's commits since the fork (`git log <fork>..<into>`), the newest one its tip;
+ * for a merged task, into's commits between the fork and the merge (`git log <fork>..<merged>`) and the first few after.
  * Null when the branch can't be read (none yet, deleted) or git fails.
  */
 export async function readTaskBranch(host: Host, t: Pick<SymccTask, 'id' | 'status' | 'branch' | 'merged' | 'history'>, into: string, nowMs: number): Promise<TaskBranchFacts | null> {
@@ -185,10 +188,26 @@ export async function readTaskBranch(host: Host, t: Pick<SymccTask, 'id' | 'stat
       if (at) fork = at
     }
   }
-  const since = fork ? await run(['log', `-${TASK_BRANCH_MAIN}`, '--format=%H %ct', `${fork.sha}..${into}`, '--']) : await run(['log', '-1', '--format=%H %ct', into, '--'])
-  if (since === null) return null
-  const main = shaTimes(since)
-  const tip = main[0] ?? fork
+  let main: BranchCommit[]
+  let tip: BranchCommit | undefined
+  if (merged && fork) {
+    // a merged task: the commits main got between the fork and the merge, plus the first few after the merge (the
+    // newest of <fork>..main would all come after the merge once main moved on far enough); main's tip on its own
+    const between = await run(['log', `-${TASK_BRANCH_MAIN}`, '--format=%H %ct', `${fork.sha}..${merged}`, '--'])
+    const head = await run(['log', '-1', '--format=%H %ct', into, '--'])
+    const count = await run(['rev-list', '--count', `${merged}..${into}`])
+    if (between === null || head === null || count === null) return null
+    const later = Number(count.trim()) || 0
+    const after = later > 0 ? await run(['log', `--skip=${Math.max(0, later - MAIN_AFTER_MERGE)}`, `-${MAIN_AFTER_MERGE}`, '--format=%H %ct', `${merged}..${into}`, '--']) : ''
+    if (after === null) return null
+    main = [...shaTimes(after), ...shaTimes(between)]
+    tip = shaTimes(head)[0] ?? main[0] ?? fork
+  } else {
+    const since = fork ? await run(['log', `-${TASK_BRANCH_MAIN}`, '--format=%H %ct', `${fork.sha}..${into}`, '--']) : await run(['log', '-1', '--format=%H %ct', into, '--'])
+    if (since === null) return null
+    main = shaTimes(since)
+    tip = main[0] ?? fork
+  }
   if (!tip) return null
   const own = new Set(commits.map(c => c.sha))
   const mergedLine = commits.find(c => c.sha === merged)
