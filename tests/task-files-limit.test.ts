@@ -24,6 +24,32 @@ test('T-713: allowFiles on a task with 30 files adds the asked file and says so'
   expect(after.history[after.history.length - 1]!.text.includes('+ src/f30.ts')).toBe(true)
 })
 
+test('T-713: allowFiles refuses asked files a task cannot hold: no "allowed" line, still waiting', () => {
+  for (const bad of ['.symcc/x.md', '.git/config', '.git', '../x.ts', '/abs.ts', '.']) {
+    const [b0, t] = addTask(emptyBoard(), { origin: { why: 'a test' }, title: 'guarded', files: ['src/a.ts'] }, NOW)
+    const b1 = patchTask(b0, t.id, { status: 'waiting', asked_files: ['src/b.ts', bad] }, NOW)
+    let said = ''
+    try {
+      allowFiles(b1, t.id, NOW, '.symcc')
+    } catch (e) {
+      said = (e as Error).message
+    }
+    expect(said.includes(`Can't allow ${bad} for ${t.id}`)).toBe(true)
+    const still = find(b1, t.id)!
+    expect(still.status).toBe('waiting')
+    expect(still.files).toEqual(['src/a.ts'])
+    expect(still.history.some(l => l.text.startsWith('the owner allowed files'))).toBe(false)
+  }
+})
+
+test('T-713: allowFiles writes the cleaned names it really added', () => {
+  const [b0, t] = addTask(emptyBoard(), { origin: { why: 'a test' }, title: 'dot', files: ['src/a.ts'] }, NOW)
+  const b1 = patchTask(b0, t.id, { status: 'waiting', asked_files: ['./src/b.ts'] }, NOW)
+  const after = find(allowFiles(b1, t.id, NOW, '.symcc'), t.id)!
+  expect(after.files).toEqual(['src/a.ts', 'src/b.ts'])
+  expect(after.history[after.history.length - 1]!.text).toBe('the owner allowed files: + src/b.ts')
+})
+
 test('T-713: change widening a task past 30 files keeps them all', () => {
   const [b0, t] = addTask(emptyBoard(), { origin: { why: 'a test' }, title: 'big', files: many(30) }, NOW)
   const b1 = patchTask(b0, t.id, { files: many(40) }, NOW)
