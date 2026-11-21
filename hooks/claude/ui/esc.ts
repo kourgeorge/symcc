@@ -39,6 +39,8 @@ export function escStep(at: PanePlace, s: Pick<typeof S, 'settingEdit' | 'settin
     if (s.answering === at.opened) return 'cancel answer'
     return 'board list'
   }
+  // the Live tab has no search: one left over from the Tasks tab is not on screen, so Esc closes the panel
+  if (at.tab === 'live') return null
   return s.search ? 'clear search' : null
 }
 
@@ -50,7 +52,8 @@ export async function escBack($: $): Promise<boolean> {
   if (!step) return false
   if (step === 'cancel scout edit') cancelScoutEdit(claudeHost($))
   else if (step === 'scouts list') await resetPane(claudeHost($), 'scouts')
-  else if (step === 'board list') await resetPane(claudeHost($), 'tasks')
+  // from a task opened on the Live tab, back to the Live tab
+  else if (step === 'board list') await resetPane(claudeHost($), (await panelValues($).readTab()) === 'live' ? 'live' : 'tasks')
   else if (step === 'close run') await panelValues($).updateScoutOpen(v => scoutPlace(v).scout)
   else {
     if (step === 'cancel setting') (S.settingEdit = null), (S.settingPick = null)

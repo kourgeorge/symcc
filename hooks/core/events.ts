@@ -57,7 +57,7 @@ export function boardEvents(before: Pick<Board, 'tasks'>, after: Pick<Board, 'ta
 }
 
 /** The history words of each check stage a task goes into (the worker's own stage gets no line). */
-const STAGE_LINE: Partial<Record<PhaseStage, string>> = { prep: 'prep started', checker: 'checker started', queue: 'waits in the merge queue', test: 'tests started', merge: 'merge started' }
+export const STAGE_LINE: Partial<Record<PhaseStage, string>> = { prep: 'prep started', checker: 'checker started', queue: 'waits in the merge queue', test: 'tests started', merge: 'merge started' }
 
 /** "try 1: checker started", "try 1: waits in the merge queue (place 2)": the history line of a stage event, or null for one that gets none. */
 export function stageLine(e: TaskEvent, t: Pick<BoardTask, 'role'>): string | null {

@@ -18,6 +18,7 @@ import { resetBackground } from '../hooks/claude/background'
 import { resetClaudeSelf } from '../hooks/claude/host'
 import { resetDebriefs } from '../hooks/app/debrief'
 import { resetEvidence } from '../hooks/app/evidence'
+import { live, stopLiveTick } from '../hooks/claude/ui/live'
 
 /** Empties the plugin's in-memory state (agents, tasks being checked, queues for the lead, timers, S): what a reload starts with. */
 export function resetPlugin() {
@@ -38,6 +39,8 @@ export function resetPlugin() {
   resetStore()
   resetMergeLine()
   resetLogo()
+  stopLiveTick()
+  live.frame = 0
   resetBackground()
   resetClaudeSelf()
   resetDebriefs()
