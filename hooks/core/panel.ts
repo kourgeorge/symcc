@@ -29,7 +29,7 @@ export type BoardPage =
 const HEADER_PAGES: ReadonlySet<BoardPage> = new Set(['tasks', 'live', 'scouts', 'settings', 'roles', 'kinds'])
 
 /** Whether page `p` shows the board header (the banner with its tests/limits line and drive warning, then the tabs
- *  row), on every board (the terminal panel, VS Code, OpenCode): only the lists show it (Tasks, Live, Scouts, Settings,
+ *  row), on every board (the terminal panel, VS Code, OpenCode): only the lists show it (Live, Tasks, Scouts, Settings,
  *  and Settings' Roles and Kinds lists). A page you open (a task, a question, a scout, a scout's run or edit, a role,
  *  a kind, a role's prompt, and since T-704 the Organizational memory page opened from the Live tab) starts with its
  *  own title instead; its footer and buttons stay. */
@@ -622,7 +622,7 @@ export const boxHint = (enter: string, empty: 'cancels' | 'goes back' = 'cancels
 /** The hint under a pick list: Enter picks, `key` (its Cancel button's hotkey) cancels. */
 export const pickHint = (key: string): string => `Enter picks · ${key} cancels`
 
-/** The views hint: the keys of the Tasks, Live, Scouts and Settings tabs. */
+/** The views hint: the keys of the Live, Tasks, Scouts and Settings tabs. */
 export const LIVE_VIEW_KEYS = 'l t s c'
 
 /** The keys under the board list: only keys that work in the list (a and x work only on a task's own page). */

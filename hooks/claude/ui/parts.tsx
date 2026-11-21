@@ -104,7 +104,7 @@ export async function paneParts($: $, e: PaneEvent) {
           </Box>,
         ]
       : []
-  /** The tab row under the banner: "[t]: Tasks (12) │ [l]: Live │ [s]: Scouts (3) │ [c]: Settings" (shorter words when narrow, see tabRow), the active one bold, underlined and blue
+  /** The tab row under the banner: "[l]: Live │ [t]: Tasks (12) │ [s]: Scouts (3) │ [c]: Settings" (shorter words when narrow, see tabRow), the active one bold, underlined and blue
    *  (the accent color), the whole tab underlined, "[t]: " included. Each tab is a `plain` Button with NO hotkey (a plain Button
    *  with a hotkey draws its own "t: " outside the Text, where the underline can't reach; a framed one draws "[ … ]" around it),
    *  so the one Text inside is all the terminal draws, and a click on it switches. The "t", "l", "s" and "c" keys belong to four

@@ -237,3 +237,14 @@ test('T-738: the VS Code Live tab spaces its sections with one empty line (the p
   await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'tasks') } })
   await ui.unmount()
 })
+
+test('T-773: a freshly opened VS Code board (no tab saved) shows the Live tab and draws the Live page', async ($, on) => {
+  seedBoard(on, { view: liveView(), tab: undefined })
+  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 100 }, surface: 'vscode' })
+  const tabs = String((await ui.find({ key: 'tabs' }))?.props.text)
+  expect(tabs.indexOf('Live')).toBeGreaterThanOrEqual(0)
+  expect(tabs.indexOf('Live')).toBeLessThan(tabs.indexOf('Tasks'))
+  expect(tabs).toMatch(/\*\*[^*]*Live[^*]*\*\*/)
+  expect((await ui.find({ key: 'live-br-head' }))?.text).toBe('Branches')
+  await ui.unmount()
+})

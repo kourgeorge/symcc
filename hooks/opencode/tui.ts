@@ -7,7 +7,7 @@
 //     command palette's "symcc board"; plain "/symcc" stays the server's text board, T-505; and by itself once a
 //     session is shown, when open_on_start is on, T-756): the task
 //     list grouped by state, with the terminal list's marks, short states and times, and a task's (or question's)
-//     page when one is opened; and, like the Claude Code board, the Live, Scouts and Settings tabs (keys t, l, s and c,
+//     page when one is opened; and, like the Claude Code board, the Live, Scouts and Settings tabs (keys l, t, s and c,
 //     or a click on a tab, T-559, T-692; Live's lanes open their task on Enter or a click): a scout's page runs it now (r) or pauses it (p) with /<name>-scout, and edits it (e:
 //     how often, model or instructions, /<name>-scout <name> every|model|prompt VALUE, T-562); a setting is changed
 //     with /<name>-settings NAME VALUE, and the Roles and Kinds pages under Settings turn a role or kind off or on

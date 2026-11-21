@@ -5,7 +5,7 @@
 // rowExtra, fitRow), the banner (bannerLines) and a task's page sections (taskSections, T-580). Nothing here draws or reads a file, so
 // the tests check exactly what the TUI shows (hooks/opencode/tests/opencode-tui.spec.ts). The panel's actions go back
 // to the engine as symcc's slash commands (actionCommand), run in the TUI's session (R6 of T-468). Like the Claude Code
-// board it has four tabs (T-559, T-692): Tasks, Live (core/live.ts's lanes and today), Scouts (the list, a scout's page with its runs, a run's report) and
+// board it has four tabs (T-559, T-692): Live (core/live.ts's lanes and today), Tasks, Scouts (the list, a scout's page with its runs, a run's report) and
 // Settings (every setting in its group, with its value and default; the groups open and close as on the Claude Code
 // board, T-585). Like it, Settings opens the Roles and Kinds
 // pages (a list, then one role's or kind's page: turn it off or on, reset it to the built-in one, T-562) and a
@@ -135,7 +135,7 @@ export type ScoutRuns = Record<string, ScoutRun[]>
 /** How many runs of each scout the view file keeps. */
 export const VIEW_RUNS_KEPT = 20
 
-/** The panel's four views, as the Claude Code board's tabs: Tasks, Live (T-692), Scouts and Settings (keys t, l, s and c). */
+/** The panel's four views, as the Claude Code board's tabs: Live (T-692), Tasks, Scouts and Settings (keys l, t, s and c). */
 export type PanelTab = 'tasks' | 'live' | 'scouts' | 'settings'
 
 /** The tabs in order, with their keys (core's LIVE_TABS, as the Claude Code board's tab row). */
@@ -799,7 +799,7 @@ export function drawnLines(l: Line, w: number): Line[] {
   return out
 }
 
-/** The tabs under the banner, as Claude Code's tab row (T-685, T-692): "[t]: Tasks (12) │ [l]: Live │ [s]: Scouts (3) │ [c]: Settings"
+/** The tabs under the banner, as Claude Code's tab row (T-685, T-692): "[l]: Live │ [t]: Tasks (12) │ [s]: Scouts (3) │ [c]: Settings"
  *  (core's LIVE_TABS and tabRow: shorter words when narrow), the shown one bright and bold; each one a button for its
  *  tab. A panel too narrow even for the shortest words puts them on more rows, never cutting one. */
 export function tabsLines(tab: PanelTab, w: number, tasks: number, scouts: number): Line[] {

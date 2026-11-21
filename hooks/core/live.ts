@@ -72,7 +72,7 @@ export const liveKeys = (): KeyHint[] => [
 ]
 
 /**
- * The tab row's words for `width` columns: "[t]: Tasks (20)" with " │ " between; when that is too wide, "[t] Tasks (20)",
+ * The tab row's words for `width` columns: "[l]: Live │ [t]: Tasks (20)" with " │ " between; when that is too wide, "[t] Tasks (20)",
  * then with "│" alone between, then "[t]Tasks (20)", then with no counts. `tabs` are the tabs' key, label and count (none: no count).
  */
 export function tabRow(tabs: readonly { key: string; label: string; count?: number }[], width: number): { labels: string[]; gap: string } {
