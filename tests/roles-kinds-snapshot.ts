@@ -62,16 +62,16 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
         "children": [
           {
             "type": "Button",
-            "props": {"key":"tab-tasks","label":"[t]Tasks (20)","plain":true},
+            "props": {"key":"tab-live","label":"[l]Live","plain":true},
             "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"underline":false,"color":"inactive"},"children":["[t]Tasks (20)"]}]
+            "children": [{"type":"Text","props":{"bold":false,"underline":false,"color":"inactive"},"children":["[l]Live"]}]
           },
           {"type":"Text","props":{"color":"subtle"},"children":["│"]},
           {
             "type": "Button",
-            "props": {"key":"tab-live","label":"[l]Live","plain":true},
+            "props": {"key":"tab-tasks","label":"[t]Tasks (20)","plain":true},
             "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"underline":false,"color":"inactive"},"children":["[l]Live"]}]
+            "children": [{"type":"Text","props":{"bold":false,"underline":false,"color":"inactive"},"children":["[t]Tasks (20)"]}]
           },
           {"type":"Text","props":{"color":"subtle"},"children":["│"]},
           {
@@ -91,8 +91,8 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
             "type": "Box",
             "props": {"key":"tab-keys","display":"none"},
             "children": [
-              {"type":"Button","props":{"key":"tab-key-tasks","label":"t","hotkey":"t"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"tab-key-live","label":"l","hotkey":"l"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"tab-key-tasks","label":"t","hotkey":"t"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"tab-key-scouts","label":"s","hotkey":"s"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"tab-key-settings","label":"c","hotkey":"c"},"press":{"plugin":"symcc"}}
             ]
@@ -210,7 +210,7 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["t l s c"]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["l t s c"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" views"]}
                 ]
               }
@@ -289,16 +289,16 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
         "children": [
           {
             "type": "Button",
-            "props": {"key":"tab-tasks","label":"[t]Tasks (20)","plain":true},
+            "props": {"key":"tab-live","label":"[l]Live","plain":true},
             "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"underline":false,"color":"inactive"},"children":["[t]Tasks (20)"]}]
+            "children": [{"type":"Text","props":{"bold":false,"underline":false,"color":"inactive"},"children":["[l]Live"]}]
           },
           {"type":"Text","props":{"color":"subtle"},"children":["│"]},
           {
             "type": "Button",
-            "props": {"key":"tab-live","label":"[l]Live","plain":true},
+            "props": {"key":"tab-tasks","label":"[t]Tasks (20)","plain":true},
             "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"underline":false,"color":"inactive"},"children":["[l]Live"]}]
+            "children": [{"type":"Text","props":{"bold":false,"underline":false,"color":"inactive"},"children":["[t]Tasks (20)"]}]
           },
           {"type":"Text","props":{"color":"subtle"},"children":["│"]},
           {
@@ -318,8 +318,8 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
             "type": "Box",
             "props": {"key":"tab-keys","display":"none"},
             "children": [
-              {"type":"Button","props":{"key":"tab-key-tasks","label":"t","hotkey":"t"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"tab-key-live","label":"l","hotkey":"l"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"tab-key-tasks","label":"t","hotkey":"t"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"tab-key-scouts","label":"s","hotkey":"s"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"tab-key-settings","label":"c","hotkey":"c"},"press":{"plugin":"symcc"}}
             ]
@@ -445,7 +445,7 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["t l s c"]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["l t s c"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" views"]}
                 ]
               }
@@ -528,16 +528,16 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
         "children": [
           {
             "type": "Button",
-            "props": {"key":"tab-tasks","label":"[t]Tasks (20)","plain":true},
+            "props": {"key":"tab-live","label":"[l]Live","plain":true},
             "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"underline":false,"color":"inactive"},"children":["[t]Tasks (20)"]}]
+            "children": [{"type":"Text","props":{"bold":false,"underline":false,"color":"inactive"},"children":["[l]Live"]}]
           },
           {"type":"Text","props":{"color":"subtle"},"children":["│"]},
           {
             "type": "Button",
-            "props": {"key":"tab-live","label":"[l]Live","plain":true},
+            "props": {"key":"tab-tasks","label":"[t]Tasks (20)","plain":true},
             "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"underline":false,"color":"inactive"},"children":["[l]Live"]}]
+            "children": [{"type":"Text","props":{"bold":false,"underline":false,"color":"inactive"},"children":["[t]Tasks (20)"]}]
           },
           {"type":"Text","props":{"color":"subtle"},"children":["│"]},
           {
@@ -557,8 +557,8 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
             "type": "Box",
             "props": {"key":"tab-keys","display":"none"},
             "children": [
-              {"type":"Button","props":{"key":"tab-key-tasks","label":"t","hotkey":"t"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"tab-key-live","label":"l","hotkey":"l"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"tab-key-tasks","label":"t","hotkey":"t"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"tab-key-scouts","label":"s","hotkey":"s"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"tab-key-settings","label":"c","hotkey":"c"},"press":{"plugin":"symcc"}}
             ]
@@ -684,7 +684,7 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["t l s c"]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["l t s c"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" views"]}
                 ]
               }
@@ -4308,16 +4308,16 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
         "children": [
           {
             "type": "Button",
-            "props": {"key":"tab-tasks","label":"[t]Tasks (20)","plain":true},
+            "props": {"key":"tab-live","label":"[l]Live","plain":true},
             "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"underline":false,"color":"inactive"},"children":["[t]Tasks (20)"]}]
+            "children": [{"type":"Text","props":{"bold":false,"underline":false,"color":"inactive"},"children":["[l]Live"]}]
           },
           {"type":"Text","props":{"color":"subtle"},"children":["│"]},
           {
             "type": "Button",
-            "props": {"key":"tab-live","label":"[l]Live","plain":true},
+            "props": {"key":"tab-tasks","label":"[t]Tasks (20)","plain":true},
             "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"underline":false,"color":"inactive"},"children":["[l]Live"]}]
+            "children": [{"type":"Text","props":{"bold":false,"underline":false,"color":"inactive"},"children":["[t]Tasks (20)"]}]
           },
           {"type":"Text","props":{"color":"subtle"},"children":["│"]},
           {
@@ -4337,8 +4337,8 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
             "type": "Box",
             "props": {"key":"tab-keys","display":"none"},
             "children": [
-              {"type":"Button","props":{"key":"tab-key-tasks","label":"t","hotkey":"t"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"tab-key-live","label":"l","hotkey":"l"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"tab-key-tasks","label":"t","hotkey":"t"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"tab-key-scouts","label":"s","hotkey":"s"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"tab-key-settings","label":"c","hotkey":"c"},"press":{"plugin":"symcc"}}
             ]
@@ -4459,7 +4459,7 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["t l s c"]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["l t s c"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" views"]}
                 ]
               }
@@ -4538,16 +4538,16 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
         "children": [
           {
             "type": "Button",
-            "props": {"key":"tab-tasks","label":"[t]Tasks (20)","plain":true},
+            "props": {"key":"tab-live","label":"[l]Live","plain":true},
             "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"underline":false,"color":"inactive"},"children":["[t]Tasks (20)"]}]
+            "children": [{"type":"Text","props":{"bold":false,"underline":false,"color":"inactive"},"children":["[l]Live"]}]
           },
           {"type":"Text","props":{"color":"subtle"},"children":["│"]},
           {
             "type": "Button",
-            "props": {"key":"tab-live","label":"[l]Live","plain":true},
+            "props": {"key":"tab-tasks","label":"[t]Tasks (20)","plain":true},
             "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"underline":false,"color":"inactive"},"children":["[l]Live"]}]
+            "children": [{"type":"Text","props":{"bold":false,"underline":false,"color":"inactive"},"children":["[t]Tasks (20)"]}]
           },
           {"type":"Text","props":{"color":"subtle"},"children":["│"]},
           {
@@ -4567,8 +4567,8 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
             "type": "Box",
             "props": {"key":"tab-keys","display":"none"},
             "children": [
-              {"type":"Button","props":{"key":"tab-key-tasks","label":"t","hotkey":"t"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"tab-key-live","label":"l","hotkey":"l"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"tab-key-tasks","label":"t","hotkey":"t"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"tab-key-scouts","label":"s","hotkey":"s"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"tab-key-settings","label":"c","hotkey":"c"},"press":{"plugin":"symcc"}}
             ]
@@ -4697,7 +4697,7 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["t l s c"]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["l t s c"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" views"]}
                 ]
               }
@@ -4780,16 +4780,16 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
         "children": [
           {
             "type": "Button",
-            "props": {"key":"tab-tasks","label":"[t]Tasks (20)","plain":true},
+            "props": {"key":"tab-live","label":"[l]Live","plain":true},
             "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"underline":false,"color":"inactive"},"children":["[t]Tasks (20)"]}]
+            "children": [{"type":"Text","props":{"bold":false,"underline":false,"color":"inactive"},"children":["[l]Live"]}]
           },
           {"type":"Text","props":{"color":"subtle"},"children":["│"]},
           {
             "type": "Button",
-            "props": {"key":"tab-live","label":"[l]Live","plain":true},
+            "props": {"key":"tab-tasks","label":"[t]Tasks (20)","plain":true},
             "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"underline":false,"color":"inactive"},"children":["[l]Live"]}]
+            "children": [{"type":"Text","props":{"bold":false,"underline":false,"color":"inactive"},"children":["[t]Tasks (20)"]}]
           },
           {"type":"Text","props":{"color":"subtle"},"children":["│"]},
           {
@@ -4809,8 +4809,8 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
             "type": "Box",
             "props": {"key":"tab-keys","display":"none"},
             "children": [
-              {"type":"Button","props":{"key":"tab-key-tasks","label":"t","hotkey":"t"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"tab-key-live","label":"l","hotkey":"l"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"tab-key-tasks","label":"t","hotkey":"t"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"tab-key-scouts","label":"s","hotkey":"s"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"tab-key-settings","label":"c","hotkey":"c"},"press":{"plugin":"symcc"}}
             ]
@@ -4939,7 +4939,7 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["t l s c"]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["l t s c"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" views"]}
                 ]
               }

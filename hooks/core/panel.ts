@@ -623,7 +623,7 @@ export const boxHint = (enter: string, empty: 'cancels' | 'goes back' = 'cancels
 export const pickHint = (key: string): string => `Enter picks · ${key} cancels`
 
 /** The views hint: the keys of the Tasks, Live, Scouts and Settings tabs. */
-export const LIVE_VIEW_KEYS = 't l s c'
+export const LIVE_VIEW_KEYS = 'l t s c'
 
 /** The keys under the board list: only keys that work in the list (a and x work only on a task's own page). */
 export const listKeys = (): KeyHint[] => [

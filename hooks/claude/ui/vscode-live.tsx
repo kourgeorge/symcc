@@ -7,7 +7,7 @@
 // The current station blinks with a CSS animation inside the Svg, and stays steady when VS Code (the person's system)
 // asks for reduced motion (`prefers-reduced-motion`). Each drawing's `alt` is the terminal's text for it.
 // T-687, T-718: at its bottom, above the footer, the Organizational memory section (core's liveOrgMem): its title a link
-// to all notes, the count and an Svg fill bar (warning colour near the cap); the 3 newest notes (day, topic, the text a
+// to all notes, the count and an Svg fill bar (one calm color); the 3 newest notes (day, topic, the text a
 // link that opens all notes with that one marked); the topics as links with their counts, in core's grid rows.
 // T-715: under each lane hang its waiting trains (core's liveTrains and trainRows): each one indented by its level,
 // "└─◇", its id and cut title a link that opens the task, then "waits" and "+ also T-n" dim.

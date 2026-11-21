@@ -179,7 +179,7 @@ function page(on: On, files: Record<string, string>, tasks: unknown[] = []) {
   const saved: Record<string, unknown> = {}
   on('state.set', (_, e, next) => (written.add(e.key), (saved[e.key] = (e as { value?: unknown }).value), next(e)))
   inProject(on)
-  on('state.get', (_, e, next) => (written.has(e.key) || !(e.key in seed) ? next(e) : { value: { value: seed[e.key], version: 1 } }))
+  on('state.get', (_, e, next) => (written.has(e.key) ? next(e) : e.key in seed ? { value: { value: seed[e.key], version: 1 } } : e.key === 'tab' ? { value: { value: 'tasks', version: 1 } } : next(e)))
   const fileOf = (p: string) => Object.keys(files).find(f => p.endsWith(f))
   on('fs.read', (_, e, next) => (fileOf(e.path) ? readText(files[fileOf(e.path)!]) : next(e)))
   return saved

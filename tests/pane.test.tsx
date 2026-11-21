@@ -22,7 +22,7 @@ function stateOf(on: On, seed: Record<string, unknown>) {
   on('state.set', (_, e, next) => (written.add(e.key), next(e)))
   // the project folder (the plugin's paths need it, see findRoot)
   inProject(on)
-  on('state.get', (_, e, next) => (written.has(e.key) || !(e.key in seed) ? next(e) : { value: { value: seed[e.key], version: 1 } }))
+  on('state.get', (_, e, next) => (written.has(e.key) ? next(e) : e.key in seed ? { value: { value: seed[e.key], version: 1 } } : e.key === 'tab' ? { value: { value: 'tasks', version: 1 } } : next(e)))
 }
 
 const PANE = {
@@ -92,7 +92,23 @@ test('T-643: the terminal panel shows the yellow "another session drives" line w
   expect(await warn()).toBeUndefined()
 })
 
-test('an empty board says what to do', async $ => {
+test('T-773: a freshly opened board shows the Live tab; the tab row is Live, Tasks, Scouts, Settings; t, l, s and c go to their tabs', async ($, on) => {
+  inProject(on)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ key: 'live-keys' })).toBeDefined()
+  const keys = (await ui.findAll({})).map(n => String(n.key ?? '')).filter(k => /^tab-(live|tasks|scouts|settings)$/.test(k))
+  expect(keys).toEqual(['tab-live', 'tab-tasks', 'tab-scouts', 'tab-settings'])
+  const hotkeys = (await ui.findAll({})).filter(n => /^tab-key-/.test(String(n.key ?? ''))).map(n => n.props.hotkey)
+  expect(hotkeys).toEqual(['l', 't', 's', 'c'])
+  await ui.press({ key: 'tab-key-tasks' })
+  expect(await ui.find({ key: 'live-keys' })).toBeUndefined()
+  await ui.press({ key: 'tab-key-live' })
+  expect(await ui.find({ key: 'live-keys' })).toBeDefined()
+  await ui.unmount()
+})
+
+test('an empty board says what to do', async ($, on) => {
+  stateOf(on, { tab: 'tasks' })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect((await ui.find({ type: 'Text', text: /^All clear\. Nothing running or waiting\.$/ }))?.props.color).toBe('inactive')
   expect((await ui.find({ type: 'Text', text: /^Tell the lead what you want next\.$/ }))?.props.color).toBe('inactive')
@@ -421,7 +437,7 @@ test('backlog tasks are a section folded by default under a short header; Enter 
   expect(texts.findIndex(t => /Write it up/.test(t))).toBeLessThan(at)
   expect(texts[at - 1]).toBe(' ')
   expect(texts.some(t => /┄/.test(t))).toBe(false)
-  expect(texts.some(t => /^Enter open · ↑↓ move · t l s c views$/.test(t))).toBe(true)
+  expect(texts.some(t => /^Enter open · ↑↓ move · l t s c views$/.test(t))).toBe(true)
   expect((await ui.find({ type: 'Text', text: /^━+$/ }))?.props.color).toBe('ide')
   // folded by default: the items are hidden
   expect(await ui.find({ key: 'T-2' })).toBeUndefined()
@@ -501,7 +517,7 @@ test('the list goes: NEEDS YOU, then doing and to do as one untitled list, then 
   expect((await ui.find({ type: 'Text', text: /^ ✗ failed\s*$/ }))?.props.color).toBe('error')
   expect((await ui.find({ type: 'Text', text: /^ ‖ paused\s*$/ }))).toBeDefined()
   // even with a task in review the hint offers only keys that work in the list: no a or x
-  expect(texts.some(t => /^Enter open · ↑↓ move · t l s c views$/.test(t))).toBe(true)
+  expect(texts.some(t => /^Enter open · ↑↓ move · l t s c views$/.test(t))).toBe(true)
   expect(texts.some(t => /a\/x|a approve|x reject/.test(t))).toBe(false)
   // folded by default: no done, dropped or backlog tasks shown
   for (const k of ['T-1', 'T-2', 'T-7']) expect(await ui.find({ key: k })).toBeUndefined()
@@ -906,7 +922,7 @@ test('"s" and the Scouts tab switch the panel to the scouts, and Enter opens one
     // each tab's one Text reads "[t] Tasks (1)" (at 50 columns the four tabs drop the ":", see tabRow), so the underline covers the key too
     expect(await ui.find({ type: 'Text', text: /^\[t\] Tasks \(1\)$/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /^\[s\] Scouts \(2\)$/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /^Enter open · ↑↓ move · t l s c views$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^Enter open · ↑↓ move · l t s c views$/ })).toBeDefined()
     expect(await ui.find({ key: 'T-1' })).toBeDefined()
     // the Tasks view no longer lists the scouts at the bottom (they have their own view)
     expect(await ui.find({ type: 'Text', text: /^scouts: / })).toBeUndefined()
@@ -932,7 +948,7 @@ test('"s" and the Scouts tab switch the panel to the scouts, and Enter opens one
     // 50 columns: the model and "last:" columns don't fit, so they are left out
     expect(await ui.find({ type: 'Text', text: /sonnet/ })).toBeUndefined()
     expect(await ui.find({ type: 'Text', text: /last:/ })).toBeUndefined()
-    expect(await ui.find({ type: 'Text', text: /^Enter open · ↑↓ move · t l s c views · b back$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^Enter open · ↑↓ move · l t s c views · b back$/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /Enter opens a scout/ })).toBeUndefined()
     expect(await ui.find({ key: 'scout-new' })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /^  \+ New scout$/ })).toBeDefined()
@@ -1133,7 +1149,7 @@ test('the Tasks / Scouts tabs sit in the header, above the line, in both views',
     const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
     const tab = texts.findIndex(t => t === '[t] Tasks (1)')
     const rule = texts.findIndex(t => /^━{50}$/.test(t))
-    const hint = texts.findIndex(t => (view === 'tasks' ? /^Enter open · ↑↓ move/ : /^Enter open · ↑↓ move · t l s c views · b back$/).test(t))
+    const hint = texts.findIndex(t => (view === 'tasks' ? /^Enter open · ↑↓ move/ : /^Enter open · ↑↓ move · l t s c views · b back$/).test(t))
     const row = texts.findIndex(t => (view === 'tasks' ? /Write it up/ : /^bugs/).test(t))
     expect(tab).toBeGreaterThan(-1)
     expect(rule).toBeGreaterThan(tab)
@@ -1673,7 +1689,7 @@ test('the Tasks view: no workers/scouts strip in the banner, NEEDS YOU then one 
     for (const id of ['T-94', 'T-95', 'T-96', 'T-97']) expect((await ui.find({ key: id }))!.text.length).toBeLessThanOrEqual(w)
     const hint = keyLines(texts, listKeys(), w)
     for (const l of hint) expect(l.length).toBeLessThanOrEqual(w)
-    expect(hint.join(' · ')).toBe('Enter open · ↑↓ move · t l s c views')
+    expect(hint.join(' · ')).toBe('Enter open · ↑↓ move · l t s c views')
     expect(texts.some(t => /a\/x|a approve|x reject/.test(t))).toBe(false)
     // folded rows: no brackets, counts lined up
     const backlog = (await ui.find({ key: 'day:backlog' }))!.text
@@ -1834,7 +1850,7 @@ for (const width of [50, 90]) {
     expect((await ui.find({ key: 'scout:simplify' }))?.props.label).toBe('simplify: paused')
     expect(await ui.find({ type: 'Text', text: /^  \+ New scout$/ })).toBeDefined()
     const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
-    expect(texts.filter(t => /^Enter open · /.test(t))).toEqual(['Enter open · ↑↓ move · t l s c views · b back'])
+    expect(texts.filter(t => /^Enter open · /.test(t))).toEqual(['Enter open · ↑↓ move · l t s c views · b back'])
     expect(texts.some(t => /run now \/ edit on its page/.test(t))).toBe(false)
     await ui.unmount()
   })
@@ -2248,7 +2264,7 @@ test('the Tasks page ends with a footer: the light rule, the mode line with [m],
   stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-5', 'review', 'Blue button')], working: [], scouts: [], mode: 'review', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   const foot = await footerOf(ui, listKeys())
-  expect(foot).toBe('⏸ review merge [m] auto  [f] search' + 'Enter open · ↑↓ move · t l s c views')
+  expect(foot).toBe('⏸ review merge [m] auto  [f] search' + 'Enter open · ↑↓ move · l t s c views')
   expect((await ui.findAll({ type: 'Text', text: /^⏸ review merge $/ })).length).toBe(1)
   expect((await ui.findAll({ key: 'mode' })).length).toBe(1)
   // the mode line comes after the list, not under the banner
@@ -2260,10 +2276,10 @@ test('the Tasks page ends with a footer: the light rule, the mode line with [m],
 const NO_MODE_PAGES: [string, Record<string, unknown>, string | null, KeyHint[]][] = [
   ['task page', { opened: 'T-5' }, null, keysFor('review')],
   ['diff view', { opened: 'T-5' }, 'show-changes', [{ key: 'a', word: 'approve' }, { key: 'x', word: 'reject' }, { key: '↑↓', word: 'scroll' }, { key: 'b', word: 'back to the task' }]],
-  ['scouts list', { tab: 'scouts' }, null, [{ key: 'Enter', word: 'open' }, { key: '↑↓', word: 'move' }, { key: 't l s c', word: 'views' }, { key: 'b', word: 'back' }]],
+  ['scouts list', { tab: 'scouts' }, null, [{ key: 'Enter', word: 'open' }, { key: '↑↓', word: 'move' }, { key: 'l t s c', word: 'views' }, { key: 'b', word: 'back' }]],
   ['scout page', { tab: 'scouts', scout: 'bugs' }, null, [{ key: 'r', word: 'run now' }, { key: 'e', word: 'edit' }, { key: 'p', word: 'pause' }, { key: '↑↓', word: 'scroll' }, { key: 'b', word: 'back' }]],
   ['scout editor', { tab: 'scouts', scout: 'bugs' }, 'scout-edit', [{ key: '↑↓', word: 'move between boxes' }, { key: 'Cancel', word: 'leaves without saving' }]],
-  ['settings', { tab: 'settings' }, null, [{ key: 'Enter', word: 'change' }, { key: '↑↓', word: 'move' }, { key: 't l s c', word: 'views' }, { key: 'b', word: 'back' }]],
+  ['settings', { tab: 'settings' }, null, [{ key: 'Enter', word: 'change' }, { key: '↑↓', word: 'move' }, { key: 'l t s c', word: 'views' }, { key: 'b', word: 'back' }]],
 ]
 for (const [name, seed, press, hints] of NO_MODE_PAGES)
   test(`the ${name} ends with a footer of its own key hints and has no mode line`, async ($, on) => {
@@ -2346,11 +2362,11 @@ test('every list page says "↑↓ move" in its key line; a task page says "↑�
   stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'One')], working: [], scouts: [scout('a')], mode: 'auto', test_commands: [] } } })
   on('ui.toast', () => ({ value: undefined }))
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect(await ui.find({ type: 'Text', text: /^Enter open · ↑↓ move · t l s c views$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^Enter open · ↑↓ move · l t s c views$/ })).toBeDefined()
   await ui.press({ key: 'tab-scouts' })
-  expect(await ui.find({ type: 'Text', text: /^Enter open · ↑↓ move · t l s c views · b back$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^Enter open · ↑↓ move · l t s c views · b back$/ })).toBeDefined()
   await ui.press({ key: 'tab-settings' })
-  expect(await ui.find({ type: 'Text', text: /^Enter change · ↑↓ move · t l s c views · b back$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^Enter change · ↑↓ move · l t s c views · b back$/ })).toBeDefined()
   await ui.press({ key: 'tab-tasks' })
   await ui.press({ key: 'T-1' })
   expect(await ui.find({ type: 'Text', text: /↑↓ scroll/ })).toBeDefined()

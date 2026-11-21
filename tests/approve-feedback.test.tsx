@@ -28,7 +28,7 @@ function seed(on: On, t: ReturnType<typeof task>, gate: Gate) {
   on('state.set', (_, e, next) => (written.add(e.key), next(e)))
   inProject(on)
   const seeded: Record<string, unknown> = { opened: t.id, view: { shape: 'view-1', value: { tasks: [t], working: [], scouts: [], mode: 'review', test_commands: ['true'] } } }
-  on('state.get', (_, e, next) => (written.has(e.key) || !(e.key in seeded) ? next(e) : { value: { value: seeded[e.key], version: 1 } }))
+  on('state.get', (_, e, next) => (written.has(e.key) ? next(e) : e.key in seeded ? { value: { value: seeded[e.key], version: 1 } } : e.key === 'tab' ? { value: { value: 'tasks', version: 1 } } : next(e)))
   const board = JSON.stringify({ version: 1, next_id: 10, tasks: [t], mode: 'review', test_commands: ['true'] })
   on('fs.exists', (_, e, next) => (/\/board\.json$/.test(e.path) ? { value: true } : /\/board\.lock$/.test(e.path) ? { value: false } : next(e)))
   on('fs.list', (_, e, next) => (/\.symcc$/.test(e.path) ? { value: [entry('board.json')] } : next(e)))

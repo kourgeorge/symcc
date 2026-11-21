@@ -336,12 +336,12 @@ test('T-757: the terminal and VS Code Live tabs show the whole task\'s tokens on
   await ui.unmount()
 })
 
-test('T-690: the tab row has a Live tab with key l, and the views hint says "t l s c"', () => {
-  expect(LIVE_TABS.map(t => t.key)).toEqual(['t', 'l', 's', 'c'])
-  expect(tabRow(LIVE_TABS.map(t => ({ key: t.key, label: t.label })), 80).labels).toEqual(['[t]: Tasks', '[l]: Live', '[s]: Scouts', '[c]: Settings'])
+test('T-690: the tab row has a Live tab with key l, and the views hint says "l t s c"', () => {
+  expect(LIVE_TABS.map(t => t.key)).toEqual(['l', 't', 's', 'c'])
+  expect(tabRow(LIVE_TABS.map(t => ({ key: t.key, label: t.label })), 80).labels).toEqual(['[l]: Live', '[t]: Tasks', '[s]: Scouts', '[c]: Settings'])
   const narrow = tabRow(LIVE_TABS.map(t => ({ key: t.key, label: t.label, count: t.key === 't' ? 20 : t.key === 's' ? 1 : undefined })), 50)
   expect(textWidth(narrow.labels.join(narrow.gap))).toBeLessThanOrEqual(50)
-  expect(listKeys().map(h => h.key)).toContain('t l s c')
+  expect(listKeys().map(h => h.key)).toContain('l t s c')
 })
 
 const liveView = (tasks: unknown[], checker = true) => ({ shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', branch: 'main', test_commands: ['npm test'], driving: true, checker, max_parallel: 3 } })
@@ -387,7 +387,7 @@ test('T-690: the Live tab draws at a normal and a narrow width with nothing cut,
     // (T-760: a narrow panel wraps the mark's legend line, cut at a space)
     if (bodyColumns === 80) expect(lines).toContain(LIVE_LEGEND)
     else expect(lines.some(l => l.startsWith('✧ = an agent works here'))).toBe(true)
-    expect(lines.some(l => l.includes('t l s c views'))).toBe(true)
+    expect(lines.some(l => l.includes('l t s c views'))).toBe(true)
     // T-760: the lane header ends the agent stations in ✧ (over their marks, as liveLabelLine), each ✧ in the heading's color
     const tree = (await ui.drawn()) as Node
     const nodes = (n: unknown): Node[] => (!n || typeof n !== 'object' ? [] : [n as Node, ...((n as Node).children ?? []).flatMap(nodes)])
@@ -475,8 +475,8 @@ for (const checker of [true, false])
     await t.unmount()
 
     const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 80 }, surface: 'vscode' })
-    // a Live tab between Tasks and Scouts
-    expect((await ui.find({ key: 'tabs' }))?.props.text).toContain(`  ·  ${mdLink('Live', vsHref('tab', 'live'))}  ·  ${mdLink('Scouts 0', vsHref('tab', 'scouts'))}`)
+    // the Live tab first, before Tasks and Scouts
+    expect((await ui.find({ key: 'tabs' }))?.props.text).toContain(`${mdLink('Live', vsHref('tab', 'live'))}  ·  **Tasks 11**  ·  ${mdLink('Scouts 0', vsHref('tab', 'scouts'))}`)
     await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'live') } })
     expect((await ui.find({ key: 'tabs' }))?.props.text).toContain('**Live**')
     expect((await ui.find({ key: 'live-head' }))?.text).toBe(lines[0])

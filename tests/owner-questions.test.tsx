@@ -192,7 +192,7 @@ function stateOf(on: On, seed: Record<string, unknown>) {
   const written = new Set<string>()
   on('state.set', (_, e, next) => (written.add(e.key), next(e)))
   inProject(on)
-  on('state.get', (_, e, next) => (written.has(e.key) || !(e.key in seed) ? next(e) : { value: { value: seed[e.key], version: 1 } }))
+  on('state.get', (_, e, next) => (written.has(e.key) ? next(e) : e.key in seed ? { value: { value: seed[e.key], version: 1 } } : e.key === 'tab' ? { value: { value: 'tasks', version: 1 } } : next(e)))
 }
 
 /** The board's files (keyed by their end); what is written is kept in `written`. */

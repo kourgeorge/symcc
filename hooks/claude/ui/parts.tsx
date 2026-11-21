@@ -114,8 +114,8 @@ export async function paneParts($: $, e: PaneEvent) {
   const tabs = () => {
     if (vscode)
       return vsTabs(vs, [
-        { which: 'tasks', label: 'Tasks', count: v.tasks.length, active: !onScouts && !onSettings && !onLive, onPress: go('tasks') },
         { which: 'live', label: 'Live', active: onLive, onPress: go('live') },
+        { which: 'tasks', label: 'Tasks', count: v.tasks.length, active: !onScouts && !onSettings && !onLive, onPress: go('tasks') },
         { which: 'scouts', label: 'Scouts', count: scouts.length, active: onScouts, onPress: go('scouts') },
         { which: 'settings', label: 'Settings', active: onSettings, onPress: go('settings') },
       ])

@@ -83,7 +83,7 @@ test('T-751: taskActions come in the header groups: the next step, the task acti
 })
 
 test('taskActions keys: none is j or k (they always move), none clashes on one page, stash is z and keep as a note v (T-592)', () => {
-  // the page's own keys beside its actions: b back, t l s c the views, the number keys of the answer buttons
+  // the page's own keys beside its actions: b back, l t s c the views, the number keys of the answer buttons
   const pageKeys = ['b', 't', 's', 'c', 'j', 'k', '1', '2', '3', '4', '5', '6', '7', '8', '9']
   const all = [tk('todo'), tk('doing'), tk('doing', { time_ask: T }), tk('paused'), tk('waiting', { question: 'Which?' }), tk('waiting', FILE_WAIT), tk('review'), tk('review', { kind: 'investigation' }), tk('failed'), tk('failed', { attempts: 0 }), tk('dropped'), tk('backlog'), tk('done')]
   for (const t of all) for (const ctx of [{}, { worker: true }, { merging: true }]) {

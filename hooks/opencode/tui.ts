@@ -326,7 +326,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   // the Settings groups open (T-585), and the setting whose pick list or box is open ('' = none)
   const [settingsOpen, setSettingsOpen] = r.createSignal<string[]>([...SETTINGS_OPEN])
   let asking = ''
-  const [tab, setTab] = r.createSignal<PanelTab>('tasks')
+  const [tab, setTab] = r.createSignal<PanelTab>('live')
   // the open run of the open scout ('' = the scout's page), the cursor over its page's runs, and the run's report
   // (undefined while it is read, null when it can't be)
   const [run, setRun] = r.createSignal('')

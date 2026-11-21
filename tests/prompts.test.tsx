@@ -174,7 +174,7 @@ const VIEW = { view: { shape: 'view-1', value: { tasks: [], working: [], scouts:
 function stateOf(on: On, seed: Record<string, unknown>) {
   const written = new Set<string>()
   on('state.set', (_, e, next) => (written.add(e.key), next(e)))
-  on('state.get', (_, e, next) => (written.has(e.key) || !(e.key in seed) ? next(e) : { value: { value: seed[e.key], version: 1 } }))
+  on('state.get', (_, e, next) => (written.has(e.key) ? next(e) : e.key in seed ? { value: { value: seed[e.key], version: 1 } } : e.key === 'tab' ? { value: { value: 'tasks', version: 1 } } : next(e)))
 }
 
 /** Fake prompt files for the panel: the project's .symcc/prompts (file name -> text); no roles at all. */

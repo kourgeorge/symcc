@@ -554,9 +554,6 @@ export const orgMemSectionKeys = (): KeyHint[] => [
   { key: ORG_MEM_KEY, word: 'all notes' },
 ]
 
-/** Whether `n` notes is near org-mem's cap (ORG_MEM_MAX_LINES): the section's count and bar are then drawn as a warning. */
-export const orgMemNearCap = (n: number) => n >= ORG_MEM_MAX_LINES * 0.9
-
 /** A note's day as the section shows it: "11-21" (month and day); "—" for a line written by hand without one. */
 export const orgMemShortDay = (date: string) => (/^\d{4}-\d{2}-\d{2}$/.test(date) ? date.slice(5) : '—')
 

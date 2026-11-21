@@ -57,7 +57,9 @@ export const PANE = {
 
 /** Seeds the board view (and the project folder, and a fixed clock at T0, which the pages are drawn at: see ui/now.ts);
  *  once the plugin writes a value, the kit's own store answers it. Gives the clock, for a test that moves it. */
-export function seedBoard(on: On, seed: Record<string, unknown> = { view: BOARD_VIEW }): MockClock {
+export function seedBoard(on: On, given: Record<string, unknown> = { view: BOARD_VIEW }): MockClock {
+  // T-773: a fresh board opens on Live; the saved pictures here are of the Tasks tab, so it starts there unless a test seeds 'tab'
+  const seed: Record<string, unknown> = { tab: 'tasks', ...given }
   const written = new Set<string>()
   on('state.set', (_, e, next) => (written.add(e.key), next(e)))
   inProject(on)

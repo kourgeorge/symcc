@@ -27,7 +27,7 @@ export type { PanelValues }
 const noPanel: PanelValues = {
   readOpened: async () => '',
   updateOpened: async () => undefined,
-  readTab: async () => '',
+  readTab: async () => 'live',
   updateTab: async () => undefined,
   readScoutOpen: async () => '',
   updateScoutOpen: async () => undefined,

@@ -13,7 +13,7 @@ function stateOf(on: On, seed: Record<string, unknown>) {
   on('state.set', (_, e, next) => (written.add(e.key), next(e)))
   // the project folder (the plugin's paths need it, see findRoot)
   inProject(on)
-  on('state.get', (_, e, next) => (written.has(e.key) || !(e.key in seed) ? next(e) : { value: { value: seed[e.key], version: 1 } }))
+  on('state.get', (_, e, next) => (written.has(e.key) ? next(e) : e.key in seed ? { value: { value: seed[e.key], version: 1 } } : e.key === 'tab' ? { value: { value: 'tasks', version: 1 } } : next(e)))
 }
 
 const PANE = {
@@ -51,10 +51,10 @@ test('the hints say the real way out, within 50 columns, and never Esc', () => {
     'Enter sends · Enter on empty or c cancels',
   ])
   for (const l of lines) expect(l.length).toBeLessThanOrEqual(50)
-  expect(hintLineText(settingsKeys())).toBe('Enter change · ↑↓ move · t l s c views · b back')
-  expect(hintLineText(settingsKeys(true))).toBe('Enter open/close · ↑↓ move · t l s c views · b back')
-  expect(hintLineText(rolesKeys())).toBe('Enter open · n new role · ↑↓ move · t l s c views · b back')
-  expect(hintLineText(scoutListKeys())).toBe('Enter open · ↑↓ move · t l s c views · b back')
+  expect(hintLineText(settingsKeys())).toBe('Enter change · ↑↓ move · l t s c views · b back')
+  expect(hintLineText(settingsKeys(true))).toBe('Enter open/close · ↑↓ move · l t s c views · b back')
+  expect(hintLineText(rolesKeys())).toBe('Enter open · n new role · ↑↓ move · l t s c views · b back')
+  expect(hintLineText(scoutListKeys())).toBe('Enter open · ↑↓ move · l t s c views · b back')
   expect(hintLineText(scoutEditKeys())).toBe('↑↓ move between boxes · Cancel leaves without saving')
   for (const keys of [settingsKeys(), rolesKeys(), scoutListKeys(), scoutEditKeys()]) expect(keys.some(k => k.key === 'Esc')).toBe(false)
 })

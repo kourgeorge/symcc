@@ -54,10 +54,10 @@ export const LIVE_EMPTY = 'No task is running right now.'
 /** The stations shown: check only when the checker setting is on. */
 export const liveStations = (checker: boolean): LiveStation[] => LIVE_STATIONS.filter(s => s !== 'check' || checker)
 
-/** The terminal panel's tabs in order, with their keys: Tasks, Live, Scouts, Settings. */
+/** The terminal panel's tabs in order, with their keys: Live, Tasks, Scouts, Settings. */
 export const LIVE_TABS = [
-  { tab: 'tasks', label: 'Tasks', key: 't' },
   { tab: 'live', label: 'Live', key: 'l' },
+  { tab: 'tasks', label: 'Tasks', key: 't' },
   { tab: 'scouts', label: 'Scouts', key: 's' },
   { tab: 'settings', label: 'Settings', key: 'c' },
 ] as const

@@ -12,8 +12,8 @@ export type $ = EngineInterface
 
 /** which task the board panel has open; '' = the list */
 const opened = atom({ plugin: 'symcc', key: 'opened' } as const, '')
-/** which view the board panel shows: 'scouts', or anything else for the tasks; kept while the panel is open */
-const tab = atom({ plugin: 'symcc', key: 'tab' } as const, '')
+/** which view the board panel shows: 'live' (the first, and where it opens), 'tasks', 'scouts' or 'settings'; kept while the panel is open */
+const tab = atom({ plugin: 'symcc', key: 'tab' } as const, 'live')
 /** which scout the Scouts view has open; '' = the list */
 const scoutOpen = atom({ plugin: 'symcc', key: 'scout' } as const, '')
 const view = atom({ plugin: 'symcc', key: 'view' } as const, { tasks: [], working: [], scouts: [], mode: 'auto', test_commands: [] } as SymccView, { shape: 'view-1' })

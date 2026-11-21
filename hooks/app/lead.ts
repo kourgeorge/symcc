@@ -226,7 +226,7 @@ export async function handOver(host: Host) {
   }
   const b = await load(host)
   await publish(host, b)
-  if (openOnStart(b)) await openPane(host, { focus: false, quiet: true })
+  if (openOnStart(b)) await openPane(host, { tab: 'live', focus: false, quiet: true })
 }
 
 // ---------------- T-769: ▍Today's lead, scout and cost figures ----------------

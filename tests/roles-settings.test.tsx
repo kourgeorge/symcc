@@ -11,7 +11,7 @@ import { emptyBoard } from '../hooks/board'
 function stateOf(on: On, seed: Record<string, unknown>) {
   const written = new Set<string>()
   on('state.set', (_, e, next) => (written.add(e.key), next(e)))
-  on('state.get', (_, e, next) => (written.has(e.key) || !(e.key in seed) ? next(e) : { value: { value: seed[e.key], version: 1 } }))
+  on('state.get', (_, e, next) => (written.has(e.key) ? next(e) : e.key in seed ? { value: { value: seed[e.key], version: 1 } } : e.key === 'tab' ? { value: { value: 'tasks', version: 1 } } : next(e)))
 }
 
 const PANE = {
@@ -116,7 +116,7 @@ test('Settings shows one Roles row (count and off count), not the roles; it open
   await ui.press({ key: 'settings-roles' })
   expect(await ui.find({ key: 'roleRow:general' })).toBeDefined()
   expect(await ui.find({ key: 'setting:mode' })).toBeUndefined()
-  expect(await ui.find({ type: 'Text', text: /Enter open · n new role · ↑↓ move · t l s c views · b back/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /Enter open · n new role · ↑↓ move · l t s c views · b back/ })).toBeDefined()
   // a role's Back returns to the Roles page; the Roles page's Back to Settings
   await ui.press({ key: 'roleRow:tester' })
   await ui.press({ key: 'role-back' })

@@ -26,7 +26,8 @@ import { viewTask, viewStubFilled } from '../../core/board-parts'
 import { orgMemNotes, orgMemNoteKey } from '../../core/org-mem'
 import { PLUGIN_ROOT } from '../host'
 import { inGroups, pillText, taskListIds, scoutListNames } from '../../core/page-header'
-import { startTui, KEY_BINDS, viewPaths, loadTuiRuntime, BOARD_PANEL, setupFailed, colorOf, drawLines, type TuiContext, type TuiRuntime, type TuiPanelInput, type TuiKeyLayer, type PanelKey } from '../tui'
+import { PANEL_TABS } from '../board-view'
+import { startTui as startTuiLive, KEY_BINDS, viewPaths, loadTuiRuntime, BOARD_PANEL, setupFailed, colorOf, drawLines, type TuiContext, type TuiRuntime, type TuiPanelInput, type TuiKeyLayer, type PanelKey } from '../tui'
 
 const NOW = Date.parse('2026-11-19T12:00:00.000Z')
 /** Every Settings group's title (all of them open). */
@@ -334,6 +335,46 @@ function shown(node: unknown): string[] {
   const rows = (x: unknown): string[] => flat(x).flatMap(k => (typeof k === 'string' ? [] : (k as El).props.flexDirection === 'row' ? [text((k as El).kids)] : rows((k as El).kids)))
   return rows(node)
 }
+
+/** T-773: the board opens on Live. Most tests here are about the Tasks tab, so this starts the TUI and goes to Tasks (the
+ *  `t` key) at its first refresh; `startTuiLive` is the plain one. */
+const startTui: typeof startTuiLive = (ctx, d) => {
+  const board = startTuiLive(ctx, d)
+  const refresh = board.refresh
+  let first = true
+  board.refresh = async () => {
+    await refresh()
+    if (first) (first = false), await board.press('t', 'ses_1')
+  }
+  return board
+}
+
+test('T-773: a freshly opened OpenCode board is on the Live tab; the tab row is Live, Tasks, Scouts, Settings; l, t, s and c go to their tabs', async () => {
+  const f = viewFile()
+  const files = new Map([['/work/proj/.symcc/view.json', viewFileText({ ...f, view: { ...f.view, open_on_start: false } })]])
+  const ctx: TuiContext = {
+    location: { directory: '/work/proj' },
+    theme: {},
+    renderer: { width: 120, height: 200 },
+    client: { session: { command: async () => undefined } },
+    keymap: { layer: () => undefined },
+    ui: {
+      toast: { show: () => undefined },
+      dialog: { prompt: async () => undefined, select: async () => undefined },
+      panel: { open: () => true, close: () => undefined, current: () => undefined },
+      slot: () => () => undefined,
+    },
+  }
+  const board = startTuiLive(ctx, { runtime: fakeRuntime(), readText: async p => files.get(p) ?? Promise.reject(new Error('missing')), every: () => () => undefined, now: () => NOW })
+  await board.refresh()
+  expect(board.state().tab).toBe('live')
+  expect(PANEL_TABS.map(t => [t.key, t.tab])).toEqual([['l', 'live'], ['t', 'tasks'], ['s', 'scouts'], ['c', 'settings']])
+  for (const [key, tab] of [['t', 'tasks'], ['s', 'scouts'], ['c', 'settings'], ['l', 'live']] as const) {
+    await board.press(key, 'ses_1')
+    expect(board.state().tab).toBe(tab)
+  }
+  board.stop()
+})
 
 test('startTui on a fake OpenCode TUI: reads the view file above its folder, draws the panel and the band, opens from /symcc-board, and sends approve, reject and answer as slash commands', async () => {
   const f = viewFile()
@@ -1156,7 +1197,7 @@ test('T-559: the Scouts tab lists the scouts from view.json, a scout\'s page sho
   const tabs = tasks.lines.find(l => lineText(l).includes('[t]: Tasks'))!
   expect(lineText(tabs)).toContain('Scouts')
   expect(tabs.find(s => s.text.includes('Settings'))?.hit).toEqual({ tab: 'settings' })
-  expect(lineText(tasks.lines.at(-1)!)).toContain('t l s c views')
+  expect(lineText(tasks.lines.at(-1)!)).toContain('l t s c views')
   // the list: name, how often, paused or the next run, last result; the waiting one first, the paused one after
   const list = panelLines(f, { tab: 'scouts', opened: '', cursor: 0 }, NOW, 100)
   const text = list.lines.map(lineText)
@@ -2400,8 +2441,8 @@ test('T-685: every board screen has Claude Code\'s buttons: the tab row, the lis
   const W = 140
   const draw = (c: Partial<PanelChoice>, w = W) => panelLines(f, { opened: '', cursor: 0, ...c }, NOW, w)
   const texts = (c: Partial<PanelChoice>, w = W) => draw(c, w).lines.map(lineText)
-  // the tab row is Claude Code's, made from core's LIVE_TABS and tabRow: "[t]: Tasks (5) │ [l]: Live │ [s]: Scouts (2) │ [c]: Settings"
-  const tabRow = '[t]: Tasks (5) │ [l]: Live │ [s]: Scouts (2) │ [c]: Settings'
+  // the tab row is Claude Code's, made from core's LIVE_TABS and tabRow: "[l]: Live │ [t]: Tasks (5) │ [s]: Scouts (2) │ [c]: Settings"
+  const tabRow = '[l]: Live │ [t]: Tasks (5) │ [s]: Scouts (2) │ [c]: Settings'
   const counts = (w: number) => coreTabRow(LIVE_TABS.map(t => ({ key: t.key, label: t.label, count: t.tab === 'tasks' ? 5 : t.tab === 'scouts' ? 2 : undefined })), w)
   expect(counts(W).labels.join(counts(W).gap)).toBe(tabRow)
   // the list pages have the tab row (T-700: a page of one task, scout, role... has none, as on the terminal panel; T-704: nor the org-mem page)
@@ -2557,7 +2598,7 @@ test('T-685: in the TUI a click on each of those buttons does exactly what its k
   const flatEls = (x: unknown): El[] => (typeof x === 'function' ? flatEls(x()) : Array.isArray(x) ? x.flatMap(flatEls) : x && typeof x === 'object' ? [x as El, ...flatEls((x as El).kids)] : [])
   const foot = flatEls(panel).find(e => e.props.flexShrink === 0 && e.props.flexDirection === 'column')!
   const footRows = rowEls(foot).map(r => r.text)
-  expect(footRows.slice(1)).toEqual(['⏵ auto [ [m] review merge ]  [ [f] search ]', '↑↓ move · Enter open · t l s c views · Esc close'])
+  expect(footRows.slice(1)).toEqual(['⏵ auto [ [m] review merge ]  [ [f] search ]', '↑↓ move · Enter open · l t s c views · Esc close'])
   // the tabs, from every tab
   for (const go of [() => toList(), () => toSettings(), async () => (await toList(), await board.press('s', 's'))]) {
     expect((await same(go, '[t]: Tasks (5)', 't')).state.tab).toBe('tasks')
@@ -2733,7 +2774,7 @@ test('T-692: the Live tab draws the terminal panel\'s lanes and today (core/live
     // each lane's first line is a click on its task
     const lane = d.lines.findIndex((l, i) => lineText(l).includes('T-612') && !!d.hits[i])
     expect(d.hits[lane]).toEqual({ open: 'T-612' })
-    expect(d.keys.map(k => k.key)).toEqual(['↑↓', 'Enter', 'm', 't l s c', 'Esc'])
+    expect(d.keys.map(k => k.key)).toEqual(['↑↓', 'Enter', 'm', 'l t s c', 'Esc'])
   }
   // the current station blinks with the clock
   const lineOf = (now: number) => panelLines(f, { tab: 'live', opened: '', cursor: 0 }, now, 120).lines.map(lineText).find(t => t.includes('T-611'))!
@@ -3032,9 +3073,9 @@ test('T-700: the board header (banner, tests/limits line, drive warning, tabs) s
   const header = (t: string[]) => ({
     tests: t.some(l => l.includes('tests: bun test')),
     drive: t.some(l => /⚠ .*\/symcc-drive/.test(l)),
-    tabs: t.some(l => l.startsWith('[t]: Tasks')),
+    tabs: t.some(l => l.startsWith('[l]: Live')),
     // the board header's rule, under the tabs (a task's or scout's page has its own heavy rule under its header, T-751)
-    rule: t.some((l, i) => /^━+$/.test(l) && !!t[i - 1]?.startsWith('[t]: Tasks')),
+    rule: t.some((l, i) => /^━+$/.test(l) && !!t[i - 1]?.startsWith('[l]: Live')),
   })
   const all = { tests: true, drive: true, tabs: true, rule: true }
   const none = { tests: false, drive: false, tabs: false, rule: false }

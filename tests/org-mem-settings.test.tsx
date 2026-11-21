@@ -16,7 +16,7 @@ import { textWidth } from '../hooks/core/stats'
 function stateOf(on: On, seed: Record<string, unknown>) {
   const written = new Set<string>()
   on('state.set', (_, e, next) => (written.add(e.key), next(e)))
-  on('state.get', (_, e, next) => (written.has(e.key) || !(e.key in seed) ? next(e) : { value: { value: seed[e.key], version: 1 } }))
+  on('state.get', (_, e, next) => (written.has(e.key) ? next(e) : e.key in seed ? { value: { value: seed[e.key], version: 1 } } : e.key === 'tab' ? { value: { value: 'tasks', version: 1 } } : next(e)))
 }
 
 const PANE = {
@@ -100,6 +100,8 @@ test('T-687: Settings no longer lists org-mem (terminal and VS Code); the Worker
   stateOf(on, SETTINGS_VIEW)
   fakeOrgMem(on, NOTES)
   const ui = await settings($)
+  // T-773: the session start opens the board on Live; go to Settings
+  await ui.press({ key: 'tab-settings' })
   await ui.press({ key: 'group:Workers' })
   expect(await ui.find({ key: 'settings-roles' })).toBeDefined()
   expect(await ui.find({ key: 'settings-orgmem' })).toBeUndefined()

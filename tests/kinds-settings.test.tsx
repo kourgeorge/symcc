@@ -11,7 +11,7 @@ import { ran, entry } from './fakes'
 function stateOf(on: On, seed: Record<string, unknown>) {
   const written = new Set<string>()
   on('state.set', (_, e, next) => (written.add(e.key), next(e)))
-  on('state.get', (_, e, next) => (written.has(e.key) || !(e.key in seed) ? next(e) : { value: { value: seed[e.key], version: 1 } }))
+  on('state.get', (_, e, next) => (written.has(e.key) ? next(e) : e.key in seed ? { value: { value: seed[e.key], version: 1 } } : e.key === 'tab' ? { value: { value: 'tasks', version: 1 } } : next(e)))
 }
 
 const PANE = {
@@ -106,7 +106,7 @@ test('Settings has a Kinds row next to Roles; its page lists the kinds with the 
   expect(await label('investigation')).toBe('investigation: built-in')
   expect(await ui.find({ type: 'Text', text: /^ · small upkeep$/ })).toBeDefined()
   expect(await ui.find({ key: 'kind-new' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /Enter open · n new kind · ↑↓ move · t l s c views · b back/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /Enter open · n new kind · ↑↓ move · l t s c views · b back/ })).toBeDefined()
   await ui.press({ key: 'kindRow:chore' })
   await ui.press({ key: 'kind-back' })
   await ui.press({ key: 'kinds-back' })

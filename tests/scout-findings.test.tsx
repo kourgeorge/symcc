@@ -101,7 +101,7 @@ test('the Settings view shows scout_findings from the board and Enter opens auto
   const written = new Set<string>()
   const seed: Record<string, unknown> = { view: { shape: 'view-1', value: { tasks: [], working: [], scouts: [], mode: 'auto', test_commands: [], branch: 'main', max_parallel: 3, max_minutes: 45, auto_retries: 2, open_on_start: true, notify: 'off', notify_choices: ['off'], scout_findings: 'backlog' } } }
   on('state.set', (_, e, next) => (written.add(e.key), next(e)))
-  on('state.get', (_, e, next) => (written.has(e.key) || !(e.key in seed) ? next(e) : { value: { value: seed[e.key], version: 1 } }))
+  on('state.get', (_, e, next) => (written.has(e.key) ? next(e) : e.key in seed ? { value: { value: seed[e.key], version: 1 } } : e.key === 'tab' ? { value: { value: 'tasks', version: 1 } } : next(e)))
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   await ui.press({ key: 'tab-settings' })
   await ui.press({ key: 'group:Scouts' })
