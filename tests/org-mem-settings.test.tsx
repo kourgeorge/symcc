@@ -88,7 +88,7 @@ const pageLines = (n: unknown): string[] => {
   return [textOf(x)]
 }
 /** The Live tab's org-mem section header line (terminal). */
-const omHead = async (ui: { drawn: () => Promise<unknown> }) => pageLines(await ui.drawn()).find(l => l.startsWith('▍Organizational memory'))
+const omHead = async (ui: { drawn: () => Promise<unknown> }) => pageLines(await ui.drawn()).find(l => l.startsWith('ORGANIZATIONAL MEMORY'))
 
 /** Every drawn text of the page, joined. */
 const pageText = async (ui: { findAll: (q: { type: string }) => Promise<{ props: Record<string, unknown>; children?: unknown[] }[]> }) =>
@@ -302,7 +302,7 @@ test('T-619, T-687: VS Code: the Live tab\'s Organizational memory link opens th
   const files = fakeOrgMem(on, NOTES)
   const ui = await settings($, 'vscode')
   const row = await ui.find({ key: 'live-orgmem' })
-  expect(String(row?.props.text)).toContain('Organizational memory')
+  expect(String(row?.props.text)).toContain('ORGANIZATIONAL MEMORY')
   expect(await pageText(ui as never)).toContain('3 / 60')
   // at the bottom of the Live tab, just above its footer
   const all = (await ui.findAll({})).map(n => String(n.key ?? ''))
@@ -374,16 +374,17 @@ test('T-718: the terminal Live tab draws the org-mem section (header, 3 newest, 
     const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns } })
     const lines = pageLines(await ui.drawn())
     for (const l of lines) expect([bodyColumns, l, textWidth(l) <= bodyColumns]).toEqual([bodyColumns, l, true])
-    // T-747: a "▍Organizational memory" heading with the count and bar on it, the lines under it indented (T-767: by 1)
-    const head = lines.findIndex(l => l.startsWith('▍Organizational memory   8 / 60 ▕'))
+    // T-747, T-789: an "ORGANIZATIONAL MEMORY" heading with the count and bar on it, an empty line under it, the lines under that indented (T-767: by 1)
+    const head = lines.findIndex(l => l.startsWith('ORGANIZATIONAL MEMORY   8 / 60 ▕'))
     expect(head).toBeGreaterThan(0)
     expect(lines[head - 1]!.trim()).toBe('')
-    expect(lines[head + 1]).toBe('   newest')
-    expect(lines[head + 2]).toMatch(/^ {4}— +unsorted {2}a note written/)
-    expect(lines[head + 3]).toMatch(/^ {4}11-21 {2}git +Use a plain path/)
-    expect(lines[head + 4]).toMatch(/^ {4}11-21 {2}tests +In tests, put/)
-    expect(lines[head + 5]).toBe('   topics')
-    const grid = lines.slice(head + 6, lines.findIndex(l => l.startsWith('   ↑↓ move')))
+    expect(lines[head + 1]!.trim()).toBe('')
+    expect(lines[head + 2]).toBe('   newest')
+    expect(lines[head + 3]).toMatch(/^ {4}— +unsorted {2}a note written/)
+    expect(lines[head + 4]).toMatch(/^ {4}11-21 {2}git +Use a plain path/)
+    expect(lines[head + 5]).toMatch(/^ {4}11-21 {2}tests +In tests, put/)
+    expect(lines[head + 6]).toBe('   topics')
+    const grid = lines.slice(head + 7, lines.findIndex(l => l.startsWith('   ↑↓ move')))
     expect(grid.join(' ')).toMatch(/tests +3/)
     expect(grid.join(' ')).toMatch(/git +2/)
     expect(grid.join(' ')).toMatch(/vs code · panel +1/)
@@ -443,7 +444,7 @@ test('T-718: VS Code draws the org-mem section (title link, count, bar, 3 newest
   await $.session.start({ cwd: '/proj' } as never)
   for (const bodyColumns of [40, 100]) {
     const ui = await $.ui.mount({ ...PANE, surface: 'vscode', props: { ...PANE.props, bodyColumns } })
-    expect(shown(String((await ui.find({ key: 'live-orgmem' }))?.props.text))).toBe('Organizational memory')
+    expect(shown(String((await ui.find({ key: 'live-orgmem' }))?.props.text))).toBe('ORGANIZATIONAL MEMORY')
     expect(await pageText(ui as never)).toContain('8 / 60')
     expect((await ui.findAll({ type: 'Svg' })).some(x => String(x.props.alt) === '8 notes of at most 60')).toBe(true)
     for (const k of ['live-om-note:8', 'live-om-note:7', 'live-om-note:6']) expect(await ui.find({ key: k })).toBeDefined()

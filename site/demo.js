@@ -46,7 +46,6 @@
     scoutsTokens: '54.7M of 530.1M',
     spark: '▁▁▁▂▂▃▄▅▆',
     // (T-781) line 4's figures: today's right-first-try share and tries per merged task (from /symcc-stats for 21 November)
-    busiest: '16:00 · 41M tokens',
     firstTry: 34,
     avgTries: '2.4',
   }
@@ -93,6 +92,9 @@
     return tabs.map(([k, n]) => sp(`[${k}] ${n}`, n === active ? 'tab-on' : 'dim')).join(sp(' │ ', 'dim'))
   }
   const heading = (name, rest = '') => sp('▍', 'heading') + sp(name, 'heading') + rest
+  // (T-789) the Live tab's section heading: the name in UPPERCASE, bold, no bar and no rule; an empty line above it
+  // (none above the first) and one under it
+  const liveHead = (name, rest = '') => sp(name.toUpperCase(), 'heading') + rest
 
   function laneLines(s, l) {
     let track = ''
@@ -144,14 +146,13 @@
     const L = []
     L.push(tabRow('Live'))
     L.push(sp(`⏵ auto · agents ${busy}/${MAX_AGENTS} busy` + (s.scout ? ` · ⌕ gaps-bot ${dur(s.now - s.scout)}` : ''), 'dim'))
-    L.push('')
-    // T-786: ▍Needs you first, only while something waits, every row in the warning color
+    // T-786: NEEDS YOU first, only while something waits, every row in the warning color
     if (s.q) {
-      L.push(heading('Needs you'))
+      L.push(liveHead('Needs you'), '')
       L.push(' ' + sp(cut('⚠ ' + s.q.id + '  ' + s.q.text, 56), 'warning'))
       L.push('')
     }
-    L.push(heading('Tasks'))
+    L.push(liveHead('Tasks'), '')
     if (s.lanes.length) {
       // the ✧ after work and check in the accent color (core/live.ts's 'mark' tone)
       L.push((' '.repeat(LEAD_W) + LABELS.map((x, i) => (i < LABELS.length - 1 ? pad(x, GAP + 1) : x)).join('')).split('✧').map(x => sp(x, 'dim')).join(sp('✧', 'mark')))
@@ -160,7 +161,7 @@
       for (const l of [...s.lanes.filter(l => !l.done), ...kept]) L.push(...laneLines(s, l))
     } else L.push(' No task is running right now.')
     L.push('')
-    L.push(heading('Today'))
+    L.push(liveHead('Today'), '')
     const d = s.today
     L.push(' ' + sp(`✓ ${d.merged} merged`, 'passed') + sp(`   ↺ ${d.back} sent back   ✗ ${d.failed} failed   Σ ${tok(d.tokens)} tokens`, 'dim'))
     // (T-769, T-779) the medians per merged task and today's agent work time; then the scouts' share of the tokens
@@ -170,15 +171,15 @@
     const bar = sp(WHO_CELL.workers.repeat(16 - cells), 'who-workers') + sp(WHO_CELL.scouts.repeat(cells), 'who-scouts')
     const shares = ' ' + sp(`workers and checkers ${100 - TODAY_MORE.scoutsPct}%`, 'who-workers') + sp(' · ', 'dim') + sp(`scouts ${TODAY_MORE.scoutsPct}%`, 'who-scouts') + sp(` (${TODAY_MORE.scoutsTokens} tokens)`, 'dim')
     L.push(' ' + bar + shares)
-    // (T-781) line 4: the hour sparkline with its first and last hour, then busiest hour, first try, tries and the checker's send-backs
-    L.push(' ' + sp('08 ', 'dim') + sp(TODAY_MORE.spark, 'bar') + sp(` ${clock(s.now).slice(0, 2)}`, 'dim') + sp(`   busiest ${TODAY_MORE.busiest}   first try ${TODAY_MORE.firstTry}%   ⌀ ${TODAY_MORE.avgTries} tries   ⌕ ${d.back} sent back by the checker`, 'dim'))
+    // (T-781) line 4: the hour sparkline with its first and last hour, then first try, tries and the checker's send-backs
+    L.push(' ' + sp('08 ', 'dim') + sp(TODAY_MORE.spark, 'bar') + sp(` ${clock(s.now).slice(0, 2)}`, 'dim') + sp(`   first try ${TODAY_MORE.firstTry}%   ⌀ ${TODAY_MORE.avgTries} tries   ⌕ ${d.back} sent back by the checker`, 'dim'))
     if (s.lanes.length) L.push(' ' + sp(`✧ = an agent works here (needs an agent slot)   bar: tokens of the task so far, full = usual per task (${tok(USUAL)})`, 'dim'))
     L.push('')
-    L.push(heading('Branches'))
+    L.push(liveHead('Branches'), '')
     L.push(...branchLines(s))
     if (wide) {
       L.push('')
-      L.push(heading('Organizational memory', '   ' + sp('60 / 60', 'dim') + ' ' + sp('▕██████████▏', 'bar')))
+      L.push(liveHead('Organizational memory', '   ' + sp('60 / 60', 'dim') + ' ' + sp('▕██████████▏', 'bar')), '')
       L.push(sp('   newest', 'dim'))
       L.push('    ' + sp('11-21', 'dim') + '  ' + sp('ui · surfaces', 'id') + '  ' + cut('VS Code board pages space their children with the page Box\'s gap={1}', 42))
       L.push('    ' + sp('11-21', 'dim') + '  ' + sp('probes       ', 'id') + '  ' + cut('Draw the OpenCode panel from /tmp with bun: panelLines(view, …)', 42))

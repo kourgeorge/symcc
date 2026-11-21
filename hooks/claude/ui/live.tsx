@@ -11,8 +11,8 @@
 // T-715: under each lane hang its waiting trains (core's liveTrains and trainRows), each one a row Button that opens its task.
 // T-727: under the lanes, the Branches section (core's liveBranches): main's latest commits and a row per open task's
 // branch (commits ahead, how far behind), each task row a row Button that opens its task.
-// T-747: each section (Tasks, Today, Branches, Organizational memory) starts with a "▍Name" heading (core's
-// liveHeading), its lines indented by LIVE_INDENT, one empty line between sections.
+// T-747, T-789: each section (Tasks, Today, Branches, Organizational memory) starts with a bold UPPERCASE heading (core's
+// liveHeading; no bar, no rule), one empty line above it (none above the first) and one under it, its lines indented by LIVE_INDENT.
 import { LIVE_EMPTY, LIVE_INDENT, liveLegend, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, laneLines, liveBold, liveHeading, liveIndented, liveInner, liveBranches, liveHeader, liveHeaderSegs, liveKeys, liveLabelSegs, liveNeeds, liveTaskLanes, liveLayout, liveOrgMem, liveStations, liveTodayLines, liveTrains, trainRows } from '../../core/live'
 import { footerRule } from '../../board'
 import { S, workers } from '../../app/state'
@@ -133,6 +133,7 @@ export function livePage($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
         <Text key="live-head" bold color={C('text')}>{liveHeader(v, running)}</Text>
       )}
       {needs.length ? <Text key="live-needs-head">{draw(liveHeading(LIVE_SECTIONS.needs, width))}</Text> : null}
+      {needs.length ? <Text key="live-needs-under"> </Text> : null}
       {needs.map((n, i) => (
         <Button key={row(needKey(n.id))} plain autoFocus={i === 0 ? true : undefined} onPress={open(n.id)}>
           {under(n.segs)}
@@ -140,6 +141,7 @@ export function livePage($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
       ))}
       {needs.length ? <Text key="live-needs-blank"> </Text> : null}
       <Text key="live-tasks-head">{draw(liveHeading(LIVE_SECTIONS.tasks, width))}</Text>
+      <Text key="live-tasks-under"> </Text>
       {running.length ? null : <Text key="live-empty" color={C('inactive')}>{LIVE_INDENT + LIVE_EMPTY}</Text>}
       {lanes.length ? <Text key="live-labels">{under(liveLabelSegs(layout))}</Text> : null}
       {lanes.flatMap((l, i) => {
@@ -162,11 +164,13 @@ export function livePage($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
       })}
       <Text key="live-next-blank"> </Text>
       <Text key="live-today-head">{draw(liveHeading(LIVE_SECTIONS.today, width))}</Text>
+      <Text key="live-today-under"> </Text>
       {today.map((line, i) => (
         <Text key={`live-today-${i}`}>{under(line)}</Text>
       ))}
       {br ? <Text key="live-br-blank"> </Text> : null}
       {br ? <Text key="live-br-head">{draw(br.head)}</Text> : null}
+      {br ? <Text key="live-br-under"> </Text> : null}
       {br ? <Text key="live-br-main">{under(br.main)}</Text> : null}
       {br?.rows.map(r =>
         r.id ? (
@@ -183,6 +187,7 @@ export function livePage($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
       </Box>
       <Text key="live-om-blank"> </Text>
       <Text key="live-om-head">{draw(om.head)}</Text>
+      <Text key="live-om-under"> </Text>
       <Text key="live-om-newest" color={C('inactive')}>{LIVE_INDENT + om.newestLabel}</Text>
       {om.empty ? <Text key="live-om-empty" color={C('inactive')}>{LIVE_INDENT + om.empty}</Text> : null}
       {om.newest.map(x => (

@@ -24,7 +24,7 @@ test('T-727: the Branches section at 100 and 40 columns: main\'s commits, a row 
   expect(wide.rows.map(r => [r.id, r.kind])).toEqual([['T-724', 'merged'], ['T-721', 'branch'], ['T-725', 'branch'], ['T-726', 'new']])
   const narrow = liveBranches(sample(), T0, 40)!
   expect(linesOf(narrow)).toEqual([
-    '▍Branches',
+    'BRANCHES',
     '  main   ●─●─●─●   c1c1c1c · 2 min ago',
     '         │   │ ╰─◀ T-724 merged',
     '         │   ╰───○ T-721  +3 · 1 behind',
@@ -138,7 +138,9 @@ for (const bodyColumns of [100, 40])
     const lines = pageLines(await ui.drawn())
     const at = lines.indexOf(want[0]!)
     expect(at).toBeGreaterThan(0)
-    expect(lines.slice(at, at + want.length)).toEqual(want)
+    // T-789: an empty line under the heading, then the section's lines
+    expect(lines[at + 1]!.trim()).toBe('')
+    expect([lines[at], ...lines.slice(at + 2, at + 1 + want.length)]).toEqual(want)
     for (const l of lines) expect(textWidth(l)).toBeLessThanOrEqual(bodyColumns)
     // each task row is a row Button that opens its task (Enter on it)
     const rows: string[] = []
@@ -157,7 +159,7 @@ test('T-727: the VS Code Live tab draws the Branches section with real lines, an
   seedBoard(on, { view: liveView() })
   const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 100 }, surface: 'vscode' })
   await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'live') } })
-  expect((await ui.find({ key: 'live-br-head' }))?.text).toBe('Branches')
+  expect((await ui.find({ key: 'live-br-head' }))?.text).toBe('BRANCHES')
   expect((await ui.find({ key: 'live-br-main-text' }))?.text).toBe('main  c1c1c1c · 2 min ago')
   const svgs = await ui.findAll({ type: 'Svg' })
   const main = svgs.find(x => x.props.alt === BRANCH_LINES_100[1]!.trim())
@@ -179,12 +181,12 @@ test('T-727: the VS Code Live tab draws the Branches section with real lines, an
   await ui.unmount()
 })
 
-// T-738, T-747: each section of the Live tab starts with a "▍Name" heading (Tasks right under the mode line, then
-// Today, Branches, Organizational memory; T-750 put Today above Branches), with one empty line just above it, none above the first, never two; no
+// T-738, T-747, T-789: each section of the Live tab starts with a bold UPPERCASE heading, no "▍" (Tasks right under the mode line, then
+// Today, Branches, Organizational memory; T-750 put Today above Branches), with one empty line just above it, none above the first, never two, and one under it; no
 // "── Name ──" rules and no full-width rule between the sections (only the footer's, under the last one).
-const LIVE_HEADS = ['▍Today', '▍Branches', '▍Organizational memory'].map(h => (l: string) => l.startsWith(h))
+const LIVE_HEADS = ['TODAY', 'BRANCHES', 'ORGANIZATIONAL MEMORY'].map(h => (l: string) => l.startsWith(h))
 for (const surface of ['terminal', 'desktop', 'mobile'] as const)
-  test(`T-738, T-747: the ${surface} Live tab has a ▍heading for each section, one empty line above each, none above the first`, async ($, on) => {
+  test(`T-738, T-747: the ${surface} Live tab has an UPPERCASE heading for each section, one empty line above and under each, none above the first`, async ($, on) => {
     const all = liveView()
     // T-786: nothing waits for the owner here (▍Needs you has its own tests)
     seedBoard(on, { view: { ...all, value: { ...all.value, tasks: all.value.tasks.filter(t => !['review', 'waiting', 'failed'].includes(t.status)) } } })
@@ -196,10 +198,11 @@ for (const surface of ['terminal', 'desktop', 'mobile'] as const)
     expect(first).toBeGreaterThan(0)
     expect(lines[first - 1]!.trim() === '').toBe(false)
     const live = lines.slice(first)
-    expect(live[1]).toBe('▍Tasks')
-    const heads = live.filter(l => l.startsWith('▍'))
-    expect(heads.slice(0, 3)).toEqual(['▍Tasks', '▍Today', '▍Branches'])
-    expect([heads.length, /^▍Organizational memory {3}\d+ \/ 60 ▕/.test(heads[3] ?? '')]).toEqual([4, true])
+    expect(live[1]).toBe('TASKS')
+    expect(live.some(l => l.includes('▍'))).toBe(false)
+    const heads = live.filter(l => LIVE_HEADS.some(h => h(l)) || l === 'TASKS')
+    expect(heads.slice(0, 3)).toEqual(['TASKS', 'TODAY', 'BRANCHES'])
+    expect([heads.length, /^ORGANIZATIONAL MEMORY {3}\d+ \/ 60 ▕/.test(heads[3] ?? '')]).toEqual([4, true])
     expect(live.filter(l => l.includes('── ') || /^─+$/.test(l)).length).toBe(1)
     // the lines under a heading are indented by 1 (T-767; a running lane starts "▶ ")
     for (const l of [' ▶ T-7', '  main ', ' ✓ ', '   newest']) expect([l, live.some(x => x.startsWith(l))]).toEqual([l, true])
@@ -208,6 +211,8 @@ for (const surface of ['terminal', 'desktop', 'mobile'] as const)
       expect([at, at > 0]).toEqual([at, true])
       expect([live[at], live[at - 1]!.trim()]).toEqual([live[at], ''])
       expect([live[at], live[at - 2]!.trim() === '']).toEqual([live[at], false])
+      expect([live[at], live[at + 1]!.trim()]).toEqual([live[at], ''])
+      expect([live[at], live[at + 2]!.trim() === '']).toEqual([live[at], false])
     }
     await ui.press({ key: 'tab-tasks' })
     await ui.unmount()
@@ -232,8 +237,10 @@ test('T-738: the VS Code Live tab spaces its sections with one empty line (the p
   const keys = ((page.children ?? []) as VsNode[]).map(k => String(k?.key ?? k?.props?.key ?? ''))
   for (const k of ['live-head', 'live-tasks', 'live-br', 'live-bottom', 'live-om']) expect([k, keys.includes(k)]).toEqual([k, true])
   // T-747: each section's heading, the terminal's names
-  expect((await ui.find({ key: 'live-tasks-head' }))?.text).toBe('Tasks')
-  expect((await ui.find({ key: 'live-today-head' }))?.text).toBe('Today')
+  expect((await ui.find({ key: 'live-tasks-head' }))?.text).toBe('TASKS')
+  expect((await ui.find({ key: 'live-today-head' }))?.text).toBe('TODAY')
+  // T-789: one empty line under each heading (padding under it), not a blank Text
+  for (const k of ['live-tasks-head', 'live-today-head', 'live-br-head', 'live-om-head']) expect([k, (await ui.find({ key: k }))?.props.paddingBottom]).toEqual([k, 1])
   // no blank Text lines of its own (the gap is the one empty line), and no padding on top of the gap
   for (const c of (page.children ?? []) as VsNode[]) expect([String(c?.props?.key), c?.props?.paddingTop ?? 0, c?.props?.marginTop ?? 0]).toEqual([String(c?.props?.key), 0, 0])
   await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'tasks') } })
@@ -247,6 +254,6 @@ test('T-773: a freshly opened VS Code board (no tab saved) shows the Live tab an
   expect(tabs.indexOf('Live')).toBeGreaterThanOrEqual(0)
   expect(tabs.indexOf('Live')).toBeLessThan(tabs.indexOf('Tasks'))
   expect(tabs).toMatch(/\*\*[^*]*Live[^*]*\*\*/)
-  expect((await ui.find({ key: 'live-br-head' }))?.text).toBe('Branches')
+  expect((await ui.find({ key: 'live-br-head' }))?.text).toBe('BRANCHES')
   await ui.unmount()
 })

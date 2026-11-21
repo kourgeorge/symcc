@@ -209,8 +209,9 @@ test('T-769: the terminal and VS Code Live tabs show ▍Today\'s 4 lines, and a 
     const t = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'terminal' })
     await t.press({ key: 'tab-live' })
     const all = pageLines(await t.drawn())
-    const at = all.indexOf('▍Today')
-    const today = all.slice(at + 1, at + 5)
+    const at = all.indexOf('TODAY')
+    expect(all[at + 1]!.trim()).toBe('')
+    const today = all.slice(at + 2, at + 6)
     for (const l of all) expect([bodyColumns, l, textWidth(l) <= bodyColumns]).toEqual([bodyColumns, l, true])
     if (bodyColumns === 140) {
       expect(today[0]).toBe(`${LIVE_INDENT}✓ 3 merged   ↺ 0 sent back   ✗ 0 failed   Σ 6M tokens`)
