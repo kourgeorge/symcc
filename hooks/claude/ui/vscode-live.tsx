@@ -20,7 +20,7 @@ import { panelValues, type $ } from '../panel'
 import type { PaneParts } from './parts'
 import { LIVE_TICK_MS, branchKey, laneKey, liveTick, newestKey, openOrgMemPage, topicKey, trainKey } from './live'
 import { mdLink, vsFooter, vsHref, vsLink } from './vscode'
-import { ORG_MEM_MAX_LINES, orgMemCount, orgMemNearCap, orgMemShortDay, type OrgMemNote } from '../../core/org-mem'
+import { ORG_MEM_MAX_LINES, orgMemCount, orgMemShortDay, type OrgMemNote } from '../../core/org-mem'
 
 /** The pixels per text column in the drawings (about one character of VS Code's panel font). */
 const COL_PX = 8
@@ -262,9 +262,9 @@ function orgMemSectionVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
   const { Svg } = vs
   const om = liveOrgMem(notes, width)
   const all = vsHref('page', 'orgmem')
-  const warn = orgMemNearCap(notes.length)
+  // T-772: one calm look at every fill (dim count, the quiet bar ink), never the warning color
   const full = Math.max(0, Math.min(10, Math.round((notes.length / ORG_MEM_MAX_LINES) * 10)))
-  const bar = barSvg(`▕${'█'.repeat(full)}${'░'.repeat(10 - full)}▏`, warn)
+  const bar = barSvg(`▕${'█'.repeat(full)}${'░'.repeat(10 - full)}▏`, false)
   const label = (key: string, text: string) => (
     <Text key={key} color={C('inactive')}>
       {text.trim()}
@@ -274,7 +274,7 @@ function orgMemSectionVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
     <Box key="live-om" flexDirection="column">
       <Box key="live-om-head" flexDirection="row" gap={1} alignItems="center">
         {vsLink(vs, 'live-orgmem', `**${mdLink(LIVE_SECTIONS.orgMem, all)}**`, [[all, openOrgMemPage($)]])}
-        <Text key="live-om-count" color={C(warn ? 'warning' : 'inactive')}>{`${notes.length} / ${ORG_MEM_MAX_LINES}`}</Text>
+        <Text key="live-om-count" color={C('inactive')}>{`${notes.length} / ${ORG_MEM_MAX_LINES}`}</Text>
         <Svg key="live-om-bar" source={bar.source} width={bar.width} height={bar.height} alt={`${orgMemCount(notes.length)} of at most ${ORG_MEM_MAX_LINES}`} />
       </Box>
       {label('live-om-newest', om.newestLabel)}

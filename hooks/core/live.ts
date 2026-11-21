@@ -10,7 +10,7 @@ import { STAGE_LINE } from './events'
 import { cutTitle, median, padWidth, taskFigures, textWidth, wrapLine } from './stats'
 import { checkerTokensOf, fmtCost, fmtDuration, fmtTokens, sumTokens, tokenCount } from './runs'
 import { type KeyHint, LIVE_VIEW_KEYS, hintLineText, hintLines, rowDuration, waitOrder } from './panel'
-import { ORG_MEM_EMPTY, ORG_MEM_MAX_LINES, TOPIC_UNSORTED, orgMemNearCap, orgMemNewest, orgMemSectionKeys, orgMemShortDay, orgMemTopicCounts, type OrgMemNote } from './org-mem'
+import { ORG_MEM_EMPTY, ORG_MEM_MAX_LINES, TOPIC_UNSORTED, orgMemNewest, orgMemSectionKeys, orgMemShortDay, orgMemTopicCounts, type OrgMemNote } from './org-mem'
 import { depDone } from './archive'
 import { dayOf, localOffset } from './days'
 import { modeLabel } from './review'
@@ -932,15 +932,15 @@ const NEWEST_TOPIC_MAX = 16
 
 /** The section's heading in `width` columns: "▍Organizational memory   57 / 60 ▕█████████░▏" (T-747), the count of
  *  the cap and a fill bar on the heading line (the bar shorter, then left out, then the title shorter, when narrow).
- *  Near the cap (orgMemNearCap) the count and bar are warnings. */
+ *  T-772: one calm look at every fill (the count dim, the bar the quiet 'bar' tone), never a warning; the lead is told
+ *  when org-mem is full (the add is refused). */
 function orgMemHead(n: number, width: number): LiveSeg[] {
-  const warn = orgMemNearCap(n)
   const count = `${n} / ${ORG_MEM_MAX_LINES}`
   for (const title of [LIVE_SECTIONS.orgMem, 'Org-mem'])
     for (const cells of [10, 6, 0]) {
       const bar = cells ? ` ${tokenBar(n, ORG_MEM_MAX_LINES, cells)}` : ''
       if (textWidth(`▍${title}   ${count}${bar}`) > width) continue
-      return segs({ text: '▍', tone: 'heading' }, { text: title, tone: 'heading' }, { text: '   ', tone: 'text' }, { text: count, tone: warn ? 'warning' : 'text' }, { text: bar, tone: warn ? 'warning' : 'bar' })
+      return segs({ text: '▍', tone: 'heading' }, { text: title, tone: 'heading' }, { text: '   ', tone: 'text' }, { text: count, tone: 'dim' }, { text: bar, tone: 'bar' })
     }
   return liveHeading('Org-mem', width)
 }

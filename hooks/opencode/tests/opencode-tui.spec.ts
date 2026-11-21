@@ -3670,3 +3670,18 @@ test('T-770: the Live tab\'s mode line ends in "⌕ gaps-bot 4m" while scouts ru
   const broken = parseViewFile(viewFileText({ ...f0, view: { ...base, scouts_running: 'x' as never } }))!
   expect('scouts_running' in broken.view).toBe(false)
 })
+
+test('T-772: the OpenCode Live tab draws the org-mem meter at 30 / 60 and 60 / 60 in the same calm colors (dim count, the quiet bar color), never the warning color', () => {
+  const looks: string[] = []
+  for (const n of [30, 60]) {
+    const f = orgMemViewFile(Array.from({ length: n }, (_, i) => `- 2026-11-20 [tests] note number ${i + 1}`).join('\n') + '\n')
+    const live = panelLines(f, { tab: 'live', opened: '', cursor: 0 }, NOW, 140)
+    const head = live.lines.find(l => lineText(l).startsWith('▍Organizational memory'))!
+    const count = head.find(x => x.text === `${n} / 60`)
+    const bar = head.find(x => /^ ▕[█░]+▏$/.test(x.text))
+    expect([n, count?.color, bar?.color]).toEqual([n, 'inactive', 'ide'])
+    expect(head.some(x => x.color === 'warning')).toBe(false)
+    looks.push(`${count?.color} ${bar?.color}`)
+  }
+  expect(looks[0]).toBe(looks[1]!)
+})

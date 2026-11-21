@@ -467,3 +467,39 @@ test('T-718: VS Code draws the org-mem section (title link, count, bar, 3 newest
   expect((await ui.findAll({ type: 'Markdown' })).filter(m => /^▶ /.test(String(m.props.text))).length).toBe(1)
   await ui.unmount()
 })
+
+/** An org-mem file of n dated notes. */
+const manyNotes = (n: number) => Array.from({ length: n }, (_, i) => `- 2026-11-20 [tests] note number ${i + 1}`).join('\n') + '\n'
+
+test('T-772: the terminal Live tab draws the org-mem meter at 30 / 60 and 60 / 60 in the same calm colors (dim count, the quiet bar color), never the warning color', async ($, on) => {
+  stateOf(on, VIEW)
+  const files = fakeOrgMem(on, manyNotes(30))
+  await $.session.start({ cwd: '/proj' } as never)
+  const looks: string[] = []
+  for (const n of [30, 60]) {
+    files[FILE] = manyNotes(n)
+    const ui = await $.ui.mount(PANE)
+    const texts = await ui.findAll({ type: 'Text' })
+    const count = texts.find(t => (t.children ?? []).join('') === `${n} / 60`)
+    const bar = texts.find(t => /^ ▕[█░]+▏$/.test((t.children ?? []).join('')))
+    expect([n, count?.props.color, bar?.props.color]).toEqual([n, 'inactive', 'ide'])
+    looks.push(`${count?.props.color} ${bar?.props.color}`)
+    await ui.unmount()
+  }
+  expect(looks[0]).toBe(looks[1]!)
+})
+
+test('T-772: VS Code draws the org-mem meter at 30 / 60 and 60 / 60 in the same calm colors: dim count, the bar filled with the quiet bar ink, never the warning ink', async ($, on) => {
+  stateOf(on, VIEW)
+  const files = fakeOrgMem(on, manyNotes(30))
+  await $.session.start({ cwd: '/proj' } as never)
+  for (const n of [30, 60]) {
+    files[FILE] = manyNotes(n)
+    const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
+    const count = (await ui.findAll({ type: 'Text' })).find(t => (t.children ?? []).join('') === `${n} / 60`)
+    expect([n, count?.props.color]).toEqual([n, 'inactive'])
+    const svg = String((await ui.findAll({ type: 'Svg' })).find(x => String(x.props.alt).endsWith('of at most 60'))?.props.source)
+    expect([n, svg.includes('fill="#3794ff"'), svg.includes('#d29922')]).toEqual([n, true, false])
+    await ui.unmount()
+  }
+})
