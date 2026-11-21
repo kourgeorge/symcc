@@ -1818,6 +1818,18 @@ folders and branches. A task stopped this way does not use up a try; its history
 "restarted: the owner moved driving to another session". There are never two drivers at
 once. If the other window doesn't answer within 3 minutes, yours takes over anyway.
 
+**Only one window with symcc.** A window you open while another live window already has symcc
+on starts with symcc off *here*: it works as plain Claude, the panel does not open, and the band
+says `symcc runs in another window · /symcc-enable here`. Type `/symcc-enable here` to make it
+a second lead on purpose (driving still follows the one-driver rules above). A window that
+crashed and left an old marker does not count: "live" uses the same stale rule as the hand-over.
+If the symcc window closes and only off-here windows remain, none takes over by itself: each says
+once `the symcc window closed · /symcc-enable here to take over`, and no worker runs until you do.
+If nobody has done so 15 minutes later, one of them (never all) plays the "needs you" notice once
+(your notify setting; nothing when notify is off).
+You can also turn one window off yourself with `/symcc-disable here` (see
+[Disabling symcc](#disabling-symcc)).
+
 ### How the lead keeps the board in order
 
 The lead sorts the board by a few plain rules: older tasks go first unless you say a task is
@@ -2061,6 +2073,17 @@ your next message, no restart needed:
 The board, its tasks, its mode and the scouts are kept. `/symcc-enable` turns everything back
 on, in the mode the board had. The switch is kept per project, as `enabled` in
 `.symcc/board.json` (a board without it is on).
+
+**Off in one window only.** `/symcc-disable here` turns symcc off in the window you type it in; the
+other windows on the project keep symcc fully on and see no change. From your next message that
+window gets no lead instructions, no "[symcc] Board update" messages, no sounds or voice, its panel
+does not open by itself, and the symcc tools answer "symcc is off in this window. /symcc-enable here
+turns it back on." and change nothing. The band and status line say `symcc is off in this window ·
+/symcc-enable here`. If that window drove the board it hands driving over to another window (as
+`/symcc-drive` does there); with no other window open, work waits until one is. `/symcc-enable
+here` turns it back on, tells the lead, opens the panel as on start, and the window may drive again by
+the normal rules. If the whole project is disabled, it says so and points to `/symcc-enable`. This
+switch lives in the window's session only, not in `board.json`.
 
 ---
 

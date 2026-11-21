@@ -2,7 +2,7 @@
 // other modules change. They all use these (S, the maps and sets) directly, never a copy, so a change made in one
 // module is seen by all.
 import type { SymccView, SymccScout, SymccTokens } from '../../types'
-import { type RoleDef, type KindDef, type SettingName, type GitState, type Board, type OwnerQuestion, type Heard, type Notify, emptyHeard, type PlanState, emptyPlan, useAssistantWord } from '../board'
+import { type RoleDef, type KindDef, type SettingName, type GitState, type Board, type OwnerQuestion, type Heard, type Notify, emptyHeard, type PlanState, emptyPlan, useAssistantWord, type OffHere } from '../board'
 import { namesFor, DEFAULT_NAME, cleanName } from '../name'
 import type { Players } from './voice'
 import type { BranchFacts, TodayTeam } from '../core/live'
@@ -81,6 +81,13 @@ export const startS = () => ({
   root: '',
   /** whether the plugin is on, as the board said when it was last read (see load); for the places that can't wait */
   enabledNow: true,
+  /** T-793: this window only is turned off (/<name>-disable here); never saved, gone when the session ends */
+  offHere: false,
+  /** T-793: why: 'off' (/<name>-disable here), 'other' (another window has symcc on), 'gone' (that window closed) */
+  offWhy: 'off' as OffHere,
+  /** T-793: while off here, whether another window was seen driving (so its going away is worth telling) and whether that was told */
+  sawOther: false,
+  takeoverTold: false,
   /** the worker roles: the plugin's roles/ with the project's .<name>/roles/ over them (see loadRoles) */
   roles: [] as RoleDef[],
   /** the task kinds: the plugin's kinds/ with the project's .<name>/kinds/ over them (see loadKinds) */
@@ -172,6 +179,9 @@ export const startS = () => ({
 /** Every value of the plugin that is set again while it runs; the other modules use S.<name>, never a copy. */
 export const S = startS()
 
+/** T-793: whether symcc works in this window: on in the board (not disabled for the project) and not turned off here. */
+export const onHere = (b: { enabled?: boolean }): boolean => b.enabled !== false && !S.offHere
+
 /** Takes the plugin's name from plugin.json (via host.plugin.name; DEFAULT_NAME if it has none) and the host's words, once. */
 export function useName(host: Pick<Host, 'plugin' | 'words'>) {
   if (S.named) return
@@ -196,7 +206,7 @@ export async function loadVersion(host: Pick<Host, 'plugin' | 'fs'>) {
 export const toolName = (tool: string): string => S.W.tool(S.N.name, tool)
 
 /** The view as published: SymccView plus the facts the panel's banner shows. */
-export type PaneView = SymccView & Partial<Pick<Board, 'max_parallel' | 'max_minutes' | 'auto_retries' | 'test_minutes' | 'archive_days' | 'archived' | 'archived_done' | 'open_on_start' | 'notify' | 'scout_findings' | 'tests_with_changes' | 'checker' | 'enabled'> & { /** the lead's open questions for the owner (see core/questions.ts), oldest first; absent when none */ questions: OwnerQuestion[]; driving: boolean; /** the branch checked out now: new tasks merge into it (see homeBranch) */ branch: string; notify_choices: Notify[]; branch_note: string; /** T-675: the data files close to the 4 MB read limit, in words (also in branch_note) */ size_note: string; git_state: GitState; plan_mode: boolean; /** T-727: the Live tab's Branches figures (app/branches.ts); absent until read, or with no git or no task branch */ branches: BranchFacts; /** T-769: ▍Today's lead, scout and cost figures (app/lead.ts todayTeam); absent until read or when there are none */ today_team: TodayTeam; /** T-761: the task pages' Branch section facts by task id (app/branches.ts's taskBranchesView): the open tasks with a branch and the latest merged ones */ task_branches: Record<string, TaskBranchFacts>; /** T-770: the scout runs going now (started, not queued), oldest first: the Live tab's mode line marks them; absent when none */ scouts_running: { name: string; since: number }[] }>
+export type PaneView = SymccView & Partial<Pick<Board, 'max_parallel' | 'max_minutes' | 'auto_retries' | 'test_minutes' | 'archive_days' | 'archived' | 'archived_done' | 'open_on_start' | 'notify' | 'scout_findings' | 'tests_with_changes' | 'checker' | 'enabled'> & { /** T-793: this window is turned off with /<name>-disable here (enabled is false too) */ off_here: OffHere; /** the lead's open questions for the owner (see core/questions.ts), oldest first; absent when none */ questions: OwnerQuestion[]; driving: boolean; /** the branch checked out now: new tasks merge into it (see homeBranch) */ branch: string; notify_choices: Notify[]; branch_note: string; /** T-675: the data files close to the 4 MB read limit, in words (also in branch_note) */ size_note: string; git_state: GitState; plan_mode: boolean; /** T-727: the Live tab's Branches figures (app/branches.ts); absent until read, or with no git or no task branch */ branches: BranchFacts; /** T-769: ▍Today's lead, scout and cost figures (app/lead.ts todayTeam); absent until read or when there are none */ today_team: TodayTeam; /** T-761: the task pages' Branch section facts by task id (app/branches.ts's taskBranchesView): the open tasks with a branch and the latest merged ones */ task_branches: Record<string, TaskBranchFacts>; /** T-770: the scout runs going now (started, not queued), oldest first: the Live tab's mode line marks them; absent when none */ scouts_running: { name: string; since: number }[] }>
 
 /** the role files already reported as skipped (file → reason), so the owner and the lead hear it once */
 export const skippedRoles = new Map<string, string>()

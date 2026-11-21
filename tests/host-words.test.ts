@@ -19,7 +19,7 @@ test("Claude Code's words keep its texts as they were", () => {
   expect(S.W.assistant).toBe('Claude')
   expect(S.W.app).toBe('Claude Code')
   expect(S.W.backToBoard).toBe('ctrl+x tab')
-  expect(offCommand()).toBe(`Disable ${S.N.name} for this project: Claude works as normal, nothing runs; the board is kept`)
+  expect(offCommand()).toBe(`Disable ${S.N.name} for this project: Claude works as normal, nothing runs; the board is kept; "here" turns it off in this window only`)
   expect(manual('')).toContain(`disable ${S.N.name} for this project: Claude works as normal (no lead`)
   expect(settingInfo('enabled')!.meaning).toBe('off: the whole plugin rests and Claude works as normal')
 })

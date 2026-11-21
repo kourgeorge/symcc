@@ -2,6 +2,11 @@
 
 When a set of user-facing changes is ready to release, bump the version in both `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` and add an entry here.
 
+## Unreleased
+
+### Added
+- `/symcc-disable here` and `/symcc-enable here`: turn symcc off (plain Claude) or on in one window only, kept in that window's session, not in `board.json`. A window opened while another live window has symcc on starts off here; when that window closes, the off-here windows say so once and wait for `/symcc-enable here`; if nobody does within 15 minutes, one of them plays the "needs you" notice once.
+
 ## 0.5.15 (2026-11-20)
 
 ### Changed

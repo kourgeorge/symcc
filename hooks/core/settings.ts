@@ -226,14 +226,26 @@ export type OffPart = { text: string; command?: boolean }
  * "symcc is disabled · /symcc-enable to turn it back on". `withName` false leaves the name out ("disabled · /symcc-enable to turn it back on"),
  * for the line under the prompt, where Claude Code already puts "⚠ symcc: " in front.
  */
-export const offStatusParts = (name: string = DEFAULT_NAME, withName = true): OffPart[] => [
-  { text: withName ? `${name} is disabled · ` : 'disabled · ' },
-  { text: `/${name}-enable`, command: true },
-  { text: ' to turn it back on' },
-]
+export type OffHere = 'off' | 'other' | 'gone'
+
+export const offStatusParts = (name: string = DEFAULT_NAME, withName = true, here: OffHere | false | undefined = false): OffPart[] =>
+  here === 'gone'
+    ? [{ text: `the ${name} window closed · ` }, { text: `/${name}-enable here`, command: true }, { text: ' to take over' }]
+    : here === 'other'
+      ? [{ text: `${name} runs in another window · ` }, { text: `/${name}-enable here`, command: true }]
+      : here
+        ? [{ text: `${name} is off in this window · ` }, { text: `/${name}-enable here`, command: true }]
+        : [
+        { text: withName ? `${name} is disabled · ` : 'disabled · ' },
+        { text: `/${name}-enable`, command: true },
+        { text: ' to turn it back on' },
+      ]
+
+/** What every lead tool answers in a window turned off with /<name>-disable here (T-793). */
+export const offHereAnswer = (name: string = DEFAULT_NAME) => `${name} is off in this window. /${name}-enable here turns it back on.`
 
 /** The "disabled" line as plain text (see offStatusParts). */
-export const offStatusLine = (name: string = DEFAULT_NAME, withName = true) => offStatusParts(name, withName).map(p => p.text).join('')
+export const offStatusLine = (name: string = DEFAULT_NAME, withName = true, here: OffHere | false | undefined = false) => offStatusParts(name, withName, here).map(p => p.text).join('')
 
 /** The spoken line for tasks just merged: "T-3 done", "T-3 and T-4 done", "T-3, T-4 and T-5 done". '' for none. */
 export function spokenDone(ids: string[]): string {
@@ -258,7 +270,9 @@ export function spokenNeedsYou(ids: string[]): string {
 export function spokenLine(items: string[]): string {
   const needs = items.filter(x => String(x ?? '').startsWith(NEEDS_YOU_MARK)).map(x => x.slice(NEEDS_YOU_MARK.length))
   const done = items.filter(x => !String(x ?? '').startsWith(NEEDS_YOU_MARK))
-  return [spokenDone(done), spokenNeedsYou(needs)].filter(Boolean).join('. ')
+  // T-793: a bare mark (no id) is the reminder "needs you" when nobody took over from a closed window
+  const bare = needs.includes('') && !needs.some(Boolean) ? 'needs you' : ''
+  return [spokenDone(done), spokenNeedsYou(needs), bare].filter(Boolean).join('. ')
 }
 
 /** A settings value for auto_retries: a whole number from 0 to 10. */

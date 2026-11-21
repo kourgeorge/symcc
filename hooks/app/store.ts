@@ -3,7 +3,7 @@ import { PARTS_DIR, READ_LIMIT_BYTES, SIZE_WARN_BYTES, hasWholeFinished, joinPar
 import { checkHealth } from './health'
 import { publish } from './lead'
 import { tellLead } from './tell'
-import { S, sizeNotes } from './state'
+import { S, onHere, sizeNotes } from './state'
 import { boardEvents, withStageHistory } from '../core/events'
 import { emitTaskEvents, logTaskEvents, type TaskEvent } from './events'
 import type { Host } from '../host'
@@ -284,7 +284,7 @@ export async function load(host: Host): Promise<Board> {
   const exists = await host.fs.exists(path(S.N.boardFile))
   if (!exists) {
     const b = emptyBoard()
-    S.enabledNow = symccOn(b)
+    S.enabledNow = onHere(b)
     return b
   }
   const { text, read: r, missing, missingFiles } = await readJoined(host)
@@ -300,7 +300,7 @@ export async function load(host: Host): Promise<Board> {
   for (const f of missingFiles) toldMissing.add(f)
   if (r.skipped || fixed.length)
     await keepCopy(host, text, 'before-fix', c => `${S.N.boardFile}: ${fixText(r.skipped, fixed)}${c ? `. The file as it was is kept in ${c}` : ''}.`)
-  S.enabledNow = symccOn(r.board)
+  S.enabledNow = onHere(r.board)
   return r.board
 }
 
@@ -406,7 +406,7 @@ const toldMissing = new Set<string>()
 /** Is the plugin on for this project? Read from the board file each time (a missing or broken board: on). Never throws. */
 export async function isOn(host: Host): Promise<boolean> {
   const text = await readWhole(host, path(S.N.boardFile)).catch(() => null)
-  return (S.enabledNow = symccOn(parseBoard(typeof text === 'string' ? text : null)))
+  return (S.enabledNow = onHere(parseBoard(typeof text === 'string' ? text : null)))
 }
 
 /**

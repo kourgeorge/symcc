@@ -1,7 +1,7 @@
 import type { SymccScout, SymccTask, SymccTokens } from '../../types'
 import { type ScoutDef, parseScout, modeOf, symccOn, OPEN, scoutPrompt, recentClosed, scoutAgentName, scoutDescription, parseScoutMemory, scoutMemoryText, scoutPausedText, everyText, SCOUT_REPORT_CHARS, scoutLeadMessage, scoutWhyNot, scoutFile, scoutNameError, scoutDraftError, scoutText, everyMinutesOf, onDemand, onNotReady, SCOUT_RETRY_MS, inPlan, addScoutRun, keepScoutUsage, migrateScoutUsage, leadScoutNameError, leadScoutText, leadScoutsText, safeScoutFile, SCOUT_FILE_NAME, SCOUT_FILE_NAME_RULE, scoutFileNameError, type ScoutRunRecord, parseScoutRuns, scoutRunsText, addScoutRunRecord, migratedScoutRun, scoutRunsFile, scoutRunReportFile, isScoutRunReport, scoutRunOutcome, scoutRunTasks, linkScoutRunTask, countFindings, reportText, parseScoutUsage, scoutResultsLine, renameScoutOrigins, linkScoutRunTaskAt, type Board } from '../board'
 import { publish, refreshStatus, drivesHere } from './lead'
-import { S, scoutState, scoutRuns, heard, timers, updateScoutOpen, stopped, movedAgents, movedRefused, DRIVING_MOVED } from './state'
+import { S, onHere, scoutState, scoutRuns, heard, timers, updateScoutOpen, stopped, movedAgents, movedRefused, DRIVING_MOVED } from './state'
 import { type FileTouch, type Host, type HostAgentStarted, notReadyYet } from '../host'
 import { startAgent, startCancelled } from './starts'
 import type { TurnEnd } from './workers'
@@ -266,7 +266,7 @@ async function queueScout(host: Host, s: ScoutDef, misses = 0, byHand = false): 
   // st.paused is brought up to date from scouts.json so the board and the lead's note show it.
   if (!st.running) await pausedNow(host, st)
   const b = await load(host)
-  const why = scoutWhyNot(st, { driving: S.driving, gitOk: S.gitState === 'ok', mode: modeOf(b), on: symccOn(b), plan: inPlan(S.plan) }, S.N.name)
+  const why = scoutWhyNot(st, { driving: S.driving, gitOk: S.gitState === 'ok', mode: modeOf(b), on: onHere(b), plan: inPlan(S.plan) }, S.N.name)
   if (why) return why
   const lastRun = st.last_run
   const lastReport = st.last_report
@@ -592,7 +592,7 @@ export async function runScoutNow(host: Host, name: string): Promise<string> {
   const st = scoutState.get(s.name)
   if (st) await pausedNow(host, st)
   const cur = await load(host)
-  const why = scoutWhyNot(st ?? { name: s.name, running: false }, { driving: S.driving, gitOk: S.gitState === 'ok', mode: modeOf(cur), on: symccOn(cur), plan: inPlan(S.plan) }, S.N.name)
+  const why = scoutWhyNot(st ?? { name: s.name, running: false }, { driving: S.driving, gitOk: S.gitState === 'ok', mode: modeOf(cur), on: onHere(cur), plan: inPlan(S.plan) }, S.N.name)
   if (why) return why
   // not waited for: it is asked from a tool call, a slash command or the panel, and starts at the next turn's start or end (see starts.ts)
   const q = await queueScout(host, s, 0, true)

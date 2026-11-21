@@ -16,20 +16,20 @@
 // render hooks) stays in register.tsx and hooks/claude/.
 //
 // Before calling an entry point, the host calls useName (app/state.ts) with its plugin name, so S.N is right.
-import { type Command, boardText, shortHome, LEAD_BEAT_MS, openOnStart, symccOn, offAnswer, commandNames, parseCommand, modeOf, settingsText, notifyOf, find, STATUS_WORD, statText, cutDiff, everyText, intoOf, ASK_TOOL, guardReason, scoutToolRefusal, NEW_ROLE_TEMPLATE, NEW_KIND_TEMPLATE, NEW_SCOUT_EVERY } from '../board'
+import { type Command, boardText, shortHome, LEAD_BEAT_MS, openOnStart, symccOn, offAnswer, offHereAnswer, commandNames, parseCommand, modeOf, settingsText, notifyOf, find, STATUS_WORD, statText, cutDiff, everyText, intoOf, ASK_TOOL, guardReason, scoutToolRefusal, NEW_ROLE_TEMPLATE, NEW_KIND_TEMPLATE, NEW_SCOUT_EVERY } from '../board'
 import { type FileTouch, type Host, type HostFeatures, ALL_FEATURES } from '../host'
 import type { SymccTokens } from '../../types'
 import { findArchived, saveArchiveMigrated } from './archive'
 import { moveOldOrgMem, deleteOrgMem } from './org-mem'
 import { askCall, checkEdit, guardFailed, stoppedText, stoppedTextFor, movedAway, movedText, listedKind, type AgentKindOf } from './ask'
 import { gitReady, setupGit } from './git'
-import { claimLead, publish, handOver, releaseLead, driveHere } from './lead'
+import { claimLead, publish, handOver, releaseLead, driveHere, startOffHere, disableHere, enableHere, offHereBeat } from './lead'
 import { changedFiles, changesText } from './review'
 import { loadRoles, changeRole } from './roles'
 import { loadKinds, changeKind } from './kinds'
 import { checkerFinished } from './checker'
 import { fileToolHits, saveScoutsMigrated, scheduleScouts, seedExampleScouts, scoutFinished, runScoutNow, setScoutPaused, unreadableScoutsText, leadScouts } from './scouts'
-import { S, loadVersion, toolName, timers, heard, stopped, workers, scoutRuns, checkerRuns, scoutState, isOwnAgent } from './state'
+import { S, onHere, loadVersion, toolName, timers, heard, stopped, workers, scoutRuns, checkerRuns, scoutState, isOwnAgent } from './state'
 import { path, load, isOn, now, saveMigrated, startWait, findRoot, mainRoot, isWorkerFolder, startingText } from './store'
 import { noteForLead, brief, takeBoardUpdate } from './tell'
 import { playable } from './voice'
@@ -63,8 +63,8 @@ export function COMMANDS(features: HostFeatures = ALL_FEATURES): { name: string;
     { name: `${S.N.name}-settings`, description: `See and change the ${S.N.name} settings: /${S.N.name}-settings opens them; /${S.N.name}-settings max_parallel 5 sets one; /${S.N.name}-settings role tester off (or kind, with on, off, reset or remove) changes a role or kind, role <name> add makes one, role <name> edit <field> <value> changes one part of it (save {"field":"value",...} several at once); /${S.N.name}-settings git setup sets up git (as the lead's setup_git)`, argumentHint: '[name value | role|kind <name> on|off|reset|remove | role|kind <name> add | role|kind <name> edit <field> <value> | role|kind <name> save {json} | git setup]' },
     { name: `${S.N.name}-stats`, description: `Show ${S.N.name} time and token stats: the whole team (lead, workers, scouts), totals, averages per task and per try, time per stage, outcomes, by role, origin and day, with bar charts; inside (with a day range) counts only the work inside it; html writes them as a web page with charts and opens it: /${S.N.name}-stats [full|html] [7d [inside]|T-100..T-130]`, argumentHint: '[full|html] [7d [inside]|T-1..T-9]' },
     { name: `${S.N.name}-doctor`, description: `Check ${S.N.dir}/ and git: old migration backups, task branches already merged, leftover task folders, files near the 4 MB limit, a stuck board; lists them with sizes and cleans up only with /${S.N.name}-doctor fix (all) or fix b-T-5 m-1101-1000 (the items with those ids)`, argumentHint: '[fix [all|id ...]]' },
-    { name: `${S.N.name}-disable`, description: `Disable ${S.N.name} for this project: ${S.W.assistant} works as normal, nothing runs; the board is kept` },
-    { name: `${S.N.name}-enable`, description: `Enable ${S.N.name} again for this project, in the mode the board had` },
+    { name: `${S.N.name}-disable`, description: `Disable ${S.N.name} for this project: ${S.W.assistant} works as normal, nothing runs; the board is kept; "here" turns it off in this window only`, argumentHint: '[here]' },
+    { name: `${S.N.name}-enable`, description: `Enable ${S.N.name} again for this project, in the mode the board had; "here" turns it on again in this window`, argumentHint: '[here]' },
     { name: `${S.N.name}-drive`, description: `Make this session drive the ${S.N.name} board (start workers, merge, run scouts); another driving session hands over first` },
     { name: S.N.help, description: `Show the ${S.N.name} manual: how the board, lead, workers and scouts work, and every command`, argumentHint: '[topic]' },
   ]
@@ -91,6 +91,8 @@ export function watchdogTick(host: Host) {
 
 /** The lead heartbeat's timer went off: the driver refreshes its heartbeat; the others look whether it went stale and take over. */
 export function leadBeat(host: Host) {
+  // T-793: a window off here drives nothing; it only looks whether the window with symcc on is gone
+  if (S.offHere) return void offHereBeat(host).catch(() => undefined)
   void claimLead(host)
     .then(async d => (d ? pump(host) : undefined))
     .catch(() => undefined)
@@ -129,6 +131,8 @@ export async function sessionStart(host: Host) {
     await saveArchiveMigrated(host).catch(() => undefined)
     await saveScoutsMigrated(host).catch(() => undefined)
     await moveOldOrgMem(host).catch(() => undefined)
+    // T-793: another live window with symcc on makes this one start off here (plain), before it can claim the lead
+    await startOffHere(host).catch(() => undefined)
     // Become the driver if nobody drives the board. As the driver, old workers still running
     // from before a reload are stopped first and their tasks go back to "todo".
     const waits = new Promise<void>(r => (startWait.mark = r))
@@ -159,7 +163,7 @@ export async function sessionStart(host: Host) {
       // Open the board panel by itself (every session, driver or not), without taking the cursor
       // from the prompt. On a narrow terminal Claude Code may not place it (isPlaced: false);
       // that is fine: the band above the prompt and /<name> still work.
-      if (openOnStart(b) && symccOn(b)) await openPane(host, { tab: 'live', focus: false, quiet: true })
+      if (openOnStart(b) && onHere(b)) await openPane(host, { tab: 'live', focus: false, quiet: true })
     }
   } finally {
     startWait.mark = null
@@ -313,7 +317,7 @@ export async function toolCall(host: Host, tool: string, agentId: string | undef
   // session; if it still isn't known, answer and write nothing (never a board or lock path from "/").
   if (!(await findRoot(host))) return { result: startingText() }
   if (S.guardOnly) return { result: guardOnlyText() }
-  if (!(await isOn(host))) return { result: offAnswer(S.N.name) }
+  if (!(await isOn(host))) return { result: S.offHere ? offHereAnswer(S.N.name) : offAnswer(S.N.name) }
   try {
     return { result: await runTool(host, name, input as In) }
   } catch (err) {
@@ -551,6 +555,7 @@ export async function runCommand(host: Host, command: string, args: string): Pro
       return say(await ownerSettings(host, cmd.input, `with /${S.N.name}-settings`))
     case 'disable':
     case 'enable':
+      if (cmd.here) return say(cmd.kind === 'enable' ? await enableHere(host, noteForLead) : await disableHere(host))
       return say(await setSymcc(host, cmd.kind === 'enable'))
     case 'drive':
       return say(await driveHere(host))

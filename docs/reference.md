@@ -141,6 +141,7 @@ Type these in the chat. `/symcc` opens everything; `/symcc-<word>` does one thin
 | `/symcc-doctor [fix [all\|id ...]]` | Check `.symcc/` and git (old backups, merged branches, leftover task folders, files near 4 MB, a stuck board). It only lists them; `fix all` or `fix <id> ...` cleans up |
 | `/symcc-disable` | Disable symcc for this project: Claude works as normal (no lead guide, workers, scouts, updates, sounds or voice); the board is kept |
 | `/symcc-enable` | Turn symcc back on, in the mode the board had |
+| `/symcc-disable here`, `/symcc-enable here` | Turn symcc off or on in this window only (plain Claude here; other windows and `board.json` are not changed) |
 | `/symcc-drive` | Make this session drive the board (start workers, merge, run scouts). If another session drives, it hands over within 30 s: its running workers stop and restart here from their kept folders and branches, without using up a try. If it doesn't answer within 3 minutes, this session takes over anyway |
 | `/symcc-help [topic]` | The built-in manual |
 

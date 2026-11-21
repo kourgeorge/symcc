@@ -17,7 +17,7 @@ import { partsText, splitBoard } from '../../core/board-parts'
 import { test, expect } from 'bun:test'
 import { mkdtemp, mkdir, readFile, lstat, readdir, realpath, rm, writeFile } from 'node:fs/promises'
 import { addTask, emptyBoard, patchTask, blockedEditText, parseLead, whoDrives, leadText as symccLeadText, LEAD_STALE_MS } from '../../board'
-import { claimLead } from '../../app/lead'
+import { claimLead, enableHere } from '../../app/lead'
 import { S, startS, timers, workers, stopped, boardAgents, starting, queuedWorkers, scoutRuns, checkerRuns, meanwhile, leadQueue } from '../../app/state'
 import { resetStore, change } from '../../app/store'
 import { stoppedText, unknownAgentText } from '../../app/ask'
@@ -439,7 +439,11 @@ test('a lead.json left by an OpenCode server stopped without its cleanup (T-467)
     expect(S.beat !== null).toBe(true)
     // ...and its own heartbeat (every 30 s) takes over once nobody refreshed lead.json for LEAD_STALE_MS
     await writeFile(leadFile, symccLeadText('opencode-gone', Date.now() - LEAD_STALE_MS - 1000))
-    expect(await claimLead(next.host)).toBe(true)
+    // T-793: that copy started while another window was live, so it is off here: it takes over only on /symcc-enable here
+    expect(S.offHere).toBe(true)
+    expect(await claimLead(next.host)).toBe(false)
+    await enableHere(next.host, () => undefined)
+    expect(S.driving).toBe(true)
     expect((await lead())?.session).toBe('opencode-next')
     // a Claude Code session in the same project sees the same file the same way (whoDrives is shared)
     expect(whoDrives(symccLeadText('opencode-gone', Date.now() - LEAD_STALE_MS - 1000), 'claude-session', Date.now())).toBe('takeover')
@@ -449,6 +453,7 @@ test('a lead.json left by an OpenCode server stopped without its cleanup (T-467)
     // killed long ago: the next start drives at once
     await writeFile(leadFile, symccLeadText('opencode-gone', Date.now() - LEAD_STALE_MS - 60_000))
     await start('opencode-later')
+    expect(S.offHere).toBe(false)
     expect(S.driving).toBe(true)
     expect((await lead())?.session).toBe('opencode-later')
   } finally {
