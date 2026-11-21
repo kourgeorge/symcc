@@ -14,6 +14,7 @@ import { emptyBoard } from '../hooks/core/board-file'
 import { scoutRunsFile } from '../hooks/core/scouts'
 import { vsHref } from '../hooks/claude/ui/vscode'
 import { fakeHost, memoryFs } from './fake-host'
+import { inToday, todayAt } from './day-clock'
 import { PANE, T0, seedBoard } from './board-fixture'
 import { TODAY_BAR_START, TODAY_LINE_2, todayTasks, todayTeamOf } from './live-today-fixture'
 
@@ -124,19 +125,28 @@ test('T-769: line 3 keeps the parts that fit its own width, whatever line 2 had 
   expect(todayMoreLines(solo, 40).map(segText).slice(1)).toEqual(['████████████████ workers 100%', '08 █ 08   busiest 08:00 · 10 tokens'])
 })
 
+// T-792: the host for readTodayTeam at `now`: a scout run and a lead answer inside today (placed between local midnight
+// and now, so they never land on yesterday just after midnight), one of each 3 days ago, and a session cost
+function todayTeamHost(now: number) {
+  const started = inToday(now, 0.2)
+  const ended = inToday(now, 0.6)
+  const files = new Map([[`/repo/${scoutRunsFile('bugs', 'symcc')}`, JSON.stringify({ runs: [{ started: new Date(started).toISOString(), ended: new Date(ended).toISOString(), outcome: 'found', findings: 1, tokens: { input: 400_000 } }, { started: null, ended: new Date(now - 3 * 86_400_000).toISOString(), outcome: 'found', findings: 1, tokens: { input: 9 } }] })]])
+  const g = fakeHost({
+    fs: memoryFs(files),
+    lead: { send: async () => undefined, usage: async () => ({ lead: [{ id: 'a', atMs: inToday(now, 0.9), tokens: { input: 70_000 } }, { id: 'b', atMs: now - 3 * 86_400_000, tokens: { input: 5 } }] }) },
+    session: { id: async () => 'me', repo: async () => null, root: async () => '/', usage: async () => ({ cost: { usd: 3.5 } }) },
+  })
+  return { g, scoutMs: ended - started }
+}
+
 test('T-769: readTodayTeam reads the lead\'s tokens today, the scouts\' runs of today and the session\'s cost; publish puts them in the view', async () => {
   resetTodayTeam()
   S.root = '/repo'
-  const now = Date.now()
-  const off = localOffset(now)
-  const files = new Map([[`/repo/${scoutRunsFile('bugs', 'symcc')}`, JSON.stringify({ runs: [{ started: new Date(now - 20 * 60_000).toISOString(), ended: new Date(now - 10 * 60_000).toISOString(), outcome: 'found', findings: 1, tokens: { input: 400_000 } }, { started: null, ended: new Date(now - 3 * 86_400_000).toISOString(), outcome: 'found', findings: 1, tokens: { input: 9 } }] })]])
-  const g = fakeHost({
-    fs: memoryFs(files),
-    lead: { send: async () => undefined, usage: async () => ({ lead: [{ id: 'a', atMs: now - 60_000, tokens: { input: 70_000 } }, { id: 'b', atMs: now - 3 * 86_400_000, tokens: { input: 5 } }] }) },
-    session: { id: async () => 'me', repo: async () => null, root: async () => '/', usage: async () => ({ cost: { usd: 3.5 } }) },
-  })
+  // T-792: a clock pinned to today's noon, not the real one (which may be just past midnight)
+  const now = todayAt(12)
+  const { g, scoutMs } = todayTeamHost(now)
   const t = await readTodayTeam(g.host, ['bugs'], now)
-  expect([t?.day, t?.lead, t?.scouts, t?.scout_ms, t?.usd]).toEqual([dayOf(now, off), 70_000, 400_000, 10 * 60_000, 3.5])
+  expect([t?.day, t?.lead, t?.scouts, t?.scout_ms, t?.usd]).toEqual([dayOf(now, localOffset(now)), 70_000, 400_000, scoutMs, 3.5])
   expect(t?.hours?.reduce((s, n) => s + n, 0)).toBe(470_000)
   // no lead usage, no scouts, no cost: nothing (no guessing)
   expect(await readTodayTeam(fakeHost().host, [], now)).toBe(undefined)
@@ -147,13 +157,26 @@ test('T-769: readTodayTeam reads the lead\'s tokens today, the scouts\' runs of 
   resetTodayTeam()
 })
 
+test('T-792: readTodayTeam finds today\'s lead, scout and hour figures just after midnight (00:05) and just before it (23:55)', async () => {
+  S.root = '/repo'
+  for (const [h, m] of [[0, 5], [23, 55]] as const) {
+    const now = todayAt(h, m)
+    const { g, scoutMs } = todayTeamHost(now)
+    const t = await readTodayTeam(g.host, ['bugs'], now)
+    const at = `${h}:${m}`
+    expect([at, t?.day, t?.lead, t?.scouts, t?.scout_ms, t?.usd]).toEqual([at, dayOf(now, localOffset(now)), 70_000, 400_000, scoutMs, 3.5])
+    expect([at, t?.hours?.reduce((s, n) => s + n, 0)]).toEqual([at, 470_000])
+  }
+})
+
 test('T-769: publish itself reads ▍Today\'s team figures on a host with no panel (OpenCode draws ▍Today from the published view)', async () => {
   resetTodayTeam()
   S.root = '/repo'
+  // publish reads at the real clock, so the lead's answer goes between local midnight and now (never yesterday)
   const now = Date.now()
   const g = fakeHost({
     features: { panel: false, band: false, leadUsage: true },
-    lead: { send: async () => undefined, usage: async () => ({ lead: [{ id: 'a', atMs: now - 60_000, tokens: { input: 70_000 } }] }) },
+    lead: { send: async () => undefined, usage: async () => ({ lead: [{ id: 'a', atMs: inToday(now, 0.5), tokens: { input: 70_000 } }] }) },
     session: { id: async () => 'me', repo: async () => null, root: async () => '/', usage: async () => ({ cost: { usd: 3.5 } }) },
   })
   await publish(g.host, emptyBoard())

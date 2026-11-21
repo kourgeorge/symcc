@@ -28,6 +28,7 @@ const headState = (t: unknown, nowMs: number) => {
   return { text: g.map(x => x.text).join(''), color: g[0]!.color }
 }
 import { keysFor } from './task-keys'
+import { inToday, todayAt } from './day-clock'
 import { type HostAgentStarted, agentState } from '../hooks/host'
 
 // The core role functions (role tools in symcc's words), and $.agent.list() entries through the Claude adapter
@@ -902,7 +903,8 @@ test('after /clear, this session\'s "doing" tasks move to the new session id', (
 
 // T-748: the status line under the prompt has the board's facts, the band above it the work: no task counts or ids here
 test('T-748: the status line says the mode, who drives, the branch, the next scout, today merged and the cost, but no task counts or ids', () => {
-  const now = Date.now()
+  // T-792: today's noon, so the runs 30 minutes back stay inside today whatever the real time
+  const now = todayAt(12)
   const ago = (min: number) => new Date(now - min * 60_000).toISOString()
   const merged = (id: string) => ({ id, status: 'done' as const, history: [{ kind: 'merged', at: ago(1), text: 'merged' }], runs: [{ started: ago(30), ended: ago(5), cost: 150.4 }] })
   const tasks = [merged('T-1'), merged('T-2'), { id: 'T-740', status: 'doing' as const, attempts: 3, runs: [{ started: ago(4), cost: 11.2 }] }, { id: 'T-743', status: 'todo' as const }]
@@ -940,7 +942,8 @@ test('T-748: symcc adds no "⚠" of its own to the status line (Claude Code draw
 })
 
 test('T-748: on a narrow line the status line drops parts from the end, cleanly; the mode and who drives stay', () => {
-  const now = Date.now()
+  // T-792: today's noon, so the merge and the run (30 minutes back) stay inside today whatever the real time
+  const now = todayAt(12)
   const ago = (min: number) => new Date(now - min * 60_000).toISOString()
   const tasks = [{ id: 'T-1', status: 'done' as const, history: [{ kind: 'merged', at: ago(1), text: 'merged' }], runs: [{ started: ago(30), ended: ago(5), cost: 312 }] }]
   const b = { tasks, scouts: [{ name: 'bugs', running: false, next_run: new Date(now + 38.2 * 60_000).toISOString() }], branch: 'main' }
@@ -954,6 +957,16 @@ test('T-748: on a narrow line the status line drops parts from the end, cleanly;
   // never longer than the room Claude Code gives it
   expect(statusRoom('symcc')).toBe(STATUS_WIDTH - '⚠ symcc: '.length)
   for (const w of [20, 30, 45, 60, statusRoom()]) expect(statusLine(b, true, { nowMs: now, width: w })!.length).toBeLessThanOrEqual(Math.max(w, '⏵ auto · drives here'.length))
+})
+
+test('T-792: the status line counts today\'s merge and cost just after midnight (00:05) and just before it (23:55)', () => {
+  for (const [h, m] of [[0, 5], [23, 55]] as const) {
+    const now = todayAt(h, m)
+    // the run and the merge between local midnight and now: always today
+    const at = (share: number) => new Date(inToday(now, share)).toISOString()
+    const tasks = [{ id: 'T-1', status: 'done' as const, history: [{ kind: 'merged', at: at(0.9), text: 'merged' }], runs: [{ started: at(0.1), ended: at(0.5), cost: 312 }] }]
+    expect([`${h}:${m}`, statusLine({ tasks, branch: 'main' }, true, { nowMs: now })]).toEqual([`${h}:${m}`, '⏵ auto · drives here · main · today ✓ 1 · $312'])
+  }
 })
 
 // T-746: Claude Code draws every control character of $.ui.status text (ESC too) as "�", so the line can't be colored
