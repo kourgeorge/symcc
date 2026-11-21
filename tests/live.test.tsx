@@ -4,6 +4,7 @@ import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { liveLanes, liveLayout, laneLines, liveLabelLine, liveStations, nextUp, nextUpLine, liveToday, todayLines, segText, liveBlink, liveHeader, tabRow, withLiveKey, LIVE_TABS, LIVE_EMPTY, LIVE_LEGEND } from '../hooks/core/live'
 import { textWidth } from '../hooks/core/stats'
+import { FINISH_STALE_MS } from '../hooks/core/lead'
 import { listKeys } from '../hooks/board'
 import { viewTask } from '../hooks/core/board-parts'
 import { LIVE_TICK_MS } from '../hooks/claude/ui/live'
@@ -50,6 +51,31 @@ test('T-690: liveLanes puts each doing task at its station, and leaves check out
   // the time at the station: from the history's stage line
   expect(lane('T-685').sinceMs).toBe(T0 - 3 * 60_000)
   expect(liveHeader(view(true), liveLanes(view(true), T0))).toBe('⏵ auto · agents 2/3 busy')
+})
+
+test('T-709: an approved task in review, or a waiting one whose merge runs, gets a lane at its real station while its check step is fresh', () => {
+  const sec = (s: number) => new Date(T0 - s * 1000).toISOString()
+  const tried = { runs: [{ started: iso(40), ended: iso(20), tokens: { input: 300_000 } }] }
+  const lanes = (...tasks: unknown[]) => liveLanes({ tasks: tasks as never[], checker: true, mode: 'auto', max_parallel: 3 }, T0)
+  // (1) a review task whose approve is in its tests, then in the merge queue at place 2
+  const testing = lanes(task('T-1', 'Approved', { status: 'review', ...tried, checking: { step: 'testing', at: sec(5) } }))
+  expect(testing.map(l => [l.id, l.station])).toEqual([['T-1', 'tests']])
+  const queued = lanes(task('T-1', 'Approved', { status: 'review', ...tried, checking: { step: 'queue', at: sec(5), place: 2 } }))
+  expect(queued.map(l => [l.station, l.place])).toEqual([['queue', 2]])
+  // (2) a stale check step, or none: no lane
+  expect(lanes(task('T-1', 'Approved', { status: 'review', ...tried, checking: { step: 'testing', at: new Date(T0 - FINISH_STALE_MS - 1000).toISOString() } }))).toEqual([])
+  expect(lanes(task('T-1', 'Approved', { status: 'review', ...tried }))).toEqual([])
+  // (3) a waiting task whose merge runs once its files are clear
+  const merging = lanes(task('T-2', 'Files cleared', { status: 'waiting', ...tried, checking: { step: 'merging', at: sec(5) } }))
+  expect(merging.map(l => [l.id, l.station])).toEqual([['T-2', 'merged']])
+  // order: an approve by when it started (its prep line), next to the doing tasks by when their try started
+  const order = lanes(
+    task('T-3', 'Worker', { runs: [{ started: iso(10) }] }),
+    task('T-1', 'Approved', { status: 'review', ...tried, checking: { step: 'testing', at: sec(5) }, history: [{ kind: 'stage', at: iso(15), text: 'try 1: prep started' }] }),
+    task('T-2', 'Files cleared', { status: 'waiting', ...tried, checking: { step: 'merging', at: sec(5) }, history: [{ kind: 'stage', at: iso(30), text: 'try 1: prep started' }, { kind: 'stage', at: iso(3), text: 'try 1: prep started' }] }),
+  )
+  expect(order.map(l => l.id)).toEqual(['T-1', 'T-3', 'T-2'])
+  expect(order[0]!.sinceMs).toBe(T0 - 5000)
 })
 
 test('T-690: lanes are ordered by when the task entered doing, earliest first', () => {
