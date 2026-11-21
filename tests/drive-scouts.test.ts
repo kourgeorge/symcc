@@ -10,7 +10,7 @@ import { claimLead } from '../hooks/app/lead'
 import { runScout, runScoutNow, scoutFinished, loadScoutRunHistory, scheduleScouts, stopAnswer } from '../hooks/app/scouts'
 import { checkEdit, movedText, unknownAgentText } from '../hooks/app/ask'
 import { toolCall, notLeadText } from '../hooks/app/symcc'
-import { S, scoutState, scoutRuns, timers, leadQueue, DRIVING_MOVED } from '../hooks/app/state'
+import { S, scoutState, scoutRuns, timers, leadQueue, stopped, movedAgents, movedRefused, DRIVING_MOVED } from '../hooks/app/state'
 import { fakeHost } from './fake-host'
 import type { HostAgent } from '../hooks/host'
 
@@ -149,4 +149,30 @@ test('(c) only the exact stop answers count as stopped; a real short finding tha
   await scoutFinished(w.host, 's2', 'Stopped workers keep their worktrees: hooks/app/git.ts:120 never removes them. Fix: remove on stop.')
   const runs = await loadScoutRunHistory(w.host, 'gaps')
   expect(runs.at(-1)?.outcome).toBe('found')
+})
+
+test('(c) a scout another copy of symcc refused with the "driving moved" note ends as stopped, whatever it answers', async () => {
+  const w = world()
+  await scheduleScouts(w.host)
+  S.driving = false
+  w.files.set(LEAD, leadText('b', Date.now()))
+  // the copy that refuses it has no record of it; its own sets are not this copy's (only movedRefused is shared)
+  expect(await checkEdit(w.host, 's1', { command: 'ls' }, ROOT, async () => 'symcc')).toBe(movedText())
+  expect(movedRefused().has('s1')).toBe(true)
+  stopped.delete('s1')
+  movedAgents.delete('s1')
+  scoutRuns.set('s1', 'gaps')
+  scoutState.get('gaps')!.running = true
+  await scoutFinished(w.host, 's1', 'Stopped: driving moved to another session. I did nothing.')
+  for (const f of w.later.splice(0)) f()
+  await pause(0)
+  expect(leadQueue.some(l => l.includes('found'))).toBe(false)
+  expect(w.toLead.some(l => l.includes('found'))).toBe(false)
+  expect((await loadScoutRunHistory(w.host, 'gaps')).at(-1)).toMatchObject({ outcome: 'stopped', findings: 0, why: DRIVING_MOVED })
+  expect(movedRefused().has('s1')).toBe(false)
+  // a scout never refused that answers with a real finding starting "Stopped" stays a finding
+  scoutRuns.set('s2', 'gaps')
+  scoutState.get('gaps')!.running = true
+  await scoutFinished(w.host, 's2', 'Stopped workers keep their worktrees: hooks/app/git.ts:120 never removes them. Fix: remove on stop.')
+  expect((await loadScoutRunHistory(w.host, 'gaps')).at(-1)?.outcome).toBe('found')
 })

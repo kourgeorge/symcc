@@ -231,6 +231,17 @@ export const TAKEN_WHY = 'another session drives the board now'
 export const DRIVING_MOVED = 'stopped: driving moved to another session'
 /** T-759: of the agents in `stopped`, the ones stopped because driving the board moved to another session (MOVED_WHY, TAKEN_WHY). */
 export const movedAgents = new Set<string>()
+const MOVED_REFUSED_KEY = '__symccMovedRefused'
+/**
+ * T-759: the agents any copy of symcc loaded in this process refused with the "driving moved" note (movedText), kept
+ * on globalThis so every copy sees them: the copy that holds such a scout in scoutRuns (and so ends its run) is not
+ * the one that refused it, and counts its run as stopped by this, whatever it answered.
+ */
+export function movedRefused(): Set<string> {
+  const g = globalThis as unknown as Record<string, unknown>
+  if (!(g[MOVED_REFUSED_KEY] instanceof Set)) g[MOVED_REFUSED_KEY] = new Set<string>()
+  return g[MOVED_REFUSED_KEY] as Set<string>
+}
 /** Whether agent `agentId` is one of symcc's own that this copy tracks now: a worker, a checker, a scout, or one it stopped. */
 export const isOwnAgent = (agentId: string | undefined): agentId is string =>
   !!agentId && (workers.has(agentId) || checkerRuns.has(agentId) || scoutRuns.has(agentId) || stopped.has(agentId))

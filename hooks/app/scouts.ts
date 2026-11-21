@@ -1,7 +1,7 @@
 import type { SymccScout, SymccTask, SymccTokens } from '../../types'
 import { type ScoutDef, parseScout, modeOf, symccOn, OPEN, scoutPrompt, recentClosed, scoutAgentName, scoutDescription, parseScoutMemory, scoutMemoryText, scoutPausedText, everyText, SCOUT_REPORT_CHARS, scoutLeadMessage, scoutWhyNot, scoutFile, scoutNameError, scoutDraftError, scoutText, everyMinutesOf, onDemand, onNotReady, SCOUT_RETRY_MS, inPlan, addScoutRun, keepScoutUsage, migrateScoutUsage, leadScoutNameError, leadScoutText, leadScoutsText, safeScoutFile, SCOUT_FILE_NAME, SCOUT_FILE_NAME_RULE, scoutFileNameError, type ScoutRunRecord, parseScoutRuns, scoutRunsText, addScoutRunRecord, migratedScoutRun, scoutRunsFile, scoutRunReportFile, isScoutRunReport, scoutRunOutcome, scoutRunTasks, linkScoutRunTask, countFindings, reportText, parseScoutUsage, scoutResultsLine, renameScoutOrigins, linkScoutRunTaskAt, type Board } from '../board'
 import { publish, refreshStatus, drivesHere } from './lead'
-import { S, scoutState, scoutRuns, heard, timers, updateScoutOpen, stopped, movedAgents, DRIVING_MOVED } from './state'
+import { S, scoutState, scoutRuns, heard, timers, updateScoutOpen, stopped, movedAgents, movedRefused, DRIVING_MOVED } from './state'
 import { type FileTouch, type Host, type HostAgentStarted, notReadyYet } from '../host'
 import { startAgent, startCancelled } from './starts'
 import type { TurnEnd } from './workers'
@@ -443,10 +443,13 @@ export async function recordScoutRun(host: Host, name: string, run: { endMs: num
  * report are kept.
  */
 export async function scoutFinished(host: Host, agentId: string, answer: string, end: boolean | TurnEnd = false, tokens?: SymccTokens) {
-  // T-759: a run symcc stopped (or refused, e.g. after driving moved to another session) whose last words are only
-  // "stopped" is a stopped run, never a finding
-  const stoppedRun = stopped.has(agentId) || stopAnswer(answer)
-  const moved = movedAgents.has(agentId) || /driving moved/i.test(answer)
+  // T-759: a run symcc stopped, or one any copy of symcc refused with the "driving moved" note (movedRefused, shared
+  // by every copy in this process), is a stopped run whatever it answered, as is one whose last words are only
+  // "stopped": never a finding
+  const refusedMoved = movedRefused().has(agentId)
+  movedRefused().delete(agentId)
+  const stoppedRun = stopped.has(agentId) || refusedMoved || stopAnswer(answer)
+  const moved = movedAgents.has(agentId) || refusedMoved || /driving moved/i.test(answer)
   const reason = stoppedRun || end === true ? 'aborted' : end === false ? 'answer' : end.reason
   const name = scoutRuns.get(agentId)!
   scoutRuns.delete(agentId)
