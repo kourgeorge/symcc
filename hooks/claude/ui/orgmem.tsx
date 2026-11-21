@@ -8,10 +8,11 @@ import { type $ } from '../panel'
 import type { PaneParts } from './parts'
 import { arrows, row } from './arrows'
 import { claudeHost } from '../host'
-import { ORG_MEM_EMPTY, orgMemAbout, orgMemOfTopic, orgMemPageTitle, orgMemTopicEmpty, orgMemDeleteAsk, orgMemKeys, orgMemNoteHead, orgMemFind, type OrgMemNote } from '../../core/org-mem'
+import { ORG_MEM_EMPTY, ORG_MEM_SUBTITLE, orgMemPageCount, orgMemAbout, orgMemOfTopic, orgMemPageTitle, orgMemTopicEmpty, orgMemDeleteAsk, orgMemKeys, orgMemNoteHead, orgMemFind, type OrgMemNote } from '../../core/org-mem'
 import { orgMemView, deleteOrgMem, resetOrgMemView } from '../../app/org-mem'
 import { orgMemPageVs } from './vscode-orgmem'
 import { orgMemPick } from './live'
+import { simplePageHeader } from './page-header'
 
 /** The note a press of Delete (x) is about: the note row that holds the focus, else the first (newest) one. */
 const focusedNote = (notes: readonly OrgMemNote[]) => {
@@ -48,13 +49,19 @@ export function orgMemPage($: $, pane: PaneParts, all: OrgMemNote[], file: strin
   return (
     <Box flexDirection="column">
       {header('orgmem')}
-      {heading(orgMemPageTitle(topic))}
-      <Box key="orgmem-buttons" flexDirection="row" gap={1}>
-        {notes.length && !ask ? <Button key="orgmem-delete" label="Delete (x)" hotkey="x" onPress={() => askDelete(focusedNote(notes))()} /> : null}
-        <Button key="orgmem-back" label="Back (b)" hotkey="b" onPress={() => (resetOrgMemView(), redraw())} />
-      </Box>
-      <Text key="orgmem-about" wrap="wrap" color={C('inactive')}>{orgMemAbout(file)}</Text>
+      {simplePageHeader(pane, {
+        from: 'live',
+        right: orgMemPageCount(notes.length, all.length, topic),
+        title: orgMemPageTitle(topic),
+        subtitle: ORG_MEM_SUBTITLE,
+        buttons: notes.length && !ask ? [{ id: 'orgmem-delete', label: 'Delete', key: 'x', onPress: () => askDelete(focusedNote(notes))() }] : [],
+        onBack: () => (resetOrgMemView(), redraw()),
+        backKey: 'orgmem-back',
+      })}
+      {heading('About')}
+      <Text key="orgmem-about" wrap="wrap" color={C('inactive')}>{` ${orgMemAbout(file)}`}</Text>
       <Text key="orgmem-about-blank"> </Text>
+      {heading('Notes')}
       {notes.length ? (
         notes.flatMap(x => [
           <Button key={row(`orgmemRow:${x.n}`)} plain label={`${orgMemNoteHead(x)}: ${x.text}`} autoFocus={x.n === focus && !ask ? true : undefined} onPress={askDelete(x)}>

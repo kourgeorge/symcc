@@ -541,6 +541,13 @@ export function orgMemFind(notes: readonly OrgMemNote[], pick: OrgMemNote | null
   return same.sort((a, b) => Math.abs(a.n - pick.n) - Math.abs(b.n - pick.n))[0]
 }
 
+/** T-790: the line under the org-mem page's title. */
+export const ORG_MEM_SUBTITLE = 'Notes shared with workers, checkers and scouts'
+
+/** T-790: the count at the right of the org-mem page's first row: "60 / 60" (all notes of the most it keeps); a topic's page
+ *  "3 of 60" (its notes of all). */
+export const orgMemPageCount = (shown: number, total: number, topic?: string | null) => (topic ? `${shown} of ${total}` : `${total} / ${ORG_MEM_MAX_LINES}`)
+
 /** The org-mem page's title: ORG_MEM_TITLE for all notes, "Organizational memory · tests" for one topic's. */
 export const orgMemPageTitle = (topic?: string | null) => (topic ? `Organizational memory · ${topic}` : ORG_MEM_TITLE)
 

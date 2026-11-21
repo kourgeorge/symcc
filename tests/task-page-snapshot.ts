@@ -136,7 +136,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Box",
             "props": {"key":"hdr-rule","flexDirection":"column"},
-            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["──────────────────────────────────────────────────"]}]
           }
         ]
       },
@@ -929,7 +929,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Box",
             "props": {"key":"hdr-rule","flexDirection":"column"},
-            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["──────────────────────────────────────────────────"]}]
           }
         ]
       },
@@ -1684,7 +1684,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Box",
             "props": {"key":"hdr-rule","flexDirection":"column"},
-            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["──────────────────────────────────────────────────"]}]
           }
         ]
       },
@@ -2514,7 +2514,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Box",
             "props": {"key":"hdr-rule","flexDirection":"column"},
-            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["──────────────────────────────────────────────────"]}]
           }
         ]
       },
@@ -3264,7 +3264,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Box",
             "props": {"key":"hdr-rule","flexDirection":"column"},
-            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["──────────────────────────────────────────────────"]}]
           }
         ]
       },
@@ -4023,7 +4023,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Box",
             "props": {"key":"hdr-rule","flexDirection":"column"},
-            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["──────────────────────────────────────────────────"]}]
           }
         ]
       },
@@ -4768,7 +4768,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Box",
             "props": {"key":"hdr-rule","flexDirection":"column"},
-            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["──────────────────────────────────────────────────"]}]
           }
         ]
       },
@@ -5290,7 +5290,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Box",
             "props": {"key":"hdr-rule","flexDirection":"column"},
-            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["──────────────────────────────────────────────────"]}]
           }
         ]
       },
@@ -5772,7 +5772,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Box",
             "props": {"key":"hdr-rule","flexDirection":"column"},
-            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["──────────────────────────────────────────────────"]}]
           }
         ]
       },
@@ -6565,7 +6565,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Box",
             "props": {"key":"hdr-rule","flexDirection":"column"},
-            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["──────────────────────────────────────────────────"]}]
           }
         ]
       },
@@ -7284,7 +7284,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Box",
             "props": {"key":"hdr-rule","flexDirection":"column"},
-            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["──────────────────────────────────────────────────"]}]
           }
         ]
       },
@@ -7755,7 +7755,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Box",
             "props": {"key":"hdr-rule","flexDirection":"column"},
-            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["──────────────────────────────────────────────────"]}]
           }
         ]
       },
@@ -8158,7 +8158,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Box",
             "props": {"key":"hdr-rule","flexDirection":"column"},
-            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["──────────────────────────────────────────────────"]}]
           }
         ]
       },
@@ -8607,7 +8607,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Box",
             "props": {"key":"hdr-rule","flexDirection":"column"},
-            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["──────────────────────────────────────────────────"]}]
           }
         ]
       },
@@ -8987,7 +8987,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Box",
             "props": {"key":"hdr-rule","flexDirection":"column"},
-            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["──────────────────────────────────────────────────"]}]
           }
         ]
       },
@@ -9683,7 +9683,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Box",
             "props": {"key":"hdr-rule","flexDirection":"column"},
-            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["──────────────────────────────────────────────────"]}]
           }
         ]
       },
@@ -10360,7 +10360,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Box",
             "props": {"key":"hdr-rule","flexDirection":"column"},
-            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["──────────────────────────────────────────────────"]}]
           }
         ]
       },
@@ -11067,7 +11067,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Box",
             "props": {"key":"hdr-rule","flexDirection":"column"},
-            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["──────────────────────────────────────────────────"]}]
           }
         ]
       },
@@ -11755,7 +11755,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Box",
             "props": {"key":"hdr-rule","flexDirection":"column"},
-            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["──────────────────────────────────────────────────"]}]
           }
         ]
       },
@@ -12714,7 +12714,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Box",
             "props": {"key":"hdr-rule","flexDirection":"column"},
-            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["──────────────────────────────────────────────────"]}]
           }
         ]
       },
@@ -13620,7 +13620,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Box",
             "props": {"key":"hdr-rule","flexDirection":"column"},
-            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["──────────────────────────────────────────────────"]}]
           }
         ]
       },
@@ -14375,7 +14375,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Box",
             "props": {"key":"hdr-rule","flexDirection":"column"},
-            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["──────────────────────────────────────────────────"]}]
           }
         ]
       },
