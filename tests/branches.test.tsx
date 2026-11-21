@@ -25,11 +25,11 @@ test('T-727: the Branches section at 100 and 40 columns: main\'s commits, a row 
   const narrow = liveBranches(sample(), T0, 40)!
   expect(linesOf(narrow)).toEqual([
     '▍Branches',
-    '    main   ●─●─●   c1c1c1c · 2 min ago',
-    '           │ │ ╰─◀ T-724 merged',
-    '           │ ╰───○ T-721  +3 · 1 behind',
-    '           ├─────○ T-725  +0 · 4 behind',
-    '           ╰─────○ T-726  not started',
+    '  main   ●─●─●─●   c1c1c1c · 2 min ago',
+    '         │   │ ╰─◀ T-724 merged',
+    '         │   ╰───○ T-721  +3 · 1 behind',
+    '         ├───────○ T-725  +0 · 4 behind',
+    '         ╰───────○ T-726  not started',
   ])
   for (const w of [100, 60, 40, 30, 20, 12])
     for (const l of linesOf(liveBranches(sample(), T0, w)!)) expect(textWidth(l), `${w}: ${l}`).toBeLessThanOrEqual(w)
@@ -199,8 +199,8 @@ for (const surface of ['terminal', 'desktop', 'mobile'] as const)
     expect(heads.slice(0, 3)).toEqual(['▍Tasks', '▍Today', '▍Branches'])
     expect([heads.length, /^▍Organizational memory {3}\d+ \/ 60 ▕/.test(heads[3] ?? '')]).toEqual([4, true])
     expect(live.filter(l => l.includes('── ') || /^─+$/.test(l)).length).toBe(1)
-    // the lines under a heading are indented by 3
-    for (const l of ['    T-7', '    main ', '   ✓ ', '     newest']) expect([l, live.some(x => x.startsWith(l))]).toEqual([l, true])
+    // the lines under a heading are indented by 1 (T-767; a running lane starts "▶ ")
+    for (const l of [' ▶ T-7', '  main ', ' ✓ ', '   newest']) expect([l, live.some(x => x.startsWith(l))]).toEqual([l, true])
     for (const isHead of LIVE_HEADS) {
       const at = live.findIndex(isHead)
       expect([at, at > 0]).toEqual([at, true])

@@ -28,12 +28,12 @@ export function branchFactsAt(now: number): BranchFacts {
   }
 }
 
-/** The lines the sample draws at 100 columns: the "▍Branches" heading (T-747), the lines under it indented by 3. */
+/** The lines the sample draws at 100 columns: the "▍Branches" heading (T-747), the lines under it indented by 1 (T-767). */
 export const BRANCH_LINES_100 = [
   '▍Branches',
-  '    main   ●───●───●───●───●───●───●   c1c1c1c · 2 min ago',
-  '           │       │           │   ╰─◀ T-724 merged',
-  '           │       │           ╰─────○ T-721  +3 commits · 1 behind',
-  '           │       ╰─────────────────○ T-725  +0 commits · 4 behind',
-  '           ╰─────────────────────────○ T-726  not started',
+  '  main   ●───●───●───●───●───●───●   c1c1c1c · 2 min ago',
+  '         │       │           │   ╰─◀ T-724 merged',
+  '         │       │           ╰─────○ T-721  +3 commits · 1 behind',
+  '         │       ╰─────────────────○ T-725  +0 commits · 4 behind',
+  '         ╰─────────────────────────○ T-726  not started',
 ]

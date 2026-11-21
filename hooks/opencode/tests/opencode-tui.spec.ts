@@ -2003,12 +2003,12 @@ test('T-718: OpenCode: the Live tab\'s org-mem section draws the header, the 3 n
     // T-747: the "▍Organizational memory" heading with the count and bar on it, the lines under it indented
     const head = ls.findIndex(l => l.startsWith('▍Organizational memory   8 / 60 ▕'))
     expect(head > 0).toBe(true)
-    expect(ls[head + 1]).toBe('     newest')
-    expect(ls[head + 2]).toMatch(/^[ ›] {5}— +unsorted {2}a note written/)
-    expect(ls[head + 3]).toMatch(/^ {6}11-21 {2}git +Use a plain path/)
-    expect(ls[head + 4]).toMatch(/^ {6}11-21 {2}tests +In tests, put/)
-    expect(ls[head + 5]).toBe('     topics')
-    const grid = ls.slice(head + 6, ls.findIndex(l => l.startsWith('     ↑↓ move')))
+    expect(ls[head + 1]).toBe('   newest')
+    expect(ls[head + 2]).toMatch(/^[ ›] {3}— +unsorted {2}a note written/)
+    expect(ls[head + 3]).toMatch(/^ {4}11-21 {2}git +Use a plain path/)
+    expect(ls[head + 4]).toMatch(/^ {4}11-21 {2}tests +In tests, put/)
+    expect(ls[head + 5]).toBe('   topics')
+    const grid = ls.slice(head + 6, ls.findIndex(l => l.startsWith('   ↑↓ move')))
     expect(grid.join(' ')).toMatch(/tests +3/)
     expect(grid.join(' ')).toMatch(/git +2/)
     expect(grid.join(' ')).toMatch(/vs code · panel +1/)
@@ -2692,7 +2692,7 @@ test('T-692: the Live tab draws the terminal panel\'s lanes and today (core/live
     }
     for (const t of texts) expect([w, t, t.length <= w]).toEqual([w, t, true])
     expect(d.ids).toEqual(['T-611', 'T-612', 'T-610'])
-    expect(texts.some(t => t.startsWith(`›${LIVE_INDENT}T-611`))).toBe(true)
+    expect(texts.some(t => t.startsWith('›▶ T-611'))).toBe(true)
     // each lane's first line is a click on its task
     const lane = d.lines.findIndex((l, i) => lineText(l).includes('T-612') && !!d.hits[i])
     expect(d.hits[lane]).toEqual({ open: 'T-612' })
@@ -2857,13 +2857,34 @@ test('T-715: the Live tab hangs the waiting trains under their lanes as the term
     const texts = d.lines.map(lineText).map(x => x.replace(/^›/, ' '))
     for (const x of texts) expect([w, x, x.length <= w]).toEqual([w, x, true])
     // right under T-712's two lane lines
-    const at = texts.findIndex(x => x.startsWith(`${LIVE_INDENT} T-712 `))
+    const at = texts.findIndex(x => x.startsWith(`${LIVE_INDENT}▶ T-712 `))
     expect([w, texts.slice(at + 2, at + 2 + rows.length)]).toEqual([w, rows.map(r => LIVE_INDENT + segText(r.segs))])
     // the cursor stops: each lane, then its trains; a click on a train opens it
     expect(d.ids).toEqual([...lanes.flatMap(l => [l.id, ...trainRows(t.lanes[l.id]!, liveInner(w)).flatMap(r => (r.id ? [r.id] : []))])])
     expect(d.hits[d.lines.findIndex(l => lineText(l).includes('└─◇ T-714'))]).toEqual({ open: 'T-714' })
     expect(texts.some(x => x.includes('next up'))).toBe(false)
     expect(texts[texts.findIndex(x => x.trim() === '▍Today') + 1]?.startsWith(`${LIVE_INDENT}✓ `)).toBe(true)
+  }
+})
+
+test('T-767: the OpenCode Live tab indents by 1 under the headings; a running lane is "▶ " with its id and title bold in the accent color, a waiting train is all dim', () => {
+  const f0 = viewFile()
+  const whole = trainTasks()
+  const f: ViewFile = { ...f0, view: { ...f0.view, tasks: whole.map(t => viewTask(t)), checker: true, max_parallel: 3 } }
+  for (const w of [100, 40]) {
+    // the cursor on the first stop (T-690), so T-712's lane shows its plain indent
+    const d = panelLines(parseViewFile(viewFileText(f)), { tab: 'live', opened: '', cursor: 0 }, NOW, w)
+    const texts = d.lines.map(lineText)
+    for (const x of texts) expect([w, x, x.length <= w]).toEqual([w, x, true])
+    expect(LIVE_INDENT).toBe(' ')
+    const lane = d.lines[texts.findIndex(x => x.startsWith(' ▶ T-712 '))]!
+    expect(lane[0]!.text).toBe(' ')
+    const run = lane.slice(1).filter(x => x.text.trim()).slice(0, 3)
+    expect(run.map(x => x.text.trim())).toEqual(['▶', 'T-712', run[2]!.text.trim()])
+    expect(run.map(x => [x.color, !!x.bold])).toEqual(run.map(() => ['claude', true]))
+    const train = d.lines[texts.findIndex(x => x.includes('└─◇ T-714'))]!.filter(x => x.text.trim())
+    expect(train.map(x => [x.text, x.color, !!x.bold])).toEqual(train.map(x => [x.text, 'inactive', false]))
+    expect(texts[texts.findIndex(x => x.trim() === '▍Today') + 1]?.startsWith(' ✓ ')).toBe(true)
   }
 })
 

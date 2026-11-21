@@ -147,10 +147,10 @@ test('T-715: train rows: "└─◇" indented by level, "waits" and "+ also"; no
   const t = liveTrains(trainView, T0)
   const rows = trainRows(t.lanes['T-712']!, 100)
   expect(rows.map(r => segText(r.segs))).toEqual([
-    '   └─◇ T-713 Task files: no silent d…  waits',
-    '      └─◇ T-714 Help: /symcc-help shows…  waits',
-    '      └─◇ T-717 Waits for a todo and a …  waits  + also T-690',
-    '   └─◇ T-716 Live deps drawn as trai…  waits  + also T-690',
+    '  └─◇ T-713 Task files: no silent d…  waits',
+    '     └─◇ T-714 Help: /symcc-help shows…  waits',
+    '     └─◇ T-717 Waits for a todo and a …  waits  + also T-690',
+    '  └─◇ T-716 Live deps drawn as trai…  waits  + also T-690',
   ])
   expect(rows.map(r => r.id)).toEqual(['T-713', 'T-714', 'T-717', 'T-716'])
   for (const w of [100, 60, 40, 32, 24])
@@ -158,12 +158,12 @@ test('T-715: train rows: "└─◇" indented by level, "waits" and "+ also"; no
   // a chain of 9: three levels, then the rest counted
   const chain = [task('T-1', 'Runs', { runs: [{ started: iso(3) }] }), ...Array.from({ length: 9 }, (_, i) => task(`T-${i + 2}`, `Step ${i + 2}`, { status: 'todo', after: [`T-${i + 1}`] }))]
   const deep = trainRows(liveTrains({ tasks: chain as never[] }, T0).lanes['T-1']!, 60)
-  expect(deep.map(r => r.id ?? segText(r.segs))).toEqual(['T-2', 'T-3', 'T-4', '   └─ +6 more waiting'])
+  expect(deep.map(r => r.id ?? segText(r.segs))).toEqual(['T-2', 'T-3', 'T-4', '  └─ +6 more waiting'])
   // eight side by side: six, then the rest counted
   const wide = [task('T-1', 'Runs', { runs: [{ started: iso(3) }] }), ...Array.from({ length: 8 }, (_, i) => task(`T-${i + 2}`, `Side ${i + 2}`, { status: 'todo', after: ['T-1'] }))]
   const many = trainRows(liveTrains({ tasks: wide as never[] }, T0).lanes['T-1']!, 60)
   expect(many.length).toBe(7)
-  expect(segText(many[6]!.segs)).toBe('   └─ +2 more waiting')
+  expect(segText(many[6]!.segs)).toBe('  └─ +2 more waiting')
 })
 
 test('T-690: today counts merges, send-backs, failures and tokens of today', () => {
@@ -373,10 +373,10 @@ test('T-690: the Live tab draws at a normal and a narrow width with nothing cut,
     for (const l of lines) expect(textWidth(l)).toBeLessThanOrEqual(bodyColumns)
     expect(textWidth(pageLines(await ui.drawn()).find(l => l.includes('Live'))!)).toBeLessThanOrEqual(bodyColumns)
     // the lane rows, their second rows, today, the legend and the keys
-    // (T-747: under the "▍Tasks" and "▍Today" headings, indented by 3)
+    // (T-747: under the "▍Tasks" and "▍Today" headings, indented; T-767: by 1, a running lane starting "▶ ")
     expect(lines[1]).toBe('▍Tasks')
-    for (const id of ['T-684', 'T-685', 'T-686', 'T-687', 'T-688']) expect(lines.some(l => l.startsWith(`${LIVE_INDENT} ${id} `))).toBe(true)
-    expect(lines.filter(l => /^ {5}change try \d\/\d/.test(l)).length).toBe(5)
+    for (const id of ['T-684', 'T-685', 'T-686', 'T-687', 'T-688']) expect(lines.some(l => l.startsWith(`${LIVE_INDENT}▶ ${id} `))).toBe(true)
+    expect(lines.filter(l => /^ {3}change try \d\/\d/.test(l)).length).toBe(5)
     // T-758: ▍Today holds only the figures line (no "next up" line, no "today" label)
     expect(lines[lines.findIndex(l => l === '▍Today') + 1]?.startsWith(`${LIVE_INDENT}✓ 1 merged`)).toBe(true)
     expect(lines.some(l => l.trimStart().startsWith('next up') || l.trimStart().startsWith('today'))).toBe(false)
@@ -551,7 +551,7 @@ for (const bodyColumns of [100, 40])
     const lines = await liveLines(term)
     for (const l of lines) expect([l, textWidth(l) <= bodyColumns]).toEqual([l, true])
     // the trains right under T-712's two lane lines, in the same order and words
-    const at = lines.findIndex(l => l.startsWith(`${LIVE_INDENT} T-712 `))
+    const at = lines.findIndex(l => l.startsWith(`${LIVE_INDENT}▶ T-712 `))
     expect(lines.slice(at + 2, at + 2 + want.length)).toEqual(want.map(r => LIVE_INDENT + segText(r.segs)))
     const keys = (await term.findAll({ type: 'Button' })).map(b => String(b.key)).filter(k => k.startsWith('live'))
     expect(keys.filter(k => k.startsWith('live-train:'))).toEqual(['live-train:T-713', 'live-train:T-714', 'live-train:T-717', 'live-train:T-716'])
@@ -568,7 +568,7 @@ for (const bodyColumns of [100, 40])
       const link = links.find(m => String(m.key) === `live-train:${r.id}`)!
       expect(link.props.pressableLinks).toEqual([vsHref('task', r.id!)])
       // the same id and title as the terminal's row, then its "waits" and "+ also"
-      const name = r.segs.filter(s => s.tone === 'id' || s.tone === 'title').map(s => s.text.trim()).join(' ')
+      const name = r.segs.filter(s => s.tone === 'wait').map(s => s.text.trim()).join(' ')
       expect(String(link.props.text)).toBe(mdLink(name, vsHref('task', r.id!)))
       const note = r.segs.slice(1).filter(s => s.tone === 'dim').map(s => s.text.trim()).filter(Boolean).join('  ')
       expect((await ui.find({ key: `live-train-note:${r.id}` }))?.text ?? '').toBe(note)
@@ -577,6 +577,52 @@ for (const bodyColumns of [100, 40])
     await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'tasks') } })
     await ui.unmount()
   })
+
+// T-767: a running lane starts "▶ ", its mark, id and title bold in the accent color; a waiting train's row is all dim.
+for (const surface of ['terminal', 'desktop', 'mobile'] as const)
+  test(`T-767: on the ${surface} Live tab a running lane is "▶ " with its id and title bold in the accent color, and a waiting train is dim`, async ($, on) => {
+    seedBoard(on, { view: liveView(TRAINS) })
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 80 }, surface })
+    await ui.press({ key: 'tab-live' })
+    const tree = (await ui.drawn()) as Node
+    const nodes = (n: unknown): Node[] => (!n || typeof n !== 'object' ? [] : [n as Node, ...((n as Node).children ?? []).flatMap(nodes)])
+    const all = nodes(tree)
+    const pieces = (key: string) => (all.find(n => (n as { key?: unknown }).key === key || n.props?.key === key)?.children ?? []).flatMap(nodes).filter(n => n.type === 'Text')
+    // the lane: the 1-space indent, then "▶ ", the id and the title in one bold accent color
+    const lane = pieces('live:T-712')
+    expect(textOf(lane[0])).toBe(LIVE_INDENT)
+    expect(LIVE_INDENT).toBe(' ')
+    const run = lane.slice(1, 4)
+    expect(run.map(textOf).map(s => s.trim())).toEqual(['▶', 'T-712', textOf(run[2]).trim()])
+    expect(textOf(run[2])).toContain('Scout')
+    const accent = run[0]?.props?.color
+    expect(typeof accent).toBe('string')
+    expect(run.map(n => [n.props?.color, n.props?.bold])).toEqual(run.map(() => [accent, true]))
+    // a train: every piece dim (the label line's names' color), none bold
+    const label = all.find(n => n.type === 'Text' && textOf(n).includes('work'))
+    const dim = (label?.children as Node[] | undefined)?.find(c => /[a-z]/.test(textOf(c)))?.props?.color
+    expect(typeof dim).toBe('string')
+    expect(dim).not.toBe(accent)
+    const train = pieces('live-train:T-713').filter(n => textOf(n).trim())
+    expect(train.map(textOf).join('')).toContain('└─◇ T-713')
+    expect(train.map(n => [textOf(n), n.props?.color, !!n.props?.bold])).toEqual(train.map(n => [textOf(n), dim, false]))
+    await ui.press({ key: 'tab-tasks' })
+    await ui.unmount()
+  })
+
+test('T-767: in VS Code a running lane starts with "▶" in the accent color and its link is bold; a waiting train\'s link is dim', async ($, on) => {
+  seedBoard(on, { view: liveView(TRAINS) })
+  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 80 }, surface: 'vscode' })
+  await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'live') } })
+  expect((await ui.find({ key: 'live-run-mark:T-712' }))?.text).toBe('▶')
+  const lane = await ui.find({ key: 'live:T-712' })
+  expect(String(lane?.props.text).startsWith('**[T-712 ')).toBe(true)
+  expect(String(lane?.props.text).endsWith(')**')).toBe(true)
+  expect(lane?.props.dimColor).toBeUndefined()
+  expect((await ui.find({ key: 'live-train:T-713' }))?.props.dimColor).toBe(true)
+  await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'tasks') } })
+  await ui.unmount()
+})
 
 test('T-715: Enter on a train (terminal) or a click on it (VS Code) opens that task, and Back returns to the Live tab', async ($, on) => {
   seedBoard(on, { view: liveView(TRAINS) })

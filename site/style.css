@@ -137,7 +137,7 @@ main.home h3 { font-size: 1.1rem; }
 .playing .caret { animation: blink 1s steps(1) infinite; }
 @keyframes blink { 50% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .playing .caret { animation: none; } }
-.t-id { color: var(--t-id); font-weight: 700; }
+.t-id, .t-run { color: var(--t-id); font-weight: 700; }
 .t-title, .t-text { color: var(--fg); }
 .t-passed { color: var(--t-ok); }
 .t-current { color: var(--t-cur); font-weight: 700; }

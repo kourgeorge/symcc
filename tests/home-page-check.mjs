@@ -77,6 +77,16 @@ if (!board.includes('bar: tokens of the task so far, full = usual per task (4.8M
 // (T-757) the hand-drawn Live tab card tells the same story: whole-task tokens, full bar = the usual per task
 if (/tokens of each try|T-740[\s\S]{0,80}tokens at hand-back/.test(page)) bad('home page: the Live tab card still shows tokens per try ("tokens at hand-back" on T-740\'s try 2)')
 if (!page.includes('▕███████████░░▏ 4.0M + …')) bad('home page: the Live tab card\'s T-740 lane does not show "4.0M + …"')
+// (T-767) the lines under a ▍heading start with 1 space; a running lane with "▶ ", its id and title bold in the accent color
+for (const [name, t] of [['board', board], ['Live tab', live]]) {
+  const lines = t.split('\n')
+  if (!lines.some(l => l.startsWith(' ▶ T-740 '))) bad(`still frame: the ${name}'s T-740 lane does not start " ▶ T-740 "`)
+  if (!lines.some(l => l.startsWith(' ✓ 56 merged'))) bad(`still frame: the ${name}'s ▍Today line is not indented by 1`)
+  if (lines.some(l => /^ {3}[✓▶]/.test(l))) bad(`still frame: the ${name} still indents by 3 under a ▍heading`)
+}
+if (!/<span class="t-run">▶ T-740 /.test(view('board'))) bad('still frame: the running lane "▶ T-740" is not drawn in the t-run tone')
+if (!/\.t-run\b/.test(readFileSync(join(out, 'style.css'), 'utf8'))) bad('style.css: no .t-run rule')
+if (!page.includes('▶ T-747  ●━━━━━━●')) bad('home page: the Live tab card\'s running lanes do not start with "▶ "')
 
 // the chat log must scroll, so its oldest messages (the owner's ask) stay in reach; and it must not pin messages
 // with justify-content: flex-end, which pushes the overflow above the top, where no scroll reaches it
