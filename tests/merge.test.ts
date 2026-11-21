@@ -5247,6 +5247,67 @@ test('T-470: on a host with no start queue (features.startQueue off) a worker st
   workers.clear()
 })
 
+/** T-723: T-1 (`extra` on it) is started by startWorker on a fresh fake world; its agent is ag1. */
+async function startedT1(extra: Partial<BoardTask> = {}) {
+  const w = world({ current: 'main' })
+  const [b0] = boardWith('auto')
+  await saveBoard(w.$, patchTask(b0, 'T-1', { status: 'todo', attempts: 0, runs: [], ...extra }, ISO))
+  S.me = 'me'
+  S.startupDone = true
+  S.driving = true
+  workers.clear()
+  const x = w.$
+  x.features = { ...x.features, startQueue: false }
+  x.agents.spawn = async () => ({ agentId: 'ag1' })
+  x.plugin = { name: 'symcc', root: '/plugin' }
+  x.fs.list = async () => []
+  await startWorker(w.$, 'T-1')
+  return { w, t: find(await load(w.$), 'T-1')! }
+}
+
+const stageTexts = (t: BoardTask) => t.history.filter(h => h.kind === 'stage').map(h => h.text)
+
+test('T-723: a claimed try writes "try N: worker started" with its role as a stage line', async () => {
+  const { t } = await startedT1({ role: 'tester', attempts: 1, runs: [{ started: ISO, ended: ISO, ended_by: 'finished', ended_note: 'tests failed' }] })
+  expect(t.attempts).toBe(2)
+  expect(stageTexts(t)).toEqual(['try 2: worker started (role tester)'])
+  workers.clear()
+  const { t: t1 } = await startedT1()
+  expect(stageTexts(t1)).toEqual(['try 1: worker started (role general)'])
+  workers.clear()
+})
+
+test('T-723: a merge-it-in try says it merges main in first', async () => {
+  const { t } = await startedT1({ merge_main: true })
+  expect(stageTexts(t)).toEqual(['try 1: worker started (role general) · merges main in first'])
+  workers.clear()
+})
+
+test('T-723: a fresh try restarted with a note says it keeps its try number', async () => {
+  const { w, t } = await startedT1({ attempts: 1, runs: [{ started: ISO, ended: ISO, ended_by: 'finished', ended_note: 'checker found problems' }] })
+  expect(t.attempts).toBe(2)
+  const said = await runTool(w.$, 'change', { task: 'T-1', add_details: 'also check the README' })
+  expect(String(said)).toMatch(/same try number/)
+  workers.clear()
+  const back = find(await load(w.$), 'T-1')!
+  if (back.status !== 'doing') await startWorker(w.$, 'T-1')
+  const again = find(await load(w.$), 'T-1')!
+  expect(again.attempts).toBe(2)
+  expect(stageTexts(again)).toEqual(['try 2: worker started (role general)', 'try 2: worker started (role general) · same try number (note joined)'])
+  workers.clear()
+})
+
+test('T-723: the hand-back writes "try N: worker handed back" before any check stage line', async () => {
+  const { w } = await startedT1()
+  w.put(`${WT}/.git`, 'gitdir: x')
+  await workerFinished(w.$, 'ag1', 'made the change')
+  const t = find(await load(w.$), 'T-1')!
+  const texts = stageTexts(t)
+  expect(texts[0]).toBe('try 1: worker started (role general)')
+  expect(texts[1]).toBe('try 1: worker handed back')
+  workers.clear()
+})
+
 test('T-600: a worker started by startWorker gets the lines of .symcc/org-mem.md in its prompt; no file: no guide heading', async () => {
   for (const guide of ['- T-5 2026-11-20: run one test file with sh scripts/test-files.sh\n', null]) {
     const w = world({ current: 'main' })

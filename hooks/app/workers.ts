@@ -1,5 +1,5 @@
 import type { SymccTask, SymccTokens } from '../../types'
-import { PREP_NOTE, type Board, type BoardTask, type RoleDef, roleSection, mayStart, liveWorkersFor, modeOf, symccOn, ready, patchTask, putTask, find, startRun, findRole, roleOf, workerName, workerDescription, onNotReady, endRun, tryLabel, needFilesQuestion, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, liveDriver, emptyBoard, ownedHere, backToTodo, stoppedEntry, withHistory, historyEntry, type HistoryAdd, type HistoryKind, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, testMinutesOf, ranOverNote, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, WRAP_UP_GRACE_MS, outOfTimeNote, checkerOn, docsOnly, checkerOutput, isCheckerOutput, checkerLine, checkerRetryText, kindOf, isInvestigation, kindSection, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt, shortSha, secretsLeftText, gaveUpTestsText, endedEarlyLine, endedEarlyNote, ENDED_EARLY_NOTE, onRuns } from '../board'
+import { PREP_NOTE, type Board, type BoardTask, type RoleDef, roleSection, mayStart, liveWorkersFor, modeOf, symccOn, ready, patchTask, putTask, find, startRun, findRole, roleOf, workerName, workerDescription, onNotReady, endRun, tryLabel, needFilesQuestion, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, liveDriver, emptyBoard, ownedHere, backToTodo, stoppedEntry, withHistory, historyEntry, type HistoryAdd, type HistoryKind, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, testMinutesOf, ranOverNote, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, WRAP_UP_GRACE_MS, outOfTimeNote, checkerOn, docsOnly, checkerOutput, isCheckerOutput, checkerLine, checkerRetryText, kindOf, isInvestigation, kindSection, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt, shortSha, secretsLeftText, gaveUpTestsText, endedEarlyLine, endedEarlyNote, ENDED_EARLY_NOTE, onRuns, workerStartedEntry, workerHandedBackEntry } from '../board'
 import { archiveOld } from './archive'
 import { checkHealth } from './health'
 import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch, clearScratch, taskBranch, copyReports, deleteMergedBranch, type BehindWhy } from './git'
@@ -182,7 +182,14 @@ async function workerStarted(host: Host, id: string, before: BoardTask, dir: str
   notReady.delete(id)
   workers.set(agentId, { task: id, worktree: dir, branch, since: Date.now() })
   // Record which agent works on the task, so a reloaded copy can find it; the note says it runs now.
-  await change(host, x => (find(x, id)?.status === 'doing' ? patchTask(x, id, { agent: agentId, ...(find(x, id)!.note === claimNote(host) ? { note: 'worker on it' } : {}) }, now()) : x))
+  // T-723: its history says the try's worker started (with its role, and whether it merges main in first or reuses its try number)
+  await change(host, x => {
+    const cur = find(x, id)
+    if (cur?.status !== 'doing') return x
+    const at = now()
+    const line = cur.attempts === claimed ? { history: withHistory(cur.history, at, workerStartedEntry(cur, !!cur.runs?.at(-1)?.merge_main)) } : {}
+    return patchTask(x, id, { agent: agentId, ...(cur.note === claimNote(host) ? { note: 'worker on it' } : {}), ...line }, at)
+  })
 }
 
 /**
@@ -292,7 +299,8 @@ export async function workerFinished(host: Host, agentId: string, answer: string
       const t = find(x, w.task)
       if (t?.status !== 'doing') return [x, undefined] as [Board, undefined]
       limitMs = finishLimitMs(x.test_commands.length, testMinutesOf(x))
-      return [patchTask(x, w.task, { finishing: ended, time_ask: undefined, ...(t.runs?.length ? { runs: endRun(t.runs, ended, { tokens, ...(cost !== undefined ? { cost } : {}) }) } : {}) }, ended), t.attempts] as [Board, number]
+      // T-723: its history says the worker handed back (its own line, just before the "prep started" the check writes)
+      return [patchTask(x, w.task, { finishing: ended, time_ask: undefined, history: withHistory(t.history, ended, workerHandedBackEntry(t)), ...(t.runs?.length ? { runs: endRun(t.runs, ended, { tokens, ...(cost !== undefined ? { cost } : {}) }) } : {}) }, ended), t.attempts] as [Board, number]
     })
   } catch {
     // T-452: board.json can't be read (load already told the owner, once). The report is kept here and

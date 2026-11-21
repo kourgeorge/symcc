@@ -1,6 +1,6 @@
 // Short history lines for things that stop or restart a task, or that the owner said.
 import type { SymccHistoryEntry, SymccRun, SymccTask } from '../../types'
-import { tryLabel } from './roles'
+import { roleOf, tryLabel } from './roles'
 import { ellipsis, squash } from './text'
 
 /** How much of the owner's answer goes into a history line. */
@@ -64,6 +64,26 @@ export function stoppedLine(t: Pick<SymccTask, 'role' | 'attempts'>, why: string
 
 /** stoppedLine as an entry to add: "restarted" when `why` says so, else "stopped". */
 export const stoppedEntry = (t: Pick<SymccTask, 'role' | 'attempts'>, why: string): HistoryAdd => [/^restarted\b/.test(why) ? 'restarted' : 'stopped', stoppedLine(t, why)]
+
+/** T-723: the words of the 'stage' line written when a try's worker starts, and when it hands back (before "prep started"). */
+export const WORKER_STARTED = 'worker started'
+export const WORKER_HANDED_BACK = 'worker handed back'
+
+/**
+ * T-723: "try 2: worker started (role tester)", the 'stage' line of a try whose worker just started: "· merges main in
+ * first" for a merge-it-in try (`mergeMain`), and "· same try number (note joined)" when this try number already had a
+ * started worker (a change restarted a try that had only just started, T-678; "(task changed)" when no note came).
+ */
+export function workerStartedEntry(t: Pick<SymccTask, 'role' | 'attempts' | 'history'>, mergeMain: boolean): HistoryAdd {
+  const head = new RegExp(`^try ${Number(t.attempts) || 0}(?: \\([^)]*\\))?: ${WORKER_STARTED}\\b`)
+  const history = t.history ?? []
+  const last = history.findLastIndex(h => h.kind === 'stage' && head.test(h.text))
+  const again = last < 0 ? '' : history.slice(last + 1).some(h => h.kind === 'note') ? ' · same try number (note joined)' : ' · same try number (task changed)'
+  return ['stage', `try ${t.attempts}: ${WORKER_STARTED} (role ${roleOf(t)})${mergeMain ? ' · merges main in first' : ''}${again}`]
+}
+
+/** T-723: "try 2: worker handed back", the 'stage' line of a try whose worker handed back its report. */
+export const workerHandedBackEntry = (t: Pick<SymccTask, 'attempts'>): HistoryAdd => ['stage', `try ${t.attempts}: ${WORKER_HANDED_BACK}`]
 
 /**
  * The history lines of a change to task `t` (as it was) with `patch`: the restart line when its
