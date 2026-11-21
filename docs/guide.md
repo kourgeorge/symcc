@@ -911,8 +911,8 @@ The Live tab (`l`) shows the tasks that run now as "railway lanes", one lane per
      11-21  workers    Before handing back, wait for every command…
      11-21  snapshots  To re-capture a saved page picture, print s…
     topics
-     tests       14    git         11    opencode    9
-     vs code      8    board        9    hosts       6
+     tests       14    git         11    board        9
+     opencode     9    vs code      8    hosts       6
     ↑↓ move · Enter open topic · m all notes
   ```
 
