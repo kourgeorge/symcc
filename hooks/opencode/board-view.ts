@@ -31,7 +31,7 @@ import {
   type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction, type DefEditField, type TaskVerb, settingsKeys, rolesKeys, kindsKeys, roleEditKeys, defEditFields, roleTools, roleFileText, roleSkipReason, kindFileText, kindSkipReason,
   DEFAULT_ROLE, isCheckerRole, ALWAYS_ON_KINDS, checkerOn, roleNameError, kindNameError, leadScoutNameError, checkStepNow, rowEndText, taskPhase, choiceLines, driveWarning,
   searchTasks, showsHeader, type BoardPage,
-  LIVE_TABS, LIVE_EMPTY, LIVE_INDENT, liveLegend, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, liveBold, liveHeading, liveIndented, liveInner, tabRow, LIVE_VIEW_KEYS, liveKeys, liveBranches, liveLanes, liveLayout, liveStations, liveHeader, liveLabelSegs, laneLines, liveOrgMem, liveTrains, trainRows, liveToday, todayLines, searchLine, modeButton, hintLines, roleKeys, rolePromptKeys, ROLE_PROMPTS, ROLE_SLOT, promptsOfRole, type RolePromptKind,
+  LIVE_TABS, LIVE_EMPTY, LIVE_INDENT, liveLegend, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, liveBold, liveHeading, liveIndented, liveInner, tabRow, LIVE_VIEW_KEYS, liveKeys, liveBranches, liveLanes, liveLayout, liveStations, liveHeader, liveHeaderSegs, liveLabelSegs, laneLines, liveOrgMem, liveTrains, trainRows, liveTodayLines, searchLine, modeButton, hintLines, roleKeys, rolePromptKeys, ROLE_PROMPTS, ROLE_SLOT, promptsOfRole, type RolePromptKind,
 } from '../board'
 import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, brokenLabel, defNamed } from '../core/def-files'
 import { restFrame } from '../core/logo'
@@ -160,6 +160,14 @@ export function parseViewFile(text: string | null | undefined): ViewFile | null 
     // T-727: the Live tab's Branches figures; a broken value is left out (no section)
     const br = rest.branches as Partial<NonNullable<PaneView['branches']>> | undefined
     if (!br || typeof br !== 'object' || typeof br.into !== 'string' || !Array.isArray(br.commits) || !br.tasks || typeof br.tasks !== 'object') delete rest.branches
+    // T-769: ▍Today's lead, scout and cost figures; a broken value is left out
+    const team = rest.today_team as Partial<NonNullable<PaneView['today_team']>> | undefined
+    if (!team || typeof team !== 'object' || typeof team.day !== 'string') delete rest.today_team
+    // T-770: the scout runs going now; a broken one is left out
+    if (Array.isArray(rest.scouts_running)) {
+      rest.scouts_running = rest.scouts_running.filter(x => !!x && typeof x === 'object' && typeof x.name === 'string' && Number.isFinite(x.since))
+      if (!rest.scouts_running.length) delete rest.scouts_running
+    } else delete rest.scouts_running
     if (!rest.changes || typeof rest.changes !== 'object' || Array.isArray(rest.changes)) delete rest.changes
     // T-761: each task page's Branch section facts; a broken one is left out (that task's page has no section)
     if (rest.task_branches && typeof rest.task_branches === 'object' && !Array.isArray(rest.task_branches)) {
@@ -838,7 +846,8 @@ function liveBody(f: ViewFile, cursor: number, nowMs: number, w: number): Body {
     ...om.grid.flatMap(r => r.map(c => liveTopicId(c.topic))),
   ]
   const selected = ids.length ? ids[Math.min(Math.max(0, cursor), ids.length - 1)]! : ''
-  b.add([{ text: liveHeader(v, lanes), color: 'text', bold: true }])
+  // T-770: the mode line, and while scouts run their mark at its end ("⌕ gaps-bot 4m"); a click on it opens the Scouts tab
+  b.add(liveHeaderSegs(v, lanes, nowMs, w).map((x, i) => (i === 0 ? { text: x.text, color: 'text', bold: true } : { text: x.text, color: LIVE_TONE[x.tone], hit: { tab: 'scouts' as const } })))
   b.add(liveSegs(liveHeading(LIVE_SECTIONS.tasks, w)))
   /** A line under a section heading: indented. */
   const under = (xs: readonly LiveSeg[], hit?: PanelHit) => liveSegs(liveIndented(xs), hit)
@@ -859,7 +868,7 @@ function liveBody(f: ViewFile, cursor: number, nowMs: number, w: number): Body {
   // T-738: one empty line above each section after the first (Today, Branches, Organizational memory)
   b.blank()
   b.add(liveSegs(liveHeading(LIVE_SECTIONS.today, w)))
-  for (const t of todayLines(liveToday(v.tasks, nowMs), inner)) b.add([{ text: LIVE_INDENT + t, color: 'text' }])
+  for (const t of liveTodayLines(v, nowMs, inner)) b.add(under(t))
   if (lanes.length) for (const x of liveLegend(lanes, inner)) b.add([{ text: LIVE_INDENT + x, color: 'inactive' }])
   if (br) {
     b.blank()

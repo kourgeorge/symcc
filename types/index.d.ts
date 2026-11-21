@@ -16,6 +16,11 @@ export type SymccRun = {
   started: string
   ended?: string
   tokens?: SymccTokens
+  /**
+   * T-769: the part of `tokens` this try's checkers used (added into `tokens` too), so the Live tab can tell checkers
+   * from workers. Missing on tries from before it, and on tries no checker looked at.
+   */
+  checker_tokens?: SymccTokens
   cost?: number
   /**
    * The full SHAs of the commits symcc made for this try, oldest first: the task's own commit

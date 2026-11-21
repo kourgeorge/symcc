@@ -156,7 +156,9 @@ async function record($: Host, t: SymccTask, v: CheckerVerdict | null, why?: str
   await change($, x => {
     const cur = find(x, t.id)
     if (!cur || cur.attempts !== t.attempts) return x
-    const runs = cur.runs?.length && tokens ? [...cur.runs.slice(0, -1), { ...cur.runs.at(-1)!, tokens: addTokens(cur.runs.at(-1)!.tokens, tokens) }] : undefined
+    // T-769: the checker's tokens are also kept apart (checker_tokens), so the Live tab can tell them from the worker's
+    const last = cur.runs?.at(-1)
+    const runs = last && tokens ? [...cur.runs!.slice(0, -1), { ...last, tokens: addTokens(last.tokens, tokens), checker_tokens: addTokens(last.checker_tokens, tokens) }] : undefined
     return patchTask(x, t.id, { history: withHistory(cur.history, now(), ...(before ? [['step', before] as HistoryAdd] : []), checkerEntry(tryLabel(cur), v, why)), ...(runs ? { runs } : {}) }, now())
   }).catch(() => undefined)
 }

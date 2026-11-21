@@ -2,7 +2,7 @@
 // numbers; claude/ui/live.tsx draws them on the terminal panel).
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { liveLanes, liveLayout, laneLines, liveLabelLine, liveLabelSegs, LIVE_AGENT_MARK, LIVE_TONE, liveStations, liveTrains, trainRows, type LiveTrain, liveToday, todayLines, segText, liveBlink, liveHeader, tabRow, LIVE_TABS, LIVE_EMPTY, LIVE_LEGEND, LIVE_INDENT, liveInner, liveBarLegend, liveLegend } from '../hooks/core/live'
+import { liveLanes, liveLayout, laneLines, liveLabelLine, liveLabelSegs, LIVE_AGENT_MARK, LIVE_TONE, liveStations, liveTrains, trainRows, type LiveTrain, liveToday, todayLines, segText, liveBlink, liveHeader, liveHeaderSegs, liveScoutMark, tabRow, LIVE_TABS, LIVE_EMPTY, LIVE_LEGEND, LIVE_INDENT, liveInner, liveBarLegend, liveLegend } from '../hooks/core/live'
 import { textWidth } from '../hooks/core/stats'
 import { FINISH_STALE_MS } from '../hooks/core/lead'
 import { listKeys } from '../hooks/board'
@@ -11,6 +11,10 @@ import { LIVE_TICK_MS } from '../hooks/claude/ui/live'
 import { BLINK_CSS } from '../hooks/claude/ui/vscode-live'
 import { mdLink, vsHref } from '../hooks/claude/ui/vscode'
 import { PANE, T0, seedBoard } from './board-fixture'
+import { publish } from '../hooks/app/lead'
+import { S, scoutRuns, scoutState, type PaneView } from '../hooks/app/state'
+import { emptyBoard } from '../hooks/core/board-file'
+import { fakeHost } from './fake-host'
 
 const iso = (minAgo: number) => new Date(T0 - minAgo * 60_000).toISOString()
 const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', question: null, order: Number(id.slice(2)), after: [], attempts: 1, history: [], branch: null, created_at: iso(300), updated_at: iso(1), ...x })
@@ -646,4 +650,88 @@ test('T-715: Enter on a train (terminal) or a click on it (VS Code) opens that t
   expect(await ui.find({ key: 'live-head' })).toBeDefined()
   await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'tasks') } })
   await ui.unmount()
+})
+
+// T-770: while scouts run, the Live tab's mode line ends in a small scout mark ("⌕ gaps-bot 4m"); a queued one isn't
+// in scouts_running (publish puts only started runs there); a click on the mark opens the Scouts tab.
+const RUNS = [{ name: 'board-review', since: T0 - 60_000 }, { name: 'gaps-bot', since: T0 - 4 * 60_000 }]
+test('T-770: liveScoutMark shows the names and times, then "N scouts", then "N", then nothing as the room shrinks', () => {
+  expect(liveScoutMark(undefined, T0)).toBe(null)
+  expect(liveScoutMark([], T0)).toBe(null)
+  expect(liveScoutMark([RUNS[1]!], T0)).toEqual({ gap: ' · ', mark: '⌕', text: ' gaps-bot 4m' })
+  expect(liveScoutMark(RUNS, T0)?.text).toBe(' gaps-bot 4m, board-review 1m')
+  expect(liveScoutMark(RUNS, T0, 20)?.text).toBe(' 2 scouts')
+  expect(liveScoutMark([RUNS[1]!], T0, 12)?.text).toBe(' 1 scout')
+  expect(liveScoutMark(RUNS, T0, 6)?.text).toBe(' 2')
+  expect(liveScoutMark(RUNS, T0, 4)).toBe(null)
+  const head = (runs: typeof RUNS, w: number) => segText(liveHeaderSegs({ ...view(true), scouts_running: runs }, liveLanes(view(true), T0), T0, w))
+  expect(head([], 80)).toBe('⏵ auto · agents 2/3 busy')
+  expect(head(RUNS, 80)).toBe('⏵ auto · agents 2/3 busy · ⌕ gaps-bot 4m, board-review 1m')
+  expect(head(RUNS, 40)).toBe('⏵ auto · agents 2/3 busy · ⌕ 2 scouts')
+  for (const w of [80, 40, 30, 26]) expect(textWidth(head(RUNS, w))).toBeLessThanOrEqual(Math.max(w, textWidth(head([], w))))
+  expect(liveHeaderSegs({ ...view(true), scouts_running: RUNS }, [], T0).map(s => s.tone)).toEqual(['text', 'text', 'scouts', 'dim'])
+})
+
+const scoutView = (runs: unknown[]) => ({ ...liveView(TASKS), value: { ...liveView(TASKS).value, ...(runs.length ? { scouts_running: runs } : {}) } })
+for (const [runs, w, want] of [
+  [[], 80, '⏵ auto · agents 2/3 busy'],
+  [[RUNS[1]], 80, '⏵ auto · agents 2/3 busy · ⌕ gaps-bot 4m'],
+  [RUNS, 80, '⏵ auto · agents 2/3 busy · ⌕ gaps-bot 4m, board-review 1m'],
+  [RUNS, 44, '⏵ auto · agents 2/3 busy · ⌕ 2 scouts'],
+] as const)
+  test(`T-770: the terminal and VS Code Live tabs' mode line at ${w} columns with ${runs.length} scout(s) running`, async ($, on) => {
+    seedBoard(on, { view: scoutView([...runs]) })
+    on('ui.toast', () => ({ value: undefined }))
+    const t = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: w }, surface: 'terminal' })
+    await t.press({ key: 'tab-live' })
+    const lines = await liveLines(t)
+    expect(lines[0]).toBe(want)
+    expect(textWidth(lines[0]!)).toBeLessThanOrEqual(w)
+    expect(lines[1]).toBe('▍Tasks')
+    const mark = await t.find({ key: 'live-scouts' })
+    expect(mark?.type).toBe(runs.length ? 'Button' : undefined)
+    if (runs.length) {
+      await t.press({ key: 'live-scouts' })
+      expect(await t.find({ key: 'live-head' })).toBeUndefined()
+      expect((await t.find({ key: 'tab-scouts' }))?.text).toContain('Scouts')
+      expect(await t.find({ key: 'live-scouts' })).toBeUndefined()
+    }
+    await t.press({ key: 'tab-tasks' })
+    await t.unmount()
+
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: w }, surface: 'vscode' })
+    await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'live') } })
+    // (the names are a markdown link: its words only)
+    expect((await ui.find({ key: 'live-head' }))?.text.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')).toBe(want)
+    const link = await ui.find({ key: 'live-scouts' })
+    expect(link?.props.pressableLinks).toEqual(runs.length ? [vsHref('tab', 'scouts')] : undefined)
+    if (runs.length) {
+      await ui.press({ key: 'live-scouts', link: { href: vsHref('tab', 'scouts') } })
+      expect((await ui.find({ key: 'tabs' }))?.props.text).toContain('**Scouts')
+    }
+    await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'tasks') } })
+    await ui.unmount()
+  })
+
+test('T-770: publish lists the started scout runs in scouts_running, oldest first; a queued one (running, not started yet) is left out', async () => {
+  S.root = '/repo'
+  const g = fakeHost()
+  const at = (minAgo: number) => new Date(Date.now() - minAgo * 60_000).toISOString()
+  scoutState.set('gaps-bot', { name: 'gaps-bot', every_minutes: 0, last_run: at(4), running: true })
+  scoutState.set('board-review', { name: 'board-review', every_minutes: 0, last_run: at(1), running: true })
+  scoutState.set('queued', { name: 'queued', every_minutes: 0, last_run: at(90), running: true })
+  scoutRuns.set('agent-b', 'board-review')
+  scoutRuns.set('agent-g', 'gaps-bot')
+  try {
+    await publish(g.host, emptyBoard())
+    const runs = (g.panel.view() as PaneView).scouts_running
+    expect(runs?.map(r => r.name)).toEqual(['gaps-bot', 'board-review'])
+    expect(runs?.[0]?.since).toBe(Date.parse(scoutState.get('gaps-bot')!.last_run!))
+    scoutRuns.clear()
+    await publish(g.host, emptyBoard())
+    expect('scouts_running' in (g.panel.view() as PaneView)).toBe(false)
+  } finally {
+    scoutRuns.clear()
+    scoutState.clear()
+  }
 })

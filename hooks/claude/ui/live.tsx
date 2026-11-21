@@ -13,7 +13,7 @@
 // branch (commits ahead, how far behind), each task row a row Button that opens its task.
 // T-747: each section (Tasks, Today, Branches, Organizational memory) starts with a "▍Name" heading (core's
 // liveHeading), its lines indented by LIVE_INDENT, one empty line between sections.
-import { LIVE_EMPTY, LIVE_INDENT, liveLegend, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, laneLines, liveBold, liveHeading, liveIndented, liveInner, liveBranches, liveHeader, liveKeys, liveLabelSegs, liveLanes, liveLayout, liveOrgMem, liveStations, liveToday, liveTrains, todayLines, trainRows } from '../../core/live'
+import { LIVE_EMPTY, LIVE_INDENT, liveLegend, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, laneLines, liveBold, liveHeading, liveIndented, liveInner, liveBranches, liveHeader, liveHeaderSegs, liveKeys, liveLabelSegs, liveLanes, liveLayout, liveOrgMem, liveStations, liveTodayLines, liveTrains, trainRows } from '../../core/live'
 import { footerRule } from '../../board'
 import { S, workers } from '../../app/state'
 import { type $, panelValues } from '../panel'
@@ -86,7 +86,7 @@ export function openOrgMemPage($: $, topic: string | null = null, note: OrgMemNo
 
 /** The Live tab on the terminal (and desktop and mobile); `notes`: org-mem's notes (newest first), for the section at its bottom. */
 export function livePage($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
-  const { Box, Text, Button, v, width, C, act, header, keyLines, nowMs } = pane
+  const { Box, Text, Button, v, width, C, act, header, keyLines, nowMs, goTab } = pane
   // the blink goes by the clock, one step per tick, so extra redraws in between don't make it flicker
   const frame = Math.floor(nowMs / LIVE_TICK_MS)
   // the key line says "↑↓ move": the arrows move between the lanes (see arrows.ts)
@@ -109,13 +109,24 @@ export function livePage($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
     if (agentId) await $.ui.view({ agentId })
     else $.ui.toast(S.N.toast(target ? `${target.id} has no worker running now.` : 'No worker is running now.'))
   })
-  const today = todayLines(liveToday(v.tasks, nowMs), inner)
+  const today = liveTodayLines(v, nowMs, inner)
+  const headSegs = liveHeaderSegs(v, lanes, nowMs, width)
   const om = liveOrgMem(notes, width)
   const br = liveBranches(v, nowMs, width)
   return (
     <Box flexDirection="column">
       {header('live')}
-      <Text key="live-head" bold color={C('text')}>{liveHeader(v, lanes)}</Text>
+      {headSegs.length > 1 ? (
+        // T-770: while scouts run, their mark at the end of the mode line ("⌕ gaps-bot 4m"), a plain Button that opens the Scouts tab
+        <Box key="live-head" flexDirection="row">
+          <Text bold color={C('text')}>{headSegs[0]!.text + headSegs[1]!.text}</Text>
+          <Button key="live-scouts" plain label={headSegs.slice(2).map(x => x.text).join('')} onPress={goTab('scouts')}>
+            <Text>{draw(headSegs.slice(2))}</Text>
+          </Button>
+        </Box>
+      ) : (
+        <Text key="live-head" bold color={C('text')}>{liveHeader(v, lanes)}</Text>
+      )}
       <Text key="live-tasks-head">{draw(liveHeading(LIVE_SECTIONS.tasks, width))}</Text>
       {lanes.length ? <Text key="live-labels">{under(liveLabelSegs(layout))}</Text> : <Text key="live-empty" color={C('inactive')}>{LIVE_INDENT + LIVE_EMPTY}</Text>}
       {lanes.flatMap((l, i) => {
@@ -139,7 +150,7 @@ export function livePage($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
       <Text key="live-next-blank"> </Text>
       <Text key="live-today-head">{draw(liveHeading(LIVE_SECTIONS.today, width))}</Text>
       {today.map((line, i) => (
-        <Text key={`live-today-${i}`} color={C('text')}>{LIVE_INDENT + line}</Text>
+        <Text key={`live-today-${i}`}>{under(line)}</Text>
       ))}
       {br ? <Text key="live-br-blank"> </Text> : null}
       {br ? <Text key="live-br-head">{draw(br.head)}</Text> : null}

@@ -7,8 +7,8 @@ import { type BoardTask, DEFAULT_AUTO_RETRIES, emptyBoard, kindOf, isInvestigati
 import { taskPhase, type PhaseStage } from './phase'
 import { handedBack, shownStatus } from './lead'
 import { STAGE_LINE } from './events'
-import { cutTitle, median, padWidth, textWidth, wrapLine } from './stats'
-import { fmtTokens, sumTokens, tokenCount } from './runs'
+import { cutTitle, median, padWidth, taskFigures, textWidth, wrapLine } from './stats'
+import { fmtCost, fmtDuration, fmtTokens, sumTokens, tokenCount } from './runs'
 import { type KeyHint, LIVE_VIEW_KEYS, hintLineText, hintLines, rowDuration, waitOrder } from './panel'
 import { ORG_MEM_EMPTY, ORG_MEM_MAX_LINES, TOPIC_UNSORTED, orgMemNearCap, orgMemNewest, orgMemSectionKeys, orgMemShortDay, orgMemTopicCounts, type OrgMemNote } from './org-mem'
 import { depDone } from './archive'
@@ -92,7 +92,7 @@ export function tabRow(tabs: readonly { key: string; label: string; count?: numb
 }
 
 /** What the Live tab reads of the board view. */
-export type LiveView = { tasks: SymccTask[]; checker?: boolean; auto_retries?: number; max_parallel?: number; mode?: SymccMode; archived_done?: string[]; branches?: BranchFacts }
+export type LiveView = { tasks: SymccTask[]; checker?: boolean; auto_retries?: number; max_parallel?: number; mode?: SymccMode; archived_done?: string[]; branches?: BranchFacts; /** T-769: ▍Today's lead, scout and cost figures (app/lead.ts) */ today_team?: TodayTeam }
 
 /**
  * One lane: a task in doing. `station` is where it is (`at` its place in `stations`); `sinceMs` when it got there;
@@ -230,17 +230,49 @@ export function liveHeader(view: LiveView, lanes: readonly LiveLane[]): string {
   return `${modeLabel(modeOf(view))} · agents ${lanes.filter(l => l.agent).length}/${max} busy`
 }
 
+/** T-770: a scout run going now (started, not queued for a slot): its name and when it started (ms). */
+export type LiveScoutRun = { name: string; since: number }
+/** T-770: the mark in front of the running scouts at the end of the mode line, drawn in the scout color. */
+export const LIVE_SCOUT_MARK = '⌕'
+/** What goes between the mode line and the scout mark. */
+export const LIVE_SCOUT_GAP = ' · '
+
+/**
+ * T-770: the scout mark at the end of the Live tab's mode line ("⌕ gaps-bot 4m, board-review 1m"), or null when no
+ * scout runs. `room`: the columns left after the mode line. The names and times when they fit (oldest run first),
+ * else "⌕ 3 scouts", else "⌕ 3", else nothing. `text` is what comes after the mark (with its leading space), drawn dim.
+ */
+export function liveScoutMark(runs: readonly LiveScoutRun[] | undefined, nowMs: number, room = Infinity): { gap: string; mark: string; text: string } | null {
+  const list = (Array.isArray(runs) ? runs : []).filter(r => r && typeof r.name === 'string' && Number.isFinite(r.since)).slice().sort((a, b) => a.since - b.since)
+  if (!list.length) return null
+  const n = list.length
+  const forms = [list.map(r => `${r.name} ${fmtDuration(nowMs - r.since)}`).join(', '), `${n} scout${n === 1 ? '' : 's'}`, `${n}`]
+  for (const f of forms) {
+    const text = ` ${f}`
+    if (textWidth(LIVE_SCOUT_GAP + LIVE_SCOUT_MARK + text) <= room) return { gap: LIVE_SCOUT_GAP, mark: LIVE_SCOUT_MARK, text }
+  }
+  return null
+}
+
+/** T-770: the mode line with its scout mark as segments, within `width` columns: the line ('text'), then the gap
+ *  ('text'), the mark ('scouts') and the names ('dim') while scouts run. */
+export function liveHeaderSegs(view: LiveView & { scouts_running?: readonly LiveScoutRun[] }, lanes: readonly LiveLane[], nowMs: number, width = Infinity): LiveSeg[] {
+  const head = liveHeader(view, lanes)
+  const m = liveScoutMark(view.scouts_running, nowMs, width - textWidth(head))
+  return [{ text: head, tone: 'text' }, ...(m ? [{ text: m.gap, tone: 'text' as const }, { text: m.mark, tone: 'scouts' as const }, { text: m.text, tone: 'dim' as const }] : [])]
+}
+
 /** The current station's mark on redraw number `frame`: ◉ and ◎ in turn; always ◉ when `steady` (reduced motion). */
 export const liveBlink = (frame: number, steady = false): string => (steady || frame % 2 === 0 ? '◉' : '◎')
 
 /** How a lane's text is colored: each client picks its own colors for these. */
-export type LiveTone = 'id' | 'title' | 'passed' | 'current' | 'future' | 'text' | 'dim' | 'warning' | 'bar' | 'heading' | 'mark' | 'run' | 'wait'
+export type LiveTone = 'id' | 'title' | 'passed' | 'current' | 'future' | 'text' | 'dim' | 'warning' | 'bar' | 'heading' | 'mark' | 'run' | 'wait' | TodayWho
 /** A piece of a lane's line in one tone. */
 export type LiveSeg = { text: string; tone: LiveTone }
 /** Each tone's color name, the same in every client; a section heading ("▍Tasks") and (T-760) the agent mark "✧" have
  *  the task page's heading color. T-767: a running lane's "▶ ", id and title are 'run' (bold, the accent color); a
  *  waiting train's id and title are 'wait' (dim, as the rest of its row). */
-export const LIVE_TONE: Record<LiveTone, string> = { id: 'claude', title: 'text', passed: 'success', current: 'ide', future: 'inactive', text: 'text', dim: 'inactive', warning: 'warning', bar: 'ide', heading: 'suggestion', mark: 'suggestion', run: 'claude', wait: 'inactive' }
+export const LIVE_TONE: Record<LiveTone, string> = { id: 'claude', title: 'text', passed: 'success', current: 'ide', future: 'inactive', text: 'text', dim: 'inactive', warning: 'warning', bar: 'ide', heading: 'suggestion', mark: 'suggestion', run: 'claude', wait: 'inactive', workers: 'ide', checkers: 'autoAccept', scouts: 'suggestion', lead: 'success' }
 /** Whether a tone is drawn bold. */
 export const liveBold = (tone: LiveTone): boolean => tone === 'id' || tone === 'current' || tone === 'heading' || tone === 'run'
 /** T-767: what a running lane's first line starts with (before its id). */
@@ -555,7 +587,7 @@ export function todayCost(tasks: readonly Pick<SymccTask, 'runs'>[], nowMs: numb
   return usd
 }
 
-/** The ▍Today figures in `width` columns: "✓ 6 merged   ↺ 9 sent back   ✗ 1 failed   Σ 18.4M tokens", on more lines (never cut) when narrow. */
+/** The ▍Today figures in `width` columns: "✓ 6 merged   ↺ 9 sent back   ✗ 1 failed   Σ 18.4M tokens", on more lines when narrow (a part wider than the page alone is cut). */
 export function todayLines(d: LiveToday, width: number): string[] {
   const parts = [`✓ ${d.merged} merged`, `↺ ${d.sentBack} sent back`, `✗ ${d.failed} failed`, `Σ ${fmtTokens(d.tokens)} tokens`]
   for (const gap of ['   ', '  ', ' ']) {
@@ -572,7 +604,209 @@ export function todayLines(d: LiveToday, width: number): string[] {
     } else cur = next
   }
   out.push(cur)
-  return out
+  // T-769: a part wider than the page on its own is cut
+  return out.map(l => fitText(l, Math.max(1, Math.floor(width))))
+}
+
+// ---------------- T-769: ▍Today's second and third lines ----------------
+//   ⌀ per task 2.8M · 9m work · 23m start-to-merge   ⏱ 13h 06m agent work · ≈ $64
+//   ████████████▓▓▒░ workers 84% · checkers 8% · scouts 5% · lead 3%   08 ▁▂▃▅▇▆▅▃▅▇█▆▃ 20   busiest 14:00 · 42.1M
+
+/** Who spent today's tokens, in the bar's order. */
+export type TodayWho = 'workers' | 'checkers' | 'scouts' | 'lead'
+export const TODAY_WHO: readonly TodayWho[] = ['workers', 'checkers', 'scouts', 'lead']
+/** The bar's cell for each, so the parts can be told apart without colors too. */
+export const TODAY_WHO_CELL: Record<TodayWho, string> = { workers: '█', checkers: '▓', scouts: '▒', lead: '░' }
+/** How many cells the stacked bar has. */
+export const TODAY_BAR = 16
+const SPARK = '▁▂▃▄▅▆▇█'
+
+/**
+ * What ▍Today reads beyond the board's tasks (the board view's `today_team`, filled by app/lead.ts): the owner's day it
+ * is for (figures of another day are not shown), the lead's tokens today (absent when they can't be read here), the
+ * scouts' tokens and run time today, the session's cost so far as /cost says (absent when the host doesn't tell it), and
+ * the lead's and scouts' tokens per hour of that day (24 numbers, the owner's hours).
+ */
+export type TodayTeam = { day: string; lead?: number; scouts?: number; scout_ms?: number; usd?: number; hours?: number[] }
+
+/**
+ * ▍Today's extra figures: the medians per task merged today (its tokens, its tries' work time, from its first try's start
+ * to the merge), today's agent work time (the tries' time inside today, and the scouts'), the cost when known, today's
+ * tokens by who spent them (only the known ones with tokens), and the tokens per hour from the first busy hour to now.
+ */
+export type TodayMore = {
+  perTask?: { tokens?: number; workMs?: number; mergeMs?: number }
+  workMs: number
+  usd?: number
+  who: { who: TodayWho; tokens: number }[]
+  hours: number[]
+  firstHour: number
+}
+
+const HOUR = 3_600_000
+
+/** ▍Today's extra figures at `nowMs` (the same day as liveToday's), from the tasks and the view's `team`. */
+export function todayMore(tasks: readonly SymccTask[], team: TodayTeam | undefined, nowMs: number, offsetMin: number = localOffset(nowMs)): TodayMore {
+  const today = dayOf(nowMs, offsetMin)
+  const shifted = nowMs + offsetMin * 60_000
+  const dayStart = nowMs - (((shifted % 86_400_000) + 86_400_000) % 86_400_000)
+  const hourOf = (at: number) => Math.floor((at - dayStart) / HOUR)
+  const isToday = (at: number | undefined): at is number => at !== undefined && dayOf(at, offsetMin) === today
+  const hours = Array.from({ length: 24 }, () => 0)
+  let workers = 0
+  let checkers = 0
+  let workMs = 0
+  const tok: number[] = []
+  const work: number[] = []
+  const toMerge: number[] = []
+  for (const t of tasks) {
+    for (const r of t.runs ?? []) {
+      const start = ms(r.started)
+      const end = ms(r.ended)
+      if (start !== undefined) {
+        const from = Math.max(start, dayStart)
+        const to = Math.min(end ?? nowMs, nowMs)
+        if (to > from) workMs += to - from
+      }
+      const at = end ?? start
+      if (!r.tokens || !isToday(at)) continue
+      const all = tokenCount(r.tokens)
+      const chk = Math.min(all, r.checker_tokens ? tokenCount(r.checker_tokens) : 0)
+      workers += all - chk
+      checkers += chk
+      const h = hourOf(at)
+      if (h >= 0 && h < 24) hours[h]! += all
+    }
+    const mergedAt = marksOf(t).filter(h => h.kind === 'merged').map(h => ms(h.at)).filter(isToday)
+    if (!mergedAt.length) continue
+    const f = taskFigures(t)
+    if (f.tok !== undefined) tok.push(f.tok)
+    if (f.hasData) work.push(f.ms)
+    const first = ms(t.runs?.[0]?.started)
+    if (first !== undefined && Math.max(...mergedAt) >= first) toMerge.push(Math.max(...mergedAt) - first)
+  }
+  const mine = team && typeof team === 'object' && team.day === today ? team : undefined
+  const n = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) && x > 0 ? x : 0)
+  for (const [h, x] of (Array.isArray(mine?.hours) ? mine.hours : []).entries()) if (h < 24) hours[h]! += n(x)
+  const counts: Record<TodayWho, number> = { workers, checkers, scouts: n(mine?.scouts), lead: n(mine?.lead) }
+  const who = TODAY_WHO.flatMap(w => (counts[w] > 0 ? [{ who: w, tokens: counts[w] }] : []))
+  const now = Math.min(23, Math.max(0, hourOf(nowMs)))
+  const firstHour = hours.findIndex(n => n > 0)
+  const perTask = { ...(tok.length ? { tokens: median(tok) } : {}), ...(work.length ? { workMs: median(work) } : {}), ...(toMerge.length ? { mergeMs: median(toMerge) } : {}) }
+  const usd = mine?.usd
+  return {
+    ...(Object.keys(perTask).length ? { perTask } : {}),
+    workMs: workMs + n(mine?.scout_ms),
+    ...(n(usd) ? { usd: n(usd) } : {}),
+    who,
+    hours: firstHour < 0 || firstHour > now ? [] : hours.slice(firstHour, now + 1),
+    firstHour: Math.max(0, firstHour),
+  }
+}
+
+/** Dollars, short: "≈ $64" from ten dollars on, else "≈ $4.20". */
+export const todayCostText = (usd: number) => `≈ ${usd >= 10 ? `$${Math.round(usd)}` : fmtCost(usd)}`
+
+/** The shares of `who`'s tokens in whole percents ("<1%" for a small one). */
+function shares(who: TodayMore['who']): string[] {
+  const all = who.reduce((s, w) => s + w.tokens, 0)
+  return who.map(w => {
+    const p = (100 * w.tokens) / all
+    return p > 0 && p < 1 ? '<1%' : `${Math.round(p)}%`
+  })
+}
+
+/** The stacked bar's cells for `who` in `n` cells (each with tokens gets one at least, when there is room). */
+export function todayBar(who: TodayMore['who'], n: number = TODAY_BAR): LiveSeg[] {
+  const all = who.reduce((s, w) => s + w.tokens, 0)
+  if (!all || n < 1) return []
+  const raw = who.map(w => (n * w.tokens) / all)
+  const cells = raw.map(x => Math.floor(x))
+  // largest remainders get the cells left
+  const order = raw.map((x, i) => ({ i, r: x - Math.floor(x) })).sort((a, b) => b.r - a.r)
+  for (let k = 0, left = n - cells.reduce((s, c) => s + c, 0); left > 0; k++, left--) cells[order[k % order.length]!.i]!++
+  // a part with tokens and no cell borrows one from the biggest
+  for (let i = 0; i < cells.length; i++)
+    if (cells[i] === 0 && n >= who.length) {
+      const big = cells.indexOf(Math.max(...cells))
+      cells[big]!--
+      cells[i] = 1
+    }
+  return who.flatMap((w, i) => (cells[i]! > 0 ? [{ text: TODAY_WHO_CELL[w.who].repeat(cells[i]!), tone: w.who }] : []))
+}
+
+/** The hours as a sparkline, ▁ to █ (a space for an hour with no tokens). */
+export function sparkline(hours: readonly number[]): string {
+  const max = Math.max(0, ...hours)
+  return hours.map(n => (n > 0 && max > 0 ? SPARK[Math.min(SPARK.length - 1, Math.max(0, Math.ceil((n / max) * SPARK.length) - 1))]! : ' ')).join('')
+}
+
+const hh = (h: number) => String(h).padStart(2, '0')
+
+/**
+ * ▍Today's second and third lines in `width` columns (see the drawing above): the medians per merged task, the agent
+ * work time and the cost; then the stacked bar of who spent the tokens with their shares, the tokens per hour and the
+ * busiest hour. When narrow, parts go from the ends, in this order: the busiest hour, the cost, the sparkline's hour
+ * labels, the sparkline, the shares' words (the bar stays); then line 2's agent work time and its per-task figures
+ * from the end. Never wider than `width`. A line with nothing to say is left out.
+ */
+export function todayMoreLines(m: TodayMore, width: number): LiveSeg[][] {
+  const w = Math.max(1, Math.floor(width))
+  const per = m.perTask
+  const perParts = per ? [per.tokens !== undefined && fmtTokens(per.tokens), per.workMs !== undefined && `${fmtDuration(per.workMs)} work`, per.mergeMs !== undefined && `${fmtDuration(per.mergeMs)} start-to-merge`].filter((x): x is string => !!x) : []
+  const line2 = (level: number, keepPer: number, work: boolean): LiveSeg[] => {
+    const out: LiveSeg[] = []
+    const gap = () => out.length && out.push({ text: '   ', tone: 'text' })
+    const p = perParts.slice(0, keepPer)
+    if (p.length) out.push({ text: '⌀ ', tone: 'dim' }, { text: `per task ${p.join(' · ')}`, tone: 'text' })
+    if (work && m.workMs > 0) {
+      gap()
+      out.push({ text: '⏱ ', tone: 'dim' }, { text: `${fmtDuration(m.workMs)} agent work`, tone: 'text' })
+    }
+    if (level < 1 && m.usd !== undefined) {
+      if (out.length) out.push({ text: ' · ', tone: 'dim' })
+      out.push({ text: todayCostText(m.usd), tone: 'text' })
+    }
+    return out
+  }
+  const sh = shares(m.who)
+  const busiest = m.hours.length ? m.hours.indexOf(Math.max(...m.hours)) : -1
+  const line3 = (level: number, busy: boolean, barW = TODAY_BAR): LiveSeg[] => {
+    if (!m.who.length) return []
+    const out: LiveSeg[] = [...todayBar(m.who, barW)]
+    if (level < 4) {
+      m.who.forEach((x, i) => out.push({ text: i ? ' · ' : ' ', tone: 'dim' }, { text: `${x.who} ${sh[i]}`, tone: x.who }))
+    }
+    if (level < 3 && m.hours.length) {
+      out.push({ text: '   ', tone: 'text' })
+      if (level < 2) out.push({ text: `${hh(m.firstHour)} `, tone: 'dim' })
+      out.push({ text: sparkline(m.hours), tone: 'bar' })
+      if (level < 2) out.push({ text: ` ${hh(m.firstHour + m.hours.length - 1)}`, tone: 'dim' })
+    }
+    if (busy && busiest >= 0) out.push({ text: `   busiest ${hh(m.firstHour + busiest)}:00 · ${fmtTokens(m.hours[busiest]!)}`, tone: 'dim' })
+    return out
+  }
+  const fits = (xs: LiveSeg[]) => textWidth(segText(xs)) <= w
+  const done = (a: LiveSeg[], b: LiveSeg[]) => [a, b].filter(x => x.length)
+  if (fits(line2(0, 3, true)) && fits(line3(0, true))) return done(line2(0, 3, true), line3(0, true))
+  for (let level = 0; level <= 4; level++) if (fits(line2(level, 3, true)) && fits(line3(level, false))) return done(line2(level, 3, true), line3(level, false))
+  // narrower still: line 2 loses its agent work time, then its per-task figures from the end; the bar gets shorter
+  let two: LiveSeg[] = []
+  for (const [keep, work] of [[3, false], [2, false], [1, false]] as const) {
+    two = line2(4, keep, work)
+    if (fits(two)) break
+  }
+  if (!fits(two)) two = two.length ? [{ text: fitText(segText(two), w), tone: 'text' }] : two
+  // line 3 fits on its own room: as many of its parts as fit, whatever line 2 kept
+  let three = line3(4, false, Math.min(TODAY_BAR, w))
+  for (let level = 0; level <= 3; level++) if (fits(line3(level, false))) { three = line3(level, false); break }
+  return done(two, three)
+}
+
+/** All of ▍Today's lines in `width` columns (each under LIVE_INDENT): the figures (todayLines), then todayMoreLines. */
+export function liveTodayLines(v: Pick<LiveView, 'tasks' | 'today_team'>, nowMs: number, width: number, offsetMin: number = localOffset(nowMs)): LiveSeg[][] {
+  const first = todayLines(liveToday(v.tasks, nowMs, offsetMin), width).map((text): LiveSeg[] => [{ text, tone: 'text' }])
+  return [...first, ...todayMoreLines(todayMore(v.tasks, v.today_team, nowMs, offsetMin), width)]
 }
 
 // ---------------- T-718: the Organizational memory section at the bottom of the Live tab ----------------

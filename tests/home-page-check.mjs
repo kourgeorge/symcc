@@ -84,6 +84,18 @@ for (const [name, t] of [['board', board], ['Live tab', live]]) {
   if (!lines.some(l => l.startsWith(' ✓ 56 merged'))) bad(`still frame: the ${name}'s ▍Today line is not indented by 1`)
   if (lines.some(l => /^ {3}[✓▶]/.test(l))) bad(`still frame: the ${name} still indents by 3 under a ▍heading`)
 }
+// (T-769) ▍Today in 3 lines: the figures; the medians per task, agent work time and cost; the stacked bar with the
+// shares (each in its board color) and the hour sparkline (the busiest hour only on the wide Live tab)
+for (const [name, t] of [['board', board], ['Live tab', live]]) {
+  const after = t.slice(t.indexOf('▍Today') + '▍Today'.length).split('\n').filter(l => l.trim())
+  if (!/^ ⌀ per task \S+ · \d+m work · \d+m start-to-merge {3}⏱ \d+h \d\dm agent work · ≈ \$\d+$/.test(after[1] ?? '')) bad(`still frame: the ${name}'s ▍Today line 2 is not the per-task medians, work time and cost ("${after[1] ?? ''}")`)
+  if (!/^ [█▓▒░]{16} workers \d+% · checkers \d+% · scouts \d+% · lead \d+% {3}08 [▁▂▃▄▅▆▇█ ]+ \d\d/.test(after[2] ?? '')) bad(`still frame: the ${name}'s ▍Today line 3 is not the stacked bar, shares and hour sparkline ("${after[2] ?? ''}")`)
+}
+if (!/busiest \d\d:00/.test(live) || /busiest/.test(board)) bad('still frame: "busiest HH:00" belongs on the wide Live tab only')
+for (const w of ['workers', 'checkers', 'scouts', 'lead']) {
+  if (!view('live').includes(`<span class="t-who-${w}">`)) bad(`still frame: the ${w}' bar part is not drawn in the t-who-${w} tone`)
+  if (!new RegExp(`\\.t-who-${w}\\b`).test(readFileSync(join(out, 'style.css'), 'utf8'))) bad(`style.css: no .t-who-${w} rule`)
+}
 if (!/<span class="t-run">▶ T-740 /.test(view('board'))) bad('still frame: the running lane "▶ T-740" is not drawn in the t-run tone')
 if (!/\.t-run\b/.test(readFileSync(join(out, 'style.css'), 'utf8'))) bad('style.css: no .t-run rule')
 if (!page.includes('▶ T-747  ●━━━━━━●')) bad('home page: the Live tab card\'s running lanes do not start with "▶ "')

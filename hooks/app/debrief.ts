@@ -106,7 +106,9 @@ async function applyDebrief(host: Host, agentId: string, d: Debrief, run: Debrie
     const mine = i >= 0 && i < runs.length ? runs[i] : undefined
     if (mine && (run.tokens || run.cost !== undefined)) {
       const out = [...runs]
-      out[i] = { ...mine, ...(run.tokens ? { tokens: addTokens(mine.tokens, run.tokens) } : {}), ...(run.cost !== undefined ? { cost: (mine.cost ?? 0) + run.cost } : {}) }
+      // T-769: a checker's debrief tokens are its own, so they also go into checker_tokens (kept apart from the worker's)
+      const isChecker = mine.agent !== agentId && Array.isArray(mine.checkers) && mine.checkers.includes(agentId)
+      out[i] = { ...mine, ...(run.tokens ? { tokens: addTokens(mine.tokens, run.tokens), ...(isChecker ? { checker_tokens: addTokens(mine.checker_tokens, run.tokens) } : {}) } : {}), ...(run.cost !== undefined ? { cost: (mine.cost ?? 0) + run.cost } : {}) }
       patch.runs = out
     }
     let told: string[] = []

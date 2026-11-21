@@ -15,7 +15,7 @@
 // T-727: under the lanes, the Branches section (core's liveBranches) drawn with real lines: see branchesVs.
 // T-747: each section has a bold heading with the terminal's names (core's LIVE_SECTIONS): Tasks, Today, Branches,
 // Organizational memory (that one a link to all notes).
-import { type BranchRow, type LiveBranches, liveBranches, LIVE_EMPTY, LIVE_AGENT_MARK, LIVE_RUN_MARK, liveLegend, LIVE_SECTIONS, type LiveLane, liveInner, type LiveLayout, type LiveSeg, LIVE_TONE, laneLines, liveHeader, liveLanes, liveLayout, liveOrgMem, liveStations, liveToday, liveTrains, segText, todayLines, trainRows } from '../../core/live'
+import { type BranchRow, type LiveBranches, liveBranches, LIVE_EMPTY, LIVE_AGENT_MARK, LIVE_RUN_MARK, liveLegend, LIVE_SECTIONS, type LiveLane, liveInner, type LiveLayout, type LiveSeg, LIVE_TONE, laneLines, liveHeader, liveHeaderSegs, liveLanes, liveLayout, liveOrgMem, liveStations, liveTodayLines, liveTrains, segText, trainRows } from '../../core/live'
 import { panelValues, type $ } from '../panel'
 import type { PaneParts } from './parts'
 import { LIVE_TICK_MS, branchKey, laneKey, liveTick, newestKey, openOrgMemPage, topicKey, trainKey } from './live'
@@ -143,7 +143,7 @@ function branchesVs(pane: PaneParts, open: (id: string) => () => void) {
 
 /** The Live tab in VS Code; `notes`: org-mem's notes (newest first), for the section at its bottom (T-718). */
 export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
-  const { Box, Text, v, width, C, act, header, nowMs, vs } = pane
+  const { Box, Text, v, width, C, act, header, nowMs, vs, goTab } = pane
   const { Svg } = vs
   // the times beside the lanes ("2m") are redrawn every tick; the blink itself is the drawing's own animation
   liveTick($)
@@ -160,6 +160,7 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
       <Text wrap="wrap" bold={bold || undefined} color={C(color)}>{text}</Text>
     </Box>
   )
+  const headSegs = liveHeaderSegs(v, lanes, nowMs, width)
   const isTrack = (s: LiveSeg) => s.tone === 'passed' || s.tone === 'current' || s.tone === 'future'
   const laneRows = lanes.map(lane => {
     // the terminal's two lines (steady: the drawing blinks by itself), drawn in pieces
@@ -217,7 +218,17 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
   return (
     <Box flexDirection="column" gap={1}>
       {header('live')}
-      {line('live-head', liveHeader(v, lanes), 'text', true)}
+      {headSegs.length > 1 ? (
+        // T-770: while scouts run, their mark at the end of the mode line ("⌕ gaps-bot 4m"): the mark in the scout
+        // color, the names a dim link that opens the Scouts tab
+        <Box key="live-head" flexDirection="row" flexWrap="wrap">
+          <Text bold color={C('text')}>{headSegs[0]!.text + headSegs[1]!.text}</Text>
+          <Text color={C(LIVE_TONE.scouts)}>{headSegs[2]!.text + ' '}</Text>
+          {vsLink(vs, 'live-scouts', mdLink(headSegs[3]!.text.trim(), vsHref('tab', 'scouts')), [[vsHref('tab', 'scouts'), goTab('scouts')]], true)}
+        </Box>
+      ) : (
+        line('live-head', liveHeader(v, lanes), 'text', true)
+      )}
       <Box key="live-tasks" flexDirection="column">
         {line('live-tasks-head', LIVE_SECTIONS.tasks, 'text', true)}
         {lanes.length ? <Box key="live-lanes" flexDirection="column" gap={1}>{laneRows}</Box> : line('live-empty', LIVE_EMPTY, 'inactive')}
@@ -225,7 +236,11 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
       {lanes.length ? line('live-legend', liveLegend(lanes, Infinity).join(' '), 'inactive') : null}
       <Box key="live-bottom" flexDirection="column">
         {line('live-today-head', LIVE_SECTIONS.today, 'text', true)}
-        {todayLines(liveToday(v.tasks, nowMs), inner).map((x, i) => line(`live-today-${i}`, x, 'text'))}
+        {liveTodayLines(v, nowMs, inner).map((x, i) => (
+          <Box key={`live-today-${i}`} flexDirection="column">
+            <Text wrap="wrap">{x.map(s => <Text color={C(LIVE_TONE[s.tone])}>{s.text}</Text>)}</Text>
+          </Box>
+        ))}
       </Box>
       {branchesVs(pane, open)}
       {orgMemSectionVs($, pane, notes)}

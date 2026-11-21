@@ -109,8 +109,9 @@ export async function paneParts($: $, e: PaneEvent) {
    *  with a hotkey draws its own "t: " outside the Text, where the underline can't reach; a framed one draws "[ … ]" around it),
    *  so the one Text inside is all the terminal draws, and a click on it switches. The "t", "l", "s" and "c" keys belong to four
    *  hidden Buttons in a Box drawn `display="none"`: they take no room and draw nothing, but still carry the hotkeys. */
+  /** Switches to tab `which`, as a click on it in the tab row (T-770: the Live tab's scout mark opens the Scouts tab). */
+  const go = (which: PaneTab) => act(async () => ((S.draft = null), (S.naming = null), (S.diffOpen = null), (S.rejecting = null), (S.settingEdit = null), (S.settingPick = null), await resetPane(claudeHost($), which)))
   const tabs = () => {
-    const go = (which: PaneTab) => act(async () => ((S.draft = null), (S.naming = null), (S.diffOpen = null), (S.rejecting = null), (S.settingEdit = null), (S.settingPick = null), await resetPane(claudeHost($), which)))
     if (vscode)
       return vsTabs(vs, [
         { which: 'tasks', label: 'Tasks', count: v.tasks.length, active: !onScouts && !onSettings && !onLive, onPress: go('tasks') },
@@ -242,6 +243,6 @@ export async function paneParts($: $, e: PaneEvent) {
         )
       return <Text>{rich(line)}</Text>
     })
-  return { Box, Text, Button, Input, v, nowMs, width, color, word, mark, act, onScouts, onSettings, onLive, t, q, C, scouts, mode, vscode, vs, switchMode, banner, tabs, header, keyLines, footer, buttonRows, rich, heading, paragraphs }
+  return { Box, Text, Button, Input, v, nowMs, width, color, word, mark, act, onScouts, onSettings, onLive, t, q, C, scouts, mode, vscode, vs, switchMode, goTab: go, banner, tabs, header, keyLines, footer, buttonRows, rich, heading, paragraphs }
 }
 export type PaneParts = Awaited<ReturnType<typeof paneParts>>

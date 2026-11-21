@@ -167,7 +167,7 @@ once you have cleared them and its merge runs.
 | merge | `⇢` | The branch moves forward |
 
 The board row shows the stage icon instead of `▶`, then the time. In Claude Code the band above
-the prompt shows the stage's icon and name, then the time in that stage: `T-740 ⌕ checker 8m`. A doing task's page names the stage on the state line of its header
+the prompt shows the stage's icon and name, then the time in that stage: `⌕ T-740  checker 8m`. A doing task's page names the stage on the state line of its header
 (see [The task page and the scout page](#the-task-page-and-the-scout-page)) and has a **Steps** row in Details
 for the whole way, such as `worker ✓ → prep ✓ → ● checker → queue → test → merge` (see
 [What a task shows on its way to the merge](#what-a-task-shows-on-its-way-to-the-merge)). A task
@@ -754,21 +754,27 @@ are about changes; under "How tasks ended" a read investigation shows as
   doing, in review or waiting) little notes ♪ ♫ float up beside it. Only one move plays at a
   time (one that comes meanwhile is dropped). Nothing moves on a panel too narrow to show the
   logo or while the board is paused.
-- **The band above the prompt** (Claude Code) shows what is happening and what needs you,
-  with no counts (the status line under the prompt has the board's facts):
+- **The band above the prompt** (Claude Code) shows what is happening and what needs you:
 
   ```
-  𝄞 symcc  T-740 ⌕ checker 8m (try 3)  After a reopen, one hand-back…
-           T-743 ○ next up              A try counts only real…
-           ⚠ 1 question for you: Q-71 Raise the version?   [ open board ]
+  𝄞 symcc  ⏵ auto · 2/3 agents · 3 waiting · ✓ 12 today           [ open board ] [-]
+   ⌕ T-740  checker 8m · try 3  After a reopen, one hand-back…
+   ▶ T-745  work 19m            Live tab: a compact view…
+   ○ T-743  next up             A try counts only real…
+   ⚠ 1 question for you: Q-71 Raise the version?
   ```
 
-  One row per running task (its stage's icon and name, the time in that stage, the try from
+  The first line has `𝄞 symcc`, a short dim summary of the board (the mode, the agents busy
+  of the slots, how many tasks wait to start, how many merged today, and `⌕ 1 scout` while
+  scouts run), the **open board** button and the fold button `[-]`. No task is on this line.
+  Folding the band (`[-]`, or ctrl+x ctrl+a) keeps only this first line. Under it, indented one space: one line per running task (its
+  stage's icon in color, the id, the stage's name and the time in that stage, the try from
   try 2 on, then the title), the next task to start (`○ next up`), then the questions for you
-  and the tasks that need you, in the warning color, and the **open board** button. A session
-  that doesn't drive the board shows `⚠ driven by another session` here too. When a row is
-  narrow, the time is left out first, then the try, so the title keeps its room. OpenCode's
-  band is unchanged.
+  and the tasks that need you, in the warning color. A session that doesn't drive the board
+  shows `⚠ driven by another session` here too. With nothing running and nothing waiting on
+  you, a dim `nothing running` line is under the first line. When the band is narrow, the
+  summary drops its parts from the end (the mode stays), and a task line cuts its title, then
+  leaves out the time, then the try, so the title keeps its room. OpenCode's band is unchanged.
 - **`/symcc`** opens the interactive board: ↑↓ to move, Enter to open a task. On the
   lists (Tasks, Scouts, Settings, Roles) ↑↓ move from row to row, and the panel scrolls to
   keep the row in view; past the first or last row they scroll the panel (to see the banner
@@ -1103,9 +1109,32 @@ indented by 1 space (VS Code shows the same names as bold headings):
   branch yet) the section isn't shown. VS Code draws it with real lines, and OpenCode shows the
   same section.
 - The header line says the board mode and `agents N/M busy` (workers and checkers running
-  against `max_parallel`). Under the `▍Today` heading, one line of today's numbers:
-  `✓ 67 merged   ↺ 56 sent back   ✗ 0 failed   Σ 320.7M tokens` (merged, sent back by the checker,
-  failed, and the tries' tokens today). The task that starts next shows in the band above the
+  against `max_parallel`). While a scout runs, a small mark goes at the end of that line: `⌕`
+  in the scout color, then each running scout's name and how long it has run, dim
+  (`⏵ auto · agents 2/3 busy · ⌕ gaps-bot 4m, board-review 1m`). When the names don't fit, it
+  says `⌕ 3 scouts`, and on a very narrow panel just `⌕ 3`. A scout still waiting to start
+  isn't shown, and with no scout running there is no mark. A click on it (or the `s` key)
+  opens the Scouts tab; this works on every board. Under the `▍Today` heading, three lines about today:
+
+  ```
+  ▍Today
+   ✓ 67 merged   ↺ 56 sent back   ✗ 0 failed   Σ 320.7M tokens
+   ⌀ per task 2.8M · 9m work · 23m start-to-merge   ⏱ 13h 06m agent work · ≈ $64
+   ████████████▓▓▒░ workers 84% · checkers 8% · scouts 5% · lead 3%   08 ▁▂▃▅▇▆▅▃▅▇█▆▃ 20
+  ```
+
+  The first line: merged, sent back by the checker, failed, and the tries' tokens today. The second:
+  for the tasks merged today, the middle value (median) of their tokens, their work time and the time
+  from their first try's start to the merge; then all agent work today (the tries' time today and the
+  scouts'); then `≈ $N`, the session's cost as `/cost` says it, only when symcc knows it (never a
+  guess). The third: a bar of who spent today's tokens (workers, checkers, scouts, the lead; each in
+  its board color and its own shade), with the shares, then the tokens per hour from the first busy
+  hour to now, with the first and last hour dim; `busiest HH:00 · NM` goes on the end when there is
+  room. A checker's tokens are counted apart from its worker's from now on (older tries count as the
+  worker's), and the lead's part shows only where symcc can read the lead's usage. The lead's,
+  scouts' and cost figures are read in the background at most every two minutes. On a narrow panel
+  parts drop from the ends, in this order: the cost, the hour labels, the hour line, the shares'
+  words (the bar stays); nothing goes past the panel's width. The task that starts next shows in the band above the
   prompt (`○ next up`), and the tasks that wait hang under their lanes. With nothing running it
   says `No task is running right now.`
 - At the bottom, just above the key hints, the **Organizational memory** section (see
@@ -1648,7 +1677,7 @@ first try shows no mark.
 
 - In a task's row (the board's task list in the terminal, VS Code and OpenCode, and
   OpenCode's band): `(2)` right after the time. It is dim, and from `(3)` on it uses the
-  warning colour. Claude Code's band above the prompt says `(try 2)`.
+  warning colour. Claude Code's band above the prompt says `· try 2`.
 - In the lead's board: `T-5 doing · try 2/3`. The `/3` shows the limit while the try is an
   automatic retry after failing tests.
 
