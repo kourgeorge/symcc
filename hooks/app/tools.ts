@@ -128,7 +128,7 @@ ${features.panel ? `  /${S.N.name}                     open the board panel (↑
   /${S.N.name}-settings git setup  git init on main if there is no repo, a .gitignore and a first
                        commit (never pushes)
   /${S.N.name}-settings orgmem delete N [KEY]  delete org-mem note number N
-${features.panel ? '' : `  /${S.N.name}-board               open the board panel (OpenCode only)
+${features.panel ? '' : `  /${S.N.name}-board               the board panel, as its own screen (OpenCode only)
 `}  /${S.N.name}-stats [full|html] [7d|T-1..T-9]  time and token stats, with bar charts:
                        tasks, worker time, tokens, the whole team (lead, workers, scouts),
                        per task and per try, the biggest tasks, how tasks ended, by role,
