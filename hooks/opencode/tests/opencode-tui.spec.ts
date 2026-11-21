@@ -2741,11 +2741,11 @@ test('T-769: the Live tab\'s ▍Today has 4 lines (medians per task, work time, 
     return { texts, lines: texts.slice(at + 2, at + 6) }
   }
   const wide = today(140)
-  expect(wide.lines[0]).toBe(`${LIVE_INDENT}✓ 3 merged   ↺ 0 sent back   ✗ 0 failed   Σ 6M tokens`)
+  expect(wide.lines[0]).toBe(`${LIVE_INDENT}✓ 3 merged   ↺ 0 sent back   ✗ 0 failed   Σ 10M tokens`)
   expect(wide.lines[1]).toBe(LIVE_INDENT + TODAY_LINE_2)
   expect(wide.lines[2]!.startsWith(LIVE_INDENT + TODAY_BAR_START)).toBe(true)
   expect(/[▁▂▃▄▅▆▇]/.test(wide.lines[2]!)).toBe(false)
-  expect(/^\s*\d\d [▁▂▃▄▅▆▇█ ]+ \d\d {3}busiest .* tokens {3}first try \d+%/.test(wide.lines[3]!)).toBe(true)
+  expect(/^\s*\d\d [▁▂▃▄▅▆▇█ ]+ \d\d {3}busiest hour .* tokens {3}first try \d+%/.test(wide.lines[3]!)).toBe(true)
   // a broken today_team is left out: no lead, scouts or cost
   const broken = parseViewFile(viewFileText({ ...f, view: { ...f.view, today_team: 'x' as never } }))!
   expect('today_team' in broken.view).toBe(false)
@@ -2771,7 +2771,7 @@ test('T-692: the Live tab draws the terminal panel\'s lanes and today (core/live
     const layout = liveLayout(lanes, liveStations(true), inner)
     const frame = Math.floor(NOW / 1000)
     const under = (x: string) => LIVE_INDENT + x
-    return [liveHeader(view, lanes), 'TASKS', ' ', under(liveLabelLine(layout)), ...lanes.flatMap(l => laneLines(l, layout, { nowMs: NOW, frame }).map(x => under(segText(x)))), ' ', 'TODAY', ' ', ...todayLines(liveToday(whole, NOW), inner).map(under), ...liveLegend(lanes, inner).map(under)]
+    return [liveHeader(view, lanes), 'TASKS', ' ', under(liveLabelLine(layout)), ...lanes.flatMap(l => laneLines(l, layout, { nowMs: NOW, frame }).map(x => under(segText(x)))), ' ', 'TODAY', ' ', ...todayLines(liveToday(whole, NOW), inner, true).map(under), ...liveLegend(lanes, inner).map(under)]
   }
   // OpenCode reads the view file, whose done task comes slim (no history): the today row must still match
   const f: ViewFile = { ...f0, view: { ...view, tasks: whole.map(t => viewTask(t)) } }

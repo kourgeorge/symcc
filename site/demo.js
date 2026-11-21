@@ -163,7 +163,7 @@
     L.push('')
     L.push(liveHead('Today'), '')
     const d = s.today
-    L.push(' ' + sp(`✓ ${d.merged} merged`, 'passed') + sp(`   ↺ ${d.back} sent back   ✗ ${d.failed} failed   Σ ${tok(d.tokens)} tokens`, 'dim'))
+    L.push(' ' + sp(`✓ ${d.merged} merged`, 'passed') + sp(`   ↺ ${d.back} sent back   ✗ ${d.failed} failed   Σ ${tok(d.tokens)} tokens`, 'dim') + sp(' (tries only)', 'dim'))
     // (T-769, T-779) the medians per merged task and today's agent work time; then the scouts' share of the tokens
     // (a bar of 16 cells in the board colors) and the tokens per hour from 08:00 to now
     L.push(' ' + sp('⌀ ', 'dim') + sp(`per task ${TODAY_MORE.perTask}`, 'text') + sp('   ⏱ ', 'dim') + sp(`${TODAY_MORE.work} agent work`, 'text'))
