@@ -166,7 +166,7 @@ export function statsHtml(d: StatsData, project: string): string {
     ? (triesShown.length < d.failedTries.length ? `<p class="muted">The latest ${triesShown.length}; every one: /${E(d.name)}-stats html full</p>` : '')
       + (triesDiffer ? `<p class="muted">${E(triesDiffer)}</p>` : '')
       + `<table class="t small"><thead><tr><th>task</th><th>try</th><th>failing command</th><th>reason</th><th>first failing test</th></tr></thead><tbody>${triesShown.map(f => `<tr><td>${E(f.id)} ${E(f.title)}</td><td>${f.try}</td><td>${f.command ? `<code>${E(f.command)}</code>` : '-'}</td><td>${E(f.reason)}</td><td>${f.test ? E(f.test) : '-'}</td></tr>`).join('')}</tbody></table>`
-    : '<p class="muted">No failed tries.</p>', true)
+    : (triesDiffer ? `<p class="muted">${E(triesDiffer)}</p>` : '<p class="muted">No failed tries.</p>'), true)
   const testsShown = d.full ? d.failedTests : d.failedTests.slice(0, FAILED_TESTS_SHORT)
   const maxTasks = Math.max(0, ...testsShown.map(x => x.tasks))
   const failedTests = section(`Tests that failed most${testsShown.length < d.failedTests.length ? ` (top ${testsShown.length} of ${d.failedTests.length})` : ''}`, d.failedTests.length

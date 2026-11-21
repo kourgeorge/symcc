@@ -547,6 +547,19 @@ test('T-735: tries stopped on purpose (paused, dropped, backlog, turned off) are
   expect(flat).not.toContain('older tries with no end saved')
 })
 
+test('T-735: with no failed try in the list but a failed history line, both reports still say why the counts differ', () => {
+  const tasks = [task('T-1', { status: 'todo', history: hist('try 1: did it → tests failed: `npm test` (exit 1)') })]
+  const note = '0 here, 1 under "Failed tries"'
+  const text = statsReport({ tasks, nowMs: NOW }).replace(/\s+/g, ' ')
+  expect(text).toContain('Failed tries (1, from history)')
+  expect(text).toContain('Each failed try (0)')
+  expect(text).toContain(note)
+  const html = statsHtml(statsData({ tasks, nowMs: NOW }), 'p').replace(/\s+/g, ' ')
+  expect(html).toContain('<h2>Each failed try (0)</h2>')
+  expect(html).toContain(note)
+  expect(html).not.toContain('No failed tries.')
+})
+
 test('T-721: a try waiting for the owner\'s files is not a failed try, and with "inside" a try keeps its own number', () => {
   const waiting = task('T-1', { status: 'todo', runs: [{ started: iso(30), ended: iso(20), ended_by: 'finished', ended_note: 'waiting for your files' }] })
   const day = 24 * 60

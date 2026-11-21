@@ -826,11 +826,11 @@ export function statsReport(input: StatsInput & { full?: boolean }): string {
   for (const f of d.failed) out.push(barRow(`  ${f.label}`, 24, f.n, maxFail, null))
 
   // T-721: each failed try (short: the latest FAILED_TRIES_SHORT), and the tests that failed most (short: the top FAILED_TESTS_SHORT)
-  if (d.failedTries.length) {
+  const differ = failedCountsNote(d)
+  if (d.failedTries.length || differ) {
     const shown = full ? d.failedTries : d.failedTries.slice(-FAILED_TRIES_SHORT)
-    out.push('', `Each failed try (${d.failedTries.length}: task · try · reason · failing command · first failing test)`)
+    out.push('', `Each failed try (${d.failedTries.length}${d.failedTries.length ? ': task · try · reason · failing command · first failing test' : ''})`)
     if (shown.length < d.failedTries.length) out.push(`  (the latest ${shown.length}; every one: /${name}-stats full)`)
-    const differ = failedCountsNote(d)
     if (differ) out.push(`  (${differ})`)
     for (const f of shown) out.push(`  ${f.id.padEnd(6)} try ${String(f.try).padEnd(2)} ${[f.reason, f.command && `\`${cutTitle(f.command, 40)}\``, f.test && cutTitle(f.test, 60)].filter(Boolean).join(' · ')}`)
   }
