@@ -853,12 +853,17 @@ are about changes; under "How tasks ended" a read investigation shows as
 
 ### Live tab
 
-The Live tab (`l`) shows the tasks that run now as "railway lanes", one lane per task the board counts as running (a task in doing, or an approved or files-cleared task while its tests and merge run):
+The Live tab (`l`) shows the tasks that run now as "railway lanes", one lane per task the board counts as running (a task in doing, or an approved or files-cleared task while its tests and merge run).
+Under the mode line it has four sections, each starting with a heading like the task page's
+`▍Details`: `▍Tasks` (the lanes), `▍Branches`, `▍Today` (next up and today's numbers) and
+`▍Organizational memory`, with one empty line between them and the lines under each heading
+indented by 3 spaces (VS Code shows the same names as bold headings):
 
 ```
-                     work·    check·   queue    tests    merged
- T-684 /symcc-doc…   ●━━━━━━━━●━━━━━━━━◉────────○────────○      #2
-  change try 2/3     ▕████████░░░░░▏ 1.1M  ↺×1
+▍Tasks
+                        work·    check·   queue    tests    merged
+    T-684 /symcc-doc…   ●━━━━━━━━●━━━━━━━━◉────────○────────○      #2
+     change try 2/3     ▕████████░░░░░▏ 1.1M  ↺×1
 ```
 
 - Lanes are in the order the tasks started their current try, so a new one joins at the bottom
@@ -900,12 +905,12 @@ The Live tab (`l`) shows the tasks that run now as "railway lanes", one lane per
   against the branch the tasks merge into (usually `main`):
 
   ```
-   ── Branches ─────────────────────────────────────────────────────
-   main   ●───●───●───●───●───●───●   c11a736 · 2 min ago
-          │       │           │   ╰─◀ T-724 merged
-          │       │           ╰─────○ T-721  +3 commits · 1 behind
-          │       ╰─────────────────○ T-725  +0 commits · 4 behind
-          ╰─────────────────────────○ T-726  not started
+  ▍Branches
+      main   ●───●───●───●───●───●───●   c11a736 · 2 min ago
+             │       │           │   ╰─◀ T-724 merged
+             │       │           ╰─────○ T-721  +3 commits · 1 behind
+             │       ╰─────────────────○ T-725  +0 commits · 4 behind
+             ╰─────────────────────────○ T-726  not started
   ```
 
   The `main` line has its last 7 commits, the newest at the right, with the newest one's short
@@ -921,7 +926,7 @@ The Live tab (`l`) shows the tasks that run now as "railway lanes", one lane per
   branch yet) the section isn't shown. VS Code draws it with real lines, and OpenCode shows the
   same section.
 - The header line says the board mode and `agents N/M busy` (workers and checkers running
-  against `max_parallel`). Under the lanes: `next up`, the todo tasks free to start (nothing
+  against `max_parallel`). Under the `▍Today` heading: `next up`, the todo tasks free to start (nothing
   unfinished in their `after`) in the order they will start, then `N more` (the other todo tasks
   not shown, trains aside). Trains are not listed there. A task that waits only for tasks that
   neither run nor wait to run (failed, paused, waiting for you, in review...) hangs nowhere: next
@@ -932,18 +937,18 @@ The Live tab (`l`) shows the tasks that run now as "railway lanes", one lane per
   [Organizational memory](#organizational-memory-org-mem)):
 
   ```
-   ── Organizational memory ───────────────────── 57 / 60 ▕█████████░▏
-    newest
-     11-21  tests      In tests, put dates relative to now, never a…
-     11-21  workers    Before handing back, wait for every command…
-     11-21  snapshots  To re-capture a saved page picture, print s…
-    topics
-     tests       14    git         11    board        9
-     opencode     9    vs code      8    hosts       6
-    ↑↓ move · Enter open topic · m all notes
+  ▍Organizational memory   57 / 60 ▕█████████░▏
+       newest
+        11-21  tests      In tests, put dates relative to now, never a…
+        11-21  workers    Before handing back, wait for every command…
+        11-21  snapshots  To re-capture a saved page picture, print s…
+       topics
+        tests       14    git         11    board        9
+        opencode     9    vs code      8    hosts       6
+       ↑↓ move · Enter open topic · m all notes
   ```
 
-  The header has the note count out of the 60 allowed and a fill bar (in the warning colour from 54
+  The heading has the note count out of the 60 allowed and a fill bar (in the warning colour from 54
   notes on). Under `newest` are the 3 newest notes (day, topic, the text cut with `…`), under
   `topics` every topic with how many notes it has, the biggest first and `unsorted` (notes without
   a topic) last; on a narrow panel the topics take fewer columns. Enter (or a click) on a topic

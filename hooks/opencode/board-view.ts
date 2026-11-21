@@ -31,7 +31,7 @@ import {
   type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction, type DefEditField, type TaskVerb, settingsKeys, rolesKeys, kindsKeys, roleEditKeys, defEditFields, roleTools, roleFileText, roleSkipReason, kindFileText, kindSkipReason,
   DEFAULT_ROLE, isCheckerRole, ALWAYS_ON_KINDS, checkerOn, roleNameError, kindNameError, leadScoutNameError, checkStepNow, rowEndText, taskPhase, choiceLines, driveWarning,
   searchTasks, showsHeader, type BoardPage,
-  LIVE_TABS, LIVE_EMPTY, LIVE_LEGEND, type LiveSeg, LIVE_TONE, tabRow, LIVE_VIEW_KEYS, liveKeys, liveBranches, liveLanes, liveLayout, liveStations, liveHeader, liveLabelLine, laneLines, liveOrgMem, liveTrains, trainRows, nextUpLine, liveToday, todayLines, searchLine, modeButton, hintLines, roleKeys, rolePromptKeys, ROLE_PROMPTS, ROLE_SLOT, promptsOfRole, type RolePromptKind,
+  LIVE_TABS, LIVE_EMPTY, LIVE_INDENT, LIVE_LEGEND, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, liveBold, liveHeading, liveIndented, liveInner, tabRow, LIVE_VIEW_KEYS, liveKeys, liveBranches, liveLanes, liveLayout, liveStations, liveHeader, liveLabelLine, laneLines, liveOrgMem, liveTrains, trainRows, nextUpLine, liveToday, todayLines, searchLine, modeButton, hintLines, roleKeys, rolePromptKeys, ROLE_PROMPTS, ROLE_SLOT, promptsOfRole, type RolePromptKind,
 } from '../board'
 import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, brokenLabel, defNamed } from '../core/def-files'
 import { restFrame } from '../core/logo'
@@ -778,7 +778,7 @@ export function tabsLines(tab: PanelTab, w: number, tasks: number, scouts: numbe
 }
 
 /** Live segments as panel text, in core's LIVE_TONE colors. */
-const liveSegs = (xs: readonly LiveSeg[], hit?: PanelHit): Line => xs.map(x => ({ text: x.text, color: LIVE_TONE[x.tone], ...(x.tone === 'id' || x.tone === 'current' ? { bold: true } : {}), ...(hit ? { hit } : {}) }))
+const liveSegs = (xs: readonly LiveSeg[], hit?: PanelHit): Line => xs.map(x => ({ text: x.text, color: LIVE_TONE[x.tone], ...(liveBold(x.tone) ? { bold: true } : {}), ...(hit ? { hit } : {}) }))
 
 /** How often the Live tab's current station changes between ◉ and ◎ (the terminal panel's LIVE_TICK_MS). */
 export const LIVE_BLINK_MS = 1000
@@ -791,15 +791,18 @@ export const LIVE_BLINK_MS = 1000
  * T-715: under each lane hang its waiting trains (core's liveTrains and trainRows); the cursor goes over them too, and
  * Enter or a click on one opens its task, as on a lane.
  * T-727: under the lanes, the Branches section (core's liveBranches); the cursor goes over its task rows (liveBranchId).
+ * T-747: each section (Tasks, Branches, Today, Organizational memory) starts with a "▍Name" heading (core's
+ * liveHeading), its lines indented by LIVE_INDENT.
  */
 function liveBody(f: ViewFile, cursor: number, nowMs: number, w: number): Body {
   const b = bodyMaker()
   const v = f.view
   const lanes = liveLanes(v, nowMs)
-  const layout = liveLayout(lanes, liveStations(v.checker === true), w)
+  const inner = liveInner(w)
+  const layout = liveLayout(lanes, liveStations(v.checker === true), inner)
   const frame = Math.floor(nowMs / LIVE_BLINK_MS)
   const trains = liveTrains(v, nowMs, lanes)
-  const rows = new Map(lanes.map(l => [l.id, trainRows(trains.lanes[l.id] ?? [], w)]))
+  const rows = new Map(lanes.map(l => [l.id, trainRows(trains.lanes[l.id] ?? [], inner)]))
   const om = liveOrgMem(orgMemIn(f), w)
   const br = liveBranches(v, nowMs, w)
   // the cursor's stops, top to bottom: each lane, then its trains; (T-727) the Branches rows; then (T-718) the newest notes and the topics
@@ -811,10 +814,13 @@ function liveBody(f: ViewFile, cursor: number, nowMs: number, w: number): Body {
   ]
   const selected = ids.length ? ids[Math.min(Math.max(0, cursor), ids.length - 1)]! : ''
   b.add([{ text: liveHeader(v, lanes), color: 'text', bold: true }])
-  b.add([{ text: lanes.length ? liveLabelLine(layout) : LIVE_EMPTY, color: 'inactive' }])
+  b.add(liveSegs(liveHeading(LIVE_SECTIONS.tasks, w)))
+  b.add([{ text: LIVE_INDENT + (lanes.length ? liveLabelLine(layout) : LIVE_EMPTY), color: 'inactive' }])
+  /** A line under a section heading: indented. */
+  const under = (xs: readonly LiveSeg[], hit?: PanelHit) => liveSegs(liveIndented(xs), hit)
   /** A row that opens task `id`: "›" in its first column when the cursor is on it (a space there otherwise). */
   const opens = (xs: readonly LiveSeg[], id: string) => {
-    const line = liveSegs(xs, { open: id })
+    const line = under(xs, { open: id })
     const head = line[0]
     if (id === selected && head?.text.startsWith(' ')) line.splice(0, 1, { text: '›', color: 'ide', bold: true, hit: { open: id } }, { ...head, text: head.text.slice(1) })
     b.add(line, { open: id })
@@ -822,37 +828,37 @@ function liveBody(f: ViewFile, cursor: number, nowMs: number, w: number): Body {
   for (const l of lanes) {
     const [first, second] = laneLines(l, layout, { nowMs, frame })
     opens(first, l.id)
-    b.add(liveSegs(second))
-    for (const r of rows.get(l.id)!) r.id ? opens(r.segs, r.id) : b.add(liveSegs(r.segs))
+    b.add(under(second))
+    for (const r of rows.get(l.id)!) r.id ? opens(r.segs, r.id) : b.add(under(r.segs))
   }
-  // T-738: one empty line above each section after the first (Branches, next up, Organizational memory)
+  // T-738: one empty line above each section after the first (Branches, Today, Organizational memory)
   if (br) {
     b.blank()
     b.add(liveSegs(br.head))
-    b.add(liveSegs(br.main))
-    for (const r of br.rows) r.id ? opens(r.segs, liveBranchId(r.id)) : b.add(liveSegs(r.segs))
+    b.add(under(br.main))
+    for (const r of br.rows) r.id ? opens(r.segs, liveBranchId(r.id)) : b.add(under(r.segs))
   }
   b.blank()
-  b.add([{ text: footerRule(w), color: 'subtle' }])
-  b.add([{ text: nextUpLine(trains, w), color: 'text' }])
-  for (const t of todayLines(liveToday(v.tasks, nowMs), w)) b.add([{ text: t, color: 'text' }])
-  if (lanes.length) b.add([{ text: LIVE_LEGEND, color: 'inactive' }])
+  b.add(liveSegs(liveHeading(LIVE_SECTIONS.today, w)))
+  b.add([{ text: LIVE_INDENT + nextUpLine(trains, inner), color: 'text' }])
+  for (const t of todayLines(liveToday(v.tasks, nowMs), inner)) b.add([{ text: LIVE_INDENT + t, color: 'text' }])
+  if (lanes.length) b.add([{ text: LIVE_INDENT + LIVE_LEGEND, color: 'inactive' }])
   // T-718: the Organizational memory section, just above the footer (a click on its header opens all notes)
   b.blank()
   b.add(liveSegs(om.head, { key: ORG_MEM_KEY }), { key: ORG_MEM_KEY })
-  b.add([{ text: om.newestLabel, color: 'inactive' }])
-  if (om.empty) b.add([{ text: om.empty, color: 'inactive' }])
-  /** A cell's segments with "›" in its first column when the cursor is on it. */
-  const marked = (xs: readonly LiveSeg[], id: string): Line => {
-    const line = liveSegs(xs, { open: id })
+  b.add([{ text: LIVE_INDENT + om.newestLabel, color: 'inactive' }])
+  if (om.empty) b.add([{ text: LIVE_INDENT + om.empty, color: 'inactive' }])
+  /** A cell's segments with "›" in its first column when the cursor is on it (the first cell of a row indented). */
+  const marked = (xs: readonly LiveSeg[], id: string, first = true): Line => {
+    const line = first ? under(xs, { open: id }) : liveSegs(xs, { open: id })
     const head = line[0]
     if (id === selected && head?.text.startsWith(' ')) line.splice(0, 1, { text: '›', color: 'ide', bold: true, hit: { open: id } }, { ...head, text: head.text.slice(1) })
     return line
   }
   for (const x of om.newest) b.add(marked(x.segs, liveNoteId(x.note.n)), { open: liveNoteId(x.note.n) })
-  if (om.grid.length) b.add([{ text: om.topicsLabel, color: 'inactive' }])
-  for (const r of om.grid) b.add(r.flatMap(c => marked(c.segs, liveTopicId(c.topic))), r.length === 1 ? { open: liveTopicId(r[0]!.topic) } : null)
-  for (const k of om.keys) b.add([{ text: k, color: 'inactive' }])
+  if (om.grid.length) b.add([{ text: LIVE_INDENT + om.topicsLabel, color: 'inactive' }])
+  for (const r of om.grid) b.add(r.flatMap((c, j) => marked(c.segs, liveTopicId(c.topic), j === 0)), r.length === 1 ? { open: liveTopicId(r[0]!.topic) } : null)
+  for (const k of om.keys) b.add([{ text: LIVE_INDENT + k, color: 'inactive' }])
   return { ...b, ids, selected }
 }
 

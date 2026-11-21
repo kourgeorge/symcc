@@ -210,11 +210,27 @@ export function liveHeader(view: LiveView, lanes: readonly LiveLane[]): string {
 export const liveBlink = (frame: number, steady = false): string => (steady || frame % 2 === 0 ? '◉' : '◎')
 
 /** How a lane's text is colored: each client picks its own colors for these. */
-export type LiveTone = 'id' | 'title' | 'passed' | 'current' | 'future' | 'text' | 'dim' | 'warning' | 'bar'
+export type LiveTone = 'id' | 'title' | 'passed' | 'current' | 'future' | 'text' | 'dim' | 'warning' | 'bar' | 'heading'
 /** A piece of a lane's line in one tone. */
 export type LiveSeg = { text: string; tone: LiveTone }
-/** Each tone's color name, the same in every client. */
-export const LIVE_TONE: Record<LiveTone, string> = { id: 'claude', title: 'text', passed: 'success', current: 'ide', future: 'inactive', text: 'text', dim: 'inactive', warning: 'warning', bar: 'ide' }
+/** Each tone's color name, the same in every client; a section heading ("▍Tasks") has the task page's heading color. */
+export const LIVE_TONE: Record<LiveTone, string> = { id: 'claude', title: 'text', passed: 'success', current: 'ide', future: 'inactive', text: 'text', dim: 'inactive', warning: 'warning', bar: 'ide', heading: 'suggestion' }
+/** Whether a tone is drawn bold. */
+export const liveBold = (tone: LiveTone): boolean => tone === 'id' || tone === 'current' || tone === 'heading'
+
+// T-747: the Live tab's sections (Tasks, Branches, Today, Organizational memory) each start with a "▍Name" heading,
+// as the task page's "▍Details", and the lines under it are indented by LIVE_INDENT.
+/** The section names, in their order on the tab. */
+export const LIVE_SECTIONS = { tasks: 'Tasks', branches: 'Branches', today: 'Today', orgMem: 'Organizational memory' } as const
+/** What the lines under a section heading start with. */
+export const LIVE_INDENT = '   '
+/** The width left for a section's lines in `width` columns (after LIVE_INDENT). */
+export const liveInner = (width: number): number => Math.max(1, Math.floor(width) - LIVE_INDENT.length)
+/** A section's heading in `width` columns: "▍Tasks" (cut when narrow), the bar and the name two segments (a client
+ *  may make the name alone a link). */
+export const liveHeading = (name: string, width: number): LiveSeg[] => [{ text: '▍', tone: 'heading' }, { text: fitText(name, Math.max(1, Math.floor(width) - 1)), tone: 'heading' }]
+/** A line under a section heading: LIVE_INDENT, then its segments. */
+export const liveIndented = (xs: readonly LiveSeg[]): LiveSeg[] => [{ text: LIVE_INDENT, tone: 'text' }, ...xs]
 
 /** How the lanes are laid out at a width: the id and title columns, the gap between stations, the station names, the right column. */
 export type LiveLayout = { width: number; idW: number; titleW: number; gap: number; labels: string[]; rightW: number; sep: number; stations: LiveStation[] }
@@ -526,7 +542,7 @@ export function todayLines(d: LiveToday, width: number): string[] {
 }
 
 // ---------------- T-718: the Organizational memory section at the bottom of the Live tab ----------------
-//  ── Organizational memory ───────────────────── 57 / 60 ▕█████████░▏
+//  ▍Organizational memory   57 / 60 ▕█████████░▏
 //   newest
 //    11-21  tests      In tests, put dates relative to now, never a…
 //   topics
@@ -554,25 +570,19 @@ const GRID_LEAD = '   '
 const GRID_GAP = '    '
 const NEWEST_TOPIC_MAX = 16
 
-/** The section's header in `width` columns: the title, a rule, the count of the cap and a fill bar (shorter, then
- *  left out, then the title shorter, when narrow). Near the cap (orgMemNearCap) the count and bar are warnings. */
+/** The section's heading in `width` columns: "▍Organizational memory   57 / 60 ▕█████████░▏" (T-747), the count of
+ *  the cap and a fill bar on the heading line (the bar shorter, then left out, then the title shorter, when narrow).
+ *  Near the cap (orgMemNearCap) the count and bar are warnings. */
 function orgMemHead(n: number, width: number): LiveSeg[] {
   const warn = orgMemNearCap(n)
   const count = `${n} / ${ORG_MEM_MAX_LINES}`
-  for (const title of ['Organizational memory', 'Org-mem'])
+  for (const title of [LIVE_SECTIONS.orgMem, 'Org-mem'])
     for (const cells of [10, 6, 0]) {
       const bar = cells ? ` ${tokenBar(n, ORG_MEM_MAX_LINES, cells)}` : ''
-      const fixed = textWidth(` ── ${title} `) + textWidth(` ${count}${bar}`)
-      if (fixed + 3 > width) continue
-      return segs(
-        { text: ' ── ', tone: 'dim' },
-        { text: title, tone: 'text' },
-        { text: ` ${'─'.repeat(width - fixed)} `, tone: 'dim' },
-        { text: count, tone: warn ? 'warning' : 'text' },
-        { text: bar, tone: warn ? 'warning' : 'bar' },
-      )
+      if (textWidth(`▍${title}   ${count}${bar}`) > width) continue
+      return segs({ text: '▍', tone: 'heading' }, { text: title, tone: 'heading' }, { text: '   ', tone: 'text' }, { text: count, tone: warn ? 'warning' : 'text' }, { text: bar, tone: warn ? 'warning' : 'bar' })
     }
-  return [{ text: fitText(`Org-mem ${count}`, width), tone: 'text' }]
+  return liveHeading('Org-mem', width)
 }
 
 /** The newest notes' lines: "   11-21  tests      text cut with …", the topic column as wide as the longest topic shown (cut when narrow). */
@@ -632,12 +642,13 @@ export function topicGrid(topics: readonly { topic: string; count: number }[], w
 }
 
 /** The Live tab's Organizational memory section for `notes` (orgMemNotes: newest first) in `width` columns (see
- *  above): no line wider than `width`. */
+ *  above): the heading in `width`, the lines under it in liveInner(width), for the client to indent (LIVE_INDENT). */
 export function liveOrgMem(notes: readonly OrgMemNote[], width: number): LiveOrgMem {
-  const w = Math.max(1, Math.floor(width))
+  const full = Math.max(1, Math.floor(width))
+  const w = liveInner(full)
   const keys = hintLines(orgMemSectionKeys(), w - 2).map(l => `  ${hintLineText(l)}`)
   return {
-    head: orgMemHead(notes.length, w),
+    head: orgMemHead(notes.length, full),
     newestLabel: '  newest',
     newest: newestLines(orgMemNewest(notes), w),
     empty: notes.length ? '' : `  ${ORG_MEM_EMPTY}`,
@@ -648,7 +659,7 @@ export function liveOrgMem(notes: readonly OrgMemNote[], width: number): LiveOrg
 }
 
 // ---------------- T-727: the Branches section under the lanes ----------------
-//  ── Branches ─────────────────────────────────────────────────────
+//  ▍Branches
 //  main   ●───●───●───●───●───●───●   c11a736 · 2 min ago
 //         │       │           │   ╰─◀ T-724 merged
 //         │       │           ╰─────○ T-721  +3 commits · 1 behind
@@ -763,13 +774,14 @@ const LABEL_ROOM = textWidth(' T-000  +0 · 0 behind')
  * (git isn't ready, or not read yet). The main line shows up to BRANCH_COMMITS of the newest commits, fewer and closer
  * when narrow, so each row keeps room for its words; a row hangs from the commit its branch forked from (a just-merged
  * task from its merge commit, else the newest), or from the leftmost commit when that one isn't shown (and a task not
- * started). Rows are ordered so their lines never cross; past BRANCH_ROWS_MAX rows, "+N more". No line is wider than
- * `width` (words are cut with "…").
+ * started). Rows are ordered so their lines never cross; past BRANCH_ROWS_MAX rows, "+N more". The heading is in
+ * `width`, the lines under it in liveInner(width) (words are cut with "…"), for the client to indent (LIVE_INDENT).
  */
 export function liveBranches(view: LiveView, nowMs: number, width: number): LiveBranches | null {
   const facts = view.branches
   if (!facts || !facts.commits.length) return null
-  const w = Math.max(1, Math.floor(width))
+  const full = Math.max(1, Math.floor(width))
+  const w = liveInner(full)
   const items = branchItems(view, facts, nowMs)
   const kept = items.slice(0, BRANCH_ROWS_MAX)
   const hidden = items.length - kept.length
@@ -797,8 +809,7 @@ export function liveBranches(view: LiveView, nowMs: number, width: number): Live
   const placed = kept.map(x => ({ x, col: x.kind === 'merged' ? colOf(x.merged, k - 1) : x.kind === 'branch' ? colOf(x.fig!.base, 0) : 0 }))
   placed.sort((a, b) => b.col - a.col || num(a.x.id) - num(b.x.id))
   // the header
-  const title = ' ── Branches '
-  const head: LiveSeg[] = textWidth(title) + 3 <= w ? [{ text: ' ── ', tone: 'dim' }, { text: 'Branches', tone: 'text' }, { text: ` ${'─'.repeat(w - textWidth(title))}`, tone: 'dim' }] : [{ text: fitText('Branches', w), tone: 'text' }]
+  const head = liveHeading(LIVE_SECTIONS.branches, full)
   // the main line
   const newest = shown[shown.length - 1]!
   const sha = newest.sha.slice(0, 7)
