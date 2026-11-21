@@ -1,7 +1,7 @@
 import type { SymccScout, SymccTask, SymccTokens } from '../../types'
 import { type ScoutDef, parseScout, modeOf, symccOn, OPEN, scoutPrompt, recentClosed, scoutAgentName, scoutDescription, parseScoutMemory, scoutMemoryText, scoutPausedText, everyText, SCOUT_REPORT_CHARS, scoutLeadMessage, scoutWhyNot, scoutFile, scoutNameError, scoutDraftError, scoutText, everyMinutesOf, onDemand, onNotReady, SCOUT_RETRY_MS, inPlan, addScoutRun, keepScoutUsage, migrateScoutUsage, leadScoutNameError, leadScoutText, leadScoutsText, safeScoutFile, SCOUT_FILE_NAME, SCOUT_FILE_NAME_RULE, scoutFileNameError, type ScoutRunRecord, parseScoutRuns, scoutRunsText, addScoutRunRecord, migratedScoutRun, scoutRunsFile, scoutRunReportFile, isScoutRunReport, scoutRunOutcome, scoutRunTasks, linkScoutRunTask, countFindings, reportText, parseScoutUsage, scoutResultsLine, renameScoutOrigins, linkScoutRunTaskAt, type Board } from '../board'
-import { publish, refreshStatus } from './lead'
-import { S, scoutState, scoutRuns, heard, timers, updateScoutOpen } from './state'
+import { publish, refreshStatus, drivesHere } from './lead'
+import { S, scoutState, scoutRuns, heard, timers, updateScoutOpen, stopped, movedAgents, DRIVING_MOVED } from './state'
 import { type FileTouch, type Host, type HostAgentStarted, notReadyYet } from '../host'
 import { startAgent, startCancelled } from './starts'
 import type { TurnEnd } from './workers'
@@ -274,7 +274,15 @@ async function queueScout(host: Host, s: ScoutDef, misses = 0, byHand = false): 
   await publish(host, b)
   const open = b.tasks.filter(t => OPEN.includes(t.status) || t.status === 'backlog').map(t => `${t.id} ${t.title}${t.status === 'backlog' ? ' (backlog)' : ''}`)
   const prompt = scoutPrompt({ scout: s.name, root: S.root, instructions: s.prompt, open, closed: recentClosed(b.tasks), lastReport, lastRun, name: S.N.name, guide: await orgMemText(host) })
-  const spawn = startAgent(host, { kind: 'scout', prompt, name: scoutAgentName(S.N.name, s.name), description: scoutDescription(s.name, s.prompt), ...(s.model ? { model: s.model } : {}) })
+  // T-759: driving may have moved to another session while the prompt was made (a hand-over stops the scouts first,
+  // and a start queued after that would never be stopped): a session that no longer drives starts no scout run
+  if (!(await drivesHere(host))) {
+    st.running = false
+    await load(host).then(x => publish(host, x)).catch(() => undefined)
+    return scoutWhyNot(st, { driving: false, gitOk: true, mode: modeOf(b), on: true }, S.N.name)
+  }
+  // and asked again right before it starts (it waits in the start queue until a turn starts or ends)
+  const spawn = startAgent(host, { kind: 'scout', prompt, name: scoutAgentName(S.N.name, s.name), description: scoutDescription(s.name, s.prompt), ...(s.model ? { model: s.model } : {}) }, () => drivesHere(host))
   return { started: scoutStarted(host, s, st, spawn, lastRun, misses, byHand) }
 }
 
@@ -435,7 +443,11 @@ export async function recordScoutRun(host: Host, name: string, run: { endMs: num
  * report are kept.
  */
 export async function scoutFinished(host: Host, agentId: string, answer: string, end: boolean | TurnEnd = false, tokens?: SymccTokens) {
-  const reason = end === true ? 'aborted' : end === false ? 'answer' : end.reason
+  // T-759: a run symcc stopped (or refused, e.g. after driving moved to another session) whose last words are only
+  // "stopped" is a stopped run, never a finding
+  const stoppedRun = stopped.has(agentId) || stopAnswer(answer)
+  const moved = movedAgents.has(agentId) || /driving moved/i.test(answer)
+  const reason = stoppedRun || end === true ? 'aborted' : end === false ? 'answer' : end.reason
   const name = scoutRuns.get(agentId)!
   scoutRuns.delete(agentId)
   const started = runStarted.get(agentId)
@@ -451,7 +463,7 @@ export async function scoutFinished(host: Host, agentId: string, answer: string,
   await addRunToHistory(
     host,
     name,
-    { started: started === undefined ? null : new Date(started).toISOString(), ended: new Date(endMs).toISOString(), outcome, findings: outcome === 'found' ? countFindings(answer) : 0, ...(tokens !== undefined ? { tokens } : {}), ...(outcome === 'found' || outcome === 'nothing' ? { tasks: [] } : {}) },
+    { started: started === undefined ? null : new Date(started).toISOString(), ended: new Date(endMs).toISOString(), outcome, findings: outcome === 'found' ? countFindings(answer) : 0, ...(tokens !== undefined ? { tokens } : {}), ...(outcome === 'found' || outcome === 'nothing' ? { tasks: [] } : {}), ...(stoppedRun && moved ? { why: DRIVING_MOVED } : {}) },
     answer,
   )
   if (reason !== 'answer') {
@@ -461,7 +473,7 @@ export async function scoutFinished(host: Host, agentId: string, answer: string,
       st.last_run = before
     }
     await load(host).then(b => publish(host, b)).catch(() => undefined)
-    const how = reason === 'aborted' ? ' was stopped' : reason === 'error' ? "'s run ended on an error" : "'s run ended on a refusal"
+    const how = reason === 'aborted' ? (stoppedRun && moved ? ` ${DRIVING_MOVED}` : ' was stopped') : reason === 'error' ? "'s run ended on an error" : "'s run ended on a refusal"
     host.ui.toast(S.N.toast(`scout ${name}${how}; nothing reported`))
     return
   }
@@ -479,6 +491,12 @@ export async function scoutFinished(host: Host, agentId: string, answer: string,
     heard.last = { what: `scout ${name} report`, at }
     tellLead(host, msg)
   }
+}
+
+/** T-759: whether a run's last words only say it stopped ("stopped", "stopped: driving moved to another session"), as a refused or stopped run answers: no report. */
+export const stopAnswer = (answer: string) => {
+  const a = answer.trim()
+  return a.length <= 300 && /^\W*stopped\b/i.test(a)
 }
 
 /** How soon after start a scout that is overdue (or never ran) runs: the first one after SOON_MS, each next one

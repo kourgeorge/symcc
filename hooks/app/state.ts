@@ -223,6 +223,14 @@ export type CheckerEnd = { answer: string | null; why?: string; tokens?: SymccTo
 export const checkerRuns = new Map<string, { task: string; worktree: string; end: (e: CheckerEnd) => void }>()
 /** agents this plugin has stopped: every tool they try is refused, so they can't change anything and end soon */
 export const stopped = new Set<string>()
+/** Why a session stops its runs when the owner moves driving the board to another session (/<name>-drive there, see stepDown). */
+export const MOVED_WHY = 'the owner moved driving to another session'
+/** Why a session stops its runs when another session took the board over (this one stopped answering for too long). */
+export const TAKEN_WHY = 'another session drives the board now'
+/** T-759: the plain note a run gets when it is stopped because driving the board moved to another session. */
+export const DRIVING_MOVED = 'stopped: driving moved to another session'
+/** T-759: of the agents in `stopped`, the ones stopped because driving the board moved to another session (MOVED_WHY, TAKEN_WHY). */
+export const movedAgents = new Set<string>()
 /** Whether agent `agentId` is one of symcc's own that this copy tracks now: a worker, a checker, a scout, or one it stopped. */
 export const isOwnAgent = (agentId: string | undefined): agentId is string =>
   !!agentId && (workers.has(agentId) || checkerRuns.has(agentId) || scoutRuns.has(agentId) || stopped.has(agentId))
@@ -245,6 +253,7 @@ export function rememberOnBoard(agentId: string) {
  */
 export async function halt(host: Host, agentId: string, why: string) {
   stopped.add(agentId)
+  if (why === MOVED_WHY || why === TAKEN_WHY) movedAgents.add(agentId)
   await host.agents.stop(agentId, `Stop now: ${why}. Don't change anything else; answer "stopped" and end.`).catch(() => undefined)
 }
 /** failed tasks the lead has already been reminded about (task id → its updated_at then) */

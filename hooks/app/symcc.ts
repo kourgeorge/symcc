@@ -21,7 +21,7 @@ import { type FileTouch, type Host, type HostFeatures, ALL_FEATURES } from '../h
 import type { SymccTokens } from '../../types'
 import { findArchived, saveArchiveMigrated } from './archive'
 import { moveOldOrgMem, deleteOrgMem } from './org-mem'
-import { askCall, checkEdit, guardFailed, stoppedText, type AgentKindOf } from './ask'
+import { askCall, checkEdit, guardFailed, stoppedText, stoppedTextFor, movedAway, movedText, listedKind, type AgentKindOf } from './ask'
 import { gitReady, setupGit } from './git'
 import { claimLead, publish, handOver, releaseLead, driveHere } from './lead'
 import { changedFiles, changesText } from './review'
@@ -284,7 +284,7 @@ export async function toolCall(host: Host, tool: string, agentId: string | undef
     logRefusal(host, who, { text, guard, what: tool })
     return { deny: text }
   }
-  if (agentId && stopped.has(agentId)) return refuse(stoppedText(), 'stopped', { role: 'agent' })
+  if (agentId && stopped.has(agentId)) return refuse(stoppedTextFor(agentId), 'stopped', { role: 'agent' })
   const on = agentId && !isOwnAgent(agentId) && (await findRoot(host)) ? await agentOnBoard(host, agentId) : undefined
   if (on?.kind === 'ended') return refuse(stoppedText(), 'stopped', { role: 'agent', task: on.task })
   // a scout or checker only reads the board: board and stats run, every other symcc tool (ask_owner too) is refused
@@ -298,6 +298,9 @@ export async function toolCall(host: Host, tool: string, agentId: string | undef
     // T-525: an agent that is no scout or checker (a worker, one symcc no longer has on record, or any other) never gets the lead's tools
     const lead = toolNames().find(t => tool === toolName(t))
     const w = workers.get(agentId) ?? (on?.kind === 'worker' ? on.worker : undefined)
+    // T-759: a scout or worker of symcc's this copy has no record of, in a session that no longer drives the board
+    // (driving moved to another session): stopped with that plain note, not told it isn't the lead
+    if (lead && !w && !isOwnAgent(agentId) && (await listedKind(host, agentId)) === 'symcc' && (await movedAway(host, agentId))) return refuse(movedText(), 'stopped', { role: 'agent' })
     if (lead) return refuse(notLeadText(lead), 'tools', w ? { role: 'worker', task: w.task } : { role: 'agent' })
   }
   if (tool === toolName(ASK_TOOL)) {

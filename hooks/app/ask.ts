@@ -6,7 +6,8 @@
 // Both are written to the task's current try on the board at once (try_question, try_refused), so a plugin reload
 // before the hand-back doesn't lose them; finishWork (workers.ts) decides from the board.
 import { type Board, type BoardTask, ASK_TOOL, ASK_SCHEMA, ASK_SENT, OPTIONS_MIN, OPTIONS_MAX, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, bashPathsToCheck, bashTooManyText, BASH_TOO_MANY, gitWriteIn, gitWriteText, workerGitWriteText, scoutGitWriteText, editInProject, scoutEditText, mergeStepAllow, scratchGitAllow, scratchTemps, eitherAllow, type GitAllow, intoOf, editTarget, find, isInvestigation, patchTask, realPathOf, brokenLinkText, guardReason, guardFailedText, type PathLookup } from '../board'
-import { S, toolName, type Worker, workers, scoutRuns, checkerRuns, stopped, isOwnAgent, boardAgents, rememberOnBoard } from './state'
+import { S, toolName, type Worker, workers, scoutRuns, checkerRuns, stopped, isOwnAgent, boardAgents, rememberOnBoard, movedAgents, DRIVING_MOVED } from './state'
+import { drivenElsewhere } from './lead'
 import type { FileTouch, Host } from '../host'
 import { load, change, now } from './store'
 import { workerOf, agentOnBoard } from './workers'
@@ -198,7 +199,7 @@ export async function checkEdit($: Host, agentId: string | undefined, touch: Fil
 
 /** checkEdit's decision: the refusal (and which guard), or undefined; `who` is filled in with the caller's role and task. */
 async function judgeEdit($: Host, agentId: string, touch: FileTouch, who: Who, cwd: string | undefined, kindOf: AgentKindOf): Promise<Refusal | undefined> {
-  if (stopped.has(agentId)) return { text: stoppedText(), guard: 'stopped' }
+  if (stopped.has(agentId)) return { text: stoppedTextFor(agentId), guard: 'stopped' }
   // a checker (the checker setting) is kept inside the task's folder it checks, as a worker is; it has no file list
   const chk = checkerRuns.get(agentId)
   if (chk) {
@@ -225,7 +226,7 @@ async function judgeEdit($: Host, agentId: string, touch: FileTouch, who: Who, c
     return checkerCheck($, touch, on.worktree, cwd)
   }
   const w = mine ?? (on?.kind === 'worker' ? on.worker : undefined)
-  if (!w) return unknownAgentCheck(agentId, kindOf)
+  if (!w) return unknownAgentCheck($, agentId, kindOf)
   Object.assign(who, { role: 'worker', task: w.task })
   if ('command' in touch) return (await outsideOwnFolder($, touch, w.worktree, cwd)) ?? workerGitWrite($, w, touch.command, cwd)
   const real = await realEdit($, touch.path, w.worktree, S.root)
@@ -267,11 +268,33 @@ export async function listedKind($: Host, agentId: string): Promise<'symcc' | 'o
  * touch nothing. It is remembered (boardAgents), so a guard that crashes later still refuses it. Any other agent
  * (the lead's own subagents) is left alone, as is one the host can't tell: undefined.
  */
-async function unknownAgentCheck(agentId: string, kindOf: AgentKindOf): Promise<Refusal | undefined> {
+async function unknownAgentCheck($: Host, agentId: string, kindOf: AgentKindOf): Promise<Refusal | undefined> {
   if ((await kindOf().catch(() => undefined)) !== 'symcc') return undefined
   rememberOnBoard(agentId)
+  // T-759: driving the board moved to another session: this run of symcc's is stopped with that plain note (and
+  // recorded as stopped, so its end is no finding), not refused as an agent symcc knows nothing of
+  if (await movedAway($, agentId)) return { text: movedText(), guard: 'stopped' }
   return { text: unknownAgentText(), guard: 'unknown-agent' }
 }
+
+/**
+ * T-759: whether agent `agentId` (one of symcc's that this copy has no record of) runs in a session that no longer
+ * drives the board, as lead.json says (drivenElsewhere): it is then marked stopped for that (movedAgents), so every
+ * later tool call is refused with the same note and its end reports nothing.
+ */
+export async function movedAway($: Host, agentId: string): Promise<boolean> {
+  if (!(await drivenElsewhere($).catch(() => false))) return false
+  stopped.add(agentId)
+  movedAgents.add(agentId)
+  return true
+}
+
+/** T-759: what a run of symcc's is told once driving the board moved to another session (it was stopped for that). */
+export const movedText = () =>
+  `${DRIVING_MOVED[0]!.toUpperCase()}${DRIVING_MOVED.slice(1)}: ${S.N.name} runs scouts and workers only in the session that drives the board, and that is another session now, so this run ends here. Do nothing more; answer "${DRIVING_MOVED}" and end.`
+
+/** What a stopped agent is told: the "driving moved" note when it was stopped for that (movedAgents), else stoppedText. */
+export const stoppedTextFor = (agentId: string) => (movedAgents.has(agentId) ? movedText() : stoppedText())
 
 /** What an agent of symcc's that symcc has no record of any more is told when it tries to edit a file or run a shell command (see unknownAgentCheck). */
 export const unknownAgentText = () =>
