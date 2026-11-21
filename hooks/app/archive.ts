@@ -1,4 +1,4 @@
-import { type Archive, type BoardTask, ARCHIVE_EVERY_MS, addToArchive, bringBack, brokenArchiveText, emptyArchive, find, normId, readArchive, removeArchived, symccOn, toArchive } from '../board'
+import { type Archive, type BoardTask, ARCHIVE_EVERY_MS, addToArchive, bringBack, brokenArchiveText, emptyArchive, find, normId, readArchive, removeArchived, renameScoutOrigins, symccOn, toArchive } from '../board'
 import { archiveChunkFile, archiveChunks } from '../core/board-parts'
 import { publish } from './lead'
 import { S } from './state'
@@ -87,6 +87,21 @@ export async function saveArchiveMigrated(host: Host): Promise<void> {
       if (!(await host.fs.write(path(copy), text).then(() => true, () => false))) return
     }
     await saveArchive(host, r.archive)
+  })
+}
+
+/**
+ * The archive part of the one-time scout origin fix (T-712, see migrateScoutOrigins): archived tasks whose origin
+ * names a scout by its agent name get the scout's own name. A broken archive, or one already current, is left as
+ * it is. Returns the tasks renamed.
+ */
+export async function renameArchivedScoutOrigins(host: Host, known: readonly string[]): Promise<{ id: string; scout: string; at: string }[]> {
+  return locked(host, async () => {
+    const r = await readArchiveFile(host)
+    if (r.broken) return []
+    const next = renameScoutOrigins(r.archive.tasks, S.N.name, known)
+    if (next.renamed.length) await saveArchive(host, { ...r.archive, tasks: next.tasks })
+    return next.renamed
   })
 }
 

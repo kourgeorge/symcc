@@ -673,6 +673,24 @@ export function linkScoutRunTask(runs: ScoutRunRecord[], id: string, scout: stri
   return runs.map((r, j) => (j === i ? { ...r, tasks: byNumber([...had, id]) } : r))
 }
 
+/**
+ * `runs` with task `id` (made at `made`, an ISO time) saved in the run whose report it came from: the latest run that
+ * reported and ended before it was made. null when there is no such run, that run already lists it, or the run keeps
+ * no task list (its tasks are worked out from the board, see scoutRunTasks).
+ */
+export function linkScoutRunTaskAt(runs: ScoutRunRecord[], id: string, made: string): ScoutRunRecord[] | null {
+  const at = Date.parse(made)
+  if (!Number.isFinite(at)) return null
+  let best = -1
+  for (let i = 0; i < runs.length; i++) {
+    const end = Date.parse(runs[i]!.ended)
+    if (reported(runs[i]!) && Number.isFinite(end) && end <= at && (best < 0 || end >= Date.parse(runs[best]!.ended))) best = i
+  }
+  const tasks = best < 0 ? undefined : runs[best]!.tasks
+  if (!tasks || tasks.includes(id)) return null
+  return runs.map((r, j) => (j === best ? { ...r, tasks: byNumber([...tasks, id]) } : r))
+}
+
 /** A run's outcome in words: "found", "nothing", "stopped", "API error", "refusal", "couldn't start". */
 export const scoutOutcomeText = (o: ScoutRunOutcome): string => ({ found: 'found', nothing: 'nothing', stopped: 'stopped', error: 'API error', refusal: 'refusal', 'not started': "couldn't start" })[o]
 
