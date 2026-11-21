@@ -121,6 +121,12 @@ export function ready(b: Board): SymccTask[] {
 // ---------------- the backlog ----------------
 
 /**
+ * T-703: a task that failed because its branch clashes with the branch it merges into. Whatever moves it
+ * back (a change, a retry, the backlog) keeps that: its next try is a "merge it in" try (merge_main).
+ */
+export const failedOnClash = (t: Pick<BoardTask, 'status' | 'note'>): boolean => t.status === 'failed' && /^conflicts with the latest /.test(t.note ?? '')
+
+/**
  * "Stash": task `id` goes to the backlog, from todo, paused or failed (or doing, once its worker
  * was stopped). It keeps everything else and never starts until promoted. A history line says so.
  */
@@ -130,7 +136,7 @@ export function stashTask(b: Board, id: string, now: string, reason = ''): Board
   if (t.status === 'backlog') return b
   if (!BACKLOG_FROM.includes(t.status)) throw new Error(`${t.id} is ${STATUS_WORD[t.status]}; only a task that is to do, paused or failed can go to the backlog`)
   const why = clean(reason, 280)
-  return patchTask(b, t.id, { status: 'backlog', note: why ? `in the backlog: ${why}` : 'in the backlog', history: withHistory(t.history, now, ['moved-backlog', `moved to the backlog (was ${t.status})${why ? `: ${why}` : ''}`]) }, now)
+  return patchTask(b, t.id, { status: 'backlog', note: why ? `in the backlog: ${why}` : 'in the backlog', ...(failedOnClash(t) ? { merge_main: true } : {}), history: withHistory(t.history, now, ['moved-backlog', `moved to the backlog (was ${t.status})${why ? `: ${why}` : ''}`]) }, now)
 }
 
 /** "Promote": task `id` leaves the backlog for "todo", so a worker may start on it. A history line says so. */

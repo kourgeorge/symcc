@@ -5,7 +5,7 @@
 // go somewhere (task, question and scout rows, folds, tabs, the mode switch) are links in a Markdown block that the plugin
 // answers (`onLinkPress`, see vsLink); real Buttons stay for the actions on a page (Approve, Retry, Save ...).
 import type { SymccMode } from '../../../types'
-import type { BoxProps, ButtonProps, ElementConstructor, InputProps, MarkdownProps, RenderChildren, RenderSurface, SelectProps, TextProps } from 'claude-code'
+import type { BoxProps, ButtonProps, ElementConstructor, InputProps, MarkdownProps, RenderChildren, RenderSurface, SelectProps, SvgProps, TextProps } from 'claude-code'
 import { emptyBoard, bannerCounts, folderName, versionMark, modeLabel, MODE_MEANING, MODE_NAME, nextMode, offStatusParts, footerRule, testsShort, driveWarning } from '../../board'
 import { ICON, namesFor } from '../../name'
 import { type PaneView, S } from '../../app/state'
@@ -21,6 +21,8 @@ export type VsKit = {
   Markdown: ElementConstructor<MarkdownProps>
   /** VS Code's own drop-down picker (the Settings page's choices). */
   Select: ElementConstructor<SelectProps>
+  /** VS Code's vector drawing (the Live tab's tracks and token bars). */
+  Svg: ElementConstructor<SvgProps>
   C: (c: string) => never
   width: number
   /** The time the page is drawn at (see now.ts). */

@@ -2088,6 +2088,78 @@ test('retry after a failure that was not a clash resets the auto retries but doe
   expect(t.merge_main ?? false).toBe(false)
 })
 
+/** T-703: T-1 failed on a clash with main (or on `note`), with symcc off so nothing starts until `start` turns it on. */
+async function failedLive(note = 'conflicts with the latest main (after 2 automatic retries)') {
+  const { w, spawned } = await liveWorld()
+  await setSymcc(w.$, false)
+  await change(w.$, b => [patchTask(b, 'T-1', { status: 'failed', note, test_tries: 2, merge_main: false, agent: undefined }, ISO), null])
+  const start = async () => {
+    await setSymcc(w.$, true)
+    await settle(w, () => workerOn('T-1'))
+    return find(await load(w.$), 'T-1')!
+  }
+  return { w, spawned, start }
+}
+
+test('T-703: a note on a task that failed on a clash, then retry: the new try still merges main in, and its run says so', async () => {
+  try {
+    const { w, start } = await failedLive()
+    await runTool(w.$, 'change', { task: 'T-1', add_details: 'mind the new main' })
+    expect(find(await load(w.$), 'T-1')!.merge_main).toBe(true)
+    expect(await runTool(w.$, 'retry', { task: 'T-1' })).toBe('T-1 queued; its new worker merges the latest main first')
+    const t = await start()
+    expect(t.status).toBe('doing')
+    expect(t.merge_main).toBe(true)
+    expect(t.runs?.at(-1)?.merge_main).toBe(true)
+  } finally {
+    cleanUp()
+  }
+})
+
+test('T-703: a change alone on a task that failed on a clash leads to a merge-main-in try', async () => {
+  try {
+    const { w, start } = await failedLive()
+    await runTool(w.$, 'change', { task: 'T-1', details: 'new details' })
+    const t = await start()
+    expect(t.merge_main).toBe(true)
+    expect(t.runs?.at(-1)?.merge_main).toBe(true)
+  } finally {
+    cleanUp()
+  }
+})
+
+test('T-703: a task that failed on its tests still gets a normal try after a note and a retry', async () => {
+  try {
+    const { w, start } = await failedLive('tests failed')
+    await runTool(w.$, 'change', { task: 'T-1', add_details: 'look again' })
+    expect(await runTool(w.$, 'retry', { task: 'T-1' })).toBe('T-1 queued')
+    const t = await start()
+    expect(t.merge_main ?? false).toBe(false)
+    expect(t.runs?.at(-1)?.merge_main).toBeUndefined()
+  } finally {
+    cleanUp()
+  }
+})
+
+test('T-703: a task that failed on a clash keeps its merge-main-in try through the backlog, pause and resume, drop and retry, and a question to the owner', async () => {
+  for (const moves of [[{ backlog: true }, { backlog: false }], [{ pause: true }, { resume: true }], [{ drop: true }, { retry: true }], [{ ask: true }, { answer: 'yes' }], [{ ask: true }, { retry: true }]] as const) {
+    const w = world()
+    const [b] = boardWith('auto', [], { status: 'failed', note: 'conflicts with the latest main (after 2 automatic retries)', test_tries: 2, merge_main: false })
+    await saveBoard(w.$, b)
+    for (const m of moves) {
+      if ('pause' in m) await runTool(w.$, 'pause', { task: 'T-1' })
+      else if ('resume' in m) await runTool(w.$, 'resume', { task: 'T-1' })
+      else if ('drop' in m) await runTool(w.$, 'drop', { task: 'T-1' })
+      else if ('retry' in m) await runTool(w.$, 'retry', { task: 'T-1' })
+      else if ('ask' in m) await runTool(w.$, 'ask', { task: 'T-1', question: 'q?' })
+      else await runTool(w.$, 'change', { task: 'T-1', ...m })
+    }
+    const t = find(await load(w.$), 'T-1')!
+    expect(t.status).toBe('todo')
+    expect(t.merge_main).toBe(true)
+  }
+})
+
 test('T-548: the old conflict_tries field is dropped from the board (once) and from the archive', () => {
   const [b, x] = boardWith('auto', [], { status: 'todo', merge_main: true })
   const r = readBoard(JSON.stringify({ ...b, tasks: [{ ...x, conflict_tries: 2 }] }))

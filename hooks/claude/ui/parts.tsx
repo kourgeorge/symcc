@@ -57,8 +57,8 @@ export async function paneParts($: $, e: PaneEvent) {
   const tabNow = await panelValues($).readTab()
   const onScouts = tabNow === 'scouts'
   const onSettings = tabNow === 'settings'
-  /** The Live tab (T-690; the terminal only): its lanes open a task's page over it, and Back comes back to it. */
-  const onLive = !vscode && tabNow === 'live'
+  /** The Live tab (T-690; VS Code's since T-691): its lanes open a task's page over it, and Back comes back to it. */
+  const onLive = tabNow === 'live'
   const t = open && !onScouts && !onSettings ? v.tasks.find(x => x.id === open) : undefined
   // a question for the owner opened from the "Questions for you" list (see question-page.tsx); gone once it is answered
   const q = open && !t && !onScouts && !onSettings ? (v.questions ?? []).find(x => x.id === open) : undefined
@@ -74,7 +74,7 @@ export async function paneParts($: $, e: PaneEvent) {
     noteForLead(`The owner set the board mode to ${switchTo}: ${brief(r)}`)
   })
   /** What the VS Code pieces (vscode.tsx) draw with. */
-  const vs: VsKit = { Box: Box as never, Text: Text as never, Button: Button as never, Input: Input as never, Markdown: els.Markdown as never, Select: (els as { Select?: unknown }).Select as never, C, width, nowMs, surface: e.surface }
+  const vs: VsKit = { Box: Box as never, Text: Text as never, Button: Button as never, Input: Input as never, Markdown: els.Markdown as never, Select: (els as { Select?: unknown }).Select as never, Svg: (els as { Svg?: unknown }).Svg as never, C, width, nowMs, surface: e.surface }
   /** The banner at the top: the drawing and the board's facts (the board mode is in the Tasks page's footer). */
   const banner = () => {
     if (vscode) return vsBanner(vs, v, mode, gitRow())
@@ -113,7 +113,8 @@ export async function paneParts($: $, e: PaneEvent) {
     const go = (which: PaneTab) => act(async () => ((S.draft = null), (S.naming = null), (S.diffOpen = null), (S.rejecting = null), (S.settingEdit = null), (S.settingPick = null), await resetPane(claudeHost($), which)))
     if (vscode)
       return vsTabs(vs, [
-        { which: 'tasks', label: 'Tasks', count: v.tasks.length, active: !onScouts && !onSettings, onPress: go('tasks') },
+        { which: 'tasks', label: 'Tasks', count: v.tasks.length, active: !onScouts && !onSettings && !onLive, onPress: go('tasks') },
+        { which: 'live', label: 'Live', active: onLive, onPress: go('live') },
         { which: 'scouts', label: 'Scouts', count: scouts.length, active: onScouts, onPress: go('scouts') },
         { which: 'settings', label: 'Settings', active: onSettings, onPress: go('settings') },
       ])
