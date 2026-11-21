@@ -159,7 +159,7 @@ export async function sessionStart(host: Host) {
       // Open the board panel by itself (every session, driver or not), without taking the cursor
       // from the prompt. On a narrow terminal Claude Code may not place it (isPlaced: false);
       // that is fine: the band above the prompt and /<name> still work.
-      if (openOnStart(b) && symccOn(b)) await openPane(host, { focus: false, quiet: true })
+      if (openOnStart(b) && symccOn(b)) await openPane(host, { tab: 'live', focus: false, quiet: true })
     }
   } finally {
     startWait.mark = null
@@ -482,7 +482,7 @@ export async function runCommand(host: Host, command: string, args: string): Pro
     case 'tasks':
       // a host with no panel: the text board, as the board tool answers it (or why the board can't be read)
       if (!host.features.panel) return say(loaded.board ? boardText(b, Date.now(), shortHome(S.root, S.home), S.N.name, undefined, { driving: S.driving }, S.version) : `${loaded.broken} Then try again.`)
-      await openPane(host, cmd.kind === 'tasks' ? { tab: 'tasks' } : {})
+      await openPane(host, { tab: cmd.kind === 'tasks' ? 'tasks' : 'live' })
       return say(boardOpened())
     case 'scouts': {
       const defs = await scheduleScouts(host)
