@@ -9,6 +9,7 @@ import { type $, panelValues } from '../panel'
 import { resetPane } from '../../app/open'
 import { takeKeysBack } from './open'
 import { claudeHost } from '../host'
+import { orgMemView, resetOrgMemView } from '../../app/org-mem'
 
 /** What Esc does on the board panel; null: nothing left to go back from, the panel closes. */
 export type EscStep =
@@ -25,8 +26,9 @@ export type EscStep =
   | null
 
 /** Where the panel is: its view ('scouts', 'settings', else the tasks), the opened task and scout ('' = none),
- *  and whether one of that scout's runs is open (its report page). */
-export type PanePlace = { tab: string; opened: string; scout: string; run?: boolean }
+ *  and whether one of that scout's runs is open (its report page); `orgMem`: the Organizational memory page is open
+ *  over the Live tab (T-687). */
+export type PanePlace = { tab: string; opened: string; scout: string; run?: boolean; orgMem?: boolean }
 
 /** The step Esc takes from `at`, given the panel's open boxes in `s` (S, or a test's copy). */
 export function escStep(at: PanePlace, s: Pick<typeof S, 'settingEdit' | 'settingPick' | 'draft' | 'naming' | 'rolePick' | 'rejecting' | 'diffOpen' | 'answering' | 'search'>): EscStep {
@@ -39,8 +41,9 @@ export function escStep(at: PanePlace, s: Pick<typeof S, 'settingEdit' | 'settin
     if (s.answering === at.opened) return 'cancel answer'
     return 'board list'
   }
-  // the Live tab has no search: one left over from the Tasks tab is not on screen, so Esc closes the panel
-  if (at.tab === 'live') return null
+  // the Live tab has no search: one left over from the Tasks tab is not on screen, so Esc closes the panel; from the
+  // Organizational memory page opened there (T-687) it goes back to the Live tab
+  if (at.tab === 'live') return at.orgMem ? 'board list' : null
   return s.search ? 'clear search' : null
 }
 
@@ -48,7 +51,7 @@ export function escStep(at: PanePlace, s: Pick<typeof S, 'settingEdit' | 'settin
 export async function escBack($: $): Promise<boolean> {
   const { scout, run: ended } = scoutPlace(await panelValues($).readScoutOpen())
   const run = !!scout && !!ended
-  const step = escStep({ tab: await panelValues($).readTab(), opened: await panelValues($).readOpened(), scout, run }, S)
+  const step = escStep({ tab: await panelValues($).readTab(), opened: await panelValues($).readOpened(), scout, run, orgMem: orgMemView.open }, S)
   if (!step) return false
   if (step === 'cancel scout edit') cancelScoutEdit(claudeHost($))
   else if (step === 'scouts list') await resetPane(claudeHost($), 'scouts')
@@ -84,6 +87,7 @@ export async function forgetPane($: $) {
   S.taskFolds = null
   S.settingEdit = null
   S.settingPick = null
+  resetOrgMemView()
   changesCache.clear()
   await panelValues($).updateTab(() => '').catch(() => undefined)
   await panelValues($).updateScoutOpen(() => '').catch(() => undefined)

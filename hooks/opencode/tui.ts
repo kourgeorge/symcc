@@ -21,10 +21,10 @@
 // modules (Solid and OpenTUI's Solid renderer) are passed in (TuiRuntime), so this file type-checks and its tests
 // run without them. The names and shapes below are @opencode/plugin 2.3.0's tui Context (only what is used).
 import { DEFAULT_NAME, dataDir } from '../name'
-import { VIEW_FILE, parseViewFile, bandDraw, panelLines, panelKeys, panelTaskActions, approveInProgress, panelRoleChoices, TASK_ACTION_COMMANDS, LETTER_KEYS, type LetterKey, hasPage, answerOptions, actionCommand, moveCursor, OWN_ANSWER, GROUPS_OPEN, groupOf, groupId, scoutRunsIn, settingsPlace, orgMemNoteOf, defPageId, rolePromptId, SETTINGS_OPEN, settingGroupOf, settingGroupId, PANEL_TABS, CHOICE_KEYS, approveSent, type ApproveSent, type ChoiceKey, type ViewFile, type Line, type PanelAction, type PanelHit, type PanelKey, type PanelGroup, type PanelTab, type BandHit } from './board-view'
+import { VIEW_FILE, parseViewFile, bandDraw, panelLines, panelKeys, panelTaskActions, approveInProgress, panelRoleChoices, TASK_ACTION_COMMANDS, LETTER_KEYS, type LetterKey, hasPage, answerOptions, actionCommand, moveCursor, OWN_ANSWER, GROUPS_OPEN, groupOf, groupId, scoutRunsIn, settingsPlace, orgMemNoteOf, ORG_MEM_PAGE, defPageId, rolePromptId, SETTINGS_OPEN, settingGroupOf, settingGroupId, PANEL_TABS, CHOICE_KEYS, approveSent, type ApproveSent, type ChoiceKey, type ViewFile, type Line, type PanelAction, type PanelHit, type PanelKey, type PanelGroup, type PanelTab, type BandHit } from './board-view'
 import { SETTING_GROUPS, isScoutRunReport, taskReports, taskActions, type TaskAction, type TaskActionId, parseSettingValue, settingChoices, settingInfo, settingValue, isSettingPage, everyText, everyMinutesOf, nextMode, modeOf, promptsOfRole, SEARCH_WORDS, type SettingName, type ScoutEditField } from '../board'
 import type { SymccScout } from '../../types'
-import { orgMemDeleteAsk, orgMemFile, orgMemNoteKey } from '../core/org-mem'
+import { ORG_MEM_KEY, orgMemDeleteAsk, orgMemFile, orgMemNoteKey } from '../core/org-mem'
 import { PARTS_KEY, safePartsFile, viewStubFilled, withViewParts } from '../core/board-parts'
 
 export type { PanelKey, PanelHit, PanelTab }
@@ -526,14 +526,6 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     if (key === 'back') return place?.prompt && place.def ? openPage(defPageId('roles', place.def.name)) : place?.def ? openPage(place.list) : open ? openPage('') : showTab('tasks')
     // the built-in prompt page is view only: b goes back to the role
     if (place?.prompt) return
-    // the Organizational memory page: Enter or x on a note asks, then deletes it with /<name>-settings orgmem delete N
-    if (place?.list === 'orgmem') {
-      const note = ids.length ? orgMemNoteOf(f, ids[moveCursor(cur(), 0, ids.length)]!) : undefined
-      if ((key !== 'x' && key !== 'open') || !note) return
-      const yes = await ctx.ui.dialog.select({ title: orgMemDeleteAsk(note, orgMemFile(dataDir(f?.name || name))), options: [{ title: 'Yes, delete', value: 'yes' }, { title: 'Cancel', value: 'no' }] })
-      if (yes === 'yes') return send(sessionID, { kind: 'orgmem-delete', n: note.n, key: orgMemNoteKey(note.text) })
-      return
-    }
     if (key === 'open' && ids.length && !place?.def) {
       const id = ids[moveCursor(cur(), 0, ids.length)]!
       const g = open ? null : settingGroupOf(id)
@@ -577,9 +569,22 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     if (at >= 0) setCursor(at)
     if (hasPage(file(), id)) openPage(id)
   }
-  /** The Live tab's keys (T-692): ↑↓ move between the lanes, Enter opens the lane's task, b goes back to the list. */
-  const pressLive = (key: PanelKey) => {
+  /** The Live tab's keys (T-692): ↑↓ move between the lanes, Enter opens the lane's task, b goes back to the list;
+   *  m opens the Organizational memory page (T-687), whose b comes back to the tab. */
+  const pressLive = async (key: PanelKey, sessionID: string) => {
+    const f = file()
     const ids = draw().ids
+    if (opened() === ORG_MEM_PAGE) {
+      if (key === 'back') return openPage('')
+      if (key === 'up' || key === 'down') return void setRunCursor(moveCursor(runCursor(), key === 'up' ? -1 : 1, ids.length))
+      // Enter or x on a note asks, then deletes it with /<name>-settings orgmem delete N
+      const note = ids.length ? orgMemNoteOf(f, ids[moveCursor(runCursor(), 0, ids.length)]!) : undefined
+      if ((key !== 'x' && key !== 'open') || !note) return
+      const yes = await ctx.ui.dialog.select({ title: orgMemDeleteAsk(note, orgMemFile(dataDir(f?.name || name))), options: [{ title: 'Yes, delete', value: 'yes' }, { title: 'Cancel', value: 'no' }] })
+      if (yes === 'yes') return send(sessionID, { kind: 'orgmem-delete', n: note.n, key: orgMemNoteKey(note.text) })
+      return
+    }
+    if (key === ORG_MEM_KEY) return openPage(ORG_MEM_PAGE)
     if (key === 'up' || key === 'down') return void setCursor(moveCursor(cursor(), key === 'up' ? -1 : 1, ids.length))
     if (key === 'open' && ids.length) return openOnList(ids[moveCursor(cursor(), 0, ids.length)]!)
     if (key === 'back') return showTab('tasks')
@@ -593,7 +598,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     const page = tab() === 'tasks' && opened() ? f?.view.tasks.find(x => x.id === opened()) : undefined
     if (to && !(page && panelTaskActions(page, approveInProgress(f, page, approving(), now())).some(x => x.key === key))) return showTab(to)
     keepPage(f)
-    if (tab() === 'live') return pressLive(key)
+    if (tab() === 'live') return pressLive(key, sessionID)
     if (tab() === 'scouts') return pressScouts(key, sessionID)
     if (tab() === 'settings') return pressSettings(key, sessionID)
     const open = opened()

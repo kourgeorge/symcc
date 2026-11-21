@@ -6,7 +6,7 @@
 // orgmem tool (orgMemAdd, orgMemRemove, orgMemReplace, orgMemList). A note is one line, "- 2026-11-20: lesson", at
 // most ORG_MEM_MAX_LINES of them; the whole file goes into every new worker's, checker's and scout's prompt. The
 // owner may edit the file by hand. Everything here is pure.
-// T-619: the owner sees the notes on a page under Settings (orgMemNotes) and may delete one there (deleteOrgMemNote).
+// T-619, T-687: the owner sees the notes on a page opened from the Live tab's Organizational memory button (orgMemNotes) and may delete one there (deleteOrgMemNote).
 import type { KeyHint } from './panel'
 
 /** The file's name inside symcc's data folder (e.g. .symcc/org-mem.md). */
@@ -331,9 +331,9 @@ export function orgMemSection(guide: string | null | undefined, file: string): s
   return `\nOrganizational memory (org-mem): notes earlier agents left about this project (from ${file}; they may be out of date):\n${lines.join('\n')}\n`
 }
 
-// ---------------- T-619: the Organizational memory page under Settings ----------------
+// ---------------- T-619, T-687: the Organizational memory page (opened from the bottom of the Live tab) ----------------
 
-/** One note of org-mem as the Settings page lists it: `n` is its place in the file (1 = the first, oldest line), so
+/** One note of org-mem as the Organizational memory page lists it: `n` is its place in the file (1 = the first, oldest line), so
  *  appending new notes keeps the numbers; `date` is '' for a line the owner wrote by hand without one. */
 export type OrgMemNote = { n: number; date: string; text: string }
 
@@ -343,10 +343,16 @@ export const ORG_MEM_TITLE = 'Organizational memory (org-mem)'
 /** What the page says when org-mem has no notes. */
 export const ORG_MEM_EMPTY = 'No notes yet.'
 
-/** "3 notes" (the Settings row's count). */
+/** "3 notes" (the count on the Live tab's button). */
 export const orgMemCount = (n: number) => `${n} note${n === 1 ? '' : 's'}`
 
-/** A closed Settings group's short value for org-mem: "org-mem 3 notes"; '' (left out) with no notes. */
+/** T-687: the words of the button at the bottom of the Live tab that opens the page: "Organizational memory (3 notes)". */
+export const orgMemButtonLabel = (n: number) => `Organizational memory (${orgMemCount(n)})`
+
+/** The key of that button on the Live tab (free there: m is the board mode only on the Tasks page). */
+export const ORG_MEM_KEY = 'm'
+
+/** A short value for org-mem: "org-mem 3 notes"; '' (left out) with no notes. */
 export const orgMemSummary = (n: number) => (n ? `org-mem ${orgMemCount(n)}` : '')
 
 /** The page's one-line explanation: where the file is, who adds to it, and its limit. */

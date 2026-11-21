@@ -5,7 +5,7 @@
 //   mode  [auto ▾]                            (VS Code's Select: a pick saves it)
 //   default auto · paused: nothing runs; …    (what it means, dim, wrapped)
 //   max_parallel  [2      ] Save              (an Input for numbers and the test commands: Save saves it)
-//   Roles  7 roles · 1 off                  (a link that opens the Roles page; Kinds and Organizational memory the same)
+//   Roles  7 roles · 1 off                  (a link that opens the Roles page; Kinds the same)
 // Only real actions are Buttons (an Input's Save). No key hints.
 import { SETTINGS, SETTING_GROUPS, isSettingPage, settingChoices, settingValue, parseSettingValue, type SettingName, type SettingPage, type SettingsInput } from '../../board'
 import { S } from '../../app/state'
@@ -17,12 +17,9 @@ import { vsFooter, vsHref, vsLink, mdLink, mdText, vsSection } from './vscode'
 export type VsSettingsCtx = {
   rolesCount: string
   kindsCount: string
-  /** "3 notes": organizational memory's notes (T-619) */
-  orgMemCount: string
   save: (input: SettingsInput) => () => void
   openRoles: () => void
   openKinds: () => void
-  openOrgMem: () => void
 }
 
 /** The Settings page in VS Code. */
@@ -89,15 +86,6 @@ export function settingsPageVs($: $, pane: PaneParts, ctx: VsSettingsCtx) {
 
   // Roles and Kinds open their pages: a link (VS Code draws a Button as a filled box), the count beside it
   const pageRow = (page: SettingPage) => {
-    if (page === 'orgmem') {
-      const href = vsHref('page', 'orgmem')
-      return (
-        <Box key="vs-setting-orgmem" flexDirection="column">
-          {vsLink(vs, 'settings-orgmem', `**${mdLink('Organizational memory', href)}** \u00a0${mdText(ctx.orgMemCount)}`, [[href, ctx.openOrgMem]])}
-          {plain('about', 'org-mem: the notes agents left for the next ones, to read or delete')}
-        </Box>
-      )
-    }
     const roles = page === 'roles'
     const href = vsHref('page', page)
     const count = roles ? ctx.rolesCount : ctx.kindsCount

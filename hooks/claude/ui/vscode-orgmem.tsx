@@ -1,5 +1,5 @@
-// The Organizational memory page (T-619) in VS Code's side panel, opened from Settings' Organizational memory row. The
-// terminal's page (settings.tsx) has a row Button per note and a Delete (x) key; VS Code draws every Button as a
+// The Organizational memory page (T-619) in VS Code's side panel, opened from the Organizational memory link at the
+// bottom of the Live tab (vscode-live.tsx, T-687); "← Live" goes back there. The terminal's page (orgmem.tsx) has a row Button per note and a Delete (x) key; VS Code draws every Button as a
 // filled box, so here each note is its header line ("#3 · T-12 · 2026-11-20") with a "Delete" link beside it, then
 // its text, dim and wrapped. Delete asks first in a box with one "Yes, delete" Button and a Cancel link. No key hints.
 import { ORG_MEM_TITLE, ORG_MEM_EMPTY, orgMemAbout, orgMemDeleteAsk, orgMemNoteHead, type OrgMemNote } from '../../core/org-mem'
@@ -50,7 +50,7 @@ export function orgMemPageVs($: $, pane: PaneParts, notes: OrgMemNote[], file: s
         {[...banner(), tabs()]}
       </Box>
       <Box key="vs-orgmem-top" flexDirection="column">
-        {vsLink(vs, 'orgmem-back', mdLink('← Settings', back), [[back, () => (resetOrgMemView(), redraw())]])}
+        {vsLink(vs, 'orgmem-back', mdLink('← Live', back), [[back, () => (resetOrgMemView(), redraw())]])}
         {vsSection(vs, 'vs-orgmem-head', ORG_MEM_TITLE)}
         {plain('vs-orgmem-about', orgMemAbout(file))}
       </Box>

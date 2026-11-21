@@ -4,12 +4,16 @@
 // file only draws its segments and wires the keys (↑↓ between lanes, Enter opens the task, w watches its worker).
 // Claude Code doesn't say whether the person asked for reduced motion, so the current station always blinks: it
 // changes between ◉ and ◎ every LIVE_TICK_MS, and while the tab is shown it is redrawn that often.
+// T-687: at its bottom, just above the key hints, the "Organizational memory (n notes)" button (key m) opens the
+// Organizational memory page over the tab (orgmem.tsx; VS Code's: vscode-orgmem.tsx); its Back comes back here.
 import { LIVE_EMPTY, LIVE_LEGEND, type LiveSeg, type LiveTone, laneLines, liveHeader, liveKeys, liveLabelLine, liveLanes, liveLayout, liveStations, liveToday, nextUp, nextUpLine, todayLines } from '../../core/live'
 import { footerRule } from '../../board'
 import { S, workers } from '../../app/state'
 import { type $, panelValues } from '../panel'
 import type { PaneParts } from './parts'
 import { arrows, row, saysArrowsMove } from './arrows'
+import { ORG_MEM_KEY, orgMemButtonLabel } from '../../core/org-mem'
+import { orgMemView } from '../../app/org-mem'
 
 /** How often the Live tab is redrawn while it is shown (its blink and its times). */
 export const LIVE_TICK_MS = 1000
@@ -48,8 +52,17 @@ export function liveTick($: $) {
   keepTicking($)
 }
 
-/** The Live tab. */
-export function livePage($: $, pane: PaneParts) {
+/** Opens the Organizational memory page over the Live tab (its Back, resetOrgMemView, comes back to the tab). */
+export function openOrgMemPage($: $) {
+  return () => {
+    orgMemView.open = true
+    orgMemView.confirm = null
+    $.ui.invalidate('ui.render')
+  }
+}
+
+/** The Live tab on the terminal (and desktop and mobile); `notes`: org-mem's note count, on the button at its bottom. */
+export function livePage($: $, pane: PaneParts, notes: number) {
   const { Box, Text, Button, v, width, C, act, banner, tabs, keyLines, nowMs } = pane
   // the blink goes by the clock, one step per tick, so extra redraws in between don't make it flicker
   const frame = Math.floor(nowMs / LIVE_TICK_MS)
@@ -94,6 +107,7 @@ export function livePage($: $, pane: PaneParts) {
       <Box key="live-keys" display="none">
         <Button key="live-watch" label="w" hotkey="w" onPress={watch} />
       </Box>
+      <Button key="live-orgmem" label={`${orgMemButtonLabel(notes)} (${ORG_MEM_KEY})`} hotkey={ORG_MEM_KEY} onPress={openOrgMemPage($)} />
       <Text key="live-foot-rule" color={C('subtle')}>{footerRule(width)}</Text>
       {lanes.length ? <Text key="live-legend" color={C('inactive')}>{LIVE_LEGEND}</Text> : null}
       {keyLines(liveKeys(), 'live-hint')}

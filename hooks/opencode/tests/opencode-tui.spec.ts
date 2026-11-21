@@ -12,7 +12,7 @@ import { LIVE_TABS, tabRow as coreTabRow, withLiveKey, LIVE_EMPTY, LIVE_LEGEND, 
 import type { PaneView } from '../../app/state'
 import type { SymccTask } from '../../../types'
 import { ICON } from '../../name'
-import { bandLines, bandDraw, BAND_CLICK_HINT, panelLines, panelKeys, parseViewFile, viewFileText, lineText, actionCommand, answerOptions, OWN_ANSWER, viewDefs, panelTaskActions, TASK_ACTION_COMMANDS, SETTINGS_OPEN, approveSent, APPROVE_SENT_MS, drawnLines, type ViewFile, type PanelChoice } from '../board-view'
+import { hasPage, bandLines, bandDraw, BAND_CLICK_HINT, panelLines, panelKeys, parseViewFile, viewFileText, lineText, actionCommand, answerOptions, OWN_ANSWER, viewDefs, panelTaskActions, TASK_ACTION_COMMANDS, SETTINGS_OPEN, approveSent, APPROVE_SENT_MS, drawnLines, type ViewFile, type PanelChoice } from '../board-view'
 import { readFile } from 'node:fs/promises'
 import { rowEndBoard, ROW_END, ROW_END_NOW } from '../../../tests/row-end-cases'
 import { taskSections } from '../../core/task-sections'
@@ -1772,7 +1772,7 @@ test('T-615: while a task\'s approve is in progress its page offers no approve o
   expect(keys(f, { id: 'T-2', at: NOW - APPROVE_SENT_MS - 1 })).toContain('approve')
 })
 
-// ---------------- T-619: the Organizational memory page under Settings ----------------
+// ---------------- T-619, T-687: the Organizational memory page, opened from the bottom of the Live tab ----------------
 
 /** The roles-and-kinds view file with three org-mem notes (newest first, as view.ts writes them). */
 function orgMemViewFile(text = `- 2026-11-18: run one test file\n- written by hand\n- 2026-11-20: the type check is separate\n`): ViewFile {
@@ -1780,20 +1780,26 @@ function orgMemViewFile(text = `- 2026-11-18: run one test file\n- written by ha
   return { ...f, view: { ...f.view, org_mem: orgMemNotes(text) } }
 }
 
-test('T-619: the Settings tab has an Org-mem row with the count; its page lists the notes newest first with their date; an empty one says "No notes yet."', () => {
+test('T-619, T-687: the Settings tab has no org-mem row; the Live tab ends with the Organizational memory button (count, key m) just above the footer; its page lists the notes newest first with their date; an empty one says "No notes yet."', () => {
   const f = orgMemViewFile()
   // the notes ride in the view file
   expect(parseViewFile(viewFileText(f))!.view.org_mem).toEqual(f.view.org_mem)
   expect(parseViewFile(viewFileText({ ...f, view: { ...f.view, org_mem: 'x' as never } }))!.view.org_mem).toBe(undefined)
+  // Settings: no org-mem row, open or closed, and no org-mem page there
   const settings = panelLines(f, { tab: 'settings', opened: '', cursor: 0, settingsOpen: ['Workers'] }, NOW, 140)
-  const s = settings.lines.map(lineText)
-  expect(s.find(l => l.includes('Org-mem'))).toMatch(/^ +Org-mem +3 notes$/)
-  expect(settings.ids).toContain('orgmem')
-  expect(settings.hits[s.findIndex(l => l.includes('3 notes'))]).toEqual({ page: 'orgmem' })
-  // closed, the Workers heading sums it up too
-  expect(panelLines(f, { tab: 'settings', opened: '', cursor: 0 }, NOW, 200).lines.map(lineText).find(l => l.includes('Workers'))).toContain('org-mem 3 notes')
+  expect(settings.lines.map(lineText).some(l => /Org-mem|org-mem|notes/.test(l))).toBe(false)
+  expect(settings.ids).not.toContain('orgmem')
+  expect(panelLines(f, { tab: 'settings', opened: '', cursor: 0 }, NOW, 200).lines.map(lineText).find(l => l.includes('Workers'))).not.toContain('org-mem')
+  expect(hasPage(f, 'orgmem', 'settings')).toBe(false)
+  // the Live tab: the button is the body's last line, right above the footer, and presses m
+  const live = panelLines(f, { tab: 'live', opened: '', cursor: 0 }, NOW, 140)
+  const button = live.lines.length - live.footer - 1
+  expect(lineText(live.lines[button]!)).toBe('[ Organizational memory (3 notes) (m) ]')
+  expect(live.lines[button]!.find(x => x.text.startsWith('[ '))?.hit).toEqual({ key: 'm' })
+  expect(panelKeys(f, '', 'live').map(k => `${k.key} ${k.word}`)).toContain('m org-mem')
+  expect(hasPage(f, 'orgmem', 'live')).toBe(true)
   // the page: title, what it is, the notes newest first (number, task id, date, then the text)
-  const page = panelLines(f, { tab: 'settings', opened: 'orgmem', cursor: 0 }, NOW, 140)
+  const page = panelLines(f, { tab: 'live', opened: 'orgmem', cursor: 0 }, NOW, 140)
   const p = page.lines.map(lineText)
   expect(p).toContain('Organizational memory (org-mem)')
   expect(p.join(' ')).toContain('.symcc/org-mem.md (at most 60 lines)')
@@ -1805,18 +1811,18 @@ test('T-619: the Settings tab has an Org-mem row with the count; its page lists 
   expect(p[at('#1')]).toBe('  #1 · 2026-11-18')
   expect(at('#2')).toBeGreaterThan(at('#3'))
   expect(at('#1')).toBeGreaterThan(at('#2'))
-  expect(panelKeys(f, 'orgmem', 'settings').map(k => k.word)).toEqual(['move', 'delete', 'views', 'back'])
+  expect(panelKeys(f, 'orgmem', 'live').map(k => k.word)).toEqual(['move', 'delete', 'views', 'back'])
   // no notes
   const empty = orgMemViewFile('')
-  expect(panelLines(empty, { tab: 'settings', opened: '', cursor: 0, settingsOpen: ['Workers'] }, NOW, 140).lines.map(lineText).find(l => l.includes('Org-mem'))).toMatch(/0 notes$/)
-  expect(panelLines(empty, { tab: 'settings', opened: 'orgmem', cursor: 0 }, NOW, 140).lines.map(lineText)).toContain('  No notes yet.')
-  expect(panelKeys(empty, 'orgmem', 'settings').map(k => k.word)).toEqual(['views', 'back'])
+  expect(panelLines(empty, { tab: 'live', opened: '', cursor: 0 }, NOW, 140).lines.map(lineText)).toContain('[ Organizational memory (0 notes) (m) ]')
+  expect(panelLines(empty, { tab: 'live', opened: 'orgmem', cursor: 0 }, NOW, 140).lines.map(lineText)).toContain('  No notes yet.')
+  expect(panelKeys(empty, 'orgmem', 'live').map(k => k.word)).toEqual(['views', 'back'])
   // the delete as a slash command
   expect(actionCommand({ kind: 'orgmem-delete', n: 3 })).toEqual({ name: 'symcc-settings', text: 'orgmem delete 3' })
   expect(actionCommand({ kind: 'orgmem-delete', n: 3, key: 'a1b2c3' })).toEqual({ name: 'symcc-settings', text: 'orgmem delete 3 a1b2c3' })
 })
 
-test('T-619: startTui: the Org-mem row opens the page; x on a note asks, Yes sends /symcc-settings orgmem delete N, Cancel sends nothing', async () => {
+test('T-619, T-687: startTui: the Live tab\'s Organizational memory button (and m) opens the page; x on a note asks, Yes sends /symcc-settings orgmem delete N, Cancel sends nothing; b returns to the Live tab', async () => {
   const f = orgMemViewFile()
   const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)]])
   const sent: { sessionID: string; name: string; text: string }[] = []
@@ -1841,10 +1847,16 @@ test('T-619: startTui: the Org-mem row opens the page; x on a note asks, Yes sen
   const panel = slots.find(s => s.append === 'session.panel')!.render({ name: BOARD_PANEL, sessionID: 'ses_1', width: 142, focused: true, close: () => undefined } as never) as El
   const lines = () => rowEls(panel).map(r => r.text)
   const clickRow = (has: string) => (rowEls(panel).find(r => r.text.includes(has))!.el.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0 })
-  await board.press('c', 'ses_1')
-  clickRow('▸ Workers')
-  clickRow('3 notes')
-  expect(board.state().opened).toBe('orgmem')
+  // the key m on the Live tab opens it, and so does a click on the button
+  await board.press('l', 'ses_1')
+  await board.press('m', 'ses_1')
+  expect([board.state().tab, board.state().opened]).toEqual(['live', 'orgmem'])
+  await board.press('back', 'ses_1')
+  expect([board.state().tab, board.state().opened]).toEqual(['live', ''])
+  // the button is a piece of its line that a click presses
+  const seg = rowEls(panel).flatMap(r => r.segs).find(x => x.kids?.join('') === '[ Organizational memory (3 notes) (m) ]')
+  ;(seg!.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0, stopPropagation: () => undefined })
+  expect([board.state().tab, board.state().opened]).toEqual(['live', 'orgmem'])
   expect(lines().some(l => l.includes('#3 · 2026-11-20'))).toBe(true)
   // x on the newest note, Cancel: nothing sent; down, x, Yes: note 2 is deleted
   answers.select.push('no', 'yes')
@@ -1854,9 +1866,9 @@ test('T-619: startTui: the Org-mem row opens the page; x on a note asks, Yes sen
   expect(asked).toEqual(['Delete note #3 · 2026-11-20 from .symcc/org-mem.md?', 'Delete note #2 · written by hand from .symcc/org-mem.md?'])
   // the note's check word goes along, so a number that moved meanwhile deletes nothing
   expect(sent).toEqual([{ sessionID: 'ses_1', name: 'symcc-settings', text: `orgmem delete 2 ${orgMemNoteKey('written by hand')}` }])
-  // b: back to the Settings list
+  // b: back to the Live tab
   await board.press('back', 'ses_1')
-  expect([board.state().tab, board.state().opened]).toEqual(['settings', ''])
+  expect([board.state().tab, board.state().opened]).toEqual(['live', ''])
   board.stop()
 })
 
@@ -2170,7 +2182,7 @@ test('T-685: every board screen has Claude Code\'s buttons: the tab row, the lis
   expect(counts(W).labels.join(counts(W).gap)).toBe(tabRow)
   const screens: Partial<PanelChoice>[] = [
     {}, { opened: 'T-2' }, { opened: 'T-3' }, { tab: 'scouts' }, { tab: 'scouts', opened: 'deps' }, { tab: 'settings' }, { tab: 'settings', opened: 'roles' }, { tab: 'settings', opened: 'kinds' },
-    { tab: 'settings', opened: 'role:tester' }, { tab: 'settings', opened: 'kind:bug' }, { tab: 'settings', opened: 'orgmem' }, { tab: 'settings', opened: 'prompt:tester:change' }, { tab: 'live' },
+    { tab: 'settings', opened: 'role:tester' }, { tab: 'settings', opened: 'kind:bug' }, { tab: 'live', opened: 'orgmem' }, { tab: 'settings', opened: 'prompt:tester:change' }, { tab: 'live' },
   ]
   for (const c of screens) {
     const d = draw(c)
@@ -2207,12 +2219,12 @@ test('T-685: every board screen has Claude Code\'s buttons: the tab row, the lis
 
   // Back (b) at the end of each list page, as Claude Code's; org-mem's Delete (x) before it (only with notes)
   const back = (c: Partial<PanelChoice>) => draw(c).lines.flat().filter(s => s.text === '[ Back (b) ]').map(s => s.hit)
-  for (const c of [{ tab: 'scouts' }, { tab: 'settings' }, { tab: 'settings', opened: 'roles' }, { tab: 'settings', opened: 'kinds' }, { tab: 'settings', opened: 'orgmem' }] as const) expect([c, back(c)]).toEqual([c, [{ key: 'back' }]])
-  const om = texts({ tab: 'settings', opened: 'orgmem' })
+  for (const c of [{ tab: 'scouts' }, { tab: 'settings' }, { tab: 'settings', opened: 'roles' }, { tab: 'settings', opened: 'kinds' }, { tab: 'live', opened: 'orgmem' }] as const) expect([c, back(c)]).toEqual([c, [{ key: 'back' }]])
+  const om = texts({ tab: 'live', opened: 'orgmem' })
   expect(om.indexOf('[ Delete (x) ]') >= 0 && om.indexOf('[ Delete (x) ]') < om.indexOf('[ Back (b) ]')).toBe(true)
-  expect(draw({ tab: 'settings', opened: 'orgmem' }).lines.flat().find(s => s.text === '[ Delete (x) ]')?.hit).toEqual({ key: 'x' })
+  expect(draw({ tab: 'live', opened: 'orgmem' }).lines.flat().find(s => s.text === '[ Delete (x) ]')?.hit).toEqual({ key: 'x' })
   const noNotes = orgMemViewFile('')
-  expect(panelLines(noNotes, { tab: 'settings', opened: 'orgmem', cursor: 0 }, NOW, W).lines.map(lineText).filter(l => l.startsWith('[ '))).toEqual(['[ Back (b) ]'])
+  expect(panelLines(noNotes, { tab: 'live', opened: 'orgmem', cursor: 0 }, NOW, W).lines.map(lineText).filter(l => l.startsWith('[ '))).toEqual(['[ Back (b) ]'])
   // an empty Scouts tab has its Back (b) too
   const noScouts: ViewFile = { ...f, view: { ...f.view, scouts: [] } }
   expect(panelLines(noScouts, { tab: 'scouts', opened: '', cursor: 0 }, NOW, W).lines.map(lineText)).toContain('[ Back (b) ]')
@@ -2337,12 +2349,15 @@ test('T-685: in the TUI a click on each of those buttons does exactly what its k
   await board.press('open', 's')
   expect(board.state().opened).toBe('T-2')
   await toList()
-  // Back (b) on the list pages: Scouts and Settings go to the task list, Roles, Kinds and org-mem to Settings
+  // Back (b) on the list pages: Scouts and Settings go to the task list, Roles and Kinds to Settings, org-mem to the Live tab
   expect((await same(async () => (await toList(), await board.press('s', 's')), '[ Back (b) ]', 'back')).state.tab).toBe('tasks')
   expect((await same(() => toSettings(), '[ Back (b) ]', 'back')).state.tab).toBe('tasks')
-  for (const row of ['4 roles', '2 kinds', '3 notes']) expect((await same(() => toSettings(row), '[ Back (b) ]', 'back')).state).toEqual({ ...board.state(), tab: 'settings', opened: '' })
+  for (const row of ['4 roles', '2 kinds']) expect((await same(() => toSettings(row), '[ Back (b) ]', 'back')).state).toEqual({ ...board.state(), tab: 'settings', opened: '' })
+  const toOrgMem = async () => (await board.press('t', 's'), await board.press('l', 's'), await click('[ Organizational memory (3 notes) (m) ]'))
+  expect((await same(async () => (await board.press('t', 's'), await board.press('l', 's')), '[ Organizational memory (3 notes) (m) ]', 'm')).state).toEqual({ ...board.state(), tab: 'live', opened: 'orgmem' })
+  expect((await same(toOrgMem, '[ Back (b) ]', 'back')).state).toEqual({ ...board.state(), tab: 'live', opened: '' })
   // org-mem's Delete (x): asks, then deletes the note under the cursor (the newest)
-  expect((await same(() => toSettings('3 notes'), '[ Delete (x) ]', 'x', { select: ['yes'] })).sent).toEqual([{ sessionID: 's', name: 'symcc-settings', text: `orgmem delete 3 ${orgMemNoteKey('the type check is separate')}` }])
+  expect((await same(toOrgMem, '[ Delete (x) ]', 'x', { select: ['yes'] })).sent).toEqual([{ sessionID: 's', name: 'symcc-settings', text: `orgmem delete 3 ${orgMemNoteKey('the type check is separate')}` }])
   // a role's page: Back, See the prompt, Turn on, Reset to built-in
   const tester = () => toSettings('4 roles', 'My tester')
   await tester()
@@ -2437,7 +2452,7 @@ test('T-692: the Live tab draws the terminal panel\'s lanes, next up and today (
     // each lane's first line is a click on its task
     const lane = d.lines.findIndex((l, i) => lineText(l).includes('T-612') && !!d.hits[i])
     expect(d.hits[lane]).toEqual({ open: 'T-612' })
-    expect(d.keys.map(k => k.key)).toEqual(['↑↓', 'Enter', 't l s c', 'Esc'])
+    expect(d.keys.map(k => k.key)).toEqual(['↑↓', 'Enter', 'm', 't l s c', 'Esc'])
   }
   // the current station blinks with the clock
   const lineOf = (now: number) => panelLines(f, { tab: 'live', opened: '', cursor: 0 }, now, 120).lines.map(lineText).find(t => t.includes('T-611'))!

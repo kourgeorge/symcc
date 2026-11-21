@@ -6,11 +6,13 @@
 //   change try 2/3  [██████░░░░] 1.1M  ↺×1      (the token bar an Svg bar that fills)
 // The current station blinks with a CSS animation inside the Svg, and stays steady when VS Code (the person's system)
 // asks for reduced motion (`prefers-reduced-motion`). Each drawing's `alt` is the terminal's text for it.
+// T-687: at its bottom, above the footer, an "Organizational memory (n notes)" link opens the Organizational memory page.
 import { LIVE_EMPTY, LIVE_LEGEND, type LiveLane, type LiveLayout, type LiveSeg, type LiveTone, laneLines, liveHeader, liveLanes, liveLayout, liveStations, liveToday, nextUp, nextUpLine, segText, todayLines } from '../../core/live'
 import { panelValues, type $ } from '../panel'
 import type { PaneParts } from './parts'
-import { LIVE_TICK_MS, laneKey, liveTick } from './live'
+import { LIVE_TICK_MS, laneKey, liveTick, openOrgMemPage } from './live'
 import { mdLink, vsFooter, vsHref, vsLink } from './vscode'
+import { orgMemButtonLabel } from '../../core/org-mem'
 
 /** The pixels per text column in the drawings (about one character of VS Code's panel font). */
 const COL_PX = 8
@@ -56,8 +58,8 @@ export function barSvg(text: string, warning: boolean): { source: string; width:
   }
 }
 
-/** The Live tab in VS Code. */
-export function livePageVs($: $, pane: PaneParts) {
+/** The Live tab in VS Code; `notes`: org-mem's note count, on the Organizational memory link at its bottom (T-687). */
+export function livePageVs($: $, pane: PaneParts, notes: number) {
   const { Box, Text, v, width, C, act, banner, tabs, nowMs, vs } = pane
   const { Svg } = vs
   // the times beside the lanes ("2m") are redrawn every tick; the blink itself is the drawing's own animation
@@ -121,6 +123,7 @@ export function livePageVs($: $, pane: PaneParts) {
         {line('live-next', nextUpLine(nextUp(v), width), 'text')}
         {todayLines(liveToday(v.tasks, nowMs), width).map((x, i) => line(`live-today-${i}`, x, 'text'))}
       </Box>
+      {vsLink(vs, 'live-orgmem', mdLink(orgMemButtonLabel(notes), vsHref('page', 'orgmem')), [[vsHref('page', 'orgmem'), openOrgMemPage($)]])}
       {vsFooter(vs, 'live-hint')}
     </Box>
   )

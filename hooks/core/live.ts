@@ -44,6 +44,7 @@ export const liveKeys = (): KeyHint[] => [
   { key: '↑↓', word: 'move' },
   { key: 'Enter', word: 'open task' },
   { key: 'w', word: 'watch worker' },
+  { key: 'm', word: 'org-mem' },
   { key: LIVE_VIEW_KEYS, word: 'views' },
   { key: 'Esc', word: 'close' },
 ]

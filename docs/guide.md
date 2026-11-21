@@ -758,7 +758,8 @@ are about changes; under "How tasks ended" a read investigation shows as
   - **Checks before merging**: `test_commands`, `test_minutes` (how many minutes each test
     command may run before merging, a whole number from 1 to 120, 10 by default; any other value
     is refused), `tests_with_changes`, `checker`
-  - **Workers**: the **Roles**, **Kinds** and org-mem rows
+  - **Workers**: the **Roles** and **Kinds** rows (org-mem is on the Live tab, see
+    [Organizational memory](#organizational-memory-org-mem))
   - **Scouts**: `scout_findings`
   - **Board and alerts**: `notify`, `open_on_start`, `archive_days`
 
@@ -862,8 +863,12 @@ The Live tab (`l`) shows the tasks that run now as "railway lanes", one lane per
   start, `(after T-n)` for one waiting on another task, then `N more in todo`) and `today`
   (merged, sent back by the checker, failed, and the tries' tokens today). With nothing
   running it says `No task is running right now.` and still shows next up.
+- At the bottom, just above the key hints, the `[ Organizational memory (12 notes) (m) ]` button
+  opens the Organizational memory page (see [Organizational memory](#organizational-memory-org-mem));
+  its Back returns to the Live tab.
 - Keys: ↑↓ move between lanes, Enter opens the task's page (Back returns to the Live tab), `w`
-  watches the worker of the lane with the focus, `t l s c` switch views, Esc closes the panel.
+  watches the worker of the lane with the focus, `m` opens organizational memory, `t l s c`
+  switch views, Esc closes the panel.
   On a narrow panel the title column and the gaps between stations shrink (the station names
   get shorter too); a lane is never wrapped or cut.
 
@@ -1754,8 +1759,9 @@ test, a trap, where something is).
   or empty file adds nothing.
 - **Editing:** you may edit, fix or trim the file by hand at any time; any line counts, with or
   without a date.
-- **Seeing and deleting notes:** Settings → Workers has an **Org-mem: n notes** row (in VS Code
-  **Organizational memory**). It opens the "Organizational memory (org-mem)" page: every note, newest
+- **Seeing and deleting notes:** at the bottom of the board's Live tab, an **Organizational memory
+  (n notes)** button (key `m`; in VS Code a link, in OpenCode a button with the same key) opens the
+  "Organizational memory (org-mem)" page, whose Back returns to the Live tab: every note, newest
   first, with its number, date and text ("No notes yet." when there are none). To delete
   a note, put the cursor on it and press `x` (or Enter; in VS Code click its Delete link), then
   `y` to confirm: exactly that line is taken out of the file. From the prompt (and in OpenCode,

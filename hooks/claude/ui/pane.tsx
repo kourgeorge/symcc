@@ -11,6 +11,9 @@ import { questionPage } from './question-page'
 import { listPageVs } from './vscode-list'
 import { livePage, stopLiveTick } from './live'
 import { livePageVs } from './vscode-live'
+import { orgMemPage } from './orgmem'
+import { orgMemNow, orgMemView } from '../../app/org-mem'
+import { claudeHost } from '../host'
 
 /** The board panel: the list (each task a button), or one task with its actions; or the Scouts or Settings view. */
 export async function renderPane($: $, e: PaneEvent, next: Parameters<PaneHook>[2]) {
@@ -23,6 +26,15 @@ export async function renderPane($: $, e: PaneEvent, next: Parameters<PaneHook>[
   return tree
 }
 
+/** The Live tab, or (T-687) the Organizational memory page opened from the button at its bottom (Back comes back). */
+async function liveTab($: $, pane: PaneParts) {
+  const om = await orgMemNow(claudeHost($))
+  if (!orgMemView.open) return pane.vscode ? livePageVs($, pane, om.notes.length) : livePage($, pane, om.notes.length)
+  // the page doesn't blink: no redraw timer while it is shown
+  stopLiveTick()
+  return orgMemPage($, pane, om.notes, om.file)
+}
+
 /** The page the board panel shows now. */
 function page($: $, pane: PaneParts) {
   // the Live tab redraws itself while it is shown (see live.tsx); any other page stops that
@@ -32,7 +44,7 @@ function page($: $, pane: PaneParts) {
   if (pane.onScouts) return scoutsPage($, pane)
   if (pane.t) return taskPage($, pane, pane.t)
   if (pane.q) return questionPage($, pane, pane.q)
-  if (pane.onLive) return pane.vscode ? livePageVs($, pane) : livePage($, pane)
+  if (pane.onLive) return liveTab($, pane)
   // VS Code's side panel has its own Tasks page: readable rows, buttons, no key hints (see vscode-list.tsx)
   return pane.vscode ? listPageVs($, pane) : listPage($, pane)
 }

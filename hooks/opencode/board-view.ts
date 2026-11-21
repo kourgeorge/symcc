@@ -10,8 +10,9 @@
 // board, T-585). Like it, Settings opens the Roles and Kinds
 // pages (a list, then one role's or kind's page: turn it off or on, reset it to the built-in one, T-562) and a
 // scout's page edits the scout (how often, model, instructions); the roles and kinds come in the view file too.
-// Settings also opens the Organizational memory page (T-619): org-mem's notes, newest first, x deletes one (after a
-// yes) with /<name>-settings orgmem delete N; the notes come in the view file too (org_mem). Every screen has the
+// The Live tab's "Organizational memory (n notes)" button at its bottom (key m, T-687) opens the Organizational memory
+// page (T-619): org-mem's notes, newest first, x deletes one (after a yes) with /<name>-settings orgmem delete N; Back
+// returns to the Live tab; the notes come in the view file too (org_mem). Every screen has the
 // Claude Code panel's buttons (T-680, T-685): its tab row, the list's [m] mode and [f] search buttons, Back (b) on the
 // list pages, a role's or kind's page buttons; each a click on it presses its key.
 import type { SymccTask, SymccScout, SymccMode } from '../../types'
@@ -34,7 +35,7 @@ import { restFrame } from '../core/logo'
 import { taskSections, type TaskSection } from '../core/task-sections'
 import type { DiffFile } from '../core/review'
 import { DEFAULT_NAME, dataDir } from '../name'
-import { ORG_MEM_TITLE, ORG_MEM_EMPTY, orgMemAbout, orgMemCount, orgMemSummary, orgMemKeys, orgMemNoteHead, orgMemFile, type OrgMemNote } from '../core/org-mem'
+import { ORG_MEM_TITLE, ORG_MEM_EMPTY, ORG_MEM_KEY, orgMemAbout, orgMemButtonLabel, orgMemKeys, orgMemNoteHead, orgMemFile, type OrgMemNote } from '../core/org-mem'
 
 /** The view file's name, in the data folder (.<name>/view.json). */
 export const VIEW_FILE = 'view.json'
@@ -341,7 +342,8 @@ const LIST_TONE: Record<string, string> = { backlog: 'inactive', review: 'warnin
  *  (archived, removed, or the view file gone) falls back to the list. */
 export function hasPage(f: ViewFile | null, id: string, tab: PanelTab = 'tasks'): boolean {
   if (!id || !f) return false
-  if (tab === 'live') return false
+  // the Live tab's one page: the Organizational memory page (T-687)
+  if (tab === 'live') return id === ORG_MEM_PAGE
   if (tab === 'scouts') return (f.view.scouts ?? []).some(x => x.name === id)
   if (tab === 'settings') return !!settingsPlace(f, id)
   return f.view.tasks.some(x => x.id === id) || (f.view.questions ?? []).some(x => x.id === id)
@@ -351,13 +353,19 @@ export function hasPage(f: ViewFile | null, id: string, tab: PanelTab = 'tasks')
 export const scoutRunsIn = (f: ViewFile | null, scout: string): ScoutRun[] => (Array.isArray(f?.view.scout_runs?.[scout]) ? f!.view.scout_runs![scout]! : [])
 
 /** The Settings pages that list roles or kinds. */
-type DefList = Exclude<SettingPage, 'orgmem'>
+type DefList = SettingPage
 
-/** A page under Settings: the Roles or Kinds list (`id` "roles" or "kinds"), the Organizational memory page ("orgmem"),
+/** The Organizational memory page's id on the Live tab (T-687: opened from the button at the tab's bottom). */
+export const ORG_MEM_PAGE = 'orgmem'
+
+/** The Organizational memory button at the bottom of the Live tab (T-687): "[ Organizational memory (3 notes) (m) ]". */
+export const orgMemButton = (n: number): PanelButton => ({ label: `${orgMemButtonLabel(n)} (${ORG_MEM_KEY})`, hit: { key: ORG_MEM_KEY } })
+
+/** A page under Settings: the Roles or Kinds list (`id` "roles" or "kinds"),
  *  or one role's or kind's page ("role:tester", "kind:bug"; its list is `list`), or (T-685) the built-in prompt a role
  *  goes in, view only ("prompt:tester:change", `prompt`); null when there is no such page (or the role or kind left the view). */
 export function settingsPlace(f: ViewFile | null, id: string): { list: SettingPage; def?: ViewDef; prompt?: RolePromptKind } | null {
-  if (id === 'roles' || id === 'kinds' || id === 'orgmem') return { list: id }
+  if (id === 'roles' || id === 'kinds') return { list: id }
   const p = /^prompt:(.+):([^:]+)$/.exec(id)
   if (p) {
     const def = defsIn(f, 'roles').find(x => x.name === p[1])
@@ -413,7 +421,7 @@ export function panelKeys(f: ViewFile | null, opened: string, tab: PanelTab = 't
 export const panelLiveKeys = (): KeyHint[] => liveKeys().filter(k => k.key !== 'w')
 
 function tabKeys(f: ViewFile | null, opened: string, tab: PanelTab, run: string, heading: boolean, merging: boolean): KeyHint[] {
-  if (tab === 'live') return panelLiveKeys()
+  if (tab === 'live') return opened === ORG_MEM_PAGE ? orgMemKeys(false, orgMemIn(f).length > 0) : panelLiveKeys()
   const move = { key: '↑↓', word: 'move' }
   const views = { key: 't s c', word: 'views' }
   const close = { key: 'Esc', word: 'close' }
@@ -422,7 +430,6 @@ function tabKeys(f: ViewFile | null, opened: string, tab: PanelTab, run: string,
     const place = settingsPlace(f, opened)
     // the settings list: core's keys, as Claude Code's (Enter open/close on a group heading, else change)
     if (!place) return settingsKeys(heading)
-    if (place.list === 'orgmem') return orgMemKeys(false, orgMemIn(f).length > 0)
     if (!place.def) return [move, { key: 'Enter', word: 'open' }, back]
     if (place.prompt) return rolePromptKeys()
     // core's keys of Claude Code's role page, but Edit and Remove (no slash command does them here)
@@ -472,14 +479,16 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
   let body: { lines: Line[]; hits?: (PanelHit | null)[] | null; ids: string[]; selected: string; head?: number }
   let keys: KeyHint[]
   if (tab === 'live') {
-    body = liveBody(f, choice.cursor, nowMs, w)
-    keys = panelKeys(f, '', 'live')
+    // T-687: the Organizational memory page, opened from the button at the tab's bottom
+    const orgMem = choice.opened === ORG_MEM_PAGE
+    body = orgMem ? orgMemBody(f, choice.cursor, w) : liveBody(f, choice.cursor, nowMs, w)
+    keys = panelKeys(f, orgMem ? ORG_MEM_PAGE : '', 'live')
   } else if (tab === 'scouts') {
     body = scoutsBody(f, choice, nowMs, w)
     keys = panelKeys(f, choice.opened, 'scouts', choice.run ?? '')
   } else if (tab === 'settings') {
     const place = settingsPlace(f, choice.opened)
-    body = place?.list === 'orgmem' ? orgMemBody(f, choice.cursor, w) : place?.prompt && place.def ? rolePromptPage(place.def, place.prompt, w) : place?.def ? defPage(f, place.list as DefList, place.def, w) : place ? defsList(f, place.list as DefList, choice.cursor, w) : settingsBody(f, choice.cursor, choice.settingsOpen ?? SETTINGS_OPEN, w)
+    body = place?.prompt && place.def ? rolePromptPage(place.def, place.prompt, w) : place?.def ? defPage(f, place.list as DefList, place.def, w) : place ? defsList(f, place.list as DefList, choice.cursor, w) : settingsBody(f, choice.cursor, choice.settingsOpen ?? SETTINGS_OPEN, w)
     keys = panelKeys(f, place ? choice.opened : '', 'settings', '', !place && !!settingGroupOf(body.selected))
   } else {
     const t = choice.opened ? f.view.tasks.find(x => x.id === choice.opened) : undefined
@@ -615,7 +624,7 @@ export const LIVE_BLINK_MS = 1000
 /**
  * The Live tab (T-692), as the terminal panel's (T-690), all made by core/live.ts: the mode and busy agents, the
  * station names, two lines per task in doing (a click on its first line, or Enter on it, opens the task), next up,
- * today's numbers and the legend; "No task is running right now." when none is in doing. The cursor goes over the
+ * today's numbers, the legend and (T-687) the Organizational memory button; "No task is running right now." when none is in doing. The cursor goes over the
  * lanes; its lane's first column shows "›". The current station blinks with the clock (one step per LIVE_BLINK_MS).
  */
 function liveBody(f: ViewFile, cursor: number, nowMs: number, w: number): Body {
@@ -641,6 +650,8 @@ function liveBody(f: ViewFile, cursor: number, nowMs: number, w: number): Body {
   b.add([{ text: nextUpLine(nextUp(v), w), color: 'text' }])
   for (const t of todayLines(liveToday(v.tasks, nowMs), w)) b.add([{ text: t, color: 'text' }])
   if (lanes.length) b.add([{ text: LIVE_LEGEND, color: 'inactive' }])
+  // T-687: the Organizational memory button, just above the footer
+  for (const l of buttonLines([orgMemButton(orgMemIn(f).length)], w)) b.add(l)
   return { ...b, ids, selected }
 }
 
@@ -939,7 +950,7 @@ function settingsBody(f: ViewFile, cursor: number, open: readonly string[], w: n
   const nameWidth = Math.max(...SETTINGS.map(x => x.name.length))
   const ids = settingRows(open)
   const selected = ids[Math.min(Math.max(0, cursor), ids.length - 1)]!
-  const pages = { roles: defsCount(f, 'roles'), kinds: defsCount(f, 'kinds'), orgmem: orgMemSummary(orgMemIn(f).length) }
+  const pages = { roles: defsCount(f, 'roles'), kinds: defsCount(f, 'kinds') }
   for (const g of SETTING_GROUPS) {
     b.blank()
     const isOpen = open.includes(g.title)
@@ -952,19 +963,6 @@ function settingsBody(f: ViewFile, cursor: number, open: readonly string[], w: n
     }
     b.add([front, { text: `▾ ${g.title}`, color: 'text', bold: true }], hit)
     for (const item of g.items) {
-      if (item === 'orgmem') {
-        const hit = { page: item }
-        b.add(
-          [
-            { text: item === selected ? '› ' : '  ', color: 'ide', bold: true },
-            { text: 'Org-mem'.padEnd(nameWidth), color: 'claude', bold: true },
-            { text: ` ${orgMemCount(orgMemIn(f).length)}`, color: 'text', bold: true },
-          ],
-          hit,
-        )
-        b.add([{ text: '    Enter opens the Organizational memory page: the notes agents left for the next ones, to read or delete', color: 'inactive' }], hit)
-        continue
-      }
       if (isSettingPage(item)) {
         const label = item === 'roles' ? 'Roles' : 'Kinds'
         const hit = { page: item }
