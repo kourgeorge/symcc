@@ -27,6 +27,7 @@ import { debriefs, learnedAsk } from '../hooks/app/debrief'
 import { DEBRIEF_MS, DEBRIEF_TEXT, LEARNED_ASK } from '../hooks/core/org-mem'
 import type { EvidenceEvent } from '../hooks/core/evidence'
 import { evidenceWritten } from '../hooks/app/evidence'
+import { checkerTokensOf, sumTokens } from '../hooks/core/runs'
 
 const ROOT = '/repo'
 const WT = `${ROOT}/.symcc/worktrees/T-1`
@@ -1343,6 +1344,16 @@ test('T-656: after a hand-back one debrief goes to the same worker and checker; 
   const after = find(await load(w.$), 'T-1')!.runs!.at(-1)!
   expect(after.tokens).toEqual({ input: (before.tokens?.input ?? 0) + 20, output: (before.tokens?.output ?? 0) + 5 })
   expect(after.checker_tokens).toEqual({ input: (before.checker_tokens?.input ?? 0) + 20, output: (before.checker_tokens?.output ?? 0) + 5 })
+  // T-774: each debrief also goes to its own agent's entry, so the try's tokens are its agents' sum and checkerTokensOf counts the checker's debrief
+  const ag = after.agents ?? []
+  const wEntry = ag.find(a => a.id === 'ag1')!
+  const cEntry = ag.find(a => a.id === chk)!
+  expect(wEntry.kind).toBe('worker')
+  expect(wEntry.tokens).toEqual({ input: 107, output: 13 })
+  expect(cEntry.kind).toBe('checker')
+  expect(cEntry.tokens).toEqual({ input: (before.checker_tokens?.input ?? 0) + 20, output: (before.checker_tokens?.output ?? 0) + 5 })
+  expect(sumTokens(ag.map(a => a.tokens))).toEqual(after.tokens)
+  expect(checkerTokensOf(after)).toEqual(after.checker_tokens)
   expect(leadQueue.join('\n')).toContain('T-1: Suggested for org-mem')
   expect(leadQueue.join('\n')).toContain('- Snapshot files live in tests/*-snapshot.ts.')
   expect((find(await load(w.$), 'T-1') as { suggested?: string[] }).suggested).toBe(undefined)

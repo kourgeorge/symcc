@@ -108,7 +108,11 @@ async function applyDebrief(host: Host, agentId: string, d: Debrief, run: Debrie
       const out = [...runs]
       // T-769: a checker's debrief tokens are its own, so they also go into checker_tokens (kept apart from the worker's)
       const isChecker = mine.agent !== agentId && Array.isArray(mine.checkers) && mine.checkers.includes(agentId)
-      out[i] = { ...mine, ...(run.tokens ? { tokens: addTokens(mine.tokens, run.tokens), ...(isChecker ? { checker_tokens: addTokens(mine.checker_tokens, run.tokens) } : {}) } : {}), ...(run.cost !== undefined ? { cost: (mine.cost ?? 0) + run.cost } : {}) }
+      // T-774: the debrief's tokens and cost also go to the agent's own entry (found by its id), so the try's sum and its agents' agree
+      const agents = Array.isArray(mine.agents) && mine.agents.some(a => a.id === agentId)
+        ? { agents: mine.agents.map(a => (a.id !== agentId ? a : { ...a, ...(run.tokens ? { tokens: addTokens(a.tokens, run.tokens) } : {}), ...(run.cost !== undefined ? { cost: (a.cost ?? 0) + run.cost } : {}) })) }
+        : {}
+      out[i] = { ...mine, ...(run.tokens ? { tokens: addTokens(mine.tokens, run.tokens), ...(isChecker ? { checker_tokens: addTokens(mine.checker_tokens, run.tokens) } : {}) } : {}), ...(run.cost !== undefined ? { cost: (mine.cost ?? 0) + run.cost } : {}), ...agents }
       patch.runs = out
     }
     let told: string[] = []
