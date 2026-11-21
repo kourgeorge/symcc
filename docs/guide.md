@@ -2097,6 +2097,17 @@ The board, its tasks, its mode and the scouts are kept. `/symcc-enable` turns ev
 on, in the mode the board had. The switch is kept per project, as `enabled` in
 `.symcc/board.json` (a board without it is on).
 
+**New projects (getting started).** symcc stays off in a folder that has no `.symcc/board.json`,
+until you start it. There it acts like plain Claude: no lead instructions, no "[symcc] Board
+update" messages, no sounds, the panel does not open by itself, no example scouts, no git-setup
+offer, and the symcc tools answer "symcc is not set up here. The owner can start it with
+/symcc-enable." Nothing is written (no `.symcc/` folder). The band and status line say `symcc is
+not set up here · /symcc-enable to start it`. Type `/symcc-enable`: it creates the board, turns
+symcc on, opens the panel (as `open_on_start` does), and tells the lead it is the lead now. If the
+folder has no repository (or no commits), the usual question about setting one up follows. Projects
+that already have a board start on as before. With several windows (see above), the first window
+you enable is the lead and later windows start off here.
+
 **Off in one window only.** `/symcc-disable here` turns symcc off in the window you type it in; the
 other windows on the project keep symcc fully on and see no change. From your next message that
 window gets no lead instructions, no "[symcc] Board update" messages, no sounds or voice, its panel

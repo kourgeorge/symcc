@@ -141,7 +141,7 @@ ${features.panel ? '' : `  /${S.N.name}-board               the board panel, as 
                        them as a web page with charts (${S.N.dir}/stats.html) and opens it
   /${S.N.name}-disable             disable ${S.N.name} for this project: ${S.W.assistant} works as normal (no lead
                        guide, no workers, scouts, updates, sounds or voice); the board is kept
-  /${S.N.name}-enable              turn it back on, in the mode the board had
+  /${S.N.name}-enable              turn it back on, in the mode the board had; in a new project (no board yet) it starts ${S.N.name} there
   /${S.N.name}-disable here, /${S.N.name}-enable here   the same for this window only (not saved in the board)
   /${S.N.name}-drive               make this session drive the board (start workers, merge, run scouts);
                        a session that drives now hands over within 30 s, its running workers

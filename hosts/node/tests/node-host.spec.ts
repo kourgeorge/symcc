@@ -28,6 +28,9 @@ import { SYMCC_WORDS } from '../../../hooks/host'
 import { scoutPrompt } from '../../../hooks/core/scouts'
 import { DEBRIEF_TEXT } from '../../../hooks/core/org-mem'
 
+/** T-795: a new project is off until the owner runs /symcc-enable; a real one does that first. */
+const enableHere = (repo: string) => runCommand(['bun', MAIN, '--root', repo, '--claude', FAKE, 'cmd', 'symcc-enable'], { cwd: repo, timeoutMs: 120_000 })
+
 test('withBasePrompt puts WORKER_BASE in front of a worker\'s prompt, and SCOUT_BASE in front of a scout\'s or checker\'s, naming none of symcc\'s tools (T-474)', () => {
   const tool = (t: string) => SYMCC_WORDS.tool('symcc', t)
   const no = { symccTools: false }
@@ -202,6 +205,7 @@ test('one task end to end on the Node host: add, a fake claude -p worker edits i
     await writeFile(`${repo}/.gitignore`, '.symcc/\n')
     await git('add', '.')
     await git('commit', '-qm', 'init')
+    await enableHere(repo)
     const cli = (...args: string[]) => runCommand(['bun', MAIN, '--root', repo, '--claude', FAKE, ...args], { cwd: repo, env: { FAKE_LOG: log, FAKE_SCRATCH: '1', FAKE_DEBRIEF: 'Suggested for org-mem:\n- Run one test file with sh check.sh.' }, timeoutMs: 120_000 })
 
     expect((await cli('tool', 'settings', JSON.stringify({ test_commands: ['sh check.sh'] }))).stdout).toContain('sh check.sh')
@@ -273,6 +277,7 @@ test('a tick that stops waiting stops its claude -p worker: the task goes back t
     await writeFile(`${repo}/.gitignore`, '.symcc/\n')
     await git('add', '.')
     await git('commit', '-qm', 'init')
+    await enableHere(repo)
     // the longest tick waits 3 minutes, then stops its worker
     const cli = (env: Record<string, string>, ...args: string[]) => runCommand(['bun', MAIN, '--root', repo, '--claude', FAKE, ...args], { cwd: repo, env, timeoutMs: 300_000 })
     expect((await cli({}, 'add', 'Say hello', '--files', 'hello.txt')).stdout).toContain('added T-1')
@@ -323,6 +328,7 @@ test('T-652: a session that closes while a worker start is still on its way ends
     await writeFile(`${repo}/.gitignore`, '.symcc/\n')
     await git('add', '.')
     await git('commit', '-qm', 'init')
+    await enableHere(repo)
     // the fake worker, if it gets to start, waits 600 s before it writes, and leaves its process group's id
     process.env.FAKE_SLEEP = '600'
     process.env.FAKE_PID = pidFile
@@ -441,6 +447,7 @@ test('T-659: the Node host names this process as a board lock holder, and tells 
     await writeFile(`${repo}/.gitignore`, '.symcc/\n')
     await git('add', '.')
     await git('commit', '-qm', 'init')
+    await enableHere(repo)
     await mkdir(`${repo}/.symcc`, { recursive: true })
     await writeFile(`${repo}/.symcc/board.lock`, lockText('gone:1', Date.now(), { pid: child.pid!, started: Date.now() - 1_000 }))
     const t0 = Date.now()
@@ -462,6 +469,7 @@ test('T-474: a worker process left running by a CLI that was killed is in the re
     await writeFile(`${repo}/.gitignore`, '.symcc/\n')
     await git('add', '.')
     await git('commit', '-qm', 'init')
+    await enableHere(repo)
     const cli = (...args: string[]) => runCommand(['bun', MAIN, '--root', repo, '--claude', FAKE, ...args], { cwd: repo, timeoutMs: 120_000 })
     expect((await cli('add', 'Say hello', '--files', 'hello.txt')).stdout).toContain('added T-1')
 
@@ -570,6 +578,7 @@ test('T-525: on the Node host the lead (no agent id) gets its tools, and an agen
   const repo = await mkdtemp('/tmp/symcc-node-lead-')
   try {
     await runCommand(['git', 'init', '-q', '-b', 'main'], { cwd: repo })
+    await enableHere(repo)
     const runner: AgentRunner = { name: 'none', command: () => ({ argv: ['true'] }), result: () => ({ answer: '' }) as never }
     const s = await openSession({ root: repo, runner, say: () => undefined, sessionId: 'node-t525' })
     try {

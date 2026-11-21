@@ -161,8 +161,9 @@ test('(b, c) a worker this copy stopped that stays listed does not keep its task
 // guard: already worked before T-376 (main sends such a task back too); kept so it stays that way
 test('(b) a doing task of this session whose worker ended with no hand-back goes back to todo at the next check', async ($, on) => {
   const w = world(on, [{ id: 'w1', name: 'symcc-T-1', status: 'completed' }])
-  // no board at the start, so nothing is sent back then; then the board shows T-1 "doing" for w1, which
+  // an empty board at the start, so nothing is sent back then; then the board shows T-1 "doing" for w1, which
   // this copy never tracked (as after a reload) and which has ended
+  w.files.set(BOARD, JSON.stringify(emptyBoard()))
   await start($, w)
   w.files.set(BOARD, JSON.stringify(doing('s1', 'w1')))
   await w.clock.advance(2 * 60_000)

@@ -16,7 +16,7 @@
 // render hooks) stays in register.tsx and hooks/claude/.
 //
 // Before calling an entry point, the host calls useName (app/state.ts) with its plugin name, so S.N is right.
-import { type Command, boardText, shortHome, LEAD_BEAT_MS, openOnStart, symccOn, offAnswer, offHereAnswer, commandNames, parseCommand, modeOf, settingsText, notifyOf, find, STATUS_WORD, statText, cutDiff, everyText, intoOf, ASK_TOOL, guardReason, scoutToolRefusal, NEW_ROLE_TEMPLATE, NEW_KIND_TEMPLATE, NEW_SCOUT_EVERY } from '../board'
+import { type Command, boardText, shortHome, LEAD_BEAT_MS, openOnStart, symccOn, offAnswer, offHereAnswer, notSetUpAnswer, modeText, commandNames, parseCommand, modeOf, settingsText, notifyOf, find, STATUS_WORD, statText, cutDiff, everyText, intoOf, ASK_TOOL, guardReason, scoutToolRefusal, NEW_ROLE_TEMPLATE, NEW_KIND_TEMPLATE, NEW_SCOUT_EVERY } from '../board'
 import { type FileTouch, type Host, type HostFeatures, ALL_FEATURES } from '../host'
 import type { SymccTokens } from '../../types'
 import { findArchived, saveArchiveMigrated } from './archive'
@@ -30,7 +30,7 @@ import { loadKinds, changeKind } from './kinds'
 import { checkerFinished } from './checker'
 import { fileToolHits, saveScoutsMigrated, scheduleScouts, seedExampleScouts, scoutFinished, runScoutNow, setScoutPaused, unreadableScoutsText, leadScouts } from './scouts'
 import { S, onHere, loadVersion, toolName, timers, heard, stopped, workers, scoutRuns, checkerRuns, scoutState, isOwnAgent } from './state'
-import { path, load, isOn, now, saveMigrated, startWait, findRoot, mainRoot, isWorkerFolder, startingText } from './store'
+import { path, load, change, isOn, now, saveMigrated, startWait, findRoot, mainRoot, isWorkerFolder, startingText } from './store'
 import { noteForLead, tellLead, brief, takeBoardUpdate } from './tell'
 import { playable } from './voice'
 import { TOOLS, leadGuide, runTool, type In, manual, ownerSettings, taskText, latestReport, statsText } from './tools'
@@ -92,6 +92,7 @@ export function watchdogTick(host: Host) {
 /** The lead heartbeat's timer went off: the driver refreshes its heartbeat; the others look whether it went stale and take over. */
 export function leadBeat(host: Host) {
   // T-793: a window off here drives nothing; it only looks whether the window with symcc on is gone
+  if (S.fresh) return
   if (S.offHere) return void offHereBeat(host).catch(() => undefined)
   void claimLead(host)
     .then(async d => (d ? pump(host) : undefined))
@@ -124,6 +125,16 @@ export async function sessionStart(host: Host) {
     S.root = main || (await host.session.repo())?.root || (await host.session.root())
     S.home = (await host.env('HOME').catch(() => undefined)) ?? ''
     S.me = await host.session.id().catch(() => `session-${Math.random().toString(36).slice(2, 10)}`)
+    // T-795: a new project (no board.json) stays off, like plain Claude, until the owner runs /<name>-enable: nothing is
+    // written, no lead is claimed, no scouts are seeded and no timer starts; only the band and status line say so.
+    S.fresh = !(await host.fs.exists(path(S.N.boardFile)).catch(() => false))
+    S.offHere = false
+    S.driving = false
+    if (S.fresh) {
+      S.enabledNow = false
+      await publish(host, await load(host))
+      return
+    }
     // An older board is saved once in the current shape (before anything else saves it), with a copy as it was;
     // so are archive.json and scouts.json (tokens saved as one number become "unsplit").
     // An old .<name>/field-guide.md becomes org-mem.md once (T-620).
@@ -149,10 +160,7 @@ export async function sessionStart(host: Host) {
     await loadRoles(host).catch(() => undefined)
     await loadKinds(host).catch(() => undefined)
     await cleanLeftoverTmp(host).catch(() => undefined)
-    S.watchdog?.cancel()
-    S.watchdog = host.clock.every(2 * 60_000, () => watchdogTick(host))
-    S.beat?.cancel()
-    S.beat = host.clock.every(LEAD_BEAT_MS, () => leadBeat(host))
+    startTimers(host)
     // A board.json that can't be read: load already kept a copy and told the owner (once); nothing
     // more happens now and board.json is left as it is. The heartbeat's pump starts work once it is fixed.
     const b = await load(host).catch(() => null)
@@ -174,6 +182,49 @@ export async function sessionStart(host: Host) {
     }
     if (leadDone) done()
     else void lead.then(done)
+  }
+}
+
+/** The watchdog and the lead heartbeat start (again). */
+function startTimers(host: Host) {
+  S.watchdog?.cancel()
+  S.watchdog = host.clock.every(2 * 60_000, () => watchdogTick(host))
+  S.beat?.cancel()
+  S.beat = host.clock.every(LEAD_BEAT_MS, () => leadBeat(host))
+}
+
+/**
+ * T-795: /<name>-enable in a new project: creates the board, turns symcc on, and starts what a normal start does (the
+ * lead claim, example scouts, timers, git check, the panel); the lead is told it is the lead now. If another window
+ * already runs symcc here, this one stays off (see startOffHere).
+ */
+async function startNewProject(host: Host, tell: (text: string) => void, here = false): Promise<string> {
+  S.fresh = false
+  S.enabledNow = true
+  await change(host, b => { const on = { ...b, enabled: true }; return [on, on] as [typeof b, typeof b] })
+  if (!here) await startOffHere(host).catch(() => undefined)
+  if (S.offHere) {
+    startTimers(host)
+    await publish(host, await load(host))
+    return `${S.N.name} already runs in another window. /${S.N.name}-enable here turns it on in this one too.`
+  }
+  S.startupDone = false
+  try {
+    await claimLead(host, true).catch(() => (S.driving = false))
+    await seedExampleScouts(host).catch(() => undefined)
+    await scheduleScouts(host).catch(() => undefined)
+    await loadRoles(host).catch(() => undefined)
+    await loadKinds(host).catch(() => undefined)
+    startTimers(host)
+    const b = await load(host)
+    await gitReady(host, b).catch(() => undefined)
+    await publish(host, b)
+    if (openOnStart(b)) await openPane(host, { tab: 'live', focus: false, quiet: true }).catch(() => undefined)
+    tell(`The owner enabled ${S.N.name} in this new project with /${S.N.name}-enable. You are the lead now; the board is in mode ${modeOf(b)}.${S.driving ? '' : ' Another window drives the board.'}`)
+    return `${S.N.name} is on in this project, in mode ${modeOf(b)}: ${modeText(modeOf(b))}.`
+  } finally {
+    S.startupDone = true
+    void pump(host).catch(() => undefined)
   }
 }
 
@@ -317,7 +368,7 @@ export async function toolCall(host: Host, tool: string, agentId: string | undef
   // session; if it still isn't known, answer and write nothing (never a board or lock path from "/").
   if (!(await findRoot(host))) return { result: startingText() }
   if (S.guardOnly) return { result: guardOnlyText() }
-  if (!(await isOn(host))) return { result: S.offHere ? offHereAnswer(S.N.name) : offAnswer(S.N.name) }
+  if (!(await isOn(host))) return { result: S.fresh ? notSetUpAnswer(S.N.name) : S.offHere ? offHereAnswer(S.N.name) : offAnswer(S.N.name) }
   try {
     return { result: await runTool(host, name, input as In) }
   } catch (err) {
@@ -477,6 +528,9 @@ export async function runCommand(host: Host, command: string, args: string): Pro
   const say = (text: string) => ({ text, isTextDisplayOnly: true as const })
   if (!loaded.board && !['bad', 'help', 'open', 'tasks'].includes(cmd.kind)) return say(`${loaded.broken} Then try again.`)
   const b = loaded.board!
+  // T-795: in a new project only /<name>-enable (and help) work; everything else points to it
+  if (S.fresh && cmd.kind === 'enable') return say(await startNewProject(host, t => tellLead(host, t), cmd.here))
+  if (S.fresh && !['bad', 'help'].includes(cmd.kind)) return say(notSetUpAnswer(S.N.name))
   switch (cmd.kind) {
     case 'bad':
       return say(cmd.message)

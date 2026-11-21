@@ -67,7 +67,7 @@ claude plugin marketplace update symcc && claude plugin update symcc@symcc
 claude plugin uninstall symcc@symcc && claude plugin marketplace remove symcc
 ```
 
-**Check it works.** Start Claude Code in your project. The board panel opens by itself on
+**Check it works.** Start Claude Code in your project. Once symcc is set up there (in a new project, after `/symcc-enable`), the board panel opens by itself on
 a wide enough terminal; if not, run `/symcc`. The status line starts with the mode, e.g. `⏵ auto`.
 
 ### Troubleshooting

@@ -81,6 +81,8 @@ export const startS = () => ({
   root: '',
   /** whether the plugin is on, as the board said when it was last read (see load); for the places that can't wait */
   enabledNow: true,
+  /** T-795: a new project: the folder had no board when the session started and the owner has not run /<name>-enable; symcc is off and writes nothing */
+  fresh: false,
   /** T-793: this window only is turned off (/<name>-disable here); never saved, gone when the session ends */
   offHere: false,
   /** T-793: why: 'off' (/<name>-disable here), 'other' (another window has symcc on), 'gone' (that window closed) */
@@ -182,7 +184,7 @@ export const startS = () => ({
 export const S = startS()
 
 /** T-793: whether symcc works in this window: on in the board (not disabled for the project) and not turned off here. */
-export const onHere = (b: { enabled?: boolean }): boolean => b.enabled !== false && !S.offHere
+export const onHere = (b: { enabled?: boolean }): boolean => b.enabled !== false && !S.offHere && !S.fresh
 
 /** Takes the plugin's name from plugin.json (via host.plugin.name; DEFAULT_NAME if it has none) and the host's words, once. */
 export function useName(host: Pick<Host, 'plugin' | 'words'>) {
