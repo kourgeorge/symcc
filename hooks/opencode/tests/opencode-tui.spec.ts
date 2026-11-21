@@ -1434,6 +1434,24 @@ test('T-574: OpenCode\'s task page shows local times with the shared when, and t
   expect(page).toContain('bug — A bug to fix')
 })
 
+test('T-722: OpenCode\'s list rows tag only the kind ("[docs]", "[bug]"), never the role; a plain change shows no tag; the page keeps the role', () => {
+  const f = defsViewFile()
+  const tasks = f.view.tasks.map(t =>
+    t.id === 'T-1' ? { ...t, kind: 'docs', role: 'docs' } : t.id === 'T-4' ? { ...t, kind: 'bug', role: 'tester' } : t.id === 'T-2' ? { ...t, status: 'todo' as const, role: 'tester' } : t,
+  )
+  const g = { ...f, view: { ...f.view, tasks } }
+  const list = panelLines(g, { opened: '', cursor: 0 }, NOW, 200).lines.map(lineText)
+  const row = (title: string) => list.find(l => l.includes(title)) ?? ''
+  expect(row('a change in src')).toMatch(/\[docs\]\s*$/)
+  expect(row('a change in src').includes('docs ·')).toBe(false)
+  expect(row('a later one')).toMatch(/\[bug\]\s*$/)
+  expect(row('a later one').includes('tester')).toBe(false)
+  expect(row('a reviewed change').includes('tester')).toBe(false)
+  expect(row('a reviewed change').includes('[')).toBe(false)
+  const page = panelLines(g, { opened: 'T-4', cursor: 0 }, NOW, 200).lines.map(lineText).join('\n')
+  expect(page).toContain('tester — My tester · model opus')
+})
+
 test('T-583: on a waiting task\'s and a question\'s page each choice is a clickable line; a click or its number key sends /symcc-answer, the page says it was sent; a right click does nothing', async () => {
   const f0 = viewFile()
   // T-3 asks a question with options, T-1 is over its time, T-4 asks for files; Q-3 is the owner's question

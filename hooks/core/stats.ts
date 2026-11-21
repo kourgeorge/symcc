@@ -1,7 +1,7 @@
 // /<name>-stats and the lead's stats tool: time and token figures built only from what the board
 // already keeps (tasks, their tries in runs[], their history), plus the archived tasks.
 // Every function here is pure; the plugin reads board.json and archive.json and passes the tasks in.
-import type { SymccStatus, SymccTask, SymccTokens } from '../../types'
+import type { SymccRun, SymccStatus, SymccTask, SymccTokens } from '../../types'
 import { DEFAULT_NAME } from '../name'
 import { isInvestigation, STATUS_WORD } from './board-file'
 import { dayLabel, dayOf } from './days'
@@ -452,6 +452,37 @@ export function unlinkedCount(mine: Pick<SymccTask, 'id' | 'created_at'>[], runs
 /** One row of "Most tokens" / "Most time". */
 export type StatsTop = { id: string; title: string; value: number }
 /** One day of "Done per day": tasks done, work time and tokens of the tries started that day. */
+/** T-721: one failed try: its task, try number, how it ended, and (when its tests failed) the command and first failing test. */
+export type StatsFailedTry = { id: string; title: string; try: number; reason: string; ended?: string; command?: string; test?: string }
+/** T-721: a test that failed: on how many failed tries, and of how many different tasks. */
+export type StatsFailedTest = { name: string; tries: number; tasks: number }
+
+/** T-721: whether try `r` did not fail: not ended yet, restarted, asking, merged, ready for review, passed but waiting for the owner's files, or an investigation's answer. */
+const okEnd = (r: SymccRun) => !r.ended_by || r.ended_by === 'restarted' || r.ended_by === 'asked' || isAnsweredRun(r) || /^(merged|ready for review|waiting for your files)\b/.test(r.ended_note ?? '')
+
+/**
+ * T-721: the failed tries of `tasks` (oldest end first) and the tests that failed in them, the ones that failed most different tasks first.
+ * Tries that ended before `fromMs` (the "inside" window) are left out; the try number is still the task's own (pass the tasks before clipRuns).
+ */
+export function failedTryFigures(tasks: Pick<SymccTask, 'id' | 'title' | 'runs'>[], fromMs = -Infinity): { tries: StatsFailedTry[]; tests: StatsFailedTest[] } {
+  const tries: StatsFailedTry[] = []
+  const tests = new Map<string, { tries: number; tasks: Set<string> }>()
+  for (const t of tasks)
+    (t.runs ?? []).forEach((r, i) => {
+      if (!r || okEnd(r) || (r.ended && Date.parse(r.ended) < fromMs)) return
+      const names = Array.isArray(r.failed_tests) ? r.failed_tests.filter(n => typeof n === 'string' && n) : []
+      tries.push({ id: t.id, title: t.title, try: i + 1, reason: r.ended_note || r.ended_by!, ...(r.ended ? { ended: r.ended } : {}), ...(r.failed_command ? { command: r.failed_command } : {}), ...(names[0] ? { test: names[0] } : {}) })
+      for (const n of new Set(names)) {
+        const e = tests.get(n) ?? (tests.set(n, { tries: 0, tasks: new Set() }), tests.get(n)!)
+        e.tries++
+        e.tasks.add(t.id)
+      }
+    })
+  tries.sort((a, b) => (a.ended ?? '').localeCompare(b.ended ?? '') || a.id.localeCompare(b.id) || a.try - b.try)
+  const ranked = [...tests.entries()].map(([name, e]) => ({ name, tries: e.tries, tasks: e.tasks.size })).sort((a, b) => b.tasks - a.tasks || b.tries - a.tries || a.name.localeCompare(b.name))
+  return { tries, tests: ranked }
+}
+
 export type StatsDay = { day: string; label: string; done: number; ms: number; tokens: number }
 
 /**
@@ -499,6 +530,9 @@ export type StatsData = {
   ended: { label: string; n: number }[]
   failed: { key: FailReason; label: string; n: number }[]
   failedTotal: number
+  /** T-721: every failed try in the range (oldest first), and the tests that failed most (most tasks first) */
+  failedTries: StatsFailedTry[]
+  failedTests: StatsFailedTest[]
   roles: StatsGroup[]
   origins: (StatsGroup & { scouts?: StatsScout[] })[]
   /** today's day ("YYYY-MM-DD" in the owner's time zone) and the last 7 days with activity, oldest first */
@@ -606,6 +640,7 @@ export function statsData(input: StatsInput & { full?: boolean }): StatsData {
     at(d).ms += runMs(r, nowMs)
     at(d).tokens += tokenCount(r.tokens)
   }
+  const failing = failedTryFigures(whole, counting === 'inside' ? winFrom : -Infinity)
   const doneAt = new Map(everyTask.map(t => [t.id, doneAtMs(t)]))
   const stages = stageFigures(whole.filter(t => t.status === 'done' && !isInv(t)), id => doneAt.get(id), counting === 'inside' ? { from: winFrom, to: nowMs } : undefined)
   const sumOf = (xs: number[]) => (xs.length ? xs.reduce((s, x) => s + x, 0) : undefined)
@@ -659,6 +694,8 @@ export function statsData(input: StatsInput & { full?: boolean }): StatsData {
     ended,
     failed,
     failedTotal: Object.values(reasons).reduce((s, n) => s + n, 0),
+    failedTries: failing.tries,
+    failedTests: failing.tests,
     roles,
     origins: origins.map(([k, ts]) => ({ ...group(k, ORIGIN_LABEL[k] ?? k, ts), ...(k === 'scout' ? { scouts } : {}) })),
     today,
@@ -677,13 +714,17 @@ export function headlineParts(d: StatsData): string[] {
   return [`${d.done} done`, ...(d.invCount ? [`${d.answered} answered`] : []), `${fmtDuration(d.workMs)} of work`, ...(d.tokKnown ? [`${fmtTokens(tokenCount(d.tokens))} tokens`] : []), ...(d.doneWithData ? [`${pct(d.first, d.doneWithData)} right first try`] : [])]
 }
 
+/** T-721: the short report lists only the latest this many failed tries, and the top this many failing tests. */
+export const FAILED_TRIES_SHORT = 10
+export const FAILED_TESTS_SHORT = 5
+
 /** The report's first line: "symcc stats · all tasks (12 tasks, incl. 2 archived)". */
 export const statsTitle = (d: StatsData) => `${d.name} stats · ${rangeText(d.range)} (${plural(d.total, 'task')}${d.archivedIn ? `, incl. ${d.archivedIn} archived` : ''})`
 
 /**
  * The whole /<name>-stats report as plain text, every line at most 80 columns. The summary view
  * keeps every figure, with bars; `full` adds the long explanations (how billed is weighed,
- * where the lead's tokens come from, why waiting time is not shown).
+ * where the lead's tokens come from, how the stage times, waiting included, are read).
  */
 export function statsReport(input: StatsInput & { full?: boolean }): string {
   const d = statsData(input)
@@ -766,6 +807,19 @@ export function statsReport(input: StatsInput & { full?: boolean }): string {
   const maxFail = Math.max(...d.failed.map(f => f.n))
   out.push(`  Failed tries (${d.failedTotal}, from history)`)
   for (const f of d.failed) out.push(barRow(`  ${f.label}`, 24, f.n, maxFail, null))
+
+  // T-721: each failed try (short: the latest FAILED_TRIES_SHORT), and the tests that failed most (short: the top FAILED_TESTS_SHORT)
+  if (d.failedTries.length) {
+    const shown = full ? d.failedTries : d.failedTries.slice(-FAILED_TRIES_SHORT)
+    out.push('', `Each failed try (${d.failedTries.length}: task · try · reason · failing command · first failing test)`)
+    if (shown.length < d.failedTries.length) out.push(`  (the latest ${shown.length}; every one: /${name}-stats full)`)
+    for (const f of shown) out.push(`  ${f.id.padEnd(6)} try ${String(f.try).padEnd(2)} ${[f.reason, f.command && `\`${cutTitle(f.command, 40)}\``, f.test && cutTitle(f.test, 60)].filter(Boolean).join(' · ')}`)
+  }
+  if (d.failedTests.length) {
+    const shown = full ? d.failedTests : d.failedTests.slice(0, FAILED_TESTS_SHORT)
+    out.push('', `Tests that failed most (tries · tasks${shown.length < d.failedTests.length ? `; top ${shown.length} of ${d.failedTests.length}` : ''})`)
+    for (const x of shown) out.push(`  ${padWidth(cutTitle(x.name, 50), 50)} ${plural(x.tries, 'try', 'tries').padStart(9)} · ${plural(x.tasks, 'task')}`)
+  }
 
   // By role and by origin: tasks, share, avg tokens and avg time per group
   const figsOf = (g: StatsGroup) => `avg ${tokOr(g.avgTok).padStart(6)} tok · ${durOr(g.avgMs).padStart(7)}`

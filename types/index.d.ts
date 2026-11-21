@@ -31,6 +31,10 @@ export type SymccRun = {
   ended_by?: SymccRunEnd
   /** a short note on how it ended, worded like the task's history lines, e.g. "merged" or "the task was changed (details)" */
   ended_note?: string
+  /** T-721: when this try failed its tests, the test command that failed (one of the board's test_commands) */
+  failed_command?: string
+  /** T-721: and the failing tests' names read from its output (at most FAILED_TESTS_KEPT, long names cut); missing when none could be read */
+  failed_tests?: string[]
   /** set when this try first had to merge main into the branch, after a clash with main */
   merge_main?: true
   /**

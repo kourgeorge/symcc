@@ -911,8 +911,8 @@ The Live tab (`l`) shows the tasks that run now as "railway lanes", one lane per
      11-21  workers    Before handing back, wait for every command…
      11-21  snapshots  To re-capture a saved page picture, print s…
     topics
-     tests       14    git         11    opencode    9
-     vs code      8    board        9    hosts       6
+     tests       14    git         11    board        9
+     opencode     9    vs code      8    hosts       6
     ↑↓ move · Enter open topic · m all notes
   ```
 
@@ -1430,8 +1430,9 @@ skills: [code-review]
 
 You can change a task's role yourself: say "use the security role for T-12", or open the task
 in the board panel and press `l` (Role) to pick one. That works on a task to do, paused,
-failed or in the backlog. The board list shows a role at the right end
-of the task's row (`tester`); `general` shows nothing.
+failed or in the backlog. The role shows on the task's page (its Role row), not in the board
+list: a row's tag at its right end is only the task's kind (`[bug]`, `[docs]`), and a plain
+change shows no tag.
 
 **Which try is it?** When a task is doing and this is not its first try, the board says so. A
 first try shows no mark.
@@ -1718,7 +1719,12 @@ its read-only `stats` tool.
   under it); time per stage (see below); the 5 biggest tasks by tokens and by time (bars); how tasks
   ended (merged on its own, approved by you, or answered for an investigation; failed
   tries by reason: tests, clash with main, files out of scope, restarted by a change, stopped,
-  rejected);
+  rejected); each failed try on its own line (task, try, how it ended, and when its tests failed,
+  the failing test command and the first failing test; the short view shows the latest 10); the
+  tests that failed most (each test with how many failed tries and how many different tasks it
+  failed, most tasks first, so a flaky test that fails many tasks stands out; the short view
+  shows the top 5). When a try fails a test command, symcc keeps that command on the try, with
+  the names of the failing tests read from its output (the "(fail) …" lines, at most 10);
   investigations on their own (how many, answered, time, tokens, tries; see
   [investigation tasks](#investigation-tasks)); by role and where tasks came from (lead,
   you, all scouts with each scout on its own line under them, workers), each with its share,

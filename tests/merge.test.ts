@@ -3,7 +3,7 @@ import type { SymccTask } from '../types'
 import { checkAndMerge, changedFiles, changesText, ownerEdits } from '../hooks/app/review'
 import { inMergeLine, MERGE_LINE_POLL_MS, resetMergeLine } from '../hooks/app/merge-line'
 import { joinedText } from '../hooks/core/board-parts'
-import { mergeLineText, parseMergeLine, inLineNote, MERGE_LINE_STALE_MS, mergeLineStaleMs, type LineEntry, testMinutesOf, testTimeoutMs, lineEntryStale, readBoard, TEST_RERUN_GONE_NOTE, DEFAULT_TEST_MINUTES, BASH_PATHS_MAX, bashTooManyText } from '../hooks/board'
+import { mergeLineText, parseMergeLine, inLineNote, MERGE_LINE_STALE_MS, mergeLineStaleMs, type LineEntry, testMinutesOf, testTimeoutMs, lineEntryStale, readBoard, TEST_RERUN_GONE_NOTE, DEFAULT_TEST_MINUTES, BASH_PATHS_MAX, bashTooManyText, failedTestNames, FAILED_TESTS_KEPT, FAILED_TEST_CHARS } from '../hooks/board'
 import { PREP_NOTE, STEP_NOTE, isMergeNote, type Board, type Notify, soundSetFor, type BoardTask, workerGitWriteText, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, readArchive, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, untestedChange, isTestFile, isPlainRelPath, parseSettingValue, type WorkerQuestion, isAnswered, boardText, taskMatches, onRuns } from '../hooks/board'
 import { removeWorktree, cleanupMerged, deleteMergedBranch } from '../hooks/app/git'
 import { addPassedTree, parsePassedTrees, passedTreesText, treePassed, PASSED_TREES_MAX } from '../hooks/core/passed-trees'
@@ -3061,6 +3061,36 @@ test('a finished try ends with the outcome of its check', async () => {
   expect((await tryEnds(answers('made the change'), { g: { changed: ['README.md'] } })).end).toEqual(['finished', 'out of scope'])
 })
 
+test('T-721: a try that fails a test command keeps that command and the failing tests read from its output', async () => {
+  const out = ['tests/a.test.ts:', '(pass) adds [0.10ms]', '(fail) board > saves the board [1.23ms]', '  error: expected 1, got 2', '(fail) merge keeps the branch', '', ' 1 pass', ' 2 fail'].join('\n')
+  const failed = await tryEnds(answers('made the change'), { tests: { 'npm test': { exitCode: 1, stdout: out, stderr: '' } } })
+  expect(failed.end).toEqual(['finished', 'tests failed'])
+  expect(failed.r.failed_command).toBe('npm test')
+  expect(failed.r.failed_tests).toEqual(['board > saves the board', 'merge keeps the branch'])
+  // no "(fail)" line it can read: the command only
+  const plain = await tryEnds(answers('made the change'), { tests: { 'npm test': { exitCode: 1, stdout: 'FAIL', stderr: 'boom' } } })
+  expect(plain.r.failed_command).toBe('npm test')
+  expect('failed_tests' in plain.r).toBe(false)
+  // a merged try keeps neither
+  const merged = await tryEnds(answers('made the change'))
+  expect('failed_command' in merged.r).toBe(false)
+})
+
+test('T-721: failedTestNames keeps at most 10 names, each once, long ones cut, and never throws', () => {
+  const many = Array.from({ length: 14 }, (_, i) => `(fail) test ${i}`).join('\n')
+  expect(failedTestNames(many)).toHaveLength(FAILED_TESTS_KEPT)
+  expect(failedTestNames('(fail) same\n(fail) same [2ms]')).toEqual(['same'])
+  const long = failedTestNames(`(fail) ${'x'.repeat(300)}`)[0]!
+  expect(long.length).toBe(FAILED_TEST_CHARS)
+  expect(long.endsWith('…')).toBe(true)
+  // cut by whole characters: an emoji is never split in half
+  const emoji = failedTestNames(`(fail) ${'😀'.repeat(200)}`)[0]!
+  expect([...emoji].length).toBe(FAILED_TEST_CHARS)
+  expect(emoji).toBe(`${'😀'.repeat(FAILED_TEST_CHARS - 1)}…`)
+  expect(failedTestNames(undefined)).toEqual([])
+  expect(failedTestNames('all good\n(pass) a')).toEqual([])
+})
+
 test('a try that asks ends as asked (a question, or files outside its list); one stopped from Claude Code as stopped; an error as stopped with the reason', async () => {
   expect((await tryEnds(answers('', undefined, { question: { question: 'red or blue?' } }))).end).toEqual(['asked', 'question'])
   expect((await tryEnds(answers('', undefined, { requested: ['README.md'] }))).end).toEqual(['asked', 'files outside its list'])
@@ -3072,9 +3102,24 @@ test('a try that asks ends as asked (a question, or files outside its list); one
   expect((await tryEnds(answers('', { reason: 'error' }))).end).toEqual(['stopped', "the worker's turn ended on an error (retries used up or the context limit)"])
 })
 
-test('T-411: only the host seeing a background command still running fails a try; an answer that only says it will continue later just adds a warning', async () => {
-  // the host's signal: a background command still running when the turn ended fails the try, whatever the answer says
-  const ran = await tryEnds(answers('Changed src/a.ts; tests/a.test.ts covers it.', { reason: 'answer', background: ['bun test'] }))
+test('T-724: a hand-back with a report while a background command still runs stops that command, logs it and goes on to prep and merge', async () => {
+  const stops: string[] = []
+  const stopBackground = async () => (stops.push('ag1'), 1)
+  const ran = await tryEnds(answers('Changed src/a.ts; tests/a.test.ts covers it.', { reason: 'answer', background: ['bun test'], stopBackground }))
+  expect(stops).toEqual(['ag1'])
+  expect(ran.end).toEqual(['finished', 'merged'])
+  expect(ran.t.note).not.toBe('the worker ended its turn before its work finished')
+  expect(ran.t.history.some(h => h.text === 'try 1: stopped 1 command still running at hand-back')).toBe(true)
+  expect(ran.t.history.some(h => h.text.includes('nothing was checked or merged'))).toBe(false)
+  // a host that can't stop it: still goes on, and the history says it could not
+  const kept = await tryEnds(answers('Changed src/a.ts.', { reason: 'answer', background: ['bun test', 'tsc -w'] }))
+  expect(kept.end).toEqual(['finished', 'merged'])
+  expect(kept.t.history.some(h => h.text === 'try 1: 2 commands still running at hand-back (could not stop them)')).toBe(true)
+})
+
+test('T-411: only the host seeing a background command still running fails a try (with no report); an answer that only says it will continue later just adds a warning', async () => {
+  // the host's signal: a background command still running when the turn ended with no report fails the try
+  const ran = await tryEnds(answers('', { reason: 'answer', background: ['bun test'] }))
   expect([ran.t.status, ran.t.note]).toEqual(['failed', 'the worker ended its turn before its work finished'])
   expect(ran.end).toEqual(['stopped', 'the worker ended its turn before its work finished'])
   expect(ran.t.history.at(-1)?.text).toContain('→ the worker ended its turn before its work finished; nothing was checked or merged')
@@ -5479,12 +5524,14 @@ test('old board tasks with kind change or investigation still load as before; an
   expect(kindOf(find(p, 'T-4'))).toBe('change')
 })
 
-test('the board line shows the kind next to the role; a plain change shows none; search matches the kind', () => {
+test('a board row tag is only the kind, never the role (T-722); a plain change shows none; the lead\'s board text keeps the role; search matches the kind', () => {
   const [b] = boardWith('auto', [], { kind: 'bug', role: 'tester', status: 'todo' } as Partial<BoardTask>)
   const t = b.tasks[0]!
-  expect(rowExtra(t, b.tasks)).toBe('[bug · tester]')
+  expect(rowExtra(t, b.tasks)).toBe('[bug]')
+  expect(rowExtra({ ...t, kind: 'docs', role: 'docs' }, b.tasks)).toBe('[docs]')
+  expect(rowExtra({ ...t, kind: 'docs', role: 'docs', status: 'doing' }, b.tasks)).toBe('[docs]')
   expect(rowExtra({ ...t, role: undefined }, b.tasks)).toBe('[bug]')
-  expect(rowExtra({ ...t, kind: undefined } as SymccTask, b.tasks)).toBe('tester')
+  expect(rowExtra({ ...t, kind: undefined } as SymccTask, b.tasks)).toBe('')
   expect(boardText(b, Date.now(), '~/p', 'symcc')).toContain('Do it [bug · tester]')
   expect(taskMatches(t, 'bug')).toBe(true)
   expect(taskMatches({ ...t, kind: undefined } as SymccTask, 'bug')).toBe(false)

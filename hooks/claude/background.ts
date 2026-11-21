@@ -12,8 +12,17 @@ export type BackgroundTask = { id?: unknown; type?: unknown; command?: unknown; 
 
 /** Per agent: the ids of the background tasks its Bash calls started, and the commands of those whose result had no id. */
 const started = new Map<string, { ids: Set<string>; commands: Set<string> }>()
-/** Per agent: its own commands still running at its last SubagentStop, until its turn.complete takes them. */
-const atStop = new Map<string, string[]>()
+/** Per agent: its own commands still running at its last SubagentStop (with their task ids), until its turn.complete takes them. */
+const atStop = new Map<string, { id: string; command: string }[]>()
+/** Per agent: the task ids of its commands still running at its turn's end (takeBackground), until stopBackground stops them. */
+const left = new Map<string, string[]>()
+/** How a background task is stopped by its id (Claude Code's TaskStop tool, set by claudeHost); none until a host sets it. */
+let stopTask: ((id: string) => Promise<unknown>) | undefined
+
+/** Sets how a background task of this session is stopped by its id (claude/host.ts: Claude Code's TaskStop tool). */
+export function useTaskStop(stop: (id: string) => Promise<unknown>) {
+  stopTask = stop
+}
 
 /** A tool call of agent `agentId` finished with `result`: a Bash command it sent to the background is noted as its own. */
 export function noteBackground(agentId: string | undefined, call: Record<string, unknown>, result: unknown) {
@@ -45,7 +54,7 @@ export function stopSeen(agentId: unknown, tasks: unknown) {
     atStop.delete(agentId)
     return
   }
-  atStop.set(agentId, own.map(t => (typeof t.command === 'string' && t.command) || (typeof t.description === 'string' && t.description) || String(t.id)))
+  atStop.set(agentId, own.map(t => ({ id: t.id as string, command: (typeof t.command === 'string' && t.command) || (typeof t.description === 'string' && t.description) || String(t.id) })))
 }
 
 /**
@@ -56,11 +65,38 @@ export function takeBackground(agentId: string | undefined): string[] | undefine
   if (!agentId) return undefined
   const own = atStop.get(agentId)
   atStop.delete(agentId)
-  return own
+  if (own?.length) left.set(agentId, own.map(t => t.id))
+  else left.delete(agentId)
+  return own?.map(t => t.command)
+}
+
+/**
+ * T-724: stops the background commands of agent `agentId` that takeBackground found still running at its turn's end:
+ * only its own, by their task ids (never by name), through the host's task stop. Answers how many were stopped. Taken once.
+ */
+export async function stopBackground(agentId: string): Promise<number> {
+  const ids = left.get(agentId) ?? []
+  left.delete(agentId)
+  const stop = stopTask
+  if (!stop) return 0
+  let stopped = 0
+  for (const id of ids) {
+    try {
+      // the host's tool call does not throw when it fails: a refusal answers { deny }, a tool error { isError: true }
+      const res = await stop(id)
+      const r = res && typeof res === 'object' ? (res as { deny?: unknown; isError?: unknown }) : undefined
+      if (r && (r.deny || r.isError === true)) continue
+      stopped++
+    } catch {
+      // already ended, or it can't be stopped: not counted
+    }
+  }
+  return stopped
 }
 
 /** Forgets everything noted (a plugin reload starts with nothing). */
 export function resetBackground() {
   started.clear()
   atStop.clear()
+  left.clear()
 }

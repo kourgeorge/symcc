@@ -151,8 +151,11 @@ function world(on: On, o: { work?: Record<string, string[]>; agents?: { id: stri
     return { value: ok() }
   })
   // a Bash command sent to the background answers with the id of its background task, as Claude Code's Bash does
+  const taskStops: string[] = []
   on('tool.call', (_, e) => {
-    const c = e as unknown as { tool: string; command?: string; run_in_background?: boolean }
+    const c = e as unknown as { tool: string; command?: string; run_in_background?: boolean; task_id?: string }
+    // T-724: Claude Code's TaskStop, which stops a background task by its id
+    if (c.tool === 'TaskStop') return (taskStops.push(String(c.task_id)), { result: 'stopped' })
     if (c.tool !== 'Bash' || !c.run_in_background) return { result: 'ran' }
     // a command in `noId` answers without its task id (the owner must not be guessed from its text)
     return { result: (o.noId?.includes(c.command ?? '') ? { stdout: '', stderr: '' } : { stdout: '', stderr: '', backgroundTaskId: `bg:${c.command}` }) as never }
@@ -181,7 +184,7 @@ function world(on: On, o: { work?: Record<string, string[]>; agents?: { id: stri
   const clock = mock.clock(on, { now: T0 })
   // a done task's history and tries are in its parts file (T-675): joined back here
   const board = () => JSON.parse(joinedText(files.get(BOARD)!, rel => files.get(BOARD.replace('board.json', rel)) ?? null)) as Board
-  return { files, git, prompts, sends, reached, toasts, clock, board, release: () => release?.(), task: (id: string) => board().tasks.find(t => t.id === id)! }
+  return { files, git, prompts, sends, reached, toasts, taskStops, clock, board, release: () => release?.(), task: (id: string) => board().tasks.find(t => t.id === id)! }
 }
 
 type Eng = Engine
@@ -511,17 +514,33 @@ const subagentStop = ($: Eng, agentId: string, running: Record<string, unknown>[
 const shell = (command: string) => ({ id: `bg:${command}`, type: 'shell', status: 'running', description: command, command })
 const ENDED_EARLY = 'the worker ended its turn before its work finished'
 
-test("T-435: a worker whose own background command still runs when its turn ends fails its try, whatever its answer says", async ($, on) => {
+test("T-435: a worker whose own background command still runs when its turn ends with no report fails its try", async ($, on) => {
   const w = await trackedWorker($, on)
   const main = w.git.state.main
   await inBackground($, 'a1', 'bun test')
   // the session's list also holds the worker itself (a background subagent) and the lead's own command
   await inBackground($, undefined, 'npm run watch')
   await subagentStop($, 'a1', [shell('bun test'), shell('npm run watch'), { id: 'a1', type: 'subagent', status: 'running', description: 'T-1', agent_type: 'symcc:worker' }])
-  await finish($, 'a1', 'Changed src/a.ts; tests/a.test.ts covers it.')
+  await finish($, 'a1', '')
   await w.clock.settle()
   expect(w.task('T-1')).toMatchObject({ status: 'failed', note: ENDED_EARLY })
   expect(w.git.state.main).toBe(main)
+  expect(w.taskStops).toEqual([])
+})
+
+test("T-724: a worker that hands back its report while its own background command still runs: that command alone is stopped by its id, logged, and the try is merged", async ($, on) => {
+  const w = await trackedWorker($, on)
+  await inBackground($, 'a1', 'bun test')
+  await inBackground($, undefined, 'npm run watch')
+  await subagentStop($, 'a1', [shell('bun test'), shell('npm run watch'), { id: 'a1', type: 'subagent', status: 'running', description: 'T-1', agent_type: 'symcc:worker' }])
+  await finish($, 'a1', 'Changed src/a.ts; tests/a.test.ts covers it.')
+  await w.clock.settle()
+  // only its own task, never the lead's
+  expect(w.taskStops).toEqual(['bg:bun test'])
+  expect(w.task('T-1').status).toBe('done')
+  expect(w.task('T-1').note ?? '').not.toContain(ENDED_EARLY)
+  expect(w.task('T-1').history.some(h => h.text === 'try 1: stopped 1 command still running at hand-back')).toBe(true)
+  expect(w.git.onMain()).toEqual([expect.stringMatching(/^T-1: /)])
 })
 
 test("T-435: another agent's background command still running doesn't count; with none running the try goes on to its check and merge", async ($, on) => {
@@ -550,13 +569,13 @@ test("T-457: a worker's id-less background command is done; another agent's same
   expect(w.task('T-1').note ?? '').not.toContain(ENDED_EARLY)
 })
 
-test("T-457: a worker's own command, tied to it by id, still running fails its try even when it also had an id-less one and the lead's runs", async ($, on) => {
+test("T-457: a worker's own command, tied to it by id, still running fails its try (no report) even when it also had an id-less one and the lead's runs", async ($, on) => {
   const w = await trackedWorker($, on, { noId: ['lint'] })
   const main = w.git.state.main
   await inBackground($, 'a1', 'lint')
   await inBackground($, 'a1', 'bun test')
   await subagentStop($, 'a1', [shell('bun test'), { id: 'L1', type: 'shell', status: 'running', description: 'tsc', command: 'tsc' }])
-  await finish($, 'a1', 'made the change')
+  await finish($, 'a1', '')
   await w.clock.settle()
   expect(w.task('T-1')).toMatchObject({ status: 'failed', note: ENDED_EARLY })
   expect(w.git.state.main).toBe(main)

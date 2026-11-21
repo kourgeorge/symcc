@@ -158,13 +158,13 @@ export const BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {"key":"T-401","label":"T-401 ▶ 2m       Show the plugin version…   worker","plain":true},
+        "props": {"key":"T-401","label":"T-401 ▶ 2m       Show the plugin version…   [docs]","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude"},"children":["T-401"]},
           {"type":"Text","props":{"color":"ide"},"children":[" ▶ 2m       "]},
           {"type":"Text","props":{"bold":false,"color":"text"},"children":["Show the plugin version…"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["   worker"]}
+          {"type":"Text","props":{"color":"inactive"},"children":["   [docs]"]}
         ]
       },
       {
@@ -456,13 +456,13 @@ export const BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {"key":"T-401","label":"T-401 ▶ 2m       Show the plugin version in the board title and the band above th…  worker","plain":true},
+        "props": {"key":"T-401","label":"T-401 ▶ 2m       Show the plugin version in the board title and the band above th…  [docs]","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude"},"children":["T-401"]},
           {"type":"Text","props":{"color":"ide"},"children":[" ▶ 2m       "]},
           {"type":"Text","props":{"bold":false,"color":"text"},"children":["Show the plugin version in the board title and the band above th…"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  worker"]}
+          {"type":"Text","props":{"color":"inactive"},"children":["  [docs]"]}
         ]
       },
       {
@@ -746,13 +746,13 @@ export const BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {"key":"T-401","label":"T-401 ▶ 2m       Show the plugin version…   worker","plain":true},
+        "props": {"key":"T-401","label":"T-401 ▶ 2m       Show the plugin version…   [docs]","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-401"]},
           {"type":"Text","props":{"color":"ide"},"children":[" ▶ 2m       "]},
           {"type":"Text","props":{"bold":false,"color":"text"},"children":["Show the plugin version…"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["   worker"]}
+          {"type":"Text","props":{"color":"inactive"},"children":["   [docs]"]}
         ]
       },
       {
@@ -1056,13 +1056,13 @@ export const BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {"key":"T-401","label":"T-401 ▶ 2m       Show the plugin version in the board title and the band above th…  worker","plain":true},
+        "props": {"key":"T-401","label":"T-401 ▶ 2m       Show the plugin version in the board title and the band above th…  [docs]","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-401"]},
           {"type":"Text","props":{"color":"ide"},"children":[" ▶ 2m       "]},
           {"type":"Text","props":{"bold":false,"color":"text"},"children":["Show the plugin version in the board title and the band above th…"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  worker"]}
+          {"type":"Text","props":{"color":"inactive"},"children":["  [docs]"]}
         ]
       },
       {
@@ -2565,13 +2565,13 @@ export const BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {"key":"T-401","label":"T-401 ▶ 2m       Show the plugin version…   worker","plain":true},
+        "props": {"key":"T-401","label":"T-401 ▶ 2m       Show the plugin version…   [docs]","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-401"]},
           {"type":"Text","props":{"color":"ide"},"children":[" ▶ 2m       "]},
           {"type":"Text","props":{"bold":false,"color":"text"},"children":["Show the plugin version…"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["   worker"]}
+          {"type":"Text","props":{"color":"inactive"},"children":["   [docs]"]}
         ]
       },
       {
@@ -2875,13 +2875,13 @@ export const BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {"key":"T-401","label":"T-401 ▶ 2m       Show the plugin version in the board title and the band above th…  worker","plain":true},
+        "props": {"key":"T-401","label":"T-401 ▶ 2m       Show the plugin version in the board title and the band above th…  [docs]","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-401"]},
           {"type":"Text","props":{"color":"ide"},"children":[" ▶ 2m       "]},
           {"type":"Text","props":{"bold":false,"color":"text"},"children":["Show the plugin version in the board title and the band above th…"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  worker"]}
+          {"type":"Text","props":{"color":"inactive"},"children":["  [docs]"]}
         ]
       },
       {
