@@ -1017,7 +1017,7 @@ It is on every board: the terminal, desktop and mobile, VS Code (the same lines 
 monospaced font) and OpenCode. The git facts are read in the background when the page opens
 and about every 30 seconds after, never while the page is drawn, so the page does not wait for
 git; a page opened right away may show the section a moment later. OpenCode's board has it for
-the tasks with a branch that are not done and the 5 latest merged ones.
+the open tasks with a branch, the 5 latest merged ones and the 5 latest dropped ones.
 
 ### Live tab
 

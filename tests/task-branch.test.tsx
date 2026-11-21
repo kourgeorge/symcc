@@ -102,6 +102,11 @@ test('T-761: the app reads a task\'s branch with read-only git: its commits and 
   expect(taskBranchFacts(f.host, todo as never, 'main', T0)).toEqual({ facts: undefined })
   expect(calls.length).toBe(before)
   expect(viewBranchTasks(taskBranchTasks(T0) as never[]).map((t: { id: string }) => t.id)).toEqual(['T-733', 'T-735', 'T-734'])
+  // a dropped task keeps its branch, so OpenCode's page reads it too (drawn dim)
+  expect(viewBranchTasks([{ id: 'T-1', status: 'dropped', branch: 'symcc/T-1' }, { id: 'T-2', status: 'failed', branch: 'symcc/T-2' }] as never[]).map((t: { id: string }) => t.id)).toEqual(['T-2', 'T-1'])
+  // only the latest few dropped ones, as they pile up
+  const drops = Array.from({ length: 8 }, (_, i) => ({ id: `T-${i + 10}`, status: 'dropped', branch: `symcc/T-${i + 10}`, updated_at: new Date(T0 - (8 - i) * 60_000).toISOString() }))
+  expect(viewBranchTasks(drops as never[]).map((t: { id: string }) => t.id)).toEqual(['T-17', 'T-16', 'T-15', 'T-14', 'T-13'])
   // kept ~30 s: the page gets the last facts at once, and a stale read starts in the background and tells the page
   let told = 0
   const first = taskBranchFacts(f.host, doing as never, 'main', T0, () => told++)

@@ -105,7 +105,7 @@ export function branchFacts(host: Host, b: Pick<Board, 'tasks'>, into: string, n
 // the open tasks with a branch and the latest merged ones and puts them in the view (`task_branches`), as OpenCode's
 // panel can only draw what the view file holds; Claude Code's task page asks for the task it shows.
 
-/** How many of the latest merged tasks publish() reads the branch of. */
+/** How many of the latest merged (and of the latest dropped) tasks publish() reads the branch of. */
 export const TASK_BRANCH_MERGED = 5
 
 /** The last facts read per task (`key`: what they were read for), and the reads running now with who waits for them. */
@@ -244,14 +244,16 @@ export function taskBranchFacts(host: Host, t: Pick<SymccTask, 'id' | 'status' |
   return { facts, done }
 }
 
-/** The tasks publish() reads the branch of: the open ones with a branch, and the TASK_BRANCH_MERGED latest merged. */
+/** The tasks publish() reads the branch of: the open ones with a branch, and the TASK_BRANCH_MERGED latest merged and
+ *  latest dropped ones (a dropped task keeps its branch, drawn dim; capped since they pile up). */
 export function viewBranchTasks<T extends Pick<SymccTask, 'id' | 'status' | 'branch' | 'merged' | 'updated_at'>>(tasks: readonly T[]): T[] {
   const open = tasks.filter(t => t.status !== 'done' && t.status !== 'dropped' && hasTaskBranch(t))
-  const merged = tasks
-    .filter(t => t.status === 'done' && hasTaskBranch(t))
-    .sort((a, b) => (Date.parse(b.updated_at ?? '') || 0) - (Date.parse(a.updated_at ?? '') || 0))
-    .slice(0, TASK_BRANCH_MERGED)
-  return [...open, ...merged]
+  const latest = (status: string) =>
+    tasks
+      .filter(t => t.status === status && hasTaskBranch(t))
+      .sort((a, b) => (Date.parse(b.updated_at ?? '') || 0) - (Date.parse(a.updated_at ?? '') || 0))
+      .slice(0, TASK_BRANCH_MERGED)
+  return [...open, ...latest('done'), ...latest('dropped')]
 }
 
 /** The branch facts for the view (`task_branches`, by task id): the last ones read for viewBranchTasks; a read that
