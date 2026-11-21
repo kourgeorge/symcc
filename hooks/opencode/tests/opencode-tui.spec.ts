@@ -8,7 +8,7 @@
 // OpenTUI (T-500): opencode/tui.ts imports them by their written-out names (what OpenCode swaps for its own copies),
 // and loadTuiRuntime names a package that is missing or lacks a function instead of failing with a bare import error.
 import { test, expect } from 'bun:test'
-import { LIVE_TABS, tabRow as coreTabRow, roleKeys, rolesKeys, kindsKeys, scoutHowTo, LIVE_EMPTY, liveLegend, liveBarLegend, liveLanes, liveLayout, liveStations, liveHeader, liveLabelLine, laneLines, segText, liveTrains, trainRows, nextUpLine, liveToday, todayLines, modeLabel, modeButton, promptsOfRole, ROLE_SLOT, SETTING_GROUPS, groupSummaryParts, taskActions, actionButtonLabel, settingsKeys, mergeRoles, mergeKinds, when, addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, showsHeader, roleTools, roleNameError, leadScoutNameError, type BoardPage, type Board } from '../../board'
+import { LIVE_TABS, tabRow as coreTabRow, roleKeys, rolesKeys, kindsKeys, scoutHowTo, LIVE_EMPTY, liveLegend, liveBarLegend, liveLanes, liveLayout, liveStations, liveHeader, liveLabelLine, laneLines, segText, liveTrains, trainRows, liveToday, todayLines, modeLabel, modeButton, promptsOfRole, ROLE_SLOT, SETTING_GROUPS, groupSummaryParts, taskActions, actionButtonLabel, settingsKeys, mergeRoles, mergeKinds, when, addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, showsHeader, roleTools, roleNameError, leadScoutNameError, type BoardPage, type Board } from '../../board'
 import type { PaneView } from '../../app/state'
 import type { SymccTask } from '../../../types'
 import { ICON } from '../../name'
@@ -2636,7 +2636,7 @@ function liveTasks(): SymccTask[] {
   ]
 }
 
-test('T-692: the Live tab draws the terminal panel\'s lanes, next up and today (core/live.ts) for the same board, from the slim view file; a narrow panel cuts nothing', () => {
+test('T-692: the Live tab draws the terminal panel\'s lanes and today (core/live.ts) for the same board, from the slim view file; a narrow panel cuts nothing', () => {
   const f0 = viewFile()
   const whole = liveTasks()
   const view = { ...f0.view, tasks: whole, checker: true, max_parallel: 3 }
@@ -2648,7 +2648,7 @@ test('T-692: the Live tab draws the terminal panel\'s lanes, next up and today (
     const layout = liveLayout(lanes, liveStations(true), inner)
     const frame = Math.floor(NOW / 1000)
     const under = (x: string) => LIVE_INDENT + x
-    return [liveHeader(view, lanes), '▍Tasks', under(liveLabelLine(layout)), ...lanes.flatMap(l => laneLines(l, layout, { nowMs: NOW, frame }).map(x => under(segText(x)))), '▍Today', under(nextUpLine(liveTrains(view, NOW, lanes), inner)), ...todayLines(liveToday(whole, NOW), inner).map(under), ...liveLegend(lanes, inner).map(under)]
+    return [liveHeader(view, lanes), '▍Tasks', under(liveLabelLine(layout)), ...lanes.flatMap(l => laneLines(l, layout, { nowMs: NOW, frame }).map(x => under(segText(x)))), '▍Today', ...todayLines(liveToday(whole, NOW), inner).map(under), ...liveLegend(lanes, inner).map(under)]
   }
   // OpenCode reads the view file, whose done task comes slim (no history): the today row must still match
   const f: ViewFile = { ...f0, view: { ...view, tasks: whole.map(t => viewTask(t)) } }
@@ -2765,7 +2765,10 @@ test('T-692: in the TUI, l (or a click on the Live tab) shows the Live tab; ↓ 
   const up = { type: 'up', button: 0, stopPropagation: () => undefined }
   await board.press('l', 's')
   expect(board.state().tab).toBe('live')
-  expect(rowEls(panel).some(r => r.text.includes('next up  T-620'))).toBe(true)
+  // T-758: ▍Today holds only the figures line (no "next up", no "today" label)
+  const liveRows = rowEls(panel).map(r => r.text)
+  expect(liveRows.some(r => r.includes('next up'))).toBe(false)
+  expect(liveRows[liveRows.findIndex(r => r.trim() === '▍Today') + 1]?.trimStart().startsWith('✓ ')).toBe(true)
   await board.press('down', 's')
   await board.press('open', 's')
   expect([board.state().tab, board.state().opened]).toEqual(['tasks', 'T-612'])
@@ -2819,7 +2822,7 @@ const trainTasks = (): SymccTask[] => {
   ]
 }
 
-test('T-715: the Live tab hangs the waiting trains under their lanes as the terminal panel does (core\'s trainRows), nothing wider than the panel; next up holds only the free and the stuck', () => {
+test('T-715: the Live tab hangs the waiting trains under their lanes as the terminal panel does (core\'s trainRows), nothing wider than the panel; no next up line (T-758)', () => {
   const f0 = viewFile()
   const whole = trainTasks()
   const view = { ...f0.view, tasks: whole, checker: true, max_parallel: 3 }
@@ -2838,11 +2841,9 @@ test('T-715: the Live tab hangs the waiting trains under their lanes as the term
     // the cursor stops: each lane, then its trains; a click on a train opens it
     expect(d.ids).toEqual([...lanes.flatMap(l => [l.id, ...trainRows(t.lanes[l.id]!, liveInner(w)).flatMap(r => (r.id ? [r.id] : []))])])
     expect(d.hits[d.lines.findIndex(l => lineText(l).includes('└─◇ T-714'))]).toEqual({ open: 'T-714' })
-    const next = texts.find(x => x.startsWith(`${LIVE_INDENT}next up`))!
-    expect(next).toBe(LIVE_INDENT + nextUpLine(t, liveInner(w)))
-    expect(next.includes('T-713')).toBe(false)
+    expect(texts.some(x => x.includes('next up'))).toBe(false)
+    expect(texts[texts.findIndex(x => x.trim() === '▍Today') + 1]?.startsWith(`${LIVE_INDENT}✓ `)).toBe(true)
   }
-  expect(nextUpLine(liveTrains(view, NOW), 120)).toBe('next up  T-715 Free to sta… · T-718 Waits for t… (waits T-701, failed) · 1 more')
 })
 
 test('T-715: in the TUI, ↓ to a train and Enter (or a click on it) opens that task; b returns to the Live tab on it', async () => {

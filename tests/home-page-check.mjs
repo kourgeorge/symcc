@@ -48,6 +48,12 @@ if (chat.includes('❯ 2')) bad('still frame: the chat shows "❯ 2"; the owner 
 for (const w of ['agents 1/3 busy', '✓ 56 merged', '↺ 47 sent back', '✗ 0 failed', 'Σ 268.6M tokens', '39c7f96'])
   if (!board.includes(w)) bad(`still frame: the board has no "${w}" (the real board)`)
 const live = text(view('live'))
+// (T-758) ▍Today holds only the figures line: no "next up" line and no "today" label
+for (const [name, t] of [['board', board], ['Live tab', live]]) {
+  const after = t.slice(t.indexOf('▍Today') + '▍Today'.length).split('\n').map(l => l.trim()).filter(Boolean)
+  if (!after[0]?.startsWith('✓ ')) bad(`still frame: the ${name}'s ▍Today does not start with the figures line ("${after[0] ?? ''}")`)
+  if (/next up {2}|today {4}/.test(t)) bad(`still frame: the ${name} still shows a "next up" or "today" label in ▍Today`)
+}
 // (T-754) the Live tab's sections come in the real order: ▍Tasks, ▍Today, ▍Branches, ▍Organizational memory
 const order = ['▍Tasks', '▍Today', '▍Branches', '▍Organizational memory']
 for (const [name, t] of [['board', board], ['Live tab', live]]) {

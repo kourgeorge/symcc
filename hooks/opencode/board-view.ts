@@ -5,7 +5,7 @@
 // rowExtra, fitRow), the banner (bannerLines) and a task's page sections (taskSections, T-580). Nothing here draws or reads a file, so
 // the tests check exactly what the TUI shows (hooks/opencode/tests/opencode-tui.spec.ts). The panel's actions go back
 // to the engine as symcc's slash commands (actionCommand), run in the TUI's session (R6 of T-468). Like the Claude Code
-// board it has four tabs (T-559, T-692): Tasks, Live (core/live.ts's lanes, next up and today), Scouts (the list, a scout's page with its runs, a run's report) and
+// board it has four tabs (T-559, T-692): Tasks, Live (core/live.ts's lanes and today), Scouts (the list, a scout's page with its runs, a run's report) and
 // Settings (every setting in its group, with its value and default; the groups open and close as on the Claude Code
 // board, T-585). Like it, Settings opens the Roles and Kinds
 // pages (a list, then one role's or kind's page: turn it off or on, reset it to the built-in one, T-562) and a
@@ -31,7 +31,7 @@ import {
   type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction, type DefEditField, type TaskVerb, settingsKeys, rolesKeys, kindsKeys, roleEditKeys, defEditFields, roleTools, roleFileText, roleSkipReason, kindFileText, kindSkipReason,
   DEFAULT_ROLE, isCheckerRole, ALWAYS_ON_KINDS, checkerOn, roleNameError, kindNameError, leadScoutNameError, checkStepNow, rowEndText, taskPhase, choiceLines, driveWarning,
   searchTasks, showsHeader, type BoardPage,
-  LIVE_TABS, LIVE_EMPTY, LIVE_INDENT, liveLegend, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, liveBold, liveHeading, liveIndented, liveInner, tabRow, LIVE_VIEW_KEYS, liveKeys, liveBranches, liveLanes, liveLayout, liveStations, liveHeader, liveLabelLine, laneLines, liveOrgMem, liveTrains, trainRows, nextUpLine, liveToday, todayLines, searchLine, modeButton, hintLines, roleKeys, rolePromptKeys, ROLE_PROMPTS, ROLE_SLOT, promptsOfRole, type RolePromptKind,
+  LIVE_TABS, LIVE_EMPTY, LIVE_INDENT, liveLegend, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, liveBold, liveHeading, liveIndented, liveInner, tabRow, LIVE_VIEW_KEYS, liveKeys, liveBranches, liveLanes, liveLayout, liveStations, liveHeader, liveLabelLine, laneLines, liveOrgMem, liveTrains, trainRows, liveToday, todayLines, searchLine, modeButton, hintLines, roleKeys, rolePromptKeys, ROLE_PROMPTS, ROLE_SLOT, promptsOfRole, type RolePromptKind,
 } from '../board'
 import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, brokenLabel, defNamed } from '../core/def-files'
 import { restFrame } from '../core/logo'
@@ -804,7 +804,7 @@ export const LIVE_BLINK_MS = 1000
 
 /**
  * The Live tab (T-692), as the terminal panel's (T-690), all made by core/live.ts: the mode and busy agents, the
- * station names, two lines per task in doing (a click on its first line, or Enter on it, opens the task), next up,
+ * station names, two lines per task in doing (a click on its first line, or Enter on it, opens the task),
  * today's numbers, the legend and (T-718) the Organizational memory section; "No task is running right now." when none is in doing. The cursor goes over the
  * lanes; its lane's first column shows "›". The current station blinks with the clock (one step per LIVE_BLINK_MS).
  * T-715: under each lane hang its waiting trains (core's liveTrains and trainRows); the cursor goes over them too, and
@@ -853,7 +853,6 @@ function liveBody(f: ViewFile, cursor: number, nowMs: number, w: number): Body {
   // T-738: one empty line above each section after the first (Today, Branches, Organizational memory)
   b.blank()
   b.add(liveSegs(liveHeading(LIVE_SECTIONS.today, w)))
-  b.add([{ text: LIVE_INDENT + nextUpLine(trains, inner), color: 'text' }])
   for (const t of todayLines(liveToday(v.tasks, nowMs), inner)) b.add([{ text: LIVE_INDENT + t, color: 'text' }])
   if (lanes.length) for (const x of liveLegend(lanes, inner)) b.add([{ text: LIVE_INDENT + x, color: 'inactive' }])
   if (br) {

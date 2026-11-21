@@ -500,26 +500,6 @@ function trainLine(x: LiveTrain, depth: number, width: number): LiveSeg[] {
   return [{ text: fitText(lead + x.id, width), tone: 'dim' }]
 }
 
-/**
- * The "next up" line in `width` columns: "next up  T-690 Live tab… · T-692 Help pa… (waits T-601, failed) · 2 more";
- * the tasks free to start and the stuck ones (see liveTrains) in start order, as many as fit (at most 3) with titles
- * cut to 12, else to 6, else with no titles, then how many more todo tasks are not shown (trains aside);
- * "nothing in todo" when there is no todo task, "nothing free to start" when all of them wait.
- */
-export function nextUpLine(t: Pick<LiveTrains, 'next' | 'more' | 'hung'>, width: number): string {
-  const head = 'next up  '
-  const items = t.next
-  if (!items.length) return t.more + t.hung ? fitText(`${head}nothing free to start${t.more ? ` · ${t.more} more` : ''}`, width) : `${head}nothing in todo`
-  const one = (x: NextUp, w: number) => `${x.id}${w ? ` ${cutTitle(x.title, w)}` : ''}${x.stuck.length ? ` (waits ${x.stuck.map(s => `${s.id}, ${s.status}`).join('; ')})` : ''}`
-  const line = (n: number, w: number) => {
-    const more = items.length - n + t.more
-    return head + [...items.slice(0, n).map(x => one(x, w)), ...(more ? [`${more} more`] : [])].join(' · ')
-  }
-  for (const w of [12, 6]) for (let n = Math.min(3, items.length); n >= 1; n--) if (textWidth(line(n, w)) <= width) return line(n, w)
-  for (let n = Math.min(3, items.length); n >= 1; n--) if (textWidth(line(n, 0)) <= width) return line(n, 0)
-  return fitText(line(1, 0), width)
-}
-
 /** Today's numbers: tasks merged, checker send-backs, tasks failed, and the worker tries' tokens. */
 export type LiveToday = { merged: number; sentBack: number; failed: number; tokens: number }
 
@@ -560,25 +540,24 @@ export function todayCost(tasks: readonly Pick<SymccTask, 'runs'>[], nowMs: numb
   return usd
 }
 
-/** The "today" lines in `width` columns: "today    ✓ 6 merged   ↺ 9 sent back   ✗ 1 failed   Σ 18.4M tokens", on more lines (never cut) when narrow. */
+/** The ▍Today figures in `width` columns: "✓ 6 merged   ↺ 9 sent back   ✗ 1 failed   Σ 18.4M tokens", on more lines (never cut) when narrow. */
 export function todayLines(d: LiveToday, width: number): string[] {
-  const head = 'today    '
   const parts = [`✓ ${d.merged} merged`, `↺ ${d.sentBack} sent back`, `✗ ${d.failed} failed`, `Σ ${fmtTokens(d.tokens)} tokens`]
   for (const gap of ['   ', '  ', ' ']) {
-    const one = head + parts.join(gap)
+    const one = parts.join(gap)
     if (textWidth(one) <= width) return [one]
   }
   const out: string[] = []
   let cur = ''
   for (const p of parts) {
     const next = cur ? `${cur}  ${p}` : p
-    if (cur && textWidth(head + next) > width) {
+    if (cur && textWidth(next) > width) {
       out.push(cur)
       cur = p
     } else cur = next
   }
   out.push(cur)
-  return out.map((x, i) => (i ? ' '.repeat(head.length) : head) + x)
+  return out
 }
 
 // ---------------- T-718: the Organizational memory section at the bottom of the Live tab ----------------

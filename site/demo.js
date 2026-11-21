@@ -49,7 +49,6 @@
       lanes: [
         { id: 'T-740', kind: 'bug', at: 0, since: at(16, 28), tryNo: 1, tries: 3, tokens: null, back: 0, agent: true },
       ],
-      next: [],
       today: { merged: END_TODAY.merged - 1, back: END_TODAY.back - 1, failed: END_TODAY.failed, tokens: END_TODAY.tokens - T747_TOKENS - T740_TRY1_TOKENS },
       head: '50ab5a9',
       commits: 3,
@@ -131,10 +130,8 @@
     } else L.push('   No task is running right now.')
     L.push('')
     L.push(heading('Today'))
-    const next = s.next.length ? s.next.map(id => `${id} ${cut(TITLES[id], 12)}`).join(' · ') : 'nothing in todo'
-    L.push('   ' + sp('next up  ', 'dim') + sp(next, 'text'))
     const d = s.today
-    L.push('   ' + sp('today    ', 'dim') + sp(`✓ ${d.merged} merged`, 'passed') + sp(`   ↺ ${d.back} sent back   ✗ ${d.failed} failed   Σ ${tok(d.tokens)} tokens`, 'dim'))
+    L.push('   ' + sp(`✓ ${d.merged} merged`, 'passed') + sp(`   ↺ ${d.back} sent back   ✗ ${d.failed} failed   Σ ${tok(d.tokens)} tokens`, 'dim'))
     if (s.lanes.length) L.push('   ' + sp(`· = needs an agent slot   bar: tokens of the task so far, full = usual per task (${tok(USUAL)})`, 'dim'))
     L.push('')
     L.push(heading('Branches'))
@@ -267,7 +264,6 @@
     [2400, at(16, 44, 0), s => {
       say(s, { k: 'event', mark: '◇', tone: 'id', text: `scout gaps-bot found: ${SCOUT_FOUND}` })
       say(s, { k: 'lead', lines: [esc('A scout found a gap in the stats. I added it as T-736 (bug); it starts when an agent slot is free.')] })
-      s.next = ['T-736']
       s.t736 = 'todo'
     }],
     // main moves on: the version bump (1f8cdb8)
