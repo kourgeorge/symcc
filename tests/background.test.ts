@@ -34,3 +34,14 @@ test('T-724: stopBackground stops only the agent\'s own commands still running a
   expect(await stopBackground('a1')).toBe(0)
   expect(stopped).toEqual(['B1'])
 })
+
+test('T-724: a TaskStop that is refused or reports an error is not counted as stopped', async () => {
+  const answers: unknown[] = [{ deny: 'refused' }, { result: 'No task found', isError: true }, { result: 'stopped' }]
+  useTaskStop(async () => answers.shift())
+  for (const id of ['B1', 'B2', 'B3']) {
+    noteBackground('a1', { tool: 'Bash', command: `cmd ${id}`, run_in_background: true }, { result: { backgroundTaskId: id } })
+  }
+  stopSeen('a1', ['B1', 'B2', 'B3'].map(id => ({ id, type: 'shell', command: `cmd ${id}` })))
+  expect(takeBackground('a1')).toEqual(['cmd B1', 'cmd B2', 'cmd B3'])
+  expect(await stopBackground('a1')).toBe(1)
+})

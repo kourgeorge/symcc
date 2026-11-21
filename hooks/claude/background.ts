@@ -82,7 +82,10 @@ export async function stopBackground(agentId: string): Promise<number> {
   let stopped = 0
   for (const id of ids) {
     try {
-      await stop(id)
+      // the host's tool call does not throw when it fails: a refusal answers { deny }, a tool error { isError: true }
+      const res = await stop(id)
+      const r = res && typeof res === 'object' ? (res as { deny?: unknown; isError?: unknown }) : undefined
+      if (r && (r.deny || r.isError === true)) continue
       stopped++
     } catch {
       // already ended, or it can't be stopped: not counted
