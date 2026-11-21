@@ -15,10 +15,10 @@
 // T-727: under the lanes, the Branches section (core's liveBranches) drawn with real lines: see branchesVs.
 // T-747: each section has a bold heading with the terminal's names (core's LIVE_SECTIONS): Tasks, Today, Branches,
 // Organizational memory (that one a link to all notes).
-import { type BranchRow, type LiveBranches, liveBranches, LIVE_EMPTY, LIVE_AGENT_MARK, LIVE_RUN_MARK, liveLegend, LIVE_SECTIONS, type LiveLane, liveInner, type LiveLayout, type LiveSeg, LIVE_TONE, laneLines, liveHeader, liveHeaderSegs, liveTaskLanes, liveLayout, liveOrgMem, liveStations, liveTodayLines, liveTrains, segText, trainRows } from '../../core/live'
+import { type BranchRow, type LiveBranches, liveBranches, LIVE_EMPTY, LIVE_AGENT_MARK, LIVE_RUN_MARK, liveLegend, LIVE_SECTIONS, type LiveLane, liveInner, type LiveLayout, type LiveSeg, LIVE_TONE, laneLines, liveHeader, liveHeaderSegs, liveNeeds, liveTaskLanes, liveLayout, liveOrgMem, liveStations, liveTodayLines, liveTrains, segText, trainRows } from '../../core/live'
 import { panelValues, type $ } from '../panel'
 import type { PaneParts } from './parts'
-import { LIVE_TICK_MS, branchKey, laneKey, liveTick, newestKey, openOrgMemPage, topicKey, trainKey } from './live'
+import { LIVE_TICK_MS, branchKey, needKey, laneKey, liveTick, newestKey, openOrgMemPage, topicKey, trainKey } from './live'
 import { mdLink, vsFooter, vsHref, vsLink } from './vscode'
 import { ORG_MEM_MAX_LINES, orgMemCount, orgMemShortDay, type OrgMemNote } from '../../core/org-mem'
 
@@ -165,6 +165,20 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
     </Box>
   )
   const headSegs = liveHeaderSegs(v, running, nowMs, width)
+  // T-786: ▍Needs you rows: the warning mark and text, the id a link that opens the task or question
+  const needs = liveNeeds(v, nowMs, Infinity)
+  const needRows = needs.map(n => {
+    const text = segText(n.segs)
+    const rest = text.slice(text.indexOf(n.id) + n.id.length).trim()
+    const href = vsHref('task', n.id)
+    return (
+      <Box key={`live-need-row:${n.id}`} flexDirection="row" gap={1}>
+        {line(`live-need-mark:${n.id}`, '⚠', LIVE_TONE.warning)}
+        {vsLink(vs, needKey(n.id), mdLink(n.id, href), [[href, open(n.id)]])}
+        {line(`live-need-text:${n.id}`, rest, LIVE_TONE.warning)}
+      </Box>
+    )
+  })
   const isTrack = (s: LiveSeg) => s.tone === 'passed' || s.tone === 'current' || s.tone === 'future'
   const laneRows = lanes.map(lane => {
     // the terminal's two lines (steady: the drawing blinks by itself), drawn in pieces
@@ -237,6 +251,12 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
       ) : (
         line('live-head', liveHeader(v, running), 'text', true)
       )}
+      {needs.length ? (
+        <Box key="live-needs" flexDirection="column">
+          {line('live-needs-head', LIVE_SECTIONS.needs, 'text', true)}
+          {needRows}
+        </Box>
+      ) : null}
       <Box key="live-tasks" flexDirection="column">
         {line('live-tasks-head', LIVE_SECTIONS.tasks, 'text', true)}
         {running.length ? null : line('live-empty', LIVE_EMPTY, 'inactive')}

@@ -1059,18 +1059,31 @@ the open tasks with a branch, the 5 latest merged ones and the 5 latest dropped 
 ### Live tab
 
 The Live tab (`l`) shows the tasks that run now as "railway lanes", one lane per task the board counts as running (a task in doing, or an approved or files-cleared task while its tests and merge run).
-Under the mode line it has four sections, each starting with a heading like the task page's
-`▍Details`: `▍Tasks` (the lanes), `▍Today` (today's numbers), `▍Branches` and
+Under the mode line it has up to five sections, each starting with a heading like the task page's
+`▍Details`: `▍Needs you` (only while something waits), `▍Tasks` (the lanes), `▍Today` (today's numbers), `▍Branches` and
 `▍Organizational memory`, with one empty line between them and the lines under each heading
 indented by 1 space (VS Code shows the same names as bold headings):
 
 ```
+▍Needs you
+ ⚠ Q-88  Which figures should go on ▍Today's 4th line?
+ ⚠ T-749 ready for review: Website home page: a live, played-out demo…
+ ⚠ T-751 asks: Claude Code only lets a button key be one letter…
+ ⚠ T-751 has run 45 min: more time?
+
 ▍Tasks
                        work✧    check✧   queue    tests    merged
  ▶ T-684 /symcc-doc…   ●━━━━━━━━●━━━━━━━━◉────────○────────○      #2
    change try 2/3      ▕████████░░░░░▏ 1.1M  ↺×1
 ```
 
+- `▍Needs you` is the first section, shown only while something waits for you, and hidden (no
+  heading, no empty line) otherwise. One row each, in the warning color: the open board questions
+  (`Q-n` and their text), then the tasks that wait for you (a worker's question, a file request,
+  more time), the tasks ready for review and the answered investigations to read. It is the same
+  list as the band above the prompt and the board's NEEDS YOU. Enter (or a click) on a row opens
+  that task's page or the question; the rows are the first stops of the arrow keys. Rows are cut
+  to fit the panel.
 - Lanes are in the order the tasks started their current try, so a new one joins at the bottom
   and the lanes don't jump around. Each starts with `▶ `, then the task id and its title (cut
   with `…`, wider on a wider panel). The `▶ ` and the id are bold in the accent color and the

@@ -773,6 +773,9 @@ test('T-751: [ and ] (and a click on ‹ or › in the header) go to the previou
   expect(board.state().opened).toBe(names[0])
   // from the Live tab: "‹ [Live]"; T-1 is its only running task, so no place to go to
   await board.press('l', 's')
+  // T-786: the two ▍Needs you rows (T-3 waiting, T-2 in review) come first
+  await board.press('down', 's')
+  await board.press('down', 's')
   await board.press('open', 's')
   expect([board.state().tab, board.state().opened]).toEqual(['tasks', 'T-1'])
   const live = panelLines(f, { opened: 'T-1', cursor: 0, from: 'live' }, NOW, 100)
@@ -2776,8 +2779,8 @@ test('T-692: the Live tab draws the terminal panel\'s lanes and today (core/live
       at = i
     }
     for (const t of texts) expect([w, t, t.length <= w]).toEqual([w, t, true])
-    expect(d.ids).toEqual(['T-611', 'T-612', 'T-610'])
-    expect(texts.some(t => t.startsWith('›▶ T-611'))).toBe(true)
+    expect(d.ids).toEqual(['T-601', 'T-611', 'T-612', 'T-610'])
+    expect(texts.some(t => t.startsWith('▶ T-611') || t.includes('▶ T-611'))).toBe(true)
     // each lane's first line is a click on its task
     const lane = d.lines.findIndex((l, i) => lineText(l).includes('T-612') && !!d.hits[i])
     expect(d.hits[lane]).toEqual({ open: 'T-612' })
@@ -2838,7 +2841,7 @@ test('T-709: the Live tab shows a lane for an approved task in review while its 
   const d = panelLines(parseViewFile(viewFileText(f)), { tab: 'live', opened: '', cursor: 0 }, NOW, 120)
   const texts = d.lines.map(lineText)
   expect(texts.includes(LIVE_INDENT + LIVE_EMPTY)).toBe(false)
-  expect(d.ids).toEqual(['T-630'])
+  expect(d.ids).toEqual(['T-601', 'T-630'])
   const lane = liveLanes({ ...f.view, tasks }, NOW)
   expect(lane.map(l => l.station)).toEqual(['tests'])
   // its check step gone stale: no lane, the empty state again
@@ -2876,11 +2879,12 @@ test('T-692: in the TUI, l (or a click on the Live tab) shows the Live tab; ↓ 
   expect(liveRows.some(r => r.includes('next up'))).toBe(false)
   expect(liveRows[liveRows.findIndex(r => r.trim() === '▍Today') + 1]?.trimStart().startsWith('✓ ')).toBe(true)
   await board.press('down', 's')
+  await board.press('down', 's')
   await board.press('open', 's')
   expect([board.state().tab, board.state().opened]).toEqual(['tasks', 'T-612'])
   // T-700: b goes back to the Live tab it was opened from, on its lane (as on the terminal panel and VS Code)
   await board.press('back', 's')
-  expect([board.state().tab, board.state().opened, board.state().cursor]).toEqual(['live', '', 1])
+  expect([board.state().tab, board.state().opened, board.state().cursor]).toEqual(['live', '', 2])
   // its page's Back button does the same
   await board.press('open', 's')
   expect([board.state().tab, board.state().opened]).toEqual(['tasks', 'T-612'])
@@ -2945,7 +2949,7 @@ test('T-715: the Live tab hangs the waiting trains under their lanes as the term
     const at = texts.findIndex(x => x.startsWith(`${LIVE_INDENT}▶ T-712 `))
     expect([w, texts.slice(at + 2, at + 2 + rows.length)]).toEqual([w, rows.map(r => LIVE_INDENT + segText(r.segs))])
     // the cursor stops: each lane, then its trains; a click on a train opens it
-    expect(d.ids).toEqual([...lanes.flatMap(l => [l.id, ...trainRows(t.lanes[l.id]!, liveInner(w)).flatMap(r => (r.id ? [r.id] : []))])])
+    expect(d.ids).toEqual(['T-701', ...lanes.flatMap(l => [l.id, ...trainRows(t.lanes[l.id]!, liveInner(w)).flatMap(r => (r.id ? [r.id] : []))])])
     expect(d.hits[d.lines.findIndex(l => lineText(l).includes('└─◇ T-714'))]).toEqual({ open: 'T-714' })
     expect(texts.some(x => x.includes('next up'))).toBe(false)
     expect(texts[texts.findIndex(x => x.trim() === '▍Today') + 1]?.startsWith(`${LIVE_INDENT}✓ `)).toBe(true)
@@ -3037,8 +3041,8 @@ test('T-771: the OpenCode Live tab keeps up to 3 just-merged lanes (dim, ✓ at 
     const d = panelLines(parseViewFile(viewFileText(f)), { tab: 'live', opened: '', cursor: 0 }, NOW, w)
     const texts = d.lines.map(lineText).map(x => x.replace(/^›/, ' '))
     for (const x of texts) expect([w, x, x.length <= w]).toEqual([w, x, true])
-    expect(d.ids.slice(0, 4)).toEqual(['T-760', 'T-748', 'T-747', 'T-749'])
-    expect(d.ids.includes('T-750') || d.ids.includes('T-740') || d.ids.includes('T-741') || d.ids.includes('T-742')).toBe(false)
+    expect(d.ids.slice(0, 5)).toEqual(['T-741', 'T-760', 'T-748', 'T-747', 'T-749'])
+    expect(d.ids.includes('T-750') || d.ids.includes('T-740') || d.ids.slice(1).includes('T-741') || d.ids.includes('T-742')).toBe(false)
     const at = texts.findIndex(x => x.startsWith(`${LIVE_INDENT}  T-747 `))
     expect(at > texts.findIndex(x => x.startsWith(`${LIVE_INDENT}▶ T-760 `))).toBe(true)
     if (w === 120) expect(texts[at]!).toMatch(/●━+●━+●━+●━+✓ +merged 3m ago$/)
@@ -3065,6 +3069,7 @@ test('T-771: the OpenCode Live tab keeps up to 3 just-merged lanes (dim, ✓ at 
   const board = startTui(ctx, { runtime: fakeRuntime(), readText: async p => files.get(p) ?? Promise.reject(new Error('missing')), every: () => () => undefined, now: () => NOW })
   await board.refresh()
   await board.press('l', 's')
+  await board.press('down', 's')
   await board.press('down', 's')
   await board.press('down', 's')
   await board.press('open', 's')
@@ -3574,8 +3579,10 @@ test('T-727: startTui: Enter on a Branches row opens its task, b returns to the 
 // ---------------- T-738: one empty line above each Live tab section ----------------
 // T-747: each section starts with a "▍Name" heading (Tasks right under the mode line), no "── Name ──" rules left
 test('T-738, T-747: the OpenCode Live tab has a ▍heading for each section, one empty line above each, none above the first', () => {
+  // T-786: nothing waits for the owner here (▍Needs you has its own test)
+  const calm = ((f: ViewFile): ViewFile => ({ ...f, view: { ...f.view, tasks: f.view.tasks.filter(t => !['review', 'waiting', 'failed'].includes(t.status) && !(t as { time_ask?: string }).time_ask) } }))(branchesViewFile())
   for (const w of [100, 40]) {
-    const d = panelLines(branchesViewFile(), { tab: 'live', opened: '', cursor: 0 }, NOW, w)
+    const d = panelLines(calm, { tab: 'live', opened: '', cursor: 0 }, NOW, w)
     const lines = d.lines.map(lineText)
     expect(lines[0]!.trim() === '').toBe(false)
     const mode = lines.findIndex(l => l.includes('agents ') && l.includes(' busy'))
@@ -3740,4 +3747,27 @@ test('T-772: the OpenCode Live tab draws the org-mem meter at 30 / 60 and 60 / 6
     looks.push(`${count?.color} ${bar?.color}`)
   }
   expect(looks[0]).toBe(looks[1]!)
+})
+
+test('T-786: the OpenCode Live tab has ▍Needs you first (above ▍Tasks) with a warning row each for a question, a waiting and a review task; the cursor starts on them; none when nothing waits; never wider than the page', () => {
+  const f0 = viewFile()
+  const f: ViewFile = { ...f0, view: { ...f0.view, questions: [{ id: 'Q-88', text: 'Which figures should go on the Today 4th line?', options: [], asked_at: AT }] } }
+  for (const w of [120, 40]) {
+    const d = panelLines(parseViewFile(viewFileText(f)), { tab: 'live', opened: '', cursor: 0 }, NOW, w)
+    const texts = d.lines.map(lineText).map(x => x.replace(/^›/, ' '))
+    for (const x of texts) expect([w, x, x.length <= w]).toEqual([w, x, true])
+    const head = texts.indexOf('▍Needs you')
+    expect(head).toBeGreaterThan(-1)
+    expect(head).toBeLessThan(texts.indexOf('▍Tasks'))
+    const rows = texts.slice(head + 1, texts.indexOf('▍Tasks') - 1)
+    expect(rows.length).toBe(3)
+    expect(rows[0]!.startsWith(' ⚠ Q-88')).toBe(true)
+    expect(rows.some(x => x.includes('T-2') && x.includes('ready for review'))).toBe(true)
+    expect(rows.some(x => x.includes('T-3') && x.includes('asks'))).toBe(true)
+    for (const i of [1, 2, 3]) expect(d.lines[head + i]!.every(x => x.color === 'warning' || x.text === '›' || x.text.trim() === '')).toBe(true)
+    expect(d.ids[0]).toBe('Q-88')
+    expect(d.ids.slice(1, 3).every(id => id.startsWith('T-'))).toBe(true)
+  }
+  const none = panelLines(parseViewFile(viewFileText({ ...f0, view: { ...f0.view, tasks: f0.view.tasks.filter(t => t.status === 'doing') } })), { tab: 'live', opened: '', cursor: 0 }, NOW, 100)
+  expect(none.lines.map(lineText).some(x => x.includes('Needs you'))).toBe(false)
 })

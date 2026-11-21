@@ -31,7 +31,7 @@ import {
   type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction, type DefEditField, type TaskVerb, settingsKeys, rolesKeys, kindsKeys, roleEditKeys, defEditFields, roleTools, roleFileText, roleSkipReason, kindFileText, kindSkipReason,
   DEFAULT_ROLE, isCheckerRole, ALWAYS_ON_KINDS, checkerOn, roleNameError, kindNameError, leadScoutNameError, checkStepNow, rowEndText, taskPhase, choiceLines, driveWarning,
   searchTasks, showsHeader, type BoardPage,
-  LIVE_TABS, LIVE_EMPTY, LIVE_INDENT, liveLegend, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, liveBold, liveHeading, liveIndented, liveInner, tabRow, LIVE_VIEW_KEYS, liveKeys, liveBranches, liveTaskLanes, liveLayout, liveStations, liveHeader, liveHeaderSegs, liveLabelSegs, laneLines, liveOrgMem, liveTrains, trainRows, liveTodayLines, searchLine, modeButton, hintLines, roleKeys, rolePromptKeys, ROLE_PROMPTS, ROLE_SLOT, promptsOfRole, type RolePromptKind,
+  LIVE_TABS, LIVE_EMPTY, LIVE_INDENT, liveLegend, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, liveBold, liveHeading, liveIndented, liveInner, tabRow, LIVE_VIEW_KEYS, liveKeys, liveBranches, liveTaskLanes, liveLayout, liveStations, liveHeader, liveHeaderSegs, liveLabelSegs, liveNeeds, laneLines, liveOrgMem, liveTrains, trainRows, liveTodayLines, searchLine, modeButton, hintLines, roleKeys, rolePromptKeys, ROLE_PROMPTS, ROLE_SLOT, promptsOfRole, type RolePromptKind,
 } from '../board'
 import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, brokenLabel, defNamed } from '../core/def-files'
 import { restFrame } from '../core/logo'
@@ -838,10 +838,12 @@ function liveBody(f: ViewFile, cursor: number, nowMs: number, w: number): Body {
   const frame = Math.floor(nowMs / LIVE_BLINK_MS)
   const trains = liveTrains(v, nowMs, lanes)
   const rows = new Map(lanes.map(l => [l.id, trainRows(trains.lanes[l.id] ?? [], inner)]))
+  const needs = liveNeeds(v, nowMs, inner)
   const om = liveOrgMem(orgMemIn(f), w)
   const br = liveBranches(v, nowMs, w)
   // the cursor's stops, top to bottom: each lane, then its trains; (T-727) the Branches rows; then (T-718) the newest notes and the topics
   const ids = [
+    ...needs.map(n => n.id),
     ...lanes.flatMap(l => [l.id, ...rows.get(l.id)!.flatMap(r => (r.id ? [r.id] : []))]),
     ...(br?.rows ?? []).flatMap(r => (r.id ? [liveBranchId(r.id)] : [])),
     ...om.newest.map(x => liveNoteId(x.note.n)),
@@ -850,11 +852,8 @@ function liveBody(f: ViewFile, cursor: number, nowMs: number, w: number): Body {
   const selected = ids.length ? ids[Math.min(Math.max(0, cursor), ids.length - 1)]! : ''
   // T-770: the mode line, and while scouts run their mark at its end ("⌕ gaps-bot 4m"); a click on it opens the Scouts tab
   b.add(liveHeaderSegs(v, running, nowMs, w).map((x, i) => (i === 0 ? { text: x.text, color: 'text', bold: true } : { text: x.text, color: LIVE_TONE[x.tone], hit: { tab: 'scouts' as const } })))
-  b.add(liveSegs(liveHeading(LIVE_SECTIONS.tasks, w)))
   /** A line under a section heading: indented. */
   const under = (xs: readonly LiveSeg[], hit?: PanelHit) => liveSegs(liveIndented(xs), hit)
-  if (!running.length) b.add([{ text: LIVE_INDENT + LIVE_EMPTY, color: 'inactive' }])
-  if (lanes.length) b.add(under(liveLabelSegs(layout)))
   /** A row that opens task `id`: "›" in its first column when the cursor is on it (a space there otherwise). */
   const opens = (xs: readonly LiveSeg[], id: string) => {
     const line = under(xs, { open: id })
@@ -862,6 +861,15 @@ function liveBody(f: ViewFile, cursor: number, nowMs: number, w: number): Body {
     if (id === selected && head?.text.startsWith(' ')) line.splice(0, 1, { text: '›', color: 'ide', bold: true, hit: { open: id } }, { ...head, text: head.text.slice(1) })
     b.add(line, { open: id })
   }
+  // T-786: ▍Needs you first, only while something waits
+  if (needs.length) {
+    b.add(liveSegs(liveHeading(LIVE_SECTIONS.needs, w)))
+    for (const n of needs) opens(n.segs, n.id)
+    b.blank()
+  }
+  b.add(liveSegs(liveHeading(LIVE_SECTIONS.tasks, w)))
+  if (!running.length) b.add([{ text: LIVE_INDENT + LIVE_EMPTY, color: 'inactive' }])
+  if (lanes.length) b.add(under(liveLabelSegs(layout)))
   for (const l of lanes) {
     const [first, second] = laneLines(l, layout, { nowMs, frame })
     opens(first, l.id)
