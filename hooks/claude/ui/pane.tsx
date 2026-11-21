@@ -10,6 +10,7 @@ import { taskPage } from './task-page'
 import { questionPage } from './question-page'
 import { listPageVs } from './vscode-list'
 import { livePage, stopLiveTick } from './live'
+import { livePageVs } from './vscode-live'
 
 /** The board panel: the list (each task a button), or one task with its actions; or the Scouts or Settings view. */
 export async function renderPane($: $, e: PaneEvent, next: Parameters<PaneHook>[2]) {
@@ -31,7 +32,7 @@ function page($: $, pane: PaneParts) {
   if (pane.onScouts) return scoutsPage($, pane)
   if (pane.t) return taskPage($, pane, pane.t)
   if (pane.q) return questionPage($, pane, pane.q)
-  if (pane.onLive) return livePage($, pane)
+  if (pane.onLive) return pane.vscode ? livePageVs($, pane) : livePage($, pane)
   // VS Code's side panel has its own Tasks page: readable rows, buttons, no key hints (see vscode-list.tsx)
   return pane.vscode ? listPageVs($, pane) : listPage($, pane)
 }

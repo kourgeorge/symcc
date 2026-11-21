@@ -168,7 +168,7 @@ test('in VS Code the Tasks page shows whole titles, status colors on the marks, 
   expect(all).toContain('▾ Backlog 3')
   expect(all).toContain('▾ Dropped 2')
   // tabs without key labels, the one shown bold and not a link
-  expect((await ui.find({ key: 'tabs' }))?.props.text).toBe(`**Tasks 20** \u00a0·\u00a0 ${mdLink('Scouts 1', vsHref('tab', 'scouts'))} \u00a0·\u00a0 ${mdLink('Settings', vsHref('tab', 'settings'))}`)
+  expect((await ui.find({ key: 'tabs' }))?.props.text).toBe(`**Tasks 20** \u00a0·\u00a0 ${mdLink('Live', vsHref('tab', 'live'))} \u00a0·\u00a0 ${mdLink('Scouts 1', vsHref('tab', 'scouts'))} \u00a0·\u00a0 ${mdLink('Settings', vsHref('tab', 'settings'))}`)
   // the header on readable lines: the tests line short, the mode with its meaning
   expect(await ui.find({ type: 'Text', text: 'tests: claude, typecheck' })).toBeDefined()
   expect(all.join(' ')).toMatch(/⏵ auto/)
@@ -212,8 +212,8 @@ test('in VS Code the other pages drop key marks from labels and print no key hin
   // the tabs are links: the shown one is bold and no link, the others switch the page
   await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'scouts') } })
   await check('scouts')
-  expect((await ui.find({ key: 'tabs' }))?.props.text).toBe(`${mdLink('Tasks 20', vsHref('tab', 'tasks'))} \u00a0·\u00a0 **Scouts 1** \u00a0·\u00a0 ${mdLink('Settings', vsHref('tab', 'settings'))}`)
-  expect((await ui.find({ key: 'tabs' }))?.props.pressableLinks).toEqual([vsHref('tab', 'tasks'), vsHref('tab', 'settings')])
+  expect((await ui.find({ key: 'tabs' }))?.props.text).toBe(`${mdLink('Tasks 20', vsHref('tab', 'tasks'))} \u00a0·\u00a0 ${mdLink('Live', vsHref('tab', 'live'))} \u00a0·\u00a0 **Scouts 1** \u00a0·\u00a0 ${mdLink('Settings', vsHref('tab', 'settings'))}`)
+  expect((await ui.find({ key: 'tabs' }))?.props.pressableLinks).toEqual([vsHref('tab', 'tasks'), vsHref('tab', 'live'), vsHref('tab', 'settings')])
   expect((await ui.find({ key: 'scouts-back' }))?.props.label).toBe('← Tasks')
   await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'settings') } })
   await check('settings')
@@ -272,8 +272,8 @@ test('in VS Code the header shows the logo, a short banner and a tab strip with 
     // the others links
     const tabs = await ui.find({ key: 'tabs' })
     expect(tabs?.type, at).toBe('Markdown')
-    expect(tabs?.props.text, at).toBe(`**Tasks 20** \u00a0·\u00a0 ${mdLink('Scouts 1', vsHref('tab', 'scouts'))} \u00a0·\u00a0 ${mdLink('Settings', vsHref('tab', 'settings'))}`)
-    expect(tabs?.props.pressableLinks, at).toEqual([vsHref('tab', 'scouts'), vsHref('tab', 'settings')])
+    expect(tabs?.props.text, at).toBe(`**Tasks 20** \u00a0·\u00a0 ${mdLink('Live', vsHref('tab', 'live'))} \u00a0·\u00a0 ${mdLink('Scouts 1', vsHref('tab', 'scouts'))} \u00a0·\u00a0 ${mdLink('Settings', vsHref('tab', 'settings'))}`)
+    expect(tabs?.props.pressableLinks, at).toEqual([vsHref('tab', 'live'), vsHref('tab', 'scouts'), vsHref('tab', 'settings')])
     expect(elements(await ui.find({ key: 'vs-header' })).filter(n => n.type === 'Button'), at).toEqual([])
     // nothing cut, no key hints anywhere in the header
     const head = texts(await ui.find({ key: 'vs-header' }))

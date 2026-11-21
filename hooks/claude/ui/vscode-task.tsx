@@ -409,7 +409,7 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
     <Box flexDirection="column" gap={1}>
       <Box key="vs-task-top" flexDirection="column" gap={1}>
         <Box key="vs-back-row" flexDirection="row">
-          <Button key="back" label="← Tasks" variant="secondary" autoFocus={x.answerable || typingBox ? undefined : true} onPress={on.back} />
+          <Button key="back" label={pane.onLive ? '← Live' : '← Tasks'} variant="secondary" autoFocus={x.answerable || typingBox ? undefined : true} onPress={on.back} />
         </Box>
         {head}
       </Box>

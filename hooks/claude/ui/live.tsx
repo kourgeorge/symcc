@@ -1,4 +1,5 @@
-// The board panel's Live tab (T-690) on the terminal (and desktop and mobile, which draw the terminal's board): one
+// The board panel's Live tab (T-690) on the terminal (and desktop and mobile, which draw the terminal's board; VS Code
+// has its own drawing of the same lanes, vscode-live.tsx): one
 // lane per task in doing, then what starts next and today's numbers. All of it is worked out in core/live.ts; this
 // file only draws its segments and wires the keys (↑↓ between lanes, Enter opens the task, w watches its worker).
 // Claude Code doesn't say whether the person asked for reduced motion, so the current station always blinks: it
@@ -41,15 +42,20 @@ function keepTicking($: $) {
 /** The key of a lane's row Button. */
 export const laneKey = (id: string) => `live:${id}`
 
+/** Notes a redraw of the Live tab and keeps its redraw timer going (the terminal's and VS Code's Live tab). */
+export function liveTick($: $) {
+  live.frame++
+  keepTicking($)
+}
+
 /** The Live tab. */
 export function livePage($: $, pane: PaneParts) {
   const { Box, Text, Button, v, width, C, act, banner, tabs, keyLines, nowMs } = pane
-  live.frame++
   // the blink goes by the clock, one step per tick, so extra redraws in between don't make it flicker
   const frame = Math.floor(nowMs / LIVE_TICK_MS)
   // the key line says "↑↓ move": the arrows move between the lanes (see arrows.ts)
   arrows.move = saysArrowsMove(liveKeys())
-  keepTicking($)
+  liveTick($)
   const lanes = liveLanes(v, nowMs)
   const layout = liveLayout(lanes, liveStations(v.checker === true), width)
   const tone: Record<LiveTone, string> = { id: 'claude', title: 'text', passed: 'success', current: 'ide', future: 'inactive', text: 'text', dim: 'inactive', warning: 'warning', bar: 'ide' }
