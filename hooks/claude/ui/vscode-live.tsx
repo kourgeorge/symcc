@@ -1,5 +1,5 @@
 // The board panel's Live tab in VS Code's side panel (T-691): the same lanes, next up and today as the terminal's Live
-// tab (live.tsx), all worked out in core/live.ts (liveLanes, liveLayout, laneLines, nextUp, liveToday ...); this file
+// tab (live.tsx), all worked out in core/live.ts (liveLanes, liveLayout, laneLines, liveTrains, nextUpLine, liveToday ...); this file
 // only draws them richer. Each lane is:
 //   T-684 /symcc-doctor…                 #2      (the id and cut title a link: a click, or Enter on it, opens the task)
 //   ●━━━━━●━━━━━◉─────○─────○                    (real lines and dots in an Svg, the station names under the dots)
@@ -7,10 +7,12 @@
 // The current station blinks with a CSS animation inside the Svg, and stays steady when VS Code (the person's system)
 // asks for reduced motion (`prefers-reduced-motion`). Each drawing's `alt` is the terminal's text for it.
 // T-687: at its bottom, above the footer, an "Organizational memory (n notes)" link opens the Organizational memory page.
-import { LIVE_EMPTY, LIVE_LEGEND, type LiveLane, type LiveLayout, type LiveSeg, LIVE_TONE, laneLines, liveHeader, liveLanes, liveLayout, liveStations, liveToday, nextUp, nextUpLine, segText, todayLines } from '../../core/live'
+// T-715: under each lane hang its waiting trains (core's liveTrains and trainRows): each one indented by its level,
+// "└─◇", its id and cut title a link that opens the task, then "waits" and "+ also T-n" dim.
+import { LIVE_EMPTY, LIVE_LEGEND, type LiveLane, type LiveLayout, type LiveSeg, LIVE_TONE, laneLines, liveHeader, liveLanes, liveLayout, liveStations, liveToday, liveTrains, nextUpLine, segText, todayLines, trainRows } from '../../core/live'
 import { panelValues, type $ } from '../panel'
 import type { PaneParts } from './parts'
-import { LIVE_TICK_MS, laneKey, liveTick, openOrgMemPage } from './live'
+import { LIVE_TICK_MS, laneKey, liveTick, openOrgMemPage, trainKey } from './live'
 import { mdLink, vsFooter, vsHref, vsLink } from './vscode'
 import { orgMemButtonLabel } from '../../core/org-mem'
 
@@ -67,6 +69,7 @@ export function livePageVs($: $, pane: PaneParts, notes: number) {
   const frame = Math.floor(nowMs / LIVE_TICK_MS)
   const lanes = liveLanes(v, nowMs)
   const layout = liveLayout(lanes, liveStations(v.checker === true), width)
+  const trains = liveTrains(v, nowMs, lanes)
   const open = (id: string) => act(() => panelValues($).updateOpened(() => id))
   /** A line of text in a Box of its own: VS Code keeps a Box's key (a Text's it drops), so each line can be found by it. */
   const line = (key: string, text: string, color: string, bold = false) => (
@@ -107,6 +110,20 @@ export function livePageVs($: $, pane: PaneParts, notes: number) {
             ]
           })()}
         </Box>
+        {trainRows(trains.lanes[lane.id] ?? [], width).map(r => {
+          // the terminal's row in pieces: the connector, the id and title (a link), then "waits" and "+ also"
+          if (!r.id) return <Box key={`live-more:${lane.id}`} flexDirection="column" paddingLeft={2}>{line(`live-more-text:${lane.id}`, segText(r.segs).trim(), 'inactive')}</Box>
+          const name = r.segs.filter(s => s.tone === 'id' || s.tone === 'title').map(s => s.text.trim()).join(' ')
+          const rest = r.segs.slice(1).filter(s => s.tone === 'dim').map(s => s.text.trim()).filter(Boolean).join('  ')
+          const href = vsHref('task', r.id)
+          return (
+            <Box key={`live-train-row:${r.id}`} flexDirection="row" gap={1} paddingLeft={2 * r.depth}>
+              {line(`live-train-mark:${r.id}`, '└─◇', 'inactive')}
+              {vsLink(vs, trainKey(r.id), mdLink(name, href), [[href, open(r.id)]])}
+              {rest ? line(`live-train-note:${r.id}`, rest, 'inactive') : null}
+            </Box>
+          )
+        })}
       </Box>
     )
   })
@@ -117,7 +134,7 @@ export function livePageVs($: $, pane: PaneParts, notes: number) {
       {lanes.length ? <Box key="live-lanes" flexDirection="column" gap={1}>{laneRows}</Box> : line('live-empty', LIVE_EMPTY, 'inactive')}
       {lanes.length ? line('live-legend', LIVE_LEGEND, 'inactive') : null}
       <Box key="live-bottom" flexDirection="column">
-        {line('live-next', nextUpLine(nextUp(v), width), 'text')}
+        {line('live-next', nextUpLine(trains, width), 'text')}
         {todayLines(liveToday(v.tasks, nowMs), width).map((x, i) => line(`live-today-${i}`, x, 'text'))}
       </Box>
       {vsLink(vs, 'live-orgmem', mdLink(orgMemButtonLabel(notes), vsHref('page', 'orgmem')), [[vsHref('page', 'orgmem'), openOrgMemPage($)]])}

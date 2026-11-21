@@ -2,7 +2,7 @@
 // numbers; claude/ui/live.tsx draws them on the terminal panel).
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { liveLanes, liveLayout, laneLines, liveLabelLine, liveStations, nextUp, nextUpLine, liveToday, todayLines, segText, liveBlink, liveHeader, tabRow, LIVE_TABS, LIVE_EMPTY, LIVE_LEGEND } from '../hooks/core/live'
+import { liveLanes, liveLayout, laneLines, liveLabelLine, liveStations, liveTrains, trainRows, type LiveTrain, nextUpLine, liveToday, todayLines, segText, liveBlink, liveHeader, tabRow, LIVE_TABS, LIVE_EMPTY, LIVE_LEGEND } from '../hooks/core/live'
 import { textWidth } from '../hooks/core/stats'
 import { FINISH_STALE_MS } from '../hooks/core/lead'
 import { listKeys } from '../hooks/board'
@@ -82,18 +82,96 @@ test('T-690: lanes are ordered by when the task entered doing, earliest first', 
   expect(liveLanes(view(true), T0).map(l => l.id)).toEqual(['T-684', 'T-685', 'T-686', 'T-688', 'T-687'])
 })
 
-test('T-690: next up lists todo tasks in start order, with "(after T-n)" for one still waiting', () => {
-  const items = nextUp(view(true))
-  // T-691 has the lowest order but waits on T-690, so it comes after it; T-692 waits on a done task: no "after"
-  expect(items.map(x => x.id)).toEqual(['T-690', 'T-691', 'T-692'])
-  expect(items.map(x => x.after)).toEqual([[], ['T-690'], []])
+test('T-690, T-715: next up lists only the todo tasks free to start, in start order; one waiting for a todo task on no lane is counted in "more"', () => {
+  const t = liveTrains(view(true), T0)
+  // T-692 waits on a done task: free; T-691 waits on T-690, which is todo and runs on no lane
+  expect(t.next.map(x => x.id)).toEqual(['T-690', 'T-692'])
+  expect(t.next.map(x => x.stuck)).toEqual([[], []])
+  expect(t.more).toBe(1)
+  expect(Object.values(t.lanes).flat()).toEqual([])
 })
 
-test('T-690: the next up line', () => {
-  const items = nextUp(view(true))
-  expect(nextUpLine(items, 120)).toBe('next up  T-690 Live tab pa… · T-691 Live tab in… (after T-690) · T-692 Live tab in…')
-  expect(nextUpLine(items, 60)).toBe('next up  T-690 Live tab pa… · 2 more in todo')
-  expect(nextUpLine([], 60)).toBe('next up  nothing in todo')
+test('T-690, T-715: the next up line', () => {
+  const t = liveTrains(view(true), T0)
+  expect(nextUpLine(t, 120)).toBe('next up  T-690 Live tab pa… · T-692 Live tab in… · 1 more')
+  expect(nextUpLine(t, 40)).toBe('next up  T-690 Live tab pa… · 2 more')
+  expect(nextUpLine({ next: [], more: 0, hung: 0 }, 60)).toBe('next up  nothing in todo')
+  expect(nextUpLine({ next: [], more: 0, hung: 2 }, 60)).toBe('next up  nothing free to start')
+})
+
+// T-715: waiting trains. Two lanes: T-712 at work, T-690 at check; todo tasks waiting for them, for each other, for a
+// failed task; one free and one waiting for the free one.
+const TRAINS = [
+  task('T-712', 'Scout ordering fix', { runs: [{ started: iso(2) }] }),
+  task('T-690', 'Live tab first part', { attempts: 2, runs: [{ started: iso(30), ended: iso(3), tokens: { input: 1_400_000 } }], checking: { step: 'checker', at: iso(0) }, checker: 'agent-c', history: [{ kind: 'stage', at: iso(3), text: 'try 2: prep started' }] }),
+  task('T-701', 'A failed one', { status: 'failed', updated_at: iso(20) }),
+  task('T-713', 'Task files: no silent drops', { status: 'todo', after: ['T-712'] }),
+  task('T-714', 'Help: /symcc-help shows all', { status: 'todo', after: ['T-713'] }),
+  task('T-716', 'Live deps drawn as trains', { status: 'todo', after: ['T-712', 'T-690'] }),
+  task('T-717', 'Waits for a todo and a lane', { status: 'todo', after: ['T-690', 'T-713'] }),
+  task('T-718', 'Waits for the failed one', { status: 'todo', after: ['T-701'] }),
+  task('T-715', 'Free to start', { status: 'todo', order: 1 }),
+  task('T-719', 'Waits for the free one', { status: 'todo', after: ['T-715'] }),
+]
+const trainView = { tasks: TRAINS as never[], checker: true, mode: 'auto' as const, max_parallel: 3 }
+/** A tree of trains as "id(+also)[children]" text, to compare in one line. */
+const shape = (xs: readonly { id: string; also: string[]; trains: unknown[] }[]): string =>
+  xs.map(x => `${x.id}${x.also.length ? `(+${x.also.join(',')})` : ''}${x.trains.length ? `[${shape(x.trains as never)}]` : ''}`).join(' ')
+
+test('T-715: liveTrains hangs a todo task under its running blocker, a todo-on-todo under its blocker\'s train, a several-blocker one once under the furthest from merging; next up holds the free and the stuck', () => {
+  const t = liveTrains(trainView, T0)
+  // T-713 under T-712's lane; T-714 (waits for T-713) under T-713's train; T-716 waits for T-712 (work) and T-690
+  // (check): under T-712, the earlier station; T-717 waits for T-690 (running) and T-713 (todo): under T-713
+  expect(shape(t.lanes['T-712']!)).toBe('T-713[T-714 T-717(+T-690)] T-716(+T-690)')
+  expect(t.lanes['T-690']).toEqual([])
+  // no copies: each waiting task once
+  const all = (xs: readonly LiveTrain[]): string[] => xs.flatMap(x => [x.id, ...all(x.trains)])
+  expect(all(Object.values(t.lanes).flat()).sort()).toEqual(['T-713', 'T-714', 'T-716', 'T-717'])
+  expect(t.hung).toBe(4)
+  // next up: the free one, and the one stuck behind a failed task; T-719 (waits for the free T-715) is "1 more"
+  expect(t.next).toEqual([
+    { id: 'T-715', title: 'Free to start', stuck: [] },
+    { id: 'T-718', title: 'Waits for the failed one', stuck: [{ id: 'T-701', status: 'failed' }] },
+  ])
+  expect(t.more).toBe(1)
+  expect(nextUpLine(t, 120)).toBe('next up  T-715 Free to sta… · T-718 Waits for t… (waits T-701, failed) · 1 more')
+  // a paused blocker, or one waiting for the owner: stuck too
+  const paused = liveTrains({ ...trainView, tasks: TRAINS.map(x => (x.id === 'T-701' ? { ...x, status: 'paused' } : x)) as never[] }, T0)
+  expect(paused.next[1]!.stuck).toEqual([{ id: 'T-701', status: 'paused' }])
+})
+
+test('T-715: two blockers at the same station: the train hangs under the one that started latest', () => {
+  const tasks = [
+    task('T-1', 'Early', { runs: [{ started: iso(30) }] }),
+    task('T-2', 'Late', { runs: [{ started: iso(5) }] }),
+    task('T-3', 'Waits for both', { status: 'todo', after: ['T-1', 'T-2'] }),
+  ]
+  const t = liveTrains({ tasks: tasks as never[], checker: true }, T0)
+  expect(shape(t.lanes['T-2']!)).toBe('T-3(+T-1)')
+  expect(t.lanes['T-1']).toEqual([])
+})
+
+test('T-715: train rows: "└─◇" indented by level, "waits" and "+ also"; nothing wider than the panel; long chains end in "+N more waiting"', () => {
+  const t = liveTrains(trainView, T0)
+  const rows = trainRows(t.lanes['T-712']!, 100)
+  expect(rows.map(r => segText(r.segs))).toEqual([
+    '   └─◇ T-713 Task files: no silent d…  waits',
+    '      └─◇ T-714 Help: /symcc-help shows…  waits',
+    '      └─◇ T-717 Waits for a todo and a …  waits  + also T-690',
+    '   └─◇ T-716 Live deps drawn as trai…  waits  + also T-690',
+  ])
+  expect(rows.map(r => r.id)).toEqual(['T-713', 'T-714', 'T-717', 'T-716'])
+  for (const w of [100, 60, 40, 32, 24])
+    for (const r of trainRows(t.lanes['T-712']!, w)) expect([w, segText(r.segs), textWidth(segText(r.segs)) <= w]).toEqual([w, segText(r.segs), true])
+  // a chain of 9: three levels, then the rest counted
+  const chain = [task('T-1', 'Runs', { runs: [{ started: iso(3) }] }), ...Array.from({ length: 9 }, (_, i) => task(`T-${i + 2}`, `Step ${i + 2}`, { status: 'todo', after: [`T-${i + 1}`] }))]
+  const deep = trainRows(liveTrains({ tasks: chain as never[] }, T0).lanes['T-1']!, 60)
+  expect(deep.map(r => r.id ?? segText(r.segs))).toEqual(['T-2', 'T-3', 'T-4', '   └─ +6 more waiting'])
+  // eight side by side: six, then the rest counted
+  const wide = [task('T-1', 'Runs', { runs: [{ started: iso(3) }] }), ...Array.from({ length: 8 }, (_, i) => task(`T-${i + 2}`, `Side ${i + 2}`, { status: 'todo', after: ['T-1'] }))]
+  const many = trainRows(liveTrains({ tasks: wide as never[] }, T0).lanes['T-1']!, 60)
+  expect(many.length).toBe(7)
+  expect(segText(many[6]!.segs)).toBe('   └─ +2 more waiting')
 })
 
 test('T-690: today counts merges, send-backs, failures and tokens of today', () => {
@@ -314,6 +392,73 @@ test('T-691: with no task in doing, the VS Code Live tab says so and still shows
   expect((await ui.find({ key: 'live-empty' }))?.text).toBe(LIVE_EMPTY)
   expect(await ui.find({ key: 'live-legend' })).toBeUndefined()
   expect((await ui.find({ key: 'live-next' }))?.text).toMatch(/^next up {2}T-690/)
+  await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'tasks') } })
+  await ui.unmount()
+})
+
+// T-715: the terminal and VS Code Live tabs draw the same trains (core's trainRows) for the same board, and a train opens its task.
+for (const bodyColumns of [100, 40])
+  test(`T-715: the terminal and VS Code Live tabs hang the same trains under the lanes, nothing wider than the panel (${bodyColumns} columns)`, async ($, on) => {
+    seedBoard(on, { view: liveView(TRAINS) })
+    on('ui.toast', () => ({ value: undefined }))
+    const lanes = liveLanes(trainView, T0)
+    const t = liveTrains(trainView, T0, lanes)
+    const want = lanes.flatMap(l => trainRows(t.lanes[l.id] ?? [], bodyColumns))
+    expect(want.filter(r => r.id).map(r => r.id)).toEqual(['T-713', 'T-714', 'T-717', 'T-716'])
+    const term = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'terminal' })
+    await term.press({ key: 'tab-live' })
+    const lines = await liveLines(term)
+    for (const l of lines) expect([l, textWidth(l) <= bodyColumns]).toEqual([l, true])
+    // the trains right under T-712's two lane lines, in the same order and words
+    const at = lines.findIndex(l => l.startsWith(' T-712 '))
+    expect(lines.slice(at + 2, at + 2 + want.length)).toEqual(want.map(r => segText(r.segs)))
+    const keys = (await term.findAll({ type: 'Button' })).map(b => String(b.key)).filter(k => k.startsWith('live'))
+    expect(keys.filter(k => k.startsWith('live-train:'))).toEqual(['live-train:T-713', 'live-train:T-714', 'live-train:T-717', 'live-train:T-716'])
+    // next up: the free one and the stuck one, no trains
+    const next = lines.find(l => l.startsWith('next up'))!
+    expect(next).toBe(nextUpLine(t, bodyColumns))
+    expect(next).not.toContain('T-713')
+    await term.press({ key: 'tab-tasks' })
+    await term.unmount()
+
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'vscode' })
+    await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'live') } })
+    const links = (await ui.findAll({ type: 'Markdown' })).filter(m => String(m.key).startsWith('live-train:'))
+    expect(links.map(m => String(m.key).slice('live-train:'.length))).toEqual(['T-713', 'T-714', 'T-717', 'T-716'])
+    for (const r of want.filter(x => x.id)) {
+      const link = links.find(m => String(m.key) === `live-train:${r.id}`)!
+      expect(link.props.pressableLinks).toEqual([vsHref('task', r.id!)])
+      // the same id and title as the terminal's row, then its "waits" and "+ also"
+      const name = r.segs.filter(s => s.tone === 'id' || s.tone === 'title').map(s => s.text.trim()).join(' ')
+      expect(String(link.props.text)).toBe(mdLink(name, vsHref('task', r.id!)))
+      const note = r.segs.slice(1).filter(s => s.tone === 'dim').map(s => s.text.trim()).filter(Boolean).join('  ')
+      expect((await ui.find({ key: `live-train-note:${r.id}` }))?.text ?? '').toBe(note)
+    }
+    expect((await ui.find({ key: 'live-next' }))?.text).toBe(next)
+    await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'tasks') } })
+    await ui.unmount()
+  })
+
+test('T-715: Enter on a train (terminal) or a click on it (VS Code) opens that task, and Back returns to the Live tab', async ($, on) => {
+  seedBoard(on, { view: liveView(TRAINS) })
+  const term = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 80 }, surface: 'terminal' })
+  await term.press({ key: 'tab-live' })
+  await term.press({ key: 'live-train:T-714' })
+  expect(await liveLines(term)).toEqual([])
+  expect(await term.find({ type: 'Text', text: /Help: \/symcc-help shows all/ })).toBeDefined()
+  await term.press({ key: 'back' })
+  expect((await liveLines(term)).length).toBeGreaterThan(0)
+  await term.press({ key: 'tab-tasks' })
+  await term.unmount()
+
+  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 80 }, surface: 'vscode' })
+  await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'live') } })
+  await ui.press({ key: 'live-train:T-716', link: { href: vsHref('task', 'T-716') } })
+  expect(await ui.find({ key: 'live-head' })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /Live deps drawn as trains/ })).toBeDefined()
+  expect((await ui.find({ key: 'back' }))?.props.label).toBe('← Live')
+  await ui.press({ key: 'back' })
+  expect(await ui.find({ key: 'live-head' })).toBeDefined()
   await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'tasks') } })
   await ui.unmount()
 })

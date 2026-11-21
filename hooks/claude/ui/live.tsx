@@ -6,7 +6,8 @@
 // changes between ◉ and ◎ every LIVE_TICK_MS, and while the tab is shown it is redrawn that often.
 // T-687: at its bottom, just above the key hints, the "Organizational memory (n notes)" button (key m) opens the
 // Organizational memory page over the tab (orgmem.tsx; VS Code's: vscode-orgmem.tsx); its Back comes back here.
-import { LIVE_EMPTY, LIVE_LEGEND, type LiveSeg, LIVE_TONE, laneLines, liveHeader, liveKeys, liveLabelLine, liveLanes, liveLayout, liveStations, liveToday, nextUp, nextUpLine, todayLines } from '../../core/live'
+// T-715: under each lane hang its waiting trains (core's liveTrains and trainRows), each one a row Button that opens its task.
+import { LIVE_EMPTY, LIVE_LEGEND, type LiveSeg, LIVE_TONE, laneLines, liveHeader, liveKeys, liveLabelLine, liveLanes, liveLayout, liveStations, liveToday, liveTrains, nextUpLine, todayLines, trainRows } from '../../core/live'
 import { footerRule } from '../../board'
 import { S, workers } from '../../app/state'
 import { type $, panelValues } from '../panel'
@@ -45,6 +46,8 @@ function keepTicking($: $) {
 
 /** The key of a lane's row Button. */
 export const laneKey = (id: string) => `live:${id}`
+/** The key of a waiting train's row Button (T-715). */
+export const trainKey = (id: string) => `live-train:${id}`
 
 /** Notes a redraw of the Live tab and keeps its redraw timer going (the terminal's and VS Code's Live tab). */
 export function liveTick($: $) {
@@ -71,6 +74,7 @@ export function livePage($: $, pane: PaneParts, notes: number) {
   liveTick($)
   const lanes = liveLanes(v, nowMs)
   const layout = liveLayout(lanes, liveStations(v.checker === true), width)
+  const trains = liveTrains(v, nowMs, lanes)
   const draw = (xs: LiveSeg[]) => xs.map(x => <Text bold={x.tone === 'id' || x.tone === 'current'} color={C(LIVE_TONE[x.tone])}>{x.text}</Text>)
   const open = (id: string) => act(() => panelValues($).updateOpened(() => id))
   /** w: the worker of the lane with the focus (else the first lane with a worker), as on the task page. */
@@ -95,10 +99,19 @@ export function livePage($: $, pane: PaneParts, notes: number) {
             {draw(first)}
           </Button>,
           <Text key={`live-sub:${l.id}`}>{draw(second)}</Text>,
+          ...trainRows(trains.lanes[l.id] ?? [], width).map(r =>
+            r.id ? (
+              <Button key={row(trainKey(r.id))} plain onPress={open(r.id)}>
+                {draw(r.segs)}
+              </Button>
+            ) : (
+              <Text key={`live-more:${l.id}`}>{draw(r.segs)}</Text>
+            ),
+          ),
         ]
       })}
       <Text key="live-rule" color={C('subtle')}>{footerRule(width)}</Text>
-      <Text key="live-next" color={C('text')}>{nextUpLine(nextUp(v), width)}</Text>
+      <Text key="live-next" color={C('text')}>{nextUpLine(trains, width)}</Text>
       {today.map((line, i) => (
         <Text key={`live-today-${i}`} color={C('text')}>{line}</Text>
       ))}
