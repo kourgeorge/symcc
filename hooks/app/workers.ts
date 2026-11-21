@@ -11,7 +11,7 @@ import { logNeedsFiles } from './evidence'
 import { loadRoles } from './roles'
 import { runChecker, checkerName, cleanFolder, CHECKER_NOTE, STOPPED_AGAIN } from './checker'
 import { loadKinds } from './kinds'
-import { S, workers, starting, queuedWorkers, type Worker, notReady, checkerNotReady, heard, finishing, approving, stopped, isOwnAgent, rememberOnBoard, halt, checkerRuns, meanwhile, reminded, timers } from './state'
+import { S, onHere, workers, starting, queuedWorkers, type Worker, notReady, checkerNotReady, heard, finishing, approving, stopped, isOwnAgent, rememberOnBoard, halt, checkerRuns, meanwhile, reminded, timers } from './state'
 import { type Host, type HostAgent, type HostAgentStarted, ENDED_STATUSES, agentState, notReadyYet } from '../host'
 import { startAgent, startCancelled, claimNote, isClaimNote } from './starts'
 import { load, change, now, path, safeWrite, aboutToWait } from './store'
@@ -58,7 +58,7 @@ export async function pump(host: Host) {
   if (!S.driving) return // another session drives the board and starts its work
   if (inPlan(S.plan)) return // plan mode: nothing starts; workers already running keep going
   const b = await load(host)
-  if (modeOf(b) === 'paused' || !symccOn(b)) return
+  if (modeOf(b) === 'paused' || !onHere(b)) return
   if (!ready(b).length) return
   if (!(await gitReady(host, b))) return // no git, no repo or no commit yet: nothing starts until it is set up
   const failed = (id: string) => async (err: Error) => {
@@ -941,7 +941,7 @@ async function finishTail(host: Host, t: SymccTask, b: Board, r: CheckResult, ma
  */
 export async function restartCheckers(host: Host, agents: HostAgent[]) {
   const b = await load(host).catch(() => null)
-  if (!b || !symccOn(b)) return
+  if (!b || !onHere(b)) return
   const live = liveDriver(await host.fs.read(path(S.N.leadFile)).catch(() => null), Date.now())
   const running = new Set([...checkerRuns.values()].map(r => r.task))
   const checkerAlive = (id: string) => agents.some(a => a.name === checkerName(S.N.name, id) && !stopped.has(a.id) && !ENDED_STATUSES.includes(a.status))
@@ -1737,7 +1737,7 @@ export async function check(host: Host) {
   await stopOrphans(host)
   const b = await load(host)
   resumeKept(host)
-  if (!symccOn(b)) return
+  if (!onHere(b)) return
   const agents = await host.agents.list().catch(() => undefined)
   const nowMs = Date.now()
   for (const id of seenEnded) if (!workers.has(id)) seenEnded.delete(id)

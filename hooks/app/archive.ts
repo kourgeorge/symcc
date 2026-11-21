@@ -1,7 +1,7 @@
 import { type Archive, type BoardTask, ARCHIVE_EVERY_MS, addToArchive, bringBack, brokenArchiveText, emptyArchive, find, normId, readArchive, removeArchived, renameScoutOrigins, symccOn, toArchive } from '../board'
 import { archiveChunkFile, archiveChunks } from '../core/board-parts'
 import { publish } from './lead'
-import { S } from './state'
+import { S, onHere } from './state'
 import type { Host } from '../host'
 import { fileName, isStubbed, load, locked, now, path, readWhole, safeWrite, writeBoard } from './store'
 import { emitTaskEvents } from './events'
@@ -116,7 +116,7 @@ export async function archiveOld(host: Host, nowMs = Date.now(), force = false):
   S.lastArchive = nowMs
   const moved = await locked(host, async () => {
     const b = await load(host)
-    if (!symccOn(b)) return null
+    if (!onHere(b)) return null
     // T-681: a task loaded as a stub (its parts file missing) stays: archived now, it would keep no history, and
     // putting the good parts file back would no longer restore it
     const old = toArchive(b, nowMs).filter(t => !isStubbed(t.id))

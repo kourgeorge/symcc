@@ -82,7 +82,7 @@ export async function setBoardMode(host: Host, m: SymccMode, who: string): Promi
 }
 
 /** Drops every board update waiting for the lead (its queue, "Meanwhile" lines, timer) and the lines waiting to be said. */
-function dropLeadUpdates() {
+export function dropLeadUpdates() {
   leadQueue.splice(0)
   meanwhile.splice(0)
   S.leadTimer?.cancel()
@@ -114,7 +114,7 @@ export async function setSymcc(host: Host, on: boolean): Promise<string> {
     S.enabledNow = was
     throw err
   })
-  S.enabledNow = on
+  S.enabledNow = on && !S.offHere
   if (!on) {
     const ids: string[] = []
     await haltAll(host, `you disabled ${S.N.name}`, async w => {

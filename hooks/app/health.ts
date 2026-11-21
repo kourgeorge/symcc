@@ -1,5 +1,5 @@
 import { type Board, boardHealth, healthText, newFindings, symccOn } from '../board'
-import { S, healthTold } from './state'
+import { S, onHere, healthTold } from './state'
 import type { Host } from '../host'
 import { tellLead } from './tell'
 
@@ -9,7 +9,7 @@ import { tellLead } from './tell'
 // or one whose problems were all told already, sends nothing.
 
 export function checkHealth($: Host, b: Board, nowMs = Date.now()) {
-  if (!S.driving || !symccOn(b)) return
+  if (!S.driving || !onHere(b)) return
   const r = newFindings(boardHealth(b, nowMs), healthTold)
   healthTold.clear()
   for (const k of r.told) healthTold.add(k)

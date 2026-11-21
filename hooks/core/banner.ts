@@ -15,7 +15,7 @@ import { checkStepNow, shownStatus } from './lead'
 import { type PhaseStage, type TaskPhase, taskPhase } from './phase'
 import { whyFailed } from './failure'
 import { CLAIM_NOTES, sessionNote, STATUS_MARK } from './details'
-import { newestFirst, offStatusParts, testsShort } from './settings'
+import { newestFirst, offStatusParts, testsShort, type OffHere } from './settings'
 import { type OwnerQuestion, openQuestions, questionLine, questionsLabel } from './questions'
 import { needsYou } from './commands'
 import { fmtCost } from './runs'
@@ -346,7 +346,7 @@ export type BannerLine = { art: string; parts: BannerPart[] }
 /** What the banner needs from the board. */
 /** `branch`: the branch checked out in the project now (new tasks merge into it); `branch_note`: a warning (e.g. no git), shown in place of it.
  *  `enabled` false (symcc disabled) or `mode` 'paused' puts a warning on the first line, after the name. */
-export type BannerBoard = Pick<Board, 'test_commands' | 'max_parallel' | 'max_minutes' | 'auto_retries'> & Partial<Pick<Board, 'archived'>> & { tasks: (Pick<SymccTask, 'status' | 'runs'> & Partial<Pick<SymccTask, 'note' | 'updated_at'>> & Pick<BoardTask, 'checking'>)[]; branch?: string; branch_note?: string; mode?: SymccMode; enabled?: boolean }
+export type BannerBoard = Pick<Board, 'test_commands' | 'max_parallel' | 'max_minutes' | 'auto_retries'> & Partial<Pick<Board, 'archived'>> & { tasks: (Pick<SymccTask, 'status' | 'runs'> & Partial<Pick<SymccTask, 'note' | 'updated_at'>> & Pick<BoardTask, 'checking'>)[]; branch?: string; branch_note?: string; mode?: SymccMode; enabled?: boolean; off_here?: OffHere }
 
 /** "2 doing", "1 to do", ... for each status in `order` that has tasks, in that order. */
 export function statusCounts(tasks: (Pick<SymccTask, 'status'> & Pick<BoardTask, 'checking'>)[], order: SymccStatus[], nowMs: number = Date.now()): string[] {
@@ -405,7 +405,7 @@ export function bannerLines(b: BannerBoard, root: string, home: string, driving:
   // disabled: "symcc is disabled · /symcc-enable to turn it back on", the command in the accent color (bold) so it stands out
   const off: BannerPart[] =
     b.enabled === false
-      ? offStatusParts(name).map(p => (p.command ? { text: p.text, tone: 'accent' as const, bold: true } : { text: p.text, tone: 'warning' as const }))
+      ? offStatusParts(name, true, b.off_here).map(p => (p.command ? { text: p.text, tone: 'accent' as const, bold: true } : { text: p.text, tone: 'warning' as const }))
       : b.mode && modeOf({ mode: b.mode }) === 'paused'
         ? [{ text: `${modeLabel('paused')}: nothing starts`, tone: 'warning' }]
         : []

@@ -1,7 +1,7 @@
 // Notify: a chime (sound 1, 2 or 3: one of the sound sets) or "symcc: T-3 done" said out loud (voice) when a task is merged or a question waits.
 import type { SymccTask } from '../../types'
 import { type Board, type Notify, type NotifySystem, type Playable, type SoundSet, SOUND_SETS, notifyOf, notifyKind, notifySet, canPlay, unplayableNote, symccOn, spokenLine, soundSetFor, projectFolder, NEEDS_YOU_MARK } from '../board'
-import { S, sayQueue } from './state'
+import { S, onHere, sayQueue } from './state'
 import type { Host } from '../host'
 
 /** One command to run: the text is always its own argument (or, on Windows, an environment value), never part of a shell string. */
@@ -177,9 +177,15 @@ export function sayQuestion(host: Host, b: Board, id: string) {
   if (queueSay(host, b, NEEDS_YOU_MARK + id)) saidNeedsYou.add(key)
 }
 
+/** T-793: the reminder when the symcc window is gone and nobody took over: "needs you" (or the chime), from a window off here. */
+export function sayGone(host: Host, b: Board): boolean {
+  return queueSay(host, b, NEEDS_YOU_MARK, true)
+}
+
 /** Adds `item` to the queue and plays it soon; false when nothing plays here (not the driver, notify or plugin off). */
-function queueSay(host: Host, b: Board, item: string): boolean {
-  if (!S.driving || !symccOn(b) || b.notify === 'off') return false
+function queueSay(host: Host, b: Board, item: string, anyWindow = false): boolean {
+  if (!anyWindow && (!S.driving || !onHere(b))) return false
+  if (b.notify === 'off') return false
   S.notifyWanted = b.notify ?? null
   sayQueue.push(item)
   if (S.sayTimer || S.saying) return true

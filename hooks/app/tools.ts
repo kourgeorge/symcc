@@ -142,6 +142,7 @@ ${features.panel ? '' : `  /${S.N.name}-board               the board panel, as 
   /${S.N.name}-disable             disable ${S.N.name} for this project: ${S.W.assistant} works as normal (no lead
                        guide, no workers, scouts, updates, sounds or voice); the board is kept
   /${S.N.name}-enable              turn it back on, in the mode the board had
+  /${S.N.name}-disable here, /${S.N.name}-enable here   the same for this window only (not saved in the board)
   /${S.N.name}-drive               make this session drive the board (start workers, merge, run scouts);
                        a session that drives now hands over within 30 s, its running workers
                        restart here without using up a try

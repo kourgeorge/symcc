@@ -47,8 +47,8 @@ export type Command =
    *  (T-619); `key`: the note's check word (orgMemNoteKey), so a number that moved deletes nothing */
   | { kind: 'orgmem-delete'; n: number; key?: string }
   | { kind: 'mode'; mode: SymccMode }
-  | { kind: 'disable' }
-  | { kind: 'enable' }
+  | { kind: 'disable'; here?: boolean }
+  | { kind: 'enable'; here?: boolean }
   | { kind: 'drive' }
   | { kind: 'help'; topic: string }
   | { kind: 'settings' }
@@ -219,9 +219,11 @@ export function parseCommand(command: string, args: string, current: SymccMode =
     case 'help':
       return { kind: 'help', topic: s }
     case 'disable':
-      return s ? use(`/${name}-disable (turn ${name} off entirely; /${name}-enable turns it back on)`) : { kind: 'disable' }
+      if (s.toLowerCase() === 'here') return { kind: 'disable', here: true }
+      return s ? use(`/${name}-disable [here] (turn ${name} off entirely, or only in this window; /${name}-enable [here] turns it back on)`) : { kind: 'disable' }
     case 'enable':
-      return s ? use(`/${name}-enable`) : { kind: 'enable' }
+      if (s.toLowerCase() === 'here') return { kind: 'enable', here: true }
+      return s ? use(`/${name}-enable [here]`) : { kind: 'enable' }
     case 'drive':
       return s ? use(`/${name}-drive (make this session drive the board)`) : { kind: 'drive' }
   }
