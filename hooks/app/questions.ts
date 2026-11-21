@@ -203,6 +203,41 @@ export async function popupToTask(host: Host, id: string, answer: string): Promi
   return `${n} did not apply this answer to ${id}: do it yourself (e.g. ${n} reject ${id} with the owner's reason or follow-up question).`
 }
 
+/** The words the host's tool result has when the owner turned the tool call down (Claude Code: "The user doesn't want to proceed with this tool use. The tool use was rejected …"). */
+const REFUSED = /doesn['’]t want to proceed|tool use was rejected/i
+
+/**
+ * Did pop-up result `r` end turned down: the call was refused (`{ deny }`), or the owner rejected it (the refusal
+ * words in its text or result)? Closing it with no answer is not that.
+ */
+export function turnedDown(r: unknown): boolean {
+  if (!r || typeof r !== 'object') return false
+  const x = r as { deny?: unknown; text?: unknown; result?: unknown }
+  if (typeof x.deny === 'string' && x.deny) return true
+  return [x.text, x.result].some(v => typeof v === 'string' && REFUSED.test(v))
+}
+
+/** The history note of a Q-n dropped because the owner turned its pop-up down (T-753). */
+export const TURNED_DOWN_NOTE = 'the owner turned the question down in the chat'
+
+/** Drops the open Q-ns `ids` because the owner turned their pop-up down: the ids it dropped. */
+async function dropTurnedDown(host: Host, ids: string[]): Promise<string[]> {
+  return change(host, x => {
+    let y = x
+    const gone: string[] = []
+    for (const id of ids) {
+      try {
+        const [z, r] = dropQuestion(y, id, now(), TURNED_DOWN_NOTE)
+        y = z
+        if (r.closed) gone.push(r.q.id)
+      } catch {
+        // no longer on the board: nothing to drop
+      }
+    }
+    return [y, gone] as [Board, string[]]
+  }).catch(() => [] as string[])
+}
+
 /** What the pop-up tool answers when the board's answers came first: the questions asked and an answer for each (keyed by question text). */
 export type PopupBoardResult = { result: { questions: unknown; answers: Record<string, string> }; context: string[] }
 
@@ -252,6 +287,13 @@ export async function popupCall<R>(host: Host, agentId: string | undefined, inpu
     popupWaits.set(id, take)
   }
   const name = S.N.name
+  // T-753: drops the Q-ns not answered on the board yet (a task's own question stays: the task keeps waiting), and
+  // says so for the lead; '' when none was dropped
+  const dropAll = async (): Promise<string> => {
+    const qids = [...new Set(tied.filter(x => x.link.kind === 'question' && fromBoard[x.q.question] === undefined).map(x => x.link.id))]
+    const gone = qids.length ? await dropTurnedDown(host, qids) : []
+    return gone.length ? `${name} dropped ${gone.join(', ')} from the board because the owner turned the pop-up down; ask again in the chat if it still matters.` : ''
+  }
   notice(`or answer on the board (${ids.join(', ')})`)
   let won: { board: true } | { dialog: R }
   try {
@@ -263,6 +305,11 @@ export async function popupCall<R>(host: Host, agentId: string | undefined, inpu
   } catch (err) {
     // the dialog (or the turn) ended without a result: the board answers already taken reach the lead the usual way
     tellBoardAnswers()
+    // T-753: it ended because the owner turned it down: its Q-ns come off the board, and the lead hears it in a note
+    if (err instanceof Error && REFUSED.test(err.message)) {
+      const line = await dropAll()
+      if (line) noteForLead(line)
+    }
     throw err
   } finally {
     for (const [id, take] of takers) if (popupWaits.get(id) === take) popupWaits.delete(id)
@@ -270,6 +317,20 @@ export async function popupCall<R>(host: Host, agentId: string | undefined, inpu
   if ('board' in won)
     return { result: { questions: input.questions, answers: fromBoard }, context: [`The owner answered on the ${name} board (${ids.join(', ')}), which closed the pop-up; the board question is closed. Act on the answer and don't ask again.`] }
   const r = won.dialog
+  // T-753: the owner turned the pop-up down (or it was refused): its Q-ns come off the board, and the lead is told;
+  // a task's own question is left as it is (the task keeps waiting for the owner)
+  if (turnedDown(r)) {
+    const line = await dropAll()
+    tellBoardAnswers()
+    if (!line) return r
+    // a refusal ({ deny }) carries no context: the lead hears it in a note instead
+    if (!r || typeof r !== 'object' || 'deny' in (r as object)) {
+      noteForLead(line)
+      return r
+    }
+    const had = (r as { context?: readonly string[] }).context ?? []
+    return { ...r, context: [...had, line] }
+  }
   const res = (r as { result?: { answers?: unknown; response?: unknown } } | null)?.result
   const answers = { ...((res?.answers ?? {}) as Record<string, unknown>) }
   const typed = typeof res?.response === 'string' ? res.response.trim() : ''

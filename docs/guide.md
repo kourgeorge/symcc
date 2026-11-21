@@ -280,6 +280,10 @@ closes the other:
   Approve, Done, Keep as a note). A reject or "ask more" still needs the lead, which gets your
   reason.
 - Close the pop-up without answering and the question stays on the board.
+- Turn the pop-up down (reject the tool call, for example to talk it through first) and its
+  `Q-` questions are dropped from the board, with the note "dropped: the owner turned the
+  question down in the chat". The lead is told which ones, and asks again in the chat if it
+  still matters. A task's own question is not dropped: the task keeps waiting for you.
 
 Some edge cases:
 

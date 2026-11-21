@@ -18,6 +18,8 @@ export type OwnerQuestion = {
   answered_by?: 'board' | 'chat'
   /** the lead took the question back (action drop) */
   dropped?: boolean
+  /** why it was dropped, when it wasn't the lead's own drop (T-753: "the owner turned the question down in the chat") */
+  drop_note?: string
 }
 
 /** The fewest and most choices a question may have. */
@@ -67,7 +69,10 @@ export function cleanQuestions(v: unknown): OwnerQuestion[] | undefined {
     if (typeof r.answer === 'string') q.answer = r.answer
     if (typeof r.answered_at === 'string' && r.answered_at) q.answered_at = r.answered_at
     if (r.answered_by === 'board' || r.answered_by === 'chat') q.answered_by = r.answered_by
-    if (r.dropped === true) q.dropped = true
+    if (r.dropped === true) {
+      q.dropped = true
+      if (typeof r.drop_note === 'string' && r.drop_note) q.drop_note = r.drop_note
+    }
     out.push(q)
   }
   return out
@@ -117,12 +122,12 @@ export function answerQuestion<B extends WithQuestions>(b: B, id: unknown, answe
   return [{ ...b, questions: trimmed((b.questions ?? []).map(x => (x.id === q.id ? done : x))) }, { q: done, closed: true }]
 }
 
-/** Takes question `id` back (the lead's drop): closed without an answer. Already closed: nothing changes. */
-export function dropQuestion<B extends WithQuestions>(b: B, id: unknown, at: string): [B, QuestionClose] {
+/** Takes question `id` back (the lead's drop; `note` says why when it was something else): closed without an answer. Already closed: nothing changes. */
+export function dropQuestion<B extends WithQuestions>(b: B, id: unknown, at: string, note = ''): [B, QuestionClose] {
   const q = findQuestion(b, id)
   if (!q) throw new Error(`${normQid(id) || 'that question'} is not on the board (see question with action list)`)
   if (!isOpenQuestion(q)) return [b, { q, closed: false }]
-  const done: OwnerQuestion = { ...q, dropped: true, answered_at: at }
+  const done: OwnerQuestion = note ? { ...q, dropped: true, answered_at: at, drop_note: note } : { ...q, dropped: true, answered_at: at }
   return [{ ...b, questions: trimmed((b.questions ?? []).map(x => (x.id === q.id ? done : x))) }, { q: done, closed: true }]
 }
 
@@ -131,7 +136,7 @@ export const questionLine = (q: OwnerQuestion) => `${q.id} ${q.text}${q.options.
 
 /** How a closed question ended, in a few words: 'answered on the board: "Yes"', 'dropped'. */
 export function closedText(q: OwnerQuestion): string {
-  if (q.dropped) return 'dropped'
+  if (q.dropped) return q.drop_note ? `dropped: ${q.drop_note}` : 'dropped'
   return `answered ${q.answered_by === 'chat' ? 'in the chat' : 'on the board'}: "${q.answer ?? ''}"`
 }
 
