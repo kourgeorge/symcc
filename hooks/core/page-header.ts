@@ -1,11 +1,14 @@
 // The 4-line header at the top of a task's page and a scout's page (T-751), the same on every board (terminal,
 // desktop, mobile, VS Code, OpenCode):
 //
-//    ‹ Tasks                                                T-738 · ‹ 2 of 6 ›     1. where you are (dim)
+//    ‹ [Tasks]                                              T-738 · ‹ 2 of 6 ›     1. where you are
 //    T-738  Live tab: an empty line before each section                           2. the title
 //    ▶ doing · worker · 4m   change · general · try 1/3   ♟ from you              3. the state
-//    ▐Pause▌ [Role] [Watch worker]   [Drop]   ☐ needs review  copy                 4. the buttons, in groups
+//    [Pause]   [Role] [Watch worker]   [Drop]   [☐ Needs review] [Copy]           4. the buttons, in groups
 //   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  then a heavy rule
+//
+// Every button reads "[Label]" in the one text color (T-775); only the order of the groups and the gaps between
+// them say what's what.
 //
 // Everything here is plain data (colored pieces, groups, places in a list); each board draws it its own way.
 import type { SymccScout, SymccTask } from '../../types'
@@ -22,11 +25,13 @@ import { localOffset } from './days'
 export type { ActionGroup }
 export { GROUP_ORDER }
 
-/** The tab a page was opened from: its Back link names it ("‹ Tasks", "‹ Live", "‹ Scouts"). */
+/** The tab a page was opened from: its Back button names it ("‹ [Tasks]", "‹ [Live]", "‹ [Scouts]"). */
 export type PageFrom = 'tasks' | 'live' | 'scouts'
 export const FROM_WORD: Record<PageFrom, string> = { tasks: 'Tasks', live: 'Live', scouts: 'Scouts' }
-/** The Back link's words: "‹ Tasks". */
-export const backText = (from: PageFrom): string => `‹ ${FROM_WORD[from]}`
+/** The Back button's words, the tab's name: "Tasks" (drawn "[Tasks]" after the arrow, see whereLine). */
+export const backText = (from: PageFrom): string => FROM_WORD[from]
+/** The arrow before the Back button: "‹ " (not part of the button, T-775). */
+export const BACK_ARROW = '‹ '
 
 /** The keys that go to the previous and the next task or scout of the list: Claude Code's Buttons take one letter
  *  or digit only, so k and j there (the owner's choice); [ and ] on OpenCode, where k and j move. */
@@ -79,7 +84,7 @@ export const scoutListNames = (scouts: SymccScout[]): string[] => sortScouts(sco
  *  ("‹ 2 of 6 ›"); just the label when it has no place. Each piece says what a click on it does. */
 export type WherePiece = { text: string; go?: 'back' | 'prev' | 'next' }
 export function whereLine(from: PageFrom, label: string, place: Place | null, width: number): { left: WherePiece[]; right: WherePiece[]; pad: number } {
-  const left: WherePiece[] = [{ text: backText(from), go: 'back' }]
+  const left: WherePiece[] = [{ text: BACK_ARROW }, { text: `[${backText(from)}]`, go: 'back' }]
   // alone in its list: no place to go to, so no "1 of 1" either
   const moves = !!place && place.of > 1
   const nav: WherePiece[] = moves ? [{ text: '‹', go: 'prev' }, { text: ` ${place.n} of ${place.of} ` }, { text: '›', go: 'next' }] : []
@@ -175,13 +180,12 @@ export function scoutStateGroups(sc: SymccScout, nowMs: number, last?: { run: Sc
  *  footer); `fact`, words that only say something (a scout's "⏸ paused"), no button. */
 export type HeaderButton = { id: string; label: string; group: ActionGroup; key?: string; fact?: boolean }
 
-/** How a header button reads on a text board (terminal, OpenCode): the next step filled "▐Pause▌", a task action
- *  and a danger one framed "[Role]", a page one plain ("☐ needs review", "copy"). */
-export const pillText = (b: Pick<HeaderButton, 'label' | 'group' | 'fact'>): string => (b.fact || b.group === 'page' ? b.label : b.group === 'main' ? `▐${b.label}▌` : `[${b.label}]`)
+/** How a header button reads on a text board (terminal, OpenCode): every one framed the same, "[Pause]", "[Drop]",
+ *  "[☐ Needs review]" (T-775); a fact is just its words ("⏸ paused"). */
+export const pillText = (b: Pick<HeaderButton, 'label' | 'fact'>): string => (b.fact ? b.label : `[${b.label}]`)
 
-/** The color of a header button on a text board: the accent for the next step, red for a danger one, the text
- *  color for the others, dim for the page group. */
-export const PILL_COLOR: Record<ActionGroup, string> = { main: 'ide', task: 'text', danger: 'error', page: 'inactive' }
+/** The color of every header button on a text board (Back too): the normal text color (T-775). */
+export const PILL_COLOR = 'text'
 
 /** `xs` grouped by their group, in GROUP_ORDER, empty groups left out (each keeps its order). */
 export function inGroups<T extends { group: ActionGroup }>(xs: readonly T[]): T[][] {

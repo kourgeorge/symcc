@@ -614,8 +614,10 @@ export const searchLine = (query: string, shown: number, all: number): string =>
 export const searchBoxHint = (count: string): string => `${count} · Enter on empty clears`
 
 /** The hint under a text box that Enter on empty cancels: what Enter does, then "Enter on empty cancels"
- *  ("goes back" when there is nothing to cancel back to but the page). Kept within 50 columns. */
-export const boxHint = (enter: string, empty: 'cancels' | 'goes back' = 'cancels'): string => `${enter} · Enter on empty ${empty}`
+ *  ("goes back" when there is nothing to cancel back to but the page). `key` is the box's Cancel button's hotkey,
+ *  named here since the button's label is just "[Cancel]": "Enter on empty or c cancels". Kept within 50 columns. */
+export const boxHint = (enter: string, empty: 'cancels' | 'goes back' = 'cancels', key?: string): string =>
+  `${enter} · Enter on empty ${key ? `or ${key} ` : ''}${empty}`
 
 /** The hint under a pick list: Enter picks, `key` (its Cancel button's hotkey) cancels. */
 export const pickHint = (key: string): string => `Enter picks · ${key} cancels`
@@ -636,9 +638,9 @@ export const listKeys = (): KeyHint[] => [
  *  while the task asks something), `group` its group in the page header's button line (see core/page-header.ts):
  *  main (the next step), task, danger (throws work away: Drop, Reject) or page (needs review, copy). */
 export type TaskActionId = 'done' | 'keep-note' | 'ask-more' | 'approve' | 'reject' | 'show-changes' | 'watch' | 'pause' | 'resume' | 'merge-now' | 'retry' | 'to-todo' | 'stash' | 'role' | 'already-merged' | 'drop' | 'needs-review' | 'copy'
-/** Which group of a page header's button line an action is in (in this order, T-751): the one next step (filled,
- *  accent color), the other task actions (outline), the ones that throw work away (red, set apart), and the page's
- *  settings and actions (dim, at the end). */
+/** Which group of a page header's button line an action is in (in this order, T-751): the one next step, the other
+ *  task actions, the ones that throw work away (set apart), and the page's settings and actions (at the end). All
+ *  are drawn alike (T-775); the order and the gaps between groups tell them apart. */
 export type ActionGroup = 'main' | 'task' | 'danger' | 'page'
 export const GROUP_ORDER: readonly ActionGroup[] = ['main', 'task', 'danger', 'page']
 export type TaskAction = { id: TaskActionId; label: string; word: string; key?: string; main?: boolean; group: ActionGroup }
@@ -702,8 +704,8 @@ export function taskActions(t: BoardTask, ctx: TaskActionCtx = {}): TaskAction[]
     canMarkMerged(t) && a('already-merged', 'Already merged', 'already merged', 'h'),
     // in review x is Reject (or Ask more), so Drop has no key there
     open && a('drop', 'Drop', 'drop', inReview ? undefined : 'x', { group: 'danger' }),
-    open && a('needs-review', `${t.needs_review ? '☑' : '☐'} needs review`, 'needs review', 'n', { group: 'page' }),
-    a('copy', 'copy', 'copy', 'y', { group: 'page' }),
+    open && a('needs-review', `${t.needs_review ? '☑' : '☐'} Needs review`, 'needs review', 'n', { group: 'page' }),
+    a('copy', 'Copy', 'copy', 'y', { group: 'page' }),
   )
   // one main action at most: the first, and none while the task asks something (its first answer is the one to press)
   let main = !asksOwner(t)

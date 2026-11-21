@@ -36,6 +36,8 @@ test('the hints say the real way out, within 50 columns, and never Esc', () => {
     boxHint('Enter goes on'),
     pickHint('c'),
     pickHint('x'),
+    boxHint('Enter sends to todo', 'cancels', 'c'),
+    boxHint('Enter sends', 'cancels', 'c'),
   ]
   expect(lines).toEqual([
     'Enter sends it to todo · Enter on empty cancels',
@@ -45,6 +47,8 @@ test('the hints say the real way out, within 50 columns, and never Esc', () => {
     'Enter goes on · Enter on empty cancels',
     'Enter picks · c cancels',
     'Enter picks · x cancels',
+    'Enter sends to todo · Enter on empty or c cancels',
+    'Enter sends · Enter on empty or c cancels',
   ])
   for (const l of lines) expect(l.length).toBeLessThanOrEqual(50)
   expect(hintLineText(settingsKeys())).toBe('Enter change · ↑↓ move · t l s c views · b back')
@@ -55,21 +59,24 @@ test('the hints say the real way out, within 50 columns, and never Esc', () => {
   for (const keys of [settingsKeys(), rolesKeys(), scoutListKeys(), scoutEditKeys()]) expect(keys.some(k => k.key === 'Esc')).toBe(false)
 })
 
-test('the reject reason box: Enter on empty cancels it (nothing is sent), and so does its Cancel (c) button', async ($, on) => {
+test('the reject reason box: Enter on empty cancels it (nothing is sent), and so does its [Cancel] button (key c)', async ($, on) => {
   stateOf(on, { opened: 'T-5', view: view([task('T-5', 'review', 'Blue button', { branch: 'symcc/T-5' })]) })
   const toasts: string[] = []
   on('ui.toast', (_, e) => (toasts.push(JSON.stringify(e)), { value: undefined }))
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   await ui.press({ key: 'reject' })
-  expect(await ui.find({ type: 'Text', text: /^Enter sends it to todo · Enter on empty cancels$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^Enter sends to todo · Enter on empty or c cancels$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /Esc/ })).toBeUndefined()
   await ui.input({ key: 'reject-reason', text: '   ' })
   expect(await ui.find({ key: 'reject-reason' })).toBeUndefined()
   expect(toasts.length).toBe(0)
   await ui.press({ key: 'reject' })
   const cancel = await ui.find({ key: 'reject-cancel' })
-  expect(cancel?.props.label).toBe('Cancel (c)')
-  expect(cancel?.props.hotkey).toBe('c')
+  expect(cancel?.props.label).toBe('Cancel')
+  expect(cancel?.text).toBe('[Cancel]')
+  // no key drawn in the button (a plain Button with a hotkey would show "c: [Cancel]"); c is on a hidden Button
+  expect(cancel?.props.hotkey).toBeUndefined()
+  expect((await ui.find({ key: 'reject-cancel-key' }))?.props.hotkey).toBe('c')
   await ui.press({ key: 'reject-cancel' })
   expect(await ui.find({ key: 'reject-reason' })).toBeUndefined()
   // the same box over the task's changes, which have their own Back (b)
@@ -89,38 +96,88 @@ test('the reject reason box: Enter on empty cancels it (nothing is sent), and so
   await ui.unmount()
 })
 
-test('the role pick list has a Cancel (c) button and says so', async ($, on) => {
+test('the role pick list has a [Cancel] button (key c) and says so', async ($, on) => {
   stateOf(on, { opened: 'T-1', view: view([task('T-1', 'todo', 'Write it up')]) })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   await ui.press({ key: 'role' })
   expect(await ui.find({ type: 'Text', text: /^Enter picks · c cancels$/ })).toBeDefined()
   const cancel = await ui.find({ key: 'role-cancel' })
-  expect(cancel?.props.label).toBe('Cancel (c)')
-  expect(cancel?.props.hotkey).toBe('c')
+  expect(cancel?.props.label).toBe('Cancel')
+  expect(cancel?.text).toBe('[Cancel]')
+  // no key drawn in the button (a plain Button with a hotkey would show "c: [Cancel]"); c is on a hidden Button
+  expect(cancel?.props.hotkey).toBeUndefined()
+  expect((await ui.find({ key: 'role-cancel-key' }))?.props.hotkey).toBe('c')
   await ui.press({ key: 'role-cancel' })
   expect(await ui.find({ key: 'role-cancel' })).toBeUndefined()
   expect(await ui.find({ key: 'role' })).toBeDefined()
+  // the hidden c Button cancels the same way
+  await ui.press({ key: 'role' })
+  await ui.press({ key: 'role-cancel-key' })
+  expect(await ui.find({ key: 'role-cancel' })).toBeUndefined()
   await ui.unmount()
 })
 
-test('"Your answer" opened with Answer…: Enter on empty and Cancel (c) go back to the answer buttons', async ($, on) => {
+test('"Your answer" opened with Answer…: Enter on empty and [Cancel] (key c) go back to the answer buttons', async ($, on) => {
   stateOf(on, { opened: 'T-2', view: view([task('T-2', 'waiting', 'Search mode', { question: 'Which colour?', options: ['red', 'blue'] })]) })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   await ui.press({ key: 'choice-3' })
   expect(await ui.find({ key: 'answer' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /^Enter sends · Enter on empty cancels$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^Enter sends · Enter on empty or c cancels$/ })).toBeDefined()
   await ui.input({ key: 'answer', text: '' })
   expect(await ui.find({ key: 'answer' })).toBeUndefined()
   expect(await ui.find({ key: 'choice-1' })).toBeDefined()
   await ui.press({ key: 'choice-3' })
+  expect(await ui.find({ type: 'Text', text: /^Enter sends · Enter on empty or c cancels$/ })).toBeDefined()
   const cancel = await ui.find({ key: 'answer-cancel' })
-  expect(cancel?.props.hotkey).toBe('c')
+  expect(cancel?.props.label).toBe('Cancel')
+  expect(cancel?.text).toBe('[Cancel]')
+  // no key drawn in the button (a plain Button with a hotkey would show "c: [Cancel]"); c is on a hidden Button
+  expect(cancel?.props.hotkey).toBeUndefined()
+  expect((await ui.find({ key: 'answer-cancel-key' }))?.props.hotkey).toBe('c')
   await ui.press({ key: 'answer-cancel' })
   expect(await ui.find({ key: 'answer' })).toBeUndefined()
   // the task stays open
   expect(await ui.find({ key: 'choice-1' })).toBeDefined()
   await ui.unmount()
 })
+
+/** T-775: off the terminal a Cancel button is a native Button labelled "Cancel", no brackets; c still on its hidden Button. */
+type Found = { type?: string; props: Record<string, unknown>; text?: string } | undefined
+async function nativeCancel(ui: { find: (q: { key: string }) => Promise<Found>; press: (q: { key: string }) => Promise<unknown> }, key: string) {
+  const b = await ui.find({ key })
+  expect(b?.type).toBe('Button')
+  expect(b?.props.label).toBe('Cancel')
+  expect(b?.props.variant).toBe('secondary')
+  expect(b?.props.plain).toBe(undefined)
+  expect(b?.text ?? '').not.toContain('[')
+  expect((await ui.find({ key: `${key}-key` }))?.props.hotkey).toBe('c')
+  await ui.press({ key })
+  expect(await ui.find({ key })).toBeUndefined()
+}
+
+for (const surface of ['desktop', 'mobile'] as const) {
+  test(`T-775: on ${surface} the reject box's Cancel is a native Button "Cancel"`, async ($, on) => {
+    stateOf(on, { opened: 'T-5', view: view([task('T-5', 'review', 'Blue button', { branch: 'symcc/T-5' })]) })
+    const ui = await $.ui.mount({ ...PANE, surface })
+    await ui.press({ key: 'reject' })
+    await nativeCancel(ui, 'reject-cancel')
+    await ui.unmount()
+  })
+  test(`T-775: on ${surface} the role pick list's Cancel is a native Button "Cancel"`, async ($, on) => {
+    stateOf(on, { opened: 'T-1', view: view([task('T-1', 'todo', 'Write it up')]) })
+    const ui = await $.ui.mount({ ...PANE, surface })
+    await ui.press({ key: 'role' })
+    await nativeCancel(ui, 'role-cancel')
+    await ui.unmount()
+  })
+  test(`T-775: on ${surface} the answer box's Cancel is a native Button "Cancel"`, async ($, on) => {
+    stateOf(on, { opened: 'T-2', view: view([task('T-2', 'waiting', 'Search mode', { question: 'Which colour?', options: ['red', 'blue'] })]) })
+    const ui = await $.ui.mount({ ...PANE, surface })
+    await ui.press({ key: 'choice-3' })
+    await nativeCancel(ui, 'answer-cancel')
+    await ui.unmount()
+  })
+}
 
 test('"Your answer" on a plain question: Enter on empty goes back to the board list', async ($, on) => {
   stateOf(on, { opened: 'T-2', view: view([task('T-2', 'waiting', 'Search mode', { question: 'Case-sensitive?' })]) })

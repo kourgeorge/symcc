@@ -14,7 +14,7 @@ export type AnswerBox = {
   onChoice: (i: number) => () => void
   /** Enter in the box (an empty one leaves it) */
   onSubmit: (value: string) => void
-  /** Cancel (c): back to the buttons */
+  /** [Cancel] (key c): back to the buttons */
   onCancel: () => void
 }
 
@@ -67,8 +67,22 @@ export function answerBox(pane: PaneParts, a: AnswerBox) {
       )}
       {a.choices.length > 0 && !a.typing && <Text key="answer-keys" color={C('inactive')}>{choiceKeysHint(a.choices.length)}</Text>}
       {a.typing && <Input key="answer" label="Your answer" placeholder="type and press Enter" autoFocus onSubmit={value => a.onSubmit(value)} />}
-      {a.typing && a.choices.length > 0 && <Button key="answer-cancel" label="Cancel (c)" hotkey="c" onPress={a.onCancel} />}
-      {a.typing && <Text color={C('inactive')}>{boxHint('Enter sends', a.choices.length ? 'cancels' : 'goes back')}</Text>}
+      {a.typing && a.choices.length > 0 && (
+        <Box key="answer-cancel-row" flexDirection="column">
+          {terminal ? (
+            <Button key="answer-cancel" plain label="Cancel" onPress={a.onCancel}>
+              <Text color={C('text')}>[Cancel]</Text>
+            </Button>
+          ) : (
+            <Button key="answer-cancel" label="Cancel" variant="secondary" onPress={a.onCancel} />
+          )}
+          {/* the c key sits on a hidden Button: a plain Button with a hotkey would draw "c: " before [Cancel] */}
+          <Box key="answer-cancel-keys" display="none">
+            <Button key="answer-cancel-key" label="Cancel" hotkey="c" onPress={a.onCancel} />
+          </Box>
+        </Box>
+      )}
+      {a.typing && <Text color={C('inactive')}>{boxHint('Enter sends', a.choices.length ? 'cancels' : 'goes back', a.choices.length ? 'c' : undefined)}</Text>}
     </Box>
   )
 }
