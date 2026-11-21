@@ -84,14 +84,15 @@ for (const [name, t] of [['board', board], ['Live tab', live]]) {
   if (!lines.some(l => l.startsWith(' ✓ 56 merged'))) bad(`still frame: the ${name}'s ▍Today line is not indented by 1`)
   if (lines.some(l => /^ {3}[✓▶]/.test(l))) bad(`still frame: the ${name} still indents by 3 under a ▍heading`)
 }
-// (T-769, T-779) ▍Today in 3 lines: the figures; the real medians per task and agent work time (no cost);
-// the bar with the scouts' share and the hour sparkline (no "busiest")
+// (T-769, T-779) ▍Today in 4 lines: the figures; the real medians per task and agent work time (no cost);
+// the bar with the scouts' share; then the hour sparkline with its labels and the figures (no cost)
 for (const [name, t] of [['board', board], ['Live tab', live]]) {
   const after = t.slice(t.indexOf('▍Today') + '▍Today'.length).split('\n').filter(l => l.trim())
   if (after[1] !== ' ⌀ per task 3M · 9m work · 41m start-to-merge   ⏱ 16h 56m agent work') bad(`still frame: the ${name}'s ▍Today line 2 does not show "3M · 9m" and the real figures ("${after[1] ?? ''}")`)
-  if (!/^ [█▒]{16} workers and checkers 90% · scouts 10% \(54\.7M of 530\.1M tokens\) {3}08 [▁▂▃▄▅▆▇█]+ \d\d/.test(after[2] ?? '')) bad(`still frame: the ${name}'s ▍Today line 3 is not the bar, the scouts' share and the hour sparkline ("${after[2] ?? ''}")`)
+  if (!/^ [█▒]{16} workers and checkers 90% · scouts 10% \(54\.7M of 530\.1M tokens\)$/.test(after[2] ?? '')) bad(`still frame: the ${name}'s ▍Today line 3 is not the bar and the scouts' share ("${after[2] ?? ''}")`)
+  if (!/^ 08 [▁▂▃▄▅▆▇█]+ \d\d {3}busiest \d\d:00 · [\d.]+M tokens {3}first try 34% {3}⌀ 2\.4 tries {3}⌕ \d+ sent back by the checker$/.test(after[3] ?? '')) bad(`still frame: the ${name}'s ▍Today line 4 is not the hour sparkline with its labels, busiest hour, first try, tries and send-backs ("${after[3] ?? ''}")`)
 }
-if (/busiest|≈ \$/.test(live + board)) bad('still frame: ▍Today still shows "busiest" or a "≈ $" figure')
+if (/≈ \$/.test(live + board)) bad('still frame: ▍Today shows a "≈ $" figure')
 for (const w of ['workers', 'scouts']) {
   if (!view('live').includes(`<span class="t-who-${w}">`)) bad(`still frame: the ${w}' bar part is not drawn in the t-who-${w} tone`)
   if (!new RegExp(`\\.t-who-${w}\\b`).test(readFileSync(join(out, 'style.css'), 'utf8'))) bad(`style.css: no .t-who-${w} rule`)

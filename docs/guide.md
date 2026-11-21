@@ -1154,13 +1154,14 @@ indented by 1 space (VS Code shows the same names as bold headings):
   (`⏵ auto · agents 2/3 busy · ⌕ gaps-bot 4m, board-review 1m`). When the names don't fit, it
   says `⌕ 3 scouts`, and on a very narrow panel just `⌕ 3`. A scout still waiting to start
   isn't shown, and with no scout running there is no mark. A click on it (or the `s` key)
-  opens the Scouts tab; this works on every board. Under the `▍Today` heading, three lines about today:
+  opens the Scouts tab; this works on every board. Under the `▍Today` heading, four lines about today:
 
   ```
   ▍Today
    ✓ 67 merged   ↺ 56 sent back   ✗ 0 failed   Σ 320.7M tokens
    ⌀ per task 2.8M · 9m work · 23m start-to-merge   ⏱ 13h 06m agent work · ≈ $64
-   ████████████▓▓▒░ workers 84% · checkers 8% · scouts 5% · lead 3%   08 ▁▂▃▅▇▆▅▃▅▇█▆▃ 20
+   ████████████▓▓▒░ workers 84% · checkers 8% · scouts 5% · lead 3%
+   08 ▁▂▃▅▇▆▅▃▅▇█▆▃ 20   busiest 14:00 · 42M tokens   first try 34%   ⌀ 2.4 tries   ⌕ 68 sent back by the checker
   ```
 
   The first line: merged, sent back by the checker, failed, and the tries' tokens today. The second:
@@ -1168,13 +1169,17 @@ indented by 1 space (VS Code shows the same names as bold headings):
   from their first try's start to the merge; then all agent work today (the tries' time today and the
   scouts'); then `≈ $N`, the session's cost as `/cost` says it, only when symcc knows it (never a
   guess). The third: a bar of who spent today's tokens (workers, checkers, scouts, the lead; each in
-  its board color and its own shade), with the shares, then the tokens per hour from the first busy
-  hour to now, with the first and last hour dim; `busiest HH:00 · NM` goes on the end when there is
-  room. A checker's tokens are counted apart from its worker's from now on (older tries count as the
+  its board color and its own shade), with the shares. The fourth: the tokens per hour from the first busy
+  hour to now as a sparkline, with the first and last hour dim on each side (they always stay); then
+  `busiest HH:00 · NM tokens`, today's share of merged tasks that went through on the first try, the
+  average tries per merged task (the same figures `/symcc-stats` shows), and how many times the checker
+  sent a task back. A checker's tokens are counted apart from its worker's from now on (older tries count as the
   worker's), and the lead's part shows only where symcc can read the lead's usage. The lead's,
   scouts' and cost figures are read in the background at most every two minutes. On a narrow panel
-  parts drop from the ends, in this order: the cost, the hour labels, the hour line, the shares'
-  words (the bar stays); nothing goes past the panel's width. The task that starts next shows in the band above the
+  parts drop from the ends: line 2 loses the cost, then the agent work time; line 3 loses the shares'
+  words (the bar stays); line 4 loses the checker send-backs, then the tries, then the first try,
+  then the busiest hour. The hour labels and the sparkline always stay: when the sparkline itself is
+  too wide, neighbouring hours are merged into one bar. Nothing goes past the panel's width. The task that starts next shows in the band above the
   prompt (`○ next up`), and the tasks that wait hang under their lanes. With nothing running it
   says `No task is running right now.`
 - At the bottom, just above the key hints, the **Organizational memory** section (see

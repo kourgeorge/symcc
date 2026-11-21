@@ -36,7 +36,7 @@
   const T740_TRY1_TOKENS = 4e6
   const USUAL = END_TODAY.tokens / END_TODAY.merged // the board's usual tokens per merged task; a full bar is that
   const MAX_AGENTS = 3
-  // (T-769, T-779) ▍Today's second and third lines, real figures from this project's stats for 21 November: the medians per
+  // (T-769, T-779) ▍Today's second, third and fourth lines, real figures from this project's stats for 21 November: the medians per
   // merged task, the agent work time, and the scouts' share of the tokens (54.7M of 530.1M; the rest is the workers' and
   // checkers'; the lead's share and the day's cost are not known). The hour sparkline is a plain shape rising through the afternoon.
   const TODAY_MORE = {
@@ -45,6 +45,10 @@
     scoutsPct: 10,
     scoutsTokens: '54.7M of 530.1M',
     spark: '▁▁▁▂▂▃▄▅▆',
+    // (T-781) line 4's figures: today's right-first-try share and tries per merged task (from /symcc-stats for 21 November)
+    busiest: '16:00 · 41M tokens',
+    firstTry: 34,
+    avgTries: '2.4',
   }
   const WHO_CELL = { workers: '█', scouts: '▒' }
 
@@ -157,7 +161,9 @@
     const cells = Math.round((TODAY_MORE.scoutsPct / 100) * 16)
     const bar = sp(WHO_CELL.workers.repeat(16 - cells), 'who-workers') + sp(WHO_CELL.scouts.repeat(cells), 'who-scouts')
     const shares = ' ' + sp(`workers and checkers ${100 - TODAY_MORE.scoutsPct}%`, 'who-workers') + sp(' · ', 'dim') + sp(`scouts ${TODAY_MORE.scoutsPct}%`, 'who-scouts') + sp(` (${TODAY_MORE.scoutsTokens} tokens)`, 'dim')
-    L.push(' ' + bar + shares + '   ' + sp('08 ', 'dim') + sp(TODAY_MORE.spark, 'bar') + sp(` ${clock(s.now).slice(0, 2)}`, 'dim'))
+    L.push(' ' + bar + shares)
+    // (T-781) line 4: the hour sparkline with its first and last hour, then busiest hour, first try, tries and the checker's send-backs
+    L.push(' ' + sp('08 ', 'dim') + sp(TODAY_MORE.spark, 'bar') + sp(` ${clock(s.now).slice(0, 2)}`, 'dim') + sp(`   busiest ${TODAY_MORE.busiest}   first try ${TODAY_MORE.firstTry}%   ⌀ ${TODAY_MORE.avgTries} tries   ⌕ ${d.back} sent back by the checker`, 'dim'))
     if (s.lanes.length) L.push(' ' + sp(`✧ = an agent works here (needs an agent slot)   bar: tokens of the task so far, full = usual per task (${tok(USUAL)})`, 'dim'))
     L.push('')
     L.push(heading('Branches'))

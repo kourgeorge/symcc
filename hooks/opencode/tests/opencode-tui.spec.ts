@@ -2711,7 +2711,7 @@ test('T-760: the OpenCode Live tab ends work and check in ✧ (in the heading co
   }
 })
 
-test('T-769: the Live tab\'s ▍Today has 3 lines (medians per task, work time, cost, the stacked bar with shares, the hour sparkline) from the slim view file; narrow drops parts, never wider', () => {
+test('T-769: the Live tab\'s ▍Today has 4 lines (medians per task, work time, cost, the stacked bar with shares, the hour sparkline with its figures) from the slim view file; narrow drops parts, never wider', () => {
   const f0 = viewFile()
   const tasks = todayTasks(NOW) as unknown as SymccTask[]
   const f: ViewFile = { ...f0, view: { ...f0.view, tasks: tasks.map(t => viewTask(t)), today_team: todayTeamOf(NOW, localOffset(NOW)) } }
@@ -2721,20 +2721,25 @@ test('T-769: the Live tab\'s ▍Today has 3 lines (medians per task, work time, 
     const texts = panelLines(parsed, { tab: 'live', opened: '', cursor: 0 }, NOW, w).lines.map(lineText)
     for (const t of texts) expect([w, t, textWidthOf(t) <= w]).toEqual([w, t, true])
     const at = texts.indexOf('▍Today')
-    return { texts, lines: texts.slice(at + 1, at + 4) }
+    return { texts, lines: texts.slice(at + 1, at + 5) }
   }
   const wide = today(140)
   expect(wide.lines[0]).toBe(`${LIVE_INDENT}✓ 3 merged   ↺ 0 sent back   ✗ 0 failed   Σ 6M tokens`)
   expect(wide.lines[1]).toBe(LIVE_INDENT + TODAY_LINE_2)
-  expect(wide.lines[2]!.startsWith(LIVE_INDENT + TODAY_BAR_START + '   ')).toBe(true)
-  expect(/[▁▂▃▄▅▆▇█]/.test(wide.lines[2]!.slice((LIVE_INDENT + TODAY_BAR_START).length))).toBe(true)
+  expect(wide.lines[2]!.startsWith(LIVE_INDENT + TODAY_BAR_START)).toBe(true)
+  expect(/[▁▂▃▄▅▆▇]/.test(wide.lines[2]!)).toBe(false)
+  expect(/^\s*\d\d [▁▂▃▄▅▆▇█ ]+ \d\d {3}busiest .* tokens {3}first try \d+%/.test(wide.lines[3]!)).toBe(true)
   // a broken today_team is left out: no lead, scouts or cost
   const broken = parseViewFile(viewFileText({ ...f, view: { ...f.view, today_team: 'x' as never } }))!
   expect('today_team' in broken.view).toBe(false)
-  // narrow: the cost goes first; at 40 only the bar is left on the third line
-  expect(today(80).texts.some(t => t.includes('≈ $'))).toBe(false)
+  // narrow: the cost goes; at 40 only the bar is left on the third line
+  expect(today(70).texts.some(t => t.includes('≈ $'))).toBe(false)
   const narrow = today(40)
   expect(narrow.texts.some(t => t === `${LIVE_INDENT}████████▓▒▒▒▒▒░░`)).toBe(true)
+  // line 4 keeps both hour labels and a sparkline, its figures cut from the end
+  const four = narrow.texts.find(t => /^\s*\d\d [▁▂▃▄▅▆▇█ ]+ \d\d/.test(t))
+  expect(four === undefined).toBe(false)
+  expect(four!.includes('⌕')).toBe(false)
 })
 
 test('T-692: the Live tab draws the terminal panel\'s lanes and today (core/live.ts) for the same board, from the slim view file; a narrow panel cuts nothing', () => {

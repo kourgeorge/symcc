@@ -700,7 +700,8 @@ export function todayLines(d: LiveToday, width: number): string[] {
 
 // ---------------- T-769: ▍Today's second and third lines ----------------
 //   ⌀ per task 2.8M · 9m work · 23m start-to-merge   ⏱ 13h 06m agent work · ≈ $64
-//   ████████████▓▓▒░ workers 84% · checkers 8% · scouts 5% · lead 3%   08 ▁▂▃▅▇▆▅▃▅▇█▆▃ 20   busiest 14:00 · 42.1M
+//   ████████████▓▓▒░ workers 84% · checkers 8% · scouts 5% · lead 3%
+//   08 ▁▂▃▅▇▆▅▃▅▇█▆▃ 20   busiest 14:00 · 42.1M tokens   first try 34%   ⌀ 2.4 tries   ⌕ 68 sent back by the checker
 
 /** Who spent today's tokens, in the bar's order. */
 export type TodayWho = 'workers' | 'checkers' | 'scouts' | 'lead'
@@ -731,6 +732,10 @@ export type TodayMore = {
   who: { who: TodayWho; tokens: number }[]
   hours: number[]
   firstHour: number
+  /** T-781: of the tasks merged today with try data: the share merged on the first try (percent), the tries per task, and the checker's send-backs today */
+  firstTry?: number
+  avgTries?: number
+  sentBack?: number
 }
 
 const HOUR = 3_600_000
@@ -749,6 +754,8 @@ export function todayMore(tasks: readonly SymccTask[], team: TodayTeam | undefin
   const tok: number[] = []
   const work: number[] = []
   const toMerge: number[] = []
+  const tries: number[] = []
+  let sentBack = 0
   for (const t of tasks) {
     for (const r of t.runs ?? []) {
       const start = ms(r.started)
@@ -769,11 +776,15 @@ export function todayMore(tasks: readonly SymccTask[], team: TodayTeam | undefin
       const h = hourOf(at)
       if (h >= 0 && h < 24) hours[h]! += all
     }
+    sentBack += marksOf(t).filter(h => h.kind === 'checker-problems' && isToday(ms(h.at))).length
     const mergedAt = marksOf(t).filter(h => h.kind === 'merged').map(h => ms(h.at)).filter(isToday)
     if (!mergedAt.length) continue
     const f = taskFigures(t)
     if (f.tok !== undefined) tok.push(f.tok)
-    if (f.hasData) work.push(f.ms)
+    if (f.hasData) {
+      work.push(f.ms)
+      tries.push(f.tries)
+    }
     const first = ms(t.runs?.[0]?.started)
     if (first !== undefined && Math.max(...mergedAt) >= first) toMerge.push(Math.max(...mergedAt) - first)
   }
@@ -793,6 +804,8 @@ export function todayMore(tasks: readonly SymccTask[], team: TodayTeam | undefin
     who,
     hours: firstHour < 0 || firstHour > now ? [] : hours.slice(firstHour, now + 1),
     firstHour: Math.max(0, firstHour),
+    ...(tries.length ? { firstTry: (100 * tries.filter(n => n === 1).length) / tries.length, avgTries: tries.reduce((a, b) => a + b, 0) / tries.length } : {}),
+    sentBack,
   }
 }
 
@@ -836,17 +849,31 @@ export function sparkline(hours: readonly number[]): string {
 const hh = (h: number) => String(h).padStart(2, '0')
 
 /**
- * ▍Today's second and third lines in `width` columns (see the drawing above): the medians per merged task, the agent
- * work time and the cost; then the stacked bar of who spent the tokens with their shares, the tokens per hour and the
- * busiest hour. When narrow, parts go from the ends, in this order: the busiest hour, the cost, the sparkline's hour
- * labels, the sparkline, the shares' words (the bar stays); then line 2's agent work time and its per-task figures
- * from the end. Never wider than `width`. A line with nothing to say is left out.
+ * T-781: line 4's sparkline in at most `bars` bars: neighbouring hours merged (their tokens added) when there are more
+ * hours than bars. Never fewer than one bar.
+ */
+export function squeezeHours(hours: readonly number[], bars: number): number[] {
+  const k = Math.max(1, Math.floor(bars))
+  if (hours.length <= k) return [...hours]
+  const g = Math.ceil(hours.length / k)
+  const out: number[] = []
+  for (let i = 0; i < hours.length; i += g) out.push(hours.slice(i, i + g).reduce((s, n) => s + n, 0))
+  return out
+}
+
+/**
+ * ▍Today's second, third and fourth lines in `width` columns (see the drawing above): the medians per merged task, the
+ * agent work time and the cost; the stacked bar of who spent the tokens with their shares; the tokens per hour with its
+ * first and last hour (always shown), then the busiest hour, the right-first-try share, the tries per merged task and
+ * the checker's send-backs. When narrow, line 2 loses its cost, its agent work time, then its per-task figures from the
+ * end; line 3 loses the shares' words (the bar stays); line 4 loses its parts from the end (send-backs, tries, first try,
+ * busiest) and then squeezes the sparkline (hours merged, the labels stay). Never wider than `width`. A line with nothing to say is left out.
  */
 export function todayMoreLines(m: TodayMore, width: number): LiveSeg[][] {
   const w = Math.max(1, Math.floor(width))
   const per = m.perTask
   const perParts = per ? [per.tokens !== undefined && fmtTokens(per.tokens), per.workMs !== undefined && `${fmtDuration(per.workMs)} work`, per.mergeMs !== undefined && `${fmtDuration(per.mergeMs)} start-to-merge`].filter((x): x is string => !!x) : []
-  const line2 = (level: number, keepPer: number, work: boolean): LiveSeg[] => {
+  const line2 = (cost: boolean, keepPer: number, work: boolean): LiveSeg[] => {
     const out: LiveSeg[] = []
     const gap = () => out.length && out.push({ text: '   ', tone: 'text' })
     const p = perParts.slice(0, keepPer)
@@ -855,44 +882,52 @@ export function todayMoreLines(m: TodayMore, width: number): LiveSeg[][] {
       gap()
       out.push({ text: '⏱ ', tone: 'dim' }, { text: `${fmtDuration(m.workMs)} agent work`, tone: 'text' })
     }
-    if (level < 1 && m.usd !== undefined) {
+    if (cost && m.usd !== undefined) {
       if (out.length) out.push({ text: ' · ', tone: 'dim' })
       out.push({ text: todayCostText(m.usd), tone: 'text' })
     }
     return out
   }
   const sh = shares(m.who)
-  const busiest = m.hours.length ? m.hours.indexOf(Math.max(...m.hours)) : -1
-  const line3 = (level: number, busy: boolean, barW = TODAY_BAR): LiveSeg[] => {
+  const line3 = (words: boolean, barW = TODAY_BAR): LiveSeg[] => {
     if (!m.who.length) return []
     const out: LiveSeg[] = [...todayBar(m.who, barW)]
-    if (level < 4) {
-      m.who.forEach((x, i) => out.push({ text: i ? ' · ' : ' ', tone: 'dim' }, { text: `${x.who} ${sh[i]}`, tone: x.who }))
+    if (words) m.who.forEach((x, i) => out.push({ text: i ? ' · ' : ' ', tone: 'dim' }, { text: `${x.who} ${sh[i]}`, tone: x.who }))
+    return out
+  }
+  const busiest = m.hours.length ? m.hours.indexOf(Math.max(...m.hours)) : -1
+  const extras: string[] = [
+    ...(busiest >= 0 ? [`busiest ${hh(m.firstHour + busiest)}:00 · ${fmtTokens(m.hours[busiest]!)} tokens`] : []),
+    ...(m.firstTry !== undefined ? [`first try ${Math.round(m.firstTry)}%`] : []),
+    ...(m.avgTries !== undefined ? [`⌀ ${m.avgTries.toFixed(1)} tries`] : []),
+    ...(m.sentBack !== undefined ? [`⌕ ${m.sentBack} sent back by the checker`] : []),
+  ]
+  const line4 = (keep: number, bars: number): LiveSeg[] => {
+    const out: LiveSeg[] = []
+    if (m.hours.length) {
+      out.push({ text: `${hh(m.firstHour)} `, tone: 'dim' }, { text: sparkline(squeezeHours(m.hours, bars)), tone: 'bar' }, { text: ` ${hh(m.firstHour + m.hours.length - 1)}`, tone: 'dim' })
     }
-    if (level < 3 && m.hours.length) {
-      out.push({ text: '   ', tone: 'text' })
-      if (level < 2) out.push({ text: `${hh(m.firstHour)} `, tone: 'dim' })
-      out.push({ text: sparkline(m.hours), tone: 'bar' })
-      if (level < 2) out.push({ text: ` ${hh(m.firstHour + m.hours.length - 1)}`, tone: 'dim' })
-    }
-    if (busy && busiest >= 0) out.push({ text: `   busiest ${hh(m.firstHour + busiest)}:00 · ${fmtTokens(m.hours[busiest]!)}`, tone: 'dim' })
+    extras.slice(0, keep).forEach((x, i) => out.push({ text: out.length || i ? '   ' : '', tone: 'text' }, { text: x, tone: 'dim' }))
     return out
   }
   const fits = (xs: LiveSeg[]) => textWidth(segText(xs)) <= w
-  const done = (a: LiveSeg[], b: LiveSeg[]) => [a, b].filter(x => x.length)
-  if (fits(line2(0, 3, true)) && fits(line3(0, true))) return done(line2(0, 3, true), line3(0, true))
-  for (let level = 0; level <= 4; level++) if (fits(line2(level, 3, true)) && fits(line3(level, false))) return done(line2(level, 3, true), line3(level, false))
-  // narrower still: line 2 loses its agent work time, then its per-task figures from the end; the bar gets shorter
   let two: LiveSeg[] = []
-  for (const [keep, work] of [[3, false], [2, false], [1, false]] as const) {
-    two = line2(4, keep, work)
+  for (const [cost, keep, work] of [[true, 3, true], [false, 3, true], [false, 3, false], [false, 2, false], [false, 1, false]] as const) {
+    two = line2(cost, keep, work)
     if (fits(two)) break
   }
-  if (!fits(two)) two = two.length ? [{ text: fitText(segText(two), w), tone: 'text' }] : two
-  // line 3 fits on its own room: as many of its parts as fit, whatever line 2 kept
-  let three = line3(4, false, Math.min(TODAY_BAR, w))
-  for (let level = 0; level <= 3; level++) if (fits(line3(level, false))) { three = line3(level, false); break }
-  return done(two, three)
+  if (!fits(two)) two = [{ text: fitText(segText(two), w), tone: 'text' }]
+  let three = line3(true)
+  if (!fits(three)) three = line3(false, Math.min(TODAY_BAR, w))
+  // line 4: the labels and the sparkline stay; the extras drop from the end, then the sparkline is squeezed
+  let four = line4(extras.length, m.hours.length)
+  for (let keep = extras.length; keep >= 0 && !fits(four); keep--) four = line4(keep, m.hours.length)
+  if (!fits(four)) {
+    const room = w - textWidth(`${hh(m.firstHour)}  ${hh(m.firstHour + m.hours.length - 1)}`)
+    four = m.hours.length ? line4(0, Math.max(1, room)) : []
+    if (!fits(four)) four = four.length ? [{ text: fitText(segText(four), w), tone: 'text' }] : four
+  }
+  return [two, three, four].filter(x => x.length)
 }
 
 /** All of ▍Today's lines in `width` columns (each under LIVE_INDENT): the figures (todayLines), then todayMoreLines. */
