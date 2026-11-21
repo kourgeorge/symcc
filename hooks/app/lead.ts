@@ -1,4 +1,4 @@
-import { testMinutesOf, openQuestions, liveWorkersFor, whoDrives, drivesAfter, driveAsk, handRequest, noHandRequest, handedText, handedOff, HANDOVER_NOTE, putTask, leadText, resetDoing, find, parseLead, relabelSession, openOnStart, type Board, gitNote, modeOf, notifyOf, notifyChoices, symccOn, statusLine, statusRoom, offStatusLine, inPlan, liveDriver, backToTodo, restartsOf } from '../board'
+import { testMinutesOf, openQuestions, liveWorkersFor, whoDrives, drivesAfter, driveAsk, handRequest, noHandRequest, handedText, handedOff, HANDOVER_NOTE, putTask, leadText, resetDoing, find, parseLead, relabelSession, openOnStart, type Board, gitNote, modeOf, notifyOf, notifyChoices, symccOn, statusLine, statusRoom, offStatusLine, inPlan, liveDriver, backToTodo, restartsOf, type TodayTeam, dayOf, localOffset, tokenCount, safeScoutFile, parseScoutRuns, scoutRunsFile } from '../board'
 import { homeBranch } from './git'
 import { S, workers, queuedWorkers, type PaneView, scoutState, updateView, sizeNotes, MOVED_WHY, TAKEN_WHY } from './state'
 import { type Host, agentState } from '../host'
@@ -229,6 +229,95 @@ export async function handOver(host: Host) {
   if (openOnStart(b)) await openPane(host, { focus: false, quiet: true })
 }
 
+// ---------------- T-769: ▍Today's lead, scout and cost figures ----------------
+// The Live tab's ▍Today shows who spent today's tokens (the lead and the scouts too) and the session's cost. Those are
+// not on the board: the lead's are read from the host's logs (host.lead.usage, slow on a big log), the scouts' from
+// their runs files, the cost from host.session.usage. They are read in the background at most every TEAM_CACHE_MS,
+// never waited for by publish(), and put into the view when read (as the Branches figures are).
+
+/** How long a read of ▍Today's team figures is used before it is read again. */
+export const TEAM_CACHE_MS = 2 * 60_000
+const teamCache: { day: string; readAt: number; running: boolean; value: TodayTeam | undefined } = { day: '', readAt: 0, running: false, value: undefined }
+
+/** The ▍Today team figures for the owner's day at `nowMs`, as last read (undefined until read, or none); starts a new read in the background when stale. */
+export function todayTeam(host: Host, scouts: readonly string[], nowMs = Date.now()): { team: TodayTeam | undefined; done?: Promise<void> } {
+  const day = dayOf(nowMs, localOffset(nowMs))
+  const cur = teamCache.value?.day === day ? teamCache.value : undefined
+  if (teamCache.running || (teamCache.day === day && nowMs - teamCache.readAt < TEAM_CACHE_MS)) return { team: cur }
+  teamCache.running = true
+  const done = readTodayTeam(host, scouts, nowMs)
+    .then(async team => {
+      const had = teamCache.value !== undefined
+      teamCache.value = team
+      teamCache.day = day
+      teamCache.readAt = nowMs
+      if (team || had)
+        await updateView(host, v => {
+          const { today_team: _old, ...rest } = v as PaneView
+          return (team ? { ...rest, today_team: team } : rest) as typeof v
+        })
+    })
+    .catch(() => undefined)
+    .finally(() => {
+      teamCache.running = false
+    })
+  return { team: cur, done }
+}
+
+/** Forgets the last read (the tests start each one fresh). */
+export function resetTodayTeam() {
+  Object.assign(teamCache, { day: '', readAt: 0, running: false, value: undefined })
+}
+
+/** Reads ▍Today's team figures now: the lead's tokens today (when the host can tell them), the scouts' runs that ended today, the session's cost. */
+export async function readTodayTeam(host: Host, scouts: readonly string[], nowMs: number): Promise<TodayTeam | undefined> {
+  const off = localOffset(nowMs)
+  const day = dayOf(nowMs, off)
+  const dayStart = nowMs - (((nowMs + off * 60_000) % 86_400_000) + 86_400_000) % 86_400_000
+  const hours = Array.from({ length: 24 }, () => 0)
+  const at = (ms: number, n: number) => {
+    const h = Math.floor((ms - dayStart) / 3_600_000)
+    if (h >= 0 && h < 24 && n > 0) hours[h]! += n
+  }
+  const out: TodayTeam = { day }
+  if (host.features.leadUsage) {
+    const u = await host.lead.usage(S.root, { kind: 'days', days: 1 }, nowMs).catch(() => null)
+    if (u && Array.isArray(u.lead)) {
+      let lead = 0
+      for (const c of u.lead)
+        if (dayOf(c.atMs, off) === day) {
+          const n = tokenCount(c.tokens)
+          lead += n
+          at(c.atMs, n)
+        }
+      out.lead = lead
+    }
+  }
+  let scoutTok = 0
+  let scoutMs = 0
+  for (const s of new Set(scouts)) {
+    if (safeScoutFile(s, S.N.name) === null) continue
+    const runs = parseScoutRuns(await host.fs.read(path(scoutRunsFile(s, S.N.name))).catch(() => null))
+    for (const r of runs) {
+      const end = Date.parse(r.ended)
+      if (!Number.isFinite(end) || dayOf(end, off) !== day) continue
+      const start = Date.parse(r.started ?? '')
+      if (Number.isFinite(start) && end > start) scoutMs += end - Math.max(start, dayStart)
+      if (r.tokens) {
+        const n = tokenCount(r.tokens)
+        scoutTok += n
+        at(end, n)
+      }
+    }
+  }
+  if (scoutTok) out.scouts = scoutTok
+  if (scoutMs) out.scout_ms = scoutMs
+  const usd = (await host.session.usage().catch(() => null))?.cost?.usd
+  if (typeof usd === 'number' && Number.isFinite(usd) && usd > 0) out.usd = usd
+  if (hours.some(n => n > 0)) out.hours = hours
+  return out.lead === undefined && out.scouts === undefined && out.scout_ms === undefined && out.usd === undefined ? undefined : out
+}
+
 export async function publish(host: Host, b: Board) {
   // the board drawn here is the one last loaded or saved, so its mtime now counts as seen (T-431)
   S.boardMtime = S.readMtime
@@ -243,7 +332,9 @@ export async function publish(host: Host, b: Board) {
   const can = await playable(host)
   // T-727: the Live tab's Branches figures: the last ones read (a stale read starts in the background, never waited for here)
   const branches = branchFacts(host, b, branch || 'main').facts
-  const v: PaneView = { tasks: b.tasks, working, scouts: [...scoutState.values()], mode: modeOf(b), test_commands: b.test_commands, branch, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, test_minutes: testMinutesOf(b), archive_days: b.archive_days, ...(b.archived ? { archived: b.archived } : {}), ...(b.archived_done?.length ? { archived_done: b.archived_done } : {}), open_on_start: openOnStart(b), notify: notifyOf(b, can, S.root), scout_findings: b.scout_findings, tests_with_changes: b.tests_with_changes, checker: b.checker, notify_choices: notifyChoices(can), enabled: symccOn(b), driving: S.driving, branch_note, ...(size_note ? { size_note } : {}), git_state: S.gitState, plan_mode: inPlan(S.plan), ...(branches ? { branches } : {}), ...(openQuestions(b).length ? { questions: openQuestions(b) } : {}) }
+  // T-769: ▍Today's lead, scout and cost figures, the last ones read (a stale read starts in the background)
+  const team = host.features.panel ? todayTeam(host, [...scoutState.keys()]).team : undefined
+  const v: PaneView = { tasks: b.tasks, working, scouts: [...scoutState.values()], mode: modeOf(b), test_commands: b.test_commands, branch, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, test_minutes: testMinutesOf(b), archive_days: b.archive_days, ...(b.archived ? { archived: b.archived } : {}), ...(b.archived_done?.length ? { archived_done: b.archived_done } : {}), open_on_start: openOnStart(b), notify: notifyOf(b, can, S.root), scout_findings: b.scout_findings, tests_with_changes: b.tests_with_changes, checker: b.checker, notify_choices: notifyChoices(can), enabled: symccOn(b), driving: S.driving, branch_note, ...(size_note ? { size_note } : {}), git_state: S.gitState, plan_mode: inPlan(S.plan), ...(branches ? { branches } : {}), ...(team ? { today_team: team } : {}), ...(openQuestions(b).length ? { questions: openQuestions(b) } : {}) }
   await updateView(host, () => v)
   // the banner logo plays a move when something happened (a merge, a worker start, a scout finding, all done)
   void logoOnPublish(host, v).catch(() => undefined)

@@ -259,6 +259,8 @@ test('with the checker on, a passing change waits for a checker (shown as checki
   expect(w.git.main).toBe(H1)
   expect(t.history.map(h => h.text)).toContain('try 1: checker: OK')
   expect(t.runs!.at(-1)!.tokens).toEqual({ output: 500 })
+  // T-769: the checker's part is also kept apart, so the Live tab can tell checkers from workers
+  expect(t.runs!.at(-1)!.checker_tokens).toEqual({ output: 500 })
 })
 
 test('T-440: the target branch deleted while the checker runs: after its OK the task waits with the branch-gone question, not failed', async () => {

@@ -146,6 +146,11 @@ main.home h3 { font-size: 1.1rem; }
 .t-warning { color: var(--t-warn); }
 .t-heading { color: var(--t-head); font-weight: 700; }
 .t-mark { color: var(--t-head); }
+/* (T-769) ▍Today's stacked bar and shares, in the board's colors for workers, checkers, scouts and the lead */
+.t-who-workers { color: var(--t-cur); }
+.t-who-checkers { color: #af87ff; }
+.t-who-scouts { color: var(--t-head); }
+.t-who-lead { color: var(--t-ok); }
 .t-lead { color: var(--fg); }
 .t-tab-on { color: var(--fg); font-weight: 700; text-decoration: underline; }
 .t-file { color: var(--t-ok); }

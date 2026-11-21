@@ -16,6 +16,9 @@ import { hasPage, bandLines, bandDraw, BAND_CLICK_HINT, panelLines, panelKeys, p
 import { readFile } from 'node:fs/promises'
 import { rowEndBoard, ROW_END, ROW_END_NOW } from '../../../tests/row-end-cases'
 import { BRANCH_LINES_100, branchFactsAt, branchTasks } from '../../../tests/branches-fixture'
+import { TODAY_BAR_START, TODAY_LINE_2, todayTasks, todayTeamOf } from '../../../tests/live-today-fixture'
+import { localOffset } from '../../core/days'
+import { textWidth as textWidthOf } from '../../core/stats'
 import { LIVE_INDENT, liveBranches, liveInner } from '../../core/live'
 import { taskSections } from '../../core/task-sections'
 import { viewTask, viewStubFilled } from '../../core/board-parts'
@@ -2655,6 +2658,32 @@ test('T-760: the OpenCode Live tab ends work and check in ✧ (in the heading co
     if (w === 120) expect(texts).toContain(LIVE_INDENT + '✧ = an agent works here (needs an agent slot)   ' + liveBarLegend(lanes.find(l => l.usual)!.usual!))
     else expect(texts.some(t => t.startsWith(LIVE_INDENT + '✧ = an agent works here'))).toBe(true)
   }
+})
+
+test('T-769: the Live tab\'s ▍Today has 3 lines (medians per task, work time, cost, the stacked bar with shares, the hour sparkline) from the slim view file; narrow drops parts, never wider', () => {
+  const f0 = viewFile()
+  const tasks = todayTasks(NOW) as unknown as SymccTask[]
+  const f: ViewFile = { ...f0, view: { ...f0.view, tasks: tasks.map(t => viewTask(t)), today_team: todayTeamOf(NOW, localOffset(NOW)) } }
+  const parsed = parseViewFile(viewFileText(f))!
+  expect(parsed.view.today_team?.lead).toBe(1_000_000)
+  const today = (w: number) => {
+    const texts = panelLines(parsed, { tab: 'live', opened: '', cursor: 0 }, NOW, w).lines.map(lineText)
+    for (const t of texts) expect([w, t, textWidthOf(t) <= w]).toEqual([w, t, true])
+    const at = texts.indexOf('▍Today')
+    return { texts, lines: texts.slice(at + 1, at + 4) }
+  }
+  const wide = today(140)
+  expect(wide.lines[0]).toBe(`${LIVE_INDENT}✓ 3 merged   ↺ 0 sent back   ✗ 0 failed   Σ 6M tokens`)
+  expect(wide.lines[1]).toBe(LIVE_INDENT + TODAY_LINE_2)
+  expect(wide.lines[2]!.startsWith(LIVE_INDENT + TODAY_BAR_START + '   ')).toBe(true)
+  expect(/[▁▂▃▄▅▆▇█]/.test(wide.lines[2]!.slice((LIVE_INDENT + TODAY_BAR_START).length))).toBe(true)
+  // a broken today_team is left out: no lead, scouts or cost
+  const broken = parseViewFile(viewFileText({ ...f, view: { ...f.view, today_team: 'x' as never } }))!
+  expect('today_team' in broken.view).toBe(false)
+  // narrow: the cost goes first; at 40 only the bar is left on the third line
+  expect(today(80).texts.some(t => t.includes('≈ $'))).toBe(false)
+  const narrow = today(40)
+  expect(narrow.texts.some(t => t === `${LIVE_INDENT}████████▓▒▒▒▒▒░░`)).toBe(true)
 })
 
 test('T-692: the Live tab draws the terminal panel\'s lanes and today (core/live.ts) for the same board, from the slim view file; a narrow panel cuts nothing', () => {

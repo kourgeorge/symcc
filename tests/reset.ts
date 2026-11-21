@@ -20,6 +20,7 @@ import { resetDebriefs } from '../hooks/app/debrief'
 import { resetEvidence } from '../hooks/app/evidence'
 import { live, stopLiveTick } from '../hooks/claude/ui/live'
 import { resetBranches } from '../hooks/app/branches'
+import { resetTodayTeam } from '../hooks/app/lead'
 
 /** Empties the plugin's in-memory state (agents, tasks being checked, queues for the lead, timers, S): what a reload starts with. */
 export function resetPlugin() {
@@ -47,6 +48,7 @@ export function resetPlugin() {
   resetDebriefs()
   resetEvidence()
   resetBranches()
+  resetTodayTeam()
   for (const m of [workers, queuedWorkers, onPurpose, scoutRuns, checkerRuns, reminded, scoutState, notReady, checkerNotReady, changesCache, scratchUse, skippedRoles, skippedKinds, stopAsked, offAsked]) m.clear()
   for (const s of [starting, finishing, stopped, movedAgents, boardAgents, healthTold, openDays, keptDirty, approving, tmpWarned, seenEnded, saidNeedsYou, guardLogged]) s.clear()
   movedRefused().clear()

@@ -13,7 +13,7 @@
 // branch (commits ahead, how far behind), each task row a row Button that opens its task.
 // T-747: each section (Tasks, Today, Branches, Organizational memory) starts with a "▍Name" heading (core's
 // liveHeading), its lines indented by LIVE_INDENT, one empty line between sections.
-import { LIVE_EMPTY, LIVE_INDENT, liveLegend, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, laneLines, liveBold, liveHeading, liveIndented, liveInner, liveBranches, liveHeader, liveKeys, liveLabelSegs, liveLanes, liveLayout, liveOrgMem, liveStations, liveToday, liveTrains, todayLines, trainRows } from '../../core/live'
+import { LIVE_EMPTY, LIVE_INDENT, liveLegend, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, laneLines, liveBold, liveHeading, liveIndented, liveInner, liveBranches, liveHeader, liveKeys, liveLabelSegs, liveLanes, liveLayout, liveOrgMem, liveStations, liveTodayLines, liveTrains, trainRows } from '../../core/live'
 import { footerRule } from '../../board'
 import { S, workers } from '../../app/state'
 import { type $, panelValues } from '../panel'
@@ -109,7 +109,7 @@ export function livePage($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
     if (agentId) await $.ui.view({ agentId })
     else $.ui.toast(S.N.toast(target ? `${target.id} has no worker running now.` : 'No worker is running now.'))
   })
-  const today = todayLines(liveToday(v.tasks, nowMs), inner)
+  const today = liveTodayLines(v, nowMs, inner)
   const om = liveOrgMem(notes, width)
   const br = liveBranches(v, nowMs, width)
   return (
@@ -139,7 +139,7 @@ export function livePage($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
       <Text key="live-next-blank"> </Text>
       <Text key="live-today-head">{draw(liveHeading(LIVE_SECTIONS.today, width))}</Text>
       {today.map((line, i) => (
-        <Text key={`live-today-${i}`} color={C('text')}>{LIVE_INDENT + line}</Text>
+        <Text key={`live-today-${i}`}>{under(line)}</Text>
       ))}
       {br ? <Text key="live-br-blank"> </Text> : null}
       {br ? <Text key="live-br-head">{draw(br.head)}</Text> : null}

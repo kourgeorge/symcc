@@ -1066,9 +1066,27 @@ indented by 1 space (VS Code shows the same names as bold headings):
   branch yet) the section isn't shown. VS Code draws it with real lines, and OpenCode shows the
   same section.
 - The header line says the board mode and `agents N/M busy` (workers and checkers running
-  against `max_parallel`). Under the `▍Today` heading, one line of today's numbers:
-  `✓ 67 merged   ↺ 56 sent back   ✗ 0 failed   Σ 320.7M tokens` (merged, sent back by the checker,
-  failed, and the tries' tokens today). The task that starts next shows in the band above the
+  against `max_parallel`). Under the `▍Today` heading, three lines about today:
+
+  ```
+  ▍Today
+   ✓ 67 merged   ↺ 56 sent back   ✗ 0 failed   Σ 320.7M tokens
+   ⌀ per task 2.8M · 9m work · 23m start-to-merge   ⏱ 13h 06m agent work · ≈ $64
+   ████████████▓▓▒░ workers 84% · checkers 8% · scouts 5% · lead 3%   08 ▁▂▃▅▇▆▅▃▅▇█▆▃ 20
+  ```
+
+  The first line: merged, sent back by the checker, failed, and the tries' tokens today. The second:
+  for the tasks merged today, the middle value (median) of their tokens, their work time and the time
+  from their first try's start to the merge; then all agent work today (the tries' time today and the
+  scouts'); then `≈ $N`, the session's cost as `/cost` says it, only when symcc knows it (never a
+  guess). The third: a bar of who spent today's tokens (workers, checkers, scouts, the lead; each in
+  its board color and its own shade), with the shares, then the tokens per hour from the first busy
+  hour to now, with the first and last hour dim; `busiest HH:00 · NM` goes on the end when there is
+  room. A checker's tokens are counted apart from its worker's from now on (older tries count as the
+  worker's), and the lead's part shows only where symcc can read the lead's usage. The lead's,
+  scouts' and cost figures are read in the background at most every two minutes. On a narrow panel
+  parts drop from the ends, in this order: the cost, the hour labels, the hour line, the shares'
+  words (the bar stays); nothing goes past the panel's width. The task that starts next shows in the band above the
   prompt (`○ next up`), and the tasks that wait hang under their lanes. With nothing running it
   says `No task is running right now.`
 - At the bottom, just above the key hints, the **Organizational memory** section (see

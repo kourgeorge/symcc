@@ -36,6 +36,18 @@
   const T740_TRY1_TOKENS = 4e6
   const USUAL = END_TODAY.tokens / END_TODAY.merged // the board's usual tokens per merged task; a full bar is that
   const MAX_AGENTS = 3
+  // (T-769) ▍Today's second and third lines, from the real board that day: the medians per merged task, the agent work
+  // time at the story's start (it grows with the busy agents), the session's cost, who spent the tokens (bar cells of
+  // 16, shares) and the tokens per hour from 08:00 (the current hour is added as the story goes)
+  const TODAY_MORE = {
+    perTask: '2.8M · 9m work · 23m start-to-merge',
+    workMin: 10 * 60 + 58,
+    cost: '≈ $54',
+    who: [['workers', 13, 84], ['checkers', 1, 8], ['scouts', 1, 5], ['lead', 1, 3]],
+    spark: '▁▂▃▅█▆▅▃',
+    busiest: '12:00 · 41.3M',
+  }
+  const WHO_CELL = { workers: '█', checkers: '▓', scouts: '▒', lead: '░' }
 
   // ---------- the state ----------
   function start() {
@@ -134,6 +146,14 @@
     L.push(heading('Today'))
     const d = s.today
     L.push(' ' + sp(`✓ ${d.merged} merged`, 'passed') + sp(`   ↺ ${d.back} sent back   ✗ ${d.failed} failed   Σ ${tok(d.tokens)} tokens`, 'dim'))
+    // (T-769) the medians per merged task, today's agent work time and the session's cost; then who spent the tokens
+    // (a stacked bar in the board colors, with the shares) and the tokens per hour from 08:00 to now
+    const work = TODAY_MORE.workMin + Math.round(((s.now - at(16, 36)) / 60) * busy)
+    L.push(' ' + sp('⌀ ', 'dim') + sp(`per task ${TODAY_MORE.perTask}`, 'text') + sp('   ⏱ ', 'dim') + sp(`${Math.floor(work / 60)}h ${String(work % 60).padStart(2, '0')}m agent work`, 'text') + sp(' · ', 'dim') + sp(TODAY_MORE.cost, 'text'))
+    const bar = TODAY_MORE.who.map(([w, cells]) => sp(WHO_CELL[w].repeat(cells), `who-${w}`)).join('')
+    const shares = TODAY_MORE.who.map(([w, , pct], i) => (i ? sp(' · ', 'dim') : ' ') + sp(`${w} ${pct}%`, `who-${w}`)).join('')
+    const spark = TODAY_MORE.spark + (s.today.merged > END_TODAY.merged - 1 ? '▆' : '▅')
+    L.push(' ' + bar + shares + '   ' + sp('08 ', 'dim') + sp(spark, 'bar') + sp(` ${clock(s.now).slice(0, 2)}`, 'dim') + (wide ? sp(`   busiest ${TODAY_MORE.busiest}`, 'dim') : ''))
     if (s.lanes.length) L.push(' ' + sp(`✧ = an agent works here (needs an agent slot)   bar: tokens of the task so far, full = usual per task (${tok(USUAL)})`, 'dim'))
     L.push('')
     L.push(heading('Branches'))

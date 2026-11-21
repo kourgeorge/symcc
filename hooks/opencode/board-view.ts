@@ -31,7 +31,7 @@ import {
   type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction, type DefEditField, type TaskVerb, settingsKeys, rolesKeys, kindsKeys, roleEditKeys, defEditFields, roleTools, roleFileText, roleSkipReason, kindFileText, kindSkipReason,
   DEFAULT_ROLE, isCheckerRole, ALWAYS_ON_KINDS, checkerOn, roleNameError, kindNameError, leadScoutNameError, checkStepNow, rowEndText, taskPhase, choiceLines, driveWarning,
   searchTasks, showsHeader, type BoardPage,
-  LIVE_TABS, LIVE_EMPTY, LIVE_INDENT, liveLegend, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, liveBold, liveHeading, liveIndented, liveInner, tabRow, LIVE_VIEW_KEYS, liveKeys, liveBranches, liveLanes, liveLayout, liveStations, liveHeader, liveLabelSegs, laneLines, liveOrgMem, liveTrains, trainRows, liveToday, todayLines, searchLine, modeButton, hintLines, roleKeys, rolePromptKeys, ROLE_PROMPTS, ROLE_SLOT, promptsOfRole, type RolePromptKind,
+  LIVE_TABS, LIVE_EMPTY, LIVE_INDENT, liveLegend, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, liveBold, liveHeading, liveIndented, liveInner, tabRow, LIVE_VIEW_KEYS, liveKeys, liveBranches, liveLanes, liveLayout, liveStations, liveHeader, liveLabelSegs, laneLines, liveOrgMem, liveTrains, trainRows, liveTodayLines, searchLine, modeButton, hintLines, roleKeys, rolePromptKeys, ROLE_PROMPTS, ROLE_SLOT, promptsOfRole, type RolePromptKind,
 } from '../board'
 import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, brokenLabel, defNamed } from '../core/def-files'
 import { restFrame } from '../core/logo'
@@ -159,6 +159,9 @@ export function parseViewFile(text: string | null | undefined): ViewFile | null 
     // T-727: the Live tab's Branches figures; a broken value is left out (no section)
     const br = rest.branches as Partial<NonNullable<PaneView['branches']>> | undefined
     if (!br || typeof br !== 'object' || typeof br.into !== 'string' || !Array.isArray(br.commits) || !br.tasks || typeof br.tasks !== 'object') delete rest.branches
+    // T-769: ▍Today's lead, scout and cost figures; a broken value is left out
+    const team = rest.today_team as Partial<NonNullable<PaneView['today_team']>> | undefined
+    if (!team || typeof team !== 'object' || typeof team.day !== 'string') delete rest.today_team
     if (!rest.changes || typeof rest.changes !== 'object' || Array.isArray(rest.changes)) delete rest.changes
     const view = { ...rest, ...runs, working: Array.isArray(f.view.working) ? f.view.working : [], scouts: Array.isArray(f.view.scouts) ? f.view.scouts : [], test_commands: Array.isArray(f.view.test_commands) ? f.view.test_commands : [] }
     return { root: s(f.root), home: s(f.home), name: s(f.name) || DEFAULT_NAME, version: s(f.version), written_at: Number(f.written_at) || 0, view }
@@ -853,7 +856,7 @@ function liveBody(f: ViewFile, cursor: number, nowMs: number, w: number): Body {
   // T-738: one empty line above each section after the first (Today, Branches, Organizational memory)
   b.blank()
   b.add(liveSegs(liveHeading(LIVE_SECTIONS.today, w)))
-  for (const t of todayLines(liveToday(v.tasks, nowMs), inner)) b.add([{ text: LIVE_INDENT + t, color: 'text' }])
+  for (const t of liveTodayLines(v, nowMs, inner)) b.add(under(t))
   if (lanes.length) for (const x of liveLegend(lanes, inner)) b.add([{ text: LIVE_INDENT + x, color: 'inactive' }])
   if (br) {
     b.blank()
