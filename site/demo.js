@@ -165,7 +165,7 @@
     L.push(...branchLines(s))
     if (wide) {
       L.push('')
-      L.push(heading('Organizational memory', '   ' + sp('60 / 60', 'warning') + ' ' + sp('▕██████████▏', 'warning')))
+      L.push(heading('Organizational memory', '   ' + sp('60 / 60', 'dim') + ' ' + sp('▕██████████▏', 'bar')))
       L.push(sp('   newest', 'dim'))
       L.push('    ' + sp('11-21', 'dim') + '  ' + sp('ui · surfaces', 'id') + '  ' + cut('VS Code board pages space their children with the page Box\'s gap={1}', 42))
       L.push('    ' + sp('11-21', 'dim') + '  ' + sp('probes       ', 'id') + '  ' + cut('Draw the OpenCode panel from /tmp with bun: panelLines(view, …)', 42))
