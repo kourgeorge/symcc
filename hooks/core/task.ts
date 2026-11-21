@@ -199,8 +199,18 @@ function askedFilesOf(b: Board, id: string): [BoardTask, string[]] {
 /** The owner allows a waiting task's file request: its files grow by them and it goes back to work, in one change. */
 export function allowFiles(b: Board, id: string, now: string, dir: string = DATA_DIR): Board {
   const [t, asked] = askedFilesOf(b, id)
-  const added = asked.filter(f => !t.files.includes(f))
-  return patchTask(b, t.id, { status: 'todo', note: 'files allowed; queued', files: [...t.files, ...added], history: withHistory(t.history, now, ['files-widened', filesAllowedLine(added.length ? added : asked)]) }, now, dir)
+  // T-713: a path a task's files can't hold (outside the project, under .git or the data folder) is never
+  // added, so Allow refuses instead of saying "allowed" and sending the worker back to be refused again.
+  const bad = asked.filter(f => !cleanFiles([f], dir).length)
+  if (bad.length) throw new Error(cantAllowText(t.id, bad, dir))
+  const kept = cleanFiles(asked, dir)
+  const added = kept.filter(f => !t.files.includes(f))
+  return patchTask(b, t.id, { status: 'todo', note: 'files allowed; queued', files: [...t.files, ...added], history: withHistory(t.history, now, ['files-widened', filesAllowedLine(added.length ? added : kept)]) }, now, dir)
+}
+
+/** Why Allow refused a file request: `bad` can't be in a task's files. The task keeps waiting. */
+export function cantAllowText(id: string, bad: readonly string[], dir: string = DATA_DIR): string {
+  return `Can't allow ${bad.join(', ')} for ${id}: a task's files can't name the whole project or paths outside it, under .git or under ${dir.replace(/\/$/, '')}, so nothing was added and ${id} keeps waiting. Press Don't allow, or the lead can change the task.`
 }
 
 /** The owner does not allow a waiting task's file request: it keeps waiting (for the lead to drop or narrow it). */
