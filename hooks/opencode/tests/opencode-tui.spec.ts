@@ -3251,3 +3251,18 @@ test('T-727: startTui: Enter on a Branches row opens its task, b returns to the 
   expect([board.state().tab, board.state().opened]).toEqual(['tasks', 'T-721'])
   board.stop()
 })
+
+// ---------------- T-738: one empty line above each Live tab section ----------------
+test('T-738: the OpenCode Live tab has exactly one empty line above each section heading, none above the first', () => {
+  for (const w of [100, 40]) {
+    const lines = panelLines(branchesViewFile(), { tab: 'live', opened: '', cursor: 0 }, NOW, w).lines.map(lineText)
+    expect(lines[0]!.trim() === '').toBe(false)
+    const heads = [(l: string) => l.startsWith(' ── Branches'), (l: string) => /^─+$/.test(l), (l: string) => l.startsWith(' ── Organizational memory')]
+    for (const isHead of heads) {
+      const at = lines.findIndex(isHead)
+      expect(at > 1).toBe(true)
+      expect([lines[at], lines[at - 1]!.trim()]).toEqual([lines[at]!, ''])
+      expect([lines[at], lines[at - 2]!.trim() === '']).toEqual([lines[at]!, false])
+    }
+  }
+})
