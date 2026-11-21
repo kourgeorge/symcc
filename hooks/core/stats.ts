@@ -219,7 +219,9 @@ export function taskStages(t: SymccTask, doneAt: (id: string) => number | undefi
     const y = Math.min(b, hi)
     if (y > x) ms[s] += y - x
   }
-  let cur: Stage = 'free'
+  // a task made straight into the backlog has no "moved to the backlog" line: its first backlog line is the move out
+  const firstBacklog = t.history.find(e => e.kind === 'moved-backlog')
+  let cur: Stage = firstBacklog && !/^moved to the backlog\b/.test(firstBacklog.text) ? 'backlog' : 'free'
   let since = made
   let inRun = false
   let pending: Stage | null = null

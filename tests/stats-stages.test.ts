@@ -67,6 +67,24 @@ test('stats stages: each stage of one task is read from its tries and timed hist
   expect(taskStages(ts[3]!, doneAt(ts))).toBe(null)
 })
 
+test('stats stages: a task made straight into the backlog counts that time as backlog, not waiting to start', () => {
+  const m = (x: number) => x * MIN
+  // made in the backlog 1200m ago (no "moved to the backlog" line), moved to todo 600m ago, starts 540m ago
+  const t = task('T-5', {
+    created_at: at(1200),
+    runs: [{ started: at(540), ended: at(480) }],
+    history: [h(1200, 'created', 'created by the lead'), h(600, 'moved-backlog', 'moved from the backlog to todo'), stage(480, 1, 'prep started'), stage(478, 1, 'checker started'), stage(470, 1, 'waits in the merge queue'), stage(465, 1, 'tests started'), stage(460, 1, 'merge started'), h(458, 'merged', 'try 1: x → merged into main (b1)')],
+  })
+  expect(taskStages(t, () => undefined)?.ms).toEqual({ free: m(60), blocked: 0, backlog: m(600), work: m(60), prep: m(2), check: m(8), queue: m(5), tests: m(5), merge: m(2), owner: 0 })
+  // one moved to the backlog later still starts as waiting to start
+  const u = task('T-6', {
+    created_at: at(1200),
+    runs: [{ started: at(540), ended: at(480) }],
+    history: [h(1200, 'created', 'created by the lead'), h(1100, 'moved-backlog', 'moved to the backlog (was todo)'), h(600, 'moved-backlog', 'moved from the backlog to todo'), stage(480, 1, 'prep started'), h(458, 'merged', 'try 1: x → merged into main (b2)')],
+  })
+  expect(taskStages(u, () => undefined)?.ms).toEqual({ free: m(160), blocked: 0, backlog: m(500), work: m(60), prep: m(22), check: 0, queue: 0, tests: 0, merge: 0, owner: 0 })
+})
+
 test('stats stages: sums and averages per stage; active + waiting add up to the lifetime; lacking tasks counted', () => {
   const ts = board()
   const f = stageFigures(ts, doneAt(ts))
