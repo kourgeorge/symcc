@@ -398,8 +398,11 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
       () => opened() === id && taskReport()?.file === latest.file && setTaskReport({ file: latest.file, text: null }),
     )
   }
+  // T-700: a task opened from the Live tab goes back there (to its lane) on b, as on the terminal panel and VS Code
+  let backTo: { tab: PanelTab; cursor: number } | undefined
   /** Opens a page ('' = back to the list), from its top. */
   const openPage = (id: string) => {
+    backTo = undefined
     setOpened(id)
     setSent(undefined)
     setTaskReport(undefined)
@@ -564,10 +567,18 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   }
   /** Opens task `id`'s page on the Tasks tab, with the list's cursor on it (so b comes back to its row). */
   const openOnList = (id: string) => {
+    const from = tab() === 'live' ? { tab: 'live' as const, cursor: cursor() } : undefined
     if (tab() !== 'tasks') showTab('tasks')
     const at = listIds().indexOf(id)
     if (at >= 0) setCursor(at)
-    if (hasPage(file(), id)) openPage(id)
+    if (hasPage(file(), id)) openPage(id), (backTo = from)
+  }
+  /** b on a task's page: back to the tab it was opened from (the Live tab, on its lane), else to the Tasks list. */
+  const closeTask = () => {
+    const to = backTo
+    if (!to) return openPage('')
+    showTab(to.tab)
+    setCursor(to.cursor)
   }
   /** The Live tab's keys (T-692): ↑↓ move between the lanes, Enter opens the lane's task, b goes back to the list;
    *  m opens the Organizational memory page (T-687), whose b comes back to the tab. */
@@ -617,7 +628,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
       if (key === 'm' && f) return send(sessionID, { kind: 'mode', mode: nextMode(modeOf(f.view)) })
       return
     }
-    if (key === 'back') return openPage('')
+    if (key === 'back') return closeTask()
     // the task's own actions (core's taskActions, panelTaskActions), each by its key, sent as a slash command
     const t = f?.view.tasks.find(x => x.id === open)
     const act = t ? panelTaskActions(t, approveInProgress(f, t, approving(), now())).find(x => x.key === key) : undefined

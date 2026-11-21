@@ -744,8 +744,16 @@ are about changes; under "How tasks ended" a read investigation shows as
 - The panel has four views, Tasks, Live, Scouts and Settings, shown as tabs under the banner:
   `[t]: Tasks (12) │ [l]: Live │ [s]: Scouts (3) │ [c]: Settings`, the open one bold, blue and
   underlined (on a narrow panel the tabs get shorter, `[t] Tasks (12)│[l] Live…`, never cut).
-  Press `t`, `l`, `s` or `c` (or click a tab) to switch. The Live tab is in the Claude Code
-  terminal panel only for now (see [Live tab](#live-tab)). The Scouts view lists each scout on one
+  Press `t`, `l`, `s` or `c` (or click a tab) to switch.
+  The header (the banner with its tests/limits line and drive warning, then the tabs) shows
+  only on the list pages: Tasks, Live, Scouts, Settings, and Settings' Roles, Kinds and
+  Organizational memory lists. A page of one thing (a task, a question, a scout or one of its
+  runs, a role, a kind, a role's prompt) starts with its own title instead; its buttons and the
+  key line at the bottom stay. This is the same in the terminal panel, VS Code and OpenCode.
+  Back from a task opened on the Live tab goes back to the Live tab. The Live tab is on all three
+  boards: the Claude Code terminal panel, VS Code (which draws the lanes as real lines and the
+  token bar as a bar that fills) and OpenCode (which has no `w` key to watch a worker); see
+  [Live tab](#live-tab). The Scouts view lists each scout on one
   row: an icon (`◉` running, `◎` waiting for its next run, `○` paused), its name, how often
   it runs, when it runs next, what its last run found (`last: found 2`, `last: nothing` or
   `never ran`) and its model. On a narrow panel the model column goes first, then the
@@ -905,27 +913,28 @@ unchanged.
   (`Back`, not `Back (b)`).
 - **A task's page** reads like a card. It uses the whole panel width and wraps every line,
   never cutting it with "…". From the top: a `← Tasks` button back to the list; the task ID and
-  title, large and bold; a status badge in its color (`▶ doing`, `◆ ready for review`,
-  `? waiting for you`, `✗ failed`, `◆ answered: read it`), with the kind, role, try and time
-  as small dim tags beside it. What needs you comes next, in a box in its color with its
-  buttons inside: the **Question for you** (yellow) with its answers as buttons and a box for
-  your own answer (a file request has `Allow files` and `Don't allow`); **Why it failed** (red)
-  with `Retry`; **Waiting for your files** (yellow) with `Merge now`. Then one row of the other
-  buttons that fit the status (for example Approve, Reject, Show changes, Drop, Copy for a task
-  in review), with at most one main button on the page. Then the sections, each under a clear
-  heading: **Why / where it came from**; **What to do** (the details, drawn as Markdown); the
-  **Changes** of a task in review; **History**, a timeline with the newest first (a mark, when
-  it happened, then the whole line; merges in green, failures in red); and the latest
+  title, large and bold (no status badge or tags under it). What needs you comes next, in a box
+  in its color with its buttons inside: the **Question for you** (yellow) with its answers as
+  buttons and a box for your own answer (a file request has `Allow files` and `Don't allow`);
+  **Why it failed** (red) with `Retry`; **Waiting for your files** (yellow) with `Merge now`.
+  Then one row of the other action buttons that fit the status (for example Approve, Reject,
+  Show changes, Drop, Copy for a task in review), with at most one main button on the page.
+  Then the sections, each under a clear heading: **Details**, the same labelled rows as the
+  terminal and OpenCode task pages (Status, Stage, Now, Role, Kind, From, Why, Files, Into,
+  After, …, Tries) as a label and value list that wraps, each task it waits for a link that
+  opens it (the Status row says `◆ answered: read it`, in green, for an answered
+  investigation); the **Answer** of an investigation; **What to do** (the details, drawn as
+  Markdown); the **Changes** of a task in review; **History**, a timeline with the newest
+  first (a mark on one line down the left, when it happened, then the whole line; merges in
+  green, failures in red), the newest 10 with `Show all` for the rest; and the latest
   **Report** as Markdown: its first lines, with `Show all` for the rest and a button for each
-  try. Last come three folds, closed until you click them, each with a count:
-  `▸ Files it may change (3)`, `▸ Waits for (2)` (each task ID a button that opens it) and
-  `▸ Time and cost (2)`.
-- **Scouts**: each scout is one button of a few lines, wrapped, never cut: its name and its
-  state as a filled badge in its color (`◉ running now`, `○ paused`, `◎ next in 3h`,
-  `◎ on demand`); then a dim line with how often it runs, its model and when it last ran; its
-  summary; and, dim, the start of its last report (`last report: found 2: …` with the first
-  finding, or `last report: nothing`). Under the list: `+ New scout` and `← Tasks`. With no
-  scouts yet, a short how-to in a box and `+ New scout` as the main button.
+  try. Last comes one fold, closed until you click it, with a count: `▸ Time and cost (2)`.
+- **Scouts**: one row per scout, with the same parts in the same order as the terminal list:
+  its icon, its name (a link that opens it), how often it runs, its state (`running now`,
+  `paused`, `next in 3h`, `on demand`), `last:` with the start of its last report
+  (`last: found 2: …`, `last: nothing`) and its model. A row never wraps: its end is cut with
+  "…" to fit. Under the list: `+ New scout` and `← Tasks`. With no scouts yet, a short how-to
+  in a box and `+ New scout` as the main button.
 - **A scout's page**: a `← Scouts` button; the name and state; when it runs, its model, the next
   run and the last run; buttons `Run now` (not while it runs), `Pause` or `Resume`, and `Edit`;
   then its **Instructions** as Markdown, its **File**, and its **Runs**; open a run to read its report.
@@ -1464,9 +1473,11 @@ A stopped worker can't do anything more: symcc refuses every tool it tries to us
 **Several Claude Code windows on the same project?** Only one of them *drives* the
 board (starts workers, merges, runs scouts). The others can see and change the board but
 start nothing. If the driving window closes, another one takes over within a few minutes.
-A window that doesn't drive shows a yellow warning under the board's banner ("Another session
-drives this board … /symcc-drive to drive it from here") and "⚠ driven by another session" in the
-band above the prompt. Its doing tasks say "runs in the other session", and the warning adds
+A window that doesn't drive shows a yellow warning in the board's banner, right under its
+tests/limits line ("⚠ Another session drives. /symcc-drive to drive it from here.", shorter on a
+narrow panel), and "⚠ driven by another session" in the band above the prompt. Like the rest of
+the banner, the warning shows on the list pages only (see the header rule under
+[Live status](#live-status-seeing-the-board)). Its doing tasks say "runs in the other session", and the warning adds
 "it looks idle" when a task has waited over 5 minutes for the driving window to start it.
 To move driving to the window you are in, type `/symcc-drive` there. If another window
 drives, symcc asks it to hand over: within 30 s it stops its workers (the answer says which

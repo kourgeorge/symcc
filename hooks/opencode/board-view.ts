@@ -27,7 +27,7 @@ import {
   SETTING_GROUPS, SETTINGS, isSettingPage, settingInfo, settingValue, cantPlayNotify, groupSummaryParts,
   type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction, type TaskVerb, settingsKeys,
   DEFAULT_ROLE, isCheckerRole, ALWAYS_ON_KINDS, checkerOn, roleNameError, kindNameError, checkStepNow, rowEndText, taskPhase, choiceLines, driveWarning,
-  searchTasks,
+  searchTasks, showsHeader, type BoardPage,
   LIVE_TABS, LIVE_EMPTY, LIVE_LEGEND, type LiveSeg, type LiveTone, tabRow, withLiveKey, liveKeys, liveLanes, liveLayout, liveStations, liveHeader, liveLabelLine, laneLines, nextUp, nextUpLine, liveToday, todayLines, searchLine, modeButton, hintLines, roleKeys, rolePromptKeys, ROLE_PROMPTS, ROLE_SLOT, promptsOfRole, type RolePromptKind,
 } from '../board'
 import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, brokenLabel, defNamed } from '../core/def-files'
@@ -473,7 +473,8 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
     ...l.parts.map(p => ({ text: p.text, color: TONE[p.tone], ...(p.bold ? { bold: true } : {}) })),
   ])
   const tab = choice.tab ?? 'tasks'
-  const top = [...banner, ...tabsLines(tab, w, v.tasks.length, (v.scouts ?? []).length), [{ text: bannerRule(w), color: 'ide' }]]
+  // T-700: the header (banner, tabs, rule) only on a list page, as on the terminal panel and VS Code (core's showsHeader)
+  const top = showsHeader(boardPageOf(f, choice)) ? [...banner, ...tabsLines(tab, w, v.tasks.length, (v.scouts ?? []).length), [{ text: bannerRule(w), color: 'ide' }]] : []
   // the list's footer has Claude Code's board-mode row (T-685): the mode, its [m] button and (no search on) [f] search
   let modeRow: Line[] = []
   let body: { lines: Line[]; hits?: (PanelHit | null)[] | null; ids: string[]; selected: string; head?: number }
@@ -538,6 +539,28 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
     bodyLines: drawnBody.length,
     footer: foot.length,
   }
+}
+
+/** Which page the panel shows for `choice` (core's BoardPage, the same names on every board): a tab's list, a list
+ *  under Settings, or the page of one task, question, scout, scout run, role, kind or role prompt. */
+export function boardPageOf(f: ViewFile | null, choice: Pick<PanelChoice, 'tab' | 'opened' | 'run'>): BoardPage {
+  const tab = choice.tab ?? 'tasks'
+  if (tab === 'live') return choice.opened === ORG_MEM_PAGE ? 'orgmem' : 'live'
+  if (tab === 'scouts') {
+    const sc = scoutNamed(f, choice.opened)
+    if (!sc) return 'scouts'
+    return choice.run && scoutRunsIn(f, sc.name).some(x => x.run.ended === choice.run) ? 'scout-run' : 'scout'
+  }
+  if (tab === 'settings') {
+    const place = settingsPlace(f, choice.opened)
+    if (!place) return 'settings'
+    if (place.prompt && place.def) return 'role-prompt'
+    if (place.def) return place.list === 'roles' ? 'role' : 'kind'
+    return place.list
+  }
+  if (!choice.opened || !f) return 'tasks'
+  if (f.view.tasks.some(x => x.id === choice.opened)) return 'task'
+  return (f.view.questions ?? []).some(x => x.id === choice.opened) ? 'question' : 'tasks'
 }
 
 /** The list footer's board-mode row, as Claude Code's (T-685): the mode in its color, its "[m] review merge" button

@@ -143,7 +143,7 @@ export const startS = () => ({
   reportTry: null as { task: string; try: number } | null,
   /** the task whose report is shown whole on VS Code's task page (else only its first part); null = none */
   reportAll: null as string | null,
-  /** the folds opened on VS Code's task page (Files it may change, Waits for, Time and cost: closed by default), for the task shown; null = all closed */
+  /** the folds opened on VS Code's task page (Time and cost: closed by default), for the task shown; null = all closed */
   taskFolds: null as { task: string; open: string[] } | null,
   sayTimer: null as { cancel(): void } | null,
   saying: false,

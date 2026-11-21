@@ -18,6 +18,21 @@ import { type PhaseStage, type PhaseTask, stageStep, taskPhase } from './phase'
 
 export * from './failure'
 
+/** The pages of the board panel (every board: the terminal panel, VS Code's side panel, OpenCode's panel): the four
+ *  tabs' lists, the lists under Settings (Roles, Kinds, Organizational memory), and the pages of one thing. */
+export type BoardPage =
+  | 'tasks' | 'live' | 'scouts' | 'settings' | 'roles' | 'kinds' | 'orgmem'
+  | 'task' | 'question' | 'scout' | 'scout-run' | 'scout-edit' | 'role' | 'role-edit' | 'role-prompt' | 'kind' | 'kind-edit'
+
+/** The pages that list things, and so show the board header. */
+const HEADER_PAGES: ReadonlySet<BoardPage> = new Set(['tasks', 'live', 'scouts', 'settings', 'roles', 'kinds', 'orgmem'])
+
+/** Whether page `p` shows the board header (the banner with its tests/limits line and drive warning, then the tabs
+ *  row), as the terminal panel does: only the lists show it (Tasks, Live, Scouts, Settings, and Settings' Roles, Kinds
+ *  and Organizational memory lists). A page of one thing (a task, a question, a scout, a scout's run or edit, a role,
+ *  a kind, a role's prompt) starts with its own title instead; its footer and buttons stay. */
+export const showsHeader = (p: BoardPage): boolean => HEADER_PAGES.has(p)
+
 /** A section's header in the board panel: "▸ Done (42)" folded, "▾ Done (42)" open; with `opened` left out (a section
  *  that is always open, like "Doing") there is no arrow: "Doing (1)". */
 export const sectionHeader = (label: string, n: number, opened?: boolean): string => `${opened === undefined ? '' : opened ? '▾ ' : '▸ '}${label} (${n})`

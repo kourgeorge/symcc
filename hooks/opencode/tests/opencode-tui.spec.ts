@@ -8,11 +8,11 @@
 // OpenTUI (T-500): opencode/tui.ts imports them by their written-out names (what OpenCode swaps for its own copies),
 // and loadTuiRuntime names a package that is missing or lacks a function instead of failing with a bare import error.
 import { test, expect } from 'bun:test'
-import { LIVE_TABS, tabRow as coreTabRow, withLiveKey, LIVE_EMPTY, LIVE_LEGEND, liveLanes, liveLayout, liveStations, liveHeader, liveLabelLine, laneLines, segText, nextUp, nextUpLine, liveToday, todayLines, modeLabel, modeButton, promptsOfRole, ROLE_SLOT, SETTING_GROUPS, groupSummaryParts, taskActions, actionButtonLabel, settingsKeys, mergeRoles, mergeKinds, when, addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, type Board } from '../../board'
+import { LIVE_TABS, tabRow as coreTabRow, withLiveKey, LIVE_EMPTY, LIVE_LEGEND, liveLanes, liveLayout, liveStations, liveHeader, liveLabelLine, laneLines, segText, nextUp, nextUpLine, liveToday, todayLines, modeLabel, modeButton, promptsOfRole, ROLE_SLOT, SETTING_GROUPS, groupSummaryParts, taskActions, actionButtonLabel, settingsKeys, mergeRoles, mergeKinds, when, addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, showsHeader, type BoardPage, type Board } from '../../board'
 import type { PaneView } from '../../app/state'
 import type { SymccTask } from '../../../types'
 import { ICON } from '../../name'
-import { hasPage, bandLines, bandDraw, BAND_CLICK_HINT, panelLines, panelKeys, parseViewFile, viewFileText, lineText, actionCommand, answerOptions, OWN_ANSWER, viewDefs, panelTaskActions, TASK_ACTION_COMMANDS, SETTINGS_OPEN, approveSent, APPROVE_SENT_MS, drawnLines, type ViewFile, type PanelChoice } from '../board-view'
+import { hasPage, bandLines, bandDraw, BAND_CLICK_HINT, panelLines, panelKeys, parseViewFile, viewFileText, lineText, actionCommand, answerOptions, OWN_ANSWER, viewDefs, panelTaskActions, TASK_ACTION_COMMANDS, SETTINGS_OPEN, approveSent, APPROVE_SENT_MS, drawnLines, boardPageOf, type ViewFile, type PanelChoice } from '../board-view'
 import { readFile } from 'node:fs/promises'
 import { rowEndBoard, ROW_END, ROW_END_NOW } from '../../../tests/row-end-cases'
 import { taskSections } from '../../core/task-sections'
@@ -267,6 +267,10 @@ test('the panel: the banner, then the list grouped by state (NEEDS YOU, what run
   // an answered investigation in review: done, keep as a note and ask more, as on the other hosts
   const inv = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => (t.id === 'T-2' ? { ...t, kind: 'investigation' } : t)) } } as ViewFile
   expect(panelKeys(inv, 'T-2').map(k => `${k.key} ${k.word}`)).toEqual(['a done', 'v keep as a note', 'x ask more', 'n needs review', 'b back'])
+  // its Status row says "answered: read it" in green, as on the other boards (T-701)
+  const invStatus = panelLines(inv, { opened: 'T-2', cursor: 0 }, NOW, 100).lines.find(l => lineText(l).startsWith('Status:'))!
+  expect(invStatus.find(s => s.text.includes('answered: read it'))?.color).toBe('success')
+  expect(lineText(invStatus)).not.toContain('ready for review')
   // a waiting task with no question text says its note, else that it waits (core's taskAsks)
   const noQ = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => (t.id === 'T-3' ? { ...t, question: null, options: undefined, note: '' } : t)) } } as ViewFile
   expect(panelLines(noQ, { opened: 'T-3', cursor: 0 }, NOW, 100).lines.map(lineText).some(l => l.includes('asks: it waits for your answer'))).toBe(true)
@@ -1946,7 +1950,7 @@ function checkScrolling(draw: (scroll: number, rows?: number) => ReturnType<type
   expect(covered).toEqual(body)
 }
 
-test('T-627: a long task page scrolls by drawn lines under a fixed banner, tabs, title and badge; the last screenful stays full', () => {
+test('T-627: a long task page scrolls by drawn lines under its fixed title and buttons; the last screenful stays full', () => {
   const f = longPageViewFile()
   const w = 60
   const draw = (scroll: number, rows?: number) => panelLines(f, { opened: 'T-2', cursor: 0, scroll, taskReport: LONG_REPORT, ...(rows ? { rows } : {}) }, NOW, w)
@@ -1964,9 +1968,11 @@ test('T-627: a long task page scrolls by drawn lines under a fixed banner, tabs,
   expect(text.join(' ').replace(/\s+/g, ' ')).toContain('report line 1 is a long one that says a lot about what was done, so it has to wrap in a narrow panel')
   const firstTitle = title.findIndex(l => l.startsWith('T-2'))
   checkScrolling(draw, 25, w, [title[firstTitle]!, title.find(l => l.startsWith('[ Back ]'))!])
-  // too low to keep the title too: the banner and tabs stay, the title scrolls with the page
-  checkScrolling(draw, 12, w, [title.find(l => l.startsWith('[t]: Tasks'))!])
-  expect(draw(0, 12).fixed < all.fixed).toBe(true)
+  // T-700: no banner or tabs on a task's page (as on the terminal panel): its title comes first
+  expect(text[0]!.startsWith('T-2 a reviewed change')).toBe(true)
+  // too low to keep the title too: the title scrolls with the page, nothing stays at the top
+  checkScrolling(draw, 8, w, [])
+  expect(draw(0, 8).fixed).toBe(0)
 })
 
 test('T-627: the list, a scout page and Settings scroll the same way: fixed banner and tabs (and the page title), a contiguous window, a full last screenful', () => {
@@ -2180,9 +2186,9 @@ test('T-685: every board screen has Claude Code\'s buttons: the tab row, the lis
   const tabRow = '[t]: Tasks (5) │ [l]: Live │ [s]: Scouts (2) │ [c]: Settings'
   const counts = (w: number) => coreTabRow(LIVE_TABS.map(t => ({ key: t.key, label: t.label, count: t.tab === 'tasks' ? 5 : t.tab === 'scouts' ? 2 : undefined })), w)
   expect(counts(W).labels.join(counts(W).gap)).toBe(tabRow)
+  // the list pages have the tab row (T-700: a page of one task, scout, role... has none, as on the terminal panel)
   const screens: Partial<PanelChoice>[] = [
-    {}, { opened: 'T-2' }, { opened: 'T-3' }, { tab: 'scouts' }, { tab: 'scouts', opened: 'deps' }, { tab: 'settings' }, { tab: 'settings', opened: 'roles' }, { tab: 'settings', opened: 'kinds' },
-    { tab: 'settings', opened: 'role:tester' }, { tab: 'settings', opened: 'kind:bug' }, { tab: 'live', opened: 'orgmem' }, { tab: 'settings', opened: 'prompt:tester:change' }, { tab: 'live' },
+    {}, { tab: 'scouts' }, { tab: 'settings' }, { tab: 'settings', opened: 'roles' }, { tab: 'settings', opened: 'kinds' }, { tab: 'live', opened: 'orgmem' }, { tab: 'live' },
   ]
   for (const c of screens) {
     const d = draw(c)
@@ -2491,9 +2497,24 @@ test('T-692: in the TUI, l (or a click on the Live tab) shows the Live tab; ↓ 
   await board.press('down', 's')
   await board.press('open', 's')
   expect([board.state().tab, board.state().opened]).toEqual(['tasks', 'T-612'])
-  // b goes back to the Tasks list
+  // T-700: b goes back to the Live tab it was opened from, on its lane (as on the terminal panel and VS Code)
   await board.press('back', 's')
-  expect(board.state().opened).toBe('')
+  expect([board.state().tab, board.state().opened, board.state().cursor]).toEqual(['live', '', 1])
+  // its page's Back button does the same
+  await board.press('open', 's')
+  expect([board.state().tab, board.state().opened]).toEqual(['tasks', 'T-612'])
+  const backSeg = rowEls(panel).flatMap(r => r.segs).find(s => (s.kids ?? []).join('') === '[ Back ]')
+  ;(backSeg!.props.onMouseUp as (e: unknown) => void)(up)
+  await settle()
+  expect([board.state().tab, board.state().opened]).toEqual(['live', ''])
+  // a task opened from the Tasks list still goes back to the list
+  await board.press('t', 's')
+  await board.press('open', 's')
+  const fromList = board.state().opened
+  expect(fromList === '').toBe(false)
+  await board.press('back', 's')
+  expect([board.state().tab, board.state().opened]).toEqual(['tasks', ''])
+  await board.press('l', 's')
   // a click on the Live tab, then on a lane
   const tabSeg = rowEls(panel).flatMap(r => r.segs).find(s => (s.kids ?? []).join('') === '[l]: Live')
   ;(tabSeg!.props.onMouseUp as (e: unknown) => void)(up)
@@ -2504,4 +2525,42 @@ test('T-692: in the TUI, l (or a click on the Live tab) shows the Live tab; ↓ 
   await settle()
   expect([board.state().tab, board.state().opened]).toEqual(['tasks', 'T-610'])
   board.stop()
+})
+
+test('T-700: the board header (banner, tests/limits line, drive warning, tabs) shows on the list pages only, as on the terminal panel (core\'s showsHeader); a task, question, scout, scout run, role, kind or prompt page starts with its own title and keeps its footer and buttons', () => {
+  const f0 = orgMemViewFile()
+  // a session that does not drive, so the banner has its drive warning too
+  const f: ViewFile = { ...f0, view: { ...f0.view, driving: false, questions: [{ id: 'Q-9', text: 'How often?', options: ['daily'], asked_at: AT }] } }
+  const W = 140
+  const texts = (c: Partial<PanelChoice>) => panelLines(f, { opened: '', cursor: 0, ...c }, NOW, W).lines.map(lineText)
+  const header = (t: string[]) => ({
+    tests: t.some(l => l.includes('tests: bun test')),
+    drive: t.some(l => /⚠ .*\/symcc-drive/.test(l)),
+    tabs: t.some(l => l.startsWith('[t]: Tasks')),
+    rule: t.some(l => /^━+$/.test(l)),
+  })
+  const all = { tests: true, drive: true, tabs: true, rule: true }
+  const none = { tests: false, drive: false, tabs: false, rule: false }
+  const lists: [Partial<PanelChoice>, BoardPage][] = [
+    [{}, 'tasks'], [{ tab: 'live' }, 'live'], [{ tab: 'scouts' }, 'scouts'], [{ tab: 'settings' }, 'settings'],
+    [{ tab: 'settings', opened: 'roles' }, 'roles'], [{ tab: 'settings', opened: 'kinds' }, 'kinds'], [{ tab: 'live', opened: 'orgmem' }, 'orgmem'],
+  ]
+  const pages: [Partial<PanelChoice>, BoardPage, string][] = [
+    [{ opened: 'T-2' }, 'task', 'T-2 '], [{ opened: 'Q-9' }, 'question', 'Q-9'], [{ tab: 'scouts', opened: 'deps' }, 'scout', 'deps'],
+    [{ tab: 'scouts', opened: 'docs-check', run: '2026-11-19T11:50:00.000Z' }, 'scout-run', 'docs-check'],
+    [{ tab: 'settings', opened: 'role:tester' }, 'role', 'tester'], [{ tab: 'settings', opened: 'kind:bug' }, 'kind', 'bug'],
+    [{ tab: 'settings', opened: 'prompt:tester:change' }, 'role-prompt', ''],
+  ]
+  for (const [c, page] of lists) {
+    expect([c, boardPageOf(f, { opened: '', ...c }), showsHeader(page)]).toEqual([c, page, true])
+    expect([c, header(texts(c))]).toEqual([c, all])
+  }
+  for (const [c, page, title] of pages) {
+    expect([c, boardPageOf(f, { opened: '', ...c }), showsHeader(page)]).toEqual([c, page, false])
+    const t = texts(c)
+    expect([c, header(t)]).toEqual([c, none])
+    if (title) expect([c, t[0]!.includes(title)]).toEqual([c, true])
+    // the footer (its rule and key hints) and the page's Back button stay
+    expect([c, t.some(l => /^─+$/.test(l)), t.some(l => l.startsWith('[ Back'))]).toEqual([c, true, true])
+  }
 })

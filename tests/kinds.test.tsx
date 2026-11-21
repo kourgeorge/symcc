@@ -111,3 +111,11 @@ test('the task page shows the kind next to the role; a plain change shows no kin
   const [, c] = addTask(b, { origin: { why: 'a test' }, title: 'Plain' }, '2026-01-01T00:00:00.000Z')
   expect(detailRows(c, { roles: [], kinds: S.kinds, all: [c], when: s => s, nowMs: 0 }).some(r => r.label === 'Kind')).toBe(false)
 })
+
+test('the Status row of an answered investigation says "answered: read it" in green; a change task in review still says ready for review (T-701)', () => {
+  const [b, inv] = addTask(emptyBoard(), { origin: { why: 'a test' }, title: 'Why slow', kind: 'investigation' }, '2026-01-01T00:00:00.000Z')
+  const [, ch] = addTask(b, { origin: { why: 'a test' }, title: 'Plain' }, '2026-01-01T00:00:00.000Z')
+  const status = (t: typeof inv) => detailRows({ ...t, status: 'review' }, { roles: [], all: [t], when: s => s, nowMs: 0 }).find(r => r.label === 'Status')!.segs[0]!
+  expect(status(inv)).toEqual({ text: '◆ answered: read it', color: 'success', bold: true })
+  expect(status(ch)).toEqual({ text: '◆ ready for review', color: 'warning', bold: true })
+})
