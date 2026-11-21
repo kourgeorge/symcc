@@ -3781,4 +3781,9 @@ test('T-786: a doing task that asks for more time has separate cursor stops for 
     const d = panelLines(f, { tab: 'live', opened: '', cursor: c }, NOW, 100)
     expect([c, d.lines.map(lineText).filter(x => x.startsWith('›')).length]).toEqual([c, 1])
   }
+  // a click on the running task's lane ({open:'T-1'}, handled as openLive(hit.open)) lands on the lane's own stop
+  const lane = d0.hits.find(h => h && 'open' in h && h.open === 'T-1')
+  expect(lane).toEqual({ open: 'T-1' })
+  expect(d0.ids.indexOf((lane as { open: string }).open)).toBe(2)
+  expect(d0.ids.indexOf('T-1')).not.toBe(d0.ids.indexOf('need:T-1'))
 })
