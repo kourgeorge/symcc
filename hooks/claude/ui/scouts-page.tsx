@@ -1,5 +1,5 @@
 // The board panel's Scouts view: the list, one scout's page, and its edit mode.
-import { scoutRow, scoutFile, scoutTone, scoutIcon, scoutKeys, scoutListRows, scoutHowTo, scoutListKeys, scoutEditKeys, boxHint, scoutRunTasks, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem } from '../../board'
+import { scoutRow, scoutFile, scoutKeys, scoutListRows, scoutHowTo, scoutListKeys, scoutEditKeys, boxHint, scoutRunTasks, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem } from '../../board'
 import { saveScout, cancelScoutEdit, runScoutNow, editScout, setScoutPaused, newScout, loadScoutRunHistory, loadScoutResults, readScoutRunReport, scoutPlace, scoutPlaceValue } from '../../app/scouts'
 import { S } from '../../app/state'
 import { type $, panelValues } from '../panel'
@@ -8,6 +8,8 @@ import { row } from './arrows'
 import { resetPane } from '../../app/open'
 import { scoutEditPageVs, scoutPageVs, scoutsListVs } from './vscode-scouts'
 import { claudeHost } from '../host'
+import { NAV_KEYS, navHint, placeIn, scoutAbout, scoutButtons, scoutListNames, scoutStateGroups } from '../../core/page-header'
+import { pageHeader, type PageHeader } from './page-header'
 
 /** A scout's edit mode: the same header as its page, then a box per part of its file, named and ordered as the
  *  page shows them: Runs every, Model, Summary, Instructions. Its Cancel button leaves it
@@ -73,9 +75,8 @@ export async function scoutsPage($: $, pane: PaneParts) {
   const place = scoutPlace(await panelValues($).readScoutOpen())
   const sc = place.scout ? scouts.find(x => x.name === place.scout) : undefined
   // VS Code's side panel: readable rows and pages, with buttons and no key hints (see vscode-scouts.tsx)
-  if (pane.vscode) return sc ? scoutPageVs($, pane, sc, place.run) : scoutsListVs($, pane)
+  if (pane.vscode && !sc) return scoutsListVs($, pane)
   if (sc) {
-    const r = scoutRow(sc, nowMs)
     const file = scoutFile(sc.name, S.N.name)
     const host = claudeHost($)
     // its runs, newest first, each with the tasks made from it (the board's tasks from this scout)
@@ -88,6 +89,23 @@ export async function scoutsPage($: $, pane: PaneParts) {
     // the open run is kept in the panel's saved scout value, next to the scout (scoutPlace); then the page is drawn again
     const showRun = (run: string) => act(async () => (await panelValues($).updateScoutOpen(() => scoutPlaceValue(sc.name, run)), $.ui.invalidate('ui.render')))
     const closeRun = showRun('')
+    // the page header (T-751): ‹ Scouts and its place in the list, its name and what it does, its state, its buttons
+    const at = placeIn(scoutListNames(scouts), sc.name)
+    const openScout = (name: string) => act(() => panelValues($).updateScoutOpen(() => name))
+    const onPress: Record<string, () => void> = {
+      'scout-run': act(async () => $.ui.toast(S.N.toast(await runScoutNow(claudeHost($), sc.name)))),
+      'scout-edit': act(() => editScout(claudeHost($), sc)),
+      'scout-pause': act(async () => $.ui.toast(S.N.toast(await setScoutPaused(claudeHost($), sc.name, !sc.paused)))),
+    }
+    const header: PageHeader = {
+      from: 'scouts', label: sc.name, place: at, title: scoutAbout(sc), color: 'claude',
+      state: scoutStateGroups(sc, nowMs, shown[0]),
+      buttons: scoutButtons(sc).map(b => ({ ...b, onPress: onPress[b.id] ?? (() => undefined) })),
+      onBack: openScout(''), onPrev: at ? openScout(at.prev) : () => undefined, onNext: at ? openScout(at.next) : () => undefined,
+      backFocus: true, nav: NAV_KEYS.claude, backKey: 'scout-back',
+    }
+    // VS Code's side panel: the same header, then its own sections (see vscode-scouts.tsx)
+    if (pane.vscode) return scoutPageVs($, pane, sc, place.run, header)
     if (opened) {
       // one run's page: its line, then its full report (from its file)
       const text = (await readScoutRunReport(host, opened.run))?.trim() ?? ''
@@ -118,39 +136,15 @@ export async function scoutsPage($: $, pane: PaneParts) {
         </Box>
       )
     }
-    // the subheader: the summary from the file's front matter, if one is set (the instructions show in full below)
-    const title = sc.summary?.trim() ?? ''
     return (
       <Box flexDirection="column" gap={1}>
-        <Box flexDirection="column">
-          <Text>
-            <Text bold color={C('claude')}>{sc.name}</Text>{' '}
-            <Text bold color={C(scoutTone(sc))}>
-              {scoutIcon(sc)} {r.state || 'waiting'}
-              {sc.running && sc.paused ? ', then paused' : ''}
-            </Text>
-            <Text color={C('inactive')}>
-              {' · '}
-              {r.every}
-              {r.model ? ` · ${r.model}` : ''} · {r.ran}
-            </Text>
-          </Text>
-          {title ? (
-            <Text bold color={C('text')}>
-              {title}
-            </Text>
-          ) : null}
-          {sc.warning ? <Text color={C('warning')}>{sc.warning}</Text> : null}
-          {problem && !sc.running ? <Text color={C('error')}>{problem}</Text> : null}
-        </Box>
-
-        {buttonRows([
-          <Button key="scout-back" label="Back" hotkey="b" autoFocus onPress={act(() => panelValues($).updateScoutOpen(() => ''))} />,
-          // no Run now while it runs: it couldn't start again until this run ends
-          !sc.running && <Button key="scout-run" label="Run now" hotkey="r" onPress={act(async () => $.ui.toast(S.N.toast(await runScoutNow(claudeHost($), sc.name))))} />,
-          <Button key="scout-edit" label="Edit" hotkey="e" onPress={act(() => editScout(claudeHost($), sc))} />,
-          <Button key="scout-pause" label={sc.paused ? 'Resume' : 'Pause'} hotkey="p" onPress={act(async () => $.ui.toast(S.N.toast(await setScoutPaused(claudeHost($), sc.name, !sc.paused))))} />,
-        ], 'scout-buttons')}
+        {pageHeader(pane, header)}
+        {sc.warning || (problem && !sc.running) ? (
+          <Box flexDirection="column">
+            {sc.warning ? <Text color={C('warning')}>{sc.warning}</Text> : null}
+            {problem && !sc.running ? <Text color={C('error')}>{problem}</Text> : null}
+          </Box>
+        ) : null}
 
         <Box flexDirection="column">
           {heading('Instructions')}
@@ -185,7 +179,7 @@ export async function scoutsPage($: $, pane: PaneParts) {
             <Text color={C('autoAccept')}>{file}</Text>
           </Text>
         </Box>
-        {footer(scoutKeys(sc.paused === true, sc.running === true), 'scout-keys')}
+        {footer(scoutKeys(sc.paused === true, sc.running === true, at && at.of > 1 ? navHint('claude') : null), 'scout-keys')}
       </Box>
     )
   }

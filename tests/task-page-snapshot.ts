@@ -8,6 +8,7 @@
 // - T-647: the Status row names the state
 // - T-693: no status badge under the title
 // - T-701: an answered investigation's Status row says "answered: read it"
+// - T-751: the 4-line page header (where you are, title, state, buttons in groups) and its heavy rule; no Status, Stage or Now rows
 export const TASK_BEFORE: Record<string, unknown> = {
   "desktop T-501": {
     "type": "Box",
@@ -15,48 +16,129 @@ export const TASK_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
-        "children": [
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-501"]},
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" Make the task page in the editor side panel"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [{"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["wide and readable, with the full title, the"]}]
-          },
-          {
-            "type": "Text",
-            "children": [{"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["details, the history and the latest report shown"]}]
-          },
-          {"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["whole (review)"]}]}
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"task-buttons","flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
             "type": "Box",
-            "props": {"key":"task-buttons-0","flexDirection":"row","gap":1},
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"back","label":"Back","hotkey":"b","autoFocus":true},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"approve","label":"Approve","hotkey":"a"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"reject","label":"Reject","hotkey":"x"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"show-changes","label":"Show changes","hotkey":"d"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"drop","label":"Drop"},"press":{"plugin":"symcc"}}
+              {
+                "type": "Button",
+                "props": {"key":"back","label":"‹ Tasks","plain":true,"autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Tasks"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["                        "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["T-501 · "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 2 of 13 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
           },
           {
             "type": "Box",
-            "props": {"key":"task-buttons-1","flexDirection":"row","gap":1},
+            "props": {"key":"hdr-title","flexDirection":"column"},
             "children": [
-              {"type":"Button","props":{"key":"needs-review","label":"Needs review: off","hotkey":"n"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"copy","label":"Copy (y)","hotkey":"y"},"press":{"plugin":"symcc"}}
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"warning","weight":"semibold"},"children":["T-501"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Make the task page in the editor side panel"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["wide and readable, with the full title, the"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["details, the history and the latest report"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["shown whole (review)"]}
+                ]
+              }
             ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"warning","weight":"semibold"},"children":["◆ ready for review"]},
+                  {"type":"Text","props":{"color":"text"},"children":["   "]},
+                  {"type":"Text","props":{"color":"suggestion"},"children":["change"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"ide"},"children":["worker"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"inactive"},"children":["try 2/4"]}
+                ]
+              },
+              {"type":"Text","children":[{"type":"Text","props":{"color":"claude"},"children":["♟ from you"]}]}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [
+              {"type":"Button","props":{"key":"approve","label":"Approve","variant":"primary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"show-changes","label":"Show changes","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"reject","label":"Reject","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":[" "]},
+              {"type":"Button","props":{"key":"drop","label":"Drop","variant":"secondary"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-1","flexDirection":"row"},
+            "children": [
+              {"type":"Button","props":{"key":"needs-review","label":"☐ needs review","dimColor":true,"variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":[" "]},
+              {"type":"Button","props":{"key":"copy","label":"copy","dimColor":true,"variant":"secondary"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"approve-key","label":"a","hotkey":"a"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"show-changes-key","label":"d","hotkey":"d"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"reject-key","label":"x","hotkey":"x"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"needs-review-key","label":"n","hotkey":"n"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"copy-key","label":"y","hotkey":"y"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
           }
         ]
       },
@@ -68,22 +150,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Status:   "]},
-              {"type":"Text","props":{"bold":true,"color":"warning","weight":"semibold"},"children":["◆ ready for review"]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · added Nov 17 at"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["          "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["02:00 PM · changed Nov 18 at 01:59 PM"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Stage:    "]},
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Steps:    "]},
               {"type":"Text","props":{"color":"success"},"children":["worker ✓"]},
               {"type":"Text","props":{"color":"inactive"},"children":[" → "]},
               {"type":"Text","props":{"color":"success"},"children":["prep ✓"]},
@@ -101,6 +168,21 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["          "]},
               {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["review"]},
               {"type":"Text","props":{"color":"inactive"},"children":[" → merge"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Added:    "]},
+              {"type":"Text","props":{"color":"text"},"children":["Nov 17 at 02:00 PM"]},
+              {"type":"Text","props":{"color":"inactive"},"children":[" · changed Nov 18 at"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["          "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["01:59 PM"]}
             ]
           },
           {
@@ -599,16 +681,16 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["x"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" reject"]}
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["d"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" show changes"]}
                 ]
               },
               {
                 "type": "Text",
                 "children": [
                   " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["d"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" show changes"]}
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["x"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" reject"]}
                 ]
               }
             ]
@@ -651,6 +733,14 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   "",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  " · ",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["↑↓"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
                 ]
@@ -676,42 +766,168 @@ export const TASK_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
-        "children": [
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"claude"},"children":["T-501"]},
-              {"type":"Text","props":{"bold":true,"color":"text"},"children":[" Make the task page in the editor side panel"]}
-            ]
-          },
-          {"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"text"},"children":["wide and readable, with the full title, the"]}]},
-          {"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"text"},"children":["details, the history and the latest report shown"]}]},
-          {"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"text"},"children":["whole (review)"]}]}
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"task-buttons","flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
             "type": "Box",
-            "props": {"key":"task-buttons-0","flexDirection":"row","gap":1},
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"back","label":"Back","hotkey":"b","autoFocus":true},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"approve","label":"Approve","hotkey":"a"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"reject","label":"Reject","hotkey":"x"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"show-changes","label":"Show changes","hotkey":"d"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"drop","label":"Drop"},"press":{"plugin":"symcc"}}
+              {
+                "type": "Button",
+                "props": {"key":"back","label":"‹ Tasks","plain":true,"autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Tasks"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["                        "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["T-501 · "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 2 of 13 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
           },
           {
             "type": "Box",
-            "props": {"key":"task-buttons-1","flexDirection":"row","gap":1},
+            "props": {"key":"hdr-title","flexDirection":"column"},
             "children": [
-              {"type":"Button","props":{"key":"needs-review","label":"Needs review: off","hotkey":"n"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"copy","label":"Copy (y)","hotkey":"y"},"press":{"plugin":"symcc"}}
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"warning"},"children":["T-501"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["Make the task page in the editor side panel"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["wide and readable, with the full title, the"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["details, the history and the latest report"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["shown whole (review)"]}
+                ]
+              }
             ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"warning"},"children":["◆ ready for review"]},
+                  {"type":"Text","props":{"color":"text"},"children":["   "]},
+                  {"type":"Text","props":{"color":"suggestion"},"children":["change"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"ide"},"children":["worker"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"inactive"},"children":["try 2/4"]}
+                ]
+              },
+              {"type":"Text","children":[{"type":"Text","props":{"color":"claude"},"children":["♟ from you"]}]}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"approve","label":"Approve","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [
+                  {
+                    "type": "Text",
+                    "children": [
+                      {"type":"Text","props":{"color":"ide"},"children":["▐"]},
+                      {"type":"Text","props":{"bold":true,"backgroundColor":"ide","color":"inverseText"},"children":["Approve"]},
+                      {"type":"Text","props":{"color":"ide"},"children":["▌"]}
+                    ]
+                  }
+                ]
+              },
+              {"type":"Text","children":["   "]},
+              {
+                "type": "Button",
+                "props": {"key":"show-changes","label":"Show changes","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Show changes]"]}]
+              },
+              {"type":"Text","children":["   "]},
+              {
+                "type": "Button",
+                "props": {"key":"reject","label":"Reject","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"error"},"children":["[Reject]"]}]
+              },
+              {"type":"Text","children":[" "]},
+              {
+                "type": "Button",
+                "props": {"key":"drop","label":"Drop","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"error"},"children":["[Drop]"]}]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-1","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"needs-review","label":"☐ needs review","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["☐ needs review"]}]
+              },
+              {"type":"Text","children":[" "]},
+              {
+                "type": "Button",
+                "props": {"key":"copy","label":"copy","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["copy"]}]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"approve-key","label":"a","hotkey":"a"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"show-changes-key","label":"d","hotkey":"d"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"reject-key","label":"x","hotkey":"x"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"needs-review-key","label":"n","hotkey":"n"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"copy-key","label":"y","hotkey":"y"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
           }
         ]
       },
@@ -723,22 +939,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"text"},"children":["Status:   "]},
-              {"type":"Text","props":{"bold":true,"color":"warning"},"children":["◆ ready for review"]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · added Nov 17 at"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"text"},"children":["          "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["02:00 PM · changed Nov 18 at 01:59 PM"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"text"},"children":["Stage:    "]},
+              {"type":"Text","props":{"bold":true,"color":"text"},"children":["Steps:    "]},
               {"type":"Text","props":{"color":"success"},"children":["worker ✓"]},
               {"type":"Text","props":{"color":"inactive"},"children":[" → "]},
               {"type":"Text","props":{"color":"success"},"children":["prep ✓"]},
@@ -756,6 +957,21 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["          "]},
               {"type":"Text","props":{"bold":true,"color":"ide"},"children":["review"]},
               {"type":"Text","props":{"color":"inactive"},"children":[" → merge"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              {"type":"Text","props":{"bold":true,"color":"text"},"children":["Added:    "]},
+              {"type":"Text","props":{"color":"text"},"children":["Nov 17 at 02:00 PM"]},
+              {"type":"Text","props":{"color":"inactive"},"children":[" · changed Nov 18 at"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              {"type":"Text","props":{"bold":true,"color":"text"},"children":["          "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["01:59 PM"]}
             ]
           },
           {
@@ -1244,16 +1460,16 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["x"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" reject"]}
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["d"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" show changes"]}
                 ]
               },
               {
                 "type": "Text",
                 "children": [
                   " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["d"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" show changes"]}
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["x"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" reject"]}
                 ]
               }
             ]
@@ -1290,7 +1506,19 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "children": [
               {
                 "type": "Text",
-                "children": ["",{"type":"Text","props":{"bold":true,"color":"text"},"children":["↑↓"]},{"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}]
+                "children": [
+                  "",
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  " · ",
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["↑↓"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
+                ]
               },
               {
                 "type": "Text",
@@ -1309,24 +1537,139 @@ export const TASK_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
-            "type": "Text",
+            "type": "Box",
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-502"]},
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" Make the task page in the editor side panel"]}
+              {
+                "type": "Button",
+                "props": {"key":"back","label":"‹ Tasks","plain":true,"autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Tasks"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["                        "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["T-502 · "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 5 of 13 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
           },
           {
-            "type": "Text",
-            "children": [{"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["wide and readable, with the full title, the"]}]
+            "type": "Box",
+            "props": {"key":"hdr-title","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"error","weight":"semibold"},"children":["T-502"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Make the task page in the editor side panel"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["wide and readable, with the full title, the"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["details, the history and the latest report"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["shown whole (failed)"]}
+                ]
+              }
+            ]
           },
           {
-            "type": "Text",
-            "children": [{"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["details, the history and the latest report shown"]}]
+            "type": "Box",
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"error","weight":"semibold"},"children":["✗ failed"]},
+                  {"type":"Text","props":{"color":"text"},"children":["   "]},
+                  {"type":"Text","props":{"color":"suggestion"},"children":["change"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"ide"},"children":["worker"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"inactive"},"children":["try 2/4"]},
+                  {"type":"Text","props":{"color":"text"},"children":["   "]},
+                  {"type":"Text","props":{"color":"claude"},"children":["♟ from you"]}
+                ]
+              },
+              {"type":"Text","children":[{"type":"Text","props":{"italic":true,"color":"inactive"},"children":["tests failed"]}]}
+            ]
           },
-          {"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["whole (failed)"]}]}
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [{"type":"Button","props":{"key":"retry","label":"Retry","variant":"primary"},"press":{"plugin":"symcc"}}]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-1","flexDirection":"row"},
+            "children": [
+              {"type":"Button","props":{"key":"stash","label":"Stash to backlog","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":[" "]},
+              {"type":"Button","props":{"key":"role","label":"Role","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":[" "]},
+              {"type":"Button","props":{"key":"already-merged","label":"Already merged","variant":"secondary"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-2","flexDirection":"row"},
+            "children": [
+              {"type":"Button","props":{"key":"drop","label":"Drop","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"needs-review","label":"☐ needs review","dimColor":true,"variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":[" "]},
+              {"type":"Button","props":{"key":"copy","label":"copy","dimColor":true,"variant":"secondary"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"retry-key","label":"r","hotkey":"r"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"stash-key","label":"z","hotkey":"z"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-key","label":"l","hotkey":"l"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"already-merged-key","label":"h","hotkey":"h"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"drop-key","label":"x","hotkey":"x"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"needs-review-key","label":"n","hotkey":"n"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"copy-key","label":"y","hotkey":"y"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
+          }
         ]
       },
       {
@@ -1367,59 +1710,22 @@ export const TASK_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Box",
-        "props": {"key":"task-buttons","flexDirection":"column"},
-        "children": [
-          {
-            "type": "Box",
-            "props": {"key":"task-buttons-0","flexDirection":"row","gap":1},
-            "children": [
-              {"type":"Button","props":{"key":"back","label":"Back","hotkey":"b","autoFocus":true},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"retry","label":"Retry","hotkey":"r"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"stash","label":"Stash to backlog (z)","hotkey":"z"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role","label":"Role (l)","hotkey":"l"},"press":{"plugin":"symcc"}}
-            ]
-          },
-          {
-            "type": "Box",
-            "props": {"key":"task-buttons-1","flexDirection":"row","gap":1},
-            "children": [
-              {"type":"Button","props":{"key":"already-merged","label":"Already merged (h)","hotkey":"h"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"drop","label":"Drop","hotkey":"x"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"needs-review","label":"Needs review: off","hotkey":"n"},"press":{"plugin":"symcc"}}
-            ]
-          },
-          {
-            "type": "Box",
-            "props": {"key":"task-buttons-2","flexDirection":"row","gap":1},
-            "children": [{"type":"Button","props":{"key":"copy","label":"Copy (y)","hotkey":"y"},"press":{"plugin":"symcc"}}]
-          }
-        ]
-      },
-      {
-        "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Details"]},
           {
             "type": "Text",
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Status:   "]},
-              {"type":"Text","props":{"bold":true,"color":"error","weight":"semibold"},"children":["✗ failed"]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · added Nov 17 at 02:00 PM ·"]}
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Added:    "]},
+              {"type":"Text","props":{"color":"text"},"children":["Nov 17 at 02:00 PM"]},
+              {"type":"Text","props":{"color":"inactive"},"children":[" · changed Nov 18 at"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["          "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["changed Nov 18 at 01:59 PM"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Now:      "]},
-              {"type":"Text","props":{"italic":true,"color":"inactive"},"children":["tests failed"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["01:59 PM"]}
             ]
           },
           {
@@ -1972,6 +2278,20 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   " · ",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  "",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["↑↓"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
                 ]
@@ -1997,18 +2317,185 @@ export const TASK_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
-            "type": "Text",
+            "type": "Box",
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"claude"},"children":["T-502"]},
-              {"type":"Text","props":{"bold":true,"color":"text"},"children":[" Make the task page in the editor side panel"]}
+              {
+                "type": "Button",
+                "props": {"key":"back","label":"‹ Tasks","plain":true,"autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Tasks"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["                        "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["T-502 · "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 5 of 13 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
           },
-          {"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"text"},"children":["wide and readable, with the full title, the"]}]},
-          {"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"text"},"children":["details, the history and the latest report shown"]}]},
-          {"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"text"},"children":["whole (failed)"]}]}
+          {
+            "type": "Box",
+            "props": {"key":"hdr-title","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"error"},"children":["T-502"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["Make the task page in the editor side panel"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["wide and readable, with the full title, the"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["details, the history and the latest report"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["shown whole (failed)"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"error"},"children":["✗ failed"]},
+                  {"type":"Text","props":{"color":"text"},"children":["   "]},
+                  {"type":"Text","props":{"color":"suggestion"},"children":["change"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"ide"},"children":["worker"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"inactive"},"children":["try 2/4"]},
+                  {"type":"Text","props":{"color":"text"},"children":["   "]},
+                  {"type":"Text","props":{"color":"claude"},"children":["♟ from you"]}
+                ]
+              },
+              {"type":"Text","children":[{"type":"Text","props":{"italic":true,"color":"inactive"},"children":["tests failed"]}]}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"retry","label":"Retry","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [
+                  {
+                    "type": "Text",
+                    "children": [
+                      {"type":"Text","props":{"color":"ide"},"children":["▐"]},
+                      {"type":"Text","props":{"bold":true,"backgroundColor":"ide","color":"inverseText"},"children":["Retry"]},
+                      {"type":"Text","props":{"color":"ide"},"children":["▌"]}
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-1","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"stash","label":"Stash to backlog","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Stash to backlog]"]}]
+              },
+              {"type":"Text","children":[" "]},
+              {
+                "type": "Button",
+                "props": {"key":"role","label":"Role","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Role]"]}]
+              },
+              {"type":"Text","children":[" "]},
+              {
+                "type": "Button",
+                "props": {"key":"already-merged","label":"Already merged","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Already merged]"]}]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-2","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"drop","label":"Drop","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"error"},"children":["[Drop]"]}]
+              },
+              {"type":"Text","children":["   "]},
+              {
+                "type": "Button",
+                "props": {"key":"needs-review","label":"☐ needs review","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["☐ needs review"]}]
+              },
+              {"type":"Text","children":[" "]},
+              {
+                "type": "Button",
+                "props": {"key":"copy","label":"copy","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["copy"]}]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"retry-key","label":"r","hotkey":"r"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"stash-key","label":"z","hotkey":"z"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-key","label":"l","hotkey":"l"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"already-merged-key","label":"h","hotkey":"h"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"drop-key","label":"x","hotkey":"x"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"needs-review-key","label":"n","hotkey":"n"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"copy-key","label":"y","hotkey":"y"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
+          }
         ]
       },
       {
@@ -2049,59 +2536,22 @@ export const TASK_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Box",
-        "props": {"key":"task-buttons","flexDirection":"column"},
-        "children": [
-          {
-            "type": "Box",
-            "props": {"key":"task-buttons-0","flexDirection":"row","gap":1},
-            "children": [
-              {"type":"Button","props":{"key":"back","label":"Back","hotkey":"b","autoFocus":true},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"retry","label":"Retry","hotkey":"r"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"stash","label":"Stash to backlog (z)","hotkey":"z"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role","label":"Role (l)","hotkey":"l"},"press":{"plugin":"symcc"}}
-            ]
-          },
-          {
-            "type": "Box",
-            "props": {"key":"task-buttons-1","flexDirection":"row","gap":1},
-            "children": [
-              {"type":"Button","props":{"key":"already-merged","label":"Already merged (h)","hotkey":"h"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"drop","label":"Drop","hotkey":"x"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"needs-review","label":"Needs review: off","hotkey":"n"},"press":{"plugin":"symcc"}}
-            ]
-          },
-          {
-            "type": "Box",
-            "props": {"key":"task-buttons-2","flexDirection":"row","gap":1},
-            "children": [{"type":"Button","props":{"key":"copy","label":"Copy (y)","hotkey":"y"},"press":{"plugin":"symcc"}}]
-          }
-        ]
-      },
-      {
-        "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Details"]},
           {
             "type": "Text",
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"text"},"children":["Status:   "]},
-              {"type":"Text","props":{"bold":true,"color":"error"},"children":["✗ failed"]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · added Nov 17 at 02:00 PM ·"]}
+              {"type":"Text","props":{"bold":true,"color":"text"},"children":["Added:    "]},
+              {"type":"Text","props":{"color":"text"},"children":["Nov 17 at 02:00 PM"]},
+              {"type":"Text","props":{"color":"inactive"},"children":[" · changed Nov 18 at"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["          "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["changed Nov 18 at 01:59 PM"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"text"},"children":["Now:      "]},
-              {"type":"Text","props":{"italic":true,"color":"inactive"},"children":["tests failed"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["01:59 PM"]}
             ]
           },
           {
@@ -2632,9 +3082,19 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["↑↓"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
                 ]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": ["",{"type":"Text","props":{"bold":true,"color":"text"},"children":["↑↓"]},{"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}]
               },
               {
                 "type": "Text",
@@ -2653,46 +3113,119 @@ export const TASK_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
-        "children": [
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-503"]},
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" Make the task page in the editor side panel"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [{"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["wide and readable, with the full title, the"]}]
-          },
-          {
-            "type": "Text",
-            "children": [{"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["details, the history and the latest report shown"]}]
-          },
-          {"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["whole (waiting)"]}]}
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"task-buttons","flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
             "type": "Box",
-            "props": {"key":"task-buttons-0","flexDirection":"row","gap":1},
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"back","label":"Back","hotkey":"b"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"already-merged","label":"Already merged (h)","hotkey":"h"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"drop","label":"Drop","hotkey":"x"},"press":{"plugin":"symcc"}}
+              {
+                "type": "Button",
+                "props": {"key":"back","label":"‹ Tasks","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Tasks"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["                        "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["T-503 · "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 4 of 13 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
           },
           {
             "type": "Box",
-            "props": {"key":"task-buttons-1","flexDirection":"row","gap":1},
+            "props": {"key":"hdr-title","flexDirection":"column"},
             "children": [
-              {"type":"Button","props":{"key":"needs-review","label":"Needs review: off","hotkey":"n"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"copy","label":"Copy (y)","hotkey":"y"},"press":{"plugin":"symcc"}}
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"warning","weight":"semibold"},"children":["T-503"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Make the task page in the editor side panel"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["wide and readable, with the full title, the"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["details, the history and the latest report"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["shown whole (waiting)"]}
+                ]
+              }
             ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"warning","weight":"semibold"},"children":["? waiting for you"]},
+                  {"type":"Text","props":{"color":"text"},"children":["   "]},
+                  {"type":"Text","props":{"color":"suggestion"},"children":["change"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"ide"},"children":["worker"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"inactive"},"children":["try 2/4"]}
+                ]
+              },
+              {"type":"Text","children":[{"type":"Text","props":{"color":"claude"},"children":["♟ from you"]}]}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [
+              {"type":"Button","props":{"key":"already-merged","label":"Already merged","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"drop","label":"Drop","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"needs-review","label":"☐ needs review","dimColor":true,"variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":[" "]},
+              {"type":"Button","props":{"key":"copy","label":"copy","dimColor":true,"variant":"secondary"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"already-merged-key","label":"h","hotkey":"h"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"drop-key","label":"x","hotkey":"x"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"needs-review-key","label":"n","hotkey":"n"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"copy-key","label":"y","hotkey":"y"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
           }
         ]
       },
@@ -2704,16 +3237,16 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Status:   "]},
-              {"type":"Text","props":{"bold":true,"color":"warning","weight":"semibold"},"children":["? waiting for you"]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · added Nov 17 at"]}
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Added:    "]},
+              {"type":"Text","props":{"color":"text"},"children":["Nov 17 at 02:00 PM"]},
+              {"type":"Text","props":{"color":"inactive"},"children":[" · changed Nov 18 at"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["          "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["02:00 PM · changed Nov 18 at 01:59 PM"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["01:59 PM"]}
             ]
           },
           {
@@ -3276,6 +3809,14 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   " · ",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  " · ",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["↑↓"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
                 ]
@@ -3301,40 +3842,139 @@ export const TASK_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
-        "children": [
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"claude"},"children":["T-503"]},
-              {"type":"Text","props":{"bold":true,"color":"text"},"children":[" Make the task page in the editor side panel"]}
-            ]
-          },
-          {"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"text"},"children":["wide and readable, with the full title, the"]}]},
-          {"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"text"},"children":["details, the history and the latest report shown"]}]},
-          {"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"text"},"children":["whole (waiting)"]}]}
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"task-buttons","flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
             "type": "Box",
-            "props": {"key":"task-buttons-0","flexDirection":"row","gap":1},
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"back","label":"Back","hotkey":"b"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"already-merged","label":"Already merged (h)","hotkey":"h"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"drop","label":"Drop","hotkey":"x"},"press":{"plugin":"symcc"}}
+              {
+                "type": "Button",
+                "props": {"key":"back","label":"‹ Tasks","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Tasks"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["                        "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["T-503 · "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 4 of 13 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
           },
           {
             "type": "Box",
-            "props": {"key":"task-buttons-1","flexDirection":"row","gap":1},
+            "props": {"key":"hdr-title","flexDirection":"column"},
             "children": [
-              {"type":"Button","props":{"key":"needs-review","label":"Needs review: off","hotkey":"n"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"copy","label":"Copy (y)","hotkey":"y"},"press":{"plugin":"symcc"}}
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"warning"},"children":["T-503"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["Make the task page in the editor side panel"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["wide and readable, with the full title, the"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["details, the history and the latest report"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["shown whole (waiting)"]}
+                ]
+              }
             ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"warning"},"children":["? waiting for you"]},
+                  {"type":"Text","props":{"color":"text"},"children":["   "]},
+                  {"type":"Text","props":{"color":"suggestion"},"children":["change"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"ide"},"children":["worker"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"inactive"},"children":["try 2/4"]}
+                ]
+              },
+              {"type":"Text","children":[{"type":"Text","props":{"color":"claude"},"children":["♟ from you"]}]}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"already-merged","label":"Already merged","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Already merged]"]}]
+              },
+              {"type":"Text","children":["   "]},
+              {
+                "type": "Button",
+                "props": {"key":"drop","label":"Drop","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"error"},"children":["[Drop]"]}]
+              },
+              {"type":"Text","children":["   "]},
+              {
+                "type": "Button",
+                "props": {"key":"needs-review","label":"☐ needs review","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["☐ needs review"]}]
+              },
+              {"type":"Text","children":[" "]},
+              {
+                "type": "Button",
+                "props": {"key":"copy","label":"copy","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["copy"]}]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"already-merged-key","label":"h","hotkey":"h"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"drop-key","label":"x","hotkey":"x"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"needs-review-key","label":"n","hotkey":"n"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"copy-key","label":"y","hotkey":"y"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
           }
         ]
       },
@@ -3346,16 +3986,16 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"text"},"children":["Status:   "]},
-              {"type":"Text","props":{"bold":true,"color":"warning"},"children":["? waiting for you"]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · added Nov 17 at"]}
+              {"type":"Text","props":{"bold":true,"color":"text"},"children":["Added:    "]},
+              {"type":"Text","props":{"color":"text"},"children":["Nov 17 at 02:00 PM"]},
+              {"type":"Text","props":{"color":"inactive"},"children":[" · changed Nov 18 at"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["          "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["02:00 PM · changed Nov 18 at 01:59 PM"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["01:59 PM"]}
             ]
           },
           {
@@ -3928,6 +4568,14 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   " · ",
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  " · ",
                   {"type":"Text","props":{"bold":true,"color":"text"},"children":["↑↓"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
                 ]
@@ -3949,44 +4597,123 @@ export const TASK_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
-        "children": [
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-504"]},
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" Make the task page in the editor side panel"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [{"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["wide and readable, with the full title, the"]}]
-          },
-          {
-            "type": "Text",
-            "children": [{"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["details, the history and the latest report shown"]}]
-          },
-          {"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["whole (doing)"]}]}
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"task-buttons","flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
             "type": "Box",
-            "props": {"key":"task-buttons-0","flexDirection":"row","gap":1},
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"back","label":"Back","hotkey":"b","autoFocus":true},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"pause","label":"Pause","hotkey":"p"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"drop","label":"Drop","hotkey":"x"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"needs-review","label":"Needs review: off","hotkey":"n"},"press":{"plugin":"symcc"}}
+              {
+                "type": "Button",
+                "props": {"key":"back","label":"‹ Tasks","plain":true,"autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Tasks"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["                        "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["T-504 · "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 6 of 13 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
           },
           {
             "type": "Box",
-            "props": {"key":"task-buttons-1","flexDirection":"row","gap":1},
-            "children": [{"type":"Button","props":{"key":"copy","label":"Copy (y)","hotkey":"y"},"press":{"plugin":"symcc"}}]
+            "props": {"key":"hdr-title","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["T-504"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Make the task page in the editor side panel"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["wide and readable, with the full title, the"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["details, the history and the latest report"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["shown whole (doing)"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["▶ doing"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"text"},"children":["worker"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"inactive"},"children":["25m"]},
+                  {"type":"Text","props":{"color":"text"},"children":["   "]},
+                  {"type":"Text","props":{"color":"suggestion"},"children":["change"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"ide"},"children":["worker"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"inactive"},"children":["try 2/4"]}
+                ]
+              },
+              {"type":"Text","children":[{"type":"Text","props":{"color":"claude"},"children":["♟ from you"]}]}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [
+              {"type":"Button","props":{"key":"pause","label":"Pause","variant":"primary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"drop","label":"Drop","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"needs-review","label":"☐ needs review","dimColor":true,"variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":[" "]},
+              {"type":"Button","props":{"key":"copy","label":"copy","dimColor":true,"variant":"secondary"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"pause-key","label":"p","hotkey":"p"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"drop-key","label":"x","hotkey":"x"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"needs-review-key","label":"n","hotkey":"n"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"copy-key","label":"y","hotkey":"y"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
           }
         ]
       },
@@ -3998,24 +4725,24 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Status:   "]},
-              {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["▶ doing · 25m"]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · added Nov 17 at 02:00 PM"]}
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Steps:    "]},
+              {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["● worker"]},
+              {"type":"Text","props":{"color":"inactive"},"children":[" → prep → queue → test → merge"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Added:    "]},
+              {"type":"Text","props":{"color":"text"},"children":["Nov 17 at 02:00 PM"]},
+              {"type":"Text","props":{"color":"inactive"},"children":[" · changed Nov 18 at"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["          "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["· changed Nov 18 at 01:59 PM"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Stage:    "]},
-              {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["● worker"]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" → prep → queue → test → merge"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["01:59 PM"]}
             ]
           },
           {
@@ -4334,6 +5061,14 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   "",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  " · ",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["↑↓"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
                 ]
@@ -4359,38 +5094,152 @@ export const TASK_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
-        "children": [
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"claude"},"children":["T-504"]},
-              {"type":"Text","props":{"bold":true,"color":"text"},"children":[" Make the task page in the editor side panel"]}
-            ]
-          },
-          {"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"text"},"children":["wide and readable, with the full title, the"]}]},
-          {"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"text"},"children":["details, the history and the latest report shown"]}]},
-          {"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"text"},"children":["whole (doing)"]}]}
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"task-buttons","flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
             "type": "Box",
-            "props": {"key":"task-buttons-0","flexDirection":"row","gap":1},
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"back","label":"Back","hotkey":"b","autoFocus":true},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"pause","label":"Pause","hotkey":"p"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"drop","label":"Drop","hotkey":"x"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"needs-review","label":"Needs review: off","hotkey":"n"},"press":{"plugin":"symcc"}}
+              {
+                "type": "Button",
+                "props": {"key":"back","label":"‹ Tasks","plain":true,"autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Tasks"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["                        "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["T-504 · "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 6 of 13 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
           },
           {
             "type": "Box",
-            "props": {"key":"task-buttons-1","flexDirection":"row","gap":1},
-            "children": [{"type":"Button","props":{"key":"copy","label":"Copy (y)","hotkey":"y"},"press":{"plugin":"symcc"}}]
+            "props": {"key":"hdr-title","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"ide"},"children":["T-504"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["Make the task page in the editor side panel"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["wide and readable, with the full title, the"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["details, the history and the latest report"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["shown whole (doing)"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"ide"},"children":["▶ doing"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"text"},"children":["worker"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"inactive"},"children":["25m"]},
+                  {"type":"Text","props":{"color":"text"},"children":["   "]},
+                  {"type":"Text","props":{"color":"suggestion"},"children":["change"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"ide"},"children":["worker"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"inactive"},"children":["try 2/4"]}
+                ]
+              },
+              {"type":"Text","children":[{"type":"Text","props":{"color":"claude"},"children":["♟ from you"]}]}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pause","label":"Pause","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [
+                  {
+                    "type": "Text",
+                    "children": [
+                      {"type":"Text","props":{"color":"ide"},"children":["▐"]},
+                      {"type":"Text","props":{"bold":true,"backgroundColor":"ide","color":"inverseText"},"children":["Pause"]},
+                      {"type":"Text","props":{"color":"ide"},"children":["▌"]}
+                    ]
+                  }
+                ]
+              },
+              {"type":"Text","children":["   "]},
+              {
+                "type": "Button",
+                "props": {"key":"drop","label":"Drop","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"error"},"children":["[Drop]"]}]
+              },
+              {"type":"Text","children":["   "]},
+              {
+                "type": "Button",
+                "props": {"key":"needs-review","label":"☐ needs review","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["☐ needs review"]}]
+              },
+              {"type":"Text","children":[" "]},
+              {
+                "type": "Button",
+                "props": {"key":"copy","label":"copy","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["copy"]}]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"pause-key","label":"p","hotkey":"p"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"drop-key","label":"x","hotkey":"x"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"needs-review-key","label":"n","hotkey":"n"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"copy-key","label":"y","hotkey":"y"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
           }
         ]
       },
@@ -4402,24 +5251,24 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"text"},"children":["Status:   "]},
-              {"type":"Text","props":{"bold":true,"color":"ide"},"children":["▶ doing · 25m"]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · added Nov 17 at 02:00 PM"]}
+              {"type":"Text","props":{"bold":true,"color":"text"},"children":["Steps:    "]},
+              {"type":"Text","props":{"bold":true,"color":"ide"},"children":["● worker"]},
+              {"type":"Text","props":{"color":"inactive"},"children":[" → prep → queue → test → merge"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              {"type":"Text","props":{"bold":true,"color":"text"},"children":["Added:    "]},
+              {"type":"Text","props":{"color":"text"},"children":["Nov 17 at 02:00 PM"]},
+              {"type":"Text","props":{"color":"inactive"},"children":[" · changed Nov 18 at"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["          "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["· changed Nov 18 at 01:59 PM"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"text"},"children":["Stage:    "]},
-              {"type":"Text","props":{"bold":true,"color":"ide"},"children":["● worker"]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" → prep → queue → test → merge"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["01:59 PM"]}
             ]
           },
           {
@@ -4715,7 +5564,19 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "children": [
               {
                 "type": "Text",
-                "children": ["",{"type":"Text","props":{"bold":true,"color":"text"},"children":["↑↓"]},{"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}]
+                "children": [
+                  "",
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  " · ",
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["↑↓"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
+                ]
               },
               {
                 "type": "Text",
@@ -4734,53 +5595,137 @@ export const TASK_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
-        "children": [
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-505"]},
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" Make the task page in the editor side panel"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [{"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["wide and readable, with the full title, the"]}]
-          },
-          {
-            "type": "Text",
-            "children": [{"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["details, the history and the latest report shown"]}]
-          },
-          {"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["whole (paused)"]}]}
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"task-buttons","flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
             "type": "Box",
-            "props": {"key":"task-buttons-0","flexDirection":"row","gap":1},
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"back","label":"Back","hotkey":"b","autoFocus":true},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"resume","label":"Resume","hotkey":"u"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"stash","label":"Stash to backlog (z)","hotkey":"z"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role","label":"Role (l)","hotkey":"l"},"press":{"plugin":"symcc"}}
+              {
+                "type": "Button",
+                "props": {"key":"back","label":"‹ Tasks","plain":true,"autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Tasks"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["                        "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["T-505 · "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 9 of 13 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
           },
           {
             "type": "Box",
-            "props": {"key":"task-buttons-1","flexDirection":"row","gap":1},
+            "props": {"key":"hdr-title","flexDirection":"column"},
             "children": [
-              {"type":"Button","props":{"key":"already-merged","label":"Already merged (h)","hotkey":"h"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"drop","label":"Drop","hotkey":"x"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"needs-review","label":"Needs review: off","hotkey":"n"},"press":{"plugin":"symcc"}}
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["T-505"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Make the task page in the editor side panel"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["wide and readable, with the full title, the"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["details, the history and the latest report"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["shown whole (paused)"]}
+                ]
+              }
             ]
           },
           {
             "type": "Box",
-            "props": {"key":"task-buttons-2","flexDirection":"row","gap":1},
-            "children": [{"type":"Button","props":{"key":"copy","label":"Copy (y)","hotkey":"y"},"press":{"plugin":"symcc"}}]
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["‖ paused"]},
+                  {"type":"Text","props":{"color":"text"},"children":["   "]},
+                  {"type":"Text","props":{"color":"suggestion"},"children":["change"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"ide"},"children":["worker"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"inactive"},"children":["try 2/4"]},
+                  {"type":"Text","props":{"color":"text"},"children":["   "]},
+                  {"type":"Text","props":{"color":"claude"},"children":["♟ from you"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [{"type":"Button","props":{"key":"resume","label":"Resume","variant":"primary"},"press":{"plugin":"symcc"}}]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-1","flexDirection":"row"},
+            "children": [
+              {"type":"Button","props":{"key":"stash","label":"Stash to backlog","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":[" "]},
+              {"type":"Button","props":{"key":"role","label":"Role","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":[" "]},
+              {"type":"Button","props":{"key":"already-merged","label":"Already merged","variant":"secondary"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-2","flexDirection":"row"},
+            "children": [
+              {"type":"Button","props":{"key":"drop","label":"Drop","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"needs-review","label":"☐ needs review","dimColor":true,"variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":[" "]},
+              {"type":"Button","props":{"key":"copy","label":"copy","dimColor":true,"variant":"secondary"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"resume-key","label":"u","hotkey":"u"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"stash-key","label":"z","hotkey":"z"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-key","label":"l","hotkey":"l"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"already-merged-key","label":"h","hotkey":"h"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"drop-key","label":"x","hotkey":"x"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"needs-review-key","label":"n","hotkey":"n"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"copy-key","label":"y","hotkey":"y"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
           }
         ]
       },
@@ -4792,16 +5737,16 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Status:   "]},
-              {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["‖ paused"]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · added Nov 17 at 02:00 PM ·"]}
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Added:    "]},
+              {"type":"Text","props":{"color":"text"},"children":["Nov 17 at 02:00 PM"]},
+              {"type":"Text","props":{"color":"inactive"},"children":[" · changed Nov 18 at"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["          "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["changed Nov 18 at 01:59 PM"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["01:59 PM"]}
             ]
           },
           {
@@ -5354,6 +6299,20 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   " · ",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  "",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["↑↓"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
                 ]
@@ -5379,47 +6338,183 @@ export const TASK_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
-        "children": [
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"claude"},"children":["T-505"]},
-              {"type":"Text","props":{"bold":true,"color":"text"},"children":[" Make the task page in the editor side panel"]}
-            ]
-          },
-          {"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"text"},"children":["wide and readable, with the full title, the"]}]},
-          {"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"text"},"children":["details, the history and the latest report shown"]}]},
-          {"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"text"},"children":["whole (paused)"]}]}
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"task-buttons","flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
             "type": "Box",
-            "props": {"key":"task-buttons-0","flexDirection":"row","gap":1},
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"back","label":"Back","hotkey":"b","autoFocus":true},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"resume","label":"Resume","hotkey":"u"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"stash","label":"Stash to backlog (z)","hotkey":"z"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role","label":"Role (l)","hotkey":"l"},"press":{"plugin":"symcc"}}
+              {
+                "type": "Button",
+                "props": {"key":"back","label":"‹ Tasks","plain":true,"autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Tasks"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["                        "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["T-505 · "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 9 of 13 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
           },
           {
             "type": "Box",
-            "props": {"key":"task-buttons-1","flexDirection":"row","gap":1},
+            "props": {"key":"hdr-title","flexDirection":"column"},
             "children": [
-              {"type":"Button","props":{"key":"already-merged","label":"Already merged (h)","hotkey":"h"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"drop","label":"Drop","hotkey":"x"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"needs-review","label":"Needs review: off","hotkey":"n"},"press":{"plugin":"symcc"}}
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["T-505"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["Make the task page in the editor side panel"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["wide and readable, with the full title, the"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["details, the history and the latest report"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["shown whole (paused)"]}
+                ]
+              }
             ]
           },
           {
             "type": "Box",
-            "props": {"key":"task-buttons-2","flexDirection":"row","gap":1},
-            "children": [{"type":"Button","props":{"key":"copy","label":"Copy (y)","hotkey":"y"},"press":{"plugin":"symcc"}}]
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["‖ paused"]},
+                  {"type":"Text","props":{"color":"text"},"children":["   "]},
+                  {"type":"Text","props":{"color":"suggestion"},"children":["change"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"ide"},"children":["worker"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"inactive"},"children":["try 2/4"]},
+                  {"type":"Text","props":{"color":"text"},"children":["   "]},
+                  {"type":"Text","props":{"color":"claude"},"children":["♟ from you"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"resume","label":"Resume","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [
+                  {
+                    "type": "Text",
+                    "children": [
+                      {"type":"Text","props":{"color":"ide"},"children":["▐"]},
+                      {"type":"Text","props":{"bold":true,"backgroundColor":"ide","color":"inverseText"},"children":["Resume"]},
+                      {"type":"Text","props":{"color":"ide"},"children":["▌"]}
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-1","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"stash","label":"Stash to backlog","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Stash to backlog]"]}]
+              },
+              {"type":"Text","children":[" "]},
+              {
+                "type": "Button",
+                "props": {"key":"role","label":"Role","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Role]"]}]
+              },
+              {"type":"Text","children":[" "]},
+              {
+                "type": "Button",
+                "props": {"key":"already-merged","label":"Already merged","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Already merged]"]}]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-2","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"drop","label":"Drop","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"error"},"children":["[Drop]"]}]
+              },
+              {"type":"Text","children":["   "]},
+              {
+                "type": "Button",
+                "props": {"key":"needs-review","label":"☐ needs review","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["☐ needs review"]}]
+              },
+              {"type":"Text","children":[" "]},
+              {
+                "type": "Button",
+                "props": {"key":"copy","label":"copy","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["copy"]}]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"resume-key","label":"u","hotkey":"u"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"stash-key","label":"z","hotkey":"z"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-key","label":"l","hotkey":"l"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"already-merged-key","label":"h","hotkey":"h"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"drop-key","label":"x","hotkey":"x"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"needs-review-key","label":"n","hotkey":"n"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"copy-key","label":"y","hotkey":"y"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
           }
         ]
       },
@@ -5431,16 +6526,16 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"text"},"children":["Status:   "]},
-              {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["‖ paused"]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · added Nov 17 at 02:00 PM ·"]}
+              {"type":"Text","props":{"bold":true,"color":"text"},"children":["Added:    "]},
+              {"type":"Text","props":{"color":"text"},"children":["Nov 17 at 02:00 PM"]},
+              {"type":"Text","props":{"color":"inactive"},"children":[" · changed Nov 18 at"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["          "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["changed Nov 18 at 01:59 PM"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["01:59 PM"]}
             ]
           },
           {
@@ -5971,9 +7066,19 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["↑↓"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
                 ]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": ["",{"type":"Text","props":{"bold":true,"color":"text"},"children":["↑↓"]},{"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}]
               },
               {
                 "type": "Text",
@@ -5992,48 +7097,129 @@ export const TASK_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
-        "children": [
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-506"]},
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" Make the task page in the editor side panel"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [{"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["wide and readable, with the full title, the"]}]
-          },
-          {
-            "type": "Text",
-            "children": [{"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["details, the history and the latest report shown"]}]
-          },
-          {"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["whole (todo)"]}]}
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"task-buttons","flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
             "type": "Box",
-            "props": {"key":"task-buttons-0","flexDirection":"row","gap":1},
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"back","label":"Back","hotkey":"b","autoFocus":true},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"pause","label":"Pause","hotkey":"p"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"stash","label":"Stash to backlog (z)","hotkey":"z"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role","label":"Role (l)","hotkey":"l"},"press":{"plugin":"symcc"}}
+              {
+                "type": "Button",
+                "props": {"key":"back","label":"‹ Tasks","plain":true,"autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Tasks"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["                        "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["T-506 · "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 8 of 13 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
           },
           {
             "type": "Box",
-            "props": {"key":"task-buttons-1","flexDirection":"row","gap":1},
+            "props": {"key":"hdr-title","flexDirection":"column"},
             "children": [
-              {"type":"Button","props":{"key":"drop","label":"Drop","hotkey":"x"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"needs-review","label":"Needs review: off","hotkey":"n"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"copy","label":"Copy (y)","hotkey":"y"},"press":{"plugin":"symcc"}}
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"inactive","weight":"semibold"},"children":["T-506"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Make the task page in the editor side panel"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["wide and readable, with the full title, the"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["details, the history and the latest report"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["shown whole (todo)"]}
+                ]
+              }
             ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"inactive","weight":"semibold"},"children":["○ to do"]},
+                  {"type":"Text","props":{"color":"text"},"children":["   "]},
+                  {"type":"Text","props":{"color":"suggestion"},"children":["change"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"ide"},"children":["worker"]},
+                  {"type":"Text","props":{"color":"text"},"children":["   "]},
+                  {"type":"Text","props":{"color":"claude"},"children":["♟ from you"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [
+              {"type":"Button","props":{"key":"pause","label":"Pause","variant":"primary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"stash","label":"Stash to backlog","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":[" "]},
+              {"type":"Button","props":{"key":"role","label":"Role","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"drop","label":"Drop","variant":"secondary"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-1","flexDirection":"row"},
+            "children": [
+              {"type":"Button","props":{"key":"needs-review","label":"☐ needs review","dimColor":true,"variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":[" "]},
+              {"type":"Button","props":{"key":"copy","label":"copy","dimColor":true,"variant":"secondary"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"pause-key","label":"p","hotkey":"p"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"stash-key","label":"z","hotkey":"z"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-key","label":"l","hotkey":"l"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"drop-key","label":"x","hotkey":"x"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"needs-review-key","label":"n","hotkey":"n"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"copy-key","label":"y","hotkey":"y"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
           }
         ]
       },
@@ -6045,16 +7231,16 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Status:   "]},
-              {"type":"Text","props":{"bold":true,"color":"inactive","weight":"semibold"},"children":["○ to do"]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · added Nov 17 at 02:00 PM ·"]}
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Added:    "]},
+              {"type":"Text","props":{"color":"text"},"children":["Nov 17 at 02:00 PM"]},
+              {"type":"Text","props":{"color":"inactive"},"children":[" · changed Nov 18 at"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["          "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["changed Nov 18 at 01:59 PM"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["01:59 PM"]}
             ]
           },
           {
@@ -6312,6 +7498,20 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   " · ",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  "",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["↑↓"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
                 ]
@@ -6337,42 +7537,168 @@ export const TASK_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
-        "children": [
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"claude"},"children":["T-506"]},
-              {"type":"Text","props":{"bold":true,"color":"text"},"children":[" Make the task page in the editor side panel"]}
-            ]
-          },
-          {"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"text"},"children":["wide and readable, with the full title, the"]}]},
-          {"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"text"},"children":["details, the history and the latest report shown"]}]},
-          {"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"text"},"children":["whole (todo)"]}]}
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"task-buttons","flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
             "type": "Box",
-            "props": {"key":"task-buttons-0","flexDirection":"row","gap":1},
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"back","label":"Back","hotkey":"b","autoFocus":true},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"pause","label":"Pause","hotkey":"p"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"stash","label":"Stash to backlog (z)","hotkey":"z"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role","label":"Role (l)","hotkey":"l"},"press":{"plugin":"symcc"}}
+              {
+                "type": "Button",
+                "props": {"key":"back","label":"‹ Tasks","plain":true,"autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Tasks"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["                        "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["T-506 · "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 8 of 13 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
           },
           {
             "type": "Box",
-            "props": {"key":"task-buttons-1","flexDirection":"row","gap":1},
+            "props": {"key":"hdr-title","flexDirection":"column"},
             "children": [
-              {"type":"Button","props":{"key":"drop","label":"Drop","hotkey":"x"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"needs-review","label":"Needs review: off","hotkey":"n"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"copy","label":"Copy (y)","hotkey":"y"},"press":{"plugin":"symcc"}}
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"inactive"},"children":["T-506"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["Make the task page in the editor side panel"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["wide and readable, with the full title, the"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["details, the history and the latest report"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["shown whole (todo)"]}
+                ]
+              }
             ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"inactive"},"children":["○ to do"]},
+                  {"type":"Text","props":{"color":"text"},"children":["   "]},
+                  {"type":"Text","props":{"color":"suggestion"},"children":["change"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"ide"},"children":["worker"]},
+                  {"type":"Text","props":{"color":"text"},"children":["   "]},
+                  {"type":"Text","props":{"color":"claude"},"children":["♟ from you"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pause","label":"Pause","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [
+                  {
+                    "type": "Text",
+                    "children": [
+                      {"type":"Text","props":{"color":"ide"},"children":["▐"]},
+                      {"type":"Text","props":{"bold":true,"backgroundColor":"ide","color":"inverseText"},"children":["Pause"]},
+                      {"type":"Text","props":{"color":"ide"},"children":["▌"]}
+                    ]
+                  }
+                ]
+              },
+              {"type":"Text","children":["   "]},
+              {
+                "type": "Button",
+                "props": {"key":"stash","label":"Stash to backlog","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Stash to backlog]"]}]
+              },
+              {"type":"Text","children":[" "]},
+              {
+                "type": "Button",
+                "props": {"key":"role","label":"Role","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Role]"]}]
+              },
+              {"type":"Text","children":["   "]},
+              {
+                "type": "Button",
+                "props": {"key":"drop","label":"Drop","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"error"},"children":["[Drop]"]}]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-1","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"needs-review","label":"☐ needs review","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["☐ needs review"]}]
+              },
+              {"type":"Text","children":[" "]},
+              {
+                "type": "Button",
+                "props": {"key":"copy","label":"copy","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["copy"]}]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"pause-key","label":"p","hotkey":"p"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"stash-key","label":"z","hotkey":"z"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-key","label":"l","hotkey":"l"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"drop-key","label":"x","hotkey":"x"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"needs-review-key","label":"n","hotkey":"n"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"copy-key","label":"y","hotkey":"y"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
           }
         ]
       },
@@ -6384,16 +7710,16 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"text"},"children":["Status:   "]},
-              {"type":"Text","props":{"bold":true,"color":"inactive"},"children":["○ to do"]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · added Nov 17 at 02:00 PM ·"]}
+              {"type":"Text","props":{"bold":true,"color":"text"},"children":["Added:    "]},
+              {"type":"Text","props":{"color":"text"},"children":["Nov 17 at 02:00 PM"]},
+              {"type":"Text","props":{"color":"inactive"},"children":[" · changed Nov 18 at"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["          "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["changed Nov 18 at 01:59 PM"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["01:59 PM"]}
             ]
           },
           {
@@ -6629,9 +7955,19 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["↑↓"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
                 ]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": ["",{"type":"Text","props":{"bold":true,"color":"text"},"children":["↑↓"]},{"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}]
               },
               {
                 "type": "Text",
@@ -6650,47 +7986,126 @@ export const TASK_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
-        "children": [
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-507"]},
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" Make the task page in the editor side panel"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [{"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["wide and readable, with the full title, the"]}]
-          },
-          {
-            "type": "Text",
-            "children": [{"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["details, the history and the latest report shown"]}]
-          },
-          {"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["whole (backlog)"]}]}
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"task-buttons","flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
             "type": "Box",
-            "props": {"key":"task-buttons-0","flexDirection":"row","gap":1},
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"back","label":"Back","hotkey":"b","autoFocus":true},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"to-todo","label":"Move to todo (o)","hotkey":"o"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role","label":"Role (l)","hotkey":"l"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"drop","label":"Drop","hotkey":"x"},"press":{"plugin":"symcc"}}
+              {
+                "type": "Button",
+                "props": {"key":"back","label":"‹ Tasks","plain":true,"autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Tasks"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["                       "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["T-507 · "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 10 of 13 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
           },
           {
             "type": "Box",
-            "props": {"key":"task-buttons-1","flexDirection":"row","gap":1},
+            "props": {"key":"hdr-title","flexDirection":"column"},
             "children": [
-              {"type":"Button","props":{"key":"needs-review","label":"Needs review: off","hotkey":"n"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"copy","label":"Copy (y)","hotkey":"y"},"press":{"plugin":"symcc"}}
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"inactive","weight":"semibold"},"children":["T-507"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Make the task page in the editor side panel"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["wide and readable, with the full title, the"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["details, the history and the latest report"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["shown whole (backlog)"]}
+                ]
+              }
             ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"inactive","weight":"semibold"},"children":["◇ backlog"]},
+                  {"type":"Text","props":{"color":"text"},"children":["   "]},
+                  {"type":"Text","props":{"color":"suggestion"},"children":["change"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"ide"},"children":["worker"]},
+                  {"type":"Text","props":{"color":"text"},"children":["   "]},
+                  {"type":"Text","props":{"color":"claude"},"children":["♟ from you"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [
+              {"type":"Button","props":{"key":"to-todo","label":"Move to todo","variant":"primary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"role","label":"Role","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"drop","label":"Drop","variant":"secondary"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-1","flexDirection":"row"},
+            "children": [
+              {"type":"Button","props":{"key":"needs-review","label":"☐ needs review","dimColor":true,"variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":[" "]},
+              {"type":"Button","props":{"key":"copy","label":"copy","dimColor":true,"variant":"secondary"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"to-todo-key","label":"o","hotkey":"o"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-key","label":"l","hotkey":"l"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"drop-key","label":"x","hotkey":"x"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"needs-review-key","label":"n","hotkey":"n"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"copy-key","label":"y","hotkey":"y"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
           }
         ]
       },
@@ -6702,16 +8117,16 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Status:   "]},
-              {"type":"Text","props":{"bold":true,"color":"inactive","weight":"semibold"},"children":["◇ backlog"]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · added Nov 17 at 02:00 PM ·"]}
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Added:    "]},
+              {"type":"Text","props":{"color":"text"},"children":["Nov 17 at 02:00 PM"]},
+              {"type":"Text","props":{"color":"inactive"},"children":[" · changed Nov 18 at"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["          "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["changed Nov 18 at 01:59 PM"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["01:59 PM"]}
             ]
           },
           {
@@ -6961,6 +8376,14 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   " · ",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  " · ",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["↑↓"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
                 ]
@@ -6986,41 +8409,160 @@ export const TASK_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
-        "children": [
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"claude"},"children":["T-507"]},
-              {"type":"Text","props":{"bold":true,"color":"text"},"children":[" Make the task page in the editor side panel"]}
-            ]
-          },
-          {"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"text"},"children":["wide and readable, with the full title, the"]}]},
-          {"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"text"},"children":["details, the history and the latest report shown"]}]},
-          {"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"text"},"children":["whole (backlog)"]}]}
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"task-buttons","flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
             "type": "Box",
-            "props": {"key":"task-buttons-0","flexDirection":"row","gap":1},
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"back","label":"Back","hotkey":"b","autoFocus":true},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"to-todo","label":"Move to todo (o)","hotkey":"o"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role","label":"Role (l)","hotkey":"l"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"drop","label":"Drop","hotkey":"x"},"press":{"plugin":"symcc"}}
+              {
+                "type": "Button",
+                "props": {"key":"back","label":"‹ Tasks","plain":true,"autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Tasks"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["                       "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["T-507 · "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 10 of 13 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
           },
           {
             "type": "Box",
-            "props": {"key":"task-buttons-1","flexDirection":"row","gap":1},
+            "props": {"key":"hdr-title","flexDirection":"column"},
             "children": [
-              {"type":"Button","props":{"key":"needs-review","label":"Needs review: off","hotkey":"n"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"copy","label":"Copy (y)","hotkey":"y"},"press":{"plugin":"symcc"}}
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"inactive"},"children":["T-507"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["Make the task page in the editor side panel"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["wide and readable, with the full title, the"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["details, the history and the latest report"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["shown whole (backlog)"]}
+                ]
+              }
             ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"inactive"},"children":["◇ backlog"]},
+                  {"type":"Text","props":{"color":"text"},"children":["   "]},
+                  {"type":"Text","props":{"color":"suggestion"},"children":["change"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"ide"},"children":["worker"]},
+                  {"type":"Text","props":{"color":"text"},"children":["   "]},
+                  {"type":"Text","props":{"color":"claude"},"children":["♟ from you"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"to-todo","label":"Move to todo","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [
+                  {
+                    "type": "Text",
+                    "children": [
+                      {"type":"Text","props":{"color":"ide"},"children":["▐"]},
+                      {"type":"Text","props":{"bold":true,"backgroundColor":"ide","color":"inverseText"},"children":["Move to todo"]},
+                      {"type":"Text","props":{"color":"ide"},"children":["▌"]}
+                    ]
+                  }
+                ]
+              },
+              {"type":"Text","children":["   "]},
+              {
+                "type": "Button",
+                "props": {"key":"role","label":"Role","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Role]"]}]
+              },
+              {"type":"Text","children":["   "]},
+              {
+                "type": "Button",
+                "props": {"key":"drop","label":"Drop","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"error"},"children":["[Drop]"]}]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-1","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"needs-review","label":"☐ needs review","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["☐ needs review"]}]
+              },
+              {"type":"Text","children":[" "]},
+              {
+                "type": "Button",
+                "props": {"key":"copy","label":"copy","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["copy"]}]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"to-todo-key","label":"o","hotkey":"o"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-key","label":"l","hotkey":"l"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"drop-key","label":"x","hotkey":"x"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"needs-review-key","label":"n","hotkey":"n"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"copy-key","label":"y","hotkey":"y"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
           }
         ]
       },
@@ -7032,16 +8574,16 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"text"},"children":["Status:   "]},
-              {"type":"Text","props":{"bold":true,"color":"inactive"},"children":["◇ backlog"]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · added Nov 17 at 02:00 PM ·"]}
+              {"type":"Text","props":{"bold":true,"color":"text"},"children":["Added:    "]},
+              {"type":"Text","props":{"color":"text"},"children":["Nov 17 at 02:00 PM"]},
+              {"type":"Text","props":{"color":"inactive"},"children":[" · changed Nov 18 at"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["          "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["changed Nov 18 at 01:59 PM"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["01:59 PM"]}
             ]
           },
           {
@@ -7273,6 +8815,14 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   " · ",
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  " · ",
                   {"type":"Text","props":{"bold":true,"color":"text"},"children":["↑↓"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
                 ]
@@ -7294,37 +8844,109 @@ export const TASK_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
-        "children": [
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-508"]},
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" Make the task page in the editor side panel"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [{"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["wide and readable, with the full title, the"]}]
-          },
-          {
-            "type": "Text",
-            "children": [{"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["details, the history and the latest report shown"]}]
-          },
-          {"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["whole (done)"]}]}
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"task-buttons","flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
             "type": "Box",
-            "props": {"key":"task-buttons-0","flexDirection":"row","gap":1},
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"back","label":"Back","hotkey":"b","autoFocus":true},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"copy","label":"Copy (y)","hotkey":"y"},"press":{"plugin":"symcc"}}
+              {
+                "type": "Button",
+                "props": {"key":"back","label":"‹ Tasks","plain":true,"autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Tasks"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["                       "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["T-508 · "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 12 of 13 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-title","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"success","weight":"semibold"},"children":["T-508"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Make the task page in the editor side panel"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["wide and readable, with the full title, the"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["details, the history and the latest report"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["shown whole (done)"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"success","weight":"semibold"},"children":["✓ done"]},
+                  {"type":"Text","props":{"color":"text"},"children":["   "]},
+                  {"type":"Text","props":{"color":"suggestion"},"children":["change"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"ide"},"children":["worker"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"inactive"},"children":["try 2/4"]},
+                  {"type":"Text","props":{"color":"text"},"children":["   "]},
+                  {"type":"Text","props":{"color":"claude"},"children":["♟ from you"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [{"type":"Button","props":{"key":"copy","label":"copy","dimColor":true,"variant":"secondary"},"press":{"plugin":"symcc"}}]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"copy-key","label":"y","hotkey":"y"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
           }
         ]
       },
@@ -7336,22 +8958,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Status:   "]},
-              {"type":"Text","props":{"bold":true,"color":"success","weight":"semibold"},"children":["✓ done"]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · added Nov 17 at 02:00 PM ·"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["          "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["changed Nov 18 at 01:59 PM"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Stage:    "]},
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Steps:    "]},
               {"type":"Text","props":{"color":"success"},"children":["worker ✓"]},
               {"type":"Text","props":{"color":"inactive"},"children":[" → "]},
               {"type":"Text","props":{"color":"success"},"children":["prep ✓"]},
@@ -7367,6 +8974,21 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["          "]},
               {"type":"Text","props":{"color":"success"},"children":["merge ✓"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Added:    "]},
+              {"type":"Text","props":{"color":"text"},"children":["Nov 17 at 02:00 PM"]},
+              {"type":"Text","props":{"color":"inactive"},"children":[" · changed Nov 18 at"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["          "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["01:59 PM"]}
             ]
           },
           {
@@ -7859,6 +9481,20 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   " · ",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  "",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["↑↓"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
                 ]
@@ -7884,31 +9520,116 @@ export const TASK_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
-        "children": [
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"claude"},"children":["T-508"]},
-              {"type":"Text","props":{"bold":true,"color":"text"},"children":[" Make the task page in the editor side panel"]}
-            ]
-          },
-          {"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"text"},"children":["wide and readable, with the full title, the"]}]},
-          {"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"text"},"children":["details, the history and the latest report shown"]}]},
-          {"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"text"},"children":["whole (done)"]}]}
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"task-buttons","flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
             "type": "Box",
-            "props": {"key":"task-buttons-0","flexDirection":"row","gap":1},
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"back","label":"Back","hotkey":"b","autoFocus":true},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"copy","label":"Copy (y)","hotkey":"y"},"press":{"plugin":"symcc"}}
+              {
+                "type": "Button",
+                "props": {"key":"back","label":"‹ Tasks","plain":true,"autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Tasks"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["                       "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["T-508 · "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 12 of 13 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-title","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"success"},"children":["T-508"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["Make the task page in the editor side panel"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["wide and readable, with the full title, the"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["details, the history and the latest report"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["shown whole (done)"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"success"},"children":["✓ done"]},
+                  {"type":"Text","props":{"color":"text"},"children":["   "]},
+                  {"type":"Text","props":{"color":"suggestion"},"children":["change"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"ide"},"children":["worker"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"inactive"},"children":["try 2/4"]},
+                  {"type":"Text","props":{"color":"text"},"children":["   "]},
+                  {"type":"Text","props":{"color":"claude"},"children":["♟ from you"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"copy","label":"copy","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["copy"]}]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"copy-key","label":"y","hotkey":"y"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
           }
         ]
       },
@@ -7920,22 +9641,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"text"},"children":["Status:   "]},
-              {"type":"Text","props":{"bold":true,"color":"success"},"children":["✓ done"]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · added Nov 17 at 02:00 PM ·"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"text"},"children":["          "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["changed Nov 18 at 01:59 PM"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"text"},"children":["Stage:    "]},
+              {"type":"Text","props":{"bold":true,"color":"text"},"children":["Steps:    "]},
               {"type":"Text","props":{"color":"success"},"children":["worker ✓"]},
               {"type":"Text","props":{"color":"inactive"},"children":[" → "]},
               {"type":"Text","props":{"color":"success"},"children":["prep ✓"]},
@@ -7949,6 +9655,21 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [{"type":"Text","props":{"bold":true,"color":"text"},"children":["          "]},{"type":"Text","props":{"color":"success"},"children":["merge ✓"]}]
+          },
+          {
+            "type": "Text",
+            "children": [
+              {"type":"Text","props":{"bold":true,"color":"text"},"children":["Added:    "]},
+              {"type":"Text","props":{"color":"text"},"children":["Nov 17 at 02:00 PM"]},
+              {"type":"Text","props":{"color":"inactive"},"children":[" · changed Nov 18 at"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              {"type":"Text","props":{"bold":true,"color":"text"},"children":["          "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["01:59 PM"]}
+            ]
           },
           {
             "type": "Text",
@@ -8430,9 +10151,19 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["↑↓"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
                 ]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": ["",{"type":"Text","props":{"bold":true,"color":"text"},"children":["↑↓"]},{"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}]
               },
               {
                 "type": "Text",
@@ -8451,39 +10182,117 @@ export const TASK_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
-        "children": [
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-509"]},
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" Make the task page in the editor side panel"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [{"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["wide and readable, with the full title, the"]}]
-          },
-          {
-            "type": "Text",
-            "children": [{"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["details, the history and the latest report shown"]}]
-          },
-          {"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["whole (dropped)"]}]}
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"task-buttons","flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
             "type": "Box",
-            "props": {"key":"task-buttons-0","flexDirection":"row","gap":1},
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"back","label":"Back","hotkey":"b","autoFocus":true},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"retry","label":"Retry","hotkey":"r"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"already-merged","label":"Already merged (h)","hotkey":"h"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"copy","label":"Copy (y)","hotkey":"y"},"press":{"plugin":"symcc"}}
+              {
+                "type": "Button",
+                "props": {"key":"back","label":"‹ Tasks","plain":true,"autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Tasks"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["                       "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["T-509 · "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 13 of 13 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-title","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"inactive","weight":"semibold"},"children":["T-509"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Make the task page in the editor side panel"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["wide and readable, with the full title, the"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["details, the history and the latest report"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["shown whole (dropped)"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"inactive","weight":"semibold"},"children":["– dropped"]},
+                  {"type":"Text","props":{"color":"text"},"children":["   "]},
+                  {"type":"Text","props":{"color":"suggestion"},"children":["change"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"ide"},"children":["worker"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"inactive"},"children":["try 2/4"]},
+                  {"type":"Text","props":{"color":"text"},"children":["   "]},
+                  {"type":"Text","props":{"color":"claude"},"children":["♟ from you"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [
+              {"type":"Button","props":{"key":"retry","label":"Retry","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":[" "]},
+              {"type":"Button","props":{"key":"already-merged","label":"Already merged","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"copy","label":"copy","dimColor":true,"variant":"secondary"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"retry-key","label":"r","hotkey":"r"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"already-merged-key","label":"h","hotkey":"h"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"copy-key","label":"y","hotkey":"y"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
           }
         ]
       },
@@ -8495,16 +10304,16 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Status:   "]},
-              {"type":"Text","props":{"bold":true,"color":"inactive","weight":"semibold"},"children":["– dropped"]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · added Nov 17 at 02:00 PM ·"]}
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Added:    "]},
+              {"type":"Text","props":{"color":"text"},"children":["Nov 17 at 02:00 PM"]},
+              {"type":"Text","props":{"color":"inactive"},"children":[" · changed Nov 18 at"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["          "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["changed Nov 18 at 01:59 PM"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["01:59 PM"]}
             ]
           },
           {
@@ -9019,6 +10828,14 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   " · ",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  " · ",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["↑↓"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
                 ]
@@ -9044,33 +10861,132 @@ export const TASK_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
-        "children": [
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"claude"},"children":["T-509"]},
-              {"type":"Text","props":{"bold":true,"color":"text"},"children":[" Make the task page in the editor side panel"]}
-            ]
-          },
-          {"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"text"},"children":["wide and readable, with the full title, the"]}]},
-          {"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"text"},"children":["details, the history and the latest report shown"]}]},
-          {"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"text"},"children":["whole (dropped)"]}]}
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"task-buttons","flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
             "type": "Box",
-            "props": {"key":"task-buttons-0","flexDirection":"row","gap":1},
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"back","label":"Back","hotkey":"b","autoFocus":true},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"retry","label":"Retry","hotkey":"r"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"already-merged","label":"Already merged (h)","hotkey":"h"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"copy","label":"Copy (y)","hotkey":"y"},"press":{"plugin":"symcc"}}
+              {
+                "type": "Button",
+                "props": {"key":"back","label":"‹ Tasks","plain":true,"autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Tasks"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["                       "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["T-509 · "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 13 of 13 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-title","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"inactive"},"children":["T-509"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["Make the task page in the editor side panel"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["wide and readable, with the full title, the"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["details, the history and the latest report"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["shown whole (dropped)"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"inactive"},"children":["– dropped"]},
+                  {"type":"Text","props":{"color":"text"},"children":["   "]},
+                  {"type":"Text","props":{"color":"suggestion"},"children":["change"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"ide"},"children":["worker"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"inactive"},"children":["try 2/4"]},
+                  {"type":"Text","props":{"color":"text"},"children":["   "]},
+                  {"type":"Text","props":{"color":"claude"},"children":["♟ from you"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"retry","label":"Retry","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Retry]"]}]
+              },
+              {"type":"Text","children":[" "]},
+              {
+                "type": "Button",
+                "props": {"key":"already-merged","label":"Already merged","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Already merged]"]}]
+              },
+              {"type":"Text","children":["   "]},
+              {
+                "type": "Button",
+                "props": {"key":"copy","label":"copy","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["copy"]}]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"retry-key","label":"r","hotkey":"r"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"already-merged-key","label":"h","hotkey":"h"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"copy-key","label":"y","hotkey":"y"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
           }
         ]
       },
@@ -9082,16 +10998,16 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"text"},"children":["Status:   "]},
-              {"type":"Text","props":{"bold":true,"color":"inactive"},"children":["– dropped"]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · added Nov 17 at 02:00 PM ·"]}
+              {"type":"Text","props":{"bold":true,"color":"text"},"children":["Added:    "]},
+              {"type":"Text","props":{"color":"text"},"children":["Nov 17 at 02:00 PM"]},
+              {"type":"Text","props":{"color":"inactive"},"children":[" · changed Nov 18 at"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["          "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["changed Nov 18 at 01:59 PM"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["01:59 PM"]}
             ]
           },
           {
@@ -9592,6 +11508,14 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   " · ",
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  " · ",
                   {"type":"Text","props":{"bold":true,"color":"text"},"children":["↑↓"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
                 ]
@@ -9613,52 +11537,130 @@ export const TASK_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
-        "children": [
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-510"]},
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" Make the task page in the editor side panel"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [{"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["wide and readable, with the full title, the"]}]
-          },
-          {
-            "type": "Text",
-            "children": [{"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["details, the history and the latest report shown"]}]
-          },
-          {"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["whole (review)"]}]}
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"task-buttons","flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
             "type": "Box",
-            "props": {"key":"task-buttons-0","flexDirection":"row","gap":1},
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"back","label":"Back","hotkey":"b","autoFocus":true},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"done","label":"Done (a)","hotkey":"a"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"keep-note","label":"Keep as a note (v)","hotkey":"v"},"press":{"plugin":"symcc"}}
+              {
+                "type": "Button",
+                "props": {"key":"back","label":"‹ Tasks","plain":true,"autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Tasks"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["                        "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["T-510 · "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 1 of 13 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
           },
           {
             "type": "Box",
-            "props": {"key":"task-buttons-1","flexDirection":"row","gap":1},
+            "props": {"key":"hdr-title","flexDirection":"column"},
             "children": [
-              {"type":"Button","props":{"key":"ask-more","label":"Ask more (x)","hotkey":"x"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"drop","label":"Drop"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"needs-review","label":"Needs review: off","hotkey":"n"},"press":{"plugin":"symcc"}}
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"success","weight":"semibold"},"children":["T-510"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Make the task page in the editor side panel"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["wide and readable, with the full title, the"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["details, the history and the latest report"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["shown whole (review)"]}
+                ]
+              }
             ]
           },
           {
             "type": "Box",
-            "props": {"key":"task-buttons-2","flexDirection":"row","gap":1},
-            "children": [{"type":"Button","props":{"key":"copy","label":"Copy (y)","hotkey":"y"},"press":{"plugin":"symcc"}}]
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [
+              {"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"success","weight":"semibold"},"children":["◆ answered: read it"]}]},
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"suggestion"},"children":["investigation"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"ide"},"children":["worker"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"inactive"},"children":["try 2/4"]},
+                  {"type":"Text","props":{"color":"text"},"children":["   "]},
+                  {"type":"Text","props":{"color":"claude"},"children":["♟ from you"]}
+                ]
+              },
+              {"type":"Text","children":[{"type":"Text","props":{"italic":true,"color":"inactive"},"children":["answered; waiting for you to read it"]}]}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [
+              {"type":"Button","props":{"key":"done","label":"Done","variant":"primary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"keep-note","label":"Keep as a note","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":[" "]},
+              {"type":"Button","props":{"key":"ask-more","label":"Ask more","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"drop","label":"Drop","variant":"secondary"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-1","flexDirection":"row"},
+            "children": [
+              {"type":"Button","props":{"key":"needs-review","label":"☐ needs review","dimColor":true,"variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":[" "]},
+              {"type":"Button","props":{"key":"copy","label":"copy","dimColor":true,"variant":"secondary"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"done-key","label":"a","hotkey":"a"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"keep-note-key","label":"v","hotkey":"v"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"ask-more-key","label":"x","hotkey":"x"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"needs-review-key","label":"n","hotkey":"n"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"copy-key","label":"y","hotkey":"y"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
           }
         ]
       },
@@ -9864,23 +11866,16 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Status:   "]},
-              {"type":"Text","props":{"bold":true,"color":"success","weight":"semibold"},"children":["◆ answered: read it"]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · added Nov 17 at"]}
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Added:    "]},
+              {"type":"Text","props":{"color":"text"},"children":["Nov 17 at 02:00 PM"]},
+              {"type":"Text","props":{"color":"inactive"},"children":[" · changed Nov 18 at"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["          "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["02:00 PM · changed Nov 18 at 01:59 PM"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Now:      "]},
-              {"type":"Text","props":{"italic":true,"color":"inactive"},"children":["answered; waiting for you to read it"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["01:59 PM"]}
             ]
           },
           {
@@ -10425,6 +12420,14 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   "",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  " · ",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["↑↓"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
                 ]
@@ -10450,46 +12453,169 @@ export const TASK_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
-        "children": [
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"claude"},"children":["T-510"]},
-              {"type":"Text","props":{"bold":true,"color":"text"},"children":[" Make the task page in the editor side panel"]}
-            ]
-          },
-          {"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"text"},"children":["wide and readable, with the full title, the"]}]},
-          {"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"text"},"children":["details, the history and the latest report shown"]}]},
-          {"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"text"},"children":["whole (review)"]}]}
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"task-buttons","flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
             "type": "Box",
-            "props": {"key":"task-buttons-0","flexDirection":"row","gap":1},
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"back","label":"Back","hotkey":"b","autoFocus":true},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"done","label":"Done (a)","hotkey":"a"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"keep-note","label":"Keep as a note (v)","hotkey":"v"},"press":{"plugin":"symcc"}}
+              {
+                "type": "Button",
+                "props": {"key":"back","label":"‹ Tasks","plain":true,"autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Tasks"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["                        "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["T-510 · "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 1 of 13 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
           },
           {
             "type": "Box",
-            "props": {"key":"task-buttons-1","flexDirection":"row","gap":1},
+            "props": {"key":"hdr-title","flexDirection":"column"},
             "children": [
-              {"type":"Button","props":{"key":"ask-more","label":"Ask more (x)","hotkey":"x"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"drop","label":"Drop"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"needs-review","label":"Needs review: off","hotkey":"n"},"press":{"plugin":"symcc"}}
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"success"},"children":["T-510"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["Make the task page in the editor side panel"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["wide and readable, with the full title, the"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["details, the history and the latest report"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["shown whole (review)"]}
+                ]
+              }
             ]
           },
           {
             "type": "Box",
-            "props": {"key":"task-buttons-2","flexDirection":"row","gap":1},
-            "children": [{"type":"Button","props":{"key":"copy","label":"Copy (y)","hotkey":"y"},"press":{"plugin":"symcc"}}]
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [
+              {"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"success"},"children":["◆ answered: read it"]}]},
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"suggestion"},"children":["investigation"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"ide"},"children":["worker"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"inactive"},"children":["try 2/4"]},
+                  {"type":"Text","props":{"color":"text"},"children":["   "]},
+                  {"type":"Text","props":{"color":"claude"},"children":["♟ from you"]}
+                ]
+              },
+              {"type":"Text","children":[{"type":"Text","props":{"italic":true,"color":"inactive"},"children":["answered; waiting for you to read it"]}]}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"done","label":"Done","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [
+                  {
+                    "type": "Text",
+                    "children": [
+                      {"type":"Text","props":{"color":"ide"},"children":["▐"]},
+                      {"type":"Text","props":{"bold":true,"backgroundColor":"ide","color":"inverseText"},"children":["Done"]},
+                      {"type":"Text","props":{"color":"ide"},"children":["▌"]}
+                    ]
+                  }
+                ]
+              },
+              {"type":"Text","children":["   "]},
+              {
+                "type": "Button",
+                "props": {"key":"keep-note","label":"Keep as a note","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Keep as a note]"]}]
+              },
+              {"type":"Text","children":[" "]},
+              {
+                "type": "Button",
+                "props": {"key":"ask-more","label":"Ask more","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Ask more]"]}]
+              },
+              {"type":"Text","children":["   "]},
+              {
+                "type": "Button",
+                "props": {"key":"drop","label":"Drop","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"error"},"children":["[Drop]"]}]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-1","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"needs-review","label":"☐ needs review","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["☐ needs review"]}]
+              },
+              {"type":"Text","children":[" "]},
+              {
+                "type": "Button",
+                "props": {"key":"copy","label":"copy","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["copy"]}]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"done-key","label":"a","hotkey":"a"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"keep-note-key","label":"v","hotkey":"v"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"ask-more-key","label":"x","hotkey":"x"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"needs-review-key","label":"n","hotkey":"n"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"copy-key","label":"y","hotkey":"y"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
           }
         ]
       },
@@ -10695,23 +12821,16 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"text"},"children":["Status:   "]},
-              {"type":"Text","props":{"bold":true,"color":"success"},"children":["◆ answered: read it"]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · added Nov 17 at"]}
+              {"type":"Text","props":{"bold":true,"color":"text"},"children":["Added:    "]},
+              {"type":"Text","props":{"color":"text"},"children":["Nov 17 at 02:00 PM"]},
+              {"type":"Text","props":{"color":"inactive"},"children":[" · changed Nov 18 at"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["          "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["02:00 PM · changed Nov 18 at 01:59 PM"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"text"},"children":["Now:      "]},
-              {"type":"Text","props":{"italic":true,"color":"inactive"},"children":["answered; waiting for you to read it"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["01:59 PM"]}
             ]
           },
           {
@@ -11240,7 +13359,19 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "children": [
               {
                 "type": "Text",
-                "children": ["",{"type":"Text","props":{"bold":true,"color":"text"},"children":["↑↓"]},{"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}]
+                "children": [
+                  "",
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  " · ",
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["↑↓"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
+                ]
               },
               {
                 "type": "Text",
@@ -11259,46 +13390,119 @@ export const TASK_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
-        "children": [
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-511"]},
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" Make the task page in the editor side panel"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [{"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["wide and readable, with the full title, the"]}]
-          },
-          {
-            "type": "Text",
-            "children": [{"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["details, the history and the latest report shown"]}]
-          },
-          {"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["whole (waiting)"]}]}
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"task-buttons","flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
             "type": "Box",
-            "props": {"key":"task-buttons-0","flexDirection":"row","gap":1},
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"back","label":"Back","hotkey":"b"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"already-merged","label":"Already merged (h)","hotkey":"h"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"drop","label":"Drop","hotkey":"x"},"press":{"plugin":"symcc"}}
+              {
+                "type": "Button",
+                "props": {"key":"back","label":"‹ Tasks","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Tasks"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["                        "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["T-511 · "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 3 of 13 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
           },
           {
             "type": "Box",
-            "props": {"key":"task-buttons-1","flexDirection":"row","gap":1},
+            "props": {"key":"hdr-title","flexDirection":"column"},
             "children": [
-              {"type":"Button","props":{"key":"needs-review","label":"Needs review: off","hotkey":"n"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"copy","label":"Copy (y)","hotkey":"y"},"press":{"plugin":"symcc"}}
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"warning","weight":"semibold"},"children":["T-511"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Make the task page in the editor side panel"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["wide and readable, with the full title, the"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["details, the history and the latest report"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["shown whole (waiting)"]}
+                ]
+              }
             ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"warning","weight":"semibold"},"children":["? waiting for you"]},
+                  {"type":"Text","props":{"color":"text"},"children":["   "]},
+                  {"type":"Text","props":{"color":"suggestion"},"children":["change"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"ide"},"children":["worker"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"inactive"},"children":["try 2/4"]}
+                ]
+              },
+              {"type":"Text","children":[{"type":"Text","props":{"color":"claude"},"children":["♟ from you"]}]}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [
+              {"type":"Button","props":{"key":"already-merged","label":"Already merged","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"drop","label":"Drop","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"needs-review","label":"☐ needs review","dimColor":true,"variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":[" "]},
+              {"type":"Button","props":{"key":"copy","label":"copy","dimColor":true,"variant":"secondary"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"already-merged-key","label":"h","hotkey":"h"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"drop-key","label":"x","hotkey":"x"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"needs-review-key","label":"n","hotkey":"n"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"copy-key","label":"y","hotkey":"y"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
           }
         ]
       },
@@ -11310,16 +13514,16 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Status:   "]},
-              {"type":"Text","props":{"bold":true,"color":"warning","weight":"semibold"},"children":["? waiting for you"]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · added Nov 17 at"]}
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Added:    "]},
+              {"type":"Text","props":{"color":"text"},"children":["Nov 17 at 02:00 PM"]},
+              {"type":"Text","props":{"color":"inactive"},"children":[" · changed Nov 18 at"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["          "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["02:00 PM · changed Nov 18 at 01:59 PM"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["01:59 PM"]}
             ]
           },
           {
@@ -11878,6 +14082,14 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   " · ",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  " · ",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["↑↓"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
                 ]
@@ -11903,40 +14115,139 @@ export const TASK_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
-        "children": [
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"claude"},"children":["T-511"]},
-              {"type":"Text","props":{"bold":true,"color":"text"},"children":[" Make the task page in the editor side panel"]}
-            ]
-          },
-          {"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"text"},"children":["wide and readable, with the full title, the"]}]},
-          {"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"text"},"children":["details, the history and the latest report shown"]}]},
-          {"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"text"},"children":["whole (waiting)"]}]}
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"task-buttons","flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
             "type": "Box",
-            "props": {"key":"task-buttons-0","flexDirection":"row","gap":1},
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"back","label":"Back","hotkey":"b"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"already-merged","label":"Already merged (h)","hotkey":"h"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"drop","label":"Drop","hotkey":"x"},"press":{"plugin":"symcc"}}
+              {
+                "type": "Button",
+                "props": {"key":"back","label":"‹ Tasks","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Tasks"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["                        "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["T-511 · "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 3 of 13 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
           },
           {
             "type": "Box",
-            "props": {"key":"task-buttons-1","flexDirection":"row","gap":1},
+            "props": {"key":"hdr-title","flexDirection":"column"},
             "children": [
-              {"type":"Button","props":{"key":"needs-review","label":"Needs review: off","hotkey":"n"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"copy","label":"Copy (y)","hotkey":"y"},"press":{"plugin":"symcc"}}
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"warning"},"children":["T-511"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["Make the task page in the editor side panel"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["wide and readable, with the full title, the"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["details, the history and the latest report"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["       "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["shown whole (waiting)"]}
+                ]
+              }
             ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"warning"},"children":["? waiting for you"]},
+                  {"type":"Text","props":{"color":"text"},"children":["   "]},
+                  {"type":"Text","props":{"color":"suggestion"},"children":["change"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"ide"},"children":["worker"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"inactive"},"children":["try 2/4"]}
+                ]
+              },
+              {"type":"Text","children":[{"type":"Text","props":{"color":"claude"},"children":["♟ from you"]}]}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"already-merged","label":"Already merged","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Already merged]"]}]
+              },
+              {"type":"Text","children":["   "]},
+              {
+                "type": "Button",
+                "props": {"key":"drop","label":"Drop","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"error"},"children":["[Drop]"]}]
+              },
+              {"type":"Text","children":["   "]},
+              {
+                "type": "Button",
+                "props": {"key":"needs-review","label":"☐ needs review","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["☐ needs review"]}]
+              },
+              {"type":"Text","children":[" "]},
+              {
+                "type": "Button",
+                "props": {"key":"copy","label":"copy","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["copy"]}]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"already-merged-key","label":"h","hotkey":"h"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"drop-key","label":"x","hotkey":"x"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"needs-review-key","label":"n","hotkey":"n"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"copy-key","label":"y","hotkey":"y"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
           }
         ]
       },
@@ -11948,16 +14259,16 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"text"},"children":["Status:   "]},
-              {"type":"Text","props":{"bold":true,"color":"warning"},"children":["? waiting for you"]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · added Nov 17 at"]}
+              {"type":"Text","props":{"bold":true,"color":"text"},"children":["Added:    "]},
+              {"type":"Text","props":{"color":"text"},"children":["Nov 17 at 02:00 PM"]},
+              {"type":"Text","props":{"color":"inactive"},"children":[" · changed Nov 18 at"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["          "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["02:00 PM · changed Nov 18 at 01:59 PM"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["01:59 PM"]}
             ]
           },
           {
@@ -12521,6 +14832,14 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {
                 "type": "Text",
                 "children": ["",{"type":"Text","props":{"bold":true,"color":"text"},"children":["y"]},{"type":"Text","props":{"color":"inactive"},"children":[" copy"]}]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  " · ",
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
+                ]
               },
               {
                 "type": "Text",

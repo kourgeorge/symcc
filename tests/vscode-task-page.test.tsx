@@ -45,19 +45,20 @@ const KEY_HINTS = [/\[[a-z]\]:/, /Enter open/, /↑↓ move/, /Esc back/, /Enter
 /** A fold row ("▸ Waits for 2") ends in its count, which is no key hint. */
 const hints = (all: string[], re: RegExp) => all.filter(s => re.test(s) && !/^[▸▾] .+ \d+$/.test(s))
 
-/** The action buttons each rich task shows in VS Code, in order, and the one primary (if any) on its page. */
+/** The action buttons each rich task shows in VS Code's page header (T-751), in order (the next step, the task's
+ *  actions, Drop, copy; needs review is a checkbox link between the last two), and the one primary (if any). */
 const ACTIONS: Record<string, { keys: string[]; primary?: string }> = {
-  'T-501': { keys: ['approve', 'reject', 'show-changes', 'drop', 'needs-review', 'copy'], primary: 'approve' },
-  'T-502': { keys: ['stash', 'role', 'already-merged', 'drop', 'needs-review', 'copy'], primary: 'retry' },
-  'T-503': { keys: ['already-merged', 'drop', 'needs-review', 'copy'] }, // its answers are numbered link lines (T-651), no primary Button
-  'T-504': { keys: ['pause', 'drop', 'needs-review', 'copy'] },
-  'T-505': { keys: ['resume', 'stash', 'role', 'already-merged', 'drop', 'needs-review', 'copy'], primary: 'resume' },
-  'T-506': { keys: ['pause', 'stash', 'role', 'drop', 'needs-review', 'copy'] },
-  'T-507': { keys: ['to-todo', 'role', 'drop', 'needs-review', 'copy'], primary: 'to-todo' },
+  'T-501': { keys: ['approve', 'show-changes', 'reject', 'drop', 'copy'], primary: 'approve' },
+  'T-502': { keys: ['retry', 'stash', 'role', 'already-merged', 'drop', 'copy'], primary: 'retry' },
+  'T-503': { keys: ['already-merged', 'drop', 'copy'] }, // its answers are numbered link lines (T-651), no primary Button
+  'T-504': { keys: ['pause', 'drop', 'copy'], primary: 'pause' },
+  'T-505': { keys: ['resume', 'stash', 'role', 'already-merged', 'drop', 'copy'], primary: 'resume' },
+  'T-506': { keys: ['pause', 'stash', 'role', 'drop', 'copy'], primary: 'pause' },
+  'T-507': { keys: ['to-todo', 'role', 'drop', 'copy'], primary: 'to-todo' },
   'T-508': { keys: ['copy'] },
   'T-509': { keys: ['retry', 'already-merged', 'copy'] },
-  'T-510': { keys: ['done', 'keep-note', 'ask-more', 'drop', 'needs-review', 'copy'], primary: 'done' },
-  'T-511': { keys: ['already-merged', 'drop', 'needs-review', 'copy'] },
+  'T-510': { keys: ['done', 'keep-note', 'ask-more', 'drop', 'copy'], primary: 'done' },
+  'T-511': { keys: ['already-merged', 'drop', 'copy'] },
 }
 
 for (const id of RICH_IDS) {
@@ -86,10 +87,11 @@ for (const id of RICH_IDS) {
     expect(title, id).toBeDefined()
     expect(title!.props.wrap).toBe('wrap')
     expect(t.title.startsWith(LONG_TITLE)).toBe(true)
-    // the id and the title on top, then the sections; no status badge under the title, the Status row in the Details instead (T-693, T-699)
+    // T-751: the page header: the id and the title, the state as chips (no Status row left in the Details), then a divider
     expect(await ui.find({ type: 'Text', text: id }), id).toBeDefined()
-    expect((await ui.find({ key: 'vs-row-status' }))?.text, id).toMatch(/^Status\S+ .+/)
-    expect(await ui.find({ key: 'vs-badge' }), id).toBeUndefined()
+    expect((await ui.find({ key: 'vs-state-status' }))?.text, id).toMatch(/^ \S+ .+ $/)
+    for (const gone of ['vs-row-status', 'vs-row-now', 'vs-row-stage', 'vs-badge']) expect(await ui.find({ key: gone }), `${id} ${gone}`).toBeUndefined()
+    expect((await ui.find({ key: 'vs-header-rule' }))?.text, id).toMatch(/^━+$/)
     const want = ['Details', 'What to do', `▸ Time and cost ${'runs' in t ? t.runs.length : 0}`]
     if (t.history.length) want.push('History (2, newest first)')
     if (t.attempts) want.push(t.status === 'doing' ? 'Report (try 1)' : 'Report (try 2, 2 of 2)') // the running try has no report yet
@@ -102,12 +104,14 @@ for (const id of RICH_IDS) {
     // the action row: exactly the buttons that fit, and at most one primary on the page
     const row = await ui.find({ key: 'vs-actions' })
     expect(elements(row!.children).filter(n => n.type === 'Button').map(n => n.props?.key), id).toEqual(ACTIONS[id]!.keys)
+    // needs review is a checkbox link, not a Button
+    if (t.status !== 'done' && t.status !== 'dropped') expect((await ui.find({ key: 'needs-review' }))?.props.text, id).toBe(mdLink('☐ needs review', vsHref('do', 'needs-review')))
     const primary = elements(tree).filter(n => n.type === 'Button' && n.props?.variant === 'primary').map(n => n.props?.key)
     expect(primary, id).toEqual(ACTIONS[id]!.primary ? [ACTIONS[id]!.primary] : [])
     // the tasks it waits for (the After rows of the Details) are links that open them; back to the list is a clear button; no key hints
     expect((await ui.find({ key: 'after-T-499' }))?.type).toBe('Markdown')
     expect((await ui.find({ key: 'vs-row-after-1' }))?.text).toContain('T-498')
-    expect((await ui.find({ key: 'back' }))?.props.label).toBe('← Tasks')
+    expect((await ui.find({ key: 'back' }))?.props.label).toBe('‹ Tasks')
     for (const re of KEY_HINTS) expect(hints(all, re), `${id} ${re}`).toEqual([])
     expect(await ui.find({ type: 'Text', text: CLICK_HINT })).toBeDefined()
     await ui.unmount()
@@ -124,8 +128,8 @@ const T504_LATER: [string, string][] = [
   ['["tokens"]', '["4.6k tokens"]'],
   ['"  try 2: 5m (running)"', '"  try 2: 15m (running)"'],
   ['"  total: 25m · 4.6k', '"  total: 35m · 4.6k'],
-  // the Status row names the state with the total work time (T-647); no badge under the title (T-693)
-  ['"▶ doing · 25m"', '"▶ doing · 35m"'],
+  // the header's state line: the total work time (T-751)
+  ['"children":["25m"]', '"children":["35m"]'],
 ]
 
 test("T-504's task page follows the host clock: 10 minutes later only its running times change", async ($, on) => {
@@ -188,15 +192,15 @@ test('in VS Code a file request shows the files, with Allow files and Don\'t all
   await ui.unmount()
 })
 
-test('in VS Code a task it waits for opens by its button, and "← Tasks" goes back to the list', async ($, on) => {
+test('in VS Code a task it waits for opens by its button, and "‹ Tasks" goes back to the list', async ($, on) => {
   seedRich(on, '')
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
   await ui.press({ key: 'T-506', link: { href: vsHref('task', 'T-506') } })
   expect(await ui.find({ type: 'Text', text: 'T-506' })).toBeDefined()
-  expect((await ui.find({ key: 'vs-row-status' }))?.text).toMatch(/^Status○ to do/)
+  expect((await ui.find({ key: 'vs-state-status' }))?.text).toBe(' ○ to do ')
   await ui.press({ key: 'after-T-499', link: { href: vsHref('task', 'T-499') } })
   expect(await ui.find({ type: 'Text', text: 'T-499' })).toBeDefined()
-  expect((await ui.find({ key: 'vs-row-status' }))?.text).toMatch(/^Status✓ done/)
+  expect((await ui.find({ key: 'vs-state-status' }))?.text).toBe(' ✓ done ')
   await ui.press({ key: 'back' })
   expect(await ui.find({ key: 'vs-actions' })).toBeUndefined()
   expect(await ui.find({ key: 'vs-task-T-506' })).toBeDefined()
@@ -224,8 +228,9 @@ for (const surface of ['terminal', 'vscode'] as const)
 // its color, tags on one line, clear sections, the less-used ones folded (closed by default, with a count), what needs
 // you boxed at the top in its tone with its buttons right there, at most one primary button, no "…" and no key hints.
 const CARDS: Record<string, { badge: string; tone: string; callout?: [string, string, string] }> = {
-  'T-504': { badge: '▶ doing · 25m', tone: 'ide' },
-  'T-502': { badge: '✗ failed', tone: 'error', callout: ['vs-sec-why-failed', 'error', 'retry'] },
+  'T-504': { badge: '▶ doing · worker · 25m', tone: 'ide' },
+  // T-751: Retry is the header's next step, no longer inside the callout
+  'T-502': { badge: '✗ failed', tone: 'error', callout: ['vs-sec-why-failed', 'error', ''] },
   'T-503': { badge: '? waiting for you', tone: 'warning', callout: ['vs-sec-question', 'warning', 'choice-1'] },
   // an answered investigation's Status row says so in green (T-701)
   'T-510': { badge: '◆ answered: read it', tone: 'success' },
@@ -242,17 +247,13 @@ for (const [id, want] of Object.entries(CARDS))
       const t = RICH_TASKS.find(x => x.id === id)!
       expect((await ui.find({ type: 'Text', text: id }))?.props, at).toMatchObject({ bold: true, size: 'title' })
       expect((await ui.find({ type: 'Text', text: t.title }))?.props, at).toMatchObject({ bold: true, size: 'title', wrap: 'wrap' })
-      // T-693, T-699: no status badge under the title and no tags row: the title block holds only the id and the
-      // title, and the Status row of the Details shows the state in the status's color
+      // T-751: the page header's state line: the status as a chip in the status's color; no Status row in the Details
       expect(await ui.find({ key: 'vs-badge' }), at).toBeUndefined()
       expect(await ui.find({ key: 'vs-tags-row' }), at).toBeUndefined()
-      const head = ((await ui.find({ key: 'vs-head' }))!.children as Node[]).filter(n => n && typeof n === 'object')
-      expect(head.length, at).toBe(2)
-      const status = (await ui.find({ key: 'vs-row-status' }))!
-      const [label, badge] = elements(status.children).filter(n => n.type === 'Text' && typeof n.children?.[0] === 'string')
-      expect(label?.children, at).toEqual(['Status'])
-      expect(badge?.children, at).toEqual([want.badge])
-      expect(badge?.props, at).toMatchObject({ bold: true, color: want.tone })
+      expect(await ui.find({ key: 'vs-row-status' }), at).toBeUndefined()
+      const badge = elements((await ui.find({ key: 'vs-state-status' }))!.children).find(n => n.type === 'Text')!
+      expect(badge.children, at).toEqual([` ${want.badge} `])
+      expect(badge.props, at).toMatchObject({ bold: true, backgroundColor: want.tone })
       expect((await ui.find({ key: 'vs-row-role' }))?.text, at).toMatch(/^Roleworker/)
       expect((await ui.find({ key: 'vs-row-tries' }))?.text, at).toMatch(/^Tries2/)
       // the sections, with their headings
@@ -267,10 +268,11 @@ for (const [id, want] of Object.entries(CARDS))
         const [key, tone, button] = want.callout
         const box = await ui.find({ key })
         expect(box?.props, at).toMatchObject({ borderStyle: 'round', borderColor: tone })
-        expect(elements(box!.children).some(n => (n.type === 'Button' || n.type === 'Markdown') && n.props?.key === button), at).toBe(true)
+        if (button) expect(elements(box!.children).some(n => (n.type === 'Button' || n.type === 'Markdown') && n.props?.key === button), at).toBe(true)
+        // right under the page header
         const top = (await ui.drawn()) as Node
         const order = (top.children ?? []).map(n => (n as Node)?.props?.key)
-        expect(order.indexOf(key), at).toBeLessThan(order.indexOf('vs-actions'))
+        expect(order.indexOf(key), at).toBeGreaterThan(order.indexOf('vs-page-header'))
       }
       // the history: newest first, a mark in its tone, the merge in the success color, the words whole
       const first = await ui.find({ key: 'vs-history-0' })

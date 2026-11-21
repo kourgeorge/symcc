@@ -390,8 +390,9 @@ test('backlog tasks are a section folded by default under a short header; Enter 
   await ui.press({ key: 'T-2' })
   expect((await ui.find({ type: 'Text', text: /Maybe later: a dark theme/ }))).toBeDefined()
   const toTodo = await ui.find({ key: 'to-todo' })
-  expect(toTodo?.props.label).toBe('Move to todo (o)')
-  expect(toTodo?.props.hotkey).toBe('o')
+  // T-751: words only on the button; its key is on a hidden Button and in the footer
+  expect(toTodo?.props.label).toBe('Move to todo')
+  expect((await ui.find({ key: 'to-todo-key' }))?.props.hotkey).toBe('o')
   expect((await ui.find({ key: 'drop' }))).toBeDefined()
   expect(await ui.find({ key: 'stash' })).toBeUndefined()
   await ui.unmount()
@@ -576,7 +577,7 @@ test("a task waiting only for the owner's files shows them and a Merge now butto
   expect(await ui.find({ type: 'Text', text: /asks:/ })).toBeUndefined()
   expect(await ui.find({ key: 'answer' })).toBeUndefined()
   expect(await ui.find({ key: 'choice-1' })).toBeUndefined()
-  expect((await ui.find({ key: 'merge-now' }))?.props.hotkey).toBe('r')
+  expect((await ui.find({ key: 'merge-now-key' }))?.props.hotkey).toBe('r')
   expect((await ui.find({ key: 'back' }))?.props.autoFocus).toBe(true)
   expect(await ui.find({ type: 'Text', text: /r merge now/ })).toBeDefined()
   expect(sayQueue).toEqual([])
@@ -1066,7 +1067,7 @@ test('a task not in review has a needs_review toggle but no review buttons', asy
   stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'Build it', { needs_review: true })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await ui.find({ key: 'needs-review' })).toBeDefined()
-  expect((await ui.find({ key: 'needs-review' }))!.props.label).toBe('Needs review: on')
+  expect((await ui.find({ key: 'needs-review' }))!.props.label).toBe('☑ needs review')
   expect(await ui.find({ key: 'approve' })).toBeUndefined()
   expect(await ui.find({ key: 'show-changes' })).toBeUndefined()
   await ui.unmount()
@@ -1364,8 +1365,8 @@ test('an open task shows its role and model; "Role" (l) opens a pick list of the
   on('ui.toast', (_, e) => (toasts.push(JSON.stringify(e)), { value: undefined }))
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await ui.find({ type: 'Text', text: /^Role:\s+tester — writes tests · model sonnet$/ })).toBeDefined()
-  const button = await ui.find({ key: 'role' })
-  expect(button?.props.hotkey).toBe('l')
+  expect(await ui.find({ key: 'role' })).toBeDefined()
+  expect((await ui.find({ key: 'role-key' }))?.props.hotkey).toBe('l')
   expect(await ui.find({ type: 'Text', text: /l role/ })).toBeDefined()
   await ui.press({ key: 'role' })
   for (const r of ['general', 'tester', 'security', 'docs']) expect(await ui.find({ key: `role:${r}` })).toBeDefined()
@@ -1417,15 +1418,18 @@ test('the task page shows one labelled row per fact, From and Why on their own r
   stateOf(on, { opened: 'T-3', view: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Base work'), task('T-3', 'review', 'Better scouts', { origin, files: ['hooks/a.ts'], after: ['T-1'], branch: 'symcc/T-3', attempts: 2 })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   const L = await lines(ui)
-  // the header: id and title in bold; no status badge under it (T-693): the Status row shows it, in its own color
+  // the header (T-751): id and title in bold; the state line under them says the status, in its own color; no Status row
   const id = await ui.find({ type: 'Text', text: /^T-3$/ })
   expect(id?.props.bold).toBe(true)
-  expect(L.some(l => /^\[.*\]$/.test(l))).toBe(false)
-  expect(L.find(l => l.startsWith('Status:'))).toMatch(/^Status:\s+◆ ready for review/)
+  expect(L.some(l => /^\[[^\]]*(ready for review|review)[^\]]*\]$/.test(l))).toBe(false)
+  expect(L.some(l => l.startsWith('Status:'))).toBe(false)
+  // the state line wraps between its groups at 50 columns: the origin goes on to the next line
+  const state = L.findIndex(l => l.startsWith('◆ ready for review'))
+  expect(L.slice(state, state + 2)).toEqual(['◆ ready for review   change · general · try 2/4', '♟ from you'])
   const badge = (await ui.findAll({ type: 'Text', text: /^◆ ready for review$/ })).find(t => t.props.color)
   expect(badge?.props.color).toBe('warning')
   expect(badge?.props.bold).toBe(true)
-  for (const label of ['Status', 'Role', 'From', 'Why', 'Request', 'Seen', 'Files', 'After', 'Branch', 'Tries']) {
+  for (const label of ['Steps', 'Added', 'Role', 'From', 'Why', 'Request', 'Seen', 'Files', 'After', 'Branch', 'Tries']) {
     const row = L.find(l => l.startsWith(`${label}:`))
     expect(row).toBeDefined()
     // every value starts in the same column
@@ -1476,10 +1480,10 @@ test('T-587: the terminal task page Status row names the state (T-647), and its 
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   const L = await lines(ui)
   expect(L).not.toContain('[⌕ checker · 9m]')
-  const status = L.findIndex(l => l.startsWith('Status:'))
-  expect(L[status]).toContain('▶ doing · 9m')
-  // the Stage row right under Status (it may wrap onto a second line)
-  expect(L.slice(status + 1, status + 3).join(' ').replace(/\s+/g, ' ')).toMatch(/^Stage: worker ✓ → prep ✓ → ● checker → queue → test → merge/)
+  // T-751: the header's state line names the state, the step and the time; the Steps row in Details the way to the merge
+  expect(L.find(l => l.startsWith('▶ doing'))).toMatch(/^▶ doing · checker · 9m\b/)
+  const at = L.findIndex(l => l.startsWith('Steps:'))
+  expect(L.slice(at, at + 2).join(' ').replace(/\s+/g, ' ')).toMatch(/^Steps: worker ✓ → prep ✓ → ● checker → queue → test → merge/)
   await ui.unmount()
 })
 
@@ -1493,8 +1497,8 @@ test('T-587: with the checker setting off the Stage row leaves "checker" out; a 
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   const L = await lines(ui)
   expect(L).not.toContain('[⊛ test · 9m]')
-  const at = L.findIndex(l => l.startsWith('Stage:'))
-  expect(L.slice(at, at + 2).join(' ').replace(/\s+/g, ' ')).toMatch(/^Stage: worker ✓ → prep ✓ → queue ✓ → ● test → merge/)
+  const at = L.findIndex(l => l.startsWith('Steps:'))
+  expect(L.slice(at, at + 2).join(' ').replace(/\s+/g, ' ')).toMatch(/^Steps: worker ✓ → prep ✓ → queue ✓ → ● test → merge/)
   await ui.unmount()
 })
 
@@ -1536,12 +1540,12 @@ test('the task page shows the Details rows in full with no fold and no e key', a
   // shown without pressing anything, under a plain heading
   expect(await ui.find({ type: 'Text', text: /^▍Details$/ })).toBeDefined()
   const L = await lines(ui)
-  for (const label of ['Status', 'Role', 'From', 'Why', 'Request', 'Files', 'Branch', 'Tries']) expect(L.some(l => new RegExp(`^${label}:`).test(l))).toBe(true)
+  for (const label of ['Steps', 'Added', 'Role', 'From', 'Why', 'Request', 'Files', 'Branch', 'Tries']) expect(L.some(l => new RegExp(`^${label}:`).test(l))).toBe(true)
   // no fold: no toggle, no "press e" hint, no e in the key hints; d stays Show changes
   expect(await ui.find({ key: 'details-toggle' })).toBeUndefined()
   expect(await ui.find({ type: 'Text', text: /press e|show details|hide details/ })).toBeUndefined()
   expect(L.some(l => /press e|· e /.test(l))).toBe(false)
-  expect((await ui.find({ key: 'show-changes' }))?.props.hotkey).toBe('d')
+  expect((await ui.find({ key: 'show-changes-key' }))?.props.hotkey).toBe('d')
   await ui.unmount()
 })
 
@@ -1709,15 +1713,17 @@ test('a task in review on a narrow or wide panel shows every key and every butto
     const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
     const lines = keyLines(texts, keysFor('review'), w)
     for (const l of lines) expect(l.length).toBeLessThanOrEqual(w)
-    expect(lines.join(' · ')).toBe('a approve · x reject · d show changes · n needs review · y copy · ↑↓ scroll · b back')
-    if (w === 30) expect(lines).toEqual(['a approve · x reject', 'd show changes', 'n needs review · y copy', '↑↓ scroll · b back'])
-    if (w === 80) expect(lines).toEqual(['a approve · x reject · d show changes · n needs review · y copy · ↑↓ scroll', 'b back'])
+    expect(lines.join(' · ')).toBe('a approve · d show changes · x reject · n needs review · y copy · ↑↓ scroll · b back')
+    if (w === 30) expect(lines).toEqual(['a approve · d show changes', 'x reject · n needs review', 'y copy · ↑↓ scroll · b back'])
+    if (w === 80) expect(lines).toEqual(['a approve · d show changes · x reject · n needs review · y copy · ↑↓ scroll', 'b back'])
     // the keys are bold, the words in the inactive color
     expect((await ui.find({ type: 'Text', text: /^a$/ }))?.props.bold).toBe(true)
     expect((await ui.find({ type: 'Text', text: /^ approve$/ }))?.props.color).toBe('inactive')
-    // every action button is there, in the same order as before
+    // every action button is there, in the header's group order (T-751), then their hidden key Buttons
     const keys = (await ui.findAll({ type: 'Button' })).map(b => String(b.key))
-    expect(keys).toEqual(['back', 'approve', 'reject', 'show-changes', 'drop', 'needs-review', 'copy'])
+    expect(keys).toEqual(['back', 'approve', 'show-changes', 'reject', 'drop', 'needs-review', 'copy', 'back-key', 'approve-key', 'show-changes-key', 'reject-key', 'needs-review-key', 'copy-key'])
+    // no key inside a pill: only the hidden Buttons have one
+    for (const k of keys.filter(x => !x.endsWith('-key'))) expect((await ui.find({ key: k }))?.props.hotkey, k).toBeUndefined()
     // T-575: the key hints are the buttons that have a key, in their order (b back and ↑↓ scroll last)
     const hotkeys = (await ui.findAll({ type: 'Button' })).map(b => b.props.hotkey).filter((k): k is string => typeof k === 'string' && k !== 'b')
     expect(hotkeys).toEqual(keysFor('review').map(k => k.key).filter(k => k !== 'b' && k !== '↑↓'))
@@ -1811,22 +1817,21 @@ test('"p" on a scout\'s page pauses it (saved in scouts.json, its file untouched
   const toasts: string[] = []
   on('ui.toast', (_, e) => (toasts.push(JSON.stringify(e)), { value: undefined }))
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  // waiting: the ◎ icon, and p pause in the key hints
-  expect(await ui.find({ type: 'Text', text: /^◎ waiting$/ })).toBeDefined()
+  // waiting: how often it runs on the header's state line, and p pause in the key hints
+  expect(await ui.find({ type: 'Text', text: /^◷ every 30 min/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /p pause/ })).toBeDefined()
-  const button = await ui.find({ key: 'scout-pause' })
-  expect(button?.props.hotkey).toBe('p')
-  expect(button?.props.label).toBe('Pause')
+  expect((await ui.find({ key: 'scout-pause-key' }))?.props.hotkey).toBe('p')
+  expect((await ui.find({ key: 'scout-pause' }))?.props.label).toBe('Pause')
   await ui.press({ key: 'scout-pause' })
   expect(JSON.parse(files['/scouts.json']!).scouts.bugs).toEqual({ last_run: '2026-11-12T08:00:00.000Z', last_report: 'NOTHING', paused: true })
   expect(files['/scouts/bugs.md']).toBe('---\nevery_minutes: 30\n---\nLook for crashes.\n')
   expect(toasts.some(t => /bugs paused: it doesn't run on its timer until you resume it \(run now still runs it\)/.test(t))).toBe(true)
-  expect(await ui.find({ type: 'Text', text: /^○ paused$/ })).toBeDefined()
-  expect((await ui.find({ type: 'Text', text: /^○ paused$/ }))?.props.color).toBe('inactive')
+  // paused is said as a fact at the end of the buttons line
+  expect((await ui.find({ type: 'Text', text: /^⏸ paused$/ }))?.props.color).toBe('inactive')
   expect(await ui.find({ type: 'Text', text: /p resume/ })).toBeDefined()
   expect((await ui.find({ key: 'scout-pause' }))?.props.label).toBe('Resume')
   // a paused scout still has Run now (button and r key); it isn't refused for the pause
-  expect((await ui.find({ key: 'scout-run' }))?.props.hotkey).toBe('r')
+  expect((await ui.find({ key: 'scout-run-key' }))?.props.hotkey).toBe('r')
   expect(await ui.find({ type: 'Text', text: /r run now/ })).toBeDefined()
   await ui.press({ key: 'scout-run' })
   expect(toasts.some(t => /is paused/.test(t))).toBe(false)
@@ -1842,7 +1847,7 @@ test('a running scout\'s page has no Run now button', async ($, on) => {
   stateOf(on, { tab: 'scouts', scout: 'bugs', view: { shape: 'view-1', value: { tasks: [], working: [], scouts: [scout('bugs', { prompt: 'Look for crashes.', running: true })], mode: 'auto', test_commands: [] } } })
   scoutFiles(on, null)
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect(await ui.find({ type: 'Text', text: /running now…/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^◉ running now$/ })).toBeDefined()
   expect(await ui.find({ key: 'scout-edit' })).toBeDefined()
   expect(await ui.find({ key: 'scout-run' })).toBeUndefined()
   await ui.unmount()
@@ -1989,18 +1994,18 @@ test('an answered investigation opens with its full answer and Done, Keep as a n
   // the full answer from the report, not the short saved one; wrapped to the panel width
   expect(L.some(l => /Saved short answer/.test(l))).toBe(false)
   for (const l of L.filter(x => /grows with every request/.test(x))) expect(l.length).toBeLessThanOrEqual(50)
-  expect((await ui.find({ key: 'done' }))?.props.hotkey).toBe('a')
-  expect((await ui.find({ key: 'keep-note' }))?.props.hotkey).toBe('v')
-  expect((await ui.find({ key: 'ask-more' }))?.props.hotkey).toBe('x')
+  expect((await ui.find({ key: 'done-key' }))?.props.hotkey).toBe('a')
+  expect((await ui.find({ key: 'keep-note-key' }))?.props.hotkey).toBe('v')
+  expect((await ui.find({ key: 'ask-more-key' }))?.props.hotkey).toBe('x')
   expect(await ui.find({ key: 'approve' })).toBeUndefined()
   expect(await ui.find({ key: 'reject' })).toBeUndefined()
   expect(await ui.find({ key: 'show-changes' })).toBeUndefined()
   expect(await ui.find({ type: 'Text', text: /Changes \(/ })).toBeUndefined()
   expect(L.some(l => /^a done · v keep as a note · x ask more/.test(l))).toBe(true)
   expect(L.some(l => /^Kind:\s+investigation — nothing is merged$/.test(l))).toBe(true)
-  // no badge under the title (T-693); the Status row says it is answered (T-701)
+  // no badge under the title (T-693); the header's state line says it is answered (T-701, T-751)
   expect(L.some(l => /^\[◆ answered: read it\]$/.test(l))).toBe(false)
-  expect(L.find(l => l.startsWith('Status:'))).toMatch(/^Status:\s+◆ answered: read it/)
+  expect(L.some(l => l.startsWith('◆ answered: read it'))).toBe(true)
   // one try: its report is the answer, so it is not shown twice
   expect(L.filter(l => /Checked in src\/cache\.ts\./.test(l)).length).toBe(1)
   // Ask more opens a box for the follow-up question
@@ -2035,7 +2040,7 @@ test('the board list and the task page show ● for a to do task worked on befor
   expect((await ui.find({ key: 'T-2' }))!.text).toMatch(/^T-2\s+● /)
   expect((await ui.find({ key: 'T-3' }))!.text).toMatch(/^T-3\s+◆ review/)
   await ui.press({ key: 'T-2' })
-  expect((await lines(ui)).find(l => l.startsWith('Status:'))).toMatch(/^Status:\s+● to do/)
+  expect((await lines(ui)).some(l => l.startsWith('● to do   '))).toBe(true)
   await ui.unmount()
 })
 
@@ -2225,7 +2230,7 @@ test('Copy (y) on a task page puts the task on the clipboard as plain text and s
   let answer: { isCopied: true } | { isCopied: false; reason: 'no-clipboard' } = { isCopied: true }
   on('ui.copy', (_, e) => (copied.push(e.text), { value: answer }))
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect((await ui.find({ key: 'copy' }))?.props.hotkey).toBe('y')
+  expect((await ui.find({ key: 'copy-key' }))?.props.hotkey).toBe('y')
   await ui.press({ key: 'copy' })
   expect(copied.length).toBe(1)
   expect(copied[0]).toMatch(/^T-12  Copy a task\nfailed · general · from: unknown\nWhat to do:\nAdd a Copy button\.\nMay change: docs\/guide\.md\nLatest report:\nDid the button\.\n$/)

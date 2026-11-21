@@ -30,7 +30,9 @@ const sec = (s: TaskSection[], id: TaskSection['id']) => s.find(x => x.id === id
 test('T-580: a todo task shows Details and What to do (its details, headings and bullets picked out), nothing else', () => {
   const s = taskSections(task('todo'), facts())
   expect(titles(s)).toEqual(['Details', 'What to do'])
-  expect(text(sec(s, 'details')).some(l => l.startsWith('Status:') && l.includes('to do'))).toBe(true)
+  // T-751: the status is on the page header's state line, not in the Details
+  expect(text(sec(s, 'details')).some(l => l.startsWith('Status:'))).toBe(false)
+  expect(text(sec(s, 'details')).some(l => l.startsWith('Added:'))).toBe(true)
   expect(text(sec(s, 'details')).some(l => l.startsWith('Files:') && l.includes('hooks/'))).toBe(true)
   expect(text(sec(s, 'what'))).toEqual(['Goal', '• Check hooks/a.ts', 'Done when: T-2 passes'])
   const what = sec(s, 'what')!.lines

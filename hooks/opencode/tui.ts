@@ -25,7 +25,7 @@
 // modules (Solid and OpenTUI's Solid renderer) are passed in (TuiRuntime), so this file type-checks and its tests
 // run without them. The names and shapes below are @opencode/plugin 2.3.0's tui Context (only what is used).
 import { DEFAULT_NAME, dataDir } from '../name'
-import { VIEW_FILE, parseViewFile, bandDraw, panelLines, panelKeys, panelTaskActions, approveInProgress, panelRoleChoices, TASK_ACTION_COMMANDS, LETTER_KEYS, type LetterKey, hasPage, answerOptions, actionCommand, moveCursor, OWN_ANSWER, GROUPS_OPEN, groupOf, groupId, scoutRunsIn, settingsPlace, orgMemNoteOf, ORG_MEM_PAGE, orgMemPageId, orgMemPageTopic, liveNoteId, liveTopicId, branchIdTask, orgMemIn, defPageId, rolePromptId, SETTINGS_OPEN, settingGroupOf, settingGroupId, PANEL_TABS, CHOICE_KEYS, approveSent, editOf, defDraftOf, draftChanges, draftError, editBoxId, boardPageOf, removeAsk, DEF_EDIT_BOXES, SETUP_GIT_ASK, newNameError, NEW_OPEN_MS, EDIT_SAVE_ID, EDIT_CANCEL_ID, EDIT_FIRST_BOX, type DefDraft, type ApproveSent, type ChoiceKey, type ViewFile, type Line, type PanelAction, type PanelHit, type PanelKey, type PanelGroup, type PanelTab, type BandHit } from './board-view'
+import { VIEW_FILE, parseViewFile, bandDraw, panelLines, pagePlace, panelKeys, panelTaskActions, approveInProgress, panelRoleChoices, TASK_ACTION_COMMANDS, LETTER_KEYS, type LetterKey, hasPage, answerOptions, actionCommand, moveCursor, OWN_ANSWER, GROUPS_OPEN, groupOf, groupId, scoutRunsIn, settingsPlace, orgMemNoteOf, ORG_MEM_PAGE, orgMemPageId, orgMemPageTopic, liveNoteId, liveTopicId, branchIdTask, orgMemIn, defPageId, rolePromptId, SETTINGS_OPEN, settingGroupOf, settingGroupId, PANEL_TABS, CHOICE_KEYS, approveSent, editOf, defDraftOf, draftChanges, draftError, editBoxId, boardPageOf, removeAsk, DEF_EDIT_BOXES, SETUP_GIT_ASK, newNameError, NEW_OPEN_MS, EDIT_SAVE_ID, EDIT_CANCEL_ID, EDIT_FIRST_BOX, type DefDraft, type ApproveSent, type ChoiceKey, type ViewFile, type Line, type PanelAction, type PanelHit, type PanelKey, type PanelGroup, type PanelTab, type BandHit } from './board-view'
 import { SETTING_GROUPS, isScoutRunReport, taskReports, taskActions, type TaskAction, type TaskActionId, parseSettingValue, settingChoices, settingInfo, settingValue, isSettingPage, everyText, everyMinutesOf, nextMode, modeOf, promptsOfRole, SEARCH_WORDS, NEW_SCOUT_EVERY, showsHeader, defEditFields, type SettingName, type ScoutEditField, type DefEditField } from '../board'
 import type { SymccScout } from '../../types'
 import { ORG_MEM_KEY, orgMemDeleteAsk, orgMemFile, orgMemNoteKey, orgMemTopicCounts } from '../core/org-mem'
@@ -300,9 +300,10 @@ export type TuiBoard = {
   stop: () => void
 }
 
-/** The keymap bindings of the panel's keys: k and j always move (as ↑ and ↓), on every page; no action has them. */
+/** The keymap bindings of the panel's keys: k and j always move (as ↑ and ↓), on every page; no action has them.
+ *  [ and ] go to the previous and the next task or scout of the list a page was opened from (T-751). */
 export const KEY_BINDS: Record<PanelKey, string> = {
-  up: 'up,k', down: 'down,j', open: 'return', back: 'b,left', close: 'escape',
+  up: 'up,k', down: 'down,j', open: 'return', back: 'b,left', close: 'escape', prev: '[', next: ']',
   ...(Object.fromEntries(LETTER_KEYS.map(k => [k, k])) as Record<LetterKey, string>),
   ...(Object.fromEntries(CHOICE_KEYS.map(k => [k, k])) as Record<ChoiceKey, string>),
 }
@@ -420,11 +421,14 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
       () => opened() === id && taskReport()?.file === latest.file && setTaskReport({ file: latest.file, text: null }),
     )
   }
-  // T-700: a task opened from the Live tab goes back there (to its lane) on b, as on the terminal panel and VS Code
+  // T-700: a task opened from the Live tab goes back there (to its lane) on b, as on the terminal panel and VS Code;
+  // T-751: its page says "‹ Live" then (fromLive), and [ and ] go through the Live tab's tasks
   let backTo: { tab: PanelTab; cursor: number } | undefined
+  const [fromLive, setFromLive] = r.createSignal(false)
   /** Opens a page ('' = back to the list), from its top. */
   const openPage = (id: string) => {
     backTo = undefined
+    setFromLive(false)
     setEdit(undefined)
     setOpened(id)
     setSent(undefined)
@@ -477,7 +481,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   /** Whether the cursor is on a page's own rows (a scout's runs, the Roles or Kinds list), not the tab's list. */
   const onPage = () => tab() !== 'tasks' && !!opened()
   const draw = () => {
-    return panelLines(file(), { tab: tab(), opened: opened(), run: run(), report: report(), cursor: onPage() ? runCursor() : cursor(), groups: groups(), settingsOpen: settingsOpen(), scroll: scroll(), ...(rows() ? { rows: rows()! } : {}), ...(sent() ? { sent: sent()! } : {}), ...(taskReport() ? { taskReport: taskReport()! } : {}), ...(approving() ? { approving: approving()! } : {}), ...(search() ? { search: search() } : {}), ...(edit() ? { edit: edit()! } : {}) }, now(), width)
+    return panelLines(file(), { tab: tab(), opened: opened(), run: run(), report: report(), cursor: onPage() ? runCursor() : cursor(), groups: groups(), settingsOpen: settingsOpen(), scroll: scroll(), ...(rows() ? { rows: rows()! } : {}), ...(sent() ? { sent: sent()! } : {}), ...(taskReport() ? { taskReport: taskReport()! } : {}), ...(approving() ? { approving: approving()! } : {}), ...(search() ? { search: search() } : {}), ...(edit() ? { edit: edit()! } : {}), ...(fromLive() ? { from: 'live' as const } : {}) }, now(), width)
   }
   /** The rows of the Tasks tab's list, even while a task's page is open (whose draw has no rows), so "open this id"
    *  can put the list cursor on that task and b comes back to it (T-568). */
@@ -671,6 +675,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     }
     if (run()) return void (key === 'back' && openRun(''))
     if (key === 'back') return openPage('')
+    if (key === 'prev' || key === 'next') return goNext(key)
     if (key === 'up' || key === 'down') return void setRunCursor(moveCursor(runCursor(), key === 'up' ? -1 : 1, ids.length))
     if (key === 'open' && ids.length) return openRun(ids[moveCursor(runCursor(), 0, ids.length)]!)
     const offered = panelKeys(f, open, 'scouts').map(k => k.word)
@@ -685,7 +690,23 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     if (tab() !== 'tasks') showTab('tasks')
     const at = listIds().indexOf(id)
     if (at >= 0) setCursor(at)
-    if (hasPage(file(), id)) openPage(id), (backTo = from)
+    if (hasPage(file(), id)) openPage(id), (backTo = from), setFromLive(!!from)
+  }
+  /** [ or ] (`key` prev or next) on a task's or scout's page: the previous or next one of the list it was opened from
+   *  (going round at the ends); a task's page keeps where b goes back to. */
+  const goNext = (key: 'prev' | 'next') => {
+    const place = pagePlace(file(), { tab: tab(), opened: opened(), run: run(), search: search(), ...(fromLive() ? { from: 'live' as const } : {}) }, now())
+    if (!place || place.of < 2) return
+    const to = place[key]
+    const keep = backTo
+    const live = fromLive()
+    openPage(to)
+    backTo = keep
+    setFromLive(live)
+    if (tab() === 'tasks' && !live) {
+      const at = listIds().indexOf(to)
+      if (at >= 0) setCursor(at)
+    }
   }
   /** b on a task's page: back to the tab it was opened from (the Live tab, on its lane), else to the Tasks list. */
   const closeTask = () => {
@@ -763,6 +784,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
       return
     }
     if (key === 'back') return closeTask()
+    if (key === 'prev' || key === 'next') return goNext(key)
     // the task's own actions (core's taskActions, panelTaskActions), each by its key, sent as a slash command
     const t = f?.view.tasks.find(x => x.id === open)
     const act = t ? panelTaskActions(t, approveInProgress(f, t, approving(), now())).find(x => x.key === key) : undefined

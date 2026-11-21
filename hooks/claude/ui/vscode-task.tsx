@@ -1,24 +1,25 @@
 // The task page in VS Code's side panel (see surface.ts and vscode.tsx), drawn as a card. The terminal's task page
 // (task-page.tsx) packs labelled rows cut to the panel and lists its keys; here the page uses the whole panel width and wraps every line:
-//   ← Tasks                                  (back to the list)
-//   T-414 and the title, large and bold
-//   the question (its answers as buttons and a box for your own), why it failed (with Retry), waiting for your files
-//   (with Merge now): boxed in their tone, at the top
-//   the action buttons in one row (only the ones that fit the status, at most one primary on the page)
-//   Details: the labelled rows the terminal and OpenCode show (detailRows: Status, Stage, Now, Role, Kind, From, Why,
+//   the page header (T-751, vsPageHeader): ‹ Tasks and the "‹ 2 of 6 ›" pager; the id and the title as a heading; the
+//   state as small chips; the action buttons in their groups (the next step primary, Drop in red, needs review a
+//   checkbox link, copy), then a divider
+//   the question (its answers as buttons and a box for your own), why it failed, waiting for your files: boxed in their
+//   tone, under the header
+//   Details: the labelled rows the terminal and OpenCode show (detailRows: Steps, Added, Role, Kind, From, Why,
 //   Files, Into, After, …, Tries) as a two-column label / value grid that wraps (T-699); each task it waits for is a link
 //   Answer · What to do (Markdown) · Changes · History (a timeline on one rail, newest first, the newest HISTORY_FIRST
 //   with a "Show all" button) · Report (Markdown, its first part with a "Show all" button), then the Time and cost fold
 // (a fold and a task id are links: VS Code draws a Button as a filled blue box)
 // No key hints: every action is a button.
 import type { SymccTask } from '../../../types'
-import { type DetailRow, type DiffFile, type Seg, findRole, fmtRun, fmtTotal, sumRuns, taskActions, type TaskActionId, type BoardTask } from '../../board'
+import { type DetailRow, type DiffFile, type Seg, findRole, fmtRun, fmtTotal, sumRuns, taskActions, type TaskAction, type TaskActionId, type BoardTask } from '../../board'
 import type { TaskSection } from '../../core/task-sections'
 import { historyEvent, historyTime, HISTORY_COLOR } from '../../core/history'
 import { S } from '../../app/state'
 import type { PaneParts } from './parts'
 import type { $ } from '../panel'
 import { vsCallout, vsChoices, vsFold, vsFooter, vsHref, vsLink, mdLink, vsSection } from './vscode'
+import { type PageHeader, vsPageHeader } from './page-header'
 
 /** How many lines of a report VS Code's task page shows before its "Show all" button. */
 export const REPORT_FIRST_LINES = 12
@@ -53,6 +54,8 @@ export function reportPart(body: string, n = REPORT_FIRST_LINES): { text: string
 
 /** What task-page.tsx worked out for the open task, and what its buttons do. */
 export type VsTaskCtx = {
+  /** the page header (the same lines as the terminal's, see page-header.tsx) */
+  header: PageHeader
   agentId: string | undefined
   inReview: boolean
   answered: boolean
@@ -117,7 +120,7 @@ export type VsTaskCtx = {
 
 /** What a button press tells: the screen it came from, so Copy copies there. */
 type Press = { surface?: Parameters<$['ui']['copy']>[0]['surface'] }
-type Action = { key: string; label: string; onPress: (press?: Press) => void; main?: boolean }
+type Action = { key: string; label: string; onPress: (press?: Press) => void; main?: boolean; group: TaskAction['group'] }
 
 /** The action buttons that fit task `t` now, in order (taskActions, shared with the terminal and OpenCode); `main`
  *  marks the one to press (one at most, none while a question waits). VS Code's buttons say no keys. */
@@ -127,7 +130,7 @@ export function vsActions(t: SymccTask, x: Pick<VsTaskCtx, 'agentId'> & Partial<
     watch: on.watch, pause: on.pause, resume: on.resume, 'merge-now': on.mergeNow, retry: on.retry, 'to-todo': on.toTodo, stash: on.stash,
     role: on.openRolePick, 'already-merged': on.markMerged, drop: on.drop, 'needs-review': on.toggleReview, copy: (p?: Press) => on.copy(p),
   }
-  return taskActions(t as BoardTask, { worker: !!x.agentId, merging: !!x.merging }).map(a => ({ key: a.id, label: a.label, onPress: press[a.id], main: !!a.main }))
+  return taskActions(t as BoardTask, { worker: !!x.agentId, merging: !!x.merging }).map(a => ({ key: a.id, label: a.label, onPress: press[a.id], main: !!a.main, group: a.group }))
 }
 
 /** The task page in VS Code. */
@@ -176,14 +179,7 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
     </Box>
   )
 
-  // the top: the id and the title, large and bold; the status and the rest are in the Details grid below
   const total = sumRuns(t.runs, nowMs)
-  const head = (
-    <Box key="vs-head" flexDirection="column">
-      <Text key="vs-id" bold size="title" color={C('claude')}>{t.id}</Text>
-      <Text key="vs-title" wrap="wrap" bold size="title" color={C('text')}>{t.title}</Text>
-    </Box>
-  )
   const typingBox = S.rejecting?.task === t.id && x.inReview && !x.merging
   // while its merge runs: a line in place of the review buttons; once it ended: its result
   const mergeStatus = x.merging
@@ -192,19 +188,9 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
       ? plain('merge-result', x.result, x.resultOk ? 'success' : 'warning')
       : null
   const rolePicking = S.rolePick?.task === t.id
+  // the header's buttons do what VS Code's own do (Copy copies on the screen it was pressed on)
   const acts = vsActions(t, x, on)
-  // Retry sits in "Why it failed" and Merge now in "Waiting for your files", right by their words
-  const inCallout = (a: Action) => (a.key === 'retry' && !!x.why) || (a.key === 'merge-now' && !!x.fileWait)
-  const button = (a: Action) => <Button key={a.key} label={a.label} variant={a.main ? 'primary' : 'secondary'} onPress={a.onPress} />
-  const calloutButtons = (key: string) => {
-    const list = acts.filter(a => inCallout(a) && a.key === key)
-    return list.length ? <Box key={`vs-${key}-row`} flexDirection="row" flexWrap="wrap" gap={1}>{list.map(button)}</Box> : null
-  }
-  const actionRow = (
-    <Box key="vs-actions" flexDirection="row" flexWrap="wrap" gap={1}>
-      {acts.filter(a => !inCallout(a)).map(button)}
-    </Box>
-  )
+  const header: PageHeader = { ...x.header, buttons: x.header.buttons.map(b => ({ ...b, onPress: acts.find(a => a.key === b.id)?.onPress ?? b.onPress })) }
 
   // the box that asks why, once Reject (or Ask more) was pressed
   const rejectBox = typingBox ? (
@@ -257,11 +243,11 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
     : null
 
   const fileWait = x.fileWait
-    ? vsCallout(vs, 'vs-sec-file-wait', '⧗', 'Waiting for your files', 'warning', [plain('vs-file-wait', x.fileWait), plain('vs-file-wait-note', 'Merge now merges it without waiting.', 'inactive'), calloutButtons('merge-now')].filter(Boolean) as never[])
+    ? vsCallout(vs, 'vs-sec-file-wait', '⧗', 'Waiting for your files', 'warning', [plain('vs-file-wait', x.fileWait), plain('vs-file-wait-note', 'Merge now merges it without waiting.', 'inactive')])
     : null
 
   const failed = x.why
-    ? vsCallout(vs, 'vs-sec-why-failed', '✗', 'Why it failed', 'error', [plain('vs-why-reason', x.why.reason), x.why.asks ? plain('vs-why-asks', x.why.asks, 'warning') : null, plain('vs-why-next', `Next: ${x.why.next}`, 'inactive'), calloutButtons('retry')].filter(Boolean) as never[])
+    ? vsCallout(vs, 'vs-sec-why-failed', '✗', 'Why it failed', 'error', [plain('vs-why-reason', x.why.reason), x.why.asks ? plain('vs-why-asks', x.why.asks, 'warning') : null, plain('vs-why-next', `Next: ${x.why.next}`, 'inactive')].filter(Boolean) as never[])
     : null
 
   // which of the shared sections show, and their headings, come from core's taskSections (as on the terminal)
@@ -375,7 +361,7 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
       ])
     : null
 
-  // the tries, one line each, and their total (the dates are on the Status row)
+  // the tries, one line each, and their total (the dates are on the Added row)
   const time = fold('time', 'Time and cost', t.runs?.length ?? 0, [
     ...(t.runs ?? []).map((r, i) => plain(`vs-run-${i}`, fmtRun(r, i, nowMs), r.ended ? 'inactive' : 'success')),
     t.runs?.length ? plain('vs-total', `total: ${fmtTotal(total)}`, 'text', { bold: true }) : plain('vs-no-runs', 'no tries yet', 'inactive'),
@@ -407,17 +393,11 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
 
   return (
     <Box flexDirection="column" gap={1}>
-      <Box key="vs-task-top" flexDirection="column" gap={1}>
-        <Box key="vs-back-row" flexDirection="row">
-          <Button key="back" label={pane.onLive ? '← Live' : '← Tasks'} variant="secondary" autoFocus={x.answerable || typingBox ? undefined : true} onPress={on.back} />
-        </Box>
-        {head}
-      </Box>
+      {vsPageHeader(pane, { ...header, backFocus: !(x.answerable || typingBox) })}
+      {mergeStatus}
       {question}
       {fileWait}
       {failed}
-      {mergeStatus}
-      {actionRow}
       {rejectBox}
       {roleBox}
       {detailGrid}

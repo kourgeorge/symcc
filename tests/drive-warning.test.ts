@@ -4,7 +4,8 @@
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { bandNote, bannerLines, bannerText, driveWarning, driverLooksIdle, statusLine, DRIVER_IDLE_MS, boardText } from '../hooks/core/banner'
-import { detailRows, OTHER_SESSION_NOTE, STATE_LABEL } from '../hooks/core/details'
+import { detailRows, OTHER_SESSION_NOTE, STATE_LABEL, sessionNote } from '../hooks/core/details'
+import { taskStateGroups } from '../hooks/core/page-header'
 import { emptyBoard } from '../hooks/core/board-file'
 
 const NOW = Date.parse('2026-11-20T12:00:00.000Z')
@@ -80,9 +81,11 @@ test('T-643: a claimed doing task says it runs in the other session when this on
   expect(bandNote({ ...t, note: 'tests failed' } as never, NOW, undefined, false)).toBe('tests failed')
 })
 
-test('T-647: the task page\'s Now row and the lead\'s text board say "runs in the other session" for a claimed doing task when this session does not drive', () => {
+test('T-647: the task page\'s state line and the lead\'s text board say "runs in the other session" for a claimed doing task when this session does not drive', () => {
   const t = { ...claimed(60_000), title: 'Search', details: '', files: [], after: [], created_at: ago(60_000), history: [], runs: [] } as never
-  const now = (driving?: boolean) => detailRows(t, { roles: [], all: [t], when: s => s, nowMs: NOW, ...(driving === undefined ? {} : { driving }) }).find(r => r.label === STATE_LABEL)!.segs[0]!.text
+  // T-751: the note is the last group of the page header's state line (no Now row in the Details)
+  const now = (driving?: boolean) => taskStateGroups(t, { nowMs: NOW, note: sessionNote(t, driving) }).at(-1)![0]!.text
+  expect(detailRows(t, { roles: [], all: [t], when: s => s, nowMs: NOW }).some(r => r.label === STATE_LABEL)).toBe(false)
   expect(now(false)).toBe(OTHER_SESSION_NOTE)
   expect(now(true)).toBe('starting at the next turn')
   expect(now()).toBe('starting at the next turn')

@@ -86,12 +86,13 @@ for (const [name, t] of [['a bug in doing with a role, tries and a checker step'
       else if (e.label === 'After') expect(r.text, r.key).toBe(e.text.replace(' ', ''))
       else expect([r.text, r.colors], r.key).toEqual([e.text, e.colors])
     }
-    // the Status row is there, with the state first ("▶ doing · …", "○ to do")
-    expect(drawn[0]!.label).toBe('Status')
-    expect(drawn[0]!.text).toMatch(t.status === 'doing' ? /^▶ doing · \d+m · added/ : /^○ to do · added/)
+    // T-751: no Status, Stage or Now row (the page header's state line says the state); the Steps row first when there is one
+    expect(drawn.map(r => r.label).filter(l => ['Status', 'Stage', 'Now'].includes(l))).toEqual([])
+    expect(drawn[0]!.label).toBe(t.status === 'doing' ? 'Steps' : 'Added')
+    expect((await ui.find({ key: 'vs-state-status' }))?.text).toMatch(t.status === 'doing' ? /^ ▶ doing · checker · \d+m $/ : /^ ○ to do $/)
     if (t === BUG) {
-      expect(drawn.map(r => r.label)).toEqual(['Status', 'Stage', 'Now', 'Role', 'Kind', 'From', 'Why', 'Request', 'Files', 'Into', 'After', 'Branch', 'Tries'])
-      expect(drawn.find(r => r.label === 'Stage')!.text).toContain('● checker')
+      expect(drawn.map(r => r.label)).toEqual(['Steps', 'Added', 'Role', 'Kind', 'From', 'Why', 'Request', 'Files', 'Into', 'After', 'Branch', 'Tries'])
+      expect(drawn.find(r => r.label === 'Steps')!.text).toContain('● checker')
       // the task it waits for opens by its link
       const link = (await ui.find({ key: 'after-T-690' })) as Node
       expect(link?.type).toBe('Markdown')
@@ -101,7 +102,7 @@ for (const [name, t] of [['a bug in doing with a role, tries and a checker step'
     // the order on the page: the title block, the action buttons, then the Details, then What to do
     const order = kids((await ui.drawn()) as Node).map(keyOf)
     const at = (k: string) => order.indexOf(k)
-    expect(at('vs-task-top')).toBe(0)
+    expect(at('vs-page-header')).toBe(0)
     expect(at('vs-actions')).toBeLessThan(at('vs-sec-details'))
     expect(at('vs-sec-details')).toBeLessThan(at('vs-sec-what'))
     await ui.unmount()
@@ -169,9 +170,9 @@ for (const id of ['T-504', 'T-502', 'T-508'])
       const tree = await ui.drawn()
       const all = elements(tree)
       const at = `${id} ${bodyColumns}`
-      // no "…" and no Text that cuts (only the footer's rule, drawn to the width)
+      // no "…" and no Text that cuts (only the rules, drawn to the width: the page header's heavy one, T-751, and the footer's)
       expect(all.filter(n => n.type === 'Text' && /…/.test(textOf(n))).length, at).toBe(0)
-      expect(all.filter(n => n.type === 'Text' && n.props?.wrap === 'truncate').map(n => /^─+$/.test(textOf(n))), at).toEqual([true])
+      expect(all.filter(n => n.type === 'Text' && n.props?.wrap === 'truncate').map(n => textOf(n).replace(/(.)\1*/, '$1')), at).toEqual(['━', '─'])
       // the title whole; every Details value Text wraps
       expect(textOf(tree), at).toContain(RICH_TASKS.find(t => t.id === id)!.title)
       const grid = (await ui.find({ key: 'vs-details-grid' })) as Node

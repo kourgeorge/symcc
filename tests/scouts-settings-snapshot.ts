@@ -8,6 +8,7 @@
 // T-650 added the sound_set row under Board and alerts (after notify) on the Settings pages; T-695 took it out again
 // (notify holds the sound set: voice / sound 1 / sound 2 / sound 3 / off).
 // T-686 took the instructions' first line off the scout pages' header (a scout without a summary shows none).
+// T-751 gave the scout pages the 4-line page header (‹ Scouts and its place, name and summary, state, buttons) and its heavy rule.
 export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
   "terminal scouts list": {
     "type": "Box",
@@ -1320,36 +1321,114 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
-        "children": [
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"claude"},"children":["dependency-updates"]},
-              " ",
-              {"type":"Text","props":{"bold":true,"color":"ide"},"children":["◉"," ","running now…",""]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · ","every 30 min"," · haiku"," · ","ran 40m ago"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "props": {"bold":true,"color":"text"},
-            "children": ["Looks for packages with a newer version and says which ones are safe to update today"]
-          }
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"scout-buttons","flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
             "type": "Box",
-            "props": {"key":"scout-buttons-0","flexDirection":"row","gap":1},
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"scout-back","label":"Back","hotkey":"b","autoFocus":true},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"scout-edit","label":"Edit","hotkey":"e"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"scout-pause","label":"Pause","hotkey":"p"},"press":{"plugin":"symcc"}}
+              {
+                "type": "Button",
+                "props": {"key":"scout-back","label":"‹ Scouts","plain":true,"autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Scouts"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["           "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["dependency-updates · "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 1 of 5 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-title","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"claude"},"children":["dependency-updates"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["Looks for packages with a"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["                    "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["newer version and says which"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["                    "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["ones are safe to update today"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"ide"},"children":["◉ running now"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"text"},"children":["every 30 min"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"inactive"},"children":["haiku"]}
+                ]
+              },
+              {"type":"Text","children":[{"type":"Text","props":{"color":"inactive"},"children":["last ran 40m ago"]}]}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"scout-edit","label":"Edit","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Edit]"]}]
+              },
+              {"type":"Text","children":["   "]},
+              {
+                "type": "Button",
+                "props": {"key":"scout-pause","label":"Pause","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["Pause"]}]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"scout-back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-edit-key","label":"e","hotkey":"e"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-pause-key","label":"p","hotkey":"p"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
           }
         ]
       },
@@ -1406,13 +1485,27 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["↑↓"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
                 ]
               },
               {
                 "type": "Text",
-                "children": [" · ",{"type":"Text","props":{"bold":true,"color":"text"},"children":["b"]},{"type":"Text","props":{"color":"inactive"},"children":[" back"]}]
+                "children": [
+                  " · ",
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["↑↓"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": ["",{"type":"Text","props":{"bold":true,"color":"text"},"children":["b"]},{"type":"Text","props":{"color":"inactive"},"children":[" back"]}]
               }
             ]
           }
@@ -1427,36 +1520,104 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
-        "children": [
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["dependency-updates"]},
-              " ",
-              {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["◉"," ","running now…",""]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · ","every 30 min"," · haiku"," · ","ran 40m ago"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "props": {"bold":true,"color":"text","weight":"semibold"},
-            "children": ["Looks for packages with a newer version and says which ones are safe to update today"]
-          }
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"scout-buttons","flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
             "type": "Box",
-            "props": {"key":"scout-buttons-0","flexDirection":"row","gap":1},
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"scout-back","label":"Back","hotkey":"b","autoFocus":true},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"scout-edit","label":"Edit","hotkey":"e"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"scout-pause","label":"Pause","hotkey":"p"},"press":{"plugin":"symcc"}}
+              {
+                "type": "Button",
+                "props": {"key":"scout-back","label":"‹ Scouts","plain":true,"autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Scouts"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["           "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["dependency-updates · "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 1 of 5 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-title","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["dependency-updates"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Looks for packages with a"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["                    "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["newer version and says which"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["                    "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["ones are safe to update today"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["◉ running now"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"text"},"children":["every 30 min"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"inactive"},"children":["haiku"]}
+                ]
+              },
+              {"type":"Text","children":[{"type":"Text","props":{"color":"inactive"},"children":["last ran 40m ago"]}]}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [
+              {"type":"Button","props":{"key":"scout-edit","label":"Edit","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"scout-pause","label":"Pause","dimColor":true,"variant":"secondary"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"scout-back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-edit-key","label":"e","hotkey":"e"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-pause-key","label":"p","hotkey":"p"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
           }
         ]
       },
@@ -1521,14 +1682,28 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["↑↓"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
                 ]
               },
               {
                 "type": "Text",
                 "children": [
                   " · ",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["↑↓"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  "",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["b"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" back"]}
                 ]
@@ -1546,36 +1721,104 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
-        "children": [
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["dependency-updates"]},
-              " ",
-              {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["◉"," ","running now…",""]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · ","every 30 min"," · haiku"," · ","ran 40m ago"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "props": {"bold":true,"color":"text","weight":"semibold"},
-            "children": ["Looks for packages with a newer version and says which ones are safe to update today"]
-          }
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"scout-buttons","flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
             "type": "Box",
-            "props": {"key":"scout-buttons-0","flexDirection":"row","gap":1},
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"scout-back","label":"Back","hotkey":"b","autoFocus":true},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"scout-edit","label":"Edit","hotkey":"e"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"scout-pause","label":"Pause","hotkey":"p"},"press":{"plugin":"symcc"}}
+              {
+                "type": "Button",
+                "props": {"key":"scout-back","label":"‹ Scouts","plain":true,"autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Scouts"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["           "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["dependency-updates · "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 1 of 5 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-title","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["dependency-updates"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Looks for packages with a"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["                    "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["newer version and says which"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["                    "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["ones are safe to update today"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["◉ running now"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"text"},"children":["every 30 min"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"inactive"},"children":["haiku"]}
+                ]
+              },
+              {"type":"Text","children":[{"type":"Text","props":{"color":"inactive"},"children":["last ran 40m ago"]}]}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [
+              {"type":"Button","props":{"key":"scout-edit","label":"Edit","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"scout-pause","label":"Pause","dimColor":true,"variant":"secondary"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"scout-back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-edit-key","label":"e","hotkey":"e"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-pause-key","label":"p","hotkey":"p"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
           }
         ]
       },
@@ -1640,14 +1883,28 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["↑↓"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
                 ]
               },
               {
                 "type": "Text",
                 "children": [
                   " · ",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["↑↓"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  "",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["b"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" back"]}
                 ]
@@ -1665,32 +1922,113 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
-        "children": [
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"claude"},"children":["security-advisories-for-node-packages"]},
-              " ",
-              {"type":"Text","props":{"bold":true,"color":"text"},"children":["◎"," ","next in 3h 00m",""]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · ","every day",""," · ","ran 21h 00m ago"]}
-            ]
-          }
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"scout-buttons","flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
             "type": "Box",
-            "props": {"key":"scout-buttons-0","flexDirection":"row","gap":1},
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"scout-back","label":"Back","hotkey":"b","autoFocus":true},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"scout-run","label":"Run now","hotkey":"r"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"scout-edit","label":"Edit","hotkey":"e"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"scout-pause","label":"Pause","hotkey":"p"},"press":{"plugin":"symcc"}}
+              {
+                "type": "Button",
+                "props": {"key":"scout-back","label":"‹ Scouts","plain":true,"autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Scouts"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["                                "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 2 of 5 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-title","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"claude"},"children":["security-advisories-for-node-packages"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["◷ every day"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"inactive"},"children":["next in 3h 00m"]}
+                ]
+              },
+              {"type":"Text","children":[{"type":"Text","props":{"color":"inactive"},"children":["last ran 21h 00m ago"]}]}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"scout-run","label":"Run now","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [
+                  {
+                    "type": "Text",
+                    "children": [
+                      {"type":"Text","props":{"color":"ide"},"children":["▐"]},
+                      {"type":"Text","props":{"bold":true,"backgroundColor":"ide","color":"inverseText"},"children":["Run now"]},
+                      {"type":"Text","props":{"color":"ide"},"children":["▌"]}
+                    ]
+                  }
+                ]
+              },
+              {"type":"Text","children":["   "]},
+              {
+                "type": "Button",
+                "props": {"key":"scout-edit","label":"Edit","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Edit]"]}]
+              },
+              {"type":"Text","children":["   "]},
+              {
+                "type": "Button",
+                "props": {"key":"scout-pause","label":"Pause","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["Pause"]}]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"scout-back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-run-key","label":"r","hotkey":"r"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-edit-key","label":"e","hotkey":"e"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-pause-key","label":"p","hotkey":"p"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
           }
         ]
       },
@@ -1752,9 +2090,19 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["↑↓"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
                 ]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": ["",{"type":"Text","props":{"bold":true,"color":"text"},"children":["↑↓"]},{"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}]
               },
               {
                 "type": "Text",
@@ -1773,32 +2121,89 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
-        "children": [
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["security-advisories-for-node-packages"]},
-              " ",
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["◎"," ","next in 3h 00m",""]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · ","every day",""," · ","ran 21h 00m ago"]}
-            ]
-          }
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"scout-buttons","flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
             "type": "Box",
-            "props": {"key":"scout-buttons-0","flexDirection":"row","gap":1},
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"scout-back","label":"Back","hotkey":"b","autoFocus":true},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"scout-run","label":"Run now","hotkey":"r"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"scout-edit","label":"Edit","hotkey":"e"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"scout-pause","label":"Pause","hotkey":"p"},"press":{"plugin":"symcc"}}
+              {
+                "type": "Button",
+                "props": {"key":"scout-back","label":"‹ Scouts","plain":true,"autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Scouts"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["                                "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 2 of 5 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-title","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["security-advisories-for-node-packages"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["◷ every day"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"inactive"},"children":["next in 3h 00m"]}
+                ]
+              },
+              {"type":"Text","children":[{"type":"Text","props":{"color":"inactive"},"children":["last ran 21h 00m ago"]}]}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [
+              {"type":"Button","props":{"key":"scout-run","label":"Run now","variant":"primary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"scout-edit","label":"Edit","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"scout-pause","label":"Pause","dimColor":true,"variant":"secondary"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"scout-back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-run-key","label":"r","hotkey":"r"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-edit-key","label":"e","hotkey":"e"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-pause-key","label":"p","hotkey":"p"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
           }
         ]
       },
@@ -1872,6 +2277,20 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   " · ",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  "",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["↑↓"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
                 ]
@@ -1897,32 +2316,89 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
-        "children": [
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["security-advisories-for-node-packages"]},
-              " ",
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["◎"," ","next in 3h 00m",""]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · ","every day",""," · ","ran 21h 00m ago"]}
-            ]
-          }
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"scout-buttons","flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
             "type": "Box",
-            "props": {"key":"scout-buttons-0","flexDirection":"row","gap":1},
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"scout-back","label":"Back","hotkey":"b","autoFocus":true},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"scout-run","label":"Run now","hotkey":"r"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"scout-edit","label":"Edit","hotkey":"e"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"scout-pause","label":"Pause","hotkey":"p"},"press":{"plugin":"symcc"}}
+              {
+                "type": "Button",
+                "props": {"key":"scout-back","label":"‹ Scouts","plain":true,"autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Scouts"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["                                "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 2 of 5 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-title","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["security-advisories-for-node-packages"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["◷ every day"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
+                  {"type":"Text","props":{"color":"inactive"},"children":["next in 3h 00m"]}
+                ]
+              },
+              {"type":"Text","children":[{"type":"Text","props":{"color":"inactive"},"children":["last ran 21h 00m ago"]}]}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [
+              {"type":"Button","props":{"key":"scout-run","label":"Run now","variant":"primary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"scout-edit","label":"Edit","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"scout-pause","label":"Pause","dimColor":true,"variant":"secondary"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"scout-back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-run-key","label":"r","hotkey":"r"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-edit-key","label":"e","hotkey":"e"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-pause-key","label":"p","hotkey":"p"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
           }
         ]
       },
@@ -1996,6 +2472,20 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   " · ",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  "",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["↑↓"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
                 ]
@@ -2021,33 +2511,123 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
-        "children": [
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"claude"},"children":["docs-drift"]},
-              " ",
-              {"type":"Text","props":{"bold":true,"color":"inactive"},"children":["○"," ","paused",""]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · ","every hour",""," · ","ran 1h 30m ago"]}
-            ]
-          },
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":["Finds places where the guide no longer matches what the code does"]}
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"scout-buttons","flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
             "type": "Box",
-            "props": {"key":"scout-buttons-0","flexDirection":"row","gap":1},
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"scout-back","label":"Back","hotkey":"b","autoFocus":true},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"scout-run","label":"Run now","hotkey":"r"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"scout-edit","label":"Edit","hotkey":"e"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"scout-pause","label":"Resume","hotkey":"p"},"press":{"plugin":"symcc"}}
+              {
+                "type": "Button",
+                "props": {"key":"scout-back","label":"‹ Scouts","plain":true,"autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Scouts"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["                   "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["docs-drift · "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 5 of 5 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-title","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"claude"},"children":["docs-drift"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["Finds places where the guide no longer"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["            "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["matches what the code does"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["◷ every hour"]},
+                  {"type":"Text","props":{"color":"text"},"children":["   "]},
+                  {"type":"Text","props":{"color":"inactive"},"children":["last ran 1h 30m ago"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"scout-run","label":"Run now","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [
+                  {
+                    "type": "Text",
+                    "children": [
+                      {"type":"Text","props":{"color":"ide"},"children":["▐"]},
+                      {"type":"Text","props":{"bold":true,"backgroundColor":"ide","color":"inverseText"},"children":["Run now"]},
+                      {"type":"Text","props":{"color":"ide"},"children":["▌"]}
+                    ]
+                  }
+                ]
+              },
+              {"type":"Text","children":["   "]},
+              {
+                "type": "Button",
+                "props": {"key":"scout-edit","label":"Edit","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Edit]"]}]
+              },
+              {"type":"Text","children":["   "]},
+              {
+                "type": "Button",
+                "props": {"key":"scout-pause","label":"Resume","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["Resume"]}]
+              },
+              {"type":"Text","children":[" "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["⏸ paused"]}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"scout-back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-run-key","label":"r","hotkey":"r"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-edit-key","label":"e","hotkey":"e"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-pause-key","label":"p","hotkey":"p"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
           }
         ]
       },
@@ -2111,9 +2691,19 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["↑↓"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
                 ]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": ["",{"type":"Text","props":{"bold":true,"color":"text"},"children":["↑↓"]},{"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}]
               },
               {
                 "type": "Text",
@@ -2132,37 +2722,99 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
-        "children": [
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["docs-drift"]},
-              " ",
-              {"type":"Text","props":{"bold":true,"color":"inactive","weight":"semibold"},"children":["○"," ","paused",""]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · ","every hour",""," · ","ran 1h 30m ago"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "props": {"bold":true,"color":"text","weight":"semibold"},
-            "children": ["Finds places where the guide no longer matches what the code does"]
-          }
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"scout-buttons","flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
             "type": "Box",
-            "props": {"key":"scout-buttons-0","flexDirection":"row","gap":1},
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"scout-back","label":"Back","hotkey":"b","autoFocus":true},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"scout-run","label":"Run now","hotkey":"r"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"scout-edit","label":"Edit","hotkey":"e"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"scout-pause","label":"Resume","hotkey":"p"},"press":{"plugin":"symcc"}}
+              {
+                "type": "Button",
+                "props": {"key":"scout-back","label":"‹ Scouts","plain":true,"autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Scouts"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["                   "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["docs-drift · "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 5 of 5 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-title","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["docs-drift"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Finds places where the guide no longer"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["            "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["matches what the code does"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["◷ every hour"]},
+                  {"type":"Text","props":{"color":"text"},"children":["   "]},
+                  {"type":"Text","props":{"color":"inactive"},"children":["last ran 1h 30m ago"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [
+              {"type":"Button","props":{"key":"scout-run","label":"Run now","variant":"primary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"scout-edit","label":"Edit","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"scout-pause","label":"Resume","dimColor":true,"variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":[" "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["⏸ paused"]}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"scout-back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-run-key","label":"r","hotkey":"r"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-edit-key","label":"e","hotkey":"e"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-pause-key","label":"p","hotkey":"p"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
           }
         ]
       },
@@ -2234,6 +2886,20 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   " · ",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  "",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["↑↓"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
                 ]
@@ -2259,37 +2925,99 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
-        "children": [
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["docs-drift"]},
-              " ",
-              {"type":"Text","props":{"bold":true,"color":"inactive","weight":"semibold"},"children":["○"," ","paused",""]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · ","every hour",""," · ","ran 1h 30m ago"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "props": {"bold":true,"color":"text","weight":"semibold"},
-            "children": ["Finds places where the guide no longer matches what the code does"]
-          }
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"scout-buttons","flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
             "type": "Box",
-            "props": {"key":"scout-buttons-0","flexDirection":"row","gap":1},
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"scout-back","label":"Back","hotkey":"b","autoFocus":true},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"scout-run","label":"Run now","hotkey":"r"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"scout-edit","label":"Edit","hotkey":"e"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"scout-pause","label":"Resume","hotkey":"p"},"press":{"plugin":"symcc"}}
+              {
+                "type": "Button",
+                "props": {"key":"scout-back","label":"‹ Scouts","plain":true,"autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Scouts"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["                   "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["docs-drift · "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 5 of 5 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-title","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["docs-drift"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Finds places where the guide no longer"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["            "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["matches what the code does"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["◷ every hour"]},
+                  {"type":"Text","props":{"color":"text"},"children":["   "]},
+                  {"type":"Text","props":{"color":"inactive"},"children":["last ran 1h 30m ago"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [
+              {"type":"Button","props":{"key":"scout-run","label":"Run now","variant":"primary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"scout-edit","label":"Edit","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"scout-pause","label":"Resume","dimColor":true,"variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":[" "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["⏸ paused"]}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"scout-back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-run-key","label":"r","hotkey":"r"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-edit-key","label":"e","hotkey":"e"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-pause-key","label":"p","hotkey":"p"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
           }
         ]
       },
@@ -2361,6 +3089,20 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   " · ",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  "",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["↑↓"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
                 ]
@@ -2386,32 +3128,113 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
-        "children": [
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"claude"},"children":["on-demand-check"]},
-              " ",
-              {"type":"Text","props":{"bold":true,"color":"text"},"children":["◎"," ","waiting",""]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · ","on demand",""," · ","never ran"]}
-            ]
-          }
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"scout-buttons","flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
             "type": "Box",
-            "props": {"key":"scout-buttons-0","flexDirection":"row","gap":1},
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"scout-back","label":"Back","hotkey":"b","autoFocus":true},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"scout-run","label":"Run now","hotkey":"r"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"scout-edit","label":"Edit","hotkey":"e"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"scout-pause","label":"Pause","hotkey":"p"},"press":{"plugin":"symcc"}}
+              {
+                "type": "Button",
+                "props": {"key":"scout-back","label":"‹ Scouts","plain":true,"autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Scouts"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["              "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["on-demand-check · "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 4 of 5 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-title","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"claude"},"children":["on-demand-check"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["◷ on demand"]},
+                  {"type":"Text","props":{"color":"text"},"children":["   "]},
+                  {"type":"Text","props":{"color":"inactive"},"children":["never ran"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"scout-run","label":"Run now","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [
+                  {
+                    "type": "Text",
+                    "children": [
+                      {"type":"Text","props":{"color":"ide"},"children":["▐"]},
+                      {"type":"Text","props":{"bold":true,"backgroundColor":"ide","color":"inverseText"},"children":["Run now"]},
+                      {"type":"Text","props":{"color":"ide"},"children":["▌"]}
+                    ]
+                  }
+                ]
+              },
+              {"type":"Text","children":["   "]},
+              {
+                "type": "Button",
+                "props": {"key":"scout-edit","label":"Edit","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Edit]"]}]
+              },
+              {"type":"Text","children":["   "]},
+              {
+                "type": "Button",
+                "props": {"key":"scout-pause","label":"Pause","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["Pause"]}]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"scout-back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-run-key","label":"r","hotkey":"r"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-edit-key","label":"e","hotkey":"e"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-pause-key","label":"p","hotkey":"p"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
           }
         ]
       },
@@ -2472,9 +3295,19 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["↑↓"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
                 ]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": ["",{"type":"Text","props":{"bold":true,"color":"text"},"children":["↑↓"]},{"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}]
               },
               {
                 "type": "Text",
@@ -2493,32 +3326,89 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
-        "children": [
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["on-demand-check"]},
-              " ",
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["◎"," ","waiting",""]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · ","on demand",""," · ","never ran"]}
-            ]
-          }
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"scout-buttons","flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
             "type": "Box",
-            "props": {"key":"scout-buttons-0","flexDirection":"row","gap":1},
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"scout-back","label":"Back","hotkey":"b","autoFocus":true},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"scout-run","label":"Run now","hotkey":"r"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"scout-edit","label":"Edit","hotkey":"e"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"scout-pause","label":"Pause","hotkey":"p"},"press":{"plugin":"symcc"}}
+              {
+                "type": "Button",
+                "props": {"key":"scout-back","label":"‹ Scouts","plain":true,"autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Scouts"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["              "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["on-demand-check · "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 4 of 5 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-title","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["on-demand-check"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["◷ on demand"]},
+                  {"type":"Text","props":{"color":"text"},"children":["   "]},
+                  {"type":"Text","props":{"color":"inactive"},"children":["never ran"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [
+              {"type":"Button","props":{"key":"scout-run","label":"Run now","variant":"primary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"scout-edit","label":"Edit","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"scout-pause","label":"Pause","dimColor":true,"variant":"secondary"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"scout-back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-run-key","label":"r","hotkey":"r"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-edit-key","label":"e","hotkey":"e"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-pause-key","label":"p","hotkey":"p"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
           }
         ]
       },
@@ -2591,6 +3481,20 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   " · ",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  "",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["↑↓"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
                 ]
@@ -2616,32 +3520,89 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
-        "children": [
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["on-demand-check"]},
-              " ",
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["◎"," ","waiting",""]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · ","on demand",""," · ","never ran"]}
-            ]
-          }
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"scout-buttons","flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
             "type": "Box",
-            "props": {"key":"scout-buttons-0","flexDirection":"row","gap":1},
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"scout-back","label":"Back","hotkey":"b","autoFocus":true},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"scout-run","label":"Run now","hotkey":"r"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"scout-edit","label":"Edit","hotkey":"e"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"scout-pause","label":"Pause","hotkey":"p"},"press":{"plugin":"symcc"}}
+              {
+                "type": "Button",
+                "props": {"key":"scout-back","label":"‹ Scouts","plain":true,"autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Scouts"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["              "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["on-demand-check · "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 4 of 5 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-title","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["on-demand-check"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["◷ on demand"]},
+                  {"type":"Text","props":{"color":"text"},"children":["   "]},
+                  {"type":"Text","props":{"color":"inactive"},"children":["never ran"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [
+              {"type":"Button","props":{"key":"scout-run","label":"Run now","variant":"primary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"scout-edit","label":"Edit","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"scout-pause","label":"Pause","dimColor":true,"variant":"secondary"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"scout-back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-run-key","label":"r","hotkey":"r"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-edit-key","label":"e","hotkey":"e"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-pause-key","label":"p","hotkey":"p"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
           }
         ]
       },
@@ -2714,6 +3675,20 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   " · ",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  "",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["↑↓"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
                 ]
@@ -2739,35 +3714,117 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
-            "type": "Text",
+            "type": "Box",
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"claude"},"children":["broken"]},
-              " ",
-              {"type":"Text","props":{"bold":true,"color":"text"},"children":["◎"," ","waiting",""]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · ","on demand",""," · ","never ran"]}
+              {
+                "type": "Button",
+                "props": {"key":"scout-back","label":"‹ Scouts","plain":true,"autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Scouts"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["                       "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["broken · "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 3 of 5 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
           },
-          {"type":"Text","props":{"color":"warning"},"children":["every_minutes \"-5\" is not valid: runs only on demand until fixed"]}
+          {
+            "type": "Box",
+            "props": {"key":"hdr-title","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [{"type":"Text","props":{"bold":true,"color":"claude"},"children":["broken"]},{"type":"Text","props":{"color":"text"},"children":["  "]}]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["◷ on demand"]},
+                  {"type":"Text","props":{"color":"text"},"children":["   "]},
+                  {"type":"Text","props":{"color":"inactive"},"children":["never ran"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"scout-run","label":"Run now","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [
+                  {
+                    "type": "Text",
+                    "children": [
+                      {"type":"Text","props":{"color":"ide"},"children":["▐"]},
+                      {"type":"Text","props":{"bold":true,"backgroundColor":"ide","color":"inverseText"},"children":["Run now"]},
+                      {"type":"Text","props":{"color":"ide"},"children":["▌"]}
+                    ]
+                  }
+                ]
+              },
+              {"type":"Text","children":["   "]},
+              {
+                "type": "Button",
+                "props": {"key":"scout-edit","label":"Edit","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Edit]"]}]
+              },
+              {"type":"Text","children":["   "]},
+              {
+                "type": "Button",
+                "props": {"key":"scout-pause","label":"Pause","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["Pause"]}]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"scout-back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-run-key","label":"r","hotkey":"r"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-edit-key","label":"e","hotkey":"e"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-pause-key","label":"p","hotkey":"p"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
+          }
         ]
       },
       {
         "type": "Box",
-        "props": {"key":"scout-buttons","flexDirection":"column"},
-        "children": [
-          {
-            "type": "Box",
-            "props": {"key":"scout-buttons-0","flexDirection":"row","gap":1},
-            "children": [
-              {"type":"Button","props":{"key":"scout-back","label":"Back","hotkey":"b","autoFocus":true},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"scout-run","label":"Run now","hotkey":"r"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"scout-edit","label":"Edit","hotkey":"e"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"scout-pause","label":"Pause","hotkey":"p"},"press":{"plugin":"symcc"}}
-            ]
-          }
-        ]
+        "props": {"flexDirection":"column"},
+        "children": [{"type":"Text","props":{"color":"warning"},"children":["every_minutes \"-5\" is not valid: runs only on demand until fixed"]}]
       },
       {
         "type": "Box",
@@ -2818,9 +3875,19 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["↑↓"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
                 ]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": ["",{"type":"Text","props":{"bold":true,"color":"text"},"children":["↑↓"]},{"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}]
               },
               {
                 "type": "Text",
@@ -2839,35 +3906,96 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
-            "type": "Text",
+            "type": "Box",
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["broken"]},
-              " ",
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["◎"," ","waiting",""]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · ","on demand",""," · ","never ran"]}
+              {
+                "type": "Button",
+                "props": {"key":"scout-back","label":"‹ Scouts","plain":true,"autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Scouts"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["                       "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["broken · "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 3 of 5 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
           },
-          {"type":"Text","props":{"color":"warning"},"children":["every_minutes \"-5\" is not valid: runs only on demand until fixed"]}
+          {
+            "type": "Box",
+            "props": {"key":"hdr-title","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["broken"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["◷ on demand"]},
+                  {"type":"Text","props":{"color":"text"},"children":["   "]},
+                  {"type":"Text","props":{"color":"inactive"},"children":["never ran"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [
+              {"type":"Button","props":{"key":"scout-run","label":"Run now","variant":"primary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"scout-edit","label":"Edit","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"scout-pause","label":"Pause","dimColor":true,"variant":"secondary"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"scout-back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-run-key","label":"r","hotkey":"r"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-edit-key","label":"e","hotkey":"e"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-pause-key","label":"p","hotkey":"p"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
+          }
         ]
       },
       {
         "type": "Box",
-        "props": {"key":"scout-buttons","flexDirection":"column"},
-        "children": [
-          {
-            "type": "Box",
-            "props": {"key":"scout-buttons-0","flexDirection":"row","gap":1},
-            "children": [
-              {"type":"Button","props":{"key":"scout-back","label":"Back","hotkey":"b","autoFocus":true},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"scout-run","label":"Run now","hotkey":"r"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"scout-edit","label":"Edit","hotkey":"e"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"scout-pause","label":"Pause","hotkey":"p"},"press":{"plugin":"symcc"}}
-            ]
-          }
-        ]
+        "props": {"flexDirection":"column"},
+        "children": [{"type":"Text","props":{"color":"warning"},"children":["every_minutes \"-5\" is not valid: runs only on demand until fixed"]}]
       },
       {
         "type": "Box",
@@ -2930,6 +4058,20 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   " · ",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  "",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["↑↓"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
                 ]
@@ -2955,35 +4097,96 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
-            "type": "Text",
+            "type": "Box",
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["broken"]},
-              " ",
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["◎"," ","waiting",""]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · ","on demand",""," · ","never ran"]}
+              {
+                "type": "Button",
+                "props": {"key":"scout-back","label":"‹ Scouts","plain":true,"autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Scouts"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["                       "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["broken · "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 3 of 5 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
           },
-          {"type":"Text","props":{"color":"warning"},"children":["every_minutes \"-5\" is not valid: runs only on demand until fixed"]}
+          {
+            "type": "Box",
+            "props": {"key":"hdr-title","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["broken"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["◷ on demand"]},
+                  {"type":"Text","props":{"color":"text"},"children":["   "]},
+                  {"type":"Text","props":{"color":"inactive"},"children":["never ran"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [
+              {"type":"Button","props":{"key":"scout-run","label":"Run now","variant":"primary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"scout-edit","label":"Edit","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"scout-pause","label":"Pause","dimColor":true,"variant":"secondary"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"scout-back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-run-key","label":"r","hotkey":"r"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-edit-key","label":"e","hotkey":"e"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-pause-key","label":"p","hotkey":"p"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]}]
+          }
         ]
       },
       {
         "type": "Box",
-        "props": {"key":"scout-buttons","flexDirection":"column"},
-        "children": [
-          {
-            "type": "Box",
-            "props": {"key":"scout-buttons-0","flexDirection":"row","gap":1},
-            "children": [
-              {"type":"Button","props":{"key":"scout-back","label":"Back","hotkey":"b","autoFocus":true},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"scout-run","label":"Run now","hotkey":"r"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"scout-edit","label":"Edit","hotkey":"e"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"scout-pause","label":"Pause","hotkey":"p"},"press":{"plugin":"symcc"}}
-            ]
-          }
-        ]
+        "props": {"flexDirection":"column"},
+        "children": [{"type":"Text","props":{"color":"warning"},"children":["every_minutes \"-5\" is not valid: runs only on demand until fixed"]}]
       },
       {
         "type": "Box",
@@ -3046,6 +4249,20 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   " · ",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  "",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["↑↓"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
                 ]

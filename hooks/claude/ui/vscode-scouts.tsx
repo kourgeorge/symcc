@@ -3,11 +3,11 @@
 // a Button as a blue box), the end cut with "…" to the room a task row has (vsRowRoom), so it never wraps (T-697):
 //   ◷ security-advisories  every day  next in 3h  last: found 5: The package left-pad has a security…
 // With no scouts, a short how-to in a box and "+ New scout" as the one primary button.
-// One scout's page: a "← Scouts" button, the name and state, its facts, Run now / Pause / Edit as buttons, then the
-// instructions, and its Runs (newest first; a press opens that run's full report, with a "← <scout>" button back;
+// One scout's page: the page header (T-751, vsPageHeader: "‹ Scouts" and the "‹ 2 of 6 ›" pager, the name and what
+// it does, its state as chips, Run now / Edit / Pause as buttons, a divider), then the instructions, and its Runs (newest first; a press opens that run's full report, with a "← <scout>" button back;
 // the page itself shows no report text). It says when its last run ended on an API error or a refusal. No key hints.
 import type { SymccScout } from '../../../types'
-import { scoutRow, scoutFile, scoutIcon, scoutHowTo, scoutListRows, type ScoutListRow, everyText, isNothing, fmtDuration, BAD_EVERY_STATE, scoutRunTasks, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem } from '../../board'
+import { scoutRow, scoutFile, scoutHowTo, scoutListRows, type ScoutListRow, everyText, isNothing, BAD_EVERY_STATE, scoutRunTasks, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem } from '../../board'
 import { cancelScoutEdit, saveScout, runScoutNow, editScout, setScoutPaused, newScout, loadScoutRunHistory, loadScoutResults, readScoutRunReport, scoutPlaceValue } from '../../app/scouts'
 import { S } from '../../app/state'
 import { type $, panelValues } from '../panel'
@@ -17,9 +17,7 @@ import { resetPane } from '../../app/open'
 import { claudeHost } from '../host'
 import { vsBadge, vsFooter, vsHref, vsLink, mdLink, vsSection, cutEnd } from './vscode'
 import { vsRowRoom } from './vscode-list'
-
-/** The color of a scout's mark in VS Code: running blue, paused dim, a bad file in the warning color, waiting plain. */
-const markTone = (s: SymccScout) => (s.running ? 'ide' : s.paused ? 'inactive' : s.warning ? 'warning' : 'text')
+import { type PageHeader, vsPageHeader } from './page-header'
 
 /** A scout's state in words, whole ("running now", "paused", "next in 3h", "on demand", "bad every_minutes"). */
 export function vsScoutState(s: SymccScout, nowMs: number): string {
@@ -137,15 +135,11 @@ export function scoutsListVs($: $, pane: PaneParts) {
 }
 
 /** One scout's page in VS Code, or one of its runs: `run` is when the open run ended ('' = none, the scout's page). */
-export async function scoutPageVs($: $, pane: PaneParts, sc: SymccScout, run = '') {
+export async function scoutPageVs($: $, pane: PaneParts, sc: SymccScout, run: string, header: PageHeader) {
   const { Box, Text, Button, act, C, vs } = pane
   const { Markdown } = vs
   const { nowMs } = pane
-  const r = scoutRow(sc, nowMs)
   const file = scoutFile(sc.name, S.N.name)
-  const title = sc.summary?.trim() || ''
-  const next = Date.parse(sc.next_run ?? '')
-  const nextText = sc.running || sc.paused || r.every === 'on demand' || sc.warning || !Number.isFinite(next) ? '' : next <= nowMs ? 'due now' : `in ${fmtDuration(next - nowMs)}`
   const plain = (key: string, text: string, color = 'inactive', bold?: true) => (
     <Text key={key} wrap="wrap" bold={bold} color={C(color)}>
       {text}
@@ -191,31 +185,13 @@ export async function scoutPageVs($: $, pane: PaneParts, sc: SymccScout, run = '
   }
   return (
     <Box key="vs-scout-page" flexDirection="column" gap={1}>
-      <Box key="vs-scout-top" flexDirection="column">
-        <Box key="vs-back-row" flexDirection="row">
-          <Button key="scout-back" label="← Scouts" variant="secondary" autoFocus onPress={act(() => panelValues($).updateScoutOpen(() => ''))} />
+      {vsPageHeader(pane, header)}
+      {sc.warning || problem ? (
+        <Box key="vs-scout-top" flexDirection="column">
+          {sc.warning ? plain('vs-scout-warning', sc.warning, 'warning') : null}
+          {problem ? plain('vs-scout-problem', problem, 'error') : null}
         </Box>
-        <Text key="vs-scout-status" wrap="wrap">
-          <Text bold color={C('claude')}>{sc.name}</Text>
-          <Text>{'  '}</Text>
-          <Text bold color={C(markTone(sc))}>{`${scoutIcon(sc)} ${vsScoutState(sc, nowMs)}`}</Text>
-        </Text>
-        {title ? plain('vs-scout-summary', title, 'text', true) : null}
-        {sc.warning ? plain('vs-scout-warning', sc.warning, 'warning') : null}
-        {problem ? plain('vs-scout-problem', problem, 'error') : null}
-      </Box>
-      <Box key="vs-scout-facts" flexDirection="column">
-        {plain('every', `runs: ${r.every}`)}
-        {r.model ? plain('model', `model: ${r.model}`) : null}
-        {nextText ? plain('next', `next run: ${nextText}`) : null}
-        {plain('ran', `last run: ${r.ran}`)}
-      </Box>
-      <Box key="vs-scout-actions" flexDirection="row" flexWrap="wrap" gap={1}>
-        {/* no Run now while it runs: it couldn't start again until this run ends */}
-        {!sc.running ? <Button key="scout-run" label="Run now" variant="primary" onPress={act(async () => $.ui.toast(S.N.toast(await runScoutNow(claudeHost($), sc.name))))} /> : null}
-        <Button key="scout-pause" label={sc.paused ? 'Resume' : 'Pause'} variant="secondary" onPress={act(async () => $.ui.toast(S.N.toast(await setScoutPaused(claudeHost($), sc.name, !sc.paused))))} />
-        <Button key="scout-edit" label="Edit" variant="secondary" onPress={act(() => editScout(claudeHost($), sc))} />
-      </Box>
+      ) : null}
       {section('instructions', 'Instructions', [sc.prompt?.trim() ? <Markdown key="vs-scout-prompt" text={sc.prompt.trim()} /> : plain('vs-scout-prompt-none', `(not loaded yet: run /${S.N.name}-scouts)`)])}
       {/* no report text here: a run's report shows on its page (a press on the run); the newest run is first */}
       {section(

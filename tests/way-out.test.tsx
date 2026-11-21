@@ -81,7 +81,7 @@ test('the reject reason box: Enter on empty cancels it (nothing is sent), and so
   await ui.press({ key: 'diff-back' })
   expect(await ui.find({ key: 'show-changes' })).toBeDefined()
   // the task page's Back (b) goes to the board list
-  expect((await ui.find({ key: 'back' }))?.props.hotkey).toBe('b')
+  expect((await ui.find({ key: 'back-key' }))?.props.hotkey).toBe('b')
   await ui.press({ key: 'back' })
   // the kit's store doesn't redraw for a value set back to its default (''), so redraw by hand
   await ui.redraw()
@@ -198,7 +198,7 @@ test('the new scout name box: Enter on empty and Cancel (x) leave it; the Scouts
 test("a scout's page has Back (b); its edit page has Cancel (x), and its footer says Cancel is the way out", async ($, on) => {
   stateOf(on, { tab: 'scouts', scout: 'bugs', view: view([]) })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect((await ui.find({ key: 'scout-back' }))?.props.hotkey).toBe('b')
+  expect((await ui.find({ key: 'scout-back-key' }))?.props.hotkey).toBe('b')
   await ui.press({ key: 'scout-edit' })
   const cancel = await ui.find({ key: 'scout-cancel' })
   expect(cancel?.props.label).toBe('Cancel (x)')

@@ -1,6 +1,6 @@
 // The board panel's page for one task: details, actions, and for a task in review its changes.
 import type { SymccTask } from '../../../types'
-import { cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, roleOf, findRole, type DiffFile, type Seg, detailRows, wrapSegs, STATUS_BADGE, taskKeys, YOUR_EDITS, intoOf, taskReports, type BoardTask, boxHint, pickHint, taskCopyText, copyToast, fileWaitText, isAnswered, showsAnswer, answerText, whyFailed, taskActions, taskAsks, canPickRole as canPickRoleOf, canMarkMerged as canMarkMergedOf, actionButtonLabel, type TaskAction, type TaskActionId, failNext, failAsks, answeredLeadLine } from '../../board'
+import { cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, roleOf, findRole, type DiffFile, type Seg, detailRows, taskKeys, YOUR_EDITS, intoOf, taskReports, type BoardTask, boxHint, pickHint, taskCopyText, copyToast, fileWaitText, isAnswered, showsAnswer, answerText, whyFailed, taskActions, taskAsks, canPickRole as canPickRoleOf, canMarkMerged as canMarkMergedOf, type TaskActionId, failNext, failAsks, answeredLeadLine, sessionNote } from '../../board'
 import { folderDiff, changedFiles } from '../../app/review'
 import { loadRoles } from '../../app/roles'
 import { loadKinds } from '../../app/kinds'
@@ -14,6 +14,8 @@ import type { PaneParts } from './parts'
 import { answerBox } from './answer-box'
 import { taskPageVs } from './vscode-task'
 import { taskSections, type SectionLine, type TaskSection } from '../../core/task-sections'
+import { NAV_KEYS, navHint, taskColor, taskPlace, taskStateGroups, type PageFrom } from '../../core/page-header'
+import { pageHeader, type PageHeader } from './page-header'
 import { claudeHost } from '../host'
 import { mergingNow, mergeOutcome } from '../../app/workers'
 import { boardAnswered } from '../../app/questions'
@@ -85,9 +87,8 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
   const cancelReject = () => ((S.rejecting = null), $.ui.invalidate('ui.render'))
   // the page's actions (shared with VS Code and OpenCode, see taskActions); the terminal draws each as a Button, and its key hints are the ones with a key
   const actions = taskActions(t as BoardTask, { worker: !!agentId, merging: !!merging })
-  const button = (x: TaskAction, onPress: () => void) => <Button key={x.id} label={actionButtonLabel(x)} hotkey={x.key} onPress={onPress} />
-  const REVIEW_IDS: readonly TaskActionId[] = ['done', 'keep-note', 'ask-more', 'approve', 'reject']
-  const reviewButtons = actions.filter(x => REVIEW_IDS.includes(x.id)).map(x => button(x, x.id === 'keep-note' ? keepNote : x.id === 'done' || x.id === 'approve' ? approveIt : askReason))
+  // the diff view keeps its own row of review buttons (Approve, Reject; Back there goes back to the task)
+  const reviewButtons = actions.filter(x => x.id === 'approve' || x.id === 'reject').map(x => <Button key={x.id} label={x.label} hotkey={x.key} onPress={x.id === 'approve' ? approveIt : askReason} />)
   const submitReject = (value: string) =>
     act(async () => {
       const why = value.trim()
@@ -305,10 +306,22 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
       const r = await $.ui.copy({ text: taskCopyText(t, { roles: S.roles, report }), ...(press?.surface ? { surface: press.surface } : {}) })
       $.ui.toast(S.N.toast(copyToast(t.id, r)))
     })()
-  /** What each of the page's other action buttons does here. */
-  const press = {
+  /** What each of the page's action buttons does here. */
+  const press: Record<TaskActionId, () => void> = {
+    done: approveIt, approve: approveIt, 'keep-note': keepNote, 'ask-more': askReason, reject: askReason,
     'show-changes': showDiff(''), watch: watchIt, pause: pauseIt, resume: resumeIt, 'merge-now': mergeNow, retry: retryIt, 'to-todo': toTodo, stash: stashIt,
     role: openRolePick, 'already-merged': markMergedIt, drop: dropIt, 'needs-review': toggleReview, copy: copyTask,
+  }
+  // the page header (T-751): where you are (the tab it was opened from, its place in that list), the title, the state,
+  // the buttons in groups (core's taskActions), then a heavy rule
+  const from: PageFrom = pane.onLive ? 'live' : 'tasks'
+  const place = taskPlace(v, t.id, from, pane.nowMs, S.search?.text ?? '')
+  const header: PageHeader = {
+    from, label: t.id, place, title: t.title, color: taskColor(t as BoardTask, pane.nowMs, pageMerging),
+    state: taskStateGroups(t as BoardTask, { nowMs: pane.nowMs, merging: pageMerging, ...(v.auto_retries !== undefined ? { autoRetries: v.auto_retries } : {}), note: sessionNote(t, v.driving ?? S.driving) }),
+    buttons: actions.map(x => ({ id: x.id, label: x.label, group: x.group, ...(x.key ? { key: x.key } : {}), onPress: press[x.id] })),
+    onBack: goBack, onPrev: place ? openTask(place.prev) : () => undefined, onNext: place ? openTask(place.next) : () => undefined,
+    backFocus: !(answerable || rejectBox), nav: NAV_KEYS.claude,
   }
   // The page's sections (shared with OpenCode, and their contents with VS Code; see core/task-sections.ts)
   const sections = taskSections(t, {
@@ -368,26 +381,16 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
   // VS Code's side panel: its own wide page, with buttons and no key hints (see vscode-task.tsx)
   if (pane.vscode)
     return taskPageVs(pane, t, {
-      agentId, inReview, answered, target, merging, result, resultOk, rows, changes, reports, at, shown, reportBody, answerShown, answerFrom, answer, sections, fileWait, overtime, answerable, askedQuestion, choices, why, canPickRole, canMarkMerged, nowRole,
+      header, agentId, inReview, answered, target, merging, result, resultOk, rows, changes, reports, at, shown, reportBody, answerShown, answerFrom, answer, sections, fileWait, overtime, answerable, askedQuestion, choices, why, canPickRole, canMarkMerged, nowRole,
       redraw: () => $.ui.invalidate('ui.render'),
       on: { back: goBack, open: openTask, approve: approveIt, keepNote, askReason, cancelReject, submitReject, showDiff, pause: pauseIt, resume: resumeIt, mergeNow, retry: retryIt, toTodo, stash: stashIt, markMerged: markMergedIt, drop: dropIt, watch: watchIt, toggleReview, copy: copyTask, openRolePick, pickRole, cancelRolePick: () => ((S.rolePick = null), $.ui.invalidate('ui.render')), choicePress, sendAnswer, pickReport },
     })
   return (
     <Box flexDirection="column" gap={1}>
-      <Box flexDirection="column">
-        {wrapSegs([{ text: t.id, color: 'claude', bold: true }, { text: `  ${t.title}`, color: 'text', bold: true }], width).map((l, i) => segLine(l, `title-${i}`))}
-        {/* no status badge under the title (T-693): the Status and Stage rows in the details show it */}
-        {agentId ? <Text color={C('inactive')}>a worker is on it now</Text> : null}
-        {mergeStatus}
-      </Box>
+      {pageHeader(pane, header)}
+      {mergeStatus}
 
       {sectionEl('why')}
-
-      {buttonRows([
-        <Button key="back" label="Back" hotkey="b" autoFocus={answerable || rejectBox ? undefined : true} onPress={goBack} />,
-        ...reviewButtons,
-        ...actions.filter(x => !REVIEW_IDS.includes(x.id)).map(x => button(x, press[x.id as Exclude<TaskActionId, 'done' | 'keep-note' | 'ask-more' | 'approve' | 'reject'>])),
-      ], 'task-buttons')}
 
       {rejectBox}
       {roleBox}
@@ -410,7 +413,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
       {sectionEl('report')}
       {sectionEl('runs')}
 
-      {footer(taskKeys(actions, reports.map(r => r.try), choices.length > 0), 'task-keys')}
+      {footer(taskKeys(actions, reports.map(r => r.try), choices.length > 0, place && place.of > 1 ? navHint('claude') : null), 'task-keys')}
     </Box>
   )
 }

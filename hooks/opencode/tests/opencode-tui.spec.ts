@@ -21,6 +21,7 @@ import { taskSections } from '../../core/task-sections'
 import { viewTask, viewStubFilled } from '../../core/board-parts'
 import { orgMemNotes, orgMemNoteKey } from '../../core/org-mem'
 import { PLUGIN_ROOT } from '../host'
+import { inGroups, pillText, taskListIds, scoutListNames } from '../../core/page-header'
 import { startTui, KEY_BINDS, viewPaths, loadTuiRuntime, BOARD_PANEL, setupFailed, colorOf, drawLines, type TuiContext, type TuiRuntime, type TuiPanelInput, type TuiKeyLayer, type PanelKey } from '../tui'
 
 const NOW = Date.parse('2026-11-19T12:00:00.000Z')
@@ -215,8 +216,9 @@ test('T-581: a doing row in a check step or the merge line shows its icon and th
   const titleAt = (lines: string[]) => new Set([...steps.map(([id, step]) => row(lines, id).indexOf(`In ${step}`)), row(lines, 'T-9').indexOf('In line'), row(lines, 'T-10').indexOf('Working')])
   expect(titleAt(band).size).toBe(1)
   expect(titleAt(list).size).toBe(1)
-  // T-587: the task page's badge names the step, the Status line the state (T-647), and the Stage line marks the step now (checker off: none)
+  // T-587: the task page's header state line names the state, the step and its time (T-751), and the Steps line marks the step now (checker off: none)
   const page = (id: string, v = f) => panelLines(v, { opened: id, cursor: 0 }, NOW, 140).lines.map(lineText)
+  const state = (p: string[]) => p[p.findIndex(l => l.startsWith('‹ ')) + 2]
   const want: [string, string, string][] = [
     ['T-10', '▶ worker · 15m', '● worker → prep → queue → test → merge'],
     ['T-6', '✎ prep · 20m', 'worker ✓ → ● prep → queue → test → merge'],
@@ -226,20 +228,20 @@ test('T-581: a doing row in a check step or the merge line shows its icon and th
   ]
   for (const [id, badge, stage] of want) {
     const p = page(id)
-    // no status badge under the title (T-693): the Status and Stage rows say it
+    // no status badge under the title (T-693): the header's state line and the Steps row say it; no Status row
     expect(p).not.toContain(`[${badge}]`)
-    expect(p.find(l => l.startsWith('Status:'))).toContain(`▶ doing · ${badge.split(' · ')[1]}`)
-    expect(p.find(l => l.startsWith('Status:'))).not.toContain(badge)
-    expect(p.find(l => l.startsWith('Stage:'))?.replace(/^Stage:\s+/, '')).toBe(stage)
+    expect(state(p)).toContain(`▶ doing · ${badge.slice(2)}`)
+    expect(p.some(l => l.startsWith('Status:'))).toBe(false)
+    expect(p.find(l => l.startsWith('Steps:'))?.replace(/^Steps:\s+/, '')).toBe(stage)
   }
   // a running checker shows its step even with the setting off; with it on every task's Stage has it
   expect(page('T-7')).not.toContain('[⌕ checker · 20m]')
-  expect(page('T-7').find(l => l.startsWith('Stage:'))).toContain('worker ✓ → prep ✓ → ● checker → queue → test → merge')
+  expect(page('T-7').find(l => l.startsWith('Steps:'))).toContain('worker ✓ → prep ✓ → ● checker → queue → test → merge')
   const on = { ...f, view: { ...f.view, checker: true } }
-  expect(page('T-1', on).find(l => l.startsWith('Stage:'))).toContain('worker ✓ → prep ✓ → checker ✓ → queue ✓ → ● test → merge')
+  expect(page('T-1', on).find(l => l.startsWith('Steps:'))).toContain('worker ✓ → prep ✓ → checker ✓ → queue ✓ → ● test → merge')
   // a done task: every step done
   const done = { ...f, view: { ...f.view, tasks: [...tasks, { ...base, id: 'T-11', title: 'Merged', status: 'done' as const, note: '', runs }] } }
-  expect(page('T-11', done).find(l => l.startsWith('Stage:'))).toContain('worker ✓ → prep ✓ → queue ✓ → test ✓ → merge ✓')
+  expect(page('T-11', done).find(l => l.startsWith('Steps:'))).toContain('worker ✓ → prep ✓ → queue ✓ → test ✓ → merge ✓')
 })
 
 test('the panel: the banner, then the list grouped by state (NEEDS YOU, what runs and waits, Done folded) with the cursor; a task\'s page with its rows, choices and keys', () => {
@@ -265,18 +267,18 @@ test('the panel: the banner, then the list grouped by state (NEEDS YOU, what run
   expect(panelLines(f, { opened: '', cursor: 99 }, NOW, 100).selected).toBe(list.ids.at(-1))
   // a task in review: its page and the approve and reject keys
   const page = panelLines(f, { opened: 'T-2', cursor: 0 }, NOW, 100).lines.map(lineText)
-  expect(page.some(l => l.startsWith('T-2 a reviewed change'))).toBe(true)
-  expect(page.some(l => l.startsWith('Status:') && l.includes('ready for review'))).toBe(true)
-  expect(panelKeys(f, 'T-2').map(k => k.word)).toEqual(['approve', 'reject', 'show changes', 'needs review', 'back'])
+  expect(page.some(l => l.startsWith('T-2  a reviewed change'))).toBe(true)
+  expect(page.some(l => l.startsWith('◆ ready for review   '))).toBe(true)
+  expect(panelKeys(f, 'T-2').map(k => k.word)).toEqual(['approve', 'show changes', 'reject', 'needs review', 'back'])
   // T-575/T-584: the page's actions are core's taskActions (the terminal's and VS Code's buttons) with a key, but Copy
   const t2 = f.view.tasks.find(t => t.id === 'T-2')!
   expect(panelTaskActions(t2).map(a => a.id)).toEqual(taskActions(t2).filter(a => a.key && a.id !== 'copy').map(a => a.id))
-  expect(panelTaskActions(t2).map(a => `${a.key} ${a.id}`)).toEqual(['a approve', 'x reject', 'd show-changes', 'n needs-review'])
+  expect(panelTaskActions(t2).map(a => `${a.key} ${a.id}`)).toEqual(['a approve', 'd show-changes', 'x reject', 'n needs-review'])
   // an answered investigation in review: done, keep as a note and ask more, as on the other hosts
   const inv = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => (t.id === 'T-2' ? { ...t, kind: 'investigation' } : t)) } } as ViewFile
   expect(panelKeys(inv, 'T-2').map(k => `${k.key} ${k.word}`)).toEqual(['a done', 'v keep as a note', 'x ask more', 'n needs review', 'b back'])
-  // its Status row says "answered: read it" in green, as on the other boards (T-701)
-  const invStatus = panelLines(inv, { opened: 'T-2', cursor: 0 }, NOW, 100).lines.find(l => lineText(l).startsWith('Status:'))!
+  // its header's state line says "answered: read it" in green, as on the other boards (T-701, T-751)
+  const invStatus = panelLines(inv, { opened: 'T-2', cursor: 0 }, NOW, 100).lines.find(l => lineText(l).startsWith('◆ answered'))!
   expect(invStatus.find(s => s.text.includes('answered: read it'))?.color).toBe('success')
   expect(lineText(invStatus)).not.toContain('ready for review')
   // a waiting task with no question text says its note, else that it waits (core's taskAsks)
@@ -404,7 +406,7 @@ test('startTui on a fake OpenCode TUI: reads the view file above its folder, dra
     expect(board.state().opened).toBe(id)
   }
   await goTo('T-2')
-  expect(shown(panel).some(l => l.startsWith('Status:'))).toBe(true)
+  expect(shown(panel).some(l => l.startsWith('◆ ready for review'))).toBe(true)
   await board.press('x', 'ses_1')
   await board.press('a', 'ses_1')
   // T-615: while that approve runs, a and x do nothing (no second approve, no reject box), as the terminal's; d still shows the changes
@@ -549,7 +551,7 @@ test('T-584: a task page offers every one of core\'s taskActions with a key (but
   board.stop()
 })
 
-test('T-680: a task page shows Claude Code\'s row of buttons ([ Back ] [ Pause ] ...), the scout page [ Back ] [ Edit ] [ Pause ], a question [ Back ]; a click on a button sends what its key sends', async () => {
+test('T-680, T-751: a task page header has the buttons in groups, words only (the next step, task actions, Drop, needs review), the scout page its own, a question [ Back ]; a click on a button sends what its key sends', async () => {
   let b: Board = emptyBoard()
   for (const title of ['running', 'a change', 'broke']) b = addTask(b, { origin: { why: 'a test' }, title, files: ['src/'] }, AT)[0]
   b = patchTask(b, 'T-1', { status: 'doing' }, AT)
@@ -562,30 +564,39 @@ test('T-680: a task page shows Claude Code\'s row of buttons ([ Back ] [ Pause ]
   const view: PaneView = { tasks: b.tasks, working: [{ task: 'T-1', since: NOW - 60_000 }], scouts, mode: 'auto', test_commands: [], max_parallel: 2, max_minutes: 30, auto_retries: 1, driving: true, branch: 'main', branch_note: '', questions: [{ id: 'Q-1', text: 'How often?', options: ['daily'], asked_at: AT }] }
   const f: ViewFile = { root: '/work/proj', home: '/work', name: 'symcc', version: '0.9.0', written_at: NOW, view }
   const task = (id: string) => f.view.tasks.find(t => t.id === id)!
-  const buttonRow = (id: string, tab: 'tasks' | 'scouts' = 'tasks') => panelLines(f, { tab, opened: id, cursor: 0 }, NOW, 140).lines.map(lineText).find(l => l.startsWith('[ Back ]'))
-  // the running task: the Claude Code panel's buttons for it (Back, then core's taskActions with its words), but
-  // Watch worker and Copy, which OpenCode can't do
-  expect(buttonRow('T-1')).toBe('[ Back ] [ Pause ] [ Drop ] [ Needs review: off ]')
-  for (const id of ['T-1', 'T-2', 'T-3']) {
-    const claude = ['Back', ...taskActions(task(id), { worker: id === 'T-1' }).map(actionButtonLabel)]
-    expect(buttonRow(id)).toBe(claude.filter(l => l !== 'Watch worker' && l !== 'Copy (y)').map(l => `[ ${l} ]`).join(' '))
+  // the header's button line: the line right above its heavy rule
+  const buttonRow = (id: string, tab: 'tasks' | 'scouts' = 'tasks', w = 140) => {
+    const ls = panelLines(f, { tab, opened: id, cursor: 0 }, NOW, w).lines.map(lineText)
+    return ls[ls.findIndex(l => /^━+$/.test(l)) - 1]
   }
-  expect(buttonRow('T-2')).toBe('[ Back ] [ Approve ] [ Reject ] [ Show changes ] [ Drop ] [ Needs review: off ]')
-  expect(buttonRow('T-3')).toBe('[ Back ] [ Retry ] [ Stash to backlog (z) ] [ Role (l) ] [ Already merged (h) ] [ Drop ] [ Needs review: off ]')
-  // a narrow panel puts the buttons on more rows, never cutting one
+  // the running task: the Claude Code board's buttons for it (core's taskActions in their groups, with their words),
+  // but Watch worker and Copy, which OpenCode can't do
+  expect(buttonRow('T-1')).toBe('▐Pause▌   [Drop]   ☐ needs review')
+  for (const id of ['T-1', 'T-2', 'T-3']) {
+    const claude = inGroups(taskActions(task(id), { worker: id === 'T-1' }).filter(a => a.id !== 'watch' && a.id !== 'copy'))
+    expect(buttonRow(id)).toBe(claude.map(g => g.map(pillText).join(' ')).join('   '))
+  }
+  expect(buttonRow('T-2')).toBe('▐Approve▌   [Show changes]   [Reject] [Drop]   ☐ needs review')
+  expect(buttonRow('T-3')).toBe('▐Retry▌   [Stash to backlog] [Role] [Already merged]   [Drop]   ☐ needs review')
+  // no key inside a button (the keys are in the footer)
+  for (const id of ['T-1', 'T-2', 'T-3']) expect(buttonRow(id)).not.toMatch(/\([a-z]\)/)
+  // a narrow panel puts the buttons on more rows, between the groups when they fit, never cutting a button
   const narrow = panelLines(f, { opened: 'T-3', cursor: 0 }, NOW, 40).lines.map(lineText)
-  expect(narrow.filter(l => l.startsWith('[ ')).join(' ')).toContain('[ Stash to backlog (z) ]')
-  // the scout pages (as Claude Code's: Back, Run now when it isn't running, Edit, Pause or Resume) and a question's
-  expect(buttonRow('deps', 'scouts')).toBe('[ Back ] [ Edit ] [ Pause ]')
-  expect(buttonRow('docs', 'scouts')).toBe('[ Back ] [ Run now ] [ Edit ] [ Resume ]')
-  expect(buttonRow('Q-1')).toBe('[ Back ]')
-  // T-693: no status badge line under a task's title: the buttons come right after it; the status is in the Status row
+  const rule = narrow.findIndex(l => /^━+$/.test(l))
+  expect(narrow.slice(rule - 4, rule)).toEqual(['▐Retry▌', '[Stash to backlog] [Role]', '[Already merged]   [Drop]', '☐ needs review'])
+  // the scout pages (as Claude Code's: Run now when it isn't running, Edit, Pause or Resume; paused said as a fact) and a question's
+  expect(buttonRow('deps', 'scouts')).toBe('[Edit]   Pause')
+  expect(buttonRow('docs', 'scouts')).toBe('▐Run now▌   [Edit]   Resume ⏸ paused')
+  expect(panelLines(f, { opened: 'Q-1', cursor: 0 }, NOW, 140).lines.map(lineText).find(l => l.startsWith('[ Back ]'))).toBe('[ Back ]')
+  // the header's 4 lines in order, then the heavy rule: where you are, the title, the state, the buttons
   for (const id of ['T-1', 'T-2', 'T-3']) {
     const lines = panelLines(f, { opened: id, cursor: 0 }, NOW, 140).lines.map(lineText)
-    const at = lines.findIndex(l => l.startsWith(`${id} `))
-    expect(lines[at + 1]?.startsWith('[ Back ]')).toBe(true)
-    expect(lines.some(l => /^\[[^ ].*\]$/.test(l))).toBe(false)
-    expect(lines.find(l => l.trim().startsWith('Status:'))).toContain({ 'T-1': '▶ doing', 'T-2': '◆ ready for review', 'T-3': '✗ failed' }[id]!)
+    expect(lines[0]).toMatch(new RegExp(`^‹ Tasks +${id} · ‹ \\d of 3 ›$`))
+    expect(lines[1]!.startsWith(`${id}  `)).toBe(true)
+    expect(lines[2]).toContain({ 'T-1': '▶ doing', 'T-2': '◆ ready for review', 'T-3': '✗ failed' }[id]!)
+    expect(lines[3]).toBe(buttonRow(id))
+    expect(lines[4]).toMatch(/^━+$/)
+    expect(lines.some(l => l.trim().startsWith('Status:'))).toBe(false)
   }
 
   // in the TUI: a click on each button sends the same command as its key (Drop in review, which has no key, drops it)
@@ -608,7 +619,12 @@ test('T-680: a task page shows Claude Code\'s row of buttons ([ Back ] [ Pause ]
   const board = startTui(ctx, { runtime: fakeRuntime(), readText: async p => files.get(p) ?? Promise.reject(new Error('missing')), every: () => () => undefined, now: () => NOW })
   await board.refresh()
   const panel = slots.find(s => s.append === 'session.panel')!.render({ name: BOARD_PANEL, sessionID: 's', width: 142, focused: true, close: () => undefined } as never) as El
-  const buttons = () => rowEls(panel).find(r => r.text.startsWith('[ Back ]'))!.segs.filter(s => s.kids.join('').startsWith('['))
+  // the header's button row: the drawn row right above the heavy rule; its buttons are the pieces a click presses
+  const headRows = () => rowEls(panel)
+  const buttons = () => {
+    const rows = headRows()
+    return rows[rows.findIndex(r => /^━+$/.test(r.text)) - 1]!.segs.filter(s => typeof s.props.onMouseUp === 'function')
+  }
   const settle = () => new Promise<void>(res => setTimeout(res, 0))
   const open = async (id: string, tab: 'tasks' | 'scouts' = 'tasks') => {
     await board.press('t', 's')
@@ -621,22 +637,24 @@ test('T-680: a task page shows Claude Code\'s row of buttons ([ Back ] [ Pause ]
     await board.press('open', 's')
     expect(board.state().opened).toBe(id)
   }
-  const clickButton = async (label: string) => {
-    const seg = buttons().find(s => s.kids.join('') === `[ ${label} ]`)!
+  const click = async (seg: El | undefined, label: string) => {
     expect([label, typeof seg?.props.onMouseUp]).toEqual([label, 'function'])
-    ;(seg.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0, stopPropagation: () => undefined })
+    ;(seg!.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0, stopPropagation: () => undefined })
     await settle()
   }
+  const clickButton = (label: string) => click(buttons().find(s => s.kids.join('') === label), label)
+  // Back is the header's "‹ Tasks" (or "‹ Scouts"); a question keeps its [ Back ] button
+  const clickBack = () => click(headRows().flatMap(r => r.segs).find(s => ['‹ Tasks', '‹ Scouts', '[ Back ]'].includes(s.kids.join(''))), 'back')
   const pages: [string, 'tasks' | 'scouts'][] = [['T-1', 'tasks'], ['T-2', 'tasks'], ['T-3', 'tasks'], ['deps', 'scouts'], ['docs', 'scouts']]
   for (const [id, tab] of pages) {
     await open(id, tab)
-    const labels = buttons().map(s => s.kids.join('').slice(2, -2))
+    const labels = buttons().map(s => s.kids.join(''))
     // Approve last (while it runs, the page offers no approve or reject)
-    for (const label of labels.filter(l => l !== 'Back' && l !== 'Approve')) {
+    for (const label of labels.filter(l => l !== '▐Approve▌')) {
       // what the button's key sends, then what a click on the button sends
       await open(id, tab)
       sent.length = 0
-      const hit = panelLines(f, { tab, opened: id, cursor: 0 }, NOW, 140).lines.flat().find(s => s.text === `[ ${label} ]`)!.hit!
+      const hit = panelLines(f, { tab, opened: id, cursor: 0 }, NOW, 140).lines.flat().find(s => s.text === label)!.hit!
       if ('key' in hit) await board.press(hit.key, 's')
       const byKey = [...sent]
       await open(id, tab)
@@ -647,19 +665,70 @@ test('T-680: a task page shows Claude Code\'s row of buttons ([ Back ] [ Pause ]
     }
     // Back goes back to the list
     await open(id, tab)
-    await clickButton('Back')
+    await clickBack()
     expect(board.state().opened).toBe('')
   }
   // the question's Back too
   await open('Q-1')
-  await clickButton('Back')
+  await clickBack()
   expect(board.state().opened).toBe('')
   // Approve sends the approve, as a; then its page has no Approve or Reject button
   await open('T-2')
   sent.length = 0
-  await clickButton('Approve')
+  await clickButton('▐Approve▌')
   expect(sent).toEqual([{ sessionID: 's', name: 'symcc-approve', text: 'T-2' }])
-  expect(rowEls(panel).find(r => r.text.startsWith('[ Back ]'))!.text).toBe('[ Back ] [ Show changes ] [ Drop ] [ Needs review: off ]')
+  expect(buttons().map(s => s.kids.join(''))).toEqual(['[Show changes]', '[Drop]', '☐ needs review'])
+  board.stop()
+})
+
+test('T-751: [ and ] (and a click on ‹ or › in the header) go to the previous and the next task or scout of the list, going round; a task opened from Live says "‹ Live"', async () => {
+  // [ and ] are bound to prev and next; k and j still move
+  expect([KEY_BINDS.prev, KEY_BINDS.next, KEY_BINDS.up, KEY_BINDS.down]).toEqual(['[', ']', 'up,k', 'down,j'])
+  const f = viewFile()
+  const list = taskListIds(f.view.tasks, NOW)
+  // the header's first line: Back, then the place with its arrows, each a click
+  const first = panelLines(f, { opened: list[0]!, cursor: 0 }, NOW, 100).lines[0]!
+  expect(lineText(first)).toMatch(new RegExp(`^‹ Tasks +${list[0]} · ‹ 1 of ${list.length} ›$`))
+  expect(first.filter(x => x.hit).map(x => [x.text, x.hit])).toEqual([['‹ Tasks', { key: 'back' }], ['‹', { key: 'prev' }], ['›', { key: 'next' }]])
+  // the footer says so
+  expect(panelLines(f, { opened: list[0]!, cursor: 0 }, NOW, 100).keys.map(k => `${k.key} ${k.word}`)).toContain('[ ] prev/next')
+  const files = new Map([['/work/proj/.symcc/view.json', viewFileText({ ...f, view: { ...f.view, scouts: [{ name: 'a', every_minutes: 60 }, { name: 'b', every_minutes: 120 }] as never } })]])
+  const fc = fakeCtx({})
+  const board = startTui(fc.ctx, { runtime: fakeRuntime(), readText: async p => files.get(p) ?? Promise.reject(new Error('missing')), every: () => () => undefined, now: () => NOW })
+  await board.refresh()
+  await board.press('open', 's')
+  expect(board.state().opened).toBe(list[0])
+  await board.press('next', 's')
+  expect(board.state().opened).toBe(list[1])
+  await board.press('prev', 's')
+  await board.press('prev', 's')
+  // before the first: the last
+  expect(board.state().opened).toBe(list.at(-1))
+  await board.press('next', 's')
+  expect(board.state().opened).toBe(list[0])
+  // b still goes back to the list
+  await board.press('back', 's')
+  expect(board.state().opened).toBe('')
+  // a scout's page: the Scouts list's order
+  const names = scoutListNames([{ name: 'a', every_minutes: 60 }, { name: 'b', every_minutes: 120 }] as never)
+  await board.press('s', 's')
+  await board.press('open', 's')
+  expect([board.state().tab, board.state().opened]).toEqual(['scouts', names[0]])
+  await board.press('next', 's')
+  expect(board.state().opened).toBe(names[1])
+  await board.press('next', 's')
+  expect(board.state().opened).toBe(names[0])
+  // from the Live tab: "‹ Live"; T-1 is its only running task, so no place to go to
+  await board.press('l', 's')
+  await board.press('open', 's')
+  expect([board.state().tab, board.state().opened]).toEqual(['tasks', 'T-1'])
+  const live = panelLines(f, { opened: 'T-1', cursor: 0, from: 'live' }, NOW, 100)
+  expect(lineText(live.lines[0]!)).toMatch(/^‹ Live +T-1$/)
+  expect(live.keys.map(k => k.word)).not.toContain('prev/next')
+  await board.press('next', 's')
+  expect(board.state().opened).toBe('T-1')
+  await board.press('back', 's')
+  expect(board.state().tab).toBe('live')
   board.stop()
 })
 
@@ -972,7 +1041,7 @@ test('T-558: the mouse works like the keys: a click on a row opens its task, on 
   await clickRow(t => t.includes('T-2 '))
   expect(board.state().opened).toBe('T-2')
   expect(focusedBy).toBe(1)
-  expect(rowEls(panel).some(r => r.text.startsWith('Status:'))).toBe(true)
+  expect(rowEls(panel).some(r => r.text.startsWith('◆ ready for review'))).toBe(true)
   // the page's key hints are buttons: approve, reject (asks the reason), back
   await clickHint('x reject')
   await clickHint('a approve')
@@ -1099,7 +1168,10 @@ test('T-559: the Scouts tab lists the scouts from view.json, a scout\'s page sho
   // a scout's page: its state, its prompt, its runs (newest first, the cursor on one) and its file
   const page = panelLines(f, { tab: 'scouts', opened: 'docs-check', cursor: 0 }, NOW, 100)
   const p = page.lines.map(lineText)
-  expect(p.some(l => l.startsWith('docs-check') && l.includes('paused') && l.includes('every hour'))).toBe(true)
+  // T-751: its header: the name, how often it runs on the state line, "⏸ paused" with its buttons
+  expect(p.some(l => l.startsWith('docs-check'))).toBe(true)
+  expect(p.some(l => l.startsWith('◷ every hour'))).toBe(true)
+  expect(p.some(l => l.endsWith('⏸ paused'))).toBe(true)
   expect(p).toContain('Instructions')
   expect(p).toContain('  Look for stale docs.')
   expect(p).toContain('Runs')
@@ -1108,6 +1180,8 @@ test('T-559: the Scouts tab lists the scouts from view.json, a scout\'s page sho
   expect(p.some(l => l.includes('nothing · 0 findings · no tasks'))).toBe(true)
   expect(p).toContain('  .symcc/scouts/docs-check.md')
   expect(panelKeys(f, 'docs-check', 'scouts').map(k => k.word)).toEqual(['run now', 'resume', 'edit', 'move', 'report', 'back'])
+  // the panel's footer also says [ ] prev/next, as there are other scouts
+  expect(page.keys.map(k => k.word)).toEqual(['run now', 'resume', 'edit', 'move', 'report', 'prev/next', 'back'])
   // a running scout has no "run now"; a waiting one pauses
   const running = { ...f, view: { ...f.view, scouts: f.view.scouts.map(s => ({ ...s, running: s.name === 'deps' })) } }
   expect(panelKeys(running, 'deps', 'scouts').map(k => k.word)).toEqual(['pause', 'edit', 'back'])
@@ -1429,7 +1503,7 @@ test('T-574: OpenCode\'s task page shows local times with the shared when, and t
   const tasks = f.view.tasks.map(t => (t.id === 'T-4' ? { ...t, role: 'tester', kind: 'bug' } : t))
   const page = panelLines({ ...f, view: { ...f.view, tasks } }, { opened: 'T-4', cursor: 0 }, NOW, 200).lines.map(lineText).join('\n')
   // the same local text Claude Code's page shows, not the UTC slice of the ISO time
-  expect(page).toContain(`added ${when(AT)}`)
+  expect(page).toContain(`Added:    ${when(AT)}`)
   expect(page).not.toContain('2026-11-19 11:00')
   // the owner's tester role (its description and model) and bug kind (its description)
   expect(page).toContain('tester — My tester · model opus')
@@ -1738,9 +1812,9 @@ test('T-596: an approved task in review whose approve runs leaves NEEDS YOU: lis
     expect(band[0]).not.toContain('review')
     expect(band.find(l => l.startsWith('T-2'))).toMatch(new RegExp(`T-2 +${icon} 15m`))
     const page = panelLines(f, { opened: 'T-2', cursor: 0 }, NOW, 140).lines.map(lineText).join('\n')
-    // no badge under the title (T-693): the Stage row names the step
+    // no badge under the title (T-693): the Steps row names the step
     expect(page).not.toContain(`[${badge}`)
-    expect(page).toMatch(new RegExp(`Stage:.*● ${badge.split(' ')[1]}`))
+    expect(page).toMatch(new RegExp(`Steps:.*● ${badge.split(' ')[1]}`))
     expect(page).not.toContain('ready for review')
   }
   // no approve running (or it ended, failed: its step is cleared, or its mark went stale): back under NEEDS YOU
@@ -1760,23 +1834,24 @@ test('T-614: right after the panel sends an approve, the page badge and the Stag
   const f = withT2({})
   const lines = page(f, sent)
   // the page itself (the banner above counts the board's statuses)
-  const all = lines.slice(lines.indexOf('T-2 a reviewed change')).join('\n')
+  const all = lines.slice(lines.indexOf('T-2  a reviewed change')).join('\n')
   expect(all).not.toContain('ready for review')
   expect(lines).not.toContain('[✎ prep]')
-  expect(lines.find(l => l.trim().startsWith('Status:'))).toContain('▶ doing')
-  expect(all).toMatch(/Stage:[\s\S]*review ✓[\s\S]*● prep[\s\S]*merge/)
+  // the header's state line (T-751)
+  expect(lines[2]).toMatch(/^▶ doing · prep/)
+  expect(all).toMatch(/Steps:[\s\S]*review ✓[\s\S]*● prep[\s\S]*merge/)
   expect(approveSent(f, sent, NOW)).toBe(true)
   // without it, or for another task, or once too old: still ready for review everywhere
   for (const a of [undefined, { id: 'T-1', at: NOW }, { id: 'T-2', at: NOW - APPROVE_SENT_MS }]) {
     const ls = page(f, a)
     expect(ls).not.toContain('[◆ ready for review]')
-    expect(ls.find(l => l.trim().startsWith('Status:'))).toContain('ready for review')
+    expect(ls[2]).toContain('ready for review')
     expect(ls.join('\n')).toMatch(/● review/)
   }
   // a step on the board: the board carries the phase (the panel drops its flag)
   const testing = withT2({ checking: { step: 'testing', at: new Date(NOW - 10_000).toISOString() } })
   expect(approveSent(testing, sent, NOW)).toBe(false)
-  expect(page(testing, sent).find(l => l.trim().startsWith('Stage:'))).toContain('● test')
+  expect(page(testing, sent).find(l => l.trim().startsWith('Steps:'))).toContain('● test')
   // the task left review (merged): no flag either
   expect(approveSent(withT2({ status: 'done' }), sent, NOW)).toBe(false)
 })
@@ -1793,10 +1868,10 @@ test('T-615: while a task\'s approve is in progress its page offers no approve o
   const keys = (g: ViewFile, approving?: { id: string; at: number }, now = NOW) => panelLines(g, { opened: 'T-2', cursor: 0, ...(approving ? { approving } : {}) }, now, 100).keys.map(k => k.word)
   expect(keys(f)).toContain('approve')
   // just pressed: approveSent
-  expect(keys(f, { id: 'T-2', at: NOW })).toEqual(['show changes', 'needs review', 'back'])
+  expect(keys(f, { id: 'T-2', at: NOW })).toEqual(['show changes', 'needs review', 'prev/next', 'back'])
   // its first step is on the board: the phase says approved
   const running = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => (t.id === 'T-2' ? { ...t, checking: { step: 'testing' as const, at: new Date(NOW - 5_000).toISOString() } } : t)) } }
-  expect(keys(running)).toEqual(['show changes', 'needs review', 'back'])
+  expect(keys(running)).toEqual(['show changes', 'needs review', 'prev/next', 'back'])
   // an approve sent for another task, or one long gone, leaves them
   expect(keys(f, { id: 'T-3', at: NOW })).toContain('approve')
   expect(keys(f, { id: 'T-2', at: NOW - APPROVE_SENT_MS - 1 })).toContain('approve')
@@ -2086,18 +2161,20 @@ test('T-627: a long task page scrolls by drawn lines under its fixed title and b
   const text = all.lines.map(lineText)
   // the title wraps onto two drawn lines, and both stay at the top (no status badge under it, T-693)
   const title = text.slice(0, all.fixed)
-  expect(title.some(l => l.startsWith('T-2 a reviewed change'))).toBe(true)
+  expect(title.some(l => l.startsWith('T-2  a reviewed change'))).toBe(true)
   expect(title.filter(l => /^\[[^ ].*\]$/.test(l)).length).toBe(0)
-  // T-680: the page's buttons stay at the top with them
-  expect(title.some(l => l.startsWith('[ Back ] [ Approve ]'))).toBe(true)
+  // T-680, T-751: the page header (with its buttons and its heavy rule) stays at the top with them
+  expect(title.some(l => l.startsWith('▐Approve▌'))).toBe(true)
+  expect(title.at(-1)).toMatch(/^━+$/)
   expect(title.join(' ')).toContain('onto a second line here')
   expect(text.slice(all.fixed).some(l => l.includes('▍History'))).toBe(true)
   // the long history and report lines are broken into rows the panel's width, keeping every word in order
   expect(text.join(' ').replace(/\s+/g, ' ')).toContain('report line 1 is a long one that says a lot about what was done, so it has to wrap in a narrow panel')
   const firstTitle = title.findIndex(l => l.startsWith('T-2'))
-  checkScrolling(draw, 25, w, [title[firstTitle]!, title.find(l => l.startsWith('[ Back ]'))!])
-  // T-700: no banner or tabs on a task's page (as on the terminal panel): its title comes first
-  expect(text[0]!.startsWith('T-2 a reviewed change')).toBe(true)
+  checkScrolling(draw, 25, w, [title[firstTitle]!, title.find(l => l.startsWith('▐Approve▌'))!])
+  // T-700: no banner or tabs on a task's page (as on the terminal panel): its header comes first (T-751)
+  expect(text[0]!.startsWith('‹ Tasks')).toBe(true)
+  expect(text[1]!.startsWith('T-2  a reviewed change')).toBe(true)
   // too low to keep the title too: the title scrolls with the page, nothing stays at the top
   checkScrolling(draw, 8, w, [])
   expect(draw(0, 8).fixed).toBe(0)
@@ -2166,9 +2243,11 @@ test('T-649: a backlog and a doing task page show their footer with the buttons:
     for (let i = 0; i < ids.indexOf(id); i++) await board.press('down', 's')
     await board.press('open', 's')
     expect(board.state().opened).toBe(id)
+    // the footer: its light rule, then the key hints (over two lines at 60 columns, with "[ ] prev/next", T-751)
     const footerOk = (rows: string[]) => {
-      expect(rows.at(-2)).toBe('─'.repeat(60))
-      for (const w of words) expect(rows.at(-1)).toContain(w)
+      const rule = rows.lastIndexOf('─'.repeat(60))
+      expect(rule).toBeGreaterThan(rows.length - 4)
+      for (const w of words) expect(rows.slice(rule + 1).join(' · ')).toContain(w)
     }
     // no height known: no padding, the footer right after the page
     const page = panelLines(f, { opened: id, cursor: 0 }, NOW, 60).lines.map(lineText)
@@ -2180,7 +2259,7 @@ test('T-649: a backlog and a doing task page show their footer with the buttons:
     expect(body!.props.flexShrink).toBe(1)
     expect(body!.props.overflow).toBe('hidden')
     expect(foot!.props.flexShrink).toBe(0)
-    expect(shown(foot)).toEqual(page.slice(-2))
+    expect(shown(foot)).toEqual(page.slice(page.lastIndexOf('─'.repeat(60))))
     // a small known height: exactly that many rows, the footer last
     ;(panel as El & { height?: number }).height = 12
     ;(panel.props.onSizeChange as () => void)()
@@ -2658,7 +2737,8 @@ test('T-692: in the TUI, l (or a click on the Live tab) shows the Live tab; ↓ 
   // its page's Back button does the same
   await board.press('open', 's')
   expect([board.state().tab, board.state().opened]).toEqual(['tasks', 'T-612'])
-  const backSeg = rowEls(panel).flatMap(r => r.segs).find(s => (s.kids ?? []).join('') === '[ Back ]')
+  // T-751: the header's "‹ Live" (opened from the Live tab)
+  const backSeg = rowEls(panel).flatMap(r => r.segs).find(s => (s.kids ?? []).join('') === '‹ Live')
   ;(backSeg!.props.onMouseUp as (e: unknown) => void)(up)
   await settle()
   expect([board.state().tab, board.state().opened]).toEqual(['live', ''])
@@ -2775,7 +2855,8 @@ test('T-700: the board header (banner, tests/limits line, drive warning, tabs) s
     tests: t.some(l => l.includes('tests: bun test')),
     drive: t.some(l => /⚠ .*\/symcc-drive/.test(l)),
     tabs: t.some(l => l.startsWith('[t]: Tasks')),
-    rule: t.some(l => /^━+$/.test(l)),
+    // the board header's rule, under the tabs (a task's or scout's page has its own heavy rule under its header, T-751)
+    rule: t.some((l, i) => /^━+$/.test(l) && !!t[i - 1]?.startsWith('[t]: Tasks')),
   })
   const all = { tests: true, drive: true, tabs: true, rule: true }
   const none = { tests: false, drive: false, tabs: false, rule: false }
@@ -2784,7 +2865,7 @@ test('T-700: the board header (banner, tests/limits line, drive warning, tabs) s
     [{ tab: 'settings', opened: 'roles' }, 'roles'], [{ tab: 'settings', opened: 'kinds' }, 'kinds'],
   ]
   const pages: [Partial<PanelChoice>, BoardPage, string][] = [
-    [{ opened: 'T-2' }, 'task', 'T-2 '], [{ opened: 'Q-9' }, 'question', 'Q-9'], [{ tab: 'scouts', opened: 'deps' }, 'scout', 'deps'],
+    [{ opened: 'T-2' }, 'task', 'T-2  '], [{ opened: 'Q-9' }, 'question', 'Q-9'], [{ tab: 'scouts', opened: 'deps' }, 'scout', 'deps'],
     [{ tab: 'scouts', opened: 'docs-check', run: '2026-11-19T11:50:00.000Z' }, 'scout-run', 'docs-check'],
     [{ tab: 'settings', opened: 'role:tester' }, 'role', 'tester'], [{ tab: 'settings', opened: 'kind:bug' }, 'kind', 'bug'],
     [{ tab: 'settings', opened: 'prompt:tester:change' }, 'role-prompt', ''], [{ tab: 'live', opened: 'orgmem' }, 'orgmem', 'Organizational memory'],
@@ -2797,9 +2878,11 @@ test('T-700: the board header (banner, tests/limits line, drive warning, tabs) s
     expect([c, boardPageOf(f, { opened: '', ...c }), showsHeader(page)]).toEqual([c, page, false])
     const t = texts(c)
     expect([c, header(t)]).toEqual([c, none])
-    if (title) expect([c, t[0]!.includes(title)]).toEqual([c, true])
+    // a task's or scout's page starts with its header (T-751): "‹ Tasks" or "‹ Scouts" (its Back), then its title
+    const head = page === 'task' || page === 'scout' ? 1 : 0
+    if (title) expect([c, t[head]!.includes(title)]).toEqual([c, true])
     // the footer (its rule and key hints) and the page's Back button stay
-    expect([c, t.some(l => /^─+$/.test(l)), t.some(l => l.startsWith('[ Back') || l.includes(' [ Back'))]).toEqual([c, true, true])
+    expect([c, t.some(l => /^─+$/.test(l)), t.some(l => l.startsWith('[ Back') || l.includes(' [ Back') || /^‹ (Tasks|Scouts)/.test(l))]).toEqual([c, true, true])
   }
 })
 

@@ -5807,7 +5807,7 @@ test('the board list shows an answered investigation as "answer" with [investiga
 
 test('the task keys of an answered investigation are done, keep as a note and ask more; a change task in review keeps approve and reject', () => {
   expect(keysFor('review', { extra: { kind: 'investigation' } }).map(k => `${k.key} ${k.word}`).slice(0, 3)).toEqual(['a done', 'v keep as a note', 'x ask more'])
-  expect(keysFor('review').map(k => `${k.key} ${k.word}`).slice(0, 3)).toEqual(['a approve', 'x reject', 'd show changes'])
+  expect(keysFor('review').map(k => `${k.key} ${k.word}`).slice(0, 3)).toEqual(['a approve', 'd show changes', 'x reject'])
 })
 
 test('a researcher task added without kind is an investigation; with kind change it stays a change', () => {

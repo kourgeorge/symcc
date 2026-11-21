@@ -72,9 +72,10 @@ export const RICH_TASKS = [
 /** The ids of the rich tasks the tests open. */
 export const RICH_IDS = RICH_TASKS.map(t => t.id).filter(id => id > 'T-500')
 
-/** Seeds the board with the rich tasks (`opened` the one shown; '' the list, so a press can open another), their report files and a git that answers with no changes. */
-export function seedRich(on: On, opened: string, run: (argv: string[]) => ProcessRunResult = () => ran()): MockClock {
+/** Seeds the board with the rich tasks (`opened` the one shown; '' the list, so a press can open another), their report files and a git that answers with no changes. `more`: other saved panel values (the tab, ...). */
+export function seedRich(on: On, opened: string, run: (argv: string[]) => ProcessRunResult = () => ran(), more: Record<string, unknown> = {}): MockClock {
   const clock = seedBoard(on, {
+    ...more,
     ...(opened ? { opened } : {}),
     view: { shape: 'view-1', value: { tasks: RICH_TASKS, working: [], scouts: [], mode: 'auto', branch: 'main', test_commands: ['claude plugin test .'] } },
   })

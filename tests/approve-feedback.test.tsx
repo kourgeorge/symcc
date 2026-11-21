@@ -145,7 +145,7 @@ for (const surface of ['terminal', 'vscode'] as const)
 // the Stage line says "prep", the Status row "doing" (T-647), none says
 // "ready for review"
 for (const surface of ['terminal', 'vscode'] as const)
-  test(`${surface}: right after Approve the Status row says doing and the Stage line prep`, async ($, on) => {
+  test(`${surface}: right after Approve the header's state line says doing and prep, and the Steps line prep`, async ($, on) => {
     const gate: Gate = { reads: 0 }
     seed(on, task('T-5', 'review', 'Blue button'), gate)
     const ui = await $.ui.mount({ ...PANE, surface })
@@ -157,11 +157,12 @@ for (const surface of ['terminal', 'vscode'] as const)
     const all = (await (ui as unknown as { findAll: (q: object) => Promise<{ text: string }[]> }).findAll({ type: 'Text' })).map(x => x.text)
     const page = all.join('\n')
     expect(page).not.toContain('ready for review')
+    // T-751: the page header's state line (a chip in VS Code)
     if (surface === 'terminal') {
       expect(all).not.toContain('[✎ prep]')
-      expect(all).toContain('Status:   ▶ doing · added ? · changed ?')
-    } else expect(all).toContain('▶ doing')
-    // the Stage line: every step up to review done, then the approve's prep now
+      expect(all).toContain('▶ doing · prep   change · general · try 1/3')
+    } else expect(all).toContain(' ▶ doing · prep ')
+    // the Steps line: every step up to review done, then the approve's prep now
     expect(page).toMatch(/review ✓[\s\S]*● prep[\s\S]*merge/)
     await finish(ui, release)
     await ui.unmount()

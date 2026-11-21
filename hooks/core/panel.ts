@@ -631,11 +631,17 @@ export const listKeys = (): KeyHint[] => [
 ]
 
 /** One action of a task's page (taskActions): `id` names it for each host (the terminal's and VS Code's button key);
- *  `label` is the button's words, `key` the terminal's hotkey (none: a button without one), `word` the key hint's word,
- *  `main` the one action to press (at most one, none while the task asks something). `keyInLabel`: the terminal's
- *  button also says its key, "Copy (y)". */
+ *  `label` is the button's words (never its key: the keys are only in the footer, T-751), `key` the terminal's
+ *  hotkey (none: a button without one), `word` the key hint's word, `main` the one action to press (at most one, none
+ *  while the task asks something), `group` its group in the page header's button line (see core/page-header.ts):
+ *  main (the next step), task, danger (throws work away: Drop, Reject) or page (needs review, copy). */
 export type TaskActionId = 'done' | 'keep-note' | 'ask-more' | 'approve' | 'reject' | 'show-changes' | 'watch' | 'pause' | 'resume' | 'merge-now' | 'retry' | 'to-todo' | 'stash' | 'role' | 'already-merged' | 'drop' | 'needs-review' | 'copy'
-export type TaskAction = { id: TaskActionId; label: string; word: string; key?: string; main?: boolean; keyInLabel?: boolean }
+/** Which group of a page header's button line an action is in (in this order, T-751): the one next step (filled,
+ *  accent color), the other task actions (outline), the ones that throw work away (red, set apart), and the page's
+ *  settings and actions (dim, at the end). */
+export type ActionGroup = 'main' | 'task' | 'danger' | 'page'
+export const GROUP_ORDER: readonly ActionGroup[] = ['main', 'task', 'danger', 'page']
+export type TaskAction = { id: TaskActionId; label: string; word: string; key?: string; main?: boolean; group: ActionGroup }
 
 /** What a task's page knows beside the task: `worker`, a worker is on it now (Watch worker); `merging`, its
  *  Approve, Done, Keep as a note or Merge now still runs (no Approve, Reject, Done, Keep as a note, Ask more or
@@ -667,54 +673,58 @@ export function taskAsks(t: BoardTask, maxMinutes?: number): { text: string; cho
 }
 
 /** The actions a task's page offers now, in the order its buttons show (the terminal's, VS Code's and OpenCode's,
- *  which keeps those it has a slash command for). An answered investigation in review gets Done, Keep as a note and
- *  Ask more instead of Approve, Reject and Show changes. */
+ *  which keeps those it has a slash command for): by group (GROUP_ORDER: the next step, the other task actions, the
+ *  ones that throw work away, the page's), each group in its own order. An answered investigation in review gets
+ *  Done, Keep as a note and Ask more instead of Approve, Reject and Show changes. */
 export function taskActions(t: BoardTask, ctx: TaskActionCtx = {}): TaskAction[] {
   const s = t.status
   const open = s !== 'done' && s !== 'dropped'
   const inReview = s === 'review'
   const fileWait = !!fileWaitText(t)
-  const a = (id: TaskActionId, label: string, word: string, key?: string, more: Partial<TaskAction> = {}): TaskAction => ({ id, label, word, ...(key ? { key } : {}), ...more })
+  const a = (id: TaskActionId, label: string, word: string, key?: string, more: Partial<TaskAction> = {}): TaskAction => ({ id, label, word, ...(key ? { key } : {}), group: 'task', ...more })
   const out: (TaskAction | false)[] = ctx.merging
     ? []
     : isAnswered(t)
-      ? [a('done', 'Done', 'done', 'a', { main: true, keyInLabel: true }), a('keep-note', 'Keep as a note', 'keep as a note', 'v', { keyInLabel: true }), a('ask-more', 'Ask more', 'ask more', 'x', { keyInLabel: true })]
-      : [inReview && a('approve', 'Approve', 'approve', 'a', { main: true }), inReview && a('reject', 'Reject', 'reject', 'x')]
+      ? [a('done', 'Done', 'done', 'a', { main: true }), a('keep-note', 'Keep as a note', 'keep as a note', 'v'), a('ask-more', 'Ask more', 'ask more', 'x')]
+      : [inReview && a('approve', 'Approve', 'approve', 'a', { main: true }), inReview && a('reject', 'Reject', 'reject', 'x', { group: 'danger' })]
   out.push(
     // the changes stay open to look at while the merge runs
     inReview && !isAnswered(t) && a('show-changes', 'Show changes', 'show changes', 'd'),
     !!ctx.worker && a('watch', 'Watch worker', 'watch worker', 'w'),
-    (s === 'doing' || s === 'todo') && a('pause', 'Pause', 'pause', 'p'),
+    // pausing is the next step of a running or waiting-to-run task (T-751)
+    (s === 'doing' || s === 'todo') && a('pause', 'Pause', 'pause', 'p', { main: true }),
     s === 'paused' && a('resume', 'Resume', 'resume', 'u', { main: true }),
-    fileWait && !ctx.merging && a('merge-now', 'Merge now', 'merge now', 'r', { main: true, keyInLabel: true }),
+    fileWait && !ctx.merging && a('merge-now', 'Merge now', 'merge now', 'r', { main: true }),
     (s === 'failed' || s === 'dropped') && a('retry', 'Retry', 'retry', 'r', s === 'failed' ? { main: true } : {}),
-    s === 'backlog' && a('to-todo', 'Move to todo', 'move to todo', 'o', { main: true, keyInLabel: true }),
-    (s === 'todo' || s === 'paused' || s === 'failed') && a('stash', 'Stash to backlog', 'stash to backlog', 'z', { keyInLabel: true }),
-    canPickRole(t) && a('role', 'Role', 'role', 'l', { keyInLabel: true }),
-    canMarkMerged(t) && a('already-merged', 'Already merged', 'already merged', 'h', { keyInLabel: true }),
+    s === 'backlog' && a('to-todo', 'Move to todo', 'move to todo', 'o', { main: true }),
+    (s === 'todo' || s === 'paused' || s === 'failed') && a('stash', 'Stash to backlog', 'stash to backlog', 'z'),
+    canPickRole(t) && a('role', 'Role', 'role', 'l'),
+    canMarkMerged(t) && a('already-merged', 'Already merged', 'already merged', 'h'),
     // in review x is Reject (or Ask more), so Drop has no key there
-    open && a('drop', 'Drop', 'drop', inReview ? undefined : 'x'),
-    open && a('needs-review', `Needs review: ${t.needs_review ? 'on' : 'off'}`, 'needs review', 'n'),
-    a('copy', 'Copy', 'copy', 'y', { keyInLabel: true }),
+    open && a('drop', 'Drop', 'drop', inReview ? undefined : 'x', { group: 'danger' }),
+    open && a('needs-review', `${t.needs_review ? '☑' : '☐'} needs review`, 'needs review', 'n', { group: 'page' }),
+    a('copy', 'copy', 'copy', 'y', { group: 'page' }),
   )
   // one main action at most: the first, and none while the task asks something (its first answer is the one to press)
   let main = !asksOwner(t)
-  return out.filter((x): x is TaskAction => !!x).map(x => (x.main && main ? ((main = false), x) : (({ main: _, ...rest }) => rest)(x)))
+  const list = out.filter((x): x is TaskAction => !!x).map((x): TaskAction => (x.main && main ? ((main = false), { ...x, group: 'main' }) : (({ main: _, ...rest }) => rest)(x)))
+  return GROUP_ORDER.flatMap(g => list.filter(x => x.group === g))
 }
 
-/** A task action's button words in the terminal: "Copy (y)" when it says its key, else its label. */
-export const actionButtonLabel = (x: TaskAction): string => (x.keyInLabel && x.key ? `${x.label} (${x.key})` : x.label)
+/** A task action's button words: its label (the keys are in the footer only, T-751). */
+export const actionButtonLabel = (x: TaskAction): string => x.label
 
 /** The keys at the bottom of a task's page: one hint per action button with a key (taskActions), in the buttons'
  *  order; then, when more than one try has a saved report (`reports`, their try numbers), "1-3 a try's report"
  *  (unless the answer buttons take the number keys, `answering`: the dim line under them tells those keys,
- *  choiceKeysHint); "y copy", "↑↓ scroll" and "b back" always come last. */
-export function taskKeys(actions: readonly TaskAction[], reports: readonly number[] = [], answering = false): KeyHint[] {
+ *  choiceKeysHint); "y copy", `nav` (T-751: "k j prev/next" when the page has others in its list, see
+ *  core/page-header.ts navHint), "↑↓ scroll" and "b back" always come last. */
+export function taskKeys(actions: readonly TaskAction[], reports: readonly number[] = [], answering = false, nav: KeyHint | null = null): KeyHint[] {
   const k = (key: string, word: string): KeyHint => ({ key, word })
   const keys: KeyHint[] = actions.filter(x => x.key && x.id !== 'copy').map(x => k(x.key!, x.word))
   const keyed = answering ? [] : reports.filter(n => n >= 1 && n <= 9)
   if (reports.length > 1 && keyed.length) keys.push(k(keyed.length > 1 ? `${keyed[0]}-${keyed[keyed.length - 1]}` : `${keyed[0]}`, "a try's report"))
-  return [...keys, k('y', 'copy'), k('↑↓', 'scroll'), k('b', 'back')]
+  return [...keys, k('y', 'copy'), ...(nav ? [nav] : []), k('↑↓', 'scroll'), k('b', 'back')]
 }
 
 /** The answer buttons of a waiting task, keyed 1, 2, 3...: Allow / Don't allow / Answer… for a file
@@ -807,10 +817,11 @@ export const scoutListKeys = (): KeyHint[] => [
 
 /** The keys at the bottom of a scout's page; p pauses its timer, or resumes it when `paused`. "r run now" shows
  *  for a paused scout too (run now still runs it), but not while the scout is `running` (like the button). */
-export const scoutKeys = (paused = false, running = false): KeyHint[] => [
+export const scoutKeys = (paused = false, running = false, nav: KeyHint | null = null): KeyHint[] => [
   ...(running ? [] : [{ key: 'r', word: 'run now' }]),
   { key: 'e', word: 'edit' },
   { key: 'p', word: paused ? 'resume' : 'pause' },
+  ...(nav ? [nav] : []),
   { key: '↑↓', word: 'scroll' },
   { key: 'b', word: 'back' },
 ]

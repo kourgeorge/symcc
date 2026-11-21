@@ -17,11 +17,15 @@ export type Seg = { text: string; color: string; bold?: boolean; italic?: boolea
 /** One labelled row on the task page ("Role:", "From:", …); a row with an empty label continues the one above. */
 export type DetailRow = { label: string; segs: Seg[] }
 
-/** The name of a task's current-state line (its `note`, e.g. "worker on it") on every view: the task page, the VS Code
- *  task page, the text board and the copied text. Change it here only; each view keeps its own casing. */
+/** The name of a task's current-state line (its `note`, e.g. "worker on it") on the text board and the copied text
+ *  (the task pages show the note at the end of their header's state line, with no label: core/page-header.ts). Change
+ *  it here only; each view keeps its own casing. */
 export const STATE_LABEL = 'Now'
 /** STATE_LABEL in lower case, for the plain-text views ("now: worker on it"). */
 export const stateLabelLower = () => STATE_LABEL.toLowerCase()
+
+/** The label of the Details row with a task's way to the merge (taskStage): "worker ✓ → ● prep → …". */
+export const STEPS_LABEL = 'Steps'
 
 /** The status badge colors on the task page: doing blue, review and waiting yellow, done green, failed red, the rest dim. */
 export const STATUS_BADGE: Record<SymccStatus, string> = { backlog: 'inactive', todo: 'inactive', doing: 'ide', review: 'warning', waiting: 'warning', paused: 'suggestion', failed: 'error', done: 'success', dropped: 'inactive' }
@@ -149,26 +153,19 @@ function originWordSegs(o: NonNullable<ReturnType<typeof originOf>>): Seg[] {
 }
 
 /**
- * The labelled rows of the task page, in order: Status, Stage (`board`: its mode and checker setting, see taskStage), Now (STATE_LABEL), Role, From, Why, Request, Seen, Files, Into (the branch it
+ * The labelled rows of the task page, in order: Steps (STEPS_LABEL; `board`: its mode and checker setting, see taskStage), Added, Role, From, Why, Request, Seen, Files, Into (the branch it
  * merges into), After (with a warning row for a task it waits for that merges into another branch), Research, Branch, Commits, Tries.
  * `when` turns an ISO time into a short date; `all` finds the tasks this one waits for; `merging`, an approve this
- * page started (see statusBadge), so the Status row says doing and the Stage line the same step as the page's badge;
- * `driving` false: another session drives the board (see sessionNote).
+ * page started (see statusBadge), so the Steps line shows the same step as the page header. The status and the note
+ * are on the page header's state line (core/page-header.ts, T-751); `driving` is read there (see sessionNote).
  */
 export function detailRows(t: SymccTask, o: { roles: readonly Pick<RoleDef, 'name' | 'description' | 'model'>[]; kinds?: readonly Pick<KindDef, 'name' | 'description'>[]; all: SymccTask[]; when: (iso: string) => string; nowMs: number; archivedDone?: string[]; board?: { mode?: unknown; checker?: unknown }; merging?: boolean; driving?: boolean }): DetailRow[] {
   const R: DetailRow[] = []
-  // the status names the state ("▶ doing · 48m"), and the Stage line the step it is in on the way to the merge (T-647)
-  // (`merging`, an approve the page started: shown doing at once, and its step on the Stage line, as on the badge)
-  const merging = !!o.merging
-  // an answered investigation (in review, see isAnswered in task.ts) says so, in green, as its old badge did (T-701)
-  const answered = t.status === 'review' && isInvestigation(t) && !merging
-  const badge = answered ? { text: `${statusMark(t)} answered: read it`, color: 'success' } : statusBadge(t as BoardTask, o.nowMs, undefined, merging, 'state')
-  R.push({ label: 'Status', segs: [{ text: badge.text, color: badge.color, bold: true }, { text: ` · added ${o.when(t.created_at)} · changed ${o.when(t.updated_at)}`, color: 'inactive' }] })
-  const stage = taskStage(t as BoardTask, o.nowMs, o.board, merging)
-  if (stage) R.push({ label: 'Stage', segs: stageSegs(stage) })
-  // in a session that doesn't drive the board (`driving` false) a claim note says the worker runs in the other session
-  const note = sessionNote(t, o.driving)
-  if (note) R.push({ label: STATE_LABEL, segs: [{ text: note, color: 'inactive', italic: true }] })
+  // the status, its step and time, the kind, role, try and origin are on the page header's state line (T-751); the
+  // Details keep the way to the merge (the Steps row) and the dates
+  const stage = taskStage(t as BoardTask, o.nowMs, o.board, !!o.merging)
+  if (stage) R.push({ label: STEPS_LABEL, segs: stageSegs(stage) })
+  R.push({ label: 'Added', segs: [{ text: o.when(t.created_at), color: 'text' }, { text: ` · changed ${o.when(t.updated_at)}`, color: 'inactive' }] })
   const name = roleOf(t)
   const r = findRole(o.roles, name)
   const more = [r?.description, r?.model ? `model ${r.model}` : ''].filter(Boolean).join(' · ')

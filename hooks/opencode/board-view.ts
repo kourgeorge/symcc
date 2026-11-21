@@ -26,7 +26,7 @@ import {
   bannerLines, bannerRule, footerRule, type BannerTone, panelSections, localOffset, when, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, ALL_CLEAR,
   rowStates, rowMark, TITLE_ROOM, fitRow, rowExtra, questionsLabel, archivedOf, archivedNote, statusMark, detailRows, detailRowLines, wrapSegs, hintLineText,
   type KeyHint, type Seg, type BoardTask, intoOf, taskActions, taskAsks, actionButtonLabel, packRows, type TaskAction, type TaskActionId,
-  ownersTurn, shownStatus, sortScouts, scoutListRows, scoutRow, scoutIcon, scoutTone, scoutHowTo, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem, scoutFile,
+  ownersTurn, shownStatus, sortScouts, scoutListRows, scoutHowTo, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem, scoutFile,
   SETTING_GROUPS, SETTINGS, isSettingPage, settingInfo, settingValue, cantPlayNotify, groupSummaryParts,
   type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction, type DefEditField, type TaskVerb, settingsKeys, rolesKeys, kindsKeys, roleEditKeys, defEditFields, roleTools, roleFileText, roleSkipReason, kindFileText, kindSkipReason,
   DEFAULT_ROLE, isCheckerRole, ALWAYS_ON_KINDS, checkerOn, roleNameError, kindNameError, leadScoutNameError, checkStepNow, rowEndText, taskPhase, choiceLines, driveWarning,
@@ -36,6 +36,8 @@ import {
 import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, brokenLabel, defNamed } from '../core/def-files'
 import { restFrame } from '../core/logo'
 import { taskSections, type TaskSection } from '../core/task-sections'
+import { type ActionGroup, groupSegLines, headerRule, inGroups, navHint, packGroups, type PageFrom, PILL_COLOR, pillText, placeIn, scoutAbout, scoutButtons as headerScoutButtons, scoutListNames, scoutStateGroups, taskColor, taskPlace, taskStateGroups, titleLines, whereLine } from '../core/page-header'
+import { sessionNote } from '../core/details'
 import type { DiffFile } from '../core/review'
 import { DEFAULT_NAME, dataDir } from '../name'
 import { ORG_MEM_EMPTY, ORG_MEM_KEY, orgMemAbout, orgMemKeys, orgMemNoteHead, orgMemFile, orgMemOfTopic, orgMemPageTitle, orgMemTopicEmpty, type OrgMemNote } from '../core/org-mem'
@@ -166,7 +168,8 @@ export function parseViewFile(text: string | null | undefined): ViewFile | null 
 }
 
 /** The panel's keys (see panelKeys for which ones each page offers). */
-export type PanelKey = 'up' | 'down' | 'open' | 'back' | 'close' | LetterKey | ChoiceKey
+/** `prev` and `next` (T-751, keys [ and ]): the previous and the next task or scout of the list a page was opened from. */
+export type PanelKey = 'up' | 'down' | 'open' | 'back' | 'close' | 'prev' | 'next' | LetterKey | ChoiceKey
 
 /** The letter keys the panel takes, each pressed as itself (the task page's take core's taskActions keys: u resume,
  *  z stash to backlog, v keep as a note, l role, h already merged, n needs review); and on the list (T-685) f search
@@ -295,6 +298,9 @@ export type PanelChoice = {
   search?: string
   /** the open role's or kind's edit mode (T-706, Claude Code's Edit), when it is for the open page */
   edit?: DefDraft
+  /** the tab the open task's page was opened from (T-751: its Back link says "‹ Live", and prev/next go through the
+   *  Live tab's tasks); the Tasks list when left out */
+  from?: PageFrom
 }
 
 /** A role's or kind's edit mode (T-706, as Claude Code's Edit page): the page it is for ("role:tester"), each box's
@@ -634,11 +640,14 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
     const t = choice.opened ? f.view.tasks.find(x => x.id === choice.opened) : undefined
     // the approve in progress takes the same buttons and keys away (approveInProgress)
     const busy = !!t && approveInProgress(f, t, choice.approving, nowMs)
-    const page = choice.opened ? openedPage(f, choice.opened, nowMs, w, choice.sent?.id === choice.opened ? choice.sent.answer : '', choice.taskReport, choice.approving?.id === choice.opened && approveSent(f, choice.approving, nowMs), busy) : null
+    const page = choice.opened ? openedPage(f, choice.opened, nowMs, w, choice.sent?.id === choice.opened ? choice.sent.answer : '', choice.taskReport, choice.approving?.id === choice.opened && approveSent(f, choice.approving, nowMs), busy, choice.from ?? 'tasks', choice.search ?? '') : null
     body = page ?? listBody(f, choice.cursor, { ...GROUPS_OPEN, ...choice.groups }, nowMs, w, choice.search ?? '')
     keys = panelKeys(f, page ? choice.opened : '', 'tasks', '', false, !!page && busy)
     if (!page) modeRow = modeLines(f, !!choice.search?.trim(), w)
   }
+  // T-751: "[ ] prev/next" on a task's or scout's page with others in its list, before "b back"
+  const place = pagePlace(f, choice, nowMs)
+  if (place && place.of > 1 && keys.at(-1)?.key === 'b') keys = [...keys.slice(0, -1), navHint('opencode'), keys.at(-1)!]
   const foot: Line[] = [[{ text: footerRule(w), color: 'subtle' }], ...modeRow, ...hintLines(keys, w).map(hintSegs)]
   // T-627: every line is cut into the rows it really takes (drawn lines: no line wider than the panel, none with a
   // line break inside), so the scroll counts what is on screen. The page's own title stays with
@@ -678,6 +687,16 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
     bodyLines: drawnBody.length,
     footer: foot.length,
   }
+}
+
+/** The place of the open task's or scout's page in the list it was opened from (core's taskPlace, placeIn): what
+ *  prev and next ([ and ]) go through; null on any other page. */
+export function pagePlace(f: ViewFile | null, choice: Pick<PanelChoice, 'tab' | 'opened' | 'run' | 'search' | 'from'>, nowMs: number) {
+  const page = boardPageOf(f, choice)
+  if (!f) return null
+  if (page === 'task') return taskPlace(f.view, choice.opened, choice.from ?? 'tasks', nowMs, choice.search ?? '')
+  if (page === 'scout') return placeIn(scoutListNames(f.view.scouts ?? []), choice.opened)
+  return null
 }
 
 /** Which page the panel shows for `choice` (core's BoardPage, the same names on every board): a tab's list, a list
@@ -951,19 +970,12 @@ function scoutPage(f: ViewFile, sc: SymccScout, choice: PanelChoice, nowMs: numb
     }
     return { ...b, ids: [], selected: '', head }
   }
-  const r = scoutRow(sc, nowMs)
-  const head = wrapSegs([
-    { text: sc.name, color: 'claude', bold: true },
-    { text: ` ${scoutIcon(sc)} ${r.state || 'waiting'}${sc.running && sc.paused ? ', then paused' : ''}`, color: scoutTone(sc), bold: true },
-    { text: ` · ${r.every}${r.model ? ` · ${r.model}` : ''} · ${r.ran}`, color: 'inactive' },
-  ], w)
-  for (const l of head) b.add(l)
-  // T-680: the page's buttons, as Claude Code's scout page has them; they stay at the top with its name
-  for (const l of buttonLines(scoutButtons(sc), w)) b.add(l)
+  // T-751: the page header, as on Claude Code's scout page: ‹ Scouts and its place, its name and what it does, its
+  // state, its buttons in groups, a heavy rule; it stays at the top while the rest scrolls
+  const last = shown[0]
+  for (const l of headerLines({ from: 'scouts', label: sc.name, place: placeIn(scoutListNames(f.view.scouts ?? []), sc.name), title: scoutAbout(sc), color: 'claude', state: scoutStateGroups(sc, nowMs, last), buttons: scoutButtons(sc) }, w)) b.add(l)
   const headLines = b.lines.length
   // the summary from the file's front matter, if one is set (the instructions show in full below)
-  const title = sc.summary?.trim() ?? ''
-  if (title) b.add([{ text: title, color: 'text', bold: true }])
   if (sc.warning) b.add([{ text: sc.warning, color: 'warning' }])
   const problem = scoutLastRunProblem([...shown].reverse().map(x => x.run))
   if (problem && !sc.running) b.add([{ text: problem, color: 'error' }])
@@ -1359,7 +1371,7 @@ export const SECTION_LINES: Partial<Record<TaskSection['id'], number>> = { histo
  *  and the answer just sent (`sent`); then a task's sections as on Claude Code's task page (core's taskSections,
  *  T-580: Why it failed, Answer, Details, Changes, What to do, History, Report, Runs), with the latest report's text
  *  (`report`, read by the TUI) and the changed files from the view file; null when it is gone. */
-function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = '', report?: PanelChoice['taskReport'], merging = false, busy = false): Body | null {
+function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = '', report?: PanelChoice['taskReport'], merging = false, busy = false, from: PageFrom = 'tasks', search = ''): Body | null {
   const v = f.view
   const b = bodyMaker()
   const addAll = (ls: Line[]) => ls.forEach(l => b.add(l))
@@ -1379,11 +1391,13 @@ function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = ''
   }
   const t = v.tasks.find(x => x.id === id)
   if (!t) return null
-  addAll(wrapSegs([{ text: t.id, color: 'claude', bold: true }, { text: `  ${t.title}`, color: 'text', bold: true }], w))
-  // no status badge under the title (T-693): the Status and Stage rows in the details show it
-  // T-680: the page's buttons, as Claude Code's terminal page draws them ([ Back ] [ Pause ] ...); a click presses one
-  addAll(buttonLines(taskButtons(t, busy), w))
-  // the title and the buttons stay at the top while the rest of the page scrolls
+  // T-751: the page header, as on Claude Code's task page: where you are (‹ Tasks or ‹ Live, its place in that list),
+  // the title, the state, the buttons in groups (core's taskActions), a heavy rule; it stays at the top while the rest scrolls
+  addAll(headerLines({
+    from, label: t.id, place: taskPlace(v, t.id, from, nowMs, search), title: t.title, color: taskColor(t, nowMs, merging),
+    state: taskStateGroups(t, { nowMs, merging, ...(v.auto_retries !== undefined ? { autoRetries: v.auto_retries } : {}), note: sessionNote(t, v.driving ?? false) }),
+    buttons: taskButtons(t, busy),
+  }, w))
   const head = b.lines.length
   const asked = taskAsks(t, v.max_minutes)
   if (asked) {
@@ -1464,21 +1478,38 @@ export const CANCEL_EDIT_BUTTON: PanelButton = { label: 'Cancel (x)', hit: { key
 /** How a button looks: "[ Back ]". */
 export const buttonText = (b: PanelButton) => `[ ${b.label} ]`
 
-/** The buttons of task `t`'s page, in Claude Code's order: Back, then core's taskActions with Claude Code's words
- *  (actionButtonLabel: "Stash to backlog (z)"), but Copy and Watch worker, which this panel can't do (`merging`: see
- *  panelKeys). A button with a key presses that key; one without (Drop in review) sends its action. */
-export const taskButtons = (t: BoardTask, merging = false): PanelButton[] => [
-  BACK_BUTTON,
-  ...taskActions(t, { merging }).filter(a => TASK_ACTION_COMMANDS[a.id]).map(a => ({ label: actionButtonLabel(a), hit: a.key ? { key: a.key as PanelKey } : { action: a.id } })),
-]
+/** A button of a page header (T-751): its words, what a click on it does, its group (core's ActionGroup); `fact`:
+ *  words that only say something (a scout's "⏸ paused"), no button. */
+export type HeadButton = PanelButton & { group: ActionGroup; fact?: boolean }
 
-/** The buttons of scout `sc`'s page, as Claude Code's: Back, Run now (not while it runs), Edit, Pause or Resume. */
-export const scoutButtons = (sc: Pick<SymccScout, 'running' | 'paused'>): PanelButton[] => [
-  BACK_BUTTON,
-  ...(sc.running ? [] : [{ label: 'Run now', hit: { key: 'r' as const } }]),
-  { label: 'Edit', hit: { key: 'e' } },
-  { label: sc.paused ? 'Resume' : 'Pause', hit: { key: 'p' } },
-]
+/** The buttons of task `t`'s page header, in Claude Code's order and groups (core's taskActions, words only: the keys
+ *  are in the footer), but Copy and Watch worker, which this panel can't do (`merging`: see panelKeys). A button with
+ *  a key presses that key; one without (Drop in review) sends its action. Back is the header's "‹ Tasks". */
+export const taskButtons = (t: BoardTask, merging = false): HeadButton[] =>
+  taskActions(t, { merging }).filter(a => TASK_ACTION_COMMANDS[a.id]).map(a => ({ label: actionButtonLabel(a), group: a.group, hit: a.key ? { key: a.key as PanelKey } : { action: a.id } }))
+
+/** The buttons of scout `sc`'s page header, as Claude Code's (core's scoutButtons): Run now (not while it runs),
+ *  Edit, Pause or Resume, and "⏸ paused" while it is paused. */
+export const scoutButtons = (sc: Pick<SymccScout, 'running' | 'paused'>): HeadButton[] =>
+  headerScoutButtons(sc).map(x => ({ label: x.label, group: x.group, ...(x.fact ? { fact: true } : {}), hit: { key: (x.key ?? 'p') as PanelKey } }))
+
+/** A page header's lines (T-751, core/page-header.ts): where you are (Back and, with a place, "‹ 2 of 6 ›": each a
+ *  click), the title, the state (wrapping between its groups), the buttons in their groups (the next step "▐Pause▌",
+ *  the others "[Role]", the danger ones red, the page ones dim; wrapping between groups, never inside a button), then
+ *  a heavy rule. */
+export function headerLines(hd: { from: PageFrom; label: string; place: ReturnType<typeof placeIn>; title: string; color: string; state: Seg[][]; buttons: HeadButton[] }, w: number): Line[] {
+  const where = whereLine(hd.from, hd.label, hd.place, w)
+  const go: Record<string, PanelHit> = { back: { key: 'back' }, prev: { key: 'prev' }, next: { key: 'next' } }
+  const first: Line = [...where.left, { text: ' '.repeat(where.pad) }, ...where.right].map(p => ({ text: p.text, color: 'inactive', ...('go' in p && p.go ? { hit: go[p.go]! } : {}) }))
+  const groups = inGroups(hd.buttons)
+  const rows = packGroups(groups.map(g => g.map(x => pillText(x).length)), w).map(row =>
+    row.flatMap(({ g, i, gap }): DrawSeg[] => {
+      const x = groups[g]![i]!
+      return [...(gap ? [{ text: ' '.repeat(gap), color: 'text' }] : []), { text: pillText(x), color: x.fact ? 'inactive' : PILL_COLOR[x.group], ...(x.group === 'main' ? { bold: true } : {}), ...(x.fact ? {} : { hit: x.hit }) }]
+    }),
+  )
+  return [first, ...titleLines(hd.label, hd.title, hd.color, w), ...groupSegLines(hd.state, w), ...rows, [{ text: headerRule(w), color: 'ide' }]]
+}
 
 /** A row of buttons, going on to more rows when it doesn't fit `w` (core's packRows, as Claude Code's buttonRows),
  *  never cutting a button; each button is a piece a click presses. */

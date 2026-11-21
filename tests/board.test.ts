@@ -20,6 +20,13 @@ import { usageTokens } from '../hooks/claude/usage'
 import { EXTRA_TOOLS, ROLE_TOOL_MAP, claudeRoleTools, BASE_WORKER_TOOLS, workerTypeFor, workerTypeSuffix, workerAgentTypes, isWorkerType, asBaseWorkers, claudeNames } from '../hooks/claude/agent-types'
 import { type AgentInfo, hostAgent, isNotReady } from '../hooks/claude/agents'
 import * as core from '../hooks/board'
+import { taskStateGroups } from '../hooks/core/page-header'
+
+/** The page header's status (T-751: its state line's first group): its text and color. */
+const headState = (t: unknown, nowMs: number) => {
+  const g = taskStateGroups(t as core.BoardTask, { nowMs })[0]!
+  return { text: g.map(x => x.text).join(''), color: g[0]!.color }
+}
 import { keysFor } from './task-keys'
 import { type HostAgentStarted, agentState } from '../hooks/host'
 
@@ -3016,10 +3023,10 @@ test('task rows: a short status column and an inactive-colored extra; the extra 
 
 test('key hints: in order for the task state, laid out at 30, 50 and 80 columns, never split or cut', () => {
   const words = (hs: { key: string; word: string }[]) => hs.map(hintText)
-  expect(words(keysFor('review'))).toEqual(['a approve', 'x reject', 'd show changes', 'n needs review', 'y copy', '↑↓ scroll', 'b back'])
-  expect(words(keysFor('review', { worker: true }))).toEqual(['a approve', 'x reject', 'd show changes', 'w watch worker', 'n needs review', 'y copy', '↑↓ scroll', 'b back'])
+  expect(words(keysFor('review'))).toEqual(['a approve', 'd show changes', 'x reject', 'n needs review', 'y copy', '↑↓ scroll', 'b back'])
+  expect(words(keysFor('review', { worker: true }))).toEqual(['a approve', 'd show changes', 'w watch worker', 'x reject', 'n needs review', 'y copy', '↑↓ scroll', 'b back'])
   expect(words(keysFor('backlog'))).toEqual(['o move to todo', 'l role', 'x drop', 'n needs review', 'y copy', '↑↓ scroll', 'b back'])
-  expect(words(keysFor('todo', { worker: true }))).toEqual(['w watch worker', 'p pause', 'z stash to backlog', 'l role', 'x drop', 'n needs review', 'y copy', '↑↓ scroll', 'b back'])
+  expect(words(keysFor('todo', { worker: true }))).toEqual(['p pause', 'w watch worker', 'z stash to backlog', 'l role', 'x drop', 'n needs review', 'y copy', '↑↓ scroll', 'b back'])
   // a failed task's key line lists the two actions its "Next:" text points to, and every other button with a key
   expect(words(keysFor('failed'))).toEqual(['r retry', 'z stash to backlog', 'l role', 'h already merged', 'x drop', 'n needs review', 'y copy', '↑↓ scroll', 'b back'])
   expect(words(keysFor('done'))).toEqual(['y copy', '↑↓ scroll', 'b back'])
@@ -3040,8 +3047,8 @@ test('key hints: in order for the task state, laid out at 30, 50 and 80 columns,
       // no line could take the next line's first item
       for (let i = 1; i < lines.length; i++) expect(hintLineText([...lines[i - 1]!, lines[i]![0]!]).length).toBeGreaterThan(w)
     }
-  expect(hintLines(keysFor('review', { worker: true }), 80).map(hintLineText)).toEqual(['a approve · x reject · d show changes · w watch worker · n needs review · y copy', '↑↓ scroll · b back'])
-  expect(hintLines(keysFor('review', { worker: true }), 30).map(hintLineText)).toEqual(['a approve · x reject', 'd show changes', 'w watch worker', 'n needs review · y copy', '↑↓ scroll · b back'])
+  expect(hintLines(keysFor('review', { worker: true }), 80).map(hintLineText)).toEqual(['a approve · d show changes · w watch worker · x reject · n needs review · y copy', '↑↓ scroll · b back'])
+  expect(hintLines(keysFor('review', { worker: true }), 30).map(hintLineText)).toEqual(['a approve · d show changes', 'w watch worker · x reject', 'n needs review · y copy', '↑↓ scroll · b back'])
   // the list only offers keys that work there: never a or x
   expect(words(listKeys())).toEqual(['Enter open', '↑↓ move', 't l s c views'])
   expect(listKeys().some(h => h.key === 'a' || h.key === 'x')).toBe(false)
@@ -3946,9 +3953,10 @@ test('T-581: a row in a check step or the merge line shows one icon in place of 
   const [b0] = addTask(emptyBoard(), { origin: W, title: 'Fix it' }, fresh)
   const b = { ...b0, tasks: [{ ...b0.tasks[0]!, status: 'doing' as const, note: 'running the tests', runs: ran, checking: { step: 'testing' as const, at: fresh } }] }
   const page = core.detailRows(b.tasks[0]!, { roles: [], all: b.tasks, when: () => '', nowMs: now })
-  // the Status row names the state, the Stage line the step (T-647)
-  expect(page.find(r => r.label === 'Status')!.segs[0]!.text).toBe('▶ doing · 9m')
-  expect(page.find(r => r.label === 'Stage')!.segs.map(g => g.text).join('')).toContain('● test')
+  // the header's state line names the state, the step and the time (T-751); the Steps row the way to the merge
+  expect(headState(b.tasks[0]!, now).text).toBe('▶ doing · test · 9m')
+  expect(page.some(r => r.label === 'Status')).toBe(false)
+  expect(page.find(r => r.label === 'Steps')!.segs.map(g => g.text).join('')).toContain('● test')
   // the lead's text board: the icon as the mark, the word kept for the lead
   expect(boardText(b, now).split('\n').find(l => l.startsWith('T-1'))).toContain('T-1   ⊛ doing   test · Fix it')
 })
@@ -4026,13 +4034,13 @@ test('T-587: the task page badge and Status row name the step a task is in; the 
   const segs = core.stageSegs(core.taskStage(inStep('checker'), now, on)!)
   expect(segs.find(g => g.text === '● checker')).toMatchObject({ bold: true, color: 'ide' })
   expect(segs.find(g => g.text === 'merge')!.color).toBe('inactive')
-  // on the task page: Status names the state (T-647), Stage comes right under it with the step
+  // on the task page: the header's state line names the state and the step (T-751), Steps is the first Details row
   const [b0] = addTask(emptyBoard(), { origin: W, title: 'Fix it' }, fresh)
   const t = { ...b0.tasks[0]!, ...inStep('checker', 'a checker agent is trying to break it before it merges') }
   const page = core.detailRows(t, { roles: [], all: [t], when: () => '', nowMs: now, board: on })
-  expect(page[0]!.segs[0]!.text).toBe('▶ doing · 9m')
-  expect(page[1]!.label).toBe('Stage')
-  expect(page[1]!.segs.map(g => g.text).join('')).toBe('worker ✓ → prep ✓ → ● checker → queue → test → merge')
+  expect(headState(t, now).text).toBe('▶ doing · checker · 9m')
+  expect(page[0]!.label).toBe('Steps')
+  expect(page[0]!.segs.map(g => g.text).join('')).toBe('worker ✓ → prep ✓ → ● checker → queue → test → merge')
 })
 
 test('T-647: the task page\'s Status row shows the state with its time ("▶ doing · 48m"), the Stage line the step; review, waiting and failed show their state', () => {
@@ -4045,18 +4053,18 @@ test('T-647: the task page\'s Status row shows the state with its time ("▶ doi
   const rows = (x: Partial<core.BoardTask>) => {
     const t = { ...base, ...x } as SymccTask
     const page = core.detailRows(t, { roles: [], all: [t], when: () => '', nowMs: now, board: { mode: 'review' } })
-    return { status: page.find(r => r.label === 'Status')!.segs[0]!, stage: page.find(r => r.label === 'Stage')?.segs.map(g => g.text).join('') ?? null }
+    return { status: headState(t, now), stage: page.find(r => r.label === 'Steps')?.segs.map(g => g.text).join('') ?? null }
   }
   // a doing task in the test step: the state on Status, the step on Stage; the page's badge keeps the step
   const testing = rows({ status: 'doing', attempts: 1, runs: ran, checking: { step: 'testing', at: fresh } })
-  expect(testing.status).toMatchObject({ text: '▶ doing · 48m', color: core.STATUS_BADGE.doing })
+  expect(testing.status).toMatchObject({ text: '▶ doing · test · 48m', color: core.STATUS_BADGE.doing })
   expect(testing.stage).toBe('worker ✓ → prep ✓ → queue ✓ → ● test → review → merge')
   expect(core.statusBadge({ status: 'doing', attempts: 1, runs: ran, checking: { step: 'testing', at: fresh } }, now).text).toBe('⊛ test · 48m')
   // its worker still working: doing too
-  expect(rows({ status: 'doing', attempts: 1, runs: [{ started: at(952) }] }).status.text).toBe('▶ doing · 48m')
+  expect(rows({ status: 'doing', attempts: 1, runs: [{ started: at(952) }] }).status.text).toBe('▶ doing · worker · 48m')
   // an approved task whose approve runs shows doing (shownStatus), the approve's step on Stage
   const approving = rows({ status: 'review', attempts: 1, runs: ran, checking: { step: 'merging', at: fresh } })
-  expect(approving.status).toMatchObject({ text: '▶ doing · 48m', color: core.STATUS_BADGE.doing })
+  expect(approving.status).toMatchObject({ text: '▶ doing · merge · 48m', color: core.STATUS_BADGE.doing })
   expect(approving.stage).toContain('review ✓ → ● merge')
   // the states that run nothing: their mark and word
   expect(rows({ status: 'review', runs: ran }).status).toMatchObject({ text: `◆ ${STATUS_WORD.review}`, color: core.STATUS_BADGE.review })
@@ -4088,7 +4096,7 @@ test('a to do task that was worked on before shows ● (a fresh one keeps ○) i
   expect(text).toMatch(/T-2 +● todo +Tried/)
   // the task page's Status line, and the After list for a task waiting on it
   ;[b] = addTask(b, { origin: W, title: 'Later', after: ['T-1', 'T-2'] }, T)
-  const status = (id: string) => detailRows(b.tasks.find(t => t.id === id)!, { roles: [], all: b.tasks, when: s => s, nowMs: 0 }).find(r => r.label === 'Status')!.segs[0]!.text
+  const status = (id: string) => headState(b.tasks.find(t => t.id === id)!, 0).text
   expect(status('T-1')).toBe(`○ ${STATUS_WORD.todo}`)
   expect(status('T-2')).toBe(`● ${STATUS_WORD.todo}`)
   const after = detailRows(b.tasks.find(t => t.id === 'T-3')!, { roles: [], all: b.tasks, when: s => s, nowMs: 0 }).filter(r => r.segs[0]?.text === 'T-1' || r.segs[0]?.text === 'T-2').map(r => r.segs.map(g => g.text).join(''))
