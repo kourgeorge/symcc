@@ -191,6 +191,25 @@ export function withAgentUsed(runs: SymccRun[] | undefined, kind: SymccRunAgent[
 }
 
 /**
+ * T-784: a worker symcc stopped reports what it used after its try may have ended: the runs with it added to the try
+ * that names the worker `id` (open or already ended) and to its own entry. A worker no try names: the runs as they are.
+ */
+export function withStoppedUsed(runs: SymccRun[] | undefined, id: unknown, now: string, used: { tokens?: SymccTokens; cost?: number }): SymccRun[] | undefined {
+  if (!runs?.length || !isAgentId(id)) return runs
+  const i = runs.findLastIndex(r => agentsOf(r).some(a => a.id === id))
+  if (i < 0 || (!used.tokens || !tokenCount(used.tokens)) && typeof used.cost !== 'number') return runs
+  const r = runs[i]!
+  const hasTokens = !!used.tokens && tokenCount(used.tokens) > 0
+  const withRun = [...runs]
+  withRun[i] = {
+    ...r,
+    ...(hasTokens ? { tokens: addTokens(r.tokens, used.tokens) } : {}),
+    ...(typeof used.cost === 'number' && Number.isFinite(used.cost) ? { cost: (r.cost ?? 0) + used.cost } : {}),
+  }
+  return withAgentUsed(withRun, 'worker', id, now, used)
+}
+
+/**
  * T-774: the tokens try `r`'s checkers used: their agent entries added up when it has any checker entry with tokens,
  * else its checker_tokens (T-769: a try from before T-774, or one whose entries were trimmed); undefined when not known.
  */

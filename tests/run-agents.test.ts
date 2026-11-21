@@ -6,7 +6,7 @@ import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import type { SymccRun, SymccTask } from '../types'
 import { type Board, addTask, emptyBoard, patchTask, find, parseBoard } from '../hooks/board'
-import { AGENT_TRIES_KEPT, AGENTS_KEPT, agentLines, checkerTokensOf, endRun, goOnRun, keepAgentIds, runsSummary, startRun, sumRuns, tokenCount, withAgentUsed, withEnd } from '../hooks/core/runs'
+import { AGENT_TRIES_KEPT, AGENTS_KEPT, agentLines, checkerTokensOf, endRun, goOnRun, keepAgentIds, runsSummary, startRun, sumRuns, tokenCount, withAgentUsed, withEnd, withStoppedUsed } from '../hooks/core/runs'
 import { taskSections, type TaskSection } from '../hooks/core/task-sections'
 import { todayMore } from '../hooks/core/live'
 import { when } from '../hooks/core/days'
@@ -63,6 +63,8 @@ test('T-774: a worker restarted after a reopen (the same try goes on) adds a sec
   // the app reopened: symcc restarts the worker itself, so the try goes on (T-743)
   const stopAt = iso(15 * MIN)
   b = patchTask(b, 'T-1', { status: 'todo', runs: withEnd(endRun(runsOf(b), stopAt), 'restarted', 'the app reopened') }, stopAt)
+  // its stopped turn ends later and reports its tokens (stoppedHandBack)
+  b = patchTask(b, 'T-1', { runs: withStoppedUsed(runsOf(b), W1, stopAt, { tokens: { input: 500_000 } }) }, stopAt)
   const goOn = goOnRun(runsOf(b), iso(14 * MIN))!
   b = patchTask(b, 'T-1', { status: 'doing', runs: goOn }, iso(14 * MIN))
   b = patchTask(b, 'T-1', { agent: W2 }, iso(14 * MIN))
@@ -73,9 +75,10 @@ test('T-774: a worker restarted after a reopen (the same try goes on) adds a sec
     ['worker', W1, iso(20 * MIN), stopAt],
     ['worker', W2, iso(14 * MIN), iso(5 * MIN)],
   ])
-  // the first worker gave no tokens (it was stopped, the host said none): the try's tokens are the second one's
-  expect(rs[0]!.agents![0]!.tokens).toBeUndefined()
-  expect(rs[0]!.tokens).toEqual({ input: 2_000_000, output: 10_000 })
+  // T-784: the first worker was stopped and the host said it used 500k: it keeps them, and the try's tokens are both
+  expect(rs[0]!.agents![0]!.tokens).toEqual({ input: 500_000 })
+  expect(rs[0]!.agents![1]!.tokens).toEqual({ input: 2_000_000, output: 10_000 })
+  expect(rs[0]!.tokens).toEqual({ input: 2_500_000, output: 10_000 })
 })
 
 const facts = (all: SymccTask[] = []) => ({ width: 100, nowMs: NOW, detail: { roles: [], all, when } })
