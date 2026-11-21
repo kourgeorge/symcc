@@ -422,8 +422,8 @@ export function boardText(b: Board, nowMs?: number, where?: string, name: string
       const n = filter.limit !== undefined && Number.isFinite(filter.limit) && filter.limit > 0 ? Math.floor(filter.limit) : undefined
       q.pick = { by: filter.sort ?? q.pick?.by ?? 'newest', n: n ?? q.pick?.n }
     }
-    const matched = searchTasks(all, { ...q, pick: undefined }, nowMs ?? Date.now())
-    const rows = q.pick ? searchTasks(all, q, nowMs ?? Date.now()) : matched
+    const matched = searchTasks(all, { ...q, pick: undefined }, nowMs ?? Date.now(), b.archived_done)
+    const rows = q.pick ? searchTasks(all, q, nowMs ?? Date.now(), b.archived_done) : matched
     const picked = q.pick ? `${q.pick.by === 'newest' ? 'last' : 'top'}${q.pick.n ? `: ${q.pick.n}` : ''}` : ''
     const asked = [picked, filter.status?.length ? `status: ${filter.status.join(', ')}` : '', search ? `search: ${search}` : ''].filter(Boolean).join('; ')
     // with last / top the line says how many matched in all: "10 of 37 matching shown (484 tasks on the board; ...)"

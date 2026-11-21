@@ -20,7 +20,7 @@ export function listPage($: $, pane: PaneParts) {
   const query = search?.text.trim() ?? ''
   const filtering = query !== ''
   const typing = !!search?.typing
-  const matching = filtering ? searchTasks(v.tasks, query, nowMs) : v.tasks
+  const matching = filtering ? searchTasks(v.tasks, query, nowMs, v.archived_done) : v.tasks
   const parts = panelSections(matching, nowMs, offset)
   if (!filtering) for (const d of [...openDays]) if (!parts.doneDays.some(g => g.day === d)) openDays.delete(d)
   // while filtering, every group with a match is open (and the backlog shows all its matches)

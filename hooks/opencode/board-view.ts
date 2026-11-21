@@ -1212,7 +1212,7 @@ function listBody(f: ViewFile, cursor: number, open0: Record<PanelGroup, boolean
   const v = f.view
   const query = search.trim()
   const filtering = query !== ''
-  const matching = filtering ? searchTasks(v.tasks, query, nowMs) : v.tasks
+  const matching = filtering ? searchTasks(v.tasks, query, nowMs, v.archived_done) : v.tasks
   const parts = panelSections(matching, nowMs, localOffset(nowMs))
   const questions = filtering ? [] : (v.questions ?? [])
   const open: Record<PanelGroup, boolean> = filtering ? { backlog: true, done: true, dropped: true } : open0
