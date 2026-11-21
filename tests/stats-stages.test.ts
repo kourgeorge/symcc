@@ -111,6 +111,10 @@ test('T-732: a to-do task asked about, and a pause waiting for the owner, count 
   expect(taskStages(pause('Waiting for the owner to choose between x and y (A or B)'), () => undefined)?.ms.owner).toBe(m(200))
   expect(taskStages(pause('this task waits for the owner'), () => undefined)?.ms.owner).toBe(m(200))
   expect(taskStages(pause('main is busy'), () => undefined)?.ms.owner).toBe(0)
+  // T-737: a to-do task's pause line has no try label ("paused: <reason>")
+  const todoPause = (why: string) => task('T-12', { attempts: 2, runs, history: [...start, h(500, 'stopped', `paused: ${why}`), h(300, 'resumed', 'resumed after a pause'), ...after] })
+  expect(taskStages(todoPause('Waiting for the owner to choose between x and y'), () => undefined)?.ms.owner).toBe(m(200))
+  expect(taskStages(todoPause('main is busy'), () => undefined)?.ms.owner).toBe(0)
 })
 
 test('stats stages: sums and averages per stage; active + waiting add up to the lifetime; lacking tasks counted', () => {
