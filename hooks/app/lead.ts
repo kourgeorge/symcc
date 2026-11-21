@@ -27,7 +27,7 @@ export async function writeLead(host: Host, text: string) {
  */
 export async function claimLead(host: Host, fresh = false): Promise<boolean> {
   // T-793: a window turned off here never drives (nor takes driving back)
-  if (S.offHere) {
+  if (S.offHere || S.fresh) {
     S.driving = false
     return false
   }
@@ -333,6 +333,7 @@ export async function offHereBeat(host: Host, nowMs = Date.now()) {
 
 /** On session end the driver lets go of lead.json, so another session can take over at once. */
 export async function releaseLead(host: Host) {
+  if (S.fresh) return // T-795: a new project has no lead.json and gets none
   const was = S.driving
   S.driving = false
   await locked(host, async () => {
@@ -355,6 +356,10 @@ export async function releaseLead(host: Host) {
 export async function handOver(host: Host) {
   const old = S.me
   const fresh = await host.session.id().catch(() => old)
+  if (S.fresh) {
+    if (fresh) S.me = fresh
+    return // T-795: a new project: nothing to hand over, nothing to publish or open
+  }
   if (fresh && fresh !== old) {
     S.me = fresh
     await locked(host, async () => {
@@ -492,7 +497,7 @@ export async function publish(host: Host, b: Board) {
       return st?.running && Number.isFinite(since) ? [{ name, since }] : []
     })
     .sort((x, y) => x.since - y.since)
-  const v: PaneView = { tasks: b.tasks, working, scouts: [...scoutState.values()], mode: modeOf(b), test_commands: b.test_commands, branch, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, test_minutes: testMinutesOf(b), archive_days: b.archive_days, ...(b.archived ? { archived: b.archived } : {}), ...(b.archived_done?.length ? { archived_done: b.archived_done } : {}), open_on_start: openOnStart(b), notify: notifyOf(b, can, S.root), scout_findings: b.scout_findings, tests_with_changes: b.tests_with_changes, checker: b.checker, notify_choices: notifyChoices(can), enabled: onHere(b), ...(S.offHere ? { off_here: S.offWhy } : {}), driving: S.driving, branch_note, ...(size_note ? { size_note } : {}), git_state: S.gitState, plan_mode: inPlan(S.plan), ...(branches ? { branches } : {}), ...(team ? { today_team: team } : {}), ...(Object.keys(task_branches).length ? { task_branches } : {}), ...(openQuestions(b).length ? { questions: openQuestions(b) } : {}), ...(scouts_running.length ? { scouts_running } : {}) }
+  const v: PaneView = { tasks: b.tasks, working, scouts: [...scoutState.values()], mode: modeOf(b), test_commands: b.test_commands, branch, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, test_minutes: testMinutesOf(b), archive_days: b.archive_days, ...(b.archived ? { archived: b.archived } : {}), ...(b.archived_done?.length ? { archived_done: b.archived_done } : {}), open_on_start: openOnStart(b), notify: notifyOf(b, can, S.root), scout_findings: b.scout_findings, tests_with_changes: b.tests_with_changes, checker: b.checker, notify_choices: notifyChoices(can), enabled: onHere(b), ...(S.offHere ? { off_here: S.offWhy } : S.fresh ? { off_here: 'new' as const } : {}), driving: S.driving, branch_note, ...(size_note ? { size_note } : {}), git_state: S.gitState, plan_mode: inPlan(S.plan), ...(branches ? { branches } : {}), ...(team ? { today_team: team } : {}), ...(Object.keys(task_branches).length ? { task_branches } : {}), ...(openQuestions(b).length ? { questions: openQuestions(b) } : {}), ...(scouts_running.length ? { scouts_running } : {}) }
   await updateView(host, () => v)
   // the banner logo plays a move when something happened (a merge, a worker start, a scout finding, all done)
   void logoOnPublish(host, v).catch(() => undefined)
@@ -501,7 +506,7 @@ export async function publish(host: Host, b: Board) {
   // Disabled: "disabled · /symcc-enable to turn it back on" without the name, as Claude Code puts "symcc: " in front; its status line
   // takes plain text only (no colors), so the command can't stand out there.
   const facts = { tasks: b.tasks, questions: b.questions, scouts: v.scouts, branch, branch_note, mode: modeOf(b) }
-  showStatus(host, () => (onHere(b) ? statusLine(facts, S.driving, { plan: inPlan(S.plan), nowMs: Date.now(), width: statusRoom(S.N.name) }) : offStatusLine(S.N.name, false, S.offHere ? S.offWhy : false)))
+  showStatus(host, () => (onHere(b) ? statusLine(facts, S.driving, { plan: inPlan(S.plan), nowMs: Date.now(), width: statusRoom(S.N.name) }) : offStatusLine(S.N.name, false, S.offHere ? S.offWhy : S.fresh ? 'new' : false)))
 }
 
 let statusText: (() => string | undefined) | undefined

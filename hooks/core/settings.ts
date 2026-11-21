@@ -226,10 +226,12 @@ export type OffPart = { text: string; command?: boolean }
  * "symcc is disabled · /symcc-enable to turn it back on". `withName` false leaves the name out ("disabled · /symcc-enable to turn it back on"),
  * for the line under the prompt, where Claude Code already puts "⚠ symcc: " in front.
  */
-export type OffHere = 'off' | 'other' | 'gone'
+export type OffHere = 'off' | 'other' | 'gone' | 'new'
 
 export const offStatusParts = (name: string = DEFAULT_NAME, withName = true, here: OffHere | false | undefined = false): OffPart[] =>
-  here === 'gone'
+  here === 'new'
+    ? [{ text: `${name} is not set up here · ` }, { text: `/${name}-enable`, command: true }, { text: ' to start it' }]
+    : here === 'gone'
     ? [{ text: `the ${name} window closed · ` }, { text: `/${name}-enable here`, command: true }, { text: ' to take over' }]
     : here === 'other'
       ? [{ text: `${name} runs in another window · ` }, { text: `/${name}-enable here`, command: true }]
@@ -243,6 +245,9 @@ export const offStatusParts = (name: string = DEFAULT_NAME, withName = true, her
 
 /** What every lead tool answers in a window turned off with /<name>-disable here (T-793). */
 export const offHereAnswer = (name: string = DEFAULT_NAME) => `${name} is off in this window. /${name}-enable here turns it back on.`
+
+/** What every lead tool answers in a new project, a folder with no board where the owner has not run /<name>-enable yet (T-795). */
+export const notSetUpAnswer = (name: string = DEFAULT_NAME) => `${name} is not set up here. The owner can start it with /${name}-enable.`
 
 /** The "disabled" line as plain text (see offStatusParts). */
 export const offStatusLine = (name: string = DEFAULT_NAME, withName = true, here: OffHere | false | undefined = false) => offStatusParts(name, withName, here).map(p => p.text).join('')

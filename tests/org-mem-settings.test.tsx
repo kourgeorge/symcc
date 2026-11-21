@@ -9,7 +9,7 @@ import { ICON } from '../hooks/name'
 import { inProject } from './project'
 import { ran, slash } from './fakes'
 import { vsHref } from '../hooks/claude/ui/vscode'
-import { showsHeader, type BoardPage } from '../hooks/board'
+import { emptyBoard, showsHeader,type BoardPage } from '../hooks/board'
 import { textWidth } from '../hooks/core/stats'
 
 /** Seeds the plugin's state values; once the plugin writes one, the kit's own store answers it (and redraws). */
@@ -38,7 +38,7 @@ const NOTES = '- 2026-11-18: run one test file with scripts/test-files.sh\n\n- w
 /** A fake .symcc folder holding org-mem.md (`files.text`; null: no file); safeWrite's temp file and mv work on it. */
 function fakeOrgMem(on: On, text: string | null) {
   const files: Record<string, string> = text === null ? {} : { [FILE]: text }
-  const mine = (p: string) => p.startsWith('/proj/.symcc/org-mem')
+  const mine = (p: string) => p.startsWith('/proj/.symcc/org-mem') || p === '/proj/.symcc/board.json'
   // any other file: what the kit or inProject answers, else not there (a slash command alone asks for more)
   on('fs.exists', async (_, e, next) => (mine(e.path) ? { value: e.path in files } : await Promise.resolve(next(e)).catch(() => ({ value: false }))))
   on('fs.read', (_, e, next) => {
@@ -338,6 +338,7 @@ test('T-619: VS Code with no notes says "No notes yet."', async ($, on) => {
 test('T-619: /symcc-settings orgmem delete N deletes note N; a wrong number deletes nothing', async ($, on) => {
   stateOf(on, VIEW)
   const files = fakeOrgMem(on, NOTES)
+  files['/proj/.symcc/board.json'] = JSON.stringify(emptyBoard()) // T-795: a project with a board
   await $.session.start({ cwd: '/proj' } as never)
   const r = String((await $.command.run(slash('symcc-settings', 'orgmem delete 3'))).text)
   expect(r).toContain('Deleted note 3 from .symcc/org-mem.md (2026-11-20)')

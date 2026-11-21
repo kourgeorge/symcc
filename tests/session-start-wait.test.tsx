@@ -95,8 +95,9 @@ function start($: Engine) {
 }
 
 test('session.start returns without the clock moving while an old worker it stopped never ends', async ($, on) => {
-  // no board: old1 has no task here, so it is an orphan and is told to stop; it keeps running
+  // an empty board: old1 has no task here, so it is an orphan and is told to stop; it keeps running
   const w = world(on, { agents: [{ id: 'old1', type: 'symcc:worker' }] })
+  w.files.set(BOARD, JSON.stringify(emptyBoard()))
   const s = start($)
   await w.clock.settle()
   expect(s.done()).toBe(true)
