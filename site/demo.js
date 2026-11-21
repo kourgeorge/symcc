@@ -92,10 +92,13 @@
     let track = ''
     LABELS.forEach((_, i) => {
       if (i) track += i <= l.at ? sp('━'.repeat(GAP), 'passed') : sp('─'.repeat(GAP), 'future')
-      track += i < l.at ? sp('●', 'passed') : i === l.at ? sp(s.frame % 2 ? '◎' : '◉', 'current') : sp('○', 'future')
+      // T-771: a just-merged lane has ✓ (done color) at merged, nothing blinking
+      track += i < l.at ? sp('●', 'passed') : i === l.at ? (l.done ? sp('✓', 'passed') : sp(s.frame % 2 ? '◎' : '◉', 'current')) : sp('○', 'future')
     })
-    const right = l.place ? `#${l.place}` : dur(s.now - l.since)
-    const one = ' ' + sp('▶ ' + pad(l.id, ID_W) + ' ' + pad(cut(TITLES[l.id], TITLE_W), TITLE_W), 'run') + '  ' + track + sp('  ' + right.padStart(6), 'dim')
+    const right = l.done ? `merged ${dur(s.now - l.done)} ago` : l.place ? `#${l.place}` : dur(s.now - l.since)
+    // T-771: a just-merged lane: no "▶ ", its id, title and second line dim
+    const name = pad(l.id, ID_W) + ' ' + pad(cut(TITLES[l.id], TITLE_W), TITLE_W)
+    const one = ' ' + (l.done ? '  ' + sp(name, 'dim') : sp('▶ ' + name, 'run')) + '  ' + track + sp('  ' + right.padStart(6), 'dim')
     const lead = `   ${l.kind} try ${l.tryNo}/${l.tries}`
     // the whole task's tokens (every try); the running try's are known only at its hand-back
     const total = (l.prior || 0) + (l.tokens || 0)
@@ -104,7 +107,7 @@
     else {
       const n = Math.max(0, Math.min(13, Math.round((total / USUAL) * 13)))
       const over = total > 2 * USUAL
-      rest = sp(`▕${'█'.repeat(n)}${'░'.repeat(13 - n)}▏ `, over ? 'warning' : 'bar') + sp(tok(total), over ? 'warning' : 'text') + (l.tokens === null ? sp(' + …', 'dim') : '') + (over ? sp(' ⚠', 'warning') : '')
+      rest = sp(`▕${'█'.repeat(n)}${'░'.repeat(13 - n)}▏ `, l.done ? 'dim' : over ? 'warning' : 'bar') + sp(tok(total), l.done ? 'dim' : over ? 'warning' : 'text') + (l.tokens === null ? sp(' + …', 'dim') : '') + (over ? sp(' ⚠', 'warning') : '')
     }
     const two = sp(pad(lead, LEAD_W), 'dim') + rest + (l.back ? sp(`  ↺×${l.back}`, 'dim') : '')
     return [one, two]
@@ -140,7 +143,9 @@
     if (s.lanes.length) {
       // the ✧ after work and check in the accent color (core/live.ts's 'mark' tone)
       L.push((' '.repeat(LEAD_W) + LABELS.map((x, i) => (i < LABELS.length - 1 ? pad(x, GAP + 1) : x)).join('')).split('✧').map(x => sp(x, 'dim')).join(sp('✧', 'mark')))
-      for (const l of s.lanes) L.push(...laneLines(s, l))
+      // T-771: the running lanes on top, then the just-merged ones (kept 10 minutes, at most 3, newest first)
+      const kept = s.lanes.filter(l => l.done && s.now - l.done < 10 * 60).sort((a, b) => b.done - a.done).slice(0, 3)
+      for (const l of [...s.lanes.filter(l => !l.done), ...kept]) L.push(...laneLines(s, l))
     } else L.push(' No task is running right now.')
     L.push('')
     L.push(heading('Today'))
@@ -317,7 +322,8 @@
     [1600, at(16, 50, 40), s => { Object.assign(lane(s, 'T-747'), { at: 3, since: s.now, place: undefined }) }],
     [2600, at(16, 53, 0), s => { Object.assign(lane(s, 'T-747'), { at: 4, since: s.now }) }],
     [900, at(16, 53, 10), s => {
-      s.lanes = s.lanes.filter(l => l.id !== 'T-747')
+      // T-771: T-747 keeps its lane for a while, drawn finished (dim, ✓ at merged, "merged 0s ago")
+      Object.assign(lane(s, 'T-747'), { done: s.now, agent: false })
       s.today.merged += 1
       s.today.tokens += T747_TOKENS
       s.commits += 1

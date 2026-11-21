@@ -810,7 +810,8 @@ const RUNS = [
 test('an opened task shows the time of each try and the total', async ($, on) => {
   stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Timed', { runs: RUNS })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect(await ui.find({ type: 'Text', text: /Runs \(time and cost\)/ })).toBeDefined()
+  // T-774: the ▍Runs heading sums this task's own tries
+  expect(await ui.find({ type: 'Text', text: /Runs\s+2 tries · 1h 12m · 40k tokens/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /try 1: 12m · 40k tokens in all/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /try 2: 1h 00m · ~\$0\.42/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /total: 1h 12m · 40k tokens in all · ~\$0\.42/ })).toBeDefined()

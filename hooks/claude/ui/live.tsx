@@ -13,7 +13,7 @@
 // branch (commits ahead, how far behind), each task row a row Button that opens its task.
 // T-747: each section (Tasks, Today, Branches, Organizational memory) starts with a "▍Name" heading (core's
 // liveHeading), its lines indented by LIVE_INDENT, one empty line between sections.
-import { LIVE_EMPTY, LIVE_INDENT, liveLegend, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, laneLines, liveBold, liveHeading, liveIndented, liveInner, liveBranches, liveHeader, liveHeaderSegs, liveKeys, liveLabelSegs, liveLanes, liveLayout, liveOrgMem, liveStations, liveTodayLines, liveTrains, trainRows } from '../../core/live'
+import { LIVE_EMPTY, LIVE_INDENT, liveLegend, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, laneLines, liveBold, liveHeading, liveIndented, liveInner, liveBranches, liveHeader, liveHeaderSegs, liveKeys, liveLabelSegs, liveTaskLanes, liveLayout, liveOrgMem, liveStations, liveTodayLines, liveTrains, trainRows } from '../../core/live'
 import { footerRule } from '../../board'
 import { S, workers } from '../../app/state'
 import { type $, panelValues } from '../panel'
@@ -92,7 +92,9 @@ export function livePage($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
   // the key line says "↑↓ move": the arrows move between the lanes (see arrows.ts)
   arrows.move = saysArrowsMove(liveKeys())
   liveTick($)
-  const lanes = liveLanes(v, nowMs)
+  // T-771: the running lanes, then the just-merged ones (dim, ✓ at "merged")
+  const lanes = liveTaskLanes(v, nowMs)
+  const running = lanes.filter(l => !l.done)
   const inner = liveInner(width)
   const layout = liveLayout(lanes, liveStations(v.checker === true), inner)
   const trains = liveTrains(v, nowMs, lanes)
@@ -110,7 +112,7 @@ export function livePage($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
     else $.ui.toast(S.N.toast(target ? `${target.id} has no worker running now.` : 'No worker is running now.'))
   })
   const today = liveTodayLines(v, nowMs, inner)
-  const headSegs = liveHeaderSegs(v, lanes, nowMs, width)
+  const headSegs = liveHeaderSegs(v, running, nowMs, width)
   const om = liveOrgMem(notes, width)
   const br = liveBranches(v, nowMs, width)
   return (
@@ -125,10 +127,11 @@ export function livePage($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
           </Button>
         </Box>
       ) : (
-        <Text key="live-head" bold color={C('text')}>{liveHeader(v, lanes)}</Text>
+        <Text key="live-head" bold color={C('text')}>{liveHeader(v, running)}</Text>
       )}
       <Text key="live-tasks-head">{draw(liveHeading(LIVE_SECTIONS.tasks, width))}</Text>
-      {lanes.length ? <Text key="live-labels">{under(liveLabelSegs(layout))}</Text> : <Text key="live-empty" color={C('inactive')}>{LIVE_INDENT + LIVE_EMPTY}</Text>}
+      {running.length ? null : <Text key="live-empty" color={C('inactive')}>{LIVE_INDENT + LIVE_EMPTY}</Text>}
+      {lanes.length ? <Text key="live-labels">{under(liveLabelSegs(layout))}</Text> : null}
       {lanes.flatMap((l, i) => {
         const [first, second] = laneLines(l, layout, { nowMs, frame })
         return [

@@ -27,6 +27,7 @@ import { debriefs, learnedAsk } from '../hooks/app/debrief'
 import { DEBRIEF_MS, DEBRIEF_TEXT, LEARNED_ASK } from '../hooks/core/org-mem'
 import type { EvidenceEvent } from '../hooks/core/evidence'
 import { evidenceWritten } from '../hooks/app/evidence'
+import { checkerTokensOf, sumTokens } from '../hooks/core/runs'
 
 const ROOT = '/repo'
 const WT = `${ROOT}/.symcc/worktrees/T-1`
@@ -261,6 +262,23 @@ test('with the checker on, a passing change waits for a checker (shown as checki
   expect(t.runs!.at(-1)!.tokens).toEqual({ output: 500 })
   // T-769: the checker's part is also kept apart, so the Live tab can tell checkers from workers
   expect(t.runs!.at(-1)!.checker_tokens).toEqual({ output: 500 })
+})
+
+test("T-774: the worker's hand-back and the checker's end each put their tokens on their own agent entry of the try, and the try's tokens are their sum", async () => {
+  const w = world()
+  // its worker ag1 started on the try (patchTask gives it its entry, as workerStarted's write does)
+  await saveBoard(w.$, patchTask(boardWith(true), 'T-1', { agent: 'ag1' }, ISO))
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: 0 })
+  const done = withStarts(w.$, workerFinished(w.$, 'ag1', 'made the change', { reason: 'answer' }, { input: 4_000 }))
+  await until(() => checkerRuns.size > 0)
+  checkerFinished([...checkerRuns.keys()][0]!, 'OK', false, { output: 500 })
+  await done
+  const r = find(await load(w.$), 'T-1')!.runs!.at(-1)!
+  expect(r.agents!.map(a => [a.kind, a.id, a.tokens, !!a.ended])).toEqual([
+    ['worker', 'ag1', { input: 4_000 }, true],
+    ['checker', 'chk1', { output: 500 }, true],
+  ])
+  expect(r.tokens).toEqual({ input: 4_000, output: 500 })
 })
 
 test('T-440: the target branch deleted while the checker runs: after its OK the task waits with the branch-gone question, not failed', async () => {
@@ -1326,6 +1344,16 @@ test('T-656: after a hand-back one debrief goes to the same worker and checker; 
   const after = find(await load(w.$), 'T-1')!.runs!.at(-1)!
   expect(after.tokens).toEqual({ input: (before.tokens?.input ?? 0) + 20, output: (before.tokens?.output ?? 0) + 5 })
   expect(after.checker_tokens).toEqual({ input: (before.checker_tokens?.input ?? 0) + 20, output: (before.checker_tokens?.output ?? 0) + 5 })
+  // T-774: each debrief also goes to its own agent's entry, so the try's tokens are its agents' sum and checkerTokensOf counts the checker's debrief
+  const ag = after.agents ?? []
+  const wEntry = ag.find(a => a.id === 'ag1')!
+  const cEntry = ag.find(a => a.id === chk)!
+  expect(wEntry.kind).toBe('worker')
+  expect(wEntry.tokens).toEqual({ input: 107, output: 13 })
+  expect(cEntry.kind).toBe('checker')
+  expect(cEntry.tokens).toEqual({ input: (before.checker_tokens?.input ?? 0) + 20, output: (before.checker_tokens?.output ?? 0) + 5 })
+  expect(sumTokens(ag.map(a => a.tokens))).toEqual(after.tokens)
+  expect(checkerTokensOf(after)).toEqual(after.checker_tokens)
   expect(leadQueue.join('\n')).toContain('T-1: Suggested for org-mem')
   expect(leadQueue.join('\n')).toContain('- Snapshot files live in tests/*-snapshot.ts.')
   expect((find(await load(w.$), 'T-1') as { suggested?: string[] }).suggested).toBe(undefined)

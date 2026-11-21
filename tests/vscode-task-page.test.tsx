@@ -92,7 +92,8 @@ for (const id of RICH_IDS) {
     expect((await ui.find({ key: 'vs-state-status' }))?.text, id).toMatch(/^ \S+ .+ $/)
     for (const gone of ['vs-row-status', 'vs-row-now', 'vs-row-stage', 'vs-badge']) expect(await ui.find({ key: gone }), `${id} ${gone}`).toBeUndefined()
     expect((await ui.find({ key: 'vs-header-rule' }))?.text, id).toMatch(/^━+$/)
-    const want = ['Details', 'What to do', `▸ Time and cost ${'runs' in t ? t.runs.length : 0}`]
+    // T-774: the folded Time and cost row sums the task's own tries on one line (no tries: its count, 0)
+    const want = ['Details', 'What to do', 'runs' in t && t.runs.length ? `▸ Time and cost ${t.runs.length} tries · ${t.id === 'T-504' ? '25m · 4.6k tokens (0.4×' : '40m · 11.6k tokens (1×'} the usual task)` : '▸ Time and cost 0']
     if (t.history.length) want.push('History (2, newest first)')
     if (t.attempts) want.push(t.status === 'doing' ? 'Report (try 1)' : 'Report (try 2, 2 of 2)') // the running try has no report yet
     if (t.status === 'failed') want.push('✗ Why it failed')
@@ -133,6 +134,8 @@ const T504_LATER: [string, string][] = [
   ['" · last: 5m (running) · all: 25m · 4.6k"', '" · last: 15m (running) · all: 35m ·"'],
   ['["tokens"]', '["4.6k tokens"]'],
   ['"  try 2: 5m (running)"', '"  try 2: 15m (running)"'],
+  // the Runs heading's sum of the task's tries (T-774)
+  ['"Runs   2 tries · 25m · 4.6k tokens (0.4× the usual task)"', '"Runs   2 tries · 35m · 4.6k tokens (0.4× the usual task)"'],
   ['"  total: 25m · 4.6k', '"  total: 35m · 4.6k'],
   // the header's state line: the total work time (T-751)
   ['"children":["25m"]', '"children":["35m"]'],
@@ -153,7 +156,7 @@ test("T-504's task page snapshot comparison still fails when the drawn tree real
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   const drawn = drawnData(await ui.drawn())
   expect(drawn).toEqual(TASK_BEFORE['terminal T-504'])
-  expect(drawn).not.toEqual(changedTree(TASK_BEFORE['terminal T-504'], [['"Runs (time and cost)"', '"Runs"']]))
+  expect(drawn).not.toEqual(changedTree(TASK_BEFORE['terminal T-504'], [['"Runs   2 tries · 25m · 4.6k tokens (0.4× the usual task)"', '"Runs"']]))
   expect(drawn).not.toEqual(changedTree(TASK_BEFORE['terminal T-504'], [['"  try 2: 5m (running)"', '"  try 2: 6m (running)"']]))
   await ui.unmount()
 })
@@ -264,9 +267,9 @@ for (const [id, want] of Object.entries(CARDS))
       expect((await ui.find({ key: 'vs-row-tries' }))?.text, at).toMatch(/^Tries2/)
       // the sections, with their headings
       for (const h of ['Details', 'What to do', 'History (2, newest first)']) expect(all, `${at} ${h}`).toContain(h)
-      // the folds, closed by default, each with its count; pressing one opens it
+      // the folds, closed by default, each with its count (Time and cost: the sum of the tries, T-774); pressing one opens it
       for (const f of ['time']) {
-        expect(mdPlain(String((await ui.find({ key: `fold-${f}` }))?.props.text)), `${at} ${f}`).toMatch(/^▸ .+ \w+$/)
+        expect(mdPlain(String((await ui.find({ key: `fold-${f}` }))?.props.text)), `${at} ${f}`).toMatch(/^▸ Time and cost 2 tries · \d+m · [\d.]+k tokens \([\d.]+× the usual task\)$/)
         expect(await ui.find({ key: `vs-sec-${f}-body` }), `${at} ${f}`).toBeUndefined()
       }
       // what needs you: boxed at the top in its tone, its main button inside

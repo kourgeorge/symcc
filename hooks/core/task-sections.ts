@@ -1,6 +1,6 @@
 // The task page's sections (T-580), as plain data: what the Claude Code terminal's task page shows under its title and
 // buttons, in its order and with its headings: ▍Why it failed, ▍Answer, ▍Details, ▍Branch (T-761), ▍Changes, ▍What to do, ▍History,
-// ▍Report and ▍Runs (time and cost). Each section is lines of colored pieces (Seg), some with what a press or click on
+// ▍Report and ▍Runs (time and cost, with a one-line sum). Each section is lines of colored pieces (Seg), some with what a press or click on
 // them does (a changed file opens its diff). The terminal (hooks/claude/ui/task-page.tsx) and OpenCode's panel
 // (hooks/opencode/board-view.ts) draw them; VS Code's card (vscode-task.tsx) takes their contents but keeps its own
 // layout. Nothing here reads a file: the report texts and the changed files come in as facts.
@@ -11,7 +11,8 @@ import { isAnswered } from './task'
 import { taskReports } from './reports'
 import { whyFailed, failNext, failAsks } from './failure'
 import { historyEvent, historyTime, HISTORY_COLOR } from './history'
-import { fmtRun, fmtTotal, sumRuns } from './runs'
+import { agentLines, fmtRun, fmtTotal, runsSummary, sumRuns } from './runs'
+import { usualTokens } from './live'
 import { type DiffFile, YOUR_EDITS } from './review'
 import { taskBranchLines, taskBranchTitle, type TaskBranchFacts } from './task-branch'
 import { cutTitle } from './stats'
@@ -28,8 +29,9 @@ export type SectionAction = { diff: string }
  */
 export type SectionLine = { segs: Seg[]; action?: SectionAction; key?: string; plain?: boolean }
 
-/** A section: its id, its heading (without the "▍"), its lines, and for the report its tries to pick from. */
-export type TaskSection = { id: TaskSectionId; title: string; lines: SectionLine[]; tries?: { try: number; shown: boolean; key?: string }[] }
+/** A section: its id, its heading (without the "▍"), its lines, for the report its tries to pick from, and for the runs
+ *  (T-774) the one-line sum in its heading (runsSummary). */
+export type TaskSection = { id: TaskSectionId; title: string; lines: SectionLine[]; tries?: { try: number; shown: boolean; key?: string }[]; summary?: string }
 
 /** What the sections need besides the task. */
 export type TaskSectionFacts = {
@@ -196,11 +198,15 @@ export function taskSections(t: SymccTask, f: TaskSectionFacts): TaskSection[] {
       ...(reports.length > 1 ? { tries: reports.map((r, i) => ({ try: r.try, shown: i === at, ...(r.try <= 9 && !f.numberKeysTaken ? { key: String(r.try) } : {}) })) } : {}),
     })
   }
+  const summary = t.runs?.length ? runsSummary(t.runs, f.nowMs, usualTokens(f.detail.all)) : ''
   if (t.runs?.length)
     out.push({
       id: 'runs',
-      title: 'Runs (time and cost)',
-      lines: [...t.runs.map((r, i) => plainLine(`  ${fmtRun(r, i, f.nowMs)}`, r.ended ? 'inactive' : 'success')), plainLine(`  total: ${fmtTotal(sumRuns(t.runs, f.nowMs))}`, 'text', { bold: true })],
+      // T-774: the heading sums this task's own tries ("3 tries · 21m · 10.1M tokens (3.6× the usual task) · checkers 2.4M"),
+      // and each try has one dim line per agent (worker or checker) under it
+      title: `Runs   ${summary}`,
+      summary,
+      lines: [...t.runs.flatMap((r, i) => [plainLine(`  ${fmtRun(r, i, f.nowMs)}`, r.ended ? 'inactive' : 'success'), ...agentLines(r, f.nowMs).map((l, k) => plainLine(`    ${l}`, 'inactive', { key: `run-${i}-agent-${k}` }))]), plainLine(`  total: ${fmtTotal(sumRuns(t.runs, f.nowMs))}`, 'text', { bold: true })],
     })
   return out
 }

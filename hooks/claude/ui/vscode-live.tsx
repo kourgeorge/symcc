@@ -15,7 +15,7 @@
 // T-727: under the lanes, the Branches section (core's liveBranches) drawn with real lines: see branchesVs.
 // T-747: each section has a bold heading with the terminal's names (core's LIVE_SECTIONS): Tasks, Today, Branches,
 // Organizational memory (that one a link to all notes).
-import { type BranchRow, type LiveBranches, liveBranches, LIVE_EMPTY, LIVE_AGENT_MARK, LIVE_RUN_MARK, liveLegend, LIVE_SECTIONS, type LiveLane, liveInner, type LiveLayout, type LiveSeg, LIVE_TONE, laneLines, liveHeader, liveHeaderSegs, liveLanes, liveLayout, liveOrgMem, liveStations, liveTodayLines, liveTrains, segText, trainRows } from '../../core/live'
+import { type BranchRow, type LiveBranches, liveBranches, LIVE_EMPTY, LIVE_AGENT_MARK, LIVE_RUN_MARK, liveLegend, LIVE_SECTIONS, type LiveLane, liveInner, type LiveLayout, type LiveSeg, LIVE_TONE, laneLines, liveHeader, liveHeaderSegs, liveTaskLanes, liveLayout, liveOrgMem, liveStations, liveTodayLines, liveTrains, segText, trainRows } from '../../core/live'
 import { panelValues, type $ } from '../panel'
 import type { PaneParts } from './parts'
 import { LIVE_TICK_MS, branchKey, laneKey, liveTick, newestKey, openOrgMemPage, topicKey, trainKey } from './live'
@@ -32,7 +32,7 @@ export const BLINK_CSS = '@keyframes symcc-blink{50%{opacity:.25}}.cur{animation
 
 /** A lane's track as an Svg document: a dot per station (passed filled green, the current one blue and blinking, future
  *  hollow grey), lines between them (bold up to the current one), the station names (layout.labels) under the dots. */
-export function trackSvg(lane: Pick<LiveLane, 'at'>, l: LiveLayout): { source: string; width: number; height: number } {
+export function trackSvg(lane: Pick<LiveLane, 'at'> & Partial<Pick<LiveLane, 'done'>>, l: LiveLayout): { source: string; width: number; height: number } {
   const step = (l.gap + 1) * COL_PX
   const r = 5
   const x0 = r + 2
@@ -44,9 +44,11 @@ export function trackSvg(lane: Pick<LiveLane, 'at'>, l: LiveLayout): { source: s
     const x = x0 + i * step
     if (i) parts.push(i <= lane.at ? `<line x1="${x - step + r}" y1="${y}" x2="${x - r}" y2="${y}" stroke="${INK.passed}" stroke-width="3"/>` : `<line x1="${x - step + r}" y1="${y}" x2="${x - r}" y2="${y}" stroke="${INK.future}" stroke-width="1.5"/>`)
     if (i < lane.at) parts.push(`<circle cx="${x}" cy="${y}" r="${r}" fill="${INK.passed}"/>`)
+    // T-771: a finished lane: a green ✓ at its last station, nothing blinks
+    else if (i === lane.at && lane.done) parts.push(`<path d="M${x - r} ${y} L${x - 1} ${y + r - 1} L${x + r + 1} ${y - r}" fill="none" stroke="${INK.passed}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`)
     else if (i === lane.at) parts.push(`<circle class="cur" cx="${x}" cy="${y}" r="${r + 1}" fill="${INK.current}" stroke="${INK.current}" stroke-width="2" fill-opacity=".85"/>`)
     else parts.push(`<circle cx="${x}" cy="${y}" r="${r - 1}" fill="none" stroke="${INK.future}" stroke-width="1.5"/>`)
-    parts.push(`<text x="${x}" y="${height - 2}" text-anchor="${i ? (i === l.stations.length - 1 ? 'end' : 'middle') : 'start'}" font-family="sans-serif" font-size="10" fill="${i === lane.at ? INK.current : INK.label}"${i === lane.at ? ' font-weight="bold"' : ''}>${(l.labels[i] ?? '').split(LIVE_AGENT_MARK).join(`<tspan fill="${INK.mark}">${LIVE_AGENT_MARK}</tspan>`)}</text>`)
+    parts.push(`<text x="${x}" y="${height - 2}" text-anchor="${i ? (i === l.stations.length - 1 ? 'end' : 'middle') : 'start'}" font-family="sans-serif" font-size="10" fill="${i === lane.at ? (lane.done ? INK.passed : INK.current) : INK.label}"${i === lane.at ? ' font-weight="bold"' : ''}>${(l.labels[i] ?? '').split(LIVE_AGENT_MARK).join(`<tspan fill="${INK.mark}">${LIVE_AGENT_MARK}</tspan>`)}</text>`)
   })
   return { source: `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${parts.join('')}</svg>`, width, height }
 }
@@ -148,7 +150,9 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
   // the times beside the lanes ("2m") are redrawn every tick; the blink itself is the drawing's own animation
   liveTick($)
   const frame = Math.floor(nowMs / LIVE_TICK_MS)
-  const lanes = liveLanes(v, nowMs)
+  // T-771: the running lanes, then the just-merged ones (dim, ✓ at "merged")
+  const lanes = liveTaskLanes(v, nowMs)
+  const running = lanes.filter(l => !l.done)
   // the terminal's words at its width under a heading (liveInner), so both say the same
   const inner = liveInner(width)
   const layout = liveLayout(lanes, liveStations(v.checker === true), inner)
@@ -160,13 +164,15 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
       <Text wrap="wrap" bold={bold || undefined} color={C(color)}>{text}</Text>
     </Box>
   )
-  const headSegs = liveHeaderSegs(v, lanes, nowMs, width)
+  const headSegs = liveHeaderSegs(v, running, nowMs, width)
   const isTrack = (s: LiveSeg) => s.tone === 'passed' || s.tone === 'current' || s.tone === 'future'
   const laneRows = lanes.map(lane => {
     // the terminal's two lines (steady: the drawing blinks by itself), drawn in pieces
     const [first, second] = laneLines(lane, layout, { nowMs, frame, steady: true })
     // T-767: the running lane's id and title (the 'run' tone, past its "▶ " mark)
-    const name = first.filter(s => s.tone === 'run' && s.text !== LIVE_RUN_MARK).map(s => s.text.trim()).filter(Boolean).join(' ')
+    // T-771: a finished lane's id and title are dim, with no mark before them
+    const done = !!lane.done
+    const name = first.filter(s => (done ? s.tone === 'dim' && s !== first[first.length - 1] : s.tone === 'run' && s.text !== LIVE_RUN_MARK)).map(s => s.text.trim()).filter(Boolean).join(' ')
     const right = first[first.length - 1]?.tone === 'dim' ? first[first.length - 1]!.text.trim() : ''
     const track = trackSvg(lane, layout)
     const href = vsHref('task', lane.id)
@@ -174,8 +180,8 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
       <Box key={`live-lane:${lane.id}`} flexDirection="column">
         <Box key={`live-top:${lane.id}`} flexDirection="row" gap={2}>
           <Box key={`live-run:${lane.id}`} flexDirection="row" gap={1}>
-            {line(`live-run-mark:${lane.id}`, LIVE_RUN_MARK.trim(), LIVE_TONE.run, true)}
-            {vsLink(vs, laneKey(lane.id), `**${mdLink(name, href)}**`, [[href, open(lane.id)]])}
+            {done ? null : line(`live-run-mark:${lane.id}`, LIVE_RUN_MARK.trim(), LIVE_TONE.run, true)}
+            {done ? vsLink(vs, laneKey(lane.id), mdLink(name, href), [[href, open(lane.id)]], true) : vsLink(vs, laneKey(lane.id), `**${mdLink(name, href)}**`, [[href, open(lane.id)]])}
           </Box>
           {right ? line(`live-right:${lane.id}`, right, 'inactive') : null}
         </Box>
@@ -227,11 +233,12 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
           {vsLink(vs, 'live-scouts', mdLink(headSegs[3]!.text.trim(), vsHref('tab', 'scouts')), [[vsHref('tab', 'scouts'), goTab('scouts')]], true)}
         </Box>
       ) : (
-        line('live-head', liveHeader(v, lanes), 'text', true)
+        line('live-head', liveHeader(v, running), 'text', true)
       )}
       <Box key="live-tasks" flexDirection="column">
         {line('live-tasks-head', LIVE_SECTIONS.tasks, 'text', true)}
-        {lanes.length ? <Box key="live-lanes" flexDirection="column" gap={1}>{laneRows}</Box> : line('live-empty', LIVE_EMPTY, 'inactive')}
+        {running.length ? null : line('live-empty', LIVE_EMPTY, 'inactive')}
+        {lanes.length ? <Box key="live-lanes" flexDirection="column" gap={1}>{laneRows}</Box> : null}
       </Box>
       {lanes.length ? line('live-legend', liveLegend(lanes, Infinity).join(' '), 'inactive') : null}
       <Box key="live-bottom" flexDirection="column">
