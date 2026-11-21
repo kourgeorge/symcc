@@ -74,7 +74,9 @@ test('the reject reason box: Enter on empty cancels it (nothing is sent), and so
   const cancel = await ui.find({ key: 'reject-cancel' })
   expect(cancel?.props.label).toBe('Cancel')
   expect(cancel?.text).toBe('[Cancel]')
-  expect(cancel?.props.hotkey).toBe('c')
+  // no key drawn in the button (a plain Button with a hotkey would show "c: [Cancel]"); c is on a hidden Button
+  expect(cancel?.props.hotkey).toBeUndefined()
+  expect((await ui.find({ key: 'reject-cancel-key' }))?.props.hotkey).toBe('c')
   await ui.press({ key: 'reject-cancel' })
   expect(await ui.find({ key: 'reject-reason' })).toBeUndefined()
   // the same box over the task's changes, which have their own Back (b)
@@ -102,10 +104,16 @@ test('the role pick list has a [Cancel] button (key c) and says so', async ($, o
   const cancel = await ui.find({ key: 'role-cancel' })
   expect(cancel?.props.label).toBe('Cancel')
   expect(cancel?.text).toBe('[Cancel]')
-  expect(cancel?.props.hotkey).toBe('c')
+  // no key drawn in the button (a plain Button with a hotkey would show "c: [Cancel]"); c is on a hidden Button
+  expect(cancel?.props.hotkey).toBeUndefined()
+  expect((await ui.find({ key: 'role-cancel-key' }))?.props.hotkey).toBe('c')
   await ui.press({ key: 'role-cancel' })
   expect(await ui.find({ key: 'role-cancel' })).toBeUndefined()
   expect(await ui.find({ key: 'role' })).toBeDefined()
+  // the hidden c Button cancels the same way
+  await ui.press({ key: 'role' })
+  await ui.press({ key: 'role-cancel-key' })
+  expect(await ui.find({ key: 'role-cancel' })).toBeUndefined()
   await ui.unmount()
 })
 
@@ -123,7 +131,9 @@ test('"Your answer" opened with Answer…: Enter on empty and [Cancel] (key c) g
   const cancel = await ui.find({ key: 'answer-cancel' })
   expect(cancel?.props.label).toBe('Cancel')
   expect(cancel?.text).toBe('[Cancel]')
-  expect(cancel?.props.hotkey).toBe('c')
+  // no key drawn in the button (a plain Button with a hotkey would show "c: [Cancel]"); c is on a hidden Button
+  expect(cancel?.props.hotkey).toBeUndefined()
+  expect((await ui.find({ key: 'answer-cancel-key' }))?.props.hotkey).toBe('c')
   await ui.press({ key: 'answer-cancel' })
   expect(await ui.find({ key: 'answer' })).toBeUndefined()
   // the task stays open

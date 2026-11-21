@@ -115,9 +115,13 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
           onInput={value => void (S.rejecting && (S.rejecting.reason = value))}
           onSubmit={submitReject}
         />
-        <Button key="reject-cancel" plain label="Cancel" hotkey="c" onPress={cancelReject}>
+        <Button key="reject-cancel" plain label="Cancel" onPress={cancelReject}>
           <Text color={C('text')}>[Cancel]</Text>
         </Button>
+        {/* the c key sits on a hidden Button: a plain Button with a hotkey would draw "c: " before [Cancel] */}
+        <Box key="reject-cancel-keys" display="none">
+          <Button key="reject-cancel-key" label="Cancel" hotkey="c" onPress={cancelReject} />
+        </Box>
         <Text color={C('inactive')}>{boxHint('Enter sends to todo', 'cancels', 'c')}</Text>
       </Box>
     ) : null
@@ -180,6 +184,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
       noteForLead(`The owner set the role of ${t.id} to ${name}: ${brief(r)}`)
     })
   const nowRole = roleOf(t).toLowerCase()
+  const cancelRole = () => ((S.rolePick = null), $.ui.invalidate('ui.render'))
   const roleBox =
     S.rolePick?.task === t.id ? (
       <Box flexDirection="column" borderStyle="round" borderColor={C('ide')} paddingX={1}>
@@ -194,9 +199,12 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
             </Button>
           )
         })}
-        <Button key="role-cancel" plain label="Cancel" hotkey="c" onPress={() => ((S.rolePick = null), $.ui.invalidate('ui.render'))}>
+        <Button key="role-cancel" plain label="Cancel" onPress={cancelRole}>
           <Text color={C('text')}>[Cancel]</Text>
         </Button>
+        <Box key="role-cancel-keys" display="none">
+          <Button key="role-cancel-key" label="Cancel" hotkey="c" onPress={cancelRole} />
+        </Box>
         <Text color={C('inactive')}>{pickHint('c')}</Text>
       </Box>
     ) : null
