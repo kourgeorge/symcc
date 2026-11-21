@@ -49,7 +49,7 @@ for (const w of ['T-740', '▍History', '▍Runs', '‹ [Tasks]', '[Try 1] [● 
 for (const w of ['1 Same heading for all', '2 Colored headings', '3 Boxes', '4 Side bar', '❯ 4'])
   if (!chat.includes(w)) bad(`still frame: the chat has no "${w}" (the real looks and pick)`)
 if (chat.includes('❯ 2')) bad('still frame: the chat shows "❯ 2"; the owner picked look 4')
-for (const w of ['agents 1/3 busy', '✓ 56 merged', '↺ 47 sent back', '✗ 0 failed', 'Σ 268.6M tokens', '39c7f96'])
+for (const w of ['agents 1/3 busy', '✓ 56 merged', '↺ 47 sent back', '✗ 0 failed', 'Σ 530.1M tokens', '39c7f96'])
   if (!board.includes(w)) bad(`still frame: the board has no "${w}" (the real board)`)
 const live = text(view('live'))
 // (T-758) ▍Today holds only the figures line: no "next up" line and no "today" label
