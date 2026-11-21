@@ -42,7 +42,8 @@ function world(changed: string[] = ['src/a.ts', 'src/a.test.ts']) {
   // gone: branch main was deleted (T-440)
   // tree: what `rev-parse <commit>^{tree}` gives (T-526); empty: git can't tell, so no passed tree is recorded
   // moves: each commit main was moved to, in order
-  const git = { main: M1, head: H0, dirty: true, detached: false, checkoutFails: false, gone: false, tree: '', moves: [] as string[] }
+  // slowStatus: `git status` waits this many promise turns before it answers, as a real git takes a moment (T-740)
+  const git = { main: M1, head: H0, dirty: true, detached: false, checkoutFails: false, gone: false, tree: '', moves: [] as string[], slowStatus: 0 }
   // the project's test commands (T-565): fails makes each one exit 1 with output; hold: a run in folder `cwd` waits for `until`
   const tests = { fails: false, output: '(fail) src/a.test.ts > doIt handles empty input\n 0 pass\n 1 fail', hold: null as { cwd: string; until: Promise<void> } | null }
   const files = new Map<string, string>()
@@ -87,6 +88,7 @@ function world(changed: string[] = ['src/a.ts', 'src/a.test.ts']) {
     run: async (argv, o = {}) => {
       const [cmd, ...rest] = argv
       calls.push(argv.join(' '))
+      if (cmd === 'git' && rest.includes('status')) for (let i = 0; i < git.slowStatus; i++) await Promise.resolve()
       if (cmd === 'git') return runGit(rest)
       if (appendLineRun(files, argv)) return ok()
       if (cmd === '/bin/sh') {
@@ -1174,6 +1176,8 @@ test('T-740: a checker symcc stopped partway gives no verdict, whatever it answe
 for (const [how, line] of [['the board is paused', 'you paused the board'], ['symcc is disabled', 'you disabled symcc']] as const) {
   test(`T-740: when ${how} while a checker runs, its history line keeps the reason ("${line}"), not "a new checker starts"`, async () => {
     const w = world()
+    // git takes a moment, as on a real machine: the task's stop is set before the checker's line is written
+    w.git.slowStatus = 3000
     S.driving = true
     await saveBoard(w.$, boardWith(true))
     const t = await finish(w, async () => {
