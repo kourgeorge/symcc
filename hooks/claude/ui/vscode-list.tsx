@@ -69,7 +69,7 @@ export function listPageVs($: $, pane: PaneParts) {
   const { nowMs } = pane
   const query = S.search?.text.trim() ?? ''
   const filtering = query !== ''
-  const matching = filtering ? searchTasks(v.tasks, query, nowMs) : v.tasks
+  const matching = filtering ? searchTasks(v.tasks, query, nowMs, v.archived_done) : v.tasks
   const parts = panelSections(matching, nowMs, localOffset(nowMs))
   if (!filtering) for (const d of [...openDays]) if (!parts.doneDays.some(g => g.day === d)) openDays.delete(d)
   const redraw = () => $.ui.invalidate('ui.render')

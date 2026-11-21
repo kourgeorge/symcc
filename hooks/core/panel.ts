@@ -518,9 +518,11 @@ export function parseSearch(query: string, nowMs: number = Date.now(), offsetMin
 const STUCK_ON: readonly SymccStatus[] = ['failed', 'paused', 'waiting', 'dropped']
 
 /** The tasks of `tasks` that pass the search's dependency words (waits-on:, blocks:, stuck), as a set of ids;
- *  undefined when the search has none. A task id that isn't in `tasks` counts as missing. */
-function dependencyHits(tasks: readonly SymccTask[], q: SearchQuery): Set<string> | undefined {
+ *  undefined when the search has none. A task id that isn't in `tasks` counts as missing, unless it is in
+ *  `archivedDone` (the board's archived done ids, done as in depDone). */
+function dependencyHits(tasks: readonly SymccTask[], q: SearchQuery, archivedDone: readonly string[] = []): Set<string> | undefined {
   if (!q.waitsOn && !q.blocks && !q.stuck) return undefined
+  const archived = new Set(archivedDone.map(a => searchId(a.toLowerCase()) ?? a))
   const byId = new Map(tasks.map(t => [t.id, t]))
   const afterOf = (id: string) => (byId.get(id)?.after ?? []).map(a => searchId(a.toLowerCase()) ?? a)
   // every id `id` waits for, directly or through a chain (each once; a loop stops)
@@ -536,8 +538,9 @@ function dependencyHits(tasks: readonly SymccTask[], q: SearchQuery): Set<string
     walk(id)
     return seen
   }
-  // what still holds a task back: the not-done tasks (and missing ids) on its chain; a done one ends the chain there
-  const holding = (id: string) => reach(id, t => !!t && t.status !== 'done')
+  // what still holds a task back: the not-done tasks (and missing ids) on its chain; a done one ends the chain there,
+  // and an archived done id holds nothing back
+  const holding = (id: string) => new Set([...reach(id, t => !!t && t.status !== 'done')].filter(a => !archived.has(a)))
   let hits: Set<string> = new Set(tasks.map(t => t.id))
   const keep = (ok: (t: SymccTask) => boolean) => (hits = new Set([...hits].filter(id => ok(byId.get(id)!))))
   if (q.waitsOn) keep(t => {
@@ -591,10 +594,11 @@ const byRunOrder = (x: SymccTask, y: SymccTask) => x.order - y.order || num(x.id
  *  to run, todo, are taken). Without either, the matches in the order given. The dependency words need the whole
  *  list, so only searchTasks (not taskMatches) applies them: waits-on:T-n (tasks whose after list leads to T-n,
  *  directly or through a chain), blocks:T-n (the not-done tasks T-n still waits for, a dropped one too) and stuck
- *  (todo tasks held back by a failed, paused, waiting or dropped task, or by an id not in `tasks`). */
-export function searchTasks<T extends SymccTask>(tasks: T[], query: string | SearchQuery, nowMs: number = Date.now()): T[] {
+ *  (todo tasks held back by a failed, paused, waiting or dropped task, or by an id not in `tasks`). `archivedDone`,
+ *  the board's archived done ids (board.archived_done): they count as done there, not missing. */
+export function searchTasks<T extends SymccTask>(tasks: T[], query: string | SearchQuery, nowMs: number = Date.now(), archivedDone: readonly string[] = []): T[] {
   const q = typeof query === 'string' ? parseSearch(query, nowMs) : query
-  const deps = dependencyHits(tasks, q)
+  const deps = dependencyHits(tasks, q, archivedDone)
   const hits = tasks.filter(t => (!deps || deps.has(t.id)) && taskMatches(t, q, nowMs))
   if (!q.pick) return hits
   const sorted = q.pick.by === 'newest'

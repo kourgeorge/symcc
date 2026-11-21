@@ -112,6 +112,18 @@ test('board tool: the dependency words filter its rows too', () => {
   expect(rows.sort()).toEqual(['T-102', 'T-103'])
 })
 
+test('stuck / blocks: an archived done id counts as done, not missing (as depDone)', () => {
+  const t2 = [task('T-2', 'todo', 'Waits on an archived done one', { after: ['T-1'] })]
+  expect(ids(searchTasks(t2, 'stuck', NOW, ['T-1']))).toEqual([])
+  expect(ids(searchTasks(t2, 'stuck', NOW))).toEqual(['T-2'])
+  const out = boardText({ ...emptyBoard(), archived_done: ['T-1'], tasks: t2 as never }, NOW, undefined, 'symcc', 0, { search: 'stuck' })
+  expect(out.split('\n').filter(l => /^T-\d+/.test(l))).toEqual([])
+  // through a chain: T-4 waits on T-3, which waits on the archived done T-1
+  const chain = [task('T-3', 'todo', 'Middle', { after: ['T-1'] }), task('T-4', 'todo', 'End', { after: ['T-3'] })]
+  expect(ids(searchTasks(chain, 'stuck', NOW, ['T-1']))).toEqual([])
+  expect(ids(searchTasks(chain, 'blocks:T-4', NOW, ['T-1']))).toEqual(['T-3'])
+})
+
 const board = (): Board =>({ ...emptyBoard(), tasks: tasks as never })
 
 test('board tool: limit / sort are the same as last: / top:, and the line says how many matched in all', () => {

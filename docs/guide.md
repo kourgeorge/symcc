@@ -743,7 +743,8 @@ are about changes; under "How tasks ended" a read investigation shows as
   - `blocks:T-3`: what T-3 still waits for: the tasks on its chain that are not done (a dropped
     one too, since T-3 still can't start). A done task ends the chain there.
   - `stuck`: to-do tasks that can't start because something they wait for (directly or through
-    a chain) is failed, paused, waiting for you, dropped, or missing from the board.
+    a chain) is failed, paused, waiting for you, dropped, or missing from the board. A done
+    task that was archived counts as done here, not missing.
   These mix too: `waits-on:T-3 status:todo`, `stuck kind:bug`; `waits-on:T-3,T-4` takes either.
   A word like `foo:bar` that is not one of these is looked for as a plain word. The lead's
   board tool also takes `limit` and `sort` (`newest` or `order`), the same as `last:` and
