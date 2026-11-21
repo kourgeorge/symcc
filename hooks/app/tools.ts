@@ -106,6 +106,10 @@ ${features.panel ? `  /${S.N.name}                     open the board panel (↑
   /${S.N.name}-scout NAME          run a scout now
   /${S.N.name}-scout NAME pause    pause a scout's timer (run now still runs it)
   /${S.N.name}-scout NAME resume   resume a paused scout${features.panel ? ' (p on its page does both)' : ''}
+  /${S.N.name}-scout NAME every N  run it every N minutes (0: only on demand)
+  /${S.N.name}-scout NAME model M  set its model (none clears it)
+  /${S.N.name}-scout NAME prompt TEXT  change what it does
+  /${S.N.name}-scout NAME new TEXT make a new scout that does TEXT
   /${S.N.name}-mode [paused|review|auto]  set the board mode; no word switches review and auto
                        (from paused, no word goes to review)
                        paused: stop every worker and scout now, start nothing new
@@ -117,7 +121,15 @@ ${features.panel ? `  /${S.N.name}                     open the board panel (↑
                        (a typed line is one whole shell command; several go in a list like ["npm test", "npm run lint"];
                        "none" clears them)
                        a value over its limit is cut to it, and the answer says so
-  /${S.N.name}-stats [full|html] [7d|T-1..T-9]  time and token stats, with bar charts:
+  /${S.N.name}-settings role|kind NAME on|off|reset|remove|add
+                       turn a role or kind on or off, put a built-in one back, remove or add one
+  /${S.N.name}-settings role|kind NAME edit FIELD VALUE  change one field of it
+  /${S.N.name}-settings role|kind NAME save {json}  set several fields at once from JSON
+  /${S.N.name}-settings git setup  git init on main if there is no repo, a .gitignore and a first
+                       commit (never pushes)
+  /${S.N.name}-settings orgmem delete N [KEY]  delete org-mem note number N
+${features.panel ? '' : `  /${S.N.name}-board               open the board panel (OpenCode only)
+`}  /${S.N.name}-stats [full|html] [7d|T-1..T-9]  time and token stats, with bar charts:
                        tasks, worker time, tokens, the whole team (lead, workers, scouts),
                        per task and per try, the biggest tasks, how tasks ended, by role,
                        origin and day (all tasks, the last N days, or an id range);
@@ -135,7 +147,7 @@ ${features.panel ? `  /${S.N.name}                     open the board panel (↑
                        "fix" cleans up every item it offers, "fix b-T-5 w-T-5" only those. Unmerged
                        branches and folders with uncommitted changes are only listed
   /${S.N.help} [TOPIC]           this manual
-${features.panel ? `On the board: t tasks · s scouts · c settings · m switch review / auto.
+${features.panel ? `On the board: t tasks · l live · s scouts · c settings · m switch review / auto.
 In the settings view: Enter on a row changes it: on/off flips, mode, notify, scout_findings and
   tests_with_changes open a pick list (notify shows only what this machine can play), numbers and test_commands an edit box
   · Cancel (x) or Enter on an empty box leaves it · b back to the tasks.

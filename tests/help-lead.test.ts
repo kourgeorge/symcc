@@ -1,6 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 import { SETTINGS } from '../hooks/board'
 import { TOOLS, manual, MANUAL, leadGuide } from '../hooks/app/tools'
+import { ALL_FEATURES } from '../hooks/host'
 
 test('/symcc-help lead names every lead tool and every setting', () => {
   const text = manual('lead')
@@ -61,4 +62,14 @@ test('the help, the lead guide and the settings tool call the stopped board mode
   expect(text).toContain('The mode (paused, review, auto)')
   expect(text).toContain('going from paused to review or auto')
   for (const old of ['mode: off', 'never to off', 'also off.', '(off, review, auto)', 'from off to review']) expect(text).not.toContain(old)
+})
+
+test('/symcc-help commands names the newer command forms and the l (Live) key', () => {
+  const text = manual('commands')
+  for (const form of [
+    '-scout NAME every N', '-scout NAME model M', '-scout NAME prompt TEXT', '-scout NAME new TEXT',
+    '-settings role|kind NAME on|off|reset|remove|add', '-settings role|kind NAME edit FIELD VALUE', '-settings role|kind NAME save {json}',
+    '-settings git setup', '-settings orgmem delete N [KEY]', 'On the board: t tasks · l live',
+  ]) expect(text).toContain(form)
+  expect(manual('commands', { ...ALL_FEATURES, panel: false })).toContain('-board ')
 })
