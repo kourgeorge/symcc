@@ -577,6 +577,11 @@ test('T-736: checker send-backs, time-outs, no result, no change and not merged 
   expect(failReason('try 1: checker found problems: x')).toBe(null)
   expect(failReason('try 2: x → tests ran out of time: `npm test` was still running after 5 min')).toBe('timeout')
   expect(failReason('try 1: x → not merged: the task was paused while it was being checked')).toBe(null)
+  // the result is the last known " → ", so a "→ tests failed" in the summary doesn't make a merged try failed
+  expect(failReason('try 1: changed a → tests failed handling → merged into main (abc123)')).toBe(null)
+  // approves and merges once the owner's files are clear are not tries of their own, even when their tests fail
+  expect(failReason('try 1: approved by the owner → not merged, the tests failed after your edits: x')).toBe(null)
+  expect(failReason('try 1: merged once your files were out of the way → tests failed: x')).toBe(null)
   const text = statsReport({ tasks, nowMs: NOW, full: true })
   expect(text).toContain('Failed tries (7, from history)')
   expect(text).toMatch(/sent back by checker +▇+ +1/)

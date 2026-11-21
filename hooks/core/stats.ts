@@ -104,13 +104,13 @@ export function failReason(line: string): FailReason | null {
   if (/^the worker ended without a result\b/.test(head)) return 'noresult'
   if (onPurposeStop(/^stopped:\s*(.*)$/.exec(head)?.[1])) return null
   if (/^(stopped\b|restarted\b)/.test(head)) return 'stopped'
+  // T-736: an approve or a merge once the owner's files are clear is not a try of its own, so its failure is not one more failed try
+  if (/^(approved by the owner|merging\b|merged once your files)/.test(head)) return null
   const cut = resultCut(l)
   const outcome = cut < 0 ? '' : l.slice(cut + 3)
   if (/^tests failed\b|the tests failed after your edits/.test(outcome)) return 'tests'
   if (/^conflicts with the latest\b/.test(outcome)) return 'clash'
   if (/^changed files outside the task\b/.test(outcome)) return 'scope'
-  // T-736: an approve or a merge once the owner's files are clear is not a try of its own, so its failure is not one more failed try
-  if (/^(approved by the owner|merging\b|merged once your files)/.test(head)) return null
   if (/^the checker found problems\b/.test(outcome)) return 'checker'
   if (/^tests ran out of time\b/.test(outcome)) return 'timeout'
   if (/^the worker made no change\b/.test(outcome)) return 'nochange'
@@ -123,10 +123,10 @@ export function failReason(line: string): FailReason | null {
 /** The label of each reason in "Failed tries by reason", in the order they are shown. */
 export const FAIL_LABEL: Record<FailReason, string> = { tests: 'tests failed', checker: 'sent back by checker', clash: 'clash with main', scope: 'files out of scope', timeout: 'ran out of time', noresult: 'no result', nochange: 'no change', notmerged: 'not merged', other: 'other', changed: 'restarted by a change', stopped: 'stopped', rejected: 'rejected by you' }
 
-/** T-736: where the try's result starts in history line `l` (its " → "): the first one followed by an outcome failReason reads, so a "→" in the summary or the checker's report never moves it; else the last one. */
+/** T-736: where the try's result starts in history line `l` (its " → "): the last one followed by an outcome word symcc writes there, so a "→ tests failed" in the worker's summary or a "→" in the checker's report never moves it; else the last one. */
 const OUTCOME_START = /^(tests failed\b|conflicts with the latest\b|changed files outside the task\b|the checker found problems\b|tests ran out of time\b|the worker made no change\b|not merged\b|checking failed\b|symcc could not\b|could not\b|the worker ended its turn before\b|merged into\b|already merged into\b|checks passed\b)/
 function resultCut(l: string): number {
-  for (let i = l.indexOf(' → '); i >= 0; i = l.indexOf(' → ', i + 3)) if (OUTCOME_START.test(l.slice(i + 3))) return i
+  for (let i = l.lastIndexOf(' → '); i >= 0; i = i ? l.lastIndexOf(' → ', i - 1) : -1) if (OUTCOME_START.test(l.slice(i + 3))) return i
   return l.lastIndexOf(' → ')
 }
 
