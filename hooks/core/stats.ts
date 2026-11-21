@@ -83,7 +83,7 @@ export function taskFigures(t: Pick<SymccTask, 'runs'>, nowMs?: number): TaskFig
 }
 
 /** Why a try failed, read from one history line; null when the line is not a clear failure. */
-export type FailReason = 'tests' | 'clash' | 'scope' | 'changed' | 'stopped' | 'rejected'
+export type FailReason = 'tests' | 'checker' | 'clash' | 'scope' | 'timeout' | 'noresult' | 'nochange' | 'notmerged' | 'other' | 'changed' | 'stopped' | 'rejected'
 
 /**
  * T-735: whether a try stopped for `why` was stopped on purpose, not failed: paused (by the owner or the lead, or the
@@ -97,15 +97,37 @@ export function failReason(line: string): FailReason | null {
   if (!/^try \d+\b/.test(l)) return null
   const head = l.replace(/^try \d+(?: \([^)]*\))?:\s*/, '')
   if (/^rejected by the owner\b/.test(head)) return 'rejected'
+  if (/^checker\b/.test(head)) return null
   if (/^restarted: the task was changed\b/.test(head)) return 'changed'
+  // T-736: a try that ran over its time (the worker's, or its checking and merging) or ended without a result
+  if (/^(out of time\b|stopped after \d+ min \(out of time\)|its checking and merging ran over \d+ min\b)/.test(head)) return 'timeout'
+  if (/^the worker ended without a result\b/.test(head)) return 'noresult'
   if (onPurposeStop(/^stopped:\s*(.*)$/.exec(head)?.[1])) return null
   if (/^(stopped\b|restarted\b)/.test(head)) return 'stopped'
-  const cut = l.lastIndexOf(' → ')
+  const cut = resultCut(l)
   const outcome = cut < 0 ? '' : l.slice(cut + 3)
   if (/^tests failed\b|the tests failed after your edits/.test(outcome)) return 'tests'
   if (/^conflicts with the latest\b/.test(outcome)) return 'clash'
   if (/^changed files outside the task\b/.test(outcome)) return 'scope'
+  // T-736: an approve or a merge once the owner's files are clear is not a try of its own, so its failure is not one more failed try
+  if (/^(approved by the owner|merging\b|merged once your files)/.test(head)) return null
+  if (/^the checker found problems\b/.test(outcome)) return 'checker'
+  if (/^tests ran out of time\b/.test(outcome)) return 'timeout'
+  if (/^the worker made no change\b/.test(outcome)) return 'nochange'
+  if (/^not merged\b/.test(outcome)) return onPurposeStop(/^not merged: the task was (.*)$/.exec(outcome)?.[1]) ? null : 'notmerged'
+  if (/^(checking failed|symcc could not|could not|the worker ended its turn before)\b/.test(outcome)) return 'other'
+  if (/; nothing was checked or merged$/.test(head)) return 'other'
   return null
+}
+
+/** The label of each reason in "Failed tries by reason", in the order they are shown. */
+export const FAIL_LABEL: Record<FailReason, string> = { tests: 'tests failed', checker: 'sent back by checker', clash: 'clash with main', scope: 'files out of scope', timeout: 'ran out of time', noresult: 'no result', nochange: 'no change', notmerged: 'not merged', other: 'other', changed: 'restarted by a change', stopped: 'stopped', rejected: 'rejected by you' }
+
+/** T-736: where the try's result starts in history line `l` (its " → "): the first one followed by an outcome failReason reads, so a "→" in the summary or the checker's report never moves it; else the last one. */
+const OUTCOME_START = /^(tests failed\b|conflicts with the latest\b|changed files outside the task\b|the checker found problems\b|tests ran out of time\b|the worker made no change\b|not merged\b|checking failed\b|symcc could not\b|could not\b|the worker ended its turn before\b|merged into\b|already merged into\b|checks passed\b)/
+function resultCut(l: string): number {
+  for (let i = l.indexOf(' → '); i >= 0; i = l.indexOf(' → ', i + 3)) if (OUTCOME_START.test(l.slice(i + 3))) return i
+  return l.lastIndexOf(' → ')
 }
 
 /**
@@ -598,13 +620,12 @@ export function statsData(input: StatsInput & { full?: boolean }): StatsData {
   const answeredDone = how.filter(h => h === 'answered').length
   const outside = how.filter(h => h === 'outside').length
   const unclear = finished.length - own - approved - answeredDone - outside
-  const reasons: Record<FailReason, number> = { tests: 0, clash: 0, scope: 0, changed: 0, stopped: 0, rejected: 0 }
+  const reasons = Object.fromEntries(Object.keys(FAIL_LABEL).map(k => [k, 0])) as Record<FailReason, number>
   for (const t of all) for (const l of t.history) {
     const r = failReason(l.text)
     if (r) reasons[r]++
   }
   const ended = [{ label: 'merged on its own', n: own }, { label: 'approved by you', n: approved }, ...(outside ? [{ label: 'merged outside the board', n: outside }] : []), ...(answeredDone ? [{ label: 'answered (investigation)', n: answeredDone }] : []), ...(unclear ? [{ label: 'not clear from history', n: unclear }] : [])]
-  const FAIL_LABEL: Record<FailReason, string> = { tests: 'tests failed', clash: 'clash with main', scope: 'files out of scope', changed: 'restarted by a change', stopped: 'stopped', rejected: 'rejected by you' }
   const failed = (Object.keys(FAIL_LABEL) as FailReason[]).map(key => ({ key, label: FAIL_LABEL[key], n: reasons[key] }))
 
   const group = (key: string, label: string, ts: SymccTask[]): StatsGroup => {
@@ -727,11 +748,13 @@ export function headlineParts(d: StatsData): string[] {
 export const FAILED_TRIES_SHORT = 10
 /**
  * T-735: when "Each failed try" (each try's own end) and "Failed tries" (history lines) count differently, why; '' when
- * they agree. Both leave out tries stopped on purpose (onPurposeStop).
+ * they agree. Both leave out tries stopped on purpose (onPurposeStop). T-736: "Failed tries" now has every failed end
+ * (checker send-backs, time-outs, no result, no change, not merged ...); what still differs is a try rejected by the
+ * owner or restarted (its own end is "ready for review" or "restarted").
  */
 export function failedCountsNote(d: Pick<StatsData, 'failedTries' | 'failedTotal'>): string {
   if (d.failedTries.length === d.failedTotal) return ''
-  return `${d.failedTries.length} here, ${d.failedTotal} under "Failed tries": this list has every saved try that ended in a failure; that count reads the history lines and has only failed tests, clashes, files outside the task, restarts by a change, stops and tries rejected by the owner`
+  return `${d.failedTries.length} here, ${d.failedTotal} under "Failed tries": this list reads each saved try's own end; that count reads the history lines, which also count tries rejected by you and restarts (by a change or a reload), whose own end is a review or a restart`
 }
 export const FAILED_TESTS_SHORT = 5
 

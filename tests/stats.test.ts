@@ -543,7 +543,7 @@ test('T-735: tries stopped on purpose (paused, dropped, backlog, turned off) are
   const t2 = statsReport({ tasks: other, nowMs: NOW, full: true })
   expect(t2).toMatch(/T-8 +try 1 +the worker ended without a result/)
   const flat = t2.replace(/\s+/g, ' ')
-  expect(flat).toContain('2 here, 1 under "Failed tries": this list has every saved try that ended in a failure; that count reads the history lines and has only failed tests, clashes, files outside the task, restarts by a change, stops and tries rejected by the owner')
+  expect(flat).toContain('2 here, 1 under "Failed tries": this list reads each saved try\'s own end; that count reads the history lines, which also count tries rejected by you and restarts')
   expect(flat).not.toContain('older tries with no end saved')
 })
 
@@ -558,6 +558,39 @@ test('T-735: with no failed try in the list but a failed history line, both repo
   expect(html).toContain('<h2>Each failed try (0)</h2>')
   expect(html).toContain('0 here, 1 under &quot;Failed tries&quot;')
   expect(html).not.toContain('No failed tries.')
+})
+
+test('T-736: checker send-backs, time-outs, no result, no change and not merged have their own reasons, so both failed-tries counts agree', () => {
+  const run = (by: 'finished' | 'stopped' | 'timed out', note: string) => [{ started: iso(30), ended: iso(20), ended_by: by, ended_note: note }]
+  const tasks = [
+    task('T-1', { status: 'todo', runs: run('finished', 'checker found problems'), history: hist('try 1: checker found problems: a → b is wrong', 'try 1: did it → the checker found problems: a → b is wrong') }),
+    task('T-2', { status: 'failed', runs: run('timed out', 'ran over 30 min'), history: hist('try 1: out of time; handed back: half (its work so far is kept in its folder and branch)') }),
+    task('T-3', { status: 'failed', runs: run('stopped', 'the worker ended without a result'), history: hist('try 1: the worker ended without a result') }),
+    task('T-4', { status: 'failed', runs: run('finished', 'no change'), history: hist('try 1: nothing to do → the worker made no change') }),
+    task('T-5', { status: 'failed', runs: run('finished', 'not merged'), history: hist('try 1: x → not merged: something else') }),
+    task('T-6', { status: 'todo', runs: run('stopped', 'its checking and merging ran over 15 min and was stopped'), history: hist('try 1: its checking and merging ran over 15 min and was stopped; a new try will look at it (1 of 2)') }),
+    task('T-7', { status: 'failed', runs: run('stopped', "the worker's turn ended on an error"), history: hist("try 1: the worker's turn ended on an error (retries used up or the context limit); nothing was checked or merged") }),
+    // an approve that could not merge is not a try of its own
+    task('T-8', { status: 'review', history: hist('try 1: approved by the owner → not merged: symcc was disabled while it was being merged; it stays in review') }),
+  ]
+  expect(failReason('try 1: did it → the checker found problems: x')).toBe('checker')
+  expect(failReason('try 1: checker found problems: x')).toBe(null)
+  expect(failReason('try 2: x → tests ran out of time: `npm test` was still running after 5 min')).toBe('timeout')
+  expect(failReason('try 1: x → not merged: the task was paused while it was being checked')).toBe(null)
+  const text = statsReport({ tasks, nowMs: NOW, full: true })
+  expect(text).toContain('Failed tries (7, from history)')
+  expect(text).toMatch(/sent back by checker +▇+ +1/)
+  expect(text).toMatch(/ran out of time +▇+ +2/)
+  for (const label of ['no result', 'no change', 'not merged', 'other']) expect(text).toMatch(new RegExp(`  ${label} +▇+ +1`))
+  expect(text).toContain('Each failed try (7: task')
+  expect(text).not.toContain('under "Failed tries"')
+  const d = statsData({ tasks, nowMs: NOW })
+  expect([d.failedTries.length, d.failedTotal]).toEqual([7, 7])
+  const html = statsHtml(d, 'p')
+  expect(html).toContain('Failed tries by reason (7, from history)')
+  expect(html).toContain('aria-label="sent back by checker: 1"')
+  expect(html).toContain('aria-label="ran out of time: 2"')
+  expect(html).not.toContain('under &quot;Failed tries&quot;')
 })
 
 test('T-721: a try waiting for the owner\'s files is not a failed try, and with "inside" a try keeps its own number', () => {
