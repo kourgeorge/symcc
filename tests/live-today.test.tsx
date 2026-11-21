@@ -105,6 +105,23 @@ test('T-769: readTodayTeam reads the lead\'s tokens today, the scouts\' runs of 
   resetTodayTeam()
 })
 
+test('T-769: publish itself reads ▍Today\'s team figures on a host with no panel (OpenCode draws ▍Today from the published view)', async () => {
+  resetTodayTeam()
+  S.root = '/repo'
+  const now = Date.now()
+  const g = fakeHost({
+    features: { panel: false, band: false, leadUsage: true },
+    lead: { send: async () => undefined, usage: async () => ({ lead: [{ id: 'a', atMs: now - 60_000, tokens: { input: 70_000 } }] }) },
+    session: { id: async () => 'me', repo: async () => null, root: async () => '/', usage: async () => ({ cost: { usd: 3.5 } }) },
+  })
+  await publish(g.host, emptyBoard())
+  // the read runs in the background and then updates the view
+  for (let i = 0; i < 500 && !(g.panel.view() as unknown as { today_team?: TodayTeam }).today_team; i++) await Promise.resolve()
+  const t = (g.panel.view() as unknown as { today_team?: TodayTeam }).today_team
+  expect([t?.lead, t?.usd]).toEqual([70_000, 3.5])
+  resetTodayTeam()
+})
+
 const liveView = (tasks: unknown[], team?: TodayTeam) => ({ shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', branch: 'main', test_commands: ['npm test'], driving: true, checker: true, max_parallel: 3, ...(team ? { today_team: team } : {}) } })
 type Node = { type?: string; props?: Record<string, unknown>; children?: unknown[] }
 const textOf = (n: unknown): string => (typeof n === 'string' ? n : !n || typeof n !== 'object' ? '' : ((n as Node).children ?? []).map(textOf).join(''))
