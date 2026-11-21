@@ -49,6 +49,10 @@ export function orgMemPage($: $, pane: PaneParts, all: OrgMemNote[], file: strin
     <Box flexDirection="column">
       {header('orgmem')}
       {heading(orgMemPageTitle(topic))}
+      <Box key="orgmem-buttons" flexDirection="row" gap={1}>
+        {notes.length && !ask ? <Button key="orgmem-delete" label="Delete (x)" hotkey="x" onPress={() => askDelete(focusedNote(notes))()} /> : null}
+        <Button key="orgmem-back" label="Back (b)" hotkey="b" onPress={() => (resetOrgMemView(), redraw())} />
+      </Box>
       <Text key="orgmem-about" wrap="wrap" color={C('inactive')}>{orgMemAbout(file)}</Text>
       <Text key="orgmem-about-blank"> </Text>
       {notes.length ? (
@@ -64,9 +68,6 @@ export function orgMemPage($: $, pane: PaneParts, all: OrgMemNote[], file: strin
       ) : (
         <Text key="orgmem-empty" color={C('inactive')}>{`  ${topic ? orgMemTopicEmpty(topic) : ORG_MEM_EMPTY}`}</Text>
       )}
-      <Text key="orgmem-blank"> </Text>
-      {notes.length && !ask ? <Button key="orgmem-delete" label="Delete (x)" hotkey="x" onPress={() => askDelete(focusedNote(notes))()} /> : null}
-      <Button key="orgmem-back" label="Back (b)" hotkey="b" onPress={() => (resetOrgMemView(), redraw())} />
       {footer(orgMemKeys(!!ask, notes.length > 0), 'orgmem-keys')}
     </Box>
   )

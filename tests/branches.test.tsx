@@ -177,3 +177,51 @@ test('T-727: the VS Code Live tab draws the Branches section with real lines, an
   await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'tasks') } })
   await ui.unmount()
 })
+
+// T-738: one empty line just above each section heading of the Live tab (Branches, the rule over next up, Organizational
+// memory), none above the first (the header line under the tab row), never two.
+const LIVE_HEADS = [(l: string) => l.startsWith(' ── Branches'), (l: string) => /^─+$/.test(l), (l: string) => l.startsWith(' ── Organizational memory')]
+for (const surface of ['terminal', 'desktop', 'mobile'] as const)
+  test(`T-738: the ${surface} Live tab has exactly one empty line above each section, none above the first`, async ($, on) => {
+    seedBoard(on, { view: liveView() })
+    on('ui.toast', () => ({ value: undefined }))
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 80 }, surface })
+    await ui.press({ key: 'tab-live' })
+    const lines = pageLines(await ui.drawn())
+    const first = lines.findIndex(l => l.includes('agents ') && l.includes(' busy'))
+    expect(first).toBeGreaterThan(0)
+    expect(lines[first - 1]!.trim() === '').toBe(false)
+    const live = lines.slice(first)
+    for (const isHead of LIVE_HEADS) {
+      const at = live.findIndex(isHead)
+      expect([at, at > 0]).toEqual([at, true])
+      expect([live[at], live[at - 1]!.trim()]).toEqual([live[at], ''])
+      expect([live[at], live[at - 2]!.trim() === '']).toEqual([live[at], false])
+    }
+    await ui.press({ key: 'tab-tasks' })
+    await ui.unmount()
+  })
+
+type VsNode = { type?: string; key?: unknown; props?: Record<string, unknown>; children?: unknown[] }
+test('T-738: the VS Code Live tab spaces its sections with one empty line (the page Box\'s gap), none above the first', async ($, on) => {
+  seedBoard(on, { view: liveView() })
+  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 100 }, surface: 'vscode' })
+  await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'live') } })
+  // the page's Box: the one holding the header line and every section as its own child
+  const find = (n: unknown): VsNode | undefined => {
+    const x = n as VsNode
+    if (!x || typeof x !== 'object') return undefined
+    if (Array.isArray(n)) return n.map(find).find(Boolean)
+    const kids = (x.children ?? []) as VsNode[]
+    if (x.type === 'Box' && kids.some(k => k && (k.key ?? k.props?.key) === 'live-head')) return x
+    return kids.map(find).find(Boolean)
+  }
+  const page = find(await ui.drawn())!
+  expect(page.props?.gap).toBe(1)
+  const keys = ((page.children ?? []) as VsNode[]).map(k => String(k?.key ?? k?.props?.key ?? ''))
+  for (const k of ['live-head', 'live-lanes', 'live-br', 'live-bottom', 'live-om']) expect([k, keys.includes(k)]).toEqual([k, true])
+  // no blank Text lines of its own (the gap is the one empty line), and no padding on top of the gap
+  for (const c of (page.children ?? []) as VsNode[]) expect([String(c?.props?.key), c?.props?.paddingTop ?? 0, c?.props?.marginTop ?? 0]).toEqual([String(c?.props?.key), 0, 0])
+  await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'tasks') } })
+  await ui.unmount()
+})

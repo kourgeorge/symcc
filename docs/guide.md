@@ -1745,8 +1745,14 @@ its read-only `stats` tool.
   sits next to it ("avg 25m · median 30m · total 1h 40m"; for roles and origins on the line
   under it); time per stage (see below); the 5 biggest tasks by tokens and by time (bars); how tasks
   ended (merged on its own, approved by you, or answered for an investigation; failed
-  tries by reason: tests, clash with main, files out of scope, restarted by a change, stopped,
-  rejected); each failed try on its own line (task, try, how it ended, and when its tests failed,
+  tries by reason: tests failed, sent back by the checker, clash with main, files out of scope,
+  ran out of time (the worker's time, the tests' time, or its checking and merging), no result
+  (the worker ended without one), no change, not merged (also when your files on main
+  can't be updated; a try that only left out secret-looking files waits for you and is not
+  counted), other (an API error, a refusal, the
+  worker ending its turn early, checking that failed), restarted by a change, stopped, rejected;
+  "Each failed try" counts the same failed tries, except tries rejected by you and restarts, and
+  says so when the two counts differ); each failed try on its own line (task, try, how it ended, and when its tests failed,
   the failing test command and the first failing test; the short view shows the latest 10); the
   tests that failed most (each test with how many failed tries and how many different tasks it
   failed, most tasks first, so a flaky test that fails many tasks stands out; the short view
