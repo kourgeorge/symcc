@@ -2,7 +2,7 @@
 // numbers; claude/ui/live.tsx draws them on the terminal panel).
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { liveLanes, liveLayout, laneLines, liveLabelLine, liveStations, liveTrains, trainRows, type LiveTrain, nextUpLine, liveToday, todayLines, segText, liveBlink, liveHeader, tabRow, LIVE_TABS, LIVE_EMPTY, LIVE_LEGEND } from '../hooks/core/live'
+import { liveLanes, liveLayout, laneLines, liveLabelLine, liveStations, liveTrains, trainRows, type LiveTrain, nextUpLine, liveToday, todayLines, segText, liveBlink, liveHeader, tabRow, LIVE_TABS, LIVE_EMPTY, LIVE_LEGEND, LIVE_INDENT, liveInner } from '../hooks/core/live'
 import { textWidth } from '../hooks/core/stats'
 import { FINISH_STALE_MS } from '../hooks/core/lead'
 import { listKeys } from '../hooks/board'
@@ -254,10 +254,12 @@ test('T-690: the Live tab draws at a normal and a narrow width with nothing cut,
     for (const l of lines) expect(textWidth(l)).toBeLessThanOrEqual(bodyColumns)
     expect(textWidth(pageLines(await ui.drawn()).find(l => l.includes('Live'))!)).toBeLessThanOrEqual(bodyColumns)
     // the lane rows, their second rows, next up, today, the legend and the keys
-    for (const id of ['T-684', 'T-685', 'T-686', 'T-687', 'T-688']) expect(lines.some(l => l.startsWith(` ${id} `))).toBe(true)
-    expect(lines.filter(l => /^ {2}change try \d\/\d/.test(l)).length).toBe(5)
-    expect(lines.some(l => l.startsWith('next up  T-690'))).toBe(true)
-    expect(lines.some(l => l.startsWith('today    ✓ 1 merged'))).toBe(true)
+    // (T-747: under the "▍Tasks" and "▍Today" headings, indented by 3)
+    expect(lines[1]).toBe('▍Tasks')
+    for (const id of ['T-684', 'T-685', 'T-686', 'T-687', 'T-688']) expect(lines.some(l => l.startsWith(`${LIVE_INDENT} ${id} `))).toBe(true)
+    expect(lines.filter(l => /^ {5}change try \d\/\d/.test(l)).length).toBe(5)
+    expect(lines[lines.findIndex(l => l === '▍Today') + 1]?.startsWith(`${LIVE_INDENT}next up  T-690`)).toBe(true)
+    expect(lines.some(l => l.startsWith(`${LIVE_INDENT}today    ✓ 1 merged`))).toBe(true)
     expect(lines).toContain(LIVE_LEGEND)
     expect(lines.some(l => l.includes('t l s c views'))).toBe(true)
     // the lanes in the order they entered doing
@@ -280,8 +282,8 @@ test('T-690: with no task in doing, the Live tab says so and shows next up', asy
   await ui.press({ key: 'tab-live' })
   const lines = await liveLines(ui)
   expect(lines[0]).toBe('⏵ auto · agents 0/3 busy')
-  expect(lines[1]).toBe(LIVE_EMPTY)
-  expect(lines.some(l => l.startsWith('next up  T-690'))).toBe(true)
+  expect(lines.slice(1, 3)).toEqual(['▍Tasks', LIVE_INDENT + LIVE_EMPTY])
+  expect(lines.some(l => l.startsWith(`${LIVE_INDENT}next up  T-690`))).toBe(true)
   await ui.press({ key: 'tab-tasks' })
   await ui.unmount()
 })
@@ -327,8 +329,9 @@ for (const checker of [true, false])
     const ids = (await t.findAll({ type: 'Button' })).map(b => String(b.key)).filter(k => k.startsWith('live:')).map(k => k.slice(5))
     const tracks: string[] = []
     for (const id of ids) tracks.push(steadyMark((await t.find({ key: `live:${id}` }))!.text.match(/[●○◉◎][━─●○◉◎]*/)![0]))
-    const next = lines.find(l => l.startsWith('next up'))!
-    const today = lines.find(l => l.startsWith('today'))!
+    // the terminal's lines under a heading are indented (T-747); VS Code's words are the same
+    const next = lines.find(l => l.startsWith(`${LIVE_INDENT}next up`))!.slice(LIVE_INDENT.length)
+    const today = lines.find(l => l.startsWith(`${LIVE_INDENT}today`))!.slice(LIVE_INDENT.length)
     await t.press({ key: 'tab-tasks' })
     await t.unmount()
 
@@ -403,20 +406,20 @@ for (const bodyColumns of [100, 40])
     on('ui.toast', () => ({ value: undefined }))
     const lanes = liveLanes(trainView, T0)
     const t = liveTrains(trainView, T0, lanes)
-    const want = lanes.flatMap(l => trainRows(t.lanes[l.id] ?? [], bodyColumns))
+    const want = lanes.flatMap(l => trainRows(t.lanes[l.id] ?? [], liveInner(bodyColumns)))
     expect(want.filter(r => r.id).map(r => r.id)).toEqual(['T-713', 'T-714', 'T-717', 'T-716'])
     const term = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'terminal' })
     await term.press({ key: 'tab-live' })
     const lines = await liveLines(term)
     for (const l of lines) expect([l, textWidth(l) <= bodyColumns]).toEqual([l, true])
     // the trains right under T-712's two lane lines, in the same order and words
-    const at = lines.findIndex(l => l.startsWith(' T-712 '))
-    expect(lines.slice(at + 2, at + 2 + want.length)).toEqual(want.map(r => segText(r.segs)))
+    const at = lines.findIndex(l => l.startsWith(`${LIVE_INDENT} T-712 `))
+    expect(lines.slice(at + 2, at + 2 + want.length)).toEqual(want.map(r => LIVE_INDENT + segText(r.segs)))
     const keys = (await term.findAll({ type: 'Button' })).map(b => String(b.key)).filter(k => k.startsWith('live'))
     expect(keys.filter(k => k.startsWith('live-train:'))).toEqual(['live-train:T-713', 'live-train:T-714', 'live-train:T-717', 'live-train:T-716'])
     // next up: the free one and the stuck one, no trains
-    const next = lines.find(l => l.startsWith('next up'))!
-    expect(next).toBe(nextUpLine(t, bodyColumns))
+    const next = lines.find(l => l.startsWith(`${LIVE_INDENT}next up`))!.slice(LIVE_INDENT.length)
+    expect(next).toBe(nextUpLine(t, liveInner(bodyColumns)))
     expect(next).not.toContain('T-713')
     await term.press({ key: 'tab-tasks' })
     await term.unmount()

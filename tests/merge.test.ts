@@ -2053,6 +2053,17 @@ test('T-732: ask on a to-do task writes a history line the stats read as waiting
   expect(t.history.at(-1)!.text).toBe('the lead asked the owner a question')
 })
 
+test('T-737: pausing a to-do task writes a history line the stats read as waiting for you when it waits for the owner', async () => {
+  const w = world()
+  const [b] = boardWith('auto', [], { status: 'todo' })
+  await saveBoard(w.$, b)
+  await runTool(w.$, 'pause', { task: 'T-1', reason: 'Waiting for the owner to choose A or B' })
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('paused')
+  expect(t.history.at(-1)!.kind).toBe('stopped')
+  expect(t.history.at(-1)!.text).toBe('paused: Waiting for the owner to choose A or B')
+})
+
 test('a task dropped while its branch clashes with main does not go back to "todo" for a merge-main try', async () => {
   const w = world({ upToDate: false, conflict: true })
   const [b] = boardWith('auto', [])

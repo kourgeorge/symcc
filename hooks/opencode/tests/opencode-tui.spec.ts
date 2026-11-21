@@ -16,7 +16,7 @@ import { hasPage, bandLines, bandDraw, BAND_CLICK_HINT, panelLines, panelKeys, p
 import { readFile } from 'node:fs/promises'
 import { rowEndBoard, ROW_END, ROW_END_NOW } from '../../../tests/row-end-cases'
 import { BRANCH_LINES_100, branchFactsAt, branchTasks } from '../../../tests/branches-fixture'
-import { liveBranches } from '../../core/live'
+import { LIVE_INDENT, liveBranches, liveInner } from '../../core/live'
 import { taskSections } from '../../core/task-sections'
 import { viewTask, viewStubFilled } from '../../core/board-parts'
 import { orgMemNotes, orgMemNoteKey } from '../../core/org-mem'
@@ -1824,10 +1824,10 @@ test('T-619, T-687: the Settings tab has no org-mem row; the Live tab ends with 
   // the Live tab (T-718): the org-mem section ends the body, right above the footer; a click on its header presses m
   const live = panelLines(f, { tab: 'live', opened: '', cursor: 0 }, NOW, 140)
   const ll = live.lines.map(lineText)
-  const head = ll.findIndex(l => l.startsWith(' ── Organizational memory'))
+  const head = ll.findIndex(l => l.startsWith('▍Organizational memory'))
   expect(ll[head]).toContain('3 / 60')
   expect(live.lines[head]!.find(x => x.text === 'Organizational memory')?.hit).toEqual({ key: 'm' })
-  expect(ll[live.lines.length - live.footer - 1]).toBe('  ↑↓ move · Enter open topic · m all notes')
+  expect(ll[live.lines.length - live.footer - 1]).toBe(`${LIVE_INDENT}  ↑↓ move · Enter open topic · m all notes`)
   expect(panelKeys(f, '', 'live').map(k => `${k.key} ${k.word}`)).toContain('m org-mem')
   expect(hasPage(f, 'orgmem', 'live')).toBe(true)
   // the page: title, what it is, the notes newest first (number, task id, date, then the text)
@@ -1846,8 +1846,8 @@ test('T-619, T-687: the Settings tab has no org-mem row; the Live tab ends with 
   expect(panelKeys(f, 'orgmem', 'live').map(k => k.word)).toEqual(['move', 'delete', 'back'])
   // no notes
   const empty = orgMemViewFile('')
-  expect(panelLines(empty, { tab: 'live', opened: '', cursor: 0 }, NOW, 140).lines.map(lineText)).toContain('  No notes yet.')
-  expect(panelLines(empty, { tab: 'live', opened: '', cursor: 0 }, NOW, 140).lines.map(lineText).find(l => l.startsWith(' ── Organizational memory'))).toContain('0 / 60')
+  expect(panelLines(empty, { tab: 'live', opened: '', cursor: 0 }, NOW, 140).lines.map(lineText)).toContain(`${LIVE_INDENT}  No notes yet.`)
+  expect(panelLines(empty, { tab: 'live', opened: '', cursor: 0 }, NOW, 140).lines.map(lineText).find(l => l.startsWith('▍Organizational memory'))).toContain('0 / 60')
   expect(panelLines(empty, { tab: 'live', opened: 'orgmem', cursor: 0 }, NOW, 140).lines.map(lineText)).toContain('  No notes yet.')
   expect(panelKeys(empty, 'orgmem', 'live').map(k => k.word)).toEqual(['back'])
   // the delete as a slash command
@@ -1925,15 +1925,15 @@ test('T-718: OpenCode: the Live tab\'s org-mem section draws the header, the 3 n
     const d = panelLines(f, { tab: 'live', opened: '', cursor: 0 }, NOW, w)
     const ls = d.lines.map(lineText)
     for (const l of ls) expect([w, l, l.length <= w]).toEqual([w, l, true])
-    const head = ls.findIndex(l => l.startsWith(' ── Organizational memory'))
-    expect(ls[head]).toContain('8 / 60')
-    expect(ls[head]!.length).toBe(w)
-    expect(ls[head + 1]).toBe('  newest')
-    expect(ls[head + 2]).toMatch(/^[ ›] {2}— +unsorted {2}a note written/)
-    expect(ls[head + 3]).toMatch(/^ {3}11-21 {2}git +Use a plain path/)
-    expect(ls[head + 4]).toMatch(/^ {3}11-21 {2}tests +In tests, put/)
-    expect(ls[head + 5]).toBe('  topics')
-    const grid = ls.slice(head + 6, ls.findIndex(l => l.startsWith('  ↑↓ move')))
+    // T-747: the "▍Organizational memory" heading with the count and bar on it, the lines under it indented
+    const head = ls.findIndex(l => l.startsWith('▍Organizational memory   8 / 60 ▕'))
+    expect(head > 0).toBe(true)
+    expect(ls[head + 1]).toBe('     newest')
+    expect(ls[head + 2]).toMatch(/^[ ›] {5}— +unsorted {2}a note written/)
+    expect(ls[head + 3]).toMatch(/^ {6}11-21 {2}git +Use a plain path/)
+    expect(ls[head + 4]).toMatch(/^ {6}11-21 {2}tests +In tests, put/)
+    expect(ls[head + 5]).toBe('     topics')
+    const grid = ls.slice(head + 6, ls.findIndex(l => l.startsWith('     ↑↓ move')))
     expect(grid.join(' ')).toMatch(/tests +3/)
     expect(grid.join(' ')).toMatch(/git +2/)
     expect(grid.join(' ')).toMatch(/vs code · panel +1/)
@@ -2564,9 +2564,12 @@ test('T-692: the Live tab draws the terminal panel\'s lanes, next up and today (
   // what the terminal panel draws (claude/ui/live.tsx): the same core functions on the whole board
   const terminal = (w: number) => {
     const lanes = liveLanes(view, NOW)
-    const layout = liveLayout(lanes, liveStations(true), w)
+    // T-747: each section under its "▍Name" heading, its lines indented
+    const inner = liveInner(w)
+    const layout = liveLayout(lanes, liveStations(true), inner)
     const frame = Math.floor(NOW / 1000)
-    return [liveHeader(view, lanes), liveLabelLine(layout), ...lanes.flatMap(l => laneLines(l, layout, { nowMs: NOW, frame }).map(segText)), nextUpLine(liveTrains(view, NOW, lanes), w), ...todayLines(liveToday(whole, NOW), w), LIVE_LEGEND]
+    const under = (x: string) => LIVE_INDENT + x
+    return [liveHeader(view, lanes), '▍Tasks', under(liveLabelLine(layout)), ...lanes.flatMap(l => laneLines(l, layout, { nowMs: NOW, frame }).map(x => under(segText(x)))), '▍Today', under(nextUpLine(liveTrains(view, NOW, lanes), inner)), ...todayLines(liveToday(whole, NOW), inner).map(under), under(LIVE_LEGEND)]
   }
   // OpenCode reads the view file, whose done task comes slim (no history): the today row must still match
   const f: ViewFile = { ...f0, view: { ...view, tasks: whole.map(t => viewTask(t)) } }
@@ -2589,7 +2592,7 @@ test('T-692: the Live tab draws the terminal panel\'s lanes, next up and today (
     }
     for (const t of texts) expect([w, t, t.length <= w]).toEqual([w, t, true])
     expect(d.ids).toEqual(['T-611', 'T-612', 'T-610'])
-    expect(texts.some(t => t.startsWith('›T-611'))).toBe(true)
+    expect(texts.some(t => t.startsWith(`›${LIVE_INDENT}T-611`))).toBe(true)
     // each lane's first line is a click on its task
     const lane = d.lines.findIndex((l, i) => lineText(l).includes('T-612') && !!d.hits[i])
     expect(d.hits[lane]).toEqual({ open: 'T-612' })
@@ -2600,7 +2603,7 @@ test('T-692: the Live tab draws the terminal panel\'s lanes, next up and today (
   expect(lineOf(NOW)).not.toBe(lineOf(NOW + 1000))
   // no task in doing: the empty state
   const none: ViewFile = { ...f, view: { ...f.view, tasks: f.view.tasks.filter(t => t.status !== 'doing') } }
-  expect(panelLines(none, { tab: 'live', opened: '', cursor: 0 }, NOW, 100).lines.map(lineText)).toContain(LIVE_EMPTY)
+  expect(panelLines(none, { tab: 'live', opened: '', cursor: 0 }, NOW, 100).lines.map(lineText)).toContain(LIVE_INDENT + LIVE_EMPTY)
 })
 
 test('T-709: the Live tab shows a lane for an approved task in review while its tests run (as the Tasks tab counts it in doing)', () => {
@@ -2611,13 +2614,13 @@ test('T-709: the Live tab shows a lane for an approved task in review while its 
   const f: ViewFile = { ...f0, view: { ...f0.view, tasks: tasks.map(t => viewTask(t)), checker: true, max_parallel: 3 } }
   const d = panelLines(parseViewFile(viewFileText(f)), { tab: 'live', opened: '', cursor: 0 }, NOW, 120)
   const texts = d.lines.map(lineText)
-  expect(texts.includes(LIVE_EMPTY)).toBe(false)
+  expect(texts.includes(LIVE_INDENT + LIVE_EMPTY)).toBe(false)
   expect(d.ids).toEqual(['T-630'])
   const lane = liveLanes({ ...f.view, tasks }, NOW)
   expect(lane.map(l => l.station)).toEqual(['tests'])
   // its check step gone stale: no lane, the empty state again
   const stale: ViewFile = { ...f, view: { ...f.view, tasks: tasks.map(t => (t.id === 'T-630' ? ({ ...t, checking: { step: 'testing', at: ago(3600) } } as unknown as SymccTask) : t)).map(t => viewTask(t)) } }
-  expect(panelLines(parseViewFile(viewFileText(stale)), { tab: 'live', opened: '', cursor: 0 }, NOW, 120).lines.map(lineText)).toContain(LIVE_EMPTY)
+  expect(panelLines(parseViewFile(viewFileText(stale)), { tab: 'live', opened: '', cursor: 0 }, NOW, 120).lines.map(lineText)).toContain(LIVE_INDENT + LIVE_EMPTY)
 })
 
 test('T-692: in the TUI, l (or a click on the Live tab) shows the Live tab; ↓ and Enter, or a click on a lane, open that task\'s page', async () => {
@@ -2706,19 +2709,19 @@ test('T-715: the Live tab hangs the waiting trains under their lanes as the term
   for (const w of [100, 40]) {
     const lanes = liveLanes(view, NOW)
     const t = liveTrains(view, NOW, lanes)
-    const rows = trainRows(t.lanes['T-712']!, w)
+    const rows = trainRows(t.lanes['T-712']!, liveInner(w))
     expect(rows.map(r => r.id)).toEqual(['T-713', 'T-714', 'T-717', 'T-716'])
     const d = panelLines(parseViewFile(viewFileText(f)), { tab: 'live', opened: '', cursor: 0 }, NOW, w)
     const texts = d.lines.map(lineText).map(x => x.replace(/^›/, ' '))
     for (const x of texts) expect([w, x, x.length <= w]).toEqual([w, x, true])
     // right under T-712's two lane lines
-    const at = texts.findIndex(x => x.startsWith(' T-712 '))
-    expect([w, texts.slice(at + 2, at + 2 + rows.length)]).toEqual([w, rows.map(r => segText(r.segs))])
+    const at = texts.findIndex(x => x.startsWith(`${LIVE_INDENT} T-712 `))
+    expect([w, texts.slice(at + 2, at + 2 + rows.length)]).toEqual([w, rows.map(r => LIVE_INDENT + segText(r.segs))])
     // the cursor stops: each lane, then its trains; a click on a train opens it
-    expect(d.ids).toEqual([...lanes.flatMap(l => [l.id, ...trainRows(t.lanes[l.id]!, w).flatMap(r => (r.id ? [r.id] : []))])])
+    expect(d.ids).toEqual([...lanes.flatMap(l => [l.id, ...trainRows(t.lanes[l.id]!, liveInner(w)).flatMap(r => (r.id ? [r.id] : []))])])
     expect(d.hits[d.lines.findIndex(l => lineText(l).includes('└─◇ T-714'))]).toEqual({ open: 'T-714' })
-    const next = texts.find(x => x.startsWith('next up'))!
-    expect(next).toBe(nextUpLine(t, w))
+    const next = texts.find(x => x.startsWith(`${LIVE_INDENT}next up`))!
+    expect(next).toBe(LIVE_INDENT + nextUpLine(t, liveInner(w)))
     expect(next.includes('T-713')).toBe(false)
   }
   expect(nextUpLine(liveTrains(view, NOW), 120)).toBe('next up  T-715 Free to sta… · T-718 Waits for t… (waits T-701, failed) · 1 more')
@@ -3188,9 +3191,9 @@ test('T-727: the OpenCode Live tab draws the Branches section under the lanes as
   expect(parseViewFile(viewFileText({ ...f, view: { ...f.view, branches: 'x' as never } }))!.view.branches).toBe(undefined)
   for (const w of [100, 40]) {
     const d = panelLines(f, { tab: 'live', opened: '', cursor: 0 }, NOW, w)
-    const lines = d.lines.map(lineText)
+    const lines = d.lines.map(lineText).map(x => x.replace(/^›/, ' '))
     const b = liveBranches(f.view, NOW, w)!
-    const want = [b.head, b.main, ...b.rows.map(r => r.segs)].map(segText)
+    const want = [segText(b.head), ...[b.main, ...b.rows.map(r => r.segs)].map(x => LIVE_INDENT + segText(x))]
     if (w === 100) expect(want).toEqual(BRANCH_LINES_100)
     const at = lines.indexOf(want[0]!)
     expect(at).toBeGreaterThan(0)
@@ -3259,12 +3262,23 @@ test('T-727: startTui: Enter on a Branches row opens its task, b returns to the 
 })
 
 // ---------------- T-738: one empty line above each Live tab section ----------------
-test('T-738: the OpenCode Live tab has exactly one empty line above each section heading, none above the first', () => {
+// T-747: each section starts with a "▍Name" heading (Tasks right under the mode line), no "── Name ──" rules left
+test('T-738, T-747: the OpenCode Live tab has a ▍heading for each section, one empty line above each, none above the first', () => {
   for (const w of [100, 40]) {
-    const lines = panelLines(branchesViewFile(), { tab: 'live', opened: '', cursor: 0 }, NOW, w).lines.map(lineText)
+    const d = panelLines(branchesViewFile(), { tab: 'live', opened: '', cursor: 0 }, NOW, w)
+    const lines = d.lines.map(lineText)
     expect(lines[0]!.trim() === '').toBe(false)
-    const heads = [(l: string) => l.startsWith(' ── Branches'), (l: string) => /^─+$/.test(l), (l: string) => l.startsWith(' ── Organizational memory')]
-    for (const isHead of heads) {
+    const mode = lines.findIndex(l => l.includes('agents ') && l.includes(' busy'))
+    expect([mode >= 0, lines[mode + 1]]).toEqual([true, '▍Tasks'])
+    const heads = lines.filter(l => l.startsWith('▍'))
+    expect(heads.slice(0, 3)).toEqual(['▍Tasks', '▍Branches', '▍Today'])
+    expect([heads.length, heads[3]!.startsWith(w === 100 ? '▍Organizational memory   ' : '▍Org')]).toEqual([4, true])
+    // no section rules in the body (the footer's rule is under it)
+    expect(lines.slice(mode, lines.length - d.footer).filter(l => l.includes('── ') || /^─+$/.test(l))).toEqual([])
+    // the heading's bar and name are drawn in the task page's heading color, bold
+    expect(d.lines[mode + 1]!.map(x => [x.color, x.bold])).toEqual([['suggestion', true], ['suggestion', true]])
+    const isHeads = [(l: string) => l.startsWith('▍Branches'), (l: string) => l.startsWith('▍Today'), (l: string) => l.startsWith('▍Org')]
+    for (const isHead of isHeads) {
       const at = lines.findIndex(isHead)
       expect(at > 1).toBe(true)
       expect([lines[at], lines[at - 1]!.trim()]).toEqual([lines[at]!, ''])

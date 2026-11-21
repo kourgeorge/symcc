@@ -88,7 +88,7 @@ const pageLines = (n: unknown): string[] => {
   return [textOf(x)]
 }
 /** The Live tab's org-mem section header line (terminal). */
-const omHead = async (ui: { drawn: () => Promise<unknown> }) => pageLines(await ui.drawn()).find(l => l.startsWith(' ── Organizational memory'))
+const omHead = async (ui: { drawn: () => Promise<unknown> }) => pageLines(await ui.drawn()).find(l => l.startsWith('▍Organizational memory'))
 
 /** Every drawn text of the page, joined. */
 const pageText = async (ui: { findAll: (q: { type: string }) => Promise<{ props: Record<string, unknown>; children?: unknown[] }[]> }) =>
@@ -269,7 +269,7 @@ test('T-619: with no org-mem file the section says 0 / 60 and "No notes yet.", a
   fakeOrgMem(on, null)
   const ui = await settings($)
   expect((await omHead(ui))).toContain('0 / 60')
-  expect(pageLines(await ui.drawn()).find(l => l.includes('No notes'))).toBe('  No notes yet.')
+  expect(pageLines(await ui.drawn()).find(l => l.includes('No notes'))).toBe('     No notes yet.')
   await ui.press({ key: 'live-orgmem' })
   expect(await ui.find({ type: 'Text', text: /No notes yet\./ })).toBeDefined()
   expect(await ui.find({ key: 'orgmem-delete' })).toBeUndefined()
@@ -356,16 +356,16 @@ test('T-718: the terminal Live tab draws the org-mem section (header, 3 newest, 
     const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns } })
     const lines = pageLines(await ui.drawn())
     for (const l of lines) expect([bodyColumns, l, textWidth(l) <= bodyColumns]).toEqual([bodyColumns, l, true])
-    const head = lines.findIndex(l => l.startsWith(' ── Organizational memory'))
+    // T-747: a "▍Organizational memory" heading with the count and bar on it, the lines under it indented by 3 more
+    const head = lines.findIndex(l => l.startsWith('▍Organizational memory   8 / 60 ▕'))
     expect(head).toBeGreaterThan(0)
-    expect(lines[head]).toContain('8 / 60')
-    expect(textWidth(lines[head]!)).toBe(bodyColumns)
-    expect(lines[head + 1]).toBe('  newest')
-    expect(lines[head + 2]).toMatch(/^ {3}— +unsorted {2}a note written/)
-    expect(lines[head + 3]).toMatch(/^ {3}11-21 {2}git +Use a plain path/)
-    expect(lines[head + 4]).toMatch(/^ {3}11-21 {2}tests +In tests, put/)
-    expect(lines[head + 5]).toBe('  topics')
-    const grid = lines.slice(head + 6, lines.findIndex(l => l.startsWith('  ↑↓ move')))
+    expect(lines[head - 1]!.trim()).toBe('')
+    expect(lines[head + 1]).toBe('     newest')
+    expect(lines[head + 2]).toMatch(/^ {6}— +unsorted {2}a note written/)
+    expect(lines[head + 3]).toMatch(/^ {6}11-21 {2}git +Use a plain path/)
+    expect(lines[head + 4]).toMatch(/^ {6}11-21 {2}tests +In tests, put/)
+    expect(lines[head + 5]).toBe('     topics')
+    const grid = lines.slice(head + 6, lines.findIndex(l => l.startsWith('     ↑↓ move')))
     expect(grid.join(' ')).toMatch(/tests +3/)
     expect(grid.join(' ')).toMatch(/git +2/)
     expect(grid.join(' ')).toMatch(/vs code · panel +1/)

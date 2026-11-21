@@ -12,7 +12,9 @@
 // T-715: under each lane hang its waiting trains (core's liveTrains and trainRows): each one indented by its level,
 // "└─◇", its id and cut title a link that opens the task, then "waits" and "+ also T-n" dim.
 // T-727: under the lanes, the Branches section (core's liveBranches) drawn with real lines: see branchesVs.
-import { type BranchRow, type LiveBranches, liveBranches, LIVE_EMPTY, LIVE_LEGEND, type LiveLane, type LiveLayout, type LiveSeg, LIVE_TONE, laneLines, liveHeader, liveLanes, liveLayout, liveOrgMem, liveStations, liveToday, liveTrains, nextUpLine, segText, todayLines, trainRows } from '../../core/live'
+// T-747: each section has a bold heading with the terminal's names (core's LIVE_SECTIONS): Tasks, Branches, Today,
+// Organizational memory (that one a link to all notes).
+import { type BranchRow, type LiveBranches, liveBranches, LIVE_EMPTY, LIVE_LEGEND, LIVE_SECTIONS, type LiveLane, liveInner, type LiveLayout, type LiveSeg, LIVE_TONE, laneLines, liveHeader, liveLanes, liveLayout, liveOrgMem, liveStations, liveToday, liveTrains, nextUpLine, segText, todayLines, trainRows } from '../../core/live'
 import { panelValues, type $ } from '../panel'
 import type { PaneParts } from './parts'
 import { LIVE_TICK_MS, branchKey, laneKey, liveTick, newestKey, openOrgMemPage, topicKey, trainKey } from './live'
@@ -109,7 +111,7 @@ function branchesVs(pane: PaneParts, open: (id: string) => () => void) {
   return (
     <Box key="live-br" flexDirection="column">
       <Box key="live-br-head" flexDirection="column">
-        <Text bold color={C('text')}>Branches</Text>
+        <Text bold color={C('text')}>{LIVE_SECTIONS.branches}</Text>
       </Box>
       <Box key="live-br-main" flexDirection="row" gap={1} alignItems="center">
         <Svg key="live-br-main-svg" source={main.source} width={main.width} height={main.height} alt={segText(br.main).trim()} />
@@ -146,7 +148,9 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
   liveTick($)
   const frame = Math.floor(nowMs / LIVE_TICK_MS)
   const lanes = liveLanes(v, nowMs)
-  const layout = liveLayout(lanes, liveStations(v.checker === true), width)
+  // the terminal's words at its width under a heading (liveInner), so both say the same
+  const inner = liveInner(width)
+  const layout = liveLayout(lanes, liveStations(v.checker === true), inner)
   const trains = liveTrains(v, nowMs, lanes)
   const open = (id: string) => act(() => panelValues($).updateOpened(() => id))
   /** A line of text in a Box of its own: VS Code keeps a Box's key (a Text's it drops), so each line can be found by it. */
@@ -188,7 +192,7 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
             ]
           })()}
         </Box>
-        {trainRows(trains.lanes[lane.id] ?? [], width).map(r => {
+        {trainRows(trains.lanes[lane.id] ?? [], inner).map(r => {
           // the terminal's row in pieces: the connector, the id and title (a link), then "waits" and "+ also"
           if (!r.id) return <Box key={`live-more:${lane.id}`} flexDirection="column" paddingLeft={2}>{line(`live-more-text:${lane.id}`, segText(r.segs).trim(), 'inactive')}</Box>
           const name = r.segs.filter(s => s.tone === 'id' || s.tone === 'title').map(s => s.text.trim()).join(' ')
@@ -209,12 +213,16 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
     <Box flexDirection="column" gap={1}>
       {header('live')}
       {line('live-head', liveHeader(v, lanes), 'text', true)}
-      {lanes.length ? <Box key="live-lanes" flexDirection="column" gap={1}>{laneRows}</Box> : line('live-empty', LIVE_EMPTY, 'inactive')}
+      <Box key="live-tasks" flexDirection="column">
+        {line('live-tasks-head', LIVE_SECTIONS.tasks, 'text', true)}
+        {lanes.length ? <Box key="live-lanes" flexDirection="column" gap={1}>{laneRows}</Box> : line('live-empty', LIVE_EMPTY, 'inactive')}
+      </Box>
       {lanes.length ? line('live-legend', LIVE_LEGEND, 'inactive') : null}
       {branchesVs(pane, open)}
       <Box key="live-bottom" flexDirection="column">
-        {line('live-next', nextUpLine(trains, width), 'text')}
-        {todayLines(liveToday(v.tasks, nowMs), width).map((x, i) => line(`live-today-${i}`, x, 'text'))}
+        {line('live-today-head', LIVE_SECTIONS.today, 'text', true)}
+        {line('live-next', nextUpLine(trains, inner), 'text')}
+        {todayLines(liveToday(v.tasks, nowMs), inner).map((x, i) => line(`live-today-${i}`, x, 'text'))}
       </Box>
       {orgMemSectionVs($, pane, notes)}
       {vsFooter(vs, 'live-hint')}
@@ -239,7 +247,7 @@ function orgMemSectionVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
   return (
     <Box key="live-om" flexDirection="column">
       <Box key="live-om-head" flexDirection="row" gap={1} alignItems="center">
-        {vsLink(vs, 'live-orgmem', `**${mdLink('Organizational memory', all)}**`, [[all, openOrgMemPage($)]])}
+        {vsLink(vs, 'live-orgmem', `**${mdLink(LIVE_SECTIONS.orgMem, all)}**`, [[all, openOrgMemPage($)]])}
         <Text key="live-om-count" color={C(warn ? 'warning' : 'inactive')}>{`${notes.length} / ${ORG_MEM_MAX_LINES}`}</Text>
         <Svg key="live-om-bar" source={bar.source} width={bar.width} height={bar.height} alt={`${orgMemCount(notes.length)} of at most ${ORG_MEM_MAX_LINES}`} />
       </Box>
