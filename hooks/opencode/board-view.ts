@@ -14,7 +14,8 @@
 // page (T-619): org-mem's notes, newest first, x deletes one (after a yes) with /<name>-settings orgmem delete N; Back
 // returns to the Live tab; the notes come in the view file too (org_mem). Every screen has the
 // Claude Code panel's buttons (T-680, T-685): its tab row, the list's [m] mode and [f] search buttons, Back (b) on the
-// list pages, a role's or kind's page buttons; each a click on it presses its key.
+// list pages, a role's or kind's page buttons (T-706: with Edit, its edit page's Save and Cancel, and Remove), + New
+// role, + New kind and + New scout, and the banner's Set up git (g); each a click on it presses its key.
 import type { SymccTask, SymccScout, SymccMode } from '../../types'
 import type { PaneView } from '../app/state'
 import type { OwnerQuestion } from '../core/questions'
@@ -22,10 +23,10 @@ import {
   statusCounts, newestFirst, bandLeads, bandNote, bandBrand, bandWhere, boardBrand, modeLabel, modeOf, planBandText, withCrew, questionsForYou,
   bannerLines, bannerRule, footerRule, type BannerTone, panelSections, localOffset, when, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, ALL_CLEAR,
   rowStates, rowMark, TITLE_ROOM, fitRow, rowExtra, questionsLabel, archivedOf, archivedNote, statusMark, detailRows, detailRowLines, wrapSegs, hintLineText,
-  type KeyHint, type Seg, type BoardTask, gitNote, intoOf, taskActions, taskAsks, actionButtonLabel, packRows, type TaskAction, type TaskActionId,
+  type KeyHint, type Seg, type BoardTask, intoOf, taskActions, taskAsks, actionButtonLabel, packRows, type TaskAction, type TaskActionId,
   ownersTurn, shownStatus, sortScouts, scoutListRows, scoutRow, scoutIcon, scoutTone, scoutHowTo, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem, scoutFile,
   SETTING_GROUPS, SETTINGS, isSettingPage, settingInfo, settingValue, cantPlayNotify, groupSummaryParts,
-  type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction, type TaskVerb, settingsKeys,
+  type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction, type DefEditField, type TaskVerb, settingsKeys, rolesKeys, kindsKeys, roleEditKeys, defEditFields, CLEARED_BY_NONE,
   DEFAULT_ROLE, isCheckerRole, ALWAYS_ON_KINDS, checkerOn, roleNameError, kindNameError, checkStepNow, rowEndText, taskPhase, choiceLines, driveWarning,
   searchTasks, showsHeader, type BoardPage,
   LIVE_TABS, LIVE_EMPTY, LIVE_LEGEND, type LiveSeg, type LiveTone, tabRow, withLiveKey, liveKeys, liveLanes, liveLayout, liveStations, liveHeader, liveLabelLine, laneLines, nextUp, nextUpLine, liveToday, todayLines, searchLine, modeButton, hintLines, roleKeys, rolePromptKeys, ROLE_PROMPTS, ROLE_SLOT, promptsOfRole, type RolePromptKind,
@@ -81,13 +82,19 @@ export type ViewDef = {
   canOff: boolean
   /** whether Reset to built-in works: the owner's copy of a built-in (or a broken file with a built-in's name) */
   canReset: boolean
+  /** whether Remove works (T-706, as on Claude Code's page): an added one, or a broken file with no built-in's name */
+  canRemove: boolean
 }
 
 /** The roles or kinds as the view file carries them: each merged one (built-in, or the owner's over it) in order, then
  *  the owner's files that can't be read. `dir` is the owner's folder for them (".symcc/roles"). */
 export function viewDefs(def: 'role' | 'kind', all: readonly (RoleDef | KindDef)[], builtIn: readonly { name: string }[], project: readonly { name: string }[], broken: readonly BrokenDef[], dir: string): ViewDef[] {
   const nameError = def === 'role' ? roleNameError : kindNameError
-  const brokenRow = (b: BrokenDef): ViewDef => ({ name: b.name, description: '', source: '', off: false, text: '', broken: brokenLabel(b), file: b.file, canOff: false, canReset: !nameError(b.name) && !!defNamed(builtIn, b.name) })
+  const brokenRow = (b: BrokenDef): ViewDef => {
+    const okName = !nameError(b.name)
+    const canReset = okName && !!defNamed(builtIn, b.name)
+    return { name: b.name, description: '', source: '', off: false, text: '', broken: brokenLabel(b), file: b.file, canOff: false, canReset, canRemove: okName && !canReset }
+  }
   const rows = all.map((d): ViewDef => {
     const bad = brokenNamed(broken, d.name)
     if (bad) return brokenRow(bad)
@@ -108,6 +115,7 @@ export function viewDefs(def: 'role' | 'kind', all: readonly (RoleDef | KindDef)
       file,
       canOff,
       canReset: source === 'replaced',
+      canRemove: source === 'added',
     }
   })
   return [...rows, ...broken.filter(b => !defNamed(all, b.name)).map(brokenRow)]
@@ -157,8 +165,9 @@ export type PanelKey = 'up' | 'down' | 'open' | 'back' | 'close' | LetterKey | C
 
 /** The letter keys the panel takes, each pressed as itself (the task page's take core's taskActions keys: u resume,
  *  z stash to backlog, v keep as a note, l role, h already merged, n needs review); and on the list (T-685) f search
- *  and m the board mode, as on Claude Code's list. j and k are not here: they always move (KEY_BINDS). */
-export const LETTER_KEYS = ['a', 'x', 'd', 't', 's', 'c', 'r', 'p', 'o', 'e', 'u', 'z', 'v', 'l', 'h', 'n', 'f', 'm'] as const
+ *  and m the board mode, as on Claude Code's list; (T-706) g Set up git (the banner's button), n a new role, kind or
+ *  scout, e and d a role's or kind's Edit and Remove. j and k are not here: they always move (KEY_BINDS). */
+export const LETTER_KEYS = ['a', 'x', 'd', 't', 's', 'c', 'r', 'p', 'o', 'e', 'u', 'z', 'v', 'l', 'h', 'n', 'f', 'm', 'g'] as const
 export type LetterKey = (typeof LETTER_KEYS)[number]
 const isLetterKey = (k: string): k is LetterKey => (LETTER_KEYS as readonly string[]).includes(k)
 
@@ -174,8 +183,9 @@ export type PanelGroup = 'backlog' | 'done' | 'dropped'
  *  or one of its runs, or change a setting; and (T-562) open a page under Settings: the Roles or Kinds list ("roles", "kinds") or one
  *  role's or kind's page ("role:tester", "kind:bug", see settingsPlace); and (T-583) pick answer choice `choice`
  *  (1 = the first of answerOptions) of the open task or question; and (T-585) open or close a Settings group (its title);
- *  and (T-680) press a task page's button that has no key (Drop in review): `action`, its id in core's taskActions. */
-export type PanelHit = { open: string } | { group: PanelGroup } | { key: PanelKey } | { tab: PanelTab } | { scout: string } | { run: string } | { setting: SettingName } | { page: string } | { choice: number } | { settingGroup: string } | { action: TaskActionId }
+ *  and (T-680) press a task page's button that has no key (Drop in review): `action`, its id in core's taskActions;
+ *  and (T-706) on a role's or kind's edit page, change one of its boxes (`editField`) or press Save (`save`). */
+export type PanelHit = { open: string } | { group: PanelGroup } | { key: PanelKey } | { tab: PanelTab } | { scout: string } | { run: string } | { setting: SettingName } | { page: string } | { choice: number } | { settingGroup: string } | { action: TaskActionId } | { editField: DefEditField } | { save: true }
 
 /** One colored piece of a line, with what a click on it does (only the footer's key hints have one). */
 export type DrawSeg = Seg & { hit?: PanelHit }
@@ -278,6 +288,48 @@ export type PanelChoice = {
   approving?: ApproveSent
   /** the task list's search (T-685, core's searchTasks words, as Claude Code's [f] search); '' or left out = none */
   search?: string
+  /** the open role's or kind's edit mode (T-706, Claude Code's Edit), when it is for the open page */
+  edit?: DefDraft
+}
+
+/** A role's or kind's edit mode (T-706, as Claude Code's Edit page): the page it is for ("role:tester"), each box's
+ *  value as changed so far (core's ROLE_EDIT_FIELDS, KIND_EDIT_FIELDS), and what Save found wrong. */
+export type DefDraft = { page: string; values: Record<string, string>; error?: string }
+
+/** The edit mode of role or kind `d`, filled from it (as Claude Code's roleDraftOf, kindDraftOf). */
+export function defDraftOf(list: DefList, d: ViewDef): DefDraft {
+  const values: Record<string, string> = list === 'roles'
+    ? { description: d.description, model: d.model ?? '', skills: (d.skills ?? []).join(', '), tools: (d.tools ?? []).join(', '), checklist: d.text }
+    : { description: d.description, body: d.text }
+  return { page: defPageId(list, d.name), values }
+}
+
+/** The boxes of the edit page, in Claude Code's order with its names and placeholders. */
+export const DEF_EDIT_BOXES: Record<DefEditField, { label: string; placeholder: (def: 'role' | 'kind') => string }> = {
+  description: { label: 'Description', placeholder: def => (def === 'role' ? 'what the role is for, in a few words' : 'what this kind of task is, in a few words') },
+  model: { label: 'Model', placeholder: () => "empty: the session's model" },
+  skills: { label: 'Skills', placeholder: () => 'skill names joined with ", " (empty: none)' },
+  tools: { label: 'Tools', placeholder: () => 'extra tools: web, to search and read the web (empty: none)' },
+  checklist: { label: 'Checklist', placeholder: () => 'what a worker with this role checks, one line each' },
+  body: { label: 'Body', placeholder: () => 'free text about the kind' },
+}
+
+/** An edit box's cursor id ("box:model"). */
+export const editBoxId = (field: DefEditField) => `box:${field}`
+
+/** The fields of the edit mode's role or kind whose value differs from `d`'s (in the page's order): what Save sends. */
+export function draftChanges(list: DefList, d: ViewDef, draft: DefDraft): DefEditField[] {
+  const before = defDraftOf(list, d).values
+  return defEditFields(list === 'roles' ? 'role' : 'kind').filter(k => (draft.values[k] ?? '') !== (before[k] ?? ''))
+}
+
+/** What Save says when the description is empty (Claude Code's words). */
+export const noDescriptionText = (list: DefList) => `description is missing: say in a few words what ${list === 'roles' ? 'the role is for' : 'this kind of task is'}`
+
+/** The keys at the bottom of the edit page: Claude Code's (roleEditKeys), with Enter, which opens a box here. */
+export const defEditKeys = (): KeyHint[] => {
+  const [move, cancel] = roleEditKeys()
+  return [move!, { key: 'Enter', word: 'change' }, cancel!]
 }
 
 /** An approve this panel sent: the task and when (ms). */
@@ -388,14 +440,40 @@ export const defPageId = (list: DefList, name: string) => `${list === 'roles' ? 
 /** The page id of the built-in prompt role `role` goes in: "prompt:tester:change". */
 export const rolePromptId = (role: string, kind: RolePromptKind) => `prompt:${role}:${kind}`
 
-/** The buttons of a role's or kind's page, in Claude Code's order (T-685): Back, See the prompt (a role, p), Turn off
- *  or Turn on (o), Reset to built-in (r). Claude Code's Edit and Remove are not here: no slash command does them. */
+/** The buttons of a role's or kind's page, in Claude Code's order (T-685, T-706): Back, Edit (e; not a file that can't
+ *  be read), See the prompt (a role, p), Turn off or Turn on (o), Reset to built-in (r), Remove (d; it asks first). */
 export const defButtons = (list: DefList, d: ViewDef): PanelButton[] => [
   BACK_BUTTON,
+  ...(!d.broken ? [{ label: 'Edit', hit: { key: 'e' as const } }] : []),
   ...(list === 'roles' && !d.broken ? [{ label: 'See the prompt', hit: { key: 'p' as const } }] : []),
   ...(d.canOff ? [{ label: d.off ? 'Turn on' : 'Turn off', hit: { key: 'o' as const } }] : []),
   ...(d.canReset ? [{ label: 'Reset to built-in', hit: { key: 'r' as const } }] : []),
+  ...(d.canRemove ? [{ label: 'Remove', hit: { key: 'd' as const } }] : []),
 ]
+
+/** The "+ New role", "+ New kind" and "+ New scout" buttons (n), as on Claude Code's Roles, Kinds and Scouts pages. */
+export const NEW_ROLE_BUTTON: PanelButton = { label: '+ New role', hit: { key: 'n' } }
+export const NEW_KIND_BUTTON: PanelButton = { label: '+ New kind', hit: { key: 'n' } }
+export const NEW_SCOUT_BUTTON: PanelButton = { label: '+ New scout', hit: { key: 'n' } }
+
+/** The banner's git row (T-706, as Claude Code's): with no git repo or no commit yet, what is wrong and the
+ *  "[ Set up git (g) ]" button, which asks for a yes before /<name>-settings git setup; no row otherwise. */
+export function gitRowLines(v: Pick<PaneView, 'git_state'>, w: number): Line[] {
+  if (v.git_state !== 'no-repo' && v.git_state !== 'no-commits') return []
+  const text = v.git_state === 'no-repo' ? 'No git repo here; nothing starts. ' : 'No commits yet; nothing starts. '
+  const button = buttonText(SETUP_GIT_BUTTON)
+  const pieces: DrawSeg[] = [{ text, color: 'warning' }, { text: button, color: 'ide', hit: SETUP_GIT_BUTTON.hit }]
+  return text.length + button.length <= w ? [pieces] : [[pieces[0]!], [pieces[1]!]]
+}
+
+/** The banner's Set up git button (g). */
+export const SETUP_GIT_BUTTON: PanelButton = { label: 'Set up git (g)', hit: { key: 'g' } }
+
+/** What the Set up git button asks before it sends the command (setup_git's own steps, in short). */
+export const SETUP_GIT_ASK = 'Set up git here? It runs git init on main (if there is no repo), writes a .gitignore and makes a first commit of the current files, leaving out ones that look like secrets; it never pushes.'
+
+/** What a role's or kind's Remove asks before it sends the command (Claude Code's words). */
+export const removeAsk = (list: DefList, d: ViewDef) => `Remove ${list === 'roles' ? 'role' : 'kind'} ${d.name} and delete ${d.file}?`
 
 /** The buttons of the built-in prompt page: Back (to the role), then the role's other prompts ("The checker prompt"). */
 export const rolePromptButtons = (role: string, kind: RolePromptKind): PanelButton[] => [
@@ -430,11 +508,12 @@ function tabKeys(f: ViewFile | null, opened: string, tab: PanelTab, run: string,
     const place = settingsPlace(f, opened)
     // the settings list: core's keys, as Claude Code's (Enter open/close on a group heading, else change)
     if (!place) return settingsKeys(heading)
-    if (!place.def) return [move, { key: 'Enter', word: 'open' }, back]
+    // the Roles and Kinds lists: Claude Code's keys (n makes a new one)
+    if (!place.def) return place.list === 'roles' ? rolesKeys() : kindsKeys()
     if (place.prompt) return rolePromptKeys()
-    // core's keys of Claude Code's role page, but Edit and Remove (no slash command does them here)
+    // core's keys of Claude Code's role page (T-706: with Edit and Remove)
     const d = place.def
-    return roleKeys({ canEdit: false, canOff: d.canOff, off: d.off, canReset: d.canReset, canRemove: false, canSeePrompt: place.list === 'roles' && !d.broken })
+    return roleKeys({ canEdit: !d.broken, canOff: d.canOff, off: d.off, canReset: d.canReset, canRemove: d.canRemove, canSeePrompt: place.list === 'roles' && !d.broken })
   }
   if (tab === 'scouts') {
     const sc = scoutNamed(f, opened)
@@ -466,12 +545,13 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
     const lines: Line[] = [[{ text: `${boardBrand(DEFAULT_NAME)}`, color: 'ide', bold: true }], [{ text: 'No board yet: start symcc in this project (the board is written by the server part).', color: 'inactive' }]]
     return { lines, hits: lines.map(() => null), ids: [], selected: '', keys: [], scroll: 0, fixed: lines.length, bodyLines: 0, footer: 0 }
   }
-  // the shared note's "(g)" names the Claude Code panel's key; this panel has none, so it says to ask the lead (setup_git)
-  const v = { ...f.view, ...(f.view.git_state && f.view.branch_note ? { branch_note: [gitNote(f.view.git_state, 'ask the lead'), f.view.size_note ?? ''].filter(Boolean).join('; ') } : {}) }
+  // the shared note says "set up git (g)": this panel has the g key and the Set up git button too (T-706)
+  const v = f.view
   const banner: Line[] = bannerLines({ ...v, max_parallel: v.max_parallel ?? 0, max_minutes: v.max_minutes ?? 0, auto_retries: v.auto_retries ?? 0, mode: v.mode }, f.root, f.home, v.driving ?? false, w, nowMs, f.name, restFrame(), f.version).map(l => [
     ...(l.art ? [{ text: l.art, color: 'ide' }] : []),
     ...l.parts.map(p => ({ text: p.text, color: TONE[p.tone], ...(p.bold ? { bold: true } : {}) })),
   ])
+  banner.push(...gitRowLines(v, w))
   const tab = choice.tab ?? 'tasks'
   // T-700: the header (banner, tabs, rule) only on a list page, as on the terminal panel and VS Code (core's showsHeader)
   const top = showsHeader(boardPageOf(f, choice)) ? [...banner, ...tabsLines(tab, w, v.tasks.length, (v.scouts ?? []).length), [{ text: bannerRule(w), color: 'ide' }]] : []
@@ -489,8 +569,9 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
     keys = panelKeys(f, choice.opened, 'scouts', choice.run ?? '')
   } else if (tab === 'settings') {
     const place = settingsPlace(f, choice.opened)
-    body = place?.prompt && place.def ? rolePromptPage(place.def, place.prompt, w) : place?.def ? defPage(f, place.list as DefList, place.def, w) : place ? defsList(f, place.list as DefList, choice.cursor, w) : settingsBody(f, choice.cursor, choice.settingsOpen ?? SETTINGS_OPEN, w)
-    keys = panelKeys(f, place ? choice.opened : '', 'settings', '', !place && !!settingGroupOf(body.selected))
+    const editing = editOf(f, choice)
+    body = editing && place?.def ? defEditPage(f, place.list as DefList, place.def, editing, choice.cursor, w) : place?.prompt && place.def ? rolePromptPage(place.def, place.prompt, w) : place?.def ? defPage(f, place.list as DefList, place.def, w) : place ? defsList(f, place.list as DefList, choice.cursor, w) : settingsBody(f, choice.cursor, choice.settingsOpen ?? SETTINGS_OPEN, w)
+    keys = editing ? defEditKeys() : panelKeys(f, place ? choice.opened : '', 'settings', '', !place && !!settingGroupOf(body.selected))
   } else {
     const t = choice.opened ? f.view.tasks.find(x => x.id === choice.opened) : undefined
     // the approve in progress takes the same buttons and keys away (approveInProgress)
@@ -543,7 +624,7 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
 
 /** Which page the panel shows for `choice` (core's BoardPage, the same names on every board): a tab's list, a list
  *  under Settings, or the page of one task, question, scout, scout run, role, kind or role prompt. */
-export function boardPageOf(f: ViewFile | null, choice: Pick<PanelChoice, 'tab' | 'opened' | 'run'>): BoardPage {
+export function boardPageOf(f: ViewFile | null, choice: Pick<PanelChoice, 'tab' | 'opened' | 'run' | 'edit'>): BoardPage {
   const tab = choice.tab ?? 'tasks'
   if (tab === 'live') return choice.opened === ORG_MEM_PAGE ? 'orgmem' : 'live'
   if (tab === 'scouts') {
@@ -555,6 +636,7 @@ export function boardPageOf(f: ViewFile | null, choice: Pick<PanelChoice, 'tab' 
     const place = settingsPlace(f, choice.opened)
     if (!place) return 'settings'
     if (place.prompt && place.def) return 'role-prompt'
+    if (place.def && editOf(f, choice)) return place.list === 'roles' ? 'role-edit' : 'kind-edit'
     if (place.def) return place.list === 'roles' ? 'role' : 'kind'
     return place.list
   }
@@ -707,8 +789,9 @@ function scoutsBody(f: ViewFile, choice: PanelChoice, nowMs: number, w: number):
   if (sc) return scoutPage(f, sc, choice, nowMs, w)
   const scouts = sortScouts(f.view.scouts ?? [])
   if (!scouts.length) {
-    // the Claude Code board's "New scout" button has no place here
-    for (const [i, l] of scoutHowTo(f.name).filter(l => !l.includes('New scout')).entries()) b.add([{ text: l, color: i === 0 ? 'text' : 'inactive' }])
+    // the how-to, then Claude Code's "+ New scout" button (n, T-706)
+    for (const [i, l] of scoutHowTo(f.name).entries()) b.add([{ text: l, color: i === 0 ? 'text' : 'inactive' }])
+    for (const l of buttonLines([NEW_SCOUT_BUTTON], w)) b.add(l)
     b.blank()
     backButton(b, w)
     return { ...b, ids: [], selected: '' }
@@ -716,6 +799,9 @@ function scoutsBody(f: ViewFile, choice: PanelChoice, nowMs: number, w: number):
   const ids = scouts.map(x => x.name)
   const selected = ids[Math.min(Math.max(0, choice.cursor), ids.length - 1)]!
   const rows = scoutListRows(scouts, nowMs, w)
+  // T-706: Claude Code's "+ New scout" button (n) above the list
+  for (const l of buttonLines([NEW_SCOUT_BUTTON], w)) b.add(l)
+  b.blank()
   scouts.forEach((x, i) => {
     const r = rows[i]!
     b.add(
@@ -852,8 +938,9 @@ function defsList(f: ViewFile, list: DefList, cursor: number, w: number): Body {
       { page: id },
     )
   }
-  b.blank()
-  b.add([{ text: `Enter opens a ${noun} · a new one: ask the lead, or add .${f.name}/${list}/<name>.md (a file you add or edit yourself shows here at the next board change)`, color: 'inactive' }])
+  // T-706: Claude Code's "+ New role" / "+ New kind" button (n), then its hint
+  for (const l of buttonLines([list === 'roles' ? NEW_ROLE_BUTTON : NEW_KIND_BUTTON], w)) b.add(l)
+  b.add([{ text: `Enter opens a ${noun} · n makes a new one · or tell the lead`, color: 'inactive' }])
   b.blank()
   backButton(b, w)
   return { ...b, ids, selected, head: 1 }
@@ -901,6 +988,43 @@ function defPage(f: ViewFile, list: DefList, x: ViewDef, w: number): Body {
   b.blank()
   b.add([{ text: 'To change what it says: ask the lead, or edit its file (your own edit shows here at the next board change)', color: 'inactive' }])
   return { ...b, ids: [], selected: '', head }
+}
+
+/** The edit mode in `choice` when it is for the open role's or kind's page (not a file that can't be read). */
+export function editOf(f: ViewFile | null, choice: Pick<PanelChoice, 'tab' | 'opened' | 'edit'>): DefDraft | undefined {
+  const e = choice.edit
+  if (!e || (choice.tab ?? 'tasks') !== 'settings' || e.page !== choice.opened) return undefined
+  const place = settingsPlace(f, choice.opened)
+  return place?.def && !place.prompt && !place.def.broken ? e : undefined
+}
+
+/** A role's or kind's edit page (T-706, Claude Code's Edit): "tester editing", where Save writes, then Save and
+ *  Cancel (x), what Save found wrong, then a box per part of its file with Claude Code's names (Description, Model,
+ *  Skills, Tools, Checklist; a kind's Description and Body), each showing its value (or its placeholder); Enter or a
+ *  click on a box asks for its new value. The cursor goes over the boxes. */
+function defEditPage(f: ViewFile, list: DefList, x: ViewDef, draft: DefDraft, cursor: number, w: number): Body {
+  const b = bodyMaker()
+  const def = list === 'roles' ? 'role' : 'kind'
+  const file = `${dataDir(f.name || DEFAULT_NAME)}/${list}/${x.name}.md`
+  b.add([{ text: x.name, color: 'claude', bold: true }, { text: ' editing', color: 'warning', bold: true }])
+  for (const l of wrapSegs([{ text: `save writes ${file}${x.source === 'built-in' ? ` (a copy of the built-in ${def}; Reset to built-in undoes it)` : ''}`, color: 'inactive' }], w)) b.add(l)
+  if (def === 'role') for (const l of wrapSegs([{ text: `the name is the file's name: to rename the role, rename ${file}`, color: 'inactive' }], w)) b.add(l)
+  for (const l of buttonLines([SAVE_BUTTON, CANCEL_EDIT_BUTTON], w)) b.add(l)
+  if (draft.error) for (const l of wrapSegs([{ text: draft.error, color: 'error' }], w)) b.add(l)
+  const head = b.lines.length
+  const fields = defEditFields(def)
+  const ids = fields.map(editBoxId)
+  const selected = ids[Math.min(Math.max(0, cursor), ids.length - 1)]!
+  for (const k of fields) {
+    const hit = { editField: k }
+    const box = DEF_EDIT_BOXES[k]
+    const value = draft.values[k] ?? ''
+    b.blank()
+    b.add([{ text: editBoxId(k) === selected ? '› ' : '  ', color: 'ide', bold: true }, { text: box.label, color: 'text', bold: true }], hit)
+    if (value.trim()) for (const l of textLines(value, 'text', w, 4)) b.add(l, hit)
+    else b.add([{ text: `    ${box.placeholder(def)}`, color: 'inactive' }], hit)
+  }
+  return { ...b, ids, selected, head }
 }
 
 /** The built-in prompt role `x` goes in, view only (T-685, Claude Code's See the prompt page): its name, what it is,
@@ -1226,6 +1350,9 @@ export const CHANGE_SEARCH_BUTTON: PanelButton = { label: '[f] change search', h
 export const CLEAR_SEARCH_BUTTON: PanelButton = { label: '[x] clear search', hit: { key: 'x' } }
 export const LIST_BACK_BUTTON: PanelButton = { label: 'Back (b)', hit: { key: 'back' } }
 export const DELETE_NOTE_BUTTON: PanelButton = { label: 'Delete (x)', hit: { key: 'x' } }
+/** The edit page's Save and Cancel (x) buttons (T-706, Claude Code's). */
+export const SAVE_BUTTON: PanelButton = { label: 'Save', hit: { save: true } }
+export const CANCEL_EDIT_BUTTON: PanelButton = { label: 'Cancel (x)', hit: { key: 'x' } }
 
 /** How a button looks: "[ Back ]". */
 export const buttonText = (b: PanelButton) => `[ ${b.label} ]`
@@ -1281,6 +1408,11 @@ export type PanelAction =
   | { kind: 'orgmem-delete'; n: number; key?: string }
   /** set the board mode (the list's [m] button, T-685): /<name>-mode review|auto */
   | { kind: 'mode'; mode: SymccMode }
+  /** (T-706) a new role or kind from the template, one part of a role's or kind's file, a new scout, and setting up git */
+  | { kind: 'def-add'; def: 'role' | 'kind'; name: string }
+  | { kind: 'def-edit'; def: 'role' | 'kind'; name: string; field: DefEditField; value: string }
+  | { kind: 'scout-new'; scout: string; prompt: string }
+  | { kind: 'setup-git' }
 
 /** The slash command (its name, without the slash, and its text) that does `a` for plugin `name`. */
 export function actionCommand(a: PanelAction, name: string = DEFAULT_NAME): { name: string; text: string } {
@@ -1294,6 +1426,10 @@ export function actionCommand(a: PanelAction, name: string = DEFAULT_NAME): { na
   if (a.kind === 'def') return { name: `${name}-settings`, text: `${a.def} ${a.name} ${a.action}` }
   if (a.kind === 'mode') return { name: `${name}-mode`, text: a.mode }
   if (a.kind === 'orgmem-delete') return { name: `${name}-settings`, text: `orgmem delete ${a.n}${a.key ? ` ${a.key}` : ''}` }
+  if (a.kind === 'def-add') return { name: `${name}-settings`, text: `${a.def} add ${a.name}` }
+  if (a.kind === 'def-edit') return { name: `${name}-settings`, text: `${a.def} ${a.name} edit ${a.field} ${a.value.trim() || (CLEARED_BY_NONE.includes(a.field) ? 'none' : '')}`.trim() }
+  if (a.kind === 'scout-new') return { name: `${name}-scout`, text: `new ${a.scout} ${a.prompt.trim()}` }
+  if (a.kind === 'setup-git') return { name: `${name}-settings`, text: 'git setup' }
   return { name: `${name}-answer`, text: `${a.id} ${a.answer.trim()}` }
 }
 

@@ -8,11 +8,11 @@
 // OpenTUI (T-500): opencode/tui.ts imports them by their written-out names (what OpenCode swaps for its own copies),
 // and loadTuiRuntime names a package that is missing or lacks a function instead of failing with a bare import error.
 import { test, expect } from 'bun:test'
-import { LIVE_TABS, tabRow as coreTabRow, withLiveKey, LIVE_EMPTY, LIVE_LEGEND, liveLanes, liveLayout, liveStations, liveHeader, liveLabelLine, laneLines, segText, nextUp, nextUpLine, liveToday, todayLines, modeLabel, modeButton, promptsOfRole, ROLE_SLOT, SETTING_GROUPS, groupSummaryParts, taskActions, actionButtonLabel, settingsKeys, mergeRoles, mergeKinds, when, addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, showsHeader, type BoardPage, type Board } from '../../board'
+import { LIVE_TABS, tabRow as coreTabRow, withLiveKey, roleKeys, rolesKeys, kindsKeys, scoutHowTo, LIVE_EMPTY, LIVE_LEGEND, liveLanes, liveLayout, liveStations, liveHeader, liveLabelLine, laneLines, segText, nextUp, nextUpLine, liveToday, todayLines, modeLabel, modeButton, promptsOfRole, ROLE_SLOT, SETTING_GROUPS, groupSummaryParts, taskActions, actionButtonLabel, settingsKeys, mergeRoles, mergeKinds, when, addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, showsHeader, type BoardPage, type Board } from '../../board'
 import type { PaneView } from '../../app/state'
 import type { SymccTask } from '../../../types'
 import { ICON } from '../../name'
-import { hasPage, bandLines, bandDraw, BAND_CLICK_HINT, panelLines, panelKeys, parseViewFile, viewFileText, lineText, actionCommand, answerOptions, OWN_ANSWER, viewDefs, panelTaskActions, TASK_ACTION_COMMANDS, SETTINGS_OPEN, approveSent, APPROVE_SENT_MS, drawnLines, boardPageOf, type ViewFile, type PanelChoice } from '../board-view'
+import { hasPage, bandLines, bandDraw, BAND_CLICK_HINT, panelLines, panelKeys, parseViewFile, viewFileText, lineText, actionCommand, answerOptions, OWN_ANSWER, viewDefs, panelTaskActions, TASK_ACTION_COMMANDS, SETTINGS_OPEN, approveSent, APPROVE_SENT_MS, drawnLines, boardPageOf, defDraftOf, defEditKeys, noDescriptionText, SETUP_GIT_ASK, type ViewFile, type PanelChoice } from '../board-view'
 import { readFile } from 'node:fs/promises'
 import { rowEndBoard, ROW_END, ROW_END_NOW } from '../../../tests/row-end-cases'
 import { taskSections } from '../../core/task-sections'
@@ -102,13 +102,19 @@ test('T-643: a session that does not drive: a warning line under the banner and 
   expect(own.map(lineText).find(l => l.startsWith('T-1'))).toMatch(/ — worker starting$/)
 })
 
-test('T-517: with no git repo the banner warns without the "(g)" key hint (this panel has no g key) and says to ask the lead', () => {
+test('T-517, T-706: with no git repo the banner warns with Claude Code\'s "set up git (g)" and its git row with the [ Set up git (g) ] button', () => {
   const f = viewFile()
   for (const git_state of ['no-repo', 'no-commits'] as const) {
-    const lines = panelLines({ ...f, view: { ...f.view, git_state, branch_note: gitNote(git_state) } }, { opened: '', cursor: 0 }, NOW, 100).lines.map(lineText).join('\n')
-    expect(lines).toContain('set up git (ask the lead)')
-    expect(lines).not.toContain('(g)')
+    const d = panelLines({ ...f, view: { ...f.view, git_state, branch_note: gitNote(git_state) } }, { opened: '', cursor: 0 }, NOW, 100)
+    const lines = d.lines.map(lineText)
+    expect(lines.join('\n')).toContain(git_state === 'no-repo' ? 'no git repo here; set up git (g)' : 'no commits yet; set up git (g)')
+    expect(lines.join('\n')).not.toContain('ask the lead')
+    // Claude Code's git row (parts.tsx gitRow): the warning, then the button
+    expect(lines).toContain(`${git_state === 'no-repo' ? 'No git repo here; nothing starts. ' : 'No commits yet; nothing starts. '}[ Set up git (g) ]`)
+    expect(d.lines.flat().find(s => s.text === '[ Set up git (g) ]')?.hit).toEqual({ key: 'g' })
   }
+  // git set up: no row
+  expect(panelLines(f, { opened: '', cursor: 0 }, NOW, 100).lines.map(lineText).some(l => l.includes('Set up git'))).toBe(false)
 })
 
 test('the band: the header, then the tasks that need you or run with the list\'s marks and short states; a "worker starting" row shows its time and no stray note', () => {
@@ -1305,7 +1311,7 @@ test('T-562: the Settings tab opens the Roles and Kinds pages from view.json; a 
   expect(l.find(x => x.includes('general'))).toContain('built-in · Any task')
   expect(l.find(x => x.includes('oops'))).toContain("— your file can't be read: no description")
   expect(list.hits[l.findIndex(x => x.includes('tester'))]).toEqual({ page: 'role:tester' })
-  expect(panelKeys(f, 'roles', 'settings').map(k => k.word)).toEqual(['move', 'open', 'back'])
+  expect(panelKeys(f, 'roles', 'settings').map(k => k.word)).toEqual(['open', 'new role', 'move', 'views', 'back'])
   // a role's page: its model, skills, checklist and file; o turns it on (it is off), r resets it
   const page = panelLines(f, { tab: 'settings', opened: 'role:tester', cursor: 0 }, NOW, 140)
   const p = page.lines.map(lineText)
@@ -1315,10 +1321,10 @@ test('T-562: the Settings tab opens the Roles and Kinds pages from view.json; a 
   expect(p).toContain('  tdd')
   expect(p).toContain('  Run them twice.')
   expect(p).toContain('  .symcc/roles/tester.md')
-  expect(panelKeys(f, 'role:tester', 'settings').map(k => k.word)).toEqual(['the prompt it goes in', 'turn on', 'reset to built-in', 'back'])
+  expect(panelKeys(f, 'role:tester', 'settings').map(k => k.word)).toEqual(['edit', 'the prompt it goes in', 'turn on', 'reset to built-in', 'back'])
   expect(page.lines.at(-1)!.find(x => x.text === 'o turn on')?.hit).toEqual({ key: 'o' })
   // general can't be turned off; the checker role says the checker setting runs it; a broken one can only be fixed
-  expect(panelKeys(f, 'role:general', 'settings').map(k => k.word)).toEqual(['the prompt it goes in', 'back'])
+  expect(panelKeys(f, 'role:general', 'settings').map(k => k.word)).toEqual(['edit', 'the prompt it goes in', 'back'])
   expect(panelLines(f, { tab: 'settings', opened: 'role:checker', cursor: 0 }, NOW, 200).lines.map(lineText).some(x => x.includes('the checker setting runs it (Settings → checker, now on)'))).toBe(true)
   expect(panelLines(f, { tab: 'settings', opened: 'role:oops', cursor: 0 }, NOW, 140).lines.map(lineText)).toContain('Fix the file by hand: .symcc/roles/oops.md.')
   // the Kinds page and a kind's page
@@ -1328,8 +1334,8 @@ test('T-562: the Settings tab opens the Roles and Kinds pages from view.json; a 
   expect(bug).toContain('bug · replaced')
   expect(bug).toContain('Body')
   expect(bug).toContain('  Fix it, with a test.')
-  expect(panelKeys(f, 'kind:bug', 'settings').map(k => k.word)).toEqual(['turn off', 'reset to built-in', 'back'])
-  expect(panelKeys(f, 'kind:change', 'settings').map(k => k.word)).toEqual(['back'])
+  expect(panelKeys(f, 'kind:bug', 'settings').map(k => k.word)).toEqual(['edit', 'turn off', 'reset to built-in', 'back'])
+  expect(panelKeys(f, 'kind:change', 'settings').map(k => k.word)).toEqual(['edit', 'back'])
   // a role that left the view has no page
   expect(panelKeys(f, 'role:gone', 'settings').map(k => k.word)).toEqual(['change', 'move', 'views', 'back'])
   // the actions as slash commands
@@ -2235,18 +2241,19 @@ test('T-685: every board screen has Claude Code\'s buttons: the tab row, the lis
   const noScouts: ViewFile = { ...f, view: { ...f.view, scouts: [] } }
   expect(panelLines(noScouts, { tab: 'scouts', opened: '', cursor: 0 }, NOW, W).lines.map(lineText)).toContain('[ Back (b) ]')
 
-  // a role's and a kind's page: Claude Code's buttons in its order (Back, See the prompt, Turn off / on, Reset to built-in)
+  // a role's and a kind's page: Claude Code's buttons in its order (Back, Edit, See the prompt, Turn off / on, Reset to built-in, Remove)
   const buttonRow = (opened: string) => texts({ tab: 'settings', opened }).find(l => l.startsWith('[ Back ]'))
-  expect(buttonRow('role:tester')).toBe('[ Back ] [ See the prompt ] [ Turn on ] [ Reset to built-in ]')
-  expect(buttonRow('role:general')).toBe('[ Back ] [ See the prompt ]')
-  expect(buttonRow('role:checker')).toBe('[ Back ] [ See the prompt ]')
-  expect(buttonRow('role:oops')).toBe('[ Back ]')
-  expect(buttonRow('kind:bug')).toBe('[ Back ] [ Turn off ] [ Reset to built-in ]')
-  expect(buttonRow('kind:change')).toBe('[ Back ]')
+  expect(buttonRow('role:tester')).toBe('[ Back ] [ Edit ] [ See the prompt ] [ Turn on ] [ Reset to built-in ]')
+  expect(buttonRow('role:general')).toBe('[ Back ] [ Edit ] [ See the prompt ]')
+  expect(buttonRow('role:checker')).toBe('[ Back ] [ Edit ] [ See the prompt ]')
+  // a broken file with no built-in's name: only Remove (T-706)
+  expect(buttonRow('role:oops')).toBe('[ Back ] [ Remove ]')
+  expect(buttonRow('kind:bug')).toBe('[ Back ] [ Edit ] [ Turn off ] [ Reset to built-in ]')
+  expect(buttonRow('kind:change')).toBe('[ Back ] [ Edit ]')
   // the buttons stay at the top with the page's name
   const role = draw({ tab: 'settings', opened: 'role:tester' })
-  expect(role.lines.slice(0, role.fixed).map(lineText)).toContain('[ Back ] [ See the prompt ] [ Turn on ] [ Reset to built-in ]')
-  expect(role.lines.flat().filter(s => s.text.startsWith('[ ') && s.hit).map(s => s.hit)).toEqual([{ key: 'back' }, { key: 'p' }, { key: 'o' }, { key: 'r' }])
+  expect(role.lines.slice(0, role.fixed).map(lineText)).toContain('[ Back ] [ Edit ] [ See the prompt ] [ Turn on ] [ Reset to built-in ]')
+  expect(role.lines.flat().filter(s => s.text.startsWith('[ ') && s.hit).map(s => s.hit)).toEqual([{ key: 'back' }, { key: 'e' }, { key: 'p' }, { key: 'o' }, { key: 'r' }])
   // the prompt page (Claude Code's See the prompt): view only, Back and the role's other prompts, its text with the slot marked
   const prompt = draw({ tab: 'settings', opened: 'prompt:tester:change' })
   const pt = prompt.lines.map(lineText)
@@ -2563,4 +2570,287 @@ test('T-700: the board header (banner, tests/limits line, drive warning, tabs) s
     // the footer (its rule and key hints) and the page's Back button stay
     expect([c, t.some(l => /^─+$/.test(l)), t.some(l => l.startsWith('[ Back'))]).toEqual([c, true, true])
   }
+})
+
+// ---------------- T-706: the Claude Code buttons OpenCode lacked ----------------
+
+/** defsViewFile with an added role (docs) and an added kind (chore), and (`git`) no git repo or no commit yet. */
+function addedViewFile(git?: 'no-repo' | 'no-commits'): ViewFile {
+  const f = defsViewFile()
+  const docsRole = { name: 'docs', description: 'Writes docs', skills: [], prompt: 'Keep it short.' }
+  const choreKind = { name: 'chore', description: 'A small chore', body: 'Do it.' }
+  const docs = viewDefs('role', [docsRole], [], [docsRole], [], '.symcc/roles')
+  const chore = viewDefs('kind', [choreKind], [], [choreKind], [], '.symcc/kinds')
+  return { ...f, view: { ...f.view, roles: [...f.view.roles!, ...docs], kinds: [...f.view.kinds!, ...chore], ...(git ? { git_state: git, branch_note: gitNote(git) } : {}) } }
+}
+
+test('T-706: a role\'s and a kind\'s page draw Claude Code\'s Edit and Remove (its order, labels and keys for the same role or kind); the lists draw + New role / + New kind, the Scouts tab + New scout', () => {
+  const f = addedViewFile()
+  const W = 140
+  const texts = (c: Partial<PanelChoice>) => panelLines(f, { opened: '', cursor: 0, ...c }, NOW, W)
+  const buttons = (opened: string) => texts({ tab: 'settings', opened }).lines.find(l => lineText(l).startsWith('[ Back ]'))!
+  // an added role: Claude Code's rolePage with source "added": Back, Edit, See the prompt, Turn off, Remove
+  expect(lineText(buttons('role:docs'))).toBe('[ Back ] [ Edit ] [ See the prompt ] [ Turn off ] [ Remove ]')
+  expect(buttons('role:docs').filter(s => s.hit).map(s => s.hit)).toEqual([{ key: 'back' }, { key: 'e' }, { key: 'p' }, { key: 'o' }, { key: 'd' }])
+  // its keys are core's roleKeys with what Claude Code's page passes for it
+  expect(panelKeys(f, 'role:docs', 'settings')).toEqual(roleKeys({ canEdit: true, canOff: true, off: false, canReset: false, canRemove: true, canSeePrompt: true }))
+  // a replaced built-in has no Remove (Reset instead), as on Claude Code
+  expect(panelKeys(f, 'role:tester', 'settings')).toEqual(roleKeys({ canEdit: true, canOff: true, off: true, canReset: true, canRemove: false, canSeePrompt: true }))
+  // a broken role file with no built-in's name: Claude Code's brokenRolePage: Back and Remove
+  expect(panelKeys(f, 'role:oops', 'settings')).toEqual(roleKeys({ canEdit: false, canOff: false, off: false, canReset: false, canRemove: true }))
+  // an added kind: Back, Edit, Turn off, Remove
+  expect(lineText(buttons('kind:chore'))).toBe('[ Back ] [ Edit ] [ Turn off ] [ Remove ]')
+  expect(panelKeys(f, 'kind:chore', 'settings')).toEqual(roleKeys({ canEdit: true, canOff: true, off: false, canReset: false, canRemove: true }))
+  expect(panelKeys(f, 'kind:change', 'settings')).toEqual(roleKeys({ canEdit: true, canOff: false, off: false, canReset: false, canRemove: false }))
+  // the Roles and Kinds lists: the rows, then "+ New role" (n), Claude Code's hint, Back (b); its footer keys
+  for (const [list, label, keys] of [['roles', '[ + New role ]', rolesKeys()], ['kinds', '[ + New kind ]', kindsKeys()]] as const) {
+    const d = texts({ tab: 'settings', opened: list })
+    const t = d.lines.map(lineText)
+    const at = t.indexOf(label)
+    expect([list, at > 0]).toEqual([list, true])
+    expect(t[at + 1]).toBe(`Enter opens a ${list === 'roles' ? 'role' : 'kind'} · n makes a new one · or tell the lead`)
+    expect(t.indexOf('[ Back (b) ]') > at).toBe(true)
+    expect(d.lines.flat().find(s => s.text === label)?.hit).toEqual({ key: 'n' })
+    expect(panelKeys(f, list, 'settings')).toEqual(withLiveKey(keys))
+  }
+  // the Scouts tab: "+ New scout" (n) above the scouts; with none, the how-to (all of it) and then the button
+  const sc = texts({ tab: 'scouts' })
+  const st = sc.lines.map(lineText)
+  expect(st.indexOf('[ + New scout ]') >= 0 && st.indexOf('[ + New scout ]') < st.findIndex(l => l.includes('deps'))).toBe(true)
+  expect(sc.lines.flat().find(s => s.text === '[ + New scout ]')?.hit).toEqual({ key: 'n' })
+  const none = panelLines({ ...f, view: { ...f.view, scouts: [] } }, { tab: 'scouts', opened: '', cursor: 0 }, NOW, W).lines.map(lineText)
+  const how = scoutHowTo('symcc')
+  expect(none.slice(none.indexOf(how[0]!), none.indexOf(how[0]!) + how.length + 1)).toEqual([...how, '[ + New scout ]'])
+})
+
+test('T-706: Edit opens Claude Code\'s edit page: "<name> editing", where Save writes, Save and Cancel (x), then its boxes in Claude Code\'s order with their values or placeholders; no board header', () => {
+  const f = addedViewFile()
+  const tester = f.view.roles!.find(r => r.name === 'tester')!
+  const general = f.view.roles!.find(r => r.name === 'general')!
+  const edit = defDraftOf('roles', tester)
+  expect(edit).toEqual({ page: 'role:tester', values: { description: 'My tester', model: 'opus', skills: 'tdd', tools: '', checklist: 'Test it well.\nRun them twice.' } })
+  const d = panelLines(f, { tab: 'settings', opened: 'role:tester', cursor: 1, edit }, NOW, 140)
+  const t = d.lines.map(lineText)
+  expect(t.slice(0, 4)).toEqual(['tester editing', 'save writes .symcc/roles/tester.md', "the name is the file's name: to rename the role, rename .symcc/roles/tester.md", '[ Save ] [ Cancel (x) ]'])
+  expect(d.lines.flat().filter(s => s.text.startsWith('[ ')).map(s => s.hit)).toEqual([{ save: true }, { key: 'x' }])
+  // the boxes: Description, Model, Skills, Tools, Checklist; the cursor (1) on Model; an empty one shows its placeholder
+  expect(d.ids).toEqual(['box:description', 'box:model', 'box:skills', 'box:tools', 'box:checklist'])
+  expect(t.filter(l => /^[› ] (Description|Model|Skills|Tools|Checklist)$/.test(l))).toEqual(['  Description', '› Model', '  Skills', '  Tools', '  Checklist'])
+  expect(t).toContain('    opus')
+  expect(t).toContain('    extra tools: web, to search and read the web (empty: none)')
+  expect(t).toContain('    Run them twice.')
+  expect(d.hits[t.indexOf('    opus')]).toEqual({ editField: 'model' })
+  // Claude Code's edit keys (with Enter, which opens a box here); no banner or tabs (core's showsHeader: role-edit)
+  expect(d.keys).toEqual(defEditKeys())
+  expect(boardPageOf(f, { tab: 'settings', opened: 'role:tester', edit })).toBe('role-edit')
+  expect(t.some(l => l.includes('[t]: Tasks'))).toBe(false)
+  // a built-in's Save writes a copy; Save's error shows under the buttons
+  const g = panelLines(f, { tab: 'settings', opened: 'role:general', cursor: 0, edit: { ...defDraftOf('roles', general), error: noDescriptionText('roles') } }, NOW, 200).lines.map(lineText)
+  expect(g).toContain('save writes .symcc/roles/general.md (a copy of the built-in role; Reset to built-in undoes it)')
+  expect(g[g.indexOf('[ Save ] [ Cancel (x) ]') + 1]).toBe('description is missing: say in a few words what the role is for')
+  // a kind: Description and Body
+  const chore = f.view.kinds!.find(k => k.name === 'chore')!
+  const k = panelLines(f, { tab: 'settings', opened: 'kind:chore', cursor: 0, edit: defDraftOf('kinds', chore) }, NOW, 140)
+  expect(k.ids).toEqual(['box:description', 'box:body'])
+  expect(k.lines.map(lineText).slice(0, 3)).toEqual(['chore editing', 'save writes .symcc/kinds/chore.md', '[ Save ] [ Cancel (x) ]'])
+  // an edit mode for another page is not drawn
+  expect(panelLines(f, { tab: 'settings', opened: 'role:docs', cursor: 0, edit }, NOW, 140).lines.map(lineText)).toContain('[ Back ] [ Edit ] [ See the prompt ] [ Turn off ] [ Remove ]')
+  // the commands they send
+  expect(actionCommand({ kind: 'def', def: 'role', name: 'docs', action: 'remove' })).toEqual({ name: 'symcc-settings', text: 'role docs remove' })
+  expect(actionCommand({ kind: 'def-add', def: 'kind', name: 'chore' })).toEqual({ name: 'symcc-settings', text: 'kind add chore' })
+  expect(actionCommand({ kind: 'def-edit', def: 'role', name: 'docs', field: 'model', value: '' })).toEqual({ name: 'symcc-settings', text: 'role docs edit model none' })
+  expect(actionCommand({ kind: 'def-edit', def: 'role', name: 'docs', field: 'checklist', value: '' })).toEqual({ name: 'symcc-settings', text: 'role docs edit checklist' })
+  expect(actionCommand({ kind: 'scout-new', scout: 'lint', prompt: ' Look for lint. ' })).toEqual({ name: 'symcc-scout', text: 'new lint Look for lint.' })
+  expect(actionCommand({ kind: 'setup-git' })).toEqual({ name: 'symcc-settings', text: 'git setup' })
+})
+
+/** startTui on `f` with a fake context: the panel's rows, its keys and clicks, the commands sent and the dialogs' answers. */
+async function tuiOn(f: ViewFile) {
+  const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)]])
+  const sent: { sessionID: string; name: string; text: string }[] = []
+  const slots: { append: string; render: (input: never) => unknown }[] = []
+  const answers = { prompt: [] as (string | undefined)[], select: [] as unknown[] }
+  const asked: string[] = []
+  const ctx: TuiContext = {
+    location: { directory: '/work/proj' },
+    theme: {},
+    renderer: { width: 142, height: 200 },
+    client: { session: { command: async input => void sent.push(input) } },
+    keymap: { layer: () => undefined },
+    ui: {
+      toast: { show: () => undefined },
+      dialog: { prompt: async o => (asked.push(o.title), answers.prompt.shift()), select: async <V,>(o: { title: string }) => (asked.push(o.title), answers.select.shift() as V | undefined) },
+      panel: { open: () => true, close: () => undefined, current: () => undefined },
+      slot: claim => (slots.push(claim as never), () => undefined),
+    },
+  }
+  const board = startTui(ctx, { runtime: fakeRuntime(), readText: async p => files.get(p) ?? Promise.reject(new Error('missing')), every: () => () => undefined, now: () => NOW })
+  await board.refresh()
+  const panel = slots.find(s => s.append === 'session.panel')!.render({ name: BOARD_PANEL, sessionID: 's', width: 142, focused: true, close: () => undefined } as never) as El
+  const lines = () => rowEls(panel).map(r => r.text)
+  const settle = () => new Promise<void>(res => setTimeout(res, 0))
+  const clickRow = (has: string) => (rowEls(panel).find(r => r.text.includes(has))!.el.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0 })
+  const click = async (label: string) => {
+    const seg = rowEls(panel).flatMap(r => r.segs).find(s => s.kids?.join('') === label)
+    expect([label, typeof seg?.props.onMouseUp]).toEqual([label, 'function'])
+    ;(seg!.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0, stopPropagation: () => undefined })
+    for (let i = 0; i < 6; i++) await settle()
+  }
+  const toSettings = async (row = '', then = '') => {
+    await board.press('t', 's')
+    await board.press('c', 's')
+    for (const g of lines().filter(l => l.includes('▸ '))) clickRow(g.trim().split(' · ')[0]!)
+    if (row) clickRow(row)
+    if (then) clickRow(then)
+  }
+  return { board, files, sent, answers, asked, lines, click, clickRow, toSettings }
+}
+
+test('T-706: startTui: Remove (d, or a click) asks Claude Code\'s question first; Cancel sends nothing, Yes sends /symcc-settings role|kind NAME remove and goes back to the list', async () => {
+  const t = await tuiOn(addedViewFile())
+  const docs = () => t.toSettings('5 roles', 'Writes docs')
+  for (const how of ['key', 'click'] as const) {
+    await docs()
+    expect(t.board.state().opened).toBe('role:docs')
+    t.sent.length = 0
+    t.asked.length = 0
+    t.answers.select.push('no')
+    if (how === 'key') await t.board.press('d', 's')
+    else await t.click('[ Remove ]')
+    expect([how, t.asked, t.sent, t.board.state().opened]).toEqual([how, ['Remove role docs and delete .symcc/roles/docs.md?'], [], 'role:docs'])
+    t.answers.select.push('yes')
+    if (how === 'key') await t.board.press('d', 's')
+    else await t.click('[ Remove ]')
+    expect([how, t.sent, t.board.state().opened]).toEqual([how, [{ sessionID: 's', name: 'symcc-settings', text: 'role docs remove' }], 'roles'])
+  }
+  // a kind the same way; a replaced built-in has no Remove: d does nothing
+  await t.toSettings('3 kinds', 'A small chore')
+  t.sent.length = 0
+  t.answers.select.push('yes')
+  await t.board.press('d', 's')
+  expect(t.sent).toEqual([{ sessionID: 's', name: 'symcc-settings', text: 'kind chore remove' }])
+  await t.toSettings('5 roles', 'My tester')
+  t.sent.length = 0
+  t.asked.length = 0
+  await t.board.press('d', 's')
+  expect([t.sent, t.asked]).toEqual([[], []])
+  t.board.stop()
+})
+
+test('T-706: startTui: Edit (e, or a click) opens the edit page; Enter or a click on a box asks its value; Save sends each changed box as /symcc-settings role|kind NAME edit FIELD VALUE; Cancel (x) and an empty description send nothing', async () => {
+  const t = await tuiOn(addedViewFile())
+  const tester = () => t.toSettings('5 roles', 'My tester')
+  await tester()
+  await t.click('[ Edit ]')
+  expect(t.lines()[0]).toBe('tester editing')
+  // down to Model, Enter: a new model; a click on the Checklist box: a new checklist; Save
+  await t.board.press('down', 's')
+  t.answers.prompt.push('sonnet', 'Check it twice.')
+  await t.board.press('open', 's')
+  t.clickRow('  Checklist')
+  await new Promise<void>(res => setTimeout(res, 0))
+  expect(t.lines()).toContain('    sonnet')
+  expect(t.lines()).toContain('    Check it twice.')
+  t.sent.length = 0
+  await t.click('[ Save ]')
+  expect(t.sent).toEqual([
+    { sessionID: 's', name: 'symcc-settings', text: 'role tester edit model sonnet' },
+    { sessionID: 's', name: 'symcc-settings', text: 'role tester edit checklist Check it twice.' },
+  ])
+  // Save leaves the edit page for the role's page
+  expect(t.board.state().opened).toBe('role:tester')
+  expect(t.lines().some(l => l.includes('editing'))).toBe(false)
+  // an emptied description: Save says why and sends nothing; x (Cancel) leaves without saving
+  await t.board.press('e', 's')
+  t.answers.prompt.push('')
+  await t.board.press('open', 's')
+  t.sent.length = 0
+  await t.click('[ Save ]')
+  expect(t.sent).toEqual([])
+  expect(t.lines()).toContain('description is missing: say in a few words what the role is for')
+  await t.click('[ Cancel (x) ]')
+  expect(t.lines().some(l => l.includes('editing'))).toBe(false)
+  await t.board.press('e', 's')
+  await t.board.press('x', 's')
+  expect(t.lines().some(l => l.includes('editing'))).toBe(false)
+  // nothing changed: Save sends nothing; a kind's Body
+  await t.toSettings('3 kinds', 'A small chore')
+  await t.board.press('e', 's')
+  await t.click('[ Save ]')
+  expect(t.sent).toEqual([])
+  await t.board.press('e', 's')
+  t.answers.prompt.push('Tidy one thing.')
+  t.clickRow('  Body')
+  await new Promise<void>(res => setTimeout(res, 0))
+  await t.click('[ Save ]')
+  expect(t.sent).toEqual([{ sessionID: 's', name: 'symcc-settings', text: 'kind chore edit body Tidy one thing.' }])
+  t.board.stop()
+})
+
+test('T-706: startTui: + New role / + New kind (n, or a click) ask the name and send /symcc-settings role|kind add NAME, then open it in the edit page once the view has it; + New scout asks name and instructions and sends /symcc-scout new', async () => {
+  const f = addedViewFile()
+  const t = await tuiOn(f)
+  await t.toSettings('5 roles')
+  t.answers.prompt.push('writer')
+  await t.click('[ + New role ]')
+  expect(t.sent).toEqual([{ sessionID: 's', name: 'symcc-settings', text: 'role add writer' }])
+  expect(t.asked).toEqual(["New role's name"])
+  // the engine wrote the new role: the next read opens it in the edit page
+  const writerRole = { name: 'writer', ...{ description: 'what this role is for', skills: [], prompt: '- one' } }
+  const g: ViewFile = { ...f, view: { ...f.view, roles: [...f.view.roles!, ...viewDefs('role', [writerRole], [], [writerRole], [], '.symcc/roles')] } }
+  t.files.set('/work/proj/.symcc/view.json', viewFileText(g))
+  await t.board.refresh()
+  expect(t.board.state().opened).toBe('role:writer')
+  expect(t.lines()[0]).toBe('writer editing')
+  // Esc on the name box sends nothing; n on the Kinds page sends kind add
+  await t.toSettings('3 kinds')
+  t.sent.length = 0
+  t.answers.prompt.push(undefined)
+  await t.board.press('n', 's')
+  t.answers.prompt.push('Chores')
+  await t.board.press('n', 's')
+  expect(t.sent).toEqual([{ sessionID: 's', name: 'symcc-settings', text: 'kind add Chores' }])
+  // + New scout: its name, then what it does
+  await t.board.press('s', 's')
+  t.sent.length = 0
+  t.asked.length = 0
+  t.answers.prompt.push('lint', 'Look for lint warnings.')
+  await t.click('[ + New scout ]')
+  expect(t.asked).toEqual(["New scout's name", 'lint: what it does'])
+  expect(t.sent).toEqual([{ sessionID: 's', name: 'symcc-scout', text: 'new lint Look for lint warnings.' }])
+  t.answers.prompt.push('lint2', '')
+  await t.board.press('n', 's')
+  expect(t.sent.length).toBe(1)
+  t.board.stop()
+})
+
+test('T-706: startTui: Set up git (g, or the banner\'s button) asks a yes first, then sends /symcc-settings git setup; Cancel sends nothing; no git row, or a page without the banner: g does nothing', async () => {
+  const t = await tuiOn(addedViewFile('no-repo'))
+  for (const how of ['key', 'click'] as const) {
+    await t.board.press('t', 's')
+    t.sent.length = 0
+    t.asked.length = 0
+    t.answers.select.push('no')
+    if (how === 'key') await t.board.press('g', 's')
+    else await t.click('[ Set up git (g) ]')
+    expect([how, t.asked, t.sent]).toEqual([how, [SETUP_GIT_ASK], []])
+    t.answers.select.push('yes')
+    if (how === 'key') await t.board.press('g', 's')
+    else await t.click('[ Set up git (g) ]')
+    expect([how, t.sent]).toEqual([how, [{ sessionID: 's', name: 'symcc-settings', text: 'git setup' }]])
+  }
+  // on a task's page (no banner) g asks nothing
+  await t.board.press('t', 's')
+  await t.board.press('open', 's')
+  expect(t.board.state().opened === '').toBe(false)
+  t.asked.length = 0
+  await t.board.press('g', 's')
+  expect(t.asked).toEqual([])
+  t.board.stop()
+  // git set up: no row and g asks nothing
+  const ok = await tuiOn(addedViewFile())
+  expect(ok.lines().some(l => l.includes('Set up git'))).toBe(false)
+  await ok.board.press('g', 's')
+  expect(ok.asked).toEqual([])
+  ok.board.stop()
 })

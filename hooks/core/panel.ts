@@ -19,7 +19,8 @@ import { type PhaseStage, type PhaseTask, stageStep, taskPhase } from './phase'
 export * from './failure'
 
 /** The pages of the board panel (every board: the terminal panel, VS Code's side panel, OpenCode's panel): the four
- *  tabs' lists, the lists under Settings (Roles, Kinds, Organizational memory), and the pages of one thing. */
+ *  tabs' lists, the lists under Settings (Roles, Kinds), the Organizational memory page (opened from the Live tab),
+ *  and the pages of one thing. */
 export type BoardPage =
   | 'tasks' | 'live' | 'scouts' | 'settings' | 'roles' | 'kinds' | 'orgmem'
   | 'task' | 'question' | 'scout' | 'scout-run' | 'scout-edit' | 'role' | 'role-edit' | 'role-prompt' | 'kind' | 'kind-edit'

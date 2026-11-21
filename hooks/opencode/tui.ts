@@ -10,7 +10,11 @@
 //     or a click on a tab, T-559, T-692; Live's lanes open their task on Enter or a click): a scout's page runs it now (r) or pauses it (p) with /<name>-scout, and edits it (e:
 //     how often, model or instructions, /<name>-scout <name> every|model|prompt VALUE, T-562); a setting is changed
 //     with /<name>-settings NAME VALUE, and the Roles and Kinds pages under Settings turn a role or kind off or on
-//     (o) or reset it to the built-in one (r) with /<name>-settings role|kind <name> on|off|reset;
+//     (o) or reset it to the built-in one (r) with /<name>-settings role|kind <name> on|off|reset; and (T-706) as on
+//     Claude Code's panel, edit it (e: an edit page with Save and Cancel, each changed box sent as /<name>-settings
+//     role|kind <name> edit FIELD VALUE), remove an added one (d, after a yes), make a new one (n on the Roles or Kinds
+//     page: /<name>-settings role|kind add NAME, then its edit page) and a new scout (n on the Scouts tab: /<name>-scout
+//     new NAME INSTRUCTIONS); the banner's Set up git (g) asks for a yes, then sends /<name>-settings git setup;
 //   - session.composer.top: the band above the prompt, like Claude Code's (the header line, a click on it opens or closes the board panel, T-567; then the questions, and
 //     the tasks that need the owner or run).
 // What is drawn comes from board-view.ts (bandLines, panelLines), made with hooks/core's helpers; this file only
@@ -21,8 +25,8 @@
 // modules (Solid and OpenTUI's Solid renderer) are passed in (TuiRuntime), so this file type-checks and its tests
 // run without them. The names and shapes below are @opencode/plugin 2.3.0's tui Context (only what is used).
 import { DEFAULT_NAME, dataDir } from '../name'
-import { VIEW_FILE, parseViewFile, bandDraw, panelLines, panelKeys, panelTaskActions, approveInProgress, panelRoleChoices, TASK_ACTION_COMMANDS, LETTER_KEYS, type LetterKey, hasPage, answerOptions, actionCommand, moveCursor, OWN_ANSWER, GROUPS_OPEN, groupOf, groupId, scoutRunsIn, settingsPlace, orgMemNoteOf, ORG_MEM_PAGE, defPageId, rolePromptId, SETTINGS_OPEN, settingGroupOf, settingGroupId, PANEL_TABS, CHOICE_KEYS, approveSent, type ApproveSent, type ChoiceKey, type ViewFile, type Line, type PanelAction, type PanelHit, type PanelKey, type PanelGroup, type PanelTab, type BandHit } from './board-view'
-import { SETTING_GROUPS, isScoutRunReport, taskReports, taskActions, type TaskAction, type TaskActionId, parseSettingValue, settingChoices, settingInfo, settingValue, isSettingPage, everyText, everyMinutesOf, nextMode, modeOf, promptsOfRole, SEARCH_WORDS, type SettingName, type ScoutEditField } from '../board'
+import { VIEW_FILE, parseViewFile, bandDraw, panelLines, panelKeys, panelTaskActions, approveInProgress, panelRoleChoices, TASK_ACTION_COMMANDS, LETTER_KEYS, type LetterKey, hasPage, answerOptions, actionCommand, moveCursor, OWN_ANSWER, GROUPS_OPEN, groupOf, groupId, scoutRunsIn, settingsPlace, orgMemNoteOf, ORG_MEM_PAGE, defPageId, rolePromptId, SETTINGS_OPEN, settingGroupOf, settingGroupId, PANEL_TABS, CHOICE_KEYS, approveSent, editOf, defDraftOf, draftChanges, noDescriptionText, editBoxId, boardPageOf, removeAsk, DEF_EDIT_BOXES, SETUP_GIT_ASK, type DefDraft, type ApproveSent, type ChoiceKey, type ViewFile, type Line, type PanelAction, type PanelHit, type PanelKey, type PanelGroup, type PanelTab, type BandHit } from './board-view'
+import { SETTING_GROUPS, isScoutRunReport, taskReports, taskActions, type TaskAction, type TaskActionId, parseSettingValue, settingChoices, settingInfo, settingValue, isSettingPage, everyText, everyMinutesOf, nextMode, modeOf, promptsOfRole, SEARCH_WORDS, NEW_SCOUT_EVERY, showsHeader, defEditFields, type SettingName, type ScoutEditField, type DefEditField } from '../board'
 import type { SymccScout } from '../../types'
 import { ORG_MEM_KEY, orgMemDeleteAsk, orgMemFile, orgMemNoteKey } from '../core/org-mem'
 import { PARTS_KEY, safePartsFile, viewStubFilled, withViewParts } from '../core/board-parts'
@@ -335,6 +339,10 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   const [approving, setApproving] = r.createSignal<ApproveSent | undefined>(undefined)
   // the task list's search (T-685, Claude Code's [f] search: core's searchTasks words; '' = none)
   const [search, setSearch] = r.createSignal('')
+  // the open role's or kind's edit mode (T-706, Claude Code's Edit page; undefined = none)
+  const [edit, setEdit] = r.createSignal<DefDraft | undefined>(undefined)
+  // a role, kind or scout just made from this panel: its page opens once the view file has it (T-706)
+  let pendingOpen: { tab: PanelTab; id: string; edit: boolean } | undefined
   let width = 80
   // the panel's height in rows (panelRows): it bounds the scroll, and the panel is drawn exactly that high, so the
   // footer stays at the bottom and no row of a longer page is left over; OpenTUI says when the box's size changes
@@ -383,6 +391,17 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     // the open task left the view: back to the list, so the list's keys work again
     keepPage(f)
     readTaskReport()
+    openMade()
+  }
+  /** Opens the page of the role, kind or scout just made here once the view file has it (a new role or kind in its
+   *  edit mode, as Claude Code's New role does). */
+  const openMade = () => {
+    const p = pendingOpen
+    if (!p || tab() !== p.tab || !hasPage(file(), p.id, p.tab)) return
+    pendingOpen = undefined
+    openPage(p.id)
+    const place = p.edit ? settingsPlace(file(), p.id) : null
+    if (place?.def) setEdit(defDraftOf(place.list, place.def))
   }
   /** Reads the open task's latest report, unless it is the one already read (or being read). */
   const readTaskReport = () => {
@@ -403,6 +422,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   /** Opens a page ('' = back to the list), from its top. */
   const openPage = (id: string) => {
     backTo = undefined
+    setEdit(undefined)
     setOpened(id)
     setSent(undefined)
     setTaskReport(undefined)
@@ -414,6 +434,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   }
   /** Shows another tab, at its list's top. */
   const showTab = (t: PanelTab) => {
+    pendingOpen = undefined
     setTab(t)
     openPage('')
     setCursor(0)
@@ -453,7 +474,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   /** Whether the cursor is on a page's own rows (a scout's runs, the Roles or Kinds list), not the tab's list. */
   const onPage = () => tab() !== 'tasks' && !!opened()
   const draw = () => {
-    return panelLines(file(), { tab: tab(), opened: opened(), run: run(), report: report(), cursor: onPage() ? runCursor() : cursor(), groups: groups(), settingsOpen: settingsOpen(), scroll: scroll(), ...(rows() ? { rows: rows()! } : {}), ...(sent() ? { sent: sent()! } : {}), ...(taskReport() ? { taskReport: taskReport()! } : {}), ...(approving() ? { approving: approving()! } : {}), ...(search() ? { search: search() } : {}) }, now(), width)
+    return panelLines(file(), { tab: tab(), opened: opened(), run: run(), report: report(), cursor: onPage() ? runCursor() : cursor(), groups: groups(), settingsOpen: settingsOpen(), scroll: scroll(), ...(rows() ? { rows: rows()! } : {}), ...(sent() ? { sent: sent()! } : {}), ...(taskReport() ? { taskReport: taskReport()! } : {}), ...(approving() ? { approving: approving()! } : {}), ...(search() ? { search: search() } : {}), ...(edit() ? { edit: edit()! } : {}) }, now(), width)
   }
   /** The rows of the Tasks tab's list, even while a task's page is open (whose draw has no rows), so "open this id"
    *  can put the list cursor on that task and b comes back to it (T-568). */
@@ -517,8 +538,58 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     if (field === 'every' && everyMinutesOf(value) === null) return say('every must be a whole number of minutes: 0 for only on demand, or 1 or more', 'error')
     await send(sessionID, { kind: 'scout-edit', scout: sc.name, field, value: field === 'model' && value.toLowerCase() === 'none' ? '' : value })
   }
+  /** Asks a yes (Claude Code's confirm step) before `what`; true when the owner picked it. */
+  const yes = async (title: string, label: string) => (await ctx.ui.dialog.select({ title, options: [{ title: label, value: 'yes' }, { title: 'Cancel', value: 'no' }] })) === 'yes'
+  /** "+ New role" / "+ New kind" (n): asks the name, then /<name>-settings role|kind add NAME; its page opens in the edit
+   *  mode once the view file has it. Esc or an empty name leaves it. */
+  const newDef = async (list: 'roles' | 'kinds', sessionID: string) => {
+    const noun = list === 'roles' ? 'role' : 'kind'
+    const asked = (await ctx.ui.dialog.prompt({ title: `New ${noun}'s name`, description: `Enter makes ${dataDir(file()?.name || name)}/${list}/<name>.md and opens it`, placeholder: 'letters, digits, - and _' }))?.trim()
+    if (!asked) return
+    if (await sendOk(sessionID, { kind: 'def-add', def: noun, name: asked })) pendingOpen = { tab: 'settings', id: defPageId(list, list === 'kinds' ? asked.toLowerCase() : asked), edit: true }
+  }
+  /** "+ New scout" (n): asks the name, then its instructions, then /<name>-scout new NAME INSTRUCTIONS (it runs every
+   *  NEW_SCOUT_EVERY minutes; e on its page changes that); its page opens once the view file has it. */
+  const newScout = async (sessionID: string) => {
+    const scout = (await ctx.ui.dialog.prompt({ title: "New scout's name", placeholder: 'letters, digits, - and _' }))?.trim()
+    if (!scout) return
+    const prompt = (await ctx.ui.dialog.prompt({ title: `${scout}: what it does`, description: `in plain words; it runs every ${NEW_SCOUT_EVERY} minutes (Edit on its page changes that)`, placeholder: 'what to look for, in plain words (longer ones: edit its file)' }))?.trim()
+    if (!prompt) return
+    if (await sendOk(sessionID, { kind: 'scout-new', scout, prompt })) pendingOpen = { tab: 'scouts', id: scout, edit: false }
+  }
+  /** Enter or a click on an edit page's box: asks its new value (Enter on an empty box empties it, Esc keeps it). */
+  const editBox = async (field: DefEditField) => {
+    const e = edit()
+    const place = e ? settingsPlace(file(), e.page) : null
+    if (!e || !place?.def) return
+    const box = DEF_EDIT_BOXES[field]
+    const now = (e.values[field] ?? '').split('\n').find(l => l.trim())?.trim() ?? ''
+    const value = await ctx.ui.dialog.prompt({ title: `${place.def.name}: ${box.label}${now ? ` (now: ${now})` : ''}`, description: box.placeholder(place.list === 'roles' ? 'role' : 'kind'), placeholder: box.placeholder(place.list === 'roles' ? 'role' : 'kind') })
+    if (value === undefined || edit()?.page !== e.page) return
+    setEdit({ page: e.page, values: { ...edit()!.values, [field]: value.trim() } })
+  }
+  /** Save on the edit page: an empty description stays with Claude Code's error; else each changed box is sent as
+   *  /<name>-settings role|kind NAME edit FIELD VALUE, in the page's order, and the page goes back to the role or kind. */
+  const saveEdit = async (sessionID: string) => {
+    const e = edit()
+    const place = e ? settingsPlace(file(), e.page) : null
+    if (!e || !place?.def) return
+    if (!(e.values.description ?? '').trim()) return void setEdit({ ...e, error: noDescriptionText(place.list) })
+    const def = place.list === 'roles' ? 'role' : 'kind'
+    for (const field of draftChanges(place.list, place.def, e)) if (!(await sendOk(sessionID, { kind: 'def-edit', def, name: place.def.name, field, value: e.values[field] ?? '' }))) return
+    if (edit()?.page === e.page) setEdit(undefined)
+  }
+  /** Set up git (g, or the banner's button), where the banner shows it: asks a yes, then /<name>-settings git setup. */
+  const setUpGit = async (sessionID: string) => {
+    const f = file()
+    const gs = f?.view.git_state
+    if (!f || (gs !== 'no-repo' && gs !== 'no-commits') || !showsHeader(boardPageOf(f, { tab: tab(), opened: opened(), run: run(), ...(edit() ? { edit: edit()! } : {}) }))) return
+    if (await yes(SETUP_GIT_ASK, 'Yes, set up git')) await send(sessionID, { kind: 'setup-git' })
+  }
   /** The Settings tab's keys: the list moves, changes a setting or opens the Roles or Kinds page; that page moves and
-   *  opens a role or kind; its page turns it off or on (o) or resets it (r); b goes back one page. */
+   *  opens a role or kind (n makes a new one); its page turns it off or on (o), resets it (r), edits it (e) or
+   *  removes it (d, after a yes); b goes back one page. On the edit page ↑↓ move over the boxes, Enter changes one,
+   *  x (Cancel) and b leave it without saving. */
   const pressSettings = async (key: PanelKey, sessionID: string) => {
     const f = file()
     const open = opened()
@@ -526,6 +597,13 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     const [cur, setCur] = open ? [runCursor, setRunCursor] : [cursor, setCursor]
     if (key === 'up' || key === 'down') return void setCur(moveCursor(cur(), key === 'up' ? -1 : 1, ids.length))
     const place = open ? settingsPlace(f, open) : null
+    if (editOf(f, { tab: tab(), opened: open, ...(edit() ? { edit: edit()! } : {}) })) {
+      if (key === 'x' || key === 'back') return void setEdit(undefined)
+      const field = ids[moveCursor(cur(), 0, ids.length)]
+      const k = place?.def ? defEditFields(place.list === 'roles' ? 'role' : 'kind').find(x => editBoxId(x) === field) : undefined
+      if (key === 'open' && k) return editBox(k)
+      return
+    }
     if (key === 'back') return place?.prompt && place.def ? openPage(defPageId('roles', place.def.name)) : place?.def ? openPage(place.list) : open ? openPage('') : showTab('tasks')
     // the built-in prompt page is view only: b goes back to the role
     if (place?.prompt) return
@@ -535,9 +613,21 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
       if (g) return toggleSettingGroup(g)
       return open || isSettingPage(id) ? openPage(id) : changeSetting(id as SettingName, sessionID)
     }
+    // + New role / + New kind on the Roles or Kinds page
+    if (key === 'n' && place && !place.def) return newDef(place.list as 'roles' | 'kinds', sessionID)
     const d = place?.def
     if (!d) return
     const def = place.list === 'roles' ? 'role' : 'kind'
+    if (key === 'e' && !d.broken) {
+      setRunCursor(0)
+      setScroll(0)
+      return void setEdit(defDraftOf(place.list, d))
+    }
+    if (key === 'd' && d.canRemove) {
+      if (!(await yes(removeAsk(place.list, d), 'Yes, remove'))) return
+      if ((await sendOk(sessionID, { kind: 'def', def, name: d.name, action: 'remove' })) && opened() === open) openPage(place.list)
+      return
+    }
     if (key === 'o' && d.canOff) return send(sessionID, { kind: 'def', def, name: d.name, action: d.off ? 'on' : 'off' })
     if (key === 'r' && d.canReset) return send(sessionID, { kind: 'def', def, name: d.name, action: 'reset' })
     // See the prompt (T-685): the first built-in prompt the role goes in
@@ -553,6 +643,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
       if (key === 'up' || key === 'down') return void setCursor(moveCursor(cursor(), key === 'up' ? -1 : 1, ids.length))
       if (key === 'open' && ids.length) openPage(ids[moveCursor(cursor(), 0, ids.length)]!)
       if (key === 'back') showTab('tasks')
+      if (key === 'n') return newScout(sessionID)
       return
     }
     if (run()) return void (key === 'back' && openRun(''))
@@ -608,6 +699,8 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     // on a task's page its own action keys come first (l is Role there, as on the terminal's task page)
     const page = tab() === 'tasks' && opened() ? f?.view.tasks.find(x => x.id === opened()) : undefined
     if (to && !(page && panelTaskActions(page, approveInProgress(f, page, approving(), now())).some(x => x.key === key))) return showTab(to)
+    // the banner's Set up git (g), on the pages that show the banner
+    if (key === 'g') return setUpGit(sessionID)
     keepPage(f)
     if (tab() === 'live') return pressLive(key, sessionID)
     if (tab() === 'scouts') return pressScouts(key, sessionID)
@@ -706,7 +799,13 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     if ('tab' in hit) return showTab(hit.tab)
     if ('choice' in hit) return pick(hit.choice, sessionID)
     if ('action' in hit) return pressAction(hit.action, sessionID)
+    if ('save' in hit) return saveEdit(sessionID)
     const ids = draw().ids
+    if ('editField' in hit) {
+      const at = ids.indexOf(editBoxId(hit.editField))
+      if (at >= 0) setRunCursor(at)
+      return editBox(hit.editField)
+    }
     if ('scout' in hit) {
       if (ids.indexOf(hit.scout) >= 0) setCursor(ids.indexOf(hit.scout))
       return openPage(hit.scout)
