@@ -44,7 +44,7 @@ const chat = text(view('chat'))
 for (const w of ['❯ there is no clear visual separation between the sections of the live page, show some ideas', '⏺ Four looks', 'T-747 try 1 → checks passed', 'symcc: T-747 done', 'scout gaps-bot found'])
   if (!chat.includes(w)) bad(`still frame: the chat has no "${w}"`)
 const task = text(view('task'))
-for (const w of ['T-740', '▍History', '▍Runs (time and cost)', 'try 1 → the checker found problems']) if (!task.includes(w)) bad(`still frame: the task page has no "${w}"`)
+for (const w of ['T-740', '▍History', '▍Runs', '‹ [Tasks]', '[Try 1] [● Try 2]', '▸ worker 12m', '⌕ checker 10m', 'try 1 → the checker found problems']) if (!task.includes(w)) bad(`still frame: the task page has no "${w}"`)
 // the real figures from the board on 2026-11-21 (not guesses): the looks offered, the owner's pick, slots, today, org-mem
 for (const w of ['1 Same heading for all', '2 Colored headings', '3 Boxes', '4 Side bar', '❯ 4'])
   if (!chat.includes(w)) bad(`still frame: the chat has no "${w}" (the real looks and pick)`)
@@ -84,18 +84,25 @@ for (const [name, t] of [['board', board], ['Live tab', live]]) {
   if (!lines.some(l => l.startsWith(' ✓ 56 merged'))) bad(`still frame: the ${name}'s ▍Today line is not indented by 1`)
   if (lines.some(l => /^ {3}[✓▶]/.test(l))) bad(`still frame: the ${name} still indents by 3 under a ▍heading`)
 }
-// (T-769) ▍Today in 3 lines: the figures; the medians per task, agent work time and cost; the stacked bar with the
-// shares (each in its board color) and the hour sparkline (the busiest hour only on the wide Live tab)
+// (T-769, T-779) ▍Today in 3 lines: the figures; the real medians per task and agent work time (no cost);
+// the bar with the scouts' share and the hour sparkline (no "busiest")
 for (const [name, t] of [['board', board], ['Live tab', live]]) {
   const after = t.slice(t.indexOf('▍Today') + '▍Today'.length).split('\n').filter(l => l.trim())
-  if (!/^ ⌀ per task \S+ · \d+m work · \d+m start-to-merge {3}⏱ \d+h \d\dm agent work · ≈ \$\d+$/.test(after[1] ?? '')) bad(`still frame: the ${name}'s ▍Today line 2 is not the per-task medians, work time and cost ("${after[1] ?? ''}")`)
-  if (!/^ [█▓▒░]{16} workers \d+% · checkers \d+% · scouts \d+% · lead \d+% {3}08 [▁▂▃▄▅▆▇█ ]+ \d\d/.test(after[2] ?? '')) bad(`still frame: the ${name}'s ▍Today line 3 is not the stacked bar, shares and hour sparkline ("${after[2] ?? ''}")`)
+  if (after[1] !== ' ⌀ per task 3M · 9m work · 41m start-to-merge   ⏱ 16h 56m agent work') bad(`still frame: the ${name}'s ▍Today line 2 does not show "3M · 9m" and the real figures ("${after[1] ?? ''}")`)
+  if (!/^ [█▒]{16} workers and checkers 90% · scouts 10% \(54\.7M of 530\.1M tokens\) {3}08 [▁▂▃▄▅▆▇█]+ \d\d/.test(after[2] ?? '')) bad(`still frame: the ${name}'s ▍Today line 3 is not the bar, the scouts' share and the hour sparkline ("${after[2] ?? ''}")`)
 }
-if (!/busiest \d\d:00/.test(live) || /busiest/.test(board)) bad('still frame: "busiest HH:00" belongs on the wide Live tab only')
-for (const w of ['workers', 'checkers', 'scouts', 'lead']) {
+if (/busiest|≈ \$/.test(live + board)) bad('still frame: ▍Today still shows "busiest" or a "≈ $" figure')
+for (const w of ['workers', 'scouts']) {
   if (!view('live').includes(`<span class="t-who-${w}">`)) bad(`still frame: the ${w}' bar part is not drawn in the t-who-${w} tone`)
   if (!new RegExp(`\\.t-who-${w}\\b`).test(readFileSync(join(out, 'style.css'), 'utf8'))) bad(`style.css: no .t-who-${w} rule`)
 }
+// (T-776, T-787) the band above the prompt: line 1 has no task id; each running task is on its own line
+const band = text(view('band')).split('\n').filter(l => l.trim())
+if (!band[0]?.startsWith('𝄞 symcc') || !band[0].includes('[ open board ]') || /T-\d+/.test(band[0])) bad(`still frame: the band's first line is not "𝄞 symcc ... [ open board ]" without a task id ("${band[0] ?? ''}")`)
+if (!band.some(l => /^ ▶ T-740 {2}work \d+m · try 2 {2}After a reopen/.test(l))) bad('still frame: the band has no running-task line for T-740')
+if (!view('band').includes('<span class="t-passed">work ')) bad('still frame: the band\'s "work Nm · try N" is not green')
+// (T-773) Live is the first tab
+if (!live.startsWith('[l] Live │ [t] Tasks │ [s] Scouts │ [c] Settings')) bad('still frame: the tab row is not "[l] Live │ [t] Tasks │ [s] Scouts │ [c] Settings"')
 if (!/<span class="t-run">▶ T-740 *<\/span> /.test(view('board'))) bad('still frame: the running lane "▶ T-740" (mark and id only) is not drawn in the t-run tone')
 if (!/\.t-run\b/.test(readFileSync(join(out, 'style.css'), 'utf8'))) bad('style.css: no .t-run rule')
 if (!page.includes('▶ T-747  ●━━━━━━●')) bad('home page: the Live tab card\'s running lanes do not start with "▶ "')
@@ -130,6 +137,9 @@ const demo = scope.symccDemo
 if (!demo) bad('demo.js did not set symccDemo')
 else {
   if (demo.STEPS.length < 10) bad(`demo.js: only ${demo.STEPS.length} steps`)
+  // (T-770) while the gaps-bot scout runs (from 16:40 to its finding at 16:44), the Live tab's mode line ends with its mark
+  const mid = demo.views(demo.stateAfter(7)).live
+  if (!text(mid).includes('⏵ auto · agents 2/3 busy · ⌕ gaps-bot ')) bad('demo.js: no "· ⌕ gaps-bot" mark on the mode line while the scout runs')
   for (let n = 0; n <= demo.STEPS.length; n++) {
     try {
       const v = demo.views(demo.stateAfter(n))

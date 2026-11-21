@@ -36,18 +36,17 @@
   const T740_TRY1_TOKENS = 4e6
   const USUAL = END_TODAY.tokens / END_TODAY.merged // the board's usual tokens per merged task; a full bar is that
   const MAX_AGENTS = 3
-  // (T-769) ▍Today's second and third lines, from the real board that day: the medians per merged task, the agent work
-  // time at the story's start (it grows with the busy agents), the session's cost, who spent the tokens (bar cells of
-  // 16, shares) and the tokens per hour from 08:00 (the current hour is added as the story goes)
+  // (T-769, T-779) ▍Today's second and third lines, real figures from this project's stats for 21 November: the medians per
+  // merged task, the agent work time, and the scouts' share of the tokens (54.7M of 530.1M; the rest is the workers' and
+  // checkers'; the lead's share and the day's cost are not known). The hour sparkline is a plain shape rising through the afternoon.
   const TODAY_MORE = {
-    perTask: '2.8M · 9m work · 23m start-to-merge',
-    workMin: 10 * 60 + 58,
-    cost: '≈ $54',
-    who: [['workers', 13, 84], ['checkers', 1, 8], ['scouts', 1, 5], ['lead', 1, 3]],
-    spark: '▁▂▃▅█▆▅▃',
-    busiest: '12:00 · 41.3M',
+    perTask: '3M · 9m work · 41m start-to-merge',
+    work: '16h 56m',
+    scoutsPct: 10,
+    scoutsTokens: '54.7M of 530.1M',
+    spark: '▁▁▁▂▂▃▄▅▆',
   }
-  const WHO_CELL = { workers: '█', checkers: '▓', scouts: '▒', lead: '░' }
+  const WHO_CELL = { workers: '█', scouts: '▒' }
 
   // ---------- the state ----------
   function start() {
@@ -71,6 +70,7 @@
       ],
       t740runs: [{ from: '16:28', start: at(16, 28), to: null, tokens: null }],
       t736: 'none',
+      scout: null,
     }
   }
 
@@ -83,8 +83,8 @@
   const LEAD_W = 1 + 2 + ID_W + 1 + TITLE_W + 2
 
   function tabRow(active) {
-    const tabs = [['t', 'Tasks'], ['l', 'Live'], ['s', 'Scouts'], ['c', 'Settings']]
-    return tabs.map(([k, n]) => sp(`[${k}]: ${n}`, n === active ? 'tab-on' : 'dim')).join(sp(' │ ', 'dim'))
+    const tabs = [['l', 'Live'], ['t', 'Tasks'], ['s', 'Scouts'], ['c', 'Settings']]
+    return tabs.map(([k, n]) => sp(`[${k}] ${n}`, n === active ? 'tab-on' : 'dim')).join(sp(' │ ', 'dim'))
   }
   const heading = (name, rest = '') => sp('▍', 'heading') + sp(name, 'heading') + rest
 
@@ -137,7 +137,7 @@
     const busy = s.lanes.filter(l => l.agent).length
     const L = []
     L.push(tabRow('Live'))
-    L.push(sp(`⏵ auto · agents ${busy}/${MAX_AGENTS} busy`, 'dim'))
+    L.push(sp(`⏵ auto · agents ${busy}/${MAX_AGENTS} busy` + (s.scout ? ` · ⌕ gaps-bot ${dur(s.now - s.scout)}` : ''), 'dim'))
     L.push('')
     L.push(heading('Tasks'))
     if (s.lanes.length) {
@@ -151,14 +151,13 @@
     L.push(heading('Today'))
     const d = s.today
     L.push(' ' + sp(`✓ ${d.merged} merged`, 'passed') + sp(`   ↺ ${d.back} sent back   ✗ ${d.failed} failed   Σ ${tok(d.tokens)} tokens`, 'dim'))
-    // (T-769) the medians per merged task, today's agent work time and the session's cost; then who spent the tokens
-    // (a stacked bar in the board colors, with the shares) and the tokens per hour from 08:00 to now
-    const work = TODAY_MORE.workMin + Math.round(((s.now - at(16, 36)) / 60) * busy)
-    L.push(' ' + sp('⌀ ', 'dim') + sp(`per task ${TODAY_MORE.perTask}`, 'text') + sp('   ⏱ ', 'dim') + sp(`${Math.floor(work / 60)}h ${String(work % 60).padStart(2, '0')}m agent work`, 'text') + sp(' · ', 'dim') + sp(TODAY_MORE.cost, 'text'))
-    const bar = TODAY_MORE.who.map(([w, cells]) => sp(WHO_CELL[w].repeat(cells), `who-${w}`)).join('')
-    const shares = TODAY_MORE.who.map(([w, , pct], i) => (i ? sp(' · ', 'dim') : ' ') + sp(`${w} ${pct}%`, `who-${w}`)).join('')
-    const spark = TODAY_MORE.spark + (s.today.merged > END_TODAY.merged - 1 ? '▆' : '▅')
-    L.push(' ' + bar + shares + '   ' + sp('08 ', 'dim') + sp(spark, 'bar') + sp(` ${clock(s.now).slice(0, 2)}`, 'dim') + (wide ? sp(`   busiest ${TODAY_MORE.busiest}`, 'dim') : ''))
+    // (T-769, T-779) the medians per merged task and today's agent work time; then the scouts' share of the tokens
+    // (a bar of 16 cells in the board colors) and the tokens per hour from 08:00 to now
+    L.push(' ' + sp('⌀ ', 'dim') + sp(`per task ${TODAY_MORE.perTask}`, 'text') + sp('   ⏱ ', 'dim') + sp(`${TODAY_MORE.work} agent work`, 'text'))
+    const cells = Math.round((TODAY_MORE.scoutsPct / 100) * 16)
+    const bar = sp(WHO_CELL.workers.repeat(16 - cells), 'who-workers') + sp(WHO_CELL.scouts.repeat(cells), 'who-scouts')
+    const shares = ' ' + sp(`workers and checkers ${100 - TODAY_MORE.scoutsPct}%`, 'who-workers') + sp(' · ', 'dim') + sp(`scouts ${TODAY_MORE.scoutsPct}%`, 'who-scouts') + sp(` (${TODAY_MORE.scoutsTokens} tokens)`, 'dim')
+    L.push(' ' + bar + shares + '   ' + sp('08 ', 'dim') + sp(TODAY_MORE.spark, 'bar') + sp(` ${clock(s.now).slice(0, 2)}`, 'dim'))
     if (s.lanes.length) L.push(' ' + sp(`✧ = an agent works here (needs an agent slot)   bar: tokens of the task so far, full = usual per task (${tok(USUAL)})`, 'dim'))
     L.push('')
     L.push(heading('Branches'))
@@ -176,6 +175,19 @@
     }
     L.push('')
     L.push(sp('↑↓ move · Enter open task · w watch worker · m org-mem · Esc close', 'dim'))
+    return L.join('\n')
+  }
+
+  // ---------- the band above the prompt (T-776, T-787) ----------
+  // Line 1: "𝄞 symcc", the dim summary and [ open board ]; then each running task on its own line: the id in the accent
+  // color, "work 10m · try 1" green, the title normal text.
+  const STAGE = ['work', 'check', 'queue', 'tests', 'merge']
+  function band(s) {
+    const running = s.lanes.filter(l => !l.done)
+    const busy = s.lanes.filter(l => l.agent).length
+    const waiting = 2 + (s.t736 === 'todo' ? 1 : 0)
+    const L = [sp('𝄞 symcc', 'heading') + '  ' + sp(`⏵ auto · ${busy}/${MAX_AGENTS} agents · ${waiting} waiting · ✓ ${s.today.merged} today`, 'dim') + '  ' + sp('[ open board ]', 'text')]
+    for (const l of running) L.push(' ' + sp('▶ ' + l.id, 'run') + '  ' + sp(`${STAGE[l.at]} ${dur(s.now - l.since)} · try ${l.tryNo}`, 'passed') + '  ' + esc(cut(TITLES[l.id], 60)))
     return L.join('\n')
   }
 
@@ -198,7 +210,7 @@
   // ---------- the task page (T-740) ----------
   function taskPage(s) {
     const L = []
-    L.push(tabRow('Tasks') + sp('   ← back', 'dim'))
+    L.push(sp('‹ [Tasks]', 'dim') + '  ' + s.t740runs.map((_, k) => (k === s.t740runs.length - 1 ? '[● Try ' : '[Try ') + (k + 1) + ']').join(' '))
     L.push('')
     L.push(sp('T-740', 'id') + ' ' + `<b>${esc(TITLES['T-740'])}</b>`)
     L.push('')
@@ -219,12 +231,17 @@
       L.push('   ' + sp(t, 'dim') + '  ' + sp(text, tone))
     }
     L.push('')
-    L.push(heading('Runs (time and cost)'))
+    // (T-774, T-779) the heading sums the tries; each try has one dim line per agent (times from the story; the split of tokens is not known)
+    const mins = r => (r.to === null ? Math.round((s.now - r.start) / 60) : r.mins)
+    const total = s.t740runs.reduce((a, r) => a + mins(r), 0)
+    const toks = s.t740runs.reduce((a, r) => a + (r.tokens || 0), 0)
+    const n = s.t740runs.length
+    L.push(heading('Runs', `   ${n} ${n === 1 ? 'try' : 'tries'} · ${total}m` + (toks ? ` · ${tok(toks)} tokens` : '')))
     s.t740runs.forEach((r, i) => {
       const running = r.to === null
-      const mins = running ? Math.round((s.now - r.start) / 60) : r.mins
-      const parts = [`try ${i + 1}: ${mins}m`, r.tokens !== null && `${tok(r.tokens)} tokens in all`, r.cost && `~$${r.cost}`, r.end].filter(Boolean).join(' · ')
+      const parts = [`try ${i + 1}: ${mins(r)}m`, r.tokens !== null && `${tok(r.tokens)} tokens in all`, r.end].filter(Boolean).join(' · ')
       L.push('   ' + sp(parts + (running ? ' (running)' : ''), running ? 'passed' : 'dim'))
+      if (r.agents) for (const a of r.agents) L.push('     ' + sp(a, 'dim'))
     })
     return L.join('\n')
   }
@@ -281,6 +298,7 @@
       Object.assign(lane(s, 'T-740'), { at: 1, since: s.now })
       Object.assign(s.branches.find(b => b.id === 'T-740'), { ahead: 1 })
       s.t740.push(['16:40', 'try 1: checker started'])
+      s.scout = s.now
     }],
     // main moves on: T-737 merges (18bc450)
     [1800, at(16, 41, 0), s => {
@@ -292,6 +310,7 @@
       say(s, { k: 'event', mark: '◇', tone: 'id', text: `scout gaps-bot found: ${SCOUT_FOUND}` })
       say(s, { k: 'lead', lines: [esc('A scout found a gap in the stats. I added it as T-736 (bug); it starts when an agent slot is free.')] })
       s.t736 = 'todo'
+      s.scout = null
     }],
     // main moves on: the version bump (1f8cdb8)
     [2200, at(16, 46, 0), s => {
@@ -309,7 +328,7 @@
       s.today.back += 1
       s.today.tokens += T740_TRY1_TOKENS
       s.t740.push(['16:50', 'try 1 → the checker found problems'], ['16:50', 'try 2: worker started'])
-      Object.assign(s.t740runs[0], { to: '16:50', mins: 22, tokens: T740_TRY1_TOKENS, end: 'the checker found problems' })
+      Object.assign(s.t740runs[0], { to: '16:50', mins: 22, tokens: T740_TRY1_TOKENS, end: 'the checker found problems', agents: ['▸ worker 12m', '⌕ checker 10m'] })
       s.t740runs.push({ from: '16:50', start: s.now, to: null, tokens: null })
       say(s, { k: 'event', mark: '↺', tone: 'warning', text: 'T-740 try 1 → the checker found problems · try 2/3 started' })
     }],
@@ -349,7 +368,7 @@
     s.thinking = false
     return s
   }
-  const views = s => ({ chat: chat(s), input: inputBox(s), board: board(s, false), live: board(s, true), task: taskPage(s), scouts: scouts(s) })
+  const views = s => ({ chat: chat(s), band: band(s), input: inputBox(s), board: board(s, false), live: board(s, true), task: taskPage(s), scouts: scouts(s) })
 
   // ---------- under bun: print the still frame for index.html ----------
   if (typeof document === 'undefined') {
@@ -365,7 +384,7 @@
   const root = document.getElementById('demo')
   if (!root) return
   const $ = name => root.querySelector(`[data-view="${name}"]`)
-  const out = { chat: $('chat'), input: $('input'), board: $('board'), live: $('live'), task: $('task'), scouts: $('scouts') }
+  const out = { chat: $('chat'), band: $('band'), input: $('input'), board: $('board'), live: $('live'), task: $('task'), scouts: $('scouts') }
   const pauseBtn = root.querySelector('.demo-pause')
   const stepLabel = root.querySelector('.demo-step')
   const still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches

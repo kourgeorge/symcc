@@ -132,6 +132,7 @@ main.home h3 { font-size: 1.1rem; }
 .chat .m { white-space: pre-wrap; overflow-wrap: anywhere; }
 .chat .you { background: #1a1e24; border-radius: 4px; padding: .15rem .4rem; }
 .chat .note { font-size: .92em; }
+.band { margin-top: .7rem; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .92em; }
 .prompt { margin-top: .7rem; border: 1px solid #3a3f47; border-radius: 6px; padding: .3rem .6rem; white-space: pre-wrap; overflow-wrap: anywhere; min-height: 2.2em; }
 .caret { color: var(--dim); }
 .playing .caret { animation: blink 1s steps(1) infinite; }
