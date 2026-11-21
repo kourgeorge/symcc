@@ -338,9 +338,10 @@ export async function saveScoutsMigrated(host: Host) {
  */
 export async function migrateScoutOrigins(host: Host): Promise<string[]> {
   const b = await load(host)
-  if (!renameScoutOrigins(b.tasks, S.N.name).renamed.length) return []
+  const known = await knownScouts(host)
+  if (!renameScoutOrigins(b.tasks, S.N.name, known).renamed.length) return []
   const renamed = await change(host, y => {
-    const r = renameScoutOrigins(y.tasks, S.N.name)
+    const r = renameScoutOrigins(y.tasks, S.N.name, known)
     return [{ ...y, tasks: r.tasks }, r.renamed] as [Board, typeof r.renamed]
   })
   for (const scout of new Set(renamed.map(r => r.scout))) {

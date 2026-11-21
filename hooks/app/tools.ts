@@ -563,8 +563,9 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       if (!str(a.why)?.trim()) throw new Error('why is missing: say in one line why this task exists (and fill origin_by, plus request, scout or from_task)')
       // a scout's agent name ("symcc-scout-bugs", what its message comes from) counts as the scout's name ("bugs");
       // a name that is not one of the scouts is refused, so its report, runs and stats are found under it
-      const scout = scoutNameOf(a.scout, S.N.name)
-      if (scout && !(await isKnownScout($, scout))) throw new Error(unknownScoutText(scout, await knownScouts($)))
+      const known = await knownScouts($)
+      const scout = scoutNameOf(a.scout, S.N.name, known)
+      if (scout && !(await isKnownScout($, scout))) throw new Error(unknownScoutText(scout, known))
       const said = { by: a.origin_by, scout: scout || a.scout, task: a.from_task, how: a.how, request: a.request, why: a.why }
       // it merges into the branch checked out now (on a detached checkout, the repo's main branch)
       const merge_into = await homeBranch($)

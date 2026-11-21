@@ -2,7 +2,7 @@
 import type { SymccOrigin } from '../../types'
 import { type Board, find, normId } from './board-file'
 import { clean, ellipsis, squash } from './text'
-import { agentSafeName } from './agents'
+import { agentSafeName, scoutAgentName } from './agents'
 
 /** Who can start a task: the owner, a scout's report, a worker's report, or the lead's own idea. */
 export const ORIGIN_BY = ['owner', 'scout', 'worker', 'lead'] as const
@@ -46,11 +46,16 @@ export function makeOrigin(o: OriginInput | undefined, now: string, b?: Board): 
 }
 
 /**
- * A scout's name from what the lead gave: its agent name ("symcc-scout-bugs", see scoutAgentName, which is what the
- * scout's message comes from) becomes the scout's own name ("bugs"); any other text is only trimmed.
+ * A scout's name from what the lead gave. A name of one of the `known` scouts is kept; a scout's agent name (what its
+ * message comes from, see scoutAgentName: "symcc-scout-bugs", with "." made "-" and cut to 64 characters) becomes the
+ * name of the known scout it belongs to ("bugs", "deps.v2" for "symcc-scout-deps-v2"). Any other agent name loses its
+ * "<plugin>-scout-" start (a scout no longer known); other text is only trimmed.
  */
-export function scoutNameOf(raw: unknown, plugin: string): string {
+export function scoutNameOf(raw: unknown, plugin: string, known: readonly string[] = []): string {
   const s = typeof raw === 'string' ? raw.trim() : ''
+  if (!s || known.includes(s)) return s
+  const match = [...known].sort().find(k => scoutAgentName(plugin, k) === s)
+  if (match) return match
   const prefix = `${agentSafeName(plugin)}-scout-`
   return s.startsWith(prefix) && s.length > prefix.length ? s.slice(prefix.length) : s
 }
@@ -63,14 +68,14 @@ export function unknownScoutText(name: string, known: string[]): string {
 
 /**
  * Tasks whose origin names a scout by its agent name ("symcc-scout-bugs", from before T-712), with the scout's own
- * name instead ("bugs"); `renamed` lists each changed task (its id, the scout and when it was made). Others are kept as they are.
+ * name instead ("bugs", matched through the `known` scouts, see scoutNameOf); `renamed` lists each changed task (its id, the scout and when it was made). Others are kept as they are.
  */
-export function renameScoutOrigins<T extends { id: string; created_at?: string; origin?: unknown }>(tasks: T[], plugin: string): { tasks: T[]; renamed: { id: string; scout: string; at: string }[] } {
+export function renameScoutOrigins<T extends { id: string; created_at?: string; origin?: unknown }>(tasks: T[], plugin: string, known: readonly string[] = []): { tasks: T[]; renamed: { id: string; scout: string; at: string }[] } {
   const renamed: { id: string; scout: string; at: string }[] = []
   const out = tasks.map(t => {
     const o = t.origin as Record<string, unknown> | null | undefined
     if (!o || typeof o !== 'object' || o.by !== 'scout' || typeof o.scout !== 'string') return t
-    const scout = scoutNameOf(o.scout, plugin)
+    const scout = scoutNameOf(o.scout, plugin, known)
     if (scout === o.scout) return t
     renamed.push({ id: t.id, scout, at: String(t.created_at || o.at || '') })
     return { ...t, origin: { ...o, scout } }

@@ -347,6 +347,40 @@ test('the migration renames scout agent names in old origins (board and parts fi
   expect([...w.files.entries()]).toEqual([...before.entries()])
 })
 
+// a scout's agent name is not always "symcc-scout-" + its name: "." becomes "-" and the whole name is cut to 64 characters
+const LONG = 'a'.repeat(60)
+const odd = (name: string) => `${ROOT}/.symcc/scouts/${name}.runs.json`
+/** Lets the world's in-memory files be listed by folder (the fake's list gives nothing), as a real scouts folder is. */
+function listable(w: ReturnType<typeof world>) {
+  ;(w.$.fs as { list: unknown }).list = async (dir: string) =>
+    [...w.files.keys()].filter(k => k.startsWith(`${dir}/`) && !k.slice(dir.length + 1).includes('/')).map(k => ({ name: k.slice(dir.length + 1), kind: 'file' }))
+  return w
+}
+
+test('an add with the agent name of scout "deps.v2" or of a long-named scout stores that scout and links its run', async () => {
+  const run = (): ScoutRunRecord[] => [{ started: null, ended: ago(2), outcome: 'found', findings: 1, tasks: [] }]
+  const w = listable(world({ [odd('deps.v2')]: scoutRunsText(run()), [odd(LONG)]: scoutRunsText(run()) }))
+  scoutState.clear()
+  scoutRuns.clear()
+  await runTool(w.$, 'add', { title: 'a', details: 'x', why: 'y', origin_by: 'scout', scout: 'symcc-scout-deps-v2' } as never)
+  await runTool(w.$, 'add', { title: 'b', details: 'x', why: 'y', origin_by: 'scout', scout: `symcc-scout-${'a'.repeat(52)}` } as never)
+  expect(boardTasks(w.files).map(t => t.origin!.scout)).toEqual(['deps.v2', LONG])
+  expect(parseScoutRuns(w.files.get(odd('deps.v2')))[0]!.tasks).toEqual(['T-1'])
+  expect(parseScoutRuns(w.files.get(odd(LONG)))[0]!.tasks).toEqual(['T-2'])
+})
+
+test('the migration maps an old agent name "symcc-scout-deps-v2" back to scout "deps.v2" and links its run', async () => {
+  const runs: ScoutRunRecord[] = [{ started: null, ended: ago(2), outcome: 'found', findings: 1, tasks: [] }]
+  const at = ago(1)
+  const t = { id: 'T-1', title: 't', details: '', status: 'todo', order: 1, after: [], files: [], attempts: 0, history: [], created_at: at, updated_at: at, merge_into: 'main', origin: { by: 'scout', scout: 'symcc-scout-deps-v2', why: 'w', at } }
+  const w = listable(world({ [odd('deps.v2')]: scoutRunsText(runs), [BOARD]: JSON.stringify({ ...emptyBoard(), mode: 'auto', tasks: [t] }) }))
+  scoutState.clear()
+  expect(await migrateScoutOrigins(w.$)).toEqual(['T-1'])
+  expect((await load(w.$)).tasks[0]!.origin?.scout).toBe('deps.v2')
+  expect(parseScoutRuns(w.files.get(odd('deps.v2')))[0]!.tasks).toEqual(['T-1'])
+  expect(await migrateScoutOrigins(w.$)).toEqual([])
+})
+
 test('a run recorded before tasks were saved gets its tasks from the board; linking a new one keeps them', () => {
   const from = (scout: string) => ({ by: 'scout' as const, scout, why: 'x', at: '' })
   const old: ScoutRunRecord[] = [{ started: null, ended: '2026-11-10T00:00:00.000Z', outcome: 'found', findings: 2 }]
