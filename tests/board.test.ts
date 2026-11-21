@@ -938,6 +938,16 @@ test('the status line keeps the backlog quiet, but says "all done · N in backlo
   expect(backlogLabel(3, true)).toBe('▾ Backlog (3)')
 })
 
+// T-746: Claude Code draws every control character of $.ui.status text (ESC too) as "�", so the line can't be colored
+// with ANSI codes; the drive warning's color lives in the band (AbovePrompt), not here.
+test('the status line has no control characters, so no ANSI color codes, even while another session drives', () => {
+  const t = (status: SymccTask['status'], id: string) => ({ id, status })
+  for (const driving of [true, false]) {
+    const line = statusLine({ tasks: [t('doing', 'T-1'), t('todo', 'T-2')] }, driving) ?? ''
+    expect([...line].some(c => c.charCodeAt(0) < 32 || c === '\x7f')).toBe(false)
+  }
+})
+
 test('the status line starts with the board mode: paused, review or auto', () => {
   const t = (status: SymccTask['status'], id: string) => ({ id, status })
   const tasks = [t('doing', 'T-26'), t('review', 'T-27')]
