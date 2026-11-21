@@ -4,7 +4,7 @@
 
 import type { SymccTokens } from '../../types'
 import { fmtCost, fmtDuration, fmtTokenKinds, fmtTokens, billedTokens, tokenCount } from './runs'
-import { BILLED_FOOTNOTE, pctText, rangeText, scoutResultsText, statsTitle, type StatsData, type StatsGroup, type StatsTop } from './stats'
+import { BILLED_FOOTNOTE, STAGES_NOTE, countingText, pctText, rangeText, scoutResultsText, statsTitle, unlinkedText, type StatsData, type StatsGroup, type StatsTop } from './stats'
 
 /** `s` safe inside HTML text and attribute values. */
 export const escapeHtml = (s: unknown): string =>
@@ -67,7 +67,7 @@ function topTable(ts: StatsTop[], fmt: (n: number) => string, colour: string): s
 }
 
 const groupText = (g: StatsGroup, total: number) => `${g.n} · ${pctText(g.n, total)}`
-const groupSub = (g: StatsGroup) => `avg ${tokOr(g.avgTok)} tokens · ${durOr(g.avgMs)}`
+const groupSub = (g: StatsGroup) => `avg ${tokOr(g.avgTok)} tokens · ${durOr(g.avgMs)}${g.sumTok !== undefined || g.sumMs !== undefined ? ` · total ${tokOr(g.sumTok)} tokens · ${durOr(g.sumMs)}` : ''}`
 
 /** The tokens per merged task the headline card shows: the whole team's when known, else the workers'. */
 export function perMergedHeadline(d: StatsData): string {
@@ -139,10 +139,11 @@ footer{color:var(--muted);font-size:.8rem;margin-top:24px}
  */
 export function statsHtml(d: StatsData, project: string): string {
   const title = `${d.name} stats · ${project}`
+  const counting = countingText(d.range, d.counting, d.insideAsked, d.name)
   const head = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${E(title)}</title><style>${CSS}</style></head><body><main>`
-    + `<header><h1>${E(title)}</h1><p>${E(rangeText(d.range))} · ${E(plural(d.total, 'task'))}${d.archivedIn ? ` (incl. ${d.archivedIn} archived)` : ''} · ${E(d.today)}</p></header>`
+    + `<header><h1>${E(title)}</h1><p>${E(rangeText(d.range))} · ${E(plural(d.total, 'task'))}${d.archivedIn ? ` (incl. ${d.archivedIn} archived)` : ''} · ${E(d.today)}</p>${counting ? `<p>${E(counting)}</p>` : ''}</header>`
     + (d.archiveProblem ? `<div class="note">Archived tasks are not counted: ${E(d.archiveProblem)}</div>` : '')
-  const end = `<footer><p>${E(statsTitle(d))}</p><p>${E(BILLED_FOOTNOTE)}</p><p>Time waiting for you is not shown: history entries from older boards carry no times.</p></footer></main></body></html>\n`
+  const end = `<footer><p>${E(statsTitle(d))}</p><p>${E(BILLED_FOOTNOTE)}</p><p>${E(`Stages: ${STAGES_NOTE}`)}</p></footer></main></body></html>\n`
   if (!d.total) return `${head}<div class="note">${d.range.kind === 'all' ? 'No tasks yet.' : 'No tasks in this range.'}</div>${end}`
 
   const cards = `<div class="cards">${headlineCards(d).map((c, i) => card(c.label, c.value, c.note, CYCLE[i % CYCLE.length]!)).join('')}</div>`
@@ -163,19 +164,29 @@ export function statsHtml(d: StatsData, project: string): string {
 
   const maxOrigin = Math.max(0, ...d.origins.map(o => o.n))
   const origins = section('Where tasks came from', d.origins.map(o => barRow(o.label, o.n, maxOrigin, groupText(o, d.total), ORIGIN_COLOUR[o.key] ?? 'var(--slate)', o.n ? groupSub(o) : '')
-    + (o.scouts?.length ? `<h3>Scout scorecard</h3>` + o.scouts.map(s => `<div class="indent">${barRow(s.label, s.n, maxOrigin, groupText(s, d.total), ORIGIN_COLOUR.scout!, s.idle ? 'no tasks here' : groupSub(s))}</div><div class="results">${E(scoutResultsText(s.results))}</div>`).join('') : '')).join(''))
+    + (o.scouts?.length ? `<h3>Scout scorecard</h3>` + o.scouts.map(s => `<div class="indent">${barRow(s.label, s.n, maxOrigin, groupText(s, d.total), ORIGIN_COLOUR.scout!, s.idle ? 'no tasks here' : groupSub(s))}</div><div class="results">${E(scoutResultsText(s.results))}${s.unlinked !== undefined && !s.idle ? ` · ${E(unlinkedText(s.unlinked))}` : ''}</div>`).join('') : '')).join(''))
 
   const days = section('Done per day (the last 7 days with activity)', dayChart(d), true)
 
   const p = d.perDone
   const perDone = section(`Per done task (${plural(d.doneWithData, 'done task')} with data)`, d.doneWithData ? kv([
-    ['time', `avg ${durOr(p.avgMs)} · median ${durOr(p.medianMs)}`],
-    ['tokens', p.avgTok !== undefined ? `avg ${tokOr(p.avgTok)} · median ${tokOr(p.medianTok)} (in all)` : '-'],
+    ['time', `avg ${durOr(p.avgMs)} · median ${durOr(p.medianMs)} · total ${durOr(p.sumMs)}`],
+    ['tokens', p.avgTok !== undefined ? `avg ${tokOr(p.avgTok)} · median ${tokOr(p.medianTok)} · total ${tokOr(p.sumTok)} (in all)` : '-'],
     ['tries', `avg ${(p.avgTries ?? 0).toFixed(1)} per task`],
     ['first try', `${pctText(d.first, d.doneWithData)} (${d.first} of ${d.doneWithData})`],
-    ['lead time', d.leadTime.n ? `avg ${durOr(d.leadTime.avgMs)} · median ${durOr(d.leadTime.medianMs)} (made to done)` : '-'],
+    ['lead time', d.leadTime.n ? `avg ${durOr(d.leadTime.avgMs)} · median ${durOr(d.leadTime.medianMs)} · total ${durOr(d.leadTime.sumMs)} (made to done)` : '-'],
   ]) : '<p class="muted">No done tasks with data.</p>')
-  const perTry = section(`Per try (${plural(d.perTry.n, 'try', 'tries')})`, kv([['time', `avg ${durOr(d.perTry.avgMs)}`], ['tokens', `avg ${tokOr(d.perTry.avgTok)} in all`], ['worker time', fmtDuration(d.workMs)], ['tokens in all', d.tokKnown ? fmtTokens(tokenCount(d.tokens)) : '-'], ...(kinds(d.tokens) ? [['kinds', kinds(d.tokens)] as [string, string]] : [])]))
+  const perTry = section(`Per try (${plural(d.perTry.n, 'try', 'tries')})`, kv([['time', `avg ${durOr(d.perTry.avgMs)} · total ${durOr(d.perTry.sumMs)}`], ['tokens', `avg ${tokOr(d.perTry.avgTok)} in all · total ${tokOr(d.perTry.sumTok)}`], ['worker time', fmtDuration(d.workMs)], ['tokens in all', d.tokKnown ? fmtTokens(tokenCount(d.tokens)) : '-'], ...(kinds(d.tokens) ? [['kinds', kinds(d.tokens)] as [string, string]] : [])]))
+
+  // T-719: time per stage, each with its total, its average per done task and its share of the lifetime
+  const f = d.stages
+  const shown = f.stages.filter(x => x.ms > 0 || (x.stage !== 'backlog' && x.stage !== 'blocked'))
+  const maxStage = Math.max(0, ...shown.map(x => x.ms))
+  const stageRow = (label: string, ms: number, avg: number, colour: string) => barRow(label, ms, maxStage, `${fmtDuration(ms)} · avg ${fmtDuration(avg)} · ${pctText(ms, f.lifetime)}`, colour)
+  const stages = section(`Time per stage (${plural(f.n, 'done task')}${f.lacking ? `; ${f.lacking} without timed history, left out` : ''})`, f.n
+    ? shown.map((x, i) => stageRow(x.label, x.ms, x.avgMs, CYCLE[i % CYCLE.length]!)).join('')
+      + kv([['active', `${fmtDuration(f.active)} · avg ${fmtDuration(f.active / f.n)} · ${pctText(f.active, f.lifetime)}`], ['waiting', `${fmtDuration(f.waiting)} · avg ${fmtDuration(f.waiting / f.n)} · ${pctText(f.waiting, f.lifetime)}`], ['lifetime', `${fmtDuration(f.lifetime)} · avg ${fmtDuration(f.avgLifetime)}`]])
+    : '<p class="muted">No done tasks with timed history.</p>', true)
 
   const v = d.inv
   const inv = section(`Investigations (${d.invCount}, ${d.answered} answered)`, d.invCount ? kv([
@@ -205,7 +216,7 @@ export function statsHtml(d: StatsData, project: string): string {
       ]), true)
   }
 
-  return `${head}${cards}<div class="grid">${states}${ended}${team}${days}${perDone}${perTry}${inv}${roles}${origins}${topTok}${topTime}</div>${end}`
+  return `${head}${cards}<div class="grid">${states}${ended}${team}${days}${stages}${perDone}${perTry}${inv}${roles}${origins}${topTok}${topTime}</div>${end}`
 }
 
 /** The command that opens `file` in the browser on `platform` (process.platform's words), or every one to try when not known. */

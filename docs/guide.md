@@ -1642,13 +1642,20 @@ its read-only `stats` tool.
 
 - **Range:** `/symcc-stats` covers every task; `/symcc-stats 7d` the tasks changed in the last
   7 days; `/symcc-stats T-100..T-130` an id range.
+- **Only the work inside the days:** a day range counts every whole try of each task changed
+  in it, so a try that started before the window counts in full. `/symcc-stats 7d inside` counts
+  only the work inside the 7 days: tries and stages are cut to the window (a try from before it
+  that ended inside counts only its part inside, with its tokens; tries that ended before it are
+  left out). The report's second line says which way it counted ("Counting: ..."). The lead's
+  `stats` tool takes the same as `inside: true`. With no day range, `inside` changes nothing and
+  the report says so.
 - **Summary and full:** `/symcc-stats` starts with one line (tasks done, hours of work, tokens,
   share right on the first try), then short parts with plain bar charts (`▇`, with `▂` and `▅`
   for a part of a block, so small numbers still show), each scaled to the biggest number in
   that part, with the counts and percentages lined up. Every line fits in 80 columns. It keeps
   every figure; the long explanations become short footnotes. `/symcc-stats full` (also with a
   range, e.g. `/symcc-stats full 7d`) adds them back: the billed-equivalent lines with how they
-  are weighed, where the lead's tokens come from, and why waiting time is not shown. The lead's
+  are weighed, where the lead's tokens come from, and how the stage times are read. The lead's
   `stats` tool gets the full text, unless it asks for the short one.
 - **Web page:** `/symcc-stats html` (also with a range, e.g. `/symcc-stats html 7d`) writes the
   same figures as one page with charts, `.symcc/stats.html`. The page is self-contained: no outside
@@ -1688,7 +1695,9 @@ its read-only `stats` tool.
 - **Parts:** tasks by status (bars); work (worker time, tokens in all and about how many
   billed, by kind); the whole team (bars); per done task (average and median time and
   tokens, tries per task, share done on the first try, lead time: from made to done); per
-  try (average time and tokens); the 5 biggest tasks by tokens and by time (bars); how tasks
+  try (average time and tokens); wherever an average per task or per try is shown, its total
+  sits next to it ("avg 25m · median 30m · total 1h 40m"; for roles and origins on the line
+  under it); time per stage (see below); the 5 biggest tasks by tokens and by time (bars); how tasks
   ended (merged on its own, approved by you, or answered for an investigation; failed
   tries by reason: tests, clash with main, files out of scope, restarted by a change, stopped,
   rejected);
@@ -1702,12 +1711,26 @@ and "in all: …"):
   - its own tokens in the range,
   - the tokens per merged fix: its tokens plus its merged tasks' tokens, divided by the number
     merged ("—" when none merged).
+  - "N tasks not linked to a run": its tasks that no run in its runs file
+    (`.symcc/scouts/<name>.runs.json`) lists, so a broken link shows the same day. Only tasks
+    made since its oldest kept run that lists tasks count (older runs are no longer kept).
 
   A scout that used tokens but made no task is listed too. The last part is tasks done per day,
   for the last 7 days with activity, oldest first.
+- **Time per stage:** for the done tasks (investigations left out), where their lifetime (made
+  to done) went, each stage with its total, its average per done task and its share: waiting to
+  start (to do, free to run), waiting on tasks (to do while a task in its `after` list was not
+  done yet), in the backlog (only when there was any), work (the worker tries), prep, check (the
+  checker), merge queue (waiting for its turn), tests (the merge queue's test commands), merge,
+  and waiting for you (a question, or ready for review). Then *active* (work, prep, check,
+  tests and merge) and *waiting* (the rest), which add up to the lifetime. It is read from what
+  symcc already records: each try's start and end, and the timed history lines between them
+  ("prep started", "checker started", "waits in the merge queue", "tests started", "merge
+  started", "merged", questions, answers and results). A done task whose history has an entry
+  with no time (older boards) or no stage line at all is left out, and the heading says how
+  many.
 - **What is left out:** tasks with no tries recorded are left out of the averages (the
-  report says how many). Time waiting for you is not shown: history
-  entries from older boards have no times.
+  report says how many).
 
 ---
 

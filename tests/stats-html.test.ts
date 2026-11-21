@@ -4,7 +4,7 @@ import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import type { SymccTask } from '../types'
 import { fakeHost, memoryFs } from './fake-host'
-import { emptyBoard, parseStatsArgs, statsData, statsReport, headlineParts, type Board } from '../hooks/board'
+import { emptyBoard, parseStatsArgs, statsData, statsReport, headlineParts, scoutRunsFile, type Board } from '../hooks/board'
 import { statsHtml, headlineCards, escapeHtml, openCommands } from '../hooks/core/stats-html'
 import { S } from '../hooks/app/state'
 import { statsText, runTool, TOOLS } from '../hooks/app/tools'
@@ -50,9 +50,9 @@ function world(runAnswer: 'ok' | 'fail' | 'throw' = 'ok') {
 const page = (w: ReturnType<typeof world>) => w.files.get(`${ROOT}/${S.N.dir}/stats.html`) ?? ''
 
 test('stats html: "html" is read apart from "full" and the range', () => {
-  expect(parseStatsArgs('html')).toEqual({ full: false, html: true, range: '' })
-  expect(parseStatsArgs('HTML 7d')).toEqual({ full: false, html: true, range: '7d' })
-  expect(parseStatsArgs('html T-1..T-9 full')).toEqual({ full: true, html: true, range: 'T-1..T-9' })
+  expect(parseStatsArgs('html')).toEqual({ full: false, html: true, inside: false, range: '' })
+  expect(parseStatsArgs('HTML 7d')).toEqual({ full: false, html: true, inside: false, range: '7d' })
+  expect(parseStatsArgs('html T-1..T-9 full')).toEqual({ full: true, html: true, inside: false, range: 'T-1..T-9' })
 })
 
 test('stats html: writes .<name>/stats.html for all tasks, 7d and an id range, says where, and opens it', async () => {
@@ -124,4 +124,20 @@ test("stats html: the headline numbers are the text report's", () => {
   expect(line).toContain(`${cards[4]!.value} right first try`)
   for (const c of cards) expect(html).toContain(`<div class="cv">${escapeHtml(c.value)}</div>`)
   expect(cards[0]!.value).toBe('3')
+})
+
+test('stats (T-719): the stats tool and /stats take "inside", and a scout task its runs file does not list is counted', async () => {
+  const w = world()
+  const said = await runTool(w.host, 'stats', { range: '7d', inside: true })
+  expect(said).toContain('Counting: only the work inside the last 7 days')
+  expect(await runTool(w.host, 'stats', { range: '7d' })).toContain('Counting: whole tries of tasks changed in the last 7 days')
+  expect(await statsText(w.host, '7d inside')).toContain('Counting: only the work inside the last 7 days')
+  const def = TOOLS().find(t => t.name === 'stats')
+  expect(JSON.stringify(def?.inputSchema ?? {})).toContain('inside')
+  // two tasks of scout bugs, its runs file lists only T-50
+  const mine = (id: string) => task(id, `scout task ${id}`, { status: 'todo', origin: { by: 'scout', scout: 'bugs', why: 'w', at: iso(5) } }, [], 5)
+  const b: Board = { ...emptyBoard(), tasks: [...TASKS(), mine('T-50'), mine('T-51')] } as Board
+  w.files.set(`${ROOT}/${S.N.boardFile}`, JSON.stringify(b, null, 2) + '\n')
+  w.files.set(`${ROOT}/${scoutRunsFile('bugs', S.N.name)}`, JSON.stringify({ runs: [{ started: iso(20), ended: iso(10), outcome: 'found', findings: 2, tasks: ['T-50'] }] }))
+  expect(await statsText(w.host, '')).toContain('        1 task not linked to a run')
 })

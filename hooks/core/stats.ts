@@ -15,7 +15,7 @@ import { addTokens, billedTokens, cleanTokens, fmtCost, fmtDuration, fmtTokenKin
 export type StatsRange = { kind: 'all' } | { kind: 'days'; days: number } | { kind: 'ids'; from: number; to: number }
 
 /** The usage line for /<name>-stats. */
-export const statsUsage = (name: string = DEFAULT_NAME) => `Use: /${name}-stats, /${name}-stats 7d (the last 7 days) or /${name}-stats T-100..T-130 (an id range); add "full" for every detail, e.g. /${name}-stats full 7d`
+export const statsUsage = (name: string = DEFAULT_NAME) => `Use: /${name}-stats, /${name}-stats 7d (the last 7 days) or /${name}-stats T-100..T-130 (an id range); add "full" for every detail, e.g. /${name}-stats full 7d, or "inside" to count only the work inside the days, e.g. /${name}-stats 7d inside`
 
 /** Reads the range words: "" (all), "7d" (last 7 days), "T-100..T-130" (ids). `bad` for anything else. */
 export function parseStatsRange(args: string, name: string = DEFAULT_NAME): StatsRange | { kind: 'bad'; message: string } {
@@ -127,6 +127,165 @@ export function originKey(t: Pick<SymccTask, 'origin'>): string {
 export const isAnsweredInvestigation = (t: Pick<SymccTask, 'status' | 'runs'> & { kind?: unknown }): boolean =>
   isInvestigation(t as { kind?: unknown }) && (t.status === 'done' || t.status === 'review' || (t.runs ?? []).some(isAnsweredRun))
 
+// ---------------- time per stage (T-719) ----------------
+
+/**
+ * The stages a task's life is cut into, read from its tries and its timed history: waiting to start (to do, free),
+ * waiting on other tasks (to do, an `after` task not done yet), in the backlog, work (worker tries), prep, check
+ * (the checker), the merge queue, tests, merge, and waiting for you (a question, or ready for review).
+ */
+export type Stage = 'free' | 'blocked' | 'backlog' | 'work' | 'prep' | 'check' | 'queue' | 'tests' | 'merge' | 'owner'
+export const STAGES: readonly Stage[] = ['free', 'blocked', 'backlog', 'work', 'prep', 'check', 'queue', 'tests', 'merge', 'owner']
+/** The stages that are work being done (by a worker, a checker or symcc's own checks); the rest is waiting. */
+export const ACTIVE_STAGES: readonly Stage[] = ['work', 'prep', 'check', 'tests', 'merge']
+export const STAGE_LABEL: Record<Stage, string> = { free: 'waiting to start', blocked: 'waiting on tasks', backlog: 'in the backlog', work: 'work', prep: 'prep', check: 'check', queue: 'merge queue', tests: 'tests', merge: 'merge', owner: 'waiting for you' }
+
+/** One task's time in each stage (ms) and its lifetime (made to done; both cut to the window when one is given). */
+export type TaskStages = { ms: Record<Stage, number>; lifetime: number }
+
+const zeroStages = (): Record<Stage, number> => ({ free: 0, blocked: 0, backlog: 0, work: 0, prep: 0, check: 0, queue: 0, tests: 0, merge: 0, owner: 0 })
+
+/** When task `t` was done: its last "merged" or "done" history entry, else (done) its last change; undefined when not done. */
+export function doneAtMs(t: Pick<SymccTask, 'status' | 'history' | 'updated_at'>): number | undefined {
+  if (t.status !== 'done') return undefined
+  const end = [...t.history].reverse().find(e => e.kind === 'merged' || e.kind === 'done')
+  const ms = Date.parse(end?.at ?? t.updated_at ?? '')
+  return Number.isFinite(ms) ? ms : undefined
+}
+
+/** The stage a history entry moves a task into: a stage, 'end' (merged or done), or null (it changes nothing). */
+function entryStage(e: { kind: string; text: string }): Stage | 'end' | null {
+  const body = e.text.replace(/^try \d+(?: \([^)]*\))?:\s*/, '')
+  if (e.kind === 'stage') {
+    if (/^prep started\b/.test(body)) return 'prep'
+    if (/^checker started\b/.test(body)) return 'check'
+    if (/^waits in the merge queue\b/.test(body)) return 'queue'
+    if (/^tests started\b/.test(body)) return 'tests'
+    if (/^merge started\b/.test(body)) return 'merge'
+    return null
+  }
+  switch (e.kind) {
+    case 'merged':
+    case 'done':
+      return 'end'
+    case 'asked':
+    case 'answered':
+    case 'try-result':
+      return 'owner'
+    case 'moved-backlog':
+      return /^moved to the backlog\b/.test(e.text) ? 'backlog' : 'free'
+    case 'not-merged':
+    case 'stopped':
+      // the lead's question ("stopped: the lead asked the owner a question") and the branch-gone question
+      // ("not merged: branch x is gone; asked the owner ...") wait for the owner's answer
+      return /\basked the owner\b/.test(body) ? 'owner' : 'free'
+    case 'answer':
+    case 'resumed':
+    case 'retried':
+    case 'checker-problems':
+    case 'failed':
+    case 'out-of-time':
+    case 'restarted':
+    case 'rejected':
+    case 'approved':
+      return 'free'
+    default:
+      return null
+  }
+}
+
+/**
+ * Task `t`'s time per stage (see Stage), from its tries' start and end and the history lines between them, cut to
+ * `clip` when given. Null when it can't be read reliably: not a done task, a history entry with no time (older boards),
+ * no finished try, or no stage line (boards from before the stage lines). `doneAt` gives when another task was done,
+ * so to-do time before its `after` tasks were done counts as waiting on them.
+ */
+export function taskStages(t: SymccTask, doneAt: (id: string) => number | undefined, clip?: { from?: number; to?: number }): TaskStages | null {
+  const made = Date.parse(t.created_at || '')
+  const end = doneAtMs(t)
+  const runs = (t.runs ?? []).filter(r => Number.isFinite(Date.parse(r.started)) && Number.isFinite(Date.parse(r.ended ?? '')))
+  if (!Number.isFinite(made) || end === undefined || end < made || !runs.length) return null
+  if (t.history.some(e => !Number.isFinite(Date.parse(e.at ?? '')))) return null
+  if (!t.history.some(e => e.kind === 'stage')) return null
+  // the points where the stage may change, in time order: a try's end, then history lines, then a try's start
+  type Point = { ms: number; prio: number; run?: 'start' | 'end'; to?: Stage | 'end' | null }
+  const points: Point[] = [
+    ...runs.flatMap(r => [{ ms: Date.parse(r.started), prio: 2, run: 'start' as const }, { ms: Date.parse(r.ended!), prio: 0, run: 'end' as const }]),
+    ...t.history.map(e => ({ ms: Date.parse(e.at!), prio: 1, to: entryStage(e) })),
+  ].sort((a, b) => a.ms - b.ms || a.prio - b.prio)
+  const depsDone = Math.max(made, ...(t.after ?? []).map(id => doneAt(id) ?? made))
+  const ms = zeroStages()
+  const lo = Math.max(made, clip?.from ?? -Infinity)
+  const hi = Math.min(end, clip?.to ?? Infinity)
+  const add = (s: Stage, a: number, b: number) => {
+    const x = Math.max(a, lo)
+    const y = Math.min(b, hi)
+    if (y > x) ms[s] += y - x
+  }
+  // a task made straight into the backlog has no "moved to the backlog" line: its first backlog line is the move out
+  const firstBacklog = t.history.find(e => e.kind === 'moved-backlog')
+  let cur: Stage = firstBacklog && !/^moved to the backlog\b/.test(firstBacklog.text) ? 'backlog' : 'free'
+  let since = made
+  let inRun = false
+  let pending: Stage | null = null
+  const close = (at: number) => {
+    const b = Math.min(at, end)
+    if (cur === 'free' && depsDone > since) {
+      add('blocked', since, Math.min(b, depsDone))
+      add('free', Math.max(since, depsDone), b)
+    } else add(cur, since, b)
+    since = Math.max(since, b)
+  }
+  for (const p of points) {
+    if (p.ms >= end) break
+    if (p.run === 'start') {
+      close(p.ms)
+      cur = 'work'
+      inRun = true
+      pending = null
+    } else if (p.run === 'end') {
+      if (!inRun) continue
+      close(p.ms)
+      cur = pending ?? 'free'
+      inRun = false
+      pending = null
+    } else if (p.to && p.to !== 'end') {
+      if (inRun) pending = p.to
+      else {
+        close(p.ms)
+        cur = p.to
+      }
+    }
+  }
+  close(end)
+  return { ms, lifetime: Math.max(0, hi - lo) }
+}
+
+/** The stage figures of a set of done tasks: per stage the sum and the average per task, active and waiting, lifetime. */
+export type StageFigures = { n: number; lacking: number; stages: { stage: Stage; label: string; ms: number; avgMs: number }[]; active: number; waiting: number; lifetime: number; avgLifetime: number }
+
+/** The stage figures of `tasks` (done change tasks), each cut to `clip` when given; tasks with no time in it are left out. */
+export function stageFigures(tasks: SymccTask[], doneAt: (id: string) => number | undefined, clip?: { from?: number; to?: number }): StageFigures {
+  const read = tasks.map(t => taskStages(t, doneAt, clip))
+  const ok = read.filter((s): s is TaskStages => s !== null && s.lifetime > 0)
+  const lacking = read.filter(s => s === null).length
+  const n = ok.length
+  const sum = (s: Stage) => ok.reduce((a, x) => a + x.ms[s], 0)
+  const stages = STAGES.map(s => ({ stage: s, label: STAGE_LABEL[s], ms: sum(s), avgMs: n ? sum(s) / n : 0 }))
+  const active = stages.filter(s => ACTIVE_STAGES.includes(s.stage)).reduce((a, s) => a + s.ms, 0)
+  const lifetime = ok.reduce((a, x) => a + x.lifetime, 0)
+  return { n, lacking, stages, active, waiting: lifetime - active, lifetime, avgLifetime: n ? lifetime / n : 0 }
+}
+
+/** Task `t` with only the part of its tries inside the window from `fromMs` on: tries that ended before it left out, the rest started no earlier than it. */
+export function clipRuns<T extends Pick<SymccTask, 'runs'>>(t: T, fromMs: number): T {
+  if (!t.runs) return t
+  const runs = t.runs
+    .filter(r => !r.ended || !(Date.parse(r.ended) < fromMs))
+    .map(r => (Date.parse(r.started) < fromMs ? { ...r, started: new Date(fromMs).toISOString() } : r))
+  return { ...t, runs }
+}
+
 // ---------------- the report ----------------
 
 export type StatsInput = {
@@ -143,6 +302,24 @@ export type StatsInput = {
   name?: string
   /** the lead's and scouts' usage for the "Whole team" part; left out, that part is not shown */
   team?: TeamInput
+  /** T-719: count only the work inside the window (tries and stages cut to it); only a day range has one */
+  inside?: boolean
+  /** T-719: each scout's runs (from its runs file), for the "not linked to a run" line; a scout left out gets no line */
+  scoutRuns?: Record<string, { ended?: string; tasks?: string[] }[]>
+}
+
+/** How the report counts: whole tries of the tasks in the range, or only the work inside the window. */
+export type StatsCounting = 'whole' | 'inside'
+
+/**
+ * The "Counting:" line: which way the report counted (T-719); null when there is no window to count inside (all tasks
+ * or an id range) and "inside" was not asked for.
+ */
+export function countingText(r: StatsRange, counting: StatsCounting, asked: boolean, name: string = DEFAULT_NAME): string | null {
+  if (counting === 'inside') return `Counting: only the work inside ${rangeText(r)} (tries and stages cut to it; the tokens of tries that ended in it)`
+  if (asked) return `Counting: whole tries ("inside" needs a day range, e.g. /${name}-stats 7d inside)`
+  if (r.kind === 'days') return `Counting: whole tries of tasks changed in ${rangeText(r)} (or add "inside")`
+  return null
 }
 
 /** The text split into whole characters (graphemes where the runtime knows them, else code points), never half of one. */
@@ -238,18 +415,40 @@ const kindsRow = (t: SymccTokens | undefined, w = 12): string[] => (tokenCount(t
 
 const STATUS_ORDER: SymccStatus[] = ['done', 'dropped', 'doing', 'todo', 'review', 'waiting', 'paused', 'failed', 'backlog']
 
-/** Reads the /<name>-stats words: "full" anywhere asks for the full view, "html" for the HTML report (T-674); the rest is the range. */
-export function parseStatsArgs(args: string): { full: boolean; html: boolean; range: string } {
+/**
+ * Reads the /<name>-stats words: "full" anywhere asks for the full view, "html" for the HTML report (T-674), "inside"
+ * for only the work inside the window (T-719); the rest is the range.
+ */
+export function parseStatsArgs(args: string): { full: boolean; html: boolean; inside: boolean; range: string } {
   const words = String(args ?? '').trim().split(/\s+/).filter(Boolean)
   const full = words.some(w => /^full$/i.test(w))
   const html = words.some(w => /^html$/i.test(w))
-  return { full, html, range: words.filter(w => !/^(full|html)$/i.test(w)).join(' ') }
+  const inside = words.some(w => /^inside$/i.test(w))
+  return { full, html, inside, range: words.filter(w => !/^(full|html|inside)$/i.test(w)).join(' ') }
 }
 
-/** A group of tasks (a role, an origin): how many, and their average tokens ("in all") and time (undefined when none of them has any). */
-export type StatsGroup = { key: string; label: string; n: number; avgTok?: number; avgMs?: number }
-/** One scout under "Where tasks came from": its group, its results, and `idle` for a scout that used tokens but made no task here. */
-export type StatsScout = StatsGroup & { results: ScoutResults; idle?: boolean }
+/**
+ * A group of tasks (a role, an origin): how many, and their average and total tokens ("in all") and time (undefined
+ * when none of them has any).
+ */
+export type StatsGroup = { key: string; label: string; n: number; avgTok?: number; avgMs?: number; sumTok?: number; sumMs?: number }
+/**
+ * One scout under "Where tasks came from": its group, its results, `idle` for a scout that used tokens but made no task
+ * here, and `unlinked`: its tasks here that its runs file doesn't list (only tasks made since its oldest kept run; left
+ * out when its runs are not known).
+ */
+export type StatsScout = StatsGroup & { results: ScoutResults; idle?: boolean; unlinked?: number }
+
+/**
+ * How many of scout tasks `mine` none of `runs` lists (T-719). Only tasks made since the oldest kept run that lists its
+ * tasks (or, when none does, the oldest kept run) count, as older runs are no longer kept; undefined with no runs.
+ */
+export function unlinkedCount(mine: Pick<SymccTask, 'id' | 'created_at'>[], runs: { ended?: string; tasks?: string[] }[]): number | undefined {
+  if (!runs.length) return undefined
+  const linked = new Set(runs.flatMap(r => r.tasks ?? []))
+  const since = Date.parse((runs.find(r => r.tasks) ?? runs[0]!).ended ?? '')
+  return mine.filter(t => !linked.has(t.id) && !(Number.isFinite(since) && Date.parse(t.created_at || '') < since)).length
+}
 /** One row of "Most tokens" / "Most time". */
 export type StatsTop = { id: string; title: string; value: number }
 /** One day of "Done per day": tasks done, work time and tokens of the tries started that day. */
@@ -263,6 +462,9 @@ export type StatsData = {
   name: string
   full: boolean
   range: StatsRange
+  /** T-719: how it counted (whole tries, or only the work inside the window), and whether "inside" was asked for */
+  counting: StatsCounting
+  insideAsked: boolean
   /** tasks in the range, and how many of them come from archive.json */
   total: number
   archivedIn: number
@@ -285,9 +487,11 @@ export type StatsData = {
   inv: { readByOwner: number; waiting: number; withData: number; ms: number; avgMs?: number; tokKnown: number; tokens: SymccTokens; avgTok?: number; tries: number; avgTries?: number }
   /** the "Whole team" part, when team input was given */
   team?: { label: string; data: TeamData }
-  perDone: { avgMs?: number; medianMs?: number; avgTok?: number; medianTok?: number; avgTries?: number }
-  leadTime: { n: number; avgMs?: number; medianMs?: number }
-  perTry: { n: number; avgMs?: number; avgTok?: number }
+  perDone: { avgMs?: number; medianMs?: number; avgTok?: number; medianTok?: number; avgTries?: number; sumMs?: number; sumTok?: number }
+  leadTime: { n: number; avgMs?: number; medianMs?: number; sumMs?: number }
+  perTry: { n: number; avgMs?: number; avgTok?: number; sumMs?: number; sumTok?: number }
+  /** T-719: the done change tasks' time per stage (see stageFigures) */
+  stages: StageFigures
   topTokens: StatsTop[]
   topTime: StatsTop[]
   /** done tasks (investigations too) and how they ended */
@@ -312,7 +516,12 @@ export function statsData(input: StatsInput & { full?: boolean }): StatsData {
   const range = input.range ?? { kind: 'all' }
   const onBoard = new Set(input.tasks.map(t => t.id))
   const old = (input.archived ?? []).filter(t => !onBoard.has(t.id))
-  const all = [...input.tasks, ...old].filter(t => inRange(t, range, nowMs))
+  const everyTask = [...input.tasks, ...old]
+  const whole = everyTask.filter(t => inRange(t, range, nowMs))
+  // T-719: "inside" (a day range only): every try cut to the window, so only the work inside it counts
+  const counting: StatsCounting = input.inside && range.kind === 'days' ? 'inside' : 'whole'
+  const winFrom = range.kind === 'days' ? nowMs - range.days * 86_400_000 : -Infinity
+  const all = counting === 'inside' ? whole.map(t => clipRuns(t, winFrom)) : whole
   const fig = new Map(all.map(t => [t.id, taskFigures(t, nowMs)]))
   const F = (t: SymccTask) => fig.get(t.id)!
   const withData = all.filter(t => F(t).hasData)
@@ -358,8 +567,9 @@ export function statsData(input: StatsInput & { full?: boolean }): StatsData {
   const group = (key: string, label: string, ts: SymccTask[]): StatsGroup => {
     const d = ts.filter(t => F(t).hasData)
     const avgTok = mean(d.filter(t => F(t).tok !== undefined).map(t => F(t).tok!))
+    const toks = d.filter(t => F(t).tok !== undefined).map(t => F(t).tok!)
     const avgMs = mean(d.map(t => F(t).ms))
-    return { key, label, n: ts.length, ...(avgTok === undefined ? {} : { avgTok }), ...(avgMs === undefined ? {} : { avgMs }) }
+    return { key, label, n: ts.length, ...(avgTok === undefined ? {} : { avgTok, sumTok: toks.reduce((s, x) => s + x, 0) }), ...(avgMs === undefined ? {} : { avgMs, sumMs: d.reduce((s, t) => s + F(t).ms, 0) }) }
   }
   const sorted = (m: Map<string, SymccTask[]>) => [...m.entries()].sort(([a, x], [b, y]) => y.length - x.length || a.localeCompare(b))
   const groupBy = (ts: SymccTask[], key: (t: SymccTask) => string) => {
@@ -377,7 +587,12 @@ export function statsData(input: StatsInput & { full?: boolean }): StatsData {
   const scoutTok = (s: string) => (Object.hasOwn(usage, s) ? tokenCount(scoutTotals({ [s]: usage[s]! }, span).tokens) : 0)
   const idle = Object.keys(usage).filter(s => !scoutGroups.some(([k]) => k === s) && scoutTok(s) > 0).sort()
   if (idle.length && !byOrigin.has('scout')) origins.push(['scout', []])
-  const scouts: StatsScout[] = [...scoutGroups.map(([s, st]) => ({ ...group(s, s, st), results: countResults(st, scoutTok(s)) })), ...idle.map(s => ({ key: s, label: s, n: 0, results: countResults([], scoutTok(s)), idle: true }))]
+  const runsOf = input.scoutRuns ?? {}
+  const unlinked = (s: string, st: SymccTask[]) => {
+    const n = Object.hasOwn(runsOf, s) ? unlinkedCount(st, runsOf[s]!) : undefined
+    return n === undefined ? {} : { unlinked: n }
+  }
+  const scouts: StatsScout[] = [...scoutGroups.map(([s, st]) => ({ ...group(s, s, st), results: countResults(st, scoutTok(s)), ...unlinked(s, st) })), ...idle.map(s => ({ key: s, label: s, n: 0, results: countResults([], scoutTok(s)), idle: true }))]
 
   const days = new Map<string, { done: number; ms: number; tokens: number }>()
   const at = (d: string) => days.get(d) ?? (days.set(d, { done: 0, ms: 0, tokens: 0 }), days.get(d)!)
@@ -391,6 +606,10 @@ export function statsData(input: StatsInput & { full?: boolean }): StatsData {
     at(d).ms += runMs(r, nowMs)
     at(d).tokens += tokenCount(r.tokens)
   }
+  const doneAt = new Map(everyTask.map(t => [t.id, doneAtMs(t)]))
+  const stages = stageFigures(whole.filter(t => t.status === 'done' && !isInv(t)), id => doneAt.get(id), counting === 'inside' ? { from: winFrom, to: nowMs } : undefined)
+  const sumOf = (xs: number[]) => (xs.length ? xs.reduce((s, x) => s + x, 0) : undefined)
+  const tryTok = runs.filter(r => r.tokens !== undefined).map(r => tokenCount(r.tokens))
   const today = dayOf(nowMs, off)
   const last = [...days.entries()].sort(([a], [b]) => b.localeCompare(a)).slice(0, 7).reverse()
 
@@ -401,6 +620,8 @@ export function statsData(input: StatsInput & { full?: boolean }): StatsData {
     name: input.name ?? DEFAULT_NAME,
     full: input.full === true,
     range,
+    counting,
+    insideAsked: input.inside === true,
     total: all.length,
     archivedIn: all.filter(t => !onBoard.has(t.id)).length,
     ...(input.archiveProblem ? { archiveProblem: input.archiveProblem } : {}),
@@ -428,9 +649,10 @@ export function statsData(input: StatsInput & { full?: boolean }): StatsData {
       ...opt('avgTries', mean(invData.map(t => F(t).tries))),
     },
     ...(input.team ? { team: { label: teamLabel, data: teamData(input.team, span, { tokens: totalTok, tries: withData.reduce((s, t) => s + F(t).tries, 0) }, doneAll.length) } } : {}),
-    perDone: { ...opt('avgMs', mean(doneMs)), ...opt('medianMs', median(doneMs)), ...opt('avgTok', mean(doneTok)), ...opt('medianTok', median(doneTok)), ...opt('avgTries', mean(done.map(t => F(t).tries))) },
-    leadTime: { n: lead.length, ...opt('avgMs', mean(lead)), ...opt('medianMs', median(lead)) },
-    perTry: { n: runs.length, ...opt('avgMs', mean(runs.map(r => runMs(r, nowMs)))), ...opt('avgTok', mean(runs.filter(r => r.tokens !== undefined).map(r => tokenCount(r.tokens)))) },
+    perDone: { ...opt('avgMs', mean(doneMs)), ...opt('medianMs', median(doneMs)), ...opt('avgTok', mean(doneTok)), ...opt('medianTok', median(doneTok)), ...opt('avgTries', mean(done.map(t => F(t).tries))), ...opt('sumMs', sumOf(doneMs)), ...opt('sumTok', sumOf(doneTok)) },
+    leadTime: { n: lead.length, ...opt('avgMs', mean(lead)), ...opt('medianMs', median(lead)), ...opt('sumMs', sumOf(lead)) },
+    perTry: { n: runs.length, ...opt('avgMs', mean(runs.map(r => runMs(r, nowMs)))), ...opt('avgTok', mean(tryTok)), ...opt('sumMs', sumOf(runs.map(r => runMs(r, nowMs)))), ...opt('sumTok', sumOf(tryTok)) },
+    stages,
     topTokens: top(t => F(t).tok),
     topTime: top(t => F(t).ms),
     finished: finished.length,
@@ -469,6 +691,8 @@ export function statsReport(input: StatsInput & { full?: boolean }): string {
   const out: string[] = []
   const done$ = () => out.flatMap(l => wrapLine(l)).join('\n')
   out.push(`${statsTitle(d)}${full ? ' · full' : ''}`)
+  const counting = countingText(d.range, d.counting, d.insideAsked, name)
+  if (counting) out.push(counting)
   if (d.archiveProblem) out.push(`Archived tasks are not counted: ${d.archiveProblem}`)
   if (!d.total) {
     out.push('', d.range.kind === 'all' ? 'No tasks yet.' : 'No tasks in this range.')
@@ -513,15 +737,18 @@ export function statsReport(input: StatsInput & { full?: boolean }): string {
   const p = d.perDone
   out.push('', `Per done task (${plural(d.doneWithData, 'done task')} with data${d.invCount ? ', investigations left out' : ''})`)
   if (d.doneWithData) {
-    out.push(row('time', `avg ${durOr(p.avgMs)} · median ${durOr(p.medianMs)}`))
-    out.push(row('tokens', p.avgTok !== undefined ? `avg ${tokOr(p.avgTok)} · median ${tokOr(p.medianTok)} (in all)` : '-'))
+    out.push(row('time', `avg ${durOr(p.avgMs)} · median ${durOr(p.medianMs)} · total ${durOr(p.sumMs)}`))
+    out.push(row('tokens', p.avgTok !== undefined ? `avg ${tokOr(p.avgTok)} · median ${tokOr(p.medianTok)} · total ${tokOr(p.sumTok)} (in all)` : '-'))
     out.push(row('tries', `avg ${(p.avgTries ?? 0).toFixed(1)} per task`))
     out.push(row('first try', `${pct(d.first, d.doneWithData)} of done tasks (${d.first} of ${d.doneWithData})`))
   } else out.push('  no done tasks with data')
-  out.push(row('lead time', d.leadTime.n ? `avg ${durOr(d.leadTime.avgMs)} · median ${durOr(d.leadTime.medianMs)} (made to done, ${plural(d.leadTime.n, 'task')})` : '-'))
+  out.push(row('lead time', d.leadTime.n ? `avg ${durOr(d.leadTime.avgMs)} · median ${durOr(d.leadTime.medianMs)} · total ${durOr(d.leadTime.sumMs)} (made to done, ${plural(d.leadTime.n, 'task')})` : '-'))
   out.push('', `Per try (${plural(d.perTry.n, 'try', 'tries')})`)
-  out.push(row('time', `avg ${durOr(d.perTry.avgMs)}`))
-  out.push(row('tokens', `avg ${tokOr(d.perTry.avgTok)} in all`))
+  out.push(row('time', `avg ${durOr(d.perTry.avgMs)} · total ${durOr(d.perTry.sumMs)}`))
+  out.push(row('tokens', `avg ${tokOr(d.perTry.avgTok)} in all · total ${tokOr(d.perTry.sumTok)}`))
+
+  // Time per stage (T-719): where the done tasks' lifetime went, from their tries and timed history
+  out.push('', ...stageLines(d.stages, full))
 
   // The biggest tasks
   const top = (title: string, ts: StatsTop[], fmt: (n: number) => string) => {
@@ -542,17 +769,21 @@ export function statsReport(input: StatsInput & { full?: boolean }): string {
 
   // By role and by origin: tasks, share, avg tokens and avg time per group
   const figsOf = (g: StatsGroup) => `avg ${tokOr(g.avgTok).padStart(6)} tok · ${durOr(g.avgMs).padStart(7)}`
+  const totalOf = (g: StatsGroup, pad: number) => (g.sumTok === undefined && g.sumMs === undefined ? [] : [`${' '.repeat(pad)}total ${tokOr(g.sumTok)} tok · ${durOr(g.sumMs)}`])
   const roleW = Math.max(12, ...d.roles.map(g => g.key.length))
-  out.push('', 'By role (tasks · share · avg tokens · avg time)')
-  for (const g of d.roles) out.push(barRow(g.label, roleW, g.n, d.roles[0]!.n, d.total, figsOf(g)))
+  out.push('', 'By role (tasks · share · avg tokens · avg time; total under it)')
+  for (const g of d.roles) out.push(barRow(g.label, roleW, g.n, d.roles[0]!.n, d.total, figsOf(g)), ...totalOf(g, 4))
 
   const scouts = d.origins.find(o => o.key === 'scout')?.scouts ?? []
   const originW = Math.max(14, ...scouts.map(s => s.key.length + 4))
   const maxOrigin = d.origins[0]!.n
-  out.push('', 'Where tasks came from (tasks · share · avg tokens · avg time)')
+  out.push('', 'Where tasks came from (tasks · share · avg tokens · avg time; total under it)')
   for (const o of d.origins) {
-    out.push(barRow(o.label, originW, o.n, maxOrigin, d.total, o.n ? figsOf(o) : ''))
-    for (const s of o.scouts ?? []) out.push(s.idle ? barRow(`    ${s.label}`, originW, 0, maxOrigin, d.total) : barRow(`    ${s.label}`, originW, s.n, maxOrigin, d.total, figsOf(s)), `        ${scoutResultsText(s.results)}`)
+    out.push(barRow(o.label, originW, o.n, maxOrigin, d.total, o.n ? figsOf(o) : ''), ...(o.n ? totalOf(o, 4) : []))
+    for (const s of o.scouts ?? []) {
+      out.push(s.idle ? barRow(`    ${s.label}`, originW, 0, maxOrigin, d.total) : barRow(`    ${s.label}`, originW, s.n, maxOrigin, d.total, figsOf(s)), `        ${scoutResultsText(s.results)}`, ...(s.idle ? [] : totalOf(s, 8)))
+      if (s.unlinked !== undefined && !s.idle) out.push(`        ${unlinkedText(s.unlinked)}`)
+    }
   }
 
   // Done per day
@@ -563,9 +794,30 @@ export function statsReport(input: StatsInput & { full?: boolean }): string {
 
   // Footnotes
   out.push('')
-  if (full) out.push(`Waiting: time waiting for you is not shown: history entries from older boards carry no times, so it can't be read reliably.`, `Tokens "in all" add every kind up; billed is ${BILLED_NOTE}.`)
-  else out.push(BILLED_FOOTNOTE, 'Time waiting for you is not shown: history entries from older boards carry no times.', `Every detail: /${name}-stats full`)
+  if (full) out.push(`Stages: ${STAGES_NOTE}`, `Tokens "in all" add every kind up; billed is ${BILLED_NOTE}.`)
+  else out.push(BILLED_FOOTNOTE, `Every detail: /${name}-stats full`)
   return done$()
+}
+
+/** "2 tasks not linked to a run": a scout's tasks its runs file doesn't list (T-719). */
+export const unlinkedText = (n: number) => `${plural(n, 'task')} not linked to a run`
+
+/** How the stage times are read, said in the full view. */
+export const STAGES_NOTE = 'read from each done task\'s tries (work) and its timed history lines ("prep started", "checker started", "waits in the merge queue", "tests started", "merge started", "merged", questions, answers and results); a task whose history has an entry with no time (older boards) or no stage line is left out and counted as lacking data.'
+
+/** The "Time per stage" lines for figures `f`: per stage the total, the average per done task and its share of the lifetime; then active, waiting and the lifetime. */
+export function stageLines(f: StageFigures, full = false): string[] {
+  const out = [`Time per stage (${plural(f.n, 'done task')}${f.lacking ? `; ${f.lacking} without timed history, left out` : ''})`]
+  if (!f.n) return [...out, '  no done tasks with timed history']
+  const shown = f.stages.filter(s => s.ms > 0 || (s.stage !== 'backlog' && s.stage !== 'blocked'))
+  const max = Math.max(...shown.map(s => s.ms))
+  const w = 16
+  const line = (label: string, ms: number, avg: number, b = '') => `  ${label.padEnd(w)} ${b.padEnd(BAR_WIDTH)} ${fmtDuration(ms).padStart(8)} · avg ${fmtDuration(avg).padStart(7)} ${pct(ms, f.lifetime).padStart(4)}`
+  out.push(`  ${''.padEnd(w)} ${''.padEnd(BAR_WIDTH)} ${'total'.padStart(8)} · ${'per task'.padStart(11)} share`)
+  for (const s of shown) out.push(line(s.label, s.ms, s.avgMs, bar(s.ms, max)))
+  out.push(line('active', f.active, f.active / f.n), line('waiting', f.waiting, f.waiting / f.n), line('lifetime', f.lifetime, f.avgLifetime))
+  if (full) out.push('  active: work, prep, check, tests and merge; waiting: the rest (to start, on tasks, merge queue, you)')
+  return out
 }
 
 // ---------------- the whole team: scouts and the lead ----------------
