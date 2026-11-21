@@ -227,6 +227,43 @@ test('stats: a session log over 4 MiB is read in parts, and one that still canno
   expect(statsReport({ tasks, nowMs: NOW, team: { leadProblem: 'no logs', leadUnread: 2 } })).toMatch(/not counted: no logs · 2 session\s+logs too big to read/)
 })
 
+test('stats: a big log is read on a host with the real $.process.run limits, after the session moved to a removed folder (T-778)', async () => {
+  const MiB = 1024 * 1024
+  const dir = '/home/me/.claude/projects/-repo'
+  const pad = (n: number) => JSON.stringify({ type: 'user', message: { content: 'x'.repeat(Math.max(0, n - 40)) } })
+  const big = [logLine('b-1', 10, { i: 1000 }), pad(5 * MiB), logLine('b-2', 10, { i: 20_000 }), pad(4 * MiB), logLine('b-3', 10, { i: 300_000 }), ''].join('\n')
+  const folders = new Set(['/home/me', dir, '/repo'])
+  const runs: { argv: string[]; cwd?: string }[] = []
+  const { host } = fakeHost({
+    env: async k => (k === 'HOME' ? '/home/me' : undefined),
+    fs: {
+      list: async () => [{ name: 'big.jsonl', kind: 'file' as const, size: big.length, mtimeMs: NOW, isLink: false }],
+      read: async () => { throw new Error('over 4 MiB') },
+    },
+    // as Claude Code's $.process.run (.claude-plugin/types/claude-code/index.d.ts): with no cwd the session's working
+    // folder is used (here a removed worktree: the command can't start, ENOENT); timeoutMs at most ten minutes, 30 s by
+    // default; stdout cut at 4194304 bytes with isStdoutTruncated
+    run: async (argv, init) => {
+      runs.push({ argv: [...argv], cwd: init?.cwd })
+      const cwd = init?.cwd ?? '/repo/.symcc/worktrees/T-1'
+      if (!folders.has(cwd)) throw new Error(`ENOENT: no such file or directory, posix_spawn '${argv[0]}' (cwd ${cwd})`)
+      if ((init?.timeoutMs ?? 30_000) > 600_000) throw new Error('timeoutMs over ten minutes')
+      const arg = (k: string) => argv.find(a => a.startsWith(`${k}=`))!.slice(k.length + 1)
+      const bs = Number(arg('bs'))
+      const at = Number(arg('skip')) * bs
+      const out = big.slice(at, at + Number(arg('count')) * bs)
+      const cap = 4194304
+      return { exitCode: 0, stdout: out.slice(0, cap), stderr: '', isStdoutTruncated: out.length > cap, isStderrTruncated: false }
+    },
+  })
+  const u = await leadUsage(host, '/repo', { kind: 'days', days: 1 }, NOW)
+  expect(u.leadUnread).toBe(undefined)
+  expect(u.leadSessions).toBe(1)
+  expect(tokenCount(leadTotals(u.lead!, {}).tokens)).toBe(321_000)
+  expect(runs.length > 3).toBe(true)
+  expect(runs.every(r => r.cwd === dir)).toBe(true)
+})
+
 test('stats: the whole team adds up lead, workers and scouts, and gives tokens per merged task', () => {
   const tasks = [task('T-1', {}, [[10, 1000]]), task('T-2', {}, [[10, 3000]]), task('T-3', { status: 'doing' }, [[5, 1000]])]
   const lead = leadCalls([logLine('a', 10, { i: 4000 }), logLine('b', 60 * 24 * 20, { i: 90_000 })].join('\n'))
