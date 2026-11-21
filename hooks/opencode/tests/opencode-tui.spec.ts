@@ -3545,7 +3545,7 @@ test('T-727: tasks as the OpenCode TUI draws them (viewTask, then viewStubFilled
   const slim = tui(f.view.tasks).find(t => t.id === 'T-724')!
   expect(slim.history).toEqual([])
   expect(kinds(tui(f.view.tasks))).toEqual(kinds(f.view.tasks as SymccTask[]))
-  expect(kinds(tui(f.view.tasks)).some(l => l.includes('◀ T-724 merged'))).toBe(true)
+  expect(kinds(tui(f.view.tasks)).some(l => l.includes('◀ T-724  merged 3m ago'))).toBe(true)
   // the same through the whole TUI path: the parsed view file, then viewStubFilled
   const parsed = parseViewFile(viewFileText({ ...f, view: { ...f.view, tasks: (f.view.tasks as SymccTask[]).map(t => viewTask(t)) } }))!
   expect(kinds(parsed.view.tasks.map(t => viewStubFilled(t)))).toEqual(kinds(f.view.tasks as SymccTask[]))
@@ -3584,7 +3584,7 @@ test('T-727: startTui: Enter on a Branches row opens its task, b returns to the 
   await board.press('back', 'ses_1')
   expect([board.state().tab, board.state().opened]).toEqual(['live', ''])
   // the view file's done task is slim (viewTask): its merge still shows as joining back
-  expect(rowEls(panel).some(r => r.text.includes('◀ T-724 merged'))).toBe(true)
+  expect(rowEls(panel).some(r => r.text.includes('◀ T-724  merged 3m ago'))).toBe(true)
   const row = rowEls(panel).find(r => r.text.includes('T-721  +3 commits'))!
   const seg = row.segs.find(x => x.props.onMouseUp)!
   ;(seg.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0, stopPropagation: () => undefined })

@@ -87,18 +87,18 @@ export function branchMainSvg(b: Pick<LiveBranches, 'commits' | 'rows'>): { sour
 }
 
 /** T-727: a Branches row's lines as an Svg: the lines passing by to the rows under it, its own line from the commit it
- *  hangs from (a curve, or a tee when a row under it hangs there too) to its mark: a hollow dot, or (just merged) an arrow. */
+ *  hangs from (a curve, or a tee when a row under it hangs there too) to its mark: a hollow dot, or (merged in the last 10 minutes, T-794) a dim arrow. */
 export function branchRowSvg(r: Pick<BranchRow, 'col' | 'lines' | 'tee' | 'kind'>, k: number): { source: string; width: number; height: number } {
   const x = (i: number) => 8 + i * BR_STEP
   const width = x(k) + 8
   const y = BR_H / 2
   const end = x(k)
-  const ink = r.kind === 'merged' ? INK.passed : INK.future
+  const ink = INK.future
   const parts: string[] = []
   for (const c of new Set(r.lines)) parts.push(`<line x1="${x(c)}" y1="0" x2="${x(c)}" y2="${BR_H}" stroke="${INK.future}" stroke-width="1.5"/>`)
   const at = x(r.col)
   parts.push(r.tee ? `<path d="M${at} 0 L${at} ${y} L${end - 5} ${y}" fill="none" stroke="${ink}" stroke-width="1.5"/>` : `<path d="M${at} 0 L${at} ${y - 5} Q${at} ${y} ${at + 5} ${y} L${end - 5} ${y}" fill="none" stroke="${ink}" stroke-width="1.5"/>`)
-  parts.push(r.kind === 'merged' ? `<path d="M${end - 6} ${y} L${end + 2} ${y - 5} L${end + 2} ${y + 5} Z" fill="${INK.passed}"/>` : `<circle cx="${end}" cy="${y}" r="4" fill="none" stroke="${INK.future}" stroke-width="1.5"${r.kind === 'new' ? ' stroke-dasharray="2 2"' : ''}/>`)
+  parts.push(r.kind === 'merged' ? `<path d="M${end - 6} ${y} L${end + 2} ${y - 5} L${end + 2} ${y + 5} Z" fill="${INK.future}"/>` : `<circle cx="${end}" cy="${y}" r="4" fill="none" stroke="${INK.future}" stroke-width="1.5"${r.kind === 'new' ? ' stroke-dasharray="2 2"' : ''}/>`)
   return { source: `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${BR_H}" viewBox="0 0 ${width} ${BR_H}">${parts.join('')}</svg>`, width, height: BR_H }
 }
 

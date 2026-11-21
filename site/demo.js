@@ -126,7 +126,7 @@
     const n = s.commits
     const line = [...Array(n)].map(() => '●').join('───')
     const out = ['  ' + sp('main', 'id') + '   ' + sp(line, 'passed') + sp(`   ${s.head} · now`, 'dim')]
-    const rows = [...s.branches].sort((a, b) => b.col - a.col)
+    const rows = s.branches.filter(b => !b.merged || s.now - b.merged < 10 * 60).sort((a, b) => b.col - a.col)
     const width = main.length + 4 * (n - 1) + 1
     rows.forEach((b, r) => {
       const cells = Array(width + 2).fill(' ')
@@ -135,8 +135,8 @@
       cells[c] = '╰'
       for (let i = c + 1; i < width + 1; i++) cells[i] = '─'
       cells[width + 1] = b.merged ? '◀' : '○'
-      const label = b.merged ? ` ${b.id} merged` : b.ahead === null ? ` ${b.id}  not started` : ` ${b.id}  +${b.ahead} commit${b.ahead === 1 ? '' : 's'} · ${b.behind} behind`
-      out.push('  ' + sp(cells.join(''), b.merged ? 'passed' : 'dim') + sp(label, b.merged ? 'passed' : 'text'))
+      const label = b.merged ? ` ${b.id}  merged ${dur(s.now - b.merged)} ago (${s.head})` : b.ahead === null ? ` ${b.id}  not started` : ` ${b.id}  +${b.ahead} commit${b.ahead === 1 ? '' : 's'} · ${b.behind} behind`
+      out.push('  ' + sp(cells.join(''), 'dim') + sp(label, b.merged ? 'dim' : 'text'))
     })
     return out
   }
@@ -363,7 +363,7 @@
       s.today.tokens += T747_TOKENS
       s.commits += 1
       s.head = '39c7f96'
-      Object.assign(s.branches.find(b => b.id === 'T-747'), { merged: true, col: s.commits - 1 })
+      Object.assign(s.branches.find(b => b.id === 'T-747'), { merged: s.now, col: s.commits - 1 })
       for (const b of s.branches) if (!b.merged) b.behind += 1
       s.voice = 'symcc: T-747 done'
       say(s, { k: 'event', mark: '✓', tone: 'passed', text: 'T-747 try 1 → merged into main' })

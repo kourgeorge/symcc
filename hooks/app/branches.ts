@@ -1,11 +1,11 @@
 // T-727: the figures of the Live tab's Branches section (core/live.ts's liveBranches draws them): the main line's latest
 // commits and, for each open task with a branch (doing, review, waiting, failed, paused), how many commits it is ahead
-// of and behind the branch it merges into and where it forked. Read with read-only git commands only, and never while a
+// of and behind the branch it merges into and where it forked (T-794: a task merged in the last 10 minutes keeps its row too). Read with read-only git commands only, and never while a
 // page is drawn: publish() puts the last figures in the view at once and, when they are older than BRANCH_CACHE_MS (or
 // the open branches changed), starts a new read in the background, which puts its figures in the view when done.
 // A git command that fails leaves out only what it was for: a task's row, or (the main line's log) the whole section.
 import type { Board } from '../board'
-import { BRANCH_COMMITS, BRANCH_STATUSES, type BranchFacts, type BranchFigures } from '../core/live'
+import { BRANCH_COMMITS, BRANCH_STATUSES, liveFinishedLanes, type BranchFacts, type BranchFigures } from '../core/live'
 import { intoOf, isSha } from '../core/board-file'
 import { TASK_BRANCH_COMMITS, TASK_BRANCH_MAIN, type TaskBranchCommit, type TaskBranchFacts } from '../core/task-branch'
 import { trailerPrefix } from '../core/commits'
@@ -78,7 +78,8 @@ export async function readBranches(host: Host, into: string, b: Pick<Board, 'tas
 export function branchFacts(host: Host, b: Pick<Board, 'tasks'>, into: string, nowMs = Date.now()): { facts: BranchFacts | undefined; done?: Promise<void> } {
   if (S.gitState !== 'ok' || !S.root) return { facts: undefined }
   const open = openBranches(b)
-  const recent = b.tasks.some(t => t.status === 'done' && (t.history ?? []).some(h => h.kind === 'merged' && nowMs - (Date.parse(h.at ?? "") || 0) <= 2 * BRANCH_CACHE_MS))
+  // T-794: the tasks merged in the last 10 minutes keep a row (the same ones ▍Tasks keeps: liveFinishedLanes)
+  const recent = liveFinishedLanes({ tasks: b.tasks as SymccTask[] }, nowMs).length > 0
   if (!open.length && !recent) return { facts: undefined }
   const key = [into, ...open.map(t => `${t.id}:${t.branch}:${t.into}`), ...b.tasks.filter(t => t.status === 'done' && t.merged).map(t => t.merged)].join(' ')
   const fresh = cache.key === key && nowMs - cache.readAt < BRANCH_CACHE_MS
