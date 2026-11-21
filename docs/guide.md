@@ -766,8 +766,8 @@ are about changes; under "How tasks ended" a read investigation shows as
 
   The first line has `𝄞 symcc`, a short dim summary of the board (the mode, the agents busy
   of the slots, how many tasks wait to start, how many merged today, and `⌕ 1 scout` while
-  scouts run), the **open board** button and the fold button `[-]`. No task is on this line,
-  so a folded band shows just it. Under it, indented one space: one line per running task (its
+  scouts run), the **open board** button and the fold button `[-]`. No task is on this line.
+  Folding the band (`[-]`, or ctrl+x ctrl+a) keeps only this first line. Under it, indented one space: one line per running task (its
   stage's icon in color, the id, the stage's name and the time in that stage, the try from
   try 2 on, then the title), the next task to start (`○ next up`), then the questions for you
   and the tasks that need you, in the warning color. A session that doesn't drive the board
