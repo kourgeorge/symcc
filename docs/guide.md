@@ -1183,8 +1183,8 @@ indented by 1 space (VS Code shows the same names as bold headings):
      ↑↓ move · Enter open topic · m all notes
   ```
 
-  The heading has the note count out of the 60 allowed and a fill bar (in the warning colour from 54
-  notes on). Under `newest` are the 3 newest notes (day, topic, the text cut with `…`), under
+  The heading has the note count out of the 60 allowed and a fill bar, both in one calm
+  color at every fill (never the warning color). Under `newest` are the 3 newest notes (day, topic, the text cut with `…`), under
   `topics` every topic with how many notes it has, the biggest first and `unsorted` (notes without
   a topic) last; on a narrow panel the topics take fewer columns. Enter (or a click) on a topic
   opens the Organizational memory page with only that topic's notes ("Organizational memory ·
