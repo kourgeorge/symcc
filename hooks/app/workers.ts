@@ -4,7 +4,7 @@ import { archiveOld } from './archive'
 import { checkHealth } from './health'
 import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch, clearScratch, taskBranch, copyReports, deleteMergedBranch, type BehindWhy } from './git'
 import { publish } from './lead'
-import { type BeforeLine, type CheckResult, checkAndMerge, recordCommits, ownerEdits, alreadyMerged } from './review'
+import { type BeforeLine, type CheckResult, checkAndMerge, recordCommits, ownerEdits, alreadyMerged, AGAIN_MAX, RELOAD_AGAIN, againsThisTry, noteAgain } from './review'
 import type { TurnLimit } from './merge-line'
 import { timedOutRetryNote } from '../core/test-timeout'
 import { logNeedsFiles } from './evidence'
@@ -978,6 +978,62 @@ async function checkerStepAgain(host: Host, t: SymccTask, b: Board, dir: string,
   await finishTail(host, t, b, r, made, await reportSummary(host, t), dir, t.agent, gaveUp)
 }
 
+/**
+ * T-733: task `t0`'s test and merge was cut off by a reload (sendBackIdle found it "doing" with a finishing mark no copy
+ * refreshes any more): the same branch goes back into the merge line (prep, catch up, test, merge) with the same finishing
+ * mark, heartbeat and time limit as a hand-back, instead of failing the try. A checker runs first only when the checker
+ * setting is on and this try has no checker OK yet. The history says "tests cut off by a reload; testing again"; at most
+ * AGAIN_MAX times per try (sendBackIdle sends it back to todo after that). `finishing` is already taken by sendBackIdle.
+ */
+async function mergeAgain(host: Host, t0: BoardTask) {
+  const id = t0.id
+  const tryNo = t0.attempts
+  let beat: { cancel(): void } | null = null
+  try {
+    const b = await load(host)
+    const t = find(b, id)
+    if (!t || !sameTry(t, t0)) return
+    const dir = worktreeDir(id)
+    const head = await git(host, ['rev-parse', '-q', '--verify', 'HEAD'], dir).catch(() => null)
+    if (!head || head.exitCode !== 0 || !head.stdout.trim()) {
+      const note = "restarted: its test and merge stopped before the end (the plugin reloaded), and its folder couldn't be read to test it again"
+      const back = await change(host, x => {
+        const cur = find(x, id)
+        return cur && sameTry(cur, t0) ? ([putTask(x, backToTodo(cur, note, now())), true] as [Board, boolean]) : ([x, false] as [Board, boolean])
+      })
+      if (back) tellLead(host, `${id} "${t.title}": its test and merge stopped when the plugin reloaded and could not be started again (its folder couldn't be read), so it goes back to todo; the next worker goes on from the same folder and branch.`)
+      return
+    }
+    await noteAgain(host, t, RELOAD_AGAIN)
+    await markFinishing(host, id, tryNo).catch(() => undefined)
+    beat = everyMs(host, FINISH_BEAT_MS, () => void markFinishing(host, id, tryNo).catch(() => undefined))
+    tellLead(host, `${id} "${t.title}": its test and merge stopped when the plugin reloaded, so I put the same branch back in the merge line to test and merge it again. This is not a new try; nothing to do.`)
+    const limitMs = finishLimitMs(b.test_commands.length, testMinutesOf(b))
+    const how = await withLimit(host, limitMs, async (gaveUp, over, limit) => {
+      const stop = () => (gaveUp() ? 'given up after running too long' : stopAsked.get(id))
+      const made: string[] = []
+      const checked = t.history.some(h => h.text === checkerLine(tryLabel(t), { ok: true }))
+      const first = checkerOn(b) && !checked ? checkerFirst(host, t, b, dir, made, stop, true) : undefined
+      const r: CheckResult = await checkAndMerge(host, t, dir, b, 'finish', made, stop, false, over, limit, first).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
+      if (r.again) return
+      await finishTail(host, t, b, r, made, await reportSummary(host, t), dir, t.agent, gaveUp)
+    })
+    if (how === OVER) {
+      beat?.cancel()
+      beat = null
+      finishing.delete(id)
+      await finishRanOver(host, id, tryNo, limitMs)
+    }
+  } finally {
+    beat?.cancel()
+    await markFinishing(host, id, tryNo, false).catch(() => undefined)
+    finishing.delete(id)
+    await endCheck(host, id)
+  }
+  await checkerAgainNow(host, id)
+  await pump(host)
+}
+
 /** The worker's report of task `t`'s current try, cut short (from its report file), for the history line. */
 async function reportSummary(host: Host, t: SymccTask): Promise<string> {
   const rel = t.runs?.at(-1)?.report
@@ -1562,6 +1618,7 @@ export async function sendBackIdle(host: Host, agents: HostAgent[]) {
   const ids = idle.map(t => t.id)
   if (!ids.length) return
   const back: BoardTask[] = []
+  const again: BoardTask[] = []
   await change(host, x => ({
     ...x,
     tasks: x.tasks.map(t => {
@@ -1573,10 +1630,18 @@ export async function sendBackIdle(host: Host, agents: HostAgent[]) {
       if (queuedNeverStarted(t)) return unclaimed(t, now())
       const sha = merged.get(t.id)
       if (sha) return mergedDone(t, sha, 'sent back to todo', now())
+      // T-733: a reload cut off its test and merge: the same branch is tested and merged again (mergeAgain), no new try,
+      // at most AGAIN_MAX times per try; taken at once (finishing), so nothing else sends it back meanwhile
+      if (t.finishing && t.note !== CHECKER_NOTE && againsThisTry(t, RELOAD_AGAIN) < AGAIN_MAX && !again.some(a => a.id === t.id)) {
+        finishing.add(t.id)
+        again.push(t)
+        return t
+      }
       back.push(t)
       return backToTodo(t, t.finishing ? 'restarted: its test and merge stopped before the end (the plugin reloaded)' : 'restarted: the old worker has ended', now())
     }),
   }))
+  for (const t of again) void mergeAgain(host, t).catch(() => undefined)
   for (const id of merged.keys()) tellLead(host, `✓ ${id} is done: its work was already merged (${shortSha(merged.get(id)!)}) when the plugin reloaded.`)
   if (back.length) tellLead(host, `${back.map(t => `${t.id} "${t.title}"`).join(', ')}: no worker was working on ${back.length > 1 ? 'them' : 'it'} any more (${back.length > 1 ? 'their workers' : 'its worker'} stopped or ended), so ${back.length > 1 ? 'they go' : 'it goes'} back to todo; the next worker goes on from the same folder and branch.`)
 }

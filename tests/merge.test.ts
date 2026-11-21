@@ -601,28 +601,79 @@ test('checkAndMerge on a conflict with main aborts the merge and says it conflic
   expect(w.git.main).toBe(M1)
 })
 
-test('checkAndMerge when main moved by hand during the turn fails that turn as one try: no catch-up and no second test run', async () => {
+test('T-733: checkAndMerge when main moved by hand during the turn brings the same branch up to date, tests it again and merges it, with a history line', async () => {
   let moves = 0
   const w = world({
-    // the owner commits to main just before ours tries to move it
+    // the owner commits to main just before ours tries to move it, once
     answer: a => {
-      if (a[0] === 'update-ref') {
-        moves++
+      if (a[0] === 'update-ref' && a[1] !== '-d' && moves++ === 0) {
         w.git.main = M2
         w.git.upToDate = false
       }
       return undefined
     },
   })
-  const [b, t] = boardWith('auto', ['npm test'])
+  const [b, t] = boardWith('auto', ['npm test'], { history: [] })
+  await saveBoard(w.$, b)
   const made: string[] = []
   const r = await checkAndMerge(w.$, t, WT, b, 'finish', made)
-  expect(r).toEqual({ ok: false, detail: 'main moved during the merge (someone committed to it by hand), so nothing was merged' })
+  expect(r).toEqual({ ok: true, merged: H2, detail: `merged into main (${H2.slice(0, 8)}); tests passed` })
+  expect(moves).toBe(2)
+  expect(made).toEqual([H1, H2])
+  expect(ranTests(w).length).toBe(2)
+  expect(w.calls.some(c => c.startsWith('wt: git ') && / merge --no-edit --no-verify -m T-1: bring up to date with main/.test(c) && c.endsWith(` ${M2}`))).toBe(true)
+  expect(w.git.main).toBe(H2)
+  expect(find(await load(w.$), 'T-1')!.history.map(h => h.text).filter(x => x.includes('moved'))).toEqual(['try 1: main moved by hand; testing again'])
+})
+
+test('T-733: when main moved by hand and bringing the branch up to date then conflicts, it fails as a conflict, as today', async () => {
+  let moves = 0
+  const w = world({
+    answer: a => {
+      if (a[0] === 'update-ref' && a[1] !== '-d' && moves++ === 0) {
+        w.git.main = M2
+        w.git.upToDate = false
+        w.git.conflict = true
+      }
+      return undefined
+    },
+  })
+  const [b, t] = boardWith('auto', ['npm test'], { history: [] })
+  await saveBoard(w.$, b)
+  const r = await checkAndMerge(w.$, t, WT, b, 'finish', [])
+  expect(r).toEqual({ ok: false, conflict: true, detail: 'conflicts with the latest main' })
   expect(moves).toBe(1)
-  expect(made).toEqual([H1])
   expect(ranTests(w).length).toBe(1)
-  expect(w.calls.some(c => c.startsWith('wt: git ') && / merge --no-edit --no-verify -m T-1: bring up to date with main/.test(c))).toBe(false)
+  expect(w.calls).toContain('wt: git merge --abort')
   expect(w.git.main).toBe(M2)
+})
+
+test('T-733: checkAndMerge when main keeps being moved by hand tries again at most twice per try, then fails that turn as one try', async () => {
+  let moves = 0
+  const w = world({
+    // the owner commits to main just before ours tries to move it, every time
+    answer: a => {
+      if (a[0] === 'update-ref' && a[1] !== '-d') {
+        moves++
+        w.git.main = `d${moves}`.padEnd(40, '0')
+        w.git.upToDate = false
+      }
+      return undefined
+    },
+  })
+  const [b, t] = boardWith('auto', ['npm test'], { history: [] })
+  await saveBoard(w.$, b)
+  const r = await checkAndMerge(w.$, t, WT, b, 'finish', [])
+  expect(r).toEqual({ ok: false, moved: true, detail: 'main moved during the merge (someone committed to it by hand), so nothing was merged' })
+  expect(moves).toBe(3)
+  expect(ranTests(w).length).toBe(3)
+  expect(find(await load(w.$), 'T-1')!.history.map(h => h.text).filter(x => x.includes('moved'))).toEqual(['try 1: main moved by hand; testing again', 'try 1: main moved by hand; testing again'])
+  // a later go of the same try (its limit already used) does not try again
+  const w2 = world({ answer: a => (a[0] === 'update-ref' && a[1] !== '-d' ? ((w2.git.main = M2), (w2.git.upToDate = false), undefined) : undefined) })
+  const [b2, t2] = boardWith('auto', ['npm test'], { history: hist('try 1: main moved by hand; testing again', 'try 1: main moved by hand; testing again') })
+  await saveBoard(w2.$, b2)
+  expect((await checkAndMerge(w2.$, t2, WT, b2, 'finish', [])).moved).toBe(true)
+  expect(ranTests(w2).length).toBe(1)
 })
 
 test('checkAndMerge fails with git\'s error when git add fails, and commits nothing', async () => {
@@ -3871,7 +3922,7 @@ test('resetDoing keeps a task with a fresh finishing mark, sends back one with a
   expect(done.runs![0]!.ended_note).toBe('merged')
 })
 
-test('the regular check: a finishing mark no longer refreshed (its copy is gone) is recovered: done when its work is merged, else back to "todo"', async () => {
+test('the regular check: a finishing mark no longer refreshed (its copy is gone) is recovered: done when its work is merged, else tested and merged again on the same try (T-733)', async () => {
   S.me = 'me'
   const old = new Date(Date.now() - 10 * 60_000).toISOString()
   for (const merged of [true, false]) {
@@ -3881,17 +3932,39 @@ test('the regular check: a finishing mark no longer refreshed (its copy is gone)
       if (args[0] === 'merge-base' && args[1] === '--is-ancestor' && args[2] === H1) return merged ? ok() : fail()
       return undefined
     } })
-    const [b] = boardWith('auto', [], { session: 'other-dead-session', branch: 'symcc/T-1', history: [], runs: [{ started: ISO }], finishing: old })
+    const [b] = boardWith('auto', ['npm test'], { session: 'other-dead-session', branch: 'symcc/T-1', history: [], runs: [{ started: ISO, ended: ISO }], finishing: old })
     await saveBoard(w.$, b)
     S.driving = true
     await check(w.$)
+    if (!merged) await turns(w, () => !finishingSet.has('T-1'))
     const t = find(await load(w.$), 'T-1')!
-    expect(t.status).toBe(merged ? 'done' : 'todo')
+    expect(t.status).toBe('done')
     expect(t.finishing).toBeUndefined()
+    expect(t.attempts).toBe(1)
     if (merged) expect(t.merged).toBe(H1)
-    else expect(t.history.at(-1)?.text).toBe('try 1: restarted: its test and merge stopped before the end (the plugin reloaded)')
+    else {
+      expect(t.merged).toBe(H1)
+      expect(ranTests(w).length).toBe(1)
+      expect(t.history.map(h => h.text)).toContain('try 1: tests cut off by a reload; testing again')
+      expect(t.history.map(h => h.text).join('\n')).not.toMatch(/restarted/)
+    }
   }
   S.driving = false
+})
+
+test('T-733: a task cut off by a reload that already went back into the merge line twice this try goes back to "todo" as before', async () => {
+  S.me = 'me'
+  const old = new Date(Date.now() - 10 * 60_000).toISOString()
+  const w = world()
+  const [b] = boardWith('auto', ['npm test'], { session: 'other-dead-session', branch: 'symcc/T-1', history: hist('try 1: tests cut off by a reload; testing again', 'try 1: tests cut off by a reload; testing again'), runs: [{ started: ISO, ended: ISO }], finishing: old })
+  await saveBoard(w.$, b)
+  S.driving = true
+  await check(w.$)
+  S.driving = false
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('todo')
+  expect(ranTests(w)).toEqual([])
+  expect(t.history.at(-1)?.text).toBe('try 1: restarted: its test and merge stopped before the end (the plugin reloaded)')
 })
 
 test('the regular check leaves a task alone while its finishing mark is fresh', async () => {
@@ -4780,13 +4853,36 @@ for (const [ahead, mins] of [[1, 8], [2, 6]] as const) {
   })
 }
 
-test('a worker\'s try whose main was moved by hand during its turn fails as one normal try: tested once, no second go', async () => {
+test('T-733: a worker\'s try whose main is moved by hand once during its turn is tested again and merged on the same try, no new try', async () => {
+  S.me = 'me'
+  let moves = 0
+  const w = world({
+    answer: a => {
+      if (a[0] === 'update-ref' && a[1] !== '-d' && moves++ === 0) {
+        w.git.main = M2
+        w.git.upToDate = false
+      }
+      return undefined
+    },
+  })
+  await aboutToFinish(w)
+  await workerFinished(w.$, 'ag1', 'made the change')
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('done')
+  expect(t.merged).toBe(H2)
+  expect(t.attempts).toBe(1)
+  expect(t.test_tries ?? 0).toBe(0)
+  expect(ranTests(w).length).toBe(2)
+  expect(t.history.map(h => h.text)).toContain('try 1: main moved by hand; testing again')
+})
+
+test('a worker\'s try whose main is moved by hand every time during its turn fails as one normal try after two goes again (T-733 limit)', async () => {
   S.me = 'me'
   let moves = 0
   const w = world({
     // the owner commits to main just before ours tries to move it, every time
     answer: a => {
-      if (a[0] === 'update-ref') {
+      if (a[0] === 'update-ref' && a[1] !== '-d') {
         moves++
         w.git.main = `d${moves}`.padEnd(40, '0')
         w.git.upToDate = false
@@ -4798,12 +4894,13 @@ test('a worker\'s try whose main was moved by hand during its turn fails as one 
   slowTests(w, pass, 10 * MIN)
   await aboutToFinish(w)
   await workerFinished(w.$, 'ag1', 'made the change')
-  expect(moves).toBe(1)
-  expect(ranTests(w).length).toBe(1)
+  expect(moves).toBe(3)
+  expect(ranTests(w).length).toBe(3)
   const t = find(await load(w.$), 'T-1')!
   // its one try failed (the test task allows one try)
   expect(t.status).toBe('failed')
   expect(t.merged).toBeUndefined()
+  expect(t.history.filter(h => h.text === 'try 1: main moved by hand; testing again').length).toBe(2)
   expect(leadQueue.some(x => x.includes('ran over'))).toBe(false)
 })
 
