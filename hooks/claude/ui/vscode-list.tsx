@@ -13,12 +13,12 @@
 // No key hints: the mode switch is a link and the search a box in the footer. An empty board says so, with one
 // primary button that starts a message to the lead in the prompt box.
 import type { SymccStatus, SymccTask } from '../../../types'
-import { statusMark, archivedNote, archivedOf, localOffset, panelSections, BACKLOG_SHOWN, ALL_CLEAR, statusCell, rowCell, rowMark, rowStates, stateText, TITLE_ROOM, rowExtra, WAITS_FOR,roleTag, kindTag, searchTasks, SEARCH_WORDS, isInvestigation, needsYou, kindMark, roleMark, fmtDuration, ownersTurn, shownStatus } from '../../board'
+import { statusMark, archivedNote, archivedOf, localOffset, panelSections, BACKLOG_SHOWN, ALL_CLEAR, statusCell, rowCell, rowMark, rowStates, stateText, TITLE_ROOM, rowExtra, fitRow, WAITS_FOR, roleTag, kindTag, searchTasks, SEARCH_WORDS, isInvestigation, needsYou, kindMark, fmtDuration, ownersTurn, shownStatus } from '../../board'
 import { openDays, S } from '../../app/state'
 import { type $, panelValues } from '../panel'
 import type { PaneParts } from './parts'
 import { row } from './arrows'
-import { vsFold, vsFooter, vsHeading, vsHref, vsLink, mdLink, mdText, twoLines, cutEnd, MORE, MIN_TITLE, NO_TITLE } from './vscode'
+import { vsFold, vsFooter, vsHeading, vsHref, vsLink, mdLink, mdText, twoLines, MORE, NO_TITLE } from './vscode'
 
 /** The groups of what needs you, top to bottom, each under its heading; what runs and what waits to run follow them
  *  as one list with no heading, in the terminal list's order (doing, then to do; T-644). */
@@ -49,56 +49,12 @@ export const ASK_LEAD = 'Tell the lead what to do next'
 /** What that button puts in the prompt box (only when the box is empty, so what the owner typed stays). */
 export const ASK_LEAD_DRAFT = 'Next task: '
 
-/** A piece of an open row's state part after its status words: `drop` says which goes first when the line is too
- *  wide (higher first; 0 only after the title is down to "…"), `long` marks a question, failure reason or note, capped
- *  to about half the free room, `short` a shorter form used before the part is dropped ("[researcher]" for
- *  "[investigation · researcher]", "waits for T-1 +2" for "waits for T-1, T-2, T-3"). */
-export type RowPart = { text: string; drop: number; long?: boolean; short?: string }
-
-/** `text` cut at a word to at most `max` columns, ending with "…"; '' when not even one whole word fits. */
-const cutWords = (text: string, max: number) => {
-  if (text.length <= max) return text
-  const head = text.slice(0, Math.max(0, max - 1))
-  const space = head.lastIndexOf(' ')
-  return space > 0 ? `${head.slice(0, space).replace(/[\s,;:·-]+$/, '')}…` : ''
-}
-
-/** An open row's one line, fitted to `room` columns, never wider (but for a room too small for even the status mark
- *  and the status). In order, until it fits: a long part (the question, why it failed) is held to about half the free
- *  room, cut at a word; parts with a `drop` are shortened (their `short` form) or dropped whole, the highest first (the
- *  role tag, the kind, the choices count, the long text), until the title keeps MIN_TITLE; "waits for …" takes its short
- *  form; the title is cut with "…", down to just "…"; "waits for …" and "→ branch" are dropped; last, the status words lose
- *  words from their end ("for 5m"). A part is never cut mid-word. No try mark: the band and the task page show it (T-628). */
-export function fitRow(title: string, room: number, status: string, parts: RowPart[]): { title: string; status: string; rest: string } {
-  const t = title.replace(/\s+/g, ' ').trim()
-  // `status` '' (a list row, whose state sits before the title): only " · " and the parts follow the title
-  const size = (st: string, ps: RowPart[]) => (st ? 3 + st.length : 0) + ps.reduce((n, p) => n + 3 + p.text.length, 0)
-  let kept = parts.filter(p => p.text)
-  let st = status
-  const left = () => room - size(st, kept)
-  const done = (shown: string) => ({ title: shown, status: st, rest: kept.map(p => p.text).join(' · ') })
-  const shorten = (at: number) => {
-    const p = kept[at]!
-    kept = p.short && p.short !== p.text ? kept.map((q, i) => (i === at ? { ...q, text: p.short!, short: undefined } : q)) : kept.filter((_, i) => i !== at)
-  }
-  if (t.length <= left()) return done(t)
-  // a long part: at most about half the room the status and the short parts leave (more when the whole title
-  // needs less), so the title keeps the rest
-  const free = room - size(st, kept.filter(p => !p.long))
-  const cap = Math.max(Math.floor(free / 2), free - t.length) - 3
-  kept = kept.map(p => (p.long ? { ...p, text: cutWords(p.text, cap) } : p)).filter(p => p.text)
-  const floor = Math.min(t.length, MIN_TITLE)
-  while (left() < floor) {
-    const top = Math.max(0, ...kept.map(p => p.drop))
-    if (!top) break
-    shorten(kept.map(p => p.drop).lastIndexOf(top))
-  }
-  for (let i = 0; i < kept.length && left() < floor; i++) if (kept[i]!.short) shorten(i)
-  // the title goes below its floor, down to "…", before the state part loses anything more
-  while (left() < 1 && kept.length) kept = kept.slice(0, -1)
-  const words = status.split(' ')
-  while (left() < 1 && words.length > 1) st = (words.pop(), words.join(' '))
-  return done(cutEnd(t, Math.max(1, left())))
+/** A VS Code list row's title and end ("rest"), fitted by the shared fitRow (the terminal and OpenCode lists' own) after
+ *  `lead` columns in `room` (vsRowRoom): the end is drawn after " · " (one column more than fitRow's two-space pad, so
+ *  the lead counts one more), so a long title is cut with "…" and the row's end ("waits for T-3", "[feature]") stays. */
+export function vsFit(lead: number, title: string, end: string, room: number, cutEnd = false): { title: string; rest: string } {
+  const fit = fitRow(lead + 1, title.replace(/\s+/g, ' ').trim(), end, room, cutEnd)
+  return { title: fit.title, rest: fit.extra }
 }
 
 async function askLead($: $) {
@@ -152,7 +108,7 @@ export function listPageVs($: $, pane: PaneParts) {
   /** One task on one line of text, like the terminal list's row (T-644): its ID a link that opens it, then its state
    *  cell in the status color, lined up with the other rows' (`col`, see cellsOf: "▶ 5m", "○"), then the title (bold
    *  when it needs you, dim when closed), with "●" first in the status color when it needs you; then, dim on the same
-   *  line, the kind or role, "after …", the question or why it failed. When the line is too wide the title is cut with
+   *  line, the kind or role, "waits for …", the question or why it failed. When the line is too wide the title is cut with
    *  "…" (the whole title is on the task's page). A done or dropped task: its mark, the ID and the title, no state.
    *  Text, not a Button (VS Code draws a Button as a blue box). */
   const taskRow = (x: SymccTask, depth = 0, col?: Column) => {
@@ -169,22 +125,15 @@ export function listPageVs($: $, pane: PaneParts) {
     // the kind once: rowExtra already shows it as a tag ("[bug · tester]", "[investigation]") for some rows; a question
     // or failure reason that only mentions the word does not count
     const tagged = body.split(' · ').some(p => p === `[${kind}]` || p === `[${kind}`)
-    // "waits for T-3" stays longest ("waits for T-1 +2" when narrow); the role tag goes first ("[researcher]" before that), then
-    // the kind, then a question or reason (cut at a word)
     // the "waits for" list comes from the task's own `after` field (its unfinished ones, as rowExtra shows them), never
-    // from text that only starts with the word: a question or note "after you look at …" is a normal long part
+    // from text that only starts with the word: a question or note "after you look at …" is a normal text
     const ids = x.status === 'todo' || x.status === 'paused' ? (x.after ?? []).filter(id => v.tasks.some(t => t.id === id && t.status !== 'done')) : []
     const after = ids.length && body === `${WAITS_FOR} ${ids.join(', ')}` ? body : ''
     const role = !after && body && (body === roleTag(x) || body === kindTag(x)) ? body : ''
-    const roleOnly = roleMark(x)
-    const parts: RowPart[] = [
-      { text: branch, drop: 0 },
-      { text: after, drop: 0, short: after && ids.length > 1 ? `${WAITS_FOR} ${ids[0]} +${ids.length - 1}` : undefined },
-      { text: kind && !tagged ? kind : '', drop: 3 },
-      { text: role, drop: 4, short: role.startsWith('[') && roleOnly && role !== `[${roleOnly}]` ? `[${roleOnly}]` : undefined },
-      { text: after || role ? '' : body, drop: 1, long: true },
-    ]
-    let rest = ''
+    // the row's end, in order: "→ branch", "waits for …", the kind (when not tagged yet), the role tag, else the
+    // question, the reason or the note; fitted the shared way (fitRow, as the terminal and OpenCode lists): a long title
+    // is cut with "…" so this whole end stays visible
+    const rowEnd = [branch, after, kind && !tagged ? kind : '', role, after || role ? '' : body].filter(Boolean).join(' · ')
     const href = vsHref('task', x.id)
     const open = act(() => panelValues($).updateOpened(() => x.id))
     if (ended) {
@@ -207,9 +156,9 @@ export function listPageVs($: $, pane: PaneParts) {
     const cell = col?.cells.get(x.id) ?? soloCell(x)
     const idWidth = col?.idWidth ?? x.id.length
     const lead = (needs ? 2 : 0) + idWidth + 1 + cell.length + 2
-    const fit = fitRow(x.title.trim() || NO_TITLE, room - depth - lead, '', parts)
+    const fit = vsFit(depth + lead, x.title.trim() || NO_TITLE, rowEnd, room, x.status === 'failed')
     const words = x.title.trim() ? mdText(fit.title) : ''
-    rest = fit.rest
+    const rest = fit.rest
     return (
       <Box key={`vs-task-${x.id}`} flexDirection="column" paddingLeft={depth}>
         <Box key={`vs-task-${x.id}-top`} flexDirection="row">
@@ -278,7 +227,7 @@ export function listPageVs($: $, pane: PaneParts) {
             const href = vsHref('question', q.id)
             const cell = qCells.get(q.id)!.padEnd(qCell)
             const more = choices ? `${choices} ${choices === 1 ? 'choice' : 'choices'}` : ''
-            const fit = fitRow(q.text.trim() || NO_TITLE, room - 2 - qId - 1 - cell.length - 2, '', [{ text: more, drop: 2 }])
+            const fit = vsFit(2 + qId + 1 + cell.length + 2, q.text.trim() || NO_TITLE, more, room)
             const words = q.text.trim() ? mdText(fit.title) : ''
             return (
               <Box key={`vs-question-${q.id}`} flexDirection="column">
