@@ -4,16 +4,13 @@
 
 import type { SymccTokens } from '../../types'
 import { fmtCost, fmtDuration, fmtTokenKinds, fmtTokens, billedTokens, tokenCount } from './runs'
-import { BILLED_FOOTNOTE, FAILED_TESTS_SHORT, FAILED_TRIES_SHORT, STAGES_NOTE, countingText, failedCountsNote, pctText, rangeText, scoutResultsText, statsTitle, unlinkedText, type StatsData, type StatsGroup, type StatsTop } from './stats'
+import { BILLED_FOOTNOTE, STAGES_NOTE, countingText, durOr, failedCountsNote, failedShown, pctText, plural, rangeText, scoutResultsText, statsTitle, tokOr, unlinkedText, type StatsData, type StatsGroup, type StatsTop } from './stats'
 
 /** `s` safe inside HTML text and attribute values. */
 export const escapeHtml = (s: unknown): string =>
   String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
 
 const E = escapeHtml
-const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
-const durOr = (x: number | undefined) => (x === undefined ? '-' : fmtDuration(x))
-const tokOr = (x: number | undefined) => (x === undefined ? '-' : fmtTokens(x))
 
 /** One colour per task state, the same in every chart. */
 const STATE_COLOUR: Record<string, string> = { done: 'var(--green)', dropped: 'var(--grey)', doing: 'var(--blue)', todo: 'var(--slate)', review: 'var(--purple)', waiting: 'var(--amber)', paused: 'var(--orange)', failed: 'var(--red)', backlog: 'var(--grey)' }
@@ -160,14 +157,13 @@ export function statsHtml(d: StatsData, project: string): string {
     + d.failed.map(f => barRow(f.label, f.n, maxFail, String(f.n), f.key === 'changed' ? 'var(--grey)' : 'var(--red)')).join(''))
 
   // T-731: the text report's "Each failed try" and "Tests that failed most" (T-721), the same short/full cut
-  const triesShown = d.full ? d.failedTries : d.failedTries.slice(-FAILED_TRIES_SHORT)
+  const { tries: triesShown, tests: testsShown } = failedShown(d)
   const triesDiffer = failedCountsNote(d)
   const failedTries = section(`Each failed try (${d.failedTries.length})`, d.failedTries.length
     ? (triesShown.length < d.failedTries.length ? `<p class="muted">The latest ${triesShown.length}; every one: /${E(d.name)}-stats html full</p>` : '')
       + (triesDiffer ? `<p class="muted">${E(triesDiffer)}</p>` : '')
       + `<table class="t small"><thead><tr><th>task</th><th>try</th><th>failing command</th><th>reason</th><th>first failing test</th></tr></thead><tbody>${triesShown.map(f => `<tr><td>${E(f.id)} ${E(f.title)}</td><td>${f.try}</td><td>${f.command ? `<code>${E(f.command)}</code>` : '-'}</td><td>${E(f.reason)}</td><td>${f.test ? E(f.test) : '-'}</td></tr>`).join('')}</tbody></table>`
     : (triesDiffer ? `<p class="muted">${E(triesDiffer)}</p>` : '<p class="muted">No failed tries.</p>'), true)
-  const testsShown = d.full ? d.failedTests : d.failedTests.slice(0, FAILED_TESTS_SHORT)
   const maxTasks = Math.max(0, ...testsShown.map(x => x.tasks))
   const failedTests = section(`Tests that failed most${testsShown.length < d.failedTests.length ? ` (top ${testsShown.length} of ${d.failedTests.length})` : ''}`, d.failedTests.length
     ? testsShown.map(x => barRow(x.name, x.tasks, maxTasks, `${plural(x.tasks, 'task')} · ${plural(x.tries, 'try', 'tries')}`, 'var(--red)')).join('')

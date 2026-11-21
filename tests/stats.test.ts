@@ -2,6 +2,7 @@ import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 import { addScoutRun, bar, cutTitle, textWidth, parseStatsArgs, wrapLine, billedTokens, billedText, failReason, migrateScoutUsage, readArchive, archiveText, tokenCount, fmtTokenKinds, inRange, keepScoutUsage, leadTotals, mean, median, mergedHow, originKey, parseScoutMemory, parseScoutUsage, parseStatsRange, rangeSpan, scoutMemoryText, scoutTotals, statsReport, statsData, scoutResultsLine, taskFigures, readBoard, boardTotal } from '../hooks/board'
 import { statsHtml } from '../hooks/core/stats-html'
+import { FAILED_TESTS_SHORT, FAILED_TRIES_SHORT, durOr, failedShown, plural, tokOr } from '../hooks/core/stats'
 import { leadCalls, projectFolderName } from '../hooks/claude/lead-usage'
 import { hist } from './history-fixture'
 
@@ -511,6 +512,21 @@ test('T-721: the stats list each failed try and rank a test that failed 3 tasks 
   expect(full.slice(full.indexOf('Tests that failed most'))).toContain('test 6')
   // no failed try: no such parts
   expect(statsReport({ tasks: [task('T-1', { runs: [ok] })], nowMs: NOW })).not.toContain('Tests that failed most')
+})
+
+test('T-739: failedShown gives the text and html reports the same short cut: the latest tries and the top tests, all of them when full', () => {
+  const tries = Array.from({ length: FAILED_TRIES_SHORT + 2 }, (_, i) => ({ id: `T-${i}`, title: '', try: 1, reason: 'r' }))
+  const tests = Array.from({ length: FAILED_TESTS_SHORT + 2 }, (_, i) => ({ name: `t${i}`, tries: 1, tasks: 1 }))
+  const short = failedShown({ full: false, failedTries: tries, failedTests: tests })
+  expect(short.tries).toEqual(tries.slice(-FAILED_TRIES_SHORT))
+  expect(short.tests).toEqual(tests.slice(0, FAILED_TESTS_SHORT))
+  const all = failedShown({ full: true, failedTries: tries, failedTests: tests })
+  expect(all.tries).toEqual(tries)
+  expect(all.tests).toEqual(tests)
+  expect(plural(1, 'try', 'tries')).toBe('1 try')
+  expect(plural(2, 'task')).toBe('2 tasks')
+  expect(durOr(undefined)).toBe('-')
+  expect(tokOr(undefined)).toBe('-')
 })
 
 test('T-735: tries stopped on purpose (paused, dropped, backlog, turned off) are not failed tries, so the two counts agree', () => {

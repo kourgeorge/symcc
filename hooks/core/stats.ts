@@ -402,7 +402,7 @@ const pct = (a: number, b: number) => (b ? `${Math.round((a / b) * 100)}%` : '-'
 const avgDur = (xs: number[]) => (xs.length ? fmtDuration(mean(xs)!) : '-')
 const avgTok = (xs: number[]) => (xs.length ? fmtTokens(mean(xs)!) : '-')
 const row = (label: string, text: string, w = 12) => `  ${label.padEnd(w)} ${text}`
-const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
+export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
 
 /** The widest a line of the report may be. */
 export const STATS_WIDTH = 80
@@ -754,8 +754,8 @@ export function statsData(input: StatsInput & { full?: boolean }): StatsData {
 /** A percentage in words: "39%", "-" out of nothing. */
 export const pctText = (a: number, b: number) => pct(a, b)
 /** An average in words, "-" for none. */
-const durOr = (x: number | undefined) => (x === undefined ? '-' : fmtDuration(x))
-const tokOr = (x: number | undefined) => (x === undefined ? '-' : fmtTokens(x))
+export const durOr = (x: number | undefined) => (x === undefined ? '-' : fmtDuration(x))
+export const tokOr = (x: number | undefined) => (x === undefined ? '-' : fmtTokens(x))
 
 /** The one-line summary figures, in the order both reports show them: "12 done", "3 answered", "4h 10m of work", "1.2M tokens", "75% right first try". */
 export function headlineParts(d: StatsData): string[] {
@@ -775,6 +775,11 @@ export function failedCountsNote(d: Pick<StatsData, 'failedTries' | 'failedTotal
   return `${d.failedTries.length} here, ${d.failedTotal} under "Failed tries": this list reads each saved try's own end; that count reads the history lines, which also count tries rejected by you and restarts (by a change or a reload), whose own end is a review or a restart`
 }
 export const FAILED_TESTS_SHORT = 5
+/** The failed tries and failing tests a report lists: all of them when full, else the latest tries and the top tests. */
+export const failedShown = (d: Pick<StatsData, 'full' | 'failedTries' | 'failedTests'>) => ({
+  tries: d.full ? d.failedTries : d.failedTries.slice(-FAILED_TRIES_SHORT),
+  tests: d.full ? d.failedTests : d.failedTests.slice(0, FAILED_TESTS_SHORT),
+})
 
 /** The report's first line: "symcc stats · all tasks (12 tasks, incl. 2 archived)". */
 export const statsTitle = (d: StatsData) => `${d.name} stats · ${rangeText(d.range)} (${plural(d.total, 'task')}${d.archivedIn ? `, incl. ${d.archivedIn} archived` : ''})`
@@ -868,15 +873,16 @@ export function statsReport(input: StatsInput & { full?: boolean }): string {
 
   // T-721: each failed try (short: the latest FAILED_TRIES_SHORT), and the tests that failed most (short: the top FAILED_TESTS_SHORT)
   const differ = failedCountsNote(d)
+  const failed = failedShown(d)
   if (d.failedTries.length || differ) {
-    const shown = full ? d.failedTries : d.failedTries.slice(-FAILED_TRIES_SHORT)
+    const shown = failed.tries
     out.push('', `Each failed try (${d.failedTries.length}${d.failedTries.length ? ': task · try · reason · failing command · first failing test' : ''})`)
     if (shown.length < d.failedTries.length) out.push(`  (the latest ${shown.length}; every one: /${name}-stats full)`)
     if (differ) out.push(`  (${differ})`)
     for (const f of shown) out.push(`  ${f.id.padEnd(6)} try ${String(f.try).padEnd(2)} ${[f.reason, f.command && `\`${cutTitle(f.command, 40)}\``, f.test && cutTitle(f.test, 60)].filter(Boolean).join(' · ')}`)
   }
   if (d.failedTests.length) {
-    const shown = full ? d.failedTests : d.failedTests.slice(0, FAILED_TESTS_SHORT)
+    const shown = failed.tests
     out.push('', `Tests that failed most (tries · tasks${shown.length < d.failedTests.length ? `; top ${shown.length} of ${d.failedTests.length}` : ''})`)
     for (const x of shown) out.push(`  ${padWidth(cutTitle(x.name, 50), 50)} ${plural(x.tries, 'try', 'tries').padStart(9)} · ${plural(x.tasks, 'task')}`)
   }
