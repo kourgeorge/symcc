@@ -67,7 +67,8 @@
   const TITLE_W = 12
   const GAP = 6
   const LABELS = ['work✧', 'check✧', 'queue', 'tests', 'merged']
-  const LEAD_W = 1 + ID_W + 1 + TITLE_W + 2
+  // T-767: the lines under a ▍heading start with 1 space; a running lane then "▶ " (core/live.ts's 'run' tone)
+  const LEAD_W = 1 + 2 + ID_W + 1 + TITLE_W + 2
 
   function tabRow(active) {
     const tabs = [['t', 'Tasks'], ['l', 'Live'], ['s', 'Scouts'], ['c', 'Settings']]
@@ -82,8 +83,8 @@
       track += i < l.at ? sp('●', 'passed') : i === l.at ? sp(s.frame % 2 ? '◎' : '◉', 'current') : sp('○', 'future')
     })
     const right = l.place ? `#${l.place}` : dur(s.now - l.since)
-    const one = sp(' ' + pad(l.id, ID_W), 'id') + sp(' ' + pad(cut(TITLES[l.id], TITLE_W), TITLE_W), 'title') + '  ' + track + sp('  ' + right.padStart(6), 'dim')
-    const lead = `  ${l.kind} try ${l.tryNo}/${l.tries}`
+    const one = ' ' + sp('▶ ' + pad(l.id, ID_W) + ' ' + pad(cut(TITLES[l.id], TITLE_W), TITLE_W), 'run') + '  ' + track + sp('  ' + right.padStart(6), 'dim')
+    const lead = `   ${l.kind} try ${l.tryNo}/${l.tries}`
     // the whole task's tokens (every try); the running try's are known only at its hand-back
     const total = (l.prior || 0) + (l.tokens || 0)
     let rest
@@ -101,7 +102,7 @@
     const main = 'main   '
     const n = s.commits
     const line = [...Array(n)].map(() => '●').join('───')
-    const out = ['   ' + sp('main', 'id') + '   ' + sp(line, 'passed') + sp(`   ${s.head} · now`, 'dim')]
+    const out = ['  ' + sp('main', 'id') + '   ' + sp(line, 'passed') + sp(`   ${s.head} · now`, 'dim')]
     const rows = [...s.branches].sort((a, b) => b.col - a.col)
     const width = main.length + 4 * (n - 1) + 1
     rows.forEach((b, r) => {
@@ -112,7 +113,7 @@
       for (let i = c + 1; i < width + 1; i++) cells[i] = '─'
       cells[width + 1] = b.merged ? '◀' : '○'
       const label = b.merged ? ` ${b.id} merged` : b.ahead === null ? ` ${b.id}  not started` : ` ${b.id}  +${b.ahead} commit${b.ahead === 1 ? '' : 's'} · ${b.behind} behind`
-      out.push('   ' + sp(cells.join(''), b.merged ? 'passed' : 'dim') + sp(label, b.merged ? 'passed' : 'text'))
+      out.push('  ' + sp(cells.join(''), b.merged ? 'passed' : 'dim') + sp(label, b.merged ? 'passed' : 'text'))
     })
     return out
   }
@@ -128,12 +129,12 @@
       // the ✧ after work and check in the accent color (core/live.ts's 'mark' tone)
       L.push((' '.repeat(LEAD_W) + LABELS.map((x, i) => (i < LABELS.length - 1 ? pad(x, GAP + 1) : x)).join('')).split('✧').map(x => sp(x, 'dim')).join(sp('✧', 'mark')))
       for (const l of s.lanes) L.push(...laneLines(s, l))
-    } else L.push('   No task is running right now.')
+    } else L.push(' No task is running right now.')
     L.push('')
     L.push(heading('Today'))
     const d = s.today
-    L.push('   ' + sp(`✓ ${d.merged} merged`, 'passed') + sp(`   ↺ ${d.back} sent back   ✗ ${d.failed} failed   Σ ${tok(d.tokens)} tokens`, 'dim'))
-    if (s.lanes.length) L.push('   ' + sp(`✧ = an agent works here (needs an agent slot)   bar: tokens of the task so far, full = usual per task (${tok(USUAL)})`, 'dim'))
+    L.push(' ' + sp(`✓ ${d.merged} merged`, 'passed') + sp(`   ↺ ${d.back} sent back   ✗ ${d.failed} failed   Σ ${tok(d.tokens)} tokens`, 'dim'))
+    if (s.lanes.length) L.push(' ' + sp(`✧ = an agent works here (needs an agent slot)   bar: tokens of the task so far, full = usual per task (${tok(USUAL)})`, 'dim'))
     L.push('')
     L.push(heading('Branches'))
     L.push(...branchLines(s))

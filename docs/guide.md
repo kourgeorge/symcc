@@ -994,11 +994,11 @@ same look as the Live tab's `▍Branches`:
 
 ```
 ▍Branch  symcc/T-733 · 3 commits · 10 behind main
-   main   ●─────●────────●──●──●────────●──●──●──●──●──●──●   447d3c8 · 2 min ago
-          │ 14:42                 ⇣ caught up 15:50
-          ╰──●────────●───────────┴──●
-             638235d  a077ff8        4825c84
-             try 2    try 4          try 6
+ main   ●─────●────────●──●──●────────●──●──●──●──●──●──●   447d3c8 · 2 min ago
+        │ 14:42                 ⇣ caught up 15:50
+        ╰──●────────●───────────┴──●
+           638235d  a077ff8        4825c84
+           try 2    try 4          try 6
 ```
 
 - **The heading**: the branch, how many commits of its own it has, and how far behind main it
@@ -1025,18 +1025,19 @@ The Live tab (`l`) shows the tasks that run now as "railway lanes", one lane per
 Under the mode line it has four sections, each starting with a heading like the task page's
 `▍Details`: `▍Tasks` (the lanes), `▍Today` (today's numbers), `▍Branches` and
 `▍Organizational memory`, with one empty line between them and the lines under each heading
-indented by 3 spaces (VS Code shows the same names as bold headings):
+indented by 1 space (VS Code shows the same names as bold headings):
 
 ```
 ▍Tasks
-                        work✧    check✧   queue    tests    merged
-    T-684 /symcc-doc…   ●━━━━━━━━●━━━━━━━━◉────────○────────○      #2
-     change try 2/3     ▕████████░░░░░▏ 1.1M  ↺×1
+                       work✧    check✧   queue    tests    merged
+ ▶ T-684 /symcc-doc…   ●━━━━━━━━●━━━━━━━━◉────────○────────○      #2
+   change try 2/3      ▕████████░░░░░▏ 1.1M  ↺×1
 ```
 
 - Lanes are in the order the tasks started their current try, so a new one joins at the bottom
-  and the lanes don't jump around. Each shows the task id and its title (cut with `…`, wider
-  on a wider panel).
+  and the lanes don't jump around. Each starts with `▶ `, then the task id and its title (cut
+  with `…`, wider on a wider panel), bold in the accent color, so the running tasks stand out
+  from the waiting ones below them.
 - The stations are work → check → queue → tests → merged; check is left out when the
   `checker` setting is off (its prep step then counts as work). Passed stations are `●━━`, the
   ones ahead `──○`, and the current one blinks between `◉` and `◎` (Claude Code doesn't tell
@@ -1055,11 +1056,11 @@ indented by 3 spaces (VS Code shows the same names as bold headings):
   earlier tries' sum with `+ …` (`4.0M + …`), or `tokens at hand-back` on a first try.
 - Waiting trains: a todo task that waits (its `after`) for a task that has not finished hangs
   under the lane of the running task it waits for, indented with `└─◇`, its id and cut title,
-  then `waits`:
+  then `waits`. The whole row of a waiting train is dim gray:
 
   ```
-   T-712 Scout or… ●━━━━━━◉──────○──────○──────○  2m
-    bug  try 1/3   tokens at hand-back
+   ▶ T-712 Scout or… ●━━━━━━◉──────○──────○──────○  2m
+     bug  try 1/3    tokens at hand-back
      └─◇ T-713 Task files: no si…  waits
         └─◇ T-714 Help: /symcc-h…  waits
      └─◇ T-716 Live deps…  waits  + also T-690
@@ -1077,11 +1078,11 @@ indented by 3 spaces (VS Code shows the same names as bold headings):
 
   ```
   ▍Branches
-      main   ●───●───●───●───●───●───●   c11a736 · 2 min ago
-             │       │           │   ╰─◀ T-724 merged
-             │       │           ╰─────○ T-721  +3 commits · 1 behind
-             │       ╰─────────────────○ T-725  +0 commits · 4 behind
-             ╰─────────────────────────○ T-726  not started
+    main   ●───●───●───●───●───●───●   c11a736 · 2 min ago
+           │       │           │   ╰─◀ T-724 merged
+           │       │           ╰─────○ T-721  +3 commits · 1 behind
+           │       ╰─────────────────○ T-725  +0 commits · 4 behind
+           ╰─────────────────────────○ T-726  not started
   ```
 
   The `main` line has its last 7 commits, the newest at the right, with the newest one's short
@@ -1107,14 +1108,14 @@ indented by 3 spaces (VS Code shows the same names as bold headings):
 
   ```
   ▍Organizational memory   57 / 60 ▕█████████░▏
-       newest
-        11-21  tests      In tests, put dates relative to now, never a…
-        11-21  workers    Before handing back, wait for every command…
-        11-21  snapshots  To re-capture a saved page picture, print s…
-       topics
-        tests       14    git         11    board        9
-        opencode     9    vs code      8    hosts       6
-       ↑↓ move · Enter open topic · m all notes
+     newest
+      11-21  tests      In tests, put dates relative to now, never a…
+      11-21  workers    Before handing back, wait for every command…
+      11-21  snapshots  To re-capture a saved page picture, print s…
+     topics
+      tests       14    git         11    board        9
+      opencode     9    vs code      8    hosts       6
+     ↑↓ move · Enter open topic · m all notes
   ```
 
   The heading has the note count out of the 60 allowed and a fill bar (in the warning colour from 54

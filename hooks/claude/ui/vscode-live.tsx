@@ -1,7 +1,7 @@
 // The board panel's Live tab in VS Code's side panel (T-691): the same lanes and today as the terminal's Live
 // tab (live.tsx), all worked out in core/live.ts (liveLanes, liveLayout, laneLines, liveTrains, liveToday ...); this file
 // only draws them richer. Each lane is:
-//   T-684 /symcc-doctor…                 #2      (the id and cut title a link: a click, or Enter on it, opens the task)
+//   ▶ T-684 /symcc-doctor…               #2      (the id and cut title a link: a click, or Enter on it, opens the task)
 //   ●━━━━━●━━━━━◉─────○─────○                    (real lines and dots in an Svg, the station names under the dots)
 //   change try 2/3  [██████░░░░] 1.1M  ↺×1      (the token bar an Svg bar that fills)
 // The current station blinks with a CSS animation inside the Svg, and stays steady when VS Code (the person's system)
@@ -11,10 +11,11 @@
 // link that opens all notes with that one marked); the topics as links with their counts, in core's grid rows.
 // T-715: under each lane hang its waiting trains (core's liveTrains and trainRows): each one indented by its level,
 // "└─◇", its id and cut title a link that opens the task, then "waits" and "+ also T-n" dim.
+// T-767: a running lane's name starts with "▶" (the accent color) and is bold; a waiting train's whole row is dim.
 // T-727: under the lanes, the Branches section (core's liveBranches) drawn with real lines: see branchesVs.
 // T-747: each section has a bold heading with the terminal's names (core's LIVE_SECTIONS): Tasks, Today, Branches,
 // Organizational memory (that one a link to all notes).
-import { type BranchRow, type LiveBranches, liveBranches, LIVE_EMPTY, LIVE_AGENT_MARK, liveLegend, LIVE_SECTIONS, type LiveLane, liveInner, type LiveLayout, type LiveSeg, LIVE_TONE, laneLines, liveHeader, liveLanes, liveLayout, liveOrgMem, liveStations, liveToday, liveTrains, segText, todayLines, trainRows } from '../../core/live'
+import { type BranchRow, type LiveBranches, liveBranches, LIVE_EMPTY, LIVE_AGENT_MARK, LIVE_RUN_MARK, liveLegend, LIVE_SECTIONS, type LiveLane, liveInner, type LiveLayout, type LiveSeg, LIVE_TONE, laneLines, liveHeader, liveLanes, liveLayout, liveOrgMem, liveStations, liveToday, liveTrains, segText, todayLines, trainRows } from '../../core/live'
 import { panelValues, type $ } from '../panel'
 import type { PaneParts } from './parts'
 import { LIVE_TICK_MS, branchKey, laneKey, liveTick, newestKey, openOrgMemPage, topicKey, trainKey } from './live'
@@ -163,14 +164,18 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
   const laneRows = lanes.map(lane => {
     // the terminal's two lines (steady: the drawing blinks by itself), drawn in pieces
     const [first, second] = laneLines(lane, layout, { nowMs, frame, steady: true })
-    const name = first.filter(s => s.tone === 'id' || s.tone === 'title').map(s => s.text.trim()).filter(Boolean).join(' ')
+    // T-767: the running lane's id and title (the 'run' tone, past its "▶ " mark)
+    const name = first.filter(s => s.tone === 'run' && s.text !== LIVE_RUN_MARK).map(s => s.text.trim()).filter(Boolean).join(' ')
     const right = first[first.length - 1]?.tone === 'dim' ? first[first.length - 1]!.text.trim() : ''
     const track = trackSvg(lane, layout)
     const href = vsHref('task', lane.id)
     return (
       <Box key={`live-lane:${lane.id}`} flexDirection="column">
         <Box key={`live-top:${lane.id}`} flexDirection="row" gap={2}>
-          {vsLink(vs, laneKey(lane.id), mdLink(name, href), [[href, open(lane.id)]])}
+          <Box key={`live-run:${lane.id}`} flexDirection="row" gap={1}>
+            {line(`live-run-mark:${lane.id}`, LIVE_RUN_MARK.trim(), LIVE_TONE.run, true)}
+            {vsLink(vs, laneKey(lane.id), `**${mdLink(name, href)}**`, [[href, open(lane.id)]])}
+          </Box>
           {right ? line(`live-right:${lane.id}`, right, 'inactive') : null}
         </Box>
         <Svg key={`live-track:${lane.id}`} source={track.source} width={track.width} height={track.height} alt={`${lane.id} at ${layout.labels[lane.at] ?? lane.station}: ${segText(first.filter(isTrack))}`} />
@@ -195,13 +200,13 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
         {trainRows(trains.lanes[lane.id] ?? [], inner).map(r => {
           // the terminal's row in pieces: the connector, the id and title (a link), then "waits" and "+ also"
           if (!r.id) return <Box key={`live-more:${lane.id}`} flexDirection="column" paddingLeft={2}>{line(`live-more-text:${lane.id}`, segText(r.segs).trim(), 'inactive')}</Box>
-          const name = r.segs.filter(s => s.tone === 'id' || s.tone === 'title').map(s => s.text.trim()).join(' ')
+          const name = r.segs.filter(s => s.tone === 'wait').map(s => s.text.trim()).join(' ')
           const rest = r.segs.slice(1).filter(s => s.tone === 'dim').map(s => s.text.trim()).filter(Boolean).join('  ')
           const href = vsHref('task', r.id)
           return (
             <Box key={`live-train-row:${r.id}`} flexDirection="row" gap={1} paddingLeft={2 * r.depth}>
               {line(`live-train-mark:${r.id}`, '└─◇', 'inactive')}
-              {vsLink(vs, trainKey(r.id), mdLink(name, href), [[href, open(r.id)]])}
+              {vsLink(vs, trainKey(r.id), mdLink(name, href), [[href, open(r.id)]], true)}
               {rest ? line(`live-train-note:${r.id}`, rest, 'inactive') : null}
             </Box>
           )

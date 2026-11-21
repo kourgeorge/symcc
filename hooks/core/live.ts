@@ -234,21 +234,24 @@ export function liveHeader(view: LiveView, lanes: readonly LiveLane[]): string {
 export const liveBlink = (frame: number, steady = false): string => (steady || frame % 2 === 0 ? '◉' : '◎')
 
 /** How a lane's text is colored: each client picks its own colors for these. */
-export type LiveTone = 'id' | 'title' | 'passed' | 'current' | 'future' | 'text' | 'dim' | 'warning' | 'bar' | 'heading' | 'mark'
+export type LiveTone = 'id' | 'title' | 'passed' | 'current' | 'future' | 'text' | 'dim' | 'warning' | 'bar' | 'heading' | 'mark' | 'run' | 'wait'
 /** A piece of a lane's line in one tone. */
 export type LiveSeg = { text: string; tone: LiveTone }
 /** Each tone's color name, the same in every client; a section heading ("▍Tasks") and (T-760) the agent mark "✧" have
- *  the task page's heading color. */
-export const LIVE_TONE: Record<LiveTone, string> = { id: 'claude', title: 'text', passed: 'success', current: 'ide', future: 'inactive', text: 'text', dim: 'inactive', warning: 'warning', bar: 'ide', heading: 'suggestion', mark: 'suggestion' }
+ *  the task page's heading color. T-767: a running lane's "▶ ", id and title are 'run' (bold, the accent color); a
+ *  waiting train's id and title are 'wait' (dim, as the rest of its row). */
+export const LIVE_TONE: Record<LiveTone, string> = { id: 'claude', title: 'text', passed: 'success', current: 'ide', future: 'inactive', text: 'text', dim: 'inactive', warning: 'warning', bar: 'ide', heading: 'suggestion', mark: 'suggestion', run: 'claude', wait: 'inactive' }
 /** Whether a tone is drawn bold. */
-export const liveBold = (tone: LiveTone): boolean => tone === 'id' || tone === 'current' || tone === 'heading'
+export const liveBold = (tone: LiveTone): boolean => tone === 'id' || tone === 'current' || tone === 'heading' || tone === 'run'
+/** T-767: what a running lane's first line starts with (before its id). */
+export const LIVE_RUN_MARK = '▶ '
 
 // T-747: the Live tab's sections (Tasks, Today, Branches, Organizational memory; T-750 put Today above Branches) each start with a "▍Name" heading,
 // as the task page's "▍Details", and the lines under it are indented by LIVE_INDENT.
 /** The section names, in their order on the tab. */
 export const LIVE_SECTIONS = { tasks: 'Tasks', today: 'Today', branches: 'Branches', orgMem: 'Organizational memory' } as const
 /** What the lines under a section heading start with. */
-export const LIVE_INDENT = '   '
+export const LIVE_INDENT = ' '
 /** The width left for a section's lines in `width` columns (after LIVE_INDENT). */
 export const liveInner = (width: number): number => Math.max(1, Math.floor(width) - LIVE_INDENT.length)
 /** A section's heading in `width` columns: "▍Tasks" (cut when narrow), the bar and the name two segments (a client
@@ -272,7 +275,7 @@ const TITLE_MAX = 40
 const RIGHT_W = 6
 
 /** A lane line's width with these columns. */
-const laneWidth = (idW: number, titleW: number, k: number, gap: number, sep: number, rightW = RIGHT_W) => 1 + idW + (titleW ? 1 + titleW : 0) + sep + k + (k - 1) * gap + sep + rightW
+const laneWidth = (idW: number, titleW: number, k: number, gap: number, sep: number, rightW = RIGHT_W) => LIVE_RUN_MARK.length + idW + (titleW ? 1 + titleW : 0) + sep + k + (k - 1) * gap + sep + rightW
 
 /**
  * The layout of `lanes` at `width` columns: gaps of 8 and a 12-column title (wider, up to the longest title, when the
@@ -308,7 +311,7 @@ export function liveLabelLine(l: LiveLayout): string {
 }
 /** T-760: liveLabelLine in pieces: the names dim, each LIVE_AGENT_MARK in the 'mark' tone (the accent color). */
 export function liveLabelSegs(l: LiveLayout): LiveSeg[] {
-  const lead = ' '.repeat(1 + nameWidth(l) + l.sep)
+  const lead = ' '.repeat(LIVE_RUN_MARK.length + nameWidth(l) + l.sep)
   const text = lead + l.labels.map((s, i) => (i < l.labels.length - 1 ? padWidth(s, l.gap + 1) : s)).join('')
   return text.split(LIVE_AGENT_MARK).flatMap((x, i): LiveSeg[] => [...(i ? [{ text: LIVE_AGENT_MARK, tone: 'mark' as const }] : []), ...(x ? [{ text: x, tone: 'dim' as const }] : [])])
 }
@@ -332,7 +335,7 @@ export const segText = (xs: readonly LiveSeg[]): string => xs.map(x => x.text).j
 
 /**
  * A lane's two lines as segments, never wider than the layout's width (unless even the tightest layout is wider):
- * 1. " T-684 /symcc-doc…  ●━━━━━━━━●━━━━━━━━◉────────○────────○      #2": passed stations ●━━, the current one blinking
+ * 1. "▶ T-684 /symcc-doc…  ●━━━━━━━━●━━━━━━━━◉────────○────────○      #2": passed stations ●━━, the current one blinking
  *    (`frame`, liveBlink), future ──○; the right column the queue place or the time at the station;
  * 2. "  change try 2/3     ▕████████░░░░░▏ 1.1M  ↺×1": kind and try, the whole task's token bar (all its tries) against
  *    the board's usual tokens per merged task (full at the usual, staying full past it; warning past twice it, with ⚠),
@@ -346,11 +349,12 @@ export function laneLines(lane: LiveLane, l: LiveLayout, o: { nowMs: number; fra
     if (i) track.push(i <= lane.at ? { text: '━'.repeat(l.gap), tone: 'passed' } : { text: '─'.repeat(l.gap), tone: 'future' })
     track.push(i < lane.at ? { text: '●', tone: 'passed' } : i === lane.at ? { text: liveBlink(o.frame, o.steady), tone: 'current' } : { text: '○', tone: 'future' })
   })
-  const name = segs({ text: ` ${padWidth(lane.id, l.idW)}`, tone: 'id' }, l.titleW > 0 && { text: ` ${padWidth(cutTitle(lane.title, l.titleW), l.titleW)}`, tone: 'title' })
+  // T-767: "▶ " before the id; the mark, id and title bold in the accent color ('run')
+  const name = segs({ text: LIVE_RUN_MARK, tone: 'run' }, { text: padWidth(lane.id, l.idW), tone: 'run' }, l.titleW > 0 && { text: ` ${padWidth(cutTitle(lane.title, l.titleW), l.titleW)}`, tone: 'run' })
   const first = [...name, { text: sep, tone: 'text' as const }, ...track, { text: sep + laneRight(lane, o.nowMs).padStart(l.rightW), tone: 'dim' as const }]
   // the second line
   const trackW = l.stations.length + (l.stations.length - 1) * l.gap
-  const indent = 1 + nameWidth(l) + l.sep
+  const indent = LIVE_RUN_MARK.length + nameWidth(l) + l.sep
   const kindTry = ` ${lane.kind} try ${lane.tryNo}/${lane.tries}`
   const back = lane.sentBack ? `  ↺×${lane.sentBack}` : ''
   const over = lane.tokens !== undefined && lane.usual !== undefined && lane.tokens > 2 * lane.usual
@@ -382,11 +386,11 @@ export function laneLines(lane: LiveLane, l: LiveLayout, o: { nowMs: number; fra
 // T-715: waiting trains. A todo task that still waits for an unfinished task hangs, as a "train" (└─◇), under the lane
 // of the running task it waits for, or under the train of the todo task it waits for (a chain), down to a lane:
 //                  work   check  queue  tests  merged
-//  T-712 Scout or… ●━━━━━━◉──────○──────○──────○  2m
+// ▶ T-712 Scout or… ●━━━━━━◉──────○──────○──────○  2m
 //   bug  try 1/3   ▕████░░░░▏ 1.1M
-//    └─◇ T-713 Task files: no si…  waits
-//       └─◇ T-714 Help: /symcc-h…  waits
-//    └─◇ T-716 Live deps…  waits  + also T-690
+//   └─◇ T-713 Task files: no si…  waits
+//      └─◇ T-714 Help: /symcc-h…  waits
+//   └─◇ T-716 Live deps…  waits  + also T-690
 // "next up" then lists only the tasks free to start, and those stuck behind a failed, paused or owner-waiting task.
 
 /** A waiting train: a todo task hung under the lane or train it waits for; `also` the other unfinished tasks it waits
@@ -469,9 +473,9 @@ const fitText = (s: string, width: number) => (textWidth(s) <= width ? s : cutTi
 
 /**
  * A lane's trains as rows in `width` columns, top to bottom (each train, then the trains hung under it), never wider
- * than `width`: "   └─◇ T-713 Task files: no si…  waits  + also T-690". Narrower, the title gets shorter, the
+ * than `width`: "  └─◇ T-713 Task files: no si…  waits  + also T-690". Narrower, the title gets shorter, the
  * "+ also" names give way to a count, "waits" goes, then the title. Past TRAIN_DEPTH levels or TRAIN_MAX trains, one
- * "   └─ +N more waiting" row counts the rest.
+ * "  └─ +N more waiting" row counts the rest.
  */
 export function trainRows(trains: readonly LiveTrain[], width: number): TrainRow[] {
   const out: TrainRow[] = []
@@ -488,19 +492,19 @@ export function trainRows(trains: readonly LiveTrain[], width: number): TrainRow
     }
   }
   walk(trains, 1)
-  if (hidden) out.push({ depth: 1, segs: [{ text: fitText(`   └─ +${hidden} more waiting`, width), tone: 'dim' }] })
+  if (hidden) out.push({ depth: 1, segs: [{ text: fitText(`  └─ +${hidden} more waiting`, width), tone: 'dim' }] })
   return out
 }
 
 /** One train's row (see trainRows). */
 function trainLine(x: LiveTrain, depth: number, width: number): LiveSeg[] {
-  const lead = `${' '.repeat(3 * depth)}└─◇ `
+  const lead = `${' '.repeat(3 * depth - 1)}└─◇ `
   const n = x.also.length
   const alsos = n ? [`  + also ${x.also.join(', ')}`, ...(n > 1 ? [`  + also ${x.also[0]} +${n - 1}`] : []), `  +${n}`] : ['']
   const tries: { also: string; waits: string }[] = []
   for (const waits of ['  waits', '']) for (const also of alsos) tries.push({ also, waits })
   const make = (t: { also: string; waits: string }, titleW: number): LiveSeg[] =>
-    segs({ text: lead, tone: 'dim' }, { text: x.id, tone: 'id' }, titleW > 0 && { text: ` ${cutTitle(x.title, titleW)}`, tone: 'title' }, { text: t.waits, tone: 'dim' }, { text: t.also, tone: 'dim' })
+    segs({ text: lead, tone: 'dim' }, { text: x.id, tone: 'wait' }, titleW > 0 && { text: ` ${cutTitle(x.title, titleW)}`, tone: 'wait' }, { text: t.waits, tone: 'dim' }, { text: t.also, tone: 'dim' })
   for (const least of [8, 3])
     for (const t of tries) {
       const room = width - textWidth(lead + x.id + t.waits + t.also) - 1

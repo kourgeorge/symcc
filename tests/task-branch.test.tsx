@@ -24,11 +24,11 @@ test('T-761: the Branch section: the heading, main\'s line, the fork, the commit
   expect(taskBranchTitle({ ...doing, behind: 0 })).toBe('Branch  symcc/T-733 · 3 commits · up to date')
   const at = (m: number) => branchTime(T0 - m * 60_000, T0)
   expect(linesOf('T-733', doing, 100)).toEqual([
-    '   main   ●─────●────────●──●──●────────●──●──●──●──●──●──●──●──●──●   eeeeeee · 10 min ago',
-    `          │ ${at(150)}                 ⇣ caught up ${at(110)}`,
-    '          ╰──●────────●───────────┴──●',
-    '             638235d  a077ff8        4825c84',
-    '             try 2    try 4          try 6',
+    ' main   ●─────●────────●──●──●────────●──●──●──●──●──●──●──●──●──●   eeeeeee · 10 min ago',
+    `        │ ${at(150)}                 ⇣ caught up ${at(110)}`,
+    '        ╰──●────────●───────────┴──●',
+    '           638235d  a077ff8        4825c84',
+    '           try 2    try 4          try 6',
   ])
   // a try from the task's runs wins over the commit's Symcc-Try line
   const ran = taskBranchLines({ status: 'doing', runs: [{ started: '', commits: [] }, { started: '', commits: [sha('638235d0')] }] } as never, { ...doing, commits: doing.commits.map(c => ({ ...c, try: 9 })) }, T0, 100).map(text)
