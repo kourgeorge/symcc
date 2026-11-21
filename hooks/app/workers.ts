@@ -3,7 +3,7 @@ import { PREP_NOTE, type Board, type BoardTask, type RoleDef, roleSection, maySt
 import { archiveOld } from './archive'
 import { checkHealth } from './health'
 import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch, clearScratch, taskBranch, copyReports, deleteMergedBranch, type BehindWhy } from './git'
-import { publish } from './lead'
+import { publish, drivesHere } from './lead'
 import { type BeforeLine, type CheckResult, checkAndMerge, recordCommits, ownerEdits, alreadyMerged, AGAIN_MAX, RELOAD_AGAIN, againsThisTry, noteAgain } from './review'
 import type { TurnLimit } from './merge-line'
 import { timedOutRetryNote } from '../core/test-timeout'
@@ -144,6 +144,8 @@ async function queueWorker(host: Host, id: string): Promise<{ started: Promise<v
     // and symcc still on; a stop while it waits takes it out of the queue at once (see haltWorkers).
     const still = async () => {
       if (!S.enabledNow) return false
+      // T-759: a session that no longer drives the board (driving moved to another session) starts no worker
+      if (!(await drivesHere(host))) return false
       const cur = find(await load(host), id)
       return cur?.status === 'doing' && cur.session === S.me && cur.attempts === t.attempts
     }

@@ -1077,22 +1077,23 @@ test('T-748: a branch note (git or file-size warning) comes right after the mode
   // with room enough the whole warning shows
   expect(statusLine({ tasks, branch: 'main', branch_note: near }, true)).toBe(`⏵ auto · ${near} · drives here · main · today ✓ 0`)
   // over the limit has its own short form
-  expect(statusLine({ tasks, branch_note: sizeWarnText('board.json', 4.2 * 1024 * 1024) }, true, { width: room })).toBe('⏵ auto · board.json 4.2 MB, over the 4 MB limit · drives here')
+  expect(statusLine({ tasks, branch_note: sizeWarnText('board.json', 4.2 * 1024 * 1024) }, true, { width: room })).toBe("⏵ auto · board.json 4.2 MB: too big, symcc can't read it · drives here")
   // a git note joined with a size note: the size one goes short, and what is still too wide is cut with "…"; the other parts drop
   const both = statusLine({ tasks, branch_note: `no commits yet; set up git (g); ${near}` }, true, { width: room })!
   expect(both).toBe('⏵ auto · no commits yet; set up git (g); board.json 3.8… · drives here')
   expect(both.length).toBeLessThanOrEqual(room)
   // a narrow line: the note stays, the rest drops
   expect(statusLine({ tasks, branch: 'main', branch_note: 'no git' }, true, { width: 10 })).toBe('⏵ auto · no git · drives here')
-  // a refused read or write (tooBigText) has a short form too, and fits
+  // T-763: a refused read or write (tooBigText) has a short form that fits whole, "symcc can't read/write it" first
   for (const doing of ['read', 'write'] as const) {
     const big = statusLine({ tasks, branch: 'main', branch_note: tooBigText('.symcc/board.json', 4.2 * 1024 * 1024, doing), mode: 'auto' }, true, { width: room })!
     expect(big.length).toBeLessThanOrEqual(room)
-    expect(big).toBe('⏵ auto · .symcc/board.json 4.2 MB, over the 4 MB limit:… · drives here')
+    expect(big).toContain(`symcc can't ${doing} it`)
+    expect(big).toBe(`⏵ auto · board.json 4.2 MB: too big, symcc can't ${doing} it · drives here`)
   }
-  // with more room the short form shows whole
-  const wide = statusLine({ tasks, branch_note: tooBigText('.symcc/board.json', 4.2 * 1024 * 1024, 'write') }, true, { width: 100 })!
-  expect(wide).toBe("⏵ auto · .symcc/board.json 4.2 MB, over the 4 MB limit: symcc can't write it · drives here")
+  // with room enough the whole error shows
+  const full = tooBigText('.symcc/board.json', 4.2 * 1024 * 1024, 'write')
+  expect(statusLine({ tasks, branch_note: full }, true, { width: 300 })).toBe(`⏵ auto · ${full} · drives here · today ✓ 0`)
   // safety net: a note still too wide after shortening is cut with "…" so the line fits
   const cut = statusLine({ tasks, branch_note: 'x'.repeat(200) }, true, { width: room })!
   expect(cut.length).toBe(room)
