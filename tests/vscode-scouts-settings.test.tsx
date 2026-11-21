@@ -41,7 +41,7 @@ function texts(tree: unknown): string[] {
 }
 const KEY_HINTS = [/\[[a-z]\]:/, /Enter open/, /Enter on a heading/, /Enter changes/, /Enter saves/, /Enter picks/, /Enter goes on/, /open\/close/, /→ \/ ←/, /↑↓/, /t s c views/, /Esc back/, /\s\([a-z]\)(\s|$)/]
 const STATUS_COLORS = new Set(['warning', 'error', 'ide', 'permission', 'success', 'suggestion'])
-const CHOICES = ['mode', 'notify', 'sound_set', 'checker', 'scout_findings', 'tests_with_changes', 'open_on_start', 'enabled']
+const CHOICES = ['mode', 'notify', 'checker', 'scout_findings', 'tests_with_changes', 'open_on_start', 'enabled']
 const BOXES = ['max_parallel', 'max_minutes', 'auto_retries', 'archive_days', 'test_commands']
 
 /** The drawn tree without the scout page's Results section (T-622 added it after these trees were saved, T-686 moved
@@ -233,12 +233,12 @@ test('Settings in VS Code at width 50: groups as headings, a Select for each cho
     expect(el?.props.label, name).toBe(name)
   }
   expect((await ui.find({ key: 'setting:mode' }))?.props.value).toBe('auto')
-  expect((await ui.find({ key: 'setting:notify' }))?.props.options).toEqual([{ value: 'off' }, { value: 'sound' }, { value: 'voice' }])
-  expect((await ui.find({ key: 'setting:notify' }))?.props.value).toBe('sound')
+  // T-695: one notify row with the five choices (the sound set is part of notify); no sound_set row
+  expect((await ui.find({ key: 'setting:notify' }))?.props.options).toEqual(['voice', 'sound 1', 'sound 2', 'sound 3', 'off'].map(value => ({ value })))
+  expect((await ui.find({ key: 'setting:notify' }))?.props.value).toBe('sound 2')
+  expect(await ui.find({ key: 'setting:sound_set' })).toBeUndefined()
+  expect(await ui.find({ key: 'vs-setting-sound_set' })).toBeUndefined()
   expect((await ui.find({ key: 'setting:scout_findings' }))?.props.value).toBe('backlog')
-  // T-650: the sound set is picked from 1, 2 and 3, and shows the one in use
-  expect((await ui.find({ key: 'setting:sound_set' }))?.props.options).toEqual([{ value: '1' }, { value: '2' }, { value: '3' }])
-  expect((await ui.find({ key: 'setting:sound_set' }))?.props.value).toBe('2')
   for (const name of BOXES) expect((await ui.find({ key: `setting:${name}` }))?.type, name).toBe('Input')
   expect((await ui.find({ key: 'setting:max_parallel' }))?.props.value).toBe('2')
   // T-460: Roles and Kinds open their pages from links, not Buttons

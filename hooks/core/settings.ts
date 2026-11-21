@@ -1,7 +1,7 @@
 // Failing tests, turning things on and off, and the settings.
 import type { SymccTask } from '../../types'
 import { DEFAULT_NAME } from '../name'
-import { type Board, type Notify, type SoundSet, isSoundSet, SOUND_SETS, DEFAULT_ARCHIVE_DAYS, DEFAULT_AUTO_RETRIES, DEFAULT_TEST_MINUTES, testMinutesOf, NOTIFY_CHOICES, MODES, SCOUT_FINDINGS_CHOICES, TESTS_WITH_CHANGES_CHOICES, emptyBoard, isMode, isNotify, isScoutFindings, isTestsWithChanges, modeOf, scoutFindingsOf, testsWithChangesOf } from './board-file'
+import { type Board, type Notify, notifyKind, soundNotify, soundSetFor, DEFAULT_ARCHIVE_DAYS, DEFAULT_AUTO_RETRIES, DEFAULT_TEST_MINUTES, testMinutesOf, NOTIFY_CHOICES, MODES, SCOUT_FINDINGS_CHOICES, TESTS_WITH_CHANGES_CHOICES, emptyBoard, isMode, isNotify, isScoutFindings, isTestsWithChanges, modeOf, scoutFindingsOf, testsWithChangesOf } from './board-file'
 import { ellipsis, num } from './text'
 import { MAX_TEST_MINUTES } from './test-timeout'
 
@@ -145,7 +145,7 @@ export function testOutputHeading(kept: string): string {
 /** Should the board panel open by itself when a session starts? Yes unless the board turned it off. */
 export const openOnStart = (b: Partial<Pick<Board, 'open_on_start'>>) => b.open_on_start !== false
 
-// ---------------- notify: off, sound or voice ----------------
+// ---------------- notify: voice, sound 1 / 2 / 3 or off ----------------
 
 /** The system a session runs on, as far as notify cares. */
 export type NotifySystem = 'mac' | 'linux' | 'windows' | 'other'
@@ -153,42 +153,34 @@ export type NotifySystem = 'mac' | 'linux' | 'windows' | 'other'
 /** What this machine can play (found once per session, without playing anything). */
 export type Playable = { system: NotifySystem; sound: boolean; voice: boolean }
 
-/** The default notify for a machine: voice where it can speak, else sound where it can chime, else off. */
-export const bestNotify = (can: Pick<Playable, 'sound' | 'voice'>): Notify => (can.voice ? 'voice' : can.sound ? 'sound' : 'off')
+/**
+ * The default notify for a machine: voice where it can speak, else the chime of the project's own sound set
+ * ("sound 2", picked from the folder name in `root`, see soundSetFor) where it can chime, else off.
+ */
+export const bestNotify = (can: Pick<Playable, 'sound' | 'voice'>, root = ''): Notify => (can.voice ? 'voice' : can.sound ? soundNotify(soundSetFor(root)) : 'off')
 
 /**
  * The notify setting in use: the board's own choice, or (none saved) the best this machine can
  * play. Without `can` (the machine not known yet) an unsaved choice reads as 'voice'.
  */
-export const notifyOf = (b: Partial<Pick<Board, 'notify'>>, can?: Pick<Playable, 'sound' | 'voice'>): Notify => (isNotify(b.notify) ? b.notify : can ? bestNotify(can) : 'voice')
-
-/** The project's folder name: the last part of `root` ('' when there is none). */
-export const projectFolder = (root: string): string => String(root ?? '').replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? ''
+export const notifyOf = (b: Partial<Pick<Board, 'notify'>>, can?: Pick<Playable, 'sound' | 'voice'>, root = ''): Notify => (isNotify(b.notify) ? b.notify : can ? bestNotify(can, root) : 'voice')
 
 /**
- * The sound set a project gets when none is saved: a stable hash (FNV-1a) of its folder name, as 1, 2 or 3,
- * so two projects usually chime differently with no setup. The same name always gives the same set.
+ * A typed or picked notify choice as a Notify, or null: "Sound 2", "sound  2" and "sound2" all read as "sound 2".
+ * The old bare "sound" is not a choice any more (it needs a set number).
  */
-export function soundSetFor(root: string): SoundSet {
-  const name = projectFolder(root).toLowerCase()
-  let h = 0x811c9dc5
-  for (let i = 0; i < name.length; i++) h = Math.imul(h ^ name.charCodeAt(i), 0x01000193) >>> 0
-  return SOUND_SETS[h % SOUND_SETS.length]!
+export const readNotify = (x: unknown): Notify | null => {
+  const w = typeof x === 'string' ? x.trim().toLowerCase().replace(/^sound\s*([123])$/, 'sound $1') : x
+  return isNotify(w) ? w : null
 }
 
-/** The sound set in use: the board's own choice, else the one picked from the project's folder name (`root`). */
-export const soundSetOf = (b: Partial<Pick<Board, 'sound_set'>>, root = ''): SoundSet => (isSoundSet(b.sound_set) ? b.sound_set : soundSetFor(root))
+/** What a bad notify value is told. */
+export const NOTIFY_MUST = 'notify must be voice, sound 1, sound 2, sound 3 or off'
 
-/** A typed or picked sound set ("2", 2) as a SoundSet, or null when it is not 1, 2 or 3. */
-export const readSoundSet = (x: unknown): SoundSet | null => {
-  const n = typeof x === 'string' && /^\s*[123]\s*$/.test(x) ? Number(x) : x
-  return isSoundSet(n) ? n : null
-}
+/** Does this machine play `n`? off always "plays" (nothing); every sound set needs the sound player. */
+export const canPlay = (n: Notify, can: Pick<Playable, 'sound' | 'voice'>) => n === 'off' || !!can[notifyKind(n) === 'voice' ? 'voice' : 'sound']
 
-/** Does this machine play `n`? off always "plays" (nothing). */
-export const canPlay = (n: Notify, can: Pick<Playable, 'sound' | 'voice'>) => n === 'off' || !!can[n]
-
-/** The notify choices this machine can play, in order: off always, then sound and voice when found. */
+/** The notify choices this machine can play, in order: voice and the 3 sounds when found, off always. */
 export const notifyChoices = (can: Pick<Playable, 'sound' | 'voice'>): Notify[] => NOTIFY_CHOICES.filter(n => canPlay(n, can))
 
 /** What is missing for `n` here, with what to install: "no speech program found (install espeak or speech-dispatcher)". */
@@ -208,7 +200,7 @@ export function missingText(n: 'sound' | 'voice', system: NotifySystem): string 
 /** Why `n` can't be turned on here ("voice isn't available here: no speech program found (...)"), or '' when it can. */
 export function notifyRefusal(n: Notify, can: Playable): string {
   if (n === 'off' || canPlay(n, can)) return ''
-  return `${n} isn't available here: ${missingText(n, can.system)}`
+  return `${n} isn't available here: ${missingText(notifyKind(n) === 'voice' ? 'voice' : 'sound', can.system)}`
 }
 
 /** The one-time note when the saved choice can't play on this machine, or '' when it can. */
@@ -275,10 +267,10 @@ export const clampRetries = (n: number) => Math.max(0, Math.min(10, Math.round(N
 // ---------------- settings ----------------
 // One list of settings, used by the lead's settings tool, /<name>-settings and the panel's Settings view.
 
-export const SETTING_NAMES = ['test_commands', 'test_minutes', 'max_parallel', 'max_minutes', 'auto_retries', 'archive_days', 'open_on_start', 'notify', 'sound_set', 'scout_findings', 'tests_with_changes', 'checker', 'mode', 'enabled'] as const
+export const SETTING_NAMES = ['test_commands', 'test_minutes', 'max_parallel', 'max_minutes', 'auto_retries', 'archive_days', 'open_on_start', 'notify', 'scout_findings', 'tests_with_changes', 'checker', 'mode', 'enabled'] as const
 export type SettingName = (typeof SETTING_NAMES)[number]
-/** commands: test_commands; number: a whole number within min-max; onoff: true/false; mode: paused/review/auto; notify: off/sound/voice; soundset: 1/2/3; findings: auto/backlog; untested: off/ask/review */
-export type SettingKind = 'commands' | 'number' | 'onoff' | 'mode' | 'notify' | 'soundset' | 'findings' | 'untested'
+/** commands: test_commands; number: a whole number within min-max; onoff: true/false; mode: paused/review/auto; notify: voice/sound 1/sound 2/sound 3/off; findings: auto/backlog; untested: off/ask/review */
+export type SettingKind = 'commands' | 'number' | 'onoff' | 'mode' | 'notify' | 'findings' | 'untested'
 export type SettingInfo = { name: SettingName; kind: SettingKind; min?: number; max?: number; default: string; range: string; meaning: string }
 
 /** Why test_minutes value `v` is refused ('' when it is a whole number of minutes from 1 to MAX_TEST_MINUTES). */
@@ -302,8 +294,7 @@ export const SETTINGS: SettingInfo[] = [
   { name: 'auto_retries', kind: 'number', min: 0, max: 10, default: String(DEFAULT_AUTO_RETRIES), range: '0-10', meaning: 'new tries on their own after failing tests' },
   { name: 'archive_days', kind: 'number', min: 0, max: 3650, default: String(DEFAULT_ARCHIVE_DAYS), range: '0-3650 (0 = never)', meaning: 'done and dropped tasks older than this move to archive.json' },
   { name: 'open_on_start', kind: 'onoff', default: 'on', range: 'on / off', meaning: 'open the board panel when a session starts' },
-  { name: 'notify', kind: 'notify', default: 'voice (else sound, else off)', range: 'off / sound / voice', meaning: 'when a task is merged or a worker asks you something: a chime (sound), or "symcc: T-3 done" / "symcc: T-5 needs you" out loud, the project name first (voice)' },
-  { name: 'sound_set', kind: 'soundset', default: 'picked from the project name', range: '1 / 2 / 3', meaning: 'which chimes notify sound plays (set 1: Glass and Ping on macOS, 2: Hero and Pop, 3: Submarine and Funk; a different one when a question waits), so you can tell which project chimed; picking one plays its chime' },
+  { name: 'notify', kind: 'notify', default: 'voice (else sound N, N picked from the project name, else off)', range: 'voice / sound 1 / sound 2 / sound 3 / off', meaning: 'when a task is merged or a worker asks you something: "symcc: T-3 done" / "symcc: T-5 needs you" out loud, the project name first (voice), or a chime from sound set N, so you can tell which project chimed (on macOS sound 1: Glass and Ping, sound 2: Hero and Pop, sound 3: Submarine and Funk; the second one when a question waits); picking a sound plays its chime' },
   { name: 'scout_findings', kind: 'findings', default: 'auto', range: 'auto / backlog', meaning: 'auto: the lead decides, a scout finding it adds goes to todo and runs; backlog: every task added from a scout finding goes to the backlog and waits for you' },
   { name: 'tests_with_changes', kind: 'untested', default: 'ask', range: 'off / ask / review', meaning: 'a change task that edits code but no test file: ask: it merges and the lead is told "T-3 changed code but no test"; review: it waits for your review instead; off: nothing (test files are in test/, tests/, __tests__/, spec/, e2e/ or cypress/ folders or have a test name like a.test.ts, a-test.ts, a.cy.ts, login.e2e.ts, FooTest.java; docs-only changes such as .md files, images and non-code files under docs/ are never flagged)' },
   { name: 'checker', kind: 'onoff', default: 'off', range: 'off / on', meaning: 'on: after the prep step and before a change joins the merge queue (where its tests run), a fresh checker tries to break it; OK goes on, a list of problems sends it back to its worker (counts as a retry); investigations and docs-only changes skip it' },
@@ -327,7 +318,7 @@ export const SETTING_GROUPS: readonly SettingGroup[] = [
   { title: 'Checks before merging', items: ['test_commands', 'test_minutes', 'tests_with_changes', 'checker'] },
   { title: 'Workers', items: ['roles', 'kinds', 'orgmem'] },
   { title: 'Scouts', items: ['scout_findings'] },
-  { title: 'Board and alerts', items: ['notify', 'sound_set', 'open_on_start', 'archive_days'] },
+  { title: 'Board and alerts', items: ['notify', 'open_on_start', 'archive_days'] },
 ]
 
 export const isSettingPage = (x: string): x is SettingPage => (SETTING_PAGES as readonly string[]).includes(x)
@@ -345,7 +336,6 @@ export function settingChoices(name: string, notifyChoices?: readonly string[]):
   if (kind === 'findings') return [...SCOUT_FINDINGS_CHOICES]
   if (kind === 'untested') return [...TESTS_WITH_CHANGES_CHOICES]
   if (kind === 'notify') return notifyChoices?.length ? [...notifyChoices] : ['off']
-  if (kind === 'soundset') return SOUND_SETS.map(String)
   return []
 }
 
@@ -379,8 +369,6 @@ function shortValue(b: Partial<Board>, name: SettingName): string {
       return `findings: ${v}`
     case 'notify':
       return `notify ${v}`
-    case 'sound_set':
-      return `sounds ${v}`
     case 'open_on_start':
       return `open on start ${v}`
     case 'archive_days':
@@ -462,9 +450,7 @@ export function settingValue(b: Partial<Board>, name: SettingName, root = ''): s
     case 'open_on_start':
       return openOnStart(b) ? 'on' : 'off'
     case 'notify':
-      return notifyOf(b)
-    case 'sound_set':
-      return String(soundSetOf(b, root))
+      return notifyOf(b, undefined, root)
     case 'enabled':
       return symccOn(b) ? 'on' : 'off'
     case 'mode':
@@ -519,9 +505,8 @@ export function applySettings(b: Board, a: SettingsInput): { board: Board; chang
     add(name, said, cut)
   }
   if (typeof a.open_on_start === 'boolean') ((y.open_on_start = a.open_on_start), add('open_on_start', a.open_on_start ? 'the board opens when a session starts' : 'the board no longer opens when a session starts'))
-  if (isNotify(a.notify)) ((y.notify = a.notify), add('notify', a.notify === 'voice' ? 'merged tasks and questions are said out loud' : a.notify === 'sound' ? 'a chime plays when a task is merged or a question waits' : 'nothing plays when a task is merged or a question waits'))
-  const set = readSoundSet(a.sound_set)
-  if (set) ((y.sound_set = set), add('sound_set', `notify sound plays sound set ${set}`))
+  const n = readNotify(a.notify)
+  if (n) ((y.notify = n), add('notify', n === 'voice' ? 'merged tasks and questions are said out loud' : n === 'off' ? 'nothing plays when a task is merged or a question waits' : `a chime from sound set ${n.slice(6)} plays when a task is merged or a question waits`))
   if (isScoutFindings(a.scout_findings)) ((y.scout_findings = a.scout_findings), add('scout_findings', a.scout_findings === 'backlog' ? 'tasks from scout findings go to the backlog' : 'tasks from scout findings go where the lead decides (todo unless it says backlog)'))
   if (isTestsWithChanges(a.tests_with_changes)) ((y.tests_with_changes = a.tests_with_changes), add('tests_with_changes', a.tests_with_changes === 'review' ? 'a code change with no test file waits for review' : a.tests_with_changes === 'ask' ? 'a code change with no test file merges and the lead is told' : 'code changes with no test file are not flagged'))
   const checker = typeof a.checker === 'boolean' ? a.checker : a.checker === 'on' ? true : a.checker === 'off' ? false : undefined
@@ -585,12 +570,8 @@ export function parseSettingValue(name: SettingName, raw: string): { ok: true; i
       return bad(`${name} must be on or off`)
     }
     case 'notify': {
-      const w = v.toLowerCase()
-      return isNotify(w) ? { ok: true, input: { notify: w } } : bad('notify must be off, sound or voice')
-    }
-    case 'soundset': {
-      const set = readSoundSet(v)
-      return set ? { ok: true, input: { sound_set: set } } : bad('sound_set must be 1, 2 or 3')
+      const n = readNotify(v)
+      return n ? { ok: true, input: { notify: n } } : bad(NOTIFY_MUST)
     }
     case 'findings': {
       const w = v.toLowerCase()
@@ -613,7 +594,7 @@ export function parseSettingValue(name: SettingName, raw: string): { ok: true; i
 
 /**
  * /<name>-settings: no words opens the Settings view; "NAME VALUE" sets one setting
- * (e.g. "max_parallel 5", "notify sound", 'test_commands "npm test"').
+ * (e.g. "max_parallel 5", "notify sound 2", 'test_commands "npm test"').
  */
 export function parseSettingsCommand(args: string, name: string = DEFAULT_NAME): { kind: 'settings' } | { kind: 'set'; setting: SettingName; input: SettingsInput } | { kind: 'bad'; message: string } {
   const s = String(args ?? '').trim()
@@ -650,7 +631,7 @@ export function leadSettingsText(b: Partial<Board>, can: Pick<Playable, 'sound' 
     ...SETTING_GROUPS.flatMap(g => [
       `## ${g.title}`,
       ...groupSettings(g).map(s => {
-        const value = s.name === 'notify' ? notifyOf(b, can) : settingValue(b, s.name, root)
+        const value = s.name === 'notify' ? notifyOf(b, can, root) : settingValue(b, s.name, root)
         const extra = s.name === 'notify' ? `; this machine can play: ${notifyChoices(can).join(', ')}` : s.name === 'enabled' ? '; only the owner can change it' : ''
         return `${s.name}: ${value} (default ${s.default}, can be ${s.range}) ${s.meaning}${extra}`
       }),

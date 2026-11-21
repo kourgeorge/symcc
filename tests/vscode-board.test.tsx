@@ -324,13 +324,14 @@ async function rowText(ui: Mounted, id: string, kind = id.startsWith('Q-') ? 'vs
 }
 /** A row's one line (its title and then its dim state part). */
 /** The panel columns VS Code reports when its list rows get at most `room` characters (see VS_ROW_SCALE). */
-const colsFor = (room: number) => Math.floor(room / VS_ROW_SCALE)
+const colsFor = (room: number) => Math.floor(room / VS_ROW_SCALE + 1e-9)
 const infoLine = async (ui: Mounted, id: string) => (await ui.find({ key: `vs-task-${id}-top` })) as Node
 
-test('in VS Code the Tasks list at widths 40 and 80: headings with counts, rows and folds as links, no Buttons', async ($, on) => {
+test('in VS Code the Tasks list at widths 42 and 80: headings with counts, rows and folds as links, no Buttons', async ($, on) => {
   seedBoard(on, { view: MIXED_VIEW })
   on('ui.toast', () => ({ value: undefined }))
-  for (const bodyColumns of [40, 80]) {
+  // 42: the narrowest panel (20 columns, see paneWidth) times VS_ROW_SCALE
+  for (const bodyColumns of [42, 80]) {
     const at = `width ${bodyColumns}`
     const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: colsFor(bodyColumns) }, surface: 'vscode' })
     const tree = await ui.drawn()
@@ -537,7 +538,7 @@ test('in VS Code a to do task worked on before shows ● in the list and on its 
   expect(await rowText(ui, 'T-408')).toMatch(/^T-408 ●\s+Add/)
   expect(await rowText(ui, 'T-406')).toMatch(/^T-406 ○\s+Write/)
   await ui.press({ key: 'T-408', link: { href: vsHref('task', 'T-408') } })
-  expect((await ui.find({ key: 'vs-status' }))?.text).toMatch(/^Status● to do/)
+  expect((await ui.find({ key: 'vs-row-status' }))?.text).toMatch(/^Status● to do/)
   await ui.unmount()
 })
 
@@ -574,8 +575,8 @@ test("T-542: in VS Code symcc's own pre-merge step shows \"prep\" and a running 
   const page = texts(await ui.drawn()).join('\n')
   expect(page).toContain('preparing to merge: committing and checking files')
   // the badge names the state and the time (T-647), and the Stage stepper marks the step now
-  expect((await ui.find({ key: 'vs-status' }))?.text).toMatch(/▶ doing · \d+m/)
-  expect((await ui.find({ key: 'vs-stage' }))?.text).toBe('Stageworker ✓→● prep→queue→test→merge')
+  expect((await ui.find({ key: 'vs-row-status' }))?.text).toMatch(/▶ doing · \d+m/)
+  expect((await ui.find({ key: 'vs-row-stage' }))?.text).toBe('Stageworker ✓ → ● prep → queue → test → merge')
   await ui.unmount()
 })
 
@@ -588,12 +589,12 @@ test('T-587: in VS Code the task page badge names the state (T-647) and the Stag
   on('ui.toast', () => ({ value: undefined }))
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
   await ui.press({ key: 'T-498', link: { href: vsHref('task', 'T-498') } })
-  expect((await ui.find({ key: 'vs-status' }))?.text).toMatch(/▶ doing · \d+m/)
-  expect((await ui.find({ key: 'vs-stage' }))?.text).toBe('Stageworker ✓→prep ✓→● checker→queue→test→merge')
+  expect((await ui.find({ key: 'vs-row-status' }))?.text).toMatch(/▶ doing · \d+m/)
+  expect((await ui.find({ key: 'vs-row-stage' }))?.text).toBe('Stageworker ✓ → prep ✓ → ● checker → queue → test → merge')
   await ui.press({ key: 'back' })
   await ui.press({ key: 'T-499', link: { href: vsHref('task', 'T-499') } })
-  expect((await ui.find({ key: 'vs-stage' }))?.text).toBe('Stageworker ✓→prep ✓→checker ✓→queue ✓→test ✓→● review→merge')
-  expect((await ui.find({ key: 'vs-status' }))?.text).toContain('◆ ready for review')
+  expect((await ui.find({ key: 'vs-row-stage' }))?.text).toBe('Stageworker ✓ → prep ✓ → checker ✓ → queue ✓ → test ✓ → ● review → merge')
+  expect((await ui.find({ key: 'vs-row-status' }))?.text).toContain('◆ ready for review')
   await ui.unmount()
 })
 
@@ -623,7 +624,7 @@ test('T-590: in VS Code each open task and question is one line: id, state, then
   const ask = { ...QUESTION, text: 'Should the board open by itself when a session starts, or only when the owner asks for it?' }
   seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, tasks, questions: [ask] } } })
   on('ui.toast', () => ({ value: undefined }))
-  for (const bodyColumns of [40, 60, 80]) {
+  for (const bodyColumns of [42, 63, 80]) {
     const at = `width ${bodyColumns}`
     const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: colsFor(bodyColumns) }, surface: 'vscode' })
     await ui.drawn()
@@ -638,8 +639,8 @@ test('T-590: in VS Code each open task and question is one line: id, state, then
       expect(line, `${at} ${id}`).not.toContain('\n')
     }
     // doing, to do and waiting: id, state, title on the same line (T-644)
-    // the role tag goes first when narrow (whole at 60 now that no try "(2)" takes room, T-628; gone at 40)
-    expect(await rowText(ui, 'T-401'), at).toMatch(bodyColumns === 40 ? /^T-401 ▶ 2m\s+Show\S*( \S+)*…$/ : /^T-401 ▶ 2m\s+Show the.*… · \[investigation · researcher\]$/)
+    // the role tag goes first when narrow (whole at 63 now that no try "(2)" takes room, T-628; gone at 42)
+    expect(await rowText(ui, 'T-401'), at).toMatch(bodyColumns === 42 ? /^T-401 ▶ 2m\s+Show\S*( \S+)*…$/ : /^T-401 ▶ 2m\s+Show the.*… · \[investigation · researcher\]$/)
     expect(await rowText(ui, 'T-406'), at).toMatch(/^T-406 ○\s+Write the guide/)
     expect(await rowText(ui, 'T-404'), at).toMatch(/^● T-404 \? waiting for 1m\s+Pick the/)
     // a long title is cut with "…" and "waits for T-406" stays on the line
@@ -647,9 +648,9 @@ test('T-590: in VS Code each open task and question is one line: id, state, then
     expect(line, at).toMatch(/^T-578 ○\s+Let.*… · waits for T-406/)
     expect(line.length, at).toBeLessThanOrEqual(bodyColumns)
     // the kind comes after "waits for T-406" and is dropped whole first when the line is narrow, never cut mid-word
-    expect(line, at).toMatch(bodyColumns === 40 ? / · waits for T-406$/ : / · waits for T-406 · feature$/)
+    expect(line, at).toMatch(bodyColumns === 42 ? / · waits for T-406$/ : / · waits for T-406 · feature$/)
     const q = await rowText(ui, 'Q-3')
-    expect(q, at).toMatch(bodyColumns === 40 ? /^● Q-3 \? 5m\s+Sh\S*( \S+)*…( · 2 choices)?$/ : /^● Q-3 \? 5m\s+Should the.*… · 2 choices$/)
+    expect(q, at).toMatch(bodyColumns === 42 ? /^● Q-3 \? 5m\s+Sh\S*( \S+)*…( · 2 choices)?$/ : /^● Q-3 \? 5m\s+Should the.*… · 2 choices$/)
     // never wider than the row: the title is cut (below its floor when it must) before the state part
     expect(q.length, at).toBeLessThanOrEqual(bodyColumns)
     for (const id of ['T-401', 'T-404', 'T-406']) expect((await rowText(ui, id)).length, `${at} ${id}`).toBeLessThanOrEqual(bodyColumns)
@@ -851,5 +852,52 @@ test('T-644: in VS Code doing and to do are one list with no heading, in the ter
   // the state cells themselves are one width
   const cells = await Promise.all(ids.map(async id => texts((await ui.find({ key: `vs-task-${id}-state` })) as Node).join('')))
   expect(new Set(cells.map(c => c.length)).size).toBe(1)
+  await ui.unmount()
+})
+
+test('T-698: in VS Code a thin rule sits between the header and the tabs on the Tasks, Scouts and Settings tabs', async ($, on) => {
+  seedBoard(on)
+  on('ui.toast', () => ({ value: undefined }))
+  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 70 }, surface: 'vscode' })
+  for (const tab of ['tasks', 'scouts', 'settings'] as const) {
+    if (tab !== 'tasks') await ui.press({ key: 'tabs', link: { href: vsHref('tab', tab) } })
+    // the tabs row starts with the rule (the footer's look), then the tabs
+    const row = (await ui.find({ key: 'tabs-row' })) as Node
+    const [rule, links] = row.children!.filter(n => n && typeof n === 'object') as Node[]
+    expect(rule?.type, tab).toBe('Text')
+    expect([rule?.props?.color, rule?.props?.wrap], tab).toEqual(['subtle', 'truncate'])
+    expect(texts(rule).join(''), tab).toBe('─'.repeat(70))
+    expect(links?.type, tab).toBe('Markdown')
+    expect(String(links?.props?.text), tab).toContain('Settings')
+    // under the header (its counts), in the drawn order
+    const drawn = JSON.stringify(drawnData(await ui.drawn()))
+    expect(drawn.indexOf('"vs-counts"'), tab).toBeGreaterThan(-1)
+    expect(drawn.indexOf('"vs-counts"') < drawn.indexOf('"tabs-row"'), tab).toBe(true)
+  }
+  await ui.unmount()
+})
+
+test('T-698: in VS Code a long title row fills more of the line (2.1 times the columns), stays one line and keeps its end part', async ($, on) => {
+  expect(VS_ROW_SCALE).toBe(2.1)
+  const long = 'Dashboard: non-UTF-8 or non-object baseline.json/final.json/events.jsonl must not crash the whole dashboard page when it loads'
+  const todo = { ...BOARD_TASKS.find(t => t.id === 'T-406')!, id: 'T-635', order: 635, kind: 'bug', title: long }
+  const questions = [{ id: 'Q-9', text: long, asked_at: new Date(T0).toISOString() }]
+  seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, questions, tasks: [...BOARD_TASKS, todo] } } })
+  on('ui.toast', () => ({ value: undefined }))
+  const bodyColumns = 60
+  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'vscode' })
+  const row = await rowText(ui, 'T-635')
+  expect(row).toContain('…')
+  expect(row).toMatch(/… · \[bug\]$/)
+  expect(row.length).toBeLessThanOrEqual(vsRowRoom(bodyColumns))
+  // more than the old 1.8 room gave
+  expect(row.length).toBeGreaterThan(Math.floor(bodyColumns * 1.8))
+  const box = (await ui.find({ key: 'vs-task-T-635' })) as Node
+  expect(box.children!.filter(n => n && typeof n === 'object').length).toBe(1)
+  // the Questions-for-you row uses the same room
+  const q = await rowText(ui, 'Q-9')
+  expect(q).toContain('…')
+  expect(q.length).toBeLessThanOrEqual(vsRowRoom(bodyColumns))
+  expect(q.length).toBeGreaterThan(Math.floor(bodyColumns * 1.8))
   await ui.unmount()
 })

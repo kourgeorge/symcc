@@ -1053,7 +1053,7 @@ function scoutsViewFile(): ViewFile {
       { run: { started: '2026-11-19T10:45:00.000Z', ended: '2026-11-19T10:50:00.000Z', outcome: 'nothing' as const, findings: 0 }, tasks: [] },
     ],
   }
-  return { ...f, view: { ...f.view, scouts, scout_runs, notify_choices: ['off', 'sound'], notify: 'sound' } }
+  return { ...f, view: { ...f.view, scouts, scout_runs, notify_choices: ['voice', 'sound 1', 'sound 2', 'sound 3', 'off'], notify: 'sound 2' } }
 }
 
 test('T-559: the Scouts tab lists the scouts from view.json, a scout\'s page shows its prompt and runs, a run its report; the Settings tab shows every setting in its group with its value and default', () => {
@@ -1114,10 +1114,11 @@ test('T-559: the Scouts tab lists the scouts from view.json, a scout\'s page sho
   expect(s.find(l => /^› /.test(l))).toContain('mode')
   expect(settings.ids.slice(0, 2)).toEqual(['settings-group:Work', 'mode'])
   expect(settings.ids).toContain('notify')
-  // T-650: the sound set row, right after notify, with the set in use
-  expect(settings.ids[settings.ids.indexOf('notify') + 1]).toBe('sound_set')
-  expect(s.find(l => l.includes('sound_set'))).toMatch(/sound_set +\d · default picked from the project name · 1 \/ 2 \/ 3/)
-  expect(panelLines({ ...f, view: { ...f.view, sound_set: 3 } as typeof f.view }, { tab: 'settings', opened: '', cursor: 1, settingsOpen: ALL_GROUPS }, NOW, 140).lines.map(lineText).find(l => l.includes('sound_set'))).toMatch(/sound_set +3 · /)
+  // T-695: one notify row holds the sound set (voice / sound 1 / sound 2 / sound 3 / off); no sound_set row
+  expect(settings.ids.includes('sound_set' as never)).toBe(false)
+  expect(s.some(l => l.includes('sound_set'))).toBe(false)
+  expect(s.find(l => /notify +sound/.test(l))).toMatch(/notify +sound 2 · default voice .*· voice \/ sound 1 \/ sound 2 \/ sound 3/)
+  expect(settings.ids[settings.ids.indexOf('notify') + 1]).toBe('open_on_start')
   expect(settings.hits[s.findIndex(l => l.includes('max_minutes'))]).toEqual({ setting: 'max_minutes' })
   expect(panelKeys(f, '', 'settings').map(k => k.word)).toEqual(['change', 'move', 'views', 'back'])
   // the footer is core's settingsKeys, as Claude Code's: on a group heading Enter opens or closes it (T-584)
@@ -1139,6 +1140,7 @@ test('T-559: startTui: t, s and c switch tabs (a click on a tab too); on a scout
   const sent: { sessionID: string; name: string; text: string }[] = []
   const slots: { append: string; render: (input: never) => unknown }[] = []
   const answers = { prompt: '7' as string | undefined, select: 'review' as string | undefined }
+  const picks: string[][] = []
   const ctx: TuiContext = {
     location: { directory: '/work/proj' },
     theme: {},
@@ -1147,7 +1149,7 @@ test('T-559: startTui: t, s and c switch tabs (a click on a tab too); on a scout
     keymap: { layer: () => undefined },
     ui: {
       toast: { show: () => undefined },
-      dialog: { prompt: async () => answers.prompt, select: async <V,>() => answers.select as V | undefined },
+      dialog: { prompt: async () => answers.prompt, select: async <V,>(o: { readonly options: readonly { readonly value: V }[] }) => (picks.push(o.options.map(x => String(x.value))), answers.select as V | undefined) },
       panel: { open: () => true, close: () => undefined, current: () => undefined },
       slot: claim => (slots.push(claim as never), () => undefined),
     },
@@ -1207,6 +1209,14 @@ test('T-559: startTui: t, s and c switch tabs (a click on a tab too); on a scout
     { sessionID: 'ses_1', name: 'symcc-settings', text: 'max_parallel 7' },
     { sessionID: 'ses_1', name: 'symcc-settings', text: 'checker on' },
   ])
+  // T-695: notify is picked from the five choices, sound set included
+  ;(rowEls(panel).find(r => r.text.includes('▸ Board and alerts'))!.el.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0 })
+  answers.select = 'sound 3'
+  const notifyRow = rowEls(panel).find(r => /notify +sound 2/.test(r.text))!
+  ;(notifyRow.el.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0 })
+  await new Promise<void>(res => setTimeout(res, 0))
+  expect(picks.at(-1)).toEqual(['voice', 'sound 1', 'sound 2', 'sound 3', 'off'])
+  expect(sent.at(-1)).toEqual({ sessionID: 'ses_1', name: 'symcc-settings', text: 'notify sound 3' })
   // a click on the Tasks tab goes back to the task list; t does too
   const tabSeg = rowEls(panel).find(r => r.text.includes('[c]: Settings'))!.segs.find(s => s.kids.join('').includes('Tasks'))!
   ;(tabSeg.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0 })

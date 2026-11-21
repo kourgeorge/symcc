@@ -6,7 +6,7 @@ test('settingChoices gives the pick list of each kind of setting, [] for on/off 
   expect(settingChoices('scout_findings')).toEqual([...SCOUT_FINDINGS_CHOICES])
   expect(settingChoices('tests_with_changes')).toEqual([...TESTS_WITH_CHANGES_CHOICES])
   // notify: only what this machine can play, off when it can play nothing (or nothing is known)
-  expect(settingChoices('notify', ['off', 'sound'])).toEqual(['off', 'sound'])
+  expect(settingChoices('notify', ['sound 1', 'sound 2', 'sound 3', 'off'])).toEqual(['sound 1', 'sound 2', 'sound 3', 'off'])
   expect(settingChoices('notify', [])).toEqual(['off'])
   expect(settingChoices('notify')).toEqual(['off'])
   expect(settingChoices('enabled')).toEqual([])
@@ -18,9 +18,9 @@ test('settingChoices gives the pick list of each kind of setting, [] for on/off 
 })
 
 test('cantPlayNotify is true only when notify is set to something this machine does not list', () => {
-  expect(cantPlayNotify({ notify: 'sound', notify_choices: ['off'] })).toBe(true)
-  expect(cantPlayNotify({ notify: 'sound', notify_choices: ['off', 'sound'] })).toBe(false)
-  expect(cantPlayNotify({ notify: 'sound' })).toBe(false)
+  expect(cantPlayNotify({ notify: 'sound 2', notify_choices: ['off'] })).toBe(true)
+  expect(cantPlayNotify({ notify: 'sound 2', notify_choices: ['sound 1', 'sound 2', 'sound 3', 'off'] })).toBe(false)
+  expect(cantPlayNotify({ notify: 'sound 2' })).toBe(false)
   expect(cantPlayNotify({ notify_choices: ['off'] })).toBe(false)
   expect(cantPlayNotify({})).toBe(false)
 })

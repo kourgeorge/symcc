@@ -180,10 +180,12 @@ export const tabLabel = (t: Pick<VsTab, 'label' | 'count'>) => (t.count === unde
  * a link, the others links (a press switches the page). No Buttons: VS Code draws those as filled blue boxes.
  */
 export function vsTabs(k: VsKit, tabs: VsTab[]): RenderChildren {
-  const { Box } = k
+  const { Box, Text, C, width } = k
   const text = tabs.map(t => (t.active ? `**${mdText(tabLabel(t))}**` : mdLink(tabLabel(t), vsHref('tab', t.which)))).join(' \u00a0·\u00a0 ')
   return (
     <Box key="tabs-row" flexDirection="column" marginTop={1}>
+      {/* T-698: a thin rule (the footer's look) between the header and the tabs */}
+      <Text key="tabs-rule" wrap="truncate" color={C('subtle')}>{footerRule(width)}</Text>
       {vsLink(k, 'tabs', text, tabs.filter(t => !t.active).map(t => [vsHref('tab', t.which), t.onPress]))}
     </Box>
   )
@@ -280,16 +282,6 @@ export function vsSection(k: VsKit, key: string, label: string): RenderChildren 
   return (
     <Text key={key} wrap="wrap" bold color={C('suggestion')}>
       {label}
-    </Text>
-  )
-}
-
-/** Small dim tags in VS Code, on one line that wraps between them ("feature · worker · try 2 · 40m"). */
-export function vsTags(k: VsKit, key: string, tags: string[]): RenderChildren {
-  const { Text, C } = k
-  return (
-    <Text key={key} wrap="wrap" size="caption" color={C('inactive')}>
-      {tags.join(' · ')}
     </Text>
   )
 }

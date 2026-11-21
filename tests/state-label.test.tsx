@@ -36,7 +36,8 @@ test('the task page on the terminal and in VS Code shows the state line as "Now:
   seedRich(on, 'T-502')
   expect(RICH_TASKS.find(x => x.id === 'T-502')?.note).toBe(NOTE)
   const vs = await $.ui.mount({ ...PANE, surface: 'vscode' })
-  expect(await vs.find({ type: 'Text', text: `${STATE_LABEL}: ${NOTE}` })).toBeDefined()
+  // the Now row of the Details grid (T-699): its label, then the note
+  expect((await vs.find({ key: 'vs-row-now' }))?.text).toBe(`${STATE_LABEL}${NOTE}`)
   expect(await vs.find({ type: 'Text', text: /^Note: / })).toBeUndefined()
   await vs.unmount()
   const term = await $.ui.mount({ ...PANE, surface: 'terminal' })

@@ -34,7 +34,7 @@ export const SCOUTS = [
 /** The board view with the scouts above and settings that differ from the defaults. */
 export const SCOUTS_VIEW = {
   shape: 'view-1',
-  value: { ...BOARD_VIEW.value, scouts: SCOUTS, notify: 'sound', sound_set: 2, notify_choices: ['off', 'sound', 'voice'], scout_findings: 'backlog', max_parallel: 2 },
+  value: { ...BOARD_VIEW.value, scouts: SCOUTS, notify: 'sound 2', notify_choices: ['voice', 'sound 1', 'sound 2', 'sound 3', 'off'], scout_findings: 'backlog', max_parallel: 2 },
 }
 
 /** Seeds the board with the scouts and settings, on tab `tab` ('scouts' or 'settings'), scout `scout` open ('' none);

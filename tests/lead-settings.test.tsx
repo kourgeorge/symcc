@@ -36,12 +36,12 @@ const call = async ($: { tool: { call(a: never): Promise<unknown> } }, args: Rec
 }
 
 test('settings with no params lists every setting with its value and default, incl. notify', async ($, on) => {
-  setup(on, { tasks: [], max_parallel: 5, notify: 'sound', test_commands: ['npm test'] })
+  setup(on, { tasks: [], max_parallel: 5, notify: 'sound 1', test_commands: ['npm test'] })
   const out = await call($, {})
   for (const name of ['mode', 'test_commands', 'max_parallel', 'max_minutes', 'auto_retries', 'archive_days', 'open_on_start', 'notify', 'enabled']) expect(out).toMatch(new RegExp(`^${name}: `, 'm'))
   expect(out).toContain('max_parallel: 5 (default 3')
   expect(out).toContain('test_commands: npm test (default none')
-  expect(out).toMatch(/^notify: sound \(default .*this machine can play: off/m)
+  expect(out).toMatch(/^notify: sound 1 \(default .*this machine can play: /m)
   expect(out).not.toContain('nothing changed')
 })
 

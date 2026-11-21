@@ -1084,7 +1084,7 @@ test('the Tasks / Scouts tabs sit in the header, above the line, in both views',
 })
 
 test('"c" and the Settings tab show one row per setting, with value, default and range', async ($, on) => {
-  stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'Build it')], working: [], scouts: [], mode: 'review', test_commands: ['npm test'], branch: 'main', max_parallel: 5, max_minutes: 45, auto_retries: 2, open_on_start: true, notify: 'off', notify_choices: ['off', 'sound'] } } })
+  stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'Build it')], working: [], scouts: [], mode: 'review', test_commands: ['npm test'], branch: 'main', max_parallel: 5, max_minutes: 45, auto_retries: 2, open_on_start: true, notify: 'off', notify_choices: ['sound 1', 'sound 2', 'sound 3', 'off'] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   const settingsTab = await ui.find({ key: 'tab-settings' })
   expect(settingsTab?.props.hotkey).toBeUndefined()
@@ -1101,7 +1101,7 @@ test('"c" and the Settings tab show one row per setting, with value, default and
   expect(tasksTab?.props.color).toBe('inactive')
   for (const g of SETTING_GROUPS) await ui.press({ key: `group:${g.title}` })
   const keys = (await ui.findAll({ type: 'Button' })).map(r => String(r.props.key)).filter(k => k.startsWith('setting:'))
-  expect(keys).toEqual(['mode', 'max_parallel', 'max_minutes', 'auto_retries', 'enabled', 'test_commands', 'test_minutes', 'tests_with_changes', 'checker', 'scout_findings', 'notify', 'sound_set', 'open_on_start', 'archive_days'].map(n => `setting:${n}`))
+  expect(keys).toEqual(['mode', 'max_parallel', 'max_minutes', 'auto_retries', 'enabled', 'test_commands', 'test_minutes', 'tests_with_changes', 'checker', 'scout_findings', 'notify', 'open_on_start', 'archive_days'].map(n => `setting:${n}`))
   expect(await ui.find({ type: 'Text', text: /^ npm test$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /^ 5$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /default 3 · 1-8 · how many workers run at once/ })).toBeDefined()
@@ -1122,8 +1122,10 @@ test('"c" and the Settings tab show one row per setting, with value, default and
   expect(await ui.find({ key: 'pick:paused' })).toBeUndefined()
   // notify: a pick list of only what this machine can play (here no speech program: no voice)
   await ui.press({ key: 'setting:notify' })
+  // T-695: one notify row holds the sound set too: sound 1 / sound 2 / sound 3, and off
   expect(await ui.find({ key: 'pick:off' })).toBeDefined()
-  expect(await ui.find({ key: 'pick:sound' })).toBeDefined()
+  for (const n of [1, 2, 3]) expect(await ui.find({ key: `pick:sound ${n}` })).toBeDefined()
+  expect(await ui.find({ key: 'pick:sound' })).toBeUndefined()
   expect(await ui.find({ key: 'pick:voice' })).toBeUndefined()
   await ui.press({ key: 'setting-cancel' })
   // "t" goes back to the tasks
@@ -1150,7 +1152,7 @@ test('Settings groups its rows under 5 headings, in order; with every group open
     'Checks before merging': ['test_commands', 'test_minutes', 'tests_with_changes', 'checker'],
     Workers: ['Roles', 'Kinds'],
     Scouts: ['scout_findings'],
-    'Board and alerts': ['notify', 'sound_set', 'open_on_start', 'archive_days'],
+    'Board and alerts': ['notify', 'open_on_start', 'archive_days'],
   }
   titles.forEach((t, i) => {
     const from = at[i]!

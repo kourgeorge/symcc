@@ -758,7 +758,7 @@ are about changes; under "How tasks ended" a read investigation shows as
     is refused), `tests_with_changes`, `checker`
   - **Workers**: the **Roles**, **Kinds** and org-mem rows
   - **Scouts**: `scout_findings`
-  - **Board and alerts**: `notify`, `sound_set`, `open_on_start`, `archive_days`
+  - **Board and alerts**: `notify`, `open_on_start`, `archive_days`
 
   Each heading is a group you open and close with Enter (→/← do not, since the panel's
   buttons only get Enter and letter or digit keys). When the page opens, all groups
@@ -796,12 +796,13 @@ are about changes; under "How tasks ended" a read investigation shows as
   (`n`) asks for a name, makes `.symcc/roles/<name>.md` from a short template and opens it
   in the edit page. All of it uses the same checks as the lead's `roles` tool (see
   [Worker roles](#worker-roles)), and a toast says what changed.
-- Typed form: `/symcc-settings max_parallel 5`, `/symcc-settings notify sound`,
+- Typed form: `/symcc-settings max_parallel 5`, `/symcc-settings notify sound 2`,
   `/symcc-settings mode review`, `/symcc-settings test_commands "npm test"`. A wrong name
   or value says why, e.g. `max_parallel must be a whole number, 1-8`.
-- `notify` is `off`, `sound` (a short chime) or `voice` ("symcc: T-3 done", "my app: T-5 needs you"
-  out loud: the project folder's name comes first, with dashes, underscores and dots said as
-  spaces, and only its first three words when it is long). A new board uses `voice` where this computer can speak, else `sound`, else `off`.
+- `notify` is `voice` ("symcc: T-3 done", "my app: T-5 needs you" out loud: the project folder's name comes
+  first, with dashes, underscores and dots said as spaces, and only its first three words when it is long),
+  `sound 1`, `sound 2` or `sound 3` (a short chime from that sound set), or `off`. A new board uses `voice` where
+  this computer can speak, else `sound N` with N picked from the project folder's name, else `off`.
   Once per session symcc checks which programs exist (without playing anything): on macOS
   `say` for voice and `afplay` with the built-in sounds for sound; on Linux `spd-say`,
   `espeak-ng` or `espeak` for voice and `paplay` (freedesktop sounds), `canberra-gtk-play`
@@ -811,10 +812,11 @@ are about changes; under "How tasks ended" a read investigation shows as
   `/symcc-settings` and from the lead. If the saved choice can't play on this computer (the
   board was set on another one), you are told once and nothing plays; the setting is kept.
   Task text is always passed to these programs as a plain argument, never as shell code.
-- `sound_set` (1, 2 or 3) picks which chimes `sound` plays, so you can tell which project chimed: each set has its own
-  "done" and "needs you" chime (macOS: Glass / Ping, Hero / Pop, Submarine / Funk; Linux and Windows use other system sounds,
-  and a sound missing on this computer falls back to set 1's). Unset, it is picked from the project folder's name, so two
-  projects usually differ with no setup; the Settings page shows the one in use, and picking one there plays its chime.
+- The three sounds let you tell which project chimed: each set has its own "done" and "needs you" chime
+  (macOS: `sound 1` Glass / Ping, `sound 2` Hero / Pop, `sound 3` Submarine / Funk; Linux and Windows use other
+  system sounds, and a sound missing on this computer falls back to set 1's). The default set comes from the project
+  folder's name, so two projects usually differ with no setup; picking a sound on the Settings page plays its chime.
+  (There used to be a separate `sound_set` setting; an old board with `notify` `sound` is read as `sound N` once.)
 - Panel keys: `a` approve, `x` reject or drop, `d` changes, `p` pause, `u` resume,
   `r` retry, `m` switch review / auto, `f` search the tasks, `n` needs review, `1`-`9` a try's report on the task
   page, `t` / `s` / `c` switch views, `b` back.

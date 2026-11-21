@@ -372,11 +372,11 @@ test('a merged task is said out loud, several are joined into one line, and noti
   // a new board saves no choice: the best this machine can play
   expect(b.notify).toBeUndefined()
   expect(notifyOf(b, { voice: true, sound: true })).toBe('voice')
-  expect(notifyOf(b, { voice: false, sound: true })).toBe('sound')
+  expect(notifyOf(b, { voice: false, sound: true }, '/x/web')).toBe('sound 2')
   expect(notifyOf(b, { voice: false, sound: false })).toBe('off')
   expect(bestNotify({ voice: true, sound: false })).toBe('voice')
   // a saved choice is kept, even where it can't play
-  expect(notifyOf({ notify: 'sound' }, { voice: true, sound: true })).toBe('sound')
+  expect(notifyOf({ notify: 'sound 1' }, { voice: true, sound: true })).toBe('sound 1')
   expect(notifyOf({ notify: 'voice' }, { voice: false, sound: false })).toBe('voice')
   expect(notifyOf(parseBoard(JSON.stringify({ ...b, notify: 'off' })))).toBe('off')
   // a bad value is set back to the default (none saved)
@@ -388,15 +388,15 @@ test("a notify choice this machine can't play is refused with the reason, and a 
   const other: Playable = { system: 'other', sound: false, voice: false }
   const mac: Playable = { system: 'mac', sound: true, voice: true }
   const windows: Playable = { system: 'windows', sound: false, voice: false }
-  expect(notifyChoices(linux)).toEqual(['off', 'sound'])
+  expect(notifyChoices(linux)).toEqual(['sound 1', 'sound 2', 'sound 3', 'off'])
   expect(notifyChoices(other)).toEqual(['off'])
-  expect(notifyChoices(mac)).toEqual(['off', 'sound', 'voice'])
+  expect(notifyChoices(mac)).toEqual(['voice', 'sound 1', 'sound 2', 'sound 3', 'off'])
   expect(notifyRefusal('voice', linux)).toBe("voice isn't available here: no speech program found (install espeak or speech-dispatcher)")
-  expect(notifyRefusal('sound', linux)).toBe('')
+  expect(notifyRefusal('sound 2', linux)).toBe('')
   expect(notifyRefusal('off', other)).toBe('')
-  expect(notifyRefusal('sound', windows)).toContain("sound isn't available here: no sound player found")
+  expect(notifyRefusal('sound 3', windows)).toContain("sound 3 isn't available here: no sound player found")
   expect(unplayableNote('voice', linux)).toBe("notify is 'voice' but no speech program was found here; nothing will play")
-  expect(unplayableNote('sound', linux)).toBe('')
+  expect(unplayableNote('sound 1', linux)).toBe('')
   expect(unplayableNote('off', other)).toBe('')
 })
 
@@ -1792,7 +1792,7 @@ test('setup leaves secrets and big files out of the first commit', async () => {
 test('/symcc-settings: no words opens the view; NAME VALUE sets one setting; bad names and values say why', () => {
   expect(parseCommand('symcc-settings', '')).toEqual({ kind: 'settings' })
   expect(parseCommand('symcc-settings', 'max_parallel 5')).toEqual({ kind: 'set', setting: 'max_parallel', input: { max_parallel: 5 } })
-  expect(parseCommand('symcc-settings', 'notify sound')).toEqual({ kind: 'set', setting: 'notify', input: { notify: 'sound' } })
+  expect(parseCommand('symcc-settings', 'notify sound 2')).toEqual({ kind: 'set', setting: 'notify', input: { notify: 'sound 2' } })
   expect(parseCommand('symcc-settings', 'notify Off')).toEqual({ kind: 'set', setting: 'notify', input: { notify: 'off' } })
   expect(parseCommand('symcc-settings', 'open_on_start on')).toEqual({ kind: 'set', setting: 'open_on_start', input: { open_on_start: true } })
   expect(parseCommand('symcc-settings', 'mode review')).toEqual({ kind: 'set', setting: 'mode', input: { mode: 'review' } })
@@ -1804,10 +1804,10 @@ test('/symcc-settings: no words opens the view; NAME VALUE sets one setting; bad
     const c = parseCommand('symcc-settings', args)
     return c?.kind === 'bad' ? c.message : ''
   }
-  expect(bad('x 1')).toBe('There is no setting called x; settings are: test_commands, test_minutes, max_parallel, max_minutes, auto_retries, archive_days, open_on_start, notify, sound_set, scout_findings, tests_with_changes, checker, mode, enabled')
+  expect(bad('x 1')).toBe('There is no setting called x; settings are: test_commands, test_minutes, max_parallel, max_minutes, auto_retries, archive_days, open_on_start, notify, scout_findings, tests_with_changes, checker, mode, enabled')
   expect(bad('max_parallel lots')).toBe('max_parallel must be a whole number, 1-8')
   expect(bad('max_parallel')).toContain('/symcc-settings max_parallel <1-8>')
-  expect(bad('notify loud')).toBe('notify must be off, sound or voice')
+  expect(bad('notify loud')).toBe('notify must be voice, sound 1, sound 2, sound 3 or off')
   expect(bad('open_on_start maybe')).toBe('open_on_start must be on or off')
   expect(bad('mode later')).toBe('mode must be paused, review or auto')
   expect(parseSettingValue('max_minutes', '90')).toEqual({ ok: true, input: { max_minutes: 90 } })
@@ -1927,7 +1927,7 @@ test('settings keep their limits, and a value cut to its limit says so', () => {
 })
 
 test('every setting has a row: value, default, range and meaning', () => {
-  expect(SETTINGS.map(s => s.name)).toEqual(['test_commands', 'test_minutes', 'max_parallel', 'max_minutes', 'auto_retries', 'archive_days', 'open_on_start', 'notify', 'sound_set', 'scout_findings', 'tests_with_changes', 'checker', 'mode', 'enabled'])
+  expect(SETTINGS.map(s => s.name)).toEqual(['test_commands', 'test_minutes', 'max_parallel', 'max_minutes', 'auto_retries', 'archive_days', 'open_on_start', 'notify', 'scout_findings', 'tests_with_changes', 'checker', 'mode', 'enabled'])
   const b = { ...emptyBoard(), test_commands: ['npm test', 'npm run lint'], notify: 'off' as const }
   expect(settingValue(b, 'test_commands')).toBe('["npm test","npm run lint"]')
   expect(settingValue(b, 'notify')).toBe('off')
