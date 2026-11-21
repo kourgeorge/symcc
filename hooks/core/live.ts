@@ -230,6 +230,38 @@ export function liveHeader(view: LiveView, lanes: readonly LiveLane[]): string {
   return `${modeLabel(modeOf(view))} · agents ${lanes.filter(l => l.agent).length}/${max} busy`
 }
 
+/** T-770: a scout run going now (started, not queued for a slot): its name and when it started (ms). */
+export type LiveScoutRun = { name: string; since: number }
+/** T-770: the mark in front of the running scouts at the end of the mode line, drawn in the scout color. */
+export const LIVE_SCOUT_MARK = '⌕'
+/** What goes between the mode line and the scout mark. */
+export const LIVE_SCOUT_GAP = ' · '
+
+/**
+ * T-770: the scout mark at the end of the Live tab's mode line ("⌕ gaps-bot 4m, board-review 1m"), or null when no
+ * scout runs. `room`: the columns left after the mode line. The names and times when they fit (oldest run first),
+ * else "⌕ 3 scouts", else "⌕ 3", else nothing. `text` is what comes after the mark (with its leading space), drawn dim.
+ */
+export function liveScoutMark(runs: readonly LiveScoutRun[] | undefined, nowMs: number, room = Infinity): { gap: string; mark: string; text: string } | null {
+  const list = (Array.isArray(runs) ? runs : []).filter(r => r && typeof r.name === 'string' && Number.isFinite(r.since)).slice().sort((a, b) => a.since - b.since)
+  if (!list.length) return null
+  const n = list.length
+  const forms = [list.map(r => `${r.name} ${fmtDuration(nowMs - r.since)}`).join(', '), `${n} scout${n === 1 ? '' : 's'}`, `${n}`]
+  for (const f of forms) {
+    const text = ` ${f}`
+    if (textWidth(LIVE_SCOUT_GAP + LIVE_SCOUT_MARK + text) <= room) return { gap: LIVE_SCOUT_GAP, mark: LIVE_SCOUT_MARK, text }
+  }
+  return null
+}
+
+/** T-770: the mode line with its scout mark as segments, within `width` columns: the line ('text'), then the gap
+ *  ('text'), the mark ('scouts') and the names ('dim') while scouts run. */
+export function liveHeaderSegs(view: LiveView & { scouts_running?: readonly LiveScoutRun[] }, lanes: readonly LiveLane[], nowMs: number, width = Infinity): LiveSeg[] {
+  const head = liveHeader(view, lanes)
+  const m = liveScoutMark(view.scouts_running, nowMs, width - textWidth(head))
+  return [{ text: head, tone: 'text' }, ...(m ? [{ text: m.gap, tone: 'text' as const }, { text: m.mark, tone: 'scouts' as const }, { text: m.text, tone: 'dim' as const }] : [])]
+}
+
 /** The current station's mark on redraw number `frame`: ◉ and ◎ in turn; always ◉ when `steady` (reduced motion). */
 export const liveBlink = (frame: number, steady = false): string => (steady || frame % 2 === 0 ? '◉' : '◎')
 

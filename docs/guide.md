@@ -1104,7 +1104,12 @@ indented by 1 space (VS Code shows the same names as bold headings):
   branch yet) the section isn't shown. VS Code draws it with real lines, and OpenCode shows the
   same section.
 - The header line says the board mode and `agents N/M busy` (workers and checkers running
-  against `max_parallel`). Under the `▍Today` heading, three lines about today:
+  against `max_parallel`). While a scout runs, a small mark goes at the end of that line: `⌕`
+  in the scout color, then each running scout's name and how long it has run, dim
+  (`⏵ auto · agents 2/3 busy · ⌕ gaps-bot 4m, board-review 1m`). When the names don't fit, it
+  says `⌕ 3 scouts`, and on a very narrow panel just `⌕ 3`. A scout still waiting to start
+  isn't shown, and with no scout running there is no mark. A click on it (or the `s` key)
+  opens the Scouts tab; this works on every board. Under the `▍Today` heading, three lines about today:
 
   ```
   ▍Today
