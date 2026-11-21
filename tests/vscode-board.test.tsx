@@ -6,10 +6,10 @@ import { PANE, BOARD_TASKS, BOARD_VIEW, T0, seedBoard, drawnData, changedTree } 
 import { BEFORE, BEFORE_DROPPED } from './board-snapshot'
 import { plainLabel, CLICK_HINT } from '../hooks/claude/ui/surface'
 import { shortTests, logoWidthFor, twoLines, MORE, vsHref, mdText, mdLink } from '../hooks/claude/ui/vscode'
-import { ASK_LEAD, ASK_LEAD_DRAFT, fitRow, vsRowRoom, VS_ROW_SCALE, NEEDS_YOU_OTHER } from '../hooks/claude/ui/vscode-list'
+import { ASK_LEAD, ASK_LEAD_DRAFT, vsFit, vsRowRoom, VS_ROW_SCALE, NEEDS_YOU_OTHER } from '../hooks/claude/ui/vscode-list'
 import { drawNow } from '../hooks/claude/ui/now'
 import { mayMove } from '../hooks/core/logo'
-import { modeLabel, MODE_MEANING, panelSections } from '../hooks/board'
+import { modeLabel, MODE_MEANING, panelSections, fitRow } from '../hooks/board'
 import { paneWidth, VS_WIDE } from '../hooks/claude/ui/parts'
 import { hist } from './history-fixture'
 
@@ -639,22 +639,22 @@ test('T-590: in VS Code each open task and question is one line: id, state, then
       expect(line, `${at} ${id}`).not.toContain('\n')
     }
     // doing, to do and waiting: id, state, title on the same line (T-644)
-    // the role tag goes first when narrow (whole at 63 now that no try "(2)" takes room, T-628; gone at 42)
-    expect(await rowText(ui, 'T-401'), at).toMatch(bodyColumns === 42 ? /^T-401 ▶ 2m\s+Show\S*( \S+)*…$/ : /^T-401 ▶ 2m\s+Show the.*… · \[investigation · researcher\]$/)
+    // the role tag is cut with "…" from its end when narrow, kept from its start (fitRow, T-702; gone at 42)
+    expect(await rowText(ui, 'T-401'), at).toMatch(bodyColumns === 42 ? /^T-401 ▶ 2m\s+Show[^·]*…$/ : bodyColumns === 63 ? /^T-401 ▶ 2m\s+Show the.*… · \[investigation · resear…$/ : /^T-401 ▶ 2m\s+Show the.*… · \[investigation · researcher\]$/)
     expect(await rowText(ui, 'T-406'), at).toMatch(/^T-406 ○\s+Write the guide/)
     expect(await rowText(ui, 'T-404'), at).toMatch(/^● T-404 \? waiting for 1m\s+Pick the/)
-    // a long title is cut with "…" and "waits for T-406" stays on the line
+    // a long title is cut with "…" and "waits for T-406 · feature" stays on the line (fitRow, T-702): whole at 80, cut
+    // from its end at 63; at 42 there is no room for both the title's floor and the end, so the end goes, as on the
+    // terminal list
     const line = await rowText(ui, 'T-578')
-    expect(line, at).toMatch(/^T-578 ○\s+Let.*… · waits for T-406/)
+    expect(line, at).toMatch(bodyColumns === 42 ? /^T-578 ○\s+Let[^·]*…$/ : bodyColumns === 63 ? /^T-578 ○\s+Let.*… · waits for T-406 · featu…$/ : /^T-578 ○\s+Let.*… · waits for T-406 · feature$/)
     expect(line.length, at).toBeLessThanOrEqual(bodyColumns)
-    // the kind comes after "waits for T-406" and is dropped whole first when the line is narrow, never cut mid-word
-    expect(line, at).toMatch(bodyColumns === 42 ? / · waits for T-406$/ : / · waits for T-406 · feature$/)
     const q = await rowText(ui, 'Q-3')
     expect(q, at).toMatch(bodyColumns === 42 ? /^● Q-3 \? 5m\s+Sh\S*( \S+)*…( · 2 choices)?$/ : /^● Q-3 \? 5m\s+Should the.*… · 2 choices$/)
     // never wider than the row: the title is cut (below its floor when it must) before the state part
     expect(q.length, at).toBeLessThanOrEqual(bodyColumns)
     for (const id of ['T-401', 'T-404', 'T-406']) expect((await rowText(ui, id)).length, `${at} ${id}`).toBeLessThanOrEqual(bodyColumns)
-    // a long failure reason takes about half the free room, cut at a word; the title keeps the rest
+    // a long failure reason: the title keeps its floor, the reason is cut with "…" (fitRow, T-702)
     const why = await rowText(ui, 'T-579')
     expect(why.length, at).toBeLessThanOrEqual(bodyColumns)
     expect(why, at).toMatch(/^● T-579 ✗ failed 1m ago\s+Let the.*…/)
@@ -662,7 +662,7 @@ test('T-590: in VS Code each open task and question is one line: id, state, then
       expect(why, at).toMatch(/… · bug · It failed: the\S*( \S+)*…$/)
       const shownWhy = why.split(' · bug · ')[1]!.replace(/…$/, '')
       const whole = `It failed: ${reason}`
-      expect(whole.startsWith(shownWhy) && whole.charAt(shownWhy.length) === ' ', at).toBe(true)
+      expect(whole.startsWith(shownWhy), at).toBe(true)
       const title = why.replace(/^● T-579 ✗ failed 1m ago\s+/, '').split(' · ')[0]!
       expect(title.length, at).toBeGreaterThan(16)
     }
@@ -674,58 +674,54 @@ test('T-590: in VS Code each open task and question is one line: id, state, then
   }
 })
 
-test('T-590: fitRow drops whole parts from the least important end, never cuts a word, caps a long text', () => {
+test('T-702: vsFit is the shared fitRow with one more lead column for " · ": a long title is cut, the row\'s end stays whole', () => {
   const long = 'Let the lead read every archived task and its whole history when the owner asks about old work from months ago'
-  const after = [{ text: 'after T-406', drop: 0 }, { text: 'feature', drop: 3 }]
-  // bodyColumns 40: T-578 leaves 33 columns; the kind goes, "after T-406" stays
-  expect(fitRow(long, 33, '○ to do', after)).toEqual({ title: 'Let the…', status: '○ to do', rest: 'after T-406' })
-  // room for all: the kind stays, after it
-  expect(fitRow(long, 60, '○ to do', after).rest).toBe('after T-406 · feature')
-  // a long reason at 74 columns: cut at a word to about half, the title gets the rest (more than its floor)
-  const why = 'x '.repeat(60).trim()
-  const fit = fitRow(long, 74, '✗ failed 1m ago', [{ text: 'bug', drop: 3 }, { text: why, drop: 1, long: true }])
-  expect(fit.title.length).toBeGreaterThan(16)
-  expect(fit.rest).toMatch(/^bug · (x )+x…$/)
-  expect(fit.title.length + 3 + 15 + 3 + fit.rest.length).toBeLessThanOrEqual(74)
-  // a question with choices: the choices count goes before the title is squeezed below its floor
-  expect(fitRow(long, 31, '? question for you for 5m', [{ text: '2 choices', drop: 2 }]).rest).toBe('')
+  for (const room of [42, 63, 80, 126]) {
+    for (const end of ['waits for T-690', '[feature]', 'waits for T-406 · feature', '']) {
+      const fit = vsFit(12, long, end, room)
+      const shared = fitRow(13, long, end, room)
+      expect(fit, `${room} ${end}`).toEqual({ title: shared.title, rest: shared.extra })
+      // never wider than the room: lead, title, " · " and the end
+      expect(12 + fit.title.length + (fit.rest ? 3 + fit.rest.length : 0), `${room} ${end}`).toBeLessThanOrEqual(room)
+    }
+  }
+  // room for the title's floor: the whole end stays, the title is cut with "…"
+  expect(vsFit(12, long, 'waits for T-690', 63)).toEqual({ title: `${long.slice(0, 32)}…`, rest: 'waits for T-690' })
+  expect(vsFit(12, long, '[feature]', 50).rest).toBe('[feature]')
+  // too narrow for the title's floor and a cut end: the end goes, the title takes the room
+  expect(vsFit(12, long, '[feature]', 42)).toEqual({ title: `${long.slice(0, 28)}…`, rest: '' })
+  // a failed task's reason (cutEnd): the whole title is kept when the reason still gets 12 columns
+  const reason = 'It failed: the tests still fail because of the old copy'
+  const failed = vsFit(12, 'Fix it', reason, 50, true)
+  expect(failed.title).toBe('Fix it')
+  expect(failed.rest).toBe(fitRow(13, 'Fix it', reason, 50, true).extra)
+  expect(failed.rest.endsWith('…')).toBe(true)
 })
 
-/** The width of a fitted row's one line, as taskRow draws it: title, " · " status, " · " rest (no try mark, T-628). */
-const fitWidth = (f: { title: string; status: string; rest: string }) => f.title.length + 3 + f.status.length + (f.rest ? 3 + f.rest.length : 0)
-
-test('T-590: fitRow never returns a line wider than its room; the role tag goes first', () => {
-  const title = 'Show the plugin version in the board title and the band above the prompt'
-  const role = () => [{ text: '', drop: 0 }, { text: '[investigation · researcher]', drop: 4, short: '[researcher]' }, { text: '', drop: 3 }]
-  // T-401 doing, kind investigation, role researcher, try 2: at bodyColumns 40 (room 33) and 60 (room 53)
-  for (const room of [33, 53, 20]) {
-    const fit = fitRow(title, room, '▶ 2m', role())
-    expect(fitWidth(fit), `room ${room}`).toBeLessThanOrEqual(room)
-    expect(fit.status, `room ${room}`).toBe('▶ 2m')
-    expect(fit.title.endsWith('…'), `room ${room}`).toBe(true)
+test('T-702: in VS Code a row waiting on another task says "waits for T-…" and a long-titled row keeps its whole end, as fitRow fits it', async ($, on) => {
+  const long = 'Board list: keep the row\'s end visible by cutting the title instead, so the owner sees what the task waits for'
+  const waits = { ...BOARD_TASKS.find(t => t.id === 'T-407')!, id: 'T-702', order: 702, title: long, after: ['T-406'] }
+  const tagged = { ...BOARD_TASKS.find(t => t.id === 'T-406')!, id: 'T-703', order: 703, kind: 'feature', title: long }
+  seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, tasks: [...BOARD_TASKS, waits, tagged] } } })
+  on('ui.toast', () => ({ value: undefined }))
+  for (const bodyColumns of [30, 40, 60]) {
+    const at = `columns ${bodyColumns}`
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'vscode' })
+    await ui.drawn()
+    for (const [id, end] of [['T-702', 'waits for T-406'], ['T-703', '[feature]']] as const) {
+      const line = await rowText(ui, id)
+      expect(line, `${at} ${id}`).not.toContain('after T-')
+      expect(line.endsWith(` · ${end}`), `${at} ${id}: ${line}`).toBe(true)
+      // the part before the title (id and state cell) is the lead; the rest is what fitRow gives for the same room
+      const title = line.slice(0, -` · ${end}`.length)
+      const lead = title.length - title.replace(/^T-70\d ○\s+/, '').length
+      const fit = fitRow(lead + 1, long, end, vsRowRoom(bodyColumns))
+      expect([title.slice(lead), end], `${at} ${id}`).toEqual([fit.title, fit.extra])
+      expect(fit.title.endsWith('…'), `${at} ${id}`).toBe(true)
+      expect(line.length, `${at} ${id}`).toBeLessThanOrEqual(vsRowRoom(bodyColumns))
+    }
+    await ui.unmount()
   }
-  // 14: the role goes and the title is cut below its floor; "▶ 2m" stays whole
-  const fourteen = fitRow(title, 14, '▶ 2m', role())
-  expect(fourteen).toEqual({ title: 'Show…', status: '▶ 2m', rest: '' })
-  expect(fitWidth(fourteen)).toBeLessThanOrEqual(14)
-  // 45: the role is shortened to "[researcher]" so the title keeps its floor; 33: the role is dropped whole
-  expect(fitRow(title, 53, '▶ 2m', role()).rest).toBe('[investigation · researcher]')
-  expect(fitRow(title, 45, '▶ 2m', role()).rest).toBe('[researcher]')
-  expect(fitRow(title, 33, '▶ 2m', role()).rest).toBe('')
-  expect(fitRow(title, 80, '▶ 2m', role()).rest).toBe('[investigation · researcher]')
-  // a long "after" list: "after T-1 +2", then the title goes below its floor before "after" is dropped
-  const after = [{ text: 'after T-401, T-402, T-403', drop: 0, short: 'after T-401 +2' }]
-  const narrow = fitRow(title, 30, '○ to do', after)
-  expect(narrow.rest).toBe('after T-401 +2')
-  expect(fitWidth(narrow)).toBeLessThanOrEqual(30)
-  // too narrow even for "…" and the status words: only the status words' end goes
-  const tiny = fitRow(title, 18, '? waiting for you for 5m', [])
-  expect(tiny).toEqual({ title: 'S…', status: '? waiting for', rest: '' })
-  expect(fitWidth(tiny)).toBeLessThanOrEqual(18)
-  // the question row at bodyColumns 40 (room 33): no wider than its room
-  const q = fitRow('Should the board open by itself when a session starts, or only when the owner asks for it?', 33, '? question for you for 5m', [{ text: '2 choices', drop: 2 }])
-  expect(fitWidth(q)).toBeLessThanOrEqual(33)
-  expect(q.status).toBe('? question for you for 5m')
 })
 
 test('T-590: a waiting question that starts with "after you …" is a normal long text, not an "after T-…" list', async ($, on) => {
@@ -740,12 +736,12 @@ test('T-590: a waiting question that starts with "after you …" is a normal lon
   expect(line).not.toContain('+')
   const [, status, after] = line.match(/^● T-404 (\? waiting for 1m)\s+(.*)$/) ?? []
   const [title, rest] = (after ?? '').split(' · ')
-  // the title keeps more than its 12-column floor; the question is capped and cut at a word
+  // the title keeps more than its 12-column floor; the question is cut with "…" (fitRow, T-702)
   expect(title!.length).toBeGreaterThan(12)
   expect(status).toMatch(/^\? waiting for 1m$/)
   expect(rest).toMatch(/…$/)
   const shown = rest!.replace(/…$/, '')
-  expect(question.startsWith(shown) && question.charAt(shown.length) === ' ').toBe(true)
+  expect(question.startsWith(shown)).toBe(true)
   await ui.unmount()
 })
 
