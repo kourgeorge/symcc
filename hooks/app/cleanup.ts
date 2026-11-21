@@ -1,7 +1,7 @@
 // Leftover and overtime cleanup for the regular check: stopping orphan agents after a reload, removing leftover
 // temp files, and a worker that runs over its time limit (ask the owner, wrap up, time out). Split out of
 // workers.ts (T-603); workers.ts's check() imports it, and it never imports workers.ts.
-import { type Board, type BoardTask, orphanMove, liveWorkersFor, putTask, find, patchTask, tryLabel, liveDriver, emptyBoard, leftoverTmpFiles, withHistory, endedBy, mergedThisTry, mergedDone, handedBack, timeLimitOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, shortSha } from '../board'
+import { type Board, type BoardTask, orphanMove, liveWorkersFor, putTask, find, patchTask, tryLabel, liveDriver, emptyBoard, leftoverTmpFiles, withHistory, endedBy, mergedThisTry, mergedDone, handedBack, timeLimitOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, shortSha, onRuns, restartedAgent, workerSince } from '../board'
 import { worktreeDir, taskBranch } from './git'
 import { alreadyMerged } from './review'
 import { S, workers, starting, finishing, stopped, isOwnAgent, halt, tmpWarned } from './state'
@@ -51,13 +51,16 @@ export async function stopOrphans(host: Host, leadNow?: string | null): Promise<
       const taken = [...workers.values()].map(w => w.task)
       const m = orphanMove(agentState(a), b, S.me, live, [...taken, ...starting, ...finishing], S.N.name)
       if (m.move === 'leave') continue
-      if (m.move === 'adopt') {
+      // T-743: an agent that worked on an earlier try, or on this try before a restart symcc did itself (a reopen), is
+      // never taken back for the try now running: a new worker starts (or started) for it, so only one works per try
+      const earlier = m.move === 'adopt' && formerWorker(find(b, m.task)!, a.id)
+      if (m.move === 'adopt' && !earlier) {
         const t = find(b, m.task)!
         // Its worker already handed back (the agent is only idle): nothing to track or stop. The
         // task's check is still running, or the regular check recovers it (done when merged).
         if (handedBack(t)) continue
-        const started = Date.parse(t.runs?.[t.runs.length - 1]?.started ?? '')
-        workers.set(a.id, { task: t.id, worktree: worktreeDir(t.id), branch: taskBranch(t), since: Number.isFinite(started) ? started : Date.now() })
+        // T-743: the time limit counts from this worker's own start, not the first start of a try that went on after a reopen
+        workers.set(a.id, { task: t.id, worktree: worktreeDir(t.id), branch: taskBranch(t), since: workerSince(t.runs?.at(-1)) ?? Date.now() })
         // The task is recorded as this session's, with this agent (its session id may have changed over the reload).
         if (t.agent !== a.id || t.session !== S.me) await change(host, x => (find(x, t.id)?.status === 'doing' && (find(x, t.id)?.agent ?? a.id) === a.id ? patchTask(x, t.id, { agent: a.id, session: S.me }, now()) : x)).catch((e: Error) => host.ui.toast(S.N.toast(`kept ${t.id}'s worker after a reload but couldn't record it on the board: ${String(e?.message ?? e).slice(0, 150)}`)))
         continue
@@ -75,6 +78,16 @@ export async function stopOrphans(host: Host, leadNow?: string | null): Promise<
     await host.clock.sleep(RELOAD_SETTLE_MS)
   }
   return out
+}
+
+/**
+ * T-743: whether agent `id` is a former worker of task `t`: named on an earlier try, or stopped on its current try by a
+ * restart symcc did itself; never while the task names it as the current try's worker.
+ */
+export function formerWorker(t: BoardTask, id: string): boolean {
+  const last = t.runs?.at(-1)
+  if (t.agent === id && (!last || last.agent === undefined || last.agent === id)) return false
+  return restartedAgent(last, id) || onRuns(t.runs?.slice(0, -1), id)
 }
 
 /** How long a fresh copy of the plugin waits before deciding a "doing" task's old worker is gone. */

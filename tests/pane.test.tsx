@@ -115,50 +115,58 @@ const BAND = {
   props: { hasSurvey: false, isWorking: false, maxRows: 8, bodyColumns: 80, scroll: { offset: 0, bodyRows: 8 }, view: {} },
 } as const
 
-test('the band above the prompt sums up the board and lists what needs you or is running', async ($, on) => {
+// T-748: the band shows the work and what needs you; the counts are gone (the status line has the board's facts)
+test('T-748: the band shows a row per running task, next up, what needs you and the button, but no count summary', async ($, on) => {
   on('state.get', () => ({
     value: {
-      value: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Parser'), task('T-2', 'waiting', 'Search mode', { question: 'Case-sensitive?' }), task('T-3', 'doing', 'Search command', { note: 'worker on it' }), task('T-4', 'todo', 'Docs')], working: [], scouts: [], mode: 'auto', test_commands: [] } },
+      value: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Parser'), task('T-2', 'waiting', 'Search mode', { question: 'Case-sensitive?' }), task('T-3', 'doing', 'Search command', { note: 'worker on it' }), task('T-4', 'todo', 'Docs'), task('T-5', 'todo', 'Later')], working: [], scouts: [scout('bugs')], mode: 'auto', max_parallel: 3, test_commands: [], driving: true } },
       version: 1,
     },
   }))
   on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...BAND, surface })
-    expect((await ui.find({ type: 'Text', text: new RegExp(`^${ICON} symcc$`, 'u') }))).toBeDefined()
-    expect((await ui.find({ type: 'Text', text: /1 doing · 1 to do · 1 waiting for you · 1 done/ }))).toBeDefined()
-    expect((await ui.find({ type: 'Text', text: /^T-2  \? waiting$/ }))).toBeDefined()
-    expect((await ui.find({ type: 'Text', text: /Case-sensitive/ }))).toBeDefined()
-    expect((await ui.find({ type: 'Text', text: /^T-3  ▶ {8}$/ }))).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /Docs/ })).toBeUndefined()
+    // the brand starts the first line; the rows line up after it
+    expect(await ui.find({ type: 'Text', text: new RegExp(`^${ICON} symcc  $`, 'u') })).toBeDefined()
+    // the running task: its stage's icon and name
+    expect(await ui.find({ type: 'Text', text: /^T-3  ▶ work {4}Search command/ })).toBeDefined()
+    // next up: only the next task to start
+    expect(await ui.find({ type: 'Text', text: /^T-4  ○ next up Docs$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /Later/ })).toBeUndefined()
+    // what needs you, in the warning color, with its question
+    const you = await ui.find({ type: 'Text', text: /^T-2  \? waiting $/ })
+    expect(you?.props.color).toBe('warning')
+    expect(await ui.find({ type: 'Text', text: /^T-2  \? waiting Search mode — Case-sensitive\?$/ })).toBeDefined()
+    // the button stays; no count summary, no mode, no scouts (the status line has them)
+    expect(await ui.find({ key: 'open-board' })).toBeDefined()
+    for (const gone of [/\d+ doing/, /\d+ to do/, /\d+ done/, /waiting for you/, /scouts?/, /workers/, /⏵ auto/]) expect(await ui.find({ type: 'Text', text: gone })).toBeUndefined()
     await ui.unmount()
   }
 })
 
-test('the band above the prompt shows the busy workers and the scouts; when narrow the "(next: …)" part goes first', async ($, on) => {
-  const soon = new Date(Date.now() + 38.2 * 60_000).toISOString()
-  on('state.get', () => ({
-    value: {
-      value: { shape: 'view-1', value: { tasks: [task('T-3', 'doing', 'Search command'), task('T-4', 'todo', 'Docs')], working: [], scouts: [scout('gaps-bot', { next_run: soon }), scout('bugs')], mode: 'auto', max_parallel: 3, test_commands: [], driving: true } },
-      version: 1,
-    },
-  }))
+test('T-748: the band lists the questions for you and the NEEDS YOU tasks in the warning color, and says when nothing runs', async ($, on) => {
+  const questions = [{ id: 'Q-71', text: 'Raise the version?', options: ['Yes', 'No'], asked_at: new Date().toISOString() }]
+  let tasks = [task('T-6', 'review', 'Ready one'), task('T-7', 'failed', 'Broke', { note: 'tests failed' }), task('T-1', 'done', 'Parser')]
+  on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [], questions, driving: true } }, version: 1 } }))
   on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
-  const wide = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 120 }, surface: 'terminal' })
-  expect(await wide.find({ type: 'Text', text: /⏵ auto · 1\/3 workers · 1 doing · 1 to do · 2 scouts \(next: gaps-bot in 38m\)/ })).toBeDefined()
-  await wide.unmount()
-  const narrow = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 90 }, surface: 'terminal' })
-  const t = await narrow.find({ type: 'Text', text: /1\/3 workers · 1 doing · 1 to do · 2 scouts $/ })
-  expect(t).toBeDefined()
-  expect(await narrow.find({ type: 'Text', text: /next:/ })).toBeUndefined()
-  await narrow.unmount()
-  // narrower still, the scouts go too; the workers stay
-  const tight = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 70 }, surface: 'terminal' })
-  expect(await tight.find({ type: 'Text', text: /1\/3 workers · 1 doing · 1 to do $/ })).toBeDefined()
-  await tight.unmount()
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  const q = await ui.find({ type: 'Text', text: /^⚠ 1 question for you: Q-71 Raise the version\?$/ })
+  expect(q?.props.color).toBe('warning')
+  expect((await ui.find({ type: 'Text', text: /^T-6  ◆ review $/ }))?.props.color).toBe('warning')
+  expect((await ui.find({ type: 'Text', text: /^T-7  ✗ failed $/ }))?.props.color).toBe('warning')
+  expect(await ui.find({ type: 'Text', text: /^T-7  ✗ failed Broke — / })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /next up/ })).toBeUndefined()
+  await ui.unmount()
+  // nothing runs, nothing is next and nothing needs you: the band says so, and keeps its button
+  tasks = [task('T-1', 'done', 'Parser')]
+  questions.length = 0
+  const idle = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  expect(await idle.find({ type: 'Text', text: /^nothing running$/ })).toBeDefined()
+  expect(await idle.find({ key: 'open-board' })).toBeDefined()
+  await idle.unmount()
 })
 
-// T-643: a session that doesn't drive: a yellow mark right after the brand, and a claimed doing task's row says it runs
+// T-643: a session that doesn't drive: a yellow warning row in the band, and a claimed doing task's row says it runs
 // in the other session (not "starting at the next turn", which never comes here); "it looks idle" after 5 minutes.
 test('T-643: the band of a session that does not drive has a yellow "driven by another session" mark and "runs in the other session" rows', async ($, on) => {
   const T0 = Date.parse('2026-03-02T10:00:00Z')
@@ -174,17 +182,17 @@ test('T-643: the band of a session that does not drive has a yellow "driven by a
     await ui.unmount()
     return all
   }
-  const mark = (all: Awaited<ReturnType<typeof band>>) => all.find(t => /^ ⚠ driven by another session/.test(String(t.text)))
+  const mark = (all: Awaited<ReturnType<typeof band>>) => all.find(t => /^⚠ driven by another session/.test(String(t.text)))
   let all = await band()
-  expect(mark(all)?.text).toBe(' ⚠ driven by another session')
+  expect(mark(all)?.text).toBe('⚠ driven by another session')
   expect(mark(all)?.props.color).toBe('warning')
   expect(all.some(t => t.text === ' — runs in the other session')).toBe(true)
   expect(all.some(t => /starting at the next turn/.test(String(t.text)))).toBe(false)
-  // still there when the band is narrow: it comes right after the brand
+  // still there when the band is narrow: it has its own row
   expect(mark(await band(50))).toBeDefined()
   // claimed 6 minutes ago and still not started there: it looks idle
   v = view(false, 6 * 60_000)
-  expect(mark(await band())?.text).toBe(' ⚠ driven by another session (it looks idle)')
+  expect(mark(await band())?.text).toBe('⚠ driven by another session (it looks idle)')
   // the driving session: no mark, and the row keeps its own note
   v = view(true, 60_000)
   all = await band()
@@ -192,7 +200,7 @@ test('T-643: the band of a session that does not drive has a yellow "driven by a
   expect(all.some(t => t.text === ' — starting at the next turn')).toBe(true)
 })
 
-test("the band's doing rows show the list's state and time, lined up, with the try from try 2 on (T-455)", async ($, on) => {
+test("T-748: a running row shows its stage's icon and name, the time in that stage and the try from try 2 on, lined up", async ($, on) => {
   const T0 = Date.parse('2026-03-02T10:00:00Z')
   const clock = mock.clock(on, { now: T0 })
   const iso = (ms: number) => new Date(ms).toISOString()
@@ -200,7 +208,7 @@ test("the band's doing rows show the list's state and time, lined up, with the t
   const tasks = [
     task('T-40', 'doing', 'Running worker', { note: 'worker on it', attempts: 1, runs: [{ started: iso(T0 - 12 * 60_000) }] }),
     task('T-41', 'doing', 'Being tested', { attempts: 1, runs: [{ started: iso(T0 - 20 * 60_000), ended: fresh }], checking: { step: 'testing', at: fresh } }),
-    task('T-42', 'doing', 'Being checked', { attempts: 2, runs: [{ started: iso(T0 - 20 * 60_000), ended: fresh }], checking: { step: 'prep', at: fresh } }),
+    task('T-42', 'doing', 'Being checked', { attempts: 2, runs: [{ started: iso(T0 - 20 * 60_000), ended: iso(T0 - 8 * 60_000) }], checking: { step: 'checker', at: fresh } }),
     task('T-43', 'doing', 'Being merged', { attempts: 1, runs: [{ started: iso(T0 - 20 * 60_000), ended: fresh }], checking: { step: 'merging', at: fresh } }),
     task('T-44', 'doing', 'Third try', { note: 'worker on it', attempts: 3, runs: [{ started: iso(T0 - 5 * 60_000) }] }),
   ]
@@ -208,24 +216,30 @@ test("the band's doing rows show the list's state and time, lined up, with the t
   on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   const row = (ui: TestMounted<"terminal", "AbovePrompt">, text: string) => ui.find({ type: 'Text', text: new RegExp(`^${esc(text)}$`, 'u') })
   const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 120 }, surface: 'terminal' })
-  // the same labels the board list gives (statusCell), fixed-width state and try columns
-  expect(tasks.map(t => statusCell(t as never, T0))).toEqual(['12m', 'test', 'prep', 'merge', '5m'])
-  // the row shows the total work time of all tries (T-557), a step row its step's icon in place of ▶ and the word: "⊛ 20m" (T-581)
-  // a later try "(n)" right after the time (T-604)
-  for (const text of ['T-40 ▶ 12m    ', 'T-41 ⊛ 20m    ', 'T-42 ✎ 20m (2)', 'T-43 ⇢ 20m    ', 'T-44 ▶ 5m  (3)']) expect(await row(ui, text)).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /try \d/ })).toBeUndefined()
+  // "⌕ checker 8m (try 2)": the checker started when the try handed back, 8 minutes ago
+  const states = ['T-40 ▶ work 12m', 'T-41 ⊛ test 10s', 'T-42 ⌕ checker 8m (try 2)', 'T-43 ⇢ merge 10s', 'T-44 ▶ work 5m (try 3)']
+  const fronts = states.map(x => `${x.padEnd(states[2]!.length)} `)
+  for (const text of fronts) expect(await row(ui, text), text).toBeDefined()
   // the titles start in one column
-  expect(await ui.find({ type: 'Text', text: /^T-40 ▶ 12m {5}Running worker$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: new RegExp(`^${esc(fronts[0]!)}Running worker$`, 'u') }), 'title column').toBeDefined()
   // no "doing" word and no "— worker on it" tail: the state says it
   expect(await ui.find({ type: 'Text', text: /^T-\d+ .*doing/ })).toBeUndefined()
   expect(await ui.find({ type: 'Text', text: /worker on it/ })).toBeUndefined()
-  // the rest of the band as before: the header line with the counts
-  expect(await ui.find({ type: 'Text', text: /5 doing/ })).toBeDefined()
   await ui.unmount()
+  // narrow: the time goes first, then the try, so the titles keep their room
+  const narrow = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 54 }, surface: 'terminal' })
+  expect(await narrow.find({ type: 'Text', text: /^T-42 ⌕ checker \(try 2\) Being checked$/ }), 'narrow 42').toBeDefined()
+  expect(await narrow.find({ type: 'Text', text: /^T-40 ▶ work {12}Running worker$/ }), 'narrow 40').toBeDefined()
+  expect(await narrow.find({ type: 'Text', text: /12m/ })).toBeUndefined()
+  await narrow.unmount()
+  const tight = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 48 }, surface: 'terminal' })
+  expect(await tight.find({ type: 'Text', text: /^T-42 ⌕ checker Being checked$/ }), 'tight').toBeDefined()
+  expect(await tight.find({ type: 'Text', text: /\(try/ })).toBeUndefined()
+  await tight.unmount()
   // the time follows the host clock
   await clock.set(T0 + 3 * 60_000)
   const later = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 120 }, surface: 'terminal' })
-  expect(await later.find({ type: 'Text', text: /^T-40 ▶ 15m +$/ })).toBeDefined()
+  expect(await later.find({ type: 'Text', text: /^T-40 ▶ work 15m +$/ }), 'later').toBeDefined()
   await later.unmount()
 })
 
@@ -241,10 +255,9 @@ test("T-542: the band shows symcc's own pre-merge step as \"prep\" with its plai
   on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [] } }, version: 1 } }))
   on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 160 }, surface: 'terminal' })
-  // the step's icon in place of ▶ and the word (T-581); the note still says the step
-  expect(await ui.find({ type: 'Text', text: new RegExp(`^T-50 ✎ 20m +Prep one — ${esc(PREP_NOTE)}`, 'u') })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: new RegExp(`^T-51 ⌕ 20m +Checked one — ${esc(CHECKER_NOTE)}`, 'u') })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /T-5\d [▶✎⌕] (prep|checker)/ })).toBeUndefined()
+  // the step's icon and its name; the note still says the step
+  expect(await ui.find({ type: 'Text', text: new RegExp(`^T-50 ✎ prep 10s +Prep one — ${esc(PREP_NOTE)}`, 'u') })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: new RegExp(`^T-51 ⌕ checker 10s +Checked one — ${esc(CHECKER_NOTE)}`, 'u') })).toBeDefined()
   await ui.unmount()
 })
 
@@ -260,18 +273,19 @@ test('T-648: a task in the queue shows ⧗ and one in the test step ⊛, on the 
   ]
   on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [] } }, version: 1 } }))
   on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
-  for (const where of [{ ...PANE, props: { ...PANE.props, bodyColumns: 160 } }, { ...BAND, props: { ...BAND.props, bodyColumns: 160 } }]) {
+  // the list's row is keyed by its id, with the total work time; the band's is one Text line, with the stage's name and time
+  const want = { pane: [/^T-71 ⧗ 20m +Queued one/, /^T-72 ⊛ 20m +Tested one/], band: [/^T-71 ⧗ queue 10s +Queued one/, /^T-72 ⊛ test 10s +Tested one/] }
+  for (const [name, where] of [['pane', { ...PANE, props: { ...PANE.props, bodyColumns: 160 } }], ['band', { ...BAND, props: { ...BAND.props, bodyColumns: 160 } }]] as const) {
     const ui = await $.ui.mount({ ...where, surface: 'terminal' } as never) as TestMounted<"terminal", "AbovePrompt">
-    // the list's row is keyed by its id; the band's is one Text line
     const line = async (id: string) => (await ui.find({ key: id }))?.text ?? (await ui.find({ type: 'Text', text: new RegExp(`^${id} `) }))?.text
-    expect(await line('T-71')).toMatch(/^T-71 ⧗ 20m +Queued one/)
-    expect(await line('T-72')).toMatch(/^T-72 ⊛ 20m +Tested one/)
+    expect(await line('T-71')).toMatch(want[name][0]!)
+    expect(await line('T-72')).toMatch(want[name][1]!)
     expect(await ui.find({ type: 'Text', text: /⋯/ })).toBeUndefined()
     await ui.unmount()
   }
 })
 
-test("every band row lines up in one title column, with the board list's short status for each state (T-461)", async ($, on) => {
+test("every band row lines up in one title column: running rows, then the rows that need you (T-461)", async ($, on) => {
   const T0 = Date.parse('2026-03-02T10:00:00Z')
   mock.clock(on, { now: T0 })
   const iso = (ms: number) => new Date(ms).toISOString()
@@ -285,17 +299,14 @@ test("every band row lines up in one title column, with the board list's short s
   on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [] } }, version: 1 } }))
   on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 120 }, surface: 'terminal' })
-  const leads = ['T-62 ▶ 12m    ', 'T-63 ▶ 3m  (2)', 'T-60 ? waiting', 'T-61 ◆ review ', 'T-59 ✗ failed ']
-  // each state is the list's own mark and short cell
-  expect(tasks.map(t => `${STATUS_MARK[t.status as SymccStatus]} ${statusCell(t as never, T0)}`)).toEqual(['▶ 12m', '▶ 3m', '? waiting', '◆ review', '✗ failed'])
+  const leads = ['T-62 ▶ work 12m        ', 'T-63 ▶ work 3m (try 2) ', 'T-60 ? waiting         ', 'T-61 ◆ review          ', 'T-59 ✗ failed          ']
   for (const lead of leads) expect(await ui.find({ type: 'Text', text: new RegExp(`^${esc(lead)}$`, 'u') })).toBeDefined()
   // so every title starts in the same column, right after a lead of one width
   expect(new Set(leads.map(l => l.length)).size).toBe(1)
   const titles = ['Run one', 'Run two', 'Wait one', 'Rev one', 'Fail one']
-  for (const [i, title] of titles.entries()) expect(await ui.find({ type: 'Text', text: new RegExp(`^${esc(leads[i]!)} ${esc(title)}`, 'u') })).toBeDefined()
-  // the waiting row keeps its question as its tail; the rest of the band is as before
+  for (const [i, title] of titles.entries()) expect(await ui.find({ type: 'Text', text: new RegExp(`^${esc(leads[i]!)}${esc(title)}`, 'u') })).toBeDefined()
+  // the waiting row keeps its question as its tail
   expect(await ui.find({ type: 'Text', text: /Wait one — Q\?/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /2 doing/ })).toBeDefined()
   await ui.unmount()
 })
 
@@ -315,11 +326,11 @@ test("the band hides only the notes a doing row's state says; other notes stay a
   on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 120 }, surface: 'terminal' })
   expect(await ui.find({ type: 'Text', text: /^ — time is up: the worker was told to hand back$/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /^T-50 ▶ 1h2m *$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^T-50 ▶ work 1h2m *$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /running the tests/ })).toBeUndefined()
   expect(await ui.find({ type: 'Text', text: /starting at the next turn/ })).toBeUndefined()
   expect(await ui.find({ type: 'Text', text: /worker starting/ })).toBeUndefined()
-  expect(await ui.find({ type: 'Text', text: /^T-53 ▶ 1m/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^T-53 ▶ work 1m/ })).toBeDefined()
   await ui.unmount()
 })
 

@@ -9,8 +9,9 @@ import { parseScoutMemory, parseScoutUsage, scoutMemoryText } from '../hooks/boa
 import { type Board, type Playable, DEFAULT_ARCHIVE_DAYS, toArchive, removeArchived, archivedCount, archivedNote, depDone, readArchive, emptyArchive, addToArchive, archiveText, bringBack, parseSettingsCommand } from '../hooks/board'
 import { detailRows, wrapSegs, makeOrigin, fromText, originWho, createdLine, evidenceText, emptyHeard, utcTime } from '../hooks/board'
 import { putTask, tryMark, tryTag, tryTone, bandLeads } from '../hooks/board'
-import { testsShort, testName } from '../hooks/board'
+import { testsShort, testName, nextScoutPart, PLAN_NOTE } from '../hooks/board'
 import { cleanFiles, taskCopyText, copyToast, realPathOf, brokenLinkText } from '../hooks/board'
+import { sizeWarnText, tooBigText } from '../hooks/core/board-parts'
 import { fakeDisk } from './fake-disk'
 import { rowEndBoard, ROW_END, LEAD_BEFORE, ROW_END_NOW } from './row-end-cases'
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
@@ -892,50 +893,60 @@ test('after /clear, this session\'s "doing" tasks move to the new session id', (
   expect(relabelSession(b, 'old', '')).toBe(b)
 })
 
-test('the status line lists running and failed task IDs, without the folder or "<name> board"', () => {
-  let n = 0
-  const t = (status: SymccTask['status'], id = `T-${++n}`) => ({ id, status })
-  const board = namesFor(DEFAULT_NAME).boardName
-  const lines = [
-    statusLine({ tasks: [t('done')] }, true),
-    statusLine({ tasks: [t('doing', 'T-26'), t('doing', 'T-27'), t('todo'), t('todo')] }, true),
-    statusLine({ tasks: [t('failed', 'T-28'), t('done')] }, true),
-    statusLine({ tasks: [t('failed', 'T-28'), t('failed', 'T-29')] }, true),
-    statusLine({ tasks: [t('todo')] }, true, '', 'paused'),
-    statusLine({ tasks: [t('waiting'), t('paused')] }, true),
-    statusLine({ tasks: [t('done')] }, false),
-    statusLine({ tasks: [] }, false),
-    statusLine({ tasks: [] }, true, 'on dev, not main'),
-    statusLine({ tasks: ['T-1', 'T-2', 'T-3', 'T-4', 'T-5'].map(id => t('doing', id)) }, true),
-    statusLine({ tasks: ['T-1', 'T-2', 'T-3', 'T-4'].map(id => t('failed', id)) }, true),
-  ]
-  expect(lines).toEqual([
-    '⏵ auto · all done',
-    '⏵ auto · T-26, T-27 doing · 2 to do',
-    '⏵ auto · 1 failed (T-28)',
-    '⏵ auto · 2 failed (T-28, T-29)',
-    '⏸ paused · 1 to do',
-    '⏵ auto · 1 paused · 1 waiting for you',
-    '⏵ auto · driven by another session · all done',
-    '⏵ auto · driven by another session · empty',
-    'on dev, not main',
-    '⏵ auto · T-1, T-2, T-3 +2 doing',
-    '⏵ auto · 4 failed (T-1, T-2, T-3 +1)',
-  ])
-  for (const l of lines) {
-    expect(l).not.toContain(board)
-    expect(l).not.toContain(DEFAULT_NAME) // this repo's folder name
-  }
-  expect(statusLine({ tasks: [] }, true)).toBeUndefined()
+// T-748: the status line under the prompt has the board's facts, the band above it the work: no task counts or ids here
+test('T-748: the status line says the mode, who drives, the branch, the next scout, today merged and the cost, but no task counts or ids', () => {
+  const now = Date.now()
+  const ago = (min: number) => new Date(now - min * 60_000).toISOString()
+  const merged = (id: string) => ({ id, status: 'done' as const, history: [{ kind: 'merged', at: ago(1), text: 'merged' }], runs: [{ started: ago(30), ended: ago(5), cost: 150.4 }] })
+  const tasks = [merged('T-1'), merged('T-2'), { id: 'T-740', status: 'doing' as const, attempts: 3, runs: [{ started: ago(4), cost: 11.2 }] }, { id: 'T-743', status: 'todo' as const }]
+  const scouts = [{ name: 'bugs', running: false, next_run: new Date(now + 38.2 * 60_000).toISOString() }, { name: 'docs', running: false, next_run: new Date(now + 90 * 60_000).toISOString() }]
+  const b = { tasks, scouts, branch: 'main', mode: 'auto' as const }
+  expect(statusLine(b, true, { nowMs: now })).toBe('⏵ auto · drives here · main · next scout bugs in 38m · today ✓ 2 · $312')
+  // no task counts and no task ids
+  const line = statusLine(b, true, { nowMs: now })!
+  for (const gone of [/T-\d/, /doing/, /to do/, /\d+ done/, /scouts/, /workers/, /try/]) expect(line).not.toMatch(gone)
+  // another session drives; a scout running now; a small cost to the cent
+  expect(statusLine({ ...b, scouts: [{ ...scouts[0]!, running: true }], tasks: [merged('T-1')].map(t => ({ ...t, runs: [{ ...t.runs[0]!, cost: 4.2 }] })) }, false, { nowMs: now })).toBe('⏵ auto · driven by another session · main · scout bugs running · today ✓ 1 · $4.20')
+  // a branch warning goes where the branch is
+  expect(statusLine({ ...b, branch_note: 'on dev, not main' }, true, { nowMs: now })).toBe('⏵ auto · on dev, not main · drives here · main · next scout bugs in 38m · today ✓ 2 · $312')
+  // paused and plan mode: no next scout (none starts)
+  expect(statusLine({ ...b, mode: 'paused' }, true, { nowMs: now })).toBe('⏸ paused · drives here · main · today ✓ 2 · $312')
+  expect(statusLine(b, true, { nowMs: now, plan: true })).toBe(`${PLAN_NOTE} · ⏵ auto · drives here · main · today ✓ 2 · $312`)
+  // nothing merged today, no cost: "today ✓ 0", no cost part
+  expect(statusLine({ tasks: [{ id: 'T-1', status: 'todo' }], branch: 'main' }, true, { nowMs: now })).toBe('⏵ auto · drives here · main · today ✓ 0')
+  // a fresh project (empty board, auto, no scouts) stays quiet; any other mode says it
+  expect(statusLine({ tasks: [], branch: 'main' }, true, { nowMs: now })).toBeUndefined()
+  expect(statusLine({ tasks: [], branch: 'main', mode: 'review' }, true, { nowMs: now })).toBe('⏸ review merge · drives here · main')
+  expect(statusLine({ tasks: [], branch: 'main' }, false, { nowMs: now })).toBe('⏵ auto · driven by another session · main')
+  // no "<name> board" and no folder name
+  expect(line).not.toContain(namesFor(DEFAULT_NAME).boardName)
+  expect(line).not.toContain(DEFAULT_NAME)
 })
 
-test('the status line keeps the backlog quiet, but says "all done · N in backlog" when only backlog is left', () => {
-  const t = (status: SymccTask['status'], id: string) => ({ id, status })
-  expect(statusLine({ tasks: [t('done', 'T-1'), t('backlog', 'T-2'), t('backlog', 'T-3')] }, true)).toBe('⏵ auto · all done · 2 in backlog')
-  expect(statusLine({ tasks: [t('backlog', 'T-2')] }, false)).toBe('⏵ auto · driven by another session · all done · 1 in backlog')
-  expect(statusLine({ tasks: [t('todo', 'T-1'), t('backlog', 'T-2')] }, true)).toBe('⏵ auto · 1 to do')
-  expect(backlogLabel(3)).toBe('▸ Backlog (3)')
-  expect(backlogLabel(3, true)).toBe('▾ Backlog (3)')
+test('T-748: symcc adds no "⚠" of its own to the status line (Claude Code draws one), even when something needs you', () => {
+  const now = Date.now()
+  const base = { branch: 'main', scouts: [] }
+  expect(statusLine({ ...base, tasks: [{ id: 'T-1', status: 'doing' }] }, true, { nowMs: now })).toBe('⏵ auto · drives here · main · today ✓ 0')
+  for (const st of ['review', 'waiting', 'failed'] as const) expect(statusLine({ ...base, tasks: [{ id: 'T-1', status: st }] }, true, { nowMs: now })).toBe('⏵ auto · drives here · main · today ✓ 0')
+  expect(statusLine({ ...base, tasks: [], questions: [{}] }, true, { nowMs: now })).toBe('⏵ auto · drives here · main')
+  expect(statusLine({ ...base, tasks: [], questions: [{ answered_at: new Date(now).toISOString() }] }, true, { nowMs: now })).toBeUndefined()
+})
+
+test('T-748: on a narrow line the status line drops parts from the end, cleanly; the mode and who drives stay', () => {
+  const now = Date.now()
+  const ago = (min: number) => new Date(now - min * 60_000).toISOString()
+  const tasks = [{ id: 'T-1', status: 'done' as const, history: [{ kind: 'merged', at: ago(1), text: 'merged' }], runs: [{ started: ago(30), ended: ago(5), cost: 312 }] }]
+  const b = { tasks, scouts: [{ name: 'bugs', running: false, next_run: new Date(now + 38.2 * 60_000).toISOString() }], branch: 'main' }
+  const full = '⏵ auto · drives here · main · next scout bugs in 38m · today ✓ 1 · $312'
+  expect(statusLine(b, true, { nowMs: now })).toBe(full)
+  expect(statusLine(b, true, { nowMs: now, width: full.length })).toBe(full)
+  expect(statusLine(b, true, { nowMs: now, width: full.length - 1 })).toBe('⏵ auto · drives here · main · next scout bugs in 38m · today ✓ 1')
+  expect(statusLine(b, true, { nowMs: now, width: 56 })).toBe('⏵ auto · drives here · main · next scout bugs in 38m')
+  expect(statusLine(b, true, { nowMs: now, width: 40 })).toBe('⏵ auto · drives here · main')
+  expect(statusLine(b, true, { nowMs: now, width: 10 })).toBe('⏵ auto · drives here')
+  // never longer than the room Claude Code gives it
+  expect(statusRoom('symcc')).toBe(STATUS_WIDTH - '⚠ symcc: '.length)
+  for (const w of [20, 30, 45, 60, statusRoom()]) expect(statusLine(b, true, { nowMs: now, width: w })!.length).toBeLessThanOrEqual(Math.max(w, '⏵ auto · drives here'.length))
 })
 
 // T-746: Claude Code draws every control character of $.ui.status text (ESC too) as "�", so the line can't be colored
@@ -943,14 +954,15 @@ test('the status line keeps the backlog quiet, but says "all done · N in backlo
 test('the status line has no control characters, so no ANSI color codes, even while another session drives', () => {
   const t = (status: SymccTask['status'], id: string) => ({ id, status })
   for (const driving of [true, false]) {
-    const line = statusLine({ tasks: [t('doing', 'T-1'), t('todo', 'T-2')] }, driving) ?? ''
+    const line = statusLine({ tasks: [t('doing', 'T-1'), t('todo', 'T-2')], branch: 'main' }, driving) ?? ''
+    expect(line).not.toBe('')
     expect([...line].some(c => c.charCodeAt(0) < 32 || c === '\x7f')).toBe(false)
   }
 })
 
 test('the status line starts with the board mode: paused, review or auto', () => {
   const t = (status: SymccTask['status'], id: string) => ({ id, status })
-  const tasks = [t('doing', 'T-26'), t('review', 'T-27')]
+  const tasks = [t('doing', 'T-26'), t('todo', 'T-27')]
   expect(MODE_LABEL).toEqual({ paused: '⏸ paused', review: '⏸ review merge', auto: '⏵ auto' })
   expect(MODE_NAME).toEqual({ paused: 'paused', review: 'review merge', auto: 'auto' })
   expect(modeButton('auto')).toBe('[m] review merge')
@@ -959,24 +971,18 @@ test('the status line starts with the board mode: paused, review or auto', () =>
   expect(nextMode('paused')).toBe('review')
   expect(nextMode('review')).toBe('auto')
   expect(nextMode('auto')).toBe('review')
-  expect(statusLine({ tasks }, true, '', 'paused')).toBe('⏸ paused · T-26 doing · 1 to review (T-27)')
-  expect(statusLine({ tasks }, true, '', 'review')).toBe('⏸ review merge · T-26 doing · 1 to review (T-27)')
-  expect(statusLine({ tasks }, true, '', 'auto')).toBe('⏵ auto · T-26 doing · 1 to review (T-27)')
-  expect(statusLine({ tasks }, true)).toBe('⏵ auto · T-26 doing · 1 to review (T-27)')
-  // empty board this session drives: paused and review show the label; auto stays quiet
-  expect(statusLine({ tasks: [] }, true, '', 'paused')).toBe('⏸ paused')
-  expect(statusLine({ tasks: [] }, true, '', 'review')).toBe('⏸ review merge')
-  expect(statusLine({ tasks: [] }, true, 'on dev, not main', 'review')).toBe('⏸ review merge · on dev, not main')
-  expect(statusLine({ tasks: [] }, true, '', 'auto')).toBeUndefined()
-  expect(statusLine({ tasks: [] }, true, 'on dev, not main', 'auto')).toBe('on dev, not main')
-  // driven by another session: the label shows in every mode
-  expect(statusLine({ tasks: [] }, false, '', 'paused')).toBe('⏸ paused · driven by another session · empty')
-  expect(statusLine({ tasks: [] }, false, '', 'review')).toBe('⏸ review merge · driven by another session · empty')
-  expect(statusLine({ tasks: [] }, false, '', 'auto')).toBe('⏵ auto · driven by another session · empty')
-  expect(statusLine({ tasks: [t('todo', 'T-1')] }, false, '', 'review')).toBe('⏸ review merge · driven by another session · 1 to do')
+  expect(statusLine({ tasks, mode: 'paused' }, true)).toBe('⏸ paused · drives here · today ✓ 0')
+  expect(statusLine({ tasks, mode: 'review' }, true)).toBe('⏸ review merge · drives here · today ✓ 0')
+  expect(statusLine({ tasks, mode: 'auto' }, true)).toBe('⏵ auto · drives here · today ✓ 0')
+  expect(statusLine({ tasks }, true)).toBe('⏵ auto · drives here · today ✓ 0')
   // a bad mode shows as auto
-  expect(statusLine({ tasks }, true, '', 'later' as never)).toBe('⏵ auto · T-26 doing · 1 to review (T-27)')
+  expect(statusLine({ tasks, mode: 'later' as never }, true)).toBe('⏵ auto · drives here · today ✓ 0')
   expect(modeLabel('paused')).toBe('⏸ paused')
+})
+
+test('backlog labels', () => {
+  expect(backlogLabel(3)).toBe('▸ Backlog (3)')
+  expect(backlogLabel(3, true)).toBe('▾ Backlog (3)')
 })
 
 // ---------------- review before merge ----------------
@@ -1060,16 +1066,46 @@ test('going from review to auto leaves tasks in review as they are', () => {
   expect(a.tasks).toEqual(b.tasks)
 })
 
-test('a task in review counts as open and shows as "ready for review"', () => {
-  expect(STATUS_WORD.review).toBe('ready for review')
-  expect(statusLine({ tasks: [{ id: 'T-5', status: 'review' }] }, true)).toBe('⏵ auto · 1 to review (T-5)')
+test('T-748: a branch note (git or file-size warning) comes right after the mode and is never dropped; a long size warning goes short', () => {
+  const tasks = [{ id: 'T-1', status: 'todo' as const }]
+  const room = statusRoom('symcc')
+  const near = sizeWarnText('board.json', 3.8 * 1024 * 1024)
+  expect(near.length).toBeGreaterThan(room)
+  const line = statusLine({ tasks, branch: 'main', branch_note: near, mode: 'auto' }, true, { width: room })!
+  expect(line).toBe('⏵ auto · board.json 3.8 MB, near the 4 MB limit · drives here · main')
+  expect(line.length).toBeLessThanOrEqual(room)
+  // with room enough the whole warning shows
+  expect(statusLine({ tasks, branch: 'main', branch_note: near }, true)).toBe(`⏵ auto · ${near} · drives here · main · today ✓ 0`)
+  // over the limit has its own short form
+  expect(statusLine({ tasks, branch_note: sizeWarnText('board.json', 4.2 * 1024 * 1024) }, true, { width: room })).toBe('⏵ auto · board.json 4.2 MB, over the 4 MB limit · drives here')
+  // a git note joined with a size note: the size one goes short, and what is still too wide is cut with "…"; the other parts drop
+  const both = statusLine({ tasks, branch_note: `no commits yet; set up git (g); ${near}` }, true, { width: room })!
+  expect(both).toBe('⏵ auto · no commits yet; set up git (g); board.json 3.8… · drives here')
+  expect(both.length).toBeLessThanOrEqual(room)
+  // a narrow line: the note stays, the rest drops
+  expect(statusLine({ tasks, branch: 'main', branch_note: 'no git' }, true, { width: 10 })).toBe('⏵ auto · no git · drives here')
+  // a refused read or write (tooBigText) has a short form too, and fits
+  for (const doing of ['read', 'write'] as const) {
+    const big = statusLine({ tasks, branch: 'main', branch_note: tooBigText('.symcc/board.json', 4.2 * 1024 * 1024, doing), mode: 'auto' }, true, { width: room })!
+    expect(big.length).toBeLessThanOrEqual(room)
+    expect(big).toBe('⏵ auto · .symcc/board.json 4.2 MB, over the 4 MB limit:… · drives here')
+  }
+  // with more room the short form shows whole
+  const wide = statusLine({ tasks, branch_note: tooBigText('.symcc/board.json', 4.2 * 1024 * 1024, 'write') }, true, { width: 100 })!
+  expect(wide).toBe("⏵ auto · .symcc/board.json 4.2 MB, over the 4 MB limit: symcc can't write it · drives here")
+  // safety net: a note still too wide after shortening is cut with "…" so the line fits
+  const cut = statusLine({ tasks, branch_note: 'x'.repeat(200) }, true, { width: room })!
+  expect(cut.length).toBe(room)
+  expect(cut.startsWith('⏵ auto · xxx')).toBe(true)
+  expect(cut.endsWith('… · drives here')).toBe(true)
 })
 
-test('the status line lists tasks to review by ID, cut after 3', () => {
-  const t = (status: SymccTask['status'], id: string) => ({ id, status })
-  expect(statusLine({ tasks: [t('doing', 'T-1'), t('review', 'T-5'), t('todo', 'T-6'), t('failed', 'T-7')] }, true)).toBe('⏵ auto · T-1 doing · 1 to review (T-5) · 1 to do · 1 failed (T-7)')
-  expect(statusLine({ tasks: ['T-1', 'T-2', 'T-3', 'T-4', 'T-5'].map(id => t('review', id)) }, true)).toBe('⏵ auto · 5 to review (T-1, T-2, T-3 +2)')
+test('a task in review counts as open and shows as "ready for review"', () => {
+  expect(STATUS_WORD.review).toBe('ready for review')
+  // the status line has no ids and no "⚠" of symcc's own (T-748)
+  expect(statusLine({ tasks: [{ id: 'T-5', status: 'review' }] }, true)).toBe('⏵ auto · drives here · today ✓ 0')
 })
+
 
 test('the board text names a task in review', () => {
   let [b, t] = addTask(emptyBoard(), { origin: W, title: 'Blue button' }, T)
@@ -2823,7 +2859,7 @@ test('folded rows line up their counts; no brackets', () => {
   expect(rows.some(r => /[()[\]]/.test(r))).toBe(false)
 })
 
-test('the line above the prompt: mode, busy workers, counts, scouts and the next scout when it fits; no ⚠ of its own', () => {
+test('the workers and scouts parts (crewParts, withCrew) and the next scout', () => {
   const now = Date.parse('2026-11-11T12:00:00Z')
   const scouts = [
     { name: 'tests', running: false, next_run: '2026-11-11T13:00:00Z' },
@@ -2832,24 +2868,13 @@ test('the line above the prompt: mode, busy workers, counts, scouts and the next
   ]
   const tasks = [{ id: 'T-1', status: 'doing' as const }, { id: 'T-2', status: 'todo' as const }, { id: 'T-3', status: 'backlog' as const }]
   const crew = { max_parallel: 3, tasks, scouts }
-  expect(statusLine({ tasks }, true, '', 'auto', false, crew, now)).toBe('⏵ auto · 1/3 workers · T-1 doing · 1 to do · 3 scouts (next: secrets in 38m)')
-  // short of room: "(next: …)" goes first, then the scouts
-  expect(statusLine({ tasks }, true, '', 'auto', false, crew, now, 55)).toBe('⏵ auto · 1/3 workers · T-1 doing · 1 to do · 3 scouts')
-  expect(statusLine({ tasks }, true, '', 'auto', false, crew, now, 45)).toBe('⏵ auto · 1/3 workers · T-1 doing · 1 to do')
-  // the room left at 80 columns after Claude Code's "⚠ symcc: "
-  expect(statusRoom('symcc')).toBe(STATUS_WIDTH - '⚠ symcc: '.length)
-  expect(statusLine({ tasks }, true, '', 'auto', false, crew, now, statusRoom())!.length).toBeLessThanOrEqual(statusRoom())
-  // no workers running: they are left out ("all done" already says it); the scouts stay
-  const done = [{ id: 'T-1', status: 'done' as const }, { id: 'T-2', status: 'backlog' as const }, { id: 'T-3', status: 'backlog' as const }]
-  expect(statusLine({ tasks: done }, true, '', 'auto', false, { max_parallel: 3, tasks: done, scouts: [scouts[0]!] }, now)).toBe('⏵ auto · all done · 2 in backlog · 1 scout (next: tests in 1h 00m)')
-  // mode paused: no next scout; a running scout is always named
-  expect(statusLine({ tasks }, true, '', 'paused', false, crew, now)).toBe('⏸ paused · 1/3 workers · T-1 doing · 1 to do · 3 scouts')
-  expect(statusLine({ tasks }, true, '', 'paused', false, { ...crew, scouts: [{ ...scouts[0]!, running: true }] }, now)).toBe('⏸ paused · 1/3 workers · T-1 doing · 1 to do · 1 scout (running: tests)')
-  // an empty board with scouts says so; without scouts it stays quiet
-  expect(statusLine({ tasks: [] }, true, '', 'auto', false, { tasks: [], scouts }, now)).toBe('⏵ auto · 3 scouts (next: secrets in 38m)')
-  expect(statusLine({ tasks: [] }, true, '', 'auto', false, { tasks: [], scouts: [] }, now)).toBeUndefined()
-  // the text never brings its own ⚠: what needs attention is said in words
-  for (const st of ['done', 'failed', 'waiting', 'review', 'doing'] as const) expect(statusLine({ tasks: [{ id: 'T-1', status: st }] }, true, '', 'auto', false, crew, now)).not.toContain('⚠')
+  expect(withCrew((w, s) => [w, s].join(' · '), crew, now)).toBe('1/3 workers · 3 scouts (next: secrets in 38m)')
+  // the status line's scout part (T-748): the next timed scout, or the running one; none while paused
+  expect(nextScoutPart(scouts, now)).toBe('next scout secrets in 38m')
+  expect(nextScoutPart([{ ...scouts[0]!, running: true }, scouts[1]!], now)).toBe('scout tests running')
+  expect(nextScoutPart(scouts, now, true)).toBe('')
+  expect(nextScoutPart([scouts[2]!], now)).toBe('')
+  expect(statusLine({ tasks: [], scouts }, true, { nowMs: now })).toBe('⏵ auto · drives here · next scout secrets in 38m')
   expect(crewParts({ tasks: [], scouts: [] }, now)).toEqual({ workers: '', scouts: '', next: '' })
   // a task symcc is only testing and merging (a fresh finishing mark) is "merging", not a worker
   const fresh = new Date(now - 10_000).toISOString()
@@ -3777,16 +3802,8 @@ test('a doing task on its 2nd or later try says "try N" in the status line, the 
   expect(tryMark({ status: 'doing', attempts: 2, test_tries: 0 }, 2)).toBe('try 2')
   expect(tryTone({ attempts: 2 })).toBe('inactive')
   expect(tryTone({ attempts: 3 })).toBe('warning')
-  // the status line
-  expect(statusLine({ tasks: [{ id: 'T-369', status: 'doing', attempts: 1 }] }, true)).toContain('T-369 doing')
-  expect(statusLine({ tasks: [{ id: 'T-369', status: 'doing', attempts: 1 }] }, true)).not.toContain('try')
-  expect(statusLine({ tasks: [{ id: 'T-369', status: 'doing', attempts: 2 }] }, true)).toContain('T-369 doing (try 2)')
-  expect(statusLine({ tasks: [{ id: 'T-1', status: 'doing', attempts: 1 }, { id: 'T-2', status: 'doing', attempts: 3 }] }, true)).toContain('T-1, T-2 doing (T-2 try 3)')
-  // the try marks never push the parts that need attention past the line's room: they are left out first
-  const busy = [{ id: 'T-371', status: 'doing', attempts: 2 }, { id: 'T-372', status: 'doing', attempts: 3 }, { id: 'T-369', status: 'review' }, { id: 'T-368', status: 'failed' }] as const
-  expect(statusLine({ tasks: [...busy] }, true, '', 'auto', false, undefined, Date.now(), statusRoom())).toBe('⏵ auto · T-371, T-372 doing · 1 to review (T-369) · 1 failed (T-368)')
-  expect(statusLine({ tasks: [...busy] }, true)).toContain('T-371, T-372 doing (T-371 try 2, T-372 try 3)')
-  expect(statusLine({ tasks: [{ id: 'T-369', status: 'doing', attempts: 2 }] }, true, '', 'auto', false, undefined, Date.now(), statusRoom())).toBe('⏵ auto · T-369 doing (try 2)')
+  // the status line has no task ids and no tries (T-748): the band above the prompt shows them
+  expect(statusLine({ tasks: [{ id: 'T-369', status: 'doing', runs: [{ started: at }, { started: at }] }] }, true)).not.toMatch(/T-369|try/)
   // the band above the prompt
   expect(bandLeads([{ id: 'T-369', status: 'doing', attempts: 1 }], 0).get('T-369')).toBe('T-369 ▶ ')
   expect(bandLeads([{ id: 'T-369', status: 'doing', attempts: 2 }], 0).get('T-369')).toBe('T-369 ▶ (2)')
@@ -4091,9 +4108,8 @@ test('T-596: an approved task in review whose approve runs is counted and listed
     expect(core.rowMark(t, now)).toBe(icon)
     expect(core.rowCell(t, now)).toBe('15m')
     expect(rowExtra(t, [t], '', 45, now)).toBe(core.APPROVED_NOTE)
-    const line = statusLine({ tasks: [t] }, true, '', 'review', false, undefined, now)!
-    expect(line).toContain('T-1 doing')
-    expect(line).not.toContain('to review')
+    // a running approve doesn't need you: no ⚠ on the status line (T-748)
+    expect(statusLine({ tasks: [t], mode: 'review' }, true, { nowMs: now })).toBe('⏸ review merge · drives here · today ✓ 0')
     expect(core.bannerCounts({ ...emptyBoard(), tasks: [t] }, now).map(c => c.text)[0]).toBe('1 doing')
     expect(crewParts({ tasks: [t], scouts: [] }, now).workers).toBe(`1 ${({ prep: 'in prep', queue: 'in queue', testing: 'testing', merging: 'merging' } as const)[checking.step]}`)
     expect(boardText({ ...emptyBoard(), tasks: [t] }, now)).toMatch(new RegExp(`T-1 +${icon} review`))
@@ -4101,7 +4117,7 @@ test('T-596: an approved task in review whose approve runs is counted and listed
   // no approve (or a stale mark, its copy gone): it needs the owner, "to review"
   for (const t of [idle, { ...idle, checking: { step: 'testing' as const, at: new Date(now - 3_600_000).toISOString() } }]) {
     expect(core.needsYou(t, now)).toBe(true)
-    expect(statusLine({ tasks: [t] }, true, '', 'review', false, undefined, now)).toContain('1 to review (T-1)')
+    expect(statusLine({ tasks: [t], mode: 'review' }, true, { nowMs: now })).toBe('⏸ review merge · drives here · today ✓ 0')
     expect(rowExtra(t, [t], '', 45, now)).toBe('Enter to review')
     expect(boardText({ ...emptyBoard(), tasks: [t] }, now)).toContain('— ready for review')
   }

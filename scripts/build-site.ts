@@ -1,7 +1,7 @@
 // Builds the symcc GitHub Pages site (T-593). Plain HTML, no npm packages: run it with bun.
 //   bun scripts/build-site.ts [--root <repo folder>] [--out <build folder>]
 // --root defaults to the repo this script is in, --out to <root>/_site.
-// It copies site/ (index.html, style.css) into the build folder and turns README.md, docs/guide.md,
+// It copies site/ (index.html, style.css, demo.js: the home page's hero demo, T-749) into the build folder and turns README.md, docs/guide.md,
 // docs/reference.md, docs/engine-and-clients.md and docs/research/*.md into HTML pages with the same header and footer as
 // site/index.html. Links to these pages are rewritten from .md to .html; links to other files in the
 // repo point to GitHub; images that pages use are copied next to them. HTML in the markdown text is
@@ -397,6 +397,22 @@ export function unsafeOut(root: string, out: string): string | undefined {
   return `${o} is not empty and was not made by this script (it has no ${MARKER} file); delete it yourself or pick another --out`
 }
 
+// T-749: the home page's hero demo (site/demo.js) plays with JS; without JS the page shows a still frame. The build
+// runs demo.js (it only fills `symccDemo` when there is no document) and writes that frame into each empty
+// `<... data-view="NAME" data-still></...>` box of index.html, so the still frame always matches the script.
+export function stillFrame(indexHtml: string, demoJs: string): string {
+  const scope: { symccDemo?: { STEPS: unknown[]; stateAfter: (n: number) => unknown; views: (s: unknown) => Record<string, string> } } = {}
+  new Function('globalThis', 'process', demoJs)(scope, { argv: [] })
+  const demo = scope.symccDemo
+  if (!demo) throw new Error('build-site: site/demo.js did not set symccDemo')
+  const views = demo.views(demo.stateAfter(demo.STEPS.length - 1))
+  return indexHtml.replace(/(<(\w+)\b[^>]*\bdata-view="([\w-]+)"[^>]*\bdata-still\b[^>]*>)(<\/\2>)/g, (all, open: string, _tag: string, name: string, close: string) => {
+    const html = views[name]
+    if (html === undefined) throw new Error(`build-site: site/demo.js has no view "${name}"`)
+    return open + html + close
+  })
+}
+
 export function build(root: string, out: string): string[] {
   const why = unsafeOut(root, out)
   if (why) throw new Error(`build-site: refusing --out ${out}: ${why}. Nothing was deleted.`)
@@ -422,6 +438,8 @@ export function build(root: string, out: string): string[] {
   cpSync(join(root, 'site'), out, { recursive: true })
   writeFileSync(join(out, '.nojekyll'), '')
   writeFileSync(join(out, MARKER), 'Made by scripts/build-site.ts; this folder is deleted and rebuilt on each build.\n')
+  const demoFile = join(root, 'site/demo.js')
+  if (existsSync(demoFile)) writeFileSync(join(out, 'index.html'), stillFrame(indexHtml, readFileSync(demoFile, 'utf8')))
 
   const written = ['index.html']
   for (const page of pages) {

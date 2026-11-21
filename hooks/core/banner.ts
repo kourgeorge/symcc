@@ -9,13 +9,17 @@ import { kindMark } from './kinds'
 import { roleMark, tryMark } from './roles'
 import { archivedLine, archivedNote, archivedOf } from './archive'
 import { PLAN_NOTE } from './plan'
-import { type CrewBoard, withCrew, parseSearch, searchTasks, BOARD_STATUSES, statusCell, STEP_NOTE, STEP_WORD, TITLE_ROOM, rowStates, stateText, rowMark, APPROVED_NOTE, fileWaitText } from './panel'
+import { type CrewBoard, nextScoutText, STEP_ICON, rowDuration, parseSearch, searchTasks, BOARD_STATUSES, statusCell, STEP_NOTE, STEP_WORD, TITLE_ROOM, rowStates, stateText, rowMark, APPROVED_NOTE, fileWaitText } from './panel'
 import { checkStepNow, shownStatus } from './lead'
-import { type TaskPhase, taskPhase } from './phase'
+import { type PhaseStage, type TaskPhase, taskPhase } from './phase'
 import { whyFailed } from './failure'
-import { CLAIM_NOTES, sessionNote } from './details'
-import { offStatusParts, testsShort } from './settings'
-import { type OwnerQuestion, openQuestions, questionsForYou, questionLine, questionsLabel } from './questions'
+import { CLAIM_NOTES, sessionNote, STATUS_MARK } from './details'
+import { newestFirst, offStatusParts, testsShort } from './settings'
+import { type OwnerQuestion, openQuestions, questionLine, questionsLabel } from './questions'
+import { needsYou } from './commands'
+import { fmtCost } from './runs'
+import { shortSizeWarns } from './board-parts'
+import { type LiveView, liveLanes, liveToday, liveTrains, todayCost } from './live'
 import { type LogoFrame, LOGO_MIN_WIDTH, restFrame } from './logo'
 
 /** The project's folder name, the last part of a path: "/Users/me/repositories/app" → "app". */
@@ -63,23 +67,6 @@ export const bandWhere = (root: string, name: string = DEFAULT_NAME) => (folderN
 /** The status line label, without the mark (Claude Code adds its own): "<name> board · <folder>". */
 export const boardLabel = (root: string, name: string = DEFAULT_NAME) => `${namesFor(name).boardName}${boardWhere(root)}`
 
-/** At most this many task IDs are listed for one state in the status line; the rest show as "+N". */
-export const STATUS_IDS = 3
-
-/** "T-1, T-2, T-3 +2" for the first STATUS_IDS IDs. */
-function idList(ids: string[]): string {
-  const shown = ids.slice(0, STATUS_IDS).join(', ')
-  return ids.length > STATUS_IDS ? `${shown} +${ids.length - STATUS_IDS}` : shown
-}
-
-/** The try marks of the doing tasks for the status line (see tryMark): " (try 2)" when one task is doing, " (T-2 try 2)"
- *  naming the task when several are; '' when every one is on its first try. */
-function triesNote(doing: (Pick<SymccTask, 'id' | 'status'> & Partial<Pick<SymccTask, 'attempts'>>)[]): string {
-  const marks = doing.slice(0, STATUS_IDS).map(t => ({ id: t.id, mark: tryMark({ status: t.status, attempts: t.attempts ?? 0 }) })).filter(x => x.mark)
-  if (!marks.length) return ''
-  return doing.length === 1 ? ` (${marks[0]!.mark})` : ` (${marks.map(x => `${x.id} ${x.mark}`).join(', ')})`
-}
-
 /**
  * The front of each task row in the band above the prompt, lined up like the board list's rows (fixed-width ID and
  * state columns). Every row shows the list's own mark and short status cell (rowMark, rowCell): a doing task "▶ 1h40m" (the
@@ -96,6 +83,85 @@ export function bandLeads(tasks: (Pick<SymccTask, 'id' | 'status' | 'runs'> & Pa
   // too narrow: the time is left out, then the try, so the titles keep TITLE_ROOM
   const { states } = rowStates(rows, nowMs, since, w => frontWidth + w + 1 + TITLE_ROOM <= width)
   return new Map(rows.map(t => [t.id, `${front(t)}${stateText(states.get(t.id))}`]))
+}
+
+// ---------------- Claude Code's band above the prompt (T-748) ----------------
+
+/** The icon and the name of each stage in a running band row: "▶ work", "⌕ checker", "⧗ queue" (STEP_ICON, STEP_WORD). */
+export const BAND_STAGE: Record<PhaseStage, { icon: string; name: string }> = {
+  worker: { icon: STATUS_MARK.doing, name: 'work' },
+  prep: { icon: STEP_ICON.prep, name: STEP_WORD.prep },
+  checker: { icon: STEP_ICON.checker, name: STEP_WORD.checker },
+  queue: { icon: STEP_ICON.queue, name: STEP_WORD.queue },
+  test: { icon: STEP_ICON.testing, name: STEP_WORD.testing },
+  merge: { icon: STEP_ICON.merging, name: STEP_WORD.merging },
+}
+/** What the band's next up row says after the task's id. */
+export const NEXT_UP_STATE = `${STATUS_MARK.todo} next up`
+
+/** One row of the band: `kind` 'run' (a running task), 'next' (the next task to start), 'you' (a task that needs the
+ *  owner, drawn in the warning color); `forms` its state, fullest first (the time goes first, then the try, when narrow). */
+export type BandItem = { id: string; title: string; kind: 'run' | 'next' | 'you'; forms: string[]; tail: string }
+
+/**
+ * The task rows of Claude Code's band above the prompt (T-748), in this order: one per running task (the Live tab's
+ * lanes: its stage's icon and name, the time in that stage, the try from try 2 on: "⌕ checker 8m (try 3)"), the next
+ * task to start ("○ next up", the first task of the Live tab's next up that waits for nothing), then the tasks that need
+ * the owner (needsYou: "? waiting", "◆ review", "✗ failed", "▶ more time?"). `since(id)`: when this session's worker
+ * started (for a worker with no open try yet). No counts: the status line and the board have those.
+ */
+export function bandItems(view: LiveView, nowMs: number, since: (id: string) => number | string | undefined = () => undefined, note: (t: BoardTask) => string = t => t.note ?? ''): BandItem[] {
+  const tasks = view.tasks as BoardTask[]
+  const you = tasks.filter(t => needsYou(t, nowMs)).sort(newestFirst)
+  const youIds = new Set(you.map(t => t.id))
+  const lanes = liveLanes(view, nowMs).filter(l => !youIds.has(l.id))
+  const byId = new Map(tasks.map(t => [t.id, t]))
+  const tail = (t: BoardTask) => rowEndText(t, taskPhase(t, nowMs), note(t))
+  const runs = lanes.map((l): BandItem => {
+    const s = BAND_STAGE[l.stage]
+    // the Live tab counts prep (and a checker with the setting off) at the work station, from the try's start; the
+    // band says the stage, so it counts from the hand-back
+    const ended = toMs(byId.get(l.id)?.runs?.at(-1)?.ended)
+    const at = l.stage === 'worker' ? (ended === undefined ? (l.sinceMs ?? toMs(since(l.id))) : (toMs(since(l.id)) ?? l.sinceMs)) :l.station === 'work' ? (ended ?? l.sinceMs) : l.sinceMs
+    const time = at !== undefined ? rowDuration(Math.max(0, nowMs - at)) : ''
+    const tries = l.tryNo > 1 ? ` (try ${l.tryNo})` : ''
+    const head = `${s.icon} ${s.name}`
+    return { id: l.id, title: l.title, kind: 'run', forms: [`${head}${time ? ` ${time}` : ''}${tries}`, `${head}${tries}`, head], tail: tail(byId.get(l.id)!) }
+  })
+  const next = liveTrains(view, nowMs).next.find(x => !x.stuck.length)
+  const nextRow: BandItem[] = next ? [{ id: next.id, title: next.title, kind: 'next', forms: [NEXT_UP_STATE], tail: '' }] : []
+  const yours = you.map((t): BandItem => {
+    const cell = statusCell(t, nowMs, since(t.id))
+    const state = `${rowMark(t, nowMs)}${cell ? ` ${cell}` : ''}`
+    return { id: t.id, title: t.title, kind: 'you', forms: [state], tail: tail(t) }
+  })
+  return [...runs, ...nextRow, ...yours]
+}
+
+const toMs = (x: number | string | undefined): number | undefined => {
+  const n = typeof x === 'number' ? x : Date.parse(x ?? '')
+  return Number.isFinite(n) ? n : undefined
+}
+
+/**
+ * The fronts of band rows (bandItems), lined up: the id padded to one width, then the state padded to one width,
+ * so every title starts in one column: "T-740 ⌕ checker 8m (try 3) ". The first state form that leaves TITLE_ROOM
+ * for the title in `width` columns is used (the time goes first, then the try).
+ */
+export function bandFronts(items: readonly Pick<BandItem, 'id' | 'forms'>[], width = Infinity): Map<string, string> {
+  const idWidth = Math.max(4, ...items.map(x => x.id.length))
+  const most = Math.max(1, ...items.map(x => x.forms.length))
+  const formOf = (x: Pick<BandItem, 'forms'>, i: number) => x.forms[Math.min(i, x.forms.length - 1)] ?? ''
+  let pick = most - 1
+  for (let i = 0; i < most; i++) {
+    const w = Math.max(0, ...items.map(x => formOf(x, i).length))
+    if (idWidth + 1 + w + 1 + TITLE_ROOM <= width) {
+      pick = i
+      break
+    }
+  }
+  const stateWidth = Math.max(0, ...items.map(x => formOf(x, pick).length))
+  return new Map(items.map(x => [x.id, `${x.id.padEnd(idWidth)} ${formOf(x, pick).padEnd(stateWidth)} `]))
 }
 
 /** Whether a doing row in the band has a state to show (see bandLeads); without one its note says what goes on. */
@@ -169,53 +235,74 @@ export const STATUS_WIDTH = 80
 /** The room the status text has in STATUS_WIDTH after Claude Code's "⚠ <name>: " in front of it. */
 export const statusRoom = (name: string = DEFAULT_NAME) => STATUS_WIDTH - `⚠ ${name}: `.length
 
+/** The status line's scout part (T-748): "scout bugs running" while one runs, else "next scout bugs in 38m" ("… now"
+ *  when it is due); '' with no timed scout, and no "next" in plan mode or board mode paused (no scout starts then). */
+export function nextScoutPart(scouts: CrewBoard['scouts'], nowMs: number, quiet = false): string {
+  const running = scouts.find(s => s.running)
+  if (running) return `scout ${running.name} running`
+  if (quiet) return ''
+  const m = /^next: (.+?) (now|in .+)$/.exec(nextScoutText(scouts, nowMs))
+  return m ? `next scout ${m[1]} ${m[2]}` : ''
+}
+
+/** A day's cost, short: "$312" from ten dollars on, else to the cent ("$4.20", "<$0.01"); '' for none. */
+export const shortCost = (usd: number): string => (!Number.isFinite(usd) || usd <= 0 ? '' : usd >= 10 ? `$${Math.round(usd)}` : fmtCost(usd))
+
+/** What the status line reads (statusLine): the tasks (for today's numbers and what needs you), the lead's questions,
+ *  the scouts, the branch (or `branch_note`, a warning shown in its place) and the board mode. */
+export type StatusBoard = {
+  tasks: (Pick<SymccTask, 'id' | 'status'> & Partial<Pick<SymccTask, 'runs' | 'history' | 'note' | 'updated_at'>> & Partial<Pick<BoardTask, 'checking' | 'time_ask'>>)[]
+  questions?: readonly Pick<OwnerQuestion, 'answered_at' | 'dropped'>[]
+  scouts?: CrewBoard['scouts']
+  branch?: string
+  branch_note?: string
+  mode?: SymccMode
+}
+
 /**
- * The short status text Claude Code shows after "symcc:", e.g. "⏵ auto · 1/3 workers · T-26 doing · 1 to do · 5 scouts (next: gaps-bot in 1h 00m)".
- * It starts with the board mode (modeLabel: "⏸ paused", "⏸ review merge", "⏵ auto"), so the mode is always in the same spot.
- * With `crew` (see withCrew): the busy workers right after the mode (left out while none run) and the scouts after the
- * counts; when the text is wider than `width`, the try marks of the doing tasks go first, then the "(next: …)" part, then the scouts.
- * Tasks being done, in review and failed are listed by ID; other open states are counts. No folder name (the pane title has it).
- * The text itself never has a "⚠": it says what needs attention in words ("1 failed (T-7)", "1 waiting for you", "⏸ paused").
- * undefined when there is nothing to say: an empty board this session drives, in mode auto, with no branch note and no scouts.
+ * The status line Claude Code shows under the prompt after "symcc" (T-748): the board's facts, plain text (Claude
+ * Code's status line can't show colors), never the task counts or ids (the band above the prompt shows the work):
+ * the mode ("⏵ auto", "⏸ review merge", "⏸ paused"), who drives ("drives here" / "driven by another session"), the
+ * branch, the next scout and when ("next scout bugs in 38m"), today's merged count ("today ✓ 58") and today's cost
+ * ("$312"), e.g. "⏵ auto · drives here · main · next scout bugs in 38m · today ✓ 58 · $312". In plan mode
+ * PLAN_NOTE comes first. A `branch_note` warning (git, or the T-675 file-size warning) comes right after the mode and
+ * is never dropped; when the line is too narrow for it, size warnings take their short form (shortSizeWarns). symcc
+ * adds no "⚠" of its own: Claude Code draws one in front of every plugin's status line, and the band above the prompt
+ * shows what needs you. When wider than `width`, parts go from the end (the cost, then today, the scout, the
+ * branch); the mode, the branch note and who drives always stay. undefined for a fresh project: an empty board this session drives, in mode auto, with
+ * no scouts, no question and no branch note.
  */
-export function statusLine(b: { tasks: (Pick<SymccTask, 'id' | 'status'> & Partial<Pick<SymccTask, 'attempts'>> & Pick<BoardTask, 'checking'>)[]; questions?: readonly Pick<OwnerQuestion, 'answered_at' | 'dropped'>[] }, driving: boolean, branch_note = '', mode: SymccMode = 'auto', plan = false, crew?: CrewBoard, nowMs = Date.now(), width = Infinity): string | undefined {
-  const join0 = (xs: (string | false | undefined)[]) => xs.filter(Boolean).join(' · ')
-  // in plan mode the line says so first (see core/plan.ts)
-  const join = (xs: (string | false | undefined)[]) => join0(plan ? [PLAN_NOTE, ...xs] : xs)
-  // an approved task in review whose approve runs is listed as doing (see shownStatus)
-  const ids = (st: SymccStatus) => b.tasks.filter(t => shownStatus(t, nowMs) === st).map(t => t.id)
-  // T-643: not driving is said right after the mode (and the questions), so it is never cut off
-  const other = driving ? '' : driveWarning(false, b.tasks, nowMs, DEFAULT_NAME, 'band').replace(/^⚠ /, '')
-  const m = modeOf({ mode })
-  const label = modeLabel(m)
-  const c = crew && { ...crew, mode: m, plan_mode: plan }
-  // the lead's open questions for the owner come right after the mode, so they are never cut ("2 questions for you")
-  const asks = questionsForYou(openQuestions(b).length)
-  if (b.tasks.length) {
-    const doing = ids('doing'), review = ids('review'), failed = ids('failed')
-    const note = triesNote(b.tasks.filter(t => t.status === 'doing'))
-    const line = (tries: string) => {
-      const parts = [
-        doing.length && `${idList(doing)} ${STATUS_WORD.doing}${tries}`,
-        review.length && `${review.length} to review (${idList(review)})`,
-        ...statusCounts(b.tasks, ['todo', 'paused', 'waiting'], nowMs),
-        failed.length && `${failed.length} ${STATUS_WORD.failed} (${idList(failed)})`,
-      ].filter((x): x is string => !!x)
-      // backlog stays out of the line, except when it is all that is left: then say so, so parked ideas aren't hidden
-      const parked = ids('backlog').length
-      const counts = join0(parts) || (parked ? `all done · ${parked} in backlog` : 'all done')
-      return withCrew((w, s) => join([label, other, asks, w, counts, s, branch_note]), c, nowMs, width)
-    }
-    // the try marks are extra: they are kept only when they fit without cutting anything else (scouts, "(next: …)")
-    const plain = line('')
-    if (!note) return plain
-    const full = line(note)
-    return full.length <= width && full.length === plain.length + note.length ? full : plain
+export function statusLine(b: StatusBoard, driving: boolean, o: { plan?: boolean; nowMs?: number; width?: number; offsetMin?: number } = {}): string | undefined {
+  const nowMs = o.nowMs ?? Date.now()
+  const width = o.width ?? Infinity
+  const m = modeOf({ mode: b.mode })
+  const scouts = b.scouts ?? []
+  const needs = openQuestions(b).length > 0 || b.tasks.some(t => needsYou(t as Parameters<typeof needsYou>[0], nowMs))
+  if (!b.tasks.length && !scouts.length && !needs && m === 'auto' && driving && !o.plan && !b.branch_note) return undefined
+  const drive = driving ? 'drives here' : driveWarning(false, b.tasks, nowMs, DEFAULT_NAME, 'band').replace(/^⚠ /, '')
+  const head = [o.plan ? PLAN_NOTE : '', modeLabel(m)].filter(Boolean)
+  const fits = (note: string) => [...head, note, drive].join(' · ').length <= width
+  let note = b.branch_note ? (fits(b.branch_note) ? b.branch_note : shortSizeWarns(b.branch_note)) : ''
+  // safety net: a note still too wide is cut to fit with "…", so the line never goes past the width (statusRoom);
+  // at least 20 characters of it stay, for a width far narrower than any status line
+  if (note && !fits(note)) {
+    const room = Math.max(20, width - [...head, '', drive].join(' · ').length)
+    if (note.length > room) note = note.slice(0, room - 1).trimEnd() + '…'
   }
-  if (!driving) return withCrew((w, s) => join([label, other, asks, w, 'empty', s, branch_note]), c, nowMs, width)
-  // an empty board in mode auto stays quiet (unless there are scouts), so a fresh project shows nothing
-  if (m !== 'auto') return withCrew((w, s) => join([label, asks, w, s, branch_note]), c, nowMs, width)
-  return withCrew((w, s) => join([(s || asks) && label, asks, w, s, branch_note]), c, nowMs, width) || undefined
+  const fixed = [...head, note, drive].filter(Boolean)
+  const today = b.tasks.length ? liveToday(b.tasks as SymccTask[], nowMs, o.offsetMin).merged : 0
+  const rest = [
+    b.branch || '',
+    nextScoutPart(scouts, nowMs, !!o.plan || m === 'paused'),
+    b.tasks.length ? `today ✓ ${today}` : '',
+    shortCost(todayCost(b.tasks, nowMs, o.offsetMin)),
+  ].filter(Boolean)
+  // parts go from the end until the line fits; the mode, the branch note and who drives always stay
+  for (let n = rest.length; n >= 0; n--) {
+    const line = [...fixed, ...rest.slice(0, n)].join(' · ')
+    if (line.length <= width || n === 0) return line
+  }
+  return undefined
 }
 
 // ---------------- the banner at the top of the board panel ----------------

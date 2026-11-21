@@ -11,7 +11,10 @@ import { S, leadQueue, workers, sayQueue, meanwhile, scoutRuns } from '../hooks/
 import { askCall, checkEdit } from '../hooks/app/ask'
 import { tellLead, noteForLead, meanwhileText } from '../hooks/app/tell'
 import { saidNeedsYou, findPlayers, playable, playsFor, sayNext, sayDone, WIN_TEXT_VAR } from '../hooks/app/voice'
-import { workerFinished, check, pump, startWorker, lateHandBack, WORKER_PROMPT, workerQuestionText, type TurnEnd } from '../hooks/app/workers'
+import { workerFinished, check, pump, startWorker, lateHandBack, WORKER_PROMPT, workerQuestionText, type TurnEnd, notThisTry, unclaimed } from '../hooks/app/workers'
+import { stopOrphans, formerWorker } from '../hooks/app/cleanup'
+import { goOnRun, selfRestart, endRun, runMs, freshTry, withoutOpenRun, type TryRun } from '../hooks/core/runs'
+import { statsData } from '../hooks/core/stats'
 import { setSymcc, setBoardMode } from '../hooks/app/board-mode'
 import { taskStage, stageText } from '../hooks/core/details'
 import { taskPhase, taskAsks, FINISH_STALE_MS, needsYou, waitsForYou, answeredLeadLine, approveRunning, panelSections, statusBadge, statusCounts, STEP_ICON, STEP_WORD } from '../hooks/board'
@@ -5486,6 +5489,51 @@ test('T-723: a merge-it-in try says it merges main in first', async () => {
   workers.clear()
 })
 
+/** T-745: T-1's retry starts in its old folder; its branch and main are each 3 commits apart; `clash`: merging main in conflicts. */
+async function retryStarted(clash: boolean) {
+  let prompt = ''
+  const w = world({
+    current: 'main',
+    answer: args => {
+      if (args[0] === 'rev-list' && args[1] === '--count') return ok('3\n')
+      if (args.includes('merge') && args.includes('--no-edit')) return clash ? { exitCode: 1, stdout: 'CONFLICT (content): Merge conflict in src/a.ts', stderr: '' } : ok()
+      return undefined
+    },
+  })
+  const [b0] = boardWith('auto')
+  await saveBoard(w.$, patchTask(b0, 'T-1', { status: 'todo', attempts: 1, runs: [{ started: ISO, ended: ISO, ended_by: 'finished', ended_note: 'tests failed' }] }, ISO))
+  w.put(`${WT}/.git`, 'gitdir: x')
+  S.me = 'me'
+  S.startupDone = true
+  S.driving = true
+  workers.clear()
+  const x = w.$
+  x.features = { ...x.features, startQueue: false }
+  x.agents.spawn = async (o: { prompt: string }) => ((prompt = o.prompt), { agentId: 'ag1' })
+  x.plugin = { name: 'symcc', root: '/plugin' }
+  x.fs.list = async () => []
+  await startWorker(w.$, 'T-1')
+  workers.clear()
+  return { w, prompt, t: find(await load(w.$), 'T-1')! }
+}
+
+test('T-745: a retry with commits of its own starts with main merged in, and its history says so', async () => {
+  const { w, prompt, t } = await retryStarted(false)
+  expect(w.calls.some(c => c.includes('merge --no-edit') && c.includes('refs/heads/main'))).toBe(true)
+  expect(w.calls.some(c => c.includes('merge --abort'))).toBe(false)
+  expect(stageTexts(t)).toEqual(['try 2: brought up to date with main (3 commits)', 'try 2: worker started (role general)'])
+  expect(t.merge_main).toBeFalsy()
+  expect(prompt).not.toContain('merge them in first')
+})
+
+test('T-745: a retry whose merge of main clashes is aborted and the worker is told to merge it in first', async () => {
+  const { w, prompt, t } = await retryStarted(true)
+  expect(w.calls.some(c => c.includes('merge --abort'))).toBe(true)
+  expect(prompt).toContain("main has 3 new commits you don't have yet; merge them in first")
+  expect(t.merge_main).toBe(true)
+  expect(stageTexts(t)).toEqual(['try 2: worker started (role general) · merges main in first'])
+})
+
 test('T-723: a fresh try restarted with a note says it keeps its try number', async () => {
   const { w, t } = await startedT1({ attempts: 1, runs: [{ started: ISO, ended: ISO, ended_by: 'finished', ended_note: 'checker found problems' }] })
   expect(t.attempts).toBe(2)
@@ -5509,6 +5557,182 @@ test('T-723: the hand-back writes "try N: worker handed back" before any check s
   expect(texts[0]).toBe('try 1: worker started (role general)')
   expect(texts[1]).toBe('try 1: worker handed back')
   workers.clear()
+})
+
+// ---------------- T-743: a restart symcc did itself goes on with the same try ----------------
+
+const REOPEN = 'restarted after Claude Code was reopened'
+const STOP = '2026-11-13T00:10:00.000Z'
+
+/** T-743: T-1 back in todo after a reopen stopped its try 1 worker ag9 at STOP (it started at ISO and used 1000 input tokens). */
+function reopenedT1(): BoardTask {
+  const [b0] = boardWith('auto', [], { session: 'me', agent: 'ag9', branch: 'symcc/T-1', history: [], runs: [{ started: ISO, agent: 'ag9', tokens: { input: 1000 } }] })
+  return backToTodo(b0.tasks[0]!, REOPEN, STOP)
+}
+const restartFields = (t: BoardTask): Partial<BoardTask> => ({ attempts: t.attempts, runs: t.runs, history: t.history, agent: t.agent, note: t.note, branch: t.branch })
+/** T-743: a board with `back` (reopenedT1) claimed again for the same try, as queueWorker claims it: "doing", no agent named yet. */
+function claimedSameTry(back: BoardTask): Board {
+  const [b0] = boardWith('auto')
+  const { agent: _a, ...fields } = restartFields(back)
+  const b = patchTask(b0, 'T-1', { ...fields, status: 'doing', session: 'me', note: QUEUED_NOTE, runs: goOnRun(back.runs, STOP)! }, STOP)
+  delete find(b, 'T-1')!.agent
+  return b
+}
+
+test('T-743: a worker restarted after a reopen keeps the same try: no new try number, no new run, no retry; its agent is on that try with the old one', async () => {
+  const { t } = await startedT1(restartFields(reopenedT1()))
+  expect(t.status).toBe('doing')
+  expect(t.attempts).toBe(1)
+  expect(t.test_tries ?? 0).toBe(0)
+  expect(t.runs!.length).toBe(1)
+  const r = t.runs![0]! as TryRun
+  expect(r.started).toBe(ISO)
+  expect(r.ended).toBeUndefined()
+  expect(r.ended_by).toBeUndefined()
+  expect(r.agent).toBe('ag1')
+  expect(r.restarts!.map(({ started: _s, ...e }) => e)).toEqual([{ at: STOP, why: 'after Claude Code was reopened', agent: 'ag9' }])
+  // when the new worker's part started: its time limit counts from there, not from ISO
+  expect(Date.parse(r.restarts![0]!.started ?? '')).toBeGreaterThan(Date.parse(ISO))
+  expect(stageTexts(t)).toEqual(['try 1: worker restarted after Claude Code was reopened'])
+  // the old worker is not this try's worker any more (its hand-back is ignored), but it is still refused as a known agent
+  expect(notThisTry(t, 'ag9')).toBe(true)
+  expect(notThisTry(t, 'ag1')).toBe(false)
+  expect(onRuns(t.runs, 'ag9')).toBe(true)
+  workers.clear()
+})
+
+test('T-743: the restarted round merges: its time spans the restart, its tokens add up, and the stats count it right first try with no failed try', async () => {
+  const { w } = await startedT1(restartFields(reopenedT1()))
+  w.put(`${WT}/.git`, 'gitdir: x')
+  await workerFinished(w.$, 'ag1', 'made the change', { reason: 'answer' }, { input: 500 })
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('done')
+  expect(t.attempts).toBe(1)
+  expect(t.runs!.length).toBe(1)
+  const r = t.runs![0]!
+  expect(r.tokens?.input).toBe(1500)
+  // from its first start (ISO) to its end, not only the last worker's part
+  expect(r.started).toBe(ISO)
+  expect(runMs(r)).toBe(Date.parse(r.ended!) - Date.parse(ISO))
+  expect(runMs(r)).toBeGreaterThan(Date.parse(STOP) - Date.parse(ISO))
+  expect(t.history.map(h => h.text)).toContain(`try 1: ${REOPEN}`)
+  const d = statsData({ tasks: [t], nowMs: Date.now() })
+  expect(d.first).toBe(1)
+  expect(d.doneWithData).toBe(1)
+  expect(d.failedTotal).toBe(0)
+  expect(d.failedTries).toEqual([])
+  workers.clear()
+})
+
+test('T-743: after a reopen only one worker works on the try: the old worker is not taken back for the try while its new worker is starting', async () => {
+  S.me = 'me'
+  const w = world()
+  const back = reopenedT1()
+  // claimed for the same try (goOnRun), its new worker still starting: the task names no agent yet
+  const claimed = claimedSameTry(back)
+  await saveBoard(w.$, claimed)
+  workers.clear()
+  w.$.agents.list = async () => [{ id: 'ag9', kind: 'worker', status: 'running', name: 'symcc-T-1' }]
+  expect(await stopOrphans(w.$, null)).toEqual(['ag9'])
+  expect(workers.has('ag9')).toBe(false)
+  expect(find(await load(w.$), 'T-1')!.agent).toBeUndefined()
+  // a task whose try still names that worker (it kept running over the reopen) keeps it: no second worker starts
+  const [b1] = boardWith('auto', [], { session: 'me', agent: 'ag7', runs: [{ started: ISO, agent: 'ag7' }] })
+  await saveBoard(w.$, b1)
+  w.$.agents.list = async () => [{ id: 'ag7', kind: 'worker', status: 'running', name: 'symcc-T-1' }]
+  expect(await stopOrphans(w.$, null)).toEqual([])
+  expect(workers.get('ag7')?.task).toBe('T-1')
+  workers.clear()
+  // the rule itself: a worker a restart stopped, or one of an earlier try, is a former worker; the current one is not
+  const t = find(claimed, 'T-1')!
+  expect(formerWorker(t, 'ag9')).toBe(true)
+  expect(formerWorker({ ...t, agent: 'ag1', runs: [{ ...t.runs![0]!, agent: 'ag1' }] }, 'ag1')).toBe(false)
+  expect(formerWorker({ ...t, runs: [{ started: ISO, agent: 'ag8' }, { started: STOP }] }, 'ag8')).toBe(true)
+})
+
+test('T-743: a worker on a try that went on after a reopen counts its time limit from its own start, not the try\'s first start', async () => {
+  S.me = 'me'
+  const w = world()
+  const first = new Date(Date.now() - 20 * 3600_000).toISOString()
+  const stop = new Date(Date.now() - 2 * 3600_000).toISOString()
+  const fresh = new Date(Date.now() - 60_000).toISOString()
+  const [b0] = boardWith('auto', [], { session: 'me', agent: 'ag9', branch: 'symcc/T-1', history: [], runs: [{ started: first, agent: 'ag9' }] })
+  const back = backToTodo(b0.tasks[0]!, REOPEN, stop)
+  const runs = goOnRun(back.runs, fresh)!.map(r => ({ ...r, agent: 'ag10' }))
+  const [b1] = boardWith('auto', [], { session: 'me', agent: 'ag10', branch: 'symcc/T-1', history: [], attempts: 1, runs })
+  await saveBoard(w.$, b1)
+  workers.clear()
+  w.$.agents.list = async () => [{ id: 'ag10', kind: 'worker', status: 'running', name: 'symcc-T-1' }]
+  expect(await stopOrphans(w.$, null)).toEqual([])
+  const since = workers.get('ag10')!.since
+  expect(Math.abs(since - Date.parse(fresh))).toBeLessThan(1000)
+  // the try's own start stays its first start
+  expect(find(await load(w.$), 'T-1')!.runs![0]!.started).toBe(first)
+  // a late hand-back taken as this worker's counts the same way
+  workers.clear()
+  expect(await lateHandBack(w.$, 'ag10')).toBe(true)
+  expect(Math.abs(workers.get('ag10')!.since - Date.parse(fresh))).toBeLessThan(1000)
+  // the regular check asks nobody for more time
+  await check(w.$)
+  const after = find(await load(w.$), 'T-1')!
+  expect(after.time_ask).toBeUndefined()
+  expect(after.wrap_up).toBeUndefined()
+  workers.clear()
+})
+
+test('T-743: a claim that went on with the same try but never started is undone back to the ended try, with no try number taken off', () => {
+  const back = reopenedT1()
+  const claimed = find(claimedSameTry(back), 'T-1')!
+  const un = unclaimed(claimed, STOP)
+  expect(un.status).toBe('todo')
+  expect(un.attempts).toBe(1)
+  expect(un.runs).toEqual(back.runs)
+})
+
+test('T-743: a real send-back (failing tests, the checker, a change) still starts a new try; a restart symcc did itself does not', async () => {
+  expect(selfRestart({ started: ISO, ended: STOP, ended_by: 'restarted', ended_note: 'after Claude Code was reopened' })).toBe(true)
+  expect(selfRestart({ started: ISO, ended: STOP, ended_by: 'restarted', ended_note: 'the old worker has ended' })).toBe(true)
+  expect(selfRestart({ started: ISO, ended: STOP, ended_by: 'restarted', ended_note: 'the task was changed (details)' })).toBe(false)
+  expect(selfRestart({ started: ISO, ended: STOP, ended_by: 'finished', ended_note: 'tests failed' })).toBe(false)
+  expect(selfRestart({ started: ISO, ended: STOP, ended_by: 'finished', ended_note: 'checker found problems' })).toBe(false)
+  expect(goOnRun([{ started: ISO, ended: STOP, ended_by: 'finished', ended_note: 'tests failed' }], STOP)).toBe(null)
+  // failing tests: back to todo with one auto retry used, and the next worker starts try 2 in a run of its own
+  S.me = 'me'
+  const w = world({}, { 'npm test': { exitCode: 1, stdout: 'FAIL a.test', stderr: '' } })
+  const [b] = boardWith('auto', ['npm test'], { session: 'me', agent: 'ag1', branch: 'symcc/T-1', history: [], runs: [{ started: ISO, agent: 'ag1' }] })
+  await saveBoard(w.$, b)
+  w.put(`${WT}/.git`, 'gitdir: x')
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
+  await workerFinished(w.$, 'ag1', 'made the change')
+  const failed = find(await load(w.$), 'T-1')!
+  expect(failed.status).toBe('todo')
+  expect(failed.test_tries).toBe(1)
+  workers.clear()
+  const { t } = await startedT1({ attempts: failed.attempts, runs: failed.runs, test_tries: failed.test_tries, history: failed.history })
+  expect(t.attempts).toBe(2)
+  expect(t.runs!.length).toBe(2)
+  expect(t.test_tries).toBe(1)
+  expect(stageTexts(t).at(-1)).toBe('try 2: worker started (role general)')
+  workers.clear()
+})
+
+test('T-743: a change right after a reopen never takes off the try that went on: its round and the stopped worker stay on the board', () => {
+  const t0 = Date.now() - 40_000
+  const at = (ms: number) => new Date(t0 + ms).toISOString()
+  const go = goOnRun(withEnd(endRun([{ started: at(0), agent: 'ag9', tokens: { input: 100 } }], at(30_000)), 'restarted', 'after Claude Code was reopened'), at(30_000))!
+  expect(freshTry({ status: 'doing', runs: go }, t0 + 35_000)).toBe(false)
+  const go2 = goOnRun(withEnd(endRun([{ started: at(-90_000), ended: at(-60_000), ended_by: 'finished', ended_note: 'tests failed' }, { started: at(0), agent: 'ag9' }], at(30_000)), 'restarted', 'after Claude Code was reopened'), at(30_000))!
+  expect(freshTry({ status: 'doing', runs: [...go2.slice(0, -1), { ...go2.at(-1)!, agent: 'ag10' }] }, t0 + 35_000)).toBe(false)
+  // even if one were taken off, the stopped worker's id moves to the try before it, so its late hand-back is still refused
+  expect(onRuns(withoutOpenRun(go2), 'ag9')).toBe(true)
+  // a fresh try with no restart still joins (T-678)
+  expect(freshTry({ status: 'doing', runs: [{ started: at(-90_000), ended: at(-60_000) }, { started: at(30_000) }] }, t0 + 35_000)).toBe(true)
+})
+
+test('T-743: endRun adds a going-on try\'s new tokens to the ones it had; a try already ended only gets missing ones filled in', () => {
+  expect(endRun([{ started: ISO, tokens: { input: 10 }, cost: 1 }], STOP, { tokens: { input: 5, output: 2 }, cost: 0.5 })[0]).toEqual({ started: ISO, ended: STOP, tokens: { input: 15, output: 2 }, cost: 1.5 })
+  expect(endRun([{ started: ISO, ended: STOP, tokens: { input: 10 } }], STOP, { tokens: { input: 5 } })[0]!.tokens).toEqual({ input: 10 })
+  expect(endRun([{ started: ISO }], STOP, { tokens: { input: 5 } })[0]!.tokens).toEqual({ input: 5 })
 })
 
 test('T-600: a worker started by startWorker gets the lines of .symcc/org-mem.md in its prompt; no file: no guide heading', async () => {

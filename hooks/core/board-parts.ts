@@ -242,6 +242,15 @@ export const sizeWarnText = (file: string, bytes: number) =>
     ? `${file} is ${mbText(bytes)}, over the 4 MB limit on reading or writing one file, so symcc can't read it`
     : `${file} is ${mbText(bytes)}, close to the 4 MB limit on reading or writing one file; past it symcc can't read it`
 
+/** `text` with every sizeWarnText warning in it put short, for a narrow line (T-748): "board.json 3.8 MB, near the
+ *  4 MB limit" or "board.json 4.2 MB, over the 4 MB limit"; a tooBigText error: "board.json 4.2 MB, over the 4 MB
+ *  limit: symcc can't read it" (or "write"). Other text stays as it is. */
+export const shortSizeWarns = (text: string) =>
+  text
+    .replace(/(\S+) is ([\d.]+ MB), over the 4 MB limit on (?:reading|writing) one file, so symcc can't (read|write) it; nothing that needs it works until it is smaller/g, "$1 $2, over the 4 MB limit: symcc can't $3 it")
+    .replace(/(\S+) is ([\d.]+ MB), over the 4 MB limit on reading or writing one file, so symcc can't read it/g, '$1 $2, over the 4 MB limit')
+    .replace(/(\S+) is ([\d.]+ MB), close to the 4 MB limit on reading or writing one file; past it symcc can't read it/g, '$1 $2, near the 4 MB limit')
+
 /** The error for file `file` of `bytes` bytes, too big to be read (or written). */
 export const tooBigText = (file: string, bytes: number, doing: 'read' | 'write' = 'read') =>
   `${file} is ${mbText(bytes)}, over the 4 MB limit on ${doing === 'read' ? 'reading' : 'writing'} one file, so symcc can't ${doing} it; nothing that needs it works until it is smaller`

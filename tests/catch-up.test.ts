@@ -21,8 +21,10 @@ function world() {
   const dirty = new Set<string>()
   const statusFails = new Set<string>()
   const calls: string[] = []
+  const clash = { on: false, aborted: 0 }
   const ref = (r: string) => r.replace(/^refs\/heads\//, '')
-  const runGit = (a: string[], cwd: string): Res => {
+  const runGit = (args: string[], cwd: string): Res => {
+    const a = args.filter((x, i) => x !== '-c' && args[i - 1] !== '-c')
     if (a[0] === 'worktree' && a[1] === 'add') {
       const isNew = a[2] === '-b'
       const dir = isNew ? a[4]! : a[2]!
@@ -48,6 +50,15 @@ function world() {
       branches.set(br, [...to])
       return ok()
     }
+    if (a[0] === 'merge' && a[1] === '--abort') return (clash.aborted++, ok())
+    // T-745: a real merge (main into a branch with its own commits): a merge commit, or a clash
+    if (a[0] === 'merge' && a.includes('--no-edit')) {
+      if (clash.on) return { exitCode: 1, stdout: 'CONFLICT (content): Merge conflict in src/x.ts', stderr: '' }
+      const br = checkedOut.get(cwd)!
+      const mine = branches.get(br)!
+      branches.set(br, [...mine, ...branches.get(ref(a.at(-1)!))!.filter(c => !mine.includes(c)), 'merge'])
+      return ok()
+    }
     if (a[0] === 'ls-files') return ok('')
     return fail()
   }
@@ -64,7 +75,7 @@ function world() {
     },
   })
   S.root = ROOT
-  return { $, branches, dirty, statusFails, calls }
+  return { $, branches, dirty, statusFails, calls, clash }
 }
 
 const task = { id: 'T-1', title: 't', status: 'todo' } as SymccTask
@@ -87,18 +98,50 @@ test('the same happens when the folder was removed but the old branch is still t
   expect(behind).toBe(0)
 })
 
-test('a branch with a commit of its own is not moved, and the worker is told it is behind', async () => {
+test('T-745: a branch with commits of its own gets main merged in before the new try', async () => {
   const w = world()
-  w.branches.set(S.N.branch('T-1'), ['a', 'mine'])
-  w.branches.set('main', ['a', 'b', 'c'])
-  const { behind, why } = await prepareWorktree(w.$, task, 'main', true)
-  expect(w.branches.get(S.N.branch('T-1'))).toEqual(['a', 'mine'])
+  await prepareWorktree(w.$, task, 'main', true)
+  w.branches.set(S.N.branch('T-1'), ['a', 'b', 'mine'])
+  // three tasks merge into main meanwhile
+  w.branches.set('main', ['a', 'b', 'c', 'd', 'e'])
+  const { behind, why, merged } = await prepareWorktree(w.$, task, 'main', true)
+  expect(w.branches.get(S.N.branch('T-1'))).toEqual(['a', 'b', 'mine', 'c', 'd', 'e', 'merge'])
   expect(w.calls.some(c => c.includes('--ff-only'))).toBe(false)
+  expect(w.calls.some(c => c.includes('merge --no-edit --no-verify -m') && c.endsWith('refs/heads/main'))).toBe(true)
+  expect(behind).toBe(0)
+  expect(why).toBe(undefined)
+  expect(merged).toBe(3)
+  expect(behindNote(behind, 'main', why)).toBe('')
+})
+
+test('T-745: a merge of main that clashes is aborted, the branch is left as it is and the worker is told', async () => {
+  const w = world()
+  await prepareWorktree(w.$, task, 'main', true)
+  w.branches.set(S.N.branch('T-1'), ['a', 'b', 'mine'])
+  w.branches.set('main', ['a', 'b', 'c', 'd'])
+  w.clash.on = true
+  const { behind, why, merged } = await prepareWorktree(w.$, task, 'main', true)
+  expect(w.clash.aborted).toBe(1)
+  expect(w.branches.get(S.N.branch('T-1'))).toEqual(['a', 'b', 'mine'])
   expect(behind).toBe(2)
-  expect(why).toBe('commits')
-  expect(behindNote(behind, 'main', why)).toContain('your branch has commits from an earlier try')
-  expect(behindNote(behind, 'main', why)).toContain('main has 2 newer commits your branch lacks')
+  expect(why).toBe('clash')
+  expect(merged).toBe(undefined)
+  expect(behindNote(behind, 'main', why)).toContain("main has 2 new commits you don't have yet; merge them in first")
   expect(behindNote(0, 'main')).toBe('')
+})
+
+test('T-745: a branch with commits of its own and uncommitted changes is left as it is', async () => {
+  const w = world()
+  await prepareWorktree(w.$, task, 'main', true)
+  w.branches.set(S.N.branch('T-1'), ['a', 'b', 'mine'])
+  w.branches.set('main', ['a', 'b', 'c'])
+  w.dirty.add(worktreeDir('T-1'))
+  const { behind, why } = await prepareWorktree(w.$, task, 'main', true)
+  expect(w.branches.get(S.N.branch('T-1'))).toEqual(['a', 'b', 'mine'])
+  expect(w.calls.some(c => c.includes(' merge '))).toBe(false)
+  expect(behind).toBe(1)
+  expect(why).toBe('changes')
+  expect(behindNote(2, 'main', 'commits')).toContain('main has 2 newer commits your branch lacks')
 })
 
 test('a folder with uncommitted changes is not moved', async () => {
