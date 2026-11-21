@@ -417,6 +417,8 @@ test('startTui on a fake OpenCode TUI: reads the view file above its folder, dra
   expect(current).toBe(undefined)
   await open.run()
   expect(current?.name).toBe(BOARD_PANEL)
+  expect(board.state().tab).toBe('live')  // T-773: a reopened board is on Live, not the last tab
+  await board.press('t', 'ses_1')
   expect(toasts).toEqual([])
   // no layer of the panel's keys before the panel is drawn: they are made inside it
   expect(layers.length).toBe(1)

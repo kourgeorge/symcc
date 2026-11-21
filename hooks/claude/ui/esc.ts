@@ -89,7 +89,7 @@ export async function forgetPane($: $) {
   S.settingPick = null
   resetOrgMemView()
   changesCache.clear()
-  await panelValues($).updateTab(() => '').catch(() => undefined)
+  await panelValues($).updateTab(() => 'live').catch(() => undefined)
   await panelValues($).updateScoutOpen(() => '').catch(() => undefined)
 }
 

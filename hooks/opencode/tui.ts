@@ -1010,7 +1010,8 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   }))
   const openBoard = () => {
     if (ctx.ui.panel.current()?.name === BOARD_PANEL) return ctx.ui.panel.close()
-    if (!ctx.ui.panel.open(BOARD_PANEL)) say(`Open or start a session first: the ${name} board opens next to a session (then /${name}-board, or "${name} board" in the command palette, ctrl+p).`)
+    if (!ctx.ui.panel.open(BOARD_PANEL)) return say(`Open or start a session first: the ${name} board opens next to a session (then /${name}-board, or "${name} board" in the command palette, ctrl+p).`)
+    showTab('live')
   }
   const clickBand = (hit: BandHit) => {
     if ('board' in hit) return openBoard()
