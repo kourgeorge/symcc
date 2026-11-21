@@ -448,3 +448,40 @@ test("T-753: a turned-down pop-up tied to a task's own question leaves the task 
   expect(w.board().tasks[0]!.status).toBe('waiting')
   expect(boardAnswered('T-1', 'Blue')).toBe(false)
 })
+
+/** A fake next(e) answered at once with `answers`, its text repeating them as Claude Code's does. */
+const answeredWith = (answers: Record<string, string>) => async () => ({
+  ref: 1,
+  result: { questions: [], answers },
+  text: `User has answered your questions: ${Object.entries(answers).map(([q, a]) => `"${q}"="${a}"`).join(', ')}.`,
+})
+
+test('T-753: an answer or a question with the refusal words is an answer, not a turned-down pop-up', async () => {
+  // the owner's answer has the words
+  const w = world()
+  const said = "No, the client doesn't want to proceed with that"
+  const out = (await popupCall(w.host, undefined, { questions: [ask('Go on?', ['Yes', 'No'])] }, answeredWith({ 'Go on?': said }), w.notice)) as { context: string[] }
+  expect(out.context).toEqual([`symcc closed Q-1 on the board with the owner's answer "${said}".`])
+  expect(w.board().questions![0]).toMatchObject({ answer: said, answered_by: 'chat' })
+  expect(w.board().questions![0]!.dropped).toBe(undefined)
+
+  // the question has the words
+  const w2 = world()
+  const q = 'The tool use was rejected last time: retry?'
+  const out2 = (await popupCall(w2.host, undefined, { questions: [ask(q, ['Yes', 'No'])] }, answeredWith({ [q]: 'Yes' }), w2.notice)) as { context: string[] }
+  expect(out2.context).toEqual(['symcc closed Q-1 on the board with the owner\'s answer "Yes".'])
+  expect(w2.board().questions![0]).toMatchObject({ answer: 'Yes', answered_by: 'chat' })
+  expect(w2.board().questions![0]!.dropped).toBe(undefined)
+})
+
+test("T-753: a task-tied pop-up answered with the refusal words puts the answer into the task", async () => {
+  const w = world()
+  await waitingTask(w.host as never, { question: 'Red or blue?', options: ['Red', 'Blue'] })
+  const said = "No: the client doesn't want to proceed"
+  const q = 'T-1 asks: red or blue?'
+  const out = (await popupCall(w.host, undefined, { questions: [ask(q, ['Red', 'Blue'], { header: 'T-1' })] }, answeredWith({ [q]: said }), w.notice)) as { context: string[] }
+  expect(out.context[0]).toMatch(/^symcc put the owner's answer into T-1: /)
+  const t = w.board().tasks[0]!
+  expect(t.status).not.toBe('waiting')
+  expect(t.history.map(h => h.text).join('\n')).toContain(said)
+})

@@ -207,13 +207,15 @@ export async function popupToTask(host: Host, id: string, answer: string): Promi
 const REFUSED = /doesn['’]t want to proceed|tool use was rejected/i
 
 /**
- * Did pop-up result `r` end turned down: the call was refused (`{ deny }`), or the owner rejected it (the refusal
- * words in its text or result)? Closing it with no answer is not that.
+ * Did pop-up result `r` end turned down: the call was refused (`{ deny }`), or it failed (`isError: true`) because
+ * the owner rejected it (the refusal words in its text or result)? Closing it with no answer is not that, and an
+ * answered result never is, even when its question or answer has those words.
  */
 export function turnedDown(r: unknown): boolean {
   if (!r || typeof r !== 'object') return false
-  const x = r as { deny?: unknown; text?: unknown; result?: unknown }
+  const x = r as { deny?: unknown; isError?: unknown; text?: unknown; result?: unknown }
   if (typeof x.deny === 'string' && x.deny) return true
+  if (x.isError !== true) return false
   return [x.text, x.result].some(v => typeof v === 'string' && REFUSED.test(v))
 }
 
