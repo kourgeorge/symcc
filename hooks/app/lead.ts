@@ -241,6 +241,15 @@ export async function disableHere(host: Host): Promise<string> {
     } finally {
       handing = false
     }
+  } else {
+    // a hand-over this window asked for earlier (/drive) or was given (handFrom) must not land on an off-here window
+    await locked(host, async () => {
+      const text = await host.fs.read(path(S.N.leadFile)).catch(() => null)
+      const l = parseLead(text)
+      if (!l) return
+      if (l.session === S.me && l.handFrom) await host.run(['rm', '-f', path(S.N.leadFile)])
+      else if (l.handTo === S.me) await writeLead(host, noHandRequest(text)!)
+    }).catch(() => undefined)
   }
   await publish(host, await load(host)).catch(() => undefined)
   return `${S.N.name} is now off in this window: ${S.W.assistant} works as normal here from your next message. Other windows are not changed.${drove ? ' This window handed driving over; another window takes over within 30 s (if none is open, work waits until one is).' : ''} Turn it back on with /${S.N.name}-enable here.`
@@ -295,6 +304,11 @@ export const GONE_GRACE_MS = 90_000
 
 /** The heartbeat of a window off here: it drives nothing; it looks whether the window with symcc on is gone and tells the owner once. */
 export async function offHereBeat(host: Host, nowMs = Date.now()) {
+  // a hand-over that landed on this window (it asked with /drive before turning off): give the board straight back
+  await locked(host, async () => {
+    const l = parseLead(await host.fs.read(path(S.N.leadFile)).catch(() => null))
+    if (l && l.session === S.me && l.handFrom) await host.run(['rm', '-f', path(S.N.leadFile)])
+  }).catch(() => undefined)
   const live = liveDriver(await host.fs.read(path(S.N.leadFile)).catch(() => null), nowMs)
   const was = S.offWhy
   if (live && live !== S.me) {

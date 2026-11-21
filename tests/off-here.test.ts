@@ -112,6 +112,42 @@ test('a driving window turned off here never drives again; with another window o
   expect(parseLead(w.files.get(w.lead)!)?.session).toBe('b')
 })
 
+test('a window that asked to drive (/drive) and then turns off here drops its request; the old driver keeps the board', async () => {
+  S.root = ROOT
+  S.me = 'a'
+  const w = world('a')
+  await saveBoard(w.host, emptyBoard())
+  expect(await claimLead(w.host)).toBe(true)
+  S.me = 'b'
+  S.driving = false
+  await driveHere(w.host)
+  expect(parseLead(w.files.get(w.lead)!)?.handTo).toBe('b')
+  await disableHere(w.host)
+  const l = parseLead(w.files.get(w.lead)!)
+  expect(l?.session).toBe('a')
+  expect(l?.handTo).toBeUndefined()
+  S.offHere = false
+  S.me = 'a'
+  expect(await claimLead(w.host)).toBe(true)
+  expect(parseLead(w.files.get(w.lead)!)?.session).toBe('a')
+})
+
+test('an off-here window that finds the board handed to it gives it straight back', async () => {
+  S.root = ROOT
+  S.me = 'b'
+  const w = world('b')
+  await saveBoard(w.host, emptyBoard())
+  S.offHere = true
+  S.offWhy = 'off'
+  w.files.set(w.lead, JSON.stringify({ session: 'b', heartbeat: Date.now(), handFrom: 'a' }))
+  await offHereBeat(w.host)
+  expect(w.files.has(w.lead)).toBe(false)
+  S.offHere = false
+  S.me = 'a'
+  expect(await claimLead(w.host)).toBe(true)
+  expect(parseLead(w.files.get(w.lead)!)?.session).toBe('a')
+})
+
 test('/symcc-enable here turns the window back on: it tells the lead once, drives again, and the project switch is untouched', async () => {
   S.root = ROOT
   S.me = 'a'
