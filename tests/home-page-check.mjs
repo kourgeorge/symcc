@@ -96,9 +96,9 @@ for (const [name, t] of [['board', board], ['Live tab', live]]) {
 // the bar with the scouts' share; then the hour sparkline with its labels and the figures (no cost)
 for (const [name, t] of [['board', board], ['Live tab', live]]) {
   const after = t.slice(t.indexOf('TODAY') + 'TODAY'.length).split('\n').filter(l => l.trim())
-  if (after[1] !== ' ⌀ per task 3M · 9m work · 41m start-to-merge   ⏱ 16h 56m agent work') bad(`still frame: the ${name}'s ▍Today line 2 does not show "3M · 9m" and the real figures ("${after[1] ?? ''}")`)
-  if (!/^ [█▒]{16} workers and checkers 90% · scouts 10% \(54\.7M of 530\.1M tokens\)$/.test(after[2] ?? '')) bad(`still frame: the ${name}'s ▍Today line 3 is not the bar and the scouts' share ("${after[2] ?? ''}")`)
-  if (!/^ 08 [▁▂▃▄▅▆▇█]+ \d\d {3}first try 34% {3}⌀ 2\.4 tries {3}⌕ \d+ sent back by the checker$/.test(after[3] ?? '')) bad(`still frame: the ${name}'s ▍Today line 4 is not the hour sparkline with its labels, first try, tries and send-backs ("${after[3] ?? ''}")`)
+  if (!/^ [█▒]{16} workers and checkers 90% · scouts 10% \(54\.7M of 530\.1M tokens\)$/.test(after[1] ?? '')) bad(`still frame: the ${name}'s ▍Today line 2 is not the bar alone with the scouts' share ("${after[1] ?? ''}")`)
+  if (after[2] !== ' ⌀ per task 3M · 9m work · 41m start-to-merge   first try 34% · ⌀ 2.4 tries   ⌕ 47 sent back by the checker' && !/^ ⌀ per task 3M · 9m work · 41m start-to-merge   first try 34% · ⌀ 2\.4 tries   ⌕ \d+ sent back by the checker$/.test(after[2] ?? '')) bad(`still frame: the ${name}'s ▍Today line 3 does not show the real medians, first try and tries ("${after[2] ?? ''}")`)
+  if (!/^ ⏱ 16h 56m agent work {3}08 [▁▂▃▄▅▆▇█]+ \d\d$/.test(after[3] ?? '')) bad(`still frame: the ${name}'s ▍Today line 4 is not the agent work time then the hour sparkline with its labels at the end ("${after[3] ?? ''}")`)
 }
 if (/≈ \$/.test(live + board)) bad('still frame: ▍Today shows a "≈ $" figure')
 for (const w of ['workers', 'scouts']) {

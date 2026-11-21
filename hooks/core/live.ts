@@ -913,71 +913,86 @@ export function squeezeHours(hours: readonly number[], bars: number): number[] {
 }
 
 /**
- * ▍Today's second, third and fourth lines in `width` columns (see the drawing above): the medians per merged task, the
- * agent work time and the cost; the stacked bar of who spent the tokens with their shares; the tokens per hour with its
- * first and last hour (always shown), then the busiest hour, the right-first-try share, the tries per merged task and
- * the checker's send-backs. When narrow, line 2 loses its cost, its agent work time, then its per-task figures from the
- * end; line 3 loses the shares' words (the bar stays); line 4 loses its parts from the end (send-backs, tries, first try,
- * busiest) and then squeezes the sparkline (hours merged, the labels stay). Never wider than `width`. A line with nothing to say is left out.
+ * ▍Today's second, third and fourth lines in `width` columns: (2) the stacked bar of who spent the tokens with their
+ * shares, alone; (3) the medians per merged task, first try, tries and the checker's send-backs; (4) the agent work
+ * time, the cost, the busiest hour, then the hour sparkline with its first and last hour at the very end. When narrow,
+ * each line drops parts from its end; line 4 drops busiest, then the cost, then squeezes the sparkline (labels stay).
+ * Never wider than `width`. A line with nothing to say is left out.
  */
 export function todayMoreLines(m: TodayMore, width: number): LiveSeg[][] {
   const w = Math.max(1, Math.floor(width))
   const per = m.perTask
   const perParts = per ? [per.tokens !== undefined && fmtTokens(per.tokens), per.workMs !== undefined && `${fmtDuration(per.workMs)} work`, per.mergeMs !== undefined && `${fmtDuration(per.mergeMs)} start-to-merge`].filter((x): x is string => !!x) : []
-  const line2 = (cost: boolean, keepPer: number, work: boolean): LiveSeg[] => {
-    const out: LiveSeg[] = []
-    const gap = () => out.length && out.push({ text: '   ', tone: 'text' })
-    const p = perParts.slice(0, keepPer)
-    if (p.length) out.push({ text: '⌀ ', tone: 'dim' }, { text: `per task ${p.join(' · ')}`, tone: 'text' })
-    if (work && m.workMs > 0) {
-      gap()
-      out.push({ text: '⏱ ', tone: 'dim' }, { text: `${fmtDuration(m.workMs)} agent work`, tone: 'text' })
-    }
-    if (cost && m.usd !== undefined) {
-      if (out.length) out.push({ text: ' · ', tone: 'dim' })
-      out.push({ text: todayCostText(m.usd), tone: 'text' })
-    }
-    return out
-  }
   const sh = shares(m.who)
-  const line3 = (words: boolean, barW = TODAY_BAR): LiveSeg[] => {
+  // line 2: the who-spent bar and its shares, alone
+  const line2 = (words: boolean, barW = TODAY_BAR): LiveSeg[] => {
     if (!m.who.length) return []
     const out: LiveSeg[] = [...todayBar(m.who, barW)]
     if (words) m.who.forEach((x, i) => out.push({ text: i ? ' · ' : ' ', tone: 'dim' }, { text: `${x.who} ${sh[i]}`, tone: x.who }))
     return out
   }
-  const busiest = m.hours.length ? m.hours.indexOf(Math.max(...m.hours)) : -1
-  const extras: string[] = [
-    ...(busiest >= 0 ? [`busiest hour ${hh(m.firstHour + busiest)}:00 · ${fmtTokens(m.hours[busiest]!)} tokens`] : []),
+  // line 3: the per-task medians, then first try, tries and the checker's send-backs; `keep` parts stay (dropped from the end)
+  const extras3: string[] = [
     ...(m.firstTry !== undefined ? [`first try ${Math.round(m.firstTry)}%`] : []),
     ...(m.avgTries !== undefined ? [`⌀ ${m.avgTries.toFixed(1)} tries`] : []),
     ...(m.sentBack !== undefined ? [`⌕ ${m.sentBack} sent back by the checker`] : []),
   ]
-  const line4 = (keep: number, bars: number): LiveSeg[] => {
+  const line3 = (keep: number): LiveSeg[] => {
     const out: LiveSeg[] = []
-    if (m.hours.length) {
+    const p = perParts.slice(0, keep)
+    if (p.length) out.push({ text: '⌀ ', tone: 'dim' }, { text: `per task ${p.join(' · ')}`, tone: 'text' })
+    const rest = keep > perParts.length ? extras3.slice(0, keep - perParts.length) : []
+    rest.forEach((x, i) => out.push({ text: out.length ? (i && !x.startsWith('⌕') ? ' · ' : '   ') : '', tone: i && !x.startsWith('⌕') ? 'dim' : 'text' }, { text: x, tone: 'dim' }))
+    return out
+  }
+  const busiest = m.hours.length ? m.hours.indexOf(Math.max(...m.hours)) : -1
+  // line 4: agent work time, the cost, the busiest hour, then the sparkline with its labels at the very end
+  const line4 = (cost: boolean, busy: boolean, bars: number): LiveSeg[] => {
+    const out: LiveSeg[] = []
+    const gap = () => out.length && out.push({ text: '   ', tone: 'text' })
+    if (m.workMs > 0) out.push({ text: '⏱ ', tone: 'dim' }, { text: `${fmtDuration(m.workMs)} agent work`, tone: 'text' })
+    if (cost && m.usd !== undefined) {
+      if (out.length) out.push({ text: ' · ', tone: 'dim' })
+      out.push({ text: todayCostText(m.usd), tone: 'text' })
+    }
+    if (busy && busiest >= 0) {
+      gap()
+      out.push({ text: `busiest hour ${hh(m.firstHour + busiest)}:00 · ${fmtTokens(m.hours[busiest]!)}`, tone: 'dim' })
+    }
+    if (bars > 0 && m.hours.length) {
+      gap()
       out.push({ text: `${hh(m.firstHour)} `, tone: 'dim' }, { text: sparkline(squeezeHours(m.hours, bars)), tone: 'bar' }, { text: ` ${hh(m.firstHour + m.hours.length - 1)}`, tone: 'dim' })
     }
-    extras.slice(0, keep).forEach((x, i) => out.push({ text: out.length || i ? '   ' : '', tone: 'text' }, { text: x, tone: 'dim' }))
     return out
   }
   const fits = (xs: LiveSeg[]) => textWidth(segText(xs)) <= w
-  let two: LiveSeg[] = []
-  for (const [cost, keep, work] of [[true, 3, true], [false, 3, true], [false, 3, false], [false, 2, false], [false, 1, false]] as const) {
-    two = line2(cost, keep, work)
-    if (fits(two)) break
+  let two = line2(true)
+  if (!fits(two)) two = line2(false, Math.min(TODAY_BAR, w))
+  let three: LiveSeg[] = []
+  for (let keep = perParts.length + extras3.length; keep >= 1; keep--) {
+    three = line3(keep)
+    if (fits(three)) break
   }
-  if (!fits(two)) two = [{ text: fitText(segText(two), w), tone: 'text' }]
-  let three = line3(true)
-  if (!fits(three)) three = line3(false, Math.min(TODAY_BAR, w))
-  // line 4: the labels and the sparkline stay; the extras drop from the end, then the sparkline is squeezed
-  let four = line4(extras.length, m.hours.length)
-  for (let keep = extras.length; keep >= 0 && !fits(four); keep--) four = line4(keep, m.hours.length)
-  if (!fits(four)) {
-    const room = w - textWidth(`${hh(m.firstHour)}  ${hh(m.firstHour + m.hours.length - 1)}`)
-    four = m.hours.length ? line4(0, Math.max(1, room)) : []
-    if (!fits(four)) four = four.length ? [{ text: fitText(segText(four), w), tone: 'text' }] : four
+  if (!fits(three)) three = [{ text: fitText(segText(three), w), tone: 'text' }]
+  // line 4 drops busiest, then the cost, then squeezes the sparkline (labels stay), then drops it, then the work time
+  const n = m.hours.length
+  let four: LiveSeg[] = []
+  const tries: [boolean, boolean, number][] = [[true, true, n], [true, false, n], [false, false, n]]
+  for (const [c, b, k] of tries) {
+    four = line4(c, b, k)
+    if (fits(four)) break
   }
+  if (!fits(four) && n) {
+    const base = textWidth(segText(line4(false, false, 0))) + (m.workMs > 0 ? 3 : 0) + textWidth(`${hh(m.firstHour)}  ${hh(m.firstHour + n - 1)}`)
+    four = line4(false, false, Math.max(1, w - base))
+  }
+  // still too wide: the work time goes, the sparkline (squeezed) stays alone
+  if (!fits(four) && n) {
+    const only = (bars: number) => [{ text: `${hh(m.firstHour)} `, tone: 'dim' as const }, { text: sparkline(squeezeHours(m.hours, bars)), tone: 'bar' as const }, { text: ` ${hh(m.firstHour + n - 1)}`, tone: 'dim' as const }]
+    four = only(Math.max(1, w - textWidth(`${hh(m.firstHour)}  ${hh(m.firstHour + n - 1)}`)))
+  }
+  if (!fits(four)) four = line4(false, false, 0)
+  if (!fits(four)) four = four.length ? [{ text: fitText(segText(four), w), tone: 'text' }] : four
   return [two, three, four].filter(x => x.length)
 }
 

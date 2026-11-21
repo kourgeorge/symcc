@@ -28,6 +28,6 @@ export const todayTeamOf = (t0: number, offsetMin: number, hours?: Record<number
   ...(hours ? { hours: Array.from({ length: 24 }, (_, h) => hours[h] ?? 0) } : {}),
 })
 
-/** The second and third lines these give at a wide panel (the bar's shares: workers 5.7M, checkers 0.3M, scouts 3M, lead 1M). */
-export const TODAY_LINE_2 = '⌀ per task 2M · 10m work · 30m start-to-merge   ⏱ 1h 15m agent work · ≈ $12 this session'
+/** T-809: the lines these give at a wide panel (the bar's shares: workers 5.7M, checkers 0.3M, scouts 3M, lead 1M): 2 the bar alone, 3 the medians, 4 work, cost, busiest hour, sparkline. */
+export const TODAY_LINE_3 = '⌀ per task 2M · 10m work · 30m start-to-merge   first try 67% · ⌀ 1.3 tries'
 export const TODAY_BAR_START = '████████▓▒▒▒▒▒░░ workers 57% · checkers 3% · scouts 30% · lead 10%'
