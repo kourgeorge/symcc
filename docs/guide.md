@@ -101,8 +101,9 @@ Each part is there for a reason. Knowing it makes the rest of this guide easier 
    │         ├──▶ worker's edit outside its list refused ──▶ waiting (file request)
    │         ├──▶ worker asks (ask_owner tool) ──▶ waiting, "symcc: T-5 needs you"
    │         ├──▶ worker's run ends on an error or a refusal ──▶ failed (with the reason)
-   │         └──▶ worker ended its turn before its work finished (its own
-   │              background command still running) ──▶ failed
+   │         └──▶ worker ended its turn with no report while its own
+   │              background command still ran ──▶ failed (with a report,
+   │              symcc stops the command and checks as usual)
    │
    ├── review   (only in review mode) checks passed; waits for YOUR approve
    │            (merge) or reject with a reason (back to todo, fresh worker)
@@ -308,9 +309,11 @@ happens, never the words in its hand-back:
 - its run ended on an API error (retries used up, the context limit) or the model refused →
   the task fails with that reason, and nothing is checked or merged (its work stays in its
   folder and branch, so a retry continues from there);
-- one of its own background commands (for example a test run it sent to the background) was
-  still running when its turn ended → the task fails ("the worker ended its turn before its
-  work finished"), and nothing is checked or merged. Another agent's command still running
+- it handed back with no report while one of its own background commands (for example a test
+  run it sent to the background) was still running → the task fails ("the worker ended its
+  turn before its work finished"), and nothing is checked or merged. If it did write a report,
+  symcc stops those commands instead (the history says "stopped N command(s) still running at
+  hand-back") and goes on to the steps below as usual. Another agent's command still running
   doesn't count; when symcc can't tell whose a command is, the worker only gets a warning if
   its hand-back says work is still going;
 - otherwise it is finished, and its work goes through these steps (an investigation goes to

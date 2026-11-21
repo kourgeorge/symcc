@@ -4,7 +4,7 @@
 
 import type { SymccTokens } from '../../types'
 import { fmtCost, fmtDuration, fmtTokenKinds, fmtTokens, billedTokens, tokenCount } from './runs'
-import { BILLED_FOOTNOTE, STAGES_NOTE, countingText, pctText, rangeText, scoutResultsText, statsTitle, unlinkedText, type StatsData, type StatsGroup, type StatsTop } from './stats'
+import { BILLED_FOOTNOTE, FAILED_TESTS_SHORT, FAILED_TRIES_SHORT, STAGES_NOTE, countingText, pctText, rangeText, scoutResultsText, statsTitle, unlinkedText, type StatsData, type StatsGroup, type StatsTop } from './stats'
 
 /** `s` safe inside HTML text and attribute values. */
 export const escapeHtml = (s: unknown): string =>
@@ -159,6 +159,18 @@ export function statsHtml(d: StatsData, project: string): string {
     + `<h3>Failed tries by reason (${d.failedTotal}, from history)</h3>`
     + d.failed.map(f => barRow(f.label, f.n, maxFail, String(f.n), f.key === 'changed' ? 'var(--grey)' : 'var(--red)')).join(''))
 
+  // T-731: the text report's "Each failed try" and "Tests that failed most" (T-721), the same short/full cut
+  const triesShown = d.full ? d.failedTries : d.failedTries.slice(-FAILED_TRIES_SHORT)
+  const failedTries = section(`Each failed try (${d.failedTries.length})`, d.failedTries.length
+    ? (triesShown.length < d.failedTries.length ? `<p class="muted">The latest ${triesShown.length}; every one: /${E(d.name)}-stats html full</p>` : '')
+      + `<table class="t small"><thead><tr><th>task</th><th>try</th><th>failing command</th><th>reason</th><th>first failing test</th></tr></thead><tbody>${triesShown.map(f => `<tr><td>${E(f.id)} ${E(f.title)}</td><td>${f.try}</td><td>${f.command ? `<code>${E(f.command)}</code>` : '-'}</td><td>${E(f.reason)}</td><td>${f.test ? E(f.test) : '-'}</td></tr>`).join('')}</tbody></table>`
+    : '<p class="muted">No failed tries.</p>', true)
+  const testsShown = d.full ? d.failedTests : d.failedTests.slice(0, FAILED_TESTS_SHORT)
+  const maxTasks = Math.max(0, ...testsShown.map(x => x.tasks))
+  const failedTests = section(`Tests that failed most${testsShown.length < d.failedTests.length ? ` (top ${testsShown.length} of ${d.failedTests.length})` : ''}`, d.failedTests.length
+    ? testsShown.map(x => barRow(x.name, x.tasks, maxTasks, `${plural(x.tasks, 'task')} · ${plural(x.tries, 'try', 'tries')}`, 'var(--red)')).join('')
+    : '<p class="muted">No failing tests recorded.</p>')
+
   const maxRole = Math.max(0, ...d.roles.map(g => g.n))
   const roles = section('By role', d.roles.map((g, i) => barRow(g.label, g.n, maxRole, groupText(g, d.total), CYCLE[i % CYCLE.length]!, groupSub(g))).join(''))
 
@@ -216,7 +228,7 @@ export function statsHtml(d: StatsData, project: string): string {
       ]), true)
   }
 
-  return `${head}${cards}<div class="grid">${states}${ended}${team}${days}${stages}${perDone}${perTry}${inv}${roles}${origins}${topTok}${topTime}</div>${end}`
+  return `${head}${cards}<div class="grid">${states}${ended}${failedTests}${failedTries}${team}${days}${stages}${perDone}${perTry}${inv}${roles}${origins}${topTok}${topTime}</div>${end}`
 }
 
 /** The command that opens `file` in the browser on `platform` (process.platform's words), or every one to try when not known. */
