@@ -73,12 +73,16 @@ export const WORKER_HANDED_BACK = 'worker handed back'
  * T-723: "try 2: worker started (role tester)", the 'stage' line of a try whose worker just started: "· merges main in
  * first" for a merge-it-in try (`mergeMain`), and "· same try number (note joined)" when this try number already had a
  * started worker (a change restarted a try that had only just started, T-678; "(task changed)" when no note came).
+ * Only that T-678 path gives a try its number back without a "restarted"/"stopped" line: a drive hand-over (handedOff)
+ * also takes the number back but writes its own "restarted" line, which already says why, so no mark is added then.
  */
 export function workerStartedEntry(t: Pick<SymccTask, 'role' | 'attempts' | 'history'>, mergeMain: boolean): HistoryAdd {
   const head = new RegExp(`^try ${Number(t.attempts) || 0}(?: \\([^)]*\\))?: ${WORKER_STARTED}\\b`)
   const history = t.history ?? []
   const last = history.findLastIndex(h => h.kind === 'stage' && head.test(h.text))
-  const again = last < 0 ? '' : history.slice(last + 1).some(h => h.kind === 'note') ? ' · same try number (note joined)' : ' · same try number (task changed)'
+  const since = last < 0 ? [] : history.slice(last + 1)
+  const changed = last >= 0 && !since.some(h => h.kind === 'restarted' || h.kind === 'stopped')
+  const again = !changed ? '' : since.some(h => h.kind === 'note') ? ' · same try number (note joined)' : ' · same try number (task changed)'
   return ['stage', `try ${t.attempts}: ${WORKER_STARTED} (role ${roleOf(t)})${mergeMain ? ' · merges main in first' : ''}${again}`]
 }
 
