@@ -64,6 +64,9 @@ if (!text(view('scouts')).includes('gaps-bot')) bad('still frame: the scouts vie
 // usual tokens per merged task (268.6M / 56 = 4.8M, so 4.0M fills 11 of 13 cells), and the legend says so
 if (!board.includes('▕███████████░░▏ 4.0M + …')) bad('still frame: T-740\'s lane does not show "▕███████████░░▏ 4.0M + …" (bar full = the usual per task)')
 if (!board.includes('bar: tokens of the task so far, full = usual per task (4.8M)')) bad('still frame: the board has no bar legend')
+// (T-757) the hand-drawn Live tab card tells the same story: whole-task tokens, full bar = the usual per task
+if (/tokens of each try|T-740[\s\S]{0,80}tokens at hand-back/.test(page)) bad('home page: the Live tab card still shows tokens per try ("tokens at hand-back" on T-740\'s try 2)')
+if (!page.includes('▕███████████░░▏ 4.0M + …')) bad('home page: the Live tab card\'s T-740 lane does not show "4.0M + …"')
 
 // the chat log must scroll, so its oldest messages (the owner's ask) stay in reach; and it must not pin messages
 // with justify-content: flex-end, which pushes the overflow above the top, where no scroll reaches it
