@@ -69,9 +69,6 @@ export async function bigLogUsageLines($: Pick<Host, 'run'>, path: string): Prom
   return keep.join('\n')
 }
 
-/** What leadUsage answers: the host's LeadUsage plus how many session logs couldn't be read at all (`leadUnread`). */
-export type LeadUsageRead = LeadUsage & { leadUnread?: number }
-
 /**
  * The lead's tokens for project folder `root`: the plugin API gives no per-session token counts (only this session's
  * $ total), so they are read from Claude Code's own session logs, ~/.claude/projects/<this project's folder>/<session>.jsonl.
@@ -79,7 +76,7 @@ export type LeadUsageRead = LeadUsage & { leadUnread?: number }
  * to since the range began are skipped. A log over 4 MiB (too big for $.fs.read) is read in parts (bigLogUsageLines);
  * one that still can't be read is counted in `leadUnread`, so the stats say the figure is short.
  */
-export async function leadUsage($: Pick<Host, 'env' | 'fs' | 'run'>, root: string, range: StatsRange, nowMs: number): Promise<LeadUsageRead> {
+export async function leadUsage($: Pick<Host, 'env' | 'fs' | 'run'>, root: string, range: StatsRange, nowMs: number): Promise<LeadUsage> {
   const home = (await $.env('HOME')) || (await $.env('USERPROFILE'))
   const base = (await $.env('CLAUDE_CONFIG_DIR')) || (home ? `${home}/.claude` : '')
   if (!base) return { leadProblem: "can't find Claude Code's folder (no HOME)" }
