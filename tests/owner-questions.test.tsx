@@ -334,9 +334,10 @@ test('the band says "2 questions for you" and lists them in the warning color, a
   on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks: [], working: [], scouts: [], mode: 'auto', test_commands: [], questions: b2.questions } }, version: 1 } }))
   on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
-  expect((await ui.find({ type: 'Text', text: /^⚠ 2 questions for you: Q-1 Raise the version\?$/ }))?.props.color).toBe('warning')
-  expect((await ui.find({ type: 'Text', text: /^⚠ Q-2 Add a scout\?$/ }))?.props.color).toBe('warning')
-  expect(await ui.find({ type: 'Text', text: /⏵ auto/ })).toBeUndefined()
+  expect((await ui.find({ type: 'Text', text: /^ ⚠ 2 questions for you: Q-1 Raise the version\?$/ }))?.props.color).toBe('warning')
+  expect((await ui.find({ type: 'Text', text: /^ ⚠ Q-2 Add a scout\?$/ }))?.props.color).toBe('warning')
+  // the mode is on the first line now (T-776), the questions under it
+  expect(await ui.find({ type: 'Text', text: /^ ⏵ auto/ })).toBeUndefined()
   await ui.unmount()
 })
 

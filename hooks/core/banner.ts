@@ -1,7 +1,8 @@
 // Board titles, the status line, the banner at the top of the panel, and the board as text.
 import type { SymccMode, SymccStatus, SymccTask } from '../../types'
 import { DEFAULT_NAME, ICON, ICON_ART, namesFor } from '../name'
-import { type Board, type BoardTask, kindOf, modeOf, OPEN, STATUS_WORD } from './board-file'
+import { type Board, type BoardTask, emptyBoard, kindOf, modeOf, OPEN, STATUS_WORD } from './board-file'
+import { cutTitle, padWidth, textWidth } from './stats'
 import { boardSections, type BoardSections, localOffset } from './days'
 import { fromText } from './origin'
 import { modeLabel, modeText } from './review'
@@ -96,19 +97,48 @@ export const BAND_STAGE: Record<PhaseStage, { icon: string; name: string }> = {
   test: { icon: STEP_ICON.testing, name: STEP_WORD.testing },
   merge: { icon: STEP_ICON.merging, name: STEP_WORD.merging },
 }
-/** What the band's next up row says after the task's id. */
-export const NEXT_UP_STATE = `${STATUS_MARK.todo} next up`
+/** What the band's next up row says after the task's id (its icon is STATUS_MARK.todo, "○"). */
+export const NEXT_UP_STATE = 'next up'
 
 /** One row of the band: `kind` 'run' (a running task), 'next' (the next task to start), 'you' (a task that needs the
- *  owner, drawn in the warning color); `forms` its state, fullest first (the time goes first, then the try, when narrow). */
-export type BandItem = { id: string; title: string; kind: 'run' | 'next' | 'you'; forms: string[]; tail: string }
+ *  owner, drawn in the warning color); `icon` the mark in front of its id ("▶", "⌕", "○", "?"); `forms` its state after
+ *  the id, fullest first (the time goes first, then the try, when narrow). */
+export type BandItem = { id: string; title: string; kind: 'run' | 'next' | 'you'; icon: string; forms: string[]; tail: string }
+
+/** What the band's first line (T-776) reads: the tasks, the scouts, the slots and the mode. */
+export type BandSummaryView = LiveView & { scouts?: readonly { running?: boolean }[] }
 
 /**
- * The task rows of Claude Code's band above the prompt (T-748), in this order: one per running task (the Live tab's
- * lanes: its stage's icon and name, the time in that stage, the try from try 2 on: "⌕ checker 8m (try 3)"), the next
- * task to start ("○ next up", the first task of the Live tab's next up that waits for nothing), then the tasks that need
- * the owner (needsYou: "? waiting", "◆ review", "✗ failed", "▶ more time?"). `since(id)`: when this session's worker
- * started (for a worker with no open try yet). No counts: the status line and the board have those.
+ * The short board summary on the band's first line, after "𝄞 symcc" (T-776): the mode, the agents busy of the slots,
+ * how many tasks wait to start, today's merged count, and "⌕ N scouts" while scouts run:
+ * "⏵ auto · 2/3 agents · 3 waiting · ✓ 12 today · ⌕ 1 scout". Wider than `width`, parts go from the end; the mode always stays.
+ */
+export function bandSummary(view: BandSummaryView, nowMs: number, width = Infinity, offsetMin?: number): string {
+  const tasks = view.tasks ?? []
+  const lanes = liveLanes(view, nowMs)
+  const max = view.max_parallel ?? emptyBoard().max_parallel
+  const waiting = tasks.filter(t => t.status === 'todo').length
+  const scouts = (view.scouts ?? []).filter(s => s.running).length
+  const parts = [
+    modeLabel(modeOf(view)),
+    `${lanes.filter(l => l.agent).length}/${max} agents`,
+    waiting ? `${waiting} waiting` : '',
+    `✓ ${liveToday(tasks, nowMs, offsetMin).merged} today`,
+    scouts ? `${STEP_ICON.checker} ${scouts} scout${scouts === 1 ? '' : 's'}` : '',
+  ].filter(Boolean)
+  for (let n = parts.length; n > 1; n--) {
+    const line = parts.slice(0, n).join(' · ')
+    if (textWidth(line) <= width) return line
+  }
+  return cutTitle(parts[0]!, Math.max(1, width))
+}
+
+/**
+ * The task rows of Claude Code's band above the prompt (T-748, T-776), in this order: one per running task (the Live
+ * tab's lanes: its stage's icon, then its name, the time in that stage, the try from try 2 on: "⌕" + "checker 8m · try 3"),
+ * the next task to start ("○" + "next up", the first task of the Live tab's next up that waits for nothing), then the
+ * tasks that need the owner (needsYou: "?" + "waiting", "◆" + "review", "✗" + "failed", "▶" + "more time?"). `since(id)`:
+ * when this session's worker started (for a worker with no open try yet). The counts are on the band's first line (bandSummary).
  */
 export function bandItems(view: LiveView, nowMs: number, since: (id: string) => number | string | undefined = () => undefined, note: (t: BoardTask) => string = t => t.note ?? ''): BandItem[] {
   const tasks = view.tasks as BoardTask[]
@@ -124,17 +154,12 @@ export function bandItems(view: LiveView, nowMs: number, since: (id: string) => 
     const ended = toMs(byId.get(l.id)?.runs?.at(-1)?.ended)
     const at = l.stage === 'worker' ? (ended === undefined ? (l.sinceMs ?? toMs(since(l.id))) : (toMs(since(l.id)) ?? l.sinceMs)) :l.station === 'work' ? (ended ?? l.sinceMs) : l.sinceMs
     const time = at !== undefined ? rowDuration(Math.max(0, nowMs - at)) : ''
-    const tries = l.tryNo > 1 ? ` (try ${l.tryNo})` : ''
-    const head = `${s.icon} ${s.name}`
-    return { id: l.id, title: l.title, kind: 'run', forms: [`${head}${time ? ` ${time}` : ''}${tries}`, `${head}${tries}`, head], tail: tail(byId.get(l.id)!) }
+    const tries = l.tryNo > 1 ? ` · try ${l.tryNo}` : ''
+    return { id: l.id, title: l.title, kind: 'run', icon: s.icon, forms: [`${s.name}${time ? ` ${time}` : ''}${tries}`, `${s.name}${tries}`, s.name], tail: tail(byId.get(l.id)!) }
   })
   const next = liveTrains(view, nowMs).next.find(x => !x.stuck.length)
-  const nextRow: BandItem[] = next ? [{ id: next.id, title: next.title, kind: 'next', forms: [NEXT_UP_STATE], tail: '' }] : []
-  const yours = you.map((t): BandItem => {
-    const cell = statusCell(t, nowMs, since(t.id))
-    const state = `${rowMark(t, nowMs)}${cell ? ` ${cell}` : ''}`
-    return { id: t.id, title: t.title, kind: 'you', forms: [state], tail: tail(t) }
-  })
+  const nextRow: BandItem[] = next ? [{ id: next.id, title: next.title, kind: 'next', icon: STATUS_MARK.todo, forms: [NEXT_UP_STATE], tail: '' }] : []
+  const yours = you.map((t): BandItem => ({ id: t.id, title: t.title, kind: 'you', icon: rowMark(t, nowMs), forms: [statusCell(t, nowMs, since(t.id))], tail: tail(t) }))
   return [...runs, ...nextRow, ...yours]
 }
 
@@ -143,10 +168,14 @@ const toMs = (x: number | string | undefined): number | undefined => {
   return Number.isFinite(n) ? n : undefined
 }
 
+/** The columns in front of a band row's id: the 1-space indent, the icon and a space (" ▶ "). */
+export const BAND_INDENT = 3
+
 /**
- * The fronts of band rows (bandItems), lined up: the id padded to one width, then the state padded to one width,
- * so every title starts in one column: "T-740 ⌕ checker 8m (try 3) ". The first state form that leaves TITLE_ROOM
- * for the title in `width` columns is used (the time goes first, then the try).
+ * The fronts of band rows (bandItems) after their icon, lined up: the id padded to one width, two spaces, then the
+ * state padded to one width and two spaces, so every title starts in one column: "T-740  checker 8m · try 3  ". The
+ * first state form that leaves TITLE_ROOM for the title in `width` columns (the whole row, BAND_INDENT included) is
+ * used (the time goes first, then the try).
  */
 export function bandFronts(items: readonly Pick<BandItem, 'id' | 'forms'>[], width = Infinity): Map<string, string> {
   const idWidth = Math.max(4, ...items.map(x => x.id.length))
@@ -154,14 +183,14 @@ export function bandFronts(items: readonly Pick<BandItem, 'id' | 'forms'>[], wid
   const formOf = (x: Pick<BandItem, 'forms'>, i: number) => x.forms[Math.min(i, x.forms.length - 1)] ?? ''
   let pick = most - 1
   for (let i = 0; i < most; i++) {
-    const w = Math.max(0, ...items.map(x => formOf(x, i).length))
-    if (idWidth + 1 + w + 1 + TITLE_ROOM <= width) {
+    const w = Math.max(0, ...items.map(x => textWidth(formOf(x, i))))
+    if (BAND_INDENT + idWidth + 2 + w + 2 + TITLE_ROOM <= width) {
       pick = i
       break
     }
   }
-  const stateWidth = Math.max(0, ...items.map(x => formOf(x, pick).length))
-  return new Map(items.map(x => [x.id, `${x.id.padEnd(idWidth)} ${formOf(x, pick).padEnd(stateWidth)} `]))
+  const stateWidth = Math.max(0, ...items.map(x => textWidth(formOf(x, pick))))
+  return new Map(items.map(x => [x.id, `${x.id.padEnd(idWidth)}  ${padWidth(formOf(x, pick), stateWidth)}  `]))
 }
 
 /** Whether a doing row in the band has a state to show (see bandLeads); without one its note says what goes on. */
