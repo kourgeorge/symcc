@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { allowFiles, refuseFiles, waitsForFiles, filesRefusedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, ROLE_TOOL_WORDS, DEFAULT_ROLE, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, patchTask, promoteTask, rejectTask, changeLines, stoppedEntry, withHistory, historyLineText, type SettingsInput, type SettingChange, testMinutesRefusal, isMode, readNotify, notifySet, notifyRefusal, applySettings, intoOf, crossBranchNotes, parseGoneBranch, saysMergeInstead, type Board, settingSetText, taskReports, reportPreview, statsReport, statsData, parseStatsRange, parseStatsArgs, archivedCount, localOffset, endedBy, freshTry, withoutOpenRun, stopEnd, changeRestartWhy, changedFields, addDetailsText, noteAddedLine, detailsBothRefusal, dayOf, inPlan, planBacklog, planAdded, planAddText, parseScoutUsage, parseStatusFilter, BOARD_STATUSES, type TeamInput, SETTING_NAMES, leadSettingsText, findingToBacklog, isScoutFindings, isTestsWithChanges, kindFor, isAnswered, askMoreTask, isInvestigation, checkKind, kindsLeadText, kindNames, BUILT_IN_KINDS, originOf, stateLabelLower, modeOf, when } from '../board'
+import { allowFiles, refuseFiles, waitsForFiles, filesRefusedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, ROLE_TOOL_WORDS, DEFAULT_ROLE, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, failedOnClash, patchTask, promoteTask, rejectTask, changeLines, stoppedEntry, withHistory, historyLineText, type SettingsInput, type SettingChange, testMinutesRefusal, isMode, readNotify, notifySet, notifyRefusal, applySettings, intoOf, crossBranchNotes, parseGoneBranch, saysMergeInstead, type Board, settingSetText, taskReports, reportPreview, statsReport, statsData, parseStatsRange, parseStatsArgs, archivedCount, localOffset, endedBy, freshTry, withoutOpenRun, stopEnd, changeRestartWhy, changedFields, addDetailsText, noteAddedLine, detailsBothRefusal, dayOf, inPlan, planBacklog, planAdded, planAddText, parseScoutUsage, parseStatusFilter, BOARD_STATUSES, type TeamInput, SETTING_NAMES, leadSettingsText, findingToBacklog, isScoutFindings, isTestsWithChanges, kindFor, isAnswered, askMoreTask, isInvestigation, checkKind, kindsLeadText, kindNames, BUILT_IN_KINDS, originOf, stateLabelLower, modeOf, when } from '../board'
 import { scoutMemoryFile, leadScouts, linkTaskToScoutRun } from './scouts'
 import { archivedText, bringBackArchived, findArchived, readArchiveFile } from './archive'
 import { removeWorktree, worktreeDir, setupGit, branchExists, branchList, homeBranch, taskWork, resetScratch } from './git'
@@ -688,7 +688,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       await scratchGone()
       // A paused task stays paused (only resume or retry starts it again); a dropped one stays dropped.
       const keep = t.status === 'dropped' || t.status === 'paused'
-      const patch: Partial<BoardTask> = { status: keep ? t.status : 'todo', note: t.status === 'paused' ? t.note : wasDoing ? 'changed; restarting' : 'changed', ...fields() }
+      const patch: Partial<BoardTask> = { status: keep ? t.status : 'todo', note: t.status === 'paused' ? t.note : wasDoing ? 'changed; restarting' : 'changed', ...(failedOnClash(t) ? { merge_main: true } : {}), ...fields() }
       // The owner's answer to a waiting task goes into its details (for the next worker) and its history.
       const answer = str(a.answer)?.trim()
       if (answer) patch.details = `${(patch.details ?? t.details).trimEnd()}\n\nOwner's answer${t.question ? ` to "${t.question}"` : ''}: ${answer}`
@@ -711,7 +711,8 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       // Finished work that waited only for the owner's files: just the merge runs again, no worker.
       if (waitsForFiles(t)) return mergeWaiting($, t.id)
       // Its automatic retries start over; if it last failed on a clash, the new worker merges main first.
-      const clashed = t.status === 'failed' && /^conflicts with the latest /.test(t.note ?? '')
+      // T-703: so does one a change, pause or the backlog moved on from such a failure (it kept merge_main).
+      const clashed = failedOnClash(t) || (t.status !== 'failed' && !!t.merge_main)
       const fromDropped = t.status === 'dropped'
       await change($, x => {
         const cur = find(x, t.id)
@@ -763,7 +764,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       }
       const wasDoing = t.status === 'doing'
       if (wasDoing) await stopWorker($, t.id, reason ?? 'the lead paused this task')
-      await change($, x => patchTask(x, t.id, { status: 'paused', note: paused, ...(wasDoing ? { history: withHistory((find(x, t.id) ?? t).history, now(), stoppedEntry(t, paused)) } : {}), ...endedBy(find(x, t.id), now(), 'stopped', paused) }, now()))
+      await change($, x => patchTask(x, t.id, { status: 'paused', note: paused, ...(failedOnClash(t) ? { merge_main: true } : {}), ...(wasDoing ? { history: withHistory((find(x, t.id) ?? t).history, now(), stoppedEntry(t, paused)) } : {}), ...endedBy(find(x, t.id), now(), 'stopped', paused) }, now()))
       void pump($)
       return `${t.id} paused${wasDoing ? ' (its worker was stopped)' : ''}; ${S.N.name} resume ${t.id} continues it`
     }
