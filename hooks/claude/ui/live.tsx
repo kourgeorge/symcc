@@ -11,7 +11,7 @@
 // T-715: under each lane hang its waiting trains (core's liveTrains and trainRows), each one a row Button that opens its task.
 // T-727: under the lanes, the Branches section (core's liveBranches): main's latest commits and a row per open task's
 // branch (commits ahead, how far behind), each task row a row Button that opens its task.
-// T-747: each section (Tasks, Branches, Today, Organizational memory) starts with a "▍Name" heading (core's
+// T-747: each section (Tasks, Today, Branches, Organizational memory) starts with a "▍Name" heading (core's
 // liveHeading), its lines indented by LIVE_INDENT, one empty line between sections.
 import { LIVE_EMPTY, LIVE_INDENT, LIVE_LEGEND, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, laneLines, liveBold, liveHeading, liveIndented, liveInner, liveBranches, liveHeader, liveKeys, liveLabelLine, liveLanes, liveLayout, liveOrgMem, liveStations, liveToday, liveTrains, nextUpLine, todayLines, trainRows } from '../../core/live'
 import { footerRule } from '../../board'
@@ -136,6 +136,12 @@ export function livePage($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
           ),
         ]
       })}
+      <Text key="live-next-blank"> </Text>
+      <Text key="live-today-head">{draw(liveHeading(LIVE_SECTIONS.today, width))}</Text>
+      <Text key="live-next" color={C('text')}>{LIVE_INDENT + nextUpLine(trains, inner)}</Text>
+      {today.map((line, i) => (
+        <Text key={`live-today-${i}`} color={C('text')}>{LIVE_INDENT + line}</Text>
+      ))}
       {br ? <Text key="live-br-blank"> </Text> : null}
       {br ? <Text key="live-br-head">{draw(br.head)}</Text> : null}
       {br ? <Text key="live-br-main">{under(br.main)}</Text> : null}
@@ -148,12 +154,6 @@ export function livePage($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
           <Text key="live-br-more">{under(r.segs)}</Text>
         ),
       )}
-      <Text key="live-next-blank"> </Text>
-      <Text key="live-today-head">{draw(liveHeading(LIVE_SECTIONS.today, width))}</Text>
-      <Text key="live-next" color={C('text')}>{LIVE_INDENT + nextUpLine(trains, inner)}</Text>
-      {today.map((line, i) => (
-        <Text key={`live-today-${i}`} color={C('text')}>{LIVE_INDENT + line}</Text>
-      ))}
       <Box key="live-keys" display="none">
         <Button key="live-watch" label="w" hotkey="w" onPress={watch} />
         <Button key="live-orgmem" label={ORG_MEM_KEY} hotkey={ORG_MEM_KEY} onPress={openOrgMemPage($)} />

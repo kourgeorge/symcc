@@ -791,7 +791,7 @@ export const LIVE_BLINK_MS = 1000
  * T-715: under each lane hang its waiting trains (core's liveTrains and trainRows); the cursor goes over them too, and
  * Enter or a click on one opens its task, as on a lane.
  * T-727: under the lanes, the Branches section (core's liveBranches); the cursor goes over its task rows (liveBranchId).
- * T-747: each section (Tasks, Branches, Today, Organizational memory) starts with a "▍Name" heading (core's
+ * T-747: each section (Tasks, Today, Branches, Organizational memory) starts with a "▍Name" heading (core's
  * liveHeading), its lines indented by LIVE_INDENT.
  */
 function liveBody(f: ViewFile, cursor: number, nowMs: number, w: number): Body {
@@ -831,18 +831,18 @@ function liveBody(f: ViewFile, cursor: number, nowMs: number, w: number): Body {
     b.add(under(second))
     for (const r of rows.get(l.id)!) r.id ? opens(r.segs, r.id) : b.add(under(r.segs))
   }
-  // T-738: one empty line above each section after the first (Branches, Today, Organizational memory)
+  // T-738: one empty line above each section after the first (Today, Branches, Organizational memory)
+  b.blank()
+  b.add(liveSegs(liveHeading(LIVE_SECTIONS.today, w)))
+  b.add([{ text: LIVE_INDENT + nextUpLine(trains, inner), color: 'text' }])
+  for (const t of todayLines(liveToday(v.tasks, nowMs), inner)) b.add([{ text: LIVE_INDENT + t, color: 'text' }])
+  if (lanes.length) b.add([{ text: LIVE_INDENT + LIVE_LEGEND, color: 'inactive' }])
   if (br) {
     b.blank()
     b.add(liveSegs(br.head))
     b.add(under(br.main))
     for (const r of br.rows) r.id ? opens(r.segs, liveBranchId(r.id)) : b.add(under(r.segs))
   }
-  b.blank()
-  b.add(liveSegs(liveHeading(LIVE_SECTIONS.today, w)))
-  b.add([{ text: LIVE_INDENT + nextUpLine(trains, inner), color: 'text' }])
-  for (const t of todayLines(liveToday(v.tasks, nowMs), inner)) b.add([{ text: LIVE_INDENT + t, color: 'text' }])
-  if (lanes.length) b.add([{ text: LIVE_INDENT + LIVE_LEGEND, color: 'inactive' }])
   // T-718: the Organizational memory section, just above the footer (a click on its header opens all notes)
   b.blank()
   b.add(liveSegs(om.head, { key: ORG_MEM_KEY }), { key: ORG_MEM_KEY })

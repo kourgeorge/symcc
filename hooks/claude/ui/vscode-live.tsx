@@ -12,7 +12,7 @@
 // T-715: under each lane hang its waiting trains (core's liveTrains and trainRows): each one indented by its level,
 // "└─◇", its id and cut title a link that opens the task, then "waits" and "+ also T-n" dim.
 // T-727: under the lanes, the Branches section (core's liveBranches) drawn with real lines: see branchesVs.
-// T-747: each section has a bold heading with the terminal's names (core's LIVE_SECTIONS): Tasks, Branches, Today,
+// T-747: each section has a bold heading with the terminal's names (core's LIVE_SECTIONS): Tasks, Today, Branches,
 // Organizational memory (that one a link to all notes).
 import { type BranchRow, type LiveBranches, liveBranches, LIVE_EMPTY, LIVE_LEGEND, LIVE_SECTIONS, type LiveLane, liveInner, type LiveLayout, type LiveSeg, LIVE_TONE, laneLines, liveHeader, liveLanes, liveLayout, liveOrgMem, liveStations, liveToday, liveTrains, nextUpLine, segText, todayLines, trainRows } from '../../core/live'
 import { panelValues, type $ } from '../panel'
@@ -218,12 +218,12 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
         {lanes.length ? <Box key="live-lanes" flexDirection="column" gap={1}>{laneRows}</Box> : line('live-empty', LIVE_EMPTY, 'inactive')}
       </Box>
       {lanes.length ? line('live-legend', LIVE_LEGEND, 'inactive') : null}
-      {branchesVs(pane, open)}
       <Box key="live-bottom" flexDirection="column">
         {line('live-today-head', LIVE_SECTIONS.today, 'text', true)}
         {line('live-next', nextUpLine(trains, inner), 'text')}
         {todayLines(liveToday(v.tasks, nowMs), inner).map((x, i) => line(`live-today-${i}`, x, 'text'))}
       </Box>
+      {branchesVs(pane, open)}
       {orgMemSectionVs($, pane, notes)}
       {vsFooter(vs, 'live-hint')}
     </Box>

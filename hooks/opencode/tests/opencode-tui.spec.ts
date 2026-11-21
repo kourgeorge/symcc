@@ -3271,13 +3271,13 @@ test('T-738, T-747: the OpenCode Live tab has a ▍heading for each section, one
     const mode = lines.findIndex(l => l.includes('agents ') && l.includes(' busy'))
     expect([mode >= 0, lines[mode + 1]]).toEqual([true, '▍Tasks'])
     const heads = lines.filter(l => l.startsWith('▍'))
-    expect(heads.slice(0, 3)).toEqual(['▍Tasks', '▍Branches', '▍Today'])
+    expect(heads.slice(0, 3)).toEqual(['▍Tasks', '▍Today', '▍Branches'])
     expect([heads.length, heads[3]!.startsWith(w === 100 ? '▍Organizational memory   ' : '▍Org')]).toEqual([4, true])
     // no section rules in the body (the footer's rule is under it)
     expect(lines.slice(mode, lines.length - d.footer).filter(l => l.includes('── ') || /^─+$/.test(l))).toEqual([])
     // the heading's bar and name are drawn in the task page's heading color, bold
     expect(d.lines[mode + 1]!.map(x => [x.color, x.bold])).toEqual([['suggestion', true], ['suggestion', true]])
-    const isHeads = [(l: string) => l.startsWith('▍Branches'), (l: string) => l.startsWith('▍Today'), (l: string) => l.startsWith('▍Org')]
+    const isHeads = [(l: string) => l.startsWith('▍Today'), (l: string) => l.startsWith('▍Branches'), (l: string) => l.startsWith('▍Org')]
     for (const isHead of isHeads) {
       const at = lines.findIndex(isHead)
       expect(at > 1).toBe(true)

@@ -180,9 +180,9 @@ test('T-727: the VS Code Live tab draws the Branches section with real lines, an
 })
 
 // T-738, T-747: each section of the Live tab starts with a "▍Name" heading (Tasks right under the mode line, then
-// Branches, Today, Organizational memory), with one empty line just above it, none above the first, never two; no
+// Today, Branches, Organizational memory; T-750 put Today above Branches), with one empty line just above it, none above the first, never two; no
 // "── Name ──" rules and no full-width rule between the sections (only the footer's, under the last one).
-const LIVE_HEADS = ['▍Branches', '▍Today', '▍Organizational memory'].map(h => (l: string) => l.startsWith(h))
+const LIVE_HEADS = ['▍Today', '▍Branches', '▍Organizational memory'].map(h => (l: string) => l.startsWith(h))
 for (const surface of ['terminal', 'desktop', 'mobile'] as const)
   test(`T-738, T-747: the ${surface} Live tab has a ▍heading for each section, one empty line above each, none above the first`, async ($, on) => {
     seedBoard(on, { view: liveView() })
@@ -196,7 +196,7 @@ for (const surface of ['terminal', 'desktop', 'mobile'] as const)
     const live = lines.slice(first)
     expect(live[1]).toBe('▍Tasks')
     const heads = live.filter(l => l.startsWith('▍'))
-    expect(heads.slice(0, 3)).toEqual(['▍Tasks', '▍Branches', '▍Today'])
+    expect(heads.slice(0, 3)).toEqual(['▍Tasks', '▍Today', '▍Branches'])
     expect([heads.length, /^▍Organizational memory {3}\d+ \/ 60 ▕/.test(heads[3] ?? '')]).toEqual([4, true])
     expect(live.filter(l => l.includes('── ') || /^─+$/.test(l)).length).toBe(1)
     // the lines under a heading are indented by 3

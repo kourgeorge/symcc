@@ -218,10 +218,10 @@ export const LIVE_TONE: Record<LiveTone, string> = { id: 'claude', title: 'text'
 /** Whether a tone is drawn bold. */
 export const liveBold = (tone: LiveTone): boolean => tone === 'id' || tone === 'current' || tone === 'heading'
 
-// T-747: the Live tab's sections (Tasks, Branches, Today, Organizational memory) each start with a "▍Name" heading,
+// T-747: the Live tab's sections (Tasks, Today, Branches, Organizational memory; T-750 put Today above Branches) each start with a "▍Name" heading,
 // as the task page's "▍Details", and the lines under it are indented by LIVE_INDENT.
 /** The section names, in their order on the tab. */
-export const LIVE_SECTIONS = { tasks: 'Tasks', branches: 'Branches', today: 'Today', orgMem: 'Organizational memory' } as const
+export const LIVE_SECTIONS = { tasks: 'Tasks', today: 'Today', branches: 'Branches', orgMem: 'Organizational memory' } as const
 /** What the lines under a section heading start with. */
 export const LIVE_INDENT = '   '
 /** The width left for a section's lines in `width` columns (after LIVE_INDENT). */
