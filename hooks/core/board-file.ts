@@ -657,7 +657,8 @@ export function cleanFiles(files: unknown, dir: string = DATA_DIR): string[] {
   return all
     .map(f => f.replace(/^\.\//, ''))
     .filter(f => f && !f.startsWith('/') && !f.split('/').includes('..') && !f.startsWith(dir) && !f.startsWith('.git/') && f !== '.git')
-    .slice(0, 30)
+  // T-713: no limit on how many files a task lists. A silent cut here made allowFiles say "allowed"
+  // for files it dropped, and the worker was refused the same file again, round after round.
 }
 /** The three board modes, in the order they are shown. */
 export const MODES: SymccMode[] = ['paused', 'review', 'auto']
