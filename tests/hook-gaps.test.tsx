@@ -107,6 +107,7 @@ const run = ($: Eng, command: string, args: string) => $.command.run({ command, 
 
 test('a scout the plugin stopped is refused a Write with the "stopped this agent" text, and the call never runs', async ($, on) => {
   const w = world(on, { agents: [{ id: 'a1', type: 'symcc:scout' }] })
+  w.files.set(BOARD, JSON.stringify(emptyBoard())) // T-795: a project with a board
   // at session start the plugin stops scouts it does not know (left from before a reload): a1 is halted
   await $.session.start({ cwd: '/repo' } as never)
   expect(w.sent).toEqual(['a1'])
@@ -117,6 +118,7 @@ test('a scout the plugin stopped is refused a Write with the "stopped this agent
 
 test("a stopped agent is refused every tool, the plugin's own board tool too", async ($, on) => {
   const w = world(on, { agents: [{ id: 'a1', type: 'symcc:scout' }] })
+  w.files.set(BOARD, JSON.stringify(emptyBoard())) // T-795: a project with a board
   await $.session.start({ cwd: '/repo' } as never)
   const bash = (await $.tool.call({ tool: 'Bash', command: 'ls', agentId: 'a1' } as never)) as { deny?: string }
   const board = (await $.tool.call({ tool: 'mcp__symcc__board', agentId: 'a1' } as never)) as { deny?: string }
