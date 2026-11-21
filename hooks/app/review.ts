@@ -1,9 +1,9 @@
 import type { SymccTask } from '../../types'
-import { type Blockers, type BoardTask, type TurnStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, testTimeoutMs, isInvestigation, testsWithChangesOf, untestedChange, untestedText, shortSha, secretFiles, secretsLeftText, onlySecretsQuestion, nameList, isPlainRelPath, SCRATCH_DIR, stepNote } from '../board'
+import { type Blockers, type BoardTask, type TurnStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, testTimeoutMs, isInvestigation, testsWithChangesOf, untestedChange, untestedText, shortSha, secretFiles, secretsLeftText, onlySecretsQuestion, nameList, isPlainRelPath, SCRATCH_DIR, stepNote, movedText, tryLabel, withHistory } from '../board'
 import { gitOk, git, worktreeDir, asSymcc, taskBranch, branchExists, scratchOn } from './git'
 import { S, changesCache } from './state'
 import type { Host } from '../host'
-import { change, now, path, safeWrite } from './store'
+import { change, load, now, path, safeWrite } from './store'
 import { inMergeLine, type TurnLimit } from './merge-line'
 import { tellLead } from './tell'
 import { logQueue } from './evidence'
@@ -104,7 +104,28 @@ export async function changesText($: Host, target: string, t: SymccTask, file = 
  * `timedOut`: a test command was stopped by its time limit (these minutes); it fails like a failing test, with its
  * output in `testOutput` (T-547), only its note says so (see settle).
  */
-export type CheckResult = { ok: boolean; detail: string; timedOut?: number; command?: string; conflict?: boolean; testOutput?: string; review?: boolean; merged?: string; notes?: string[]; blocked?: Blockers; untested?: string; checker?: boolean; again?: boolean; noVerdict?: string; secrets?: string[]; ask?: string; gone?: boolean }
+export type CheckResult = { ok: boolean; detail: string; timedOut?: number; command?: string; conflict?: boolean; testOutput?: string; review?: boolean; merged?: string; notes?: string[]; blocked?: Blockers; untested?: string; checker?: boolean; again?: boolean; noVerdict?: string; secrets?: string[]; ask?: string; gone?: boolean; moved?: boolean }
+
+/** T-733: how many times one try's branch goes back into the merge line for each reason (main moved by hand, a reload cut its tests off), so it can't loop. */
+export const AGAIN_MAX = 2
+
+/** T-733: the history line (after "try N: ") when main moved by hand during the merge and the same branch is tested and merged again. */
+export const MOVED_AGAIN = 'main moved by hand; testing again'
+
+/** T-733: the history line (after "try N: ") when a reload cut off a task's test or merge and the same branch is tested and merged again. */
+export const RELOAD_AGAIN = 'tests cut off by a reload; testing again'
+
+/** T-733: how many times task `t`'s current try already went back into the merge line for `why` (MOVED_AGAIN or RELOAD_AGAIN), from its history. */
+export const againsThisTry = (t: Pick<BoardTask, 'history' | 'role' | 'attempts'>, why: string) => (t.history ?? []).filter(h => h.text === `${tryLabel(t)}: ${why}`).length
+
+/** T-733: writes task `t`'s history line for going back into the merge line (`why`), while it is still the same try. Never throws. */
+export async function noteAgain($: Host, t: Pick<SymccTask, 'id' | 'status' | 'attempts'>, why: string) {
+  await change($, x => {
+    const cur = find(x, t.id)
+    if (!cur || cur.status !== t.status || cur.attempts !== t.attempts) return x
+    return patchTask(x, t.id, { history: withHistory(cur.history, now(), ['step', `${tryLabel(cur)}: ${why}`]) }, now())
+  }).catch(() => undefined)
+}
 
 /** T-440: the branch the task merges into (`target`) was deleted while it was checked: nothing merged; the caller makes the task wait with the "branch is gone" question (waitIfBranchGone). */
 export const goneResult = (target: string): CheckResult => ({ ok: false, gone: true, detail: `not merged: branch ${target} is gone` })
@@ -219,12 +240,23 @@ export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board
   // One merge line for the whole project (inMergeLine): only the task at its front catches up, tests and moves its branch.
   // So the branch can only move under it by hand (the owner committed to it meanwhile): that fails this turn as one normal try.
   // The time limit runs only during its own turn (each task in front has its own limit and `release`, so the line keeps moving).
-  const r = await inMergeLine<CheckResult>($, t.id, refresh => upToDateTestMove($, t, dir, b, mode, made, stopped, retest, target, head, changed, refresh, noVerdict), {
+  const turn = () => inMergeLine<CheckResult>($, t.id, refresh => upToDateTestMove($, t, dir, b, mode, made, stopped, retest, target, head, changed, refresh, noVerdict), {
     t,
     stopped,
     ...(release ? { release } : {}),
     ...(limit ? { limit } : {}),
   })
+  let r = await turn()
+  // T-733: main moved under a worker's finished work only by a commit made outside the board: the same branch goes
+  // back into the merge line (catch up, test, merge) instead of failing the try, at most AGAIN_MAX times per try
+  if (r.moved && mode === 'finish') {
+    const cur = find(await load($).catch(() => b), t.id) ?? t
+    let left = AGAIN_MAX - againsThisTry(cur, MOVED_AGAIN)
+    while (r.moved && left-- > 0 && !stopped()) {
+      await noteAgain($, t, MOVED_AGAIN)
+      r = await turn()
+    }
+  }
   // T-660: the turn's outcome goes to the evidence file (in the background)
   logQueue($, t.id, Number(t.attempts) || 0, r)
   return withSecrets(r)
@@ -432,7 +464,7 @@ async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mo
   const current = (await git($, ['symbolic-ref', '--short', '-q', 'HEAD'])).stdout.trim()
   const moved = await moveTarget(args => git($, args), { target, id: t.id, from: main, to: candidate, checkedOut: current === target, note: `${S.N.name} ${t.id}`, skipDir: S.N.dir, action: mode === 'approve' ? 'approve' : 'retry' })
   if (!moved.ok && !(await branchExists($, target))) return goneResult(target)
-  if (!moved.ok) return { ok: false, detail: moved.detail, ...(moved.blocked ? { blocked: moved.blocked } : {}) }
+  if (!moved.ok) return { ok: false, detail: moved.detail, ...(moved.blocked ? { blocked: moved.blocked } : {}), ...(moved.detail === movedText(target) ? { moved: true } : {}) }
   const tests = !b.test_commands.length ? '; no test command set' : skipped || testsRun ? passed : ''
   // Research notes the merge added or changed (not deleted): asked of git only when the work touched docs/research/.
   let notes: string[] = []
