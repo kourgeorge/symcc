@@ -31,7 +31,7 @@ import {
   type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction, type DefEditField, type TaskVerb, settingsKeys, rolesKeys, kindsKeys, roleEditKeys, defEditFields, roleTools, roleFileText, roleSkipReason, kindFileText, kindSkipReason,
   DEFAULT_ROLE, isCheckerRole, ALWAYS_ON_KINDS, checkerOn, roleNameError, kindNameError, leadScoutNameError, checkStepNow, rowEndText, taskPhase, choiceLines, driveWarning,
   searchTasks, showsHeader, type BoardPage,
-  LIVE_TABS, LIVE_EMPTY, LIVE_LEGEND, type LiveSeg, LIVE_TONE, tabRow, LIVE_VIEW_KEYS, liveKeys, liveLanes, liveLayout, liveStations, liveHeader, liveLabelLine, laneLines, liveOrgMem, liveTrains, trainRows, nextUpLine, liveToday, todayLines, searchLine, modeButton, hintLines, roleKeys, rolePromptKeys, ROLE_PROMPTS, ROLE_SLOT, promptsOfRole, type RolePromptKind,
+  LIVE_TABS, LIVE_EMPTY, LIVE_LEGEND, type LiveSeg, LIVE_TONE, tabRow, LIVE_VIEW_KEYS, liveKeys, liveBranches, liveLanes, liveLayout, liveStations, liveHeader, liveLabelLine, laneLines, liveOrgMem, liveTrains, trainRows, nextUpLine, liveToday, todayLines, searchLine, modeButton, hintLines, roleKeys, rolePromptKeys, ROLE_PROMPTS, ROLE_SLOT, promptsOfRole, type RolePromptKind,
 } from '../board'
 import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, brokenLabel, defNamed } from '../core/def-files'
 import { restFrame } from '../core/logo'
@@ -154,6 +154,9 @@ export function parseViewFile(text: string | null | undefined): ViewFile | null 
     if (!Array.isArray(rest.roles)) delete rest.roles
     if (!Array.isArray(rest.kinds)) delete rest.kinds
     if (!Array.isArray(rest.org_mem)) delete rest.org_mem
+    // T-727: the Live tab's Branches figures; a broken value is left out (no section)
+    const br = rest.branches as Partial<NonNullable<PaneView['branches']>> | undefined
+    if (!br || typeof br !== 'object' || typeof br.into !== 'string' || !Array.isArray(br.commits) || !br.tasks || typeof br.tasks !== 'object') delete rest.branches
     if (!rest.changes || typeof rest.changes !== 'object' || Array.isArray(rest.changes)) delete rest.changes
     const view = { ...rest, ...runs, working: Array.isArray(f.view.working) ? f.view.working : [], scouts: Array.isArray(f.view.scouts) ? f.view.scouts : [], test_commands: Array.isArray(f.view.test_commands) ? f.view.test_commands : [] }
     return { root: s(f.root), home: s(f.home), name: s(f.name) || DEFAULT_NAME, version: s(f.version), written_at: Number(f.written_at) || 0, view }
@@ -442,6 +445,10 @@ export const orgMemPageTopic = (id: string): string | null => (id === ORG_MEM_PA
 /** T-718: the cursor ids of the Live tab's org-mem section: a newest note's ("om-note:3") and a topic's ("om-topic:tests"). */
 export const liveNoteId = (n: number) => `om-note:${n}`
 export const liveTopicId = (topic: string) => `om-topic:${topic}`
+/** T-727: the cursor id of a Branches row on the Live tab ("br:T-721"); Enter or a click on it opens the task. */
+export const liveBranchId = (id: string) => `br:${id}`
+/** The task of a Branches row's cursor id, else null. */
+export const branchIdTask = (id: string): string | null => (id.startsWith('br:') ? id.slice(3) : null)
 
 /** A page under Settings: the Roles or Kinds list (`id` "roles" or "kinds"),
  *  or one role's or kind's page ("role:tester", "kind:bug"; its list is `list`), or (T-685) the built-in prompt a role
@@ -783,6 +790,7 @@ export const LIVE_BLINK_MS = 1000
  * lanes; its lane's first column shows "›". The current station blinks with the clock (one step per LIVE_BLINK_MS).
  * T-715: under each lane hang its waiting trains (core's liveTrains and trainRows); the cursor goes over them too, and
  * Enter or a click on one opens its task, as on a lane.
+ * T-727: under the lanes, the Branches section (core's liveBranches); the cursor goes over its task rows (liveBranchId).
  */
 function liveBody(f: ViewFile, cursor: number, nowMs: number, w: number): Body {
   const b = bodyMaker()
@@ -793,9 +801,11 @@ function liveBody(f: ViewFile, cursor: number, nowMs: number, w: number): Body {
   const trains = liveTrains(v, nowMs, lanes)
   const rows = new Map(lanes.map(l => [l.id, trainRows(trains.lanes[l.id] ?? [], w)]))
   const om = liveOrgMem(orgMemIn(f), w)
-  // the cursor's stops, top to bottom: each lane, then its trains; then (T-718) the newest notes and the topics
+  const br = liveBranches(v, nowMs, w)
+  // the cursor's stops, top to bottom: each lane, then its trains; (T-727) the Branches rows; then (T-718) the newest notes and the topics
   const ids = [
     ...lanes.flatMap(l => [l.id, ...rows.get(l.id)!.flatMap(r => (r.id ? [r.id] : []))]),
+    ...(br?.rows ?? []).flatMap(r => (r.id ? [liveBranchId(r.id)] : [])),
     ...om.newest.map(x => liveNoteId(x.note.n)),
     ...om.grid.flatMap(r => r.map(c => liveTopicId(c.topic))),
   ]
@@ -814,6 +824,11 @@ function liveBody(f: ViewFile, cursor: number, nowMs: number, w: number): Body {
     opens(first, l.id)
     b.add(liveSegs(second))
     for (const r of rows.get(l.id)!) r.id ? opens(r.segs, r.id) : b.add(liveSegs(r.segs))
+  }
+  if (br) {
+    b.add(liveSegs(br.head))
+    b.add(liveSegs(br.main))
+    for (const r of br.rows) r.id ? opens(r.segs, liveBranchId(r.id)) : b.add(liveSegs(r.segs))
   }
   b.add([{ text: footerRule(w), color: 'subtle' }])
   b.add([{ text: nextUpLine(trains, w), color: 'text' }])

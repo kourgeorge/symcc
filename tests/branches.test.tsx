@@ -1,0 +1,179 @@
+// T-727: the Live tab's Branches section: core/live.ts's liveBranches lays it out, app/branches.ts reads the figures
+// with git (here a fake git), and the terminal and VS Code Live tabs draw it (OpenCode's: hooks/opencode/tests).
+import { expect } from 'claude-code/testing'
+import { test } from './reset'
+import { BRANCH_ROWS_MAX, liveBranches, segText } from '../hooks/core/live'
+import { textWidth } from '../hooks/core/stats'
+import { branchFacts, readBranches, BRANCH_CACHE_MS } from '../hooks/app/branches'
+import { publish } from '../hooks/app/lead'
+import { S } from '../hooks/app/state'
+import { emptyBoard } from '../hooks/core/board-file'
+import { branchKey } from '../hooks/claude/ui/live'
+import { vsHref } from '../hooks/claude/ui/vscode'
+import { done, fakeHost } from './fake-host'
+import { PANE, T0, seedBoard } from './board-fixture'
+import { BRANCH_LINES_100, branchFactsAt, branchTasks, sha } from './branches-fixture'
+
+const sample = (now = T0) => ({ tasks: branchTasks(now) as never[], branches: branchFactsAt(now) })
+const linesOf = (b: NonNullable<ReturnType<typeof liveBranches>>) => [b.head, b.main, ...b.rows.map(r => r.segs)].map(segText)
+
+test('T-727: the Branches section at 100 and 40 columns: main\'s commits, a row per branch where it forked, not started, just merged; nothing wider than the panel', () => {
+  const wide = liveBranches(sample(), T0, 100)!
+  expect(linesOf(wide)).toEqual(BRANCH_LINES_100)
+  expect(wide.rows.map(r => [r.id, r.kind])).toEqual([['T-724', 'merged'], ['T-721', 'branch'], ['T-725', 'branch'], ['T-726', 'new']])
+  const narrow = liveBranches(sample(), T0, 40)!
+  expect(linesOf(narrow)).toEqual([
+    ` ── Branches ${'─'.repeat(27)}`,
+    ' main   ●─●─●─●─●   c1c1c1c · 2 min ago',
+    '        │     │ ╰─◀ T-724 merged',
+    '        │     ╰───○ T-721  +3 · 1 behind',
+    '        ├─────────○ T-725  +0 · 4 behind',
+    '        ╰─────────○ T-726  not started',
+  ])
+  for (const w of [100, 60, 40, 30, 20, 12])
+    for (const l of linesOf(liveBranches(sample(), T0, w)!)) expect(textWidth(l), `${w}: ${l}`).toBeLessThanOrEqual(w)
+  // far behind: a warning; the merge shows only for about a minute; no figures: no section
+  const late = { ...sample(), branches: { ...branchFactsAt(T0), tasks: { ...branchFactsAt(T0).tasks, 'T-725': { ahead: 2, behind: 9, base: sha('c9') } } } }
+  const row = liveBranches(late, T0, 100)!.rows.find(r => r.id === 'T-725')!
+  expect(row.segs.find(s => s.text === '9 behind')?.tone).toBe('warning')
+  // c9 isn't shown: it hangs at the left edge
+  expect(row.col).toBe(0)
+  expect(liveBranches(sample(), T0 + 2 * 60_000, 100)!.rows.some(r => r.kind === 'merged')).toBe(false)
+  expect(liveBranches({ tasks: sample().tasks }, T0, 100)).toBe(null)
+  // many branches: at most BRANCH_ROWS_MAX rows, then "+N more"
+  const many = Array.from({ length: 11 }, (_, i) => ({ ...branchTasks(T0)[0]!, id: `T-${800 + i}`, branch: `symcc/T-${800 + i}` }))
+  const lots = liveBranches({ tasks: many as never[], branches: { ...branchFactsAt(T0), tasks: Object.fromEntries(many.map(t => [t.id, { ahead: 1, behind: 0, base: sha('c1') }])) } }, T0, 60)!
+  expect(lots.rows.filter(r => r.id).length).toBe(BRANCH_ROWS_MAX)
+  expect(segText(lots.rows[lots.rows.length - 1]!.segs).trim()).toBe('+3 more')
+})
+
+/** A fake git for the sample: main's log, and each branch's counts and fork point; T-725's count fails. */
+function fakeGit(calls: string[][], failing = 'symcc/T-725') {
+  return async (argv: readonly string[]) => {
+    calls.push([...argv])
+    const a = argv.slice(1)
+    if (a[0] === 'log') return done({ stdout: branchFactsAt(T0).commits.slice(0, 7).map(c => `${c.sha} ${Math.floor(c.at / 1000)}`).join('\n') + '\n' })
+    if (a[0] === 'rev-list') {
+      if (a[3] === `main...${failing}`) return done({ exitCode: 128, stderr: 'fatal: bad revision' })
+      return done({ stdout: a[3] === 'main...symcc/T-721' ? '1\t3\n' : '4\t0\n' })
+    }
+    if (a[0] === 'merge-base') return done({ stdout: `${a[2] === 'symcc/T-721' ? sha('c2') : sha('c5')}\n` })
+    return done()
+  }
+}
+
+test('T-727: the app reads the branch figures with read-only git, keeps them ~30 s, and a failing git command drops only that row', async () => {
+  S.root = '/repo'
+  S.gitState = 'ok'
+  const calls: string[][] = []
+  const f = fakeHost({ run: fakeGit(calls, 'symcc/none') })
+  const board = { ...emptyBoard(), tasks: branchTasks(T0) as never[] }
+  const facts = await readBranches(f.host, 'main', board, T0)
+  expect(facts!.commits.map(c => c.sha)).toEqual(branchFactsAt(T0).commits.slice(0, 7).map(c => c.sha))
+  expect(facts!.commits[0]!.at).toBe(Math.floor(branchFactsAt(T0).commits[0]!.at / 1000) * 1000)
+  expect(facts!.tasks).toEqual({ 'T-721': { ahead: 3, behind: 1, base: sha('c2') }, 'T-725': { ahead: 0, behind: 4, base: sha('c5') } })
+  // only read-only commands, in the project's folder
+  for (const c of calls) expect(['log', 'rev-list', 'merge-base']).toContain(c[1])
+  expect(calls.some(c => c.join(' ') === 'git rev-list --left-right --count main...symcc/T-721')).toBe(true)
+
+  // a failing count drops only T-725; the section still shows the others
+  const g = fakeHost({ run: fakeGit([]) })
+  const first = branchFacts(g.host, board, 'main', T0)
+  expect(first.facts).toBe(undefined)
+  await first.done
+  const view = g.panel.view() as unknown as { branches: ReturnType<typeof branchFactsAt> }
+  expect(Object.keys(view.branches.tasks)).toEqual(['T-721'])
+  const rows = liveBranches({ tasks: branchTasks(T0) as never[], branches: view.branches }, T0, 100)!.rows.map(r => r.id)
+  expect(rows).toEqual(['T-724', 'T-721', 'T-726'])
+  // kept: no new read within BRANCH_CACHE_MS, and publish puts them in the view at once
+  const again = branchFacts(g.host, board, 'main', T0 + 1000)
+  expect(again.done).toBe(undefined)
+  expect(again.facts?.tasks['T-721']?.ahead).toBe(3)
+  expect(branchFacts(g.host, board, 'main', T0 + BRANCH_CACHE_MS + 1).done).toBeDefined()
+  // the main line's log failing: no section at all
+  const h = fakeHost({ run: async argv => (argv[1] === 'log' ? done({ exitCode: 128 }) : done()) })
+  expect(await readBranches(h.host, 'main', board, T0)).toBe(null)
+})
+
+test('T-727: publish puts the last branch figures in the board view (as OpenCode reads view.json)', async () => {
+  S.root = '/repo'
+  S.gitState = 'ok'
+  const g = fakeHost({ run: fakeGit([], 'symcc/none') })
+  const now = Date.now()
+  const board = { ...emptyBoard(), tasks: branchTasks(now) as never[] }
+  await branchFacts(g.host, board, 'main', now).done
+  await publish(g.host, board)
+  const v = g.panel.view() as unknown as { branches?: { tasks: Record<string, unknown> } }
+  expect(Object.keys(v.branches?.tasks ?? {}).sort()).toEqual(['T-721', 'T-725'])
+  // no git: no figures
+  S.gitState = 'no-git'
+  await publish(g.host, board)
+  expect('branches' in g.panel.view()).toBe(false)
+})
+
+type Node = { type?: string; props?: Record<string, unknown>; children?: unknown[] }
+const textOf = (n: unknown): string => (typeof n === 'string' ? n : !n || typeof n !== 'object' ? '' : ((n as Node).children ?? []).map(textOf).join(''))
+/** The lines of a drawn page, top to bottom (a row Box is one line; hidden Boxes draw nothing). */
+const pageLines = (n: unknown): string[] => {
+  const x = n as Node
+  if (!x || typeof x !== 'object') return []
+  if (x.type === 'Box') {
+    if (x.props?.display === 'none') return []
+    return x.props?.flexDirection === 'row' ? [textOf(x)] : (x.children ?? []).flatMap(pageLines)
+  }
+  return [textOf(x)]
+}
+
+const liveView = () => ({ shape: 'view-1', value: { tasks: branchTasks(T0), working: [], scouts: [], mode: 'auto', branch: 'main', test_commands: ['npm test'], driving: true, checker: true, max_parallel: 3, branches: branchFactsAt(T0) } })
+
+for (const bodyColumns of [100, 40])
+  test(`T-727: the terminal Live tab draws the Branches section at ${bodyColumns} columns, and Enter on a row opens its task`, async ($, on) => {
+    seedBoard(on, { view: liveView() })
+    on('ui.toast', () => ({ value: undefined }))
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'terminal' })
+    await ui.press({ key: 'tab-live' })
+    const want = linesOf(liveBranches({ tasks: branchTasks(T0) as never[], branches: branchFactsAt(T0) }, T0, bodyColumns)!)
+    // the section's lines, in order, right under the lane (and over the rule)
+    const lines = pageLines(await ui.drawn())
+    const at = lines.indexOf(want[0]!)
+    expect(at).toBeGreaterThan(0)
+    expect(lines.slice(at, at + want.length)).toEqual(want)
+    for (const l of lines) expect(textWidth(l)).toBeLessThanOrEqual(bodyColumns)
+    // each task row is a row Button that opens its task (Enter on it)
+    const rows: string[] = []
+    for (const id of ['T-724', 'T-721', 'T-725', 'T-726']) rows.push((await ui.find({ key: branchKey(id) }))!.text)
+    expect(rows).toEqual(want.slice(2))
+    await ui.press({ key: branchKey('T-725') })
+    expect(pageLines(await ui.drawn()).includes(want[0]!)).toBe(false)
+    expect(await ui.find({ type: 'Text', text: /Guide: Live tab/ })).toBeDefined()
+    await ui.press({ key: 'back' })
+    expect(pageLines(await ui.drawn()).includes(want[0]!)).toBe(true)
+    await ui.press({ key: 'tab-tasks' })
+    await ui.unmount()
+  })
+
+test('T-727: the VS Code Live tab draws the Branches section with real lines, and a click on a row opens its task', async ($, on) => {
+  seedBoard(on, { view: liveView() })
+  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 100 }, surface: 'vscode' })
+  await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'live') } })
+  expect((await ui.find({ key: 'live-br-head' }))?.text).toBe('Branches')
+  expect((await ui.find({ key: 'live-br-main-text' }))?.text).toBe('main  c1c1c1c · 2 min ago')
+  const svgs = await ui.findAll({ type: 'Svg' })
+  const main = svgs.find(x => x.props.alt === BRANCH_LINES_100[1]!.trim())
+  expect(String(main?.props.alt)).toBe(BRANCH_LINES_100[1]!.trim())
+  expect((String(main?.props.source).match(/<circle/g) ?? []).length).toBe(7)
+  for (const [i, id] of ['T-724', 'T-721', 'T-725', 'T-726'].entries()) {
+    const svg = svgs.find(x => x.props.alt === BRANCH_LINES_100[i + 2]!.trim())
+    expect(String(svg?.props.source)).toContain('<path')
+    expect((await ui.find({ key: branchKey(id) }))?.props.pressableLinks).toEqual([vsHref('task', id)])
+  }
+  expect((await ui.find({ key: 'live-br-note:T-721' }))?.text).toBe('+3 commits · 1 behind')
+  expect((await ui.find({ key: 'live-br-note:T-726' }))?.text).toBe('not started')
+  await ui.press({ key: branchKey('T-721'), link: { href: vsHref('task', 'T-721') } })
+  expect(await ui.find({ key: 'live-br-head' })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /Record which test failed/ })).toBeDefined()
+  await ui.press({ key: 'back' })
+  expect(await ui.find({ key: 'live-br-head' })).toBeDefined()
+  await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'tasks') } })
+  await ui.unmount()
+})

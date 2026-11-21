@@ -11,10 +11,11 @@
 // link that opens all notes with that one marked); the topics as links with their counts, in core's grid rows.
 // T-715: under each lane hang its waiting trains (core's liveTrains and trainRows): each one indented by its level,
 // "└─◇", its id and cut title a link that opens the task, then "waits" and "+ also T-n" dim.
-import { LIVE_EMPTY, LIVE_LEGEND, type LiveLane, type LiveLayout, type LiveSeg, LIVE_TONE, laneLines, liveHeader, liveLanes, liveLayout, liveOrgMem, liveStations, liveToday, liveTrains, nextUpLine, segText, todayLines, trainRows } from '../../core/live'
+// T-727: under the lanes, the Branches section (core's liveBranches) drawn with real lines: see branchesVs.
+import { type BranchRow, type LiveBranches, liveBranches, LIVE_EMPTY, LIVE_LEGEND, type LiveLane, type LiveLayout, type LiveSeg, LIVE_TONE, laneLines, liveHeader, liveLanes, liveLayout, liveOrgMem, liveStations, liveToday, liveTrains, nextUpLine, segText, todayLines, trainRows } from '../../core/live'
 import { panelValues, type $ } from '../panel'
 import type { PaneParts } from './parts'
-import { LIVE_TICK_MS, laneKey, liveTick, newestKey, openOrgMemPage, topicKey, trainKey } from './live'
+import { LIVE_TICK_MS, branchKey, laneKey, liveTick, newestKey, openOrgMemPage, topicKey, trainKey } from './live'
 import { mdLink, vsFooter, vsHref, vsLink } from './vscode'
 import { ORG_MEM_MAX_LINES, orgMemCount, orgMemNearCap, orgMemShortDay, type OrgMemNote } from '../../core/org-mem'
 
@@ -60,6 +61,81 @@ export function barSvg(text: string, warning: boolean): { source: string; width:
     width,
     height,
   }
+}
+
+/** T-727: the pixels from one commit's dot to the next in the Branches drawings, and each drawing's height. */
+const BR_STEP = 22
+const BR_H = 18
+
+/** T-727: the Branches section's main line as an Svg: a dot per shown commit (oldest left), lines between them, and a
+ *  line down from each commit a row hangs from. Every Branches drawing is as wide, so the rows' lines meet it. */
+export function branchMainSvg(b: Pick<LiveBranches, 'commits' | 'rows'>): { source: string; width: number; height: number } {
+  const k = b.commits.length
+  const x = (i: number) => 8 + i * BR_STEP
+  const width = x(k) + 8
+  const y = BR_H / 2
+  const parts: string[] = []
+  if (k > 1) parts.push(`<line x1="${x(0)}" y1="${y}" x2="${x(k - 1)}" y2="${y}" stroke="${INK.future}" stroke-width="1.5"/>`)
+  for (const c of new Set(b.rows.filter(r => r.kind !== 'more').map(r => r.col))) parts.push(`<line x1="${x(c)}" y1="${y}" x2="${x(c)}" y2="${BR_H}" stroke="${INK.future}" stroke-width="1.5"/>`)
+  b.commits.forEach((c, i) => parts.push(`<circle cx="${x(i)}" cy="${y}" r="4" fill="${INK.bar}"><title>${c.sha.slice(0, 7)}</title></circle>`))
+  return { source: `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${BR_H}" viewBox="0 0 ${width} ${BR_H}">${parts.join('')}</svg>`, width, height: BR_H }
+}
+
+/** T-727: a Branches row's lines as an Svg: the lines passing by to the rows under it, its own line from the commit it
+ *  hangs from (a curve, or a tee when a row under it hangs there too) to its mark: a hollow dot, or (just merged) an arrow. */
+export function branchRowSvg(r: Pick<BranchRow, 'col' | 'lines' | 'tee' | 'kind'>, k: number): { source: string; width: number; height: number } {
+  const x = (i: number) => 8 + i * BR_STEP
+  const width = x(k) + 8
+  const y = BR_H / 2
+  const end = x(k)
+  const ink = r.kind === 'merged' ? INK.passed : INK.future
+  const parts: string[] = []
+  for (const c of new Set(r.lines)) parts.push(`<line x1="${x(c)}" y1="0" x2="${x(c)}" y2="${BR_H}" stroke="${INK.future}" stroke-width="1.5"/>`)
+  const at = x(r.col)
+  parts.push(r.tee ? `<path d="M${at} 0 L${at} ${y} L${end - 5} ${y}" fill="none" stroke="${ink}" stroke-width="1.5"/>` : `<path d="M${at} 0 L${at} ${y - 5} Q${at} ${y} ${at + 5} ${y} L${end - 5} ${y}" fill="none" stroke="${ink}" stroke-width="1.5"/>`)
+  parts.push(r.kind === 'merged' ? `<path d="M${end - 6} ${y} L${end + 2} ${y - 5} L${end + 2} ${y + 5} Z" fill="${INK.passed}"/>` : `<circle cx="${end}" cy="${y}" r="4" fill="none" stroke="${INK.future}" stroke-width="1.5"${r.kind === 'new' ? ' stroke-dasharray="2 2"' : ''}/>`)
+  return { source: `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${BR_H}" viewBox="0 0 ${width} ${BR_H}">${parts.join('')}</svg>`, width, height: BR_H }
+}
+
+/** T-727: the Live tab's Branches section in VS Code: core's liveBranches drawn with real lines (an Svg per line, each
+ *  one's `alt` the terminal's text), each task's id a link that opens it, its figures after it. */
+function branchesVs(pane: PaneParts, open: (id: string) => () => void) {
+  const { Box, Text, C, v, width, nowMs, vs } = pane
+  const { Svg } = vs
+  const br = liveBranches(v, nowMs, width)
+  if (!br) return null
+  const main = branchMainSvg(br)
+  const words = (xs: LiveSeg[]) => xs.map(s => <Text color={C(LIVE_TONE[s.tone])}>{s.text}</Text>)
+  return (
+    <Box key="live-br" flexDirection="column">
+      <Box key="live-br-head" flexDirection="column">
+        <Text bold color={C('text')}>Branches</Text>
+      </Box>
+      <Box key="live-br-main" flexDirection="row" gap={1} alignItems="center">
+        <Svg key="live-br-main-svg" source={main.source} width={main.width} height={main.height} alt={segText(br.main).trim()} />
+        <Box key="live-br-main-text" flexDirection="column">
+          <Text color={C('inactive')}>
+            <Text bold color={C('text')}>{br.name}</Text>
+            {br.right ? `  ${br.right}` : ''}
+          </Text>
+        </Box>
+      </Box>
+      {br.rows.map(r => {
+        if (!r.id) return <Box key="live-br-more" flexDirection="column" paddingLeft={1}><Text color={C('inactive')}>{segText(r.label)}</Text></Box>
+        const svg = branchRowSvg(r, br.commits.length)
+        const href = vsHref('task', r.id)
+        return (
+          <Box key={`live-br-row:${r.id}`} flexDirection="row" gap={1} alignItems="center">
+            <Svg key={`live-br-svg:${r.id}`} source={svg.source} width={svg.width} height={svg.height} alt={segText(r.segs).trim()} />
+            {vsLink(vs, branchKey(r.id), mdLink(r.id, href), [[href, open(r.id)]])}
+            <Box key={`live-br-note:${r.id}`} flexDirection="column">
+              <Text>{words(r.label.slice(1).map((s, i) => (i ? s : { ...s, text: s.text.trimStart() })))}</Text>
+            </Box>
+          </Box>
+        )
+      })}
+    </Box>
+  )
 }
 
 /** The Live tab in VS Code; `notes`: org-mem's notes (newest first), for the section at its bottom (T-718). */
@@ -135,6 +211,7 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
       {line('live-head', liveHeader(v, lanes), 'text', true)}
       {lanes.length ? <Box key="live-lanes" flexDirection="column" gap={1}>{laneRows}</Box> : line('live-empty', LIVE_EMPTY, 'inactive')}
       {lanes.length ? line('live-legend', LIVE_LEGEND, 'inactive') : null}
+      {branchesVs(pane, open)}
       <Box key="live-bottom" flexDirection="column">
         {line('live-next', nextUpLine(trains, width), 'text')}
         {todayLines(liveToday(v.tasks, nowMs), width).map((x, i) => line(`live-today-${i}`, x, 'text'))}

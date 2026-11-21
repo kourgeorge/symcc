@@ -65,7 +65,7 @@ export function tabRow(tabs: readonly { key: string; label: string; count?: numb
 }
 
 /** What the Live tab reads of the board view. */
-export type LiveView = { tasks: SymccTask[]; checker?: boolean; auto_retries?: number; max_parallel?: number; mode?: SymccMode; archived_done?: string[] }
+export type LiveView = { tasks: SymccTask[]; checker?: boolean; auto_retries?: number; max_parallel?: number; mode?: SymccMode; archived_done?: string[]; branches?: BranchFacts }
 
 /**
  * One lane: a task in doing. `station` is where it is (`at` its place in `stations`); `sinceMs` when it got there;
@@ -637,4 +637,188 @@ export function liveOrgMem(notes: readonly OrgMemNote[], width: number): LiveOrg
     grid: topicGrid(orgMemTopicCounts(notes), w),
     keys: keys.map(k => fitText(k, w)),
   }
+}
+
+// ---------------- T-727: the Branches section under the lanes ----------------
+//  ── Branches ─────────────────────────────────────────────────────
+//  main   ●───●───●───●───●───●───●   c11a736 · 2 min ago
+//         │       │           │   ╰─◀ T-724 merged
+//         │       │           ╰─────○ T-721  +3 commits · 1 behind
+//         │       ╰─────────────────○ T-725  +0 commits · 4 behind
+//         ╰─────────────────────────○ T-726  not started
+// The figures come from git, read by the app side (hooks/app/branches.ts) and put in the view (`branches`).
+
+/** One commit of the main line: its full sha and when it was made (ms). */
+export type BranchCommit = { sha: string; at: number }
+/** What git says of a task's branch: commits on it not in the branch it merges into (`ahead`), commits there not on
+ *  it (`behind`), and where it forked (`base`, the merge-base's full sha). */
+export type BranchFigures = { ahead: number; behind: number; base: string }
+/** The branch figures in the view (T-727): the branch the main line shows (`into`), its latest commits (newest first),
+ *  each open task's branch figures by task id (a task whose git command failed is left out), and when they were read. */
+export type BranchFacts = { into: string; commits: BranchCommit[]; tasks: Record<string, BranchFigures>; at: number }
+
+/** The task statuses whose branch gets a row. */
+export const BRANCH_STATUSES: readonly SymccTask['status'][] = ['doing', 'review', 'waiting', 'failed', 'paused']
+/** How many commits the main line shows at most. */
+export const BRANCH_COMMITS = 7
+/** At most this many task rows, then "+N more". */
+export const BRANCH_ROWS_MAX = 8
+/** At most this many "not started" rows (next-up todo tasks with no branch yet). */
+export const BRANCH_NEW_MAX = 3
+/** Past this many commits behind, "N behind" is a warning. */
+export const BRANCH_BEHIND_WARN = 5
+/** A task merged this recently shows as joining back ("◀ T-n merged"). */
+export const BRANCH_MERGED_MS = 60_000
+
+/** What a row of the section is: a task's branch, a just-merged task, a task not started yet, or the "+N more" line. */
+export type BranchRowKind = 'branch' | 'merged' | 'new' | 'more'
+/**
+ * A row of the section: its task (`id`, none on "+N more"), what it is, the commit it hangs from (`col`, 0 = the
+ * leftmost shown), the columns of the rows under it whose lines pass by (`lines`), whether one of them hangs from the
+ * same commit (`tee`: "├" instead of "╰"), its whole line (`segs`) and the text after its mark (`label`).
+ */
+export type BranchRow = { id?: string; kind: BranchRowKind; col: number; lines: number[]; tee: boolean; segs: LiveSeg[]; label: LiveSeg[] }
+/** The section in a width: its header, the main line (`main`: its segments; `name` the branch, `commits` the shown ones
+ *  oldest first, `step` the columns from one dot to the next, `indent` the columns before the first dot, `right` the
+ *  newest commit's sha and age), and the rows. */
+export type LiveBranches = { head: LiveSeg[]; main: LiveSeg[]; name: string; commits: BranchCommit[]; step: number; indent: number; right: string; rows: BranchRow[] }
+
+/** "just now", "2 min ago", "3 h ago", "4 d ago". */
+export function agoText(ms: number): string {
+  const m = Math.floor(Math.max(0, ms) / 60_000)
+  if (m < 1) return 'just now'
+  if (m < 60) return `${m} min ago`
+  const h = Math.floor(m / 60)
+  return h < 24 ? `${h} h ago` : `${Math.floor(h / 24)} d ago`
+}
+
+/** Cuts segments to `width` columns, the one that crosses the edge ending in "…". */
+function fitSegs(xs: readonly LiveSeg[], width: number): LiveSeg[] {
+  const out: LiveSeg[] = []
+  let used = 0
+  for (const x of xs) {
+    const w = textWidth(x.text)
+    if (used + w <= width) {
+      out.push(x)
+      used += w
+      continue
+    }
+    const room = width - used
+    if (room > 0) out.push({ text: cutTitle(x.text, room), tone: x.tone })
+    break
+  }
+  return out
+}
+
+type BranchItem = { id: string; kind: 'branch' | 'merged' | 'new'; fig?: BranchFigures; merged?: string }
+
+/** The tasks the section shows, in the order they are kept when there are too many: the just-merged ones, the open
+ *  tasks with a branch git answered for (by id), then up to BRANCH_NEW_MAX next-up tasks with no branch yet. */
+function branchItems(view: LiveView, facts: BranchFacts, nowMs: number): BranchItem[] {
+  const merged: BranchItem[] = []
+  const open: BranchItem[] = []
+  for (const t of view.tasks) {
+    if (t.status === 'done') {
+      const history: readonly { kind: string; at?: string }[] = Array.isArray(t.history) ? t.history : (viewMarks(t) ?? [])
+      const at = Math.max(-Infinity, ...history.filter(h => h.kind === 'merged').map(h => ms(h.at) ?? -Infinity))
+      if (nowMs - at <= BRANCH_MERGED_MS && nowMs - at >= -BRANCH_MERGED_MS) merged.push({ id: t.id, kind: 'merged', ...(t.merged ? { merged: t.merged } : {}) })
+      continue
+    }
+    const fig = facts.tasks[t.id]
+    if (BRANCH_STATUSES.includes(t.status) && t.branch && fig) open.push({ id: t.id, kind: 'branch', fig })
+  }
+  const next = liveTrains(view, nowMs)
+    .next.filter(x => !x.stuck.length && !(view.tasks.find(t => t.id === x.id)?.branch))
+    .slice(0, BRANCH_NEW_MAX)
+    .map((x): BranchItem => ({ id: x.id, kind: 'new' }))
+  const byId = (a: BranchItem, b: BranchItem) => num(a.id) - num(b.id)
+  return [...merged.sort(byId), ...open.sort(byId), ...next]
+}
+
+/** The text after a row's mark, longest first: " T-721  +3 commits · 1 behind" (warning past BRANCH_BEHIND_WARN), then shorter. */
+function branchLabels(x: BranchItem): LiveSeg[][] {
+  const id: LiveSeg = { text: ` ${x.id}`, tone: 'id' }
+  if (x.kind === 'merged') return [[id, { text: ' merged', tone: 'passed' }]]
+  if (x.kind === 'new') return [[id, { text: '  not started', tone: 'dim' }]]
+  const { ahead, behind } = x.fig!
+  const late: LiveTone = behind > BRANCH_BEHIND_WARN ? 'warning' : 'dim'
+  return [
+    [id, { text: `  +${ahead} commit${ahead === 1 ? '' : 's'}`, tone: 'text' }, { text: ' · ', tone: 'dim' }, { text: `${behind} behind`, tone: late }],
+    [id, { text: `  +${ahead}`, tone: 'text' }, { text: ' · ', tone: 'dim' }, { text: `${behind} behind`, tone: late }],
+    [id, { text: ` +${ahead}`, tone: 'text' }, { text: ` ↓${behind}`, tone: late }],
+  ]
+}
+const LABEL_ROOM = textWidth(' T-000  +0 · 0 behind')
+
+/**
+ * The Branches section (see above) for the view's branch figures in `width` columns, or null when there are none
+ * (git isn't ready, or not read yet). The main line shows up to BRANCH_COMMITS of the newest commits, fewer and closer
+ * when narrow, so each row keeps room for its words; a row hangs from the commit its branch forked from (a just-merged
+ * task from its merge commit, else the newest), or from the leftmost commit when that one isn't shown (and a task not
+ * started). Rows are ordered so their lines never cross; past BRANCH_ROWS_MAX rows, "+N more". No line is wider than
+ * `width` (words are cut with "…").
+ */
+export function liveBranches(view: LiveView, nowMs: number, width: number): LiveBranches | null {
+  const facts = view.branches
+  if (!facts || !facts.commits.length) return null
+  const w = Math.max(1, Math.floor(width))
+  const items = branchItems(view, facts, nowMs)
+  const kept = items.slice(0, BRANCH_ROWS_MAX)
+  const hidden = items.length - kept.length
+  const nameW = Math.min(12, Math.max(4, textWidth(facts.into)))
+  const n = Math.min(BRANCH_COMMITS, facts.commits.length)
+  // the most commits, then the widest step, that leave each row room for its words
+  let pick: { k: number; step: number; indent: number } | undefined
+  for (const gap of [3, 1])
+    for (let k = n; k >= Math.min(2, n) && !pick; k--)
+      for (const step of [4, 3, 2]) {
+        const indent = 1 + nameW + gap
+        if (indent + 1 + (k - 1) * step + 2 + LABEL_ROOM <= w) {
+          pick = { k, step, indent }
+          break
+        }
+      }
+  const { k, step, indent } = pick ?? { k: Math.min(2, n), step: 2, indent: 1 + nameW + 1 }
+  const shown = facts.commits.slice(0, k).reverse()
+  const trackW = 1 + (k - 1) * step
+  const markAt = trackW + 1
+  const colOf = (sha: string | undefined, none: number) => {
+    const i = sha ? shown.findIndex(c => c.sha === sha || (sha.length >= 7 && c.sha.startsWith(sha))) : -1
+    return i >= 0 ? i : none
+  }
+  const placed = kept.map(x => ({ x, col: x.kind === 'merged' ? colOf(x.merged, k - 1) : x.kind === 'branch' ? colOf(x.fig!.base, 0) : 0 }))
+  placed.sort((a, b) => b.col - a.col || num(a.x.id) - num(b.x.id))
+  // the header
+  const title = ' ── Branches '
+  const head: LiveSeg[] = textWidth(title) + 3 <= w ? [{ text: ' ── ', tone: 'dim' }, { text: 'Branches', tone: 'text' }, { text: ` ${'─'.repeat(w - textWidth(title))}`, tone: 'dim' }] : [{ text: fitText('Branches', w), tone: 'text' }]
+  // the main line
+  const newest = shown[shown.length - 1]!
+  const sha = newest.sha.slice(0, 7)
+  const room = w - indent - trackW
+  const right = [`   ${sha} · ${agoText(nowMs - newest.at)}`, `  ${sha}`, ''].find(s => textWidth(s) <= room) ?? ''
+  const name = cutTitle(facts.into, nameW)
+  const track: LiveSeg[] = []
+  shown.forEach((_, i) => {
+    if (i) track.push({ text: '─'.repeat(step - 1), tone: 'dim' })
+    track.push({ text: '●', tone: 'bar' })
+  })
+  const main = fitSegs([{ text: ` ${padWidth(name, indent - 1)}`, tone: 'title' }, ...track, ...(right ? [{ text: right, tone: 'dim' as const }] : [])], w)
+  // the rows
+  const rows: BranchRow[] = placed.map(({ x, col }, i) => {
+    const below = placed.slice(i + 1).map(p => p.col)
+    const tee = below.includes(col)
+    const cells = Array.from({ length: markAt }, () => ' ')
+    for (const c of below) cells[c * step] = '│'
+    cells[col * step] = tee ? '├' : '╰'
+    for (let c = col * step + 1; c < markAt; c++) cells[c] = '─'
+    const graph = cells.join('')
+    const mark: LiveSeg = { text: x.kind === 'merged' ? '◀' : '○', tone: x.kind === 'merged' ? 'passed' : 'future' }
+    const lead: LiveSeg[] = [{ text: ' '.repeat(indent), tone: 'text' }, { text: graph, tone: 'dim' }, mark]
+    const leadW = textWidth(segText(lead))
+    const labels = branchLabels(x)
+    const label = labels.find(l => leadW + textWidth(segText(l)) <= w) ?? fitSegs(labels[labels.length - 1]!, Math.max(0, w - leadW))
+    return { id: x.id, kind: x.kind, col, lines: below, tee, segs: fitSegs([...lead, ...label], w), label }
+  })
+  if (hidden) rows.push({ kind: 'more', col: 0, lines: [], tee: false, segs: [{ text: fitText(`${' '.repeat(indent)}+${hidden} more`, w), tone: 'dim' }], label: [{ text: `+${hidden} more`, tone: 'dim' }] })
+  return { head, main, name, commits: shown, step, indent, right: right.trim(), rows }
 }

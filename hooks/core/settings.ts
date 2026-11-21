@@ -614,7 +614,7 @@ export function settingsText(b: Partial<Board>, name: string = DEFAULT_NAME, roo
   return [
     ...SETTING_GROUPS.flatMap(g => {
       const rows = groupSettings(g)
-      const pages = g.items.some(isSettingPage) ? ['  roles and kinds: open them from the Settings view, or tell the lead', `  org-mem (organizational memory): its notes are in .${name}/org-mem.md, listed and deleted from the Organizational memory button at the bottom of the board's Live tab (/${name}-settings orgmem delete N)`] : []
+      const pages = g.items.some(isSettingPage) ? ['  roles and kinds: open them from the Settings view, or tell the lead', `  org-mem (organizational memory): its notes are in .${name}/org-mem.md; the Organizational memory section at the bottom of the board's Live tab shows the newest notes and topics and opens the page that lists and deletes them (/${name}-settings orgmem delete N)`] : []
       return [`${g.title}:`, ...rows.map(s => `  ${s.name.padEnd(w)}  ${settingValue(b, s.name, root)}  (default ${s.default} · ${s.range}) ${s.meaning}`), ...pages]
     }),
     `Change one: /${name}-settings NAME VALUE, e.g. /${name}-settings max_parallel 5`,
@@ -635,7 +635,7 @@ export function leadSettingsText(b: Partial<Board>, can: Pick<Playable, 'sound' 
         const extra = s.name === 'notify' ? `; this machine can play: ${notifyChoices(can).join(', ')}` : s.name === 'enabled' ? '; only the owner can change it' : ''
         return `${s.name}: ${value} (default ${s.default}, can be ${s.range}) ${s.meaning}${extra}`
       }),
-      ...(g.items.some(isSettingPage) ? ['roles and kinds: use the roles and kinds tools (the owner sees them as pages in the Settings view)', 'org-mem (organizational memory): change it with the orgmem tool (the owner sees its notes on the Organizational memory page, opened from the button at the bottom of the board\'s Live tab, and may delete them there)'] : []),
+      ...(g.items.some(isSettingPage) ? ['roles and kinds: use the roles and kinds tools (the owner sees them as pages in the Settings view)', 'org-mem (organizational memory): change it with the orgmem tool (the owner sees its notes on the Organizational memory page, opened from the Organizational memory section (newest notes and topics) at the bottom of the board\'s Live tab, and may delete them there)'] : []),
     ]),
   ].join('\n')
 }

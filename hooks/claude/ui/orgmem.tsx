@@ -1,6 +1,6 @@
 // The Organizational memory page (T-619) on the terminal panel (and desktop and mobile; VS Code has its own,
-// vscode-orgmem.tsx). T-687: it is opened from the "Organizational memory (n notes)" button at the bottom of the Live
-// tab (live.tsx, key m), and its Back returns to the Live tab; it is no longer under Settings. T-718: opened from a
+// vscode-orgmem.tsx). T-687, T-718: it is opened from the Organizational memory section (newest notes and topics) at the
+// bottom of the Live tab (live.tsx, key m), and its Back returns to the Live tab; it is no longer under Settings. T-718: opened from a
 // topic in the Live tab's org-mem section it shows only that topic's notes ("Organizational memory · tests"); from a
 // newest note there, all notes with the focus on that one (live.tsx's orgMemPick says which).
 import { S } from '../../app/state'
@@ -19,7 +19,7 @@ const focusedNote = (notes: readonly OrgMemNote[]) => {
   return (m ? notes.find(x => x.n === Number(m[1])) : undefined) ?? orgMemFind(notes, orgMemPick.note) ?? notes[0]
 }
 
-/** The Organizational memory page, opened from the button at the bottom of the Live tab: what org-mem is, then its notes newest first
+/** The Organizational memory page, opened from the Organizational memory section at the bottom of the Live tab: what org-mem is, then its notes newest first
  *  (number, date, text); Enter on a note or Delete (x) asks to delete it (y yes, x cancel); Back (b) to the Live tab. */
 export function orgMemPage($: $, pane: PaneParts, all: OrgMemNote[], file: string) {
   if (pane.vscode) return orgMemPageVs($, pane, all, file)

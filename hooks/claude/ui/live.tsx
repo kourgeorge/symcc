@@ -9,7 +9,9 @@
 // the Organizational memory page (orgmem.tsx; VS Code's: vscode-orgmem.tsx) filtered to it, Enter on a newest note
 // opens all notes with that note focused, m opens all notes; the page's Back comes back here.
 // T-715: under each lane hang its waiting trains (core's liveTrains and trainRows), each one a row Button that opens its task.
-import { LIVE_EMPTY, LIVE_LEGEND, type LiveSeg, LIVE_TONE, laneLines, liveHeader, liveKeys, liveLabelLine, liveLanes, liveLayout, liveOrgMem, liveStations, liveToday, liveTrains, nextUpLine, todayLines, trainRows } from '../../core/live'
+// T-727: under the lanes, the Branches section (core's liveBranches): main's latest commits and a row per open task's
+// branch (commits ahead, how far behind), each task row a row Button that opens its task.
+import { LIVE_EMPTY, LIVE_LEGEND, type LiveSeg, LIVE_TONE, laneLines, liveBranches, liveHeader, liveKeys, liveLabelLine, liveLanes, liveLayout, liveOrgMem, liveStations, liveToday, liveTrains, nextUpLine, todayLines, trainRows } from '../../core/live'
 import { footerRule } from '../../board'
 import { S, workers } from '../../app/state'
 import { type $, panelValues } from '../panel'
@@ -50,6 +52,8 @@ function keepTicking($: $) {
 export const laneKey = (id: string) => `live:${id}`
 /** The key of a waiting train's row Button (T-715). */
 export const trainKey = (id: string) => `live-train:${id}`
+/** The key of a Branches row's Button (T-727). */
+export const branchKey = (id: string) => `live-branch:${id}`
 
 /** Notes a redraw of the Live tab and keeps its redraw timer going (the terminal's and VS Code's Live tab). */
 export function liveTick($: $) {
@@ -102,6 +106,7 @@ export function livePage($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
   })
   const today = todayLines(liveToday(v.tasks, nowMs), width)
   const om = liveOrgMem(notes, width)
+  const br = liveBranches(v, nowMs, width)
   return (
     <Box flexDirection="column">
       {header('live')}
@@ -125,6 +130,17 @@ export function livePage($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
           ),
         ]
       })}
+      {br ? <Text key="live-br-head">{draw(br.head)}</Text> : null}
+      {br ? <Text key="live-br-main">{draw(br.main)}</Text> : null}
+      {br?.rows.map(r =>
+        r.id ? (
+          <Button key={row(branchKey(r.id))} plain onPress={open(r.id)}>
+            {draw(r.segs)}
+          </Button>
+        ) : (
+          <Text key="live-br-more">{draw(r.segs)}</Text>
+        ),
+      )}
       <Text key="live-rule" color={C('subtle')}>{footerRule(width)}</Text>
       <Text key="live-next" color={C('text')}>{nextUpLine(trains, width)}</Text>
       {today.map((line, i) => (

@@ -15,6 +15,8 @@ import { ICON } from '../../name'
 import { hasPage, bandLines, bandDraw, BAND_CLICK_HINT, panelLines, panelKeys, parseViewFile, viewFileText, lineText, actionCommand, answerOptions, OWN_ANSWER, viewDefs, panelTaskActions, TASK_ACTION_COMMANDS, SETTINGS_OPEN, approveSent, APPROVE_SENT_MS, drawnLines, boardPageOf, defDraftOf, defEditKeys, noDescriptionText, draftError, SETUP_GIT_ASK, EDIT_FIRST_BOX, newNameError, type ViewFile, type PanelChoice } from '../board-view'
 import { readFile } from 'node:fs/promises'
 import { rowEndBoard, ROW_END, ROW_END_NOW } from '../../../tests/row-end-cases'
+import { BRANCH_LINES_100, branchFactsAt, branchTasks } from '../../../tests/branches-fixture'
+import { liveBranches } from '../../core/live'
 import { taskSections } from '../../core/task-sections'
 import { viewTask } from '../../core/board-parts'
 import { orgMemNotes, orgMemNoteKey } from '../../core/org-mem'
@@ -3165,4 +3167,67 @@ test('T-706: startTui: Set up git (g, or the banner\'s button) asks a yes first,
   await ok.board.press('g', 's')
   expect(ok.asked).toEqual([])
   ok.board.stop()
+})
+
+// ---------------- T-727: the Live tab's Branches section ----------------
+/** The Branches sample (tests/branches-fixture.ts) as a view file at NOW. */
+function branchesViewFile(): ViewFile {
+  const f = viewFile()
+  return { ...f, view: { ...f.view, tasks: branchTasks(NOW) as never[], branches: branchFactsAt(NOW), checker: true } }
+}
+
+test('T-727: the OpenCode Live tab draws the Branches section under the lanes as core lays it out, at 100 and 40 columns', () => {
+  const f = branchesViewFile()
+  expect(parseViewFile(viewFileText(f))!.view.branches).toEqual(f.view.branches)
+  expect(parseViewFile(viewFileText({ ...f, view: { ...f.view, branches: 'x' as never } }))!.view.branches).toBe(undefined)
+  for (const w of [100, 40]) {
+    const d = panelLines(f, { tab: 'live', opened: '', cursor: 0 }, NOW, w)
+    const lines = d.lines.map(lineText)
+    const b = liveBranches(f.view, NOW, w)!
+    const want = [b.head, b.main, ...b.rows.map(r => r.segs)].map(segText)
+    if (w === 100) expect(want).toEqual(BRANCH_LINES_100)
+    const at = lines.indexOf(want[0]!)
+    expect(at).toBeGreaterThan(0)
+    expect(lines.slice(at, at + want.length)).toEqual(want)
+    for (const l of want) expect([...l].length <= w).toBe(true)
+    // the task rows are cursor stops, after the lane
+    expect(d.ids.filter(id => id.startsWith('br:'))).toEqual(['br:T-724', 'br:T-721', 'br:T-725', 'br:T-726'])
+  }
+  // no figures: no section
+  const none = panelLines(viewFile(), { tab: 'live', opened: '', cursor: 0 }, NOW, 100).lines.map(lineText)
+  expect(none.some(l => l.includes('Branches'))).toBe(false)
+})
+
+test('T-727: startTui: Enter on a Branches row opens its task, b returns to the Live tab; a click on a row opens its task', async () => {
+  const f = branchesViewFile()
+  const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)]])
+  const slots: { append: string; render: (input: never) => unknown }[] = []
+  const ctx: TuiContext = {
+    location: { directory: '/work/proj' },
+    theme: {},
+    renderer: { width: 100 },
+    client: { session: { command: async () => undefined } },
+    keymap: { layer: () => undefined },
+    ui: {
+      toast: { show: () => undefined },
+      dialog: { prompt: async () => undefined, select: async () => undefined },
+      panel: { open: () => true, close: () => undefined, current: () => undefined },
+      slot: claim => (slots.push(claim as never), () => undefined),
+    },
+  }
+  const board = startTui(ctx, { runtime: fakeRuntime(), readText: async p => files.get(p) ?? Promise.reject(new Error('missing')), every: () => () => undefined, now: () => NOW })
+  await board.refresh()
+  const panel = slots.find(s => s.append === 'session.panel')!.render({ name: BOARD_PANEL, sessionID: 'ses_1', width: 102, focused: true, close: () => undefined } as never) as El
+  await board.press('l', 'ses_1')
+  const ids = panelLines(f, { tab: 'live', opened: '', cursor: 0 }, NOW, 100).ids
+  for (let i = 0; i < ids.indexOf('br:T-725'); i++) await board.press('down', 'ses_1')
+  await board.press('open', 'ses_1')
+  expect([board.state().tab, board.state().opened]).toEqual(['tasks', 'T-725'])
+  await board.press('back', 'ses_1')
+  expect([board.state().tab, board.state().opened]).toEqual(['live', ''])
+  const row = rowEls(panel).find(r => r.text.includes('T-721  +3 commits'))!
+  const seg = row.segs.find(x => x.props.onMouseUp)!
+  ;(seg.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0, stopPropagation: () => undefined })
+  expect([board.state().tab, board.state().opened]).toEqual(['tasks', 'T-721'])
+  board.stop()
 })
