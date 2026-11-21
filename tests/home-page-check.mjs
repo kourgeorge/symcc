@@ -1,0 +1,78 @@
+// Used by tests/build-site.sh (T-749): checks the built home page and its hero demo.
+//   bun tests/home-page-check.mjs <built folder> <repo folder>
+// The home page has the playing hero (site/demo.js) with its 4 tabs and a still frame for no JS, the how-it-works
+// strip, the feature cards, the comparison, the install commands, the FAQ, the final call to action, the nav links
+// and the "Read more" list; it loads no outside script; demo.js plays every step of its story without an error.
+// Prints one "FAIL: ..." line per problem and exits 1 if there were any.
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
+const [out, root] = process.argv.slice(2)
+const fails = []
+const bad = m => fails.push(m)
+const page = readFileSync(join(out, 'index.html'), 'utf8')
+const has = (text, what) => { if (!page.includes(text)) bad(`home page: no ${what} (${text})`) }
+
+// the hero demo, its tabs (radio buttons + labels, so they work without JS) and its script
+has('id="demo"', 'hero demo')
+for (const [id, label] of [['v-chat', 'Chat + board'], ['v-live', 'Live tab'], ['v-task', 'Task page'], ['v-scouts', 'Scouts']]) {
+  has(`id="${id}"`, `tab input ${id}`)
+  has(`<label for="${id}">${label}</label>`, `tab "${label}"`)
+}
+has('<script src="demo.js"></script>', 'demo script')
+has('class="demo-pause"', 'pause button')
+for (const m of page.matchAll(/<script\b([^>]*)>/g)) {
+  const src = /\bsrc="([^"]*)"/.exec(m[1])?.[1]
+  if (!src) bad('home page: an inline <script>; the demo lives in demo.js')
+  else if (/^([a-z][a-z0-9+.-]*:|\/\/)/i.test(src)) bad(`home page: an outside script: ${src}`)
+}
+if (/<link\b[^>]*href="(https?:)?\/\//.test(page)) bad('home page: an outside stylesheet or font')
+
+// the still frame the build writes into each view box (what a reader without JS sees)
+// a view's text runs to the next view box (the chat log holds <div>s of its own)
+const view = name => new RegExp(`data-view="${name}" data-still>([\\s\\S]*?)(data-view=|</section>)`).exec(page)?.[1] ?? ''
+const text = html => html.replace(/<[^>]*>/g, '').replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
+const board = text(view('board'))
+for (const w of ['▍Tasks', '▍Branches', '▍Today', 'work·', 'check·', 'queue', 'tests', 'merged', 'T-740', 'try 2/3', '↺×1'])
+  if (!board.includes(w)) bad(`still frame: the board has no "${w}"`)
+if (!text(view('live')).includes('▍Organizational memory')) bad('still frame: the Live tab has no ▍Organizational memory')
+const chat = text(view('chat'))
+for (const w of ['❯ there is no clear visual separation between the sections of the live page, show some ideas', '⏺ Four looks', 'T-747 try 1 → checks passed', 'symcc: T-747 done', 'scout gaps-bot found'])
+  if (!chat.includes(w)) bad(`still frame: the chat has no "${w}"`)
+const task = text(view('task'))
+for (const w of ['T-740', '▍History', '▍Runs (time and cost)', 'try 1 → the checker found problems']) if (!task.includes(w)) bad(`still frame: the task page has no "${w}"`)
+if (!text(view('scouts')).includes('gaps-bot')) bad('still frame: the scouts view has no gaps-bot')
+
+// the sections after the hero
+for (const id of ['how-it-works', 'what-you-get', 'why-not-parallel', 'install', 'claude-code', 'opencode', 'faq', 'get-started', 'read-more']) has(`id="${id}"`, `section #${id}`)
+if ((page.match(/<details class="card">/g) ?? []).length < 4) bad('home page: fewer than 4 feature cards')
+if ((page.match(/<details class="faq">/g) ?? []).length < 3) bad('home page: fewer than 3 FAQ questions')
+if ((page.match(/<ol class="steps">[\s\S]*?<\/ol>/)?.[0].match(/<li>/g) ?? []).length < 4) bad('home page: the how-it-works strip has fewer than 4 steps')
+
+// install commands, nav links, words
+has('claude plugin install symcc --marketplace kourgeorge/symcc', 'Claude Code install command')
+has('git clone https://github.com/kourgeorge/symcc &amp;&amp; sh symcc/scripts/install-opencode.sh', 'OpenCode install command (clone)')
+has('opencode plugin add github:kourgeorge/symcc', 'OpenCode install command (no clone)')
+const nav = /<header class="site"[\s\S]*?<\/header>/.exec(page)?.[0] ?? ''
+for (const href of ['overview.html', 'guide.html', 'reference.html', 'engine-and-clients.html', 'research/index.html', 'https://github.com/kourgeorge/symcc'])
+  if (!nav.includes(`href="${href}"`)) bad(`home page nav: no link to ${href}`)
+has('agent organization', 'the words "agent organization"')
+if (/swarm/i.test(page)) bad('home page calls symcc a swarm')
+
+// demo.js: every step of the story plays, from start to end, without an error, and the views stay text the page can show
+const scope = {}
+new Function('globalThis', 'process', readFileSync(join(root, 'site/demo.js'), 'utf8'))(scope, { argv: [] })
+const demo = scope.symccDemo
+if (!demo) bad('demo.js did not set symccDemo')
+else {
+  if (demo.STEPS.length < 10) bad(`demo.js: only ${demo.STEPS.length} steps`)
+  for (let n = 0; n <= demo.STEPS.length; n++) {
+    try {
+      const v = demo.views(demo.stateAfter(n))
+      for (const [k, html] of Object.entries(v)) if (/undefined|NaN/.test(text(html))) bad(`demo.js: step ${n}, view ${k} shows "undefined" or "NaN"`)
+    } catch (e) { bad(`demo.js: step ${n} throws: ${e.message}`) }
+  }
+}
+
+for (const f of fails) console.log(`FAIL: ${f}`)
+process.exit(fails.length ? 1 : 0)

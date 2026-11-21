@@ -18,6 +18,8 @@ if ! bun "$here/scripts/build-site.ts" --root "$here" --out "$tmp/real" >"$tmp/l
   bad "build failed: $(cat "$tmp/log")"
 fi
 bun "$here/tests/build-site-check.mjs" "$tmp/real" "$here/.github/workflows/pages.yml" "$here" || bad "checks on the real build failed (see above)"
+# (T-749) the home page: the playing hero demo with its 4 tabs and still frame, the sections, install commands, nav links
+bun "$here/tests/home-page-check.mjs" "$tmp/real" "$here" || bad "checks on the home page failed (see above)"
 
 # a small copy with tricky text in the guide
 mkdir -p "$tmp/src/docs/research"
