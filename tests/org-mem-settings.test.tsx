@@ -10,6 +10,7 @@ import { inProject } from './project'
 import { ran, slash } from './fakes'
 import { vsHref } from '../hooks/claude/ui/vscode'
 import { showsHeader, type BoardPage } from '../hooks/board'
+import { textWidth } from '../hooks/core/stats'
 
 /** Seeds the plugin's state values; once the plugin writes one, the kit's own store answers it (and redraws). */
 function stateOf(on: On, seed: Record<string, unknown>) {
@@ -73,6 +74,22 @@ async function settings($: Engine, surface: 'terminal' | 'vscode' = 'terminal') 
   return $.ui.mount({ ...PANE, surface })
 }
 
+type Node = { type?: string; key?: unknown; props?: Record<string, unknown>; children?: unknown[] }
+const textOf = (n: unknown): string => (typeof n === 'string' ? n : !n || typeof n !== 'object' ? '' : ((n as Node).children ?? []).map(textOf).join(''))
+/** The lines of a drawn terminal page, top to bottom (a row Box is one line; hidden Boxes draw nothing). */
+const pageLines = (n: unknown): string[] => {
+  const x = n as Node
+  if (Array.isArray(n)) return n.flatMap(pageLines)
+  if (!x || typeof x !== 'object') return []
+  if (x.type === 'Box') {
+    if (x.props?.display === 'none') return []
+    return x.props?.flexDirection === 'row' ? [textOf(x)] : (x.children ?? []).flatMap(pageLines)
+  }
+  return [textOf(x)]
+}
+/** The Live tab's org-mem section header line (terminal). */
+const omHead = async (ui: { drawn: () => Promise<unknown> }) => pageLines(await ui.drawn()).find(l => l.startsWith(' ── Organizational memory'))
+
 /** Every drawn text of the page, joined. */
 const pageText = async (ui: { findAll: (q: { type: string }) => Promise<{ props: Record<string, unknown>; children?: unknown[] }[]> }) =>
   (await ui.findAll({ type: 'Text' })).flatMap(t => (t.children ?? []).filter(c => typeof c === 'string')).join('\n') +
@@ -95,13 +112,13 @@ test('T-687: Settings no longer lists org-mem (terminal and VS Code); the Worker
   await vs.unmount()
 })
 
-test('T-687: the Live tab ends with an Organizational memory button (count, key m) just above the key hints; it opens the page, Back returns to the Live tab', async ($, on) => {
+test('T-687, T-718: the Live tab ends with the Organizational memory section (count, key m for all notes) just above the key hints; m opens the page, Back returns to the Live tab', async ($, on) => {
   stateOf(on, VIEW)
   fakeOrgMem(on, NOTES)
   const ui = await settings($)
   const button = await ui.find({ key: 'live-orgmem' })
-  expect(button?.props.label).toBe('Organizational memory (3 notes) (m)')
   expect(button?.props.hotkey).toBe('m')
+  expect((await omHead(ui))).toContain('3 / 60')
   // at the bottom: after it only the footer (its rule, the legend when there are lanes, and the key hints)
   const nodes = await ui.findAll({})
   const at = nodes.findIndex(n => n.key === 'live-orgmem')
@@ -114,7 +131,7 @@ test('T-687: the Live tab ends with an Organizational memory button (count, key 
   expect(await ui.find({ type: 'Text', text: /▍Organizational memory \(org-mem\)/ })).toBeDefined()
   expect(await ui.find({ key: 'live-orgmem' })).toBeUndefined()
   await ui.press({ key: 'orgmem-back' })
-  expect((await ui.find({ key: 'live-orgmem' }))?.props.label).toBe('Organizational memory (3 notes) (m)')
+  expect((await omHead(ui))).toContain('3 / 60')
   expect(await ui.find({ type: 'Text', text: /agents \d+\/\d+ busy/ })).toBeDefined()
   await ui.unmount()
 })
@@ -199,15 +216,16 @@ test('T-619: the Organizational memory page lists the notes newest first with th
   // Back goes to the Live tab, whose button has the new count
   await ui.press({ key: 'orgmem-delete-cancel' })
   await ui.press({ key: 'orgmem-back' })
-  expect((await ui.find({ key: 'live-orgmem' }))?.props.label).toBe('Organizational memory (2 notes) (m)')
+  expect((await omHead(ui))).toContain('2 / 60')
   await ui.unmount()
 })
 
-test('T-619: with no org-mem file the button says 0 notes and the page says "No notes yet." with no delete key', async ($, on) => {
+test('T-619: with no org-mem file the section says 0 / 60 and "No notes yet.", and the page says "No notes yet." with no delete key', async ($, on) => {
   stateOf(on, VIEW)
   fakeOrgMem(on, null)
   const ui = await settings($)
-  expect((await ui.find({ key: 'live-orgmem' }))?.props.label).toBe('Organizational memory (0 notes) (m)')
+  expect((await omHead(ui))).toContain('0 / 60')
+  expect(pageLines(await ui.drawn()).find(l => l.includes('No notes'))).toBe('  No notes yet.')
   await ui.press({ key: 'live-orgmem' })
   expect(await ui.find({ type: 'Text', text: /No notes yet\./ })).toBeDefined()
   expect(await ui.find({ key: 'orgmem-delete' })).toBeUndefined()
@@ -223,7 +241,8 @@ test('T-619, T-687: VS Code: the Live tab\'s Organizational memory link opens th
   const files = fakeOrgMem(on, NOTES)
   const ui = await settings($, 'vscode')
   const row = await ui.find({ key: 'live-orgmem' })
-  expect(String(row?.props.text)).toContain('Organizational memory (3 notes)')
+  expect(String(row?.props.text)).toContain('Organizational memory')
+  expect(await pageText(ui as never)).toContain('3 / 60')
   // at the bottom of the Live tab, just above its footer
   const all = (await ui.findAll({})).map(n => String(n.key ?? ''))
   expect(all.indexOf('live-orgmem')).toBeGreaterThan(all.indexOf('live-next'))
@@ -242,7 +261,7 @@ test('T-619, T-687: VS Code: the Live tab\'s Organizational memory link opens th
   expect(files[FILE]).toBe('\n- written by hand, no date\n- 2026-11-20: the type check is separate\n')
   expect(String((await ui.find({ key: 'orgmem-back' }))?.props.text)).toContain('← Live')
   await ui.press({ key: 'orgmem-back', link: { href: vsHref('page', 'back/orgmem-back') } })
-  expect(String((await ui.find({ key: 'live-orgmem' }))?.props.text)).toContain('Organizational memory (2 notes)')
+  expect(await pageText(ui as never)).toContain('2 / 60')
   await ui.unmount()
 })
 
@@ -265,4 +284,131 @@ test('T-619: /symcc-settings orgmem delete N deletes note N; a wrong number dele
   const bad = String((await $.command.run(slash('symcc-settings', 'orgmem delete 9'))).text)
   expect(bad).toContain('No note 9')
   expect(files[FILE]).toBe('- 2026-11-18: run one test file with scripts/test-files.sh\n\n- written by hand, no date\n')
+})
+
+// ---------------- T-718: the Live tab's Organizational memory section ----------------
+
+/** A sample org-mem file with topics, oldest first: the newest are #8 (written by hand: unsorted), #7 (git), #6 (tests). */
+const TOPIC_NOTES = [
+  '- 2026-11-18 [tests] Run one test file with scripts/test-files.sh, never plain bun test here',
+  '- 2026-11-19 [git] The guard refuses a new repo inside the project folder',
+  '- 2026-11-19 [tests] Snapshot pictures are made again with snapshotEntry',
+  '- 2026-11-20 [vs code · panel] VS Code keeps a Box key but drops a Text key, so wrap lines in Boxes',
+  '- 2026-11-20 [opencode] OpenTUI boxes shrink unless they are given a fixed size',
+  '- 2026-11-21 [tests] In tests, put dates relative to now, never a fixed date for windows',
+  '- 2026-11-21 [git] Use a plain path for each scratch repository command',
+  '- a note written by hand without a date',
+  '',
+].join('\n')
+
+/** A markdown text as VS Code shows it: links as their words, escapes and bold marks taken off. */
+const shown = (md: string) => md.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/\*\*/g, '').replace(/\\(.)/g, '$1')
+
+test('T-718: the terminal Live tab draws the org-mem section (header, 3 newest, topic counts) at 40 and 100 columns, nothing wider than the panel', async ($, on) => {
+  stateOf(on, VIEW)
+  fakeOrgMem(on, TOPIC_NOTES)
+  await $.session.start({ cwd: '/proj' } as never)
+  for (const bodyColumns of [40, 100]) {
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns } })
+    const lines = pageLines(await ui.drawn())
+    for (const l of lines) expect([bodyColumns, l, textWidth(l) <= bodyColumns]).toEqual([bodyColumns, l, true])
+    const head = lines.findIndex(l => l.startsWith(' ── Organizational memory'))
+    expect(head).toBeGreaterThan(0)
+    expect(lines[head]).toContain('8 / 60')
+    expect(textWidth(lines[head]!)).toBe(bodyColumns)
+    expect(lines[head + 1]).toBe('  newest')
+    expect(lines[head + 2]).toMatch(/^ {3}— +unsorted {2}a note written/)
+    expect(lines[head + 3]).toMatch(/^ {3}11-21 {2}git +Use a plain path/)
+    expect(lines[head + 4]).toMatch(/^ {3}11-21 {2}tests +In tests, put/)
+    expect(lines[head + 5]).toBe('  topics')
+    const grid = lines.slice(head + 6, lines.findIndex(l => l.startsWith('  ↑↓ move')))
+    expect(grid.join(' ')).toMatch(/tests +3/)
+    expect(grid.join(' ')).toMatch(/git +2/)
+    expect(grid.join(' ')).toMatch(/vs code · panel +1/)
+    expect(grid.at(-1)).toMatch(/unsorted +1$/)
+    expect(grid.length).toBe(bodyColumns === 100 ? 2 : 3)
+    expect(lines.join('\n')).toContain('Enter open topic')
+    // the newest notes and the topics are ↑↓ rows (Buttons) that open the page
+    const keys = (await ui.findAll({ type: 'Button' })).map(b => String(b.key ?? '')).filter(k => k.startsWith('live-om-'))
+    expect(keys).toEqual(['live-om-note:8', 'live-om-note:7', 'live-om-note:6', 'live-om-topic:tests', 'live-om-topic:git', 'live-om-topic:opencode', 'live-om-topic:vs code · panel', 'live-om-topic:unsorted'])
+    await ui.unmount()
+  }
+})
+
+test('T-718: Enter on a topic opens the page of its notes only, Back returns to Live; Delete there deletes the right note; Enter on a newest note opens all notes on it', async ($, on) => {
+  stateOf(on, VIEW)
+  const files = fakeOrgMem(on, TOPIC_NOTES)
+  const ui = await settings($)
+  await ui.press({ key: 'live-om-topic:tests' })
+  expect(await ui.find({ type: 'Text', text: /▍Organizational memory · tests$/ })).toBeDefined()
+  const rows = async () => (await ui.findAll({ type: 'Button' })).map(b => String(b.key ?? '')).filter(k => k.startsWith('orgmemRow:'))
+  expect(await rows()).toEqual(['orgmemRow:6', 'orgmemRow:3', 'orgmemRow:1'])
+  // Back: the Live tab again
+  await ui.press({ key: 'orgmem-back' })
+  expect((await omHead(ui))).toContain('8 / 60')
+  // again, and delete note 3 from the filtered page: exactly that line goes
+  await ui.press({ key: 'live-om-topic:tests' })
+  await ui.press({ key: 'orgmemRow:3' })
+  expect(await ui.find({ type: 'Text', text: 'Delete note #3 · 2026-11-19 from .symcc/org-mem.md?' })).toBeDefined()
+  await ui.press({ key: 'orgmem-delete-yes' })
+  expect(files[FILE]).toBe(TOPIC_NOTES.replace('- 2026-11-19 [tests] Snapshot pictures are made again with snapshotEntry\n', ''))
+  // the page stays filtered: the topic's two other notes (the numbers after the deleted line moved up by one)
+  expect(await rows()).toEqual(['orgmemRow:5', 'orgmemRow:1'])
+  await ui.press({ key: 'orgmem-back' })
+  expect((await omHead(ui))).toContain('7 / 60')
+  expect(pageLines(await ui.drawn()).find(l => /tests +\d/.test(l))).toMatch(/tests +2( |$)/)
+  // a newest note: all notes, the focus on it; m: all notes, the focus on the newest
+  await ui.press({ key: 'live-om-note:6' })
+  expect(await ui.find({ type: 'Text', text: /▍Organizational memory \(org-mem\)$/ })).toBeDefined()
+  expect((await rows()).length).toBe(7)
+  expect((await ui.find({ key: 'orgmemRow:6' }))?.props.autoFocus).toBe(true)
+  expect((await ui.find({ key: 'orgmemRow:7' }))?.props.autoFocus).toBe(undefined)
+  await ui.press({ key: 'orgmem-back' })
+  await ui.press({ key: 'live-orgmem' })
+  expect((await ui.find({ key: 'orgmemRow:7' }))?.props.autoFocus).toBe(true)
+  await ui.unmount()
+})
+
+test('T-718: VS Code draws the org-mem section (title link, count, bar, 3 newest, topic links with counts) at 40 and 100 columns; a topic link opens its page, delete there deletes the right note, "← Live" returns', async ($, on) => {
+  stateOf(on, VIEW)
+  const files = fakeOrgMem(on, TOPIC_NOTES)
+  await $.session.start({ cwd: '/proj' } as never)
+  for (const bodyColumns of [40, 100]) {
+    const ui = await $.ui.mount({ ...PANE, surface: 'vscode', props: { ...PANE.props, bodyColumns } })
+    expect(shown(String((await ui.find({ key: 'live-orgmem' }))?.props.text))).toBe('Organizational memory')
+    expect(await pageText(ui as never)).toContain('8 / 60')
+    expect((await ui.findAll({ type: 'Svg' })).some(x => String(x.props.alt) === '8 notes of at most 60')).toBe(true)
+    for (const k of ['live-om-note:8', 'live-om-note:7', 'live-om-note:6']) expect(await ui.find({ key: k })).toBeDefined()
+    expect(shown(String((await ui.find({ key: 'live-om-note:7' }))?.props.text))).toMatch(/^Use a plain path/)
+    expect((await ui.findAll({ type: 'Markdown' })).filter(m => String(m.key ?? '').startsWith('live-om-topic:')).length).toBe(5)
+    // each grid row: its cells' words and the gaps between them fit the panel
+    let n = 0
+    for (let i = 0; ; i++) {
+      const r = (await ui.find({ key: `live-om-row-${i}` })) as unknown as Node | undefined
+      if (!r) break
+      const cells = ((r.children ?? []) as Node[]).map(c => shown(String(c.props?.text ?? ''))).filter(Boolean)
+      n += cells.length
+      expect([bodyColumns, cells, textWidth(cells.join('   ')) + 1 <= bodyColumns]).toEqual([bodyColumns, cells, true])
+    }
+    expect(n).toBe(5)
+    expect(shown(String((await ui.find({ key: 'live-om-topic:tests' }))?.props.text))).toBe('tests 3')
+    expect(shown(String((await ui.find({ key: 'live-om-topic:unsorted' }))?.props.text))).toBe('unsorted 1')
+    await ui.unmount()
+  }
+  const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
+  await ui.press({ key: 'live-om-topic:tests', link: { href: vsHref('page', 'orgmem-topic/tests') } })
+  const text = await pageText(ui as never)
+  expect(text).toContain('Organizational memory · tests')
+  expect(text).toContain('#6 · 2026-11-21')
+  expect(text).not.toContain('#7 · 2026-11-21')
+  await ui.press({ key: 'orgmemRow:3', link: { href: vsHref('do', 'orgmem-delete/3') } })
+  await ui.press({ key: 'orgmem-delete-yes' })
+  expect(files[FILE]).toBe(TOPIC_NOTES.replace('- 2026-11-19 [tests] Snapshot pictures are made again with snapshotEntry\n', ''))
+  await ui.press({ key: 'orgmem-back', link: { href: vsHref('page', 'back/orgmem-back') } })
+  expect(await pageText(ui as never)).toContain('7 / 60')
+  // a newest note's link: all notes, that one marked
+  await ui.press({ key: 'live-om-note:6', link: { href: vsHref('do', 'orgmem-note/6') } })
+  expect(await pageText(ui as never)).toContain('Organizational memory (org-mem)')
+  expect(String((await ui.find({ key: 'orgmemRow:6' }))?.props.text)).toMatch(/^▶ /)
+  await ui.unmount()
 })

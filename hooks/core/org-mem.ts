@@ -7,7 +7,8 @@
 // (T-717: one topic label each, set only by the lead; an old "- 2026-11-20: lesson" line reads as topic "unsorted"), at
 // most ORG_MEM_MAX_LINES of them; the whole file goes into every new worker's, checker's and scout's prompt. The
 // owner may edit the file by hand. Everything here is pure.
-// T-619, T-687: the owner sees the notes on a page opened from the Live tab's Organizational memory button (orgMemNotes) and may delete one there (deleteOrgMemNote).
+// T-619, T-687, T-718: the owner sees the notes on a page opened from the Live tab's Organizational memory section (orgMemNotes; the
+// section's newest notes and topic counts: orgMemNewest, orgMemTopicCounts, drawn by core/live.ts's liveOrgMem) and may delete one there (deleteOrgMemNote).
 import type { KeyHint } from './panel'
 
 /** The file's name inside symcc's data folder (e.g. .symcc/org-mem.md). */
@@ -438,13 +439,11 @@ export const ORG_MEM_TITLE = 'Organizational memory (org-mem)'
 /** What the page says when org-mem has no notes. */
 export const ORG_MEM_EMPTY = 'No notes yet.'
 
-/** "3 notes" (the count on the Live tab's button). */
+/** "3 notes". */
 export const orgMemCount = (n: number) => `${n} note${n === 1 ? '' : 's'}`
 
-/** T-687: the words of the button at the bottom of the Live tab that opens the page: "Organizational memory (3 notes)". */
-export const orgMemButtonLabel = (n: number) => `Organizational memory (${orgMemCount(n)})`
 
-/** The key of that button on the Live tab (free there: m is the board mode only on the Tasks page). */
+/** The Live tab's key for the page with all notes (free there: m is the board mode only on the Tasks page). */
 export const ORG_MEM_KEY = 'm'
 
 /** The page's one-line explanation: where the file is, who adds to it, and its limit. */
@@ -516,6 +515,42 @@ export const orgMemKeys = (confirming = false, notes = true): KeyHint[] =>
   confirming
     ? [{ key: 'y', word: 'yes, delete' }, { key: 'x', word: 'cancel' }]
     : [...(notes ? [{ key: '↑↓', word: 'move' }, { key: 'x', word: 'delete' }] : []), { key: 'b', word: 'back' }]
+
+// ---------------- T-718: the Live tab's Organizational memory section (drawn by core/live.ts's liveOrgMem) ----------------
+
+/** How many of the newest notes the Live tab's section shows. */
+export const ORG_MEM_NEWEST = 3
+
+/** The `n` newest notes of `notes` (orgMemNotes gives them newest first). */
+export const orgMemNewest = (notes: readonly OrgMemNote[], n = ORG_MEM_NEWEST): OrgMemNote[] => notes.slice(0, n)
+
+/** The topics of `notes` with their counts as the Live tab lists them: the biggest first (then by name), "unsorted" last. */
+export function orgMemTopicCounts(notes: readonly OrgMemNote[]): { topic: string; count: number }[] {
+  const all = orgMemTopics(notes)
+  return [...all.filter(x => x.topic !== TOPIC_UNSORTED), ...all.filter(x => x.topic === TOPIC_UNSORTED)]
+}
+
+/** The notes of topic `topic` (all of them when it is null or ''), in the same order. */
+export const orgMemOfTopic = (notes: readonly OrgMemNote[], topic?: string | null): OrgMemNote[] => (topic ? notes.filter(x => x.topic === topic) : [...notes])
+
+/** The org-mem page's title: ORG_MEM_TITLE for all notes, "Organizational memory · tests" for one topic's. */
+export const orgMemPageTitle = (topic?: string | null) => (topic ? `Organizational memory · ${topic}` : ORG_MEM_TITLE)
+
+/** What a topic's page says when it has no notes (its last one was deleted). */
+export const orgMemTopicEmpty = (topic: string) => `No notes with topic "${topic}" now.`
+
+/** The key hints under the Live tab's section: "↑↓ move · Enter open topic · m all notes". */
+export const orgMemSectionKeys = (): KeyHint[] => [
+  { key: '↑↓', word: 'move' },
+  { key: 'Enter', word: 'open topic' },
+  { key: ORG_MEM_KEY, word: 'all notes' },
+]
+
+/** Whether `n` notes is near org-mem's cap (ORG_MEM_MAX_LINES): the section's count and bar are then drawn as a warning. */
+export const orgMemNearCap = (n: number) => n >= ORG_MEM_MAX_LINES * 0.9
+
+/** A note's day as the section shows it: "11-21" (month and day); "—" for a line written by hand without one. */
+export const orgMemShortDay = (date: string) => (/^\d{4}-\d{2}-\d{2}$/.test(date) ? date.slice(5) : '—')
 
 /** The confirm step's question: "Delete note #3 · 2026-11-20 from .symcc/org-mem.md?" */
 export const orgMemDeleteAsk = (x: OrgMemNote, file: string) => `Delete note ${orgMemNoteHead(x)} from ${file}?`
