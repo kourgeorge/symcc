@@ -3585,3 +3585,28 @@ test('T-761: the OpenCode task page draws the Branch section from the view file:
   // to do, never started: no Branch section
   expect(page('T-736', 100).some(l => l.startsWith('▍Branch'))).toBe(false)
 })
+
+test('T-770: the Live tab\'s mode line ends in "⌕ gaps-bot 4m" while scouts run, "⌕ N scouts" when the names don\'t fit, and a click on it opens the Scouts tab', () => {
+  const f0 = viewFile()
+  const base = { ...f0.view, tasks: liveTasks(), checker: true, max_parallel: 3 }
+  const runs = [{ name: 'board-review', since: NOW - 60_000 }, { name: 'gaps-bot', since: NOW - 4 * 60_000 }]
+  const draw = (scouts_running: typeof runs | undefined, w: number) => {
+    const f = parseViewFile(viewFileText({ ...f0, view: { ...base, ...(scouts_running ? { scouts_running } : {}) } }))!
+    const d = panelLines(f, { tab: 'live', opened: '', cursor: 0 }, NOW, w)
+    const i = d.lines.findIndex(l => lineText(l).includes(' busy'))
+    return { text: lineText(d.lines[i]!), segs: d.lines[i]! }
+  }
+  const head = liveHeader(base, liveLanes(base, NOW))
+  expect(draw(undefined, 80).text).toBe(head)
+  expect(draw([runs[1]!], 80).text).toBe(`${head} · ⌕ gaps-bot 4m`)
+  expect(draw(runs, 80).text).toBe(`${head} · ⌕ gaps-bot 4m, board-review 1m`)
+  expect(draw(runs, 44).text).toBe(`${head} · ⌕ 2 scouts`)
+  for (const w of [120, 80, 44, 32]) expect([w, draw(runs, w).text.length <= Math.max(w, head.length)]).toEqual([w, true])
+  const segs = draw([runs[1]!], 80).segs
+  expect(segs.find(s => s.text === '⌕')?.color).toBe('suggestion')
+  expect(segs.find(s => s.text === '⌕')?.hit).toEqual({ tab: 'scouts' })
+  expect(segs.find(s => s.text === ' gaps-bot 4m')?.color).toBe('inactive')
+  // a broken scouts_running is left out
+  const broken = parseViewFile(viewFileText({ ...f0, view: { ...base, scouts_running: 'x' as never } }))!
+  expect('scouts_running' in broken.view).toBe(false)
+})
