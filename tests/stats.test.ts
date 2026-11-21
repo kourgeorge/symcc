@@ -1,6 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { addScoutRun, bar, cutTitle, textWidth, parseStatsArgs, wrapLine, billedTokens, billedText, failReason, migrateScoutUsage, readArchive, archiveText, tokenCount, fmtTokenKinds, inRange, keepScoutUsage, leadTotals, mean, median, mergedHow, originKey, parseScoutMemory, parseScoutUsage, parseStatsRange, rangeSpan, scoutMemoryText, scoutTotals, statsReport, scoutResultsLine, taskFigures, readBoard, boardTotal } from '../hooks/board'
+import { addScoutRun, bar, cutTitle, textWidth, parseStatsArgs, wrapLine, billedTokens, billedText, failReason, migrateScoutUsage, readArchive, archiveText, tokenCount, fmtTokenKinds, inRange, keepScoutUsage, leadTotals, mean, median, mergedHow, originKey, parseScoutMemory, parseScoutUsage, parseStatsRange, rangeSpan, scoutMemoryText, scoutTotals, statsReport, statsData, scoutResultsLine, taskFigures, readBoard, boardTotal } from '../hooks/board'
+import { statsHtml } from '../hooks/core/stats-html'
 import { leadCalls, projectFolderName } from '../hooks/claude/lead-usage'
 import { hist } from './history-fixture'
 
@@ -536,7 +537,7 @@ test('T-735: tries stopped on purpose (paused, dropped, backlog, turned off) are
   // the HTML page uses the same figures
   const d = statsData({ tasks, nowMs: NOW, range: { kind: 'days', days: 7 } })
   expect([d.failedTries.length, d.failedTotal]).toEqual([1, 1])
-  expect(statsHtml(d)).toContain('<h2>Each failed try (1)</h2>')
+  expect(statsHtml(d, 'p')).toContain('<h2>Each failed try (1)</h2>')
   // a try stopped for another reason still fails; when the counts differ the list says why
   const other = [...tasks, task('T-8', { status: 'failed', runs: [stop(20, 'the worker ended without a result')] })]
   const t2 = statsReport({ tasks: other, nowMs: NOW, full: true })
