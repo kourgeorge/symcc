@@ -156,8 +156,21 @@ export function cleanLearned(lines: readonly string[]): string[] {
   return out
 }
 
-/** An org-mem line's lesson, without its "- 2026-11-21 [tests]" (or old "- 2026-11-20:") front (lines the owner wrote by hand are taken as they are). */
-const lessonOf = (line: string) => line.replace(/^\s*[-*•]?\s*(?:\d{4}-\d{2}-\d{2}\s*:?)?\s*(?:\[[^\]\n]{1,40}\]\s*)?/, '')
+/** A note's text without its list mark and an old "2026-11-20:" front (the text a lead gives keeps any "[WIP]" or "[link](url)" start). */
+const plainLesson = (line: string) => line.replace(/^\s*[-*•]?\s*(?:\d{4}-\d{2}-\d{2}\s*:)?\s*/, '')
+
+/**
+ * An org-mem line's lesson, for comparing: without its "- 2026-11-21 [tests] " front (T-717: the "[topic]" is taken
+ * off only right after a date with no colon, and only when followed by a space) or its old "- 2026-11-20:" front.
+ * Anything else (a new note's text, a line written by hand) is taken as plainLesson gives it.
+ */
+function lessonOf(line: string): string {
+  const m = /^\s*[-*•]?\s*\d{4}-\d{2}-\d{2}(?!\s*:)\s+/.exec(line)
+  if (!m) return plainLesson(line)
+  const rest = line.slice(m[0].length)
+  const t = /^\[([^\]\n]{1,40})\]\s+/.exec(rest)
+  return t && cleanTopic(t[1]) ? rest.slice(t[0].length) : rest
+}
 
 /** The words of `s`, lower case, for comparing. */
 const wordsOf = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
@@ -254,7 +267,7 @@ export type OrgMemNewNote = { text: string; topic: string }
 /** A note the lead gives, made one plain line (list mark, any old "T-12 " task id and any "2026-11-20:" front off, cut at LEARNED_LINE_CHARS); '' when it is empty, secret-looking or file contents. */
 export function cleanNote(raw: string): string {
   const s = String(raw ?? '').replace(/\s+/g, ' ').trim().replace(/^(?:[-*•+]|\d+[.)])\s+/, '').replace(/^T-\d+\s+/, '')
-  return cleanLearned([lessonOf(s)])[0] ?? ''
+  return cleanLearned([plainLesson(s)])[0] ?? ''
 }
 
 /** Org-mem `lines` joined back into the file's text ('' with none). */

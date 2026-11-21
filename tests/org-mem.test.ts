@@ -276,6 +276,14 @@ test('T-717: an old "date:" line or a markdown link line starting with "[word]" 
   expect(orgMemReplace(g, 1, 'something done', D).text.split('\n')[0]).toBe(`- ${D} [unsorted] something done`)
 })
 
+test('T-717: add and replace keep a leading "[WIP]" or "[link](url)" of the note text itself', () => {
+  const r = orgMemAdd('', [n('[link](http://x) is the doc', 'docs'), n('[WIP] marker means unfinished', 'docs')], D)
+  expect(r.text).toBe(`- ${D} [docs] [link](http://x) is the doc\n- ${D} [docs] [WIP] marker means unfinished\n`)
+  expect(orgMemNotes(r.text).reverse().map(x => x.text)).toEqual(['[link](http://x) is the doc', '[WIP] marker means unfinished'])
+  expect(orgMemAdd(r.text, [n('[WIP] marker means unfinished', 'other')], D).repeats).toEqual(['[WIP] marker means unfinished'])
+  expect(orgMemReplace(`- ${D} [a] x y z\n`, 1, '[WIP] means not done', D).text).toBe(`- ${D} [a] [WIP] means not done\n`)
+})
+
 test('T-717: cleanTopic: short, lower case, letters, digits, spaces, · and -', () => {
   expect(cleanTopic('  Tests  ')).toBe('tests')
   expect(cleanTopic('board ·  ui')).toBe('board · ui')
