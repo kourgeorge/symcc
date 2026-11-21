@@ -4,16 +4,18 @@
 // file only draws its segments and wires the keys (↑↓ between lanes, Enter opens the task, w watches its worker).
 // Claude Code doesn't say whether the person asked for reduced motion, so the current station always blinks: it
 // changes between ◉ and ◎ every LIVE_TICK_MS, and while the tab is shown it is redrawn that often.
-// T-687: at its bottom, just above the key hints, the "Organizational memory (n notes)" button (key m) opens the
-// Organizational memory page over the tab (orgmem.tsx; VS Code's: vscode-orgmem.tsx); its Back comes back here.
+// T-687, T-718: at its bottom, just above the key hints, the Organizational memory section (core's liveOrgMem): a
+// header with the count and a fill bar, the 3 newest notes and the topics with their counts. Enter on a topic opens
+// the Organizational memory page (orgmem.tsx; VS Code's: vscode-orgmem.tsx) filtered to it, Enter on a newest note
+// opens all notes with that note focused, m opens all notes; the page's Back comes back here.
 // T-715: under each lane hang its waiting trains (core's liveTrains and trainRows), each one a row Button that opens its task.
-import { LIVE_EMPTY, LIVE_LEGEND, type LiveSeg, LIVE_TONE, laneLines, liveHeader, liveKeys, liveLabelLine, liveLanes, liveLayout, liveStations, liveToday, liveTrains, nextUpLine, todayLines, trainRows } from '../../core/live'
+import { LIVE_EMPTY, LIVE_LEGEND, type LiveSeg, LIVE_TONE, laneLines, liveHeader, liveKeys, liveLabelLine, liveLanes, liveLayout, liveOrgMem, liveStations, liveToday, liveTrains, nextUpLine, todayLines, trainRows } from '../../core/live'
 import { footerRule } from '../../board'
 import { S, workers } from '../../app/state'
 import { type $, panelValues } from '../panel'
 import type { PaneParts } from './parts'
 import { arrows, row, saysArrowsMove } from './arrows'
-import { ORG_MEM_KEY, orgMemButtonLabel } from '../../core/org-mem'
+import { ORG_MEM_KEY, type OrgMemNote } from '../../core/org-mem'
 import { orgMemView } from '../../app/org-mem'
 
 /** How often the Live tab is redrawn while it is shown (its blink and its times). */
@@ -55,17 +57,29 @@ export function liveTick($: $) {
   keepTicking($)
 }
 
-/** Opens the Organizational memory page over the Live tab (its Back, resetOrgMemView, comes back to the tab). */
-export function openOrgMemPage($: $) {
+/** T-718: what the Organizational memory page shows when opened from the Live tab: one topic's notes (`topic`, null:
+ *  all of them) and the note to put the focus on (`note`, null: the first). The note is kept whole, not by its number,
+ *  since a delete on the page moves the numbers after it; the page finds it again with orgMemFind. Set on every open. */
+export const orgMemPick = { topic: null as string | null, note: null as OrgMemNote | null }
+
+/** The key of a newest note's row in the Live tab's org-mem section, and of a topic's cell (T-718). */
+export const newestKey = (n: number) => `live-om-note:${n}`
+export const topicKey = (topic: string) => `live-om-topic:${topic}`
+
+/** Opens the Organizational memory page over the Live tab (its Back, resetOrgMemView, comes back to the tab): all
+ *  notes, or (T-718) topic `topic`'s, with the focus on note `note` when given. */
+export function openOrgMemPage($: $, topic: string | null = null, note: OrgMemNote | null = null) {
   return () => {
     orgMemView.open = true
     orgMemView.confirm = null
+    orgMemPick.topic = topic
+    orgMemPick.note = note
     $.ui.invalidate('ui.render')
   }
 }
 
-/** The Live tab on the terminal (and desktop and mobile); `notes`: org-mem's note count, on the button at its bottom. */
-export function livePage($: $, pane: PaneParts, notes: number) {
+/** The Live tab on the terminal (and desktop and mobile); `notes`: org-mem's notes (newest first), for the section at its bottom. */
+export function livePage($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
   const { Box, Text, Button, v, width, C, act, header, keyLines, nowMs } = pane
   // the blink goes by the clock, one step per tick, so extra redraws in between don't make it flicker
   const frame = Math.floor(nowMs / LIVE_TICK_MS)
@@ -87,6 +101,7 @@ export function livePage($: $, pane: PaneParts, notes: number) {
     else $.ui.toast(S.N.toast(target ? `${target.id} has no worker running now.` : 'No worker is running now.'))
   })
   const today = todayLines(liveToday(v.tasks, nowMs), width)
+  const om = liveOrgMem(notes, width)
   return (
     <Box flexDirection="column">
       {header('live')}
@@ -117,8 +132,29 @@ export function livePage($: $, pane: PaneParts, notes: number) {
       ))}
       <Box key="live-keys" display="none">
         <Button key="live-watch" label="w" hotkey="w" onPress={watch} />
+        <Button key="live-orgmem" label={ORG_MEM_KEY} hotkey={ORG_MEM_KEY} onPress={openOrgMemPage($)} />
       </Box>
-      <Button key="live-orgmem" label={`${orgMemButtonLabel(notes)} (${ORG_MEM_KEY})`} hotkey={ORG_MEM_KEY} onPress={openOrgMemPage($)} />
+      <Text key="live-om-head">{draw(om.head)}</Text>
+      <Text key="live-om-newest" color={C('inactive')}>{om.newestLabel}</Text>
+      {om.empty ? <Text key="live-om-empty" color={C('inactive')}>{om.empty}</Text> : null}
+      {om.newest.map(x => (
+        <Button key={row(newestKey(x.note.n))} plain onPress={openOrgMemPage($, null, x.note)}>
+          {draw(x.segs)}
+        </Button>
+      ))}
+      {om.grid.length ? <Text key="live-om-topics" color={C('inactive')}>{om.topicsLabel}</Text> : null}
+      {om.grid.map((r, i) => (
+        <Box key={`live-om-row-${i}`} flexDirection="row">
+          {r.map(c => (
+            <Button key={row(topicKey(c.topic))} plain onPress={openOrgMemPage($, c.topic)}>
+              {draw(c.segs)}
+            </Button>
+          ))}
+        </Box>
+      ))}
+      {om.keys.map((k, i) => (
+        <Text key={`live-om-keys-${i}`} color={C('inactive')}>{k}</Text>
+      ))}
       <Text key="live-foot-rule" color={C('subtle')}>{footerRule(width)}</Text>
       {lanes.length ? <Text key="live-legend" color={C('inactive')}>{LIVE_LEGEND}</Text> : null}
       {keyLines(liveKeys(), 'live-hint')}

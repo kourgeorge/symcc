@@ -10,9 +10,11 @@
 // board, T-585). Like it, Settings opens the Roles and Kinds
 // pages (a list, then one role's or kind's page: turn it off or on, reset it to the built-in one, T-562) and a
 // scout's page edits the scout (how often, model, instructions); the roles and kinds come in the view file too.
-// The Live tab's "Organizational memory (n notes)" button at its bottom (key m, T-687) opens the Organizational memory
-// page (T-619): org-mem's notes, newest first, x deletes one (after a yes) with /<name>-settings orgmem delete N; Back
-// returns to the Live tab; the notes come in the view file too (org_mem). Every screen has the
+// The Live tab's Organizational memory section at its bottom (T-718, core's liveOrgMem: the count and a fill bar, the
+// 3 newest notes, the topics with their counts) opens the Organizational memory page (T-619): Enter on a topic its
+// notes only ("orgmem:tests"), on a newest note all notes with the cursor on it, m (or a click on the header) all notes.
+// x deletes one (after a yes) with /<name>-settings orgmem delete N; Back returns to the Live tab; the notes come in the
+// view file too (org_mem). Every screen has the
 // Claude Code panel's buttons (T-680, T-685): its tab row, the list's [m] mode and [f] search buttons, Back (b) on the
 // list pages, a role's or kind's page buttons (T-706: with Edit, its edit page's Save and Cancel, and Remove), + New
 // role, + New kind and + New scout, and the banner's Set up git (g); each a click on it presses its key.
@@ -29,14 +31,14 @@ import {
   type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction, type DefEditField, type TaskVerb, settingsKeys, rolesKeys, kindsKeys, roleEditKeys, defEditFields, roleTools, roleFileText, roleSkipReason, kindFileText, kindSkipReason,
   DEFAULT_ROLE, isCheckerRole, ALWAYS_ON_KINDS, checkerOn, roleNameError, kindNameError, leadScoutNameError, checkStepNow, rowEndText, taskPhase, choiceLines, driveWarning,
   searchTasks, showsHeader, type BoardPage,
-  LIVE_TABS, LIVE_EMPTY, LIVE_LEGEND, type LiveSeg, LIVE_TONE, tabRow, LIVE_VIEW_KEYS, liveKeys, liveLanes, liveLayout, liveStations, liveHeader, liveLabelLine, laneLines, liveTrains, trainRows, nextUpLine, liveToday, todayLines, searchLine, modeButton, hintLines, roleKeys, rolePromptKeys, ROLE_PROMPTS, ROLE_SLOT, promptsOfRole, type RolePromptKind,
+  LIVE_TABS, LIVE_EMPTY, LIVE_LEGEND, type LiveSeg, LIVE_TONE, tabRow, LIVE_VIEW_KEYS, liveKeys, liveLanes, liveLayout, liveStations, liveHeader, liveLabelLine, laneLines, liveOrgMem, liveTrains, trainRows, nextUpLine, liveToday, todayLines, searchLine, modeButton, hintLines, roleKeys, rolePromptKeys, ROLE_PROMPTS, ROLE_SLOT, promptsOfRole, type RolePromptKind,
 } from '../board'
 import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, brokenLabel, defNamed } from '../core/def-files'
 import { restFrame } from '../core/logo'
 import { taskSections, type TaskSection } from '../core/task-sections'
 import type { DiffFile } from '../core/review'
 import { DEFAULT_NAME, dataDir } from '../name'
-import { ORG_MEM_TITLE, ORG_MEM_EMPTY, ORG_MEM_KEY, orgMemAbout, orgMemButtonLabel, orgMemKeys, orgMemNoteHead, orgMemFile, type OrgMemNote } from '../core/org-mem'
+import { ORG_MEM_EMPTY, ORG_MEM_KEY, orgMemAbout, orgMemKeys, orgMemNoteHead, orgMemFile, orgMemOfTopic, orgMemPageTitle, orgMemTopicEmpty, type OrgMemNote } from '../core/org-mem'
 
 /** The view file's name, in the data folder (.<name>/view.json). */
 export const VIEW_FILE = 'view.json'
@@ -416,7 +418,7 @@ const LIST_TONE: Record<string, string> = { backlog: 'inactive', review: 'warnin
 export function hasPage(f: ViewFile | null, id: string, tab: PanelTab = 'tasks'): boolean {
   if (!id || !f) return false
   // the Live tab's one page: the Organizational memory page (T-687)
-  if (tab === 'live') return id === ORG_MEM_PAGE
+  if (tab === 'live') return orgMemPageTopic(id) !== null
   if (tab === 'scouts') return (f.view.scouts ?? []).some(x => x.name === id)
   if (tab === 'settings') return !!settingsPlace(f, id)
   return f.view.tasks.some(x => x.id === id) || (f.view.questions ?? []).some(x => x.id === id)
@@ -428,11 +430,18 @@ export const scoutRunsIn = (f: ViewFile | null, scout: string): ScoutRun[] => (A
 /** The Settings pages that list roles or kinds. */
 type DefList = SettingPage
 
-/** The Organizational memory page's id on the Live tab (T-687: opened from the button at the tab's bottom). */
+/** The Organizational memory page's id on the Live tab (T-687: all notes); T-718: "orgmem:tests" is topic tests' notes only. */
 export const ORG_MEM_PAGE = 'orgmem'
 
-/** The Organizational memory button at the bottom of the Live tab (T-687): "[ Organizational memory (3 notes) (m) ]". */
-export const orgMemButton = (n: number): PanelButton => ({ label: `${orgMemButtonLabel(n)} (${ORG_MEM_KEY})`, hit: { key: ORG_MEM_KEY } })
+/** T-718: the page id of topic `topic`'s notes ("orgmem:tests"; all notes without a topic). */
+export const orgMemPageId = (topic?: string | null) => (topic ? `${ORG_MEM_PAGE}:${topic}` : ORG_MEM_PAGE)
+
+/** T-718: whether `id` is an Organizational memory page, and its topic ('' = all notes; null: not one). */
+export const orgMemPageTopic = (id: string): string | null => (id === ORG_MEM_PAGE ? '' : id.startsWith(`${ORG_MEM_PAGE}:`) ? id.slice(ORG_MEM_PAGE.length + 1) : null)
+
+/** T-718: the cursor ids of the Live tab's org-mem section: a newest note's ("om-note:3") and a topic's ("om-topic:tests"). */
+export const liveNoteId = (n: number) => `om-note:${n}`
+export const liveTopicId = (topic: string) => `om-topic:${topic}`
 
 /** A page under Settings: the Roles or Kinds list (`id` "roles" or "kinds"),
  *  or one role's or kind's page ("role:tester", "kind:bug"; its list is `list`), or (T-685) the built-in prompt a role
@@ -541,7 +550,7 @@ export function panelKeys(f: ViewFile | null, opened: string, tab: PanelTab = 't
 export const panelLiveKeys = (): KeyHint[] => liveKeys().filter(k => k.key !== 'w')
 
 function tabKeys(f: ViewFile | null, opened: string, tab: PanelTab, run: string, heading: boolean, merging: boolean): KeyHint[] {
-  if (tab === 'live') return opened === ORG_MEM_PAGE ? orgMemKeys(false, orgMemIn(f).length > 0) : panelLiveKeys()
+  if (tab === 'live') return orgMemPageTopic(opened) !== null ? orgMemKeys(false, orgMemOfTopic(orgMemIn(f), orgMemPageTopic(opened)).length > 0) : panelLiveKeys()
   const move = { key: '↑↓', word: 'move' }
   const views = { key: LIVE_VIEW_KEYS, word: 'views' }
   const close = { key: 'Esc', word: 'close' }
@@ -603,9 +612,9 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
   let keys: KeyHint[]
   if (tab === 'live') {
     // T-687: the Organizational memory page, opened from the button at the tab's bottom
-    const orgMem = choice.opened === ORG_MEM_PAGE
-    body = orgMem ? orgMemBody(f, choice.cursor, w) : liveBody(f, choice.cursor, nowMs, w)
-    keys = panelKeys(f, orgMem ? ORG_MEM_PAGE : '', 'live')
+    const topic = orgMemPageTopic(choice.opened)
+    body = topic !== null ? orgMemBody(f, choice.cursor, w, topic) : liveBody(f, choice.cursor, nowMs, w)
+    keys = panelKeys(f, topic !== null ? choice.opened : '', 'live')
   } else if (tab === 'scouts') {
     body = scoutsBody(f, choice, nowMs, w)
     keys = panelKeys(f, choice.opened, 'scouts', choice.run ?? '')
@@ -668,7 +677,7 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
  *  under Settings, or the page of one task, question, scout, scout run, role, kind or role prompt. */
 export function boardPageOf(f: ViewFile | null, choice: Pick<PanelChoice, 'tab' | 'opened' | 'run' | 'edit'>): BoardPage {
   const tab = choice.tab ?? 'tasks'
-  if (tab === 'live') return choice.opened === ORG_MEM_PAGE ? 'orgmem' : 'live'
+  if (tab === 'live') return orgMemPageTopic(choice.opened) !== null ? 'orgmem' : 'live'
   if (tab === 'scouts') {
     const sc = scoutNamed(f, choice.opened)
     if (!sc) return 'scouts'
@@ -770,7 +779,7 @@ export const LIVE_BLINK_MS = 1000
 /**
  * The Live tab (T-692), as the terminal panel's (T-690), all made by core/live.ts: the mode and busy agents, the
  * station names, two lines per task in doing (a click on its first line, or Enter on it, opens the task), next up,
- * today's numbers, the legend and (T-687) the Organizational memory button; "No task is running right now." when none is in doing. The cursor goes over the
+ * today's numbers, the legend and (T-718) the Organizational memory section; "No task is running right now." when none is in doing. The cursor goes over the
  * lanes; its lane's first column shows "›". The current station blinks with the clock (one step per LIVE_BLINK_MS).
  * T-715: under each lane hang its waiting trains (core's liveTrains and trainRows); the cursor goes over them too, and
  * Enter or a click on one opens its task, as on a lane.
@@ -783,8 +792,13 @@ function liveBody(f: ViewFile, cursor: number, nowMs: number, w: number): Body {
   const frame = Math.floor(nowMs / LIVE_BLINK_MS)
   const trains = liveTrains(v, nowMs, lanes)
   const rows = new Map(lanes.map(l => [l.id, trainRows(trains.lanes[l.id] ?? [], w)]))
-  // the cursor's stops, top to bottom: each lane, then its trains
-  const ids = lanes.flatMap(l => [l.id, ...rows.get(l.id)!.flatMap(r => (r.id ? [r.id] : []))])
+  const om = liveOrgMem(orgMemIn(f), w)
+  // the cursor's stops, top to bottom: each lane, then its trains; then (T-718) the newest notes and the topics
+  const ids = [
+    ...lanes.flatMap(l => [l.id, ...rows.get(l.id)!.flatMap(r => (r.id ? [r.id] : []))]),
+    ...om.newest.map(x => liveNoteId(x.note.n)),
+    ...om.grid.flatMap(r => r.map(c => liveTopicId(c.topic))),
+  ]
   const selected = ids.length ? ids[Math.min(Math.max(0, cursor), ids.length - 1)]! : ''
   b.add([{ text: liveHeader(v, lanes), color: 'text', bold: true }])
   b.add([{ text: lanes.length ? liveLabelLine(layout) : LIVE_EMPTY, color: 'inactive' }])
@@ -805,8 +819,21 @@ function liveBody(f: ViewFile, cursor: number, nowMs: number, w: number): Body {
   b.add([{ text: nextUpLine(trains, w), color: 'text' }])
   for (const t of todayLines(liveToday(v.tasks, nowMs), w)) b.add([{ text: t, color: 'text' }])
   if (lanes.length) b.add([{ text: LIVE_LEGEND, color: 'inactive' }])
-  // T-687: the Organizational memory button, just above the footer
-  for (const l of buttonLines([orgMemButton(orgMemIn(f).length)], w)) b.add(l)
+  // T-718: the Organizational memory section, just above the footer (a click on its header opens all notes)
+  b.add(liveSegs(om.head, { key: ORG_MEM_KEY }), { key: ORG_MEM_KEY })
+  b.add([{ text: om.newestLabel, color: 'inactive' }])
+  if (om.empty) b.add([{ text: om.empty, color: 'inactive' }])
+  /** A cell's segments with "›" in its first column when the cursor is on it. */
+  const marked = (xs: readonly LiveSeg[], id: string): Line => {
+    const line = liveSegs(xs, { open: id })
+    const head = line[0]
+    if (id === selected && head?.text.startsWith(' ')) line.splice(0, 1, { text: '›', color: 'ide', bold: true, hit: { open: id } }, { ...head, text: head.text.slice(1) })
+    return line
+  }
+  for (const x of om.newest) b.add(marked(x.segs, liveNoteId(x.note.n)), { open: liveNoteId(x.note.n) })
+  if (om.grid.length) b.add([{ text: om.topicsLabel, color: 'inactive' }])
+  for (const r of om.grid) b.add(r.flatMap(c => marked(c.segs, liveTopicId(c.topic))), r.length === 1 ? { open: liveTopicId(r[0]!.topic) } : null)
+  for (const k of om.keys) b.add([{ text: k, color: 'inactive' }])
   return { ...b, ids, selected }
 }
 
@@ -1120,13 +1147,13 @@ export const orgMemNoteOf = (f: ViewFile | null, id: string): OrgMemNote | undef
 
 /** The Organizational memory page (T-619): what org-mem is, then its notes newest first, each its number, task id and
  *  date, then its text wrapped; the cursor's note is the one x deletes. "No notes yet." when there are none. */
-function orgMemBody(f: ViewFile, cursor: number, w: number): Body {
+function orgMemBody(f: ViewFile, cursor: number, w: number, topic = ''): Body {
   const b = bodyMaker()
-  const notes = orgMemIn(f)
-  b.heading(ORG_MEM_TITLE)
+  const notes = orgMemOfTopic(orgMemIn(f), topic)
+  b.heading(orgMemPageTitle(topic))
   for (const l of wrapSegs([{ text: orgMemAbout(orgMemFile(dataDir(f.name))), color: 'inactive' }], w)) b.add(l)
   b.blank()
-  if (!notes.length) b.add([{ text: `  ${ORG_MEM_EMPTY}`, color: 'inactive' }])
+  if (!notes.length) b.add([{ text: `  ${topic ? orgMemTopicEmpty(topic) : ORG_MEM_EMPTY}`, color: 'inactive' }])
   const ids = notes.map(x => orgMemNoteId(x.n))
   const selected = ids.length ? ids[Math.min(Math.max(0, cursor), ids.length - 1)]! : ''
   for (const x of notes) {
