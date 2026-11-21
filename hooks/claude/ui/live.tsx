@@ -63,7 +63,7 @@ export function openOrgMemPage($: $) {
 
 /** The Live tab on the terminal (and desktop and mobile); `notes`: org-mem's note count, on the button at its bottom. */
 export function livePage($: $, pane: PaneParts, notes: number) {
-  const { Box, Text, Button, v, width, C, act, banner, tabs, keyLines, nowMs } = pane
+  const { Box, Text, Button, v, width, C, act, header, keyLines, nowMs } = pane
   // the blink goes by the clock, one step per tick, so extra redraws in between don't make it flicker
   const frame = Math.floor(nowMs / LIVE_TICK_MS)
   // the key line says "↑↓ move": the arrows move between the lanes (see arrows.ts)
@@ -86,8 +86,7 @@ export function livePage($: $, pane: PaneParts, notes: number) {
   const today = todayLines(liveToday(v.tasks, nowMs), width)
   return (
     <Box flexDirection="column">
-      {[...banner(), tabs()]}
-      <Text key="header-rule" wrap="truncate" color={C('ide')}>{'━'.repeat(Math.max(1, width))}</Text>
+      {header('live')}
       <Text key="live-head" bold color={C('text')}>{liveHeader(v, lanes)}</Text>
       {lanes.length ? <Text key="live-labels" color={C('inactive')}>{liveLabelLine(layout)}</Text> : <Text key="live-empty" color={C('inactive')}>{LIVE_EMPTY}</Text>}
       {lanes.flatMap((l, i) => {

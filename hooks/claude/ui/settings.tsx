@@ -279,7 +279,7 @@ function rolesPage($: $, pane: PaneParts, roles: RoleDef[], builtIn: RoleDef[], 
     )
   return (
     <Box flexDirection="column">
-      {header()}
+      {header('roles')}
       {heading('Roles')}
       {roles.map((r, i) => {
         const bad = brokenNamed(broken, r.name)
@@ -451,7 +451,7 @@ function kindsPage($: $, pane: PaneParts, kinds: KindDef[], builtIn: KindDef[], 
     )
   return (
     <Box flexDirection="column">
-      {header()}
+      {header('kinds')}
       {heading('Kinds')}
       {kinds.map((k, i) => {
         const bad = brokenNamed(broken, k.name)
@@ -611,7 +611,7 @@ export async function settingsPage($: $, pane: PaneParts) {
     )
   return (
     <Box flexDirection="column">
-      {header()}
+      {header('settings')}
       {SETTING_GROUPS.flatMap((g, gi) => {
         const open = S.settingsOpen.includes(g.title)
         const sum = groupSummaryParts(g, v, Math.max(20, pane.width - 4), { roles: rolesCount, kinds: kindsCount })

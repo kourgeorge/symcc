@@ -60,7 +60,7 @@ export function barSvg(text: string, warning: boolean): { source: string; width:
 
 /** The Live tab in VS Code; `notes`: org-mem's note count, on the Organizational memory link at its bottom (T-687). */
 export function livePageVs($: $, pane: PaneParts, notes: number) {
-  const { Box, Text, v, width, C, act, banner, tabs, nowMs, vs } = pane
+  const { Box, Text, v, width, C, act, header, nowMs, vs } = pane
   const { Svg } = vs
   // the times beside the lanes ("2m") are redrawn every tick; the blink itself is the drawing's own animation
   liveTick($)
@@ -113,9 +113,7 @@ export function livePageVs($: $, pane: PaneParts, notes: number) {
   })
   return (
     <Box flexDirection="column" gap={1}>
-      <Box key="vs-header" flexDirection="column">
-        {[...banner(), tabs()]}
-      </Box>
+      {header('live')}
       {line('live-head', liveHeader(v, lanes), 'text', true)}
       {lanes.length ? <Box key="live-lanes" flexDirection="column" gap={1}>{laneRows}</Box> : line('live-empty', LIVE_EMPTY, 'inactive')}
       {lanes.length ? line('live-legend', LIVE_LEGEND, 'inactive') : null}

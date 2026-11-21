@@ -1,6 +1,6 @@
 // The board panel's Tasks view: the list of tasks by section.
 import type { SymccTask } from '../../../types'
-import { statusMark, archivedNote, archivedOf, localOffset, panelSections, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, groupLabel, ALL_CLEAR, rowStates, stateText, rowMark, TITLE_ROOM, bannerRule, fitRow, rowExtra, listKeys, searchTasks, SEARCH_WORDS, searchLine, searchBoxHint, questionsLabel, type OwnerQuestion, ownersTurn, shownStatus } from '../../board'
+import { statusMark, archivedNote, archivedOf, localOffset, panelSections, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, groupLabel, ALL_CLEAR, rowStates, stateText, rowMark, TITLE_ROOM, fitRow, rowExtra, listKeys, searchTasks, SEARCH_WORDS, searchLine, searchBoxHint, questionsLabel, type OwnerQuestion, ownersTurn, shownStatus } from '../../board'
 import { openDays, S } from '../../app/state'
 import { type $, panelValues } from '../panel'
 import type { PaneParts } from './parts'
@@ -13,7 +13,7 @@ import { row } from './arrows'
  *  No way out needs Esc (it doesn't reach the panel from a text box): Enter on an empty box clears the search, and
  *  while a filter is on (not typing) [x] clear search, next to [f] change search, takes it off. */
 export function listPage($: $, pane: PaneParts) {
-  const { Box, Text, Button, Input, v, width, mark, act, C, banner, tabs, footer } = pane
+  const { Box, Text, Button, Input, v, width, mark, act, C, header, footer } = pane
   const { nowMs } = pane
   const offset = localOffset(nowMs)
   const search = S.search
@@ -128,8 +128,7 @@ export function listPage($: $, pane: PaneParts) {
   const searchButton = typing || filtering ? null : [<Text key="search-gap">  </Text>, <Button key="search-open" label="[f] search" hotkey="f" dimColor onPress={openSearch} />]
   return (
     <Box flexDirection="column">
-      {[...banner(), tabs()]}
-      <Text key="header-rule" wrap="truncate" color={C('ide')}>{bannerRule(width)}</Text>
+      {header('tasks')}
       {searchRows}
       {searchButtons}
       {list.map((r, i) => {

@@ -217,7 +217,7 @@ export async function scoutsPage($: $, pane: PaneParts) {
   const rows = scoutListRows(scouts, nowMs, width)
   return (
     <Box flexDirection="column">
-      {header()}
+      {header('scouts')}
       {scouts.length === 0 && scoutHowTo(S.N.name).map((line, i) => <Text color={C(i === 0 ? 'text' : 'inactive')}>{line}</Text>)}
       {newBox()}
       {scouts.length > 0 && <Text key="scouts-blank-top"> </Text>}

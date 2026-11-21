@@ -112,11 +112,9 @@ type RenderLine = [key: string, text: string, color?: string] | false
 
 /** The header of a list page: the banner and tabs, a link back to Settings, the heading and what the page is for. */
 function listTop(pane: PaneParts, k: ReturnType<typeof kit>, noun: 'Roles' | 'Kinds', about: string, onBack: () => void) {
-  const { Box, banner, tabs } = pane
+  const { Box } = pane
   return [
-    <Box key="vs-header" flexDirection="column">
-      {[...banner(), tabs()]}
-    </Box>,
+    ...pane.header(noun === 'Roles' ? 'roles' : 'kinds'),
     <Box key={`vs-${noun.toLowerCase()}-top`} flexDirection="column">
       {k.back(`${noun.toLowerCase()}-back`, 'Settings', onBack)}
       {vsSection(k.vs, `vs-${noun.toLowerCase()}-head`, noun)}

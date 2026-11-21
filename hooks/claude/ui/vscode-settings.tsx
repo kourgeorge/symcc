@@ -24,7 +24,7 @@ export type VsSettingsCtx = {
 
 /** The Settings page in VS Code. */
 export function settingsPageVs($: $, pane: PaneParts, ctx: VsSettingsCtx) {
-  const { Box, Text, Input, C, banner, tabs, vs, v } = pane
+  const { Box, Text, Input, C, header, vs, v } = pane
   const { Select } = vs
   const plain = (key: string, text: string, color = 'inactive') => (
     <Text key={key} wrap="wrap" color={C(color)}>
@@ -99,9 +99,7 @@ export function settingsPageVs($: $, pane: PaneParts, ctx: VsSettingsCtx) {
 
   return (
     <Box flexDirection="column" gap={1}>
-      <Box key="vs-header" flexDirection="column">
-        {[...banner(), tabs()]}
-      </Box>
+      {header('settings')}
       {SETTING_GROUPS.map(g => (
         <Box key={`vs-group-${g.title}`} flexDirection="column" gap={1}>
           {vsSection(vs, `vs-group-${g.title}-head`, g.title)}

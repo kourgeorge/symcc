@@ -66,7 +66,7 @@ export function scoutRowEnd(s: SymccScout, r: ScoutListRow, room: number): strin
  *  file yellow), then dim "last:" with the start of the last report and the model, cut with "…" to the room a task
  *  row has (vsRowRoom), so a row never wraps. */
 export function scoutsListVs($: $, pane: PaneParts) {
-  const { Box, Text, Button, Input, act, C, scouts, banner, tabs, vs, width } = pane
+  const { Box, Text, Button, Input, act, C, scouts, header, vs, width } = pane
   const { nowMs } = pane
   const room = vsRowRoom(width)
   const rows = scoutListRows(scouts, nowMs, room)
@@ -120,9 +120,7 @@ export function scoutsListVs($: $, pane: PaneParts) {
 
   return (
     <Box flexDirection="column" gap={1}>
-      <Box key="vs-header" flexDirection="column">
-        {[...banner(), tabs()]}
-      </Box>
+      {header('scouts')}
       {scouts.length === 0 ? <Box key="vs-scouts-howto" flexDirection="column" borderStyle="round" borderColor={C('subtle')} paddingX={1}>{scoutHowTo(S.N.name).map((line, i) => plain(`howto-${i}`, line.replace(/ \([a-z]\)(?=\s|$)/g, ''), i === 0 ? 'text' : 'inactive'))}</Box> : null}
       {scouts.length ? (
         <Box key="vs-scouts-rows" flexDirection="column">

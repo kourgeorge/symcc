@@ -2186,9 +2186,9 @@ test('T-685: every board screen has Claude Code\'s buttons: the tab row, the lis
   const tabRow = '[t]: Tasks (5) │ [l]: Live │ [s]: Scouts (2) │ [c]: Settings'
   const counts = (w: number) => coreTabRow(LIVE_TABS.map(t => ({ key: t.key, label: t.label, count: t.tab === 'tasks' ? 5 : t.tab === 'scouts' ? 2 : undefined })), w)
   expect(counts(W).labels.join(counts(W).gap)).toBe(tabRow)
-  // the list pages have the tab row (T-700: a page of one task, scout, role... has none, as on the terminal panel)
+  // the list pages have the tab row (T-700: a page of one task, scout, role... has none, as on the terminal panel; T-704: nor the org-mem page)
   const screens: Partial<PanelChoice>[] = [
-    {}, { tab: 'scouts' }, { tab: 'settings' }, { tab: 'settings', opened: 'roles' }, { tab: 'settings', opened: 'kinds' }, { tab: 'live', opened: 'orgmem' }, { tab: 'live' },
+    {}, { tab: 'scouts' }, { tab: 'settings' }, { tab: 'settings', opened: 'roles' }, { tab: 'settings', opened: 'kinds' }, { tab: 'live' },
   ]
   for (const c of screens) {
     const d = draw(c)
@@ -2527,7 +2527,7 @@ test('T-692: in the TUI, l (or a click on the Live tab) shows the Live tab; ↓ 
   board.stop()
 })
 
-test('T-700: the board header (banner, tests/limits line, drive warning, tabs) shows on the list pages only, as on the terminal panel (core\'s showsHeader); a task, question, scout, scout run, role, kind or prompt page starts with its own title and keeps its footer and buttons', () => {
+test('T-700: the board header (banner, tests/limits line, drive warning, tabs) shows on the list pages only, as on the terminal panel (core\'s showsHeader); a task, question, scout, scout run, role, kind, prompt or (T-704) org-mem page starts with its own title and keeps its footer and buttons', () => {
   const f0 = orgMemViewFile()
   // a session that does not drive, so the banner has its drive warning too
   const f: ViewFile = { ...f0, view: { ...f0.view, driving: false, questions: [{ id: 'Q-9', text: 'How often?', options: ['daily'], asked_at: AT }] } }
@@ -2543,13 +2543,13 @@ test('T-700: the board header (banner, tests/limits line, drive warning, tabs) s
   const none = { tests: false, drive: false, tabs: false, rule: false }
   const lists: [Partial<PanelChoice>, BoardPage][] = [
     [{}, 'tasks'], [{ tab: 'live' }, 'live'], [{ tab: 'scouts' }, 'scouts'], [{ tab: 'settings' }, 'settings'],
-    [{ tab: 'settings', opened: 'roles' }, 'roles'], [{ tab: 'settings', opened: 'kinds' }, 'kinds'], [{ tab: 'live', opened: 'orgmem' }, 'orgmem'],
+    [{ tab: 'settings', opened: 'roles' }, 'roles'], [{ tab: 'settings', opened: 'kinds' }, 'kinds'],
   ]
   const pages: [Partial<PanelChoice>, BoardPage, string][] = [
     [{ opened: 'T-2' }, 'task', 'T-2 '], [{ opened: 'Q-9' }, 'question', 'Q-9'], [{ tab: 'scouts', opened: 'deps' }, 'scout', 'deps'],
     [{ tab: 'scouts', opened: 'docs-check', run: '2026-11-19T11:50:00.000Z' }, 'scout-run', 'docs-check'],
     [{ tab: 'settings', opened: 'role:tester' }, 'role', 'tester'], [{ tab: 'settings', opened: 'kind:bug' }, 'kind', 'bug'],
-    [{ tab: 'settings', opened: 'prompt:tester:change' }, 'role-prompt', ''],
+    [{ tab: 'settings', opened: 'prompt:tester:change' }, 'role-prompt', ''], [{ tab: 'live', opened: 'orgmem' }, 'orgmem', 'Organizational memory'],
   ]
   for (const [c, page] of lists) {
     expect([c, boardPageOf(f, { opened: '', ...c }), showsHeader(page)]).toEqual([c, page, true])

@@ -9,6 +9,7 @@ import { ICON } from '../hooks/name'
 import { inProject } from './project'
 import { ran, slash } from './fakes'
 import { vsHref } from '../hooks/claude/ui/vscode'
+import { showsHeader, type BoardPage } from '../hooks/board'
 
 /** Seeds the plugin's state values; once the plugin writes one, the kit's own store answers it (and redraws). */
 function stateOf(on: On, seed: Record<string, unknown>) {
@@ -116,6 +117,53 @@ test('T-687: the Live tab ends with an Organizational memory button (count, key 
   expect((await ui.find({ key: 'live-orgmem' }))?.props.label).toBe('Organizational memory (3 notes) (m)')
   expect(await ui.find({ type: 'Text', text: /agents \d+\/\d+ busy/ })).toBeDefined()
   await ui.unmount()
+})
+
+/** T-704: walks one surface's board through its pages, from the Tasks list to a task's page and back, the tabs, the org-mem
+ *  page and back, and checks that each draws the board header exactly when core's showsHeader says so. */
+async function headerWalk($: Engine, on: On, surface: 'terminal' | 'vscode') {
+  const task = { id: 'T-1', title: 'A task', details: '', files: [], status: 'todo', note: '', question: null, order: 1, after: [], attempts: 0, history: [], branch: null, created_at: '', updated_at: '' }
+  // only the view is seeded: the tab and the opened task start empty (the Tasks list) and are changed by pressing
+  stateOf(on, { view: { ...VIEW.view, value: { ...VIEW.view.value, tasks: [task] } } })
+  fakeOrgMem(on, NOTES)
+  // no session start: it would publish the (empty) board over the seeded view
+  const ui = await $.ui.mount({ ...PANE, surface })
+  const vs = surface === 'vscode'
+  // the header: on the terminal its tabs row and the thick rule under it, in VS Code its "vs-header" box
+  const drawn = async () =>
+    vs ? (await ui.find({ key: 'vs-header' })) !== undefined
+      : (await ui.find({ type: 'Text', text: /^\[t\]: Tasks/ })) !== undefined && (await ui.find({ type: 'Text', text: /^━+$/ })) !== undefined
+  const check = async (page: BoardPage) => expect([page, await drawn()]).toEqual([page, showsHeader(page)])
+  const tab = (t: 'tasks' | 'live' | 'scouts' | 'settings') => (vs ? ui.press({ key: 'tabs', link: { href: vsHref('tab', t) } }) : ui.press({ key: `tab-key-${t}` }))
+  await check('tasks')
+  await (vs ? ui.press({ key: 'T-1', link: { href: vsHref('task', 'T-1') } }) : ui.press({ key: 'T-1' }))
+  expect(await ui.find({ key: 'back' })).toBeDefined()
+  await check('task')
+  await ui.press({ key: 'back' })
+  await check('tasks')
+  await tab('scouts')
+  await check('scouts')
+  await tab('settings')
+  await check('settings')
+  await tab('live')
+  await check('live')
+  await (vs ? ui.press({ key: 'live-orgmem', link: { href: vsHref('page', 'orgmem') } }) : ui.press({ key: 'live-orgmem' }))
+  expect(await pageText(ui as never)).toContain('Organizational memory (org-mem)')
+  await check('orgmem')
+  // T-704: the org-mem page is an opened page now (from Live), so no header on it
+  expect([surface, await drawn()]).toEqual([surface, false])
+  await (vs ? ui.press({ key: 'orgmem-back', link: { href: vsHref('page', 'back/orgmem-back') } }) : ui.press({ key: 'orgmem-back' }))
+  expect(await ui.find({ key: 'live-orgmem' })).toBeDefined()
+  await check('live')
+  await ui.unmount()
+}
+
+test('T-704: the terminal panel draws the board header exactly where showsHeader says: the lists yes, a task page and the org-mem page (opened from Live) no', async ($, on) => {
+  await headerWalk($, on, 'terminal')
+})
+
+test('T-704: VS Code draws the board header exactly where showsHeader says: the lists yes, a task page and the org-mem page (opened from Live) no', async ($, on) => {
+  await headerWalk($, on, 'vscode')
 })
 
 test('T-619: the Organizational memory page lists the notes newest first with their date; x then y deletes exactly that line', async ($, on) => {

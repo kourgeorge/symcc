@@ -41,7 +41,7 @@ export function orgMemPage($: $, pane: PaneParts, notes: OrgMemNote[], file: str
   )
   return (
     <Box flexDirection="column">
-      {header()}
+      {header('orgmem')}
       {heading(ORG_MEM_TITLE)}
       <Text key="orgmem-about" wrap="wrap" color={C('inactive')}>{orgMemAbout(file)}</Text>
       <Text key="orgmem-about-blank"> </Text>

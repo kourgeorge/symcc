@@ -12,7 +12,7 @@ import { vsCallout, vsFooter, vsHref, vsLink, mdLink, mdText, vsSection } from '
 
 /** The Organizational memory page in VS Code. */
 export function orgMemPageVs($: $, pane: PaneParts, notes: OrgMemNote[], file: string) {
-  const { Box, Text, C, vs, banner, tabs } = pane
+  const { Box, Text, C, vs, header } = pane
   const redraw = () => $.ui.invalidate('ui.render')
   const plain = (key: string, text: string, color = 'inactive') => (
     <Text key={key} wrap="wrap" color={C(color)}>
@@ -46,9 +46,7 @@ export function orgMemPageVs($: $, pane: PaneParts, notes: OrgMemNote[], file: s
   }
   return (
     <Box flexDirection="column" gap={1}>
-      <Box key="vs-header" flexDirection="column">
-        {[...banner(), tabs()]}
-      </Box>
+      {header('orgmem')}
       <Box key="vs-orgmem-top" flexDirection="column">
         {vsLink(vs, 'orgmem-back', mdLink('← Live', back), [[back, () => (resetOrgMemView(), redraw())]])}
         {vsSection(vs, 'vs-orgmem-head', ORG_MEM_TITLE)}

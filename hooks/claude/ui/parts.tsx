@@ -2,7 +2,7 @@
 import { drawNow } from './now'
 import type { MatchedHook } from 'claude-code'
 import type { SymccMode } from '../../../types'
-import { STATUS_WORD, sortScouts, modeOf, nextMode, emptyBoard, type BannerTone, bannerLines, modeLabel, modeButton, bannerRule, footerRule, type KeyHint, hintLines, packRows } from '../../board'
+import { STATUS_WORD, sortScouts, modeOf, nextMode, emptyBoard, type BannerTone, bannerLines, modeLabel, modeButton, bannerRule, footerRule, type KeyHint, hintLines, packRows, showsHeader, type BoardPage } from '../../board'
 import { setupGit } from '../../app/git'
 import { logoNow, noteLogoWidth } from '../../app/logo'
 import { type PaneView, S } from '../../app/state'
@@ -141,8 +141,13 @@ export async function paneParts($: $, e: PaneEvent) {
       </Box>
     )
   }
-  /** The whole header: banner, then the tab row, then the rule under them. */
-  const header = () => [...banner(), tabs(), <Text key="header-rule" wrap="truncate" color={C('ide')}>{bannerRule(width)}</Text>]
+  /** The board header for page `p`, only where core's showsHeader says (the list pages; T-704): banner, then the tab
+   *  row, then the rule under them; in VS Code the banner and tabs in one "vs-header" box (no rule). Nothing on an
+   *  opened page (a task, a question, a scout, a role, a kind, org-mem...), which starts with its own title. */
+  const header = (p: BoardPage) =>
+    !showsHeader(p) ? [] :
+    vscode ? [<Box key="vs-header" flexDirection="column">{[...banner(), tabs()]}</Box>] :
+    [...banner(), tabs(), <Text key="header-rule" wrap="truncate" color={C('ide')}>{bannerRule(width)}</Text>]
   /** Key hints over as many lines as the width needs (the views hint says "t l s c": the terminal has the Live tab), broken only between hints: keys bold, words in the inactive color (readable on dark themes too). */
   const keyLines = (hints: KeyHint[], name: string) =>
     vscode ? [vsFooter(vs, name)] :

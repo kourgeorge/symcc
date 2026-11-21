@@ -63,7 +63,7 @@ async function askLead($: $) {
 }
 
 export function listPageVs($: $, pane: PaneParts) {
-  const { Box, Text, Button, Input, v, mark, word, act, C, banner, tabs, vs, switchMode, mode, width } = pane
+  const { Box, Text, Button, Input, v, mark, word, act, C, header, vs, switchMode, mode, width } = pane
   /** The characters an open row is fitted to: more than the reported columns (see VS_ROW_SCALE). */
   const room = vsRowRoom(width)
   const { nowMs } = pane
@@ -343,9 +343,7 @@ export function listPageVs($: $, pane: PaneParts) {
 
   return (
     <Box flexDirection="column" gap={1}>
-      <Box key="vs-header" flexDirection="column">
-        {[...banner(), tabs()]}
-      </Box>
+      {header('tasks')}
       {active.length ? active : filtering ? null : empty}
       {folded.length ? <Box key="vs-folded" flexDirection="column" gap={1}>{folded}</Box> : null}
       {vsFooter(vs, 'list-hint', { mode, onSwitch: switchMode, search, extra: clear })}
