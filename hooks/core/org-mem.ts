@@ -357,9 +357,10 @@ function setLine(text: string, n: number, line: string): string {
  * T-717: org-mem `guide` with topic `topic` set on several notes at once, keeping their dates and texts: the notes
  * `which` names (numbers from list, e.g. "3,7,12" or "3 7 12"), and every note of topic `from` (to rename a topic or
  * merge it into another). `why` (nothing changed) when the topic is bad or nothing is named; `missing`: the numbers
- * that name no note (the others still change).
+ * that name no note (the others still change). A note written by hand without a date gets day `date` (today when
+ * left out), since only a dated line carries a topic: "- [WIP] x" becomes "- 2026-11-21 [tests] [WIP] x".
  */
-export function orgMemSetTopic(guide: string | null | undefined, which: string | number | undefined, topic: string, from?: string): { text: string; changed: OrgMemNote[]; missing: string[]; why?: string } {
+export function orgMemSetTopic(guide: string | null | undefined, which: string | number | undefined, topic: string, from?: string, date = new Date().toISOString().slice(0, 10)): { text: string; changed: OrgMemNote[]; missing: string[]; why?: string } {
   const text = String(guide ?? '')
   const t = cleanTopic(topic)
   if (!t) return { text, changed: [], missing: [], why: BAD_TOPIC }
@@ -380,7 +381,7 @@ export function orgMemSetTopic(guide: string | null | undefined, which: string |
   const changed: OrgMemNote[] = []
   for (const x of [...notes].reverse()) {
     if (!picked.has(x.n) || x.topic === t) continue
-    next = setLine(next, x.n, orgMemLine(x.date, x.text, t))
+    next = setLine(next, x.n, orgMemLine(x.date || date, x.text, t))
     changed.push(x)
   }
   return { text: next, changed, missing }
@@ -468,8 +469,9 @@ export function orgMemNotes(guide: string | null | undefined): OrgMemNote[] {
   return orgMemLines(guide)
     .map((line, i): OrgMemNote => {
       const m = NOTE_FRONT.exec(line)
-      // a hand-written line without a date keeps its text whole (only its list mark and a "[topic]" are taken off)
-      if (!m) return { n: i + 1, date: '', ...topicAndText(line.replace(/^\s*[-*•]\s+/, '').trim()) }
+      // a hand-written line without a date never has a topic: it is "unsorted" with its text whole (only its list
+      // mark is taken off), so "- [WIP] x" keeps "[WIP]"
+      if (!m) return { n: i + 1, date: '', topic: TOPIC_UNSORTED, text: line.replace(/^\s*[-*•]\s+/, '').trim() }
       const rest = line.slice(m[0].length)
       // an old line ("2026-11-20: ...") has no topic: its text stays whole, even when it starts with "[WIP]"
       if (m[2]) return { n: i + 1, date: m[1]!, topic: TOPIC_UNSORTED, text: rest.trim() }

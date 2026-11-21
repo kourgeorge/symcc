@@ -127,7 +127,7 @@ export async function orgMemTool(host: Host, a: OrgMemInput): Promise<string> {
     }
     if (action === 'topic') {
       const from = typeof a.from === 'string' && a.from.trim() ? a.from : undefined
-      const r = orgMemSetTopic(old, which, typeof a.topic === 'string' ? a.topic : '', from)
+      const r = orgMemSetTopic(old, which, typeof a.topic === 'string' ? a.topic : '', from, date)
       const missing = r.missing.length ? ` No note ${r.missing.join(', ')} (skipped).` : ''
       if (r.why) return `Topics not changed: ${r.why}.${missing}`
       if (r.changed.length) await save(r.text)

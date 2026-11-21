@@ -255,7 +255,7 @@ test('T-717: old lines (no [topic]) read as "unsorted"; a [topic] after the date
   expect(orgMemNotes(g).reverse().map(x => [x.n, x.date, x.topic, x.text])).toEqual([
     [1, '2026-11-18', 'unsorted', 'old note'],
     [2, D, 'tests', 'run one file'],
-    [3, '', 'git', 'by hand with a topic'],
+    [3, '', 'unsorted', '[git] by hand with a topic'],
     [4, '', 'unsorted', 'by hand without'],
     [5, D, 'unsorted', '[Not A Topic!] odd'],
   ])
@@ -267,13 +267,23 @@ test('T-717: an old "date:" line or a markdown link line starting with "[word]" 
     ['unsorted', '[WIP] something'],
     ['unsorted', '[link](http://x) see this'],
   ])
-  const r = orgMemSetTopic(g, '1,2', 'tests')
-  expect(r.text).toBe('- 2026-11-20 [tests] [WIP] something\n- [tests] [link](http://x) see this\n')
+  const r = orgMemSetTopic(g, '1,2', 'tests', undefined, D)
+  expect(r.text).toBe(`- 2026-11-20 [tests] [WIP] something\n- ${D} [tests] [link](http://x) see this\n`)
   expect(orgMemNotes(r.text).reverse().map(x => [x.topic, x.text])).toEqual([
     ['tests', '[WIP] something'],
     ['tests', '[link](http://x) see this'],
   ])
   expect(orgMemReplace(g, 1, 'something done', D).text.split('\n')[0]).toBe(`- ${D} [unsorted] something done`)
+})
+
+test('T-717: a hand-written line without a date never has a topic: "- [WIP] x" is unsorted with "[WIP]" kept, also after relabelling', () => {
+  const g = '- [WIP] the merge queue is slow on big diffs\n'
+  expect(orgMemNotes(g).map(x => [x.date, x.topic, x.text])).toEqual([['', 'unsorted', '[WIP] the merge queue is slow on big diffs']])
+  expect(orgMemTopics(orgMemNotes(g))).toEqual([{ topic: 'unsorted', count: 1 }])
+  const r = orgMemSetTopic(g, '1', 'git', undefined, D)
+  expect(r.text).toBe(`- ${D} [git] [WIP] the merge queue is slow on big diffs\n`)
+  expect(orgMemNotes(r.text).map(x => [x.topic, x.text])).toEqual([['git', '[WIP] the merge queue is slow on big diffs']])
+  expect(orgMemReplace(g, 1, 'the merge queue is slow on big diffs, split them', D, 'git').text).toBe(`- ${D} [git] the merge queue is slow on big diffs, split them\n`)
 })
 
 test('T-717: add and replace keep a leading "[WIP]" or "[link](url)" of the note text itself', () => {
@@ -312,14 +322,14 @@ test('T-717: replace keeps the note\'s topic, or changes it when given; a bad to
 
 test('T-717: the topic action relabels several notes at once (keeping dates and texts), renames a topic with from, and refuses a bad name', () => {
   const g = `- 2026-11-18: a\n- ${D} [git] b\n\n- by hand c\n- ${D} [git] d\n`
-  const r = orgMemSetTopic(g, '1, #3 9', 'Tests')
+  const r = orgMemSetTopic(g, '1, #3 9', 'Tests', undefined, D)
   expect(r.why).toBe(undefined)
   expect(r.missing).toEqual(['9'])
   expect(r.changed.map(x => x.n)).toEqual([1, 3])
-  expect(r.text).toBe(`- 2026-11-18 [tests] a\n- ${D} [git] b\n\n- [tests] by hand c\n- ${D} [git] d\n`)
+  expect(r.text).toBe(`- 2026-11-18 [tests] a\n- ${D} [git] b\n\n- ${D} [tests] by hand c\n- ${D} [git] d\n`)
   // rename / merge: every note of topic git
   const m = orgMemSetTopic(r.text, undefined, 'workflow', 'git')
-  expect(m.text).toBe(`- 2026-11-18 [tests] a\n- ${D} [workflow] b\n\n- [tests] by hand c\n- ${D} [workflow] d\n`)
+  expect(m.text).toBe(`- 2026-11-18 [tests] a\n- ${D} [workflow] b\n\n- ${D} [tests] by hand c\n- ${D} [workflow] d\n`)
   expect(orgMemTopics(orgMemNotes(m.text))).toEqual([{ topic: 'tests', count: 2 }, { topic: 'workflow', count: 2 }])
   for (const bad of ['', 'no/slash', 'x'.repeat(30)]) {
     const b = orgMemSetTopic(g, '1', bad)
