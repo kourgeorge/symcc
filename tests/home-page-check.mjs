@@ -43,6 +43,13 @@ const task = text(view('task'))
 for (const w of ['T-740', '▍History', '▍Runs (time and cost)', 'try 1 → the checker found problems']) if (!task.includes(w)) bad(`still frame: the task page has no "${w}"`)
 if (!text(view('scouts')).includes('gaps-bot')) bad('still frame: the scouts view has no gaps-bot')
 
+// the chat log must scroll, so its oldest messages (the owner's ask) stay in reach; and it must not pin messages
+// with justify-content: flex-end, which pushes the overflow above the top, where no scroll reaches it
+const css = readFileSync(join(out, 'style.css'), 'utf8')
+const chatLog = /\.chat-log\s*\{([^}]*)\}/.exec(css)?.[1] ?? ''
+if (!/overflow(-y)?\s*:\s*auto/.test(chatLog)) bad('style.css: .chat-log does not scroll (needs overflow-y: auto)')
+if (/justify-content\s*:\s*flex-end/.test(chatLog)) bad('style.css: .chat-log uses justify-content: flex-end, which hides the oldest messages out of reach')
+
 // the sections after the hero
 for (const id of ['how-it-works', 'what-you-get', 'why-not-parallel', 'install', 'claude-code', 'opencode', 'faq', 'get-started', 'read-more']) has(`id="${id}"`, `section #${id}`)
 if ((page.match(/<details class="card">/g) ?? []).length < 4) bad('home page: fewer than 4 feature cards')

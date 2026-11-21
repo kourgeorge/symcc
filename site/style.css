@@ -125,7 +125,10 @@ main.home h3 { font-size: 1.1rem; }
 .win pre.wrap { white-space: pre-wrap; overflow-wrap: anywhere; }
 .view-live .pane, .view-task .pane, .view-scouts .pane { max-width: 52rem; margin: 0 auto; }
 .chat { display: flex; flex-direction: column; border-right: 1px solid var(--line); overflow: hidden; }
-.chat-log { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; overflow: hidden; gap: .55rem; }
+/* T-749: the log scrolls, so no message is ever out of reach. The first message's auto top margin keeps a short log
+   at the bottom (justify-content: flex-end would push old messages above the top, where no scroll reaches them). */
+.chat-log { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; overflow-x: hidden; gap: .55rem; }
+.chat-log > :first-child { margin-top: auto; }
 .chat .m { white-space: pre-wrap; overflow-wrap: anywhere; }
 .chat .you { background: #1a1e24; border-radius: 4px; padding: .15rem .4rem; }
 .chat .note { font-size: .92em; }

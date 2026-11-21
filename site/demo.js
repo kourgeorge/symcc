@@ -340,7 +340,11 @@
 
   function draw() {
     const v = views(s)
-    for (const k of Object.keys(out)) if (out[k] && out[k].innerHTML !== v[k]) out[k].innerHTML = v[k]
+    for (const k of Object.keys(out)) if (out[k] && out[k].innerHTML !== v[k]) {
+      out[k].innerHTML = v[k]
+      // a new chat message: show the newest one, like a terminal (older ones stay a scroll away)
+      if (k === 'chat') out[k].scrollTop = out[k].scrollHeight
+    }
     if (stepLabel) stepLabel.textContent = clock(s.now)
   }
   // a wait that stands still while paused
