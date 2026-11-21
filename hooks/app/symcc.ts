@@ -58,9 +58,9 @@ export function COMMANDS(features: HostFeatures = ALL_FEATURES): { name: string;
     { name: `${S.N.name}-approve`, description: `Approve a ${S.N.name} task that is ready for review (merge it): /${S.N.name}-approve T-5`, argumentHint: '<T-id>' },
     { name: `${S.N.name}-reject`, description: `Reject a ${S.N.name} task in review, with the reason: /${S.N.name}-reject T-5 <reason>`, argumentHint: '<T-id> <reason>' },
     { name: `${S.N.name}-diff`, description: `Show what a ${S.N.name} task in review changed, or one file's diff: /${S.N.name}-diff T-5 [file]`, argumentHint: '<T-id> [file]' },
-    { name: `${S.N.name}-scout`, description: `Run a ${S.N.name} scout now (/${S.N.name}-scout <name>), pause or resume it (/${S.N.name}-scout <name> pause|resume), or change it (/${S.N.name}-scout <name> every 30, model <model|none>, prompt <instructions>); a new one: /${S.N.name}-scout new <name> <instructions>`, argumentHint: '<name> [pause|resume|every N|model M|prompt TEXT] | new <name> <instructions>' },
+    { name: `${S.N.name}-scout`, description: `Run a ${S.N.name} scout now (/${S.N.name}-scout <name>), pause or resume it (/${S.N.name}-scout <name> pause|resume), or change it (/${S.N.name}-scout <name> every 30, model <model|none>, prompt <instructions>); a new one: /${S.N.name}-scout <name> new <instructions>`, argumentHint: '<name> [pause|resume|every N|model M|prompt TEXT|new TEXT]' },
     { name: `${S.N.name}-mode`, description: `Set the ${S.N.name} board mode: paused (nothing runs), review (finished work waits for you) or auto (it merges on its own); no word switches review and auto`, argumentHint: '[paused|review|auto]' },
-    { name: `${S.N.name}-settings`, description: `See and change the ${S.N.name} settings: /${S.N.name}-settings opens them; /${S.N.name}-settings max_parallel 5 sets one; /${S.N.name}-settings role tester off (or kind, with on, off, reset or remove) changes a role or kind, role add <name> makes one, role <name> edit <field> <value> changes one part of it; /${S.N.name}-settings git setup sets up git (as the lead's setup_git)`, argumentHint: '[name value | role|kind <name> on|off|reset|remove | role|kind add <name> | role|kind <name> edit <field> <value> | git setup]' },
+    { name: `${S.N.name}-settings`, description: `See and change the ${S.N.name} settings: /${S.N.name}-settings opens them; /${S.N.name}-settings max_parallel 5 sets one; /${S.N.name}-settings role tester off (or kind, with on, off, reset or remove) changes a role or kind, role <name> add makes one, role <name> edit <field> <value> changes one part of it (save {"field":"value",...} several at once); /${S.N.name}-settings git setup sets up git (as the lead's setup_git)`, argumentHint: '[name value | role|kind <name> on|off|reset|remove | role|kind <name> add | role|kind <name> edit <field> <value> | role|kind <name> save {json} | git setup]' },
     { name: `${S.N.name}-stats`, description: `Show ${S.N.name} time and token stats: the whole team (lead, workers, scouts), totals, averages per task and per try, outcomes, by role, origin and day, with bar charts; html writes them as a web page with charts and opens it: /${S.N.name}-stats [full|html] [7d|T-100..T-130]`, argumentHint: '[full|html] [7d|T-1..T-9]' },
     { name: `${S.N.name}-doctor`, description: `Check ${S.N.dir}/ and git: old migration backups, task branches already merged, leftover task folders, files near the 4 MB limit, a stuck board; lists them with sizes and cleans up only with /${S.N.name}-doctor fix (all) or fix b-T-5 m-1101-1000 (the items with those ids)`, argumentHint: '[fix [all|id ...]]' },
     { name: `${S.N.name}-disable`, description: `Disable ${S.N.name} for this project: ${S.W.assistant} works as normal, nothing runs; the board is kept` },
@@ -510,15 +510,18 @@ export async function runCommand(host: Host, command: string, args: string): Pro
     }
     case 'def':
     case 'def-add':
-    case 'def-edit': {
-      // the lead's roles and kinds tools (changeRole, changeKind); add starts from the panel's template, edit changes one field
+    case 'def-edit':
+    case 'def-save': {
+      // the lead's roles and kinds tools (changeRole, changeKind); add starts from the panel's template, edit changes
+      // one field, save several in one edit (as the panel's Save: a bad value saves none)
       const input =
         cmd.kind === 'def' ? { action: cmd.action, name: cmd.name }
         : cmd.kind === 'def-add' ? { action: 'add', name: cmd.name, ...(cmd.def === 'role' ? NEW_ROLE_TEMPLATE : NEW_KIND_TEMPLATE) }
+        : cmd.kind === 'def-save' ? { action: 'edit', name: cmd.name, ...cmd.fields }
         : { action: 'edit', name: cmd.name, [cmd.field]: cmd.value }
       const r = await (cmd.def === 'role' ? changeRole : changeKind)(host, input)
       if (r.ok) {
-        const what = cmd.kind === 'def' ? cmd.action : cmd.kind === 'def-add' ? 'add' : `edit ${cmd.field}`
+        const what = cmd.kind === 'def' ? cmd.action : cmd.kind === 'def-add' ? 'add' : cmd.kind === 'def-save' ? `edit ${Object.keys(cmd.fields).join(', ')}` : `edit ${cmd.field}`
         noteForLead(`The owner changed ${cmd.def} ${cmd.name} (${what}): ${brief(r.text)}`)
         // the board's view carries the roles and kinds for a panel that draws from it (OpenCode's view.json)
         await publish(host, await load(host))

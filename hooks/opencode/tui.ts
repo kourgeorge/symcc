@@ -11,10 +11,10 @@
 //     how often, model or instructions, /<name>-scout <name> every|model|prompt VALUE, T-562); a setting is changed
 //     with /<name>-settings NAME VALUE, and the Roles and Kinds pages under Settings turn a role or kind off or on
 //     (o) or reset it to the built-in one (r) with /<name>-settings role|kind <name> on|off|reset; and (T-706) as on
-//     Claude Code's panel, edit it (e: an edit page with Save and Cancel, each changed box sent as /<name>-settings
-//     role|kind <name> edit FIELD VALUE), remove an added one (d, after a yes), make a new one (n on the Roles or Kinds
-//     page: /<name>-settings role|kind add NAME, then its edit page) and a new scout (n on the Scouts tab: /<name>-scout
-//     new NAME INSTRUCTIONS); the banner's Set up git (g) asks for a yes, then sends /<name>-settings git setup;
+//     Claude Code's panel, edit it (e: an edit page with Save and Cancel, the changed boxes sent in one /<name>-settings
+//     role|kind <name> save {...}), remove an added one (d, after a yes), make a new one (n on the Roles or Kinds
+//     page: /<name>-settings role|kind NAME add, then its edit page) and a new scout (n on the Scouts tab: /<name>-scout
+//     NAME new INSTRUCTIONS); the banner's Set up git (g) asks for a yes, then sends /<name>-settings git setup;
 //   - session.composer.top: the band above the prompt, like Claude Code's (the header line, a click on it opens or closes the board panel, T-567; then the questions, and
 //     the tasks that need the owner or run).
 // What is drawn comes from board-view.ts (bandLines, panelLines), made with hooks/core's helpers; this file only
@@ -25,7 +25,7 @@
 // modules (Solid and OpenTUI's Solid renderer) are passed in (TuiRuntime), so this file type-checks and its tests
 // run without them. The names and shapes below are @opencode/plugin 2.3.0's tui Context (only what is used).
 import { DEFAULT_NAME, dataDir } from '../name'
-import { VIEW_FILE, parseViewFile, bandDraw, panelLines, panelKeys, panelTaskActions, approveInProgress, panelRoleChoices, TASK_ACTION_COMMANDS, LETTER_KEYS, type LetterKey, hasPage, answerOptions, actionCommand, moveCursor, OWN_ANSWER, GROUPS_OPEN, groupOf, groupId, scoutRunsIn, settingsPlace, orgMemNoteOf, ORG_MEM_PAGE, defPageId, rolePromptId, SETTINGS_OPEN, settingGroupOf, settingGroupId, PANEL_TABS, CHOICE_KEYS, approveSent, editOf, defDraftOf, draftChanges, noDescriptionText, editBoxId, boardPageOf, removeAsk, DEF_EDIT_BOXES, SETUP_GIT_ASK, type DefDraft, type ApproveSent, type ChoiceKey, type ViewFile, type Line, type PanelAction, type PanelHit, type PanelKey, type PanelGroup, type PanelTab, type BandHit } from './board-view'
+import { VIEW_FILE, parseViewFile, bandDraw, panelLines, panelKeys, panelTaskActions, approveInProgress, panelRoleChoices, TASK_ACTION_COMMANDS, LETTER_KEYS, type LetterKey, hasPage, answerOptions, actionCommand, moveCursor, OWN_ANSWER, GROUPS_OPEN, groupOf, groupId, scoutRunsIn, settingsPlace, orgMemNoteOf, ORG_MEM_PAGE, defPageId, rolePromptId, SETTINGS_OPEN, settingGroupOf, settingGroupId, PANEL_TABS, CHOICE_KEYS, approveSent, editOf, defDraftOf, draftChanges, draftError, editBoxId, boardPageOf, removeAsk, DEF_EDIT_BOXES, SETUP_GIT_ASK, type DefDraft, type ApproveSent, type ChoiceKey, type ViewFile, type Line, type PanelAction, type PanelHit, type PanelKey, type PanelGroup, type PanelTab, type BandHit } from './board-view'
 import { SETTING_GROUPS, isScoutRunReport, taskReports, taskActions, type TaskAction, type TaskActionId, parseSettingValue, settingChoices, settingInfo, settingValue, isSettingPage, everyText, everyMinutesOf, nextMode, modeOf, promptsOfRole, SEARCH_WORDS, NEW_SCOUT_EVERY, showsHeader, defEditFields, type SettingName, type ScoutEditField, type DefEditField } from '../board'
 import type { SymccScout } from '../../types'
 import { ORG_MEM_KEY, orgMemDeleteAsk, orgMemFile, orgMemNoteKey } from '../core/org-mem'
@@ -540,7 +540,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   }
   /** Asks a yes (Claude Code's confirm step) before `what`; true when the owner picked it. */
   const yes = async (title: string, label: string) => (await ctx.ui.dialog.select({ title, options: [{ title: label, value: 'yes' }, { title: 'Cancel', value: 'no' }] })) === 'yes'
-  /** "+ New role" / "+ New kind" (n): asks the name, then /<name>-settings role|kind add NAME; its page opens in the edit
+  /** "+ New role" / "+ New kind" (n): asks the name, then /<name>-settings role|kind NAME add; its page opens in the edit
    *  mode once the view file has it. Esc or an empty name leaves it. */
   const newDef = async (list: 'roles' | 'kinds', sessionID: string) => {
     const noun = list === 'roles' ? 'role' : 'kind'
@@ -548,7 +548,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     if (!asked) return
     if (await sendOk(sessionID, { kind: 'def-add', def: noun, name: asked })) pendingOpen = { tab: 'settings', id: defPageId(list, list === 'kinds' ? asked.toLowerCase() : asked), edit: true }
   }
-  /** "+ New scout" (n): asks the name, then its instructions, then /<name>-scout new NAME INSTRUCTIONS (it runs every
+  /** "+ New scout" (n): asks the name, then its instructions, then /<name>-scout NAME new INSTRUCTIONS (it runs every
    *  NEW_SCOUT_EVERY minutes; e on its page changes that); its page opens once the view file has it. */
   const newScout = async (sessionID: string) => {
     const scout = (await ctx.ui.dialog.prompt({ title: "New scout's name", placeholder: 'letters, digits, - and _' }))?.trim()
@@ -568,15 +568,19 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     if (value === undefined || edit()?.page !== e.page) return
     setEdit({ page: e.page, values: { ...edit()!.values, [field]: value.trim() } })
   }
-  /** Save on the edit page: an empty description stays with Claude Code's error; else each changed box is sent as
-   *  /<name>-settings role|kind NAME edit FIELD VALUE, in the page's order, and the page goes back to the role or kind. */
+  /** Save on the edit page: a value the lead's tool would refuse (draftError: an empty description, a tool word a role
+   *  may not have, ...) stays on the page with Claude Code's error and sends nothing; else the changed boxes go in one
+   *  /<name>-settings role|kind NAME save {...} (one edit: all or none), and the page goes back to the role or kind
+   *  once it is sent. */
   const saveEdit = async (sessionID: string) => {
     const e = edit()
     const place = e ? settingsPlace(file(), e.page) : null
     if (!e || !place?.def) return
-    if (!(e.values.description ?? '').trim()) return void setEdit({ ...e, error: noDescriptionText(place.list) })
+    const error = draftError(place.list, place.def.name, e)
+    if (error) return void setEdit({ ...e, error })
     const def = place.list === 'roles' ? 'role' : 'kind'
-    for (const field of draftChanges(place.list, place.def, e)) if (!(await sendOk(sessionID, { kind: 'def-edit', def, name: place.def.name, field, value: e.values[field] ?? '' }))) return
+    const changed = draftChanges(place.list, place.def, e)
+    if (changed.length && !(await sendOk(sessionID, { kind: 'def-save', def, name: place.def.name, fields: Object.fromEntries(changed.map(f => [f, e.values[f] ?? ''])) }))) return
     if (edit()?.page === e.page) setEdit(undefined)
   }
   /** Set up git (g, or the banner's button), where the banner shows it: asks a yes, then /<name>-settings git setup. */

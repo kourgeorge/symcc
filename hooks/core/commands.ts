@@ -26,16 +26,21 @@ export type Command =
   | { kind: 'scout-pause'; name: string; paused: boolean }
   /** /<name>-scout <name> every N | model M | prompt TEXT: changes one part of the scout's file (model none clears it) */
   | { kind: 'scout-edit'; name: string; field: ScoutEditField; value: string }
-  /** /<name>-scout new <name> <instructions>: a new scout (its file), run every NEW_SCOUT_EVERY minutes, as the lead's scouts tool's add */
+  /** /<name>-scout <name> new <instructions>: a new scout (its file), run every NEW_SCOUT_EVERY minutes, as the lead's
+   *  scouts tool's add (the name comes first, as in every scout form, so any name works) */
   | { kind: 'scout-new'; name: string; prompt: string }
   /** /<name>-settings role|kind <name> on|off|reset|remove: turns a role or kind on or off, back to the built-in one, or
    *  deletes an added one (the boards ask for a yes first) */
   | { kind: 'def'; def: 'role' | 'kind'; name: string; action: DefAction }
-  /** /<name>-settings role|kind add <name>: a new role or kind, from the panel's template (NEW_ROLE_TEMPLATE, NEW_KIND_TEMPLATE) */
+  /** /<name>-settings role|kind <name> add: a new role or kind, from the panel's template (NEW_ROLE_TEMPLATE,
+   *  NEW_KIND_TEMPLATE); the name comes first, as in every role|kind form, so any name works */
   | { kind: 'def-add'; def: 'role' | 'kind'; name: string }
   /** /<name>-settings role|kind <name> edit <field> <value>: changes one part of its file (a built-in is copied first);
    *  model, skills and tools "none" clear it */
   | { kind: 'def-edit'; def: 'role' | 'kind'; name: string; field: DefEditField; value: string }
+  /** /<name>-settings role|kind <name> save {"field":"value",...}: changes several parts at once, as the panel's Save
+   *  (one edit of the lead's tool: a bad value saves none of them) */
+  | { kind: 'def-save'; def: 'role' | 'kind'; name: string; fields: Partial<Record<DefEditField, string>> }
   /** /<name>-settings git setup: sets up git as the lead's setup_git does (the boards ask for a yes first) */
   | { kind: 'setup-git' }
   /** /<name>-settings orgmem delete <n> [key]: deletes note n (its place in the file) from organizational memory
@@ -54,7 +59,7 @@ export type Command =
 export const SCOUT_EDIT_FIELDS = ['every', 'model', 'prompt'] as const
 export type ScoutEditField = (typeof SCOUT_EDIT_FIELDS)[number]
 
-/** How often a scout made with /<name>-scout new runs, in minutes (the panel's new scout starts with it too). */
+/** How often a scout made with /<name>-scout <name> new runs, in minutes (the panel's new scout starts with it too). */
 export const NEW_SCOUT_EVERY = 60
 
 /** What /<name>-settings role|kind <name> <action> does to a role or kind. */
@@ -73,7 +78,26 @@ export const defEditFields = (def: 'role' | 'kind'): readonly DefEditField[] => 
 
 /** The usage line of /<name>-settings role|kind. */
 export const defUsage = (def: 'role' | 'kind', name: string = DEFAULT_NAME) =>
-  `/${name}-settings ${def} <name> on, off, reset or remove; /${name}-settings ${def} add <name>; or /${name}-settings ${def} <name> edit ${defEditFields(def).join('|')} <value>`
+  `/${name}-settings ${def} <name> on, off, reset or remove; /${name}-settings ${def} <name> add (a new one); /${name}-settings ${def} <name> edit ${defEditFields(def).join('|')} <value>; or /${name}-settings ${def} <name> save {"<field>":"<value>",...}`
+
+/** The fields of a save's JSON text (`{"description":"...","tools":"web"}`), or null when it is not an object of
+ *  known fields with text values, or it empties the description. */
+export function defSaveFields(def: 'role' | 'kind', text: string): Partial<Record<DefEditField, string>> | null {
+  let raw: unknown
+  try {
+    raw = JSON.parse(text)
+  } catch {
+    return null
+  }
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+  const out: Partial<Record<DefEditField, string>> = {}
+  for (const [k, v] of Object.entries(raw)) {
+    if (!defEditFields(def).includes(k as DefEditField) || typeof v !== 'string') return null
+    out[k as DefEditField] = v
+  }
+  if (!Object.keys(out).length || (out.description !== undefined && !out.description.trim())) return null
+  return out
+}
 
 /** What /<name>-task T-5 <verb> does to the task (each the same as the lead's tool): pause, resume, retry, drop
  *  [reason], merged (its work is already merged outside the board), review on|off (needs_review), stash (to the
@@ -153,16 +177,14 @@ export function parseCommand(command: string, args: string, current: SymccMode =
       if (words.length === 1) return { kind: 'scout', name: id! }
       if (words.length === 2 && /^(pause|resume)$/i.test(words[1]!)) return { kind: 'scout-pause', name: id!, paused: words[1]!.toLowerCase() === 'pause' }
       const field = (words[1] ?? '').toLowerCase() as ScoutEditField
-      // new <name> <instructions> (a scout named "new" still takes pause, resume, every, model and prompt)
-      if ((id ?? '').toLowerCase() === 'new' && words.length >= 3 && !/^(pause|resume)$/i.test(words[1]!) && !SCOUT_EDIT_FIELDS.includes(field)) {
-        return { kind: 'scout-new', name: words[1]!, prompt: s.replace(/^\S+\s+\S+\s*/, '').trim() }
-      }
+      // <name> new <instructions>: the name comes first, so a new scout may have any name
+      if (words.length >= 3 && field === ('new' as string)) return { kind: 'scout-new', name: id!, prompt: s.replace(/^\S+\s+\S+\s*/, '').trim() }
       if (words.length >= 3 && SCOUT_EDIT_FIELDS.includes(field)) {
         // the value is the rest of the text as typed (the instructions keep their spacing)
         const value = s.replace(/^\S+\s+\S+\s*/, '').trim()
         return { kind: 'scout-edit', name: id!, field, value: field === 'model' && value.toLowerCase() === 'none' ? '' : value }
       }
-      return use(`/${name}-scout <name> (run it now), /${name}-scout <name> pause, or /${name}-scout <name> resume; to change it: /${name}-scout <name> every <minutes>, model <model|none> or prompt <instructions>; a new one: /${name}-scout new <name> <instructions>`)
+      return use(`/${name}-scout <name> (run it now), /${name}-scout <name> pause, or /${name}-scout <name> resume; to change it: /${name}-scout <name> every <minutes>, model <model|none> or prompt <instructions>; a new one: /${name}-scout <name> new <instructions>`)
     }
     case 'mode':
       return parseModeCommand(s, current, name)
@@ -171,7 +193,11 @@ export function parseCommand(command: string, args: string, current: SymccMode =
       if (def === 'role' || def === 'kind') {
         const action = (words[2] ?? '').toLowerCase()
         if (words.length === 3 && DEF_ACTIONS.includes(action as DefAction)) return { kind: 'def', def, name: words[1]!, action: action as DefAction }
-        if (words.length === 3 && words[1]!.toLowerCase() === 'add') return { kind: 'def-add', def, name: words[2]! }
+        if (words.length === 3 && action === 'add') return { kind: 'def-add', def, name: words[1]! }
+        if (words.length >= 4 && action === 'save') {
+          const fields = defSaveFields(def, s.replace(/^\S+\s+\S+\s+\S+\s*/, '').trim())
+          return fields ? { kind: 'def-save', def, name: words[1]!, fields } : use(defUsage(def, name))
+        }
         const field = (words[3] ?? '').toLowerCase() as DefEditField
         if (words.length >= 4 && action === 'edit' && defEditFields(def).includes(field)) {
           // the value is the rest of the text as typed (a checklist keeps its lines)

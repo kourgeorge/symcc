@@ -26,7 +26,7 @@ import {
   type KeyHint, type Seg, type BoardTask, intoOf, taskActions, taskAsks, actionButtonLabel, packRows, type TaskAction, type TaskActionId,
   ownersTurn, shownStatus, sortScouts, scoutListRows, scoutRow, scoutIcon, scoutTone, scoutHowTo, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem, scoutFile,
   SETTING_GROUPS, SETTINGS, isSettingPage, settingInfo, settingValue, cantPlayNotify, groupSummaryParts,
-  type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction, type DefEditField, type TaskVerb, settingsKeys, rolesKeys, kindsKeys, roleEditKeys, defEditFields, CLEARED_BY_NONE,
+  type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction, type DefEditField, type TaskVerb, settingsKeys, rolesKeys, kindsKeys, roleEditKeys, defEditFields, roleTools, roleFileText, roleSkipReason, kindFileText, kindSkipReason,
   DEFAULT_ROLE, isCheckerRole, ALWAYS_ON_KINDS, checkerOn, roleNameError, kindNameError, checkStepNow, rowEndText, taskPhase, choiceLines, driveWarning,
   searchTasks, showsHeader, type BoardPage,
   LIVE_TABS, LIVE_EMPTY, LIVE_LEGEND, type LiveSeg, type LiveTone, tabRow, withLiveKey, liveKeys, liveLanes, liveLayout, liveStations, liveHeader, liveLabelLine, laneLines, nextUp, nextUpLine, liveToday, todayLines, searchLine, modeButton, hintLines, roleKeys, rolePromptKeys, ROLE_PROMPTS, ROLE_SLOT, promptsOfRole, type RolePromptKind,
@@ -325,6 +325,22 @@ export function draftChanges(list: DefList, d: ViewDef, draft: DefDraft): DefEdi
 
 /** What Save says when the description is empty (Claude Code's words). */
 export const noDescriptionText = (list: DefList) => `description is missing: say in a few words what ${list === 'roles' ? 'the role is for' : 'this kind of task is'}`
+
+/** Why Save can't save the edit mode of `name` (Claude Code's error words), or '' when it can: an empty description,
+ *  a tool word a role may not have (roleTools), or a file the role or kind could not be read from (roleSkipReason,
+ *  kindSkipReason, on the file text the lead's tool would write). The panel shows it on the edit page and sends nothing,
+ *  as Claude Code's saveRoleDraft keeps its edit page open with the tool's error. */
+export function draftError(list: DefList, name: string, draft: DefDraft): string {
+  const v = draft.values
+  const description = (v.description ?? '').trim()
+  if (!description) return noDescriptionText(list)
+  const items = (s: string | undefined) => (s ?? '').split(',').map(x => x.trim()).filter(Boolean)
+  if (list === 'kinds') return kindSkipReason(name.toLowerCase(), kindFileText({ description, body: v.body ?? '' })) ?? ''
+  const tools = roleTools(items(v.tools))
+  if (typeof tools === 'string') return tools
+  const model = (v.model ?? '').trim()
+  return roleSkipReason(name, roleFileText({ description, ...(model ? { model } : {}), skills: items(v.skills), ...(tools.length ? { tools } : {}), prompt: v.checklist ?? '' })) ?? ''
+}
 
 /** The keys at the bottom of the edit page: Claude Code's (roleEditKeys), with Enter, which opens a box here. */
 export const defEditKeys = (): KeyHint[] => {
@@ -1410,7 +1426,8 @@ export type PanelAction =
   | { kind: 'mode'; mode: SymccMode }
   /** (T-706) a new role or kind from the template, one part of a role's or kind's file, a new scout, and setting up git */
   | { kind: 'def-add'; def: 'role' | 'kind'; name: string }
-  | { kind: 'def-edit'; def: 'role' | 'kind'; name: string; field: DefEditField; value: string }
+  /** the edit page's Save: its changed boxes in one edit (a bad value saves none) */
+  | { kind: 'def-save'; def: 'role' | 'kind'; name: string; fields: Partial<Record<DefEditField, string>> }
   | { kind: 'scout-new'; scout: string; prompt: string }
   | { kind: 'setup-git' }
 
@@ -1426,9 +1443,9 @@ export function actionCommand(a: PanelAction, name: string = DEFAULT_NAME): { na
   if (a.kind === 'def') return { name: `${name}-settings`, text: `${a.def} ${a.name} ${a.action}` }
   if (a.kind === 'mode') return { name: `${name}-mode`, text: a.mode }
   if (a.kind === 'orgmem-delete') return { name: `${name}-settings`, text: `orgmem delete ${a.n}${a.key ? ` ${a.key}` : ''}` }
-  if (a.kind === 'def-add') return { name: `${name}-settings`, text: `${a.def} add ${a.name}` }
-  if (a.kind === 'def-edit') return { name: `${name}-settings`, text: `${a.def} ${a.name} edit ${a.field} ${a.value.trim() || (CLEARED_BY_NONE.includes(a.field) ? 'none' : '')}`.trim() }
-  if (a.kind === 'scout-new') return { name: `${name}-scout`, text: `new ${a.scout} ${a.prompt.trim()}` }
+  if (a.kind === 'def-add') return { name: `${name}-settings`, text: `${a.def} ${a.name} add` }
+  if (a.kind === 'def-save') return { name: `${name}-settings`, text: `${a.def} ${a.name} save ${JSON.stringify(a.fields)}` }
+  if (a.kind === 'scout-new') return { name: `${name}-scout`, text: `${a.scout} new ${a.prompt.trim()}` }
   if (a.kind === 'setup-git') return { name: `${name}-settings`, text: 'git setup' }
   return { name: `${name}-answer`, text: `${a.id} ${a.answer.trim()}` }
 }

@@ -8,11 +8,11 @@
 // OpenTUI (T-500): opencode/tui.ts imports them by their written-out names (what OpenCode swaps for its own copies),
 // and loadTuiRuntime names a package that is missing or lacks a function instead of failing with a bare import error.
 import { test, expect } from 'bun:test'
-import { LIVE_TABS, tabRow as coreTabRow, withLiveKey, roleKeys, rolesKeys, kindsKeys, scoutHowTo, LIVE_EMPTY, LIVE_LEGEND, liveLanes, liveLayout, liveStations, liveHeader, liveLabelLine, laneLines, segText, nextUp, nextUpLine, liveToday, todayLines, modeLabel, modeButton, promptsOfRole, ROLE_SLOT, SETTING_GROUPS, groupSummaryParts, taskActions, actionButtonLabel, settingsKeys, mergeRoles, mergeKinds, when, addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, showsHeader, type BoardPage, type Board } from '../../board'
+import { LIVE_TABS, tabRow as coreTabRow, withLiveKey, roleKeys, rolesKeys, kindsKeys, scoutHowTo, LIVE_EMPTY, LIVE_LEGEND, liveLanes, liveLayout, liveStations, liveHeader, liveLabelLine, laneLines, segText, nextUp, nextUpLine, liveToday, todayLines, modeLabel, modeButton, promptsOfRole, ROLE_SLOT, SETTING_GROUPS, groupSummaryParts, taskActions, actionButtonLabel, settingsKeys, mergeRoles, mergeKinds, when, addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, showsHeader, roleTools, type BoardPage, type Board } from '../../board'
 import type { PaneView } from '../../app/state'
 import type { SymccTask } from '../../../types'
 import { ICON } from '../../name'
-import { hasPage, bandLines, bandDraw, BAND_CLICK_HINT, panelLines, panelKeys, parseViewFile, viewFileText, lineText, actionCommand, answerOptions, OWN_ANSWER, viewDefs, panelTaskActions, TASK_ACTION_COMMANDS, SETTINGS_OPEN, approveSent, APPROVE_SENT_MS, drawnLines, boardPageOf, defDraftOf, defEditKeys, noDescriptionText, SETUP_GIT_ASK, type ViewFile, type PanelChoice } from '../board-view'
+import { hasPage, bandLines, bandDraw, BAND_CLICK_HINT, panelLines, panelKeys, parseViewFile, viewFileText, lineText, actionCommand, answerOptions, OWN_ANSWER, viewDefs, panelTaskActions, TASK_ACTION_COMMANDS, SETTINGS_OPEN, approveSent, APPROVE_SENT_MS, drawnLines, boardPageOf, defDraftOf, defEditKeys, noDescriptionText, draftError, SETUP_GIT_ASK, type ViewFile, type PanelChoice } from '../board-view'
 import { readFile } from 'node:fs/promises'
 import { rowEndBoard, ROW_END, ROW_END_NOW } from '../../../tests/row-end-cases'
 import { taskSections } from '../../core/task-sections'
@@ -2657,10 +2657,16 @@ test('T-706: Edit opens Claude Code\'s edit page: "<name> editing", where Save w
   expect(panelLines(f, { tab: 'settings', opened: 'role:docs', cursor: 0, edit }, NOW, 140).lines.map(lineText)).toContain('[ Back ] [ Edit ] [ See the prompt ] [ Turn off ] [ Remove ]')
   // the commands they send
   expect(actionCommand({ kind: 'def', def: 'role', name: 'docs', action: 'remove' })).toEqual({ name: 'symcc-settings', text: 'role docs remove' })
-  expect(actionCommand({ kind: 'def-add', def: 'kind', name: 'chore' })).toEqual({ name: 'symcc-settings', text: 'kind add chore' })
-  expect(actionCommand({ kind: 'def-edit', def: 'role', name: 'docs', field: 'model', value: '' })).toEqual({ name: 'symcc-settings', text: 'role docs edit model none' })
-  expect(actionCommand({ kind: 'def-edit', def: 'role', name: 'docs', field: 'checklist', value: '' })).toEqual({ name: 'symcc-settings', text: 'role docs edit checklist' })
-  expect(actionCommand({ kind: 'scout-new', scout: 'lint', prompt: ' Look for lint. ' })).toEqual({ name: 'symcc-scout', text: 'new lint Look for lint.' })
+  expect(actionCommand({ kind: 'def-add', def: 'kind', name: 'chore' })).toEqual({ name: 'symcc-settings', text: 'kind chore add' })
+  expect(actionCommand({ kind: 'def-add', def: 'role', name: 'remove' })).toEqual({ name: 'symcc-settings', text: 'role remove add' })
+  expect(actionCommand({ kind: 'def-save', def: 'role', name: 'docs', fields: { model: '', checklist: '- one\n- two' } })).toEqual({ name: 'symcc-settings', text: 'role docs save {"model":"","checklist":"- one\\n- two"}' })
+  expect(actionCommand({ kind: 'scout-new', scout: 'lint', prompt: ' Look for lint. ' })).toEqual({ name: 'symcc-scout', text: 'lint new Look for lint.' })
+  expect(actionCommand({ kind: 'scout-new', scout: 'every', prompt: 'look' })).toEqual({ name: 'symcc-scout', text: 'every new look' })
+  // what Save refuses before sending (the lead's tool's words): an empty description, a tool a role may not have
+  expect(draftError('roles', 'docs', { page: 'role:docs', values: { description: ' ' } })).toBe('description is missing: say in a few words what the role is for')
+  expect(draftError('roles', 'docs', { page: 'role:docs', values: { description: 'docs', tools: 'web, foo' } })).toBe(roleTools(['foo']) as string)
+  expect(draftError('roles', 'docs', { page: 'role:docs', values: { description: 'docs', tools: 'web', checklist: '- one' } })).toBe('')
+  expect(draftError('kinds', 'chore', { page: 'kind:chore', values: { description: 'a chore', body: 'x' } })).toBe('')
   expect(actionCommand({ kind: 'setup-git' })).toEqual({ name: 'symcc-settings', text: 'git setup' })
 })
 
@@ -2737,7 +2743,7 @@ test('T-706: startTui: Remove (d, or a click) asks Claude Code\'s question first
   t.board.stop()
 })
 
-test('T-706: startTui: Edit (e, or a click) opens the edit page; Enter or a click on a box asks its value; Save sends each changed box as /symcc-settings role|kind NAME edit FIELD VALUE; Cancel (x) and an empty description send nothing', async () => {
+test('T-706: startTui: Edit (e, or a click) opens the edit page; Enter or a click on a box asks its value; Save sends the changed boxes in one /symcc-settings role|kind NAME save {...}; Cancel (x), an empty description or a bad tool word send nothing and keep the page with the error', async () => {
   const t = await tuiOn(addedViewFile())
   const tester = () => t.toSettings('5 roles', 'My tester')
   await tester()
@@ -2753,10 +2759,7 @@ test('T-706: startTui: Edit (e, or a click) opens the edit page; Enter or a clic
   expect(t.lines()).toContain('    Check it twice.')
   t.sent.length = 0
   await t.click('[ Save ]')
-  expect(t.sent).toEqual([
-    { sessionID: 's', name: 'symcc-settings', text: 'role tester edit model sonnet' },
-    { sessionID: 's', name: 'symcc-settings', text: 'role tester edit checklist Check it twice.' },
-  ])
+  expect(t.sent).toEqual([{ sessionID: 's', name: 'symcc-settings', text: 'role tester save {"model":"sonnet","checklist":"Check it twice."}' }])
   // Save leaves the edit page for the role's page
   expect(t.board.state().opened).toBe('role:tester')
   expect(t.lines().some(l => l.includes('editing'))).toBe(false)
@@ -2770,6 +2773,21 @@ test('T-706: startTui: Edit (e, or a click) opens the edit page; Enter or a clic
   expect(t.lines()).toContain('description is missing: say in a few words what the role is for')
   await t.click('[ Cancel (x) ]')
   expect(t.lines().some(l => l.includes('editing'))).toBe(false)
+  // a new description and a tool word a role may not have: nothing is sent (not even the description), the page stays
+  // with the lead's tool's error, as Claude Code's saveRoleDraft
+  await t.board.press('e', 's')
+  t.answers.prompt.push('Tests it all', 'foo')
+  await t.board.press('open', 's')
+  await t.board.press('down', 's')
+  await t.board.press('down', 's')
+  await t.board.press('down', 's')
+  await t.board.press('open', 's')
+  expect(t.lines()).toContain('    foo')
+  await t.click('[ Save ]')
+  expect(t.sent).toEqual([])
+  expect(t.lines()[0]).toBe('tester editing')
+  expect(t.lines()).toContain(roleTools(['foo']) as string)
+  await t.board.press('x', 's')
   await t.board.press('e', 's')
   await t.board.press('x', 's')
   expect(t.lines().some(l => l.includes('editing'))).toBe(false)
@@ -2783,17 +2801,17 @@ test('T-706: startTui: Edit (e, or a click) opens the edit page; Enter or a clic
   t.clickRow('  Body')
   await new Promise<void>(res => setTimeout(res, 0))
   await t.click('[ Save ]')
-  expect(t.sent).toEqual([{ sessionID: 's', name: 'symcc-settings', text: 'kind chore edit body Tidy one thing.' }])
+  expect(t.sent).toEqual([{ sessionID: 's', name: 'symcc-settings', text: 'kind chore save {"body":"Tidy one thing."}' }])
   t.board.stop()
 })
 
-test('T-706: startTui: + New role / + New kind (n, or a click) ask the name and send /symcc-settings role|kind add NAME, then open it in the edit page once the view has it; + New scout asks name and instructions and sends /symcc-scout new', async () => {
+test('T-706: startTui: + New role / + New kind (n, or a click) ask the name and send /symcc-settings role|kind NAME add, then open it in the edit page once the view has it; + New scout asks name and instructions and sends /symcc-scout NAME new', async () => {
   const f = addedViewFile()
   const t = await tuiOn(f)
   await t.toSettings('5 roles')
   t.answers.prompt.push('writer')
   await t.click('[ + New role ]')
-  expect(t.sent).toEqual([{ sessionID: 's', name: 'symcc-settings', text: 'role add writer' }])
+  expect(t.sent).toEqual([{ sessionID: 's', name: 'symcc-settings', text: 'role writer add' }])
   expect(t.asked).toEqual(["New role's name"])
   // the engine wrote the new role: the next read opens it in the edit page
   const writerRole = { name: 'writer', ...{ description: 'what this role is for', skills: [], prompt: '- one' } }
@@ -2802,14 +2820,14 @@ test('T-706: startTui: + New role / + New kind (n, or a click) ask the name and 
   await t.board.refresh()
   expect(t.board.state().opened).toBe('role:writer')
   expect(t.lines()[0]).toBe('writer editing')
-  // Esc on the name box sends nothing; n on the Kinds page sends kind add
+  // Esc on the name box sends nothing; n on the Kinds page sends kind NAME add
   await t.toSettings('3 kinds')
   t.sent.length = 0
   t.answers.prompt.push(undefined)
   await t.board.press('n', 's')
   t.answers.prompt.push('Chores')
   await t.board.press('n', 's')
-  expect(t.sent).toEqual([{ sessionID: 's', name: 'symcc-settings', text: 'kind add Chores' }])
+  expect(t.sent).toEqual([{ sessionID: 's', name: 'symcc-settings', text: 'kind Chores add' }])
   // + New scout: its name, then what it does
   await t.board.press('s', 's')
   t.sent.length = 0
@@ -2817,7 +2835,7 @@ test('T-706: startTui: + New role / + New kind (n, or a click) ask the name and 
   t.answers.prompt.push('lint', 'Look for lint warnings.')
   await t.click('[ + New scout ]')
   expect(t.asked).toEqual(["New scout's name", 'lint: what it does'])
-  expect(t.sent).toEqual([{ sessionID: 's', name: 'symcc-scout', text: 'new lint Look for lint warnings.' }])
+  expect(t.sent).toEqual([{ sessionID: 's', name: 'symcc-scout', text: 'lint new Look for lint warnings.' }])
   t.answers.prompt.push('lint2', '')
   await t.board.press('n', 's')
   expect(t.sent.length).toBe(1)
