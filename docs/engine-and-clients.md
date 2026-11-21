@@ -94,7 +94,7 @@ This is the list in `hooks/engine.ts`, by the file each name comes from (paths a
 
 **`hooks/core/history`**: `HISTORY_COLOR`, `historyEvent`, `historyTime`
 
-**`hooks/core/org-mem`**: `ORG_MEM_EMPTY`, `ORG_MEM_TITLE`, `orgMemAbout`, `orgMemCount`, `orgMemDeleteAsk`, `orgMemFile`, `orgMemKeys`, `type OrgMemNote`, `orgMemNoteHead`, `orgMemNoteKey`, `orgMemSummary`
+**`hooks/core/org-mem`**: `ORG_MEM_EMPTY`, `ORG_MEM_TITLE`, `orgMemAbout`, `orgMemCount`, `orgMemDeleteAsk`, `orgMemFile`, `orgMemKeys`, `type OrgMemNote`, `orgMemNoteHead`, `orgMemNoteKey`
 
 **`hooks/core/path-guard`**: `spawnFailedText`
 
