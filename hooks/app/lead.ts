@@ -207,6 +207,7 @@ export async function startOffHere(host: Host) {
   S.offHere = false
   S.sawOther = false
   S.takeoverTold = false
+  S.missingSince = null
   const b = await load(host).catch(() => null)
   if (!b || b.enabled === false) return
   const live = liveDriver(await host.fs.read(path(S.N.leadFile)).catch(() => null), Date.now())
@@ -226,6 +227,7 @@ export async function disableHere(host: Host): Promise<string> {
   S.enabledNow = false
   S.sawOther = false
   S.takeoverTold = false
+  S.missingSince = null
   dropLeadUpdates()
   const drove = S.driving
   if (drove) {
@@ -253,6 +255,7 @@ export async function enableHere(host: Host, tell: (text: string) => void): Prom
   S.enabledNow = true
   S.sawOther = false
   S.takeoverTold = false
+  S.missingSince = null
   await publish(host, b)
   if (openOnStart(b)) await openPane(host, { tab: 'live', focus: false, quiet: true }).catch(() => undefined)
   await claimLead(host).catch(() => false)
@@ -287,6 +290,9 @@ async function goneReminder(host: Host, live: boolean, nowMs: number): Promise<b
   }).catch(() => false)
 }
 
+/** T-793: how long lead.json may be missing or stale before the take-over line shows (one heartbeat plus a margin), so a second on-window can claim it. */
+export const GONE_GRACE_MS = 90_000
+
 /** The heartbeat of a window off here: it drives nothing; it looks whether the window with symcc on is gone and tells the owner once. */
 export async function offHereBeat(host: Host, nowMs = Date.now()) {
   const live = liveDriver(await host.fs.read(path(S.N.leadFile)).catch(() => null), nowMs)
@@ -294,8 +300,9 @@ export async function offHereBeat(host: Host, nowMs = Date.now()) {
   if (live && live !== S.me) {
     S.sawOther = true
     S.takeoverTold = false
+    S.missingSince = null
     if (S.offWhy === 'gone') S.offWhy = 'other'
-  } else if (S.sawOther && !S.takeoverTold) {
+  } else if (S.sawOther && !S.takeoverTold && (S.missingSince ??= nowMs, nowMs - S.missingSince >= GONE_GRACE_MS)) {
     S.takeoverTold = true
     S.offWhy = 'gone'
     host.ui.toast(S.N.toast(takeoverText()))
@@ -352,7 +359,7 @@ export async function handOver(host: Host) {
   }
   const b = await load(host)
   await publish(host, b)
-  if (openOnStart(b)) await openPane(host, { tab: 'live', focus: false, quiet: true })
+  if (onHere(b) && openOnStart(b)) await openPane(host, { tab: 'live', focus: false, quiet: true })
 }
 
 // ---------------- T-769: ▍Today's lead, scout and cost figures ----------------

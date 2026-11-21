@@ -4,9 +4,9 @@
 // symcc window is gone.
 import { expect } from 'claude-code/testing'
 import { emptyBoard, leadText, parseLead, parseCommand, offStatusLine, offHereAnswer, LEAD_STALE_MS, type Board } from '../hooks/board'
-import { claimLead, disableHere, enableHere, offHereBeat, GONE_REMIND_MS, startOffHere, driveHere } from '../hooks/app/lead'
+import { claimLead, disableHere, enableHere, offHereBeat, handOver, GONE_REMIND_MS, GONE_GRACE_MS, startOffHere, driveHere } from '../hooks/app/lead'
 import { S, sayQueue, toolName } from '../hooks/app/state'
-import { leadBeat, leadGuideText, sessionStart, toolCall, COMMANDS } from '../hooks/app/symcc'
+import { leadBeat, leadGuideText, sessionStart, toolCall, runCommand, COMMANDS } from '../hooks/app/symcc'
 import { saveBoard } from '../hooks/app/store'
 import { tellLead, takeBoardUpdate } from '../hooks/app/tell'
 import { test } from './reset'
@@ -131,6 +131,60 @@ test('/symcc-enable here turns the window back on: it tells the lead once, drive
   expect(told).toHaveLength(1)
 })
 
+test('/symcc-enable here through the real command tells the lead with one message', async () => {
+  S.root = ROOT
+  S.me = 'b'
+  const w = world('b')
+  await saveBoard(w.host, emptyBoard())
+  w.files.set(w.lead, leadText('a', Date.now()))
+  await startOffHere(w.host)
+  expect(S.offHere).toBe(true)
+  await runCommand(w.host, 'symcc-enable', 'here')
+  expect(S.offHere).toBe(false)
+  const update = takeBoardUpdate()
+  expect(update).toContain('enable here')
+  expect(takeBoardUpdate()).toBeUndefined()
+})
+
+test('handOver (after /clear) does not open the panel in an off-here window', async () => {
+  S.root = ROOT
+  S.me = 'b'
+  const w = world('b')
+  await saveBoard(w.host, emptyBoard())
+  w.files.set(w.lead, leadText('a', Date.now()))
+  await startOffHere(w.host)
+  await handOver(w.host)
+  expect(w.opened).toEqual([])
+})
+
+test('the take-over line waits a grace so a second on-window can claim lead.json first', async () => {
+  S.root = ROOT
+  S.me = 'b'
+  const w = world('b')
+  await saveBoard(w.host, emptyBoard())
+  const t0 = Date.now()
+  w.files.set(w.lead, leadText('a', t0))
+  await startOffHere(w.host)
+  w.toasts.length = 0
+  w.files.delete(w.lead)
+  await offHereBeat(w.host, t0 + 1000)
+  expect(w.toasts).toEqual([])
+  w.files.set(w.lead, leadText('c', t0 + 30_000))
+  await offHereBeat(w.host, t0 + 31_000)
+  await offHereBeat(w.host, t0 + 31_000 + GONE_GRACE_MS)
+  expect(w.toasts).toEqual([])
+  expect(w.files.has(`${ROOT}/${S.N.dir}/gone.json`)).toBe(false)
+  expect(S.offWhy).toBe('other')
+  // nobody claims: the line shows once after the grace
+  w.files.delete(w.lead)
+  const t1 = t0 + 200_000
+  await offHereBeat(w.host, t1)
+  expect(w.toasts).toEqual([])
+  await offHereBeat(w.host, t1 + GONE_GRACE_MS)
+  await offHereBeat(w.host, t1 + GONE_GRACE_MS + 30_000)
+  expect(w.toasts).toHaveLength(1)
+})
+
 test('/symcc-enable here with the whole project disabled says so and points to /symcc-enable', async () => {
   S.root = ROOT
   S.me = 'a'
@@ -210,8 +264,10 @@ test('when the only window with symcc on goes away, an off-here window says so o
   expect(w.toasts).toEqual([])
   // a closes (it lets go of lead.json)
   w.files.delete(w.lead)
-  await offHereBeat(w.host)
-  await offHereBeat(w.host)
+  const tn = Date.now()
+  await offHereBeat(w.host, tn)
+  await offHereBeat(w.host, tn + GONE_GRACE_MS)
+  await offHereBeat(w.host, tn + GONE_GRACE_MS + 1000)
   expect(w.toasts).toHaveLength(1)
   expect(w.toasts[0]).toContain('the symcc window closed · /symcc-enable here to take over')
   expect(S.driving).toBe(false)
@@ -234,16 +290,18 @@ test('nobody takes over: "needs you" plays once, 15 minutes after the take-over 
   w.files.set(w.lead, leadText('a', t0))
   await startOffHere(w.host)
   w.files.delete(w.lead)
-  await offHereBeat(w.host, t0 + 1000) // the take-over line shows; the note starts
+  await offHereBeat(w.host, t0 + 1000) // first missed
+  const t1 = t0 + 1000 + GONE_GRACE_MS
+  await offHereBeat(w.host, t1) // the take-over line shows; the note starts
   expect(sayQueue).toEqual([])
-  await offHereBeat(w.host, t0 + 1000 + GONE_REMIND_MS - 1000)
+  await offHereBeat(w.host, t1 + GONE_REMIND_MS - 1000)
   expect(sayQueue).toEqual([])
-  await offHereBeat(w.host, t0 + 1000 + GONE_REMIND_MS)
+  await offHereBeat(w.host, t1 + GONE_REMIND_MS)
   expect(sayQueue).toEqual(['?'])
   // not again, and a second off-here window (same files) does not play it either
-  await offHereBeat(w.host, t0 + 1000 + GONE_REMIND_MS + 60_000)
+  await offHereBeat(w.host, t1 + GONE_REMIND_MS + 60_000)
   S.me = 'c'
-  await offHereBeat(w.host, t0 + 1000 + GONE_REMIND_MS + 120_000)
+  await offHereBeat(w.host, t1 + GONE_REMIND_MS + 120_000)
   expect(sayQueue).toEqual(['?'])
   expect(S.driving).toBe(false)
 })

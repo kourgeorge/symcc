@@ -31,7 +31,7 @@ import { checkerFinished } from './checker'
 import { fileToolHits, saveScoutsMigrated, scheduleScouts, seedExampleScouts, scoutFinished, runScoutNow, setScoutPaused, unreadableScoutsText, leadScouts } from './scouts'
 import { S, onHere, loadVersion, toolName, timers, heard, stopped, workers, scoutRuns, checkerRuns, scoutState, isOwnAgent } from './state'
 import { path, load, isOn, now, saveMigrated, startWait, findRoot, mainRoot, isWorkerFolder, startingText } from './store'
-import { noteForLead, brief, takeBoardUpdate } from './tell'
+import { noteForLead, tellLead, brief, takeBoardUpdate } from './tell'
 import { playable } from './voice'
 import { TOOLS, leadGuide, runTool, type In, manual, ownerSettings, taskText, latestReport, statsText } from './tools'
 import { openPane } from './open'
@@ -555,7 +555,7 @@ export async function runCommand(host: Host, command: string, args: string): Pro
       return say(await ownerSettings(host, cmd.input, `with /${S.N.name}-settings`))
     case 'disable':
     case 'enable':
-      if (cmd.here) return say(cmd.kind === 'enable' ? await enableHere(host, noteForLead) : await disableHere(host))
+      if (cmd.here) return say(cmd.kind === 'enable' ? await enableHere(host, t => tellLead(host, t)) : await disableHere(host))
       return say(await setSymcc(host, cmd.kind === 'enable'))
     case 'drive':
       return say(await driveHere(host))

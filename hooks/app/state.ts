@@ -88,6 +88,8 @@ export const startS = () => ({
   /** T-793: while off here, whether another window was seen driving (so its going away is worth telling) and whether that was told */
   sawOther: false,
   takeoverTold: false,
+  /** T-793: when the window with symcc on was first missed (ms), so the take-over line waits out a grace; null while seen */
+  missingSince: null as number | null,
   /** the worker roles: the plugin's roles/ with the project's .<name>/roles/ over them (see loadRoles) */
   roles: [] as RoleDef[],
   /** the task kinds: the plugin's kinds/ with the project's .<name>/kinds/ over them (see loadKinds) */
