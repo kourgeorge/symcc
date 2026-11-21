@@ -6,7 +6,7 @@ import type { SymccTask } from '../types'
 import { type Board, addTask, emptyBoard, patchTask, find, checkerVerdict, checkerOutput, isCheckerOutput, docsOnly, checkerOn, applySettings, parseSettingValue, settingValue, finishedNote, bashOutsideText, gitWriteText, gitWriteIn, workerGitWriteText, untestedChange, testTail, statusCell, PREP_NOTE, CHECKER_NOTE } from '../hooks/board'
 import { S, leadQueue, meanwhile, workers, checkerRuns, stopped } from '../hooks/app/state'
 import { workerFinished, WORKER_PROMPT, checkingNow, stopAsked, check, stoppedHandBack } from '../hooks/app/workers'
-import { setBoardMode } from '../hooks/app/board-mode'
+import { setBoardMode, setSymcc } from '../hooks/app/board-mode'
 import { stopOrphans } from '../hooks/app/cleanup'
 import { checkerFinished } from '../hooks/app/checker'
 import { checkEdit, stoppedText } from '../hooks/app/ask'
@@ -42,7 +42,8 @@ function world(changed: string[] = ['src/a.ts', 'src/a.test.ts']) {
   // gone: branch main was deleted (T-440)
   // tree: what `rev-parse <commit>^{tree}` gives (T-526); empty: git can't tell, so no passed tree is recorded
   // moves: each commit main was moved to, in order
-  const git = { main: M1, head: H0, dirty: true, detached: false, checkoutFails: false, gone: false, tree: '', moves: [] as string[] }
+  // slowStatus: `git status` waits this many promise turns before it answers, as a real git takes a moment (T-740)
+  const git = { main: M1, head: H0, dirty: true, detached: false, checkoutFails: false, gone: false, tree: '', moves: [] as string[], slowStatus: 0 }
   // the project's test commands (T-565): fails makes each one exit 1 with output; hold: a run in folder `cwd` waits for `until`
   const tests = { fails: false, output: '(fail) src/a.test.ts > doIt handles empty input\n 0 pass\n 1 fail', hold: null as { cwd: string; until: Promise<void> } | null }
   const files = new Map<string, string>()
@@ -87,6 +88,7 @@ function world(changed: string[] = ['src/a.ts', 'src/a.test.ts']) {
     run: async (argv, o = {}) => {
       const [cmd, ...rest] = argv
       calls.push(argv.join(' '))
+      if (cmd === 'git' && rest.includes('status')) for (let i = 0; i < git.slowStatus; i++) await Promise.resolve()
       if (cmd === 'git') return runGit(rest)
       if (appendLineRun(files, argv)) return ok()
       if (cmd === '/bin/sh') {
@@ -1097,6 +1099,96 @@ for (const how of ['answers just "stopped"', 'was stopped by symcc (its agent is
     expect(end.status).toBe('done')
     expect(end.attempts).toBe(1)
     expect(end.test_tries ?? 0).toBe(0)
+  })
+}
+
+// ---------------- T-740: after a reopen, one hand-back starts one prep and one checker; a checker symcc stopped is no verdict ----------------
+
+for (const second of ['the same worker again', "the earlier try's worker"]) {
+  test(`T-740: a second hand-back for the same try (${second}) is ignored: one prep, one checker`, async () => {
+    const w = world()
+    S.driving = true
+    // try 2 runs with worker ag1; ag0 was try 1's worker (still alive after a reopen, and taken back by this copy)
+    await saveBoard(w.$, boardWith(true, { attempts: 2, agent: 'ag1', runs: [{ started: ISO, ended: ISO, agent: 'ag0' }, { started: ISO, agent: 'ag1' }] }))
+    workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: 0 })
+    const done = withStarts(w.$, workerFinished(w.$, 'ag1', 'made the change'))
+    await until(() => checkerRuns.size > 0)
+    const other = second.startsWith('the same') ? 'ag1' : 'ag0'
+    workers.set(other, { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: 0 })
+    await withStarts(w.$, workerFinished(w.$, other, 'made the change'))
+    await turns(200)
+    expect(w.spawns.length).toBe(1)
+    checkerFinished([...checkerRuns.keys()][0]!, 'OK')
+    await done
+    await turns(50)
+    const t = find(await load(w.$), 'T-1')!
+    const texts = t.history.map(h => h.text)
+    expect(texts.filter(x => x === 'try 2: worker handed back').length).toBe(1)
+    expect(texts.filter(x => /prep started/.test(x)).length).toBeLessThan(2)
+    expect(texts.filter(x => /checker: OK/.test(x)).length).toBe(1)
+    expect(w.spawns.length).toBe(1)
+    expect(t.status).toBe('done')
+  })
+}
+
+test("T-740: a hand-back from an earlier try's worker while the new try's worker runs is not taken as the new try's", async () => {
+  const w = world()
+  S.driving = true
+  await saveBoard(w.$, boardWith(true, { attempts: 2, agent: 'ag1', runs: [{ started: ISO, ended: ISO, agent: 'ag0' }, { started: ISO, agent: 'ag1' }] }))
+  workers.set('ag0', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: 0 })
+  await withStarts(w.$, workerFinished(w.$, 'ag0', 'old work'))
+  await turns(200)
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('doing')
+  expect(t.finishing).toBe(undefined)
+  expect(t.runs!.at(-1)!.ended).toBe(undefined)
+  expect(t.history.some(h => h.text.includes('worker handed back'))).toBe(false)
+  expect(w.spawns.length).toBe(0)
+})
+
+test('T-740: a checker symcc stopped partway gives no verdict, whatever it answered: a new checker starts on the same try, no new worker try, no retry used', async () => {
+  const w = world()
+  S.driving = true
+  await saveBoard(w.$, boardWith(true))
+  const answer = 'symcc stopped me partway through. I found no problems before the stop, but this is not a full review. stopped'
+  const t = await finish(w, async id => {
+    // symcc's own record of the stop; the agent list doesn't even name it any more
+    stopped.add(id)
+    w.$.agents.list = async () => []
+    checkerFinished(id, answer)
+  })
+  expect(t.status).toBe('doing')
+  expect(t.attempts).toBe(1)
+  expect(t.test_tries ?? 0).toBe(0)
+  expect(t.history.some(h => h.text.includes('checker found problems'))).toBe(false)
+  expect(t.history.map(h => h.text)).toContain('try 1: checker gave no verdict (it was stopped; a new checker starts)')
+  expect(leadQueue.join('\n')).not.toContain('sent back by the checker')
+  await until(() => w.spawns.length === 2 && checkerRuns.size > 0)
+  checkerFinished([...checkerRuns.keys()][0]!, 'OK')
+  await until(() => checkerRuns.size === 0 && !checkingNow('T-1'))
+  await until(() => w.git.main !== M1)
+  const end = find(await load(w.$), 'T-1')!
+  expect(end.status).toBe('done')
+  expect(end.attempts).toBe(1)
+  expect(end.test_tries ?? 0).toBe(0)
+})
+
+for (const [how, line] of [['the board is paused', 'you paused the board'], ['symcc is disabled', 'you disabled symcc']] as const) {
+  test(`T-740: when ${how} while a checker runs, its history line keeps the reason ("${line}"), not "a new checker starts"`, async () => {
+    const w = world()
+    // git takes a moment, as on a real machine: the task's stop is set before the checker's line is written
+    w.git.slowStatus = 3000
+    S.driving = true
+    await saveBoard(w.$, boardWith(true))
+    const t = await finish(w, async () => {
+      if (how === 'the board is paused') await setBoardMode(w.$, 'paused', 'you')
+      else await setSymcc(w.$, false)
+    })
+    const texts = t.history.map(h => h.text)
+    expect(texts).toContain(`try 1: checker gave no verdict (${line})`)
+    expect(texts.some(x => x.includes('a new checker starts'))).toBe(false)
+    expect(t.status).toBe('todo')
+    expect(w.spawns.length).toBe(1)
   })
 }
 

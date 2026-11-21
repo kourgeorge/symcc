@@ -4,10 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>symcc · a team lead for your coding agents</title>
-<meta name="description" content="symcc turns your coding agent chat into a lead that plans, a board everyone shares, and workers that build in parallel.">
+<meta name="description" content="symcc is an agent organization inside your coding agent: you talk to a lead, workers build in parallel, a checker tries to break each change, and nothing merges until your tests pass.">
+<meta name="color-scheme" content="dark">
 <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body class="home">
 <header class="site">
   <a class="brand" href="index.html">symcc</a>
   <nav>
@@ -22,35 +23,140 @@
 
 <main class="home">
   <section class="hero">
-    <h1>A team lead for your coding agents</h1>
-    <p class="lead">symcc is an agent organization that runs inside your coding agent. You talk to a lead; the lead puts the work on a board, workers build it in parallel, and nothing merges until your tests pass.</p>
+    <p class="eyebrow">Free and open source · for Claude Code and OpenCode</p>
+    <h1>Talk to one lead.<br>A team ships the work.</h1>
+    <p class="lead">symcc is an agent organization inside your coding agent: you say what you want, workers build it in parallel, and nothing merges until a checker and your tests are happy.</p>
     <p class="cta">
       <a class="button" href="#install">Install</a>
-      <a class="button ghost" href="guide.html">Read the guide</a>
+      <a class="button ghost" href="https://github.com/kourgeorge/symcc">GitHub</a>
     </p>
   </section>
 
-  <section>
-    <h2 id="what-it-is">What it is</h2>
-    <p>Coding agents are fast. The hard part is keeping track of the work: new ideas come up while an agent is busy, and small items quietly drop out. symcc keeps that list for you and has a team work through it.</p>
-    <ul class="parts">
-      <li><strong>The lead</strong> is your normal chat. You talk to one place, at any time. It turns your ideas into tasks, decides their order and asks you only for real decisions.</li>
-      <li><strong>Workers</strong> build tasks in parallel. Each has its own folder and branch, so they cannot overwrite each other and your branch is untouched until merge. Each task lists the files it may change, so a stray edit is refused instead of showing up in the diff.</li>
-      <li><strong>Scouts</strong> run on a timer and only look. They find bugs, missing tests and outdated parts while you are away. The lead turns what they find into tasks, so a scout never changes your project by itself.</li>
-      <li><strong>The merge queue</strong> lets finished changes take turns: it runs your tests, lets you review the diff, and merges one change at a time. This way the code that was tested is exactly the code that merges.</li>
-    </ul>
-    <p>symcc also has an optional checker, an agent that tries to break each change before the tests run. The file checks catch honest mistakes; they are not a security boundary. The <a href="guide.html#why-it-is-built-this-way">guide</a> explains why each part is there.</p>
+  <section class="demo" id="demo" aria-label="A played-out symcc session">
+    <input type="radio" name="demo-view" id="v-chat" checked>
+    <input type="radio" name="demo-view" id="v-live">
+    <input type="radio" name="demo-view" id="v-task">
+    <input type="radio" name="demo-view" id="v-scouts">
+    <div class="demo-tabs">
+      <label for="v-chat">Chat + board</label>
+      <label for="v-live">Live tab</label>
+      <label for="v-task">Task page</label>
+      <label for="v-scouts">Scouts</label>
+    </div>
+    <div class="win">
+      <div class="win-bar">
+        <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="win-title">~/symcc · claude</span>
+        <span class="demo-step">16:53</span>
+        <button type="button" class="demo-pause" aria-pressed="false" hidden>❚❚ Pause</button>
+      </div>
+      <div class="view view-chat">
+        <div class="pane chat">
+          <div class="chat-log" data-view="chat" data-still></div>
+          <div class="prompt" data-view="input" data-still></div>
+        </div>
+        <pre class="pane board" data-view="board" data-still></pre>
+      </div>
+      <div class="view view-live"><pre class="pane" data-view="live" data-still></pre></div>
+      <div class="view view-task"><pre class="pane wrap" data-view="task" data-still></pre></div>
+      <div class="view view-scouts"><pre class="pane wrap" data-view="scouts" data-still></pre></div>
+    </div>
+    <p class="demo-note">A real session: symcc building symcc on 21 November 2026. The owner asks for clearer sections on the Live tab, picks one of four looks, and T-747 goes from worker to checker to merge queue to tests to main. Next to it, the checker sends T-740 back and it starts try 2, and a scout's finding becomes T-736.</p>
   </section>
 
-  <section>
-    <h2 id="the-board">The board</h2>
-    <p>One list for work you asked for and work scouts found: todo, doing, review, done. It is a plain file, so the work is still there after the chat ends.</p>
-    <figure>
-      <img src="docs/demo.svg" alt="symcc demo: you ask the lead, tasks appear on the board, workers move them from todo to doing to review to done" width="900">
-    </figure>
+  <section class="how" aria-labelledby="how-it-works">
+    <h2 id="how-it-works">How it works</h2>
+    <ol class="steps">
+      <li><b>You say it</b><span>Type an idea, a bug or a wish into your normal chat, at any time.</span></li>
+      <li><b>The lead plans it</b><span>It turns your words into tasks, sets their order, and asks you only for real decisions.</span></li>
+      <li><b>Workers build it</b><span>Each task gets its own worker, folder and branch. Several run at once.</span></li>
+      <li><b>A checker tries to break it</b><span>An optional second agent reads the change and sends it back if it finds problems.</span></li>
+      <li><b>Your tests decide</b><span>The merge queue runs your tests on each change, one at a time, then merges it.</span></li>
+    </ol>
   </section>
 
-  <section>
+  <section aria-labelledby="what-you-get">
+    <h2 id="what-you-get">What you get</h2>
+    <p class="hint">Click a card to see more.</p>
+    <div class="cards">
+      <details class="card">
+        <summary><span class="icon">⏺</span><b>One lead, one chat</b><span>You talk to one place. The lead keeps the list.</span></summary>
+        <p>New ideas come up while agents are busy. Say them; the lead puts each one on the board with a why, a kind and the files it may change. When it needs a choice from you, it asks once, on the board and as a pop-up.</p>
+        <pre>❯ show some ideas
+⏺ Four looks for the Live tab's sections …
+❯ 4
+⏺ Added T-747. I'll tell you when it merges.</pre>
+      </details>
+      <details class="card">
+        <summary><span class="icon">◉</span><b>The Live tab</b><span>See each task's way to main, as it happens.</span></summary>
+        <p>Every running task is a lane: work, check, queue, tests, merged. You see the time at each station, the tokens of each try, and how often the checker sent it back.</p>
+        <pre> T-747  ●━━━━━━●━━━━━━◉──────○──────○
+  change try 1/3  ▕█████████████▏ 5.7M
+ T-740  ◉──────○──────○──────○──────○
+  bug try 2/3  tokens at hand-back  ↺×1</pre>
+      </details>
+      <details class="card">
+        <summary><span class="icon">╰─○</span><b>A folder per worker</b><span>Workers can't step on each other.</span></summary>
+        <p>Each worker gets its own copy of the project on its own branch. Your branch stays untouched until merge. Each task lists the files it may change, so a stray edit is refused instead of hiding in the diff.</p>
+        <pre>main   ●───●───●───●
+           │   ╰─────○ T-740  +1 commit · 3 behind
+           ╰─────────○ T-747  not started</pre>
+      </details>
+      <details class="card">
+        <summary><span class="icon">↺</span><b>A checker</b><span>A second agent tries to break each change.</span></summary>
+        <p>Before the tests run, the checker reads the change and the task. If it finds problems, the task goes back to a worker with the checker's words, and a new try starts. You see each try on the task page.</p>
+        <pre>try 1 → the checker found problems
+try 2: worker started</pre>
+      </details>
+      <details class="card">
+        <summary><span class="icon">✓</span><b>A merge queue</b><span>The code that was tested is the code that merges.</span></summary>
+        <p>Finished changes take turns. Each one is brought up to date with main, your test commands run on it, and only then does it merge. In review mode you look at the diff first.</p>
+        <pre>T-747 try 1 → checks passed
+T-747 try 1 → merged into main
+♪ symcc: T-747 done</pre>
+      </details>
+      <details class="card">
+        <summary><span class="icon">◇</span><b>Scouts</b><span>Agents that only look, on a timer.</span></summary>
+        <p>Scouts look for bugs, gaps, missing tests and copied code while you are away. They never change your project. They report to the lead, and the lead makes a task of what is worth doing.</p>
+        <pre>◇ scout gaps-bot found: Checker send-backs,
+  the most common failure, are left out of the
+  failed-tries reasons and total → T-736</pre>
+      </details>
+      <details class="card">
+        <summary><span class="icon">▍</span><b>Organizational memory</b><span>What one agent learns, the next one knows.</span></summary>
+        <p>Agents suggest short notes about the project: a trick for the tests, a command the guard refuses. The lead keeps the surprising ones, and every new worker gets them with its task.</p>
+        <pre>11-21  tests   In tests, put dates relative
+               to now, never a fixed date</pre>
+      </details>
+      <details class="card">
+        <summary><span class="icon">▤</span><b>A board that stays</b><span>A plain file, kept after the chat ends.</span></summary>
+        <p>The board lives in your project. Close the chat, come back tomorrow: the tasks, their history, tries, time and cost are all still there.</p>
+        <pre>▍Runs (time and cost)
+   try 1: 22m · 4.0M tokens in all · the checker found problems</pre>
+      </details>
+    </div>
+  </section>
+
+  <section aria-labelledby="why-not-parallel">
+    <h2 id="why-not-parallel">Why not just run agents in parallel?</h2>
+    <p>You can open five agent chats at once. The hard part is everything around them. Here is what changes with symcc.</p>
+    <div class="table compare">
+      <table>
+        <thead><tr><th></th><th>Agents in parallel, by hand</th><th>symcc</th></tr></thead>
+        <tbody>
+          <tr><th>Where you talk</th><td>One chat per agent; you hop between them</td><td>One lead; it hands out the work</td></tr>
+          <tr><th>Keeping track</th><td>In your head, or a notes file</td><td>A board with every task, its why and its history</td></tr>
+          <tr><th>Edits clashing</th><td>Agents share one folder and overwrite each other</td><td>Each worker has its own folder and branch</td></tr>
+          <tr><th>Stray changes</th><td>Found later in the diff, if at all</td><td>Refused: each task lists the files it may change</td></tr>
+          <tr><th>Checking the work</th><td>You read every change</td><td>A checker tries to break it, then your tests run</td></tr>
+          <tr><th>Merging</th><td>By hand, with conflicts</td><td>A queue merges one tested change at a time</td></tr>
+          <tr><th>Finding more work</th><td>Only what you notice</td><td>Scouts look while you are away</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="install">
     <h2 id="install">Install</h2>
     <h3 id="claude-code">Claude Code</h3>
     <p>You need Claude Code and git. There is no build step.</p>
@@ -62,6 +168,39 @@
     <p>Or, with no clone:</p>
     <pre><code>opencode plugin add github:kourgeorge/symcc</code></pre>
     <p>Pick one of the two ways. The details are in the <a href="guide.html#using-symcc-in-opencode">guide</a>.</p>
+  </section>
+
+  <section aria-labelledby="faq">
+    <h2 id="faq">Questions</h2>
+    <details class="faq">
+      <summary>Does symcc change my branch while I work?</summary>
+      <p>No. Workers build in their own folders and branches. Your branch only changes when the merge queue merges a change that passed your tests.</p>
+    </details>
+    <details class="faq">
+      <summary>Do I have to watch it?</summary>
+      <p>No. In auto mode, tested changes merge by themselves and symcc can say "T-747 done" out loud. In review mode, each change waits for you to look at it first.</p>
+    </details>
+    <details class="faq">
+      <summary>What does it cost?</summary>
+      <p>symcc is free. The agents use your normal Claude Code or OpenCode account, so each try costs tokens. The task page shows the time, tokens and cost of every try, and you choose how many agents run at once.</p>
+    </details>
+    <details class="faq">
+      <summary>Is it safe to let agents merge?</summary>
+      <p>Nothing merges until your tests pass, and each task may change only its listed files. These checks catch honest mistakes; they are not a security boundary. The <a href="guide.html#why-it-is-built-this-way">guide</a> explains why each part is there.</p>
+    </details>
+    <details class="faq">
+      <summary>Is the demo above real?</summary>
+      <p>Yes. It is symcc building symcc: the task numbers, titles and steps come from its own board and history. It is drawn with HTML so you can read it, pause it and switch views.</p>
+    </details>
+  </section>
+
+  <section class="final">
+    <h2 id="get-started">Give your coding agent a team</h2>
+    <p>One command to install. Then say what you want.</p>
+    <p class="cta">
+      <a class="button" href="#install">Install symcc</a>
+      <a class="button ghost" href="guide.html">Read the guide</a>
+    </p>
   </section>
 
   <section>
@@ -80,5 +219,6 @@
 <footer class="site">
   <p>symcc is open source under the MIT license · <a href="https://github.com/kourgeorge/symcc">github.com/kourgeorge/symcc</a> · <a href="llms.txt">llms.txt</a> (the docs for AI tools)</p>
 </footer>
+<script src="demo.js"></script>
 </body>
 </html>

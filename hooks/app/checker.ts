@@ -7,7 +7,7 @@ import { git, taskBranch } from './git'
 import { markStep } from './review'
 import { loadRoles } from './roles'
 import { changeValues } from './prompt-values'
-import { S, type CheckerEnd, checkerRuns, halt } from './state'
+import { S, type CheckerEnd, checkerRuns, halt, stopped } from './state'
 import { type Host, notReadyYet } from '../host'
 import type { TurnEnd } from './workers'
 import { change, now } from './store'
@@ -17,7 +17,11 @@ import { orgMemText, keepSuggestions } from './org-mem'
 import { learnedAsk, startDebrief } from './debrief'
 
 /** What a checker came to: its verdict, or null with why there is none (it was stopped, ran over its time, or didn't start). */
-export type CheckerOutcome = { verdict: CheckerVerdict | null; why?: string; again?: boolean }
+/** `stopped` (T-740): symcc itself stopped this checker (its agent is in `stopped`) before its verdict, so whatever it answered is no verdict. */
+export type CheckerOutcome = { verdict: CheckerVerdict | null; why?: string; again?: boolean; stopped?: boolean }
+
+/** The no-verdict reason of a checker symcc stopped before its verdict, when a new checker starts on the same try. */
+export const STOPPED_AGAIN = 'it was stopped; a new checker starts'
 
 /** The agent name of task `id`'s checker: "symcc-T-3-checker". */
 export const checkerName = (name: string, id: string) => agentSafeName(`${name}-${id}-checker`)
@@ -73,6 +77,8 @@ export async function runChecker($: Host, t: SymccTask, b: Board, dir: string, s
   }
   // checkerRuns is set at once (in the promise below, before any await), and the board then names the checker too, so
   // the guards of another session's copy of the plugin know it (T-471); it is taken off when the checker ends
+  // its time ran out (symcc stops it then too, but that is no stop to start a new checker for)
+  let overTime = false
   const ended = new Promise<CheckerEnd>(resolve => {
     let timer: { cancel(): void } | null = null
     const done = (e: CheckerEnd) => {
@@ -85,6 +91,7 @@ export async function runChecker($: Host, t: SymccTask, b: Board, dir: string, s
     const min = b.max_minutes
     try {
       timer = $.clock.after(min * 60_000, () => {
+        overTime = true
         void halt($, agentId, 'your time is up')
         done({ answer: null, why: `it ran over ${min} min and was stopped` })
       }) ?? null
@@ -102,6 +109,18 @@ export async function runChecker($: Host, t: SymccTask, b: Board, dir: string, s
   await markChecker($, t, agentId, false)
   await cleanFolder($, dir)
   const back = await putBack($, dir, saved)
+  // T-740: symcc stopped this checker (a reload's orphan stop, a halt): known from symcc's own record of the stop, not
+  // from its answer's text; whatever it answered ("stopped", or "I found nothing before the stop") is no verdict
+  const bySymcc = !overTime && stopped.has(agentId)
+  if (bySymcc) {
+    // a halt of every checker (the board paused, symcc disabled) ends it with no answer and its own reason (end.why),
+    // as on main: that comes first, even when the task's stop was set meanwhile; else read the stop again here
+    const own = end.answer === null && end.why ? end.why : undefined
+    const late = own ? undefined : stop()
+    const why = own ?? (late ? `the task was ${late}` : undefined)
+    await record($, t, null, why ?? STOPPED_AGAIN, end.tokens)
+    return { verdict: null, why: why ?? 'it was stopped', stopped: true }
+  }
   // T-600, T-632: its "Learned:" lines are kept on the task as org-mem suggestions for the lead, whatever its verdict
   if (end.answer) await keepSuggestions($, t.id, end.answer)
   // T-656: it handed back: one follow-up turn asks it for org-mem suggestions; nothing waits for that answer
