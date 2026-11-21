@@ -1747,7 +1747,9 @@ its read-only `stats` tool.
   ended (merged on its own, approved by you, or answered for an investigation; failed
   tries by reason: tests failed, sent back by the checker, clash with main, files out of scope,
   ran out of time (the worker's time, the tests' time, or its checking and merging), no result
-  (the worker ended without one), no change, not merged, other (an API error, a refusal, the
+  (the worker ended without one), no change, not merged (also when your files on main
+  can't be updated; a try that only left out secret-looking files waits for you and is not
+  counted), other (an API error, a refusal, the
   worker ending its turn early, checking that failed), restarted by a change, stopped, rejected;
   "Each failed try" counts the same failed tries, except tries rejected by you and restarts, and
   says so when the two counts differ); each failed try on its own line (task, try, how it ended, and when its tests failed,

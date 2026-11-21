@@ -115,7 +115,9 @@ export function failReason(line: string): FailReason | null {
   if (/^tests ran out of time\b/.test(outcome)) return 'timeout'
   if (/^the worker made no change\b/.test(outcome)) return 'nochange'
   // a "not merged … (not used: …)" line is the end of a check whose try was already counted by its own "stopped:" or "restarted:" line
-  if (/^not merged\b/.test(outcome)) return notMergedOnPurpose(outcome) || /\(not used: /.test(outcome) ? null : 'notmerged'
+  // a try that only left out secret-looking files waits for the owner, so it is not a failed try
+  if (/^not merged\b/.test(outcome)) return notMergedOnPurpose(outcome) || /\(not used: /.test(outcome) || /, and the task changed nothing else$/.test(outcome) ? null : 'notmerged'
+  if (/^your files on \S+ can't be updated\b/.test(outcome)) return 'notmerged'
   if (/^(checking failed|symcc could not|could not|the worker ended its turn before)\b/.test(outcome)) return 'other'
   if (/; nothing was checked or merged$/.test(head)) return 'other'
   return null
@@ -138,7 +140,7 @@ export const FAIL_LABEL: Record<FailReason, string> = { tests: 'tests failed', c
  * "→ tests failed" or "→ not merged"). Otherwise it is the last " → " followed by an outcome word symcc writes there,
  * so a "→ tests failed" in the worker's summary does not move it; else the last one.
  */
-const OUTCOME_START = /^(tests failed\b|conflicts with the latest\b|changed files outside the task\b|the checker found problems\b|tests ran out of time\b|the worker made no change\b|not merged\b|checking failed\b|symcc could not\b|could not\b|the worker ended its turn before\b|merged into\b|already merged into\b|checks passed\b)/
+const OUTCOME_START = /^(tests failed\b|conflicts with the latest\b|changed files outside the task\b|the checker found problems\b|tests ran out of time\b|the worker made no change\b|not merged\b|checking failed\b|symcc could not\b|could not\b|the worker ended its turn before\b|your files on \S+ can't be updated\b|merged into\b|already merged into\b|checks passed\b)/
 function resultCut(l: string): number {
   const checker = l.indexOf(' → the checker found problems:')
   if (checker >= 0) return checker
