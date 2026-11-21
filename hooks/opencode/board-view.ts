@@ -37,11 +37,11 @@ import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, br
 import { restFrame } from '../core/logo'
 import { taskSections, type TaskSection } from '../core/task-sections'
 import type { TaskBranchFacts } from '../core/task-branch'
-import { type ActionGroup, groupSegLines, headerRule, inGroups, navHint, packGroups, type PageFrom, PILL_COLOR, pillText, placeIn, scoutAbout, scoutButtons as headerScoutButtons, scoutListNames, scoutStateGroups, taskColor, taskPlace, taskStateGroups, titleLines, whereLine } from '../core/page-header'
+import { type ActionGroup, groupSegLines, headerRule, inGroups, navHint, navRow, packGroups, type PageFrom, PILL_COLOR, pillText, placeIn, scoutAbout, scoutButtons as headerScoutButtons, scoutListNames, scoutStateGroups, taskColor, taskPlace, taskStateGroups, titleLines, whereLine } from '../core/page-header'
 import { sessionNote } from '../core/details'
 import type { DiffFile } from '../core/review'
 import { DEFAULT_NAME, dataDir } from '../name'
-import { ORG_MEM_EMPTY, ORG_MEM_KEY, orgMemAbout, orgMemKeys, orgMemNoteHead, orgMemFile, orgMemOfTopic, orgMemPageTitle, orgMemTopicEmpty, type OrgMemNote } from '../core/org-mem'
+import { ORG_MEM_EMPTY, ORG_MEM_KEY, ORG_MEM_SUBTITLE, orgMemPageCount, orgMemAbout, orgMemKeys, orgMemNoteHead, orgMemFile, orgMemOfTopic, orgMemPageTitle, orgMemTopicEmpty, type OrgMemNote } from '../core/org-mem'
 
 /** The view file's name, in the data folder (.<name>/view.json). */
 export const VIEW_FILE = 'view.json'
@@ -988,7 +988,7 @@ function scoutPage(f: ViewFile, sc: SymccScout, choice: PanelChoice, nowMs: numb
     return { ...b, ids: [], selected: '', head }
   }
   // T-751: the page header, as on Claude Code's scout page: ‹ Scouts and its place, its name and what it does, its
-  // state, its buttons in groups, a heavy rule; it stays at the top while the rest scrolls
+  // state, its buttons in groups, a thin rule; it stays at the top while the rest scrolls
   const last = shown[0]
   for (const l of headerLines({ from: 'scouts', label: sc.name, place: placeIn(scoutListNames(f.view.scouts ?? []), sc.name), title: scoutAbout(sc), color: 'claude', state: scoutStateGroups(sc, nowMs, last), buttons: scoutButtons(sc) }, w)) b.add(l)
   const headLines = b.lines.length
@@ -1204,12 +1204,19 @@ export const orgMemNoteOf = (f: ViewFile | null, id: string): OrgMemNote | undef
 function orgMemBody(f: ViewFile, cursor: number, w: number, topic = ''): Body {
   const b = bodyMaker()
   const notes = orgMemOfTopic(orgMemIn(f), topic)
-  b.heading(orgMemPageTitle(topic))
-  // T-742: Delete (x) (when there are notes) and Back (b) on one row right under the title; they stay at the top with it
-  for (const l of buttonLines([...(notes.length ? [DELETE_NOTE_BUTTON] : []), LIST_BACK_BUTTON], w)) b.add(l)
+  // T-790: the same header as a task's page: "‹ [Live]" and the count, the title, the subtitle, "[Delete]" (the keys are in the
+  // footer), a thin rule; then ▍About and ▍Notes. The header stays at the top.
+  const nav = navRow('live', orgMemPageCount(notes.length, orgMemIn(f).length, topic), w)
+  b.add([...nav.left, { text: ' '.repeat(nav.pad) }, ...nav.right].map(p => ({ text: p.text, color: 'go' in p && p.go ? PILL_COLOR : 'inactive', ...('go' in p && p.go ? { hit: { key: 'back' } as PanelHit } : {}) })))
+  b.add([{ text: orgMemPageTitle(topic), color: 'text', bold: true }])
+  b.add([{ text: ORG_MEM_SUBTITLE, color: 'inactive' }])
+  if (notes.length) b.add([{ text: `[${DELETE_NOTE_BUTTON.label}]`, color: PILL_COLOR, hit: DELETE_NOTE_BUTTON.hit }])
+  b.add([{ text: headerRule(w), color: 'ide' }])
   const headLines = b.lines.length
-  for (const l of wrapSegs([{ text: orgMemAbout(orgMemFile(dataDir(f.name))), color: 'inactive' }], w)) b.add(l)
+  b.add([{ text: '▍About', color: 'suggestion', bold: true }])
+  for (const l of wrapSegs([{ text: orgMemAbout(orgMemFile(dataDir(f.name))), color: 'inactive' }], w - 1)) b.add([{ text: ' ', color: 'text' }, ...l])
   b.blank()
+  b.add([{ text: '▍Notes', color: 'suggestion', bold: true }])
   if (!notes.length) b.add([{ text: `  ${topic ? orgMemTopicEmpty(topic) : ORG_MEM_EMPTY}`, color: 'inactive' }])
   const ids = notes.map(x => orgMemNoteId(x.n))
   const selected = ids.length ? ids[Math.min(Math.max(0, cursor), ids.length - 1)]! : ''
@@ -1409,7 +1416,7 @@ function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = ''
   const t = v.tasks.find(x => x.id === id)
   if (!t) return null
   // T-751: the page header, as on Claude Code's task page: where you are (‹ Tasks or ‹ Live, its place in that list),
-  // the title, the state, the buttons in groups (core's taskActions), a heavy rule; it stays at the top while the rest scrolls
+  // the title, the state, the buttons in groups (core's taskActions), a thin rule; it stays at the top while the rest scrolls
   addAll(headerLines({
     from, label: t.id, place: taskPlace(v, t.id, from, nowMs, search), title: t.title, color: taskColor(t, nowMs, merging),
     state: taskStateGroups(t, { nowMs, merging, ...(v.auto_retries !== undefined ? { autoRetries: v.auto_retries } : {}), note: sessionNote(t, v.driving ?? false) }),
@@ -1489,7 +1496,7 @@ export const SEARCH_BUTTON: PanelButton = { label: '[f] search', hit: { key: 'f'
 export const CHANGE_SEARCH_BUTTON: PanelButton = { label: '[f] change search', hit: { key: 'f' } }
 export const CLEAR_SEARCH_BUTTON: PanelButton = { label: '[x] clear search', hit: { key: 'x' } }
 export const LIST_BACK_BUTTON: PanelButton = { label: 'Back (b)', hit: { key: 'back' } }
-export const DELETE_NOTE_BUTTON: PanelButton = { label: 'Delete (x)', hit: { key: 'x' } }
+export const DELETE_NOTE_BUTTON: PanelButton = { label: 'Delete', hit: { key: 'x' } }
 /** The edit page's Save and Cancel (x) buttons (T-706, Claude Code's). */
 export const SAVE_BUTTON: PanelButton = { label: 'Save', hit: { save: true } }
 export const CANCEL_EDIT_BUTTON: PanelButton = { label: 'Cancel (x)', hit: { key: 'x' } }
@@ -1514,7 +1521,7 @@ export const scoutButtons = (sc: Pick<SymccScout, 'running' | 'paused'>): HeadBu
 
 /** A page header's lines (T-751, core/page-header.ts): where you are (Back and, with a place, "‹ 2 of 6 ›": each a
  *  click), the title, the state (wrapping between its groups), the buttons in their groups (each "[Pause]" in the
- *  text color, T-775; wrapping between groups, never inside a button), then a heavy rule. */
+ *  text color, T-775; wrapping between groups, never inside a button), then a thin rule. */
 export function headerLines(hd: { from: PageFrom; label: string; place: ReturnType<typeof placeIn>; title: string; color: string; state: Seg[][]; buttons: HeadButton[] }, w: number): Line[] {
   const where = whereLine(hd.from, hd.label, hd.place, w)
   const go: Record<string, PanelHit> = { back: { key: 'back' }, prev: { key: 'prev' }, next: { key: 'next' } }

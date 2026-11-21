@@ -614,7 +614,7 @@ test('T-680, T-751: a task page header has the buttons in groups, words only (th
   // the header's button line: the line right above its heavy rule
   const buttonRow = (id: string, tab: 'tasks' | 'scouts' = 'tasks', w = 140) => {
     const ls = panelLines(f, { tab, opened: id, cursor: 0 }, NOW, w).lines.map(lineText)
-    return ls[ls.findIndex(l => /^━+$/.test(l)) - 1]
+    return ls[ls.findIndex(l => /^─+$/.test(l)) - 1]
   }
   // the running task: the Claude Code board's buttons for it (core's taskActions in their groups, with their words),
   // but Watch worker and Copy, which OpenCode can't do
@@ -628,14 +628,14 @@ test('T-680, T-751: a task page header has the buttons in groups, words only (th
   // T-775: every button drawn the same: "[Label]" in the text color, not bold (no filled pill, no red, no dim word)
   for (const id of ['T-1', 'T-2', 'T-3']) {
     const ls = panelLines(f, { opened: id, cursor: 0 }, NOW, 140).lines
-    const row = ls[ls.findIndex(l => /^━+$/.test(lineText(l))) - 1]!.filter(x => x.hit)
+    const row = ls[ls.findIndex(l => /^─+$/.test(lineText(l))) - 1]!.filter(x => x.hit)
     expect(row.map(x => [x.text.startsWith('[') && x.text.endsWith(']'), x.color, !!x.bold])).toEqual(row.map(() => [true, 'text', false]))
   }
   // no key inside a button (the keys are in the footer)
   for (const id of ['T-1', 'T-2', 'T-3']) expect(buttonRow(id)).not.toMatch(/\([a-z]\)/)
   // a narrow panel puts the buttons on more rows, between the groups when they fit, never cutting a button
   const narrow = panelLines(f, { opened: 'T-3', cursor: 0 }, NOW, 40).lines.map(lineText)
-  const rule = narrow.findIndex(l => /^━+$/.test(l))
+  const rule = narrow.findIndex(l => /^─+$/.test(l))
   expect(narrow.slice(rule - 4, rule)).toEqual(['[Retry]', '[Stash to backlog] [Role]', '[Already merged]   [Drop]', '[☐ Needs review]'])
   // the scout pages (as Claude Code's: Run now when it isn't running, Edit, Pause or Resume; paused said as a fact) and a question's
   expect(buttonRow('deps', 'scouts')).toBe('[Edit]   [Pause]')
@@ -648,7 +648,7 @@ test('T-680, T-751: a task page header has the buttons in groups, words only (th
     expect(lines[1]!.startsWith(`${id}  `)).toBe(true)
     expect(lines[2]).toContain({ 'T-1': '▶ doing', 'T-2': '◆ ready for review', 'T-3': '✗ failed' }[id]!)
     expect(lines[3]).toBe(buttonRow(id))
-    expect(lines[4]).toMatch(/^━+$/)
+    expect(lines[4]).toMatch(/^─+$/)
     expect(lines.some(l => l.trim().startsWith('Status:'))).toBe(false)
   }
 
@@ -676,7 +676,7 @@ test('T-680, T-751: a task page header has the buttons in groups, words only (th
   const headRows = () => rowEls(panel)
   const buttons = () => {
     const rows = headRows()
-    return rows[rows.findIndex(r => /^━+$/.test(r.text)) - 1]!.segs.filter(s => typeof s.props.onMouseUp === 'function')
+    return rows[rows.findIndex(r => /^─+$/.test(r.text)) - 1]!.segs.filter(s => typeof s.props.onMouseUp === 'function')
   }
   const settle = () => new Promise<void>(res => setTimeout(res, 0))
   const open = async (id: string, tab: 'tasks' | 'scouts' = 'tasks') => {
@@ -2074,6 +2074,10 @@ test('T-718: OpenCode: the Live tab\'s org-mem section draws the header, the 3 n
   const page = panelLines(f, { tab: 'live', opened: 'orgmem:tests', cursor: 0 }, NOW, 100)
   expect(page.lines.map(lineText)).toContain('Organizational memory · tests')
   expect(page.ids).toEqual(['note:6', 'note:3', 'note:1'])
+  // T-790: the same header as the all-notes page, the topic in the title: "‹ [Live]" and "3 of 8", title, subtitle, [Delete], thin rule, ▍About
+  const head = page.lines.map(lineText).slice(0, 6)
+  expect([head[0], head[1], head[2], head[3], head[5]]).toEqual([`‹ [Live]${' '.repeat(100 - 8 - 6)}3 of 8`, 'Organizational memory · tests', 'Notes shared with workers, checkers and scouts', '[Delete]', '▍About'])
+  expect(head[4]).toMatch(/^─+$/)
   expect(boardPageOf(f, { tab: 'live', opened: 'orgmem:tests' })).toBe('orgmem')
   expect(hasPage(f, 'orgmem:tests', 'live')).toBe(true)
 })
@@ -2217,9 +2221,9 @@ test('T-627: a long task page scrolls by drawn lines under its fixed title and b
   expect(title.some(l => l.startsWith('T-2  a reviewed change'))).toBe(true)
   // (the header's buttons are "[Label]" too since T-775; a badge would name the status)
   expect(title.filter(l => /^\[[^\]]*(review|doing|todo|failed|waiting|done|dropped|backlog)[^\]]*\]$/i.test(l) && !/Needs review/.test(l)).length).toBe(0)
-  // T-680, T-751: the page header (with its buttons and its heavy rule) stays at the top with them
+  // T-680, T-751: the page header (with its buttons and its thin rule) stays at the top with them
   expect(title.some(l => l.startsWith('[Approve]'))).toBe(true)
-  expect(title.at(-1)).toMatch(/^━+$/)
+  expect(title.at(-1)).toMatch(/^─+$/)
   expect(title.join(' ')).toContain('onto a second line here')
   expect(text.slice(all.fixed).some(l => l.includes('▍History'))).toBe(true)
   // the long history and report lines are broken into rows the panel's width, keeping every word in order
@@ -2484,20 +2488,27 @@ test('T-685: every board screen has Claude Code\'s buttons: the tab row, the lis
   expect(found.lines.slice(0, found.fixed).map(lineText)).toContain('search: reviewed · 1 of 5 tasks')
   expect(texts({ search: 'nothing-like-this' })).toContain('search: nothing-like-this · no tasks match')
 
-  // Back (b) on each list page, as Claude Code's; org-mem's Delete (x) before it (only with notes)
+  // Back (b) on each list page, as Claude Code's
   const back = (c: Partial<PanelChoice>) => draw(c).lines.flat().filter(s => s.text === '[ Back (b) ]').map(s => s.hit)
-  for (const c of [{ tab: 'scouts' }, { tab: 'settings' }, { tab: 'settings', opened: 'roles' }, { tab: 'settings', opened: 'kinds' }, { tab: 'live', opened: 'orgmem' }] as const) expect([c, back(c)]).toEqual([c, [{ key: 'back' }]])
+  for (const c of [{ tab: 'scouts' }, { tab: 'settings' }, { tab: 'settings', opened: 'roles' }, { tab: 'settings', opened: 'kinds' }] as const) expect([c, back(c)]).toEqual([c, [{ key: 'back' }]])
+  // T-790: the org-mem page has the shared detail header: "‹ [Live]" and the count, the title, the subtitle, "[Delete]" (no key in it),
+  // a thin rule, kept at the top; then ▍About and ▍Notes; the old Back (b) button is gone
   const om = texts({ tab: 'live', opened: 'orgmem' })
-  // T-742: on one row right under the page's title, before the first note, and kept at the top with the title
-  const omTitle = om.findIndex(l => l.includes('Organizational memory (org-mem)'))
-  expect(om[omTitle + 1]).toBe('[ Delete (x) ] [ Back (b) ]')
-  expect(omTitle + 1 < om.findIndex(l => l.includes('#3 · 2026-11-20'))).toBe(true)
+  expect(om[0]).toMatch(/^‹ \[Live\] +3 \/ 60$/)
+  expect(om.slice(1, 4)).toEqual(['Organizational memory (org-mem)', 'Notes shared with workers, checkers and scouts', '[Delete]'])
+  expect(om[4]).toMatch(/^─+$/)
+  expect(om[5]).toBe('▍About')
+  expect(om.indexOf('▍Notes')).toBeGreaterThan(5)
+  expect(om.indexOf('▍Notes')).toBeLessThan(om.findIndex(l => l.includes('#3 · 2026-11-20')))
+  expect(om.some(l => l.includes('Back (b)') || l.includes('Delete (x)'))).toBe(false)
   const omPage = draw({ tab: 'live', opened: 'orgmem' })
-  expect(omPage.lines.slice(0, omPage.fixed).map(lineText)).toContain('[ Delete (x) ] [ Back (b) ]')
+  expect(omPage.lines.slice(0, omPage.fixed).map(lineText)).toContain('[Delete]')
   expect(omPage.selected).toBe('note:3')
-  expect(draw({ tab: 'live', opened: 'orgmem' }).lines.flat().find(s => s.text === '[ Delete (x) ]')?.hit).toEqual({ key: 'x' })
+  expect(omPage.lines[0]!.find(s => s.text === '[Live]')?.hit).toEqual({ key: 'back' })
+  expect(omPage.lines.flat().find(s => s.text === '[Delete]')?.hit).toEqual({ key: 'x' })
   const noNotes = orgMemViewFile('')
-  expect(panelLines(noNotes, { tab: 'live', opened: 'orgmem', cursor: 0 }, NOW, W).lines.map(lineText).filter(l => l.startsWith('[ '))).toEqual(['[ Back (b) ]'])
+  const noTexts = panelLines(noNotes, { tab: 'live', opened: 'orgmem', cursor: 0 }, NOW, W).lines.map(lineText)
+  expect([noTexts[0]!.startsWith('‹ [Live]'), noTexts.includes('[Delete]')]).toEqual([true, false])
   // an empty Scouts tab has its Back (b) too
   const noScouts: ViewFile = { ...f, view: { ...f.view, scouts: [] } }
   expect(panelLines(noScouts, { tab: 'scouts', opened: '', cursor: 0 }, NOW, W).lines.map(lineText)).toContain('[ Back (b) ]')
@@ -2629,9 +2640,9 @@ test('T-685: in the TUI a click on each of those buttons does exactly what its k
   for (const row of ['4 roles', '2 kinds']) expect((await same(() => toSettings(row), '[ Back (b) ]', 'back')).state).toEqual({ ...board.state(), tab: 'settings', opened: '' })
   const toOrgMem = async () => (await board.press('t', 's'), await board.press('l', 's'), await click('Organizational memory'))
   expect((await same(async () => (await board.press('t', 's'), await board.press('l', 's')), 'Organizational memory', 'm')).state).toEqual({ ...board.state(), tab: 'live', opened: 'orgmem' })
-  expect((await same(toOrgMem, '[ Back (b) ]', 'back')).state).toEqual({ ...board.state(), tab: 'live', opened: '' })
+  expect((await same(toOrgMem, '[Live]', 'back')).state).toEqual({ ...board.state(), tab: 'live', opened: '' })
   // org-mem's Delete (x): asks, then deletes the note under the cursor (the newest)
-  expect((await same(toOrgMem, '[ Delete (x) ]', 'x', { select: ['yes'] })).sent).toEqual([{ sessionID: 's', name: 'symcc-settings', text: `orgmem delete 3 ${orgMemNoteKey('the type check is separate')}` }])
+  expect((await same(toOrgMem, '[Delete]', 'x', { select: ['yes'] })).sent).toEqual([{ sessionID: 's', name: 'symcc-settings', text: `orgmem delete 3 ${orgMemNoteKey('the type check is separate')}` }])
   // a role's page: Back, See the prompt, Turn on, Reset to built-in
   const tester = () => toSettings('4 roles', 'My tester')
   await tester()
@@ -3105,11 +3116,11 @@ test('T-700: the board header (banner, tests/limits line, drive warning, tabs) s
     expect([c, boardPageOf(f, { opened: '', ...c }), showsHeader(page)]).toEqual([c, page, false])
     const t = texts(c)
     expect([c, header(t)]).toEqual([c, none])
-    // a task's or scout's page starts with its header (T-751): "‹ [Tasks]" or "‹ [Scouts]" (its Back), then its title
-    const head = page === 'task' || page === 'scout' ? 1 : 0
+    // a task's, scout's or org-mem page starts with its header (T-751, T-790): "‹ [Tasks]", "‹ [Scouts]" or "‹ [Live]" (its Back), then its title
+    const head = page === 'task' || page === 'scout' || page === 'orgmem' ? 1 : 0
     if (title) expect([c, t[head]!.includes(title)]).toEqual([c, true])
     // the footer (its rule and key hints) and the page's Back button stay
-    expect([c, t.some(l => /^─+$/.test(l)), t.some(l => l.startsWith('[ Back') || l.includes(' [ Back') || /^‹ \[(Tasks|Scouts)\]/.test(l))]).toEqual([c, true, true])
+    expect([c, t.some(l => /^─+$/.test(l)), t.some(l => l.startsWith('[ Back') || l.includes(' [ Back') || /^‹ \[(Tasks|Scouts|Live)\]/.test(l))]).toEqual([c, true, true])
   }
 })
 

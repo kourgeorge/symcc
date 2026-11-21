@@ -336,7 +336,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
     role: openRolePick, 'already-merged': markMergedIt, drop: dropIt, 'needs-review': toggleReview, copy: copyTask,
   }
   // the page header (T-751): where you are (the tab it was opened from, its place in that list), the title, the state,
-  // the buttons in groups (core's taskActions), then a heavy rule
+  // the buttons in groups (core's taskActions), then a thin rule
   const from: PageFrom = pane.onLive ? 'live' : 'tasks'
   const place = taskPlace(v, t.id, from, pane.nowMs, S.search?.text ?? '')
   const header: PageHeader = {
