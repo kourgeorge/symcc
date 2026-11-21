@@ -592,6 +592,11 @@ test('T-736: checker send-backs, time-outs, no result, no change and not merged 
   const paused = task('T-9', { status: 'todo', runs: run('stopped', 'the board was paused while its work was being checked'), history: hist('try 1: did it → not merged: the task was stopped because the board was paused while it was being checked (not used: the board was paused)') })
   const pd = statsData({ tasks: [paused], nowMs: NOW })
   expect([pd.failedTries.length, pd.failedTotal]).toEqual([0, 0])
+  // checker round 3: a check that ends after its try was stopped ("not used: …") is the same try, counted once by its "stopped:" line
+  expect(failReason('try 1: did it → not merged: the task was stopped because the command line stopped waiting while it was being checked (not used: the command line stopped waiting)')).toBe(null)
+  const quit = task('T-10', { status: 'todo', runs: run('stopped', 'the command line stopped waiting while its work was being checked'), history: hist('try 1: stopped: the command line stopped waiting while its work was being checked; nothing merged, its files are kept', 'try 1: did it → not merged: the task was stopped because the command line stopped waiting while it was being checked (not used: the command line stopped waiting)') })
+  const qd = statsData({ tasks: [quit], nowMs: NOW })
+  expect([qd.failedTries.length, qd.failedTotal]).toEqual([1, 1])
   const text = statsReport({ tasks, nowMs: NOW, full: true })
   expect(text).toContain('Failed tries (7, from history)')
   expect(text).toMatch(/sent back by checker +▇+ +1/)

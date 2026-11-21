@@ -114,7 +114,8 @@ export function failReason(line: string): FailReason | null {
   if (/^the checker found problems\b/.test(outcome)) return 'checker'
   if (/^tests ran out of time\b/.test(outcome)) return 'timeout'
   if (/^the worker made no change\b/.test(outcome)) return 'nochange'
-  if (/^not merged\b/.test(outcome)) return notMergedOnPurpose(outcome) ? null : 'notmerged'
+  // a "not merged … (not used: …)" line is the end of a check whose try was already counted by its own "stopped:" or "restarted:" line
+  if (/^not merged\b/.test(outcome)) return notMergedOnPurpose(outcome) || /\(not used: /.test(outcome) ? null : 'notmerged'
   if (/^(checking failed|symcc could not|could not|the worker ended its turn before)\b/.test(outcome)) return 'other'
   if (/; nothing was checked or merged$/.test(head)) return 'other'
   return null
