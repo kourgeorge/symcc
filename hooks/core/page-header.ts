@@ -5,7 +5,7 @@
 //    T-738  Live tab: an empty line before each section                           2. the title
 //    ▶ doing · worker · 4m   change · general · try 1/3   ♟ from you              3. the state
 //    [Pause]   [Role] [Watch worker]   [Drop]   [☐ Needs review] [Copy]           4. the buttons, in groups
-//   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  then a heavy rule
+//   ───────────────────────────────────────────────────────────────────────────────  then a thin rule (T-790)
 //
 // Every button reads "[Label]" in the one text color (T-775); only the order of the groups and the gaps between
 // them say what's what.
@@ -238,8 +238,17 @@ export function groupSegLines(groups: readonly Seg[][], width: number): Seg[][] 
   return packGroups(pieces.map(p => [len(p)]), w, ITEM_GAP, GROUP_GAP).map(row => row.flatMap(({ g, gap }) => [...(gap ? [{ text: ' '.repeat(gap), color: 'text' }] : []), ...pieces[g]!]))
 }
 
-/** The heavy rule under the header, across the page. */
-export const headerRule = (width: number): string => '━'.repeat(Math.max(1, Math.floor(width)))
+/** The thin rule under the header of every detail page (task, scout, org-mem; T-790), across the page. The heavy rule
+ *  (━) stays on the main board only. */
+export const headerRule = (width: number): string => '─'.repeat(Math.max(1, Math.floor(width)))
+
+/** T-790: line 1 of a detail page that has no place in a list (the org-mem page): "‹ [Live]", the `right` words at the
+ *  far end ("60 / 60"); the same pieces as whereLine's. */
+export function navRow(from: PageFrom, right: string, width: number): { left: WherePiece[]; right: WherePiece[]; pad: number } {
+  const left: WherePiece[] = [{ text: BACK_ARROW }, { text: `[${backText(from)}]`, go: 'back' }]
+  const len = left.reduce((n, x) => n + x.text.length, 0)
+  return { left, right: [{ text: right }], pad: Math.max(1, Math.floor(width) - len - right.length) }
+}
 
 /** The Edit button's word (written so tests/host-free.sh doesn't take it for Claude Code's Edit tool). */
 const EDIT_WORD = 'Edit '.trim()

@@ -1,7 +1,7 @@
 // T-751: the task page and the scout page start with one 4-line header, the same on every board: where you are (Back,
 // the place in the list it was opened from, prev/next), the title, the state, the buttons in groups (the next step,
 // the task actions, the ones that throw work away, the page ones; since T-775 every one "[Label]" in one style, Back
-// "‹ [Tasks]"; words only, the keys in the footer), then a heavy rule. core/page-header.ts makes the lines; these tests check them on the terminal, desktop, mobile and
+// "‹ [Tasks]"; words only, the keys in the footer), then a thin rule (T-790). core/page-header.ts makes the lines; these tests check them on the terminal, desktop, mobile and
 // VS Code (OpenCode's are in hooks/opencode/tests/opencode-tui.spec.ts).
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
@@ -96,7 +96,7 @@ const CASES: [string, string, string, string[]][] = [
 ]
 for (const [id, status, color, groups] of CASES)
   for (const surface of ['terminal', 'desktop', 'mobile'] as const)
-    test(`T-751: ${id}'s page on ${surface}: the 4 header lines in order, then the heavy rule; buttons in groups, words only; keys in the footer`, async ($, on) => {
+    test(`T-751: ${id}'s page on ${surface}: the 4 header lines in order, then the thin rule; buttons in groups, words only; keys in the footer`, async ($, on) => {
       seedRich(on, id)
       const ui = await $.ui.mount({ ...PANE, surface })
       const h = await header(ui)
@@ -155,8 +155,8 @@ for (const [id, status, color, groups] of CASES)
       const foot = textOf(await ui.find({ key: 'task-keys-footer' }))
       for (const a of acts.filter(x => x.key)) expect(foot).toContain(`${a.key} ${a.word}`)
       expect(foot).toContain('k j prev/next')
-      // the heavy rule
-      expect(textOf(kids(h).at(-1))).toMatch(/^━{50}$/)
+      // the thin rule
+      expect(textOf(kids(h).at(-1))).toMatch(/^─{50}$/)
       await ui.unmount()
     })
 

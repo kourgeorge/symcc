@@ -91,7 +91,7 @@ for (const id of RICH_IDS) {
     expect(await ui.find({ type: 'Text', text: id }), id).toBeDefined()
     expect((await ui.find({ key: 'vs-state-status' }))?.text, id).toMatch(/^ \S+ .+ $/)
     for (const gone of ['vs-row-status', 'vs-row-now', 'vs-row-stage', 'vs-badge']) expect(await ui.find({ key: gone }), `${id} ${gone}`).toBeUndefined()
-    expect((await ui.find({ key: 'vs-header-rule' }))?.text, id).toMatch(/^━+$/)
+    expect((await ui.find({ key: 'vs-header-rule' }))?.text, id).toMatch(/^─+$/)
     // T-774: the folded Time and cost row sums the task's own tries on one line (no tries: its count, 0)
     const want = ['Details', 'What to do', 'runs' in t && t.runs.length ? `▸ Time and cost ${t.runs.length} tries · ${t.id === 'T-504' ? '25m · 4.6k tokens (0.4×' : '40m · 11.6k tokens (1×'} the usual task)` : '▸ Time and cost 0']
     if (t.history.length) want.push('History (2, newest first)')

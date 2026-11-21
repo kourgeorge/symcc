@@ -1,13 +1,13 @@
 // The 4-line header of a task's page and a scout's page on the Claude Code boards (T-751; the lines themselves are
 // core's, see core/page-header.ts): where you are (Back, and the place in the list with prev/next), the title, the
-// state, the buttons in groups, then a heavy rule.
+// state, the buttons in groups, then a thin rule (T-790).
 // On the terminal every button (Back too) is a `plain` Button drawn "[Label]" in the text color, all alike (T-775; no
 // key inside it): the keys belong to hidden Buttons in a Box drawn `display="none"` (`<id>-key`), as the tab keys and
 // the answer keys, and are listed in the footer only. Desktop and mobile draw native buttons, all secondary. VS Code
 // draws the same 4 lines with its own controls (vsPageHeader), all secondary too.
 import type { RenderChildren } from 'claude-code'
 import type { Seg } from '../../board'
-import { type HeaderButton, type PageFrom, type Place, BACK_ARROW, backText, groupSegLines, headerRule, inGroups, packGroups, PILL_COLOR, pillText, titleLines, whereLine, ITEM_GAP } from '../../core/page-header'
+import { type HeaderButton, type PageFrom, type Place, BACK_ARROW, backText, groupSegLines, headerRule, inGroups, navRow, packGroups, PILL_COLOR, pillText, titleLines, whereLine, ITEM_GAP } from '../../core/page-header'
 import type { PaneParts } from './parts'
 
 /** What a page header shows and what its buttons do. `label`: the task's id or the scout's name; `place`: its place
@@ -152,6 +152,104 @@ export function vsPageHeader(pane: PaneParts, hd: PageHeader): RenderChildren {
       <Box key="vs-actions" flexDirection="row" flexWrap="wrap" columnGap={ITEM_GAP} rowGap={1}>
         {inGroups(hd.buttons).flatMap((g, i) => [...(i ? [<Text key={`vs-gap-${i}`}>{'   '}</Text>] : []), ...g.map(button)])}
       </Box>
+      <Box key="vs-header-rule" flexDirection="column">
+        <Text wrap="truncate" color={C('ide')}>{headerRule(pane.width)}</Text>
+      </Box>
+    </Box>
+  )
+}
+
+/** T-790: what the org-mem page's header shows (the same shape as a task's: where you are, title and subtitle, one action
+ *  row, a thin rule). `right`: the count at the far end of the first row ("60 / 60"); `buttons`: the one action row. */
+export type SimpleHeader = {
+  from: PageFrom
+  right: string
+  title: string
+  subtitle: string
+  buttons: { id: string; label: string; key?: string; onPress: () => void }[]
+  onBack: () => void
+  /** the Back button's element key */
+  backKey: string
+}
+
+/** The header of a page that is not a task or a scout (the org-mem page), on the terminal, desktop and mobile: "‹ [Live]"
+ *  and the count, the title (bold), the subtitle (dim), "[Delete]" buttons, a thin rule. Keys (b and the buttons') belong to
+ *  hidden Buttons in a Box drawn `display="none"`, as the task page's. */
+export function simplePageHeader(pane: PaneParts, hd: SimpleHeader): RenderChildren {
+  const { Box, Text, Button, C, width } = pane
+  const terminal = pane.vs.surface === 'terminal'
+  const where = navRow(hd.from, hd.right, width)
+  const whereRow = (
+    <Box key="hdr-where" flexDirection="row">
+      {[...where.left, { text: ' '.repeat(where.pad) }, ...where.right].map((p, i) =>
+        'go' in p && p.go === 'back' ? (
+          terminal ? (
+            <Button key={hd.backKey} plain label={backText(hd.from)} onPress={hd.onBack}>
+              <Text color={C(PILL_COLOR)}>{p.text}</Text>
+            </Button>
+          ) : (
+            <Button key={hd.backKey} label={backText(hd.from)} variant="secondary" onPress={hd.onBack} />
+          )
+        ) : (
+          <Text key={`hdr-where-${i}`} color={C('inactive')}>{p.text}</Text>
+        ),
+      )}
+    </Box>
+  )
+  const keyed = hd.buttons.filter(b => b.key)
+  return (
+    <Box key="page-header" flexDirection="column">
+      {whereRow}
+      <Text key="hdr-title" bold color={C('text')}>{hd.title}</Text>
+      <Text key="hdr-subtitle" color={C('inactive')}>{hd.subtitle}</Text>
+      {hd.buttons.length ? (
+        <Box key="hdr-buttons" flexDirection="row" gap={ITEM_GAP}>
+          {hd.buttons.map(b =>
+            terminal ? (
+              <Button key={b.id} plain label={b.label} onPress={b.onPress}>
+                <Text color={C(PILL_COLOR)}>{pillText(b)}</Text>
+              </Button>
+            ) : (
+              <Button key={b.id} label={b.label} variant="secondary" onPress={b.onPress} />
+            ),
+          )}
+        </Box>
+      ) : null}
+      <Box key="hdr-keys" display="none">
+        <Button key={`${hd.backKey}-key`} label="b" hotkey="b" onPress={hd.onBack} />
+        {keyed.map(b => (
+          <Button key={`${b.id}-key`} label={b.key!} hotkey={b.key!} onPress={b.onPress} />
+        ))}
+      </Box>
+      <Box key="hdr-rule" flexDirection="column">
+        <Text wrap="truncate" color={C('ide')}>{headerRule(width)}</Text>
+      </Box>
+    </Box>
+  )
+}
+
+/** The same header in VS Code's side panel: "‹" and a back button with the count at the right, the title as a heading,
+ *  the subtitle, secondary buttons, a divider. */
+export function vsSimplePageHeader(pane: PaneParts, hd: SimpleHeader): RenderChildren {
+  const { Box, Text, Button, C } = pane
+  return (
+    <Box key="vs-page-header" flexDirection="column" gap={1}>
+      <Box key="vs-where" flexDirection="row" justifyContent="space-between" flexWrap="wrap">
+        <Box key="vs-back" flexDirection="row" columnGap={1}>
+          <Text color={C('inactive')}>{BACK_ARROW.trim()}</Text>
+          <Button key={hd.backKey} label={backText(hd.from)} variant="secondary" onPress={hd.onBack} />
+        </Box>
+        <Text key="vs-count" color={C('inactive')}>{hd.right}</Text>
+      </Box>
+      <Box key="vs-head" flexDirection="column">
+        <Text key="vs-title" wrap="wrap" bold size="title" color={C('text')}>{hd.title}</Text>
+        <Text key="vs-subtitle" wrap="wrap" size="caption" color={C('inactive')}>{hd.subtitle}</Text>
+      </Box>
+      {hd.buttons.length ? (
+        <Box key="vs-actions" flexDirection="row" flexWrap="wrap" columnGap={ITEM_GAP} rowGap={1}>
+          {hd.buttons.map(b => <Button key={b.id} label={b.label} variant="secondary" onPress={b.onPress} />)}
+        </Box>
+      ) : null}
       <Box key="vs-header-rule" flexDirection="column">
         <Text wrap="truncate" color={C('ide')}>{headerRule(pane.width)}</Text>
       </Box>
