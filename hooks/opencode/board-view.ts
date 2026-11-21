@@ -31,7 +31,7 @@ import {
   type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction, type DefEditField, type TaskVerb, settingsKeys, rolesKeys, kindsKeys, roleEditKeys, defEditFields, roleTools, roleFileText, roleSkipReason, kindFileText, kindSkipReason,
   DEFAULT_ROLE, isCheckerRole, ALWAYS_ON_KINDS, checkerOn, roleNameError, kindNameError, leadScoutNameError, checkStepNow, rowEndText, taskPhase, choiceLines, driveWarning,
   searchTasks, showsHeader, type BoardPage,
-  LIVE_TABS, LIVE_EMPTY, LIVE_INDENT, liveLegend, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, liveBold, liveHeading, liveIndented, liveInner, tabRow, LIVE_VIEW_KEYS, liveKeys, liveBranches, liveLanes, liveLayout, liveStations, liveHeader, liveLabelLine, laneLines, liveOrgMem, liveTrains, trainRows, liveToday, todayLines, searchLine, modeButton, hintLines, roleKeys, rolePromptKeys, ROLE_PROMPTS, ROLE_SLOT, promptsOfRole, type RolePromptKind,
+  LIVE_TABS, LIVE_EMPTY, LIVE_INDENT, liveLegend, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, liveBold, liveHeading, liveIndented, liveInner, tabRow, LIVE_VIEW_KEYS, liveKeys, liveBranches, liveLanes, liveLayout, liveStations, liveHeader, liveLabelSegs, laneLines, liveOrgMem, liveTrains, trainRows, liveToday, todayLines, searchLine, modeButton, hintLines, roleKeys, rolePromptKeys, ROLE_PROMPTS, ROLE_SLOT, promptsOfRole, type RolePromptKind,
 } from '../board'
 import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, brokenLabel, defNamed } from '../core/def-files'
 import { restFrame } from '../core/logo'
@@ -834,9 +834,9 @@ function liveBody(f: ViewFile, cursor: number, nowMs: number, w: number): Body {
   const selected = ids.length ? ids[Math.min(Math.max(0, cursor), ids.length - 1)]! : ''
   b.add([{ text: liveHeader(v, lanes), color: 'text', bold: true }])
   b.add(liveSegs(liveHeading(LIVE_SECTIONS.tasks, w)))
-  b.add([{ text: LIVE_INDENT + (lanes.length ? liveLabelLine(layout) : LIVE_EMPTY), color: 'inactive' }])
   /** A line under a section heading: indented. */
   const under = (xs: readonly LiveSeg[], hit?: PanelHit) => liveSegs(liveIndented(xs), hit)
+  b.add(lanes.length ? under(liveLabelSegs(layout)) : [{ text: LIVE_INDENT + LIVE_EMPTY, color: 'inactive' }])
   /** A row that opens task `id`: "›" in its first column when the cursor is on it (a space there otherwise). */
   const opens = (xs: readonly LiveSeg[], id: string) => {
     const line = under(xs, { open: id })

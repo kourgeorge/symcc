@@ -66,7 +66,7 @@
   const ID_W = 5
   const TITLE_W = 12
   const GAP = 6
-  const LABELS = ['work·', 'check·', 'queue', 'tests', 'merged']
+  const LABELS = ['work✧', 'check✧', 'queue', 'tests', 'merged']
   const LEAD_W = 1 + ID_W + 1 + TITLE_W + 2
 
   function tabRow(active) {
@@ -125,14 +125,15 @@
     L.push('')
     L.push(heading('Tasks'))
     if (s.lanes.length) {
-      L.push(sp(' '.repeat(LEAD_W) + LABELS.map((x, i) => (i < LABELS.length - 1 ? pad(x, GAP + 1) : x)).join(''), 'dim'))
+      // the ✧ after work and check in the accent color (core/live.ts's 'mark' tone)
+      L.push((' '.repeat(LEAD_W) + LABELS.map((x, i) => (i < LABELS.length - 1 ? pad(x, GAP + 1) : x)).join('')).split('✧').map(x => sp(x, 'dim')).join(sp('✧', 'mark')))
       for (const l of s.lanes) L.push(...laneLines(s, l))
     } else L.push('   No task is running right now.')
     L.push('')
     L.push(heading('Today'))
     const d = s.today
     L.push('   ' + sp(`✓ ${d.merged} merged`, 'passed') + sp(`   ↺ ${d.back} sent back   ✗ ${d.failed} failed   Σ ${tok(d.tokens)} tokens`, 'dim'))
-    if (s.lanes.length) L.push('   ' + sp(`· = needs an agent slot   bar: tokens of the task so far, full = usual per task (${tok(USUAL)})`, 'dim'))
+    if (s.lanes.length) L.push('   ' + sp(`✧ = an agent works here (needs an agent slot)   bar: tokens of the task so far, full = usual per task (${tok(USUAL)})`, 'dim'))
     L.push('')
     L.push(heading('Branches'))
     L.push(...branchLines(s))

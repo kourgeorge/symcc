@@ -2,7 +2,7 @@
 // numbers; claude/ui/live.tsx draws them on the terminal panel).
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { liveLanes, liveLayout, laneLines, liveLabelLine, liveStations, liveTrains, trainRows, type LiveTrain, liveToday, todayLines, segText, liveBlink, liveHeader, tabRow, LIVE_TABS, LIVE_EMPTY, LIVE_LEGEND, LIVE_INDENT, liveInner, liveBarLegend, liveLegend } from '../hooks/core/live'
+import { liveLanes, liveLayout, laneLines, liveLabelLine, liveLabelSegs, LIVE_AGENT_MARK, LIVE_TONE, liveStations, liveTrains, trainRows, type LiveTrain, liveToday, todayLines, segText, liveBlink, liveHeader, tabRow, LIVE_TABS, LIVE_EMPTY, LIVE_LEGEND, LIVE_INDENT, liveInner, liveBarLegend, liveLegend } from '../hooks/core/live'
 import { textWidth } from '../hooks/core/stats'
 import { FINISH_STALE_MS } from '../hooks/core/lead'
 import { listKeys } from '../hooks/board'
@@ -245,6 +245,32 @@ const t757Check = (sub: (id: string) => string, warn: (id: string) => boolean) =
   expect(warn('T-806')).toBe(true)
 }
 
+test('T-760: the agent stations end in ✧ (accent color), each name still starts over its mark, and the legend says what ✧ means', () => {
+  expect(LIVE_AGENT_MARK).toBe('✧')
+  expect(textWidth(LIVE_AGENT_MARK)).toBe(1)
+  expect(LIVE_LEGEND).toBe('✧ = an agent works here (needs an agent slot)')
+  expect(LIVE_TONE.mark).toBe(LIVE_TONE.heading)
+  for (const checker of [true, false])
+    for (const width of [100, 80, 60, 50, 40, 32]) {
+      const lanes = liveLanes(view(checker), T0)
+      const l = liveLayout(lanes, liveStations(checker), width)
+      const segs = liveLabelSegs(l)
+      const line = liveLabelLine(l)
+      expect(segText(segs)).toBe(line)
+      expect(line.includes('·')).toBe(false)
+      // only the ✧ marks are in the 'mark' tone; one after work, one after check when the checker is on
+      expect(segs.filter(s => s.tone === 'mark').map(s => s.text)).toEqual(checker ? ['✧', '✧'] : ['✧'])
+      expect(segs.every(s => s.tone === (s.text === '✧' ? 'mark' : 'dim'))).toBe(true)
+      if (width === 100) expect([line.includes('work✧'), line.includes('check✧')]).toEqual([true, checker])
+      // each station name starts over its dot on the lane line
+      const [first] = laneLines(lanes[0]!, l, { nowMs: T0, frame: 0 })
+      const track = segText(first!)
+      const dots = [...track].flatMap((c, i) => ('●◉◎○'.includes(c) ? [i] : []))
+      const starts = [...line].flatMap((c, i, all) => (c !== ' ' && (i === 0 || all[i - 1] === ' ') ? [i] : []))
+      expect([width, starts]).toEqual([width, dots])
+    }
+})
+
 test('T-757: lanes show the whole task\'s tokens, the bar full at the usual per task, the warning past twice it (core)', () => {
   const lanes = liveLanes({ tasks: T757 as never[], checker: true }, T0)
   const lane = (id: string) => lanes.find(x => x.id === id)!
@@ -354,8 +380,22 @@ test('T-690: the Live tab draws at a normal and a narrow width with nothing cut,
     // T-758: ▍Today holds only the figures line (no "next up" line, no "today" label)
     expect(lines[lines.findIndex(l => l === '▍Today') + 1]?.startsWith(`${LIVE_INDENT}✓ 1 merged`)).toBe(true)
     expect(lines.some(l => l.trimStart().startsWith('next up') || l.trimStart().startsWith('today'))).toBe(false)
-    expect(lines).toContain(LIVE_LEGEND)
+    // (T-760: a narrow panel wraps the mark's legend line, cut at a space)
+    if (bodyColumns === 80) expect(lines).toContain(LIVE_LEGEND)
+    else expect(lines.some(l => l.startsWith('✧ = an agent works here'))).toBe(true)
     expect(lines.some(l => l.includes('t l s c views'))).toBe(true)
+    // T-760: the lane header ends the agent stations in ✧ (over their marks, as liveLabelLine), each ✧ in the heading's color
+    const tree = (await ui.drawn()) as Node
+    const nodes = (n: unknown): Node[] => (!n || typeof n !== 'object' ? [] : [n as Node, ...((n as Node).children ?? []).flatMap(nodes)])
+    const labelLine = lines[2]
+    expect(labelLine?.includes(bodyColumns === 80 ? 'work✧' : '✧')).toBe(true)
+    expect(labelLine?.includes('·')).toBe(false)
+    const labels = nodes(tree).find(n => n.type === 'Text' && textOf(n) === labelLine)
+    const head = nodes(tree).find(n => n.type === 'Text' && textOf(n) === '▍Tasks')?.children?.[0] as Node | undefined
+    expect(typeof head?.props?.color).toBe('string')
+    const pieces = (labels?.children ?? []) as Node[]
+    expect(pieces.filter(c => textOf(c) === '✧').map(c => c.props?.color)).toEqual([head?.props?.color, head?.props?.color])
+    expect(pieces.filter(c => /[a-z]/.test(textOf(c))).every(c => c.props?.color !== head?.props?.color)).toBe(true)
     // the lanes in the order they entered doing
     const order = (await ui.findAll({ type: 'Button' })).map(b => String(b.key)).filter(k => k.startsWith('live:'))
     expect(order).toEqual(['live:T-684', 'live:T-685', 'live:T-686', 'live:T-688', 'live:T-687'])
@@ -448,8 +488,10 @@ for (const checker of [true, false])
       expect(svg?.type, id).toBe('Svg')
       expect(String(svg?.props.alt).endsWith(`: ${tracks[i]}`), id).toBe(true)
       const source = String(svg?.props.source)
-      expect(/>(check|chk|c)·</.test(source), id).toBe(checker)
-      expect(/>(work|wrk|w)·</.test(source), id).toBe(true)
+      // T-760: the agent stations end in ✧, drawn in the accent color
+      expect(/>(check|chk|c)<tspan fill="#[0-9a-f]+">✧<\/tspan></.test(source), id).toBe(checker)
+      expect(/>(work|wrk|w)<tspan fill="#[0-9a-f]+">✧<\/tspan></.test(source), id).toBe(true)
+      expect(source.includes('·'), id).toBe(false)
       // the current station blinks, steady with reduced motion
       expect(source.includes(BLINK_CSS) && source.includes('class="cur"'), id).toBe(true)
     }

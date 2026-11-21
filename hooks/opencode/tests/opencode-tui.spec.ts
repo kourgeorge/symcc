@@ -2636,6 +2636,27 @@ function liveTasks(): SymccTask[] {
   ]
 }
 
+test('T-760: the OpenCode Live tab ends work and check in ✧ (in the heading color, lined up as the terminal\'s), with the new legend', () => {
+  const f0 = viewFile()
+  const whole = liveTasks()
+  const f: ViewFile = { ...f0, view: { ...f0.view, tasks: whole.map(t => viewTask(t)), checker: true, max_parallel: 3 } }
+  for (const w of [120, 50]) {
+    const d = panelLines(parseViewFile(viewFileText(f)), { tab: 'live', opened: '', cursor: 0 }, NOW, w)
+    const at = d.lines.findIndex(l => lineText(l) === '▍Tasks')
+    const labels = d.lines[at + 1]!
+    const lanes = liveLanes(f.view, NOW)
+    expect(lineText(labels)).toBe(LIVE_INDENT + liveLabelLine(liveLayout(lanes, liveStations(true), liveInner(w))))
+    if (w === 120) expect(lineText(labels).includes('work✧') && lineText(labels).includes('check✧')).toBe(true)
+    expect(lineText(labels).includes('·')).toBe(false)
+    const heading = d.lines[at]![0]!.color
+    expect(labels.filter(x => x.text === '✧').map(x => x.color)).toEqual([heading, heading])
+    expect(labels.filter(x => /[a-z]/.test(x.text)).every(x => x.color === 'inactive')).toBe(true)
+    const texts = d.lines.map(lineText)
+    if (w === 120) expect(texts).toContain(LIVE_INDENT + '✧ = an agent works here (needs an agent slot)   ' + liveBarLegend(lanes.find(l => l.usual)!.usual!))
+    else expect(texts.some(t => t.startsWith(LIVE_INDENT + '✧ = an agent works here'))).toBe(true)
+  }
+})
+
 test('T-692: the Live tab draws the terminal panel\'s lanes and today (core/live.ts) for the same board, from the slim view file; a narrow panel cuts nothing', () => {
   const f0 = viewFile()
   const whole = liveTasks()

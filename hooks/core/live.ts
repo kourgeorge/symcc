@@ -30,19 +30,24 @@ function marksOf(t: { history?: readonly { kind: string; at?: string }[] }): rea
 /** The stations of a lane, in the order a task passes them. */
 export type LiveStation = 'work' | 'check' | 'queue' | 'tests' | 'merged'
 export const LIVE_STATIONS: readonly LiveStation[] = ['work', 'check', 'queue', 'tests', 'merged']
-/** The line under the lanes that says what the "·" after a station name means. */
-export const LIVE_LEGEND = '· = needs an agent slot'
+/** T-760: the mark after a station name where an agent works (work, check): those stations need an agent slot. */
+export const LIVE_AGENT_MARK = '✧'
+/** The line under the lanes that says what LIVE_AGENT_MARK after a station name means. */
+export const LIVE_LEGEND = `${LIVE_AGENT_MARK} = an agent works here (needs an agent slot)`
 /** T-757: what the token bar means, with the board's usual tokens per merged task. */
 export const liveBarLegend = (usual: number): string => `bar: tokens of the task so far, full = usual per task (${fmtTokens(usual)})`
 /** The legend under the lanes in `width` columns: LIVE_LEGEND, then (when the usual tokens per task are known, so the
- *  lanes draw bars) what the bar means; on one line when it fits, else on more (cut at spaces, never wider). */
+ *  lanes draw bars) what the bar means; on one line when it fits, else on more (each cut at spaces, never wider). */
 export function liveLegend(lanes: readonly Pick<LiveLane, 'usual'>[], width: number): string[] {
   const usual = lanes.find(l => l.usual)?.usual
-  if (!usual) return [LIVE_LEGEND]
+  const w = Math.max(1, Math.floor(width))
+  // T-760: the mark's line is longer now, so a narrow panel wraps it too
+  const mark = wrapLine(LIVE_LEGEND, w)
+  if (!usual) return mark
   const bar = liveBarLegend(usual)
   const one = `${LIVE_LEGEND}   ${bar}`
   if (textWidth(one) <= width) return [one]
-  return [LIVE_LEGEND, ...wrapLine(bar, Math.max(1, Math.floor(width)))]
+  return [...mark, ...wrapLine(bar, w)]
 }
 /** What the Live tab says when no task is in doing. */
 export const LIVE_EMPTY = 'No task is running right now.'
@@ -229,11 +234,12 @@ export function liveHeader(view: LiveView, lanes: readonly LiveLane[]): string {
 export const liveBlink = (frame: number, steady = false): string => (steady || frame % 2 === 0 ? '◉' : '◎')
 
 /** How a lane's text is colored: each client picks its own colors for these. */
-export type LiveTone = 'id' | 'title' | 'passed' | 'current' | 'future' | 'text' | 'dim' | 'warning' | 'bar' | 'heading'
+export type LiveTone = 'id' | 'title' | 'passed' | 'current' | 'future' | 'text' | 'dim' | 'warning' | 'bar' | 'heading' | 'mark'
 /** A piece of a lane's line in one tone. */
 export type LiveSeg = { text: string; tone: LiveTone }
-/** Each tone's color name, the same in every client; a section heading ("▍Tasks") has the task page's heading color. */
-export const LIVE_TONE: Record<LiveTone, string> = { id: 'claude', title: 'text', passed: 'success', current: 'ide', future: 'inactive', text: 'text', dim: 'inactive', warning: 'warning', bar: 'ide', heading: 'suggestion' }
+/** Each tone's color name, the same in every client; a section heading ("▍Tasks") and (T-760) the agent mark "✧" have
+ *  the task page's heading color. */
+export const LIVE_TONE: Record<LiveTone, string> = { id: 'claude', title: 'text', passed: 'success', current: 'ide', future: 'inactive', text: 'text', dim: 'inactive', warning: 'warning', bar: 'ide', heading: 'suggestion', mark: 'suggestion' }
 /** Whether a tone is drawn bold. */
 export const liveBold = (tone: LiveTone): boolean => tone === 'id' || tone === 'current' || tone === 'heading'
 
@@ -255,9 +261,9 @@ export const liveIndented = (xs: readonly LiveSeg[]): LiveSeg[] => [{ text: LIVE
 export type LiveLayout = { width: number; idW: number; titleW: number; gap: number; labels: string[]; rightW: number; sep: number; stations: LiveStation[] }
 
 const LABELS: Record<LiveStation, string>[] = [
-  { work: 'work·', check: 'check·', queue: 'queue', tests: 'tests', merged: 'merged' },
-  { work: 'wrk·', check: 'chk·', queue: 'que', tests: 'tst', merged: 'mrg' },
-  { work: 'w·', check: 'c·', queue: 'q', tests: 't', merged: 'm' },
+  { work: 'work✧', check: 'check✧', queue: 'queue', tests: 'tests', merged: 'merged' },
+  { work: 'wrk✧', check: 'chk✧', queue: 'que', tests: 'tst', merged: 'mrg' },
+  { work: 'w✧', check: 'c✧', queue: 'q', tests: 't', merged: 'm' },
 ]
 const MAX_GAP = 8
 const MIN_GAP = 2
@@ -298,8 +304,13 @@ const nameWidth = (l: LiveLayout) => l.idW + (l.titleW ? 1 + l.titleW : 0)
 
 /** The station names' line over the lanes, each name starting over its mark. */
 export function liveLabelLine(l: LiveLayout): string {
+  return segText(liveLabelSegs(l))
+}
+/** T-760: liveLabelLine in pieces: the names dim, each LIVE_AGENT_MARK in the 'mark' tone (the accent color). */
+export function liveLabelSegs(l: LiveLayout): LiveSeg[] {
   const lead = ' '.repeat(1 + nameWidth(l) + l.sep)
-  return lead + l.labels.map((s, i) => (i < l.labels.length - 1 ? padWidth(s, l.gap + 1) : s)).join('')
+  const text = lead + l.labels.map((s, i) => (i < l.labels.length - 1 ? padWidth(s, l.gap + 1) : s)).join('')
+  return text.split(LIVE_AGENT_MARK).flatMap((x, i): LiveSeg[] => [...(i ? [{ text: LIVE_AGENT_MARK, tone: 'mark' as const }] : []), ...(x ? [{ text: x, tone: 'dim' as const }] : [])])
 }
 
 /** A bar of `cells` blocks for `value` against `full`: "▕████░░░░▏". */

@@ -33,8 +33,12 @@ if (/<link\b[^>]*href="(https?:)?\/\//.test(page)) bad('home page: an outside st
 const view = name => new RegExp(`data-view="${name}" data-still>([\\s\\S]*?)(data-view=|</section>)`).exec(page)?.[1] ?? ''
 const text = html => html.replace(/<[^>]*>/g, '').replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
 const board = text(view('board'))
-for (const w of ['▍Tasks', '▍Branches', '▍Today', 'work·', 'check·', 'queue', 'tests', 'merged', 'T-740', 'try 2/3', '↺×1'])
+for (const w of ['▍Tasks', '▍Branches', '▍Today', 'work✧', 'check✧', 'queue', 'tests', 'merged', 'T-740', 'try 2/3', '↺×1'])
   if (!board.includes(w)) bad(`still frame: the board has no "${w}"`)
+// (T-760) the agent mark is ✧ (in the accent color), not ·, and the legend says what it means
+if (/work·|check·/.test(board)) bad('still frame: the board still marks the agent stations with ·')
+if (!board.includes('✧ = an agent works here (needs an agent slot)')) bad('still frame: the board has no ✧ legend')
+if (!view('board').includes('<span class="t-mark">✧</span>')) bad('still frame: the ✧ marks are not drawn in the accent color')
 if (!text(view('live')).includes('▍Organizational memory')) bad('still frame: the Live tab has no ▍Organizational memory')
 const chat = text(view('chat'))
 for (const w of ['❯ there is no clear visual separation between the sections of the live page, show some ideas', '⏺ Four looks', 'T-747 try 1 → checks passed', 'symcc: T-747 done', 'scout gaps-bot found'])

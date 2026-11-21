@@ -997,7 +997,7 @@ indented by 3 spaces (VS Code shows the same names as bold headings):
 
 ```
 ▍Tasks
-                        work·    check·   queue    tests    merged
+                        work✧    check✧   queue    tests    merged
     T-684 /symcc-doc…   ●━━━━━━━━●━━━━━━━━◉────────○────────○      #2
      change try 2/3     ▕████████░░░░░▏ 1.1M  ↺×1
 ```
@@ -1009,8 +1009,9 @@ indented by 3 spaces (VS Code shows the same names as bold headings):
   `checker` setting is off (its prep step then counts as work). Passed stations are `●━━`, the
   ones ahead `──○`, and the current one blinks between `◉` and `◎` (Claude Code doesn't tell
   plugins about reduced motion, so it always blinks; the tab redraws itself every second while
-  it is shown). The `·` after work and check means those stations need an agent slot (a
-  worker or a checker); queue and tests use none, so there can be more lanes than
+  it is shown). The `✧` after work and check (in the headings' color) means an agent works there, so
+  those stations need an agent slot (a worker or a checker); the legend under the lanes says
+  `✧ = an agent works here (needs an agent slot)`; queue and tests use none, so there can be more lanes than
   `max_parallel`.
 - On the right: the time at the current station, or the place in the merge queue (`#2`).
 - The second row: the kind, the try (`try 2/3`, auto retries after failing tests included),

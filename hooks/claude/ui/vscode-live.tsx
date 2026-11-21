@@ -14,7 +14,7 @@
 // T-727: under the lanes, the Branches section (core's liveBranches) drawn with real lines: see branchesVs.
 // T-747: each section has a bold heading with the terminal's names (core's LIVE_SECTIONS): Tasks, Today, Branches,
 // Organizational memory (that one a link to all notes).
-import { type BranchRow, type LiveBranches, liveBranches, LIVE_EMPTY, liveLegend, LIVE_SECTIONS, type LiveLane, liveInner, type LiveLayout, type LiveSeg, LIVE_TONE, laneLines, liveHeader, liveLanes, liveLayout, liveOrgMem, liveStations, liveToday, liveTrains, segText, todayLines, trainRows } from '../../core/live'
+import { type BranchRow, type LiveBranches, liveBranches, LIVE_EMPTY, LIVE_AGENT_MARK, liveLegend, LIVE_SECTIONS, type LiveLane, liveInner, type LiveLayout, type LiveSeg, LIVE_TONE, laneLines, liveHeader, liveLanes, liveLayout, liveOrgMem, liveStations, liveToday, liveTrains, segText, todayLines, trainRows } from '../../core/live'
 import { panelValues, type $ } from '../panel'
 import type { PaneParts } from './parts'
 import { LIVE_TICK_MS, branchKey, laneKey, liveTick, newestKey, openOrgMemPage, topicKey, trainKey } from './live'
@@ -24,7 +24,7 @@ import { ORG_MEM_MAX_LINES, orgMemCount, orgMemNearCap, orgMemShortDay, type Org
 /** The pixels per text column in the drawings (about one character of VS Code's panel font). */
 const COL_PX = 8
 /** The drawings' colors: an image can't read the theme, so hues that read on light and dark themes alike. */
-const INK = { passed: '#3fb950', current: '#3794ff', future: '#8b949e', label: '#8b949e', warning: '#d29922', bar: '#3794ff', empty: '#8b949e' }
+const INK = { mark: '#b79cff', passed: '#3fb950', current: '#3794ff', future: '#8b949e', label: '#8b949e', warning: '#d29922', bar: '#3794ff', empty: '#8b949e' }
 
 /** The CSS of a lane's track: the current station blinks, steady with reduced motion. */
 export const BLINK_CSS = '@keyframes symcc-blink{50%{opacity:.25}}.cur{animation:symcc-blink 1s steps(1) infinite}@media (prefers-reduced-motion: reduce){.cur{animation:none}}'
@@ -45,7 +45,7 @@ export function trackSvg(lane: Pick<LiveLane, 'at'>, l: LiveLayout): { source: s
     if (i < lane.at) parts.push(`<circle cx="${x}" cy="${y}" r="${r}" fill="${INK.passed}"/>`)
     else if (i === lane.at) parts.push(`<circle class="cur" cx="${x}" cy="${y}" r="${r + 1}" fill="${INK.current}" stroke="${INK.current}" stroke-width="2" fill-opacity=".85"/>`)
     else parts.push(`<circle cx="${x}" cy="${y}" r="${r - 1}" fill="none" stroke="${INK.future}" stroke-width="1.5"/>`)
-    parts.push(`<text x="${x}" y="${height - 2}" text-anchor="${i ? (i === l.stations.length - 1 ? 'end' : 'middle') : 'start'}" font-family="sans-serif" font-size="10" fill="${i === lane.at ? INK.current : INK.label}"${i === lane.at ? ' font-weight="bold"' : ''}>${l.labels[i] ?? ''}</text>`)
+    parts.push(`<text x="${x}" y="${height - 2}" text-anchor="${i ? (i === l.stations.length - 1 ? 'end' : 'middle') : 'start'}" font-family="sans-serif" font-size="10" fill="${i === lane.at ? INK.current : INK.label}"${i === lane.at ? ' font-weight="bold"' : ''}>${(l.labels[i] ?? '').split(LIVE_AGENT_MARK).join(`<tspan fill="${INK.mark}">${LIVE_AGENT_MARK}</tspan>`)}</text>`)
   })
   return { source: `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${parts.join('')}</svg>`, width, height }
 }

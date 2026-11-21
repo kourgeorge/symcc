@@ -145,6 +145,7 @@ main.home h3 { font-size: 1.1rem; }
 .t-bar { color: var(--t-cur); }
 .t-warning { color: var(--t-warn); }
 .t-heading { color: var(--t-head); font-weight: 700; }
+.t-mark { color: var(--t-head); }
 .t-lead { color: var(--fg); }
 .t-tab-on { color: var(--fg); font-weight: 700; text-decoration: underline; }
 .t-file { color: var(--t-ok); }
