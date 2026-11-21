@@ -5,7 +5,7 @@
 import type { SymccMode, SymccTask } from '../../types'
 import { type BoardTask, DEFAULT_AUTO_RETRIES, emptyBoard, kindOf, isInvestigation, modeOf } from './board-file'
 import { taskPhase, type PhaseStage } from './phase'
-import { handedBack } from './lead'
+import { handedBack, shownStatus } from './lead'
 import { STAGE_LINE } from './events'
 import { cutTitle, median, padWidth, textWidth } from './stats'
 import { fmtTokens, sumTokens, tokenCount } from './runs'
@@ -143,14 +143,23 @@ function stationSince(t: BoardTask, station: LiveStation, startMs: number | unde
   return found ?? (station === 'check' ? ms(t.runs?.[t.runs.length - 1]?.ended) : undefined) ?? ms(t.checking?.at)
 }
 
-/** The lanes of the Live tab: one per task in doing (and only those), the one that entered doing first at the top. */
+/** When the approve (or files-merge) running on task `t` (in review or waiting) started: its last "prep started" line
+ *  after its try ended, else its check step's mark. */
+function approveSince(t: BoardTask, endMs: number | undefined): number | undefined {
+  const word = STAGE_LINE.prep!
+  const preps = (t.history ?? []).filter(h => h.kind === 'stage' && h.text.includes(`: ${word}`)).map(h => ms(h.at)).filter((n): n is number => n !== undefined && (endMs === undefined || n >= endMs))
+  return preps.length ? Math.max(...preps) : ms(t.checking?.at)
+}
+
+/** The lanes of the Live tab: one per task the board shows as doing (shownStatus: a task in doing, or one in review or
+ *  waiting whose approve or merge runs, with a fresh check step), the one that entered doing (or whose approve began) first at the top. */
 export function liveLanes(view: LiveView, nowMs: number): LiveLane[] {
   const checker = view.checker === true
   const stations = liveStations(checker)
   const usual = usualTokens(view.tasks)
   const retries = view.auto_retries ?? DEFAULT_AUTO_RETRIES
   const lanes = view.tasks
-    .filter(t => t.status === 'doing')
+    .filter(t => shownStatus(t as BoardTask, nowMs) === 'doing')
     .map((x): LiveLane => {
       const t = x as BoardTask
       let stage: PhaseStage = taskPhase(t, nowMs).stage ?? 'worker'
@@ -158,8 +167,9 @@ export function liveLanes(view: LiveView, nowMs: number): LiveLane[] {
       const station = stationOf(stage, checker)
       const run = t.runs?.[t.runs.length - 1]
       const startMs = ms(run?.started)
-      const enteredMs = startMs ?? ms(t.updated_at) ?? ms(t.created_at) ?? 0
-      const sinceMs = stationSince(t, station, startMs)
+      const approving = t.status !== 'doing'
+      const enteredMs = (approving ? approveSince(t, ms(run?.ended)) : startMs) ?? ms(t.updated_at) ?? ms(t.created_at) ?? 0
+      const sinceMs = stationSince(t, station, approving ? enteredMs : startMs)
       const tryNo = Math.max(1, Number(t.attempts) || 1)
       const auto = Number(t.test_tries ?? 0) || 0
       const place = stage === 'queue' ? t.checking?.place : undefined

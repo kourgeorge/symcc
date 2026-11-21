@@ -2468,6 +2468,23 @@ test('T-692: the Live tab draws the terminal panel\'s lanes, next up and today (
   expect(panelLines(none, { tab: 'live', opened: '', cursor: 0 }, NOW, 100).lines.map(lineText)).toContain(LIVE_EMPTY)
 })
 
+test('T-709: the Live tab shows a lane for an approved task in review while its tests run (as the Tasks tab counts it in doing)', () => {
+  const f0 = viewFile()
+  const ago = (s: number) => new Date(NOW - s * 1000).toISOString()
+  const approved = { id: 'T-630', title: 'Approved, in its tests', details: '', files: [], status: 'review', note: '', question: null, order: 30, after: [], attempts: 1, history: [], branch: null, created_at: ago(9000), updated_at: ago(60), runs: [{ started: ago(2400), ended: ago(1200) }], checking: { step: 'testing', at: ago(5) } } as unknown as SymccTask
+  const tasks = [...liveTasks().filter(t => t.status !== 'doing'), approved]
+  const f: ViewFile = { ...f0, view: { ...f0.view, tasks: tasks.map(t => viewTask(t)), checker: true, max_parallel: 3 } }
+  const d = panelLines(parseViewFile(viewFileText(f)), { tab: 'live', opened: '', cursor: 0 }, NOW, 120)
+  const texts = d.lines.map(lineText)
+  expect(texts.includes(LIVE_EMPTY)).toBe(false)
+  expect(d.ids).toEqual(['T-630'])
+  const lane = liveLanes({ ...f.view, tasks }, NOW)
+  expect(lane.map(l => l.station)).toEqual(['tests'])
+  // its check step gone stale: no lane, the empty state again
+  const stale: ViewFile = { ...f, view: { ...f.view, tasks: tasks.map(t => (t.id === 'T-630' ? ({ ...t, checking: { step: 'testing', at: ago(3600) } } as unknown as SymccTask) : t)).map(t => viewTask(t)) } }
+  expect(panelLines(parseViewFile(viewFileText(stale)), { tab: 'live', opened: '', cursor: 0 }, NOW, 120).lines.map(lineText)).toContain(LIVE_EMPTY)
+})
+
 test('T-692: in the TUI, l (or a click on the Live tab) shows the Live tab; ↓ and Enter, or a click on a lane, open that task\'s page', async () => {
   const f0 = viewFile()
   const f: ViewFile = { ...f0, view: { ...f0.view, tasks: liveTasks().map(t => viewTask(t)), checker: true } }
