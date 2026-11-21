@@ -204,6 +204,7 @@ async function startNewProject(host: Host, tell: (text: string) => void, here = 
   await change(host, b => { const on = { ...b, enabled: true }; return [on, on] as [typeof b, typeof b] })
   if (!here) await startOffHere(host).catch(() => undefined)
   if (S.offHere) {
+    startTimers(host)
     await publish(host, await load(host))
     return `${S.N.name} already runs in another window. /${S.N.name}-enable here turns it on in this one too.`
   }
