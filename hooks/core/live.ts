@@ -7,7 +7,7 @@ import { type BoardTask, DEFAULT_AUTO_RETRIES, emptyBoard, kindOf, isInvestigati
 import { taskPhase, type PhaseStage } from './phase'
 import { handedBack, shownStatus } from './lead'
 import { STAGE_LINE } from './events'
-import { cutTitle, median, padWidth, textWidth } from './stats'
+import { cutTitle, median, padWidth, textWidth, wrapLine } from './stats'
 import { fmtTokens, sumTokens, tokenCount } from './runs'
 import { type KeyHint, LIVE_VIEW_KEYS, hintLineText, hintLines, rowDuration, waitOrder } from './panel'
 import { ORG_MEM_EMPTY, ORG_MEM_MAX_LINES, TOPIC_UNSORTED, orgMemNearCap, orgMemNewest, orgMemSectionKeys, orgMemShortDay, orgMemTopicCounts, type OrgMemNote } from './org-mem'
@@ -32,6 +32,18 @@ export type LiveStation = 'work' | 'check' | 'queue' | 'tests' | 'merged'
 export const LIVE_STATIONS: readonly LiveStation[] = ['work', 'check', 'queue', 'tests', 'merged']
 /** The line under the lanes that says what the "·" after a station name means. */
 export const LIVE_LEGEND = '· = needs an agent slot'
+/** T-757: what the token bar means, with the board's usual tokens per merged task. */
+export const liveBarLegend = (usual: number): string => `bar: tokens of the task so far, full = usual per task (${fmtTokens(usual)})`
+/** The legend under the lanes in `width` columns: LIVE_LEGEND, then (when the usual tokens per task are known, so the
+ *  lanes draw bars) what the bar means; on one line when it fits, else on more (cut at spaces, never wider). */
+export function liveLegend(lanes: readonly Pick<LiveLane, 'usual'>[], width: number): string[] {
+  const usual = lanes.find(l => l.usual)?.usual
+  if (!usual) return [LIVE_LEGEND]
+  const bar = liveBarLegend(usual)
+  const one = `${LIVE_LEGEND}   ${bar}`
+  if (textWidth(one) <= width) return [one]
+  return [LIVE_LEGEND, ...wrapLine(bar, Math.max(1, Math.floor(width)))]
+}
 /** What the Live tab says when no task is in doing. */
 export const LIVE_EMPTY = 'No task is running right now.'
 /** The stations shown: check only when the checker setting is on. */
@@ -80,9 +92,10 @@ export type LiveView = { tasks: SymccTask[]; checker?: boolean; auto_retries?: n
 /**
  * One lane: a task in doing. `station` is where it is (`at` its place in `stations`); `sinceMs` when it got there;
  * `place` its place in the merge queue (in the queue only); `tryNo`/`tries` its try and how many it may have
- * (its auto retries after failing tests included); `tokens` what its current try has recorded (a running worker's
- * tokens are only recorded when it hands back, so none while it works); `usual` the board's usual tokens per
- * merged task; `sentBack` how often the checker sent it back; `enteredMs` when its current doing spell began (its
+ * (its auto retries after failing tests included); `tokens` what the whole task has recorded so far, all its tries
+ * (a running worker's tokens are only recorded when it hands back, so none for its try while it works: then `more`
+ * is set and `tokens` is the earlier tries' sum, or left out when there is none); `usual` the board's usual tokens per
+ * merged task;`sentBack` how often the checker sent it back; `enteredMs` when its current doing spell began (its
  * current try's start); `agent` whether an agent (its worker or checker) runs on it now.
  */
 export type LiveLane = {
@@ -98,6 +111,7 @@ export type LiveLane = {
   tryNo: number
   tries: number
   tokens?: number
+  more?: boolean
   usual?: number
   sentBack: number
   enteredMs: number
@@ -178,6 +192,10 @@ export function liveLanes(view: LiveView, nowMs: number): LiveLane[] {
       const tryNo = Math.max(1, Number(t.attempts) || 1)
       const auto = Number(t.test_tries ?? 0) || 0
       const place = stage === 'queue' ? t.checking?.place : undefined
+      // T-757: the whole task's tokens (every try); the current try's are known only once it hands back
+      const runs = t.runs ?? []
+      const more = !!run && !run.tokens
+      const total = tokenCount(sumTokens(runs.map(r => r.tokens)))
       return {
         id: t.id,
         title: t.title,
@@ -190,7 +208,8 @@ export function liveLanes(view: LiveView, nowMs: number): LiveLane[] {
         ...(place ? { place } : {}),
         tryNo,
         tries: Math.max(tryNo, tryNo - auto + retries),
-        ...(run?.tokens ? { tokens: tokenCount(run.tokens) } : {}),
+        ...(total > 0 ? { tokens: total } : {}),
+        ...(more && total > 0 ? { more } : {}),
         ...(usual ? { usual } : {}),
         sentBack: (t.history ?? []).filter(h => h.kind === 'checker-problems').length,
         enteredMs,
@@ -304,9 +323,10 @@ export const segText = (xs: readonly LiveSeg[]): string => xs.map(x => x.text).j
  * A lane's two lines as segments, never wider than the layout's width (unless even the tightest layout is wider):
  * 1. " T-684 /symcc-doc…  ●━━━━━━━━●━━━━━━━━◉────────○────────○      #2": passed stations ●━━, the current one blinking
  *    (`frame`, liveBlink), future ──○; the right column the queue place or the time at the station;
- * 2. "  change try 2/3     ▕████████░░░░░▏ 1.1M  ↺×1": kind and try, the current try's token bar against twice the
- *    board's usual tokens per merged task (warning past it, with ⚠), and the checker's send-backs. Parts that don't fit
- *    are left out (the bar first, then the kind), never cut. A running worker's tokens are known only at its hand-back.
+ * 2. "  change try 2/3     ▕████████░░░░░▏ 1.1M  ↺×1": kind and try, the whole task's token bar (all its tries) against
+ *    the board's usual tokens per merged task (full at the usual, staying full past it; warning past twice it, with ⚠),
+ *    and the checker's send-backs. Parts that don't fit are left out (the bar first, then the kind), never cut. A running
+ *    worker's tokens are known only at its hand-back: until then the earlier tries' sum with " + …", or "tokens at hand-back".
  */
 export function laneLines(lane: LiveLane, l: LiveLayout, o: { nowMs: number; frame: number; steady?: boolean }): [LiveSeg[], LiveSeg[]] {
   const sep = ' '.repeat(l.sep)
@@ -328,7 +348,13 @@ export function laneLines(lane: LiveLane, l: LiveLayout, o: { nowMs: number; fra
     if (form === 'none') return []
     if (lane.tokens === undefined) return [{ text: 'tokens at hand-back', tone: 'dim' }]
     const cells = Math.min(13, Math.max(4, trackW - 2))
-    return segs(form === 'bar' && lane.usual !== undefined && { text: tokenBar(lane.tokens, 2 * lane.usual, cells) + ' ', tone: over ? 'warning' : 'bar' }, { text: fmtTokens(lane.tokens), tone: over ? 'warning' : 'text' }, over && { text: ' ⚠', tone: 'warning' })
+    // T-757: full bar = the usual tokens per task (it stays full past it); the warning only past twice the usual
+    return segs(
+      form === 'bar' && lane.usual !== undefined && { text: tokenBar(lane.tokens, lane.usual, cells) + ' ', tone: over ? 'warning' : 'bar' },
+      { text: fmtTokens(lane.tokens), tone: over ? 'warning' : 'text' },
+      lane.more && { text: ' + …', tone: 'dim' },
+      over && { text: ' ⚠', tone: 'warning' },
+    )
   }
   const tries: LiveSeg[][] = []
   for (const withKind of [true, false])

@@ -13,7 +13,7 @@
 // branch (commits ahead, how far behind), each task row a row Button that opens its task.
 // T-747: each section (Tasks, Today, Branches, Organizational memory) starts with a "▍Name" heading (core's
 // liveHeading), its lines indented by LIVE_INDENT, one empty line between sections.
-import { LIVE_EMPTY, LIVE_INDENT, LIVE_LEGEND, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, laneLines, liveBold, liveHeading, liveIndented, liveInner, liveBranches, liveHeader, liveKeys, liveLabelLine, liveLanes, liveLayout, liveOrgMem, liveStations, liveToday, liveTrains, nextUpLine, todayLines, trainRows } from '../../core/live'
+import { LIVE_EMPTY, LIVE_INDENT, liveLegend, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, laneLines, liveBold, liveHeading, liveIndented, liveInner, liveBranches, liveHeader, liveKeys, liveLabelLine, liveLanes, liveLayout, liveOrgMem, liveStations, liveToday, liveTrains, nextUpLine, todayLines, trainRows } from '../../core/live'
 import { footerRule } from '../../board'
 import { S, workers } from '../../app/state'
 import { type $, panelValues } from '../panel'
@@ -181,7 +181,7 @@ export function livePage($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
         <Text key={`live-om-keys-${i}`} color={C('inactive')}>{LIVE_INDENT + k}</Text>
       ))}
       <Text key="live-foot-rule" color={C('subtle')}>{footerRule(width)}</Text>
-      {lanes.length ? <Text key="live-legend" color={C('inactive')}>{LIVE_LEGEND}</Text> : null}
+      {lanes.length ? liveLegend(lanes, width).map((x, i) => <Text key={i ? `live-legend-${i}` : 'live-legend'} color={C('inactive')}>{x}</Text>) : null}
       {keyLines(liveKeys(), 'live-hint')}
     </Box>
   )

@@ -31,7 +31,7 @@ import {
   type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction, type DefEditField, type TaskVerb, settingsKeys, rolesKeys, kindsKeys, roleEditKeys, defEditFields, roleTools, roleFileText, roleSkipReason, kindFileText, kindSkipReason,
   DEFAULT_ROLE, isCheckerRole, ALWAYS_ON_KINDS, checkerOn, roleNameError, kindNameError, leadScoutNameError, checkStepNow, rowEndText, taskPhase, choiceLines, driveWarning,
   searchTasks, showsHeader, type BoardPage,
-  LIVE_TABS, LIVE_EMPTY, LIVE_INDENT, LIVE_LEGEND, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, liveBold, liveHeading, liveIndented, liveInner, tabRow, LIVE_VIEW_KEYS, liveKeys, liveBranches, liveLanes, liveLayout, liveStations, liveHeader, liveLabelLine, laneLines, liveOrgMem, liveTrains, trainRows, nextUpLine, liveToday, todayLines, searchLine, modeButton, hintLines, roleKeys, rolePromptKeys, ROLE_PROMPTS, ROLE_SLOT, promptsOfRole, type RolePromptKind,
+  LIVE_TABS, LIVE_EMPTY, LIVE_INDENT, liveLegend, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, liveBold, liveHeading, liveIndented, liveInner, tabRow, LIVE_VIEW_KEYS, liveKeys, liveBranches, liveLanes, liveLayout, liveStations, liveHeader, liveLabelLine, laneLines, liveOrgMem, liveTrains, trainRows, nextUpLine, liveToday, todayLines, searchLine, modeButton, hintLines, roleKeys, rolePromptKeys, ROLE_PROMPTS, ROLE_SLOT, promptsOfRole, type RolePromptKind,
 } from '../board'
 import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, brokenLabel, defNamed } from '../core/def-files'
 import { restFrame } from '../core/logo'
@@ -855,7 +855,7 @@ function liveBody(f: ViewFile, cursor: number, nowMs: number, w: number): Body {
   b.add(liveSegs(liveHeading(LIVE_SECTIONS.today, w)))
   b.add([{ text: LIVE_INDENT + nextUpLine(trains, inner), color: 'text' }])
   for (const t of todayLines(liveToday(v.tasks, nowMs), inner)) b.add([{ text: LIVE_INDENT + t, color: 'text' }])
-  if (lanes.length) b.add([{ text: LIVE_INDENT + LIVE_LEGEND, color: 'inactive' }])
+  if (lanes.length) for (const x of liveLegend(lanes, inner)) b.add([{ text: LIVE_INDENT + x, color: 'inactive' }])
   if (br) {
     b.blank()
     b.add(liveSegs(br.head))

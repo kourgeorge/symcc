@@ -2,7 +2,7 @@
 // numbers; claude/ui/live.tsx draws them on the terminal panel).
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { liveLanes, liveLayout, laneLines, liveLabelLine, liveStations, liveTrains, trainRows, type LiveTrain, nextUpLine, liveToday, todayLines, segText, liveBlink, liveHeader, tabRow, LIVE_TABS, LIVE_EMPTY, LIVE_LEGEND, LIVE_INDENT, liveInner } from '../hooks/core/live'
+import { liveLanes, liveLayout, laneLines, liveLabelLine, liveStations, liveTrains, trainRows, type LiveTrain, nextUpLine, liveToday, todayLines, segText, liveBlink, liveHeader, tabRow, LIVE_TABS, LIVE_EMPTY, LIVE_LEGEND, LIVE_INDENT, liveInner, liveBarLegend, liveLegend } from '../hooks/core/live'
 import { textWidth } from '../hooks/core/stats'
 import { FINISH_STALE_MS } from '../hooks/core/lead'
 import { listKeys } from '../hooks/board'
@@ -45,7 +45,8 @@ test('T-690: liveLanes puts each doing task at its station, and leaves check out
   expect(lane('T-684').place).toBe(2)
   expect(lane('T-684').sentBack).toBe(1)
   expect(lane('T-684').tryNo).toBe(2)
-  expect(lane('T-684').tokens).toBe(1_100_000)
+  // T-757: the whole task's tokens, every try
+  expect(lane('T-684').tokens).toBe(2_200_000)
   // a running worker's tokens are only known at its hand-back
   expect(lane('T-687').tokens).toBe(undefined)
   // the time at the station: from the history's stage line
@@ -206,11 +207,111 @@ test('T-690: lane lines fit the width with nothing cut, and the current station 
   expect(segText(a).trimEnd().endsWith('#2')).toBe(true)
   expect(segText(a)).toContain('T-684 /symcc-doctor')
   expect(liveBlink(1, true)).toBe('◉')
-  // the token bar is scaled against twice the usual tokens per merged task: past that, a warning
+  // the token bar is full at the usual tokens per merged task: past twice it, a warning
   const over = laneLines(lanes.find(x => x.id === 'T-685')!, l, { nowMs: T0, frame: 0 })[1]
   expect(segText(over)).toContain('3.4M ⚠')
   expect(over.some(s => s.tone === 'warning')).toBe(true)
   expect(segText(laneLines(lanes.find(x => x.id === 'T-687')!, l, { nowMs: T0, frame: 0 })[1])).toContain('tokens at hand-back')
+})
+
+const C_WARNING = '"color":"warning"'
+/** T-757: the usual tokens per merged task is 4M (one done task); lanes: try 2 running after a 4M try 1 (T-801), try 2
+ *  handed back with 1M (T-802), try 1 running (T-803), at the usual (T-804), at half (T-805), past twice it (T-806). */
+const T757 = [
+  task('T-800', 'Done at 4M', { status: 'done', runs: [{ started: iso(300), ended: iso(200), tokens: { input: 4_000_000 } }], history: [{ kind: 'merged', at: iso(30), text: 'try 1 → merged into main' }] }),
+  task('T-801', 'Try 2 running', { attempts: 2, runs: [{ started: iso(60), ended: iso(50), tokens: { input: 4_000_000 } }, { started: iso(20) }] }),
+  task('T-802', 'Try 2 handed back', { attempts: 2, runs: [{ started: iso(60), ended: iso(50), tokens: { input: 4_000_000 } }, { started: iso(20), ended: iso(2), tokens: { input: 1_000_000 } }], checking: { step: 'checker', at: iso(0) }, checker: 'agent-c' }),
+  task('T-803', 'Try 1 running', { runs: [{ started: iso(10) }] }),
+  task('T-804', 'At the usual', { runs: [{ started: iso(40), ended: iso(3), tokens: { input: 4_000_000 } }], checking: { step: 'testing', at: iso(0) } }),
+  task('T-805', 'At half the usual', { runs: [{ started: iso(40), ended: iso(3), tokens: { input: 2_000_000 } }], checking: { step: 'testing', at: iso(0) } }),
+  task('T-806', 'Past twice the usual', { runs: [{ started: iso(40), ended: iso(3), tokens: { input: 9_000_000 } }], checking: { step: 'testing', at: iso(0) } }),
+]
+/** What each T-757 lane's second line must show (the bar's cells: full, empty). */
+const T757_WANT = (bar: string) => {
+  const cells = bar.replace(/[▕▏]/g, '')
+  return { full: [...cells].filter(c => c === '█').length, empty: [...cells].filter(c => c === '░').length }
+}
+const t757Check = (sub: (id: string) => string, warn: (id: string) => boolean) => {
+  const bar = (id: string) => T757_WANT(/▕[█░]+▏/.exec(sub(id))?.[0] ?? '')
+  // (a) try 2 running: try 1's 4M with "+ …", the bar full (4M against the usual 4M)
+  expect(sub('T-801')).toContain('4M + …')
+  expect(bar('T-801').empty).toBe(0)
+  expect(bar('T-801').full).toBeGreaterThan(0)
+  // (b) handed back: the whole sum, no "+ …"
+  expect(sub('T-802')).toContain('5M')
+  expect(sub('T-802')).not.toContain('+ …')
+  expect(sub('T-802')).not.toContain('⚠')
+  // (c) try 1 running
+  expect(sub('T-803')).toContain('tokens at hand-back')
+  // (d) at the usual: full; at half: half
+  expect(bar('T-804').empty).toBe(0)
+  const half = bar('T-805')
+  expect(Math.abs(half.full - half.empty)).toBeLessThanOrEqual(1)
+  expect(warn('T-804')).toBe(false)
+  // (e) past twice the usual: the warning color and ⚠
+  expect(sub('T-806')).toContain('9M ⚠')
+  expect(warn('T-806')).toBe(true)
+}
+
+test('T-757: lanes show the whole task\'s tokens, the bar full at the usual per task, the warning past twice it (core)', () => {
+  const lanes = liveLanes({ tasks: T757 as never[], checker: true }, T0)
+  const lane = (id: string) => lanes.find(x => x.id === id)!
+  expect([lane('T-801').tokens, lane('T-801').more, lane('T-802').tokens, lane('T-802').more, lane('T-803').tokens]).toEqual([4_000_000, true, 5_000_000, undefined, undefined])
+  expect(lane('T-801').usual).toBe(4_000_000)
+  const l = liveLayout(lanes, liveStations(true), 80)
+  const second = (id: string) => laneLines(lane(id), l, { nowMs: T0, frame: 0 })[1]
+  t757Check(id => segText(second(id)), id => second(id).some(s => s.tone === 'warning'))
+  expect(liveLegend(lanes, 200)).toEqual([`${LIVE_LEGEND}   bar: tokens of the task so far, full = usual per task (4M)`])
+  // narrow: on more lines, none wider
+  for (const x of liveLegend(lanes, 30)) expect(textWidth(x)).toBeLessThanOrEqual(30)
+})
+
+test('T-757: the terminal and VS Code Live tabs show the whole task\'s tokens on the new scale, and the bar legend', async ($, on) => {
+  seedBoard(on, { view: liveView(T757) })
+  on('ui.toast', () => ({ value: undefined }))
+  const t = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 100 }, surface: 'terminal' })
+  await t.press({ key: 'tab-live' })
+  const lines = await liveLines(t)
+  const drawn = await t.drawn()
+  const nodeOf = (n: unknown, text: string): unknown => {
+    const x = n as Node
+    if (!x || typeof x !== 'object') return undefined
+    if (x.type === 'Text' && textOf(x) === text) return x
+    for (const c of x.children ?? []) { const hit = nodeOf(c, text); if (hit) return hit }
+    return undefined
+  }
+  const subs: Record<string, string> = {}
+  const warns: Record<string, boolean> = {}
+  for (const x of T757.slice(1)) {
+    subs[x.id] = lines[lines.findIndex(l => l.includes(` ${x.id} `)) + 1] ?? ''
+    const n = nodeOf(drawn, subs[x.id]!)
+    expect(n === undefined).toBe(false)
+    warns[x.id] = JSON.stringify(n).includes(C_WARNING)
+  }
+  t757Check(id => subs[id]!, id => warns[id]!)
+  expect(lines.some(x => x.includes('bar: tokens of the task so far, full = usual per task (4M)'))).toBe(true)
+  await t.press({ key: 'tab-tasks' })
+  await t.unmount()
+
+  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 100 }, surface: 'vscode' })
+  await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'live') } })
+  // each lane's bar Svg comes after its track Svg (alt "T-801 at …")
+  const bars: Record<string, { alt: string; source: string }> = {}
+  let owner = ''
+  for (const s of await ui.findAll({ type: 'Svg' })) {
+    const alt = String(s.props.alt ?? '')
+    const m = /^(T-\d+) at /.exec(alt)
+    if (m) owner = m[1]!
+    else if (alt.startsWith('▕') && owner) bars[owner] = { alt, source: String(s.props.source ?? '') }
+  }
+  for (const x of T757.slice(1)) bars[x.id] ??= { alt: '', source: '' }
+  const sub = async (id: string) => `${bars[id]!.alt} ${(await ui.find({ key: `live-sub:${id}` }))?.text ?? ''}`
+  const vs: Record<string, string> = {}
+  for (const x of T757.slice(1)) vs[x.id] = await sub(x.id)
+  t757Check(id => vs[id]!, id => bars[id]!.source.includes('#d29922'))
+  expect((await ui.find({ key: 'live-legend' }))?.text).toBe(`${LIVE_LEGEND}   ${liveBarLegend(4_000_000)}`)
+  await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'tasks') } })
+  await ui.unmount()
 })
 
 test('T-690: the tab row has a Live tab with key l, and the views hint says "t l s c"', () => {
@@ -368,7 +469,7 @@ for (const checker of [true, false])
     // next up and today: the terminal's words
     expect((await ui.find({ key: 'live-next' }))?.text).toBe(next)
     expect((await ui.find({ key: 'live-today-0' }))?.text).toBe(today)
-    expect((await ui.find({ key: 'live-legend' }))?.text).toBe(LIVE_LEGEND)
+    expect((await ui.find({ key: 'live-legend' }))?.text).toBe(`${LIVE_LEGEND}   ${liveBarLegend(800_000)}`)
     await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'tasks') } })
     await ui.unmount()
   })

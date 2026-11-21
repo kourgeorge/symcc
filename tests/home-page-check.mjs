@@ -60,6 +60,10 @@ for (const w of ['60 / 60', 'tests 14', 'shell · guard 11', 'ui · surfaces 11'
 for (const w of ['16:28', '16:50', 'try 1: 22m · 4.0M tokens in all'])
   if (!task.includes(w)) bad(`still frame: the task page has no "${w}" (T-740's real try 1)`)
 if (!text(view('scouts')).includes('gaps-bot')) bad('still frame: the scouts view has no gaps-bot')
+// (T-757) T-740 on try 2: its lane shows the whole task's tokens (try 1's 4.0M, more coming), the bar full at the
+// usual tokens per merged task (268.6M / 56 = 4.8M, so 4.0M fills 11 of 13 cells), and the legend says so
+if (!board.includes('▕███████████░░▏ 4.0M + …')) bad('still frame: T-740\'s lane does not show "▕███████████░░▏ 4.0M + …" (bar full = the usual per task)')
+if (!board.includes('bar: tokens of the task so far, full = usual per task (4.8M)')) bad('still frame: the board has no bar legend')
 
 // the chat log must scroll, so its oldest messages (the owner's ask) stay in reach; and it must not pin messages
 // with justify-content: flex-end, which pushes the overflow above the top, where no scroll reaches it

@@ -1014,10 +1014,12 @@ indented by 3 spaces (VS Code shows the same names as bold headings):
   `max_parallel`.
 - On the right: the time at the current station, or the place in the merge queue (`#2`).
 - The second row: the kind, the try (`try 2/3`, auto retries after failing tests included),
-  the current try's tokens with a bar scaled so the board's usual tokens per merged task fill
-  half of it (yellow with `⚠` past twice that), and `↺×N` for the checker's send-backs. A running
-  worker's tokens are only known when it hands back, so until then the row says `tokens at
-  hand-back`.
+  the whole task's tokens (every try so far) with a bar that the board's usual tokens per merged
+  task fill (half full at half the usual; it stays full past it, and turns yellow with `⚠` past
+  twice the usual), and `↺×N` for the checker's send-backs. The legend under the lanes says
+  this, with the usual figure: `bar: tokens of the task so far, full = usual per task (2.8M)`. A
+  running worker's tokens are only known when it hands back, so until then the row shows the
+  earlier tries' sum with `+ …` (`4.0M + …`), or `tokens at hand-back` on a first try.
 - Waiting trains: a todo task that waits (its `after`) for a task that has not finished hangs
   under the lane of the running task it waits for, indented with `└─◇`, its id and cut title,
   then `waits`:

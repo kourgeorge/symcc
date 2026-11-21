@@ -14,7 +14,7 @@
 // T-727: under the lanes, the Branches section (core's liveBranches) drawn with real lines: see branchesVs.
 // T-747: each section has a bold heading with the terminal's names (core's LIVE_SECTIONS): Tasks, Today, Branches,
 // Organizational memory (that one a link to all notes).
-import { type BranchRow, type LiveBranches, liveBranches, LIVE_EMPTY, LIVE_LEGEND, LIVE_SECTIONS, type LiveLane, liveInner, type LiveLayout, type LiveSeg, LIVE_TONE, laneLines, liveHeader, liveLanes, liveLayout, liveOrgMem, liveStations, liveToday, liveTrains, nextUpLine, segText, todayLines, trainRows } from '../../core/live'
+import { type BranchRow, type LiveBranches, liveBranches, LIVE_EMPTY, liveLegend, LIVE_SECTIONS, type LiveLane, liveInner, type LiveLayout, type LiveSeg, LIVE_TONE, laneLines, liveHeader, liveLanes, liveLayout, liveOrgMem, liveStations, liveToday, liveTrains, nextUpLine, segText, todayLines, trainRows } from '../../core/live'
 import { panelValues, type $ } from '../panel'
 import type { PaneParts } from './parts'
 import { LIVE_TICK_MS, branchKey, laneKey, liveTick, newestKey, openOrgMemPage, topicKey, trainKey } from './live'
@@ -217,7 +217,7 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
         {line('live-tasks-head', LIVE_SECTIONS.tasks, 'text', true)}
         {lanes.length ? <Box key="live-lanes" flexDirection="column" gap={1}>{laneRows}</Box> : line('live-empty', LIVE_EMPTY, 'inactive')}
       </Box>
-      {lanes.length ? line('live-legend', LIVE_LEGEND, 'inactive') : null}
+      {lanes.length ? line('live-legend', liveLegend(lanes, Infinity).join(' '), 'inactive') : null}
       <Box key="live-bottom" flexDirection="column">
         {line('live-today-head', LIVE_SECTIONS.today, 'text', true)}
         {line('live-next', nextUpLine(trains, inner), 'text')}

@@ -34,7 +34,7 @@
   const END_TODAY = { merged: 56, back: 47, failed: 0, tokens: 268.6e6 }
   const T747_TOKENS = 5.7e6
   const T740_TRY1_TOKENS = 4e6
-  const USUAL = END_TODAY.tokens / END_TODAY.merged // the board's usual tokens per merged task; bars are drawn against twice that
+  const USUAL = END_TODAY.tokens / END_TODAY.merged // the board's usual tokens per merged task; a full bar is that
   const MAX_AGENTS = 3
 
   // ---------- the state ----------
@@ -85,11 +85,14 @@
     const right = l.place ? `#${l.place}` : dur(s.now - l.since)
     const one = sp(' ' + pad(l.id, ID_W), 'id') + sp(' ' + pad(cut(TITLES[l.id], TITLE_W), TITLE_W), 'title') + '  ' + track + sp('  ' + right.padStart(6), 'dim')
     const lead = `  ${l.kind} try ${l.tryNo}/${l.tries}`
+    // the whole task's tokens (every try); the running try's are known only at its hand-back
+    const total = (l.prior || 0) + (l.tokens || 0)
     let rest
-    if (l.tokens === null) rest = sp('tokens at hand-back', 'dim')
+    if (!total) rest = sp('tokens at hand-back', 'dim')
     else {
-      const n = Math.max(0, Math.min(13, Math.round((l.tokens / (2 * USUAL)) * 13)))
-      rest = sp(`▕${'█'.repeat(n)}${'░'.repeat(13 - n)}▏ `, 'bar') + sp(tok(l.tokens), 'text')
+      const n = Math.max(0, Math.min(13, Math.round((total / USUAL) * 13)))
+      const over = total > 2 * USUAL
+      rest = sp(`▕${'█'.repeat(n)}${'░'.repeat(13 - n)}▏ `, over ? 'warning' : 'bar') + sp(tok(total), over ? 'warning' : 'text') + (l.tokens === null ? sp(' + …', 'dim') : '') + (over ? sp(' ⚠', 'warning') : '')
     }
     const two = sp(pad(lead, LEAD_W), 'dim') + rest + (l.back ? sp(`  ↺×${l.back}`, 'dim') : '')
     return [one, two]
@@ -132,6 +135,7 @@
     L.push('   ' + sp('next up  ', 'dim') + sp(next, 'text'))
     const d = s.today
     L.push('   ' + sp('today    ', 'dim') + sp(`✓ ${d.merged} merged`, 'passed') + sp(`   ↺ ${d.back} sent back   ✗ ${d.failed} failed   Σ ${tok(d.tokens)} tokens`, 'dim'))
+    if (s.lanes.length) L.push('   ' + sp(`· = needs an agent slot   bar: tokens of the task so far, full = usual per task (${tok(USUAL)})`, 'dim'))
     L.push('')
     L.push(heading('Branches'))
     L.push(...branchLines(s))
@@ -278,7 +282,7 @@
       Object.assign(s.branches.find(b => b.id === 'T-747'), { ahead: 1 })
     }],
     [2400, at(16, 50, 0), s => {
-      Object.assign(lane(s, 'T-740'), { at: 0, since: s.now, tryNo: 2, tokens: null, back: 1 })
+      Object.assign(lane(s, 'T-740'), { at: 0, since: s.now, tryNo: 2, prior: T740_TRY1_TOKENS, tokens: null, back: 1 })
       s.today.back += 1
       s.today.tokens += T740_TRY1_TOKENS
       s.t740.push(['16:50', 'try 1 → the checker found problems'], ['16:50', 'try 2: worker started'])
