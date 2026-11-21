@@ -10,6 +10,7 @@ import { AGENT_TRIES_KEPT, AGENTS_KEPT, agentLines, checkerTokensOf, endRun, goO
 import { taskSections, type TaskSection } from '../hooks/core/task-sections'
 import { todayMore } from '../hooks/core/live'
 import { when } from '../hooks/core/days'
+import { inToday, todayAt } from './day-clock'
 
 const NOW = Date.now()
 const iso = (msAgo: number) => new Date(NOW - msAgo).toISOString()
@@ -169,14 +170,19 @@ test('T-774: only the last few tries keep their agent list (older ones keep only
 })
 
 test('T-785: a try cut to its latest agents still counts every checker (its checker_tokens), in the heading and the Live split', () => {
-  const agents = Array.from({ length: 12 }, (_, i) => ({ id: `c${i}`, kind: 'checker' as const, started: iso(40 * MIN), ended: iso(39 * MIN), tokens: { input: 1_000_000 } }))
-  const run: SymccRun = { started: iso(50 * MIN), ended: iso(30 * MIN), tokens: { input: 14_000_000 }, checker_tokens: { input: 12_000_000 }, agents }
-  const kept = keepAgentIds([run])
-  expect(kept[0]!.agents!.length).toBe(AGENTS_KEPT)
-  expect(checkerTokensOf(kept[0])).toEqual({ input: 12_000_000 })
-  expect(runsSummary(kept, NOW)).toContain('checkers 12M')
-  const who = todayMore([withRuns('T-5', 'done', kept)], undefined, NOW - 60 * MIN).who
-  expect(who.find(w => w.who === 'checkers')!.tokens).toBe(12_000_000)
+  // T-796: the try lies between local midnight and `now` (just after midnight and just before it), so it is always today
+  for (const [h, m] of [[0, 5], [23, 55]] as const) {
+    const now = todayAt(h, m)
+    const at = (share: number) => new Date(inToday(now, share)).toISOString()
+    const agents = Array.from({ length: 12 }, (_, i) => ({ id: `c${i}`, kind: 'checker' as const, started: at(0.3), ended: at(0.4), tokens: { input: 1_000_000 } }))
+    const run: SymccRun = { started: at(0.1), ended: at(0.5), tokens: { input: 14_000_000 }, checker_tokens: { input: 12_000_000 }, agents }
+    const kept = keepAgentIds([run])
+    expect(kept[0]!.agents!.length).toBe(AGENTS_KEPT)
+    expect(checkerTokensOf(kept[0])).toEqual({ input: 12_000_000 })
+    expect([`${h}:${m}`, runsSummary(kept, now).includes('checkers 12M')]).toEqual([`${h}:${m}`, true])
+    const who = todayMore([withRuns('T-5', 'done', kept)], undefined, now).who
+    expect([`${h}:${m}`, who]).toEqual([`${h}:${m}`, [{ who: 'workers', tokens: 2_000_000 }, { who: 'checkers', tokens: 12_000_000 }]])
+  }
 })
 
 test('T-785: a checker lost mid-check is ended when the next checker starts, and a finished task has no open entry', () => {
