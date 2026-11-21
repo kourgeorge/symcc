@@ -31,7 +31,7 @@ import { change, load, saveBoard, saveMigrated, takeLock, dropLock } from '../ho
 import { TOOLS, runTool, ownerSettings, allowAskedFiles, refuseAskedFiles } from '../hooks/app/tools'
 import { archiveOld, saveArchiveMigrated } from '../hooks/app/archive'
 import { commandsOf, pause } from './fakes'
-import { runCommand } from '../hooks/app/symcc'
+import { runCommand, agentFinished } from '../hooks/app/symcc'
 // test() from ./reset starts each test with the plugin's memory empty, whatever ran before it (T-291)
 import { test } from './reset'
 import { fakeDisk } from './fake-disk'
@@ -3217,6 +3217,24 @@ test('T-411: only the host seeing a background command still running fails a try
   expect(normal.end).toEqual(['finished', 'merged'])
   expect(normal.t.history.some(h => h.text.includes('warning:'))).toBe(false)
   expect(leadQueue.some(x => x.includes('may have ended before'))).toBe(false)
+})
+
+test('T-784: a worker stopped by a pause or a change keeps the tokens the host reports on its agent line and in its try', async () => {
+  const withAgent = { runs: [{ started: ISO, agents: [{ id: 'ag1', kind: 'worker' as const, started: ISO }] }] }
+  for (const stop of [(w: ReturnType<typeof world>) => runTool(w.$, 'pause', { task: 'T-1' }), (w: ReturnType<typeof world>) => runTool(w.$, 'change', { task: 'T-1', details: 'new plan' })]) {
+    const { r } = await tryEnds(async w => {
+      S.driving = true
+      await stop(w)
+      // the stopped worker's turn ends: the host reports what it used
+      agentFinished(w.$, 'ag1', { answer: 'stopped', end: { reason: 'aborted' }, isAborted: true, tokens: { input: 1000, output: 50 }, cost: 0.5 })
+      for (let i = 0; i < 100; i++) await Promise.resolve()
+    }, { extra: withAgent })
+    expect(r.ended).toBeDefined()
+    expect(r.tokens).toEqual({ input: 1000, output: 50 })
+    expect(r.cost).toBe(0.5)
+    expect(r.agents![0]!.tokens).toEqual({ input: 1000, output: 50 })
+    expect(r.agents![0]!.cost).toBe(0.5)
+  }
 })
 
 test('a try stopped by the lead says why: changed (which fields), paused, dropped, asked, backlog', async () => {

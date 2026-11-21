@@ -104,8 +104,8 @@ export type HostLead = {
  */
 export type LeadSend = { urgent?: boolean }
 
-/** What host.lead.usage answers. */
-export type LeadUsage = Pick<TeamInput, 'lead' | 'leadSessions' | 'leadProblem' | 'leadFrom'>
+/** What host.lead.usage answers; `leadUnread` counts session logs that couldn't be read at all. */
+export type LeadUsage = Pick<TeamInput, 'lead' | 'leadSessions' | 'leadProblem' | 'leadFrom' | 'leadUnread'>
 
 /**
  * The names that differ from host to host: what the model calls symcc's tools, what the prompts call its file tools,

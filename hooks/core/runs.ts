@@ -164,7 +164,9 @@ export const agentsOf = (r: SymccRun | undefined): SymccRunAgent[] => (Array.isA
 export function withAgentStart(runs: SymccRun[] | undefined, kind: SymccRunAgent['kind'], id: unknown, now: string): SymccRun[] | undefined {
   const last = runs?.at(-1)
   if (!runs || !last || !isAgentId(id) || agentsOf(last).some(a => a.id === id)) return runs
-  return [...runs.slice(0, -1), { ...last, agents: [...agentsOf(last), { id, kind, started: now }].slice(-AGENTS_KEPT) }]
+  // T-785: a checker lost mid-check never ended its entry: a new checker ends any earlier open one at its own start
+  const before = kind === 'checker' ? agentsOf(last).map(a => (a.kind === 'checker' && !a.ended ? { ...a, ended: now } : a)) : agentsOf(last)
+  return [...runs.slice(0, -1), { ...last, agents: [...before, { id, kind, started: now }].slice(-AGENTS_KEPT) }]
 }
 
 /**
@@ -191,12 +193,31 @@ export function withAgentUsed(runs: SymccRun[] | undefined, kind: SymccRunAgent[
 }
 
 /**
+ * T-784: a worker symcc stopped reports what it used after its try may have ended: the runs with it added to the try
+ * that names the worker `id` (open or already ended) and to its own entry. A worker no try names: the runs as they are.
+ */
+export function withStoppedUsed(runs: SymccRun[] | undefined, id: unknown, now: string, used: { tokens?: SymccTokens; cost?: number }): SymccRun[] | undefined {
+  if (!runs?.length || !isAgentId(id)) return runs
+  const i = runs.findLastIndex(r => agentsOf(r).some(a => a.id === id))
+  if (i < 0 || (!used.tokens || !tokenCount(used.tokens)) && typeof used.cost !== 'number') return runs
+  const r = runs[i]!
+  const hasTokens = !!used.tokens && tokenCount(used.tokens) > 0
+  const withRun = [...runs]
+  withRun[i] = {
+    ...r,
+    ...(hasTokens ? { tokens: addTokens(r.tokens, used.tokens) } : {}),
+    ...(typeof used.cost === 'number' && Number.isFinite(used.cost) ? { cost: (r.cost ?? 0) + used.cost } : {}),
+  }
+  return withAgentUsed(withRun, 'worker', id, now, used)
+}
+
+/**
  * T-774: the tokens try `r`'s checkers used: their agent entries added up when it has any checker entry with tokens,
  * else its checker_tokens (T-769: a try from before T-774, or one whose entries were trimmed); undefined when not known.
  */
 export function checkerTokensOf(r: SymccRun | undefined): SymccTokens | undefined {
   const own = agentsOf(r).filter(a => a.kind === 'checker' && a.tokens)
-  return own.length ? sumTokens(own.map(a => a.tokens)) : r?.checker_tokens
+  return r?.checker_tokens ?? (own.length ? sumTokens(own.map(a => a.tokens)) : undefined)
 }
 
 /** T-774: a short agent id for a page: "ses…Qr2" (the first and last three characters of a long one). */
@@ -401,8 +422,9 @@ export function endRun(runs: SymccRun[] | undefined, now: string, used: { tokens
     ...(used.tokens !== undefined && (last.tokens === undefined || open) ? { tokens: open && last.tokens !== undefined ? addTokens(last.tokens, used.tokens) : used.tokens } : {}),
     ...(used.cost !== undefined && (last.cost === undefined || open) ? { cost: open && last.cost !== undefined ? last.cost + used.cost : used.cost } : {}),
   }
-  // T-774: an agent still open on the try (a worker stopped without a hand-back) ends with it
-  const agents = open && last.agents?.some(a => !a.ended) ? { agents: last.agents.map(a => (a.ended ? a : { ...a, ended: now })) } : {}
+  // T-774: an agent still open on the try (a worker stopped without a hand-back) ends with it; T-785: also a checker
+  // entry left open after the try ended
+  const agents = last.agents?.some(a => !a.ended) ? { agents: last.agents.map(a => (a.ended ? a : { ...a, ended: now })) } : {}
   out[out.length - 1] = { ...last, ...(last.ended ? {} : { ended: now }), ...add, ...agents }
   return out
 }

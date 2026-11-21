@@ -396,7 +396,7 @@ export function agentFinished(host: Host, agentId: string | undefined, run: Agen
   else if (agentId && checkerRuns.has(agentId)) checkerFinished(agentId, answer, broken ? end : isAborted || end.reason === 'aborted', tokens)
   // a report from a worker this copy lost track of in a reload: still taken when its task waits for it
   // (a worker this copy stopped, e.g. an orphan after a reload: its task is put back to "todo" at once instead)
-  else if (agentId) void lateHandBack(host, agentId).then(ok => (ok ? workerFinished(host, agentId, answer, end, tokens, cost) : stoppedHandBack(host, agentId))).catch(() => undefined)
+  else if (agentId) void lateHandBack(host, agentId).then(ok => (ok ? workerFinished(host, agentId, answer, end, tokens, cost) : stoppedHandBack(host, agentId, tokens, cost))).catch(() => undefined)
 }
 
 // ---------------- commands ----------------

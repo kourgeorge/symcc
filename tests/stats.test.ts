@@ -4,6 +4,7 @@ import { addScoutRun, bar, cutTitle, textWidth, parseStatsArgs, wrapLine, billed
 import { statsHtml } from '../hooks/core/stats-html'
 import { FAILED_TESTS_SHORT, FAILED_TRIES_SHORT, durOr, failedShown, plural, tokOr } from '../hooks/core/stats'
 import { leadCalls, leadUsage, projectFolderName } from '../hooks/claude/lead-usage'
+import type { LeadUsage } from '../hooks/host'
 import { fakeHost } from './fake-host'
 import { hist } from './history-fixture'
 
@@ -217,7 +218,8 @@ test('stats: a session log over 4 MiB is read in parts, and one that still canno
 
   // when the parts can't be read either, the lead's row says so (text and HTML)
   const { host: failing } = fakeHost({ env: host.env, fs: host.fs, run: async () => ({ exitCode: 1, stdout: '', stderr: 'no dd' }) })
-  const v = await leadUsage(failing, '/repo', { kind: 'all' }, NOW)
+  // typed as the host's LeadUsage: leadUnread is part of it (T-782), so the type check fails if it goes
+  const v: LeadUsage = await leadUsage(failing, '/repo', { kind: 'all' }, NOW)
   expect(v.leadUnread).toBe(1)
   expect(leadTotals(v.lead!, {}).calls).toBe(1)
   const text = statsReport({ tasks, nowMs: NOW, team: v })
