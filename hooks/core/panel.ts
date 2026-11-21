@@ -435,12 +435,24 @@ export type SearchQuery = {
   sinceMs?: number
   /** last:N (newest: the most recently changed first) or top:N (order: what runs next first); `n` left out = all. */
   pick?: { by: 'newest' | 'order'; n?: number }
+  /** waits-on:T-n: only tasks whose after list leads to one of these ids, directly or through a chain. */
+  waitsOn?: string[]
+  /** blocks:T-n: only the not-done tasks one of these ids waits for, directly or through a chain. */
+  blocks?: string[]
+  /** stuck: only todo tasks that can't start: something they wait for is failed, paused, waiting, dropped or missing. */
+  stuck?: boolean
   /** What's wrong with a status: or kind: word (an unknown status or kind); the panel ignores these and keeps the word plain. */
   errors: string[]
 }
 
 /** The filter words a search takes, for hints and help. */
-export const SEARCH_WORDS = 'last:N top:N since:2d status: kind: role:'
+export const SEARCH_WORDS = 'last:N top:N since:2d status: kind: role: waits-on:T-n blocks:T-n stuck'
+
+/** A search value read as a task id ("T-12", "t12" or "12" → "T-12"); undefined when it isn't one. */
+const searchId = (v: string): string | undefined => {
+  const m = /^(?:t-?)?(\d+)$/.exec(v)
+  return m ? `T-${Number(m[1])}` : undefined
+}
 
 /** How long ago `when` points, in ms ("30m", "2h", "2d", "1w"), or the moment of a local day ("2026-11-18");
  *  undefined when it can't be read. */
@@ -455,13 +467,18 @@ function sinceOf(when: string, nowMs: number, offsetMin: number): number | undef
 }
 
 /** Reads a search text: plain words, and the filter words last:N, top:N, since:<30m|2h|2d|1w|2026-11-18>,
- *  status:<word or open>, kind:<kind> and role:<role> (case-insensitive; a value may list several, "status:done,dropped").
+ *  status:<word or open>, kind:<kind>, role:<role>, waits-on:<id>, blocks:<id> and stuck (case-insensitive; a value
+ *  may list several, "status:done,dropped").
  *  A word that isn't a filter word, or whose value can't be read (foo:bar, last:x), stays a plain word. An unknown
  *  status (or a kind not in `kinds`, when given) is noted in `errors` and the word stays plain too. */
 export function parseSearch(query: string, nowMs: number = Date.now(), offsetMin: number = localOffset(nowMs), kinds?: readonly string[]): SearchQuery {
   const q: SearchQuery = { words: [], errors: [] }
   for (const w of query.toLowerCase().split(/\s+/).filter(Boolean)) {
-    const m = /^(last|top|since|status|kind|role):(.+)$/.exec(w)
+    if (w === 'stuck') {
+      q.stuck = true
+      continue
+    }
+    const m = /^(last|top|since|status|kind|role|waits-on|blocks):(.+)$/.exec(w)
     if (!m) {
       q.words.push(w)
       continue
@@ -487,9 +504,55 @@ export function parseSearch(query: string, nowMs: number = Date.now(), offsetMin
         q.errors.push(`unknown kind "${bad[0]}"; the kinds are: ${kinds!.join(', ')}`)
         q.words.push(w)
       } else q.kinds = [...(q.kinds ?? []), ...list]
+    } else if (key === 'waits-on' || key === 'blocks') {
+      const found = list.map(searchId)
+      if (!found.length || found.some(x => !x)) q.words.push(w)
+      else if (key === 'waits-on') q.waitsOn = [...new Set([...(q.waitsOn ?? []), ...(found as string[])])]
+      else q.blocks = [...new Set([...(q.blocks ?? []), ...(found as string[])])]
     } else q.roles = [...(q.roles ?? []), ...list]
   }
   return q
+}
+
+/** The statuses that keep a task waiting on them from starting until someone acts (see `stuck`). */
+const STUCK_ON: readonly SymccStatus[] = ['failed', 'paused', 'waiting', 'dropped']
+
+/** The tasks of `tasks` that pass the search's dependency words (waits-on:, blocks:, stuck), as a set of ids;
+ *  undefined when the search has none. A task id that isn't in `tasks` counts as missing, unless it is in
+ *  `archivedDone` (the board's archived done ids, done as in depDone). */
+function dependencyHits(tasks: readonly SymccTask[], q: SearchQuery, archivedDone: readonly string[] = []): Set<string> | undefined {
+  if (!q.waitsOn && !q.blocks && !q.stuck) return undefined
+  const archived = new Set(archivedDone.map(a => searchId(a.toLowerCase()) ?? a))
+  const byId = new Map(tasks.map(t => [t.id, t]))
+  const afterOf = (id: string) => (byId.get(id)?.after ?? []).map(a => searchId(a.toLowerCase()) ?? a)
+  // every id `id` waits for, directly or through a chain (each once; a loop stops)
+  const reach = (id: string, through: (t: SymccTask | undefined) => boolean): Set<string> => {
+    const seen = new Set<string>()
+    const walk = (x: string) => {
+      for (const a of afterOf(x)) {
+        if (a === id || seen.has(a)) continue
+        seen.add(a)
+        if (through(byId.get(a))) walk(a)
+      }
+    }
+    walk(id)
+    return seen
+  }
+  // what still holds a task back: the not-done tasks (and missing ids) on its chain; a done one ends the chain there,
+  // and an archived done id holds nothing back
+  const holding = (id: string) => new Set([...reach(id, t => !!t && t.status !== 'done')].filter(a => !archived.has(a)))
+  let hits: Set<string> = new Set(tasks.map(t => t.id))
+  const keep = (ok: (t: SymccTask) => boolean) => (hits = new Set([...hits].filter(id => ok(byId.get(id)!))))
+  if (q.waitsOn) keep(t => {
+    const all = reach(t.id, () => true)
+    return q.waitsOn!.some(x => all.has(x))
+  })
+  if (q.blocks) {
+    const held = new Set(q.blocks.flatMap(x => [...holding(x)]))
+    keep(t => held.has(t.id) && t.status !== 'done')
+  }
+  if (q.stuck) keep(t => t.status === 'todo' && [...holding(t.id)].some(a => !byId.has(a) || STUCK_ON.includes(byId.get(a)!.status)))
+  return hits
 }
 
 /** When a task last changed (its updated_at, else created_at), in ms; NaN when neither can be read. */
@@ -528,10 +591,15 @@ const byRunOrder = (x: SymccTask, y: SymccTask) => x.order - y.order || num(x.id
 
 /** The tasks of `tasks` that match the search `query` (see taskMatches). With last:N, the N changed most recently,
  *  newest first; with top:N, the first N in run order (what runs next: without a status: word only the tasks waiting
- *  to run, todo, are taken). Without either, the matches in the order given. */
-export function searchTasks<T extends SymccTask>(tasks: T[], query: string | SearchQuery, nowMs: number = Date.now()): T[] {
+ *  to run, todo, are taken). Without either, the matches in the order given. The dependency words need the whole
+ *  list, so only searchTasks (not taskMatches) applies them: waits-on:T-n (tasks whose after list leads to T-n,
+ *  directly or through a chain), blocks:T-n (the not-done tasks T-n still waits for, a dropped one too) and stuck
+ *  (todo tasks held back by a failed, paused, waiting or dropped task, or by an id not in `tasks`). `archivedDone`,
+ *  the board's archived done ids (board.archived_done): they count as done there, not missing. */
+export function searchTasks<T extends SymccTask>(tasks: T[], query: string | SearchQuery, nowMs: number = Date.now(), archivedDone: readonly string[] = []): T[] {
   const q = typeof query === 'string' ? parseSearch(query, nowMs) : query
-  const hits = tasks.filter(t => taskMatches(t, q, nowMs))
+  const deps = dependencyHits(tasks, q, archivedDone)
+  const hits = tasks.filter(t => (!deps || deps.has(t.id)) && taskMatches(t, q, nowMs))
   if (!q.pick) return hits
   const sorted = q.pick.by === 'newest'
     ? [...hits].sort((x, y) => (changedMs(y) || 0) - (changedMs(x) || 0) || num(y.id) - num(x.id))
