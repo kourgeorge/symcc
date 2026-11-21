@@ -30,13 +30,14 @@ function marksOf(t: { history?: readonly { kind: string; at?: string }[] }): rea
 /**
  * T-781: task `t`'s send-backs on one day (`isToday` tells by the mark's time): `all` counts every one the way /symcc-stats
  * lists failed tries (the checker's problems, tests failed, a clash with main), `checker` only the checker's. A finished
- * task's board view keeps only the marks of the checker's lines (no text), so it counts only those.
+ * task's board view keeps marks (no text) of the checker's lines and of its tests-failed and clash lines (kind 'failed').
  */
 function sentBackOf(t: { history?: readonly { kind: string; at?: string; text?: string }[] }, isToday: (at: string | undefined) => boolean): { all: number; checker: number } {
   const marks = marksOf(t) as readonly { kind: string; at?: string; text?: string }[]
   const checker = marks.filter(h => h.kind === 'checker-problems' && isToday(h.at)).length
   const other = marks.filter(h => {
-    const r = typeof h.text === 'string' ? failReason(h.text) : null
+    // a finished task's view marks keep only the tests/clash 'failed' lines, without their text
+    const r = typeof h.text === 'string' ? failReason(h.text) : h.kind === 'failed' ? 'tests' : null
     return (r === 'tests' || r === 'clash') && isToday(h.at)
   }).length
   return { all: checker + other, checker }

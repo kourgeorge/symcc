@@ -9,6 +9,7 @@ import { textWidth } from '../hooks/core/stats'
 import { dayOf, localOffset } from '../hooks/core/days'
 import { publish, readTodayTeam, resetTodayTeam, todayTeam } from '../hooks/app/lead'
 import { S } from '../hooks/app/state'
+import { viewTask } from '../hooks/core/board-parts'
 import { emptyBoard } from '../hooks/core/board-file'
 import { scoutRunsFile } from '../hooks/core/scouts'
 import { vsHref } from '../hooks/claude/ui/vscode'
@@ -101,6 +102,15 @@ test('T-781: line 1 counts every send-back today, line 4 only the checker\'s; an
   expect(lines[0]).toContain('↺ 3 sent back')
   expect(lines.at(-1)).toBe('⌕ 2 sent back by the checker')
   expect(texts(liveTodayLines({ tasks: [], today_team: undefined }, T0, 140, 0)).length).toBe(1)
+})
+
+test('T-781: a done task keeps its tests-failed and checker send-backs on the slim board view (OpenCode)', () => {
+  const at = new Date(T0 - 60_000).toISOString()
+  const h = (kind: string, text: string) => ({ at, kind, text })
+  const t = { id: 'T-1', status: 'done' as const, history: [h('failed', 'try 1: did it → tests failed: z'), h('checker-problems', 'try 2: checker found problems: y'), h('failed', 'try 3: did it → the worker made no change'), h('merged', 'try 4: did it → merged')], runs: [] }
+  const top = (x: unknown) => texts(liveTodayLines({ tasks: [x] as never[], today_team: undefined }, T0, 140, 0))[0]
+  expect(top(t)).toContain('↺ 2 sent back')
+  expect(top(viewTask(t))).toContain('↺ 2 sent back')
 })
 
 test('T-769: line 3 keeps the parts that fit its own width, whatever line 2 had to drop', () => {
