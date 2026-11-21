@@ -11,8 +11,11 @@ export const startRun = (runs: SymccRun[] | undefined, now: string, mergeMain = 
 // reloaded, the driving session changed, the old worker ended) is not a send-back: the next worker goes on with the
 // SAME try (no new run, attempts stays), and the try keeps a record of each such restart.
 
-/** One restart symcc did itself on a try: when (the end time it took off the try), why (the try's end note then), and the worker it stopped. */
-export type RunRestart = { at: string; why: string; agent?: string }
+/**
+ * One restart symcc did itself on a try: when (the end time it took off the try), why (the try's end note then), the
+ * worker it stopped, and when the next worker's part of the try started (its time limit counts from then).
+ */
+export type RunRestart = { at: string; why: string; agent?: string; started?: string }
 /** A try as kept on the board, with the restarts symcc did itself (oldest first); see goOnRun. */
 export type TryRun = SymccRun & { restarts?: RunRestart[] }
 
@@ -37,7 +40,7 @@ export function goOnRun(runs: SymccRun[] | undefined, now: string): TryRun[] | n
   const last = runs?.at(-1)
   if (!runs || !last || !selfRestart(last)) return null
   const { ended, ended_by: _b, ended_note, agent, ...rest } = last as TryRun
-  const step: RunRestart = { at: ended ?? now, why: ended_note ?? '', ...(isAgentId(agent) ? { agent } : {}) }
+  const step: RunRestart = { at: ended ?? now, why: ended_note ?? '', ...(isAgentId(agent) ? { agent } : {}), started: now }
   return [...runs.slice(0, -1), { ...rest, restarts: [...restartsOf(last), step] }]
 }
 
@@ -53,6 +56,16 @@ export function undoGoOn(runs: SymccRun[] | undefined): TryRun[] | null {
   const { restarts: _r, ...rest } = last
   const left = restartsOf(last).slice(0, -1)
   return [...runs.slice(0, -1), { ...rest, ended: step.at, ended_by: 'restarted', ...(step.why ? { ended_note: step.why } : {}), ...(step.agent ? { agent: step.agent } : {}), ...(left.length ? { restarts: left } : {}) }]
+}
+
+/**
+ * T-743: when try `r`'s current worker started (ms): the latest restart's start on a try that went on after a restart
+ * symcc did itself, else the try's own start; null when the board doesn't say. The try's total time still runs from
+ * its first start (runMs); this is only for the worker's time limit.
+ */
+export function workerSince(r: SymccRun | undefined): number | null {
+  const at = Date.parse(restartsOf(r).at(-1)?.started ?? r?.started ?? '')
+  return Number.isFinite(at) ? at : null
 }
 
 /** T-743: whether agent `id` worked on try `r` before a restart symcc did itself (it is not that try's worker now). */
@@ -119,7 +132,8 @@ function keepRestarts(r: SymccRun, old: boolean): SymccRun {
   const ok = (Array.isArray(all) ? all : []).filter((e): e is RunRestart => !!e && typeof e === 'object' && typeof (e as RunRestart).at === 'string').slice(-RESTARTS_KEPT)
   const clean = ok.map(e => {
     const agent = !old && isAgentId(e.agent) ? e.agent : undefined
-    return agent === e.agent && typeof e.why === 'string' ? e : { at: e.at, why: typeof e.why === 'string' ? e.why : '', ...(agent ? { agent } : {}) }
+    const started = typeof e.started === 'string' ? e.started : undefined
+    return agent === e.agent && typeof e.why === 'string' && started === e.started ? e : { at: e.at, why: typeof e.why === 'string' ? e.why : '', ...(agent ? { agent } : {}), ...(started ? { started } : {}) }
   })
   if (Array.isArray(all) && clean.length === all.length && clean.every((e, k) => e === all[k])) return r
   const { restarts: _r, ...rest } = r as TryRun

@@ -1,5 +1,5 @@
 import type { SymccTask, SymccTokens } from '../../types'
-import { PREP_NOTE, type Board, type BoardTask, type RoleDef, roleSection, mayStart, liveWorkersFor, modeOf, symccOn, ready, patchTask, putTask, find, startRun, findRole, roleOf, workerName, workerDescription, onNotReady, endRun, tryLabel, needFilesQuestion, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, liveDriver, emptyBoard, ownedHere, backToTodo, stoppedEntry, withHistory, historyEntry, type HistoryAdd, type HistoryKind, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, testMinutesOf, ranOverNote, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, WRAP_UP_GRACE_MS, outOfTimeNote, checkerOn, docsOnly, checkerOutput, isCheckerOutput, checkerLine, checkerRetryText, kindOf, isInvestigation, kindSection, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt, shortSha, secretsLeftText, gaveUpTestsText, endedEarlyLine, endedEarlyNote, ENDED_EARLY_NOTE, onRuns, workerStartedEntry, workerHandedBackEntry, withFailedTests, goOnRun, undoGoOn, restartsOf, restartedAgent, DEFAULT_ROLE } from '../board'
+import { PREP_NOTE, type Board, type BoardTask, type RoleDef, roleSection, mayStart, liveWorkersFor, modeOf, symccOn, ready, patchTask, putTask, find, startRun, findRole, roleOf, workerName, workerDescription, onNotReady, endRun, tryLabel, needFilesQuestion, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, liveDriver, emptyBoard, ownedHere, backToTodo, stoppedEntry, withHistory, historyEntry, type HistoryAdd, type HistoryKind, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, testMinutesOf, ranOverNote, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, WRAP_UP_GRACE_MS, outOfTimeNote, checkerOn, docsOnly, checkerOutput, isCheckerOutput, checkerLine, checkerRetryText, kindOf, isInvestigation, kindSection, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt, shortSha, secretsLeftText, gaveUpTestsText, endedEarlyLine, endedEarlyNote, ENDED_EARLY_NOTE, onRuns, workerStartedEntry, workerHandedBackEntry, withFailedTests, goOnRun, undoGoOn, restartsOf, restartedAgent, DEFAULT_ROLE, workerSince } from '../board'
 import { archiveOld } from './archive'
 import { checkHealth } from './health'
 import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch, clearScratch, taskBranch, copyReports, deleteMergedBranch, type BehindWhy } from './git'
@@ -573,8 +573,8 @@ export async function lateHandBack(host: Host, agentId: string): Promise<boolean
   // A task whose worker already handed back (handedBack) is being, or was, checked: not taken again.
   if (!t || t.status !== 'doing' || t.session !== S.me || finishing.has(t.id) || starting.has(t.id) || handedBack(t)) return false
   if ([...workers.values()].some(w => w.task === t.id)) return false
-  const started = Date.parse(t.runs?.[t.runs.length - 1]?.started ?? '')
-  workers.set(agentId, { task: t.id, worktree: worktreeDir(t.id), branch: taskBranch(t), since: Number.isFinite(started) ? started : Date.now() })
+  // T-743: the time limit counts from this worker's own start, not the first start of a try that went on after a reopen
+  workers.set(agentId, { task: t.id, worktree: worktreeDir(t.id), branch: taskBranch(t), since: workerSince(t.runs?.at(-1)) ?? Date.now() })
   return true
 }
 
@@ -609,10 +609,9 @@ export async function agentOnBoard(host: Host, agentId: string): Promise<OnBoard
   return found
 }
 
-/** When task `t`'s current try started (ms), or now when the board doesn't say. */
+/** When task `t`'s current worker started (ms; T-743: its own start on a try that went on after a reopen), or now when the board doesn't say. */
 function runStart(t: BoardTask): number {
-  const started = Date.parse(t.runs?.[t.runs.length - 1]?.started ?? '')
-  return Number.isFinite(started) ? started : Date.now()
+  return workerSince(t.runs?.at(-1)) ?? Date.now()
 }
 
 /**

@@ -1,7 +1,7 @@
 // Leftover and overtime cleanup for the regular check: stopping orphan agents after a reload, removing leftover
 // temp files, and a worker that runs over its time limit (ask the owner, wrap up, time out). Split out of
 // workers.ts (T-603); workers.ts's check() imports it, and it never imports workers.ts.
-import { type Board, type BoardTask, orphanMove, liveWorkersFor, putTask, find, patchTask, tryLabel, liveDriver, emptyBoard, leftoverTmpFiles, withHistory, endedBy, mergedThisTry, mergedDone, handedBack, timeLimitOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, shortSha, onRuns, restartedAgent } from '../board'
+import { type Board, type BoardTask, orphanMove, liveWorkersFor, putTask, find, patchTask, tryLabel, liveDriver, emptyBoard, leftoverTmpFiles, withHistory, endedBy, mergedThisTry, mergedDone, handedBack, timeLimitOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, shortSha, onRuns, restartedAgent, workerSince } from '../board'
 import { worktreeDir, taskBranch } from './git'
 import { alreadyMerged } from './review'
 import { S, workers, starting, finishing, stopped, isOwnAgent, halt, tmpWarned } from './state'
@@ -59,8 +59,8 @@ export async function stopOrphans(host: Host, leadNow?: string | null): Promise<
         // Its worker already handed back (the agent is only idle): nothing to track or stop. The
         // task's check is still running, or the regular check recovers it (done when merged).
         if (handedBack(t)) continue
-        const started = Date.parse(t.runs?.[t.runs.length - 1]?.started ?? '')
-        workers.set(a.id, { task: t.id, worktree: worktreeDir(t.id), branch: taskBranch(t), since: Number.isFinite(started) ? started : Date.now() })
+        // T-743: the time limit counts from this worker's own start, not the first start of a try that went on after a reopen
+        workers.set(a.id, { task: t.id, worktree: worktreeDir(t.id), branch: taskBranch(t), since: workerSince(t.runs?.at(-1)) ?? Date.now() })
         // The task is recorded as this session's, with this agent (its session id may have changed over the reload).
         if (t.agent !== a.id || t.session !== S.me) await change(host, x => (find(x, t.id)?.status === 'doing' && (find(x, t.id)?.agent ?? a.id) === a.id ? patchTask(x, t.id, { agent: a.id, session: S.me }, now()) : x)).catch((e: Error) => host.ui.toast(S.N.toast(`kept ${t.id}'s worker after a reload but couldn't record it on the board: ${String(e?.message ?? e).slice(0, 150)}`)))
         continue

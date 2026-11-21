@@ -5545,7 +5545,9 @@ test('T-743: a worker restarted after a reopen keeps the same try: no new try nu
   expect(r.ended).toBeUndefined()
   expect(r.ended_by).toBeUndefined()
   expect(r.agent).toBe('ag1')
-  expect(r.restarts).toEqual([{ at: STOP, why: 'after Claude Code was reopened', agent: 'ag9' }])
+  expect(r.restarts!.map(({ started: _s, ...e }) => e)).toEqual([{ at: STOP, why: 'after Claude Code was reopened', agent: 'ag9' }])
+  // when the new worker's part started: its time limit counts from there, not from ISO
+  expect(Date.parse(r.restarts![0]!.started ?? '')).toBeGreaterThan(Date.parse(ISO))
   expect(stageTexts(t)).toEqual(['try 1: worker restarted after Claude Code was reopened'])
   // the old worker is not this try's worker any more (its hand-back is ignored), but it is still refused as a known agent
   expect(notThisTry(t, 'ag9')).toBe(true)
@@ -5601,6 +5603,36 @@ test('T-743: after a reopen only one worker works on the try: the old worker is 
   expect(formerWorker(t, 'ag9')).toBe(true)
   expect(formerWorker({ ...t, agent: 'ag1', runs: [{ ...t.runs![0]!, agent: 'ag1' }] }, 'ag1')).toBe(false)
   expect(formerWorker({ ...t, runs: [{ started: ISO, agent: 'ag8' }, { started: STOP }] }, 'ag8')).toBe(true)
+})
+
+test('T-743: a worker on a try that went on after a reopen counts its time limit from its own start, not the try\'s first start', async () => {
+  S.me = 'me'
+  const w = world()
+  const first = new Date(Date.now() - 20 * 3600_000).toISOString()
+  const stop = new Date(Date.now() - 2 * 3600_000).toISOString()
+  const fresh = new Date(Date.now() - 60_000).toISOString()
+  const [b0] = boardWith('auto', [], { session: 'me', agent: 'ag9', branch: 'symcc/T-1', history: [], runs: [{ started: first, agent: 'ag9' }] })
+  const back = backToTodo(b0.tasks[0]!, REOPEN, stop)
+  const runs = goOnRun(back.runs, fresh)!.map(r => ({ ...r, agent: 'ag10' }))
+  const [b1] = boardWith('auto', [], { session: 'me', agent: 'ag10', branch: 'symcc/T-1', history: [], attempts: 1, runs })
+  await saveBoard(w.$, b1)
+  workers.clear()
+  w.$.agents.list = async () => [{ id: 'ag10', kind: 'worker', status: 'running', name: 'symcc-T-1' }]
+  expect(await stopOrphans(w.$, null)).toEqual([])
+  const since = workers.get('ag10')!.since
+  expect(Math.abs(since - Date.parse(fresh))).toBeLessThan(1000)
+  // the try's own start stays its first start
+  expect(find(await load(w.$), 'T-1')!.runs![0]!.started).toBe(first)
+  // a late hand-back taken as this worker's counts the same way
+  workers.clear()
+  expect(await lateHandBack(w.$, 'ag10')).toBe(true)
+  expect(Math.abs(workers.get('ag10')!.since - Date.parse(fresh))).toBeLessThan(1000)
+  // the regular check asks nobody for more time
+  await check(w.$)
+  const after = find(await load(w.$), 'T-1')!
+  expect(after.time_ask).toBeUndefined()
+  expect(after.wrap_up).toBeUndefined()
+  workers.clear()
 })
 
 test('T-743: a claim that went on with the same try but never started is undone back to the ended try, with no try number taken off', () => {

@@ -426,7 +426,9 @@ session takes over driving the board, or an old worker ends with no report, the 
 with the same try: the try number stays, no retry is used, and it does not count as a failed try in
 `/symcc-stats` (a task whose restarted round merges is still "right first try"). Its history says
 "try 2: worker restarted after the app was reopened". The try's time runs from its first start to
-its end, across the restarts, and its tokens add up over all its workers. Only one worker works on
+its end, across the restarts, and its tokens add up over all its workers. A hand-over is a little
+different: when driving moves to another session, the try is not counted again, but its time starts
+again in the new session. Each worker's time limit always counts from that worker's own start. Only one worker works on
 a try: the worker that was stopped by the restart is never taken back for it once a new one starts.
 
 ### When something goes wrong
