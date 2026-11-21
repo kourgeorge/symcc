@@ -109,6 +109,8 @@ Type these in the chat. `/symcc` opens everything; `/symcc-<word>` does one thin
 | Command | What it does |
 |---|---|
 | `/symcc` | Open the board panel (tasks, scouts and settings) |
+| `/symcc-board` | OpenCode only: open the board in its session panel, or close it when it is open. (There, plain `/symcc` prints the board as text) |
+| `/symcc-answer T-5 <answer>` | OpenCode only: answer a waiting task, or a question with `Q-3 <answer>`. The board panel sends this for you |
 | `/symcc-tasks` | Open the panel on the tasks view |
 | `/symcc-scouts` | Open the panel on the scouts view and reload the scout files (a text list if the panel can't be shown) |
 | `/symcc-task T-3` | Open one task |
