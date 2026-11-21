@@ -36,6 +36,8 @@ test('the hints say the real way out, within 50 columns, and never Esc', () => {
     boxHint('Enter goes on'),
     pickHint('c'),
     pickHint('x'),
+    boxHint('Enter sends to todo', 'cancels', 'c'),
+    boxHint('Enter sends', 'cancels', 'c'),
   ]
   expect(lines).toEqual([
     'Enter sends it to todo · Enter on empty cancels',
@@ -45,6 +47,8 @@ test('the hints say the real way out, within 50 columns, and never Esc', () => {
     'Enter goes on · Enter on empty cancels',
     'Enter picks · c cancels',
     'Enter picks · x cancels',
+    'Enter sends to todo · Enter on empty or c cancels',
+    'Enter sends · Enter on empty or c cancels',
   ])
   for (const l of lines) expect(l.length).toBeLessThanOrEqual(50)
   expect(hintLineText(settingsKeys())).toBe('Enter change · ↑↓ move · t l s c views · b back')
@@ -55,20 +59,21 @@ test('the hints say the real way out, within 50 columns, and never Esc', () => {
   for (const keys of [settingsKeys(), rolesKeys(), scoutListKeys(), scoutEditKeys()]) expect(keys.some(k => k.key === 'Esc')).toBe(false)
 })
 
-test('the reject reason box: Enter on empty cancels it (nothing is sent), and so does its Cancel (c) button', async ($, on) => {
+test('the reject reason box: Enter on empty cancels it (nothing is sent), and so does its [Cancel] button (key c)', async ($, on) => {
   stateOf(on, { opened: 'T-5', view: view([task('T-5', 'review', 'Blue button', { branch: 'symcc/T-5' })]) })
   const toasts: string[] = []
   on('ui.toast', (_, e) => (toasts.push(JSON.stringify(e)), { value: undefined }))
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   await ui.press({ key: 'reject' })
-  expect(await ui.find({ type: 'Text', text: /^Enter sends it to todo · Enter on empty cancels$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^Enter sends to todo · Enter on empty or c cancels$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /Esc/ })).toBeUndefined()
   await ui.input({ key: 'reject-reason', text: '   ' })
   expect(await ui.find({ key: 'reject-reason' })).toBeUndefined()
   expect(toasts.length).toBe(0)
   await ui.press({ key: 'reject' })
   const cancel = await ui.find({ key: 'reject-cancel' })
-  expect(cancel?.props.label).toBe('Cancel (c)')
+  expect(cancel?.props.label).toBe('Cancel')
+  expect(cancel?.text).toBe('[Cancel]')
   expect(cancel?.props.hotkey).toBe('c')
   await ui.press({ key: 'reject-cancel' })
   expect(await ui.find({ key: 'reject-reason' })).toBeUndefined()
@@ -89,13 +94,14 @@ test('the reject reason box: Enter on empty cancels it (nothing is sent), and so
   await ui.unmount()
 })
 
-test('the role pick list has a Cancel (c) button and says so', async ($, on) => {
+test('the role pick list has a [Cancel] button (key c) and says so', async ($, on) => {
   stateOf(on, { opened: 'T-1', view: view([task('T-1', 'todo', 'Write it up')]) })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   await ui.press({ key: 'role' })
   expect(await ui.find({ type: 'Text', text: /^Enter picks · c cancels$/ })).toBeDefined()
   const cancel = await ui.find({ key: 'role-cancel' })
-  expect(cancel?.props.label).toBe('Cancel (c)')
+  expect(cancel?.props.label).toBe('Cancel')
+  expect(cancel?.text).toBe('[Cancel]')
   expect(cancel?.props.hotkey).toBe('c')
   await ui.press({ key: 'role-cancel' })
   expect(await ui.find({ key: 'role-cancel' })).toBeUndefined()
@@ -103,17 +109,20 @@ test('the role pick list has a Cancel (c) button and says so', async ($, on) => 
   await ui.unmount()
 })
 
-test('"Your answer" opened with Answer…: Enter on empty and Cancel (c) go back to the answer buttons', async ($, on) => {
+test('"Your answer" opened with Answer…: Enter on empty and [Cancel] (key c) go back to the answer buttons', async ($, on) => {
   stateOf(on, { opened: 'T-2', view: view([task('T-2', 'waiting', 'Search mode', { question: 'Which colour?', options: ['red', 'blue'] })]) })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   await ui.press({ key: 'choice-3' })
   expect(await ui.find({ key: 'answer' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /^Enter sends · Enter on empty cancels$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^Enter sends · Enter on empty or c cancels$/ })).toBeDefined()
   await ui.input({ key: 'answer', text: '' })
   expect(await ui.find({ key: 'answer' })).toBeUndefined()
   expect(await ui.find({ key: 'choice-1' })).toBeDefined()
   await ui.press({ key: 'choice-3' })
+  expect(await ui.find({ type: 'Text', text: /^Enter sends · Enter on empty or c cancels$/ })).toBeDefined()
   const cancel = await ui.find({ key: 'answer-cancel' })
+  expect(cancel?.props.label).toBe('Cancel')
+  expect(cancel?.text).toBe('[Cancel]')
   expect(cancel?.props.hotkey).toBe('c')
   await ui.press({ key: 'answer-cancel' })
   expect(await ui.find({ key: 'answer' })).toBeUndefined()

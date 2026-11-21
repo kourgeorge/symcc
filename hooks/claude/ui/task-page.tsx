@@ -115,8 +115,10 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
           onInput={value => void (S.rejecting && (S.rejecting.reason = value))}
           onSubmit={submitReject}
         />
-        <Button key="reject-cancel" label="Cancel (c)" hotkey="c" onPress={cancelReject} />
-        <Text color={C('inactive')}>{boxHint('Enter sends it to todo')}</Text>
+        <Button key="reject-cancel" plain label="Cancel" hotkey="c" onPress={cancelReject}>
+          <Text color={C('text')}>[Cancel]</Text>
+        </Button>
+        <Text color={C('inactive')}>{boxHint('Enter sends to todo', 'cancels', 'c')}</Text>
       </Box>
     ) : null
   if (inReview && !answered && S.diffOpen?.task === t.id) {
@@ -192,7 +194,9 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
             </Button>
           )
         })}
-        <Button key="role-cancel" label="Cancel (c)" hotkey="c" onPress={() => ((S.rolePick = null), $.ui.invalidate('ui.render'))} />
+        <Button key="role-cancel" plain label="Cancel" hotkey="c" onPress={() => ((S.rolePick = null), $.ui.invalidate('ui.render'))}>
+          <Text color={C('text')}>[Cancel]</Text>
+        </Button>
         <Text color={C('inactive')}>{pickHint('c')}</Text>
       </Box>
     ) : null

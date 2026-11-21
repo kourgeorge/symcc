@@ -795,7 +795,8 @@ are about changes; under "How tasks ended" a read investigation shows as
   - a scout's edit page: its **Cancel** button (`x`);
   - a page: its **Back** button, `b`: a task page and the Scouts list or Settings go back
     to the board list, a task's changes to the task, a scout's page to the Scouts list.
-  Each box and footer says the way out, e.g. `Enter sends · Enter on empty cancels`.
+  Each box and footer says the way out, e.g. `Enter sends · Enter on empty or c cancels`
+  (the **[Cancel]** button's own letter is named there, not on the button).
   When Esc does reach the panel it still goes one step back the same way, and on the
   board list with no search it closes the panel; after a step back the panel asks for the
   keys again (if you had text in the prompt, Claude Code keeps them there; ctrl+x tab or a

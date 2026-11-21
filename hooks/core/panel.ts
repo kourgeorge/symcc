@@ -614,8 +614,10 @@ export const searchLine = (query: string, shown: number, all: number): string =>
 export const searchBoxHint = (count: string): string => `${count} · Enter on empty clears`
 
 /** The hint under a text box that Enter on empty cancels: what Enter does, then "Enter on empty cancels"
- *  ("goes back" when there is nothing to cancel back to but the page). Kept within 50 columns. */
-export const boxHint = (enter: string, empty: 'cancels' | 'goes back' = 'cancels'): string => `${enter} · Enter on empty ${empty}`
+ *  ("goes back" when there is nothing to cancel back to but the page). `key` is the box's Cancel button's hotkey,
+ *  named here since the button's label is just "[Cancel]": "Enter on empty or c cancels". Kept within 50 columns. */
+export const boxHint = (enter: string, empty: 'cancels' | 'goes back' = 'cancels', key?: string): string =>
+  `${enter} · Enter on empty ${key ? `or ${key} ` : ''}${empty}`
 
 /** The hint under a pick list: Enter picks, `key` (its Cancel button's hotkey) cancels. */
 export const pickHint = (key: string): string => `Enter picks · ${key} cancels`
