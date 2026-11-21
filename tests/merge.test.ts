@@ -3102,9 +3102,24 @@ test('a try that asks ends as asked (a question, or files outside its list); one
   expect((await tryEnds(answers('', { reason: 'error' }))).end).toEqual(['stopped', "the worker's turn ended on an error (retries used up or the context limit)"])
 })
 
-test('T-411: only the host seeing a background command still running fails a try; an answer that only says it will continue later just adds a warning', async () => {
-  // the host's signal: a background command still running when the turn ended fails the try, whatever the answer says
-  const ran = await tryEnds(answers('Changed src/a.ts; tests/a.test.ts covers it.', { reason: 'answer', background: ['bun test'] }))
+test('T-724: a hand-back with a report while a background command still runs stops that command, logs it and goes on to prep and merge', async () => {
+  const stops: string[] = []
+  const stopBackground = async () => (stops.push('ag1'), 1)
+  const ran = await tryEnds(answers('Changed src/a.ts; tests/a.test.ts covers it.', { reason: 'answer', background: ['bun test'], stopBackground }))
+  expect(stops).toEqual(['ag1'])
+  expect(ran.end).toEqual(['finished', 'merged'])
+  expect(ran.t.note).not.toBe('the worker ended its turn before its work finished')
+  expect(ran.t.history.some(h => h.text === 'try 1: stopped 1 command still running at hand-back')).toBe(true)
+  expect(ran.t.history.some(h => h.text.includes('nothing was checked or merged'))).toBe(false)
+  // a host that can't stop it: still goes on, and the history says it could not
+  const kept = await tryEnds(answers('Changed src/a.ts.', { reason: 'answer', background: ['bun test', 'tsc -w'] }))
+  expect(kept.end).toEqual(['finished', 'merged'])
+  expect(kept.t.history.some(h => h.text === 'try 1: 2 commands still running at hand-back (could not stop them)')).toBe(true)
+})
+
+test('T-411: only the host seeing a background command still running fails a try (with no report); an answer that only says it will continue later just adds a warning', async () => {
+  // the host's signal: a background command still running when the turn ended with no report fails the try
+  const ran = await tryEnds(answers('', { reason: 'answer', background: ['bun test'] }))
   expect([ran.t.status, ran.t.note]).toEqual(['failed', 'the worker ended its turn before its work finished'])
   expect(ran.end).toEqual(['stopped', 'the worker ended its turn before its work finished'])
   expect(ran.t.history.at(-1)?.text).toContain('→ the worker ended its turn before its work finished; nothing was checked or merged')
@@ -5509,12 +5524,14 @@ test('old board tasks with kind change or investigation still load as before; an
   expect(kindOf(find(p, 'T-4'))).toBe('change')
 })
 
-test('the board line shows the kind next to the role; a plain change shows none; search matches the kind', () => {
+test('a board row tag is only the kind, never the role (T-722); a plain change shows none; the lead\'s board text keeps the role; search matches the kind', () => {
   const [b] = boardWith('auto', [], { kind: 'bug', role: 'tester', status: 'todo' } as Partial<BoardTask>)
   const t = b.tasks[0]!
-  expect(rowExtra(t, b.tasks)).toBe('[bug · tester]')
+  expect(rowExtra(t, b.tasks)).toBe('[bug]')
+  expect(rowExtra({ ...t, kind: 'docs', role: 'docs' }, b.tasks)).toBe('[docs]')
+  expect(rowExtra({ ...t, kind: 'docs', role: 'docs', status: 'doing' }, b.tasks)).toBe('[docs]')
   expect(rowExtra({ ...t, role: undefined }, b.tasks)).toBe('[bug]')
-  expect(rowExtra({ ...t, kind: undefined } as SymccTask, b.tasks)).toBe('tester')
+  expect(rowExtra({ ...t, kind: undefined } as SymccTask, b.tasks)).toBe('')
   expect(boardText(b, Date.now(), '~/p', 'symcc')).toContain('Do it [bug · tester]')
   expect(taskMatches(t, 'bug')).toBe(true)
   expect(taskMatches({ ...t, kind: undefined } as SymccTask, 'bug')).toBe(false)

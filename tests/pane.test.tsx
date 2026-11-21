@@ -1316,18 +1316,20 @@ const ROLE_FILES = {
   '/roles/security.md': '---\ndescription: checks for holes\n---\n',
 }
 
-test('a running task shows its role at the right end in the inactive color; the list shows no try "(n)" (T-628), the band keeps it; general shows no role', async ($, on) => {
-  const tasks = [task('T-1', 'doing', 'Plain work', { role: 'general', attempts: 2 }), task('T-12', 'doing', 'Cover the parser errors', { role: 'tester', attempts: 1 }), task('T-13', 'doing', 'Fix the parser', { role: 'tester', attempts: 3 })]
+test('a running task shows its kind (never its role, T-722) at the right end in the inactive color; the list shows no try "(n)" (T-628), the band keeps it; a plain change shows no tag', async ($, on) => {
+  const tasks = [task('T-1', 'doing', 'Plain work', { role: 'general', attempts: 2 }), task('T-12', 'doing', 'Cover the parser errors', { role: 'tester', attempts: 1 }), task('T-13', 'doing', 'Fix the parser', { kind: 'bug', role: 'tester', attempts: 3 }), task('T-14', 'todo', 'Write the guide', { kind: 'docs', role: 'docs' })]
   stateOf(on, { view: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 60 }, surface: 'terminal' })
-  const mark = await ui.find({ type: 'Text', text: /^ +tester$/ })
+  const mark = await ui.find({ type: 'Text', text: /^ +\[bug\]$/ })
   expect(mark).toBeDefined()
   expect(mark?.props.color).toBe('inactive')
-  expect((await ui.find({ key: 'T-12' }))?.text.length).toBe(60)
+  expect((await ui.find({ key: 'T-14' }))?.text).toMatch(/Write the guide +\[docs\]$/)
+  expect((await ui.find({ key: 'T-12' }))?.text).toMatch(/Cover the parser errors$/)
+  expect(await ui.find({ type: 'Text', text: /tester/ })).toBeUndefined()
   // no try mark on any list row, not "(n)" and not "try n" (T-628: the band and the task page show it)
   expect(await ui.find({ type: 'Text', text: /^ ?\([23]\)$/ })).toBeUndefined()
   expect((await ui.find({ key: 'T-1' }))?.text).toMatch(/T-1 +▶ +Plain work$/)
-  expect((await ui.find({ key: 'T-13' }))?.text).toMatch(/T-13 ▶ +Fix the parser +tester$/)
+  expect((await ui.find({ key: 'T-13' }))?.text).toMatch(/T-13 ▶ +Fix the parser +\[bug\]$/)
   for (const id of ['T-1', 'T-12', 'T-13']) expect((await ui.find({ key: id }))?.text).not.toMatch(/try|\(\d\)/)
   // the titles still start in one column
   const starts = await Promise.all(['T-1', 'T-12', 'T-13'].map(async id => {
@@ -1581,7 +1583,7 @@ test('the Tasks view: no workers/scouts strip in the banner, NEEDS YOU then one 
   const iso = (m: number) => new Date(now + m * 60_000).toISOString()
   const tasks = [
     task('T-94', 'review', 'Clearer board view'),
-    task('T-95', 'doing', 'Secrets scout example', { role: 'frontend', attempts: 1, runs: [{ started: iso(-4) }] }),
+    task('T-95', 'doing', 'Secrets scout example', { role: 'frontend', kind: 'bug', attempts: 1, runs: [{ started: iso(-4) }] }),
     task('T-96', 'doing', 'Version 0.3.0', { role: 'docs', attempts: 1, runs: [{ started: iso(-1) }] }),
     task('T-97', 'todo', 'Rename "off" to "pause"', { after: ['T-96'] }),
     ...[1, 2, 3].map(n => task(`T-${n}`, 'backlog', `Idea ${n}`)),
@@ -1615,7 +1617,7 @@ test('the Tasks view: no workers/scouts strip in the banner, NEEDS YOU then one 
   }
   // at 100 columns the extras sit at the right end of each row
   const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 100 }, surface: 'terminal' })
-  expect((await ui.find({ key: 'T-95' }))!.text).toMatch(/^T-95 ▶ 4m\s+Secrets scout example\s+frontend$/)
+  expect((await ui.find({ key: 'T-95' }))!.text).toMatch(/^T-95 ▶ 4m\s+Secrets scout example\s+\[bug\]$/)
   expect((await ui.find({ key: 'T-95' }))!.text.length).toBe(100)
   expect((await ui.find({ key: 'T-97' }))!.text).toMatch(/^T-97 ○\s+Rename "off" to "pause"\s+waits for T-96$/)
   expect((await ui.find({ key: 'T-94' }))!.text).toMatch(/^T-94 ◆ review\s+Clearer board view\s+Enter to review$/)

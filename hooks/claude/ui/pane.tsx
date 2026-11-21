@@ -29,7 +29,7 @@ export async function renderPane($: $, e: PaneEvent, next: Parameters<PaneHook>[
 /** The Live tab, or (T-687) the Organizational memory page opened from the button at its bottom (Back comes back). */
 async function liveTab($: $, pane: PaneParts) {
   const om = await orgMemNow(claudeHost($))
-  if (!orgMemView.open) return pane.vscode ? livePageVs($, pane, om.notes.length) : livePage($, pane, om.notes.length)
+  if (!orgMemView.open) return pane.vscode ? livePageVs($, pane, om.notes) : livePage($, pane, om.notes)
   // the page doesn't blink: no redraw timer while it is shown
   stopLiveTick()
   return orgMemPage($, pane, om.notes, om.file)

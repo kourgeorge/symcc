@@ -12,6 +12,7 @@ import { claudeNames, workerTypeFor } from './agent-types'
 import { hostAgent, isNotReady, scoutNotReady } from './agents'
 import { leadUsage } from './lead-usage'
 import { panelValues } from './panel'
+import { useTaskStop } from './background'
 
 /** The Host register.tsx hands the logic (the board panel's values are its ui.panel). */
 export type ClaudeHost = Host
@@ -161,6 +162,8 @@ function envGet($: EngineInterface, name: string): Promise<string | undefined> {
  * their first argument written out: see envGet).
  */
 export function claudeHost($: EngineInterface): ClaudeHost {
+  // T-724: a background command of a worker still running at its hand-back is stopped by its task id with the TaskStop tool
+  useTaskStop(id => $.tool.call({ tool: 'TaskStop', task_id: id }))
   const host: ClaudeHost = {
     // Claude Code has every feature: the board panel, the band, a lead woken at once, plan mode and the lead's session logs
     features: ALL_FEATURES,

@@ -265,10 +265,12 @@ export async function waitEnded(host: Host, ids: string[], ms: number): Promise<
 /**
  * Why a worker's turn ended (from turn.complete): answered, stopped, refused (with what the API said) or an API error.
  * `background`: the agent's background commands the host saw still running when its turn ended ([] for none);
- * absent when the host can't tell. Only a non-empty list fails the try (ENDED_EARLY_NOTE); the answer's text alone
+ * absent when the host can't tell. A non-empty list with no hand-back report fails the try (ENDED_EARLY_NOTE); with a
+ * report, the commands are stopped (`stopBackground`) and the hand-back goes on (T-724). The answer's text alone
  * (endedEarlyLine) only adds a warning (see warnEndedEarly).
+ * `stopBackground`: when the host can, stops those commands of the agent (only its own, never by name) and answers how many it stopped.
  */
-export type TurnEnd = { reason: TurnEndReason; refusal?: TurnRefusal; background?: readonly string[] }
+export type TurnEnd = { reason: TurnEndReason; refusal?: TurnRefusal; background?: readonly string[]; stopBackground?: () => Promise<number> }
 /** Why a turn ended: the model answered, it was interrupted, the model refused, or an error ended it. */
 export type TurnEndReason = 'answer' | 'aborted' | 'refusal' | 'error'
 /** What was said about a refusal that ended a turn: its category and explanation, each null when none was given. */
@@ -656,6 +658,22 @@ export async function endCheck(host: Host, id: string) {
 }
 
 /**
+ * T-724: the worker handed back its report while commands it started were still running (end.background): its own
+ * leftovers are stopped through the host (end.stopBackground; never by name) and a history line says so; the try goes on.
+ */
+async function stopLeftovers(host: Host, t: SymccTask, end: TurnEnd) {
+  const running = end.background?.length ?? 0
+  if (!running) return
+  const stopped = end.stopBackground ? await end.stopBackground().catch(() => 0) : 0
+  const cmds = (n: number) => `${n} command${n === 1 ? '' : 's'}`
+  const text = stopped >= running ? `stopped ${cmds(stopped)} still running at hand-back` : stopped > 0 ? `stopped ${cmds(stopped)} of ${running} still running at hand-back` : `${cmds(running)} still running at hand-back (could not stop ${running === 1 ? 'it' : 'them'})`
+  await change(host, x => {
+    const cur = find(x, t.id)
+    return cur && cur.status === t.status && cur.attempts === t.attempts ? patchTask(x, t.id, { history: withHistory(cur.history, now(), ['step', `${tryLabel(t)}: ${text}`]) }, now()) : x
+  })
+}
+
+/**
  * T-411: when the answer's text reads as ended before its work finished (endedEarlyLine), a warning note goes to the
  * task's history and the lead's board update. Only a warning: the text check can be wrong, so the try goes on as usual.
  */
@@ -765,8 +783,8 @@ export async function saveReport(host: Host, t: SymccTask, answer: string) {
  * What happens is decided from what the try recorded on the board (try_question, try_refused) and why its turn ended, never from the hand-back's text (which
  * stays its report, an investigation's answer; it only adds a warning, see warnEndedEarly), in this order: a question (ask_owner) → waiting with it; edits refused
  * as outside the task's files → waiting for those files (nothing merged, even with half-done edits); stopped → failed;
- * an API error or a refusal → failed with the reason; the host saw a background command still running (end.background) → failed (ENDED_EARLY_NOTE);
- * else done: checked and merged (an investigation: its answer).
+ * an API error or a refusal → failed with the reason; the host saw a background command still running (end.background) with no report → failed (ENDED_EARLY_NOTE);
+ * else done (T-724: commands still running at a hand-back with a report are stopped first, see stopLeftovers): checked and merged (an investigation: its answer).
  * Once the try has ended (its outcome written), the folder's .scratch/ throwaway folder is emptied (clearScratch, T-456);
  * not when the task changed meanwhile, was given up, or a checker starts again there.
  */
@@ -818,16 +836,18 @@ async function finishTry(host: Host, agentId: string, w: Pick<Worker, 'task' | '
     const why = endFailure(end)
     if (await writeIfSame(host, t, cur => ({ status: 'failed', note: why, history: withHistory(cur.history, now(), ['failed', `${tryLabel(t)}: ${why}; nothing was checked or merged`]), ...endedBy(cur, now(), 'stopped', why) }))) return false
     tellLead(host, `${t.id} "${t.title}": ${why}, so nothing was checked or merged and the task failed. Its work so far is kept in its folder and branch, and its report (${S.N.name} board task ${t.id}); ${S.N.name} retry ${t.id} starts a fresh try that continues from there. Or change, split or drop it.`)
-  } else if (end.background?.length) {
-    // The host saw a background command of it still running when its turn ended: its work isn't done.
+  } else if (end.background?.length && !answer.trim()) {
+    // The host saw a background command of it still running when its turn ended with no report: its work isn't done.
     if (await writeIfSame(host, t, cur => ({ status: 'failed', note: ENDED_EARLY_NOTE, history: withHistory(cur.history, now(), ['failed', `${tryLabel(t)}: ${cutLine(summary, 300)} → ${ENDED_EARLY_NOTE}; nothing was checked or merged`]), ...endedBy(cur, now(), 'stopped', ENDED_EARLY_NOTE) }))) return false
     tellLead(host, `${t.id} "${t.title}": ${ENDED_EARLY_NOTE} (something it started was still running, but ending its turn ends its work), so nothing was checked or merged and the task failed. Its work so far is kept in its folder and branch; ${S.N.name} retry ${t.id} starts a fresh try that continues from there.`)
   } else if (isInvestigation(t)) {
     if (gaveUp()) return false
+    await stopLeftovers(host, t, end)
     await warnEndedEarly(host, t, answer)
     await answered(host, t, answer, summary)
   } else {
     if (gaveUp()) return false
+    await stopLeftovers(host, t, end)
     await warnEndedEarly(host, t, answer)
     if (await waitIfBranchGone(host, b, t, 'merge')) return true
     await change(host, x => (find(x, t.id)?.status === 'doing' && !gaveUp() ? patchTask(x, t.id, { note: PREP_NOTE }, now()) : x))
