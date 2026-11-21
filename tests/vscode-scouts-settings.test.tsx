@@ -159,6 +159,9 @@ test('T-697 the Scouts list in VS Code at width 50: one line per scout, the term
     const open = await ui.find({ key: `scout:${s.name}` })
     expect([open?.type, open?.props.pressableLinks], s.name).toEqual(['Markdown', [vsHref('scout', s.name)]])
     // the row's Texts: the icon (in the scout's tone), then how often, the state, the end
+    const raw = (box!.children as Node[]).filter(n => n.type === 'Text').map(n => texts(n).join(''))
+    // the cells keep their gaps in VS Code: no plain spaces, only no-break ones
+    for (const t of raw) expect(t.includes(' '), `${s.name}: plain space in ${JSON.stringify(t)}`).toBe(false)
     const cells = (box!.children as Node[]).filter(n => n.type === 'Text').map(n => [texts(n).join('').replace(/\u00a0/g, ' '), n.props?.color])
     expect(cells[0], s.name).toEqual([`${r.icon} `, r.tone])
     for (const [text, color] of cells.slice(1)) expect(color, `${s.name}: ${text}`).toBe(text === r.state ? r.stateTone : 'inactive')
@@ -166,7 +169,7 @@ test('T-697 the Scouts list in VS Code at width 50: one line per scout, the term
   }
   const line = (name: string) => ui.find({ key: `vs-scout-${name}` }).then(vsRowText)
   expect(await line('dependency-updates')).toMatch(/^◉ dependency-updates +every 30 min +running now… +haiku$/)
-  const stateColor = (name: string) => ui.find({ key: `vs-scout-${name}` }).then(b => ((b!.children as Node[]).filter(n => n.type === 'Text').find(n => /running|paused|bad every|next in/.test(texts(n).join(''))))?.props?.color)
+  const stateColor = (name: string) => ui.find({ key: `vs-scout-${name}` }).then(b => ((b!.children as Node[]).filter(n => n.type === 'Text').find(n => /running|paused|bad every|next in/.test(texts(n).join('').replace(/ /g, ' '))))?.props?.color)
   expect(await stateColor('dependency-updates')).toBe('ide')
   expect(await stateColor('docs-drift')).toBe('inactive')
   expect(await stateColor('broken')).toBe('warning')

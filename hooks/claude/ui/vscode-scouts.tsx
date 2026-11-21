@@ -43,7 +43,7 @@ export function reportStart(report: string | undefined): string {
 }
 
 /** Spaces that HTML does not squeeze, so a row's cells keep their padding in VS Code's panel. */
-const hard = (s: string) => s.replace(/ /g, ' ')
+const hard = (s: string) => s.replace(/ /g, ' ')
 
 /** The end of a Scouts list row after its state, as plain text, fitted to `room` characters (never wider): the
  *  terminal row's "last:" cell with the start of the last report after it ("last: found 5: The package left-pad…"),
