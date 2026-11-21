@@ -79,7 +79,7 @@
   const TITLE_W = 12
   const GAP = 6
   const LABELS = ['work✧', 'check✧', 'queue', 'tests', 'merged']
-  // T-767: the lines under a ▍heading start with 1 space; a running lane then "▶ " (core/live.ts's 'run' tone)
+  // T-767: the lines under a ▍heading start with 1 space; a running lane then "▶ " and its id in the accent ('run' tone), its title normal text
   const LEAD_W = 1 + 2 + ID_W + 1 + TITLE_W + 2
 
   function tabRow(active) {
@@ -97,8 +97,8 @@
     })
     const right = l.done ? `merged ${dur(s.now - l.done)} ago` : l.place ? `#${l.place}` : dur(s.now - l.since)
     // T-771: a just-merged lane: no "▶ ", its id, title and second line dim
-    const name = pad(l.id, ID_W) + ' ' + pad(cut(TITLES[l.id], TITLE_W), TITLE_W)
-    const one = ' ' + (l.done ? '  ' + sp(name, 'dim') : sp('▶ ' + name, 'run')) + '  ' + track + sp('  ' + right.padStart(6), 'dim')
+    const title = ' ' + pad(cut(TITLES[l.id], TITLE_W), TITLE_W)
+    const one = ' ' + (l.done ? '  ' + sp(pad(l.id, ID_W) + title, 'dim') : sp('▶ ' + pad(l.id, ID_W), 'run') + title) + '  ' + track + sp('  ' + right.padStart(6), 'dim')
     const lead = `   ${l.kind} try ${l.tryNo}/${l.tries}`
     // the whole task's tokens (every try); the running try's are known only at its hand-back
     const total = (l.prior || 0) + (l.tokens || 0)

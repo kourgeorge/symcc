@@ -338,7 +338,7 @@ export type LiveTone = 'id' | 'title' | 'passed' | 'current' | 'future' | 'text'
 /** A piece of a lane's line in one tone. */
 export type LiveSeg = { text: string; tone: LiveTone }
 /** Each tone's color name, the same in every client; a section heading ("▍Tasks") and (T-760) the agent mark "✧" have
- *  the task page's heading color. T-767: a running lane's "▶ ", id and title are 'run' (bold, the accent color); a
+ *  the task page's heading color. T-767: a running lane's "▶ " and id are 'run' (bold, the accent color; its title is normal text); a
  *  waiting train's id and title are 'wait' (dim, as the rest of its row). */
 export const LIVE_TONE: Record<LiveTone, string> = { id: 'claude', title: 'text', passed: 'success', current: 'ide', future: 'inactive', text: 'text', dim: 'inactive', warning: 'warning', bar: 'ide', heading: 'suggestion', mark: 'suggestion', run: 'claude', wait: 'inactive', workers: 'ide', checkers: 'autoAccept', scouts: 'suggestion', lead: 'success' }
 /** Whether a tone is drawn bold. */
@@ -468,9 +468,9 @@ export function laneLines(lane: LiveLane, l: LiveLayout, o: { nowMs: number; fra
     // T-771: a finished lane has ✓ (done color) at its last station instead of the blinking mark
     track.push(i < lane.at ? { text: '●', tone: 'passed' } : i === lane.at ? (done ? { text: LIVE_DONE_MARK, tone: 'passed' } : { text: liveBlink(o.frame, o.steady), tone: 'current' }) : { text: '○', tone: 'future' })
   })
-  // T-767: "▶ " before the id; the mark, id and title bold in the accent color ('run'); T-771: a finished lane's dim, no mark
+  // T-767: "▶ " before the id; the mark and id bold in the accent color ('run'), the title normal text; T-771: a finished lane's dim, no mark
   const nameTone: LiveTone = done ? 'dim' : 'run'
-  const name = segs({ text: done ? ' '.repeat(LIVE_RUN_MARK.length) : LIVE_RUN_MARK, tone: done ? 'text' : 'run' }, { text: padWidth(lane.id, l.idW), tone: nameTone }, l.titleW > 0 && { text: ` ${padWidth(cutTitle(lane.title, l.titleW), l.titleW)}`, tone: nameTone })
+  const name = segs({ text: done ? ' '.repeat(LIVE_RUN_MARK.length) : LIVE_RUN_MARK, tone: done ? 'text' : 'run' }, { text: padWidth(lane.id, l.idW), tone: nameTone }, l.titleW > 0 && { text: ` ${padWidth(cutTitle(lane.title, l.titleW), l.titleW)}`, tone: done ? 'dim' : 'text' })
   const first = [...name, { text: sep, tone: 'text' as const }, ...track, { text: sep + laneRight(lane, o.nowMs, l.rightW).padStart(l.rightW), tone: 'dim' as const }]
   // the second line
   const trackW = l.stations.length + (l.stations.length - 1) * l.gap
@@ -761,7 +761,7 @@ export function todayMore(tasks: readonly SymccTask[], team: TodayTeam | undefin
       const at = end ?? start
       if (!r.tokens || !isToday(at)) continue
       const all = tokenCount(r.tokens)
-      // T-774: the checkers' part from the try's agent entries (their kinds) when it has them, else its checker_tokens
+      // T-785: the checkers' part from the try's checker_tokens first, from its agent entries (their kinds) only when that is missing
       const chkTok = checkerTokensOf(r)
       const chk = Math.min(all, chkTok ? tokenCount(chkTok) : 0)
       workers += all - chk

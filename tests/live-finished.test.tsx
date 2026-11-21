@@ -102,7 +102,7 @@ test('T-771: the VS Code Live tab shows the finished lane (dim link, no ▶, "me
   expect(lane?.props.dimColor).toBe(true)
   expect(String(lane?.props.text).startsWith('[T-747 Live tab')).toBe(true)
   expect(await ui.find({ key: 'live-run-mark:T-747' })).toBeUndefined()
-  expect((await ui.find({ key: 'live-run-mark:T-760' }))?.text).toBe('▶')
+  expect((await ui.find({ key: 'live-run-mark:T-760' }))?.text).toBe('▶ T-760')
   expect((await ui.find({ key: 'live-right:T-747' }))?.text).toBe('merged 3m ago')
   expect(await ui.find({ key: 'live:T-740' })).toBeUndefined()
   await ui.press({ key: 'live:T-747', link: { href: vsHref('task', 'T-747') } })
