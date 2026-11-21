@@ -49,7 +49,7 @@ test('the version read from plugin.json shows in the panel title, the banner, th
   expect(boardBrand('symcc', '0.3.0')).toBe(`${ICON} symcc v0.3.0`)
   expect(bannerLines(emptyBoard(), '/Users/me/repositories/symcc', '/Users/me', true, 80, 0, 'symcc', undefined, S.version)[0]!.parts.some(p => p.text.includes('board'))).toBe(false)
   // the band above the prompt shows no version (T-576)
-  expect(bandTitle(80, () => ' ⏵ auto · 1 doing ').brand).toBe(`${ICON} symcc`)
+  expect(bandTitle('/Users/me/repositories/symcc')).toBe(`${ICON} symcc`)
 })
 
 test('a missing or broken plugin.json shows no version, and no error', async () => {

@@ -76,14 +76,15 @@ test('a question the lead adds is saved on the board, shown to the panel, in the
   expect(q).toMatchObject({ id: 'Q-1', text: 'Raise the version?', options: ['Yes', 'No', 'Later'] })
   expect(q?.asked_at).toBeTruthy()
   expect(q?.answer).toBeUndefined()
-  // the panel's view has the open question; the status line counts it
+  // the panel's view has the open question; the status line starts with ⚠ (T-748: no count there, the band lists it)
   expect((w.panel.view() as { questions?: unknown[] }).questions).toEqual([q])
-  expect(w.status.at(-1)).toContain('1 question for you')
+  expect(w.status.at(-1)).toMatch(/^⚠ ⏵ auto · drives here/)
+  expect(w.status.at(-1)).not.toContain('question')
   // the same "needs you" as a waiting task, once per question
   expect(sayQueue).toEqual([`${NEEDS_YOU_MARK}Q-1`])
   await call(w.host, { action: 'add', text: 'Add a docs scout?', options: ['Yes', 'No'] })
   expect(sayQueue).toEqual([`${NEEDS_YOU_MARK}Q-1`, `${NEEDS_YOU_MARK}Q-2`])
-  expect(w.status.at(-1)).toContain('2 questions for you')
+  expect(w.status.at(-1)).toMatch(/^⚠ /)
   // the list action and the board tool's text show them
   expect(await call(w.host, { action: 'list' })).toContain('Open questions for the owner (2):\n- Q-1 Raise the version? (Yes | No | Later)')
   expect(await runTool(w.host, 'board', {})).toContain('Questions for you (2):')
@@ -152,8 +153,8 @@ test('the board file keeps questions as they were and drops broken entries', () 
   expect(r.board.next_question).toBe(2)
   // a board with no questions stays without the fields
   expect('questions' in readBoard(JSON.stringify(emptyBoard())).board).toBe(false)
-  // the status line counts only open questions, right after the mode, also on an empty board
-  expect(statusLine({ tasks: [], questions: b.questions }, true)).toBe('⏵ auto · 1 question for you')
+  // an open question makes the status line start with ⚠ (T-748: the band names it), also on an empty board
+  expect(statusLine({ tasks: [], questions: b.questions }, true)).toBe('⚠ ⏵ auto · drives here')
   expect(statusLine({ tasks: [], questions: b2.questions }, true)).toBeUndefined()
   expect(boardText(b2)).not.toContain('Questions for you')
 })
@@ -327,15 +328,15 @@ test("T-651: in VS Code a question's options are numbered link lines, one under 
   await vs.unmount()
 })
 
-test('the band says "2 questions for you" and lists them, also with no task on the board', async ($, on) => {
+test('the band says "2 questions for you" and lists them in the warning color, also with no task on the board', async ($, on) => {
   const [b1] = addQuestion(emptyBoard(), 'Raise the version?', ['Yes', 'No'], ISO)
   const [b2] = addQuestion(b1, 'Add a scout?', ['Yes', 'No'], ISO)
   on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks: [], working: [], scouts: [], mode: 'auto', test_commands: [], questions: b2.questions } }, version: 1 } }))
   on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
-  expect(await ui.find({ type: 'Text', text: /⏵ auto · 2 questions for you/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /^Q-1 for you$/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /Add a scout\?/ })).toBeDefined()
+  expect((await ui.find({ type: 'Text', text: /^⚠ 2 questions for you: Q-1 Raise the version\?$/ }))?.props.color).toBe('warning')
+  expect((await ui.find({ type: 'Text', text: /^⚠ Q-2 Add a scout\?$/ }))?.props.color).toBe('warning')
+  expect(await ui.find({ type: 'Text', text: /⏵ auto/ })).toBeUndefined()
   await ui.unmount()
 })
 

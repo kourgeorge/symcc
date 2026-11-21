@@ -39,8 +39,8 @@ test('unknown mode behaves as today: add is not moved to the backlog, scouts may
   // a signal that says nothing keeps it unknown
   expect(notePlan(p, null)).toEqual({ plan: p, left: null, changed: false })
   const tasks = [{ id: 'T-1', status: 'doing' as const }]
-  expect(statusLine({ tasks }, true, '', 'auto', inPlan(p))).not.toContain(PLAN_NOTE)
-  expect(statusLine({ tasks }, true, '', 'auto', inPlan(p), { max_parallel: 3, tasks, scouts: [] }, 0)).not.toContain(PLAN_NOTE)
+  expect(statusLine({ tasks }, true, { plan: inPlan(p) })).not.toContain(PLAN_NOTE)
+  expect(statusLine({ tasks, scouts: [] }, true, { plan: inPlan(p), nowMs: 0 })).not.toContain(PLAN_NOTE)
 })
 
 test('scouts skip in plan mode (timer and run now go through scoutWhyNot); the other reasons still come first', () => {
@@ -54,12 +54,13 @@ test('the band and the status line say "plan mode: nothing starts"; running work
   expect(planBandText(1)).toBe('plan mode: nothing starts (1 worker keeps going)')
   expect(planBandText(3)).toBe('plan mode: nothing starts (3 workers keep going)')
   const tasks = [{ id: 'T-1', status: 'doing' as const }]
-  expect(statusLine({ tasks }, true, '', 'auto', true)).toBe('plan mode: nothing starts · ⏵ auto · T-1 doing')
-  expect(statusLine({ tasks: [] }, true, '', 'auto', true)).toBe('plan mode: nothing starts')
-  expect(statusLine({ tasks: [] }, true, '', 'auto', false)).toBe(undefined)
+  expect(statusLine({ tasks }, true, { plan: true, nowMs: 0 })).toBe('plan mode: nothing starts · ⏵ auto · drives here · today ✓ 0')
+  expect(statusLine({ tasks: [] }, true, { plan: true })).toBe('plan mode: nothing starts · ⏵ auto · drives here')
+  expect(statusLine({ tasks: [] }, true, { plan: false })).toBe(undefined)
   // with scouts, no "next" in plan mode, as no scout starts
   const scouts = [{ name: 'bugs', running: false, next_run: '1970-01-01T00:10:00Z' }]
-  expect(statusLine({ tasks }, true, '', 'auto', true, { max_parallel: 3, tasks, scouts }, 0)).toBe('plan mode: nothing starts · ⏵ auto · 1/3 workers · T-1 doing · 1 scout')
+  expect(statusLine({ tasks, scouts }, true, { plan: true, nowMs: 0 })).toBe('plan mode: nothing starts · ⏵ auto · drives here · today ✓ 0')
+  expect(statusLine({ tasks, scouts }, true, { plan: false, nowMs: 0 })).toBe('⏵ auto · drives here · next scout bugs in 10m · today ✓ 0')
 })
 
 test('leaving plan mode tells the lead once, with the backlog tasks added during it; nothing is moved', () => {

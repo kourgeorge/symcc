@@ -166,8 +166,8 @@ once you have cleared them and its merge runs.
 | test | `⊛` | Your test commands run |
 | merge | `⇢` | The branch moves forward |
 
-The board row shows the stage icon instead of `▶`, then the time. The band above the prompt
-counts the same tasks. A doing task's page names the stage in its badge and has a **Stage** line
+The board row shows the stage icon instead of `▶`, then the time. In Claude Code the band above
+the prompt shows the stage's icon and name, then the time in that stage: `T-740 ⌕ checker 8m`. A doing task's page names the stage in its badge and has a **Stage** line
 for the whole way, such as `worker ✓ → prep ✓ → ● checker → queue → test → merge` (see
 [What a task shows on its way to the merge](#what-a-task-shows-on-its-way-to-the-merge)). A task
 in review or waiting shows as `doing` while its approve or merge runs.
@@ -252,8 +252,9 @@ board with its `question` tool, with 2 to 6 short choices, and asks it briefly i
 - The board list shows **Questions for you (2)** at the top, above the tasks. Enter on one
   opens its page: the question, one button per choice (also on the number keys) and
   **Answer…** for your own words, the same as a waiting task.
-- The band above the prompt and the status line say **2 questions for you** while any is
-  open, and with `notify` on you hear "needs you" once per question.
+- The band above the prompt says **⚠ 2 questions for you: Q-1 …** (one row per question) while
+  any is open, and the status line starts with `⚠`. With `notify` on you hear "needs you"
+  once per question.
 - Answer on the board and the question closes and leaves the list (it stays in the file as
   history). The lead gets a board update right away (like a finished task), with a block like
   "The owner answered your question Q-3 (…): Yes. … Act on it.". Answer in the chat instead and the lead closes it with your words. The
@@ -594,17 +595,19 @@ You can also do it yourself:
   `/symcc-diff T-5` (the changed files with `+`/`-` counts) or `/symcc-diff T-5 <file>`
   (that file's full diff), and `/symcc-mode [paused|review|auto]` (with no word it switches
   between `review` and `auto`; from `paused` it goes to `review`).
-- The status line (the `symcc:` line by the prompt) starts with the mode, `⏸ paused`,
-  `⏸ review merge` or `⏵ auto`, then the busy workers, the task counts (tasks to review by
-  ID) and the scouts, e.g.
-  `⏵ auto · 1/3 workers · T-26 doing · 1 to review (T-5) · 5 scouts (next: gaps-bot in 1h 00m)`.
-  Workers are left out while none run (`all done` or the counts already say so). It is kept
-  to about 80 columns: when it is too long, the `(next: …)` part goes first, then the scouts.
-  The "next" time is redrawn every minute. With an empty board and no scouts it shows nothing
-  in `auto`, so a fresh project stays quiet.
-- symcc's own text never has a `⚠`: what needs you is said in words (`1 failed (T-7)`,
-  `1 waiting for you`, `⏸ paused`, `symcc is disabled · /symcc-enable to turn it back on`). A `⚠` in front of `symcc:` is drawn
-  by Claude Code itself for a plugin's status line, and plugins can't change it.
+- The status line (the `symcc` line under the prompt) has the board's facts, as plain text:
+  the mode (`⏸ paused`, `⏸ review merge` or `⏵ auto`), who drives (`drives here` or
+  `driven by another session`), the branch, the next scout and when, today's merged tasks
+  and today's cost, e.g.
+  `⏵ auto · drives here · main · next scout bugs in 38m · today ✓ 58 · $312`.
+  It has no task counts and no task ids: the band above the prompt shows the work. It is kept
+  to about 80 columns: when it is too long, parts go from the end (the cost, then today, the
+  scout, the branch); the mode and who drives always stay. The "next scout" time is redrawn
+  every minute. With an empty board and no scouts it shows nothing in `auto`, so a fresh
+  project stays quiet.
+- The line starts with symcc's own `⚠` only when something needs you: an open question or a
+  task in NEEDS YOU (waiting, review, failed, asking for more time). The band names it.
+  Claude Code may draw a mark of its own in front of `symcc`; plugins can't change that.
 
 ### Plan mode
 
@@ -682,7 +685,7 @@ are about changes; under "How tasks ended" a read investigation shows as
 - **The panel** opens by itself when a session starts (on a wide enough terminal; turn it
   off with the `open_on_start` setting). It shows a small banner (folder, branch, test
   command, limits, counts) and the task list. The workers and scouts are not in the banner;
-  they are in the status line and the band above the prompt. When nothing starts, the
+  the running tasks are in the band above the prompt, the next scout in the status line. When nothing starts, the
   banner's first line says so in the warning color: `⏸ paused: nothing starts` (board paused)
   or `symcc is disabled · /symcc-enable to turn it back on` (symcc disabled).
   The clef drawn at the left of the banner moves now and then, about 4 frames a second, each
@@ -693,10 +696,21 @@ are about changes; under "How tasks ended" a read investigation shows as
   doing, in review or waiting) little notes ♪ ♫ float up beside it. Only one move plays at a
   time (one that comes meanwhile is dropped). Nothing moves on a panel too narrow to show the
   logo or while the board is paused.
-- **The band above the prompt** shows the mode, the busy workers, the counts and the scouts,
-  e.g. `⏵ auto · 1/3 workers · 1 doing · 1 to do · 2 scouts (next: gaps-bot in 38m)`, and under
-  it the tasks that need you or are running. When narrow, the `(next: …)` part goes first,
-  then the scouts.
+- **The band above the prompt** (Claude Code) shows what is happening and what needs you,
+  with no counts (the status line under the prompt has the board's facts):
+
+  ```
+  𝄞 symcc  T-740 ⌕ checker 8m (try 3)  After a reopen, one hand-back…
+           T-743 ○ next up              A try counts only real…
+           ⚠ 1 question for you: Q-71 Raise the version?   [ open board ]
+  ```
+
+  One row per running task (its stage's icon and name, the time in that stage, the try from
+  try 2 on, then the title), the next task to start (`○ next up`), then the questions for you
+  and the tasks that need you, in the warning color, and the **open board** button. A session
+  that doesn't drive the board shows `⚠ driven by another session` here too. When a row is
+  narrow, the time is left out first, then the try, so the title keeps its room. OpenCode's
+  band is unchanged.
 - **`/symcc`** opens the interactive board: ↑↓ to move, Enter to open a task. On the
   lists (Tasks, Scouts, Settings, Roles) ↑↓ move from row to row, and the panel scrolls to
   keep the row in view; past the first or last row they scroll the panel (to see the banner
@@ -1469,10 +1483,9 @@ change shows no tag.
 **Which try is it?** When a task is doing and this is not its first try, the board says so. A
 first try shows no mark.
 
-- In a task's row (the band above the prompt and the board's task list in the terminal, VS
-  Code and OpenCode): `(2)` right after the time. It is dim, and from `(3)` on it uses the
-  warning colour.
-- In the status line: `T-5 doing (try 2)`.
+- In a task's row (the board's task list in the terminal, VS Code and OpenCode, and
+  OpenCode's band): `(2)` right after the time. It is dim, and from `(3)` on it uses the
+  warning colour. Claude Code's band above the prompt says `(try 2)`.
 - In the lead's board: `T-5 doing · try 2/3`. The `/3` shows the limit while the try is an
   automatic retry after failing tests.
 
@@ -1486,8 +1499,7 @@ This is the same number as the "Time and cost" total on the task page: each try'
 start to end, added up. Time while the task was paused, waiting for you, waiting on other
 tasks, or in todo between tries is not counted.
 
-When a row is short of room, the time is left out first, then the try. When the status line
-is short of room, the try marks go first, so failed tasks and reviews always stay in view.
+When a row is short of room, the time is left out first, then the try.
 
 **One task, one role.** When a feature needs several kinds of work and each part is big
 enough to stand alone, the lead splits it into one task per role and links them with `after`:

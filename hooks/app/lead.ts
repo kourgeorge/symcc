@@ -223,11 +223,12 @@ export async function publish(host: Host, b: Board) {
   await updateView(host, () => v)
   // the banner logo plays a move when something happened (a merge, a worker start, a scout finding, all done)
   void logoOnPublish(host, v).catch(() => undefined)
-  // the line above the prompt, with the workers and scouts (redrawn every minute while scouts are timed, see refreshStatus).
-  // Disabled: "disabled · /symcc-enable to turn it back on" without the name, as Claude Code puts "⚠ symcc: " in front; its status line
+  // the status line under the prompt: the board's facts (mode, who drives, branch, next scout, today's merged and cost),
+  // no task counts (the band above the prompt shows the work, T-748); redrawn every minute while scouts are timed, see refreshStatus.
+  // Disabled: "disabled · /symcc-enable to turn it back on" without the name, as Claude Code puts "symcc: " in front; its status line
   // takes plain text only (no colors), so the command can't stand out there.
-  const crew = { max_parallel: b.max_parallel, tasks: b.tasks, scouts: v.scouts }
-  showStatus(host, () => (symccOn(b) ? statusLine(b, S.driving, branch_note, modeOf(b), inPlan(S.plan), crew, Date.now(), statusRoom(S.N.name)) : offStatusLine(S.N.name, false)))
+  const facts = { tasks: b.tasks, questions: b.questions, scouts: v.scouts, branch, branch_note, mode: modeOf(b) }
+  showStatus(host, () => (symccOn(b) ? statusLine(facts, S.driving, { plan: inPlan(S.plan), nowMs: Date.now(), width: statusRoom(S.N.name) }) : offStatusLine(S.N.name, false)))
 }
 
 let statusText: (() => string | undefined) | undefined

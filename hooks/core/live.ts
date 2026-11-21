@@ -520,6 +520,20 @@ export function liveToday(tasks: readonly SymccTask[], nowMs: number, offsetMin:
   return { merged, sentBack, failed, tokens }
 }
 
+/** Today's cost in dollars (T-748, the status line's "$312"): the cost of the tries that ended today (or run today),
+ *  where a try reports one; 0 when none does. The same day as liveToday's. */
+export function todayCost(tasks: readonly Pick<SymccTask, 'runs'>[], nowMs: number, offsetMin: number = localOffset(nowMs)): number {
+  const today = dayOf(nowMs, offsetMin)
+  let usd = 0
+  for (const t of tasks) {
+    for (const r of t.runs ?? []) {
+      const at = ms(r.ended ?? r.started)
+      if (typeof r.cost === 'number' && Number.isFinite(r.cost) && at !== undefined && dayOf(at, offsetMin) === today) usd += r.cost
+    }
+  }
+  return usd
+}
+
 /** The "today" lines in `width` columns: "today    ✓ 6 merged   ↺ 9 sent back   ✗ 1 failed   Σ 18.4M tokens", on more lines (never cut) when narrow. */
 export function todayLines(d: LiveToday, width: number): string[] {
   const head = 'today    '

@@ -61,13 +61,13 @@ test('T-643, T-694: the terminal banner has the warning line in the warning tone
 
 test('T-643: the status line says "driven by another session" right after the mode, whatever the board holds', () => {
   const t = (status: 'doing' | 'todo' | 'failed', id: string) => ({ id, status })
-  expect(statusLine({ tasks: [t('doing', 'T-1'), t('todo', 'T-2')] }, false, '', 'auto', false, undefined, NOW)).toBe('⏵ auto · driven by another session · T-1 doing · 1 to do')
-  expect(statusLine({ tasks: [t('failed', 'T-3')] }, false, '', 'auto', false, undefined, NOW)).toBe('⏵ auto · driven by another session · 1 failed (T-3)')
-  expect(statusLine({ tasks: [claimed(6 * 60_000)] }, false, '', 'auto', false, undefined, NOW)).toBe('⏵ auto · driven by another session (it looks idle) · T-1 doing')
-  // narrow: the mark stays (the extras go first)
-  expect(statusLine({ tasks: [t('doing', 'T-1')] }, false, '', 'auto', false, undefined, NOW, 40)).toMatch(/^⏵ auto · driven by another session/)
-  // driving: no mark
-  expect(statusLine({ tasks: [t('doing', 'T-1')] }, true, '', 'auto', false, undefined, NOW)).toBe('⏵ auto · T-1 doing')
+  expect(statusLine({ tasks: [t('doing', 'T-1'), t('todo', 'T-2')], branch: 'main' }, false, { nowMs: NOW })).toBe('⏵ auto · driven by another session · main · today ✓ 0')
+  expect(statusLine({ tasks: [t('failed', 'T-3')], branch: 'main' }, false, { nowMs: NOW })).toBe('⚠ ⏵ auto · driven by another session · main · today ✓ 0')
+  expect(statusLine({ tasks: [claimed(6 * 60_000)] }, false, { nowMs: NOW })).toBe('⏵ auto · driven by another session (it looks idle) · today ✓ 0')
+  // narrow: the mark stays (the other parts go first)
+  expect(statusLine({ tasks: [t('doing', 'T-1')], branch: 'main' }, false, { nowMs: NOW, width: 40 })).toBe('⏵ auto · driven by another session')
+  // driving: "drives here"
+  expect(statusLine({ tasks: [t('doing', 'T-1')], branch: 'main' }, true, { nowMs: NOW })).toBe('⏵ auto · drives here · main · today ✓ 0')
 })
 
 test('T-643: a claimed doing task says it runs in the other session when this one does not drive', () => {
