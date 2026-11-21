@@ -8,8 +8,9 @@
 // OpenTUI (T-500): opencode/tui.ts imports them by their written-out names (what OpenCode swaps for its own copies),
 // and loadTuiRuntime names a package that is missing or lacks a function instead of failing with a bare import error.
 import { test, expect } from 'bun:test'
-import { PANE_TABS, tabLabel, TAB_GAP, modeLabel, modeButton, promptsOfRole, ROLE_SLOT, SETTING_GROUPS, groupSummaryParts, taskActions, actionButtonLabel, settingsKeys, mergeRoles, mergeKinds, when, addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, type Board } from '../../board'
+import { LIVE_TABS, tabRow as coreTabRow, withLiveKey, LIVE_EMPTY, LIVE_LEGEND, liveLanes, liveLayout, liveStations, liveHeader, liveLabelLine, laneLines, segText, nextUp, nextUpLine, liveToday, todayLines, modeLabel, modeButton, promptsOfRole, ROLE_SLOT, SETTING_GROUPS, groupSummaryParts, taskActions, actionButtonLabel, settingsKeys, mergeRoles, mergeKinds, when, addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, type Board } from '../../board'
 import type { PaneView } from '../../app/state'
+import type { SymccTask } from '../../../types'
 import { ICON } from '../../name'
 import { bandLines, bandDraw, BAND_CLICK_HINT, panelLines, panelKeys, parseViewFile, viewFileText, lineText, actionCommand, answerOptions, OWN_ANSWER, viewDefs, panelTaskActions, TASK_ACTION_COMMANDS, SETTINGS_OPEN, approveSent, APPROVE_SENT_MS, drawnLines, type ViewFile, type PanelChoice } from '../board-view'
 import { readFile } from 'node:fs/promises'
@@ -1064,7 +1065,7 @@ test('T-559: the Scouts tab lists the scouts from view.json, a scout\'s page sho
   const tabs = tasks.lines.find(l => lineText(l).includes('[t]: Tasks'))!
   expect(lineText(tabs)).toContain('Scouts')
   expect(tabs.find(s => s.text.includes('Settings'))?.hit).toEqual({ tab: 'settings' })
-  expect(lineText(tasks.lines.at(-1)!)).toContain('t s c views')
+  expect(lineText(tasks.lines.at(-1)!)).toContain('t l s c views')
   // the list: name, how often, paused or the next run, last result; the waiting one first, the paused one after
   const list = panelLines(f, { tab: 'scouts', opened: '', cursor: 0 }, NOW, 100)
   const text = list.lines.map(lineText)
@@ -1122,8 +1123,8 @@ test('T-559: the Scouts tab lists the scouts from view.json, a scout\'s page sho
   expect(settings.hits[s.findIndex(l => l.includes('max_minutes'))]).toEqual({ setting: 'max_minutes' })
   expect(panelKeys(f, '', 'settings').map(k => k.word)).toEqual(['change', 'move', 'views', 'back'])
   // the footer is core's settingsKeys, as Claude Code's: on a group heading Enter opens or closes it (T-584)
-  expect(settings.keys).toEqual(settingsKeys(false))
-  expect(panelLines(f, { tab: 'settings', opened: '', cursor: 0, settingsOpen: ALL_GROUPS }, NOW, 140).keys).toEqual(settingsKeys(true))
+  expect(settings.keys).toEqual(withLiveKey(settingsKeys(false)))
+  expect(panelLines(f, { tab: 'settings', opened: '', cursor: 0, settingsOpen: ALL_GROUPS }, NOW, 140).keys).toEqual(withLiveKey(settingsKeys(true)))
   expect(lineText(panelLines(f, { tab: 'settings', opened: '', cursor: 0, settingsOpen: ALL_GROUPS }, NOW, 140).lines.at(-1)!)).toContain('Enter open/close')
   // the actions as slash commands
   expect(actionCommand({ kind: 'scout', scout: 'deps' })).toEqual({ name: 'symcc-scout', text: 'deps' })
@@ -2163,24 +2164,26 @@ test('T-685: every board screen has Claude Code\'s buttons: the tab row, the lis
   const W = 140
   const draw = (c: Partial<PanelChoice>, w = W) => panelLines(f, { opened: '', cursor: 0, ...c }, NOW, w)
   const texts = (c: Partial<PanelChoice>, w = W) => draw(c, w).lines.map(lineText)
-  // the tab row is Claude Code's, made from core's PANE_TABS, tabLabel and TAB_GAP: "[t]: Tasks (5) │ [s]: Scouts (2) │ [c]: Settings"
-  const tabRow = '[t]: Tasks (5) │ [s]: Scouts (2) │ [c]: Settings'
-  expect(PANE_TABS.map(t => tabLabel(t.key, t.label, t.tab === 'tasks' ? 5 : t.tab === 'scouts' ? 2 : undefined)).join(TAB_GAP)).toBe(tabRow)
+  // the tab row is Claude Code's, made from core's LIVE_TABS and tabRow: "[t]: Tasks (5) │ [l]: Live │ [s]: Scouts (2) │ [c]: Settings"
+  const tabRow = '[t]: Tasks (5) │ [l]: Live │ [s]: Scouts (2) │ [c]: Settings'
+  const counts = (w: number) => coreTabRow(LIVE_TABS.map(t => ({ key: t.key, label: t.label, count: t.tab === 'tasks' ? 5 : t.tab === 'scouts' ? 2 : undefined })), w)
+  expect(counts(W).labels.join(counts(W).gap)).toBe(tabRow)
   const screens: Partial<PanelChoice>[] = [
     {}, { opened: 'T-2' }, { opened: 'T-3' }, { tab: 'scouts' }, { tab: 'scouts', opened: 'deps' }, { tab: 'settings' }, { tab: 'settings', opened: 'roles' }, { tab: 'settings', opened: 'kinds' },
-    { tab: 'settings', opened: 'role:tester' }, { tab: 'settings', opened: 'kind:bug' }, { tab: 'settings', opened: 'orgmem' }, { tab: 'settings', opened: 'prompt:tester:change' },
+    { tab: 'settings', opened: 'role:tester' }, { tab: 'settings', opened: 'kind:bug' }, { tab: 'settings', opened: 'orgmem' }, { tab: 'settings', opened: 'prompt:tester:change' }, { tab: 'live' },
   ]
   for (const c of screens) {
     const d = draw(c)
     const row = d.lines.find(l => lineText(l) === tabRow)
     expect([c, !!row]).toEqual([c, true])
     // each tab a button for its tab; the shown one bold
-    expect(row!.filter(s => s.hit).map(s => [s.text, s.hit, !!s.bold])).toEqual(PANE_TABS.map(t => [tabLabel(t.key, t.label, t.tab === 'tasks' ? 5 : t.tab === 'scouts' ? 2 : undefined), { tab: t.tab }, t.tab === (c.tab ?? 'tasks')]))
+    expect(row!.filter(s => s.hit).map(s => [s.text, s.hit, !!s.bold])).toEqual(LIVE_TABS.map((t, i) => [counts(W).labels[i], { tab: t.tab }, t.tab === (c.tab ?? 'tasks')]))
   }
-  // a narrow panel puts the tabs on more rows, never cutting one
-  const narrow = texts({}, 40)
-  expect(narrow).toContain('[t]: Tasks (5) │ [s]: Scouts (2)')
-  expect(narrow).toContain('[c]: Settings')
+  // a narrow panel gets the terminal's shorter tab words (tabRow); narrower still, more rows, never cutting one
+  expect(texts({}, 50)).toContain(counts(50).labels.join(counts(50).gap))
+  expect(counts(50).labels.join(counts(50).gap).length <= 50).toBe(true)
+  const narrow = texts({}, 20)
+  for (const l of counts(20).labels) expect([l, narrow.some(x => x.includes(l))]).toEqual([l, true])
 
   // the list's footer: Claude Code's board-mode row (the mode, its [m] button, [f] search), then the key hints
   const list = draw({})
@@ -2311,7 +2314,7 @@ test('T-685: in the TUI a click on each of those buttons does exactly what its k
   const flatEls = (x: unknown): El[] => (typeof x === 'function' ? flatEls(x()) : Array.isArray(x) ? x.flatMap(flatEls) : x && typeof x === 'object' ? [x as El, ...flatEls((x as El).kids)] : [])
   const foot = flatEls(panel).find(e => e.props.flexShrink === 0 && e.props.flexDirection === 'column')!
   const footRows = rowEls(foot).map(r => r.text)
-  expect(footRows.slice(1)).toEqual(['⏵ auto [ [m] review merge ]  [ [f] search ]', '↑↓ move · Enter open · t s c views · Esc close'])
+  expect(footRows.slice(1)).toEqual(['⏵ auto [ [m] review merge ]  [ [f] search ]', '↑↓ move · Enter open · t l s c views · Esc close'])
   // the tabs, from every tab
   for (const go of [() => toList(), () => toSettings(), async () => (await toList(), await board.press('s', 's'))]) {
     expect((await same(go, '[t]: Tasks (5)', 't')).state.tab).toBe('tasks')
@@ -2380,4 +2383,110 @@ test('T-696: a long-title row in the list keeps "waits for T-1" / "[feature]" at
     expect(r5).toMatch(/Board list: .*…  +\[feature\]$/)
     expect(r4.length).toBeLessThan(w + 1)
   }
+})
+
+/** T-692: a sample board for the Live tab: three tasks in doing (a worker, the checker, the merge queue), a task
+ *  merged today after a send-back, a failed one, two to do (one waiting on the other). Times are minutes before NOW. */
+function liveTasks(): SymccTask[] {
+  const ago = (min: number) => new Date(NOW - min * 60_000).toISOString()
+  const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', question: null, order: Number(id.slice(2)), after: [], attempts: 1, history: [], branch: null, created_at: ago(300), updated_at: ago(1), ...x }) as unknown as SymccTask
+  return [
+    task('T-610', 'Organizational memory search', { runs: [{ started: ago(4) }] }),
+    task('T-611', '/symcc-doctor checks the hooks', { attempts: 2, runs: [{ started: ago(60), ended: ago(50), tokens: { input: 1_100_000 } }, { started: ago(30), ended: ago(10), tokens: { input: 1_100_000 } }], checking: { step: 'queue', at: ago(0), place: 2 }, history: [{ kind: 'checker-problems', at: ago(40), text: 'try 1: checker: problems' }, { kind: 'stage', at: ago(5), text: 'try 2: waits in the merge queue (place 2)' }] }),
+    task('T-612', 'Scout page: drop the first line', { runs: [{ started: ago(20), ended: ago(2), tokens: { input: 540_000 } }], checking: { step: 'checker', at: ago(0) }, checker: 'agent-c', history: [{ kind: 'stage', at: ago(2), text: 'try 1: prep started' }] }),
+    task('T-600', 'A merged one', { status: 'done', merged: 'abc1234', updated_at: ago(1), runs: [{ started: ago(200), ended: ago(100), tokens: { input: 800_000 } }], history: [{ kind: 'checker-problems', at: ago(90), text: 'try 1: checker: problems, a long reason' }, { kind: 'merged', at: ago(30), text: 'try 2 → merged into main' }] }),
+    task('T-601', 'A failed one', { status: 'failed', updated_at: ago(20) }),
+    task('T-620', 'Live tab part 1', { status: 'todo', order: 5 }),
+    task('T-621', 'Live tab in VS Code', { status: 'todo', after: ['T-620'], order: 1 }),
+  ]
+}
+
+test('T-692: the Live tab draws the terminal panel\'s lanes, next up and today (core/live.ts) for the same board, from the slim view file; a narrow panel cuts nothing', () => {
+  const f0 = viewFile()
+  const whole = liveTasks()
+  const view = { ...f0.view, tasks: whole, checker: true, max_parallel: 3 }
+  // what the terminal panel draws (claude/ui/live.tsx): the same core functions on the whole board
+  const terminal = (w: number) => {
+    const lanes = liveLanes(view, NOW)
+    const layout = liveLayout(lanes, liveStations(true), w)
+    const frame = Math.floor(NOW / 1000)
+    return [liveHeader(view, lanes), liveLabelLine(layout), ...lanes.flatMap(l => laneLines(l, layout, { nowMs: NOW, frame }).map(segText)), nextUpLine(nextUp(view), w), ...todayLines(liveToday(whole, NOW), w), LIVE_LEGEND]
+  }
+  // OpenCode reads the view file, whose done task comes slim (no history): the today row must still match
+  const f: ViewFile = { ...f0, view: { ...view, tasks: whole.map(t => viewTask(t)) } }
+  const slim = f.view.tasks.find(t => t.id === 'T-600') as unknown as Record<string, unknown>
+  expect('history' in slim).toBe(false)
+  expect(viewFileText(f)).not.toContain('a long reason')
+  expect(liveToday(f.view.tasks, NOW, 0)).toEqual(liveToday(whole, NOW, 0))
+  expect([liveToday(f.view.tasks, NOW, 0).merged, liveToday(f.view.tasks, NOW, 0).sentBack, liveToday(f.view.tasks, NOW, 0).failed]).toEqual([1, 2, 1])
+  for (const w of [120, 80, 50, 32]) {
+    const d = panelLines(parseViewFile(viewFileText(f)), { tab: 'live', opened: '', cursor: 0 }, NOW, w)
+    const texts = d.lines.map(lineText)
+    // the lane under the cursor shows "›" in its first column
+    const plain = texts.map(t => t.replace(/^›/, ' '))
+    let at = plain.indexOf(terminal(w)[0]!)
+    expect([w, at >= 0]).toEqual([w, true])
+    for (const want of terminal(w)) {
+      const i = plain.indexOf(want, at)
+      expect([w, want, i >= at]).toEqual([w, want, true])
+      at = i
+    }
+    for (const t of texts) expect([w, t, t.length <= w]).toEqual([w, t, true])
+    expect(d.ids).toEqual(['T-611', 'T-612', 'T-610'])
+    expect(texts.some(t => t.startsWith('›T-611'))).toBe(true)
+    // each lane's first line is a click on its task
+    const lane = d.lines.findIndex((l, i) => lineText(l).includes('T-612') && !!d.hits[i])
+    expect(d.hits[lane]).toEqual({ open: 'T-612' })
+    expect(d.keys.map(k => k.key)).toEqual(['↑↓', 'Enter', 't l s c', 'Esc'])
+  }
+  // the current station blinks with the clock
+  const lineOf = (now: number) => panelLines(f, { tab: 'live', opened: '', cursor: 0 }, now, 120).lines.map(lineText).find(t => t.includes('T-611'))!
+  expect(lineOf(NOW)).not.toBe(lineOf(NOW + 1000))
+  // no task in doing: the empty state
+  const none: ViewFile = { ...f, view: { ...f.view, tasks: f.view.tasks.filter(t => t.status !== 'doing') } }
+  expect(panelLines(none, { tab: 'live', opened: '', cursor: 0 }, NOW, 100).lines.map(lineText)).toContain(LIVE_EMPTY)
+})
+
+test('T-692: in the TUI, l (or a click on the Live tab) shows the Live tab; ↓ and Enter, or a click on a lane, open that task\'s page', async () => {
+  const f0 = viewFile()
+  const f: ViewFile = { ...f0, view: { ...f0.view, tasks: liveTasks().map(t => viewTask(t)), checker: true } }
+  const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)]])
+  const slots: { append: string; render: (input: never) => unknown }[] = []
+  const ctx: TuiContext = {
+    location: { directory: '/work/proj' },
+    theme: {},
+    renderer: { width: 122, height: 200 },
+    client: { session: { command: async () => undefined } },
+    keymap: { layer: () => undefined },
+    ui: {
+      toast: { show: () => undefined },
+      dialog: { prompt: async () => undefined, select: async () => undefined },
+      panel: { open: () => true, close: () => undefined, current: () => undefined },
+      slot: claim => (slots.push(claim as never), () => undefined),
+    },
+  }
+  const board = startTui(ctx, { runtime: fakeRuntime(), readText: async p => files.get(p) ?? Promise.reject(new Error('missing')), every: () => () => undefined, now: () => NOW })
+  await board.refresh()
+  const panel = slots.find(s => s.append === 'session.panel')!.render({ name: BOARD_PANEL, sessionID: 's', width: 122, focused: true, close: () => undefined, focus: () => undefined } as never) as El
+  const settle = () => new Promise<void>(res => setTimeout(res, 0))
+  const up = { type: 'up', button: 0, stopPropagation: () => undefined }
+  await board.press('l', 's')
+  expect(board.state().tab).toBe('live')
+  expect(rowEls(panel).some(r => r.text.includes('next up  T-620'))).toBe(true)
+  await board.press('down', 's')
+  await board.press('open', 's')
+  expect([board.state().tab, board.state().opened]).toEqual(['tasks', 'T-612'])
+  // b goes back to the Tasks list
+  await board.press('back', 's')
+  expect(board.state().opened).toBe('')
+  // a click on the Live tab, then on a lane
+  const tabSeg = rowEls(panel).flatMap(r => r.segs).find(s => (s.kids ?? []).join('') === '[l]: Live')
+  ;(tabSeg!.props.onMouseUp as (e: unknown) => void)(up)
+  await settle()
+  expect(board.state().tab).toBe('live')
+  const lane = rowEls(panel).find(r => r.text.includes('T-610 Organizational'))!
+  ;(lane.el.props.onMouseUp as (e: unknown) => void)(up)
+  await settle()
+  expect([board.state().tab, board.state().opened]).toEqual(['tasks', 'T-610'])
+  board.stop()
 })

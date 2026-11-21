@@ -14,6 +14,7 @@ import { depDone } from './archive'
 import { dayOf, localOffset } from './days'
 import { modeLabel } from './review'
 import { num } from './text'
+import { viewMarks } from './board-parts'
 
 /** The stations of a lane, in the order a task passes them. */
 export type LiveStation = 'work' | 'check' | 'queue' | 'tests' | 'merged'
@@ -338,8 +339,8 @@ export function nextUpLine(items: readonly NextUp[], width: number): string {
 export type LiveToday = { merged: number; sentBack: number; failed: number; tokens: number }
 
 /** Today's numbers at `nowMs` (the owner's day, `offsetMin` east of UTC): merged (a "merged" history line today), sent back
- *  (the checker's send-backs today; a task given without its history, as a board view's done one, counts as merged
- *  today by its `merged` commit and `updated_at`, and adds no send-backs), failed (tasks failed now that failed today), tokens (of the tries that ended today, or run today). */
+ *  (the checker's send-backs today; a task given without its history, as a board view's done one, is counted by its
+ *  history marks, see viewTask), failed (tasks failed now that failed today), tokens (of the tries that ended today, or run today). */
 export function liveToday(tasks: readonly SymccTask[], nowMs: number, offsetMin: number = localOffset(nowMs)): LiveToday {
   const today = dayOf(nowMs, offsetMin)
   const isToday = (iso: string | undefined) => {
@@ -351,11 +352,11 @@ export function liveToday(tasks: readonly SymccTask[], nowMs: number, offsetMin:
   let failed = 0
   let tokens = 0
   for (const t of tasks) {
-    // A board view's done or dropped task (viewTask, e.g. OpenCode's) comes without its history: its `merged` commit and
-    // last change time stand in for the "merged" line; its send-backs are not in the view (read its parts for them).
-    const history = Array.isArray(t.history) ? t.history : undefined
-    if (history ? history.some(h => h.kind === 'merged' && isToday(h.at)) : t.status === 'done' && !!t.merged && isToday(t.updated_at)) merged++
-    sentBack += (history ?? []).filter(h => h.kind === 'checker-problems' && isToday(h.at)).length
+    // A board view's done or dropped task (viewTask, e.g. OpenCode's) comes without its history: its history marks (the
+    // kinds and times of its merge and send-back lines) stand in for it.
+    const history: readonly { kind: string; at?: string }[] = Array.isArray(t.history) ? t.history : (viewMarks(t) ?? [])
+    if (history.some(h => h.kind === 'merged' && isToday(h.at))) merged++
+    sentBack += history.filter(h => h.kind === 'checker-problems' && isToday(h.at)).length
     if (t.status === 'failed' && isToday(t.updated_at)) failed++
     for (const r of t.runs ?? []) if (r.tokens && isToday(r.ended ?? r.started)) tokens += tokenCount(r.tokens)
   }

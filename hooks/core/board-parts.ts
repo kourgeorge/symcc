@@ -136,15 +136,30 @@ export function hasWholeFinished(raw: unknown, held?: Set<string>): boolean {
 /** The fields a finished task leaves out of the board view file (OpenCode's TUI reads its parts file when its page opens). */
 export const VIEW_LEFT_OUT = ['history', 'details', 'test_output', 'answer', 'suggested', 'research_notes'] as const
 
+/** The view task's field with the times of its history lines the Live tab's "today" counts (VIEW_MARK_KINDS), without their text. */
+export const VIEW_MARKS_KEY = 'history_marks'
+/** The history kinds whose times a finished view task keeps (merges and the checker's send-backs, see core/live.ts liveToday). */
+export const VIEW_MARK_KINDS: readonly string[] = ['merged', 'checker-problems']
+/** A history line's kind and time, as a finished view task keeps it. */
+export type ViewMark = { kind: string; at?: string }
+
+/** The history marks of view task `t`: its own `history_marks` when it is a finished one slimmed by viewTask, else undefined. */
+export function viewMarks(t: object): ViewMark[] | undefined {
+  const m = (t as Record<string, unknown>)[VIEW_MARKS_KEY]
+  return Array.isArray(m) ? (m.filter(isObj) as ViewMark[]) : undefined
+}
+
 /**
  * A task as the board view file carries it: an open task whole; a done or dropped one without its long parts
  * (VIEW_LEFT_OUT, and its origin's request and evidence), with `parts` naming the file that has them. Its tries stay,
- * for the totals.
+ * for the totals, and so do the kinds and times of its merge and send-back lines (VIEW_MARKS_KEY), for the Live tab's today.
  */
 export function viewTask<T extends { id: string; status: SymccStatus }>(t: T): T {
   const file = splits(t) ? partsFileOf(t.id) : ''
   if (!file) return t
   const x = { ...t } as Record<string, unknown>
+  const history = Array.isArray(x.history) ? x.history.filter(isObj) : []
+  x[VIEW_MARKS_KEY] = history.filter(h => VIEW_MARK_KINDS.includes(String(h.kind))).map(h => ({ kind: String(h.kind), ...(typeof h.at === 'string' ? { at: h.at } : {}) }))
   for (const k of VIEW_LEFT_OUT) delete x[k]
   if (isObj(x.origin)) {
     const { request: _r, evidence: _e, ...origin } = x.origin
@@ -170,7 +185,7 @@ export function withViewParts<T extends object>(t: T, text: string | null): T {
   const r = readParts(text)
   const parts = r.tasks[String((t as Record<string, unknown>).id)]
   if (!parts) return t
-  const { [PARTS_KEY]: _f, ...own } = t as Record<string, unknown>
+  const { [PARTS_KEY]: _f, [VIEW_MARKS_KEY]: _m, ...own } = t as Record<string, unknown>
   return { ...parts, ...own, ...(isObj(parts.origin) && isObj(own.origin) ? { origin: { ...parts.origin, ...own.origin } } : {}) } as T
 }
 

@@ -5,7 +5,7 @@
 // rowExtra, fitRow), the banner (bannerLines) and a task's page sections (taskSections, T-580). Nothing here draws or reads a file, so
 // the tests check exactly what the TUI shows (hooks/opencode/tests/opencode-tui.spec.ts). The panel's actions go back
 // to the engine as symcc's slash commands (actionCommand), run in the TUI's session (R6 of T-468). Like the Claude Code
-// board it has three tabs (T-559): Tasks, Scouts (the list, a scout's page with its runs, a run's report) and
+// board it has four tabs (T-559, T-692): Tasks, Live (core/live.ts's lanes, next up and today), Scouts (the list, a scout's page with its runs, a run's report) and
 // Settings (every setting in its group, with its value and default; the groups open and close as on the Claude Code
 // board, T-585). Like it, Settings opens the Roles and Kinds
 // pages (a list, then one role's or kind's page: turn it off or on, reset it to the built-in one, T-562) and a
@@ -26,7 +26,8 @@ import {
   SETTING_GROUPS, SETTINGS, isSettingPage, settingInfo, settingValue, cantPlayNotify, groupSummaryParts,
   type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction, type TaskVerb, settingsKeys,
   DEFAULT_ROLE, isCheckerRole, ALWAYS_ON_KINDS, checkerOn, roleNameError, kindNameError, checkStepNow, rowEndText, taskPhase, choiceLines, driveWarning,
-  PANE_TABS, tabLabel, TAB_GAP, searchTasks, searchLine, modeButton, hintLines, roleKeys, rolePromptKeys, ROLE_PROMPTS, ROLE_SLOT, promptsOfRole, type RolePromptKind,
+  searchTasks,
+  LIVE_TABS, LIVE_EMPTY, LIVE_LEGEND, type LiveSeg, type LiveTone, tabRow, withLiveKey, liveKeys, liveLanes, liveLayout, liveStations, liveHeader, liveLabelLine, laneLines, nextUp, nextUpLine, liveToday, todayLines, searchLine, modeButton, hintLines, roleKeys, rolePromptKeys, ROLE_PROMPTS, ROLE_SLOT, promptsOfRole, type RolePromptKind,
 } from '../board'
 import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, brokenLabel, defNamed } from '../core/def-files'
 import { restFrame } from '../core/logo'
@@ -120,11 +121,11 @@ export type ScoutRuns = Record<string, ScoutRun[]>
 /** How many runs of each scout the view file keeps. */
 export const VIEW_RUNS_KEPT = 20
 
-/** The panel's three views, as the Claude Code board's tabs: Tasks, Scouts and Settings (keys t, s and c). */
-export type PanelTab = 'tasks' | 'scouts' | 'settings'
+/** The panel's four views, as the Claude Code board's tabs: Tasks, Live (T-692), Scouts and Settings (keys t, l, s and c). */
+export type PanelTab = 'tasks' | 'live' | 'scouts' | 'settings'
 
-/** The tabs in order, with their keys (core's PANE_TABS, as the Claude Code board's tab row). */
-export const PANEL_TABS: readonly { tab: PanelTab; label: string; key: 't' | 's' | 'c' }[] = PANE_TABS
+/** The tabs in order, with their keys (core's LIVE_TABS, as the Claude Code board's tab row). */
+export const PANEL_TABS: readonly { tab: PanelTab; label: string; key: 't' | 'l' | 's' | 'c' }[] = LIVE_TABS
 
 /** The view file's text. */
 export const viewFileText = (f: ViewFile) => JSON.stringify(f) + '\n'
@@ -340,6 +341,7 @@ const LIST_TONE: Record<string, string> = { backlog: 'inactive', review: 'warnin
  *  (archived, removed, or the view file gone) falls back to the list. */
 export function hasPage(f: ViewFile | null, id: string, tab: PanelTab = 'tasks'): boolean {
   if (!id || !f) return false
+  if (tab === 'live') return false
   if (tab === 'scouts') return (f.view.scouts ?? []).some(x => x.name === id)
   if (tab === 'settings') return !!settingsPlace(f, id)
   return f.view.tasks.some(x => x.id === id) || (f.view.questions ?? []).some(x => x.id === id)
@@ -403,6 +405,15 @@ const scoutNamed = (f: ViewFile | null, name: string): SymccScout | undefined =>
  * the Roles and Kinds lists and a role's or kind's page (o turn off or on, r reset to the built-in one).
  */
 export function panelKeys(f: ViewFile | null, opened: string, tab: PanelTab = 'tasks', run = '', heading = false, merging = false): KeyHint[] {
+  // the views hint says "t l s c": this panel has the Live tab too
+  return withLiveKey(tabKeys(f, opened, tab, run, heading, merging))
+}
+
+/** The keys of the Live tab (core's liveKeys), but w (watch worker: OpenCode's panel can't show a worker's session). */
+export const panelLiveKeys = (): KeyHint[] => liveKeys().filter(k => k.key !== 'w')
+
+function tabKeys(f: ViewFile | null, opened: string, tab: PanelTab, run: string, heading: boolean, merging: boolean): KeyHint[] {
+  if (tab === 'live') return panelLiveKeys()
   const move = { key: '↑↓', word: 'move' }
   const views = { key: 't s c', word: 'views' }
   const close = { key: 'Esc', word: 'close' }
@@ -460,7 +471,10 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
   let modeRow: Line[] = []
   let body: { lines: Line[]; hits?: (PanelHit | null)[] | null; ids: string[]; selected: string; head?: number }
   let keys: KeyHint[]
-  if (tab === 'scouts') {
+  if (tab === 'live') {
+    body = liveBody(f, choice.cursor, nowMs, w)
+    keys = panelKeys(f, '', 'live')
+  } else if (tab === 'scouts') {
     body = scoutsBody(f, choice, nowMs, w)
     keys = panelKeys(f, choice.opened, 'scouts', choice.run ?? '')
   } else if (tab === 'settings') {
@@ -580,13 +594,54 @@ export function drawnLines(l: Line, w: number): Line[] {
   return out
 }
 
-/** The tabs under the banner, as Claude Code's tab row (T-685): "[t]: Tasks (12) │ [s]: Scouts (3) │ [c]: Settings"
- *  (core's PANE_TABS and tabLabel), the shown one bright and bold; each one a button for its tab. A narrow panel puts
- *  them on more rows, never cutting one. */
+/** The tabs under the banner, as Claude Code's tab row (T-685, T-692): "[t]: Tasks (12) │ [l]: Live │ [s]: Scouts (3) │ [c]: Settings"
+ *  (core's LIVE_TABS and tabRow: shorter words when narrow), the shown one bright and bold; each one a button for its
+ *  tab. A panel too narrow even for the shortest words puts them on more rows, never cutting one. */
 export function tabsLines(tab: PanelTab, w: number, tasks: number, scouts: number): Line[] {
-  const count: Record<PanelTab, number | undefined> = { tasks, scouts, settings: undefined }
-  const segs: DrawSeg[] = PANEL_TABS.map(t => ({ text: tabLabel(t.key, t.label, count[t.tab]), color: t.tab === tab ? 'ide' : 'inactive', ...(t.tab === tab ? { bold: true } : {}), hit: { tab: t.tab } }))
-  return packRows(segs.map(s => s.text.length), Math.max(1, Math.floor(w)), TAB_GAP.length).map(row => row.flatMap((k, i) => [...(i ? [{ text: TAB_GAP, color: 'subtle' }] : []), segs[k]!]))
+  const count: Record<PanelTab, number | undefined> = { tasks, live: undefined, scouts, settings: undefined }
+  const width = Math.max(1, Math.floor(w))
+  const row = tabRow(PANEL_TABS.map(t => ({ key: t.key, label: t.label, count: count[t.tab] })), width)
+  const segs: DrawSeg[] = PANEL_TABS.map((t, i) => ({ text: row.labels[i]!, color: t.tab === tab ? 'ide' : 'inactive', ...(t.tab === tab ? { bold: true } : {}), hit: { tab: t.tab } }))
+  return packRows(segs.map(s => s.text.length), width, row.gap.length).map(r => r.flatMap((k, i) => [...(i ? [{ text: row.gap, color: 'subtle' }] : []), segs[k]!]))
+}
+
+/** The colors of the Live tab's tones: the terminal panel's (claude/ui/live.tsx). */
+const LIVE_TONE: Record<LiveTone, string> = { id: 'claude', title: 'text', passed: 'success', current: 'ide', future: 'inactive', text: 'text', dim: 'inactive', warning: 'warning', bar: 'ide' }
+const liveSegs = (xs: readonly LiveSeg[], hit?: PanelHit): Line => xs.map(x => ({ text: x.text, color: LIVE_TONE[x.tone], ...(x.tone === 'id' || x.tone === 'current' ? { bold: true } : {}), ...(hit ? { hit } : {}) }))
+
+/** How often the Live tab's current station changes between ◉ and ◎ (the terminal panel's LIVE_TICK_MS). */
+export const LIVE_BLINK_MS = 1000
+
+/**
+ * The Live tab (T-692), as the terminal panel's (T-690), all made by core/live.ts: the mode and busy agents, the
+ * station names, two lines per task in doing (a click on its first line, or Enter on it, opens the task), next up,
+ * today's numbers and the legend; "No task is running right now." when none is in doing. The cursor goes over the
+ * lanes; its lane's first column shows "›". The current station blinks with the clock (one step per LIVE_BLINK_MS).
+ */
+function liveBody(f: ViewFile, cursor: number, nowMs: number, w: number): Body {
+  const b = bodyMaker()
+  const v = f.view
+  const lanes = liveLanes(v, nowMs)
+  const layout = liveLayout(lanes, liveStations(v.checker === true), w)
+  const frame = Math.floor(nowMs / LIVE_BLINK_MS)
+  const ids = lanes.map(l => l.id)
+  const selected = ids.length ? ids[Math.min(Math.max(0, cursor), ids.length - 1)]! : ''
+  b.add([{ text: liveHeader(v, lanes), color: 'text', bold: true }])
+  b.add([{ text: lanes.length ? liveLabelLine(layout) : LIVE_EMPTY, color: 'inactive' }])
+  for (const l of lanes) {
+    const [first, second] = laneLines(l, layout, { nowMs, frame })
+    const line = liveSegs(first, { open: l.id })
+    // the lane under the cursor: "›" in its first column (a space there otherwise)
+    const head = line[0]
+    if (l.id === selected && head?.text.startsWith(' ')) line.splice(0, 1, { text: '›', color: 'ide', bold: true, hit: { open: l.id } }, { ...head, text: head.text.slice(1) })
+    b.add(line, { open: l.id })
+    b.add(liveSegs(second))
+  }
+  b.add([{ text: footerRule(w), color: 'subtle' }])
+  b.add([{ text: nextUpLine(nextUp(v), w), color: 'text' }])
+  for (const t of todayLines(liveToday(v.tasks, nowMs), w)) b.add([{ text: t, color: 'text' }])
+  if (lanes.length) b.add([{ text: LIVE_LEGEND, color: 'inactive' }])
+  return { ...b, ids, selected }
 }
 
 /** What a body of the panel holds (between the tabs and the footer); its first `head` lines (the page's title) stay

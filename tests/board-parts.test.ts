@@ -399,6 +399,8 @@ test('T-675: the board view file leaves out a finished task\'s long parts; its p
   expect(slim.parts).toBe('tasks/T-600.json')
   expect(slim.history).toBe(undefined as never)
   expect(slim.details).toBe(undefined as never)
+  // T-692: only the kinds and times of its merge and send-back lines stay, for the Live tab's today (no text)
+  expect((slim as unknown as Record<string, unknown>).history_marks).toEqual(done.history.filter(h => h.kind === 'merged' || h.kind === 'checker-problems').map(h => ({ kind: h.kind, ...(h.at ? { at: h.at } : {}) })))
   expect(slim.origin).toEqual({ by: 'owner', why: done.origin!.why, at: done.origin!.at })
   // the tries stay, for the totals
   expect(slim.runs).toEqual(done.runs)

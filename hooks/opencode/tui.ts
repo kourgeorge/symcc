@@ -6,8 +6,8 @@
 //   - session.panel: the board (opened with ui.panel.open(BOARD_PANEL), from the "/symcc-board" keymap command or the
 //     command palette's "symcc board"; plain "/symcc" stays the server's text board, T-505): the task
 //     list grouped by state, with the terminal list's marks, short states and times, and a task's (or question's)
-//     page when one is opened; and, like the Claude Code board, the Scouts and Settings tabs (keys t, s and c, or a
-//     click on a tab, T-559): a scout's page runs it now (r) or pauses it (p) with /<name>-scout, and edits it (e:
+//     page when one is opened; and, like the Claude Code board, the Live, Scouts and Settings tabs (keys t, l, s and c,
+//     or a click on a tab, T-559, T-692; Live's lanes open their task on Enter or a click): a scout's page runs it now (r) or pauses it (p) with /<name>-scout, and edits it (e:
 //     how often, model or instructions, /<name>-scout <name> every|model|prompt VALUE, T-562); a setting is changed
 //     with /<name>-settings NAME VALUE, and the Roles and Kinds pages under Settings turn a role or kind off or on
 //     (o) or reset it to the built-in one (r) with /<name>-settings role|kind <name> on|off|reset;
@@ -570,13 +570,30 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     if (key === 'p' && sc) return send(sessionID, { kind: 'scout', scout: open, paused: !sc.paused })
     if (key === 'e' && sc) return editScout(sc, sessionID)
   }
+  /** Opens task `id`'s page on the Tasks tab, with the list's cursor on it (so b comes back to its row). */
+  const openOnList = (id: string) => {
+    if (tab() !== 'tasks') showTab('tasks')
+    const at = listIds().indexOf(id)
+    if (at >= 0) setCursor(at)
+    if (hasPage(file(), id)) openPage(id)
+  }
+  /** The Live tab's keys (T-692): ↑↓ move between the lanes, Enter opens the lane's task, b goes back to the list. */
+  const pressLive = (key: PanelKey) => {
+    const ids = draw().ids
+    if (key === 'up' || key === 'down') return void setCursor(moveCursor(cursor(), key === 'up' ? -1 : 1, ids.length))
+    if (key === 'open' && ids.length) return openOnList(ids[moveCursor(cursor(), 0, ids.length)]!)
+    if (key === 'back') return showTab('tasks')
+  }
   const press = async (key: PanelKey, sessionID: string) => {
     // Esc closes the panel (OpenCode 2.3 leaves closing to the panel's own keys)
     if (key === 'close') return ctx.ui.panel.close()
-    const to = TAB_OF[key]
-    if (to) return showTab(to)
     const f = file()
+    const to = TAB_OF[key]
+    // on a task's page its own action keys come first (l is Role there, as on the terminal's task page)
+    const page = tab() === 'tasks' && opened() ? f?.view.tasks.find(x => x.id === opened()) : undefined
+    if (to && !(page && panelTaskActions(page, approveInProgress(f, page, approving(), now())).some(x => x.key === key))) return showTab(to)
     keepPage(f)
+    if (tab() === 'live') return pressLive(key)
     if (tab() === 'scouts') return pressScouts(key, sessionID)
     if (tab() === 'settings') return pressSettings(key, sessionID)
     const open = opened()
@@ -696,6 +713,8 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
       if (at >= 0) (opened() ? setRunCursor : setCursor)(at)
       return hasPage(file(), hit.page, 'settings') ? openPage(hit.page) : undefined
     }
+    // a lane on the Live tab opens its task on the Tasks tab
+    if ('open' in hit && tab() === 'live') return openOnList(hit.open)
     const id = 'open' in hit ? hit.open : groupId(hit.group)
     const at = (tab() === 'tasks' ? listIds() : draw().ids).indexOf(id)
     if (at >= 0) setCursor(at)
@@ -805,10 +824,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   const clickBand = (hit: BandHit) => {
     if ('board' in hit) return openBoard()
     if (ctx.ui.panel.current()?.name !== BOARD_PANEL && !ctx.ui.panel.open(BOARD_PANEL)) return say(`Open or start a session first: the ${name} board opens next to a session.`)
-    if (tab() !== 'tasks') showTab('tasks')
-    const at = listIds().indexOf(hit.open)
-    if (at >= 0) setCursor(at)
-    if (hasPage(file(), hit.open)) openPage(hit.open)
+    openOnList(hit.open)
   }
   const reread = () => void refresh().catch(e => failed('board', e))
   reread()
