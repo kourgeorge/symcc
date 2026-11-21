@@ -1158,13 +1158,13 @@ indented by 1 space (VS Code shows the same names as bold headings):
 
   ```
   ▍Today
-   ✓ 67 merged   ↺ 56 sent back   ✗ 0 failed   Σ 320.7M tokens
+   ✓ 67 merged   ↺ 76 sent back   ✗ 0 failed   Σ 320.7M tokens
    ⌀ per task 2.8M · 9m work · 23m start-to-merge   ⏱ 13h 06m agent work · ≈ $64
    ████████████▓▓▒░ workers 84% · checkers 8% · scouts 5% · lead 3%
    08 ▁▂▃▅▇▆▅▃▅▇█▆▃ 20   busiest 14:00 · 42M tokens   first try 34%   ⌀ 2.4 tries   ⌕ 68 sent back by the checker
   ```
 
-  The first line: merged, sent back by the checker, failed, and the tries' tokens today. The second:
+  The first line: merged, sent back (every send-back today: the checker's problems, tests failed, a clash with main), failed, and the tries' tokens today. The second:
   for the tasks merged today, the middle value (median) of their tokens, their work time and the time
   from their first try's start to the merge; then all agent work today (the tries' time today and the
   scouts'); then `≈ $N`, the session's cost as `/cost` says it, only when symcc knows it (never a
@@ -1173,7 +1173,7 @@ indented by 1 space (VS Code shows the same names as bold headings):
   hour to now as a sparkline, with the first and last hour dim on each side (they always stay); then
   `busiest HH:00 · NM tokens`, today's share of merged tasks that went through on the first try, the
   average tries per merged task (the same figures `/symcc-stats` shows), and how many times the checker
-  sent a task back. A checker's tokens are counted apart from its worker's from now on (older tries count as the
+  sent a task back (left out when none; line 4 is left out when it has nothing to show). A checker's tokens are counted apart from its worker's from now on (older tries count as the
   worker's), and the lead's part shows only where symcc can read the lead's usage. The lead's,
   scouts' and cost figures are read in the background at most every two minutes. On a narrow panel
   parts drop from the ends: line 2 loses the cost, then the agent work time; line 3 loses the shares'

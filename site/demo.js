@@ -31,6 +31,8 @@
   const SCOUT_FOUND = 'Checker send-backs, the most common failure, are left out of the failed-tries reasons and total'
   // The real board at the end of the story: "✓ 56 merged ↺ 47 sent back ✗ 0 failed Σ 268.6M tokens". The story starts
   // just before T-747 merged (5.7M tokens) and T-740's try 1 was sent back (4M tokens).
+  // of those send-backs, this many were for failed tests or a clash with main; the rest were the checker's (line 4)
+  const OTHER_BACK = 6
   const END_TODAY = { merged: 56, back: 47, failed: 0, tokens: 268.6e6 }
   const T747_TOKENS = 5.7e6
   const T740_TRY1_TOKENS = 4e6
@@ -163,7 +165,7 @@
     const shares = ' ' + sp(`workers and checkers ${100 - TODAY_MORE.scoutsPct}%`, 'who-workers') + sp(' · ', 'dim') + sp(`scouts ${TODAY_MORE.scoutsPct}%`, 'who-scouts') + sp(` (${TODAY_MORE.scoutsTokens} tokens)`, 'dim')
     L.push(' ' + bar + shares)
     // (T-781) line 4: the hour sparkline with its first and last hour, then busiest hour, first try, tries and the checker's send-backs
-    L.push(' ' + sp('08 ', 'dim') + sp(TODAY_MORE.spark, 'bar') + sp(` ${clock(s.now).slice(0, 2)}`, 'dim') + sp(`   busiest ${TODAY_MORE.busiest}   first try ${TODAY_MORE.firstTry}%   ⌀ ${TODAY_MORE.avgTries} tries   ⌕ ${d.back} sent back by the checker`, 'dim'))
+    L.push(' ' + sp('08 ', 'dim') + sp(TODAY_MORE.spark, 'bar') + sp(` ${clock(s.now).slice(0, 2)}`, 'dim') + sp(`   busiest ${TODAY_MORE.busiest}   first try ${TODAY_MORE.firstTry}%   ⌀ ${TODAY_MORE.avgTries} tries   ⌕ ${d.back - OTHER_BACK} sent back by the checker`, 'dim'))
     if (s.lanes.length) L.push(' ' + sp(`✧ = an agent works here (needs an agent slot)   bar: tokens of the task so far, full = usual per task (${tok(USUAL)})`, 'dim'))
     L.push('')
     L.push(heading('Branches'))

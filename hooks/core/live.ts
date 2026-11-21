@@ -7,7 +7,7 @@ import { type BoardTask, DEFAULT_AUTO_RETRIES, emptyBoard, kindOf, isInvestigati
 import { taskPhase, type PhaseStage } from './phase'
 import { handedBack, shownStatus } from './lead'
 import { STAGE_LINE } from './events'
-import { cutTitle, median, padWidth, taskFigures, textWidth, wrapLine } from './stats'
+import { cutTitle, failReason, median, padWidth, taskFigures, textWidth, wrapLine } from './stats'
 import { checkerTokensOf, fmtCost, fmtDuration, fmtTokens, sumTokens, tokenCount } from './runs'
 import { type KeyHint, LIVE_VIEW_KEYS, hintLineText, hintLines, rowDuration, waitOrder } from './panel'
 import { ORG_MEM_EMPTY, ORG_MEM_MAX_LINES, TOPIC_UNSORTED, orgMemNewest, orgMemSectionKeys, orgMemShortDay, orgMemTopicCounts, type OrgMemNote } from './org-mem'
@@ -25,6 +25,21 @@ import { viewMarks } from './board-parts'
 function marksOf(t: { history?: readonly { kind: string; at?: string }[] }): readonly { kind: string; at?: string }[] {
   const history = Array.isArray(t.history) ? t.history : []
   return history.length > 0 ? history : (viewMarks(t) ?? history)
+}
+
+/**
+ * T-781: task `t`'s send-backs on one day (`isToday` tells by the mark's time): `all` counts every one the way /symcc-stats
+ * lists failed tries (the checker's problems, tests failed, a clash with main), `checker` only the checker's. A finished
+ * task's board view keeps only the marks of the checker's lines (no text), so it counts only those.
+ */
+function sentBackOf(t: { history?: readonly { kind: string; at?: string; text?: string }[] }, isToday: (at: string | undefined) => boolean): { all: number; checker: number } {
+  const marks = marksOf(t) as readonly { kind: string; at?: string; text?: string }[]
+  const checker = marks.filter(h => h.kind === 'checker-problems' && isToday(h.at)).length
+  const other = marks.filter(h => {
+    const r = typeof h.text === 'string' ? failReason(h.text) : null
+    return (r === 'tests' || r === 'clash') && isToday(h.at)
+  }).length
+  return { all: checker + other, checker }
 }
 
 /** The stations of a lane, in the order a task passes them. */
@@ -656,7 +671,7 @@ export function liveToday(tasks: readonly SymccTask[], nowMs: number, offsetMin:
   for (const t of tasks) {
     const history = marksOf(t)
     if (history.some(h => h.kind === 'merged' && isToday(h.at))) merged++
-    sentBack += history.filter(h => h.kind === 'checker-problems' && isToday(h.at)).length
+    sentBack += sentBackOf(t, isToday).all
     if (t.status === 'failed' && isToday(t.updated_at)) failed++
     for (const r of t.runs ?? []) if (r.tokens && isToday(r.ended ?? r.started)) tokens += tokenCount(r.tokens)
   }
@@ -755,7 +770,7 @@ export function todayMore(tasks: readonly SymccTask[], team: TodayTeam | undefin
   const work: number[] = []
   const toMerge: number[] = []
   const tries: number[] = []
-  let sentBack = 0
+  let checkerBack = 0
   for (const t of tasks) {
     for (const r of t.runs ?? []) {
       const start = ms(r.started)
@@ -776,7 +791,7 @@ export function todayMore(tasks: readonly SymccTask[], team: TodayTeam | undefin
       const h = hourOf(at)
       if (h >= 0 && h < 24) hours[h]! += all
     }
-    sentBack += marksOf(t).filter(h => h.kind === 'checker-problems' && isToday(ms(h.at))).length
+    checkerBack += sentBackOf(t, at => isToday(ms(at))).checker
     const mergedAt = marksOf(t).filter(h => h.kind === 'merged').map(h => ms(h.at)).filter(isToday)
     if (!mergedAt.length) continue
     const f = taskFigures(t)
@@ -805,7 +820,7 @@ export function todayMore(tasks: readonly SymccTask[], team: TodayTeam | undefin
     hours: firstHour < 0 || firstHour > now ? [] : hours.slice(firstHour, now + 1),
     firstHour: Math.max(0, firstHour),
     ...(tries.length ? { firstTry: (100 * tries.filter(n => n === 1).length) / tries.length, avgTries: tries.reduce((a, b) => a + b, 0) / tries.length } : {}),
-    sentBack,
+    ...(checkerBack ? { sentBack: checkerBack } : {}),
   }
 }
 
