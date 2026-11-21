@@ -37,13 +37,43 @@ export function leadCalls(jsonl: string): LeadCall[] {
 /** Claude Code's folder name for a project path under ~/.claude/projects: every character not a letter or digit becomes "-". */
 export const projectFolderName = (root: string) => String(root ?? '').replace(/[^a-zA-Z0-9]/g, '-')
 
+/** The most $.fs.read takes (Claude Code refuses a bigger file). */
+export const READ_LIMIT = 4 * 1024 * 1024
+/** The size in MiB of one part a bigger log is read in (under the 4 MiB of stdout $.process.run keeps). */
+export const PART_MIB = 3
+
+/**
+ * The usage lines of a session log too big for $.fs.read: read in parts of PART_MIB MiB with dd (the path is an
+ * argument, never in a shell string), keeping only the lines that hold "usage". A line cut between two parts is
+ * joined again. null when a part can't be read.
+ */
+export async function bigLogUsageLines($: Pick<Host, 'run'>, path: string): Promise<string | null> {
+  const keep: string[] = []
+  let carry = ''
+  for (let part = 0; part < 100_000; part++) {
+    const r = await $.run(['dd', `if=${path}`, 'bs=1048576', `skip=${part * PART_MIB}`, `count=${PART_MIB}`], { timeoutMs: 60_000 }).catch(() => null)
+    if (!r || r.exitCode !== 0) return null
+    const text = String(r.stdout ?? '')
+    if (!text) break
+    const lines = (carry + text).split('\n')
+    carry = lines.pop() ?? ''
+    for (const l of lines) if (l.includes('"usage"')) keep.push(l)
+  }
+  if (carry.includes('"usage"')) keep.push(carry)
+  return keep.join('\n')
+}
+
+/** What leadUsage answers: the host's LeadUsage plus how many session logs couldn't be read at all (`leadUnread`). */
+export type LeadUsageRead = LeadUsage & { leadUnread?: number }
+
 /**
  * The lead's tokens for project folder `root`: the plugin API gives no per-session token counts (only this session's
  * $ total), so they are read from Claude Code's own session logs, ~/.claude/projects/<this project's folder>/<session>.jsonl.
  * Read-only, only this project's folder, only the usage numbers (see leadCalls). For a days range, logs not written
- * to since the range began are skipped.
+ * to since the range began are skipped. A log over 4 MiB (too big for $.fs.read) is read in parts (bigLogUsageLines);
+ * one that still can't be read is counted in `leadUnread`, so the stats say the figure is short.
  */
-export async function leadUsage($: Pick<Host, 'env' | 'fs'>, root: string, range: StatsRange, nowMs: number): Promise<LeadUsage> {
+export async function leadUsage($: Pick<Host, 'env' | 'fs' | 'run'>, root: string, range: StatsRange, nowMs: number): Promise<LeadUsageRead> {
   const home = (await $.env('HOME')) || (await $.env('USERPROFILE'))
   const base = (await $.env('CLAUDE_CONFIG_DIR')) || (home ? `${home}/.claude` : '')
   if (!base) return { leadProblem: "can't find Claude Code's folder (no HOME)" }
@@ -54,14 +84,17 @@ export async function leadUsage($: Pick<Host, 'env' | 'fs'>, root: string, range
   // a resumed session's log may repeat calls of the one before: each call counts once
   const lead = new Map<string, LeadCall>()
   let sessions = 0
+  let unread = 0
   for (const f of files) {
     if (f.kind !== 'file' || !f.name.endsWith('.jsonl')) continue
     if (range.kind === 'days' && from !== undefined && f.mtimeMs < from) continue
-    const text = await $.fs.read(`${dir}/${f.name}`).catch(() => null)
-    if (text === null) continue
+    const path = `${dir}/${f.name}`
+    let text = f.size > READ_LIMIT ? null : await $.fs.read(path).catch(() => null)
+    if (text === null) text = await bigLogUsageLines($, path)
+    if (text === null) { unread++; continue }
     const calls = leadCalls(String(text))
     if (calls.length) sessions++
     for (const c of calls) lead.set(c.id, c)
   }
-  return { lead: [...lead.values()], leadSessions: sessions, leadFrom: LEAD_LOGS }
+  return { lead: [...lead.values()], leadSessions: sessions, leadFrom: LEAD_LOGS, ...(unread ? { leadUnread: unread } : {}) }
 }

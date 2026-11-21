@@ -4,7 +4,7 @@
 
 import type { SymccTokens } from '../../types'
 import { fmtCost, fmtDuration, fmtTokenKinds, fmtTokens, billedTokens, tokenCount } from './runs'
-import { BILLED_FOOTNOTE, STAGES_NOTE, countingText, durOr, failedCountsNote, failedShown, pctText, plural, rangeText, scoutResultsText, statsTitle, tokOr, unlinkedText, type StatsData, type StatsGroup, type StatsTop } from './stats'
+import { BILLED_FOOTNOTE, STAGES_NOTE, countingText, durOr, failedCountsNote, failedShown, pctText, plural, rangeText, scoutResultsText, statsTitle, tokOr, unlinkedText, unreadText, type StatsData, type StatsGroup, type StatsTop } from './stats'
 
 /** `s` safe inside HTML text and attribute values. */
 export const escapeHtml = (s: unknown): string =>
@@ -213,7 +213,7 @@ export function statsHtml(d: StatsData, project: string): string {
   if (d.team) {
     const t = d.team.data
     const parts: [string, string, SymccTokens | undefined, string][] = [
-      ['lead', 'lead', t.lead?.tokens, t.lead ? `${plural(t.lead.calls, 'call')}${t.lead.sessions !== undefined ? ` · ${plural(t.lead.sessions, 'session')}` : ''}` : `not counted: ${t.leadProblem ?? 'no session logs'}`],
+      ['lead', 'lead', t.lead?.tokens, t.lead ? `${plural(t.lead.calls, 'call')}${t.lead.sessions !== undefined ? ` · ${plural(t.lead.sessions, 'session')}` : ''}${unreadText(t.leadUnread)}` : `not counted: ${t.leadProblem ?? 'no session logs'}${unreadText(t.leadUnread)}`],
       ['worker', 'workers', t.workers.tokens, plural(t.workers.tries, 'try', 'tries')],
       ['scout', 'scouts', t.scouts.tokens, `${plural(t.scouts.runs, 'run')}${t.scouts.runs ? ` · ${fmtDuration(t.scouts.ms)}` : ''}`],
     ]
