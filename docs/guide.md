@@ -1012,7 +1012,7 @@ A scout's page has the same shape:
  bugs  Looks for real bugs in recent changes
  ◷ every 2 days · next in 38m   last ran 2h 00m ago: 2 findings → T-736, T-739
  [Run now]   [Edit]   [Pause]
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+────────────────────────────────────────────────────────────────────────
 ```
 
 Line 2 is its name and its summary (just the name when its file has no summary); line 3 how
