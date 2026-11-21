@@ -11,6 +11,7 @@ import { detailRows, wrapSegs, makeOrigin, fromText, originWho, createdLine, evi
 import { putTask, tryMark, tryTag, tryTone, bandLeads } from '../hooks/board'
 import { testsShort, testName, nextScoutPart, PLAN_NOTE } from '../hooks/board'
 import { cleanFiles, taskCopyText, copyToast, realPathOf, brokenLinkText } from '../hooks/board'
+import { sizeWarnText } from '../hooks/core/board-parts'
 import { fakeDisk } from './fake-disk'
 import { rowEndBoard, ROW_END, LEAD_BEFORE, ROW_END_NOW } from './row-end-cases'
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
@@ -907,7 +908,7 @@ test('T-748: the status line says the mode, who drives, the branch, the next sco
   // another session drives; a scout running now; a small cost to the cent
   expect(statusLine({ ...b, scouts: [{ ...scouts[0]!, running: true }], tasks: [merged('T-1')].map(t => ({ ...t, runs: [{ ...t.runs[0]!, cost: 4.2 }] })) }, false, { nowMs: now })).toBe('⏵ auto · driven by another session · main · scout bugs running · today ✓ 1 · $4.20')
   // a branch warning goes where the branch is
-  expect(statusLine({ ...b, branch_note: 'on dev, not main' }, true, { nowMs: now })).toBe('⏵ auto · drives here · on dev, not main · next scout bugs in 38m · today ✓ 2 · $312')
+  expect(statusLine({ ...b, branch_note: 'on dev, not main' }, true, { nowMs: now })).toBe('⏵ auto · on dev, not main · drives here · main · next scout bugs in 38m · today ✓ 2 · $312')
   // paused and plan mode: no next scout (none starts)
   expect(statusLine({ ...b, mode: 'paused' }, true, { nowMs: now })).toBe('⏸ paused · drives here · main · today ✓ 2 · $312')
   expect(statusLine(b, true, { nowMs: now, plan: true })).toBe(`${PLAN_NOTE} · ⏵ auto · drives here · main · today ✓ 2 · $312`)
@@ -922,12 +923,12 @@ test('T-748: the status line says the mode, who drives, the branch, the next sco
   expect(line).not.toContain(DEFAULT_NAME)
 })
 
-test('T-748: the status line starts with "⚠" only when something needs you: an open question or a task in NEEDS YOU', () => {
+test('T-748: symcc adds no "⚠" of its own to the status line (Claude Code draws one), even when something needs you', () => {
   const now = Date.now()
   const base = { branch: 'main', scouts: [] }
   expect(statusLine({ ...base, tasks: [{ id: 'T-1', status: 'doing' }] }, true, { nowMs: now })).toBe('⏵ auto · drives here · main · today ✓ 0')
-  for (const st of ['review', 'waiting', 'failed'] as const) expect(statusLine({ ...base, tasks: [{ id: 'T-1', status: st }] }, true, { nowMs: now })).toBe('⚠ ⏵ auto · drives here · main · today ✓ 0')
-  expect(statusLine({ ...base, tasks: [], questions: [{}] }, true, { nowMs: now })).toBe('⚠ ⏵ auto · drives here · main')
+  for (const st of ['review', 'waiting', 'failed'] as const) expect(statusLine({ ...base, tasks: [{ id: 'T-1', status: st }] }, true, { nowMs: now })).toBe('⏵ auto · drives here · main · today ✓ 0')
+  expect(statusLine({ ...base, tasks: [], questions: [{}] }, true, { nowMs: now })).toBe('⏵ auto · drives here · main')
   expect(statusLine({ ...base, tasks: [], questions: [{ answered_at: new Date(now).toISOString() }] }, true, { nowMs: now })).toBeUndefined()
 })
 
@@ -1065,10 +1066,29 @@ test('going from review to auto leaves tasks in review as they are', () => {
   expect(a.tasks).toEqual(b.tasks)
 })
 
+test('T-748: a branch note (git or file-size warning) comes right after the mode and is never dropped; a long size warning goes short', () => {
+  const tasks = [{ id: 'T-1', status: 'todo' as const }]
+  const room = statusRoom('symcc')
+  const near = sizeWarnText('board.json', 3.8 * 1024 * 1024)
+  expect(near.length).toBeGreaterThan(room)
+  const line = statusLine({ tasks, branch: 'main', branch_note: near, mode: 'auto' }, true, { width: room })!
+  expect(line).toBe('⏵ auto · board.json 3.8 MB, near the 4 MB limit · drives here · main')
+  expect(line.length).toBeLessThanOrEqual(room)
+  // with room enough the whole warning shows
+  expect(statusLine({ tasks, branch: 'main', branch_note: near }, true)).toBe(`⏵ auto · ${near} · drives here · main · today ✓ 0`)
+  // over the limit has its own short form
+  expect(statusLine({ tasks, branch_note: sizeWarnText('board.json', 4.2 * 1024 * 1024) }, true, { width: room })).toBe('⏵ auto · board.json 4.2 MB, over the 4 MB limit · drives here')
+  // a git note joined with a size note: both stay (the size one short) even past the room; the other parts drop
+  const both = statusLine({ tasks, branch_note: `no commits yet; set up git (g); ${near}` }, true, { width: room })!
+  expect(both).toBe('⏵ auto · no commits yet; set up git (g); board.json 3.8 MB, near the 4 MB limit · drives here')
+  // a narrow line: the note stays, the rest drops
+  expect(statusLine({ tasks, branch: 'main', branch_note: 'no git' }, true, { width: 10 })).toBe('⏵ auto · no git · drives here')
+})
+
 test('a task in review counts as open and shows as "ready for review"', () => {
   expect(STATUS_WORD.review).toBe('ready for review')
-  // the status line has no ids: a task in review needs you, so it starts with ⚠ (T-748)
-  expect(statusLine({ tasks: [{ id: 'T-5', status: 'review' }] }, true)).toBe('⚠ ⏵ auto · drives here · today ✓ 0')
+  // the status line has no ids and no "⚠" of symcc's own (T-748)
+  expect(statusLine({ tasks: [{ id: 'T-5', status: 'review' }] }, true)).toBe('⏵ auto · drives here · today ✓ 0')
 })
 
 
@@ -4082,7 +4102,7 @@ test('T-596: an approved task in review whose approve runs is counted and listed
   // no approve (or a stale mark, its copy gone): it needs the owner, "to review"
   for (const t of [idle, { ...idle, checking: { step: 'testing' as const, at: new Date(now - 3_600_000).toISOString() } }]) {
     expect(core.needsYou(t, now)).toBe(true)
-    expect(statusLine({ tasks: [t], mode: 'review' }, true, { nowMs: now })).toBe('⚠ ⏸ review merge · drives here · today ✓ 0')
+    expect(statusLine({ tasks: [t], mode: 'review' }, true, { nowMs: now })).toBe('⏸ review merge · drives here · today ✓ 0')
     expect(rowExtra(t, [t], '', 45, now)).toBe('Enter to review')
     expect(boardText({ ...emptyBoard(), tasks: [t] }, now)).toContain('— ready for review')
   }

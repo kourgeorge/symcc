@@ -62,7 +62,7 @@ test('T-643, T-694: the terminal banner has the warning line in the warning tone
 test('T-643: the status line says "driven by another session" right after the mode, whatever the board holds', () => {
   const t = (status: 'doing' | 'todo' | 'failed', id: string) => ({ id, status })
   expect(statusLine({ tasks: [t('doing', 'T-1'), t('todo', 'T-2')], branch: 'main' }, false, { nowMs: NOW })).toBe('⏵ auto · driven by another session · main · today ✓ 0')
-  expect(statusLine({ tasks: [t('failed', 'T-3')], branch: 'main' }, false, { nowMs: NOW })).toBe('⚠ ⏵ auto · driven by another session · main · today ✓ 0')
+  expect(statusLine({ tasks: [t('failed', 'T-3')], branch: 'main' }, false, { nowMs: NOW })).toBe('⏵ auto · driven by another session · main · today ✓ 0')
   expect(statusLine({ tasks: [claimed(6 * 60_000)] }, false, { nowMs: NOW })).toBe('⏵ auto · driven by another session (it looks idle) · today ✓ 0')
   // narrow: the mark stays (the other parts go first)
   expect(statusLine({ tasks: [t('doing', 'T-1')], branch: 'main' }, false, { nowMs: NOW, width: 40 })).toBe('⏵ auto · driven by another session')

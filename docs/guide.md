@@ -253,7 +253,7 @@ board with its `question` tool, with 2 to 6 short choices, and asks it briefly i
   opens its page: the question, one button per choice (also on the number keys) and
   **Answer…** for your own words, the same as a waiting task.
 - The band above the prompt says **⚠ 2 questions for you: Q-1 …** (one row per question) while
-  any is open, and the status line starts with `⚠`. With `notify` on you hear "needs you"
+  any is open. With `notify` on you hear "needs you"
   once per question.
 - Answer on the board and the question closes and leaves the list (it stays in the file as
   history). The lead gets a board update right away (like a finished task), with a block like
@@ -605,9 +605,11 @@ You can also do it yourself:
   scout, the branch); the mode and who drives always stay. The "next scout" time is redrawn
   every minute. With an empty board and no scouts it shows nothing in `auto`, so a fresh
   project stays quiet.
-- The line starts with symcc's own `⚠` only when something needs you: an open question or a
-  task in NEEDS YOU (waiting, review, failed, asking for more time). The band names it.
-  Claude Code may draw a mark of its own in front of `symcc`; plugins can't change that.
+- A warning about git or a data file near the 4 MB limit comes right after the mode and is
+  never dropped; on a narrow line the size warning is short, e.g.
+  `board.json 3.8 MB, near the 4 MB limit`.
+- symcc adds no `⚠` of its own: Claude Code draws one in front of every plugin's status line,
+  and the band above the prompt shows what needs you in the warning color.
 
 ### Plan mode
 

@@ -18,6 +18,7 @@ import { newestFirst, offStatusParts, testsShort } from './settings'
 import { type OwnerQuestion, openQuestions, questionLine, questionsLabel } from './questions'
 import { needsYou } from './commands'
 import { fmtCost } from './runs'
+import { shortSizeWarns } from './board-parts'
 import { type LiveView, liveLanes, liveToday, liveTrains, todayCost } from './live'
 import { type LogoFrame, LOGO_MIN_WIDTH, restFrame } from './logo'
 
@@ -264,9 +265,11 @@ export type StatusBoard = {
  * the mode ("⏵ auto", "⏸ review merge", "⏸ paused"), who drives ("drives here" / "driven by another session"), the
  * branch, the next scout and when ("next scout bugs in 38m"), today's merged count ("today ✓ 58") and today's cost
  * ("$312"), e.g. "⏵ auto · drives here · main · next scout bugs in 38m · today ✓ 58 · $312". In plan mode
- * PLAN_NOTE comes first. It starts with "⚠ " only when something needs the owner (an open question, or a task in
- * NEEDS YOU). When wider than `width`, parts go from the end (the cost, then today, the scout, the branch); the mode
- * and who drives always stay. undefined for a fresh project: an empty board this session drives, in mode auto, with
+ * PLAN_NOTE comes first. A `branch_note` warning (git, or the T-675 file-size warning) comes right after the mode and
+ * is never dropped; when the line is too narrow for it, size warnings take their short form (shortSizeWarns). symcc
+ * adds no "⚠" of its own: Claude Code draws one in front of every plugin's status line, and the band above the prompt
+ * shows what needs you. When wider than `width`, parts go from the end (the cost, then today, the scout, the
+ * branch); the mode, the branch note and who drives always stay. undefined for a fresh project: an empty board this session drives, in mode auto, with
  * no scouts, no question and no branch note.
  */
 export function statusLine(b: StatusBoard, driving: boolean, o: { plan?: boolean; nowMs?: number; width?: number; offsetMin?: number } = {}): string | undefined {
@@ -277,18 +280,20 @@ export function statusLine(b: StatusBoard, driving: boolean, o: { plan?: boolean
   const needs = openQuestions(b).length > 0 || b.tasks.some(t => needsYou(t as Parameters<typeof needsYou>[0], nowMs))
   if (!b.tasks.length && !scouts.length && !needs && m === 'auto' && driving && !o.plan && !b.branch_note) return undefined
   const drive = driving ? 'drives here' : driveWarning(false, b.tasks, nowMs, DEFAULT_NAME, 'band').replace(/^⚠ /, '')
-  const fixed = [o.plan ? PLAN_NOTE : '', modeLabel(m), drive].filter(Boolean)
+  const head = [o.plan ? PLAN_NOTE : '', modeLabel(m)].filter(Boolean)
+  const fits = (note: string) => [...head, note, drive].join(' · ').length <= width
+  const note = b.branch_note ? (fits(b.branch_note) ? b.branch_note : shortSizeWarns(b.branch_note)) : ''
+  const fixed = [...head, note, drive].filter(Boolean)
   const today = b.tasks.length ? liveToday(b.tasks as SymccTask[], nowMs, o.offsetMin).merged : 0
   const rest = [
-    b.branch_note || b.branch || '',
+    b.branch || '',
     nextScoutPart(scouts, nowMs, !!o.plan || m === 'paused'),
     b.tasks.length ? `today ✓ ${today}` : '',
     shortCost(todayCost(b.tasks, nowMs, o.offsetMin)),
   ].filter(Boolean)
-  const mark = needs ? '⚠ ' : ''
-  // parts go from the end until the line fits; the mode and who drives always stay
+  // parts go from the end until the line fits; the mode, the branch note and who drives always stay
   for (let n = rest.length; n >= 0; n--) {
-    const line = mark + [...fixed, ...rest.slice(0, n)].join(' · ')
+    const line = [...fixed, ...rest.slice(0, n)].join(' · ')
     if (line.length <= width || n === 0) return line
   }
   return undefined
