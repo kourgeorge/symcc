@@ -4,7 +4,8 @@
 // commands in the TUI's session (approve, reject, diff, answer: board-view.ts's actionCommand). It claims two places of
 // OpenCode's screen (docs/research/opencode-spike-can-a-small-symcc-plugin-refuse-edits-start-a.md, point 4):
 //   - session.panel: the board (opened with ui.panel.open(BOARD_PANEL), from the "/symcc-board" keymap command or the
-//     command palette's "symcc board"; plain "/symcc" stays the server's text board, T-505): the task
+//     command palette's "symcc board"; plain "/symcc" stays the server's text board, T-505; and by itself once a
+//     session is shown, when open_on_start is on, T-756): the task
 //     list grouped by state, with the terminal list's marks, short states and times, and a task's (or question's)
 //     page when one is opened; and, like the Claude Code board, the Live, Scouts and Settings tabs (keys t, l, s and c,
 //     or a click on a tab, T-559, T-692; Live's lanes open their task on Enter or a click): a scout's page runs it now (r) or pauses it (p) with /<name>-scout, and edits it (e:
@@ -392,6 +393,18 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     keepPage(f)
     readTaskReport()
     openMade()
+    openOnStart(f)
+  }
+  /** T-756: opens the board panel by itself once per TUI run, as Claude Code does at session start when open_on_start is
+   *  on (and symcc is on). The first view file read decides; with it on, each read tries again until a session is
+   *  shown (ui.panel.open says no on OpenCode's home page; no toast then). Once open (or opened by the owner), it is
+   *  never opened again in this run, so a closed board stays closed. */
+  let startOpen: 'wait' | 'try' | 'done' = 'wait'
+  const openOnStart = (f: ViewFile | null) => {
+    if (startOpen === 'done' || !f) return
+    if (startOpen === 'wait') startOpen = f.view.open_on_start !== false && f.view.enabled !== false ? 'try' : 'done'
+    if (startOpen !== 'try') return
+    if (ctx.ui.panel.current()?.name === BOARD_PANEL || ctx.ui.panel.open(BOARD_PANEL)) startOpen = 'done'
   }
   /** Opens the page of the role, kind or scout just made here once the view file has it (a new role or kind in its
    *  edit mode, as Claude Code's New role does). */
