@@ -48,6 +48,13 @@ if (chat.includes('❯ 2')) bad('still frame: the chat shows "❯ 2"; the owner 
 for (const w of ['agents 1/3 busy', '✓ 56 merged', '↺ 47 sent back', '✗ 0 failed', 'Σ 268.6M tokens', '39c7f96'])
   if (!board.includes(w)) bad(`still frame: the board has no "${w}" (the real board)`)
 const live = text(view('live'))
+// (T-754) the Live tab's sections come in the real order: ▍Tasks, ▍Today, ▍Branches, ▍Organizational memory
+const order = ['▍Tasks', '▍Today', '▍Branches', '▍Organizational memory']
+for (const [name, t] of [['board', board], ['Live tab', live]]) {
+  const at = order.map(h => t.indexOf(h)).filter(i => i >= 0)
+  if (name === 'Live tab' && at.length < order.length) bad(`still frame: the Live tab is missing one of ${order.join(', ')}`)
+  if (at.some((i, k) => k > 0 && i < at[k - 1])) bad(`still frame: the ${name}'s sections are not in the order ${order.join(', ')}`)
+}
 for (const w of ['60 / 60', 'tests 14', 'shell · guard 11', 'ui · surfaces 11', 'probes 8', 'engine · hosts 5', 'snapshots 5'])
   if (!live.includes(w)) bad(`still frame: the Live tab has no "${w}" (the real org-mem)`)
 for (const w of ['16:28', '16:50', 'try 1: 22m · 4.0M tokens in all'])

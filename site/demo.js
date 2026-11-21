@@ -127,14 +127,14 @@
       for (const l of s.lanes) L.push(...laneLines(s, l))
     } else L.push('   No task is running right now.')
     L.push('')
-    L.push(heading('Branches'))
-    L.push(...branchLines(s))
-    L.push('')
     L.push(heading('Today'))
     const next = s.next.length ? s.next.map(id => `${id} ${cut(TITLES[id], 12)}`).join(' · ') : 'nothing in todo'
     L.push('   ' + sp('next up  ', 'dim') + sp(next, 'text'))
     const d = s.today
     L.push('   ' + sp('today    ', 'dim') + sp(`✓ ${d.merged} merged`, 'passed') + sp(`   ↺ ${d.back} sent back   ✗ ${d.failed} failed   Σ ${tok(d.tokens)} tokens`, 'dim'))
+    L.push('')
+    L.push(heading('Branches'))
+    L.push(...branchLines(s))
     if (wide) {
       L.push('')
       L.push(heading('Organizational memory', '   ' + sp('60 / 60', 'warning') + ' ' + sp('▕██████████▏', 'warning')))
@@ -304,7 +304,7 @@
       for (const b of s.branches) if (!b.merged) b.behind += 1
       s.voice = 'symcc: T-747 done'
       say(s, { k: 'event', mark: '✓', tone: 'passed', text: 'T-747 try 1 → merged into main' })
-      say(s, { k: 'lead', lines: [esc('T-747 is merged. The Live tab\'s sections now start with ▍Tasks, ▍Branches, ▍Today and ▍Organizational memory.')] })
+      say(s, { k: 'lead', lines: [esc('T-747 is merged. The Live tab\'s sections now start with ▍Tasks, ▍Today, ▍Branches and ▍Organizational memory.')] })
     }],
     [3200, at(16, 53, 40), s => { s.voice = '' }],
   ]
