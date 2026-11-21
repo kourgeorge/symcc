@@ -6,7 +6,7 @@ import type { SymccTask } from '../types'
 import { type Board, addTask, emptyBoard, patchTask, find, checkerVerdict, checkerOutput, isCheckerOutput, docsOnly, checkerOn, applySettings, parseSettingValue, settingValue, finishedNote, bashOutsideText, gitWriteText, gitWriteIn, workerGitWriteText, untestedChange, testTail, statusCell, PREP_NOTE, CHECKER_NOTE } from '../hooks/board'
 import { S, leadQueue, meanwhile, workers, checkerRuns, stopped } from '../hooks/app/state'
 import { workerFinished, WORKER_PROMPT, checkingNow, stopAsked, check, stoppedHandBack } from '../hooks/app/workers'
-import { setBoardMode } from '../hooks/app/board-mode'
+import { setBoardMode, setSymcc } from '../hooks/app/board-mode'
 import { stopOrphans } from '../hooks/app/cleanup'
 import { checkerFinished } from '../hooks/app/checker'
 import { checkEdit, stoppedText } from '../hooks/app/ask'
@@ -1170,6 +1170,23 @@ test('T-740: a checker symcc stopped partway gives no verdict, whatever it answe
   expect(end.attempts).toBe(1)
   expect(end.test_tries ?? 0).toBe(0)
 })
+
+for (const [how, line] of [['the board is paused', 'you paused the board'], ['symcc is disabled', 'you disabled symcc']] as const) {
+  test(`T-740: when ${how} while a checker runs, its history line keeps the reason ("${line}"), not "a new checker starts"`, async () => {
+    const w = world()
+    S.driving = true
+    await saveBoard(w.$, boardWith(true))
+    const t = await finish(w, async () => {
+      if (how === 'the board is paused') await setBoardMode(w.$, 'paused', 'you')
+      else await setSymcc(w.$, false)
+    })
+    const texts = t.history.map(h => h.text)
+    expect(texts).toContain(`try 1: checker gave no verdict (${line})`)
+    expect(texts.some(x => x.includes('a new checker starts'))).toBe(false)
+    expect(t.status).toBe('todo')
+    expect(w.spawns.length).toBe(1)
+  })
+}
 
 // ---------------- T-600: organizational memory (org-mem) ----------------
 

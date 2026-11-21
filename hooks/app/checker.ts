@@ -113,9 +113,12 @@ export async function runChecker($: Host, t: SymccTask, b: Board, dir: string, s
   // from its answer's text; whatever it answered ("stopped", or "I found nothing before the stop") is no verdict
   const bySymcc = !overTime && stopped.has(agentId)
   if (bySymcc) {
+    // read again here, just before the line: a stop asked for this task (dropped, paused) names it; a halt of every
+    // checker (the board paused, symcc disabled) ends it with no answer and its own reason (end.why), as on main
     const late = stop()
-    await record($, t, null, late ? `the task was ${late}` : STOPPED_AGAIN, end.tokens)
-    return { verdict: null, why: late ? `the task was ${late}` : 'it was stopped', stopped: true }
+    const why = late ? `the task was ${late}` : end.answer === null && end.why ? end.why : undefined
+    await record($, t, null, why ?? STOPPED_AGAIN, end.tokens)
+    return { verdict: null, why: why ?? 'it was stopped', stopped: true }
   }
   // T-600, T-632: its "Learned:" lines are kept on the task as org-mem suggestions for the lead, whatever its verdict
   if (end.answer) await keepSuggestions($, t.id, end.answer)
