@@ -121,9 +121,9 @@ export type LiveLane = {
   sentBack: number
   enteredMs: number
   agent: boolean
-  /** T-771: set on a finished lane (a task merged, or an investigation answered, in the last LIVE_FINISHED_MS):
-   *  when it finished and the word its right column says ("merged 3m ago"). */
-  done?: { atMs: number; word: 'merged' | 'answered' }
+  /** T-771: set on a finished lane (a task merged in the last LIVE_FINISHED_MS):
+   *  when it merged and the word its right column says ("merged 3m ago"). */
+  done?: { atMs: number; word: 'merged' }
 }
 
 /** T-771: how long a just-merged task keeps its lane (drawn finished, dim), and at most how many such lanes there are. */
@@ -231,26 +231,22 @@ export function liveLanes(view: LiveView, nowMs: number): LiveLane[] {
   return lanes.sort((a, b) => a.enteredMs - b.enteredMs || num(a.id) - num(b.id))
 }
 
-/** T-771: when done task `t` finished: its last "merged" history line (else its last try's end, when it has such a
- *  line without a time); an investigation's last "done" line or its last try's end. Undefined when it did not merge. */
-function finishedAt(t: SymccTask): { atMs: number; word: 'merged' | 'answered' } | undefined {
+/** T-771: when done task `t` merged: its last "merged" history line (else its last try's end, when it has such a
+ *  line without a time). Undefined when it did not merge (investigations never do). */
+function finishedAt(t: SymccTask): { atMs: number; word: 'merged' } | undefined {
   const marks = marksOf(t)
   const lastEnd = ms(t.runs?.[t.runs.length - 1]?.ended)
   const latest = (kind: string) => {
     const xs = marks.filter(h => h.kind === kind).map(h => ms(h.at)).filter((n): n is number => n !== undefined)
     return xs.length ? Math.max(...xs) : undefined
   }
-  if (isInvestigation(t)) {
-    const at = latest('done') ?? lastEnd
-    return at !== undefined ? { atMs: at, word: 'answered' } : undefined
-  }
-  if (!marks.some(h => h.kind === 'merged')) return undefined
+  if (isInvestigation(t) || !marks.some(h => h.kind === 'merged')) return undefined
   const at = latest('merged') ?? lastEnd
   return at !== undefined ? { atMs: at, word: 'merged' } : undefined
 }
 
 /**
- * T-771: the finished lanes: the tasks merged (and investigations answered) in the last LIVE_FINISHED_MS, newest first,
+ * T-771: the finished lanes: the tasks merged in the last LIVE_FINISHED_MS, newest first,
  * at most LIVE_FINISHED_MAX. Each is drawn as passed every station, ✓ at the last one, dim (laneLines), "merged 3m ago"
  * at its right. Failed or dropped tasks get none.
  */

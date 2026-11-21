@@ -1064,7 +1064,7 @@ indented by 1 space (VS Code shows the same names as bold headings):
   running ones, drawn as finished: the track filled up to `merged` with `✓` there (green), the id,
   title and second row dim, no `▶ `, and `merged 3m ago` on the right (`3m ago` on a narrow panel).
   At most 3 such lanes show, newest first; after 10 minutes, or when a 4th task merges, the oldest
-  goes. An answered investigation gets one too (`answered 2m ago`, `✓` at its last station);
+  goes. Only merged tasks get one: answered investigations,
   failed or dropped tasks don't. Enter (or a click) on a finished lane opens its task page.
 
   ```

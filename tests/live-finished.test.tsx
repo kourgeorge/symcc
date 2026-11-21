@@ -26,7 +26,7 @@ const liveView = (tasks: unknown[]) => ({ shape: 'view-1', value: { tasks, worki
 
 test('T-771: a task merged 3m ago keeps a finished lane under the running ones; one merged 11m ago, failed or dropped ones get none', () => {
   const lanes = liveTaskLanes(view(TASKS), T0)
-  expect(lanes.map(l => [l.id, l.done?.word ?? 'running'])).toEqual([['T-760', 'running'], ['T-747', 'merged'], ['T-743', 'answered']])
+  expect(lanes.map(l => [l.id, l.done?.word ?? 'running'])).toEqual([['T-760', 'running'], ['T-747', 'merged']])
   const layout = liveLayout(lanes, liveStations(true), liveInner(100))
   const [first, second] = laneLines(lanes[1]!, layout, { nowMs: T0, frame: 0 })
   const text = segText(first)
@@ -37,8 +37,6 @@ test('T-771: a task merged 3m ago keeps a finished lane under the running ones; 
   expect(first.find(s => s.text === '✓')?.tone).toBe('passed')
   expect(first.some(s => s.tone === 'current' || s.tone === 'run')).toBe(false)
   expect(second.filter(s => s.text.trim()).every(s => s.tone === 'dim')).toBe(true)
-  // the answered investigation: ✓ at its last station, "answered 6m ago"
-  expect(segText(laneLines(lanes[2]!, layout, { nowMs: T0, frame: 0 })[0])).toMatch(/✓ +answered 6m ago$/)
   // nothing wider than the panel, at any width
   for (const w of [100, 60, 40, 30]) {
     const l = liveLayout(lanes, liveStations(true), w)
@@ -46,6 +44,15 @@ test('T-771: a task merged 3m ago keeps a finished lane under the running ones; 
   }
   // 11 minutes after its merge T-747 is gone too
   expect(liveTaskLanes(view(TASKS), T0 + 8 * 60_000).map(l => l.id)).toEqual(['T-760'])
+})
+
+test('T-771: an answered investigation gets no finished lane, whether its board has the full history or the slim one', () => {
+  // answered 6m ago, and (full history) read by the owner 2m ago: a 'done' line
+  const answered = task('T-743', 'An answered question', { status: 'done', kind: 'investigation', runs: [{ started: iso(9), ended: iso(6) }], history: [] })
+  const read = { ...answered, history: [{ kind: 'done', at: iso(2), text: 'try 1: the owner read the answer → done (nothing merged)' }] }
+  expect(liveFinishedLanes(view([answered]), T0)).toEqual([])
+  expect(liveFinishedLanes(view([read]), T0)).toEqual([])
+  expect(liveTaskLanes(view([task('T-760', 'A running one', { runs: [{ started: iso(4) }] }), read]), T0).map(l => l.id)).toEqual(['T-760'])
 })
 
 test('T-771: at most 3 finished lanes, newest first; a 4th merge pushes the oldest out', () => {
