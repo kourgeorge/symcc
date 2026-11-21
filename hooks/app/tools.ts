@@ -741,7 +741,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       const checking = checkingNow(t.id)
       if (checking) stopAsked.set(t.id, 'dropped')
       else if (t.status === 'doing') await stopWorker($, t.id, 'dropped')
-      await change($, x => patchTask(x, t.id, { status: 'dropped', note: str(a.reason) ?? 'dropped', ...endedBy(find(x, t.id), now(), 'stopped', 'dropped') }, now()))
+      await change($, x => patchTask(x, t.id, { status: 'dropped', note: str(a.reason) ?? 'dropped', ...(failedOnClash(t) ? { merge_main: true } : {}), ...endedBy(find(x, t.id), now(), 'stopped', 'dropped') }, now()))
       if (checking) await haltChecker($, t.id, 'the task was dropped')
       if (!checking) await removeWorktree($, t.id, worktreeDir(t.id)).catch(() => undefined)
       void pump($)
