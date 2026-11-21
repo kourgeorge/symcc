@@ -29,5 +29,5 @@ export const todayTeamOf = (t0: number, offsetMin: number, hours?: Record<number
 })
 
 /** The second and third lines these give at a wide panel (the bar's shares: workers 5.7M, checkers 0.3M, scouts 3M, lead 1M). */
-export const TODAY_LINE_2 = '⌀ per task 2M · 10m work · 30m start-to-merge   ⏱ 1h 15m agent work · ≈ $12'
+export const TODAY_LINE_2 = '⌀ per task 2M · 10m work · 30m start-to-merge   ⏱ 1h 15m agent work · ≈ $12 this session'
 export const TODAY_BAR_START = '████████▓▒▒▒▒▒░░ workers 57% · checkers 3% · scouts 30% · lead 10%'

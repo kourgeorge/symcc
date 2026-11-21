@@ -29,7 +29,7 @@
   }
   const ASK = 'there is no clear visual separation between the sections of the live page, show some ideas'
   const SCOUT_FOUND = 'Checker send-backs, the most common failure, are left out of the failed-tries reasons and total'
-  // The real board at the end of the story: "✓ 56 merged ↺ 47 sent back ✗ 0 failed Σ 268.6M tokens". The story starts
+  // The real board at the end of the story: "✓ 56 merged ↺ 47 sent back ✗ 0 failed Σ 530.1M tokens" (268.6M of it the tries). The story starts
   // just before T-747 merged (5.7M tokens) and T-740's try 1 was sent back (4M tokens).
   const END_TODAY = { merged: 56, back: 47, failed: 0, tokens: 268.6e6 }
   const T747_TOKENS = 5.7e6
@@ -49,6 +49,8 @@
     firstTry: 34,
     avgTries: '2.4',
   }
+  // the scouts' tokens on top of the tries, so Σ is everyone's total (the bar's 530.1M at the end)
+  const OTHERS_TOKENS = 530.1e6 - END_TODAY.tokens
   const WHO_CELL = { workers: '█', scouts: '▒' }
 
   // ---------- the state ----------
@@ -163,7 +165,7 @@
     L.push('')
     L.push(liveHead('Today'), '')
     const d = s.today
-    L.push(' ' + sp(`✓ ${d.merged} merged`, 'passed') + sp(`   ↺ ${d.back} sent back   ✗ ${d.failed} failed   Σ ${tok(d.tokens)} tokens`, 'dim'))
+    L.push(' ' + sp(`✓ ${d.merged} merged`, 'passed') + sp(`   ↺ ${d.back} sent back   ✗ ${d.failed} failed   Σ ${tok(d.tokens + OTHERS_TOKENS)} tokens`, 'dim'))
     // (T-769, T-779) the medians per merged task and today's agent work time; then the scouts' share of the tokens
     // (a bar of 16 cells in the board colors) and the tokens per hour from 08:00 to now
     L.push(' ' + sp('⌀ ', 'dim') + sp(`per task ${TODAY_MORE.perTask}`, 'text') + sp('   ⏱ ', 'dim') + sp(`${TODAY_MORE.work} agent work`, 'text'))

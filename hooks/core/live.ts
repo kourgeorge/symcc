@@ -722,9 +722,12 @@ export function todayCost(tasks: readonly Pick<SymccTask, 'runs'>[], nowMs: numb
   return usd
 }
 
+/** T-799: after Σ when the lead's and scouts' tokens aren't known (Σ is the tries only). */
+export const TRIES_ONLY = ' (tries only)'
+
 /** The ▍Today figures in `width` columns: "✓ 6 merged   ↺ 9 sent back   ✗ 1 failed   Σ 18.4M tokens", on more lines when narrow (a part wider than the page alone is cut). */
-export function todayLines(d: LiveToday, width: number): string[] {
-  const parts = [`✓ ${d.merged} merged`, `↺ ${d.sentBack} sent back`, `✗ ${d.failed} failed`, `Σ ${fmtTokens(d.tokens)} tokens`]
+export function todayLines(d: LiveToday, width: number, triesOnly = false): string[] {
+  const parts = [`✓ ${d.merged} merged`, `↺ ${d.sentBack} sent back`, `✗ ${d.failed} failed`, `Σ ${fmtTokens(d.tokens)} tokens${triesOnly ? TRIES_ONLY : ''}`]
   for (const gap of ['   ', '  ', ' ']) {
     const one = parts.join(gap)
     if (textWidth(one) <= width) return [one]
@@ -777,6 +780,8 @@ export type TodayMore = {
   who: { who: TodayWho; tokens: number }[]
   hours: number[]
   firstHour: number
+  /** T-799: the lead's or the scouts' tokens today are known (so the Σ of everyone is complete) */
+  teamKnown?: boolean
   /** T-781: of the tasks merged today with try data: the share merged on the first try (percent), the tries per task, and the checker's send-backs today */
   firstTry?: number
   avgTries?: number
@@ -847,6 +852,7 @@ export function todayMore(tasks: readonly SymccTask[], team: TodayTeam | undefin
     workMs: workMs + n(mine?.scout_ms),
     ...(n(usd) ? { usd: n(usd) } : {}),
     who,
+    ...(typeof mine?.lead === 'number' || typeof mine?.scouts === 'number' ? { teamKnown: true } : {}),
     hours: firstHour < 0 || firstHour > now ? [] : hours.slice(firstHour, now + 1),
     firstHour: Math.max(0, firstHour),
     ...(tries.length ? { firstTry: (100 * tries.filter(n => n === 1).length) / tries.length, avgTries: tries.reduce((a, b) => a + b, 0) / tries.length } : {}),
@@ -855,7 +861,7 @@ export function todayMore(tasks: readonly SymccTask[], team: TodayTeam | undefin
 }
 
 /** Dollars, short: "≈ $64" from ten dollars on, else "≈ $4.20". */
-export const todayCostText = (usd: number) => `≈ ${usd >= 10 ? `$${Math.round(usd)}` : fmtCost(usd)}`
+export const todayCostText = (usd: number) => `≈ ${usd >= 10 ? `$${Math.round(usd)}` : fmtCost(usd)} this session`
 
 /** The shares of `who`'s tokens in whole percents ("<1%" for a small one). */
 function shares(who: TodayMore['who']): string[] {
@@ -942,7 +948,7 @@ export function todayMoreLines(m: TodayMore, width: number): LiveSeg[][] {
   }
   const busiest = m.hours.length ? m.hours.indexOf(Math.max(...m.hours)) : -1
   const extras: string[] = [
-    ...(busiest >= 0 ? [`busiest ${hh(m.firstHour + busiest)}:00 · ${fmtTokens(m.hours[busiest]!)} tokens`] : []),
+    ...(busiest >= 0 ? [`busiest hour ${hh(m.firstHour + busiest)}:00 · ${fmtTokens(m.hours[busiest]!)} tokens`] : []),
     ...(m.firstTry !== undefined ? [`first try ${Math.round(m.firstTry)}%`] : []),
     ...(m.avgTries !== undefined ? [`⌀ ${m.avgTries.toFixed(1)} tries`] : []),
     ...(m.sentBack !== undefined ? [`⌕ ${m.sentBack} sent back by the checker`] : []),
@@ -977,8 +983,14 @@ export function todayMoreLines(m: TodayMore, width: number): LiveSeg[][] {
 
 /** All of ▍Today's lines in `width` columns (each under LIVE_INDENT): the figures (todayLines), then todayMoreLines. */
 export function liveTodayLines(v: Pick<LiveView, 'tasks' | 'today_team'>, nowMs: number, width: number, offsetMin: number = localOffset(nowMs)): LiveSeg[][] {
-  const first = todayLines(liveToday(v.tasks, nowMs, offsetMin), width).map((text): LiveSeg[] => [{ text, tone: 'text' }])
-  return [...first, ...todayMoreLines(todayMore(v.tasks, v.today_team, nowMs, offsetMin), width)]
+  const more = todayMore(v.tasks, v.today_team, nowMs, offsetMin)
+  const d = liveToday(v.tasks, nowMs, offsetMin)
+  // T-799: Σ is everyone's tokens (the bar's total), never less than the busiest hour
+  const tokens = Math.max(more.who.reduce((s, x) => s + x.tokens, 0), d.tokens, ...more.hours)
+  const triesOnly = !more.teamKnown
+  const first = todayLines({ ...d, tokens }, width, triesOnly).map((text): LiveSeg[] =>
+    text.endsWith(TRIES_ONLY) ? [{ text: text.slice(0, -TRIES_ONLY.length), tone: 'text' }, { text: TRIES_ONLY, tone: 'dim' }] : [{ text, tone: 'text' }])
+  return [...first, ...todayMoreLines(more, width)]
 }
 
 // ---------------- T-718: the Organizational memory section at the bottom of the Live tab ----------------

@@ -1181,19 +1181,19 @@ TASKS
   TODAY
 
    ✓ 67 merged   ↺ 76 sent back   ✗ 0 failed   Σ 320.7M tokens
-   ⌀ per task 2.8M · 9m work · 23m start-to-merge   ⏱ 13h 06m agent work · ≈ $64
+   ⌀ per task 2.8M · 9m work · 23m start-to-merge   ⏱ 13h 06m agent work · ≈ $64 this session
    ████████████▓▓▒░ workers 84% · checkers 8% · scouts 5% · lead 3%
-   08 ▁▂▃▅▇▆▅▃▅▇█▆▃ 20   busiest 14:00 · 42M tokens   first try 34%   ⌀ 2.4 tries   ⌕ 68 sent back by the checker
+   08 ▁▂▃▅▇▆▅▃▅▇█▆▃ 20   busiest hour 14:00 · 42M tokens   first try 34%   ⌀ 2.4 tries   ⌕ 68 sent back by the checker
   ```
 
-  The first line: merged, sent back (every send-back today: the checker's problems, tests failed, a clash with main), failed, and the tries' tokens today. The second:
+  The first line: merged, sent back (every send-back today: the checker's problems, tests failed, a clash with main), failed, and the tokens of everyone today (workers, checkers, scouts and the lead: the same total the bar's shares are out of, so it is never smaller than the busiest hour; when the lead's and the scouts' tokens aren't known it is the tries only and says a dim `(tries only)`). The second:
   for the tasks merged today, the middle value (median) of their tokens, their work time and the time
   from their first try's start to the merge; then all agent work today (the tries' time today and the
-  scouts'); then `≈ $N`, the session's cost as `/cost` says it, only when symcc knows it (never a
+  scouts'); then `≈ $N this session`, the whole session's cost (not just today's) as `/cost` says it, only when symcc knows it (never a
   guess). The third: a bar of who spent today's tokens (workers, checkers, scouts, the lead; each in
   its board color and its own shade), with the shares. The fourth: the tokens per hour from the first busy
   hour to now as a sparkline, with the first and last hour dim on each side (they always stay); then
-  `busiest HH:00 · NM tokens`, today's share of merged tasks that went through on the first try, the
+  `busiest hour HH:00 · NM tokens`, today's share of merged tasks that went through on the first try, the
   average tries per merged task (the same figures `/symcc-stats` shows), and how many times the checker
   sent a task back (left out when none; line 4 is left out when it has nothing to show). A checker's tokens are counted apart from its worker's from now on (older tries count as the
   worker's), and the lead's part shows only where symcc can read the lead's usage. The lead's,
