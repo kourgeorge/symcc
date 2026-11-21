@@ -1,5 +1,5 @@
 // The task page's sections (T-580), as plain data: what the Claude Code terminal's task page shows under its title and
-// buttons, in its order and with its headings: ▍Why it failed, ▍Answer, ▍Details, ▍Changes, ▍What to do, ▍History,
+// buttons, in its order and with its headings: ▍Why it failed, ▍Answer, ▍Details, ▍Branch (T-761), ▍Changes, ▍What to do, ▍History,
 // ▍Report and ▍Runs (time and cost). Each section is lines of colored pieces (Seg), some with what a press or click on
 // them does (a changed file opens its diff). The terminal (hooks/claude/ui/task-page.tsx) and OpenCode's panel
 // (hooks/opencode/board-view.ts) draw them; VS Code's card (vscode-task.tsx) takes their contents but keeps its own
@@ -13,9 +13,11 @@ import { whyFailed, failNext, failAsks } from './failure'
 import { historyEvent, historyTime, HISTORY_COLOR } from './history'
 import { fmtRun, fmtTotal, sumRuns } from './runs'
 import { type DiffFile, YOUR_EDITS } from './review'
+import { taskBranchLines, taskBranchTitle, type TaskBranchFacts } from './task-branch'
+import { cutTitle } from './stats'
 
 /** The sections, in the page's order. */
-export type TaskSectionId = 'why' | 'answer' | 'details' | 'changes' | 'what' | 'history' | 'report' | 'runs'
+export type TaskSectionId = 'why' | 'answer' | 'details' | 'branch' | 'changes' | 'what' | 'history' | 'report' | 'runs'
 
 /** What a press on a line does: show a changed file's diff. */
 export type SectionAction = { diff: string }
@@ -50,6 +52,8 @@ export type TaskSectionFacts = {
   changesHint?: string
   /** the number keys answer a question, so the report's tries get none */
   numberKeysTaken?: boolean
+  /** T-761: what git says of the task's branch (app/branches.ts's taskBranchFacts); left out: no Branch section */
+  branch?: TaskBranchFacts | null
 }
 
 /** The text of `file` among the facts: null when it can't be read or was not read. */
@@ -157,6 +161,8 @@ export function taskSections(t: SymccTask, f: TaskSectionFacts): TaskSection[] {
     })
   }
   out.push({ id: 'details', title: 'Details', lines: detailRows(t, { ...f.detail, nowMs: f.nowMs }).flatMap((r, i) => detailRowLines(r, width).map((segs, j) => ({ segs, key: `row-${i}-${j}` }))) })
+  // T-761: the task's branch against the one it merges into (core/task-branch.ts); none before it has a branch
+  if (f.branch) out.push({ id: 'branch', title: cutTitle(taskBranchTitle(f.branch), Math.max(1, width - 1)), lines: taskBranchLines(t, f.branch, f.nowMs, width).map((segs, i): SectionLine => ({ segs, key: `branch-${i}` })) })
   if (t.status === 'review' && !isAnswered(bt) && f.changes) {
     const files = f.changes.files
     const fileWidth = Math.max(4, ...files.map(x => x.file.length))

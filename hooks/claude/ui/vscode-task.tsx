@@ -7,6 +7,7 @@
 //   tone, under the header
 //   Details: the labelled rows the terminal and OpenCode show (detailRows: Steps, Added, Role, Kind, From, Why,
 //   Files, Into, After, …, Tries) as a two-column label / value grid that wraps (T-699); each task it waits for is a link
+//   Branch (T-761: the task's branch against main, the terminal's lines in the monospaced face)
 //   Answer · What to do (Markdown) · Changes · History (a timeline on one rail, newest first, the newest HISTORY_FIRST
 //   with a "Show all" button) · Report (Markdown, its first part with a "Show all" button), then the Time and cost fold
 // (a fold and a task id are links: VS Code draws a Button as a filled blue box)
@@ -295,6 +296,25 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
     </Box>,
   ])
 
+  // T-761: the task's branch against main (core/task-branch.ts): the terminal's lines, in the monospaced face so the
+  // dots and lines stay over each other, in the same colors
+  const branchSec = sec('branch')
+  const branch = branchSec
+    ? section('branch', branchSec.title, [
+        <Box key="vs-branch" flexDirection="column">
+          {branchSec.lines.map((l, i) => (
+            <Text key={l.key ?? `vs-branch-${i}`} wrap="truncate" mono>
+              {l.segs.map((g, j) => (
+                <Text key={`${l.key ?? i}-${j}`} mono bold={g.bold} color={C(g.color)}>
+                  {g.text}
+                </Text>
+              ))}
+            </Text>
+          ))}
+        </Box>,
+      ])
+    : null
+
   const details = section('what', 'What to do', [t.details.trim() ? <Markdown key="vs-details-md" text={t.details.trimEnd()} /> : plain('vs-details-none', '(no details)', 'inactive')])
 
   // a task in review: the files it changed, each opening its diff
@@ -401,6 +421,7 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
       {rejectBox}
       {roleBox}
       {detailGrid}
+      {branch}
       {answer}
       {details}
       {changes}

@@ -15,7 +15,8 @@ import { ICON } from '../../name'
 import { hasPage, bandLines, bandDraw, BAND_CLICK_HINT, panelLines, panelKeys, parseViewFile, viewFileText, lineText, actionCommand, answerOptions, OWN_ANSWER, viewDefs, panelTaskActions, TASK_ACTION_COMMANDS, SETTINGS_OPEN, approveSent, APPROVE_SENT_MS, drawnLines, boardPageOf, defDraftOf, defEditKeys, noDescriptionText, draftError, SETUP_GIT_ASK, EDIT_FIRST_BOX, newNameError, type ViewFile, type PanelChoice } from '../board-view'
 import { readFile } from 'node:fs/promises'
 import { rowEndBoard, ROW_END, ROW_END_NOW } from '../../../tests/row-end-cases'
-import { BRANCH_LINES_100, branchFactsAt, branchTasks } from '../../../tests/branches-fixture'
+import { BRANCH_LINES_100, branchFactsAt, branchTasks, taskBranchDoing, taskBranchLong, taskBranchMerged, taskBranchTasks } from '../../../tests/branches-fixture'
+import type { TaskBranchFacts } from '../../core/task-branch'
 import { LIVE_INDENT, liveBranches, liveInner } from '../../core/live'
 import { taskSections } from '../../core/task-sections'
 import { viewTask, viewStubFilled } from '../../core/board-parts'
@@ -3517,4 +3518,41 @@ test('T-756: open_on_start turned off, or symcc turned off, while it waits for a
     expect(s.toasts.length).toBe(0)
     s.board.stop()
   }
+})
+
+// ---------------- T-761: the task page's Branch section ----------------
+test('T-761: the OpenCode task page draws the Branch section from the view file: tries, a catch-up, a merge, a cut history; none for a task with no branch', () => {
+  const f = viewFile()
+  const g: ViewFile = { ...f, view: { ...f.view, tasks: taskBranchTasks(NOW) as never[], task_branches: { 'T-733': taskBranchDoing(NOW), 'T-734': taskBranchMerged(NOW), 'T-735': taskBranchLong(NOW) } } }
+  // the view file keeps the facts; a broken one is left out
+  expect(parseViewFile(viewFileText(g))!.view.task_branches).toEqual(g.view.task_branches)
+  expect(Object.keys(parseViewFile(viewFileText({ ...g, view: { ...g.view, task_branches: { ...g.view.task_branches, 'T-9': { branch: 1 } as never } } }))!.view.task_branches ?? {})).toEqual(['T-733', 'T-734', 'T-735'])
+  const page = (id: string, w: number) => panelLines(g, { opened: id, cursor: 0 }, NOW, w).lines.map(lineText).map(x => x.replace(/^›/, ' '))
+  const want = (id: string, facts: TaskBranchFacts, w: number) => {
+    const t = g.view.tasks.find(x => x.id === id)!
+    return taskSections(t, { width: w, nowMs: NOW, detail: { roles: [], kinds: [], all: [], when: (x: string) => x }, branch: facts }).find(s => s.id === 'branch')!
+  }
+  // doing: the heading, main's line, the fork and the catch-up, the commits with their tries, in that order, under Details
+  const doing = page('T-733', 100)
+  const sec = want('T-733', taskBranchDoing(NOW), 100)
+  expect(sec.title).toBe('Branch  symcc/T-733 · 3 commits · 10 behind main')
+  const at = doing.indexOf(`▍${sec.title}`)
+  expect(at).toBeGreaterThan(doing.findIndex(l => l.startsWith('▍Details')))
+  expect(doing.slice(at + 1, at + 1 + sec.lines.length)).toEqual(sec.lines.map(l => segText(l.segs as never)))
+  expect(doing[at + 2]).toContain('⇣ caught up')
+  expect(doing[at + 4]!.trim()).toBe('638235d  a077ff8        4825c84')
+  expect(doing[at + 5]!.trim()).toBe('try 2    try 4          try 6')
+  // merged: the line goes up into main with its sha
+  const merged = page('T-734', 100)
+  expect(merged.some(l => /╯ merged \d\d:\d\d \(cdcdcdc\)$/.test(l))).toBe(true)
+  expect(merged).toContain('▍Branch  symcc/T-733 · 3 commits · merged into main')
+  // a long history: the latest commits and "… N earlier", never wider than the page
+  for (const w of [100, 60, 40]) {
+    const long = page('T-735', w)
+    const h = long.findIndex(l => l.startsWith('▍Branch'))
+    expect(long.slice(h, h + 7).some(l => /^ +… \d+ earlier$/.test(l))).toBe(true)
+    for (const l of long.slice(h, h + 7)) expect([l, [...l].length <= w]).toEqual([l, true])
+  }
+  // to do, never started: no Branch section
+  expect(page('T-736', 100).some(l => l.startsWith('▍Branch'))).toBe(false)
 })
