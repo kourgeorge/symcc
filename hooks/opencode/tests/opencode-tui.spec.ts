@@ -3290,7 +3290,8 @@ test('T-738, T-747: the OpenCode Live tab has a ▍heading for each section, one
 /** T-756: a fake tui context whose ui.panel.open says no until `shown.session` is set (OpenCode's home page first). */
 function startCtx(view: Partial<PaneView>) {
   const f = viewFile()
-  const text = viewFileText({ ...f, view: { ...f.view, ...view } })
+  let text = viewFileText({ ...f, view: { ...f.view, ...view } })
+  const setView = (v: Partial<PaneView>) => void (text = viewFileText({ ...f, view: { ...f.view, ...v } }))
   const fc = fakeCtx({})
   const shown = { session: false }
   const opens: string[] = []
@@ -3301,7 +3302,7 @@ function startCtx(view: Partial<PaneView>) {
     current: () => current,
   }
   const board = startTui({ ...fc.ctx, ui: { ...fc.ctx.ui, panel } }, { runtime: fakeRuntime(), readText: async () => text, every: () => () => undefined, now: () => NOW })
-  return { board, shown, opens, toasts: fc.toasts, current: () => current, panel }
+  return { board, shown, opens, toasts: fc.toasts, current: () => current, panel, setView }
 }
 
 test('T-756: with open_on_start on, the board panel opens by itself once a session is shown (no toast before), and not again after it is closed', async () => {
@@ -3331,6 +3332,23 @@ test('T-756: with open_on_start off, or symcc off, the board panel never opens b
     await s.board.refresh()
     await s.board.refresh()
     expect(s.opens.length).toBe(0)
+    expect(s.current()).toBe(undefined)
+    expect(s.toasts.length).toBe(0)
+    s.board.stop()
+  }
+})
+
+test('T-756: open_on_start turned off, or symcc turned off, while it waits for a session: the board does not open', async () => {
+  for (const later of [{ open_on_start: false, enabled: true }, { open_on_start: true, enabled: false }]) {
+    const s = startCtx({ open_on_start: true, enabled: true })
+    await s.board.refresh()
+    expect(s.current()).toBe(undefined)
+    s.setView(later)
+    s.shown.session = true
+    await s.board.refresh()
+    // turned back on later in the same run: still not by itself
+    s.setView({ open_on_start: true, enabled: true })
+    await s.board.refresh()
     expect(s.current()).toBe(undefined)
     expect(s.toasts.length).toBe(0)
     s.board.stop()

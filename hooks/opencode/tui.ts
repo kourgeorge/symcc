@@ -396,15 +396,15 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     openOnStart(f)
   }
   /** T-756: opens the board panel by itself once per TUI run, as Claude Code does at session start when open_on_start is
-   *  on (and symcc is on). The first view file read decides; with it on, each read tries again until a session is
-   *  shown (ui.panel.open says no on OpenCode's home page; no toast then). Once open (or opened by the owner), it is
-   *  never opened again in this run, so a closed board stays closed. */
-  let startOpen: 'wait' | 'try' | 'done' = 'wait'
+   *  on (and symcc is on). Each view file read checks the setting again and tries until a session is shown
+   *  (ui.panel.open says no on OpenCode's home page; no toast then), so a setting turned off while it waits still
+   *  counts. Once it is off at a read, or the board is open (also when the owner opened it), it is never opened by
+   *  itself again in this run, so a closed board stays closed. */
+  let startDone = false
   const openOnStart = (f: ViewFile | null) => {
-    if (startOpen === 'done' || !f) return
-    if (startOpen === 'wait') startOpen = f.view.open_on_start !== false && f.view.enabled !== false ? 'try' : 'done'
-    if (startOpen !== 'try') return
-    if (ctx.ui.panel.current()?.name === BOARD_PANEL || ctx.ui.panel.open(BOARD_PANEL)) startOpen = 'done'
+    if (startDone || !f) return
+    if (f.view.open_on_start === false || f.view.enabled === false) startDone = true
+    else if (ctx.ui.panel.current()?.name === BOARD_PANEL || ctx.ui.panel.open(BOARD_PANEL)) startDone = true
   }
   /** Opens the page of the role, kind or scout just made here once the view file has it (a new role or kind in its
    *  edit mode, as Claude Code's New role does). */
