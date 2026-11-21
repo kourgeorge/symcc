@@ -59,6 +59,9 @@ function reset() {
   resetStore()
   for (const m of [workers, scoutRuns, checkerRuns, queuedWorkers]) m.clear()
   for (const s of [stopped, boardAgents, starting]) s.clear()
+  // the lead's waiting update lines: a test checks they stay empty, so none may come from an earlier test
+  leadQueue.length = 0
+  meanwhile.length = 0
   owners().clear()
   leads().clear()
 }
@@ -791,7 +794,11 @@ test('the main folder\'s copy starts a worker as an OpenCode session: the role\'
     await writeFile(`${p.main}/.symcc/board.json`, JSON.stringify(saved.board))
     const f = fakeSessions(2)
     let host: Host | undefined
-    const plugin = symccServer({ engine: SYMCC_ENGINE, host: o => (host = opencodeHost(o)), hostOptions: { say: () => undefined, sessionId: 'opencode-run' }, agentOptions: { pollMs: 10 } })
+    // T-725: the agent's own waits (the session's move into the worktree, and the board naming the worker before its
+    // prompt) get WAIT_MS like until() below, not their 20 s default: on a busy machine the board write that names the
+    // worker can take longer, the start then gives up, and the test timed out waiting for a prompt that never came.
+    // Each wait ends as soon as what it waits for happens, so this never slows a passing run.
+    const plugin = symccServer({ engine: SYMCC_ENGINE, host: o => (host = opencodeHost(o)), hostOptions: { say: () => undefined, sessionId: 'opencode-run' }, agentOptions: { pollMs: 10, waitMs: WAIT_MS } })
     const c = fakeCtx(p.main, f.api)
     const endCopy = await plugin.setup(c.ctx)
     expect(S.guardOnly).toBe(false)
@@ -803,9 +810,11 @@ test('the main folder\'s copy starts a worker as an OpenCode session: the role\'
     await until(() => f.calls.some(x => x.startsWith('prompt')))
     const wt = `${p.main}/.symcc/worktrees/T-3`
     expect(f.calls).toEqual([`create ses_2 parent ${lead} model openai/gpt-5`, 'move ses_2', `prompt ses_2 in ${wt} (queue)`])
-    // starting the worker woke nobody: no start queue on OpenCode, so no "Starting worker" line for the lead
-    await new Promise<void>(r => setTimeout(() => r(), 1700))
+    // starting the worker woke nobody: no start queue on OpenCode, so no "Starting worker" line for the lead. A wake
+    // line is queued before the agent is spawned, so by now it would be waiting (leadQueue, S.leadTimer) or sent
     expect(f.prompts.filter(x => x.sessionID === lead)).toEqual([])
+    expect(leadQueue).toEqual([])
+    expect(S.leadTimer).toBe(null)
     // OpenCode's own "subagent completed" message fires the lead's prompt hook, as a prompt does
     f.hooks.onSubagent = id => void c.hooks.prompt!({ sessionID: id })
     const t = (await load(host!)).tasks.find(x => x.id === 'T-3')!
@@ -821,7 +830,10 @@ test('the main folder\'s copy starts a worker as an OpenCode session: the role\'
     expect(f.subagent).toEqual([`ses_2 -> ${lead}`])
     // symcc's board update about T-3 reaches the lead once, queued, labelled so the automatic message isn't a second report
     await until(() => f.prompts.some(x => x.sessionID === lead))
-    await new Promise<void>(r => setTimeout(() => r(), 1700))
+    // and nothing more is on its way to the lead: no line waits for a next update, and no send is due
+    await until(() => starting.size === 0)
+    expect(leadQueue).toEqual([])
+    expect(S.leadTimer).toBe(null)
     const toLead = f.prompts.filter(x => x.sessionID === lead)
     expect(toLead.length).toBe(1)
     expect(toLead[0]!.delivery).toBe('queue')
@@ -1026,7 +1038,9 @@ test('the plugin\'s lead: the owner\'s session (no child, none of symcc\'s agent
     expect(f.prompts[2]!.delivery).toBe('queue')
     // only "Meanwhile" lines make no update
     noteForLead('dropped T-6')
-    await new Promise<void>(r => setTimeout(() => r(), 1700))
+    // no send is due (an update would have armed S.leadTimer): the line waits for the next real update
+    expect(S.leadTimer).toBe(null)
+    expect(meanwhile).toEqual(['dropped T-6'])
     expect(f.prompts.length).toBe(3)
     await endCopy!()
     // the lead is kept for the board owner when the copy goes: a copy loaded again knows it at once
