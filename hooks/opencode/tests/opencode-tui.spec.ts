@@ -18,7 +18,7 @@ import { rowEndBoard, ROW_END, ROW_END_NOW } from '../../../tests/row-end-cases'
 import { BRANCH_LINES_100, branchFactsAt, branchTasks } from '../../../tests/branches-fixture'
 import { liveBranches } from '../../core/live'
 import { taskSections } from '../../core/task-sections'
-import { viewTask } from '../../core/board-parts'
+import { viewTask, viewStubFilled } from '../../core/board-parts'
 import { orgMemNotes, orgMemNoteKey } from '../../core/org-mem'
 import { PLUGIN_ROOT } from '../host'
 import { startTui, KEY_BINDS, viewPaths, loadTuiRuntime, BOARD_PANEL, setupFailed, colorOf, drawLines, type TuiContext, type TuiRuntime, type TuiPanelInput, type TuiKeyLayer, type PanelKey } from '../tui'
@@ -3198,9 +3198,27 @@ test('T-727: the OpenCode Live tab draws the Branches section under the lanes as
   expect(none.some(l => l.includes('Branches'))).toBe(false)
 })
 
+test('T-727: tasks as the OpenCode TUI draws them (viewTask, then viewStubFilled: slim done tasks get history: []) still show the "◀ T-n merged" row and today\'s merged / sent-back counts', () => {
+  const f = branchesViewFile()
+  const tui = (ts: readonly unknown[]) => (ts as SymccTask[]).map(t => viewStubFilled(viewTask(t)))
+  const kinds = (tasks: SymccTask[]) => liveBranches({ ...f.view, tasks }, NOW, 100)!.rows.map(r => segText(r.segs))
+  const slim = tui(f.view.tasks).find(t => t.id === 'T-724')!
+  expect(slim.history).toEqual([])
+  expect(kinds(tui(f.view.tasks))).toEqual(kinds(f.view.tasks as SymccTask[]))
+  expect(kinds(tui(f.view.tasks)).some(l => l.includes('◀ T-724 merged'))).toBe(true)
+  // the same through the whole TUI path: the parsed view file, then viewStubFilled
+  const parsed = parseViewFile(viewFileText({ ...f, view: { ...f.view, tasks: (f.view.tasks as SymccTask[]).map(t => viewTask(t)) } }))!
+  expect(kinds(parsed.view.tasks.map(t => viewStubFilled(t)))).toEqual(kinds(f.view.tasks as SymccTask[]))
+  // today: the T-692 sample (one merged after a send-back, one more send-back in doing)
+  const whole = liveTasks()
+  const today = liveToday(tui(whole), NOW, 0)
+  expect(today).toEqual(liveToday(whole, NOW, 0))
+  expect([today.merged, today.sentBack, today.failed]).toEqual([1, 2, 1])
+})
+
 test('T-727: startTui: Enter on a Branches row opens its task, b returns to the Live tab; a click on a row opens its task', async () => {
   const f = branchesViewFile()
-  const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)]])
+  const files = new Map([['/work/proj/.symcc/view.json', viewFileText({ ...f, view: { ...f.view, tasks: (f.view.tasks as SymccTask[]).map(t => viewTask(t)) } })]])
   const slots: { append: string; render: (input: never) => unknown }[] = []
   const ctx: TuiContext = {
     location: { directory: '/work/proj' },
@@ -3225,6 +3243,8 @@ test('T-727: startTui: Enter on a Branches row opens its task, b returns to the 
   expect([board.state().tab, board.state().opened]).toEqual(['tasks', 'T-725'])
   await board.press('back', 'ses_1')
   expect([board.state().tab, board.state().opened]).toEqual(['live', ''])
+  // the view file's done task is slim (viewTask): its merge still shows as joining back
+  expect(rowEls(panel).some(r => r.text.includes('◀ T-724 merged'))).toBe(true)
   const row = rowEls(panel).find(r => r.text.includes('T-721  +3 commits'))!
   const seg = row.segs.find(x => x.props.onMouseUp)!
   ;(seg.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0, stopPropagation: () => undefined })

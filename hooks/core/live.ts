@@ -17,6 +17,16 @@ import { modeLabel } from './review'
 import { num } from './text'
 import { viewMarks } from './board-parts'
 
+/**
+ * The kinds and times of task `t`'s history lines. A board view's done or dropped task (viewTask, e.g. OpenCode's)
+ * comes without its history, and OpenCode's TUI then fills it in as `history: []` (viewStubFilled): its history marks
+ * (the kinds and times of its merge and send-back lines) stand in for it whenever it has them and no history lines.
+ */
+function marksOf(t: { history?: readonly { kind: string; at?: string }[] }): readonly { kind: string; at?: string }[] {
+  const history = Array.isArray(t.history) ? t.history : []
+  return history.length > 0 ? history : (viewMarks(t) ?? history)
+}
+
 /** The stations of a lane, in the order a task passes them. */
 export type LiveStation = 'work' | 'check' | 'queue' | 'tests' | 'merged'
 export const LIVE_STATIONS: readonly LiveStation[] = ['work', 'check', 'queue', 'tests', 'merged']
@@ -485,9 +495,7 @@ export function liveToday(tasks: readonly SymccTask[], nowMs: number, offsetMin:
   let failed = 0
   let tokens = 0
   for (const t of tasks) {
-    // A board view's done or dropped task (viewTask, e.g. OpenCode's) comes without its history: its history marks (the
-    // kinds and times of its merge and send-back lines) stand in for it.
-    const history: readonly { kind: string; at?: string }[] = Array.isArray(t.history) ? t.history : (viewMarks(t) ?? [])
+    const history = marksOf(t)
     if (history.some(h => h.kind === 'merged' && isToday(h.at))) merged++
     sentBack += history.filter(h => h.kind === 'checker-problems' && isToday(h.at)).length
     if (t.status === 'failed' && isToday(t.updated_at)) failed++
@@ -719,7 +727,7 @@ function branchItems(view: LiveView, facts: BranchFacts, nowMs: number): BranchI
   const open: BranchItem[] = []
   for (const t of view.tasks) {
     if (t.status === 'done') {
-      const history: readonly { kind: string; at?: string }[] = Array.isArray(t.history) ? t.history : (viewMarks(t) ?? [])
+      const history = marksOf(t)
       const at = Math.max(-Infinity, ...history.filter(h => h.kind === 'merged').map(h => ms(h.at) ?? -Infinity))
       if (nowMs - at <= BRANCH_MERGED_MS && nowMs - at >= -BRANCH_MERGED_MS) merged.push({ id: t.id, kind: 'merged', ...(t.merged ? { merged: t.merged } : {}) })
       continue
