@@ -84,3 +84,26 @@ test('a folder with an existing board still starts on, with or without `enabled`
     await sessionEnd(w.host)
   }
 })
+
+test('/symcc-enable turns the board on even when another window wrote it with enabled: false meanwhile', async () => {
+  const w = world('a')
+  await sessionStart(w.host)
+  w.files.set(w.board, JSON.stringify({ ...emptyBoard(), enabled: false }))
+  const r = await runCommand(w.host, 'symcc-enable', '')
+  expect(r?.text).toContain('is on in this project')
+  expect((JSON.parse(w.files.get(w.board)!) as Board).enabled).toBe(true)
+  expect(await leadGuideText(w.host)).toBeDefined()
+  expect(JSON.stringify(await toolCall(w.host, toolName('board'), undefined, {}))).not.toContain('disabled')
+})
+
+test('/symcc-enable here in a new-project window with another window on turns this one on as a second lead', async () => {
+  const w = world('b')
+  await sessionStart(w.host)
+  w.files.set(w.board, JSON.stringify(emptyBoard()))
+  w.files.set(w.lead, JSON.stringify({ session: 'a', at: Date.now() }))
+  const r = await runCommand(w.host, 'symcc-enable', 'here')
+  expect(r?.text).toContain('is on in this project')
+  expect(S.offHere).toBe(false)
+  expect(S.fresh).toBe(false)
+  expect(await leadGuideText(w.host)).toBeDefined()
+})

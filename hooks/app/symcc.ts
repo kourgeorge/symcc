@@ -198,11 +198,11 @@ function startTimers(host: Host) {
  * lead claim, example scouts, timers, git check, the panel); the lead is told it is the lead now. If another window
  * already runs symcc here, this one stays off (see startOffHere).
  */
-async function startNewProject(host: Host, tell: (text: string) => void): Promise<string> {
+async function startNewProject(host: Host, tell: (text: string) => void, here = false): Promise<string> {
   S.fresh = false
   S.enabledNow = true
-  await change(host, b => [b, b] as [typeof b, typeof b])
-  await startOffHere(host).catch(() => undefined)
+  await change(host, b => { const on = { ...b, enabled: true }; return [on, on] as [typeof b, typeof b] })
+  if (!here) await startOffHere(host).catch(() => undefined)
   if (S.offHere) {
     await publish(host, await load(host))
     return `${S.N.name} already runs in another window. /${S.N.name}-enable here turns it on in this one too.`
@@ -528,7 +528,7 @@ export async function runCommand(host: Host, command: string, args: string): Pro
   if (!loaded.board && !['bad', 'help', 'open', 'tasks'].includes(cmd.kind)) return say(`${loaded.broken} Then try again.`)
   const b = loaded.board!
   // T-795: in a new project only /<name>-enable (and help) work; everything else points to it
-  if (S.fresh && cmd.kind === 'enable') return say(await startNewProject(host, t => tellLead(host, t)))
+  if (S.fresh && cmd.kind === 'enable') return say(await startNewProject(host, t => tellLead(host, t), cmd.here))
   if (S.fresh && !['bad', 'help'].includes(cmd.kind)) return say(notSetUpAnswer(S.N.name))
   switch (cmd.kind) {
     case 'bad':
