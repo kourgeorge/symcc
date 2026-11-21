@@ -177,8 +177,9 @@ function entryStage(e: { kind: string; text: string }): Stage | 'end' | null {
     case 'not-merged':
     case 'stopped':
       // the lead's question ("stopped: the lead asked the owner a question") and the branch-gone question
-      // ("not merged: branch x is gone; asked the owner ...") wait for the owner's answer
-      return /\basked the owner\b/.test(body) ? 'owner' : 'free'
+      // ("not merged: branch x is gone; asked the owner ...") wait for the owner's answer; so does a pause whose
+      // reason waits for the owner ("stopped: paused: Waiting for the owner to choose ..."), until it is resumed
+      return /\basked the owner\b/.test(body) || /\bpaused\b.*\bwait(?:s|ing)? (?:for|on) (?:the owner|you)\b/i.test(body) ? 'owner' : 'free'
     case 'answer':
     case 'resumed':
     case 'retried':

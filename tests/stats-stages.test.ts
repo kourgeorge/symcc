@@ -98,6 +98,21 @@ test("stats stages: the lead's question and the branch-gone question count as wa
   expect(taskStages(stop, () => undefined)?.ms.owner).toBe(0)
 })
 
+test('T-732: a to-do task asked about, and a pause waiting for the owner, count as waiting for you; a plain pause does not', () => {
+  const m = (x: number) => x * MIN
+  const runs = [{ started: at(595), ended: at(590) }, { started: at(290), ended: at(280) }]
+  const after = [stage(280, 2, 'prep started'), h(270, 'merged', 'try 2: x → merged into main (q1)')]
+  const start = [h(600, 'created', 'created by the owner'), h(590, 'stopped', 'try 1: stopped by the owner')]
+  // asked while to do 500m ago, answered 300m ago: 200m waiting for you
+  const todo = task('T-10', { attempts: 2, runs, history: [...start, h(500, 'asked', 'the lead asked the owner a question'), h(300, 'answer', 'the owner answered: “A”'), ...after] })
+  expect(taskStages(todo, () => undefined)?.ms).toEqual({ free: m(105), blocked: 0, backlog: 0, work: m(15), prep: m(10), check: 0, queue: 0, tests: 0, merge: 0, owner: m(200) })
+  // paused 500m ago waiting for the owner, resumed 300m ago
+  const pause = (why: string) => task('T-11', { attempts: 2, runs, history: [...start, h(500, 'stopped', `try 1: stopped: paused: ${why}`), h(300, 'resumed', 'resumed after a pause'), ...after] })
+  expect(taskStages(pause('Waiting for the owner to choose between x and y (A or B)'), () => undefined)?.ms.owner).toBe(m(200))
+  expect(taskStages(pause('this task waits for the owner'), () => undefined)?.ms.owner).toBe(m(200))
+  expect(taskStages(pause('main is busy'), () => undefined)?.ms.owner).toBe(0)
+})
+
 test('stats stages: sums and averages per stage; active + waiting add up to the lifetime; lacking tasks counted', () => {
   const ts = board()
   const f = stageFigures(ts, doneAt(ts))
