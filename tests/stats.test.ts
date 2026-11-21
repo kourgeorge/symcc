@@ -510,3 +510,17 @@ test('T-721: the stats list each failed try and rank a test that failed 3 tasks 
   // no failed try: no such parts
   expect(statsReport({ tasks: [task('T-1', { runs: [ok] })], nowMs: NOW })).not.toContain('Tests that failed most')
 })
+
+test('T-721: a try waiting for the owner\'s files is not a failed try, and with "inside" a try keeps its own number', () => {
+  const waiting = task('T-1', { status: 'todo', runs: [{ started: iso(30), ended: iso(20), ended_by: 'finished', ended_note: 'waiting for your files' }] })
+  const day = 24 * 60
+  const late = task('T-2', { status: 'todo', created_at: iso(4 * day), runs: [
+    { started: iso(3 * day + 10), ended: iso(3 * day), ended_by: 'finished', ended_note: 'tests failed', failed_command: 'npm test', failed_tests: ['old one'] },
+    { started: iso(70), ended: iso(60), ended_by: 'finished', ended_note: 'tests failed', failed_command: 'npm test', failed_tests: ['x'] },
+  ] })
+  const text = statsReport({ tasks: [waiting, late], nowMs: NOW, range: { kind: 'days', days: 1 }, inside: true, full: true })
+  expect(text).not.toMatch(/T-1 +try 1/)
+  expect(text).toContain('Each failed try (1:')
+  expect(text).toMatch(/T-2 +try 2 +tests failed · `npm test` · x/)
+  expect(text).not.toContain('old one')
+})

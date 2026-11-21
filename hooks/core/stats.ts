@@ -457,16 +457,19 @@ export type StatsFailedTry = { id: string; title: string; try: number; reason: s
 /** T-721: a test that failed: on how many failed tries, and of how many different tasks. */
 export type StatsFailedTest = { name: string; tries: number; tasks: number }
 
-/** T-721: whether try `r` did not fail: not ended yet, restarted, asking, merged, ready for review, or an investigation's answer. */
-const okEnd = (r: SymccRun) => !r.ended_by || r.ended_by === 'restarted' || r.ended_by === 'asked' || isAnsweredRun(r) || /^(merged|ready for review)\b/.test(r.ended_note ?? '')
+/** T-721: whether try `r` did not fail: not ended yet, restarted, asking, merged, ready for review, passed but waiting for the owner's files, or an investigation's answer. */
+const okEnd = (r: SymccRun) => !r.ended_by || r.ended_by === 'restarted' || r.ended_by === 'asked' || isAnsweredRun(r) || /^(merged|ready for review|waiting for your files)\b/.test(r.ended_note ?? '')
 
-/** T-721: the failed tries of `tasks` (oldest end first) and the tests that failed in them, the ones that failed most different tasks first. */
-export function failedTryFigures(tasks: Pick<SymccTask, 'id' | 'title' | 'runs'>[]): { tries: StatsFailedTry[]; tests: StatsFailedTest[] } {
+/**
+ * T-721: the failed tries of `tasks` (oldest end first) and the tests that failed in them, the ones that failed most different tasks first.
+ * Tries that ended before `fromMs` (the "inside" window) are left out; the try number is still the task's own (pass the tasks before clipRuns).
+ */
+export function failedTryFigures(tasks: Pick<SymccTask, 'id' | 'title' | 'runs'>[], fromMs = -Infinity): { tries: StatsFailedTry[]; tests: StatsFailedTest[] } {
   const tries: StatsFailedTry[] = []
   const tests = new Map<string, { tries: number; tasks: Set<string> }>()
   for (const t of tasks)
     (t.runs ?? []).forEach((r, i) => {
-      if (!r || okEnd(r)) return
+      if (!r || okEnd(r) || (r.ended && Date.parse(r.ended) < fromMs)) return
       const names = Array.isArray(r.failed_tests) ? r.failed_tests.filter(n => typeof n === 'string' && n) : []
       tries.push({ id: t.id, title: t.title, try: i + 1, reason: r.ended_note || r.ended_by!, ...(r.ended ? { ended: r.ended } : {}), ...(r.failed_command ? { command: r.failed_command } : {}), ...(names[0] ? { test: names[0] } : {}) })
       for (const n of new Set(names)) {
@@ -637,7 +640,7 @@ export function statsData(input: StatsInput & { full?: boolean }): StatsData {
     at(d).ms += runMs(r, nowMs)
     at(d).tokens += tokenCount(r.tokens)
   }
-  const failing = failedTryFigures(all)
+  const failing = failedTryFigures(whole, counting === 'inside' ? winFrom : -Infinity)
   const doneAt = new Map(everyTask.map(t => [t.id, doneAtMs(t)]))
   const stages = stageFigures(whole.filter(t => t.status === 'done' && !isInv(t)), id => doneAt.get(id), counting === 'inside' ? { from: winFrom, to: nowMs } : undefined)
   const sumOf = (xs: number[]) => (xs.length ? xs.reduce((s, x) => s + x, 0) : undefined)
