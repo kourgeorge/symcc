@@ -352,9 +352,6 @@ export const orgMemButtonLabel = (n: number) => `Organizational memory (${orgMem
 /** The key of that button on the Live tab (free there: m is the board mode only on the Tasks page). */
 export const ORG_MEM_KEY = 'm'
 
-/** A short value for org-mem: "org-mem 3 notes"; '' (left out) with no notes. */
-export const orgMemSummary = (n: number) => (n ? `org-mem ${orgMemCount(n)}` : '')
-
 /** The page's one-line explanation: where the file is, who adds to it, and its limit. */
 export const orgMemAbout = (file: string) =>
   `Notes for the agents: symcc puts ${file} (at most ${ORG_MEM_MAX_LINES} lines) into every new worker's, checker's and scout's prompt. Agents may suggest notes right after they hand back a task (one short follow-up question); the lead decides what goes in. You may edit the file by hand too.`

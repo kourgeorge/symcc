@@ -2,7 +2,7 @@
 // Every new worker, checker and scout gets org-mem in its prompt (orgMemText). The debrief's answer (app/debrief.ts,
 // T-656) and a report's "Learned:" lines (a host with no debrief) are only suggestions: they are kept on the task (keepSuggestions) and listed in the lead's board update when the task is
 // done (a dropped task's are thrown away; see the task event listener below). Only the lead changes org-mem, with its
-// orgmem tool (orgMemTool); the owner may delete notes on the Settings page or edit the file by hand.
+// orgmem tool (orgMemTool); the owner may delete notes on the org-mem page (its button is at the bottom of the Live tab) or edit the file by hand.
 import { addSuggestions, deleteOrgMemNote, dropTaskIds, orgMemAdd, orgMemFile, orgMemList, orgMemNotes, orgMemRemove, orgMemReplace, orgMemSection, suggestedText, ORG_MEM_MAX_LINES, type OrgMemNote } from '../core/org-mem'
 import { find, type Board, type BoardTask } from '../core/board-file'
 import { patchTask } from '../core/task'
@@ -159,7 +159,7 @@ export function resetOrgMemView() {
   orgMemView.confirm = null
 }
 
-/** T-619: org-mem's notes for the Settings page (newest first, see orgMemNotes) and its file's path in the project
+/** T-619: org-mem's notes for the org-mem page opened from the Live tab (newest first, see orgMemNotes) and its file's path in the project
  *  (".symcc/org-mem.md"); no notes when the file is missing or can't be read. */
 export async function orgMemNow(host: Host): Promise<{ notes: OrgMemNote[]; file: string }> {
   return { notes: S.root ? orgMemNotes(await readGuide(host)) : [], file: orgMemFile(S.N.dir) }

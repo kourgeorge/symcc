@@ -1,7 +1,7 @@
 // T-600, T-632: organizational memory (org-mem) (core/org-mem.ts): "Learned:" suggestions from a report, cleaned and kept once; the
 // lead's add / remove / replace / list; the limit; and org-mem shown in prompts.
 import { expect, test } from 'claude-code/testing'
-import { addSuggestions, suggestedText, orgMemAdd, orgMemRemove, orgMemReplace, orgMemList, dropTaskIds, cleanLearned, orgMemSection, sameLesson, splitLearned, ORG_MEM_MAX_LINES, LEARNED_LINE_CHARS, LEARNED_ASK, DEBRIEF_TEXT, debriefLines, orgMemNotes, orgMemNoteHead, orgMemCount, orgMemSummary, orgMemAbout, deleteOrgMemNote, orgMemNoteKey, ORG_MEM_EMPTY } from '../hooks/core/org-mem'
+import { addSuggestions, suggestedText, orgMemAdd, orgMemRemove, orgMemReplace, orgMemList, dropTaskIds, cleanLearned, orgMemSection, sameLesson, splitLearned, ORG_MEM_MAX_LINES, LEARNED_LINE_CHARS, LEARNED_ASK, DEBRIEF_TEXT, debriefLines, orgMemNotes, orgMemNoteHead, orgMemCount, orgMemAbout, deleteOrgMemNote, orgMemNoteKey, ORG_MEM_EMPTY } from '../hooks/core/org-mem'
 import { parseCommand } from '../hooks/core/commands'
 import { checkerVerdict, fillPrompt, scoutPrompt, PROMPT_KINDS, BUILT_IN_PROMPTS } from '../hooks/board'
 import { checkerPrompt } from '../hooks/core/checker'
@@ -181,7 +181,6 @@ test('T-619, T-632: orgMemNotes lists the notes newest first, each its place in 
   expect(orgMemNoteHead(orgMemNotes(text)[0]!)).toBe(`#3 · ${D}`)
   expect(orgMemNoteHead(orgMemNotes(text)[1]!)).toBe('#2 · written by hand')
   expect([orgMemCount(0), orgMemCount(1), orgMemCount(4)]).toEqual(['0 notes', '1 note', '4 notes'])
-  expect([orgMemSummary(0), orgMemSummary(2)]).toEqual(['', 'org-mem 2 notes'])
   expect(ORG_MEM_EMPTY).toBe('No notes yet.')
   expect(orgMemAbout('.symcc/org-mem.md')).toContain('right after they hand back a task (one short follow-up question)')
   expect(orgMemAbout('.symcc/org-mem.md')).toContain(`.symcc/org-mem.md (at most ${ORG_MEM_MAX_LINES} lines)`)
