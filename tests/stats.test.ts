@@ -481,3 +481,32 @@ test('stats: tasks from a scout with no name show their results under "scout" (T
   expect(text).toMatch(/\n {6}scout +[▇▅▂]+ +2 +100%.*\n {8}2 tasks \(1 merged, 1 dropped, 0 open\) · 0 scout tokens · 0 per merged\n/)
   expect(text).not.toContain('no tasks')
 })
+
+test('T-721: the stats list each failed try and rank a test that failed 3 tasks above one that failed 1', () => {
+  const fail = (min: number, tests?: string[]) => ({ started: iso(min + 5), ended: iso(min), ended_by: 'finished' as const, ended_note: 'tests failed', failed_command: 'npm test', ...(tests ? { failed_tests: tests } : {}) })
+  const ok = { started: iso(4), ended: iso(2), ended_by: 'finished' as const, ended_note: 'merged' }
+  const tasks = [
+    task('T-1', { runs: [fail(50, ['flaky one']), ok] }),
+    task('T-2', { runs: [fail(40, ['flaky one', 'only here']), ok] }),
+    task('T-3', { runs: [fail(30, ['flaky one']), { started: iso(20), ended: iso(10), ended_by: 'stopped', ended_note: 'stopped from Claude Code' }] }),
+    task('T-4', { runs: [fail(20), ok] }),
+  ]
+  const text = statsReport({ tasks, nowMs: NOW, full: false })
+  expect(text).toContain('Each failed try (5: task · try · reason · failing command · first failing test)')
+  expect(text).toMatch(/T-2 +try 1 +tests failed · `npm test` · flaky one/)
+  expect(text).toMatch(/T-3 +try 2 +stopped from Claude Code\n/)
+  expect(text).toMatch(/T-4 +try 1 +tests failed · `npm test`\n/)
+  const most = text.slice(text.indexOf('Tests that failed most'))
+  expect(most).toMatch(/flaky one +3 tries · 3 tasks/)
+  expect(most).toMatch(/only here +1 try · 1 task/)
+  expect(most.indexOf('flaky one')).toBeLessThan(most.indexOf('only here'))
+  // the short view shows the top 5 tests only
+  const many = Array.from({ length: 7 }, (_, i) => task(`T-${10 + i}`, { runs: [fail(10, [`test ${i}`])] }))
+  const short = statsReport({ tasks: many, nowMs: NOW })
+  expect(short).toContain('top 5 of 7')
+  expect(short.slice(short.indexOf('Tests that failed most'))).not.toContain('test 6')
+  const full = statsReport({ tasks: many, nowMs: NOW, full: true })
+  expect(full.slice(full.indexOf('Tests that failed most'))).toContain('test 6')
+  // no failed try: no such parts
+  expect(statsReport({ tasks: [task('T-1', { runs: [ok] })], nowMs: NOW })).not.toContain('Tests that failed most')
+})

@@ -132,7 +132,7 @@ ${features.panel ? `  /${S.N.name}                     open the board panel (↑
                        commit (never pushes)
   /${S.N.name}-settings orgmem delete N [KEY]  delete org-mem note number N
 ${features.panel ? '' : `  /${S.N.name}-board               the board panel, as its own screen (OpenCode only)
-`}  /${S.N.name}-stats [full|html] [7d|T-1..T-9]  time and token stats, with bar charts:
+`}  /${S.N.name}-stats [full|html] [7d|T-1..T-9] [inside]  time and token stats, with bar charts:
                        tasks, worker time, tokens, the whole team (lead, workers, scouts),
                        per task and per try (averages and totals), time per stage, the
                        biggest tasks, how tasks ended, by role, origin and day (all tasks,

@@ -68,6 +68,45 @@ export function withEnd(runs: SymccRun[] | undefined, by: SymccRunEnd, note?: st
   return out
 }
 
+/** T-721: how many failing test names a failed try keeps (the first ones printed). */
+export const FAILED_TESTS_KEPT = 10
+/** T-721: the most characters one kept failing test name has (a longer one is cut, ending in "…"). */
+export const FAILED_TEST_CHARS = 120
+
+/**
+ * T-721: the failing tests' names in test output: each "(fail) <name>" line (bun and `claude plugin test` print one per
+ * failed test), without the "(fail)" mark and the time at its end, each once, at most FAILED_TESTS_KEPT, long ones cut.
+ * [] when none can be read (and never throws: a try is never failed because of this).
+ */
+export function failedTestNames(output: unknown): string[] {
+  try {
+    const out: string[] = []
+    for (const raw of String(output ?? '').split('\n')) {
+      const m = /^\s*\(fail\)\s+(.*?)\s*(\[[\d.]+\s*m?s\])?\s*$/.exec(raw)
+      const name = m?.[1]?.trim()
+      if (!name) continue
+      const cut = name.length > FAILED_TEST_CHARS ? `${name.slice(0, FAILED_TEST_CHARS - 1)}…` : name
+      if (!out.includes(cut)) out.push(cut)
+      if (out.length >= FAILED_TESTS_KEPT) break
+    }
+    return out
+  } catch {
+    return []
+  }
+}
+
+/**
+ * T-721: the runs with the last try marked as failing test command `command`, with the failing tests' names read from
+ * its `output` (failedTestNames; left out when none can be read). No command, or no try: the runs as they are.
+ */
+export function withFailedTests(runs: SymccRun[] | undefined, command: string | undefined, output: string | undefined): SymccRun[] | undefined {
+  const last = runs?.at(-1)
+  if (!runs || !last || !command) return runs
+  const { failed_command: _c, failed_tests: _t, ...rest } = last
+  const names = failedTestNames(output)
+  return [...runs.slice(0, -1), { ...rest, failed_command: command, ...(names.length ? { failed_tests: names } : {}) }]
+}
+
 /**
  * The patch that ends task `t`'s running try at `now` with reason `by` (and `note`); empty when
  * `t` is not "doing" (no try of its own is running or being checked) or has no try.

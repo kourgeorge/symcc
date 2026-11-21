@@ -1699,7 +1699,12 @@ its read-only `stats` tool.
   under it); time per stage (see below); the 5 biggest tasks by tokens and by time (bars); how tasks
   ended (merged on its own, approved by you, or answered for an investigation; failed
   tries by reason: tests, clash with main, files out of scope, restarted by a change, stopped,
-  rejected);
+  rejected); each failed try on its own line (task, try, how it ended, and when its tests failed,
+  the failing test command and the first failing test; the short view shows the latest 10); the
+  tests that failed most (each test with how many failed tries and how many different tasks it
+  failed, most tasks first, so a flaky test that fails many tasks stands out; the short view
+  shows the top 5). When a try fails a test command, symcc keeps that command on the try, with
+  the names of the failing tests read from its output (the "(fail) …" lines, at most 10);
   investigations on their own (how many, answered, time, tokens, tries; see
   [investigation tasks](#investigation-tasks)); by role and where tasks came from (lead,
   you, all scouts with each scout on its own line under them, workers), each with its share,

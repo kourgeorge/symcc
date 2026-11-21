@@ -3,7 +3,7 @@ import type { SymccTask } from '../types'
 import { checkAndMerge, changedFiles, changesText, ownerEdits } from '../hooks/app/review'
 import { inMergeLine, MERGE_LINE_POLL_MS, resetMergeLine } from '../hooks/app/merge-line'
 import { joinedText } from '../hooks/core/board-parts'
-import { mergeLineText, parseMergeLine, inLineNote, MERGE_LINE_STALE_MS, mergeLineStaleMs, type LineEntry, testMinutesOf, testTimeoutMs, lineEntryStale, readBoard, TEST_RERUN_GONE_NOTE, DEFAULT_TEST_MINUTES, BASH_PATHS_MAX, bashTooManyText } from '../hooks/board'
+import { mergeLineText, parseMergeLine, inLineNote, MERGE_LINE_STALE_MS, mergeLineStaleMs, type LineEntry, testMinutesOf, testTimeoutMs, lineEntryStale, readBoard, TEST_RERUN_GONE_NOTE, DEFAULT_TEST_MINUTES, BASH_PATHS_MAX, bashTooManyText, failedTestNames, FAILED_TESTS_KEPT, FAILED_TEST_CHARS } from '../hooks/board'
 import { PREP_NOTE, STEP_NOTE, isMergeNote, type Board, type Notify, soundSetFor, type BoardTask, workerGitWriteText, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, readArchive, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, untestedChange, isTestFile, isPlainRelPath, parseSettingValue, type WorkerQuestion, isAnswered, boardText, taskMatches, onRuns } from '../hooks/board'
 import { removeWorktree, cleanupMerged, deleteMergedBranch } from '../hooks/app/git'
 import { addPassedTree, parsePassedTrees, passedTreesText, treePassed, PASSED_TREES_MAX } from '../hooks/core/passed-trees'
@@ -3059,6 +3059,32 @@ test('a finished try ends with the outcome of its check', async () => {
   expect((await tryEnds(answers('made the change'), { tests: { 'npm test': { exitCode: 1, stdout: 'FAIL', stderr: '' } } })).end).toEqual(['finished', 'tests failed'])
   expect((await tryEnds(answers('made the change'), { g: { upToDate: false, conflict: true } })).end).toEqual(['finished', 'clash with main'])
   expect((await tryEnds(answers('made the change'), { g: { changed: ['README.md'] } })).end).toEqual(['finished', 'out of scope'])
+})
+
+test('T-721: a try that fails a test command keeps that command and the failing tests read from its output', async () => {
+  const out = ['tests/a.test.ts:', '(pass) adds [0.10ms]', '(fail) board > saves the board [1.23ms]', '  error: expected 1, got 2', '(fail) merge keeps the branch', '', ' 1 pass', ' 2 fail'].join('\n')
+  const failed = await tryEnds(answers('made the change'), { tests: { 'npm test': { exitCode: 1, stdout: out, stderr: '' } } })
+  expect(failed.end).toEqual(['finished', 'tests failed'])
+  expect(failed.r.failed_command).toBe('npm test')
+  expect(failed.r.failed_tests).toEqual(['board > saves the board', 'merge keeps the branch'])
+  // no "(fail)" line it can read: the command only
+  const plain = await tryEnds(answers('made the change'), { tests: { 'npm test': { exitCode: 1, stdout: 'FAIL', stderr: 'boom' } } })
+  expect(plain.r.failed_command).toBe('npm test')
+  expect('failed_tests' in plain.r).toBe(false)
+  // a merged try keeps neither
+  const merged = await tryEnds(answers('made the change'))
+  expect('failed_command' in merged.r).toBe(false)
+})
+
+test('T-721: failedTestNames keeps at most 10 names, each once, long ones cut, and never throws', () => {
+  const many = Array.from({ length: 14 }, (_, i) => `(fail) test ${i}`).join('\n')
+  expect(failedTestNames(many)).toHaveLength(FAILED_TESTS_KEPT)
+  expect(failedTestNames('(fail) same\n(fail) same [2ms]')).toEqual(['same'])
+  const long = failedTestNames(`(fail) ${'x'.repeat(300)}`)[0]!
+  expect(long.length).toBe(FAILED_TEST_CHARS)
+  expect(long.endsWith('…')).toBe(true)
+  expect(failedTestNames(undefined)).toEqual([])
+  expect(failedTestNames('all good\n(pass) a')).toEqual([])
 })
 
 test('a try that asks ends as asked (a question, or files outside its list); one stopped from Claude Code as stopped; an error as stopped with the reason', async () => {
