@@ -132,6 +132,11 @@ Type these in the chat. `/symcc` opens everything; `/symcc-<word>` does one thin
 | `/symcc-settings role <name> on\|off\|reset` | Turn a role on or off, or reset it back to the built-in one |
 | `/symcc-settings kind <name> on\|off\|reset` | Turn a kind on or off, or reset it back to the built-in one |
 | `/symcc-stats [full\|html] [7d\|T-100..T-130]` | Time and token stats from the board (archived tasks too), easy to read with plain bar charts: a one-line summary, totals, the whole team, averages and medians per task and per try, the biggest tasks, how tasks ended (merged, approved or answered), investigations counted on their own, by role, origin and day. `7d` limits it to the last 7 days, `T-100..T-130` to an id range; `full` adds the long explanations; `html` writes the same figures as a self-contained web page with charts (`.symcc/stats.html`) and opens it |
+| `/symcc-settings role <name> add` / `edit <field> <value>` / `save {...}` / `remove` | Make a role, change one part of it (`description`, `model`, `skills`, `tools`, `checklist`), change several parts at once with JSON, or delete one you added. `kind` works the same (its parts are `description` and `body`) |
+| `/symcc-scout <name> new <instructions>` | Make a new scout (it runs every 60 minutes at first) |
+| `/symcc-settings git setup` | Set up git when the folder has no repo or no commit: `git init` on main, a `.gitignore` and a first commit; never pushes |
+| `/symcc-settings orgmem delete N` | Delete note N from the organizational memory (its number on the Organizational memory page) |
+| `/symcc-doctor [fix [all\|id ...]]` | Check `.symcc/` and git (old backups, merged branches, leftover task folders, files near 4 MB, a stuck board). It only lists them; `fix all` or `fix <id> ...` cleans up |
 | `/symcc-disable` | Disable symcc for this project: Claude works as normal (no lead guide, workers, scouts, updates, sounds or voice); the board is kept |
 | `/symcc-enable` | Turn symcc back on, in the mode the board had |
 | `/symcc-drive` | Make this session drive the board (start workers, merge, run scouts). If another session drives, it hands over within 30 s: its running workers stop and restart here from their kept folders and branches, without using up a try. If it doesn't answer within 3 minutes, this session takes over anyway |
