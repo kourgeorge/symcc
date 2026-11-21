@@ -13,7 +13,7 @@ import { tellLead, noteForLead, meanwhileText } from '../hooks/app/tell'
 import { saidNeedsYou, findPlayers, playable, playsFor, sayNext, sayDone, WIN_TEXT_VAR } from '../hooks/app/voice'
 import { workerFinished, check, pump, startWorker, lateHandBack, WORKER_PROMPT, workerQuestionText, type TurnEnd, notThisTry, unclaimed } from '../hooks/app/workers'
 import { stopOrphans, formerWorker } from '../hooks/app/cleanup'
-import { goOnRun, selfRestart, endRun, runMs, type TryRun } from '../hooks/core/runs'
+import { goOnRun, selfRestart, endRun, runMs, freshTry, withoutOpenRun, type TryRun } from '../hooks/core/runs'
 import { statsData } from '../hooks/core/stats'
 import { setSymcc, setBoardMode } from '../hooks/app/board-mode'
 import { taskStage, stageText } from '../hooks/core/details'
@@ -5637,6 +5637,19 @@ test('T-743: a real send-back (failing tests, the checker, a change) still start
   expect(t.test_tries).toBe(1)
   expect(stageTexts(t).at(-1)).toBe('try 2: worker started (role general)')
   workers.clear()
+})
+
+test('T-743: a change right after a reopen never takes off the try that went on: its round and the stopped worker stay on the board', () => {
+  const t0 = Date.now() - 40_000
+  const at = (ms: number) => new Date(t0 + ms).toISOString()
+  const go = goOnRun(withEnd(endRun([{ started: at(0), agent: 'ag9', tokens: { input: 100 } }], at(30_000)), 'restarted', 'after Claude Code was reopened'), at(30_000))!
+  expect(freshTry({ status: 'doing', runs: go }, t0 + 35_000)).toBe(false)
+  const go2 = goOnRun(withEnd(endRun([{ started: at(-90_000), ended: at(-60_000), ended_by: 'finished', ended_note: 'tests failed' }, { started: at(0), agent: 'ag9' }], at(30_000)), 'restarted', 'after Claude Code was reopened'), at(30_000))!
+  expect(freshTry({ status: 'doing', runs: [...go2.slice(0, -1), { ...go2.at(-1)!, agent: 'ag10' }] }, t0 + 35_000)).toBe(false)
+  // even if one were taken off, the stopped worker's id moves to the try before it, so its late hand-back is still refused
+  expect(onRuns(withoutOpenRun(go2), 'ag9')).toBe(true)
+  // a fresh try with no restart still joins (T-678)
+  expect(freshTry({ status: 'doing', runs: [{ started: at(-90_000), ended: at(-60_000) }, { started: at(30_000) }] }, t0 + 35_000)).toBe(true)
 })
 
 test('T-743: endRun adds a going-on try\'s new tokens to the ones it had; a try already ended only gets missing ones filled in', () => {

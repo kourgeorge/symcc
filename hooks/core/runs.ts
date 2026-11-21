@@ -204,6 +204,9 @@ export function freshTry(t: Pick<SymccTask, 'status' | 'runs'> & { finishing?: s
   if (t.status !== 'doing' || t.finishing || t.checking) return false
   const last = t.runs?.at(-1)
   if (!last || last.ended) return false
+  // T-743: a try that went on after a restart symcc did itself (goOnRun) is a whole round already under way: taking it
+  // off would drop its tokens, time and restarts (and the stopped worker's id); a change ends it as a new try instead
+  if (restartsOf(last).length) return false
   // its agent ids must be kept somewhere when its run is taken off (withoutOpenRun): on the try before it
   if (t.runs!.length < 2 && (last.agent || last.checkers?.length)) return false
   const age = nowMs - Date.parse(last.started)
@@ -218,7 +221,7 @@ export function withoutOpenRun(runs: SymccRun[] | undefined): SymccRun[] | undef
   if (!runs?.length || runs.at(-1)!.ended) return runs
   const open = runs.at(-1)!
   let out = runs.slice(0, -1)
-  for (const id of [open.agent, ...(open.checkers ?? [])]) out = withAgentId(out, 'checker', id) ?? out
+  for (const id of [open.agent, ...(open.checkers ?? []), ...restartsOf(open).map(e => e.agent)]) out = withAgentId(out, 'checker', id) ?? out
   return out
 }
 
