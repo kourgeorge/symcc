@@ -3,6 +3,7 @@
 import type { TurnEnd } from '../app/workers'
 import type { SymccTokens } from '../../types'
 import { cleanTokens } from '../core/runs'
+import { stopBackground } from './background'
 
 /** Token usage as Claude Code reports it (a turn result's usage, or a session log line's message.usage). */
 export type ClaudeUsage = { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number }
@@ -20,6 +21,9 @@ export function usageTokens(u: ClaudeUsage | undefined): SymccTokens | undefined
  * How a turn ended, from Claude Code's turn.complete event: its reason, the refusal on a refusal alone, and the
  * agent's own background commands still running (`background`, from its SubagentStop; see background.ts) when known.
  */
-export function turnEnd(e: { reason: TurnEnd['reason']; refusal?: TurnEnd['refusal'] }, background?: readonly string[]): TurnEnd {
-  return { reason: e.reason, ...(e.reason === 'refusal' ? { refusal: e.refusal } : {}), ...(background ? { background } : {}) }
+export function turnEnd(e: { reason: TurnEnd['reason']; refusal?: TurnEnd['refusal']; agentId?: string }, background?: readonly string[]): TurnEnd {
+  // T-724: with commands still running, the agent's own ones can be stopped (by their task ids, see stopBackground)
+  const agentId = e.agentId
+  const stop = background?.length && agentId ? { stopBackground: () => stopBackground(agentId) } : {}
+  return { reason: e.reason, ...(e.reason === 'refusal' ? { refusal: e.refusal } : {}), ...(background ? { background } : {}), ...stop }
 }

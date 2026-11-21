@@ -3072,9 +3072,24 @@ test('a try that asks ends as asked (a question, or files outside its list); one
   expect((await tryEnds(answers('', { reason: 'error' }))).end).toEqual(['stopped', "the worker's turn ended on an error (retries used up or the context limit)"])
 })
 
-test('T-411: only the host seeing a background command still running fails a try; an answer that only says it will continue later just adds a warning', async () => {
-  // the host's signal: a background command still running when the turn ended fails the try, whatever the answer says
-  const ran = await tryEnds(answers('Changed src/a.ts; tests/a.test.ts covers it.', { reason: 'answer', background: ['bun test'] }))
+test('T-724: a hand-back with a report while a background command still runs stops that command, logs it and goes on to prep and merge', async () => {
+  const stops: string[] = []
+  const stopBackground = async () => (stops.push('ag1'), 1)
+  const ran = await tryEnds(answers('Changed src/a.ts; tests/a.test.ts covers it.', { reason: 'answer', background: ['bun test'], stopBackground }))
+  expect(stops).toEqual(['ag1'])
+  expect(ran.end).toEqual(['finished', 'merged'])
+  expect(ran.t.note).not.toBe('the worker ended its turn before its work finished')
+  expect(ran.t.history.some(h => h.text === 'try 1: stopped 1 command still running at hand-back')).toBe(true)
+  expect(ran.t.history.some(h => h.text.includes('nothing was checked or merged'))).toBe(false)
+  // a host that can't stop it: still goes on, and the history says it could not
+  const kept = await tryEnds(answers('Changed src/a.ts.', { reason: 'answer', background: ['bun test', 'tsc -w'] }))
+  expect(kept.end).toEqual(['finished', 'merged'])
+  expect(kept.t.history.some(h => h.text === 'try 1: 2 commands still running at hand-back (could not stop them)')).toBe(true)
+})
+
+test('T-411: only the host seeing a background command still running fails a try (with no report); an answer that only says it will continue later just adds a warning', async () => {
+  // the host's signal: a background command still running when the turn ended with no report fails the try
+  const ran = await tryEnds(answers('', { reason: 'answer', background: ['bun test'] }))
   expect([ran.t.status, ran.t.note]).toEqual(['failed', 'the worker ended its turn before its work finished'])
   expect(ran.end).toEqual(['stopped', 'the worker ended its turn before its work finished'])
   expect(ran.t.history.at(-1)?.text).toContain('→ the worker ended its turn before its work finished; nothing was checked or merged')
