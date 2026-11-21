@@ -738,6 +738,13 @@ are about changes; under "How tasks ended" a read investigation shows as
   - `since:30m`, `since:2h`, `since:2d`, `since:1w` or `since:2026-11-18`: changed since then.
   - `status:done` (or `status:open`, or several: `status:done,dropped`), `kind:bug`,
     `role:tester`.
+  - `waits-on:T-3`: the tasks that wait for T-3, directly or through a chain (T-5 waits for
+    T-4, which waits for T-3).
+  - `blocks:T-3`: what T-3 still waits for: the tasks on its chain that are not done (a dropped
+    one too, since T-3 still can't start). A done task ends the chain there.
+  - `stuck`: to-do tasks that can't start because something they wait for (directly or through
+    a chain) is failed, paused, waiting for you, dropped, or missing from the board.
+  These mix too: `waits-on:T-3 status:todo`, `stuck kind:bug`; `waits-on:T-3,T-4` takes either.
   A word like `foo:bar` that is not one of these is looked for as a plain word. The lead's
   board tool also takes `limit` and `sort` (`newest` or `order`), the same as `last:` and
   `top:`, and says how many matched in all (`10 of 37 matching shown`).

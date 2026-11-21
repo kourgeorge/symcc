@@ -58,7 +58,61 @@ test('an unknown filter word (foo:bar) or a bad value stays a plain word', () =>
   expect(parseSearch('kind:nope', NOW, 0, ['change', 'bug']).errors[0]).toMatch(/unknown kind "nope"/)
 })
 
-const board = (): Board => ({ ...emptyBoard(), tasks: tasks as never })
+// T-720: dependency words. A chain T-101 ← T-102 ← T-103 (T-103 waits for T-102, which waits for T-101), a done
+// T-100 at its start, a task waiting on a failed one, one waiting on a missing id, and one stuck through a chain.
+const deps: SymccTask[] = [
+  task('T-100', 'done', 'Done base'),
+  task('T-101', 'doing', 'Chain start', { after: ['T-100'] }),
+  task('T-102', 'todo', 'Chain middle', { after: ['T-101'] }),
+  task('T-103', 'todo', 'Chain end', { after: ['T-102'], kind: 'bug' }),
+  task('T-104', 'review', 'Also waits on the start', { after: ['T-101'] }),
+  task('T-110', 'failed', 'Broke'),
+  task('T-111', 'todo', 'Waits on a failed one', { after: ['T-110'] }),
+  task('T-112', 'todo', 'Waits on a missing id', { after: ['T-99'] }),
+  task('T-113', 'todo', 'Stuck through a chain', { after: ['T-111'] }),
+  task('T-114', 'paused', 'Waits on a failed one too', { after: ['T-110'] }),
+]
+
+test('waits-on:T-n: tasks waiting on T-n directly or through a chain; mixes with other words', () => {
+  expect(ids(searchTasks(deps, 'waits-on:T-101', NOW))).toEqual(['T-102', 'T-103', 'T-104'])
+  expect(ids(searchTasks(deps, 'waits-on:t-101 status:todo', NOW))).toEqual(['T-102', 'T-103'])
+  expect(ids(searchTasks(deps, 'waits-on:101 kind:bug', NOW))).toEqual(['T-103'])
+  expect(ids(searchTasks(deps, 'waits-on:T-100', NOW))).toEqual(['T-101', 'T-102', 'T-103', 'T-104'])
+  expect(ids(searchTasks(deps, 'waits-on:T-110,T-102', NOW))).toEqual(['T-103', 'T-111', 'T-113', 'T-114'])
+  expect(ids(searchTasks(deps, 'waits-on:T-99', NOW))).toEqual(['T-112'])
+  expect(ids(searchTasks(deps, 'waits-on:T-103', NOW))).toEqual([])
+  // a value that isn't an id stays a plain word
+  expect(parseSearch('waits-on:soon', NOW, 0).words).toEqual(['waits-on:soon'])
+})
+
+test('blocks:T-n: the not-done tasks T-n still waits for, through the chain; a done one ends it', () => {
+  expect(ids(searchTasks(deps, 'blocks:T-103', NOW))).toEqual(['T-101', 'T-102'])
+  expect(ids(searchTasks(deps, 'blocks:T-103 status:doing', NOW))).toEqual(['T-101'])
+  expect(ids(searchTasks(deps, 'blocks:T-113', NOW))).toEqual(['T-110', 'T-111'])
+  expect(ids(searchTasks(deps, 'blocks:T-112', NOW))).toEqual([])
+  expect(ids(searchTasks(deps, 'blocks:T-101', NOW))).toEqual([])
+})
+
+test('stuck: todo tasks held back by a failed, paused, waiting or dropped task, or a missing id', () => {
+  expect(ids(searchTasks(deps, 'stuck', NOW))).toEqual(['T-111', 'T-112', 'T-113'])
+  expect(ids(searchTasks(deps, 'stuck missing', NOW))).toEqual(['T-112'])
+  expect(ids(searchTasks(deps, 'stuck waits-on:T-111', NOW))).toEqual(['T-113'])
+  expect(ids(searchTasks(deps, 'stuck top:1', NOW))).toEqual(['T-111'])
+  for (const s of ['paused', 'waiting', 'dropped']) {
+    const b = [task('T-1', s, 'Held'), task('T-2', 'todo', 'Waits', { after: ['T-1'] })]
+    expect(ids(searchTasks(b, 'stuck', NOW))).toEqual(['T-2'])
+  }
+  // waiting on a doing / review / todo task is a normal wait, not stuck
+  expect(ids(searchTasks(deps, 'stuck waits-on:T-101', NOW))).toEqual([])
+})
+
+test('board tool: the dependency words filter its rows too', () => {
+  const out = boardText({ ...emptyBoard(), tasks: deps as never }, NOW, undefined, 'symcc', 0, { search: 'waits-on:T-101 status:todo' })
+  const rows = out.split('\n').filter(l => /^T-\d+/.test(l)).map(l => l.split(' ')[0])
+  expect(rows.sort()).toEqual(['T-102', 'T-103'])
+})
+
+const board = (): Board =>({ ...emptyBoard(), tasks: tasks as never })
 
 test('board tool: limit / sort are the same as last: / top:, and the line says how many matched in all', () => {
   const show = (f: Parameters<typeof boardText>[5]) => boardText(board(), NOW, undefined, 'symcc', 0, f)
