@@ -2366,3 +2366,18 @@ test('T-685: in the TUI a click on each of those buttons does exactly what its k
   expect(sent).toEqual([])
   board.stop()
 })
+
+test('T-696: a long-title row in the list keeps "waits for T-1" / "[feature]" at its end and cuts the title with "…"', () => {
+  const f = viewFile()
+  const long = 'Board list: keep the row end visible by cutting the title instead of dropping the extra part'
+  const tasks = f.view.tasks.map(t => (t.id === 'T-4' ? { ...t, title: long, after: ['T-1'] } : t.id === 'T-5' ? { ...t, status: 'todo' as const, title: long, kind: 'feature' } : t))
+  const g = { ...f, view: { ...f.view, tasks } }
+  for (const w of [80, 100]) {
+    const rows = panelLines(g, { opened: '', cursor: 0 }, NOW, w).lines.map(lineText)
+    const r4 = rows.find(l => l.includes('T-4'))!
+    const r5 = rows.find(l => l.includes('T-5'))!
+    expect(r4).toMatch(/Board list: .*…  +waits for T-1$/)
+    expect(r5).toMatch(/Board list: .*…  +\[feature\]$/)
+    expect(r4.length).toBeLessThan(w + 1)
+  }
+})

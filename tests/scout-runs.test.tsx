@@ -362,11 +362,13 @@ const ALL = /^ {0,2}in all: 2 tasks \(1 merged, 0 dropped, 1 open\) · 2k scout 
 
 /** Scout bugs with one merged task (3k tokens) and one open, and 2k tokens of its own in scouts.json. */
 function resultsPage(on: On) {
-  const t = (id: string, status: string, runs: unknown[] = []) => ({ id, title: id, details: '', files: [], status, note: '', question: null, order: 1, after: [], attempts: runs.length, history: [], branch: null, created_at: '2026-11-12T01:00:00.000Z', updated_at: '2026-11-12T02:00:00.000Z', runs, origin: { by: 'scout', scout: 'bugs', why: '', at: '' } })
-  const tasks = [t('T-7', 'done', [{ started: '2026-11-12T01:00:00.000Z', ended: '2026-11-12T01:10:00.000Z', tokens: { input: 3000 } }]), t('T-8', 'todo')]
-  // the scout's own tokens a day ago (not at the fixed LAST_RUN), so they stay inside "last 7 days" whatever today is
-  const memory = addScoutRun(null, 'bugs', { endMs: Date.now() - 86_400_000, ms: 60_000, tokens: { input: 2000 } })
-  page(on, { '/.symcc/scouts/bugs.runs.json': scoutRunsText([{ started: null, ended: LAST_RUN, outcome: 'found', findings: 2, tasks: ['T-7', 'T-8'] }]), '/.symcc/scouts.json': memory }, tasks)
+  // dates relative to now, so the run and the merged task stay inside "last 7 days"
+  const ago = (h: number) => new Date(Date.now() - h * 3600_000).toISOString()
+  const run = ago(24)
+  const t = (id: string, status: string, runs: unknown[] = []) => ({ id, title: id, details: '', files: [], status, note: '', question: null, order: 1, after: [], attempts: runs.length, history: [], branch: null, created_at: ago(23), updated_at: ago(22), runs, origin: { by: 'scout', scout: 'bugs', why: '', at: '' } })
+  const tasks = [t('T-7', 'done', [{ started: ago(23), ended: ago(22.5), tokens: { input: 3000 } }]), t('T-8', 'todo')]
+  const memory = addScoutRun(null, 'bugs', { endMs: Date.parse(run), ms: 60_000, tokens: { input: 2000 } })
+  page(on, { '/.symcc/scouts/bugs.runs.json': scoutRunsText([{ started: null, ended: run, outcome: 'found', findings: 2, tasks: ['T-7', 'T-8'] }]), '/.symcc/scouts.json': memory }, tasks)
 }
 
 test("T-686: the scout's page keeps the Results figures out of its header, in their own section right before File", async ($, on) => {
