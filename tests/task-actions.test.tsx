@@ -46,9 +46,9 @@ test('taskActions: the buttons of each status, in order, with their keys and at 
   // a running worker over its time limit asks, so nothing is the main action
   expect(main(taskActions(tk('doing', { time_ask: T })))).toEqual([])
   // needs review is a checkbox
-  expect(taskActions(tk('todo', { needs_review: true })).find(x => x.id === 'needs-review')?.label).toBe('☑ needs review')
+  expect(taskActions(tk('todo', { needs_review: true })).find(x => x.id === 'needs-review')?.label).toBe('☑ Needs review')
   // the button words never say their key (T-751)
-  expect(taskActions(tk('backlog')).map(actionButtonLabel)).toEqual(['Move to todo', 'Role', 'Drop', '☐ needs review', 'copy'])
+  expect(taskActions(tk('backlog')).map(actionButtonLabel)).toEqual(['Move to todo', 'Role', 'Drop', '☐ Needs review', 'Copy'])
 })
 
 test('taskKeys: the hints are the buttons that have a key, in their order (p, u, h, n, r on dropped, x drop included)', () => {

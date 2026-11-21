@@ -1501,18 +1501,18 @@ export const scoutButtons = (sc: Pick<SymccScout, 'running' | 'paused'>): HeadBu
   headerScoutButtons(sc).map(x => ({ label: x.label, group: x.group, ...(x.fact ? { fact: true } : {}), hit: { key: (x.key ?? 'p') as PanelKey } }))
 
 /** A page header's lines (T-751, core/page-header.ts): where you are (Back and, with a place, "‹ 2 of 6 ›": each a
- *  click), the title, the state (wrapping between its groups), the buttons in their groups (the next step "▐Pause▌",
- *  the others "[Role]", the danger ones red, the page ones dim; wrapping between groups, never inside a button), then
- *  a heavy rule. */
+ *  click), the title, the state (wrapping between its groups), the buttons in their groups (each "[Pause]" in the
+ *  text color, T-775; wrapping between groups, never inside a button), then a heavy rule. */
 export function headerLines(hd: { from: PageFrom; label: string; place: ReturnType<typeof placeIn>; title: string; color: string; state: Seg[][]; buttons: HeadButton[] }, w: number): Line[] {
   const where = whereLine(hd.from, hd.label, hd.place, w)
   const go: Record<string, PanelHit> = { back: { key: 'back' }, prev: { key: 'prev' }, next: { key: 'next' } }
-  const first: Line = [...where.left, { text: ' '.repeat(where.pad) }, ...where.right].map(p => ({ text: p.text, color: 'inactive', ...('go' in p && p.go ? { hit: go[p.go]! } : {}) }))
+  // Back is a button like the others ("[Tasks]", the text color); the arrow and the pager stay dim
+  const first: Line = [...where.left, { text: ' '.repeat(where.pad) }, ...where.right].map(p => ({ text: p.text, color: 'go' in p && p.go === 'back' ? PILL_COLOR : 'inactive', ...('go' in p && p.go ? { hit: go[p.go]! } : {}) }))
   const groups = inGroups(hd.buttons)
   const rows = packGroups(groups.map(g => g.map(x => pillText(x).length)), w).map(row =>
     row.flatMap(({ g, i, gap }): DrawSeg[] => {
       const x = groups[g]![i]!
-      return [...(gap ? [{ text: ' '.repeat(gap), color: 'text' }] : []), { text: pillText(x), color: x.fact ? 'inactive' : PILL_COLOR[x.group], ...(x.group === 'main' ? { bold: true } : {}), ...(x.fact ? {} : { hit: x.hit }) }]
+      return [...(gap ? [{ text: ' '.repeat(gap), color: 'text' }] : []), { text: pillText(x), color: x.fact ? 'inactive' : PILL_COLOR, ...(x.fact ? {} : { hit: x.hit }) }]
     }),
   )
   return [first, ...titleLines(hd.label, hd.title, hd.color, w), ...groupSegLines(hd.state, w), ...rows, [{ text: headerRule(w), color: 'ide' }]]

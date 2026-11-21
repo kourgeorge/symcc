@@ -1,15 +1,14 @@
 // The 4-line header of a task's page and a scout's page on the Claude Code boards (T-751; the lines themselves are
 // core's, see core/page-header.ts): where you are (Back, and the place in the list with prev/next), the title, the
 // state, the buttons in groups, then a heavy rule.
-// On the terminal every button is a `plain` Button drawn as its pill (no key inside it): the keys belong to hidden
-// Buttons in a Box drawn `display="none"` (`<id>-key`), as the tab keys and the answer keys, and are listed in the
-// footer only. Desktop and mobile draw native buttons (the next step primary). VS Code draws the same 4 lines with
-// its own controls (vsPageHeader).
+// On the terminal every button (Back too) is a `plain` Button drawn "[Label]" in the text color, all alike (T-775; no
+// key inside it): the keys belong to hidden Buttons in a Box drawn `display="none"` (`<id>-key`), as the tab keys and
+// the answer keys, and are listed in the footer only. Desktop and mobile draw native buttons, all secondary. VS Code
+// draws the same 4 lines with its own controls (vsPageHeader), all secondary too.
 import type { RenderChildren } from 'claude-code'
 import type { Seg } from '../../board'
-import { type HeaderButton, type PageFrom, type Place, backText, groupSegLines, headerRule, inGroups, packGroups, PILL_COLOR, pillText, titleLines, whereLine, ITEM_GAP } from '../../core/page-header'
+import { type HeaderButton, type PageFrom, type Place, BACK_ARROW, backText, groupSegLines, headerRule, inGroups, packGroups, PILL_COLOR, pillText, titleLines, whereLine, ITEM_GAP } from '../../core/page-header'
 import type { PaneParts } from './parts'
-import { mdLink, vsHref, vsLink } from './vscode'
 
 /** What a page header shows and what its buttons do. `label`: the task's id or the scout's name; `place`: its place
  *  in the list it was opened from (null: not in it); `title`: line 2's words and the color of the label there. */
@@ -52,7 +51,7 @@ export function pageHeader(pane: PaneParts, hd: PageHeader): RenderChildren {
       {[...where.left, { text: ' '.repeat(where.pad) }, ...where.right].map((p, i) =>
         'go' in p && p.go ? (
           <Button key={p.go === 'back' ? (hd.backKey ?? 'back') : p.go} plain label={p.go === 'back' ? backText(hd.from) : p.go === 'prev' ? 'Previous' : 'Next'} autoFocus={p.go === 'back' && hd.backFocus ? true : undefined} onPress={goes[p.go]}>
-            <Text color={C('inactive')}>{p.text}</Text>
+            <Text color={C(p.go === 'back' ? PILL_COLOR : 'inactive')}>{p.text}</Text>
           </Button>
         ) : (
           <Text key={`hdr-where-${i}`} color={C('inactive')}>{p.text}</Text>
@@ -64,19 +63,10 @@ export function pageHeader(pane: PaneParts, hd: PageHeader): RenderChildren {
   const rows = packGroups(groups.map(g => g.map(b => pillText(b).length)), width)
   const pill = (b: PageHeader['buttons'][number]) => {
     if (b.fact) return <Text key={b.id} color={C('inactive')}>{b.label}</Text>
-    if (!terminal) return <Button key={b.id} label={b.label} variant={b.group === 'main' ? 'primary' : 'secondary'} dimColor={b.group === 'page' ? true : undefined} onPress={b.onPress} />
-    const color = PILL_COLOR[b.group]
+    if (!terminal) return <Button key={b.id} label={b.label} variant="secondary" onPress={b.onPress} />
     return (
       <Button key={b.id} plain label={b.label} onPress={b.onPress}>
-        {b.group === 'main' ? (
-          <Text>
-            <Text color={C(color)}>▐</Text>
-            <Text bold backgroundColor={C(color)} color={C('inverseText')}>{b.label}</Text>
-            <Text color={C(color)}>▌</Text>
-          </Text>
-        ) : (
-          <Text color={C(color)}>{pillText(b)}</Text>
-        )}
+        <Text color={C(PILL_COLOR)}>{pillText(b)}</Text>
       </Button>
     )
   }
@@ -110,11 +100,10 @@ export function pageHeader(pane: PaneParts, hd: PageHeader): RenderChildren {
   )
 }
 
-/** The header in VS Code's side panel: a back button and a "‹ 2 of 6 ›" pager, the title as a heading, the state as
- *  small chips, the buttons (the next step primary, Drop in red, needs review a checkbox link), then a divider. */
+/** The header in VS Code's side panel: "‹" and a Tasks back button, a "‹ 2 of 6 ›" pager, the title as a heading,
+ *  the state as small chips, the buttons (all secondary, one style, T-775), then a divider. */
 export function vsPageHeader(pane: PaneParts, hd: PageHeader): RenderChildren {
   const { Box, Text, Button, C } = pane
-  const vs = pane.vs
   const chip = (key: string, g: Seg[], first: boolean) =>
     <Box key={key} flexDirection="row">
       {first ? (
@@ -130,22 +119,15 @@ export function vsPageHeader(pane: PaneParts, hd: PageHeader): RenderChildren {
   const status = hd.state[0] ?? []
   const button = (b: PageHeader['buttons'][number]) => {
     if (b.fact) return <Text key={b.id} color={C('inactive')}>{b.label}</Text>
-    if (b.id === 'needs-review') {
-      const href = vsHref('do', b.id)
-      return vsLink(vs, b.id, mdLink(b.label, href), [[href, b.onPress]], true)
-    }
-    if (b.group === 'danger')
-      return (
-        <Button key={b.id} label={b.label} variant="secondary" onPress={b.onPress}>
-          <Text color={C('error')}>{b.label}</Text>
-        </Button>
-      )
-    return <Button key={b.id} label={b.label} variant={b.group === 'main' ? 'primary' : 'secondary'} onPress={b.onPress} />
+    return <Button key={b.id} label={b.label} variant="secondary" onPress={b.onPress} />
   }
   return (
     <Box key="vs-page-header" flexDirection="column" gap={1}>
       <Box key="vs-where" flexDirection="row" justifyContent="space-between" flexWrap="wrap">
-        <Button key={hd.backKey ?? 'back'} label={backText(hd.from)} variant="secondary" autoFocus={hd.backFocus ? true : undefined} onPress={hd.onBack} />
+        <Box key="vs-back" flexDirection="row" columnGap={1}>
+          <Text color={C('inactive')}>{BACK_ARROW.trim()}</Text>
+          <Button key={hd.backKey ?? 'back'} label={backText(hd.from)} variant="secondary" autoFocus={hd.backFocus ? true : undefined} onPress={hd.onBack} />
+        </Box>
         {hd.place && hd.place.of > 1 ? (
           <Box key="vs-pager" flexDirection="row" columnGap={1}>
             <Button key="prev" label="‹" variant="secondary" onPress={hd.onPrev} />

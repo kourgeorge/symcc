@@ -46,18 +46,18 @@ const KEY_HINTS = [/\[[a-z]\]:/, /Enter open/, /↑↓ move/, /Esc back/, /Enter
 const hints = (all: string[], re: RegExp) => all.filter(s => re.test(s) && !/^[▸▾] .+ \d+$/.test(s))
 
 /** The action buttons each rich task shows in VS Code's page header (T-751), in order (the next step, the task's
- *  actions, Drop, copy; needs review is a checkbox link between the last two), and the one primary (if any). */
-const ACTIONS: Record<string, { keys: string[]; primary?: string }> = {
-  'T-501': { keys: ['approve', 'show-changes', 'reject', 'drop', 'copy'], primary: 'approve' },
-  'T-502': { keys: ['retry', 'stash', 'role', 'already-merged', 'drop', 'copy'], primary: 'retry' },
-  'T-503': { keys: ['already-merged', 'drop', 'copy'] }, // its answers are numbered link lines (T-651), no primary Button
-  'T-504': { keys: ['pause', 'drop', 'copy'], primary: 'pause' },
-  'T-505': { keys: ['resume', 'stash', 'role', 'already-merged', 'drop', 'copy'], primary: 'resume' },
-  'T-506': { keys: ['pause', 'stash', 'role', 'drop', 'copy'], primary: 'pause' },
-  'T-507': { keys: ['to-todo', 'role', 'drop', 'copy'], primary: 'to-todo' },
+ *  actions, Drop, copy; needs review, a Button too since T-775, between the last two), all secondary. */
+const ACTIONS: Record<string, { keys: string[] }> = {
+  'T-501': { keys: ['approve', 'show-changes', 'reject', 'drop', 'copy'] },
+  'T-502': { keys: ['retry', 'stash', 'role', 'already-merged', 'drop', 'copy'] },
+  'T-503': { keys: ['already-merged', 'drop', 'copy'] }, // its answers are numbered link lines (T-651)
+  'T-504': { keys: ['pause', 'drop', 'copy'] },
+  'T-505': { keys: ['resume', 'stash', 'role', 'already-merged', 'drop', 'copy'] },
+  'T-506': { keys: ['pause', 'stash', 'role', 'drop', 'copy'] },
+  'T-507': { keys: ['to-todo', 'role', 'drop', 'copy'] },
   'T-508': { keys: ['copy'] },
   'T-509': { keys: ['retry', 'already-merged', 'copy'] },
-  'T-510': { keys: ['done', 'keep-note', 'ask-more', 'drop', 'copy'], primary: 'done' },
+  'T-510': { keys: ['done', 'keep-note', 'ask-more', 'drop', 'copy'] },
   'T-511': { keys: ['already-merged', 'drop', 'copy'] },
 }
 
@@ -75,7 +75,7 @@ for (const id of RICH_IDS) {
     await ui.unmount()
   })
 
-  test(`${id}'s task page in VS Code at width 50: whole text, its sections, only the fitting buttons, one primary at most`, async ($, on) => {
+  test(`${id}'s task page in VS Code at width 50: whole text, its sections, only the fitting buttons, all in one style`, async ($, on) => {
     seedRich(on, id)
     const t = RICH_TASKS.find(x => x.id === id)!
     const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
@@ -101,17 +101,23 @@ for (const id of RICH_IDS) {
     // the details and the report are Markdown, given whole (the report: its first part)
     const md = elements(tree).filter(n => n.type === 'Markdown').map(n => String(n.props?.text))
     expect(md, id).toContain(t.details.trimEnd())
-    // the action row: exactly the buttons that fit, and at most one primary on the page
+    // the action row: exactly the buttons that fit, all secondary in one style (T-775: no primary, no red)
     const row = await ui.find({ key: 'vs-actions' })
-    expect(elements(row!.children).filter(n => n.type === 'Button').map(n => n.props?.key), id).toEqual(ACTIONS[id]!.keys)
-    // needs review is a checkbox link, not a Button
-    if (t.status !== 'done' && t.status !== 'dropped') expect((await ui.find({ key: 'needs-review' }))?.props.text, id).toBe(mdLink('☐ needs review', vsHref('do', 'needs-review')))
+    const open = t.status !== 'done' && t.status !== 'dropped'
+    const buttons = elements(row!.children).filter(n => n.type === 'Button')
+    expect(buttons.map(n => n.props?.key).filter(k => k !== 'needs-review'), id).toEqual(ACTIONS[id]!.keys)
+    for (const b of buttons) {
+      expect(b.props?.variant, `${id} ${b.props?.key}`).toBe('secondary')
+      expect(b.children ?? [], `${id} ${b.props?.key}`).toEqual([])
+    }
+    // needs review is a Button like the others (T-775)
+    if (open) expect((await ui.find({ key: 'needs-review' }))?.props.label, id).toBe('☐ Needs review')
     const primary = elements(tree).filter(n => n.type === 'Button' && n.props?.variant === 'primary').map(n => n.props?.key)
-    expect(primary, id).toEqual(ACTIONS[id]!.primary ? [ACTIONS[id]!.primary] : [])
+    expect(primary, id).toEqual([])
     // the tasks it waits for (the After rows of the Details) are links that open them; back to the list is a clear button; no key hints
     expect((await ui.find({ key: 'after-T-499' }))?.type).toBe('Markdown')
     expect((await ui.find({ key: 'vs-row-after-1' }))?.text).toContain('T-498')
-    expect((await ui.find({ key: 'back' }))?.props.label).toBe('‹ Tasks')
+    expect((await ui.find({ key: 'back' }))?.props.label).toBe('Tasks')
     for (const re of KEY_HINTS) expect(hints(all, re), `${id} ${re}`).toEqual([])
     expect(await ui.find({ type: 'Text', text: CLICK_HINT })).toBeDefined()
     await ui.unmount()
@@ -192,7 +198,7 @@ test('in VS Code a file request shows the files, with Allow files and Don\'t all
   await ui.unmount()
 })
 
-test('in VS Code a task it waits for opens by its button, and "‹ Tasks" goes back to the list', async ($, on) => {
+test('in VS Code a task it waits for opens by its button, and "‹ [Tasks]" goes back to the list', async ($, on) => {
   seedRich(on, '')
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
   await ui.press({ key: 'T-506', link: { href: vsHref('task', 'T-506') } })

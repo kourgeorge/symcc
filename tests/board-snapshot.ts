@@ -4,6 +4,7 @@
 // before the VS Code layout (T-413). The VS Code work must leave these exactly as they are. They are drawn at T0, the
 // fixture's fixed clock (T-401 has run 2 minutes then: "▶ 2m"), so they don't depend on when the tests run (T-437).
 // T-751: the task page ("terminal task", "desktop task", "mobile task") starts with the 4-line page header and its heavy rule.
+// T-775: every header button "[Label]" in one style, Back "‹ [Tasks]".
 export const BEFORE: Record<string, unknown> = {
   "terminal 50": {
     "type": "Box",
@@ -1217,13 +1218,14 @@ export const BEFORE: Record<string, unknown> = {
             "type": "Box",
             "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
+              {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
               {
                 "type": "Button",
-                "props": {"key":"back","label":"‹ Tasks","plain":true,"autoFocus":true},
+                "props": {"key":"back","label":"Tasks","plain":true,"autoFocus":true},
                 "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Tasks"]}]
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Tasks]"]}]
               },
-              {"type":"Text","props":{"color":"inactive"},"children":["                        "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["                      "]},
               {"type":"Text","props":{"color":"inactive"},"children":["T-405 · "]},
               {
                 "type": "Button",
@@ -1287,16 +1289,7 @@ export const BEFORE: Record<string, unknown> = {
                 "type": "Button",
                 "props": {"key":"retry","label":"Retry","plain":true},
                 "press": {"plugin":"symcc"},
-                "children": [
-                  {
-                    "type": "Text",
-                    "children": [
-                      {"type":"Text","props":{"color":"ide"},"children":["▐"]},
-                      {"type":"Text","props":{"bold":true,"backgroundColor":"ide","color":"inverseText"},"children":["Retry"]},
-                      {"type":"Text","props":{"color":"ide"},"children":["▌"]}
-                    ]
-                  }
-                ]
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Retry]"]}]
               },
               {"type":"Text","children":["   "]},
               {
@@ -1317,7 +1310,7 @@ export const BEFORE: Record<string, unknown> = {
                 "type": "Button",
                 "props": {"key":"drop","label":"Drop","plain":true},
                 "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"error"},"children":["[Drop]"]}]
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Drop]"]}]
               }
             ]
           },
@@ -1327,16 +1320,16 @@ export const BEFORE: Record<string, unknown> = {
             "children": [
               {
                 "type": "Button",
-                "props": {"key":"needs-review","label":"☐ needs review","plain":true},
+                "props": {"key":"needs-review","label":"☐ Needs review","plain":true},
                 "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"inactive"},"children":["☐ needs review"]}]
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[☐ Needs review]"]}]
               },
               {"type":"Text","children":[" "]},
               {
                 "type": "Button",
-                "props": {"key":"copy","label":"copy","plain":true},
+                "props": {"key":"copy","label":"Copy","plain":true},
                 "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"inactive"},"children":["copy"]}]
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Copy]"]}]
               }
             ]
           },
@@ -1916,13 +1909,14 @@ export const BEFORE: Record<string, unknown> = {
             "type": "Box",
             "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
+              {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
               {
                 "type": "Button",
-                "props": {"key":"back","label":"‹ Tasks","plain":true,"autoFocus":true},
+                "props": {"key":"back","label":"Tasks","plain":true,"autoFocus":true},
                 "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Tasks"]}]
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Tasks]"]}]
               },
-              {"type":"Text","props":{"color":"inactive"},"children":["                        "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["                      "]},
               {"type":"Text","props":{"color":"inactive"},"children":["T-405 · "]},
               {
                 "type": "Button",
@@ -1982,7 +1976,7 @@ export const BEFORE: Record<string, unknown> = {
             "type": "Box",
             "props": {"key":"hdr-buttons-0","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"retry","label":"Retry","variant":"primary"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"retry","label":"Retry","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":["   "]},
               {"type":"Button","props":{"key":"stash","label":"Stash to backlog","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":[" "]},
@@ -1995,9 +1989,9 @@ export const BEFORE: Record<string, unknown> = {
             "type": "Box",
             "props": {"key":"hdr-buttons-1","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"needs-review","label":"☐ needs review","dimColor":true,"variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"needs-review","label":"☐ Needs review","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":[" "]},
-              {"type":"Button","props":{"key":"copy","label":"copy","dimColor":true,"variant":"secondary"},"press":{"plugin":"symcc"}}
+              {"type":"Button","props":{"key":"copy","label":"Copy","variant":"secondary"},"press":{"plugin":"symcc"}}
             ]
           },
           {
@@ -3235,13 +3229,14 @@ export const BEFORE: Record<string, unknown> = {
             "type": "Box",
             "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
+              {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
               {
                 "type": "Button",
-                "props": {"key":"back","label":"‹ Tasks","plain":true,"autoFocus":true},
+                "props": {"key":"back","label":"Tasks","plain":true,"autoFocus":true},
                 "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Tasks"]}]
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Tasks]"]}]
               },
-              {"type":"Text","props":{"color":"inactive"},"children":["                        "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["                      "]},
               {"type":"Text","props":{"color":"inactive"},"children":["T-405 · "]},
               {
                 "type": "Button",
@@ -3301,7 +3296,7 @@ export const BEFORE: Record<string, unknown> = {
             "type": "Box",
             "props": {"key":"hdr-buttons-0","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"retry","label":"Retry","variant":"primary"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"retry","label":"Retry","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":["   "]},
               {"type":"Button","props":{"key":"stash","label":"Stash to backlog","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":[" "]},
@@ -3314,9 +3309,9 @@ export const BEFORE: Record<string, unknown> = {
             "type": "Box",
             "props": {"key":"hdr-buttons-1","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"needs-review","label":"☐ needs review","dimColor":true,"variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"needs-review","label":"☐ Needs review","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":[" "]},
-              {"type":"Button","props":{"key":"copy","label":"copy","dimColor":true,"variant":"secondary"},"press":{"plugin":"symcc"}}
+              {"type":"Button","props":{"key":"copy","label":"Copy","variant":"secondary"},"press":{"plugin":"symcc"}}
             ]
           },
           {

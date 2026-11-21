@@ -377,10 +377,24 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
         {body}
         {sec.tries
           ? buttonRows(
-              sec.tries.map(r => <Button key={`report-try-${r.try}`} label={`${r.shown ? '● ' : ''}Try ${r.try}${r.key ? ` (${r.key})` : ''}`} hotkey={r.key} onPress={pickReport(r.try)} />),
+              // "[Try 1] [● Try 2]" as the header's buttons (T-775): plain, framed the same, no key in the label; the
+              // keys (1-9, listed in the footer) belong to hidden Buttons below
+              sec.tries.map(r => {
+                const label = `${r.shown ? '● ' : ''}Try ${r.try}`
+                return (
+                  <Button key={`report-try-${r.try}`} plain label={label} onPress={pickReport(r.try)}>
+                    <Text color={C('text')}>{`[${label}]`}</Text>
+                  </Button>
+                )
+              }),
               'report-buttons',
             )
           : null}
+        {sec.tries?.some(r => r.key) ? (
+          <Box key="report-try-keys" display="none">
+            {sec.tries.filter(r => r.key).map(r => <Button key={`report-try-${r.try}-key`} label={r.key!} hotkey={r.key!} onPress={pickReport(r.try)} />)}
+          </Box>
+        ) : null}
       </Box>
     )
   }

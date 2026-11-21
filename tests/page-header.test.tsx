@@ -1,7 +1,7 @@
 // T-751: the task page and the scout page start with one 4-line header, the same on every board: where you are (Back,
-// the place in the list it was opened from, prev/next), the title, the state, the buttons in groups (the next step
-// filled, the task actions, the ones that throw work away in red, the page ones dim; words only, the keys in the footer),
-// then a heavy rule. core/page-header.ts makes the lines; these tests check them on the terminal, desktop, mobile and
+// the place in the list it was opened from, prev/next), the title, the state, the buttons in groups (the next step,
+// the task actions, the ones that throw work away, the page ones; since T-775 every one "[Label]" in one style, Back
+// "‹ [Tasks]"; words only, the keys in the footer), then a heavy rule. core/page-header.ts makes the lines; these tests check them on the terminal, desktop, mobile and
 // VS Code (OpenCode's are in hooks/opencode/tests/opencode-tui.spec.ts).
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
@@ -29,13 +29,13 @@ test('core: placeIn goes round at the ends; the where line shortens when narrow;
     const l = whereLine('tasks', 'T-738', place, w)
     return segText([...l.left, { text: ' '.repeat(l.pad) }, ...l.right])
   }
-  expect(at(40)).toMatch(/^‹ Tasks +T-738 · ‹ 2 of 3 ›$/)
+  expect(at(40)).toMatch(/^‹ \[Tasks\] +T-738 · ‹ 2 of 3 ›$/)
   expect(at(40).length).toBe(40)
-  expect(at(20)).toBe('‹ Tasks   ‹ 2 of 3 ›')
+  expect(at(20)).toBe('‹ [Tasks] ‹ 2 of 3 ›')
   // alone in its list: no "1 of 1" and no arrows
-  expect(at(40, placeIn(['T-738'], 'T-738'))).toMatch(/^‹ Tasks +T-738$/)
-  expect(segText(whereLine('live', 'T-5', null, 20).left)).toBe('‹ Live')
-  expect(segText(whereLine('scouts', 'bugs', null, 20).left)).toBe('‹ Scouts')
+  expect(at(40, placeIn(['T-738'], 'T-738'))).toMatch(/^‹ \[Tasks\] +T-738$/)
+  expect(segText(whereLine('live', 'T-5', null, 20).left)).toBe('‹ [Live]')
+  expect(segText(whereLine('scouts', 'bugs', null, 20).left)).toBe('‹ [Scouts]')
   // the list: what needs you, what runs, what waits, the backlog, done, dropped; a search keeps only its matches
   expect(LIST.slice(0, 3)).toEqual(['T-510', 'T-501', 'T-511'])
   expect(LIST.at(-1)).toBe('T-509')
@@ -74,9 +74,11 @@ test('core: the buttons pack whole groups on a row, breaking a group only betwee
   expect(packGroups(groups, 40).map(r => r.map(x => `${x.g}.${x.i}`))).toEqual([['0.0'], ['1.0', '1.1'], ['1.2', '2.0'], ['3.0']])
   // the page group alone on its own row when there is no room left
   expect(packGroups([[7], [10]], 18).map(r => r.map(x => x.g))).toEqual([[0], [1]])
-  expect(pillText({ label: 'Pause', group: 'main' })).toBe('▐Pause▌')
-  expect(pillText({ label: 'Drop', group: 'danger' })).toBe('[Drop]')
-  expect(pillText({ label: 'copy', group: 'page' })).toBe('copy')
+  // T-775: every button framed the same, whatever its group; a fact is just its words
+  expect(pillText({ label: 'Pause' })).toBe('[Pause]')
+  expect(pillText({ label: 'Drop' })).toBe('[Drop]')
+  expect(pillText({ label: 'Copy' })).toBe('[Copy]')
+  expect(pillText({ label: '⏸ paused', fact: true })).toBe('⏸ paused')
 })
 
 /** The header Box of a drawn page. */
@@ -103,7 +105,7 @@ for (const [id, status, color, groups] of CASES)
       expect(parts).toEqual(['hdr-where', 'hdr-title', 'hdr-state', ...rows, 'hdr-keys', 'hdr-rule'])
       // line 1: Back and the place in the list
       const place = placeIn(LIST, id)!
-      expect(textOf(kids(h)[0])).toMatch(new RegExp(`^‹ Tasks +${id} · ‹ ${place.n} of ${LIST.length} ›$`))
+      expect(textOf(kids(h)[0])).toMatch(new RegExp(`^‹ \\[Tasks\\] +${id} · ‹ ${place.n} of ${LIST.length} ›$`))
       // line 2: the id in its status color, the title in bold
       const title = kids(kids(h)[1])[0]!
       expect(kids(title)[0]).toMatchObject({ props: { bold: true, color }, children: [id] })
@@ -124,14 +126,20 @@ for (const [id, status, color, groups] of CASES)
         expect(String(p.props?.label), keyOf(p)).not.toMatch(/\([a-z]\)/)
       }
       if (surface === 'terminal') {
-        // the next step filled in the accent color, Drop in red, the page ones dim
+        // T-775: every button "[Label]" in the text color, one Text each: no filled pill, no red, no dim plain word
         const inner = (k: string) => kids(pills.find(p => keyOf(p) === k))
-        expect(textOf(inner(acts[0]!.id))).toBe(`▐${acts[0]!.label}▌`)
-        expect(kids(inner(acts[0]!.id)[0])[1]?.props).toMatchObject({ backgroundColor: 'ide' })
-        expect(inner('drop')[0]?.props).toMatchObject({ color: 'error' })
-        expect(inner('copy')[0]?.props).toMatchObject({ color: 'inactive' })
-        expect(textOf(inner('needs-review'))).toBe('☐ needs review')
-      } else expect(pills[0]?.props?.variant).toBe('primary')
+        for (const a of acts) {
+          expect(inner(a.id).length, a.id).toBe(1)
+          expect(textOf(inner(a.id)), a.id).toBe(`[${a.label}]`)
+          expect(inner(a.id)[0]?.props, a.id).toEqual({ color: 'text' })
+        }
+        expect(textOf(inner('needs-review'))).toBe('[☐ Needs review]')
+        expect(textOf(inner('copy'))).toBe('[Copy]')
+        // Back: the arrow outside, the tab name a button in the same style
+        const back = kids(kids(h)[0]).find(n => keyOf(n) === 'back')!
+        expect(textOf(back)).toBe('[Tasks]')
+        expect(kids(back)[0]?.props).toEqual({ color: 'text' })
+      } else for (const p of pills) expect(p.props?.variant, keyOf(p)).toBe('secondary')
       // the keys: hidden Buttons, and in the footer
       const hidden = kids(kids(h).find(k => keyOf(k) === 'hdr-keys'))
       expect(hidden.map(b => `${keyOf(b)} ${b.props?.hotkey}`)).toEqual(['back-key b', 'prev-key k', 'next-key j', ...acts.filter(a => a.key).map(a => `${a.id}-key ${a.key}`)])
@@ -170,26 +178,30 @@ test('T-751: a narrow terminal page wraps the state and the buttons between grou
   const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 30 }, surface: 'terminal' })
   const h = await header(ui)
   const rows = kids(h).filter(k => keyOf(k)?.startsWith('hdr-buttons-')).map(textOf)
-  expect(rows).toEqual(['▐Retry▌', '[Stash to backlog] [Role]', '[Already merged]   [Drop]', '☐ needs review copy'])
+  expect(rows).toEqual(['[Retry]', '[Stash to backlog] [Role]', '[Already merged]   [Drop]', '[☐ Needs review] [Copy]'])
   for (const r of rows) expect(r.length).toBeLessThanOrEqual(30)
   const state = kids(kids(h)[2]).map(textOf)
   expect(state).toEqual(['✗ failed', 'change · worker · try 2/4', '♟ from you   tests failed'])
   await ui.unmount()
 })
 
-test('T-751: in VS Code the same header: Back and a pager, the title, state chips, the buttons in groups (Drop red, needs review a checkbox link), a divider', async ($, on) => {
+test('T-751: in VS Code the same header: Back and a pager, the title, state chips, the buttons in groups (all secondary, one style, T-775), a divider', async ($, on) => {
   seedRich(on, 'T-501')
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
   const h = await header(ui, true)
   expect(kids(h).map(keyOf)).toEqual(['vs-where', 'vs-head', 'vs-state', 'vs-actions', 'vs-header-rule'])
-  expect((await ui.find({ key: 'back' }))?.props.label).toBe('‹ Tasks')
+  expect((await ui.find({ key: 'back' }))?.props.label).toBe('Tasks')
+  expect(textOf(await ui.find({ key: 'vs-back' }))).toMatch(/^‹/)
   const place = placeIn(LIST, 'T-501')!
   expect(textOf(await ui.find({ key: 'vs-pager' }))).toBe(`${place.n} of ${LIST.length}`)
   const actions = kids(await ui.find({ key: 'vs-actions' }))
   expect(actions.filter(n => n.type === 'Button' || n.type === 'Markdown').map(keyOf)).toEqual(['approve', 'show-changes', 'reject', 'drop', 'needs-review', 'copy'])
-  expect(actions.find(n => keyOf(n) === 'approve')?.props?.variant).toBe('primary')
-  expect(kids(actions.find(n => keyOf(n) === 'drop'))[0]?.props?.color).toBe('error')
-  expect(actions.find(n => keyOf(n) === 'needs-review')?.type).toBe('Markdown')
+  for (const b of actions.filter(n => n.type === 'Button')) {
+    expect(b.props?.variant, keyOf(b)).toBe('secondary')
+    expect(kids(b).length, keyOf(b)).toBe(0)
+  }
+  expect(actions.find(n => keyOf(n) === 'needs-review')?.type).toBe('Button')
+  expect(actions.find(n => keyOf(n) === 'needs-review')?.props?.label).toBe('☐ Needs review')
   // the pager goes to the next task
   await ui.press({ key: 'next' })
   await ui.redraw()
@@ -197,17 +209,17 @@ test('T-751: in VS Code the same header: Back and a pager, the title, state chip
   await ui.unmount()
 })
 
-test('T-751: a task opened from the Live tab says "‹ Live" and goes through the Live tab\'s tasks', async ($, on) => {
+test('T-751: a task opened from the Live tab says "‹ [Live]" and goes through the Live tab\'s tasks', async ($, on) => {
   seedRich(on, 'T-504', undefined, { tab: 'live' })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   // T-504 is the only running task: no place to go to
-  expect(textOf(kids(await header(ui))[0])).toMatch(/^‹ Live +T-504$/)
+  expect(textOf(kids(await header(ui))[0])).toMatch(/^‹ \[Live\] +T-504$/)
   expect(await ui.find({ key: 'next-key' })).toBeUndefined()
   await ui.unmount()
 })
 
 for (const surface of ['terminal', 'desktop', 'mobile', 'vscode'] as const)
-  test(`T-751: a scout's page on ${surface}: the same header (‹ Scouts and its place, name and summary, state, buttons, rule); j goes to the next scout`, async ($, on) => {
+  test(`T-751: a scout's page on ${surface}: the same header (‹ [Scouts] and its place, name and summary, state, buttons, rule); j goes to the next scout`, async ($, on) => {
     seedScouts(on, 'scouts', 'docs-drift')
     const names = scoutListNames(SCOUTS as never)
     const place = placeIn(names, 'docs-drift')!
@@ -217,20 +229,21 @@ for (const surface of ['terminal', 'desktop', 'mobile', 'vscode'] as const)
     if (!vs) {
       const parts = kids(h).map(keyOf)
       expect(parts).toEqual(['hdr-where', 'hdr-title', 'hdr-state', 'hdr-buttons-0', 'hdr-keys', 'hdr-rule'])
-      expect(textOf(kids(h)[0])).toMatch(new RegExp(`^‹ Scouts +docs-drift · ‹ ${place.n} of ${names.length} ›$`))
+      expect(textOf(kids(h)[0])).toMatch(new RegExp(`^‹ \\[Scouts\\] +docs-drift · ‹ ${place.n} of ${names.length} ›$`))
       expect(textOf(kids(h)[1]).replace(/\s+/g, ' ')).toBe('docs-drift Finds places where the guide no longer matches what the code does')
       expect(textOf(kids(h)[2])).toMatch(/^◷ every hour/)
-      // the buttons it had (Run now the next step, Edit, Resume dim) and paused said as a fact
+      // the buttons it had (Run now, Edit, Resume, all "[Label]", T-775) and paused said as a fact
       const row = kids(kids(h)[3])
       expect(row.filter(n => n.type === 'Button').map(keyOf)).toEqual(['scout-run', 'scout-edit', 'scout-pause'])
-      expect(textOf(kids(h)[3])).toMatch(surface === 'terminal' ? /^▐Run now▌   \[Edit\]   Resume ⏸ paused$/ : /⏸ paused$/)
+      expect(textOf(kids(h)[3])).toMatch(surface === 'terminal' ? /^\[Run now\]   \[Edit\]   \[Resume\] ⏸ paused$/ : /⏸ paused$/)
       expect(kids(kids(h).find(k => keyOf(k) === 'hdr-keys')).map(b => b.props?.hotkey)).toEqual(['b', 'k', 'j', 'r', 'e', 'p'])
       expect(textOf(await ui.find({ key: 'scout-keys-footer' }))).toContain('k j prev/next')
       await ui.press({ key: 'next-key' })
       await ui.redraw()
     } else {
       expect(kids(h).map(keyOf)).toEqual(['vs-where', 'vs-head', 'vs-state', 'vs-actions', 'vs-header-rule'])
-      expect((await ui.find({ key: 'scout-back' }))?.props.label).toBe('‹ Scouts')
+      expect((await ui.find({ key: 'scout-back' }))?.props.label).toBe('Scouts')
+      for (const b of kids(await ui.find({ key: 'vs-actions' })).filter(n => n.type === 'Button')) expect(b.props?.variant, keyOf(b)).toBe('secondary')
       await ui.press({ key: 'next' })
       await ui.redraw()
     }

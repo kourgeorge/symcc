@@ -929,16 +929,16 @@ A task's page and a scout's page start with the same 4-line header on every boar
 desktop, mobile, VS Code and OpenCode), then a heavy rule:
 
 ```
- ‹ Tasks                                              T-738 · ‹ 2 of 6 ›
+ ‹ [Tasks]                                            T-738 · ‹ 2 of 6 ›
  T-738  Live tab: an empty line before each section (all boards)
  ▶ doing · worker · 4m   change · general · try 1/3   ♟ from you
- ▐Pause▌   [Role] [Watch worker]   [Drop]   ☐ needs review copy
+ [Pause]   [Role] [Watch worker]   [Drop]   [☐ Needs review] [Copy]
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ▍Details
 ```
 
-1. **Where you are** (dim). `‹ Tasks` is Back: it names the tab you came from (`‹ Tasks`,
-   `‹ Live`, `‹ Scouts`). On the right is the page's place in the list it was opened from
+1. **Where you are**. `‹ [Tasks]` is Back: the arrow, then a button that names the tab you
+   came from (`‹ [Tasks]`, `‹ [Live]`, `‹ [Scouts]`), drawn like the other buttons. On the right is the page's place in the list it was opened from
    (the same filter or search): `T-738 · ‹ 2 of 6 ›`. A click on `‹` or `›` goes to the
    previous or the next task (or scout) of that list, going round at the ends; so do the keys
    `k` and `j` on the Claude Code boards and `[` and `]` in OpenCode (where `k` and `j` move).
@@ -953,12 +953,17 @@ desktop, mobile, VS Code and OpenCode), then a heavy rule:
    Status, Stage or Now rows in Details any more: Details starts with the **Steps** row (the
    way to the merge) and the **Added** row (when it was added and last changed).
 4. **The buttons**, in groups, with words only (their keys are in the key line at the bottom,
-   never inside a button): first the one next step, filled in the accent color (Pause, Approve,
-   Retry, Resume, Merge now, Move to todo or Done; none while the task asks you something);
-   then the other task actions, framed (Role, Watch worker, Show changes, Stash to backlog,
-   Already merged, Keep as a note, Ask more); then the ones that throw work away, in red and
-   set apart (Reject, Drop); then, dim at the end, the page's own: `☐ needs review` (a
-   checkbox: `n` turns it on, `☑ needs review`, and off) and `copy` (`y`).
+   never inside a button). Every button looks the same: `[Label]`, in the normal text color.
+   The order of the groups and the gaps between them say what is what: first the one next
+   step (Pause, Approve, Retry, Resume, Merge now, Move to todo or Done; none while the task
+   asks you something); then the other task actions (Role, Watch worker, Show changes, Stash
+   to backlog, Already merged, Keep as a note, Ask more); then, set apart, the ones that throw
+   work away (Reject, Drop); then, at the end, the page's own: `[☐ Needs review]` (a checkbox:
+   `n` turns it on, `[☑ Needs review]`, and off) and `[Copy]` (`y`).
+
+Further down, under ▍Report, the buttons that show an earlier try's report look the same:
+`[Try 1] [Try 2] [● Try 3]` (● the one shown); their keys, `1`-`9`, are in the key line
+(`1-3 a try's report`), not in the buttons.
 
 On a narrow panel lines 3 and 4 wrap between their groups, never inside a button; a group wider
 than the panel wraps between its buttons, and with no room left the page group goes to its own
@@ -970,10 +975,10 @@ when the list has more than one.
 A scout's page has the same shape:
 
 ```
- ‹ Scouts                                           bugs · ‹ 3 of 10 ›
+ ‹ [Scouts]                                         bugs · ‹ 3 of 10 ›
  bugs  Looks for real bugs in recent changes
  ◷ every 2 days · next in 38m   last ran 2h 00m ago: 2 findings → T-736, T-739
- ▐Run now▌   [Edit]   Pause
+ [Run now]   [Edit]   [Pause]
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
@@ -982,10 +987,10 @@ often it runs (or `◉ running now`), when it runs next, its model, and its last
 came of it; line 4 Run now (not while it runs), Edit and Pause or Resume, with `⏸ paused` said
 at the end while it is paused.
 
-VS Code draws the same 4 lines with its own controls: a `‹ Tasks` back button and a `‹ 2 of 6 ›`
-pager, the title as a heading, the state as small chips (the status one filled in its color),
-the buttons (the next step the primary one, Drop in red, needs review a checkbox link, copy a
-small button), then a divider.
+VS Code draws the same 4 lines with its own controls: `‹` and a `Tasks` back button, a
+`‹ 2 of 6 ›` pager, the title as a heading, the state as small chips (the status one filled in
+its color), the buttons (all in one style, as on the other boards: no main button, no red;
+needs review is a button too), then a divider.
 
 #### The Branch section
 
@@ -1164,10 +1169,10 @@ unchanged.
   (`Back`, not `Back (b)`).
 - **A task's page** reads like a card. It uses the whole panel width and wraps every line,
   never cutting it with "…". From the top: the page header (see [the task page and the scout
-  page](#the-task-page-and-the-scout-page)): a `‹ Tasks` button back to the list and the
+  page](#the-task-page-and-the-scout-page)): `‹` and a `Tasks` button back to the list, the
   `‹ 2 of 6 ›` pager, the task ID and title as a heading, the state as small chips (`◆ answered:
-  read it`, in green, for an answered investigation), the action buttons in their groups (at
-  most one main button on the page, Drop in red, needs review a checkbox link), then a divider.
+  read it`, in green, for an answered investigation), the action buttons in their groups (all
+  in one style: no main button, no red; needs review a button too), then a divider.
   What needs you comes next, in a box in its color: the **Question for you** (yellow) with its
   answers as buttons and a box for your own answer (a file request has `Allow files` and
   `Don't allow`); **Why it failed** (red); **Waiting for your files** (yellow).
@@ -1187,7 +1192,7 @@ unchanged.
   (`last: found 2: …`, `last: nothing`) and its model. A row never wraps: its end is cut with
   "…" to fit. Under the list: `+ New scout` and `← Tasks`. With no scouts yet, a short how-to
   in a box and `+ New scout` as the main button.
-- **A scout's page**: the page header: a `‹ Scouts` button and the pager; the name and its
+- **A scout's page**: the page header: `‹` and a `Scouts` button, and the pager; the name and its
   summary; when it runs, the next run, its model and the last run as chips; buttons `Run now`
   (not while it runs), `Edit`, and `Pause` or `Resume` (`⏸ paused` beside it while paused);
   then its **Instructions** as Markdown, its **File**, and its **Runs**; open a run to read its report.
@@ -2221,7 +2226,7 @@ Workers, scouts and checkers are OpenCode sessions of their own. Each one is a c
 
 The board opens by itself in OpenCode's session panel, next to the session, the first time a session is shown, as in Claude Code at session start; turn the `open_on_start` setting off (`/symcc-settings open_on_start off`) to stop that. `/symcc-board` (or "symcc board" in OpenCode's command palette, ctrl+p) also opens it (run it again to close it; on OpenCode's home page, with no session open, a message says to open or start one first): the banner, then the tasks grouped as in Claude Code (Questions for you, NEEDS YOU, what runs and waits, the backlog, and Done and Dropped as counts), with the same marks, short states and times. ↑/↓ (or k/j, on every page, a task's page too) move, Enter opens a task or a question, b goes back, [ and ] go to the previous and the next task (or scout) of the list on its page, Esc closes the panel. On a task in review, a approves and x rejects (it asks for the reason); on a waiting task or a question, a answers (pick a choice, or Answer… to type your own). A task's page has the same sections as Claude Code's task page, with the same headings: ▍Why it failed (a failed task), ▍Answer (an answered investigation), ▍Details, ▍Branch (its branch against main, see [the Branch section](#the-branch-section)), ▍Changes (a task in review: its changed files; a click on one shows the changes, like d), ▍What to do, ▍History, ▍Report (the latest try's, read from its file when you open the page) and ▍Runs (time and cost). A long history or report is cut after its first lines with "… (n more lines)" (the whole report stays in its file); the mouse wheel scrolls the page. A task's and a scout's page start with the same header as in Claude Code ([the task page and the scout page](#the-task-page-and-the-scout-page)), which stays at the top while the page scrolls, and its heavy rule sets it apart from the text. It offers the same actions as in Claude Code, with the same keys (p pause, u resume, r retry, o move to todo, z stash to backlog, v keep as a note, l role, h already merged, x drop, n needs review on/off); drop asks for an optional reason and role lets you pick from the roles. Only Copy and Watch worker are not there. These are sent as slash commands in your session (`/symcc-approve`, `/symcc-reject`, `/symcc-task T-5 pause` and the other `/symcc-task` words, `/symcc-answer T-5 <answer>` or `Q-3 <answer>`), which you can also type, in Claude Code too.
 
-As in Claude Code, the panel has four tabs under the banner: Tasks, Live, Scouts and Settings. t, l, s and c switch between them (or click a tab). Every screen has the same buttons as Claude Code's panel, and a click on one presses its key: the tab row, the list's mode (m) and search (f) buttons, Back (b) on the list pages (on a task's or scout's page, its header's `‹ Tasks` or `‹ Scouts`) and the buttons of a task's, scout's, role's or kind's page. The header (banner, tabs and rule) shows only on the list pages (Tasks, Live, Scouts, Settings); an opened page has just its own buttons and text. **Live** (l) shows the same railway lanes as [the Live tab in Claude Code](#live-tab), with the waiting trains under them, then what starts next and today's numbers, then the Branches section; the arrow keys move between the lanes, trains and Branches rows, and Enter (or a click) opens a lane's, train's or Branches row's task (there is no `w` key to watch a worker). Back (b) from a task opened on Live returns to Live, on its lane. At the bottom of Live, the **Organizational memory** section (the count, the 3 newest notes and the topics with their counts) opens the notes the agents keep: the arrow keys reach its notes and topics too, Enter on a topic opens only that topic's notes, Enter on a newest note opens all notes with the cursor on it, and m (or a click on the section's header) opens all notes. There, x deletes the note under the cursor after a yes (sent as `/symcc-settings orgmem delete N`), and b returns to Live. **Scouts** lists each scout with how often it runs, whether it is paused or when it runs next, and its last result; Enter opens a scout's page: its instructions, its recent runs (newest first, with the tasks made from them) and its file. On it, r runs the scout now and p pauses or resumes it (sent as `/symcc-scout <name>` and `/symcc-scout <name> pause` or `resume`), and e edits it: pick how often it runs, its model or its instructions, then type the new value (sent as `/symcc-scout <name> every 30`, `model <model>` or `model none` for the session's model, or `prompt <instructions>`; the rest of the scout's file is kept, and longer instructions are easier to write in the file itself). Enter on a run shows its report, and b goes back. **Settings** shows every setting in the same groups as Claude Code, each with its value, its default and its range, and what it does under it. Enter (or a click) changes the one under the cursor: on/off settings flip, mode, notify, scout_findings and tests_with_changes are picked from a list, and the rest are typed; it is sent as `/symcc-settings <name> <value>`. Under Workers, the Roles and Kinds rows (with how many there are, and how many are off) open their pages, as in Claude Code: a list of the roles or kinds, each with where it comes from (built-in, replaced or added), whether it is off and what it is for, and a file that can't be read says why. Enter opens one: its description, a role's model, skills and tools, its checklist (a role) or body (a kind), and its file. On it, o turns it off or on and r resets it to the built-in one (when you changed a built-in); these are sent as `/symcc-settings role <name> off` (or `on`, `reset`; `kind <name> ...` for a kind). general, the checker role, change and investigation can't be turned off. As in Claude Code, a role's or kind's page has Back, Edit (e; its edit page has Save and Cancel), See the prompt (p, roles only), Turn off or Turn on (o), Reset to built-in (r) and Remove (d; it asks first, and only for ones you added). The list pages have **+ New role** / **+ New kind** (n) and the Scouts page has **+ New scout** (n). They are sent as `/symcc-settings role <name> add`, `edit <field> <value>`, `save {...}` and `remove` (the same for `kind`), and `/symcc-scout <name> new <instructions>`. When the folder has no git repo or no commit yet, the banner shows **Set up git (g)**, which asks for a yes and sends `/symcc-settings git setup`. A change you make in a file yourself shows in the panel at the next board change (OpenCode tells symcc of no finished edit). b goes back one page.
+As in Claude Code, the panel has four tabs under the banner: Tasks, Live, Scouts and Settings. t, l, s and c switch between them (or click a tab). Every screen has the same buttons as Claude Code's panel, and a click on one presses its key: the tab row, the list's mode (m) and search (f) buttons, Back (b) on the list pages (on a task's or scout's page, its header's `[Tasks]` or `[Scouts]`) and the buttons of a task's, scout's, role's or kind's page. The header (banner, tabs and rule) shows only on the list pages (Tasks, Live, Scouts, Settings); an opened page has just its own buttons and text. **Live** (l) shows the same railway lanes as [the Live tab in Claude Code](#live-tab), with the waiting trains under them, then what starts next and today's numbers, then the Branches section; the arrow keys move between the lanes, trains and Branches rows, and Enter (or a click) opens a lane's, train's or Branches row's task (there is no `w` key to watch a worker). Back (b) from a task opened on Live returns to Live, on its lane. At the bottom of Live, the **Organizational memory** section (the count, the 3 newest notes and the topics with their counts) opens the notes the agents keep: the arrow keys reach its notes and topics too, Enter on a topic opens only that topic's notes, Enter on a newest note opens all notes with the cursor on it, and m (or a click on the section's header) opens all notes. There, x deletes the note under the cursor after a yes (sent as `/symcc-settings orgmem delete N`), and b returns to Live. **Scouts** lists each scout with how often it runs, whether it is paused or when it runs next, and its last result; Enter opens a scout's page: its instructions, its recent runs (newest first, with the tasks made from them) and its file. On it, r runs the scout now and p pauses or resumes it (sent as `/symcc-scout <name>` and `/symcc-scout <name> pause` or `resume`), and e edits it: pick how often it runs, its model or its instructions, then type the new value (sent as `/symcc-scout <name> every 30`, `model <model>` or `model none` for the session's model, or `prompt <instructions>`; the rest of the scout's file is kept, and longer instructions are easier to write in the file itself). Enter on a run shows its report, and b goes back. **Settings** shows every setting in the same groups as Claude Code, each with its value, its default and its range, and what it does under it. Enter (or a click) changes the one under the cursor: on/off settings flip, mode, notify, scout_findings and tests_with_changes are picked from a list, and the rest are typed; it is sent as `/symcc-settings <name> <value>`. Under Workers, the Roles and Kinds rows (with how many there are, and how many are off) open their pages, as in Claude Code: a list of the roles or kinds, each with where it comes from (built-in, replaced or added), whether it is off and what it is for, and a file that can't be read says why. Enter opens one: its description, a role's model, skills and tools, its checklist (a role) or body (a kind), and its file. On it, o turns it off or on and r resets it to the built-in one (when you changed a built-in); these are sent as `/symcc-settings role <name> off` (or `on`, `reset`; `kind <name> ...` for a kind). general, the checker role, change and investigation can't be turned off. As in Claude Code, a role's or kind's page has Back, Edit (e; its edit page has Save and Cancel), See the prompt (p, roles only), Turn off or Turn on (o), Reset to built-in (r) and Remove (d; it asks first, and only for ones you added). The list pages have **+ New role** / **+ New kind** (n) and the Scouts page has **+ New scout** (n). They are sent as `/symcc-settings role <name> add`, `edit <field> <value>`, `save {...}` and `remove` (the same for `kind`), and `/symcc-scout <name> new <instructions>`. When the folder has no git repo or no commit yet, the banner shows **Set up git (g)**, which asks for a yes and sends `/symcc-settings git setup`. A change you make in a file yourself shows in the panel at the next board change (OpenCode tells symcc of no finished edit). b goes back one page.
 
 Above the prompt of an open session, a strip shows the header line and the questions and tasks that need you or run, as the band does in Claude Code. It is there by itself; there is nothing to turn on. Click its header line to open the board panel (click again to close it), or click a task's or question's row to open its page; the header ends with a dim "(click: board)" when there is room.
 

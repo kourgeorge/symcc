@@ -572,27 +572,33 @@ test('T-680, T-751: a task page header has the buttons in groups, words only (th
   }
   // the running task: the Claude Code board's buttons for it (core's taskActions in their groups, with their words),
   // but Watch worker and Copy, which OpenCode can't do
-  expect(buttonRow('T-1')).toBe('▐Pause▌   [Drop]   ☐ needs review')
+  expect(buttonRow('T-1')).toBe('[Pause]   [Drop]   [☐ Needs review]')
   for (const id of ['T-1', 'T-2', 'T-3']) {
     const claude = inGroups(taskActions(task(id), { worker: id === 'T-1' }).filter(a => a.id !== 'watch' && a.id !== 'copy'))
     expect(buttonRow(id)).toBe(claude.map(g => g.map(pillText).join(' ')).join('   '))
   }
-  expect(buttonRow('T-2')).toBe('▐Approve▌   [Show changes]   [Reject] [Drop]   ☐ needs review')
-  expect(buttonRow('T-3')).toBe('▐Retry▌   [Stash to backlog] [Role] [Already merged]   [Drop]   ☐ needs review')
+  expect(buttonRow('T-2')).toBe('[Approve]   [Show changes]   [Reject] [Drop]   [☐ Needs review]')
+  expect(buttonRow('T-3')).toBe('[Retry]   [Stash to backlog] [Role] [Already merged]   [Drop]   [☐ Needs review]')
+  // T-775: every button drawn the same: "[Label]" in the text color, not bold (no filled pill, no red, no dim word)
+  for (const id of ['T-1', 'T-2', 'T-3']) {
+    const ls = panelLines(f, { opened: id, cursor: 0 }, NOW, 140).lines
+    const row = ls[ls.findIndex(l => /^━+$/.test(lineText(l))) - 1]!.filter(x => x.hit)
+    expect(row.map(x => [x.text.startsWith('[') && x.text.endsWith(']'), x.color, !!x.bold])).toEqual(row.map(() => [true, 'text', false]))
+  }
   // no key inside a button (the keys are in the footer)
   for (const id of ['T-1', 'T-2', 'T-3']) expect(buttonRow(id)).not.toMatch(/\([a-z]\)/)
   // a narrow panel puts the buttons on more rows, between the groups when they fit, never cutting a button
   const narrow = panelLines(f, { opened: 'T-3', cursor: 0 }, NOW, 40).lines.map(lineText)
   const rule = narrow.findIndex(l => /^━+$/.test(l))
-  expect(narrow.slice(rule - 4, rule)).toEqual(['▐Retry▌', '[Stash to backlog] [Role]', '[Already merged]   [Drop]', '☐ needs review'])
+  expect(narrow.slice(rule - 4, rule)).toEqual(['[Retry]', '[Stash to backlog] [Role]', '[Already merged]   [Drop]', '[☐ Needs review]'])
   // the scout pages (as Claude Code's: Run now when it isn't running, Edit, Pause or Resume; paused said as a fact) and a question's
-  expect(buttonRow('deps', 'scouts')).toBe('[Edit]   Pause')
-  expect(buttonRow('docs', 'scouts')).toBe('▐Run now▌   [Edit]   Resume ⏸ paused')
+  expect(buttonRow('deps', 'scouts')).toBe('[Edit]   [Pause]')
+  expect(buttonRow('docs', 'scouts')).toBe('[Run now]   [Edit]   [Resume] ⏸ paused')
   expect(panelLines(f, { opened: 'Q-1', cursor: 0 }, NOW, 140).lines.map(lineText).find(l => l.startsWith('[ Back ]'))).toBe('[ Back ]')
   // the header's 4 lines in order, then the heavy rule: where you are, the title, the state, the buttons
   for (const id of ['T-1', 'T-2', 'T-3']) {
     const lines = panelLines(f, { opened: id, cursor: 0 }, NOW, 140).lines.map(lineText)
-    expect(lines[0]).toMatch(new RegExp(`^‹ Tasks +${id} · ‹ \\d of 3 ›$`))
+    expect(lines[0]).toMatch(new RegExp(`^‹ \\[Tasks\\] +${id} · ‹ \\d of 3 ›$`))
     expect(lines[1]!.startsWith(`${id}  `)).toBe(true)
     expect(lines[2]).toContain({ 'T-1': '▶ doing', 'T-2': '◆ ready for review', 'T-3': '✗ failed' }[id]!)
     expect(lines[3]).toBe(buttonRow(id))
@@ -644,14 +650,14 @@ test('T-680, T-751: a task page header has the buttons in groups, words only (th
     await settle()
   }
   const clickButton = (label: string) => click(buttons().find(s => s.kids.join('') === label), label)
-  // Back is the header's "‹ Tasks" (or "‹ Scouts"); a question keeps its [ Back ] button
-  const clickBack = () => click(headRows().flatMap(r => r.segs).find(s => ['‹ Tasks', '‹ Scouts', '[ Back ]'].includes(s.kids.join(''))), 'back')
+  // Back is the header's "[Tasks]" (or "[Scouts]") after its arrow; a question keeps its [ Back ] button
+  const clickBack = () => click(headRows().flatMap(r => r.segs).find(s => ['[Tasks]', '[Scouts]', '[ Back ]'].includes(s.kids.join(''))), 'back')
   const pages: [string, 'tasks' | 'scouts'][] = [['T-1', 'tasks'], ['T-2', 'tasks'], ['T-3', 'tasks'], ['deps', 'scouts'], ['docs', 'scouts']]
   for (const [id, tab] of pages) {
     await open(id, tab)
     const labels = buttons().map(s => s.kids.join(''))
     // Approve last (while it runs, the page offers no approve or reject)
-    for (const label of labels.filter(l => l !== '▐Approve▌')) {
+    for (const label of labels.filter(l => l !== '[Approve]')) {
       // what the button's key sends, then what a click on the button sends
       await open(id, tab)
       sent.length = 0
@@ -676,21 +682,21 @@ test('T-680, T-751: a task page header has the buttons in groups, words only (th
   // Approve sends the approve, as a; then its page has no Approve or Reject button
   await open('T-2')
   sent.length = 0
-  await clickButton('▐Approve▌')
+  await clickButton('[Approve]')
   expect(sent).toEqual([{ sessionID: 's', name: 'symcc-approve', text: 'T-2' }])
-  expect(buttons().map(s => s.kids.join(''))).toEqual(['[Show changes]', '[Drop]', '☐ needs review'])
+  expect(buttons().map(s => s.kids.join(''))).toEqual(['[Show changes]', '[Drop]', '[☐ Needs review]'])
   board.stop()
 })
 
-test('T-751: [ and ] (and a click on ‹ or › in the header) go to the previous and the next task or scout of the list, going round; a task opened from Live says "‹ Live"', async () => {
+test('T-751: [ and ] (and a click on ‹ or › in the header) go to the previous and the next task or scout of the list, going round; a task opened from Live says "‹ [Live]"', async () => {
   // [ and ] are bound to prev and next; k and j still move
   expect([KEY_BINDS.prev, KEY_BINDS.next, KEY_BINDS.up, KEY_BINDS.down]).toEqual(['[', ']', 'up,k', 'down,j'])
   const f = viewFile()
   const list = taskListIds(f.view.tasks, NOW)
   // the header's first line: Back, then the place with its arrows, each a click
   const first = panelLines(f, { opened: list[0]!, cursor: 0 }, NOW, 100).lines[0]!
-  expect(lineText(first)).toMatch(new RegExp(`^‹ Tasks +${list[0]} · ‹ 1 of ${list.length} ›$`))
-  expect(first.filter(x => x.hit).map(x => [x.text, x.hit])).toEqual([['‹ Tasks', { key: 'back' }], ['‹', { key: 'prev' }], ['›', { key: 'next' }]])
+  expect(lineText(first)).toMatch(new RegExp(`^‹ \\[Tasks\\] +${list[0]} · ‹ 1 of ${list.length} ›$`))
+  expect(first.filter(x => x.hit).map(x => [x.text, x.hit])).toEqual([['[Tasks]', { key: 'back' }], ['‹', { key: 'prev' }], ['›', { key: 'next' }]])
   // the footer says so
   expect(panelLines(f, { opened: list[0]!, cursor: 0 }, NOW, 100).keys.map(k => `${k.key} ${k.word}`)).toContain('[ ] prev/next')
   const files = new Map([['/work/proj/.symcc/view.json', viewFileText({ ...f, view: { ...f.view, scouts: [{ name: 'a', every_minutes: 60 }, { name: 'b', every_minutes: 120 }] as never } })]])
@@ -719,12 +725,12 @@ test('T-751: [ and ] (and a click on ‹ or › in the header) go to the previou
   expect(board.state().opened).toBe(names[1])
   await board.press('next', 's')
   expect(board.state().opened).toBe(names[0])
-  // from the Live tab: "‹ Live"; T-1 is its only running task, so no place to go to
+  // from the Live tab: "‹ [Live]"; T-1 is its only running task, so no place to go to
   await board.press('l', 's')
   await board.press('open', 's')
   expect([board.state().tab, board.state().opened]).toEqual(['tasks', 'T-1'])
   const live = panelLines(f, { opened: 'T-1', cursor: 0, from: 'live' }, NOW, 100)
-  expect(lineText(live.lines[0]!)).toMatch(/^‹ Live +T-1$/)
+  expect(lineText(live.lines[0]!)).toMatch(/^‹ \[Live\] +T-1$/)
   expect(live.keys.map(k => k.word)).not.toContain('prev/next')
   await board.press('next', 's')
   expect(board.state().opened).toBe('T-1')
@@ -2163,18 +2169,19 @@ test('T-627: a long task page scrolls by drawn lines under its fixed title and b
   // the title wraps onto two drawn lines, and both stay at the top (no status badge under it, T-693)
   const title = text.slice(0, all.fixed)
   expect(title.some(l => l.startsWith('T-2  a reviewed change'))).toBe(true)
-  expect(title.filter(l => /^\[[^ ].*\]$/.test(l)).length).toBe(0)
+  // (the header's buttons are "[Label]" too since T-775; a badge would name the status)
+  expect(title.filter(l => /^\[[^\]]*(review|doing|todo|failed|waiting|done|dropped|backlog)[^\]]*\]$/i.test(l) && !/Needs review/.test(l)).length).toBe(0)
   // T-680, T-751: the page header (with its buttons and its heavy rule) stays at the top with them
-  expect(title.some(l => l.startsWith('▐Approve▌'))).toBe(true)
+  expect(title.some(l => l.startsWith('[Approve]'))).toBe(true)
   expect(title.at(-1)).toMatch(/^━+$/)
   expect(title.join(' ')).toContain('onto a second line here')
   expect(text.slice(all.fixed).some(l => l.includes('▍History'))).toBe(true)
   // the long history and report lines are broken into rows the panel's width, keeping every word in order
   expect(text.join(' ').replace(/\s+/g, ' ')).toContain('report line 1 is a long one that says a lot about what was done, so it has to wrap in a narrow panel')
   const firstTitle = title.findIndex(l => l.startsWith('T-2'))
-  checkScrolling(draw, 25, w, [title[firstTitle]!, title.find(l => l.startsWith('▐Approve▌'))!])
+  checkScrolling(draw, 25, w, [title[firstTitle]!, title.find(l => l.startsWith('[Approve]'))!])
   // T-700: no banner or tabs on a task's page (as on the terminal panel): its header comes first (T-751)
-  expect(text[0]!.startsWith('‹ Tasks')).toBe(true)
+  expect(text[0]!.startsWith('‹ [Tasks]')).toBe(true)
   expect(text[1]!.startsWith('T-2  a reviewed change')).toBe(true)
   // too low to keep the title too: the title scrolls with the page, nothing stays at the top
   checkScrolling(draw, 8, w, [])
@@ -2800,8 +2807,8 @@ test('T-692: in the TUI, l (or a click on the Live tab) shows the Live tab; ↓ 
   // its page's Back button does the same
   await board.press('open', 's')
   expect([board.state().tab, board.state().opened]).toEqual(['tasks', 'T-612'])
-  // T-751: the header's "‹ Live" (opened from the Live tab)
-  const backSeg = rowEls(panel).flatMap(r => r.segs).find(s => (s.kids ?? []).join('') === '‹ Live')
+  // T-751: the header's "[Live]" (opened from the Live tab, after its arrow)
+  const backSeg = rowEls(panel).flatMap(r => r.segs).find(s => (s.kids ?? []).join('') === '[Live]')
   ;(backSeg!.props.onMouseUp as (e: unknown) => void)(up)
   await settle()
   expect([board.state().tab, board.state().opened]).toEqual(['live', ''])
@@ -2960,11 +2967,11 @@ test('T-700: the board header (banner, tests/limits line, drive warning, tabs) s
     expect([c, boardPageOf(f, { opened: '', ...c }), showsHeader(page)]).toEqual([c, page, false])
     const t = texts(c)
     expect([c, header(t)]).toEqual([c, none])
-    // a task's or scout's page starts with its header (T-751): "‹ Tasks" or "‹ Scouts" (its Back), then its title
+    // a task's or scout's page starts with its header (T-751): "‹ [Tasks]" or "‹ [Scouts]" (its Back), then its title
     const head = page === 'task' || page === 'scout' ? 1 : 0
     if (title) expect([c, t[head]!.includes(title)]).toEqual([c, true])
     // the footer (its rule and key hints) and the page's Back button stay
-    expect([c, t.some(l => /^─+$/.test(l)), t.some(l => l.startsWith('[ Back') || l.includes(' [ Back') || /^‹ (Tasks|Scouts)/.test(l))]).toEqual([c, true, true])
+    expect([c, t.some(l => /^─+$/.test(l)), t.some(l => l.startsWith('[ Back') || l.includes(' [ Back') || /^‹ \[(Tasks|Scouts)\]/.test(l))]).toEqual([c, true, true])
   }
 })
 

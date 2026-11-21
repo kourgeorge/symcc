@@ -9,6 +9,7 @@
 // (notify holds the sound set: voice / sound 1 / sound 2 / sound 3 / off).
 // T-686 took the instructions' first line off the scout pages' header (a scout without a summary shows none).
 // T-751 gave the scout pages the 4-line page header (‹ Scouts and its place, name and summary, state, buttons) and its heavy rule.
+// T-775 drew every header button "[Label]" in one style, and Back "‹ [Scouts]".
 export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
   "terminal scouts list": {
     "type": "Box",
@@ -1327,13 +1328,14 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "type": "Box",
             "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
+              {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
               {
                 "type": "Button",
-                "props": {"key":"scout-back","label":"‹ Scouts","plain":true,"autoFocus":true},
+                "props": {"key":"scout-back","label":"Scouts","plain":true,"autoFocus":true},
                 "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Scouts"]}]
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Scouts]"]}]
               },
-              {"type":"Text","props":{"color":"inactive"},"children":["           "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["         "]},
               {"type":"Text","props":{"color":"inactive"},"children":["dependency-updates · "]},
               {
                 "type": "Button",
@@ -1410,7 +1412,7 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
                 "type": "Button",
                 "props": {"key":"scout-pause","label":"Pause","plain":true},
                 "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"inactive"},"children":["Pause"]}]
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Pause]"]}]
               }
             ]
           },
@@ -1526,13 +1528,14 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "type": "Box",
             "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
+              {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
               {
                 "type": "Button",
-                "props": {"key":"scout-back","label":"‹ Scouts","plain":true,"autoFocus":true},
+                "props": {"key":"scout-back","label":"Scouts","plain":true,"autoFocus":true},
                 "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Scouts"]}]
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Scouts]"]}]
               },
-              {"type":"Text","props":{"color":"inactive"},"children":["           "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["         "]},
               {"type":"Text","props":{"color":"inactive"},"children":["dependency-updates · "]},
               {
                 "type": "Button",
@@ -1600,7 +1603,7 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "children": [
               {"type":"Button","props":{"key":"scout-edit","label":"Edit","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":["   "]},
-              {"type":"Button","props":{"key":"scout-pause","label":"Pause","dimColor":true,"variant":"secondary"},"press":{"plugin":"symcc"}}
+              {"type":"Button","props":{"key":"scout-pause","label":"Pause","variant":"secondary"},"press":{"plugin":"symcc"}}
             ]
           },
           {
@@ -1727,13 +1730,14 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "type": "Box",
             "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
+              {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
               {
                 "type": "Button",
-                "props": {"key":"scout-back","label":"‹ Scouts","plain":true,"autoFocus":true},
+                "props": {"key":"scout-back","label":"Scouts","plain":true,"autoFocus":true},
                 "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Scouts"]}]
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Scouts]"]}]
               },
-              {"type":"Text","props":{"color":"inactive"},"children":["           "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["         "]},
               {"type":"Text","props":{"color":"inactive"},"children":["dependency-updates · "]},
               {
                 "type": "Button",
@@ -1801,7 +1805,7 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "children": [
               {"type":"Button","props":{"key":"scout-edit","label":"Edit","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":["   "]},
-              {"type":"Button","props":{"key":"scout-pause","label":"Pause","dimColor":true,"variant":"secondary"},"press":{"plugin":"symcc"}}
+              {"type":"Button","props":{"key":"scout-pause","label":"Pause","variant":"secondary"},"press":{"plugin":"symcc"}}
             ]
           },
           {
@@ -1928,13 +1932,14 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "type": "Box",
             "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
+              {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
               {
                 "type": "Button",
-                "props": {"key":"scout-back","label":"‹ Scouts","plain":true,"autoFocus":true},
+                "props": {"key":"scout-back","label":"Scouts","plain":true,"autoFocus":true},
                 "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Scouts"]}]
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Scouts]"]}]
               },
-              {"type":"Text","props":{"color":"inactive"},"children":["                                "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["                              "]},
               {
                 "type": "Button",
                 "props": {"key":"prev","label":"Previous","plain":true},
@@ -1986,16 +1991,7 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
                 "type": "Button",
                 "props": {"key":"scout-run","label":"Run now","plain":true},
                 "press": {"plugin":"symcc"},
-                "children": [
-                  {
-                    "type": "Text",
-                    "children": [
-                      {"type":"Text","props":{"color":"ide"},"children":["▐"]},
-                      {"type":"Text","props":{"bold":true,"backgroundColor":"ide","color":"inverseText"},"children":["Run now"]},
-                      {"type":"Text","props":{"color":"ide"},"children":["▌"]}
-                    ]
-                  }
-                ]
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Run now]"]}]
               },
               {"type":"Text","children":["   "]},
               {
@@ -2009,7 +2005,7 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
                 "type": "Button",
                 "props": {"key":"scout-pause","label":"Pause","plain":true},
                 "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"inactive"},"children":["Pause"]}]
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Pause]"]}]
               }
             ]
           },
@@ -2127,13 +2123,14 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "type": "Box",
             "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
+              {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
               {
                 "type": "Button",
-                "props": {"key":"scout-back","label":"‹ Scouts","plain":true,"autoFocus":true},
+                "props": {"key":"scout-back","label":"Scouts","plain":true,"autoFocus":true},
                 "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Scouts"]}]
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Scouts]"]}]
               },
-              {"type":"Text","props":{"color":"inactive"},"children":["                                "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["                              "]},
               {
                 "type": "Button",
                 "props": {"key":"prev","label":"Previous","plain":true},
@@ -2181,11 +2178,11 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "type": "Box",
             "props": {"key":"hdr-buttons-0","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"scout-run","label":"Run now","variant":"primary"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-run","label":"Run now","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":["   "]},
               {"type":"Button","props":{"key":"scout-edit","label":"Edit","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":["   "]},
-              {"type":"Button","props":{"key":"scout-pause","label":"Pause","dimColor":true,"variant":"secondary"},"press":{"plugin":"symcc"}}
+              {"type":"Button","props":{"key":"scout-pause","label":"Pause","variant":"secondary"},"press":{"plugin":"symcc"}}
             ]
           },
           {
@@ -2322,13 +2319,14 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "type": "Box",
             "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
+              {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
               {
                 "type": "Button",
-                "props": {"key":"scout-back","label":"‹ Scouts","plain":true,"autoFocus":true},
+                "props": {"key":"scout-back","label":"Scouts","plain":true,"autoFocus":true},
                 "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Scouts"]}]
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Scouts]"]}]
               },
-              {"type":"Text","props":{"color":"inactive"},"children":["                                "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["                              "]},
               {
                 "type": "Button",
                 "props": {"key":"prev","label":"Previous","plain":true},
@@ -2376,11 +2374,11 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "type": "Box",
             "props": {"key":"hdr-buttons-0","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"scout-run","label":"Run now","variant":"primary"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-run","label":"Run now","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":["   "]},
               {"type":"Button","props":{"key":"scout-edit","label":"Edit","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":["   "]},
-              {"type":"Button","props":{"key":"scout-pause","label":"Pause","dimColor":true,"variant":"secondary"},"press":{"plugin":"symcc"}}
+              {"type":"Button","props":{"key":"scout-pause","label":"Pause","variant":"secondary"},"press":{"plugin":"symcc"}}
             ]
           },
           {
@@ -2517,13 +2515,14 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "type": "Box",
             "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
+              {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
               {
                 "type": "Button",
-                "props": {"key":"scout-back","label":"‹ Scouts","plain":true,"autoFocus":true},
+                "props": {"key":"scout-back","label":"Scouts","plain":true,"autoFocus":true},
                 "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Scouts"]}]
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Scouts]"]}]
               },
-              {"type":"Text","props":{"color":"inactive"},"children":["                   "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["                 "]},
               {"type":"Text","props":{"color":"inactive"},"children":["docs-drift · "]},
               {
                 "type": "Button",
@@ -2583,16 +2582,7 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
                 "type": "Button",
                 "props": {"key":"scout-run","label":"Run now","plain":true},
                 "press": {"plugin":"symcc"},
-                "children": [
-                  {
-                    "type": "Text",
-                    "children": [
-                      {"type":"Text","props":{"color":"ide"},"children":["▐"]},
-                      {"type":"Text","props":{"bold":true,"backgroundColor":"ide","color":"inverseText"},"children":["Run now"]},
-                      {"type":"Text","props":{"color":"ide"},"children":["▌"]}
-                    ]
-                  }
-                ]
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Run now]"]}]
               },
               {"type":"Text","children":["   "]},
               {
@@ -2606,7 +2596,7 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
                 "type": "Button",
                 "props": {"key":"scout-pause","label":"Resume","plain":true},
                 "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"inactive"},"children":["Resume"]}]
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Resume]"]}]
               },
               {"type":"Text","children":[" "]},
               {"type":"Text","props":{"color":"inactive"},"children":["⏸ paused"]}
@@ -2728,13 +2718,14 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "type": "Box",
             "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
+              {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
               {
                 "type": "Button",
-                "props": {"key":"scout-back","label":"‹ Scouts","plain":true,"autoFocus":true},
+                "props": {"key":"scout-back","label":"Scouts","plain":true,"autoFocus":true},
                 "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Scouts"]}]
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Scouts]"]}]
               },
-              {"type":"Text","props":{"color":"inactive"},"children":["                   "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["                 "]},
               {"type":"Text","props":{"color":"inactive"},"children":["docs-drift · "]},
               {
                 "type": "Button",
@@ -2790,11 +2781,11 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "type": "Box",
             "props": {"key":"hdr-buttons-0","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"scout-run","label":"Run now","variant":"primary"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-run","label":"Run now","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":["   "]},
               {"type":"Button","props":{"key":"scout-edit","label":"Edit","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":["   "]},
-              {"type":"Button","props":{"key":"scout-pause","label":"Resume","dimColor":true,"variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-pause","label":"Resume","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":[" "]},
               {"type":"Text","props":{"color":"inactive"},"children":["⏸ paused"]}
             ]
@@ -2931,13 +2922,14 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "type": "Box",
             "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
+              {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
               {
                 "type": "Button",
-                "props": {"key":"scout-back","label":"‹ Scouts","plain":true,"autoFocus":true},
+                "props": {"key":"scout-back","label":"Scouts","plain":true,"autoFocus":true},
                 "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Scouts"]}]
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Scouts]"]}]
               },
-              {"type":"Text","props":{"color":"inactive"},"children":["                   "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["                 "]},
               {"type":"Text","props":{"color":"inactive"},"children":["docs-drift · "]},
               {
                 "type": "Button",
@@ -2993,11 +2985,11 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "type": "Box",
             "props": {"key":"hdr-buttons-0","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"scout-run","label":"Run now","variant":"primary"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-run","label":"Run now","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":["   "]},
               {"type":"Button","props":{"key":"scout-edit","label":"Edit","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":["   "]},
-              {"type":"Button","props":{"key":"scout-pause","label":"Resume","dimColor":true,"variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-pause","label":"Resume","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":[" "]},
               {"type":"Text","props":{"color":"inactive"},"children":["⏸ paused"]}
             ]
@@ -3134,13 +3126,14 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "type": "Box",
             "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
+              {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
               {
                 "type": "Button",
-                "props": {"key":"scout-back","label":"‹ Scouts","plain":true,"autoFocus":true},
+                "props": {"key":"scout-back","label":"Scouts","plain":true,"autoFocus":true},
                 "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Scouts"]}]
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Scouts]"]}]
               },
-              {"type":"Text","props":{"color":"inactive"},"children":["              "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["            "]},
               {"type":"Text","props":{"color":"inactive"},"children":["on-demand-check · "]},
               {
                 "type": "Button",
@@ -3192,16 +3185,7 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
                 "type": "Button",
                 "props": {"key":"scout-run","label":"Run now","plain":true},
                 "press": {"plugin":"symcc"},
-                "children": [
-                  {
-                    "type": "Text",
-                    "children": [
-                      {"type":"Text","props":{"color":"ide"},"children":["▐"]},
-                      {"type":"Text","props":{"bold":true,"backgroundColor":"ide","color":"inverseText"},"children":["Run now"]},
-                      {"type":"Text","props":{"color":"ide"},"children":["▌"]}
-                    ]
-                  }
-                ]
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Run now]"]}]
               },
               {"type":"Text","children":["   "]},
               {
@@ -3215,7 +3199,7 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
                 "type": "Button",
                 "props": {"key":"scout-pause","label":"Pause","plain":true},
                 "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"inactive"},"children":["Pause"]}]
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Pause]"]}]
               }
             ]
           },
@@ -3332,13 +3316,14 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "type": "Box",
             "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
+              {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
               {
                 "type": "Button",
-                "props": {"key":"scout-back","label":"‹ Scouts","plain":true,"autoFocus":true},
+                "props": {"key":"scout-back","label":"Scouts","plain":true,"autoFocus":true},
                 "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Scouts"]}]
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Scouts]"]}]
               },
-              {"type":"Text","props":{"color":"inactive"},"children":["              "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["            "]},
               {"type":"Text","props":{"color":"inactive"},"children":["on-demand-check · "]},
               {
                 "type": "Button",
@@ -3386,11 +3371,11 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "type": "Box",
             "props": {"key":"hdr-buttons-0","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"scout-run","label":"Run now","variant":"primary"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-run","label":"Run now","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":["   "]},
               {"type":"Button","props":{"key":"scout-edit","label":"Edit","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":["   "]},
-              {"type":"Button","props":{"key":"scout-pause","label":"Pause","dimColor":true,"variant":"secondary"},"press":{"plugin":"symcc"}}
+              {"type":"Button","props":{"key":"scout-pause","label":"Pause","variant":"secondary"},"press":{"plugin":"symcc"}}
             ]
           },
           {
@@ -3526,13 +3511,14 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "type": "Box",
             "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
+              {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
               {
                 "type": "Button",
-                "props": {"key":"scout-back","label":"‹ Scouts","plain":true,"autoFocus":true},
+                "props": {"key":"scout-back","label":"Scouts","plain":true,"autoFocus":true},
                 "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Scouts"]}]
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Scouts]"]}]
               },
-              {"type":"Text","props":{"color":"inactive"},"children":["              "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["            "]},
               {"type":"Text","props":{"color":"inactive"},"children":["on-demand-check · "]},
               {
                 "type": "Button",
@@ -3580,11 +3566,11 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "type": "Box",
             "props": {"key":"hdr-buttons-0","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"scout-run","label":"Run now","variant":"primary"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-run","label":"Run now","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":["   "]},
               {"type":"Button","props":{"key":"scout-edit","label":"Edit","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":["   "]},
-              {"type":"Button","props":{"key":"scout-pause","label":"Pause","dimColor":true,"variant":"secondary"},"press":{"plugin":"symcc"}}
+              {"type":"Button","props":{"key":"scout-pause","label":"Pause","variant":"secondary"},"press":{"plugin":"symcc"}}
             ]
           },
           {
@@ -3720,13 +3706,14 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "type": "Box",
             "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
+              {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
               {
                 "type": "Button",
-                "props": {"key":"scout-back","label":"‹ Scouts","plain":true,"autoFocus":true},
+                "props": {"key":"scout-back","label":"Scouts","plain":true,"autoFocus":true},
                 "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Scouts"]}]
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Scouts]"]}]
               },
-              {"type":"Text","props":{"color":"inactive"},"children":["                       "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["                     "]},
               {"type":"Text","props":{"color":"inactive"},"children":["broken · "]},
               {
                 "type": "Button",
@@ -3775,16 +3762,7 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
                 "type": "Button",
                 "props": {"key":"scout-run","label":"Run now","plain":true},
                 "press": {"plugin":"symcc"},
-                "children": [
-                  {
-                    "type": "Text",
-                    "children": [
-                      {"type":"Text","props":{"color":"ide"},"children":["▐"]},
-                      {"type":"Text","props":{"bold":true,"backgroundColor":"ide","color":"inverseText"},"children":["Run now"]},
-                      {"type":"Text","props":{"color":"ide"},"children":["▌"]}
-                    ]
-                  }
-                ]
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Run now]"]}]
               },
               {"type":"Text","children":["   "]},
               {
@@ -3798,7 +3776,7 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
                 "type": "Button",
                 "props": {"key":"scout-pause","label":"Pause","plain":true},
                 "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"inactive"},"children":["Pause"]}]
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Pause]"]}]
               }
             ]
           },
@@ -3912,13 +3890,14 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "type": "Box",
             "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
+              {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
               {
                 "type": "Button",
-                "props": {"key":"scout-back","label":"‹ Scouts","plain":true,"autoFocus":true},
+                "props": {"key":"scout-back","label":"Scouts","plain":true,"autoFocus":true},
                 "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Scouts"]}]
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Scouts]"]}]
               },
-              {"type":"Text","props":{"color":"inactive"},"children":["                       "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["                     "]},
               {"type":"Text","props":{"color":"inactive"},"children":["broken · "]},
               {
                 "type": "Button",
@@ -3966,11 +3945,11 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "type": "Box",
             "props": {"key":"hdr-buttons-0","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"scout-run","label":"Run now","variant":"primary"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-run","label":"Run now","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":["   "]},
               {"type":"Button","props":{"key":"scout-edit","label":"Edit","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":["   "]},
-              {"type":"Button","props":{"key":"scout-pause","label":"Pause","dimColor":true,"variant":"secondary"},"press":{"plugin":"symcc"}}
+              {"type":"Button","props":{"key":"scout-pause","label":"Pause","variant":"secondary"},"press":{"plugin":"symcc"}}
             ]
           },
           {
@@ -4103,13 +4082,14 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "type": "Box",
             "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
+              {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
               {
                 "type": "Button",
-                "props": {"key":"scout-back","label":"‹ Scouts","plain":true,"autoFocus":true},
+                "props": {"key":"scout-back","label":"Scouts","plain":true,"autoFocus":true},
                 "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹ Scouts"]}]
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Scouts]"]}]
               },
-              {"type":"Text","props":{"color":"inactive"},"children":["                       "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["                     "]},
               {"type":"Text","props":{"color":"inactive"},"children":["broken · "]},
               {
                 "type": "Button",
@@ -4157,11 +4137,11 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "type": "Box",
             "props": {"key":"hdr-buttons-0","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"scout-run","label":"Run now","variant":"primary"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"scout-run","label":"Run now","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":["   "]},
               {"type":"Button","props":{"key":"scout-edit","label":"Edit","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":["   "]},
-              {"type":"Button","props":{"key":"scout-pause","label":"Pause","dimColor":true,"variant":"secondary"},"press":{"plugin":"symcc"}}
+              {"type":"Button","props":{"key":"scout-pause","label":"Pause","variant":"secondary"},"press":{"plugin":"symcc"}}
             ]
           },
           {
