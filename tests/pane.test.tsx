@@ -352,6 +352,20 @@ test('T-648: a task in the queue shows ⧗ and one in the test step ⊛, on the 
   }
 })
 
+test('T-787: a running band row has its id in the accent color, its stage part in green and its title in the normal color', async ($, on) => {
+  const T0 = Date.parse('2026-03-02T10:00:00Z')
+  mock.clock(on, { now: T0 })
+  const tasks = [task('T-73', 'doing', 'Run title', { note: 'worker on it', attempts: 4, runs: [{ started: new Date(T0 - 7 * 60_000).toISOString() }] })]
+  on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [], driving: true } }, version: 1 } }))
+  on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
+  const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 120 }, surface: 'terminal' })
+  const colorOf = async (text: RegExp) => (await ui.find({ type: 'Text', text }))?.props?.color
+  expect(await colorOf(/^T-73$/)).toBe('claude')
+  expect(await colorOf(/^work 7m · try 4$/)).toBe('green')
+  expect(await colorOf(/^Run title$/)).toBeUndefined()
+  await ui.unmount()
+})
+
 test("every band row lines up in one title column: running rows, then the rows that need you (T-461)", async ($, on) => {
   const T0 = Date.parse('2026-03-02T10:00:00Z')
   mock.clock(on, { now: T0 })

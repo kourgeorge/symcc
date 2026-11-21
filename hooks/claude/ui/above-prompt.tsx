@@ -72,6 +72,19 @@ export async function renderAbovePrompt($: $, e: Parameters<AbovePromptHook>[1],
   const hidden = items.length - shown.length + questions.length - asks.length
   const fronts = bandFronts(shown, columns)
   const line = (s: string) => ` ${cutTitle(s, Math.max(1, columns - 1))}`
+  // a running row's front: the id in the accent color, the stage part ("work 7m · try 4") in green
+  const runFront = (front: string) => {
+    const m = /^(\S+)(\s+)(.*?)(\s*)$/u.exec(front)
+    if (!m) return <Text>{front}</Text>
+    return (
+      <Text>
+        <Text color={'claude' as never}>{m[1]}</Text>
+        {m[2]}
+        <Text color={'green' as never}>{m[3]}</Text>
+        {m[4]}
+      </Text>
+    )
+  }
   const row = (x: BandItem) => {
     const front = fronts.get(x.id) ?? ''
     const cut = fitRow(x.title, x.tail ? ` — ${x.tail}` : '', columns - BAND_INDENT - textWidth(front))
@@ -80,7 +93,7 @@ export async function renderAbovePrompt($: $, e: Parameters<AbovePromptHook>[1],
         {' '}
         <Text color={FRONT_COLOR[x.kind] as never}>{x.icon}</Text>
         {' '}
-        <Text color={(x.kind === 'run' ? undefined : FRONT_COLOR[x.kind]) as never}>{front}</Text>
+        {x.kind === 'run' ? runFront(front) : <Text color={FRONT_COLOR[x.kind] as never}>{front}</Text>}
         <Text color={(x.kind === 'you' ? 'warning' : undefined) as never}>{cut.title}</Text>
         <Text color={'inactive' as never}>{cut.tail}</Text>
       </Text>
