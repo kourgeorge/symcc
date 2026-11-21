@@ -901,11 +901,30 @@ The Live tab (`l`) shows the tasks that run now as "railway lanes", one lane per
   up lists it with what holds it, `T-718 Waits for… (waits T-701, failed)`, so you see it is stuck.
   Then `today` (merged, sent back by the checker, failed, and the tries' tokens today). With
   nothing running it says `No task is running right now.` and still shows next up.
-- At the bottom, just above the key hints, the `[ Organizational memory (12 notes) (m) ]` button
-  opens the Organizational memory page (see [Organizational memory](#organizational-memory-org-mem));
-  its Back returns to the Live tab.
-- Keys: ↑↓ move between lanes (and their trains), Enter opens the task's page (Back returns to the Live tab), `w`
-  watches the worker of the lane with the focus, `m` opens organizational memory, `t l s c`
+- At the bottom, just above the key hints, the **Organizational memory** section (see
+  [Organizational memory](#organizational-memory-org-mem)):
+
+  ```
+   ── Organizational memory ───────────────────── 57 / 60 ▕█████████░▏
+    newest
+     11-21  tests      In tests, put dates relative to now, never a…
+     11-21  workers    Before handing back, wait for every command…
+     11-21  snapshots  To re-capture a saved page picture, print s…
+    topics
+     tests       14    git         11    opencode    9
+     vs code      8    board        9    hosts       6
+    ↑↓ move · Enter open topic · m all notes
+  ```
+
+  The header has the note count out of the 60 allowed and a fill bar (in the warning colour from 54
+  notes on). Under `newest` are the 3 newest notes (day, topic, the text cut with `…`), under
+  `topics` every topic with how many notes it has, the biggest first and `unsorted` (notes without
+  a topic) last; on a narrow panel the topics take fewer columns. Enter (or a click) on a topic
+  opens the Organizational memory page with only that topic's notes ("Organizational memory ·
+  tests"); on a newest note it opens all notes with that one selected; `m` opens all notes. Back
+  returns to the Live tab.
+- Keys: ↑↓ move between lanes (and their trains, then the newest notes and topics), Enter opens the task's page (Back returns to the Live tab), `w`
+  watches the worker of the lane with the focus, `m` opens all organizational memory notes, `t l s c`
   switch views, Esc closes the panel.
   On a narrow panel the title column and the gaps between stations shrink (the station names
   get shorter too); a lane is never wrapped or cut.
@@ -1411,8 +1430,9 @@ skills: [code-review]
 
 You can change a task's role yourself: say "use the security role for T-12", or open the task
 in the board panel and press `l` (Role) to pick one. That works on a task to do, paused,
-failed or in the backlog. The board list shows a role at the right end
-of the task's row (`tester`); `general` shows nothing.
+failed or in the backlog. The role shows on the task's page (its Role row), not in the board
+list: a row's tag at its right end is only the task's kind (`[bug]`, `[docs]`), and a plain
+change shows no tag.
 
 **Which try is it?** When a task is doing and this is not its first try, the board says so. A
 first try shows no mark.
@@ -1641,13 +1661,20 @@ its read-only `stats` tool.
 
 - **Range:** `/symcc-stats` covers every task; `/symcc-stats 7d` the tasks changed in the last
   7 days; `/symcc-stats T-100..T-130` an id range.
+- **Only the work inside the days:** a day range counts every whole try of each task changed
+  in it, so a try that started before the window counts in full. `/symcc-stats 7d inside` counts
+  only the work inside the 7 days: tries and stages are cut to the window (a try from before it
+  that ended inside counts only its part inside, with its tokens; tries that ended before it are
+  left out). The report's second line says which way it counted ("Counting: ..."). The lead's
+  `stats` tool takes the same as `inside: true`. With no day range, `inside` changes nothing and
+  the report says so.
 - **Summary and full:** `/symcc-stats` starts with one line (tasks done, hours of work, tokens,
   share right on the first try), then short parts with plain bar charts (`▇`, with `▂` and `▅`
   for a part of a block, so small numbers still show), each scaled to the biggest number in
   that part, with the counts and percentages lined up. Every line fits in 80 columns. It keeps
   every figure; the long explanations become short footnotes. `/symcc-stats full` (also with a
   range, e.g. `/symcc-stats full 7d`) adds them back: the billed-equivalent lines with how they
-  are weighed, where the lead's tokens come from, and why waiting time is not shown. The lead's
+  are weighed, where the lead's tokens come from, and how the stage times are read. The lead's
   `stats` tool gets the full text, unless it asks for the short one.
 - **Web page:** `/symcc-stats html` (also with a range, e.g. `/symcc-stats html 7d`) writes the
   same figures as one page with charts, `.symcc/stats.html`. The page is self-contained: no outside
@@ -1687,7 +1714,9 @@ its read-only `stats` tool.
 - **Parts:** tasks by status (bars); work (worker time, tokens in all and about how many
   billed, by kind); the whole team (bars); per done task (average and median time and
   tokens, tries per task, share done on the first try, lead time: from made to done); per
-  try (average time and tokens); the 5 biggest tasks by tokens and by time (bars); how tasks
+  try (average time and tokens); wherever an average per task or per try is shown, its total
+  sits next to it ("avg 25m · median 30m · total 1h 40m"; for roles and origins on the line
+  under it); time per stage (see below); the 5 biggest tasks by tokens and by time (bars); how tasks
   ended (merged on its own, approved by you, or answered for an investigation; failed
   tries by reason: tests, clash with main, files out of scope, restarted by a change, stopped,
   rejected);
@@ -1701,12 +1730,26 @@ and "in all: …"):
   - its own tokens in the range,
   - the tokens per merged fix: its tokens plus its merged tasks' tokens, divided by the number
     merged ("—" when none merged).
+  - "N tasks not linked to a run": its tasks that no run in its runs file
+    (`.symcc/scouts/<name>.runs.json`) lists, so a broken link shows the same day. Only tasks
+    made since its oldest kept run that lists tasks count (older runs are no longer kept).
 
   A scout that used tokens but made no task is listed too. The last part is tasks done per day,
   for the last 7 days with activity, oldest first.
+- **Time per stage:** for the done tasks (investigations left out), where their lifetime (made
+  to done) went, each stage with its total, its average per done task and its share: waiting to
+  start (to do, free to run), waiting on tasks (to do while a task in its `after` list was not
+  done yet), in the backlog (only when there was any), work (the worker tries), prep, check (the
+  checker), merge queue (waiting for its turn), tests (the merge queue's test commands), merge,
+  and waiting for you (a question, or ready for review). Then *active* (work, prep, check,
+  tests and merge) and *waiting* (the rest), which add up to the lifetime. It is read from what
+  symcc already records: each try's start and end, and the timed history lines between them
+  ("prep started", "checker started", "waits in the merge queue", "tests started", "merge
+  started", "merged", questions, answers and results). A done task whose history has an entry
+  with no time (older boards) or no stage line at all is left out, and the heading says how
+  many.
 - **What is left out:** tasks with no tries recorded are left out of the averages (the
-  report says how many). Time waiting for you is not shown: history
-  entries from older boards have no times.
+  report says how many).
 
 ---
 
@@ -1800,10 +1843,13 @@ test, a trap, where something is).
   or empty file adds nothing.
 - **Editing:** you may edit, fix or trim the file by hand at any time; any line counts, with or
   without a date.
-- **Seeing and deleting notes:** at the bottom of the board's Live tab, an **Organizational memory
-  (n notes)** button (key `m`; in VS Code a link, in OpenCode a button with the same key) opens the
-  "Organizational memory (org-mem)" page, whose Back returns to the Live tab: every note, newest
-  first, with its number, date and text ("No notes yet." when there are none). To delete
+- **Seeing and deleting notes:** at the bottom of the board's Live tab, the **Organizational
+  memory** section shows the count (out of 60, with a fill bar), the 3 newest notes and every topic
+  with its note count ([Live tab](#live-tab)). Enter (or a click) on a topic opens the
+  "Organizational memory · tests" page with only that topic's notes; on a newest note, or with `m`
+  (in VS Code the section's title is a link; in OpenCode a click on its header), the
+  "Organizational memory (org-mem)" page with every note. Back returns to the Live tab. The page
+  lists the notes newest first, with their number, date and text ("No notes yet." when there are none). To delete
   a note, put the cursor on it and press `x` (or Enter; in VS Code click its Delete link), then
   `y` to confirm: exactly that line is taken out of the file. From the prompt (and in OpenCode,
   where the page does it for you): `/symcc-settings orgmem delete N`, N being the note's number on the page.
@@ -1962,7 +2008,7 @@ Workers, scouts and checkers are OpenCode sessions of their own. Each one is a c
 
 `/symcc-board` (or "symcc board" in OpenCode's command palette, ctrl+p) opens the board in OpenCode's session panel, next to the open session (run it again to close it; on OpenCode's home page, with no session open, a message says to open or start one first): the banner, then the tasks grouped as in Claude Code (Questions for you, NEEDS YOU, what runs and waits, the backlog, and Done and Dropped as counts), with the same marks, short states and times. ↑/↓ (or k/j, on every page, a task's page too) move, Enter opens a task or a question, b goes back, Esc closes the panel. On a task in review, a approves and x rejects (it asks for the reason); on a waiting task or a question, a answers (pick a choice, or Answer… to type your own). A task's page has the same sections as Claude Code's task page, with the same headings: ▍Why it failed (a failed task), ▍Answer (an answered investigation), ▍Details, ▍Changes (a task in review: its changed files; a click on one shows the changes, like d), ▍What to do, ▍History, ▍Report (the latest try's, read from its file when you open the page) and ▍Runs (time and cost). A long history or report is cut after its first lines with "… (n more lines)" (the whole report stays in its file); the mouse wheel scrolls the page. It offers the same actions as in Claude Code, with the same keys (p pause, u resume, r retry, o move to todo, z stash to backlog, v keep as a note, l role, h already merged, x drop, n needs review on/off); drop asks for an optional reason and role lets you pick from the roles. Only Copy and Watch worker are not there. These are sent as slash commands in your session (`/symcc-approve`, `/symcc-reject`, `/symcc-task T-5 pause` and the other `/symcc-task` words, `/symcc-answer T-5 <answer>` or `Q-3 <answer>`), which you can also type, in Claude Code too.
 
-As in Claude Code, the panel has four tabs under the banner: Tasks, Live, Scouts and Settings. t, l, s and c switch between them (or click a tab). Every screen has the same buttons as Claude Code's panel, and a click on one presses its key: the tab row, the list's mode (m) and search (f) buttons, Back (b) on the list pages and the buttons of a task's, scout's, role's or kind's page. The header (banner, tabs and rule) shows only on the list pages (Tasks, Live, Scouts, Settings); an opened page has just its own buttons and text. **Live** (l) shows the same railway lanes as [the Live tab in Claude Code](#live-tab), with the waiting trains under them, then what starts next and today's numbers; the arrow keys move between the lanes and trains, and Enter (or a click) opens a lane's or train's task (there is no `w` key to watch a worker). Back (b) from a task opened on Live returns to Live, on its lane. At the bottom of Live, the **Organizational memory (n notes)** button (m) opens the notes the agents keep: newest first, x deletes the one under the cursor after a yes (sent as `/symcc-settings orgmem delete N`), and b returns to Live. **Scouts** lists each scout with how often it runs, whether it is paused or when it runs next, and its last result; Enter opens a scout's page: its instructions, its recent runs (newest first, with the tasks made from them) and its file. On it, r runs the scout now and p pauses or resumes it (sent as `/symcc-scout <name>` and `/symcc-scout <name> pause` or `resume`), and e edits it: pick how often it runs, its model or its instructions, then type the new value (sent as `/symcc-scout <name> every 30`, `model <model>` or `model none` for the session's model, or `prompt <instructions>`; the rest of the scout's file is kept, and longer instructions are easier to write in the file itself). Enter on a run shows its report, and b goes back. **Settings** shows every setting in the same groups as Claude Code, each with its value, its default and its range, and what it does under it. Enter (or a click) changes the one under the cursor: on/off settings flip, mode, notify, scout_findings and tests_with_changes are picked from a list, and the rest are typed; it is sent as `/symcc-settings <name> <value>`. Under Workers, the Roles and Kinds rows (with how many there are, and how many are off) open their pages, as in Claude Code: a list of the roles or kinds, each with where it comes from (built-in, replaced or added), whether it is off and what it is for, and a file that can't be read says why. Enter opens one: its description, a role's model, skills and tools, its checklist (a role) or body (a kind), and its file. On it, o turns it off or on and r resets it to the built-in one (when you changed a built-in); these are sent as `/symcc-settings role <name> off` (or `on`, `reset`; `kind <name> ...` for a kind). general, the checker role, change and investigation can't be turned off. As in Claude Code, a role's or kind's page has Back, Edit (e; its edit page has Save and Cancel), See the prompt (p, roles only), Turn off or Turn on (o), Reset to built-in (r) and Remove (d; it asks first, and only for ones you added). The list pages have **+ New role** / **+ New kind** (n) and the Scouts page has **+ New scout** (n). They are sent as `/symcc-settings role <name> add`, `edit <field> <value>`, `save {...}` and `remove` (the same for `kind`), and `/symcc-scout <name> new <instructions>`. When the folder has no git repo or no commit yet, the banner shows **Set up git (g)**, which asks for a yes and sends `/symcc-settings git setup`. A change you make in a file yourself shows in the panel at the next board change (OpenCode tells symcc of no finished edit). b goes back one page.
+As in Claude Code, the panel has four tabs under the banner: Tasks, Live, Scouts and Settings. t, l, s and c switch between them (or click a tab). Every screen has the same buttons as Claude Code's panel, and a click on one presses its key: the tab row, the list's mode (m) and search (f) buttons, Back (b) on the list pages and the buttons of a task's, scout's, role's or kind's page. The header (banner, tabs and rule) shows only on the list pages (Tasks, Live, Scouts, Settings); an opened page has just its own buttons and text. **Live** (l) shows the same railway lanes as [the Live tab in Claude Code](#live-tab), with the waiting trains under them, then what starts next and today's numbers; the arrow keys move between the lanes and trains, and Enter (or a click) opens a lane's or train's task (there is no `w` key to watch a worker). Back (b) from a task opened on Live returns to Live, on its lane. At the bottom of Live, the **Organizational memory** section (the count, the 3 newest notes and the topics with their counts) opens the notes the agents keep: the arrow keys reach its notes and topics too, Enter on a topic opens only that topic's notes, Enter on a newest note opens all notes with the cursor on it, and m (or a click on the section's header) opens all notes. There, x deletes the note under the cursor after a yes (sent as `/symcc-settings orgmem delete N`), and b returns to Live. **Scouts** lists each scout with how often it runs, whether it is paused or when it runs next, and its last result; Enter opens a scout's page: its instructions, its recent runs (newest first, with the tasks made from them) and its file. On it, r runs the scout now and p pauses or resumes it (sent as `/symcc-scout <name>` and `/symcc-scout <name> pause` or `resume`), and e edits it: pick how often it runs, its model or its instructions, then type the new value (sent as `/symcc-scout <name> every 30`, `model <model>` or `model none` for the session's model, or `prompt <instructions>`; the rest of the scout's file is kept, and longer instructions are easier to write in the file itself). Enter on a run shows its report, and b goes back. **Settings** shows every setting in the same groups as Claude Code, each with its value, its default and its range, and what it does under it. Enter (or a click) changes the one under the cursor: on/off settings flip, mode, notify, scout_findings and tests_with_changes are picked from a list, and the rest are typed; it is sent as `/symcc-settings <name> <value>`. Under Workers, the Roles and Kinds rows (with how many there are, and how many are off) open their pages, as in Claude Code: a list of the roles or kinds, each with where it comes from (built-in, replaced or added), whether it is off and what it is for, and a file that can't be read says why. Enter opens one: its description, a role's model, skills and tools, its checklist (a role) or body (a kind), and its file. On it, o turns it off or on and r resets it to the built-in one (when you changed a built-in); these are sent as `/symcc-settings role <name> off` (or `on`, `reset`; `kind <name> ...` for a kind). general, the checker role, change and investigation can't be turned off. As in Claude Code, a role's or kind's page has Back, Edit (e; its edit page has Save and Cancel), See the prompt (p, roles only), Turn off or Turn on (o), Reset to built-in (r) and Remove (d; it asks first, and only for ones you added). The list pages have **+ New role** / **+ New kind** (n) and the Scouts page has **+ New scout** (n). They are sent as `/symcc-settings role <name> add`, `edit <field> <value>`, `save {...}` and `remove` (the same for `kind`), and `/symcc-scout <name> new <instructions>`. When the folder has no git repo or no commit yet, the banner shows **Set up git (g)**, which asks for a yes and sends `/symcc-settings git setup`. A change you make in a file yourself shows in the panel at the next board change (OpenCode tells symcc of no finished edit). b goes back one page.
 
 Above the prompt of an open session, a strip shows the header line and the questions and tasks that need you or run, as the band does in Claude Code. It is there by itself; there is nothing to turn on. Click its header line to open the board panel (click again to close it), or click a task's or question's row to open its page; the header ends with a dim "(click: board)" when there is room.
 

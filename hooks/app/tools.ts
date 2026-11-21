@@ -1,6 +1,6 @@
 import type { SymccTask } from '../../types'
 import { allowFiles, refuseFiles, waitsForFiles, filesRefusedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, ROLE_TOOL_WORDS, DEFAULT_ROLE, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, failedOnClash, patchTask, promoteTask, rejectTask, changeLines, stoppedEntry, withHistory, historyLineText, type SettingsInput, type SettingChange, testMinutesRefusal, isMode, readNotify, notifySet, notifyRefusal, applySettings, intoOf, crossBranchNotes, parseGoneBranch, saysMergeInstead, type Board, settingSetText, taskReports, reportPreview, statsReport, statsData, parseStatsRange, parseStatsArgs, archivedCount, localOffset, endedBy, freshTry, withoutOpenRun, stopEnd, changeRestartWhy, changedFields, addDetailsText, noteAddedLine, detailsBothRefusal, dayOf, inPlan, planBacklog, planAdded, planAddText, parseScoutUsage, parseStatusFilter, BOARD_STATUSES, type TeamInput, SETTING_NAMES, leadSettingsText, findingToBacklog, isScoutFindings, isTestsWithChanges, kindFor, isAnswered, askMoreTask, isInvestigation, checkKind, kindsLeadText, kindNames, BUILT_IN_KINDS, originOf, stateLabelLower, modeOf, when, scoutNameOf, unknownScoutText } from '../board'
-import { scoutMemoryFile, leadScouts, linkTaskToScoutRun, knownScouts, isKnownScout } from './scouts'
+import { scoutMemoryFile, leadScouts, linkTaskToScoutRun, knownScouts, isKnownScout, loadScoutRunHistory } from './scouts'
 import { archivedText, bringBackArchived, findArchived, readArchiveFile } from './archive'
 import { removeWorktree, worktreeDir, setupGit, branchExists, branchList, homeBranch, taskWork, resetScratch } from './git'
 import { loadRoles, leadRoles } from './roles'
@@ -134,10 +134,11 @@ ${features.panel ? `  /${S.N.name}                     open the board panel (↑
 ${features.panel ? '' : `  /${S.N.name}-board               the board panel, as its own screen (OpenCode only)
 `}  /${S.N.name}-stats [full|html] [7d|T-1..T-9]  time and token stats, with bar charts:
                        tasks, worker time, tokens, the whole team (lead, workers, scouts),
-                       per task and per try, the biggest tasks, how tasks ended, by role,
-                       origin and day (all tasks, the last N days, or an id range);
-                       "full" adds the long explanations; "html" writes them as a web page
-                       with charts (${S.N.dir}/stats.html) and opens it
+                       per task and per try (averages and totals), time per stage, the
+                       biggest tasks, how tasks ended, by role, origin and day (all tasks,
+                       the last N days, or an id range); "inside" counts only the work
+                       inside the N days; "full" adds the long explanations; "html" writes
+                       them as a web page with charts (${S.N.dir}/stats.html) and opens it
   /${S.N.name}-disable             disable ${S.N.name} for this project: ${S.W.assistant} works as normal (no lead
                        guide, no workers, scouts, updates, sounds or voice); the board is kept
   /${S.N.name}-enable              turn it back on, in the mode the board had
@@ -161,7 +162,7 @@ In an open task: b back · p pause · u resume · r retry · x drop · w watch t
   · l pick the worker role (a task to do, paused, failed or in the backlog).
   · h already merged: marks a failed, waiting, paused or dropped task done whose work was merged by hand (checked with git first; nothing is merged or tested).
 In a backlog task: o move to todo · x drop · l role.
-On the board list a task's role shows at the right end of its row ("tester"); general shows nothing. The list rows show no try number; the band above the prompt shows a later try as "(n)" right after the row's time ("T-5 ⊛ 3m (3)"), and the task page shows "try 3/4". A task to do that waits on others shows "waits for T-x"; a task in review shows "Enter to review"; a task that merges into another branch than the one you are on shows "→ that-branch".
+On the board list a task's kind shows at the right end of its row ("[bug]", "[docs]"); a plain change shows nothing, and the role is never there (the task page shows it). The list rows show no try number; the band above the prompt shows a later try as "(n)" right after the row's time ("T-5 ⊛ 3m (3)"), and the task page shows "try 3/4". A task to do that waits on others shows "waits for T-x"; a task in review shows "Enter to review"; a task that merges into another branch than the one you are on shows "→ that-branch".
 The board list goes top to bottom: NEEDS YOU (with its title); then the tasks doing and to do in one list without a title (running first, then to do, then paused); a blank line; then the folded rows "▸ Backlog  N", "▸ Done  N" and "▸ Dropped  N". Enter on a folded row opens it (the backlog shows 5 items, then "… N more").
 Backlog tasks are ideas and unclear work; they start only when you move them to todo (o).
 In a task ready for review: a approve · x reject (asks for a reason) · d show changes.
@@ -426,7 +427,7 @@ export const TOOLS = () => [
     description: `Read or change organizational memory (org-mem, ${S.N.dir}/org-mem.md): short notes every new worker, checker and scout gets in its prompt, one line each ("- 2026-11-21 [tests] the note"), at most ${ORG_MEM_MAX_LINES}. Each note has one topic label; only you set topics (old lines without one read as "unsorted"). Only you change it (agents only suggest notes; see "Suggested for org-mem" in board updates). action "list" (the default): every note with its number and topic, oldest first, then the topics with their counts. "add": notes (one or more {text, topic}; text a short plain sentence, no task ids) go at the end with today's date; one that repeats a note there, even in other words, is refused (use replace to improve that note), one without a good topic is refused, and an add that would go past ${ORG_MEM_MAX_LINES} lines adds nothing (remove or replace first). "remove": takes out the note which names (its number from list, or its text). "replace": puts by in the place of the note which names (refused if by repeats another note); it keeps the note's topic unless topic is given. "topic": sets topic on several notes at once: the ones which names (numbers, e.g. "3,7,12") and every note of topic from (to rename a topic or merge it into another). ${TOPIC_RULES}`,
     inputSchema: { type: 'object', properties: { action: { type: 'string', enum: ['list', 'add', 'remove', 'replace', 'topic'], description: 'What to do; list when left out.' }, notes: { type: 'array', items: { type: 'object', properties: { text: { type: 'string', description: 'The note: one short plain sentence.' }, topic: { type: 'string', description: 'Its topic, e.g. "tests".' } }, required: ['text', 'topic'] }, description: 'For add: the new notes, each with its topic.' }, which: { type: 'string', description: 'For remove / replace: the note, by its number from list (e.g. "3") or its text. For topic: the notes\' numbers, e.g. "3,7,12".' }, by: { type: 'string', description: 'For replace: the new note.' }, topic: { type: 'string', description: `For topic: the topic to set. For replace: a new topic (the old one is kept when left out). A topic: lower case letters, digits, spaces, "·" and "-", at most ${TOPIC_MAX_CHARS} characters.` }, from: { type: 'string', description: 'For topic: also relabel every note that has this topic (rename or merge a topic).' } } },
   },
-  { name: 'stats', description: `Read-only: time and token stats of the ${S.N.name} board (incl. archived tasks): the whole team's tokens (lead, workers, scouts) and per merged task, totals, averages and medians per task and per try, outcomes, by role, origin and day. Use it when the owner asks e.g. "how much did we spend this week?" (range "7d"). Gives the full text with every detail; short: true gives the owner's shorter summary.`, inputSchema: { type: 'object', properties: { range: { type: 'string', description: 'Optional: "7d" (the last 7 days) or "T-100..T-130" (an id range); empty = all tasks.' }, short: { type: 'boolean', description: 'Optional: true for the shorter summary the owner sees with /stats (the same figures, fewer explanations).' } } } },
+  { name: 'stats', description: `Read-only: time and token stats of the ${S.N.name} board (incl. archived tasks): the whole team's tokens (lead, workers, scouts) and per merged task, totals, averages and medians per task and per try, time per stage (waiting to start, waiting on other tasks, work, prep, check, merge queue, tests, merge, waiting for the owner), outcomes, by role, origin and day, and per scout how many of its tasks no run of it lists. Use it when the owner asks e.g. "how much did we spend this week?" (range "7d"). A day range counts every whole try of each task changed in it; inside: true counts only the work inside the days (tries and stages cut to them). Gives the full text with every detail; short: true gives the owner's shorter summary.`, inputSchema: { type: 'object', properties: { range: { type: 'string', description: 'Optional: "7d" (the last 7 days) or "T-100..T-130" (an id range); empty = all tasks.' }, inside: { type: 'boolean', description: 'Optional, with a day range: true counts only the work inside the window (tries and stages cut to it), not every whole try of a task changed in it.' }, short: { type: 'boolean', description: 'Optional: true for the shorter summary the owner sees with /stats (the same figures, fewer explanations).' } } } },
   {
     name: 'setup_git',
     description: `Set up git in a project folder that has no git repo or no commits yet (${S.N.name} needs one: each worker gets its own git worktree). Only run it after the owner said yes. It runs git init on branch main (if there is no repo), writes or adds to .gitignore (${S.N.dir}/, node_modules/, .env, .env.* but not templates like .env.example (!.env*.example etc.), .DS_Store, dist/, build/, __pycache__/, .venv/), and makes a first commit of the current files, leaving out (and ignoring) files that look like secrets or are over 50 MB. Open tasks then merge into that branch. Never pushes, adds no remote.`,
@@ -451,7 +452,8 @@ export const LEAD_USAGE_UNREAD = "the lead's calls can't be read here"
  * The stats report (see statsReport) for range words like "7d" or "T-100..T-130": the board's
  * tasks and the archived ones. Read-only. A bad range gives the usage line. The word "full" in
  * `args` (or `full`) gives the full view with every explanation; else the summary view. The word
- * "html" (only the owner's command, not `readOnly`) writes the web page and opens it.
+ * "html" (only the owner's command, not `readOnly`) writes the web page and opens it. The word "inside" (with a day
+ * range) counts only the work inside the window (T-719). Each scout's runs file is read for its "not linked" line.
  */
 export async function statsText($: Host, args: string, full?: boolean, readOnly = false): Promise<string> {
   const parsed = parseStatsArgs(args)
@@ -465,7 +467,11 @@ export async function statsText($: Host, args: string, full?: boolean, readOnly 
   const team: TeamInput = { ...($.features.leadUsage ? await $.lead.usage(S.root, range, nowMs) : { leadProblem: LEAD_USAGE_UNREAD }), scouts: parseScoutUsage(await $.fs.read(scoutMemoryFile()).catch(() => null)) }
   const usd = (await $.session.usage().catch(() => null))?.cost?.usd
   if (typeof usd === 'number' && Number.isFinite(usd)) team.sessionUsd = usd
-  const input = { tasks: b.tasks, archived: r.broken ? [] : r.archive.tasks, archiveProblem, range, nowMs, offsetMin: localOffset(), name: S.N.name, team, full: full ?? words.full }
+  const archived = r.broken ? [] : r.archive.tasks
+  // T-719: each scout's runs, for the "not linked to a run" line (only the scouts that made tasks)
+  const scoutNames = [...new Set([...b.tasks, ...archived].map(t => (t.origin?.by === 'scout' ? t.origin.scout : undefined)).filter((s): s is string => !!s))]
+  const scoutRuns = Object.fromEntries(await Promise.all(scoutNames.map(async s => [s, await loadScoutRunHistory($, s).catch(() => [])] as const)))
+  const input = { tasks: b.tasks, archived, archiveProblem, range, nowMs, offsetMin: localOffset(), name: S.N.name, team, full: full ?? words.full, inside: words.inside, scoutRuns }
   if (!words.html) return statsReport(input)
   // "html" (T-674): the same figures (statsData) as a web page, written to .<name>/stats.html and opened in the browser
   const out = path(`${S.N.dir}/stats.html`)
@@ -822,7 +828,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
     case 'orgmem':
       return orgMemTool($, a)
     case 'stats':
-      return statsText($, str(a.range) ?? '', a.short !== true, true)
+      return statsText($, `${str(a.range) ?? ''}${a.inside === true ? ' inside' : ''}`, a.short !== true, true)
     case 'setup_git':
       return setupGit($, 'the lead')
     case 'settings': {

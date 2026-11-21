@@ -13,7 +13,7 @@
 // No key hints: the mode switch is a link and the search a box in the footer. An empty board says so, with one
 // primary button that starts a message to the lead in the prompt box.
 import type { SymccStatus, SymccTask } from '../../../types'
-import { statusMark, archivedNote, archivedOf, localOffset, panelSections, BACKLOG_SHOWN, ALL_CLEAR, statusCell, rowCell, rowMark, rowStates, stateText, TITLE_ROOM, rowExtra, fitRow, WAITS_FOR, roleTag, kindTag, searchTasks, SEARCH_WORDS, isInvestigation, needsYou, kindMark, fmtDuration, ownersTurn, shownStatus } from '../../board'
+import { statusMark, archivedNote, archivedOf, localOffset, panelSections, BACKLOG_SHOWN, ALL_CLEAR, statusCell, rowCell, rowMark, rowStates, stateText, TITLE_ROOM, rowExtra, fitRow, WAITS_FOR, kindTag, searchTasks, SEARCH_WORDS, isInvestigation, needsYou, kindMark, fmtDuration, ownersTurn, shownStatus } from '../../board'
 import { openDays, S } from '../../app/state'
 import { type $, panelValues } from '../panel'
 import type { PaneParts } from './parts'
@@ -122,15 +122,15 @@ export function listPageVs($: $, pane: PaneParts) {
     const branch = body.startsWith('→ ') ? body.split(' · ')[0]! : ''
     if (branch) body = body.slice(branch.length).replace(/^ · /, '')
     const kind = kindMark(x)
-    // the kind once: rowExtra already shows it as a tag ("[bug · tester]", "[investigation]") for some rows; a question
+    // the kind once: rowExtra already shows it as a tag ("[bug]", "[investigation]") for some rows; a question
     // or failure reason that only mentions the word does not count
     const tagged = body.split(' · ').some(p => p === `[${kind}]` || p === `[${kind}`)
     // the "waits for" list comes from the task's own `after` field (its unfinished ones, as rowExtra shows them), never
     // from text that only starts with the word: a question or note "after you look at …" is a normal text
     const ids = x.status === 'todo' || x.status === 'paused' ? (x.after ?? []).filter(id => v.tasks.some(t => t.id === id && t.status !== 'done')) : []
     const after = ids.length && body === `${WAITS_FOR} ${ids.join(', ')}` ? body : ''
-    const role = !after && body && (body === roleTag(x) || body === kindTag(x)) ? body : ''
-    // the row's end, in order: "→ branch", "waits for …", the kind (when not tagged yet), the role tag, else the
+    const role = !after && body && body === kindTag(x) ? body : ''
+    // the row's end, in order: "→ branch", "waits for …", the kind (when not tagged yet), the kind tag, else the
     // question, the reason or the note; fitted the shared way (fitRow, as the terminal and OpenCode lists): a long title
     // is cut with "…" so this whole end stays visible
     const rowEnd = [branch, after, kind && !tagged ? kind : '', role, after || role ? '' : body].filter(Boolean).join(' · ')

@@ -5,8 +5,9 @@
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { PANE, T0, seedBoard } from './board-fixture'
-import { historyEntry, historyEvent, historyTime, HISTORY_MARK, oldHistoryEntry } from '../hooks/core/history'
+import { historyEntry, historyEvent, historyTime, HISTORY_MARK, oldHistoryEntry, workerStartedEntry, workerHandedBackEntry } from '../hooks/core/history'
 import { hist } from './history-fixture'
+import { handedOff, withHistory, type BoardTask } from '../hooks/board'
 
 /** An old line (from before T-522) as the one-time conversion reads it, as an event. */
 const old = (l: string) => historyEvent(oldHistoryEntry(l))
@@ -51,6 +52,16 @@ test('a new entry\'s mark comes from its saved kind, whatever words its text hol
   expect(historyEvent(historyEntry('failed', 'try 2: all good → merged into main', at))).toMatchObject({ tone: 'bad', said: 'all good', result: 'merged into main' })
   expect(historyEvent(historyEntry('merged', 'try 2: the old test failed → merged into main (abc1234)', at))).toMatchObject({ tone: 'good', try: 2, label: 'try 2' })
   expect(historyEvent(historyEntry('checker-problems', 'try 2: checker found problems: x', at)).mark).toBe('✗')
+  // T-723: a try's worker start and hand-back are stage lines: a step mark, their try split off like "prep started"
+  for (const e of [workerStartedEntry({ attempts: 2, role: 'tester', history: [] }, true), workerHandedBackEntry({ attempts: 2 }), ['stage', 'try 2: prep started'] as const])
+    expect(historyEvent(historyEntry(e[0], e[1], at))).toMatchObject({ kind: 'stage', tone: 'step', mark: '●', try: 2, label: 'try 2' })
+  expect(historyEvent(historyEntry(...workerStartedEntry({ attempts: 2, role: 'tester', history: [] }, true), at)).text).toBe('worker started (role tester) · merges main in first')
+  // T-723: a drive hand-over gives the try its number back too, but it is no change: no "same try number" mark,
+  // even with a note earlier in that try (its own "restarted" line already says why)
+  const started = withHistory([], at, workerStartedEntry({ attempts: 2, role: 'tester', history: [] }, false), ['note', 'Note added: x'])
+  const off = handedOff({ id: 'T-1', title: 'x', details: '', status: 'doing', attempts: 2, role: 'tester', note: 'worker on it', session: 's', runs: [{ started: at }, { started: at }], history: started } as BoardTask, at)
+  expect(workerStartedEntry({ ...off, attempts: off.attempts + 1 }, false)).toEqual(['stage', 'try 2: worker started (role tester)'])
+  expect(workerStartedEntry({ attempts: 2, role: 'tester', history: started }, false)[1]).toBe('try 2: worker started (role tester) · same try number (note joined)')
   // a kind symcc doesn't know is drawn as "anything else"
   expect(historyEvent({ kind: 'nonsense', text: 'try 1: stopped: x' })).toMatchObject({ kind: 'other', tone: 'other', at: '' })
 })

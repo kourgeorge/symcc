@@ -12,7 +12,7 @@ const iso = (ms: number) => new Date(ms).toISOString()
 const task = (id: string, status: string, title: string, extra: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status, note: '', question: null, order: Number(id.slice(2)), after: [], attempts: 0, history: [], branch: null, created_at: iso(T0 - 3_600_000), updated_at: iso(T0 - 60_000), ...extra })
 
 export const BOARD_TASKS = [
-  task('T-401', 'doing', 'Show the plugin version in the board title and the band above the prompt', { role: 'worker' }),
+  task('T-401', 'doing', 'Show the plugin version in the board title and the band above the prompt', { role: 'worker', kind: 'docs' }), // T-722: only its kind shows in the row
   task('T-402', 'doing', 'Keep the search box open while typing several words in a row', { attempts: 1 }),
   task('T-403', 'review', 'Make the settings page show every group with its own short summary line'),
   task('T-404', 'waiting', 'Pick the colors for the review mark on light themes', { question: 'Yellow or blue for review?' }),

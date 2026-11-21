@@ -6,15 +6,17 @@
 //   change try 2/3  [██████░░░░] 1.1M  ↺×1      (the token bar an Svg bar that fills)
 // The current station blinks with a CSS animation inside the Svg, and stays steady when VS Code (the person's system)
 // asks for reduced motion (`prefers-reduced-motion`). Each drawing's `alt` is the terminal's text for it.
-// T-687: at its bottom, above the footer, an "Organizational memory (n notes)" link opens the Organizational memory page.
+// T-687, T-718: at its bottom, above the footer, the Organizational memory section (core's liveOrgMem): its title a link
+// to all notes, the count and an Svg fill bar (warning colour near the cap); the 3 newest notes (day, topic, the text a
+// link that opens all notes with that one marked); the topics as links with their counts, in core's grid rows.
 // T-715: under each lane hang its waiting trains (core's liveTrains and trainRows): each one indented by its level,
 // "└─◇", its id and cut title a link that opens the task, then "waits" and "+ also T-n" dim.
-import { LIVE_EMPTY, LIVE_LEGEND, type LiveLane, type LiveLayout, type LiveSeg, LIVE_TONE, laneLines, liveHeader, liveLanes, liveLayout, liveStations, liveToday, liveTrains, nextUpLine, segText, todayLines, trainRows } from '../../core/live'
+import { LIVE_EMPTY, LIVE_LEGEND, type LiveLane, type LiveLayout, type LiveSeg, LIVE_TONE, laneLines, liveHeader, liveLanes, liveLayout, liveOrgMem, liveStations, liveToday, liveTrains, nextUpLine, segText, todayLines, trainRows } from '../../core/live'
 import { panelValues, type $ } from '../panel'
 import type { PaneParts } from './parts'
-import { LIVE_TICK_MS, laneKey, liveTick, openOrgMemPage, trainKey } from './live'
+import { LIVE_TICK_MS, laneKey, liveTick, newestKey, openOrgMemPage, topicKey, trainKey } from './live'
 import { mdLink, vsFooter, vsHref, vsLink } from './vscode'
-import { orgMemButtonLabel } from '../../core/org-mem'
+import { ORG_MEM_MAX_LINES, orgMemCount, orgMemNearCap, orgMemShortDay, type OrgMemNote } from '../../core/org-mem'
 
 /** The pixels per text column in the drawings (about one character of VS Code's panel font). */
 const COL_PX = 8
@@ -60,8 +62,8 @@ export function barSvg(text: string, warning: boolean): { source: string; width:
   }
 }
 
-/** The Live tab in VS Code; `notes`: org-mem's note count, on the Organizational memory link at its bottom (T-687). */
-export function livePageVs($: $, pane: PaneParts, notes: number) {
+/** The Live tab in VS Code; `notes`: org-mem's notes (newest first), for the section at its bottom (T-718). */
+export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
   const { Box, Text, v, width, C, act, header, nowMs, vs } = pane
   const { Svg } = vs
   // the times beside the lanes ("2m") are redrawn every tick; the blink itself is the drawing's own animation
@@ -137,8 +139,55 @@ export function livePageVs($: $, pane: PaneParts, notes: number) {
         {line('live-next', nextUpLine(trains, width), 'text')}
         {todayLines(liveToday(v.tasks, nowMs), width).map((x, i) => line(`live-today-${i}`, x, 'text'))}
       </Box>
-      {vsLink(vs, 'live-orgmem', mdLink(orgMemButtonLabel(notes), vsHref('page', 'orgmem')), [[vsHref('page', 'orgmem'), openOrgMemPage($)]])}
+      {orgMemSectionVs($, pane, notes)}
       {vsFooter(vs, 'live-hint')}
+    </Box>
+  )
+}
+
+/** T-718: the Live tab's Organizational memory section in VS Code (see the top of this file). */
+function orgMemSectionVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
+  const { Box, Text, C, width, vs } = pane
+  const { Svg } = vs
+  const om = liveOrgMem(notes, width)
+  const all = vsHref('page', 'orgmem')
+  const warn = orgMemNearCap(notes.length)
+  const full = Math.max(0, Math.min(10, Math.round((notes.length / ORG_MEM_MAX_LINES) * 10)))
+  const bar = barSvg(`▕${'█'.repeat(full)}${'░'.repeat(10 - full)}▏`, warn)
+  const label = (key: string, text: string) => (
+    <Text key={key} color={C('inactive')}>
+      {text.trim()}
+    </Text>
+  )
+  return (
+    <Box key="live-om" flexDirection="column">
+      <Box key="live-om-head" flexDirection="row" gap={1} alignItems="center">
+        {vsLink(vs, 'live-orgmem', `**${mdLink('Organizational memory', all)}**`, [[all, openOrgMemPage($)]])}
+        <Text key="live-om-count" color={C(warn ? 'warning' : 'inactive')}>{`${notes.length} / ${ORG_MEM_MAX_LINES}`}</Text>
+        <Svg key="live-om-bar" source={bar.source} width={bar.width} height={bar.height} alt={`${orgMemCount(notes.length)} of at most ${ORG_MEM_MAX_LINES}`} />
+      </Box>
+      {label('live-om-newest', om.newestLabel)}
+      {om.empty ? label('live-om-empty', om.empty) : null}
+      {om.newest.map(x => {
+        const href = vsHref('do', `orgmem-note/${x.note.n}`)
+        const text = x.segs[x.segs.length - 1]!.text.trim()
+        return (
+          <Box key={`live-om-note-row:${x.note.n}`} flexDirection="row" gap={2} paddingLeft={1}>
+            <Text key="day" color={C('inactive')}>{orgMemShortDay(x.note.date)}</Text>
+            <Text key="topic" bold color={C('claude')}>{x.segs[2]!.text.trim()}</Text>
+            {vsLink(vs, newestKey(x.note.n), mdLink(text, href), [[href, openOrgMemPage($, null, x.note)]])}
+          </Box>
+        )
+      })}
+      {om.grid.length ? label('live-om-topics', om.topicsLabel) : null}
+      {om.grid.map((r, i) => (
+        <Box key={`live-om-row-${i}`} flexDirection="row" gap={3} paddingLeft={1}>
+          {r.map(c => {
+            const href = vsHref('page', `orgmem-topic/${c.topic}`)
+            return vsLink(vs, topicKey(c.topic), `${mdLink(c.topic, href)} ${c.count}`, [[href, openOrgMemPage($, c.topic)]])
+          })}
+        </Box>
+      ))}
     </Box>
   )
 }

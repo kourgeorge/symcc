@@ -1,25 +1,31 @@
 // The Organizational memory page (T-619) on the terminal panel (and desktop and mobile; VS Code has its own,
 // vscode-orgmem.tsx). T-687: it is opened from the "Organizational memory (n notes)" button at the bottom of the Live
-// tab (live.tsx, key m), and its Back returns to the Live tab; it is no longer under Settings.
+// tab (live.tsx, key m), and its Back returns to the Live tab; it is no longer under Settings. T-718: opened from a
+// topic in the Live tab's org-mem section it shows only that topic's notes ("Organizational memory · tests"); from a
+// newest note there, all notes with the focus on that one (live.tsx's orgMemPick says which).
 import { S } from '../../app/state'
 import { type $ } from '../panel'
 import type { PaneParts } from './parts'
 import { arrows, row } from './arrows'
 import { claudeHost } from '../host'
-import { ORG_MEM_TITLE, ORG_MEM_EMPTY, orgMemAbout, orgMemDeleteAsk, orgMemKeys, orgMemNoteHead, type OrgMemNote } from '../../core/org-mem'
+import { ORG_MEM_EMPTY, orgMemAbout, orgMemOfTopic, orgMemPageTitle, orgMemTopicEmpty, orgMemDeleteAsk, orgMemKeys, orgMemNoteHead, orgMemFind, type OrgMemNote } from '../../core/org-mem'
 import { orgMemView, deleteOrgMem, resetOrgMemView } from '../../app/org-mem'
 import { orgMemPageVs } from './vscode-orgmem'
+import { orgMemPick } from './live'
 
 /** The note a press of Delete (x) is about: the note row that holds the focus, else the first (newest) one. */
 const focusedNote = (notes: readonly OrgMemNote[]) => {
   const m = /^orgmemRow:(\d+)$/.exec(arrows.focused ?? '')
-  return (m ? notes.find(x => x.n === Number(m[1])) : undefined) ?? notes[0]
+  return (m ? notes.find(x => x.n === Number(m[1])) : undefined) ?? orgMemFind(notes, orgMemPick.note) ?? notes[0]
 }
 
 /** The Organizational memory page, opened from the button at the bottom of the Live tab: what org-mem is, then its notes newest first
  *  (number, date, text); Enter on a note or Delete (x) asks to delete it (y yes, x cancel); Back (b) to the Live tab. */
-export function orgMemPage($: $, pane: PaneParts, notes: OrgMemNote[], file: string) {
-  if (pane.vscode) return orgMemPageVs($, pane, notes, file)
+export function orgMemPage($: $, pane: PaneParts, all: OrgMemNote[], file: string) {
+  if (pane.vscode) return orgMemPageVs($, pane, all, file)
+  const topic = orgMemPick.topic
+  const notes = orgMemOfTopic(all, topic)
+  const focus = (orgMemFind(notes, orgMemPick.note) ?? notes[0])?.n
   const { Box, Text, Button, act, C, header, footer, heading } = pane
   const redraw = () => $.ui.invalidate('ui.render')
   const ask = orgMemView.confirm === null ? undefined : notes.find(x => x.n === orgMemView.confirm)
@@ -42,12 +48,12 @@ export function orgMemPage($: $, pane: PaneParts, notes: OrgMemNote[], file: str
   return (
     <Box flexDirection="column">
       {header('orgmem')}
-      {heading(ORG_MEM_TITLE)}
+      {heading(orgMemPageTitle(topic))}
       <Text key="orgmem-about" wrap="wrap" color={C('inactive')}>{orgMemAbout(file)}</Text>
       <Text key="orgmem-about-blank"> </Text>
       {notes.length ? (
-        notes.flatMap((x, i) => [
-          <Button key={row(`orgmemRow:${x.n}`)} plain label={`${orgMemNoteHead(x)}: ${x.text}`} autoFocus={i === 0 && !ask ? true : undefined} onPress={askDelete(x)}>
+        notes.flatMap(x => [
+          <Button key={row(`orgmemRow:${x.n}`)} plain label={`${orgMemNoteHead(x)}: ${x.text}`} autoFocus={x.n === focus && !ask ? true : undefined} onPress={askDelete(x)}>
             <Text wrap="wrap">
               <Text bold color={C('claude')}>{`  ${orgMemNoteHead(x)}`}</Text>
               <Text color={C('text')}>{`  ${x.text}`}</Text>
@@ -56,7 +62,7 @@ export function orgMemPage($: $, pane: PaneParts, notes: OrgMemNote[], file: str
           ...(ask?.n === x.n ? [confirmBox(x)] : []),
         ])
       ) : (
-        <Text key="orgmem-empty" color={C('inactive')}>{`  ${ORG_MEM_EMPTY}`}</Text>
+        <Text key="orgmem-empty" color={C('inactive')}>{`  ${topic ? orgMemTopicEmpty(topic) : ORG_MEM_EMPTY}`}</Text>
       )}
       <Text key="orgmem-blank"> </Text>
       {notes.length && !ask ? <Button key="orgmem-delete" label="Delete (x)" hotkey="x" onPress={() => askDelete(focusedNote(notes))()} /> : null}

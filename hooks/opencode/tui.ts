@@ -25,10 +25,10 @@
 // modules (Solid and OpenTUI's Solid renderer) are passed in (TuiRuntime), so this file type-checks and its tests
 // run without them. The names and shapes below are @opencode/plugin 2.3.0's tui Context (only what is used).
 import { DEFAULT_NAME, dataDir } from '../name'
-import { VIEW_FILE, parseViewFile, bandDraw, panelLines, panelKeys, panelTaskActions, approveInProgress, panelRoleChoices, TASK_ACTION_COMMANDS, LETTER_KEYS, type LetterKey, hasPage, answerOptions, actionCommand, moveCursor, OWN_ANSWER, GROUPS_OPEN, groupOf, groupId, scoutRunsIn, settingsPlace, orgMemNoteOf, ORG_MEM_PAGE, defPageId, rolePromptId, SETTINGS_OPEN, settingGroupOf, settingGroupId, PANEL_TABS, CHOICE_KEYS, approveSent, editOf, defDraftOf, draftChanges, draftError, editBoxId, boardPageOf, removeAsk, DEF_EDIT_BOXES, SETUP_GIT_ASK, newNameError, NEW_OPEN_MS, EDIT_SAVE_ID, EDIT_CANCEL_ID, EDIT_FIRST_BOX, type DefDraft, type ApproveSent, type ChoiceKey, type ViewFile, type Line, type PanelAction, type PanelHit, type PanelKey, type PanelGroup, type PanelTab, type BandHit } from './board-view'
+import { VIEW_FILE, parseViewFile, bandDraw, panelLines, panelKeys, panelTaskActions, approveInProgress, panelRoleChoices, TASK_ACTION_COMMANDS, LETTER_KEYS, type LetterKey, hasPage, answerOptions, actionCommand, moveCursor, OWN_ANSWER, GROUPS_OPEN, groupOf, groupId, scoutRunsIn, settingsPlace, orgMemNoteOf, ORG_MEM_PAGE, orgMemPageId, orgMemPageTopic, liveNoteId, liveTopicId, orgMemIn, defPageId, rolePromptId, SETTINGS_OPEN, settingGroupOf, settingGroupId, PANEL_TABS, CHOICE_KEYS, approveSent, editOf, defDraftOf, draftChanges, draftError, editBoxId, boardPageOf, removeAsk, DEF_EDIT_BOXES, SETUP_GIT_ASK, newNameError, NEW_OPEN_MS, EDIT_SAVE_ID, EDIT_CANCEL_ID, EDIT_FIRST_BOX, type DefDraft, type ApproveSent, type ChoiceKey, type ViewFile, type Line, type PanelAction, type PanelHit, type PanelKey, type PanelGroup, type PanelTab, type BandHit } from './board-view'
 import { SETTING_GROUPS, isScoutRunReport, taskReports, taskActions, type TaskAction, type TaskActionId, parseSettingValue, settingChoices, settingInfo, settingValue, isSettingPage, everyText, everyMinutesOf, nextMode, modeOf, promptsOfRole, SEARCH_WORDS, NEW_SCOUT_EVERY, showsHeader, defEditFields, type SettingName, type ScoutEditField, type DefEditField } from '../board'
 import type { SymccScout } from '../../types'
-import { ORG_MEM_KEY, orgMemDeleteAsk, orgMemFile, orgMemNoteKey } from '../core/org-mem'
+import { ORG_MEM_KEY, orgMemDeleteAsk, orgMemFile, orgMemNoteKey, orgMemTopicCounts } from '../core/org-mem'
 import { PARTS_KEY, safePartsFile, viewStubFilled, withViewParts } from '../core/board-parts'
 
 export type { PanelKey, PanelHit, PanelTab }
@@ -694,12 +694,29 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     showTab(to.tab)
     setCursor(to.cursor)
   }
-  /** The Live tab's keys (T-692): ↑↓ move between the lanes, Enter opens the lane's task, b goes back to the list;
-   *  m opens the Organizational memory page (T-687), whose b comes back to the tab. */
+  /** Enter (or a click) on the Live tab's row `id`: a lane's or train's task opens on the Tasks tab; (T-718) a topic of
+   *  the org-mem section opens its notes' page, a newest note all notes with the cursor on it. */
+  const openLive = (id: string) => {
+    const at = draw().ids.indexOf(id)
+    if (at >= 0) setCursor(at)
+    if (id.startsWith('om-topic:')) {
+      const topic = orgMemTopicCounts(orgMemIn(file())).find(x => liveTopicId(x.topic) === id)?.topic
+      return topic ? openPage(orgMemPageId(topic)) : undefined
+    }
+    if (id.startsWith('om-note:')) {
+      const n = orgMemIn(file()).findIndex(x => liveNoteId(x.n) === id)
+      openPage(ORG_MEM_PAGE)
+      return void setRunCursor(Math.max(0, n))
+    }
+    return openOnList(id)
+  }
+  /** The Live tab's keys (T-692): ↑↓ move between the lanes (and the org-mem section's notes and topics), Enter opens
+   *  the lane's task (or the topic's page, see openLive), b goes back to the list; m opens the Organizational memory
+   *  page (T-687), whose b comes back to the tab. */
   const pressLive = async (key: PanelKey, sessionID: string) => {
     const f = file()
     const ids = draw().ids
-    if (opened() === ORG_MEM_PAGE) {
+    if (orgMemPageTopic(opened()) !== null) {
       if (key === 'back') return openPage('')
       if (key === 'up' || key === 'down') return void setRunCursor(moveCursor(runCursor(), key === 'up' ? -1 : 1, ids.length))
       // Enter or x on a note asks, then deletes it with /<name>-settings orgmem delete N
@@ -711,7 +728,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     }
     if (key === ORG_MEM_KEY) return openPage(ORG_MEM_PAGE)
     if (key === 'up' || key === 'down') return void setCursor(moveCursor(cursor(), key === 'up' ? -1 : 1, ids.length))
-    if (key === 'open' && ids.length) return openOnList(ids[moveCursor(cursor(), 0, ids.length)]!)
+    if (key === 'open' && ids.length) return openLive(ids[moveCursor(cursor(), 0, ids.length)]!)
     if (key === 'back') return showTab('tasks')
   }
   const press = async (key: PanelKey, sessionID: string) => {
@@ -852,7 +869,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
       return hasPage(file(), hit.page, 'settings') ? openPage(hit.page) : undefined
     }
     // a lane on the Live tab opens its task on the Tasks tab
-    if ('open' in hit && tab() === 'live') return openOnList(hit.open)
+    if ('open' in hit && tab() === 'live') return openLive(hit.open)
     const id = 'open' in hit ? hit.open : groupId(hit.group)
     const at = (tab() === 'tasks' ? listIds() : draw().ids).indexOf(id)
     if (at >= 0) setCursor(at)

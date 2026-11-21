@@ -103,8 +103,9 @@ test('stats: outcomes, origins and days are read from what the board keeps', () 
   expect(text).toMatch(/♟ you +▇+ +1 +50%  avg +200 tok/)
   expect(text).toMatch(/docs +▇+ +1 +50%  avg +50 tok/)
   expect(text).toMatch(/Today +▇+ +2 +25m/)
-  expect(text).toContain('Time waiting for you is not shown')
-  expect(statsReport({ tasks, nowMs: NOW, full: true })).toContain("time waiting for you is not shown: history entries from older boards")
+  // T-719: these histories carry no times, so the stage part leaves them out and says so
+  expect(text).toContain('Time per stage (0 done tasks; 2 without timed history, left out)')
+  expect(statsReport({ tasks, nowMs: NOW, full: true })).toContain('Stages: read from each done task')
 })
 
 test('stats: a try left with no end time by an older board is closed once when the board is read, so the board total and stats agree', () => {
@@ -266,10 +267,11 @@ test('stats: a bar is scaled to the biggest value, at most 16 blocks, and a smal
 })
 
 test('stats: "full" anywhere in the words asks for the full view; the rest is the range', () => {
-  expect(parseStatsArgs('')).toEqual({ full: false, html: false, range: '' })
-  expect(parseStatsArgs('full')).toEqual({ full: true, html: false, range: '' })
-  expect(parseStatsArgs('7d FULL')).toEqual({ full: true, html: false, range: '7d' })
-  expect(parseStatsArgs('full T-1..T-9')).toEqual({ full: true, html: false, range: 'T-1..T-9' })
+  expect(parseStatsArgs('')).toEqual({ full: false, html: false, inside: false, range: '' })
+  expect(parseStatsArgs('full')).toEqual({ full: true, html: false, inside: false, range: '' })
+  expect(parseStatsArgs('7d FULL')).toEqual({ full: true, html: false, inside: false, range: '7d' })
+  expect(parseStatsArgs('full T-1..T-9')).toEqual({ full: true, html: false, inside: false, range: 'T-1..T-9' })
+  expect(parseStatsArgs('2d inside')).toEqual({ full: false, html: false, inside: true, range: '2d' })
 })
 
 test('stats: a long line is wrapped under its text, within 80 columns', () => {
@@ -326,8 +328,8 @@ test('stats: the summary keeps every figure of the full view; full only adds the
   const short = statsReport(input)
   const full = statsReport({ ...input, full: true })
   for (const want of ['4 done', 'to do ', 'worker time  1h 45m', 'with data    4 of 5 tasks', '1 call · 3 sessions', '5 tries', '1 run · 1m', 'per merged', '$2.25',
-    'avg 26m · median 25m', 'avg 3.8k · median 3k (in all)', 'avg 1.3 per task', '75% of done tasks (3 of 4)', 'lead time    avg 1h 00m · median 1h 00m (made to done, 4 tasks)',
-    'avg 21m', 'avg 3k in all', 'Most time', 'input 4k · output 10 · cache write 50 · cache read 90k', 'Failed tries (1, from history)']) {
+    'avg 26m · median 25m · total 1h 45m', 'avg 3.8k · median 3k · total 15k (in all)', 'avg 1.3 per task', '75% of done tasks (3 of 4)', 'lead time    avg 1h 00m · median 1h 00m · total 4h 00m (made to done, 4 tasks)',
+    'avg 21m · total 1h 45m', 'avg 3k in all · total 15k', 'Most time', 'input 4k · output 10 · cache write 50 · cache read 90k', 'Failed tries (1, from history)']) {
     expect(short).toContain(want)
     expect(full).toContain(want)
   }
