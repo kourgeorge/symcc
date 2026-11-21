@@ -2947,7 +2947,7 @@ test('T-715: the Live tab hangs the waiting trains under their lanes as the term
   }
 })
 
-test('T-767: the OpenCode Live tab indents by 1 under the headings; a running lane is "▶ " with its id and title bold in the accent color, a waiting train is all dim', () => {
+test('T-767: the OpenCode Live tab indents by 1 under the headings; a running lane is "▶ " and its id bold in the accent color and its title normal text, a waiting train is all dim', () => {
   const f0 = viewFile()
   const whole = trainTasks()
   const f: ViewFile = { ...f0, view: { ...f0.view, tasks: whole.map(t => viewTask(t)), checker: true, max_parallel: 3 } }
@@ -2961,7 +2961,8 @@ test('T-767: the OpenCode Live tab indents by 1 under the headings; a running la
     expect(lane[0]!.text).toBe(' ')
     const run = lane.slice(1).filter(x => x.text.trim()).slice(0, 3)
     expect(run.map(x => x.text.trim())).toEqual(['▶', 'T-712', run[2]!.text.trim()])
-    expect(run.map(x => [x.color, !!x.bold])).toEqual(run.map(() => ['claude', true]))
+    // T-777: only "▶ " and the id are bold accent; the title is normal text
+    expect(run.map(x => [x.color, !!x.bold])).toEqual([['claude', true], ['claude', true], ['text', false]])
     const train = d.lines[texts.findIndex(x => x.includes('└─◇ T-714'))]!.filter(x => x.text.trim())
     expect(train.map(x => [x.text, x.color, !!x.bold])).toEqual(train.map(x => [x.text, 'inactive', false]))
     expect(texts[texts.findIndex(x => x.trim() === '▍Today') + 1]?.startsWith(' ✓ ')).toBe(true)

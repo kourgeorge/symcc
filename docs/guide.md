@@ -1073,8 +1073,9 @@ indented by 1 space (VS Code shows the same names as bold headings):
 
 - Lanes are in the order the tasks started their current try, so a new one joins at the bottom
   and the lanes don't jump around. Each starts with `▶ `, then the task id and its title (cut
-  with `…`, wider on a wider panel), bold in the accent color, so the running tasks stand out
-  from the waiting ones below them.
+  with `…`, wider on a wider panel). The `▶ ` and the id are bold in the accent color and the
+  title is normal text, so the running tasks stand out from the waiting ones below them (those
+  are all dim).
 - The stations are work → check → queue → tests → merged; check is left out when the
   `checker` setting is off (its prep step then counts as work). Passed stations are `●━━`, the
   ones ahead `──○`, and the current one blinks between `◉` and `◎` (Claude Code doesn't tell
