@@ -164,7 +164,9 @@ export const agentsOf = (r: SymccRun | undefined): SymccRunAgent[] => (Array.isA
 export function withAgentStart(runs: SymccRun[] | undefined, kind: SymccRunAgent['kind'], id: unknown, now: string): SymccRun[] | undefined {
   const last = runs?.at(-1)
   if (!runs || !last || !isAgentId(id) || agentsOf(last).some(a => a.id === id)) return runs
-  return [...runs.slice(0, -1), { ...last, agents: [...agentsOf(last), { id, kind, started: now }].slice(-AGENTS_KEPT) }]
+  // T-785: a checker lost mid-check never ended its entry: a new checker ends any earlier open one at its own start
+  const before = kind === 'checker' ? agentsOf(last).map(a => (a.kind === 'checker' && !a.ended ? { ...a, ended: now } : a)) : agentsOf(last)
+  return [...runs.slice(0, -1), { ...last, agents: [...before, { id, kind, started: now }].slice(-AGENTS_KEPT) }]
 }
 
 /**
@@ -215,7 +217,7 @@ export function withStoppedUsed(runs: SymccRun[] | undefined, id: unknown, now: 
  */
 export function checkerTokensOf(r: SymccRun | undefined): SymccTokens | undefined {
   const own = agentsOf(r).filter(a => a.kind === 'checker' && a.tokens)
-  return own.length ? sumTokens(own.map(a => a.tokens)) : r?.checker_tokens
+  return r?.checker_tokens ?? (own.length ? sumTokens(own.map(a => a.tokens)) : undefined)
 }
 
 /** T-774: a short agent id for a page: "ses…Qr2" (the first and last three characters of a long one). */
@@ -420,8 +422,9 @@ export function endRun(runs: SymccRun[] | undefined, now: string, used: { tokens
     ...(used.tokens !== undefined && (last.tokens === undefined || open) ? { tokens: open && last.tokens !== undefined ? addTokens(last.tokens, used.tokens) : used.tokens } : {}),
     ...(used.cost !== undefined && (last.cost === undefined || open) ? { cost: open && last.cost !== undefined ? last.cost + used.cost : used.cost } : {}),
   }
-  // T-774: an agent still open on the try (a worker stopped without a hand-back) ends with it
-  const agents = open && last.agents?.some(a => !a.ended) ? { agents: last.agents.map(a => (a.ended ? a : { ...a, ended: now })) } : {}
+  // T-774: an agent still open on the try (a worker stopped without a hand-back) ends with it; T-785: also a checker
+  // entry left open after the try ended
+  const agents = last.agents?.some(a => !a.ended) ? { agents: last.agents.map(a => (a.ended ? a : { ...a, ended: now })) } : {}
   out[out.length - 1] = { ...last, ...(last.ended ? {} : { ended: now }), ...add, ...agents }
   return out
 }
