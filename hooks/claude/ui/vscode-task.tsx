@@ -13,7 +13,7 @@
 // (a fold and a task id are links: VS Code draws a Button as a filled blue box)
 // No key hints: every action is a button.
 import type { SymccTask } from '../../../types'
-import { type DetailRow, type DiffFile, type Seg, findRole, fmtRun, fmtTotal, sumRuns, taskActions, type TaskAction, type TaskActionId, type BoardTask } from '../../board'
+import { type DetailRow, type DiffFile, type Seg, agentLines, findRole, fmtRun, fmtTotal, sumRuns, taskActions, type TaskAction, type TaskActionId, type BoardTask } from '../../board'
 import type { TaskSection } from '../../core/task-sections'
 import { historyEvent, historyTime, HISTORY_COLOR } from '../../core/history'
 import { S } from '../../app/state'
@@ -381,9 +381,10 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
       ])
     : null
 
-  // the tries, one line each, and their total (the dates are on the Added row)
-  const time = fold('time', 'Time and cost', t.runs?.length ?? 0, [
-    ...(t.runs ?? []).map((r, i) => plain(`vs-run-${i}`, fmtRun(r, i, nowMs), r.ended ? 'inactive' : 'success')),
+  // the tries, one line each with a dim line per agent under it (T-774), and their total (the dates are on the Added
+  // row); the folded row sums them on one line ("3 tries · 21m · 10.1M tokens (3.6× the usual task) · checkers 2.4M")
+  const time = fold('time', 'Time and cost', sec('runs')?.summary || (t.runs?.length ?? 0), [
+    ...(t.runs ?? []).flatMap((r, i) => [plain(`vs-run-${i}`, fmtRun(r, i, nowMs), r.ended ? 'inactive' : 'success'), ...agentLines(r, nowMs).map((l, k) => plain(`vs-run-${i}-agent-${k}`, `  ${l}`, 'inactive'))]),
     t.runs?.length ? plain('vs-total', `total: ${fmtTotal(total)}`, 'text', { bold: true }) : plain('vs-no-runs', 'no tries yet', 'inactive'),
   ])
 

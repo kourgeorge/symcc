@@ -263,6 +263,23 @@ test('with the checker on, a passing change waits for a checker (shown as checki
   expect(t.runs!.at(-1)!.checker_tokens).toEqual({ output: 500 })
 })
 
+test("T-774: the worker's hand-back and the checker's end each put their tokens on their own agent entry of the try, and the try's tokens are their sum", async () => {
+  const w = world()
+  // its worker ag1 started on the try (patchTask gives it its entry, as workerStarted's write does)
+  await saveBoard(w.$, patchTask(boardWith(true), 'T-1', { agent: 'ag1' }, ISO))
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: 0 })
+  const done = withStarts(w.$, workerFinished(w.$, 'ag1', 'made the change', { reason: 'answer' }, { input: 4_000 }))
+  await until(() => checkerRuns.size > 0)
+  checkerFinished([...checkerRuns.keys()][0]!, 'OK', false, { output: 500 })
+  await done
+  const r = find(await load(w.$), 'T-1')!.runs!.at(-1)!
+  expect(r.agents!.map(a => [a.kind, a.id, a.tokens, !!a.ended])).toEqual([
+    ['worker', 'ag1', { input: 4_000 }, true],
+    ['checker', 'chk1', { output: 500 }, true],
+  ])
+  expect(r.tokens).toEqual({ input: 4_000, output: 500 })
+})
+
 test('T-440: the target branch deleted while the checker runs: after its OK the task waits with the branch-gone question, not failed', async () => {
   const w = world()
   await saveBoard(w.$, boardWith(true))

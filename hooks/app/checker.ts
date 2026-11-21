@@ -2,7 +2,7 @@
 // finishWork (workers.ts) runs a checker here after the prep step and before the task joins the merge line, and waits
 // for its verdict; turn.complete (agentFinished in app/symcc.ts) hands the checker's answer back through checkerFinished.
 import type { SymccTask, SymccTokens } from '../../types'
-import { type Board, CHECKER_NOTE, CHECKER_ROLE, type CheckerVerdict, roleSection, addTokens, agentSafeName, checkerDiff, checkerChangedFiles, checkerTestsText, checkerEntry, checkerPrompt, checkerVerdict, cutLine, find, findRole, intoOf, patchTask, tryLabel, withHistory, type HistoryAdd } from '../board'
+import { type Board, CHECKER_NOTE, CHECKER_ROLE, type CheckerVerdict, roleSection, addTokens, agentSafeName, checkerDiff, checkerChangedFiles, checkerTestsText, checkerEntry, checkerPrompt, checkerVerdict, cutLine, find, findRole, intoOf, patchTask, tryLabel, withHistory, withAgentUsed, type HistoryAdd } from '../board'
 import { git, taskBranch } from './git'
 import { markStep } from './review'
 import { loadRoles } from './roles'
@@ -118,7 +118,7 @@ export async function runChecker($: Host, t: SymccTask, b: Board, dir: string, s
     const own = end.answer === null && end.why ? end.why : undefined
     const late = own ? undefined : stop()
     const why = own ?? (late ? `the task was ${late}` : undefined)
-    await record($, t, null, why ?? STOPPED_AGAIN, end.tokens)
+    await record($, t, null, why ?? STOPPED_AGAIN, end.tokens, undefined, agentId)
     return { verdict: null, why: why ?? 'it was stopped', stopped: true }
   }
   // T-600, T-632: its "Learned:" lines are kept on the task as org-mem suggestions for the lead, whatever its verdict
@@ -132,7 +132,7 @@ export async function runChecker($: Host, t: SymccTask, b: Board, dir: string, s
     verdict = null
     why = `it moved the task's branch ${taskBranch(t)} and it could not be put back`
   }
-  await record($, t, verdict, why, end.tokens, back === 'moved' ? `${tryLabel(t)}: the checker moved the branch ${taskBranch(t)}; it was put back at ${saved!.head.slice(0, 10)}, so nothing it made is merged` : undefined)
+  await record($, t, verdict, why, end.tokens, back === 'moved' ? `${tryLabel(t)}: the checker moved the branch ${taskBranch(t)}; it was put back at ${saved!.head.slice(0, 10)}, so nothing it made is merged` : undefined, agentId)
   logVerdict($, t.id, Number(t.attempts) || 0, verdict)
   return { verdict, ...(why ? { why } : {}) }
 }
@@ -152,13 +152,15 @@ async function markChecker($: Host, t: SymccTask, agentId: string, on: boolean) 
 }
 
 /** The checker's verdict (`v`, or none with `why`) as a history line of task `t`, and its tokens added to the current try; only while `t` is still on that try. */
-async function record($: Host, t: SymccTask, v: CheckerVerdict | null, why?: string, tokens?: SymccTokens, before?: string) {
+async function record($: Host, t: SymccTask, v: CheckerVerdict | null, why?: string, tokens?: SymccTokens, before?: string, agentId?: string) {
   await change($, x => {
     const cur = find(x, t.id)
     if (!cur || cur.attempts !== t.attempts) return x
-    // T-769: the checker's tokens are also kept apart (checker_tokens), so the Live tab can tell them from the worker's
+    // T-769: the checker's tokens are also kept apart (checker_tokens), so the Live tab can tell them from the worker's;
+    // T-774: and on the checker's own agent entry, ended now (a stopped checker keeps the tokens it had)
     const last = cur.runs?.at(-1)
-    const runs = last && tokens ? [...cur.runs!.slice(0, -1), { ...last, tokens: addTokens(last.tokens, tokens), checker_tokens: addTokens(last.checker_tokens, tokens) }] : undefined
+    const added = last && tokens ? [...cur.runs!.slice(0, -1), { ...last, tokens: addTokens(last.tokens, tokens), checker_tokens: addTokens(last.checker_tokens, tokens) }] : cur.runs
+    const runs = last && agentId ? withAgentUsed(added, 'checker', agentId, now(), tokens ? { tokens } : {}) : added !== cur.runs ? added : undefined
     return patchTask(x, t.id, { history: withHistory(cur.history, now(), ...(before ? [['step', before] as HistoryAdd] : []), checkerEntry(tryLabel(cur), v, why)), ...(runs ? { runs } : {}) }, now())
   }).catch(() => undefined)
 }

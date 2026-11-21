@@ -8,7 +8,7 @@ import { taskPhase, type PhaseStage } from './phase'
 import { handedBack, shownStatus } from './lead'
 import { STAGE_LINE } from './events'
 import { cutTitle, median, padWidth, taskFigures, textWidth, wrapLine } from './stats'
-import { fmtCost, fmtDuration, fmtTokens, sumTokens, tokenCount } from './runs'
+import { checkerTokensOf, fmtCost, fmtDuration, fmtTokens, sumTokens, tokenCount } from './runs'
 import { type KeyHint, LIVE_VIEW_KEYS, hintLineText, hintLines, rowDuration, waitOrder } from './panel'
 import { ORG_MEM_EMPTY, ORG_MEM_MAX_LINES, TOPIC_UNSORTED, orgMemNearCap, orgMemNewest, orgMemSectionKeys, orgMemShortDay, orgMemTopicCounts, type OrgMemNote } from './org-mem'
 import { depDone } from './archive'
@@ -639,7 +639,9 @@ export function todayMore(tasks: readonly SymccTask[], team: TodayTeam | undefin
       const at = end ?? start
       if (!r.tokens || !isToday(at)) continue
       const all = tokenCount(r.tokens)
-      const chk = Math.min(all, r.checker_tokens ? tokenCount(r.checker_tokens) : 0)
+      // T-774: the checkers' part from the try's agent entries (their kinds) when it has them, else its checker_tokens
+      const chkTok = checkerTokensOf(r)
+      const chk = Math.min(all, chkTok ? tokenCount(chkTok) : 0)
       workers += all - chk
       checkers += chk
       const h = hourOf(at)
