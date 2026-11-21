@@ -130,6 +130,7 @@ export function livePage($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
           ),
         ]
       })}
+      {br ? <Text key="live-br-blank"> </Text> : null}
       {br ? <Text key="live-br-head">{draw(br.head)}</Text> : null}
       {br ? <Text key="live-br-main">{draw(br.main)}</Text> : null}
       {br?.rows.map(r =>
@@ -141,6 +142,7 @@ export function livePage($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
           <Text key="live-br-more">{draw(r.segs)}</Text>
         ),
       )}
+      <Text key="live-next-blank"> </Text>
       <Text key="live-rule" color={C('subtle')}>{footerRule(width)}</Text>
       <Text key="live-next" color={C('text')}>{nextUpLine(trains, width)}</Text>
       {today.map((line, i) => (
@@ -150,6 +152,7 @@ export function livePage($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
         <Button key="live-watch" label="w" hotkey="w" onPress={watch} />
         <Button key="live-orgmem" label={ORG_MEM_KEY} hotkey={ORG_MEM_KEY} onPress={openOrgMemPage($)} />
       </Box>
+      <Text key="live-om-blank"> </Text>
       <Text key="live-om-head">{draw(om.head)}</Text>
       <Text key="live-om-newest" color={C('inactive')}>{om.newestLabel}</Text>
       {om.empty ? <Text key="live-om-empty" color={C('inactive')}>{om.empty}</Text> : null}

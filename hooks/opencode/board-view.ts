@@ -825,16 +825,20 @@ function liveBody(f: ViewFile, cursor: number, nowMs: number, w: number): Body {
     b.add(liveSegs(second))
     for (const r of rows.get(l.id)!) r.id ? opens(r.segs, r.id) : b.add(liveSegs(r.segs))
   }
+  // T-738: one empty line above each section after the first (Branches, next up, Organizational memory)
   if (br) {
+    b.blank()
     b.add(liveSegs(br.head))
     b.add(liveSegs(br.main))
     for (const r of br.rows) r.id ? opens(r.segs, liveBranchId(r.id)) : b.add(liveSegs(r.segs))
   }
+  b.blank()
   b.add([{ text: footerRule(w), color: 'subtle' }])
   b.add([{ text: nextUpLine(trains, w), color: 'text' }])
   for (const t of todayLines(liveToday(v.tasks, nowMs), w)) b.add([{ text: t, color: 'text' }])
   if (lanes.length) b.add([{ text: LIVE_LEGEND, color: 'inactive' }])
   // T-718: the Organizational memory section, just above the footer (a click on its header opens all notes)
+  b.blank()
   b.add(liveSegs(om.head, { key: ORG_MEM_KEY }), { key: ORG_MEM_KEY })
   b.add([{ text: om.newestLabel, color: 'inactive' }])
   if (om.empty) b.add([{ text: om.empty, color: 'inactive' }])
