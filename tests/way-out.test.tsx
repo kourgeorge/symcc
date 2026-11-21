@@ -141,6 +141,44 @@ test('"Your answer" opened with Answer…: Enter on empty and [Cancel] (key c) g
   await ui.unmount()
 })
 
+/** T-775: off the terminal a Cancel button is a native Button labelled "Cancel", no brackets; c still on its hidden Button. */
+type Found = { type?: string; props: Record<string, unknown>; text?: string } | undefined
+async function nativeCancel(ui: { find: (q: { key: string }) => Promise<Found>; press: (q: { key: string }) => Promise<unknown> }, key: string) {
+  const b = await ui.find({ key })
+  expect(b?.type).toBe('Button')
+  expect(b?.props.label).toBe('Cancel')
+  expect(b?.props.variant).toBe('secondary')
+  expect(b?.props.plain).toBe(undefined)
+  expect(b?.text ?? '').not.toContain('[')
+  expect((await ui.find({ key: `${key}-key` }))?.props.hotkey).toBe('c')
+  await ui.press({ key })
+  expect(await ui.find({ key })).toBeUndefined()
+}
+
+for (const surface of ['desktop', 'mobile'] as const) {
+  test(`T-775: on ${surface} the reject box's Cancel is a native Button "Cancel"`, async ($, on) => {
+    stateOf(on, { opened: 'T-5', view: view([task('T-5', 'review', 'Blue button', { branch: 'symcc/T-5' })]) })
+    const ui = await $.ui.mount({ ...PANE, surface })
+    await ui.press({ key: 'reject' })
+    await nativeCancel(ui, 'reject-cancel')
+    await ui.unmount()
+  })
+  test(`T-775: on ${surface} the role pick list's Cancel is a native Button "Cancel"`, async ($, on) => {
+    stateOf(on, { opened: 'T-1', view: view([task('T-1', 'todo', 'Write it up')]) })
+    const ui = await $.ui.mount({ ...PANE, surface })
+    await ui.press({ key: 'role' })
+    await nativeCancel(ui, 'role-cancel')
+    await ui.unmount()
+  })
+  test(`T-775: on ${surface} the answer box's Cancel is a native Button "Cancel"`, async ($, on) => {
+    stateOf(on, { opened: 'T-2', view: view([task('T-2', 'waiting', 'Search mode', { question: 'Which colour?', options: ['red', 'blue'] })]) })
+    const ui = await $.ui.mount({ ...PANE, surface })
+    await ui.press({ key: 'choice-3' })
+    await nativeCancel(ui, 'answer-cancel')
+    await ui.unmount()
+  })
+}
+
 test('"Your answer" on a plain question: Enter on empty goes back to the board list', async ($, on) => {
   stateOf(on, { opened: 'T-2', view: view([task('T-2', 'waiting', 'Search mode', { question: 'Case-sensitive?' })]) })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })

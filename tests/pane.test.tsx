@@ -2035,6 +2035,22 @@ test('the task page shows the latest try\'s full report, and a try\'s number key
   await ui.unmount()
 })
 
+test('T-775: on mobile the try buttons are native Buttons labelled "Try 1", with no brackets, and still pick a try', async ($, on) => {
+  fakeFiles(on, { '/reports/T-1-try-1.md': 'First try report: the tests failed.\n', '/reports/T-1-try-2.md': 'Second try report.\n' })
+  stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [reportedTask()], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  const ui = await $.ui.mount({ ...PANE, surface: 'mobile' })
+  const b = await ui.find({ key: 'report-try-1' })
+  expect(b?.type).toBe('Button')
+  expect(b?.props.label).toBe('Try 1')
+  expect(b?.props.variant).toBe('secondary')
+  expect(b?.props.plain).toBe(undefined)
+  expect(b?.text ?? '').not.toContain('[')
+  expect((await ui.find({ key: 'report-try-1-key' }))?.props.hotkey).toBe('1')
+  await ui.press({ key: 'report-try-1' })
+  expect((await ui.find({ key: 'report-try-1' }))?.props.label).toBe('● Try 1')
+  await ui.unmount()
+})
+
 const answeredTask = (extra: Record<string, unknown> = {}) =>
   task('T-1', 'review', 'Why is the cache slow', { kind: 'investigation', role: 'researcher', attempts: 1, note: 'answered; waiting for you to read it', answer: 'Saved short answer.', runs: [{ started: '', ended: '', report: R1 }], history: hist('try 1: answered: The cache is never cleared.'), ...extra })
 

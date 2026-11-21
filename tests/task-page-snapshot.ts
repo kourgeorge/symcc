@@ -9,7 +9,7 @@
 // - T-693: no status badge under the title
 // - T-701: an answered investigation's Status row says "answered: read it"
 // - T-751: the 4-line page header (where you are, title, state, buttons in groups) and its heavy rule; no Status, Stage or Now rows
-// - T-775: every header button "[Label]" in one style, Back "‹ [Tasks]"; the try buttons "[Try 1]", their keys hidden
+// - T-775: every header button "[Label]" in one style, Back "‹ [Tasks]"; the try buttons "[Try 1]", their keys hidden (on desktop and mobile native Buttons "Try 1", no brackets)
 export const TASK_BEFORE: Record<string, unknown> = {
   "desktop T-501": {
     "type": "Box",
@@ -644,18 +644,8 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "type": "Box",
                 "props": {"key":"report-buttons-0","flexDirection":"row","gap":1},
                 "children": [
-                  {
-                    "type": "Button",
-                    "props": {"key":"report-try-1","label":"Try 1","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["[Try 1]"]}]
-                  },
-                  {
-                    "type": "Button",
-                    "props": {"key":"report-try-2","label":"● Try 2","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["[● Try 2]"]}]
-                  }
+                  {"type":"Button","props":{"key":"report-try-1","label":"Try 1","variant":"secondary"},"press":{"plugin":"symcc"}},
+                  {"type":"Button","props":{"key":"report-try-2","label":"● Try 2","variant":"secondary"},"press":{"plugin":"symcc"}}
                 ]
               }
             ]
@@ -2202,18 +2192,8 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "type": "Box",
                 "props": {"key":"report-buttons-0","flexDirection":"row","gap":1},
                 "children": [
-                  {
-                    "type": "Button",
-                    "props": {"key":"report-try-1","label":"Try 1","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["[Try 1]"]}]
-                  },
-                  {
-                    "type": "Button",
-                    "props": {"key":"report-try-2","label":"● Try 2","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["[● Try 2]"]}]
-                  }
+                  {"type":"Button","props":{"key":"report-try-1","label":"Try 1","variant":"secondary"},"press":{"plugin":"symcc"}},
+                  {"type":"Button","props":{"key":"report-try-2","label":"● Try 2","variant":"secondary"},"press":{"plugin":"symcc"}}
                 ]
               }
             ]
@@ -3805,18 +3785,8 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "type": "Box",
                 "props": {"key":"report-buttons-0","flexDirection":"row","gap":1},
                 "children": [
-                  {
-                    "type": "Button",
-                    "props": {"key":"report-try-1","label":"Try 1","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["[Try 1]"]}]
-                  },
-                  {
-                    "type": "Button",
-                    "props": {"key":"report-try-2","label":"● Try 2","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["[● Try 2]"]}]
-                  }
+                  {"type":"Button","props":{"key":"report-try-1","label":"Try 1","variant":"secondary"},"press":{"plugin":"symcc"}},
+                  {"type":"Button","props":{"key":"report-try-2","label":"● Try 2","variant":"secondary"},"press":{"plugin":"symcc"}}
                 ]
               }
             ]
@@ -6277,18 +6247,8 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "type": "Box",
                 "props": {"key":"report-buttons-0","flexDirection":"row","gap":1},
                 "children": [
-                  {
-                    "type": "Button",
-                    "props": {"key":"report-try-1","label":"Try 1","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["[Try 1]"]}]
-                  },
-                  {
-                    "type": "Button",
-                    "props": {"key":"report-try-2","label":"● Try 2","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["[● Try 2]"]}]
-                  }
+                  {"type":"Button","props":{"key":"report-try-1","label":"Try 1","variant":"secondary"},"press":{"plugin":"symcc"}},
+                  {"type":"Button","props":{"key":"report-try-2","label":"● Try 2","variant":"secondary"},"press":{"plugin":"symcc"}}
                 ]
               }
             ]
@@ -9534,18 +9494,8 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "type": "Box",
                 "props": {"key":"report-buttons-0","flexDirection":"row","gap":1},
                 "children": [
-                  {
-                    "type": "Button",
-                    "props": {"key":"report-try-1","label":"Try 1","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["[Try 1]"]}]
-                  },
-                  {
-                    "type": "Button",
-                    "props": {"key":"report-try-2","label":"● Try 2","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["[● Try 2]"]}]
-                  }
+                  {"type":"Button","props":{"key":"report-try-1","label":"Try 1","variant":"secondary"},"press":{"plugin":"symcc"}},
+                  {"type":"Button","props":{"key":"report-try-2","label":"● Try 2","variant":"secondary"},"press":{"plugin":"symcc"}}
                 ]
               }
             ]
@@ -10897,18 +10847,8 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "type": "Box",
                 "props": {"key":"report-buttons-0","flexDirection":"row","gap":1},
                 "children": [
-                  {
-                    "type": "Button",
-                    "props": {"key":"report-try-1","label":"Try 1","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["[Try 1]"]}]
-                  },
-                  {
-                    "type": "Button",
-                    "props": {"key":"report-try-2","label":"● Try 2","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["[● Try 2]"]}]
-                  }
+                  {"type":"Button","props":{"key":"report-try-1","label":"Try 1","variant":"secondary"},"press":{"plugin":"symcc"}},
+                  {"type":"Button","props":{"key":"report-try-2","label":"● Try 2","variant":"secondary"},"press":{"plugin":"symcc"}}
                 ]
               }
             ]
@@ -12505,18 +12445,8 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "type": "Box",
                 "props": {"key":"report-buttons-0","flexDirection":"row","gap":1},
                 "children": [
-                  {
-                    "type": "Button",
-                    "props": {"key":"report-try-1","label":"Try 1","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["[Try 1]"]}]
-                  },
-                  {
-                    "type": "Button",
-                    "props": {"key":"report-try-2","label":"● Try 2","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["[● Try 2]"]}]
-                  }
+                  {"type":"Button","props":{"key":"report-try-1","label":"Try 1","variant":"secondary"},"press":{"plugin":"symcc"}},
+                  {"type":"Button","props":{"key":"report-try-2","label":"● Try 2","variant":"secondary"},"press":{"plugin":"symcc"}}
                 ]
               }
             ]
@@ -14223,18 +14153,8 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "type": "Box",
                 "props": {"key":"report-buttons-0","flexDirection":"row","gap":1},
                 "children": [
-                  {
-                    "type": "Button",
-                    "props": {"key":"report-try-1","label":"Try 1","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["[Try 1]"]}]
-                  },
-                  {
-                    "type": "Button",
-                    "props": {"key":"report-try-2","label":"● Try 2","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["[● Try 2]"]}]
-                  }
+                  {"type":"Button","props":{"key":"report-try-1","label":"Try 1","variant":"secondary"},"press":{"plugin":"symcc"}},
+                  {"type":"Button","props":{"key":"report-try-2","label":"● Try 2","variant":"secondary"},"press":{"plugin":"symcc"}}
                 ]
               }
             ]

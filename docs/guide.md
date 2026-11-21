@@ -970,7 +970,9 @@ desktop, mobile, VS Code and OpenCode), then a heavy rule:
 
 Further down, under ▍Report, the buttons that show an earlier try's report look the same:
 `[Try 1] [Try 2] [● Try 3]` (● the one shown); their keys, `1`-`9`, are in the key line
-(`1-3 a try's report`), not in the buttons.
+(`1-3 a try's report`), not in the buttons. On the desktop and mobile apps these and the boxes'
+Cancel buttons are the app's own buttons, labelled `Try 1` and `Cancel` with no brackets, as
+the header's buttons there.
 
 On a narrow panel lines 3 and 4 wrap between their groups, never inside a button; a group wider
 than the panel wraps between its buttons, and with no room left the page group goes to its own

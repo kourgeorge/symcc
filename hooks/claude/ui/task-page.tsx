@@ -33,6 +33,8 @@ export const mergingLine = (id: string): string => pressed.get(id) ?? (mergingNo
 /** One task opened: its details and actions; for a task in review also its changes. */
 export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
   const { Box, Text, Button, Input, v, width, color, word, mark, act, C, footer, buttonRows, heading, paragraphs } = pane
+  // desktop and mobile draw every Button as a native button: there a button gets its label plain, no brackets (as the header)
+  const terminal = pane.vs.surface === 'terminal'
   if (!S.roles.length) await loadRoles(claudeHost($)).catch(() => undefined)
   if (!S.kinds.length) await loadKinds(claudeHost($)).catch(() => undefined)
   // the branch this task merges into: its changes are shown against it
@@ -115,9 +117,13 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
           onInput={value => void (S.rejecting && (S.rejecting.reason = value))}
           onSubmit={submitReject}
         />
-        <Button key="reject-cancel" plain label="Cancel" onPress={cancelReject}>
-          <Text color={C('text')}>[Cancel]</Text>
-        </Button>
+        {terminal ? (
+          <Button key="reject-cancel" plain label="Cancel" onPress={cancelReject}>
+            <Text color={C('text')}>[Cancel]</Text>
+          </Button>
+        ) : (
+          <Button key="reject-cancel" label="Cancel" variant="secondary" onPress={cancelReject} />
+        )}
         {/* the c key sits on a hidden Button: a plain Button with a hotkey would draw "c: " before [Cancel] */}
         <Box key="reject-cancel-keys" display="none">
           <Button key="reject-cancel-key" label="Cancel" hotkey="c" onPress={cancelReject} />
@@ -199,9 +205,13 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
             </Button>
           )
         })}
-        <Button key="role-cancel" plain label="Cancel" onPress={cancelRole}>
-          <Text color={C('text')}>[Cancel]</Text>
-        </Button>
+        {terminal ? (
+          <Button key="role-cancel" plain label="Cancel" onPress={cancelRole}>
+            <Text color={C('text')}>[Cancel]</Text>
+          </Button>
+        ) : (
+          <Button key="role-cancel" label="Cancel" variant="secondary" onPress={cancelRole} />
+        )}
         <Box key="role-cancel-keys" display="none">
           <Button key="role-cancel-key" label="Cancel" hotkey="c" onPress={cancelRole} />
         </Box>
@@ -393,6 +403,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
               // keys (1-9, listed in the footer) belong to hidden Buttons below
               sec.tries.map(r => {
                 const label = `${r.shown ? '● ' : ''}Try ${r.try}`
+                if (!terminal) return <Button key={`report-try-${r.try}`} label={label} variant="secondary" onPress={pickReport(r.try)} />
                 return (
                   <Button key={`report-try-${r.try}`} plain label={label} onPress={pickReport(r.try)}>
                     <Text color={C('text')}>{`[${label}]`}</Text>

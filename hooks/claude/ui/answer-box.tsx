@@ -69,9 +69,13 @@ export function answerBox(pane: PaneParts, a: AnswerBox) {
       {a.typing && <Input key="answer" label="Your answer" placeholder="type and press Enter" autoFocus onSubmit={value => a.onSubmit(value)} />}
       {a.typing && a.choices.length > 0 && (
         <Box key="answer-cancel-row" flexDirection="column">
-          <Button key="answer-cancel" plain label="Cancel" onPress={a.onCancel}>
-            <Text color={C('text')}>[Cancel]</Text>
-          </Button>
+          {terminal ? (
+            <Button key="answer-cancel" plain label="Cancel" onPress={a.onCancel}>
+              <Text color={C('text')}>[Cancel]</Text>
+            </Button>
+          ) : (
+            <Button key="answer-cancel" label="Cancel" variant="secondary" onPress={a.onCancel} />
+          )}
           {/* the c key sits on a hidden Button: a plain Button with a hotkey would draw "c: " before [Cancel] */}
           <Box key="answer-cancel-keys" display="none">
             <Button key="answer-cancel-key" label="Cancel" hotkey="c" onPress={a.onCancel} />
