@@ -182,7 +182,7 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
       <Box key={`live-lane:${lane.id}`} flexDirection="column">
         <Box key={`live-top:${lane.id}`} flexDirection="row" gap={2}>
           <Box key={`live-run:${lane.id}`} flexDirection="row" gap={1}>
-            {done ? null : line(`live-run-mark:${lane.id}`, `${LIVE_RUN_MARK}${runId}`.trim(), LIVE_TONE.run, true)}
+            {done ? null : line(`live-run-mark:${lane.id}`, `${LIVE_RUN_MARK}${name ? runId : ''}`.trim(), LIVE_TONE.run, true)}
             {done ? vsLink(vs, laneKey(lane.id), mdLink(name, href), [[href, open(lane.id)]], true) : vsLink(vs, laneKey(lane.id), mdLink(name || lane.id, href), [[href, open(lane.id)]])}
           </Box>
           {right ? line(`live-right:${lane.id}`, right, 'inactive') : null}
