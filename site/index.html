@@ -47,7 +47,7 @@
       <div class="win-bar">
         <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
         <span class="win-title">~/symcc · claude</span>
-        <span class="demo-step">16:52</span>
+        <span class="demo-step">16:53</span>
         <button type="button" class="demo-pause" aria-pressed="false" hidden>❚❚ Pause</button>
       </div>
       <div class="view view-chat">
@@ -84,14 +84,16 @@
         <p>New ideas come up while agents are busy. Say them; the lead puts each one on the board with a why, a kind and the files it may change. When it needs a choice from you, it asks once, on the board and as a pop-up.</p>
         <pre>❯ show some ideas
 ⏺ Four looks for the Live tab's sections …
-❯ 2
+❯ 4
 ⏺ Added T-747. I'll tell you when it merges.</pre>
       </details>
       <details class="card">
         <summary><span class="icon">◉</span><b>The Live tab</b><span>See each task's way to main, as it happens.</span></summary>
         <p>Every running task is a lane: work, check, queue, tests, merged. You see the time at each station, the tokens of each try, and how often the checker sent it back.</p>
-        <pre> T-740  ●━━━━━━◉──────○──────○──────○
-  bug try 2/3  ▕██████░░░░░░░▏ 1.1M  ↺×1</pre>
+        <pre> T-747  ●━━━━━━●━━━━━━◉──────○──────○
+  change try 1/3  ▕█████████████▏ 5.7M
+ T-740  ◉──────○──────○──────○──────○
+  bug try 2/3  tokens at hand-back  ↺×1</pre>
       </details>
       <details class="card">
         <summary><span class="icon">╰─○</span><b>A folder per worker</b><span>Workers can't step on each other.</span></summary>
@@ -130,7 +132,7 @@ T-747 try 1 → merged into main
         <summary><span class="icon">▤</span><b>A board that stays</b><span>A plain file, kept after the chat ends.</span></summary>
         <p>The board lives in your project. Close the chat, come back tomorrow: the tasks, their history, tries, time and cost are all still there.</p>
         <pre>▍Runs (time and cost)
-   try 1: 13m · 1.1M tokens in all</pre>
+   try 1: 22m · 4.0M tokens in all · the checker found problems</pre>
       </details>
     </div>
   </section>

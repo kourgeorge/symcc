@@ -29,13 +29,18 @@
   }
   const ASK = 'there is no clear visual separation between the sections of the live page, show some ideas'
   const SCOUT_FOUND = 'Checker send-backs, the most common failure, are left out of the failed-tries reasons and total'
-  const USUAL = 1.2e6 // the board's usual tokens per merged task; bars are drawn against twice that
-  const MAX_AGENTS = 2
+  // The real board at the end of the story: "✓ 56 merged ↺ 47 sent back ✗ 0 failed Σ 268.6M tokens". The story starts
+  // just before T-747 merged (5.7M tokens) and T-740's try 1 was sent back (4M tokens).
+  const END_TODAY = { merged: 56, back: 47, failed: 0, tokens: 268.6e6 }
+  const T747_TOKENS = 5.7e6
+  const T740_TRY1_TOKENS = 4e6
+  const USUAL = END_TODAY.tokens / END_TODAY.merged // the board's usual tokens per merged task; bars are drawn against twice that
+  const MAX_AGENTS = 3
 
   // ---------- the state ----------
   function start() {
     return {
-      now: at(16, 41, 0),
+      now: at(16, 36, 0),
       frame: 0,
       chat: [{ k: 'note', text: '⏵ auto · the board is open · 1 task running' }],
       input: '',
@@ -45,10 +50,10 @@
         { id: 'T-740', kind: 'bug', at: 0, since: at(16, 28), tryNo: 1, tries: 3, tokens: null, back: 0, agent: true },
       ],
       next: [],
-      today: { merged: 54, back: 12, failed: 2, tokens: 88.1e6 },
-      head: '18bc450',
-      commits: 5,
-      branches: [{ id: 'T-740', col: 1, ahead: 1, behind: 3 }],
+      today: { merged: END_TODAY.merged - 1, back: END_TODAY.back - 1, failed: END_TODAY.failed, tokens: END_TODAY.tokens - T747_TOKENS - T740_TRY1_TOKENS },
+      head: '50ab5a9',
+      commits: 3,
+      branches: [{ id: 'T-740', col: 2, ahead: 0, behind: 0 }],
       merged747: false,
       t740: [
         ['16:28', 'try 1: worker started (from the lead)'],
@@ -132,14 +137,14 @@
     L.push('   ' + sp('today    ', 'dim') + sp(`✓ ${d.merged} merged`, 'passed') + sp(`   ↺ ${d.back} sent back   ✗ ${d.failed} failed   Σ ${tok(d.tokens)} tokens`, 'dim'))
     if (wide) {
       L.push('')
-      L.push(heading('Organizational memory', '   ' + sp('59 / 60', 'warning') + ' ' + sp('▕██████████▏', 'warning')))
+      L.push(heading('Organizational memory', '   ' + sp('60 / 60', 'warning') + ' ' + sp('▕██████████▏', 'warning')))
       L.push(sp('   newest', 'dim'))
       L.push('    ' + sp('11-21', 'dim') + '  ' + sp('ui · surfaces', 'id') + '  ' + cut('VS Code board pages space their children with the page Box\'s gap={1}', 42))
       L.push('    ' + sp('11-21', 'dim') + '  ' + sp('probes       ', 'id') + '  ' + cut('Draw the OpenCode panel from /tmp with bun: panelLines(view, …)', 42))
       L.push('    ' + sp('11-21', 'dim') + '  ' + sp('tests        ', 'id') + '  ' + cut('In tests, put dates relative to now, never a fixed date', 42))
       L.push(sp('   topics', 'dim'))
-      L.push('    tests ' + sp('14', 'dim') + '   shell · guard ' + sp('11', 'dim') + '   ui · surfaces ' + sp('10', 'dim') + '   probes ' + sp('8', 'dim'))
-      L.push('    snapshots ' + sp('5', 'dim') + '   engine · hosts ' + sp('5', 'dim') + '   site ' + sp('3', 'dim') + '   board data ' + sp('3', 'dim'))
+      L.push('    tests ' + sp('14', 'dim') + '   shell · guard ' + sp('11', 'dim') + '   ui · surfaces ' + sp('11', 'dim') + '   probes ' + sp('8', 'dim'))
+      L.push('    engine · hosts ' + sp('5', 'dim') + '   snapshots ' + sp('5', 'dim') + '   board data ' + sp('3', 'dim') + '   site ' + sp('3', 'dim'))
     }
     L.push('')
     L.push(sp('↑↓ move · Enter open task · w watch worker · m org-mem · Esc close', 'dim'))
@@ -221,70 +226,78 @@
   const lane = (s, id) => s.lanes.find(l => l.id === id)
   const say = (s, m) => { s.chat.push(m); if (s.chat.length > 14) s.chat.shift() }
   const STEPS = [
-    [1200, at(16, 41, 10), s => {
-      Object.assign(lane(s, 'T-740'), { at: 1, since: s.now, tokens: 1.1e6 })
-      s.t740.push(['16:41', 'try 1: prep started'], ['16:41', 'try 1: checker started'])
-      Object.assign(s.t740runs[0], { to: '16:41', mins: 13, tokens: 1.1e6 })
-    }],
-    [900, at(16, 41, 30), { type: ASK }],
-    [300, at(16, 41, 40), s => { s.thinking = true }],
-    [1800, at(16, 42, 0), s => {
+    [1200, at(16, 36, 20), { type: ASK }],
+    [300, at(16, 36, 30), s => { s.thinking = true }],
+    [1800, at(16, 37, 0), s => {
       s.thinking = false
       say(s, { k: 'lead', lines: [
         esc('Four looks for the Live tab\'s sections (Tasks, Branches, Today, Organizational memory):'),
-        sp('  1 ', 'dim') + esc('a thin rule between sections  ') + sp('────────', 'dim'),
-        sp('  2 ', 'dim') + esc('side-bar headings, like the task page  ') + sp('▍Tasks', 'heading'),
-        sp('  3 ', 'dim') + esc('each section in its own box  ') + sp('╭─ Tasks ─╮', 'dim'),
-        sp('  4 ', 'dim') + esc('bold names with a blank line before them'),
+        sp('  1 ', 'dim') + esc('Same heading for all  ') + sp('Tasks', 'dim'),
+        sp('  2 ', 'dim') + esc('Colored headings  ') + sp('Tasks', 'heading'),
+        sp('  3 ', 'dim') + esc('Boxes  ') + sp('╭─ Tasks ─╮', 'dim'),
+        sp('  4 ', 'dim') + esc('Side bar  ') + sp('▍Tasks', 'heading'),
         esc('Which one do you want?'),
       ] })
     }],
-    [2600, at(16, 43, 0), s => {
-      Object.assign(lane(s, 'T-740'), { at: 0, since: s.now, tryNo: 2, tokens: null, back: 1 })
-      s.today.back += 1
-      s.t740.push(['16:43', 'try 1 → the checker found problems'], ['16:43', 'try 2: worker started'])
-      Object.assign(s.t740runs[0], { cost: '2.40', end: 'the checker found problems' })
-      s.t740runs.push({ from: '16:43', start: s.now, to: null, tokens: null })
-      say(s, { k: 'event', mark: '↺', tone: 'warning', text: 'T-740 try 1 → the checker found problems · try 2/3 started' })
-    }],
-    [1200, at(16, 43, 30), { type: '2' }],
-    [300, at(16, 43, 35), s => { s.thinking = true }],
-    [1400, at(16, 44, 0), s => {
+    [2400, at(16, 37, 40), { type: '4' }],
+    [300, at(16, 37, 45), s => { s.thinking = true }],
+    [1400, at(16, 38, 0), s => {
       s.thinking = false
       say(s, { k: 'tool', name: 'symcc · add_task', args: 'T-747, kind: change', result: 'added T-747 · a worker starts now' })
       say(s, { k: 'lead', lines: [esc('Added T-747: each Live tab section gets a "▍Name" side-bar heading, like the task page. I\'ll tell you when it merges.')] })
       s.lanes.push({ id: 'T-747', kind: 'change', at: 0, since: s.now, tryNo: 1, tries: 3, tokens: null, back: 0, agent: true })
       s.branches.push({ id: 'T-747', col: s.commits - 1, ahead: 0, behind: 0 })
     }],
-    [2600, at(16, 45, 0), s => {
+    // T-740's worker hands back (its commit 24bd543) and the checker starts
+    [2200, at(16, 40, 0), s => {
+      Object.assign(lane(s, 'T-740'), { at: 1, since: s.now })
+      Object.assign(s.branches.find(b => b.id === 'T-740'), { ahead: 1 })
+      s.t740.push(['16:40', 'try 1: checker started'])
+    }],
+    // main moves on: T-737 merges (18bc450)
+    [1800, at(16, 41, 0), s => {
+      s.commits += 1
+      s.head = '18bc450'
+      for (const b of s.branches) b.behind += 1
+    }],
+    [2400, at(16, 44, 0), s => {
       say(s, { k: 'event', mark: '◇', tone: 'id', text: `scout gaps-bot found: ${SCOUT_FOUND}` })
       say(s, { k: 'lead', lines: [esc('A scout found a gap in the stats. I added it as T-736 (bug); it starts when an agent slot is free.')] })
       s.next = ['T-736']
       s.t736 = 'todo'
     }],
-    [2400, at(16, 46, 50), s => {
+    // main moves on: the version bump (1f8cdb8)
+    [2200, at(16, 46, 0), s => {
       s.commits += 1
       s.head = '1f8cdb8'
       for (const b of s.branches) b.behind += 1
     }],
-    [2200, at(16, 48, 45), s => {
-      Object.assign(lane(s, 'T-747'), { at: 1, since: s.now, tokens: 0.9e6, agent: true })
+    // T-747's worker hands back after 10m (its commit 65096b8) and the checker starts
+    [2000, at(16, 48, 0), s => {
+      Object.assign(lane(s, 'T-747'), { at: 1, since: s.now })
       Object.assign(s.branches.find(b => b.id === 'T-747'), { ahead: 1 })
     }],
-    [2600, at(16, 50, 10), s => {
-      Object.assign(lane(s, 'T-747'), { at: 2, since: s.now, place: 1, agent: false })
-      say(s, { k: 'event', mark: '✓', tone: 'passed', text: 'T-747 try 1 → checks passed: the checker said "OK" · waits in the merge queue (place 1)' })
-      s.lanes.push({ id: 'T-736', kind: 'bug', at: 0, since: s.now, tryNo: 1, tries: 3, tokens: null, back: 0, agent: true })
-      s.branches.push({ id: 'T-736', col: s.commits - 1, ahead: null, behind: 0 })
-      s.next = []
-      s.t736 = 'doing'
+    [2400, at(16, 50, 0), s => {
+      Object.assign(lane(s, 'T-740'), { at: 0, since: s.now, tryNo: 2, tokens: null, back: 1 })
+      s.today.back += 1
+      s.today.tokens += T740_TRY1_TOKENS
+      s.t740.push(['16:50', 'try 1 → the checker found problems'], ['16:50', 'try 2: worker started'])
+      Object.assign(s.t740runs[0], { to: '16:50', mins: 22, tokens: T740_TRY1_TOKENS, end: 'the checker found problems' })
+      s.t740runs.push({ from: '16:50', start: s.now, to: null, tokens: null })
+      say(s, { k: 'event', mark: '↺', tone: 'warning', text: 'T-740 try 1 → the checker found problems · try 2/3 started' })
     }],
-    [2000, at(16, 51, 0), s => { Object.assign(lane(s, 'T-747'), { at: 3, since: s.now, place: undefined }) }],
-    [2600, at(16, 52, 0), s => { Object.assign(lane(s, 'T-747'), { at: 4, since: s.now }) }],
-    [900, at(16, 52, 10), s => {
+    // the checker says "OK"; T-747 is brought up to date with main (39c7f96) and waits in the queue
+    [1600, at(16, 50, 20), s => {
+      Object.assign(lane(s, 'T-747'), { at: 2, since: s.now, place: 1, agent: false, tokens: T747_TOKENS })
+      Object.assign(s.branches.find(b => b.id === 'T-747'), { ahead: 2, behind: 0 })
+      say(s, { k: 'event', mark: '✓', tone: 'passed', text: 'T-747 try 1 → checks passed: the checker said "OK" · waits in the merge queue (place 1)' })
+    }],
+    [1600, at(16, 50, 40), s => { Object.assign(lane(s, 'T-747'), { at: 3, since: s.now, place: undefined }) }],
+    [2600, at(16, 53, 0), s => { Object.assign(lane(s, 'T-747'), { at: 4, since: s.now }) }],
+    [900, at(16, 53, 10), s => {
       s.lanes = s.lanes.filter(l => l.id !== 'T-747')
       s.today.merged += 1
-      s.today.tokens += 0.9e6
+      s.today.tokens += T747_TOKENS
       s.commits += 1
       s.head = '39c7f96'
       Object.assign(s.branches.find(b => b.id === 'T-747'), { merged: true, col: s.commits - 1 })
@@ -293,13 +306,7 @@
       say(s, { k: 'event', mark: '✓', tone: 'passed', text: 'T-747 try 1 → merged into main' })
       say(s, { k: 'lead', lines: [esc('T-747 is merged. The Live tab\'s sections now start with ▍Tasks, ▍Branches, ▍Today and ▍Organizational memory.')] })
     }],
-    [3200, at(16, 52, 30), s => {
-      s.voice = ''
-      Object.assign(lane(s, 'T-740'), { at: 1, since: s.now, tokens: 0.8e6 })
-      Object.assign(s.branches.find(b => b.id === 'T-740'), { ahead: 2 })
-      s.t740.push(['16:52', 'try 2: prep started'], ['16:52', 'try 2: checker started'])
-      Object.assign(s.t740runs[1], { to: '16:52', mins: 9, tokens: 0.8e6 })
-    }],
+    [3200, at(16, 53, 40), s => { s.voice = '' }],
   ]
   const LOOP_PAUSE = 6000
 

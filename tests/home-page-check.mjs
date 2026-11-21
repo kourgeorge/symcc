@@ -41,6 +41,17 @@ for (const w of ['❯ there is no clear visual separation between the sections o
   if (!chat.includes(w)) bad(`still frame: the chat has no "${w}"`)
 const task = text(view('task'))
 for (const w of ['T-740', '▍History', '▍Runs (time and cost)', 'try 1 → the checker found problems']) if (!task.includes(w)) bad(`still frame: the task page has no "${w}"`)
+// the real figures from the board on 2026-11-21 (not guesses): the looks offered, the owner's pick, slots, today, org-mem
+for (const w of ['1 Same heading for all', '2 Colored headings', '3 Boxes', '4 Side bar', '❯ 4'])
+  if (!chat.includes(w)) bad(`still frame: the chat has no "${w}" (the real looks and pick)`)
+if (chat.includes('❯ 2')) bad('still frame: the chat shows "❯ 2"; the owner picked look 4')
+for (const w of ['agents 1/3 busy', '✓ 56 merged', '↺ 47 sent back', '✗ 0 failed', 'Σ 268.6M tokens', '39c7f96'])
+  if (!board.includes(w)) bad(`still frame: the board has no "${w}" (the real board)`)
+const live = text(view('live'))
+for (const w of ['60 / 60', 'tests 14', 'shell · guard 11', 'ui · surfaces 11', 'probes 8', 'engine · hosts 5', 'snapshots 5'])
+  if (!live.includes(w)) bad(`still frame: the Live tab has no "${w}" (the real org-mem)`)
+for (const w of ['16:28', '16:50', 'try 1: 22m · 4.0M tokens in all'])
+  if (!task.includes(w)) bad(`still frame: the task page has no "${w}" (T-740's real try 1)`)
 if (!text(view('scouts')).includes('gaps-bot')) bad('still frame: the scouts view has no gaps-bot')
 
 // the chat log must scroll, so its oldest messages (the owner's ask) stay in reach; and it must not pin messages
