@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { liveWorkersFor, startBranch, type Board, intoOf, type GitState, gitStateOf, noGitText, setupAskText, gitignoreWith, gitignoreBase, riskyFiles, parseLsTree, ignoreLineFor, setupDoneText, find, worktreesToRemove, branchesToDelete, cleanupText, namedReports, SCRATCH_DIR, SCRATCH_EXCLUDE, commitMessage, isSha } from '../board'
+import { liveWorkersFor, startBranch, type Board, intoOf, type GitState, gitStateOf, noGitText, setupAskText, gitignoreWith, gitignoreBase, riskyFiles, parseLsTree, ignoreLineFor, setupDoneText, find, worktreesToRemove, branchesToDelete, cleanupText, namedReports, SCRATCH_DIR, SCRATCH_EXCLUDE, commitMessage, isSha, isTaskCommit } from '../board'
 import { publish } from './lead'
 import { S, workers, starting, finishing, approving, keptDirty, scratchUse } from './state'
 import { type Host, agentState } from '../host'
@@ -174,7 +174,7 @@ export async function prepareWorktree($: Host, t: SymccTask, target: string, cat
  * of `target`'s commits the branch still lacks afterwards (0 when it was moved, is up to date, or git could not tell),
  * `merged` (how many were merged in, when that happened), and, when `behind` is more than 0, why it was not moved
  * (T-483): uncommitted changes, a clash, or the move failed (also when `git status` itself fails). `commit`: the merge
- commit made (T-764). `t.attempts` must already be the new try's number: the merge commit's Symcc-Try trailer names it.
+ commit made, or the one an undone claim of this same try already made (earlierCatchUp) (T-764). `t.attempts` must already be the new try's number: the merge commit's Symcc-Try trailer names it.
  */
 export async function catchUpBranch($: Host, dir: string, branch: string, target: string, t?: Pick<SymccTask, 'id' | 'title' | 'attempts'>): Promise<CatchUp> {
   const count = async (range: string) => {
@@ -183,7 +183,7 @@ export async function catchUpBranch($: Host, dir: string, branch: string, target
     return Number.isFinite(n) ? n : null
   }
   const behind = await count(`refs/heads/${branch}..refs/heads/${target}`)
-  if (!behind) return { behind: 0 }
+  if (!behind) return { behind: 0, ...(t ? await earlierCatchUp($, dir, t) : {}) }
   const own = await count(`refs/heads/${target}..refs/heads/${branch}`)
   if (own === null) return { behind: 0 }
   const st = await git($, ['status', '--porcelain'], dir)
@@ -204,6 +204,21 @@ export async function catchUpBranch($: Host, dir: string, branch: string, target
   }
   await git($, ['merge', '--abort'], dir)
   return { behind, why: /^CONFLICT|fix conflicts|unmerged/im.test(`${m.stdout}\n${m.stderr}`) ? 'clash' : 'failed' }
+}
+
+/**
+ * T-764: the catch-up merge an earlier claim of this same try already made (`commit`), when the branch tip in `dir` is
+ * a merge commit of task `t` naming try `t.attempts`. A claim undone before its worker started (see unclaimed in
+ * workers.ts) drops the run that saved it, and the branch, already up to date, is not merged again: the re-claim saves
+ * it from here. Empty when the tip is anything else or git can't tell.
+ */
+async function earlierCatchUp($: Host, dir: string, t: Pick<SymccTask, 'id' | 'attempts'>): Promise<{ commit?: string }> {
+  if (!(t.attempts > 0)) return {}
+  const r = await git($, ['log', '-1', '--format=%H %P%n%B', 'HEAD'], dir)
+  if (r.exitCode !== 0) return {}
+  const [first = '', ...body] = String(r.stdout ?? '').split('\n')
+  const [head = '', ...parents] = first.trim().split(/\s+/)
+  return isSha(head) && parents.length > 1 && isTaskCommit(body.join('\n'), t.id, S.N.name, t.attempts) ? { commit: head } : {}
 }
 
 /** Why catchUpBranch left a branch behind (T-483): its own commits, uncommitted changes in its folder, merging main in clashed (T-745), or the move failed. */

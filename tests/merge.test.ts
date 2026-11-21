@@ -5495,11 +5495,13 @@ test('T-723: a merge-it-in try says it merges main in first', async () => {
 async function retryStarted(clash: boolean, runs: BoardTask['runs'] = [{ started: ISO, ended: ISO, ended_by: 'finished', ended_note: 'tests failed' }]) {
   let prompt = ''
   // T-764: the catch-up merge's message, and (once set) the message `git log -1` shows for the merge commit
-  const seen = { message: '', logged: '' }
+  // `upToDate`: the branch already holds main (an earlier claim of this try merged it in), its tip the merge commit H2
+  const seen = { message: '', logged: '', upToDate: false }
   const w = world({
     current: 'main',
     answer: args => {
-      if (args[0] === 'rev-list' && args[1] === '--count') return ok('3\n')
+      if (args[0] === 'rev-list' && args[1] === '--count') return ok(seen.upToDate ? '0\n' : '3\n')
+      if (seen.upToDate && args[0] === 'log' && args.at(-1) === 'HEAD' && args.includes('--format=%H %P%n%B')) return ok(`${H2} ${H1} ${M1}\n${seen.message}`)
       if (args.includes('merge') && args.includes('--no-edit')) {
         if (clash) return { exitCode: 1, stdout: 'CONFLICT (content): Merge conflict in src/a.ts', stderr: '' }
         seen.message = args[args.indexOf('-m') + 1]!
@@ -5543,6 +5545,39 @@ test('T-764: the catch-up merge commit is saved on the new try with its try numb
   seen.logged = seen.message
   w.git.tip = H2 // the branch tip, H2, is on main
   expect(await alreadyMerged(w.$, t)).toBe(H2)
+})
+
+test('T-764: a claim undone before its worker started keeps the catch-up merge commit: the re-claim saves it on the same try', async () => {
+  const { w, seen, t } = await retryStarted(false, [{ started: ISO, ended: ISO, ended_by: 'finished', ended_note: 'tests failed', commits: [H1] }])
+  expect(t.runs!.at(-1)!.commits).toEqual([H2])
+  // the queued start is taken back (a reload, a hand-over): the claim and the run that saved H2 are undone
+  const back = unclaimed(t, ISO)
+  expect(back.attempts).toBe(1)
+  expect(back.runs!.length).toBe(1)
+  await saveBoard(w.$, { ...(await load(w.$)), tasks: (await load(w.$)).tasks.map(x => (x.id === 'T-1' ? back : x)) })
+  // the branch already holds main, so nothing is merged again; its tip is try 2's merge commit
+  seen.upToDate = true
+  const calls = w.calls.length
+  await startWorker(w.$, 'T-1')
+  workers.clear()
+  expect(w.calls.slice(calls).some(c => c.includes('merge --no-edit'))).toBe(false)
+  const again = find(await load(w.$), 'T-1')!
+  expect(again.attempts).toBe(2)
+  expect(again.runs!.map(r => r.commits)).toEqual([[H1], [H2]])
+  w.git.head = H2
+  expect(await ownerEdits(w.$, again, WT)).toEqual([])
+})
+
+test('T-764: an up-to-date branch whose tip is an older try\'s merge commit saves nothing on the new try', async () => {
+  const { w, seen } = await retryStarted(false, [{ started: ISO, ended: ISO, ended_by: 'finished', ended_note: 'tests failed', commits: [H1] }])
+  // try 2 ends with no commit of its own; try 3 starts on a branch whose tip is still try 2's merge commit
+  await saveBoard(w.$, patchTask(await load(w.$), 'T-1', { status: 'todo', note: '', runs: [{ started: ISO, ended: ISO, ended_by: 'finished', ended_note: 'tests failed', commits: [H1] }, { started: ISO, ended: ISO, ended_by: 'finished', ended_note: 'tests failed', commits: [H2] }] }, ISO))
+  seen.upToDate = true
+  await startWorker(w.$, 'T-1')
+  workers.clear()
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.attempts).toBe(3)
+  expect(t.runs!.at(-1)!.commits ?? []).toEqual([])
 })
 
 test('T-764: after a restart that goes on, the catch-up merge commit carries the same try number and lands on that try', async () => {
