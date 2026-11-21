@@ -376,3 +376,112 @@ test('a board answer taken while the dialog waits reaches the lead once if the d
   await pause(0)
   expect(w.toLead).toEqual([])
 })
+
+// T-753: Claude Code's result when the owner turns the pop-up down
+const REFUSAL = "The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). STOP what you are doing and wait for the user to tell you how to proceed."
+
+/** A fake next(e) the owner turns down: it ends with the refusal as an error result. */
+function refusedDialog() {
+  let refuse: () => void = () => undefined
+  const shown = new Promise<{ ref: number; result: string; text: string; isError: true }>(res => (refuse = () => res({ ref: 1, result: REFUSAL, text: REFUSAL, isError: true })))
+  return { open: () => shown, refuse: () => refuse() }
+}
+
+test('T-753: a pop-up the owner turns down drops its Q-ns, and the lead is told their ids', async () => {
+  const w = world()
+  const d = refusedDialog()
+  const questions = [ask('Which color?', ['Red', 'Blue']), ask('Which part?', ['Top', 'Side']), ask('Which size?', ['S', 'M'])]
+  const r = popupCall(w.host, undefined, { questions }, d.open, w.notice)
+  await pause(0)
+  expect(openQuestions(w.board()).map(q => q.id)).toEqual(['Q-1', 'Q-2', 'Q-3'])
+  d.refuse()
+  const out = (await r) as unknown as { ref: number; isError: boolean; context: string[] }
+  // the refusal itself still reaches the lead, with what symcc did as context
+  expect(out.ref).toBe(1)
+  expect(out.isError).toBe(true)
+  expect(out.context).toEqual(['symcc dropped Q-1, Q-2, Q-3 from the board because the owner turned the pop-up down; ask again in the chat if it still matters.'])
+  expect(openQuestions(w.board())).toEqual([])
+  expect(w.board().questions!.map(q => [q.dropped, q.drop_note])).toEqual([0, 1, 2].map(() => [true, 'the owner turned the question down in the chat']))
+  expect(await runTool(w.host, 'question', { action: 'drop', id: 'Q-2' })).toContain('dropped: the owner turned the question down in the chat')
+  await pause(0)
+  expect(w.toLead).toEqual([])
+  expect(await answerOnBoard(w.host, 'Q-1', 'Red')).toContain('Q-1 was already closed')
+
+  // a call refused before it opened ({ deny }) drops them too; the lead hears it in a note
+  const w2 = world()
+  const r2 = popupCall(w2.host, undefined, { questions: [ask('Which color?', ['Red', 'Blue'])] }, async () => ({ deny: 'no' }), w2.notice)
+  expect(await r2).toEqual({ deny: 'no' })
+  expect(openQuestions(w2.board())).toEqual([])
+})
+
+test('T-753: closed with no answer keeps the Q-ns open; answered closes them with the answer', async () => {
+  const w = world()
+  const d = dialog()
+  const r = popupCall(w.host, undefined, { questions: [ask('Which color?', ['Red', 'Blue']), ask('Which part?', ['Top', 'Side'])] }, d.open, w.notice)
+  await pause(0)
+  d.answer({})
+  const out = (await r) as unknown as { context?: string[] }
+  expect(out.context ?? []).toEqual([])
+  expect(openQuestions(w.board()).map(q => q.id)).toEqual(['Q-1', 'Q-2'])
+
+  const w2 = world()
+  const d2 = dialog()
+  const r2 = popupCall(w2.host, undefined, { questions: [ask('Which color?', ['Red', 'Blue'])] }, d2.open, w2.notice)
+  await pause(0)
+  d2.answer({ 'Which color?': 'Blue' })
+  expect(((await r2) as { context: string[] }).context).toEqual(['symcc closed Q-1 on the board with the owner\'s answer "Blue".'])
+  expect(w2.board().questions![0]).toMatchObject({ answer: 'Blue', answered_by: 'chat' })
+  expect(w2.board().questions![0]!.dropped).toBe(undefined)
+})
+
+test("T-753: a turned-down pop-up tied to a task's own question leaves the task waiting", async () => {
+  const w = world()
+  await waitingTask(w.host as never, { question: 'Red or blue?', options: ['Red', 'Blue'] })
+  const d = refusedDialog()
+  const r = popupCall(w.host, undefined, { questions: [ask('T-1 asks: red or blue?', ['Red', 'Blue'], { header: 'T-1' })] }, d.open, w.notice)
+  await pause(0)
+  d.refuse()
+  const out = (await r) as unknown as { ref: number; context?: string[] }
+  expect(out.ref).toBe(1)
+  expect(out.context ?? []).toEqual([])
+  expect(w.board().questions ?? []).toEqual([])
+  expect(w.board().tasks[0]!.status).toBe('waiting')
+  expect(boardAnswered('T-1', 'Blue')).toBe(false)
+})
+
+/** A fake next(e) answered at once with `answers`, its text repeating them as Claude Code's does. */
+const answeredWith = (answers: Record<string, string>) => async () => ({
+  ref: 1,
+  result: { questions: [], answers },
+  text: `User has answered your questions: ${Object.entries(answers).map(([q, a]) => `"${q}"="${a}"`).join(', ')}.`,
+})
+
+test('T-753: an answer or a question with the refusal words is an answer, not a turned-down pop-up', async () => {
+  // the owner's answer has the words
+  const w = world()
+  const said = "No, the client doesn't want to proceed with that"
+  const out = (await popupCall(w.host, undefined, { questions: [ask('Go on?', ['Yes', 'No'])] }, answeredWith({ 'Go on?': said }), w.notice)) as { context: string[] }
+  expect(out.context).toEqual([`symcc closed Q-1 on the board with the owner's answer "${said}".`])
+  expect(w.board().questions![0]).toMatchObject({ answer: said, answered_by: 'chat' })
+  expect(w.board().questions![0]!.dropped).toBe(undefined)
+
+  // the question has the words
+  const w2 = world()
+  const q = 'The tool use was rejected last time: retry?'
+  const out2 = (await popupCall(w2.host, undefined, { questions: [ask(q, ['Yes', 'No'])] }, answeredWith({ [q]: 'Yes' }), w2.notice)) as { context: string[] }
+  expect(out2.context).toEqual(['symcc closed Q-1 on the board with the owner\'s answer "Yes".'])
+  expect(w2.board().questions![0]).toMatchObject({ answer: 'Yes', answered_by: 'chat' })
+  expect(w2.board().questions![0]!.dropped).toBe(undefined)
+})
+
+test("T-753: a task-tied pop-up answered with the refusal words puts the answer into the task", async () => {
+  const w = world()
+  await waitingTask(w.host as never, { question: 'Red or blue?', options: ['Red', 'Blue'] })
+  const said = "No: the client doesn't want to proceed"
+  const q = 'T-1 asks: red or blue?'
+  const out = (await popupCall(w.host, undefined, { questions: [ask(q, ['Red', 'Blue'], { header: 'T-1' })] }, answeredWith({ [q]: said }), w.notice)) as { context: string[] }
+  expect(out.context[0]).toMatch(/^symcc put the owner's answer into T-1: /)
+  const t = w.board().tasks[0]!
+  expect(t.status).not.toBe('waiting')
+  expect(t.history.map(h => h.text).join('\n')).toContain(said)
+})
