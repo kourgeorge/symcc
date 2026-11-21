@@ -940,7 +940,9 @@ function remember(text: string, d: StatsData): string {
  * (or one made before the plugin was loaded again), which is then shown as it is.
  */
 export function statsDataOf(text: string): StatsData | undefined {
-  return remembered.get(text) ?? remembered.get(String(text ?? '').trim())
+  const t = String(text ?? '').trim()
+  // Claude Code puts "<name>: " (e.g. "symcc: ") before a command's text (T-788)
+  return remembered.get(text) ?? remembered.get(t) ?? remembered.get(t.replace(/^[\w.-]+: /, ''))
 }
 
 /** "2 tasks not linked to a run": a scout's tasks its runs file doesn't list (T-719). */
