@@ -1,6 +1,6 @@
 // The board panel's page for one task: details, actions, and for a task in review its changes.
 import type { SymccTask } from '../../../types'
-import { cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, roleOf, findRole, type DiffFile, type Seg, detailRows, wrapSegs, STATUS_BADGE, statusMark, statusBadge, taskKeys, YOUR_EDITS, intoOf, taskReports, type BoardTask, boxHint, pickHint, taskCopyText, copyToast, fileWaitText, isAnswered, showsAnswer, answerText, whyFailed, taskActions, taskAsks, canPickRole as canPickRoleOf, canMarkMerged as canMarkMergedOf, actionButtonLabel, type TaskAction, type TaskActionId, failNext, failAsks, answeredLeadLine } from '../../board'
+import { cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, roleOf, findRole, type DiffFile, type Seg, detailRows, wrapSegs, STATUS_BADGE, taskKeys, YOUR_EDITS, intoOf, taskReports, type BoardTask, boxHint, pickHint, taskCopyText, copyToast, fileWaitText, isAnswered, showsAnswer, answerText, whyFailed, taskActions, taskAsks, canPickRole as canPickRoleOf, canMarkMerged as canMarkMergedOf, actionButtonLabel, type TaskAction, type TaskActionId, failNext, failAsks, answeredLeadLine } from '../../board'
 import { folderDiff, changedFiles } from '../../app/review'
 import { loadRoles } from '../../app/roles'
 import { loadKinds } from '../../app/kinds'
@@ -211,12 +211,10 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
       ))}
     </Text>
   )
-  // an approve this page started shows its step at once, not "ready for review": on the badge, the Status row and the
+  // an approve this page started shows its step at once, not "ready for review": on the Status row and the
   // Stage line alike (one flag for the whole page)
   const pageMerging = !!mergingLine(t.id)
   const rows = detailRows(t, { roles: S.roles, kinds: S.kinds, all: v.tasks, when, nowMs: pane.nowMs, archivedDone: v.archived_done, board: v, merging: pageMerging, driving: v.driving ?? S.driving })
-  // the badge names the step a doing task is in ("⌕ checker · 5m"); the Status row its state ("▶ doing · 48m")
-  const badge = statusBadge(t as BoardTask, pane.nowMs, undefined, pageMerging)
   // The saved worker reports, one per try: the latest shown, unless the owner picked another try (its number key).
   const reports = taskReports(t)
   if (S.reportTry && S.reportTry.task !== t.id) S.reportTry = null
@@ -378,10 +376,8 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
     <Box flexDirection="column" gap={1}>
       <Box flexDirection="column">
         {wrapSegs([{ text: t.id, color: 'claude', bold: true }, { text: `  ${t.title}`, color: 'text', bold: true }], width).map((l, i) => segLine(l, `title-${i}`))}
-        <Text>
-          <Text bold color={C(badge.color)}>{`[${answered ? `${statusMark(t)} answered: read it` : badge.text}]`}</Text>
-          {agentId ? <Text color={C('inactive')}> · a worker is on it now</Text> : null}
-        </Text>
+        {/* no status badge under the title (T-693): the Status and Stage rows in the details show it */}
+        {agentId ? <Text color={C('inactive')}>a worker is on it now</Text> : null}
         {mergeStatus}
       </Box>
 

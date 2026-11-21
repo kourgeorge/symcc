@@ -130,8 +130,8 @@ export function driverLooksIdle(tasks: readonly DriveTask[], nowMs: number): boo
 
 /**
  * The warning a session that doesn't drive the board shows, '' when it drives. `where` 'board': the line under the
- * board's banner, the longest form that fits in `width` ("⚠ Another session drives this board — its workers run there,
- * not here. /symcc-drive to drive it from here."); 'band': the short mark at the start of the band above the prompt
+ * board's banner, right under its tests/limits line, the longest form that fits in `width` ("⚠ Another session drives.
+ * /symcc-drive to drive it from here."); 'band': the short mark at the start of the band above the prompt
  * ("⚠ driven by another session"). Both add that the driver looks idle when driverLooksIdle says so.
  */
 export function driveWarning(driving: boolean, tasks: readonly DriveTask[], nowMs: number, name: string = DEFAULT_NAME, where: 'board' | 'band' = 'board', width = Infinity): string {
@@ -139,9 +139,8 @@ export function driveWarning(driving: boolean, tasks: readonly DriveTask[], nowM
   const idle = driverLooksIdle(tasks, nowMs)
   if (where === 'band') return `⚠ driven by another session${idle ? ' (it looks idle)' : ''}`
   const cmd = `/${namesFor(name).name}-drive`
-  const who = `Another session drives this board${idle ? ', but it looks idle' : ''}`
+  const who = `Another session drives${idle ? ', but looks idle' : ''}`
   const forms = [
-    `⚠ ${who} — its workers run there, not here. ${cmd} to drive it from here.`,
     `⚠ ${who}. ${cmd} to drive it from here.`,
     `⚠ ${who}. ${cmd} to take over.`,
     `⚠ Other session drives${idle ? ' (idle?)' : ''} · ${cmd}`,
@@ -318,16 +317,17 @@ export function bannerLines(b: BannerBoard, root: string, home: string, driving:
   const withV = line1(version)
   const l1 = withV.reduce((n, p) => n + p.text.length, 0) <= room1 ? withV : line1('')
   const texts = [l1, l2, l3]
-  // as before: a board with tasks (or archived ones) always gets a counts line, even an empty one
-  if (b.tasks.length || archivedOf(b).done) texts.push(join(bannerCounts(b, nowMs).map(c => fact(c.text))))
   const w = Math.max(1, Math.floor(width))
   const wide = w >= BANNER_NARROW
-  // The three fixed lines sit beside the drawing; the drawing's lower lines (the clef's hook)
-  // stand alone, and the counts line goes under the drawing, from the left edge, so it keeps the full width.
-  if (wide) texts.splice(3, 0, ...Array.from({ length: Math.max(0, ICON_ART.length - 3) }, () => [] as BannerPart[]))
-  // T-643: a session that doesn't drive says so in the warning color under it all, with how to take over
-  const warn = driveWarning(driving, b.tasks, nowMs ?? Date.now(), name, 'board', w)
+  // T-643/T-694: a session that doesn't drive says so in the warning color right under the tests/limits line, with how to take over
+  const room4 = w - (wide && logo[3] !== undefined ? logo[3].length + 1 : 0)
+  const warn = driveWarning(driving, b.tasks, nowMs ?? Date.now(), name, 'board', room4)
   if (warn) texts.push([{ text: warn, tone: 'warning' }])
+  // The fixed lines sit beside the drawing; the drawing's lower lines (the clef's hook) stand alone when nothing
+  // is beside them, and the counts line goes under the drawing, from the left edge, so it keeps the full width.
+  if (wide) texts.push(...Array.from({ length: Math.max(0, ICON_ART.length - texts.length) }, () => [] as BannerPart[]))
+  // as before: a board with tasks (or archived ones) always gets a counts line, even an empty one
+  if (b.tasks.length || archivedOf(b).done) texts.push(join(bannerCounts(b, nowMs).map(c => fact(c.text))))
   return texts.map((parts, i) => {
     const art = wide && logo[i] !== undefined ? `${logo[i]} ` : ''
     return { art, parts: cutParts(parts, w - art.length) }

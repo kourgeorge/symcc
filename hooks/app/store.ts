@@ -363,7 +363,7 @@ async function readJoined(host: Host, again = true): Promise<{ text: string; rea
     raw = JSON.parse(text)
   } catch {
     noteRead(host, file, text)
-    return { text, read: readBoard(text), whole: false, missing: [], missingFiles: new Set<string>() }
+    return { text, read: readBoard(text, S.root), whole: false, missing: [], missingFiles: new Set<string>() }
   }
   const files = new Map<string, Record<string, Record<string, unknown>>>()
   const missingNow = new Set<string>()
@@ -392,7 +392,7 @@ async function readJoined(host: Host, again = true): Promise<{ text: string; rea
   // a finished task kept whole only because its parts file is missing is not one to migrate (see missingParts)
   const whole = hasWholeFinished(raw, missingNow)
   if (!whole) noteRead(host, file, text)
-  const read = readBoardValue(j.raw)
+  const read = readBoardValue(j.raw, S.root)
   return { text, read, whole, missing: j.missing.map((text, i) => ({ text, file: j.stubbed[i]!.file })), missingFiles: missingNow }
 }
 

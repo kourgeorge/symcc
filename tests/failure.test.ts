@@ -42,7 +42,11 @@ test("a failed task's board row and the lead's text board use the same sentence 
   const fit = fitRow(20, 'Fix it', whyFailed(CASES[3]![1]), 60, true)
   expect(fit.extra).toMatch(/^The worker finished.*…$/)
   expect(fit.title.length + fit.pad.length + fit.extra.length).toBe(40)
-  expect(fitRow(20, 'Fix it', whyFailed(CASES[3]![1]), 60).extra).toBe('')
+  // without cutExtra a short whole title also keeps the start of the extra (T-696)
+  expect(fitRow(20, 'Fix it', whyFailed(CASES[3]![1]), 60)).toEqual(fit)
+  // too narrow for 12 columns of reason: the reason is still cut, down to 8 columns, then left out
+  expect(fitRow(20, 'Fix it', whyFailed(CASES[3]![1]), 38, true).extra).toMatch(/^The worke…$/)
+  expect(fitRow(20, 'Fix it', whyFailed(CASES[3]![1]), 33, true)).toEqual({ title: 'Fix it', pad: '', extra: '' })
 })
 
 test("the worker's report asking for files or a question is pointed out", () => {

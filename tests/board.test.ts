@@ -372,11 +372,11 @@ test('a merged task is said out loud, several are joined into one line, and noti
   // a new board saves no choice: the best this machine can play
   expect(b.notify).toBeUndefined()
   expect(notifyOf(b, { voice: true, sound: true })).toBe('voice')
-  expect(notifyOf(b, { voice: false, sound: true })).toBe('sound')
+  expect(notifyOf(b, { voice: false, sound: true }, '/x/web')).toBe('sound 2')
   expect(notifyOf(b, { voice: false, sound: false })).toBe('off')
   expect(bestNotify({ voice: true, sound: false })).toBe('voice')
   // a saved choice is kept, even where it can't play
-  expect(notifyOf({ notify: 'sound' }, { voice: true, sound: true })).toBe('sound')
+  expect(notifyOf({ notify: 'sound 1' }, { voice: true, sound: true })).toBe('sound 1')
   expect(notifyOf({ notify: 'voice' }, { voice: false, sound: false })).toBe('voice')
   expect(notifyOf(parseBoard(JSON.stringify({ ...b, notify: 'off' })))).toBe('off')
   // a bad value is set back to the default (none saved)
@@ -388,15 +388,15 @@ test("a notify choice this machine can't play is refused with the reason, and a 
   const other: Playable = { system: 'other', sound: false, voice: false }
   const mac: Playable = { system: 'mac', sound: true, voice: true }
   const windows: Playable = { system: 'windows', sound: false, voice: false }
-  expect(notifyChoices(linux)).toEqual(['off', 'sound'])
+  expect(notifyChoices(linux)).toEqual(['sound 1', 'sound 2', 'sound 3', 'off'])
   expect(notifyChoices(other)).toEqual(['off'])
-  expect(notifyChoices(mac)).toEqual(['off', 'sound', 'voice'])
+  expect(notifyChoices(mac)).toEqual(['voice', 'sound 1', 'sound 2', 'sound 3', 'off'])
   expect(notifyRefusal('voice', linux)).toBe("voice isn't available here: no speech program found (install espeak or speech-dispatcher)")
-  expect(notifyRefusal('sound', linux)).toBe('')
+  expect(notifyRefusal('sound 2', linux)).toBe('')
   expect(notifyRefusal('off', other)).toBe('')
-  expect(notifyRefusal('sound', windows)).toContain("sound isn't available here: no sound player found")
+  expect(notifyRefusal('sound 3', windows)).toContain("sound 3 isn't available here: no sound player found")
   expect(unplayableNote('voice', linux)).toBe("notify is 'voice' but no speech program was found here; nothing will play")
-  expect(unplayableNote('sound', linux)).toBe('')
+  expect(unplayableNote('sound 1', linux)).toBe('')
   expect(unplayableNote('off', other)).toBe('')
 })
 
@@ -466,11 +466,10 @@ test('the banner: the clef drawing beside the name, where, who drives and the se
     `${a0}symcc board · symcc · ⏸ paused: nothing starts`,
     `${a1}~/repositories/symcc · main · driven by another session`,
     `${a2}no test command · 3 at once · 45 min · 1 retry`,
-    `${a3}`,
+    `${a3}⚠ Another session drives. /symcc-drive to drive it from here.`,
     '2 doing · 1 to do · 1 done',
-    '⚠ Another session drives this board. /symcc-drive to drive it from here.',
   ])
-  expect(more[5]!.parts).toEqual([{ text: '⚠ Another session drives this board. /symcc-drive to drive it from here.', tone: 'warning' }])
+  expect(more[3]!.parts).toEqual([{ text: '⚠ Another session drives. /symcc-drive to drive it from here.', tone: 'warning' }])
   // no all-time total of the tries on the counts line (T-630): /symcc-stats has it
   expect(more.map(bannerText).join('\n')).not.toMatch(/tokens|8m/)
   expect(more[2]!.parts[0]).toEqual({ text: 'no test command', tone: 'warning' })
@@ -586,7 +585,7 @@ test('the board list shows "→ branch" only for a task that merges into another
   expect(rowExtra(t, [t, u], 'main')).toBe('→ feature-x')
   expect(rowExtra(u, [t, u], 'main')).toBe('')
   expect(rowExtra(t, [t, u], 'feature-x')).toBe('')
-  expect(rowExtra({ ...t, after: [u.id] }, [t, u], 'main')).toBe('→ feature-x · after T-2')
+  expect(rowExtra({ ...t, after: [u.id] }, [t, u], 'main')).toBe('→ feature-x · waits for T-2')
 })
 
 test("a task waiting only for the owner's files: its row and keys say to commit or stash them; a question is unchanged", () => {
@@ -1793,7 +1792,7 @@ test('setup leaves secrets and big files out of the first commit', async () => {
 test('/symcc-settings: no words opens the view; NAME VALUE sets one setting; bad names and values say why', () => {
   expect(parseCommand('symcc-settings', '')).toEqual({ kind: 'settings' })
   expect(parseCommand('symcc-settings', 'max_parallel 5')).toEqual({ kind: 'set', setting: 'max_parallel', input: { max_parallel: 5 } })
-  expect(parseCommand('symcc-settings', 'notify sound')).toEqual({ kind: 'set', setting: 'notify', input: { notify: 'sound' } })
+  expect(parseCommand('symcc-settings', 'notify sound 2')).toEqual({ kind: 'set', setting: 'notify', input: { notify: 'sound 2' } })
   expect(parseCommand('symcc-settings', 'notify Off')).toEqual({ kind: 'set', setting: 'notify', input: { notify: 'off' } })
   expect(parseCommand('symcc-settings', 'open_on_start on')).toEqual({ kind: 'set', setting: 'open_on_start', input: { open_on_start: true } })
   expect(parseCommand('symcc-settings', 'mode review')).toEqual({ kind: 'set', setting: 'mode', input: { mode: 'review' } })
@@ -1805,10 +1804,10 @@ test('/symcc-settings: no words opens the view; NAME VALUE sets one setting; bad
     const c = parseCommand('symcc-settings', args)
     return c?.kind === 'bad' ? c.message : ''
   }
-  expect(bad('x 1')).toBe('There is no setting called x; settings are: test_commands, test_minutes, max_parallel, max_minutes, auto_retries, archive_days, open_on_start, notify, sound_set, scout_findings, tests_with_changes, checker, mode, enabled')
+  expect(bad('x 1')).toBe('There is no setting called x; settings are: test_commands, test_minutes, max_parallel, max_minutes, auto_retries, archive_days, open_on_start, notify, scout_findings, tests_with_changes, checker, mode, enabled')
   expect(bad('max_parallel lots')).toBe('max_parallel must be a whole number, 1-8')
   expect(bad('max_parallel')).toContain('/symcc-settings max_parallel <1-8>')
-  expect(bad('notify loud')).toBe('notify must be off, sound or voice')
+  expect(bad('notify loud')).toBe('notify must be voice, sound 1, sound 2, sound 3 or off')
   expect(bad('open_on_start maybe')).toBe('open_on_start must be on or off')
   expect(bad('mode later')).toBe('mode must be paused, review or auto')
   expect(parseSettingValue('max_minutes', '90')).toEqual({ ok: true, input: { max_minutes: 90 } })
@@ -1928,7 +1927,7 @@ test('settings keep their limits, and a value cut to its limit says so', () => {
 })
 
 test('every setting has a row: value, default, range and meaning', () => {
-  expect(SETTINGS.map(s => s.name)).toEqual(['test_commands', 'test_minutes', 'max_parallel', 'max_minutes', 'auto_retries', 'archive_days', 'open_on_start', 'notify', 'sound_set', 'scout_findings', 'tests_with_changes', 'checker', 'mode', 'enabled'])
+  expect(SETTINGS.map(s => s.name)).toEqual(['test_commands', 'test_minutes', 'max_parallel', 'max_minutes', 'auto_retries', 'archive_days', 'open_on_start', 'notify', 'scout_findings', 'tests_with_changes', 'checker', 'mode', 'enabled'])
   const b = { ...emptyBoard(), test_commands: ['npm test', 'npm run lint'], notify: 'off' as const }
   expect(settingValue(b, 'test_commands')).toBe('["npm test","npm run lint"]')
   expect(settingValue(b, 'notify')).toBe('off')
@@ -2944,7 +2943,7 @@ test('task rows: a short status column and an inactive-colored extra; the extra 
   expect(rowExtra({ ...base, attempts: 2 }, tasks)).toBe('frontend')
   expect(rowExtra({ ...base, role: 'general', attempts: 1 }, tasks)).toBe('')
   expect(rowExtra({ ...base, role: 'general', attempts: 3 }, tasks)).toBe('')
-  expect(rowExtra(tasks[1]!, tasks)).toBe('after T-5')
+  expect(rowExtra(tasks[1]!, tasks)).toBe('waits for T-5')
   expect(rowExtra({ ...tasks[1]!, after: ['T-1'] }, tasks)).toBe('')
   expect(rowExtra(tasks[3]!, tasks)).toBe('Enter to review')
   expect(rowExtra(tasks[2]!, tasks)).toBe('')
@@ -2953,11 +2952,29 @@ test('task rows: a short status column and an inactive-colored extra; the extra 
   expect(statusCell(asking, now)).toBe('more time?')
   expect(rowExtra(asking, tasks, '', 45)).toBe('T-5 has run 55 min. Give it more time?')
   expect(rowExtra({ ...asking, extra_minutes: undefined }, tasks)).toBe(`T-5 has run ${emptyBoard().max_minutes} min. Give it more time?`)
-  // the extra sits at the right end; when the whole title does not fit beside it, it goes, then the title is cut
+  // the extra sits at the right end; when the whole title does not fit beside it, the title is cut first (down to
+  // TITLE_ROOM), then the extra is cut (keeping its start), and only at a very narrow width does the extra go (T-696)
   const wide = fitRow(20, 'Secrets scout example', 'frontend · try 2', 60)
   expect(20 + wide.title.length + wide.pad.length + wide.extra.length).toBe(60)
   expect(wide.title).toBe('Secrets scout example')
-  expect(fitRow(20, 'Secrets scout example', 'frontend · try 2', 50)).toEqual({ title: 'Secrets scout example', pad: '', extra: '' })
+  expect(fitRow(20, 'Secrets scout example', 'frontend · try 2', 50)).toEqual({ title: 'Secrets scout examp…', pad: '  ', extra: 'fronten…' })
+  const long = 'Board list: keep the row end visible by cutting the title instead'
+  const cut = fitRow(10, long, 'waits for T-690', 60)
+  expect(cut).toEqual({ title: 'Board list: keep the row end vis…', pad: '  ', extra: 'waits for T-690' })
+  expect(10 + cut.title.length + cut.pad.length + cut.extra.length).toBe(60)
+  expect(fitRow(10, long, '[feature]', 45)).toEqual({ title: 'Board list: keep the ro…', pad: '  ', extra: '[feature]' })
+  // narrow: the title keeps 20 columns and the extra is cut, keeping its start
+  expect(fitRow(10, long, 'waits for T-690', 40)).toEqual({ title: 'Board list: keep th…', pad: '  ', extra: 'waits f…' })
+  // very narrow: the extra goes, the title is cut to the room
+  expect(fitRow(10, long, 'waits for T-690', 35)).toEqual({ title: 'Board list: keep the row…', pad: '', extra: '' })
+  expect(fitRow(10, long, 'waits for T-690', 11)).toEqual({ title: '…', pad: '', extra: '' })
+  // a cut that lands after a space (the "…" drops it) still ends the extra right at the width
+  expect(fitRow(10, long, 'waits for T-690', 49)).toEqual({ title: 'Board list: keep the…', pad: '   ', extra: 'waits for T-690' })
+  for (const extra of ['waits for T-690', '[feature]'])
+    for (let w = 30; w <= 80; w++) {
+      const f = fitRow(10, long, extra, w)
+      if (f.extra) expect([w, 10 + f.title.length + f.pad.length + f.extra.length]).toEqual([w, w])
+    }
   expect(fitRow(20, 'Secrets scout example', 'frontend · try 2', 30)).toEqual({ title: 'Secrets s…', pad: '', extra: '' })
 })
 

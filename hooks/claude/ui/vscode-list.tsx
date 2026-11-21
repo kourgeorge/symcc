@@ -1,7 +1,7 @@
 // The board panel's Tasks view in VS Code's side panel (see surface.ts and vscode.tsx). Like the terminal's list
 // (list.tsx), each open task is one line: the ID (a link that opens the task), its state cell in the status color,
 // lined up in one column with the other rows' ("▶ 5m" for a doing task, "○" for a to do one), the title, then dim the
-// kind or role, "after …", the question or why it failed:
+// kind or role, "waits for …", the question or why it failed:
 //   T-401 ▶ 5m  Show the plugin version in the board title · [investigation · researcher]
 //   ● T-404 ? waiting for 1m  Pick the colors for the review mark · Yellow or blue for review?
 // The row is fitted to the panel's width (paneWidth in parts.tsx: wide when VS Code tells none) times VS_ROW_SCALE,
@@ -13,7 +13,7 @@
 // No key hints: the mode switch is a link and the search a box in the footer. An empty board says so, with one
 // primary button that starts a message to the lead in the prompt box.
 import type { SymccStatus, SymccTask } from '../../../types'
-import { statusMark, archivedNote, archivedOf, localOffset, panelSections, BACKLOG_SHOWN, ALL_CLEAR, statusCell, rowCell, rowMark, rowStates, stateText, TITLE_ROOM, rowExtra, roleTag, kindTag, searchTasks, SEARCH_WORDS, isInvestigation, needsYou, kindMark, roleMark, fmtDuration, ownersTurn, shownStatus } from '../../board'
+import { statusMark, archivedNote, archivedOf, localOffset, panelSections, BACKLOG_SHOWN, ALL_CLEAR, statusCell, rowCell, rowMark, rowStates, stateText, TITLE_ROOM, rowExtra, WAITS_FOR,roleTag, kindTag, searchTasks, SEARCH_WORDS, isInvestigation, needsYou, kindMark, roleMark, fmtDuration, ownersTurn, shownStatus } from '../../board'
 import { openDays, S } from '../../app/state'
 import { type $, panelValues } from '../panel'
 import type { PaneParts } from './parts'
@@ -32,8 +32,9 @@ const GROUPS: { label: string; has: SymccStatus[] }[] = [
  *  columns in its code font's cells, but draws a row's title in its narrower text font: in the owner's 950px panel it
  *  reported about 70-80 columns, yet a 66-character row filled less than half the line. So a row is fitted to this many
  *  times the reported columns (a bit under the 2 that screenshot shows, so a title of wide letters still fits on its
- *  one line); only a really narrow panel cuts the title with "…". */
-export const VS_ROW_SCALE = 1.8
+ *  one line); only a really narrow panel cuts the title with "…". At 1.8 a cut row still ended at about 80-85% of the
+ *  line (T-698), so it is 2.1 now: the row fills the line and stays one line (the Questions-for-you rows use it too). */
+export const VS_ROW_SCALE = 2.1
 /** The characters a VS Code list row is fitted to, for a panel of `columns` reported columns (see VS_ROW_SCALE). */
 export const vsRowRoom = (columns: number) => Math.floor(columns * VS_ROW_SCALE)
 
@@ -51,7 +52,7 @@ export const ASK_LEAD_DRAFT = 'Next task: '
 /** A piece of an open row's state part after its status words: `drop` says which goes first when the line is too
  *  wide (higher first; 0 only after the title is down to "…"), `long` marks a question, failure reason or note, capped
  *  to about half the free room, `short` a shorter form used before the part is dropped ("[researcher]" for
- *  "[investigation · researcher]", "after T-1 +2" for "after T-1, T-2, T-3"). */
+ *  "[investigation · researcher]", "waits for T-1 +2" for "waits for T-1, T-2, T-3"). */
 export type RowPart = { text: string; drop: number; long?: boolean; short?: string }
 
 /** `text` cut at a word to at most `max` columns, ending with "…"; '' when not even one whole word fits. */
@@ -65,8 +66,8 @@ const cutWords = (text: string, max: number) => {
 /** An open row's one line, fitted to `room` columns, never wider (but for a room too small for even the status mark
  *  and the status). In order, until it fits: a long part (the question, why it failed) is held to about half the free
  *  room, cut at a word; parts with a `drop` are shortened (their `short` form) or dropped whole, the highest first (the
- *  role tag, the kind, the choices count, the long text), until the title keeps MIN_TITLE; "after …" takes its short
- *  form; the title is cut with "…", down to just "…"; "after …" and "→ branch" are dropped; last, the status words lose
+ *  role tag, the kind, the choices count, the long text), until the title keeps MIN_TITLE; "waits for …" takes its short
+ *  form; the title is cut with "…", down to just "…"; "waits for …" and "→ branch" are dropped; last, the status words lose
  *  words from their end ("for 5m"). A part is never cut mid-word. No try mark: the band and the task page show it (T-628). */
 export function fitRow(title: string, room: number, status: string, parts: RowPart[]): { title: string; status: string; rest: string } {
   const t = title.replace(/\s+/g, ' ').trim()
@@ -168,17 +169,17 @@ export function listPageVs($: $, pane: PaneParts) {
     // the kind once: rowExtra already shows it as a tag ("[bug · tester]", "[investigation]") for some rows; a question
     // or failure reason that only mentions the word does not count
     const tagged = body.split(' · ').some(p => p === `[${kind}]` || p === `[${kind}`)
-    // "after T-3" stays longest ("after T-1 +2" when narrow); the role tag goes first ("[researcher]" before that), then
+    // "waits for T-3" stays longest ("waits for T-1 +2" when narrow); the role tag goes first ("[researcher]" before that), then
     // the kind, then a question or reason (cut at a word)
-    // the "after" list comes from the task's own `after` field (its unfinished ones, as rowExtra shows them), never
+    // the "waits for" list comes from the task's own `after` field (its unfinished ones, as rowExtra shows them), never
     // from text that only starts with the word: a question or note "after you look at …" is a normal long part
     const ids = x.status === 'todo' || x.status === 'paused' ? (x.after ?? []).filter(id => v.tasks.some(t => t.id === id && t.status !== 'done')) : []
-    const after = ids.length && body === `after ${ids.join(', ')}` ? body : ''
+    const after = ids.length && body === `${WAITS_FOR} ${ids.join(', ')}` ? body : ''
     const role = !after && body && (body === roleTag(x) || body === kindTag(x)) ? body : ''
     const roleOnly = roleMark(x)
     const parts: RowPart[] = [
       { text: branch, drop: 0 },
-      { text: after, drop: 0, short: after && ids.length > 1 ? `after ${ids[0]} +${ids.length - 1}` : undefined },
+      { text: after, drop: 0, short: after && ids.length > 1 ? `${WAITS_FOR} ${ids[0]} +${ids.length - 1}` : undefined },
       { text: kind && !tagged ? kind : '', drop: 3 },
       { text: role, drop: 4, short: role.startsWith('[') && roleOnly && role !== `[${roleOnly}]` ? `[${roleOnly}]` : undefined },
       { text: after || role ? '' : body, drop: 1, long: true },

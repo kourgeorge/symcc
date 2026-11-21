@@ -78,8 +78,10 @@ test('T-643: a session that does not drive: a warning line under the banner and 
   const fresh = new Date(NOW - 60_000).toISOString()
   const view = (driving: boolean, updated_at = fresh): ViewFile => ({ ...f, view: { ...f.view, driving, working: [], tasks: f.view.tasks.map(t => (t.id === 'T-1' ? { ...t, updated_at } : t)) } })
   const warnLines = (g: ViewFile, w = 120) => panelLines(g, { opened: '', cursor: 0 }, NOW, w).lines.filter(l => l.some(s => s.color === 'warning' && s.text.startsWith('⚠')))
-  const full = '⚠ Another session drives this board — its workers run there, not here. /symcc-drive to drive it from here.'
-  expect(warnLines(view(false)).map(lineText)).toEqual([full])
+  // T-694: the line sits right under the tests/limits line, beside the drawing's last row when wide; its text from the ⚠ on
+  const warnText = (l: Parameters<typeof lineText>[0]) => lineText(l).slice(lineText(l).indexOf('⚠'))
+  const full = '⚠ Another session drives. /symcc-drive to drive it from here.'
+  expect(warnLines(view(false)).map(warnText)).toEqual([full])
   // narrow: a shorter form that fits
   const narrow = warnLines(view(false), 40).map(lineText)
   expect(narrow.length).toBe(1)
@@ -90,7 +92,7 @@ test('T-643: a session that does not drive: a warning line under the banner and 
   expect(band[0]![1]).toEqual({ text: ' ⚠ driven by another session', color: 'warning' })
   expect(band.map(lineText).find(l => l.startsWith('T-1'))).toMatch(/ — runs in the other session$/)
   // claimed an hour ago and still not started there: it looks idle
-  expect(warnLines(view(false, AT), 140).map(lineText)).toEqual(['⚠ Another session drives this board, but it looks idle — its workers run there, not here. /symcc-drive to drive it from here.'])
+  expect(warnLines(view(false, AT), 140).map(warnText)).toEqual(['⚠ Another session drives, but looks idle. /symcc-drive to drive it from here.'])
   expect(bandDraw(view(false, AT), NOW, 120).lines[0]![1]!.text).toBe(' ⚠ driven by another session (it looks idle)')
   // the driving session: neither, and the row keeps its own note
   expect(warnLines(view(true))).toEqual([])
@@ -215,13 +217,14 @@ test('T-581: a doing row in a check step or the merge line shows its icon and th
   ]
   for (const [id, badge, stage] of want) {
     const p = page(id)
-    expect(p).toContain(`[${badge}]`)
+    // no status badge under the title (T-693): the Status and Stage rows say it
+    expect(p).not.toContain(`[${badge}]`)
     expect(p.find(l => l.startsWith('Status:'))).toContain(`▶ doing · ${badge.split(' · ')[1]}`)
     expect(p.find(l => l.startsWith('Status:'))).not.toContain(badge)
     expect(p.find(l => l.startsWith('Stage:'))?.replace(/^Stage:\s+/, '')).toBe(stage)
   }
   // a running checker shows its step even with the setting off; with it on every task's Stage has it
-  expect(page('T-7')).toContain('[⌕ checker · 20m]')
+  expect(page('T-7')).not.toContain('[⌕ checker · 20m]')
   expect(page('T-7').find(l => l.startsWith('Stage:'))).toContain('worker ✓ → prep ✓ → ● checker → queue → test → merge')
   const on = { ...f, view: { ...f.view, checker: true } }
   expect(page('T-1', on).find(l => l.startsWith('Stage:'))).toContain('worker ✓ → prep ✓ → checker ✓ → queue ✓ → ● test → merge')
@@ -563,6 +566,14 @@ test('T-680: a task page shows Claude Code\'s row of buttons ([ Back ] [ Pause ]
   expect(buttonRow('deps', 'scouts')).toBe('[ Back ] [ Edit ] [ Pause ]')
   expect(buttonRow('docs', 'scouts')).toBe('[ Back ] [ Run now ] [ Edit ] [ Resume ]')
   expect(buttonRow('Q-1')).toBe('[ Back ]')
+  // T-693: no status badge line under a task's title: the buttons come right after it; the status is in the Status row
+  for (const id of ['T-1', 'T-2', 'T-3']) {
+    const lines = panelLines(f, { opened: id, cursor: 0 }, NOW, 140).lines.map(lineText)
+    const at = lines.findIndex(l => l.startsWith(`${id} `))
+    expect(lines[at + 1]?.startsWith('[ Back ]')).toBe(true)
+    expect(lines.some(l => /^\[[^ ].*\]$/.test(l))).toBe(false)
+    expect(lines.find(l => l.trim().startsWith('Status:'))).toContain({ 'T-1': '▶ doing', 'T-2': '◆ ready for review', 'T-3': '✗ failed' }[id]!)
+  }
 
   // in the TUI: a click on each button sends the same command as its key (Drop in review, which has no key, drops it)
   const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)]])
@@ -1042,7 +1053,7 @@ function scoutsViewFile(): ViewFile {
       { run: { started: '2026-11-19T10:45:00.000Z', ended: '2026-11-19T10:50:00.000Z', outcome: 'nothing' as const, findings: 0 }, tasks: [] },
     ],
   }
-  return { ...f, view: { ...f.view, scouts, scout_runs, notify_choices: ['off', 'sound'], notify: 'sound' } }
+  return { ...f, view: { ...f.view, scouts, scout_runs, notify_choices: ['voice', 'sound 1', 'sound 2', 'sound 3', 'off'], notify: 'sound 2' } }
 }
 
 test('T-559: the Scouts tab lists the scouts from view.json, a scout\'s page shows its prompt and runs, a run its report; the Settings tab shows every setting in its group with its value and default', () => {
@@ -1103,10 +1114,11 @@ test('T-559: the Scouts tab lists the scouts from view.json, a scout\'s page sho
   expect(s.find(l => /^› /.test(l))).toContain('mode')
   expect(settings.ids.slice(0, 2)).toEqual(['settings-group:Work', 'mode'])
   expect(settings.ids).toContain('notify')
-  // T-650: the sound set row, right after notify, with the set in use
-  expect(settings.ids[settings.ids.indexOf('notify') + 1]).toBe('sound_set')
-  expect(s.find(l => l.includes('sound_set'))).toMatch(/sound_set +\d · default picked from the project name · 1 \/ 2 \/ 3/)
-  expect(panelLines({ ...f, view: { ...f.view, sound_set: 3 } as typeof f.view }, { tab: 'settings', opened: '', cursor: 1, settingsOpen: ALL_GROUPS }, NOW, 140).lines.map(lineText).find(l => l.includes('sound_set'))).toMatch(/sound_set +3 · /)
+  // T-695: one notify row holds the sound set (voice / sound 1 / sound 2 / sound 3 / off); no sound_set row
+  expect(settings.ids.includes('sound_set' as never)).toBe(false)
+  expect(s.some(l => l.includes('sound_set'))).toBe(false)
+  expect(s.find(l => /notify +sound/.test(l))).toMatch(/notify +sound 2 · default voice .*· voice \/ sound 1 \/ sound 2 \/ sound 3/)
+  expect(settings.ids[settings.ids.indexOf('notify') + 1]).toBe('open_on_start')
   expect(settings.hits[s.findIndex(l => l.includes('max_minutes'))]).toEqual({ setting: 'max_minutes' })
   expect(panelKeys(f, '', 'settings').map(k => k.word)).toEqual(['change', 'move', 'views', 'back'])
   // the footer is core's settingsKeys, as Claude Code's: on a group heading Enter opens or closes it (T-584)
@@ -1128,6 +1140,7 @@ test('T-559: startTui: t, s and c switch tabs (a click on a tab too); on a scout
   const sent: { sessionID: string; name: string; text: string }[] = []
   const slots: { append: string; render: (input: never) => unknown }[] = []
   const answers = { prompt: '7' as string | undefined, select: 'review' as string | undefined }
+  const picks: string[][] = []
   const ctx: TuiContext = {
     location: { directory: '/work/proj' },
     theme: {},
@@ -1136,7 +1149,7 @@ test('T-559: startTui: t, s and c switch tabs (a click on a tab too); on a scout
     keymap: { layer: () => undefined },
     ui: {
       toast: { show: () => undefined },
-      dialog: { prompt: async () => answers.prompt, select: async <V,>() => answers.select as V | undefined },
+      dialog: { prompt: async () => answers.prompt, select: async <V,>(o: { readonly options: readonly { readonly value: V }[] }) => (picks.push(o.options.map(x => String(x.value))), answers.select as V | undefined) },
       panel: { open: () => true, close: () => undefined, current: () => undefined },
       slot: claim => (slots.push(claim as never), () => undefined),
     },
@@ -1196,6 +1209,14 @@ test('T-559: startTui: t, s and c switch tabs (a click on a tab too); on a scout
     { sessionID: 'ses_1', name: 'symcc-settings', text: 'max_parallel 7' },
     { sessionID: 'ses_1', name: 'symcc-settings', text: 'checker on' },
   ])
+  // T-695: notify is picked from the five choices, sound set included
+  ;(rowEls(panel).find(r => r.text.includes('▸ Board and alerts'))!.el.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0 })
+  answers.select = 'sound 3'
+  const notifyRow = rowEls(panel).find(r => /notify +sound 2/.test(r.text))!
+  ;(notifyRow.el.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0 })
+  await new Promise<void>(res => setTimeout(res, 0))
+  expect(picks.at(-1)).toEqual(['voice', 'sound 1', 'sound 2', 'sound 3', 'off'])
+  expect(sent.at(-1)).toEqual({ sessionID: 'ses_1', name: 'symcc-settings', text: 'notify sound 3' })
   // a click on the Tasks tab goes back to the task list; t does too
   const tabSeg = rowEls(panel).find(r => r.text.includes('[c]: Settings'))!.segs.find(s => s.kids.join('').includes('Tasks'))!
   ;(tabSeg.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0 })
@@ -1686,7 +1707,9 @@ test('T-596: an approved task in review whose approve runs leaves NEEDS YOU: lis
     expect(band[0]).not.toContain('review')
     expect(band.find(l => l.startsWith('T-2'))).toMatch(new RegExp(`T-2 +${icon} 15m`))
     const page = panelLines(f, { opened: 'T-2', cursor: 0 }, NOW, 140).lines.map(lineText).join('\n')
-    expect(page).toContain(badge)
+    // no badge under the title (T-693): the Stage row names the step
+    expect(page).not.toContain(`[${badge}`)
+    expect(page).toMatch(new RegExp(`Stage:.*● ${badge.split(' ')[1]}`))
     expect(page).not.toContain('ready for review')
   }
   // no approve running (or it ended, failed: its step is cleared, or its mark went stale): back under NEEDS YOU
@@ -1708,21 +1731,21 @@ test('T-614: right after the panel sends an approve, the page badge and the Stag
   // the page itself (the banner above counts the board's statuses)
   const all = lines.slice(lines.indexOf('T-2 a reviewed change')).join('\n')
   expect(all).not.toContain('ready for review')
-  expect(lines).toContain('[✎ prep]')
+  expect(lines).not.toContain('[✎ prep]')
   expect(lines.find(l => l.trim().startsWith('Status:'))).toContain('▶ doing')
   expect(all).toMatch(/Stage:[\s\S]*review ✓[\s\S]*● prep[\s\S]*merge/)
   expect(approveSent(f, sent, NOW)).toBe(true)
   // without it, or for another task, or once too old: still ready for review everywhere
   for (const a of [undefined, { id: 'T-1', at: NOW }, { id: 'T-2', at: NOW - APPROVE_SENT_MS }]) {
     const ls = page(f, a)
-    expect(ls).toContain('[◆ ready for review]')
+    expect(ls).not.toContain('[◆ ready for review]')
     expect(ls.find(l => l.trim().startsWith('Status:'))).toContain('ready for review')
     expect(ls.join('\n')).toMatch(/● review/)
   }
   // a step on the board: the board carries the phase (the panel drops its flag)
   const testing = withT2({ checking: { step: 'testing', at: new Date(NOW - 10_000).toISOString() } })
   expect(approveSent(testing, sent, NOW)).toBe(false)
-  expect(page(testing, sent)).toContain('[⊛ test]')
+  expect(page(testing, sent).find(l => l.trim().startsWith('Stage:'))).toContain('● test')
   // the task left review (merged): no flag either
   expect(approveSent(withT2({ status: 'done' }), sent, NOW)).toBe(false)
 })
@@ -1916,10 +1939,10 @@ test('T-627: a long task page scrolls by drawn lines under a fixed banner, tabs,
   const draw = (scroll: number, rows?: number) => panelLines(f, { opened: 'T-2', cursor: 0, scroll, taskReport: LONG_REPORT, ...(rows ? { rows } : {}) }, NOW, w)
   const all = draw(0)
   const text = all.lines.map(lineText)
-  // the title wraps onto two drawn lines, and both stay at the top with the badge
+  // the title wraps onto two drawn lines, and both stay at the top (no status badge under it, T-693)
   const title = text.slice(0, all.fixed)
   expect(title.some(l => l.startsWith('T-2 a reviewed change'))).toBe(true)
-  expect(title.filter(l => /^\[[^ ].*\]$/.test(l)).length).toBe(1)
+  expect(title.filter(l => /^\[[^ ].*\]$/.test(l)).length).toBe(0)
   // T-680: the page's buttons stay at the top with them
   expect(title.some(l => l.startsWith('[ Back ] [ Approve ]'))).toBe(true)
   expect(title.join(' ')).toContain('onto a second line here')
@@ -1927,7 +1950,7 @@ test('T-627: a long task page scrolls by drawn lines under a fixed banner, tabs,
   // the long history and report lines are broken into rows the panel's width, keeping every word in order
   expect(text.join(' ').replace(/\s+/g, ' ')).toContain('report line 1 is a long one that says a lot about what was done, so it has to wrap in a narrow panel')
   const firstTitle = title.findIndex(l => l.startsWith('T-2'))
-  checkScrolling(draw, 25, w, [title[firstTitle]!, title.find(l => l.startsWith('['))!])
+  checkScrolling(draw, 25, w, [title[firstTitle]!, title.find(l => l.startsWith('[ Back ]'))!])
   // too low to keep the title too: the banner and tabs stay, the title scrolls with the page
   checkScrolling(draw, 12, w, [title.find(l => l.startsWith('[t]: Tasks'))!])
   expect(draw(0, 12).fixed < all.fixed).toBe(true)
@@ -2342,4 +2365,19 @@ test('T-685: in the TUI a click on each of those buttons does exactly what its k
   await board.press('r', 's')
   expect(sent).toEqual([])
   board.stop()
+})
+
+test('T-696: a long-title row in the list keeps "waits for T-1" / "[feature]" at its end and cuts the title with "…"', () => {
+  const f = viewFile()
+  const long = 'Board list: keep the row end visible by cutting the title instead of dropping the extra part'
+  const tasks = f.view.tasks.map(t => (t.id === 'T-4' ? { ...t, title: long, after: ['T-1'] } : t.id === 'T-5' ? { ...t, status: 'todo' as const, title: long, kind: 'feature' } : t))
+  const g = { ...f, view: { ...f.view, tasks } }
+  for (const w of [80, 100]) {
+    const rows = panelLines(g, { opened: '', cursor: 0 }, NOW, w).lines.map(lineText)
+    const r4 = rows.find(l => l.includes('T-4'))!
+    const r5 = rows.find(l => l.includes('T-5'))!
+    expect(r4).toMatch(/Board list: .*…  +waits for T-1$/)
+    expect(r5).toMatch(/Board list: .*…  +\[feature\]$/)
+    expect(r4.length).toBeLessThan(w + 1)
+  }
 })

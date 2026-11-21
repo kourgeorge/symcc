@@ -1,11 +1,12 @@
-// T-650: notify "sound" has 3 sound sets, so the owner can tell which project chimed.
+// T-650: notify has 3 sound sets, so the owner can tell which project chimed; T-695: they are the notify choices
+// "sound 1", "sound 2" and "sound 3" (there is no sound_set setting any more).
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { fakeHost } from './fake-host'
 import { S, type PaneView } from '../hooks/app/state'
 import { publish } from '../hooks/app/lead'
 import { type Players, findPlayers, playsFor, playSample, sayDone, sayNext, MAC_SETS, FD_SETS } from '../hooks/app/voice'
-import { type SoundSet, SOUND_SETS, SETTING_GROUPS, applySettings, emptyBoard, groupSummary, leadSettingsText, parseBoard, parseSettingValue, settingChoices, settingValue, settingsText, soundSetFor, soundSetOf } from '../hooks/board'
+import { type SoundSet, SOUND_SETS, SETTING_GROUPS, SETTING_NAMES, applySettings, emptyBoard, groupSummary, leadSettingsText, notifyChoices, notifyOf, parseBoard, readBoard, parseSettingValue, settingChoices, settingValue, settingsText, soundNotify, soundSetFor } from '../hooks/board'
 
 const MAC = '/System/Library/Sounds'
 const FD = '/usr/share/sounds/freedesktop/stereo'
@@ -33,7 +34,7 @@ function machine(os: 'Darwin' | 'Linux' | '', programs: string[], files: string[
   return { $, ran }
 }
 
-const chime = async ($: Parameters<typeof playsFor>[0], set: SoundSet, needsYou: boolean) => (await playsFor($, 'sound', [needsYou ? '?T-5' : 'T-3'], set)).map(p => p.argv)
+const chime = async ($: Parameters<typeof playsFor>[0], set: SoundSet, needsYou: boolean) => (await playsFor($, soundNotify(set), [needsYou ? '?T-5' : 'T-3'])).map(p => p.argv)
 
 test('on macOS each sound set plays its own done and needs-you sounds, all different', async () => {
   const { $ } = machine('Darwin', ['afplay'], ALL_MAC)
@@ -96,42 +97,72 @@ test('the default sound set comes from the project folder name and stays the sam
   // many names spread over all 3 sets
   const sets = new Set(['a', 'b', 'c', 'web', 'api', 'site', 'alpha', 'beta'].map(n => soundSetFor(`/x/${n}`)))
   expect(sets.size).toBe(3)
-  expect(soundSetOf({}, '/x/web')).toBe(2)
-  expect(soundSetOf({ sound_set: 3 }, '/x/web')).toBe(3)
-  // with nothing given, playsFor uses the set of the project folder (S.root)
+  // with no notify saved on a machine that can only chime, the default is the project folder's set (S.root)
+  expect(notifyOf({}, { voice: false, sound: true }, '/x/web')).toBe('sound 2')
+  expect(notifyOf({}, { voice: true, sound: true }, '/x/web')).toBe('voice')
+  expect(notifyOf({}, { voice: false, sound: false }, '/x/web')).toBe('off')
   const { $ } = machine('Darwin', ['afplay'], ALL_MAC)
   S.root = '/x/web'
-  expect((await playsFor($, 'sound', ['T-1'])).map(p => p.argv)).toEqual([['afplay', `${MAC}/${MAC_SETS[2][0]}.aiff`]])
+  expect((await playsFor($, null, ['T-1'])).map(p => p.argv)).toEqual([['afplay', `${MAC}/${MAC_SETS[2][0]}.aiff`]])
   S.root = '/x/symcc'
-  expect((await playsFor($, 'sound', ['T-1'])).map(p => p.argv)).toEqual([['afplay', `${MAC}/${MAC_SETS[3][0]}.aiff`]])
+  expect((await playsFor($, null, ['T-1'])).map(p => p.argv)).toEqual([['afplay', `${MAC}/${MAC_SETS[3][0]}.aiff`]])
 })
 
-test('the sound_set setting is read, saved, shown and changes the files played', async () => {
-  expect(parseSettingValue('sound_set', '2')).toEqual({ ok: true, input: { sound_set: 2 } })
-  expect(parseSettingValue('sound_set', '4')).toEqual({ ok: false, message: 'sound_set must be 1, 2 or 3' })
-  expect(settingChoices('sound_set')).toEqual(['1', '2', '3'])
+test('T-695: notify takes voice, sound 1, sound 2, sound 3 or off, and nothing else; there is no sound_set', async () => {
+  for (const v of ['voice', 'sound 1', 'sound 2', 'sound 3', 'off']) expect(parseSettingValue('notify', v)).toEqual({ ok: true, input: { notify: v } })
+  // typed loosely: case and spaces do not matter
+  expect(parseSettingValue('notify', 'Sound2')).toEqual({ ok: true, input: { notify: 'sound 2' } })
+  for (const v of ['sound', 'sound 4', 'loud', '2']) expect(parseSettingValue('notify', v)).toEqual({ ok: false, message: 'notify must be voice, sound 1, sound 2, sound 3 or off' })
+  expect(settingChoices('notify', notifyChoices({ sound: true, voice: true }))).toEqual(['voice', 'sound 1', 'sound 2', 'sound 3', 'off'])
+  expect(notifyChoices({ sound: true, voice: false })).toEqual(['sound 1', 'sound 2', 'sound 3', 'off'])
+  expect((SETTING_NAMES as readonly string[]).includes('sound_set')).toBe(false)
+  expect(SETTING_GROUPS.find(g => g.title === 'Board and alerts')!.items).toEqual(['notify', 'open_on_start', 'archive_days'])
   const b = emptyBoard()
-  // a pick list gives text; the lead's tool gives a number
-  const r = applySettings(b, { sound_set: '3' })
-  expect(r.board.sound_set).toBe(3)
-  expect(r.changes.map(c => [c.name, c.value])).toEqual([['sound_set', '3']])
-  expect(applySettings(b, { sound_set: 2 }).board.sound_set).toBe(2)
-  expect(applySettings(b, { sound_set: 7 }).changes).toEqual([])
+  const r = applySettings(b, { notify: 'sound 3' })
+  expect(r.board.notify).toBe('sound 3')
+  expect(r.changes.map(c => [c.name, c.value])).toEqual([['notify', 'sound 3']])
+  expect(applySettings(b, { notify: 'sound' }).changes).toEqual([])
+  expect(applySettings(b, { notify: 'sound 7' }).changes).toEqual([])
   // kept in the board file; a bad value is dropped
-  expect(parseBoard(JSON.stringify({ ...b, sound_set: 2 })).sound_set).toBe(2)
-  expect(parseBoard(JSON.stringify({ ...b, sound_set: 9 })).sound_set).toBe(undefined)
-  // shown: the saved one, else the one picked from the project name
-  expect(settingValue({ sound_set: 1 }, 'sound_set', '/x/web')).toBe('1')
-  expect(settingValue({}, 'sound_set', '/x/web')).toBe('2')
-  expect(SETTING_GROUPS.find(g => g.items.includes('sound_set'))!.title).toBe('Board and alerts')
-  expect(settingsText({}, 'symcc', '/x/web')).toMatch(/sound_set\s+2\s+\(default picked from the project name · 1 \/ 2 \/ 3\)/)
-  expect(leadSettingsText({ sound_set: 3 }, { sound: true, voice: true })).toContain('sound_set: 3 (default picked from the project name, can be 1 / 2 / 3)')
-  expect(groupSummary(SETTING_GROUPS.find(g => g.title === 'Board and alerts')!, { notify: 'sound', sound_set: 2 }, 200)).toContain('sounds 2')
-  // the setting changes the files played
+  expect(parseBoard(JSON.stringify({ ...b, notify: 'sound 2' })).notify).toBe('sound 2')
+  expect(parseBoard(JSON.stringify({ ...b, notify: 'sound 9' })).notify).toBe(undefined)
+  // shown in the settings lists
+  expect(settingValue({ notify: 'sound 1' }, 'notify', '/x/web')).toBe('sound 1')
+  const text = settingsText({ notify: 'sound 2' }, 'symcc', '/x/web')
+  expect(text).toMatch(/notify\s+sound 2\s+\(default voice \(else sound N, N picked from the project name, else off\) · voice \/ sound 1 \/ sound 2 \/ sound 3 \/ off\)/)
+  expect(text).toContain('sound 1: Glass and Ping, sound 2: Hero and Pop, sound 3: Submarine and Funk')
+  expect(text).not.toContain('sound_set')
+  const lead = leadSettingsText({}, { sound: true, voice: false }, '/x/web')
+  expect(lead).toContain('notify: sound 2 (default voice')
+  expect(lead).toContain('this machine can play: sound 1, sound 2, sound 3, off')
+  expect(lead).not.toContain('sound_set')
+  expect(groupSummary(SETTING_GROUPS.find(g => g.title === 'Board and alerts')!, { notify: 'sound 2' }, 200)).toContain('notify sound 2')
+  // the choice changes the files played
   const { $ } = machine('Darwin', ['afplay'], ALL_MAC)
   S.root = '/x/web'
-  const files = await Promise.all(SOUND_SETS.map(async set => (await playsFor($, 'sound', ['T-1'], soundSetOf({ sound_set: set }, S.root)))[0]!.argv[1]))
+  const files = await Promise.all(SOUND_SETS.map(async set => (await playsFor($, `sound ${set}`, ['T-1']))[0]!.argv[1]))
   expect(files).toEqual(SOUND_SETS.map(set => `${MAC}/${MAC_SETS[set][0]}.aiff`))
+})
+
+test('T-695: an old board with notify "sound" loads as "sound N": its sound_set, else the project set', async () => {
+  const b = emptyBoard()
+  const old = (x: object) => readBoard(JSON.stringify({ ...b, ...x }), '/x/web')
+  expect(old({ notify: 'sound', sound_set: 2 }).board.notify).toBe('sound 2')
+  expect(old({ notify: 'sound', sound_set: 3 }).board.notify).toBe('sound 3')
+  expect(old({ notify: 'sound' }).board.notify).toBe(`sound ${soundSetFor('/x/web')}`)
+  expect(readBoard(JSON.stringify({ ...b, notify: 'sound' }), '/x/symcc').board.notify).toBe(`sound ${soundSetFor('/x/symcc')}`)
+  // a bad old sound_set: the project's set
+  expect(old({ notify: 'sound', sound_set: 9 }).board.notify).toBe('sound 2')
+  // counted as migrated, so the board is saved once in the new shape; not a fixed (bad) value
+  expect(old({ notify: 'sound', sound_set: 2 }).migrated).toBe(1)
+  expect(old({ notify: 'sound', sound_set: 2 }).fixed).toEqual([])
+  // an old sound_set next to voice or off is dropped
+  const v = old({ notify: 'voice', sound_set: 3 })
+  expect(v.board.notify).toBe('voice')
+  expect('sound_set' in v.board).toBe(false)
+  expect(v.migrated).toBe(1)
+  expect(old({ notify: 'off', sound_set: 1 }).board.notify).toBe('off')
+  expect(old({ notify: 'voice' }).migrated).toBe(0)
 })
 
 test("playing a sample plays the set's done chime once, and nothing where there is no player", async () => {
@@ -142,25 +173,25 @@ test("playing a sample plays the set's done chime once, and nothing where there 
   expect(await playSample(none.$, 2)).toBe(null)
 })
 
-test("a queued chime plays the board's sound set, else the project's", async () => {
+test('a queued chime plays the set its notify names', async () => {
   const { $, ran } = machine('Darwin', ['afplay'], ALL_MAC)
   S.root = '/x/web'
   S.driving = true
-  sayDone($, { ...emptyBoard(), notify: 'sound', sound_set: 3 }, 'T-3')
+  sayDone($, { ...emptyBoard(), notify: 'sound 3' }, 'T-3')
   S.sayTimer = null
   await sayNext($)
-  sayDone($, { ...emptyBoard(), notify: 'sound' }, 'T-4')
+  sayDone($, { ...emptyBoard(), notify: 'sound 1' }, 'T-4')
   S.sayTimer = null
   await sayNext($)
   S.driving = false
-  expect(ran.filter(a => a[0] === 'afplay')).toEqual([['afplay', `${MAC}/${MAC_SETS[3][0]}.aiff`], ['afplay', `${MAC}/${MAC_SETS[2][0]}.aiff`]])
+  expect(ran.filter(a => a[0] === 'afplay')).toEqual([['afplay', `${MAC}/${MAC_SETS[3][0]}.aiff`], ['afplay', `${MAC}/${MAC_SETS[1][0]}.aiff`]])
 })
 
-test('the board view the Settings pages read has the sound set: the saved one, else the one from the project name', async () => {
+test('the board view the Settings pages read has notify (with its set) and the five choices, and no sound_set', async () => {
   const f = fakeHost()
   S.root = '/x/web'
-  await publish(f.host, emptyBoard())
-  expect((f.panel.view() as PaneView).sound_set).toBe(soundSetFor('/x/web'))
-  await publish(f.host, { ...emptyBoard(), sound_set: 3 })
-  expect((f.panel.view() as PaneView).sound_set).toBe(3)
+  await publish(f.host, { ...emptyBoard(), notify: 'sound 3' })
+  const v = f.panel.view() as PaneView
+  expect(v.notify).toBe('sound 3')
+  expect('sound_set' in v).toBe(false)
 })

@@ -81,12 +81,12 @@ test('T-643: the terminal panel shows the yellow "another session drives" line w
   const warn = async () => {
     const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 120 }, surface: 'terminal' })
     // the line's colored part (the outer Text of the line matches too, with no color of its own)
-    const t = (await ui.findAll({ type: 'Text', text: /^⚠ Another session drives this board/ })).find(x => x.props.color)
+    const t = (await ui.findAll({ type: 'Text', text: /^⚠ Another session drives/ })).find(x => x.props.color)
     await ui.unmount()
     return t
   }
   const t = await warn()
-  expect(t?.text).toBe('⚠ Another session drives this board — its workers run there, not here. /symcc-drive to drive it from here.')
+  expect(t?.text).toBe('⚠ Another session drives. /symcc-drive to drive it from here.')
   expect(t?.props.color).toBe('warning')
   driving = true
   expect(await warn()).toBeUndefined()
@@ -1085,7 +1085,7 @@ test('the Tasks / Scouts tabs sit in the header, above the line, in both views',
 })
 
 test('"c" and the Settings tab show one row per setting, with value, default and range', async ($, on) => {
-  stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'Build it')], working: [], scouts: [], mode: 'review', test_commands: ['npm test'], branch: 'main', max_parallel: 5, max_minutes: 45, auto_retries: 2, open_on_start: true, notify: 'off', notify_choices: ['off', 'sound'] } } })
+  stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'Build it')], working: [], scouts: [], mode: 'review', test_commands: ['npm test'], branch: 'main', max_parallel: 5, max_minutes: 45, auto_retries: 2, open_on_start: true, notify: 'off', notify_choices: ['sound 1', 'sound 2', 'sound 3', 'off'] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   const settingsTab = await ui.find({ key: 'tab-settings' })
   expect(settingsTab?.props.hotkey).toBeUndefined()
@@ -1102,7 +1102,7 @@ test('"c" and the Settings tab show one row per setting, with value, default and
   expect(tasksTab?.props.color).toBe('inactive')
   for (const g of SETTING_GROUPS) await ui.press({ key: `group:${g.title}` })
   const keys = (await ui.findAll({ type: 'Button' })).map(r => String(r.props.key)).filter(k => k.startsWith('setting:'))
-  expect(keys).toEqual(['mode', 'max_parallel', 'max_minutes', 'auto_retries', 'enabled', 'test_commands', 'test_minutes', 'tests_with_changes', 'checker', 'scout_findings', 'notify', 'sound_set', 'open_on_start', 'archive_days'].map(n => `setting:${n}`))
+  expect(keys).toEqual(['mode', 'max_parallel', 'max_minutes', 'auto_retries', 'enabled', 'test_commands', 'test_minutes', 'tests_with_changes', 'checker', 'scout_findings', 'notify', 'open_on_start', 'archive_days'].map(n => `setting:${n}`))
   expect(await ui.find({ type: 'Text', text: /^ npm test$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /^ 5$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /default 3 · 1-8 · how many workers run at once/ })).toBeDefined()
@@ -1123,8 +1123,10 @@ test('"c" and the Settings tab show one row per setting, with value, default and
   expect(await ui.find({ key: 'pick:paused' })).toBeUndefined()
   // notify: a pick list of only what this machine can play (here no speech program: no voice)
   await ui.press({ key: 'setting:notify' })
+  // T-695: one notify row holds the sound set too: sound 1 / sound 2 / sound 3, and off
   expect(await ui.find({ key: 'pick:off' })).toBeDefined()
-  expect(await ui.find({ key: 'pick:sound' })).toBeDefined()
+  for (const n of [1, 2, 3]) expect(await ui.find({ key: `pick:sound ${n}` })).toBeDefined()
+  expect(await ui.find({ key: 'pick:sound' })).toBeUndefined()
   expect(await ui.find({ key: 'pick:voice' })).toBeUndefined()
   await ui.press({ key: 'setting-cancel' })
   // "t" goes back to the tasks
@@ -1151,7 +1153,7 @@ test('Settings groups its rows under 5 headings, in order; with every group open
     'Checks before merging': ['test_commands', 'test_minutes', 'tests_with_changes', 'checker'],
     Workers: ['Roles', 'Kinds'],
     Scouts: ['scout_findings'],
-    'Board and alerts': ['notify', 'sound_set', 'open_on_start', 'archive_days'],
+    'Board and alerts': ['notify', 'open_on_start', 'archive_days'],
   }
   titles.forEach((t, i) => {
     const from = at[i]!
@@ -1403,10 +1405,12 @@ test('the task page shows one labelled row per fact, From and Why on their own r
   stateOf(on, { opened: 'T-3', view: { shape: 'view-1', value: { tasks: [task('T-1', 'done', 'Base work'), task('T-3', 'review', 'Better scouts', { origin, files: ['hooks/a.ts'], after: ['T-1'], branch: 'symcc/T-3', attempts: 2 })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   const L = await lines(ui)
-  // the header: id and title in bold, then the status badge in its own color
+  // the header: id and title in bold; no status badge under it (T-693): the Status row shows it, in its own color
   const id = await ui.find({ type: 'Text', text: /^T-3$/ })
   expect(id?.props.bold).toBe(true)
-  const badge = (await ui.findAll({ type: 'Text', text: /^\[◆ ready for review\]$/ })).find(t => t.props.color)
+  expect(L.some(l => /^\[.*\]$/.test(l))).toBe(false)
+  expect(L.find(l => l.startsWith('Status:'))).toMatch(/^Status:\s+◆ ready for review/)
+  const badge = (await ui.findAll({ type: 'Text', text: /^◆ ready for review$/ })).find(t => t.props.color)
   expect(badge?.props.color).toBe('warning')
   expect(badge?.props.bold).toBe(true)
   for (const label of ['Status', 'Role', 'From', 'Why', 'Request', 'Seen', 'Files', 'After', 'Branch', 'Tries']) {
@@ -1445,12 +1449,12 @@ test('From shows a scout or a split task in its own color', async ($, on) => {
   stateOf(on, { opened: 'T-4', view: { shape: 'view-1', value: { tasks: [task('T-4', 'doing', 'Fix it', { origin: { by: 'scout', scout: 'bugs', why: 'it breaks', at: '' } }), task('T-5', 'todo', 'Part', { origin: { by: 'lead', task: 'T-4', how: 'split', why: 'too big', at: '' } })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect((await ui.find({ type: 'Text', text: /^scout bugs$/ }))?.props.color).toBe('suggestion')
-  expect((await ui.findAll({ type: 'Text', text: /^\[▶ worker\]$/ })).find(t => t.props.color)?.props.color).toBe('ide')
+  expect((await ui.findAll({ type: 'Text', text: /^▶ doing$/ })).find(t => t.props.color)?.props.color).toBe('ide')
   expect((await lines(ui)).some(l => /^Request:/.test(l))).toBe(false)
   await ui.unmount()
 })
 
-test('T-587: the terminal task page badge names the step ("[⌕ checker · 9m]"), the Status row the state (T-647), and its Stage row marks the step now, the steps before done', async ($, on) => {
+test('T-587: the terminal task page Status row names the state (T-647), and its Stage row marks the step now, the steps before done; no badge under the title (T-693)', async ($, on) => {
   const T0 = Date.parse('2026-03-02T10:00:00Z')
   mock.clock(on, { now: T0 })
   const iso = (ms: number) => new Date(ms).toISOString()
@@ -1459,7 +1463,7 @@ test('T-587: the terminal task page badge names the step ("[⌕ checker · 9m]")
   stateOf(on, { opened: 'T-4', view: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', checker: true, test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   const L = await lines(ui)
-  expect(L).toContain('[⌕ checker · 9m]')
+  expect(L).not.toContain('[⌕ checker · 9m]')
   const status = L.findIndex(l => l.startsWith('Status:'))
   expect(L[status]).toContain('▶ doing · 9m')
   // the Stage row right under Status (it may wrap onto a second line)
@@ -1476,7 +1480,7 @@ test('T-587: with the checker setting off the Stage row leaves "checker" out; a 
   stateOf(on, { opened: 'T-4', view: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   const L = await lines(ui)
-  expect(L).toContain('[⊛ test · 9m]')
+  expect(L).not.toContain('[⊛ test · 9m]')
   const at = L.findIndex(l => l.startsWith('Stage:'))
   expect(L.slice(at, at + 2).join(' ').replace(/\s+/g, ' ')).toMatch(/^Stage: worker ✓ → prep ✓ → queue ✓ → ● test → merge/)
   await ui.unmount()
@@ -1614,7 +1618,7 @@ test('the Tasks view: no workers/scouts strip in the banner, NEEDS YOU then one 
   const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 100 }, surface: 'terminal' })
   expect((await ui.find({ key: 'T-95' }))!.text).toMatch(/^T-95 ▶ 4m\s+Secrets scout example\s+frontend$/)
   expect((await ui.find({ key: 'T-95' }))!.text.length).toBe(100)
-  expect((await ui.find({ key: 'T-97' }))!.text).toMatch(/^T-97 ○\s+Rename "off" to "pause"\s+after T-96$/)
+  expect((await ui.find({ key: 'T-97' }))!.text).toMatch(/^T-97 ○\s+Rename "off" to "pause"\s+waits for T-96$/)
   expect((await ui.find({ key: 'T-94' }))!.text).toMatch(/^T-94 ◆ review\s+Clearer board view\s+Enter to review$/)
   // focus starts on the first task, and the order is tasks first, then folded rows
   const buttons = (await ui.findAll({ type: 'Button' })).filter(b => /^T-\d+$|^day:/.test(String(b.key)))
@@ -1628,6 +1632,34 @@ test('the Tasks view: no workers/scouts strip in the banner, NEEDS YOU then one 
   expect(row).toMatch(/…$/)
   expect(row.length).toBeLessThanOrEqual(30)
   await narrow.unmount()
+})
+
+test('T-696: a long-title row in the terminal list keeps "waits for T-1" / "[feature]" at its end and cuts the title with "…"', async ($, on) => {
+  const now = Date.now()
+  const long = 'Board list: keep the row end visible by cutting the title instead of dropping the extra part'
+  const tasks = [
+    task('T-1', 'doing', 'Short one', { attempts: 1, runs: [{ started: new Date(now - 60_000).toISOString() }] }),
+    task('T-2', 'todo', long, { after: ['T-1'] }),
+    task('T-3', 'todo', long, { kind: 'feature' }),
+  ]
+  stateOf(on, { view: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'review', max_parallel: 3, test_commands: [] } } })
+  for (const w of [60, 100]) {
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: w }, surface: 'terminal' })
+    const t2 = (await ui.find({ key: 'T-2' }))!.text
+    const t3 = (await ui.find({ key: 'T-3' }))!.text
+    expect(t2).toMatch(/^T-2\s+○\s+Board list: .*…  +waits for T-1$/)
+    expect(t3).toMatch(/^T-3\s+○\s+Board list: .*…  +\[feature\]$/)
+    expect(t2.length).toBe(w)
+    await ui.unmount()
+  }
+  // very narrow: the title keeps 20 columns and the extra is cut, then left out
+  for (const w of [45, 30]) {
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: w }, surface: 'terminal' })
+    const t2 = (await ui.find({ key: 'T-2' }))!.text
+    expect(t2.length).toBeLessThanOrEqual(w)
+    expect(t2).toMatch(w === 45 ? /^T-2\s+○\s+Board list: keep th…  waits.*…$/ : /^T-2\s+○\s+Board list: [^…]*…$/)
+    await ui.unmount()
+  }
 })
 
 const OFF_CASES = [
@@ -1889,8 +1921,8 @@ test('archived tasks are only counted on the Done row, and /symcc-task still fin
   const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 80 }, surface: 'terminal' })
   expect(await ui.find({ type: 'Text', text: /^▸ Done +1 \(\+96 archived\)$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /An old one/ })).toBeUndefined()
-  // T-12 waits on T-5, which is archived as done: no "after T-5"
-  expect(await ui.find({ type: 'Text', text: /after T-5/ })).toBeUndefined()
+  // T-12 waits on T-5, which is archived as done: no "waits for T-5"
+  expect(await ui.find({ type: 'Text', text: /waits for T-5/ })).toBeUndefined()
   await ui.unmount()
   const shown = String((await $.command.run(slash('symcc-task', 'T-5'))).text)
   expect(shown).toMatch(/^T-5 is archived \(in \.symcc\/archive\.json; read-only\)/)
@@ -1954,7 +1986,9 @@ test('an answered investigation opens with its full answer and Done, Keep as a n
   expect(await ui.find({ type: 'Text', text: /Changes \(/ })).toBeUndefined()
   expect(L.some(l => /^a done · v keep as a note · x ask more/.test(l))).toBe(true)
   expect(L.some(l => /^Kind:\s+investigation — nothing is merged$/.test(l))).toBe(true)
-  expect(L.some(l => /^\[◆ answered: read it\]$/.test(l))).toBe(true)
+  // no badge under the title (T-693); the Status row says it is in review
+  expect(L.some(l => /^\[◆ answered: read it\]$/.test(l))).toBe(false)
+  expect(L.find(l => l.startsWith('Status:'))).toMatch(/^Status:\s+◆ ready for review/)
   // one try: its report is the answer, so it is not shown twice
   expect(L.filter(l => /Checked in src\/cache\.ts\./.test(l)).length).toBe(1)
   // Ask more opens a box for the follow-up question
@@ -1989,7 +2023,7 @@ test('the board list and the task page show ● for a to do task worked on befor
   expect((await ui.find({ key: 'T-2' }))!.text).toMatch(/^T-2\s+● /)
   expect((await ui.find({ key: 'T-3' }))!.text).toMatch(/^T-3\s+◆ review/)
   await ui.press({ key: 'T-2' })
-  expect((await lines(ui)).some(l => l.includes('[● '))).toBe(true)
+  expect((await lines(ui)).find(l => l.startsWith('Status:'))).toMatch(/^Status:\s+● to do/)
   await ui.unmount()
 })
 
