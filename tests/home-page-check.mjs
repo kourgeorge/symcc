@@ -48,6 +48,12 @@ if (chat.includes('❯ 2')) bad('still frame: the chat shows "❯ 2"; the owner 
 for (const w of ['agents 1/3 busy', '✓ 56 merged', '↺ 47 sent back', '✗ 0 failed', 'Σ 268.6M tokens', '39c7f96'])
   if (!board.includes(w)) bad(`still frame: the board has no "${w}" (the real board)`)
 const live = text(view('live'))
+// (T-758) ▍Today holds only the figures line: no "next up" line and no "today" label
+for (const [name, t] of [['board', board], ['Live tab', live]]) {
+  const after = t.slice(t.indexOf('▍Today') + '▍Today'.length).split('\n').map(l => l.trim()).filter(Boolean)
+  if (!after[0]?.startsWith('✓ ')) bad(`still frame: the ${name}'s ▍Today does not start with the figures line ("${after[0] ?? ''}")`)
+  if (/next up {2}|today {4}/.test(t)) bad(`still frame: the ${name} still shows a "next up" or "today" label in ▍Today`)
+}
 // (T-754) the Live tab's sections come in the real order: ▍Tasks, ▍Today, ▍Branches, ▍Organizational memory
 const order = ['▍Tasks', '▍Today', '▍Branches', '▍Organizational memory']
 for (const [name, t] of [['board', board], ['Live tab', live]]) {
@@ -60,6 +66,13 @@ for (const w of ['60 / 60', 'tests 14', 'shell · guard 11', 'ui · surfaces 11'
 for (const w of ['16:28', '16:50', 'try 1: 22m · 4.0M tokens in all'])
   if (!task.includes(w)) bad(`still frame: the task page has no "${w}" (T-740's real try 1)`)
 if (!text(view('scouts')).includes('gaps-bot')) bad('still frame: the scouts view has no gaps-bot')
+// (T-757) T-740 on try 2: its lane shows the whole task's tokens (try 1's 4.0M, more coming), the bar full at the
+// usual tokens per merged task (268.6M / 56 = 4.8M, so 4.0M fills 11 of 13 cells), and the legend says so
+if (!board.includes('▕███████████░░▏ 4.0M + …')) bad('still frame: T-740\'s lane does not show "▕███████████░░▏ 4.0M + …" (bar full = the usual per task)')
+if (!board.includes('bar: tokens of the task so far, full = usual per task (4.8M)')) bad('still frame: the board has no bar legend')
+// (T-757) the hand-drawn Live tab card tells the same story: whole-task tokens, full bar = the usual per task
+if (/tokens of each try|T-740[\s\S]{0,80}tokens at hand-back/.test(page)) bad('home page: the Live tab card still shows tokens per try ("tokens at hand-back" on T-740\'s try 2)')
+if (!page.includes('▕███████████░░▏ 4.0M + …')) bad('home page: the Live tab card\'s T-740 lane does not show "4.0M + …"')
 
 // the chat log must scroll, so its oldest messages (the owner's ask) stay in reach; and it must not pin messages
 // with justify-content: flex-end, which pushes the overflow above the top, where no scroll reaches it

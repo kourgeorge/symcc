@@ -200,7 +200,7 @@ for (const surface of ['terminal', 'desktop', 'mobile'] as const)
     expect([heads.length, /^▍Organizational memory {3}\d+ \/ 60 ▕/.test(heads[3] ?? '')]).toEqual([4, true])
     expect(live.filter(l => l.includes('── ') || /^─+$/.test(l)).length).toBe(1)
     // the lines under a heading are indented by 3
-    for (const l of ['    T-7', '    main ', '   next up  ', '   today    ', '     newest']) expect([l, live.some(x => x.startsWith(l))]).toEqual([l, true])
+    for (const l of ['    T-7', '    main ', '   ✓ ', '     newest']) expect([l, live.some(x => x.startsWith(l))]).toEqual([l, true])
     for (const isHead of LIVE_HEADS) {
       const at = live.findIndex(isHead)
       expect([at, at > 0]).toEqual([at, true])

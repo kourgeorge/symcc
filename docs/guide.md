@@ -991,7 +991,7 @@ small button), then a divider.
 
 The Live tab (`l`) shows the tasks that run now as "railway lanes", one lane per task the board counts as running (a task in doing, or an approved or files-cleared task while its tests and merge run).
 Under the mode line it has four sections, each starting with a heading like the task page's
-`▍Details`: `▍Tasks` (the lanes), `▍Today` (next up and today's numbers), `▍Branches` and
+`▍Details`: `▍Tasks` (the lanes), `▍Today` (today's numbers), `▍Branches` and
 `▍Organizational memory`, with one empty line between them and the lines under each heading
 indented by 3 spaces (VS Code shows the same names as bold headings):
 
@@ -1014,10 +1014,12 @@ indented by 3 spaces (VS Code shows the same names as bold headings):
   `max_parallel`.
 - On the right: the time at the current station, or the place in the merge queue (`#2`).
 - The second row: the kind, the try (`try 2/3`, auto retries after failing tests included),
-  the current try's tokens with a bar scaled so the board's usual tokens per merged task fill
-  half of it (yellow with `⚠` past twice that), and `↺×N` for the checker's send-backs. A running
-  worker's tokens are only known when it hands back, so until then the row says `tokens at
-  hand-back`.
+  the whole task's tokens (every try so far) with a bar that the board's usual tokens per merged
+  task fill (half full at half the usual; it stays full past it, and turns yellow with `⚠` past
+  twice the usual), and `↺×N` for the checker's send-backs. The legend under the lanes says
+  this, with the usual figure: `bar: tokens of the task so far, full = usual per task (2.8M)`. A
+  running worker's tokens are only known when it hands back, so until then the row shows the
+  earlier tries' sum with `+ …` (`4.0M + …`), or `tokens at hand-back` on a first try.
 - Waiting trains: a todo task that waits (its `after`) for a task that has not finished hangs
   under the lane of the running task it waits for, indented with `└─◇`, its id and cut title,
   then `waits`:
@@ -1062,13 +1064,11 @@ indented by 3 spaces (VS Code shows the same names as bold headings):
   branch yet) the section isn't shown. VS Code draws it with real lines, and OpenCode shows the
   same section.
 - The header line says the board mode and `agents N/M busy` (workers and checkers running
-  against `max_parallel`). Under the `▍Today` heading: `next up`, the todo tasks free to start (nothing
-  unfinished in their `after`) in the order they will start, then `N more` (the other todo tasks
-  not shown, trains aside). Trains are not listed there. A task that waits only for tasks that
-  neither run nor wait to run (failed, paused, waiting for you, in review...) hangs nowhere: next
-  up lists it with what holds it, `T-718 Waits for… (waits T-701, failed)`, so you see it is stuck.
-  Then `today` (merged, sent back by the checker, failed, and the tries' tokens today). With
-  nothing running it says `No task is running right now.` and still shows next up.
+  against `max_parallel`). Under the `▍Today` heading, one line of today's numbers:
+  `✓ 67 merged   ↺ 56 sent back   ✗ 0 failed   Σ 320.7M tokens` (merged, sent back by the checker,
+  failed, and the tries' tokens today). The task that starts next shows in the band above the
+  prompt (`○ next up`), and the tasks that wait hang under their lanes. With nothing running it
+  says `No task is running right now.`
 - At the bottom, just above the key hints, the **Organizational memory** section (see
   [Organizational memory](#organizational-memory-org-mem)):
 

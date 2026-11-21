@@ -89,11 +89,12 @@
       </details>
       <details class="card">
         <summary><span class="icon">◉</span><b>The Live tab</b><span>See each task's way to main, as it happens.</span></summary>
-        <p>Every running task is a lane: work, check, queue, tests, merged. You see the time at each station, the tokens of each try, and how often the checker sent it back.</p>
+        <p>Every running task is a lane: work, check, queue, tests, merged. You see the time at each station, the tokens of the whole task so far (every try), and how often the checker sent it back. A full bar is the usual tokens per task.</p>
         <pre> T-747  ●━━━━━━●━━━━━━◉──────○──────○
   change try 1/3  ▕█████████████▏ 5.7M
  T-740  ◉──────○──────○──────○──────○
-  bug try 2/3  tokens at hand-back  ↺×1</pre>
+  bug try 2/3  ▕███████████░░▏ 4.0M + …  ↺×1
+ bar: tokens of the task so far, full = usual per task (4.8M)</pre>
       </details>
       <details class="card">
         <summary><span class="icon">╰─○</span><b>A folder per worker</b><span>Workers can't step on each other.</span></summary>

@@ -1,5 +1,5 @@
-// The board panel's Live tab in VS Code's side panel (T-691): the same lanes, next up and today as the terminal's Live
-// tab (live.tsx), all worked out in core/live.ts (liveLanes, liveLayout, laneLines, liveTrains, nextUpLine, liveToday ...); this file
+// The board panel's Live tab in VS Code's side panel (T-691): the same lanes and today as the terminal's Live
+// tab (live.tsx), all worked out in core/live.ts (liveLanes, liveLayout, laneLines, liveTrains, liveToday ...); this file
 // only draws them richer. Each lane is:
 //   T-684 /symcc-doctor…                 #2      (the id and cut title a link: a click, or Enter on it, opens the task)
 //   ●━━━━━●━━━━━◉─────○─────○                    (real lines and dots in an Svg, the station names under the dots)
@@ -14,7 +14,7 @@
 // T-727: under the lanes, the Branches section (core's liveBranches) drawn with real lines: see branchesVs.
 // T-747: each section has a bold heading with the terminal's names (core's LIVE_SECTIONS): Tasks, Today, Branches,
 // Organizational memory (that one a link to all notes).
-import { type BranchRow, type LiveBranches, liveBranches, LIVE_EMPTY, LIVE_LEGEND, LIVE_SECTIONS, type LiveLane, liveInner, type LiveLayout, type LiveSeg, LIVE_TONE, laneLines, liveHeader, liveLanes, liveLayout, liveOrgMem, liveStations, liveToday, liveTrains, nextUpLine, segText, todayLines, trainRows } from '../../core/live'
+import { type BranchRow, type LiveBranches, liveBranches, LIVE_EMPTY, liveLegend, LIVE_SECTIONS, type LiveLane, liveInner, type LiveLayout, type LiveSeg, LIVE_TONE, laneLines, liveHeader, liveLanes, liveLayout, liveOrgMem, liveStations, liveToday, liveTrains, segText, todayLines, trainRows } from '../../core/live'
 import { panelValues, type $ } from '../panel'
 import type { PaneParts } from './parts'
 import { LIVE_TICK_MS, branchKey, laneKey, liveTick, newestKey, openOrgMemPage, topicKey, trainKey } from './live'
@@ -217,10 +217,9 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
         {line('live-tasks-head', LIVE_SECTIONS.tasks, 'text', true)}
         {lanes.length ? <Box key="live-lanes" flexDirection="column" gap={1}>{laneRows}</Box> : line('live-empty', LIVE_EMPTY, 'inactive')}
       </Box>
-      {lanes.length ? line('live-legend', LIVE_LEGEND, 'inactive') : null}
+      {lanes.length ? line('live-legend', liveLegend(lanes, Infinity).join(' '), 'inactive') : null}
       <Box key="live-bottom" flexDirection="column">
         {line('live-today-head', LIVE_SECTIONS.today, 'text', true)}
-        {line('live-next', nextUpLine(trains, inner), 'text')}
         {todayLines(liveToday(v.tasks, nowMs), inner).map((x, i) => line(`live-today-${i}`, x, 'text'))}
       </Box>
       {branchesVs(pane, open)}
