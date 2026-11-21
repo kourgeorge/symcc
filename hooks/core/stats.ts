@@ -1,6 +1,7 @@
 // /<name>-stats and the lead's stats tool: time and token figures built only from what the board
 // already keeps (tasks, their tries in runs[], their history), plus the archived tasks.
-// Every function here is pure; the plugin reads board.json and archive.json and passes the tasks in.
+// Every function here is pure (but statsReport remembering the figures of its last texts, see statsDataOf); the plugin
+// reads board.json and archive.json and passes the tasks in.
 import type { SymccRun, SymccStatus, SymccTask, SymccTokens } from '../../types'
 import { DEFAULT_NAME } from '../name'
 import { isInvestigation, STATUS_WORD } from './board-file'
@@ -797,7 +798,7 @@ export function statsReport(input: StatsInput & { full?: boolean }): string {
   const d = statsData(input)
   const { full, name } = d
   const out: string[] = []
-  const done$ = () => out.flatMap(l => wrapLine(l)).join('\n')
+  const done$ = () => remember(out.flatMap(l => wrapLine(l)).join('\n'), d)
   out.push(`${statsTitle(d)}${full ? ' · full' : ''}`)
   const counting = countingText(d.range, d.counting, d.insideAsked, name)
   if (counting) out.push(counting)
@@ -921,6 +922,25 @@ export function statsReport(input: StatsInput & { full?: boolean }): string {
   if (full) out.push(`Stages: ${STAGES_NOTE}`, `Tokens "in all" add every kind up; billed is ${BILLED_NOTE}.`)
   else out.push(BILLED_FOOTNOTE, `Every detail: /${name}-stats full`)
   return done$()
+}
+
+/** T-768: how many of the latest report texts keep their figures (see statsDataOf). */
+const REMEMBERED_MAX = 20
+const remembered = new Map<string, StatsData>()
+/** Keeps the figures `d` of report text `text` (the latest REMEMBERED_MAX texts), and gives the text back. */
+function remember(text: string, d: StatsData): string {
+  remembered.delete(text)
+  remembered.set(text, d)
+  while (remembered.size > REMEMBERED_MAX) remembered.delete(remembered.keys().next().value!)
+  return text
+}
+/**
+ * T-768: the figures a report text (from statsReport) was made from, so a client can draw that report its own way
+ * (Claude Code's chat, claude/ui/stats-output.tsx) without reading the text back; undefined for a text it didn't make
+ * (or one made before the plugin was loaded again), which is then shown as it is.
+ */
+export function statsDataOf(text: string): StatsData | undefined {
+  return remembered.get(text) ?? remembered.get(String(text ?? '').trim())
 }
 
 /** "2 tasks not linked to a run": a scout's tasks its runs file doesn't list (T-719). */

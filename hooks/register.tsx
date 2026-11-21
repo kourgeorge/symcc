@@ -24,6 +24,7 @@ import { renderAbovePrompt } from './claude/ui/above-prompt'
 import { arrowMove, noteFocus } from './claude/ui/arrows'
 import { paneClosing } from './claude/ui/esc'
 import { renderPane } from './claude/ui/pane'
+import { renderStatsOutput } from './claude/ui/stats-output'
 
 export { BOARD_OPENED } from './app/symcc'
 export { registerAll } from './claude/registration'
@@ -231,6 +232,13 @@ export const register: Register = on => {
     await findRoot(claudeHost($))
     return renderAbovePrompt($, e, next)
   })
+
+  // T-768: /<name>-stats's row in the chat, drawn in colors from its figures (see claude/ui/stats-output.tsx); any
+  // other command's row, or a failure here, is drawn by the engine as it is.
+  on('ui.render', { component: 'CommandOutput' }, async ($, e, next) => {
+    useName(claudeHost($))
+    return renderStatsOutput($, e, next)
+  }).catch(($, e, next) => passOn($, 'ui.render CommandOutput', e, next))
 
   // The board panel closing: Esc goes one step back and keeps it open (see paneClosing).
   on('ui.close', async ($, e, next) => {
