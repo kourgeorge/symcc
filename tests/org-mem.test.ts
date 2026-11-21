@@ -1,13 +1,16 @@
 // T-600, T-632: organizational memory (org-mem) (core/org-mem.ts): "Learned:" suggestions from a report, cleaned and kept once; the
 // lead's add / remove / replace / list; the limit; and org-mem shown in prompts.
 import { expect, test } from 'claude-code/testing'
-import { addSuggestions, suggestedText, orgMemAdd, orgMemRemove, orgMemReplace, orgMemList, dropTaskIds, cleanLearned, orgMemSection, sameLesson, splitLearned, ORG_MEM_MAX_LINES, LEARNED_LINE_CHARS, LEARNED_ASK, DEBRIEF_TEXT, debriefLines, orgMemNotes, orgMemNoteHead, orgMemCount, orgMemAbout, deleteOrgMemNote, orgMemNoteKey, ORG_MEM_EMPTY } from '../hooks/core/org-mem'
+import { addSuggestions, suggestedText, orgMemAdd, orgMemRemove, orgMemReplace, orgMemList, dropTaskIds, cleanLearned, orgMemSection, sameLesson, splitLearned, ORG_MEM_MAX_LINES, LEARNED_LINE_CHARS, LEARNED_ASK, DEBRIEF_TEXT, debriefLines, orgMemNotes, orgMemNoteHead, orgMemCount, orgMemAbout, deleteOrgMemNote, orgMemNoteKey, ORG_MEM_EMPTY, cleanTopic, orgMemSetTopic, orgMemTopics, TOPIC_MAX_CHARS } from '../hooks/core/org-mem'
 import { parseCommand } from '../hooks/core/commands'
 import { checkerVerdict, fillPrompt, scoutPrompt, PROMPT_KINDS, BUILT_IN_PROMPTS } from '../hooks/board'
 import { checkerPrompt } from '../hooks/core/checker'
 import { failAsks } from '../hooks/core/failure'
 
 const D = '2026-11-20'
+
+/** A new note with topic `topic` (T-717). */
+const n = (text: string, topic = 'tests') => ({ text, topic })
 
 test('the "Learned:" section is split off the end of a report; none: nothing', () => {
   expect(splitLearned('did it')).toEqual({ body: 'did it', lines: [] })
@@ -59,31 +62,31 @@ test('T-632: a 150-character suggestion is cut near 100 (T-656), with "…"', ()
   expect(s!.endsWith('…')).toBe(true)
 })
 
-test('T-632: the lead adds notes as "- date: lesson" (no task id); a near repeat is refused; an add past 60 lines adds nothing', () => {
-  const one = orgMemAdd(null, ['Run one test file with sh scripts/test-files.sh'], D)
-  expect(one).toEqual({ text: `- ${D}: Run one test file with sh scripts/test-files.sh\n`, added: ['Run one test file with sh scripts/test-files.sh'], repeats: [], bad: [], full: false })
-  const again = orgMemAdd(one.text, ['run ONE test file with `sh scripts/test-files.sh`.', '- The guard refuses a repo in the project', 'API_KEY=abc123'], D)
+test('T-632, T-717: the lead adds notes as "- date [topic] lesson" (no task id); a near repeat is refused; an add past 60 lines adds nothing', () => {
+  const one = orgMemAdd(null, [n('Run one test file with sh scripts/test-files.sh')], D)
+  expect(one).toEqual({ text: `- ${D} [tests] Run one test file with sh scripts/test-files.sh\n`, added: ['Run one test file with sh scripts/test-files.sh'], repeats: [], bad: [], noTopic: [], full: false })
+  const again = orgMemAdd(one.text, ['run ONE test file with `sh scripts/test-files.sh`.', '- The guard refuses a repo in the project', 'API_KEY=abc123'].map(x => n(x, 'git')), D)
   expect(again.added).toEqual(['The guard refuses a repo in the project'])
   expect(again.repeats).toEqual(['run ONE test file with `sh scripts/test-files.sh`.'])
   expect(again.bad).toEqual(['API_KEY=abc123'])
-  expect(again.text).toBe(`${one.text}- ${D}: The guard refuses a repo in the project\n`)
+  expect(again.text).toBe(`${one.text}- ${D} [git] The guard refuses a repo in the project\n`)
   // two near-same notes in one add: only the first
-  expect(orgMemAdd('', ['snapshots are in tests/', 'Snapshots are in tests/.'], D).added).toEqual(['snapshots are in tests/'])
+  expect(orgMemAdd('', [n('snapshots are in tests/'), n('Snapshots are in tests/.')], D).added).toEqual(['snapshots are in tests/'])
   // a note copied from an old line keeps no task id (or old date)
-  expect(orgMemAdd('', ['- T-12 2026-11-19: copied old note', 'T-3 another old note'], D).text).toBe(`- ${D}: copied old note\n- ${D}: another old note\n`)
+  expect(orgMemAdd('', [n('- T-12 2026-11-19: copied old note'), n('T-3 another old note')], D).text).toBe(`- ${D} [tests] copied old note\n- ${D} [tests] another old note\n`)
   const full = Array.from({ length: ORG_MEM_MAX_LINES }, (_, i) => `- ${D}: lesson number ${i} about thing${i}`).join('\n') + '\n'
-  const r = orgMemAdd(full, ['brand new trap in the merge line'], D)
+  const r = orgMemAdd(full, [n('brand new trap in the merge line')], D)
   expect(r.full).toBe(true)
   expect(r.added).toEqual([])
   expect(r.text).toBe(full)
   // one line short of the limit: one more fits
   const less = full.split('\n').slice(1).join('\n')
-  expect(orgMemAdd(less, ['brand new trap in the merge line'], D).text.trim().split('\n')).toHaveLength(ORG_MEM_MAX_LINES)
+  expect(orgMemAdd(less, [n('brand new trap in the merge line')], D).text.trim().split('\n')).toHaveLength(ORG_MEM_MAX_LINES)
 })
 
 test('T-632: the lead removes and replaces a note by number or text, and lists them oldest first', () => {
   const g = `- 2026-11-18: run one test file with sh scripts/test-files.sh\n- by hand: with a colon\n- ${D}: the type check is separate from the tests\n`
-  expect(orgMemList(g, '.symcc/org-mem.md')).toBe(`.symcc/org-mem.md: 3 notes (at most ${ORG_MEM_MAX_LINES}), oldest first:\n#1 2026-11-18: run one test file with sh scripts/test-files.sh\n#2 by hand: with a colon\n#3 ${D}: the type check is separate from the tests`)
+  expect(orgMemList(g, '.symcc/org-mem.md')).toBe(`.symcc/org-mem.md: 3 notes (at most ${ORG_MEM_MAX_LINES}), oldest first:\n#1 2026-11-18 [unsorted] run one test file with sh scripts/test-files.sh\n#2 [unsorted] by hand: with a colon\n#3 ${D} [unsorted] the type check is separate from the tests\nTopics (1): unsorted 3`)
   expect(orgMemList('', '.symcc/org-mem.md')).toContain('no notes yet')
   expect(orgMemRemove(g, 2).text).toBe(`- 2026-11-18: run one test file with sh scripts/test-files.sh\n- ${D}: the type check is separate from the tests\n`)
   expect(orgMemRemove(g, '#3').removed?.text).toBe('the type check is separate from the tests')
@@ -91,7 +94,7 @@ test('T-632: the lead removes and replaces a note by number or text, and lists t
   expect(orgMemRemove(g, 9)).toEqual({ text: g, removed: null })
   const r = orgMemReplace(g, 1, 'run one test file: sh scripts/test-files.sh tests/x.test.ts', D)
   expect(r.why).toBe(undefined)
-  expect(r.text.split('\n')[0]).toBe(`- ${D}: run one test file: sh scripts/test-files.sh tests/x.test.ts`)
+  expect(r.text.split('\n')[0]).toBe(`- ${D} [unsorted] run one test file: sh scripts/test-files.sh tests/x.test.ts`)
   expect(r.text.split('\n').slice(1).join('\n')).toBe(g.split('\n').slice(1).join('\n'))
   // the new note repeats another one: refused
   expect(orgMemReplace(g, 1, 'The type check is separate from the tests', D).why).toContain('repeats note 3')
@@ -172,9 +175,9 @@ test('a "Learned:" heading inside a quoted code block is not the section: the re
 test('T-619, T-632: orgMemNotes lists the notes newest first, each its place in the file, date and text (no task id)', () => {
   const text = `- 2026-11-18: one\n\n  \n- by hand: with a colon\n- ${D}: three\n`
   expect(orgMemNotes(text)).toEqual([
-    { n: 3, date: D, text: 'three' },
-    { n: 2, date: '', text: 'by hand: with a colon' },
-    { n: 1, date: '2026-11-18', text: 'one' },
+    { n: 3, date: D, topic: 'unsorted', text: 'three' },
+    { n: 2, date: '', topic: 'unsorted', text: 'by hand: with a colon' },
+    { n: 1, date: '2026-11-18', topic: 'unsorted', text: 'one' },
   ])
   expect(orgMemNotes(null)).toEqual([])
   expect(orgMemNotes(' \n\n')).toEqual([])
@@ -191,7 +194,7 @@ test('T-619: deleteOrgMemNote takes out exactly that line; a wrong number or a c
   const text = `- 2026-11-18: one\n\n- two\n- ${D}: three\n`
   const r = deleteOrgMemNote(text, 2)
   expect(r.text).toBe(`- 2026-11-18: one\n\n- ${D}: three\n`)
-  expect(r.removed).toEqual({ n: 2, date: '', text: 'two' })
+  expect(r.removed).toEqual({ n: 2, date: '', topic: 'unsorted', text: 'two' })
   expect(deleteOrgMemNote(text, 3).text).toBe('- 2026-11-18: one\n\n- two\n')
   expect(deleteOrgMemNote(text, 1, 'one').text).toBe(`\n- two\n- ${D}: three\n`)
   for (const [n, expect_] of [[0, undefined], [4, undefined], [1, 'not what it says']] as const) {
@@ -243,4 +246,70 @@ test('T-656: the debrief asks for 0-3 short facts for other agents under "Sugges
   // any "no" answer after the heading is nothing, with or without a list mark and words after it
   for (const no of ['Suggested for org-mem: none — nothing here is true beyond this task.', 'Suggested for org-mem: No new facts.', 'Suggested for org-mem: nothing to add', 'Suggested for org-mem:\n- None from this task.', 'Suggested for org-mem:\n- N/A here', 'Suggested for org-mem:\n- no facts beyond this task', 'Suggested for org-mem: No.', 'Suggested for org-mem: No, nothing to add.', 'Suggested for org-mem:\n- No suggestions.', 'Suggested for org-mem:\n- No notes to add.']) expect(addSuggestions(undefined, no, true)).toEqual([])
   expect(addSuggestions(undefined, 'Suggested for org-mem:\n- Nonetheless, one test file runs fast.\n- Note the slow step.\n- No new facts.', true)).toEqual(['Nonetheless, one test file runs fast.', 'Note the slow step.'])
+})
+
+// ---------------- T-717: one topic label per note ----------------
+
+test('T-717: old lines (no [topic]) read as "unsorted"; a [topic] after the date is the note\'s topic, not its text', () => {
+  const g = `- 2026-11-18: old note\n- ${D} [tests] run one file\n- [git] by hand with a topic\n- by hand without\n- ${D} [Not A Topic!] odd\n`
+  expect(orgMemNotes(g).reverse().map(x => [x.n, x.date, x.topic, x.text])).toEqual([
+    [1, '2026-11-18', 'unsorted', 'old note'],
+    [2, D, 'tests', 'run one file'],
+    [3, '', 'git', 'by hand with a topic'],
+    [4, '', 'unsorted', 'by hand without'],
+    [5, D, 'unsorted', '[Not A Topic!] odd'],
+  ])
+})
+
+test('T-717: cleanTopic: short, lower case, letters, digits, spaces, · and -', () => {
+  expect(cleanTopic('  Tests  ')).toBe('tests')
+  expect(cleanTopic('board ·  ui')).toBe('board · ui')
+  expect(cleanTopic('git-guard 2')).toBe('git-guard 2')
+  for (const bad of ['', '   ', 'a/b', '[x]', 'x'.repeat(TOPIC_MAX_CHARS + 1), 'tests!', 3]) expect(cleanTopic(bad)).toBe('')
+})
+
+test('T-717: add writes "[topic]" and refuses a note without a good topic; the duplicate check ignores topics', () => {
+  const r = orgMemAdd('', [n('one trap here', 'Board UI'), n('the topic is missing', ''), n('bad topic', 'a/b')], D)
+  expect(r.text).toBe(`- ${D} [board ui] one trap here\n`)
+  expect(r.noTopic).toEqual(['the topic is missing', 'bad topic'])
+  // the same lesson under another topic is still a repeat, also against an old line without a topic
+  expect(orgMemAdd(r.text, [n('One trap here.', 'tests')], D).repeats).toEqual(['One trap here.'])
+  expect(orgMemAdd(`- ${D}: one trap here\n`, [n('One trap here.', 'tests')], D).repeats).toEqual(['One trap here.'])
+})
+
+test('T-717: replace keeps the note\'s topic, or changes it when given; a bad topic is refused', () => {
+  const g = `- 2026-11-18 [tests] run one test file\n- 2026-11-18: an old note without topic\n`
+  expect(orgMemReplace(g, 1, 'run one test file with test-files.sh', D).text.split('\n')[0]).toBe(`- ${D} [tests] run one test file with test-files.sh`)
+  expect(orgMemReplace(g, 1, 'run one test file with test-files.sh', D, 'Scripts').text.split('\n')[0]).toBe(`- ${D} [scripts] run one test file with test-files.sh`)
+  expect(orgMemReplace(g, 2, 'an old note, now better', D).text.split('\n')[1]).toBe(`- ${D} [unsorted] an old note, now better`)
+  const bad = orgMemReplace(g, 1, 'x y z', D, 'no/slash')
+  expect(bad.why).toContain('a topic is a short name')
+  expect(bad.text).toBe(g)
+})
+
+test('T-717: the topic action relabels several notes at once (keeping dates and texts), renames a topic with from, and refuses a bad name', () => {
+  const g = `- 2026-11-18: a\n- ${D} [git] b\n\n- by hand c\n- ${D} [git] d\n`
+  const r = orgMemSetTopic(g, '1, #3 9', 'Tests')
+  expect(r.why).toBe(undefined)
+  expect(r.missing).toEqual(['9'])
+  expect(r.changed.map(x => x.n)).toEqual([1, 3])
+  expect(r.text).toBe(`- 2026-11-18 [tests] a\n- ${D} [git] b\n\n- [tests] by hand c\n- ${D} [git] d\n`)
+  // rename / merge: every note of topic git
+  const m = orgMemSetTopic(r.text, undefined, 'workflow', 'git')
+  expect(m.text).toBe(`- 2026-11-18 [tests] a\n- ${D} [workflow] b\n\n- [tests] by hand c\n- ${D} [workflow] d\n`)
+  expect(orgMemTopics(orgMemNotes(m.text))).toEqual([{ topic: 'tests', count: 2 }, { topic: 'workflow', count: 2 }])
+  for (const bad of ['', 'no/slash', 'x'.repeat(30)]) {
+    const b = orgMemSetTopic(g, '1', bad)
+    expect(b.why).toContain('a topic is a short name')
+    expect(b.text).toBe(g)
+  }
+  expect(orgMemSetTopic(g, '9', 'tests').why).toContain('names no note')
+  expect(orgMemSetTopic(g, undefined, 'tests', 'nope').why).toContain('no note has topic "nope"')
+})
+
+test('T-717: list shows each note with its number and topic, then the topics with their counts (biggest first)', () => {
+  const g = `- 2026-11-18: a\n- ${D} [git] b\n- ${D} [git] c\n`
+  expect(orgMemList(g, '.symcc/org-mem.md')).toBe(`.symcc/org-mem.md: 3 notes (at most ${ORG_MEM_MAX_LINES}), oldest first:\n#1 2026-11-18 [unsorted] a\n#2 ${D} [git] b\n#3 ${D} [git] c\nTopics (2): git 2, unsorted 1`)
+  // a topic disappears when its last note goes
+  expect(orgMemList(orgMemRemove(g, 1).text, '.symcc/org-mem.md')).toContain('Topics (1): git 2')
 })

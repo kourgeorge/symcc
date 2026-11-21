@@ -3,7 +3,8 @@
 // tasks, short); a host that can't continue an agent asks for a "Learned:" section at the end of the report instead. symcc
 // keeps the suggestions on the task (addSuggestions); when the task merges (or an investigation is Done) the lead's
 // board update lists them (suggestedText), and the lead decides what goes into <project>/.<name>/org-mem.md with its
-// orgmem tool (orgMemAdd, orgMemRemove, orgMemReplace, orgMemList). A note is one line, "- 2026-11-20: lesson", at
+// orgmem tool (orgMemAdd, orgMemRemove, orgMemReplace, orgMemSetTopic, orgMemList). A note is one line, "- 2026-11-21 [topic] lesson"
+// (T-717: one topic label each, set only by the lead; an old "- 2026-11-20: lesson" line reads as topic "unsorted"), at
 // most ORG_MEM_MAX_LINES of them; the whole file goes into every new worker's, checker's and scout's prompt. The
 // owner may edit the file by hand. Everything here is pure.
 // T-619, T-687: the owner sees the notes on a page opened from the Live tab's Organizational memory button (orgMemNotes) and may delete one there (deleteOrgMemNote).
@@ -155,8 +156,8 @@ export function cleanLearned(lines: readonly string[]): string[] {
   return out
 }
 
-/** An org-mem line's lesson, without its "- 2026-11-20:" front (lines the owner wrote by hand are taken as they are). */
-const lessonOf = (line: string) => line.replace(/^\s*[-*•]?\s*(?:\d{4}-\d{2}-\d{2}\s*:)?\s*/, '')
+/** An org-mem line's lesson, without its "- 2026-11-21 [tests]" (or old "- 2026-11-20:") front (lines the owner wrote by hand are taken as they are). */
+const lessonOf = (line: string) => line.replace(/^\s*[-*•]?\s*(?:\d{4}-\d{2}-\d{2}\s*:?)?\s*(?:\[[^\]\n]{1,40}\]\s*)?/, '')
 
 /** The words of `s`, lower case, for comparing. */
 const wordsOf = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
@@ -225,8 +226,30 @@ export function suggestedText(id: string, lines: readonly string[], tool: string
   return [`${id}: Suggested for org-mem (decide with ${tool}; most are skipped):`, ...lines.map(l => `- ${l}`)].join('\n')
 }
 
-/** An org-mem line for lesson `text` on day `date`: "- 2026-11-20: lesson". */
-export const orgMemLine = (date: string, text: string) => `- ${date}: ${text}`
+/** T-717: the topic of a note written without one (old lines, lines written by hand). */
+export const TOPIC_UNSORTED = 'unsorted'
+
+/** T-717: the longest a topic name may be. */
+export const TOPIC_MAX_CHARS = 24
+
+/**
+ * T-717: topic name `raw` made plain (lower case, spaces squeezed, trimmed); '' when it is empty, longer than
+ * TOPIC_MAX_CHARS or has anything but letters, digits, spaces, "·" and "-".
+ */
+export function cleanTopic(raw: unknown): string {
+  if (typeof raw !== 'string') return ''
+  const s = raw.replace(/\s+/g, ' ').trim().toLowerCase()
+  return s && s.length <= TOPIC_MAX_CHARS && /^[a-z0-9][a-z0-9 ·-]*$/.test(s) ? s : ''
+}
+
+/** Why a topic name was refused (for the lead's tool answers). */
+export const BAD_TOPIC = `a topic is a short name: lower case letters, digits, spaces, "·" and "-", at most ${TOPIC_MAX_CHARS} characters`
+
+/** An org-mem line for lesson `text` on day `date` with topic `topic` (T-717): "- 2026-11-21 [tests] lesson" ("- [tests] lesson" without a date). */
+export const orgMemLine = (date: string, text: string, topic: string) => `- ${date ? `${date} ` : ''}[${topic}] ${text}`
+
+/** T-717: a note the lead adds: its text and its topic. */
+export type OrgMemNewNote = { text: string; topic: string }
 
 /** A note the lead gives, made one plain line (list mark, any old "T-12 " task id and any "2026-11-20:" front off, cut at LEARNED_LINE_CHARS); '' when it is empty, secret-looking or file contents. */
 export function cleanNote(raw: string): string {
@@ -238,26 +261,31 @@ export function cleanNote(raw: string): string {
 const joinLines = (lines: readonly string[]) => (lines.length ? `${lines.join('\n')}\n` : '')
 
 /**
- * Org-mem `guide` with `notes` added at its end as "- 2026-11-20: lesson" (day `date`). A note that near-matches one
- * already there, or one added just before (sameLesson), is refused as a repeat; an empty or secret-looking one as
- * bad. When the new notes would take org-mem past `max` lines, nothing is added (`full`). `text` is the new file
- * (unchanged when nothing was added).
+ * Org-mem `guide` with `notes` added at its end as "- 2026-11-21 [topic] lesson" (day `date`, T-717: each note's
+ * topic, see cleanTopic). A note that near-matches one already there, or one added just before (sameLesson), is
+ * refused as a repeat; an empty or secret-looking one as bad; one with a missing or bad topic as `noTopic`. When the
+ * new notes would take org-mem past `max` lines, nothing is added (`full`). `text` is the new file (unchanged when
+ * nothing was added).
  */
-export function orgMemAdd(guide: string | null | undefined, notes: readonly string[], date: string, max = ORG_MEM_MAX_LINES): { text: string; added: string[]; repeats: string[]; bad: string[]; full: boolean } {
+export function orgMemAdd(guide: string | null | undefined, notes: readonly OrgMemNewNote[], date: string, max = ORG_MEM_MAX_LINES): { text: string; added: string[]; repeats: string[]; bad: string[]; noTopic: string[]; full: boolean } {
   const old = orgMemLines(guide)
-  const added: string[] = []
+  const added: OrgMemNewNote[] = []
   const repeats: string[] = []
   const bad: string[] = []
+  const noTopic: string[] = []
   for (const raw of notes) {
-    const s = cleanNote(raw)
-    if (!s) bad.push(String(raw ?? ''))
-    else if ([...old, ...added].some(l => sameLesson(l, s))) repeats.push(s)
-    else added.push(s)
+    const s = cleanNote(raw.text)
+    const topic = cleanTopic(raw.topic)
+    if (!s) bad.push(String(raw.text ?? ''))
+    else if (!topic) noTopic.push(s)
+    else if ([...old, ...added.map(x => x.text)].some(l => sameLesson(l, s))) repeats.push(s)
+    else added.push({ text: s, topic })
   }
   const text = String(guide ?? '')
-  if (added.length && old.length + added.length > max) return { text, added: [], repeats, bad, full: true }
-  if (!added.length) return { text, added, repeats, bad, full: false }
-  return { text: joinLines([...old, ...added.map(s => orgMemLine(date, s))]), added, repeats, bad, full: false }
+  const said = added.map(x => x.text)
+  if (added.length && old.length + added.length > max) return { text, added: [], repeats, bad, noTopic, full: true }
+  if (!added.length) return { text, added: said, repeats, bad, noTopic, full: false }
+  return { text: joinLines([...old, ...added.map(x => orgMemLine(date, x.text, x.topic))]), added: said, repeats, bad, noTopic, full: false }
 }
 
 /**
@@ -286,29 +314,81 @@ export function orgMemRemove(guide: string | null | undefined, which: string | n
 
 /**
  * Org-mem `guide` with the note `which` names (see findOrgMemNote) replaced, in its place, by note `by` on day
- * `date`. Refused (nothing changed, `why` says why) when there is no such note, `by` is empty or secret-looking, or
- * `by` near-matches another note (sameLesson).
+ * `date`, keeping the old note's topic, or (T-717) taking `topic` when given. Refused (nothing changed, `why` says
+ * why) when there is no such note, `by` is empty or secret-looking, `topic` is bad (see cleanTopic), or `by`
+ * near-matches another note (sameLesson).
  */
-export function orgMemReplace(guide: string | null | undefined, which: string | number, by: string, date: string): { text: string; old: OrgMemNote | null; now: string; why?: string } {
+export function orgMemReplace(guide: string | null | undefined, which: string | number, by: string, date: string, topic?: string): { text: string; old: OrgMemNote | null; now: string; topic: string; why?: string } {
   const text = String(guide ?? '')
   const old = findOrgMemNote(guide, which)
-  if (!old) return { text, old: null, now: '', why: 'no such note' }
+  if (!old) return { text, old: null, now: '', topic: '', why: 'no such note' }
   const s = cleanNote(by)
-  if (!s) return { text, old, now: '', why: 'the new note is empty, looks secret or is file contents' }
+  if (!s) return { text, old, now: '', topic: old.topic, why: 'the new note is empty, looks secret or is file contents' }
+  const t = topic === undefined ? old.topic : cleanTopic(topic)
+  if (!t) return { text, old, now: s, topic: old.topic, why: BAD_TOPIC }
   const twin = orgMemNotes(guide).find(x => x.n !== old.n && sameLesson(x.text, s))
-  if (twin) return { text, old, now: s, why: `the new note repeats note ${twin.n} ("${twin.text}")` }
-  const raw = text.split('\n')
-  let seen = 0
-  const at = raw.findIndex(l => l.trim() && ++seen === old.n)
-  raw[at] = orgMemLine(date, s)
-  return { text: raw.join('\n'), old, now: s }
+  if (twin) return { text, old, now: s, topic: t, why: `the new note repeats note ${twin.n} ("${twin.text}")` }
+  return { text: setLine(text, old.n, orgMemLine(date, s, t)), old, now: s, topic: t }
 }
 
-/** Org-mem's notes as the lead's orgmem list shows them: one per line, "#3 2026-11-20: lesson", oldest first, with the count and limit. */
+/** Text `text` with its `n`th non-empty line (1 = the first) put as `line`; every other line stays as written. */
+function setLine(text: string, n: number, line: string): string {
+  const raw = text.split('\n')
+  let seen = 0
+  const at = raw.findIndex(l => l.trim() && ++seen === n)
+  if (at >= 0) raw[at] = line
+  return raw.join('\n')
+}
+
+/**
+ * T-717: org-mem `guide` with topic `topic` set on several notes at once, keeping their dates and texts: the notes
+ * `which` names (numbers from list, e.g. "3,7,12" or "3 7 12"), and every note of topic `from` (to rename a topic or
+ * merge it into another). `why` (nothing changed) when the topic is bad or nothing is named; `missing`: the numbers
+ * that name no note (the others still change).
+ */
+export function orgMemSetTopic(guide: string | null | undefined, which: string | number | undefined, topic: string, from?: string): { text: string; changed: OrgMemNote[]; missing: string[]; why?: string } {
+  const text = String(guide ?? '')
+  const t = cleanTopic(topic)
+  if (!t) return { text, changed: [], missing: [], why: BAD_TOPIC }
+  const notes = orgMemNotes(guide)
+  const parts = which === undefined ? [] : String(which).split(/[\s,;]+/).map(x => x.replace(/^#/, '')).filter(Boolean)
+  const missing: string[] = []
+  const picked = new Set<number>()
+  for (const p of parts) {
+    const n = /^\d+$/.test(p) ? Number(p) : NaN
+    if (notes.some(x => x.n === n)) picked.add(n)
+    else missing.push(p)
+  }
+  const fromTopic = from === undefined ? '' : cleanTopic(from)
+  if (from !== undefined && !fromTopic) return { text, changed: [], missing, why: `from: ${BAD_TOPIC}` }
+  if (fromTopic) for (const x of notes) if (x.topic === fromTopic) picked.add(x.n)
+  if (!picked.size) return { text, changed: [], missing, why: fromTopic ? `no note has topic "${fromTopic}"` : 'which names no note (give numbers from list, e.g. "3,7,12", or from: a topic)' }
+  let next = text
+  const changed: OrgMemNote[] = []
+  for (const x of [...notes].reverse()) {
+    if (!picked.has(x.n) || x.topic === t) continue
+    next = setLine(next, x.n, orgMemLine(x.date, x.text, t))
+    changed.push(x)
+  }
+  return { text: next, changed, missing }
+}
+
+/** T-717: the topics of `notes` with how many notes each has, the biggest first (then by name). */
+export function orgMemTopics(notes: readonly OrgMemNote[]): { topic: string; count: number }[] {
+  const counts = new Map<string, number>()
+  for (const x of notes) counts.set(x.topic, (counts.get(x.topic) ?? 0) + 1)
+  return [...counts].map(([topic, count]) => ({ topic, count })).sort((a, b) => b.count - a.count || a.topic.localeCompare(b.topic))
+}
+
+/** Org-mem's notes as the lead's orgmem list shows them: one per line, "#3 2026-11-20 [tests] lesson", oldest first, with the count and limit, then (T-717) the topics with their counts. */
 export function orgMemList(guide: string | null | undefined, file: string): string {
   const notes = [...orgMemNotes(guide)].reverse()
   if (!notes.length) return `${file} has no notes yet (at most ${ORG_MEM_MAX_LINES}).`
-  return [`${file}: ${orgMemCount(notes.length)} (at most ${ORG_MEM_MAX_LINES}), oldest first:`, ...notes.map(x => `#${x.n} ${x.date ? `${x.date}: ` : ''}${x.text}`)].join('\n')
+  return [
+    `${file}: ${orgMemCount(notes.length)} (at most ${ORG_MEM_MAX_LINES}), oldest first:`,
+    ...notes.map(x => `#${x.n} ${x.date ? `${x.date} ` : ''}[${x.topic}] ${x.text}`),
+    `Topics (${orgMemTopics(notes).length}): ${orgMemTopics(notes).map(x => `${x.topic} ${x.count}`).join(', ')}`,
+  ].join('\n')
 }
 
 /**
@@ -334,8 +414,9 @@ export function orgMemSection(guide: string | null | undefined, file: string): s
 // ---------------- T-619, T-687: the Organizational memory page (opened from the bottom of the Live tab) ----------------
 
 /** One note of org-mem as the Organizational memory page lists it: `n` is its place in the file (1 = the first, oldest line), so
- *  appending new notes keeps the numbers; `date` is '' for a line the owner wrote by hand without one. */
-export type OrgMemNote = { n: number; date: string; text: string }
+ *  appending new notes keeps the numbers; `date` is '' for a line the owner wrote by hand without one; `topic` (T-717) is the
+ *  "[topic]" after the date, TOPIC_UNSORTED for a line without one. */
+export type OrgMemNote = { n: number; date: string; topic: string; text: string }
 
 /** The page's title. */
 export const ORG_MEM_TITLE = 'Organizational memory (org-mem)'
@@ -356,17 +437,27 @@ export const ORG_MEM_KEY = 'm'
 export const orgMemAbout = (file: string) =>
   `Notes for the agents: symcc puts ${file} (at most ${ORG_MEM_MAX_LINES} lines) into every new worker's, checker's and scout's prompt. Agents may suggest notes right after they hand back a task (one short follow-up question); the lead decides what goes in. You may edit the file by hand too.`
 
-/** The front of a note line: "- 2026-11-20: ". */
+/** The front of a note line: "- 2026-11-20: " (old) or "- 2026-11-21 " (T-717, a "[topic]" follows). */
 const NOTE_FRONT = /^\s*(?:[-*•]\s+)?(\d{4}-\d{2}-\d{2})\s*:?\s*/
 
-/** Org-mem's notes, newest (last in the file) first, each with its date and text (see OrgMemNote). */
+/** T-717: a "[topic] " at the front of the rest of a line. */
+const TOPIC_FRONT = /^\[([^\]\n]{1,40})\]\s*/
+
+/** `rest` (a line after its date) split into its topic (TOPIC_UNSORTED without a good "[topic]") and text. */
+function topicAndText(rest: string): { topic: string; text: string } {
+  const m = TOPIC_FRONT.exec(rest)
+  const topic = m ? cleanTopic(m[1]) : ''
+  return topic ? { topic, text: rest.slice(m![0].length).trim() } : { topic: TOPIC_UNSORTED, text: rest.trim() }
+}
+
+/** Org-mem's notes, newest (last in the file) first, each with its date, topic and text (see OrgMemNote). */
 export function orgMemNotes(guide: string | null | undefined): OrgMemNote[] {
   return orgMemLines(guide)
     .map((line, i): OrgMemNote => {
       const m = NOTE_FRONT.exec(line)
-      // a hand-written line without a date keeps its text whole (only its list mark is taken off)
-      if (!m) return { n: i + 1, date: '', text: line.replace(/^\s*[-*•]\s+/, '').trim() }
-      return { n: i + 1, date: m[1]!, text: line.slice(m[0].length).trim() }
+      // a hand-written line without a date keeps its text whole (only its list mark and a "[topic]" are taken off)
+      if (!m) return { n: i + 1, date: '', ...topicAndText(line.replace(/^\s*[-*•]\s+/, '').trim()) }
+      return { n: i + 1, date: m[1]!, ...topicAndText(line.slice(m[0].length)) }
     })
     .reverse()
 }

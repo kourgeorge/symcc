@@ -3,7 +3,7 @@
 // T-656) and a report's "Learned:" lines (a host with no debrief) are only suggestions: they are kept on the task (keepSuggestions) and listed in the lead's board update when the task is
 // done (a dropped task's are thrown away; see the task event listener below). Only the lead changes org-mem, with its
 // orgmem tool (orgMemTool); the owner may delete notes on the org-mem page (its button is at the bottom of the Live tab) or edit the file by hand.
-import { addSuggestions, deleteOrgMemNote, dropTaskIds, orgMemAdd, orgMemFile, orgMemList, orgMemNotes, orgMemRemove, orgMemReplace, orgMemSection, suggestedText, ORG_MEM_MAX_LINES, type OrgMemNote } from '../core/org-mem'
+import { addSuggestions, cleanTopic, deleteOrgMemNote, dropTaskIds, orgMemAdd, orgMemFile, orgMemList, orgMemNotes, orgMemRemove, orgMemReplace, orgMemSection, orgMemSetTopic, suggestedText, BAD_TOPIC, ORG_MEM_MAX_LINES, type OrgMemNewNote, type OrgMemNote } from '../core/org-mem'
 import { find, type Board, type BoardTask } from '../core/board-file'
 import { patchTask } from '../core/task'
 import type { Host } from '../host'
@@ -74,13 +74,31 @@ async function onDoneOrDropped(events: readonly { task: string; kind: string; to
 onTaskEvent(onDoneOrDropped)
 
 /** What the lead's orgmem tool gets (see TOOLS in tools.ts). */
-export type OrgMemInput = { action?: unknown; notes?: unknown; note?: unknown; which?: unknown; by?: unknown }
+export type OrgMemInput = { action?: unknown; notes?: unknown; note?: unknown; which?: unknown; by?: unknown; topic?: unknown; from?: unknown }
+
+/** T-717: add's notes as {text, topic}: each item an object {text, topic}, or a plain string taking the call's `topic`. */
+function newNotes(a: OrgMemInput): OrgMemNewNote[] {
+  const all = Array.isArray(a.notes) ? a.notes : [a.notes ?? a.note]
+  const shared = typeof a.topic === 'string' ? a.topic : ''
+  const out: OrgMemNewNote[] = []
+  for (const x of all) {
+    if (typeof x === 'string') {
+      if (x.trim()) out.push({ text: x, topic: shared })
+    } else if (x && typeof x === 'object' && typeof (x as { text?: unknown }).text === 'string' && (x as { text: string }).text.trim()) {
+      const t = (x as { topic?: unknown }).topic
+      out.push({ text: (x as { text: string }).text, topic: typeof t === 'string' ? t : shared })
+    }
+  }
+  return out
+}
 
 /**
- * T-632: the lead's orgmem tool. list (the default): every note with its number; add: `notes` (one or more) at the
- * end, refused past ORG_MEM_MAX_LINES lines or as a near repeat (sameLesson); remove: the note `which` names (its
- * number or text); replace: the note `which` names by `by`, in its place. Writes org-mem one save at a time with the
- * other writers. Answers what happened, in short lines.
+ * T-632: the lead's orgmem tool. list (the default): every note with its number and topic, then the topics with their
+ * counts; add: `notes` (one or more, each with a topic, T-717) at the end, refused past ORG_MEM_MAX_LINES lines or as
+ * a near repeat (sameLesson); remove: the note `which` names (its number or text); replace: the note `which` names by
+ * `by`, in its place (its topic kept unless `topic` is given); topic (T-717): sets `topic` on the notes `which` names
+ * ("3,7,12") and on every note of topic `from`. Writes org-mem one save at a time with the other writers. Answers what
+ * happened, in short lines.
  */
 export async function orgMemTool(host: Host, a: OrgMemInput): Promise<string> {
   if (!S.root) return 'No project folder yet.'
@@ -93,8 +111,8 @@ export async function orgMemTool(host: Host, a: OrgMemInput): Promise<string> {
   return oneAtATime(file, async (): Promise<string> => {
     const old = await readGuide(host)
     if (action === 'add') {
-      const notes = (Array.isArray(a.notes) ? a.notes : [a.notes ?? a.note]).filter(x => typeof x === 'string' && x.trim()).map(String)
-      if (!notes.length) throw new Error('add needs notes: one or more short lines')
+      const notes = newNotes(a)
+      if (!notes.length) throw new Error('add needs notes: one or more {text, topic}')
       const r = orgMemAdd(old, notes, date)
       const parts: string[] = []
       if (r.full) parts.push(`Not added: ${file} would go past ${ORG_MEM_MAX_LINES} lines. Remove or replace a note first (action list shows them).`)
@@ -104,7 +122,17 @@ export async function orgMemTool(host: Host, a: OrgMemInput): Promise<string> {
       }
       if (r.repeats.length) parts.push(`Not added, already there (or close to a note there; use replace to improve it): ${r.repeats.map(x => `"${x}"`).join(', ')}.`)
       if (r.bad.length) parts.push(`Not added (empty, looks secret or is file contents): ${r.bad.length}.`)
+      if (r.noTopic.length) parts.push(`Not added, no good topic (${BAD_TOPIC}): ${r.noTopic.map(x => `"${x}"`).join(', ')}.`)
       return parts.join('\n')
+    }
+    if (action === 'topic') {
+      const from = typeof a.from === 'string' && a.from.trim() ? a.from : undefined
+      const r = orgMemSetTopic(old, which, typeof a.topic === 'string' ? a.topic : '', from)
+      const missing = r.missing.length ? ` No note ${r.missing.join(', ')} (skipped).` : ''
+      if (r.why) return `Topics not changed: ${r.why}.${missing}`
+      if (r.changed.length) await save(r.text)
+      const t = cleanTopic(a.topic)
+      return r.changed.length ? `Set topic "${t}" on ${r.changed.length === 1 ? 'note' : 'notes'} ${r.changed.map(x => x.n).join(', ')} in ${file}.${missing}` : `Those notes already have topic "${t}": nothing changed.${missing}`
     }
     if (which === undefined) throw new Error(`${action} needs which: the note's number (see action list) or its text`)
     if (action === 'remove') {
@@ -115,12 +143,12 @@ export async function orgMemTool(host: Host, a: OrgMemInput): Promise<string> {
     }
     if (action === 'replace') {
       const by = typeof a.by === 'string' ? a.by : typeof a.note === 'string' ? a.note : ''
-      const r = orgMemReplace(old, which, by, date)
+      const r = orgMemReplace(old, which, by, date, typeof a.topic === 'string' ? a.topic : undefined)
       if (r.why) return `Not replaced: ${r.why}.`
       await save(r.text)
-      return `Replaced note ${r.old!.n} in ${file}: "${r.old!.text}" is now "${r.now}".`
+      return `Replaced note ${r.old!.n} in ${file}: "${r.old!.text}" is now "${r.now}" [${r.topic}].`
     }
-    throw new Error(`action must be list, add, remove or replace (got ${JSON.stringify(a.action)})`)
+    throw new Error(`action must be list, add, remove, replace or topic (got ${JSON.stringify(a.action)})`)
   })
 }
 
