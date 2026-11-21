@@ -315,31 +315,156 @@ export function laneLines(lane: LiveLane, l: LiveLayout, o: { nowMs: number; fra
   return [first, tries.find(fits) ?? tries[tries.length - 1]!]
 }
 
-/** A todo task as "next up" lists it: its id, title and the tasks it still waits for. */
-export type NextUp = { id: string; title: string; after: string[] }
+// T-715: waiting trains. A todo task that still waits for an unfinished task hangs, as a "train" (└─◇), under the lane
+// of the running task it waits for, or under the train of the todo task it waits for (a chain), down to a lane:
+//                  work   check  queue  tests  merged
+//  T-712 Scout or… ●━━━━━━◉──────○──────○──────○  2m
+//   bug  try 1/3   ▕████░░░░▏ 1.1M
+//    └─◇ T-713 Task files: no si…  waits
+//       └─◇ T-714 Help: /symcc-h…  waits
+//    └─◇ T-716 Live deps…  waits  + also T-690
+// "next up" then lists only the tasks free to start, and those stuck behind a failed, paused or owner-waiting task.
 
-/** The todo tasks in the order they will start (the board's order: by order and id, each one after the tasks it waits for), with what they still wait for. */
-export function nextUp(view: LiveView): NextUp[] {
-  const todo = view.tasks.filter(t => t.status === 'todo')
+/** A waiting train: a todo task hung under the lane or train it waits for; `also` the other unfinished tasks it waits
+ *  for (it is shown once, under the one furthest from merging); `trains` the todo tasks hung under it, in start order. */
+export type LiveTrain = { id: string; title: string; also: string[]; trains: LiveTrain[] }
+/** A task "next up" lists: free to start (`stuck` empty), or waiting only for tasks that don't run nor wait to run
+ *  (`stuck`: each one's id and what it is: "failed", "paused", "needs you" ...), so the owner sees it is stuck. */
+export type NextUp = { id: string; title: string; stuck: { id: string; status: string }[] }
+/** The trains of each lane (by its task's id), next up, `more` (the other todo tasks: they wait for a todo task that
+ *  runs on no lane) and `hung` (how many tasks hang as trains). */
+export type LiveTrains = { lanes: Record<string, LiveTrain[]>; next: NextUp[]; more: number; hung: number }
+
+/** How a blocker that neither runs nor waits to run is named in next up's "(waits T-n, failed)". */
+const STUCK_WORD: Partial<Record<SymccTask['status'], string>> = { failed: 'failed', paused: 'paused', waiting: 'needs you', review: 'in review', backlog: 'in backlog', dropped: 'dropped', doing: 'stopped' }
+
+/**
+ * The waiting trains of the Live tab and its next up list. A todo task whose after-list has an unfinished task hangs
+ * once: under the running lane it waits for or under the train of a todo task it waits for (that one hung itself), the
+ * one furthest from merging when there are several (a todo blocker before any running one, the one that starts last
+ * first; else the lane at the earliest station, ties: the one that started latest); the others are its `also`.
+ * A todo task waiting only for tasks that are neither running nor todo (failed, paused, waiting for the owner ...) is
+ * "stuck" and goes to next up with them; so does every task free to start. Next up is in start order (the board's).
+ */
+export function liveTrains(view: LiveView, nowMs: number, lanes: readonly LiveLane[] = liveLanes(view, nowMs)): LiveTrains {
   const board = { tasks: view.tasks as BoardTask[], archived_done: view.archived_done ?? [] }
-  return waitOrder(todo, (x, y) => x.order - y.order || num(x.id) - num(y.id)).map(t => ({ id: t.id, title: t.title, after: (t.after ?? []).filter(a => !depDone(board, a)) }))
+  const byId = new Map(view.tasks.map(t => [t.id, t]))
+  const laneOf = new Map(lanes.map(l => [l.id, l]))
+  const todo = waitOrder(view.tasks.filter(t => t.status === 'todo'), (x, y) => x.order - y.order || num(x.id) - num(y.id))
+  const rank = new Map(todo.map((t, i) => [t.id, i]))
+  const open = new Map(todo.map(t => [t.id, [...new Set((t.after ?? []).filter(a => a !== t.id && !depDone(board, a)))]]))
+  const parent = new Map<string, string>()
+  /** Whether `id`'s chain of parents (up to a lane) passes `through`. */
+  const under = (id: string, through: string) => {
+    const seen = new Set<string>()
+    for (let x: string | undefined = id; x && !seen.has(x); x = parent.get(x)) {
+      if (x === through) return true
+      seen.add(x)
+    }
+    return false
+  }
+  /** Furthest from merging first: a todo blocker (the later it starts, the further), then the earliest station, then the latest start. */
+  const further = (a: string, b: string) => {
+    const la = laneOf.get(a)
+    const lb = laneOf.get(b)
+    if (!la || !lb) return la ? 1 : lb ? -1 : (rank.get(b) ?? 0) - (rank.get(a) ?? 0)
+    return la.at - lb.at || lb.enteredMs - la.enteredMs || num(b) - num(a)
+  }
+  // a task can hang once its todo blocker hangs: go over them until nothing changes (a chain settles in its length's passes)
+  for (let pass = 0, changed = true; changed && pass <= todo.length; pass++) {
+    changed = false
+    for (const t of todo) {
+      const can = open.get(t.id)!.filter(a => laneOf.has(a) || (parent.has(a) && !under(a, t.id)))
+      const best = can.sort(further)[0]
+      if (best && parent.get(t.id) !== best) parent.set(t.id, best), (changed = true)
+    }
+  }
+  const build = (id: string): LiveTrain[] =>
+    todo.filter(t => parent.get(t.id) === id).map(t => ({ id: t.id, title: t.title, also: open.get(t.id)!.filter(a => a !== id), trains: build(t.id) }))
+  const next: NextUp[] = []
+  let more = 0
+  for (const t of todo) {
+    if (parent.has(t.id)) continue
+    const waits = open.get(t.id)!
+    const stuck = waits.every(a => !laneOf.has(a) && byId.get(a)?.status !== 'todo')
+    if (stuck) next.push({ id: t.id, title: t.title, stuck: waits.map(a => ({ id: a, status: STUCK_WORD[byId.get(a)?.status ?? 'done'] ?? (byId.has(a) ? byId.get(a)!.status : 'not found') })) })
+    else more++
+  }
+  return { lanes: Object.fromEntries(lanes.map(l => [l.id, build(l.id)])), next, more, hung: parent.size }
+}
+
+/** A row of a lane's trains: a train (`id`, at `depth` 1, 2, 3 ...) or the "└─ +N more waiting" row (no id). */
+export type TrainRow = { id?: string; depth: number; segs: LiveSeg[] }
+/** At most this many levels of trains under a lane, and this many trains; the rest are "└─ +N more waiting". */
+export const TRAIN_DEPTH = 3
+export const TRAIN_MAX = 6
+const TRAIN_TITLE = 24
+
+/** Cuts text to `width` columns, with "…" when cut. */
+const fitText = (s: string, width: number) => (textWidth(s) <= width ? s : cutTitle(s, Math.max(1, width)))
+
+/**
+ * A lane's trains as rows in `width` columns, top to bottom (each train, then the trains hung under it), never wider
+ * than `width`: "   └─◇ T-713 Task files: no si…  waits  + also T-690". Narrower, the title gets shorter, the
+ * "+ also" names give way to a count, "waits" goes, then the title. Past TRAIN_DEPTH levels or TRAIN_MAX trains, one
+ * "   └─ +N more waiting" row counts the rest.
+ */
+export function trainRows(trains: readonly LiveTrain[], width: number): TrainRow[] {
+  const out: TrainRow[] = []
+  let hidden = 0
+  const count = (xs: readonly LiveTrain[]): number => xs.reduce((n, x) => n + 1 + count(x.trains), 0)
+  const walk = (xs: readonly LiveTrain[], depth: number) => {
+    for (const x of xs) {
+      if (depth > TRAIN_DEPTH || out.length >= TRAIN_MAX) {
+        hidden += 1 + count(x.trains)
+        continue
+      }
+      out.push({ id: x.id, depth, segs: trainLine(x, depth, width) })
+      walk(x.trains, depth + 1)
+    }
+  }
+  walk(trains, 1)
+  if (hidden) out.push({ depth: 1, segs: [{ text: fitText(`   └─ +${hidden} more waiting`, width), tone: 'dim' }] })
+  return out
+}
+
+/** One train's row (see trainRows). */
+function trainLine(x: LiveTrain, depth: number, width: number): LiveSeg[] {
+  const lead = `${' '.repeat(3 * depth)}└─◇ `
+  const n = x.also.length
+  const alsos = n ? [`  + also ${x.also.join(', ')}`, ...(n > 1 ? [`  + also ${x.also[0]} +${n - 1}`] : []), `  +${n}`] : ['']
+  const tries: { also: string; waits: string }[] = []
+  for (const waits of ['  waits', '']) for (const also of alsos) tries.push({ also, waits })
+  const make = (t: { also: string; waits: string }, titleW: number): LiveSeg[] =>
+    segs({ text: lead, tone: 'dim' }, { text: x.id, tone: 'id' }, titleW > 0 && { text: ` ${cutTitle(x.title, titleW)}`, tone: 'title' }, { text: t.waits, tone: 'dim' }, { text: t.also, tone: 'dim' })
+  for (const least of [8, 3])
+    for (const t of tries) {
+      const room = width - textWidth(lead + x.id + t.waits + t.also) - 1
+      if (room >= Math.min(least, textWidth(x.title))) return make(t, Math.min(room, TRAIN_TITLE))
+    }
+  for (const t of tries) if (textWidth(lead + x.id + t.waits + t.also) <= width) return make(t, 0)
+  // narrower than its lead and id: cut
+  return [{ text: fitText(lead + x.id, width), tone: 'dim' }]
 }
 
 /**
- * The "next up" line in `width` columns: "next up  T-690 Live tab… · T-691 VS Code l… (after T-690) · 2 more in todo";
- * as many tasks as fit (at most 3) with titles cut to 12, else to 6, else with no titles; "nothing in todo" for none.
+ * The "next up" line in `width` columns: "next up  T-690 Live tab… · T-692 Help pa… (waits T-601, failed) · 2 more";
+ * the tasks free to start and the stuck ones (see liveTrains) in start order, as many as fit (at most 3) with titles
+ * cut to 12, else to 6, else with no titles, then how many more todo tasks are not shown (trains aside);
+ * "nothing in todo" when there is no todo task, "nothing free to start" when all of them wait.
  */
-export function nextUpLine(items: readonly NextUp[], width: number): string {
+export function nextUpLine(t: Pick<LiveTrains, 'next' | 'more' | 'hung'>, width: number): string {
   const head = 'next up  '
-  if (!items.length) return `${head}nothing in todo`
-  const one = (x: NextUp, w: number) => `${x.id}${w ? ` ${cutTitle(x.title, w)}` : ''}${x.after.length ? ` (after ${x.after.join(', ')})` : ''}`
+  const items = t.next
+  if (!items.length) return t.more + t.hung ? fitText(`${head}nothing free to start${t.more ? ` · ${t.more} more` : ''}`, width) : `${head}nothing in todo`
+  const one = (x: NextUp, w: number) => `${x.id}${w ? ` ${cutTitle(x.title, w)}` : ''}${x.stuck.length ? ` (waits ${x.stuck.map(s => `${s.id}, ${s.status}`).join('; ')})` : ''}`
   const line = (n: number, w: number) => {
-    const more = items.length - n
-    return head + [...items.slice(0, n).map(x => one(x, w)), ...(more ? [`${more} more in todo`] : [])].join(' · ')
+    const more = items.length - n + t.more
+    return head + [...items.slice(0, n).map(x => one(x, w)), ...(more ? [`${more} more`] : [])].join(' · ')
   }
   for (const w of [12, 6]) for (let n = Math.min(3, items.length); n >= 1; n--) if (textWidth(line(n, w)) <= width) return line(n, w)
   for (let n = Math.min(3, items.length); n >= 1; n--) if (textWidth(line(n, 0)) <= width) return line(n, 0)
-  return line(1, 0)
+  return fitText(line(1, 0), width)
 }
 
 /** Today's numbers: tasks merged, checker send-backs, tasks failed, and the worker tries' tokens. */

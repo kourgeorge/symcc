@@ -8,7 +8,7 @@
 // OpenTUI (T-500): opencode/tui.ts imports them by their written-out names (what OpenCode swaps for its own copies),
 // and loadTuiRuntime names a package that is missing or lacks a function instead of failing with a bare import error.
 import { test, expect } from 'bun:test'
-import { LIVE_TABS, tabRow as coreTabRow, roleKeys, rolesKeys, kindsKeys, scoutHowTo, LIVE_EMPTY, LIVE_LEGEND, liveLanes, liveLayout, liveStations, liveHeader, liveLabelLine, laneLines, segText, nextUp, nextUpLine, liveToday, todayLines, modeLabel, modeButton, promptsOfRole, ROLE_SLOT, SETTING_GROUPS, groupSummaryParts, taskActions, actionButtonLabel, settingsKeys, mergeRoles, mergeKinds, when, addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, showsHeader, roleTools, roleNameError, leadScoutNameError, type BoardPage, type Board } from '../../board'
+import { LIVE_TABS, tabRow as coreTabRow, roleKeys, rolesKeys, kindsKeys, scoutHowTo, LIVE_EMPTY, LIVE_LEGEND, liveLanes, liveLayout, liveStations, liveHeader, liveLabelLine, laneLines, segText, liveTrains, trainRows, nextUpLine, liveToday, todayLines, modeLabel, modeButton, promptsOfRole, ROLE_SLOT, SETTING_GROUPS, groupSummaryParts, taskActions, actionButtonLabel, settingsKeys, mergeRoles, mergeKinds, when, addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, showsHeader, roleTools, roleNameError, leadScoutNameError, type BoardPage, type Board } from '../../board'
 import type { PaneView } from '../../app/state'
 import type { SymccTask } from '../../../types'
 import { ICON } from '../../name'
@@ -2438,7 +2438,7 @@ test('T-692: the Live tab draws the terminal panel\'s lanes, next up and today (
     const lanes = liveLanes(view, NOW)
     const layout = liveLayout(lanes, liveStations(true), w)
     const frame = Math.floor(NOW / 1000)
-    return [liveHeader(view, lanes), liveLabelLine(layout), ...lanes.flatMap(l => laneLines(l, layout, { nowMs: NOW, frame }).map(segText)), nextUpLine(nextUp(view), w), ...todayLines(liveToday(whole, NOW), w), LIVE_LEGEND]
+    return [liveHeader(view, lanes), liveLabelLine(layout), ...lanes.flatMap(l => laneLines(l, layout, { nowMs: NOW, frame }).map(segText)), nextUpLine(liveTrains(view, NOW, lanes), w), ...todayLines(liveToday(whole, NOW), w), LIVE_LEGEND]
   }
   // OpenCode reads the view file, whose done task comes slim (no history): the today row must still match
   const f: ViewFile = { ...f0, view: { ...view, tasks: whole.map(t => viewTask(t)) } }
@@ -2548,6 +2548,89 @@ test('T-692: in the TUI, l (or a click on the Live tab) shows the Live tab; ↓ 
   ;(lane.el.props.onMouseUp as (e: unknown) => void)(up)
   await settle()
   expect([board.state().tab, board.state().opened]).toEqual(['tasks', 'T-610'])
+  board.stop()
+})
+
+// T-715: the same sample board as tests/live.test.tsx: two lanes (T-712 at work, T-690 at check), todo tasks waiting for
+// them, for each other and for a failed task; one free, one waiting for the free one.
+const trainTasks = (): SymccTask[] => {
+  const ago = (min: number) => new Date(NOW - min * 60_000).toISOString()
+  const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', question: null, order: Number(id.slice(2)), after: [], attempts: 1, history: [], branch: null, created_at: ago(300), updated_at: ago(1), ...x }) as unknown as SymccTask
+  return [
+    task('T-712', 'Scout ordering fix', { runs: [{ started: ago(2) }] }),
+    task('T-690', 'Live tab first part', { attempts: 2, runs: [{ started: ago(30), ended: ago(3), tokens: { input: 1_400_000 } }], checking: { step: 'checker', at: ago(0) }, checker: 'agent-c', history: [{ kind: 'stage', at: ago(3), text: 'try 2: prep started' }] }),
+    task('T-701', 'A failed one', { status: 'failed', updated_at: ago(20) }),
+    task('T-713', 'Task files: no silent drops', { status: 'todo', after: ['T-712'] }),
+    task('T-714', 'Help: /symcc-help shows all', { status: 'todo', after: ['T-713'] }),
+    task('T-716', 'Live deps drawn as trains', { status: 'todo', after: ['T-712', 'T-690'] }),
+    task('T-717', 'Waits for a todo and a lane', { status: 'todo', after: ['T-690', 'T-713'] }),
+    task('T-718', 'Waits for the failed one', { status: 'todo', after: ['T-701'] }),
+    task('T-715', 'Free to start', { status: 'todo', order: 1 }),
+    task('T-719', 'Waits for the free one', { status: 'todo', after: ['T-715'] }),
+  ]
+}
+
+test('T-715: the Live tab hangs the waiting trains under their lanes as the terminal panel does (core\'s trainRows), nothing wider than the panel; next up holds only the free and the stuck', () => {
+  const f0 = viewFile()
+  const whole = trainTasks()
+  const view = { ...f0.view, tasks: whole, checker: true, max_parallel: 3 }
+  const f: ViewFile = { ...f0, view: { ...view, tasks: whole.map(t => viewTask(t)) } }
+  for (const w of [100, 40]) {
+    const lanes = liveLanes(view, NOW)
+    const t = liveTrains(view, NOW, lanes)
+    const rows = trainRows(t.lanes['T-712']!, w)
+    expect(rows.map(r => r.id)).toEqual(['T-713', 'T-714', 'T-717', 'T-716'])
+    const d = panelLines(parseViewFile(viewFileText(f)), { tab: 'live', opened: '', cursor: 0 }, NOW, w)
+    const texts = d.lines.map(lineText).map(x => x.replace(/^›/, ' '))
+    for (const x of texts) expect([w, x, x.length <= w]).toEqual([w, x, true])
+    // right under T-712's two lane lines
+    const at = texts.findIndex(x => x.startsWith(' T-712 '))
+    expect([w, texts.slice(at + 2, at + 2 + rows.length)]).toEqual([w, rows.map(r => segText(r.segs))])
+    // the cursor stops: each lane, then its trains; a click on a train opens it
+    expect(d.ids).toEqual([...lanes.flatMap(l => [l.id, ...trainRows(t.lanes[l.id]!, w).flatMap(r => (r.id ? [r.id] : []))])])
+    expect(d.hits[d.lines.findIndex(l => lineText(l).includes('└─◇ T-714'))]).toEqual({ open: 'T-714' })
+    const next = texts.find(x => x.startsWith('next up'))!
+    expect(next).toBe(nextUpLine(t, w))
+    expect(next.includes('T-713')).toBe(false)
+  }
+  expect(nextUpLine(liveTrains(view, NOW), 120)).toBe('next up  T-715 Free to sta… · T-718 Waits for t… (waits T-701, failed) · 1 more')
+})
+
+test('T-715: in the TUI, ↓ to a train and Enter (or a click on it) opens that task; b returns to the Live tab on it', async () => {
+  const f0 = viewFile()
+  const f: ViewFile = { ...f0, view: { ...f0.view, tasks: trainTasks().map(t => viewTask(t)), checker: true } }
+  const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)]])
+  const slots: { append: string; render: (input: never) => unknown }[] = []
+  const ctx: TuiContext = {
+    location: { directory: '/work/proj' },
+    theme: {},
+    renderer: { width: 100, height: 200 },
+    client: { session: { command: async () => undefined } },
+    keymap: { layer: () => undefined },
+    ui: {
+      toast: { show: () => undefined },
+      dialog: { prompt: async () => undefined, select: async () => undefined },
+      panel: { open: () => true, close: () => undefined, current: () => undefined },
+      slot: claim => (slots.push(claim as never), () => undefined),
+    },
+  }
+  const board = startTui(ctx, { runtime: fakeRuntime(), readText: async p => files.get(p) ?? Promise.reject(new Error('missing')), every: () => () => undefined, now: () => NOW })
+  await board.refresh()
+  const panel = slots.find(s => s.append === 'session.panel')!.render({ name: BOARD_PANEL, sessionID: 's', width: 100, focused: true, close: () => undefined, focus: () => undefined } as never) as El
+  const settle = () => new Promise<void>(res => setTimeout(res, 0))
+  const up = { type: 'up', button: 0, stopPropagation: () => undefined }
+  await board.press('l', 's')
+  // ↓ down to T-713, the first train under the T-712 lane
+  const ids = panelLines(parseViewFile(viewFileText(f)), { tab: 'live', opened: '', cursor: 0 }, NOW, 100).ids
+  for (let i = 0; i < ids.indexOf('T-713'); i++) await board.press('down', 's')
+  await board.press('open', 's')
+  expect([board.state().tab, board.state().opened]).toEqual(['tasks', 'T-713'])
+  await board.press('back', 's')
+  expect([board.state().tab, board.state().opened, board.state().cursor]).toEqual(['live', '', ids.indexOf('T-713')])
+  const train = rowEls(panel).find(r => r.text.includes('└─◇ T-716'))!
+  ;(train.el.props.onMouseUp as (e: unknown) => void)(up)
+  await settle()
+  expect([board.state().tab, board.state().opened]).toEqual(['tasks', 'T-716'])
   board.stop()
 })
 

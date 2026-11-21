@@ -29,7 +29,7 @@ import {
   type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction, type DefEditField, type TaskVerb, settingsKeys, rolesKeys, kindsKeys, roleEditKeys, defEditFields, roleTools, roleFileText, roleSkipReason, kindFileText, kindSkipReason,
   DEFAULT_ROLE, isCheckerRole, ALWAYS_ON_KINDS, checkerOn, roleNameError, kindNameError, leadScoutNameError, checkStepNow, rowEndText, taskPhase, choiceLines, driveWarning,
   searchTasks, showsHeader, type BoardPage,
-  LIVE_TABS, LIVE_EMPTY, LIVE_LEGEND, type LiveSeg, LIVE_TONE, tabRow, LIVE_VIEW_KEYS, liveKeys, liveLanes, liveLayout, liveStations, liveHeader, liveLabelLine, laneLines, nextUp, nextUpLine, liveToday, todayLines, searchLine, modeButton, hintLines, roleKeys, rolePromptKeys, ROLE_PROMPTS, ROLE_SLOT, promptsOfRole, type RolePromptKind,
+  LIVE_TABS, LIVE_EMPTY, LIVE_LEGEND, type LiveSeg, LIVE_TONE, tabRow, LIVE_VIEW_KEYS, liveKeys, liveLanes, liveLayout, liveStations, liveHeader, liveLabelLine, laneLines, liveTrains, trainRows, nextUpLine, liveToday, todayLines, searchLine, modeButton, hintLines, roleKeys, rolePromptKeys, ROLE_PROMPTS, ROLE_SLOT, promptsOfRole, type RolePromptKind,
 } from '../board'
 import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, brokenLabel, defNamed } from '../core/def-files'
 import { restFrame } from '../core/logo'
@@ -772,6 +772,8 @@ export const LIVE_BLINK_MS = 1000
  * station names, two lines per task in doing (a click on its first line, or Enter on it, opens the task), next up,
  * today's numbers, the legend and (T-687) the Organizational memory button; "No task is running right now." when none is in doing. The cursor goes over the
  * lanes; its lane's first column shows "›". The current station blinks with the clock (one step per LIVE_BLINK_MS).
+ * T-715: under each lane hang its waiting trains (core's liveTrains and trainRows); the cursor goes over them too, and
+ * Enter or a click on one opens its task, as on a lane.
  */
 function liveBody(f: ViewFile, cursor: number, nowMs: number, w: number): Body {
   const b = bodyMaker()
@@ -779,21 +781,28 @@ function liveBody(f: ViewFile, cursor: number, nowMs: number, w: number): Body {
   const lanes = liveLanes(v, nowMs)
   const layout = liveLayout(lanes, liveStations(v.checker === true), w)
   const frame = Math.floor(nowMs / LIVE_BLINK_MS)
-  const ids = lanes.map(l => l.id)
+  const trains = liveTrains(v, nowMs, lanes)
+  const rows = new Map(lanes.map(l => [l.id, trainRows(trains.lanes[l.id] ?? [], w)]))
+  // the cursor's stops, top to bottom: each lane, then its trains
+  const ids = lanes.flatMap(l => [l.id, ...rows.get(l.id)!.flatMap(r => (r.id ? [r.id] : []))])
   const selected = ids.length ? ids[Math.min(Math.max(0, cursor), ids.length - 1)]! : ''
   b.add([{ text: liveHeader(v, lanes), color: 'text', bold: true }])
   b.add([{ text: lanes.length ? liveLabelLine(layout) : LIVE_EMPTY, color: 'inactive' }])
+  /** A row that opens task `id`: "›" in its first column when the cursor is on it (a space there otherwise). */
+  const opens = (xs: readonly LiveSeg[], id: string) => {
+    const line = liveSegs(xs, { open: id })
+    const head = line[0]
+    if (id === selected && head?.text.startsWith(' ')) line.splice(0, 1, { text: '›', color: 'ide', bold: true, hit: { open: id } }, { ...head, text: head.text.slice(1) })
+    b.add(line, { open: id })
+  }
   for (const l of lanes) {
     const [first, second] = laneLines(l, layout, { nowMs, frame })
-    const line = liveSegs(first, { open: l.id })
-    // the lane under the cursor: "›" in its first column (a space there otherwise)
-    const head = line[0]
-    if (l.id === selected && head?.text.startsWith(' ')) line.splice(0, 1, { text: '›', color: 'ide', bold: true, hit: { open: l.id } }, { ...head, text: head.text.slice(1) })
-    b.add(line, { open: l.id })
+    opens(first, l.id)
     b.add(liveSegs(second))
+    for (const r of rows.get(l.id)!) r.id ? opens(r.segs, r.id) : b.add(liveSegs(r.segs))
   }
   b.add([{ text: footerRule(w), color: 'subtle' }])
-  b.add([{ text: nextUpLine(nextUp(v), w), color: 'text' }])
+  b.add([{ text: nextUpLine(trains, w), color: 'text' }])
   for (const t of todayLines(liveToday(v.tasks, nowMs), w)) b.add([{ text: t, color: 'text' }])
   if (lanes.length) b.add([{ text: LIVE_LEGEND, color: 'inactive' }])
   // T-687: the Organizational memory button, just above the footer
