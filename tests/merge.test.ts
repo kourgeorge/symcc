@@ -3083,6 +3083,10 @@ test('T-721: failedTestNames keeps at most 10 names, each once, long ones cut, a
   const long = failedTestNames(`(fail) ${'x'.repeat(300)}`)[0]!
   expect(long.length).toBe(FAILED_TEST_CHARS)
   expect(long.endsWith('…')).toBe(true)
+  // cut by whole characters: an emoji is never split in half
+  const emoji = failedTestNames(`(fail) ${'😀'.repeat(200)}`)[0]!
+  expect([...emoji].length).toBe(FAILED_TEST_CHARS)
+  expect(emoji).toBe(`${'😀'.repeat(FAILED_TEST_CHARS - 1)}…`)
   expect(failedTestNames(undefined)).toEqual([])
   expect(failedTestNames('all good\n(pass) a')).toEqual([])
 })

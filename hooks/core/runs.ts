@@ -85,7 +85,9 @@ export function failedTestNames(output: unknown): string[] {
       const m = /^\s*\(fail\)\s+(.*?)\s*(\[[\d.]+\s*m?s\])?\s*$/.exec(raw)
       const name = m?.[1]?.trim()
       if (!name) continue
-      const cut = name.length > FAILED_TEST_CHARS ? `${name.slice(0, FAILED_TEST_CHARS - 1)}…` : name
+      // whole characters (code points), so an emoji is never cut in half
+      const chars = [...name]
+      const cut = chars.length > FAILED_TEST_CHARS ? `${chars.slice(0, FAILED_TEST_CHARS - 1).join('')}…` : name
       if (!out.includes(cut)) out.push(cut)
       if (out.length >= FAILED_TESTS_KEPT) break
     }
