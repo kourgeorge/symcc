@@ -1,16 +1,13 @@
-// The board panel's Scouts view in VS Code's side panel (see surface.ts and vscode.tsx). The terminal's list
-// (scouts-page.tsx) packs each scout on one line of columns, cut to the width; here each scout is a block of a
-// few readable lines that wrap, its name a link that opens it (VS Code draws a Button as a blue box):
-//   security-advisories   ◎ next in 3h       (the name, then its status as a badge in its color)
-//   every day · ran 21h ago                  (how often, model, when it ran: dim)
-//   Checks the advisories for our packages   (the summary, whole)
-//   last report: found 5: The package left-pad has a security advisory   (the start of the last report, whole, dim)
+// The board panel's Scouts view in VS Code's side panel (see surface.ts and vscode.tsx). Like the terminal's list
+// (scouts-page.tsx, scoutListRows), each scout is one line of columns, its name a link that opens it (VS Code draws
+// a Button as a blue box), the end cut with "…" to the room a task row has (vsRowRoom), so it never wraps (T-697):
+//   ◷ security-advisories  every day  next in 3h  last: found 5: The package left-pad has a security…
 // With no scouts, a short how-to in a box and "+ New scout" as the one primary button.
 // One scout's page: a "← Scouts" button, the name and state, its facts, Run now / Pause / Edit as buttons, then the
 // instructions, and its Runs (newest first; a press opens that run's full report, with a "← <scout>" button back;
 // the page itself shows no report text). It says when its last run ended on an API error or a refusal. No key hints.
 import type { SymccScout } from '../../../types'
-import { scoutRow, scoutFile, scoutIcon, scoutHowTo, scoutLastText, everyText, isNothing, fmtDuration, BAD_EVERY_STATE, scoutRunTasks, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem } from '../../board'
+import { scoutRow, scoutFile, scoutIcon, scoutHowTo, scoutListRows, type ScoutListRow, everyText, isNothing, fmtDuration, BAD_EVERY_STATE, scoutRunTasks, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem } from '../../board'
 import { cancelScoutEdit, saveScout, runScoutNow, editScout, setScoutPaused, newScout, loadScoutRunHistory, loadScoutResults, readScoutRunReport, scoutPlaceValue } from '../../app/scouts'
 import { S } from '../../app/state'
 import { type $, panelValues } from '../panel'
@@ -18,7 +15,8 @@ import type { PaneParts } from './parts'
 import { row } from './arrows'
 import { resetPane } from '../../app/open'
 import { claudeHost } from '../host'
-import { vsBadge, vsFooter, vsHref, vsLink, mdLink, vsSection } from './vscode'
+import { vsBadge, vsFooter, vsHref, vsLink, mdLink, vsSection, cutEnd } from './vscode'
+import { vsRowRoom } from './vscode-list'
 
 /** The color of a scout's mark in VS Code: running blue, paused dim, a bad file in the warning color, waiting plain. */
 const markTone = (s: SymccScout) => (s.running ? 'ide' : s.paused ? 'inactive' : s.warning ? 'warning' : 'text')
@@ -44,50 +42,57 @@ export function reportStart(report: string | undefined): string {
     .replace(/`([^`]+)`/g, '$1')
 }
 
-/** The "last report" line of a scout row: "last report: found 2: <its first finding>", or "last report: nothing". */
-function lastLine(s: SymccScout): { text: string; tone: string } {
-  if (s.running) return { text: '', tone: 'inactive' }
-  const l = scoutLastText(s)
-  if (l.text === 'never ran') return { text: '', tone: 'inactive' }
-  if (isNothing(s.last_report)) return { text: 'last report: nothing', tone: 'inactive' }
-  const start = reportStart(s.last_report)
-  return { text: `last report: ${l.text.replace(/^last: /, '')}${start ? `: ${start}` : ''}`, tone: 'text' }
+/** Spaces that HTML does not squeeze, so a row's cells keep their padding in VS Code's panel. */
+const hard = (s: string) => s.replace(/ /g, ' ')
+
+/** The end of a Scouts list row after its state, as plain text, fitted to `room` characters (never wider): the
+ *  terminal row's "last:" cell with the start of the last report after it ("last: found 5: The package left-pad…"),
+ *  then the model; the report start is cut with "…" first, then the whole end. */
+export function scoutRowEnd(s: SymccScout, r: ScoutListRow, room: number): string {
+  const last = r.last.trim()
+  const model = r.model.trim()
+  const start = last && !s.running && !isNothing(s.last_report) ? reportStart(s.last_report) : ''
+  const modelPart = model ? `  ${model}` : ''
+  if (!last) return room >= modelPart.length ? modelPart : ''
+  const free = room - 2 - last.length - modelPart.length - 2
+  const said = start && free >= 2 ? `: ${cutEnd(start, free)}` : ''
+  const all = `${last}${said}${modelPart}`
+  if (room <= 2) return ''
+  return `  ${all.length <= room - 2 ? all : cutEnd(all, room - 2)}`
 }
 
-/** The Scouts list in VS Code. */
+/** The Scouts list in VS Code: one line per scout, like the terminal list (scouts-page.tsx, scoutListRows): the
+ *  icon, the name (a link that opens the scout), how often, the state in its color (running blue, paused dim, a bad
+ *  file yellow), then dim "last:" with the start of the last report and the model, cut with "…" to the room a task
+ *  row has (vsRowRoom), so a row never wraps. */
 export function scoutsListVs($: $, pane: PaneParts) {
-  const { Box, Text, Button, Input, act, C, scouts, banner, tabs, vs } = pane
+  const { Box, Text, Button, Input, act, C, scouts, banner, tabs, vs, width } = pane
   const { nowMs } = pane
+  const room = vsRowRoom(width)
+  const rows = scoutListRows(scouts, nowMs, room)
   const plain = (key: string, text: string, color = 'inactive') => (
     <Text key={key} wrap="wrap" color={C(color)}>
       {text}
     </Text>
   )
 
-  const scoutBox = (x: SymccScout) => {
-    const r = scoutRow(x, nowMs)
-    const facts = [r.every, r.model, r.ran].filter(Boolean).join(' · ')
-    const title = x.summary?.trim() || (x.prompt ?? '').split('\n').map(l => l.trim()).find(Boolean) || ''
-    const last = lastLine(x)
-    // the name a link that opens it (text, not a Button: VS Code draws a Button as a blue box) and its status badge,
-    // then dim lines: how often and the last run, the summary, a bad file's warning, the start of the last report
-    const line = (key: string, text: string, color = 'inactive') => (
-      <Text key={key} wrap="wrap" color={C(color)}>
-        {text}
-      </Text>
-    )
+  const scoutLine = (x: SymccScout, i: number) => {
+    const r = rows[i]!
     const href = vsHref('scout', x.name)
     const name = mdLink(x.name, href)
+    const pad = ' '.repeat(Math.max(0, r.name.length - x.name.length))
+    const lead = r.icon.length + 1 + r.name.length + r.every.length + r.state.length
+    const end = scoutRowEnd(x, r, room - lead)
+    // the name a link that opens it (text, not a Button: VS Code draws a Button as a blue box)
     return (
-      <Box key={`vs-scout-${x.name}`} flexDirection="column">
-        <Box key={`vs-scout-${x.name}-top`} flexDirection="row" flexWrap="wrap" columnGap={2}>
-          {vsLink(vs, row(`scout:${x.name}`), x.paused ? name : `**${name}**`, [[href, act(() => panelValues($).updateScoutOpen(() => x.name))]], x.paused)}
-          {vsBadge(vs, 'mark', `${scoutIcon(x)} ${vsScoutState(x, nowMs)}`, markTone(x))}
+      <Box key={`vs-scout-${x.name}`} flexDirection="row">
+        <Text key="icon" color={C(r.tone)}>{hard(`${r.icon} `)}</Text>
+        <Box key="name" flexShrink={0} minWidth={r.name.length}>
+          {vsLink(vs, row(`scout:${x.name}`), `${x.paused ? name : `**${name}**`}${pad}`, [[href, act(() => panelValues($).updateScoutOpen(() => x.name))]], x.paused)}
         </Box>
-        {line('facts', facts)}
-        {title ? line('summary', title, 'text') : null}
-        {x.warning ? line('warning', x.warning, 'warning') : null}
-        {last.text ? line('last', last.text) : null}
+        {r.every ? <Text key="every" color={C('inactive')}>{hard(r.every)}</Text> : null}
+        {r.state ? <Text key="state" color={C(r.stateTone)}>{hard(r.state)}</Text> : null}
+        {end ? <Text key="end" wrap="truncate" color={C('inactive')}>{hard(end)}</Text> : null}
       </Box>
     )
   }
@@ -119,7 +124,11 @@ export function scoutsListVs($: $, pane: PaneParts) {
         {[...banner(), tabs()]}
       </Box>
       {scouts.length === 0 ? <Box key="vs-scouts-howto" flexDirection="column" borderStyle="round" borderColor={C('subtle')} paddingX={1}>{scoutHowTo(S.N.name).map((line, i) => plain(`howto-${i}`, line.replace(/ \([a-z]\)(?=\s|$)/g, ''), i === 0 ? 'text' : 'inactive'))}</Box> : null}
-      {scouts.map(scoutBox)}
+      {scouts.length ? (
+        <Box key="vs-scouts-rows" flexDirection="column">
+          {scouts.map(scoutLine)}
+        </Box>
+      ) : null}
       {newBox}
       <Box key="vs-scouts-back-row" flexDirection="row">
         <Button key="scouts-back" label="← Tasks" variant="secondary" onPress={act(() => resetPane(claudeHost($), 'tasks'))} />
