@@ -1,6 +1,6 @@
 {
   "name": "symcc",
-  "version": "0.5.21",
+  "version": "0.5.22",
   "description": "A team lead for your coding agents: the main chat plans the work on a shared task board, workers build tasks in parallel in their own worktrees and merge what passes the tests, and scouts look for problems on a timer.",
   "types": "./types/index.d.ts",
   "license": "MIT"
