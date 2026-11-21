@@ -220,6 +220,50 @@ test('T-619: the Organizational memory page lists the notes newest first with th
   await ui.unmount()
 })
 
+test('T-742: the terminal page has Delete (x) and Back (b) on one row right under the title, before the first note; the focus starts on a note; x and b still work', async ($, on) => {
+  stateOf(on, VIEW)
+  fakeOrgMem(on, NOTES)
+  const ui = await settings($)
+  await ui.press({ key: 'live-orgmem' })
+  const keys = (await ui.findAll({})).map(n => String(n.key ?? ''))
+  const title = (await ui.findAll({})).findIndex(n => /▍Organizational memory \(org-mem\)/.test(String(n.text ?? '')))
+  expect(title).toBeGreaterThanOrEqual(0)
+  expect(keys.indexOf('orgmem-delete')).toBeGreaterThan(title)
+  expect(keys.indexOf('orgmem-back')).toBeGreaterThan(keys.indexOf('orgmem-delete'))
+  expect(keys.indexOf('orgmemRow:3')).toBeGreaterThan(keys.indexOf('orgmem-back'))
+  // one row, the line just under the title
+  const page = (await ui.drawn()) as Node
+  const kids = (page.children ?? []) as Node[]
+  const at = kids.findIndex(k => /Organizational memory \(org-mem\)/.test(textOf(k)))
+  const row = kids[at + 1]!
+  expect([row.type, row.key ?? row.props?.key, row.props?.flexDirection]).toEqual(['Box', 'orgmem-buttons', 'row'])
+  expect(((row.children ?? []) as Node[]).map(b => b.props?.label)).toEqual(['Delete (x)', 'Back (b)'])
+  // the focus on the newest note, not on the buttons
+  const focused = (await ui.findAll({ type: 'Button' })).filter(b => b.props.autoFocus === true).map(b => String(b.key ?? ''))
+  expect(focused).toEqual(['orgmemRow:3'])
+  expect((await ui.find({ key: 'orgmem-delete' }))?.props.hotkey).toBe('x')
+  expect((await ui.find({ key: 'orgmem-back' }))?.props.hotkey).toBe('b')
+  // x asks about the focused note; while it asks there is no Delete; b goes back to Live
+  await ui.press({ key: 'orgmem-delete' })
+  expect(await ui.find({ type: 'Text', text: /^Delete note #3 · 2026-11-20/ })).toBeDefined()
+  expect(await ui.find({ key: 'orgmem-delete' })).toBeUndefined()
+  await ui.press({ key: 'orgmem-delete-cancel' })
+  await ui.press({ key: 'orgmem-back' })
+  expect((await omHead(ui))).toContain('3 / 60')
+  await ui.unmount()
+})
+
+test('T-742: VS Code: the "← Live" link comes before the first note', async ($, on) => {
+  stateOf(on, VIEW)
+  fakeOrgMem(on, NOTES)
+  const ui = await settings($, 'vscode')
+  await ui.press({ key: 'live-orgmem', link: { href: vsHref('page', 'orgmem') } })
+  const keys = (await ui.findAll({})).map(n => String(n.key ?? ''))
+  expect(keys.indexOf('orgmem-back')).toBeGreaterThanOrEqual(0)
+  expect(keys.indexOf('orgmem-back')).toBeLessThan(keys.indexOf('orgmemRow:3'))
+  await ui.unmount()
+})
+
 test('T-619: with no org-mem file the section says 0 / 60 and "No notes yet.", and the page says "No notes yet." with no delete key', async ($, on) => {
   stateOf(on, VIEW)
   fakeOrgMem(on, null)

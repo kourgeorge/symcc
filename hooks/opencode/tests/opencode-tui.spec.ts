@@ -2351,11 +2351,17 @@ test('T-685: every board screen has Claude Code\'s buttons: the tab row, the lis
   expect(found.lines.slice(0, found.fixed).map(lineText)).toContain('search: reviewed · 1 of 5 tasks')
   expect(texts({ search: 'nothing-like-this' })).toContain('search: nothing-like-this · no tasks match')
 
-  // Back (b) at the end of each list page, as Claude Code's; org-mem's Delete (x) before it (only with notes)
+  // Back (b) on each list page, as Claude Code's; org-mem's Delete (x) before it (only with notes)
   const back = (c: Partial<PanelChoice>) => draw(c).lines.flat().filter(s => s.text === '[ Back (b) ]').map(s => s.hit)
   for (const c of [{ tab: 'scouts' }, { tab: 'settings' }, { tab: 'settings', opened: 'roles' }, { tab: 'settings', opened: 'kinds' }, { tab: 'live', opened: 'orgmem' }] as const) expect([c, back(c)]).toEqual([c, [{ key: 'back' }]])
   const om = texts({ tab: 'live', opened: 'orgmem' })
-  expect(om.indexOf('[ Delete (x) ]') >= 0 && om.indexOf('[ Delete (x) ]') < om.indexOf('[ Back (b) ]')).toBe(true)
+  // T-742: on one row right under the page's title, before the first note, and kept at the top with the title
+  const omTitle = om.findIndex(l => l.includes('Organizational memory (org-mem)'))
+  expect(om[omTitle + 1]).toBe('[ Delete (x) ] [ Back (b) ]')
+  expect(omTitle + 1 < om.findIndex(l => l.includes('#3 · 2026-11-20'))).toBe(true)
+  const omPage = draw({ tab: 'live', opened: 'orgmem' })
+  expect(omPage.lines.slice(0, omPage.fixed).map(lineText)).toContain('[ Delete (x) ] [ Back (b) ]')
+  expect(omPage.selected).toBe('note:3')
   expect(draw({ tab: 'live', opened: 'orgmem' }).lines.flat().find(s => s.text === '[ Delete (x) ]')?.hit).toEqual({ key: 'x' })
   const noNotes = orgMemViewFile('')
   expect(panelLines(noNotes, { tab: 'live', opened: 'orgmem', cursor: 0 }, NOW, W).lines.map(lineText).filter(l => l.startsWith('[ '))).toEqual(['[ Back (b) ]'])
@@ -2790,7 +2796,7 @@ test('T-700: the board header (banner, tests/limits line, drive warning, tabs) s
     expect([c, header(t)]).toEqual([c, none])
     if (title) expect([c, t[0]!.includes(title)]).toEqual([c, true])
     // the footer (its rule and key hints) and the page's Back button stay
-    expect([c, t.some(l => /^─+$/.test(l)), t.some(l => l.startsWith('[ Back'))]).toEqual([c, true, true])
+    expect([c, t.some(l => /^─+$/.test(l)), t.some(l => l.startsWith('[ Back') || l.includes(' [ Back'))]).toEqual([c, true, true])
   }
 })
 

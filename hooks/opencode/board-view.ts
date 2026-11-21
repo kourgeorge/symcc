@@ -1170,6 +1170,9 @@ function orgMemBody(f: ViewFile, cursor: number, w: number, topic = ''): Body {
   const b = bodyMaker()
   const notes = orgMemOfTopic(orgMemIn(f), topic)
   b.heading(orgMemPageTitle(topic))
+  // T-742: Delete (x) (when there are notes) and Back (b) on one row right under the title; they stay at the top with it
+  for (const l of buttonLines([...(notes.length ? [DELETE_NOTE_BUTTON] : []), LIST_BACK_BUTTON], w)) b.add(l)
+  const headLines = b.lines.length
   for (const l of wrapSegs([{ text: orgMemAbout(orgMemFile(dataDir(f.name))), color: 'inactive' }], w)) b.add(l)
   b.blank()
   if (!notes.length) b.add([{ text: `  ${topic ? orgMemTopicEmpty(topic) : ORG_MEM_EMPTY}`, color: 'inactive' }])
@@ -1182,10 +1185,7 @@ function orgMemBody(f: ViewFile, cursor: number, w: number, topic = ''): Body {
   }
   b.blank()
   b.add([{ text: `↑↓ picks a note · x deletes it (asks first) · or edit ${orgMemFile(dataDir(f.name))} by hand`, color: 'inactive' }])
-  b.blank()
-  // Delete (x) (when there are notes) and Back (b), each on its own row as on Claude Code's page
-  for (const x of [...(notes.length ? [DELETE_NOTE_BUTTON] : []), LIST_BACK_BUTTON]) buttonLines([x], w).forEach(l => b.add(l))
-  return { ...b, ids, selected, head: 1 }
+  return { ...b, ids, selected, head: headLines }
 }
 
 /** The Settings tab: each group (Work, Checks before merging, ...) as a heading that opens or closes, like the
