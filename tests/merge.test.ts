@@ -2141,8 +2141,8 @@ test('T-703: a task that failed on its tests still gets a normal try after a not
   }
 })
 
-test('T-703: a task that failed on a clash keeps its merge-main-in try through the backlog, pause and resume, and drop and retry', async () => {
-  for (const moves of [[{ backlog: true }, { backlog: false }], [{ pause: true }, { resume: true }], [{ drop: true }, { retry: true }]] as const) {
+test('T-703: a task that failed on a clash keeps its merge-main-in try through the backlog, pause and resume, drop and retry, and a question to the owner', async () => {
+  for (const moves of [[{ backlog: true }, { backlog: false }], [{ pause: true }, { resume: true }], [{ drop: true }, { retry: true }], [{ ask: true }, { answer: 'yes' }], [{ ask: true }, { retry: true }]] as const) {
     const w = world()
     const [b] = boardWith('auto', [], { status: 'failed', note: 'conflicts with the latest main (after 2 automatic retries)', test_tries: 2, merge_main: false })
     await saveBoard(w.$, b)
@@ -2151,6 +2151,7 @@ test('T-703: a task that failed on a clash keeps its merge-main-in try through t
       else if ('resume' in m) await runTool(w.$, 'resume', { task: 'T-1' })
       else if ('drop' in m) await runTool(w.$, 'drop', { task: 'T-1' })
       else if ('retry' in m) await runTool(w.$, 'retry', { task: 'T-1' })
+      else if ('ask' in m) await runTool(w.$, 'ask', { task: 'T-1', question: 'q?' })
       else await runTool(w.$, 'change', { task: 'T-1', ...m })
     }
     const t = find(await load(w.$), 'T-1')!

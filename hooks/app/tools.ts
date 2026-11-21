@@ -729,7 +729,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       if (checkingNow(t.id)) stopAsked.set(t.id, 'sent to the owner')
       else if (t.status === 'doing') await stopWorker($, t.id, 'waiting for the owner')
       const asked = t.status === 'doing' && !checkingNow(t.id)
-      await change($, x => patchTask(x, t.id, { status: 'waiting', question: (str(a.question) ?? '').slice(0, 1000), note: 'waiting for you', ...(asked ? { history: withHistory((find(x, t.id) ?? t).history, now(), stoppedEntry(t, 'the lead asked the owner a question')) } : {}), ...endedBy(find(x, t.id), now(), 'stopped', 'the lead asked the owner a question') }, now()))
+      await change($, x => patchTask(x, t.id, { status: 'waiting', question: (str(a.question) ?? '').slice(0, 1000), note: 'waiting for you', ...(failedOnClash(t) ? { merge_main: true } : {}), ...(asked ? { history: withHistory((find(x, t.id) ?? t).history, now(), stoppedEntry(t, 'the lead asked the owner a question')) } : {}), ...endedBy(find(x, t.id), now(), 'stopped', 'the lead asked the owner a question') }, now()))
       await haltChecker($, t.id, 'the task was sent to the owner')
       return `${t.id} now waits for the owner`
     }
