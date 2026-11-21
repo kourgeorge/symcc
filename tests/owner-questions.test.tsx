@@ -113,7 +113,7 @@ test('answering on the board closes the question and wakes the lead at once with
   expect(w.status.at(-1) ?? '').not.toContain('question')
   // with nothing else happening on the board: one board update right away, the answer in its own block
   await pause(0)
-  expect(w.toLead).toEqual([`[${S.N.name}] Board update:\n\nThe owner answered your question Q-1 ("Raise the version?"): Yes. The question is closed. Act on it.\n\nLead: decide what happens next on the board (use the ${S.N.name} tools), then tell the owner briefly.`])
+  expect(w.toLead).toEqual([`[${S.N.name}] Board update:\n\nThe owner answered your question Q-1 ("Raise the version?"): Yes. The question is closed. Act on it.\n\nLead: decide what happens next on the board (use the ${S.N.name} tools), then tell the owner briefly.\nReply shape: one line per task ("✓ T-5  merged   what it means"); a routine update with no news is one short line at most.`])
   expect(w.toLead[0]).not.toContain('Meanwhile')
   expect(meanwhile).toEqual([])
   // other owner actions still come only as Meanwhile lines: no message of their own, at the top of the next update

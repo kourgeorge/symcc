@@ -77,7 +77,7 @@ export function takeBoardUpdate(): string | undefined {
   const body = leadQueue.splice(0).join('\n\n')
   if (!body || !S.enabledNow) return undefined
   const before = meanwhileText(meanwhile.splice(0))
-  return `[${S.N.name}] Board update:\n\n${before ? `${before}\n\n` : ''}${body}\n\nLead: decide what happens next on the board (use the ${S.N.name} tools), then tell the owner briefly.`
+  return `[${S.N.name}] Board update:\n\n${before ? `${before}\n\n` : ''}${body}\n\nLead: decide what happens next on the board (use the ${S.N.name} tools), then tell the owner briefly.\nReply shape: one line per task ("✓ T-5  merged   what it means"); a routine update with no news is one short line at most.`
 }
 
 /** An answer cut to one short line, for a "Meanwhile" line. */
