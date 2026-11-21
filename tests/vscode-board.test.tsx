@@ -487,6 +487,23 @@ test('in VS Code a row keeps its kind when its question or reason has the same w
   await ui.unmount()
 })
 
+test('T-722: in VS Code a row tag is only the kind ("[docs]", "[bug]"), never the role; a plain change with a role shows no tag', async ($, on) => {
+  const doing = BOARD_TASKS.find(t => t.id === 'T-402')!
+  const todo = BOARD_TASKS.find(t => t.id === 'T-408')!
+  const DOCS = { ...doing, id: 'T-601', order: 601, kind: 'docs', role: 'docs' }
+  const BUG = { ...todo, id: 'T-602', order: 602, kind: 'bug', role: 'tester' }
+  const PLAIN = { ...todo, id: 'T-603', order: 603, role: 'tester' }
+  seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, tasks: [...BOARD_TASKS, DOCS, BUG, PLAIN] } } })
+  on('ui.toast', () => ({ value: undefined }))
+  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 80 }, surface: 'vscode' })
+  await ui.drawn()
+  expect(await rowText(ui, 'T-601')).toMatch(/ · \[docs\]$/)
+  expect(await rowText(ui, 'T-602')).toMatch(/ · \[bug\]$/)
+  for (const id of ['T-601', 'T-602', 'T-603']) expect(await rowText(ui, id)).not.toMatch(/tester|docs ·|· docs\]/)
+  expect(await rowText(ui, 'T-603')).not.toMatch(/\[/)
+  await ui.unmount()
+})
+
 test('in VS Code an empty board at widths 40 and 80: a friendly note and one primary button that starts a message to the lead', async ($, on) => {
   seedBoard(on, { view: EMPTY_VIEW })
   on('ui.toast', () => ({ value: undefined }))
@@ -639,8 +656,8 @@ test('T-590: in VS Code each open task and question is one line: id, state, then
       expect(line, `${at} ${id}`).not.toContain('\n')
     }
     // doing, to do and waiting: id, state, title on the same line (T-644)
-    // the role tag is cut with "…" from its end when narrow, kept from its start (fitRow, T-702; gone at 42)
-    expect(await rowText(ui, 'T-401'), at).toMatch(bodyColumns === 42 ? /^T-401 ▶ 2m\s+Show[^·]*…$/ : bodyColumns === 63 ? /^T-401 ▶ 2m\s+Show the.*… · \[investigation · resear…$/ : /^T-401 ▶ 2m\s+Show the.*… · \[investigation · researcher\]$/)
+    // the tag is only the kind, never the role (T-722); it goes at 42 (fitRow, T-702)
+    expect(await rowText(ui, 'T-401'), at).toMatch(bodyColumns === 42 ? /^T-401 ▶ 2m\s+Show[^·]*…$/ : /^T-401 ▶ 2m\s+Show the.*… · \[investigation\]$/)
     expect(await rowText(ui, 'T-406'), at).toMatch(/^T-406 ○\s+Write the guide/)
     expect(await rowText(ui, 'T-404'), at).toMatch(/^● T-404 \? waiting for 1m\s+Pick the/)
     // a long title is cut with "…" and "waits for T-406 · feature" stays on the line (fitRow, T-702): whole at 80, cut

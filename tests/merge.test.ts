@@ -5418,12 +5418,14 @@ test('old board tasks with kind change or investigation still load as before; an
   expect(kindOf(find(p, 'T-4'))).toBe('change')
 })
 
-test('the board line shows the kind next to the role; a plain change shows none; search matches the kind', () => {
+test('a board row tag is only the kind, never the role (T-722); a plain change shows none; the lead\'s board text keeps the role; search matches the kind', () => {
   const [b] = boardWith('auto', [], { kind: 'bug', role: 'tester', status: 'todo' } as Partial<BoardTask>)
   const t = b.tasks[0]!
-  expect(rowExtra(t, b.tasks)).toBe('[bug · tester]')
+  expect(rowExtra(t, b.tasks)).toBe('[bug]')
+  expect(rowExtra({ ...t, kind: 'docs', role: 'docs' }, b.tasks)).toBe('[docs]')
+  expect(rowExtra({ ...t, kind: 'docs', role: 'docs', status: 'doing' }, b.tasks)).toBe('[docs]')
   expect(rowExtra({ ...t, role: undefined }, b.tasks)).toBe('[bug]')
-  expect(rowExtra({ ...t, kind: undefined } as SymccTask, b.tasks)).toBe('tester')
+  expect(rowExtra({ ...t, kind: undefined } as SymccTask, b.tasks)).toBe('')
   expect(boardText(b, Date.now(), '~/p', 'symcc')).toContain('Do it [bug · tester]')
   expect(taskMatches(t, 'bug')).toBe(true)
   expect(taskMatches({ ...t, kind: undefined } as SymccTask, 'bug')).toBe(false)

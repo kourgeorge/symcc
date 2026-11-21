@@ -8,7 +8,7 @@ import { originOf } from './origin'
 import { isAnswered, OVERTIME_OPTIONS, overtimeQuestion, timeLimitOf } from './task'
 import { waitFilesNote } from './review'
 import { kindMark } from './kinds'
-import { roleMark, roleOf, tryTag } from './roles'
+import { roleOf, tryTag } from './roles'
 import { onDemand } from './scouts'
 import { fmtDuration, runMs, sumRuns } from './runs'
 import { ellipsis, num } from './text'
@@ -292,12 +292,9 @@ export const ANSWER_CELL = 'answer'
 /** The tag of a task's kind in the board list: "[investigation]", "[bug]"; '' for a plain change (to keep lines short). */
 export const kindTag = (t: { kind?: unknown }): string => (kindMark(t) ? `[${kindMark(t)}]` : '')
 
-/** The role part of a task row: its kind and its role (see roleMark), e.g. "[bug · tester]", "[investigation]", or just "tester" for a change. */
-export const roleTag = (t: { kind?: unknown; role?: string }): string => {
-  const kind = kindMark(t)
-  const role = roleMark(t)
-  return kind ? `[${[kind, role].filter(Boolean).join(' · ')}]` : role
-}
+/** The tag at the right end of a task row (doing, to do, paused): only its kind, "[bug]", "[docs]"; '' for a plain
+ *  change. The role is not in it (T-722): the task page's Role row shows it. */
+export const roleTag = (t: { kind?: unknown }): string => kindTag(t)
 
 /** The secondary-color (inactive) text at the right end of a task row: "tester" for a task being worked on (its try shows
  *  after its time instead, see rowStates; its

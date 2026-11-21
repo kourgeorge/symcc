@@ -1411,8 +1411,9 @@ skills: [code-review]
 
 You can change a task's role yourself: say "use the security role for T-12", or open the task
 in the board panel and press `l` (Role) to pick one. That works on a task to do, paused,
-failed or in the backlog. The board list shows a role at the right end
-of the task's row (`tester`); `general` shows nothing.
+failed or in the backlog. The role shows on the task's page (its Role row), not in the board
+list: a row's tag at its right end is only the task's kind (`[bug]`, `[docs]`), and a plain
+change shows no tag.
 
 **Which try is it?** When a task is doing and this is not its first try, the board says so. A
 first try shows no mark.
