@@ -1,4 +1,4 @@
-import { testMinutesOf, openQuestions, liveWorkersFor, whoDrives, drivesAfter, driveAsk, handRequest, noHandRequest, handedText, handedOff, HANDOVER_NOTE, putTask, leadText, resetDoing, find, parseLead, relabelSession, openOnStart, type Board, gitNote, modeOf, notifyOf, notifyChoices, symccOn, statusLine, statusRoom, offStatusLine, inPlan, liveDriver } from '../board'
+import { testMinutesOf, openQuestions, liveWorkersFor, whoDrives, drivesAfter, driveAsk, handRequest, noHandRequest, handedText, handedOff, HANDOVER_NOTE, putTask, leadText, resetDoing, find, parseLead, relabelSession, openOnStart, type Board, gitNote, modeOf, notifyOf, notifyChoices, symccOn, statusLine, statusRoom, offStatusLine, inPlan, liveDriver, backToTodo, restartsOf } from '../board'
 import { homeBranch } from './git'
 import { S, workers, queuedWorkers, type PaneView, scoutState, updateView, sizeNotes } from './state'
 import { type Host, agentState } from '../host'
@@ -100,7 +100,10 @@ async function stepDown(host: Host, leadBefore: string | null) {
       await change(host, x => {
         const cur = find(x, w.task)
         if (cur?.status !== 'doing') return x
-        return putTask(x, queuedNeverStarted(cur) ? unclaimed(cur, now()) : handedOff(cur, now()))
+        // T-743: a try that already went on after a restart symcc did itself is not taken off (that would lose its
+        // earlier part): it ends as restarted, and the next worker goes on with it again
+        const goneOn = restartsOf(cur.runs?.at(-1)).length > 0
+        return putTask(x, queuedNeverStarted(cur) ? unclaimed(cur, now()) : goneOn ? backToTodo(cur, HANDOVER_NOTE, now()) : handedOff(cur, now()))
       }).catch(() => undefined)
     })
     await waitEnded(host, agents, ORPHAN_WAIT_MS)
