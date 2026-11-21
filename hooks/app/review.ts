@@ -238,7 +238,8 @@ export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board
   if (pre && 'result' in pre) return withSecrets(pre.result)
   const noVerdict = pre?.noVerdict
   // One merge line for the whole project (inMergeLine): only the task at its front catches up, tests and moves its branch.
-  // So the branch can only move under it by hand (the owner committed to it meanwhile): that fails this turn as one normal try.
+  // So the branch can only move under it by hand (the owner committed to it meanwhile): then the same branch is tested
+  // again (T-733, below), at most AGAIN_MAX times per try; only after that does the turn fail as one normal try.
   // The time limit runs only during its own turn (each task in front has its own limit and `release`, so the line keeps moving).
   const turn = () => inMergeLine<CheckResult>($, t.id, refresh => upToDateTestMove($, t, dir, b, mode, made, stopped, retest, target, head, changed, refresh, noVerdict), {
     t,

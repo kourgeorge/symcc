@@ -176,8 +176,10 @@ in review or waiting shows as `doing` while its approve or merge runs.
 branches), oldest first. Only the task at the front has its turn. In its turn, in one go, it
 catches up with the target branch, runs the tests (skipped when this exact code already passed),
 and then merges (or stops in `review` when you want to approve first). Any failure on the way
-(a clash, failing tests, out of time, the branch moved by hand) is one normal failed try and uses
-one of the `auto_retries`. The checker runs before the queue, side by side with other checkers,
+(a clash, failing tests, out of time) is one normal failed try and uses one of the `auto_retries`.
+A hand commit is different: when you commit to the branch yourself during a worker's merge, the
+same branch goes back into the queue to catch up, test and merge again (history: "try 2: main
+moved by hand; testing again"), at most 2 times per try; only a third move fails the try. The checker runs before the queue, side by side with other checkers,
 and never runs the project's tests. The tests run once per try, in the task's turn.
 
 **The cost of one queue.** Tasks wait their turn. When five tasks with 10-minute tests finish
@@ -339,7 +341,9 @@ How the queue works is in [States, stages and the queue](#states-stages-and-the-
           → tell
 
     Any failure on the way (checker problems, a clash, failing tests, out of time,
-    ran over, the branch moved by hand) = one normal failed try (uses an auto_retry).
+    ran over) = one normal failed try (uses an auto_retry).
+    The branch moved by hand, or a reload cut the tests off = the same branch is
+    tested again (at most 2 times per try each), not a new try.
     Your own files in the way = the task waits, then merges by itself.
 
 The steps, in this order:
@@ -412,9 +416,12 @@ The steps, in this order:
    two minutes) merges it by itself (it is brought up to date, and tested again only if
    the branch moved meanwhile). "retry T-3" (or approve, for a task in review) does that
    merge at once. If the branch moved and the task now clashes or fails its tests, it gets
-   a new try as usual. If the branch still moved during the turn (you committed to it by hand
-   meanwhile), nothing is merged and the turn fails as one normal try; an approve stays in
-   review (approve it again).
+   a new try as usual. If you commit to the branch by hand while a worker's finished work is
+   in its turn, nothing is merged yet: symcc writes "try N: main moved by hand; testing again"
+   and puts the same branch back in the queue (catch up, test, merge), at most 2 times per try.
+   Only when it moves a third time does the try fail. A merge that waited for your files, or an
+   approve, is not tested again this way: the waiting merge gets a new try as usual, and an
+   approve stays in review (approve it again).
 9. **Tell.** The lead gets one line: merged, or why not (see "What reaches the lead" below). On a Mac you also hear
    "symcc: T-3 done" (and "symcc: T-5 needs you" when a task waits for your answer), starting with
    the project's name so you know which project spoke.
@@ -438,7 +445,8 @@ a try: the worker that was stopped by the restart is never taken back for it onc
 
 ### When something goes wrong
 
-Every failure on the way is one normal failed try. A worker's task uses one of the `auto_retries`
+Every failure on the way is one normal failed try, except a hand commit or a reload during the
+merge, which first test the same branch again (see the table). A worker's task uses one of the `auto_retries`
 and goes back to `todo` (its folder and branch are kept); when they are used up it is marked
 `failed` and the lead is told.
 
@@ -449,7 +457,8 @@ and goes back to `todo` (its folder and branch are kept); when they are used up 
 | Tests failed | The failing tests in the note | The end of the failing output |
 | Tests ran out of time | A note that the tests ran out of time after so many minutes, to raise `test_minutes` if they are just slow | The output so far |
 | The turn ran over its limit | "ran over 15 min and was stopped; nothing was merged" | A fresh try on the kept folder |
-| The branch moved by hand during the turn | "main moved during the merge (someone committed to it by hand), so nothing was merged" | A fresh try |
+| The branch moved by hand during the turn | "try N: main moved by hand; testing again" in the history | Nothing at first: the same branch is tested and merged again, at most 2 times per try; a third move gives "main moved during the merge (someone committed to it by hand), so nothing was merged" and a fresh try |
+| A reload cut off the tests or the merge | "try N: tests cut off by a reload; testing again" in the history | Nothing: the same branch is tested and merged again, at most 2 times per try (not a new try) |
 | Your files are in the way of the merge | The task waits (`waiting`) with the file names | Nothing: it merges by itself once they are clear |
 
 An approve that fails (failing tests, out of time, ran over, branch moved) is not a try: the task
@@ -2084,7 +2093,7 @@ Workers, scouts and checkers are OpenCode sessions of their own. Each one is a c
 
 ### The board panel and the strip
 
-`/symcc-board` (or "symcc board" in OpenCode's command palette, ctrl+p) opens the board in OpenCode's session panel, next to the open session (run it again to close it; on OpenCode's home page, with no session open, a message says to open or start one first): the banner, then the tasks grouped as in Claude Code (Questions for you, NEEDS YOU, what runs and waits, the backlog, and Done and Dropped as counts), with the same marks, short states and times. ↑/↓ (or k/j, on every page, a task's page too) move, Enter opens a task or a question, b goes back, Esc closes the panel. On a task in review, a approves and x rejects (it asks for the reason); on a waiting task or a question, a answers (pick a choice, or Answer… to type your own). A task's page has the same sections as Claude Code's task page, with the same headings: ▍Why it failed (a failed task), ▍Answer (an answered investigation), ▍Details, ▍Changes (a task in review: its changed files; a click on one shows the changes, like d), ▍What to do, ▍History, ▍Report (the latest try's, read from its file when you open the page) and ▍Runs (time and cost). A long history or report is cut after its first lines with "… (n more lines)" (the whole report stays in its file); the mouse wheel scrolls the page. It offers the same actions as in Claude Code, with the same keys (p pause, u resume, r retry, o move to todo, z stash to backlog, v keep as a note, l role, h already merged, x drop, n needs review on/off); drop asks for an optional reason and role lets you pick from the roles. Only Copy and Watch worker are not there. These are sent as slash commands in your session (`/symcc-approve`, `/symcc-reject`, `/symcc-task T-5 pause` and the other `/symcc-task` words, `/symcc-answer T-5 <answer>` or `Q-3 <answer>`), which you can also type, in Claude Code too.
+The board opens by itself in OpenCode's session panel, next to the session, the first time a session is shown, as in Claude Code at session start; turn the `open_on_start` setting off (`/symcc-settings open_on_start off`) to stop that. `/symcc-board` (or "symcc board" in OpenCode's command palette, ctrl+p) also opens it (run it again to close it; on OpenCode's home page, with no session open, a message says to open or start one first): the banner, then the tasks grouped as in Claude Code (Questions for you, NEEDS YOU, what runs and waits, the backlog, and Done and Dropped as counts), with the same marks, short states and times. ↑/↓ (or k/j, on every page, a task's page too) move, Enter opens a task or a question, b goes back, Esc closes the panel. On a task in review, a approves and x rejects (it asks for the reason); on a waiting task or a question, a answers (pick a choice, or Answer… to type your own). A task's page has the same sections as Claude Code's task page, with the same headings: ▍Why it failed (a failed task), ▍Answer (an answered investigation), ▍Details, ▍Changes (a task in review: its changed files; a click on one shows the changes, like d), ▍What to do, ▍History, ▍Report (the latest try's, read from its file when you open the page) and ▍Runs (time and cost). A long history or report is cut after its first lines with "… (n more lines)" (the whole report stays in its file); the mouse wheel scrolls the page. It offers the same actions as in Claude Code, with the same keys (p pause, u resume, r retry, o move to todo, z stash to backlog, v keep as a note, l role, h already merged, x drop, n needs review on/off); drop asks for an optional reason and role lets you pick from the roles. Only Copy and Watch worker are not there. These are sent as slash commands in your session (`/symcc-approve`, `/symcc-reject`, `/symcc-task T-5 pause` and the other `/symcc-task` words, `/symcc-answer T-5 <answer>` or `Q-3 <answer>`), which you can also type, in Claude Code too.
 
 As in Claude Code, the panel has four tabs under the banner: Tasks, Live, Scouts and Settings. t, l, s and c switch between them (or click a tab). Every screen has the same buttons as Claude Code's panel, and a click on one presses its key: the tab row, the list's mode (m) and search (f) buttons, Back (b) on the list pages and the buttons of a task's, scout's, role's or kind's page. The header (banner, tabs and rule) shows only on the list pages (Tasks, Live, Scouts, Settings); an opened page has just its own buttons and text. **Live** (l) shows the same railway lanes as [the Live tab in Claude Code](#live-tab), with the waiting trains under them, then what starts next and today's numbers, then the Branches section; the arrow keys move between the lanes, trains and Branches rows, and Enter (or a click) opens a lane's, train's or Branches row's task (there is no `w` key to watch a worker). Back (b) from a task opened on Live returns to Live, on its lane. At the bottom of Live, the **Organizational memory** section (the count, the 3 newest notes and the topics with their counts) opens the notes the agents keep: the arrow keys reach its notes and topics too, Enter on a topic opens only that topic's notes, Enter on a newest note opens all notes with the cursor on it, and m (or a click on the section's header) opens all notes. There, x deletes the note under the cursor after a yes (sent as `/symcc-settings orgmem delete N`), and b returns to Live. **Scouts** lists each scout with how often it runs, whether it is paused or when it runs next, and its last result; Enter opens a scout's page: its instructions, its recent runs (newest first, with the tasks made from them) and its file. On it, r runs the scout now and p pauses or resumes it (sent as `/symcc-scout <name>` and `/symcc-scout <name> pause` or `resume`), and e edits it: pick how often it runs, its model or its instructions, then type the new value (sent as `/symcc-scout <name> every 30`, `model <model>` or `model none` for the session's model, or `prompt <instructions>`; the rest of the scout's file is kept, and longer instructions are easier to write in the file itself). Enter on a run shows its report, and b goes back. **Settings** shows every setting in the same groups as Claude Code, each with its value, its default and its range, and what it does under it. Enter (or a click) changes the one under the cursor: on/off settings flip, mode, notify, scout_findings and tests_with_changes are picked from a list, and the rest are typed; it is sent as `/symcc-settings <name> <value>`. Under Workers, the Roles and Kinds rows (with how many there are, and how many are off) open their pages, as in Claude Code: a list of the roles or kinds, each with where it comes from (built-in, replaced or added), whether it is off and what it is for, and a file that can't be read says why. Enter opens one: its description, a role's model, skills and tools, its checklist (a role) or body (a kind), and its file. On it, o turns it off or on and r resets it to the built-in one (when you changed a built-in); these are sent as `/symcc-settings role <name> off` (or `on`, `reset`; `kind <name> ...` for a kind). general, the checker role, change and investigation can't be turned off. As in Claude Code, a role's or kind's page has Back, Edit (e; its edit page has Save and Cancel), See the prompt (p, roles only), Turn off or Turn on (o), Reset to built-in (r) and Remove (d; it asks first, and only for ones you added). The list pages have **+ New role** / **+ New kind** (n) and the Scouts page has **+ New scout** (n). They are sent as `/symcc-settings role <name> add`, `edit <field> <value>`, `save {...}` and `remove` (the same for `kind`), and `/symcc-scout <name> new <instructions>`. When the folder has no git repo or no commit yet, the banner shows **Set up git (g)**, which asks for a yes and sends `/symcc-settings git setup`. A change you make in a file yourself shows in the panel at the next board change (OpenCode tells symcc of no finished edit). b goes back one page.
 
