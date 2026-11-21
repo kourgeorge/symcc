@@ -174,14 +174,17 @@ function entryStage(e: { kind: string; text: string }): Stage | 'end' | null {
       return 'owner'
     case 'moved-backlog':
       return /^moved to the backlog\b/.test(e.text) ? 'backlog' : 'free'
+    case 'not-merged':
+    case 'stopped':
+      // the lead's question ("stopped: the lead asked the owner a question") and the branch-gone question
+      // ("not merged: branch x is gone; asked the owner ...") wait for the owner's answer
+      return /\basked the owner\b/.test(body) ? 'owner' : 'free'
     case 'answer':
     case 'resumed':
     case 'retried':
     case 'checker-problems':
     case 'failed':
-    case 'not-merged':
     case 'out-of-time':
-    case 'stopped':
     case 'restarted':
     case 'rejected':
     case 'approved':

@@ -85,6 +85,19 @@ test('stats stages: a task made straight into the backlog counts that time as ba
   expect(taskStages(u, () => undefined)?.ms).toEqual({ free: m(160), blocked: 0, backlog: m(500), work: m(60), prep: m(22), check: 0, queue: 0, tests: 0, merge: 0, owner: 0 })
 })
 
+test("stats stages: the lead's question and the branch-gone question count as waiting for you", () => {
+  const m = (x: number) => x * MIN
+  const runs = [{ started: at(595), ended: at(590) }, { started: at(290), ended: at(280) }]
+  const after = [h(300, 'answer', 'the owner answered: “yes”'), stage(280, 2, 'prep started'), h(270, 'merged', 'try 2: x → merged into main (q1)')]
+  const lead = task('T-7', { attempts: 2, runs, history: [h(600, 'created', 'created by the owner'), h(590, 'stopped', 'try 1: stopped: the lead asked the owner a question'), ...after] })
+  expect(taskStages(lead, () => undefined)?.ms).toEqual({ free: m(15), blocked: 0, backlog: 0, work: m(15), prep: m(10), check: 0, queue: 0, tests: 0, merge: 0, owner: m(290) })
+  const gone = task('T-8', { attempts: 2, runs, history: [h(600, 'created', 'created by the owner'), h(589, 'not-merged', 'not merged: branch x is gone; asked the owner whether to merge into main instead'), ...after] })
+  expect(taskStages(gone, () => undefined)?.ms).toEqual({ free: m(16), blocked: 0, backlog: 0, work: m(15), prep: m(10), check: 0, queue: 0, tests: 0, merge: 0, owner: m(289) })
+  // a plain stop is not a question: it waits to start again
+  const stop = task('T-9', { attempts: 2, runs, history: [h(600, 'created', 'created by the owner'), h(590, 'stopped', 'try 1: stopped by the owner'), ...after] })
+  expect(taskStages(stop, () => undefined)?.ms.owner).toBe(0)
+})
+
 test('stats stages: sums and averages per stage; active + waiting add up to the lifetime; lacking tasks counted', () => {
   const ts = board()
   const f = stageFigures(ts, doneAt(ts))
