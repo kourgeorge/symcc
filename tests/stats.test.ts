@@ -556,7 +556,7 @@ test('T-735: with no failed try in the list but a failed history line, both repo
   expect(text).toContain(note)
   const html = statsHtml(statsData({ tasks, nowMs: NOW }), 'p').replace(/\s+/g, ' ')
   expect(html).toContain('<h2>Each failed try (0)</h2>')
-  expect(html).toContain(note)
+  expect(html).toContain('0 here, 1 under &quot;Failed tries&quot;')
   expect(html).not.toContain('No failed tries.')
 })
 
