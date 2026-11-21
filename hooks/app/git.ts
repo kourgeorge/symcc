@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { liveWorkersFor, startBranch, type Board, intoOf, type GitState, gitStateOf, noGitText, setupAskText, gitignoreWith, gitignoreBase, riskyFiles, parseLsTree, ignoreLineFor, setupDoneText, find, worktreesToRemove, branchesToDelete, cleanupText, namedReports, SCRATCH_DIR, SCRATCH_EXCLUDE } from '../board'
+import { liveWorkersFor, startBranch, type Board, intoOf, type GitState, gitStateOf, noGitText, setupAskText, gitignoreWith, gitignoreBase, riskyFiles, parseLsTree, ignoreLineFor, setupDoneText, find, worktreesToRemove, branchesToDelete, cleanupText, namedReports, SCRATCH_DIR, SCRATCH_EXCLUDE, commitMessage } from '../board'
 import { publish } from './lead'
 import { S, workers, starting, finishing, approving, keptDirty, scratchUse } from './state'
 import { type Host, agentState } from '../host'
@@ -159,21 +159,23 @@ export async function prepareWorktree($: Host, t: SymccTask, target: string, cat
       made = true
     }
   }
-  const kept: CatchUp = catchUp && !made ? await catchUpBranch($, dir, branch, target).catch(() => ({ behind: 0 })) : { behind: 0 }
+  const kept: CatchUp = catchUp && !made ? await catchUpBranch($, dir, branch, target, t).catch(() => ({ behind: 0 })) : { behind: 0 }
   await copyTypes($, dir).catch(() => false)
   await prepareScratch($, dir).catch(() => false)
   return { dir, branch, ...kept }
 }
 
 /**
- * Brings an old task branch up to `target` (the branch it merges into) before a new try (T-482): when the branch has
- * no commits `target` lacks and its folder `dir` has no uncommitted changes, it is fast-forwarded to `target`'s tip,
- * so a task that waited on others starts from their merged work. A branch with its own commits, or a folder with
- * changes, is left as it is (the "bring up to date" step at merge time handles it). Returns how many of `target`'s
- * commits the branch still lacks afterwards (0 when it was moved, is up to date, or git could not tell), and, when
- * that is more than 0, why it was not moved (T-483): its own commits, uncommitted changes, or the move failed (also when `git status` itself fails).
+ * Brings an old task branch up to `target` (the branch it merges into) before a new try (T-482): when its folder `dir`
+ * has no uncommitted changes, a branch with no commits `target` lacks is fast-forwarded to `target`'s tip, and one with
+ * its own commits (a retry, T-745) gets `target` merged in (the same kind of merge as the "bring up to date" step at
+ * merge time; `t` names the merge commit), so a new try starts from today's `target`. A merge that clashes is aborted
+ * and the branch left as it was. A folder with changes is left as it is (the merge step handles it). Returns how many
+ * of `target`'s commits the branch still lacks afterwards (0 when it was moved, is up to date, or git could not tell),
+ * `merged` (how many were merged in, when that happened), and, when `behind` is more than 0, why it was not moved
+ * (T-483): uncommitted changes, a clash, or the move failed (also when `git status` itself fails).
  */
-export async function catchUpBranch($: Host, dir: string, branch: string, target: string): Promise<CatchUp> {
+export async function catchUpBranch($: Host, dir: string, branch: string, target: string, t?: Pick<SymccTask, 'id' | 'title' | 'attempts'>): Promise<CatchUp> {
   const count = async (range: string) => {
     const r = await git($, ['rev-list', '--count', range], dir)
     const n = r.exitCode === 0 ? Number(r.stdout.trim() || '0') : NaN
@@ -183,18 +185,26 @@ export async function catchUpBranch($: Host, dir: string, branch: string, target
   if (!behind) return { behind: 0 }
   const own = await count(`refs/heads/${target}..refs/heads/${branch}`)
   if (own === null) return { behind: 0 }
-  if (own > 0) return { behind, why: 'commits' }
   const st = await git($, ['status', '--porcelain'], dir)
   if (st.exitCode !== 0) return { behind, why: 'failed' } // status itself failed: don't claim uncommitted work
   if (st.stdout.trim()) return { behind, why: 'changes' }
-  const r = await git($, ['merge', '--ff-only', '-q', `refs/heads/${target}`], dir)
-  return r.exitCode === 0 ? { behind: 0 } : { behind, why: 'failed' }
+  if (own === 0) {
+    const r = await git($, ['merge', '--ff-only', '-q', `refs/heads/${target}`], dir)
+    return r.exitCode === 0 ? { behind: 0 } : { behind, why: 'failed' }
+  }
+  // T-745: a retry's branch has its own commits: main is merged in now, not only at merge time
+  const subject = `${t?.id ?? branch}: bring up to date with ${target}`
+  const message = t ? commitMessage(t, { name: S.N.name, subject }) : subject
+  const m = await git($, [...asSymcc(), 'merge', '--no-edit', '--no-verify', '-m', message, `refs/heads/${target}`], dir)
+  if (m.exitCode === 0) return { behind: 0, merged: behind }
+  await git($, ['merge', '--abort'], dir)
+  return { behind, why: /^CONFLICT|fix conflicts|unmerged/im.test(`${m.stdout}\n${m.stderr}`) ? 'clash' : 'failed' }
 }
 
-/** Why catchUpBranch left a branch behind (T-483): its own commits, uncommitted changes in its folder, or the move failed. */
-export type BehindWhy = 'commits' | 'changes' | 'failed'
-/** What catchUpBranch found: how many commits the branch still lacks, and why (set when `behind` > 0). */
-export type CatchUp = { behind: number; why?: BehindWhy }
+/** Why catchUpBranch left a branch behind (T-483): its own commits, uncommitted changes in its folder, merging main in clashed (T-745), or the move failed. */
+export type BehindWhy = 'commits' | 'changes' | 'clash' | 'failed'
+/** What catchUpBranch found: how many commits the branch still lacks, and why (set when `behind` > 0); `merged`: how many of the target's commits were merged into a branch with its own commits (T-745). */
+export type CatchUp = { behind: number; why?: BehindWhy; merged?: number }
 
 /**
  * Whether the project keeps any file under SCRATCH_DIR in git in the worker folder `dir` (`git ls-files -- .scratch`
