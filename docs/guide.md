@@ -768,8 +768,8 @@ are about changes; under "How tasks ended" a read investigation shows as
   of the slots, how many tasks wait to start, how many merged today, and `⌕ 1 scout` while
   scouts run), the **open board** button and the fold button `[-]`. No task is on this line.
   Folding the band (`[-]`, or ctrl+x ctrl+a) keeps only this first line. Under it, indented one space: one line per running task (its
-  stage's icon in color, the id, the stage's name and the time in that stage, the try from
-  try 2 on, then the title), the next task to start (`○ next up`), then the questions for you
+  stage's icon in color, the id in the accent (orange) color, the stage's name and the time in that stage and the try from
+  try 2 on in green, then the title in the normal text color), the next task to start (`○ next up`), then the questions for you
   and the tasks that need you, in the warning color. A session that doesn't drive the board
   shows `⚠ driven by another session` here too. With nothing running and nothing waiting on
   you, a dim `nothing running` line is under the first line. When the band is narrow, the
