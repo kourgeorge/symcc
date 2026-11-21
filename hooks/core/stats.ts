@@ -103,7 +103,10 @@ export function failReason(line: string): FailReason | null {
   if (/^(out of time\b|stopped after \d+ min \(out of time\)|its checking and merging ran over \d+ min\b)/.test(head)) return 'timeout'
   if (/^the worker ended without a result\b/.test(head)) return 'noresult'
   if (onPurposeStop(/^stopped:\s*(.*)$/.exec(head)?.[1])) return null
-  if (/^(stopped\b|restarted\b)/.test(head)) return 'stopped'
+  // T-743: any other restart is one symcc did itself (a reopen, a reload, a hand-over, its old worker ended): the same try
+  // goes on, so it is no failed try
+  if (/^restarted\b/.test(head)) return null
+  if (/^stopped\b/.test(head)) return 'stopped'
   // T-736: an approve or a merge once the owner's files are clear is not a try of its own, so its failure is not one more failed try
   if (/^(approved by the owner|merging\b|merged once your files)/.test(head)) return null
   const cut = resultCut(l)
@@ -768,11 +771,12 @@ export const FAILED_TRIES_SHORT = 10
  * T-735: when "Each failed try" (each try's own end) and "Failed tries" (history lines) count differently, why; '' when
  * they agree. Both leave out tries stopped on purpose (onPurposeStop). T-736: "Failed tries" now has every failed end
  * (checker send-backs, time-outs, no result, no change, not merged ...); what still differs is a try rejected by the
- * owner or restarted (its own end is "ready for review" or "restarted").
+ * owner or restarted by a change (its own end is "ready for review" or "restarted"). T-743: a restart symcc did itself
+ * (a reopen, a reload) is counted in neither: the same try goes on.
  */
 export function failedCountsNote(d: Pick<StatsData, 'failedTries' | 'failedTotal'>): string {
   if (d.failedTries.length === d.failedTotal) return ''
-  return `${d.failedTries.length} here, ${d.failedTotal} under "Failed tries": this list reads each saved try's own end; that count reads the history lines, which also count tries rejected by you and restarts (by a change or a reload), whose own end is a review or a restart`
+  return `${d.failedTries.length} here, ${d.failedTotal} under "Failed tries": this list reads each saved try's own end; that count reads the history lines, which also count tries rejected by you and restarts by a change, whose own end is a review or a restart`
 }
 export const FAILED_TESTS_SHORT = 5
 /** The failed tries and failing tests a report lists: all of them when full, else the latest tries and the top tests. */

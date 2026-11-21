@@ -414,6 +414,21 @@ The steps, in this order:
    "symcc: T-3 done" (and "symcc: T-5 needs you" when a task waits for your answer), starting with
    the project's name so you know which project spoke.
 
+### What a try is
+
+A try is one round of worker work plus what checks it (the checker, the tests and the merge). A new
+try starts only when that round is sent back for a real reason: failing tests, a clash with your
+branch, a checker that found real problems, your reject, or an answer or change that restarts the
+work on purpose.
+
+A restart symcc does itself is not a new try. When the app is reopened, the plugin reloads, another
+session takes over driving the board, or an old worker ends with no report, the new worker goes on
+with the same try: the try number stays, no retry is used, and it does not count as a failed try in
+`/symcc-stats` (a task whose restarted round merges is still "right first try"). Its history says
+"try 2: worker restarted after the app was reopened". The try's time runs from its first start to
+its end, across the restarts, and its tokens add up over all its workers. Only one worker works on
+a try: the worker that was stopped by the restart is never taken back for it once a new one starts.
+
 ### When something goes wrong
 
 Every failure on the way is one normal failed try. A worker's task uses one of the `auto_retries`

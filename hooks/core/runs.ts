@@ -6,6 +6,58 @@ import type { SymccRun, SymccRunEnd, SymccTask, SymccTokens } from '../../types'
 /** The runs with a new try started at `now`; `mergeMain` marks a try that first merges main in after a clash. */
 export const startRun = (runs: SymccRun[] | undefined, now: string, mergeMain = false): SymccRun[] => [...(runs ?? []), { started: now, ...(mergeMain ? { merge_main: true as const } : {}) }]
 
+// ---------------- a restart symcc did itself (T-743) ----------------
+// A try is one round of worker work plus what checks it. A restart symcc does itself (the app reopened, the plugin
+// reloaded, the driving session changed, the old worker ended) is not a send-back: the next worker goes on with the
+// SAME try (no new run, attempts stays), and the try keeps a record of each such restart.
+
+/** One restart symcc did itself on a try: when (the end time it took off the try), why (the try's end note then), and the worker it stopped. */
+export type RunRestart = { at: string; why: string; agent?: string }
+/** A try as kept on the board, with the restarts symcc did itself (oldest first); see goOnRun. */
+export type TryRun = SymccRun & { restarts?: RunRestart[] }
+
+/** The restarts symcc did itself on try `r` ([] for none). */
+export const restartsOf = (r: SymccRun | undefined): RunRestart[] => {
+  const x = (r as TryRun | undefined)?.restarts
+  return Array.isArray(x) ? x : []
+}
+
+/**
+ * T-743: whether try `r` ended in a restart symcc did itself (a reopen, a reload, a hand-over, its old worker ended), so
+ * the next worker goes on with the same try. A restart because the task was changed is on purpose: a new try.
+ */
+export const selfRestart = (r: SymccRun | undefined): boolean => r?.ended_by === 'restarted' && !/^the task was changed\b/.test(r.ended_note ?? '')
+
+/**
+ * T-743: the runs with the last try going on again after a restart symcc did itself (selfRestart): its end is taken
+ * off (so its time counts from its first start to its next end), and the restart is kept on it (when, why, and the
+ * worker it stopped, which is no longer this try's worker). Null when the last try did not end that way.
+ */
+export function goOnRun(runs: SymccRun[] | undefined, now: string): TryRun[] | null {
+  const last = runs?.at(-1)
+  if (!runs || !last || !selfRestart(last)) return null
+  const { ended, ended_by: _b, ended_note, agent, ...rest } = last as TryRun
+  const step: RunRestart = { at: ended ?? now, why: ended_note ?? '', ...(isAgentId(agent) ? { agent } : {}) }
+  return [...runs.slice(0, -1), { ...rest, restarts: [...restartsOf(last), step] }]
+}
+
+/**
+ * T-743: goOnRun undone, for a claim whose worker never started (see unclaimed in app/workers.ts): the last try ends
+ * again as it did at its latest restart. Null when the last try is not one that goOnRun opened (it is ended, it has a
+ * worker, or it has no restart).
+ */
+export function undoGoOn(runs: SymccRun[] | undefined): TryRun[] | null {
+  const last = runs?.at(-1) as TryRun | undefined
+  const step = restartsOf(last).at(-1)
+  if (!runs || !last || last.ended || last.agent || !step) return null
+  const { restarts: _r, ...rest } = last
+  const left = restartsOf(last).slice(0, -1)
+  return [...runs.slice(0, -1), { ...rest, ended: step.at, ended_by: 'restarted', ...(step.why ? { ended_note: step.why } : {}), ...(step.agent ? { agent: step.agent } : {}), ...(left.length ? { restarts: left } : {}) }]
+}
+
+/** T-743: whether agent `id` worked on try `r` before a restart symcc did itself (it is not that try's worker now). */
+export const restartedAgent = (r: SymccRun | undefined, id: string): boolean => !!id && restartsOf(r).some(e => e?.agent === id)
+
 /** How many of a task's latest tries keep their agent ids (SymccRun.agent and checkers); older tries lose them. */
 export const AGENT_TRIES_KEPT = 5
 /** How many checker ids one try keeps (the latest). */
@@ -38,9 +90,11 @@ export function withAgentId(runs: SymccRun[] | undefined, as: 'agent' | 'checker
 export function keepAgentIds<T extends SymccRun[] | undefined>(runs: T): T {
   if (!Array.isArray(runs)) return runs
   let changed = false
-  const out = runs.map((r, i) => {
-    if (!r || typeof r !== 'object' || !('agent' in r || 'checkers' in r)) return r
+  const out = runs.map((r0, i) => {
     const old = i < runs.length - AGENT_TRIES_KEPT
+    const r = keepRestarts(r0, old)
+    if (r !== r0) changed = true
+    if (!r || typeof r !== 'object' || !('agent' in r || 'checkers' in r)) return r
     const agent = !old && isAgentId(r.agent) ? r.agent : undefined
     const checkers = !old && Array.isArray(r.checkers) ? [...new Set(r.checkers.filter(isAgentId))].slice(-CHECKERS_KEPT) : []
     if (agent === r.agent && checkers.length && checkers.length === r.checkers?.length && checkers.every((c, k) => c === r.checkers![k])) return r
@@ -52,8 +106,28 @@ export function keepAgentIds<T extends SymccRun[] | undefined>(runs: T): T {
   return (changed ? out : runs) as T
 }
 
-/** Whether agent `id` is named on any of `runs` (as a try's worker or one of its checkers). */
-export const onRuns = (runs: SymccRun[] | undefined, id: string): boolean => !!id && !!runs?.some(r => r?.agent === id || (Array.isArray(r?.checkers) && r.checkers.includes(id)))
+/** T-743: how many restarts one try keeps (the latest). */
+const RESTARTS_KEPT = 10
+
+/**
+ * T-743: try `r` with its restarts cleaned (see TryRun): only entries with a time, the latest RESTARTS_KEPT, a bad
+ * agent id dropped, and no agent ids at all on an `old` try (as keepAgentIds does). `r` itself when nothing changes.
+ */
+function keepRestarts(r: SymccRun, old: boolean): SymccRun {
+  if (!r || typeof r !== 'object' || !('restarts' in r)) return r
+  const all = (r as TryRun).restarts as unknown
+  const ok = (Array.isArray(all) ? all : []).filter((e): e is RunRestart => !!e && typeof e === 'object' && typeof (e as RunRestart).at === 'string').slice(-RESTARTS_KEPT)
+  const clean = ok.map(e => {
+    const agent = !old && isAgentId(e.agent) ? e.agent : undefined
+    return agent === e.agent && typeof e.why === 'string' ? e : { at: e.at, why: typeof e.why === 'string' ? e.why : '', ...(agent ? { agent } : {}) }
+  })
+  if (Array.isArray(all) && clean.length === all.length && clean.every((e, k) => e === all[k])) return r
+  const { restarts: _r, ...rest } = r as TryRun
+  return { ...rest, ...(clean.length ? { restarts: clean } : {}) } as SymccRun
+}
+
+/** Whether agent `id` is named on any of `runs` (as a try's worker, one of its checkers, or a worker a restart stopped). */
+export const onRuns = (runs: SymccRun[] | undefined, id: string): boolean => !!id && !!runs?.some(r => r?.agent === id || (Array.isArray(r?.checkers) && r.checkers.includes(id)) || restartedAgent(r, id))
 
 /**
  * The runs with the last try's end reason set to `by` (and `note`). The first reason wins: a try
@@ -178,14 +252,17 @@ export function runEndText(r: SymccRun): string {
 /**
  * The runs with the last try ended at `now`, adding what it used if known. A try already
  * ended keeps its end time (a second end does not move it), but missing tokens/cost are filled in.
+ * T-743: a try still running that already has tokens or a cost (it went on after a restart symcc did itself, see
+ * goOnRun) gets what this end used added to them.
  */
 export function endRun(runs: SymccRun[] | undefined, now: string, used: { tokens?: SymccTokens; cost?: number } = {}): SymccRun[] {
   const out = [...(runs ?? [])]
   const last = out[out.length - 1]
   if (!last) return out
+  const open = !last.ended
   const add = {
-    ...(used.tokens !== undefined && last.tokens === undefined ? { tokens: used.tokens } : {}),
-    ...(used.cost !== undefined && last.cost === undefined ? { cost: used.cost } : {}),
+    ...(used.tokens !== undefined && (last.tokens === undefined || open) ? { tokens: open && last.tokens !== undefined ? addTokens(last.tokens, used.tokens) : used.tokens } : {}),
+    ...(used.cost !== undefined && (last.cost === undefined || open) ? { cost: open && last.cost !== undefined ? last.cost + used.cost : used.cost } : {}),
   }
   out[out.length - 1] = { ...last, ...(last.ended ? {} : { ended: now }), ...add }
   return out
