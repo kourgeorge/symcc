@@ -277,4 +277,8 @@ test('T-794: a task merged 3 minutes ago keeps a dim Branches row joining main; 
   // the newest finished one first
   const mixed = liveBranches({ ...sample(), tasks: [...(sample().tasks as never[]), merged('T-740', 2) as never] }, T0, 100)!
   expect(mixed.rows.map(r => r.id)).toEqual(['T-740', 'T-724', 'T-721', 'T-725', 'T-726'])
+  // a merge commit not among the commits shown: joins at the left edge, like open branches
+  const far = branchTasks(T0).map(t => (t.id === 'T-724' ? { ...t, merged: 'c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6' } : t))
+  const narrow = liveBranches({ tasks: far as never[], branches: branchFactsAt(T0) }, T0, 40)!
+  expect(narrow.rows.find(r => r.id === 'T-724')!.col).toBe(0)
 })

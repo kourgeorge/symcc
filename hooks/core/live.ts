@@ -1252,7 +1252,7 @@ export function liveBranches(view: LiveView, nowMs: number, width: number): Live
     const i = sha ? shown.findIndex(c => c.sha === sha || (sha.length >= 7 && c.sha.startsWith(sha))) : -1
     return i >= 0 ? i : none
   }
-  const placed = kept.map(x => ({ x, col: x.kind === 'merged' ? colOf(x.merged, k - 1) : x.kind === 'branch' ? colOf(x.fig!.base, 0) : 0 }))
+  const placed = kept.map(x => ({ x, col: x.kind === 'merged' ? colOf(x.merged, 0) : x.kind === 'branch' ? colOf(x.fig!.base, 0) : 0 }))
   // same commit: the open tasks first, then the finished ones (newest first), then the ones not started
   const rank = (x: BranchItem) => (x.kind === 'branch' ? 0 : x.kind === 'merged' ? 1 : 2)
   placed.sort((a, b) => b.col - a.col || rank(a.x) - rank(b.x) || (b.x.atMs ?? 0) - (a.x.atMs ?? 0) || num(a.x.id) - num(b.x.id))
