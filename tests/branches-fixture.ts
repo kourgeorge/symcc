@@ -2,6 +2,7 @@
 // tests: main's 9 latest commits (c1 newest), T-721 in doing 3 ahead / 1 behind (forked at c2), T-725 in review 0 ahead
 // / 4 behind (forked at c5), T-726 next up in todo with no branch yet, and T-724 merged (at c1) 30 seconds before `now`.
 import type { BranchFacts } from '../hooks/core/live'
+import type { TaskBranchFacts } from '../hooks/core/task-branch'
 
 /** A commit's full sha: "c1" → "c1c1c1…" (40 characters). */
 export const sha = (name: string) => name.repeat(40 / name.length)
@@ -26,6 +27,54 @@ export function branchFactsAt(now: number): BranchFacts {
     tasks: { 'T-721': { ahead: 3, behind: 1, base: sha('c2') }, 'T-725': { ahead: 0, behind: 4, base: sha('c5') } },
     at: now,
   }
+}
+
+// T-761: one task's branch for its page's Branch section, at `now` (ms): T-733 in doing with 3 commits from tries 2, 4
+// and 6, main merged in (caught up) at the start of try 6, and 10 of main's commits behind; the same work merged (the
+// merge-time catch-up "cd" landed on main); and a long history of 14 commits.
+const min = 60_000
+/** main's commits since the fork, oldest first: e1..e4 before the catch-up, e5..ee (10) after it. */
+const mainSince = (now: number) => {
+  const names = ['e1', 'e2', 'e3', 'e4', 'e5', 'e6', 'e7', 'e8', 'e9', 'ea', 'eb', 'ec', 'ed', 'ee']
+  const at = [140, 125, 120, 115, 100, 90, 80, 70, 60, 50, 40, 30, 20, 10]
+  return names.map((n, i) => ({ sha: sha(n), at: now - at[i]! * min }))
+}
+/** The doing task's facts, as app/branches.ts's readTaskBranch reads them. */
+export function taskBranchDoing(now: number): TaskBranchFacts {
+  const main = mainSince(now)
+  return {
+    branch: 'symcc/T-733', into: 'main', tip: main[main.length - 1]!, fork: { sha: sha('f0'), at: now - 150 * min }, main,
+    commits: [
+      { sha: sha('638235d0'), at: now - 145 * min, try: 2 },
+      { sha: sha('a077ff80'), at: now - 130 * min, try: 4 },
+      { sha: sha('cc'), at: now - 110 * min, try: 6, catchUp: true },
+      { sha: sha('4825c840'), at: now - 105 * min, try: 6 },
+    ],
+    ahead: 4, behind: 10, at: now,
+  }
+}
+/** The same work merged: the merge-time catch-up (cd) is the merged commit; one of main's commits (ef) came after. */
+export function taskBranchMerged(now: number): TaskBranchFacts {
+  const d = taskBranchDoing(now)
+  const tip = { sha: sha('ef'), at: now - 2 * min }
+  return { ...d, ahead: undefined, behind: undefined, tip, main: [...d.main, tip], commits: [...d.commits, { sha: sha('cd'), at: now - 5 * min, try: 6, catchUp: true }], merged: { sha: sha('cd'), at: now - 5 * min } } as TaskBranchFacts
+}
+/** A long history: 14 commits, one per try. */
+export function taskBranchLong(now: number): TaskBranchFacts {
+  const d = taskBranchDoing(now)
+  const hex = '0123456789abcdef'
+  return { ...d, commits: Array.from({ length: 14 }, (_, i) => ({ sha: sha(`b${hex[i]}`), at: now - (148 - i * 10) * min, try: i + 1 })), ahead: 14 }
+}
+/** The tasks the samples are for: T-733 doing (tries 2, 4, 6), T-734 merged, T-735 long, T-736 to do with no branch. */
+export function taskBranchTasks(now: number) {
+  const iso = (m: number) => new Date(now - m * min).toISOString()
+  const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', question: null, order: Number(id.slice(2)), after: [], attempts: 6, history: [], branch: `symcc/${id}`, created_at: iso(200), updated_at: iso(1), ...x })
+  return [
+    task('T-733', 'Draw the branch on the task page'),
+    task('T-734', 'Merged branch', { status: 'done', merged: sha('cd'), history: [{ kind: 'merged', at: iso(5), text: 'try 6 → merged into main' }] }),
+    task('T-735', 'A long history', { attempts: 14 }),
+    task('T-736', 'Not started', { status: 'todo', attempts: 0, branch: null }),
+  ]
 }
 
 /** The lines the sample draws at 100 columns: the "▍Branches" heading (T-747), the lines under it indented by 1 (T-767). */

@@ -36,6 +36,7 @@ import {
 import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, brokenLabel, defNamed } from '../core/def-files'
 import { restFrame } from '../core/logo'
 import { taskSections, type TaskSection } from '../core/task-sections'
+import type { TaskBranchFacts } from '../core/task-branch'
 import { type ActionGroup, groupSegLines, headerRule, inGroups, navHint, packGroups, type PageFrom, PILL_COLOR, pillText, placeIn, scoutAbout, scoutButtons as headerScoutButtons, scoutListNames, scoutStateGroups, taskColor, taskPlace, taskStateGroups, titleLines, whereLine } from '../core/page-header'
 import { sessionNote } from '../core/details'
 import type { DiffFile } from '../core/review'
@@ -163,7 +164,12 @@ export function parseViewFile(text: string | null | undefined): ViewFile | null 
     const team = rest.today_team as Partial<NonNullable<PaneView['today_team']>> | undefined
     if (!team || typeof team !== 'object' || typeof team.day !== 'string') delete rest.today_team
     if (!rest.changes || typeof rest.changes !== 'object' || Array.isArray(rest.changes)) delete rest.changes
-    const view = { ...rest, ...runs, working: Array.isArray(f.view.working) ? f.view.working : [], scouts: Array.isArray(f.view.scouts) ? f.view.scouts : [], test_commands: Array.isArray(f.view.test_commands) ? f.view.test_commands : [] }
+    // T-761: each task page's Branch section facts; a broken one is left out (that task's page has no section)
+    if (rest.task_branches && typeof rest.task_branches === 'object' && !Array.isArray(rest.task_branches)) {
+      const ok = (x: Partial<TaskBranchFacts> | null) => !!x && typeof x === 'object' && typeof x.branch === 'string' && typeof x.into === 'string' && !!x.tip && typeof x.tip.sha === 'string' && Array.isArray(x.main) && Array.isArray(x.commits)
+      rest.task_branches = Object.fromEntries(Object.entries(rest.task_branches).filter(([, x]) => ok(x as Partial<TaskBranchFacts> | null)))
+    } else delete rest.task_branches
+    const view ={ ...rest, ...runs, working: Array.isArray(f.view.working) ? f.view.working : [], scouts: Array.isArray(f.view.scouts) ? f.view.scouts : [], test_commands: Array.isArray(f.view.test_commands) ? f.view.test_commands : [] }
     return { root: s(f.root), home: s(f.home), name: s(f.name) || DEFAULT_NAME, version: s(f.version), written_at: Number(f.written_at) || 0, view }
   } catch {
     return null
@@ -1413,6 +1419,8 @@ function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = ''
     detail: { roles: defsIn(f, 'roles'), kinds: defsIn(f, 'kinds'), all: v.tasks, when: iso => when(iso), board: v, merging, driving: v.driving ?? false, ...(v.archived_done ? { archivedDone: v.archived_done } : {}) },
     ...(report ? { texts: { [report.file]: report.text } } : {}),
     changes: v.changes?.[t.id] ?? null,
+    // T-761: the Branch section, from the facts the server side read with git (app/branches.ts)
+    ...(v.task_branches?.[t.id] ? { branch: v.task_branches[t.id] } : {}),
     target: intoOf(t),
     dataDir: dataDir(f.name || DEFAULT_NAME),
     // here a click on a file, like d, shows all the task's changes (there is no one-file diff)

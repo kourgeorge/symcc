@@ -765,7 +765,10 @@ export function todayMoreLines(m: TodayMore, width: number): LiveSeg[][] {
     if (fits(two)) break
   }
   if (!fits(two)) two = two.length ? [{ text: fitText(segText(two), w), tone: 'text' }] : two
-  return done(two, line3(4, false, Math.min(TODAY_BAR, w)))
+  // line 3 fits on its own room: as many of its parts as fit, whatever line 2 kept
+  let three = line3(4, false, Math.min(TODAY_BAR, w))
+  for (let level = 0; level <= 3; level++) if (fits(line3(level, false))) { three = line3(level, false); break }
+  return done(two, three)
 }
 
 /** All of ▍Today's lines in `width` columns (each under LIVE_INDENT): the figures (todayLines), then todayMoreLines. */

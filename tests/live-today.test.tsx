@@ -82,6 +82,17 @@ test('T-769: on a narrower panel ▍Today drops parts from the ends in order (co
   for (const w of [30, 12, 4]) for (const l of liveTodayLines({ tasks: TASKS as never[], today_team: TEAM }, T0, w, 0)) expect([w, textWidth(segText(l)) <= w]).toEqual([w, true])
 })
 
+test('T-769: line 3 keeps the parts that fit its own width, whatever line 2 had to drop', () => {
+  const M = 60_000
+  const example = { perTask: { tokens: 2_800_000, workMs: 9 * M, mergeMs: 23 * M }, workMs: (13 * 60 + 6) * M, usd: 64, who: [{ who: 'workers' as const, tokens: 84 }, { who: 'checkers' as const, tokens: 8 }, { who: 'scouts' as const, tokens: 5 }, { who: 'lead' as const, tokens: 3 }], hours: [1, 2, 3, 5, 7, 6, 5, 3, 5, 7, 8, 6, 3], firstHour: 8 }
+  for (let w = 64; w <= 68; w++) {
+    const three = segText(todayMoreLines(example, w)[1] ?? [])
+    expect([w, three.includes('workers 84% · checkers 8% · scouts 5% · lead 3%'), textWidth(three) <= w]).toEqual([w, true, true])
+  }
+  const solo = { ...example, who: [{ who: 'workers' as const, tokens: 10 }], hours: [10] }
+  expect(segText(todayMoreLines(solo, 40)[1] ?? [])).toBe('████████████████ workers 100%   08 █ 08')
+})
+
 test('T-769: readTodayTeam reads the lead\'s tokens today, the scouts\' runs of today and the session\'s cost; publish puts them in the view', async () => {
   resetTodayTeam()
   S.root = '/repo'

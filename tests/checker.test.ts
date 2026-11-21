@@ -1319,8 +1319,13 @@ test('T-656: after a hand-back one debrief goes to the same worker and checker; 
   expect(leadQueue.join('\n')).toContain('- Run one test file with sh scripts/test-files.sh.')
   // the checker's answer comes after the task is done: its suggestion goes to the lead at once; "none" adds nothing
   leadQueue.splice(0)
-  agentFinished(w.$, chk, { answer: '- Snapshot files live in tests/*-snapshot.ts.', end: { reason: 'answer' }, isAborted: false, tokens: undefined })
+  const before = t.runs!.at(-1)!
+  agentFinished(w.$, chk, { answer: '- Snapshot files live in tests/*-snapshot.ts.', end: { reason: 'answer' }, isAborted: false, tokens: { input: 20, output: 5 } })
   await turns(50)
+  // T-769: the checker's debrief tokens are a checker's: they go into checker_tokens too, not only the try's tokens
+  const after = find(await load(w.$), 'T-1')!.runs!.at(-1)!
+  expect(after.tokens).toEqual({ input: (before.tokens?.input ?? 0) + 20, output: (before.tokens?.output ?? 0) + 5 })
+  expect(after.checker_tokens).toEqual({ input: (before.checker_tokens?.input ?? 0) + 20, output: (before.checker_tokens?.output ?? 0) + 5 })
   expect(leadQueue.join('\n')).toContain('T-1: Suggested for org-mem')
   expect(leadQueue.join('\n')).toContain('- Snapshot files live in tests/*-snapshot.ts.')
   expect((find(await load(w.$), 'T-1') as { suggested?: string[] }).suggested).toBe(undefined)

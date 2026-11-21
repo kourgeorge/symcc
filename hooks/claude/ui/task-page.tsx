@@ -4,7 +4,8 @@ import { cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, role
 import { folderDiff, changedFiles } from '../../app/review'
 import { loadRoles } from '../../app/roles'
 import { loadKinds } from '../../app/kinds'
-import { S, workers } from '../../app/state'
+import { type PaneView, S, workers } from '../../app/state'
+import { taskBranchFacts } from '../../app/branches'
 import { type $, panelValues } from '../panel'
 import { path } from '../../app/store'
 import { noteForLead, brief, tellLead } from '../../app/tell'
@@ -323,8 +324,13 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
     onBack: goBack, onPrev: place ? openTask(place.prev) : () => undefined, onNext: place ? openTask(place.next) : () => undefined,
     backFocus: !(answerable || rejectBox), nav: NAV_KEYS.claude,
   }
+  // T-761: the Branch section's git facts: the last ones read (the view's, or this page's own read); a stale read runs
+  // in the background, never waited for here, and redraws the page once it is done
+  const branchRead = taskBranchFacts(claudeHost($), t, target, pane.nowMs, redraw).facts
+  const branch = branchRead ?? (v as PaneView).task_branches?.[t.id]
   // The page's sections (shared with OpenCode, and their contents with VS Code; see core/task-sections.ts)
   const sections = taskSections(t, {
+    ...(branch ? { branch } : {}),
     width, nowMs: pane.nowMs, detail: { roles: S.roles, kinds: S.kinds, all: v.tasks, when, archivedDone: v.archived_done, board: v, merging: pageMerging, driving: v.driving ?? S.driving }, texts,
     ...(shown ? { shownTry: shown.try } : {}), changes, target, dataDir: S.N.dir, numberKeysTaken: choices.length > 0,
   })
@@ -397,6 +403,7 @@ export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
 
       {sectionEl('answer')}
       {sectionEl('details')}
+      {sectionEl('branch')}
       {sectionEl('changes')}
 
       {fileWait && (
