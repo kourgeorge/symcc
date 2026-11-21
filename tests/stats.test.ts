@@ -582,6 +582,16 @@ test('T-736: checker send-backs, time-outs, no result, no change and not merged 
   // approves and merges once the owner's files are clear are not tries of their own, even when their tests fail
   expect(failReason('try 1: approved by the owner → not merged, the tests failed after your edits: x')).toBe(null)
   expect(failReason('try 1: merged once your files were out of the way → tests failed: x')).toBe(null)
+  // checker round 2: stops on purpose during the check are not failures
+  expect(failReason('try 1: did it → not merged: the task was stopped because the board was paused while it was being checked (not used: the board was paused)')).toBe(null)
+  expect(failReason('try 1: did it → not merged: the task was stopped because symcc was turned off while it was being checked (x)')).toBe(null)
+  expect(failReason('try 1: did it → not merged: the task was sent to the owner while it was being checked (x)')).toBe(null)
+  // an arrow inside the checker's report never moves the result
+  expect(failReason('try 1: did it → the checker found problems: running the suite → tests failed on b.test.ts')).toBe('checker')
+  expect(failReason('try 1: did it → the checker found problems: step a → not merged when x')).toBe('checker')
+  const paused = task('T-9', { status: 'todo', runs: run('stopped', 'the board was paused while its work was being checked'), history: hist('try 1: did it → not merged: the task was stopped because the board was paused while it was being checked (not used: the board was paused)') })
+  const pd = statsData({ tasks: [paused], nowMs: NOW })
+  expect([pd.failedTries.length, pd.failedTotal]).toEqual([0, 0])
   const text = statsReport({ tasks, nowMs: NOW, full: true })
   expect(text).toContain('Failed tries (7, from history)')
   expect(text).toMatch(/sent back by checker +▇+ +1/)
