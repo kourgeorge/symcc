@@ -555,32 +555,14 @@ export const boxHint = (enter: string, empty: 'cancels' | 'goes back' = 'cancels
 /** The hint under a pick list: Enter picks, `key` (its Cancel button's hotkey) cancels. */
 export const pickHint = (key: string): string => `Enter picks · ${key} cancels`
 
+/** The views hint: the keys of the Tasks, Live, Scouts and Settings tabs. */
+export const LIVE_VIEW_KEYS = 't l s c'
+
 /** The keys under the board list: only keys that work in the list (a and x work only on a task's own page). */
 export const listKeys = (): KeyHint[] => [
   { key: 'Enter', word: 'open' },
   { key: '↑↓', word: 'move' },
-  { key: 't s c', word: 'views' },
-]
-
-/** The board panel's tabs in order, with their keys (the terminal's tab row and OpenCode's draw them). */
-export const PANE_TABS = [
-  { tab: 'tasks', label: 'Tasks', key: 't' },
-  { tab: 'scouts', label: 'Scouts', key: 's' },
-  { tab: 'settings', label: 'Settings', key: 'c' },
-] as const
-
-/** A tab's words in the tab row: "[t]: Tasks (12)", "[c]: Settings" (no count). */
-export const tabLabel = (key: string, label: string, count?: number): string => `[${key}]: ${label}${count === undefined ? '' : ` (${count})`}`
-
-/** What goes between two tabs in the tab row. */
-export const TAB_GAP = ' │ '
-
-/** The view keys under the scouts and settings pages; `enter` adds "Enter opens" first. */
-export const viewKeys = (enter = true): KeyHint[] => [
-  ...(enter ? [{ key: 'Enter', word: 'opens' }] : []),
-  { key: 't', word: 'tasks' },
-  { key: 's', word: 'scouts' },
-  { key: 'c', word: 'settings' },
+  { key: LIVE_VIEW_KEYS, word: 'views' },
 ]
 
 /** One action of a task's page (taskActions): `id` names it for each host (the terminal's and VS Code's button key);
@@ -700,7 +682,7 @@ export const diffKeys = (review: boolean, oneFile: boolean): KeyHint[] => [
 export const settingsKeys = (heading = false): KeyHint[] => [
   { key: 'Enter', word: heading ? 'open/close' : 'change' },
   { key: '↑↓', word: 'move' },
-  { key: 't s c', word: 'views' },
+  { key: LIVE_VIEW_KEYS, word: 'views' },
   { key: 'b', word: 'back' },
 ]
 
@@ -709,7 +691,7 @@ export const rolesKeys = (): KeyHint[] => [
   { key: 'Enter', word: 'open' },
   { key: 'n', word: 'new role' },
   { key: '↑↓', word: 'move' },
-  { key: 't s c', word: 'views' },
+  { key: LIVE_VIEW_KEYS, word: 'views' },
   { key: 'b', word: 'back' },
 ]
 
@@ -722,7 +704,7 @@ export const kindsKeys = (): KeyHint[] => [
   { key: 'Enter', word: 'open' },
   { key: 'n', word: 'new kind' },
   { key: '↑↓', word: 'move' },
-  { key: 't s c', word: 'views' },
+  { key: LIVE_VIEW_KEYS, word: 'views' },
   { key: 'b', word: 'back' },
 ]
 
@@ -754,7 +736,7 @@ export const scoutEditKeys = (): KeyHint[] => [
 export const scoutListKeys = (): KeyHint[] => [
   { key: 'Enter', word: 'open' },
   { key: '↑↓', word: 'move' },
-  { key: 't s c', word: 'views' },
+  { key: LIVE_VIEW_KEYS, word: 'views' },
   { key: 'b', word: 'back' },
 ]
 

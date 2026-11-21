@@ -6,7 +6,7 @@
 // changes between ◉ and ◎ every LIVE_TICK_MS, and while the tab is shown it is redrawn that often.
 // T-687: at its bottom, just above the key hints, the "Organizational memory (n notes)" button (key m) opens the
 // Organizational memory page over the tab (orgmem.tsx; VS Code's: vscode-orgmem.tsx); its Back comes back here.
-import { LIVE_EMPTY, LIVE_LEGEND, type LiveSeg, type LiveTone, laneLines, liveHeader, liveKeys, liveLabelLine, liveLanes, liveLayout, liveStations, liveToday, nextUp, nextUpLine, todayLines } from '../../core/live'
+import { LIVE_EMPTY, LIVE_LEGEND, type LiveSeg, LIVE_TONE, laneLines, liveHeader, liveKeys, liveLabelLine, liveLanes, liveLayout, liveStations, liveToday, nextUp, nextUpLine, todayLines } from '../../core/live'
 import { footerRule } from '../../board'
 import { S, workers } from '../../app/state'
 import { type $, panelValues } from '../panel'
@@ -71,8 +71,7 @@ export function livePage($: $, pane: PaneParts, notes: number) {
   liveTick($)
   const lanes = liveLanes(v, nowMs)
   const layout = liveLayout(lanes, liveStations(v.checker === true), width)
-  const tone: Record<LiveTone, string> = { id: 'claude', title: 'text', passed: 'success', current: 'ide', future: 'inactive', text: 'text', dim: 'inactive', warning: 'warning', bar: 'ide' }
-  const draw = (xs: LiveSeg[]) => xs.map(x => <Text bold={x.tone === 'id' || x.tone === 'current'} color={C(tone[x.tone])}>{x.text}</Text>)
+  const draw = (xs: LiveSeg[]) => xs.map(x => <Text bold={x.tone === 'id' || x.tone === 'current'} color={C(LIVE_TONE[x.tone])}>{x.text}</Text>)
   const open = (id: string) => act(() => panelValues($).updateOpened(() => id))
   /** w: the worker of the lane with the focus (else the first lane with a worker), as on the task page. */
   const watch = act(async () => {

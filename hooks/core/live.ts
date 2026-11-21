@@ -9,7 +9,7 @@ import { handedBack, shownStatus } from './lead'
 import { STAGE_LINE } from './events'
 import { cutTitle, median, padWidth, textWidth } from './stats'
 import { fmtTokens, sumTokens, tokenCount } from './runs'
-import { type KeyHint, rowDuration, waitOrder } from './panel'
+import { type KeyHint, LIVE_VIEW_KEYS, rowDuration, waitOrder } from './panel'
 import { depDone } from './archive'
 import { dayOf, localOffset } from './days'
 import { modeLabel } from './review'
@@ -19,8 +19,6 @@ import { viewMarks } from './board-parts'
 /** The stations of a lane, in the order a task passes them. */
 export type LiveStation = 'work' | 'check' | 'queue' | 'tests' | 'merged'
 export const LIVE_STATIONS: readonly LiveStation[] = ['work', 'check', 'queue', 'tests', 'merged']
-/** The stations where an agent runs (a worker, a checker): each such lane takes one of the max_parallel slots. */
-export const AGENT_STATION: Record<LiveStation, boolean> = { work: true, check: true, queue: false, tests: false, merged: false }
 /** The line under the lanes that says what the "·" after a station name means. */
 export const LIVE_LEGEND = '· = needs an agent slot'
 /** What the Live tab says when no task is in doing. */
@@ -35,10 +33,6 @@ export const LIVE_TABS = [
   { tab: 'scouts', label: 'Scouts', key: 's' },
   { tab: 'settings', label: 'Settings', key: 'c' },
 ] as const
-/** The view keys' hint where there is a Live tab. */
-export const LIVE_VIEW_KEYS = 't l s c'
-/** Key hints with the views hint "t s c" turned into "t l s c" (for a client that draws the Live tab). */
-export const withLiveKey = (hints: readonly KeyHint[]): KeyHint[] => hints.map(h => (h.key === 't s c' ? { ...h, key: LIVE_VIEW_KEYS } : h))
 /** The keys under the Live tab. */
 export const liveKeys = (): KeyHint[] => [
   { key: '↑↓', word: 'move' },
@@ -208,6 +202,8 @@ export const liveBlink = (frame: number, steady = false): string => (steady || f
 export type LiveTone = 'id' | 'title' | 'passed' | 'current' | 'future' | 'text' | 'dim' | 'warning' | 'bar'
 /** A piece of a lane's line in one tone. */
 export type LiveSeg = { text: string; tone: LiveTone }
+/** Each tone's color name, the same in every client. */
+export const LIVE_TONE: Record<LiveTone, string> = { id: 'claude', title: 'text', passed: 'success', current: 'ide', future: 'inactive', text: 'text', dim: 'inactive', warning: 'warning', bar: 'ide' }
 
 /** How the lanes are laid out at a width: the id and title columns, the gap between stations, the station names, the right column. */
 export type LiveLayout = { width: number; idW: number; titleW: number; gap: number; labels: string[]; rightW: number; sep: number; stations: LiveStation[] }

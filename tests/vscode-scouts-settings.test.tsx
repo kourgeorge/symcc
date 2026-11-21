@@ -41,7 +41,7 @@ function texts(tree: unknown): string[] {
   }
   return out
 }
-const KEY_HINTS = [/\[[a-z]\]:/, /Enter open/, /Enter on a heading/, /Enter changes/, /Enter saves/, /Enter picks/, /Enter goes on/, /open\/close/, /→ \/ ←/, /↑↓/, /t s c views/, /Esc back/, /\s\([a-z]\)(\s|$)/]
+const KEY_HINTS = [/\[[a-z]\]:/, /Enter open/, /Enter on a heading/, /Enter changes/, /Enter saves/, /Enter picks/, /Enter goes on/, /open\/close/, /→ \/ ←/, /↑↓/, /t l s c views/, /Esc back/, /\s\([a-z]\)(\s|$)/]
 const STATUS_COLORS = new Set(['warning', 'error', 'ide', 'permission', 'success', 'suggestion'])
 const CHOICES = ['mode', 'notify', 'checker', 'scout_findings', 'tests_with_changes', 'open_on_start', 'enabled']
 const BOXES = ['max_parallel', 'max_minutes', 'auto_retries', 'archive_days', 'test_commands']

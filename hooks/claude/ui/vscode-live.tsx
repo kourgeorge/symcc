@@ -7,7 +7,7 @@
 // The current station blinks with a CSS animation inside the Svg, and stays steady when VS Code (the person's system)
 // asks for reduced motion (`prefers-reduced-motion`). Each drawing's `alt` is the terminal's text for it.
 // T-687: at its bottom, above the footer, an "Organizational memory (n notes)" link opens the Organizational memory page.
-import { LIVE_EMPTY, LIVE_LEGEND, type LiveLane, type LiveLayout, type LiveSeg, type LiveTone, laneLines, liveHeader, liveLanes, liveLayout, liveStations, liveToday, nextUp, nextUpLine, segText, todayLines } from '../../core/live'
+import { LIVE_EMPTY, LIVE_LEGEND, type LiveLane, type LiveLayout, type LiveSeg, LIVE_TONE, laneLines, liveHeader, liveLanes, liveLayout, liveStations, liveToday, nextUp, nextUpLine, segText, todayLines } from '../../core/live'
 import { panelValues, type $ } from '../panel'
 import type { PaneParts } from './parts'
 import { LIVE_TICK_MS, laneKey, liveTick, openOrgMemPage } from './live'
@@ -67,7 +67,6 @@ export function livePageVs($: $, pane: PaneParts, notes: number) {
   const frame = Math.floor(nowMs / LIVE_TICK_MS)
   const lanes = liveLanes(v, nowMs)
   const layout = liveLayout(lanes, liveStations(v.checker === true), width)
-  const tone: Record<LiveTone, string> = { id: 'claude', title: 'text', passed: 'success', current: 'ide', future: 'inactive', text: 'text', dim: 'inactive', warning: 'warning', bar: 'ide' }
   const open = (id: string) => act(() => panelValues($).updateOpened(() => id))
   /** A line of text in a Box of its own: VS Code keeps a Box's key (a Text's it drops), so each line can be found by it. */
   const line = (key: string, text: string, color: string, bold = false) => (
@@ -96,7 +95,7 @@ export function livePageVs($: $, pane: PaneParts, notes: number) {
             const at = second.findIndex(s => s.text.startsWith('▕'))
             const words = (xs: LiveSeg[], key: string) => {
               const parts = xs.map((s, i) => ({ ...s, text: !s.text.trim() ? '  ' : i === 0 ? s.text.trimStart() : s.text })).filter((s, i, all) => s.text.trim() || (i > 0 && i < all.length - 1))
-              return parts.length ? <Text key={key}>{parts.map(s => <Text color={C(tone[s.tone])}>{s.text}</Text>)}</Text> : null
+              return parts.length ? <Text key={key}>{parts.map(s => <Text color={C(LIVE_TONE[s.tone])}>{s.text}</Text>)}</Text> : null
             }
             if (at < 0) return [words(second, 'w0')]
             const barSeg = second[at]!

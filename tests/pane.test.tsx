@@ -4,7 +4,6 @@ import type { On } from 'claude-code'
 import { ICON, ICON_ART } from '../hooks/name'
 import { SETTING_GROUPS, groupSummary, hintLines, hintLineText, listKeys, scoutKeys, scoutListKeys, settingsKeys, rolesKeys, statusCell, STATUS_MARK, PREP_NOTE, bandLeads, type KeyHint } from '../hooks/board'
 import { keysFor } from './task-keys'
-import { withLiveKey } from '../hooks/core/live'
 import { CHECKER_NOTE } from '../hooks/app/checker'
 import { arrowTarget, focusStops, isArrow, rowStops, saysArrowsMove } from '../hooks/claude/ui/arrows'
 import type { SymccStatus } from '../types'
@@ -34,7 +33,7 @@ const PANE = {
 
 /** The lines of a key hint as the panel draws them at `width`, each found whole, in order, among its texts. */
 function keyLines(texts: string[], hints: KeyHint[], width: number): string[] {
-  const want = hintLines(withLiveKey(hints), width).map(hintLineText)
+  const want = hintLines(hints, width).map(hintLineText)
   let at = -1
   for (const l of want) {
     const k = texts.indexOf(l, at + 1)
@@ -2148,7 +2147,7 @@ async function footerOf(ui: Mounted, hints: KeyHint[], width = 50): Promise<stri
   const foot = feet[0]!.text
   expect(boxes[0]!.text.endsWith(foot)).toBe(true)
   expect(foot.startsWith('─'.repeat(width))).toBe(true)
-  const lines = hintLines(withLiveKey(hints), width).map(hintLineText)
+  const lines = hintLines(hints, width).map(hintLineText)
   expect(foot.endsWith(lines.join(''))).toBe(true)
   // each hint line is drawn once on the page
   for (const l of lines) expect(boxes[0]!.text.split(l).length - 1).toBe(1)
@@ -2171,10 +2170,10 @@ test('the Tasks page ends with a footer: the light rule, the mode line with [m],
 const NO_MODE_PAGES: [string, Record<string, unknown>, string | null, KeyHint[]][] = [
   ['task page', { opened: 'T-5' }, null, keysFor('review')],
   ['diff view', { opened: 'T-5' }, 'show-changes', [{ key: 'a', word: 'approve' }, { key: 'x', word: 'reject' }, { key: '↑↓', word: 'scroll' }, { key: 'b', word: 'back to the task' }]],
-  ['scouts list', { tab: 'scouts' }, null, [{ key: 'Enter', word: 'open' }, { key: '↑↓', word: 'move' }, { key: 't s c', word: 'views' }, { key: 'b', word: 'back' }]],
+  ['scouts list', { tab: 'scouts' }, null, [{ key: 'Enter', word: 'open' }, { key: '↑↓', word: 'move' }, { key: 't l s c', word: 'views' }, { key: 'b', word: 'back' }]],
   ['scout page', { tab: 'scouts', scout: 'bugs' }, null, [{ key: 'r', word: 'run now' }, { key: 'e', word: 'edit' }, { key: 'p', word: 'pause' }, { key: '↑↓', word: 'scroll' }, { key: 'b', word: 'back' }]],
   ['scout editor', { tab: 'scouts', scout: 'bugs' }, 'scout-edit', [{ key: '↑↓', word: 'move between boxes' }, { key: 'Cancel', word: 'leaves without saving' }]],
-  ['settings', { tab: 'settings' }, null, [{ key: 'Enter', word: 'change' }, { key: '↑↓', word: 'move' }, { key: 't s c', word: 'views' }, { key: 'b', word: 'back' }]],
+  ['settings', { tab: 'settings' }, null, [{ key: 'Enter', word: 'change' }, { key: '↑↓', word: 'move' }, { key: 't l s c', word: 'views' }, { key: 'b', word: 'back' }]],
 ]
 for (const [name, seed, press, hints] of NO_MODE_PAGES)
   test(`the ${name} ends with a footer of its own key hints and has no mode line`, async ($, on) => {
@@ -2182,7 +2181,7 @@ for (const [name, seed, press, hints] of NO_MODE_PAGES)
     on('ui.toast', () => ({ value: undefined }))
     const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
     if (press) await ui.press({ key: press })
-    expect(await footerOf(ui, hints)).toBe(hintLines(withLiveKey(hints), 50).map(hintLineText).join(''))
+    expect(await footerOf(ui, hints)).toBe(hintLines(hints, 50).map(hintLineText).join(''))
     expect(await ui.find({ key: 'mode' })).toBeUndefined()
     expect(await ui.find({ type: 'Text', text: /review merge/ })).toBeUndefined()
     await ui.unmount()

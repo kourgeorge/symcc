@@ -2,7 +2,7 @@
 // numbers; claude/ui/live.tsx draws them on the terminal panel).
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { liveLanes, liveLayout, laneLines, liveLabelLine, liveStations, nextUp, nextUpLine, liveToday, todayLines, segText, liveBlink, liveHeader, tabRow, withLiveKey, LIVE_TABS, LIVE_EMPTY, LIVE_LEGEND } from '../hooks/core/live'
+import { liveLanes, liveLayout, laneLines, liveLabelLine, liveStations, nextUp, nextUpLine, liveToday, todayLines, segText, liveBlink, liveHeader, tabRow, LIVE_TABS, LIVE_EMPTY, LIVE_LEGEND } from '../hooks/core/live'
 import { textWidth } from '../hooks/core/stats'
 import { FINISH_STALE_MS } from '../hooks/core/lead'
 import { listKeys } from '../hooks/board'
@@ -140,7 +140,7 @@ test('T-690: the tab row has a Live tab with key l, and the views hint says "t l
   expect(tabRow(LIVE_TABS.map(t => ({ key: t.key, label: t.label })), 80).labels).toEqual(['[t]: Tasks', '[l]: Live', '[s]: Scouts', '[c]: Settings'])
   const narrow = tabRow(LIVE_TABS.map(t => ({ key: t.key, label: t.label, count: t.key === 't' ? 20 : t.key === 's' ? 1 : undefined })), 50)
   expect(textWidth(narrow.labels.join(narrow.gap))).toBeLessThanOrEqual(50)
-  expect(withLiveKey(listKeys()).map(h => h.key)).toContain('t l s c')
+  expect(listKeys().map(h => h.key)).toContain('t l s c')
 })
 
 const liveView = (tasks: unknown[], checker = true) => ({ shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', branch: 'main', test_commands: ['npm test'], driving: true, checker, max_parallel: 3 } })

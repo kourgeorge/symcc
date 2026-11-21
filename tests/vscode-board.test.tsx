@@ -45,7 +45,7 @@ function texts(tree: unknown): string[] {
   return out
 }
 const STATUS_COLORS = new Set(['warning', 'error', 'ide', 'permission', 'success', 'suggestion'])
-const KEY_HINTS = [/\[[a-z]\]:/, /Enter open/, /↑↓ move/, /t s c views/, /\[m\]/, /\[f\]/, /Enter to/]
+const KEY_HINTS = [/\[[a-z]\]:/, /Enter open/, /↑↓ move/, /t l s c views/, /\[m\]/, /\[f\]/, /Enter to/]
 
 test('the board on the terminal, the desktop and mobile draws exactly as before the VS Code layout', async ($, on) => {
   seedBoard(on)

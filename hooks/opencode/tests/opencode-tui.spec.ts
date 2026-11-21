@@ -8,7 +8,7 @@
 // OpenTUI (T-500): opencode/tui.ts imports them by their written-out names (what OpenCode swaps for its own copies),
 // and loadTuiRuntime names a package that is missing or lacks a function instead of failing with a bare import error.
 import { test, expect } from 'bun:test'
-import { LIVE_TABS, tabRow as coreTabRow, withLiveKey, roleKeys, rolesKeys, kindsKeys, scoutHowTo, LIVE_EMPTY, LIVE_LEGEND, liveLanes, liveLayout, liveStations, liveHeader, liveLabelLine, laneLines, segText, nextUp, nextUpLine, liveToday, todayLines, modeLabel, modeButton, promptsOfRole, ROLE_SLOT, SETTING_GROUPS, groupSummaryParts, taskActions, actionButtonLabel, settingsKeys, mergeRoles, mergeKinds, when, addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, showsHeader, roleTools, roleNameError, leadScoutNameError, type BoardPage, type Board } from '../../board'
+import { LIVE_TABS, tabRow as coreTabRow, roleKeys, rolesKeys, kindsKeys, scoutHowTo, LIVE_EMPTY, LIVE_LEGEND, liveLanes, liveLayout, liveStations, liveHeader, liveLabelLine, laneLines, segText, nextUp, nextUpLine, liveToday, todayLines, modeLabel, modeButton, promptsOfRole, ROLE_SLOT, SETTING_GROUPS, groupSummaryParts, taskActions, actionButtonLabel, settingsKeys, mergeRoles, mergeKinds, when, addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, showsHeader, roleTools, roleNameError, leadScoutNameError, type BoardPage, type Board } from '../../board'
 import type { PaneView } from '../../app/state'
 import type { SymccTask } from '../../../types'
 import { ICON } from '../../name'
@@ -1133,8 +1133,8 @@ test('T-559: the Scouts tab lists the scouts from view.json, a scout\'s page sho
   expect(settings.hits[s.findIndex(l => l.includes('max_minutes'))]).toEqual({ setting: 'max_minutes' })
   expect(panelKeys(f, '', 'settings').map(k => k.word)).toEqual(['change', 'move', 'views', 'back'])
   // the footer is core's settingsKeys, as Claude Code's: on a group heading Enter opens or closes it (T-584)
-  expect(settings.keys).toEqual(withLiveKey(settingsKeys(false)))
-  expect(panelLines(f, { tab: 'settings', opened: '', cursor: 0, settingsOpen: ALL_GROUPS }, NOW, 140).keys).toEqual(withLiveKey(settingsKeys(true)))
+  expect(settings.keys).toEqual(settingsKeys(false))
+  expect(panelLines(f, { tab: 'settings', opened: '', cursor: 0, settingsOpen: ALL_GROUPS }, NOW, 140).keys).toEqual(settingsKeys(true))
   expect(lineText(panelLines(f, { tab: 'settings', opened: '', cursor: 0, settingsOpen: ALL_GROUPS }, NOW, 140).lines.at(-1)!)).toContain('Enter open/close')
   // the actions as slash commands
   expect(actionCommand({ kind: 'scout', scout: 'deps' })).toEqual({ name: 'symcc-scout', text: 'deps' })
@@ -2628,7 +2628,7 @@ test('T-706: a role\'s and a kind\'s page draw Claude Code\'s Edit and Remove (i
     expect(t[at + 1]).toBe(`Enter opens a ${list === 'roles' ? 'role' : 'kind'} · n makes a new one · or tell the lead`)
     expect(t.indexOf('[ Back (b) ]') > at).toBe(true)
     expect(d.lines.flat().find(s => s.text === label)?.hit).toEqual({ key: 'n' })
-    expect(panelKeys(f, list, 'settings')).toEqual(withLiveKey(keys))
+    expect(panelKeys(f, list, 'settings')).toEqual(keys)
   }
   // the Scouts tab: "+ New scout" (n) above the scouts; with none, the how-to (all of it) and then the button
   const sc = texts({ tab: 'scouts' })

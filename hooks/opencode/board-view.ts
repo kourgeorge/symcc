@@ -29,7 +29,7 @@ import {
   type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction, type DefEditField, type TaskVerb, settingsKeys, rolesKeys, kindsKeys, roleEditKeys, defEditFields, roleTools, roleFileText, roleSkipReason, kindFileText, kindSkipReason,
   DEFAULT_ROLE, isCheckerRole, ALWAYS_ON_KINDS, checkerOn, roleNameError, kindNameError, leadScoutNameError, checkStepNow, rowEndText, taskPhase, choiceLines, driveWarning,
   searchTasks, showsHeader, type BoardPage,
-  LIVE_TABS, LIVE_EMPTY, LIVE_LEGEND, type LiveSeg, type LiveTone, tabRow, withLiveKey, liveKeys, liveLanes, liveLayout, liveStations, liveHeader, liveLabelLine, laneLines, nextUp, nextUpLine, liveToday, todayLines, searchLine, modeButton, hintLines, roleKeys, rolePromptKeys, ROLE_PROMPTS, ROLE_SLOT, promptsOfRole, type RolePromptKind,
+  LIVE_TABS, LIVE_EMPTY, LIVE_LEGEND, type LiveSeg, LIVE_TONE, tabRow, LIVE_VIEW_KEYS, liveKeys, liveLanes, liveLayout, liveStations, liveHeader, liveLabelLine, laneLines, nextUp, nextUpLine, liveToday, todayLines, searchLine, modeButton, hintLines, roleKeys, rolePromptKeys, ROLE_PROMPTS, ROLE_SLOT, promptsOfRole, type RolePromptKind,
 } from '../board'
 import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, brokenLabel, defNamed } from '../core/def-files'
 import { restFrame } from '../core/logo'
@@ -534,8 +534,7 @@ const scoutNamed = (f: ViewFile | null, name: string): SymccScout | undefined =>
  * the Roles and Kinds lists and a role's or kind's page (o turn off or on, r reset to the built-in one).
  */
 export function panelKeys(f: ViewFile | null, opened: string, tab: PanelTab = 'tasks', run = '', heading = false, merging = false): KeyHint[] {
-  // the views hint says "t l s c": this panel has the Live tab too
-  return withLiveKey(tabKeys(f, opened, tab, run, heading, merging))
+  return tabKeys(f, opened, tab, run, heading, merging)
 }
 
 /** The keys of the Live tab (core's liveKeys), but w (watch worker: OpenCode's panel can't show a worker's session). */
@@ -544,7 +543,7 @@ export const panelLiveKeys = (): KeyHint[] => liveKeys().filter(k => k.key !== '
 function tabKeys(f: ViewFile | null, opened: string, tab: PanelTab, run: string, heading: boolean, merging: boolean): KeyHint[] {
   if (tab === 'live') return opened === ORG_MEM_PAGE ? orgMemKeys(false, orgMemIn(f).length > 0) : panelLiveKeys()
   const move = { key: '↑↓', word: 'move' }
-  const views = { key: 't s c', word: 'views' }
+  const views = { key: LIVE_VIEW_KEYS, word: 'views' }
   const close = { key: 'Esc', word: 'close' }
   const back = { key: 'b', word: 'back' }
   if (tab === 'settings') {
@@ -762,8 +761,7 @@ export function tabsLines(tab: PanelTab, w: number, tasks: number, scouts: numbe
   return packRows(segs.map(s => s.text.length), width, row.gap.length).map(r => r.flatMap((k, i) => [...(i ? [{ text: row.gap, color: 'subtle' }] : []), segs[k]!]))
 }
 
-/** The colors of the Live tab's tones: the terminal panel's (claude/ui/live.tsx). */
-const LIVE_TONE: Record<LiveTone, string> = { id: 'claude', title: 'text', passed: 'success', current: 'ide', future: 'inactive', text: 'text', dim: 'inactive', warning: 'warning', bar: 'ide' }
+/** Live segments as panel text, in core's LIVE_TONE colors. */
 const liveSegs = (xs: readonly LiveSeg[], hit?: PanelHit): Line => xs.map(x => ({ text: x.text, color: LIVE_TONE[x.tone], ...(x.tone === 'id' || x.tone === 'current' ? { bold: true } : {}), ...(hit ? { hit } : {}) }))
 
 /** How often the Live tab's current station changes between ◉ and ◎ (the terminal panel's LIVE_TICK_MS). */

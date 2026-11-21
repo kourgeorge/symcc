@@ -13,7 +13,7 @@ import { arrows, saysArrowsMove } from './arrows'
 import { type PaneTab, resetPane } from '../../app/open'
 import { claudeHost } from '../host'
 import { isVscode, vscodeButton } from './surface'
-import { LIVE_TABS, tabRow, withLiveKey } from '../../core/live'
+import { LIVE_TABS, tabRow } from '../../core/live'
 import { type VsKit, logoWidthFor, vsBanner, vsFooter, vsTabs } from './vscode'
 
 export type PaneHook = MatchedHook<'ui.render', { component: 'Pane' }>
@@ -148,10 +148,10 @@ export async function paneParts($: $, e: PaneEvent) {
     !showsHeader(p) ? [] :
     vscode ? [<Box key="vs-header" flexDirection="column">{[...banner(), tabs()]}</Box>] :
     [...banner(), tabs(), <Text key="header-rule" wrap="truncate" color={C('ide')}>{bannerRule(width)}</Text>]
-  /** Key hints over as many lines as the width needs (the views hint says "t l s c": the terminal has the Live tab), broken only between hints: keys bold, words in the inactive color (readable on dark themes too). */
+  /** Key hints over as many lines as the width needs, broken only between hints: keys bold, words in the inactive color (readable on dark themes too). */
   const keyLines = (hints: KeyHint[], name: string) =>
     vscode ? [vsFooter(vs, name)] :
-    hintLines(withLiveKey(hints), width).map((line, i) => (
+    hintLines(hints, width).map((line, i) => (
       <Text key={`${name}-${i}`} color={C('subtle')}>
         {line.map((kh, j) => (
           <Text key={`${name}-${i}-${j}`}>
