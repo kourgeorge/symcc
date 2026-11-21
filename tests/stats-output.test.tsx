@@ -64,7 +64,7 @@ test('T-768: /symcc-stats draws a title bar, 4 colored headline figures, ▍ hea
   on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   const stats = statsWorld(on)
   const text = await stats($, viewInput())
-  const ui = await $.ui.mount(row(text))
+  const ui = await $.ui.mount(row(`symcc: ${text}`)) // the real host puts "symcc: " before the text (T-788)
   const W = 80
   const drawn = await lines(ui)
   const shown = drawn.map(l => l.text)
