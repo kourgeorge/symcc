@@ -13,7 +13,7 @@
 // branch (commits ahead, how far behind), each task row a row Button that opens its task.
 // T-747: each section (Tasks, Today, Branches, Organizational memory) starts with a "▍Name" heading (core's
 // liveHeading), its lines indented by LIVE_INDENT, one empty line between sections.
-import { LIVE_EMPTY, LIVE_INDENT, liveLegend, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, laneLines, liveBold, liveHeading, liveIndented, liveInner, liveBranches, liveHeader, liveHeaderSegs, liveKeys, liveLabelSegs, liveTaskLanes, liveLayout, liveOrgMem, liveStations, liveTodayLines, liveTrains, trainRows } from '../../core/live'
+import { LIVE_EMPTY, LIVE_INDENT, liveLegend, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, laneLines, liveBold, liveHeading, liveIndented, liveInner, liveBranches, liveHeader, liveHeaderSegs, liveKeys, liveLabelSegs, liveNeeds, liveTaskLanes, liveLayout, liveOrgMem, liveStations, liveTodayLines, liveTrains, trainRows } from '../../core/live'
 import { footerRule } from '../../board'
 import { S, workers } from '../../app/state'
 import { type $, panelValues } from '../panel'
@@ -52,6 +52,8 @@ function keepTicking($: $) {
 
 /** The key of a lane's row Button. */
 export const laneKey = (id: string) => `live:${id}`
+/** T-786: the key of a ▍Needs you row's Button. */
+export const needKey = (id: string) => `live-need:${id}`
 /** The key of a waiting train's row Button (T-715). */
 export const trainKey = (id: string) => `live-train:${id}`
 /** The key of a Branches row's Button (T-727). */
@@ -113,6 +115,7 @@ export function livePage($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
   })
   const today = liveTodayLines(v, nowMs, inner)
   const headSegs = liveHeaderSegs(v, running, nowMs, width)
+  const needs = liveNeeds(v, nowMs, inner)
   const om = liveOrgMem(notes, width)
   const br = liveBranches(v, nowMs, width)
   return (
@@ -129,13 +132,20 @@ export function livePage($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
       ) : (
         <Text key="live-head" bold color={C('text')}>{liveHeader(v, running)}</Text>
       )}
+      {needs.length ? <Text key="live-needs-head">{draw(liveHeading(LIVE_SECTIONS.needs, width))}</Text> : null}
+      {needs.map((n, i) => (
+        <Button key={row(needKey(n.id))} plain autoFocus={i === 0 ? true : undefined} onPress={open(n.id)}>
+          {under(n.segs)}
+        </Button>
+      ))}
+      {needs.length ? <Text key="live-needs-blank"> </Text> : null}
       <Text key="live-tasks-head">{draw(liveHeading(LIVE_SECTIONS.tasks, width))}</Text>
       {running.length ? null : <Text key="live-empty" color={C('inactive')}>{LIVE_INDENT + LIVE_EMPTY}</Text>}
       {lanes.length ? <Text key="live-labels">{under(liveLabelSegs(layout))}</Text> : null}
       {lanes.flatMap((l, i) => {
         const [first, second] = laneLines(l, layout, { nowMs, frame })
         return [
-          <Button key={row(laneKey(l.id))} plain autoFocus={i === 0 ? true : undefined} onPress={open(l.id)}>
+          <Button key={row(laneKey(l.id))} plain autoFocus={i === 0 && !needs.length ? true : undefined} onPress={open(l.id)}>
             {under(first)}
           </Button>,
           <Text key={`live-sub:${l.id}`}>{under(second)}</Text>,

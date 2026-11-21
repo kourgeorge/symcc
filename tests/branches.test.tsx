@@ -185,7 +185,9 @@ test('T-727: the VS Code Live tab draws the Branches section with real lines, an
 const LIVE_HEADS = ['▍Today', '▍Branches', '▍Organizational memory'].map(h => (l: string) => l.startsWith(h))
 for (const surface of ['terminal', 'desktop', 'mobile'] as const)
   test(`T-738, T-747: the ${surface} Live tab has a ▍heading for each section, one empty line above each, none above the first`, async ($, on) => {
-    seedBoard(on, { view: liveView() })
+    const all = liveView()
+    // T-786: nothing waits for the owner here (▍Needs you has its own tests)
+    seedBoard(on, { view: { ...all, value: { ...all.value, tasks: all.value.tasks.filter(t => !['review', 'waiting', 'failed'].includes(t.status)) } } })
     on('ui.toast', () => ({ value: undefined }))
     const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 80 }, surface })
     await ui.press({ key: 'tab-live' })

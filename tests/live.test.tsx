@@ -346,6 +346,8 @@ test('T-690: the tab row has a Live tab with key l, and the views hint says "l t
 
 const liveView = (tasks: unknown[], checker = true) => ({ shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', branch: 'main', test_commands: ['npm test'], driving: true, checker, max_parallel: 3 } })
 
+/** T-786: the tasks that wait for nobody (▍Needs you has its own tests, tests/live-needs.test.tsx). */
+const calm = (tasks: { status: string }[]) => tasks.filter(t => !['review', 'waiting', 'failed'].includes(t.status))
 type Node = { type?: string; props?: Record<string, unknown>; children?: unknown[] }
 const textOf = (n: unknown): string => (typeof n === 'string' ? n : !n || typeof n !== 'object' ? '' : ((n as Node).children ?? []).map(textOf).join(''))
 /** The lines of a drawn page, top to bottom (a row Box is one line; hidden Boxes draw nothing). */
@@ -366,7 +368,7 @@ const liveLines = async (ui: { drawn: () => Promise<unknown> }) => {
 }
 
 test('T-690: the Live tab draws at a normal and a narrow width with nothing cut, and blinks across two redraws', async ($, on) => {
-  const clock = seedBoard(on, { view: liveView(TASKS) })
+  const clock = seedBoard(on, { view: liveView(calm(TASKS)) })
   on('ui.toast', () => ({ value: undefined }))
   for (const bodyColumns of [80, 44]) {
     const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'terminal' })
@@ -415,7 +417,7 @@ test('T-690: the Live tab draws at a normal and a narrow width with nothing cut,
 })
 
 test('T-690, T-758: with no task in doing, the Live tab says so and shows no next up line', async ($, on) => {
-  seedBoard(on, { view: liveView(TASKS.filter(t => t.status !== 'doing')) })
+  seedBoard(on, { view: liveView(calm(TASKS.filter(t => t.status !== 'doing'))) })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   await ui.press({ key: 'tab-live' })
   const lines = await liveLines(ui)
@@ -675,7 +677,7 @@ test('T-770: liveScoutMark shows the names and times, then "N scouts", then "N",
   expect(liveHeaderSegs({ ...view(true), scouts_running: RUNS }, [], T0).map(s => s.tone)).toEqual(['text', 'text', 'scouts', 'dim'])
 })
 
-const scoutView = (runs: unknown[]) => ({ ...liveView(TASKS), value: { ...liveView(TASKS).value, ...(runs.length ? { scouts_running: runs } : {}) } })
+const scoutView = (runs: unknown[]) => ({ ...liveView(calm(TASKS)), value: { ...liveView(calm(TASKS)).value, ...(runs.length ? { scouts_running: runs } : {}) } })
 for (const [runs, w, want] of [
   [[], 80, '⏵ auto · agents 2/3 busy'],
   [[RUNS[1]], 80, '⏵ auto · agents 2/3 busy · ⌕ gaps-bot 4m'],

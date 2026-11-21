@@ -15,6 +15,12 @@ import { depDone } from './archive'
 import { dayOf, localOffset } from './days'
 import { modeLabel } from './review'
 import { num } from './text'
+import { asksMoreTime, needsYou } from './commands'
+import { fileWaitText, taskAsks } from './panel'
+import { isOpenQuestion } from './questions'
+import { whyFailed } from './failure'
+import { newestFirst } from './settings'
+import { isAnswered } from './task'
 import { viewMarks } from './board-parts'
 
 /**
@@ -367,7 +373,30 @@ export const LIVE_RUN_MARK = '▶ '
 // T-747: the Live tab's sections (Tasks, Today, Branches, Organizational memory; T-750 put Today above Branches) each start with a "▍Name" heading,
 // as the task page's "▍Details", and the lines under it are indented by LIVE_INDENT.
 /** The section names, in their order on the tab. */
-export const LIVE_SECTIONS = { tasks: 'Tasks', today: 'Today', branches: 'Branches', orgMem: 'Organizational memory' } as const
+export const LIVE_SECTIONS = { needs: 'Needs you', tasks: 'Tasks', today: 'Today', branches: 'Branches', orgMem: 'Organizational memory' } as const
+/** T-786: one row of the Live tab's ▍Needs you section: `id` (Q-n or T-n) opens on Enter; `segs` is the row in the warning tone. */
+export type LiveNeed = { id: string; segs: LiveSeg[] }
+/** T-786: the rows of ▍Needs you, in `inner` columns (each cut to fit): the open board questions, then the tasks that need the owner
+ *  (the same list as the band and the board's NEEDS YOU: needsYou), newest first. Empty while nothing waits. */
+export function liveNeeds(view: LiveView & { questions?: readonly { id: string; text: string; answered_at?: string; dropped?: boolean }[] }, nowMs: number, inner: number): LiveNeed[] {
+  const open = (view.questions ?? []).filter(q => isOpenQuestion(q))
+  const tasks = (view.tasks as BoardTask[]).filter(t => needsYou(t, nowMs)).sort(newestFirst)
+  const idW = Math.max(0, ...open.map(q => q.id.length), ...tasks.map(t => t.id.length))
+  const row = (id: string, rest: string): LiveNeed => ({ id, segs: [{ text: cutTitle(`⚠ ${id.padEnd(idW)} ${rest.replace(/\s+/g, ' ').trim()}`, Math.max(1, inner)), tone: 'warning' }] })
+  const qs = open.map(q => row(q.id, q.text))
+  const ts = tasks.map(t => {
+    if (asksMoreTime(t)) {
+      const a = taskAsks(t, (view as { max_minutes?: number }).max_minutes)
+      return row(t.id, (a?.text ?? '').replace(t.id, '').trim().replace(/\. Give it more time\?$/, ': more time?'))
+    }
+    if (t.status === 'review') return row(t.id, `${isAnswered(t) ? 'answer to read' : 'ready for review'}: ${t.title}`)
+    if (t.status === 'failed') return row(t.id, `failed: ${whyFailed(t)}`)
+    const files = fileWaitText(t)
+    if (files) return row(t.id, `asks: ${files}`)
+    return row(t.id, `asks: ${taskAsks(t)?.text ?? t.title}`)
+  })
+  return [...qs, ...ts]
+}
 /** What the lines under a section heading start with. */
 export const LIVE_INDENT = ' '
 /** The width left for a section's lines in `width` columns (after LIVE_INDENT). */

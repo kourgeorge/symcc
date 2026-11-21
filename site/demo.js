@@ -60,6 +60,8 @@
       chat: [{ k: 'note', text: '⏵ auto · the board is open · 1 task running' }],
       input: '',
       thinking: false,
+      // T-786: the board question that waits for the owner (▍Needs you), null when none
+      q: null,
       voice: '',
       lanes: [
         { id: 'T-740', kind: 'bug', at: 0, since: at(16, 28), tryNo: 1, tries: 3, tokens: null, back: 0, agent: true },
@@ -143,6 +145,12 @@
     L.push(tabRow('Live'))
     L.push(sp(`⏵ auto · agents ${busy}/${MAX_AGENTS} busy` + (s.scout ? ` · ⌕ gaps-bot ${dur(s.now - s.scout)}` : ''), 'dim'))
     L.push('')
+    // T-786: ▍Needs you first, only while something waits, every row in the warning color
+    if (s.q) {
+      L.push(heading('Needs you'))
+      L.push(' ' + sp(cut('⚠ ' + s.q.id + '  ' + s.q.text, 56), 'warning'))
+      L.push('')
+    }
     L.push(heading('Tasks'))
     if (s.lanes.length) {
       // the ✧ after work and check in the accent color (core/live.ts's 'mark' tone)
@@ -289,9 +297,10 @@
         sp('  4 ', 'dim') + esc('Side bar  ') + sp('▍Tasks', 'heading'),
         esc('Which one do you want?'),
       ] })
+      s.q = { id: 'Q-12', text: 'Which look should the Live tab sections have?' }
     }],
     [2400, at(16, 37, 40), { type: '4' }],
-    [300, at(16, 37, 45), s => { s.thinking = true }],
+    [300, at(16, 37, 45), s => { s.thinking = true; s.q = null }],
     [1400, at(16, 38, 0), s => {
       s.thinking = false
       say(s, { k: 'tool', name: 'symcc · add_task', args: 'T-747, kind: change', result: 'added T-747 · a worker starts now' })

@@ -743,7 +743,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
       return void setRunCursor(Math.max(0, n))
     }
     // T-727: a Branches row opens its task too
-    return openOnList(branchIdTask(id) ?? id)
+    return openOnList(branchIdTask(id) ?? (id.startsWith('need:') ? id.slice(5) : id))
   }
   /** The Live tab's keys (T-692): ↑↓ move between the lanes (and the org-mem section's notes and topics), Enter opens
    *  the lane's task (or the topic's page, see openLive), b goes back to the list; m opens the Organizational memory
