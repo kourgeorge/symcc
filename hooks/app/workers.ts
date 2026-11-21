@@ -1631,9 +1631,9 @@ export async function sendBackIdle(host: Host, agents: HostAgent[]) {
       const sha = merged.get(t.id)
       if (sha) return mergedDone(t, sha, 'sent back to todo', now())
       // T-733: a reload cut off its test and merge: the same branch is tested and merged again (mergeAgain), no new try,
-      // at most AGAIN_MAX times per try; taken at once (finishing), so nothing else sends it back meanwhile
-      if (t.finishing && t.note !== CHECKER_NOTE && againsThisTry(t, RELOAD_AGAIN) < AGAIN_MAX && !again.some(a => a.id === t.id)) {
-        finishing.add(t.id)
+      // at most AGAIN_MAX times per try; taken (finishing) once the board is saved, so a failed save leaves it to the next check.
+      // An investigation's result is its answer, never tested or merged: it goes back to todo as before.
+      if (t.finishing && !isInvestigation(t) && t.note !== CHECKER_NOTE && againsThisTry(t, RELOAD_AGAIN) < AGAIN_MAX && !again.some(a => a.id === t.id)) {
         again.push(t)
         return t
       }
@@ -1641,7 +1641,11 @@ export async function sendBackIdle(host: Host, agents: HostAgent[]) {
       return backToTodo(t, t.finishing ? 'restarted: its test and merge stopped before the end (the plugin reloaded)' : 'restarted: the old worker has ended', now())
     }),
   }))
-  for (const t of again) void mergeAgain(host, t).catch(() => undefined)
+  for (const t of again) {
+    if (finishing.has(t.id)) continue
+    finishing.add(t.id)
+    void mergeAgain(host, t).catch(() => undefined)
+  }
   for (const id of merged.keys()) tellLead(host, `✓ ${id} is done: its work was already merged (${shortSha(merged.get(id)!)}) when the plugin reloaded.`)
   if (back.length) tellLead(host, `${back.map(t => `${t.id} "${t.title}"`).join(', ')}: no worker was working on ${back.length > 1 ? 'them' : 'it'} any more (${back.length > 1 ? 'their workers' : 'its worker'} stopped or ended), so ${back.length > 1 ? 'they go' : 'it goes'} back to todo; the next worker goes on from the same folder and branch.`)
 }

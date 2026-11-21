@@ -3967,6 +3967,45 @@ test('T-733: a task cut off by a reload that already went back into the merge li
   expect(t.history.at(-1)?.text).toBe('try 1: restarted: its test and merge stopped before the end (the plugin reloaded)')
 })
 
+test('T-733: a board save that fails while a task cut off by a reload is put back in the merge line leaves it to the next check, not stuck in "doing"', async () => {
+  S.me = 'me'
+  const old = new Date(Date.now() - 10 * 60_000).toISOString()
+  const w = world()
+  const [b] = boardWith('auto', ['npm test'], { session: 'other-dead-session', branch: 'symcc/T-1', history: [], runs: [{ started: ISO, ended: ISO }], finishing: old })
+  await saveBoard(w.$, b)
+  S.driving = true
+  w.failSaves(p => p.startsWith(BOARD) && p !== BOARD)
+  await check(w.$).catch(() => undefined)
+  w.failSaves(() => false)
+  expect(finishingSet.has('T-1')).toBe(false)
+  await check(w.$)
+  await turns(w, () => !finishingSet.has('T-1'))
+  S.driving = false
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).not.toBe('doing')
+  expect(ranTests(w).length).toBe(1)
+  expect(t.history.map(h => h.text)).toContain('try 1: tests cut off by a reload; testing again')
+})
+
+test('T-733: an investigation cut off by a reload is never tested or merged: it goes back to "todo" as before', async () => {
+  S.me = 'me'
+  const old = new Date(Date.now() - 10 * 60_000).toISOString()
+  const w = world()
+  const main0 = w.git.main
+  const [b] = boardWith('auto', ['npm test'], { kind: 'investigation', session: 'other-dead-session', branch: 'symcc/T-1', history: [], runs: [{ started: ISO, ended: ISO }], finishing: old } as Partial<BoardTask>)
+  await saveBoard(w.$, b)
+  S.driving = true
+  await check(w.$)
+  S.driving = false
+  expect(finishingSet.has('T-1')).toBe(false)
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('todo')
+  expect(t.merged).toBeUndefined()
+  expect(ranTests(w)).toEqual([])
+  expect(w.git.main).toBe(main0)
+  expect(t.history.at(-1)?.text).toBe('try 1: restarted: its test and merge stopped before the end (the plugin reloaded)')
+})
+
 test('the regular check leaves a task alone while its finishing mark is fresh', async () => {
   S.me = 'me'
   const w = world()
