@@ -113,8 +113,8 @@ function branchesVs(pane: PaneParts, open: (id: string) => () => void) {
   const words = (xs: LiveSeg[]) => xs.map(s => <Text color={C(LIVE_TONE[s.tone])}>{s.text}</Text>)
   return (
     <Box key="live-br" flexDirection="column">
-      <Box key="live-br-head" flexDirection="column">
-        <Text bold color={C('text')}>{LIVE_SECTIONS.branches}</Text>
+      <Box key="live-br-head" flexDirection="column" paddingBottom={1}>
+        <Text bold color={C('text')}>{LIVE_SECTIONS.branches.toUpperCase()}</Text>
       </Box>
       <Box key="live-br-main" flexDirection="row" gap={1} alignItems="center">
         <Svg key="live-br-main-svg" source={main.source} width={main.width} height={main.height} alt={segText(br.main).trim()} />
@@ -162,6 +162,12 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
   const line = (key: string, text: string, color: string, bold = false) => (
     <Box key={key} flexDirection="column">
       <Text wrap="wrap" bold={bold || undefined} color={C(color)}>{text}</Text>
+    </Box>
+  )
+  /** T-789: a section heading: the name in UPPERCASE, bold, one empty line under it. */
+  const headLine = (key: string, name: string) => (
+    <Box key={key} flexDirection="column" paddingBottom={1}>
+      <Text wrap="wrap" bold color={C('text')}>{name.toUpperCase()}</Text>
     </Box>
   )
   const headSegs = liveHeaderSegs(v, running, nowMs, width)
@@ -253,18 +259,18 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
       )}
       {needs.length ? (
         <Box key="live-needs" flexDirection="column">
-          {line('live-needs-head', LIVE_SECTIONS.needs, 'text', true)}
+          {headLine('live-needs-head', LIVE_SECTIONS.needs)}
           {needRows}
         </Box>
       ) : null}
       <Box key="live-tasks" flexDirection="column">
-        {line('live-tasks-head', LIVE_SECTIONS.tasks, 'text', true)}
+        {headLine('live-tasks-head', LIVE_SECTIONS.tasks)}
         {running.length ? null : line('live-empty', LIVE_EMPTY, 'inactive')}
         {lanes.length ? <Box key="live-lanes" flexDirection="column" gap={1}>{laneRows}</Box> : null}
       </Box>
       {lanes.length ? line('live-legend', liveLegend(lanes, Infinity).join(' '), 'inactive') : null}
       <Box key="live-bottom" flexDirection="column">
-        {line('live-today-head', LIVE_SECTIONS.today, 'text', true)}
+        {headLine('live-today-head', LIVE_SECTIONS.today)}
         {liveTodayLines(v, nowMs, inner).map((x, i) => (
           <Box key={`live-today-${i}`} flexDirection="column">
             <Text wrap="wrap">{x.map(s => <Text color={C(LIVE_TONE[s.tone])}>{s.text}</Text>)}</Text>
@@ -294,8 +300,8 @@ function orgMemSectionVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
   )
   return (
     <Box key="live-om" flexDirection="column">
-      <Box key="live-om-head" flexDirection="row" gap={1} alignItems="center">
-        {vsLink(vs, 'live-orgmem', `**${mdLink(LIVE_SECTIONS.orgMem, all)}**`, [[all, openOrgMemPage($)]])}
+      <Box key="live-om-head" flexDirection="row" gap={1} alignItems="center" paddingBottom={1}>
+        {vsLink(vs, 'live-orgmem', `**${mdLink(LIVE_SECTIONS.orgMem.toUpperCase(), all)}**`, [[all, openOrgMemPage($)]])}
         <Text key="live-om-count" color={C('inactive')}>{`${notes.length} / ${ORG_MEM_MAX_LINES}`}</Text>
         <Svg key="live-om-bar" source={bar.source} width={bar.width} height={bar.height} alt={`${orgMemCount(notes.length)} of at most ${ORG_MEM_MAX_LINES}`} />
       </Box>

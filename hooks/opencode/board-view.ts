@@ -827,8 +827,8 @@ export const LIVE_BLINK_MS = 1000
  * T-715: under each lane hang its waiting trains (core's liveTrains and trainRows); the cursor goes over them too, and
  * Enter or a click on one opens its task, as on a lane.
  * T-727: under the lanes, the Branches section (core's liveBranches); the cursor goes over its task rows (liveBranchId).
- * T-747: each section (Tasks, Today, Branches, Organizational memory) starts with a "▍Name" heading (core's
- * liveHeading), its lines indented by LIVE_INDENT.
+ * T-747, T-789: each section (Tasks, Today, Branches, Organizational memory) starts with a bold UPPERCASE heading (core's
+ * liveHeading), one empty line above (none above the first) and one under it, its lines indented by LIVE_INDENT.
  */
 function liveBody(f: ViewFile, cursor: number, nowMs: number, w: number): Body {
   const b = bodyMaker()
@@ -867,10 +867,12 @@ function liveBody(f: ViewFile, cursor: number, nowMs: number, w: number): Body {
   // T-786: ▍Needs you first, only while something waits
   if (needs.length) {
     b.add(liveSegs(liveHeading(LIVE_SECTIONS.needs, w)))
+    b.blank()
     for (const n of needs) opens(n.segs, liveNeedId(n.id))
     b.blank()
   }
   b.add(liveSegs(liveHeading(LIVE_SECTIONS.tasks, w)))
+  b.blank()
   if (!running.length) b.add([{ text: LIVE_INDENT + LIVE_EMPTY, color: 'inactive' }])
   if (lanes.length) b.add(under(liveLabelSegs(layout)))
   for (const l of lanes) {
@@ -882,17 +884,20 @@ function liveBody(f: ViewFile, cursor: number, nowMs: number, w: number): Body {
   // T-738: one empty line above each section after the first (Today, Branches, Organizational memory)
   b.blank()
   b.add(liveSegs(liveHeading(LIVE_SECTIONS.today, w)))
+  b.blank()
   for (const t of liveTodayLines(v, nowMs, inner)) b.add(under(t))
   if (lanes.length) for (const x of liveLegend(lanes, inner)) b.add([{ text: LIVE_INDENT + x, color: 'inactive' }])
   if (br) {
     b.blank()
     b.add(liveSegs(br.head))
+    b.blank()
     b.add(under(br.main))
     for (const r of br.rows) r.id ? opens(r.segs, liveBranchId(r.id)) : b.add(under(r.segs))
   }
   // T-718: the Organizational memory section, just above the footer (a click on its header opens all notes)
   b.blank()
   b.add(liveSegs(om.head, { key: ORG_MEM_KEY }), { key: ORG_MEM_KEY })
+  b.blank()
   b.add([{ text: LIVE_INDENT + om.newestLabel, color: 'inactive' }])
   if (om.empty) b.add([{ text: LIVE_INDENT + om.empty, color: 'inactive' }])
   /** A cell's segments with "›" in its first column when the cursor is on it (the first cell of a row indented). */

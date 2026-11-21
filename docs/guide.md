@@ -1028,7 +1028,7 @@ needs review is a button too), then a divider.
 #### The Branch section
 
 Under **▍Details**, a task that has a branch shows it against the branch it merges into, in the
-same look as the Live tab's `▍Branches`:
+same look as the Live tab's `BRANCHES` section:
 
 ```
 ▍Branch  symcc/T-733 · 3 commits · 10 behind main
@@ -1060,25 +1060,28 @@ the open tasks with a branch, the 5 latest merged ones and the 5 latest dropped 
 ### Live tab
 
 The Live tab (`l`) shows the tasks that run now as "railway lanes", one lane per task the board counts as running (a task in doing, or an approved or files-cleared task while its tests and merge run).
-Under the mode line it has up to five sections, each starting with a heading like the task page's
-`▍Details`: `▍Needs you` (only while something waits), `▍Tasks` (the lanes), `▍Today` (today's numbers), `▍Branches` and
-`▍Organizational memory`, with one empty line between them and the lines under each heading
-indented by 1 space (VS Code shows the same names as bold headings):
+Under the mode line it has up to five sections, each starting with a heading that is a plain bold
+UPPERCASE word (no bar, no rule): `NEEDS YOU` (only while something waits), `TASKS` (the lanes), `TODAY` (today's numbers),
+`BRANCHES` and `ORGANIZATIONAL MEMORY` (`ORG-MEM` on a narrow panel). One empty line sits above each heading (none above the first)
+and one under it, and the lines under a heading are indented by 1 space (VS Code shows the same
+words as bold headings with the same spacing):
 
 ```
-▍Needs you
- ⚠ Q-88  Which figures should go on ▍Today's 4th line?
+NEEDS YOU
+
+ ⚠ Q-88  Which figures should go on TODAY's 4th line?
  ⚠ T-749 ready for review: Website home page: a live, played-out demo…
  ⚠ T-751 asks: Claude Code only lets a button key be one letter…
  ⚠ T-751 has run 45 min: more time?
 
-▍Tasks
+TASKS
+
                        work✧    check✧   queue    tests    merged
  ▶ T-684 /symcc-doc…   ●━━━━━━━━●━━━━━━━━◉────────○────────○      #2
    change try 2/3      ▕████████░░░░░▏ 1.1M  ↺×1
 ```
 
-- `▍Needs you` is the first section, shown only while something waits for you, and hidden (no
+- `NEEDS YOU` is the first section, shown only while something waits for you, and hidden (no
   heading, no empty line) otherwise. One row each, in the warning color: the open board questions
   (`Q-n` and their text), then the tasks that wait for you (a worker's question, a file request,
   more time), the tasks ready for review and the answered investigations to read. It is the same
@@ -1138,11 +1141,12 @@ indented by 1 space (VS Code shows the same names as bold headings):
   the others. Under a lane at most 3 levels and 6 trains show, then `└─ +N more waiting`. On a
   narrow panel the title gets shorter and `+ also` becomes a count; nothing is wider than the panel.
   Enter (or a click) on a train opens that task, and Back returns to the Live tab.
-- Under the `▍Today` section, the **Branches** section shows how each open task's branch stands
+- Under the `TODAY` section, the **Branches** section shows how each open task's branch stands
   against the branch the tasks merge into (usually `main`):
 
   ```
-  ▍Branches
+  BRANCHES
+
     main   ●───●───●───●───●───●───●   c11a736 · 2 min ago
            │       │           │   ╰─◀ T-724 merged
            │       │           ╰─────○ T-721  +3 commits · 1 behind
@@ -1168,10 +1172,11 @@ indented by 1 space (VS Code shows the same names as bold headings):
   (`⏵ auto · agents 2/3 busy · ⌕ gaps-bot 4m, board-review 1m`). When the names don't fit, it
   says `⌕ 3 scouts`, and on a very narrow panel just `⌕ 3`. A scout still waiting to start
   isn't shown, and with no scout running there is no mark. A click on it (or the `s` key)
-  opens the Scouts tab; this works on every board. Under the `▍Today` heading, four lines about today:
+  opens the Scouts tab; this works on every board. Under the `TODAY` heading, four lines about today:
 
   ```
-  ▍Today
+  TODAY
+
    ✓ 67 merged   ↺ 76 sent back   ✗ 0 failed   Σ 320.7M tokens
    ⌀ per task 2.8M · 9m work · 23m start-to-merge   ⏱ 13h 06m agent work · ≈ $64
    ████████████▓▓▒░ workers 84% · checkers 8% · scouts 5% · lead 3%
@@ -1200,7 +1205,8 @@ indented by 1 space (VS Code shows the same names as bold headings):
   [Organizational memory](#organizational-memory-org-mem)):
 
   ```
-  ▍Organizational memory   57 / 60 ▕█████████░▏
+  ORGANIZATIONAL MEMORY   57 / 60 ▕█████████░▏
+
      newest
       11-21  tests      In tests, put dates relative to now, never a…
       11-21  workers    Before handing back, wait for every command…

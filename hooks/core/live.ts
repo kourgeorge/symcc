@@ -401,9 +401,9 @@ export function liveNeeds(view: LiveView & { questions?: readonly { id: string; 
 export const LIVE_INDENT = ' '
 /** The width left for a section's lines in `width` columns (after LIVE_INDENT). */
 export const liveInner = (width: number): number => Math.max(1, Math.floor(width) - LIVE_INDENT.length)
-/** A section's heading in `width` columns: "▍Tasks" (cut when narrow), the bar and the name two segments (a client
- *  may make the name alone a link). */
-export const liveHeading = (name: string, width: number): LiveSeg[] => [{ text: '▍', tone: 'heading' }, { text: fitText(name, Math.max(1, Math.floor(width) - 1)), tone: 'heading' }]
+/** T-789: a section's heading in `width` columns: the name in UPPERCASE ("TASKS", cut when narrow), bold, no bar and no rule.
+ *  The client puts one empty line above it (none above the first) and one under it. */
+export const liveHeading = (name: string, width: number): LiveSeg[] => [{ text: fitText(name.toUpperCase(), Math.max(1, Math.floor(width))), tone: 'heading' }]
 /** A line under a section heading: LIVE_INDENT, then its segments. */
 export const liveIndented = (xs: readonly LiveSeg[]): LiveSeg[] => [{ text: LIVE_INDENT, tone: 'text' }, ...xs]
 
@@ -1016,11 +1016,11 @@ const NEWEST_TOPIC_MAX = 16
  *  when org-mem is full (the add is refused). */
 function orgMemHead(n: number, width: number): LiveSeg[] {
   const count = `${n} / ${ORG_MEM_MAX_LINES}`
-  for (const title of [LIVE_SECTIONS.orgMem, 'Org-mem'])
+  for (const title of [LIVE_SECTIONS.orgMem.toUpperCase(), 'ORG-MEM'])
     for (const cells of [10, 6, 0]) {
       const bar = cells ? ` ${tokenBar(n, ORG_MEM_MAX_LINES, cells)}` : ''
-      if (textWidth(`▍${title}   ${count}${bar}`) > width) continue
-      return segs({ text: '▍', tone: 'heading' }, { text: title, tone: 'heading' }, { text: '   ', tone: 'text' }, { text: count, tone: 'dim' }, { text: bar, tone: 'bar' })
+      if (textWidth(`${title}   ${count}${bar}`) > width) continue
+      return segs({ text: title, tone: 'heading' }, { text: '   ', tone: 'text' }, { text: count, tone: 'dim' }, { text: bar, tone: 'bar' })
     }
   return liveHeading('Org-mem', width)
 }
