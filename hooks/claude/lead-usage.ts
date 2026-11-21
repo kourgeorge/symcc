@@ -46,13 +46,19 @@ export const PART_MIB = 3
  * The usage lines of a session log too big for $.fs.read: read in parts of PART_MIB MiB with dd (the path is an
  * argument, never in a shell string), keeping only the lines that hold "usage". A line cut between two parts is
  * joined again. null when a part can't be read.
+ *
+ * T-778: dd runs in the log's own folder. Without a cwd, Claude Code starts it in the session's working folder,
+ * which a shell `cd` of the lead moves (e.g. into a task's worktree); once that worktree is removed, every dd failed
+ * to start (ENOENT) and the lead showed 0 tokens.
  */
 export async function bigLogUsageLines($: Pick<Host, 'run'>, path: string): Promise<string | null> {
   const keep: string[] = []
   let carry = ''
+  const cwd = path.slice(0, path.lastIndexOf('/')) || '/'
   for (let part = 0; part < 100_000; part++) {
-    const r = await $.run(['dd', `if=${path}`, 'bs=1048576', `skip=${part * PART_MIB}`, `count=${PART_MIB}`], { timeoutMs: 60_000 }).catch(() => null)
-    if (!r || r.exitCode !== 0) return null
+    const r = await $.run(['dd', `if=${path}`, 'bs=1048576', `skip=${part * PART_MIB}`, `count=${PART_MIB}`], { cwd, timeoutMs: 60_000 }).catch(() => null)
+    // a cut part (over the 4 MiB $.process.run keeps) would lose lines: say the log can't be read instead
+    if (!r || r.exitCode !== 0 || (r as { isStdoutTruncated?: boolean }).isStdoutTruncated) return null
     const text = String(r.stdout ?? '')
     if (!text) break
     const lines = (carry + text).split('\n')

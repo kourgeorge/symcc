@@ -110,7 +110,8 @@ export function resetClaudeSelf() {
 /** Never rejects: undefined on any error, or when it takes longer than PS_TIME_LIMIT_MS. */
 async function ps($: EngineInterface, argv: readonly string[]): Promise<{ exitCode: number; stdout: string } | undefined> {
   try {
-    return await $.process.run(argv, { timeoutMs: PS_TIME_LIMIT_MS })
+    // cwd "/": the session's working folder may be a removed worktree (T-778), and ps needs no folder of its own
+    return await $.process.run(argv, { cwd: '/', timeoutMs: PS_TIME_LIMIT_MS })
   } catch {
     return undefined
   }
@@ -188,7 +189,9 @@ export function claudeHost($: EngineInterface): ClaudeHost {
       list: p => $.fs.list(p),
       stat: (p, options) => $.fs.stat(p, options),
     },
-    run: (argv, init) => $.process.run(argv, init),
+    // T-778: with no cwd, Claude Code starts the command in the session's working folder, which the lead's shell `cd`
+    // moves (into a task's worktree that is later removed: then every command fails to start); the project root stays
+    run: async (argv, init) => $.process.run(argv, init?.cwd ? init : { ...init, cwd: await $.session.root() }),
     processes: claudeProcesses($),
     clock: { after: (ms, fn) => $.clock.after(ms, fn), every: (ms, fn) => $.clock.every(ms, fn), sleep: ms => $.clock.sleep(ms) },
     ui: {

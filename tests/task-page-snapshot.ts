@@ -9,6 +9,7 @@
 // - T-693: no status badge under the title
 // - T-701: an answered investigation's Status row says "answered: read it"
 // - T-751: the 4-line page header (where you are, title, state, buttons in groups) and its heavy rule; no Status, Stage or Now rows
+// - T-774: the Runs heading sums the task's own tries
 export const TASK_BEFORE: Record<string, unknown> = {
   "desktop T-501": {
     "type": "Box",
@@ -654,7 +655,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Runs (time and cost)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  try 2: 20m · 7k tokens in all · ~$0.80"]},
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
@@ -1437,7 +1438,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Runs (time and cost)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  try 2: 20m · 7k tokens in all · ~$0.80"]},
           {"type":"Text","props":{"bold":true,"color":"text"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
@@ -2183,7 +2184,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Runs (time and cost)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  try 2: 20m · 7k tokens in all · ~$0.80"]},
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
@@ -3003,7 +3004,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Runs (time and cost)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  try 2: 20m · 7k tokens in all · ~$0.80"]},
           {"type":"Text","props":{"bold":true,"color":"text"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
@@ -3752,7 +3753,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Runs (time and cost)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  try 2: 20m · 7k tokens in all · ~$0.80"]},
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
@@ -4519,7 +4520,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Runs (time and cost)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  try 2: 20m · 7k tokens in all · ~$0.80"]},
           {"type":"Text","props":{"bold":true,"color":"text"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
@@ -5004,7 +5005,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Runs (time and cost)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Runs   2 tries · 25m · 4.6k tokens (0.4× the usual task)"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
           {"type":"Text","props":{"color":"success"},"children":["  try 2: 5m (running)"]},
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["  total: 25m · 4.6k tokens in all · ~$0.42"]}
@@ -5521,7 +5522,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Runs (time and cost)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Runs   2 tries · 25m · 4.6k tokens (0.4× the usual task)"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
           {"type":"Text","props":{"color":"success"},"children":["  try 2: 5m (running)"]},
           {"type":"Text","props":{"bold":true,"color":"text"},"children":["  total: 25m · 4.6k tokens in all · ~$0.42"]}
@@ -6204,7 +6205,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Runs (time and cost)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  try 2: 20m · 7k tokens in all · ~$0.80"]},
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
@@ -6987,7 +6988,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Runs (time and cost)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  try 2: 20m · 7k tokens in all · ~$0.80"]},
           {"type":"Text","props":{"bold":true,"color":"text"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
@@ -9446,7 +9447,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Runs (time and cost)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  try 2: 20m · 7k tokens in all · ~$0.80"]},
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
@@ -10120,7 +10121,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Runs (time and cost)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  try 2: 20m · 7k tokens in all · ~$0.80"]},
           {"type":"Text","props":{"bold":true,"color":"text"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
@@ -10771,7 +10772,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Runs (time and cost)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  try 2: 20m · 7k tokens in all · ~$0.80"]},
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
@@ -11459,7 +11460,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Runs (time and cost)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  try 2: 20m · 7k tokens in all · ~$0.80"]},
           {"type":"Text","props":{"bold":true,"color":"text"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
@@ -12341,7 +12342,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Runs (time and cost)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  try 2: 20m · 7k tokens in all · ~$0.80"]},
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
@@ -13290,7 +13291,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Runs (time and cost)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  try 2: 20m · 7k tokens in all · ~$0.80"]},
           {"type":"Text","props":{"bold":true,"color":"text"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
@@ -14025,7 +14026,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Runs (time and cost)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  try 2: 20m · 7k tokens in all · ~$0.80"]},
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
@@ -14788,7 +14789,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Runs (time and cost)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  try 2: 20m · 7k tokens in all · ~$0.80"]},
           {"type":"Text","props":{"bold":true,"color":"text"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}

@@ -48,6 +48,23 @@ export type SymccRun = {
    */
   agent?: string
   checkers?: string[]
+  /**
+   * T-774: each agent that worked on this try (its workers: one more after each restart symcc did itself; its checkers),
+   * oldest first, with what each used. The try's `tokens` and `cost` are their sum (plus what their follow-up debrief
+   * turns used). Only the latest few agents (AGENTS_KEPT) and only on the last few tries (AGENT_TRIES_KEPT); older tries
+   * keep only their sums, and tries from before T-774 have none.
+   */
+  agents?: SymccRunAgent[]
+}
+
+/** T-774: one agent of a try: its agent id, worker or checker, when it started and ended, and what it used (when the host said). */
+export type SymccRunAgent = {
+  id: string
+  kind: 'worker' | 'checker'
+  started: string
+  ended?: string
+  tokens?: SymccTokens
+  cost?: number
 }
 
 /**
