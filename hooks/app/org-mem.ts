@@ -149,7 +149,7 @@ export async function moveOldOrgMem(host: Host): Promise<void> {
   }
 }
 
-/** T-619: what the Organizational memory page under Settings shows: whether it is open, and the note whose delete
+/** T-619: what the Organizational memory page (opened from the Live tab) shows: whether it is open, and the note whose delete
  *  waits for a yes (its number, see OrgMemNote; null for none). */
 export const orgMemView = { open: false, confirm: null as number | null }
 
