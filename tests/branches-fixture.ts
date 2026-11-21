@@ -1,6 +1,6 @@
 // T-727: a sample board for the Live tab's Branches section, the same in the core, terminal, VS Code and OpenCode
 // tests: main's 9 latest commits (c1 newest), T-721 in doing 3 ahead / 1 behind (forked at c2), T-725 in review 0 ahead
-// / 4 behind (forked at c5), T-726 next up in todo with no branch yet, and T-724 merged (at c1) 30 seconds before `now`.
+// / 4 behind (forked at c5), T-726 next up in todo with no branch yet, and T-724 merged (at c1) 3 minutes before `now`.
 import type { BranchFacts } from '../hooks/core/live'
 import type { TaskBranchFacts } from '../hooks/core/task-branch'
 
@@ -15,7 +15,7 @@ export function branchTasks(now: number) {
     task('T-721', 'Record which test failed', { branch: 'symcc/T-721', runs: [{ started: iso(600) }] }),
     task('T-725', 'Guide: Live tab', { status: 'review', branch: 'symcc/T-725' }),
     task('T-726', 'Text fixes after org-mem', { status: 'todo' }),
-    task('T-724', 'Merged just now', { status: 'done', branch: 'symcc/T-724', merged: sha('c1'), history: [{ kind: 'merged', at: iso(30), text: 'try 1 → merged into main' }] }),
+    task('T-724', 'Merged just now', { status: 'done', branch: 'symcc/T-724', merged: sha('c1'), history: [{ kind: 'merged', at: iso(180), text: 'try 1 → merged into main' }] }),
   ]
 }
 
@@ -81,7 +81,7 @@ export function taskBranchTasks(now: number) {
 export const BRANCH_LINES_100 = [
   'BRANCHES',
   '  main   ●───●───●───●───●───●───●   c1c1c1c · 2 min ago',
-  '         │       │           │   ╰─◀ T-724 merged',
+  '         │       │           │   ╰─◀ T-724  merged 3m ago (c1c1c1c)',
   '         │       │           ╰─────○ T-721  +3 commits · 1 behind',
   '         │       ╰─────────────────○ T-725  +0 commits · 4 behind',
   '         ╰─────────────────────────○ T-726  not started',

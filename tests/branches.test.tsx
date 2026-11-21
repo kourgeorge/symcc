@@ -2,7 +2,7 @@
 // with git (here a fake git), and the terminal and VS Code Live tabs draw it (OpenCode's: hooks/opencode/tests).
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { BRANCH_ROWS_MAX, LIVE_INDENT, liveBranches, segText } from '../hooks/core/live'
+import { BRANCH_ROWS_MAX, LIVE_INDENT, liveBranches, liveFinishedLanes, segText } from '../hooks/core/live'
 import { textWidth } from '../hooks/core/stats'
 import { branchFacts, readBranches, BRANCH_CACHE_MS } from '../hooks/app/branches'
 import { publish } from '../hooks/app/lead'
@@ -26,7 +26,7 @@ test('T-727: the Branches section at 100 and 40 columns: main\'s commits, a row 
   expect(linesOf(narrow)).toEqual([
     'BRANCHES',
     '  main   ●─●─●─●   c1c1c1c · 2 min ago',
-    '         │   │ ╰─◀ T-724 merged',
+    '         │   │ ╰─◀ T-724  merged 3m ago',
     '         │   ╰───○ T-721  +3 · 1 behind',
     '         ├───────○ T-725  +0 · 4 behind',
     '         ╰───────○ T-726  not started',
@@ -39,7 +39,8 @@ test('T-727: the Branches section at 100 and 40 columns: main\'s commits, a row 
   expect(row.segs.find(s => s.text === '9 behind')?.tone).toBe('warning')
   // c9 isn't shown: it hangs at the left edge
   expect(row.col).toBe(0)
-  expect(liveBranches(sample(), T0 + 2 * 60_000, 100)!.rows.some(r => r.kind === 'merged')).toBe(false)
+  expect(liveBranches(sample(), T0 + 6 * 60_000, 100)!.rows.some(r => r.kind === 'merged')).toBe(true)
+  expect(liveBranches(sample(), T0 + 7 * 60_000, 100)!.rows.some(r => r.kind === 'merged')).toBe(false)
   expect(liveBranches({ tasks: sample().tasks }, T0, 100)).toBe(null)
   // many branches: at most BRANCH_ROWS_MAX rows, then "+N more"
   const many = Array.from({ length: 11 }, (_, i) => ({ ...branchTasks(T0)[0]!, id: `T-${800 + i}`, branch: `symcc/T-${800 + i}` }))
@@ -256,4 +257,28 @@ test('T-773: a freshly opened VS Code board (no tab saved) shows the Live tab an
   expect(tabs).toMatch(/\*\*[^*]*Live[^*]*\*\*/)
   expect((await ui.find({ key: 'live-br-head' }))?.text).toBe('BRANCHES')
   await ui.unmount()
+})
+
+test('T-794: a task merged 3 minutes ago keeps a dim Branches row joining main; 11 minutes ago it has none; only finished rows still show the section; the same tasks as the Tasks lanes', () => {
+  const tasks = branchTasks(T0) as { id: string; status: string; history: { kind: string; at: string; text: string }[] }[]
+  const merged = (id: string, minAgo: number) => ({ ...tasks[3]!, id, history: [{ kind: 'merged', at: new Date(T0 - minAgo * 60_000).toISOString(), text: 'merged' }] })
+  const only = [merged('T-724', 3), merged('T-730', 11), merged('T-731', 1), merged('T-732', 2), merged('T-733', 4)]
+  const view = { tasks: only as never[], branches: { ...branchFactsAt(T0), tasks: {} } }
+  const b = liveBranches(view, T0, 100)!
+  // (c) only finished rows: the section shows; (b) 11 minutes: none; at most 3, newest first
+  expect(b.rows.map(r => r.id)).toEqual(['T-731', 'T-732', 'T-724'])
+  const row = b.rows.find(r => r.id === 'T-724')!
+  // (a) dim, joins main at its merge commit (c1 = the newest)
+  expect(segText(row.segs)).toContain('◀ T-724  merged 3m ago (c1c1c1c)')
+  expect(row.segs.filter(s => s.text.includes('merged') || s.text === '◀').every(s => s.tone === 'dim')).toBe(true)
+  expect(row.col).toBe(b.commits.length - 1)
+  // (d) the same tasks as ▍Tasks
+  expect(b.rows.map(r => r.id)).toEqual(liveFinishedLanes(view, T0).map(l => l.id))
+  // the newest finished one first
+  const mixed = liveBranches({ ...sample(), tasks: [...(sample().tasks as never[]), merged('T-740', 2) as never] }, T0, 100)!
+  expect(mixed.rows.map(r => r.id)).toEqual(['T-740', 'T-724', 'T-721', 'T-725', 'T-726'])
+  // a merge commit not among the commits shown: joins at the left edge, like open branches
+  const far = branchTasks(T0).map(t => (t.id === 'T-724' ? { ...t, merged: 'c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6' } : t))
+  const narrow = liveBranches({ tasks: far as never[], branches: branchFactsAt(T0) }, T0, 40)!
+  expect(narrow.rows.find(r => r.id === 'T-724')!.col).toBe(0)
 })
