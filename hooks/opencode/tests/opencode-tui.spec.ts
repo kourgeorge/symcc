@@ -333,7 +333,7 @@ function shown(node: unknown): string[] {
 
 test('startTui on a fake OpenCode TUI: reads the view file above its folder, draws the panel and the band, opens from /symcc-board, and sends approve, reject and answer as slash commands', async () => {
   const f = viewFile()
-  const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)]])
+  const files = new Map([['/work/proj/.symcc/view.json', viewFileText({ ...f, view: { ...f.view, open_on_start: false } })]])  // T-756: the board doesn't open by itself here
   const sent: { sessionID: string; name: string; text: string }[] = []
   const slots: { append: string; render: (input: never) => unknown }[] = []
   const layers: TuiKeyLayer[] = []
@@ -951,7 +951,7 @@ test('T-567: a click on the band above the prompt: the header opens the board pa
   const headLen = lineText(wide.lines[0]!).length - BAND_CLICK_HINT.length
   expect(lineText(bandDraw(f, NOW, headLen + BAND_CLICK_HINT.length - 1).lines[0]!)).not.toContain('(click: board)')
   expect(lineText(bandDraw(f, NOW, 40).lines[0]!)).not.toContain('(click: board)')
-  const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)]])
+  const files = new Map([['/work/proj/.symcc/view.json', viewFileText({ ...f, view: { ...f.view, open_on_start: false } })]])  // T-756: the board doesn't open by itself here
   const fc = fakeCtx({})
   const board = startTui({ ...fc.ctx, renderer: { width: 164, height: 200 } }, { runtime: fakeRuntime(), readText: async p => files.get(p) ?? Promise.reject(new Error('missing')), every: () => () => undefined, now: () => NOW })
   await board.refresh()
@@ -3367,5 +3367,73 @@ test('T-738, T-747: the OpenCode Live tab has a ▍heading for each section, one
       expect([lines[at], lines[at - 1]!.trim()]).toEqual([lines[at]!, ''])
       expect([lines[at], lines[at - 2]!.trim() === '']).toEqual([lines[at]!, false])
     }
+  }
+})
+
+/** T-756: a fake tui context whose ui.panel.open says no until `shown.session` is set (OpenCode's home page first). */
+function startCtx(view: Partial<PaneView>) {
+  const f = viewFile()
+  let text = viewFileText({ ...f, view: { ...f.view, ...view } })
+  const setView = (v: Partial<PaneView>) => void (text = viewFileText({ ...f, view: { ...f.view, ...v } }))
+  const fc = fakeCtx({})
+  const shown = { session: false }
+  const opens: string[] = []
+  let current: { name: string; sessionID: string } | undefined
+  const panel = {
+    open: (name: string) => (opens.push(name), shown.session ? ((current = { name, sessionID: 's' }), true) : false),
+    close: () => void (current = undefined),
+    current: () => current,
+  }
+  const board = startTui({ ...fc.ctx, ui: { ...fc.ctx.ui, panel } }, { runtime: fakeRuntime(), readText: async () => text, every: () => () => undefined, now: () => NOW })
+  return { board, shown, opens, toasts: fc.toasts, current: () => current, panel, setView }
+}
+
+test('T-756: with open_on_start on, the board panel opens by itself once a session is shown (no toast before), and not again after it is closed', async () => {
+  const s = startCtx({ open_on_start: true, enabled: true })
+  await s.board.refresh()
+  // no session yet: it waits, with no toast
+  expect(s.current()).toBe(undefined)
+  expect(s.toasts.length).toBe(0)
+  s.shown.session = true
+  await s.board.refresh()
+  expect(s.current()?.name).toBe(BOARD_PANEL)
+  // the owner closes it: later reads don't open it again
+  s.panel.close()
+  const tried = s.opens.length
+  await s.board.refresh()
+  await s.board.refresh()
+  expect(s.current()).toBe(undefined)
+  expect(s.opens.length).toBe(tried)
+  expect(s.toasts.length).toBe(0)
+  s.board.stop()
+})
+
+test('T-756: with open_on_start off, or symcc off, the board panel never opens by itself', async () => {
+  for (const view of [{ open_on_start: false, enabled: true }, { open_on_start: true, enabled: false }]) {
+    const s = startCtx(view)
+    s.shown.session = true
+    await s.board.refresh()
+    await s.board.refresh()
+    expect(s.opens.length).toBe(0)
+    expect(s.current()).toBe(undefined)
+    expect(s.toasts.length).toBe(0)
+    s.board.stop()
+  }
+})
+
+test('T-756: open_on_start turned off, or symcc turned off, while it waits for a session: the board does not open', async () => {
+  for (const later of [{ open_on_start: false, enabled: true }, { open_on_start: true, enabled: false }]) {
+    const s = startCtx({ open_on_start: true, enabled: true })
+    await s.board.refresh()
+    expect(s.current()).toBe(undefined)
+    s.setView(later)
+    s.shown.session = true
+    await s.board.refresh()
+    // turned back on later in the same run: still not by itself
+    s.setView({ open_on_start: true, enabled: true })
+    await s.board.refresh()
+    expect(s.current()).toBe(undefined)
+    expect(s.toasts.length).toBe(0)
+    s.board.stop()
   }
 })

@@ -1098,13 +1098,15 @@ export function leadTotals(calls: LeadCall[], s: { from?: number; to?: number })
 }
 
 /** What the "Whole team" part needs: the lead's calls (or why they can't be read) and where they come from, the scouts' usage, and this session's $ if the host reports it. */
-export type TeamInput = { lead?: LeadCall[]; leadSessions?: number; leadProblem?: string; leadFrom?: string; scouts?: Record<string, ScoutUsage>; sessionUsd?: number }
+export type TeamInput = { lead?: LeadCall[]; leadSessions?: number; leadProblem?: string; leadFrom?: string; leadUnread?: number; scouts?: Record<string, ScoutUsage>; sessionUsd?: number }
 
 /** What a host's lead usage, the workers and the scouts add up to within a span (see teamData). */
 export type TeamData = {
   /** the lead's calls and tokens, or null when they can't be read (`leadProblem` says why) */
   lead: { calls: number; tokens: SymccTokens; sessions?: number; from?: string } | null
   leadProblem?: string
+  /** how many of the lead's session logs couldn't be read at all, so the lead's figure is short (T-762) */
+  leadUnread?: number
   workers: { tokens: SymccTokens; tries: number }
   scouts: ScoutUsageFigures
   total: SymccTokens
@@ -1118,7 +1120,7 @@ export function teamData(team: TeamInput, span: { from?: number; to?: number }, 
   const from = team.leadFrom ?? team.lead?.find(c => c.from)?.from
   const lead = lt ? { ...lt, ...(team.leadSessions !== undefined ? { sessions: team.leadSessions } : {}), ...(from ? { from } : {}) } : null
   const sc = scoutTotals(team.scouts ?? {}, span)
-  return { lead, ...(lead ? {} : { leadProblem: team.leadProblem ?? 'no session logs' }), workers, scouts: sc, total: sumTokens([lead?.tokens, workers.tokens, sc.tokens]), merged, ...(team.sessionUsd !== undefined ? { sessionUsd: team.sessionUsd } : {}) }
+  return { lead, ...(lead ? {} : { leadProblem: team.leadProblem ?? 'no session logs' }), ...(team.leadUnread ? { leadUnread: team.leadUnread } : {}), workers, scouts: sc, total: sumTokens([lead?.tokens, workers.tokens, sc.tokens]), merged, ...(team.sessionUsd !== undefined ? { sessionUsd: team.sessionUsd } : {}) }
 }
 
 /**
@@ -1130,6 +1132,9 @@ export function teamLines(team: TeamInput, span: { from?: number; to?: number },
   return teamDataLines(teamData(team, span, workers, merged), name, full)
 }
 
+/** T-762: the note after the lead's row when some session logs couldn't be read, so its figure is never silently low ("" when all were read). */
+export const unreadText = (n: number | undefined) => n ? ` · ${plural(n, 'session log')} too big to read` : ''
+
 /** The "Whole team" lines for figures `d` (see teamLines). */
 export function teamDataLines(d: TeamData, name: string = DEFAULT_NAME, full = false): string[] {
   const { lead, workers, merged, total } = d
@@ -1139,8 +1144,8 @@ export function teamDataLines(d: TeamData, name: string = DEFAULT_NAME, full = f
   const w = 12
   const part = (label: string, t: SymccTokens, what: string) => [`  ${label.padEnd(w)} ${bar(tokenCount(t), max).padEnd(BAR_WIDTH)} ${n(t)} tokens · ${what}`, ...kindsRow(t, w)]
   const out: string[] = []
-  if (lead) out.push(...part(`${ORIGIN_MARK.lead} lead`, lead.tokens, `${plural(lead.calls, 'call')}${lead.sessions !== undefined ? ` · ${plural(lead.sessions, 'session')}` : ''}${full && lead.from ? `, from ${lead.from}` : ''}`))
-  else out.push(row(`${ORIGIN_MARK.lead} lead`, `not counted: ${d.leadProblem ?? 'no session logs'}`))
+  if (lead) out.push(...part(`${ORIGIN_MARK.lead} lead`, lead.tokens, `${plural(lead.calls, 'call')}${lead.sessions !== undefined ? ` · ${plural(lead.sessions, 'session')}` : ''}${full && lead.from ? `, from ${lead.from}` : ''}${unreadText(d.leadUnread)}`))
+  else out.push(row(`${ORIGIN_MARK.lead} lead`, `not counted: ${d.leadProblem ?? 'no session logs'}${unreadText(d.leadUnread)}`))
   out.push(...part(`${ORIGIN_MARK.worker} workers`, workers.tokens, plural(workers.tries, 'try', 'tries')))
   out.push(...part(`${ORIGIN_MARK.scout} scouts`, sc.tokens, `${plural(sc.runs, 'run')}${sc.runs ? ` · ${fmtDuration(sc.ms)}` : ''}`))
   out.push(row('total', `${tokensText(total)}${lead ? '' : ' (without the lead)'}`), ...kindsRow(total))

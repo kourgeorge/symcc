@@ -1,6 +1,6 @@
 import { testMinutesOf, openQuestions, liveWorkersFor, whoDrives, drivesAfter, driveAsk, handRequest, noHandRequest, handedText, handedOff, HANDOVER_NOTE, putTask, leadText, resetDoing, find, parseLead, relabelSession, openOnStart, type Board, gitNote, modeOf, notifyOf, notifyChoices, symccOn, statusLine, statusRoom, offStatusLine, inPlan, liveDriver, backToTodo, restartsOf } from '../board'
 import { homeBranch } from './git'
-import { S, workers, queuedWorkers, type PaneView, scoutState, updateView, sizeNotes } from './state'
+import { S, workers, queuedWorkers, type PaneView, scoutState, updateView, sizeNotes, MOVED_WHY, TAKEN_WHY } from './state'
 import { type Host, agentState } from '../host'
 import { path, locked, change, now, load, safeWrite, boardMtime } from './store'
 import { openPane } from './open'
@@ -64,7 +64,7 @@ export async function claimLead(host: Host, fresh = false): Promise<boolean> {
   }
   if (was && !S.driving) {
     // Another session took over (this one stopped answering for too long): its workers own the tasks now.
-    await haltAll(host, 'another session drives the board now')
+    await haltAll(host, TAKEN_WHY)
     host.ui.toast(S.N.toast('another session drives the board now; this one only shows and changes it'))
   }
   if (S.driving) {
@@ -83,6 +83,27 @@ export async function claimLead(host: Host, fresh = false): Promise<boolean> {
 let handing = false
 
 /**
+ * T-759: whether lead.json says another session drives the board, or that this one is handing it to another session.
+ * Read from the file itself, not from S.driving, so a copy of the plugin whose S.driving is out of date (its heartbeat
+ * hasn't run yet, or an older copy still running in this session) sees it too. No (or a broken) lead.json: false.
+ */
+export async function drivenElsewhere(host: Host): Promise<boolean> {
+  const l = parseLead(await host.fs.read(path(S.N.leadFile)).catch(() => null))
+  if (!l) return false
+  return l.session !== S.me || (!!l.handTo && l.handTo !== S.me)
+}
+
+/**
+ * T-759: whether this session may start a scout or a worker now: it drives the board (S.driving), it isn't handing the
+ * board over, and lead.json doesn't say driving moved to another session (see drivenElsewhere). Asked right before
+ * each start, so a run is never started by a session that no longer drives.
+ */
+export async function drivesHere(host: Host): Promise<boolean> {
+  if (!S.driving || handing) return false
+  return !(await drivenElsewhere(host))
+}
+
+/**
  * The hand-over the owner asked for (/<name>-drive in another session, T-430), seen on this driver's heartbeat
  * (lead.json `leadBefore` names this session with `handTo`). This session stops driving first (S.driving false, so
  * nothing new starts), stops its workers and scouts (the same haltAll as when another session drives the board now),
@@ -96,7 +117,7 @@ async function stepDown(host: Host, leadBefore: string | null) {
   try {
     S.driving = false
     const agents = [...workers.keys()]
-    await haltAll(host, 'the owner moved driving to another session', async w => {
+    await haltAll(host, MOVED_WHY, async w => {
       await change(host, x => {
         const cur = find(x, w.task)
         if (cur?.status !== 'doing') return x

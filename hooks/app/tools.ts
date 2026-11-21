@@ -217,7 +217,8 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
   max_minutes (a worker running longer makes symcc ask you for more time), auto_retries (new tries on their own
   after failing tests, 2 by default), archive_days (done and dropped tasks older than this
   many days move to the archive, 14 by default, 0 = never), ${features.panel ? `open_on_start (open the board panel when a
-  session starts, on by default), ` : ''}notify (voice, sound 1, sound 2, sound 3 or off: when a task is merged or a worker
+  session starts, on by default), ` : `open_on_start (OpenCode only: the board panel opens by itself once a
+  session is shown, on by default), `}notify (voice, sound 1, sound 2, sound 3 or off: when a task is merged or a worker
   asks you something, say "symcc: T-3 done" / "symcc: T-5 needs you" out loud (the project's name first), or play a chime
   from sound set 1, 2 or 3, so you can tell projects apart (on macOS 1: Glass / Ping, 2: Hero / Pop, 3: Submarine / Funk);
   only the session driving the board plays; voice by default where this machine can speak, else the sound set

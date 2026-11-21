@@ -3,7 +3,8 @@ import type { SymccTask } from '../types'
 import { addScoutRun, bar, cutTitle, textWidth, parseStatsArgs, wrapLine, billedTokens, billedText, failReason, migrateScoutUsage, readArchive, archiveText, tokenCount, fmtTokenKinds, inRange, keepScoutUsage, leadTotals, mean, median, mergedHow, originKey, parseScoutMemory, parseScoutUsage, parseStatsRange, rangeSpan, scoutMemoryText, scoutTotals, statsReport, statsData, scoutResultsLine, taskFigures, readBoard, boardTotal } from '../hooks/board'
 import { statsHtml } from '../hooks/core/stats-html'
 import { FAILED_TESTS_SHORT, FAILED_TRIES_SHORT, durOr, failedShown, plural, tokOr } from '../hooks/core/stats'
-import { leadCalls, projectFolderName } from '../hooks/claude/lead-usage'
+import { leadCalls, leadUsage, projectFolderName } from '../hooks/claude/lead-usage'
+import { fakeHost } from './fake-host'
 import { hist } from './history-fixture'
 
 const NOW = Date.parse('2026-11-13T12:00:00Z')
@@ -172,6 +173,58 @@ test('stats: the lead is summed from session log lines, each call once, main cha
   expect(leadTotals(calls, {})).toEqual({ calls: 2, tokens: { input: 1002, output: 98, cache_write: 18, cache_read: 900 } })
   expect(leadTotals(calls, rangeSpan({ kind: 'days', days: 1 }, [], NOW))).toEqual({ calls: 1, tokens: { input: 2, output: 98, cache_write: 18, cache_read: 900 } })
   expect(projectFolderName('/Users/me/repos/my.app')).toBe('-Users-me-repos-my-app')
+})
+
+test('stats: a session log over 4 MiB is read in parts, and one that still cannot be read is named (T-762)', async () => {
+  const MiB = 1024 * 1024
+  const dir = '/home/me/.claude/projects/-repo'
+  const pad = (n: number) => JSON.stringify({ type: 'user', message: { content: 'x'.repeat(Math.max(0, n - 40)) } })
+  // a big log: one call early, one cut across the 3 MiB line between two parts, one near the end; over 4 MiB in all
+  const first = logLine('big-1', 10, { i: 1000 })
+  const cut = logLine('big-2', 10, { i: 20_000 })
+  const head = [first, pad(3 * MiB - first.length - 2 - 60)].join('\n') + '\n'
+  const big = [head + cut, pad(2 * MiB), logLine('big-3', 10, { i: 300_000 }), ''].join('\n')
+  expect(big.length > 4 * MiB).toBe(true)
+  expect(head.length < 3 * MiB && head.length + cut.length > 3 * MiB).toBe(true)
+  const files = new Map([[`${dir}/small.jsonl`, logLine('s', 10, { i: 4 })], [`${dir}/big.jsonl`, big]])
+  const runs: string[][] = []
+  const { host } = fakeHost({
+    env: async k => (k === 'HOME' ? '/home/me' : undefined),
+    fs: {
+      list: async () => [...files].map(([p, t]) => ({ name: p.slice(dir.length + 1), kind: 'file' as const, size: t.length, mtimeMs: NOW, isLink: false })),
+      // as Claude Code's $.fs.read: a file over 4 MiB is refused
+      read: async p => { const t = files.get(p)!; if (t.length > 4 * MiB) throw new Error('over 4 MiB'); return t },
+    },
+    // dd if=<path> bs=1048576 skip=<k> count=<n>, over the text as bytes (it is all ASCII here)
+    run: async argv => {
+      runs.push([...argv])
+      const arg = (k: string) => argv.find(a => a.startsWith(`${k}=`))!.slice(k.length + 1)
+      const t = files.get(arg('if'))!
+      const at = Number(arg('skip')) * MiB
+      return { exitCode: 0, stdout: t.slice(at, at + Number(arg('count')) * MiB), stderr: '' }
+    },
+  })
+  const u = await leadUsage(host, '/repo', { kind: 'all' }, NOW)
+  expect(u.leadSessions).toBe(2)
+  expect(u.leadUnread).toBe(undefined)
+  const lt = leadTotals(u.lead!, {})
+  expect(lt.calls).toBe(4)
+  expect(tokenCount(lt.tokens)).toBe(321_004)
+  // only the big log goes through dd, its path as one argument
+  expect(runs.every(a => a[0] === 'dd' && a[1] === `if=${dir}/big.jsonl`)).toBe(true)
+  const tasks = [task('T-1', {}, [[10, 1000]])]
+  expect(statsReport({ tasks, nowMs: NOW, team: u })).toMatch(/lead\s+▇+\s+321k tokens · 4 calls · 2 sessions\n/)
+
+  // when the parts can't be read either, the lead's row says so (text and HTML)
+  const { host: failing } = fakeHost({ env: host.env, fs: host.fs, run: async () => ({ exitCode: 1, stdout: '', stderr: 'no dd' }) })
+  const v = await leadUsage(failing, '/repo', { kind: 'all' }, NOW)
+  expect(v.leadUnread).toBe(1)
+  expect(leadTotals(v.lead!, {}).calls).toBe(1)
+  const text = statsReport({ tasks, nowMs: NOW, team: v })
+  expect(text).toMatch(/lead\s+▂\s+4 tokens · 1 call · 1 session · 1 session\s+log too big to read/)
+  expect(statsHtml(statsData({ tasks, nowMs: NOW, team: v }), 'p')).toContain('1 call · 1 session · 1 session log too big to read')
+  // no log read at all: still named next to "not counted"
+  expect(statsReport({ tasks, nowMs: NOW, team: { leadProblem: 'no logs', leadUnread: 2 } })).toMatch(/not counted: no logs · 2 session\s+logs too big to read/)
 })
 
 test('stats: the whole team adds up lead, workers and scouts, and gives tokens per merged task', () => {

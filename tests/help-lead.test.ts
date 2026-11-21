@@ -10,6 +10,16 @@ test('/symcc-help lead names every lead tool and every setting', () => {
   expect(text).toContain('scouts · roles · kinds · orgmem · stats · setup_git')
 })
 
+test('T-765: the OpenCode lead help lists open_on_start, as its board opens by itself (T-756)', () => {
+  // OpenCode's features (hooks/opencode/host.ts OPENCODE_FEATURES): no panel or band in the engine's sense
+  const opencode = { ...ALL_FEATURES, panel: false, band: false, planMode: false, startQueue: false }
+  const text = manual('lead', opencode)
+  expect(text).toContain('open_on_start (OpenCode only: the board panel opens by itself once a')
+  const settings = text.slice(text.indexOf('settings: test_commands'))
+  expect(settings.indexOf('open_on_start')).toBeGreaterThan(settings.indexOf('archive_days'))
+  expect(settings.indexOf('open_on_start')).toBeLessThan(settings.indexOf('notify'))
+})
+
 test('the lead has no prompts tool: the worker prompts are built-in only', () => {
   expect(TOOLS().map(t => t.name)).not.toContain('prompts')
   expect(manual('lead')).not.toContain('prompts/change.md')

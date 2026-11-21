@@ -3,7 +3,7 @@ import { PREP_NOTE, type Board, type BoardTask, type RoleDef, roleSection, maySt
 import { archiveOld } from './archive'
 import { checkHealth } from './health'
 import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch, clearScratch, taskBranch, copyReports, deleteMergedBranch, type BehindWhy } from './git'
-import { publish } from './lead'
+import { publish, drivesHere } from './lead'
 import { type BeforeLine, type CheckResult, checkAndMerge, recordCommits, ownerEdits, alreadyMerged, AGAIN_MAX, RELOAD_AGAIN, againsThisTry, noteAgain } from './review'
 import type { TurnLimit } from './merge-line'
 import { timedOutRetryNote } from '../core/test-timeout'
@@ -113,7 +113,9 @@ async function queueWorker(host: Host, id: string): Promise<{ started: Promise<v
     if (await mergedBeforeStart(host, t0!)) return null
     // the branch it merges into is gone: it waits for the owner instead of failing
     if (await waitIfBranchGone(host, b, t0!, 'start')) return null
-    const { dir, branch, behind, why, merged } = await prepareWorktree(host, t0!, intoOf(t0!), true)
+    // T-764: the catch-up merge commit names the try about to start (the same one when T-743's go-on rule keeps it)
+    const tryNo = t0!.attempts > 0 && goOnRun(t0!.runs, now()) ? t0!.attempts : t0!.attempts + 1
+    const { dir, branch, behind, why, merged, commit } = await prepareWorktree(host, { ...t0!, attempts: tryNo }, intoOf(t0!), true)
     // the earlier answers its details name (a keep-note task's reports) are read inside its own folder
     await copyReports(host, t0!, dir).catch(() => [])
     const roles = await loadRoles(host)
@@ -130,7 +132,7 @@ async function queueWorker(host: Host, id: string): Promise<{ started: Promise<v
       const upToDate = merged ? { history: withHistory(cur!.history, at, ['stage', `${tryLabel({ ...cur!, attempts })}: brought up to date with ${intoOf(cur!)} (${merged} commit${merged === 1 ? '' : 's'})`]) } : {}
       // and when merging it in clashed, this try merges it in itself (its prompt asks, the git guard lets it), as the clash retry does
       const clash = why === 'clash' && !cur!.merge_main ? { merge_main: true } : {}
-      const y = patchTask(x, id, { status: 'doing', session: S.me, attempts, branch, note: claimNote(host), runs: goOn ?? startRun(cur!.runs, at, !!cur!.merge_main || why === 'clash'), ...upToDate, ...clash }, at)
+      const y = patchTask(x, id, { status: 'doing', session: S.me, attempts, branch, note: claimNote(host), runs: addCommits(goOn ?? startRun(cur!.runs, at, !!cur!.merge_main || why === 'clash'), commit ? [commit] : []), ...upToDate, ...clash }, at)
       // T-471: an earlier try's agent is never taken as this try's worker (agentOnBoard); the new one is recorded when it starts
       delete find(y, id)!.agent
       return [y, find(y, id)!]
@@ -142,6 +144,8 @@ async function queueWorker(host: Host, id: string): Promise<{ started: Promise<v
     // and symcc still on; a stop while it waits takes it out of the queue at once (see haltWorkers).
     const still = async () => {
       if (!S.enabledNow) return false
+      // T-759: a session that no longer drives the board (driving moved to another session) starts no worker
+      if (!(await drivesHere(host))) return false
       const cur = find(await load(host), id)
       return cur?.status === 'doing' && cur.session === S.me && cur.attempts === t.attempts
     }
