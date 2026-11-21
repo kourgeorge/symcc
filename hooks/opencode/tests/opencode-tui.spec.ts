@@ -267,6 +267,10 @@ test('the panel: the banner, then the list grouped by state (NEEDS YOU, what run
   // an answered investigation in review: done, keep as a note and ask more, as on the other hosts
   const inv = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => (t.id === 'T-2' ? { ...t, kind: 'investigation' } : t)) } } as ViewFile
   expect(panelKeys(inv, 'T-2').map(k => `${k.key} ${k.word}`)).toEqual(['a done', 'v keep as a note', 'x ask more', 'n needs review', 'b back'])
+  // its Status row says "answered: read it" in green, as on the other boards (T-701)
+  const invStatus = panelLines(inv, { opened: 'T-2', cursor: 0 }, NOW, 100).lines.find(l => lineText(l).startsWith('Status:'))!
+  expect(invStatus.find(s => s.text.includes('answered: read it'))?.color).toBe('success')
+  expect(lineText(invStatus)).not.toContain('ready for review')
   // a waiting task with no question text says its note, else that it waits (core's taskAsks)
   const noQ = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => (t.id === 'T-3' ? { ...t, question: null, options: undefined, note: '' } : t)) } } as ViewFile
   expect(panelLines(noQ, { opened: 'T-3', cursor: 0 }, NOW, 100).lines.map(lineText).some(l => l.includes('asks: it waits for your answer'))).toBe(true)

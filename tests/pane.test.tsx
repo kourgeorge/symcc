@@ -1986,9 +1986,9 @@ test('an answered investigation opens with its full answer and Done, Keep as a n
   expect(await ui.find({ type: 'Text', text: /Changes \(/ })).toBeUndefined()
   expect(L.some(l => /^a done · v keep as a note · x ask more/.test(l))).toBe(true)
   expect(L.some(l => /^Kind:\s+investigation — nothing is merged$/.test(l))).toBe(true)
-  // no badge under the title (T-693); the Status row says it is in review
+  // no badge under the title (T-693); the Status row says it is answered (T-701)
   expect(L.some(l => /^\[◆ answered: read it\]$/.test(l))).toBe(false)
-  expect(L.find(l => l.startsWith('Status:'))).toMatch(/^Status:\s+◆ ready for review/)
+  expect(L.find(l => l.startsWith('Status:'))).toMatch(/^Status:\s+◆ answered: read it/)
   // one try: its report is the answer, so it is not shown twice
   expect(L.filter(l => /Checked in src\/cache\.ts\./.test(l)).length).toBe(1)
   // Ask more opens a box for the follow-up question

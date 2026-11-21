@@ -227,7 +227,8 @@ const CARDS: Record<string, { badge: string; tone: string; callout?: [string, st
   'T-504': { badge: '▶ doing · 25m', tone: 'ide' },
   'T-502': { badge: '✗ failed', tone: 'error', callout: ['vs-sec-why-failed', 'error', 'retry'] },
   'T-503': { badge: '? waiting for you', tone: 'warning', callout: ['vs-sec-question', 'warning', 'choice-1'] },
-  'T-510': { badge: '◆ ready for review', tone: 'warning' },
+  // an answered investigation's Status row says so in green (T-701)
+  'T-510': { badge: '◆ answered: read it', tone: 'success' },
 }
 for (const [id, want] of Object.entries(CARDS))
   for (const bodyColumns of [40, 80])

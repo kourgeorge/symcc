@@ -160,7 +160,9 @@ export function detailRows(t: SymccTask, o: { roles: readonly Pick<RoleDef, 'nam
   // the status names the state ("▶ doing · 48m"), and the Stage line the step it is in on the way to the merge (T-647)
   // (`merging`, an approve the page started: shown doing at once, and its step on the Stage line, as on the badge)
   const merging = !!o.merging
-  const badge = statusBadge(t as BoardTask, o.nowMs, undefined, merging, 'state')
+  // an answered investigation (in review, see isAnswered in task.ts) says so, in green, as its old badge did (T-701)
+  const answered = t.status === 'review' && isInvestigation(t) && !merging
+  const badge = answered ? { text: `${statusMark(t)} answered: read it`, color: 'success' } : statusBadge(t as BoardTask, o.nowMs, undefined, merging, 'state')
   R.push({ label: 'Status', segs: [{ text: badge.text, color: badge.color, bold: true }, { text: ` · added ${o.when(t.created_at)} · changed ${o.when(t.updated_at)}`, color: 'inactive' }] })
   const stage = taskStage(t as BoardTask, o.nowMs, o.board, merging)
   if (stage) R.push({ label: 'Stage', segs: stageSegs(stage) })
