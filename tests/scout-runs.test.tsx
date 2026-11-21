@@ -7,7 +7,7 @@ import { test } from './reset'
 import type { On } from 'claude-code'
 import type { SymccScout } from '../types'
 import { addScoutRun, emptyBoard, leadScoutText, parseScoutRuns, scoutRunTasks, scoutRunsText, scoutRunLine, scoutLastRunProblem, linkScoutRunTask, SCOUT_RUNS_KEPT, type ScoutRunRecord } from '../hooks/board'
-import { scoutFinished, scheduleScouts, scoutPlace, scoutPlaceValue, migrateScoutOrigins } from '../hooks/app/scouts'
+import { scoutFinished, scheduleScouts, scoutPlace, scoutPlaceValue, migrateScoutOrigins, loadScoutResults } from '../hooks/app/scouts'
 import { runTool } from '../hooks/app/tools'
 import { load } from '../hooks/app/store'
 import { utcTime } from '../hooks/board'
@@ -342,6 +342,24 @@ test('the migration renames scout agent names in old origins (board and parts fi
   const parts = [...w.files.keys()].filter(k => k.startsWith(`${ROOT}/.symcc/tasks/`))
   expect(parts.some(k => w.files.get(k)!.includes('"scout": "test-gaps"') || w.files.get(k)!.includes('"scout":"test-gaps"'))).toBe(true)
   expect(parseScoutRuns(w.files.get(GAPS_RUNS)).map(r => r.tasks)).toEqual([['T-1'], ['T-2', 'T-9'], undefined])
+  const before = new Map(w.files)
+  expect(await migrateScoutOrigins(w.$)).toEqual([])
+  expect([...w.files.entries()]).toEqual([...before.entries()])
+})
+
+test('the migration also renames scout agent names in archive.json, so the Results line counts them under the scout', async () => {
+  const runs: ScoutRunRecord[] = [{ started: null, ended: ago(50), outcome: 'found', findings: 1, tasks: [] }]
+  const at = ago(40)
+  const t = { id: 'T-1', title: 't', details: '', status: 'done', order: 1, after: [], files: [], attempts: 0, history: [], created_at: at, updated_at: at, merge_into: 'main', origin: { by: 'scout', scout: 'symcc-scout-test-gaps', why: 'w', at } }
+  const ARCHIVE = `${ROOT}/.symcc/archive.json`
+  const w = world({ [GAPS_RUNS]: scoutRunsText(runs), [ARCHIVE]: JSON.stringify({ version: 1, tasks: [t] }) })
+  expect(await migrateScoutOrigins(w.$)).toEqual(['T-1'])
+  expect(w.files.get(ARCHIVE)!.includes('symcc-scout-test-gaps')).toBe(false)
+  expect(w.files.get(ARCHIVE)!.includes('test-gaps')).toBe(true)
+  expect(parseScoutRuns(w.files.get(GAPS_RUNS))[0]!.tasks).toEqual(['T-1'])
+  const results = await loadScoutResults(w.$, ['test-gaps', 'symcc-scout-test-gaps'], [], Date.now())
+  expect(results['test-gaps']).toContain('1 task')
+  expect(results['symcc-scout-test-gaps']).not.toContain('1 task')
   const before = new Map(w.files)
   expect(await migrateScoutOrigins(w.$)).toEqual([])
   expect([...w.files.entries()]).toEqual([...before.entries()])

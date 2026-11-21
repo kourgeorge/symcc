@@ -7,7 +7,7 @@ import { startAgent, startCancelled } from './starts'
 import type { TurnEnd } from './workers'
 import { path, load, change, now, oneAtATime, safeWrite } from './store'
 import { tellLead } from './tell'
-import { readArchiveFile } from './archive'
+import { readArchiveFile, renameArchivedScoutOrigins } from './archive'
 import { orgMemText } from './org-mem'
 
 // ---------------- scouts ----------------
@@ -332,18 +332,20 @@ export async function saveScoutsMigrated(host: Host) {
 
 /**
  * The one-time fix of tasks added with a scout's agent name ("symcc-scout-bugs") as their scout (before T-712): the
- * board (board.json and its <dir>/tasks/ parts files) gets the scout's own name ("bugs"), and each such task is saved
+ * board (board.json and its <dir>/tasks/ parts files) and the archive get the scout's own name ("bugs"), and each such task is saved
  * in the run whose report it came from (the latest run of that scout that ended before the task was made). A board
  * already current changes nothing. Returns the ids renamed.
  */
 export async function migrateScoutOrigins(host: Host): Promise<string[]> {
   const b = await load(host)
   const known = await knownScouts(host)
-  if (!renameScoutOrigins(b.tasks, S.N.name, known).renamed.length) return []
-  const renamed = await change(host, y => {
+  const archived = await renameArchivedScoutOrigins(host, known).catch(() => [])
+  const renamed = !renameScoutOrigins(b.tasks, S.N.name, known).renamed.length ? [] : await change(host, y => {
     const r = renameScoutOrigins(y.tasks, S.N.name, known)
     return [{ ...y, tasks: r.tasks }, r.renamed] as [Board, typeof r.renamed]
   })
+  renamed.push(...archived)
+  if (!renamed.length) return []
   for (const scout of new Set(renamed.map(r => r.scout))) {
     if (safeScoutFile(scout, S.N.name) === null) continue
     const mine = renamed.filter(r => r.scout === scout)
