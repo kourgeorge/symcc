@@ -175,7 +175,7 @@ function orgMemSectionVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
           <Box key={`live-om-note-row:${x.note.n}`} flexDirection="row" gap={2} paddingLeft={1}>
             <Text key="day" color={C('inactive')}>{orgMemShortDay(x.note.date)}</Text>
             <Text key="topic" bold color={C('claude')}>{x.segs[2]!.text.trim()}</Text>
-            {vsLink(vs, newestKey(x.note.n), mdLink(text, href), [[href, openOrgMemPage($, null, x.note.n)]])}
+            {vsLink(vs, newestKey(x.note.n), mdLink(text, href), [[href, openOrgMemPage($, null, x.note)]])}
           </Box>
         )
       })}

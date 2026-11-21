@@ -58,8 +58,9 @@ export function liveTick($: $) {
 }
 
 /** T-718: what the Organizational memory page shows when opened from the Live tab: one topic's notes (`topic`, null:
- *  all of them) and the note to put the focus on (`note`, its number; null: the first). Set on every open. */
-export const orgMemPick = { topic: null as string | null, note: null as number | null }
+ *  all of them) and the note to put the focus on (`note`, null: the first). The note is kept whole, not by its number,
+ *  since a delete on the page moves the numbers after it; the page finds it again with orgMemFind. Set on every open. */
+export const orgMemPick = { topic: null as string | null, note: null as OrgMemNote | null }
 
 /** The key of a newest note's row in the Live tab's org-mem section, and of a topic's cell (T-718). */
 export const newestKey = (n: number) => `live-om-note:${n}`
@@ -67,7 +68,7 @@ export const topicKey = (topic: string) => `live-om-topic:${topic}`
 
 /** Opens the Organizational memory page over the Live tab (its Back, resetOrgMemView, comes back to the tab): all
  *  notes, or (T-718) topic `topic`'s, with the focus on note `note` when given. */
-export function openOrgMemPage($: $, topic: string | null = null, note: number | null = null) {
+export function openOrgMemPage($: $, topic: string | null = null, note: OrgMemNote | null = null) {
   return () => {
     orgMemView.open = true
     orgMemView.confirm = null
@@ -137,7 +138,7 @@ export function livePage($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
       <Text key="live-om-newest" color={C('inactive')}>{om.newestLabel}</Text>
       {om.empty ? <Text key="live-om-empty" color={C('inactive')}>{om.empty}</Text> : null}
       {om.newest.map(x => (
-        <Button key={row(newestKey(x.note.n))} plain onPress={openOrgMemPage($, null, x.note.n)}>
+        <Button key={row(newestKey(x.note.n))} plain onPress={openOrgMemPage($, null, x.note)}>
           {draw(x.segs)}
         </Button>
       ))}

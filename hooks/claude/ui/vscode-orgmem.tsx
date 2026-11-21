@@ -4,7 +4,7 @@
 // its text, dim and wrapped. Delete asks first in a box with one "Yes, delete" Button and a Cancel link. No key hints.
 // T-718: opened from a topic in the Live tab's org-mem section it lists only that topic's notes ("Organizational
 // memory · tests"); from a newest note there, all notes with that one marked "▶" (live.tsx's orgMemPick).
-import { ORG_MEM_EMPTY, orgMemAbout, orgMemOfTopic, orgMemPageTitle, orgMemTopicEmpty, orgMemDeleteAsk, orgMemNoteHead, type OrgMemNote } from '../../core/org-mem'
+import { ORG_MEM_EMPTY, orgMemAbout, orgMemOfTopic, orgMemPageTitle, orgMemTopicEmpty, orgMemDeleteAsk, orgMemNoteHead, orgMemFind, type OrgMemNote } from '../../core/org-mem'
 import { orgMemView, deleteOrgMem, resetOrgMemView } from '../../app/org-mem'
 import { S } from '../../app/state'
 import { type $ } from '../panel'
@@ -17,6 +17,7 @@ import { vsCallout, vsFooter, vsHref, vsLink, mdLink, mdText, vsSection } from '
 export function orgMemPageVs($: $, pane: PaneParts, all: OrgMemNote[], file: string) {
   const topic = orgMemPick.topic
   const notes = orgMemOfTopic(all, topic)
+  const picked = orgMemFind(notes, orgMemPick.note)?.n
   const { Box, Text, C, vs, header } = pane
   const redraw = () => $.ui.invalidate('ui.render')
   const plain = (key: string, text: string, color = 'inactive') => (
@@ -36,7 +37,7 @@ export function orgMemPageVs($: $, pane: PaneParts, all: OrgMemNote[], file: str
     const href = vsHref('do', `orgmem-delete/${x.n}`)
     return (
       <Box key={`vs-orgmem-${x.n}`} flexDirection="column">
-        {vsLink(vs, `orgmemRow:${x.n}`, `${x.n === orgMemPick.note ? '▶ ' : ''}**${mdText(orgMemNoteHead(x))}**  ${mdLink('Delete', href)}`, [[href, () => ((orgMemView.confirm = x.n), redraw())]])}
+        {vsLink(vs, `orgmemRow:${x.n}`, `${x.n === picked ? '▶ ' : ''}**${mdText(orgMemNoteHead(x))}**  ${mdLink('Delete', href)}`, [[href, () => ((orgMemView.confirm = x.n), redraw())]])}
         {plain(`vs-orgmem-${x.n}-text`, x.text, 'text')}
         {ask?.n === x.n
           ? vsCallout(vs, 'orgmem-delete-box', '⚠', orgMemDeleteAsk(x, file), 'warning', [

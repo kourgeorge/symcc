@@ -533,6 +533,14 @@ export function orgMemTopicCounts(notes: readonly OrgMemNote[]): { topic: string
 /** The notes of topic `topic` (all of them when it is null or ''), in the same order. */
 export const orgMemOfTopic = (notes: readonly OrgMemNote[], topic?: string | null): OrgMemNote[] => (topic ? notes.filter(x => x.topic === topic) : [...notes])
 
+/** Note `pick` in `notes` now: a delete moves the numbers of the lines after it, so a picked note is found again by
+ *  its date, topic and text (the one nearest its old number when the same note is there twice); undefined once it is gone. */
+export function orgMemFind(notes: readonly OrgMemNote[], pick: OrgMemNote | null | undefined): OrgMemNote | undefined {
+  if (!pick) return undefined
+  const same = notes.filter(x => x.date === pick.date && x.topic === pick.topic && x.text === pick.text)
+  return same.sort((a, b) => Math.abs(a.n - pick.n) - Math.abs(b.n - pick.n))[0]
+}
+
 /** The org-mem page's title: ORG_MEM_TITLE for all notes, "Organizational memory · tests" for one topic's. */
 export const orgMemPageTitle = (topic?: string | null) => (topic ? `Organizational memory · ${topic}` : ORG_MEM_TITLE)
 

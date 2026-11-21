@@ -8,7 +8,7 @@ import { type $ } from '../panel'
 import type { PaneParts } from './parts'
 import { arrows, row } from './arrows'
 import { claudeHost } from '../host'
-import { ORG_MEM_EMPTY, orgMemAbout, orgMemOfTopic, orgMemPageTitle, orgMemTopicEmpty, orgMemDeleteAsk, orgMemKeys, orgMemNoteHead, type OrgMemNote } from '../../core/org-mem'
+import { ORG_MEM_EMPTY, orgMemAbout, orgMemOfTopic, orgMemPageTitle, orgMemTopicEmpty, orgMemDeleteAsk, orgMemKeys, orgMemNoteHead, orgMemFind, type OrgMemNote } from '../../core/org-mem'
 import { orgMemView, deleteOrgMem, resetOrgMemView } from '../../app/org-mem'
 import { orgMemPageVs } from './vscode-orgmem'
 import { orgMemPick } from './live'
@@ -16,7 +16,7 @@ import { orgMemPick } from './live'
 /** The note a press of Delete (x) is about: the note row that holds the focus, else the first (newest) one. */
 const focusedNote = (notes: readonly OrgMemNote[]) => {
   const m = /^orgmemRow:(\d+)$/.exec(arrows.focused ?? '')
-  return (m ? notes.find(x => x.n === Number(m[1])) : undefined) ?? notes.find(x => x.n === orgMemPick.note) ?? notes[0]
+  return (m ? notes.find(x => x.n === Number(m[1])) : undefined) ?? orgMemFind(notes, orgMemPick.note) ?? notes[0]
 }
 
 /** The Organizational memory page, opened from the button at the bottom of the Live tab: what org-mem is, then its notes newest first
@@ -25,7 +25,7 @@ export function orgMemPage($: $, pane: PaneParts, all: OrgMemNote[], file: strin
   if (pane.vscode) return orgMemPageVs($, pane, all, file)
   const topic = orgMemPick.topic
   const notes = orgMemOfTopic(all, topic)
-  const focus = notes.some(x => x.n === orgMemPick.note) ? orgMemPick.note : notes[0]?.n
+  const focus = (orgMemFind(notes, orgMemPick.note) ?? notes[0])?.n
   const { Box, Text, Button, act, C, header, footer, heading } = pane
   const redraw = () => $.ui.invalidate('ui.render')
   const ask = orgMemView.confirm === null ? undefined : notes.find(x => x.n === orgMemView.confirm)
