@@ -282,7 +282,13 @@ export function statusLine(b: StatusBoard, driving: boolean, o: { plan?: boolean
   const drive = driving ? 'drives here' : driveWarning(false, b.tasks, nowMs, DEFAULT_NAME, 'band').replace(/^⚠ /, '')
   const head = [o.plan ? PLAN_NOTE : '', modeLabel(m)].filter(Boolean)
   const fits = (note: string) => [...head, note, drive].join(' · ').length <= width
-  const note = b.branch_note ? (fits(b.branch_note) ? b.branch_note : shortSizeWarns(b.branch_note)) : ''
+  let note = b.branch_note ? (fits(b.branch_note) ? b.branch_note : shortSizeWarns(b.branch_note)) : ''
+  // safety net: a note still too wide is cut to fit with "…", so the line never goes past the width (statusRoom);
+  // at least 20 characters of it stay, for a width far narrower than any status line
+  if (note && !fits(note)) {
+    const room = Math.max(20, width - [...head, '', drive].join(' · ').length)
+    if (note.length > room) note = note.slice(0, room - 1).trimEnd() + '…'
+  }
   const fixed = [...head, note, drive].filter(Boolean)
   const today = b.tasks.length ? liveToday(b.tasks as SymccTask[], nowMs, o.offsetMin).merged : 0
   const rest = [

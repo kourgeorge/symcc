@@ -11,7 +11,7 @@ import { detailRows, wrapSegs, makeOrigin, fromText, originWho, createdLine, evi
 import { putTask, tryMark, tryTag, tryTone, bandLeads } from '../hooks/board'
 import { testsShort, testName, nextScoutPart, PLAN_NOTE } from '../hooks/board'
 import { cleanFiles, taskCopyText, copyToast, realPathOf, brokenLinkText } from '../hooks/board'
-import { sizeWarnText } from '../hooks/core/board-parts'
+import { sizeWarnText, tooBigText } from '../hooks/core/board-parts'
 import { fakeDisk } from './fake-disk'
 import { rowEndBoard, ROW_END, LEAD_BEFORE, ROW_END_NOW } from './row-end-cases'
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
@@ -1078,11 +1078,26 @@ test('T-748: a branch note (git or file-size warning) comes right after the mode
   expect(statusLine({ tasks, branch: 'main', branch_note: near }, true)).toBe(`⏵ auto · ${near} · drives here · main · today ✓ 0`)
   // over the limit has its own short form
   expect(statusLine({ tasks, branch_note: sizeWarnText('board.json', 4.2 * 1024 * 1024) }, true, { width: room })).toBe('⏵ auto · board.json 4.2 MB, over the 4 MB limit · drives here')
-  // a git note joined with a size note: both stay (the size one short) even past the room; the other parts drop
+  // a git note joined with a size note: the size one goes short, and what is still too wide is cut with "…"; the other parts drop
   const both = statusLine({ tasks, branch_note: `no commits yet; set up git (g); ${near}` }, true, { width: room })!
-  expect(both).toBe('⏵ auto · no commits yet; set up git (g); board.json 3.8 MB, near the 4 MB limit · drives here')
+  expect(both).toBe('⏵ auto · no commits yet; set up git (g); board.json 3.8… · drives here')
+  expect(both.length).toBeLessThanOrEqual(room)
   // a narrow line: the note stays, the rest drops
   expect(statusLine({ tasks, branch: 'main', branch_note: 'no git' }, true, { width: 10 })).toBe('⏵ auto · no git · drives here')
+  // a refused read or write (tooBigText) has a short form too, and fits
+  for (const doing of ['read', 'write'] as const) {
+    const big = statusLine({ tasks, branch: 'main', branch_note: tooBigText('.symcc/board.json', 4.2 * 1024 * 1024, doing), mode: 'auto' }, true, { width: room })!
+    expect(big.length).toBeLessThanOrEqual(room)
+    expect(big).toBe('⏵ auto · .symcc/board.json 4.2 MB, over the 4 MB limit:… · drives here')
+  }
+  // with more room the short form shows whole
+  const wide = statusLine({ tasks, branch_note: tooBigText('.symcc/board.json', 4.2 * 1024 * 1024, 'write') }, true, { width: 100 })!
+  expect(wide).toBe("⏵ auto · .symcc/board.json 4.2 MB, over the 4 MB limit: symcc can't write it · drives here")
+  // safety net: a note still too wide after shortening is cut with "…" so the line fits
+  const cut = statusLine({ tasks, branch_note: 'x'.repeat(200) }, true, { width: room })!
+  expect(cut.length).toBe(room)
+  expect(cut.startsWith('⏵ auto · xxx')).toBe(true)
+  expect(cut.endsWith('… · drives here')).toBe(true)
 })
 
 test('a task in review counts as open and shows as "ready for review"', () => {
