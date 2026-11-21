@@ -438,10 +438,10 @@ export const orgMemAbout = (file: string) =>
   `Notes for the agents: symcc puts ${file} (at most ${ORG_MEM_MAX_LINES} lines) into every new worker's, checker's and scout's prompt. Agents may suggest notes right after they hand back a task (one short follow-up question); the lead decides what goes in. You may edit the file by hand too.`
 
 /** The front of a note line: "- 2026-11-20: " (old) or "- 2026-11-21 " (T-717, a "[topic]" follows). */
-const NOTE_FRONT = /^\s*(?:[-*•]\s+)?(\d{4}-\d{2}-\d{2})\s*:?\s*/
+const NOTE_FRONT = /^\s*(?:[-*•]\s+)?(\d{4}-\d{2}-\d{2})\s*(:?)\s*/
 
-/** T-717: a "[topic] " at the front of the rest of a line. */
-const TOPIC_FRONT = /^\[([^\]\n]{1,40})\]\s*/
+/** T-717: a "[topic] " at the front of the rest of a line: the "]" is followed by a space or the end, so a markdown link ("[link](url)") is not a topic. */
+const TOPIC_FRONT = /^\[([^\]\n]{1,40})\](?:\s+|$)/
 
 /** `rest` (a line after its date) split into its topic (TOPIC_UNSORTED without a good "[topic]") and text. */
 function topicAndText(rest: string): { topic: string; text: string } {
@@ -457,7 +457,10 @@ export function orgMemNotes(guide: string | null | undefined): OrgMemNote[] {
       const m = NOTE_FRONT.exec(line)
       // a hand-written line without a date keeps its text whole (only its list mark and a "[topic]" are taken off)
       if (!m) return { n: i + 1, date: '', ...topicAndText(line.replace(/^\s*[-*•]\s+/, '').trim()) }
-      return { n: i + 1, date: m[1]!, ...topicAndText(line.slice(m[0].length)) }
+      const rest = line.slice(m[0].length)
+      // an old line ("2026-11-20: ...") has no topic: its text stays whole, even when it starts with "[WIP]"
+      if (m[2]) return { n: i + 1, date: m[1]!, topic: TOPIC_UNSORTED, text: rest.trim() }
+      return { n: i + 1, date: m[1]!, ...topicAndText(rest) }
     })
     .reverse()
 }

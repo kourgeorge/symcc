@@ -261,6 +261,21 @@ test('T-717: old lines (no [topic]) read as "unsorted"; a [topic] after the date
   ])
 })
 
+test('T-717: an old "date:" line or a markdown link line starting with "[word]" is "unsorted", and relabelling keeps the word', () => {
+  const g = '- 2026-11-20: [WIP] something\n- [link](http://x) see this\n'
+  expect(orgMemNotes(g).reverse().map(x => [x.topic, x.text])).toEqual([
+    ['unsorted', '[WIP] something'],
+    ['unsorted', '[link](http://x) see this'],
+  ])
+  const r = orgMemSetTopic(g, '1,2', 'tests')
+  expect(r.text).toBe('- 2026-11-20 [tests] [WIP] something\n- [tests] [link](http://x) see this\n')
+  expect(orgMemNotes(r.text).reverse().map(x => [x.topic, x.text])).toEqual([
+    ['tests', '[WIP] something'],
+    ['tests', '[link](http://x) see this'],
+  ])
+  expect(orgMemReplace(g, 1, 'something done', D).text.split('\n')[0]).toBe(`- ${D} [unsorted] something done`)
+})
+
 test('T-717: cleanTopic: short, lower case, letters, digits, spaces, · and -', () => {
   expect(cleanTopic('  Tests  ')).toBe('tests')
   expect(cleanTopic('board ·  ui')).toBe('board · ui')
