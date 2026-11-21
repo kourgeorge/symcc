@@ -462,6 +462,9 @@ export const orgMemPageId = (topic?: string | null) => (topic ? `${ORG_MEM_PAGE}
 /** T-718: whether `id` is an Organizational memory page, and its topic ('' = all notes; null: not one). */
 export const orgMemPageTopic = (id: string): string | null => (id === ORG_MEM_PAGE ? '' : id.startsWith(`${ORG_MEM_PAGE}:`) ? id.slice(ORG_MEM_PAGE.length + 1) : null)
 
+/** T-786: the cursor id of a ▍Needs you row ("need:T-1"), apart from the same task's lane. */
+export const liveNeedId = (id: string) => `need:${id}`
+
 /** T-718: the cursor ids of the Live tab's org-mem section: a newest note's ("om-note:3") and a topic's ("om-topic:tests"). */
 export const liveNoteId = (n: number) => `om-note:${n}`
 export const liveTopicId = (topic: string) => `om-topic:${topic}`
@@ -843,7 +846,7 @@ function liveBody(f: ViewFile, cursor: number, nowMs: number, w: number): Body {
   const br = liveBranches(v, nowMs, w)
   // the cursor's stops, top to bottom: each lane, then its trains; (T-727) the Branches rows; then (T-718) the newest notes and the topics
   const ids = [
-    ...needs.map(n => n.id),
+    ...needs.map(n => liveNeedId(n.id)),
     ...lanes.flatMap(l => [l.id, ...rows.get(l.id)!.flatMap(r => (r.id ? [r.id] : []))]),
     ...(br?.rows ?? []).flatMap(r => (r.id ? [liveBranchId(r.id)] : [])),
     ...om.newest.map(x => liveNoteId(x.note.n)),
@@ -864,7 +867,7 @@ function liveBody(f: ViewFile, cursor: number, nowMs: number, w: number): Body {
   // T-786: ▍Needs you first, only while something waits
   if (needs.length) {
     b.add(liveSegs(liveHeading(LIVE_SECTIONS.needs, w)))
-    for (const n of needs) opens(n.segs, n.id)
+    for (const n of needs) opens(n.segs, liveNeedId(n.id))
     b.blank()
   }
   b.add(liveSegs(liveHeading(LIVE_SECTIONS.tasks, w)))

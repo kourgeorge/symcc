@@ -2779,7 +2779,7 @@ test('T-692: the Live tab draws the terminal panel\'s lanes and today (core/live
       at = i
     }
     for (const t of texts) expect([w, t, t.length <= w]).toEqual([w, t, true])
-    expect(d.ids).toEqual(['T-601', 'T-611', 'T-612', 'T-610'])
+    expect(d.ids).toEqual(['need:T-601', 'T-611', 'T-612', 'T-610'])
     expect(texts.some(t => t.startsWith('▶ T-611') || t.includes('▶ T-611'))).toBe(true)
     // each lane's first line is a click on its task
     const lane = d.lines.findIndex((l, i) => lineText(l).includes('T-612') && !!d.hits[i])
@@ -2841,7 +2841,7 @@ test('T-709: the Live tab shows a lane for an approved task in review while its 
   const d = panelLines(parseViewFile(viewFileText(f)), { tab: 'live', opened: '', cursor: 0 }, NOW, 120)
   const texts = d.lines.map(lineText)
   expect(texts.includes(LIVE_INDENT + LIVE_EMPTY)).toBe(false)
-  expect(d.ids).toEqual(['T-601', 'T-630'])
+  expect(d.ids).toEqual(['need:T-601', 'T-630'])
   const lane = liveLanes({ ...f.view, tasks }, NOW)
   expect(lane.map(l => l.station)).toEqual(['tests'])
   // its check step gone stale: no lane, the empty state again
@@ -2949,7 +2949,7 @@ test('T-715: the Live tab hangs the waiting trains under their lanes as the term
     const at = texts.findIndex(x => x.startsWith(`${LIVE_INDENT}▶ T-712 `))
     expect([w, texts.slice(at + 2, at + 2 + rows.length)]).toEqual([w, rows.map(r => LIVE_INDENT + segText(r.segs))])
     // the cursor stops: each lane, then its trains; a click on a train opens it
-    expect(d.ids).toEqual(['T-701', ...lanes.flatMap(l => [l.id, ...trainRows(t.lanes[l.id]!, liveInner(w)).flatMap(r => (r.id ? [r.id] : []))])])
+    expect(d.ids).toEqual(['need:T-701', ...lanes.flatMap(l => [l.id, ...trainRows(t.lanes[l.id]!, liveInner(w)).flatMap(r => (r.id ? [r.id] : []))])])
     expect(d.hits[d.lines.findIndex(l => lineText(l).includes('└─◇ T-714'))]).toEqual({ open: 'T-714' })
     expect(texts.some(x => x.includes('next up'))).toBe(false)
     expect(texts[texts.findIndex(x => x.trim() === '▍Today') + 1]?.startsWith(`${LIVE_INDENT}✓ `)).toBe(true)
@@ -3041,7 +3041,7 @@ test('T-771: the OpenCode Live tab keeps up to 3 just-merged lanes (dim, ✓ at 
     const d = panelLines(parseViewFile(viewFileText(f)), { tab: 'live', opened: '', cursor: 0 }, NOW, w)
     const texts = d.lines.map(lineText).map(x => x.replace(/^›/, ' '))
     for (const x of texts) expect([w, x, x.length <= w]).toEqual([w, x, true])
-    expect(d.ids.slice(0, 5)).toEqual(['T-741', 'T-760', 'T-748', 'T-747', 'T-749'])
+    expect(d.ids.slice(0, 5)).toEqual(['need:T-741', 'T-760', 'T-748', 'T-747', 'T-749'])
     expect(d.ids.includes('T-750') || d.ids.includes('T-740') || d.ids.slice(1).includes('T-741') || d.ids.includes('T-742')).toBe(false)
     const at = texts.findIndex(x => x.startsWith(`${LIVE_INDENT}  T-747 `))
     expect(at > texts.findIndex(x => x.startsWith(`${LIVE_INDENT}▶ T-760 `))).toBe(true)
@@ -3765,9 +3765,20 @@ test('T-786: the OpenCode Live tab has ▍Needs you first (above ▍Tasks) with 
     expect(rows.some(x => x.includes('T-2') && x.includes('ready for review'))).toBe(true)
     expect(rows.some(x => x.includes('T-3') && x.includes('asks'))).toBe(true)
     for (const i of [1, 2, 3]) expect(d.lines[head + i]!.every(x => x.color === 'warning' || x.text === '›' || x.text.trim() === '')).toBe(true)
-    expect(d.ids[0]).toBe('Q-88')
-    expect(d.ids.slice(1, 3).every(id => id.startsWith('T-'))).toBe(true)
+    expect(d.ids[0]).toBe('need:Q-88')
+    expect(d.ids.slice(1, 3).every(id => id.startsWith('need:T-'))).toBe(true)
   }
   const none = panelLines(parseViewFile(viewFileText({ ...f0, view: { ...f0.view, tasks: f0.view.tasks.filter(t => t.status === 'doing') } })), { tab: 'live', opened: '', cursor: 0 }, NOW, 100)
   expect(none.lines.map(lineText).some(x => x.includes('Needs you'))).toBe(false)
+})
+
+test('T-786: a doing task that asks for more time has separate cursor stops for its ▍Needs you row and its lane', () => {
+  const f0 = viewFile()
+  const f = parseViewFile(viewFileText({ ...f0, view: { ...f0.view, tasks: f0.view.tasks.filter(t => t.id === 'T-1' || t.id === 'T-2').map(t => (t.id === 'T-1' ? { ...t, time_ask: AT, note: 'time is up' } : t)) } }))
+  const d0 = panelLines(f, { tab: 'live', opened: '', cursor: 0 }, NOW, 100)
+  expect(d0.ids.slice(0, 3)).toEqual(['need:T-2', 'need:T-1', 'T-1'])
+  for (let c = 0; c < 3; c++) {
+    const d = panelLines(f, { tab: 'live', opened: '', cursor: c }, NOW, 100)
+    expect([c, d.lines.map(lineText).filter(x => x.startsWith('›')).length]).toEqual([c, 1])
+  }
 })
