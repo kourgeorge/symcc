@@ -1991,6 +1991,17 @@ test('ask refuses a done or dropped task and leaves it as it is', async () => {
   }
 })
 
+test('T-732: ask on a to-do task writes a history line the stats read as waiting for you', async () => {
+  const w = world()
+  const [b] = boardWith('auto', [], { status: 'todo' })
+  await saveBoard(w.$, b)
+  expect(await runTool(w.$, 'ask', { task: 'T-1', question: 'A or B?' })).toBe('T-1 now waits for the owner')
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('waiting')
+  expect(t.history.at(-1)!.kind).toBe('asked')
+  expect(t.history.at(-1)!.text).toBe('the lead asked the owner a question')
+})
+
 test('a task dropped while its branch clashes with main does not go back to "todo" for a merge-main try', async () => {
   const w = world({ upToDate: false, conflict: true })
   const [b] = boardWith('auto', [])
