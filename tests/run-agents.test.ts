@@ -98,6 +98,14 @@ test("T-774: the task page's Runs part shows one dim line per agent under its tr
   expect(agentLines(t.runs![0]!, NOW)).toEqual(['▸ worker  ses…Qr2  11m · 4.1M', '⌕ checker a01…c3b  3m · 2.1M'])
 })
 
+test("T-774: a checker still running counts up on its Runs line (the try ended at the worker's hand-back, before it began)", () => {
+  let b = doing()
+  b = workerHandsBack(b, W1, iso(10 * MIN), { input: 1_000 })
+  b = patchTask(b, 'T-1', { checker: C1 }, iso(8 * MIN))
+  const r = runsOf(b)[0]!
+  expect(agentLines(r, NOW)).toEqual(['▸ worker  ses…Qr2  10m · 1k', '⌕ checker a01…c3b  8m'])
+})
+
 /** Task `id`, done or doing, with `runs`. */
 const withRuns = (id: string, status: SymccTask['status'], runs: SymccRun[]): SymccTask =>
   ({ id, title: id, details: '', files: [], status, note: '', question: null, order: 1, after: [], attempts: runs.length, history: [], branch: null, created_at: iso(60 * MIN), updated_at: iso(MIN), runs }) as SymccTask

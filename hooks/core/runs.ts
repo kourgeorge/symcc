@@ -215,7 +215,8 @@ export const AGENT_MARK: Record<SymccRunAgent['kind'], string> = { worker: '▸'
  */
 export function agentLines(r: SymccRun, nowMs?: number): string[] {
   return agentsOf(r).map(a => {
-    const end = a.ended ?? r.ended
+    // A checker starts after the worker's hand-back ended the try, so the try's end only caps an agent that began before it.
+    const end = a.ended ?? (r.ended && Date.parse(r.ended) >= Date.parse(a.started) ? r.ended : undefined)
     const ms = runMs({ started: a.started, ...(end ? { ended: end } : {}) }, nowMs)
     const used = [fmtDuration(ms), a.tokens && fmtTokens(tokenCount(a.tokens)), a.cost !== undefined && `~${fmtCost(a.cost)}`].filter(Boolean).join(' · ')
     return `${AGENT_MARK[a.kind]} ${a.kind.padEnd(7)} ${shortAgentId(a.id).padEnd(8)} ${used}`
