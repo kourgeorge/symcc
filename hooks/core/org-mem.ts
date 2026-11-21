@@ -405,11 +405,11 @@ export function deleteOrgMemNote(guide: string | null | undefined, n: number, ex
 /** A note's line on the page above its text: "#3 · 2026-11-20" ("#3 · written by hand" without a date). */
 export const orgMemNoteHead = (x: OrgMemNote) => `#${x.n} · ${x.date || 'written by hand'}`
 
-/** The page's key hints: x deletes the note under the cursor (after a confirm step: y yes, x cancel). */
+/** The page's key hints: x deletes the note under the cursor (after a confirm step: y yes, x cancel). No "views" hint: it is a page opened from Live, like a role's or a question's page (T-704). */
 export const orgMemKeys = (confirming = false, notes = true): KeyHint[] =>
   confirming
     ? [{ key: 'y', word: 'yes, delete' }, { key: 'x', word: 'cancel' }]
-    : [...(notes ? [{ key: '↑↓', word: 'move' }, { key: 'x', word: 'delete' }] : []), { key: 't s c', word: 'views' }, { key: 'b', word: 'back' }]
+    : [...(notes ? [{ key: '↑↓', word: 'move' }, { key: 'x', word: 'delete' }] : []), { key: 'b', word: 'back' }]
 
 /** The confirm step's question: "Delete note #3 · 2026-11-20 from .symcc/org-mem.md?" */
 export const orgMemDeleteAsk = (x: OrgMemNote, file: string) => `Delete note ${orgMemNoteHead(x)} from ${file}?`

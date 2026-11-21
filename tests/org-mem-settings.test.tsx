@@ -179,7 +179,7 @@ test('T-619: the Organizational memory page lists the notes newest first with th
   expect((await ui.find({ key: 'orgmemRow:3' }))?.props.label).toBe('#3 · 2026-11-20: the type check is separate')
   expect((await ui.find({ key: 'orgmemRow:2' }))?.props.label).toBe('#2 · written by hand: written by hand, no date')
   expect((await ui.find({ key: 'orgmemRow:1' }))?.props.label).toBe('#1 · 2026-11-18: run one test file with scripts/test-files.sh')
-  expect(await ui.find({ type: 'Text', text: /↑↓ move · x delete · t l s c views · b back/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /↑↓ move · x delete · b back$/ })).toBeDefined()
   // Enter on note 2 asks first; Cancel leaves the file alone
   await ui.press({ key: 'orgmemRow:2' })
   expect(await ui.find({ type: 'Text', text: 'Delete note #2 · written by hand from .symcc/org-mem.md?' })).toBeDefined()
@@ -211,7 +211,10 @@ test('T-619: with no org-mem file the button says 0 notes and the page says "No 
   await ui.press({ key: 'live-orgmem' })
   expect(await ui.find({ type: 'Text', text: /No notes yet\./ })).toBeDefined()
   expect(await ui.find({ key: 'orgmem-delete' })).toBeUndefined()
-  expect(await ui.find({ type: 'Text', text: /^t l s c views · b back$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^b back$/ })).toBeDefined()
+  // T-704: an opened page, so no "views" hint and no hidden t/l/s/c Buttons
+  expect(await ui.find({ type: 'Text', text: /views/ })).toBeUndefined()
+  expect((await ui.findAll({ type: 'Button' })).filter(b => String(b.key ?? '').startsWith('tab-key-')).length).toBe(0)
   await ui.unmount()
 })
 

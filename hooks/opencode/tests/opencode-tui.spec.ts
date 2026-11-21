@@ -1815,12 +1815,12 @@ test('T-619, T-687: the Settings tab has no org-mem row; the Live tab ends with 
   expect(p[at('#1')]).toBe('  #1 · 2026-11-18')
   expect(at('#2')).toBeGreaterThan(at('#3'))
   expect(at('#1')).toBeGreaterThan(at('#2'))
-  expect(panelKeys(f, 'orgmem', 'live').map(k => k.word)).toEqual(['move', 'delete', 'views', 'back'])
+  expect(panelKeys(f, 'orgmem', 'live').map(k => k.word)).toEqual(['move', 'delete', 'back'])
   // no notes
   const empty = orgMemViewFile('')
   expect(panelLines(empty, { tab: 'live', opened: '', cursor: 0 }, NOW, 140).lines.map(lineText)).toContain('[ Organizational memory (0 notes) (m) ]')
   expect(panelLines(empty, { tab: 'live', opened: 'orgmem', cursor: 0 }, NOW, 140).lines.map(lineText)).toContain('  No notes yet.')
-  expect(panelKeys(empty, 'orgmem', 'live').map(k => k.word)).toEqual(['views', 'back'])
+  expect(panelKeys(empty, 'orgmem', 'live').map(k => k.word)).toEqual(['back'])
   // the delete as a slash command
   expect(actionCommand({ kind: 'orgmem-delete', n: 3 })).toEqual({ name: 'symcc-settings', text: 'orgmem delete 3' })
   expect(actionCommand({ kind: 'orgmem-delete', n: 3, key: 'a1b2c3' })).toEqual({ name: 'symcc-settings', text: 'orgmem delete 3 a1b2c3' })
