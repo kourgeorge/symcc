@@ -7,7 +7,7 @@ import { pause, entry } from './fakes'
 import { withStarts } from './starts'
 import { emptyBoard, leadText, handRequest, parseLead } from '../hooks/board'
 import { claimLead } from '../hooks/app/lead'
-import { runScout, runScoutNow, scoutFinished, loadScoutRunHistory, scheduleScouts } from '../hooks/app/scouts'
+import { runScout, runScoutNow, scoutFinished, loadScoutRunHistory, scheduleScouts, stopAnswer } from '../hooks/app/scouts'
 import { checkEdit, movedText, unknownAgentText } from '../hooks/app/ask'
 import { toolCall, notLeadText } from '../hooks/app/symcc'
 import { S, scoutState, scoutRuns, timers, leadQueue, DRIVING_MOVED } from '../hooks/app/state'
@@ -133,4 +133,20 @@ test('(c) a scout run that ends "stopped: driving moved to another session" repo
   expect(runs.at(-1)).toMatchObject({ outcome: 'stopped', findings: 0, why: DRIVING_MOVED })
   expect(w.toasts.some(t => t.includes(`scout gaps ${DRIVING_MOVED}; nothing reported`))).toBe(true)
   expect(scoutState.get('gaps')?.running).toBe(false)
+})
+
+test('(c) only the exact stop answers count as stopped; a real short finding that starts with "Stopped" is still a finding', async () => {
+  expect(stopAnswer('stopped')).toBe(true)
+  expect(stopAnswer(' "Stopped." ')).toBe(true)
+  expect(stopAnswer(DRIVING_MOVED)).toBe(true)
+  expect(stopAnswer(`**${DRIVING_MOVED}.**`)).toBe(true)
+  expect(stopAnswer('Stopped workers keep their worktrees: hooks/app/git.ts:120 never removes them. Fix: remove on stop.')).toBe(false)
+  expect(stopAnswer('**Stopped** tasks lose notes (hooks/app/x.ts:3)')).toBe(false)
+  const w = world()
+  await scheduleScouts(w.host)
+  scoutRuns.set('s2', 'gaps')
+  scoutState.get('gaps')!.running = true
+  await scoutFinished(w.host, 's2', 'Stopped workers keep their worktrees: hooks/app/git.ts:120 never removes them. Fix: remove on stop.')
+  const runs = await loadScoutRunHistory(w.host, 'gaps')
+  expect(runs.at(-1)?.outcome).toBe('found')
 })

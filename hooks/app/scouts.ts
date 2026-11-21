@@ -493,10 +493,12 @@ export async function scoutFinished(host: Host, agentId: string, answer: string,
   }
 }
 
-/** T-759: whether a run's last words only say it stopped ("stopped", "stopped: driving moved to another session"), as a refused or stopped run answers: no report. */
+/** T-759: whether a run's whole answer is only one of the stop answers ("stopped", or DRIVING_MOVED), maybe in
+ *  quotes, bold or with an end mark, as a refused or stopped run answers: no report. Any other text, even one that
+ *  starts with "Stopped", is a real answer. */
 export const stopAnswer = (answer: string) => {
-  const a = answer.trim()
-  return a.length <= 300 && /^\W*stopped\b/i.test(a)
+  const a = answer.trim().replace(/^[\s"'`*_.]+|[\s"'`*_.!]+$/g, '').toLowerCase()
+  return a === 'stopped' || a === DRIVING_MOVED
 }
 
 /** How soon after start a scout that is overdue (or never ran) runs: the first one after SOON_MS, each next one
