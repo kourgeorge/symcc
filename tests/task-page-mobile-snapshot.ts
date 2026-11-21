@@ -9,7 +9,7 @@
 // - T-701: an answered investigation's Status row says "answered: read it"
 // - T-751: the 4-line page header (where you are, title, state, buttons in groups) and its heavy rule; no Status, Stage or Now rows
 // - T-774: the Runs heading sums the task's own tries
-// - T-775: every header button "[Label]" in one style, Back "‹ [Tasks]"; the try buttons "[Try 1]", their keys hidden (on desktop and mobile native Buttons "Try 1", no brackets)
+// - T-775: every header button "[Label]" in one style, Back "‹ [Tasks]"; the try buttons "[Try 1]", their keys hidden (on desktop and mobile native Buttons "Try 1" and Back "Tasks", no brackets)
 export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
   "mobile T-501": {
     "type": "Box",
@@ -24,12 +24,7 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
-              {
-                "type": "Button",
-                "props": {"key":"back","label":"Tasks","plain":true,"autoFocus":true},
-                "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"text"},"children":["[Tasks]"]}]
-              },
+              {"type":"Button","props":{"key":"back","label":"Tasks","variant":"secondary","autoFocus":true},"press":{"plugin":"symcc"}},
               {"type":"Text","props":{"color":"inactive"},"children":["                      "]},
               {"type":"Text","props":{"color":"inactive"},"children":["T-501 · "]},
               {
@@ -783,12 +778,7 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
-              {
-                "type": "Button",
-                "props": {"key":"back","label":"Tasks","plain":true,"autoFocus":true},
-                "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"text"},"children":["[Tasks]"]}]
-              },
+              {"type":"Button","props":{"key":"back","label":"Tasks","variant":"secondary","autoFocus":true},"press":{"plugin":"symcc"}},
               {"type":"Text","props":{"color":"inactive"},"children":["                      "]},
               {"type":"Text","props":{"color":"inactive"},"children":["T-502 · "]},
               {
@@ -1572,12 +1562,7 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
-              {
-                "type": "Button",
-                "props": {"key":"back","label":"Tasks","plain":true},
-                "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"text"},"children":["[Tasks]"]}]
-              },
+              {"type":"Button","props":{"key":"back","label":"Tasks","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","props":{"color":"inactive"},"children":["                      "]},
               {"type":"Text","props":{"color":"inactive"},"children":["T-503 · "]},
               {
@@ -2307,12 +2292,7 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
-              {
-                "type": "Button",
-                "props": {"key":"back","label":"Tasks","plain":true,"autoFocus":true},
-                "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"text"},"children":["[Tasks]"]}]
-              },
+              {"type":"Button","props":{"key":"back","label":"Tasks","variant":"secondary","autoFocus":true},"press":{"plugin":"symcc"}},
               {"type":"Text","props":{"color":"inactive"},"children":["                      "]},
               {"type":"Text","props":{"color":"inactive"},"children":["T-504 · "]},
               {
@@ -2805,12 +2785,7 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
-              {
-                "type": "Button",
-                "props": {"key":"back","label":"Tasks","plain":true,"autoFocus":true},
-                "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"text"},"children":["[Tasks]"]}]
-              },
+              {"type":"Button","props":{"key":"back","label":"Tasks","variant":"secondary","autoFocus":true},"press":{"plugin":"symcc"}},
               {"type":"Text","props":{"color":"inactive"},"children":["                      "]},
               {"type":"Text","props":{"color":"inactive"},"children":["T-505 · "]},
               {
@@ -3557,12 +3532,7 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
-              {
-                "type": "Button",
-                "props": {"key":"back","label":"Tasks","plain":true,"autoFocus":true},
-                "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"text"},"children":["[Tasks]"]}]
-              },
+              {"type":"Button","props":{"key":"back","label":"Tasks","variant":"secondary","autoFocus":true},"press":{"plugin":"symcc"}},
               {"type":"Text","props":{"color":"inactive"},"children":["                      "]},
               {"type":"Text","props":{"color":"inactive"},"children":["T-506 · "]},
               {
@@ -3998,12 +3968,7 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
-              {
-                "type": "Button",
-                "props": {"key":"back","label":"Tasks","plain":true,"autoFocus":true},
-                "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"text"},"children":["[Tasks]"]}]
-              },
+              {"type":"Button","props":{"key":"back","label":"Tasks","variant":"secondary","autoFocus":true},"press":{"plugin":"symcc"}},
               {"type":"Text","props":{"color":"inactive"},"children":["                     "]},
               {"type":"Text","props":{"color":"inactive"},"children":["T-507 · "]},
               {
@@ -4422,12 +4387,7 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
-              {
-                "type": "Button",
-                "props": {"key":"back","label":"Tasks","plain":true,"autoFocus":true},
-                "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"text"},"children":["[Tasks]"]}]
-              },
+              {"type":"Button","props":{"key":"back","label":"Tasks","variant":"secondary","autoFocus":true},"press":{"plugin":"symcc"}},
               {"type":"Text","props":{"color":"inactive"},"children":["                     "]},
               {"type":"Text","props":{"color":"inactive"},"children":["T-508 · "]},
               {
@@ -5107,12 +5067,7 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
-              {
-                "type": "Button",
-                "props": {"key":"back","label":"Tasks","plain":true,"autoFocus":true},
-                "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"text"},"children":["[Tasks]"]}]
-              },
+              {"type":"Button","props":{"key":"back","label":"Tasks","variant":"secondary","autoFocus":true},"press":{"plugin":"symcc"}},
               {"type":"Text","props":{"color":"inactive"},"children":["                     "]},
               {"type":"Text","props":{"color":"inactive"},"children":["T-509 · "]},
               {
@@ -5795,12 +5750,7 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
-              {
-                "type": "Button",
-                "props": {"key":"back","label":"Tasks","plain":true,"autoFocus":true},
-                "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"text"},"children":["[Tasks]"]}]
-              },
+              {"type":"Button","props":{"key":"back","label":"Tasks","variant":"secondary","autoFocus":true},"press":{"plugin":"symcc"}},
               {"type":"Text","props":{"color":"inactive"},"children":["                      "]},
               {"type":"Text","props":{"color":"inactive"},"children":["T-510 · "]},
               {
@@ -6720,12 +6670,7 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
-              {
-                "type": "Button",
-                "props": {"key":"back","label":"Tasks","plain":true},
-                "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"text"},"children":["[Tasks]"]}]
-              },
+              {"type":"Button","props":{"key":"back","label":"Tasks","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","props":{"color":"inactive"},"children":["                      "]},
               {"type":"Text","props":{"color":"inactive"},"children":["T-511 · "]},
               {

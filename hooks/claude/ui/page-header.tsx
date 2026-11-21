@@ -49,7 +49,9 @@ export function pageHeader(pane: PaneParts, hd: PageHeader): RenderChildren {
   const whereRow = (
     <Box key="hdr-where" flexDirection="row">
       {[...where.left, { text: ' '.repeat(where.pad) }, ...where.right].map((p, i) =>
-        'go' in p && p.go ? (
+        'go' in p && p.go === 'back' && !terminal ? (
+          <Button key={hd.backKey ?? 'back'} label={backText(hd.from)} variant="secondary" autoFocus={hd.backFocus ? true : undefined} onPress={hd.onBack} />
+        ) : 'go' in p && p.go ? (
           <Button key={p.go === 'back' ? (hd.backKey ?? 'back') : p.go} plain label={p.go === 'back' ? backText(hd.from) : p.go === 'prev' ? 'Previous' : 'Next'} autoFocus={p.go === 'back' && hd.backFocus ? true : undefined} onPress={goes[p.go]}>
             <Text color={C(p.go === 'back' ? PILL_COLOR : 'inactive')}>{p.text}</Text>
           </Button>

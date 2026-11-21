@@ -1529,12 +1529,7 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
-              {
-                "type": "Button",
-                "props": {"key":"scout-back","label":"Scouts","plain":true,"autoFocus":true},
-                "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"text"},"children":["[Scouts]"]}]
-              },
+              {"type":"Button","props":{"key":"scout-back","label":"Scouts","variant":"secondary","autoFocus":true},"press":{"plugin":"symcc"}},
               {"type":"Text","props":{"color":"inactive"},"children":["         "]},
               {"type":"Text","props":{"color":"inactive"},"children":["dependency-updates · "]},
               {
@@ -1731,12 +1726,7 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
-              {
-                "type": "Button",
-                "props": {"key":"scout-back","label":"Scouts","plain":true,"autoFocus":true},
-                "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"text"},"children":["[Scouts]"]}]
-              },
+              {"type":"Button","props":{"key":"scout-back","label":"Scouts","variant":"secondary","autoFocus":true},"press":{"plugin":"symcc"}},
               {"type":"Text","props":{"color":"inactive"},"children":["         "]},
               {"type":"Text","props":{"color":"inactive"},"children":["dependency-updates · "]},
               {
@@ -2124,12 +2114,7 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
-              {
-                "type": "Button",
-                "props": {"key":"scout-back","label":"Scouts","plain":true,"autoFocus":true},
-                "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"text"},"children":["[Scouts]"]}]
-              },
+              {"type":"Button","props":{"key":"scout-back","label":"Scouts","variant":"secondary","autoFocus":true},"press":{"plugin":"symcc"}},
               {"type":"Text","props":{"color":"inactive"},"children":["                              "]},
               {
                 "type": "Button",
@@ -2320,12 +2305,7 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
-              {
-                "type": "Button",
-                "props": {"key":"scout-back","label":"Scouts","plain":true,"autoFocus":true},
-                "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"text"},"children":["[Scouts]"]}]
-              },
+              {"type":"Button","props":{"key":"scout-back","label":"Scouts","variant":"secondary","autoFocus":true},"press":{"plugin":"symcc"}},
               {"type":"Text","props":{"color":"inactive"},"children":["                              "]},
               {
                 "type": "Button",
@@ -2719,12 +2699,7 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
-              {
-                "type": "Button",
-                "props": {"key":"scout-back","label":"Scouts","plain":true,"autoFocus":true},
-                "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"text"},"children":["[Scouts]"]}]
-              },
+              {"type":"Button","props":{"key":"scout-back","label":"Scouts","variant":"secondary","autoFocus":true},"press":{"plugin":"symcc"}},
               {"type":"Text","props":{"color":"inactive"},"children":["                 "]},
               {"type":"Text","props":{"color":"inactive"},"children":["docs-drift · "]},
               {
@@ -2923,12 +2898,7 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
-              {
-                "type": "Button",
-                "props": {"key":"scout-back","label":"Scouts","plain":true,"autoFocus":true},
-                "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"text"},"children":["[Scouts]"]}]
-              },
+              {"type":"Button","props":{"key":"scout-back","label":"Scouts","variant":"secondary","autoFocus":true},"press":{"plugin":"symcc"}},
               {"type":"Text","props":{"color":"inactive"},"children":["                 "]},
               {"type":"Text","props":{"color":"inactive"},"children":["docs-drift · "]},
               {
@@ -3317,12 +3287,7 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
-              {
-                "type": "Button",
-                "props": {"key":"scout-back","label":"Scouts","plain":true,"autoFocus":true},
-                "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"text"},"children":["[Scouts]"]}]
-              },
+              {"type":"Button","props":{"key":"scout-back","label":"Scouts","variant":"secondary","autoFocus":true},"press":{"plugin":"symcc"}},
               {"type":"Text","props":{"color":"inactive"},"children":["            "]},
               {"type":"Text","props":{"color":"inactive"},"children":["on-demand-check · "]},
               {
@@ -3512,12 +3477,7 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
-              {
-                "type": "Button",
-                "props": {"key":"scout-back","label":"Scouts","plain":true,"autoFocus":true},
-                "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"text"},"children":["[Scouts]"]}]
-              },
+              {"type":"Button","props":{"key":"scout-back","label":"Scouts","variant":"secondary","autoFocus":true},"press":{"plugin":"symcc"}},
               {"type":"Text","props":{"color":"inactive"},"children":["            "]},
               {"type":"Text","props":{"color":"inactive"},"children":["on-demand-check · "]},
               {
@@ -3891,12 +3851,7 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
-              {
-                "type": "Button",
-                "props": {"key":"scout-back","label":"Scouts","plain":true,"autoFocus":true},
-                "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"text"},"children":["[Scouts]"]}]
-              },
+              {"type":"Button","props":{"key":"scout-back","label":"Scouts","variant":"secondary","autoFocus":true},"press":{"plugin":"symcc"}},
               {"type":"Text","props":{"color":"inactive"},"children":["                     "]},
               {"type":"Text","props":{"color":"inactive"},"children":["broken · "]},
               {
@@ -4083,12 +4038,7 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
-              {
-                "type": "Button",
-                "props": {"key":"scout-back","label":"Scouts","plain":true,"autoFocus":true},
-                "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"text"},"children":["[Scouts]"]}]
-              },
+              {"type":"Button","props":{"key":"scout-back","label":"Scouts","variant":"secondary","autoFocus":true},"press":{"plugin":"symcc"}},
               {"type":"Text","props":{"color":"inactive"},"children":["                     "]},
               {"type":"Text","props":{"color":"inactive"},"children":["broken · "]},
               {

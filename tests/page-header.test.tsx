@@ -105,7 +105,7 @@ for (const [id, status, color, groups] of CASES)
       expect(parts).toEqual(['hdr-where', 'hdr-title', 'hdr-state', ...rows, 'hdr-keys', 'hdr-rule'])
       // line 1: Back and the place in the list
       const place = placeIn(LIST, id)!
-      expect(textOf(kids(h)[0])).toMatch(new RegExp(`^‹ \\[Tasks\\] +${id} · ‹ ${place.n} of ${LIST.length} ›$`))
+      expect(textOf(kids(h)[0])).toMatch(new RegExp(`^‹ ${surface === 'terminal' ? '\\[Tasks\\]' : ''} +${id} · ‹ ${place.n} of ${LIST.length} ›$`))
       // line 2: the id in its status color, the title in bold
       const title = kids(kids(h)[1])[0]!
       expect(kids(title)[0]).toMatchObject({ props: { bold: true, color }, children: [id] })
@@ -139,7 +139,16 @@ for (const [id, status, color, groups] of CASES)
         const back = kids(kids(h)[0]).find(n => keyOf(n) === 'back')!
         expect(textOf(back)).toBe('[Tasks]')
         expect(kids(back)[0]?.props).toEqual({ color: 'text' })
-      } else for (const p of pills) expect(p.props?.variant, keyOf(p)).toBe('secondary')
+      } else {
+        for (const p of pills) expect(p.props?.variant, keyOf(p)).toBe('secondary')
+        // Back off the terminal: a native secondary Button "Tasks", no brackets, no children (like the other buttons)
+        const back = kids(kids(h)[0]).find(n => keyOf(n) === 'back')!
+        expect(back.type).toBe('Button')
+        expect(back.props?.label).toBe('Tasks')
+        expect(back.props?.variant).toBe('secondary')
+        expect(back.props?.plain).toBeUndefined()
+        expect(kids(back).length).toBe(0)
+      }
       // the keys: hidden Buttons, and in the footer
       const hidden = kids(kids(h).find(k => keyOf(k) === 'hdr-keys'))
       expect(hidden.map(b => `${keyOf(b)} ${b.props?.hotkey}`)).toEqual(['back-key b', 'prev-key k', 'next-key j', ...acts.filter(a => a.key).map(a => `${a.id}-key ${a.key}`)])
@@ -229,7 +238,13 @@ for (const surface of ['terminal', 'desktop', 'mobile', 'vscode'] as const)
     if (!vs) {
       const parts = kids(h).map(keyOf)
       expect(parts).toEqual(['hdr-where', 'hdr-title', 'hdr-state', 'hdr-buttons-0', 'hdr-keys', 'hdr-rule'])
-      expect(textOf(kids(h)[0])).toMatch(new RegExp(`^‹ \\[Scouts\\] +docs-drift · ‹ ${place.n} of ${names.length} ›$`))
+      if (surface !== 'terminal') {
+        const back = kids(kids(h)[0]).find(n => keyOf(n) === 'scout-back')!
+        expect(back.props?.label).toBe('Scouts')
+        expect(back.props?.variant).toBe('secondary')
+        expect(kids(back).length).toBe(0)
+      }
+      expect(textOf(kids(h)[0])).toMatch(new RegExp(`^‹ ${surface === 'terminal' ? '\\[Scouts\\]' : '(Scouts)?'} +docs-drift · ‹ ${place.n} of ${names.length} ›$`))
       expect(textOf(kids(h)[1]).replace(/\s+/g, ' ')).toBe('docs-drift Finds places where the guide no longer matches what the code does')
       expect(textOf(kids(h)[2])).toMatch(/^◷ every hour/)
       // the buttons it had (Run now, Edit, Resume, all "[Label]", T-775) and paused said as a fact

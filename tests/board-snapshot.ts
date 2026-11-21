@@ -1910,12 +1910,7 @@ export const BEFORE: Record<string, unknown> = {
             "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
-              {
-                "type": "Button",
-                "props": {"key":"back","label":"Tasks","plain":true,"autoFocus":true},
-                "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"text"},"children":["[Tasks]"]}]
-              },
+              {"type":"Button","props":{"key":"back","label":"Tasks","variant":"secondary","autoFocus":true},"press":{"plugin":"symcc"}},
               {"type":"Text","props":{"color":"inactive"},"children":["                      "]},
               {"type":"Text","props":{"color":"inactive"},"children":["T-405 · "]},
               {
@@ -3230,12 +3225,7 @@ export const BEFORE: Record<string, unknown> = {
             "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
-              {
-                "type": "Button",
-                "props": {"key":"back","label":"Tasks","plain":true,"autoFocus":true},
-                "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"text"},"children":["[Tasks]"]}]
-              },
+              {"type":"Button","props":{"key":"back","label":"Tasks","variant":"secondary","autoFocus":true},"press":{"plugin":"symcc"}},
               {"type":"Text","props":{"color":"inactive"},"children":["                      "]},
               {"type":"Text","props":{"color":"inactive"},"children":["T-405 · "]},
               {
