@@ -9,7 +9,7 @@ import type { TurnLimit } from './merge-line'
 import { timedOutRetryNote } from '../core/test-timeout'
 import { logNeedsFiles } from './evidence'
 import { loadRoles } from './roles'
-import { runChecker, checkerName, cleanFolder, CHECKER_NOTE } from './checker'
+import { runChecker, checkerName, cleanFolder, CHECKER_NOTE, STOPPED_AGAIN } from './checker'
 import { loadKinds } from './kinds'
 import { S, workers, starting, queuedWorkers, type Worker, notReady, checkerNotReady, heard, finishing, approving, stopped, isOwnAgent, rememberOnBoard, halt, checkerRuns, meanwhile, reminded, timers } from './state'
 import { type Host, type HostAgent, type HostAgentStarted, ENDED_STATUSES, agentState, notReadyYet } from '../host'
@@ -282,12 +282,15 @@ export async function workerFinished(host: Host, agentId: string, answer: string
   const w = workers.get(agentId)
   if (!w) return
   workers.delete(agentId)
+  // T-740: this copy is already checking a hand-back for this task (a second one for the same try, e.g. from the old
+  // worker it took back after a reopen): ignored, so one hand-back leads to one prep and one checker
+  if (finishing.has(w.task)) return
   const at = now()
   heard.workers[w.task] = at
   heard.last = { what: `${w.task} worker report`, at }
   finishing.add(w.task)
   let beat: { cancel(): void } | null = null
-  let tryNo: number | undefined
+  let tryNo: number | undefined | null
   let limitMs = finishLimitMs(0)
   // The try ends now (checking and merging is not counted). The turn result gives tokens but
   // no dollar cost, so `cost` stays empty until Claude Code reports one.
@@ -300,6 +303,9 @@ export async function workerFinished(host: Host, agentId: string, answer: string
     tryNo = await change(host, x => {
       const t = find(x, w.task)
       if (t?.status !== 'doing') return [x, undefined] as [Board, undefined]
+      // T-740: this try already handed back (another copy checks it), or the agent is not this try's worker (an
+      // earlier try's worker, still alive after a reopen): nothing is written and nothing is checked
+      if (handedBack(t) || notThisTry(t, agentId)) return [x, null] as [Board, null]
       limitMs = finishLimitMs(x.test_commands.length, testMinutesOf(x))
       // T-723: its history says the worker handed back (its own line, just before the "prep started" the check writes)
       return [patchTask(x, w.task, { finishing: ended, time_ask: undefined, history: withHistory(t.history, ended, workerHandedBackEntry(t)), ...(t.runs?.length ? { runs: endRun(t.runs, ended, { tokens, ...(cost !== undefined ? { cost } : {}) }) } : {}) }, ended), t.attempts] as [Board, number]
@@ -309,6 +315,10 @@ export async function workerFinished(host: Host, agentId: string, answer: string
     // finished as usual by the regular check once the board can be read again (resumeKept); board.json is
     // left as it is, and the task is not sent back to "todo" meanwhile (see sendBackIdle).
     keptHandBacks.set(agentId, { w, answer, end, tokens, cost })
+    finishing.delete(w.task)
+    return
+  }
+  if (tryNo === null) {
     finishing.delete(w.task)
     return
   }
@@ -334,6 +344,17 @@ export async function workerFinished(host: Host, agentId: string, answer: string
   }
   await checkerAgainNow(host, w.task)
   await pump(host)
+}
+
+/**
+ * T-740: whether agent `agentId` is not the worker of task `t`'s current try: the try names another worker, or it
+ * names none yet while `agentId` worked on an earlier try (its hand-back belongs to that try, which already ended).
+ */
+export function notThisTry(t: BoardTask, agentId: string): boolean {
+  const last = t.runs?.at(-1)
+  const cur = last?.agent ?? t.agent
+  if (cur && cur !== agentId) return true
+  return last?.agent !== agentId && onRuns(t.runs?.slice(0, -1), agentId)
 }
 
 /** T-452: hand-backs of workers whose task couldn't be marked finished (board.json couldn't be read), by agent id; resumeKept finishes them. */
@@ -1077,6 +1098,13 @@ async function afterChecker(host: Host, t: SymccTask, b: Board, dir: string, mad
   const stoppedBefore = new Set(stopped)
   const c = await runChecker(host, t, b, dir, stop, restarted ? tryLater : undefined)
   const stoppedResult = (why: string): BeforeLine => ({ result: { ok: false, detail: `not merged: the task was ${why} while it was being checked` } })
+  // T-740: symcc stopped this checker (runChecker knows it from symcc's own record of the stop): no verdict, whatever it answered
+  if (c.stopped) {
+    const why = stop()
+    if (why) return stoppedResult(why)
+    checkerAgain.add(t.id)
+    return { result: { ok: false, again: true, detail: 'the checker was stopped before its verdict; a new checker starts' } }
+  }
   // T-428: a checker that only answered "stopped", or that symcc itself stopped, gives no verdict: it found nothing.
   // Its step starts again as after a reload (T-386, restartCheckers), with no retry counted.
   if (c.verdict && 'report' in c.verdict && (stoppedAnswer(c.verdict.report) || (await checkerStopped(host, t.id, stoppedBefore)))) {
@@ -1115,7 +1143,7 @@ async function unsayProblems(host: Host, t: SymccTask, report: string) {
     const at = cur.history.map(h => h.text).lastIndexOf(said)
     if (at < 0) return x
     const history = [...cur.history]
-    history[at] = historyEntry('checker', checkerLine(tryLabel(cur), null, 'it was stopped; a new checker starts'), cur.history[at]!.at ?? now())
+    history[at] = historyEntry('checker', checkerLine(tryLabel(cur), null, STOPPED_AGAIN), cur.history[at]!.at ?? now())
     return patchTask(x, t.id, { history }, now())
   }).catch(() => undefined)
 }
