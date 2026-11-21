@@ -116,7 +116,7 @@ test('Settings shows one Roles row (count and off count), not the roles; it open
   await ui.press({ key: 'settings-roles' })
   expect(await ui.find({ key: 'roleRow:general' })).toBeDefined()
   expect(await ui.find({ key: 'setting:mode' })).toBeUndefined()
-  expect(await ui.find({ type: 'Text', text: /Enter open · n new role · ↑↓ move · t s c views · b back/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /Enter open · n new role · ↑↓ move · t l s c views · b back/ })).toBeDefined()
   // a role's Back returns to the Roles page; the Roles page's Back to Settings
   await ui.press({ key: 'roleRow:tester' })
   await ui.press({ key: 'role-back' })

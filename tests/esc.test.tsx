@@ -26,6 +26,10 @@ const CASES: [string, PanePlace, Partial<Boxes>, EscStep][] = [
   ['task changes, reject box over them', at({ opened: 'T-5' }), { diffOpen: { task: 'T-5', file: '' }, rejecting: { task: 'T-5', reason: '' } }, 'cancel reject'],
   ['waiting task, "Your answer" opened with Answer…', at({ opened: 'T-6' }), { answering: 'T-6' }, 'cancel answer'],
   ['waiting task, Answer… pressed on another task', at({ opened: 'T-6' }), { answering: 'T-2' }, 'board list'],
+  // Live (T-690)
+  ['Live tab', at({ tab: 'live' }), {}, null],
+  ['Live tab, a search left over from the Tasks tab', at({ tab: 'live' }), { search: { text: 'x', typing: false } }, null],
+  ['task page opened from the Live tab', at({ tab: 'live', opened: 'T-5' }), {}, 'board list'],
   // Scouts
   ['Scouts list', at({ tab: 'scouts' }), {}, 'board list'],
   ['Scouts list, new scout name box', at({ tab: 'scouts' }), { naming: { name: 'x', error: '' } }, 'cancel scout edit'],

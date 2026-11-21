@@ -92,7 +92,7 @@ test('T-619: Settings has an Org-mem row with the count; its page lists the note
   expect((await ui.find({ key: 'orgmemRow:3' }))?.props.label).toBe('#3 · 2026-11-20: the type check is separate')
   expect((await ui.find({ key: 'orgmemRow:2' }))?.props.label).toBe('#2 · written by hand: written by hand, no date')
   expect((await ui.find({ key: 'orgmemRow:1' }))?.props.label).toBe('#1 · 2026-11-18: run one test file with scripts/test-files.sh')
-  expect(await ui.find({ type: 'Text', text: /↑↓ move · x delete · t s c views · b back/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /↑↓ move · x delete · t l s c views · b back/ })).toBeDefined()
   // Enter on note 2 asks first; Cancel leaves the file alone
   await ui.press({ key: 'orgmemRow:2' })
   expect(await ui.find({ type: 'Text', text: 'Delete note #2 · written by hand from .symcc/org-mem.md?' })).toBeDefined()
@@ -124,7 +124,7 @@ test('T-619: with no org-mem file the row says 0 notes and the page says "No not
   await ui.press({ key: 'settings-orgmem' })
   expect(await ui.find({ type: 'Text', text: /No notes yet\./ })).toBeDefined()
   expect(await ui.find({ key: 'orgmem-delete' })).toBeUndefined()
-  expect(await ui.find({ type: 'Text', text: /^t s c views · b back$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^t l s c views · b back$/ })).toBeDefined()
   await ui.unmount()
 })
 

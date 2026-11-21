@@ -13,6 +13,7 @@ import { arrows, saysArrowsMove } from './arrows'
 import { type PaneTab, resetPane } from '../../app/open'
 import { claudeHost } from '../host'
 import { isVscode, vscodeButton } from './surface'
+import { LIVE_TABS, tabRow, withLiveKey } from '../../core/live'
 import { type VsKit, logoWidthFor, vsBanner, vsFooter, vsTabs } from './vscode'
 
 export type PaneHook = MatchedHook<'ui.render', { component: 'Pane' }>
@@ -56,6 +57,8 @@ export async function paneParts($: $, e: PaneEvent) {
   const tabNow = await panelValues($).readTab()
   const onScouts = tabNow === 'scouts'
   const onSettings = tabNow === 'settings'
+  /** The Live tab (T-690; the terminal only): its lanes open a task's page over it, and Back comes back to it. */
+  const onLive = !vscode && tabNow === 'live'
   const t = open && !onScouts && !onSettings ? v.tasks.find(x => x.id === open) : undefined
   // a question for the owner opened from the "Questions for you" list (see question-page.tsx); gone once it is answered
   const q = open && !t && !onScouts && !onSettings ? (v.questions ?? []).find(x => x.id === open) : undefined
@@ -101,10 +104,10 @@ export async function paneParts($: $, e: PaneEvent) {
           </Box>,
         ]
       : []
-  /** The tab row under the banner: "[t]: Tasks (12) │ [s]: Scouts (3) │ [c]: Settings", the active one bold, underlined and blue
+  /** The tab row under the banner: "[t]: Tasks (12) │ [l]: Live │ [s]: Scouts (3) │ [c]: Settings" (shorter words when narrow, see tabRow), the active one bold, underlined and blue
    *  (the accent color), the whole tab underlined, "[t]: " included. Each tab is a `plain` Button with NO hotkey (a plain Button
    *  with a hotkey draws its own "t: " outside the Text, where the underline can't reach; a framed one draws "[ … ]" around it),
-   *  so the one Text inside is all the terminal draws, and a click on it switches. The "t", "s" and "c" keys belong to three
+   *  so the one Text inside is all the terminal draws, and a click on it switches. The "t", "l", "s" and "c" keys belong to four
    *  hidden Buttons in a Box drawn `display="none"`: they take no room and draw nothing, but still carry the hotkeys. */
   const tabs = () => {
     const go = (which: PaneTab) => act(async () => ((S.draft = null), (S.naming = null), (S.diffOpen = null), (S.rejecting = null), (S.settingEdit = null), (S.settingPick = null), await resetPane(claudeHost($), which)))
@@ -114,27 +117,24 @@ export async function paneParts($: $, e: PaneEvent) {
         { which: 'scouts', label: 'Scouts', count: scouts.length, active: onScouts, onPress: go('scouts') },
         { which: 'settings', label: 'Settings', active: onSettings, onPress: go('settings') },
       ])
-    const keyOf = (which: PaneTab) => (which === 'settings' ? 'c' : which[0])
+    // the four tabs (LIVE_TABS): their words get shorter when the panel is narrow (tabRow), never cut
+    const count = (which: PaneTab) => (which === 'tasks' ? v.tasks.length : which === 'scouts' ? scouts.length : undefined)
+    const row = tabRow(LIVE_TABS.map(x => ({ key: x.key, label: x.label, count: count(x.tab) })), width)
+    const isActive = (which: PaneTab) => (which === 'scouts' ? onScouts : which === 'settings' ? onSettings : which === 'live' ? onLive : !onScouts && !onSettings && !onLive)
     const one = (which: PaneTab, label: string) => {
-      const active = which === 'scouts' ? onScouts : which === 'settings' ? onSettings : !onScouts && !onSettings
-      label = `[${keyOf(which)}]: ${label}`
+      const active = isActive(which)
       return (
         <Button key={`tab-${which}`} plain label={label} onPress={go(which)}>
           <Text bold={active} underline={active} color={C(active ? 'ide' : 'inactive')}>{label}</Text>
         </Button>
       )
     }
-    const tabKeys: PaneTab[] = ['tasks', 'scouts', 'settings']
     return (
       <Box key="tabs" flexDirection="row">
-        {one('tasks', `Tasks (${v.tasks.length})`)}
-        <Text color={C('subtle')}> │ </Text>
-        {one('scouts', `Scouts (${scouts.length})`)}
-        <Text color={C('subtle')}> │ </Text>
-        {one('settings', 'Settings')}
+        {LIVE_TABS.flatMap((x, i) => [...(i ? [<Text color={C('subtle')}>{row.gap}</Text>] : []), one(x.tab, row.labels[i]!)])}
         <Box key="tab-keys" display="none">
-          {tabKeys.map(which => (
-            <Button key={`tab-key-${which}`} label={keyOf(which)} hotkey={keyOf(which)} onPress={go(which)} />
+          {LIVE_TABS.map(x => (
+            <Button key={`tab-key-${x.tab}`} label={x.key} hotkey={x.key} onPress={go(x.tab)} />
           ))}
         </Box>
       </Box>
@@ -142,10 +142,10 @@ export async function paneParts($: $, e: PaneEvent) {
   }
   /** The whole header: banner, then the tab row, then the rule under them. */
   const header = () => [...banner(), tabs(), <Text key="header-rule" wrap="truncate" color={C('ide')}>{bannerRule(width)}</Text>]
-  /** Key hints over as many lines as the width needs, broken only between hints: keys bold, words in the inactive color (readable on dark themes too). */
+  /** Key hints over as many lines as the width needs (the views hint says "t l s c": the terminal has the Live tab), broken only between hints: keys bold, words in the inactive color (readable on dark themes too). */
   const keyLines = (hints: KeyHint[], name: string) =>
     vscode ? [vsFooter(vs, name)] :
-    hintLines(hints, width).map((line, i) => (
+    hintLines(withLiveKey(hints), width).map((line, i) => (
       <Text key={`${name}-${i}`} color={C('subtle')}>
         {line.map((kh, j) => (
           <Text key={`${name}-${i}-${j}`}>
@@ -236,6 +236,6 @@ export async function paneParts($: $, e: PaneEvent) {
         )
       return <Text>{rich(line)}</Text>
     })
-  return { Box, Text, Button, Input, v, nowMs, width, color, word, mark, act, onScouts, onSettings, t, q, C, scouts, mode, vscode, vs, switchMode, banner, tabs, header, keyLines, footer, buttonRows, rich, heading, paragraphs }
+  return { Box, Text, Button, Input, v, nowMs, width, color, word, mark, act, onScouts, onSettings, onLive, t, q, C, scouts, mode, vscode, vs, switchMode, banner, tabs, header, keyLines, footer, buttonRows, rich, heading, paragraphs }
 }
 export type PaneParts = Awaited<ReturnType<typeof paneParts>>
