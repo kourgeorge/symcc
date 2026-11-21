@@ -27,7 +27,7 @@ import {
   ownersTurn, shownStatus, sortScouts, scoutListRows, scoutRow, scoutIcon, scoutTone, scoutHowTo, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem, scoutFile,
   SETTING_GROUPS, SETTINGS, isSettingPage, settingInfo, settingValue, cantPlayNotify, groupSummaryParts,
   type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction, type DefEditField, type TaskVerb, settingsKeys, rolesKeys, kindsKeys, roleEditKeys, defEditFields, roleTools, roleFileText, roleSkipReason, kindFileText, kindSkipReason,
-  DEFAULT_ROLE, isCheckerRole, ALWAYS_ON_KINDS, checkerOn, roleNameError, kindNameError, checkStepNow, rowEndText, taskPhase, choiceLines, driveWarning,
+  DEFAULT_ROLE, isCheckerRole, ALWAYS_ON_KINDS, checkerOn, roleNameError, kindNameError, leadScoutNameError, checkStepNow, rowEndText, taskPhase, choiceLines, driveWarning,
   searchTasks, showsHeader, type BoardPage,
   LIVE_TABS, LIVE_EMPTY, LIVE_LEGEND, type LiveSeg, type LiveTone, tabRow, withLiveKey, liveKeys, liveLanes, liveLayout, liveStations, liveHeader, liveLabelLine, laneLines, nextUp, nextUpLine, liveToday, todayLines, searchLine, modeButton, hintLines, roleKeys, rolePromptKeys, ROLE_PROMPTS, ROLE_SLOT, promptsOfRole, type RolePromptKind,
 } from '../board'
@@ -316,6 +316,11 @@ export const DEF_EDIT_BOXES: Record<DefEditField, { label: string; placeholder: 
 
 /** An edit box's cursor id ("box:model"). */
 export const editBoxId = (field: DefEditField) => `box:${field}`
+/** The edit page's cursor ids for its Save and Cancel (x) buttons, before its boxes (T-706, as Claude Code's ↑↓). */
+export const EDIT_SAVE_ID = 'edit:save'
+export const EDIT_CANCEL_ID = 'edit:cancel'
+/** Where the edit page's cursor starts: its first box (Description), as Claude Code's autoFocus; ↑ reaches Cancel and Save. */
+export const EDIT_FIRST_BOX = 2
 
 /** The fields of the edit mode's role or kind whose value differs from `d`'s (in the page's order): what Save sends. */
 export function draftChanges(list: DefList, d: ViewDef, draft: DefDraft): DefEditField[] {
@@ -345,7 +350,7 @@ export function draftError(list: DefList, name: string, draft: DefDraft): string
 /** The keys at the bottom of the edit page: Claude Code's (roleEditKeys), with Enter, which opens a box here. */
 export const defEditKeys = (): KeyHint[] => {
   const [move, cancel] = roleEditKeys()
-  return [move!, { key: 'Enter', word: 'change' }, cancel!]
+  return [move!, { key: 'Enter', word: 'change a box or press Save' }, cancel!]
 }
 
 /** An approve this panel sent: the task and when (ms). */
@@ -452,6 +457,28 @@ export const defsIn = (f: ViewFile | null, list: DefList): ViewDef[] => (Array.i
 
 /** A role's or kind's page id: "role:tester", "kind:bug". */
 export const defPageId = (list: DefList, name: string) => `${list === 'roles' ? 'role' : 'kind'}:${name}`
+
+/** Why a new role's, kind's or scout's name (typed in "+ New ...") can't be used, as the engine would refuse it ('' when
+ *  it can): the lead's tool's name check, then a name already in the view (any case), as Claude Code's newDefFile and
+ *  New scout keep the name box open with the reason. A file there that can't be read says what its page offers. */
+export function newNameError(f: ViewFile | null, what: 'role' | 'kind' | 'scout', name: string): string {
+  const n = name.trim()
+  if (what === 'scout') {
+    const bad = leadScoutNameError(n)
+    if (bad) return bad
+    const there = (f?.view.scouts ?? []).find(x => x.name.toLowerCase() === n.toLowerCase())
+    return there ? `a scout named ${there.name} already exists` : ''
+  }
+  const bad = (what === 'role' ? roleNameError : kindNameError)(n)
+  if (bad) return bad
+  const there = defNamed(defsIn(f, what === 'role' ? 'roles' : 'kinds'), n)
+  if (!there) return ''
+  if (there.broken) return `${there.file} is already there but ${there.broken}: ${there.canReset ? 'open it in the list to Reset to built-in' : 'open it in the list to Remove it'}, or fix the file by hand`
+  return `a ${what} named ${there.name} already exists; open it in the list to change it`
+}
+
+/** How long a "+ New ..." waits for its role, kind or scout to show in the view file before it stops waiting (ms). */
+export const NEW_OPEN_MS = 15_000
 
 /** The page id of the built-in prompt role `role` goes in: "prompt:tester:change". */
 export const rolePromptId = (role: string, kind: RolePromptKind) => `prompt:${role}:${kind}`
@@ -1017,7 +1044,7 @@ export function editOf(f: ViewFile | null, choice: Pick<PanelChoice, 'tab' | 'op
 /** A role's or kind's edit page (T-706, Claude Code's Edit): "tester editing", where Save writes, then Save and
  *  Cancel (x), what Save found wrong, then a box per part of its file with Claude Code's names (Description, Model,
  *  Skills, Tools, Checklist; a kind's Description and Body), each showing its value (or its placeholder); Enter or a
- *  click on a box asks for its new value. The cursor goes over the boxes. */
+ *  click on a box asks for its new value. The cursor goes over Save, Cancel and the boxes. */
 function defEditPage(f: ViewFile, list: DefList, x: ViewDef, draft: DefDraft, cursor: number, w: number): Body {
   const b = bodyMaker()
   const def = list === 'roles' ? 'role' : 'kind'
@@ -1025,12 +1052,17 @@ function defEditPage(f: ViewFile, list: DefList, x: ViewDef, draft: DefDraft, cu
   b.add([{ text: x.name, color: 'claude', bold: true }, { text: ' editing', color: 'warning', bold: true }])
   for (const l of wrapSegs([{ text: `save writes ${file}${x.source === 'built-in' ? ` (a copy of the built-in ${def}; Reset to built-in undoes it)` : ''}`, color: 'inactive' }], w)) b.add(l)
   if (def === 'role') for (const l of wrapSegs([{ text: `the name is the file's name: to rename the role, rename ${file}`, color: 'inactive' }], w)) b.add(l)
-  for (const l of buttonLines([SAVE_BUTTON, CANCEL_EDIT_BUTTON], w)) b.add(l)
+  const fields = defEditFields(def)
+  // the cursor goes over Save, Cancel and the boxes, as Claude Code's ↑↓ (it starts on the first box: EDIT_FIRST_BOX)
+  const ids = [EDIT_SAVE_ID, EDIT_CANCEL_ID, ...fields.map(editBoxId)]
+  const selected = ids[Math.min(Math.max(0, cursor), ids.length - 1)]!
+  const onButton = selected === EDIT_SAVE_ID ? SAVE_BUTTON : selected === EDIT_CANCEL_ID ? CANCEL_EDIT_BUTTON : undefined
+  for (const l of buttonLines([SAVE_BUTTON, CANCEL_EDIT_BUTTON], w - (onButton ? 2 : 0))) {
+    if (!onButton) b.add(l)
+    else b.add([{ text: '› ', color: 'ide', bold: true }, ...l.map(s => (s.text === buttonText(onButton) ? { ...s, color: 'claude', bold: true } : s))])
+  }
   if (draft.error) for (const l of wrapSegs([{ text: draft.error, color: 'error' }], w)) b.add(l)
   const head = b.lines.length
-  const fields = defEditFields(def)
-  const ids = fields.map(editBoxId)
-  const selected = ids[Math.min(Math.max(0, cursor), ids.length - 1)]!
   for (const k of fields) {
     const hit = { editField: k }
     const box = DEF_EDIT_BOXES[k]

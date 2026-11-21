@@ -25,7 +25,7 @@
 // modules (Solid and OpenTUI's Solid renderer) are passed in (TuiRuntime), so this file type-checks and its tests
 // run without them. The names and shapes below are @opencode/plugin 2.3.0's tui Context (only what is used).
 import { DEFAULT_NAME, dataDir } from '../name'
-import { VIEW_FILE, parseViewFile, bandDraw, panelLines, panelKeys, panelTaskActions, approveInProgress, panelRoleChoices, TASK_ACTION_COMMANDS, LETTER_KEYS, type LetterKey, hasPage, answerOptions, actionCommand, moveCursor, OWN_ANSWER, GROUPS_OPEN, groupOf, groupId, scoutRunsIn, settingsPlace, orgMemNoteOf, ORG_MEM_PAGE, defPageId, rolePromptId, SETTINGS_OPEN, settingGroupOf, settingGroupId, PANEL_TABS, CHOICE_KEYS, approveSent, editOf, defDraftOf, draftChanges, draftError, editBoxId, boardPageOf, removeAsk, DEF_EDIT_BOXES, SETUP_GIT_ASK, type DefDraft, type ApproveSent, type ChoiceKey, type ViewFile, type Line, type PanelAction, type PanelHit, type PanelKey, type PanelGroup, type PanelTab, type BandHit } from './board-view'
+import { VIEW_FILE, parseViewFile, bandDraw, panelLines, panelKeys, panelTaskActions, approveInProgress, panelRoleChoices, TASK_ACTION_COMMANDS, LETTER_KEYS, type LetterKey, hasPage, answerOptions, actionCommand, moveCursor, OWN_ANSWER, GROUPS_OPEN, groupOf, groupId, scoutRunsIn, settingsPlace, orgMemNoteOf, ORG_MEM_PAGE, defPageId, rolePromptId, SETTINGS_OPEN, settingGroupOf, settingGroupId, PANEL_TABS, CHOICE_KEYS, approveSent, editOf, defDraftOf, draftChanges, draftError, editBoxId, boardPageOf, removeAsk, DEF_EDIT_BOXES, SETUP_GIT_ASK, newNameError, NEW_OPEN_MS, EDIT_SAVE_ID, EDIT_CANCEL_ID, EDIT_FIRST_BOX, type DefDraft, type ApproveSent, type ChoiceKey, type ViewFile, type Line, type PanelAction, type PanelHit, type PanelKey, type PanelGroup, type PanelTab, type BandHit } from './board-view'
 import { SETTING_GROUPS, isScoutRunReport, taskReports, taskActions, type TaskAction, type TaskActionId, parseSettingValue, settingChoices, settingInfo, settingValue, isSettingPage, everyText, everyMinutesOf, nextMode, modeOf, promptsOfRole, SEARCH_WORDS, NEW_SCOUT_EVERY, showsHeader, defEditFields, type SettingName, type ScoutEditField, type DefEditField } from '../board'
 import type { SymccScout } from '../../types'
 import { ORG_MEM_KEY, orgMemDeleteAsk, orgMemFile, orgMemNoteKey } from '../core/org-mem'
@@ -342,7 +342,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   // the open role's or kind's edit mode (T-706, Claude Code's Edit page; undefined = none)
   const [edit, setEdit] = r.createSignal<DefDraft | undefined>(undefined)
   // a role, kind or scout just made from this panel: its page opens once the view file has it (T-706)
-  let pendingOpen: { tab: PanelTab; id: string; edit: boolean } | undefined
+  let pendingOpen: { tab: PanelTab; id: string; edit: boolean; at: number } | undefined
   let width = 80
   // the panel's height in rows (panelRows): it bounds the scroll, and the panel is drawn exactly that high, so the
   // footer stays at the bottom and no row of a longer page is left over; OpenTUI says when the box's size changes
@@ -397,11 +397,14 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
    *  edit mode, as Claude Code's New role does). */
   const openMade = () => {
     const p = pendingOpen
-    if (!p || tab() !== p.tab || !hasPage(file(), p.id, p.tab)) return
+    if (!p) return
+    // the engine refused it after all (or it never came): stop waiting, so it doesn't open later
+    if (tab() !== p.tab || d.now() - p.at > NEW_OPEN_MS) return void (pendingOpen = undefined)
+    if (!hasPage(file(), p.id, p.tab)) return
     pendingOpen = undefined
     openPage(p.id)
     const place = p.edit ? settingsPlace(file(), p.id) : null
-    if (place?.def) setEdit(defDraftOf(place.list, place.def))
+    if (place?.def) openEdit(place.list, place.def)
   }
   /** Reads the open task's latest report, unless it is the one already read (or being read). */
   const readTaskReport = () => {
@@ -538,24 +541,41 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     if (field === 'every' && everyMinutesOf(value) === null) return say('every must be a whole number of minutes: 0 for only on demand, or 1 or more', 'error')
     await send(sessionID, { kind: 'scout-edit', scout: sc.name, field, value: field === 'model' && value.toLowerCase() === 'none' ? '' : value })
   }
+  /** Opens the edit mode of the open role or kind, with the cursor on its first box (Claude Code's autoFocus). */
+  const openEdit = (list: 'roles' | 'kinds', x: Parameters<typeof defDraftOf>[1]) => {
+    setRunCursor(EDIT_FIRST_BOX)
+    setScroll(0)
+    setEdit(defDraftOf(list, x))
+  }
   /** Asks a yes (Claude Code's confirm step) before `what`; true when the owner picked it. */
   const yes = async (title: string, label: string) => (await ctx.ui.dialog.select({ title, options: [{ title: label, value: 'yes' }, { title: 'Cancel', value: 'no' }] })) === 'yes'
   /** "+ New role" / "+ New kind" (n): asks the name, then /<name>-settings role|kind NAME add; its page opens in the edit
    *  mode once the view file has it. Esc or an empty name leaves it. */
   const newDef = async (list: 'roles' | 'kinds', sessionID: string) => {
     const noun = list === 'roles' ? 'role' : 'kind'
-    const asked = (await ctx.ui.dialog.prompt({ title: `New ${noun}'s name`, description: `Enter makes ${dataDir(file()?.name || name)}/${list}/<name>.md and opens it`, placeholder: 'letters, digits, - and _' }))?.trim()
+    const asked = await askNewName(noun, `New ${noun}'s name`, `Enter makes ${dataDir(file()?.name || name)}/${list}/<name>.md and opens it`, 'letters, digits, - and _')
     if (!asked) return
-    if (await sendOk(sessionID, { kind: 'def-add', def: noun, name: asked })) pendingOpen = { tab: 'settings', id: defPageId(list, list === 'kinds' ? asked.toLowerCase() : asked), edit: true }
+    if (await sendOk(sessionID, { kind: 'def-add', def: noun, name: asked })) pendingOpen = { tab: 'settings', id: defPageId(list, list === 'kinds' ? asked.toLowerCase() : asked), edit: true, at: d.now() }
+  }
+  /** Asks a new role's, kind's or scout's name; a name the engine would refuse (bad, or taken: newNameError) asks
+   *  again with the reason, as Claude Code's name box stays open with it. Esc or an empty name: undefined. */
+  const askNewName = async (what: 'role' | 'kind' | 'scout', title: string, description: string, placeholder: string): Promise<string | undefined> => {
+    let error = ''
+    for (;;) {
+      const asked = (await ctx.ui.dialog.prompt({ title, ...(error || description ? { description: error || description } : {}), placeholder }))?.trim()
+      if (!asked) return undefined
+      error = newNameError(file(), what, asked)
+      if (!error) return asked
+    }
   }
   /** "+ New scout" (n): asks the name, then its instructions, then /<name>-scout NAME new INSTRUCTIONS (it runs every
    *  NEW_SCOUT_EVERY minutes; e on its page changes that); its page opens once the view file has it. */
   const newScout = async (sessionID: string) => {
-    const scout = (await ctx.ui.dialog.prompt({ title: "New scout's name", placeholder: 'letters, digits, - and _' }))?.trim()
+    const scout = await askNewName('scout', "New scout's name", '', 'lowercase letters, digits and dashes')
     if (!scout) return
     const prompt = (await ctx.ui.dialog.prompt({ title: `${scout}: what it does`, description: `in plain words; it runs every ${NEW_SCOUT_EVERY} minutes (Edit on its page changes that)`, placeholder: 'what to look for, in plain words (longer ones: edit its file)' }))?.trim()
     if (!prompt) return
-    if (await sendOk(sessionID, { kind: 'scout-new', scout, prompt })) pendingOpen = { tab: 'scouts', id: scout, edit: false }
+    if (await sendOk(sessionID, { kind: 'scout-new', scout, prompt })) pendingOpen = { tab: 'scouts', id: scout, edit: false, at: d.now() }
   }
   /** Enter or a click on an edit page's box: asks its new value (Enter on an empty box empties it, Esc keeps it). */
   const editBox = async (field: DefEditField) => {
@@ -592,8 +612,8 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   }
   /** The Settings tab's keys: the list moves, changes a setting or opens the Roles or Kinds page; that page moves and
    *  opens a role or kind (n makes a new one); its page turns it off or on (o), resets it (r), edits it (e) or
-   *  removes it (d, after a yes); b goes back one page. On the edit page ↑↓ move over the boxes, Enter changes one,
-   *  x (Cancel) and b leave it without saving. */
+   *  removes it (d, after a yes); b goes back one page. On the edit page ↑↓ move over Save, Cancel and the boxes,
+   *  Enter changes a box or presses the button, x (Cancel) and b leave it without saving. */
   const pressSettings = async (key: PanelKey, sessionID: string) => {
     const f = file()
     const open = opened()
@@ -604,6 +624,9 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     if (editOf(f, { tab: tab(), opened: open, ...(edit() ? { edit: edit()! } : {}) })) {
       if (key === 'x' || key === 'back') return void setEdit(undefined)
       const field = ids[moveCursor(cur(), 0, ids.length)]
+      // Enter on the Save or Cancel button (↑ from the first box reaches them, as on Claude Code)
+      if (key === 'open' && field === EDIT_SAVE_ID) return saveEdit(sessionID)
+      if (key === 'open' && field === EDIT_CANCEL_ID) return void setEdit(undefined)
       const k = place?.def ? defEditFields(place.list === 'roles' ? 'role' : 'kind').find(x => editBoxId(x) === field) : undefined
       if (key === 'open' && k) return editBox(k)
       return
@@ -622,11 +645,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     const d = place?.def
     if (!d) return
     const def = place.list === 'roles' ? 'role' : 'kind'
-    if (key === 'e' && !d.broken) {
-      setRunCursor(0)
-      setScroll(0)
-      return void setEdit(defDraftOf(place.list, d))
-    }
+    if (key === 'e' && !d.broken) return openEdit(place.list, d)
     if (key === 'd' && d.canRemove) {
       if (!(await yes(removeAsk(place.list, d), 'Yes, remove'))) return
       if ((await sendOk(sessionID, { kind: 'def', def, name: d.name, action: 'remove' })) && opened() === open) openPage(place.list)
