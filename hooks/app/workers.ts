@@ -44,6 +44,8 @@ export const WORKER_PROMPT = (t: BoardTask, b: Board, dir: string, role?: RoleDe
 export const behindNote = (behind: number, into: string, why: BehindWhy = 'commits') => {
   if (behind <= 0) return ''
   const n = `${behind} commit${behind === 1 ? '' : 's'}`
+  // T-745: merging it in before the try clashed, so the worker merges it in itself (the try runs with merge_main)
+  if (why === 'clash') return `\n\nNote: ${into} has ${behind} new commit${behind === 1 ? '' : 's'} you don't have yet; merge them in first.`
   const head =
     why === 'changes' ? `your folder has uncommitted work from an earlier try and is ${n} behind ${into}.`
     : why === 'failed' ? `symcc could not move your branch up to ${into}, so it is ${n} behind ${into}.`
@@ -111,7 +113,7 @@ async function queueWorker(host: Host, id: string): Promise<{ started: Promise<v
     if (await mergedBeforeStart(host, t0!)) return null
     // the branch it merges into is gone: it waits for the owner instead of failing
     if (await waitIfBranchGone(host, b, t0!, 'start')) return null
-    const { dir, branch, behind, why } = await prepareWorktree(host, t0!, intoOf(t0!), true)
+    const { dir, branch, behind, why, merged } = await prepareWorktree(host, t0!, intoOf(t0!), true)
     // the earlier answers its details name (a keep-note task's reports) are read inside its own folder
     await copyReports(host, t0!, dir).catch(() => [])
     const roles = await loadRoles(host)
@@ -123,7 +125,12 @@ async function queueWorker(host: Host, id: string): Promise<{ started: Promise<v
       const at = now()
       // T-743: after a restart symcc did itself (a reopen, a reload, ...) the same try goes on: no new run, no new try number
       const goOn = cur!.attempts > 0 ? goOnRun(cur!.runs, at) : null
-      const y = patchTask(x, id, { status: 'doing', session: S.me, attempts: goOn ? cur!.attempts : cur!.attempts + 1, branch, note: claimNote(host), runs: goOn ?? startRun(cur!.runs, at, !!cur!.merge_main) }, at)
+      const attempts = goOn ? cur!.attempts : cur!.attempts + 1
+      // T-745: the branch had its own commits and main was merged in before this try
+      const upToDate = merged ? { history: withHistory(cur!.history, at, ['stage', `${tryLabel({ ...cur!, attempts })}: brought up to date with ${intoOf(cur!)} (${merged} commit${merged === 1 ? '' : 's'})`]) } : {}
+      // and when merging it in clashed, this try merges it in itself (its prompt asks, the git guard lets it), as the clash retry does
+      const clash = why === 'clash' && !cur!.merge_main ? { merge_main: true } : {}
+      const y = patchTask(x, id, { status: 'doing', session: S.me, attempts, branch, note: claimNote(host), runs: goOn ?? startRun(cur!.runs, at, !!cur!.merge_main || why === 'clash'), ...upToDate, ...clash }, at)
       // T-471: an earlier try's agent is never taken as this try's worker (agentOnBoard); the new one is recorded when it starts
       delete find(y, id)!.agent
       return [y, find(y, id)!]

@@ -5489,6 +5489,51 @@ test('T-723: a merge-it-in try says it merges main in first', async () => {
   workers.clear()
 })
 
+/** T-745: T-1's retry starts in its old folder; its branch and main are each 3 commits apart; `clash`: merging main in conflicts. */
+async function retryStarted(clash: boolean) {
+  let prompt = ''
+  const w = world({
+    current: 'main',
+    answer: args => {
+      if (args[0] === 'rev-list' && args[1] === '--count') return ok('3\n')
+      if (args.includes('merge') && args.includes('--no-edit')) return clash ? { exitCode: 1, stdout: 'CONFLICT (content): Merge conflict in src/a.ts', stderr: '' } : ok()
+      return undefined
+    },
+  })
+  const [b0] = boardWith('auto')
+  await saveBoard(w.$, patchTask(b0, 'T-1', { status: 'todo', attempts: 1, runs: [{ started: ISO, ended: ISO, ended_by: 'finished', ended_note: 'tests failed' }] }, ISO))
+  w.put(`${WT}/.git`, 'gitdir: x')
+  S.me = 'me'
+  S.startupDone = true
+  S.driving = true
+  workers.clear()
+  const x = w.$
+  x.features = { ...x.features, startQueue: false }
+  x.agents.spawn = async (o: { prompt: string }) => ((prompt = o.prompt), { agentId: 'ag1' })
+  x.plugin = { name: 'symcc', root: '/plugin' }
+  x.fs.list = async () => []
+  await startWorker(w.$, 'T-1')
+  workers.clear()
+  return { w, prompt, t: find(await load(w.$), 'T-1')! }
+}
+
+test('T-745: a retry with commits of its own starts with main merged in, and its history says so', async () => {
+  const { w, prompt, t } = await retryStarted(false)
+  expect(w.calls.some(c => c.includes('merge --no-edit') && c.includes('refs/heads/main'))).toBe(true)
+  expect(w.calls.some(c => c.includes('merge --abort'))).toBe(false)
+  expect(stageTexts(t)).toEqual(['try 2: brought up to date with main (3 commits)', 'try 2: worker started (role general)'])
+  expect(t.merge_main).toBeFalsy()
+  expect(prompt).not.toContain('merge them in first')
+})
+
+test('T-745: a retry whose merge of main clashes is aborted and the worker is told to merge it in first', async () => {
+  const { w, prompt, t } = await retryStarted(true)
+  expect(w.calls.some(c => c.includes('merge --abort'))).toBe(true)
+  expect(prompt).toContain("main has 3 new commits you don't have yet; merge them in first")
+  expect(t.merge_main).toBe(true)
+  expect(stageTexts(t)).toEqual(['try 2: worker started (role general) · merges main in first'])
+})
+
 test('T-723: a fresh try restarted with a note says it keeps its try number', async () => {
   const { w, t } = await startedT1({ attempts: 1, runs: [{ started: ISO, ended: ISO, ended_by: 'finished', ended_note: 'checker found problems' }] })
   expect(t.attempts).toBe(2)
