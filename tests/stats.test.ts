@@ -77,7 +77,8 @@ test('stats: outcomes, origins and days are read from what the board keeps', () 
   expect(failReason('try 1: did it → tests failed: `npm test` (exit 1). x')).toBe('tests')
   expect(failReason('try 2 (role docs): ok → conflicts with the latest main')).toBe('clash')
   expect(failReason('try 1: done → changed files outside the task (a.ts); allowed: b.ts')).toBe('scope')
-  expect(failReason('try 3: stopped: paused by the owner')).toBe('stopped')
+  expect(failReason('try 3: stopped: paused by the owner')).toBe(null)
+  expect(failReason('try 3: stopped from Claude Code')).toBe('stopped')
   expect(failReason('try 1: restarted: the task was changed (details)')).toBe('changed')
   expect(failReason('try 1: restarted: the plugin reloaded and the old worker was gone')).toBe('stopped')
   const rep = statsReport({ tasks: [{ ...knownTasks()[0]!, history: [{ at: '2026-01-01T00:00:00Z', kind: 'restarted', text: 'try 1: restarted: the task was changed (details)' }] }], nowMs: NOW })
@@ -509,6 +510,38 @@ test('T-721: the stats list each failed try and rank a test that failed 3 tasks 
   expect(full.slice(full.indexOf('Tests that failed most'))).toContain('test 6')
   // no failed try: no such parts
   expect(statsReport({ tasks: [task('T-1', { runs: [ok] })], nowMs: NOW })).not.toContain('Tests that failed most')
+})
+
+test('T-735: tries stopped on purpose (paused, dropped, backlog, turned off) are not failed tries, so the two counts agree', () => {
+  const day = 24 * 60
+  const stop = (min: number, note: string) => ({ started: iso(min + 5), ended: iso(min), ended_by: 'stopped' as const, ended_note: note })
+  const failed = { started: iso(65), ended: iso(60), ended_by: 'finished' as const, ended_note: 'tests failed', failed_command: 'npm test', failed_tests: ['real one'] }
+  const tasks = [
+    task('T-1', { status: 'todo', runs: [failed], history: hist('try 1: did it → tests failed: `npm test` (exit 1)') }),
+    task('T-2', { status: 'paused', runs: [stop(50, 'paused: run only T-1')], history: hist('try 1: stopped: paused: run only T-1') }),
+    task('T-3', { status: 'todo', runs: [stop(45, 'the owner paused the board')], history: hist('try 1: stopped: the owner paused the board') }),
+    task('T-4', { status: 'dropped', runs: [stop(40, 'dropped')] }),
+    task('T-5', { status: 'backlog', runs: [stop(35, 'moved to the backlog')] }),
+    task('T-6', { status: 'todo', runs: [stop(30, 'symcc was disabled')] }),
+    task('T-7', { status: 'todo', runs: [stop(25, 'symcc was turned off')], history: hist('try 1: stopped: symcc was turned off') }),
+  ]
+  for (const t of tasks) t.created_at = iso(day / 2)
+  const text = statsReport({ tasks, nowMs: NOW, range: { kind: 'days', days: 7 }, full: true })
+  expect(text).toContain('Failed tries (1, from history)')
+  expect(text).toContain('Each failed try (1: task · try · reason · failing command · first failing test)')
+  expect(text).toMatch(/T-1 +try 1 +tests failed · `npm test` · real one/)
+  for (const id of ['T-2', 'T-3', 'T-4', 'T-5', 'T-6', 'T-7']) expect(text).not.toMatch(new RegExp(`${id} +try 1`))
+  expect(text).toMatch(/real one +1 try · 1 task/)
+  expect(text).not.toContain('under "Failed tries"')
+  // the HTML page uses the same figures
+  const d = statsData({ tasks, nowMs: NOW, range: { kind: 'days', days: 7 } })
+  expect([d.failedTries.length, d.failedTotal]).toEqual([1, 1])
+  expect(statsHtml(d)).toContain('<h2>Each failed try (1)</h2>')
+  // a try stopped for another reason still fails; when the counts differ the list says why
+  const other = [...tasks, task('T-8', { status: 'failed', runs: [stop(20, 'the worker ended without a result')] })]
+  const t2 = statsReport({ tasks: other, nowMs: NOW, full: true })
+  expect(t2).toMatch(/T-8 +try 1 +the worker ended without a result/)
+  expect(t2).toContain('2 here, 1 under "Failed tries"')
 })
 
 test('T-721: a try waiting for the owner\'s files is not a failed try, and with "inside" a try keeps its own number', () => {

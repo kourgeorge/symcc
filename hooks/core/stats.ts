@@ -85,12 +85,20 @@ export function taskFigures(t: Pick<SymccTask, 'runs'>, nowMs?: number): TaskFig
 /** Why a try failed, read from one history line; null when the line is not a clear failure. */
 export type FailReason = 'tests' | 'clash' | 'scope' | 'changed' | 'stopped' | 'rejected'
 
+/**
+ * T-735: whether a try stopped for `why` was stopped on purpose, not failed: paused (by the owner or the lead, or the
+ * whole board), dropped, moved to the backlog, symcc turned off (disabled), or the lead asking the owner a question.
+ */
+export const onPurposeStop = (why: string | undefined): boolean =>
+  /^(paused\b|dropped\b|moved to the backlog\b|the lead asked the owner a question\b|.* paused the board\b|the board was paused\b|\S+ was (disabled|turned off)\b)/.test(String(why ?? '').trim())
+
 export function failReason(line: string): FailReason | null {
   const l = String(line ?? '')
   if (!/^try \d+\b/.test(l)) return null
   const head = l.replace(/^try \d+(?: \([^)]*\))?:\s*/, '')
   if (/^rejected by the owner\b/.test(head)) return 'rejected'
   if (/^restarted: the task was changed\b/.test(head)) return 'changed'
+  if (onPurposeStop(/^stopped:\s*(.*)$/.exec(head)?.[1])) return null
   if (/^(stopped\b|restarted\b)/.test(head)) return 'stopped'
   const cut = l.lastIndexOf(' → ')
   const outcome = cut < 0 ? '' : l.slice(cut + 3)
@@ -458,8 +466,8 @@ export type StatsFailedTry = { id: string; title: string; try: number; reason: s
 /** T-721: a test that failed: on how many failed tries, and of how many different tasks. */
 export type StatsFailedTest = { name: string; tries: number; tasks: number }
 
-/** T-721: whether try `r` did not fail: not ended yet, restarted, asking, merged, ready for review, passed but waiting for the owner's files, or an investigation's answer. */
-const okEnd = (r: SymccRun) => !r.ended_by || r.ended_by === 'restarted' || r.ended_by === 'asked' || isAnsweredRun(r) || /^(merged|ready for review|waiting for your files)\b/.test(r.ended_note ?? '')
+/** T-721: whether try `r` did not fail: not ended yet, restarted, asking, merged, ready for review, passed but waiting for the owner's files, or an investigation's answer; T-735: also a try stopped on purpose (onPurposeStop). */
+const okEnd = (r: SymccRun) => !r.ended_by || r.ended_by === 'restarted' || r.ended_by === 'asked' || isAnsweredRun(r) || /^(merged|ready for review|waiting for your files)\b/.test(r.ended_note ?? '') || (r.ended_by === 'stopped' && onPurposeStop(r.ended_note))
 
 /**
  * T-721: the failed tries of `tasks` (oldest end first) and the tests that failed in them, the ones that failed most different tasks first.
@@ -717,6 +725,14 @@ export function headlineParts(d: StatsData): string[] {
 
 /** T-721: the short report lists only the latest this many failed tries, and the top this many failing tests. */
 export const FAILED_TRIES_SHORT = 10
+/**
+ * T-735: when "Each failed try" (each try's own end) and "Failed tries" (history lines) count differently, why; '' when
+ * they agree. Both leave out tries stopped on purpose (onPurposeStop).
+ */
+export function failedCountsNote(d: Pick<StatsData, 'failedTries' | 'failedTotal'>): string {
+  if (d.failedTries.length === d.failedTotal) return ''
+  return `${d.failedTries.length} here, ${d.failedTotal} under "Failed tries": this list reads how each saved try ended, that count reads the history lines (it also counts restarts by a change and older tries with no end saved)`
+}
 export const FAILED_TESTS_SHORT = 5
 
 /** The report's first line: "symcc stats · all tasks (12 tasks, incl. 2 archived)". */
@@ -814,6 +830,8 @@ export function statsReport(input: StatsInput & { full?: boolean }): string {
     const shown = full ? d.failedTries : d.failedTries.slice(-FAILED_TRIES_SHORT)
     out.push('', `Each failed try (${d.failedTries.length}: task · try · reason · failing command · first failing test)`)
     if (shown.length < d.failedTries.length) out.push(`  (the latest ${shown.length}; every one: /${name}-stats full)`)
+    const differ = failedCountsNote(d)
+    if (differ) out.push(`  (${differ})`)
     for (const f of shown) out.push(`  ${f.id.padEnd(6)} try ${String(f.try).padEnd(2)} ${[f.reason, f.command && `\`${cutTitle(f.command, 40)}\``, f.test && cutTitle(f.test, 60)].filter(Boolean).join(' · ')}`)
   }
   if (d.failedTests.length) {
