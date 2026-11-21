@@ -744,7 +744,13 @@ are about changes; under "How tasks ended" a read investigation shows as
 - The panel has four views, Tasks, Live, Scouts and Settings, shown as tabs under the banner:
   `[t]: Tasks (12) │ [l]: Live │ [s]: Scouts (3) │ [c]: Settings`, the open one bold, blue and
   underlined (on a narrow panel the tabs get shorter, `[t] Tasks (12)│[l] Live…`, never cut).
-  Press `t`, `l`, `s` or `c` (or click a tab) to switch. The Live tab is in the Claude Code
+  Press `t`, `l`, `s` or `c` (or click a tab) to switch.
+  The header (the banner with its tests/limits line and drive warning, then the tabs) shows
+  only on the list pages: Tasks, Live, Scouts, Settings, and Settings' Roles, Kinds and
+  Organizational memory lists. A page of one thing (a task, a question, a scout or one of its
+  runs, a role, a kind, a role's prompt) starts with its own title instead; its buttons and the
+  key line at the bottom stay. This is the same in the terminal panel, VS Code and OpenCode.
+  Back from a task opened on the Live tab goes back to the Live tab. The Live tab is in the Claude Code
   terminal panel only for now (see [Live tab](#live-tab)). The Scouts view lists each scout on one
   row: an icon (`◉` running, `◎` waiting for its next run, `○` paused), its name, how often
   it runs, when it runs next, what its last run found (`last: found 2`, `last: nothing` or
@@ -1459,9 +1465,11 @@ A stopped worker can't do anything more: symcc refuses every tool it tries to us
 **Several Claude Code windows on the same project?** Only one of them *drives* the
 board (starts workers, merges, runs scouts). The others can see and change the board but
 start nothing. If the driving window closes, another one takes over within a few minutes.
-A window that doesn't drive shows a yellow warning under the board's banner ("Another session
-drives this board … /symcc-drive to drive it from here") and "⚠ driven by another session" in the
-band above the prompt. Its doing tasks say "runs in the other session", and the warning adds
+A window that doesn't drive shows a yellow warning in the board's banner, right under its
+tests/limits line ("⚠ Another session drives. /symcc-drive to drive it from here.", shorter on a
+narrow panel), and "⚠ driven by another session" in the band above the prompt. Like the rest of
+the banner, the warning shows on the list pages only (see the header rule under
+[Live status](#live-status-seeing-the-board)). Its doing tasks say "runs in the other session", and the warning adds
 "it looks idle" when a task has waited over 5 minutes for the driving window to start it.
 To move driving to the window you are in, type `/symcc-drive` there. If another window
 drives, symcc asks it to hand over: within 30 s it stops its workers (the answer says which
