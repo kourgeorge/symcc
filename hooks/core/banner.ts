@@ -135,7 +135,7 @@ export function bandSummary(view: BandSummaryView, nowMs: number, width = Infini
 
 /**
  * The task rows of Claude Code's band above the prompt (T-748, T-776), in this order: one per running task (the Live
- * tab's lanes: its stage's icon, then its name, the time in that stage, the try from try 2 on: "⌕" + "checker 8m · try 3"),
+ * tab's lanes: its stage's icon, then its name, the time in that stage, the try from try 2 on: "⌕" + "checker 8m (try 3)"),
  * the next task to start ("○" + "next up", the first task of the Live tab's next up that waits for nothing), then the
  * tasks that need the owner (needsYou: "?" + "waiting", "◆" + "review", "✗" + "failed", "▶" + "more time?"). `since(id)`:
  * when this session's worker started (for a worker with no open try yet). The counts are on the band's first line (bandSummary).
@@ -154,8 +154,8 @@ export function bandItems(view: LiveView, nowMs: number, since: (id: string) => 
     const ended = toMs(byId.get(l.id)?.runs?.at(-1)?.ended)
     const at = l.stage === 'worker' ? (ended === undefined ? (l.sinceMs ?? toMs(since(l.id))) : (toMs(since(l.id)) ?? l.sinceMs)) :l.station === 'work' ? (ended ?? l.sinceMs) : l.sinceMs
     const time = at !== undefined ? rowDuration(Math.max(0, nowMs - at)) : ''
-    const tries = l.tryNo > 1 ? ` · try ${l.tryNo}` : ''
-    return { id: l.id, title: l.title, kind: 'run', icon: s.icon, forms: [[s.name, time].filter(Boolean).join(' ') + tries, s.name + tries, s.name].map(f => f.replace(/^ · /, '')), tail: tail(byId.get(l.id)!) }
+    const tries = l.tryNo > 1 ? `(try ${l.tryNo})` : ''
+    return { id: l.id, title: l.title, kind: 'run', icon: s.icon, forms: [[s.name, time, tries].filter(Boolean).join(' '), [s.name, tries].filter(Boolean).join(' '), s.name], tail: tail(byId.get(l.id)!) }
   })
   const next = liveTrains(view, nowMs).next.find(x => !x.stuck.length)
   const nextRow: BandItem[] = next ? [{ id: next.id, title: next.title, kind: 'next', icon: STATUS_MARK.todo, forms: [NEXT_UP_STATE], tail: '' }] : []
@@ -172,8 +172,8 @@ const toMs = (x: number | string | undefined): number | undefined => {
 export const BAND_INDENT = 3
 
 /**
- * The fronts of band rows (bandItems) after their icon, lined up: the id padded to one width, two spaces, then the
- * state padded to one width and two spaces, so every title starts in one column: "T-740  checker 8m · try 3  ". The
+ * The fronts of band rows (bandItems) after their icon, lined up: the id padded to one width, a space, then the
+ * state padded to one width and a space, so every title starts in one column: "T-740 checker 8m (try 3) ". The
  * first state form that leaves TITLE_ROOM for the title in `width` columns (the whole row, BAND_INDENT included) is
  * used (the time goes first, then the try).
  */
@@ -184,13 +184,13 @@ export function bandFronts(items: readonly Pick<BandItem, 'id' | 'forms'>[], wid
   let pick = most - 1
   for (let i = 0; i < most; i++) {
     const w = Math.max(0, ...items.map(x => textWidth(formOf(x, i))))
-    if (BAND_INDENT + idWidth + 2 + w + 2 + TITLE_ROOM <= width) {
+    if (BAND_INDENT + idWidth + 1 + w + (w > 0 ? 1 : 0) + TITLE_ROOM <= width) {
       pick = i
       break
     }
   }
   const stateWidth = Math.max(0, ...items.map(x => textWidth(formOf(x, pick))))
-  return new Map(items.map(x => [x.id, `${x.id.padEnd(idWidth)}  ${padWidth(formOf(x, pick), stateWidth)}  `]))
+  return new Map(items.map(x => [x.id, `${x.id.padEnd(idWidth)} ${padWidth(formOf(x, pick), stateWidth)}${stateWidth > 0 ? ' ' : ''}`]))
 }
 
 /** Whether a doing row in the band has a state to show (see bandLeads); without one its note says what goes on. */
