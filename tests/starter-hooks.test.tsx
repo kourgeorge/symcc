@@ -147,6 +147,30 @@ test("T-838 startTrigger: $.agent.spawn's deny makes it reject, an answer with n
   expect(await claudeAgents(fake$().$).startTrigger!()).toEqual({ agentId: 'starter-1' })
 })
 
+test('T-857 startTrigger: stops the starter with TaskStop right after it gets its id; a failing stop changes nothing', async () => {
+  const calls: unknown[] = []
+  const f = fake$()
+  const $ = f.$ as unknown as { tool: { call: (c: unknown) => Promise<unknown> } }
+  $.tool.call = async c => (calls.push(c), { result: 'ok' })
+  expect(await claudeAgents(f.$).startTrigger!()).toEqual({ agentId: 'starter-1' })
+  expect(calls).toEqual([{ tool: 'TaskStop', task_id: 'starter-1' }])
+  const g = fake$()
+  ;(g.$ as unknown as { tool: { call: () => Promise<unknown> } }).tool.call = async () => {
+    throw new Error('no stop')
+  }
+  expect(await claudeAgents(g.$).startTrigger!()).toEqual({ agentId: 'starter-1' })
+})
+
+test('T-857 stopped starter: its turn.complete with an empty answer still starts the queued workers', async () => {
+  const f = fake$()
+  const host = claudeHost(f.$)
+  void startAgent(host, worker('symcc-T-1'))
+  await settle()
+  const r = await registered().get('turn.complete')!.handler(f.$, { agentId: 'starter-1', answer: '' }, () => ({ passed: true }))
+  expect(r).toEqual({ passed: true })
+  expect(f.spawned).toEqual(['symcc-T-1'])
+})
+
 for (const [what, answer] of [['refused', { deny: 'no' }], ['answers no id', {}]] as const) {
   test(`T-838 startTrigger ${what}: startAgent wakes the lead once and the worker starts at the next drainStarts`, async () => {
     const f = fake$(() => answer)
