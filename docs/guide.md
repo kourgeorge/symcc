@@ -1182,7 +1182,7 @@ TASKS
 
    ✓ 67 merged   ↺ 76 sent back   ✗ 0 failed   Σ 320.7M tokens
    ████████████▓▓▒░ workers 84% · checkers 8% · scouts 5% · lead 3%
-   ⌀ per task 2.8M · 9m work · 23m start-to-merge   first try 34%   ⌀ 2.4 tries   ⌕ 68 sent back by the checker
+   ⌀ per task 2.8M · 9m work · 23m start-to-merge   first try 34% · ⌀ 2.4 tries   ⌕ 68 sent back by the checker
    ⏱ 13h 06m agent work · ≈ $64 this session   busiest hour 14:00 · 42M   08 ▁▂▃▅▇▆▅▃▅▇█▆▃ 20
   ```
 
