@@ -420,7 +420,10 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     if (!f || !m || m.at <= openNowDone || m.at < startedAt || !shownSession || m.session !== shownSession) return
     openNowDone = m.at
     if (f.view.open_on_start === false || f.view.enabled === false) return
-    if (ctx.ui.panel.current()?.name !== BOARD_PANEL) ctx.ui.panel.open(BOARD_PANEL)
+    if (ctx.ui.panel.current()?.name !== BOARD_PANEL) {
+      ctx.ui.panel.open(BOARD_PANEL)
+      showTab('live')
+    }
   }
   /** Opens the page of the role, kind or scout just made here once the view file has it (a new role or kind in its
    *  edit mode, as Claude Code's New role does). */

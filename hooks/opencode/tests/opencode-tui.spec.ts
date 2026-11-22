@@ -3743,6 +3743,23 @@ test('T-841: /symcc-enable in this window\'s session opens the board; other wind
   s.board.stop()
 })
 
+test('T-841: /symcc-enable opens the board on the Live tab, not the last used tab', async () => {
+  const s = startCtx({ open_on_start: true, enabled: true })
+  s.shown.session = true
+  s.showSession('me')
+  await s.board.refresh()
+  await s.board.press('t', 'me')
+  expect(s.board.state().tab).toBe('tasks')
+  s.panel.close()
+  s.setView({ open_on_start: true, enabled: false })
+  await s.board.refresh()
+  s.enableIn('me', { open_on_start: true, enabled: true })
+  await s.board.refresh()
+  expect(s.current()?.name).toBe(BOARD_PANEL)
+  expect(s.board.state().tab).toBe('live')
+  s.board.stop()
+})
+
 test('T-841: /symcc-enable in another session, or with open_on_start off, opens nothing', async () => {
   const a = startCtx({ open_on_start: true, enabled: false })
   a.shown.session = true
