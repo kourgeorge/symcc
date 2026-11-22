@@ -12,7 +12,7 @@ import { LIVE_TABS, tabRow as coreTabRow, roleKeys, rolesKeys, kindsKeys, scoutH
 import type { PaneView } from '../../app/state'
 import type { SymccTask } from '../../../types'
 import { ICON } from '../../name'
-import { hasPage, bandLines, bandDraw, BAND_CLICK_HINT, panelLines, panelKeys, parseViewFile, viewFileText, lineText, actionCommand, answerOptions, OWN_ANSWER, viewDefs, panelTaskActions, TASK_ACTION_COMMANDS, SETTINGS_OPEN, approveSent, APPROVE_SENT_MS, drawnLines, gitRowLines, boardPageOf, defDraftOf, defEditKeys, noDescriptionText, draftError, SETUP_GIT_ASK, EDIT_FIRST_BOX, newNameError, type ViewFile, type PanelChoice } from '../board-view'
+import { PANEL_MARK, hasPage, bandLines, bandDraw, BAND_CLICK_HINT, panelLines, panelKeys, parseViewFile, viewFileText, lineText, actionCommand, answerOptions, OWN_ANSWER, viewDefs, panelTaskActions, TASK_ACTION_COMMANDS, SETTINGS_OPEN, approveSent, APPROVE_SENT_MS, drawnLines, gitRowLines, boardPageOf, defDraftOf, defEditKeys, noDescriptionText, draftError, SETUP_GIT_ASK, EDIT_FIRST_BOX, newNameError, type ViewFile, type PanelChoice } from '../board-view'
 import { readFile } from 'node:fs/promises'
 import { rowEndBoard, ROW_END, ROW_END_NOW } from '../../../tests/row-end-cases'
 import { BRANCH_LINES_100, branchFactsAt, branchTasks, taskBranchDoing, taskBranchLong, taskBranchMerged, taskBranchTasks } from '../../../tests/branches-fixture'
@@ -47,6 +47,14 @@ function viewFile(): ViewFile {
   const view: PaneView = { tasks: b.tasks, working: [{ task: 'T-1', since: NOW - 3 * 60_000 }], scouts: [], mode: 'auto', test_commands: ['bun test'], max_parallel: 2, max_minutes: 30, auto_retries: 1, driving: true, home_branch: 'main', branch_note: '' }
   return { root: '/work/proj', home: '/work', name: 'symcc', version: '0.9.0', written_at: NOW, view }
 }
+
+
+/**
+ * T-888: what the board panel sent, without the PANEL_MARK every send ends with (the server keeps a panel press's
+ * answer a quiet note by it); a send without the mark shows up as "NO PANEL MARK: ..." so every send check fails.
+ */
+const unmarked = <T extends { text: string }>(input: T): T =>
+  ({ ...input, text: input.text.endsWith(PANEL_MARK) ? input.text.slice(0, -PANEL_MARK.length) : `NO PANEL MARK: ${input.text}` })
 
 test('the view file round-trips, and a broken or foreign one reads as none', () => {
   const f = viewFile()
@@ -402,7 +410,7 @@ test('startTui on a fake OpenCode TUI: reads the view file in its folder, draws 
     location: { directory: '/work/proj' },
     theme: { primary: 'blue' },
     renderer: { width: 120, height: 200 },
-    client: { session: { command: async input => void sent.push(input) } },
+    client: { session: { command: async input => void sent.push(unmarked(input)) } },
     keymap: { layer: factory => void layers.push(factory()) },
     ui: {
       toast: { show: o => void toasts.push(o.message) },
@@ -503,7 +511,7 @@ test('T-887: opening the board while git is not ok posts nothing into the sessio
       location: { directory: '/work/proj' },
       theme: { primary: 'blue' },
       renderer: { width: 120, height: 200 },
-      client: { session: { command: async input => void sent.push(input) } },
+      client: { session: { command: async input => void sent.push(unmarked(input)) } },
       keymap: { layer: factory => void layers.push(factory()) },
       ui: {
         toast: { show: () => undefined },
@@ -557,7 +565,7 @@ test('T-584: a task page offers every one of core\'s taskActions with a key (but
     location: { directory: '/work/proj' },
     theme: {},
     renderer: { width: 140, height: 200 },
-    client: { session: { command: async input => void sent.push(input) } },
+    client: { session: { command: async input => void sent.push(unmarked(input)) } },
     keymap: { layer: () => undefined },
     ui: {
       toast: { show: () => undefined },
@@ -707,7 +715,7 @@ test('T-680, T-751: a task page header has the buttons in groups, words only (th
     location: { directory: '/work/proj' },
     theme: {},
     renderer: { width: 142, height: 200 },
-    client: { session: { command: async input => void sent.push(input) } },
+    client: { session: { command: async input => void sent.push(unmarked(input)) } },
     keymap: { layer: () => undefined },
     ui: {
       toast: { show: () => undefined },
@@ -1110,7 +1118,7 @@ test('T-558: the mouse works like the keys: a click on a row opens its task, on 
     location: { directory: '/work/proj' },
     theme: {},
     renderer: { width: 120, height: 200 },
-    client: { session: { command: async input => void sent.push(input) } },
+    client: { session: { command: async input => void sent.push(unmarked(input)) } },
     keymap: { layer: () => undefined },
     ui: {
       toast: { show: () => undefined },
@@ -1335,7 +1343,7 @@ test('T-559: startTui: t, s and c switch tabs (a click on a tab too); on a scout
     location: { directory: '/work/proj' },
     theme: {},
     renderer: { width: 140, height: 200 },
-    client: { session: { command: async input => void sent.push(input) } },
+    client: { session: { command: async input => void sent.push(unmarked(input)) } },
     keymap: { layer: () => undefined },
     ui: {
       toast: { show: () => undefined },
@@ -1546,7 +1554,7 @@ test('T-562: startTui: Settings opens Roles, a role\'s page turns it on and rese
     location: { directory: '/work/proj' },
     theme: {},
     renderer: { width: 140, height: 200 },
-    client: { session: { command: async input => void sent.push(input) } },
+    client: { session: { command: async input => void sent.push(unmarked(input)) } },
     keymap: { layer: () => undefined },
     ui: {
       toast: { show: o => void toasts.push(o.message) },
@@ -1692,7 +1700,7 @@ test('T-583: on a waiting task\'s and a question\'s page each choice is a clicka
     location: { directory: '/work/proj' },
     theme: {},
     renderer: { width: 120, height: 200 },
-    client: { session: { command: async input => void sent.push(input) } },
+    client: { session: { command: async input => void sent.push(unmarked(input)) } },
     keymap: { layer: () => undefined },
     ui: {
       toast: { show: () => undefined },
@@ -1790,7 +1798,7 @@ test('T-585: the Settings tab\'s groups open and close like the Claude Code boar
     location: { directory: '/work/proj' },
     theme: {},
     renderer: { width: 140, height: 200 },
-    client: { session: { command: async input => void sent.push(input) } },
+    client: { session: { command: async input => void sent.push(unmarked(input)) } },
     keymap: { layer: () => undefined },
     ui: {
       toast: { show: () => undefined },
@@ -2079,7 +2087,7 @@ test('T-619, T-687: startTui: the Live tab\'s "[all]" button (T-866: not m) open
     location: { directory: '/work/proj' },
     theme: {},
     renderer: { width: 140 },
-    client: { session: { command: async input => void sent.push(input) } },
+    client: { session: { command: async input => void sent.push(unmarked(input)) } },
     keymap: { layer: () => undefined },
     ui: {
       toast: { show: () => undefined },
@@ -2186,7 +2194,7 @@ test('T-718: startTui: Enter on a topic opens its notes\' page, b returns to the
     location: { directory: '/work/proj' },
     theme: {},
     renderer: { width: 100 },
-    client: { session: { command: async input => void sent.push(input) } },
+    client: { session: { command: async input => void sent.push(unmarked(input)) } },
     keymap: { layer: () => undefined },
     ui: {
       toast: { show: () => undefined },
@@ -2661,7 +2669,7 @@ test('T-685: in the TUI a click on each of those buttons does exactly what its k
     location: { directory: '/work/proj' },
     theme: {},
     renderer: { width: 142, height: 200 },
-    client: { session: { command: async input => void sent.push(input) } },
+    client: { session: { command: async input => void sent.push(unmarked(input)) } },
     keymap: { layer: () => undefined },
     ui: {
       toast: { show: () => undefined },
@@ -3425,7 +3433,7 @@ async function tuiOn(f: ViewFile) {
     location: { directory: '/work/proj' },
     theme: {},
     renderer: { width: 142, height: 200 },
-    client: { session: { command: async input => void sent.push(input) } },
+    client: { session: { command: async input => void sent.push(unmarked(input)) } },
     keymap: { layer: () => undefined },
     ui: {
       toast: { show: () => undefined },
@@ -3687,7 +3695,7 @@ test('T-861/T-887: opening the board (/symcc-board) sends no /symcc-settings git
   for (const [state, want] of [['no-repo', 0], ['no-commits', 0], [undefined, 0]] as const) {
     const f = fakeCtx({})
     const sent: { name: string; text: string }[] = []
-    const ctx: TuiContext = { ...f.ctx, client: { session: { command: async i => void sent.push(i) } } }
+    const ctx: TuiContext = { ...f.ctx, client: { session: { command: async i => void sent.push(unmarked(i)) } } }
     const board = startTui(ctx, { runtime: fakeRuntime(), readText: async () => viewFileText(addedViewFile(state)), every: () => () => undefined, now: () => NOW })
     await board.refresh()
     f.slots.find(s => s.append === 'session.composer.top')!.render({ sessionID: 's' } as never)

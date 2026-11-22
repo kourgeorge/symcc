@@ -37,8 +37,8 @@ import { TOOLS, leadGuide, manual } from '../../app/tools'
 import { ASK_TOOL_DEF } from '../../app/ask'
 import { COMMANDS, toolCall, notLeadText, runCommand as symccCommand } from '../../app/symcc'
 import { scoutToolRefusal } from '../../core/scouts'
-import { workerToolRefusal } from '../tools'
-import { parseViewFile } from '../board-view'
+import { workerToolRefusal, ownerAnswerText } from '../tools'
+import { parseViewFile, PANEL_MARK } from '../board-view'
 
 // T-509: limits far above a normal run, for a machine at load 200-500 where one git command or a copy's start can take
 // seconds. Every wait below ends as soon as what it waits for happens, so a larger limit never slows a passing run;
@@ -1230,7 +1230,7 @@ test('each session is offered only the symcc tools it may call, and the lead get
   }
 }, TEST_MS)
 
-test('each slash command is added and runs symcc\'s runCommand: an answer only for the owner is a synthetic message that wakes nobody, /symcc is the text board, and the help has no Claude-panel lines', async () => {
+test('each slash command is added and runs symcc\'s runCommand: a typed one (TUI or web page, T-888) answers for the owner in a normal chat message the web page shows, a board panel press (PANEL_MARK) in a synthetic note that wakes nobody, /symcc is the text board, and the help has no Claude-panel lines', async () => {
   reset()
   const p = await project()
   try {
@@ -1257,10 +1257,24 @@ test('each slash command is added and runs symcc\'s runCommand: an answer only f
     // every command answers in the lead's chat
     for (const name of c.commands.keys()) expect([name, (await run(name)).added]).toEqual([name, 1])
     // its args are the text after the command, with or without the command in front
+    const helpText = (await symccCommand(host!, 'symcc-help', 'commands'))!.text
+    // T-888: typed (in the TUI, or the web page, which sends it through the same session command path), the answer
+    // for the owner is a normal chat message (the web page shows only a label for a synthetic note), not a synthetic one
+    const synthTyped = toLead(f.synthetic).length
     const help = await run('symcc-help', 'commands')
-    const shown = help.synthetic.at(-1)!
-    expect(shown).toEqual({ sessionID: lead, text: (await symccCommand(host!, 'symcc-help', 'commands'))!.text, delivery: 'steer', resume: false })
-    expect((await run('symcc-help', '/symcc-help commands')).synthetic.at(-1)!.text).toBe(shown.text)
+    expect(help.added).toBe(1)
+    expect(help.synthetic.length).toBe(synthTyped)
+    expect(help.prompts.at(-1)!).toEqual({ sessionID: lead, text: ownerAnswerText('symcc-help', helpText), delivery: 'steer' })
+    expect(help.prompts.at(-1)!.text.startsWith(helpText)).toBe(true)
+    expect(help.prompts.at(-1)!.text).toContain('no reply needed')
+    expect((await run('symcc-help', '/symcc-help commands')).prompts.at(-1)!.text).toBe(ownerAnswerText('symcc-help', helpText))
+    // the board panel's press carries PANEL_MARK: the same answer as a quiet synthetic note that doesn't wake the lead
+    const promptsPanel = toLead(f.prompts).length
+    const pressed = await run('symcc-help', `/symcc-help commands${PANEL_MARK}`)
+    expect(pressed.added).toBe(1)
+    expect(pressed.prompts.length).toBe(promptsPanel)
+    const shown = pressed.synthetic.at(-1)!
+    expect(shown).toEqual({ sessionID: lead, text: helpText, delivery: 'steer', resume: false })
     for (const line of ['/symcc opens everything', 'the whole panel', 'On the board: t tasks', 'In the panel nothing needs Esc', 'open the board panel', 'In the settings view']) expect(shown.text).not.toContain(line)
     expect(shown.text).toContain('/symcc shows the board as text')
     // the Claude host's help (every feature on) keeps its panel lines
@@ -1268,15 +1282,16 @@ test('each slash command is added and runs symcc\'s runCommand: an answer only f
     expect(manual('commands')).toContain('In the panel nothing needs Esc')
     expect(manual('commands', OPENCODE_FEATURES)).toBe(shown.text)
     // /symcc: no panel yet, so the text board
-    const board = (await run('symcc')).synthetic.at(-1)!
+    const board = (await run('symcc')).prompts.at(-1)!
     expect(board.text).toContain('T-1')
-    expect(board.resume).toBe(false)
+    expect(board.text).toContain('the answer to /symcc,')
     // a command that isn't only for the owner (the scouts list when no panel opens) is a prompt the lead answers
     const synthBefore = toLead(f.synthetic).length
-    const scouts = await run('symcc-scouts')
+    const scouts = await run('symcc-scouts', PANEL_MARK)
     expect(scouts.added).toBe(1)
     expect(scouts.synthetic.length).toBe(synthBefore)
     expect(scouts.prompts.at(-1)!.delivery).toBe('steer')
+    expect(scouts.prompts.at(-1)!.text).not.toContain('no reply needed')
     await settle()
     await end!()
     await settle()
@@ -1374,9 +1389,9 @@ test('/symcc-disable then /symcc-enable through OpenCode\'s commands in the lead
     await c.hooks.prompt!({ sessionID: lead })
     expect([...leads().values()]).toEqual([lead])
     const run = async (name: string, text = '') => {
-      const before = f.synthetic.filter(x => x.sessionID === lead).length
+      const before = f.prompts.filter(x => x.sessionID === lead).length
       await c.commands.get(name)!.execute({ sessionID: lead, prompt: { text }, delivery: 'steer' })
-      const answers = f.synthetic.filter(x => x.sessionID === lead).slice(before)
+      const answers = f.prompts.filter(x => x.sessionID === lead).slice(before)
       expect(answers.length).toBe(1)
       return answers[0]!.text
     }
@@ -1435,9 +1450,9 @@ test('T-844: /symcc-init through OpenCode\'s commands: a folder with no board st
     const lead = f.lead(main)
     await c.hooks.prompt!({ sessionID: lead })
     const run = async (name: string, text = '') => {
-      const before = f.synthetic.filter(x => x.sessionID === lead).length
+      const before = f.prompts.filter(x => x.sessionID === lead).length
       await c.commands.get(name)!.execute({ sessionID: lead, prompt: { text }, delivery: 'steer' })
-      return f.synthetic.filter(x => x.sessionID === lead).slice(before).map(x => x.text).join('\n')
+      return f.prompts.filter(x => x.sessionID === lead).slice(before).map(x => x.text).join('\n')
     }
     const mark = async () => parseViewFile(await readFile(`${main}/.symcc/view.json`, 'utf8').catch(() => null))?.open_now
     expect(await run('symcc-enable')).toContain('/symcc-init to create one here')
@@ -1451,7 +1466,7 @@ test('T-844: /symcc-init through OpenCode\'s commands: a folder with no board st
     const first = await mark()
     expect(first?.session).toBe(lead)
     await new Promise<void>(r => setTimeout(() => r(), 15))
-    expect(await run('symcc-init')).toBe('symcc is already set up here.')
+    expect(await run('symcc-init')).toBe(ownerAnswerText('symcc-init', 'symcc is already set up here.'))
     expect(await mark()).toEqual(first)
     await settle()
     await end!()
@@ -1483,7 +1498,8 @@ test('the TUI\'s view file (T-466, R6): each publish writes .symcc/view.json; /s
     await tool('symcc_ask', { task: 'T-2', question: 'Which database?' })
     await until(async () => (await view())!.view.tasks.find(t => t.id === 'T-2')!.status === 'waiting')
     const run = async (text: string) => {
-      await c.commands.get('symcc-answer')!.execute({ sessionID: lead, prompt: { text }, delivery: 'steer' })
+      // (T-888) the board panel sends /symcc-answer, with its PANEL_MARK
+      await c.commands.get('symcc-answer')!.execute({ sessionID: lead, prompt: { text: `${text}${PANEL_MARK}` }, delivery: 'steer' })
       return f.synthetic.at(-1)!
     }
     expect((await run('')).text).toContain('/symcc-answer T-5 <answer>')
