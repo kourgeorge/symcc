@@ -77,6 +77,29 @@ test('/symcc-init in a folder with its own .git creates board.json with symcc on
   expect(w.panel.view()).toMatchObject({ on_here: true })
 })
 
+test('T-844: a window that started with no board looks again: /symcc-enable here turns it on as a second lead; /symcc-init says already set up and switches it on', async () => {
+  for (const cmd of ['symcc-enable', 'symcc-init'] as const) {
+    const w = world('b')
+    w.files.set(`${ROOT}/.git`, '')
+    await sessionStart(w.host)
+    expect(S.fresh).toBe(true)
+    // another window made the board and drives it
+    w.files.set(w.board, JSON.stringify(emptyBoard()))
+    w.files.set(w.lead, JSON.stringify({ session: 'a', heartbeat: Date.now() }))
+    const r = await runCommand(w.host, cmd, cmd === 'symcc-enable' ? 'here' : '')
+    expect(r?.text).toContain(cmd === 'symcc-enable' ? 'is on in this window' : 'already set up here')
+    expect(S.fresh).toBe(false)
+    if (cmd === 'symcc-enable') {
+      expect(S.offHere).toBe(false)
+      expect(await leadGuideText(w.host)).toBeDefined()
+    } else {
+      // started the normal way: off here, because another window drives
+      expect(S.offHere).toBe(true)
+    }
+    expect((await runCommand(w.host, 'symcc-enable', ''))?.text).not.toBe(notSetUpAnswer(S.N.name))
+  }
+})
+
 test('a folder with an existing board still starts on, with or without `enabled`', async () => {
   for (const board of [JSON.stringify(emptyBoard()), JSON.stringify((({ enabled: _e, ...rest }) => rest)(emptyBoard()))]) {
     const w = world('a')

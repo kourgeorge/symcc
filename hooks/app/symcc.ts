@@ -218,6 +218,14 @@ async function createBoardIn(host: Host, dir: string, setUpGit: boolean): Promis
   return ''
 }
 
+/** A window that started with no board looks again for the nearest board; if one is there now, it starts the normal way (off here when another window drives, a lead otherwise). */
+async function refreshFresh(host: Host) {
+  if (!S.fresh || S.guardOnly) return
+  const own = await sessionFolder(host)
+  const main = (await projectRoot(host, own).catch(() => own)) || own
+  if (await host.fs.exists(`${main}/${S.N.boardFile}`).catch(() => false)) await sessionStart(host).catch(() => undefined)
+}
+
 /**
  * T-844: /<name>-init, like the git command that starts a repo: creates the board in the folder the session started in,
  * turns symcc on, and starts what a normal start does (the lead claim, example scouts, timers, git check, the panel); the
@@ -555,6 +563,8 @@ export async function runCommand(host: Host, command: string, args: string): Pro
   // board (help, opening the panel, a usage line) still work; the others answer with the reason.
   // T-844: /<name>-init comes before anything reads the session's board: a broken board above never blocks it
   const early = parseCommand(command, args, undefined, S.N.name)
+  // T-844: a window that started with no board looks again: another window may have made the board since
+  if (early && early.kind !== 'bad' && early.kind !== 'help') await refreshFresh(host)
   if (early?.kind === 'init') return { text: await initProject(host, t => tellLead(host, t), !!early.git), isTextDisplayOnly: true }
   const loaded = await load(host).then(
     board => ({ board, broken: '' }),
