@@ -133,7 +133,7 @@ export function stashTask(b: Board, id: string, now: string, reason = ''): Board
   if (t.status === 'backlog') return b
   if (!BACKLOG_FROM.includes(t.status)) throw new Error(`${t.id} is ${STATUS_WORD[t.status]}; only a task that is to do, paused or failed can go to the backlog`)
   const why = clean(reason, 280)
-  return patchTask(b, t.id, { status: 'backlog', note: why ? `in the backlog: ${why}` : 'in the backlog', ...(failedOnClash(t) ? { merge_main: true } : {}), history: withHistory(t.history, now, ['moved-backlog', `moved to the backlog (was ${t.status})${why ? `: ${why}` : ''}`]) }, now)
+  return patchTask(b, t.id, { status: 'backlog', note: why ? `in the backlog: ${why}` : 'in the backlog', ...(failedOnClash(t) ? { merge_main: true } : {}), history: withHistory(t.history, now, ['moved-backlog', `moved to the backlog (was ${t.status})${why ? `: ${why}` : ''}`, { backlog: true }]) }, now)
 }
 
 /** "Promote": task `id` leaves the backlog for "todo", so a worker may start on it. A history line says so. */
@@ -315,7 +315,7 @@ function answeredTask(b: Board, id: string, what: string): BoardTask {
 export function investigationDone(b: Board, id: string, now: string, kept?: string): Board {
   const t = answeredTask(b, id, 'marked done')
   const line = `try ${t.attempts}: the owner read the answer → done (nothing merged)${kept ? `; kept as a note by ${kept}` : ''}`
-  return patchTask(b, t.id, { status: 'done', note: kept ? `answered; kept as a note by ${kept}` : 'answered', merge_main: false, test_output: undefined, history: withHistory(t.history, now, ['done', line]) }, now)
+  return patchTask(b, t.id, { status: 'done', note: kept ? `answered; kept as a note by ${kept}` : 'answered', merge_main: false, test_output: undefined, history: withHistory(t.history, now, ['done', line, { try: Number(t.attempts) || 0, result: `done (nothing merged)${kept ? `; kept as a note by ${kept}` : ''}` }]) }, now)
 }
 
 /** `s` in lower case with every run of other characters turned into one "-", and no "-" at either end. */
@@ -431,5 +431,5 @@ export function askMoreTask(b: Board, id: string, question: string, answer: stri
   const body = answer.trim() || t.answer?.trim() || ''
   const fits = body && t.details.length + head.length + body.length + where.length + 40 <= DETAILS_MAX
   const added = fits ? `${head}${report ? ` (in full in ${report})` : ''}:\n${body}` : `${head}${where || ' was not saved'}.`
-  return patchTask(b, t.id, { status: 'todo', note: `asked more: ${q.slice(0, 280)}`, details: withAsk(t.details.trimEnd(), added), answer: undefined, test_tries: 0, test_output: undefined, merge_main: false, history: withHistory(t.history, now, ['asked', `try ${t.attempts}: the owner asked more: ${q}`]) }, now)
+  return patchTask(b, t.id, { status: 'todo', note: `asked more: ${q.slice(0, 280)}`, details: withAsk(t.details.trimEnd(), added), answer: undefined, test_tries: 0, test_output: undefined, merge_main: false, history: withHistory(t.history, now, ['asked', `try ${t.attempts}: the owner asked more: ${q}`, { try: Number(t.attempts) || 0 }]) }, now)
 }

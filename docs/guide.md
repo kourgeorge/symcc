@@ -2070,7 +2070,9 @@ its read-only `stats` tool.
   (the worker ended without one), no change, not merged (also when your files on main
   can't be updated; a try that only left out secret-looking files waits for you and is not
   counted), other (an API error, a refusal, the
-  worker ending its turn early, checking that failed), restarted by a change, stopped, rejected;
+  worker ending its turn early, checking that failed), restarted by a change, stopped, rejected
+  (biggest count first; a reason with fewer than 3 tries is folded into "other", its name and
+  count listed after it; each history line carries its reason, so the stats never read it back out of the words);
   "Each failed try" counts the same failed tries, except tries rejected by you and restarts, and
   says so when the two counts differ); each failed try on its own line (task, try, how it ended, and when its tests failed,
   the failing test command and the first failing test; the short view shows the latest 10); the

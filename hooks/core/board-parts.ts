@@ -8,7 +8,6 @@
 // ARCHIVE_FILE_BYTES. Every function here is pure; app/store.ts and app/archive.ts read and write the files.
 import type { SymccStatus } from '../../types'
 import type { Board, BoardTask } from './board-file'
-import { failReason } from './stats'
 
 /** The folder (inside the data folder) that holds the finished tasks' parts files. */
 export const PARTS_DIR = 'tasks'
@@ -142,7 +141,7 @@ export const VIEW_MARKS_KEY = 'history_marks'
 /** The history kinds whose times a finished view task keeps (merges, the checker's send-backs and the 'failed' lines of tests failed or a clash with main, see core/live.ts liveToday). */
 export const VIEW_MARK_KINDS: readonly string[] = ['merged', 'checker-problems', 'failed']
 /** A history line's kind and time, as a finished view task keeps it. */
-export type ViewMark = { kind: string; at?: string }
+export type ViewMark = { kind: string; at?: string; reason?: string }
 
 /** The history marks of view task `t`: its own `history_marks` when it is a finished one slimmed by viewTask, else undefined. */
 export function viewMarks(t: object): ViewMark[] | undefined {
@@ -160,7 +159,7 @@ export function viewTask<T extends { id: string; status: SymccStatus }>(t: T): T
   if (!file) return t
   const x = { ...t } as Record<string, unknown>
   const history = Array.isArray(x.history) ? x.history.filter(isObj) : []
-  x[VIEW_MARKS_KEY] = history.filter(h => VIEW_MARK_KINDS.includes(String(h.kind)) && (h.kind !== 'failed' || ['tests', 'clash'].includes(String(failReason(String(h.text)))))).map(h => ({ kind: String(h.kind), ...(typeof h.at === 'string' ? { at: h.at } : {}) }))
+  x[VIEW_MARKS_KEY] = history.filter(h => VIEW_MARK_KINDS.includes(String(h.kind)) && (h.kind !== 'failed' || ['tests', 'clash'].includes(String(h.reason)))).map(h => ({ kind: String(h.kind), ...(typeof h.at === 'string' ? { at: h.at } : {}), ...(typeof h.reason === 'string' ? { reason: h.reason } : {}) }))
   for (const k of VIEW_LEFT_OUT) delete x[k]
   if (isObj(x.origin)) {
     const { request: _r, evidence: _e, ...origin } = x.origin

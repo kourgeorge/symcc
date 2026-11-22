@@ -51,7 +51,7 @@ test('boardEvents covers every task of a write; the stage lines go into the hist
   expect(stageLine(ev('stage', 'checker', 'queue', { place: 2 }), {})).toBe('try 1: waits in the merge queue (place 2)')
   expect(stageLine(ev('stage', 'prep', null), {})).toBe(null)
   const b = withStageHistory({ ...emptyBoard(), tasks: after.tasks }, events)
-  expect(b.tasks[0]!.history).toEqual([{ at: AT, kind: 'stage', text: 'try 1: prep started' }])
+  expect(b.tasks[0]!.history).toEqual([{ at: AT, kind: 'stage', text: 'try 1: prep started', try: 1, step: 'prep' }])
   expect(b.tasks[1]!.history).toEqual([])
 })
 

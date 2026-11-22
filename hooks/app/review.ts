@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { type Blockers, type BoardTask, type TurnStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, testTimeoutMs, isInvestigation, testsWithChangesOf, untestedChange, untestedText, shortSha, secretFiles, secretsLeftText, onlySecretsQuestion, nameList, isPlainRelPath, SCRATCH_DIR, stepNote, movedText, tryLabel, withHistory } from '../board'
+import { type Blockers, type BoardTask, type TurnStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, testTimeoutMs, isInvestigation, testsWithChangesOf, untestedChange, untestedText, shortSha, secretFiles, secretsLeftText, onlySecretsQuestion, nameList, isPlainRelPath, SCRATCH_DIR, stepNote, movedText, tryLabel, tryEntry, taskWasResult, type FailReason, withHistory } from '../board'
 import { gitOk, git, worktreeDir, asSymcc, taskBranch, branchExists, scratchOn } from './git'
 import { S, changesCache } from './state'
 import type { Host } from '../host'
@@ -104,7 +104,7 @@ export async function changesText($: Host, target: string, t: SymccTask, file = 
  * `timedOut`: a test command was stopped by its time limit (these minutes); it fails like a failing test, with its
  * output in `testOutput` (T-547), only its note says so (see settle).
  */
-export type CheckResult = { ok: boolean; detail: string; timedOut?: number; command?: string; conflict?: boolean; testOutput?: string; review?: boolean; merged?: string; notes?: string[]; blocked?: Blockers; untested?: string; checker?: boolean; again?: boolean; noVerdict?: string; secrets?: string[]; ask?: string; gone?: boolean; moved?: boolean }
+export type CheckResult = { ok: boolean; detail: string; reason?: FailReason; earlier?: boolean; timedOut?: number; command?: string; conflict?: boolean; testOutput?: string; review?: boolean; merged?: string; notes?: string[]; blocked?: Blockers; untested?: string; checker?: boolean; again?: boolean; noVerdict?: string; secrets?: string[]; ask?: string; gone?: boolean; moved?: boolean }
 
 /** T-733: how many times one try's branch goes back into the merge line for each reason (main moved by hand, a reload cut its tests off), so it can't loop. */
 export const AGAIN_MAX = 2
@@ -123,12 +123,12 @@ export async function noteAgain($: Host, t: Pick<SymccTask, 'id' | 'status' | 'a
   await change($, x => {
     const cur = find(x, t.id)
     if (!cur || cur.status !== t.status || cur.attempts !== t.attempts) return x
-    return patchTask(x, t.id, { history: withHistory(cur.history, now(), ['step', `${tryLabel(cur)}: ${why}`]) }, now())
+    return patchTask(x, t.id, { history: withHistory(cur.history, now(), tryEntry(cur, 'step', why)) }, now())
   }).catch(() => undefined)
 }
 
 /** T-440: the branch the task merges into (`target`) was deleted while it was checked: nothing merged; the caller makes the task wait with the "branch is gone" question (waitIfBranchGone). */
-export const goneResult = (target: string): CheckResult => ({ ok: false, gone: true, detail: `not merged: branch ${target} is gone` })
+export const goneResult = (target: string): CheckResult => ({ ok: false, gone: true, reason: 'notmerged', detail: `not merged: branch ${target} is gone` })
 
 /**
  * The checker setting (T-551): what the checker, run after the prep step and before the task joins the merge line
@@ -162,7 +162,7 @@ export type CheckMode = 'finish' | 'approve' | 'merge'
 export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board, mode: CheckMode = 'finish', made: string[] = [], stop: () => string | undefined = () => undefined, retest = false, release?: Promise<unknown>, limit?: TurnLimit, first?: (changed: readonly string[]) => Promise<BeforeLine>): Promise<CheckResult> {
   const stopped = (): CheckResult | undefined => {
     const why = stop()
-    return why ? { ok: false, detail: `not merged: the task was ${why} while it was being checked` } : undefined
+    return why ? taskWasResult(why) : undefined
   }
   // the branch this task merges into: the one checked out when it was made
   const target = intoOf(t)
@@ -171,23 +171,23 @@ export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board
   // fails on a pathspec naming an ignored path (T-477). As a second safeguard, anything under it that still got staged
   // is unstaged below, but not where the project keeps files there in git (scratchOn false): those are staged as usual.
   const add = await git($, ['add', '-A', '--', '.'], dir)
-  if (add.exitCode !== 0) return { ok: false, detail: `symcc could not stage the work (git add): ${gitFailText(add)}` }
+  if (add.exitCode !== 0) return { ok: false, reason: 'other', detail: `symcc could not stage the work (git add): ${gitFailText(add)}` }
   // Files whose names look like secrets (.env, *.pem, *.key, id_rsa, ...) are taken out of what is staged
   // before the commit: they stay in the folder, but never reach a commit or the target branch.
   // Deletions are kept (--diff-filter=d): removing such a file from the project is allowed.
   const staged = await git($, ['diff', '--cached', '--name-only', '--no-renames', '--diff-filter=d', '-z'], dir)
-  if (staged.exitCode !== 0) return { ok: false, detail: `symcc could not list the staged work (git diff --cached): ${gitFailText(staged)}` }
+  if (staged.exitCode !== 0) return { ok: false, reason: 'other', detail: `symcc could not list the staged work (git diff --cached): ${gitFailText(staged)}` }
   const stagedNames = staged.stdout.split('\0').filter(Boolean)
   const left = secretFiles(stagedNames)
   if (await scratchOn($, dir)) {
     const inScratch = stagedNames.filter(f => f.startsWith(`${SCRATCH_DIR}/`))
     const why = await unstage($, dir, inScratch)
-    if (why) return { ok: false, detail: `symcc could not leave out the worker's ${SCRATCH_DIR}/ folder: ${why}` }
+    if (why) return { ok: false, reason: 'other', detail: `symcc could not leave out the worker's ${SCRATCH_DIR}/ folder: ${why}` }
   }
   const unstaged = await unstage($, dir, left)
-  if (unstaged) return { ok: false, detail: `symcc could not leave out files that look like secrets (${nameList(left)}): ${unstaged}` }
+  if (unstaged) return { ok: false, reason: 'other', detail: `symcc could not leave out files that look like secrets (${nameList(left)}): ${unstaged}` }
   const committed = await commitTry($, t, dir, made)
-  if (committed) return { ok: false, detail: `symcc could not commit the work: ${committed}` }
+  if (committed) return { ok: false, reason: 'other', detail: `symcc could not commit the work: ${committed}` }
   if (!(await branchExists($, target))) return goneResult(target)
   const main = await gitOk($, ['rev-parse', `refs/heads/${target}`])
   let head = await gitOk($, ['rev-parse', 'HEAD'], dir)
@@ -202,7 +202,7 @@ export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board
   const inBranch = secretFiles(await changedSince($, base, head, true))
   if (inHistory.length || inBranch.length) {
     const why = await dropFromBranch($, t, dir, base, inBranch, made)
-    if (why) return { ok: false, detail: `symcc could not take files that look like secrets out of the task's branch (${nameList([...new Set([...inHistory, ...inBranch])].sort())}): ${why}` }
+    if (why) return { ok: false, reason: 'other', detail: `symcc could not take files that look like secrets out of the task's branch (${nameList([...new Set([...inHistory, ...inBranch])].sort())}): ${why}` }
     head = await gitOk($, ['rev-parse', 'HEAD'], dir)
     changed = await changedSince($, base, head)
     left.push(...inBranch)
@@ -219,20 +219,20 @@ export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board
     // Nothing new, but this task's own work is already on the target branch (an earlier try merged
     // it and a reload sent the task back): it is done, not failed. Checked first: files an earlier try
     // left out as secrets are still in the folder then, and must not turn this into a question.
-    if (await onTarget($, t.id, head, target)) return withSecrets({ ok: true, merged: head, detail: `already merged into ${target} (${shortSha(head)}) by an earlier try; nothing new to merge` })
+    if (await onTarget($, t.id, head, target)) return withSecrets({ ok: true, merged: head, earlier: true, detail: `already merged into ${target} (${shortSha(head)}) by an earlier try; nothing new to merge` })
     if (secrets.length) {
       const ask = onlySecretsQuestion(t.id, secrets)
       // Nothing merges: settle makes the task wait for the owner with the question.
       return { ok: false, secrets, ask, detail: `not merged: ${secretsLeftText(secrets)}, and the task changed nothing else` }
     }
-    return { ok: false, detail: 'the worker made no change' }
+    return { ok: false, reason: 'nochange', detail: 'the worker made no change' }
   }
   const bad = outOfScope(changed, t.files, S.N.dir)
   if (bad.length) {
     // On approve the owner's edits stay in the folder: once the files are allowed, approving again merges them.
-    if (mode !== 'finish') return withSecrets({ ok: false, detail: outOfScopeText(bad, t.files) })
+    if (mode !== 'finish') return withSecrets({ ok: false, reason: 'scope', detail: outOfScopeText(bad, t.files) })
     const undo = await undoOutOfScope($, t, dir, base, bad, made)
-    return withSecrets({ ok: false, detail: outOfScopeText(bad, t.files, !undo) + undo })
+    return withSecrets({ ok: false, reason: 'scope', detail: outOfScopeText(bad, t.files, !undo) + undo })
   }
   // The checker setting: the checker looks at the change before it joins the line; the line's tests run once, after it
   const pre = first ? await first(changed) : undefined
@@ -410,8 +410,8 @@ async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mo
     if (m.exitCode !== 0) {
       await git($, ['merge', '--abort'], dir)
       // Only a real conflict is one: any other failure (e.g. signing the merge commit) is git's error, and retrying on conflicts can't help it.
-      if (/^CONFLICT|fix conflicts|unmerged/im.test(`${m.stdout}\n${m.stderr}`)) return { ok: false, detail: `conflicts with the latest ${target}`, conflict: true }
-      return { ok: false, detail: `symcc could not bring the work up to date with ${target} (git merge): ${gitFailText(m)}` }
+      if (/^CONFLICT|fix conflicts|unmerged/im.test(`${m.stdout}\n${m.stderr}`)) return { ok: false, reason: 'clash', detail: `conflicts with the latest ${target}`, conflict: true }
+      return { ok: false, reason: 'other', detail: `symcc could not bring the work up to date with ${target} (git merge): ${gitFailText(m)}` }
     }
     candidate = await gitOk($, ['rev-parse', 'HEAD'], dir)
     made.push(candidate)
@@ -433,11 +433,11 @@ async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mo
         // T-547: stopped by its time limit: it fails like a failing test, its output goes to a new try (see settle)
         if (r.exitCode !== 0 && ranOutOfTime(r, thrown)) {
           const min = limitMinutes(testTimeoutMs(b))
-          return stopped() ?? { ok: false, timedOut: min, command: cmd, detail: timedOutDetail(cmd, min), testOutput: testTail(`${timedOutHead(cmd, min)}\n${r.stdout}\n${r.stderr}`) }
+          return stopped() ?? { ok: false, reason: 'timeout', timedOut: min, command: cmd, detail: timedOutDetail(cmd, min), testOutput: testTail(`${timedOutHead(cmd, min)}\n${r.stdout}\n${r.stderr}`) }
         }
         if (r.exitCode !== 0) {
           const tail = `${r.stdout}\n${r.stderr}`.trim().split('\n').slice(-8).join(' | ').slice(0, 700)
-          return stopped() ?? { ok: false, command: cmd, detail: `tests failed: \`${cmd}\` (exit ${r.exitCode}). ${tail}`, testOutput: testTail(`$ ${cmd} (exit ${r.exitCode})\n${r.stdout}\n${r.stderr}`) }
+          return stopped() ?? { ok: false, reason: 'tests', command: cmd, detail: `tests failed: \`${cmd}\` (exit ${r.exitCode}). ${tail}`, testOutput: testTail(`$ ${cmd} (exit ${r.exitCode})\n${r.stdout}\n${r.stderr}`) }
         }
         const s = stopped()
         if (s) return s
@@ -466,7 +466,7 @@ async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mo
   const current = (await git($, ['symbolic-ref', '--short', '-q', 'HEAD'])).stdout.trim()
   const moved = await moveTarget(args => git($, args), { target, id: t.id, from: main, to: candidate, checkedOut: current === target, note: `${S.N.name} ${t.id}`, skipDir: S.N.dir, action: mode === 'approve' ? 'approve' : 'retry' })
   if (!moved.ok && !(await branchExists($, target))) return goneResult(target)
-  if (!moved.ok) return { ok: false, detail: moved.detail, ...(moved.blocked ? { blocked: moved.blocked } : {}), ...(moved.detail === movedText(target) ? { moved: true } : {}) }
+  if (!moved.ok) return { ok: false, detail: moved.detail, ...(moved.reason ? { reason: moved.reason } : {}), ...(moved.blocked ? { blocked: moved.blocked } : {}), ...(moved.detail === movedText(target) ? { moved: true } : {}) }
   const tests = !b.test_commands.length ? '; no test command set' : skipped || testsRun ? passed : ''
   // Research notes the merge added or changed (not deleted): asked of git only when the work touched docs/research/.
   let notes: string[] = []

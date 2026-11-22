@@ -3,7 +3,7 @@ import type { SymccMode, SymccTask } from '../../types'
 import { DEFAULT_NAME } from '../name'
 import { type Board, type BoardTask, type Blockers, blockerFiles, find, isMode, modeOf, STATUS_WORD } from './board-file'
 import { isSecretName } from './git-setup'
-import { withHistory } from './history'
+import { type FailReason, onPurposeStop, withHistory } from './history'
 import { patchTask } from './task'
 import { clean, shownPath } from './text'
 
@@ -124,6 +124,15 @@ export function reviewTask(b: Board, id: string, what: 'approve' | 'reject'): Bo
 }
 
 /**
+ * T-806: the result of a check that ended because task was `why` ("paused", "stopped because the board was paused", "sent to
+ * the owner", ...) while it was being checked: nothing merged. Only a stop that was not on purpose counts as "not merged".
+ */
+export function taskWasResult(why: string): { ok: false; detail: string; reason?: FailReason } {
+  const onPurpose = /^sent to the owner\b/.test(why) || onPurposeStop(why.replace(/^stopped because\s+/, ''))
+  return { ok: false, detail: `not merged: the task was ${why} while it was being checked`, ...(onPurpose ? {} : { reason: 'notmerged' as const }) }
+}
+
+/**
  * The owner rejected task `id` (in "review") because of `reason`: it goes back to "todo" with the
  * reason in its note and history, so the next worker sees it; its test and merge-main retries start over.
  */
@@ -131,7 +140,7 @@ export function rejectTask(b: Board, id: string, reason: string, now: string): B
   const t = reviewTask(b, id, 'reject')
   const why = clean(reason, 1000)
   if (!why) throw new Error('give a reason for rejecting, so the next worker knows what to fix')
-  return patchTask(b, t.id, { status: 'todo', note: `rejected: ${why.slice(0, 280)}`, test_tries: 0, test_output: undefined, merge_main: false, history: withHistory(t.history, now, ['rejected', `try ${t.attempts}: rejected by the owner: ${why}`]) }, now)
+  return patchTask(b, t.id, { status: 'todo', note: `rejected: ${why.slice(0, 280)}`, test_tries: 0, test_output: undefined, merge_main: false, history: withHistory(t.history, now, ['rejected', `try ${t.attempts}: rejected by the owner: ${why}`, { try: Number(t.attempts) || 0, reason: 'rejected' }]) }, now)
 }
 
 // ---------------- looking at a task's changes (review) ----------------
@@ -327,21 +336,21 @@ const gitError = (r: { stdout: string; stderr: string }) => `${r.stderr}\n${r.st
  * `ok` only when the branch moved and (if checked out) the files were updated. When the branch was no longer at `from`
  * (it was moved by hand meanwhile, as only the front of the merge line moves it), nothing moves and the caller's turn fails.
  */
-export async function moveTarget(run: GitRun, o: { target: string; id: string; from: string; to: string; checkedOut: boolean; note: string; skipDir: string; action?: BlockedAction }): Promise<{ ok: boolean; detail: string; blocked?: Blockers }> {
+export async function moveTarget(run: GitRun, o: { target: string; id: string; from: string; to: string; checkedOut: boolean; note: string; skipDir: string; action?: BlockedAction }): Promise<{ ok: boolean; detail: string; blocked?: Blockers; reason?: FailReason }> {
   const ref = `refs/heads/${o.target}`
   const action = o.action ?? 'retry'
   if (o.checkedOut) {
     const diff = await run(['diff', '--name-only', '--no-renames', '-z', o.from, o.to])
-    if (diff.exitCode !== 0) return { ok: false, detail: `could not list the changes to merge: ${gitError(diff)}` }
+    if (diff.exitCode !== 0) return { ok: false, reason: 'other', detail: `could not list the changes to merge: ${gitError(diff)}` }
     // --ignored=matching lists git-ignored files too (an ignored folder as one entry, not every
     // file in it): read-tree overwrites ignored files without a word, so they must be checked here.
     const st = await run(['status', '--porcelain', '-z', '--untracked-files=all', '--ignored=matching'])
-    if (st.exitCode !== 0) return { ok: false, detail: `could not check your files on ${o.target}: ${gitError(st)}` }
+    if (st.exitCode !== 0) return { ok: false, reason: 'other', detail: `could not check your files on ${o.target}: ${gitError(st)}` }
     const blocked = mergeBlockers(st.stdout, diff.stdout.split('\0').filter(Boolean), o.skipDir)
     if (blockerFiles(blocked).length) return { ok: false, detail: blockedText(o.target, o.id, blocked), blocked }
     // A dry run catches anything else that would stop the update, before the branch moves.
     const dry = await run(['read-tree', '-n', '-m', '-u', o.from, o.to])
-    if (dry.exitCode !== 0) return { ok: false, detail: `your files on ${o.target} can't be updated (${gitError(dry)}); fix that, then ${thenDo(action, o.id)}` }
+    if (dry.exitCode !== 0) return { ok: false, reason: 'notmerged', detail: `your files on ${o.target} can't be updated (${gitError(dry)}); fix that, then ${thenDo(action, o.id)}` }
   }
   const cas = await run(['update-ref', '-m', o.note, ref, o.to, o.from])
   if (cas.exitCode !== 0) {
@@ -349,13 +358,13 @@ export async function moveTarget(run: GitRun, o: { target: string; id: string; f
     const now = await run(['rev-parse', ref])
     if (now.exitCode === 0 && now.stdout.trim() !== o.from) return { ok: false, detail: movedText(o.target) }
     const lock = /Unable to create '([^']+\.lock)'/.exec(`${cas.stderr}\n${cas.stdout}`)?.[1]
-    if (lock) return { ok: false, detail: `could not move ${o.target}: a git lock file is in the way: ${lock}; if no git is running, remove it, then ${thenDo(action, o.id)}` }
-    return { ok: false, detail: `could not move ${o.target}: ${gitError(cas)}; fix that, then ${thenDo(action, o.id)}` }
+    if (lock) return { ok: false, reason: 'other', detail: `could not move ${o.target}: a git lock file is in the way: ${lock}; if no git is running, remove it, then ${thenDo(action, o.id)}` }
+    return { ok: false, reason: 'other', detail: `could not move ${o.target}: ${gitError(cas)}; fix that, then ${thenDo(action, o.id)}` }
   }
   if (!o.checkedOut) return { ok: true, detail: '' }
   const rt = await run(['read-tree', '-m', '-u', o.from, o.to])
   if (rt.exitCode === 0) return { ok: true, detail: '' }
   const back = await run(['update-ref', '-m', `${o.note} (undone)`, ref, o.from, o.to])
   const after = back.exitCode === 0 ? `${o.target} is back where it was and your files are unchanged` : `and putting ${o.target} back failed too (${gitError(back)}); run "git reset --soft ${o.from.slice(0, 12)}" on ${o.target} to undo it`
-  return { ok: false, detail: `not merged: your files on ${o.target} could not be updated (${gitError(rt)}); ${after}. Fix that, then ${thenDo(action, o.id)}` }
+  return { ok: false, reason: 'notmerged', detail: `not merged: your files on ${o.target} could not be updated (${gitError(rt)}); ${after}. Fix that, then ${thenDo(action, o.id)}` }
 }

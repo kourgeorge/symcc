@@ -154,7 +154,7 @@ export function statsHtml(d: StatsData, project: string): string {
   const ended = section(`How tasks ended (${plural(d.finished, 'done task')})`,
     d.ended.map((e, i) => barRow(e.label, e.n, maxEnd, `${e.n} · ${pctText(e.n, d.finished)}`, CYCLE[i % CYCLE.length]!)).join('')
     + `<h3>Failed tries by reason (${d.failedTotal}, from history)</h3>`
-    + d.failed.map(f => barRow(f.label, f.n, maxFail, String(f.n), f.key === 'changed' ? 'var(--grey)' : 'var(--red)')).join(''))
+    + d.failed.map(f => barRow(f.label, f.n, maxFail, String(f.n), f.key === 'changed' ? 'var(--grey)' : 'var(--red)', f.folded ?? '')).join(''))
 
   // T-731: the text report's "Each failed try" and "Tests that failed most" (T-721), the same short/full cut
   const { tries: triesShown, tests: testsShown } = failedShown(d)

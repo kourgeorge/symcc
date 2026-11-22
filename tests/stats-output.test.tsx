@@ -112,8 +112,8 @@ test('T-768: /symcc-stats draws a title bar, 4 colored headline figures, ▍ hea
   expect(barOf(/^ {2}◆ lead +█/)).toMatchObject({ color: 'success', width: VIEW_BAR })
   expect(barOf(/^ {2}▸ workers +█/)).toMatchObject({ color: 'ide', width: VIEW_BAR })
   expect(barOf(/^ {2}⌕ scouts +█/)).toMatchObject({ color: 'suggestion', width: VIEW_BAR })
-  // the clash row has no failures: an empty bar, its count and label dim
-  expect(drawn.find(l => /^ {2}clash with main +░{16} +0$/.test(l.text))).toBeDefined()
+  // T-806: a reason with no failures is not listed (the clash row is gone); the rows come biggest first
+  expect(drawn.find(l => /^ {2}clash with main/.test(l.text))).toBeUndefined()
   // "Where the time goes": every row ends in the same column (the share), the numbers right-aligned
   const at = shown.indexOf(shown.find(l => /^▍Where the time goes/.test(l))!)
   const stageRows = shown.slice(at + 1, at + 13).map(l => l.trimEnd())

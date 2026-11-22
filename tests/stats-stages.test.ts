@@ -4,12 +4,13 @@ import type { SymccHistoryEntry, SymccTask } from '../types'
 import { statsData, statsReport, stageFigures, taskStages, doneAtMs, unlinkedCount } from '../hooks/board'
 import { statsHtml } from '../hooks/core/stats-html'
 import { hist } from './history-fixture'
+import { oldHistoryFacts } from '../hooks/core/old-data'
 
 const NOW = Date.now()
 const MIN = 60_000
 /** The ISO time `min` minutes ago. */
 const at = (min: number) => new Date(NOW - min * MIN).toISOString()
-const h = (min: number, kind: string, text: string): SymccHistoryEntry => ({ at: at(min), kind, text })
+const h = (min: number, kind: string, text: string): SymccHistoryEntry => ({ at: at(min), kind, text, ...oldHistoryFacts({ kind, text }) })
 const stage = (min: number, n: number, words: string) => h(min, 'stage', `try ${n}: ${words}`)
 
 function task(id: string, over: Partial<SymccTask>): SymccTask {

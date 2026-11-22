@@ -3,6 +3,7 @@
 import type { SymccRun, SymccTask } from '../types'
 import type { StatsInput } from '../hooks/core/stats'
 import { addScoutRun, parseScoutUsage } from '../hooks/core/stats'
+import { oldHistoryFacts } from '../hooks/core/old-data'
 
 /** The time the fixture is read at: dates are relative to it (one day, one hour ago ...). */
 export const VIEW_NOW = Date.now()
@@ -15,7 +16,9 @@ function done(id: string, title: string, made: number, tries: SymccRun[], over: 
   const end = tries[tries.length - 1]!
   const endMin = (VIEW_NOW - Date.parse(end.ended!)) / 60_000
   const at = (m: number) => iso(endMin - m)
-  return {
+  // T-806: the facts of each line (step, reason, how ...) as the writers set them, here read out of the text by the doctor's old parsers
+  const withFacts = (t: SymccTask): SymccTask => ({ ...t, history: t.history.map(e => ({ ...e, ...oldHistoryFacts(e) })) })
+  return withFacts({
     id, title, details: '', files: [], status: 'done', note: '', question: null, order: 0, after: [], attempts: tries.length, branch: null,
     created_at: iso(made), updated_at: at(9), runs: tries,
     history: [
@@ -28,7 +31,7 @@ function done(id: string, title: string, made: number, tries: SymccRun[], over: 
       { at: at(9), kind: 'merged', text: `try ${tries.length}: done → merged into main (abc1234)` },
     ],
     ...over,
-  }
+  })
 }
 
 /** The stats input: done tasks (one sent back by the tests, one by the checker), a running one, a dropped one, an
@@ -40,11 +43,11 @@ export function viewInput(over: Partial<StatsInput> = {}): StatsInput {
     done('T-1', 'Parser for the stats command', 400, [run(390, 360, 12_000)], { role: 'general', origin: { by: 'owner' } as SymccTask['origin'] }),
     done('T-2', 'Bars line up on narrow screens', 320, [failedTests, run(270, 240, 9000)], {
       role: 'ui', origin: { by: 'scout', scout: 'bugs' } as SymccTask['origin'],
-      history: [{ at: iso(320), kind: 'added', text: 'added' }, { at: iso(280), kind: 'failed', text: 'try 1: done → tests failed (sh scripts/test-files.sh)' }, { at: iso(235), kind: 'stage', text: 'try 2: tests started' }, { at: iso(230), kind: 'merged', text: 'try 2: done → merged into main (abc1234)' }],
+      history: [{ at: iso(320), kind: 'added', text: 'added' }, { at: iso(280), kind: 'failed', text: 'try 1: done → tests failed (sh scripts/test-files.sh)' }, { at: iso(279), kind: 'failed', text: 'try 1: done → tests failed (sh scripts/test-files.sh)' }, { at: iso(278), kind: 'failed', text: 'try 1: done → tests failed (sh scripts/test-files.sh)' }, { at: iso(235), kind: 'stage', text: 'try 2: tests started' }, { at: iso(230), kind: 'merged', text: 'try 2: done → merged into main (abc1234)' }],
     }),
     done('T-3', 'Colors by meaning', 210, [sentBack, run(185, 170, 3000)], {
       role: 'ui', origin: { by: 'lead' } as SymccTask['origin'],
-      history: [{ at: iso(210), kind: 'added', text: 'added' }, { at: iso(190), kind: 'checker-problems', text: 'try 1: done → the checker found problems: a bar is too wide' }, { at: iso(165), kind: 'stage', text: 'try 2: tests started' }, { at: iso(160), kind: 'merged', text: 'try 2: done → merged into main (abc1234)' }],
+      history: [{ at: iso(210), kind: 'added', text: 'added' }, { at: iso(190), kind: 'checker-problems', text: 'try 1: done → the checker found problems: a bar is too wide' }, { at: iso(189), kind: 'checker-problems', text: 'try 1: done → the checker found problems: a bar is too wide' }, { at: iso(188), kind: 'checker-problems', text: 'try 1: done → the checker found problems: a bar is too wide' }, { at: iso(165), kind: 'stage', text: 'try 2: tests started' }, { at: iso(160), kind: 'merged', text: 'try 2: done → merged into main (abc1234)' }],
     }),
     done('T-4', 'Footer hints', 120, [run(110, 100, 1500)], { origin: { by: 'scout', scout: 'bugs' } as SymccTask['origin'] }),
     { id: 'T-5', title: 'Still going', details: '', files: [], status: 'doing', note: '', question: null, order: 0, after: [], attempts: 1, history: [], branch: null, created_at: iso(60), updated_at: iso(5), runs: [{ started: iso(50), agents: [{ kind: 'worker' as const, started: iso(50), tokens: { input: 800 } }] }], origin: { by: 'worker', task: 'T-1' } as SymccTask['origin'] },

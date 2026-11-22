@@ -1,7 +1,7 @@
 // Leftover and overtime cleanup for the regular check: stopping orphan agents after a reload, removing leftover
 // temp files, and a worker that runs over its time limit (ask the owner, wrap up, time out). Split out of
 // workers.ts (T-603); workers.ts's check() imports it, and it never imports workers.ts.
-import { type Board, type BoardTask, orphanMove, liveWorkersFor, putTask, find, patchTask, tryLabel, liveDriver, emptyBoard, leftoverTmpFiles, withHistory, endedBy, mergedThisTry, mergedDone, handedBack, timeLimitOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, shortSha, onTask, restartedAgent, workerIdOf, withAgentStart, workerSince } from '../board'
+import { type Board, type BoardTask, orphanMove, liveWorkersFor, putTask, find, patchTask, tryLabel, liveDriver, emptyBoard, leftoverTmpFiles, withHistory, tryEntry, endedBy, mergedThisTry, mergedDone, handedBack, timeLimitOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, shortSha, onTask, restartedAgent, workerIdOf, withAgentStart, workerSince } from '../board'
 import { worktreeDir, taskBranch } from './git'
 import { alreadyMerged } from './review'
 import { S, workers, starting, finishing, stopped, isOwnAgent, halt, tmpWarned } from './state'
@@ -142,7 +142,7 @@ export async function timedOut(host: Host, id: string, t: BoardTask | undefined,
   const out = await change(host, x => {
     const cur = find(x, id)
     if (!same(cur)) return [x, null] as [Board, null]
-    const next = sha ? putTask(x, mergedDone(cur, sha, `stopped after ${Math.round(minutes)} min`, now())) : patchTask(x, id, { status: 'failed', note: outOfTimeNote(max), history: withHistory(cur.history, now(), ['out-of-time', `${tryLabel(cur)}: stopped after ${Math.round(minutes)} min (out of time); its work so far is kept in its folder and branch`]), ...endedBy(cur, now(), 'timed out', `ran over ${max} min`) }, now())
+    const next = sha ? putTask(x, mergedDone(cur, sha, `stopped after ${Math.round(minutes)} min`, now())) : patchTask(x, id, { status: 'failed', note: outOfTimeNote(max), history: withHistory(cur.history, now(), tryEntry(cur, 'out-of-time', `stopped after ${Math.round(minutes)} min (out of time); its work so far is kept in its folder and branch`, { reason: 'timeout' })), ...endedBy(cur, now(), 'timed out', `ran over ${max} min`) }, now())
     return [next, cur] as [Board, BoardTask]
   })
   if (!out) return
@@ -159,7 +159,7 @@ export async function askOvertime(host: Host, b: Board, id: string, limit: numbe
   const t = await change(host, x => {
     const cur = find(x, id)
     if (cur?.status !== 'doing' || cur.time_ask || cur.wrap_up) return [x, null] as [Board, null]
-    return [patchTask(x, id, { time_ask: now(), note: OVERTIME_NOTE, history: withHistory(cur.history, now(), ['out-of-time', `${tryLabel(cur)}: ran ${limit} min, over its time limit; asked the owner for more time`]) }, now()), cur] as [Board, BoardTask]
+    return [patchTask(x, id, { time_ask: now(), note: OVERTIME_NOTE, history: withHistory(cur.history, now(), tryEntry(cur, 'out-of-time', `ran ${limit} min, over its time limit; asked the owner for more time`)) }, now()), cur] as [Board, BoardTask]
   })
   if (!t) return
   sayNeedsYou(host, b, t, overtimeQuestion(id, limit))
@@ -171,7 +171,7 @@ export async function wrapUp(host: Host, id: string, why: string) {
   const t = await change(host, x => {
     const cur = find(x, id)
     if (cur?.status !== 'doing' || cur.wrap_up) return [x, null] as [Board, null]
-    return [patchTask(x, id, { time_ask: undefined, wrap_up: now(), note: 'time is up: the worker was told to hand back', history: withHistory(cur.history, now(), ['out-of-time', `${tryLabel(cur)}: time is up (${why}); the worker was told to write down what it has and hand back`]) }, now()), cur] as [Board, BoardTask]
+    return [patchTask(x, id, { time_ask: undefined, wrap_up: now(), note: 'time is up: the worker was told to hand back', history: withHistory(cur.history, now(), tryEntry(cur, 'out-of-time', `time is up (${why}); the worker was told to write down what it has and hand back`)) }, now()), cur] as [Board, BoardTask]
   })
   if (!t) return false
   for (const [agentId, w] of workers) if (w.task === id) await host.agents.send(agentId, WRAP_UP_TEXT).catch(() => undefined)
@@ -197,7 +197,7 @@ export async function answerOvertime(host: Host, id: string, answer: string): Pr
     const cur = find(x, t.id)
     if (cur?.status !== 'doing' || !cur.time_ask) return [x, null] as [Board, null]
     const extra = (cur.extra_minutes ?? 0) + pick.add
-    return [patchTask(x, t.id, { extra_minutes: extra, time_ask: undefined, note: '', history: withHistory(cur.history, now(), ['step', `${tryLabel(cur)}: the owner gave it ${pick.add} more min (limit now ${timeLimitOf(x.max_minutes, { extra_minutes: extra })} min)`]) }, now()), timeLimitOf(x.max_minutes, { extra_minutes: extra })] as [Board, number]
+    return [patchTask(x, t.id, { extra_minutes: extra, time_ask: undefined, note: '', history: withHistory(cur.history, now(), tryEntry(cur, 'step', `the owner gave it ${pick.add} more min (limit now ${timeLimitOf(x.max_minutes, { extra_minutes: extra })} min)`)) }, now()), timeLimitOf(x.max_minutes, { extra_minutes: extra })] as [Board, number]
   })
   if (out === null) return undefined
   return `${t.id} has ${pick.add} more minutes: its limit is now ${out} min, and its worker goes on.`

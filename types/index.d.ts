@@ -86,7 +86,33 @@ export type SymccRunEnd = 'finished' | 'restarted' | 'stopped' | 'timed out' | '
  * whose time could not be guessed), what kind of event it is (`kind`, one of HISTORY_KINDS in hooks/core/history.ts,
  * e.g. "created", "checker-ok", "merged", "note") and its line as the owner reads it (`text`, e.g. "try 1: checker: OK").
  */
-export type SymccHistoryEntry = { at?: string; kind: string; text: string }
+export type SymccHistoryEntry = {
+  at?: string
+  kind: string
+  text: string
+  /** T-806: the facts of the line, set where it is written (readers never read them back out of `text`): the try number it is about */
+  try?: number
+  /** a stage line's step: the worker started or handed back, or the check stage the try went into */
+  step?: SymccHistoryStep
+  /** a merge-queue line's place in the queue */
+  place?: number
+  /** a try's result line: the words after its " → " */
+  result?: string
+  /** why the try counts as sent back or failed (see FailReason in hooks/core/stats.ts) */
+  reason?: SymccFailReason
+  /** a merged line: by its own try, by the owner's approve, or outside the board */
+  how?: 'own' | 'approved' | 'outside'
+  /** the line puts the task to wait for the owner's answer */
+  owner?: true
+  /** a moved-backlog line that moves the task into the backlog (else out of it) */
+  backlog?: true
+}
+
+/** T-806: the step of a 'stage' history line. */
+export type SymccHistoryStep = 'worker-start' | 'handed-back' | 'prep' | 'checker' | 'queue' | 'tests' | 'merge'
+
+/** T-806: why a try was sent back or failed, as a history line records it. */
+export type SymccFailReason = 'tests' | 'checker' | 'clash' | 'scope' | 'timeout' | 'noresult' | 'nochange' | 'notmerged' | 'other' | 'changed' | 'stopped' | 'rejected'
 
 /**
  * Where a task came from, so it can be traced back to the request that started it.

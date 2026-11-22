@@ -3272,28 +3272,28 @@ test('a failed file update after the branch moved puts the branch back and is no
 test('a dry run that fails stops the merge before the branch moves', async () => {
   const g = fakeGit({ 'dry-run': [{ exitCode: 128, stderr: 'error: something in the way' }] })
   const r = await moveTarget(g.run, MOVE)
-  expect(r).toEqual({ ok: false, detail: 'your files on main can\'t be updated (error: something in the way); fix that, then say "retry T-3"' })
+  expect(r).toEqual({ ok: false, reason: 'notmerged', detail: 'your files on main can\'t be updated (error: something in the way); fix that, then say "retry T-3"' })
   expect(g.calls.some(c => c[0] === 'update-ref')).toBe(false)
 })
 
 test('a failing git diff stops the merge before the branch moves', async () => {
   const g = fakeGit({ diff: [{ exitCode: 128, stderr: 'fatal: bad object aaaa' }] })
   const r = await moveTarget(g.run, MOVE)
-  expect(r).toEqual({ ok: false, detail: 'could not list the changes to merge: fatal: bad object aaaa' })
+  expect(r).toEqual({ ok: false, reason: 'other', detail: 'could not list the changes to merge: fatal: bad object aaaa' })
   expect(g.calls.some(c => c[0] === 'update-ref' || c[0] === 'read-tree')).toBe(false)
 })
 
 test('a failing git status stops the merge before the branch moves', async () => {
   const g = fakeGit({ diff: [{ exitCode: 0, stdout: 'a.txt\0' }], status: [{ exitCode: 128, stderr: 'fatal: not a git repository' }] })
   const r = await moveTarget(g.run, MOVE)
-  expect(r).toEqual({ ok: false, detail: 'could not check your files on main: fatal: not a git repository' })
+  expect(r).toEqual({ ok: false, reason: 'other', detail: 'could not check your files on main: fatal: not a git repository' })
   expect(g.calls.some(c => c[0] === 'update-ref' || c[0] === 'read-tree')).toBe(false)
 })
 
 test('when the file update and putting the branch back both fail, it says how to undo the move by hand', async () => {
   const g = fakeGit({ diff: [{ exitCode: 0, stdout: 'a.txt\0' }], 'read-tree': [{ exitCode: 128, stderr: 'error: boom' }], 'update-ref': [{ exitCode: 0 }, { exitCode: 1, stderr: 'fatal: lock' }] })
   const r = await moveTarget(g.run, MOVE)
-  expect(r).toEqual({ ok: false, detail: 'not merged: your files on main could not be updated (error: boom); and putting main back failed too (fatal: lock); run "git reset --soft aaaa" on main to undo it. Fix that, then say "retry T-3"' })
+  expect(r).toEqual({ ok: false, reason: 'notmerged', detail: 'not merged: your files on main could not be updated (error: boom); and putting main back failed too (fatal: lock); run "git reset --soft aaaa" on main to undo it. Fix that, then say "retry T-3"' })
   expect(r.detail).not.toContain('back where it was')
   const refs = g.calls.filter(c => c[0] === 'update-ref')
   expect(refs.map(c => c.slice(-3))).toEqual([['refs/heads/main', 'bbbb', 'aaaa'], ['refs/heads/main', 'aaaa', 'bbbb']])
@@ -3345,10 +3345,10 @@ test('the normal merge moves the branch and updates the files; another branch ch
 
 test('a failed update-ref where the branch did not move is git\'s error, not a move by hand', async () => {
   const lock = fakeGit({ 'update-ref': [{ exitCode: 128, stderr: "fatal: cannot lock ref 'refs/heads/main': Unable to create '/r/.git/refs/heads/main.lock': File exists." }], 'rev-parse': [{ exitCode: 0, stdout: 'aaaa\n' }] })
-  expect(await moveTarget(lock.run, { ...MOVE, checkedOut: false })).toEqual({ ok: false, detail: 'could not move main: a git lock file is in the way: /r/.git/refs/heads/main.lock; if no git is running, remove it, then say "retry T-3"' })
+  expect(await moveTarget(lock.run, { ...MOVE, checkedOut: false })).toEqual({ ok: false, reason: 'other', detail: 'could not move main: a git lock file is in the way: /r/.git/refs/heads/main.lock; if no git is running, remove it, then say "retry T-3"' })
   const other = fakeGit({ 'update-ref': [{ exitCode: 128, stderr: 'fatal: disk full' }], 'rev-parse': [{ exitCode: 0, stdout: 'aaaa' }] })
   const r = await moveTarget(other.run, { ...MOVE, checkedOut: false })
-  expect(r).toEqual({ ok: false, detail: 'could not move main: fatal: disk full; fix that, then say "retry T-3"' })
+  expect(r).toEqual({ ok: false, reason: 'other', detail: 'could not move main: fatal: disk full; fix that, then say "retry T-3"' })
 })
 
 // ---------------- a board.json that can't be read ----------------
@@ -3679,7 +3679,7 @@ import { changeLines, changedFields, filesWidenedLine, ownerAnsweredLine, stoppe
 test('changeLines names the changed fields of a restart, the widened files and the owner answer', async () => {
   const t = { attempts: 2, role: 'general', files: ['hooks/'], details: 'old', after: [] as string[] }
   expect(changedFields(t, { details: 'old', files: ['hooks/', 'tests/'], after: [] })).toEqual(['files'])
-  expect(changeLines(t, { details: 'new', after: ['T-1'] }, true)).toEqual([['restarted', 'try 2: restarted: the task was changed (details, after)'], ['waits-changed', 'waits on changed: nothing → T-1']])
+  expect(changeLines(t, { details: 'new', after: ['T-1'] }, true)).toEqual([['restarted', 'try 2: restarted: the task was changed (details, after)', { try: 2, reason: 'changed' }], ['waits-changed', 'waits on changed: nothing → T-1']])
   expect(changeLines(t, { files: ['hooks/', 'a.ts', 'b.ts'] }, false)).toEqual([['files-widened', 'files widened: + a.ts, + b.ts']])
   expect(changeLines(t, {}, false, ' yes, go ')).toEqual([['answer', 'the owner answered: “yes, go”']])
   expect(changeLines(t, { files: ['hooks/'] }, false)).toEqual([])

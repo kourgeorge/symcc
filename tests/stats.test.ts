@@ -3,8 +3,8 @@ import type { SymccTask } from '../types'
 import { readOld, stillOld } from './old-data-fixture'
 import { usedRun } from './agent-fixture'
 import { tryTokens } from '../hooks/board'
-import { upgradeArchiveTask, upgradeScoutUsage } from '../hooks/core/old-data'
-import { addScoutRun, bar, cutTitle, textWidth, parseStatsArgs, wrapLine, billedTokens, billedText, failReason, readArchive, archiveText, tokenCount, fmtTokenKinds, inRange, keepScoutUsage, leadTotals, mean, median, mergedHow, originKey, parseScoutMemory, parseScoutUsage, parseStatsRange, rangeSpan, scoutMemoryText, scoutTotals, statsReport, statsData, scoutResultsLine, taskFigures, readBoard, boardTotal } from '../hooks/board'
+import { oldFailReason as failReason, upgradeArchiveTask, upgradeScoutUsage } from '../hooks/core/old-data'
+import { addScoutRun, bar, cutTitle, textWidth, parseStatsArgs, wrapLine, billedTokens, billedText, readArchive, archiveText, tokenCount, fmtTokenKinds, inRange, keepScoutUsage, leadTotals, mean, median, mergedHow, originKey, parseScoutMemory, parseScoutUsage, parseStatsRange, rangeSpan, scoutMemoryText, scoutTotals, statsReport, statsData, scoutResultsLine, taskFigures, readBoard, boardTotal } from '../hooks/board'
 import { statsHtml } from '../hooks/core/stats-html'
 import { FAILED_TESTS_SHORT, FAILED_TRIES_SHORT, durOr, failedShown, plural, tokOr } from '../hooks/core/stats'
 import { leadCalls, leadUsage, projectFolderName } from '../hooks/claude/lead-usage'
@@ -92,9 +92,10 @@ test('stats: outcomes, origins and days are read from what the board keeps', () 
   expect(failReason('try 1: restarted: the plugin reloaded and the old worker was gone')).toBe(null)
   expect(failReason('try 2: restarted after Claude Code was reopened')).toBe(null)
   expect(failReason('try 2: worker restarted after Claude Code was reopened')).toBe(null)
-  const rep = statsReport({ tasks: [{ ...knownTasks()[0]!, history: [{ at: '2026-01-01T00:00:00Z', kind: 'restarted', text: 'try 1: restarted: the task was changed (details)' }] }], nowMs: NOW })
-  expect(rep).toMatch(/restarted by a change +▇+ +1/)
-  expect(rep).toMatch(/ stopped +0/)
+  const rep = statsReport({ tasks: [{ ...knownTasks()[0]!, history: [{ at: '2026-01-01T00:00:00Z', kind: 'restarted', text: 'try 1: restarted: the task was changed (details)', reason: 'changed' as const }] }], nowMs: NOW })
+  // T-806: a reason with fewer than 3 tries is folded into "other", which names it
+  expect(rep.replace(/\s+/g, ' ')).toMatch(/other ▇+ 1 \(restarted by a change 1\)/)
+  expect(rep).not.toMatch(/ stopped +0/)
   expect(failReason('try 1: rejected by the owner: too long')).toBe('rejected')
   expect(failReason('try 1: tests failed → merged into main (abc)')).toBe(null)
   expect(failReason('moved to the backlog')).toBe(null)
@@ -110,8 +111,9 @@ test('stats: outcomes, origins and days are read from what the board keeps', () 
   const text = statsReport({ tasks, nowMs: NOW })
   expect(text).toMatch(/merged on its own +▇+ +1 +50%/)
   expect(text).toMatch(/approved by you +▇+ +1 +50%/)
-  expect(text).toMatch(/tests failed +▇+ +1\n/)
-  expect(text).toMatch(/clash with main +0\n/)
+  // one failed try is under 3, so it is folded into "other" and named after it
+  expect(text.replace(/\s+/g, ' ')).toMatch(/other ▇+ 1 \(tests failed 1\)/)
+  expect(text).not.toMatch(/clash with main/)
   expect(text).toMatch(/♟ you +▇+ +1 +50%  avg +200 tok/)
   expect(text).toMatch(/docs +▇+ +1 +50%  avg +50 tok/)
   expect(text).toMatch(/Today +▇+ +2 +25m/)
@@ -719,17 +721,17 @@ test('T-736: checker send-backs, time-outs, no result, no change and not merged 
   expect([bd.failedTries.length, bd.failedTotal]).toEqual([1, 1])
   const text = statsReport({ tasks, nowMs: NOW, full: true })
   expect(text).toContain('Failed tries (7, from history)')
-  expect(text).toMatch(/sent back by checker +▇+ +1/)
-  expect(text).toMatch(/ran out of time +▇+ +2/)
-  for (const label of ['no result', 'no change', 'not merged', 'other']) expect(text).toMatch(new RegExp(`  ${label} +▇+ +1`))
+  // T-806: every reason has fewer than 3 tries here, so all fold into "other" (7), named after it
+  expect(text).toMatch(/other +▇+ +7/)
+  expect(text.replace(/\s+/g, ' ')).toContain('(ran out of time 2, sent back by checker 1, no result 1, no change 1, not merged 1)')
   expect(text).toContain('Each failed try (7: task')
   expect(text).not.toContain('under "Failed tries"')
   const d = statsData({ tasks, nowMs: NOW })
   expect([d.failedTries.length, d.failedTotal]).toEqual([7, 7])
   const html = statsHtml(d, 'p')
   expect(html).toContain('Failed tries by reason (7, from history)')
-  expect(html).toContain('aria-label="sent back by checker: 1"')
-  expect(html).toContain('aria-label="ran out of time: 2"')
+  expect(html).toContain('aria-label="other: 7"')
+  expect(html).toContain('ran out of time 2, sent back by checker 1')
   expect(html).not.toContain('under &quot;Failed tries&quot;')
 })
 
@@ -745,4 +747,26 @@ test('T-721: a try waiting for the owner\'s files is not a failed try, and with 
   expect(text).toContain('Each failed try (1:')
   expect(text).toMatch(/T-2 +try 2 +tests failed · `npm test` · x/)
   expect(text).not.toContain('old one')
+})
+
+test('T-806: "why tries were sent back" lists the biggest count first and folds reasons with fewer than 3 tries into "other"', () => {
+  const line = (reason: string, n: number) => Array.from({ length: n }, (_, i) => ({ at: iso(50 - i), kind: 'failed', text: `try ${i + 1}: x → y`, try: i + 1, result: 'y', reason }))
+  const history = [...line('tests', 4), ...line('clash', 5), ...line('scope', 2), ...line('nochange', 1), ...line('other', 1)] as unknown as SymccTask['history']
+  const d = statsData({ tasks: [task('T-1', { status: 'failed', history })], nowMs: NOW })
+  // 5 clash, 4 tests; scope 2 + no change 1 + other 1 fold into "other" (4), its folded names after it, biggest first
+  expect(d.failed.map(f => [f.key, f.n])).toEqual([['clash', 5], ['tests', 4], ['other', 4]])
+  expect(d.failed.at(-1)!.folded).toBe('files out of scope 2, no change 1')
+  expect(d.failedTotal).toBe(13)
+  const text = statsReport({ tasks: [task('T-1', { status: 'failed', history })], nowMs: NOW })
+  const at = (label: string) => text.indexOf(`  ${label} `)
+  expect(at('clash with main')).toBeGreaterThan(0)
+  expect(at('clash with main')).toBeLessThan(at('tests failed'))
+  expect(at('tests failed')).toBeLessThan(at('other'))
+  expect(text.replace(/\s+/g, ' ')).toContain('(files out of scope 2, no change 1)')
+  expect(text).not.toMatch(/ no change +▇* +1\b/)
+  const html = statsHtml(d, 'p')
+  expect(html.indexOf('clash with main')).toBeLessThan(html.indexOf('tests failed'))
+  expect(html).toContain('files out of scope 2, no change 1')
+  // none to show when no try was sent back
+  expect(statsData({ tasks: [task('T-2')], nowMs: NOW }).failed).toEqual([])
 })

@@ -3,7 +3,7 @@
 // brings every file to today's shape (upgradeBoard, upgradeArchiveTask, upgradeScoutUsage, migratedScoutRun) once.
 // Pure functions on parsed JSON. Delete this file when the owner has run the fix.
 import type { SymccHistoryEntry, SymccRun } from '../../types'
-import { type HistoryKind, AFTER_CHANGED, RESULT_BAD, RESULT_GOOD, historyEntryOk, isHistoryKind, resultArrow, tryParts, withHistory } from './history'
+import { type FailReason, type HistoryFacts, type HistoryKind, AFTER_CHANGED, historyEntryOk, isHistoryKind, onPurposeStop, tryParts, withHistory } from './history'
 import { addTokens, cleanTokens, isAgentId, sumTokens, tokenCount } from './runs'
 import { isSoundSet, soundNotify, soundSetFor } from './board-file'
 import { countFindings, isNothing } from './scouts'
@@ -156,6 +156,100 @@ const PLAIN_KINDS: [HistoryKind, RegExp][] = [
   ['not-merged', /^(not merged|not started):/],
 ]
 
+/** How symcc started a try's result, the words it put right after " → ": good results, then bad ones (T-806: only the migration reads them now). */
+const OLD_GOOD = /^(merged into|already merged into|done\b)/
+const OLD_BAD = /^(not merged|tests failed|the checker found problems|conflicts with the latest|symcc could not|could not|checking failed|the worker made no change|the worker ended its turn before|your files on|its checking and merging ran over|its merge ran over)/
+const OLD_KNOWN = new RegExp(`${OLD_GOOD.source}|${OLD_BAD.source}|^(checks passed|the checker (was stopped|couldn't start|gave no verdict)|you have )`)
+
+/** The index of the " → " that starts a try's result in `body`: the first one followed by words symcc writes there, else the last one; undefined when none. */
+function oldResultArrow(body: string): number | undefined {
+  const arrows = [...body.matchAll(/ → /g)].map(a => a.index!)
+  return arrows.find(i => OLD_KNOWN.test(body.slice(i + 3))) ?? arrows.at(-1)
+}
+
+/**
+ * Where the try's result starts in history line `l` (its " → "). When the line has " → the checker found problems:", that
+ * is the result and nothing after it counts. Otherwise it is the last " → " followed by an outcome word symcc writes there; else the last one.
+ */
+const OLD_OUTCOME_WORDS = /^(tests failed\b|conflicts with the latest\b|changed files outside the task\b|the checker found problems\b|tests ran out of time\b|the worker made no change\b|not merged\b|checking failed\b|symcc could not\b|could not\b|the worker ended its turn before\b|your files on \S+ can't be updated\b|merged into\b|already merged into\b|checks passed\b)/
+function oldCutAt(l: string): number {
+  const checker = l.indexOf(' → the checker found problems:')
+  if (checker >= 0) return checker
+  for (let i = l.lastIndexOf(' → '); i >= 0; i = i ? l.lastIndexOf(' → ', i - 1) : -1) if (OLD_OUTCOME_WORDS.test(l.slice(i + 3))) return i
+  return l.lastIndexOf(' → ')
+}
+
+/** A "not merged: the task was … while it was being checked" result that is an on-purpose stop. */
+function oldNotMergedOnPurpose(outcome: string): boolean {
+  const why = /^not merged: the task was (.*)$/.exec(outcome)?.[1]
+  if (why === undefined) return false
+  if (/^sent to the owner\b/.test(why)) return true
+  return onPurposeStop(why.replace(/^stopped because\s+/, ''))
+}
+
+/** Why a try failed, read from one old history line; null when the line is not a clear failure. */
+export function oldFailReason(line: string): FailReason | null {
+  const l = String(line ?? '')
+  if (!/^try \d+\b/.test(l)) return null
+  const head = l.replace(/^try \d+(?: \([^)]*\))?:\s*/, '')
+  if (/^rejected by the owner\b/.test(head)) return 'rejected'
+  if (/^checker\b/.test(head)) return null
+  if (/^restarted: the task was changed\b/.test(head)) return 'changed'
+  if (/^(out of time\b|stopped after \d+ min \(out of time\)|its checking and merging ran over \d+ min\b)/.test(head)) return 'timeout'
+  if (/^the worker ended without a result\b/.test(head)) return 'noresult'
+  if (onPurposeStop(/^stopped:\s*(.*)$/.exec(head)?.[1])) return null
+  if (/^restarted\b/.test(head)) return null
+  if (/^stopped\b/.test(head)) return 'stopped'
+  if (/^(approved by the owner|merging\b|merged once your files)/.test(head)) return null
+  const cut = oldCutAt(l)
+  const outcome = cut < 0 ? '' : l.slice(cut + 3)
+  if (/^tests failed\b|the tests failed after your edits/.test(outcome)) return 'tests'
+  if (/^conflicts with the latest\b/.test(outcome)) return 'clash'
+  if (/^changed files outside the task\b/.test(outcome)) return 'scope'
+  if (/^the checker found problems\b/.test(outcome)) return 'checker'
+  if (/^tests ran out of time\b/.test(outcome)) return 'timeout'
+  if (/^the worker made no change\b/.test(outcome)) return 'nochange'
+  if (/^not merged\b/.test(outcome)) return oldNotMergedOnPurpose(outcome) || /\(not used: /.test(outcome) || /, and the task changed nothing else$/.test(outcome) ? null : 'notmerged'
+  if (/^your files on \S+ can't be updated\b/.test(outcome)) return 'notmerged'
+  if (/^(checking failed|symcc could not|could not|the worker ended its turn before)\b/.test(outcome)) return 'other'
+  if (/; nothing was checked or merged$/.test(head)) return 'other'
+  return null
+}
+
+/** The kinds of a try's result line, whose text is split at the " → ". */
+const RESULT_LINE_KINDS: readonly string[] = ['merged', 'done', 'failed', 'try-result', 'not-merged', 'approved', 'approve-failed']
+
+/** The stage words of a 'stage' line and the step each means. */
+const STAGE_STEPS: [RegExp, NonNullable<HistoryFacts['step']>][] = [
+  [/^worker started\b/, 'worker-start'], [/^worker handed back\b/, 'handed-back'], [/^prep started\b/, 'prep'], [/^checker started\b/, 'checker'],
+  [/^waits in the merge queue\b/, 'queue'], [/^tests started\b/, 'tests'], [/^merge started\b/, 'merge'],
+]
+
+/** The facts (T-806) of an old history line, read out of its kind and text with the old patterns, one last time. */
+export function oldHistoryFacts(e: { kind: string; text: string }): HistoryFacts {
+  const parts = tryParts(e.text)
+  const body = parts ? parts[2] : e.text
+  const out: HistoryFacts = {}
+  if (parts) out.try = parts[1]
+  if (e.kind === 'stage') {
+    const step = STAGE_STEPS.find(([re]) => re.test(body))?.[1]
+    if (step) out.step = step
+    const place = /^waits in the merge queue \(place (\d+)\)/.exec(body)
+    if (place) out.place = Number(place[1])
+  }
+  if (parts && RESULT_LINE_KINDS.includes(e.kind)) {
+    const arrow = oldResultArrow(body)
+    if (arrow !== undefined && body.slice(arrow + 3)) out.result = body.slice(arrow + 3)
+  }
+  const reason = oldFailReason(e.text)
+  if (reason) out.reason = reason
+  if (e.kind === 'merged' && /^merged outside the board\b/.test(e.text)) out.how = 'outside'
+  else if (e.kind === 'merged' && / → merged into /.test(e.text)) out.how = /approved by the owner/.test(e.text) ? 'approved' : 'own'
+  if ((e.kind === 'not-merged' || e.kind === 'stopped') && (/\basked the owner\b/.test(body) || /\bpaused\b.*\bwait(?:s|ing)? (?:for|on) (?:the owner|you)\b/i.test(body))) out.owner = true
+  if (e.kind === 'moved-backlog' && /^moved to the backlog\b/.test(e.text)) out.backlog = true
+  return out
+}
+
 /** The kind of an old history line (a plain string from before T-522), guessed from how it starts and from its result words. */
 export function guessHistoryKind(line: string): HistoryKind {
   const parts = tryParts(line)
@@ -169,16 +263,22 @@ export function guessHistoryKind(line: string): HistoryKind {
   if (/^restarted\b/.test(body)) return 'restarted'
   if (/^stopped/.test(body)) return 'stopped'
   if (/^rejected/.test(body)) return 'rejected'
-  if (/^approved, but/.test(body)) return 'approved'
+  if (/^approved, but/.test(body)) return 'approve-failed'
   if (/^(out of time|ran \d+ min, over|time is up)/.test(body)) return 'out-of-time'
   if (/^the worker ended without a result|; nothing was checked or merged$/.test(body)) return 'failed'
-  const arrow = resultArrow(body)
+  const arrow = oldResultArrow(body)
   if (arrow !== undefined) {
     const result = body.slice(arrow + 3)
-    return /^done\b/.test(result) ? 'done' : RESULT_GOOD.test(result) ? 'merged' : RESULT_BAD.test(result) ? 'failed' : 'try-result'
+    return /^done\b/.test(result) ? 'done' : OLD_GOOD.test(result) ? 'merged' : OLD_BAD.test(result) ? 'failed' : 'try-result'
   }
   if (/, so it is done$/.test(body)) return 'done'
   return 'step'
+}
+
+/** Whether the old patterns find a fact in entry `e` that it doesn't carry yet (T-806). */
+function lacksFacts(e: SymccHistoryEntry): boolean {
+  const facts = oldHistoryFacts(e) as Record<string, unknown>
+  return Object.keys(facts).some(k => (e as Record<string, unknown>)[k] === undefined)
 }
 
 /** An old history line (a plain string) as a record: kind guessed (guessHistoryKind), time guessed from the try it names or the task's created_at. */
@@ -187,7 +287,7 @@ export function oldHistoryEntry(line: string, t: { runs?: readonly SymccRun[]; c
   const n = tryParts(line)?.[1]
   const run = n ? t.runs?.[n - 1] : undefined
   const at = run ? run.ended ?? run.started : kind === 'created' ? t.created_at : undefined
-  return { ...(typeof at === 'string' && at ? { at } : {}), kind, text: line }
+  return { ...(typeof at === 'string' && at ? { at } : {}), kind, text: line, ...oldHistoryFacts({ kind, text: line }) }
 }
 
 /**
@@ -196,13 +296,16 @@ export function oldHistoryEntry(line: string, t: { runs?: readonly SymccRun[]; c
  */
 export function migrateHistory(t: { history?: unknown; runs?: readonly SymccRun[]; created_at?: string }): SymccHistoryEntry[] | null {
   const h = t.history
-  if (!Array.isArray(h) || h.every(e => typeof e !== 'string' && historyEntryOk(e) && isHistoryKind((e as SymccHistoryEntry).kind))) return null
+  if (!Array.isArray(h) || h.every(e => typeof e !== 'string' && historyEntryOk(e) && isHistoryKind((e as SymccHistoryEntry).kind) && !lacksFacts(e as SymccHistoryEntry))) return null
   const out: SymccHistoryEntry[] = []
   for (const e of h) {
     if (typeof e === 'string') { out.push(oldHistoryEntry(e, t)); continue }
     if (!e || typeof e !== 'object' || Array.isArray(e) || typeof (e as SymccHistoryEntry).text !== 'string') continue
     const r = e as SymccHistoryEntry
-    out.push({ ...(typeof r.at === 'string' && r.at ? { at: r.at } : {}), kind: isHistoryKind(r.kind) ? r.kind : 'other', text: r.text })
+    const kind = r.kind === 'approved' ? 'approve-failed' : isHistoryKind(r.kind) ? r.kind : 'other'
+    // the facts the old patterns read out of the line fill the ones it doesn't have (never replacing a saved one)
+    const { at: _at, ...saved } = r
+    out.push({ ...(typeof r.at === 'string' && r.at ? { at: r.at } : {}), ...oldHistoryFacts({ kind, text: r.text }), ...saved, kind, text: r.text })
   }
   return out
 }
@@ -324,7 +427,7 @@ export type OldInput = {
 
 /** The count of everything in old shape, as lines; rows with n = 0 are left out. */
 export function oldDataRows(i: OldInput): OldRow[] {
-  const c = { unsplit: 0, numTok: 0, strHist: 0, badKind: 0, other: 0, attempts: 0, chk: 0, queue: 0, role: 0, stage: 0, origin: 0, openRun: 0, conflict: 0, rerun: 0, noInto: 0 }
+  const c = { unsplit: 0, numTok: 0, strHist: 0, badKind: 0, facts: 0, other: 0, attempts: 0, chk: 0, queue: 0, role: 0, stage: 0, origin: 0, openRun: 0, conflict: 0, rerun: 0, noInto: 0 }
   const task = (t: Raw, board: boolean) => {
     const runs = (Array.isArray(t.runs) ? t.runs : []).filter(isObj) as Raw[]
     for (const r of runs) {
@@ -339,6 +442,7 @@ export function oldDataRows(i: OldInput): OldRow[] {
       if (typeof e === 'string' || !isObj(e) || typeof e.text !== 'string') c.strHist++
       else if (!isHistoryKind(e.kind)) c.badKind++
       else if (e.kind === 'other') c.other++
+      else if (lacksFacts(e as unknown as SymccHistoryEntry)) c.facts++
     }
     if (!board) return
     if (isNum(t.attempts) && Array.isArray(t.runs) && t.attempts !== t.runs.length) c.attempts++
@@ -368,6 +472,7 @@ export function oldDataRows(i: OldInput): OldRow[] {
     { n: usage, text: 'scout usage totals with tokens saved as one number', fix: true },
     { n: c.strHist, text: 'history entries that are plain strings or not records', fix: true },
     { n: c.badKind, text: 'history entries with a kind symcc does not know', fix: true },
+    { n: c.facts, text: 'history entries without their facts (try, step, result, reason ...)', fix: true },
     { n: c.other, text: 'history entries of kind `other` (shown as they are)', fix: false },
     { n: c.attempts, text: 'tasks where attempts is not the number of tries (shown as they are)', fix: false },
     { n: c.chk, text: 'tasks whose tries keep tokens, cost or agent ids outside their agent entries (agent, checker, tokens, checker_tokens, cost, checkers)', fix: true },

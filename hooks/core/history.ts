@@ -1,5 +1,5 @@
 // Short history lines for things that stop or restart a task, or that the owner said.
-import type { SymccHistoryEntry, SymccRun, SymccTask } from '../../types'
+import type { SymccFailReason, SymccHistoryEntry, SymccRun, SymccTask } from '../../types'
 import { roleOf, tryLabel } from './roles'
 import { ellipsis, squash } from './text'
 
@@ -23,6 +23,40 @@ export const changeRestartWhy = (fields: readonly string[]): string => `restarte
 export function changeRestartLine(t: Pick<SymccTask, 'role' | 'attempts'>, fields: readonly string[]): string {
   return `${tryLabel(t)}: ${changeRestartWhy(fields)}`
 }
+
+/**
+ * T-806: whether a try stopped for `why` was stopped on purpose, not failed: paused (by the owner or the lead, or the
+ * whole board), dropped, moved to the backlog, symcc turned off (disabled), or the lead asking the owner a question.
+ */
+export const onPurposeStop = (why: string | undefined): boolean =>
+  /^(paused\b|dropped\b|moved to the backlog\b|the lead asked the owner a question\b|.* paused the board\b|the board was paused\b|\S+ was (disabled|turned off)\b)/.test(String(why ?? '').trim())
+
+/**
+ * Whether a stop or a not-merged line worded `why` puts the task to wait for the owner's answer: the lead's question, the
+ * branch-gone question ("asked the owner ..."), or a pause whose reason waits for the owner ("paused: Waiting for the owner ...").
+ */
+export const waitsForOwner = (why: string): boolean => /\basked the owner\b/.test(why) || /\bpaused\b.*\bwait(?:s|ing)? (?:for|on) (?:the owner|you)\b/i.test(why)
+
+/**
+ * T-806: result line `line` with " (not used: <why>)" added: the check it ends was counted by another line of its own (the
+ * try was stopped, or the task changed), so a "not merged" result keeps no reason, and the note is part of its result.
+ */
+export function notUsedEntry(line: HistoryAdd, why: string): HistoryAdd {
+  const { result, reason, ...rest } = line[2] ?? {}
+  const note = ` (not used: ${why})`
+  const dropped = reason === 'notmerged' && (result ?? '').startsWith('not merged')
+  return [line[0], line[1] + note, { ...rest, ...(result !== undefined ? { result: result + note } : {}), ...(reason && !dropped ? { reason } : {}) }]
+}
+
+/** The facts a history line carries besides its time, kind and text (T-806; see SymccHistoryEntry). */
+export type HistoryFacts = Omit<SymccHistoryEntry, 'at' | 'kind' | 'text'>
+
+/** "try 2: <body>" as an entry to add, with its `try` fact; `facts` adds the rest. */
+export const tryEntry = (t: Pick<SymccTask, 'role' | 'attempts'>, kind: HistoryKind, body: string, facts: HistoryFacts = {}): HistoryAdd => [kind, `${tryLabel(t)}: ${body}`, { try: Number(t.attempts) || 0, ...facts }]
+
+/** "try 2: <said> → <result>" as an entry to add: its `try` and `result` facts are set; `facts` adds the rest (the reason, ...). */
+export const resultEntry = (t: Pick<SymccTask, 'role' | 'attempts'>, kind: HistoryKind, said: string, result: string, facts: HistoryFacts = {}): HistoryAdd =>
+  tryEntry(t, kind, `${said} → ${result}`, { result, ...facts })
 
 /**
  * The try's end reason for a stop worded `why` as in stoppedLine: "restarted: X" is restarted
@@ -62,12 +96,22 @@ export function stoppedLine(t: Pick<SymccTask, 'role' | 'attempts'>, why: string
   return `${tryLabel(t)}: ${/^restarted\b/.test(why) ? why : `stopped: ${why}`}`
 }
 
-/** stoppedLine as an entry to add: "restarted" when `why` says so, else "stopped". */
-export const stoppedEntry = (t: Pick<SymccTask, 'role' | 'attempts'>, why: string): HistoryAdd => [/^restarted\b/.test(why) ? 'restarted' : 'stopped', stoppedLine(t, why)]
+/**
+ * stoppedLine as an entry to add: "restarted" when `why` says so, else "stopped". Its reason: "changed" for a restart
+ * by a change, "stopped" for a stop that was not on purpose; a restart symcc did itself and an on-purpose stop have none.
+ */
+export const stoppedEntry = (t: Pick<SymccTask, 'role' | 'attempts'>, why: string): HistoryAdd => {
+  const restarted = /^restarted\b/.test(why)
+  const reason: FailReason | undefined = restarted ? (/^restarted: the task was changed\b/.test(why) ? 'changed' : undefined) : onPurposeStop(why) ? undefined : 'stopped'
+  return [restarted ? 'restarted' : 'stopped', stoppedLine(t, why), { try: Number(t.attempts) || 0, ...(reason ? { reason } : {}), ...(!restarted && waitsForOwner(why) ? { owner: true as const } : {}) }]
+}
 
 /** T-723: the words of the 'stage' line written when a try's worker starts, and when it hands back (before "prep started"). */
 export const WORKER_STARTED = 'worker started'
 export const WORKER_HANDED_BACK = 'worker handed back'
+
+/** T-806: why a try failed or was sent back, as a history line records it (`reason`). */
+export type FailReason = SymccFailReason
 
 /**
  * T-723: "try 2: worker started (role tester)", the 'stage' line of a try whose worker just started: "· merges main in
@@ -77,17 +121,16 @@ export const WORKER_HANDED_BACK = 'worker handed back'
  * also takes the number back but writes its own "restarted" line, which already says why, so no mark is added then.
  */
 export function workerStartedEntry(t: Pick<SymccTask, 'role' | 'attempts' | 'history'>, mergeMain: boolean): HistoryAdd {
-  const head = new RegExp(`^try ${Number(t.attempts) || 0}(?: \\([^)]*\\))?: ${WORKER_STARTED}\\b`)
   const history = t.history ?? []
-  const last = history.findLastIndex(h => h.kind === 'stage' && head.test(h.text))
+  const last = history.findLastIndex(h => h.kind === 'stage' && h.step === 'worker-start' && h.try === (Number(t.attempts) || 0))
   const since = last < 0 ? [] : history.slice(last + 1)
   const changed = last >= 0 && !since.some(h => h.kind === 'restarted' || h.kind === 'stopped')
   const again = !changed ? '' : since.some(h => h.kind === 'note') ? ' · same try number (note joined)' : ' · same try number (task changed)'
-  return ['stage', `try ${t.attempts}: ${WORKER_STARTED} (role ${roleOf(t)})${mergeMain ? ' · merges main in first' : ''}${again}`]
+  return ['stage', `try ${t.attempts}: ${WORKER_STARTED} (role ${roleOf(t)})${mergeMain ? ' · merges main in first' : ''}${again}`, { try: Number(t.attempts) || 0, step: 'worker-start' }]
 }
 
 /** T-723: "try 2: worker handed back", the 'stage' line of a try whose worker handed back its report. */
-export const workerHandedBackEntry = (t: Pick<SymccTask, 'attempts'>): HistoryAdd => ['stage', `try ${t.attempts}: ${WORKER_HANDED_BACK}`]
+export const workerHandedBackEntry = (t: Pick<SymccTask, 'attempts'>): HistoryAdd => ['stage', `try ${t.attempts}: ${WORKER_HANDED_BACK}`, { try: Number(t.attempts) || 0, step: 'handed-back' }]
 
 /**
  * The history lines of a change to task `t` (as it was) with `patch`: the restart line when its
@@ -96,7 +139,7 @@ export const workerHandedBackEntry = (t: Pick<SymccTask, 'attempts'>): HistoryAd
  */
 export function changeLines(t: Pick<SymccTask, 'role' | 'attempts' | 'files'> & Partial<SymccTask>, patch: Partial<SymccTask>, wasDoing: boolean, answer?: string, note?: string): HistoryAdd[] {
   const lines: HistoryAdd[] = []
-  if (wasDoing) lines.push(['restarted', changeRestartLine(t, changedFields(t, patch))])
+  if (wasDoing) lines.push(['restarted', changeRestartLine(t, changedFields(t, patch)), { try: Number(t.attempts) || 0, reason: 'changed' }])
   const widened = filesWidenedLine(t.files ?? [], patch.files)
   if (widened) lines.push(['files-widened', widened])
   const waits = afterChangedLine(t.after ?? [], patch.after)
@@ -175,7 +218,7 @@ export const HISTORY_KINDS = {
   /** the owner rejected the try */
   rejected: 'bad',
   /** the owner approved, but it could not merge (its edits fail the tests …) */
-  approved: 'bad',
+  'approve-failed': 'bad',
   /** a try's result that went badly (tests failed, conflicts, no change, ended without a result …) */
   failed: 'bad',
   /** something kept it from merging or starting ("not merged: ...", "not started: ...") */
@@ -194,18 +237,18 @@ export type HistoryKind = keyof typeof HISTORY_KINDS
 /** A history entry (the record saved in board.json). */
 export type HistoryEntry = SymccHistoryEntry
 
-/** One entry to add: its kind and its text. */
-export type HistoryAdd = [kind: HistoryKind, text: string]
+/** One entry to add: its kind, its text and its facts (see HistoryFacts). */
+export type HistoryAdd = [kind: HistoryKind, text: string, facts?: HistoryFacts]
 
 /** Whether `k` is a kind symcc knows (see HISTORY_KINDS). */
 export const isHistoryKind = (k: unknown): k is HistoryKind => typeof k === 'string' && Object.prototype.hasOwnProperty.call(HISTORY_KINDS, k)
 
-/** The one way a history entry is made: `{ at, kind, text }`, `at` the time it happened (ISO). */
-export const historyEntry = (kind: HistoryKind, text: string, at: string): HistoryEntry => ({ at, kind, text })
+/** The one way a history entry is made: `{ at, kind, text, ...facts }`, `at` the time it happened (ISO). */
+export const historyEntry = (kind: HistoryKind, text: string, at: string, facts: HistoryFacts = {}): HistoryEntry => ({ at, kind, text, ...facts })
 
 /** Task history `history` with entries added (each one [kind, text]), all at time `at`. */
 export function withHistory(history: readonly HistoryEntry[] | undefined, at: string, ...adds: HistoryAdd[]): HistoryEntry[] {
-  return [...(history ?? []), ...adds.map(([kind, text]) => historyEntry(kind, text, at))]
+  return [...(history ?? []), ...adds.map(([kind, text, facts]) => historyEntry(kind, text, at, facts))]
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -252,20 +295,6 @@ export type HistoryEvent = {
   result: string
 }
 
-/** How symcc starts a try's result, the words it puts right after " → ": good results, then bad ones. */
-export const RESULT_GOOD = /^(merged into|already merged into|done\b)/
-export const RESULT_BAD = /^(not merged|tests failed|the checker found problems|conflicts with the latest|symcc could not|could not|checking failed|the worker made no change|the worker ended its turn before|your files on|its checking and merging ran over|its merge ran over)/
-const RESULT_KNOWN = new RegExp(`${RESULT_GOOD.source}|${RESULT_BAD.source}|^(checks passed|the checker (was stopped|couldn't start|gave no verdict)|you have )`)
-
-/**
- * The index of the " → " that starts a try's result in `body`: the first one followed by words symcc writes there,
- * so a "→" in the worker's summary or in the test output never moves it (else the last one); undefined when none.
- */
-export function resultArrow(body: string): number | undefined {
-  const arrows = [...body.matchAll(/ → /g)].map(a => a.index!)
-  return arrows.find(i => RESULT_KNOWN.test(body.slice(i + 3))) ?? arrows.at(-1)
-}
-
 /** A line's "try 2 (role tester): " label split off: [label, try number, the rest], or null when it names no try. */
 export function tryParts(text: string): [label: string, n: number, body: string] | null {
   const m = /^(try (\d+)(?: \([^)]*\))?):\s*(.*)$/s.exec(text)
@@ -280,7 +309,7 @@ export function historyEntryOk(v: unknown): boolean {
 }
 
 /** The kinds of a try's result line ("try 2: <what the worker said> → <the result>"), whose text is split at the " → ". */
-const RESULT_KINDS = ['merged', 'done', 'failed', 'try-result', 'not-merged', 'approved'] as const satisfies readonly HistoryKind[]
+const RESULT_KINDS = ['merged', 'done', 'failed', 'try-result', 'not-merged', 'approve-failed'] as const satisfies readonly HistoryKind[]
 
 /**
  * A history entry as an event to draw: its mark and tone come from its saved kind (HISTORY_KINDS), never from words in
@@ -293,9 +322,9 @@ export function historyEvent(e: HistoryEntry): HistoryEvent {
   const parts = tryParts(e.text)
   const text = parts ? parts[2] : e.text
   const isResult = (RESULT_KINDS as readonly string[]).includes(kind)
-  const arrow = parts && isResult ? resultArrow(text) : undefined
+  const result = parts && isResult && e.result && text.endsWith(` → ${e.result}`) ? e.result : ''
   return {
     kind, tone, mark: HISTORY_MARK[tone], at: e.at ?? '', try: parts ? parts[1] : 0, label: parts ? parts[0] : '', text,
-    said: arrow === undefined ? text : text.slice(0, arrow), result: arrow === undefined ? '' : text.slice(arrow + 3),
+    said: result ? text.slice(0, text.length - result.length - 3) : text, result,
   }
 }

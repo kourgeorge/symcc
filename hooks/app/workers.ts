@@ -1,5 +1,5 @@
 import type { SymccTask, SymccTokens } from '../../types'
-import { PREP_NOTE, type Board, type BoardTask, type RoleDef, roleSection, mayStart, liveWorkersFor, modeOf, symccOn, ready, patchTask, putTask, find, startRun, findRole, roleOf, workerName, workerDescription, onNotReady, endRun, tryLabel, needFilesQuestion, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, liveDriver, emptyBoard, ownedHere, backToTodo, stoppedEntry, withHistory, historyEntry, type HistoryAdd, type HistoryKind, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, testMinutesOf, ranOverNote, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, WRAP_UP_GRACE_MS, outOfTimeNote, checkerOn, docsOnly, checkerOutput, isCheckerOutput, checkerLine, checkerRetryText, kindOf, isInvestigation, kindSection, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt, shortSha, secretsLeftText, gaveUpTestsText, endedEarlyLine, endedEarlyNote, ENDED_EARLY_NOTE, workerStartedEntry, workerHandedBackEntry, withFailedTests, withAgentUsed, withStoppedUsed, goOnRun, undoGoOn, restartsOf, restartedAgent, workerIdOf, checkerIdOf, onTask, withAgentStart, DEFAULT_ROLE, workerSince } from '../board'
+import { PREP_NOTE, type Board, type BoardTask, type RoleDef, roleSection, mayStart, liveWorkersFor, modeOf, symccOn, ready, patchTask, putTask, find, startRun, findRole, roleOf, workerName, workerDescription, onNotReady, endRun, tryLabel, needFilesQuestion, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, liveDriver, emptyBoard, ownedHere, backToTodo, stoppedEntry, withHistory, historyEntry, type HistoryAdd, type HistoryFacts, tryEntry, resultEntry, notUsedEntry, taskWasResult, type HistoryKind, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, testMinutesOf, ranOverNote, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, WRAP_UP_GRACE_MS, outOfTimeNote, checkerOn, docsOnly, checkerOutput, isCheckerOutput, checkerLine, checkerRetryText, kindOf, isInvestigation, kindSection, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt, shortSha, secretsLeftText, gaveUpTestsText, endedEarlyLine, endedEarlyNote, ENDED_EARLY_NOTE, workerStartedEntry, workerHandedBackEntry, withFailedTests, withAgentUsed, withStoppedUsed, goOnRun, undoGoOn, restartsOf, restartedAgent, workerIdOf, checkerIdOf, onTask, withAgentStart, DEFAULT_ROLE, workerSince } from '../board'
 import { archiveOld } from './archive'
 import { checkHealth } from './health'
 import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch, clearScratch, taskBranch, copyReports, deleteMergedBranch, type BehindWhy } from './git'
@@ -129,7 +129,7 @@ async function queueWorker(host: Host, id: string): Promise<{ started: Promise<v
       const goOn = cur!.attempts > 0 ? goOnRun(cur!.runs, at) : null
       const attempts = goOn ? cur!.attempts : cur!.attempts + 1
       // T-745: the branch had its own commits and main was merged in before this try
-      const upToDate = merged ? { history: withHistory(cur!.history, at, ['stage', `${tryLabel({ ...cur!, attempts })}: brought up to date with ${intoOf(cur!)} (${merged} commit${merged === 1 ? '' : 's'})`]) } : {}
+      const upToDate = merged ? { history: withHistory(cur!.history, at, tryEntry({ ...cur!, attempts }, 'stage', `brought up to date with ${intoOf(cur!)} (${merged} commit${merged === 1 ? '' : 's'})`)) } : {}
       // and when merging it in clashed, this try merges it in itself (its prompt asks, the git guard lets it), as the clash retry does
       const clash = why === 'clash' && !cur!.merge_main ? { merge_main: true } : {}
       const y = patchTask(x, id, { status: 'doing', session: S.me, attempts, branch, note: claimNote(host), runs: addCommits(goOn ?? startRun(cur!.runs, at, !!cur!.merge_main || why === 'clash'), commit ? [commit] : []), ...upToDate, ...clash }, at)
@@ -241,7 +241,7 @@ export async function waitIfBranchGone(host: Host, b: Board, t: SymccTask, when:
     const cur = find(x, t.id)
     if (!cur || cur.status !== t.status || cur.attempts !== t.attempts) return [x, false] as [Board, boolean]
     const line = `${when === 'start' ? 'not started' : 'not merged'}: branch ${into} is gone; asked the owner whether to merge into ${instead} instead`
-    return [patchTask(x, t.id, { status: 'waiting', question, options, merge_wait: undefined, note: 'waiting for you', history: withHistory(cur.history, now(), ['not-merged', line]), ...endedBy(cur, now(), 'asked', `branch ${into} is gone`) }, now()), true] as [Board, boolean]
+    return [patchTask(x, t.id, { status: 'waiting', question, options, merge_wait: undefined, note: 'waiting for you', history: withHistory(cur.history, now(), ['not-merged', line, { owner: true }]), ...endedBy(cur, now(), 'asked', `branch ${into} is gone`) }, now()), true] as [Board, boolean]
   })
   if (asked) {
     sayNeedsYou(host, b, t, question)
@@ -381,7 +381,7 @@ export function workerRestartedEntry(t: Pick<BoardTask, 'role' | 'attempts'>, wh
   const w = why.trim()
   const reason = !w ? '' : /^after\b/.test(w) ? ` ${w}` : `: ${w}`
   const role = roleOf(t)
-  return ['stage', `try ${t.attempts}: worker restarted${reason}${role === DEFAULT_ROLE ? '' : ` (role ${role})`}`]
+  return ['stage', `try ${t.attempts}: worker restarted${reason}${role === DEFAULT_ROLE ? '' : ` (role ${role})`}`, { try: Number(t.attempts) || 0 }]
 }
 
 /** T-452: hand-backs of workers whose task couldn't be marked finished (board.json couldn't be read), by agent id; resumeKept finishes them. */
@@ -489,7 +489,7 @@ function ranOverTry(t: BoardTask, min: number, retries: number): BoardTask {
   const tries = t.test_tries ?? 0
   const retry = onTestFail(t, retries) === 'retry'
   const note = retry ? `${ranOverNote(min)}; a new try will look at it (${tries + 1} of ${retries})` : `${ranOverNote(min)}; nothing was merged (after ${tries} automatic ${tries === 1 ? 'retry' : 'retries'})`
-  return { ...rest, status: retry ? 'todo' : 'failed', note, ...(retry ? { test_tries: tries + 1 } : {}), updated_at: now(), history: withHistory(t.history, now(), ['failed', `${tryLabel(t)}: ${note}`]), ...(t.status === 'doing' ? endedBy(t, now(), 'stopped', ranOverNote(min)) : {}) }
+  return { ...rest, status: retry ? 'todo' : 'failed', note, ...(retry ? { test_tries: tries + 1 } : {}), updated_at: now(), history: withHistory(t.history, now(), tryEntry(t, 'failed', note, { reason: 'timeout' })), ...(t.status === 'doing' ? endedBy(t, now(), 'stopped', ranOverNote(min)) : {}) }
 }
 
 /** What the lead is told about task `t` (as ranOverTry left it, with `retries` automatic retries) after its merge turn ran over `min` minutes. */
@@ -521,7 +521,7 @@ async function landedLate(host: Host, t: SymccTask, sha: string, made: readonly 
     if (!cur || !fits(cur)) return [x, { done: false, cur }] as [Board, { done: boolean; cur?: BoardTask }]
     const next = mergedDone({ ...cur, runs: addCommits(cur.runs, [...made, sha]) }, sha, 'left as given up', now())
     const line = `${tryLabel(cur)}: its checking and merging was given up as stuck, but it ended late and its work was merged into ${into} (${short}), so it is done`
-    return [putTask(x, { ...next, history: withHistory(cur.history, now(), ['merged', line]) }), { done: true, cur }] as [Board, { done: boolean; cur?: BoardTask }]
+    return [putTask(x, { ...next, history: withHistory(cur.history, now(), ['merged', line, { try: cur.attempts }]) }), { done: true, cur }] as [Board, { done: boolean; cur?: BoardTask }]
   }).catch((e: Error) => {
     tellLead(host, `${t.id} "${t.title}": its given-up checking and merging ended late and its work was merged into ${into} (${short}), but the board could not be updated (${e.message.slice(0, 200)}).`)
     return null
@@ -716,7 +716,7 @@ async function stopLeftovers(host: Host, t: SymccTask, end: TurnEnd) {
   const text = stopped >= running ? `stopped ${cmds(stopped)} still running at hand-back` : stopped > 0 ? `stopped ${cmds(stopped)} of ${running} still running at hand-back` : `${cmds(running)} still running at hand-back (could not stop ${running === 1 ? 'it' : 'them'})`
   await change(host, x => {
     const cur = find(x, t.id)
-    return cur && cur.status === t.status && cur.attempts === t.attempts ? patchTask(x, t.id, { history: withHistory(cur.history, now(), ['step', `${tryLabel(t)}: ${text}`]) }, now()) : x
+    return cur && cur.status === t.status && cur.attempts === t.attempts ? patchTask(x, t.id, { history: withHistory(cur.history, now(), tryEntry(t, 'step', text)) }, now()) : x
   })
 }
 
@@ -730,7 +730,7 @@ async function warnEndedEarly(host: Host, t: SymccTask, answer: string) {
   const note = endedEarlyNote(t.id, line)
   await change(host, x => {
     const cur = find(x, t.id)
-    return cur && cur.status === t.status && cur.attempts === t.attempts ? patchTask(x, t.id, { history: withHistory(cur.history, now(), ['step', `${tryLabel(t)}: warning: ${note}`]) }, now()) : x
+    return cur && cur.status === t.status && cur.attempts === t.attempts ? patchTask(x, t.id, { history: withHistory(cur.history, now(), tryEntry(t, 'step', `warning: ${note}`)) }, now()) : x
   })
   tellLead(host, note)
 }
@@ -762,8 +762,8 @@ async function changedMeanwhile(host: Host, t: SymccTask, b: Board, r: CheckResu
     if (!cur) return [x, null] as [Board, null]
     const late = off ? `${off} while it was being merged, too late` : `it was ${cur.status} while being merged, too late`
     const y = merged
-      ? patchTask(x, t.id, { status: 'done', note: off ? `merged; ${off} too late to stop it` : `merged; it was ${cur.status} too late to stop it`, merge_main: false, test_output: undefined, ...(r.notes?.length ? { research_notes: r.notes } : {}), history: withHistory(cur.history, now(), line, ['merged', `${tryLabel(t)}: ${late}: the work was already merged, so it stays done`]), ...(cur.attempts === t.attempts && cur.runs?.length ? { runs: withEnd(cur.runs, 'finished', 'merged', true) } : {}) }, now())
-      : patchTask(x, t.id, { history: withHistory(cur.history, now(), [line[0], `${line[1]} (not used: ${off ?? `the task was ${cur.status} meanwhile`})`]) }, now())
+      ? patchTask(x, t.id, { status: 'done', note: off ? `merged; ${off} too late to stop it` : `merged; it was ${cur.status} too late to stop it`, merge_main: false, test_output: undefined, ...(r.notes?.length ? { research_notes: r.notes } : {}), history: withHistory(cur.history, now(), line, tryEntry(t, 'merged', `${late}: the work was already merged, so it stays done`)), ...(cur.attempts === t.attempts && cur.runs?.length ? { runs: withEnd(cur.runs, 'finished', 'merged', true) } : {}) }, now())
+      : patchTask(x, t.id, { history: withHistory(cur.history, now(), notUsedEntry(line, off ?? `the task was ${cur.status} meanwhile`)) }, now())
     return [y, cur.status] as [Board, string]
   })
   if (!was) return
@@ -858,7 +858,7 @@ async function finishTry(host: Host, agentId: string, w: Pick<Worker, 'task' | '
       await answered(host, t, answer, summary, limit)
       return true
     }
-    if (await writeIfSame(host, t, cur => ({ status: 'failed', note: outOfTimeNote(limit), history: withHistory(cur.history, now(), ['out-of-time', `${tryLabel(t)}: out of time; handed back: ${cutLine(summary, 300)} (its work so far is kept in its folder and branch)`]), ...endedBy(cur, now(), 'timed out', `ran over ${limit} min`) }))) return false
+    if (await writeIfSame(host, t, cur => ({ status: 'failed', note: outOfTimeNote(limit), history: withHistory(cur.history, now(), tryEntry(t, 'out-of-time', `out of time; handed back: ${cutLine(summary, 300)} (its work so far is kept in its folder and branch)`, { reason: 'timeout' })), ...endedBy(cur, now(), 'timed out', `ran over ${limit} min`) }))) return false
     tellLead(host, `${t.id} "${t.title}": its time (${limit} minutes) was up, so its worker wrote down what it had and handed back, and the task failed. Its work so far is kept in its folder and branch, and its report (${S.N.name} board task ${t.id}); a retry (${S.N.name} retry) continues from there. Or split it, or drop it.`)
     return true
   }
@@ -867,25 +867,25 @@ async function finishTry(host: Host, agentId: string, w: Pick<Worker, 'task' | '
   if (q) {
     // Straight to the owner: the task waits with the question; their answer sends it back to work.
     const { question, options } = q
-    if (await writeIfSame(host, t, cur => ({ status: 'waiting', question: question.slice(0, 1000), ...(options ? { options } : {}), note: 'waiting for you', history: withHistory(cur.history, now(), ['asked', `${tryLabel(t)}: worker asked: ${question}`]), ...endedBy(cur, now(), 'asked', 'question') }))) return false
+    if (await writeIfSame(host, t, cur => ({ status: 'waiting', question: question.slice(0, 1000), ...(options ? { options } : {}), note: 'waiting for you', history: withHistory(cur.history, now(), tryEntry(t, 'asked', `worker asked: ${question}`)), ...endedBy(cur, now(), 'asked', 'question') }))) return false
     sayNeedsYou(host, b, t, question)
     tellLead(host, workerQuestionText(t.id, question, options), { urgent: true })
   } else if (need.length) {
     const question = needFilesQuestion(t.id, need)
-    if (await writeIfSame(host, t, cur => ({ status: 'waiting', question: question.slice(0, 1000), asked_files: need, note: 'waiting for you', history: withHistory(cur.history, now(), ['asked', `${tryLabel(t)}: worker asked for more files: ${need.join(', ')}`]), ...endedBy(cur, now(), 'asked', 'files outside its list') }))) return false
+    if (await writeIfSame(host, t, cur => ({ status: 'waiting', question: question.slice(0, 1000), asked_files: need, note: 'waiting for you', history: withHistory(cur.history, now(), tryEntry(t, 'asked', `worker asked for more files: ${need.join(', ')}`)), ...endedBy(cur, now(), 'asked', 'files outside its list') }))) return false
     logNeedsFiles(host, t.id, Number(t.attempts) || 0, need)
     sayNeedsYou(host, b, t, question)
     tellLead(host, `${question}\nThe task now waits for the owner, who can allow the files from the board (Allow on its page). If they agree here instead, ${S.N.name} change ${t.id} with the wider files (that sends it back to work; what the worker already changed is kept). Otherwise ${S.N.name} drop it, or change it to a narrower plan that fits its files.`, { urgent: true })
   } else if (end.reason === 'aborted') {
-    if (await writeIfSame(host, t, cur => ({ status: 'failed', note: 'the worker was stopped', history: withHistory(cur.history, now(), ['stopped', `${tryLabel(t)}: stopped before finishing`]), ...endedBy(cur, now(), 'stopped', `stopped from ${S.W.app}`) }))) return false
+    if (await writeIfSame(host, t, cur => ({ status: 'failed', note: 'the worker was stopped', history: withHistory(cur.history, now(), tryEntry(t, 'stopped', 'stopped before finishing', { reason: 'stopped' })), ...endedBy(cur, now(), 'stopped', `stopped from ${S.W.app}`) }))) return false
     tellLead(host, `${t.id} "${t.title}": the worker was stopped before finishing.`)
   } else if (end.reason === 'error' || end.reason === 'refusal') {
     const why = endFailure(end)
-    if (await writeIfSame(host, t, cur => ({ status: 'failed', note: why, history: withHistory(cur.history, now(), ['failed', `${tryLabel(t)}: ${why}; nothing was checked or merged`]), ...endedBy(cur, now(), 'stopped', why) }))) return false
+    if (await writeIfSame(host, t, cur => ({ status: 'failed', note: why, history: withHistory(cur.history, now(), tryEntry(t, 'failed', `${why}; nothing was checked or merged`, { reason: 'other' })), ...endedBy(cur, now(), 'stopped', why) }))) return false
     tellLead(host, `${t.id} "${t.title}": ${why}, so nothing was checked or merged and the task failed. Its work so far is kept in its folder and branch, and its report (${S.N.name} board task ${t.id}); ${S.N.name} retry ${t.id} starts a fresh try that continues from there. Or change, split or drop it.`)
   } else if (end.background?.length && !answer.trim()) {
     // The host saw a background command of it still running when its turn ended with no report: its work isn't done.
-    if (await writeIfSame(host, t, cur => ({ status: 'failed', note: ENDED_EARLY_NOTE, history: withHistory(cur.history, now(), ['failed', `${tryLabel(t)}: ${cutLine(summary, 300)} → ${ENDED_EARLY_NOTE}; nothing was checked or merged`]), ...endedBy(cur, now(), 'stopped', ENDED_EARLY_NOTE) }))) return false
+    if (await writeIfSame(host, t, cur => ({ status: 'failed', note: ENDED_EARLY_NOTE, history: withHistory(cur.history, now(), resultEntry(t, 'failed', cutLine(summary, 300), `${ENDED_EARLY_NOTE}; nothing was checked or merged`, { reason: 'other' })), ...endedBy(cur, now(), 'stopped', ENDED_EARLY_NOTE) }))) return false
     tellLead(host, `${t.id} "${t.title}": ${ENDED_EARLY_NOTE} (something it started was still running, but ending its turn ends its work), so nothing was checked or merged and the task failed. Its work so far is kept in its folder and branch; ${S.N.name} retry ${t.id} starts a fresh try that continues from there.`)
   } else if (isInvestigation(t)) {
     if (gaveUp()) return false
@@ -902,7 +902,7 @@ async function finishTry(host: Host, agentId: string, w: Pick<Worker, 'task' | '
     const stop = () => (gaveUp() ? 'given up after running too long' : stopAsked.get(t.id))
     // The checker setting: a change that is not docs only gets a checker after its prep step, before it joins the merge line (checkerFirst).
     const first = checkerOn(b) ? checkerFirst(host, t, b, w.worktree, made, stop) : undefined
-    const r: CheckResult = await checkAndMerge(host, t, w.worktree, b, 'finish', made, stop, false, release, limit, first).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
+    const r: CheckResult = await checkAndMerge(host, t, w.worktree, b, 'finish', made, stop, false, release, limit, first).catch((e: Error) => ({ ok: false, reason: 'other' as const, detail: `checking failed: ${e.message.slice(0, 300)}` }))
     // T-428: the checker was stopped before its verdict: the task stays "doing" in its checker step, and a new checker starts (restartCheckers)
     if (r.again) return false
     await finishTail(host, t, b, r, made, summary, w.worktree, agentId, gaveUp)
@@ -921,7 +921,7 @@ async function finishTail(host: Host, t: SymccTask, b: Board, r: CheckResult, ma
   await recordCommits(host, t.id, made, r.merged)
   // T-440: the branch it merges into was deleted during the tests, the merge-line wait or the checker: it waits with the "branch is gone" question, its work kept, no failed try
   if (r.gone && (await waitIfBranchGone(host, b, t, 'merge'))) return
-  if (r.blocked) await holdForFiles(host, t, b, r, ['try-result', `${tryLabel(t)}: ${cutLine(summary, 300)} → ${r.detail}`], worktree, agentId)
+  if (r.blocked) await holdForFiles(host, t, b, r, resultEntry(t, 'try-result', cutLine(summary, 300), r.detail), worktree, agentId)
   else
     await settle(host, t, b, r, summary, worktree, agentId).catch(async (e: unknown) => {
       // Merged, but the outcome could not be written: the work is on its branch, so it still ends done.
@@ -1018,8 +1018,8 @@ async function checkerStepAgain(host: Host, t: SymccTask, b: Board, dir: string,
   const why = stop()
   if (!why) await cleanFolder(host, dir)
   const r: CheckResult = why
-    ? { ok: false, detail: `not merged: the task was ${why} while it was being checked` }
-    : await checkAndMerge(host, t, dir, b, 'finish', made, stop, false, release, limit, checkerFirst(host, t, b, dir, made, stop, true)).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
+    ? taskWasResult(why)
+    : await checkAndMerge(host, t, dir, b, 'finish', made, stop, false, release, limit, checkerFirst(host, t, b, dir, made, stop, true)).catch((e: Error) => ({ ok: false, reason: 'other' as const, detail: `checking failed: ${e.message.slice(0, 300)}` }))
   // the checker's agent type isn't loaded yet (just after a reload): the task stays "doing" in its checker step, and the next check starts it again (restartCheckers)
   if (r.again) return
   await finishTail(host, t, b, r, made, await reportSummary(host, t), dir, workerIdOf(t), gaveUp)
@@ -1061,7 +1061,7 @@ async function mergeAgain(host: Host, t0: BoardTask) {
       const made: string[] = []
       const checked = t.history.some(h => h.text === checkerLine(tryLabel(t), { ok: true }))
       const first = checkerOn(b) && !checked ? checkerFirst(host, t, b, dir, made, stop, true) : undefined
-      const r: CheckResult = await checkAndMerge(host, t, dir, b, 'finish', made, stop, false, over, limit, first).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
+      const r: CheckResult = await checkAndMerge(host, t, dir, b, 'finish', made, stop, false, over, limit, first).catch((e: Error) => ({ ok: false, reason: 'other' as const, detail: `checking failed: ${e.message.slice(0, 300)}` }))
       if (r.again) return
       await finishTail(host, t, b, r, made, await reportSummary(host, t), dir, workerIdOf(t), gaveUp)
     })
@@ -1097,7 +1097,7 @@ async function reportSummary(host: Host, t: SymccTask): Promise<string> {
 const checkerFirst = (host: Host, t: SymccTask, b: Board, dir: string, made: string[], stop: () => string | undefined, restarted = false) => async (changed: readonly string[]): Promise<BeforeLine> => {
   if (docsOnly(changed)) return undefined
   const why = stop()
-  if (why) return { result: { ok: false, detail: `not merged: the task was ${why} while it was being checked` } }
+  if (why) return { result: taskWasResult(why) }
   return afterChecker(host, t, b, dir, made, stop, restarted)
 }
 
@@ -1123,7 +1123,7 @@ async function afterChecker(host: Host, t: SymccTask, b: Board, dir: string, mad
   // the checkers symcc had stopped before this one ran: one it stops meanwhile (a reload's orphan stop, a halt) is told apart below
   const stoppedBefore = new Set(stopped)
   const c = await runChecker(host, t, b, dir, stop, restarted ? tryLater : undefined)
-  const stoppedResult = (why: string): BeforeLine => ({ result: { ok: false, detail: `not merged: the task was ${why} while it was being checked` } })
+  const stoppedResult = (why: string): BeforeLine => ({ result: taskWasResult(why) })
   // T-740: symcc stopped this checker (runChecker knows it from symcc's own record of the stop): no verdict, whatever it answered
   if (c.stopped) {
     const why = stop()
@@ -1143,7 +1143,7 @@ async function afterChecker(host: Host, t: SymccTask, b: Board, dir: string, mad
   if (c.again) return { result: { ok: false, again: true, detail: `the checker couldn't start yet (${c.why}); tried again at the next check` } }
   checkerNotReady.delete(t.id)
   if (c.verdict?.ok) return undefined
-  if (c.verdict && 'report' in c.verdict) return { result: { ok: false, checker: true, detail: `the checker found problems: ${cutLine(c.verdict.report, 300)}`, testOutput: checkerOutput(c.verdict.report) } }
+  if (c.verdict && 'report' in c.verdict) return { result: { ok: false, checker: true, reason: 'checker', detail: `the checker found problems: ${cutLine(c.verdict.report, 300)}`, testOutput: checkerOutput(c.verdict.report) } }
   const why = stop()
   if (why) return stoppedResult(why)
   return { noVerdict: `the checker gave no verdict (${c.why ?? 'no answer'})` }
@@ -1169,7 +1169,7 @@ async function unsayProblems(host: Host, t: SymccTask, report: string) {
     const at = cur.history.map(h => h.text).lastIndexOf(said)
     if (at < 0) return x
     const history = [...cur.history]
-    history[at] = historyEntry('checker', checkerLine(tryLabel(cur), null, STOPPED_AGAIN), cur.history[at]!.at ?? now())
+    history[at] = historyEntry('checker', checkerLine(tryLabel(cur), null, STOPPED_AGAIN), cur.history[at]!.at ?? now(), { try: cur.attempts })
     return patchTask(x, t.id, { history }, now())
   }).catch(() => undefined)
 }
@@ -1189,7 +1189,7 @@ async function answered(host: Host, t: SymccTask, answer: string, summary: strin
   const text = answer.trim() || '(no answer)'
   const kept = text.length > ANSWER_MAX_CHARS ? `${text.slice(0, ANSWER_MAX_CHARS - 1)}…` : text
   const late = limit !== undefined
-  if (await writeIfSame(host, t, cur => ({ status: 'review', note: late ? ANSWERED_LATE_NOTE : ANSWERED_NOTE, answer: kept, merge_main: false, test_output: undefined, time_ask: undefined, wrap_up: undefined, history: withHistory(cur.history, now(), ['answered', `${tryLabel(t)}: answered${late ? ` (time ran out after ${limit} min)` : ''}: ${cutLine(summary, 300)}`]), ...endedBy(cur, now(), late ? 'timed out' : 'finished', late ? `${ANSWERED}; ran over ${limit} min` : finishedNote({ ok: true, detail: '', answered: true })) }))) return
+  if (await writeIfSame(host, t, cur => ({ status: 'review', note: late ? ANSWERED_LATE_NOTE : ANSWERED_NOTE, answer: kept, merge_main: false, test_output: undefined, time_ask: undefined, wrap_up: undefined, history: withHistory(cur.history, now(), tryEntry(t, 'answered', `answered${late ? ` (time ran out after ${limit} min)` : ''}: ${cutLine(summary, 300)}`)), ...endedBy(cur, now(), late ? 'timed out' : 'finished', late ? `${ANSWERED}; ran over ${limit} min` : finishedNote({ ok: true, detail: '', answered: true })) }))) return
   tellLead(host, `${t.id} "${t.title}" is answered${late ? ` (its time of ${limit} minutes ran out, so this is its answer so far)` : ''} and waits for the owner to read it (nothing was committed, tested or merged). The answer is on the task (${S.N.name} board task ${t.id}, with the full report). Tell the owner it is ready to read. Then, on the owner's word: ${S.N.name} approve ${t.id} is Done (it ends, nothing merged); ${S.N.name} approve ${t.id} with keep_note: true is Keep as a note (also adds a docs task that writes the answer to docs/research/); ${S.N.name} reject ${t.id} with their follow-up question is Ask more (a fresh try).`)
 }
 
@@ -1274,8 +1274,9 @@ const resultKind = (r: CheckResult): HistoryKind => (r.blocked || r.ask || r.rev
  * The lead is told only the outcome: the worker's own report already reached it as the agent's hand-back.
  * A merge the owner approved (`approved`) wakes nobody: it waits as a "Meanwhile" line.
  */
-export async function settle(host: Host, t: SymccTask, b: Board, r: CheckResult, summary: string, worktree: string, agentId?: string, approved = false) {
-  const line: HistoryAdd = [resultKind(r), `${tryLabel(t)}: ${cutLine(summary, 300)} → ${r.detail}`]
+export async function settle(host: Host, t: SymccTask, b: Board, r: CheckResult, summary: string, worktree: string, agentId?: string, approved = false, mergedBy?: 'approved') {
+  const facts: HistoryFacts = { ...(r.reason ? { reason: r.reason } : {}), ...(resultKind(r) === 'merged' && !r.earlier ? { how: mergedBy ?? 'own' } : {}) }
+  const line: HistoryAdd = resultEntry(t, resultKind(r), cutLine(summary, 300), r.detail, facts)
   // Every write below reads the task again and is skipped when it was dropped, paused or changed meanwhile.
   // A finished worker's try ends with the check's outcome (an approve is not a try: its task is in review, so nothing is set).
   const write = async (patch: (cur: SymccTask) => Partial<BoardTask>) => {
@@ -1324,8 +1325,8 @@ export async function settle(host: Host, t: SymccTask, b: Board, r: CheckResult,
     return
   }
   const detail = r.conflict ? `conflicts with the latest ${intoOf(t)} (after ${tries} automatic ${tries === 1 ? 'retry' : 'retries'})` : r.detail
-  const done = `${tryLabel(t)}: ${cutLine(summary, 300)} → ${detail}`
-  if (!(await write(cur => ({ status: r.ok ? 'done' : 'failed', note: detail.slice(0, 300), merge_main: false, test_output: r.testOutput, history: withHistory(cur.history, now(), [resultKind(r), done]), ...(r.ok && r.notes?.length ? { research_notes: r.notes } : {}), ...(r.ok && cur.status === 'waiting' && cur.attempts === t.attempts && cur.runs?.length ? { runs: withEnd(cur.runs, 'finished', 'merged', true) } : {}) })))) return
+  const done = resultEntry(t, resultKind(r), cutLine(summary, 300), detail, facts)
+  if (!(await write(cur => ({ status: r.ok ? 'done' : 'failed', note: detail.slice(0, 300), merge_main: false, test_output: r.testOutput, history: withHistory(cur.history, now(), done), ...(r.ok && r.notes?.length ? { research_notes: r.notes } : {}), ...(r.ok && cur.status === 'waiting' && cur.attempts === t.attempts && cur.runs?.length ? { runs: withEnd(cur.runs, 'finished', 'merged', true) } : {}) })))) return
   if (r.ok) sayDone(host, b, t.id)
   // Merged: its folder goes, then its branch, only when all its work is in the branch it merged into (deleteMergedBranch), so nothing is lost.
   if (r.ok && (await removeWorktree(host, t.id, worktree, agentId, true))) await deleteMergedBranch(host, taskBranch(t), intoOf(t))
@@ -1458,7 +1459,7 @@ async function mergeRanOver(host: Host, id: string, status: SymccTask['status'],
       const next = ranOverTry(cur, min, retries)
       return [putTask(x, next), next] as [Board, BoardTask]
     }
-    const y = patchTask(x, id, { note: `approved, but the merge ran over ${min} min and was given up; approve it again`, merge_wait: undefined, history: withHistory(cur.history, now(), ['failed', `${tryLabel(cur)}: approved by the owner → its checking and merging ran over ${min} min and was given up; nothing written, it stays ${STATUS_WORD_OF(status)}`]) }, now())
+    const y = patchTask(x, id, { note: `approved, but the merge ran over ${min} min and was given up; approve it again`, merge_wait: undefined, history: withHistory(cur.history, now(), resultEntry(cur, 'failed', 'approved by the owner', `its checking and merging ran over ${min} min and was given up; nothing written, it stays ${STATUS_WORD_OF(status)}`)) }, now())
     return [y, cur] as [Board, BoardTask]
   }).catch(() => null)
   const late = out ? null : find(await load(host).catch(() => null) ?? emptyBoard(), id)
@@ -1495,7 +1496,7 @@ async function mergeWork(host: Host, t: SymccTask, b: Board, kind: 'approve' | '
     })
     const made: string[] = []
     const stop = () => (gaveUp() ? 'given up after running too long' : stopAsked.get(t.id))
-    const r: CheckResult = await checkAndMerge(host, t, dir, b, kind, made, stop, retest, release, limit).catch((e: Error) => ({ ok: false, detail: `checking failed: ${e.message.slice(0, 300)}` }))
+    const r: CheckResult = await checkAndMerge(host, t, dir, b, kind, made, stop, retest, release, limit).catch((e: Error) => ({ ok: false, reason: 'other' as const, detail: `checking failed: ${e.message.slice(0, 300)}` }))
     // Given up meanwhile: mergeRanOver already wrote its note; this late outcome is not written over
     // it, unless the work reached the branch after all (landedLate).
     if (gaveUp()) {
@@ -1513,12 +1514,12 @@ async function mergeWork(host: Host, t: SymccTask, b: Board, kind: 'approve' | '
         tellLead(host, `${t.id} "${t.title}" was merged into ${intoOf(t)} (${sha}), but it is no longer on the board.`)
         return `${t.id} was merged into ${intoOf(t)} (${sha}), but it is no longer on the board`
       }
-      await settle(host, t, b, r, by, dir, undefined, kind === 'approve')
+      await settle(host, t, b, r, by, dir, undefined, kind === 'approve', kind === 'approve' ? 'approved' : undefined)
       const off = offAsked.get(t.id)
       if (off && cur.status === status) {
         await change(host, x => {
           const c = find(x, t.id)
-          return c?.status === 'done' ? patchTask(x, t.id, { history: withHistory(c.history, now(), ['merged', `${tryLabel(t)}: ${off} while it was being merged, too late: the work was already merged, so it stays done`]) }, now()) : x
+          return c?.status === 'done' ? patchTask(x, t.id, { history: withHistory(c.history, now(), tryEntry(t, 'merged', `${off} while it was being merged, too late: the work was already merged, so it stays done`)) }, now()) : x
         })
         return `${t.id} was merged into ${intoOf(t)} (${sha}) before ${off}; it is done`
       }
@@ -1530,7 +1531,7 @@ async function mergeWork(host: Host, t: SymccTask, b: Board, kind: 'approve' | '
       const again = kind === 'approve' ? 'approve it again' : 'it merges at a later check'
       await change(host, x => {
         const c = find(x, t.id)
-        return c?.status === status ? patchTask(x, t.id, { note: `${kind === 'approve' ? 'approved, but ' : ''}not merged: ${off} first; ${again}`, history: withHistory(c.history, now(), ['not-merged', `${tryLabel(t)}: ${by.replace(/^merged /, 'merging ')} → not merged: ${off} while it was being merged; it ${stays}`]) }, now()) : x
+        return c?.status === status ? patchTask(x, t.id, { note: `${kind === 'approve' ? 'approved, but ' : ''}not merged: ${off} first; ${again}`, history: withHistory(c.history, now(), resultEntry(t, 'not-merged', by.replace(/^merged /, 'merging '), `not merged: ${off} while it was being merged; it ${stays}`)) }, now()) : x
       })
       return `${t.id} was not merged and ${stays}: ${off} while it was being merged. ${kind === 'approve' ? 'Approve it again.' : `Retry it, or it merges at a later check.`}`
     }
@@ -1538,7 +1539,7 @@ async function mergeWork(host: Host, t: SymccTask, b: Board, kind: 'approve' | '
     if (r.gone && (await waitIfBranchGone(host, b, t, 'merge'))) return `${t.id} was not merged: the branch it merges into, ${intoOf(t)}, is gone; it now waits for your answer`
     if (r.blocked) {
       // Only the owner's files are in the way: it waits for them (merge_wait); the regular check merges it once they are clear.
-      await holdForFiles(host, t, b, r, ['try-result', `${tryLabel(t)}: ${kind === 'approve' ? 'approved by the owner' : 'merging again'} → ${r.detail}`], dir, undefined, kind === 'approve')
+      await holdForFiles(host, t, b, r, resultEntry(t, 'try-result', kind === 'approve' ? 'approved by the owner' : 'merging again', r.detail), dir, undefined, kind === 'approve')
       return `${t.id} was not merged and ${stays}: ${r.detail}.`
     }
     if (kind === 'approve' && retest && r.testOutput !== undefined) {
@@ -1546,7 +1547,7 @@ async function mergeWork(host: Host, t: SymccTask, b: Board, kind: 'approve' | '
       const folder = `${S.N.dir}/worktrees/${t.id}`
       await change(host, x => {
         const c = find(x, t.id)
-        return c?.status === 'review' ? patchTask(x, t.id, { note: `approved, but your edits fail the tests: ${r.detail.slice(0, 220)}`, merge_wait: undefined, test_output: r.testOutput, history: withHistory(c.history, now(), ['approved', `${tryLabel(t)}: approved by the owner → not merged, the tests failed after your edits: ${r.detail.slice(0, 250)}`]) }, now()) : x
+        return c?.status === 'review' ? patchTask(x, t.id, { note: `approved, but your edits fail the tests: ${r.detail.slice(0, 220)}`, merge_wait: undefined, test_output: r.testOutput, history: withHistory(c.history, now(), resultEntry(t, 'approve-failed', 'approved by the owner', `not merged, the tests failed after your edits: ${r.detail.slice(0, 250)}`)) }, now()) : x
       })
       tellLead(host, `${t.id} "${t.title}" was not merged: with the owner's edits the tests fail. It stays in review; the owner can fix the files in ${folder} and approve again.\n${r.testOutput}`)
       return `${t.id} was not merged and stays in review: ${r.detail}. Fix the files in ${folder}, then approve it again (the tests run again).`
@@ -1558,7 +1559,7 @@ async function mergeWork(host: Host, t: SymccTask, b: Board, kind: 'approve' | '
       const next = /approve \S+ again$/.test(r.detail) ? '.' : '. Fix that, then approve it again.'
       return `${t.id} was not merged and stays in review: ${r.detail}${next}`
     }
-    await settle(host, cur, b, r, by, dir)
+    await settle(host, cur, b, r, by, dir, undefined, false, kind === 'approve' ? 'approved' : undefined)
     if (r.ok) outcomes.set(t.id, 'merged')
     const label = kind === 'approve' ? 'approved, but not merged' : 'not merged'
     return r.ok ? `${t.id} ${kind === 'approve' ? 'approved and merged' : 'merged'}: ${r.detail}` : `${t.id} ${label}: ${r.detail}${r.conflict || r.testOutput !== undefined ? ' (see the board for what happens next)' : ''}`
@@ -1610,7 +1611,7 @@ async function failLost(host: Host, agentId: string, w: Worker) {
     const cur = find(x, w.task)
     if (!cur || !sameTry(cur, t, agentId) || handedBack(cur)) return x
     failed = true
-    return patchTask(x, w.task, { status: 'failed', note: 'the worker ended without a result', history: withHistory(cur.history, now(), ['failed', `${tryLabel(cur)}: the worker ended without a result`]), ...endedBy(cur, now(), 'stopped', 'the worker ended without a result') }, now())
+    return patchTask(x, w.task, { status: 'failed', note: 'the worker ended without a result', history: withHistory(cur.history, now(), tryEntry(cur, 'failed', 'the worker ended without a result', { reason: 'noresult' })), ...endedBy(cur, now(), 'stopped', 'the worker ended without a result') }, now())
   })
   if (!failed) return
   tellLead(host, `${w.task} "${t.title}": the worker ended without a result. Retry it (${S.N.name} retry), change it, or drop it.`)

@@ -160,7 +160,7 @@ async function record($: Host, t: SymccTask, v: CheckerVerdict | null, why?: str
     if (!cur || cur.attempts !== t.attempts) return x
     // T-774, T-805: the checker's tokens go only on its own agent entry, ended now (a stopped checker keeps the tokens it had)
     const runs = cur.runs?.length && (agentId || tokens) ? withAgentUsed(cur.runs, 'checker', agentId, now(), tokens ? { tokens } : {}) : undefined
-    return patchTask(x, t.id, { history: withHistory(cur.history, now(), ...(before ? [['step', before] as HistoryAdd] : []), checkerEntry(tryLabel(cur), v, why)), ...(runs ? { runs } : {}) }, now())
+    return patchTask(x, t.id, { history: withHistory(cur.history, now(), ...(before ? [['step', before, { try: cur.attempts }] as HistoryAdd] : []), checkerEntry(tryLabel(cur), v, why, cur.attempts)), ...(runs ? { runs } : {}) }, now())
   }).catch(() => undefined)
 }
 

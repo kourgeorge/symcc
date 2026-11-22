@@ -6,8 +6,7 @@ import type { SymccMode, SymccTask } from '../../types'
 import { type BoardTask, DEFAULT_AUTO_RETRIES, emptyBoard, kindOf, isInvestigation, modeOf } from './board-file'
 import { taskPhase, type PhaseStage } from './phase'
 import { handedBack, shownStatus } from './lead'
-import { STAGE_LINE } from './events'
-import { cutTitle, failReason, median, padWidth, taskFigures, textWidth, wrapLine } from './stats'
+import { cutTitle, median, padWidth, taskFigures, textWidth, wrapLine } from './stats'
 import { checkerIdOf, checkerTokensOf, tryCost, tryTokens, fmtCost, fmtDuration, fmtTokens, sumTokens, tokenCount } from './runs'
 import { type KeyHint, LIVE_VIEW_KEYS, hintLineText, hintLines, rowDuration, waitOrder } from './panel'
 import { ORG_MEM_EMPTY, ORG_MEM_MAX_LINES, TOPIC_UNSORTED, orgMemNewest, orgMemSectionKeys, orgMemShortDay, orgMemTopicCounts, type OrgMemNote } from './org-mem'
@@ -28,7 +27,7 @@ import { viewMarks } from './board-parts'
  * comes without its history, and OpenCode's TUI then fills it in as `history: []` (viewStubFilled): its history marks
  * (the kinds and times of its merge and send-back lines) stand in for it whenever it has them and no history lines.
  */
-function marksOf(t: { history?: readonly { kind: string; at?: string }[] }): readonly { kind: string; at?: string }[] {
+function marksOf(t: { history?: readonly { kind: string; at?: string; reason?: string }[] }): readonly { kind: string; at?: string; reason?: string }[] {
   const history = Array.isArray(t.history) ? t.history : []
   return history.length > 0 ? history : (viewMarks(t) ?? history)
 }
@@ -36,16 +35,12 @@ function marksOf(t: { history?: readonly { kind: string; at?: string }[] }): rea
 /**
  * T-781: task `t`'s send-backs on one day (`isToday` tells by the mark's time): `all` counts every one the way /symcc-stats
  * lists failed tries (the checker's problems, tests failed, a clash with main), `checker` only the checker's. A finished
- * task's board view keeps marks (no text) of the checker's lines and of its tests-failed and clash lines (kind 'failed').
+ * task's board view keeps marks (no text) of the checker's lines and of its tests-failed and clash lines (with their reason).
  */
-function sentBackOf(t: { history?: readonly { kind: string; at?: string; text?: string }[] }, isToday: (at: string | undefined) => boolean): { all: number; checker: number } {
-  const marks = marksOf(t) as readonly { kind: string; at?: string; text?: string }[]
+function sentBackOf(t: { history?: readonly { kind: string; at?: string; reason?: string }[] }, isToday: (at: string | undefined) => boolean): { all: number; checker: number } {
+  const marks = marksOf(t) as readonly { kind: string; at?: string; reason?: string }[]
   const checker = marks.filter(h => h.kind === 'checker-problems' && isToday(h.at)).length
-  const other = marks.filter(h => {
-    // a finished task's view marks keep only the tests/clash 'failed' lines, without their text
-    const r = typeof h.text === 'string' ? failReason(h.text) : h.kind === 'failed' ? 'tests' : null
-    return (r === 'tests' || r === 'clash') && isToday(h.at)
-  }).length
+  const other = marks.filter(h => (h.reason === 'tests' || h.reason === 'clash') && isToday(h.at)).length
   return { all: checker + other, checker }
 }
 
@@ -187,20 +182,18 @@ const ms = (iso: string | undefined): number | undefined => {
 /** When task `t` got to `station` in its try that started at `startMs`: the history's stage lines (T-616), else the hand-back, else the check step's mark. */
 function stationSince(t: BoardTask, station: LiveStation, startMs: number | undefined): number | undefined {
   if (station === 'work') return startMs
-  const stageAt = (stages: PhaseStage[], first: boolean) => {
-    const words = stages.map(s => STAGE_LINE[s]).filter((w): w is string => !!w)
-    const hits = (t.history ?? []).filter(h => h.kind === 'stage' && words.some(w => h.text.includes(`: ${w}`))).map(h => ms(h.at)).filter((n): n is number => n !== undefined && (startMs === undefined || n >= startMs))
+  const stageAt = (steps: string[], first: boolean) => {
+    const hits = (t.history ?? []).filter(h => h.kind === 'stage' && h.step !== undefined && steps.includes(h.step)).map(h => ms(h.at)).filter((n): n is number => n !== undefined && (startMs === undefined || n >= startMs))
     return hits.length ? (first ? Math.min(...hits) : Math.max(...hits)) : undefined
   }
-  const found = station === 'check' ? stageAt(['prep', 'checker'], true) : station === 'queue' ? stageAt(['queue'], false) : station === 'tests' ? stageAt(['test'], false) : stageAt(['merge'], false)
+  const found = station === 'check' ? stageAt(['prep', 'checker'], true) : station === 'queue' ? stageAt(['queue'], false) : station === 'tests' ? stageAt(['tests'], false) : stageAt(['merge'], false)
   return found ?? (station === 'check' ? ms(t.runs?.[t.runs.length - 1]?.ended) : undefined) ?? ms(t.checking?.at)
 }
 
 /** When the approve (or files-merge) running on task `t` (in review or waiting) started: its last "prep started" line
  *  after its try ended, else its check step's mark. */
 function approveSince(t: BoardTask, endMs: number | undefined): number | undefined {
-  const word = STAGE_LINE.prep!
-  const preps = (t.history ?? []).filter(h => h.kind === 'stage' && h.text.includes(`: ${word}`)).map(h => ms(h.at)).filter((n): n is number => n !== undefined && (endMs === undefined || n >= endMs))
+  const preps = (t.history ?? []).filter(h => h.kind === 'stage' && h.step === 'prep').map(h => ms(h.at)).filter((n): n is number => n !== undefined && (endMs === undefined || n >= endMs))
   return preps.length ? Math.max(...preps) : ms(t.checking?.at)
 }
 

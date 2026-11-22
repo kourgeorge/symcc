@@ -335,7 +335,7 @@ export function statsLines(d: StatsData, width: number): StatLine[] {
   const endColor = (l: string) => (/^merged on its own/.test(l) ? GOOD : /^approved/.test(l) ? ACCENT : /^answered/.test(l) ? 'ide' : 'inactive')
   L.bars(d.ended.map(e => ({ label: e.label, color: endColor(e.label), value: e.n, barColor: endColor(e.label), cols: [num(String(e.n)), num(pctText(e.n, d.finished))], dimRow: !e.n })))
   L.heading('Why tries were sent back', `${d.failedTotal}, from history`)
-  L.bars(d.failed.map(x => ({ label: x.label, color: FAIL_COLOR[x.key] ?? 'text', value: x.n, barColor: FAIL_COLOR[x.key] ?? 'inactive', cols: [num(String(x.n))], dimRow: !x.n })))
+  L.bars(d.failed.map(x => ({ label: x.label, color: FAIL_COLOR[x.key] ?? 'text', value: x.n, barColor: FAIL_COLOR[x.key] ?? 'inactive', cols: [num(String(x.n))], dimRow: !x.n, ...(x.folded ? { rest: `(${x.folded})` } : {}) })))
 
   // each failed try, and the tests that failed most
   const differ = failedCountsNote(d)

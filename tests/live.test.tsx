@@ -22,9 +22,9 @@ const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ 
 /** Four tasks in doing, one at each place: a worker running (T-687), a checker (T-686), the tests (T-685), the merge queue (T-684). */
 const TASKS = [
   task('T-687', 'Organizational memory search', { runs: [{ started: iso(4) }] }),
-  task('T-684', '/symcc-doctor checks the hooks', { attempts: 2, runs: [{ started: iso(60), ended: iso(50), agents: [{ kind: 'worker' as const, started: iso(60), ended: iso(50), tokens: { input: 1_100_000 } }] }, { started: iso(30), ended: iso(10), agents: [{ kind: 'worker' as const, started: iso(30), ended: iso(10), tokens: { input: 1_100_000 } }] }], checking: { step: 'queue', at: iso(0), place: 2 }, history: [{ kind: 'checker-problems', at: iso(40), text: 'try 1: checker: problems' }, { kind: 'stage', at: iso(5), text: 'try 2: waits in the merge queue (place 2)' }] }),
-  task('T-686', 'Scout page: drop the first line', { runs: [{ started: iso(20), ended: iso(2), agents: [{ kind: 'worker' as const, started: iso(20), ended: iso(2), tokens: { input: 540_000 } }, { id: 'agent-c', kind: 'checker' as const, started: iso(2) }] }], checking: { step: 'checker', at: iso(0) }, history: [{ kind: 'stage', at: iso(2), text: 'try 1: prep started' }] }),
-  task('T-685', 'OpenCode: give every board screen buttons', { runs: [{ started: iso(25), ended: iso(9), agents: [{ kind: 'worker' as const, started: iso(25), ended: iso(9), tokens: { input: 3_400_000 } }] }], checking: { step: 'testing', at: iso(0) }, history: [{ kind: 'stage', at: iso(3), text: 'try 1: tests started' }] }),
+  task('T-684', '/symcc-doctor checks the hooks', { attempts: 2, runs: [{ started: iso(60), ended: iso(50), agents: [{ kind: 'worker' as const, started: iso(60), ended: iso(50), tokens: { input: 1_100_000 } }] }, { started: iso(30), ended: iso(10), agents: [{ kind: 'worker' as const, started: iso(30), ended: iso(10), tokens: { input: 1_100_000 } }] }], checking: { step: 'queue', at: iso(0), place: 2 }, history: [{ kind: 'checker-problems', at: iso(40), text: 'try 1: checker: problems' }, { kind: 'stage', at: iso(5), text: 'try 2: waits in the merge queue (place 2)', try: 2, step: 'queue' }] }),
+  task('T-686', 'Scout page: drop the first line', { runs: [{ started: iso(20), ended: iso(2), agents: [{ kind: 'worker' as const, started: iso(20), ended: iso(2), tokens: { input: 540_000 } }, { id: 'agent-c', kind: 'checker' as const, started: iso(2) }] }], checking: { step: 'checker', at: iso(0) }, history: [{ kind: 'stage', at: iso(2), text: 'try 1: prep started', try: 1, step: 'prep' }] }),
+  task('T-685', 'OpenCode: give every board screen buttons', { runs: [{ started: iso(25), ended: iso(9), agents: [{ kind: 'worker' as const, started: iso(25), ended: iso(9), tokens: { input: 3_400_000 } }] }], checking: { step: 'testing', at: iso(0) }, history: [{ kind: 'stage', at: iso(3), text: 'try 1: tests started', try: 1, step: 'tests' }] }),
   task('T-688', 'Handed back, in prep', { runs: [{ started: iso(15), ended: iso(1), agents: [{ kind: 'worker' as const, started: iso(15), ended: iso(1), tokens: { input: 200_000 } }] }], finishing: iso(0), checking: { step: 'prep', at: iso(0) } }),
   task('T-600', 'A merged one', { status: 'done', runs: [{ started: iso(300), ended: iso(200), agents: [{ kind: 'worker' as const, started: iso(300), ended: iso(200), tokens: { input: 800_000 } }] }], history: [{ kind: 'merged', at: iso(30), text: 'try 1 → merged into main' }] }),
   task('T-601', 'A failed one', { status: 'failed', updated_at: iso(20) }),
@@ -76,8 +76,8 @@ test('T-709: an approved task in review, or a waiting one whose merge runs, gets
   // order: an approve by when it started (its prep line), next to the doing tasks by when their try started
   const order = lanes(
     task('T-3', 'Worker', { runs: [{ started: iso(10) }] }),
-    task('T-1', 'Approved', { status: 'review', ...tried, checking: { step: 'testing', at: sec(5) }, history: [{ kind: 'stage', at: iso(15), text: 'try 1: prep started' }] }),
-    task('T-2', 'Files cleared', { status: 'waiting', ...tried, checking: { step: 'merging', at: sec(5) }, history: [{ kind: 'stage', at: iso(30), text: 'try 1: prep started' }, { kind: 'stage', at: iso(3), text: 'try 1: prep started' }] }),
+    task('T-1', 'Approved', { status: 'review', ...tried, checking: { step: 'testing', at: sec(5) }, history: [{ kind: 'stage', at: iso(15), text: 'try 1: prep started', try: 1, step: 'prep' }] }),
+    task('T-2', 'Files cleared', { status: 'waiting', ...tried, checking: { step: 'merging', at: sec(5) }, history: [{ kind: 'stage', at: iso(30), text: 'try 1: prep started', try: 1, step: 'prep' }, { kind: 'stage', at: iso(3), text: 'try 1: prep started', try: 1, step: 'prep' }] }),
   )
   expect(order.map(l => l.id)).toEqual(['T-1', 'T-3', 'T-2'])
   expect(order[0]!.sinceMs).toBe(T0 - 5000)
@@ -100,7 +100,7 @@ test('T-690, T-715: next up lists only the todo tasks free to start, in start or
 // failed task; one free and one waiting for the free one.
 const TRAINS = [
   task('T-712', 'Scout ordering fix', { runs: [{ started: iso(2) }] }),
-  task('T-690', 'Live tab first part', { attempts: 2, runs: [{ started: iso(30), ended: iso(3), agents: [{ kind: 'worker' as const, started: iso(30), ended: iso(3), tokens: { input: 1_400_000 } }, { id: 'agent-c', kind: 'checker' as const, started: iso(3) }] }], checking: { step: 'checker', at: iso(0) }, history: [{ kind: 'stage', at: iso(3), text: 'try 2: prep started' }] }),
+  task('T-690', 'Live tab first part', { attempts: 2, runs: [{ started: iso(30), ended: iso(3), agents: [{ kind: 'worker' as const, started: iso(30), ended: iso(3), tokens: { input: 1_400_000 } }, { id: 'agent-c', kind: 'checker' as const, started: iso(3) }] }], checking: { step: 'checker', at: iso(0) }, history: [{ kind: 'stage', at: iso(3), text: 'try 2: prep started', try: 2, step: 'prep' }] }),
   task('T-701', 'A failed one', { status: 'failed', updated_at: iso(20) }),
   task('T-713', 'Task files: no silent drops', { status: 'todo', after: ['T-712'] }),
   task('T-714', 'Help: /symcc-help shows all', { status: 'todo', after: ['T-713'] }),

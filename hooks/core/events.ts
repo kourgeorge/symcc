@@ -59,6 +59,9 @@ export function boardEvents(before: Pick<Board, 'tasks'>, after: Pick<Board, 'ta
 /** The history words of each check stage a task goes into (the worker's own stage gets no line). */
 export const STAGE_LINE: Partial<Record<PhaseStage, string>> = { prep: 'prep started', checker: 'checker started', queue: 'waits in the merge queue', test: 'tests started', merge: 'merge started' }
 
+/** T-806: the history step of each check stage a task goes into. */
+export const STAGE_STEP: Partial<Record<PhaseStage, 'prep' | 'checker' | 'queue' | 'tests' | 'merge'>> = { prep: 'prep', checker: 'checker', queue: 'queue', test: 'tests', merge: 'merge' }
+
 /** "try 1: checker started", "try 1: waits in the merge queue (place 2)": the history line of a stage event, or null for one that gets none. */
 export function stageLine(e: TaskEvent, t: Pick<BoardTask, 'role'>): string | null {
   const words = e.kind === 'stage' && e.to ? STAGE_LINE[e.to as PhaseStage] : undefined
@@ -72,7 +75,8 @@ export function withStageHistory(b: Board, events: readonly TaskEvent[]): Board 
   for (const e of events) {
     const t = b.tasks.find(x => x.id === e.task)
     const line = t ? stageLine(e, t) : null
-    if (line) lines.set(e.task, [...(lines.get(e.task) ?? []), [e.at, ['stage', line]]])
+    const step = e.to ? STAGE_STEP[e.to as PhaseStage] : undefined
+    if (line && step) lines.set(e.task, [...(lines.get(e.task) ?? []), [e.at, ['stage', line, { try: e.try, step, ...(e.place ? { place: e.place } : {}) }]]])
   }
   if (!lines.size) return b
   return {

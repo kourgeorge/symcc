@@ -226,7 +226,7 @@ export const alreadyMergedLine = (t: Pick<BoardTask, 'role' | 'attempts' | 'merg
 export function mergedDone(t: BoardTask, sha: string, when: string, now: string): BoardTask {
   const { session: _s, finishing: _f, checking: _c, test_output: _o, ...rest } = t
   const runs = t.status === 'doing' ? endedBy(t, now, 'finished', 'merged').runs : t.runs?.length ? withEnd(t.runs, 'finished', 'merged', true) : undefined
-  return { ...rest, status: 'done' as const, note: `merged into ${intoOf(t)} (${shortSha(sha)})`, merged: sha, merge_main: false, updated_at: now, history: withHistory(t.history, now, ['merged', alreadyMergedLine(t, sha, when)]), ...(runs ? { runs } : {}) }
+  return { ...rest, status: 'done' as const, note: `merged into ${intoOf(t)} (${shortSha(sha)})`, merged: sha, merge_main: false, updated_at: now, history: withHistory(t.history, now, ['merged', alreadyMergedLine(t, sha, when), { try: Number(t.attempts) || 0 }]), ...(runs ? { runs } : {}) }
 }
 
 // ---------------- merged outside the board (T-514) ----------------
@@ -255,7 +255,7 @@ export function mergedOutside(t: BoardTask, sha: string, by: string, commits: re
   const { session: _s, finishing: _f, checking: _c, test_output: _o, merge_wait: _w, time_ask: _a, wrap_up: _u, options: _p, asked_files: _af, question_lead: _ql, options_lead: _ol, ...rest } = t
   const ended = t.status === 'doing' ? endedBy(t, now, 'finished', 'merged').runs : t.runs?.length ? withEnd(t.runs, 'finished', 'merged', true) : undefined
   const runs = ended ? addCommits(ended, [...commits, sha]) : undefined
-  return { ...rest, status: 'done' as const, question: null, note: `merged into ${intoOf(t)} outside the board (${shortSha(sha)})`, merged: sha, merge_main: false, updated_at: now, history: withHistory(t.history, now, ['merged', mergedOutsideLine(sha, by)]), ...(runs ? { runs } : {}) }
+  return { ...rest, status: 'done' as const, question: null, note: `merged into ${intoOf(t)} outside the board (${shortSha(sha)})`, merged: sha, merge_main: false, updated_at: now, history: withHistory(t.history, now, ['merged', mergedOutsideLine(sha, by), { how: 'outside' }]), ...(runs ? { runs } : {}) }
 }
 
 /**

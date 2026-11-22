@@ -2,7 +2,8 @@
 // already keeps (tasks, their tries in runs[], their history), plus the archived tasks.
 // Every function here is pure (but statsReport remembering the figures of its last texts, see statsDataOf); the plugin
 // reads board.json and archive.json and passes the tasks in.
-import type { SymccRun, SymccStatus, SymccTask, SymccTokens } from '../../types'
+import type { SymccHistoryEntry, SymccRun, SymccStatus, SymccTask, SymccTokens } from '../../types'
+import { type FailReason, onPurposeStop } from './history'
 import { DEFAULT_NAME } from '../name'
 import { isInvestigation, STATUS_WORD } from './board-file'
 import { dayLabel, dayOf } from './days'
@@ -83,73 +84,22 @@ export function taskFigures(t: Pick<SymccTask, 'runs'>, nowMs?: number): TaskFig
   return { ms: runs.reduce((s, r) => s + runMs(r, nowMs), 0), tries: runs.length, hasData: runs.length > 0, ...(tokens ? { tokens, tok: tokenCount(tokens) } : {}) }
 }
 
-/** Why a try failed, read from one history line; null when the line is not a clear failure. */
-export type FailReason = 'tests' | 'checker' | 'clash' | 'scope' | 'timeout' | 'noresult' | 'nochange' | 'notmerged' | 'other' | 'changed' | 'stopped' | 'rejected'
-
-/**
- * T-735: whether a try stopped for `why` was stopped on purpose, not failed: paused (by the owner or the lead, or the
- * whole board), dropped, moved to the backlog, symcc turned off (disabled), or the lead asking the owner a question.
- */
-export const onPurposeStop = (why: string | undefined): boolean =>
-  /^(paused\b|dropped\b|moved to the backlog\b|the lead asked the owner a question\b|.* paused the board\b|the board was paused\b|\S+ was (disabled|turned off)\b)/.test(String(why ?? '').trim())
-
-export function failReason(line: string): FailReason | null {
-  const l = String(line ?? '')
-  if (!/^try \d+\b/.test(l)) return null
-  const head = l.replace(/^try \d+(?: \([^)]*\))?:\s*/, '')
-  if (/^rejected by the owner\b/.test(head)) return 'rejected'
-  if (/^checker\b/.test(head)) return null
-  if (/^restarted: the task was changed\b/.test(head)) return 'changed'
-  // T-736: a try that ran over its time (the worker's, or its checking and merging) or ended without a result
-  if (/^(out of time\b|stopped after \d+ min \(out of time\)|its checking and merging ran over \d+ min\b)/.test(head)) return 'timeout'
-  if (/^the worker ended without a result\b/.test(head)) return 'noresult'
-  if (onPurposeStop(/^stopped:\s*(.*)$/.exec(head)?.[1])) return null
-  // T-743: any other restart is one symcc did itself (a reopen, a reload, a hand-over, its old worker ended): the same try
-  // goes on, so it is no failed try
-  if (/^restarted\b/.test(head)) return null
-  if (/^stopped\b/.test(head)) return 'stopped'
-  // T-736: an approve or a merge once the owner's files are clear is not a try of its own, so its failure is not one more failed try
-  if (/^(approved by the owner|merging\b|merged once your files)/.test(head)) return null
-  const cut = resultCut(l)
-  const outcome = cut < 0 ? '' : l.slice(cut + 3)
-  if (/^tests failed\b|the tests failed after your edits/.test(outcome)) return 'tests'
-  if (/^conflicts with the latest\b/.test(outcome)) return 'clash'
-  if (/^changed files outside the task\b/.test(outcome)) return 'scope'
-  if (/^the checker found problems\b/.test(outcome)) return 'checker'
-  if (/^tests ran out of time\b/.test(outcome)) return 'timeout'
-  if (/^the worker made no change\b/.test(outcome)) return 'nochange'
-  // a "not merged … (not used: …)" line is the end of a check whose try was already counted by its own "stopped:" or "restarted:" line
-  // a try that only left out secret-looking files waits for the owner, so it is not a failed try
-  if (/^not merged\b/.test(outcome)) return notMergedOnPurpose(outcome) || /\(not used: /.test(outcome) || /, and the task changed nothing else$/.test(outcome) ? null : 'notmerged'
-  if (/^your files on \S+ can't be updated\b/.test(outcome)) return 'notmerged'
-  if (/^(checking failed|symcc could not|could not|the worker ended its turn before)\b/.test(outcome)) return 'other'
-  if (/; nothing was checked or merged$/.test(head)) return 'other'
-  return null
-}
-
-/** T-736: a "not merged: the task was … while it was being checked" result that is an on-purpose stop: dropped, paused, sent to the owner, or "stopped because" the board was paused or symcc turned off. */
-function notMergedOnPurpose(outcome: string): boolean {
-  const why = /^not merged: the task was (.*)$/.exec(outcome)?.[1]
-  if (why === undefined) return false
-  if (/^sent to the owner\b/.test(why)) return true
-  return onPurposeStop(why.replace(/^stopped because\s+/, ''))
-}
+/** Why a try failed or was sent back: the `reason` a history line records (T-806). */
+export type { FailReason }
 
 /** The label of each reason in "Failed tries by reason", in the order they are shown. */
 export const FAIL_LABEL: Record<FailReason, string> = { tests: 'tests failed', checker: 'sent back by checker', clash: 'clash with main', scope: 'files out of scope', timeout: 'ran out of time', noresult: 'no result', nochange: 'no change', notmerged: 'not merged', other: 'other', changed: 'restarted by a change', stopped: 'stopped', rejected: 'rejected by you' }
 
-/**
- * T-736: where the try's result starts in history line `l` (its " → "). When the line has " → the checker found
- * problems:", that is the result and nothing after it counts (the checker's report, copied after it, may hold its own
- * "→ tests failed" or "→ not merged"). Otherwise it is the last " → " followed by an outcome word symcc writes there,
- * so a "→ tests failed" in the worker's summary does not move it; else the last one.
- */
-const OUTCOME_START = /^(tests failed\b|conflicts with the latest\b|changed files outside the task\b|the checker found problems\b|tests ran out of time\b|the worker made no change\b|not merged\b|checking failed\b|symcc could not\b|could not\b|the worker ended its turn before\b|your files on \S+ can't be updated\b|merged into\b|already merged into\b|checks passed\b)/
-function resultCut(l: string): number {
-  const checker = l.indexOf(' → the checker found problems:')
-  if (checker >= 0) return checker
-  for (let i = l.lastIndexOf(' → '); i >= 0; i = i ? l.lastIndexOf(' → ', i - 1) : -1) if (OUTCOME_START.test(l.slice(i + 3))) return i
-  return l.lastIndexOf(' → ')
+/** Reasons with fewer tries than this are folded into "other" in the list of why tries were sent back. */
+export const FOLD_BELOW = 3
+
+/** The "Why tries were sent back" rows from the counts `reasons`: biggest count first, small ones folded into "other" (named in `folded`), none for a count of 0. */
+export function failedRows(reasons: Record<FailReason, number>): { key: FailReason; label: string; n: number; folded?: string }[] {
+  const keys = (Object.keys(FAIL_LABEL) as FailReason[]).filter(k => k !== 'other')
+  const rows = keys.filter(k => reasons[k] >= FOLD_BELOW).map(key => ({ key, label: FAIL_LABEL[key], n: reasons[key] })).sort((a, b) => b.n - a.n)
+  const small = keys.filter(k => reasons[k] > 0 && reasons[k] < FOLD_BELOW).sort((a, b) => reasons[b] - reasons[a])
+  const other = reasons.other + small.reduce((sum, k) => sum + reasons[k], 0)
+  return other ? [...rows, { key: 'other', label: FAIL_LABEL.other, n: other, ...(small.length ? { folded: small.map(k => `${FAIL_LABEL[k]} ${reasons[k]}`).join(', ') } : {}) }] : rows
 }
 
 /**
@@ -159,10 +109,10 @@ function resultCut(l: string): number {
 export function mergedHow(t: Pick<SymccTask, 'history'> & { kind?: unknown }): 'own' | 'approved' | 'answered' | 'outside' | null {
   if (isInvestigation(t as { kind?: unknown })) return 'answered'
   // T-514: merged by hand, then marked done on the board
-  if (t.history.some(l => /^merged outside the board\b/.test(l.text))) return 'outside'
-  const merged = t.history.filter(l => / → merged into /.test(l.text))
+  if (t.history.some(l => l.how === 'outside')) return 'outside'
+  const merged = t.history.filter(l => l.how === 'own' || l.how === 'approved')
   if (!merged.length) return null
-  return merged.some(l => /approved by the owner/.test(l.text)) ? 'approved' : 'own'
+  return merged.some(l => l.how === 'approved') ? 'approved' : 'own'
 }
 
 /** Who a task came from, as one word: "owner", "scout bugs", "worker", "lead", or "unknown" (no usable origin). */
@@ -206,16 +156,9 @@ export function doneAtMs(t: Pick<SymccTask, 'status' | 'history' | 'updated_at'>
 }
 
 /** The stage a history entry moves a task into: a stage, 'end' (merged or done), or null (it changes nothing). */
-function entryStage(e: { kind: string; text: string }): Stage | 'end' | null {
-  const body = e.text.replace(/^try \d+(?: \([^)]*\))?:\s*/, '')
-  if (e.kind === 'stage') {
-    if (/^prep started\b/.test(body)) return 'prep'
-    if (/^checker started\b/.test(body)) return 'check'
-    if (/^waits in the merge queue\b/.test(body)) return 'queue'
-    if (/^tests started\b/.test(body)) return 'tests'
-    if (/^merge started\b/.test(body)) return 'merge'
-    return null
-  }
+const STEP_STAGE: Partial<Record<string, Stage>> = { prep: 'prep', checker: 'check', queue: 'queue', tests: 'tests', merge: 'merge' }
+function entryStage(e: SymccHistoryEntry): Stage | 'end' | null {
+  if (e.kind === 'stage') return (e.step && STEP_STAGE[e.step]) || null
   switch (e.kind) {
     case 'merged':
     case 'done':
@@ -225,13 +168,12 @@ function entryStage(e: { kind: string; text: string }): Stage | 'end' | null {
     case 'try-result':
       return 'owner'
     case 'moved-backlog':
-      return /^moved to the backlog\b/.test(e.text) ? 'backlog' : 'free'
+      return e.backlog ? 'backlog' : 'free'
     case 'not-merged':
     case 'stopped':
-      // the lead's question ("stopped: the lead asked the owner a question") and the branch-gone question
-      // ("not merged: branch x is gone; asked the owner ...") wait for the owner's answer; so does a pause whose
-      // reason waits for the owner ("stopped: paused: Waiting for the owner to choose ..."), until it is resumed
-      return /\basked the owner\b/.test(body) || /\bpaused\b.*\bwait(?:s|ing)? (?:for|on) (?:the owner|you)\b/i.test(body) ? 'owner' : 'free'
+      // the lead's question, the branch-gone question and a pause that waits for the owner's answer ('owner' is set on
+      // those lines when they are written) wait for the owner, until it is resumed
+      return e.owner ? 'owner' : 'free'
     case 'answer':
     case 'resumed':
     case 'retried':
@@ -240,7 +182,7 @@ function entryStage(e: { kind: string; text: string }): Stage | 'end' | null {
     case 'out-of-time':
     case 'restarted':
     case 'rejected':
-    case 'approved':
+    case 'approve-failed':
       return 'free'
     default:
       return null
@@ -277,7 +219,7 @@ export function taskStages(t: SymccTask, doneAt: (id: string) => number | undefi
   }
   // a task made straight into the backlog has no "moved to the backlog" line: its first backlog line is the move out
   const firstBacklog = t.history.find(e => e.kind === 'moved-backlog')
-  let cur: Stage = firstBacklog && !/^moved to the backlog\b/.test(firstBacklog.text) ? 'backlog' : 'free'
+  let cur: Stage = firstBacklog && !firstBacklog.backlog ? 'backlog' : 'free'
   let since = made
   let inRun = false
   let pending: Stage | null = null
@@ -581,7 +523,8 @@ export type StatsData = {
   /** done tasks (investigations too) and how they ended */
   finished: number
   ended: { label: string; n: number }[]
-  failed: { key: FailReason; label: string; n: number }[]
+  /** the reasons, biggest count first; those with fewer than FOLD_BELOW tries are folded into the last row, "other" (`folded` names them) */
+  failed: { key: FailReason; label: string; n: number; folded?: string }[]
   failedTotal: number
   /** T-721: every failed try in the range (oldest first), and the tests that failed most (most tasks first) */
   failedTries: StatsFailedTry[]
@@ -644,11 +587,10 @@ export function statsData(input: StatsInput & { full?: boolean }): StatsData {
   const unclear = finished.length - own - approved - answeredDone - outside
   const reasons = Object.fromEntries(Object.keys(FAIL_LABEL).map(k => [k, 0])) as Record<FailReason, number>
   for (const t of all) for (const l of t.history) {
-    const r = failReason(l.text)
-    if (r) reasons[r]++
+    if (l.reason) reasons[l.reason]++
   }
   const ended = [{ label: 'merged on its own', n: own }, { label: 'approved by you', n: approved }, ...(outside ? [{ label: 'merged outside the board', n: outside }] : []), ...(answeredDone ? [{ label: 'answered (investigation)', n: answeredDone }] : []), ...(unclear ? [{ label: 'not clear from history', n: unclear }] : [])]
-  const failed = (Object.keys(FAIL_LABEL) as FailReason[]).map(key => ({ key, label: FAIL_LABEL[key], n: reasons[key] }))
+  const failed = failedRows(reasons)
 
   const group = (key: string, label: string, ts: SymccTask[]): StatsGroup => {
     const d = ts.filter(t => F(t).hasData)
@@ -872,9 +814,9 @@ export function statsReport(input: StatsInput & { full?: boolean }): string {
   out.push('', `How tasks ended (${plural(d.finished, 'done task')})`)
   const maxEnd = Math.max(...d.ended.map(e => e.n))
   for (const e of d.ended) out.push(barRow(e.label, 24, e.n, maxEnd, d.finished))
-  const maxFail = Math.max(...d.failed.map(f => f.n))
+  const maxFail = Math.max(0, ...d.failed.map(f => f.n))
   out.push(`  Failed tries (${d.failedTotal}, from history)`)
-  for (const f of d.failed) out.push(barRow(`  ${f.label}`, 24, f.n, maxFail, null))
+  for (const f of d.failed) out.push(barRow(`  ${f.label}`, 24, f.n, maxFail, null, f.folded ? `(${f.folded})` : ''))
 
   // T-721: each failed try (short: the latest FAILED_TRIES_SHORT), and the tests that failed most (short: the top FAILED_TESTS_SHORT)
   const differ = failedCountsNote(d)

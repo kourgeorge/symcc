@@ -139,7 +139,7 @@ export const checkerLine = (tryLabel: string, v: CheckerVerdict | null, why = ''
   !v ? `${tryLabel}: checker gave no verdict${why ? ` (${why})` : ''}` : 'report' in v ? `${tryLabel}: checker found problems: ${oneLine(v.report, 300)}` : `${tryLabel}: checker: OK`
 
 /** checkerLine as a history entry to add: "checker-ok", "checker-problems", or "checker" with no verdict. */
-export const checkerEntry = (tryLabel: string, v: CheckerVerdict | null, why = ''): HistoryAdd => [!v ? 'checker' : 'report' in v ? 'checker-problems' : 'checker-ok', checkerLine(tryLabel, v, why)]
+export const checkerEntry = (tryLabel: string, v: CheckerVerdict | null, why = '', tryNo = 0): HistoryAdd => [!v ? 'checker' : 'report' in v ? 'checker-problems' : 'checker-ok', checkerLine(tryLabel, v, why), { try: tryNo }]
 
 const oneLine = (s: string, max: number) => {
   const t = s.replace(/\s+/g, ' ').trim()

@@ -3,8 +3,9 @@
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { addTask, afterChanges, emptyBoard, mergedHow, patchTask, promoteTask, readArchive, archiveText, readBoard, rejectTask, stashTask, statsReport, find, type Board } from '../hooks/board'
-import { HISTORY_KINDS, historyEntry, historyLineText, historyTime, withHistory } from '../hooks/core/history'
-import { guessHistoryKind, migrateHistory, oldHistoryEntry, upgradeArchiveTask } from '../hooks/core/old-data'
+import { type HistoryAdd, type HistoryKind, HISTORY_KINDS, historyEntry, historyLineText, historyTime, notUsedEntry, resultEntry, stoppedEntry, withHistory, workerHandedBackEntry, workerStartedEntry } from '../hooks/core/history'
+import { taskWasResult } from '../hooks/core/review'
+import { guessHistoryKind, migrateHistory, oldHistoryFacts, oldHistoryEntry, upgradeArchiveTask } from '../hooks/core/old-data'
 import { readOld, stillOld } from './old-data-fixture'
 import { taskText } from '../hooks/app/tools'
 
@@ -18,11 +19,11 @@ test('new entries get at, kind and text through the helper', () => {
   let b: Board = addTask(emptyBoard(), { origin: { by: 'owner', why: 'the owner asked for it' }, title: 'A' }, T)[0]
   expect(b.tasks[0]!.history).toEqual([{ at: T, kind: 'created', text: 'created by the owner because the owner asked for it' }])
   b = stashTask(b, 'T-1', T2, 'not clear yet')
-  expect(find(b, 'T-1')!.history.at(-1)).toEqual({ at: T2, kind: 'moved-backlog', text: 'moved to the backlog (was todo): not clear yet' })
+  expect(find(b, 'T-1')!.history.at(-1)).toEqual({ at: T2, kind: 'moved-backlog', text: 'moved to the backlog (was todo): not clear yet', backlog: true })
   b = promoteTask(b, 'T-1', T2)
   b = patchTask(b, 'T-1', { status: 'review', attempts: 1 }, T2)
   b = rejectTask(b, 'T-1', 'the button should be blue', T2)
-  expect(find(b, 'T-1')!.history.at(-1)).toEqual({ at: T2, kind: 'rejected', text: 'try 1: rejected by the owner: the button should be blue' })
+  expect(find(b, 'T-1')!.history.at(-1)).toEqual({ at: T2, kind: 'rejected', text: 'try 1: rejected by the owner: the button should be blue', try: 1, reason: 'rejected' })
   // every saved kind is one of the list in hooks/core/history.ts
   expect(find(b, 'T-1')!.history.every(h => h.kind in HISTORY_KINDS)).toBe(true)
 })
@@ -45,11 +46,11 @@ test('an old board with string history converts once: kinds guessed from the tex
   expect(r.fixed).toEqual([])
   expect(r.board.tasks[0]!.history).toEqual([
     { at: '2026-11-01T08:00:00.000Z', kind: 'created', text: 'created by the owner because x' },
-    { at: '2026-11-01T09:20:00.000Z', kind: 'failed', text: 'try 1: did it → tests failed: `bun test` (exit 1)' },
+    { at: '2026-11-01T09:20:00.000Z', kind: 'failed', text: 'try 1: did it → tests failed: `bun test` (exit 1)', try: 1, result: 'tests failed: `bun test` (exit 1)', reason: 'tests' },
     { kind: 'note', text: 'the lead added a note: “the earlier try failed”' },
     { kind: 'waits-changed', text: 'waits on changed: nothing → T-2' },
     // try 2 has not ended: its start
-    { at: '2026-11-02T08:00:00.000Z', kind: 'asked', text: 'try 2: worker asked: which one?' },
+    { at: '2026-11-02T08:00:00.000Z', kind: 'asked', text: 'try 2: worker asked: which one?', try: 2 },
   ])
   // once saved, nothing more to convert
   expect(stillOld(r.board)).toBe(false)
@@ -67,7 +68,7 @@ test('an old archive converts the same way, once, and its stats still count', ()
   const a = readArchive(JSON.stringify({ version: 1, tasks: [upgradeArchiveTask(merged)] }))
   expect(a.archive.tasks[0]!.history).toEqual([
     { at: '2026-11-01T08:00:00.000Z', kind: 'created', text: 'created by the lead because y' },
-    { at: '2026-11-01T09:20:00.000Z', kind: 'merged', text: 'try 1: done it → merged into main (abc1234)' },
+    { at: '2026-11-01T09:20:00.000Z', kind: 'merged', text: 'try 1: done it → merged into main (abc1234)', try: 1, result: 'merged into main (abc1234)', how: 'own' },
   ])
   expect(mergedHow(a.archive.tasks[0]!)).toBe('own')
   expect(upgradeArchiveTask(a.archive.tasks[0]! as never)).toBe(null)
@@ -82,7 +83,7 @@ test('the old-line guess: a kind for each kind of line symcc wrote, and records 
   expect(guessHistoryKind('moved from the backlog to todo')).toBe('moved-backlog')
   expect(guessHistoryKind('resumed after a pause')).toBe('resumed')
   expect(guessHistoryKind('something odd')).toBe('other')
-  expect(oldHistoryEntry('try 9: x → merged into main', { runs: [] })).toEqual({ kind: 'merged', text: 'try 9: x → merged into main' })
+  expect(oldHistoryEntry('try 9: x → merged into main', { runs: [] })).toEqual({ kind: 'merged', text: 'try 9: x → merged into main', try: 9, result: 'merged into main', how: 'own' })
   expect(migrateHistory({ history: [historyEntry('note', 'n', T)] })).toBe(null)
   expect(migrateHistory({ history: [{ kind: 'gone-kind', text: 'n', at: T }] })).toEqual([{ kind: 'other', text: 'n', at: T }])
   // a bad entry (no text) is still dropped and named
@@ -98,4 +99,63 @@ test('a damaged archive.json history (null, a number, a record without text) loa
   expect(t.history.map(e => e.text)).toEqual(['created by the lead because x'])
   expect(taskText(t, false)).not.toContain('undefined')
   expect(migrateHistory({ history: [null] })).toEqual([])
+})
+
+test('T-806: the doctor fills the facts of old lines once (try, step, place, result, reason, how, owner, backlog) and renames the approved kind', () => {
+  const lines: [HistoryKind, string][] = [
+    ['stage', 'try 2: waits in the merge queue (place 3)'],
+    ['stage', 'try 2: worker started (role tester)'],
+    ['failed', 'try 1: did it → conflicts with the latest main'],
+    ['merged', 'try 1: approved by the owner → merged into main (abc); approved by the owner'],
+    ['merged', 'merged outside the board (abc1234); marked done by the lead'],
+    ['stopped', 'try 1: stopped: the lead asked the owner a question'],
+    ['moved-backlog', 'moved to the backlog (was todo)'],
+    ['moved-backlog', 'moved from the backlog to todo'],
+    ['note', 'the lead added a note: “try 2: x → tests failed”'],
+  ]
+  const old = [...lines.map(([kind, text]) => ({ at: T, kind, text })), { at: T, kind: 'approved', text: 'try 1: approved by the owner → not merged, the tests failed after your edits: x' }]
+  const fixed = migrateHistory({ history: old })!
+  expect(fixed.map(e => [e.kind, e.try, e.step, e.place, e.result, e.reason, e.how, e.owner, e.backlog])).toEqual([
+    ['stage', 2, 'queue', 3, undefined, undefined, undefined, undefined, undefined],
+    ['stage', 2, 'worker-start', undefined, undefined, undefined, undefined, undefined, undefined],
+    ['failed', 1, undefined, undefined, 'conflicts with the latest main', 'clash', undefined, undefined, undefined],
+    ['merged', 1, undefined, undefined, 'merged into main (abc); approved by the owner', undefined, 'approved', undefined, undefined],
+    ['merged', undefined, undefined, undefined, undefined, undefined, 'outside', undefined, undefined],
+    ['stopped', 1, undefined, undefined, undefined, undefined, undefined, true, undefined],
+    ['moved-backlog', undefined, undefined, undefined, undefined, undefined, undefined, undefined, true],
+    ['moved-backlog', undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined],
+    ['note', undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined],
+    ['approve-failed', 1, undefined, undefined, 'not merged, the tests failed after your edits: x', undefined, undefined, undefined, undefined],
+  ])
+  // done once: nothing left to fill, and a fact already saved is never replaced
+  expect(migrateHistory({ history: fixed })).toBe(null)
+  expect(migrateHistory({ history: [{ at: T, kind: 'failed', text: 'try 1: x → tests failed: y', reason: 'clash' }] })![0]!.reason).toBe('clash')
+})
+
+test('T-806: the writers set the facts, and they match what the doctor reads out of the same lines', () => {
+  const t = { attempts: 3, role: 'general' }
+  const same = (e: HistoryAdd) => expect(Object.fromEntries(Object.entries(oldHistoryFacts({ kind: e[0], text: e[1] })).sort())).toEqual(Object.fromEntries(Object.entries(e[2] ?? {}).sort()))
+  // stops and restarts: a plain stop is "stopped", a pause is on purpose, a change restart is "changed", the lead's question waits for the owner
+  expect(stoppedEntry(t, 'stopped from Claude Code')[2]).toEqual({ try: 3, reason: 'stopped' })
+  expect(stoppedEntry(t, 'paused by the owner')[2]).toEqual({ try: 3 })
+  expect(stoppedEntry(t, 'restarted: the task was changed (details)')[2]).toEqual({ try: 3, reason: 'changed' })
+  expect(stoppedEntry(t, 'restarted after Claude Code was reopened')[2]).toEqual({ try: 3 })
+  expect(stoppedEntry(t, 'the lead asked the owner a question')[2]).toEqual({ try: 3, owner: true })
+  for (const why of ['stopped from Claude Code', 'paused by the owner', 'restarted: the task was changed (details)', 'restarted after Claude Code was reopened', 'the lead asked the owner a question']) same(stoppedEntry(t, why))
+  // a result line: its result is the words after the arrow, its reason is what the check found
+  const r = resultEntry(t, 'failed', 'did it', 'tests failed: `npm test` (exit 1)', { reason: 'tests' })
+  expect(r).toEqual(['failed', 'try 3: did it → tests failed: `npm test` (exit 1)', { try: 3, result: 'tests failed: `npm test` (exit 1)', reason: 'tests' }])
+  same(r)
+  same(resultEntry(t, 'merged', 'did it', 'merged into main (abc)', { how: 'own' }))
+  same(workerStartedEntry({ ...t, history: [] }, true))
+  same(workerHandedBackEntry(t))
+  // a check that ended after its try was stopped keeps no "not merged" reason, and its result carries the note
+  const notUsed = notUsedEntry(resultEntry(t, 'failed', 'did it', 'not merged: x', { reason: 'notmerged' }), 'the task was paused meanwhile')
+  expect(notUsed[2]).toEqual({ try: 3, result: 'not merged: x (not used: the task was paused meanwhile)' })
+  same(notUsed)
+  // the result of a check that ended because the task was stopped on purpose is no "not merged"
+  expect(taskWasResult('paused').reason).toBe(undefined)
+  expect(taskWasResult('stopped because the board was paused').reason).toBe(undefined)
+  expect(taskWasResult('sent to the owner').reason).toBe(undefined)
+  expect(taskWasResult('stopped because the command line stopped waiting').reason).toBe('notmerged')
 })
