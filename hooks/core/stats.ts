@@ -9,7 +9,7 @@ import { isInvestigation, STATUS_WORD } from './board-file'
 import { dayLabel, dayOf } from './days'
 import { ORIGIN_MARK } from './origin'
 import { jsonObj } from './text'
-import { addTokens, billedTokens, cleanTokens, fmtCost, fmtDuration, fmtTokenKinds, fmtTokens, isAnsweredRun, PRICE_WEIGHT, runMs, sumTokens, tokenCount, tryTokens } from './runs'
+import { gapsOf, addTokens, billedTokens, cleanTokens, fmtCost, fmtDuration, fmtTokenKinds, fmtTokens, isAnsweredRun, PRICE_WEIGHT, runMs, sumTokens, tokenCount, tryTokens } from './runs'
 
 // ---------------- the range ----------------
 
@@ -203,9 +203,15 @@ export function taskStages(t: SymccTask, doneAt: (id: string) => number | undefi
   if (t.history.some(e => !Number.isFinite(Date.parse(e.at ?? '')))) return null
   if (!t.history.some(e => e.kind === 'stage')) return null
   // the points where the stage may change, in time order: a try's end, then history lines, then a try's start
-  type Point = { ms: number; prio: number; run?: 'start' | 'end'; to?: Stage | 'end' | null }
+  type Point = { ms: number; prio: number; run?: 'start' | 'end'; idle?: 'from' | 'to'; to?: Stage | 'end' | null }
+  // T-863: a try that went on after a restart symcc did itself has idle stretches (no session was open): there nothing
+  // runs, so the time is waiting, never work
+  const idle = runs.flatMap(r => gapsOf(r).filter(g => g.from >= Date.parse(r.started) && g.to <= Date.parse(r.ended!)))
+  // steps that ran before such a stretch began (prep, queue, tests before Claude Code closed) count under their own name
+  const early = runs.flatMap(r => gapsOf(r).map(g => ({ s: Date.parse(r.started), from: g.from })))
   const points: Point[] = [
     ...runs.flatMap(r => [{ ms: Date.parse(r.started), prio: 2, run: 'start' as const }, { ms: Date.parse(r.ended!), prio: 0, run: 'end' as const }]),
+    ...idle.flatMap(g => [{ ms: g.from, prio: 0, idle: 'from' as const }, { ms: g.to, prio: 0, idle: 'to' as const }]),
     ...t.history.map(e => ({ ms: Date.parse(e.at!), prio: 1, to: entryStage(e) })),
   ].sort((a, b) => a.ms - b.ms || a.prio - b.prio)
   const depsDone = Math.max(made, ...(t.after ?? []).map(id => doneAt(id) ?? made))
@@ -231,9 +237,29 @@ export function taskStages(t: SymccTask, doneAt: (id: string) => number | undefi
     } else add(cur, since, b)
     since = Math.max(since, b)
   }
+  let idleNow = false
   for (const p of points) {
     if (p.ms >= end) break
-    if (p.run === 'start') {
+    if (p.idle === 'from') {
+      if (!inRun) continue
+      close(p.ms)
+      cur = 'free'
+      idleNow = true
+    } else if (p.idle === 'to') {
+      if (!idleNow) continue
+      close(p.ms)
+      cur = 'work'
+      idleNow = false
+    } else if (idleNow) {
+      // history lines inside an idle stretch change nothing; the try's end after it does
+      if (p.run === 'end') {
+        close(p.ms)
+        cur = pending ?? 'free'
+        inRun = false
+        pending = null
+        idleNow = false
+      }
+    } else if (p.run === 'start') {
       close(p.ms)
       cur = 'work'
       inRun = true
@@ -245,7 +271,7 @@ export function taskStages(t: SymccTask, doneAt: (id: string) => number | undefi
       inRun = false
       pending = null
     } else if (p.to && p.to !== 'end') {
-      if (inRun) pending = p.to
+      if (inRun && !early.some(e => p.ms >= e.s && p.ms < e.from)) pending = p.to
       else {
         close(p.ms)
         cur = p.to

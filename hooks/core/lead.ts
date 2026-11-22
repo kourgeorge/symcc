@@ -276,7 +276,7 @@ export function resetDoing(b: Board, me: string, leadBefore: string | null, nowM
       // A live agent keeps its task only while it still works on it (not once it handed back).
       if (t.status !== 'doing' || !ownedHere(t, me, live) || (keep.includes(t.id) && !handedBack(t)) || finishingNow(t, nowMs)) return t
       const sha = mergedThisTry(t)
-      return sha ? mergedDone(t, sha, 'sent back to todo', now) : backToTodo(t, note, now)
+      return sha ? mergedDone(t, sha, 'sent back to todo', now) : backToTodo(t, note, now, lastAlive(t, leadBefore, now))
     }),
   }
 }
@@ -294,7 +294,28 @@ export function relabelSession(b: Board, oldId: string, newId: string): Board {
 }
 
 /** Task `t` back to "todo" with `note`, no longer tied to a session; a running one gets a history line saying why (the next try starts for that reason). */
-export function backToTodo(t: BoardTask, note: string, now: string): BoardTask {
+export function backToTodo(t: BoardTask, note: string, now: string, stoppedAt: string = now): BoardTask {
   const { live: _l, ...rest } = t
-  return { ...rest, status: 'todo' as const, note, updated_at: now, ...(t.status === 'doing' ? { history: withHistory(t.history, now, stoppedEntry(t, note)), ...endedBy(t, now, ...stopEnd(note)) } : {}) }
+  return { ...rest, status: 'todo' as const, note, updated_at: now, ...(t.status === 'doing' ? { history: withHistory(t.history, now, stoppedEntry(t, note)), ...laterEnd(endedBy(t, stoppedAt, ...stopEnd(note)), stoppedAt) } : {}) }
+}
+
+/** T-863: a try that handed back before the close (prep, queue, tests ran after) ends at the later last-alive time, so those minutes count as active and the gap starts there. */
+function laterEnd(p: { runs?: BoardTask['runs'] }, at: string): { runs?: BoardTask['runs'] } {
+  const last = p.runs?.at(-1)
+  if (!p.runs || !last?.ended || !(Date.parse(at) > Date.parse(last.ended))) return p
+  return { runs: [...p.runs.slice(0, -1), { ...last, ended: at }] }
+}
+
+/**
+ * T-863: the last moment the old session was known to be alive while task `t` ran: the old lead.json heartbeat, else the
+ * latest of the task's updated_at, last history time and checking time. Never after `now`, never before the try started.
+ */
+function lastAlive(t: BoardTask, leadBefore: string | null, now: string): string {
+  const nowMs = Date.parse(now)
+  const times = [parseLead(leadBefore)?.heartbeat, ...(parseLead(leadBefore)?.heartbeat === undefined ? [t.updated_at, t.live?.checking?.at, ...(t.history ?? []).map(h => h.at)].map(s => Date.parse(s ?? '')) : [])]
+  const known = times.filter((n): n is number => typeof n === 'number' && Number.isFinite(n))
+  if (!known.length) return now
+  const started = Date.parse(t.runs?.at(-1)?.started ?? '')
+  const ms = Math.min(nowMs, Math.max(...known, Number.isFinite(started) ? started : 0))
+  return Number.isFinite(ms) ? new Date(ms).toISOString() : now
 }
