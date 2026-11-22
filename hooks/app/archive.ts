@@ -6,6 +6,7 @@ import type { Host } from '../host'
 import { fileName, isStubbed, load, locked, now, path, readWhole, safeWrite, writeBoard } from './store'
 import { emitTaskEvents } from './events'
 import { tellLead } from './tell'
+import { migrateIfOld } from './migrate-data'
 
 // ---------------- old tasks: archive.json ----------------
 // Done and dropped tasks older than archive_days move from board.json to archive.json, so the board
@@ -77,6 +78,7 @@ export async function saveArchive(host: Host, a: Archive) {
  * it is. Returns the tasks renamed.
  */
 export async function renameArchivedScoutOrigins(host: Host, known: readonly string[]): Promise<{ id: string; scout: string; at: string }[]> {
+  await migrateIfOld(host)
   return locked(host, async () => {
     const r = await readArchiveFile(host)
     if (r.broken) return []
@@ -95,6 +97,7 @@ export async function archiveOld(host: Host, nowMs = Date.now(), force = false):
   if (!S.driving) return []
   if (!force && nowMs - S.lastArchive < ARCHIVE_EVERY_MS) return []
   S.lastArchive = nowMs
+  await migrateIfOld(host)
   const moved = await locked(host, async () => {
     const b = await load(host)
     if (!onHere(b)) return null
@@ -139,6 +142,7 @@ export const archivedText = (id: string) => `${id} is archived (in ${S.N.archive
  * saved first, then the task leaves the archive (so it is never lost on the way). Throws for a done one.
  */
 export async function bringBackArchived(host: Host, id: string): Promise<string> {
+  await migrateIfOld(host)
   const t = await findArchived(host, id)
   if (!t) throw new Error(`${normId(id)} is not on the board`)
   if (t.status !== 'dropped') throw new Error(archivedText(t.id))

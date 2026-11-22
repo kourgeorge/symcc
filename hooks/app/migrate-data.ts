@@ -36,7 +36,8 @@ async function archiveRaw(host: Host): Promise<{ file: string; text: string; tas
 }
 
 /** Everything the count reads (read-only). */
-async function oldInput(host: Host): Promise<OldInput> {
+async function oldInput(host: Host, all = true): Promise<OldInput> {
+  if (!all) return { board: await readBoardRaw(host), archive: [], scouts: null, withRuns: new Set<string>(), fieldGuide: false, orgMem: false }
   const scoutsText = await host.fs.read(scoutMemoryFile()).catch(() => null)
   const scouts = jsonOf(scoutsText)
   const names = Object.keys((scouts as { scouts?: Record<string, unknown> } | null)?.scouts ?? {})
@@ -61,14 +62,25 @@ export async function oldDataFound(host: Host): Promise<{ rows: ReturnType<typeo
 /** The count as one sentence part: "3 tries with tokens saved as one number, 2 tasks with an old role". */
 export const oldRowsText = (rows: ReturnType<typeof oldDataRows>): string => rows.map(r => `${r.n} ${r.text}`).join('; ')
 
-/** At session start: says once that old data is still in an old shape (never changes it). Never throws. */
-export async function reportOldData(host: Host): Promise<void> {
-  if (S.guardOnly || !S.root) return
-  const { rows, fixable } = await oldDataFound(host)
-  if (!fixable) return
-  const msg = `Some of ${S.N.dir}/ is still in an old shape (${oldRowsText(rows.filter(r => r.fix))}). Run /${S.N.name}-doctor fix migrate-data to bring it up to date (a backup is kept first).`
-  host.ui.toast(S.N.toast(msg))
-  tellLead(host, msg)
+/**
+ * Brings old data shapes up to date before anything saves over them (T-804): when the board (and with `all`, the archive,
+ * scouts.json and the old files too) is still in an old shape, it runs the migration (backup first) and tells the owner
+ * and the lead once what it did. Nothing happens for data already current. Never throws.
+ */
+export async function migrateIfOld(host: Host, all = true): Promise<void> {
+  try {
+    if (S.guardOnly || !S.root) return
+    const input = await oldInput(host, all)
+    if (!oldDataRows(input).some(r => r.fix)) return
+    const r = await migrateData(host)
+    const msg = r.failed
+      ? `symcc could not move your old data to the current shape: ${r.failed}. Run /${S.N.name}-doctor fix migrate-data after looking at it.`
+      : `symcc moved your old data to the current shape; a backup is in ${S.N.dir}/${r.backup}/`
+    host.ui.toast(S.N.toast(msg))
+    tellLead(host, msg)
+  } catch {
+    // never stops the caller
+  }
 }
 
 /** Copies the data files into a dated backup folder (data.before-migrate-<time>/) beside them. Throws when one can't be copied. */
@@ -92,7 +104,7 @@ async function backUp(host: Host): Promise<string> {
  * (usage totals, each scout's last report into its runs file) and field-guide.md as org-mem.md. Answers '' failed and
  * the lines of what it changed in `done`; a failure before the backup is complete changes nothing.
  */
-export async function migrateData(host: Host): Promise<{ failed: string; done: string[] }> {
+export async function migrateData(host: Host): Promise<{ failed: string; done: string[]; backup?: string }> {
   if (S.guardOnly) return { failed: 'this window only guards a worker folder', done: [] }
   const done: string[] = []
   let backup: string
@@ -133,7 +145,7 @@ export async function migrateData(host: Host): Promise<{ failed: string; done: s
     }
     return ''
   }).catch((e: Error) => String(e?.message ?? e).slice(0, 150))
-  if (failed) return { failed: `${failed} (the backup is in ${backup}/)`, done }
+  if (failed) return { failed: `${failed} (the backup is in ${backup}/)`, done, backup }
   // 3. scouts.json: usage totals, then each last report into its runs file
   let usage = false
   await changeScoutMemory(host, old => {
@@ -160,7 +172,7 @@ export async function migrateData(host: Host): Promise<{ failed: string; done: s
     done.push('field-guide.md moved to org-mem.md')
   }
   const after = oldDataRows(await oldInput(host)).filter(r => r.fix)
-  if (after.length) return { failed: `still in an old shape: ${oldRowsText(after)} (the backup is in ${backup}/)`, done }
+  if (after.length) return { failed: `still in an old shape: ${oldRowsText(after)} (the backup is in ${backup}/)`, done, backup }
   if (!before.length) done.push('nothing was in an old shape')
-  return { failed: '', done }
+  return { failed: '', done, backup }
 }

@@ -1926,12 +1926,15 @@ sizes. It changes nothing until you say so.
   them. If `board.json`, its `tasks/` files, the archive, `scouts.json`, a scout's last report
   or `field-guide.md` still hold an old shape (history lines as plain strings, tokens saved as
   one number, old roles, `mode: off`, `target_branch`, a "queue (n)" note, ...), the doctor lists
-  how many of each and symcc says so once at start. `/symcc-doctor fix migrate-data` keeps a
+  how many of each. `/symcc-doctor fix migrate-data` keeps a
   dated copy of the data files first (`.symcc/data.before-migrate-<time>/`, cleaned up later
   like the other backups), saves every file once in today's shape and says what it changed.
   Some counts are only information and are left as they are: `unsplit` tokens, history entries
   of kind `other`, tasks where `attempts` differs from the number of tries, and tries with
   `checker_tokens` but no checker agent entry.
+  Nothing old is ever saved over first: at session start, and before a board or archive change
+  would save an old-shaped file, symcc runs this same step itself (backup first) and tells you
+  once what it moved.
 - **What else it offers to clean up (each with a short id):** old `board.json.before-migrate-<time>` copies
   and `data.before-migrate-<time>/` folders
   (the newest one is kept); folders in `.symcc/worktrees/` of done or dropped tasks with no

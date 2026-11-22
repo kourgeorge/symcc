@@ -4,8 +4,9 @@
 import { expect } from 'claude-code/testing'
 import { emptyBoard, readBoard, readArchive } from '../hooks/board'
 import { doctor } from '../hooks/app/doctor'
-import { load } from '../hooks/app/store'
-import { S } from '../hooks/app/state'
+import { load, change } from '../hooks/app/store'
+import { migrateIfOld } from '../hooks/app/migrate-data'
+import { S, leadQueue } from'../hooks/app/state'
 import { oldDataRows } from '../hooks/core/old-data'
 import { stillOld } from './old-data-fixture'
 import type { HostFileEntry, HostRunResult } from '../hooks/host'
@@ -144,4 +145,34 @@ test('T-804: fix migrate-data keeps a backup and saves every file in the current
   expect(stillOld(await load(w.host))).toBe(false)
   expect(readBoard(w.files.get(`${D}/board.json`)!).fixed).toEqual([])
   expect(await doctor(w.host, '')).not.toContain('migrate-data')
+})
+
+test('T-804: a change on an old board migrates it first (with a backup), never writing the fallbacks', async () => {
+  const w = world()
+  const original = w.files.get(`${D}/board.json`)!
+  await change(w.host, b => b)
+  const backups = [...w.files.keys()].filter(f => f.includes('/data.before-migrate-'))
+  expect(backups.find(f => f.endsWith('/board.json'))).toBeDefined()
+  expect(w.files.get(backups.find(f => f.endsWith('/board.json'))!)).toBe(original)
+  const board = JSON.parse(w.files.get(`${D}/board.json`)!)
+  expect(board.mode).toBe('paused')
+  expect('target_branch' in board).toBe(false)
+  const t1 = (await load(w.host)).tasks.find(t => t.id === 'T-1')!
+  expect(t1.merge_into).toBe('dev')
+  expect(t1.history.length).toBe(2)
+})
+
+test('T-804: migrateIfOld at session start migrates once, tells once, and keeps string history lines as records', async () => {
+  const w = world()
+  S.enabledNow = true
+  leadQueue.length = 0
+  await migrateIfOld(w.host)
+  const board = JSON.parse(w.files.get(`${D}/board.json`)!)
+  expect(board.mode).toBe('paused')
+  expect(JSON.stringify(board)).toContain('created by the lead because x')
+  expect(w.files.get(`${D}/scouts.json`)).toContain('unsplit')
+  const told = () => leadQueue.filter(t => t.includes('moved your old data')).length
+  expect(told()).toBe(1)
+  await migrateIfOld(w.host)
+  expect(told()).toBe(1)
 })

@@ -976,7 +976,8 @@ const num = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) && x >=
 const figs = (v: unknown): ScoutUsageFigures | null => {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return null
   const o = v as Record<string, unknown>
-  return { runs: num(o.runs), tokens: cleanTokens(o.tokens) ?? {}, ms: num(o.ms) }
+  // a total saved before the kinds were kept apart (one number) is kept as `unsplit` until /<name>-doctor fix migrate-data saves it so
+  return { runs: num(o.runs), tokens: cleanTokens(typeof o.tokens === 'number' ? { unsplit: o.tokens } : o.tokens) ?? {}, ms: num(o.ms) }
 }
 
 /** The scouts' tokens and time kept in scouts.json under "usage" (scout name → totals); {} for a missing or broken file. */

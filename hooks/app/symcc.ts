@@ -21,7 +21,7 @@ import { type FileTouch, type Host, type HostFeatures, ALL_FEATURES } from '../h
 import type { SymccTokens } from '../../types'
 import { findArchived } from './archive'
 import { moveOldOrgMem, deleteOrgMem } from './org-mem'
-import { reportOldData } from './migrate-data'
+import { migrateIfOld } from './migrate-data'
 import { askCall, checkEdit, guardFailed, stoppedText, stoppedTextFor, movedAway, movedText, listedKind, type AgentKindOf } from './ask'
 import { gitReady, setupGit } from './git'
 import { claimLead, publish, handOver, releaseLead, driveHere, startOffHere, disableHere, enableHere, offHereBeat } from './lead'
@@ -136,12 +136,12 @@ export async function sessionStart(host: Host) {
       await publish(host, await load(host))
       return
     }
-    // Finished tasks kept whole in board.json move to their parts files once (T-675); old data shapes are only
-    // reported here (T-804): /<name>-doctor fix migrate-data brings them up to date.
+    // T-804: old data shapes are brought up to date first (backup kept), before anything below can save over them.
+    await migrateIfOld(host)
+    // Finished tasks kept whole in board.json move to their parts files once (T-675).
     await saveMigrated(host).catch(() => undefined)
     await scoutOriginsFixed(host).catch(() => undefined)
     await moveOldOrgMem(host).catch(() => undefined)
-    await reportOldData(host).catch(() => undefined)
     // T-793: another live window with symcc on makes this one start off here (plain), before it can claim the lead
     await startOffHere(host).catch(() => undefined)
     // Become the driver if nobody drives the board. As the driver, old workers still running

@@ -3,6 +3,7 @@ import { PARTS_DIR, READ_LIMIT_BYTES, SIZE_WARN_BYTES, hasWholeFinished, joinPar
 import { checkHealth } from './health'
 import { publish } from './lead'
 import { tellLead } from './tell'
+import { migrateIfOld } from './migrate-data'
 import { S, onHere, sizeNotes } from './state'
 import { boardEvents, withStageHistory } from '../core/events'
 import { emitTaskEvents, logTaskEvents, type TaskEvent } from './events'
@@ -525,6 +526,7 @@ export async function saveBoard(host: Host, b: Board) {
     await host.run(['rm', '-f', file]).catch(() => undefined)
   }
   await noteMtime(host, true)
+  currentStamp = await boardStamp(host)
 }
 
 /**
@@ -543,11 +545,33 @@ export async function writeBoard(host: Host, before: Board, after: Board): Promi
   return { board: saved, events }
 }
 
+/** board.json's mtime when it was last seen in today's shape (our own save, or a check that found nothing to migrate). */
+let currentStamp: string | null = null
+
+/** board.json's identity for that check: project, mtime and size. */
+const boardStamp = async (host: Host) => {
+  const st = await host.fs.stat(path(S.N.boardFile)).catch(() => null)
+  return st ? `${S.root}|${st.mtimeMs}|${st.size}` : null
+}
+
+/**
+ * T-804: a board still in an old shape is migrated (backup first) before a change saves it; reading never changes the
+ * file, so without this a save would write bad-value fallbacks (mode 'off' as 'auto', target_branch dropped, ...).
+ * Checked again only when board.json changed since the last check or save.
+ */
+async function migratedBoard(host: Host) {
+  const m = await boardStamp(host)
+  if (m !== null && m === currentStamp) return
+  await migrateIfOld(host, false)
+  currentStamp = await boardStamp(host)
+}
+
 /**
  * Every change goes through here, one at a time, so two workers finishing together
  * never lose an update; the lock file does the same between sessions.
  */
-export function change<T>(host: Host, fn: (b: Board) => [Board, T] | Board): Promise<T> {
+export async function change<T>(host: Host, fn: (b: Board) => [Board, T] | Board): Promise<T> {
+  await migratedBoard(host)
   return locked(host, async () => {
     const before = await load(host)
     const out = fn(before)

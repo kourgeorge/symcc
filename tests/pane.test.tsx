@@ -44,7 +44,7 @@ function keyLines(texts: string[], hints: KeyHint[], width: number): string[] {
   return want
 }
 
-const task = (id: string, status: string, title: string, extra: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status, note: '', question: null, order: Number(id.slice(2)), after: [], attempts: 0, history: [], branch: null, created_at: '', updated_at: '', ...extra })
+const task = (id: string, status: string, title: string, extra: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status, note: '', question: null, order: Number(id.slice(2)), after: [], attempts: 0, history: [], branch: null, created_at: '', updated_at: '', origin: { by: 'owner', why: 'x', at: '' }, merge_into: 'main', ...extra })
 
 test('the panel shows the board, newest task first, with their question', async ($, on) => {
   on('state.get', () => ({
@@ -1609,7 +1609,7 @@ test('T-587: with the checker setting off the Stage row leaves "checker" out; a 
 }
 
 test('an old task without an origin still opens, with From: unknown and no Why row', async ($, on) => {
-  stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'Old one')], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
+  stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'Old one', { origin: undefined })], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   const L = await lines(ui)
   expect(L.some(l => /^From:\s+unknown/.test(l))).toBe(true)
@@ -2326,7 +2326,7 @@ test('the banner text is in the unselected tabs\' color, not bold; warnings keep
 })
 
 test('Copy (y) on a task page puts the task on the clipboard as plain text and says so; a no says why', async ($, on) => {
-  const board = { tasks: [task('T-12', 'failed', 'Copy a task', { details: 'Add a Copy button.', files: ['docs/guide.md'], attempts: 1, runs: [{ started: '', ended: '', report: '.symcc/reports/T-12-try-1.md' }] })] }
+  const board = { tasks: [task('T-12', 'failed', 'Copy a task', { details: 'Add a Copy button.', files: ['docs/guide.md'], attempts: 1, origin: undefined, runs: [{ started: '', ended: '', report: '.symcc/reports/T-12-try-1.md' }] })] }
   stateOf(on, { opened: 'T-12', view: { shape: 'view-1', value: { ...board, working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   fakeFiles(on, { ...ROLE_FILES, '/board.json': JSON.stringify(board), '/reports/T-12-try-1.md': 'Did the button.\n' })
   const toasts: string[] = []
