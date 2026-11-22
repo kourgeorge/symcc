@@ -112,8 +112,8 @@ for (const w of ['workers', 'scouts']) {
 // (T-776, T-787) the band above the prompt: line 1 has no task id; each running task is on its own line
 const band = text(view('band')).split('\n').filter(l => l.trim())
 if (!band[0]?.startsWith('𝄞 symcc') || !band[0].includes('[ open board ]') || /T-\d+/.test(band[0])) bad(`still frame: the band's first line is not "𝄞 symcc ... [ open board ]" without a task id ("${band[0] ?? ''}")`)
-if (!band.some(l => /^ ▶ T-740 {2}\d+m · try 2 {2}After a reopen/.test(l))) bad('still frame: the band has no running-task line for T-740')
-if (!/<span class="t-passed">\d+m · try/.test(view('band'))) bad('still frame: the band\'s "Nm · try N" is not green')
+if (!band.some(l => /^ [▶⌕] T-740 \d+m \(try \d\) After a reopen/.test(l))) bad('still frame: the band has no running-task line for T-740')
+if (!/<span class="t-passed">\d+m \(try/.test(view('band'))) bad('still frame: the band\'s "Nm (try N)" is not green')
 // (T-773) Live is the first tab
 if (!live.startsWith('[l] Live │ [t] Tasks │ [s] Scouts │ [c] Settings')) bad('still frame: the tab row is not "[l] Live │ [t] Tasks │ [s] Scouts │ [c] Settings"')
 if (!/<span class="t-run">▶ T-740 *<\/span> /.test(view('board'))) bad('still frame: the running lane "▶ T-740" (mark and id only) is not drawn in the t-run tone')
