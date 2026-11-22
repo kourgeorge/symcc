@@ -115,8 +115,10 @@ export const register: Register = on => {
   // The owner's typed prompt (terminal or phone/web bridge); slash commands, hidden prompts and symcc's own board updates are left out.
   on('prompt.submit', async ($, e, next) => {
     useName(claudeHost($))
-    const r = await next(e)
     const kind = e.origin?.kind
+    // T-837: the hidden starter's end ("OK") reaches the lead's chat as a message; dropped here so it wakes no turn
+    if (kind !== 'composer' && kind !== 'bridge' && !e.command && e.text.includes(`from="${S.N.name}-starter"`)) return { drop: 'the starter agent finished' }
+    const r = await next(e)
     if ((kind === 'composer' || kind === 'bridge') && !e.command && !e.isMeta && 'text' in r && typeof r.text === 'string') ownerTyped(r.text)
     return r
   }).catch(($, e, next) => passOn($, 'prompt.submit', e, next))

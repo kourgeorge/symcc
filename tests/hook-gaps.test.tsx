@@ -249,6 +249,15 @@ test("symcc's worker and scout types are not offered in the main chat; other age
 
 const say = ($: Eng, text: string, more: Record<string, unknown> = {}) => $.prompt.submit({ text, origin: { kind: 'composer' }, ...more } as never)
 
+test("T-837: the starter's hand-back is dropped before the lead sees it; a worker's passes", async ($, on) => {
+  world(on)
+  const frame = (name: string) => `<agent-message from="${name}">\n[Subagent hand-back] OK\n</agent-message>`
+  const starter = (await $.prompt.submit({ text: frame('symcc-starter'), isMeta: true, origin: { kind: 'peer' } } as never)) as { drop?: string }
+  expect(typeof starter.drop).toBe('string')
+  const worker = (await $.prompt.submit({ text: frame('symcc-worker'), isMeta: true, origin: { kind: 'peer' } } as never)) as { drop?: string; text?: string }
+  expect(worker.drop).toBeUndefined()
+})
+
 /** The lead adds a task from the owner's request; returns the evidence the plugin put next to it. */
 async function ownerAdd($: Eng, w: ReturnType<typeof world>, request: string): Promise<string> {
   const r = (await $.tool.call({ tool: 'mcp__symcc__add', title: `Do: ${request.slice(0, 40)}`, why: 'the owner asked', origin_by: 'owner', request, files: ['src/'] } as never)) as { result?: string }
