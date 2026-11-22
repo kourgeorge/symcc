@@ -2,6 +2,7 @@ import { expect, test } from 'claude-code/testing'
 import { SETTINGS } from '../hooks/board'
 import { TOOLS, manual, MANUAL, leadGuide } from '../hooks/app/tools'
 import { ALL_FEATURES } from '../hooks/host'
+import { SCOUT_EDIT_FIELDS } from '../hooks/core/commands'
 
 test('/symcc-help lead names every lead tool and every setting', () => {
   const text = manual('lead')
@@ -18,6 +19,25 @@ test('T-765: the OpenCode lead help lists open_on_start, as its board opens by i
   const settings = text.slice(text.indexOf('settings: test_commands'))
   expect(settings.indexOf('open_on_start')).toBeGreaterThan(settings.indexOf('archive_days'))
   expect(settings.indexOf('open_on_start')).toBeLessThan(settings.indexOf('notify'))
+})
+
+test('T-876: the manual names plain /symcc-enable as the one on switch, never /symcc-enable here', () => {
+  const text = Object.values(MANUAL()).join('\n') + leadGuide()
+  expect(text).toContain('/symcc-disable here        turn it off in this window only')
+  expect(text).toContain('/symcc-enable              the one on switch: symcc on, in this window')
+  expect(text).not.toContain('enable here')
+})
+
+test('T-876: the manual names every /symcc-scout NAME field word', () => {
+  const text = manual('commands')
+  for (const field of SCOUT_EDIT_FIELDS) expect(text).toContain(`/symcc-scout NAME ${field} `)
+  expect(text).toContain('/symcc-scout NAME findings auto|backlog|default')
+})
+
+test('T-876: the lead guide says the [all] button opens all org-mem notes, not an m key', () => {
+  const text = leadGuide()
+  expect(text).not.toContain('m opens all notes')
+  expect(text).toContain('the [all] button next to "newest" opens all notes')
 })
 
 test('the lead has no prompts tool: the worker prompts are built-in only', () => {
