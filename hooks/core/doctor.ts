@@ -6,7 +6,7 @@
 import { mbText } from './board-parts'
 
 /** What a found item is about. */
-export type DoctorKind = 'backup' | 'worktree' | 'prune' | 'branch' | 'size' | 'stray' | 'board'
+export type DoctorKind = 'data' | 'backup' | 'worktree' | 'prune' | 'branch' | 'size' | 'stray' | 'board'
 
 /**
  * One thing the doctor found: `fixable` ones carry a short `id` made from what they are (not their place in the list,
@@ -21,6 +21,8 @@ export const BACKUP_MARK = '.before-migrate-'
 export const branchId = (taskId: string) => `b-${taskId}`
 export const folderId = (taskId: string) => `w-${taskId}`
 export const PRUNE_ID = 'p-worktrees'
+/** T-804: the id of the item that brings old data shapes up to date (`/<name>-doctor fix migrate-data`). */
+export const MIGRATE_ID = 'migrate-data'
 
 /**
  * The id of each backup in `names` (by name): "m-" and the month, day, hour and minute it was made ("m-1101-1000"),
@@ -91,7 +93,7 @@ export function parseDoctorArgs(args: string, name: string): DoctorAsk {
   if (words[0]!.toLowerCase() !== 'fix') return use
   const rest = words.slice(1)
   if (!rest.length || (rest.length === 1 && rest[0]!.toLowerCase() === 'all')) return { fix: 'all' }
-  if (rest.some(w => !/^[bwmp]-[a-z0-9-]+$/i.test(w))) return use
+  if (rest.some(w => !/^[bwmp]-[a-z0-9-]+$/i.test(w) && w.toLowerCase() !== MIGRATE_ID)) return use
   return { fix: rest.filter((w, i) => rest.findIndex(o => o.toLowerCase() === w.toLowerCase()) === i) }
 }
 
@@ -116,7 +118,7 @@ export function doctorText(items: DoctorItem[], name: string, dir: string): stri
 }
 
 /** What one fix did: the item's id and text, and '' when it was done or the reason it was not. */
-export type DoctorFixed = { id: string; text: string; bytes?: number; failed: string }
+export type DoctorFixed = { id: string; text: string; bytes?: number; failed: string; done?: string[] }
 
 /**
  * The answer after fixing: each item done (✓) or kept with the reason (✗), the space freed, and the ids asked for
@@ -129,7 +131,7 @@ export function fixedText(done: DoctorFixed[], name: string, gone: string[] = []
   const freed = ok.reduce((n, d) => n + (d.bytes ?? 0), 0)
   return [
     `${name} doctor cleaned up ${ok.length} of ${done.length}:`,
-    ...done.map(d => (d.failed ? `  ✗ ${d.id}  ${d.text}: kept, ${d.failed}` : `  ✓ ${d.id}  ${d.text}`)),
+    ...done.flatMap(d => [d.failed ? `  ✗ ${d.id}  ${d.text}: kept, ${d.failed}` : `  ✓ ${d.id}  ${d.text}`, ...(d.done ?? []).map(l => `      ${l}`)]),
     ...(freed ? [`Freed about ${sizeText(freed)}.`] : []),
     ...goneLine,
   ].join('\n')

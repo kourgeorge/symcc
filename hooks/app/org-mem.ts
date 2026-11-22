@@ -153,20 +153,13 @@ export async function orgMemTool(host: Host, a: OrgMemInput): Promise<string> {
 }
 
 /**
- * T-620: the one-time move of the old notes file (.<name>/field-guide.md, its name before T-620) to org-mem.md, at
- * session start. Only when the old file exists and org-mem.md doesn't; nothing else reads the old name.
- * T-632: then the task ids are taken off org-mem's old lines ("- T-12 2026-11-20: x" becomes "- 2026-11-20: x",
- * see dropTaskIds); a file without any is not written. Never throws.
+ * T-632: at session start, the task ids are taken off org-mem's old lines ("- T-12 2026-11-20: x" becomes
+ * "- 2026-11-20: x", see dropTaskIds); a file without any is not written. Never throws.
+ * (The old .<name>/field-guide.md is moved to org-mem.md by /<name>-doctor fix migrate-data.)
  */
 export async function moveOldOrgMem(host: Host): Promise<void> {
   if (S.guardOnly || !S.root) return
-  const from = path(`${S.N.dir}/field-guide.md`)
   const to = path(orgMemFile(S.N.dir))
-  try {
-    if ((await host.fs.exists(from)) && !(await host.fs.exists(to))) await host.run(['mv', '-f', from, to])
-  } catch {
-    // the old notes stay where they are; org-mem starts empty
-  }
   try {
     await oneAtATime(orgMemFile(S.N.dir), async () => {
       const r = dropTaskIds(await readGuide(host))

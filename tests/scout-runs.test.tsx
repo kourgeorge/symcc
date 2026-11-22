@@ -109,25 +109,17 @@ test(`only the last ${SCOUT_RUNS_KEPT} runs are kept, and the report files of ol
   expect(w.files.has(`${ROOT}/.symcc/reports/scouts/bugs-1.md`)).toBe(true)
 })
 
-test("once: the last report in scouts.json becomes the first run of the history, before the new run's", async () => {
+test("T-804: the last report in scouts.json is not moved into the history by a run or by scheduling (migrate-data does that)", async () => {
   const w = world({ [MEMORY]: JSON.stringify({ scouts: { bugs: { last_run: LAST_RUN, last_report: '1. Old crash.' } } }) })
   await scoutFinished(w.$, 's1', 'NOTHING')
-  const runs = w.runs()
-  expect(runs.map(r => [r.ended, r.outcome])).toEqual([
-    [LAST_RUN, 'found'],
-    [runs[1]!.ended, 'nothing'],
-  ])
-  expect(w.files.get(`${ROOT}/${runs[0]!.report}`)).toBe('1. Old crash.\n')
-})
-
-test('scheduling the scouts moves the last report into the history when there is none yet', async () => {
-  const w = world({ [MEMORY]: JSON.stringify({ scouts: { bugs: { last_run: LAST_RUN, last_report: '1. Old crash.' } } }) })
+  expect(w.runs().map(r => r.outcome)).toEqual(['nothing'])
+  const v = world({ [MEMORY]: JSON.stringify({ scouts: { bugs: { last_run: LAST_RUN, last_report: '1. Old crash.' } } }) })
   scoutState.clear()
-  w.$.fs.list = async () => [{ name: 'bugs.md', kind: 'file' }] as never
-  w.files.set(`${ROOT}/.symcc/scouts/bugs.md`, '---\nevery_minutes: 0\n---\nLook for crashes.\n')
-  w.$.fs.exists = async p => p.endsWith('/.symcc/scouts') || w.files.has(p)
-  await scheduleScouts(w.$)
-  expect(w.runs().map(r => r.outcome)).toEqual(['found'])
+  v.$.fs.list = async () => [{ name: 'bugs.md', kind: 'file' }] as never
+  v.files.set(`${ROOT}/.symcc/scouts/bugs.md`, '---\nevery_minutes: 0\n---\nLook for crashes.\n')
+  v.$.fs.exists = async p => p.endsWith('/.symcc/scouts') || v.files.has(p)
+  await scheduleScouts(v.$)
+  expect(v.runs()).toEqual([])
 })
 
 test('tasks made from a run are linked to it: the scout\'s tasks made after it ended and before the next report', () => {

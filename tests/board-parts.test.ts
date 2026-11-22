@@ -51,7 +51,7 @@ function bigBoard(): Board {
   const b = emptyBoard()
   for (let i = 1; i <= 700; i++) {
     const at = iso(NOW - (700 - i) * 15 * 60_000)
-    const history: SymccHistoryEntry[] = Array.from({ length: 30 }, (_, k) => ({ at, kind: k % 3 ? 'step' : 'state', text: `try ${1 + (k % 3)}: ${words(14, `h${k}`)}` }))
+    const history: SymccHistoryEntry[] = Array.from({ length: 30 }, (_, k) => ({ at, kind: k % 3 ? 'step' : 'stage', text: `try ${1 + (k % 3)}: ${words(14, `h${k}`)}` }))
     const runs: SymccRun[] = [0, 1, 2].map(k => ({ started: at, ended: iso(Date.parse(at) + (k + 1) * 60_000), tokens: { input: 1200 + k, output: 30_000 + i, cache_write: 90_000, cache_read: 1_500_000 }, cost: 1.25, commits: ['a'.repeat(40)], report: `.symcc/reports/T-${i}-try-${k + 1}.md`, ended_by: 'finished', ended_note: 'merged into main (aaaaaaa); tests passed', agent: `agent-${i}-${k}` }))
     const status: BoardTask['status'] = i > 660 ? (i % 2 ? 'todo' : 'backlog') : i % 10 === 0 ? 'dropped' : 'done'
     const open = status !== 'done' && status !== 'dropped'
@@ -202,7 +202,7 @@ test('T-681: a task finished while its parts file is missing stays whole in boar
   const good = w.files.get(file)!
   w.files.delete(file)
   await load(w.host)
-  const line: SymccHistoryEntry = { at: iso(NOW), kind: 'state', text: 'finished by hand' }
+  const line: SymccHistoryEntry = { at: iso(NOW), kind: 'stage', text: 'finished by hand' }
   await change(w.host, x => ({ ...x, tasks: x.tasks.map(t => (t.id === 'T-661' ? { ...t, status: 'done', history: [line] } : t)) }))
   expect(w.files.has(file)).toBe(false)
   expect((await load(w.host)).tasks[660]!.history.length).toBe(1)
@@ -277,7 +277,7 @@ test('T-681: a parts file that is there but lacks one task\'s entry gets it back
   const b = emptyBoard()
   for (const id of ['T-1', 'T-2', 'T-3']) {
     const at = iso(NOW)
-    b.tasks.push({ id, title: id, details: 'd', files: [], status: id === 'T-3' ? 'todo' : 'done', note: '', question: null, order: 1, after: [], attempts: 1, history: [{ at, kind: 'state', text: 'x' }], branch: null, merge_into: 'main', kind: 'bug', role: 'general', created_at: at, updated_at: at } as BoardTask)
+    b.tasks.push({ id, title: id, details: 'd', files: [], status: id === 'T-3' ? 'todo' : 'done', note: '', question: null, order: 1, after: [], attempts: 1, history: [{ at, kind: 'stage', text: 'x' }], branch: null, merge_into: 'main', kind: 'bug', role: 'general', created_at: at, updated_at: at } as BoardTask)
   }
   b.next_id = 4
   await saveBoard(w.host, b)

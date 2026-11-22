@@ -252,104 +252,28 @@ export type HistoryEvent = {
   result: string
 }
 
-/** Old lines that are not about a try, by how they start: [kind, start]. */
-const PLAIN_KINDS: [HistoryKind, RegExp][] = [
-  ['created', /^created by /],
-  ['note', /^the lead added a note:/],
-  ['answer', /^the owner answered:/],
-  ['waits-changed', new RegExp(`^${AFTER_CHANGED}`)],
-  ['files-refused', /^the owner didn't allow files:/],
-  ['files-widened', /^(files widened:|the owner allowed files:|owner edited files)/],
-  ['moved-backlog', /^(moved to the backlog|moved from the backlog)/],
-  ['retried', /^brought back from/],
-  ['resumed', /^resumed\b/],
-  ['merge-into', /^now merges into /],
-  ['merged', /^merged outside the board\b/],
-  ['not-merged', /^(not merged|not started):/],
-]
-
 /** How symcc starts a try's result, the words it puts right after " → ": good results, then bad ones. */
-const RESULT_GOOD = /^(merged into|already merged into|done\b)/
-const RESULT_BAD = /^(not merged|tests failed|the checker found problems|conflicts with the latest|symcc could not|could not|checking failed|the worker made no change|the worker ended its turn before|your files on|its checking and merging ran over|its merge ran over)/
+export const RESULT_GOOD = /^(merged into|already merged into|done\b)/
+export const RESULT_BAD = /^(not merged|tests failed|the checker found problems|conflicts with the latest|symcc could not|could not|checking failed|the worker made no change|the worker ended its turn before|your files on|its checking and merging ran over|its merge ran over)/
 const RESULT_KNOWN = new RegExp(`${RESULT_GOOD.source}|${RESULT_BAD.source}|^(checks passed|the checker (was stopped|couldn't start|gave no verdict)|you have )`)
 
 /**
  * The index of the " → " that starts a try's result in `body`: the first one followed by words symcc writes there,
  * so a "→" in the worker's summary or in the test output never moves it (else the last one); undefined when none.
  */
-function resultArrow(body: string): number | undefined {
+export function resultArrow(body: string): number | undefined {
   const arrows = [...body.matchAll(/ → /g)].map(a => a.index!)
   return arrows.find(i => RESULT_KNOWN.test(body.slice(i + 3))) ?? arrows.at(-1)
 }
 
 /** A line's "try 2 (role tester): " label split off: [label, try number, the rest], or null when it names no try. */
-function tryParts(text: string): [label: string, n: number, body: string] | null {
+export function tryParts(text: string): [label: string, n: number, body: string] | null {
   const m = /^(try (\d+)(?: \([^)]*\))?):\s*(.*)$/s.exec(text)
   return m ? [m[1]!, Number(m[2]), m[3]!] : null
 }
 
-/**
- * The kind of an old history line (a plain string from before T-522), guessed from how it starts and, for a try's
- * result, from the words symcc put after its " → ". Only used to convert old boards once (see oldHistoryEntry).
- */
-export function guessHistoryKind(line: string): HistoryKind {
-  const parts = tryParts(line)
-  if (!parts) return PLAIN_KINDS.find(([, re]) => re.test(line))?.[0] ?? 'other'
-  const body = parts[2]
-  if (/^checker: OK\b/.test(body)) return 'checker-ok'
-  if (/^checker found problems\b/.test(body)) return 'checker-problems'
-  if (/^checker\b/.test(body)) return 'checker'
-  if (/^(worker asked|the owner asked)/.test(body)) return 'asked'
-  if (/^answered\b/.test(body)) return 'answered'
-  if (/^restarted\b/.test(body)) return 'restarted'
-  if (/^stopped/.test(body)) return 'stopped'
-  if (/^rejected/.test(body)) return 'rejected'
-  if (/^approved, but/.test(body)) return 'approved'
-  if (/^(out of time|ran \d+ min, over|time is up)/.test(body)) return 'out-of-time'
-  if (/^the worker ended without a result|; nothing was checked or merged$/.test(body)) return 'failed'
-  const arrow = resultArrow(body)
-  if (arrow !== undefined) {
-    const result = body.slice(arrow + 3)
-    return /^done\b/.test(result) ? 'done' : RESULT_GOOD.test(result) ? 'merged' : RESULT_BAD.test(result) ? 'failed' : 'try-result'
-  }
-  if (/, so it is done$/.test(body)) return 'done'
-  return 'step'
-}
-
-/**
- * An old history line (a plain string) as a record: its kind guessed from its text (guessHistoryKind), its time
- * guessed from the try it names (that try's end, else its start) or, for "created", the task's created_at; no time
- * when neither is known. Only for the one-time conversion of old boards and archives.
- */
-export function oldHistoryEntry(line: string, t: { runs?: readonly SymccRun[]; created_at?: string } = {}): HistoryEntry {
-  const kind = guessHistoryKind(line)
-  const n = tryParts(line)?.[1]
-  const run = n ? t.runs?.[n - 1] : undefined
-  const at = run ? run.ended ?? run.started : kind === 'created' ? t.created_at : undefined
-  return { ...(typeof at === 'string' && at ? { at } : {}), kind, text: line }
-}
-
-/**
- * A task's history in the current shape (one-time conversion, T-522): old string lines become records (oldHistoryEntry),
- * a record with a kind symcc doesn't know gets "other", and anything else (null, a number, a record without a text, as
- * in a damaged archive.json) is dropped. Null when there is nothing to convert.
- */
-export function migrateHistory(t: { history?: unknown; runs?: readonly SymccRun[]; created_at?: string }): HistoryEntry[] | null {
-  const h = t.history
-  if (!Array.isArray(h) || h.every(e => typeof e !== 'string' && historyEntryOk(e) && isHistoryKind((e as HistoryEntry).kind))) return null
-  const out: HistoryEntry[] = []
-  for (const e of h) {
-    if (typeof e === 'string') { out.push(oldHistoryEntry(e, t)); continue }
-    if (!e || typeof e !== 'object' || Array.isArray(e) || typeof (e as HistoryEntry).text !== 'string') continue
-    const r = e as HistoryEntry
-    out.push({ ...(typeof r.at === 'string' && r.at ? { at: r.at } : {}), kind: isHistoryKind(r.kind) ? r.kind : 'other', text: r.text })
-  }
-  return out
-}
-
-/** Whether `v` can be a history entry read from a file: an old string line (converted on load) or a record with a text and a kind. */
+/** Whether `v` can be a history entry read from a file: a record with a text and a kind. */
 export function historyEntryOk(v: unknown): boolean {
-  if (typeof v === 'string') return true
   if (!v || typeof v !== 'object' || Array.isArray(v)) return false
   const e = v as Partial<HistoryEntry>
   return typeof e.text === 'string' && typeof e.kind === 'string' && (e.at === undefined || typeof e.at === 'string')

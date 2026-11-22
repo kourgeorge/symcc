@@ -1,6 +1,8 @@
 import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { addScoutRun, bar, cutTitle, textWidth, parseStatsArgs, wrapLine, billedTokens, billedText, failReason, migrateScoutUsage, readArchive, archiveText, tokenCount, fmtTokenKinds, inRange, keepScoutUsage, leadTotals, mean, median, mergedHow, originKey, parseScoutMemory, parseScoutUsage, parseStatsRange, rangeSpan, scoutMemoryText, scoutTotals, statsReport, statsData, scoutResultsLine, taskFigures, readBoard, boardTotal } from '../hooks/board'
+import { readOld, stillOld } from './old-data-fixture'
+import { upgradeArchiveTask, upgradeScoutUsage } from '../hooks/core/old-data'
+import { addScoutRun, bar, cutTitle, textWidth, parseStatsArgs, wrapLine, billedTokens, billedText, failReason, readArchive, archiveText, tokenCount, fmtTokenKinds, inRange, keepScoutUsage, leadTotals, mean, median, mergedHow, originKey, parseScoutMemory, parseScoutUsage, parseStatsRange, rangeSpan, scoutMemoryText, scoutTotals, statsReport, statsData, scoutResultsLine, taskFigures, readBoard, boardTotal } from '../hooks/board'
 import { statsHtml } from '../hooks/core/stats-html'
 import { FAILED_TESTS_SHORT, FAILED_TRIES_SHORT, durOr, failedShown, plural, tokOr } from '../hooks/core/stats'
 import { leadCalls, leadUsage, projectFolderName } from '../hooks/claude/lead-usage'
@@ -118,9 +120,8 @@ test('stats: outcomes, origins and days are read from what the board keeps', () 
 
 test('stats: a try left with no end time by an older board is closed once when the board is read, so the board total and stats agree', () => {
   const t = task('T-1', { updated_at: iso(50), runs: [{ started: iso(60) }, { started: iso(58), ended: iso(55), tokens: { unsplit: 10 } }, { started: iso(54) }] })
-  const read = (x: typeof t) => readBoard(JSON.stringify({ version: 1, tasks: [x] }))
+  const read = (x: typeof t) => readOld(JSON.stringify({ version: 1, tasks: [x] }))
   const r = read(t)
-  expect(r.migrated).toBe(1)
   // 2m (to the next try) + 3m + 4m (to the last change), not 54 minutes up to now
   expect(r.board.tasks[0]!.runs!.map(x => x.ended)).toEqual([iso(58), iso(55), iso(50)])
   expect(taskFigures(r.board.tasks[0]!, NOW).ms).toBe(9 * 60_000)
@@ -330,25 +331,23 @@ test('stats: the billed-equivalent weighs input 1, cache write 1.25, cache read 
 test('stats: old saved runs with one number are migrated once, kept as-is and shown as unsplit', () => {
   // board.json: a try's tokens and the archived totals
   const old = { ...task('T-1', { runs: [] }), runs: [{ started: iso(60), ended: iso(50), tokens: 5000 }, { started: iso(40), ended: iso(30), tokens: { input: 10 } }] }
-  const r = readBoard(JSON.stringify({ version: 1, tasks: [old], archived: { done: 1, dropped: 0, tries: 1, ms: 60_000, tokens: 300 } }))
-  expect(r.migrated).toBe(2)
+  const r = readOld(JSON.stringify({ version: 1, tasks: [old], archived: { done: 1, dropped: 0, tries: 1, ms: 60_000, tokens: 300 } }))
   expect(r.board.tasks[0]!.runs!.map(x => x.tokens)).toEqual([{ unsplit: 5000 }, { input: 10 }])
   expect(r.board.archived!.tokens).toEqual({ unsplit: 300 })
-  expect(readBoard(JSON.stringify(r.board)).migrated).toBe(0)
+  expect(stillOld(r.board)).toBe(false)
   const text = statsReport({ tasks: r.board.tasks, nowMs: NOW })
   expect(text).toMatch(/tokens\s+5k in all, about 10 billed\* \(leaves out 5k unsplit\)\n\s+input 10 · unsplit 5k\n/)
   expect(statsReport({ tasks: r.board.tasks, nowMs: NOW, full: true })).toMatch(/billed-eq\.\s+10 \([^]*leaves out 5k unsplit tokens/)
   // archive.json: its tasks' tries too
-  const a = readArchive(JSON.stringify({ version: 1, tasks: [{ ...old, status: 'done' }] }))
-  expect(a.migrated).toBe(1)
+  const a = readArchive(JSON.stringify({ version: 1, tasks: [upgradeArchiveTask({ ...old, status: 'done' })] }))
   expect(a.archive.tasks[0]!.runs![0]!.tokens).toEqual({ unsplit: 5000 })
-  expect(readArchive(archiveText(a.archive)).migrated).toBeUndefined()
+  expect(upgradeArchiveTask(a.archive.tasks[0]! as never)).toBe(null)
   // scouts.json: the usage totals, all and per day
   const scouts = JSON.stringify({ scouts: {}, usage: { bugs: { runs: 2, tokens: 900, ms: 10, days: { '2026-11-13': { runs: 1, tokens: 400, ms: 5 } } } } })
-  const moved = migrateScoutUsage(scouts)!
+  const moved = upgradeScoutUsage(scouts)!
   expect(parseScoutUsage(moved).bugs).toEqual({ runs: 2, tokens: { unsplit: 900 }, ms: 10, days: { '2026-11-13': { runs: 1, tokens: { unsplit: 400 }, ms: 5 } } })
-  expect(migrateScoutUsage(moved)).toBe(null)
-  expect(migrateScoutUsage(addScoutRun(moved, 'bugs', { endMs: NOW, ms: 1, tokens: { input: 1 } }))).toBe(null)
+  expect(upgradeScoutUsage(moved)).toBe(null)
+  expect(upgradeScoutUsage(addScoutRun(moved, 'bugs', { endMs: NOW, ms: 1, tokens: { input: 1 } }))).toBe(null)
   expect(parseScoutUsage(addScoutRun(moved, 'bugs', { endMs: NOW, ms: 1, tokens: { input: 1 } })).bugs!.tokens).toEqual({ input: 1, unsplit: 900 })
 })
 

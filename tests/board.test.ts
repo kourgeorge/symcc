@@ -13,6 +13,8 @@ import { testsShort, testName, nextScoutPart, PLAN_NOTE } from '../hooks/board'
 import { cleanFiles, taskCopyText, copyToast, realPathOf, brokenLinkText } from '../hooks/board'
 import { sizeWarnText, tooBigText } from '../hooks/core/board-parts'
 import { fakeDisk } from './fake-disk'
+import { readOld, stillOld } from './old-data-fixture'
+import { upgradeArchiveTask } from '../hooks/core/old-data'
 import { rowEndBoard, ROW_END, LEAD_BEFORE, ROW_END_NOW } from './row-end-cases'
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
 import { STEP_WORD, asChecking, stepNote, STEP_NOTE, isMergeNote, inLineNote, PREP_NOTE, CHECKER_NOTE, everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, goneBranchQuestion, goneBranchOptions, parseGoneBranch, saysMergeInstead, crossBranchNotes, intoOf, branchesToDelete, worktreesToRemove, cleanupText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, notifyOf, notifyChoices, notifyRefusal, unplayableNote, bestNotify, startRun, endRun, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_NOT_READY, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, needFilesQuestion, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, bashPathsToCheck, CWD_LOST, BASH_LOST, shellCwd, bashTooManyText, BASH_TOO_MANY, BASH_PATHS_MAX, pathAliases, resolvePath, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, panelSections, sectionHeader, foldedRow, crewParts, withCrew, statusRoom, STATUS_WIDTH, nextScoutText, statusCell, rowExtra, fileWaitText, fitRow, hintLines, hintLineText, hintText, packRows, listKeys, taskKeys, diffKeys, scoutKeys, scoutListKeys, scoutIcon, scoutTone, scoutLastText, countFindings, scoutListRows, scoutListText, scoutPausedText, scoutMayRun, scoutWhyNot, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, rolesLeadText, BUILT_IN_ROLES, WEB_SAFETY_LINE, leftoverTmpFiles, tmpName, normId, dayOf, runMs, isNothing, agentSafeName, onDemand, readBoard } from '../hooks/board'
@@ -622,17 +624,16 @@ test("a task waiting only for the owner's files: its row and keys say to commit 
 test('an old board: each task without its own branch gets the old target_branch, and target_branch is dropped', () => {
   const task = (id: string, extra: object = {}) => ({ id, title: id, details: '', files: [], status: 'todo', note: '', question: null, order: 0, after: [], attempts: 0, history: [], branch: null, created_at: T, updated_at: T, origin: { by: 'lead', why: 'x', at: T }, ...extra })
   const old = { version: 1, next_id: 3, mode: 'auto', test_commands: [], target_branch: 'main', max_parallel: 3, tasks: [task('T-1'), task('T-2', { merge_into: 'feature-x' })] }
-  const r = readBoard(JSON.stringify(old))
+  const r = readOld(JSON.stringify(old))
   expect(r.board.tasks.map(t => t.merge_into)).toEqual(['main', 'feature-x'])
-  expect(r.migrated).toBe(2)
   expect('target_branch' in r.board).toBe(false)
   expect(JSON.stringify(r.board)).not.toContain('target_branch')
   // a board saved after that has nothing more to migrate
-  expect(readBoard(JSON.stringify(r.board)).migrated).toBe(0)
+  expect(stillOld(r.board)).toBe(false)
   // an old target_branch other than main is what the tasks get
-  expect(readBoard(JSON.stringify({ ...old, target_branch: 'dev' })).board.tasks[0]!.merge_into).toBe('dev')
-  // no tasks: still saved once, to drop target_branch
-  expect(readBoard(JSON.stringify({ ...old, tasks: [] })).migrated).toBe(1)
+  expect(readOld(JSON.stringify({ ...old, target_branch: 'dev' })).board.tasks[0]!.merge_into).toBe('dev')
+  // no tasks: target_branch is still dropped
+  expect(JSON.stringify(readOld(JSON.stringify({ ...old, tasks: [] })).board)).not.toContain('target_branch')
 })
 
 // ---------------- today in full, older days folded ----------------
@@ -1011,10 +1012,10 @@ test('the board mode is "auto" by default, also for a board without it or with a
   expect(emptyBoard().mode).toBe('auto')
   expect(parseBoard(null).mode).toBe('auto')
   expect(parseBoard(JSON.stringify({ version: 1, next_id: 1, tasks: [] })).mode).toBe('auto')
-  // T-578: the old mode "off" is "paused" now: a board saved with it is converted once (and saved, as migrated)
-  expect(parseBoard(JSON.stringify({ mode: 'off', tasks: [] })).mode).toBe('paused')
-  expect(readBoard(JSON.stringify({ mode: 'off', tasks: [] }))).toMatchObject({ migrated: 1, fixed: [] })
-  expect(readBoard(JSON.stringify({ mode: 'paused', tasks: [] }))).toMatchObject({ migrated: 0, fixed: [] })
+  // T-578: the old mode "off" is "paused" now; only migrate-data converts it (a plain read sets the default)
+  expect(readOld(JSON.stringify({ mode: 'off', tasks: [] })).board.mode).toBe('paused')
+  expect(readOld(JSON.stringify({ mode: 'off', tasks: [] })).fixed).toEqual([])
+  expect(parseBoard(JSON.stringify({ mode: 'off', tasks: [] })).mode).toBe('auto')
   expect(parseBoard(JSON.stringify({ mode: 'paused', tasks: [] })).mode).toBe('paused')
   expect(parseBoard(JSON.stringify({ mode: 'review', tasks: [] })).mode).toBe('review')
   expect(parseBoard(JSON.stringify({ mode: 'auto', tasks: [] })).mode).toBe('auto')
@@ -2174,12 +2175,10 @@ test('the worker prompt for a role with web tools has the web safety line; other
 
 test('a board with old roles is migrated once: tests becomes tester, backend and frontend general', () => {
   const task = (id: string, role?: string) => ({ id, title: id, details: '', files: [], status: 'todo', note: '', question: null, order: 1, after: [], attempts: 0, history: [], branch: null, origin: W, created_at: T, updated_at: T, ...(role ? { role } : {}) })
-  const r = readBoard(JSON.stringify({ version: 1, next_id: 6, tasks: [task('T-1', 'tests'), task('T-2', 'backend'), task('T-3', 'Frontend'), task('T-4', 'docs'), task('T-5')] }))
+  const r = readOld(JSON.stringify({ version: 1, next_id: 6, tasks: [task('T-1', 'tests'), task('T-2', 'backend'), task('T-3', 'Frontend'), task('T-4', 'docs'), task('T-5')] }))
   expect(r.board.tasks.map(t => t.role)).toEqual(['tester', 'general', 'general', 'docs', undefined])
-  // all five: none had its own branch (merge_into) yet
-  expect(r.migrated).toBe(5)
-  // saved and read again, nothing more changes
-  expect(readBoard(boardText(r.board)).migrated).toBe(0)
+  // saved and upgraded again, nothing more changes
+  expect(stillOld(r.board)).toBe(false)
 })
 
 test('a project role file still adds or overrides a role', async () => {
@@ -2245,11 +2244,14 @@ test('leftover temp files: the names tmpName makes for every saved file match; o
   expect(leftoverTmpFiles(made.map(name => ({ name, mtimeMs: old })), now)).toEqual(made)
   expect(leftoverTmpFiles(made.map(name => ({ name, mtimeMs: now - 1_000 })), now)).toEqual([])
   expect(new Set(['1-a', '2-a', '1-b'].map(n => tmpName('scouts.json', 's', n))).size).toBe(3)
-  expect(leftoverTmpFiles(['scouts.json.tmp', 'archive.json.tmp', 'stats.json.s.1.tmp'].map(name => ({ name, mtimeMs: old })), now)).toEqual([])
+  expect(leftoverTmpFiles(['scouts.json.tmp', 'archive.json.tmp'].map(name => ({ name, mtimeMs: old })), now)).toEqual([])
+  // T-804: any file symcc saves through a temp file (gone.json, view.json, a scout's runs file, a report) is cleaned, not only a list of owners
+  const others = ['gone.json', 'view.json', 'bugs.runs.json', 'org-mem.md'].map(f => tmpName(f, 'sess:1/x', '7-ab12cd'))
+  expect(leftoverTmpFiles(others.map(name => ({ name, mtimeMs: old })), now)).toEqual(others)
   // T-675: the archive's later files and the finished tasks' parts files (in .symcc/tasks/) are saved the same way
   const more = ['archive-2.json', 'archive-13.json', 'T-600.json', 'T-0.json'].map(f => tmpName(f, 'sess:1/x', '7-ab12cd'))
   expect(leftoverTmpFiles(more.map(name => ({ name, mtimeMs: old })), now)).toEqual(more)
-  expect(leftoverTmpFiles(['archive-x.json.a.1.tmp', 'T-.json.a.1.tmp', 'T-1.jsonx.a.1.tmp', 'archive-2.json.tmp'].map(name => ({ name, mtimeMs: old })), now)).toEqual([])
+  expect(leftoverTmpFiles(['T-1.jsonx.a.1.tmp', 'archive-2.json.tmp'].map(name => ({ name, mtimeMs: old })), now)).toEqual([])
 })
 
 test('leftover temp files: fresh ones, or ones with no or future time, are kept', () => {
@@ -2267,7 +2269,7 @@ test('leftover temp files: fresh ones, or ones with no or future time, are kept'
 test('leftover temp files: other names are never chosen', () => {
   const now = 1_000_000_000
   const old = now - 10 * LOCK_STALE_MS
-  const names = ['board.json', 'lead.json', 'board.lock', 'board.json.tmp', 'board.lock..tmp', 'lead.json.tmp', 'other.abc.tmp', 'board.lock.a/b.tmp', 'xboard.lock.a.tmp', 'board.lock.a.tmp.bak', 'scouts']
+  const names = ['board.json', 'lead.json', 'board.lock', 'board.json.tmp', 'board.lock..tmp', 'lead.json.tmp', 'other.abc.tmp', 'board.lock.a/b.tmp', 'board.lock.a.tmp.bak', 'scouts']
   expect(leftoverTmpFiles(names.map(name => ({ name, mtimeMs: old })), now)).toEqual([])
   expect(leftoverTmpFiles(null as unknown as [], now)).toEqual([])
 })
@@ -2443,34 +2445,29 @@ test('T-348: a task with the removed stage engine\'s stage, stages and backs loa
     { ...base, id: 'T-1', status: 'todo', ...staged },
     { ...base, id: 'T-2', status: 'todo', runs: [{ started: T, ended: T }] },
   ] }
-  const r = readBoard(JSON.stringify(board))
+  const r = readOld(JSON.stringify(board))
   const [t1, t2] = r.board.tasks
   for (const k of ['stage', 'stages', 'backs']) expect(k in t1!).toBe(false)
   expect(t1!.runs).toEqual([{ started: T, ended: T }])
   expect(t1!.title).toBe('A')
-  // only the task that had them is migrated; once saved, nothing changes again
-  expect(r.migrated).toBe(1)
+  // only the task that had them changes; once saved, nothing changes again
   expect(t2).toEqual({ ...base, id: 'T-2', status: 'todo', runs: [{ started: T, ended: T }] } as unknown as typeof t2)
-  expect(readBoard(boardText(r.board)).migrated).toBe(0)
+  expect(stillOld(r.board)).toBe(false)
   // the archive too
-  const a = readArchive(JSON.stringify({ version: 1, tasks: [{ ...base, id: 'T-3', status: 'done', ...staged }] }))
-  expect(a.migrated).toBe(1)
-  const t3 = a.archive.tasks[0]!
+  const t3 = upgradeArchiveTask({ ...base, id: 'T-3', status: 'done', ...staged })!
   for (const k of ['stage', 'stages', 'backs']) expect(k in t3).toBe(false)
   expect(t3.runs).toEqual([{ started: T, ended: T }])
-  expect(readArchive(archiveText(a.archive)).migrated).toBeUndefined()
+  expect(upgradeArchiveTask(t3)).toBe(null)
 })
 
 test('a board whose tasks have no origin is migrated once: the lead made them before origins were kept', () => {
   const old = { version: 1, next_id: 2, mode: 'auto', test_commands: [], target_branch: 'main', max_parallel: 3, max_minutes: 45, auto_retries: 2, tasks: [
     { id: 'T-1', title: 'A', details: 'A', files: [], status: 'todo', note: '', question: null, order: 1, after: [], attempts: 0, history: [], branch: null, created_at: T, updated_at: T },
   ] }
-  const r = readBoard(JSON.stringify(old))
+  const r = readOld(JSON.stringify(old))
   expect(r.board.tasks[0]!.origin).toEqual({ by: 'lead', why: 'made before origins were kept', at: T })
-  // the task (origin and branch at once) and the dropped target_branch
-  expect(r.migrated).toBe(2)
   expect(fromText(r.board.tasks[0]!)).toBe('◆ from: lead')
-  expect(readBoard(boardText(r.board)).migrated).toBe(0)
+  expect(stillOld(r.board)).toBe(false)
   // a broken (hand-edited) origin is not usable: "unknown", and nothing breaks
   expect(fromText({ origin: { by: 'nobody' } })).toBe('from: unknown')
   expect(originWho({ origin: null })).toBe('unknown')
@@ -3409,13 +3406,13 @@ test('readBoard drops bad entries inside files, after, history and runs, and nam
   const r2b = readBoard(JSON.stringify({ tasks: [{ ...base, runs: [{ started: T }, 'x', 4] }] }))
   expect(r2b.board.tasks[0]!.runs).toHaveLength(1)
   expect(r2b.fixed).toContain('T-1: 2 bad tries dropped')
-  // (3) after keeps only task ids (normalised), history only entries (an old string line is converted, T-522)
-  const r3 = readBoard(JSON.stringify({ tasks: [{ ...base, after: [5, null, 'T-2'], history: [7, 'made'] }] }))
+  // (3) after keeps only task ids (normalised), history only records (an old string line is dropped; migrate-data converts it)
+  const r3 = readBoard(JSON.stringify({ tasks: [{ ...base, after: [5, null, 'T-2'], history: [7, { kind: 'note', text: 'made' }] }] }))
   expect(r3.board.tasks[0]!.after).toEqual(['T-2'])
-  expect(r3.board.tasks[0]!.history).toEqual([{ kind: 'other', text: 'made' }])
+  expect(r3.board.tasks[0]!.history).toEqual([{ kind: 'note', text: 'made' }])
   expect(r3.fixed).toEqual(['T-1: 2 bad after entries dropped', 'T-1: 1 bad history entry dropped'])
   // a clean task reports nothing
-  expect(readBoard(JSON.stringify({ tasks: [{ ...base, files: ['a'], after: ['t2'], history: ['h'], runs: [] }] })).fixed).toEqual([])
+  expect(readBoard(JSON.stringify({ tasks: [{ ...base, files: ['a'], after: ['t2'], history: [{ kind: 'note', text: 'h' }], runs: [] }] })).fixed).toEqual([])
 })
 
 test('fixText lists dropped task entries as they are and keeps "set to the default" for settings only', () => {
@@ -3912,7 +3909,7 @@ test('T-605/T-612: the merge queue\'s waiting note is "queue (n)"; a saved board
   expect(isMergeNote('in line (2)')).toBe(false)
   const at = new Date().toISOString()
   const task = (id: string, extra: object) => ({ id, title: 'x', status: 'doing', attempts: 1, note: 'queue (3)', merge_into: 'main', origin: { by: 'lead', why: 'w', at: '' }, created_at: '', updated_at: '', ...extra })
-  const read = readBoard(JSON.stringify({ version: 1, tasks: [task('T-1', { checking: { step: 'prep', at } }), task('T-2', {}), task('T-3', { checking: { step: 'queue', place: 3, at } })] }))
+  const read = readOld(JSON.stringify({ version: 1, tasks: [task('T-1', { checking: { step: 'prep', at } }), task('T-2', {}), task('T-3', { checking: { step: 'queue', place: 3, at } })] }))
   const [one, two, three] = read.board.tasks
   expect(one!.checking).toEqual({ step: 'queue', place: 3, at })
   expect(one!.note).toBe('queue (3)')
@@ -3920,13 +3917,10 @@ test('T-605/T-612: the merge queue\'s waiting note is "queue (n)"; a saved board
   expect(two!.note).toBe('')
   // a task already in the queue step (saved by this version) is left as it is
   expect(three!.checking).toEqual({ step: 'queue', place: 3, at })
-  expect(read.migrated).toBe(2)
   // once saved, nothing changes again
-  const again = readBoard(JSON.stringify(read.board))
-  expect(again.board.tasks).toEqual(read.board.tasks)
-  expect(again.migrated).toBe(0)
+  expect(stillOld(read.board)).toBe(false)
   // the old "in line (n)" note (T-605) and the old step name "checking" are no longer read
-  const old = readBoard(JSON.stringify({ version: 1, tasks: [task('T-1', { note: 'in line (3)', checking: { step: 'checking', at } })] }))
+  const old = readOld(JSON.stringify({ version: 1, tasks: [task('T-1', { note: 'in line (3)', checking: { step: 'checking', at } })] }))
   expect(old.board.tasks[0]!.note).toBe('in line (3)')
   expect(old.board.tasks[0]!.checking).toBeUndefined()
 })

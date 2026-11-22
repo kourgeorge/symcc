@@ -5,11 +5,12 @@
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { PANE, T0, seedBoard } from './board-fixture'
-import { historyEntry, historyEvent, historyTime, HISTORY_MARK, oldHistoryEntry, workerStartedEntry, workerHandedBackEntry } from '../hooks/core/history'
+import { historyEntry, historyEvent, historyTime, HISTORY_MARK, workerStartedEntry, workerHandedBackEntry } from '../hooks/core/history'
 import { hist } from './history-fixture'
 import { handedOff, withHistory, type BoardTask } from '../hooks/board'
 
 /** An old line (from before T-522) as the one-time conversion reads it, as an event. */
+import { oldHistoryEntry } from '../hooks/core/old-data'
 const old = (l: string) => historyEvent(oldHistoryEntry(l))
 
 const iso = (ms: number) => new Date(ms).toISOString()

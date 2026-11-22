@@ -3,7 +3,9 @@
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { addTask, afterChanges, emptyBoard, mergedHow, patchTask, promoteTask, readArchive, archiveText, readBoard, rejectTask, stashTask, statsReport, find, type Board } from '../hooks/board'
-import { HISTORY_KINDS, guessHistoryKind, historyEntry, historyLineText, historyTime, migrateHistory, oldHistoryEntry, withHistory } from '../hooks/core/history'
+import { HISTORY_KINDS, historyEntry, historyLineText, historyTime, withHistory } from '../hooks/core/history'
+import { guessHistoryKind, migrateHistory, oldHistoryEntry, upgradeArchiveTask } from '../hooks/core/old-data'
+import { readOld, stillOld } from './old-data-fixture'
 import { taskText } from '../hooks/app/tools'
 
 const T = '2026-11-18T10:00:00.000Z'
@@ -39,9 +41,8 @@ const OLD_TASK = {
 }
 
 test('an old board with string history converts once: kinds guessed from the text, times from the tries', () => {
-  const r = readBoard(JSON.stringify({ version: 1, next_id: 2, tasks: [OLD_TASK] }))
+  const r = readOld(JSON.stringify({ version: 1, next_id: 2, tasks: [OLD_TASK] }))
   expect(r.fixed).toEqual([])
-  expect(r.migrated).toBe(1)
   expect(r.board.tasks[0]!.history).toEqual([
     { at: '2026-11-01T08:00:00.000Z', kind: 'created', text: 'created by the owner because x' },
     { at: '2026-11-01T09:20:00.000Z', kind: 'failed', text: 'try 1: did it → tests failed: `bun test` (exit 1)' },
@@ -51,7 +52,7 @@ test('an old board with string history converts once: kinds guessed from the tex
     { at: '2026-11-02T08:00:00.000Z', kind: 'asked', text: 'try 2: worker asked: which one?' },
   ])
   // once saved, nothing more to convert
-  expect(readBoard(JSON.stringify(r.board)).migrated).toBe(0)
+  expect(stillOld(r.board)).toBe(false)
   // the health check, stats and the text board still read it
   expect(afterChanges(r.board.tasks[0]!)).toBe(1)
   expect(statsReport({ tasks: r.board.tasks, nowMs: Date.parse(T), full: true })).toContain('Failed tries')
@@ -63,14 +64,13 @@ test('an old board with string history converts once: kinds guessed from the tex
 
 test('an old archive converts the same way, once, and its stats still count', () => {
   const merged = { ...OLD_TASK, id: 'T-5', status: 'done', history: ['created by the lead because y', 'try 1: done it → merged into main (abc1234)'] }
-  const a = readArchive(JSON.stringify({ version: 1, tasks: [merged] }))
-  expect(a.migrated).toBe(1)
+  const a = readArchive(JSON.stringify({ version: 1, tasks: [upgradeArchiveTask(merged)] }))
   expect(a.archive.tasks[0]!.history).toEqual([
     { at: '2026-11-01T08:00:00.000Z', kind: 'created', text: 'created by the lead because y' },
     { at: '2026-11-01T09:20:00.000Z', kind: 'merged', text: 'try 1: done it → merged into main (abc1234)' },
   ])
   expect(mergedHow(a.archive.tasks[0]!)).toBe('own')
-  expect(readArchive(archiveText(a.archive)).migrated).toBeUndefined()
+  expect(upgradeArchiveTask(a.archive.tasks[0]! as never)).toBe(null)
 })
 
 test('the old-line guess: a kind for each kind of line symcc wrote, and records already converted are left alone', () => {
@@ -86,13 +86,13 @@ test('the old-line guess: a kind for each kind of line symcc wrote, and records 
   expect(migrateHistory({ history: [historyEntry('note', 'n', T)] })).toBe(null)
   expect(migrateHistory({ history: [{ kind: 'gone-kind', text: 'n', at: T }] })).toEqual([{ kind: 'other', text: 'n', at: T }])
   // a bad entry (no text) is still dropped and named
-  const r = readBoard(JSON.stringify({ version: 1, tasks: [{ ...OLD_TASK, history: [{ kind: 'note' }, 'ok'] }] }))
+  const r = readBoard(JSON.stringify({ version: 1, tasks: [{ ...OLD_TASK, history: [{ kind: 'note' }, { kind: 'note', text: 'ok' }] }] }))
   expect(r.fixed).toEqual(['T-1: 1 bad history entry dropped'])
   expect(historyLineText({ kind: 'other', text: 'no time' })).toBe('no time')
 })
 
 test('a damaged archive.json history (null, a number, a record without text) loads, the bad entries dropped', () => {
-  const a = readArchive(JSON.stringify({ version: 1, tasks: [{ ...OLD_TASK, status: 'done', history: [null, 5, { kind: 'note' }, 'created by the lead because x'] }] }))
+  const a = readArchive(JSON.stringify({ version: 1, tasks: [upgradeArchiveTask({ ...OLD_TASK, status: 'done', history: [null, 5, { kind: 'note' }, 'created by the lead because x'] })] }))
   expect(a.broken).toBeUndefined()
   const t = a.archive.tasks[0]!
   expect(t.history.map(e => e.text)).toEqual(['created by the lead because x'])

@@ -19,8 +19,9 @@
 import { settingShown, type Command, boardText, shortHome, LEAD_BEAT_MS, openOnStart, symccOn, offAnswer, offHereAnswer, notSetUpAnswer, modeText, commandNames, parseCommand, modeOf, settingsText, notifyOf, find, STATUS_WORD, statText, cutDiff, everyText, intoOf, ASK_TOOL, guardReason, scoutToolRefusal, NEW_ROLE_TEMPLATE, NEW_KIND_TEMPLATE, NEW_SCOUT_EVERY } from '../board'
 import { type FileTouch, type Host, type HostFeatures, ALL_FEATURES } from '../host'
 import type { SymccTokens } from '../../types'
-import { findArchived, saveArchiveMigrated } from './archive'
+import { findArchived } from './archive'
 import { moveOldOrgMem, deleteOrgMem } from './org-mem'
+import { migrateIfOld } from './migrate-data'
 import { askCall, checkEdit, guardFailed, stoppedText, stoppedTextFor, movedAway, movedText, listedKind, type AgentKindOf } from './ask'
 import { gitReady, setupGit } from './git'
 import { claimLead, publish, handOver, releaseLead, driveHere, startOffHere, disableHere, enableHere, offHereBeat } from './lead'
@@ -28,7 +29,7 @@ import { changedFiles, changesText } from './review'
 import { loadRoles, changeRole } from './roles'
 import { loadKinds, changeKind } from './kinds'
 import { checkerFinished } from './checker'
-import { fileToolHits, saveScoutsMigrated, scheduleScouts, seedExampleScouts, scoutFinished, runScoutNow, setScoutPaused, unreadableScoutsText, leadScouts } from './scouts'
+import { fileToolHits, scoutOriginsFixed, scheduleScouts, seedExampleScouts, scoutFinished, runScoutNow, setScoutPaused, unreadableScoutsText, leadScouts } from './scouts'
 import { S, onHere, loadVersion, toolName, timers, heard, stopped, workers, scoutRuns, checkerRuns, scoutState, isOwnAgent } from './state'
 import { path, load, change, isOn, now, saveMigrated, startWait, findRoot, mainRoot, isWorkerFolder, startingText } from './store'
 import { noteForLead, tellLead, brief, takeBoardUpdate } from './tell'
@@ -135,13 +136,14 @@ export async function sessionStart(host: Host) {
       await publish(host, await load(host))
       return
     }
-    // An older board is saved once in the current shape (before anything else saves it), with a copy as it was;
-    // so are archive.json and scouts.json (tokens saved as one number become "unsplit").
-    // An old .<name>/field-guide.md becomes org-mem.md once (T-620).
-    await saveMigrated(host).catch(() => undefined)
-    await saveArchiveMigrated(host).catch(() => undefined)
-    await saveScoutsMigrated(host).catch(() => undefined)
-    await moveOldOrgMem(host).catch(() => undefined)
+    // T-804: old data shapes are brought up to date first (backup kept), before anything below can save over them.
+    // If that fails, nothing below that saves runs (the owner was told once).
+    if (!(await migrateIfOld(host))) {
+      // Finished tasks kept whole in board.json move to their parts files once (T-675).
+      await saveMigrated(host).catch(() => undefined)
+      await scoutOriginsFixed(host).catch(() => undefined)
+      await moveOldOrgMem(host).catch(() => undefined)
+    }
     // T-793: another live window with symcc on makes this one start off here (plain), before it can claim the lead
     await startOffHere(host).catch(() => undefined)
     // Become the driver if nobody drives the board. As the driver, old workers still running

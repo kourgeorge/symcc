@@ -620,18 +620,6 @@ export function addScoutRunRecord(runs: ScoutRunRecord[], run: ScoutRunRecord, k
   return { runs: all.slice(cut), dropped: all.slice(0, cut) }
 }
 
-/** The one-time move from scouts.json: a scout's saved last report becomes its first run (ended at its last run, or
- *  `nowIso` when that is not known), its report going to the file `report` names. Null when there is no last report. */
-export function migratedScoutRun(mem: { last_run: string | null; last_report?: string } | undefined, report: (ended: string) => string, nowIso: string): { run: ScoutRunRecord; text: string } | null {
-  if (!mem || mem.last_report === undefined) return null
-  const text = mem.last_report.trim()
-  const ended = mem.last_run && Number.isFinite(Date.parse(mem.last_run)) ? mem.last_run : nowIso
-  const outcome: ScoutRunOutcome = isNothing(text) ? 'nothing' : 'found'
-  const run: ScoutRunRecord = { started: null, ended, outcome, findings: outcome === 'found' ? countFindings(text) : 0 }
-  if (text) run.report = report(ended)
-  return { run, text }
-}
-
 const reported = (r: ScoutRunRecord) => r.outcome === 'found' || r.outcome === 'nothing'
 const byNumber = (ids: string[]) => {
   const num = (id: string) => Number(/\d+/.exec(id)?.[0] ?? 0)
