@@ -226,7 +226,7 @@ export type OffHere = 'off' | 'other' | 'gone' | 'new'
 
 export const offStatusParts = (name: string = DEFAULT_NAME, withName = true, here: OffHere | false | undefined = false): OffPart[] =>
   here === 'new'
-    ? [{ text: `${name} is not set up here · ` }, { text: `/${name}-enable`, command: true }, { text: ' to start it' }]
+    ? [{ text: `no ${name} board in this folder or any folder above it · ` }, { text: `/${name}-init`, command: true }, { text: ' to create one here' }]
     : here === 'gone'
     ? [{ text: `the ${name} window closed · ` }, { text: `/${name}-enable here`, command: true }, { text: ' to take over' }]
     : here === 'other'
@@ -242,8 +242,8 @@ export const offStatusParts = (name: string = DEFAULT_NAME, withName = true, her
 /** What every lead tool answers in a window turned off with /<name>-disable here (T-793). */
 export const offHereAnswer = (name: string = DEFAULT_NAME) => `${name} is off in this window. /${name}-enable here turns it back on.`
 
-/** What every lead tool answers in a new project, a folder with no board where the owner has not run /<name>-enable yet (T-795). */
-export const notSetUpAnswer = (name: string = DEFAULT_NAME) => `${name} is not set up here. The owner can start it with /${name}-enable.`
+/** What every lead tool answers in a new project, a folder with no board in it or above it, where the owner has not run /<name>-init yet (T-795, T-844). */
+export const notSetUpAnswer = (name: string = DEFAULT_NAME) => `no ${name} board in this folder or any folder above it · /${name}-init to create one here`
 
 /** The "disabled" line as plain text (see offStatusParts). */
 export const offStatusLine = (name: string = DEFAULT_NAME, withName = true, here: OffHere | false | undefined = false) => offStatusParts(name, withName, here).map(p => p.text).join('')

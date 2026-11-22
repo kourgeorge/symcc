@@ -49,6 +49,7 @@ export type Command =
   | { kind: 'mode'; mode: SymccMode }
   | { kind: 'disable'; here?: boolean }
   | { kind: 'enable'; here?: boolean }
+  | { kind: 'init'; git?: boolean }
   | { kind: 'drive' }
   | { kind: 'help'; topic: string }
   | { kind: 'settings' }
@@ -109,7 +110,7 @@ export type TaskVerb = (typeof TASK_VERBS)[number]
 export const taskUsage = (name: string = DEFAULT_NAME) => `/${name}-task T-3 (open it), or /${name}-task T-3 pause|resume|retry|drop [reason]|merged|review on|off|stash|todo|role <name>|note`
 
 /** The words after the plugin's name, one per command: /<name>-tasks, /<name>-approve, ... */
-export const COMMAND_WORDS = ['tasks', 'scouts', 'task', 'approve', 'reject', 'diff', 'scout', 'mode', 'settings', 'help', 'disable', 'enable', 'drive'] as const
+export const COMMAND_WORDS = ['tasks', 'scouts', 'task', 'approve', 'reject', 'diff', 'scout', 'mode', 'settings', 'help', 'disable', 'enable', 'init', 'drive'] as const
 
 /** Every slash command's name (without the slash): "<name>" and "<name>-<word>". */
 export const commandNames = (name: string = DEFAULT_NAME): string[] => [name, ...COMMAND_WORDS.map(w => `${name}-${w}`)]
@@ -224,6 +225,9 @@ export function parseCommand(command: string, args: string, current: SymccMode =
     case 'enable':
       if (s.toLowerCase() === 'here') return { kind: 'enable', here: true }
       return s ? use(`/${name}-enable [here]`) : { kind: 'enable' }
+    case 'init':
+      if (s.toLowerCase() === 'git') return { kind: 'init', git: true }
+      return s ? use(`/${name}-init [git] (set up ${name} in this folder, like the git command that starts a repo; "git" also sets up git here when this folder has no repo of its own)`) : { kind: 'init' }
     case 'drive':
       return s ? use(`/${name}-drive (make this session drive the board)`) : { kind: 'drive' }
   }

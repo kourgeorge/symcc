@@ -29,8 +29,8 @@ import { scoutPrompt } from '../../../hooks/core/scouts'
 import { tryCost, tryTokens } from '../../../hooks/core/runs'
 import { DEBRIEF_TEXT } from '../../../hooks/core/org-mem'
 
-/** T-795: a new project is off until the owner runs /symcc-enable; a real one does that first. */
-const enableHere = (repo: string) => runCommand(['bun', MAIN, '--root', repo, '--claude', FAKE, 'cmd', 'symcc-enable'], { cwd: repo, timeoutMs: 120_000 })
+/** T-795: a new project is off until the owner runs /symcc-init; a real one does that first. */
+const enableHere = (repo: string) => runCommand(['bun', MAIN, '--root', repo, '--claude', FAKE, 'cmd', 'symcc-init'], { cwd: repo, timeoutMs: 120_000 })
 
 test('withBasePrompt puts WORKER_BASE in front of a worker\'s prompt, and SCOUT_BASE in front of a scout\'s or checker\'s, naming none of symcc\'s tools (T-474)', () => {
   const tool = (t: string) => SYMCC_WORDS.tool('symcc', t)

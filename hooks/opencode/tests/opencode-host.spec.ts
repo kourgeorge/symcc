@@ -1386,6 +1386,50 @@ test('/symcc-disable then /symcc-enable through OpenCode\'s commands in the lead
   }
 }, LONG_TEST_MS)
 
+test('T-844: /symcc-init through OpenCode\'s commands: a folder with no board stays off and points to /symcc-init; init makes .symcc there (a parent repo is not used), writes the open-now mark for this session once, and a second init changes nothing', async () => {
+  reset()
+  const base = await realpath(await mkdtemp('/tmp/symcc-oc-init-'))
+  try {
+    // the parent folder is a git repo; the project folder under it has its own .git
+    await git(base, 'init', '-q', '-b', 'main')
+    const main = `${base}/proj`
+    await mkdir(main, { recursive: true })
+    await writeFile(`${main}/a.txt`, 'hi\n')
+    await git(main, 'init', '-q', '-b', 'main')
+    await git(main, 'add', '-A')
+    await git(main, 'commit', '-q', '--no-verify', '-m', 'start')
+    const f = fakeSessions()
+    const plugin = symccServer({ engine: SYMCC_ENGINE, hostOptions: { say: () => undefined, sessionId: 'opencode-init' } })
+    const c = fakeCtx(main, f.api)
+    const end = await plugin.setup(c.ctx)
+    await until(() => S.startupDone === true)
+    const lead = f.lead(main)
+    await c.hooks.prompt!({ sessionID: lead })
+    const run = async (name: string, text = '') => {
+      const before = f.synthetic.filter(x => x.sessionID === lead).length
+      await c.commands.get(name)!.execute({ sessionID: lead, prompt: { text }, delivery: 'steer' })
+      return f.synthetic.filter(x => x.sessionID === lead).slice(before).map(x => x.text).join('\n')
+    }
+    const mark = async () => parseViewFile(await readFile(`${main}/.symcc/view.json`, 'utf8').catch(() => null))?.open_now
+    expect(await run('symcc-enable')).toContain('/symcc-init to create one here')
+    expect(await readFile(`${main}/.symcc/board.json`, 'utf8').catch(() => 'none')).toBe('none')
+    expect(await mark()).toBe(undefined)
+    expect(await run('symcc-init')).toContain('is on in this project')
+    expect(JSON.parse(await readFile(`${main}/.symcc/board.json`, 'utf8')).enabled !== false).toBe(true)
+    expect(await readFile(`${base}/.symcc/board.json`, 'utf8').catch(() => 'none')).toBe('none')
+    const first = await mark()
+    expect(first?.session).toBe(lead)
+    await new Promise<void>(r => setTimeout(() => r(), 15))
+    expect(await run('symcc-init')).toBe('symcc is already set up here.')
+    expect(await mark()).toEqual(first)
+    await settle()
+    await end!()
+    await settle()
+  } finally {
+    await rm(base, { recursive: true, force: true })
+  }
+}, LONG_TEST_MS)
+
 test('the TUI\'s view file (T-466, R6): each publish writes .symcc/view.json; /symcc-answer answers a waiting task (the change tool, the lead hears of it) and a question on the board', async () => {
   reset()
   const p = await project()

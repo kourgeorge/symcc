@@ -151,6 +151,8 @@ test("an owner's own second checkout (another git worktree) is not a worker's fo
 test("an owner's own git worktree inside the project (/repo/.worktrees/feature) keeps its own root and runs normally", async () => {
   const own = `${ROOT}/.worktrees/feature`
   const w = inWorktree(true, own)
+  // T-844: it has a .symcc of its own (the nearest one is the project); without one it would use /repo's board
+  w.files.set(`${own}/.symcc/board.json`, JSON.stringify(emptyBoard()))
   expect(await mainRoot(w.host, own)).toBe(own)
   await sessionStart(w.host)
   expect(S.root).toBe(own)

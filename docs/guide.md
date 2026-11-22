@@ -2185,14 +2185,19 @@ The board, its tasks, its mode and the scouts are kept. `/symcc-enable` turns ev
 on, in the mode the board had, and opens the board panel (as above). The switch is kept per project, as `enabled` in
 `.symcc/board.json` (a board without it is on).
 
-**New projects (getting started).** symcc stays off in a folder that has no `.symcc/board.json`,
-until you start it. There it acts like plain Claude: no lead instructions, no "[symcc] Board
+**New projects (getting started).** symcc looks for its board folder by walking up:
+from the folder Claude started in it looks for a `.symcc` folder, then in each folder above, and uses
+the nearest. With none, symcc stays off until you run `/symcc-init`. There it acts like plain Claude: no lead instructions, no "[symcc] Board
 update" messages, no sounds, the panel does not open by itself, no example scouts, no git-setup
-offer, and the symcc tools answer "symcc is not set up here. The owner can start it with
-/symcc-enable." Nothing is written (no `.symcc/` folder). The band and status line say `symcc is
-not set up here · /symcc-enable to start it`. Type `/symcc-enable`: it creates the board, turns
-symcc on, opens the board panel by itself on the Live tab (unless `open_on_start` is off, and not again if it is already open), and tells the lead it is the lead now. If the
-folder has no repository (or no commits), the usual question about setting one up follows. Projects
+offer, and every symcc command and tool answers "no symcc board in this folder or any folder above it ·
+/symcc-init to create one here". Nothing is written (no `.symcc/` folder). The band and status line say
+the same. Type `/symcc-init` (it works like the command that starts a repo): it creates the board in the
+folder Claude started in, never in a parent folder, even when that is a repository or already has a
+`.symcc` (the nearest board then wins there; a session already running on the parent's board keeps it,
+so start a new one here). Where `.symcc/` already exists it changes nothing and says "already set up
+here". If this folder has no repository of its own, it asks first; `/symcc-init git` then sets up a
+repository and a first commit here (a parent's repository is never used). It turns symcc on, opens the board panel by itself on the Live tab (unless `open_on_start` is off, and not again if it is already open), and tells the lead it is the lead now. `/symcc-enable` and
+`/symcc-disable` only switch an existing board on or off; with no board they point to `/symcc-init`. Projects
 that already have a board start on as before. With several windows (see above), the first window
 you enable is the lead and later windows start off here.
 

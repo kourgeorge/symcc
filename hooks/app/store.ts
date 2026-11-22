@@ -105,10 +105,44 @@ export function normalPath(p: string): string {
  */
 export async function findRoot(host: Host): Promise<boolean> {
   if (S.root) return true
-  const repo = await host.session.repo().catch(() => null)
-  const root = await mainRoot(host, repo?.root || (await host.session.root().catch(() => '')) || '').catch(() => '')
+  const root = await projectRoot(host, await sessionFolder(host)).catch(() => '')
   if (root && !S.root) S.root = root
   return !!S.root
+}
+
+/** The folder the session started in (T-844: not its git repo's top); its git repo's top when the host has no folder. */
+export async function sessionFolder(host: Host): Promise<string> {
+  const own = await host.session.root().catch(() => '')
+  if (own && own !== '/') return own
+  return (await host.session.repo().catch(() => null))?.root || own || ''
+}
+
+/**
+ * T-844: finds the board like git finds .git: `dir` itself, then each folder above it, the first with a .<name>
+ * folder (or its board file) is the project. '' when there is none (symcc stays off).
+ */
+export async function boardFolder(host: Host, dir: string): Promise<string> {
+  let d = dir.replace(/[\\/]+$/, '') || '/'
+  for (let i = 0; i < 100; i++) {
+    if ((await host.fs.exists(`${d}/${S.N.boardFile}`).catch(() => false)) || (await host.fs.exists(`${d}/${S.N.dir}`).catch(() => false))) return d
+    if (d === '/' || /^[A-Za-z]:$/.test(d)) return ''
+    d = d.replace(/[\\/][^\\/]*$/, '') || '/'
+  }
+  return ''
+}
+
+/**
+ * T-844: the project folder for a session in `dir`: the nearest folder (itself or above) with a .<name> folder; for a
+ * worker's folder (inside the main project's worktrees folder) the main project. With none, `dir` itself (symcc is off
+ * there, and /<name>-init would make the board in it). Never a git repo above, unless that is where .<name> is.
+ */
+export async function projectRoot(host: Host, dir: string): Promise<string> {
+  if (!dir) return ''
+  const found = await boardFolder(host, dir)
+  if (!found) return dir.replace(/[\\/]+$/, '') || '/'
+  const main = await mainRoot(host, found).catch(() => found)
+  if (main && main !== found && (await isWorkerFolder(host, dir, main).catch(() => false))) return main
+  return found
 }
 
 /** Counts this copy of the plugin's temp files, so each save gets its own (see tmpName). */

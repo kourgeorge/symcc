@@ -16,14 +16,14 @@
 // render hooks) stays in register.tsx and hooks/claude/.
 //
 // Before calling an entry point, the host calls useName (app/state.ts) with its plugin name, so S.N is right.
-import { settingShown, type Command, boardText, shortHome, LEAD_BEAT_MS, openOnStart, symccOn, offAnswer, offHereAnswer, notSetUpAnswer, modeText, commandNames, parseCommand, modeOf, settingsText, notifyOf, find, STATUS_WORD, statText, cutDiff, everyText, intoOf, ASK_TOOL, guardReason, scoutToolRefusal, NEW_ROLE_TEMPLATE, NEW_KIND_TEMPLATE, NEW_SCOUT_EVERY } from '../board'
+import { settingShown, type Command, boardText, shortHome, LEAD_BEAT_MS, openOnStart, symccOn, offAnswer, offHereAnswer, notSetUpAnswer, modeText, commandNames, parseCommand, modeOf, settingsText, notifyOf, find, STATUS_WORD, statText, cutDiff, everyText, intoOf, ASK_TOOL, guardReason, scoutToolRefusal, NEW_ROLE_TEMPLATE, NEW_KIND_TEMPLATE, NEW_SCOUT_EVERY, emptyBoard } from '../board'
 import { type FileTouch, type Host, type HostFeatures, ALL_FEATURES } from '../host'
 import type { SymccTokens } from '../../types'
 import { findArchived } from './archive'
 import { moveOldOrgMem, deleteOrgMem } from './org-mem'
 import { migrateIfOld } from './migrate-data'
 import { askCall, checkEdit, guardFailed, stoppedText, stoppedTextFor, movedAway, movedText, listedKind, type AgentKindOf } from './ask'
-import { gitReady, setupGit } from './git'
+import { gitReady, setupGit, initGitIn } from './git'
 import { claimLead, publish, handOver, releaseLead, driveHere, startOffHere, disableHere, enableHere, offHereBeat } from './lead'
 import { changedFiles, changesText } from './review'
 import { loadRoles, changeRole } from './roles'
@@ -31,7 +31,7 @@ import { loadKinds, changeKind } from './kinds'
 import { checkerFinished } from './checker'
 import { fileToolHits, scoutOriginsFixed, scheduleScouts, seedExampleScouts, scoutFinished, runScoutNow, setScoutPaused, unreadableScoutsText, leadScouts } from './scouts'
 import { S, onHere, loadVersion, toolName, timers, heard, stopped, workers, scoutRuns, checkerRuns, scoutState, isOwnAgent } from './state'
-import { path, load, change, isOn, now, saveMigrated, startWait, findRoot, mainRoot, isWorkerFolder, startingText } from './store'
+import { path, load, change, isOn, now, saveMigrated, startWait, findRoot, projectRoot, sessionFolder, isWorkerFolder, startingText } from './store'
 import { noteForLead, tellLead, brief, takeBoardUpdate } from './tell'
 import { playable } from './voice'
 import { TOOLS, leadGuide, runTool, type In, manual, ownerSettings, taskText, latestReport, statsText } from './tools'
@@ -67,6 +67,7 @@ export function COMMANDS(features: HostFeatures = ALL_FEATURES): { name: string;
     { name: `${S.N.name}-doctor`, description: `Check ${S.N.dir}/ and git: old migration backups, task branches already merged, leftover task folders, files near the 4 MB limit, a stuck board; lists them with sizes and cleans up only with /${S.N.name}-doctor fix (all) or fix b-T-5 m-1101-1000 (the items with those ids)`, argumentHint: '[fix [all|id ...]]' },
     { name: `${S.N.name}-disable`, description: `Disable ${S.N.name} for this project: ${S.W.assistant} works as normal, nothing runs; the board is kept; "here" turns it off in this window only`, argumentHint: '[here]' },
     { name: `${S.N.name}-enable`, description: `Enable ${S.N.name} again for this project, in the mode the board had; "here" turns it on again in this window`, argumentHint: '[here]' },
+    { name: `${S.N.name}-init`, description: `Set up ${S.N.name} in this folder, like git init: makes ${S.N.dir}/ here, turns it on and opens the board; with no .git of its own it asks first, then "git" sets up git here too; where a board exists it changes nothing`, argumentHint: '[git]' },
     { name: `${S.N.name}-drive`, description: `Make this session drive the ${S.N.name} board (start workers, merge, run scouts); another driving session hands over first` },
     { name: S.N.help, description: `Show the ${S.N.name} manual: how the board, lead, workers and scouts work, and every command`, argumentHint: '[topic]' },
   ]
@@ -88,13 +89,14 @@ export function sessionStarting() {
 
 /** The watchdog's timer went off (every 2 minutes): look for stuck workers and tasks. */
 export function watchdogTick(host: Host) {
+  if (S.guardOnly) return // a worker folder only guards: the timers touch nothing
   void check(host).catch(() => undefined)
 }
 
 /** The lead heartbeat's timer went off: the driver refreshes its heartbeat; the others look whether it went stale and take over. */
 export function leadBeat(host: Host) {
   // T-793: a window off here drives nothing; it only looks whether the window with symcc on is gone
-  if (S.fresh) return
+  if (S.fresh || S.guardOnly) return // guardOnly: a worker folder never claims a lead
   if (S.offHere) return void offHereBeat(host).catch(() => undefined)
   void claimLead(host)
     .then(async d => (d ? pump(host) : undefined))
@@ -109,7 +111,7 @@ export async function sessionStart(host: Host) {
   // A session in one of symcc's worker folders (<main project>/.<name>/worktrees/...) only guards (see guardStart);
   // any other folder, an owner's own second checkout too, runs normally with its own root.
   const own = await sessionFolder(host)
-  const main = await mainRoot(host, own).catch(() => own)
+  const main = await projectRoot(host, own).catch(() => own)
   if (await isWorkerFolder(host, own, main).catch(() => false)) return guardStart(host, main)
   S.guardOnly = false
   // claimLead may wait on the clock: for the board lock (up to 5 s), for old workers it stopped
@@ -124,10 +126,10 @@ export async function sessionStart(host: Host) {
   // Even if a later step throws, pump must not stay blocked for the whole session.
   try {
     await loadVersion(host)
-    S.root = main || (await host.session.repo())?.root || (await host.session.root())
+    S.root = main || own
     S.home = (await host.env('HOME').catch(() => undefined)) ?? ''
     S.me = await host.session.id().catch(() => `session-${Math.random().toString(36).slice(2, 10)}`)
-    // T-795: a new project (no board.json) stays off, like plain Claude, until the owner runs /<name>-enable: nothing is
+    // T-795: a new project (no board.json) stays off, like plain Claude, until the owner runs /<name>-init (T-844: no .<name> in this folder or above): nothing is
     // written, no lead is claimed, no scouts are seeded and no timer starts; only the band and status line say so.
     S.fresh = !(await host.fs.exists(path(S.N.boardFile)).catch(() => false))
     S.offHere = false
@@ -197,15 +199,56 @@ function startTimers(host: Host) {
 }
 
 /**
- * T-795: /<name>-enable in a new project: creates the board, turns symcc on, and starts what a normal start does (the
- * lead claim, example scouts, timers, git check, the panel); the lead is told it is the lead now. If another window
- * already runs symcc here, this one stays off (see startOffHere).
+ * T-844: makes the board in `dir`, a folder the session may not even run in. It names `dir` everywhere and never reads or sets
+ * the session's state (S.root, S.guardOnly, S.fresh, S.gitState, S.toldGit), so a running session's board is untouched
+ * while it works. Git first: with no .git of its own, git init and a first commit run here first; if that fails nothing
+ * is created and the error comes back, so running it again retries. Only then is board.json written. Returns the error, '' when done.
  */
-async function startNewProject(host: Host, tell: (text: string) => void, here = false): Promise<string> {
+async function createBoardIn(host: Host, dir: string, setUpGit: boolean): Promise<string> {
+  if (setUpGit) {
+    const failed = await initGitIn(host, dir).then(() => '', (err: Error) => err.message)
+    if (failed) return failed
+  }
+  try {
+    await host.run(['mkdir', '-p', `${dir}/${S.N.dir}`], { cwd: dir })
+    await host.fs.write(`${dir}/${S.N.boardFile}`, JSON.stringify(emptyBoard(), null, 2) + '\n')
+  } catch (err) {
+    return (err as Error).message
+  }
+  return ''
+}
+
+/** A window that started with no board looks again for the nearest board; if one is there now, it starts the normal way (off here when another window drives, a lead otherwise). */
+async function refreshFresh(host: Host) {
+  if (!S.fresh || S.guardOnly) return
+  const own = await sessionFolder(host)
+  const main = (await projectRoot(host, own).catch(() => own)) || own
+  if (await host.fs.exists(`${main}/${S.N.boardFile}`).catch(() => false)) await sessionStart(host).catch(() => undefined)
+}
+
+/**
+ * T-844: /<name>-init, like the git command that starts a repo: creates the board in the folder the session started in,
+ * turns symcc on, and starts what a normal start does (the lead claim, example scouts, timers, git check, the panel); the
+ * lead is told it is the lead now. Where a board is found (here or above) it changes nothing. A folder with no .git of its
+ * own is asked about first (the answer is /<name>-init git): then git is set up in this folder (never a parent folder's
+ * repo). If another window already runs symcc here, this one stays off (see startOffHere).
+ */
+async function initProject(host: Host, tell: (text: string) => void, withGit: boolean): Promise<string> {
+  const own = (await sessionFolder(host)).replace(/[\\/]+$/, '') || '/'
+  // like git init: only a board in this exact folder stops it; one in a folder above does not (the nearest board wins)
+  if (await host.fs.exists(`${own}/${S.N.boardFile}`).catch(() => false)) return `${S.N.name} is already set up here.`
+  const hasGit = await host.fs.exists(`${own}/.git`).catch(() => false)
+  if (!hasGit && !withGit) return `This folder has no git repo of its own (${S.N.name} never uses a folder above). ${S.N.name} needs git for its task branches. /${S.N.name}-init git sets up git here (a repo on main, a .gitignore and a first commit; never pushes) and creates the ${S.N.name} board here.`
+  // this session already runs on a board in a folder above: the new board is made here, but the session keeps the old one
+  const above = !S.fresh && !!S.root && S.root !== own ? S.root : ''
+  const failed = await createBoardIn(host, own, !hasGit)
+  if (failed) return `${S.N.name} was not set up here: ${failed}${hasGit ? '' : ` (nothing was created; /${S.N.name}-init git tries again)`}`
+  if (above) return `${S.N.name} board created in ${shortHome(own, S.home)} (the nearest board wins there). This session still runs on the board in ${shortHome(above, S.home)}: start a new session in this folder to use the new one.`
+  // the session's own folder with no board: it switches itself on, like a new start
+  S.root = own
   S.fresh = false
   S.enabledNow = true
-  await change(host, b => { const on = { ...b, enabled: true }; return [on, on] as [typeof b, typeof b] })
-  if (!here) await startOffHere(host).catch(() => undefined)
+  await startOffHere(host).catch(() => undefined)
   if (S.offHere) {
     startTimers(host)
     await publish(host, await load(host))
@@ -223,18 +266,12 @@ async function startNewProject(host: Host, tell: (text: string) => void, here = 
     await gitReady(host, b).catch(() => undefined)
     await publish(host, b)
     if (openOnStart(b) && !(await host.ui.panes().then(ps => ps.some(p => p.id === S.N.pane && p.isShown), () => false))) await openPane(host, { tab: 'live', focus: false, quiet: true }).catch(() => undefined)
-    tell(`The owner enabled ${S.N.name} in this new project with /${S.N.name}-enable. You are the lead now; the board is in mode ${modeOf(b)}.${S.driving ? '' : ' Another window drives the board.'}`)
+    tell(`The owner ran /${S.N.name}-init in this folder. You are the lead now; the board is in mode ${modeOf(b)}.${S.driving ? '' : ' Another window drives the board.'}`)
     return `${S.N.name} is on in this project, in mode ${settingShown('mode', modeOf(b))}: ${modeText(modeOf(b))}.`
   } finally {
     S.startupDone = true
     void pump(host).catch(() => undefined)
   }
-}
-
-/** The session's own folder: its git repo's top folder, else its folder ('' when neither is known). */
-async function sessionFolder(host: Host): Promise<string> {
-  const repo = await host.session.repo().catch(() => null)
-  return repo?.root || (await host.session.root().catch(() => '')) || ''
 }
 
 /**
@@ -247,7 +284,7 @@ export async function guardStart(host: Host, root?: string) {
   S.guardOnly = true
   S.driving = false
   await loadVersion(host).catch(() => undefined)
-  S.root = root || (await mainRoot(host, await sessionFolder(host)).catch(() => '')) || S.root
+  S.root = root || (await projectRoot(host, await sessionFolder(host)).catch(() => '')) || S.root
   S.home = (await host.env('HOME').catch(() => undefined)) ?? ''
   S.me = await host.session.id().catch(() => `session-${Math.random().toString(36).slice(2, 10)}`)
   if (!S.root) return
@@ -524,6 +561,11 @@ export async function runCommand(host: Host, command: string, args: string): Pro
   if (isDoctor) return { text: await doctor(host, args ?? '').catch((err: Error) => `${S.N.name} doctor failed: ${err.message}`), isTextDisplayOnly: true }
   // A broken board.json makes load throw (it is never written over): the commands that don't need the
   // board (help, opening the panel, a usage line) still work; the others answer with the reason.
+  // T-844: /<name>-init comes before anything reads the session's board: a broken board above never blocks it
+  const early = parseCommand(command, args, undefined, S.N.name)
+  // T-844: a window that started with no board looks again: another window may have made the board since
+  if (early && early.kind !== 'bad' && early.kind !== 'help') await refreshFresh(host)
+  if (early?.kind === 'init') return { text: await initProject(host, t => tellLead(host, t), !!early.git), isTextDisplayOnly: true }
   const loaded = await load(host).then(
     board => ({ board, broken: '' }),
     (err: Error) => ({ board: null, broken: err.message }),
@@ -533,8 +575,7 @@ export async function runCommand(host: Host, command: string, args: string): Pro
   const say = (text: string) => ({ text, isTextDisplayOnly: true as const })
   if (!loaded.board && !['bad', 'help', 'open', 'tasks'].includes(cmd.kind)) return say(`${loaded.broken} Then try again.`)
   const b = loaded.board!
-  // T-795: in a new project only /<name>-enable (and help) work; everything else points to it
-  if (S.fresh && cmd.kind === 'enable') return say(await startNewProject(host, t => tellLead(host, t), cmd.here))
+  // T-795: in a folder with no board only /<name>-init (and help) work; everything else points to it
   if (S.fresh && !['bad', 'help'].includes(cmd.kind)) return say(notSetUpAnswer(S.N.name))
   switch (cmd.kind) {
     case 'bad':
