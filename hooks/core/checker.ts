@@ -149,7 +149,8 @@ export function checkerProblems(report: string): string[] {
   if (h < 0) return []
   const out: string[] = []
   for (const l of lines.slice(h + 1)) {
-    if (!l.startsWith('- ') || out.length >= CHECKER_PROBLEMS_MAX) break
+    if (!/^- ?$/.test(l) && !l.startsWith('- ')) break
+    if (out.length >= CHECKER_PROBLEMS_MAX) break
     const t = l.slice(2).trim()
     if (t) out.push(oneLine(t, 300))
   }

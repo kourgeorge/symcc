@@ -46,7 +46,7 @@ export function firstFinding(line: string): string {
   const after = /\bproblems?:([\s\S]*)$/i.exec(String(line ?? ''))
   if (!after) return ''
   // Strip any run of list marks, bold/italic marks and spaces from the start.
-  const text = after[1]!.replace(/^(?:[\s\-*_•]|\d+[.)])+/, '')
+  const text = after[1]!.replace(/^(?:[\s\-*_•]|\d+[.)](?=\s))+/, '')
   return text ? firstSentence(text) : ''
 }
 

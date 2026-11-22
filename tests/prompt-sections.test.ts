@@ -9,7 +9,7 @@ import { roleSection, leadRoleText } from '../hooks/core/roles'
 import { splitLeadNotes, leadNotesText } from '../hooks/core/lead-notes'
 import { checkerEntry, checkerProblems } from '../hooks/core/checker'
 import checkerText from '../prompts/checker'
-import { triesRows,triesTable } from '../hooks/core/tries-table'
+import { firstFinding,triesRows,triesTable } from '../hooks/core/tries-table'
 import { addDetailsText } from '../hooks/core/history'
 import { hist } from './history-fixture'
 
@@ -193,6 +193,16 @@ test('T-859: only the final "Problems:" block counts; other shapes before it are
 test('T-859: the Problems heading may have bold or italic marks and trailing spaces', () => {
   for (const h of ['Problems:', '**Problems:**', '__Problems:__', '*Problems:*', '_Problems:_', '**Problems:**  '])
     expect(checkerProblems(`x\n\n${h}\n- a.ts:1 bad`)).toEqual(['a.ts:1 bad'])
+})
+
+test('T-859: an empty "- " item does not end the block', () => {
+  expect(checkerProblems('Problems:\n- \n- b.ts:2 bad')).toEqual(['b.ts:2 bad'])
+})
+
+test('T-859: the old-line fallback keeps numbers and versions', () => {
+  expect(firstFinding('I found one real problem: 2.5 seconds lost')).toBe('2.5 seconds lost')
+  expect(firstFinding('problem: 0.5.30 bump missing')).toBe('0.5.30 bump missing')
+  expect(firstFinding('Problems: 1. a.ts:1 bad')).toBe('a.ts:1 bad')
 })
 
 test('T-859: the checker prompt asks for the fixed Problems block', () => {
