@@ -3,6 +3,11 @@
 import { expect } from 'claude-code/testing'
 import { FINISHED, isFinished } from '../hooks/board'
 import { splits } from '../hooks/core/board-parts'
+import { asBlockers } from '../hooks/core/board-file'
+import { historyEntryOk } from '../hooks/core/history'
+import { originOf } from '../hooks/core/origin'
+import { cleanAsk } from '../hooks/core/questions'
+import { cleanTokens } from '../hooks/core/runs'
 import { isNum, isObj } from '../hooks/core/text'
 import { test } from './reset'
 
@@ -24,4 +29,14 @@ test('T-839: isObj takes only plain objects, isNum only finite numbers', () => {
   expect(isNum(0)).toBe(true)
   expect(isNum(-2.5)).toBe(true)
   for (const x of [NaN, Infinity, -Infinity, '1', null, undefined, {}, []]) expect(isNum(x)).toBe(false)
+})
+
+test('T-839: readers that now use isObj still turn away null, arrays and plain values', () => {
+  for (const x of [null, undefined, [], [1], 'x', 0, true]) {
+    expect(asBlockers(x)).toBe(undefined)
+    expect(cleanAsk(x)).toBe(undefined)
+    expect(cleanTokens(x)).toBe(undefined)
+    expect(historyEntryOk(x)).toBe(false)
+    expect(originOf({ origin: x })).toBe(undefined)
+  }
 })

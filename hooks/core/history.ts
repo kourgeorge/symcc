@@ -1,7 +1,7 @@
 // Short history lines for things that stop or restart a task, or that the owner said.
 import type { SymccFailReason, SymccHistoryEntry, SymccRun, SymccTask } from '../../types'
 import { roleOf, tryLabel } from './roles'
-import { ellipsis, squash } from './text'
+import { ellipsis, isObj, squash } from './text'
 
 /** How much of the owner's answer goes into a history line. */
 export const ANSWER_LINE_CHARS = 300
@@ -303,7 +303,7 @@ export function tryParts(text: string): [label: string, n: number, body: string]
 
 /** Whether `v` can be a history entry read from a file: a record with a text and a kind. */
 export function historyEntryOk(v: unknown): boolean {
-  if (!v || typeof v !== 'object' || Array.isArray(v)) return false
+  if (!isObj(v)) return false
   const e = v as Partial<HistoryEntry>
   return typeof e.text === 'string' && typeof e.kind === 'string' && (e.at === undefined || typeof e.at === 'string')
 }

@@ -1,5 +1,6 @@
 // Time and cost of each try.
 import type { RunRestart, SymccRun, SymccRunAgent, SymccRunEnd, SymccTask, SymccTokens } from '../../types'
+import { isObj } from './text'
 
 // ---------------- time and cost of each try ----------------
 
@@ -514,7 +515,7 @@ const cnt = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) && x > 
 
 /** Only the known kinds with a count above 0 (anything else is dropped); undefined when none is left. */
 export function cleanTokens(x: unknown): SymccTokens | undefined {
-  if (!x || typeof x !== 'object' || Array.isArray(x)) return undefined
+  if (!isObj(x)) return undefined
   const o = x as Record<string, unknown>
   const out: SymccTokens = {}
   for (const k of TOKEN_KINDS) if (cnt(o[k])) out[k] = cnt(o[k])

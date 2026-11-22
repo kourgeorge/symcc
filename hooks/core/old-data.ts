@@ -392,7 +392,7 @@ export function migrateHistory(t: { history?: unknown; runs?: readonly SymccRun[
   const out: SymccHistoryEntry[] = []
   for (const e of h) {
     if (typeof e === 'string') { out.push(oldHistoryEntry(e, t)); continue }
-    if (!e || typeof e !== 'object' || Array.isArray(e) || typeof (e as SymccHistoryEntry).text !== 'string') continue
+    if (!isObj(e) || typeof (e as SymccHistoryEntry).text !== 'string') continue
     const r = e as SymccHistoryEntry
     const kind = r.kind === 'approved' ? 'approve-failed' : isHistoryKind(r.kind) ? r.kind : 'other'
     // the facts the old patterns read out of the line fill the ones it doesn't have (never replacing a saved one)

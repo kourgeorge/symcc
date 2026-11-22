@@ -1,7 +1,7 @@
 // Where a task came from (owner, scout, worker, lead) and the evidence for it.
 import type { SymccOrigin } from '../../types'
 import { type Board, find, normId } from './board-file'
-import { clean, ellipsis, squash } from './text'
+import { clean, ellipsis, isObj, squash } from './text'
 import { agentSafeName, scoutAgentName } from './agents'
 
 /** Who can start a task: the owner, a scout's report, a worker's report, or the lead's own idea. */
@@ -86,7 +86,7 @@ export function renameScoutOrigins<T extends { id: string; created_at?: string; 
 /** A task's origin if it has a usable one (a hand-edited one may be broken or missing). */
 export const originOf = (t: { origin?: unknown }): SymccOrigin | undefined => {
   const o = t.origin as Record<string, unknown> | null | undefined
-  if (!o || typeof o !== 'object' || Array.isArray(o) || !(ORIGIN_BY as readonly unknown[]).includes(o.by)) return undefined
+  if (!isObj(o) || !(ORIGIN_BY as readonly unknown[]).includes(o.by)) return undefined
   // keep only text fields that really are text, so one hand-edited task can't break the board
   const text = (k: string) => (typeof o[k] === 'string' ? { [k]: o[k] as string } : {})
   return {

@@ -199,7 +199,7 @@ export function parseScoutMemory(text: string | null | undefined): Record<string
   const scouts = isObj(raw) ? raw.scouts : undefined
   if (!isObj(scouts)) return out
   for (const [name, v] of Object.entries(scouts as Record<string, unknown>)) {
-    if (!name || !v || typeof v !== 'object' || Array.isArray(v)) continue
+    if (!name || !isObj(v)) continue
     if ((v as { paused?: unknown }).paused === true) out[name] = { paused: true }
   }
   return out

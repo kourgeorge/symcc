@@ -4,6 +4,7 @@ import { DEFAULT_NAME, namesFor } from '../name'
 import { type ArchivedTotals, type Board, type BoardTask, cleanCommitFields, find, isFinished, normId } from './board-file'
 import { withHistory } from './history'
 import { addTokens, sumRuns } from './runs'
+import { isObj } from './text'
 
 /** Archiving runs at most this often (ms), on the regular check of the driving session. */
 export const ARCHIVE_EVERY_MS = 60 * 60_000
@@ -34,7 +35,7 @@ export function readArchive(text: string | null): { archive: Archive; broken?: s
   } catch (e) {
     return { archive: emptyArchive(), broken: `not valid JSON (${String((e as Error)?.message ?? e).slice(0, 120)})` }
   }
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { archive: emptyArchive(), broken: 'it is not an archive (the file holds no JSON object)' }
+  if (!isObj(raw)) return { archive: emptyArchive(), broken: 'it is not an archive (the file holds no JSON object)' }
   const tasks = (raw as { tasks?: unknown }).tasks
   if (!Array.isArray(tasks)) return { archive: emptyArchive(), broken: '"tasks" is not a list' }
   const ok = tasks.filter((t): t is BoardTask => !!t && typeof t === 'object' && typeof (t as BoardTask).id === 'string' && isFinished(t as BoardTask))

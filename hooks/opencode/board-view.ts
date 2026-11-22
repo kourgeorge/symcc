@@ -42,6 +42,7 @@ import { type RoleChange, CHANGED_HEADING, changeLines, changesOfRole, roleListL
 import { roleButtons as headerRoleButtons } from '../core/page-header'
 import { type ActionGroup, groupSegLines, headerRule, inGroups, navHint, navRow, packGroups, type PageFrom, PILL_COLOR, pillText, placeIn, scoutAbout, scoutButtons as headerScoutButtons, scoutListNames, scoutStateGroups, taskColor, taskPlace, taskStateGroups, titleLines, whereLine } from '../core/page-header'
 import { sessionNote } from '../core/details'
+import { isObj } from '../core/text'
 import type { DiffFile } from '../core/review'
 import { DEFAULT_NAME, dataDir } from '../name'
 import { ORG_MEM_EMPTY, ORG_MEM_SUBTITLE, orgMemPageCount, orgMemAbout, orgMemKeys, orgMemNoteHead, orgMemFile, orgMemOfTopic, orgMemPageTitle, orgMemTopicEmpty, type OrgMemNote } from '../core/org-mem'
@@ -176,7 +177,7 @@ export function parseViewFile(text: string | null | undefined): ViewFile | null 
     // T-769: ▍Today's lead, scout and cost figures; a broken value is left out
     const team = rest.today_team as Partial<NonNullable<PaneView['today_team']>> | undefined
     if (!team || typeof team !== 'object' || typeof team.day !== 'string') delete rest.today_team
-    if (!rest.changes || typeof rest.changes !== 'object' || Array.isArray(rest.changes)) delete rest.changes
+    if (!isObj(rest.changes)) delete rest.changes
     // T-761: each task page's Branch section facts; a broken one is left out (that task's page has no section)
     if (rest.task_branches && typeof rest.task_branches === 'object' && !Array.isArray(rest.task_branches)) {
       const ok = (x: Partial<TaskBranchFacts> | null) => !!x && typeof x === 'object' && typeof x.branch === 'string' && typeof x.into === 'string' && !!x.tip && typeof x.tip.sha === 'string' && Array.isArray(x.main) && Array.isArray(x.commits)

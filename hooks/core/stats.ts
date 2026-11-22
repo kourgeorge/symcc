@@ -989,7 +989,7 @@ export type ScoutUsage = ScoutUsageFigures & { days: Record<string, ScoutUsageFi
 
 const num = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) && x >= 0 ? x : 0)
 const figs = (v: unknown): ScoutUsageFigures | null => {
-  if (!v || typeof v !== 'object' || Array.isArray(v)) return null
+  if (!isObj(v)) return null
   const o = v as Record<string, unknown>
   // a total saved before the kinds were kept apart (one number) is kept as `unsplit` until /<name>-doctor fix migrate-data saves it so
   return { runs: num(o.runs), tokens: cleanTokens(typeof o.tokens === 'number' ? { unsplit: o.tokens } : o.tokens) ?? {}, ms: num(o.ms) }

@@ -5,6 +5,7 @@ import { type BoardTask, isMode, modeOf, normId, STATUS_WORD } from './board-fil
 import { taskPhase } from './phase'
 import { type DiffFile, statCount, YOUR_EDITS } from './review'
 import { parseSettingsCommand, type SettingName, type SettingsInput } from './settings'
+import { isObj } from './text'
 
 // ---------------- the slash commands ----------------
 
@@ -92,7 +93,7 @@ export function defSaveFields(def: 'role' | 'kind', text: string): Partial<Recor
   } catch {
     return null
   }
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+  if (!isObj(raw)) return null
   const out: Partial<Record<DefEditField, string>> = {}
   for (const [k, v] of Object.entries(raw)) {
     if (!defEditFields(def).includes(k as DefEditField) || typeof v !== 'string') return null

@@ -3,7 +3,7 @@
 // "Questions for you" list, in the band and in the status line; an answer (on the board or in the chat) closes one,
 // and it stays in the file as history.
 import type { SymccAsk } from '../../types'
-import { clean, squash } from './text'
+import { clean, isObj, squash } from './text'
 
 /**
  * One question for the owner: the one Ask record (see SymccAsk in types) with an id. `by` is 'lead'. `answer` and
@@ -26,7 +26,7 @@ const strs = (v: unknown): string[] | undefined => (Array.isArray(v) && v.every(
 
 /** `v` as one Ask record (see SymccAsk), with only the fields it may hold; undefined when it is not one. */
 export function cleanAsk(v: unknown): SymccAsk | undefined {
-  if (!v || typeof v !== 'object' || Array.isArray(v)) return undefined
+  if (!isObj(v)) return undefined
   const r = v as Record<string, unknown>
   if (typeof r.text !== 'string' || !(r.by === 'worker' || r.by === 'lead' || r.by === 'symcc')) return undefined
   const a: SymccAsk = { by: r.by, text: r.text, asked_at: typeof r.asked_at === 'string' ? r.asked_at : '' }
