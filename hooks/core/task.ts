@@ -104,6 +104,9 @@ export function patchTask(b: Board, id: string, patch: Partial<BoardTask>, now: 
   if (next.status !== 'waiting') next.question = null
   // The worker's file request and choices belong to the question they came with.
   for (const k of ['asked_files', 'options'] as const) if (next.status !== 'waiting' || (patch.question !== undefined && !(k in patch)) || !next[k]?.length) delete next[k]
+  // T-801: the lead's wording of the open question goes with the question (kept only while it stays as it was, or set by the patch)
+  const sameAsk = next.status === t.status && patch.question === undefined && patch.time_ask === undefined && (next.status === 'waiting' || (next.status === 'doing' && !!next.time_ask))
+  for (const k of ['question_lead', 'options_lead'] as const) if (!(k in patch) && !sameAsk) delete next[k]
   // Waiting only for the owner's files to merge: kept while the task stays where it is (or the patch sets it again).
   if (!waitsForFiles(next) || (next.status !== t.status && !('merge_wait' in patch))) delete next.merge_wait
   return putTask(b, next)

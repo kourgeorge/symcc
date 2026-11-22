@@ -1,6 +1,6 @@
 // The lead's questions for the owner on the board (see core/questions.ts): the lead's question tool, and the
 // owner's answer from the board panel's question page.
-import { type Board, type BoardTask, type OwnerQuestion, type QuestionClose, addQuestion, answerQuestion, dropQuestion, normQid, questionsText, closedText, boardAnswerLine, openQuestions, questionsForYou, QUESTION_MAX, QUESTION_OPTIONS, OPTION_MAX, taskAsks, asksOwner, isAnswered, find } from '../board'
+import { type Board, type BoardTask, type OwnerQuestion, type QuestionClose, addQuestion, answerQuestion, dropQuestion, normQid, questionsText, closedText, boardAnswerLine, openQuestions, questionsForYou, QUESTION_MAX, QUESTION_OPTIONS, OPTION_MAX, taskAsks, asksOwner, isAnswered, find, patchTask, putTask } from '../board'
 import { clean, squash } from '../core/text'
 import { S } from './state'
 import type { Host } from '../host'
@@ -168,6 +168,32 @@ async function linkQuestions(host: Host, qs: PopupQuestion[]): Promise<(PopupLin
   return links
 }
 
+/**
+ * T-801: the lead's own wording of a task's question goes on the task, so the board shows it instead of symcc's text:
+ * its question text, and (for a worker's own question, not a file request or more time) its options as the buttons.
+ * It goes away with the question (patchTask).
+ */
+async function leadWording(host: Host, tied: { q: PopupQuestion; link: PopupLink }[]): Promise<void> {
+  const mine = tied.filter(x => x.link.kind === 'task')
+  if (!mine.length) return
+  await change(host, x => {
+    let y = x
+    for (const { q, link } of mine) {
+      const t = find(y, link.id) as BoardTask | undefined
+      if (!t || !asksOwner(t)) continue
+      const text = clean(squash(q.question), 1000)
+      const opts = labels(q)
+      const plain = t.status === 'waiting' && !t.asked_files?.length
+      const patched = find(patchTask(y, link.id, { question_lead: text, ...(plain && opts.length ? { options_lead: opts } : {}) }, now()), link.id) as BoardTask
+      // the task itself did not change for the owner: its waiting time stays, and an older pop-up's buttons go
+      const next: BoardTask = { ...patched, updated_at: t.updated_at }
+      if (!(plain && opts.length)) delete next.options_lead
+      y = putTask(y, next)
+    }
+    return y
+  }).catch(() => undefined)
+}
+
 /** Does `answer` pick option `label` (its words at the start, any case)? */
 const picks = (answer: string, label: string) => answer.trim().toLowerCase().startsWith(label.toLowerCase())
 
@@ -258,6 +284,7 @@ export async function popupCall<R>(host: Host, agentId: string | undefined, inpu
   const links = await linkQuestions(host, qs)
   const tied = qs.flatMap((q, i) => (links[i] ? [{ q, link: links[i]! }] : []))
   if (!tied.length) return open()
+  await leadWording(host, tied)
   // the board may close the dialog only when it can answer every question in it: with an untied one (e.g. free
   // text) board answers are kept, but the dialog stays open for the rest
   const boardCloses = tied.length === qs.length && qs.length === (Array.isArray(input.questions) ? input.questions.length : 0)

@@ -268,10 +268,18 @@ board with its `question` tool, with 2 to 6 short choices, and asks it briefly i
 (AskUserQuestion in Claude Code), the lead just asks with the pop-up, and symcc puts each
 question on the board by itself:
 
-- A question about a task that waits for you (a review, an answered investigation, a
-  worker's question or file request, more time) has the task's id (T-5) as its header and is
+- A question about a task that waits for you (a worker's question, a file request, more
+  time, a review, an answered investigation) has the task's id (T-5) as its header and is
   tied to that task's own board question: no extra `Q-` entry. A task id only mentioned in
-  the question's text doesn't tie it.
+  the question's text doesn't tie it. For a worker's question, a file request and a "more
+  time?" question the board then shows the lead's wording (alone) in place of symcc's own
+  text, on the task page and in NEEDS YOU. Review tasks and answered investigations keep
+  symcc's own text. The band also shows the lead's wording for a waiting task's question or
+  file request. For a
+  worker's own question the lead's choices are the board's buttons (an answer is put into the
+  task as that choice's text). For symcc's fixed questions (file request, more time, review) the
+  buttons stay symcc's own, since they run board actions. The lead's wording goes away when the
+  question is answered or changes.
 - Any other question becomes a `Q-` question with the same text and choices (or, when the
   lead already put that exact question on the board, that one is used).
 

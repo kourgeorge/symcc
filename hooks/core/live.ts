@@ -387,6 +387,7 @@ export function liveNeeds(view: LiveView & { questions?: readonly { id: string; 
   const ts = tasks.map(t => {
     if (asksMoreTime(t)) {
       const a = taskAsks(t, (view as { max_minutes?: number }).max_minutes)
+      if (t.question_lead) return row(t.id, a?.text ?? '')
       return row(t.id, (a?.text ?? '').replace(t.id, '').trim().replace(/\. Give it more time\?$/, ': more time?'))
     }
     if (t.status === 'review') return row(t.id, `${isAnswered(t) ? 'answer to read' : 'ready for review'}: ${t.title}`)

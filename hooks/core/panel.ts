@@ -320,7 +320,7 @@ export const WAITS_FOR = 'waits for'
 function rowExtraOf(t: BoardTask, tasks: Pick<SymccTask, 'id' | 'status'>[], maxMinutes: number): string {
   switch (t.status) {
     case 'doing':
-      if (asksMoreTime(t)) return overtimeQuestion(t.id, timeLimitOf(maxMinutes, t))
+      if (asksMoreTime(t)) return t.question_lead || overtimeQuestion(t.id, timeLimitOf(maxMinutes, t))
       return roleTag(t)
     case 'todo':
     case 'paused': {
@@ -330,7 +330,7 @@ function rowExtraOf(t: BoardTask, tasks: Pick<SymccTask, 'id' | 'status'>[], max
     case 'review':
       return isInvestigation(t) ? kindTag(t) : 'Enter to review'
     case 'waiting':
-      return t.question ?? ''
+      return t.question_lead || (t.question ?? '')
     case 'failed':
       return whyFailed(t)
     case 'backlog':
@@ -669,9 +669,10 @@ export const asksOwner = (t: BoardTask): boolean => asksMoreTime(t) || (t.status
  *  `files`: the files it asks to change (Allow / Don't allow), `overtime`: the "more time?" question. */
 export function taskAsks(t: BoardTask, maxMinutes?: number): { text: string; choices: string[]; files: string[]; overtime: boolean } | null {
   if (!asksOwner(t)) return null
-  if (asksMoreTime(t)) return { text: overtimeQuestion(t.id, timeLimitOf(maxMinutes ?? 45, t)), choices: answerChoices(undefined, [...OVERTIME_OPTIONS]), files: [], overtime: true }
+  if (asksMoreTime(t)) return { text: t.question_lead || overtimeQuestion(t.id, timeLimitOf(maxMinutes ?? 45, t)), choices: answerChoices(undefined, [...OVERTIME_OPTIONS]), files: [], overtime: true }
   const files = t.asked_files ?? []
-  return { text: t.question || t.note || 'it waits for your answer', choices: answerChoices(files, t.options), files: [...files], overtime: false }
+  // T-801: the lead's own wording replaces the text; its options are the buttons of a worker's question (not a file request's)
+  return { text: t.question_lead || t.question || t.note || 'it waits for your answer', choices: answerChoices(files, files.length ? undefined : t.options_lead?.length ? t.options_lead : t.options), files: [...files], overtime: false }
 }
 
 /** The actions a task's page offers now, in the order its buttons show (the terminal's, VS Code's and OpenCode's,
