@@ -148,7 +148,7 @@ else {
   if (demo.STEPS.length < 10) bad(`demo.js: only ${demo.STEPS.length} steps`)
   // (T-770) while the gaps-bot scout runs (from 16:40 to its finding at 16:44), the Live tab's mode line ends with its mark
   const mid = demo.views(demo.stateAfter(7)).live
-  if (!text(mid).includes('⏵ auto · agents 2/3 busy · ⌕ gaps-bot ')) bad('demo.js: no "· ⌕ gaps-bot" mark on the mode line while the scout runs')
+  if (!text(mid).includes('⏵ auto merge · agents 2/3 busy · ⌕ gaps-bot ')) bad('demo.js: no "· ⌕ gaps-bot" mark on the mode line while the scout runs')
   for (let n = 0; n <= demo.STEPS.length; n++) {
     try {
       const v = demo.views(demo.stateAfter(n))

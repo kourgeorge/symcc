@@ -3,6 +3,7 @@ import type { SymccTask } from '../../types'
 import { DEFAULT_NAME } from '../name'
 import { type Board, type Notify, notifyKind, soundNotify, soundSetFor, DEFAULT_ARCHIVE_DAYS, DEFAULT_AUTO_RETRIES, DEFAULT_TEST_MINUTES, testMinutesOf, NOTIFY_CHOICES, MODES, SCOUT_FINDINGS_CHOICES, TESTS_WITH_CHANGES_CHOICES, emptyBoard, isMode, isNotify, isScoutFindings, isTestsWithChanges, modeOf, scoutFindingsOf, testsWithChangesOf } from './board-file'
 import { ellipsis, num } from './text'
+import { MODE_NAME } from './review'
 import { MAX_TEST_MINUTES } from './test-timeout'
 
 /** 'retry' while fewer than `max` tries were used, else 'fail'. */
@@ -317,7 +318,7 @@ export const SETTINGS: SettingInfo[] = [
   { name: 'scout_findings', kind: 'findings', default: 'auto', range: 'auto / backlog', meaning: 'auto: the lead decides, a scout finding it adds goes to todo and runs; backlog: every task added from a scout finding goes to the backlog and waits for you' },
   { name: 'tests_with_changes', kind: 'untested', default: 'ask', range: 'off / ask / review', meaning: 'a change task that edits code but no test file: ask: it merges and the lead is told "T-3 changed code but no test"; review: it waits for your review instead; off: nothing (test files are in test/, tests/, __tests__/, spec/, e2e/ or cypress/ folders or have a test name like a.test.ts, a-test.ts, a.cy.ts, login.e2e.ts, FooTest.java; docs-only changes such as .md files, images and non-code files under docs/ are never flagged)' },
   { name: 'checker', kind: 'onoff', default: 'off', range: 'off / on', meaning: 'on: after the prep step and before a change joins the merge queue (where its tests run), a fresh checker tries to break it; OK goes on, a list of problems sends it back to its worker (counts as a retry); investigations and docs-only changes skip it' },
-  { name: 'mode', kind: 'mode', default: 'auto', range: 'paused / review / auto', meaning: 'paused: nothing runs; review: finished work waits for you; auto: it merges on its own' },
+  { name: 'mode', kind: 'mode', default: 'auto merge', range: 'paused / approve merge / auto merge', meaning: 'paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own' },
   { name: 'enabled', kind: 'onoff', default: 'on', range: 'on / off', get meaning() {
     return `off: the whole plugin rests and ${assistantWord} works as normal`
   } },
@@ -346,6 +347,9 @@ export const isSettingPage = (x: string): x is SettingPage => (SETTING_PAGES as 
 export const groupSettings = (g: SettingGroup): SettingInfo[] => g.items.flatMap(x => (isSettingPage(x) ? [] : [settingInfo(x)!]))
 
 export const settingInfo = (name: string): SettingInfo | undefined => SETTINGS.find(s => s.name === name)
+
+/** T-800: a setting's value as the owner reads it: the mode "review" / "auto" shows as "approve merge" / "auto merge"; the stored value is unchanged. */
+export const settingShown = (name: string, value: string): string => (name === 'mode' && isMode(value) ? MODE_NAME[value] : value)
 
 /** The values setting `name` is picked from: mode, scout_findings, tests_with_changes, and notify (only what this
  *  machine can play, `notifyChoices`; off always). [] for a setting that flips as on/off or is typed in a box. */
@@ -392,6 +396,8 @@ function shortValue(b: Partial<Board>, name: SettingName): string {
       return `open on start ${v}`
     case 'archive_days':
       return v === '0' ? 'never archive' : `archive after ${v} day${v === '1' ? '' : 's'}`
+    case 'mode':
+      return settingShown('mode', v)
     default:
       return v
   }
@@ -602,7 +608,8 @@ export function parseSettingValue(name: SettingName, raw: string): { ok: true; i
     }
     case 'mode': {
       const w = v.toLowerCase()
-      return isMode(w) ? { ok: true, input: { mode: w } } : bad('mode must be paused, review or auto')
+      const stored = w === MODE_NAME.review ? 'review' : w === MODE_NAME.auto ? 'auto' : w
+      return isMode(stored) ? { ok: true, input: { mode: stored } } : bad('mode must be paused, review or auto')
     }
     case 'commands': {
       const list = v.toLowerCase() === 'none' ? [] : commandList(v)

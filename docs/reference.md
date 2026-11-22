@@ -68,7 +68,7 @@ claude plugin uninstall symcc@symcc && claude plugin marketplace remove symcc
 ```
 
 **Check it works.** Start Claude Code in your project. Once symcc is set up there (in a new project, after `/symcc-enable`), the board panel opens by itself on
-a wide enough terminal; if not, run `/symcc`. The status line starts with the mode, e.g. `⏵ auto`.
+a wide enough terminal; if not, run `/symcc`. The status line starts with the mode, e.g. `⏵ auto merge`.
 
 ### Troubleshooting
 
@@ -83,8 +83,8 @@ The mode decides whether finished work merges by itself. Change the mode with `/
 
 | Mode | Shown as | What happens |
 |---|---|---|
-| `auto` (default) | `⏵ auto` | A finished task that passes the checks is merged at once. |
-| `review` | `⏸ review merge` | Every finished task waits for you to approve or reject it. |
+| `auto` (default) | `⏵ auto merge` | A finished task that passes the checks is merged at once. |
+| `review` | `⏸ approve merge` | Every finished task waits for you to approve or reject it. |
 | `paused` | `⏸ paused` | Every worker and scout stops at once. Nothing new starts. |
 
 Claude Code's own **plan mode** (Shift+Tab) also counts: while the main chat is in it, new tasks go
@@ -98,7 +98,7 @@ merge, and scouts can't edit files. See [approval before merge](guide.md#approva
 ## Live status: seeing the board
 
 The board panel shows every task, scout and setting in one place. `/symcc` opens it. Keys: `a` approve, `x` reject or drop, `d` show changes,
-`p` pause, `u` resume, `r` retry, `m` switch review / auto, `t` / `s` / `c` the Tasks,
+`p` pause, `u` resume, `r` retry, `m` switch approve merge / auto merge, `t` / `s` / `c` the Tasks,
 Scouts and Settings tabs. **Ctrl+T** shows running workers. More in the
 [guide](guide.md#live-status-seeing-the-board).
 

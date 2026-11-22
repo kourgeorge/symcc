@@ -45,7 +45,7 @@ And the ideas that tie them together:
 | **Scope check** | Each task lists the files it may change (its scope); anything else is not merged; a worker's edit outside it is refused and becomes a file request to you |
 | **Automatic retries** | Failing tests, or a clash with your branch, send the task back to a new worker (with the failing test output, or told to merge your branch in first), up to `auto_retries` times in all (2 by default) |
 | **Test gate** | Your test commands must pass before anything is merged |
-| **Approval before merge** | Human-in-the-loop review: modes `auto`, `review` or `paused`; see the diff, approve, or reject with a reason; one task can be marked "needs review" |
+| **Approval before merge** | Human-in-the-loop review: modes auto merge, approve merge or paused; see the diff, approve, or reject with a reason; one task can be marked "needs review" |
 | **Merge into the target branch** | Commit, scope check, update on the latest target branch, re-run tests, then merge; your branch only moves this way |
 | **Live status** | The board panel and the status line |
 
@@ -594,11 +594,11 @@ The board has one mode, set with `/symcc-mode`, `/symcc-settings mode …` or by
 
 - **`paused`**: every running worker and scout stops at once and nothing new starts. Tasks
   already in review can still be approved or rejected.
-- **`review`**: work runs; every finished task that passes waits as `review` for you.
+- **`review`** (shown as **approve merge**): work runs; every finished task that passes waits as `review` for you.
   The lead also asks you before it adds any task (yours, a scout's finding, a worker's
   report or its own idea): it says what the task would be in a line or two and adds it
   only after your yes.
-- **`auto`** (the default): work runs; a task that passes the steps up to the tests is merged at
+- **`auto`** (shown as **auto merge**; the default): work runs; a task that passes the steps up to the tests is merged at
   once (see [The way to the merge](#the-way-to-the-merge)).
 
 Going from `paused` to `review` or `auto` starts work again. In `auto` you can still mark one
@@ -643,19 +643,19 @@ You can also do it yourself:
   diff, or pick a file for just that file's diff, with added lines in green and removed
   lines in red. `a` approves, `x` rejects (it asks for a short reason first), `b` goes back.
   A very long diff is cut, with a note like `… 340 more lines (see /symcc-diff T-5)`.
-- The banner shows the mode: `⏵ auto` (finished tasks that pass merge on their own),
-  `⏸ review merge` (finished tasks wait for your approve or reject) or `⏸ paused` (no work runs).
-  Press `m` to switch between `review merge` and `auto` (`m` never pauses the board).
+- The banner shows the mode: `⏵ auto merge` (finished tasks that pass merge on their own),
+  `⏸ approve merge` (finished tasks wait for your approve or reject) or `⏸ paused` (no work runs).
+  Press `m` to switch between `approve merge` and `auto merge` (`m` never pauses the board).
 - In any open task, `n` turns that task's own "needs review" on or off.
 - **Slash commands:** `/symcc-approve T-5`, `/symcc-reject T-5 <reason>`,
   `/symcc-diff T-5` (the changed files with `+`/`-` counts) or `/symcc-diff T-5 <file>`
   (that file's full diff), and `/symcc-mode [paused|review|auto]` (with no word it switches
   between `review` and `auto`; from `paused` it goes to `review`).
 - The status line (the `symcc` line under the prompt) has the board's facts, as plain text:
-  the mode (`⏸ paused`, `⏸ review merge` or `⏵ auto`), who drives (`drives here` or
+  the mode (`⏸ paused`, `⏸ approve merge` or `⏵ auto merge`), who drives (`drives here` or
   `driven by another session`), the branch, the next scout and when, today's merged tasks
   and today's cost, e.g.
-  `⏵ auto · drives here · main · next scout bugs in 38m · today ✓ 58 · $312`.
+  `⏵ auto merge · drives here · main · next scout bugs in 38m · today ✓ 58 · $312`.
   It has no task counts and no task ids: the band above the prompt shows the work. It is kept
   to about 80 columns: when it is too long, parts go from the end (the cost, then today, the
   scout, the branch); the mode and who drives always stay. The "next scout" time is redrawn
@@ -757,7 +757,7 @@ are about changes; under "How tasks ended" a read investigation shows as
 - **The band above the prompt** (Claude Code) shows what is happening and what needs you:
 
   ```
-  𝄞 symcc  ⏵ auto · 2/3 agents · 3 waiting · ✓ 12 today           [ open board ] [-]
+  𝄞 symcc  ⏵ auto merge · 2/3 agents busy · 3 tasks waiting · 12 completed today  [ open board ] [-]
    ⌕ T-740  checker 8m · try 3  After a reopen, one hand-back…
    ▶ T-745  work 19m            Live tab: a compact view…
    ○ T-743  next up             A try counts only real…
@@ -765,7 +765,7 @@ are about changes; under "How tasks ended" a read investigation shows as
   ```
 
   The first line has `𝄞 symcc`, a short dim summary of the board (the mode, the agents busy
-  of the slots, how many tasks wait to start, how many merged today, and `⌕ 1 scout` while
+  of the slots, how many tasks wait to start, how many tasks were completed today, and `⌕ 1 scout` while
   scouts run), the **open board** button and the fold button `[-]`. No task is on this line.
   Folding the band (`[-]`, or ctrl+x ctrl+a) keeps only this first line. Under it, indented one space: one line per running task (its
   stage's icon in color, the id in the accent (orange) color, the stage's name and the time in that stage and the try from
@@ -864,13 +864,13 @@ are about changes; under "How tasks ended" a read investigation shows as
   Each heading is a group you open and close with Enter (→/← do not, since the panel's
   buttons only get Enter and letter or digit keys). When the page opens, all groups
   are closed and the first heading has the focus; a closed group shows its values in short
-  on its heading line, e.g. `▸ Work · auto · 3 at once · 45 min · 2 retries`, and an open
+  on its heading line, e.g. `▸ Work · auto merge · 3 at once · 45 min · 2 retries`, and an open
   one shows `▾ Work` with its rows under it. ↑↓ go over the headings and the rows of open
   groups only. The panel remembers which groups are open until the session ends. The lead's
   `settings` tool and `/symcc-settings` text always list every setting under the same
   headings. Enter on a row changes it: `open_on_start`,
-  `checker` and `enabled` flip on/off; `mode`, `notify`, `scout_findings` and `tests_with_changes` open a pick list (paused / review
-  / auto; only the notify choices this computer can play; off / ask / review); numbers and `test_commands` open an edit box (the typed line is one
+  `checker` and `enabled` flip on/off; `mode`, `notify`, `scout_findings` and `tests_with_changes` open a pick list (paused / approve merge
+  / auto merge; only the notify choices this computer can play; off / ask / review); numbers and `test_commands` open an edit box (the typed line is one
   command, run as one shell line, so `cd web && npm test` works as in a shell; several commands go in a list,
   `["npm test", "npm run lint"]`, up to 5; `none` clears them). Enter on an empty box or Cancel (`x`) cancels; Back (`b`) goes to the Tasks list. Saving uses the same checks and limits as
   telling the lead, and a toast says what changed, e.g. `max_parallel set to 5`. A value
@@ -919,7 +919,7 @@ are about changes; under "How tasks ended" a read investigation shows as
   folder's name, so two projects usually differ with no setup; picking a sound on the Settings page plays its chime.
   (There used to be a separate `sound_set` setting; an old board with `notify` `sound` is read as `sound N` once.)
 - Panel keys: `a` approve, `x` reject or drop, `d` changes, `p` pause, `u` resume,
-  `r` retry, `m` switch review / auto, `f` search the tasks, `n` needs review, `1`-`9` a try's report on the task
+  `r` retry, `m` switch approve merge / auto merge, `f` search the tasks, `n` needs review, `1`-`9` a try's report on the task
   page, `k` / `j` the previous / next task or scout on its page, `t` / `l` / `s` / `c` switch views, `b` back.
 - Copy, `y` on the task page: puts the task on the clipboard as plain text (its title, status, role,
   where it came from, why, what to do with the notes and your answers, the files it may change,
@@ -1172,7 +1172,7 @@ TASKS
 - The header line says the board mode and `agents N/M busy` (workers and checkers running
   against `max_parallel`). While a scout runs, a small mark goes at the end of that line: `⌕`
   in the scout color, then each running scout's name and how long it has run, dim
-  (`⏵ auto · agents 2/3 busy · ⌕ gaps-bot 4m, board-review 1m`). When the names don't fit, it
+  (`⏵ auto merge · agents 2/3 busy · ⌕ gaps-bot 4m, board-review 1m`). When the names don't fit, it
   says `⌕ 3 scouts`, and on a very narrow panel just `⌕ 3`. A scout still waiting to start
   isn't shown, and with no scout running there is no mark. A click on it (or the `s` key)
   opens the Scouts tab; this works on every board. Under the `TODAY` heading, four lines about today:
@@ -1242,7 +1242,7 @@ unchanged.
 - **Header**: the symcc logo (the clef, in the accent color; it sways now and then and turns
   into a check mark, a robot or a note on a merge, a start or a scout finding, as in the
   terminal) with four short lines beside it: the name, version and folder; the board mode as a
-  colored pill (`⏵ auto`) with what it means, dim; the branch and who drives; the tests, short
+  colored pill (`⏵ auto merge`) with what it means, dim; the branch and who drives; the tests, short
   ("none set", one short command, short names up to 24 characters like "claude, typecheck",
   or "5 commands") and the limits. Under it the counts as small badges
   (`● 2 doing · ● 6 to do · ● 1 waiting for you`), each dot in its status color. Every line
@@ -1260,7 +1260,7 @@ unchanged.
   Dropped are folded headings (`▸ Backlog  3 `), closed until you click them. With nothing
   open the list says "All clear" and has one main button, `Tell the lead what to do next`,
   which puts "Next task: " in the prompt box (only when the box is empty).
-- **Footer**: a `Switch to review merge` (or `Switch to auto`) button and a search box that
+- **Footer**: a `Switch to approve merge` (or `Switch to auto merge`) button and a search box that
   filters as you type, with `Clear search` while a search is on. No key hints; other pages
   say "Click a button, or Tab to it and press Enter." and their buttons drop the key marks
   (`Back`, not `Back (b)`).

@@ -111,7 +111,7 @@ export type BandSummaryView = LiveView & { scouts?: readonly { running?: boolean
 /**
  * The short board summary on the band's first line, after "𝄞 symcc" (T-776): the mode, the agents busy of the slots,
  * how many tasks wait to start, today's merged count, and "⌕ N scouts" while scouts run:
- * "⏵ auto · 2/3 agents · 3 waiting · ✓ 12 today · ⌕ 1 scout". Wider than `width`, parts go from the end; the mode always stays.
+ * "⏵ auto merge · 2/3 agents busy · 3 tasks waiting · 12 completed today · ⌕ 1 scout". Wider than `width`, parts go from the end; the mode always stays.
  */
 export function bandSummary(view: BandSummaryView, nowMs: number, width = Infinity, offsetMin?: number): string {
   const tasks = view.tasks ?? []
@@ -121,9 +121,9 @@ export function bandSummary(view: BandSummaryView, nowMs: number, width = Infini
   const scouts = (view.scouts ?? []).filter(s => s.running).length
   const parts = [
     modeLabel(modeOf(view)),
-    `${lanes.filter(l => l.agent).length}/${max} agents`,
-    waiting ? `${waiting} waiting` : '',
-    `✓ ${liveToday(tasks, nowMs, offsetMin).merged} today`,
+    `${lanes.filter(l => l.agent).length}/${max} agents busy`,
+    waiting ? `${waiting} ${waiting === 1 ? 'task' : 'tasks'} waiting` : '',
+    `${liveToday(tasks, nowMs, offsetMin).merged} completed today`,
     scouts ? `${STEP_ICON.checker} ${scouts} scout${scouts === 1 ? '' : 's'}` : '',
   ].filter(Boolean)
   for (let n = parts.length; n > 1; n--) {
@@ -291,9 +291,9 @@ export type StatusBoard = {
 /**
  * The status line Claude Code shows under the prompt after "symcc" (T-748): the board's facts, plain text (Claude
  * Code's status line can't show colors), never the task counts or ids (the band above the prompt shows the work):
- * the mode ("⏵ auto", "⏸ review merge", "⏸ paused"), who drives ("drives here" / "driven by another session"), the
+ * the mode ("⏵ auto merge", "⏸ approve merge", "⏸ paused"), who drives ("drives here" / "driven by another session"), the
  * branch, the next scout and when ("next scout bugs in 38m"), today's merged count ("today ✓ 58") and today's cost
- * ("$312"), e.g. "⏵ auto · drives here · main · next scout bugs in 38m · today ✓ 58 · $312". In plan mode
+ * ("$312"), e.g. "⏵ auto merge · drives here · main · next scout bugs in 38m · today ✓ 58 · $312". In plan mode
  * PLAN_NOTE comes first. A `branch_note` warning (git, or the T-675 file-size warning) comes right after the mode and
  * is never dropped; when the line is too narrow for it, size warnings take their short form (shortSizeWarns). symcc
  * adds no "⚠" of its own: Claude Code draws one in front of every plugin's status line, and the band above the prompt

@@ -78,7 +78,7 @@ test('a question the lead adds is saved on the board, shown to the panel, in the
   expect(q?.answer).toBeUndefined()
   // the panel's view has the open question; the status line has no count and no "⚠" of its own (T-748: the band lists it)
   expect((w.panel.view() as { questions?: unknown[] }).questions).toEqual([q])
-  expect(w.status.at(-1)).toMatch(/^⏵ auto · drives here/)
+  expect(w.status.at(-1)).toMatch(/^⏵ auto merge · drives here/)
   expect(w.status.at(-1)).not.toContain('question')
   // the same "needs you" as a waiting task, once per question
   expect(sayQueue).toEqual([`${NEEDS_YOU_MARK}Q-1`])
@@ -154,7 +154,7 @@ test('the board file keeps questions as they were and drops broken entries', () 
   // a board with no questions stays without the fields
   expect('questions' in readBoard(JSON.stringify(emptyBoard())).board).toBe(false)
   // an open question keeps the status line on an empty board, with no "⚠" of symcc's own (T-748: the band names it)
-  expect(statusLine({ tasks: [], questions: b.questions }, true)).toBe('⏵ auto · drives here')
+  expect(statusLine({ tasks: [], questions: b.questions }, true)).toBe('⏵ auto merge · drives here')
   expect(statusLine({ tasks: [], questions: b2.questions }, true)).toBeUndefined()
   expect(boardText(b2)).not.toContain('Questions for you')
 })
@@ -337,7 +337,7 @@ test('the band says "2 questions for you" and lists them in the warning color, a
   expect((await ui.find({ type: 'Text', text: /^ ⚠ 2 questions for you: Q-1 Raise the version\?$/ }))?.props.color).toBe('warning')
   expect((await ui.find({ type: 'Text', text: /^ ⚠ Q-2 Add a scout\?$/ }))?.props.color).toBe('warning')
   // the mode is on the first line now (T-776), the questions under it
-  expect(await ui.find({ type: 'Text', text: /^ ⏵ auto/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /^ ⏵ auto merge/ })).toBeUndefined()
   await ui.unmount()
 })
 

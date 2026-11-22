@@ -1,5 +1,5 @@
 // The board panel's Settings view.
-import { SETTINGS, SETTING_GROUPS, groupSummaryParts, isSettingPage, settingChoices, cantPlayNotify, type SettingsInput, type SettingName, type SettingPage, settingValue, parseSettingValue, settingsKeys, boxHint, pickHint, type RoleDef, DEFAULT_ROLE, mergeRoles, roleKeys, roleEditKeys, rolesKeys, roleNameError, rolePromptKeys, ROLE_PLACEHOLDERS, ROLE_SLOT, ROLE_PROMPTS, promptsOfRole, type RolePromptKind, type KindDef, mergeKinds, kindsKeys, findKind, kindNameError, ALWAYS_ON_KINDS, isCheckerRole, checkerOn } from '../../board'
+import { SETTINGS, SETTING_GROUPS, groupSummaryParts, isSettingPage, settingChoices, settingShown, cantPlayNotify, type SettingsInput, type SettingName, type SettingPage, settingValue, parseSettingValue, settingsKeys, boxHint, pickHint, type RoleDef, DEFAULT_ROLE, mergeRoles, roleKeys, roleEditKeys, rolesKeys, roleNameError, rolePromptKeys, ROLE_PLACEHOLDERS, ROLE_SLOT, ROLE_PROMPTS, promptsOfRole, type RolePromptKind, type KindDef, mergeKinds, kindsKeys, findKind, kindNameError, ALWAYS_ON_KINDS, isCheckerRole, checkerOn } from '../../board'
 import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, brokenLabel, defNamed } from '../../core/def-files'
 import { S } from '../../app/state'
 import { type $ } from '../panel'
@@ -562,7 +562,7 @@ export async function settingsPage($: $, pane: PaneParts) {
       <Box key={`setting-pick-${name}`} flexDirection="column" borderStyle="round" borderColor={C('ide')} paddingX={1}>
         {S.settingPick.options.map(o => (
           <Button key={`pick:${o}`} autoFocus={o === now ? true : undefined} onPress={saveIt({ [name]: o })}>
-            <Text bold={o === now} color={C(o === now ? 'ide' : 'text')}>{o === now ? `● ${o}` : `○ ${o}`}</Text>
+            <Text bold={o === now} color={C(o === now ? 'ide' : 'text')}>{o === now ? `● ${settingShown(name, o)}` : `○ ${settingShown(name, o)}`}</Text>
           </Button>
         ))}
         {cancelButton}
@@ -584,7 +584,7 @@ export async function settingsPage($: $, pane: PaneParts) {
     return [
       <Button key={row(`setting:${x.name}`)} plain onPress={pressRow(x.name)}>
         <Text bold color={C('claude')}>{x.name.padEnd(nameWidth)}</Text>
-        <Text bold color={C('text')}> {settingValue(v, x.name)}</Text>
+        <Text bold color={C('text')}> {settingShown(x.name, settingValue(v, x.name))}</Text>
         {x.name === 'notify' && cantPlayNotify(v) ? <Text color={C('warning')}> (can't play here: nothing plays)</Text> : null}
         <Text color={C('inactive')}> · default {x.default} · {x.range} · {x.meaning}</Text>
       </Button>,

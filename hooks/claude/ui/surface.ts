@@ -8,7 +8,7 @@ import type { ButtonProps, ElementConstructor, RenderSurface } from 'claude-code
 /** True when the board is drawn in VS Code's side panel. */
 export const isVscode = (surface: RenderSurface | string | undefined) => surface === 'vscode'
 
-/** A button label without its key mark: "Cancel (x)" → "Cancel", "[m] review merge" → "review merge", "[f] search" → "search". */
+/** A button label without its key mark: "Cancel (x)" → "Cancel", "[m] approve merge" → "approve merge", "[f] search" → "search". */
 export const plainLabel = (label: string): string =>
   label
     .replace(/^\[[a-z0-9]\]:?\s+/i, '')

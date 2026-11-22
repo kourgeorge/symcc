@@ -314,7 +314,7 @@ export function liveTaskLanes(view: LiveView, nowMs: number): LiveLane[] {
   return [...running, ...liveFinishedLanes(view, nowMs).filter(l => !ids.has(l.id))]
 }
 
-/** "⏵ auto · agents 2/3 busy": the board mode and the agents running (workers and checkers) against max_parallel. */
+/** "⏵ auto merge · agents 2/3 busy": the board mode and the agents running (workers and checkers) against max_parallel. */
 export function liveHeader(view: LiveView, lanes: readonly LiveLane[]): string {
   const max = view.max_parallel ?? emptyBoard().max_parallel
   return `${modeLabel(modeOf(view))} · agents ${lanes.filter(l => l.agent).length}/${max} busy`

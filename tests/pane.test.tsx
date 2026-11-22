@@ -79,7 +79,7 @@ test('T-643: the terminal panel shows the yellow "another session drives" line w
   let driving = false
   on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks: [task('T-3', 'doing', 'Search command', { note: 'worker on it' })], working: [], scouts: [], mode: 'auto', test_commands: ['npm test'], driving } }, version: 1 } }))
   const warn = async () => {
-    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 120 }, surface: 'terminal' })
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 140 }, surface: 'terminal' })
     // the line's colored part (the outer Text of the line matches too, with no color of its own)
     const t = (await ui.findAll({ type: 'Text', text: /^⚠ Another session drives/ })).find(x => x.props.color)
     await ui.unmount()
@@ -163,7 +163,7 @@ test('T-776: the band\'s first line has the brand, the board summary and the but
     const ui = await $.ui.mount({ ...BAND, surface })
     const lines = await bandLines(ui)
     // line 1: the brand, the summary (mode, agents busy of the slots, waiting, today's merged) and the button; no task
-    expect(lines[0]).toMatch(new RegExp(`^${esc(ICON)} symcc  ⏵ auto · 1/3 agents · 2 waiting · ✓ 0 today +\\[ open board \\]$`, 'u'))
+    expect(lines[0]).toMatch(new RegExp(`^${esc(ICON)} symcc  ⏵ auto merge · 1/3 agents busy · 2 tasks waiting +\\[ open board \\]$`, 'u'))
     expect(textWidth(lines[0]!)).toBe(80)
     expect(lines[0]).not.toMatch(/T-\d/)
     expect(await ui.find({ key: 'open-board' })).toBeDefined()
@@ -184,15 +184,15 @@ test('T-776: running scouts show on the band\'s first line, and a narrow band dr
     },
   }))
   on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
-  const wide = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 120 }, surface: 'terminal' })
-  expect((await bandLines(wide))[0]).toMatch(/⏵ auto · 1\/3 agents · 1 waiting · ✓ 0 today · ⌕ 1 scout +\[ open board \]$/)
+  const wide = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 140 }, surface: 'terminal' })
+  expect((await bandLines(wide))[0]).toMatch(/⏵ auto merge · 1\/3 agents busy · 1 task waiting · 0 completed today · ⌕ 1 scout +\[ open board \]$/)
   await wide.unmount()
   for (const columns of [60, 44]) {
     const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: columns }, surface: 'terminal' })
     const lines = await bandLines(ui)
     for (const l of lines) expect([columns, l, textWidth(l) <= columns]).toEqual([columns, l, true])
     // the mode always stays; parts go from the end
-    expect(lines[0]).toMatch(/^\S+ symcc {2}⏵ auto/u)
+    expect(lines[0]).toMatch(/^\S+ symcc {2}⏵ auto merge/u)
     expect(lines[0]).not.toMatch(/scout/)
     expect(lines[0]).toMatch(/\[ open board \]$/)
     // the task row keeps its front and cuts its title
@@ -203,8 +203,8 @@ test('T-776: running scouts show on the band\'s first line, and a narrow band dr
     expect(lines.at(-1)).toMatch(/^ ⚠ driven by another session/)
     await ui.unmount()
   }
-  const tight = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 44 }, surface: 'terminal' })
-  expect((await bandLines(tight))[0]).toMatch(/^\S+ symcc {2}⏵ auto · 1\/3 agents +\[ open board \]$/u)
+  const tight = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 56 }, surface: 'terminal' })
+  expect((await bandLines(tight))[0]).toMatch(/^\S+ symcc {2}⏵ auto merge · 1\/3 agents busy +\[ open board \]$/u)
   await tight.unmount()
 })
 
@@ -280,7 +280,7 @@ test("T-748: a running row shows its stage's icon and name, the time in that sta
   ]
   on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [], driving: true } }, version: 1 } }))
   on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
-  const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 120 }, surface: 'terminal' })
+  const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 140 }, surface: 'terminal' })
   // "⌕" + "checker 8m · try 2": the checker started when the try handed back, 8 minutes ago
   // one line each, the one that started first at the top
   const rows = [['⊛', 'T-41', 'test 10s', 'Being tested'], ['⌕', 'T-42', 'checker 8m · try 2', 'Being checked'], ['⇢', 'T-43', 'merge 10s', 'Being merged'], ['▶', 'T-40', 'work 12m', 'Running worker'], ['▶', 'T-44', 'work 5m · try 3', 'Third try']]
@@ -305,7 +305,7 @@ test("T-748: a running row shows its stage's icon and name, the time in that sta
   await tight.unmount()
   // the time follows the host clock
   await clock.set(T0 + 3 * 60_000)
-  const later = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 120 }, surface: 'terminal' })
+  const later = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 140 }, surface: 'terminal' })
   expect(await later.find({ type: 'Text', text: /^T-40  work 15m +$/ }), 'later').toBeDefined()
   await later.unmount()
 })
@@ -358,7 +358,7 @@ test('T-787: a running band row has its id in the accent color, its stage part i
   const tasks = [task('T-73', 'doing', 'Run title', { note: 'worker on it', attempts: 4, runs: [{ started: new Date(T0 - 7 * 60_000).toISOString() }] })]
   on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [], driving: true } }, version: 1 } }))
   on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
-  const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 120 }, surface: 'terminal' })
+  const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 140 }, surface: 'terminal' })
   const colorOf = async (text: RegExp) => (await ui.find({ type: 'Text', text }))?.props?.color
   expect(await colorOf(/^T-73$/)).toBe('claude')
   expect(await colorOf(/^work 7m · try 4$/)).toBe('green')
@@ -379,7 +379,7 @@ test("every band row lines up in one title column: running rows, then the rows t
   ]
   on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [], driving: true } }, version: 1 } }))
   on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
-  const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 120 }, surface: 'terminal' })
+  const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 140 }, surface: 'terminal' })
   const leads = [['T-62', 'work 12m'], ['T-63', 'work 3m · try 2'], ['T-60', 'waiting'], ['T-61', 'review'], ['T-59', 'failed']].map(([id, state]) => `${id}  ${state!.padEnd(15)}  `)
   for (const lead of leads) expect(await ui.find({ type: 'Text', text: new RegExp(`^${esc(lead)}$`, 'u') }), lead).toBeDefined()
   // so every title starts in the same column, right after a lead of one width
@@ -405,7 +405,7 @@ test("the band hides only the notes a doing row's state says; other notes stay a
   ]
   on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [] } }, version: 1 } }))
   on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
-  const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 120 }, surface: 'terminal' })
+  const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 140 }, surface: 'terminal' })
   expect(await ui.find({ type: 'Text', text: /^ — time is up: the worker was told to hand back$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /^T-50  work 1h2m *$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /running the tests/ })).toBeUndefined()
@@ -1099,17 +1099,17 @@ test('a task in review is listed near the top as "review" with its keys, and the
   expect((await ui.find({ type: 'Text', text: /^\s*Enter to review$/ }))?.props.color).toBe('inactive')
   // a and x only work on the task's own page, so the list never offers them
   expect(await ui.find({ type: 'Text', text: /a approve|x reject|a\/x/ })).toBeUndefined()
-  expect(await ui.find({ type: 'Text', text: /^⏸ review merge $/ })).toBeDefined()
-  expect((await ui.find({ key: 'mode' }))!.props.label).toBe('[m] auto')
+  expect(await ui.find({ type: 'Text', text: /^⏸ approve merge $/ })).toBeDefined()
+  expect((await ui.find({ key: 'mode' }))!.props.label).toBe('[m] auto merge')
   const rows = (await ui.findAll({ type: 'Text', text: /^T-\d+\s*$/ })).map(x => x.text.trim())
   expect(rows[0]).toBe('T-5')
   await ui.unmount()
 })
 
 const MODE_CASES = [
-  ['auto', /^⏵ auto $/, '[m] review merge'],
-  ['paused', /^⏸ paused $/, '[m] review merge'],
-  ['later', /^⏵ auto $/, '[m] review merge'],
+  ['auto', /^⏵ auto merge $/, '[m] approve merge'],
+  ['paused', /^⏸ paused $/, '[m] approve merge'],
+  ['later', /^⏵ auto merge $/, '[m] approve merge'],
 ] as const
 for (const [mode, text, label] of MODE_CASES)
   test(`the banner shows mode "${mode}" with its label, and m switches only between review and auto`, async ($, on) => {
@@ -1202,8 +1202,8 @@ test('"c" and the Settings tab show one row per setting, with value, default and
   expect(await ui.find({ type: 'Text', text: /default 45 · 5-600/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /one shell line, or a list of up to 5 lines/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /^ off$/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /^ review$/ })).toBeDefined()
-  // Enter on a number opens an edit box; on mode a pick list of paused / review / auto
+  expect(await ui.find({ type: 'Text', text: /^ approve merge$/ })).toBeDefined()
+  // Enter on a number opens an edit box; on mode a pick list of paused / approve merge / auto merge (stored review / auto)
   await ui.press({ key: 'setting:max_parallel' })
   expect(await ui.find({ key: 'setting-edit' })).toBeDefined()
   await ui.press({ key: 'setting:mode' })
@@ -1212,6 +1212,9 @@ test('"c" and the Settings tab show one row per setting, with value, default and
   expect(await ui.find({ key: 'pick:off' })).toBeUndefined()
   expect(await ui.find({ key: 'pick:review' })).toBeDefined()
   expect(await ui.find({ key: 'pick:auto' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '○ paused' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '● approve merge' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '○ auto merge' })).toBeDefined()
   await ui.press({ key: 'setting-cancel' })
   expect(await ui.find({ key: 'pick:paused' })).toBeUndefined()
   // notify: a pick list of only what this machine can play (here no speech program: no voice)
@@ -1281,9 +1284,9 @@ test('Settings groups start closed with the first heading focused; Enter opens a
   expect(work?.props.plain).toBe(true)
   expect(work?.props.autoFocus).toBe(true)
   expect((await ui.find({ key: 'group:Scouts' }))?.props.autoFocus).toBeUndefined()
-  expect(work?.props.label).toBe('▸ Work · auto · 3 at once · 45 min · 2 retries')
+  expect(work?.props.label).toBe('▸ Work · auto merge · 3 at once · 45 min · 2 re…')
   expect(await ui.find({ type: 'Text', text: '▸ Work' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: ' · auto · 3 at once · 45 min · 2 retries' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: ' · auto merge · 3 at once · 45 min · 2 re…' })).toBeDefined()
   expect(String((await ui.find({ key: 'group:Workers' }))?.props.label)).toMatch(/^▸ Workers · \d+ roles? · \d+ kinds?/)
   expect(await ui.find({ key: 'setting:mode' })).toBeUndefined()
   // Enter opens Work: its rows show under "▾ Work"; ↑↓ go from its last row to the next heading, past nothing hidden
@@ -1311,8 +1314,8 @@ test('Settings groups start closed with the first heading focused; Enter opens a
 
 test('a closed group summary is cut to fit', () => {
   const work = SETTING_GROUPS[0]!
-  expect(groupSummary(work, { mode: 'auto', max_parallel: 3, max_minutes: 45, auto_retries: 2 }, 80)).toBe('Work · auto · 3 at once · 45 min · 2 retries')
-  expect(groupSummary(work, { mode: 'auto', max_parallel: 3, max_minutes: 45, auto_retries: 2 }, 20)).toBe('Work · auto · 3 at…')
+  expect(groupSummary(work, { mode: 'auto', max_parallel: 3, max_minutes: 45, auto_retries: 2 }, 80)).toBe('Work · auto merge · 3 at once · 45 min · 2 retries')
+  expect(groupSummary(work, { mode: 'auto', max_parallel: 3, max_minutes: 45, auto_retries: 2 }, 20)).toBe('Work · auto merge ·…')
   expect(groupSummary(work, { mode: 'auto', enabled: false }, 80)).toContain('disabled')
   const board = SETTING_GROUPS.find(g => g.title === 'Board and alerts')!
   expect(groupSummary(board, { archive_days: 0 }, 80)).toContain('never archive')
@@ -1340,7 +1343,7 @@ test('a closed group heading draws its title bold in the text colour and its val
   const title = await ui.find({ type: 'Text', text: /^▸ Work$/ })
   expect(title?.props.bold).toBe(true)
   expect(title?.props.color).toBe('text')
-  const values = await ui.find({ type: 'Text', text: /^ · auto · 3 at once/ })
+  const values = await ui.find({ type: 'Text', text: /^ · auto merge · 3 at once/ })
   expect(values?.props.color).toBe('inactive')
   expect(values?.props.bold).toBeFalsy()
   const checks = await ui.find({ key: 'group:Checks before merging' })
@@ -1698,7 +1701,7 @@ test('the Tasks view: no workers/scouts strip in the banner, NEEDS YOU then one 
     expect(counts).toBeGreaterThan(-1)
     expect(texts.findIndex(t => /^━+$/.test(t))).toBeGreaterThan(counts)
     // the mode line is in the footer, after the list, not under the banner
-    expect(texts.findIndex(t => /^⏸ review merge $/.test(t))).toBeGreaterThan(texts.findIndex(t => /^━+$/.test(t)))
+    expect(texts.findIndex(t => /^⏸ approve merge $/.test(t))).toBeGreaterThan(texts.findIndex(t => /^━+$/.test(t)))
     // every task row fits the panel; the hint is whole and fits too
     for (const id of ['T-94', 'T-95', 'T-96', 'T-97']) expect((await ui.find({ key: id }))!.text.length).toBeLessThanOrEqual(w)
     const hint = keyLines(texts, listKeys(), w)
@@ -1963,7 +1966,7 @@ test('every_minutes 0 or a bad value: no timer, "on demand" in /symcc-scouts wit
   expect(list).toMatch(/^secrets: on demand$/m)
   expect(list).toMatch(/^bad: on demand \(every_minutes "-5" is not valid: runs only on demand until fixed\)$/m)
   // only bugs is on the timer: the panel shows its next run, and none for secrets and bad
-  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 120 }, surface: 'terminal' })
+  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 140 }, surface: 'terminal' })
   await ui.press({ key: 'tab-scouts' })
   expect(String((await ui.find({ key: 'scout:bugs' }))?.text)).toMatch(/every 30 min\s+next in 1m/)
   expect(String((await ui.find({ key: 'scout:secrets' }))?.text).trimEnd()).toMatch(/^  ◎ secrets\s+on demand\s+never ran$/)
@@ -2278,12 +2281,12 @@ test('the Tasks page ends with a footer: the light rule, the mode line with [m],
   stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-5', 'review', 'Blue button')], working: [], scouts: [], mode: 'review', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   const foot = await footerOf(ui, listKeys())
-  expect(foot).toBe('⏸ review merge [m] auto  [f] search' + 'Enter open · ↑↓ move · l t s c views')
-  expect((await ui.findAll({ type: 'Text', text: /^⏸ review merge $/ })).length).toBe(1)
+  expect(foot).toBe('⏸ approve merge [m] auto merge  [f] search' + 'Enter open · ↑↓ move · l t s c views')
+  expect((await ui.findAll({ type: 'Text', text: /^⏸ approve merge $/ })).length).toBe(1)
   expect((await ui.findAll({ key: 'mode' })).length).toBe(1)
   // the mode line comes after the list, not under the banner
   const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
-  expect(texts.indexOf('⏸ review merge ')).toBeGreaterThan(texts.findIndex(t => /^\s*Enter to review$/.test(t)))
+  expect(texts.indexOf('⏸ approve merge ')).toBeGreaterThan(texts.findIndex(t => /^\s*Enter to review$/.test(t)))
   await ui.unmount()
 })
 
@@ -2303,7 +2306,7 @@ for (const [name, seed, press, hints] of NO_MODE_PAGES)
     if (press) await ui.press({ key: press })
     expect(await footerOf(ui, hints)).toBe(hintLines(hints, 50).map(hintLineText).join(''))
     expect(await ui.find({ key: 'mode' })).toBeUndefined()
-    expect(await ui.find({ type: 'Text', text: /review merge/ })).toBeUndefined()
+    expect(await ui.find({ type: 'Text', text: /^⏸ approve merge/ })).toBeUndefined()
     await ui.unmount()
   })
 

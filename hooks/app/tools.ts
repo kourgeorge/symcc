@@ -79,9 +79,9 @@ export const MANUAL = (features: HostFeatures = ALL_FEATURES): Record<string, st
     (${S.N.dir}/worktrees/T-n). When it finishes, ${S.N.name} checks the files it changed, runs the
     tests and merges only if they pass. Each task merges into the branch you were on when it
     was made (its copy starts from that branch too). In mode
-    review (or for a task with needs_review) it waits for your approve or reject first.
-  • The board has one mode: paused (nothing runs), review (work runs; finished work waits for
-    you) or auto (work runs; finished work that passes merges on its own; the default).
+    approve merge (review) (or for a task with needs_review) it waits for your approve or reject first.
+  • The board has one mode: paused (nothing runs), approve merge (review: work runs; finished work waits for
+    you) or auto merge (auto: work runs; finished work that passes merges on its own; the default).
   • Scouts are background agents on a timer (every_minutes: 0 means only on demand). Each
     does what its file asks (reading the project, running shell commands, searching the
     web) and reports to the lead, which decides what goes on the board.
@@ -116,8 +116,8 @@ ${features.panel ? `  /${S.N.name}                     open the board panel (↑
   /${S.N.name}-mode [paused|review|auto]  set the board mode; no word switches review and auto
                        (from paused, no word goes to review)
                        paused: stop every worker and scout now, start nothing new
-                       review: work runs; finished tasks wait for your approve or reject
-                       auto: work runs; finished tasks that pass merge on their own
+                       review (shown as approve merge): work runs; finished tasks wait for your approve or reject
+                       auto (shown as auto merge): work runs; finished tasks that pass merge on their own
   /${S.N.name}-settings [NAME VALUE]  ${features.panel ? 'open the settings view' : 'show the settings'}, or set one setting, e.g.
                        /${S.N.name}-settings max_parallel 5 · /${S.N.name}-settings notify sound 2
                        /${S.N.name}-settings mode review · /${S.N.name}-settings test_commands "npm test"
@@ -152,7 +152,7 @@ ${features.panel ? '' : `  /${S.N.name}-board               the board panel, as 
                        "fix" cleans up every item it offers, "fix b-T-5 w-T-5" only those. Unmerged
                        branches and folders with uncommitted changes are only listed
   /${S.N.help} [TOPIC]           this manual
-${features.panel ? `On the board: t tasks · l live · s scouts · c settings · m switch review / auto.
+${features.panel ? `On the board: t tasks · l live · s scouts · c settings · m switch approve merge / auto merge.
 In the settings view: Enter on a row changes it: on/off flips, mode, notify, scout_findings and
   tests_with_changes open a pick list (notify shows only what this machine can play), numbers and test_commands an edit box
   · Cancel (x) or Enter on an empty box leaves it · b back to the tasks.
@@ -168,7 +168,7 @@ The board list goes top to bottom: NEEDS YOU (with its title); then the tasks do
 Backlog tasks are ideas and unclear work; they start only when you move them to todo (o).
 In a task ready for review: a approve · x reject (asks for a reason) · d show changes.
 In an answered investigation: a done · v keep as a note (adds a docs task) · x ask more (asks for a follow-up question).
-On the board list: m switches the mode between review and auto (never to paused).` : `There is no board panel here: the commands above answer as text, and the lead
+On the board list: m switches the mode between approve merge and auto merge (never to paused).` : `There is no board panel here: the commands above answer as text, and the lead
   can show the board too ("show the board", "show T-3").`}
 Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
 "set the test command to npm test", "give workers 90 minutes".`,
@@ -233,8 +233,8 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
   where its tests run, a fresh checker tries to break it; OK goes on, a list of problems
   sends it back to its worker with the report, counting as a retry; investigations and docs-only
   changes skip it), mode (paused stops every
-  worker and scout and starts nothing new; review makes every finished task wait for
-  your approve or reject; auto, the default, merges a finished task that passes at once),
+  worker and scout and starts nothing new; review (approve merge) makes every finished task wait for
+  your approve or reject; auto (auto merge), the default, merges a finished task that passes at once),
   enabled (off disables the whole plugin; only you can change it, with /${S.N.name}-disable and /${S.N.name}-enable).
   You can also change every setting yourself with /${S.N.name}-settings${features.panel ? ` (or the c tab in the
   board)` : ''}. A value over its limit is cut to it, and the answer says so.
@@ -348,7 +348,7 @@ ${
     : `- Put every question for the owner that isn't about one task (a settings choice, "add a scout?", "raise the version?") on the board with ${S.N.name} question (action add, with 2 to 6 short options), and ask it briefly in the chat too, with the options as numbered plain chat text, plus "or answer on the board". Never leave a question only in the chat: chat questions scroll away and get forgotten. If the owner answers in the chat, close it with ${S.N.name} question action answer (id and their words); a board answer wakes you at once with a board update saying "The owner answered your question Q-3 (…): <answer>. … Act on it.", already closed: act on it and don't ask again. Drop a question that no longer matters (action drop). A question about one task stays ${S.N.name} ask.
 - Questions the owner can also answer on the board (a review, an answered investigation, a worker's question or file request, more time) you ask as plain chat text with numbered options, plus "or answer on the board". Don't stack two questions under the same numbers: ask one at a time.`
 }
-- The board has one mode (${S.N.name} settings mode): "paused" stops every worker and scout and starts nothing new, "review" runs work but every finished task that passes waits for the owner, "auto" (the default) merges finished work that passes on its own. Tasks in review can be approved or rejected in every mode.
+- The board has one mode (${S.N.name} settings mode): "paused" stops every worker and scout and starts nothing new, "review" (shown to the owner as "approve merge") runs work but every finished task that passes waits for the owner, "auto" (shown as "auto merge"; the default) merges finished work that passes on its own. Tasks in review can be approved or rejected in every mode.
 - In mode "review", ask the owner before every ${S.N.name} add, whatever the task comes from (the owner's words, a scout finding, a worker's report, your own idea): say in one or two lines what the task would be, and add it only after a yes. In mode "auto" you add tasks as usual. Plain answers, notes (add_details) and board actions (approve, pause, settings) need no asking.
 - Review before merge (optional): in mode review, or with needs_review on one task (${S.N.name} add / change), a finished task that passes stays "ready for review" instead of merging. You get "T-5 is ready for review": show the owner the change (its branch), then ${S.N.name} approve T-5 (merge it) or ${S.N.name} reject T-5 with the owner's reason (a fresh worker redoes it). Only approve when the owner says so. Going from review to auto does not merge tasks already in review.
 - Work merged by hand: when a task's branch was merged outside the board (by the owner, or by you on the owner's word, e.g. its only failure was the merge tests timing out), don't drop it and don't let a new worker redo it: ${S.N.name} merged T-5 marks it done. ${S.N.name} checks with git that all its commits are in the branch it merges into and refuses with the reason if not; nothing is merged or tested, its folder and branch are cleaned up, and tasks waiting on it start. It works for a task that is to do, running, failed, waiting, paused, in review or dropped. Use it only after the owner's word or a rule the owner set.

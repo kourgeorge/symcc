@@ -27,7 +27,7 @@ import {
   rowStates, rowMark, TITLE_ROOM, fitRow, rowExtra, questionsLabel, archivedOf, archivedNote, statusMark, detailRows, detailRowLines, wrapSegs, hintLineText,
   type KeyHint, type Seg, type BoardTask, intoOf, taskActions, taskAsks, actionButtonLabel, packRows, type TaskAction, type TaskActionId,
   ownersTurn, shownStatus, sortScouts, scoutListRows, scoutHowTo, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem, scoutFile,
-  SETTING_GROUPS, SETTINGS, isSettingPage, settingInfo, settingValue, cantPlayNotify, groupSummaryParts,
+  SETTING_GROUPS, SETTINGS, isSettingPage, settingInfo, settingShown, settingValue, cantPlayNotify, groupSummaryParts,
   type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction, type DefEditField, type TaskVerb, settingsKeys, rolesKeys, kindsKeys, roleEditKeys, defEditFields, roleTools, roleFileText, roleSkipReason, kindFileText, kindSkipReason,
   DEFAULT_ROLE, isCheckerRole, ALWAYS_ON_KINDS, checkerOn, roleNameError, kindNameError, leadScoutNameError, checkStepNow, rowEndText, taskPhase, choiceLines, driveWarning,
   searchTasks, showsHeader, type BoardPage,
@@ -739,7 +739,7 @@ export function boardPageOf(f: ViewFile | null, choice: Pick<PanelChoice, 'tab' 
   return (f.view.questions ?? []).some(x => x.id === choice.opened) ? 'question' : 'tasks'
 }
 
-/** The list footer's board-mode row, as Claude Code's (T-685): the mode in its color, its "[m] review merge" button
+/** The list footer's board-mode row, as Claude Code's (T-685): the mode in its color, its "[m] approve merge" button
  *  (it sends /<name>-mode with the mode it switches to), and "[f] search" when no search is on; going on to another row
  *  when it doesn't fit, never cutting a button. */
 function modeLines(f: ViewFile, searching: boolean, w: number): Line[] {
@@ -1291,7 +1291,7 @@ function settingsBody(f: ViewFile, cursor: number, open: readonly string[], w: n
         [
           { text: sel ? '› ' : '  ', color: 'ide', bold: true },
           { text: x.name.padEnd(nameWidth), color: 'claude', bold: true },
-          { text: ` ${settingValue(v, x.name)}`, color: 'text', bold: true },
+          { text: ` ${settingShown(x.name, settingValue(v, x.name))}`, color: 'text', bold: true },
           ...(unplayable ? [{ text: " (can't play here: nothing plays)", color: 'warning' }] : []),
           { text: ` · default ${x.default} · ${x.range}`, color: 'inactive' },
         ],

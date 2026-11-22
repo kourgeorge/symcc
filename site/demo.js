@@ -56,7 +56,7 @@
     return {
       now: at(16, 36, 0),
       frame: 0,
-      chat: [{ k: 'note', text: '⏵ auto · the board is open · 1 task running' }],
+      chat: [{ k: 'note', text: '⏵ auto merge · the board is open · 1 task running' }],
       input: '',
       thinking: false,
       // T-786: the board question that waits for the owner (▍Needs you), null when none
@@ -145,7 +145,7 @@
     const busy = s.lanes.filter(l => l.agent).length
     const L = []
     L.push(tabRow('Live'))
-    L.push(sp(`⏵ auto · agents ${busy}/${MAX_AGENTS} busy` + (s.scout ? ` · ⌕ gaps-bot ${dur(s.now - s.scout)}` : ''), 'dim'))
+    L.push(sp(`⏵ auto merge · agents ${busy}/${MAX_AGENTS} busy` + (s.scout ? ` · ⌕ gaps-bot ${dur(s.now - s.scout)}` : ''), 'dim'))
     // T-786: NEEDS YOU first, only while something waits, every row in the warning color
     if (s.q) {
       L.push(liveHead('Needs you'), '')
@@ -201,7 +201,7 @@
     const running = s.lanes.filter(l => !l.done)
     const busy = s.lanes.filter(l => l.agent).length
     const waiting = 2 + (s.t736 === 'todo' ? 1 : 0)
-    const L = [sp('𝄞 symcc', 'heading') + '  ' + sp(`⏵ auto · ${busy}/${MAX_AGENTS} agents · ${waiting} waiting · ✓ ${s.today.merged} today`, 'dim') + '  ' + sp('[ open board ]', 'text')]
+    const L = [sp('𝄞 symcc', 'heading') + '  ' + sp(`⏵ auto merge · ${busy}/${MAX_AGENTS} agents busy · ${waiting} ${waiting === 1 ? 'task' : 'tasks'} waiting · ${s.today.merged} completed today`, 'dim') + '  ' + sp('[ open board ]', 'text')]
     for (const l of running) L.push(' ' + sp('▶ ' + l.id, 'run') + '  ' + sp(`${STAGE[l.at]} ${dur(s.now - l.since)} · try ${l.tryNo}`, 'passed') + '  ' + esc(cut(TITLES[l.id], 60)))
     return L.join('\n')
   }

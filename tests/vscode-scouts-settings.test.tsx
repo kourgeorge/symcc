@@ -258,6 +258,7 @@ test('Settings in VS Code at width 50: groups as headings, a Select for each cho
     expect(el?.props.label, name).toBe(name)
   }
   expect((await ui.find({ key: 'setting:mode' }))?.props.value).toBe('auto')
+  expect((await ui.find({ key: 'setting:mode' }))?.props.options).toEqual([{ value: 'paused' }, { value: 'review', label: 'approve merge' }, { value: 'auto', label: 'auto merge' }])
   // T-695: one notify row with the five choices (the sound set is part of notify); no sound_set row
   expect((await ui.find({ key: 'setting:notify' }))?.props.options).toEqual(['voice', 'sound 1', 'sound 2', 'sound 3', 'off'].map(value => ({ value })))
   expect((await ui.find({ key: 'setting:notify' }))?.props.value).toBe('sound 2')

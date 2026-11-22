@@ -4310,11 +4310,11 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       {"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]},
       {
         "type": "Button",
-        "props": {"key":"group:Work","label":"▸ Work · auto · 2 at once · 45 min · 2 retries","plain":true,"autoFocus":true},
+        "props": {"key":"group:Work","label":"▸ Work · auto merge · 2 at once · 45 min · 2 re…","plain":true,"autoFocus":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"text"},"children":["▸ Work"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · auto · 2 at once · 45 min · 2 retries"]}
+          {"type":"Text","props":{"color":"inactive"},"children":[" · auto merge · 2 at once · 45 min · 2 re…"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -4507,11 +4507,11 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       {"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]},
       {
         "type": "Button",
-        "props": {"key":"group:Work","label":"▸ Work · auto · 2 at once · 45 min · 2 retries","plain":true,"autoFocus":true},
+        "props": {"key":"group:Work","label":"▸ Work · auto merge · 2 at once · 45 min · 2 re…","plain":true,"autoFocus":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Work"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · auto · 2 at once · 45 min · 2 retries"]}
+          {"type":"Text","props":{"color":"inactive"},"children":[" · auto merge · 2 at once · 45 min · 2 re…"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -4712,11 +4712,11 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       {"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]},
       {
         "type": "Button",
-        "props": {"key":"group:Work","label":"▸ Work · auto · 2 at once · 45 min · 2 retries","plain":true,"autoFocus":true},
+        "props": {"key":"group:Work","label":"▸ Work · auto merge · 2 at once · 45 min · 2 re…","plain":true,"autoFocus":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Work"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · auto · 2 at once · 45 min · 2 retries"]}
+          {"type":"Text","props":{"color":"inactive"},"children":[" · auto merge · 2 at once · 45 min · 2 re…"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -4925,19 +4925,20 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "type": "Button",
         "props": {
           "key": "setting:mode",
-          "label": "mode               auto · default auto · paused / review / a" +
-            "uto · paused: nothing runs; review: finished work waits for " +
-            "you; auto: it merges on its own",
+          "label": "mode               auto merge · default auto merge · paused /" +
+            " approve merge / auto merge · paused: nothing runs; approve m" +
+            "erge: finished work waits for your approval; auto merge: it m" +
+            "erges on its own",
           "plain": true
         },
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude"},"children":["mode              "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","auto"]},
+          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","auto merge"]},
           {
             "type": "Text",
             "props": {"color":"inactive"},
-            "children": [" · default ","auto"," · ","paused / review / auto"," · ","paused: nothing runs; review: finished work waits for you; auto: it merges on its own"]
+            "children": [" · default ","auto merge"," · ","paused / approve merge / auto merge"," · ","paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"]
           }
         ]
       },
@@ -5399,19 +5400,20 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "type": "Button",
         "props": {
           "key": "setting:mode",
-          "label": "mode               auto · default auto · paused / review / a" +
-            "uto · paused: nothing runs; review: finished work waits for " +
-            "you; auto: it merges on its own",
+          "label": "mode               auto merge · default auto merge · paused /" +
+            " approve merge / auto merge · paused: nothing runs; approve m" +
+            "erge: finished work waits for your approval; auto merge: it m" +
+            "erges on its own",
           "plain": true
         },
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["mode              "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","auto"]},
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","auto merge"]},
           {
             "type": "Text",
             "props": {"color":"inactive"},
-            "children": [" · default ","auto"," · ","paused / review / auto"," · ","paused: nothing runs; review: finished work waits for you; auto: it merges on its own"]
+            "children": [" · default ","auto merge"," · ","paused / approve merge / auto merge"," · ","paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"]
           }
         ]
       },
@@ -5881,19 +5883,20 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "type": "Button",
         "props": {
           "key": "setting:mode",
-          "label": "mode               auto · default auto · paused / review / a" +
-            "uto · paused: nothing runs; review: finished work waits for " +
-            "you; auto: it merges on its own",
+          "label": "mode               auto merge · default auto merge · paused /" +
+            " approve merge / auto merge · paused: nothing runs; approve m" +
+            "erge: finished work waits for your approval; auto merge: it m" +
+            "erges on its own",
           "plain": true
         },
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["mode              "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","auto"]},
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","auto merge"]},
           {
             "type": "Text",
             "props": {"color":"inactive"},
-            "children": [" · default ","auto"," · ","paused / review / auto"," · ","paused: nothing runs; review: finished work waits for you; auto: it merges on its own"]
+            "children": [" · default ","auto merge"," · ","paused / approve merge / auto merge"," · ","paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"]
           }
         ]
       },
@@ -6363,19 +6366,20 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "type": "Button",
         "props": {
           "key": "setting:mode",
-          "label": "mode               auto · default auto · paused / review / a" +
-            "uto · paused: nothing runs; review: finished work waits for " +
-            "you; auto: it merges on its own",
+          "label": "mode               auto merge · default auto merge · paused /" +
+            " approve merge / auto merge · paused: nothing runs; approve m" +
+            "erge: finished work waits for your approval; auto merge: it m" +
+            "erges on its own",
           "plain": true
         },
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude"},"children":["mode              "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","auto"]},
+          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","auto merge"]},
           {
             "type": "Text",
             "props": {"color":"inactive"},
-            "children": [" · default ","auto"," · ","paused / review / auto"," · ","paused: nothing runs; review: finished work waits for you; auto: it merges on its own"]
+            "children": [" · default ","auto merge"," · ","paused / approve merge / auto merge"," · ","paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"]
           }
         ]
       },
@@ -6391,15 +6395,15 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
           },
           {
             "type": "Button",
-            "props": {"key":"pick:review","label":"○ review"},
+            "props": {"key":"pick:review","label":"○ approve merge"},
             "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ review"]}]
+            "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ approve merge"]}]
           },
           {
             "type": "Button",
-            "props": {"key":"pick:auto","label":"● auto","autoFocus":true},
+            "props": {"key":"pick:auto","label":"● auto merge","autoFocus":true},
             "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":true,"color":"ide"},"children":["● auto"]}]
+            "children": [{"type":"Text","props":{"bold":true,"color":"ide"},"children":["● auto merge"]}]
           },
           {"type":"Button","props":{"key":"setting-cancel","label":"Cancel (x)","hotkey":"x"},"press":{"plugin":"symcc"}},
           {"type":"Text","props":{"color":"inactive"},"children":["Enter picks · x cancels"]}
@@ -6863,19 +6867,20 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "type": "Button",
         "props": {
           "key": "setting:mode",
-          "label": "mode               auto · default auto · paused / review / a" +
-            "uto · paused: nothing runs; review: finished work waits for " +
-            "you; auto: it merges on its own",
+          "label": "mode               auto merge · default auto merge · paused /" +
+            " approve merge / auto merge · paused: nothing runs; approve m" +
+            "erge: finished work waits for your approval; auto merge: it m" +
+            "erges on its own",
           "plain": true
         },
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["mode              "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","auto"]},
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","auto merge"]},
           {
             "type": "Text",
             "props": {"color":"inactive"},
-            "children": [" · default ","auto"," · ","paused / review / auto"," · ","paused: nothing runs; review: finished work waits for you; auto: it merges on its own"]
+            "children": [" · default ","auto merge"," · ","paused / approve merge / auto merge"," · ","paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"]
           }
         ]
       },
@@ -6891,15 +6896,15 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
           },
           {
             "type": "Button",
-            "props": {"key":"pick:review","label":"○ review"},
+            "props": {"key":"pick:review","label":"○ approve merge"},
             "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ review"]}]
+            "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ approve merge"]}]
           },
           {
             "type": "Button",
-            "props": {"key":"pick:auto","label":"● auto","autoFocus":true},
+            "props": {"key":"pick:auto","label":"● auto merge","autoFocus":true},
             "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["● auto"]}]
+            "children": [{"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["● auto merge"]}]
           },
           {"type":"Button","props":{"key":"setting-cancel","label":"Cancel (x)","hotkey":"x"},"press":{"plugin":"symcc"}},
           {"type":"Text","props":{"color":"inactive"},"children":["Enter picks · x cancels"]}
@@ -7371,19 +7376,20 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "type": "Button",
         "props": {
           "key": "setting:mode",
-          "label": "mode               auto · default auto · paused / review / a" +
-            "uto · paused: nothing runs; review: finished work waits for " +
-            "you; auto: it merges on its own",
+          "label": "mode               auto merge · default auto merge · paused /" +
+            " approve merge / auto merge · paused: nothing runs; approve m" +
+            "erge: finished work waits for your approval; auto merge: it m" +
+            "erges on its own",
           "plain": true
         },
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["mode              "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","auto"]},
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","auto merge"]},
           {
             "type": "Text",
             "props": {"color":"inactive"},
-            "children": [" · default ","auto"," · ","paused / review / auto"," · ","paused: nothing runs; review: finished work waits for you; auto: it merges on its own"]
+            "children": [" · default ","auto merge"," · ","paused / approve merge / auto merge"," · ","paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"]
           }
         ]
       },
@@ -7399,15 +7405,15 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
           },
           {
             "type": "Button",
-            "props": {"key":"pick:review","label":"○ review"},
+            "props": {"key":"pick:review","label":"○ approve merge"},
             "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ review"]}]
+            "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ approve merge"]}]
           },
           {
             "type": "Button",
-            "props": {"key":"pick:auto","label":"● auto","autoFocus":true},
+            "props": {"key":"pick:auto","label":"● auto merge","autoFocus":true},
             "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["● auto"]}]
+            "children": [{"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["● auto merge"]}]
           },
           {"type":"Button","props":{"key":"setting-cancel","label":"Cancel (x)","hotkey":"x"},"press":{"plugin":"symcc"}},
           {"type":"Text","props":{"color":"inactive"},"children":["Enter picks · x cancels"]}
@@ -7879,19 +7885,20 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "type": "Button",
         "props": {
           "key": "setting:mode",
-          "label": "mode               auto · default auto · paused / review / a" +
-            "uto · paused: nothing runs; review: finished work waits for " +
-            "you; auto: it merges on its own",
+          "label": "mode               auto merge · default auto merge · paused /" +
+            " approve merge / auto merge · paused: nothing runs; approve m" +
+            "erge: finished work waits for your approval; auto merge: it m" +
+            "erges on its own",
           "plain": true
         },
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude"},"children":["mode              "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","auto"]},
+          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","auto merge"]},
           {
             "type": "Text",
             "props": {"color":"inactive"},
-            "children": [" · default ","auto"," · ","paused / review / auto"," · ","paused: nothing runs; review: finished work waits for you; auto: it merges on its own"]
+            "children": [" · default ","auto merge"," · ","paused / approve merge / auto merge"," · ","paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"]
           }
         ]
       },
@@ -8391,19 +8398,20 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "type": "Button",
         "props": {
           "key": "setting:mode",
-          "label": "mode               auto · default auto · paused / review / a" +
-            "uto · paused: nothing runs; review: finished work waits for " +
-            "you; auto: it merges on its own",
+          "label": "mode               auto merge · default auto merge · paused /" +
+            " approve merge / auto merge · paused: nothing runs; approve m" +
+            "erge: finished work waits for your approval; auto merge: it m" +
+            "erges on its own",
           "plain": true
         },
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["mode              "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","auto"]},
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","auto merge"]},
           {
             "type": "Text",
             "props": {"color":"inactive"},
-            "children": [" · default ","auto"," · ","paused / review / auto"," · ","paused: nothing runs; review: finished work waits for you; auto: it merges on its own"]
+            "children": [" · default ","auto merge"," · ","paused / approve merge / auto merge"," · ","paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"]
           }
         ]
       },
@@ -8911,19 +8919,20 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "type": "Button",
         "props": {
           "key": "setting:mode",
-          "label": "mode               auto · default auto · paused / review / a" +
-            "uto · paused: nothing runs; review: finished work waits for " +
-            "you; auto: it merges on its own",
+          "label": "mode               auto merge · default auto merge · paused /" +
+            " approve merge / auto merge · paused: nothing runs; approve m" +
+            "erge: finished work waits for your approval; auto merge: it m" +
+            "erges on its own",
           "plain": true
         },
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["mode              "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","auto"]},
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","auto merge"]},
           {
             "type": "Text",
             "props": {"color":"inactive"},
-            "children": [" · default ","auto"," · ","paused / review / auto"," · ","paused: nothing runs; review: finished work waits for you; auto: it merges on its own"]
+            "children": [" · default ","auto merge"," · ","paused / approve merge / auto merge"," · ","paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"]
           }
         ]
       },
@@ -9431,19 +9440,20 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "type": "Button",
         "props": {
           "key": "setting:mode",
-          "label": "mode               auto · default auto · paused / review / a" +
-            "uto · paused: nothing runs; review: finished work waits for " +
-            "you; auto: it merges on its own",
+          "label": "mode               auto merge · default auto merge · paused /" +
+            " approve merge / auto merge · paused: nothing runs; approve m" +
+            "erge: finished work waits for your approval; auto merge: it m" +
+            "erges on its own",
           "plain": true
         },
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude"},"children":["mode              "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","auto"]},
+          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","auto merge"]},
           {
             "type": "Text",
             "props": {"color":"inactive"},
-            "children": [" · default ","auto"," · ","paused / review / auto"," · ","paused: nothing runs; review: finished work waits for you; auto: it merges on its own"]
+            "children": [" · default ","auto merge"," · ","paused / approve merge / auto merge"," · ","paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"]
           }
         ]
       },
@@ -9918,19 +9928,20 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "type": "Button",
         "props": {
           "key": "setting:mode",
-          "label": "mode               auto · default auto · paused / review / a" +
-            "uto · paused: nothing runs; review: finished work waits for " +
-            "you; auto: it merges on its own",
+          "label": "mode               auto merge · default auto merge · paused /" +
+            " approve merge / auto merge · paused: nothing runs; approve m" +
+            "erge: finished work waits for your approval; auto merge: it m" +
+            "erges on its own",
           "plain": true
         },
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["mode              "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","auto"]},
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","auto merge"]},
           {
             "type": "Text",
             "props": {"color":"inactive"},
-            "children": [" · default ","auto"," · ","paused / review / auto"," · ","paused: nothing runs; review: finished work waits for you; auto: it merges on its own"]
+            "children": [" · default ","auto merge"," · ","paused / approve merge / auto merge"," · ","paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"]
           }
         ]
       },
@@ -10413,19 +10424,20 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "type": "Button",
         "props": {
           "key": "setting:mode",
-          "label": "mode               auto · default auto · paused / review / a" +
-            "uto · paused: nothing runs; review: finished work waits for " +
-            "you; auto: it merges on its own",
+          "label": "mode               auto merge · default auto merge · paused /" +
+            " approve merge / auto merge · paused: nothing runs; approve m" +
+            "erge: finished work waits for your approval; auto merge: it m" +
+            "erges on its own",
           "plain": true
         },
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["mode              "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","auto"]},
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","auto merge"]},
           {
             "type": "Text",
             "props": {"color":"inactive"},
-            "children": [" · default ","auto"," · ","paused / review / auto"," · ","paused: nothing runs; review: finished work waits for you; auto: it merges on its own"]
+            "children": [" · default ","auto merge"," · ","paused / approve merge / auto merge"," · ","paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"]
           }
         ]
       },
@@ -10908,19 +10920,20 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "type": "Button",
         "props": {
           "key": "setting:mode",
-          "label": "mode               auto · default auto · paused / review / a" +
-            "uto · paused: nothing runs; review: finished work waits for " +
-            "you; auto: it merges on its own",
+          "label": "mode               auto merge · default auto merge · paused /" +
+            " approve merge / auto merge · paused: nothing runs; approve m" +
+            "erge: finished work waits for your approval; auto merge: it m" +
+            "erges on its own",
           "plain": true
         },
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude"},"children":["mode              "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","auto"]},
+          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","auto merge"]},
           {
             "type": "Text",
             "props": {"color":"inactive"},
-            "children": [" · default ","auto"," · ","paused / review / auto"," · ","paused: nothing runs; review: finished work waits for you; auto: it merges on its own"]
+            "children": [" · default ","auto merge"," · ","paused / approve merge / auto merge"," · ","paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"]
           }
         ]
       },
@@ -11406,19 +11419,20 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "type": "Button",
         "props": {
           "key": "setting:mode",
-          "label": "mode               auto · default auto · paused / review / a" +
-            "uto · paused: nothing runs; review: finished work waits for " +
-            "you; auto: it merges on its own",
+          "label": "mode               auto merge · default auto merge · paused /" +
+            " approve merge / auto merge · paused: nothing runs; approve m" +
+            "erge: finished work waits for your approval; auto merge: it m" +
+            "erges on its own",
           "plain": true
         },
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["mode              "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","auto"]},
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","auto merge"]},
           {
             "type": "Text",
             "props": {"color":"inactive"},
-            "children": [" · default ","auto"," · ","paused / review / auto"," · ","paused: nothing runs; review: finished work waits for you; auto: it merges on its own"]
+            "children": [" · default ","auto merge"," · ","paused / approve merge / auto merge"," · ","paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"]
           }
         ]
       },
@@ -11912,19 +11926,20 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "type": "Button",
         "props": {
           "key": "setting:mode",
-          "label": "mode               auto · default auto · paused / review / a" +
-            "uto · paused: nothing runs; review: finished work waits for " +
-            "you; auto: it merges on its own",
+          "label": "mode               auto merge · default auto merge · paused /" +
+            " approve merge / auto merge · paused: nothing runs; approve m" +
+            "erge: finished work waits for your approval; auto merge: it m" +
+            "erges on its own",
           "plain": true
         },
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["mode              "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","auto"]},
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","auto merge"]},
           {
             "type": "Text",
             "props": {"color":"inactive"},
-            "children": [" · default ","auto"," · ","paused / review / auto"," · ","paused: nothing runs; review: finished work waits for you; auto: it merges on its own"]
+            "children": [" · default ","auto merge"," · ","paused / approve merge / auto merge"," · ","paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"]
           }
         ]
       },

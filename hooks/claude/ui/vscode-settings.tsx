@@ -7,7 +7,7 @@
 //   max_parallel  [2      ] Save              (an Input for numbers and the test commands: Save saves it)
 //   Roles  7 roles · 1 off                  (a link that opens the Roles page; Kinds the same)
 // Only real actions are Buttons (an Input's Save). No key hints.
-import { SETTINGS, SETTING_GROUPS, isSettingPage, settingChoices, settingValue, parseSettingValue, type SettingName, type SettingPage, type SettingsInput } from '../../board'
+import { SETTINGS, SETTING_GROUPS, isSettingPage, settingChoices, settingShown, settingValue, parseSettingValue, type SettingName, type SettingPage, type SettingsInput } from '../../board'
 import { S } from '../../app/state'
 import { type $ } from '../panel'
 import type { PaneParts } from './parts'
@@ -43,7 +43,7 @@ export function settingsPageVs($: $, pane: PaneParts, ctx: VsSettingsCtx) {
     if (choices) {
       // a value this machine can't play (notify) stays in the list, marked, so the Select shows what is set
       const cantPlay = !choices.includes(now)
-      const options = [...choices.map(value => ({ value })), ...(cantPlay ? [{ value: now, label: `${now} (can't play here)` }] : [])]
+      const options = [...choices.map(value => (settingShown(name, value) === value ? { value } : { value, label: settingShown(name, value) })), ...(cantPlay ? [{ value: now, label: `${now} (can't play here)` }] : [])]
       return (
         <Box key={`vs-setting-${name}`} flexDirection="column">
           <Select key={`setting:${name}`} label={name} options={options} value={now} onSelect={value => {

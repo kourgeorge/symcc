@@ -245,12 +245,12 @@ export const sizeWarnText = (file: string, bytes: number) =>
 
 /** `text` with every sizeWarnText warning in it put short, for a narrow line (T-748): "board.json 3.8 MB, near the
  *  4 MB limit"; over the limit (a sizeWarnText or tooBigText) the key words come first and the folder goes, so it
- *  fits the status line (T-763): "board.json 4.2 MB: too big, symcc can't read it" (or "write"). Other text stays
+ *  fits the status line (T-763): "board.json 4.2 MB: too big, can't read it" (or "write"). Other text stays
  *  as it is. */
 export const shortSizeWarns = (text: string) =>
   text
     .replace(/(\S+) is ([\d.]+ MB), over the 4 MB limit on (?:reading or writing|reading|writing) one file, so symcc can't (read|write) it(?:; nothing that needs it works until it is smaller)?/g,
-      (_m, file: string, mb: string, doing: string) => `${file.split('/').pop()} ${mb}: too big, symcc can't ${doing} it`)
+      (_m, file: string, mb: string, doing: string) => `${file.split('/').pop()} ${mb}: too big, can't ${doing} it`)
     .replace(/(\S+) is ([\d.]+ MB), close to the 4 MB limit on reading or writing one file; past it symcc can't read it/g, '$1 $2, near the 4 MB limit')
 
 /** The error for file `file` of `bytes` bytes, too big to be read (or written). */

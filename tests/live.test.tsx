@@ -55,7 +55,7 @@ test('T-690: liveLanes puts each doing task at its station, and leaves check out
   expect(lane('T-687').tokens).toBe(undefined)
   // the time at the station: from the history's stage line
   expect(lane('T-685').sinceMs).toBe(T0 - 3 * 60_000)
-  expect(liveHeader(view(true), liveLanes(view(true), T0))).toBe('⏵ auto · agents 2/3 busy')
+  expect(liveHeader(view(true), liveLanes(view(true), T0))).toBe('⏵ auto merge · agents 2/3 busy')
 })
 
 test('T-709: an approved task in review, or a waiting one whose merge runs, gets a lane at its real station while its check step is fresh', () => {
@@ -374,7 +374,7 @@ test('T-690: the Live tab draws at a normal and a narrow width with nothing cut,
     const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'terminal' })
     await ui.press({ key: 'tab-live' })
     const lines = await liveLines(ui)
-    expect(lines[0]).toBe('⏵ auto · agents 2/3 busy')
+    expect(lines[0]).toBe('⏵ auto merge · agents 2/3 busy')
     // every line fits: nothing is cut or wrapped (the tab row too)
     for (const l of lines) expect(textWidth(l)).toBeLessThanOrEqual(bodyColumns)
     expect(textWidth(pageLines(await ui.drawn()).find(l => l.includes('Live'))!)).toBeLessThanOrEqual(bodyColumns)
@@ -425,7 +425,7 @@ test('T-690, T-758: with no task in doing, the Live tab says so and shows no nex
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   await ui.press({ key: 'tab-live' })
   const lines = await liveLines(ui)
-  expect(lines[0]).toBe('⏵ auto · agents 0/3 busy')
+  expect(lines[0]).toBe('⏵ auto merge · agents 0/3 busy')
   expect([lines[1], lines[2]!.trim(), lines[3]]).toEqual(['TASKS', '', LIVE_INDENT + LIVE_EMPTY])
   expect(lines.some(l => l.includes('next up'))).toBe(false)
   expect(lines[lines.findIndex(l => l === 'TODAY') + 2]?.startsWith(`${LIVE_INDENT}✓ `)).toBe(true)
@@ -538,7 +538,7 @@ test('T-691, T-758: with no task in doing, the VS Code Live tab says so and show
   seedBoard(on, { view: liveView(TASKS.filter(t => t.status !== 'doing')) })
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
   await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'live') } })
-  expect((await ui.find({ key: 'live-head' }))?.text).toBe('⏵ auto · agents 0/3 busy')
+  expect((await ui.find({ key: 'live-head' }))?.text).toBe('⏵ auto merge · agents 0/3 busy')
   expect((await ui.find({ key: 'live-empty' }))?.text).toBe(LIVE_EMPTY)
   expect(await ui.find({ key: 'live-legend' })).toBeUndefined()
   expect(await ui.find({ key: 'live-next' })).toBeUndefined()
@@ -674,19 +674,19 @@ test('T-770: liveScoutMark shows the names and times, then "N scouts", then "N",
   expect(liveScoutMark(RUNS, T0, 6)?.text).toBe(' 2')
   expect(liveScoutMark(RUNS, T0, 4)).toBe(null)
   const head = (runs: typeof RUNS, w: number) => segText(liveHeaderSegs({ ...view(true), scouts_running: runs }, liveLanes(view(true), T0), T0, w))
-  expect(head([], 80)).toBe('⏵ auto · agents 2/3 busy')
-  expect(head(RUNS, 80)).toBe('⏵ auto · agents 2/3 busy · ⌕ gaps-bot 4m, board-review 1m')
-  expect(head(RUNS, 40)).toBe('⏵ auto · agents 2/3 busy · ⌕ 2 scouts')
+  expect(head([], 80)).toBe('⏵ auto merge · agents 2/3 busy')
+  expect(head(RUNS, 80)).toBe('⏵ auto merge · agents 2/3 busy · ⌕ gaps-bot 4m, board-review 1m')
+  expect(head(RUNS, 44)).toBe('⏵ auto merge · agents 2/3 busy · ⌕ 2 scouts')
   for (const w of [80, 40, 30, 26]) expect(textWidth(head(RUNS, w))).toBeLessThanOrEqual(Math.max(w, textWidth(head([], w))))
   expect(liveHeaderSegs({ ...view(true), scouts_running: RUNS }, [], T0).map(s => s.tone)).toEqual(['text', 'text', 'scouts', 'dim'])
 })
 
 const scoutView = (runs: unknown[]) => ({ ...liveView(calm(TASKS)), value: { ...liveView(calm(TASKS)).value, ...(runs.length ? { scouts_running: runs } : {}) } })
 for (const [runs, w, want] of [
-  [[], 80, '⏵ auto · agents 2/3 busy'],
-  [[RUNS[1]], 80, '⏵ auto · agents 2/3 busy · ⌕ gaps-bot 4m'],
-  [RUNS, 80, '⏵ auto · agents 2/3 busy · ⌕ gaps-bot 4m, board-review 1m'],
-  [RUNS, 44, '⏵ auto · agents 2/3 busy · ⌕ 2 scouts'],
+  [[], 80, '⏵ auto merge · agents 2/3 busy'],
+  [[RUNS[1]], 80, '⏵ auto merge · agents 2/3 busy · ⌕ gaps-bot 4m'],
+  [RUNS, 80, '⏵ auto merge · agents 2/3 busy · ⌕ gaps-bot 4m, board-review 1m'],
+  [RUNS, 44, '⏵ auto merge · agents 2/3 busy · ⌕ 2 scouts'],
 ] as const)
   test(`T-770: the terminal and VS Code Live tabs' mode line at ${w} columns with ${runs.length} scout(s) running`, async ($, on) => {
     seedBoard(on, { view: scoutView([...runs]) })

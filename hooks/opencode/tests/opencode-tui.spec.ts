@@ -128,8 +128,8 @@ test('T-517, T-706: with no git repo the banner warns with Claude Code\'s "set u
 test('the band: the header, then the tasks that need you or run with the list\'s marks and short states; a "worker starting" row shows its time and no stray note', () => {
   const f = viewFile()
   const lines = bandLines(f, NOW, 120).map(lineText)
-  // T-576: "𝄞 symcc · proj ⏵ auto · …": no "board", no version; the project shown as it isn't called symcc
-  expect(lines[0]!.startsWith(`${ICON} symcc · proj ⏵ auto`)).toBe(true)
+  // T-576: "𝄞 symcc · proj ⏵ auto merge · …": no "board", no version; the project shown as it isn't called symcc
+  expect(lines[0]!.startsWith(`${ICON} symcc · proj ⏵ auto merge`)).toBe(true)
   // the header's own text, checked wide enough that the " (click: board)" hint is there, and without that hint
   const wideHead = lineText(bandDraw(f, NOW, 400).lines[0]!)
   expect(wideHead.endsWith(BAND_CLICK_HINT)).toBe(true)
@@ -140,7 +140,7 @@ test('the band: the header, then the tasks that need you or run with the list\'s
   expect(lines[0]).toContain('1 doing')
   // in the symcc project itself the name shows once, the state right after it
   const own = bandLines({ ...f, root: '/work/symcc' }, NOW, 120).map(lineText)[0]!
-  expect(own.startsWith(`${ICON} symcc ⏵ auto`)).toBe(true)
+  expect(own.startsWith(`${ICON} symcc ⏵ auto merge`)).toBe(true)
   expect(own).toContain('1 doing')
   const t1 = f.view.tasks.find(t => t.id === 'T-1')!
   const row1 = lines.find(l => l.startsWith('T-1'))!
@@ -2476,7 +2476,7 @@ test('T-685: every board screen has Claude Code\'s buttons: the tab row, the lis
   const list = draw({})
   const modeRow = list.lines.at(-list.footer + 1)!
   expect(lineText(modeRow)).toBe(`${modeLabel('auto')} [ ${modeButton('auto')} ]  [ [f] search ]`)
-  expect(lineText(modeRow)).toBe('⏵ auto [ [m] review merge ]  [ [f] search ]')
+  expect(lineText(modeRow)).toBe('⏵ auto merge [ [m] approve merge ]  [ [f] search ]')
   expect(modeRow.filter(s => s.hit).map(s => s.hit)).toEqual([{ key: 'm' }, { key: 'f' }])
   // a task's page has no mode row (as Claude Code's)
   expect(texts({ opened: 'T-2' }).some(l => l.includes('[m]'))).toBe(false)
@@ -2487,7 +2487,7 @@ test('T-685: every board screen has Claude Code\'s buttons: the tab row, the lis
   expect(ft).toContain('[ [f] change search ]  [ [x] clear search ]')
   expect(found.lines.flat().filter(s => s.text === '[ [f] change search ]' || s.text === '[ [x] clear search ]').map(s => s.hit)).toEqual([{ key: 'f' }, { key: 'x' }])
   expect(found.ids).toEqual(['T-2'])
-  expect(lineText(found.lines.at(-found.footer + 1)!)).toBe('⏵ auto [ [m] review merge ]')
+  expect(lineText(found.lines.at(-found.footer + 1)!)).toBe('⏵ auto merge [ [m] approve merge ]')
   // they stay at the top with the tabs when the list scrolls
   expect(found.lines.slice(0, found.fixed).map(lineText)).toContain('search: reviewed · 1 of 5 tasks')
   expect(texts({ search: 'nothing-like-this' })).toContain('search: nothing-like-this · no tasks match')
@@ -2615,7 +2615,7 @@ test('T-685: in the TUI a click on each of those buttons does exactly what its k
   const flatEls = (x: unknown): El[] => (typeof x === 'function' ? flatEls(x()) : Array.isArray(x) ? x.flatMap(flatEls) : x && typeof x === 'object' ? [x as El, ...flatEls((x as El).kids)] : [])
   const foot = flatEls(panel).find(e => e.props.flexShrink === 0 && e.props.flexDirection === 'column')!
   const footRows = rowEls(foot).map(r => r.text)
-  expect(footRows.slice(1)).toEqual(['⏵ auto [ [m] review merge ]  [ [f] search ]', '↑↓ move · Enter open · l t s c views · Esc close'])
+  expect(footRows.slice(1)).toEqual(['⏵ auto merge [ [m] approve merge ]  [ [f] search ]', '↑↓ move · Enter open · l t s c views · Esc close'])
   // the tabs, from every tab
   for (const go of [() => toList(), () => toSettings(), async () => (await toList(), await board.press('s', 's'))]) {
     expect((await same(go, '[t]: Tasks (5)', 't')).state.tab).toBe('tasks')
@@ -2624,7 +2624,7 @@ test('T-685: in the TUI a click on each of those buttons does exactly what its k
   }
   // the list: [m] sends /symcc-mode with the mode it switches to; [f] search asks and filters; [f] change search with
   // an empty answer clears it; [x] clear search clears it
-  expect((await same(() => toList(), '[ [m] review merge ]', 'm')).sent).toEqual([{ sessionID: 's', name: 'symcc-mode', text: 'review' }])
+  expect((await same(() => toList(), '[ [m] approve merge ]', 'm')).sent).toEqual([{ sessionID: 's', name: 'symcc-mode', text: 'review' }])
   expect((await same(() => toList(), '[ [f] search ]', 'f', { prompt: ['reviewed'] })).lines).toContain('search: reviewed · 1 of 5 tasks')
   // Esc on the box keeps the list as it was
   expect((await same(() => toList(), '[ [f] search ]', 'f', { prompt: [undefined] })).lines.some(l => l.startsWith('search:'))).toBe(false)

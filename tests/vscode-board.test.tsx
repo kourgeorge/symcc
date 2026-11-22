@@ -171,13 +171,13 @@ test('in VS Code the Tasks page shows whole titles, status colors on the marks, 
   expect((await ui.find({ key: 'tabs' }))?.props.text).toBe(`${mdLink('Live', vsHref('tab', 'live'))} \u00a0·\u00a0 **Tasks 20** \u00a0·\u00a0 ${mdLink('Scouts 1', vsHref('tab', 'scouts'))} \u00a0·\u00a0 ${mdLink('Settings', vsHref('tab', 'settings'))}`)
   // the header on readable lines: the tests line short, the mode with its meaning
   expect(await ui.find({ type: 'Text', text: 'tests: claude, typecheck' })).toBeDefined()
-  expect(all.join(' ')).toMatch(/⏵ auto/)
+  expect(all.join(' ')).toMatch(/⏵ auto merge/)
   // no key hints; at most one primary button; the mode switch is a quiet link and the search an Input
   for (const re of KEY_HINTS) expect(all.filter(s => re.test(s)), String(re)).toEqual([])
   expect(elements(tree).filter(n => n.type === 'Button' && n.props?.variant === 'primary').length).toBeLessThanOrEqual(1)
   const mode = await ui.find({ key: 'mode' })
   expect(mode?.type).toBe('Markdown')
-  expect(mode?.props.text).toBe(mdLink('Switch to review merge', vsHref('mode', 'review')))
+  expect(mode?.props.text).toBe(mdLink('Switch to approve merge', vsHref('mode', 'review')))
   expect((await ui.find({ key: 'search' }))?.type).toBe('Input')
   await ui.unmount()
 })
@@ -225,7 +225,7 @@ test('in VS Code the other pages drop key marks from labels and print no key hin
 
 test('plainLabel and shortTests', () => {
   expect(plainLabel('Cancel (x)')).toBe('Cancel')
-  expect(plainLabel('[m] review merge')).toBe('review merge')
+  expect(plainLabel('[m] approve merge')).toBe('approve merge')
   expect(plainLabel('[t]: Tasks (3)')).toBe('Tasks (3)')
   expect(plainLabel('Approve')).toBe('Approve')
   expect(plainLabel('+ New scout')).toBe('+ New scout')

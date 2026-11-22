@@ -36,7 +36,7 @@ export const shortTests = (cmds: readonly string[]): string => (cmds.some(c => c
 /** The color a mode's word is drawn in (the same as the terminal footer's). */
 export const modeColor = (m: SymccMode) => (m === 'paused' ? 'warning' : m === 'review' ? 'suggestion' : 'text')
 
-/** The mode switch's label in VS Code: "Switch to review merge" in auto (and off), "Switch to auto" in review. */
+/** The mode switch's label in VS Code: "Switch to approve merge" in auto (and off), "Switch to auto merge" in review. */
 export const switchLabel = (m: SymccMode) => `Switch to ${MODE_NAME[nextMode(m)]}`
 
 /** The color of a status's dot in the counts badges (the same as the list's marks). */

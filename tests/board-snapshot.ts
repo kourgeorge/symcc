@@ -259,8 +259,8 @@ export const BEFORE: Record<string, unknown> = {
             "type": "Box",
             "props": {"key":"footer-mode","flexDirection":"row"},
             "children": [
-              {"type":"Text","props":{"wrap":"truncate"},"children":[{"type":"Text","props":{"bold":true,"color":"text"},"children":["⏵ auto"]}," "]},
-              {"type":"Button","props":{"key":"mode","label":"[m] review merge","hotkey":"m","dimColor":true},"press":{"plugin":"symcc"}},
+              {"type":"Text","props":{"wrap":"truncate"},"children":[{"type":"Text","props":{"bold":true,"color":"text"},"children":["⏵ auto merge"]}," "]},
+              {"type":"Button","props":{"key":"mode","label":"[m] approve merge","hotkey":"m","dimColor":true},"press":{"plugin":"symcc"}},
               {"type":"Text","children":["  "]},
               {"type":"Button","props":{"key":"search-open","label":"[f] search","hotkey":"f","dimColor":true},"press":{"plugin":"symcc"}}
             ]
@@ -561,8 +561,8 @@ export const BEFORE: Record<string, unknown> = {
             "type": "Box",
             "props": {"key":"footer-mode","flexDirection":"row"},
             "children": [
-              {"type":"Text","props":{"wrap":"truncate"},"children":[{"type":"Text","props":{"bold":true,"color":"text"},"children":["⏵ auto"]}," "]},
-              {"type":"Button","props":{"key":"mode","label":"[m] review merge","hotkey":"m","dimColor":true},"press":{"plugin":"symcc"}},
+              {"type":"Text","props":{"wrap":"truncate"},"children":[{"type":"Text","props":{"bold":true,"color":"text"},"children":["⏵ auto merge"]}," "]},
+              {"type":"Button","props":{"key":"mode","label":"[m] approve merge","hotkey":"m","dimColor":true},"press":{"plugin":"symcc"}},
               {"type":"Text","children":["  "]},
               {"type":"Button","props":{"key":"search-open","label":"[f] search","hotkey":"f","dimColor":true},"press":{"plugin":"symcc"}}
             ]
@@ -850,9 +850,9 @@ export const BEFORE: Record<string, unknown> = {
               {
                 "type": "Text",
                 "props": {"wrap":"truncate"},
-                "children": [{"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["⏵ auto"]}," "]
+                "children": [{"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["⏵ auto merge"]}," "]
               },
-              {"type":"Button","props":{"key":"mode","label":"[m] review merge","hotkey":"m","dimColor":true},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"mode","label":"[m] approve merge","hotkey":"m","dimColor":true},"press":{"plugin":"symcc"}},
               {"type":"Text","children":["  "]},
               {"type":"Button","props":{"key":"search-open","label":"[f] search","hotkey":"f","dimColor":true},"press":{"plugin":"symcc"}}
             ]
@@ -1164,9 +1164,9 @@ export const BEFORE: Record<string, unknown> = {
               {
                 "type": "Text",
                 "props": {"wrap":"truncate"},
-                "children": [{"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["⏵ auto"]}," "]
+                "children": [{"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["⏵ auto merge"]}," "]
               },
-              {"type":"Button","props":{"key":"mode","label":"[m] review merge","hotkey":"m","dimColor":true},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"mode","label":"[m] approve merge","hotkey":"m","dimColor":true},"press":{"plugin":"symcc"}},
               {"type":"Text","children":["  "]},
               {"type":"Button","props":{"key":"search-open","label":"[f] search","hotkey":"f","dimColor":true},"press":{"plugin":"symcc"}}
             ]
@@ -1798,11 +1798,11 @@ export const BEFORE: Record<string, unknown> = {
       {"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]},
       {
         "type": "Button",
-        "props": {"key":"group:Work","label":"▸ Work · auto · 3 at once · 45 min · 2 retries","plain":true,"autoFocus":true},
+        "props": {"key":"group:Work","label":"▸ Work · auto merge · 3 at once · 45 min · 2 re…","plain":true,"autoFocus":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"text"},"children":["▸ Work"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · auto · 3 at once · 45 min · 2 retries"]}
+          {"type":"Text","props":{"color":"inactive"},"children":[" · auto merge · 3 at once · 45 min · 2 re…"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -2493,11 +2493,11 @@ export const BEFORE: Record<string, unknown> = {
       {"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]},
       {
         "type": "Button",
-        "props": {"key":"group:Work","label":"▸ Work · auto · 3 at once · 45 min · 2 retries","plain":true,"autoFocus":true},
+        "props": {"key":"group:Work","label":"▸ Work · auto merge · 3 at once · 45 min · 2 re…","plain":true,"autoFocus":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Work"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · auto · 3 at once · 45 min · 2 retries"]}
+          {"type":"Text","props":{"color":"inactive"},"children":[" · auto merge · 3 at once · 45 min · 2 re…"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -2856,9 +2856,9 @@ export const BEFORE: Record<string, unknown> = {
               {
                 "type": "Text",
                 "props": {"wrap":"truncate"},
-                "children": [{"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["⏵ auto"]}," "]
+                "children": [{"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["⏵ auto merge"]}," "]
               },
-              {"type":"Button","props":{"key":"mode","label":"[m] review merge","hotkey":"m","dimColor":true},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"mode","label":"[m] approve merge","hotkey":"m","dimColor":true},"press":{"plugin":"symcc"}},
               {"type":"Text","children":["  "]},
               {"type":"Button","props":{"key":"search-open","label":"[f] search","hotkey":"f","dimColor":true},"press":{"plugin":"symcc"}}
             ]
@@ -3170,9 +3170,9 @@ export const BEFORE: Record<string, unknown> = {
               {
                 "type": "Text",
                 "props": {"wrap":"truncate"},
-                "children": [{"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["⏵ auto"]}," "]
+                "children": [{"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["⏵ auto merge"]}," "]
               },
-              {"type":"Button","props":{"key":"mode","label":"[m] review merge","hotkey":"m","dimColor":true},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"mode","label":"[m] approve merge","hotkey":"m","dimColor":true},"press":{"plugin":"symcc"}},
               {"type":"Text","children":["  "]},
               {"type":"Button","props":{"key":"search-open","label":"[f] search","hotkey":"f","dimColor":true},"press":{"plugin":"symcc"}}
             ]
@@ -3808,11 +3808,11 @@ export const BEFORE: Record<string, unknown> = {
       {"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]},
       {
         "type": "Button",
-        "props": {"key":"group:Work","label":"▸ Work · auto · 3 at once · 45 min · 2 retries","plain":true,"autoFocus":true},
+        "props": {"key":"group:Work","label":"▸ Work · auto merge · 3 at once · 45 min · 2 re…","plain":true,"autoFocus":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Work"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · auto · 3 at once · 45 min · 2 retries"]}
+          {"type":"Text","props":{"color":"inactive"},"children":[" · auto merge · 3 at once · 45 min · 2 re…"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -4023,8 +4023,8 @@ export const BEFORE_DROPPED: Record<string, unknown> = {
             "type": "Box",
             "props": {"key":"footer-mode","flexDirection":"row"},
             "children": [
-              {"type":"Text","props":{"wrap":"truncate"},"children":[{"type":"Text","props":{"bold":true,"color":"text"},"children":["⏵ auto"]}," "]},
-              {"type":"Button","props":{"key":"mode","label":"[m] review merge","hotkey":"m","dimColor":true},"press":{"plugin":"symcc"}},
+              {"type":"Text","props":{"wrap":"truncate"},"children":[{"type":"Text","props":{"bold":true,"color":"text"},"children":["⏵ auto merge"]}," "]},
+              {"type":"Button","props":{"key":"mode","label":"[m] approve merge","hotkey":"m","dimColor":true},"press":{"plugin":"symcc"}},
               {"type":"Text","children":["  "]},
               {"type":"Button","props":{"key":"search-open","label":"[f] search","hotkey":"f","dimColor":true},"press":{"plugin":"symcc"}}
             ]
@@ -4168,8 +4168,8 @@ export const BEFORE_DROPPED: Record<string, unknown> = {
             "type": "Box",
             "props": {"key":"footer-mode","flexDirection":"row"},
             "children": [
-              {"type":"Text","props":{"wrap":"truncate"},"children":[{"type":"Text","props":{"bold":true,"color":"text"},"children":["⏵ auto"]}," "]},
-              {"type":"Button","props":{"key":"mode","label":"[m] review merge","hotkey":"m","dimColor":true},"press":{"plugin":"symcc"}},
+              {"type":"Text","props":{"wrap":"truncate"},"children":[{"type":"Text","props":{"bold":true,"color":"text"},"children":["⏵ auto merge"]}," "]},
+              {"type":"Button","props":{"key":"mode","label":"[m] approve merge","hotkey":"m","dimColor":true},"press":{"plugin":"symcc"}},
               {"type":"Text","children":["  "]},
               {"type":"Button","props":{"key":"search-open","label":"[f] search","hotkey":"f","dimColor":true},"press":{"plugin":"symcc"}}
             ]
@@ -4307,9 +4307,9 @@ export const BEFORE_DROPPED: Record<string, unknown> = {
               {
                 "type": "Text",
                 "props": {"wrap":"truncate"},
-                "children": [{"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["⏵ auto"]}," "]
+                "children": [{"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["⏵ auto merge"]}," "]
               },
-              {"type":"Button","props":{"key":"mode","label":"[m] review merge","hotkey":"m","dimColor":true},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"mode","label":"[m] approve merge","hotkey":"m","dimColor":true},"press":{"plugin":"symcc"}},
               {"type":"Text","children":["  "]},
               {"type":"Button","props":{"key":"search-open","label":"[f] search","hotkey":"f","dimColor":true},"press":{"plugin":"symcc"}}
             ]
@@ -4464,9 +4464,9 @@ export const BEFORE_DROPPED: Record<string, unknown> = {
               {
                 "type": "Text",
                 "props": {"wrap":"truncate"},
-                "children": [{"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["⏵ auto"]}," "]
+                "children": [{"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["⏵ auto merge"]}," "]
               },
-              {"type":"Button","props":{"key":"mode","label":"[m] review merge","hotkey":"m","dimColor":true},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"mode","label":"[m] approve merge","hotkey":"m","dimColor":true},"press":{"plugin":"symcc"}},
               {"type":"Text","children":["  "]},
               {"type":"Button","props":{"key":"search-open","label":"[f] search","hotkey":"f","dimColor":true},"press":{"plugin":"symcc"}}
             ]
@@ -4612,9 +4612,9 @@ export const BEFORE_DROPPED: Record<string, unknown> = {
               {
                 "type": "Text",
                 "props": {"wrap":"truncate"},
-                "children": [{"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["⏵ auto"]}," "]
+                "children": [{"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["⏵ auto merge"]}," "]
               },
-              {"type":"Button","props":{"key":"mode","label":"[m] review merge","hotkey":"m","dimColor":true},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"mode","label":"[m] approve merge","hotkey":"m","dimColor":true},"press":{"plugin":"symcc"}},
               {"type":"Text","children":["  "]},
               {"type":"Button","props":{"key":"search-open","label":"[f] search","hotkey":"f","dimColor":true},"press":{"plugin":"symcc"}}
             ]
@@ -4769,9 +4769,9 @@ export const BEFORE_DROPPED: Record<string, unknown> = {
               {
                 "type": "Text",
                 "props": {"wrap":"truncate"},
-                "children": [{"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["⏵ auto"]}," "]
+                "children": [{"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["⏵ auto merge"]}," "]
               },
-              {"type":"Button","props":{"key":"mode","label":"[m] review merge","hotkey":"m","dimColor":true},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"mode","label":"[m] approve merge","hotkey":"m","dimColor":true},"press":{"plugin":"symcc"}},
               {"type":"Text","children":["  "]},
               {"type":"Button","props":{"key":"search-open","label":"[f] search","hotkey":"f","dimColor":true},"press":{"plugin":"symcc"}}
             ]

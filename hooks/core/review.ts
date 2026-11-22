@@ -91,18 +91,18 @@ export function setMode(b: Board, m: SymccMode): Board {
   return { ...b, mode: isMode(m) ? m : 'auto' }
 }
 
-/** The short name of a mode, as shown at a glance: "paused", "review merge", "auto". */
-export const MODE_NAME: Record<SymccMode, string> = { paused: 'paused', review: 'review merge', auto: 'auto' }
+/** The short name of a mode, as shown at a glance: "paused", "approve merge", "auto merge" (T-800: the stored values stay review and auto). */
+export const MODE_NAME: Record<SymccMode, string> = { paused: 'paused', review: 'approve merge', auto: 'auto merge' }
 const MODE_ICON: Record<SymccMode, string> = { paused: '⏸', review: '⏸', auto: '⏵' }
 
-/** The label for a mode, in the panel banner and at the start of the status line: "⏸ paused", "⏸ review merge", "⏵ auto". */
+/** The label for a mode, in the panel banner and at the start of the status line: "⏸ paused", "⏸ approve merge", "⏵ auto merge". */
 export const MODE_LABEL: Record<SymccMode, string> = { paused: `${MODE_ICON.paused} ${MODE_NAME.paused}`, review: `${MODE_ICON.review} ${MODE_NAME.review}`, auto: `${MODE_ICON.auto} ${MODE_NAME.auto}` }
 export const modeLabel = (m: SymccMode): string => MODE_LABEL[isMode(m) ? m : 'auto']
 
 /** The mode the panel's m button switches to: review and auto swap; paused goes to review. */
 export const nextMode = (m: SymccMode): SymccMode => (modeOf({ mode: m }) === 'review' ? 'auto' : 'review')
 
-/** The panel's m button: "[m] review merge" in auto (and paused), "[m] auto" in review. */
+/** The panel's m button: "[m] approve merge" in auto (and paused), "[m] auto merge" in review. */
 export const modeButton = (m: SymccMode): string => `[m] ${MODE_NAME[nextMode(m)]}`
 
 /** What a mode means, in a few words. */
@@ -112,7 +112,7 @@ export const MODE_MEANING: Record<SymccMode, string> = {
   auto: 'work runs; finished tasks that pass merge on their own',
 }
 
-/** The one line shown for a mode: "⏵ auto: work runs; finished tasks that pass merge on their own". */
+/** The one line shown for a mode: "⏵ auto merge: work runs; finished tasks that pass merge on their own". */
 export const modeText = (m: SymccMode): string => `${modeLabel(m)}: ${MODE_MEANING[isMode(m) ? m : 'auto']}`
 
 /** Task `id`, which must be in "review" for approve / reject; throws otherwise. */
