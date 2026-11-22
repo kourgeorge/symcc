@@ -537,7 +537,17 @@ export function runMs(r: Pick<SymccRun, 'started' | 'ended' | 'restarts'>, nowMs
   return Math.max(0, z - a - idle)
 }
 
-export type RunTotal = { ms: number; tokens?: SymccTokens; cost?: number; tries: number }
+/**
+ * T-873: how long the worker of try `r` has worked on it, in ms, for the over-time check (max_minutes) and its hard cap:
+ * the try's active time from its first start (runMs, closed-app gaps left out), the same time the band and Live tab show.
+ * `nowMs - sinceMs` when the board has no start for the try.
+ */
+export function workerActiveMs(r: Pick<SymccRun, 'started' | 'restarts'> | undefined, sinceMs: number, nowMs: number): number {
+  if (!r || !Number.isFinite(Date.parse(r.started))) return Math.max(0, nowMs - sinceMs)
+  return runMs({ started: r.started, ...(r.restarts ? { restarts: r.restarts } : {}) }, nowMs)
+}
+
+export type RunTotal ={ ms: number; tokens?: SymccTokens; cost?: number; tries: number }
 
 /** Adds up tries: their time, and their tokens and cost where any try reports them. */
 export function sumRuns(runs: SymccRun[] | undefined, nowMs?: number): RunTotal {

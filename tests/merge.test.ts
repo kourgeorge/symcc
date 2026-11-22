@@ -3251,8 +3251,15 @@ const sentTo = (w: ReturnType<typeof world>) => {
   w.$.agents.send = w.$.agents.stop = async (to, text) => void sent.push({ to, text })
   return sent
 }
-/** T-1's worker (ag1) as started `min` minutes ago. */
-const runFor = (min: number) => workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: Date.now() - min * 60_000 })
+/** T-1's worker (ag1) and its try as started `min` minutes ago (T-873: the over-time check counts the try's active time). */
+const runFor = async (w: ReturnType<typeof world>, min: number) => {
+  const since = Date.now() - min * 60_000
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since })
+  await change(w.$, b => {
+    const runs = find(b, 'T-1')?.runs
+    return runs?.length ? patchTask(b, 'T-1', { runs: [...runs.slice(0, -1), { ...runs.at(-1)!, started: new Date(since).toISOString() }] }, ISO) : b
+  })
+}
 /** Over-time tests drive the board (check only runs then); world() sets driving off again. */
 async function overTime(then: (w: ReturnType<typeof world>, sent: { to: string; text: string }[]) => Promise<unknown>) {
   let sent: { to: string; text: string }[] = []
@@ -3273,7 +3280,7 @@ test('at the time limit the worker is not stopped: the task stays doing and the 
   let sent: { to: string; text: string }[] = []
   const r = await overTime(async (w, s) => {
     sent = s
-    runFor(50)
+    await runFor(w, 50)
     await check(w.$)
     expect(workers.has('ag1')).toBe(true)
     await check(w.$) // asked once only
@@ -3293,10 +3300,10 @@ test('at the time limit the worker is not stopped: the task stays doing and the 
 test('"+30 min" moves the limit later: the worker goes on, is not asked again before it, and finishes normally', async () => {
   let said = ''
   const r = await overTime(async w => {
-    runFor(50)
+    await runFor(w, 50)
     await check(w.$)
     said = await runTool(w.$, 'change', { task: 'T-1', answer: '+30 min' })
-    runFor(70) // past 45, not past 75
+    await runFor(w, 70) // past 45, not past 75
     await check(w.$)
     const t = find(await load(w.$), 'T-1') as BoardTask
     expect(t.live?.extra_minutes).toBe(30)
@@ -3318,7 +3325,7 @@ test('"Stop it" tells the worker to wrap up; its hand-back is saved as the repor
   const r = await overTime(async (w, s) => {
     sent = s
     w0 = w
-    runFor(50)
+    await runFor(w, 50)
     await check(w.$)
     expect(await runTool(w.$, 'change', { task: 'T-1', answer: 'Stop it' })).toMatch(/^T-1: its worker was told to write down what it has and hand back/)
     const t = find(await load(w.$), 'T-1') as BoardTask
@@ -3344,9 +3351,9 @@ test('no answer by the hard cap (twice the limit) does the same: wrap-up message
   let sent: { to: string; text: string }[] = []
   const r = await overTime(async (w, s) => {
     sent = s
-    runFor(50)
+    await runFor(w, 50)
     await check(w.$)
-    runFor(91) // past 45 + 45
+    await runFor(w, 91) // past 45 + 45
     await check(w.$)
     expect(sent).toEqual([{ to: 'ag1', text: WRAP_UP_TEXT }])
     expect((find(await load(w.$), 'T-1') as BoardTask).status).toBe('doing')
@@ -3367,7 +3374,7 @@ test('a worker that finishes before the limit is unchanged: never asked, merged 
   let sent: { to: string; text: string }[] = []
   const r = await overTime(async (w, s) => {
     sent = s
-    runFor(20)
+    await runFor(w, 20)
     await check(w.$)
     await workerFinished(w.$, 'ag1', 'made the change')
   })
