@@ -2,7 +2,7 @@
 // open; that stretch is not work time. A step (queue, tests, ...) shows the time since the step began.
 import { expect, test } from 'claude-code/testing'
 import type { SymccRun, SymccTask } from '../types'
-import { goOnRun, activeFrom, agentLines, gapsOf, keepAgentIds, runMs, runsSummary, triesSummary, workerActiveMs } from '../hooks/core/runs'
+import { goOnRun, activeFrom, agentLines, gapsOf, keepAgentIds, runMs, runsSummary, triesSummary, workerActiveMs, withWorkerStart, startRun, workerSince } from '../hooks/core/runs'
 import { timeLimitOf, hardCapOf } from '../hooks/core/task'
 import { liveLanes, liveToday, laneRight } from '../hooks/core/live'
 import { bandItems } from '../hooks/core/banner'
@@ -188,6 +188,26 @@ test('T-873: the over-time check counts the try\'s active time from its first st
   expect(workerActiveMs(plain, NOW - 44 * MIN, NOW + 2 * MIN) / MIN > limit).toBe(true)
   // no start on the board: the worker's own start
   expect(workerActiveMs(undefined, NOW - 46 * MIN, NOW) / MIN > limit).toBe(true)
+})
+
+test('T-884: a claim that waited 3 h in the start queue counts its try time from the worker\'s start, so it is not asked for more time', () => {
+  const limit = timeLimitOf(45, undefined)
+  // claimed 3 h ago, its worker started 5 min ago
+  const runs = withWorkerStart(startRun(undefined, at(180)), 'ag1', at(5))!
+  const r = runs.at(-1)!
+  expect(r.started).toBe(at(5))
+  expect(workerSince(r)).toBe(NOW - 5 * MIN)
+  expect(runMs(r, NOW)).toBe(5 * MIN)
+  expect(workerActiveMs(r, NOW - 5 * MIN, NOW) / MIN > limit).toBe(false)
+  expect(workerActiveMs(r, NOW - 5 * MIN, NOW) / MIN > hardCapOf(45, undefined)).toBe(false)
+  // a second worker on the same try (a checker send-back is a new try; this is any later start) moves nothing
+  const again = withWorkerStart(runs, 'ag2', at(1))!.at(-1)!
+  expect(again.started).toBe(at(5))
+  // a try that went on after a reopen: its restart's start moves to the new worker's start, so the queue wait is a gap
+  const goOn = [{ started: at(300), restarts: [{ at: at(290), why: REOPEN, started: at(200) }], agents: [{ id: 'ag0', kind: 'worker' as const, started: at(300), ended: at(290), ended_by: 'restarted' as const }] }]
+  const g = withWorkerStart(goOn, 'ag3', at(2))!.at(-1)!
+  expect(g.restarts![0]!.started).toBe(at(2))
+  expect(runMs(g, NOW)).toBe(12 * MIN)
 })
 
 /**

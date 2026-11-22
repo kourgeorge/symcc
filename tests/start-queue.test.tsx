@@ -15,7 +15,7 @@ import { takeBoardUpdate, tellLead } from '../hooks/app/tell'
 import { queuedNeverStarted, unclaimQueued } from '../hooks/app/workers'
 import { agentFinished } from '../hooks/app/symcc'
 import { claudeAgents } from '../hooks/claude/host'
-import { starterEnded, isStarter, resetStarts, STARTER_TIMEOUT_MS, startAgent, drainStarts, leadTurn, queuedStarts, cancelStarts, startCancelled, QUEUED_NOTE, STARTING_NOTE } from '../hooks/app/starts'
+import { starterEnded, isStarter, resetStarts, STARTER_TIMEOUT_MS, startAgent, drainStarts, leadTurn, queuedStarts, cancelStarts, startCancelled, QUEUED_NOTE, STARTING_NOTE, rewakeStarts } from '../hooks/app/starts'
 import { ran } from './fakes'
 import { fakeHost as sharedFakeHost } from './fake-host'
 
@@ -135,6 +135,28 @@ test('while the lead is in a turn, a queued start wakes nobody: that turn ends a
   leadTurn(false)
   await drainStarts(host)
   expect(spawned).toEqual(['symcc-T-1'])
+})
+
+test('T-884: a queued start whose wake-up was lost (the lead\'s turn end never came) is woken again by the next regular check', async () => {
+  const { host, spawned } = fakeHost()
+  leadTurn(true) // the lead's turn.complete is then lost: leadBusy stays on
+  void startAgent(host, worker('symcc-T-1'))
+  expect(leadQueue).toEqual([])
+  // the first check sees it only just queued: nothing yet
+  expect(rewakeStarts(host)).toBe(false)
+  expect(leadQueue).toEqual([])
+  // still waiting at the next check: the queue is woken (a board update for the lead)
+  expect(rewakeStarts(host)).toBe(true)
+  expect(leadQueue.length).toBe(1)
+  expect(leadQueue[0]).toContain('Starting worker symcc-T-1')
+  // not again at the very next check
+  expect(rewakeStarts(host)).toBe(false)
+  await drainStarts(host)
+  expect(spawned).toEqual(['symcc-T-1'])
+  // an empty queue wakes nobody
+  expect(rewakeStarts(host)).toBe(false)
+  expect(rewakeStarts(host)).toBe(false)
+  expect(leadQueue.length).toBe(1)
 })
 
 test('T-470: with no start queue (features.startQueue off) startAgent spawns at once: nothing queued, no wake-up, no lead message; a start no longer wanted is cancelled', async () => {
@@ -273,6 +295,29 @@ test('loaded: a worker asked for by a lead tool call (add) is queued, wakes nobo
   expect(w.task('T-1').note).toBe(QUEUED_NOTE)
   expect(wakeUps(w.prompts)).toEqual([])
   await leadTurnEnds($, 'lead')
+  await w.clock.settle()
+  expect(w.spawned).toEqual(['symcc-T-1'])
+})
+
+test('T-884 loaded: a worker queued in a lead turn whose end never came is woken by the next regular check, not left for the owner\'s next prompt', async ($, on) => {
+  const w = world(on)
+  w.files.set(BOARD, JSON.stringify(todo(0)))
+  await $.session.start({ cwd: '/repo' } as never)
+  await w.clock.settle()
+  await leadTurnStarts($, 'lead')
+  await $.tool.call({ tool: 'mcp__symcc__add', title: 'Fix it', why: 'a test', files: ['src/'], origin_by: 'lead' } as never)
+  await w.clock.settle()
+  expect(w.task('T-1').note).toBe(QUEUED_NOTE)
+  expect(wakeUps(w.prompts)).toEqual([])
+  // the lead's turn.complete is lost: no turn ends; the regular 2-minute check wakes the queue
+  for (let i = 0; i < 2; i++) {
+    await w.clock.advance(2 * 60_000)
+    await w.clock.settle()
+  }
+  await w.clock.advance(1500)
+  await w.clock.settle()
+  expect(wakeUps(w.prompts).length).toBe(1)
+  await leadTurnStarts($, 'wake')
   await w.clock.settle()
   expect(w.spawned).toEqual(['symcc-T-1'])
 })
