@@ -16,7 +16,7 @@
 // render hooks) stays in register.tsx and hooks/claude/.
 //
 // Before calling an entry point, the host calls useName (app/state.ts) with its plugin name, so S.N is right.
-import { type Command, boardText, shortHome, LEAD_BEAT_MS, openOnStart, symccOn, offAnswer, offHereAnswer, notSetUpAnswer, modeText, commandNames, parseCommand, modeOf, settingsText, notifyOf, find, STATUS_WORD, statText, cutDiff, everyText, intoOf, ASK_TOOL, guardReason, scoutToolRefusal, NEW_ROLE_TEMPLATE, NEW_KIND_TEMPLATE, NEW_SCOUT_EVERY } from '../board'
+import { settingShown, type Command, boardText, shortHome, LEAD_BEAT_MS, openOnStart, symccOn, offAnswer, offHereAnswer, notSetUpAnswer, modeText, commandNames, parseCommand, modeOf, settingsText, notifyOf, find, STATUS_WORD, statText, cutDiff, everyText, intoOf, ASK_TOOL, guardReason, scoutToolRefusal, NEW_ROLE_TEMPLATE, NEW_KIND_TEMPLATE, NEW_SCOUT_EVERY } from '../board'
 import { type FileTouch, type Host, type HostFeatures, ALL_FEATURES } from '../host'
 import type { SymccTokens } from '../../types'
 import { findArchived, saveArchiveMigrated } from './archive'
@@ -221,7 +221,7 @@ async function startNewProject(host: Host, tell: (text: string) => void, here = 
     await publish(host, b)
     if (openOnStart(b)) await openPane(host, { tab: 'live', focus: false, quiet: true }).catch(() => undefined)
     tell(`The owner enabled ${S.N.name} in this new project with /${S.N.name}-enable. You are the lead now; the board is in mode ${modeOf(b)}.${S.driving ? '' : ' Another window drives the board.'}`)
-    return `${S.N.name} is on in this project, in mode ${modeOf(b)}: ${modeText(modeOf(b))}.`
+    return `${S.N.name} is on in this project, in mode ${settingShown('mode', modeOf(b))}: ${modeText(modeOf(b))}.`
   } finally {
     S.startupDone = true
     void pump(host).catch(() => undefined)

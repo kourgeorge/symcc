@@ -1,7 +1,7 @@
 // Board mode and stopping: pausing / resuming the board, disabling / enabling symcc, stopping workers (one, all, or
 // before the host quits). Split out of workers.ts (T-603); it imports from workers.ts, never the other way.
 import type { SymccMode } from '../../types'
-import { type Board, modeOf, symccOn, patchTask, find, workerName, setMode, modeText, setEnabled, stoppedEntry, withHistory, endedBy } from '../board'
+import { settingShown, type Board, modeOf, symccOn, patchTask, find, workerName, setMode, modeText, setEnabled, stoppedEntry, withHistory, endedBy } from '../board'
 import { haltCheckers } from './checker'
 import { publish } from './lead'
 import { S, workers, queuedWorkers, type Worker, halt, scoutRuns, scoutState, leadQueue, meanwhile, sayQueue } from './state'
@@ -133,7 +133,7 @@ export async function setSymcc(host: Host, on: boolean): Promise<string> {
   // (T-571) a paused board (/<name>-mode paused) is not the same as a disabled symcc: the strip shows "⏸ paused"
   // for it, and /<name>-enable (which only enables symcc itself) keeps the mode, so say plainly why nothing starts yet
   const paused = modeOf(b) === 'paused' ? ` ${S.N.name} itself is enabled, but the board is paused, so no work starts; start work with /${S.N.name}-mode review or /${S.N.name}-mode auto.` : ''
-  return `${S.N.name} is ${before ? 'already ' : ''}enabled, in mode ${modeOf(b)}: ${modeText(modeOf(b))}.${paused}`
+  return `${S.N.name} is ${before ? 'already ' : ''}enabled, in mode ${settingShown('mode', modeOf(b))}: ${modeText(modeOf(b))}.${paused}`
 }
 
 /**

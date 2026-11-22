@@ -1939,7 +1939,7 @@ test('/symcc-enable when symcc is already enabled says "already enabled" and tel
     await settle(w, () => workerOn('T-1'))
     const told = leadQueue.length
     const again = await setSymcc(w.$, true)
-    expect(again.startsWith('symcc is already enabled, in mode auto: ')).toBe(true)
+    expect(again.startsWith('symcc is already enabled, in mode auto merge: ')).toBe(true)
     for (let i = 0; i < 200; i++) await Promise.resolve()
     expect(leadQueue.length).toBe(told)
     // T-1 already has its worker: no second one
@@ -2919,6 +2919,15 @@ test('owner settings changes are queued for the lead, not sent', async () => {
   expect(leadQueue).toEqual([])
   expect(meanwhile.length).toBe(1)
   expect(meanwhile[0]).toContain('The owner changed the settings: ')
+})
+
+test('T-800: the mode-change answer says "approve merge", and board.json keeps "review"', async () => {
+  const w = world()
+  await saveBoard(w.$, emptyBoard())
+  const out = await ownerSettings(w.$, { mode: 'review' }, 'from the board')
+  expect(out).toContain('mode set to approve merge:')
+  expect(out).not.toContain('mode set to review')
+  expect((await load(w.$)).mode).toBe('review')
 })
 
 test('a merge the owner approved sends no board update; it joins the Meanwhile lines', async () => {

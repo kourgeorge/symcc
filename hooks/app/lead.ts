@@ -1,4 +1,4 @@
-import { testMinutesOf, openQuestions, liveWorkersFor, whoDrives, drivesAfter, driveAsk, handRequest, noHandRequest, handedText, handedOff, HANDOVER_NOTE, putTask, leadText, resetDoing, find, parseLead, relabelSession, openOnStart, type Board, gitNote, modeOf, notifyOf, notifyChoices, symccOn, statusLine, statusRoom, offHereAnswer, modeText, offStatusLine, inPlan, liveDriver, backToTodo, restartsOf, type TodayTeam, dayOf, localOffset, tokenCount, safeScoutFile, parseScoutRuns, scoutRunsFile } from '../board'
+import { settingShown, testMinutesOf, openQuestions, liveWorkersFor, whoDrives, drivesAfter, driveAsk, handRequest, noHandRequest, handedText, handedOff, HANDOVER_NOTE, putTask, leadText, resetDoing, find, parseLead, relabelSession, openOnStart, type Board, gitNote, modeOf, notifyOf, notifyChoices, symccOn, statusLine, statusRoom, offHereAnswer, modeText, offStatusLine, inPlan, liveDriver, backToTodo, restartsOf, type TodayTeam, dayOf, localOffset, tokenCount, safeScoutFile, parseScoutRuns, scoutRunsFile } from '../board'
 import { homeBranch } from './git'
 import { S, onHere, workers, queuedWorkers, scoutRuns, type PaneView, scoutState, updateView, sizeNotes, MOVED_WHY, TAKEN_WHY } from './state'
 import { type Host, agentState } from '../host'
@@ -270,7 +270,7 @@ export async function enableHere(host: Host, tell: (text: string) => void): Prom
   await claimLead(host).catch(() => false)
   void pump(host)
   tell(`The owner enabled ${S.N.name} in this window with /${S.N.name}-enable here. You are a lead again; the board is in mode ${modeOf(b)}.`)
-  return `${S.N.name} is on in this window again, in mode ${modeOf(b)}: ${modeText(modeOf(b))}.`
+  return `${S.N.name} is on in this window again, in mode ${settingShown('mode', modeOf(b))}: ${modeText(modeOf(b))}.`
 }
 
 /** T-793: how long after the take-over line first showed, with nobody taking over, the "needs you" reminder plays (once). */
