@@ -168,7 +168,7 @@ once you have cleared them and its merge runs.
 | merge | `⇢` | The branch moves forward |
 
 The board row shows the stage icon instead of `▶`, then the time. In Claude Code the band above
-the prompt shows the stage's icon and name, then the time in that stage: `⌕ T-740  checker 8m`. A doing task's page names the stage on the state line of its header
+the prompt shows the stage's icon, then the time in that stage: `⌕ T-740  8m` (the icons ▶ and ⌕ already say work and checker, so those two words are left out; the other stages keep theirs, like `queue 10s`). A doing task's page names the stage on the state line of its header
 (see [The task page and the scout page](#the-task-page-and-the-scout-page)) and has a **Steps** row in Details
 for the whole way, such as `worker ✓ → prep ✓ → ● checker → queue → test → merge` (see
 [What a task shows on its way to the merge](#what-a-task-shows-on-its-way-to-the-merge)). A task
@@ -779,8 +779,8 @@ are about changes; under "How tasks ended" a read investigation shows as
 
   ```
   𝄞 symcc  ⏵ auto merge · 2/3 agents busy · 3 tasks waiting · 12 completed today  [ open board ] [-]
-   ⌕ T-740  checker 8m · try 3  After a reopen, one hand-back…
-   ▶ T-745  work 19m            Live tab: a compact view…
+   ⌕ T-740  8m · try 3  After a reopen, one hand-back…
+   ▶ T-745  19m         Live tab: a compact view…
    ○ T-743  next up             A try counts only real…
    ⚠ 1 question for you: Q-71 Raise the version?
   ```
@@ -1787,7 +1787,7 @@ change shows no tag.
 first try shows no mark.
 
 - In Claude Code's band above the prompt: `· try 3` after the step and its time
-  (`T-5 ▶ work 12m · try 3`).
+  (`T-5 ▶ 12m · try 3`).
 - In OpenCode's strip above the prompt: `(3)` right after the time (`T-5 ▶ 1h40m (3)`).
 - On the task's page: `try 3/4`.
 - In the lead's board: `T-5 doing · try 2/3`. The `/3` shows the limit while the try is an
