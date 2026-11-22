@@ -73,8 +73,15 @@ export async function settle(s: NodeSession, work: boolean, timeoutMs = 60 * 60_
   const until = Date.now() + timeoutMs
   let quiet = 0
   s.working = work
-  if (work) await pump(s.host).catch(() => undefined)
+  // T-869: a tick pumps once the session start has finished, and waits for that pump. The start's own pump (fired, not
+  // waited for, when a claimLead that waited ends) reads the board and asks git before it claims a task; on a busy
+  // machine that took longer than the quiet looks below, so the tick ended "quiet" with the ready task still "todo".
+  let pumped = false
   while (Date.now() < until) {
+    if (work && !pumped && (S.startupDone || S.guardOnly)) {
+      pumped = true
+      await pump(s.host).catch(() => undefined)
+    }
     quiet = idle(s) ? quiet + 1 : 0
     if (quiet >= 3) return true
     await s.host.clock.sleep(lookMs)

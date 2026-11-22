@@ -1001,6 +1001,10 @@ const hh = (h: number) => String(h).padStart(2, '0')
 
 /** T-817: the dim mark for an hour still to come. */
 const SPARK_FUTURE = '·'
+/** T-864: the thin borders of the hour sparkline (like the lane bars) and the dim floor of a past hour with no tokens. */
+const SPARK_EDGE_L = '▕'
+const SPARK_EDGE_R = '▏'
+const SPARK_FLOOR = '▁'
 
 /** T-817: line 4's sparkline always spans the whole day, 00 to 24: this many cells when `per` hours share one cell. */
 export const sparkCells = (per: number): number => Math.ceil(24 / Math.max(1, Math.min(24, Math.floor(per))))
@@ -1026,18 +1030,24 @@ export function sparkSegs(hours: readonly number[], per: number): LiveSeg[] {
   const cells = squeezeHours(hours, g)
   const text = sparkline(cells)
   const cur = cells.length - 1
-  return [
-    ...(cur > 0 ? [{ text: text.slice(0, cur), tone: 'bar' as const }] : []),
-    ...(cur >= 0 ? [{ text: text.slice(cur), tone: 'now' as const }] : []),
-    ...(sparkCells(g) > cells.length ? [{ text: SPARK_FUTURE.repeat(sparkCells(g) - cells.length), tone: 'dim' as const }] : []),
-  ]
+  const out: LiveSeg[] = [{ text: SPARK_EDGE_L, tone: 'dim' }]
+  const add = (t: string, tone: LiveSeg['tone']) => {
+    const last = out[out.length - 1]!
+    if (last.tone === tone) last.text += t
+    else out.push({ text: t, tone })
+  }
+  // T-864: a past hour with no tokens is a dim ▁ (one joined floor); an hour with tokens is its bar
+  cells.forEach((n, i) => (i === cur ? add(n > 0 ? text[i]! : SPARK_FLOOR, 'now') : n > 0 ? add(text[i]!, 'bar') : add(SPARK_FLOOR, 'dim')))
+  if (sparkCells(g) > cells.length) add(SPARK_FUTURE.repeat(sparkCells(g) - cells.length), 'dim')
+  add(SPARK_EDGE_R, 'dim')
+  return out
 }
 
 /**
  * ▍Today's second, third and fourth lines in `width` columns: (2) the stacked bar of who spent the tokens with their
  * shares, alone; (3) the medians per merged task, first try, tries and the checker's send-backs; (4) the agent work
  * time, the cost, the busiest hour, then the hour sparkline (00 to 24) at the very end. When narrow,
- * each line drops parts from its end; line 4 drops the ⌀/h label first, then busiest, then the cost, then squeezes the sparkline (labels stay).
+ * each line drops parts from its end; line 4 drops busiest, then the cost, then shortens ⌀/h to ⌀, then squeezes the sparkline; the ⌀ label and the sparkline stay together, last.
  * Never wider than `width`. A line with nothing to say is left out.
  */
 export function todayMoreLines(m: TodayMore, width: number): LiveSeg[][] {
@@ -1069,7 +1079,7 @@ export function todayMoreLines(m: TodayMore, width: number): LiveSeg[][] {
   }
   const busiest = m.hours.length ? m.hours.indexOf(Math.max(...m.hours)) : -1
   // line 4: agent work time, the cost, the busiest hour, then the sparkline with its labels at the very end
-  const line4 = (cost: boolean, busy: boolean, per: number, label = false): LiveSeg[] => {
+  const line4 = (cost: boolean, busy: boolean, per: number, label: 'long' | 'short' = 'short'): LiveSeg[] => {
     const out: LiveSeg[] = []
     const gap = () => out.length && out.push({ text: '   ', tone: 'text' })
     if (m.workMs > 0) out.push({ text: '⏱ ', tone: 'dim' }, { text: `${fmtDuration(m.workMs)} agent work`, tone: 'text' })
@@ -1083,7 +1093,7 @@ export function todayMoreLines(m: TodayMore, width: number): LiveSeg[][] {
     }
     if (per > 0 && m.hours.length) {
       gap()
-      out.push({ text: label ? `${TOKEN_SIGN}/h 00 ` : '00 ', tone: 'dim' }, ...sparkSegs(m.hours, per), { text: ' 24', tone: 'dim' })
+      out.push({ text: label === 'long' ? `${TOKEN_SIGN}/h 00 ` : `${TOKEN_SIGN} 00 `, tone: 'dim' }, ...sparkSegs(m.hours, per), { text: ' 24', tone: 'dim' })
     }
     return out
   }
@@ -1100,7 +1110,7 @@ export function todayMoreLines(m: TodayMore, width: number): LiveSeg[][] {
   // line 4 drops busiest, then the cost, then squeezes the sparkline (labels stay), then drops it, then the work time
   const n = m.hours.length
   let four: LiveSeg[] = []
-  const tries: [boolean, boolean, number, boolean][] = [[true, true, 1, true], [true, true, 1, false], [true, false, 1, false], [false, false, 1, false]]
+  const tries: [boolean, boolean, number, 'long' | 'short'][] = [[true, true, 1, 'long'], [true, false, 1, 'long'], [false, false, 1, 'long'], [false, false, 1, 'short']]
   for (const [c, b, k, l] of tries) {
     four = line4(c, b, k, l)
     if (fits(four)) break
@@ -1108,7 +1118,7 @@ export function todayMoreLines(m: TodayMore, width: number): LiveSeg[][] {
   // squeezed: 2, 3, 4 (and more) hours to a cell, the smallest that fits, the labels staying
   const squeezed = (work: boolean) => {
     for (let per = 2; per <= 24; per++) {
-      const x = work ? line4(false, false, per) : [{ text: '00 ', tone: 'dim' as const }, ...sparkSegs(m.hours, per), { text: ' 24', tone: 'dim' as const }]
+      const x = work ? line4(false, false, per) : [{ text: `${TOKEN_SIGN} 00 `, tone: 'dim' as const }, ...sparkSegs(m.hours, per), { text: ' 24', tone: 'dim' as const }]
       if (fits(x)) return x
     }
     return null
