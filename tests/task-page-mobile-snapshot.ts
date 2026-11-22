@@ -2368,16 +2368,21 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
                   {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
                   {"type":"Text","props":{"color":"text"},"children":["worker"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
-                  {"type":"Text","props":{"color":"inactive"},"children":["25m"]},
-                  {"type":"Text","props":{"color":"text"},"children":["   "]},
+                  {"type":"Text","props":{"color":"inactive"},"children":["⏱ 25m"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
                   {"type":"Text","props":{"color":"suggestion"},"children":["change"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
                   {"type":"Text","props":{"color":"ide"},"children":["worker"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" · "]},
-                  {"type":"Text","props":{"color":"inactive"},"children":["try 2/4"]}
+                  {"type":"Text","props":{"color":"inactive"},"children":["try 2/4"]},
+                  {"type":"Text","props":{"color":"text"},"children":["   "]},
+                  {"type":"Text","props":{"color":"claude"},"children":["♟ from you"]}
                 ]
-              },
-              {"type":"Text","children":[{"type":"Text","props":{"color":"claude"},"children":["♟ from you"]}]}
+              }
             ]
           },
           {

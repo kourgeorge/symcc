@@ -49,11 +49,11 @@ test('core: the title wraps under itself; the state groups say status, step, tim
   expect(lines.slice(1).every(l => l.startsWith(' '.repeat(7)) && l[7] !== ' ')).toBe(true)
   const doing = { ...task('T-504'), kind: 'bug', role: 'tester', origin: { by: 'scout', scout: 'bugs', why: 'w' } } as BoardTask
   const groups = taskStateGroups(doing, { nowMs: T0, autoRetries: 2 })
-  expect(groups.map(segText)).toEqual(['▶ doing · worker · 25m', 'bug · tester · try 2/4', '⌕ scout bugs'])
+  expect(groups.map(segText)).toEqual(['▶ doing · worker · ⏱ 25m', 'bug · tester · try 2/4', '⌕ scout bugs'])
   expect(groups[0]![0]).toMatchObject({ color: 'ide', bold: true })
-  expect(groupSegLines(groups, 80).map(segText)).toEqual(['▶ doing · worker · 25m   bug · tester · try 2/4   ⌕ scout bugs'])
+  expect(groupSegLines(groups, 80).map(segText)).toEqual(['▶ doing · worker · ⏱ 25m   bug · tester · try 2/4   ⌕ scout bugs'])
   // narrow: between the groups, never inside one
-  expect(groupSegLines(groups, 40).map(segText)).toEqual(['▶ doing · worker · 25m', 'bug · tester · try 2/4   ⌕ scout bugs'])
+  expect(groupSegLines(groups, 40).map(segText)).toEqual(['▶ doing · worker · ⏱ 25m', 'bug · tester · try 2/4   ⌕ scout bugs'])
   expect(segText(taskStateGroups(task('T-501'), { nowMs: T0 })[0]!)).toBe('◆ ready for review')
   expect(segText(taskStateGroups(task('T-502'), { nowMs: T0 })[0]!)).toBe('✗ failed')
   expect(taskStateGroups(task('T-502'), { nowMs: T0 })[0]![0]!.color).toBe('error')
@@ -90,7 +90,7 @@ async function header(ui: { find: (q: object) => Promise<unknown> }, vscode = fa
 
 // a doing, a review and a failed task, on the terminal, desktop and mobile
 const CASES: [string, string, string, string[]][] = [
-  ['T-504', '▶ doing · worker · 25m', 'ide', ['main pause', 'danger drop', 'page needs-review', 'page copy']],
+  ['T-504', '▶ doing · worker · ⏱ 25m', 'ide', ['main pause', 'danger drop', 'page needs-review', 'page copy']],
   ['T-501', '◆ ready for review', 'warning', ['main approve', 'task show-changes', 'danger reject', 'danger drop', 'page needs-review', 'page copy']],
   ['T-502', '✗ failed', 'error', ['main retry', 'task stash', 'task role', 'task already-merged', 'danger drop', 'page needs-review', 'page copy']],
 ]

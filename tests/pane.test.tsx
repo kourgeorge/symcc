@@ -1590,7 +1590,7 @@ test('T-587: the terminal task page Status row names the state (T-647), and its 
   const L = await lines(ui)
   expect(L).not.toContain('[⌕ checker · 9m]')
   // T-751: the header's state line names the state, the step and the time; the Steps row in Details the way to the merge
-  expect(L.find(l => l.startsWith('▶ doing'))).toMatch(/^▶ doing · checker · 9m\b/)
+  expect(L.find(l => l.startsWith('▶ doing'))).toMatch(/^▶ doing · checker · ⏱ 9m\b/)
   const at = L.findIndex(l => l.startsWith('Steps:'))
   expect(L.slice(at, at + 2).join(' ').replace(/\s+/g, ' ')).toMatch(/^Steps: worker ✓ → prep ✓ → ● checker → queue → test → merge/)
   await ui.unmount()

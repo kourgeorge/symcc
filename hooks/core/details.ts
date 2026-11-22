@@ -81,7 +81,7 @@ export function statusBadge(t: BadgeTask, nowMs: number, since?: number | string
   if (form === 'state') {
     const word = `${p.shown === t.status ? statusMark(t) : STATUS_MARK[p.shown]} ${STATUS_WORD[p.shown]}`
     const time = p.shown === 'doing' ? rowTime(t, nowMs, since) : ''
-    return { text: time ? `${word} · ${time}` : word, color }
+    return { text: time ? `${word} · ⏱ ${time}` : word, color }
   }
   const word = p.stage === 'queue' && p.place ? `${IN_LINE_ICON} ${inLineNote(p.place)}` : step ? `${STEP_ICON[step]} ${STEP_WORD[step]}` : p.state === 'doing' ? `${STATUS_MARK.doing} worker` : `${statusMark(t)} ${STATUS_WORD[t.status]}`
   if (p.state !== 'doing') return { text: word, color }
