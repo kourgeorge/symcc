@@ -40,6 +40,8 @@ export type SymccRun = {
   failed_command?: string
   /** T-721: and the failing tests' names read from its output (at most FAILED_TESTS_KEPT, long names cut); missing when none could be read */
   failed_tests?: string[]
+  /** T-846: set when this try's commit changed only docs files, so its checker was skipped (the Live lanes draw check as skipped) */
+  docs_only?: true
   /** set when this try first had to merge main into the branch, after a clash with main */
   merge_main?: true
   /** T-743: the restarts symcc did itself on this try (oldest first), see RunRestart */

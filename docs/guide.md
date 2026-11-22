@@ -1082,7 +1082,14 @@ the open tasks with a branch, the 5 latest merged ones and the 5 latest dropped 
 
 ### Live tab
 
-The Live tab (`l`) shows the tasks that run now as "railway lanes", one lane per task the board counts as running (a task in doing, or an approved or files-cleared task while its tests and merge run).
+The Live tab (`l`) shows the tasks that run now as "railway lanes", one lane per task the board counts as running (a task in doing, or an approved or files-cleared task while its tests and merge run, or a task that waits for your review).
+Each lane shows the path that task really takes: a normal code task goes `work → check → queue → tests → merged` (`check` only
+when the checker setting is on); an investigation goes `work → answer` only (no check, queue, tests or merge) and leaves the lanes when
+it hands back, then waits under NEEDS YOU as "answer to read"; a docs-only change shows `check` as a dim `–` once it has handed
+back and symcc has seen that its commit changed only docs files (the checker skips it; the dash stays until it merges, also
+while it waits at `you`); a task that needs review (it has "needs review" on, or the board is in approve-merge mode) has a
+`you` station before `merged`, and its lane stays at `you` while it waits for you and goes on to `merged` when you approve. Lanes
+that skip stations are drawn as a plain line through those columns, so the station names over the lanes stay lined up.
 Under the mode line it has up to five sections, each starting with a heading that is a plain bold
 UPPERCASE word followed on the same line by a thin rule (`─`, in the same color as the word) to the right edge (shorter on a narrow panel, none under 4 columns): `NEEDS YOU` (only while something waits), `TASKS` (the lanes),
 `BRANCHES`, `TODAY` (today's numbers) and `ORGANIZATIONAL MEMORY` (`ORG-MEM` on a narrow panel). One empty line sits above each heading (none above the first)

@@ -13,7 +13,7 @@
 // branch (commits ahead, how far behind), each task row a row Button that opens its task.
 // T-747, T-789: each section (Tasks, Today, Branches, Organizational memory) starts with a bold UPPERCASE heading (core's
 // liveHeading; no bar, no rule), one empty line above it (none above the first) and one under it, its lines indented by LIVE_INDENT.
-import { LIVE_DIVIDER, LIVE_EMPTY, LIVE_INDENT, liveLegend, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, laneLines, liveBold, liveHeading, liveIndented, liveInner, liveBranches, liveHeader, liveHeaderSegs, liveKeys, liveLabelSegs, liveNeeds, liveTaskLanes, liveLayout, liveOrgMem, liveStations, liveTodayLines, liveTrains, trainRows } from '../../core/live'
+import { LIVE_DIVIDER, LIVE_EMPTY, LIVE_INDENT, liveLegend, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, laneLines, liveBold, liveHeading, liveIndented, liveInner, liveBranches, liveHeader, liveHeaderSegs, liveKeys, liveLabelSegs, liveNeeds, liveTaskLanes, liveLayout, liveOrgMem, liveColumns, liveTodayLines, liveTrains, trainRows } from '../../core/live'
 import { footerRule } from '../../board'
 import { S, workers } from '../../app/state'
 import { type $, panelValues } from '../panel'
@@ -98,7 +98,7 @@ export function livePage($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
   const lanes = liveTaskLanes(v, nowMs)
   const running = lanes.filter(l => !l.done)
   const inner = liveInner(width)
-  const layout = liveLayout(lanes, liveStations(v.checker === true), inner)
+  const layout = liveLayout(lanes, liveColumns(lanes, v.checker === true), inner)
   const trains = liveTrains(v, nowMs, lanes)
   const draw = (xs: LiveSeg[]) => xs.map(x => <Text bold={liveBold(x.tone)} color={C(LIVE_TONE[x.tone])}>{x.text}</Text>)
   /** A line under a section heading: indented. */
