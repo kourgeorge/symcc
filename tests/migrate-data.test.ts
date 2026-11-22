@@ -245,3 +245,21 @@ test('T-804: a failed runs-file write is told once and not retried until the fil
   expect(backups(w).size).toBe(2)
   expect(leadQueue.filter(t => t.includes("couldn't move")).length).toBe(1)
 })
+
+test('T-804: the same write error naming a random temp file is told once, even when the files change', async () => {
+  const w = world()
+  S.enabledNow = true
+  leadQueue.length = 0
+  let n = 0
+  const write = w.host.fs.write
+  w.host.fs.write = async (p, text) => {
+    if (p.includes('.runs.json')) throw new Error(`EACCES: permission denied, open '${ROOT}/.symcc/scouts/good.runs.json.node-host.${++n}-r${n}abc.tmp'`)
+    return write(p, text)
+  }
+  await migrateIfOld(w.host)
+  for (let i = 0; i < 2; i++) {
+    w.files.set(`${D}/scouts.json`, w.files.get(`${D}/scouts.json`)! + ' ')
+    await migrateIfOld(w.host)
+  }
+  expect(leadQueue.filter(t => t.includes("couldn't move")).length).toBe(1)
+})

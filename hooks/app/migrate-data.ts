@@ -100,7 +100,10 @@ export async function migrateIfOld(host: Host, all = true): Promise<string> {
   const msg = `symcc couldn't move your old data to the current shape (${why}); nothing was saved. Run /${S.N.name}-doctor.`
   lastFailure = { sig: await filesSignature(host), msg }
   // told once: the same reason, whatever the time or backup folder in it
-  const plain = msg.replace(/\S*data\.before-migrate-\S*?\//g, '<backup>')
+  const plain = msg
+    .replace(/\S*data\.before-migrate-\S*?\//g, '<backup>')
+    .replace(/[^\s/'"()]*\.\d+-[a-z0-9]+\.tmp/g, '<tmp>')
+    .replace(/(^|[\s'"(])\/[^\s'"()]*/g, '$1<path>')
   if (plain !== toldFailure) {
     toldFailure = plain
     host.ui.toast(S.N.toast(msg))
