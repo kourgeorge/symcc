@@ -272,6 +272,24 @@ export function movedRefused(): Set<string> {
   if (!(g[MOVED_REFUSED_KEY] instanceof Set)) g[MOVED_REFUSED_KEY] = new Set<string>()
   return g[MOVED_REFUSED_KEY] as Set<string>
 }
+const HALTED_KEY = '__symccHalted'
+const HALTED_MAX = 500
+/**
+ * T-883: the agents any copy of symcc loaded in this process told to stop (halt), kept on globalThis so every copy sees
+ * them: after a reload or a takeover, the copy that still tracks such a worker is often not the one that stopped it, and
+ * its session then ends on an error that is no real API error (see stoppedBySymcc in workers.ts). Kept small.
+ */
+export function haltedAnywhere(): Set<string> {
+  const g = globalThis as unknown as Record<string, unknown>
+  if (!(g[HALTED_KEY] instanceof Set)) g[HALTED_KEY] = new Set<string>()
+  return g[HALTED_KEY] as Set<string>
+}
+function rememberHalted(agentId: string) {
+  const s = haltedAnywhere()
+  if (s.has(agentId)) return
+  if (s.size >= HALTED_MAX) s.delete(s.values().next().value!)
+  s.add(agentId)
+}
 /** Whether agent `agentId` is one of symcc's own that this copy tracks now: a worker, a checker, a scout, or one it stopped. */
 export const isOwnAgent = (agentId: string | undefined): agentId is string =>
   !!agentId && (workers.has(agentId) || checkerRuns.has(agentId) || scoutRuns.has(agentId) || stopped.has(agentId))
@@ -294,6 +312,7 @@ export function rememberOnBoard(agentId: string) {
  */
 export async function halt(host: Host, agentId: string, why: string) {
   stopped.add(agentId)
+  rememberHalted(agentId)
   if (why === MOVED_WHY || why === TAKEN_WHY) movedAgents.add(agentId)
   await host.agents.stop(agentId, `Stop now: ${why}. Don't change anything else; answer "stopped" and end.`).catch(() => undefined)
 }

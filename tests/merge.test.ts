@@ -10,11 +10,11 @@ import { PREP_NOTE, STEP_NOTE, shownNote, type Board, type Notify, soundSetFor, 
 import { usedRun, runBy } from './agent-fixture'
 import { removeWorktree, cleanupMerged, deleteMergedBranch } from '../hooks/app/git'
 import { addPassedTree, parsePassedTrees, passedTreesText, treePassed, PASSED_TREES_MAX } from '../hooks/core/passed-trees'
-import { S, leadQueue, workers, sayQueue, meanwhile, scoutRuns } from '../hooks/app/state'
+import { S, leadQueue, workers, sayQueue, meanwhile, scoutRuns, haltedAnywhere } from '../hooks/app/state'
 import { askCall, checkEdit } from '../hooks/app/ask'
 import { tellLead, noteForLead, meanwhileText } from '../hooks/app/tell'
 import { saidNeedsYou, findPlayers, playable, playsFor, sayNext, sayDone, WIN_TEXT_VAR } from '../hooks/app/voice'
-import { workerFinished, check, pump, startWorker, lateHandBack, WORKER_PROMPT, workerQuestionText, type TurnEnd, notThisTry, unclaimed } from '../hooks/app/workers'
+import { workerFinished, check, pump, startWorker, lateHandBack, WORKER_PROMPT, workerQuestionText, type TurnEnd, notThisTry, unclaimed, SYMCC_STOPPED_NOTE } from '../hooks/app/workers'
 import { stopOrphans, formerWorker } from '../hooks/app/cleanup'
 import { goOnRun, selfRestart, endRun, runMs, freshTry, withoutOpenRun, agentLines, type TryRun } from '../hooks/core/runs'
 import { statsData } from '../hooks/core/stats'
@@ -56,6 +56,7 @@ const tmpMove = (call: string, file: string) => {
 
 const ROOT = '/repo'
 const WT = `${ROOT}/.symcc/worktrees/T-1`
+const LEAD = `${ROOT}/.symcc/lead.json`
 const BOARD = `${ROOT}/.symcc/board.json`
 const LOCK = `${ROOT}/.symcc/board.lock`
 const T0 = 1_800_000_000_000
@@ -2370,8 +2371,9 @@ test('an archived task can still be looked up, is read-only, and an archived dro
  * T-1's worker (files src/; its folder holds edits in src/a.ts) hands back `answer`. `ask` / `requested`: what its
  * try recorded (an ask_owner call, edits refused as outside its files); `end`: why its turn ended.
  */
-async function workerAnswers(answer: string, o: { notify?: Notify; driving?: boolean; git?: Partial<Git>; ask?: WorkerQuestion; requested?: string[]; end?: TurnEnd } = {}) {
+async function workerAnswers(answer: string, o: { notify?: Notify; driving?: boolean; git?: Partial<Git>; ask?: WorkerQuestion; requested?: string[]; end?: TurnEnd; before?: (w: ReturnType<typeof world>) => void } = {}) {
   const w = world(o.git)
+  o.before?.(w)
   const [b0] = boardWith('auto', ['npm test'], { history: hist('created by the lead') })
   await saveBoard(w.$, recorded({ ...b0, notify: o.notify ?? 'voice' }, { question: o.ask, requested: o.requested }))
   w.put(`${WT}/.git`, 'gitdir: x')
@@ -2458,6 +2460,41 @@ test("a turn that ended on an API error or a refusal fails the task with the rea
   expect(movedMain(refused.w)).toBe(false)
   const bare = await workerAnswers('', { notify: 'off', end: { reason: 'refusal', refusal: { category: null, explanation: null } } })
   expect(bare.t.note).toBe('the model refused to go on')
+})
+
+test('T-883: a worker that symcc stopped (a reload or takeover in another copy) and whose session then ends on an error goes on with the same try, not failed', async () => {
+  // another copy of symcc in this process stopped it (a reload's orphan stop, a takeover): this copy still tracks it
+  haltedAnywhere().add('ag1')
+  try {
+    const { w, t } = await workerAnswers('the session failed', { notify: 'off', end: { reason: 'error' } })
+    expect(t.status).toBe('todo')
+    expect(t.attempts).toBe(1)
+    expect(t.note).toBe(SYMCC_STOPPED_NOTE)
+    expect(t.history.at(-1)?.text).toContain('its worker was stopped by a reload or a takeover')
+    expect(t.history.some(h => /ended on an error/.test(h.text))).toBe(false)
+    expect(movedMain(w)).toBe(false)
+  } finally {
+    haltedAnywhere().delete('ag1')
+  }
+  // another session took the board over (lead.json names it): same, even with no stop seen in this process
+  const taken = await workerAnswers('', { notify: 'off', end: { reason: 'error' }, before: w => w.put(LEAD, leadText('another-session', Date.now())) })
+  expect(taken.t.status).toBe('todo')
+  expect(taken.t.attempts).toBe(1)
+  expect(taken.t.note).toBe(SYMCC_STOPPED_NOTE)
+  // its try ends as restarted (so the next worker goes on with it, see goOnRun), never as stopped with the error
+  haltedAnywhere().add('ag1')
+  const ran = await tryEnds(answers('', { reason: 'error' }))
+  expect(ran.end).toEqual(['restarted', 'its worker was stopped by a reload or a takeover'])
+  expect(selfRestart(ran.r)).toBe(true)
+  expect(ran.t.attempts).toBe(1)
+  haltedAnywhere().delete('ag1')
+})
+
+test('T-883: a real API error with no symcc stop still fails the try', async () => {
+  const { t } = await workerAnswers('', { notify: 'off', end: { reason: 'error' }, before: w => w.put(LEAD, leadText(S.me, Date.now())) })
+  expect(t.status).toBe('failed')
+  expect(t.attempts).toBe(1)
+  expect(t.note).toBe("the worker's turn ended on an error (retries used up or the context limit)")
 })
 
 test('a stopped turn (aborted) still fails the task as stopped, and nothing is merged', async () => {
@@ -3974,7 +4011,6 @@ test('approve shows "merge" while it moves main, and the step is gone once it is
 
 // ---------------- a plugin reload while a task's work is tested and merged (T-169) ----------------
 
-const LEAD = `${ROOT}/.symcc/lead.json`
 /** T-1's try-`n` commit message, with its trailers (see commitMessage). */
 const t1Commit = (n = 1) => commitMessage({ id: 'T-1', title: 'Do it', attempts: n, origin: { by: 'lead', why: 'a test', at: ISO } })
 /** A fake reload of the plugin: this copy's memory of what it is checking is gone; the old finish still runs. */

@@ -18,7 +18,7 @@ import { answerOvertime } from './cleanup'
 import { haltChecker } from './checker'
 import { questionTool } from './questions'
 import { markMerged } from './merged'
-import { publish } from './lead'
+import { publish, enableHere } from './lead'
 import { orgMemTool } from './org-mem'
 import { ORG_MEM_MAX_LINES, TOPIC_MAX_CHARS } from '../core/org-mem'
 
@@ -906,7 +906,8 @@ export async function ownerSettings($: Host, a: SettingsInput, where: string): P
   // the on/off switch is the owner's alone and works like /<name>-disable and /<name>-enable
   if (typeof a.enabled === 'boolean') {
     const { enabled, ...rest } = a
-    const said = await setSymcc($, enabled)
+    // T-880: on goes the same way as /<name>-enable (enableHere): the project AND this window, when it was off here
+    const said = enabled ? await enableHere($, t => tellLead($, t)) : await setSymcc($, false)
     return Object.keys(rest).length ? `${said}; ${await ownerSettings($, rest, where)}` : said
   }
   const r = await saveSettings($, a, 'you')
