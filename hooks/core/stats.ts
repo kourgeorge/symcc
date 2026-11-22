@@ -587,7 +587,7 @@ export function statsData(input: StatsInput & { full?: boolean }): StatsData {
   const unclear = finished.length - own - approved - answeredDone - outside
   const reasons = Object.fromEntries(Object.keys(FAIL_LABEL).map(k => [k, 0])) as Record<FailReason, number>
   for (const t of all) for (const l of t.history) {
-    if (l.reason) reasons[l.reason]++
+    if (l.reason && l.reason in reasons) reasons[l.reason]++
   }
   const ended = [{ label: 'merged on its own', n: own }, { label: 'approved by you', n: approved }, ...(outside ? [{ label: 'merged outside the board', n: outside }] : []), ...(answeredDone ? [{ label: 'answered (investigation)', n: answeredDone }] : []), ...(unclear ? [{ label: 'not clear from history', n: unclear }] : [])]
   const failed = failedRows(reasons)
