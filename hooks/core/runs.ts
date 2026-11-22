@@ -259,7 +259,7 @@ export function agentLines(r: SymccRun, nowMs?: number): string[] {
   return agentsOf(r).filter(a => a.id && a.ended_by !== 'dropped').map(a => {
     // A checker starts after the worker's hand-back ended the try, so the try's end only caps an agent that began before it.
     const end = a.ended ?? (r.ended && Date.parse(r.ended) >= Date.parse(a.started) ? r.ended : undefined)
-    const ms = runMs({ started: a.started, ...(end ? { ended: end } : {}), ...(r.restarts ? { restarts: r.restarts } : {}) }, nowMs)
+    const ms = runMs({ started: a.started, ...(end ? { ended: end } : {}), ...(r.restarts ? { restarts: r.restarts } : {}), ...(r.idle_ms !== undefined ? { idle_ms: r.idle_ms } : {}), ...(r.idle_until ? { idle_until: r.idle_until } : {}) }, nowMs)
     const used = [fmtDuration(ms), a.tokens && fmtTok(tokenCount(a.tokens)), a.cost !== undefined && `~${fmtCost(a.cost)}`].filter(Boolean).join(' · ')
     return `${AGENT_MARK[a.kind]} ${a.kind.padEnd(7)} ${shortAgentId(a.id!).padEnd(8)} ${used}`
   })
@@ -288,14 +288,28 @@ const RESTARTS_KEPT = 10
 function keepRestarts(r: SymccRun): SymccRun {
   if (!r || typeof r !== 'object' || !('restarts' in r)) return r
   const all = r.restarts as unknown
-  const ok = (Array.isArray(all) ? all : []).filter((e): e is RunRestart => !!e && typeof e === 'object' && typeof (e as RunRestart).at === 'string').slice(-RESTARTS_KEPT)
+  const valid = (Array.isArray(all) ? all : []).filter((e): e is RunRestart => !!e && typeof e === 'object' && typeof (e as RunRestart).at === 'string')
+  const ok = valid.slice(-RESTARTS_KEPT)
+  // T-882: the closed-app time of the restarts trimmed off is kept as one saved total, so the try's time doesn't jump
+  const cut = gapsOf({ restarts: valid.slice(0, valid.length - ok.length) })
   const clean = ok.map(e => {
     const started = typeof e.started === 'string' ? e.started : undefined
     return Object.keys(e).length === 2 + (started ? 1 : 0) && typeof e.why === 'string' && started === e.started ? e : { at: e.at, why: typeof e.why === 'string' ? e.why : '', ...(started ? { started } : {}) }
   })
   if (Array.isArray(all) && clean.length === all.length && clean.every((e, k) => e === all[k])) return r
   const { restarts: _r, ...rest } = r
-  return { ...rest, ...(clean.length ? { restarts: clean } : {}) }
+  const old = savedIdle(r)
+  const idle = cut.length
+    ? { idle_ms: (old?.to ?? 0) - (old?.from ?? 0) + cut.reduce((s, g) => s + g.to - g.from, 0), idle_until: new Date(Math.max(old?.to ?? -Infinity, ...cut.map(g => g.to))).toISOString() }
+    : {}
+  return { ...rest, ...idle, ...(clean.length ? { restarts: clean } : {}) }
+}
+
+/** T-882: the saved closed-app time of try `r`'s trimmed restarts as one stretch ending at idle_until; null for none. */
+function savedIdle(r: Pick<SymccRun, 'idle_ms' | 'idle_until'> | undefined): { from: number; to: number } | null {
+  const ms = r?.idle_ms
+  const to = Date.parse(r?.idle_until ?? '')
+  return typeof ms === 'number' && ms > 0 && Number.isFinite(ms) && Number.isFinite(to) ? { from: to - ms, to } : null
 }
 
 /**
@@ -514,22 +528,24 @@ export function fmtTokenKinds(t: SymccTokens | undefined): string {
  * T-863: the stretches of try `r` when nobody worked on it: from each restart's stop (`at`) to the next worker's start, as
  * ms. A try goes on after a restart symcc did itself (Claude Code closed for a day, then reopened), and that time is not work.
  */
-export function gapsOf(r: Pick<SymccRun, 'restarts'> | undefined): { from: number; to: number }[] {
-  return restartsOf(r as SymccRun | undefined)
+export function gapsOf(r: Pick<SymccRun, 'restarts' | 'idle_ms' | 'idle_until'> | undefined): { from: number; to: number }[] {
+  // T-882: the trimmed restarts' saved time comes first, as one stretch
+  const saved = savedIdle(r)
+  return [...(saved ? [saved] : []), ...restartsOf(r as SymccRun | undefined)
     .map(s => ({ from: Date.parse(s?.at ?? ''), to: Date.parse(s?.started ?? '') }))
-    .filter(g => Number.isFinite(g.from) && Number.isFinite(g.to) && g.to > g.from)
+    .filter(g => Number.isFinite(g.from) && Number.isFinite(g.to) && g.to > g.from)]
 }
 
 /**
  * T-863: `fromMs` moved later by the gaps of try `r` after it, so `nowMs - activeFrom(r, fromMs)` is the active time since
  * `fromMs` (the closed-app stretches left out). `fromMs` itself when the try has no gap after it.
  */
-export function activeFrom(r: Pick<SymccRun, 'restarts'> | undefined, fromMs: number): number {
+export function activeFrom(r: Pick<SymccRun, 'restarts' | 'idle_ms' | 'idle_until'> | undefined, fromMs: number): number {
   return fromMs + gapsOf(r).reduce((s, g) => s + Math.max(0, g.to - Math.max(g.from, fromMs)), 0)
 }
 
 /** How long one try took, in ms: its start to its end (up to `nowMs` while it runs; 0 if not given), without the stretches nobody worked on it (gapsOf). */
-export function runMs(r: Pick<SymccRun, 'started' | 'ended' | 'restarts'>, nowMs?: number): number {
+export function runMs(r: Pick<SymccRun, 'started' | 'ended' | 'restarts' | 'idle_ms' | 'idle_until'>, nowMs?: number): number {
   const a = Date.parse(r.started)
   const z = r.ended ? Date.parse(r.ended) : nowMs
   if (!Number.isFinite(a) || z === undefined || !Number.isFinite(z)) return 0
@@ -542,9 +558,9 @@ export function runMs(r: Pick<SymccRun, 'started' | 'ended' | 'restarts'>, nowMs
  * the try's active time from its first start (runMs, closed-app gaps left out), the same time the band and Live tab show.
  * `nowMs - sinceMs` when the board has no start for the try.
  */
-export function workerActiveMs(r: Pick<SymccRun, 'started' | 'restarts'> | undefined, sinceMs: number, nowMs: number): number {
+export function workerActiveMs(r: Pick<SymccRun, 'started' | 'restarts' | 'idle_ms' | 'idle_until'> | undefined, sinceMs: number, nowMs: number): number {
   if (!r || !Number.isFinite(Date.parse(r.started))) return Math.max(0, nowMs - sinceMs)
-  return runMs({ started: r.started, ...(r.restarts ? { restarts: r.restarts } : {}) }, nowMs)
+  return runMs({ started: r.started, ...(r.restarts ? { restarts: r.restarts } : {}), ...(r.idle_ms !== undefined ? { idle_ms: r.idle_ms } : {}), ...(r.idle_until ? { idle_until: r.idle_until } : {}) }, nowMs)
 }
 
 export type RunTotal = { ms: number; tokens?: SymccTokens; cost?: number; tries: number }
