@@ -2250,7 +2250,7 @@ project on if it was disabled and this window on if it was off here, tells the l
 on start, and the window may drive again by the normal rules. Its answer says what it did and names the
 mode, for example "symcc is on in this window, in mode paused: ..." with a hint to start work with
 `/symcc-mode auto`; it says "already enabled" only when both were on already. `/symcc-enable here` still
-works and does the same.
+works and does the same, and so does setting `enabled` to on in the Settings view (on every board).
 
 ---
 

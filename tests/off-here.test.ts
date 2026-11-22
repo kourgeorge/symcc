@@ -8,6 +8,7 @@ import { claimLead, disableHere, enableHere, offHereBeat, handOver, GONE_REMIND_
 import { S, sayQueue, toolName } from '../hooks/app/state'
 import { leadBeat, leadGuideText, sessionStart, toolCall, runCommand, COMMANDS } from '../hooks/app/symcc'
 import { saveBoard } from '../hooks/app/store'
+import { ownerSettings } from '../hooks/app/tools'
 import { tellLead, takeBoardUpdate } from '../hooks/app/tell'
 import { test } from './reset'
 import { fakeHost, memoryFs, done } from './fake-host'
@@ -271,6 +272,33 @@ test('T-875: plain /symcc-enable in an off-here window turns this window on; the
   expect(takeBoardUpdate()).toContain('with /symcc-enable.')
   expect(w.panel.view()).toMatchObject({ on_here: true })
   expect(offStatusLine('symcc', false, false)).not.toContain('here')
+})
+
+test('T-880: turning enabled on from Settings in an off-here window works like /symcc-enable: the window is on, one lead message', async () => {
+  S.root = ROOT
+  S.me = 'b'
+  const w = world('b')
+  await saveBoard(w.host, emptyBoard())
+  w.files.set(w.lead, leadText('a', Date.now()))
+  await startOffHere(w.host)
+  expect(S.offHere).toBe(true)
+  const said = await ownerSettings(w.host, { enabled: true }, 'from the board')
+  expect(said.startsWith('symcc is on in this window, in mode ')).toBe(true)
+  expect(S.offHere).toBe(false)
+  expect(S.enabledNow).toBe(true)
+  expect(await toolCall(w.host, toolName('board'), undefined, {})).not.toEqual({ result: offHereAnswer(S.N.name) })
+  expect(takeBoardUpdate()).toContain('turned symcc on in this window with /symcc-enable.')
+  expect(takeBoardUpdate()).toBeUndefined()
+  // the same answer text as /symcc-enable gives in the same state
+  await disableHere(w.host)
+  const r = await runCommand(w.host, 'symcc-enable', '')
+  expect(r?.text).toBe(said)
+  // through /symcc-settings enabled on (the OpenCode board sends this) too
+  await disableHere(w.host)
+  takeBoardUpdate()
+  const r2 = await runCommand(w.host, 'symcc-settings', 'enabled on')
+  expect(r2?.text).toBe(said)
+  expect(S.offHere).toBe(false)
 })
 
 test('a second live window starts off here with a short notice; board.json is unchanged and its panel does not open', async () => {
