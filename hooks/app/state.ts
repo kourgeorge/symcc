@@ -61,8 +61,13 @@ export function updateScoutOpen(host: Host, change: (value: string) => string) {
 export function readView(host: Host) {
   return panelOf(host).readView()
 }
-export function updateView(host: Host, change: (value: SymccView) => SymccView) {
-  return panelOf(host).updateView(change)
+/** Sets the published view. A refused value (too big, or any failure) never fails a board change or a worker start: the next publish tries again. */
+export async function updateView(host: Host, change: (value: SymccView) => SymccView) {
+  try {
+    await panelOf(host).updateView(change)
+  } catch {
+    // dropped on purpose, see above
+  }
 }
 
 // ---------------- what this module holds while it is loaded ----------------

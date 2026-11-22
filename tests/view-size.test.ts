@@ -5,6 +5,11 @@ import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { slimView, VIEW_MAX_CHARS, VIEW_WHOLE_MS } from '../hooks/claude/panel'
 import type { SymccView } from '../types'
+import { addTask, emptyBoard } from '../hooks/board'
+import { change } from '../hooks/app/store'
+import { publish } from '../hooks/app/lead'
+import { S, sizeNotes } from '../hooks/app/state'
+import { fakeHost, memoryFs } from './fake-host'
 
 const now = Date.parse('2026-11-22T12:00:00Z')
 const at = (msAgo: number) => new Date(now - msAgo).toISOString()
@@ -49,6 +54,57 @@ test('a view over the limit is trimmed, oldest finished tasks first, instead of 
   const ids = (out.tasks as unknown as { id: string }[]).map(t => t.id)
   expect(ids.includes('T-0')).toBe(true)
   expect(ids.includes('T-3999')).toBe(false)
+})
+
+test('open tasks are cut only after old finished tasks have gone', () => {
+  const open = { ...task('T-open', 'todo', 60_000), details: long.repeat(4), history: Array.from({ length: 40 }, () => ({ at: at(0), kind: 'step', text: 'line' })) }
+  const tasks = [open, ...Array.from({ length: 20000 }, (_, i) => ({ ...task(`T-${i}`, 'done', VIEW_WHOLE_MS * 2 + i), details: '', history: [] }))]
+  const out = slimView(viewOf(tasks), now)
+  const o = (out.tasks as unknown as { id: string; details: string; history: unknown[] }[]).find(t => t.id === 'T-open')
+  expect(o?.details).toBe(long.repeat(4))
+  expect(o?.history.length).toBe(40)
+  expect(JSON.stringify(out).length).toBeLessThan(VIEW_MAX_CHARS)
+})
+
+/** A host whose panel keeps the view as Claude Code's panel does (slimView), refusing a value over the limit. */
+function refusingWorld() {
+  let stored = ''
+  const w = fakeHost({ fs: memoryFs(new Map()) })
+  const panel = {
+    ...w.panel,
+    updateView: async (f: (v: SymccView) => SymccView) => {
+      const text = JSON.stringify(slimView(f(w.panel.view()), now))
+      if (text.length > VIEW_MAX_CHARS) throw new Error('$.state.set: the value is over the 4194304 limit')
+      stored = text
+    },
+  }
+  S.root = '/repo'
+  S.writing = Promise.resolve()
+  S.enabledNow = true
+  return { ...w, host: { ...w.host, ui: { ...w.host.ui, panel } }, stored: () => stored }
+}
+
+test('publish of a board with many long finished tasks stores a view under 4 MB and warns about nothing', async () => {
+  const w = refusingWorld()
+  const b = emptyBoard()
+  const base = addTask(emptyBoard(), { origin: { why: 't' }, title: 'base' }, at(0))[0].tasks[0]!
+  for (let i = 1; i <= 700; i++) b.tasks.push({ ...base, id: `T-${i}`, status: 'done', details: long, history: [{ at: at(0), kind: 'merged', text: long }], updated_at: at(VIEW_WHOLE_MS * 3) } as never)
+  expect(JSON.stringify(b.tasks).length).toBeGreaterThan(3_000_000)
+  await publish(w.host, b)
+  expect(w.stored().length).toBeGreaterThan(0)
+  expect(w.stored().length).toBeLessThan(VIEW_MAX_CHARS)
+  expect(sizeNotes.size).toBe(0)
+})
+
+test('publish and a board change survive a view the host refuses', async () => {
+  const w = fakeHost({ fs: memoryFs(new Map()) })
+  w.host.ui.panel!.updateView = async () => Promise.reject(new Error('$.state.set: the value is 4196705 characters, over the 4194304 limit'))
+  S.root = '/repo'
+  S.writing = Promise.resolve()
+  S.enabledNow = true
+  await publish(w.host, emptyBoard())
+  await change(w.host, b => ({ ...b, mode: 'auto' }))
+  expect(true).toBe(true)
 })
 
 test('open tasks stay while finished ones go', () => {
