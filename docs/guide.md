@@ -1183,7 +1183,7 @@ TASKS ────────────────────────�
    ✓ 67 merged   ↺ 76 sent back   ✗ 0 failed   Σ 320.7M tokens
    █████████████▓▒░ workers 84% · checkers 8% · scouts 5% · lead 3%
    ⌀ per task 2.8M · 9m work · 23m start-to-merge   first try 34% · ⌀ 2.4 tries   ⌕ 68 sent back by the checker
-   ⏱ 13h 06m agent work · ≈ $64 this session   busiest hour 14:00 · 42M   08 ▁▂▃▅▆▅█▆▅▃▃▂▂ 20
+   ⏱ 13h 06m agent work · ≈ $64 this session   busiest hour 14:00 · 42M   00         ▁▂▃▅▆▅█········· 24
   ```
 
   The first line: merged, sent back (every send-back today: the checker's problems, tests failed, a clash with main), failed, and the tokens of everyone today (workers, checkers, scouts and the lead: the same total the bar's shares are out of, so it is never smaller than the busiest hour; when the lead's and the scouts' tokens aren't known it is the tries only and says a dim `(tries only)`). The second: a bar of who spent today's tokens (workers, checkers, scouts, the lead; each in
