@@ -1,4 +1,4 @@
-// T-795, T-844: a folder with no .symcc in it or above it stays off until the owner runs /symcc-init (like git init). Off means
+// T-795, T-844, T-860: a folder with no .symcc in it (never one above) stays off until the owner runs /symcc-init (like git init). Off means
 // plain Claude: no lead prompt, no board updates, tools refuse, the band says so, and nothing is written. A project
 // that already has a board still starts on (with or without `enabled`).
 import { expect } from 'claude-code/testing'
@@ -47,9 +47,9 @@ test('a session in a folder with no board: no lead prompt, no board update, tool
   expect(w.toLead).toEqual([])
   expect(takeBoardUpdate()).toBeUndefined()
   expect(await toolCall(w.host, toolName('board'), undefined, {})).toEqual({ result: notSetUpAnswer(S.N.name) })
-  expect(notSetUpAnswer('symcc')).toBe('no symcc board in this folder or any folder above it · /symcc-init to create one here')
+  expect(notSetUpAnswer('symcc')).toBe('no symcc board in this folder · /symcc-init to create one here')
   expect(w.panel.view()).toMatchObject({ on_here: false, off_here: 'new' })
-  expect(offStatusLine('symcc', true, 'new')).toBe('no symcc board in this folder or any folder above it · /symcc-init to create one here')
+  expect(offStatusLine('symcc', true, 'new')).toBe('no board here · /symcc-init')
   expect(offStatusParts('symcc', true, 'new').find(p => p.command)?.text).toBe('/symcc-init')
   expect(w.opened).toEqual([])
   // another command, /symcc-enable too, points to /symcc-init
@@ -158,19 +158,29 @@ test('T-844: /symcc-init in a folder with no .git asks first; "git" sets up git 
   expect([...w.files.keys()].some(k => k.startsWith('/home/me/.symcc'))).toBe(false)
 })
 
-test('T-844: a session in a subfolder of a project finds the project\'s .symcc (the nearest one above)', async () => {
+test('T-860: a session started in a subfolder of a project gets only the hint: no board, band, panel, lead guide or writes; one in the folder with .symcc runs as usual', async () => {
   const w = world('a', '/repo/src/deep', '/repo')
   w.files.set('/repo/.symcc/board.json', JSON.stringify(emptyBoard()))
+  const before = JSON.stringify([...w.files.entries()])
   await sessionStart(w.host)
+  expect(S.fresh).toBe(true)
+  expect(S.root).toBe('/repo/src/deep')
+  expect(S.driving).toBe(false)
+  expect(await leadGuideText(w.host)).toBeUndefined()
+  expect(w.opened).toEqual([])
+  expect(w.panel.view()).toMatchObject({ on_here: false, off_here: 'new' })
+  expect(JSON.stringify([...w.files.entries()])).toBe(before)
+  // every command but /symcc-init and help points to /symcc-init
+  expect((await runCommand(w.host, 'symcc-tasks', ''))?.text).toBe('no symcc board in this folder · /symcc-init to create one here')
+  expect((await runCommand(w.host, 'symcc-mode', 'review'))?.text).toBe(notSetUpAnswer(S.N.name))
+  expect(JSON.stringify([...w.files.entries()])).toBe(before)
+  // the folder with the .symcc runs as usual
+  const v = world('a', '/repo', '/repo')
+  v.files.set('/repo/.symcc/board.json', JSON.stringify(emptyBoard()))
+  await sessionStart(v.host)
   expect(S.fresh).toBe(false)
   expect(S.root).toBe('/repo')
   expect(S.driving).toBe(true)
-  // a nearer .symcc wins
-  const v = world('a', '/repo/sub', '/repo')
-  v.files.set('/repo/.symcc/board.json', JSON.stringify(emptyBoard()))
-  v.files.set('/repo/sub/.symcc/board.json', JSON.stringify(emptyBoard()))
-  await sessionStart(v.host)
-  expect(S.root).toBe('/repo/sub')
 })
 
 test('T-844: a folder with no .symcc above it, under a git repo, stays off and writes nothing', async () => {
@@ -193,14 +203,13 @@ test('T-858: with no board, /symcc-stats, /symcc-stats html, /symcc-doctor and /
   expect([...w.files.keys()]).toEqual([])
 })
 
-test('T-858: a bare .symcc folder with no board.json does not stop the search for a board above it', async () => {
+test('T-860: a subfolder with a bare .symcc folder and no board.json is still a folder with no board', async () => {
   const w = world('a', '/repo/sub', '/repo')
   w.files.set('/repo/.symcc/board.json', JSON.stringify(emptyBoard()))
   w.files.set('/repo/sub/.symcc/stray.txt', '')
-  w.files.set('/repo/sub/.symcc', '')
   await sessionStart(w.host)
-  expect(S.fresh).toBe(false)
-  expect(S.root).toBe('/repo')
+  expect(S.fresh).toBe(true)
+  expect(S.root).toBe('/repo/sub')
 })
 
 test('T-844: /symcc-init where a board exists changes nothing and says so', async () => {
@@ -226,20 +235,20 @@ test('T-856: /symcc-init in a window turned off with /symcc-disable here does no
   expect(r?.text).toContain('/symcc-enable here turns it back on')
 })
 
-test('T-844: /symcc-init in a subfolder of a folder with .symcc makes the subfolder\'s own board; later sessions there use it', async () => {
+test('T-860: /symcc-init in a subfolder of a project makes the subfolder\'s own board, with no parent-board message; later sessions there use it', async () => {
   const v = world('a', '/repo/src', '/repo')
   v.files.set('/repo/.git', '')
   v.files.set('/repo/src/.git', '')
   v.files.set('/repo/.symcc/board.json', JSON.stringify(emptyBoard()))
   await sessionStart(v.host)
-  expect(S.root).toBe('/repo')
-  const opened = v.opened.length
+  expect(S.fresh).toBe(true)
   const r = await runCommand(v.host, 'symcc-init', '')
-  expect(r?.text).toContain('new')
-  expect(r?.text).not.toContain('above this folder')
+  expect(r?.text).toContain('is on in this project')
+  expect(r?.text).not.toContain('nearest')
+  expect(r?.text).not.toContain('start a new session')
   expect(v.files.has('/repo/src/.symcc/board.json')).toBe(true)
-  expect(S.root).toBe('/repo')
-  expect(v.opened.length).toBe(opened)
+  expect(S.root).toBe('/repo/src')
+  expect(S.fresh).toBe(false)
   const again = world('b', '/repo/src', '/repo')
   for (const [k, val] of v.files) again.files.set(k, val)
   await sessionStart(again.host)
@@ -275,27 +284,6 @@ function slowGit(id: string, root: string, repoRoot: string, mode: { fail?: bool
   } as typeof w.host
   return { ...w, host }
 }
-
-test('T-844: while /symcc-init sets up a subfolder, the session keeps answering from the parent board', async () => {
-  let open!: () => void
-  const gate = new Promise<void>(r => (open = r))
-  const v = slowGit('a', '/repo/src', '/repo', { gate })
-  v.files.set('/repo/.git', '')
-  v.files.set('/repo/.symcc/board.json', JSON.stringify(emptyBoard()))
-  await sessionStart(v.host)
-  const init = runCommand(v.host, 'symcc-init', 'git')
-  for (let i = 0; i < 20; i++) await Promise.resolve()
-  const mode = await runCommand(v.host, 'symcc-mode', 'review')
-  expect(mode?.text).not.toContain('only guards')
-  expect(S.root).toBe('/repo')
-  expect(S.guardOnly).toBe(false)
-  open()
-  const r = await init
-  expect(r?.text).toContain('board created')
-  expect(JSON.parse(v.files.get('/repo/.symcc/board.json')!).mode).toBe('review')
-  expect(JSON.parse(v.files.get('/repo/src/.symcc/board.json')!).mode).toBe('auto')
-  expect(S.root).toBe('/repo')
-})
 
 test('T-844: a failing git init creates nothing; /symcc-init git again retries', async () => {
   const mode = { fail: true } as { fail?: boolean }
@@ -334,38 +322,6 @@ test('T-844: a git step that fails after git init leaves no .git or .gitignore; 
   const again = await runCommand(host, 'symcc-init', 'git')
   expect(again?.text).toContain('is on in this project')
   expect(w.ran.filter(x => x.args.startsWith('init')).length).toBe(2)
-})
-
-test('T-844: the lead heartbeat cannot claim the new board\'s lead during or after /symcc-init in a subfolder', async () => {
-  let open!: () => void
-  const gate = new Promise<void>(r => (open = r))
-  const v = slowGit('a', '/repo/src', '/repo', { gate })
-  v.files.set('/repo/.git', '')
-  v.files.set('/repo/.symcc/board.json', JSON.stringify(emptyBoard()))
-  await sessionStart(v.host)
-  const parentLead = v.files.get('/repo/.symcc/lead.json')
-  const init = runCommand(v.host, 'symcc-init', 'git')
-  for (let i = 0; i < 20; i++) await Promise.resolve()
-  leadBeat(v.host)
-  open()
-  await init
-  leadBeat(v.host)
-  for (let i = 0; i < 50; i++) await Promise.resolve()
-  expect([...v.files.keys()].filter(k => k.startsWith('/repo/src/.symcc') && k.includes('lead'))).toEqual([])
-  expect(JSON.parse(v.files.get('/repo/.symcc/lead.json')!).session).toBe(JSON.parse(parentLead!).session)
-  expect(S.root).toBe('/repo')
-})
-
-test('T-844: a broken board above does not stop /symcc-init in a subfolder with its own .git', async () => {
-  const v = world('a', '/repo/src', '/repo')
-  v.files.set('/repo/.git', '')
-  v.files.set('/repo/src/.git', '')
-  v.files.set('/repo/.symcc/board.json', '{bad')
-  await sessionStart(v.host)
-  const r = await runCommand(v.host, 'symcc-init', '')
-  expect(r?.text).not.toContain('Then try again')
-  expect(v.files.has('/repo/src/.symcc/board.json')).toBe(true)
-  expect(v.files.get('/repo/.symcc/board.json')).toBe('{bad')
 })
 
 // T-841: /symcc-enable on a project with a board that is off opens the panel; not with open_on_start off, nor twice

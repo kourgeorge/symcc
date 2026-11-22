@@ -51,7 +51,7 @@ test('the view file round-trips, and a broken or foreign one reads as none', () 
   const f = viewFile()
   expect(parseViewFile(viewFileText(f))).toEqual(f)
   for (const bad of [null, '', '{', '{"view":{}}', '[]']) expect(parseViewFile(bad)).toBe(null)
-  expect(viewPaths('/work/proj/.symcc/worktrees/T-1')).toContain('/work/proj/.symcc/view.json')
+  expect(viewPaths('/work/proj/.symcc/worktrees/T-1')).toEqual(['/work/proj/.symcc/worktrees/T-1/.symcc/view.json'])
 })
 
 test('T-630: the panel and the band show no all-time total of the tries ("total: … tokens in all over N tries"); a task page keeps its own', () => {
@@ -311,7 +311,7 @@ test('the panel: the banner, then the list grouped by state (NEEDS YOU, what run
   expect(actionCommand({ kind: 'diff', id: 'T-2' })).toEqual({ name: 'symcc-diff', text: 'T-2' })
   expect(actionCommand({ kind: 'answer', id: 'Q-1', answer: 'yes' })).toEqual({ name: 'symcc-answer', text: 'Q-1 yes' })
   // T-858: no view file means no board here: says what every other place says
-  expect(panelLines(null, { opened: '', cursor: 0 }, NOW, 100).lines.map(lineText).join('\n')).toContain('no symcc board in this folder or any folder above it · /symcc-init to create one here')
+  expect(panelLines(null, { opened: '', cursor: 0 }, NOW, 100).lines.map(lineText).join('\n')).toContain('no symcc board in this folder · /symcc-init to create one here')
 })
 
 /** A fake of OpenTUI's Solid renderer: elements are plain objects, insert keeps what it is given (functions are drawn when read). */
@@ -376,7 +376,7 @@ test('T-773: a freshly opened OpenCode board is on the Live tab; the tab row is 
   board.stop()
 })
 
-test('startTui on a fake OpenCode TUI: reads the view file above its folder, draws the panel and the band, opens from /symcc-board, and sends approve, reject and answer as slash commands', async () => {
+test('startTui on a fake OpenCode TUI: reads the view file in its folder, draws the panel and the band, opens from /symcc-board, and sends approve, reject and answer as slash commands', async () => {
   const f = viewFile()
   const files = new Map([['/work/proj/.symcc/view.json', viewFileText({ ...f, view: { ...f.view, open_on_start: false } })]])  // T-756: the board doesn't open by itself here
   const sent: { sessionID: string; name: string; text: string }[] = []
@@ -386,7 +386,7 @@ test('startTui on a fake OpenCode TUI: reads the view file above its folder, dra
   let current: { name: string; sessionID: string } | undefined
   const answers = { prompt: 'too big', select: 'postgres' as string | undefined }
   const ctx: TuiContext = {
-    location: { directory: '/work/proj/src' },
+    location: { directory: '/work/proj' },
     theme: { primary: 'blue' },
     renderer: { width: 120, height: 200 },
     client: { session: { command: async input => void sent.push(input) } },

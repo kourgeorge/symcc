@@ -118,31 +118,18 @@ export async function sessionFolder(host: Host): Promise<string> {
 }
 
 /**
- * T-844: finds the board like git finds .git: `dir` itself, then each folder above it, the first with a .<name>
- * folder (or its board file) is the project. '' when there is none (symcc stays off).
- */
-export async function boardFolder(host: Host, dir: string): Promise<string> {
-  let d = dir.replace(/[\\/]+$/, '') || '/'
-  for (let i = 0; i < 100; i++) {
-    if (await host.fs.exists(`${d}/${S.N.boardFile}`).catch(() => false)) return d
-    if (d === '/' || /^[A-Za-z]:$/.test(d)) return ''
-    d = d.replace(/[\\/][^\\/]*$/, '') || '/'
-  }
-  return ''
-}
-
-/**
- * T-844: the project folder for a session in `dir`: the nearest folder (itself or above) with a .<name> folder; for a
- * worker's folder (inside the main project's worktrees folder) the main project. With none, `dir` itself (symcc is off
- * there, and /<name>-init would make the board in it). Never a git repo above, unless that is where .<name> is.
+ * T-860: the project folder for a session in `dir`: `dir` itself (the folder the session started in); never a folder above
+ * it. For a worker's folder (inside the main project's worktrees folder) it is the main project, found from the repo (see mainRoot).
+ * Whether a board is there is for the caller to look at: with none, symcc is off (and /<name>-init makes one in `dir`).
  */
 export async function projectRoot(host: Host, dir: string): Promise<string> {
   if (!dir) return ''
-  const found = await boardFolder(host, dir)
-  if (!found) return dir.replace(/[\\/]+$/, '') || '/'
-  const main = await mainRoot(host, found).catch(() => found)
-  if (main && main !== found && (await isWorkerFolder(host, dir, main).catch(() => false))) return main
-  return found
+  const own = dir.replace(/[\\/]+$/, '') || '/'
+  // only a path through <name>/worktrees can be a worker's folder; any other folder is not looked up in the repo
+  if (!own.includes(`/${S.N.worktrees}/`)) return own
+  const main = await mainRoot(host, own).catch(() => own)
+  if (main && main !== own && (await isWorkerFolder(host, own, main).catch(() => false))) return main
+  return own
 }
 
 /** Counts this copy of the plugin's temp files, so each save gets its own (see tmpName). */

@@ -218,7 +218,7 @@ async function createBoardIn(host: Host, dir: string, setUpGit: boolean): Promis
   return ''
 }
 
-/** A window that started with no board looks again for the nearest board; if one is there now, it starts the normal way (off here when another window drives, a lead otherwise). */
+/** A window that started with no board looks again for a board in its own folder; if one is there now, it starts the normal way (off here when another window drives, a lead otherwise). */
 async function refreshFresh(host: Host) {
   if (!S.fresh || S.guardOnly) return
   const own = await sessionFolder(host)
@@ -235,15 +235,12 @@ async function refreshFresh(host: Host) {
  */
 async function initProject(host: Host, tell: (text: string) => void, withGit: boolean): Promise<string> {
   const own = (await sessionFolder(host)).replace(/[\\/]+$/, '') || '/'
-  // like git init: only a board in this exact folder stops it; one in a folder above does not (the nearest board wins)
+  // like git init: only a board in this exact folder stops it; one in a folder above does not
   if (await host.fs.exists(`${own}/${S.N.boardFile}`).catch(() => false)) return S.offHere ? (S.offWhy === 'other' ? `${S.N.name} is already set up here. It runs in another window; /${S.N.name}-enable here turns it on in this one too.` : `${S.N.name} is already set up here, but it is off in this window. /${S.N.name}-enable here turns it back on.`) :`${S.N.name} is already set up here.`
   const hasGit = await host.fs.exists(`${own}/.git`).catch(() => false)
-  if (!hasGit && !withGit) return `This folder has no git repo of its own (${S.N.name} never uses a folder above). ${S.N.name} needs git for its task branches. /${S.N.name}-init git sets up git here (a repo on main, a .gitignore and a first commit; never pushes) and creates the ${S.N.name} board here.`
-  // this session already runs on a board in a folder above: the new board is made here, but the session keeps the old one
-  const above = !S.fresh && !!S.root && S.root !== own ? S.root : ''
+  if (!hasGit && !withGit) return `This folder has no git repo of its own (a folder above is never used). ${S.N.name} needs git for its task branches. /${S.N.name}-init git sets up git here (a repo on main, a .gitignore and a first commit; never pushes) and creates the ${S.N.name} board here.`
   const failed = await createBoardIn(host, own, !hasGit)
   if (failed) return `${S.N.name} was not set up here: ${failed}${hasGit ? '' : ` (nothing was created; /${S.N.name}-init git tries again)`}`
-  if (above) return `${S.N.name} board created in ${shortHome(own, S.home)} (the nearest board wins there). This session still runs on the board in ${shortHome(above, S.home)}: start a new session in this folder to use the new one.`
   // the session's own folder with no board: it switches itself on, like a new start
   S.root = own
   S.fresh = false

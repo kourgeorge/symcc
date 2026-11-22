@@ -268,19 +268,13 @@ export function drawPanel<H = PanelHit>(r: TuiRuntime, theme: unknown, lines: Li
   return col
 }
 
-/** The view file's folders to look in: `dir` and each folder above it (a worker's folder is inside the main one's). */
+/** The view file's folder to look in (T-860): `dir` only, never a folder above it. */
 export function viewPaths(dir: string, name: string = DEFAULT_NAME): string[] {
-  const out: string[] = []
-  let d = dir.replace(/\/+$/, '') || '/'
-  for (;;) {
-    out.push(`${d === '/' ? '' : d}/${dataDir(name)}/${VIEW_FILE}`)
-    if (d === '/' || !d.includes('/')) break
-    d = d.slice(0, d.lastIndexOf('/')) || '/'
-  }
-  return out
+  const d = dir.replace(/\/+$/, '') || '/'
+  return [`${d === '/' ? '' : d}/${dataDir(name)}/${VIEW_FILE}`]
 }
 
-/** The first view file found from `dir` upwards, read and parsed; null when there is none. */
+/** The view file in `dir`, read and parsed; null when there is none. */
 export async function readViewFile(dir: string, readText: TuiDeps['readText'], name?: string): Promise<ViewFile | null> {
   for (const p of viewPaths(dir, name)) {
     const text = await readText(p).catch(() => null)

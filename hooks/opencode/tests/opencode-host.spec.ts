@@ -461,33 +461,28 @@ test('a lead.json left by an OpenCode server stopped without its cleanup (T-467)
   }
 }, LONG_TEST_MS)
 
-test('a copy in a subfolder of the main project runs the engine (as Claude Code\'s sessionStart does); with the main folder\'s copy running, it waits', async () => {
+test('T-860: a copy started in a subfolder of the main project is a folder with no board: the hint only, no lead, no timers, nothing written; the main folder\'s copy runs the engine', async () => {
   reset()
   const p = await project()
   try {
-    const roles: string[] = []
-    const onRole = (dir: string, role: CopyRole) => void roles.push(`${dir} ${role}`)
-    const plugin = symccServer({ engine: SYMCC_ENGINE, onRole, hostOptions: { say: () => undefined, sessionId: 'opencode-sub' } })
-    const end = await plugin.setup(fakeCtx(`${p.main}/src`).ctx)
-    expect(roles).toEqual([`${p.main}/src engine`])
+    const plugin = symccServer({ engine: SYMCC_ENGINE, hostOptions: { say: () => undefined, sessionId: 'opencode-sub' } })
+    const sub = `${p.main}/src`
+    const c = fakeCtx(sub, fakeSessions().api)
+    const end = await plugin.setup(c.ctx)
     expect(S.guardOnly).toBe(false)
-    expect(S.root).toBe(p.main)
-    expect(S.beat !== null).toBe(true)
-    expect(await readFile(`${p.main}/.symcc/lead.json`, 'utf8')).toContain('opencode-sub')
-    await end!()
+    expect(S.fresh).toBe(true)
+    expect(S.root).toBe(sub)
     expect(S.beat).toBe(null)
-    // one engine per project: the main folder's copy and a subfolder's share one owner
+    expect(await lstat(`${sub}/.symcc`).then(() => 'there', () => 'none')).toBe('none')
+    expect(await lstat(`${p.main}/.symcc/lead.json`).then(() => 'there', () => 'none')).toBe('none')
+    await end!()
     await settle()
     reset()
-    const { engine } = recordingEngine()
-    const roles2: string[] = []
-    const rec = symccServer({ engine, onRole: (dir: string, role: CopyRole) => void roles2.push(`${dir} ${role}`), hostOptions: { say: () => undefined } })
-    const endMain = await rec.setup(fakeCtx(p.main).ctx)
-    const endSub = await rec.setup(fakeCtx(`${p.main}/src`).ctx)
-    expect(roles2).toEqual([`${p.main} engine`, `${p.main}/src waiting`])
-    await endSub!()
-    await endMain!()
-    expect(owners().size).toBe(0)
+    const main = await plugin.setup(fakeCtx(p.main).ctx)
+    await readFile(`${p.main}/.symcc/board.json`, 'utf8')
+    expect(S.fresh).toBe(false)
+    expect(S.root).toBe(p.main)
+    await main!()
   } finally {
     await finish(p)
   }
@@ -1064,7 +1059,7 @@ test('two main copies: updates the engine copy kept before the lead was known st
     const plugin = symccServer({ engine: recordingEngine().engine, host: o => { const h = opencodeHost(o); hosts.push(h); return h }, hostOptions: { say: () => undefined, sessionId: 'opencode-lead' } })
     const a = fakeCtx(p.main, f.api)
     const endA = await plugin.setup(a.ctx)
-    const b = fakeCtx(`${p.main}/src`, f.api)
+    const b = fakeCtx(p.main, f.api)
     const endB = await plugin.setup(b.ctx)
     await hosts[0]!.lead.send('early news')
     const owner = f.lead(p.main)
