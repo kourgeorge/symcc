@@ -17,7 +17,7 @@ import { readFile } from 'node:fs/promises'
 import { rowEndBoard, ROW_END, ROW_END_NOW } from '../../../tests/row-end-cases'
 import { BRANCH_LINES_100, branchFactsAt, branchTasks, taskBranchDoing, taskBranchLong, taskBranchMerged, taskBranchTasks } from '../../../tests/branches-fixture'
 import type { TaskBranchFacts } from '../../core/task-branch'
-import { TODAY_BAR_START, TODAY_LINE_2, todayTasks, todayTeamOf } from '../../../tests/live-today-fixture'
+import { TODAY_BAR_START, TODAY_LINE_3, todayTasks, todayTeamOf } from '../../../tests/live-today-fixture'
 import { localOffset } from '../../core/days'
 import { textWidth as textWidthOf } from '../../core/stats'
 import { LIVE_INDENT, liveBranches, liveInner } from '../../core/live'
@@ -2741,22 +2741,23 @@ test('T-769: the Live tab\'s ▍Today has 4 lines (medians per task, work time, 
     return { texts, lines: texts.slice(at + 2, at + 6) }
   }
   const wide = today(140)
-  expect(wide.lines[0]).toBe(`${LIVE_INDENT}✓ 3 merged   ↺ 0 sent back   ✗ 0 failed   Σ 6M tokens`)
-  expect(wide.lines[1]).toBe(LIVE_INDENT + TODAY_LINE_2)
-  expect(wide.lines[2]!.startsWith(LIVE_INDENT + TODAY_BAR_START)).toBe(true)
-  expect(/[▁▂▃▄▅▆▇]/.test(wide.lines[2]!)).toBe(false)
-  expect(/^\s*\d\d [▁▂▃▄▅▆▇█ ]+ \d\d {3}busiest .* tokens {3}first try \d+%/.test(wide.lines[3]!)).toBe(true)
+  expect(wide.lines[0]).toBe(`${LIVE_INDENT}✓ 3 merged   ↺ 0 sent back   ✗ 0 failed   Σ 10M tokens`)
+  expect(wide.lines[1]!.startsWith(LIVE_INDENT + TODAY_BAR_START)).toBe(true)
+  expect(/[▁▂▃▄▅▆▇]/.test(wide.lines[1]!)).toBe(false)
+  expect(wide.lines[2]).toBe(LIVE_INDENT + TODAY_LINE_3)
+  // (the hours depend on the machine's time zone)
+  expect(/^ ⏱ 1h 15m agent work · ≈ \$12 this session   busiest hour \d\d:00 · \S+   \d\d [▁▂▃▄▅▆▇█ ]+ \d\d$/.test(wide.lines[3]!.replace(LIVE_INDENT, ' '))).toBe(true)
   // a broken today_team is left out: no lead, scouts or cost
   const broken = parseViewFile(viewFileText({ ...f, view: { ...f.view, today_team: 'x' as never } }))!
   expect('today_team' in broken.view).toBe(false)
   // narrow: the cost goes; at 40 only the bar is left on the third line
-  expect(today(70).texts.some(t => t.includes('≈ $'))).toBe(false)
+  expect(today(45).texts.some(t => t.includes('≈ $'))).toBe(false)
   const narrow = today(40)
   expect(narrow.texts.some(t => t === `${LIVE_INDENT}████████▓▒▒▒▒▒░░`)).toBe(true)
   // line 4 keeps both hour labels and a sparkline, its figures cut from the end
-  const four = narrow.texts.find(t => /^\s*\d\d [▁▂▃▄▅▆▇█ ]+ \d\d/.test(t))
+  const four = narrow.texts.find(t => / \d\d [▁▂▃▄▅▆▇█ ]+ \d\d$/.test(t))
   expect(four === undefined).toBe(false)
-  expect(four!.includes('⌕')).toBe(false)
+  expect(four!.includes('busiest')).toBe(false)
 })
 
 test('T-692: the Live tab draws the terminal panel\'s lanes and today (core/live.ts) for the same board, from the slim view file; a narrow panel cuts nothing', () => {
@@ -2771,7 +2772,7 @@ test('T-692: the Live tab draws the terminal panel\'s lanes and today (core/live
     const layout = liveLayout(lanes, liveStations(true), inner)
     const frame = Math.floor(NOW / 1000)
     const under = (x: string) => LIVE_INDENT + x
-    return [liveHeader(view, lanes), 'TASKS', ' ', under(liveLabelLine(layout)), ...lanes.flatMap(l => laneLines(l, layout, { nowMs: NOW, frame }).map(x => under(segText(x)))), ' ', 'TODAY', ' ', ...todayLines(liveToday(whole, NOW), inner).map(under), ...liveLegend(lanes, inner).map(under)]
+    return [liveHeader(view, lanes), 'TASKS', ' ', under(liveLabelLine(layout)), ...lanes.flatMap(l => laneLines(l, layout, { nowMs: NOW, frame }).map(x => under(segText(x)))), ' ', 'TODAY', ' ', ...todayLines(liveToday(whole, NOW), inner, true).map(under), ...liveLegend(lanes, inner).map(under)]
   }
   // OpenCode reads the view file, whose done task comes slim (no history): the today row must still match
   const f: ViewFile = { ...f0, view: { ...view, tasks: whole.map(t => viewTask(t)) } }
