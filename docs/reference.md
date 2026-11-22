@@ -142,10 +142,10 @@ Type these in the chat. `/symcc` opens everything; `/symcc-<word>` does one thin
 | `/symcc-settings orgmem delete N` | Delete note N from the organizational memory (its number on the Organizational memory page) |
 | `/symcc-doctor [fix [all\|id ...]]` | Check `.symcc/` and git (old backups, merged branches, leftover task folders, files near 4 MB, a stuck board). It only lists them; `fix all` or `fix <id> ...` cleans up |
 | `/symcc-disable` | Disable symcc for this project: Claude works as normal (no lead guide, workers, scouts, updates, sounds or voice); the board is kept |
-| `/symcc-enable` | Turn symcc back on, in the mode the board had. It never creates a board; with no `.symcc` in the folder the session started in, it points to `/symcc-init` |
+| `/symcc-enable` | Turn symcc on in this window: the project too if it was disabled, and this window if it was off here (it becomes a lead again), in the mode the board had. It says "already enabled" only when both were on. It never creates a board; with no `.symcc` in the folder the session started in, it points to `/symcc-init` |
 | `/symcc-init [git]` | Create `.symcc/` with the board in the folder Claude started in (a board in a parent folder does not matter), turn symcc on, become the lead, add the example scouts and open the panel. With no repository of its own the board still opens, with a "No git repo here" notice and a Set up git button; `/symcc-init git` sets git up here first. Where `.symcc/` already exists it changes nothing |
 | `/symcc-disable here` | Turn symcc off in this window only (plain Claude here). It is kept in this session, not in `board.json`; other windows are not changed. If this window drives the board, it hands driving over |
-| `/symcc-enable here` | Turn symcc on again in this window (it becomes a lead again). A window opened while another live window has symcc on starts off here; this opts in. If the whole project is disabled, use `/symcc-enable` |
+| `/symcc-enable here` | The same as `/symcc-enable` (kept as another spelling). A window opened while another live window has symcc on starts off here; `/symcc-enable` opts in |
 | `/symcc-drive` | Make this session drive the board (start workers, merge, run scouts). If another session drives, it hands over within 30 s: its running workers stop and restart here from their kept folders and branches, without using up a try. If it doesn't answer within 3 minutes, this session takes over anyway |
 | `/symcc-help [topic]` | The built-in manual |
 

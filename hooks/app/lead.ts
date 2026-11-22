@@ -7,7 +7,7 @@ import { openPane } from './open'
 import { playable, sayGone } from './voice'
 import { logoIdle, logoOnPublish } from './logo'
 import { pump, waitEnded, ORPHAN_WAIT_MS, unclaimQueued, queuedNeverStarted, unclaimed } from './workers'
-import { haltAll, haltWorkers, dropLeadUpdates } from './board-mode'
+import { haltAll, haltWorkers, dropLeadUpdates, setSymcc } from './board-mode'
 import { stopOrphans } from './cleanup'
 import { branchFacts, taskBranchesView } from './branches'
 
@@ -200,7 +200,7 @@ async function followBoard(host: Host) {
 // hands driving over (another window claims lead.json on its heartbeat) and, with no other window left, waits.
 
 /** The text of the take-over notice (a window off here tells it once when the window with symcc on is gone). */
-const takeoverText = () => `the ${S.N.name} window closed · /${S.N.name}-enable here to take over`
+const takeoverText = () => `the ${S.N.name} window closed · /${S.N.name}-enable to take over`
 
 /** At session start: when another window with symcc on is live (a fresh heartbeat in lead.json), this window starts off here. */
 export async function startOffHere(host: Host) {
@@ -216,12 +216,12 @@ export async function startOffHere(host: Host) {
   S.offWhy = 'other'
   S.enabledNow = false
   S.sawOther = true
-  host.ui.toast(S.N.toast(`${S.N.name} runs in another window · /${S.N.name}-enable here to use it here too`))
+  host.ui.toast(S.N.toast(`${S.N.name} runs in another window · /${S.N.name}-enable to use it here too`))
 }
 
 /** /<name>-disable here: this window works as plain ${S.W.app}; if it drove the board it hands driving over. Answers what happened. */
 export async function disableHere(host: Host): Promise<string> {
-  if (S.offHere) return `${S.N.name} is already off in this window. /${S.N.name}-enable here turns it back on.`
+  if (S.offHere) return `${S.N.name} is already off in this window. /${S.N.name}-enable turns it back on.`
   S.offHere = true
   S.offWhy = 'off'
   S.enabledNow = false
@@ -252,14 +252,30 @@ export async function disableHere(host: Host): Promise<string> {
     }).catch(() => undefined)
   }
   await publish(host, await load(host)).catch(() => undefined)
-  return `${S.N.name} is now off in this window: ${S.W.assistant} works as normal here from your next message. Other windows are not changed.${drove ? ' This window handed driving over; another window takes over within 30 s (if none is open, work waits until one is).' : ''} Turn it back on with /${S.N.name}-enable here.`
+  return `${S.N.name} is now off in this window: ${S.W.assistant} works as normal here from your next message. Other windows are not changed.${drove ? ' This window handed driving over; another window takes over within 30 s (if none is open, work waits until one is).' : ''} Turn it back on with /${S.N.name}-enable.`
 }
 
-/** /<name>-enable here: symcc is on in this window again and this window is a lead; it may drive again by the normal rules. */
+/** T-875: the answer of /<name>-enable once it turned something on: what it did, the mode, and how to start work when paused. */
+const onHereText = (b: Board) => {
+  const m = modeOf(b)
+  const paused = m === 'paused' ? ` No work starts while the board is paused; /${S.N.name}-mode auto (or review) starts it.` : ''
+  return `${S.N.name} is on in this window, in mode ${settingShown('mode', m)}: ${modeText(m)}.${paused}`
+}
+
+/**
+ * /<name>-enable (T-875: "here" is the same): symcc on, in this window. It turns the project on if it was disabled and this
+ * window on if it was off here; this window is then a lead and may drive again by the normal rules. "already enabled"
+ * only when both were on already.
+ */
 export async function enableHere(host: Host, tell: (text: string) => void): Promise<string> {
-  const b = await load(host)
-  if (b.enabled === false) return `${S.N.name} is disabled for the whole project. Turn it on with /${S.N.name}-enable.`
-  if (!S.offHere) return `${S.N.name} is already on in this window.`
+  let b = await load(host)
+  if (b.enabled !== false && !S.offHere) return setSymcc(host, true)
+  if (b.enabled === false) {
+    // with S.offHere still set, setSymcc neither tells the lead nor opens the panel; the steps below do that once
+    await setSymcc(host, true)
+    b = await load(host)
+    if (!S.offHere) return onHereText(b)
+  }
   S.offHere = false
   S.enabledNow = true
   S.sawOther = false
@@ -269,8 +285,8 @@ export async function enableHere(host: Host, tell: (text: string) => void): Prom
   if (openOnStart(b)) await openPane(host, { tab: 'live', focus: false, quiet: true }).catch(() => undefined)
   await claimLead(host).catch(() => false)
   void pump(host)
-  tell(`The owner enabled ${S.N.name} in this window with /${S.N.name}-enable here. You are a lead again; the board is in mode ${modeOf(b)}.`)
-  return `${S.N.name} is on in this window again, in mode ${settingShown('mode', modeOf(b))}: ${modeText(modeOf(b))}.`
+  tell(`The owner turned ${S.N.name} on in this window with /${S.N.name}-enable. You are a lead again; the board is in mode ${modeOf(b)}.`)
+  return onHereText(b)
 }
 
 /** T-793: how long after the take-over line first showed, with nobody taking over, the "needs you" reminder plays (once). */

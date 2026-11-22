@@ -66,7 +66,7 @@ export function COMMANDS(features: HostFeatures = ALL_FEATURES): { name: string;
     { name: `${S.N.name}-stats`, description: `Show ${S.N.name} time and token stats: the whole team (lead, workers, scouts), totals, averages per task and per try, time per stage, outcomes, by role, origin and day, with bar charts; inside (with a day range) counts only the work inside it; html writes them as a web page with charts and opens it: /${S.N.name}-stats [full|html] [7d [inside]|T-100..T-130]`, argumentHint: '[full|html] [7d [inside]|T-1..T-9]' },
     { name: `${S.N.name}-doctor`, description: `Check ${S.N.dir}/ and git: old migration backups, task branches already merged, leftover task folders, files near the 4 MB limit, a stuck board; lists them with sizes and cleans up only with /${S.N.name}-doctor fix (all) or fix b-T-5 m-1101-1000 (the items with those ids)`, argumentHint: '[fix [all|id ...]]' },
     { name: `${S.N.name}-disable`, description: `Disable ${S.N.name} for this project: ${S.W.assistant} works as normal, nothing runs; the board is kept; "here" turns it off in this window only`, argumentHint: '[here]' },
-    { name: `${S.N.name}-enable`, description: `Enable ${S.N.name} again for this project, in the mode the board had; "here" turns it on again in this window`, argumentHint: '[here]' },
+    { name: `${S.N.name}-enable`, description: `Turn ${S.N.name} on in this window: the project too if it was disabled, in the mode the board had`, argumentHint: '[here]' },
     { name: `${S.N.name}-init`, description: `Set up ${S.N.name} in this folder, like git init: makes ${S.N.dir}/ here, turns it on and opens the board; with no .git of its own it asks first, then "git" sets up git here too; where a board exists it changes nothing`, argumentHint: '[git]' },
     { name: `${S.N.name}-drive`, description: `Make this session drive the ${S.N.name} board (start workers, merge, run scouts); another driving session hands over first` },
     { name: S.N.help, description: `Show the ${S.N.name} manual: how the board, lead, workers and scouts work, and every command`, argumentHint: '[topic]' },
@@ -238,7 +238,7 @@ async function refreshFresh(host: Host) {
 async function initProject(host: Host, tell: (text: string) => void, withGit: boolean): Promise<string> {
   const own = (await sessionFolder(host)).replace(/[\\/]+$/, '') || '/'
   // like git init: only a board in this exact folder stops it; one in a folder above does not
-  if (await host.fs.exists(`${own}/${S.N.boardFile}`).catch(() => false)) return S.offHere ? (S.offWhy === 'other' ? `${S.N.name} is already set up here. It runs in another window; /${S.N.name}-enable here turns it on in this one too.` : `${S.N.name} is already set up here, but it is off in this window. /${S.N.name}-enable here turns it back on.`) :`${S.N.name} is already set up here.`
+  if (await host.fs.exists(`${own}/${S.N.boardFile}`).catch(() => false)) return S.offHere ? (S.offWhy === 'other' ? `${S.N.name} is already set up here. It runs in another window; /${S.N.name}-enable turns it on in this one too.` : `${S.N.name} is already set up here, but it is off in this window. /${S.N.name}-enable turns it back on.`) :`${S.N.name} is already set up here.`
   const hasGit = await host.fs.exists(`${own}/.git`).catch(() => false)
   // T-861: plain init always makes the board; with no git the board shows a notice and its Set up git button does the git part
   const failed = await createBoardIn(host, own, !hasGit && withGit)
@@ -251,7 +251,7 @@ async function initProject(host: Host, tell: (text: string) => void, withGit: bo
   if (S.offHere) {
     startTimers(host)
     await publish(host, await load(host))
-    return `${S.N.name} already runs in another window. /${S.N.name}-enable here turns it on in this one too.`
+    return `${S.N.name} already runs in another window. /${S.N.name}-enable turns it on in this one too.`
   }
   S.startupDone = false
   try {
@@ -661,8 +661,9 @@ export async function runCommand(host: Host, command: string, args: string): Pro
       return say(await ownerSettings(host, cmd.input, `with /${S.N.name}-settings`))
     case 'disable':
     case 'enable':
-      if (cmd.here) return say(cmd.kind === 'enable' ? await enableHere(host, t => tellLead(host, t)) : await disableHere(host))
-      return say(await setSymcc(host, cmd.kind === 'enable'))
+      // T-875: /<name>-enable (with or without "here") means "on, in this window"; only disable has a one-window form
+      if (cmd.kind === 'enable') return say(await enableHere(host, t => tellLead(host, t)))
+      return say(cmd.here ? await disableHere(host) : await setSymcc(host, false))
     case 'drive':
       return say(await driveHere(host))
     case 'mode': {

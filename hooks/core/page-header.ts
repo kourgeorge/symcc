@@ -3,7 +3,7 @@
 //
 //    ‹ [Tasks]                                              T-738 · ‹ 2 of 6 ›     1. where you are
 //    T-738  Live tab: an empty line before each section                           2. the title
-//    ▶ doing · worker · 4m   change · general · try 1/3   ♟ from you              3. the state
+//    ▶ doing · worker · ⏱ 4m   change · general · try 1/3   ♟ from you            3. the state
 //    [Pause]   [Role] [Watch worker]   [Drop]   [☐ Needs review] [Copy]           4. the buttons, in groups
 //   ───────────────────────────────────────────────────────────────────────────────  then a thin rule (T-790)
 //
@@ -26,8 +26,8 @@ export type { ActionGroup }
 export { GROUP_ORDER }
 
 /** The tab a page was opened from: its Back button names it ("‹ [Tasks]", "‹ [Live]", "‹ [Scouts]"). */
-export type PageFrom = 'tasks' | 'live' | 'scouts'
-export const FROM_WORD: Record<PageFrom, string> = { tasks: 'Tasks', live: 'Live', scouts: 'Scouts' }
+export type PageFrom = 'tasks' | 'live' | 'scouts' | 'roles'
+export const FROM_WORD: Record<PageFrom, string> = { tasks: 'Tasks', live: 'Live', scouts: 'Scouts', roles: 'Roles' }
 /** The Back button's words, the tab's name: "Tasks" (drawn "[Tasks]" after the arrow, see whereLine). */
 export const backText = (from: PageFrom): string => FROM_WORD[from]
 /** The arrow before the Back button: "‹ " (not part of the button, T-775). */
@@ -134,7 +134,7 @@ const dot = (): Seg => ({ text: ' · ', color: 'inactive' })
 
 /**
  * Line 3 of a task's page, in groups (a narrow page wraps between them): the status mark and word in its color, the
- * step it is in and its work time ("▶ doing · worker · 4m", "◆ ready for review", "✗ failed"); its kind · role ·
+ * step it is in and its work time ("▶ doing · worker · ⏱ 4m", "◆ ready for review", "✗ failed"); its kind · role ·
  * try n/m; where it came from (originShort); and its note, when it has one (dim). `merging`: an approve this page
  * started (shown doing at once, as on the board); `note`: the note as this session shows it (sessionNote).
  */
@@ -148,7 +148,7 @@ export function taskStateGroups(t: BoardTask, o: { nowMs: number; merging?: bool
     const step = stageStep(p.stage)
     status.push(dot(), { text: step ? `${STEP_WORD[step]}${p.stage === 'queue' && p.place ? ` (${p.place})` : ''}` : 'worker', color: 'text' })
     const time = rowTime(t, o.nowMs)
-    if (time) status.push(dot(), { text: time, color: 'inactive' })
+    if (time) status.push(dot(), { text: `⏱ ${time}`, color: 'inactive' })
   }
   const what: Seg[] = [{ text: kindOf(t), color: 'suggestion' }, dot(), { text: roleOf(t), color: 'ide' }]
   const tries = tryText(t, o.autoRetries)
@@ -262,6 +262,18 @@ export function scoutButtons(sc: Pick<SymccScout, 'running' | 'paused'>): Header
     { id: 'scout-edit', label: EDIT_WORD, group: 'task', key: 'e' },
     { id: 'scout-pause', label: sc.paused ? 'Resume' : 'Pause', group: 'page', key: 'p' },
     ...(sc.paused ? [{ id: 'scout-paused', label: '⏸ paused', group: 'page' as const, fact: true }] : []),
+  ]
+}
+
+/** The buttons of a role's page header (T-871): Edit and Prompt, Turn off or on, Reset to built-in (a replaced role) and
+ *  Remove (an added one); the keys are the ones the page has always had (e, p, o, r, d). */
+export function roleButtons(o: { canOff: boolean; off: boolean; canReset: boolean; canRemove: boolean; canSeePrompt: boolean }): HeaderButton[] {
+  return [
+    { id: 'role-edit', label: EDIT_WORD, group: 'task', key: 'e' },
+    ...(o.canSeePrompt ? [{ id: 'role-prompt', label: 'Prompt', group: 'task' as const, key: 'p' }] : []),
+    ...(o.canOff ? [{ id: 'role-off', label: o.off ? 'Turn on' : 'Turn off', group: 'page' as const, key: 'o' }] : []),
+    ...(o.canReset ? [{ id: 'role-reset', label: 'Reset to built-in', group: 'danger' as const, key: 'r' }] : []),
+    ...(o.canRemove ? [{ id: 'role-remove', label: 'Remove', group: 'danger' as const, key: 'd' }] : []),
   ]
 }
 

@@ -223,10 +223,10 @@ export function parseCommand(command: string, args: string, current: SymccMode =
       return { kind: 'help', topic: s }
     case 'disable':
       if (s.toLowerCase() === 'here') return { kind: 'disable', here: true }
-      return s ? use(`/${name}-disable [here] (turn ${name} off entirely, or only in this window; /${name}-enable [here] turns it back on)`) : { kind: 'disable' }
+      return s ? use(`/${name}-disable [here] (turn ${name} off entirely, or only in this window; /${name}-enable turns it back on)`) : { kind: 'disable' }
     case 'enable':
       if (s.toLowerCase() === 'here') return { kind: 'enable', here: true }
-      return s ? use(`/${name}-enable [here]`) : { kind: 'enable' }
+      return s ? use(`/${name}-enable (turn ${name} on in this window)`) : { kind: 'enable' }
     case 'init':
       if (s.toLowerCase() === 'git') return { kind: 'init', git: true }
       return s ? use(`/${name}-init [git] (set up ${name} in this folder, like the git command that starts a repo; "git" also sets up git here when this folder has no repo of its own)`) : { kind: 'init' }

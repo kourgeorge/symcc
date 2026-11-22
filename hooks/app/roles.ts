@@ -2,6 +2,9 @@ import { type RoleDef, type RolePromptKind, parseRole, roleSkipReason, roleTools
 import type { BrokenDef } from '../core/def-files'
 import { skippedRoles, S } from './state'
 import type { Host } from '../host'
+import { changedDay } from '../core/role-changes'
+import { localOffset } from '../core/days'
+import { path } from './store'
 import { type DefKind, loadDefs, defLists, manageDefs, newDefFile } from './def-files'
 
 // ---------------- worker roles ----------------
@@ -83,6 +86,14 @@ export function changeRole(host: Host, a: LeadRoleInput): Promise<{ ok: boolean;
   return manageDefs(host, ROLES, a)
 }
 
+/** The day the owner's file of role `name` was last changed ("2026-11-22"), or '' when it has no file or it can't be told. */
+export async function roleFileDay(host: Host, name: string): Promise<string> {
+  const st = await Promise.resolve()
+    .then(() => host.fs.stat(path(`${S.N.dir}/roles/${name}.md`)))
+    .catch(() => null)
+  return st && st.kind === 'file' && st.mtimeMs > 0 ?changedDay(st.mtimeMs, localOffset(st.mtimeMs)) : ''
+}
+
 // ---------------- the Roles page of the panel's Settings view ----------------
 
 /** A role's edit mode in the panel: one box per part of its file. */
@@ -95,6 +106,8 @@ export const roleView = {
   open: '',
   draft: null as RoleDraft | null,
   confirmRemove: false,
+  /** the Reset to built-in confirm step (T-871) */
+  confirmReset: false,
   naming: null as { name: string; error: string } | null,
   /** the built-in prompt shown on the opened role's page, view only ('' = none) */
   prompt: '' as RolePromptKind | '',
@@ -106,6 +119,7 @@ export function resetRoleView() {
   roleView.open = ''
   roleView.draft = null
   roleView.confirmRemove = false
+  roleView.confirmReset = false
   roleView.naming = null
   roleView.prompt = ''
 }
