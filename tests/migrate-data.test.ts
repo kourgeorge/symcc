@@ -344,6 +344,13 @@ test('T-805: migrating an old try keeps a cost of 0', () => {
   expect(tryTokens(r)).toEqual({ input: 100 })
 })
 
+test('T-805: a doing task keeps its current worker and checker open', () => {
+  const m = migrateRunAgents({ id: 'T-2', status: 'doing', agent: 'www', checker: 'kkk', runs: [{ started: T, agent: 'www' }] })!
+  const t = m as unknown as Parameters<typeof workerIdOf>[0]
+  expect(workerIdOf(t)).toBe('www')
+  expect(checkerIdOf(t)).toBe('kkk')
+})
+
 test('T-805: ids kept alone on an old try show no made-up agent lines, and the tokens still count', () => {
   const m = migrateRunAgents({ id: 'T-1', status: 'done', runs: [{ started: T, ended: E, tokens: { input: 150 }, checker_tokens: { input: 40 }, agent: 'w1', checkers: ['c1', 'c2'] }] })!
   const r = (m.runs as SymccRun[])[0]!

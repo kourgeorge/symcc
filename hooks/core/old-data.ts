@@ -70,18 +70,21 @@ export function migrateRunAgents(t: Raw): Raw | null {
     const last = ri === runs.length - 1
     // The times of an id kept alone are not known, so its entry is marked "dropped": the guard still finds the id, but
     // the task page shows no made-up line for it.
-    const mark = (kind: OldAgent['kind'], id: unknown, end?: string) => {
+    const mark = (kind: OldAgent['kind'], id: unknown, end?: string, open = false) => {
       if (!isAgentId(id) || ids(id)) return
-      agents = [...agents, { id, kind, started, ...(end ? { ended: end } : {}), ended_by: 'dropped' }]
+      agents = [...agents, open ? { id, kind, started } : { id, kind, started, ...(end ? { ended: end } : {}), ended_by: 'dropped' }]
     }
     const stops = (Array.isArray(restarts) ? restarts : []).filter(isObj)
     for (const id of stops.map(e => e.agent)) if (isAgentId(id)) agents = agents.map(a => (a.id === id ? { ...a, ended_by: 'restarted' } : a))
     for (const e of stops) mark('worker', e.agent, typeof e.at === 'string' ? e.at : ended)
-    mark('worker', agent, ended)
+    const doing = last && t.status === 'doing'
+    // the current worker of a task still doing stays open, so workerIdOf finds it
+    const current = doing && !ended ? (isAgentId(t.agent) ? t.agent : agent) : undefined
+    mark('worker', agent, ended, doing && !ended && agent === current)
     for (const c of Array.isArray(checkers) ? checkers : []) mark('checker', c, ended)
-    if (last && t.status === 'doing') {
-      mark('worker', t.agent, ended)
-      mark('checker', t.checker)
+    if (doing) {
+      mark('worker', t.agent, ended, !ended)
+      mark('checker', t.checker, undefined, true)
     }
     // what the sums hold that the entries do not
     const sum = sumTokens(agents.map(a => a.tokens))
