@@ -148,6 +148,13 @@ test('T-851: an owner follow-up question after a lead note stays in the text; a 
   expect(rows[1]!.reason).toBe('stopped before finishing')
 })
 
+test('T-859: the old-line fallback strips all list and bold marks after "problems:"', () => {
+  const t = task({ history: [({ kind: 'checker-problems', text: 'try 1: checker found problems: x **Problems:** - a.ts:1 bad', try: 1 })] as never })
+  expect(triesRows(t)[0]!.finding).toBe('a.ts:1 bad')
+  const u = task({ history: [({ kind: 'checker-problems', text: 'try 1: checker found problems: x Problems: 1. * b.ts:2 worse', try: 1 })] as never })
+  expect(triesRows(u)[0]!.finding).toBe('b.ts:2 worse')
+})
+
 test('T-859: an old squashed line with only list items and no problem text gives an empty finding; abbreviations do not cut a sentence', () => {
   const report = 'I read the diff and ran probes in /tmp.\n\n**What works:**\n- **Band line:** `bandSummary` gives the right text\n- hooks/core/b.ts:4 is fine'
   const squashed = report.replace(/\s+/g, ' ')

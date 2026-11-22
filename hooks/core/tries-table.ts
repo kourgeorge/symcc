@@ -43,9 +43,11 @@ export function firstSentence(s: string, max = 200): string {
  * sentence. Never a list item from a "What works" part; '' when the line has no such text.
  */
 export function firstFinding(line: string): string {
-  const after = /\bproblems?:\s*(?:[-*•]|\d+[.)])?\s*(\S[\s\S]*)$/i.exec(String(line ?? ''))
-  if (after) return firstSentence(after[1]!)
-  return ''
+  const after = /\bproblems?:([\s\S]*)$/i.exec(String(line ?? ''))
+  if (!after) return ''
+  // Strip any run of list marks, bold/italic marks and spaces from the start.
+  const text = after[1]!.replace(/^(?:[\s\-*_•]|\d+[.)])+/, '')
+  return text ? firstSentence(text) : ''
 }
 
 const tryNo = (e: SymccHistoryEntry): number => e.try ?? tryParts(e.text)?.[1] ?? 0
