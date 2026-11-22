@@ -46,6 +46,11 @@ export type SymccRun = {
   merge_main?: true
   /** T-743: the restarts symcc did itself on this try (oldest first), see RunRestart */
   restarts?: RunRestart[]
+  /**
+   * T-882: the closed-app stretches (ISO times, oldest first) of the restarts trimmed off `restarts` (only the latest few
+   * are kept), each at its real time, so the try's active time stays the same after the trim (see gapsOf).
+   */
+  idle?: { from: string; to: string }[]
 }
 
 /**

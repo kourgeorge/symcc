@@ -1,8 +1,8 @@
 // T-863: board times count only real work. A try that went on after a reopen (T-743) has a long stretch when no session was
 // open; that stretch is not work time. A step (queue, tests, ...) shows the time since the step began.
 import { expect, test } from 'claude-code/testing'
-import type { SymccTask } from '../types'
-import { goOnRun, activeFrom, agentLines, gapsOf, runMs, runsSummary, triesSummary, workerActiveMs } from '../hooks/core/runs'
+import type { SymccRun, SymccTask } from '../types'
+import { goOnRun, activeFrom, agentLines, gapsOf, keepAgentIds, runMs, runsSummary, triesSummary, workerActiveMs } from '../hooks/core/runs'
 import { timeLimitOf, hardCapOf } from '../hooks/core/task'
 import { liveLanes, liveToday, laneRight } from '../hooks/core/live'
 import { bandItems } from '../hooks/core/banner'
@@ -188,4 +188,70 @@ test('T-873: the over-time check counts the try\'s active time from its first st
   expect(workerActiveMs(plain, NOW - 44 * MIN, NOW + 2 * MIN) / MIN > limit).toBe(true)
   // no start on the board: the worker's own start
   expect(workerActiveMs(undefined, NOW - 46 * MIN, NOW) / MIN > limit).toBe(true)
+})
+
+/**
+ * T-882: 10 min of work, Claude Code closed 12 h, then `short` quick restarts (1 min of work, 1 min closed each), the
+ * last worker started 9 min ago. Active: 10 + short × 1 + 9 min.
+ */
+const longGapThenRestarts = (short: number) => {
+  const back = 9 + 2 * short // minutes ago the first worker after the long gap started
+  return {
+    started: at(back + 12 * 60 + 10),
+    restarts: [
+      { at: at(back + 12 * 60), why: REOPEN, started: at(back) },
+      ...Array.from({ length: short }, (_, k) => ({ at: at(back - 2 * k - 1), why: REOPEN, started: at(back - 2 * k - 2) })),
+    ],
+  }
+}
+
+test('T-882: a try with 11+ restarts after a long closed-app gap keeps its active minutes when the board is saved (old restarts trimmed)', () => {
+  const r = longGapThenRestarts(11)
+  expect(runMs(r, NOW)).toBe(30 * MIN)
+  // saving the board keeps only the last 10 restarts; the long gap's time is kept as a saved total
+  const [kept] = keepAgentIds([r])
+  expect(kept!.restarts!.length).toBe(10)
+  expect(runMs(kept!, NOW)).toBe(30 * MIN)
+  expect(workerActiveMs(kept!, NOW - 9 * MIN, NOW)).toBe(30 * MIN)
+  expect(NOW - activeFrom(kept!, Date.parse(kept!.started))).toBe(30 * MIN)
+  // saved again: nothing changes
+  expect(keepAgentIds([kept!])[0]).toBe(kept)
+  // more restarts trimmed later add to the saved total
+  const r2 = longGapThenRestarts(15)
+  expect(runMs(r2, NOW)).toBe(34 * MIN)
+  const [once] = keepAgentIds([{ ...r2, restarts: r2.restarts.slice(0, 13) }])
+  const [twice] = keepAgentIds([{ ...once!, restarts: [...once!.restarts!, ...r2.restarts.slice(13)] }])
+  expect(twice!.restarts!.length).toBe(10)
+  expect(runMs(twice!, NOW)).toBe(34 * MIN)
+  // the task page and the stats show the same time
+  const t = task('T-53', { runs: [kept] })
+  expect(triesSummary(t.runs, NOW)).toContain('30m (running)')
+  expect(statsData({ tasks: [t], nowMs: NOW }).perTry.sumMs).toBe(30 * MIN)
+})
+
+test('T-882: trimmed closed-app stretches stay at their real times, so work between two trimmed gaps still counts', () => {
+  // 2 h work, closed 20 h, a worker works 6 h, then 11 quick restarts (1 min closed each), the last worker started 9 min ago
+  const q = 31
+  const r = {
+    started: at(q + 360 + 1200 + 120),
+    restarts: [
+      { at: at(q + 360 + 1200), why: REOPEN, started: at(q + 360) },
+      ...Array.from({ length: 11 }, (_, k) => ({ at: at(q - 2 * k - 1), why: REOPEN, started: at(q - 2 * k - 2) })),
+    ],
+    agents: [
+      { id: 'ag1', kind: 'worker' as const, started: at(q + 360 + 1200 + 120), ended: at(q + 360 + 1200), ended_by: 'restarted' as const },
+      { id: 'ag2', kind: 'worker' as const, started: at(q + 360), ended: at(q - 1), ended_by: 'restarted' as const },
+      { id: 'ag3', kind: 'worker' as const, started: at(9) },
+    ],
+  }
+  const [kept] = keepAgentIds([r])
+  expect(kept!.restarts!.length).toBe(10)
+  expect((kept as SymccRun).idle!.length).toBe(2)
+  expect(runMs(kept!, NOW)).toBe(runMs(r, NOW))
+  expect(runMs(kept!, NOW)).toBe(500 * MIN)
+  // the 6 h worker keeps its 6 h, and the active time since it started is the same
+  expect(agentLines(kept!, NOW)).toEqual(agentLines(r, NOW))
+  expect(agentLines(kept!, NOW).join('\n')).toContain('6h 01m')
+  expect(NOW - activeFrom(kept!, Date.parse(at(q + 360)))).toBe(NOW - activeFrom(r, Date.parse(at(q + 360))))
+  expect(NOW - activeFrom(kept!, Date.parse(at(q + 360)))).toBe(380 * MIN)
 })

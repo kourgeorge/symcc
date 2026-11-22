@@ -3351,6 +3351,38 @@ test('T-873: the hard cap counts the try\'s active time too: 80 min, the gap, th
   expect(sent).toEqual([{ to: 'ag1', text: WRAP_UP_TEXT }])
 })
 
+test('T-882: 10 min, a 12 h closed-app gap, then 11 quick restarts (the long gap\'s restart trimmed off) is not asked for more time or wrapped up', async () => {
+  let sent: { to: string; text: string }[] = []
+  const r = await overTime(async (w, s) => {
+    sent = s
+    const MIN = 60_000
+    const nowMs = Date.now()
+    const iso = (minAgo: number) => new Date(nowMs - minAgo * MIN).toISOString()
+    const back = 9 + 22 // the first worker after the long gap started 31 min ago
+    workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: nowMs - 9 * MIN })
+    await change(w.$, b => {
+      const runs = find(b, 'T-1')?.runs
+      if (!runs?.length) return b
+      const why = 'restarted after Claude Code was reopened'
+      const restarts = [
+        { at: iso(back + 12 * 60), why, started: iso(back) },
+        ...Array.from({ length: 11 }, (_, k) => ({ at: iso(back - 2 * k - 1), why, started: iso(back - 2 * k - 2) })),
+      ]
+      return patchTask(b, 'T-1', { runs: [...runs.slice(0, -1), { ...runs.at(-1)!, started: iso(back + 12 * 60 + 10), restarts }] }, ISO)
+    })
+    // the saved board keeps only the last 10 restarts; 30 active minutes either way
+    expect(find(await load(w.$), 'T-1')?.runs?.at(-1)?.restarts?.length).toBe(10)
+    await check(w.$)
+    await check(w.$)
+    expect(workers.has('ag1')).toBe(true)
+  })
+  expect(r.t.status).toBe('doing')
+  expect((r.t as BoardTask).live?.time_ask).toBeUndefined()
+  expect((r.t as BoardTask).live?.wrap_up).toBeUndefined()
+  expect(leadQueue.some(x => x.includes('Give it more time?'))).toBe(false)
+  expect(sent).toEqual([])
+})
+
 test('"+30 min" moves the limit later: the worker goes on, is not asked again before it, and finishes normally', async () => {
   let said = ''
   const r = await overTime(async w => {
