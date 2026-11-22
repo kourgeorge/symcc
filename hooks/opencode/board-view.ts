@@ -913,7 +913,7 @@ function liveBody(f: ViewFile, cursor: number, nowMs: number, w: number): Body {
     for (const r of rows.get(l.id)!) r.id ? opens(r.segs, r.id) : b.add(under(r.segs))
   }
   if (lanes.length) b.add([{ text: LIVE_INDENT + LIVE_DIVIDER, color: 'inactive' }])
-  if (lanes.length) for (const x of liveLegend(lanes, inner)) b.add([{ text: LIVE_INDENT + x, color: 'inactive' }])
+  if (lanes.length) for (const x of liveLegend(inner)) b.add([{ text: LIVE_INDENT + x, color: 'inactive' }])
   if (br) {
     b.blank()
     b.add(liveSegs(br.head))
