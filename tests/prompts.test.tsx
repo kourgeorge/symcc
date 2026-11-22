@@ -45,22 +45,25 @@ test("T-616: the 'stage' history lines stay out of Earlier tries, so an earlier 
   ]
   const b = boardWith(['npm test'], { history })
   const p = WORKER_PROMPT(b.tasks[0]!, b, WT)
-  expect(p).toContain("Earlier tries:\n- try 1: checker found problems: X broken\n- try 2: tests failed: Y\nDon't repeat those mistakes.")
+  expect(p).toContain('## Earlier tries\n\n| try | how it ended | reason |')
+  expect(p).toMatch(/\| 1 \| sent back by the checker \|/)
+  expect(p).toContain("Don't repeat those mistakes.")
   expect(p).not.toContain('checker started')
 })
 
 test('the built-in prompts are filled in for the task: no placeholder is left, and the change prompt has the test rule', () => {
   setup()
-  const b = boardWith(['npm test'], { history: hist('created by the lead', 'try 1 failed its tests') })
+  const b = boardWith(['npm test'], { history: hist('created by the lead', 'try 1: Fixed the parser. → tests failed: 2 failed') })
   const p = WORKER_PROMPT(b.tasks[0]!, b, WT)
   expect(p).not.toContain('{{')
   expect(p).toContain('You are a symcc worker. Do exactly this one task, then stop.')
   expect(p).toContain(`own copy of the project on branch symcc/T-1:\n  ${WT}\n`)
-  expect(p).toContain('Task T-1: Do it\nMake it work.')
-  expect(p).toContain('Files you may change: src/. This is the full list')
+  expect(p).toContain('# Task T-1 · change · general\n\nTask T-1: Do it\n\nKind of task: change')
+  expect(p).toContain('## What to do\n\nMake it work.')
+  expect(p).toContain('## Files you may change\n\nsrc/. This is the full list')
   expect(p).toContain('These test commands must pass. symcc runs them all, each one on its own from your folder, before merging, and sends you the output if any fail:\n  npm test\n')
   expect(p).toContain(TEST_RULE)
-  expect(p).toContain("Earlier tries:\n- try 1 failed its tests\nDon't repeat those mistakes.")
+  expect(p).toContain('## Earlier tries\n\n| try | how it ended |')
   // T-656: the main prompt ends at the ask line; the org-mem ask is only added on a host with no debrief
   expect(p.endsWith(`what you changed.\n${ASK}`)).toBe(true)
   expect(WORKER_PROMPT(b.tasks[0]!, b, WT, undefined, '', LEARNED_ASK).endsWith(`what you changed.\n${ASK}\n${LEARNED_ASK}`)).toBe(true)
@@ -131,7 +134,7 @@ test('placeholders are filled in one pass: "{{files}}" in the task\'s details st
   setup()
   const b = boardWith([], { details: 'see {{files}} and {{nope}}' })
   const p = WORKER_PROMPT(b.tasks[0]!, b, WT)
-  expect(p).toContain('Task T-1: Do it\nsee {{files}} and {{nope}}')
+  expect(p).toContain('## What to do\n\nsee {{files}} and {{nope}}')
   expect(fillPrompt('investigation', { details: 'D {{ask}}', ask: 'A' })).toContain('D {{ask}}')
   expect(PROMPT_PLACEHOLDERS.change).toHaveProperty('test_command')
 })
@@ -141,7 +144,7 @@ test("a role's checklist may use the prompt's placeholders: {{files}} and {{test
   const role: RoleDef = { name: 'tester', description: 'writes tests', skills: [], prompt: '- only touch {{files}}\n- run: {{test_command}}\n- {{task_id}} on {{branch}} in {{folder}}\n- left: {{nope}} {{role}} {{ask}}' }
   const b = boardWith(['npm test'])
   const p = WORKER_PROMPT(b.tasks[0]!, b, WT, role)
-  expect(p).toContain('Your role: tester\n- only touch Files you may change: src/. This is the full list')
+  expect(p).toContain('## Your role: tester\n- only touch Files you may change: src/. This is the full list')
   expect(p).toContain('- run: These test commands must pass. symcc runs them all, each one on its own from your folder, before merging, and sends you the output if any fail:\n  npm test\n')
   expect(p).toContain(`- T-1 on symcc/T-1 in ${WT}`)
   // an unknown {{word}}, and the prompt's own bigger parts, are left as written

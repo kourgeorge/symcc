@@ -6104,7 +6104,7 @@ test('the worker prompt of an investigation asks for the answer in full and says
   expect(p).not.toContain('these must pass')
   const [c] = boardWith('auto', ['npm test'])
   const q = WORKER_PROMPT(c.tasks[0]!, c, WT)
-  expect(q).toContain('Files you may change: src/.')
+  expect(q).toContain('## Files you may change\n\nsrc/. This is the full list')
   expect(q).not.toContain('investigation')
 })
 

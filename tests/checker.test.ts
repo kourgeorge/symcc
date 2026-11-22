@@ -328,7 +328,7 @@ test('T-542: after the checker says OK, the prep and merge steps no longer say a
 
 // ---------------- the checker runs before the merge line; the tests run once, in it (T-551) ----------------
 
-const NO_PROJECT_TESTS = "Tests: Don't run the project's own tests (its test files or test commands): symcc runs the project's test commands once, in the merge queue, after you. Check the change with your own throwaway probe tests and scripts (in .scratch/ or /tmp) instead, and say a new test would pass without the change only where your own probe shows it."
+const NO_PROJECT_TESTS = "## Tests\n\nDon't run the project's own tests (its test files or test commands): symcc runs the project's test commands once, in the merge queue, after you. Check the change with your own throwaway probe tests and scripts (in .scratch/ or /tmp) instead, and say a new test would pass without the change only where your own probe shows it."
 
 /** The test commands the fake host ran, in order. */
 const testRuns = (w: ReturnType<typeof world>) => w.calls.filter(c => c.startsWith('/bin/sh -c '))
@@ -497,7 +497,7 @@ test('T-551: the checker prompt names no test command to run and says the tests 
   expect(p).not.toContain('npm test')
   expect(p).not.toContain('npm run lint')
   expect(p).not.toMatch(/run the tests for the changed files/i)
-  expect(p).toContain('Files it changed:\n  src/a.ts\n  src/a.test.ts\n')
+  expect(p).toContain('## Files it changed\n\n  src/a.ts\n  src/a.test.ts\n')
   expect(p).toContain('there is no need to look at the board or the main project folder')
   expect(p).not.toContain('{{')
   // the verdict format is kept
@@ -509,7 +509,7 @@ test('T-551: with no test commands set, the checker is still told not to look fo
   await saveBoard(w.$, boardWith(true, {}, { test_commands: [] }))
   await finish(w, async id => checkerFinished(id, 'OK'))
   const q = w.spawns[0]!.prompt
-  expect(q).toContain("Tests: Don't run the project's own tests (its test files or test commands): no test commands are set for this project, so nothing runs its tests in the merge queue after you; still, don't look for them.")
+  expect(q).toContain("## Tests\n\nDon't run the project's own tests (its test files or test commands): no test commands are set for this project, so nothing runs its tests in the merge queue after you; still, don't look for them.")
 })
 
 test("a checker role's checklist gets its placeholders filled in, as a worker's role does ({{files}}, {{test_command}}, {{kind}}, ...)", async () => {

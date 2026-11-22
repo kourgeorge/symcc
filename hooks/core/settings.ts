@@ -5,6 +5,7 @@ import { type Board, type Notify, notifyKind, soundNotify, soundSetFor, DEFAULT_
 import { ellipsis, num } from './text'
 import { MODE_NAME } from './review'
 import { MAX_TEST_MINUTES } from './test-timeout'
+import { testOutputHeading } from './test-output-heading'
 
 /** 'retry' while fewer than `max` tries were used, else 'fail'. */
 const retryOrFail = (tries: number | undefined, max: number): 'retry' | 'fail' => ((tries ?? 0) < max ? 'retry' : 'fail')
@@ -135,13 +136,7 @@ export function testTail(output: string, n = TEST_OUTPUT_CHARS): string {
   return [...(first.startsWith('$ ') ? [first] : []), failedTestsHead(blocks.length), ...kept, end].join('\n')
 }
 
-/** The worker prompt's heading over kept test output (testTail), saying what follows: the failing tests and the end, only the end, or all of it. */
-export function testOutputHeading(kept: string): string {
-  const lines = kept.split('\n')
-  const head = lines[0]?.startsWith('$ ') ? lines[1] : lines[0]
-  if (head && /^\d+ failed tests?, each "\(fail\)" line/.test(head)) return 'The failing tests and the end of the test output:'
-  return kept.startsWith('…') ? 'The end of the test output:' : 'The test output:'
-}
+export { testOutputHeading }
 
 /** Should the board panel open by itself when a session starts? Yes unless the board turned it off. */
 export const openOnStart = (b: Partial<Pick<Board, 'open_on_start'>>) => b.open_on_start !== false
