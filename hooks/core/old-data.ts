@@ -13,6 +13,11 @@ import type { ScoutRunOutcome, ScoutRunRecord } from './scouts'
 type Raw = Record<string, unknown>
 const isObj = (x: unknown): x is Raw => !!x && typeof x === 'object' && !Array.isArray(x)
 const isNum = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x)
+/** Whether `t` holds field `k` with a value (T-854): a key set to null, undefined, "" or [] is not old data, only a writer's empty default. */
+const has = (t: object, k: string): boolean => {
+  const v = (t as Raw)[k]
+  return v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && v.length === 0)
+}
 
 /** The task fields the removed stage engine kept (T-332 to T-342): on the task `stage`, `stages` and `backs`, on a try `stage`. */
 const STAGE_FIELDS = ['stage', 'stages', 'backs'] as const
@@ -21,7 +26,7 @@ const STAGE_FIELDS = ['stage', 'stages', 'backs'] as const
 export function withoutStages<T extends object>(t: T): T | null {
   const runs = (t as { runs?: unknown }).runs
   const runHas = Array.isArray(runs) && runs.some(r => isObj(r) && 'stage' in r)
-  if (!STAGE_FIELDS.some(k => k in t) && !runHas) return null
+  if (!STAGE_FIELDS.some(k => has(t, k)) && !runHas) return null
   const out = { ...t } as Raw
   for (const k of STAGE_FIELDS) delete out[k]
   if (runHas) out.runs = (runs as unknown[]).map(r => {
@@ -45,7 +50,7 @@ type OldAgent = { id?: string; kind: 'worker' | 'checker'; started: string; ende
 
 /** Whether a task (parsed JSON) still has what T-805 moved onto the agent entries of its tries. */
 export function hasOldAgents(t: Raw): boolean {
-  return 'agent' in t || 'checker' in t || (Array.isArray(t.runs) && t.runs.some(r => isObj(r) && (RUN_SUMS.some(k => k in r) || (Array.isArray(r.restarts) && r.restarts.some(e => isObj(e) && 'agent' in e)))))
+  return has(t, 'agent') || has(t, 'checker') || (Array.isArray(t.runs) && t.runs.some(r => isObj(r) && (RUN_SUMS.some(k => k in r) || (Array.isArray(r.restarts) && r.restarts.some(e => isObj(e) && 'agent' in e)))))
 }
 
 /**
@@ -123,7 +128,7 @@ export const OLD_ROLES: Record<string, string> = { tests: 'tester', backend: 'ge
 
 /** Task `t` without the old conflict_tries field (T-548), or null when it has none. */
 export function withoutConflictTries<T extends object>(t: T): T | null {
-  if (!('conflict_tries' in t)) return null
+  if (!has(t, 'conflict_tries')) return null
   const { conflict_tries: _c, ...rest } = t as T & { conflict_tries?: unknown }
   return rest as T
 }
@@ -133,7 +138,7 @@ export const TEST_RERUN_GONE_NOTE = 'its tests had run out of time; symcc no lon
 
 /** Task `t` without test_rerun and rerun_minutes (T-547), or null when it has neither; a task that waited for that rerun goes back to "todo". */
 export function withoutTestRerun(t: Raw): Raw | null {
-  if (!('test_rerun' in t) && !('rerun_minutes' in t)) return null
+  if (!has(t, 'test_rerun') && !has(t, 'rerun_minutes')) return null
   const { test_rerun, rerun_minutes: _m, ...rest } = t
   if (test_rerun === undefined || test_rerun === null || (t.status !== 'waiting' && t.status !== 'doing')) return rest
   const { session: _s, finishing: _f, checking: _c, live: _l, options: _o, asked_files: _a, question: _q, ask: _k, ...todo } = rest
@@ -155,11 +160,11 @@ const OLD_CLAIM_NOTES = ['starting at the next turn', 'worker starting']
  * Null when it has none of those.
  */
 export function withLive(t: Raw): Raw | null {
-  const old = OLD_LIVE.some(([k]) => k in t) || 'finishing' in t
+  const old = OLD_LIVE.some(([k]) => has(t, k)) || has(t, 'finishing')
   const doing = t.status === 'doing'
   const inChecker = doing && !isObj(t.live) && (t.note === OLD_CHECKER_NOTE || (isObj(t.checking) && t.checking.step === 'checker'))
   const phased = inChecker || (doing && !isObj(t.live) && typeof t.note === 'string' && (OLD_CLAIM_NOTES.includes(t.note) || t.note === 'worker on it'))
-  const falseMain = 'merge_main' in t && t.merge_main !== true
+  const falseMain = 'merge_main' in t && t.merge_main !== true && t.merge_main !== null && t.merge_main !== undefined
   const clash = t.status === 'failed' && !('failed_on' in t) && typeof t.note === 'string' && /^conflicts with the latest /.test(t.note)
   if (!old && !phased && !falseMain && !clash) return null
   const out: Raw = { ...t }
@@ -198,7 +203,8 @@ function oldAskBy(text: string, files: readonly string[], opts: readonly string[
  */
 export function withAsk(t: Raw): Raw | null {
   const liveQ = isObj(t.live) && 'question' in t.live
-  if (!(['question', 'options', 'asked_files', 'question_lead', 'options_lead'] as const).some(k => k in t) && !liveQ) return null
+  // only a field with a value is old data (T-854); a null one is left alone, and goes when a real one is moved
+  if (!(['question', 'options', 'asked_files', 'question_lead', 'options_lead'] as const).some(k => has(t, k)) && !(liveQ && has(t.live as Raw, 'question'))) return null
   const { question, options, asked_files, question_lead, options_lead, ...out } = t
   const at = typeof t.updated_at === 'string' ? t.updated_at : ''
   const text = typeof question === 'string' ? question : ''
@@ -591,7 +597,7 @@ export function oldDataRows(i: OldInput): OldRow[] {
     if (typeof t.role === 'string' && OLD_ROLES[t.role.trim().toLowerCase()]) c.role++
     if (!('origin' in t)) c.origin++
     if (!(typeof t.merge_into === 'string' && t.merge_into.trim())) c.noInto++
-    if ('test_rerun' in t || 'rerun_minutes' in t) c.rerun++
+    if (has(t, 'test_rerun') || has(t, 'rerun_minutes')) c.rerun++
     const rs = Array.isArray(t.runs) ? t.runs : []
     if (rs.some((r, k) => isObj(r) && typeof r.started === 'string' && !r.ended && !(k === rs.length - 1 && t.status === 'doing'))) c.openRun++
   }
