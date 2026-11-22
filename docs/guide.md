@@ -1121,7 +1121,7 @@ TASKS ────────────────────────�
   ones ahead `──○`, and the current one blinks between `◉` and `◎` (Claude Code doesn't tell
   plugins about reduced motion, so it always blinks; the tab redraws itself every second while
   it is shown). The `✧` after work and check (in the headings' color) means an agent works there, so
-  those stations need an agent slot (a worker or a checker); the legend under the lanes says
+  those stations need an agent slot (a worker or a checker); the legend under the lanes (below a short dim divider line) says
   `✧ = an agent works here (needs an agent slot)`; queue and tests use none, so there can be more lanes than
   `max_parallel`.
 - On the right: the time at the current station, or the place in the merge queue (`#2`).

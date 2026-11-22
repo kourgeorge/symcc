@@ -612,8 +612,15 @@ export const scoutRunsText = (runs: ScoutRunRecord[]): string => JSON.stringify(
 /** `runs` with `run` added at the end, only the last `keep` kept; `dropped` are the ones that fell out (their report files go too). */
 export function addScoutRunRecord(runs: ScoutRunRecord[], run: ScoutRunRecord, keep = SCOUT_RUNS_KEPT): { runs: ScoutRunRecord[]; dropped: ScoutRunRecord[] } {
   const all = [...runs, run]
-  const cut = Math.max(0, all.length - Math.max(1, keep))
-  return { runs: all.slice(cut), dropped: all.slice(0, cut) }
+  const max = Math.max(1, keep)
+  if (all.length <= max) return { runs: all, dropped: [] }
+  // The newest run that reported (found or nothing) is the scout's "last run": it stays even when older than the newest `keep`.
+  let pin = -1
+  for (let i = all.length - 1; i >= 0; i--) if (all[i]!.outcome === 'found' || all[i]!.outcome === 'nothing') { pin = i; break }
+  const recent = all.length - max
+  if (pin < 0 || pin >= recent) return { runs: all.slice(recent), dropped: all.slice(0, recent) }
+  const kept = [all[pin]!, ...all.slice(all.length - max)]
+  return { runs: kept, dropped: all.slice(0, recent).filter((_, i) => i !== pin) }
 }
 
 const reported = (r: ScoutRunRecord) => r.outcome === 'found' || r.outcome === 'nothing'

@@ -51,6 +51,8 @@ export const LIVE_STATIONS: readonly LiveStation[] = ['work', 'check', 'queue', 
 export const LIVE_AGENT_MARK = '✧'
 /** The line under the lanes that says what LIVE_AGENT_MARK after a station name means. */
 export const LIVE_LEGEND = `${LIVE_AGENT_MARK} = an agent works here (needs an agent slot)`
+/** T-836: the short dim divider line right above the key line (shown only when the key line is). */
+export const LIVE_DIVIDER = '─'.repeat(12)
 /** T-757: what the token bar means, with the board's usual tokens per merged task. */
 export const liveBarLegend = (usual: number): string => `bar: tokens of the task so far, full = usual per task (${fmtTokens(usual)})`
 /** The legend under the lanes in `width` columns: LIVE_LEGEND, then (when the usual tokens per task are known, so the
