@@ -176,4 +176,6 @@ test('T-859: a recorded checker result saves its problems on the entry and the t
 
 test('T-859: a report that ends in a "What works" list saves no problems', () => {
   expect(checkerProblems('Mostly fine.\n\n**What works:**\n- one\n- two')).toEqual([])
+  for (const head of ['## Problems', 'Problems found:', 'Problems (2):', 'The problems:'])
+    expect(checkerProblems(`I found one real problem: X.\n\n**What works:**\n- a\n\n${head}\n- hooks/x.ts:12 X is wrong`)).toEqual(['hooks/x.ts:12 X is wrong'])
 })

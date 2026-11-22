@@ -149,7 +149,7 @@ const stripMark = (l: string) => l.replace(/^\s*(?:[-*•]|\d+[.)])\s+/, '').tri
 export function checkerProblems(report: string): string[] {
   const lines = String(report ?? '').split('\n').map(l => l.trimEnd())
   const clean = (ls: string[]) => ls.map(stripMark).filter(Boolean).slice(0, CHECKER_PROBLEMS_MAX).map(l => oneLine(l, 300))
-  const h = lines.findLastIndex(l => /^\W*problems?\W*:\W*$/i.test(l))
+  const h = lines.findLastIndex(l => /^[#*_>\s]*(?:\w+ )?problems?(?: found| remaining)?(?:\s*\(\d+\))?[\s:*_]*$/i.test(l))
   if (h >= 0) {
     const rest = lines.slice(h + 1)
     const end = rest.findIndex((l, i) => !l.trim() && rest.slice(i + 1).some(x => /^\W*(?:what\b|\w[\w ]*:\W*$)/i.test(x)))
