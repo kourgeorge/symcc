@@ -7,7 +7,7 @@ import { type BoardTask, DEFAULT_AUTO_RETRIES, emptyBoard, kindOf, isInvestigati
 import { taskPhase, type PhaseStage } from './phase'
 import { handedBack, shownStatus } from './lead'
 import { cutTitle, median, padWidth, taskFigures, textWidth, wrapLine } from './stats'
-import { activeFrom, restartsOf, gapsOf, agentsOf, checkerIdOf, checkerTokensOf, tryCost, tryTokens, fmtCost, fmtDuration, fmtTokens, sumTokens, tokenCount, TOKEN_SIGN, fmtTok } from './runs'
+import { activeFrom, restartsOf, gapsOf, agentsOf, agentsOnTask, sumRuns,checkerIdOf, checkerTokensOf, tryCost, tryTokens, fmtCost, fmtDuration, fmtTokens, sumTokens, tokenCount, TOKEN_SIGN, fmtTok } from './runs'
 import { type KeyHint, LIVE_VIEW_KEYS, hintLineText, hintLines, rowDuration, waitOrder } from './panel'
 import { ORG_MEM_EMPTY, ORG_MEM_MAX_LINES, TOPIC_UNSORTED, ORG_MEM_ALL, orgMemNewest, orgMemShortDay, orgMemTopicCounts, type OrgMemNote } from './org-mem'
 import { depDone } from './archive'
@@ -57,20 +57,11 @@ export const LIVE_LEGEND = `${LIVE_AGENT_MARK} = an agent works here (needs an a
 export const TOKENS_NOTE = `${TOKEN_SIGN} = tokens`
 /** T-836: the short dim divider line right above the key line (shown only when the key line is). */
 export const LIVE_DIVIDER = '─'.repeat(12)
-/** T-757: what the token bar means, with the board's usual tokens per merged task. */
-export const liveBarLegend = (usual: number): string => `bar: ${TOKEN_SIGN} of the task so far, full = usual per task (${fmtTok(usual)})`
-/** The legend under the lanes in `width` columns: LIVE_LEGEND, then (when the usual tokens per task are known, so the
- *  lanes draw bars) what the bar means; on one line when it fits, else on more (each cut at spaces, never wider). */
-export function liveLegend(lanes: readonly Pick<LiveLane, 'usual'>[], width: number): string[] {
-  const usual = lanes.find(l => l.usual)?.usual
-  const w = Math.max(1, Math.floor(width))
-  // T-760: the mark's line is longer now, so a narrow panel wraps it too
-  const mark = wrapLine(LIVE_LEGEND, w)
-  if (!usual) return mark
-  const bar = liveBarLegend(usual)
-  const one = `${LIVE_LEGEND}   ${bar}`
-  if (textWidth(one) <= width) return [one]
-  return [...mark, ...wrapLine(bar, w)]
+/** The legend under the lanes in `width` columns: LIVE_LEGEND, cut at spaces onto more lines when narrow (never wider).
+ *  T-867: the lanes have no token bar any more, so nothing about a bar. */
+export function liveLegend(width: number): string[] {
+  // T-760: the mark's line is long, so a narrow panel wraps it
+  return wrapLine(LIVE_LEGEND, Math.max(1, Math.floor(width)))
 }
 /** What the Live tab says when no task is in doing. */
 export const LIVE_EMPTY = 'No task is running right now.'
@@ -153,6 +144,11 @@ export type LiveLane = {
   tokens?: number
   more?: boolean
   usual?: number
+  /** T-867: the task's active time so far, all its tries (runMs: closed-app stretches left out), in ms */
+  activeMs?: number
+  /** T-867: the task's tokens split by agent kind (its tries' agent entries), left out when 0 */
+  workerTokens?: number
+  checkerTokens?: number
   sentBack: number
   enteredMs: number
   agent: boolean
@@ -181,6 +177,16 @@ function stationOf(stage: PhaseStage, checker: boolean): LiveStation {
     case 'merge':
       return 'merged'
   }
+}
+
+/** T-867: task `t`'s active time (all tries, up to `nowMs`) and its tokens by agent kind, as lane fields (0s left out). */
+function usageOf(t: SymccTask, nowMs?: number): Pick<LiveLane, 'activeMs' | 'workerTokens' | 'checkerTokens'> {
+  const activeMs = sumRuns(t.runs, nowMs).ms
+  const agents = agentsOnTask(t)
+  const of = (kind: 'worker' | 'checker') => tokenCount(sumTokens(agents.filter(a => a.kind === kind).map(a => a.tokens)))
+  const worker = of('worker')
+  const checker = of('checker')
+  return { ...(activeMs > 0 ? { activeMs } : {}), ...(worker > 0 ? { workerTokens: worker } : {}), ...(checker > 0 ? { checkerTokens: checker } : {}) }
 }
 
 /** The board's usual tokens per merged task: the middle value over the done tasks (not investigations) with tokens. */
@@ -282,6 +288,7 @@ export function liveLanes(view: LiveView, nowMs: number): LiveLane[] {
         ...(total > 0 ? { tokens: total } : {}),
         ...(more && total > 0 ? { more } : {}),
         ...(usual ? { usual } : {}),
+        ...usageOf(t, nowMs),
         sentBack: (t.history ?? []).filter(h => h.kind === 'checker-problems').length,
         enteredMs,
         agent: !waiting && stage === 'worker' || (stage === 'checker' && !!checkerIdOf(t)),
@@ -336,6 +343,7 @@ export function liveFinishedLanes(view: LiveView, nowMs: number): LiveLane[] {
         tries: Math.max(tryNo, tryNo - auto + retries),
         ...(total > 0 ? { tokens: total } : {}),
         ...(usual ? { usual } : {}),
+        ...usageOf(t),
         sentBack: marksOf(t).filter(h => h.kind === 'checker-problems').length,
         enteredMs: done.atMs,
         agent: false,
@@ -558,10 +566,13 @@ export function liveLabelSegs(l: LiveLayout): LiveSeg[] {
   return text.split(LIVE_AGENT_MARK).flatMap((x, i): LiveSeg[] => [...(i ? [{ text: LIVE_AGENT_MARK, tone: 'mark' as const }] : []), ...(x ? [{ text: x, tone: 'dim' as const }] : [])])
 }
 
-/** A bar of `cells` blocks for `value` against `full`: "▕████░░░░▏". */
-const tokenBar = (value: number, full: number, cells: number) => {
-  const n = Math.max(0, Math.min(cells, Math.round((value / full) * cells)))
-  return `▕${'█'.repeat(n)}${'░'.repeat(cells - n)}▏`
+/** T-867: from this many times the board's median tokens per task, a lane's "(n× median)" is in the warning tone. */
+export const LANE_WARN_TIMES = 2
+/** How many times the median, rounded to one decimal as shown ("7.6", "1", "0.4"); the tone is decided on this
+ *  rounded number, so "(2× median)" is always in the warning tone. Under 0.05 it reads "<0.1", never "0". */
+export function laneTimes(x: number): { text: string; warn: boolean } {
+  const r = Math.round(x * 10) / 10
+  return { text: r < 0.1 ? '<0.1' : r.toFixed(1).replace(/\.0$/, ''), warn: r >= LANE_WARN_TIMES }
 }
 
 /** The text at a lane's right: its place in the queue ("#2"), else the time at its station ("2m"); '' when not known. */
@@ -584,10 +595,12 @@ export const segText = (xs: readonly LiveSeg[]): string => xs.map(x => x.text).j
  * A lane's two lines as segments, never wider than the layout's width (unless even the tightest layout is wider):
  * 1. "▶ T-684 /symcc-doc…  ●━━━━━━━━●━━━━━━━━◉────────○────────○      #2": passed stations ●━━, the current one blinking
  *    (`frame`, liveBlink), future ──○; the right column the queue place or the time at the station;
- * 2. "  change try 2/3     ▕████████░░░░░▏ 1.1M  ↺×1": kind and try, the whole task's token bar (all its tries) against
- *    the board's usual tokens per merged task (full at the usual, staying full past it; warning past twice it, with ⚠),
- *    and the checker's send-backs. Parts that don't fit are left out (the bar first, then the kind), never cut. A running
- *    worker's tokens are known only at its hand-back: until then the earlier tries' sum with " + …", or "tokens at hand-back".
+ * 2. "  bug try 4/4  ⌀ 7.3M (7.6× median) · ⏱ 41m · worker ⌀ 5.4M · checker ⌀ 1.9M · ↺×2" (T-867): kind and try, the
+ *    whole task's tokens (all its tries) and how many times the board's median tokens per merged task that is (the warning
+ *    tone from LANE_WARN_TIMES), its active time (all tries), its tokens by agent kind (a 0 part left out) and the
+ *    checker's send-backs. When narrow, parts go from the end: the worker/checker split, then ⏱, then "× median", then
+ *    the kind; never cut. A running worker's tokens are known only at its hand-back: until then the earlier tries' sum
+ *    with " + …", or "⌀ at hand-back".
  */
 export function laneLines(lane: LiveLane, l: LiveLayout, o: { nowMs: number; frame: number; steady?: boolean }): [LiveSeg[], LiveSeg[]] {
   const sep = ' '.repeat(l.sep)
@@ -617,34 +630,30 @@ export function laneLines(lane: LiveLane, l: LiveLayout, o: { nowMs: number; fra
   // T-850: a finished lane has "✓ " (dim) there instead, its id stays in the accent color
   const name = segs({ text: done ? `${LIVE_DONE_MARK} ` : LIVE_RUN_MARK, tone: done ? 'dim' : 'run' }, { text: padWidth(lane.id, l.idW), tone: 'run' }, l.titleW > 0 && { text: ` ${padWidth(cutTitle(lane.title, l.titleW), l.titleW)}`, tone: done ? 'dim' : 'text' })
   const first = [...name, { text: sep, tone: 'text' as const }, ...track, { text: sep + laneRight(lane, o.nowMs, l.rightW).padStart(l.rightW), tone: 'dim' as const }]
-  // the second line
-  const trackW = l.stations.length + (l.stations.length - 1) * l.gap
-  const indent = LIVE_RUN_MARK.length + nameWidth(l) + l.sep
-  const kindTry = ` ${lane.kind} try ${lane.tryNo}/${lane.tries}`
-  const back = lane.sentBack ? `  ↺×${lane.sentBack}` : ''
-  const over = lane.tokens !== undefined && lane.usual !== undefined && lane.tokens > 2 * lane.usual
+  // the second line (T-867: plain numbers, no bar)
+  const back: LiveSeg | false = lane.sentBack > 0 && { text: `↺×${lane.sentBack}`, tone: 'dim' }
   const fits = (xs: LiveSeg[]) => textWidth(segText(xs)) <= l.width
-  const tokens = (form: 'bar' | 'plain' | 'none'): LiveSeg[] => {
-    if (form === 'none') return []
-    if (lane.tokens === undefined) return done ? [] : [{ text: `${TOKEN_SIGN} at hand-back`, tone: 'dim' }]
-    const cells = Math.min(13, Math.max(4, trackW - 2))
-    // T-757: full bar = the usual tokens per task (it stays full past it); the warning only past twice the usual
-    return segs(
-      form === 'bar' && lane.usual !== undefined && { text: tokenBar(lane.tokens, lane.usual, cells) + ' ', tone: over ? 'warning' : 'bar' },
-      { text: fmtTok(lane.tokens), tone: over ? 'warning' : 'text' },
-      lane.more && { text: ' + …', tone: 'dim' },
-      over && { text: ' ⚠', tone: 'warning' },
-    )
+  // "(7.6× median)": against the board's usual tokens per merged task; the warning tone from twice it
+  const times = lane.tokens !== undefined && lane.usual ? lane.tokens / lane.usual : undefined
+  const shown = times !== undefined && laneTimes(times)
+  const median: LiveSeg | false = shown && { text: ` (${shown.text}× median)`, tone: shown.warn ? 'warning' : 'dim' }
+  const tokens = (withMedian: boolean): LiveSeg[] =>
+    lane.tokens === undefined
+      ? done ? [] : [{ text: `${TOKEN_SIGN} at hand-back`, tone: 'dim' }]
+      : segs({ text: fmtTok(lane.tokens), tone: 'text' }, lane.more && { text: ' + …', tone: 'dim' }, withMedian && median)
+  const time: LiveSeg[] = lane.activeMs ? [{ text: `⏱ ${rowDuration(lane.activeMs)}`, tone: 'dim' }] : []
+  const split: LiveSeg[][] = [
+    lane.workerTokens ? [{ text: `worker ${fmtTok(lane.workerTokens)}`, tone: 'dim' }] : [],
+    lane.checkerTokens ? [{ text: `checker ${fmtTok(lane.checkerTokens)}`, tone: 'dim' }] : [],
+  ]
+  /** The line with the parts up to `level` (3: all; 2: no worker/checker split; 1: no ⏱; 0: no "× median"). */
+  const line = (level: number, withKind: boolean): LiveSeg[] => {
+    const lead: LiveSeg = { text: `  ${withKind ? `${lane.kind} ` : ''}try ${lane.tryNo}/${lane.tries}`, tone: 'dim' }
+    const parts = [tokens(level >= 1), level >= 2 ? time : [], ...(level >= 3 ? split : []), back ? [back] : []].filter(x => x.length)
+    return segs(lead, ...parts.flatMap((x, i): LiveSeg[] => [{ text: i ? ' · ' : '  ', tone: i ? 'dim' : 'text' }, ...x]))
   }
-  const tries: LiveSeg[][] = []
-  for (const withKind of [true, false])
-    for (const form of ['bar', 'plain', 'none'] as const) {
-      const lead = ' ' + (withKind ? kindTry : ` try ${lane.tryNo}/${lane.tries}`)
-      const pad = Math.max(2, indent - textWidth(lead))
-      const rest = tokens(form)
-      tries.push(segs({ text: lead, tone: 'dim' }, rest.length > 0 && { text: ' '.repeat(pad), tone: 'text' }, ...rest, { text: back, tone: 'dim' }))
-    }
-  tries.push(segs({ text: `  try ${lane.tryNo}/${lane.tries}`, tone: 'dim' }))
+  const tries: LiveSeg[][] = [3, 2, 1, 0].map(n => line(n, true))
+  tries.push(line(0, false), segs({ text: `  try ${lane.tryNo}/${lane.tries}`, tone: 'dim' }))
   const second = tries.find(fits) ?? tries[tries.length - 1]!
   // T-771: a finished lane's second line is dim throughout
   return [first, done ? second.map(x => (x.tone === 'text' && !x.text.trim() ? x : { ...x, tone: 'dim' })) : second]
@@ -654,7 +663,7 @@ export function laneLines(lane: LiveLane, l: LiveLayout, o: { nowMs: number; fra
 // of the running task it waits for, or under the train of the todo task it waits for (a chain), down to a lane:
 //                  work   check  queue  tests  merged
 // ▶ T-712 Scout or… ●━━━━━━◉──────○──────○──────○  2m
-//   bug  try 1/3   ▕████░░░░▏ 1.1M
+//   bug try 1/3  ⌀ 1.1M (0.3× median) · ⏱ 2m · worker ⌀ 1.1M
 //   └─◇ T-713 Task files: no si…  waits
 //      └─◇ T-714 Help: /symcc-h…  waits
 //   └─◇ T-716 Live deps…  waits  + also T-690

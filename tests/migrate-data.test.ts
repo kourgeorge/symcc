@@ -5,7 +5,7 @@ import { expect } from 'claude-code/testing'
 import { emptyBoard, readBoard, readArchive, tryTokens, tryCost, checkerTokensOf, workerIdOf, checkerIdOf } from '../hooks/board'
 import { doctor } from '../hooks/app/doctor'
 import { load, change } from '../hooks/app/store'
-import { migrateIfOld, forgetMigrationFailure } from '../hooks/app/migrate-data'
+import { migrateIfOld, forgetMigrationFailure, oldDataFound } from '../hooks/app/migrate-data'
 import { S, leadQueue } from'../hooks/app/state'
 import { agentLines } from '../hooks/core/runs'
 import { oldDataRows, migrateRunAgents } from '../hooks/core/old-data'
@@ -482,4 +482,133 @@ test('T-854: the doctor shows a migration backup folder\'s real size', async () 
   expect(line).toBeDefined()
   expect(line).not.toContain('0 B')
   expect(line).toMatch(/4\.[89] MB|5(\.0)? MB/)
+})
+
+test('T-886: old data written again within an hour (an older symcc copy) reuses the backup folder and tells the owner once that an older copy writes to the board', async () => {
+  const w = world()
+  S.enabledNow = true
+  leadQueue.length = 0
+  const original = w.files.get(`${D}/board.json`)!
+  expect(await migrateIfOld(w.host)).toBe('')
+  for (let i = 0; i < 3; i++) {
+    w.files.set(`${D}/board.json`, original)
+    expect(await migrateIfOld(w.host)).toBe('')
+    expect(JSON.parse(w.files.get(`${D}/board.json`)!).mode).toBe('paused')
+  }
+  expect(backups(w).size).toBe(1)
+  expect(leadQueue.filter(t => t.includes('moved your old data')).length).toBe(1)
+  expect(leadQueue.filter(t => t.includes('an older symcc copy is writing to this board')).length).toBe(1)
+})
+
+test('T-886: after a reload (memory empty) a backup under an hour old is reused and the owner warned; one over an hour old gets a fresh backup', async () => {
+  const w = world()
+  S.enabledNow = true
+  leadQueue.length = 0
+  const name = (ms: number) => `data.before-migrate-${new Date(ms).toISOString().replace(/[:.]/g, '-')}`
+  const recent = name(Date.now() - 10 * 60_000)
+  w.files.set(`${D}/${recent}/board.json`, 'older')
+  w.files.set(`${D}/${recent}/migrated.json`, JSON.stringify({ at: new Date(Date.now() - 10 * 60_000).toISOString(), version: S.version }))
+  expect(await migrateIfOld(w.host)).toBe('')
+  expect(backups(w).size).toBe(1)
+  expect(leadQueue.filter(t => t.includes('an older symcc copy is writing to this board')).length).toBe(1)
+  expect(leadQueue.some(t => t.includes(`.symcc/${recent}/`))).toBe(true)
+  // a world whose only backup is two hours old: a new one is made
+  const v = world()
+  leadQueue.length = 0
+  v.files.set(`${D}/${name(Date.now() - 2 * 60 * 60_000)}/board.json`, 'older')
+  expect(await migrateIfOld(v.host)).toBe('')
+  expect(backups(v).size).toBe(2)
+})
+
+test('T-886: a backup not left by a successful migration (a failed try, before a reload, or another symcc version) gives the usual message, not the older-copy warning', async () => {
+  const name = (ms: number) => `data.before-migrate-${new Date(ms).toISOString().replace(/[:.]/g, '-')}`
+  const older = (_w: unknown) => leadQueue.filter(t => t.includes('an older symcc copy')).length
+  const moved = () => leadQueue.filter(t => t.includes('moved your old data')).length
+  // writing board.json fails with why() while it is not ''
+  const failBoard = (w: ReturnType<typeof world>, why: () => string) => {
+    const write = w.host.fs.write
+    w.host.fs.write = async (p, text) => {
+      if (why() && p.endsWith('board.json') && !p.includes('before-migrate')) throw new Error(why())
+      return write(p, text)
+    }
+    const run = w.host.run
+    w.host.run = async (argv, opts) => (why() && argv[0] === 'mv' && String(argv[argv.length - 1]).endsWith('board.json') ? done({ exitCode: 1, stderr: why() }) : run(argv, opts))
+  }
+  // 1. the failure reason changes, then it works (one process)
+  {
+    const w = world()
+    S.enabledNow = true
+    leadQueue.length = 0
+    let why = 'disk A'
+    failBoard(w, () => why)
+    expect(await migrateIfOld(w.host)).toContain("couldn't move")
+    why = 'disk B'
+    w.files.set(`${D}/scouts.json`, w.files.get(`${D}/scouts.json`)! + ' ')
+    expect(await migrateIfOld(w.host)).toContain("couldn't move")
+    why = ''
+    w.files.set(`${D}/scouts.json`, w.files.get(`${D}/scouts.json`)! + ' ')
+    expect(await migrateIfOld(w.host)).toBe('')
+    expect(older(w)).toBe(0)
+    expect(moved()).toBe(1)
+  }
+  // 2. a failure, a reload (memory empty), then it works
+  {
+    const w = world()
+    leadQueue.length = 0
+    let fail = true
+    failBoard(w, () => (fail ? 'disk A' : ''))
+    expect(await migrateIfOld(w.host)).toContain("couldn't move")
+    forgetMigrationFailure()
+    fail = false
+    expect(await migrateIfOld(w.host)).toBe('')
+    expect(older(w)).toBe(0)
+    expect(moved()).toBe(1)
+  }
+  // 3. a recent success by another symcc version (an update added an old-shape rule)
+  {
+    const w = world()
+    leadQueue.length = 0
+    const recent = name(Date.now() - 10 * 60_000)
+    w.files.set(`${D}/${recent}/board.json`, 'older')
+    w.files.set(`${D}/${recent}/migrated.json`, JSON.stringify({ at: new Date(Date.now() - 10 * 60_000).toISOString(), version: `${S.version}-other` }))
+    expect(await migrateIfOld(w.host)).toBe('')
+    expect(older(w)).toBe(0)
+    expect(moved()).toBe(1)
+  }
+})
+
+test('T-886: a half-made backup (a copy failed part way) is never reused: the next run makes a whole new one', async () => {
+  const w = world()
+  S.enabledNow = true
+  leadQueue.length = 0
+  let fail = true
+  const write = w.host.fs.write
+  w.host.fs.write = async (p, text) => {
+    if (fail && p.includes('before-migrate') && p.endsWith('/archive.json')) throw new Error('disk full')
+    return write(p, text)
+  }
+  const archiveBefore = w.files.get(`${D}/archive.json`)
+  expect(await migrateIfOld(w.host)).toContain('the backup could not be made')
+  fail = false
+  w.files.set(`${D}/scouts.json`, w.files.get(`${D}/scouts.json`)! + ' ')
+  expect(await migrateIfOld(w.host)).toBe('')
+  // the folder the success names holds the archive as it was, and is marked whole
+  const told = leadQueue.find(t => t.includes('moved your old data'))!
+  const used = [...backups(w)].find(b => told.includes(`data.before-migrate-${b}/`))!
+  expect(typeof used).toBe('string')
+  expect(w.files.get(`${D}/data.before-migrate-${used}/archive.json`)).toBe(archiveBefore)
+  expect(w.files.has(`${D}/data.before-migrate-${used}/backup-complete.json`)).toBe(true)
+})
+
+test('T-886: a task already in the queue step with a leftover "queue (n)" note migrates to no old rows', async () => {
+  const w = world()
+  S.enabledNow = true
+  const board = JSON.parse(w.files.get(`${D}/board.json`)!)
+  board.tasks.push({ ...base, id: 'T-9', title: 'nine', status: 'doing', note: 'queue (2)', attempts: 1, origin: { by: 'lead', why: 'w', at: T }, merge_into: 'main', history: [], runs: [{ started: T }], live: { session: 'me', phase: 'checker', checking: { step: 'queue', place: 2, at: E } } })
+  w.files.set(`${D}/board.json`, JSON.stringify(board, null, 2))
+  expect(await migrateIfOld(w.host)).toBe('')
+  expect((await oldDataFound(w.host)).rows.filter(r => r.fix).length).toBe(0)
+  const t9 = (await load(w.host)).tasks.find(t => t.id === 'T-9')!
+  expect(t9.note).toBe('')
+  expect(t9.live?.checking).toEqual({ step: 'queue', place: 2, at: E })
 })

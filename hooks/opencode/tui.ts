@@ -642,7 +642,8 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   const setUpGit = async (sessionID: string) => {
     const f = file()
     const gs = f?.view.git_state
-    if (!f || (gs !== 'no-repo' && gs !== 'no-commits') || !showsHeader(boardPageOf(f, { tab: tab(), opened: opened(), run: run(), ...(edit() ? { edit: edit()! } : {}) }))) return
+    if (!f || (gs !== 'no-repo' && gs !== 'no-commits' && gs !== 'no-git') || !showsHeader(boardPageOf(f, { tab: tab(), opened: opened(), run: run(), ...(edit() ? { edit: edit()! } : {}) }))) return
+    if (gs === 'no-git') return void (await send(sessionID, { kind: 'check-git' }))
     if (await yes(SETUP_GIT_ASK, 'Yes, set up git')) await send(sessionID, { kind: 'setup-git' })
   }
   /** The Settings tab's keys: the list moves, changes a setting or opens the Roles or Kinds page; that page moves and
@@ -1037,6 +1038,9 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     if (ctx.ui.panel.current()?.name === BOARD_PANEL) return ctx.ui.panel.close()
     if (!ctx.ui.panel.open(BOARD_PANEL)) return say(`Open or start a session first: the ${name} board opens next to a session (then /${name}-board, or "${name} board" in the command palette, ctrl+p).`)
     showTab('live')
+    // the git notice is looked at again when the panel opens, so installing git by hand clears it
+    const gs = file()?.view.git_state
+    if (shownSession && gs && gs !== 'ok') void send(shownSession, { kind: 'check-git' }).catch(() => undefined)
   }
   const clickBand = (hit: BandHit) => {
     if ('board' in hit) return openBoard()

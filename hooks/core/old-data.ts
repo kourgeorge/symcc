@@ -444,7 +444,8 @@ export function upgradeTask(t: Raw, into = 'main'): Raw | null {
   const queue = typeof out.note === 'string' ? /^queue \((\d+)\)$/.exec(out.note) : null
   const lv = isObj(out.live) ? out.live : {}
   const checking = lv.checking as Raw | undefined
-  if (queue && (!isObj(checking) || checking.step !== 'queue')) out = isObj(checking) ? { ...out, live: { ...lv, checking: { ...checking, step: 'queue', place: Number(queue[1]) } } } : { ...out, note: '' }
+  // the note always goes (it is counted as old); a checking step not yet 'queue' takes the place from it (T-886)
+  if (queue) out = isObj(checking) && checking.step !== 'queue' ? { ...out, note: '', live: { ...lv, checking: { ...checking, step: 'queue', place: Number(queue[1]) } } } : { ...out, note: '' }
   return out === t ? null : out
 }
 
