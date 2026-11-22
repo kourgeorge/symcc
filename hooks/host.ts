@@ -196,8 +196,6 @@ export type PanelValues = {
   updateScoutOpen: (change: (value: string) => string) => Promise<unknown>
   readView: () => Promise<SymccView>
   updateView: (change: (value: SymccView) => SymccView) => Promise<unknown>
-  /** Only a panel that leaves tasks out of its stored view (Claude Code's): the warning for `view` as it would be stored, '' when nothing needed leaving out. */
-  trimNote?: (view: SymccView) => string
 }
 
 /** A process as the board lock records it: its id and when it started (ms since 1970). */
