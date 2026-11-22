@@ -84,8 +84,8 @@ export function cleanupText(branches: number, worktrees: number, few = 3): strin
 
 // ---------------- a folder without git ----------------
 // Workers each get a git worktree, so the project must be a git repo with at least one commit.
-// With none, nothing starts; symcc offers to set one up (it asks first: it makes a .git folder
-// and commits the owner's files).
+// With none, no worker starts; the board shows a notice and symcc offers to set one up (on the
+// owner's yes: it makes a .git folder and commits the owner's files).
 
 /** ok: a repo with commits; no-git: the git program is missing; no-repo: not inside a git work tree; no-commits: a repo with no commit yet. */
 export type GitState = 'ok' | 'no-git' | 'no-repo' | 'no-commits'

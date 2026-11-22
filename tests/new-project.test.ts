@@ -4,9 +4,10 @@
 import { expect } from 'claude-code/testing'
 import { gitNotice, gitInstallStep, emptyBoard, parseCommand, notSetUpAnswer, offStatusLine, offStatusParts, parseLead, type Board } from '../hooks/board'
 import { S, toolName } from '../hooks/app/state'
-import { watchdogTick, leadBeat,leadGuideText, sessionStart, sessionEnd, toolCall, runCommand } from '../hooks/app/symcc'
+import { COMMANDS, watchdogTick, leadBeat,leadGuideText, sessionStart, sessionEnd, toolCall, runCommand } from '../hooks/app/symcc'
 import { tellLead, takeBoardUpdate } from '../hooks/app/tell'
 import { setupGit, gitReady } from '../hooks/app/git'
+import { MANUAL } from '../hooks/app/tools'
 import { test } from './reset'
 import { fakeHost, memoryFs, done } from './fake-host'
 
@@ -425,4 +426,14 @@ test('T-844: /symcc-init is parsed: plain, with git, and a usage line for other 
   expect(parseCommand('symcc-init', '')).toEqual({ kind: 'init' })
   expect(parseCommand('symcc-init', ' git ')).toEqual({ kind: 'init', git: true })
   expect(parseCommand('symcc-init', 'now')!.kind).toBe('bad')
+})
+
+test('T-861: the /symcc-init description and help say plain init makes the board and shows the no-git notice (it no longer asks first)', () => {
+  const init = COMMANDS().find(c => c.name === `${S.N.name}-init`)!.description
+  expect(init.includes('asks first')).toBe(false)
+  expect(init.includes('No git repo here')).toBe(true)
+  const help = Object.values(MANUAL()).join('\n')
+  expect(help.includes('asked about first')).toBe(false)
+  expect(help.includes('asks first, then')).toBe(false)
+  expect(help.includes('No git repo here')).toBe(true)
 })
