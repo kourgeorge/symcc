@@ -586,7 +586,8 @@ always says what happened ("T-743 merged", not "Good news: …").
   review. Then, only if something needs you, one line saying what.
 - **Routine news** (a worker, checker or scout started, a retry on its own, nothing to do): one
   short line at most, e.g. "▶ T-751 retrying (2/4)." Each board update symcc sends the lead
-  reminds it of this.
+  reminds it of this. An update that holds only "Starting ..." lines (sent just to let symcc start
+  an agent) says "No reply needed; end the turn without a message." instead.
 - **A new task:** "Added T-n  <short title>", then one line for what waits on what, if anything.
 - **A question for you:** the question in one sentence, the choices numbered, then "(or answer on
   the board)". In Claude Code it is the AskUserQuestion pop-up, as before.
