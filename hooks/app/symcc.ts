@@ -227,7 +227,7 @@ async function initProject(host: Host, tell: (text: string) => void, withGit: bo
       S.fresh = saved.fresh
       S.guardOnly = saved.guardOnly
     }
-    return `${S.N.name} board created in ${shortHome(own, S.home)} (the nearest board wins there). This session still runs on the board in ${shortHome(above, S.home)}: start a new ${S.W.assistant} session in this folder to use the new one.`
+    return `${S.N.name} board created in ${shortHome(own, S.home)} (the nearest board wins there). This session still runs on the board in ${shortHome(above, S.home)}: start a new session in this folder to use the new one.`
   }
   S.root = own
   S.fresh = false
