@@ -29,9 +29,11 @@ merge), and the agents are proactive (workers build on their own, scouts find th
 
 The status line, the banner and the Scouts view use the plugin's real text (see
 `statusLine`, `modeLabel`, `bannerLines` and `scoutRow` in `hooks/core/`, and the Scouts
-view in `hooks/claude/ui/scouts-page.tsx`), e.g. `⏸ approve merge · T-1, T-3 doing · 1 to do`. The banner
-counts and the status line are worked out from the `tasks` list in the script, so they always
-match the board.
+view in `hooks/claude/ui/scouts-page.tsx`). The status line has the same parts as the real one:
+the mode, who drives, the branch, the next scout, how many tasks merged today and today's cost,
+e.g. `⏸ approve merge · drives here · main · scout tests running · today ✓ 1 · $1.84`. The
+banner counts and the status line's merged count are worked out from the `tasks` list in the
+script, so they always match the board.
 
 ## How to change it
 
@@ -176,7 +178,7 @@ push(text(552, 122, '~/my-app · main · this session drives', { fill: C.dim }))
 push(text(552, 140, 'tests: npm test · 3 at once · 45 min', { fill: C.dim }))
 
 // The tasks, and when each one changes state. The counts line in the banner and the status
-// line are worked out from this, the same way the plugin does (statusCounts, statusLine).
+// line (today's merged count and cost) are worked out from this.
 const tasks = [
   { id: 'T-1', title: 'the search index', y: 230, states: [[9.4, 'todo'], [12.9, 'doing'], [18.8, 'review'], [27.6, 'done']],
     subs: [[12.9, 17.9, '.symcc/worktrees/T-1 · branch symcc/T-1'], [17.9, 27.6, '✓ only its own files · ✓ tests pass', C.green], [27.6, PART2_END, '✓ merged into main', C.green]] },
@@ -198,10 +200,21 @@ for (let i = 0; i + 1 < marks.length; i++) {
   // the banner's counts line
   const counts = ['doing', 'review', 'todo', 'done'].filter(n).map(st => `${n(st)} ${WORD[st]}`).join(' · ')
   if (counts) push(show([[a, b]], text(PX, 172, counts, { fill: C.dim })))
-  // the status line
-  const parts = [n('doing') && `${ids('doing').join(', ')} doing`, n('review') && `${n('review')} to review (${ids('review').join(', ')})`, n('todo') && `${n('todo')} to do`].filter(Boolean)
-  if (on.length && !parts.length) parts.push('all done')
-  push(show([[a, b]], text(LX, 500, [['symcc: ', C.dim], ['⏸ approve merge', C.accent], ...parts.map(p => [' · ' + p, C.text])])))
+}
+// The status line (statusLine): the mode · who drives · the branch · the next scout · today ✓ merged · today's
+// cost, plain text (Claude Code's status line has no colors). It changes when a task or the scout changes.
+const SCOUT_DUE = 31, SCOUT_RUN = 31.8 // the scout is due, then runs until RUN_END (below)
+const scoutAt = x => x < SCOUT_DUE ? 'next scout tests in 1m' : x < SCOUT_RUN ? 'next scout tests now' : x < 37.3 ? 'scout tests running' : 'next scout tests in 30m'
+const COST = { 'T-1': 1.84, 'T-4': 0.92 } // a task's worker cost, counted once its try ends (review)
+const cost = usd => usd <= 0 ? '' : usd >= 10 ? `$${Math.round(usd)}` : `$${usd.toFixed(2)}`
+const lineMarks = [...new Set([...marks, SCOUT_DUE, SCOUT_RUN, 37.3])].sort((a, b) => a - b)
+for (let i = 0; i + 1 < lineMarks.length; i++) {
+  const [a, b] = [lineMarks[i], lineMarks[i + 1]]
+  const on = tasks.map(t => ({ id: t.id, st: stateAt(t, a) })).filter(t => t.st)
+  const merged = on.filter(t => t.st === 'done').length
+  const spent = on.filter(t => t.st === 'review' || t.st === 'done').reduce((s, t) => s + (COST[t.id] || 0), 0)
+  const parts = ['⏸ approve merge', 'drives here', 'main', scoutAt(a), on.length && `today ✓ ${merged}`, cost(spent)].filter(Boolean)
+  push(show([[a, b]], text(LX, 500, [['symcc: ', C.dim], [parts.join(' · '), C.text]])))
 }
 
 // tabs

@@ -21,7 +21,7 @@ The picture and the video are in the [README](../README.md#how-it-works).
 2. **Plan.** The lead turns it into tasks, sets their order and the files each may change.
 3. **Build.** Workers start in parallel, each in its own worktree.
 4. **Check.** symcc runs the scope check and the test gate, and retries on failure.
-5. **Review.** In review mode you approve or reject. You can also edit the task's files in `.symcc/worktrees/T-x` and then approve: your edits go in, and the tests run again first. An answered investigation always waits for you (even in `auto`): read its answer, then Done, Keep as a note or Ask more.
+5. **Review.** In approve merge mode (stored as `review`) you approve or reject. You can also edit the task's files in `.symcc/worktrees/T-x` and then approve: your edits go in, and the tests run again first. An answered investigation always waits for you (even in `auto`): read its answer, then Done, Keep as a note or Ask more.
 6. **Merge.** symcc updates the task on the latest target branch, re-runs the tests, merges, and the lead tells you. Your own uncommitted edits on that branch are kept; only your files with the same name as a file the task changes hold the merge back: an uncommitted edit (commit or stash it), an untracked file (move, rename or commit it), or a git-ignored file (move or rename it). The task waits for you, then merges by itself once those files are out of the way.
 
 Here is the planning step in the chat:
