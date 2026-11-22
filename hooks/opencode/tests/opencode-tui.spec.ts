@@ -310,8 +310,8 @@ test('the panel: the banner, then the list grouped by state (NEEDS YOU, what run
   expect(actionCommand({ kind: 'reject', id: 'T-2', reason: ' too big ' })).toEqual({ name: 'symcc-reject', text: 'T-2 too big' })
   expect(actionCommand({ kind: 'diff', id: 'T-2' })).toEqual({ name: 'symcc-diff', text: 'T-2' })
   expect(actionCommand({ kind: 'answer', id: 'Q-1', answer: 'yes' })).toEqual({ name: 'symcc-answer', text: 'Q-1 yes' })
-  // no view file yet: says so
-  expect(panelLines(null, { opened: '', cursor: 0 }, NOW, 100).lines.map(lineText).join('\n')).toContain('No board yet')
+  // T-858: no view file means no board here: says what every other place says
+  expect(panelLines(null, { opened: '', cursor: 0 }, NOW, 100).lines.map(lineText).join('\n')).toContain('no symcc board in this folder or any folder above it · /symcc-init to create one here')
 })
 
 /** A fake of OpenTUI's Solid renderer: elements are plain objects, insert keeps what it is given (functions are drawn when read). */

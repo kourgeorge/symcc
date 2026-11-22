@@ -124,7 +124,7 @@ export async function sessionFolder(host: Host): Promise<string> {
 export async function boardFolder(host: Host, dir: string): Promise<string> {
   let d = dir.replace(/[\\/]+$/, '') || '/'
   for (let i = 0; i < 100; i++) {
-    if ((await host.fs.exists(`${d}/${S.N.boardFile}`).catch(() => false)) || (await host.fs.exists(`${d}/${S.N.dir}`).catch(() => false))) return d
+    if (await host.fs.exists(`${d}/${S.N.boardFile}`).catch(() => false)) return d
     if (d === '/' || /^[A-Za-z]:$/.test(d)) return ''
     d = d.replace(/[\\/][^\\/]*$/, '') || '/'
   }

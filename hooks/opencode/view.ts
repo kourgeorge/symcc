@@ -37,7 +37,7 @@ export function viewFilePanel(host: Pick<Host, 'fs' | 'run' | 'ui' | 'plugin'>):
   /** T-841: the session that ran /enable last (the TUI window showing it opens the board once) */
   let openNow: { session: string; at: number } | undefined
   const write = (v: SymccView) => {
-    if (!S.root || S.guardOnly) return writing
+    if (!S.root || S.guardOnly || S.fresh) return writing
     const root = S.root
     const file = `${root}/${S.N.dir}/${VIEW_FILE}`
     const at = Date.now()

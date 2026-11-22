@@ -182,6 +182,27 @@ test('T-844: a folder with no .symcc above it, under a git repo, stays off and w
   expect([...w.files.keys()].filter(k => k.includes('.symcc'))).toEqual([])
 })
 
+test('T-858: with no board, /symcc-stats, /symcc-stats html, /symcc-doctor and /symcc-doctor fix point to /symcc-init and write and run nothing', async () => {
+  const w = world('a')
+  await sessionStart(w.host)
+  w.ran.length = 0
+  for (const [c, a] of [['symcc-stats', ''], ['symcc-stats', 'html'], ['symcc-doctor', ''], ['symcc-doctor', 'fix']] as const) {
+    expect((await runCommand(w.host, c, a))?.text).toBe(notSetUpAnswer(S.N.name))
+  }
+  expect(w.ran).toEqual([])
+  expect([...w.files.keys()]).toEqual([])
+})
+
+test('T-858: a bare .symcc folder with no board.json does not stop the search for a board above it', async () => {
+  const w = world('a', '/repo/sub', '/repo')
+  w.files.set('/repo/.symcc/board.json', JSON.stringify(emptyBoard()))
+  w.files.set('/repo/sub/.symcc/stray.txt', '')
+  w.files.set('/repo/sub/.symcc', '')
+  await sessionStart(w.host)
+  expect(S.fresh).toBe(false)
+  expect(S.root).toBe('/repo')
+})
+
 test('T-844: /symcc-init where a board exists changes nothing and says so', async () => {
   const w = world('a')
   w.files.set(w.board, JSON.stringify(emptyBoard()))
