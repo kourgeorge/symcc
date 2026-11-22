@@ -162,6 +162,7 @@ export function livePage($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
           ),
         ]
       })}
+      {lanes.length ? liveLegend(lanes, inner).map((x, i) => <Text key={i ? `live-legend-${i}` : 'live-legend'} color={C('inactive')}>{LIVE_INDENT + x}</Text>) : null}
       {br ? <Text key="live-br-blank"> </Text> : null}
       {br ? <Text key="live-br-head">{draw(br.head)}</Text> : null}
       {br ? <Text key="live-br-under"> </Text> : null}
@@ -209,7 +210,6 @@ export function livePage($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
         <Text key={`live-om-keys-${i}`} color={C('inactive')}>{LIVE_INDENT + k}</Text>
       ))}
       <Text key="live-foot-rule" color={C('subtle')}>{footerRule(width)}</Text>
-      {lanes.length ? liveLegend(lanes, width).map((x, i) => <Text key={i ? `live-legend-${i}` : 'live-legend'} color={C('inactive')}>{x}</Text>) : null}
       {keyLines(liveKeys(), 'live-hint')}
     </Box>
   )
