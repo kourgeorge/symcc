@@ -125,8 +125,8 @@ export async function sessionFolder(host: Host): Promise<string> {
 export async function projectRoot(host: Host, dir: string): Promise<string> {
   if (!dir) return ''
   const own = dir.replace(/[\\/]+$/, '') || '/'
-  // only a path through <name>/worktrees can be a worker's folder; any other folder is not looked up in the repo
-  if (!own.includes(`/${S.N.worktrees}/`)) return own
+  // only a path through <name>/worktrees can be a worker's folder (either slash); any other folder is not looked up in the repo
+  if (!own.replace(/\\/g, '/').includes(`/${S.N.worktrees}/`)) return own
   const main = await mainRoot(host, own).catch(() => own)
   if (main && main !== own && (await isWorkerFolder(host, own, main).catch(() => false))) return main
   return own

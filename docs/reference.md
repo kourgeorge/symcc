@@ -140,7 +140,7 @@ Type these in the chat. `/symcc` opens everything; `/symcc-<word>` does one thin
 | `/symcc-settings orgmem delete N` | Delete note N from the organizational memory (its number on the Organizational memory page) |
 | `/symcc-doctor [fix [all\|id ...]]` | Check `.symcc/` and git (old backups, merged branches, leftover task folders, files near 4 MB, a stuck board). It only lists them; `fix all` or `fix <id> ...` cleans up |
 | `/symcc-disable` | Disable symcc for this project: Claude works as normal (no lead guide, workers, scouts, updates, sounds or voice); the board is kept |
-| `/symcc-enable` | Turn symcc back on, in the mode the board had. It never creates a board; with no `.symcc` in this folder or above it, it points to `/symcc-init` |
+| `/symcc-enable` | Turn symcc back on, in the mode the board had. It never creates a board; with no `.symcc` in the folder the session started in, it points to `/symcc-init` |
 | `/symcc-init [git]` | Create `.symcc/` with the board in the folder Claude started in (a board in a parent folder does not matter), turn symcc on, become the lead, add the example scouts and open the panel. With no repository of its own it asks first; `/symcc-init git` sets one up here. Where `.symcc/` already exists it changes nothing |
 | `/symcc-disable here` | Turn symcc off in this window only (plain Claude here). It is kept in this session, not in `board.json`; other windows are not changed. If this window drives the board, it hands driving over |
 | `/symcc-enable here` | Turn symcc on again in this window (it becomes a lead again). A window opened while another live window has symcc on starts off here; this opts in. If the whole project is disabled, use `/symcc-enable` |
