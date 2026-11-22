@@ -126,7 +126,7 @@ const pageLines = (n: unknown): string[] => {
   return [textOf(x)]
 }
 
-const liveView = () => ({ shape: 'view-1', value: { tasks: branchTasks(T0), working: [], scouts: [], mode: 'auto', branch: 'main', test_commands: ['npm test'], driving: true, checker: true, max_parallel: 3, branches: branchFactsAt(T0) } })
+const liveView = () => ({ shape: 'view-1', value: { tasks: branchTasks(T0), working: [], scouts: [], mode: 'auto', home_branch: 'main', test_commands: ['npm test'], driving: true, checker: true, max_parallel: 3, branches: branchFactsAt(T0) } })
 
 for (const bodyColumns of [100, 40])
   test(`T-727: the terminal Live tab draws the Branches section at ${bodyColumns} columns, and Enter on a row opens its task`, async ($, on) => {

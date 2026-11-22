@@ -5,6 +5,7 @@ import { asksMoreTime, needsYou, needsYouFirst } from './commands'
 import { boardSections, type DayGroup, dayLabel, dayOf, localOffset, taskDay } from './days'
 import { approveRunning, checkStepNow, finishingNow, shownStatus } from './lead'
 import { originOf } from './origin'
+import { askText } from './questions'
 import { isAnswered, OVERTIME_OPTIONS, overtimeQuestion, timeLimitOf } from './task'
 import { waitFilesNote } from './review'
 import { kindMark } from './kinds'
@@ -308,7 +309,7 @@ export const WAITS_FOR = 'waits for'
 function rowExtraOf(t: BoardTask, tasks: Pick<SymccTask, 'id' | 'status'>[], maxMinutes: number): string {
   switch (t.status) {
     case 'doing':
-      if (asksMoreTime(t)) return t.question_lead || overtimeQuestion(t.id, timeLimitOf(maxMinutes, t))
+      if (asksMoreTime(t)) return t.ask?.lead?.text || overtimeQuestion(t.id, timeLimitOf(maxMinutes, t))
       return roleTag(t)
     case 'todo':
     case 'paused': {
@@ -318,7 +319,7 @@ function rowExtraOf(t: BoardTask, tasks: Pick<SymccTask, 'id' | 'status'>[], max
     case 'review':
       return isInvestigation(t) ? kindTag(t) : 'Enter to review'
     case 'waiting':
-      return t.question_lead || (t.question ?? '')
+      return askText(t.ask)
     case 'failed':
       return whyFailed(t)
     case 'backlog':
@@ -657,10 +658,10 @@ export const asksOwner = (t: BoardTask): boolean => asksMoreTime(t) || (t.status
  *  `files`: the files it asks to change (Allow / Don't allow), `overtime`: the "more time?" question. */
 export function taskAsks(t: BoardTask, maxMinutes?: number): { text: string; choices: string[]; files: string[]; overtime: boolean } | null {
   if (!asksOwner(t)) return null
-  if (asksMoreTime(t)) return { text: t.question_lead || overtimeQuestion(t.id, timeLimitOf(maxMinutes ?? 45, t)), choices: answerChoices(undefined, [...OVERTIME_OPTIONS]), files: [], overtime: true }
-  const files = t.asked_files ?? []
+  if (asksMoreTime(t)) return { text: t.ask?.lead?.text || overtimeQuestion(t.id, timeLimitOf(maxMinutes ?? 45, t)), choices: answerChoices(undefined, [...OVERTIME_OPTIONS]), files: [], overtime: true }
+  const files = t.ask?.files ?? []
   // T-801: the lead's own wording replaces the text; its options are the buttons of a worker's question (not a file request's)
-  return { text: t.question_lead || t.question || t.note || 'it waits for your answer', choices: answerChoices(files, files.length ? undefined : t.options_lead?.length ? t.options_lead : t.options), files: [...files], overtime: false }
+  return { text: askText(t.ask) || t.note || 'it waits for your answer', choices: answerChoices(files, files.length ? undefined : t.ask?.lead?.options?.length ? t.ask.lead.options : t.ask?.options), files: [...files], overtime: false }
 }
 
 /** The actions a task's page offers now, in the order its buttons show (the terminal's, VS Code's and OpenCode's,

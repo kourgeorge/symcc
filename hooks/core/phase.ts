@@ -1,6 +1,6 @@
 // Where a task is now, worked out in one place (T-610, step 1 of 6 from investigation T-608): its saved status, the
 // status the boards show it under, the step it is in on its way to the merge, and what (if anything) it waits for
-// from the owner. For now it reads today's fields (status, checking, time_ask, merge_wait, asked_files); the merge
+// from the owner. For now it reads today's fields (status, checking, time_ask, merge_wait, ask.files); the merge
 // queue is a check step of its own (checking { step: 'queue', place }, T-612), the "queue (n)" note is only for people. The helpers that decide a task's stage or wait (approveRunning, shownStatus, ownersTurn, waitsForYou,
 // rowMark, statusCell, rowCell, stepNowWord, statusBadge, taskStage) are thin wrappers over it (T-611).
 import type { SymccStatus } from '../../types'
@@ -32,7 +32,7 @@ export type PhaseWait = 'answer' | 'files' | 'your-files' | 'review' | 'time' | 
 export type TaskPhase = { state: SymccStatus; shown: SymccStatus; stage: PhaseStage | null; place?: number; waitsFor: PhaseWait | null; approved: boolean; since?: string }
 
 /** What taskPhase reads of a task (only its status must be there). */
-export type PhaseTask = Pick<BoardTask, 'status'> & Partial<Pick<BoardTask, 'updated_at' | 'runs' | 'live' | 'asked_files'>>
+export type PhaseTask = Pick<BoardTask, 'status'> & Partial<Pick<BoardTask, 'updated_at' | 'runs' | 'live' | 'ask'>>
 
 const STEP_STAGE: Record<CheckStep, PhaseStage> = { prep: 'prep', testing: 'test', checker: 'checker', queue: 'queue', merging: 'merge' }
 /** The check step of stage `stage` (its icon and word are STEP_ICON and STEP_WORD), '' for the worker and none. */
@@ -66,7 +66,7 @@ function ownerWait(t: PhaseTask): { waitsFor: PhaseWait | null; approved: boolea
   const files = waitsForFiles(t)
   const waitsFor: PhaseWait | null =
     files ? 'your-files'
-    : t.status === 'waiting' ? ((t.asked_files?.length ?? 0) > 0 ? 'files' : 'answer')
+    : t.status === 'waiting' ? ((t.ask?.files?.length ?? 0) > 0 ? 'files' : 'answer')
     : t.status === 'review' ? 'review'
     : t.status === 'failed' ? 'failed'
     : null

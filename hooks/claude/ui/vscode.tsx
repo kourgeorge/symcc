@@ -112,7 +112,7 @@ export function vsBanner(k: VsKit, v: PaneView, mode: SymccMode, gitRow: RenderC
   const d = emptyBoard()
   const name = namesFor(S.N.name)
   const folder = folderName(S.root)
-  const off = v.enabled === false ? offStatusParts(S.N.name, true, v.off_here) : []
+  const off = v.on_here === false ? offStatusParts(S.N.name, true, v.off_here) : []
   const driving = v.driving ?? S.driving
   const cmds = v.test_commands ?? []
   const retries = v.auto_retries ?? d.auto_retries
@@ -141,7 +141,7 @@ export function vsBanner(k: VsKit, v: PaneView, mode: SymccMode, gitRow: RenderC
           <Text color={C('inactive')}>{` ${MODE_MEANING[mode]}`}</Text>
         </Text>
         <Text key="vs-branch" wrap="wrap">
-          {v.branch_note ? <Text color={C('warning')}>{v.branch_note}</Text> : <Text color={C('inactive')}>{v.branch ? `branch ${v.branch}` : 'no branch'}</Text>}
+          {v.branch_note ? <Text color={C('warning')}>{v.branch_note}</Text> : <Text color={C('inactive')}>{v.home_branch ? `branch ${v.home_branch}` : 'no branch'}</Text>}
           {dot('vs-branch-dot')}
           <Text color={C('inactive')}>{driving ? 'this session drives' : 'driven by another session'}</Text>
         </Text>

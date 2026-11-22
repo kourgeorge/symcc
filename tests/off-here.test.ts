@@ -76,7 +76,7 @@ test('/symcc-disable here: board.json is unchanged, this window gets no lead pro
   expect(takeBoardUpdate()).toBeUndefined()
   expect(await toolCall(w.host, toolName('board'), undefined, {})).toEqual({ result: offHereAnswer(S.N.name) })
   expect(offHereAnswer('symcc')).toBe('symcc is off in this window. /symcc-enable here turns it back on.')
-  expect(w.panel.view()).toMatchObject({ enabled: false, off_here: 'off' })
+  expect(w.panel.view()).toMatchObject({ on_here: false, off_here: 'off' })
   expect(offStatusLine('symcc', true, 'off')).toBe('symcc is off in this window · /symcc-enable here')
 
   // session B (another window): the same board, symcc on there
@@ -246,7 +246,7 @@ test('a second live window starts off here with a short notice; board.json is un
   expect(parseLead(w.files.get(w.lead)!)?.session).toBe('a')
   expect(w.toasts.some(t => t.includes('symcc runs in another window · /symcc-enable here to use it here too'))).toBe(true)
   expect(w.opened).toEqual([])
-  expect(w.panel.view()).toMatchObject({ enabled: false, off_here: 'other' })
+  expect(w.panel.view()).toMatchObject({ on_here: false, off_here: 'other' })
   expect(offStatusLine('symcc', true, 'other')).toBe('symcc runs in another window · /symcc-enable here')
   expect(await leadGuideText(w.host)).toBeUndefined()
   // /symcc-enable here opens the panel as on start and makes it a lead

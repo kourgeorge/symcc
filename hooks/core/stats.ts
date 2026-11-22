@@ -997,7 +997,11 @@ export function addScoutRun(text: string | null | undefined, name: string, run: 
   const add = (f: ScoutUsageFigures | undefined): ScoutUsageFigures => ({ runs: (f?.runs ?? 0) + 1, tokens: addTokens(f?.tokens, run.tokens), ms: (f?.ms ?? 0) + ms })
   const cur = usage[name]
   const day = dayOf(run.endMs, 0)
-  usage[name] = { ...add(cur), days: { ...(cur?.days ?? {}), ...(day ? { [day]: add(cur?.days[day]) } : {}) } }
+  const days = { ...(cur?.days ?? {}), ...(day ? { [day]: add(cur?.days[day]) } : {}) }
+  // T-808: only the last year's days are kept (the totals above stay whole)
+  const from = dayOf(run.endMs - 365 * 86_400_000, 0)
+  for (const k of Object.keys(days)) if (from && k < from) delete days[k]
+  usage[name] = { ...add(cur), days }
   return JSON.stringify({ ...raw, usage }, null, 2) + '\n'
 }
 

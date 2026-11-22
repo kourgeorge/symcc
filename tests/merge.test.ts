@@ -250,7 +250,7 @@ function world(g: Partial<Git> = {}, tests: Record<string, Res> = {}) {
 /** What a try recorded for its hand-back: an ask_owner call (`question`) and edits refused as outside its files (`requested`). */
 type Rec = { question?: WorkerQuestion; requested?: string[] }
 /** Board `b` with T-1's current try holding `rec`, as ask_owner and the tool.check hook write it. */
-const recorded = (b: Board, rec: Rec = {}) => (rec.question || rec.requested ? patchTask(b, 'T-1', { live: { ...(rec.question ? { question: rec.question } : {}), ...(rec.requested ? { refused: rec.requested } : {}) } }, ISO) : b)
+const recorded = (b: Board, rec: Rec = {}) => (rec.question || rec.requested ? patchTask(b, 'T-1', { live: { ...(rec.question ? { ask: { by: 'worker' as const, text: rec.question.question, asked_at: ISO, ...(rec.question.options ? { options: rec.question.options } : {}) } } : {}), ...(rec.requested ? { refused: rec.requested } : {}) } }, ISO) : b)
 
 function boardWith(mode: 'auto' | 'review', test_commands: string[] = [], extra: Partial<BoardTask> & { agent?: string } = {}): [Board, BoardTask] {
   const [b, t] = addTask({ ...emptyBoard(), mode, test_commands }, { origin: { why: 'a test' }, title: 'Do it', files: ['src/'] }, ISO)
@@ -1049,7 +1049,7 @@ test('a change with only .env.local does not merge: the task waits for the owner
   expect(movedMain(w)).toBe(false)
   expect(ranTests(w)).toEqual([])
   expect(t.status).toBe('waiting')
-  expect(t.question).toContain('changed only files whose names look like secrets (tests/.env.local)')
+  expect(t.ask?.text).toContain('changed only files whose names look like secrets (tests/.env.local)')
   expect(t.history.at(-1)?.text).toContain('left out tests/.env.local')
   expect(told).toContain('tests/.env.local')
   // nothing merged, so the folder stays and the file stays in it
@@ -1079,7 +1079,7 @@ test('deleting a tracked secret-looking file is allowed: the deletion is committ
   // main tracks tests/.env; the worker ran git rm tests/.env
   const { w, restored, t, told } = await finishedWithSecrets(['tests/.env'], false, { deleted: ['tests/.env'] })
   expect(t.status).toBe('done')
-  expect(t.question ?? undefined).toBeUndefined()
+  expect(t.ask).toBeUndefined()
   expect(restored).toEqual([])
   expect(movedMain(w)).toBe(true)
   expect(w.git.main).toBe(H1)
@@ -1768,7 +1768,7 @@ const deleteMain = (w: ReturnType<typeof world>) => {
 /** T-440: task `t` waits with the "branch main is gone" question, its work kept: not failed, no failed try counted. */
 const waitsForGoneMain = (w: ReturnType<typeof world>, t: BoardTask) => {
   expect(t.status).toBe('waiting')
-  expect(t.question).toMatch(/^branch main is gone: merge into \S+ instead\?$/)
+  expect(t.ask?.text).toMatch(/^branch main is gone: merge into \S+ instead\?$/)
   expect(t.history.at(-1)?.text).toMatch(/^not merged: branch main is gone; asked the owner/)
   expect(t.test_tries ?? 0).toBe(0)
   expect(movedMain(w)).toBe(false)
@@ -2053,7 +2053,7 @@ test('ask refuses a done or dropped task and leaves it as it is', async () => {
     expect(err).toBe(`T-1 is ${status}; retry it first if it needs more work`)
     const t = find(await load(w.$), 'T-1')!
     expect(t.status).toBe(status)
-    expect(t.question ?? null).toBe(null)
+    expect(t.ask).toBeUndefined()
   }
 })
 
@@ -2387,7 +2387,7 @@ test("a worker's ask_owner question makes the task wait for the owner with the q
   saidNeedsYou.clear()
   const { w, t } = await workerAnswers('I asked the owner.', { ask: { question: 'Should the button be red or blue?' } })
   expect(t.status).toBe('waiting')
-  expect(t.question).toBe('Should the button be red or blue?')
+  expect(t.ask?.text).toBe('Should the button be red or blue?')
   expect(t.note).toBe('waiting for you')
   expect(t.history.at(-1)?.text).toBe('try 1: worker asked: Should the button be red or blue?')
   // it needs the owner now: the update is urgent (OpenCode steers it into a busy lead, T-464)
@@ -2400,8 +2400,8 @@ test("a worker's ask_owner question makes the task wait for the owner with the q
 test("a worker's question with options saves the options, and the lead is told to offer them", async () => {
   const { t } = await workerAnswers('', { notify: 'off', ask: { question: 'Which colour?', options: ['red', 'blue', 'green'] } })
   expect(t.status).toBe('waiting')
-  expect(t.question).toBe('Which colour?')
-  expect((t as { options?: string[] }).options).toEqual(['red', 'blue', 'green'])
+  expect(t.ask?.text).toBe('Which colour?')
+  expect(t.ask?.options).toEqual(['red', 'blue', 'green'])
   expect(leadQueue.join('\n')).toContain('Options: red | blue | green.')
   expect(leadQueue.join('\n')).toContain('Otherwise ask the owner in the chat now, plain and short, offering the options as numbered plain chat text, plus "or answer on the board"')
   // Claude Code's words name its pop-up question tool (T-371: another host may have none)
@@ -2414,10 +2414,10 @@ test('a change worker whose edits outside its files were refused waits for those
   // world(): the task's folder holds edits in src/a.ts, inside the task's files (src/)
   const { w, t } = await workerAnswers('I changed src/a.ts; README.md was refused.', { requested: ['README.md', 'docs/a.md'] })
   expect(t.status).toBe('waiting')
-  expect(t.question).toBe('T-1 needs to change files outside its list: README.md, docs/a.md. Allow them?')
+  expect(t.ask?.text).toBe('T-1 needs to change files outside its list: README.md, docs/a.md. Allow them?')
   expect(t.note).toBe('waiting for you')
   expect(t.history.at(-1)?.text).toBe('try 1: worker asked for more files: README.md, docs/a.md')
-  expect((t as { asked_files?: string[] }).asked_files).toEqual(['README.md', 'docs/a.md'])
+  expect(t.ask?.files).toEqual(['README.md', 'docs/a.md'])
   expect(leadQueue.join('\n')).toContain('The task now waits for the owner, who can allow the files from the board')
   expect(S.leadUrgent).toBe(true)
   expect(sayQueue).toEqual(['?T-1'])
@@ -2428,18 +2428,18 @@ test('a change worker whose edits outside its files were refused waits for those
 
 test('a question wins over refused edits, and both win over how the turn ended', async () => {
   const both = await workerAnswers('', { notify: 'off', ask: { question: 'Which?' }, requested: ['README.md'], end: { reason: 'aborted' } })
-  expect(both.t).toMatchObject({ status: 'waiting', question: 'Which?' })
+  expect(both.t).toMatchObject({ status: 'waiting', ask: { by: 'worker', text: 'Which?' } })
   const files = await workerAnswers('', { notify: 'off', requested: ['README.md'], end: { reason: 'error' } })
   expect(files.t.status).toBe('waiting')
-  expect((files.t as { asked_files?: string[] }).asked_files).toEqual(['README.md'])
+  expect(files.t.ask?.files).toEqual(['README.md'])
 })
 
 test('a hand-back whose text says "QUESTION:" or "NEED FILES:", with no ask_owner call or refused edit, is checked and merged normally', async () => {
   for (const answer of ['QUESTION: Should the button be red or blue?', 'NEED FILES: README.md — the docs mention it', 'I looked around.\nQUESTION: Which colour?\nOPTIONS: red | blue']) {
     const { w, t } = await workerAnswers(answer, { notify: 'off' })
     expect(t.status).toBe('done')
-    expect(t.question ?? undefined).toBeUndefined()
-    expect((t as { asked_files?: string[] }).asked_files).toBeUndefined()
+    expect(t.ask).toBeUndefined()
+    expect(t.ask?.files).toBeUndefined()
     expect(movedMain(w)).toBe(true)
   }
 })
@@ -2477,7 +2477,7 @@ test("ask_owner from a scout is refused; from a running worker it is written to 
   workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
   expect(await askCall(w.$, 'ag1', { question: 'First?' })).toBe('Sent to the owner. Stop now and hand back.')
   expect(await askCall(w.$, 'ag1', { question: 'Which?', options: ['a', 'b'] })).toBe('Sent to the owner. Stop now and hand back.')
-  expect((find(await load(w.$), 'T-1') as BoardTask).live?.question).toEqual({ question: 'Which?', options: ['a', 'b'] })
+  expect((find(await load(w.$), 'T-1') as BoardTask).live?.ask).toMatchObject({ by: 'worker', text: 'Which?', options: ['a', 'b'] })
   workers.delete('ag1')
 })
 
@@ -2494,8 +2494,8 @@ test("a question and a refused edit survive a plugin reload before the hand-back
   expect(await lateHandBack(q.$, 'ag1')).toBe(true)
   await workerFinished(q.$, 'ag1', 'I asked the owner.')
   const asked = find(await load(q.$), 'T-1') as BoardTask
-  expect(asked).toMatchObject({ status: 'waiting', question: 'Red or blue?', options: ['red', 'blue'] })
-  expect(asked.live?.question).toBeUndefined()
+  expect(asked).toMatchObject({ status: 'waiting', ask: { by: 'worker', text: 'Red or blue?', options: ['red', 'blue'] } })
+  expect(asked.live?.ask).toBeUndefined()
   expect(movedMain(q)).toBe(false)
   // a refused edit: the same, through the tool.check hook's part
   const f = world()
@@ -2508,7 +2508,7 @@ test("a question and a refused edit survive a plugin reload before the hand-back
   expect(await lateHandBack(f.$, 'ag1')).toBe(true)
   await workerFinished(f.$, 'ag1', 'README.md was refused.')
   const files = find(await load(f.$), 'T-1') as BoardTask
-  expect(files).toMatchObject({ status: 'waiting', asked_files: ['README.md'] })
+  expect(files).toMatchObject({ status: 'waiting', ask: { by: 'symcc', files: ['README.md'] } })
   expect(files.live?.refused).toBeUndefined()
   expect(movedMain(f)).toBe(false)
   workers.clear()
@@ -2517,7 +2517,7 @@ test("a question and a refused edit survive a plugin reload before the hand-back
 test('what a try recorded for its hand-back is cleared when a new try starts, and when the task leaves "doing"', () => {
   const [b] = boardWith('auto')
   const rec = recorded(b, { question: { question: 'Which?' }, requested: ['README.md'] })
-  expect(find(rec, 'T-1')).toMatchObject({ live: { question: { question: 'Which?' }, refused: ['README.md'] }, })
+  expect(find(rec, 'T-1')).toMatchObject({ live: { ask: { by: 'worker', text: 'Which?' }, refused: ['README.md'] }, })
   for (const next of [patchTask(rec, 'T-1', { attempts: 2 }, ISO), patchTask(rec, 'T-1', { status: 'todo' }, ISO)]) {
     expect(find(next, 'T-1')).not.toHaveProperty('try_question')
     expect(find(next, 'T-1')).not.toHaveProperty('try_refused')
@@ -2539,7 +2539,7 @@ test('the worker prompts say how to ask and what a refused edit means, with no Q
 async function askedForFiles(files: string[]) {
   const w = world()
   const [b] = boardWith('auto')
-  await saveBoard(w.$, patchTask(b, 'T-1', { status: 'waiting', question: `T-1 needs to change files outside its list: ${files.join(', ')}. Allow them?`, asked_files: files, note: 'waiting for you' } as Partial<BoardTask>, ISO))
+  await saveBoard(w.$, patchTask(b, 'T-1', { status: 'waiting', ask: { by: 'symcc', text: `T-1 needs to change files outside its list: ${files.join(', ')}. Allow them?`, files, asked_at: '' }, note: 'waiting for you' } as Partial<BoardTask>, ISO))
   let saves = 0
   const fs = (w.$ as { fs: { write: (p: string, t: string) => Promise<void> } }).fs
   const write = fs.write
@@ -2555,8 +2555,8 @@ test('Allow on a file request widens the files and sends the task back to work i
   expect(t.status).toBe('todo')
   expect(t.files).toEqual(['src/', 'README.md', 'docs/a.md'])
   expect(t.history.at(-1)?.text).toBe('the owner allowed files: + README.md, + docs/a.md')
-  expect(t.question).toBeNull()
-  expect(t).not.toHaveProperty('asked_files')
+  expect(t.ask).toBeUndefined()
+  expect(t).not.toHaveProperty('ask')
   expect(leadQueue).toEqual([])
   expect(meanwhile.join('\n')).toContain('The owner allowed README.md, docs/a.md for T-1')
 })
@@ -2574,7 +2574,7 @@ test("Don't allow keeps the task waiting with a note and tells the lead at once"
 test('Allow or Don\'t allow on a task that does not wait for files is refused', async () => {
   const w = world()
   const [b] = boardWith('auto')
-  await saveBoard(w.$, patchTask(b, 'T-1', { status: 'waiting', question: 'Which colour?' }, ISO))
+  await saveBoard(w.$, patchTask(b, 'T-1', { status: 'waiting', ask: { by: 'lead', text: 'Which colour?', asked_at: '' } }, ISO))
   await expect(allowAskedFiles(w.$, 'T-1')).rejects.toThrow('not waiting for files')
   await expect(refuseAskedFiles(w.$, 'T-1')).rejects.toThrow('not waiting for files')
 })
@@ -2639,7 +2639,7 @@ test('changing only order or after on a running task keeps its worker and saves 
 test("the owner's answer to a waiting task goes into its details and its history", async () => {
   const w = world()
   const [b] = boardWith('review')
-  await saveBoard(w.$, patchTask(b, 'T-1', { status: 'waiting', question: 'Which docs?', note: 'waiting for you' }, ISO))
+  await saveBoard(w.$, patchTask(b, 'T-1', { status: 'waiting', ask: { by: 'lead', text: 'Which docs?', asked_at: '' }, note: 'waiting for you' }, ISO))
   await runTool(w.$, 'change', { task: 'T-1', answer: 'ok' })
   const t = find(await load(w.$), 'T-1')!
   expect(t.history.at(-1)?.text).toBe('the owner answered: “ok”')
@@ -4481,7 +4481,7 @@ test('an uncommitted change in a file the task changes: the task waits with a no
     expect(x.status).toBe('waiting')
     expect(x.note).toBe('waiting for your files on main: src/a.ts; commit or stash them')
     expect(x.live?.merge_wait).toEqual({ dirty: ['src/a.ts'], untracked: [], ignored: [] })
-    expect(x.question).toBeNull()
+    expect(x.ask).toBeUndefined()
     expect(x.runs!.at(-1)!.ended_note).toBe('waiting for your files')
     expect(w.git.main).toBe(M1)
     expect(ranTests(w)).toEqual(['/bin/sh -c npm test'])
@@ -5229,7 +5229,7 @@ test('an investigation hand-back that restates the question ("Question: ... / An
   expect(t.status).toBe('review')
   expect(t.note).toBe('answered; waiting for you to read it')
   expect(t.answer).toBe(body)
-  expect(t.question ?? undefined).toBeUndefined()
+  expect(t.ask).toBeUndefined()
 })
 
 test('an investigation answer that starts with "NEED FILES:" or "QUESTION:" goes to review as answered', async () => {
@@ -5237,7 +5237,7 @@ test('an investigation answer that starts with "NEED FILES:" or "QUESTION:" goes
     const { t } = await investigationAnswers('auto', body)
     expect(t.status).toBe('review')
     expect(t.answer).toBe(body)
-    expect((t as { asked_files?: string[] }).asked_files).toBeUndefined()
+    expect(t.ask?.files).toBeUndefined()
   }
 })
 
@@ -5249,7 +5249,7 @@ test('an investigation never waits for files', async () => {
 test('an investigation worker that asks the owner (ask_owner) still waits for the owner', async () => {
   const { t } = await investigationAnswers('auto', 'I need to know.', {}, { question: { question: 'Which cache do you mean?' } })
   expect(t.status).toBe('waiting')
-  expect(t.question).toBe('Which cache do you mean?')
+  expect(t.ask?.text).toBe('Which cache do you mean?')
   expect(t.answer).toBeUndefined()
 })
 
@@ -6598,7 +6598,7 @@ test('T-547: a timed-out test run starts a new try with the time-out in its outp
   const c = await timingOut(() => true)
   const t = await c.t1()
   expect(t.status).toBe('todo')
-  expect(t.question).toBe(null)
+  expect(t.ask).toBeUndefined()
   expect(t.test_tries).toBe(1)
   expect(t.test_output).toContain('ran out of time after 10 min')
   expect(t.test_output).toContain('raise test_minutes if the tests are just slow')
@@ -6700,16 +6700,16 @@ test('T-547: a board with test_rerun set is converted once: a task waiting for i
   const base = { title: 't', details: '', files: [], order: 1, after: [], attempts: 1, history: [], branch: null, merge_into: 'main', origin: { by: 'lead', why: 'x', at: ISO }, created_at: ISO, updated_at: ISO }
   const raw = {
     tasks: [
-      { ...base, id: 'T-1', status: 'waiting', question: null, note: 'tests ran out of time (10 min); running them again once, no new try', test_rerun: 1 },
-      { ...base, id: 'T-2', status: 'waiting', question: 'T-2: the tests ran out of time twice; nothing failed. Run them again, give them more time, or stop it?', options: ['Run the tests again', 'Give them more time', 'Stop it'], note: 'waiting for you', test_rerun: 2, rerun_minutes: 20 },
-      { ...base, id: 'T-3', status: 'waiting', question: 'Which one?', note: 'waiting for you' },
+      { ...base, id: 'T-1', status: 'waiting', note: 'tests ran out of time (10 min); running them again once, no new try', test_rerun: 1 },
+      { ...base, id: 'T-2', status: 'waiting', ask: { by: 'symcc', text: 'T-2: the tests ran out of time twice; nothing failed. Run them again, give them more time, or stop it?', options: ['Run the tests again', 'Give them more time', 'Stop it'], asked_at: '' }, note: 'waiting for you', test_rerun: 2, rerun_minutes: 20 },
+      { ...base, id: 'T-3', status: 'waiting', ask: { by: 'lead', text: 'Which one?', asked_at: '' }, note: 'waiting for you' },
     ],
   }
   const r = readOld(JSON.stringify(raw))
   for (const id of ['T-1', 'T-2']) {
     const t = find(r.board, id)! as BoardTask & Record<string, unknown>
     expect(t.status).toBe('todo')
-    expect(t.question).toBe(null)
+    expect(t.ask).toBeUndefined()
     expect(t.note).toBe(TEST_RERUN_GONE_NOTE)
     expect(t.history.map(h => h.text)).toContain(TEST_RERUN_GONE_NOTE)
     expect('test_rerun' in t).toBe(false)
@@ -6718,11 +6718,11 @@ test('T-547: a board with test_rerun set is converted once: a task waiting for i
   }
   // a task waiting for the owner for another reason is left as it was
   expect(find(r.board, 'T-3')!.status).toBe('waiting')
-  expect(find(r.board, 'T-3')!.question).toBe('Which one?')
+  expect(find(r.board, 'T-3')!.ask?.text).toBe('Which one?')
   // once saved, reading it again changes nothing more
   expect(stillOld(r.board)).toBe(false)
   // a stray test_rerun on a task in another status is only dropped
-  const done = readOld(JSON.stringify({ tasks: [{ ...base, id: 'T-4', status: 'done', question: null, note: 'merged', test_rerun: 1 }] }))
+  const done = readOld(JSON.stringify({ tasks: [{ ...base, id: 'T-4', status: 'done', note: 'merged', test_rerun: 1 }] }))
   expect(find(done.board, 'T-4')!.status).toBe('done')
   expect('test_rerun' in find(done.board, 'T-4')!).toBe(false)
 })

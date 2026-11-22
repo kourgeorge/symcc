@@ -192,6 +192,6 @@ test('the board view the Settings pages read has notify (with its set) and the f
   S.root = '/x/web'
   await publish(f.host, { ...emptyBoard(), notify: 'sound 3' })
   const v = f.panel.view() as PaneView
-  expect(v.notify).toBe('sound 3')
+  expect(v.notify_now).toBe('sound 3')
   expect('sound_set' in v).toBe(false)
 })

@@ -56,7 +56,7 @@ function bigBoard(): Board {
     const status: BoardTask['status'] = i > 660 ? (i % 2 ? 'todo' : 'backlog') : i % 10 === 0 ? 'dropped' : 'done'
     const open = status !== 'done' && status !== 'dropped'
     b.tasks.push({
-      id: `T-${i}`, title: `Task ${i}: ${words(8, 't')}`, details: words(220, 'd'), files: ['hooks/app/', 'tests/'], status, note: open ? '' : 'merged into main (aaaaaaa); tests passed', question: null,
+      id: `T-${i}`, title: `Task ${i}: ${words(8, 't')}`, details: words(220, 'd'), files: ['hooks/app/', 'tests/'], status, note: open ? '' : 'merged into main (aaaaaaa); tests passed',
       order: i, after: i > 1 ? [`T-${i - 1}`] : [], attempts: open ? 0 : 3, history: open ? [] : history, ...(open ? {} : { runs, merged: 'b'.repeat(40) }), branch: open ? null : `symcc/T-${i}`, merge_into: 'main',
       origin: { by: 'owner', why: words(12, 'w'), request: words(60, 'r'), evidence: `last owner prompt: ${words(110, 'e')}`, at }, kind: 'bug', role: 'general', created_at: at, updated_at: at,
     } as BoardTask)
@@ -277,7 +277,7 @@ test('T-681: a parts file that is there but lacks one task\'s entry gets it back
   const b = emptyBoard()
   for (const id of ['T-1', 'T-2', 'T-3']) {
     const at = iso(NOW)
-    b.tasks.push({ id, title: id, details: 'd', files: [], status: id === 'T-3' ? 'todo' : 'done', note: '', question: null, order: 1, after: [], attempts: 1, history: [{ at, kind: 'stage', text: 'x' }], branch: null, merge_into: 'main', kind: 'bug', role: 'general', created_at: at, updated_at: at } as BoardTask)
+    b.tasks.push({ id, title: id, details: 'd', files: [], status: id === 'T-3' ? 'todo' : 'done', note: '', order: 1, after: [], attempts: 1, history: [{ at, kind: 'stage', text: 'x' }], branch: null, merge_into: 'main', kind: 'bug', role: 'general', created_at: at, updated_at: at } as BoardTask)
   }
   b.next_id = 4
   await saveBoard(w.host, b)

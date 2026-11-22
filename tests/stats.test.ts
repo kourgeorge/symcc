@@ -18,7 +18,7 @@ const iso = (minAgo: number) => new Date(NOW - minAgo * 60_000).toISOString()
 /** A task made `ageMin` minutes ago; `tries` are [minutes, tokens] per try (the tokens as plain input), each starting at the task's creation. */
 function task(id: string, over: Partial<SymccTask> = {}, tries: [number, number?][] = [], ageMin = 60): SymccTask {
   const runs = tries.map(([min, tokens]) => ({ started: iso(ageMin), ended: iso(ageMin - min), ...(tokens !== undefined ? { agents: [{ kind: 'worker' as const, started: iso(ageMin), ended: iso(ageMin - min), tokens: { input: tokens } }] } : {}) }))
-  return { id, title: `task ${id}`, details: '', files: [], status: 'done', note: '', question: null, order: 0, after: [], attempts: tries.length, history: [], branch: null, created_at: iso(ageMin), updated_at: iso(0), ...(runs.length ? { runs } : {}), ...over }
+  return { id, title: `task ${id}`, details: '', files: [], status: 'done', note: '', order: 0, after: [], attempts: tries.length, history: [], branch: null, created_at: iso(ageMin), updated_at: iso(0), ...(runs.length ? { runs } : {}), ...over }
 }
 
 test('stats: averages and medians', () => {
@@ -142,20 +142,20 @@ const logLine = (id: string, minAgo: number, u: { i?: number; o?: number; cr?: n
   JSON.stringify({ type: 'assistant', isSidechain: false, timestamp: iso(minAgo), message: { id, model: 'm', content: [{ type: 'text', text: 'secret words' }], usage: { input_tokens: u.i ?? 0, output_tokens: u.o ?? 0, cache_read_input_tokens: u.cr ?? 0, cache_creation_input_tokens: u.cc ?? 0 } }, ...over })
 
 test('stats: a scout run adds its tokens and time to scouts.json, and the rest of the file is kept', () => {
-  const mem = scoutMemoryText([{ name: 'bugs', last_run: iso(5), last_report: 'all fine' }])
+  const mem = scoutMemoryText([{ name: 'bugs', paused: true }])
   let text = addScoutRun(mem, 'bugs', { endMs: NOW, ms: 120_000, tokens: { input: 1000, output: 500, cache_write: 500, cache_read: 3000 } })
   text = addScoutRun(text, 'bugs', { endMs: NOW - 86_400_000 * 3, ms: 60_000 })
   text = addScoutRun(text, 'docs', { endMs: NOW, ms: 30_000, tokens: { input: 700 } })
-  expect(parseScoutMemory(text).bugs?.last_report).toBe('all fine')
+  expect(parseScoutMemory(text).bugs?.paused).toBe(true)
   const u = parseScoutUsage(text)
   // each kind is kept apart, not one sum
   expect(u.bugs).toMatchObject({ runs: 2, tokens: { input: 1000, output: 500, cache_write: 500, cache_read: 3000 }, ms: 180_000 })
   expect(u.bugs!.days['2026-11-13']).toEqual({ runs: 1, tokens: { input: 1000, output: 500, cache_write: 500, cache_read: 3000 }, ms: 120_000 })
   expect(u.docs?.tokens).toEqual({ input: 700 })
   // a later save of the scouts' memory (which knows nothing of usage) keeps it
-  const saved = keepScoutUsage(scoutMemoryText([{ name: 'bugs', last_run: iso(1), last_report: 'new' }]), text)
+  const saved = keepScoutUsage(scoutMemoryText([{ name: 'bugs', paused: true }]), text)
   expect(parseScoutUsage(saved)).toEqual(u)
-  expect(parseScoutMemory(saved).bugs?.last_report).toBe('new')
+  expect(parseScoutMemory(saved).bugs?.paused).toBe(true)
   expect(parseScoutUsage('not json')).toEqual({})
   // the range: the last 2 days leave out the run 3 days ago
   const both = { input: 1700, output: 500, cache_write: 500, cache_read: 3000 }
@@ -769,4 +769,13 @@ test('T-806: "why tries were sent back" lists the biggest count first and folds 
   expect(html).toContain('files out of scope 2, no change 1')
   // none to show when no try was sent back
   expect(statsData({ tasks: [task('T-2')], nowMs: NOW }).failed).toEqual([])
+})
+
+test('T-808: a scout run keeps only the last 365 days in its usage days; the totals stay whole', () => {
+  const old = addScoutRun(null, 'bugs', { endMs: NOW - 400 * 86_400_000, ms: 1000 })
+  expect(Object.keys(parseScoutUsage(old).bugs!.days)).toHaveLength(1)
+  const next = addScoutRun(old, 'bugs', { endMs: NOW, ms: 2000 })
+  const u = parseScoutUsage(next).bugs!
+  expect(Object.keys(u.days)).toEqual([new Date(NOW).toISOString().slice(0, 10)])
+  expect(u).toMatchObject({ runs: 2, ms: 3000 })
 })

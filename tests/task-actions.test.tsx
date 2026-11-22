@@ -7,10 +7,11 @@ import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { taskActions, taskAsks, taskKeys, actionButtonLabel, type BoardTask, type TaskAction } from '../hooks/board'
 import { vsActions } from '../hooks/claude/ui/vscode-task'
+import { askShape } from './ask-shape'
 
 const T = '2026-11-09T00:00:00.000Z'
 const tk = (status: string, extra: Record<string, unknown> = {}) =>
-  ({ id: 'T-1', title: 'x', details: '', files: [], status, note: '', question: null, order: 0, after: [], attempts: 1, history: [], branch: null, created_at: T, updated_at: T, ...extra }) as unknown as BoardTask
+  ({ id: 'T-1', title: 'x', details: '', files: [], status, note: '', order: 0, after: [], attempts: 1, history: [], branch: null, created_at: T, updated_at: T, ...askShape(extra) }) as unknown as BoardTask
 const ids = (a: TaskAction[]) => a.map(x => x.id)
 const keyed = (a: TaskAction[]) => a.filter(x => x.key).map(x => `${x.key} ${x.word}`)
 const main = (a: TaskAction[]) => a.filter(x => x.main).map(x => x.id)

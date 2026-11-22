@@ -35,21 +35,21 @@ const keyOf = (n: Node) => n.key ?? (n.props?.key as string | undefined)
 
 const iso = (ms: number) => new Date(ms).toISOString()
 const fresh = iso(T0 - 10_000)
-const DEP = { id: 'T-690', title: 'The task it waits for', details: '', files: [], status: 'done', note: '', question: null, order: 690, after: [], attempts: 1, history: [], branch: null, created_at: iso(T0), updated_at: iso(T0) }
+const DEP = { id: 'T-690', title: 'The task it waits for', details: '', files: [], status: 'done', note: '', order: 690, after: [], attempts: 1, history: [], branch: null, created_at: iso(T0), updated_at: iso(T0) }
 /** A bug in doing, with a role, two tries and a checker step now. */
 const BUG = {
   id: 'T-691', title: 'The history timeline is broken', kind: 'bug', role: 'tester', details: 'Fix it.', files: ['hooks/a.ts', 'tests/'], status: 'doing', note: 'a checker agent is trying to break it before it merges',
-  question: null, order: 691, after: ['T-690'], attempts: 2, branch: 'symcc/T-691', created_at: iso(T0 - 86_400_000), updated_at: iso(T0 - 60_000),
+  order: 691, after: ['T-690'], attempts: 2, branch: 'symcc/T-691', created_at: iso(T0 - 86_400_000), updated_at: iso(T0 - 60_000),
   origin: { by: 'owner', request: 'fix the history timeline', why: 'the owner sees loose bars between the events' },
   runs: [{ started: iso(T0 - 3_600_000), ended: iso(T0 - 3_000_000) }, { started: iso(T0 - 900_000), ended: fresh, checkers: [{ started: fresh }] }],
   live: { checking: { step: 'checker', at: fresh } }, 
   history: [historyEntry('created', 'created by the owner because the timeline is broken', iso(T0 - 86_400_000)), historyEntry('failed', 'try 1: first fix → tests failed: x', iso(T0 - 3_000_000))],
 }
 /** A plain change in to do. */
-const TODO = { id: 'T-692', title: 'A plain change', details: '', files: [], status: 'todo', note: '', question: null, order: 692, after: [], attempts: 0, history: [], branch: null, created_at: iso(T0 - 60_000), updated_at: iso(T0 - 60_000), origin: { by: 'lead', why: 'tidy up' } }
+const TODO = { id: 'T-692', title: 'A plain change', details: '', files: [], status: 'todo', note: '', order: 692, after: [], attempts: 0, history: [], branch: null, created_at: iso(T0 - 60_000), updated_at: iso(T0 - 60_000), origin: { by: 'lead', why: 'tidy up' } }
 
 const seed = (on: Parameters<typeof seedBoard>[0], opened: string, tasks: unknown[]) => {
-  seedBoard(on, { opened, view: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', checker: true, branch: 'main', test_commands: ['claude plugin test .'] } } })
+  seedBoard(on, { opened, view: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', checker: true, home_branch: 'main', test_commands: ['claude plugin test .'] } } })
   on('fs.exists', () => ({ value: false }))
   on('ui.toast', () => ({ value: undefined }))
   on('ui.status', () => ({ value: undefined }))

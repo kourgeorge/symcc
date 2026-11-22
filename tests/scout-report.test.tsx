@@ -73,15 +73,23 @@ function world(o: { memory?: string; moveFails?: boolean } = {}) {
     return sent
   }
   const memory = () => JSON.parse(files.get(MEMORY) ?? '{}') as { scouts?: Record<string, { last_run: string | null; last_report?: string; paused?: boolean }>; usage?: Record<string, { runs: number }> }
-  return { $: host, files, st, sent, toasts, toLead, memory }
+  /** T-808: the scout's runs file (newest last) and the full report of its newest run (null when it has none) */
+  const runs = () => (JSON.parse(files.get(`${ROOT}/.symcc/scouts/bugs.runs.json`) ?? '{"runs":[]}') as { runs: { outcome: string; report?: string; ended: string }[] }).runs
+  const lastReport = () => {
+    const r = runs().at(-1)
+    return r?.report ? (files.get(`${ROOT}/${r.report}`) ?? null) : null
+  }
+  return { $: host, files, st, sent, toasts, toLead, memory, runs, lastReport }
 }
 
 // ---------------- a report with findings ----------------
 
-test("a scout's report is saved to scouts.json as its last report, with the run's time", async () => {
+test("a scout's report is saved as the newest run of its runs file with its report file, and not in scouts.json (T-808)", async () => {
   const w = world()
   await scoutFinished(w.$, 's1', '  1. The parser crashes on empty input.\n2. No test for it.\n  ')
-  expect(w.memory().scouts?.bugs).toEqual({ last_run: LAST_RUN, last_report: '1. The parser crashes on empty input.\n2. No test for it.' })
+  expect(w.memory().scouts?.bugs).toBeUndefined()
+  expect(w.runs().at(-1)?.outcome).toBe('found')
+  expect(w.lastReport()?.trim()).toBe('1. The parser crashes on empty input.\n2. No test for it.')
 })
 
 test("a scout's report adds one run to its usage in scouts.json", async () => {
@@ -120,31 +128,33 @@ test("a scout's report is noted as the last thing heard from it", async () => {
   expect(heard.last?.what).toBe('scout bugs report')
 })
 
-test(`a report longer than ${SCOUT_REPORT_CHARS} characters is cut to that size in scouts.json`, async () => {
+test(`a report longer than ${SCOUT_REPORT_CHARS} characters is cut to that size in memory; its file keeps it whole`, async () => {
   const w = world()
   await scoutFinished(w.$, 's1', `1. ${'x'.repeat(SCOUT_REPORT_CHARS * 2)}`)
-  expect(w.memory().scouts?.bugs?.last_report?.length).toBe(SCOUT_REPORT_CHARS)
+  expect(w.st.last_report?.length).toBe(SCOUT_REPORT_CHARS)
+  expect(w.lastReport()?.length).toBeGreaterThan(SCOUT_REPORT_CHARS)
 })
 
-test("saving the report keeps what else scouts.json had: another scout's entry and the owner's pause", async () => {
-  const w = world({ memory: JSON.stringify({ scouts: { bugs: { last_run: LAST_RUN, paused: true }, docs: { last_run: BEFORE } } }) })
+test("a finished run keeps what else scouts.json had: another scout's pause and the owner's pause", async () => {
+  const w = world({ memory: JSON.stringify({ scouts: { bugs: { paused: true }, docs: { paused: true } } }) })
   scoutState.set('docs', { name: 'docs', every_minutes: 60, last_run: BEFORE, running: false })
   await scoutFinished(w.$, 's1', '1. Found a crash.')
-  expect(w.memory().scouts).toEqual({ bugs: { last_run: LAST_RUN, last_report: '1. Found a crash.', paused: true }, docs: { last_run: BEFORE } })
+  expect(w.memory().scouts).toEqual({ bugs: { paused: true }, docs: { paused: true } })
 })
 
 test('the board update for a paused scout tells the lead it does not run again until the owner resumes it', async () => {
-  const w = world({ memory: JSON.stringify({ scouts: { bugs: { last_run: LAST_RUN, paused: true } } }) })
+  const w = world({ memory: JSON.stringify({ scouts: { bugs: { paused: true } } }) })
   await scoutFinished(w.$, 's1', '1. Found a crash.')
   expect(w.toLead()[0]).toContain('The owner has paused "bugs"')
 })
 
 // ---------------- a "NOTHING" report ----------------
 
-test('a "NOTHING" report is saved to scouts.json as the last report', async () => {
+test('a "NOTHING" report is saved as a run with outcome nothing and its report file', async () => {
   const w = world()
   await scoutFinished(w.$, 's1', 'NOTHING')
-  expect(w.memory().scouts?.bugs).toEqual({ last_run: LAST_RUN, last_report: 'NOTHING' })
+  expect(w.runs().at(-1)?.outcome).toBe('nothing')
+  expect(w.lastReport()?.trim()).toBe('NOTHING')
 })
 
 test('a "NOTHING" report sends the lead no board update', async () => {
@@ -168,7 +178,8 @@ test('a "NOTHING" report is not noted as heard from the scout', async () => {
 test('an empty report counts as nothing: saved as "", no board update', async () => {
   const w = world()
   await scoutFinished(w.$, 's1', '   \n ')
-  expect(w.memory().scouts?.bugs?.last_report).toBe('')
+  expect(w.st.last_report).toBe('')
+  expect(w.runs().at(-1)?.outcome).toBe('nothing')
   expect(w.toLead()).toEqual([])
 })
 
@@ -190,21 +201,21 @@ test('a stopped scout run reports nothing to the lead and keeps the last real re
   expect(w.toasts.some(t => t.includes('scout bugs was stopped; nothing reported'))).toBe(true)
 })
 
-test('when scouts.json cannot be saved, the lead still gets the finding and a note that the run was not saved', async () => {
+test('when scouts.json cannot be saved (only its usage totals go there now), the lead still gets the finding and the run is in its runs file', async () => {
   const w = world({ moveFails: true })
   await scoutFinished(w.$, 's1', '1. Found a crash.')
   const sent = w.toLead()
   expect(sent.length).toBe(1)
-  expect(sent[0]).toContain("Note: scout bugs's last run was not saved")
   expect(sent[0]).toContain('Scout "bugs" found 1 thing')
   expect(w.files.has(MEMORY)).toBe(false)
+  expect(w.runs().at(-1)?.outcome).toBe('found')
 })
 
 test('with the plugin turned off, a scout report is saved but the lead gets no board update', async () => {
   const w = world()
   w.files.set(BOARD, JSON.stringify({ ...emptyBoard(), enabled: false }))
   await scoutFinished(w.$, 's1', '1. Found a crash.')
-  expect(w.memory().scouts?.bugs?.last_report).toBe('1. Found a crash.')
+  expect(w.lastReport()?.trim()).toBe('1. Found a crash.')
   expect(w.toLead()).toEqual([])
 })
 
@@ -217,7 +228,7 @@ test("with board.json broken, a scout's report still reaches the lead and is sav
   const sent = w.toLead()
   expect(sent.length).toBe(1)
   expect(sent[0]).toContain('Scout "bugs" found something')
-  expect(w.memory().scouts?.bugs?.last_report).toBe('Finding: X')
+  expect(w.lastReport()?.trim()).toBe('Finding: X')
   expect(w.files.get(BOARD)).toBe('{ not json')
 })
 
@@ -233,7 +244,7 @@ test('with board.json broken, a stopped scout run still shows the "was stopped" 
 
 for (const end of [{ reason: 'error' }, { reason: 'refusal', refusal: { category: null, explanation: 'cannot help' } }] as const) {
   test(`through agentFinished (turn.complete), a scout run that ended on ${end.reason === 'error' ? 'an error' : 'a refusal'} sends nothing to the lead and keeps its last real run and report`, async () => {
-    const w = world({ memory: JSON.stringify({ scouts: { bugs: { last_run: BEFORE, last_report: '1. The old finding.' } } }) })
+    const w = world()
     w.st.last_report = '1. The old finding.'
     agentFinished(w.$, 's1', { answer: '1. Let me look at src/a.ts next.', end, isAborted: false, tokens: undefined })
     // scoutFinished runs on without being waited for: let its work finish (its toast is the last step)
@@ -241,8 +252,8 @@ for (const end of [{ reason: 'error' }, { reason: 'refusal', refusal: { category
     expect(w.toLead()).toEqual([])
     expect(w.st.running).toBe(false)
     expect(w.st.last_report).toBe('1. The old finding.')
-    // the saved last report is the old one; only the run's usage is counted
-    expect(w.memory().scouts!.bugs).toEqual({ last_run: BEFORE, last_report: '1. The old finding.' })
+    // no report was saved (the last real one stays the newest run's); only the run's usage is counted
+    expect(['found', 'nothing']).not.toContain(w.runs().at(-1)?.outcome)
     expect(w.memory().usage!.bugs!.runs).toBe(1)
     expect(scoutRuns.has('s1')).toBe(false)
     expect(w.toasts.join('\n')).toContain(end.reason === 'error' ? "scout bugs's run ended on an error; nothing reported" : "scout bugs's run ended on a refusal; nothing reported")

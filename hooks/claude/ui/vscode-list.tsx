@@ -116,7 +116,7 @@ export function listPageVs($: $, pane: PaneParts) {
     // a done or dropped task is one line: its mark (the terminal list's), the ID link, the dim title; no status line
     const ended = x.status === 'done' || x.status === 'dropped'
     const needs = needsYou(x, nowMs)
-    const extra = rowExtra(x, v.tasks, v.branch ?? '', v.max_minutes, nowMs).replace(/^Enter to review$/, isInvestigation(x) ? '' : 'ready for your review')
+    const extra = rowExtra(x, v.tasks, v.home_branch ?? '', v.max_minutes, nowMs).replace(/^Enter to review$/, isInvestigation(x) ? '' : 'ready for your review')
     let body = extra
     // "→ other-branch" first, when it merges elsewhere (kept whole)
     const branch = body.startsWith('→ ') ? body.split(' · ')[0]! : ''

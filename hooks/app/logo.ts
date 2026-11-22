@@ -38,7 +38,7 @@ async function paneShown(host: Host): Promise<boolean> {
 /** Plays `move` now, if one may play (see mayMove) and none plays yet; one that comes while another plays is dropped. */
 export async function playLogo(host: Host, move: LogoMove, v: Partial<PaneView>): Promise<boolean> {
   if (isPlaying(logo.play, logo.t)) return false
-  if (!mayMove({ enabled: v.enabled, mode: v.mode, width: logo.width, shown: await paneShown(host) })) return false
+  if (!mayMove({ enabled: v.on_here, mode: v.mode, width: logo.width, shown: await paneShown(host) })) return false
   if (isPlaying(logo.play, logo.t)) return false
   logo.play = startMove(logo.play, move, logo.t)
   logo.last = Date.now()

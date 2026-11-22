@@ -138,6 +138,24 @@ export type SymccOrigin = {
   at: string
 }
 
+/**
+ * T-808: one question for the owner, in every place one is kept: `task.ask` (a worker's question or file request, the
+ * lead's ask, symcc's own question), `live.ask` (a worker's question, until its try is handed back) and `board.questions`
+ * (the lead's questions that are not about one task). `by`: who asked. `files`: the files a worker asked to change (the
+ * owner can allow them), shown as Allow / Don't allow. `options`: the choices, shown as buttons. `lead`: the lead's own
+ * wording from its pop-up tied to the question (T-801), which the board shows instead of `text` (and `options`).
+ */
+export type SymccAsk = {
+  by: 'worker' | 'lead' | 'symcc'
+  text: string
+  options?: string[]
+  files?: string[]
+  asked_at: string
+  answer?: string
+  answered_at?: string
+  lead?: { text: string; options?: string[] }
+}
+
 export type SymccTask = {
   id: string
   title: string
@@ -145,7 +163,6 @@ export type SymccTask = {
   files: string[]
   status: SymccStatus
   note: string
-  question: string | null
   order: number
   after: string[]
   attempts: number
@@ -178,14 +195,8 @@ export type SymccTask = {
   merge_into?: string
   /** the task's own work branch (its worker's copy), e.g. "symcc/T-3"; null until a worker starts */
   branch: string | null
-  /** the files a worker asked for (its edits refused as outside the task's files) while the task waits (the owner can allow them from the board); only while waiting */
-  asked_files?: string[]
-  /** the choices a worker gave with its ask_owner question, shown as buttons; only while waiting */
-  options?: string[]
-  /** the lead's own wording of this task's question, from its pop-up tied to the task (T-801); the board shows it instead of the question's text; only while the question is open */
-  question_lead?: string
-  /** the answer choices of the lead's pop-up for this question (T-801), shown as the buttons of a worker's question */
-  options_lead?: string[]
+  /** the question the task waits on (a worker's, the lead's, or symcc's own: a file request, a gone branch); only while waiting, or while the owner is asked for more time (see SymccAsk) */
+  ask?: SymccAsk
   created_at: string
   updated_at: string
 }
@@ -199,6 +210,8 @@ export type SymccScout = {
   warning?: string
   last_run: string | null
   running: boolean
+  /** set in the view while a running scout's agent has really started (not only queued) */
+  started?: boolean
   /** the model from the scout file's front matter, if set */
   model?: string
   /** the one-line subheader from the scout file's front matter (`summary:`), if set; else the page shows the first line of the instructions */

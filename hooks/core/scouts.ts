@@ -164,12 +164,12 @@ export function leadScoutsText(scouts: SymccScout[], nowMs: number, scoutsDir: s
 /** How much of a scout's last answer is kept (SymccScout.last_report). */
 export const SCOUT_REPORT_CHARS = 2000
 
-/** What is kept about one scout between restarts (in <dir>/scouts.json); `paused` only when the owner paused it. */
-export type ScoutMemory = { last_run: string | null; last_report?: string; paused?: boolean }
+/** What is kept about one scout between restarts (in <dir>/scouts.json): only that the owner paused it. Its last run and report are read from its runs file (T-808). */
+export type ScoutMemory = { paused?: boolean }
 
 /**
- * Reads scouts.json. A missing, empty or broken file means "no scout has run" ({}), never an error;
- * entries with a bad shape are skipped one by one, and reports are cut to SCOUT_REPORT_CHARS.
+ * Reads scouts.json. A missing, empty or broken file means "no scout is paused" ({}), never an error;
+ * entries with a bad shape are skipped one by one.
  */
 export function parseScoutMemory(text: string | null | undefined): Record<string, ScoutMemory> {
   const out: Record<string, ScoutMemory> = {}
@@ -184,35 +184,31 @@ export function parseScoutMemory(text: string | null | undefined): Record<string
   if (!scouts || typeof scouts !== 'object' || Array.isArray(scouts)) return out
   for (const [name, v] of Object.entries(scouts as Record<string, unknown>)) {
     if (!name || !v || typeof v !== 'object' || Array.isArray(v)) continue
-    const e = v as { last_run?: unknown; last_report?: unknown; paused?: unknown }
-    const last_run = typeof e.last_run === 'string' && !Number.isNaN(Date.parse(e.last_run)) ? e.last_run : null
-    const m: ScoutMemory = { last_run }
-    if (typeof e.last_report === 'string') m.last_report = e.last_report.slice(0, SCOUT_REPORT_CHARS)
-    if (e.paused === true) m.paused = true
-    if (m.last_run === null && m.last_report === undefined && !m.paused) continue
-    out[name] = m
+    if ((v as { paused?: unknown }).paused === true) out[name] = { paused: true }
   }
   return out
 }
 
 /** The text of scouts.json for these scouts; only the names in `keep` (if given) are written. */
-export function scoutMemoryText(scouts: Iterable<{ name: string; last_run: string | null; last_report?: string; paused?: boolean }>, keep?: string[]): string {
+export function scoutMemoryText(scouts: Iterable<{ name: string; paused?: boolean }>, keep?: string[]): string {
   const out: Record<string, ScoutMemory> = {}
   for (const s of scouts) {
     if (keep && !keep.includes(s.name)) continue
-    if (s.last_run === null && s.last_report === undefined && !s.paused) continue
-    const m: ScoutMemory = { last_run: s.last_run }
-    if (s.last_report !== undefined) m.last_report = s.last_report.slice(0, SCOUT_REPORT_CHARS)
-    if (s.paused) m.paused = true
-    out[s.name] = m
+    if (s.paused) out[s.name] = { paused: true }
   }
   return JSON.stringify({ scouts: out }, null, 2) + '\n'
 }
 
 /** The text of scouts.json once scout `name` is paused (or resumed), everything else in `saved` kept as it is. */
 export function scoutPausedText(saved: Record<string, ScoutMemory>, name: string, paused: boolean): string {
-  const all = { ...saved, [name]: { ...(saved[name] ?? { last_run: null }), paused } }
+  const all = { ...saved, [name]: { paused } }
   return scoutMemoryText(Object.entries(all).map(([n, m]) => ({ name: n, ...m })))
+}
+
+/** A scout's last real run read from its runs (oldest first): when it started (else ended) and the file of its report; null when none reported. */
+export function lastRunOf(runs: readonly ScoutRunRecord[]): { last_run: string; report?: string } | null {
+  const r = [...runs].reverse().find(x => x.outcome === 'found' || x.outcome === 'nothing')
+  return r ? { last_run: r.started ?? r.ended, ...(r.report ? { report: r.report } : {}) } : null
 }
 
 /** How often a scout runs: "every 30 min", "every hour", "every 2 hours", "every 90 min", or "on demand" for 0. */
@@ -607,18 +603,25 @@ export function parseScoutRuns(text: string | null | undefined): ScoutRunRecord[
     if (Array.isArray(e.tasks)) r.tasks = [...new Set(e.tasks.filter((x): x is string => typeof x === 'string' && /^[\w-]{1,40}$/.test(x)))]
     out.push(r)
   }
-  return out.slice(-SCOUT_RUNS_KEPT)
+  return trimScoutRuns(out, SCOUT_RUNS_KEPT).runs
 }
 
 /** The text of a scout's runs file. */
 export const scoutRunsText = (runs: ScoutRunRecord[]): string => JSON.stringify({ runs }, null, 2) + '\n'
 
-/** `runs` with `run` added at the end, only the last `keep` kept; `dropped` are the ones that fell out (their report files go too). */
-export function addScoutRunRecord(runs: ScoutRunRecord[], run: ScoutRunRecord, keep = SCOUT_RUNS_KEPT): { runs: ScoutRunRecord[]; dropped: ScoutRunRecord[] } {
-  const all = [...runs, run]
-  const cut = Math.max(0, all.length - Math.max(1, keep))
-  return { runs: all.slice(cut), dropped: all.slice(0, cut) }
+/** `all` cut to the newest `keep`, plus the newest run that reported (found or nothing) when it is older: that one is the scout's "last run". `dropped` fell out. Used when adding and when reading. */
+export function trimScoutRuns(all: ScoutRunRecord[], keep = SCOUT_RUNS_KEPT): { runs: ScoutRunRecord[]; dropped: ScoutRunRecord[] } {
+  const max = Math.max(1, keep)
+  if (all.length <= max) return { runs: all, dropped: [] }
+  let pin = -1
+  for (let i = all.length - 1; i >= 0; i--) if (all[i]!.outcome === 'found' || all[i]!.outcome === 'nothing') { pin = i; break }
+  const recent = all.length - max
+  if (pin < 0 || pin >= recent) return { runs: all.slice(recent), dropped: all.slice(0, recent) }
+  return { runs: [all[pin]!, ...all.slice(recent)], dropped: all.slice(0, recent).filter((_, i) => i !== pin) }
 }
+
+/** `runs` with `run` added at the end, trimmed as trimScoutRuns does; `dropped` are the ones that fell out (their report files go too). */
+export const addScoutRunRecord = (runs: ScoutRunRecord[], run: ScoutRunRecord, keep = SCOUT_RUNS_KEPT) => trimScoutRuns([...runs, run], keep)
 
 const reported = (r: ScoutRunRecord) => r.outcome === 'found' || r.outcome === 'nothing'
 const byNumber = (ids: string[]) => {

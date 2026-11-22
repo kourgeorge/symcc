@@ -93,11 +93,11 @@ test('an old line converted once: a try\'s result is read from the words symcc w
 })
 
 const TASK = {
-  id: 'T-504', title: 'The scouts keep stopping', details: '', files: ['tests/'], status: 'todo', note: '', question: null, order: 504, after: ['T-500'],
+  id: 'T-504', title: 'The scouts keep stopping', details: '', files: ['tests/'], status: 'todo', note: '', order: 504, after: ['T-500'],
   attempts: 2, history: hist(...HISTORY), branch: null, created_at: iso(T0 - 86_400_000), updated_at: iso(T0 - 60_000), role: 'worker',
 }
 const seed = (on: Parameters<typeof seedBoard>[0]) => {
-  seedBoard(on, { opened: 'T-504', view: { shape: 'view-1', value: { tasks: [TASK], working: [], scouts: [], mode: 'auto', branch: 'main', test_commands: [] } } })
+  seedBoard(on, { opened: 'T-504', view: { shape: 'view-1', value: { tasks: [TASK], working: [], scouts: [], mode: 'auto', home_branch: 'main', test_commands: [] } } })
   on('fs.exists', () => ({ value: false }))
   on('ui.toast', () => ({ value: undefined }))
   on('ui.status', () => ({ value: undefined }))
@@ -159,7 +159,7 @@ test('both task pages show when each entry happened, beside its mark; an entry w
   const today = new Date(T0 - 30 * 60_000).toISOString()
   const older = new Date(T0 - 2 * 86_400_000).toISOString()
   const history = [historyEntry('created', 'created by the owner because x', older), historyEntry('checker-ok', 'try 1: checker: OK', today), { kind: 'note', text: 'the lead added a note: “old”' }]
-  seedBoard(on, { opened: 'T-504', view: { shape: 'view-1', value: { tasks: [{ ...TASK, history }], working: [], scouts: [], mode: 'auto', branch: 'main', test_commands: [] } } })
+  seedBoard(on, { opened: 'T-504', view: { shape: 'view-1', value: { tasks: [{ ...TASK, history }], working: [], scouts: [], mode: 'auto', home_branch: 'main', test_commands: [] } } })
   on('fs.exists', () => ({ value: false }))
   on('ui.toast', () => ({ value: undefined }))
   on('ui.status', () => ({ value: undefined }))

@@ -184,7 +184,7 @@ test("the scout's page lists its runs, newest first, and opening one shows its f
     { started: null, ended: '2026-11-12T00:00:00.000Z', outcome: 'found', findings: 2, report: '.symcc/reports/scouts/bugs-old.md' },
     { started: null, ended: LAST_RUN, outcome: 'nothing', findings: 0, report: '.symcc/reports/scouts/bugs-new.md' },
   ]
-  const task = { id: 'T-7', title: 'Fix the crash', details: '', files: [], status: 'todo', note: '', question: null, order: 7, after: [], attempts: 0, history: [], branch: null, created_at: '2026-11-12T01:00:00.000Z', updated_at: '', origin: { by: 'scout', scout: 'bugs', why: 'it crashes', at: '' } }
+  const task = { id: 'T-7', title: 'Fix the crash', details: '', files: [], status: 'todo', note: '', order: 7, after: [], attempts: 0, history: [], branch: null, created_at: '2026-11-12T01:00:00.000Z', updated_at: '', origin: { by: 'scout', scout: 'bugs', why: 'it crashes', at: '' } }
   page(on, { '/.symcc/scouts/bugs.runs.json': scoutRunsText(runs), '/.symcc/reports/scouts/bugs-old.md': '1. The parser crashes.\n2. The whole old report.\n', '/.symcc/reports/scouts/bugs-new.md': 'NOTHING\n' }, [task])
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await ui.find({ type: 'Text', text: /^▍Runs$/ })).toBeDefined()
@@ -464,7 +464,7 @@ function resultsPage(on: On) {
   // dates relative to now, so the run and the merged task stay inside "last 7 days"
   const ago = (h: number) => new Date(Date.now() - h * 3600_000).toISOString()
   const run = ago(24)
-  const t = (id: string, status: string, runs: unknown[] = []) => ({ id, title: id, details: '', files: [], status, note: '', question: null, order: 1, after: [], attempts: runs.length, history: [], branch: null, created_at: ago(23), updated_at: ago(22), runs, origin: { by: 'scout', scout: 'bugs', why: '', at: '' } })
+  const t = (id: string, status: string, runs: unknown[] = []) => ({ id, title: id, details: '', files: [], status, note: '', order: 1, after: [], attempts: runs.length, history: [], branch: null, created_at: ago(23), updated_at: ago(22), runs, origin: { by: 'scout', scout: 'bugs', why: '', at: '' } })
   const tasks = [t('T-7', 'done', [{ started: ago(23), ended: ago(22.5), agents: [{ kind: 'worker' as const, started: ago(23), ended: ago(22.5), tokens: { input: 3000 } }] }]), t('T-8', 'todo')]
   const memory = addScoutRun(null, 'bugs', { endMs: Date.parse(run), ms: 60_000, tokens: { input: 2000 } })
   page(on, { '/.symcc/scouts/bugs.runs.json': scoutRunsText([{ started: null, ended: run, outcome: 'found', findings: 2, tasks: ['T-7', 'T-8'] }]), '/.symcc/scouts.json': memory }, tasks)

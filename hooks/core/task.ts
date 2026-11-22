@@ -38,7 +38,6 @@ export function addTask(b: Board, f: { title: string; details?: string; files?: 
     files: cleanFiles(f.files, dir),
     status: f.backlog === true ? 'backlog' : 'todo',
     note: '',
-    question: null,
     order: typeof f.order === 'number' ? f.order : Math.max(0, ...b.tasks.map(x => x.order)) + 1,
     after,
     attempts: 0,
@@ -64,7 +63,7 @@ function liveFor(t: BoardTask, patch: TaskPatch, next: BoardTask): Live | undefi
   const sameTry = next.status === t.status && next.attempts === t.attempts
   const kept: Live = patch.live === null ? {} : { ...(t.live ?? {}) }
   // the over-time marks, the hand-back record and the check step belong to one try, and to the status it was in
-  if (!sameTry) for (const k of ['extra_minutes', 'time_ask', 'wrap_up', 'question', 'refused', 'checking'] as const) delete kept[k]
+  if (!sameTry) for (const k of ['extra_minutes', 'time_ask', 'wrap_up', 'ask', 'refused', 'checking'] as const) delete kept[k]
   // waiting only for the owner's files to merge: kept while the task stays where it is (or the patch sets it again)
   if (next.status !== t.status) delete kept.merge_wait
   const set = patch.live ? patch.live : {}
@@ -112,12 +111,12 @@ export function patchTask(b: Board, id: string, patch: TaskPatch, now: string, d
     else delete next.needs_review
   }
   if (patch.after !== undefined) next.after = patch.after.map(normId).filter(x => x !== t.id && knownDep(b, x))
-  if (next.status !== 'waiting') next.question = null
-  // The worker's file request and choices belong to the question they came with.
-  for (const k of ['asked_files', 'options'] as const) if (next.status !== 'waiting' || (patch.question !== undefined && !(k in patch)) || !next[k]?.length) delete next[k]
-  // T-801: the lead's wording of the open question goes with the question (kept only while it stays as it was, or set by the patch)
-  const sameAsk = next.status === t.status && patch.question === undefined && patch.live?.time_ask === undefined && (next.status === 'waiting' || (next.status === 'doing' && !!next.live?.time_ask))
-  for (const k of ['question_lead', 'options_lead'] as const) if (!(k in patch) && !sameAsk) delete next[k]
+  // The question the task waits on (T-808: one Ask record, with the lead's wording, T-801, and a file request's files): only while it waits
+  // (or, for the lead's wording of the "more time?" question, while a worker runs over its time), and kept only while it stays as it was or the patch sets it.
+  const sameAsk = next.status === t.status && patch.ask === undefined && patch.live?.time_ask === undefined && (next.status === 'waiting' || (next.status === 'doing' && !!next.live?.time_ask))
+  if (!('ask' in patch) && !sameAsk) delete next.ask
+  if (next.status !== 'waiting' && !(next.status === 'doing' && next.live?.time_ask)) delete next.ask
+  if (next.ask === undefined) delete next.ask
   return putTask(b, next)
 }
 
@@ -205,8 +204,9 @@ export const filesRefusedText = (id: string, files: readonly string[]) => `The o
 function askedFilesOf(b: Board, id: string): [BoardTask, string[]] {
   const t = find(b, id)
   if (!t) throw new Error(`${id} is not on the board`)
-  if (t.status !== 'waiting' || !t.asked_files?.length) throw new Error(`${t.id} is not waiting for files to be allowed`)
-  return [t, t.asked_files]
+  const files = t.ask?.files
+  if (t.status !== 'waiting' || !files?.length) throw new Error(`${t.id} is not waiting for files to be allowed`)
+  return [t, files]
 }
 
 /** The owner allows a waiting task's file request: its files grow by them and it goes back to work, in one change. */

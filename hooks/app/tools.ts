@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { settingShown, allowFiles, refuseFiles, waitsForFiles, filesRefusedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, ROLE_TOOL_WORDS, DEFAULT_ROLE, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, failedOnClash, patchTask, promoteTask, rejectTask, changeLines, stoppedEntry, waitsForOwner, withHistory, type HistoryAdd, historyLineText, type SettingsInput, type SettingChange, testMinutesRefusal, isMode, readNotify, notifySet, notifyRefusal, applySettings, intoOf, crossBranchNotes, parseGoneBranch, saysMergeInstead, type Board, settingSetText, taskReports, reportPreview, statsReport, statsData, parseStatsRange, parseStatsArgs, archivedCount, localOffset, endedBy, freshTry, withoutOpenRun, stopEnd, changeRestartWhy, changedFields, addDetailsText, noteAddedLine, detailsBothRefusal, dayOf, inPlan, planBacklog, planAdded, planAddText, parseScoutUsage, parseStatusFilter, BOARD_STATUSES, type TeamInput, SETTING_NAMES, leadSettingsText, findingToBacklog, isScoutFindings, isTestsWithChanges, kindFor, isAnswered, askMoreTask, isInvestigation, checkKind, kindsLeadText, kindNames, BUILT_IN_KINDS, originOf, stateLabelLower, shownNote, modeOf, when, scoutNameOf, unknownScoutText } from '../board'
+import { makeAsk, settingShown, allowFiles, refuseFiles, waitsForFiles, filesRefusedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, ROLE_TOOL_WORDS, DEFAULT_ROLE, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, failedOnClash, patchTask, promoteTask, rejectTask, changeLines, stoppedEntry, waitsForOwner, withHistory, type HistoryAdd, historyLineText, type SettingsInput, type SettingChange, testMinutesRefusal, isMode, readNotify, notifySet, notifyRefusal, applySettings, intoOf, crossBranchNotes, parseGoneBranch, saysMergeInstead, type Board, settingSetText, taskReports, reportPreview, statsReport, statsData, parseStatsRange, parseStatsArgs, archivedCount, localOffset, endedBy, freshTry, withoutOpenRun, stopEnd, changeRestartWhy, changedFields, addDetailsText, noteAddedLine, detailsBothRefusal, dayOf, inPlan, planBacklog, planAdded, planAddText, parseScoutUsage, parseStatusFilter, BOARD_STATUSES, type TeamInput, SETTING_NAMES, leadSettingsText, findingToBacklog, isScoutFindings, isTestsWithChanges, kindFor, isAnswered, askMoreTask, isInvestigation, checkKind, kindsLeadText, kindNames, BUILT_IN_KINDS, originOf, stateLabelLower, shownNote, modeOf, when, scoutNameOf, unknownScoutText } from '../board'
 import { scoutMemoryFile, leadScouts, linkTaskToScoutRun, knownScouts, isKnownScout, loadScoutRunHistory } from './scouts'
 import { archivedText, bringBackArchived, findArchived, readArchiveFile } from './archive'
 import { removeWorktree, worktreeDir, setupGit, branchExists, branchList, homeBranch, taskWork, resetScratch } from './git'
@@ -42,9 +42,8 @@ export function taskText(t: SymccTask, running: boolean, all: SymccTask[] = [], 
   if (t.origin?.why) L.push(`why: ${t.origin.why}`)
   if (t.origin?.evidence) L.push(`seen by ${S.N.name}: ${t.origin.evidence}`)
   if (shownNote(t)) L.push(`${stateLabelLower()}: ${shownNote(t)}`)
-  if (t.status === 'waiting' && t.question) L.push('', `ASKS: ${t.question}`)
-  const bt = t as BoardTask
-  if (t.status === 'waiting' && bt.options?.length) L.push(`OPTIONS: ${bt.options.join(' | ')}`)
+  if (t.status === 'waiting' && t.ask?.text) L.push('', `ASKS: ${t.ask.text}`)
+  if (t.status === 'waiting' && t.ask?.options?.length) L.push(`OPTIONS: ${t.ask.options.join(' | ')}`)
   L.push('', 'What to do:', ...(t.details.trim() ? t.details.split('\n').map(l => (l.trim() ? `  ${l}` : '')) : ['  (no details)']))
   L.push('', 'May change:', ...(t.files.length ? t.files.map(f => `  ${f}`) : ['  anywhere in the project']))
   L.push('', `merges into: ${intoOf(t)}`)
@@ -529,7 +528,7 @@ export async function taskOrThrow($: Host, id: string) {
 
 /** The owner pressed Allow on a waiting task's file request: its files grow and it goes back to work, in one change; the lead hears of it later ("Meanwhile"). */
 export async function allowAskedFiles($: Host, id: string): Promise<string> {
-  const files = await change($, x => [allowFiles(x, id, now(), S.N.dir), (find(x, id) as BoardTask | undefined)?.asked_files ?? []] as [Board, string[]])
+  const files = await change($, x => [allowFiles(x, id, now(), S.N.dir), (find(x, id) as BoardTask | undefined)?.ask?.files ?? []] as [Board, string[]])
   void pump($)
   noteForLead(`The owner allowed ${files.join(', ')} for ${id}; it went back to work.`)
   return `${id}: files allowed (${files.join(', ')}); back to work`
@@ -537,7 +536,7 @@ export async function allowAskedFiles($: Host, id: string): Promise<string> {
 
 /** The owner pressed Don't allow on a waiting task's file request: it keeps waiting, and the lead is told now (drop it or narrow the plan). */
 export async function refuseAskedFiles($: Host, id: string): Promise<string> {
-  const files = await change($, x => [refuseFiles(x, id, now()), (find(x, id) as BoardTask | undefined)?.asked_files ?? []] as [Board, string[]])
+  const files = await change($, x => [refuseFiles(x, id, now()), (find(x, id) as BoardTask | undefined)?.ask?.files ?? []] as [Board, string[]])
   tellLead($, filesRefusedText(id, files))
   return `${id}: files not allowed; the lead will drop it or narrow the plan`
 }
@@ -666,7 +665,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       const note = str(a.add_details)?.trim()
       const noted = note ? addDetailsText(t.details, note, dayOf(Date.now(), localOffset())) : undefined
       const noteHistory = (x: Board): Partial<SymccTask> => (note ? { history: withHistory((find(x, t.id) ?? t).history, now(), ['note', noteAddedLine(note)]) } : {})
-      const gone = parseGoneBranch(t.status === 'waiting' ? t.question : null)
+      const gone = parseGoneBranch(t.status === 'waiting' ? (t.ask?.text ?? null) : null)
       if (!into && gone && saysMergeInstead(str(a.answer) ?? '', gone.instead)) into = gone.instead
       const fields = (): Partial<BoardTask> => {
         const p: Partial<BoardTask> = {}
@@ -731,7 +730,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       const patch: Partial<BoardTask> = { status: keep ? t.status : 'todo', note: t.status === 'paused' ? t.note : wasDoing ? 'changed; restarting' : 'changed', ...(failedOnClash(t) ? { merge_main: true } : {}), ...fields() }
       // The owner's answer to a waiting task goes into its details (for the next worker) and its history.
       const answer = str(a.answer)?.trim()
-      if (answer) patch.details = `${(patch.details ?? t.details).trimEnd()}\n\nOwner's answer${t.question ? ` to "${t.question}"` : ''}: ${answer}`
+      if (answer) patch.details = `${(patch.details ?? t.details).trimEnd()}\n\nOwner's answer${t.ask?.text ? ` to "${t.ask.text}"` : ''}: ${answer}`
       await change($, x => {
         const cur = find(x, t.id) ?? t
         const lines = changeLines(t, patch, wasDoing && !fresh, answer, note)
@@ -771,7 +770,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       const asked = t.status === 'doing' && !checkingNow(t.id)
       // T-732: a to-do task asked about gets a line too, so the stats count the wait as waiting for the owner
       const line: HistoryAdd | null = asked ? stoppedEntry(t, 'the lead asked the owner a question') : t.status === 'todo' ? ['asked', 'the lead asked the owner a question'] : null
-      await change($, x => patchTask(x, t.id, { status: 'waiting', question: (str(a.question) ?? '').slice(0, 1000), note: 'waiting for you', ...(failedOnClash(t) ? { merge_main: true } : {}), ...(line ? { history: withHistory((find(x, t.id) ?? t).history, now(), line) } : {}), ...endedBy(find(x, t.id), now(), 'stopped', 'the lead asked the owner a question') }, now()))
+      await change($, x => patchTask(x, t.id, { status: 'waiting', ask: makeAsk('lead', (str(a.question) ?? '').slice(0, 1000), now()), note: 'waiting for you', ...(failedOnClash(t) ? { merge_main: true } : {}), ...(line ? { history: withHistory((find(x, t.id) ?? t).history, now(), line) } : {}), ...endedBy(find(x, t.id), now(), 'stopped', 'the lead asked the owner a question') }, now()))
       await haltChecker($, t.id, 'the task was sent to the owner')
       return `${t.id} now waits for the owner`
     }

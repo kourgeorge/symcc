@@ -14,7 +14,7 @@ const HISTORY_WORDS = 'fixed the headings and wrapped every line'
 async function open(on: On, $: Engine, id: string, slim: boolean, surface: 'terminal' | 'vscode') {
   const whole = RICH_TASKS.find(t => t.id === id)!
   const shown = slim ? viewStubFilled(viewTask(whole as never)) : whole
-  const view = { shape: 'view-1', value: { tasks: [shown], working: [], scouts: [], mode: 'auto', branch: 'main', test_commands: [] } }
+  const view = { shape: 'view-1', value: { tasks: [shown], working: [], scouts: [], mode: 'auto', home_branch: 'main', test_commands: [] } }
   const stored: string[] = []
   // every value the panel saves into its stored state is recorded on its way through seedBoard's own handler
   const recording = ((name: string, fn: (...a: never[]) => unknown) =>
