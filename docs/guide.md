@@ -1183,7 +1183,7 @@ TASKS ────────────────────────�
    ✓ 67 merged   ↺ 76 sent back   ✗ 0 failed   Σ 320.7M tokens
    █████████████▓▒░ workers 84% · checkers 8% · scouts 5% · lead 3%
    ⌀ per task 2.8M · 9m work · 23m start-to-merge   first try 34% · ⌀ 2.4 tries   ⌕ 68 sent back by the checker
-   ⏱ 13h 06m agent work · ≈ $64 this session   busiest hour 14:00 · 42M   08 ▁▂▃▅▆▅█▆▅▃▃▂▂ 20
+   ⏱ 13h 06m agent work · ≈ $64 this session   busiest hour 14:00 · 42M   00         ▁▂▃▅▆▅█········· 24
   ```
 
   The first line: merged, sent back (every send-back today: the checker's problems, tests failed, a clash with main), failed, and the tokens of everyone today (workers, checkers, scouts and the lead: the same total the bar's shares are out of, so it is never smaller than the busiest hour; when the lead's and the scouts' tokens aren't known it is the tries only and says a dim `(tries only)`). The second: a bar of who spent today's tokens (workers, checkers, scouts, the lead; each in
@@ -1193,13 +1193,13 @@ TASKS ────────────────────────�
   average tries per merged task (the same figures `/symcc-stats` shows), and how many times the checker
   sent a task back (left out when none). The fourth: all agent work today (the tries' time today and the
   scouts'); then `≈ $N this session`, the whole session's cost (not just today's) as `/cost` says it, only when symcc knows it (never a
-  guess); then `busiest hour HH:00 · NM`; and at the very end the tokens per hour from the first busy
-  hour to now as a sparkline, with the first and last hour dim on each side (they always stay). A line with nothing to show is left out. A checker's tokens are counted apart from its worker's from now on (older tries count as the
+  guess); then `busiest hour HH:00 · NM`; and at the very end the tokens per
+  hour as a sparkline that always spans the whole day, `00` to `24` (the labels are dim and always stay): the hours so far are bars, the current hour's bar is in the accent color, and the hours still to come are dim dots (`·`). A line with nothing to show is left out. A checker's tokens are counted apart from its worker's from now on (older tries count as the
   worker's), and the lead's part shows only where symcc can read the lead's usage. The lead's,
   scouts' and cost figures are read in the background at most every two minutes. On a narrow panel
   parts drop from the ends: line 3 loses the checker send-backs first, then the tries, the first try and the per-task figures;
   line 4 loses the busiest hour, then the cost; the hour labels and the sparkline stay longest after the agent work time:
-  when the sparkline itself is too wide, neighbouring hours are merged into one bar. Nothing goes past the panel's width. The task that starts next shows in the band above the
+  when the sparkline itself is too wide, neighbouring hours are merged (2, 3 or 4 to a bar) so the whole day still fits. Nothing goes past the panel's width. The task that starts next shows in the band above the
   prompt (`○ next up`), and the tasks that wait hang under their lanes. With nothing running it
   says `No task is running right now.`
 - At the bottom, just above the key hints, the **Organizational memory** section (see
