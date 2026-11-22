@@ -9,6 +9,9 @@ import type { Host } from '../host'
 // The owner's own actions (approve, drop, settings, ...) don't wake the lead: they wait
 // as short "Meanwhile the owner:" lines at the top of the next update sent for a real reason.
 
+/** The end of a start line (see wakeLine in starts.ts); an update of only such lines asks for no reply. */
+export const START_LINE_END = ' Nothing to do for it.'
+
 /** At most this many "Meanwhile" lines are shown; the rest are counted ("+N more"). */
 export const MEANWHILE_SHOWN = 10
 
@@ -77,7 +80,11 @@ export function takeBoardUpdate(): string | undefined {
   const body = leadQueue.splice(0).join('\n\n')
   if (!body || !S.enabledNow) return undefined
   const before = meanwhileText(meanwhile.splice(0))
-  return `[${S.N.name}] Board update:\n\n${before ? `${before}\n\n` : ''}${body}\n\nLead: decide what happens next on the board (use the ${S.N.name} tools), then tell the owner briefly.\nReply shape: one line per task ("✓ T-5  merged   what it means"); a routine update with no news is one short line at most.`
+  const startOnly = !before && body.split('\n\n').every(l => l.startsWith('Starting ') && l.endsWith(START_LINE_END))
+  const ending = startOnly
+    ? 'No reply needed; end the turn without a message.'
+    : `Lead: decide what happens next on the board (use the ${S.N.name} tools), then tell the owner briefly.\nReply shape: one line per task ("✓ T-5  merged   what it means"); a routine update with no news is one short line at most.`
+  return `[${S.N.name}] Board update:\n\n${before ? `${before}\n\n` : ''}${body}\n\n${ending}`
 }
 
 /** An answer cut to one short line, for a "Meanwhile" line. */

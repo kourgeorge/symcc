@@ -11,6 +11,7 @@ import { runBy } from './agent-fixture'
 import type { Host, HostAgentStart } from '../hooks/host'
 import { ALL_FEATURES, noUi } from '../hooks/host'
 import { S, leadQueue } from '../hooks/app/state'
+import { takeBoardUpdate, tellLead } from '../hooks/app/tell'
 import { queuedNeverStarted, unclaimQueued } from '../hooks/app/workers'
 import { startAgent, drainStarts, leadTurn, queuedStarts, cancelStarts, startCancelled, QUEUED_NOTE, STARTING_NOTE } from '../hooks/app/starts'
 import { ran } from './fakes'
@@ -103,6 +104,24 @@ test('an idle lead is woken once for several queued starts; after the queue empt
   void startAgent(host, worker('symcc-T-4'))
   expect(leadQueue.length).toBe(2)
   expect(leadQueue[1]).toContain('symcc-T-4')
+})
+
+test('T-825: a start-only update asks for no reply; a start with other news keeps the usual ending', async () => {
+  const { host } = fakeHost()
+  void startAgent(host, worker('symcc-T-1'))
+  const only = takeBoardUpdate() ?? ''
+  expect(only).toContain('Starting worker symcc-T-1')
+  expect(only).toContain('No reply needed; end the turn without a message.')
+  expect(only).not.toContain('decide what happens next')
+  expect(only).not.toContain('Reply shape')
+  await drainStarts(host)
+  void startAgent(host, worker('symcc-T-2'))
+  tellLead(host, 'T-3 "x" was merged.')
+  const mixed = takeBoardUpdate() ?? ''
+  expect(mixed).toContain('Starting worker symcc-T-2')
+  expect(mixed).toContain('was merged')
+  expect(mixed).toContain('Lead: decide what happens next')
+  expect(mixed).not.toContain('No reply needed')
 })
 
 test('while the lead is in a turn, a queued start wakes nobody: that turn ends and starts it', async () => {
