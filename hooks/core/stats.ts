@@ -1011,28 +1011,6 @@ export function addScoutRun(text: string | null | undefined, name: string, run: 
   return JSON.stringify({ ...raw, usage }, null, 2) + '\n'
 }
 
-/**
- * Migration: scouts.json's text with every usage total whose tokens were saved as one number
- * (before the kinds were kept apart) kept as-is, marked unsplit: { unsplit: n }. Null when nothing needs it.
- */
-export function migrateScoutUsage(text: string | null | undefined): string | null {
-  const raw = jsonObj(text)
-  const u = raw?.usage
-  if (!raw || !u || typeof u !== 'object' || Array.isArray(u)) return null
-  let changed = false
-  const fix = (v: unknown): unknown => {
-    if (!v || typeof v !== 'object' || Array.isArray(v) || typeof (v as { tokens?: unknown }).tokens !== 'number') return v
-    changed = true
-    return { ...(v as object), tokens: cleanTokens({ unsplit: (v as { tokens: number }).tokens }) ?? {} }
-  }
-  const usage = Object.fromEntries(Object.entries(u as Record<string, unknown>).map(([k, v]) => {
-    const top = fix(v) as Record<string, unknown>
-    const d = top && typeof top === 'object' ? top.days : undefined
-    return [k, d && typeof d === 'object' && !Array.isArray(d) ? { ...top, days: Object.fromEntries(Object.entries(d as Record<string, unknown>).map(([day, x]) => [day, fix(x)])) } : top]
-  }))
-  return changed ? JSON.stringify({ ...raw, usage }, null, 2) + '\n' : null
-}
-
 /** New scouts.json text `next` with the "usage" of the file's text before (`prev`) kept, when `next` carries none. */
 export function keepScoutUsage(next: string, prev: string | null | undefined): string {
   const n = jsonObj(next)

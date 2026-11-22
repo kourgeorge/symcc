@@ -1922,7 +1922,18 @@ tasks, folders of tasks that ended. They take space and make `git branch` long, 
 can't tell on its own which of them you still want. `/symcc-doctor` looks and tells you, with
 sizes. It changes nothing until you say so.
 
-- **What it offers to clean up (each with a short id):** old `board.json.before-migrate-<time>` copies
+- **Old data shapes (`migrate-data`):** symcc no longer converts old-shaped files when it reads
+  them. If `board.json`, its `tasks/` files, the archive, `scouts.json`, a scout's last report
+  or `field-guide.md` still hold an old shape (history lines as plain strings, tokens saved as
+  one number, old roles, `mode: off`, `target_branch`, a "queue (n)" note, ...), the doctor lists
+  how many of each and symcc says so once at start. `/symcc-doctor fix migrate-data` keeps a
+  dated copy of the data files first (`.symcc/data.before-migrate-<time>/`, cleaned up later
+  like the other backups), saves every file once in today's shape and says what it changed.
+  Some counts are only information and are left as they are: `unsplit` tokens, history entries
+  of kind `other`, tasks where `attempts` differs from the number of tries, and tries with
+  `checker_tokens` but no checker agent entry.
+- **What else it offers to clean up (each with a short id):** old `board.json.before-migrate-<time>` copies
+  and `data.before-migrate-<time>/` folders
   (the newest one is kept); folders in `.symcc/worktrees/` of done or dropped tasks with no
   uncommitted changes; git worktree entries whose folder is gone (`git worktree prune`);
   `symcc/T-<n>` branches of done or dropped tasks whose work is all in the branch they merge

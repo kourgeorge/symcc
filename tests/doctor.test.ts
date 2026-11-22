@@ -20,7 +20,7 @@ const iso = (minAgo: number) => new Date(NOW - minAgo * 60_000).toISOString()
 const sha = (c: string) => c.repeat(40)
 
 function task(id: string, status: BoardTask['status'], over: Partial<BoardTask> = {}): BoardTask {
-  return { id, title: `task ${id}`, details: '', files: [], status, note: '', question: null, order: 0, after: [], attempts: 1, history: [], branch: `symcc/${id}`, merge_into: 'main', created_at: iso(60), updated_at: iso(60), ...over } as BoardTask
+  return { id, title: `task ${id}`, details: '', files: [], status, note: '', question: null, order: 0, after: [], attempts: 1, history: [], branch: `symcc/${id}`, merge_into: 'main', created_at: iso(60), updated_at: iso(60), origin: { by: 'lead', why: 'x', at: iso(60) }, ...over } as BoardTask
 }
 
 /**

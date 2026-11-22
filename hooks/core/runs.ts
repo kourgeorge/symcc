@@ -212,8 +212,8 @@ export function withStoppedUsed(runs: SymccRun[] | undefined, id: unknown, now: 
 }
 
 /**
- * T-774: the tokens try `r`'s checkers used: their agent entries added up when it has any checker entry with tokens,
- * else its checker_tokens (T-769: a try from before T-774, or one whose entries were trimmed); undefined when not known.
+ * T-774: the tokens try `r`'s checkers used: its checker_tokens (T-769) when it has them, else its checker agent
+ * entries added up (those with tokens); undefined when not known.
  */
 export function checkerTokensOf(r: SymccRun | undefined): SymccTokens | undefined {
   const own = agentsOf(r).filter(a => a.kind === 'checker' && a.tokens)

@@ -2,8 +2,8 @@
 // Every function here is pure; the plugin (app/archive.ts) reads and writes the files.
 import type { SymccStatus } from '../../types'
 import { DEFAULT_NAME, namesFor } from '../name'
-import { type ArchivedTotals, type Board, type BoardTask, cleanCommitFields, find, migrateRunTokens, normId, withoutConflictTries, withoutStages } from './board-file'
-import { migrateHistory, withHistory } from './history'
+import { type ArchivedTotals, type Board, type BoardTask, cleanCommitFields, find, normId } from './board-file'
+import { withHistory } from './history'
 import { addTokens, sumRuns } from './runs'
 
 /** Archiving runs at most this often (ms), on the regular check of the driving session. */
@@ -28,9 +28,8 @@ const FINISHED: SymccStatus[] = ['done', 'dropped']
 /**
  * What reading archive.json found: the archive, or `broken` (the reason) when the text is not an
  * archive. A broken archive must never be written over (keep a copy, tell the owner, stop archiving).
- * `migrated`: how many tasks were brought to the current shape; the file should then be saved once.
  */
-export function readArchive(text: string | null): { archive: Archive; broken?: string; migrated?: number } {
+export function readArchive(text: string | null): { archive: Archive; broken?: string } {
   if (text === null || text === undefined || !String(text).trim()) return { archive: emptyArchive() }
   let raw: unknown
   try {
@@ -42,22 +41,8 @@ export function readArchive(text: string | null): { archive: Archive; broken?: s
   const tasks = (raw as { tasks?: unknown }).tasks
   if (!Array.isArray(tasks)) return { archive: emptyArchive(), broken: '"tasks" is not a list' }
   const ok = tasks.filter((t): t is BoardTask => !!t && typeof t === 'object' && typeof (t as BoardTask).id === 'string' && FINISHED.includes((t as BoardTask).status))
-  // Migration: tries with tokens saved as one number get it marked unsplit (see migrateRunTokens), and the removed stage engine's
-  // fields are dropped (see withoutStages); `migrated` counts the tasks changed so the file is saved once.
-  let migrated = 0
-  const clean = ok.map(t0 => {
-    const stageless = withoutStages(t0) ?? t0
-    // T-548: the old conflict_tries field is dropped (see withoutConflictTries)
-    const clash = withoutConflictTries(stageless)
-    const bare = clash ?? (stageless === t0 ? null : stageless)
-    const t = bare ?? t0
-    const split = migrateRunTokens(t.runs)
-    // T-522: history lines saved as plain strings become records (see migrateHistory)
-    const history = migrateHistory(t)
-    if (split || bare || history) migrated++
-    return { ...cleanCommitFields(split ? { ...t, runs: split } : t), after: Array.isArray(t.after) ? t.after : [], history: history ?? (Array.isArray(t.history) ? t.history : []), files: Array.isArray(t.files) ? t.files : [] }
-  })
-  return { archive: { version: 1, tasks: clean }, ...(migrated ? { migrated } : {}) }
+  const clean = ok.map(t => ({ ...cleanCommitFields(t), after: Array.isArray(t.after) ? t.after : [], history: Array.isArray(t.history) ? t.history : [], files: Array.isArray(t.files) ? t.files : [] }))
+  return { archive: { version: 1, tasks: clean } }
 }
 
 /** The archive as file text. */

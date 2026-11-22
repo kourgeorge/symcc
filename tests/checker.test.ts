@@ -1491,19 +1491,13 @@ test('T-600: a report without a "Learned:" section adds nothing, and with no gui
   expect(WORKER_PROMPT(t, await load(w.$), WT, undefined, '\nOrganizational memory (org-mem): notes earlier agents left about this project (from .symcc/org-mem.md; they may be out of date):\n- x\n')).toContain('they may be out of date):\n- x')
 })
 
-test('T-620, T-632: an old .symcc/field-guide.md moves to org-mem.md once and its lines lose their task ids; an existing org-mem.md is never overwritten', async () => {
+test('T-632, T-804: org-mem lines lose their task ids at start; an old field-guide.md is not moved at start (migrate-data does that)', async () => {
   const OLD = `${ROOT}/.symcc/field-guide.md`
   const w = world()
-  await w.$.fs.write(OLD, '- T-0 2026-11-01: an old note\n- written by hand\n')
+  await w.$.fs.write(OLD, '- T-0 2026-11-01: an old note\n')
   await moveOldOrgMem(w.$)
-  expect(await w.$.fs.exists(OLD)).toBe(false)
-  expect(await w.$.fs.read(GUIDE)).toBe('- 2026-11-01: an old note\n- written by hand\n')
-  // a second start with both files: nothing moves, and lines without ids stay as they are
-  await w.$.fs.write(OLD, '- T-9 2026-11-02: left behind\n')
-  const before = await w.$.fs.read(GUIDE)
-  await moveOldOrgMem(w.$)
-  expect(await w.$.fs.read(GUIDE)).toBe(before)
   expect(await w.$.fs.exists(OLD)).toBe(true)
+  expect(await w.$.fs.exists(GUIDE)).toBe(false)
   // an org-mem.md with old ids (written before T-632) is converted once at start
   await w.$.fs.write(GUIDE, '- T-611 2026-11-20: a note\n- 2026-11-20: a new one\n')
   await moveOldOrgMem(w.$)
