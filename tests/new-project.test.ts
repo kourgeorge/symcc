@@ -77,7 +77,7 @@ test('/symcc-init in a folder with its own .git creates board.json with symcc on
   expect(w.panel.view()).toMatchObject({ on_here: true })
 })
 
-test('T-844: a window that started with no board looks again: /symcc-enable here turns it on as a second lead; /symcc-init says already set up and switches it on', async () => {
+test('T-844: a window that started with no board looks again: /symcc-enable here turns it on as a second lead; /symcc-init says already set up here, and when another window drives it adds the /symcc-enable here hint (window stays off)', async () => {
   for (const cmd of ['symcc-enable', 'symcc-init'] as const) {
     const w = world('b')
     w.files.set(`${ROOT}/.git`, '')
@@ -88,6 +88,7 @@ test('T-844: a window that started with no board looks again: /symcc-enable here
     w.files.set(w.lead, JSON.stringify({ session: 'a', heartbeat: Date.now() }))
     const r = await runCommand(w.host, cmd, cmd === 'symcc-enable' ? 'here' : '')
     expect(r?.text).toContain(cmd === 'symcc-enable' ? 'is on in this window' : 'already set up here')
+    if (cmd === 'symcc-init') expect(r?.text).toContain('/symcc-enable here turns it on in this one too')
     expect(S.fresh).toBe(false)
     if (cmd === 'symcc-enable') {
       expect(S.offHere).toBe(false)
@@ -189,6 +190,19 @@ test('T-844: /symcc-init where a board exists changes nothing and says so', asyn
   const r = await runCommand(w.host, 'symcc-init', '')
   expect(r?.text).toBe('symcc is already set up here.')
   expect(JSON.stringify([...w.files.entries()])).toBe(before)
+})
+
+test('T-856: /symcc-init in a window turned off with /symcc-disable here does not claim another window runs symcc', async () => {
+  const w = world('a')
+  w.files.set(w.board, JSON.stringify(emptyBoard()))
+  await sessionStart(w.host)
+  await runCommand(w.host, 'symcc-disable', 'here')
+  expect(S.offHere).toBe(true)
+  expect(S.offWhy).toBe('off')
+  const r = await runCommand(w.host, 'symcc-init', '')
+  expect(r?.text).toContain('already set up here')
+  expect(r?.text).not.toContain('another window')
+  expect(r?.text).toContain('/symcc-enable here turns it back on')
 })
 
 test('T-844: /symcc-init in a subfolder of a folder with .symcc makes the subfolder\'s own board; later sessions there use it', async () => {

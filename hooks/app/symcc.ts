@@ -236,7 +236,7 @@ async function refreshFresh(host: Host) {
 async function initProject(host: Host, tell: (text: string) => void, withGit: boolean): Promise<string> {
   const own = (await sessionFolder(host)).replace(/[\\/]+$/, '') || '/'
   // like git init: only a board in this exact folder stops it; one in a folder above does not (the nearest board wins)
-  if (await host.fs.exists(`${own}/${S.N.boardFile}`).catch(() => false)) return `${S.N.name} is already set up here.`
+  if (await host.fs.exists(`${own}/${S.N.boardFile}`).catch(() => false)) return S.offHere ? (S.offWhy === 'other' ? `${S.N.name} is already set up here. It runs in another window; /${S.N.name}-enable here turns it on in this one too.` : `${S.N.name} is already set up here, but it is off in this window. /${S.N.name}-enable here turns it back on.`) :`${S.N.name} is already set up here.`
   const hasGit = await host.fs.exists(`${own}/.git`).catch(() => false)
   if (!hasGit && !withGit) return `This folder has no git repo of its own (${S.N.name} never uses a folder above). ${S.N.name} needs git for its task branches. /${S.N.name}-init git sets up git here (a repo on main, a .gitignore and a first commit; never pushes) and creates the ${S.N.name} board here.`
   // this session already runs on a board in a folder above: the new board is made here, but the session keeps the old one
