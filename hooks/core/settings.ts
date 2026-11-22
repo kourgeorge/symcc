@@ -228,11 +228,11 @@ export const offStatusParts = (name: string = DEFAULT_NAME, withName = true, her
   here === 'new'
     ? [{ text: 'no board here · ' }, { text: `/${name}-init`, command: true }]
     : here === 'gone'
-    ? [{ text: `the ${name} window closed · ` }, { text: `/${name}-enable here`, command: true }, { text: ' to take over' }]
+    ? [{ text: `the ${name} window closed · ` }, { text: `/${name}-enable`, command: true }, { text: ' to take over' }]
     : here === 'other'
-      ? [{ text: `${name} runs in another window · ` }, { text: `/${name}-enable here`, command: true }]
+      ? [{ text: `${name} runs in another window · ` }, { text: `/${name}-enable`, command: true }]
       : here
-        ? [{ text: `${name} is off in this window · ` }, { text: `/${name}-enable here`, command: true }]
+        ? [{ text: `${name} is off in this window · ` }, { text: `/${name}-enable`, command: true }]
         : [
         { text: withName ? `${name} is disabled · ` : 'disabled · ' },
         { text: `/${name}-enable`, command: true },
@@ -240,7 +240,7 @@ export const offStatusParts = (name: string = DEFAULT_NAME, withName = true, her
       ]
 
 /** What every lead tool answers in a window turned off with /<name>-disable here (T-793). */
-export const offHereAnswer = (name: string = DEFAULT_NAME) => `${name} is off in this window. /${name}-enable here turns it back on.`
+export const offHereAnswer = (name: string = DEFAULT_NAME) => `${name} is off in this window. /${name}-enable turns it back on.`
 
 /** What every lead tool answers in a new project, a folder with no board in it or above it, where the owner has not run /<name>-init yet (T-795, T-844). */
 export const notSetUpAnswer = (name: string = DEFAULT_NAME) => `no ${name} board in this folder · /${name}-init to create one here`

@@ -75,9 +75,9 @@ test('/symcc-disable here: board.json is unchanged, this window gets no lead pro
   expect(w.toLead).toEqual([])
   expect(takeBoardUpdate()).toBeUndefined()
   expect(await toolCall(w.host, toolName('board'), undefined, {})).toEqual({ result: offHereAnswer(S.N.name) })
-  expect(offHereAnswer('symcc')).toBe('symcc is off in this window. /symcc-enable here turns it back on.')
+  expect(offHereAnswer('symcc')).toBe('symcc is off in this window. /symcc-enable turns it back on.')
   expect(w.panel.view()).toMatchObject({ on_here: false, off_here: 'off' })
-  expect(offStatusLine('symcc', true, 'off')).toBe('symcc is off in this window · /symcc-enable here')
+  expect(offStatusLine('symcc', true, 'off')).toBe('symcc is off in this window · /symcc-enable')
 
   // session B (another window): the same board, symcc on there
   S.offHere = false
@@ -156,14 +156,14 @@ test('/symcc-enable here turns the window back on: it tells the lead once, drive
   await disableHere(w.host)
   const told: string[] = []
   const said = await enableHere(w.host, t => told.push(t))
-  expect(said).toContain('on in this window again')
+  expect(said).toContain('symcc is on in this window, in mode ')
   expect(S.offHere).toBe(false)
   expect(S.enabledNow).toBe(true)
   expect(told).toHaveLength(1)
-  expect(told[0]).toContain('enable here')
+  expect(told[0]).toContain('turned symcc on in this window with /symcc-enable.')
   expect(S.driving).toBe(true)
   expect(await leadGuideText(w.host)).toBeDefined()
-  expect(await enableHere(w.host, t => told.push(t))).toContain('already on')
+  expect((await enableHere(w.host, t => told.push(t))).startsWith('symcc is already enabled, in mode ')).toBe(true)
   expect(told).toHaveLength(1)
 })
 
@@ -178,7 +178,7 @@ test('/symcc-enable here through the real command tells the lead with one messag
   await runCommand(w.host, 'symcc-enable', 'here')
   expect(S.offHere).toBe(false)
   const update = takeBoardUpdate()
-  expect(update).toContain('enable here')
+  expect(update).toContain('with /symcc-enable.')
   expect(takeBoardUpdate()).toBeUndefined()
 })
 
@@ -221,16 +221,51 @@ test('the take-over line waits a grace so a second on-window can claim lead.json
   expect(w.toasts).toHaveLength(1)
 })
 
-test('/symcc-enable here with the whole project disabled says so and points to /symcc-enable', async () => {
+test('T-875: /symcc-enable with the whole project disabled turns the project on and this window too, and says so', async () => {
   S.root = ROOT
   S.me = 'a'
   const w = world('a')
-  await saveBoard(w.host, { ...emptyBoard(), enabled: false })
+  await saveBoard(w.host, { ...emptyBoard(), enabled: false, mode: 'paused' })
+  const r = await runCommand(w.host, 'symcc-enable', '')
+  expect(r?.text).toBe('symcc is on in this window, in mode paused: ⏸ paused: no work runs; tasks in review can still be approved or rejected. No work starts while the board is paused; /symcc-mode auto (or review) starts it.')
+  expect(boardOf(w).enabled).toBe(true)
+  expect(S.enabledNow).toBe(true)
+  expect(await toolCall(w.host, toolName('board'), undefined, {})).not.toEqual({ result: offHereAnswer(S.N.name) })
+})
+
+test('T-875: /symcc-enable in a window off here AND a disabled project turns both on, with one lead message', async () => {
+  S.root = ROOT
+  S.me = 'a'
+  const w = world('a')
+  await saveBoard(w.host, emptyBoard())
+  await disableHere(w.host)
+  await saveBoard(w.host, { ...boardOf(w), enabled: false })
   const told: string[] = []
   const said = await enableHere(w.host, t => told.push(t))
-  expect(said).toContain('disabled for the whole project')
-  expect(said).toContain('/symcc-enable.')
-  expect(told).toEqual([])
+  expect(said.startsWith('symcc is on in this window, in mode ')).toBe(true)
+  expect(boardOf(w).enabled).toBe(true)
+  expect(S.offHere).toBe(false)
+  expect(S.enabledNow).toBe(true)
+  expect(told).toHaveLength(1)
+  expect(takeBoardUpdate()).toBeUndefined()
+})
+
+test('T-875: plain /symcc-enable in an off-here window turns this window on; the tools work again', async () => {
+  S.root = ROOT
+  S.me = 'b'
+  const w = world('b')
+  await saveBoard(w.host, emptyBoard())
+  w.files.set(w.lead, leadText('a', Date.now()))
+  await startOffHere(w.host)
+  expect(S.offHere).toBe(true)
+  expect(await toolCall(w.host, toolName('board'), undefined, {})).toEqual({ result: offHereAnswer(S.N.name) })
+  const r = await runCommand(w.host, 'symcc-enable', '')
+  expect(r?.text?.startsWith('symcc is on in this window, in mode ')).toBe(true)
+  expect(S.offHere).toBe(false)
+  expect(await toolCall(w.host, toolName('board'), undefined, {})).not.toEqual({ result: offHereAnswer(S.N.name) })
+  expect(takeBoardUpdate()).toContain('with /symcc-enable.')
+  expect(w.panel.view()).toMatchObject({ on_here: true })
+  expect(offStatusLine('symcc', false, false)).not.toContain('here')
 })
 
 test('a second live window starts off here with a short notice; board.json is unchanged and its panel does not open', async () => {
@@ -244,12 +279,12 @@ test('a second live window starts off here with a short notice; board.json is un
   expect(S.driving).toBe(false)
   expect(w.files.get(w.board)).toBe(before)
   expect(parseLead(w.files.get(w.lead)!)?.session).toBe('a')
-  expect(w.toasts.some(t => t.includes('symcc runs in another window · /symcc-enable here to use it here too'))).toBe(true)
+  expect(w.toasts.some(t => t.includes('symcc runs in another window · /symcc-enable to use it here too'))).toBe(true)
   expect(w.opened).toEqual([])
   expect(w.panel.view()).toMatchObject({ on_here: false, off_here: 'other' })
-  expect(offStatusLine('symcc', true, 'other')).toBe('symcc runs in another window · /symcc-enable here')
+  expect(offStatusLine('symcc', true, 'other')).toBe('symcc runs in another window · /symcc-enable')
   expect(await leadGuideText(w.host)).toBeUndefined()
-  // /symcc-enable here opens the panel as on start and makes it a lead
+  // /symcc-enable opens the panel as on start and makes it a lead
   await enableHere(w.host, () => undefined)
   expect(w.opened.length).toBe(1)
 })
@@ -305,11 +340,11 @@ test('when the only window with symcc on goes away, an off-here window says so o
   await offHereBeat(w.host, tn + GONE_GRACE_MS)
   await offHereBeat(w.host, tn + GONE_GRACE_MS + 1000)
   expect(w.toasts).toHaveLength(1)
-  expect(w.toasts[0]).toContain('the symcc window closed · /symcc-enable here to take over')
+  expect(w.toasts[0]).toContain('the symcc window closed · /symcc-enable to take over')
   expect(S.driving).toBe(false)
   expect(w.files.has(w.lead)).toBe(false)
   expect(w.panel.view()).toMatchObject({ off_here: 'gone' })
-  expect(offStatusLine('symcc', true, 'gone')).toBe('the symcc window closed · /symcc-enable here to take over')
+  expect(offStatusLine('symcc', true, 'gone')).toBe('the symcc window closed · /symcc-enable to take over')
   // the heartbeat of the session does the same and still claims nothing
   leadBeat(w.host)
   for (let i = 0; i < 30; i++) await Promise.resolve()
