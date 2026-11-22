@@ -50,6 +50,10 @@ test('command parsing: disable here and enable here; the plain forms and bad wor
   expect(parseCommand('symcc-disable', '')).toEqual({ kind: 'disable' })
   expect(parseCommand('symcc-enable', '')).toEqual({ kind: 'enable' })
   expect(parseCommand('symcc-disable', 'now')?.kind).toBe('bad')
+  // T-875: the "turn it back on" hint names plain /symcc-enable, never "[here]"
+  const bad = parseCommand('symcc-disable', 'foo', undefined, 'symcc') as { message?: string } | null
+  expect(JSON.stringify(bad).includes('/symcc-enable turns it back on')).toBe(true)
+  expect(JSON.stringify(bad).includes('/symcc-enable [here]')).toBe(false)
   expect(parseCommand('symcc-enable', 'there')?.kind).toBe('bad')
   expect(COMMANDS().find(c => c.name === 'symcc-disable')?.description).toContain('here')
 })

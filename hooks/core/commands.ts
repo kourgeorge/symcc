@@ -221,7 +221,7 @@ export function parseCommand(command: string, args: string, current: SymccMode =
       return { kind: 'help', topic: s }
     case 'disable':
       if (s.toLowerCase() === 'here') return { kind: 'disable', here: true }
-      return s ? use(`/${name}-disable [here] (turn ${name} off entirely, or only in this window; /${name}-enable [here] turns it back on)`) : { kind: 'disable' }
+      return s ? use(`/${name}-disable [here] (turn ${name} off entirely, or only in this window; /${name}-enable turns it back on)`) : { kind: 'disable' }
     case 'enable':
       if (s.toLowerCase() === 'here') return { kind: 'enable', here: true }
       return s ? use(`/${name}-enable [here]`) : { kind: 'enable' }
