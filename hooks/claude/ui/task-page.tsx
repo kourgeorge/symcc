@@ -7,7 +7,7 @@ import { loadKinds } from '../../app/kinds'
 import { type PaneView, S, workers } from '../../app/state'
 import { taskBranchFacts } from '../../app/branches'
 import { type $, panelValues } from '../panel'
-import { path } from '../../app/store'
+import { path, taskWithParts } from '../../app/store'
 import { noteForLead, brief, tellLead } from '../../app/tell'
 import { when } from '../../core/days'
 import { runTool, allowAskedFiles, refuseAskedFiles } from '../../app/tools'
@@ -31,7 +31,9 @@ const lastResult = new Map<string, { text: string; ok: boolean }>()
 export const mergingLine = (id: string): string => pressed.get(id) ?? (mergingNow(id) ? MERGING_LINE : '')
 
 /** One task opened: its details and actions; for a task in review also its changes. */
-export async function taskPage($: $, pane: PaneParts, t: SymccTask) {
+export async function taskPage($: $, pane: PaneParts, viewTask: SymccTask) {
+  // T-829: a task the view slimmed gets its details and history back from its parts file, for this page only
+  const t = await taskWithParts(claudeHost($), viewTask)
   const { Box, Text, Button, Input, v, width, color, word, mark, act, C, footer, buttonRows, heading, paragraphs } = pane
   // desktop and mobile draw every Button as a native button: there a button gets its label plain, no brackets (as the header)
   const terminal = pane.vs.surface === 'terminal'

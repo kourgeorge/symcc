@@ -816,7 +816,7 @@ are about changes; under "How tasks ended" a read investigation shows as
   any case, looking at the task's id (`T-12`, or just `12`), title, details, role, status,
   where it came from (owner, scout name, the task it came from) and your request. It looks in
   every group, Backlog, Done and Dropped too: groups with a match open, the others are
-  hidden. Archived tasks are not searched. Enter keeps the filter and gives you the list
+  hidden. Archived tasks are not searched. Old done and dropped tasks (the board panel keeps their details out of its view to stay small) are found by id, title, role, status and origin only, not by words in their details; their task page still shows the full text. Enter keeps the filter and gives you the list
   back (↑↓ and Enter work as usual); a line says what is on, e.g. `search: notify · 3 of 144
   tasks` (or `no tasks match`), with `[f] change search` and `[x] clear search` under it:
   `x` clears the search and shows everything. Enter on an empty search box clears it too.
