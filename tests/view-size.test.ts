@@ -84,11 +84,11 @@ function refusingWorld() {
   return { ...w, host: { ...w.host, ui: { ...w.host.ui, panel } }, stored: () => stored }
 }
 
-test('publish of a board with many long finished tasks stores a view under 4 MB and warns about nothing', async () => {
+test('publish of a board with many long recent finished tasks stores a view under 4 MB and warns about nothing', async () => {
   const w = refusingWorld()
   const b = emptyBoard()
   const base = addTask(emptyBoard(), { origin: { why: 't' }, title: 'base' }, at(0))[0].tasks[0]!
-  for (let i = 1; i <= 700; i++) b.tasks.push({ ...base, id: `T-${i}`, status: 'done', details: long, history: [{ at: at(0), kind: 'merged', text: long }], updated_at: at(VIEW_WHOLE_MS * 3) } as never)
+  for (let i = 1; i <= 700; i++) b.tasks.push({ ...base, id: `T-${i}`, status: 'done', details: long, history: [{ at: at(0), kind: 'merged', text: long }], updated_at: at(60_000) } as never)
   expect(JSON.stringify(b.tasks).length).toBeGreaterThan(3_000_000)
   await publish(w.host, b)
   expect(w.stored().length).toBeGreaterThan(0)
@@ -112,4 +112,14 @@ test('open tasks stay while finished ones go', () => {
   const out = slimView(viewOf(tasks), now)
   expect((out.tasks as unknown as { id: string }[]).some(t => t.id === 'T-open')).toBe(true)
   expect(JSON.stringify(out).length).toBeLessThan(VIEW_MAX_CHARS)
+})
+
+test('the view size is counted in characters, not bytes', async () => {
+  const w = refusingWorld()
+  const b = emptyBoard()
+  const base = addTask(emptyBoard(), { origin: { why: 't' }, title: 'base' }, at(0))[0].tasks[0]!
+  for (let i = 1; i <= 1000; i++) b.tasks.push({ ...base, id: `T-${i}`, status: 'todo', details: 'é'.repeat(9000) } as never)
+  await publish(w.host, b)
+  expect(w.stored().length).toBeLessThan(VIEW_MAX_CHARS)
+  expect([...sizeNotes.values()].some(n => n.includes('over the 4 MB'))).toBe(false)
 })
