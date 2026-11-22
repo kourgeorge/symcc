@@ -1678,6 +1678,14 @@ export type PanelAction =
   | { kind: 'setup-git' }
   | { kind: 'check-git' }
 
+/**
+ * T-888: the hidden mark the board panel puts at the end of the text of every slash command it sends (an invisible
+ * separator, U+2063, which trim() keeps). A typed command (TUI or web page) answers in a normal chat message, which
+ * the web page shows in full but which wakes the lead; a command with this mark keeps the quiet synthetic note, so a
+ * panel key press doesn't cost a lead turn (the panel shows its own result).
+ */
+export const PANEL_MARK = '⁣'
+
 /** The slash command (its name, without the slash, and its text) that does `a` for plugin `name`. */
 export function actionCommand(a: PanelAction, name: string = DEFAULT_NAME): { name: string; text: string } {
   if (a.kind === 'approve') return { name: `${name}-approve`, text: a.id }

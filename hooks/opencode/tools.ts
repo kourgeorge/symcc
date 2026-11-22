@@ -25,6 +25,7 @@ import { normQid } from '../core/questions'
 import { answerChoices } from '../core/panel'
 import { answeredLeadLine } from '../core/commands'
 import type { OcCommandDefinition, OcSessionApi, OcToolInfo } from './ctx'
+import { PANEL_MARK } from './board-view'
 
 /**
  * Who calls a tool: the lead (the session plugin.ts knows as the owner's chat), a worker, a scout or checker, or any
@@ -111,10 +112,15 @@ export function commandArgs(name: string, text: string): string {
   return (t === head || t.startsWith(`${head} `) ? t.slice(head.length) : t).trim()
 }
 
+/** T-888: a typed command's answer for the owner, as the chat message it goes in as: a last line tells the lead it needn't reply. */
+export const ownerAnswerText = (command: string, text: string) =>
+  `${text}\n\n(${S.N.name}: this is the answer to /${command}, shown for the owner. Lead: no reply needed, do nothing for it.)`
+
 /**
  * The slash commands to add with ctx.command.transform: each runs symcc's runCommand. Its answer goes into the
- * session's chat: one only for the owner (isTextDisplayOnly) as a synthetic message that doesn't wake the model, any
- * other as a prompt the model answers (as Claude Code does with a command's text).
+ * session's chat: one only for the owner (isTextDisplayOnly) as a normal chat message (ownerAnswerText, T-888: the
+ * only kind OpenCode's web page shows in full), or as a quiet synthetic note when the board panel sent the command
+ * (PANEL_MARK); any other as a prompt the model answers (as Claude Code does with a command's text).
  */
 export function opencodeCommands(host: Host, session: Pick<OcSessionApi, 'prompt' | 'synthetic'>): OcCommandDefinition[] {
   return [...COMMANDS(host.features), ANSWER_COMMAND()].map(c => ({
@@ -128,12 +134,19 @@ export function opencodeCommands(host: Host, session: Pick<OcSessionApi, 'prompt
       // T-841: was symcc on in this window before the command? (a board that can't be read counts as on: nothing to open)
       // T-844: /init in a folder with no board counts as off before (S.fresh); where a board is found it opens nothing
       const wasOn = isInit ? !S.fresh : isEnable ? await load(host).then(b => onHere(b), () => true) : true
-      const answer: CommandAnswer | null = await run(host, c.name, commandArgs(c.name, inv.prompt.text)).catch((err: Error) => ({ text: `${S.N.name}: /${c.name} failed: ${err?.message ?? err}`, isTextDisplayOnly: true as const }))
+      // T-888: the board panel's own sends carry PANEL_MARK (board-view.ts); a typed command (TUI or web page) doesn't
+      const fromPanel = inv.prompt.text.includes(PANEL_MARK)
+      const typed = inv.prompt.text.split(PANEL_MARK).join('')
+      const answer: CommandAnswer | null = await run(host, c.name, commandArgs(c.name, typed)).catch((err: Error) => ({ text: `${S.N.name}: /${c.name} failed: ${err?.message ?? err}`, isTextDisplayOnly: true as const }))
       if (!answer) return
       // T-841: /enable really turned symcc on here: this session's window opens the board (the view file carries the mark)
       const nowOn = isEnable && !wasOn && S.root && !S.guardOnly ? await load(host).then(b => onHere(b), () => false) : false
       if (nowOn) await host.ui.panel?.openNow?.(inv.sessionID).catch(() => undefined)
-      if (answer.isTextDisplayOnly) await session.synthetic({ sessionID: inv.sessionID, text: answer.text, description: `/${c.name}`, delivery: inv.delivery, resume: false })
+      // T-888: OpenCode shows a synthetic note only as a one-line label (and the web page's compact timeline folds it
+      // away), so a typed command's answer for the owner goes in as a normal chat message the web page shows in full.
+      // That wakes the lead for a short turn, so the message tells it no reply is needed. Panel presses stay quiet.
+      if (answer.isTextDisplayOnly && fromPanel) await session.synthetic({ sessionID: inv.sessionID, text: answer.text, description: `/${c.name}`, delivery: inv.delivery, resume: false })
+      else if (answer.isTextDisplayOnly) await session.prompt({ sessionID: inv.sessionID, text: ownerAnswerText(c.name, answer.text), delivery: inv.delivery })
       else await session.prompt({ sessionID: inv.sessionID, text: answer.text, delivery: inv.delivery })
     },
   }))
