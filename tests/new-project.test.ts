@@ -198,7 +198,12 @@ test('T-861: with git missing the board says git is not installed and gives the 
     expect(view.git_install).toBe(step)
     expect(view.branch_note).toContain('git is not installed')
     expect(gitNotice('no-git', view.git_install, 'symcc')).toBe(`Git is not installed: ${step}. No worker starts until it is.`)
-    expect(w.toLead.join('\n') + (takeBoardUpdate() ?? '')).toContain(step)
+    const told = w.toLead.join('\n') + (takeBoardUpdate() ?? '')
+    expect(told).toContain(step)
+    // T-887: symcc no longer looks again by itself while git is missing, so the lead must tell the owner how to make it look
+    expect(told.includes('on its own')).toBe(false)
+    expect(told).toContain('Check again (g)')
+    expect(told).toContain('/symcc-settings git check')
   }
   expect(gitInstallStep({ os: 'mac' })).toBe('xcode-select --install')
   expect(gitInstallStep({ os: 'windows' })).toBe('winget install --id Git.Git')

@@ -133,7 +133,7 @@ export function gitNotice(s: GitState, step = '', name: string = DEFAULT_NAME): 
 /** The one message the lead gets when the git program is missing; `step` = how to install it on this machine (gitInstallStep). */
 export function noGitText(name: string = DEFAULT_NAME, step = ''): string {
   const how = step ? `The install step for this machine is \`${step}\`.` : 'On macOS run `xcode-select --install` (or `brew install git`); on Linux use the package manager (e.g. `sudo apt install git`); on Windows `winget install --id Git.Git`; or get it from https://git-scm.com.'
-  return `No work can start: git is not installed. ${name} needs git to give each worker its own copy of the project (git worktrees), so it can't work without it. Ask the owner whether to install it. ${how} Only on their yes run it yourself, and only if it needs no sudo and no installer window; otherwise tell them to run it. Then ${name} sees git on its own and the next step is setting up the repo.`
+  return `No work can start: git is not installed. ${name} needs git to give each worker its own copy of the project (git worktrees), so it can't work without it. Ask the owner whether to install it. ${how} Only on their yes run it yourself, and only if it needs no sudo and no installer window; otherwise tell them to run it. ${name} does not look for git again by itself while it is missing (on a Mac each look can open Apple's install pop-up), so once git is installed tell the owner to press Check again (g) in the board panel or run /symcc-settings git check; then ${name} sees git and asks about setting up the repo.`
 }
 
 /** The question the lead passes on to the owner when the folder has no repo (or no commits); `setup` = how to say yes. */
