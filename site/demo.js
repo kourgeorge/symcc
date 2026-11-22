@@ -94,10 +94,10 @@
     return tabs.map(([k, n]) => sp(`[${k}] ${n}`, n === active ? 'tab-on' : 'dim')).join(sp(' │ ', 'dim'))
   }
   const heading = (name, rest = '') => sp('▍', 'heading') + sp(name, 'heading') + rest
-  // (T-789, T-810) the Live tab's section heading: the name in UPPERCASE, bold, then a thin dim rule to the right edge
+  // (T-789, T-810) the Live tab's section heading: the name in UPPERCASE, bold, then a thin rule in the heading color to the right edge
   // (the demo panel is 64 columns wide); an empty line above it (none above the first) and one under it
   const PANEL_W = 64
-  const liveHead = (name, rest = '', plain = '') => sp(name.toUpperCase(), 'heading') + rest + sp(' ' + '─'.repeat(Math.max(0, PANEL_W - name.length - plain.length - 1)), 'dim')
+  const liveHead = (name, rest = '', plain = '') => sp(name.toUpperCase(), 'heading') + rest + sp(' ' + '─'.repeat(Math.max(0, PANEL_W - name.length - plain.length - 1)), 'heading')
 
   function laneLines(s, l) {
     let track = ''
@@ -163,6 +163,10 @@
       const kept = s.lanes.filter(l => l.done && s.now - l.done < 10 * 60).sort((a, b) => b.done - a.done).slice(0, 3)
       for (const l of [...s.lanes.filter(l => !l.done), ...kept]) L.push(...laneLines(s, l))
     } else L.push(' No task is running right now.')
+    if (s.lanes.length) L.push(' ' + sp(`✧ = an agent works here (needs an agent slot)   bar: tokens of the task so far, full = usual per task (${tok(USUAL)})`, 'dim'))
+    L.push('')
+    L.push(liveHead('Branches'), '')
+    L.push(...branchLines(s))
     L.push('')
     L.push(liveHead('Today'), '')
     const d = s.today
@@ -175,10 +179,6 @@
     L.push(' ' + bar + shares)
     L.push(' ' + sp('⌀ ', 'dim') + sp(`per task ${TODAY_MORE.perTask}`, 'text') + sp(`   first try ${TODAY_MORE.firstTry}% · ⌀ ${TODAY_MORE.avgTries} tries   ⌕ ${d.back} sent back by the checker`, 'dim'))
     L.push(' ' + sp('⏱ ', 'dim') + sp(`${TODAY_MORE.work} agent work`, 'text') + sp('   00 ', 'dim') + sp(' '.repeat(8) + TODAY_MORE.spark.slice(0, -1), 'bar') + sp(TODAY_MORE.spark.slice(-1), 'now') + sp('·'.repeat(24 - 8 - TODAY_MORE.spark.length), 'dim') + sp(' 24', 'dim'))
-    if (s.lanes.length) L.push(' ' + sp(`✧ = an agent works here (needs an agent slot)   bar: tokens of the task so far, full = usual per task (${tok(USUAL)})`, 'dim'))
-    L.push('')
-    L.push(liveHead('Branches'), '')
-    L.push(...branchLines(s))
     if (wide) {
       L.push('')
       L.push(liveHead('Organizational memory', '   ' + sp('60 / 60', 'dim'), '   60 / 60'), '')

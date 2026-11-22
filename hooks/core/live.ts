@@ -370,10 +370,10 @@ export const LIVE_DONE_MARK = '✓'
 /** T-767: what a running lane's first line starts with (before its id). */
 export const LIVE_RUN_MARK = '▶ '
 
-// T-747: the Live tab's sections (Tasks, Today, Branches, Organizational memory; T-750 put Today above Branches) each start with a "▍Name" heading,
+// T-747: the Live tab's sections (Tasks, Today, Branches, Organizational memory; T-820 put Today after Branches) each start with a "▍Name" heading,
 // as the task page's "▍Details", and the lines under it are indented by LIVE_INDENT.
 /** The section names, in their order on the tab. */
-export const LIVE_SECTIONS = { needs: 'Needs you', tasks: 'Tasks', today: 'Today', branches: 'Branches', orgMem: 'Organizational memory' } as const
+export const LIVE_SECTIONS = { needs: 'Needs you', tasks: 'Tasks', branches: 'Branches', today: 'Today', orgMem: 'Organizational memory' } as const
 /** T-786: one row of the Live tab's ▍Needs you section: `id` (Q-n or T-n) opens on Enter; `segs` is the row in the warning tone. */
 export type LiveNeed = { id: string; segs: LiveSeg[] }
 /** T-786: the rows of ▍Needs you, in `inner` columns (each cut to fit): the open board questions, then the tasks that need the owner
@@ -387,6 +387,7 @@ export function liveNeeds(view: LiveView & { questions?: readonly { id: string; 
   const ts = tasks.map(t => {
     if (asksMoreTime(t)) {
       const a = taskAsks(t, (view as { max_minutes?: number }).max_minutes)
+      if (t.question_lead) return row(t.id, a?.text ?? '')
       return row(t.id, (a?.text ?? '').replace(t.id, '').trim().replace(/\. Give it more time\?$/, ': more time?'))
     }
     if (t.status === 'review') return row(t.id, `${isAnswered(t) ? 'answer to read' : 'ready for review'}: ${t.title}`)
@@ -408,11 +409,11 @@ export const liveRuleText = (used: number, width: number): string => {
   return Math.floor(width) < 4 || room < 1 ? '' : ` ${'─'.repeat(room)}`
 }
 /** T-789/T-810: a section's heading in `width` columns: the name in UPPERCASE ("TASKS", cut when narrow), bold, then a thin
- *  dim rule to the right edge. The client puts one empty line above it (none above the first) and one under it. */
+ *  rule in the heading color to the right edge. The client puts one empty line above it (none above the first) and one under it. */
 export const liveHeading = (name: string, width: number): LiveSeg[] => {
   const text = fitText(name.toUpperCase(), Math.max(1, Math.floor(width)))
   const rule = liveRuleText(textWidth(text), width)
-  return [{ text, tone: 'heading' }, ...(rule ? [{ text: rule, tone: 'dim' as const }] : [])]
+  return [{ text, tone: 'heading' }, ...(rule ? [{ text: rule, tone: 'heading' as const }] : [])]
 }
 /** A line under a section heading: LIVE_INDENT, then its segments. */
 export const liveIndented = (xs: readonly LiveSeg[]): LiveSeg[] => [{ text: LIVE_INDENT, tone: 'text' }, ...xs]
@@ -1076,7 +1077,7 @@ function orgMemHead(n: number, width: number): LiveSeg[] {
     const used = textWidth(`${title}   ${count}`)
     if (used > width) continue
     const rule = liveRuleText(used, width)
-    return segs({ text: title, tone: 'heading' }, { text: '   ', tone: 'text' }, { text: count, tone: 'dim' }, { text: rule, tone: 'dim' })
+    return segs({ text: title, tone: 'heading' }, { text: '   ', tone: 'text' }, { text: count, tone: 'dim' }, { text: rule, tone: 'heading' })
   }
   return liveHeading('Org-mem', width)
 }

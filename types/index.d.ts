@@ -155,6 +155,10 @@ export type SymccTask = {
   asked_files?: string[]
   /** the choices a worker gave with its ask_owner question, shown as buttons; only while waiting */
   options?: string[]
+  /** the lead's own wording of this task's question, from its pop-up tied to the task (T-801); the board shows it instead of the question's text; only while the question is open */
+  question_lead?: string
+  /** the answer choices of the lead's pop-up for this question (T-801), shown as the buttons of a worker's question */
+  options_lead?: string[]
   created_at: string
   updated_at: string
 }
