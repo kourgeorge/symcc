@@ -1829,7 +1829,13 @@ merge").
 
 This is the same number as the "Time and cost" total on the task page: each try's time from
 start to end, added up. Time while the task was paused, waiting for you, waiting on other
-tasks, or in todo between tries is not counted.
+tasks, or in todo between tries is not counted. Time while no session was open also is not
+counted: when Claude Code was closed for a day and reopened, the try goes on (it is the same try)
+and only the stretches when its worker, checker or tests really ran count. The same active time
+is used for the band, the Live tab, the task page's Tries and Runs lines, `/symcc-stats` work
+time, the over-time check (`max_minutes`) and the stage charts. A task in prep, queue, tests or
+merge shows the time since that step began (`queue 1m`), not the time since the try started.
+Totals since the task was made (the lead time, `/symcc-stats` lifetime) stay wall-clock time.
 
 When a row is short of room, the time is left out first, then the try.
 

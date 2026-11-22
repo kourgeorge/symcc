@@ -3,7 +3,7 @@
 // again right before it acts, so nothing unmerged, uncommitted or in use is ever deleted. Reports, org-mem, scouts,
 // roles and kinds are never touched: only migration backups, task folders of finished tasks, stale git worktree
 // entries and task branches already in their branch can be cleaned up.
-import { type BoardTask, type Board, liveWorkersFor, intoOf, finishingNow, checkStepNow, parseLead, isFresh, liveDriver } from '../board'
+import { type BoardTask, type Board, liveWorkersFor, intoOf, finishingNow, checkStepNow, parseLead, isFresh, liveDriver, activeFrom } from '../board'
 import { type DoctorItem, oldBackups, backupIds, branchId, folderId, PRUNE_ID, parseDoctorArgs, doctorText, fixedText, type DoctorFixed, mergeRunsText, mergeNoteText, pruneLines, STRAY_DIRS, DOCTOR_STUCK_MIN, BACKUP_MARK, MIGRATE_ID } from '../core/doctor'
 import { SIZE_WARN_BYTES, READ_LIMIT_BYTES, PARTS_DIR, mbText } from '../core/board-parts'
 import { type Host, agentState } from '../host'
@@ -276,7 +276,8 @@ async function findAll(host: Host, b: Board | null, mergingId: string | undefine
     for (const t of b.tasks) {
       // the task being merged has no worker on purpose: never tell the owner to retry it
       if (t.status !== 'doing' || t.id === mergingId || inUse(t.id, t, agents)) continue
-      const since = Date.parse(t.runs?.at(-1)?.started ?? t.updated_at)
+      const run = t.runs?.at(-1)
+      const since = run?.started ? activeFrom(run, Date.parse(run.started)) : Date.parse(t.updated_at)
       const min = Number.isFinite(since) ? Math.round((nowMs - since) / 60_000) : NaN
       if (!(min >= DOCTOR_STUCK_MIN)) continue
       listed.push({ kind: 'board', fixable: false, text: `${t.id} is running but has no live worker (for ${min} min): /${S.N.name}-task ${t.id} retry${driver ? '' : `, or /${S.N.name}-drive so the regular check takes it back`}` })
