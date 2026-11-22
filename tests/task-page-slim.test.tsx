@@ -15,13 +15,17 @@ async function open(on: On, $: Engine, id: string, slim: boolean, surface: 'term
   const whole = RICH_TASKS.find(t => t.id === id)!
   const shown = slim ? viewTask(whole as never) : whole
   const view = { shape: 'view-1', value: { tasks: [shown], working: [], scouts: [], mode: 'auto', branch: 'main', test_commands: [] } }
-  seedBoard(on, { opened: id, view })
+  const stored: string[] = []
+  // every value the panel saves into its stored state is recorded on its way through seedBoard's own handler
+  const recording = ((name: string, fn: (...a: never[]) => unknown) =>
+    name === 'state.set' ? on(name as never, ((c: unknown, e: { value: unknown }, next: (e: unknown) => unknown) => (stored.push(JSON.stringify(e.value)), (fn as Function)(c, e, next))) as never) : on(name as never, fn as never)) as unknown as On
+  seedBoard(recording, { opened: id, view })
   on('fs.read', (_, e, next) => (new RegExp(`\\.symcc/${partsFileOf(id).replace('.', '\\.')}$`).test(e.path) ? readText(partsText({ [id]: whole as never })) : next(e)))
   on('fs.exists', () => ({ value: false }))
   const ui = await $.ui.mount({ ...PANE, surface })
   const text = JSON.stringify(drawnData(await ui.drawn()))
   await ui.unmount()
-  return { text, view, shown }
+  return { text, view, shown, stored }
 }
 
 for (const surface of ['terminal', 'vscode'] as const) {
@@ -30,8 +34,8 @@ for (const surface of ['terminal', 'vscode'] as const) {
     expect('details' in r.shown).toBe(false)
     expect(r.text).toContain(DETAILS_WORDS)
     expect(r.text).toContain(HISTORY_WORDS)
-    expect(JSON.stringify(r.view)).not.toContain(DETAILS_WORDS)
-    expect('details' in r.shown).toBe(false)
+    expect(r.stored.join('\n')).not.toContain(DETAILS_WORDS)
+    expect(r.stored.join('\n')).not.toContain(HISTORY_WORDS)
   })
 
   test(`${surface}: an open task's page is unchanged`, async ($, on) => {
