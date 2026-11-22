@@ -555,6 +555,11 @@ export async function runCommand(host: Host, command: string, args: string): Pro
   // if it still isn't known, answer and write nothing (never a board or lock path from "/").
   if (!(await findRoot(host))) return { text: startingText(), isTextDisplayOnly: true }
   if (S.guardOnly) return { text: guardOnlyText(), isTextDisplayOnly: true }
+  // T-858: with no board nothing is read or written (no stats file, no git): both point to /<name>-init
+  if (isStats || isDoctor) {
+    await refreshFresh(host)
+    if (S.fresh) return { text: notSetUpAnswer(S.N.name), isTextDisplayOnly: true }
+  }
   // /<name>-stats: a read-only text report (see statsText); it changes nothing on the board.
   if (isStats) return { text: await statsText(host, args ?? '').catch((err: Error) => `Could not build the stats: ${err.message}`), isTextDisplayOnly: true }
   // /<name>-doctor (T-676): checks .<name>/ and git; cleans up only with "fix" (all) or "fix <id> ..." (those)

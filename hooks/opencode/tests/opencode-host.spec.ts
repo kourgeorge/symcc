@@ -1414,6 +1414,8 @@ test('T-844: /symcc-init through OpenCode\'s commands: a folder with no board st
     expect(await run('symcc-enable')).toContain('/symcc-init to create one here')
     expect(await readFile(`${main}/.symcc/board.json`, 'utf8').catch(() => 'none')).toBe('none')
     expect(await mark()).toBe(undefined)
+    // T-858: nothing is written there while it has no board (no .symcc folder, no view file)
+    expect(await lstat(`${main}/.symcc`).then(() => 'there', () => 'none')).toBe('none')
     expect(await run('symcc-init')).toContain('is on in this project')
     expect(JSON.parse(await readFile(`${main}/.symcc/board.json`, 'utf8')).enabled !== false).toBe(true)
     expect(await readFile(`${base}/.symcc/board.json`, 'utf8').catch(() => 'none')).toBe('none')
