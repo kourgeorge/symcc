@@ -3622,6 +3622,8 @@ test('T-738, T-747: the OpenCode Live tab has a ▍heading for each section, one
     // T-823: the key line sits right under the lanes, before BRANCHES
     const keyAt = lines.findIndex(l => l.trimStart().startsWith('✧ = an agent works here'))
     expect([keyAt > mode, keyAt < lines.findIndex(l => l.startsWith('BRANCHES ─'))]).toEqual([true, true])
+    // T-836: a short dim divider right above the key line
+    expect(lines[keyAt - 1]).toBe(' ' + '─'.repeat(12))
     expect([heads.length, heads[3]!.startsWith(w === 100 ? 'ORGANIZATIONAL MEMORY   ' : 'ORG')]).toEqual([4, true])
     // no section rules in the body (the footer's rule is under it)
     expect(lines.slice(mode, lines.length - d.footer).filter(l => l.includes('── ') || /^─+$/.test(l))).toEqual([])

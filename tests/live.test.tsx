@@ -2,7 +2,7 @@
 // numbers; claude/ui/live.tsx draws them on the terminal panel).
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { liveLanes, liveLayout, laneLines, liveLabelLine, liveLabelSegs, LIVE_AGENT_MARK, LIVE_TONE, liveStations, liveTrains, trainRows, type LiveTrain, liveToday, todayLines, segText, liveBlink, liveHeader, liveHeaderSegs, liveScoutMark, tabRow, LIVE_TABS, LIVE_EMPTY, LIVE_LEGEND, LIVE_INDENT, liveInner, liveBarLegend, liveLegend } from '../hooks/core/live'
+import { liveLanes, liveLayout, laneLines, liveLabelLine, liveLabelSegs, LIVE_AGENT_MARK, LIVE_TONE, liveStations, liveTrains, trainRows, type LiveTrain, liveToday, todayLines, segText, liveBlink, liveHeader, liveHeaderSegs, liveScoutMark, tabRow, LIVE_TABS, LIVE_EMPTY, LIVE_LEGEND, LIVE_DIVIDER, LIVE_INDENT, liveInner, liveBarLegend, liveLegend } from '../hooks/core/live'
 import { textWidth } from '../hooks/core/stats'
 import { FINISH_STALE_MS } from '../hooks/core/lead'
 import { listKeys } from '../hooks/board'
@@ -397,6 +397,8 @@ test('T-690: the Live tab draws at a normal and a narrow width with nothing cut,
     const legendAt = lines.findIndex(l => l.trimStart().startsWith('✧ = an agent works here'))
     const branchesAt = lines.findIndex(l => l.startsWith('BRANCHES ─'))
     expect(legendAt).toBeGreaterThan(lines.findIndex(l => l.startsWith(`${LIVE_INDENT}▶ T-688 `)))
+    // T-836: a short divider right above the key line
+    expect(lines[legendAt - 1]).toBe(LIVE_INDENT + LIVE_DIVIDER)
     if (branchesAt >= 0) expect(legendAt).toBeLessThan(branchesAt)
     expect(lines.some(l => l.includes('l t s c views'))).toBe(true)
     // T-760: the lane header ends the agent stations in ✧ (over their marks, as liveLabelLine), each ✧ in the heading's color

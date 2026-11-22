@@ -15,7 +15,7 @@
 // T-727: under the lanes, the Branches section (core's liveBranches) drawn with real lines: see branchesVs.
 // T-747: each section has a bold heading with the terminal's names (core's LIVE_SECTIONS): Tasks, Today, Branches,
 // Organizational memory (that one a link to all notes).
-import { type BranchRow, type LiveBranches, liveBranches, LIVE_EMPTY, LIVE_AGENT_MARK, LIVE_RUN_MARK, liveLegend, LIVE_SECTIONS, type LiveLane, liveInner, liveRuleText, type LiveLayout, type LiveSeg, LIVE_TONE, laneLines, liveHeader, liveHeaderSegs, liveNeeds, liveTaskLanes, liveLayout, liveOrgMem, liveStations, liveTodayLines, liveTrains, segText, trainRows } from '../../core/live'
+import { LIVE_DIVIDER, type BranchRow, type LiveBranches, liveBranches, LIVE_EMPTY, LIVE_AGENT_MARK, LIVE_RUN_MARK, liveLegend, LIVE_SECTIONS, type LiveLane, liveInner, liveRuleText, type LiveLayout, type LiveSeg, LIVE_TONE, laneLines, liveHeader, liveHeaderSegs, liveNeeds, liveTaskLanes, liveLayout, liveOrgMem, liveStations, liveTodayLines, liveTrains, segText, trainRows } from '../../core/live'
 import { panelValues, type $ } from '../panel'
 import type { PaneParts } from './parts'
 import { LIVE_TICK_MS, branchKey, needKey, laneKey, liveTick, newestKey, openOrgMemPage, topicKey, trainKey } from './live'
@@ -271,7 +271,7 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
         {running.length ? null : line('live-empty', LIVE_EMPTY, 'inactive')}
         {lanes.length ? <Box key="live-lanes" flexDirection="column" gap={1}>{laneRows}</Box> : null}
       </Box>
-      {lanes.length ? line('live-legend', liveLegend(lanes, Infinity).join(' '), 'inactive') : null}
+      {lanes.length ? <Box key="live-key" flexDirection="column">{line('live-divider', LIVE_DIVIDER, 'inactive')}{line('live-legend', liveLegend(lanes, Infinity).join(' '), 'inactive')}</Box> : null}
       {branchesVs(pane, open)}
       <Box key="live-bottom" flexDirection="column">
         {headLine('live-today-head', LIVE_SECTIONS.today)}
