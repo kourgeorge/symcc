@@ -5,6 +5,7 @@
 // The checker verdict and the queue outcome of a real run are checked in checker.test.ts (the T-616 flow test).
 import { expect } from 'claude-code/testing'
 import { addTask, emptyBoard, patchTask, workerGitWriteText, blockedEditText, ASK_SENT } from '../hooks/board'
+import { runBy } from './agent-fixture'
 import { checkEdit, askCall } from '../hooks/app/ask'
 import { toolCall } from '../hooks/app/symcc'
 import { finishWork } from '../hooks/app/workers'
@@ -60,7 +61,7 @@ function world(opts: { hang?: boolean; failLog?: boolean } = {}) {
 /** A board with T-1 "doing" on try 2, files src/ only, and its worker w1 running. */
 async function withWorker(w: ReturnType<typeof world>) {
   const [b] = addTask(emptyBoard(), { origin: { why: 'a test' }, title: 'Do it', details: 'x', files: ['src/'] }, AT)
-  await saveBoard(w.host, patchTask(b, 'T-1', { status: 'doing', attempts: 2, agent: 'w1' }, AT))
+  await saveBoard(w.host, patchTask(b, 'T-1', { status: 'doing', attempts: 2, runs: [runBy('w1', AT)] }, AT))
   workers.set('w1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: 0 })
 }
 

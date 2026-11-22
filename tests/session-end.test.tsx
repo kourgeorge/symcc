@@ -5,7 +5,8 @@
 import { expect, mock, type Engine } from 'claude-code/testing'
 import { test } from './reset'
 import type { On } from 'claude-code'
-import { type Board, LEAD_BEAT_MS, addTask, emptyBoard, patchTask } from '../hooks/board'
+import { type Board, LEAD_BEAT_MS, addTask, emptyBoard, patchTask, workerIdOf } from '../hooks/board'
+import { runBy } from './agent-fixture'
 import { ran } from './fakes'
 import type { ProcessRunResult } from 'claude-code'
 
@@ -84,7 +85,7 @@ type Eng = Engine
 /** Session "s1" starts and drives the board; T-1 is "doing" for "s1", worked on by the live agent w1 (adopted at start). */
 async function startDriving($: Eng, w: ReturnType<typeof world>) {
   const [b] = addTask(emptyBoard(), { origin: { why: 'a test' }, title: 'Build it', files: ['src/'], merge_into: 'main' }, ISO)
-  w.files.set(BOARD, JSON.stringify(patchTask(b, 'T-1', { status: 'doing', session: 's1', agent: 'w1', attempts: 1, branch: 'symcc/T-1' }, ISO)))
+  w.files.set(BOARD, JSON.stringify(patchTask(b, 'T-1', { status: 'doing', session: 's1', runs: [runBy('w1', ISO)], attempts: 1, branch: 'symcc/T-1' }, ISO)))
   await $.session.start({ cwd: '/repo' } as never)
   // the start itself: s1 drives, and T-1 kept its worker
   expect(w.lead()?.session).toBe('s1')
@@ -110,7 +111,7 @@ test("session.end on /clear moves the old session's doing task to the new id and
   const t = w.board().tasks[0]!
   expect(t.session).toBe('s2')
   expect(t.status).toBe('doing')
-  expect(t.agent).toBe('w1')
+  expect(workerIdOf(t)).toBe('w1')
 })
 
 test('session.end on /clear keeps the live worker: the view published after it still shows T-1 working', async ($, on) => {

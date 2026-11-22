@@ -7,7 +7,8 @@ import { joinedText } from '../hooks/core/board-parts'
 import { expect, mock, type Engine } from 'claude-code/testing'
 import { test } from './reset'
 import type { On } from 'claude-code'
-import { type Board, addTask, emptyBoard, patchTask } from '../hooks/board'
+import { type Board, addTask, emptyBoard, patchTask, workerIdOf } from '../hooks/board'
+import { runBy } from './agent-fixture'
 import { ran } from './fakes'
 
 const T0 = 1_800_000_000_000
@@ -82,7 +83,7 @@ function world(on: On, agents: Agent[], sid = 's1', gate: { wait?: Promise<void>
  */
 function doing(session: string, agent: string, started = ISO): Board {
   const [b] = addTask({ ...emptyBoard(), mode: 'auto', max_parallel: 0 }, { origin: { why: 'a test' }, title: 'Build it', files: ['src/'], merge_into: 'main' }, ISO)
-  return patchTask(b, 'T-1', { status: 'doing', session, agent, attempts: 1, branch: 'symcc/T-1', runs: [{ started }] } as never, ISO)
+  return patchTask(b, 'T-1', { status: 'doing', session, attempts: 1, branch: 'symcc/T-1', runs: [runBy(agent, started)] } as never, ISO)
 }
 
 const tool = async ($: Engine, name: string, args: Record<string, unknown>) => {
@@ -103,7 +104,7 @@ test('(a) after a reload, the live worker of this session whose task is doing fo
   await start($, w)
   expect(w.sent).toEqual([])
   expect(w.task('T-1').status).toBe('doing')
-  expect(w.task('T-1').agent).toBe('w1')
+  expect(workerIdOf(w.task('T-1'))).toBe('w1')
   // and the regular checks keep it: it is still working
   await w.clock.advance(2 * 60_000)
   await w.clock.settle()

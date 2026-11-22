@@ -19,7 +19,7 @@ function task(id: string, over: Partial<SymccTask>): SymccTask {
 /** Made 600m ago; works 590..560; prep 2m, check 8m, queue 5m, tests 5m, merge 2m; merged 538m ago (lifetime 62m). */
 const plain = () => task('T-1', {
   created_at: at(600),
-  runs: [{ started: at(590), ended: at(560), tokens: { input: 1000 } }],
+  runs: [{ started: at(590), ended: at(560), agents: [{ kind: 'worker' as const, started: at(590), ended: at(560), tokens: { input: 1000 } }] }],
   history: [h(600, 'created', 'created by the owner'), stage(560, 1, 'prep started'), stage(558, 1, 'checker started'), h(550, 'checker-ok', 'try 1: checker: OK'), stage(550, 1, 'waits in the merge queue (place 1)'), stage(545, 1, 'tests started'), stage(540, 1, 'merge started'), h(538, 'merged', 'try 1: did it → merged into main (abc)')],
 })
 
@@ -27,7 +27,7 @@ const plain = () => task('T-1', {
 const waiter = () => task('T-2', {
   created_at: at(600),
   after: ['T-1'],
-  runs: [{ started: at(530), ended: at(500), tokens: { input: 3000 } }],
+  runs: [{ started: at(530), ended: at(500), agents: [{ kind: 'worker' as const, started: at(530), ended: at(500), tokens: { input: 3000 } }] }],
   history: [h(600, 'created', 'created by the lead'), stage(500, 1, 'prep started'), stage(499, 1, 'checker started'), stage(495, 1, 'waits in the merge queue'), stage(494, 1, 'tests started'), stage(490, 1, 'merge started'), h(489, 'merged', 'try 1: x → merged into main (def)')],
 })
 
@@ -164,7 +164,7 @@ test('stats: "inside" counts only the work inside the window, cutting a try that
   const t = task('T-5', {
     created_at: at(30 * H),
     updated_at: at(22 * H),
-    runs: [{ started: at(26 * H), ended: at(23 * H), tokens: { input: 500 } }],
+    runs: [{ started: at(26 * H), ended: at(23 * H), agents: [{ kind: 'worker' as const, started: at(26 * H), ended: at(23 * H), tokens: { input: 500 } }] }],
     history: [h(30 * H, 'created', 'created by the owner'), stage(23 * H, 1, 'prep started'), stage(22 * H + 5, 1, 'merge started'), h(22 * H, 'merged', 'try 1: x → merged into main (1)')],
   })
   const whole = statsReport({ tasks: [t], nowMs: NOW, range: { kind: 'days', days: 1 } })

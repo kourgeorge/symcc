@@ -465,7 +465,7 @@ function resultsPage(on: On) {
   const ago = (h: number) => new Date(Date.now() - h * 3600_000).toISOString()
   const run = ago(24)
   const t = (id: string, status: string, runs: unknown[] = []) => ({ id, title: id, details: '', files: [], status, note: '', question: null, order: 1, after: [], attempts: runs.length, history: [], branch: null, created_at: ago(23), updated_at: ago(22), runs, origin: { by: 'scout', scout: 'bugs', why: '', at: '' } })
-  const tasks = [t('T-7', 'done', [{ started: ago(23), ended: ago(22.5), tokens: { input: 3000 } }]), t('T-8', 'todo')]
+  const tasks = [t('T-7', 'done', [{ started: ago(23), ended: ago(22.5), agents: [{ kind: 'worker' as const, started: ago(23), ended: ago(22.5), tokens: { input: 3000 } }] }]), t('T-8', 'todo')]
   const memory = addScoutRun(null, 'bugs', { endMs: Date.parse(run), ms: 60_000, tokens: { input: 2000 } })
   page(on, { '/.symcc/scouts/bugs.runs.json': scoutRunsText([{ started: null, ended: run, outcome: 'found', findings: 2, tasks: ['T-7', 'T-8'] }]), '/.symcc/scouts.json': memory }, tasks)
 }

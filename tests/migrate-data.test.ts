@@ -2,12 +2,14 @@
 // migrate-data` keeps a dated backup of the data files and saves every file once in today's shape; after that, loading
 // needs no migration (the old-shape code is gone from board-file, history, archive, stats, scouts and org-mem).
 import { expect } from 'claude-code/testing'
-import { emptyBoard, readBoard, readArchive } from '../hooks/board'
+import { emptyBoard, readBoard, readArchive, tryTokens, tryCost, checkerTokensOf, workerIdOf, checkerIdOf } from '../hooks/board'
 import { doctor } from '../hooks/app/doctor'
 import { load, change } from '../hooks/app/store'
 import { migrateIfOld, forgetMigrationFailure } from '../hooks/app/migrate-data'
 import { S, leadQueue } from'../hooks/app/state'
-import { oldDataRows } from '../hooks/core/old-data'
+import { agentLines } from '../hooks/core/runs'
+import { oldDataRows, migrateRunAgents } from '../hooks/core/old-data'
+import type { SymccRun } from '../types'
 import { stillOld } from './old-data-fixture'
 import type { HostFileEntry, HostRunResult } from '../hooks/host'
 import { test } from './reset'
@@ -128,7 +130,7 @@ test('T-804: fix migrate-data keeps a backup and saves every file in the current
   expect(t1.role).toBe('tester')
   expect(t1.origin?.why).toBe('made before origins were kept')
   expect(t1.history.map(h => h.kind)).toEqual(['created', 'failed'])
-  expect(t1.runs!.map(r => r.tokens)).toEqual([{ unsplit: 5000 }, undefined])
+  expect(t1.runs!.map(r => tryTokens(r))).toEqual([{ unsplit: 5000 }, undefined])
   expect(t1.runs!.every(r => !!r.ended)).toBe(true)
   expect(t1.note).not.toMatch(/^queue/)
   // archive.json
@@ -136,7 +138,7 @@ test('T-804: fix migrate-data keeps a backup and saves every file in the current
   const t3 = arch.archive.tasks[0]! as unknown as Record<string, unknown>
   expect('stage' in t3 || 'conflict_tries' in t3).toBe(false)
   expect((arch.archive.tasks[0]!.history[0] as { kind: string }).kind).toBe('merged')
-  expect(arch.archive.tasks[0]!.runs![0]!.tokens).toEqual({ unsplit: 90 })
+  expect(tryTokens(arch.archive.tasks[0]!.runs![0]!)).toEqual({ unsplit: 90 })
   // scouts.json and the scout's runs file, org-mem
   expect(JSON.parse(w.files.get(`${D}/scouts.json`)!).usage.bugs.tokens).toEqual({ unsplit: 900 })
   expect(JSON.parse(w.files.get(`${D}/scouts/bugs.runs.json`)!).runs[0].outcome).toBe('found')
@@ -297,4 +299,62 @@ test('T-804: the same write error naming a random temp file is told once, even w
     await migrateIfOld(w.host)
   }
   expect(leadQueue.filter(t => t.includes("couldn't move")).length).toBe(1)
+})
+
+test('T-805: fix migrate-data gives an old try its agent entries (worker: tokens - checker_tokens, checker: checker_tokens) and takes the old fields away', async () => {
+  const w = world()
+  const old = JSON.parse(w.files.get(`${D}/board.json`)!)
+  old.tasks.push({
+    ...base, id: 'T-5', title: 'five', status: 'doing', note: 'worker on it', attempts: 2, origin: { by: 'lead', why: 'w', at: T }, merge_into: 'main', history: [], session: 'me', agent: 'ag5', checker: 'chk5',
+    runs: [
+      { started: T, ended: E, tokens: { input: 1000, output: 50 }, checker_tokens: { input: 300 }, cost: 0.5, agent: 'ag4', checkers: ['chk4'], ended_by: 'finished', ended_note: 'checker found problems' },
+      { started: E, tokens: { input: 70 }, agent: 'ag5', checkers: ['chk5'], restarts: [{ at: E, why: 'after a reopen', agent: 'ag3', started: E }], agents: [{ id: 'ag5', kind: 'worker' as const, started: E, tokens: { input: 20 } }] },
+    ],
+  })
+  w.files.set(`${D}/board.json`, JSON.stringify(old, null, 2))
+  // the dry run counts it
+  expect(await doctor(w.host, '')).toContain('keep tokens, cost or agent ids outside their agent entries')
+  const out = await doctor(w.host, 'fix migrate-data')
+  expect(out).toContain('✓ migrate-data')
+  const t = (await load(w.host)).tasks.find(x => x.id === 'T-5')!
+  const [r1, r2] = t.runs!
+  // a try with no agents: a worker entry with tokens - checker_tokens and the cost, a checker entry with checker_tokens
+  expect(r1!.agents!.filter(a => a.kind === 'worker').map(a => [a.id, a.tokens, a.cost])).toEqual([['ag4', { input: 700, output: 50 }, 0.5]])
+  expect(r1!.agents!.filter(a => a.kind === 'checker').map(a => [a.id, a.tokens])).toEqual([['chk4', { input: 300 }]])
+  expect([tryTokens(r1), checkerTokensOf(r1), tryCost(r1)]).toEqual([{ input: 1000, output: 50 }, { input: 300 }, 0.5])
+  // a try that had agents keeps them, and what its sum held beyond them goes on its last worker
+  expect(tryTokens(r2)).toEqual({ input: 70 })
+  expect(r2!.agents!.find(a => a.id === 'ag5')!.tokens).toEqual({ input: 70 })
+  expect(r2!.agents!.find(a => a.id === 'ag3')).toMatchObject({ kind: 'worker', ended_by: 'dropped' })
+  expect(r2!.restarts).toEqual([{ at: E, why: 'after a reopen', started: E }])
+  // the current worker and checker are the last open entries; no old field is left
+  expect(workerIdOf(t)).toBe('ag5')
+  expect(checkerIdOf(t)).toBe('chk5')
+  const saved = JSON.parse(w.files.get(`${D}/board.json`)!).tasks.find((x: { id: string }) => x.id === 'T-5')
+  expect('agent' in saved || 'checker' in saved).toBe(false)
+  for (const r of saved.runs) expect(['tokens', 'checker_tokens', 'cost', 'agent', 'checkers'].filter(k => k in r)).toEqual([])
+  // once migrated, nothing is old any more
+  expect(await doctor(w.host, '')).not.toContain('keep tokens, cost or agent ids')
+})
+
+test('T-805: migrating an old try keeps a cost of 0', () => {
+  const m = migrateRunAgents({ id: 'T-2', status: 'done', runs: [{ started: T, ended: E, tokens: { input: 100 }, cost: 0 }] })!
+  const r = (m.runs as SymccRun[])[0]!
+  expect(tryCost(r)).toBe(0)
+  expect(tryTokens(r)).toEqual({ input: 100 })
+})
+
+test('T-805: a doing task keeps its current worker and checker open', () => {
+  const m = migrateRunAgents({ id: 'T-2', status: 'doing', agent: 'www', checker: 'kkk', runs: [{ started: T, agent: 'www' }] })!
+  const t = m as unknown as Parameters<typeof workerIdOf>[0]
+  expect(workerIdOf(t)).toBe('www')
+  expect(checkerIdOf(t)).toBe('kkk')
+})
+
+test('T-805: ids kept alone on an old try show no made-up agent lines, and the tokens still count', () => {
+  const m = migrateRunAgents({ id: 'T-1', status: 'done', runs: [{ started: T, ended: E, tokens: { input: 150 }, checker_tokens: { input: 40 }, agent: 'w1', checkers: ['c1', 'c2'] }] })!
+  const r = (m.runs as SymccRun[])[0]!
+  expect(agentLines(r)).toEqual([])
+  expect(tryTokens(r)).toEqual({ input: 150 })
+  expect(checkerTokensOf(r)).toEqual({ input: 40 })
 })

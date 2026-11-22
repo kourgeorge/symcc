@@ -26,8 +26,8 @@ const HISTORY = [
   'try 2: fixed the headings and wrapped every line to the panel width → merged into main',
 ]
 const RUNS = [
-  { started: iso(T0 - 7_200_000), ended: iso(T0 - 6_000_000), report: '.symcc/reports/T-501-try-1.md', cost: 0.42, tokens: { input: 1200, output: 3400 } },
-  { started: iso(T0 - 3_000_000), ended: iso(T0 - 1_800_000), report: '.symcc/reports/T-501-try-2.md', cost: 0.8, tokens: { input: 2000, output: 5000 } },
+  { started: iso(T0 - 7_200_000), ended: iso(T0 - 6_000_000), report: '.symcc/reports/T-501-try-1.md', agents: [{ kind: 'worker' as const, started: iso(T0 - 7_200_000), ended: iso(T0 - 6_000_000), tokens: { input: 1200, output: 3400 }, cost: 0.42 }] },
+  { started: iso(T0 - 3_000_000), ended: iso(T0 - 1_800_000), report: '.symcc/reports/T-501-try-2.md', agents: [{ kind: 'worker' as const, started: iso(T0 - 3_000_000), ended: iso(T0 - 1_800_000), tokens: { input: 2000, output: 5000 }, cost: 0.8 }] },
 ]
 const ORIGIN = { by: 'owner', request: 'also the task details looks to narrow and cut. need an entire work on that', why: 'the owner finds the task page in the editor side panel too narrow, and its lines are cut at the edge' }
 

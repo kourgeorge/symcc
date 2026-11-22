@@ -1,6 +1,8 @@
 import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 import { readOld, stillOld } from './old-data-fixture'
+import { usedRun } from './agent-fixture'
+import { tryTokens } from '../hooks/board'
 import { upgradeArchiveTask, upgradeScoutUsage } from '../hooks/core/old-data'
 import { addScoutRun, bar, cutTitle, textWidth, parseStatsArgs, wrapLine, billedTokens, billedText, failReason, readArchive, archiveText, tokenCount, fmtTokenKinds, inRange, keepScoutUsage, leadTotals, mean, median, mergedHow, originKey, parseScoutMemory, parseScoutUsage, parseStatsRange, rangeSpan, scoutMemoryText, scoutTotals, statsReport, statsData, scoutResultsLine, taskFigures, readBoard, boardTotal } from '../hooks/board'
 import { statsHtml } from '../hooks/core/stats-html'
@@ -15,7 +17,7 @@ const iso = (minAgo: number) => new Date(NOW - minAgo * 60_000).toISOString()
 
 /** A task made `ageMin` minutes ago; `tries` are [minutes, tokens] per try (the tokens as plain input), each starting at the task's creation. */
 function task(id: string, over: Partial<SymccTask> = {}, tries: [number, number?][] = [], ageMin = 60): SymccTask {
-  const runs = tries.map(([min, tokens]) => ({ started: iso(ageMin), ended: iso(ageMin - min), ...(tokens !== undefined ? { tokens: { input: tokens } } : {}) }))
+  const runs = tries.map(([min, tokens]) => ({ started: iso(ageMin), ended: iso(ageMin - min), ...(tokens !== undefined ? { agents: [{ kind: 'worker' as const, started: iso(ageMin), ended: iso(ageMin - min), tokens: { input: tokens } }] } : {}) }))
   return { id, title: `task ${id}`, details: '', files: [], status: 'done', note: '', question: null, order: 0, after: [], attempts: tries.length, history: [], branch: null, created_at: iso(ageMin), updated_at: iso(0), ...(runs.length ? { runs } : {}), ...over }
 }
 
@@ -119,7 +121,7 @@ test('stats: outcomes, origins and days are read from what the board keeps', () 
 })
 
 test('stats: a try left with no end time by an older board is closed once when the board is read, so the board total and stats agree', () => {
-  const t = task('T-1', { updated_at: iso(50), runs: [{ started: iso(60) }, { started: iso(58), ended: iso(55), tokens: { unsplit: 10 } }, { started: iso(54) }] })
+  const t = task('T-1', { updated_at: iso(50), runs: [{ started: iso(60) }, { started: iso(58), ended: iso(55), agents: [{ kind: 'worker' as const, started: iso(58), ended: iso(55), tokens: { unsplit: 10 } }] }, { started: iso(54) }] })
   const read = (x: typeof t) => readOld(JSON.stringify({ version: 1, tasks: [x] }))
   const r = read(t)
   // 2m (to the next try) + 3m + 4m (to the last change), not 54 minutes up to now
@@ -302,7 +304,7 @@ test('stats: an id range counts the lead and scouts over the time its tasks span
 })
 
 test('stats: a worker try keeps its kinds apart, and the report shows them with a billed-equivalent estimate', () => {
-  const t = task('T-1', { runs: [{ started: iso(60), ended: iso(50), tokens: { input: 1000, output: 2000, cache_write: 4000, cache_read: 100_000 } }] })
+  const t = task('T-1', { runs: [usedRun({ started: iso(60), ended: iso(50) }, { input: 1000, output: 2000, cache_write: 4000, cache_read: 100_000 })] })
   const team = { lead: leadCalls(logLine('a', 10, { i: 10, o: 20, cr: 1000, cc: 40 })) }
   const text = statsReport({ tasks: [t], nowMs: NOW, team })
   // the summary: tokens in plain words, the kinds on one line under, and a short footnote for billed
@@ -332,7 +334,7 @@ test('stats: old saved runs with one number are migrated once, kept as-is and sh
   // board.json: a try's tokens and the archived totals
   const old = { ...task('T-1', { runs: [] }), runs: [{ started: iso(60), ended: iso(50), tokens: 5000 }, { started: iso(40), ended: iso(30), tokens: { input: 10 } }] }
   const r = readOld(JSON.stringify({ version: 1, tasks: [old], archived: { done: 1, dropped: 0, tries: 1, ms: 60_000, tokens: 300 } }))
-  expect(r.board.tasks[0]!.runs!.map(x => x.tokens)).toEqual([{ unsplit: 5000 }, { input: 10 }])
+  expect(r.board.tasks[0]!.runs!.map(x => tryTokens(x))).toEqual([{ unsplit: 5000 }, { input: 10 }])
   expect(r.board.archived!.tokens).toEqual({ unsplit: 300 })
   expect(stillOld(r.board)).toBe(false)
   const text = statsReport({ tasks: r.board.tasks, nowMs: NOW })
@@ -340,7 +342,7 @@ test('stats: old saved runs with one number are migrated once, kept as-is and sh
   expect(statsReport({ tasks: r.board.tasks, nowMs: NOW, full: true })).toMatch(/billed-eq\.\s+10 \([^]*leaves out 5k unsplit tokens/)
   // archive.json: its tasks' tries too
   const a = readArchive(JSON.stringify({ version: 1, tasks: [upgradeArchiveTask({ ...old, status: 'done' })] }))
-  expect(a.archive.tasks[0]!.runs![0]!.tokens).toEqual({ unsplit: 5000 })
+  expect(tryTokens(a.archive.tasks[0]!.runs![0]!)).toEqual({ unsplit: 5000 })
   expect(upgradeArchiveTask(a.archive.tasks[0]! as never)).toBe(null)
   // scouts.json: the usage totals, all and per day
   const scouts = JSON.stringify({ scouts: {}, usage: { bugs: { runs: 2, tokens: 900, ms: 10, days: { '2026-11-13': { runs: 1, tokens: 400, ms: 5 } } } } })

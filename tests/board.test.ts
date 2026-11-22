@@ -1,6 +1,6 @@
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import type { SymccMode, SymccScout, SymccStatus, SymccTask } from '../types'
+import type { SymccMode, SymccRun, SymccScout, SymccStatus, SymccTask } from '../types'
 import { pause, commandsOf, entry } from './fakes'
 import { turnNow, withStarts } from './starts'
 import { SPEED_CAP_MS, bestMsOf, bestPairMsOf, growsSlowly } from './timing'
@@ -13,6 +13,8 @@ import { testsShort, testName, nextScoutPart, PLAN_NOTE } from '../hooks/board'
 import { cleanFiles, taskCopyText, copyToast, realPathOf, brokenLinkText } from '../hooks/board'
 import { sizeWarnText, tooBigText } from '../hooks/core/board-parts'
 import { fakeDisk } from './fake-disk'
+import { runBy, usedRun } from './agent-fixture'
+import { tryCost } from '../hooks/board'
 import { readOld, stillOld } from './old-data-fixture'
 import { upgradeArchiveTask } from '../hooks/core/old-data'
 import { rowEndBoard, ROW_END, LEAD_BEFORE, ROW_END_NOW } from './row-end-cases'
@@ -39,7 +41,7 @@ const { parseRole, roleSkipReason } = core
 const roleSection = (r: core.RoleDef | undefined, values: Record<string, string> = {}) => core.roleSection(r, values)
 const asCore = (a: AgentInfo, name?: string) => agentState(hostAgent(a, name))
 const mayStart = (t: core.BoardTask | undefined, agents: AgentInfo[], name?: string) => core.mayStart(t, agents.map(a => asCore(a, name)), name)
-const liveWorkersFor = (t: Pick<core.BoardTask, 'id' | 'agent'>, agents: AgentInfo[], name?: string) => core.liveWorkersFor(t, agents.map(a => asCore(a, name)), name)
+const liveWorkersFor = (t: Pick<core.BoardTask, 'id' | 'runs'>, agents: AgentInfo[], name?: string) => core.liveWorkersFor(t, agents.map(a => asCore(a, name)), name)
 const orphanMove = (a: AgentInfo, b: core.Board, me: string, live: string | null, taken: string[] = [], name?: string) => core.orphanMove(asCore(a, name), b, me, live, taken, name)
 
 const T = '2026-11-09T00:00:00.000Z'
@@ -280,8 +282,8 @@ test('a worker starts on a task only if it is "todo" and no live worker is on it
     expect(mayStart(t(), [{ id: 'w', type: 'symcc:worker', status, description: 'T-1 A' }])).toBe(false)
   expect(mayStart(t(), [{ id: 'w', type: 'symcc:worker', status: 'running', description: 'T-10 other' }])).toBe(true)
   // a live agent recorded on the task: no start, whatever its description says
-  b = patchTask(b, 'T-1', { agent: 'w1' }, T)
-  expect(parseBoard(JSON.stringify(b)).tasks[0]!.agent).toBe('w1')
+  b = patchTask(b, 'T-1', { runs: [runBy('w1', T)] }, T)
+  expect(core.workerIdOf(parseBoard(JSON.stringify(b)).tasks[0]!)).toBe('w1')
   expect(mayStart(t(), [{ id: 'w1', status: 'running', description: 'something' }])).toBe(false)
   expect(mayStart(t(), [{ id: 'w1', status: 'completed', description: 'something' }])).toBe(true)
   expect(liveWorkersFor(t(), [{ id: 'w1', status: 'running' }]).map(a => a.id)).toEqual(['w1'])
@@ -314,9 +316,10 @@ test('time and cost: a try records its start and end, and leaving "doing" ends i
   b = patchTask(b, t.id, { status: 'doing', runs: startRun(undefined, '2026-11-09T10:00:00.000Z') }, T)
   expect(b.tasks[0]!.runs).toEqual([{ started: '2026-11-09T10:00:00.000Z' }])
   const ended = endRun(b.tasks[0]!.runs, '2026-11-09T10:12:00.000Z', { tokens: { input: 1000, output: 500 } })
-  expect(ended).toEqual([{ started: '2026-11-09T10:00:00.000Z', ended: '2026-11-09T10:12:00.000Z', tokens: { input: 1000, output: 500 } }])
+  expect(ended).toEqual([{ started: '2026-11-09T10:00:00.000Z', ended: '2026-11-09T10:12:00.000Z', agents: [{ kind: 'worker' as const, started: '2026-11-09T10:00:00.000Z', ended: '2026-11-09T10:12:00.000Z', tokens: { input: 1000, output: 500 } }] }])
   // A second end keeps the first end time.
-  expect(endRun(ended, '2026-11-09T11:00:00.000Z', { cost: 0.5 })[0]).toEqual({ ...ended[0], cost: 0.5 })
+  expect(tryCost(endRun(ended, '2026-11-09T11:00:00.000Z', { cost: 0.5 })[0])).toBe(0.5)
+  expect(endRun(ended, '2026-11-09T11:00:00.000Z', { cost: 0.5 })[0]!.ended).toBe('2026-11-09T10:12:00.000Z')
   // A task that leaves "doing" with an open try gets it ended.
   b = patchTask(b, t.id, { status: 'failed' }, '2026-11-09T10:05:00.000Z')
   expect(b.tasks[0]!.runs![0]!.ended).toBe('2026-11-09T10:05:00.000Z')
@@ -327,8 +330,8 @@ test('time and cost: a try records its start and end, and leaving "doing" ends i
 
 test('time and cost: tries add up, and a running try counts up to now', async () => {
   const runs = [
-    { started: '2026-11-09T10:00:00.000Z', ended: '2026-11-09T10:12:00.000Z', tokens: { input: 1000 }, cost: 0.4 },
-    { started: '2026-11-09T11:00:00.000Z', ended: '2026-11-09T12:00:00.000Z', cost: 3 },
+    { started: '2026-11-09T10:00:00.000Z', ended: '2026-11-09T10:12:00.000Z', agents: [{ kind: 'worker' as const, started: '2026-11-09T10:00:00.000Z', ended: '2026-11-09T10:12:00.000Z', tokens: { input: 1000 }, cost: 0.4 }] },
+    { started: '2026-11-09T11:00:00.000Z', ended: '2026-11-09T12:00:00.000Z', agents: [{ kind: 'worker' as const, started: '2026-11-09T11:00:00.000Z', ended: '2026-11-09T12:00:00.000Z', cost: 3 }] },
     { started: '2026-11-09T13:00:00.000Z' },
   ]
   expect(sumRuns(runs, Date.parse('2026-11-09T13:05:00.000Z'))).toEqual({ ms: 77 * 60_000, tries: 3, tokens: { input: 1000 }, cost: 3.4 })
@@ -469,7 +472,7 @@ test('the banner: the clef drawing beside the name, where, who drives and the se
   expect(bannerRule(12)).toBe('━'.repeat(12))
   expect(listRule(12)).toBe('┄'.repeat(12))
   // driven elsewhere, no test command, and a counts line under the drawing, at full width
-  const run = { started: '2026-01-01T00:00:00.000Z', ended: '2026-01-01T00:08:00.000Z', tokens: { cache_read: 600_000, input: 43_700 } }
+  const run = { started: '2026-01-01T00:00:00.000Z', ended: '2026-01-01T00:08:00.000Z', agents: [{ kind: 'worker' as const, started: '2026-01-01T00:00:00.000Z', ended: '2026-01-01T00:08:00.000Z', tokens: { cache_read: 600_000, input: 43_700 } }] }
   const tasks = [{ status: 'doing', runs: [run] }, { status: 'doing' }, { status: 'todo' }, { status: 'done' }] as never[]
   const more = bannerLines({ ...emptyBoard(), branch: 'main', mode: 'paused', auto_retries: 1, tasks }, '/Users/me/repositories/symcc', '/Users/me', false, 80)
   // mode paused: a warning on the first line, as nothing starts (the workers/scouts strip is gone from the banner)
@@ -907,8 +910,8 @@ test('T-748: the status line says the mode, who drives, the branch, the next sco
   // T-792: today's noon, so the runs 30 minutes back stay inside today whatever the real time
   const now = todayAt(12)
   const ago = (min: number) => new Date(now - min * 60_000).toISOString()
-  const merged = (id: string) => ({ id, status: 'done' as const, history: [{ kind: 'merged', at: ago(1), text: 'merged' }], runs: [{ started: ago(30), ended: ago(5), cost: 150.4 }] })
-  const tasks = [merged('T-1'), merged('T-2'), { id: 'T-740', status: 'doing' as const, attempts: 3, runs: [{ started: ago(4), cost: 11.2 }] }, { id: 'T-743', status: 'todo' as const }]
+  const merged = (id: string) => ({ id, status: 'done' as const, history: [{ kind: 'merged', at: ago(1), text: 'merged' }], runs: [{ started: ago(30), ended: ago(5), agents: [{ kind: 'worker' as const, started: ago(30), ended: ago(5), cost: 150.4 }] }] })
+  const tasks = [merged('T-1'), merged('T-2'), { id: 'T-740', status: 'doing' as const, attempts: 3, runs: [{ started: ago(4), agents: [{ kind: 'worker' as const, started: ago(4), cost: 11.2 }] }] }, { id: 'T-743', status: 'todo' as const }]
   const scouts = [{ name: 'bugs', running: false, next_run: new Date(now + 38.2 * 60_000).toISOString() }, { name: 'docs', running: false, next_run: new Date(now + 90 * 60_000).toISOString() }]
   const b = { tasks, scouts, branch: 'main', mode: 'auto' as const }
   expect(statusLine(b, true, { nowMs: now })).toBe('⏵ auto merge · drives here · main · next scout bugs in 38m · today ✓ 2 · $312')
@@ -916,7 +919,7 @@ test('T-748: the status line says the mode, who drives, the branch, the next sco
   const line = statusLine(b, true, { nowMs: now })!
   for (const gone of [/T-\d/, /doing/, /to do/, /\d+ done/, /scouts/, /workers/, /try/]) expect(line).not.toMatch(gone)
   // another session drives; a scout running now; a small cost to the cent
-  expect(statusLine({ ...b, scouts: [{ ...scouts[0]!, running: true }], tasks: [merged('T-1')].map(t => ({ ...t, runs: [{ ...t.runs[0]!, cost: 4.2 }] })) }, false, { nowMs: now })).toBe('⏵ auto merge · driven by another session · main · scout bugs running · today ✓ 1 · $4.20')
+  expect(statusLine({ ...b, scouts: [{ ...scouts[0]!, running: true }], tasks: [merged('T-1')].map(t => ({ ...t, runs: [usedRun({ started: t.runs[0]!.started, ended: t.runs[0]!.ended }, undefined, 4.2)] })) }, false, { nowMs: now })).toBe('⏵ auto merge · driven by another session · main · scout bugs running · today ✓ 1 · $4.20')
   // a branch warning goes where the branch is
   expect(statusLine({ ...b, branch_note: 'on dev, not main' }, true, { nowMs: now })).toBe('⏵ auto merge · on dev, not main · drives here · main · next scout bugs in 38m · today ✓ 2 · $312')
   // paused and plan mode: no next scout (none starts)
@@ -946,7 +949,7 @@ test('T-748: on a narrow line the status line drops parts from the end, cleanly;
   // T-792: today's noon, so the merge and the run (30 minutes back) stay inside today whatever the real time
   const now = todayAt(12)
   const ago = (min: number) => new Date(now - min * 60_000).toISOString()
-  const tasks = [{ id: 'T-1', status: 'done' as const, history: [{ kind: 'merged', at: ago(1), text: 'merged' }], runs: [{ started: ago(30), ended: ago(5), cost: 312 }] }]
+  const tasks = [{ id: 'T-1', status: 'done' as const, history: [{ kind: 'merged', at: ago(1), text: 'merged' }], runs: [{ started: ago(30), ended: ago(5), agents: [{ kind: 'worker' as const, started: ago(30), ended: ago(5), cost: 312 }] }] }]
   const b = { tasks, scouts: [{ name: 'bugs', running: false, next_run: new Date(now + 38.2 * 60_000).toISOString() }], branch: 'main' }
   const full = '⏵ auto merge · drives here · main · next scout bugs in 38m · today ✓ 1 · $312'
   expect(statusLine(b, true, { nowMs: now })).toBe(full)
@@ -965,7 +968,7 @@ test('T-792: the status line counts today\'s merge and cost just after midnight 
     const now = todayAt(h, m)
     // the run and the merge between local midnight and now: always today
     const at = (share: number) => new Date(inToday(now, share)).toISOString()
-    const tasks = [{ id: 'T-1', status: 'done' as const, history: [{ kind: 'merged', at: at(0.9), text: 'merged' }], runs: [{ started: at(0.1), ended: at(0.5), cost: 312 }] }]
+    const tasks = [{ id: 'T-1', status: 'done' as const, history: [{ kind: 'merged', at: at(0.9), text: 'merged' }], runs: [{ started: at(0.1), ended: at(0.5), agents: [{ kind: 'worker' as const, started: at(0.1), ended: at(0.5), cost: 312 }] }] }]
     expect([`${h}:${m}`, statusLine({ tasks, branch: 'main' }, true, { nowMs: now })]).toEqual([`${h}:${m}`, '⏵ auto merge · drives here · main · today ✓ 1 · $312'])
   }
 })
@@ -2719,15 +2722,15 @@ test('T-631: the Tries row shows the last try and the sum of all on one line', (
   const [, base] = addTask(emptyBoard(), { origin: W, title: 'x' }, T)
   const at = (m: number) => new Date(Date.parse('2026-11-20T10:00:00.000Z') + m * 60_000).toISOString()
   const NOW = Date.parse(at(40))
-  const tries = (attempts: number, runs: { started: string; ended?: string; tokens?: { input: number } }[]) =>
+  const tries = (attempts: number, runs: SymccRun[]) =>
     detailRows({ ...base, attempts, runs }, { roles: [], all: [], when: s => s, nowMs: NOW }).find(r => r.label === 'Tries')!.segs.map(s => s.text).join('')
-  const done = (from: number, mins: number, input?: number) => ({ started: at(from), ended: at(from + mins), ...(input !== undefined && { tokens: { input } }) })
+  const done = (from: number, mins: number, input?: number) => ({ started: at(from), ended: at(from + mins), ...(input !== undefined && { agents: [{ kind: 'worker' as const, started: at(from), ended: at(from + mins), tokens: { input } }] }) })
   // one try: no "last" / "all" split
   expect(tries(1, [done(0, 6, 1_200_000)])).toBe('1 · 6m · 1.2M tokens')
   // three tries: the last one and the sum
   expect(tries(3, [done(0, 5, 1_200_000), done(10, 6, 1_200_000), done(20, 6, 1_200_000)])).toBe('3 · last: 6m · 1.2M tokens · all: 17m · 3.6M tokens')
   // the last try still running counts up to now and says so
-  expect(tries(2, [done(0, 6, 1_200_000), { started: at(36), tokens: { input: 300_000 } }])).toBe('2 · last: 4m (running) · 300k tokens · all: 10m · 1.5M tokens')
+  expect(tries(2, [done(0, 6, 1_200_000), { started: at(36), agents: [{ kind: 'worker' as const, started: at(36), tokens: { input: 300_000 } }] }])).toBe('2 · last: 4m (running) · 300k tokens · all: 10m · 1.5M tokens')
   // no tokens known: the token parts are left out
   expect(tries(3, [done(0, 5), done(10, 6), done(20, 6)])).toBe('3 · last: 6m · all: 17m')
   expect(tries(0, [])).toBe('0')
@@ -2784,13 +2787,13 @@ test('/symcc-settings enabled off reads as the on/off switch', () => {
 
 test('after a plugin reload, a worker of this session is adopted, not stopped (T-87)', () => {
   const [b0] = addTask(emptyBoard(), { origin: W, title: 'A' }, T)
-  const b = patchTask(b0, 'T-1', { status: 'doing', session: 'me', agent: 'w1' }, T)
+  const b = patchTask(b0, 'T-1', { status: 'doing', session: 'me', runs: [runBy('w1', T)] }, T)
   const w = (id: string, name = 'symcc-T-1', status = 'running') => ({ id, name, type: 'symcc:worker', status, description: 'A' })
   // the reloaded copy knows no workers: the running one of its own task is kept
   expect(orphanMove(w('w1'), b, 'me', 'me')).toEqual({ move: 'adopt', task: 'T-1' })
   expect(orphanMove(w('w1'), b, 'me', null)).toEqual({ move: 'adopt', task: 'T-1' })
   // found by its name when no agent was recorded yet (reload right after the spawn)
-  const noAgent = patchTask(b, 'T-1', { agent: undefined }, T)
+  const noAgent = patchTask(b, 'T-1', { runs: [{ started: T }] }, T)
   expect(orphanMove(w('w9'), noAgent, 'me', 'me')).toEqual({ move: 'adopt', task: 'T-1' })
   // but only one worker per task: a second one is stopped
   expect(orphanMove(w('w9'), noAgent, 'me', 'me', ['T-1'])).toEqual({ move: 'stop' })
@@ -2808,7 +2811,7 @@ test('after a plugin reload, a worker of this session is adopted, not stopped (T
   expect(orphanMove(w('w1'), theirs, 'me', 'me')).toEqual({ move: 'adopt', task: 'T-1' })
   expect(orphanMove(w('w1'), theirs, 'me', null)).toEqual({ move: 'adopt', task: 'T-1' })
   // a dead session's task found only by the worker's name: not ours to keep, stop
-  expect(orphanMove(w('w9'), patchTask(theirs, 'T-1', { agent: undefined }, T), 'me', 'me')).toEqual({ move: 'stop' })
+  expect(orphanMove(w('w9'), patchTask(theirs, 'T-1', { runs: [{ started: T }] }, T), 'me', 'me')).toEqual({ move: 'stop' })
   // ended agents are never touched; bad input is left alone
   expect(orphanMove(w('w1', 'symcc-T-1', 'completed'), b, 'me', 'me')).toEqual({ move: 'leave' })
   expect(orphanMove({ id: '', status: 'running' }, b, 'me', 'me')).toEqual({ move: 'leave' })
@@ -3560,7 +3563,7 @@ const daysAgo = (n: number) => new Date(A_NOW - n * A_DAY).toISOString()
 function oldBoard(): Board {
   let b = emptyBoard()
   for (const title of ['old done', 'old dropped', 'new done', 'still to do']) b = addTask(b, { origin: W, title }, T)[0]
-  b = patchTask(b, 'T-1', { status: 'done', runs: [{ started: daysAgo(21), ended: new Date(Date.parse(daysAgo(21)) + 60_000).toISOString(), tokens: { input: 1000 } }] }, daysAgo(20))
+  b = patchTask(b, 'T-1', { status: 'done', runs: [{ started: daysAgo(21), ended: new Date(Date.parse(daysAgo(21)) + 60_000).toISOString(), agents: [{ kind: 'worker' as const, started: daysAgo(21), tokens: { input: 1000 } }] }] }, daysAgo(20))
   b = patchTask(b, 'T-2', { status: 'dropped' }, daysAgo(20))
   b = patchTask(b, 'T-3', { status: 'done' }, daysAgo(2))
   return b
@@ -3999,7 +4002,7 @@ test('T-587: the task page badge and Status row name the step a task is in; the 
   expect(core.stageText(core.taskStage(inStep('testing'), now, auto)!)).toBe('worker ✓ → prep ✓ → queue ✓ → ● test → merge')
   expect(core.stageText(core.taskStage(inStep('merging'), now, auto)!)).toBe('worker ✓ → prep ✓ → queue ✓ → test ✓ → ● merge')
   // checker off, but this try had a checker: shown
-  const checked = { ...inLine, runs: [{ ...ran![0]!, checkers: ['a1234567890abcdef'] }] as SymccTask['runs'] }
+  const checked = { ...inLine, runs: [{ ...ran![0]!, agents: [{ id: 'a1234567890abcdef', kind: 'checker', started: ran![0]!.started }] }] as SymccTask['runs'] }
   expect(core.stageText(core.taskStage(checked, now, auto)!)).toContain('checker ✓')
   // review mode: review after test
   expect(core.stageText(core.taskStage(inStep('testing'), now, { mode: 'review' })!)).toBe('worker ✓ → prep ✓ → queue ✓ → ● test → review → merge')

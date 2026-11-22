@@ -8,7 +8,7 @@ import { isInvestigation, STATUS_WORD } from './board-file'
 import { dayLabel, dayOf } from './days'
 import { ORIGIN_MARK } from './origin'
 import { jsonObj } from './text'
-import { addTokens, billedTokens, cleanTokens, fmtCost, fmtDuration, fmtTokenKinds, fmtTokens, isAnsweredRun, PRICE_WEIGHT, runMs, sumTokens, tokenCount } from './runs'
+import { addTokens, billedTokens, cleanTokens, fmtCost, fmtDuration, fmtTokenKinds, fmtTokens, isAnsweredRun, PRICE_WEIGHT, runMs, sumTokens, tokenCount, tryTokens } from './runs'
 
 // ---------------- the range ----------------
 
@@ -78,8 +78,8 @@ export type TaskFigures = { ms: number; tokens?: SymccTokens; tok?: number; trie
 
 export function taskFigures(t: Pick<SymccTask, 'runs'>, nowMs?: number): TaskFigures {
   const runs = t.runs ?? []
-  const tok = runs.filter(r => r.tokens !== undefined)
-  const tokens = tok.length ? sumTokens(tok.map(r => r.tokens)) : undefined
+  const tok = runs.map(tryTokens).filter((x): x is SymccTokens => x !== undefined)
+  const tokens = tok.length ? sumTokens(tok) : undefined
   return { ms: runs.reduce((s, r) => s + runMs(r, nowMs), 0), tries: runs.length, hasData: runs.length > 0, ...(tokens ? { tokens, tok: tokenCount(tokens) } : {}) }
 }
 
@@ -690,13 +690,13 @@ export function statsData(input: StatsInput & { full?: boolean }): StatsData {
     const d = dayOf(Date.parse(r.started), off)
     if (!d) continue
     at(d).ms += runMs(r, nowMs)
-    at(d).tokens += tokenCount(r.tokens)
+    at(d).tokens += tokenCount(tryTokens(r))
   }
   const failing = failedTryFigures(whole, counting === 'inside' ? winFrom : -Infinity)
   const doneAt = new Map(everyTask.map(t => [t.id, doneAtMs(t)]))
   const stages = stageFigures(whole.filter(t => t.status === 'done' && !isInv(t)), id => doneAt.get(id), counting === 'inside' ? { from: winFrom, to: nowMs } : undefined)
   const sumOf = (xs: number[]) => (xs.length ? xs.reduce((s, x) => s + x, 0) : undefined)
-  const tryTok = runs.filter(r => r.tokens !== undefined).map(r => tokenCount(r.tokens))
+  const tryTok = runs.filter(r => tryTokens(r) !== undefined).map(r => tokenCount(tryTokens(r)))
   const today = dayOf(nowMs, off)
   const last = [...days.entries()].sort(([a], [b]) => b.localeCompare(a)).slice(0, 7).reverse()
 

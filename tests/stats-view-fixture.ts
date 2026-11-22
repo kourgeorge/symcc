@@ -9,7 +9,7 @@ export const VIEW_NOW = Date.now()
 const iso = (minAgo: number) => new Date(VIEW_NOW - minAgo * 60_000).toISOString()
 
 /** A try from `from` to `to` minutes ago, with `tok` input tokens (and a tenth of them output). */
-const run = (from: number, to: number, tok: number, over: Partial<SymccRun> = {}): SymccRun => ({ started: iso(from), ended: iso(to), tokens: { input: tok, output: tok / 10, cache_read: tok * 2 }, ...over })
+const run = (from: number, to: number, tok: number, over: Partial<SymccRun> = {}): SymccRun => ({ started: iso(from), ended: iso(to), ...over, agents: [{ kind: 'worker' as const, started: iso(from), ended: iso(to), tokens: { input: tok, output: tok / 10, cache_read: tok * 2 } }] })
 /** A done change task made `made` minutes ago: one try of work, then prep, check, the queue, tests and the merge, each timed. */
 function done(id: string, title: string, made: number, tries: SymccRun[], over: Partial<SymccTask> = {}): SymccTask {
   const end = tries[tries.length - 1]!
@@ -47,7 +47,7 @@ export function viewInput(over: Partial<StatsInput> = {}): StatsInput {
       history: [{ at: iso(210), kind: 'added', text: 'added' }, { at: iso(190), kind: 'checker-problems', text: 'try 1: done → the checker found problems: a bar is too wide' }, { at: iso(165), kind: 'stage', text: 'try 2: tests started' }, { at: iso(160), kind: 'merged', text: 'try 2: done → merged into main (abc1234)' }],
     }),
     done('T-4', 'Footer hints', 120, [run(110, 100, 1500)], { origin: { by: 'scout', scout: 'bugs' } as SymccTask['origin'] }),
-    { id: 'T-5', title: 'Still going', details: '', files: [], status: 'doing', note: '', question: null, order: 0, after: [], attempts: 1, history: [], branch: null, created_at: iso(60), updated_at: iso(5), runs: [{ started: iso(50), tokens: { input: 800 } }], origin: { by: 'worker', task: 'T-1' } as SymccTask['origin'] },
+    { id: 'T-5', title: 'Still going', details: '', files: [], status: 'doing', note: '', question: null, order: 0, after: [], attempts: 1, history: [], branch: null, created_at: iso(60), updated_at: iso(5), runs: [{ started: iso(50), agents: [{ kind: 'worker' as const, started: iso(50), tokens: { input: 800 } }] }], origin: { by: 'worker', task: 'T-1' } as SymccTask['origin'] },
     { id: 'T-6', title: 'Dropped idea', details: '', files: [], status: 'dropped', note: '', question: null, order: 0, after: [], attempts: 0, history: [], branch: null, created_at: iso(90), updated_at: iso(80), origin: { by: 'scout', scout: 'ideas' } as SymccTask['origin'] },
     { id: 'T-7', title: 'Why is the lead slow?', details: '', files: [], status: 'done', kind: 'investigation', note: '', question: null, order: 0, after: [], attempts: 1, history: [], branch: null, created_at: iso(150), updated_at: iso(100), runs: [run(140, 130, 700, { ended_by: 'finished', ended_note: 'answered' })], origin: { by: 'owner' } as SymccTask['origin'] },
   ]

@@ -5,6 +5,7 @@
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { addTask, emptyBoard, patchTask, find, blockedEditText } from '../hooks/board'
+import { runBy } from './agent-fixture'
 import { S, scratchUse } from '../hooks/app/state'
 import { checkEdit } from '../hooks/app/ask'
 import { load } from '../hooks/app/store'
@@ -70,7 +71,7 @@ async function world(root: string, lsFiles: { exitCode?: number; stdout?: string
   S.root = root
   S.me = 'me'
   const [b0, t] = addTask(emptyBoard(), { origin: { why: 'a test' }, title: 'Do it', details: 'Do it.\nDone when: done.', files: ['src/'] }, ISO)
-  const b = patchTask(b0, t.id, { status: 'doing', attempts: 1, session: 'me', agent: 'w9', branch: 'symcc/T-1', runs: [{ started: ISO }] }, ISO)
+  const b = patchTask(b0, t.id, { status: 'doing', attempts: 1, session: 'me', branch: 'symcc/T-1', runs: [runBy('w9', ISO)] }, ISO)
   files.set(`${root}/${S.N.boardFile}`, JSON.stringify(b))
   return { host, gitCalls }
 }

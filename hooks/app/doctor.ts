@@ -40,7 +40,7 @@ const agentsNow = (host: Host) => host.agents.list().then(a => a.map(agentState)
 function inUse(id: string, t: BoardTask | undefined, agents: ReturnType<typeof agentState>[] | null): boolean {
   if ([...workers.values()].some(w => w.task === id) || starting.has(id) || finishing.has(id) || approving.has(id)) return true
   if (!agents) return true
-  return liveWorkersFor({ id, agent: t?.agent }, agents, S.N.name).length > 0
+  return liveWorkersFor({ id, runs: t?.runs }, agents, S.N.name).length > 0
 }
 
 /** Whether folder `dir` (a git worktree) has uncommitted changes; true also when git can't tell. */
