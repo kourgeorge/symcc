@@ -607,9 +607,9 @@ export function laneLines(lane: LiveLane, l: LiveLayout, o: { nowMs: number; fra
     // T-771: a finished lane has ✓ (done color) at its last station instead of the blinking mark
     else track.push(k < lane.at ? { text: '●', tone: 'passed' } : k === lane.at ? (done ? { text: LIVE_DONE_MARK, tone: 'passed' } : { text: liveBlink(o.frame, o.steady), tone: 'current' }) : { text: '○', tone: 'future' })
   })
-  // T-767: "▶ " before the id; the mark and id bold in the accent color ('run'), the title normal text; T-771: a finished lane's dim, no mark
-  const nameTone: LiveTone = done ? 'dim' : 'run'
-  const name = segs({ text: done ? ' '.repeat(LIVE_RUN_MARK.length) : LIVE_RUN_MARK, tone: done ? 'text' : 'run' }, { text: padWidth(lane.id, l.idW), tone: nameTone }, l.titleW > 0 && { text: ` ${padWidth(cutTitle(lane.title, l.titleW), l.titleW)}`, tone: done ? 'dim' : 'text' })
+  // T-767: "▶ " before the id; the mark and id bold in the accent color ('run'), the title normal text; T-771: a finished lane's title dim
+  // T-850: a finished lane has "✓ " (dim) there instead, its id stays in the accent color
+  const name = segs({ text: done ? `${LIVE_DONE_MARK} ` : LIVE_RUN_MARK, tone: done ? 'dim' : 'run' }, { text: padWidth(lane.id, l.idW), tone: 'run' }, l.titleW > 0 && { text: ` ${padWidth(cutTitle(lane.title, l.titleW), l.titleW)}`, tone: done ? 'dim' : 'text' })
   const first = [...name, { text: sep, tone: 'text' as const }, ...track, { text: sep + laneRight(lane, o.nowMs, l.rightW).padStart(l.rightW), tone: 'dim' as const }]
   // the second line
   const trackW = l.stations.length + (l.stations.length - 1) * l.gap

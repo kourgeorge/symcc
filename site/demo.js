@@ -107,9 +107,9 @@
       track += i < l.at ? sp('●', 'passed') : i === l.at ? (l.done ? sp('✓', 'passed') : sp(s.frame % 2 ? '◎' : '◉', 'current')) : sp('○', 'future')
     })
     const right = l.done ? `merged ${dur(s.now - l.done)} ago` : l.place ? `#${l.place}` : dur(s.now - l.since)
-    // T-771: a just-merged lane: no "▶ ", its id, title and second line dim
+    // T-771: a just-merged lane: "✓ " (dim), its id in the accent, title and second line dim
     const title = ' ' + pad(cut(TITLES[l.id], TITLE_W), TITLE_W)
-    const one = ' ' + (l.done ? '  ' + sp(pad(l.id, ID_W) + title, 'dim') : sp('▶ ' + pad(l.id, ID_W), 'run') + title) + '  ' + track + sp('  ' + right.padStart(6), 'dim')
+    const one = ' ' + (l.done ? sp('✓ ', 'dim') + sp(pad(l.id, ID_W), 'run') + sp(title, 'dim') : sp('▶ ' + pad(l.id, ID_W), 'run') + title) + '  ' + track + sp('  ' + right.padStart(6), 'dim')
     const lead = `   ${l.kind} try ${l.tryNo}/${l.tries}`
     // the whole task's tokens (every try); the running try's are known only at its hand-back
     const total = (l.prior || 0) + (l.tokens || 0)
