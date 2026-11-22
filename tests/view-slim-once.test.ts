@@ -114,3 +114,18 @@ test('T-891: ▍Today, yesterday and last 7 days show the same numbers from the 
   expect(lines(slimPast, n)).toEqual(lines(past, n))
   for (const days of [1, 7]) expect(pastDays(slimPast as never[], n, days)).toEqual(pastDays(past as never[], n, days))
 })
+
+test('T-891: slimming an already slim view again (a non-publish panel update) keeps the history marks', () => {
+  const view = (tasks: unknown[]) => ({ tasks, working: [], scouts: [], mode: 'auto', test_commands: [] }) as unknown as SymccView
+  const lines = (tasks: unknown[], at: number) => liveTodayLines({ tasks: tasks as never[], today_team: undefined }, at, 140, 0).map(segText)
+  const today = todayTasks(T0)
+  const once = slimView(view(today))
+  const twice = slimView({ ...once, branches: {} } as SymccView)
+  const marks = (v: SymccView) => JSON.stringify(v.tasks.map(t => (t as unknown as { history_marks?: unknown }).history_marks))
+  expect(marks(twice)).toBe(marks(once))
+  expect(lines(twice.tasks, T0)).toEqual(lines(today, T0))
+  const n = inToday(Date.now(), 0.5)
+  const past = pastTasks(n)
+  const pastTwice = slimView(slimView(view(past))).tasks
+  for (const days of [1, 7]) expect(pastDays(pastTwice as never[], n, days)).toEqual(pastDays(past as never[], n, days))
+})

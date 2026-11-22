@@ -154,7 +154,9 @@ export function viewTask<T extends { id: string; status: SymccStatus }>(t: T): T
   if (!file) return t
   const x = { ...t } as Record<string, unknown>
   const history = Array.isArray(x.history) ? x.history.filter(isObj) : []
-  x[VIEW_MARKS_KEY] = history.filter(h => VIEW_MARK_KINDS.includes(String(h.kind)) && (h.kind !== 'failed' || ['tests', 'clash'].includes(String(h.reason)))).map(h => ({ kind: String(h.kind), ...(typeof h.at === 'string' ? { at: h.at } : {}), ...(typeof h.reason === 'string' ? { reason: h.reason } : {}) }))
+  // A task viewTask already slimmed has no history left: keep its marks (slimming twice must not wipe them, T-891).
+  const slimmed = PARTS_KEY in x && Array.isArray(x[VIEW_MARKS_KEY]) && history.length === 0
+  if (!slimmed) x[VIEW_MARKS_KEY] = history.filter(h => VIEW_MARK_KINDS.includes(String(h.kind)) && (h.kind !== 'failed' || ['tests', 'clash'].includes(String(h.reason)))).map(h => ({ kind: String(h.kind), ...(typeof h.at === 'string' ? { at: h.at } : {}), ...(typeof h.reason === 'string' ? { reason: h.reason } : {}) }))
   for (const k of VIEW_LEFT_OUT) delete x[k]
   if (isObj(x.origin)) {
     const { request: _r, evidence: _e, ...origin } = x.origin
