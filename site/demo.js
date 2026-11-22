@@ -1,5 +1,5 @@
 // The home page's hero demo (T-749): a played-out symcc session, drawn as HTML text in the look of the real panel
-// (core/live.ts: lanes work · check · queue · tests · merged, the ▍ section headings, token bars) and the lead's chat.
+// (core/live.ts: lanes work · check · queue · tests · merged, the ▍ section headings, the token numbers under the lanes) and the lead's chat.
 // The story is a real one from symcc's own board on 2026-11-21: T-747 (the owner's ask, four looks, one picked,
 // worker → check → queue → tests → merged), T-740 sent back by the checker and tried again, and a scout's finding
 // (gaps-bot) turned into T-736. No libraries, no outside files. Without JS the page shows the still frame written
@@ -34,7 +34,10 @@
   const END_TODAY = { merged: 56, back: 47, failed: 0, tokens: 268.6e6 }
   const T747_TOKENS = 5.7e6
   const T740_TRY1_TOKENS = 4e6
-  const USUAL = END_TODAY.tokens / END_TODAY.merged // the board's usual tokens per merged task; a full bar is that
+  // T-867: who spent them (the real split is not known; these only show the lane's worker/checker parts)
+  const T740_TRY1_SPLIT = { worker: 2.6e6, checker: 1.4e6 }
+  const T747_SPLIT = { worker: 4.1e6, checker: 1.6e6 }
+  const USUAL = END_TODAY.tokens / END_TODAY.merged // the board's usual (median) tokens per merged task; a lane says "(n× median)" against it
   const MAX_AGENTS = 3
   // (T-769, T-779) ▍Today's second, third and fourth lines, real figures from this project's stats for 21 November: the medians per
   // merged task, the agent work time, and the scouts' share of the tokens (54.7M of 530.1M; the rest is the workers' and
@@ -65,7 +68,7 @@
       q: null,
       voice: '',
       lanes: [
-        { id: 'T-740', kind: 'bug', at: 0, since: at(16, 28), tryNo: 1, tries: 3, tokens: null, back: 0, agent: true },
+        { id: 'T-740', kind: 'bug', at: 0, since: at(16, 28), began: at(16, 28), tryNo: 1, tries: 3, tokens: null, back: 0, agent: true },
       ],
       today: { merged: END_TODAY.merged - 1, back: END_TODAY.back - 1, failed: END_TODAY.failed, tokens: END_TODAY.tokens - T747_TOKENS - T740_TRY1_TOKENS },
       head: '50ab5a9',
@@ -110,17 +113,26 @@
     // T-771: a just-merged lane: "✓ " (dim), its id in the accent, title and second line dim
     const title = ' ' + pad(cut(TITLES[l.id], TITLE_W), TITLE_W)
     const one = ' ' + (l.done ? sp('✓ ', 'dim') + sp(pad(l.id, ID_W), 'run') + sp(title, 'dim') : sp('▶ ' + pad(l.id, ID_W), 'run') + title) + '  ' + track + sp('  ' + right.padStart(6), 'dim')
-    const lead = `   ${l.kind} try ${l.tryNo}/${l.tries}`
-    // the whole task's tokens (every try); the running try's are known only at its hand-back
+    // T-867: no bar: the whole task's tokens (every try; the running try's are known only at its hand-back), how many
+    // times the median per task (the warning tone from twice it), its time so far, who spent them, the send-backs.
+    // When the line is too wide, parts go from the end: the worker/checker split, then ⏱, then "(× median)", then the kind
     const total = (l.prior || 0) + (l.tokens || 0)
-    let rest
-    if (!total) rest = sp('⌀ at hand-back', 'dim')
-    else {
-      const n = Math.max(0, Math.min(13, Math.round((total / USUAL) * 13)))
-      const over = total > 2 * USUAL
-      rest = sp(`▕${'█'.repeat(n)}${'░'.repeat(13 - n)}▏ `, l.done ? 'dim' : over ? 'warning' : 'bar') + sp('⌀ ' + tok(total), l.done ? 'dim' : over ? 'warning' : 'text') + (l.tokens === null ? sp(' + …', 'dim') : '') + (over ? sp(' ⚠', 'warning') : '')
+    const times = total / USUAL
+    const tone = t => (l.done ? 'dim' : t)
+    const mins = Math.max(0, (l.done || s.now) - l.began)
+    const tokens = withMedian =>
+      !total
+        ? [['⌀ at hand-back', 'dim']]
+        : [['⌀ ' + tok(total), tone('text')], ...(l.tokens === null ? [[' + …', 'dim']] : []), ...(withMedian ? [[` (${times.toFixed(1).replace(/\.0$/, '')}× median)`, tone(times >= 2 ? 'warning' : 'dim')]] : [])]
+    const split = [l.worker && [[`worker ⌀ ${tok(l.worker)}`, 'dim']], l.checker && [[`checker ⌀ ${tok(l.checker)}`, 'dim']]].filter(Boolean)
+    const line = (level, withKind) => {
+      const parts = [tokens(level >= 1), ...(level >= 2 ? [[[`⏱ ${dur(mins)}`, 'dim']]] : []), ...(level >= 3 ? split : []), ...(l.back ? [[[`↺×${l.back}`, 'dim']]] : [])]
+      return [[`  ${withKind ? l.kind + ' ' : ''}try ${l.tryNo}/${l.tries}`, 'dim'], ...parts.flatMap((x, i) => [[i ? ' · ' : '  ', 'dim'], ...x])]
     }
-    const two = sp(pad(lead, LEAD_W), 'dim') + rest + (l.back ? sp(`  ↺×${l.back}`, 'dim') : '')
+    const tries = [line(3, true), line(2, true), line(1, true), line(0, true), line(0, false)]
+    const width = xs => 1 + xs.reduce((n, [t]) => n + t.length, 0)
+    const pick = tries.find(xs => width(xs) <= PANEL_W) || tries[tries.length - 1]
+    const two = ' ' + pick.map(([t, k]) => sp(t, k)).join('')
     return [one, two]
   }
 
@@ -164,7 +176,7 @@
       for (const l of [...s.lanes.filter(l => !l.done), ...kept]) L.push(...laneLines(s, l))
     } else L.push(' No task is running right now.')
     if (s.lanes.length) L.push(' ' + sp('─'.repeat(12), 'dim'))
-    if (s.lanes.length) L.push(' ' + sp(`✧ = an agent works here (needs an agent slot) · ⌀ = tokens   bar: ⌀ of the task so far, full = usual per task (⌀ ${tok(USUAL)})`, 'dim'))
+    if (s.lanes.length) L.push(' ' + sp('✧ = an agent works here (needs an agent slot) · ⌀ = tokens', 'dim'))
     L.push('')
     L.push(liveHead('Branches'), '')
     L.push(...branchLines(s))
@@ -310,7 +322,7 @@
       s.thinking = false
       say(s, { k: 'tool', name: 'symcc · add_task', args: 'T-747, kind: change', result: 'added T-747 · a worker starts now' })
       say(s, { k: 'lead', lines: [esc('Added T-747: each Live tab section gets a "▍Name" side-bar heading, like the task page. I\'ll tell you when it merges.')] })
-      s.lanes.push({ id: 'T-747', kind: 'change', at: 0, since: s.now, tryNo: 1, tries: 3, tokens: null, back: 0, agent: true })
+      s.lanes.push({ id: 'T-747', kind: 'change', at: 0, since: s.now, began: s.now, tryNo: 1, tries: 3, tokens: null, back: 0, agent: true })
       s.branches.push({ id: 'T-747', col: s.commits - 1, ahead: 0, behind: 0 })
     }],
     // T-740's worker hands back (its commit 24bd543) and the checker starts
@@ -344,7 +356,7 @@
       Object.assign(s.branches.find(b => b.id === 'T-747'), { ahead: 1 })
     }],
     [2400, at(16, 50, 0), s => {
-      Object.assign(lane(s, 'T-740'), { at: 0, since: s.now, tryNo: 2, prior: T740_TRY1_TOKENS, tokens: null, back: 1 })
+      Object.assign(lane(s, 'T-740'), { at: 0, since: s.now, tryNo: 2, prior: T740_TRY1_TOKENS, tokens: null, back: 1, ...T740_TRY1_SPLIT })
       s.today.back += 1
       s.today.tokens += T740_TRY1_TOKENS
       s.t740.push(['16:50', 'try 1 → the checker found problems'], ['16:50', 'try 2: worker started'])
@@ -354,7 +366,7 @@
     }],
     // the checker says "OK"; T-747 is brought up to date with main (39c7f96) and waits in the queue
     [1600, at(16, 50, 20), s => {
-      Object.assign(lane(s, 'T-747'), { at: 2, since: s.now, place: 1, agent: false, tokens: T747_TOKENS })
+      Object.assign(lane(s, 'T-747'), { at: 2, since: s.now, place: 1, agent: false, tokens: T747_TOKENS, ...T747_SPLIT })
       Object.assign(s.branches.find(b => b.id === 'T-747'), { ahead: 2, behind: 0 })
       say(s, { k: 'event', mark: '✓', tone: 'passed', text: 'T-747 try 1 → checks passed: the checker said "OK" · waits in the merge queue (place 1)' })
     }],

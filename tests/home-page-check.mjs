@@ -82,13 +82,15 @@ for (const w of ['60 / 60', 'tests 14', 'shell · guard 11', 'ui · surfaces 11'
 for (const w of ['16:28', '16:50', 'try 1: 22m · 4.0M tokens in all'])
   if (!task.includes(w)) bad(`still frame: the task page has no "${w}" (T-740's real try 1)`)
 if (!text(view('scouts')).includes('gaps-bot')) bad('still frame: the scouts view has no gaps-bot')
-// (T-757) T-740 on try 2: its lane shows the whole task's tokens (try 1's 4.0M, more coming), the bar full at the
-// usual tokens per merged task (268.6M / 56 = 4.8M, so 4.0M fills 11 of 13 cells), and the legend says so
-if (!board.includes('▕███████████░░▏ ⌀ 4.0M + …')) bad('still frame: T-740\'s lane does not show "▕███████████░░▏ ⌀ 4.0M + …" (bar full = the usual per task)')
-if (!board.includes('⌀ = tokens   bar: ⌀ of the task so far, full = usual per task (⌀ 4.8M)')) bad('still frame: the board has no bar legend')
-// (T-757) the hand-drawn Live tab card tells the same story: whole-task tokens, full bar = the usual per task
+// (T-757, T-867) T-740 on try 2: its lane shows the whole task's tokens (try 1's 4.0M, more coming) against the median
+// tokens per merged task (268.6M / 56 = 4.8M, so 0.8×) and its time, no bar; the key line has no bar text
+if (!board.includes('bug try 2/3  ⌀ 4.0M + … (0.8× median) · ⏱ ')) bad('still frame: T-740\'s lane does not show "⌀ 4.0M + … (0.8× median) · ⏱ …"')
+if (/▕[█░]+▏ ⌀/.test(board) || /▕[█░]+▏ ⌀/.test(page)) bad('still frame: a lane still has a token bar')
+if (board.includes('usual per task')) bad('still frame: the key line still explains the bar')
+// (T-757, T-867) the hand-drawn Live tab card tells the same story: whole-task tokens × the median, time, who spent them
 if (/tokens of each try|T-740[\s\S]{0,80}tokens at hand-back/.test(page)) bad('home page: the Live tab card still shows tokens per try ("tokens at hand-back" on T-740\'s try 2)')
-if (!page.includes('▕███████████░░▏ ⌀ 4.0M + …')) bad('home page: the Live tab card\'s T-740 lane does not show "4.0M + …"')
+if (!page.includes('bug try 2/3  ⌀ 4.0M + … (0.8× median) · ⏱ 22m · worker ⌀ 2.6M · checker ⌀ 1.4M · ↺×1')) bad('home page: the Live tab card\'s T-740 lane does not show "⌀ 4.0M + … (0.8× median) · ⏱ 22m · worker … · checker …"')
+if (page.includes('usual per task')) bad('home page: the Live tab card still explains the bar')
 // (T-767) the lines under a ▍heading start with 1 space; a running lane with "▶ ", its id in the accent color, its title normal text
 for (const [name, t] of [['board', board], ['Live tab', live]]) {
   const lines = t.split('\n')

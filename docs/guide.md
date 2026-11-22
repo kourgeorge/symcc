@@ -863,8 +863,8 @@ are about changes; under "How tasks ended" a read investigation shows as
   runs, a role, a kind, a role's prompt) starts with its own title instead; its buttons and the
   key line at the bottom stay. This is the same in the terminal panel, VS Code and OpenCode.
   Back from a task opened on the Live tab goes back to the Live tab. The Live tab is on all three
-  boards: the Claude Code terminal panel, VS Code (which draws the lanes as real lines and the
-  token bar as a bar that fills; each waiting train is a link) and OpenCode (which has no `w` key to watch a worker); see
+  boards: the Claude Code terminal panel, VS Code (which draws the lanes as real lines;
+  each waiting train is a link) and OpenCode (which has no `w` key to watch a worker); see
   [Live tab](#live-tab). The Scouts view lists each scout on one
   row: an icon (`◉` running, `◎` waiting for its next run, `○` paused), its name, how often
   it runs, when it runs next, what its last run found (`last: found 2`, `last: nothing` or
@@ -1144,11 +1144,14 @@ TASKS ────────────────────────�
   `✧ = an agent works here (needs an agent slot) · ⌀ = tokens`; queue and tests use none, so there can be more lanes than
   `max_parallel`.
 - On the right: the time at the current station, or the place in the merge queue (`#2`).
-- The second row: the kind, the try (`try 2/3`, auto retries after failing tests included),
-  the whole task's tokens (every try so far) with a bar that the board's usual tokens per merged
-  task fill (half full at half the usual; it stays full past it, and turns yellow with `⚠` past
-  twice the usual), and `↺×N` for the checker's send-backs. The legend under the lanes says
-  this, with the usual figure: `bar: ⌀ of the task so far, full = usual per task (⌀ 2.8M)`. A
+- The second row has no bar, only numbers about this task:
+  `bug try 4/4  ⌀ 7.3M (7.6× median) · ⏱ 41m · worker ⌀ 5.4M · checker ⌀ 1.9M · ↺×2`. That is
+  the kind and the try (`try 2/3`, auto retries after failing tests included), the whole task's
+  tokens (every try so far), how many times the board's median tokens per merged task that is
+  (yellow from twice the median), the task's working time so far (all tries; time when Claude
+  Code was closed is left out), how its tokens split between its workers and checkers (a part
+  that is 0 is left out), and `↺×N` for the checker's send-backs. On a narrow panel the parts go
+  from the end: first the worker/checker split, then `⏱`, then `(× median)`; the try and `⌀` stay. A
   running worker's tokens are only known when it hands back, so until then the row shows the
   earlier tries' sum with `+ …` (`⌀ 4.0M + …`), or `⌀ at hand-back` on a first try.
 - **Signs on the boards:** `⌀` = tokens (a count has `⌀` in front: `⌀ 716.1k`; the legend under the lanes says so, and with no lane the same dim note, `⌀ = tokens`, ends TODAY). `avg` marks an average (`avg ⌀ 2M/task`). Task pages (the agent lines, the Tries summary's checker part) use it too. `/symcc-stats` and its HTML page keep the word "tokens".
