@@ -3260,6 +3260,24 @@ const runFor = async (w: ReturnType<typeof world>, min: number) => {
     return runs?.length ? patchTask(b, 'T-1', { runs: [...runs.slice(0, -1), { ...runs.at(-1)!, started: new Date(since).toISOString() }] }, ISO) : b
   })
 }
+/**
+ * T-873: T-1's try ran `before` active minutes, then Claude Code was closed overnight (16 h), then the same try
+ * went on `after` minutes ago with a new worker (ag1, its since = the restart).
+ */
+const goneOnFor = async (w: ReturnType<typeof world>, before: number, after: number) => {
+  const MIN = 60_000
+  const nowMs = Date.now()
+  const since = nowMs - after * MIN
+  const gapFrom = since - 16 * 60 * MIN
+  const started = gapFrom - before * MIN
+  workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since })
+  await change(w.$, b => {
+    const runs = find(b, 'T-1')?.runs
+    if (!runs?.length) return b
+    const restarts = [{ at: new Date(gapFrom).toISOString(), why: 'restarted after Claude Code was reopened', started: new Date(since).toISOString() }]
+    return patchTask(b, 'T-1', { runs: [...runs.slice(0, -1), { ...runs.at(-1)!, started: new Date(started).toISOString(), restarts }] }, ISO)
+  })
+}
 /** Over-time tests drive the board (check only runs then); world() sets driving off again. */
 async function overTime(then: (w: ReturnType<typeof world>, sent: { to: string; text: string }[]) => Promise<unknown>) {
   let sent: { to: string; text: string }[] = []
@@ -3295,6 +3313,42 @@ test('at the time limit the worker is not stopped: the task stays doing and the 
   expect(told.length).toBe(1)
   expect(told[0]).toContain('+30 min | +60 min | Stop it')
   expect(told[0]).toContain('change T-1 and answer')
+})
+
+test('T-873: a try that went on after Claude Code was reopened is asked for more time at 45 active minutes, not 45 min after the restart', async () => {
+  // 40 min, the overnight gap, then 10 min on the same try: 50 active minutes, only 10 since the restart
+  const r = await overTime(async w => {
+    await goneOnFor(w, 40, 10)
+    await check(w.$)
+    expect(workers.has('ag1')).toBe(true)
+  })
+  expect(r.t.status).toBe('doing')
+  expect((r.t as BoardTask).live?.time_ask).toBeDefined()
+  expect(leadQueue.filter(x => x.includes('T-1 has run 45 min. Give it more time?')).length).toBe(1)
+})
+
+test('T-873: the closed-app gap is not counted: 30 min, the gap, then 10 min is not asked yet', async () => {
+  // started over 16 h ago, but only 40 active minutes
+  const r = await overTime(async w => {
+    await goneOnFor(w, 30, 10)
+    await check(w.$)
+  })
+  expect(r.t.status).toBe('doing')
+  expect((r.t as BoardTask).live?.time_ask).toBeUndefined()
+  expect(leadQueue.some(x => x.includes('Give it more time?'))).toBe(false)
+})
+
+test('T-873: the hard cap counts the try\'s active time too: 80 min, the gap, then 11 min is told to wrap up', async () => {
+  let sent: { to: string; text: string }[] = []
+  await overTime(async (w, s) => {
+    sent = s
+    await goneOnFor(w, 40, 10)
+    await check(w.$) // asked
+    await goneOnFor(w, 80, 11) // 91 active minutes: past 45 + 45, only 11 since the restart
+    await check(w.$)
+    expect((find(await load(w.$), 'T-1') as BoardTask).live?.wrap_up).toBeDefined()
+  })
+  expect(sent).toEqual([{ to: 'ag1', text: WRAP_UP_TEXT }])
 })
 
 test('"+30 min" moves the limit later: the worker goes on, is not asked again before it, and finishes normally', async () => {
