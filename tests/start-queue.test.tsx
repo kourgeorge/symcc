@@ -332,7 +332,7 @@ for (const [what, stop, status] of [
  * but with nothing in the loaded copy's start queue: what a reload (another task merging) leaves behind.
  */
 const lostStart = (b: Board, id: string, session = 's1'): Board =>
-  patchTask(b, id, { status: 'doing', session, attempts: 1, branch: `symcc/${id}`, note: QUEUED_NOTE, runs: startRun(undefined, ISO) }, ISO)
+  patchTask(b, id, { status: 'doing', live: { session: session, phase: 'claimed' }, attempts: 1, branch: `symcc/${id}`, note: QUEUED_NOTE, runs: startRun(undefined, ISO) }, ISO)
 
 const sentBack = ({ text: h }: { text: string }) => h.includes('old worker has ended') || h.includes('restarted')
 
@@ -385,11 +385,11 @@ test('T-428 loaded: the regular check, with no reload, finds a queued task its c
 
 test('T-428: a doing task whose worker started (no longer the queued note) is not unclaimed; only a queued one is, with no try counted', () => {
   const [b0] = addTask({ ...emptyBoard(), mode: 'auto' }, { origin: { why: 'a test' }, title: 'One', files: ['a/'] }, ISO)
-  const t = { ...b0.tasks[0]!, status: 'doing' as const, attempts: 1, note: 'worker on it', session: 's1', runs: [{ started: ISO }] }
+  const t = { ...b0.tasks[0]!, status: 'doing' as const, attempts: 1, note: 'worker on it', live: { session: 's1', phase: 'worker' as const }, runs: [{ started: ISO }] }
   expect(queuedNeverStarted(t)).toBe(false)
   expect(unclaimQueued({ ...b0, tasks: [t] }, 's1', null, ISO).tasks[0]!.status).toBe('doing')
   // the same task still only queued: unclaimed, its try not counted and its run taken off
-  const q = { ...t, note: QUEUED_NOTE }
+  const q = { ...t, note: QUEUED_NOTE, live: { session: 's1', phase: 'claimed' as const } }
   expect(queuedNeverStarted(q)).toBe(true)
   const u = unclaimQueued({ ...b0, tasks: [q] }, 's1', null, ISO).tasks[0]!
   expect(u.status).toBe('todo')
@@ -400,7 +400,7 @@ test('T-428: a doing task whose worker started (no longer the queued note) is no
 
 test('T-470: a claim cut off before its worker started on a host with no start queue (note STARTING_NOTE) is unclaimed too, with no try counted', () => {
   const [b0] = addTask(emptyBoard(), { origin: { why: 'a test' }, title: 'One', files: ['a/'] }, ISO)
-  const t = { ...b0.tasks[0]!, status: 'doing' as const, session: 'old', attempts: 1, note: STARTING_NOTE, runs: [{ started: ISO }] }
+  const t = { ...b0.tasks[0]!, status: 'doing' as const, live: { session: 'old', phase: 'claimed' as const }, attempts: 1, note: STARTING_NOTE, runs: [{ started: ISO }] }
   expect(STARTING_NOTE).toBe('worker starting')
   expect(queuedNeverStarted(t)).toBe(true)
   const u = unclaimQueued({ ...b0, tasks: [t] }, 'old', null, ISO).tasks[0]!

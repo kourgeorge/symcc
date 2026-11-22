@@ -76,7 +76,7 @@ export const boardLabel = (root: string, name: string = DEFAULT_NAME) => `${name
  * try 2 on ("T-434 ▶ 1h40m (3)", see rowStates); in a row narrower than `width` the time is left out, then the try;
  * the others "? waiting", "◆ review", "✗ failed". The state column has one width, so every title starts in one column. `since(id)` is when this session's worker started.
  */
-export function bandLeads(tasks: (Pick<SymccTask, 'id' | 'status' | 'runs'> & Partial<Pick<SymccTask, 'attempts' | 'note'>> & Pick<BoardTask, 'checking' | 'time_ask' | 'kind'>)[], nowMs: number, since: (id: string) => number | string | undefined = () => undefined, width = Infinity): Map<string, string> {
+export function bandLeads(tasks: (Pick<SymccTask, 'id' | 'status' | 'runs'> & Partial<Pick<SymccTask, 'attempts' | 'note'>> & Pick<BoardTask, 'live' | 'kind'>)[], nowMs: number, since: (id: string) => number | string | undefined = () => undefined, width = Infinity): Map<string, string> {
   const idWidth = Math.max(4, ...tasks.map(t => t.id.length))
   const rows = tasks.map(t => ({ ...t, attempts: t.attempts ?? 0 }))
   const front = (t: (typeof rows)[number]) => `${t.id.padEnd(idWidth)} ${rowMark(t, nowMs)} `
@@ -194,7 +194,7 @@ export function bandFronts(items: readonly Pick<BandItem, 'id' | 'forms'>[], wid
 }
 
 /** Whether a doing row in the band has a state to show (see bandLeads); without one its note says what goes on. */
-export const bandHasState = (t: Pick<SymccTask, 'status' | 'runs'> & Pick<BoardTask, 'checking' | 'time_ask' | 'kind'>, nowMs: number, since?: number | string): boolean => t.status === 'doing' && statusCell(t, nowMs, since) !== ''
+export const bandHasState = (t: Pick<SymccTask, 'status' | 'runs'> & Pick<BoardTask, 'live' | 'kind'>, nowMs: number, since?: number | string): boolean => t.status === 'doing' && statusCell(t, nowMs, since) !== ''
 
 /** The notes a doing row's state already says ("▶ 12m", "⊛ 9m", "⇢ 40s"), so the band leaves them out when it shows one:
  *  also both claim notes (app/starts.ts: QUEUED_NOTE "starting at the next turn" with the start queue, STARTING_NOTE
@@ -204,7 +204,7 @@ const STATE_NOTES = new Set(['worker on it', STEP_NOTE.testing, STEP_NOTE.mergin
 /** The note a doing row in the band shows as its tail: '' when its state already says it (see STATE_NOTES), else the note.
  *  `driving` false (another session drives the board): a claim note ("starting at the next turn") becomes
  *  OTHER_SESSION_NOTE, as that task's worker starts in the driving session, not here (T-643). */
-export const bandNote = (t: Pick<SymccTask, 'status' | 'runs' | 'note'> & Pick<BoardTask, 'checking' | 'time_ask' | 'kind'>, nowMs: number, since?: number | string, driving = true): string =>
+export const bandNote = (t: Pick<SymccTask, 'status' | 'runs' | 'note'> & Pick<BoardTask, 'live' | 'kind'>, nowMs: number, since?: number | string, driving = true): string =>
   !t.note || (STATE_NOTES.has(t.note) && bandHasState(t, nowMs, since)) ? '' : sessionNote(t, driving)
 
 // ---------------- another session drives the board (T-643) ----------------
@@ -251,7 +251,7 @@ export function driveWarning(driving: boolean, tasks: readonly DriveTask[], nowM
  * why it failed (whyFailed), else `note` (the task's note; the bands pass bandNote, which leaves out what the row's
  * state already says). '' when there is nothing to say.
  */
-export function rowEndText(t: Pick<SymccTask, 'note' | 'history'> & Partial<Pick<SymccTask, 'question' | 'test_output' | 'runs'>> & Partial<Pick<BoardTask, 'question_lead'>> & Pick<BoardTask, 'status' | 'merge_wait' | 'merge_into'>, phase: Pick<TaskPhase, 'waitsFor' | 'approved' | 'stage'>, note: string = t.note ?? ''): string {
+export function rowEndText(t: Pick<SymccTask, 'note' | 'history'> & Partial<Pick<SymccTask, 'question' | 'test_output' | 'runs'>> & Partial<Pick<BoardTask, 'question_lead'>> & Pick<BoardTask, 'status' | 'live' | 'merge_into'>, phase: Pick<TaskPhase, 'waitsFor' | 'approved' | 'stage'>, note: string = t.note ?? ''): string {
   if (phase.waitsFor === 'your-files') return fileWaitText(t)
   if (phase.approved && phase.stage) return APPROVED_NOTE
   if (phase.waitsFor === 'answer' || phase.waitsFor === 'files') return t.question_lead ?? t.question ?? t.note ?? ''
@@ -280,7 +280,7 @@ export const shortCost = (usd: number): string => (!Number.isFinite(usd) || usd 
 /** What the status line reads (statusLine): the tasks (for today's numbers and what needs you), the lead's questions,
  *  the scouts, the branch (or `branch_note`, a warning shown in its place) and the board mode. */
 export type StatusBoard = {
-  tasks: (Pick<SymccTask, 'id' | 'status'> & Partial<Pick<SymccTask, 'runs' | 'history' | 'note' | 'updated_at'>> & Partial<Pick<BoardTask, 'checking' | 'time_ask'>>)[]
+  tasks: (Pick<SymccTask, 'id' | 'status'> & Partial<Pick<SymccTask, 'runs' | 'history' | 'note' | 'updated_at'>> & Partial<Pick<BoardTask, 'live'>>)[]
   questions?: readonly Pick<OwnerQuestion, 'answered_at' | 'dropped'>[]
   scouts?: CrewBoard['scouts']
   branch?: string
@@ -346,10 +346,10 @@ export type BannerLine = { art: string; parts: BannerPart[] }
 /** What the banner needs from the board. */
 /** `branch`: the branch checked out in the project now (new tasks merge into it); `branch_note`: a warning (e.g. no git), shown in place of it.
  *  `enabled` false (symcc disabled) or `mode` 'paused' puts a warning on the first line, after the name. */
-export type BannerBoard = Pick<Board, 'test_commands' | 'max_parallel' | 'max_minutes' | 'auto_retries'> & Partial<Pick<Board, 'archived'>> & { tasks: (Pick<SymccTask, 'status' | 'runs'> & Partial<Pick<SymccTask, 'note' | 'updated_at'>> & Pick<BoardTask, 'checking'>)[]; branch?: string; branch_note?: string; mode?: SymccMode; enabled?: boolean; off_here?: OffHere }
+export type BannerBoard = Pick<Board, 'test_commands' | 'max_parallel' | 'max_minutes' | 'auto_retries'> & Partial<Pick<Board, 'archived'>> & { tasks: (Pick<SymccTask, 'status' | 'runs'> & Partial<Pick<SymccTask, 'note' | 'updated_at'>> & Pick<BoardTask, 'live'>)[]; branch?: string; branch_note?: string; mode?: SymccMode; enabled?: boolean; off_here?: OffHere }
 
 /** "2 doing", "1 to do", ... for each status in `order` that has tasks, in that order. */
-export function statusCounts(tasks: (Pick<SymccTask, 'status'> & Pick<BoardTask, 'checking'>)[], order: SymccStatus[], nowMs: number = Date.now()): string[] {
+export function statusCounts(tasks: (Pick<SymccTask, 'status'> & Pick<BoardTask, 'live'>)[], order: SymccStatus[], nowMs: number = Date.now()): string[] {
   // an approved task in review whose approve runs counts as doing (see shownStatus)
   return order.map(st => [tasks.filter(t => shownStatus(t, nowMs) === st).length, STATUS_WORD[st]] as const).filter(([n]) => n > 0).map(([n, word]) => `${n} ${word}`)
 }

@@ -149,8 +149,8 @@ export type SymccTask = {
   order: number
   after: string[]
   attempts: number
-  /** set when the next try must first merge main into the branch and resolve conflicts */
-  merge_main?: boolean
+  /** set (only ever to true) when the next try must first merge main into the branch and resolve conflicts */
+  merge_main?: true
   /** how many times a new try was started on its own because the tests failed */
   test_tries?: number
   /** the end of the failing test output from the last try, shown to the next worker */

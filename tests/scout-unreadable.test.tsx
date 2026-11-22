@@ -58,7 +58,7 @@ function world(on: On) {
   on('env.get', () => ({ value: undefined }) as never)
   const clock = mock.clock(on, { now: T0 })
   const [b] = addTask(emptyBoard(), { origin: { why: 'a test' }, title: 'Build it', files: ['src/'], merge_into: 'main' }, ISO)
-  files.set(BOARD, JSON.stringify({ ...patchTask(b, 'T-1', { status: 'doing', session: 's1', runs: [runBy('w1', ISO)], attempts: 1, branch: 'symcc/T-1' }, ISO), mode: 'auto', open_on_start: false }))
+  files.set(BOARD, JSON.stringify({ ...patchTask(b, 'T-1', { status: 'doing', live: { session: 's1' }, runs: [runBy('w1', ISO)], attempts: 1, branch: 'symcc/T-1' }, ISO), mode: 'auto', open_on_start: false }))
   return { files, writes, spawned, state, clock }
 }
 

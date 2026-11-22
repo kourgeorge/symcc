@@ -32,7 +32,7 @@ export type PhaseWait = 'answer' | 'files' | 'your-files' | 'review' | 'time' | 
 export type TaskPhase = { state: SymccStatus; shown: SymccStatus; stage: PhaseStage | null; place?: number; waitsFor: PhaseWait | null; approved: boolean; since?: string }
 
 /** What taskPhase reads of a task (only its status must be there). */
-export type PhaseTask = Pick<BoardTask, 'status'> & Partial<Pick<BoardTask, 'updated_at' | 'runs' | 'checking' | 'time_ask' | 'merge_wait' | 'asked_files'>>
+export type PhaseTask = Pick<BoardTask, 'status'> & Partial<Pick<BoardTask, 'updated_at' | 'runs' | 'live' | 'asked_files'>>
 
 const STEP_STAGE: Record<CheckStep, PhaseStage> = { prep: 'prep', testing: 'test', checker: 'checker', queue: 'queue', merging: 'merge' }
 /** The check step of stage `stage` (its icon and word are STEP_ICON and STEP_WORD), '' for the worker and none. */
@@ -47,17 +47,17 @@ export function taskPhase(t: PhaseTask, nowMs: number, _board?: { mode?: unknown
   const base = { state, shown, approved: false }
   if (shown !== 'doing') return { ...base, stage: null, ...ownerWait(t) }
   const stage: PhaseStage = step ? STEP_STAGE[step] : state === 'doing' ? 'worker' : 'prep'
-  const place = stage === 'queue' ? t.checking?.place : undefined
+  const place = stage === 'queue' ? t.live?.checking?.place : undefined
   const last = t.runs?.[t.runs.length - 1]
   // more time asked (asksMoreTime in commands.ts reads the same fields)
-  const time = stage === 'worker' && !!t.time_ask
+  const time = stage === 'worker' && !!t.live?.time_ask
   return {
     ...base,
     stage,
     ...(place ? { place } : {}),
     waitsFor: time ? 'time' : null,
     approved: state === 'review',
-    ...(time ? { since: t.time_ask } : stage === 'worker' && last && !last.ended ? { since: last.started } : {}),
+    ...(time ? { since: t.live?.time_ask } : stage === 'worker' && last && !last.ended ? { since: last.started } : {}),
   }
 }
 

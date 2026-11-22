@@ -92,7 +92,7 @@ export function orphanMove(a: AgentState, b: Board, me: string, live: string | n
   if (!t || t.status !== 'doing') return { move: 'stop' }
   if (!ownedHere(t, me, live)) return { move: 'leave' }
   if (!me || taken.includes(t.id)) return { move: 'stop' }
-  if (t.session === me && (!workerIdOf(t) || workerIdOf(t) === a.id)) return { move: 'adopt', task: t.id }
+  if (t.live?.session === me && (!workerIdOf(t) || workerIdOf(t) === a.id)) return { move: 'adopt', task: t.id }
   // The task names this very agent but a session that doesn't drive the board (e.g. this process's
   // session id changed over the reload): the agent is listed here, so it is this process's own worker.
   if (workerIdOf(t) === a.id) return { move: 'adopt', task: t.id }

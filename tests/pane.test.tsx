@@ -5,7 +5,8 @@ import { ICON, ICON_ART } from '../hooks/name'
 import { textWidth } from '../hooks/core/stats'
 import { SETTING_GROUPS, groupSummary, hintLines, hintLineText, listKeys, scoutKeys, scoutListKeys, settingsKeys, rolesKeys, statusCell, STATUS_MARK, PREP_NOTE, bandLeads, type KeyHint } from '../hooks/board'
 import { keysFor } from './task-keys'
-import { CHECKER_NOTE } from '../hooks/app/checker'
+import { STEP_NOTE } from '../hooks/board'
+const CHECKER_NOTE = STEP_NOTE.checker
 import { arrowTarget, focusStops, isArrow, rowStops, saysArrowsMove } from '../hooks/claude/ui/arrows'
 import type { SymccStatus } from '../types'
 import { sayQueue } from '../hooks/app/state'
@@ -273,9 +274,9 @@ test("T-748: a running row shows its stage's icon and name, the time in that sta
   const fresh = iso(T0 - 10_000)
   const tasks = [
     task('T-40', 'doing', 'Running worker', { note: 'worker on it', attempts: 1, runs: [{ started: iso(T0 - 12 * 60_000) }] }),
-    task('T-41', 'doing', 'Being tested', { attempts: 1, runs: [{ started: iso(T0 - 20 * 60_000), ended: fresh }], checking: { step: 'testing', at: fresh } }),
-    task('T-42', 'doing', 'Being checked', { attempts: 2, runs: [{ started: iso(T0 - 20 * 60_000), ended: iso(T0 - 8 * 60_000) }], checking: { step: 'checker', at: fresh } }),
-    task('T-43', 'doing', 'Being merged', { attempts: 1, runs: [{ started: iso(T0 - 20 * 60_000), ended: fresh }], checking: { step: 'merging', at: fresh } }),
+    task('T-41', 'doing', 'Being tested', { attempts: 1, runs: [{ started: iso(T0 - 20 * 60_000), ended: fresh }], live: { checking: { step: 'testing', at: fresh } }, }),
+    task('T-42', 'doing', 'Being checked', { attempts: 2, runs: [{ started: iso(T0 - 20 * 60_000), ended: iso(T0 - 8 * 60_000) }], live: { checking: { step: 'checker', at: fresh } }, }),
+    task('T-43', 'doing', 'Being merged', { attempts: 1, runs: [{ started: iso(T0 - 20 * 60_000), ended: fresh }], live: { checking: { step: 'merging', at: fresh } }, }),
     task('T-44', 'doing', 'Third try', { note: 'worker on it', attempts: 3, runs: [{ started: iso(T0 - 5 * 60_000) }] }),
   ]
   on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [], driving: true } }, version: 1 } }))
@@ -316,8 +317,8 @@ test("T-542: the band shows symcc's own pre-merge step as \"prep\" with its plai
   const iso = (ms: number) => new Date(ms).toISOString()
   const fresh = iso(T0 - 10_000)
   const tasks = [
-    task('T-50', 'doing', 'Prep one', { note: PREP_NOTE, attempts: 1, runs: [{ started: iso(T0 - 20 * 60_000), ended: fresh }], checking: { step: 'prep', at: fresh } }),
-    task('T-51', 'doing', 'Checked one', { note: CHECKER_NOTE, attempts: 1, runs: [{ started: iso(T0 - 20 * 60_000), ended: fresh }], checking: { step: 'checker', at: fresh } }),
+    task('T-50', 'doing', 'Prep one', { note: PREP_NOTE, attempts: 1, runs: [{ started: iso(T0 - 20 * 60_000), ended: fresh }], live: { checking: { step: 'prep', at: fresh } }, }),
+    task('T-51', 'doing', 'Checked one', { note: CHECKER_NOTE, attempts: 1, runs: [{ started: iso(T0 - 20 * 60_000), ended: fresh }], live: { checking: { step: 'checker', at: fresh } }, }),
   ]
   on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [] } }, version: 1 } }))
   on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
@@ -335,8 +336,8 @@ test('T-648: a task in the queue shows ⧗ and one in the test step ⊛, on the 
   const fresh = iso(T0 - 10_000)
   const ran = [{ started: iso(T0 - 20 * 60_000), ended: fresh }]
   const tasks = [
-    task('T-71', 'doing', 'Queued one', { note: 'queue (2)', attempts: 1, runs: ran, checking: { step: 'queue', place: 2, at: fresh } }),
-    task('T-72', 'doing', 'Tested one', { note: 'running the tests', attempts: 1, runs: ran, checking: { step: 'testing', at: fresh } }),
+    task('T-71', 'doing', 'Queued one', { note: 'queue (2)', attempts: 1, runs: ran, live: { checking: { step: 'queue', place: 2, at: fresh } }, }),
+    task('T-72', 'doing', 'Tested one', { note: 'running the tests', attempts: 1, runs: ran, live: { checking: { step: 'testing', at: fresh } }, }),
   ]
   on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [] } }, version: 1 } }))
   on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
@@ -398,7 +399,7 @@ test("the band hides only the notes a doing row's state says; other notes stay a
   const fresh = iso(T0 - 10_000)
   const tasks = [
     task('T-50', 'doing', 'Wrap up', { note: 'time is up: the worker was told to hand back', attempts: 1, runs: [{ started: iso(T0 - 62 * 60_000) }] }),
-    task('T-51', 'doing', 'Being checked', { note: 'running the tests', attempts: 1, runs: [{ started: iso(T0 - 20 * 60_000), ended: fresh }], checking: { step: 'testing', at: fresh } }),
+    task('T-51', 'doing', 'Being checked', { note: 'running the tests', attempts: 1, runs: [{ started: iso(T0 - 20 * 60_000), ended: fresh }], live: { checking: { step: 'testing', at: fresh } }, }),
     task('T-52', 'doing', 'Queued', { note: 'starting at the next turn', attempts: 1, runs: [{ started: iso(T0 - 60_000) }] }),
     // T-470's claim note on a host with no start queue (OpenCode): the time says it, so no stray note (T-466)
     task('T-53', 'doing', 'Starting', { note: 'worker starting', attempts: 1, runs: [{ started: iso(T0 - 60_000) }] }),
@@ -651,7 +652,7 @@ test('a waiting task opens with a box to answer it', async ($, on) => {
 
 test("a task waiting only for the owner's files shows them and a Merge now button, with no answer box and no \"needs you\" sound", async ($, on) => {
   sayQueue.splice(0)
-  const t = task('T-2', 'waiting', 'Search mode', { merge_wait: { dirty: ['src/a.ts', 'README.md'], untracked: [], ignored: [] }, note: 'waiting for your files on main: src/a.ts, README.md; commit or stash them' })
+  const t = task('T-2', 'waiting', 'Search mode', { live: { merge_wait: { dirty: ['src/a.ts', 'README.md'], untracked: [], ignored: [] } }, note: 'waiting for your files on main: src/a.ts, README.md; commit or stash them' })
   stateOf(on, { opened: 'T-2', view: { shape: 'view-1', value: { tasks: [t], working: [], scouts: [], mode: 'auto', notify: 'voice', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await ui.find({ type: 'Text', text: /^waiting for your files on main: src\/a\.ts, README\.md; commit or stash them, it merges on its own$/ })).toBeDefined()
@@ -666,7 +667,7 @@ test("a task waiting only for the owner's files shows them and a Merge now butto
 })
 
 test("a task waiting for the owner's git-ignored file says move or rename it on its page, not commit or stash", async ($, on) => {
-  const t = task('T-2', 'waiting', 'Search mode', { merge_wait: { dirty: [], untracked: [], ignored: ['.env'] }, note: 'waiting for your files on main: .env; move or rename them' })
+  const t = task('T-2', 'waiting', 'Search mode', { live: { merge_wait: { dirty: [], untracked: [], ignored: ['.env'] } }, note: 'waiting for your files on main: .env; move or rename them' })
   stateOf(on, { opened: 'T-2', view: { shape: 'view-1', value: { tasks: [t], working: [], scouts: [], mode: 'auto', notify: 'voice', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await ui.find({ type: 'Text', text: /^waiting for your files on main: \.env; move or rename them, it merges on its own$/ })).toBeDefined()
@@ -1561,7 +1562,7 @@ test('T-587: the terminal task page Status row names the state (T-647), and its 
   mock.clock(on, { now: T0 })
   const iso = (ms: number) => new Date(ms).toISOString()
   const fresh = iso(T0 - 10_000)
-  const tasks = [task('T-4', 'doing', 'Fix it', { note: 'a checker agent is trying to break it before it merges', attempts: 1, runs: [{ started: iso(T0 - 9 * 60_000), ended: fresh }], checking: { step: 'checker', at: fresh } })]
+  const tasks = [task('T-4', 'doing', 'Fix it', { note: 'a checker agent is trying to break it before it merges', attempts: 1, runs: [{ started: iso(T0 - 9 * 60_000), ended: fresh }], live: { checking: { step: 'checker', at: fresh } }, })]
   stateOf(on, { opened: 'T-4', view: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', checker: true, test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   const L = await lines(ui)
@@ -1578,7 +1579,7 @@ test('T-587: with the checker setting off the Stage row leaves "checker" out; a 
   mock.clock(on, { now: T0 })
   const iso = (ms: number) => new Date(ms).toISOString()
   const fresh = iso(T0 - 10_000)
-  const tasks = [task('T-4', 'doing', 'Fix it', { note: 'running the tests', attempts: 1, runs: [{ started: iso(T0 - 9 * 60_000), ended: fresh }], checking: { step: 'testing', at: fresh } })]
+  const tasks = [task('T-4', 'doing', 'Fix it', { note: 'running the tests', attempts: 1, runs: [{ started: iso(T0 - 9 * 60_000), ended: fresh }], live: { checking: { step: 'testing', at: fresh } }, })]
   stateOf(on, { opened: 'T-4', view: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   const L = await lines(ui)

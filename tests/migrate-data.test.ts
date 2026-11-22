@@ -337,6 +337,30 @@ test('T-805: fix migrate-data gives an old try its agent entries (worker: tokens
   expect(await doctor(w.host, '')).not.toContain('keep tokens, cost or agent ids')
 })
 
+test('T-807: fix migrate-data moves a task\'s try-only fields into live, drops a false merge_main and reads a clash failure from its note', async () => {
+  const w = world()
+  const old = JSON.parse(w.files.get(`${D}/board.json`)!)
+  const origin = { by: 'lead', why: 'w', at: T }
+  old.tasks.push(
+    { ...base, id: 'T-5', title: 'five', status: 'doing', note: 'worker on it', attempts: 1, origin, merge_into: 'main', history: [], session: 'me', time_ask: E, extra_minutes: 10, try_refused: ['a.ts'], try_question: { question: 'Which?' }, merge_main: false, runs: [{ started: T }] },
+    { ...base, id: 'T-6', title: 'six', status: 'doing', note: 'worker starting', attempts: 1, origin, merge_into: 'main', history: [], session: 'me', finishing: E, runs: [{ started: T, ended: E }] },
+    { ...base, id: 'T-7', title: 'seven', status: 'failed', note: 'conflicts with the latest main (after 2 automatic retries)', attempts: 3, origin, merge_into: 'main', history: [], runs: [] },
+  )
+  w.files.set(`${D}/board.json`, JSON.stringify(old, null, 2))
+  expect(await doctor(w.host, '')).toContain('try-only fields outside `live`')
+  expect(await doctor(w.host, 'fix migrate-data')).toContain('✓ migrate-data')
+  const b = await load(w.host)
+  const t5 = b.tasks.find(x => x.id === 'T-5')!
+  expect(t5.live).toEqual({ session: 'me', phase: 'worker', time_ask: E, extra_minutes: 10, refused: ['a.ts'], question: { question: 'Which?' } })
+  expect('merge_main' in t5).toBe(false)
+  const t6 = b.tasks.find(x => x.id === 'T-6')!
+  expect(t6.live).toEqual({ session: 'me', phase: 'claimed', checking: { step: 'prep', at: E } })
+  expect(b.tasks.find(x => x.id === 'T-7')!.failed_on).toBe('clash')
+  const saved = JSON.parse(w.files.get(`${D}/board.json`)!).tasks.find((x: { id: string }) => x.id === 'T-5')
+  expect(['session', 'finishing', 'time_ask', 'extra_minutes', 'try_refused', 'try_question'].filter(k => k in saved)).toEqual([])
+  expect(await doctor(w.host, '')).not.toContain('try-only fields outside')
+})
+
 test('T-805: migrating an old try keeps a cost of 0', () => {
   const m = migrateRunAgents({ id: 'T-2', status: 'done', runs: [{ started: T, ended: E, tokens: { input: 100 }, cost: 0 }] })!
   const r = (m.runs as SymccRun[])[0]!

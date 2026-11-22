@@ -118,7 +118,7 @@ test('(a) the task names an older session id that no longer drives, but this ver
   await start($, w)
   expect(w.sent).toEqual([])
   expect(w.task('T-1').status).toBe('doing')
-  expect(w.task('T-1').session).toBe('s1')
+  expect(w.task('T-1').live?.session).toBe('s1')
 })
 
 test('(a) a board that cannot be read when the plugin loads stops no worker', async ($, on) => {
@@ -317,7 +317,7 @@ test('a worker stopped because its time is up: a "Stopped" answer during the slo
   const gate: { wait?: Promise<void> } = {}
   const w = world(on, agents, 's1', gate)
   const tenAgo = new Date(Date.now() - 10 * 60_000).toISOString()
-  w.files.set(BOARD, JSON.stringify(patchTask(doing('s1', 'w1', tenAgo), 'T-1', { wrap_up: tenAgo } as never, ISO)))
+  w.files.set(BOARD, JSON.stringify(patchTask(doing('s1', 'w1', tenAgo), 'T-1', { live: { wrap_up: tenAgo } } as never, ISO)))
   w.files.set(LEAD, JSON.stringify({ session: 's1', heartbeat: T0 - 1000 }) + '\n')
   await start($, w)
   expect(w.task('T-1').status).toBe('doing')

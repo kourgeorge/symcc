@@ -260,7 +260,7 @@ async function project() {
   await git(main, 'worktree', 'add', '-q', '-b', 'symcc/T-1', wt)
   const at = '2026-11-18T00:00:00.000Z'
   const [b1] = addTask(emptyBoard(), { origin: { why: 'a test' }, title: 'a change in src', files: ['src/'] }, at)
-  const [b2] = addTask(patchTask(b1, 'T-1', { status: 'doing', session: 'driver', runs: [{ started: at, agents: [{ id: 'ses_worker', kind: 'worker' as const, started: at }] }] }, at), { origin: { why: 'a test' }, title: 'an old one', files: ['src/'] }, at)
+  const [b2] = addTask(patchTask(b1, 'T-1', { status: 'doing', live: { session: 'driver' }, runs: [{ started: at, agents: [{ id: 'ses_worker', kind: 'worker' as const, started: at }] }] }, at), { origin: { why: 'a test' }, title: 'an old one', files: ['src/'] }, at)
   const board = patchTask(b2, 'T-2', { status: 'todo', runs: [{ started: at, ended: at, agents: [{ id: 'ses_old', kind: 'worker' as const, started: at, ended: at }] }] }, at)
   await writeFile(`${main}/.symcc/board.json`, JSON.stringify(board))
   const link = base.startsWith('/private/tmp/') ? main.slice('/private'.length) : main
@@ -1145,7 +1145,7 @@ test('every lead tool and ask_owner is added as a normal tool (codemode false) w
     // (T-515) through the engine's own one-at-a-time board write (change), not a plain file write: the add above makes
     // the engine start T-2's and T-3's workers, and on a busy machine their board write could land between a load
     // and a writeFile here and undo this patch (the question was then refused: the board no longer named ses_w2)
-    await change(host!, b => patchTask(b, 'T-1', { status: 'doing', runs: withAgentStart(find(b, 'T-1')?.runs?.length ? find(b, 'T-1')!.runs : [{ started: at }], 'worker', 'ses_w2', at), session: S.me }, at))
+    await change(host!, b => patchTask(b, 'T-1', { status: 'doing', runs: withAgentStart(find(b, 'T-1')?.runs?.length ? find(b, 'T-1')!.runs : [{ started: at }], 'worker', 'ses_w2', at), live: { session: S.me } }, at))
     workers.set('ses_w2', { task: 'T-1', worktree: p.wt, branch: 'symcc/T-1', since: Date.now() })
     expect(await call('symcc_add', 'ses_w2', { title: 'x', details: 'y', why: 'z', origin_by: 'owner' })).toEqual({ refused: workerToolRefusal('add') })
     const asked = await call('symcc_ask_owner', 'ses_w2', { question: 'Which one?' })

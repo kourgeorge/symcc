@@ -19,7 +19,7 @@ import { readOld, stillOld } from './old-data-fixture'
 import { upgradeArchiveTask } from '../hooks/core/old-data'
 import { rowEndBoard, ROW_END, LEAD_BEFORE, ROW_END_NOW } from './row-end-cases'
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
-import { STEP_WORD, asChecking, stepNote, STEP_NOTE, isMergeNote, inLineNote, PREP_NOTE, CHECKER_NOTE, everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, goneBranchQuestion, goneBranchOptions, parseGoneBranch, saysMergeInstead, crossBranchNotes, intoOf, branchesToDelete, worktreesToRemove, cleanupText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, notifyOf, notifyChoices, notifyRefusal, unplayableNote, bestNotify, startRun, endRun, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_NOT_READY, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, needFilesQuestion, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, bashPathsToCheck, CWD_LOST, BASH_LOST, shellCwd, bashTooManyText, BASH_TOO_MANY, BASH_PATHS_MAX, pathAliases, resolvePath, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, panelSections, sectionHeader, foldedRow, crewParts, withCrew, statusRoom, STATUS_WIDTH, nextScoutText, statusCell, rowExtra, fileWaitText, fitRow, hintLines, hintLineText, hintText, packRows, listKeys, taskKeys, diffKeys, scoutKeys, scoutListKeys, scoutIcon, scoutTone, scoutLastText, countFindings, scoutListRows, scoutListText, scoutPausedText, scoutMayRun, scoutWhyNot, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, rolesLeadText, BUILT_IN_ROLES, WEB_SAFETY_LINE, leftoverTmpFiles, tmpName, normId, dayOf, runMs, isNothing, agentSafeName, onDemand, readBoard } from '../hooks/board'
+import { STEP_WORD, asChecking, stepNote, STEP_NOTE, isMergeNote, inLineNote, PREP_NOTE, everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, goneBranchQuestion, goneBranchOptions, parseGoneBranch, saysMergeInstead, crossBranchNotes, intoOf, branchesToDelete, worktreesToRemove, cleanupText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, notifyOf, notifyChoices, notifyRefusal, unplayableNote, bestNotify, startRun, endRun, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_NOT_READY, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, needFilesQuestion, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, bashPathsToCheck, CWD_LOST, BASH_LOST, shellCwd, bashTooManyText, BASH_TOO_MANY, BASH_PATHS_MAX, pathAliases, resolvePath, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, panelSections, sectionHeader, foldedRow, crewParts, withCrew, statusRoom, STATUS_WIDTH, nextScoutText, statusCell, rowExtra, fileWaitText, fitRow, hintLines, hintLineText, hintText, packRows, listKeys, taskKeys, diffKeys, scoutKeys, scoutListKeys, scoutIcon, scoutTone, scoutLastText, countFindings, scoutListRows, scoutListText, scoutPausedText, scoutMayRun, scoutWhyNot, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, rolesLeadText, BUILT_IN_ROLES, WEB_SAFETY_LINE, leftoverTmpFiles, tmpName, normId, dayOf, runMs, isNothing, agentSafeName, onDemand, readBoard } from '../hooks/board'
 import { usageTokens } from '../hooks/claude/usage'
 import { EXTRA_TOOLS, ROLE_TOOL_MAP, claudeRoleTools, BASE_WORKER_TOOLS, workerTypeFor, workerTypeSuffix, workerAgentTypes, isWorkerType, asBaseWorkers, claudeNames } from '../hooks/claude/agent-types'
 import { type AgentInfo, hostAgent, isNotReady } from '../hooks/claude/agents'
@@ -202,18 +202,18 @@ test('at session start, only "doing" tasks of this session, a dead session or no
   const t0 = 1_800_000_000_000
   let b = emptyBoard()
   for (const title of ['mine', 'dead', 'old', 'live', 'idle']) b = addTask(b, { origin: W, title }, T)[0]
-  b = patchTask(b, 'T-1', { status: 'doing', session: 'me' }, T)
-  b = patchTask(b, 'T-2', { status: 'doing', session: 'gone' }, T)
+  b = patchTask(b, 'T-1', { status: 'doing', live: { session: 'me' } }, T)
+  b = patchTask(b, 'T-2', { status: 'doing', live: { session: 'gone' } }, T)
   b = patchTask(b, 'T-3', { status: 'doing' }, T)
-  b = patchTask(b, 'T-4', { status: 'doing', session: 'other' }, T)
+  b = patchTask(b, 'T-4', { status: 'doing', live: { session: 'other' } }, T)
   // the session is kept through a save and a load
   b = parseBoard(JSON.stringify(b))
-  expect(b.tasks.map(t => t.session)).toEqual(['me', 'gone', undefined, 'other', undefined])
+  expect(b.tasks.map(t => t.live?.session)).toEqual(['me', 'gone', undefined, 'other', undefined])
   const lead = leadText('other', t0)
   expect(liveDriver(lead, t0 + 60_000)).toBe('other')
   const after = resetDoing(b, 'me', lead, t0 + 60_000, 'restarted', T)
   expect(after.tasks.map(t => t.status)).toEqual(['todo', 'todo', 'todo', 'doing', 'todo'])
-  expect(after.tasks.map(t => t.session)).toEqual([undefined, undefined, undefined, 'other', undefined])
+  expect(after.tasks.map(t => t.live?.session)).toEqual([undefined, undefined, undefined, 'other', undefined])
   // once the other session's heartbeat is stale, its tasks are reset too
   expect(liveDriver(lead, t0 + LEAD_STALE_MS + 1)).toBe(null)
   expect(resetDoing(b, 'me', lead, t0 + LEAD_STALE_MS + 1, 'restarted', T).tasks.every(t => t.status === 'todo')).toBe(true)
@@ -226,14 +226,14 @@ test('at session start, only "doing" tasks of this session, a dead session or no
 
 test('a task forgets its session when it leaves "doing"', () => {
   let [b] = addTask(emptyBoard(), { origin: W, title: 'A' }, T)
-  b = patchTask(b, 'T-1', { status: 'doing', session: 'me' }, T)
-  expect(b.tasks[0]!.session).toBe('me')
+  b = patchTask(b, 'T-1', { status: 'doing', live: { session: 'me' } }, T)
+  expect(b.tasks[0]!.live?.session).toBe('me')
   b = patchTask(b, 'T-1', { note: 'merging' }, T)
-  expect(b.tasks[0]!.session).toBe('me')
+  expect(b.tasks[0]!.live?.session).toBe('me')
   b = patchTask(b, 'T-1', { status: 'failed' }, T)
   expect('session' in b.tasks[0]!).toBe(false)
   // a session left on a task that isn't running is dropped on load
-  const text = JSON.stringify({ ...b, tasks: [{ ...b.tasks[0], status: 'todo', session: 'x' }] })
+  const text = JSON.stringify({ ...b, tasks: [{ ...b.tasks[0], status: 'todo', live: { session: 'x' } }] })
   expect('session' in parseBoard(text).tasks[0]!).toBe(false)
 })
 
@@ -305,8 +305,8 @@ test('a worker is found by its name: the task id, or the id with a suffix the ho
 test('after a reload, a task whose old worker is still alive stays "doing"', () => {
   let b = emptyBoard()
   for (const title of ['alive', 'gone']) b = addTask(b, { origin: W, title }, T)[0]
-  b = patchTask(b, 'T-1', { status: 'doing', session: 'me' }, T)
-  b = patchTask(b, 'T-2', { status: 'doing', session: 'me' }, T)
+  b = patchTask(b, 'T-1', { status: 'doing', live: { session: 'me' } }, T)
+  b = patchTask(b, 'T-2', { status: 'doing', live: { session: 'me' } }, T)
   const after = resetDoing(b, 'me', null, 0, 'restarted', T, ['T-1'])
   expect(after.tasks.map(t => t.status)).toEqual(['doing', 'todo'])
 })
@@ -604,23 +604,23 @@ test('the board list shows "→ branch" only for a task that merges into another
 
 test("a task waiting only for the owner's files: its row and keys say to commit or stash them; a question is unchanged", () => {
   const base: SymccTask = { id: 'T-2', title: 'x', details: '', files: [], status: 'waiting', note: 'waiting for your files on dev: a.ts; commit or stash them', question: null, order: 0, after: [], attempts: 1, history: [], branch: null, created_at: '', updated_at: '' }
-  const files = { ...base, merge_wait: { dirty: ['a.ts'], untracked: [], ignored: [] }, merge_into: 'dev' } as SymccTask
+  const files = { ...base, live: { merge_wait: { dirty: ['a.ts'], untracked: [], ignored: [] } }, merge_into: 'dev' } as SymccTask
   expect(fileWaitText(files)).toBe('waiting for your files on dev: a.ts; commit or stash them, it merges on its own')
   expect(rowExtra(files, [files])).toBe('waiting for your files on dev: a.ts; commit or stash them, it merges on its own')
   expect(fileWaitText({ ...files, status: 'review' } as SymccTask)).toContain('commit or stash them')
   expect(fileWaitText({ ...files, status: 'todo' } as SymccTask)).toBe('')
   // untracked or git-ignored files: move or rename them (git stash leaves ignored files where they are), as the note says
-  const ignored = { ...files, merge_wait: { dirty: [], untracked: [], ignored: ['.env'] } } as SymccTask
+  const ignored = { ...files, live: { merge_wait: { dirty: [], untracked: [], ignored: ['.env'] } }, } as SymccTask
   expect(fileWaitText(ignored)).toBe('waiting for your files on dev: .env; move or rename them, it merges on its own')
   expect(rowExtra(ignored, [ignored])).toBe('waiting for your files on dev: .env; move or rename them, it merges on its own')
-  const untracked = { ...files, merge_wait: { dirty: [], untracked: ['b.ts'], ignored: [] } } as SymccTask
+  const untracked = { ...files, live: { merge_wait: { dirty: [], untracked: ['b.ts'], ignored: [] } }, } as SymccTask
   expect(fileWaitText(untracked)).toBe('waiting for your files on dev: b.ts; move, rename or commit them, it merges on its own')
-  const tracked = { ...files, merge_wait: { dirty: ['a.ts'], untracked: [], ignored: [] } } as SymccTask
+  const tracked = { ...files, live: { merge_wait: { dirty: ['a.ts'], untracked: [], ignored: [] } }, } as SymccTask
   expect(fileWaitText(tracked)).toBe('waiting for your files on dev: a.ts; commit or stash them, it merges on its own')
   const asked = { ...base, question: 'Which one?' }
   expect(fileWaitText(asked)).toBe('')
   expect(rowExtra(asked, [asked])).toBe('Which one?')
-  expect(keysFor('waiting', { extra: { merge_wait: { dirty: ['a.ts'], untracked: [], ignored: [] } } }).map(k => `${k.key} ${k.word}`)).toContain('r merge now')
+  expect(keysFor('waiting', { extra: { live: { merge_wait: { dirty: ['a.ts'], untracked: [], ignored: [] } }, } }).map(k => `${k.key} ${k.word}`)).toContain('r merge now')
   expect(keysFor('waiting').map(k => k.key)).not.toContain('r')
 })
 
@@ -823,13 +823,13 @@ test('a heartbeat is fresh only within the stale time, in either direction', asy
 
 test('backToTodo sends a task back to "todo" and forgets its session', async () => {
   const [b] = addTask(emptyBoard(), { origin: W, title: 'x' }, T)
-  const t = { ...b.tasks[0]!, status: 'doing' as const, session: 's1' }
+  const t = { ...b.tasks[0]!, status: 'doing' as const, live: { session: 's1' } }
   const back = backToTodo(t, 'restarted', '2026-11-10T00:00:00.000Z')
   expect(back.status).toBe('todo')
   expect(back.note).toBe('restarted')
   expect(back.updated_at).toBe('2026-11-10T00:00:00.000Z')
   expect('session' in back).toBe(false)
-  expect(t.session).toBe('s1')
+  expect(t.live?.session).toBe('s1')
 })
 
 test('statusCounts names only statuses that have tasks, in the order given', async () => {
@@ -890,13 +890,13 @@ test('a new scout name and every_minutes are checked', async () => {
 test('after /clear, this session\'s "doing" tasks move to the new session id', () => {
   let b = emptyBoard()
   for (const title of ['mine', 'other', 'done', 'none']) b = addTask(b, { origin: W, title }, T)[0]
-  b = patchTask(b, 'T-1', { status: 'doing', session: 'old' }, T)
-  b = patchTask(b, 'T-2', { status: 'doing', session: 'other' }, T)
+  b = patchTask(b, 'T-1', { status: 'doing', live: { session: 'old' } }, T)
+  b = patchTask(b, 'T-2', { status: 'doing', live: { session: 'other' } }, T)
   // a finished task that still names the old session (patchTask would drop it) is left alone
-  b = { ...b, tasks: b.tasks.map(t => (t.id === 'T-3' ? { ...t, status: 'done' as const, session: 'old' } : t)) }
+  b = { ...b, tasks: b.tasks.map(t => (t.id === 'T-3' ? { ...t, status: 'done' as const, live: { session: 'old' } } : t)) }
   b = patchTask(b, 'T-4', { status: 'doing' }, T)
   const after = relabelSession(b, 'old', 'new')
-  expect(after.tasks.map(t => t.session)).toEqual(['new', 'other', 'old', undefined])
+  expect(after.tasks.map(t => t.live?.session)).toEqual(['new', 'other', 'old', undefined])
   expect(after.tasks.map(t => t.status)).toEqual(['doing', 'doing', 'done', 'doing'])
   // the new session sees its own task as its own, even with the old id gone
   expect(ownedHere(after.tasks[0]!, 'new', 'new')).toBe(true)
@@ -1063,7 +1063,7 @@ test('reject sends a task in review back to "todo" with the reason in its histor
   expect(ready(r).map(y => y.id)).toEqual([t.id])
   const c = rejectTask(patchTask(b, t.id, { test_tries: 2, merge_main: true }, T), t.id, 'try again', T).tasks[0]!
   expect(c.test_tries).toBe(0)
-  expect(c.merge_main).toBe(false)
+  expect(c.merge_main).toBeUndefined()
   expect(() => rejectTask(b, t.id, '  ', T)).toThrow()
 })
 
@@ -2787,7 +2787,7 @@ test('/symcc-settings enabled off reads as the on/off switch', () => {
 
 test('after a plugin reload, a worker of this session is adopted, not stopped (T-87)', () => {
   const [b0] = addTask(emptyBoard(), { origin: W, title: 'A' }, T)
-  const b = patchTask(b0, 'T-1', { status: 'doing', session: 'me', runs: [runBy('w1', T)] }, T)
+  const b = patchTask(b0, 'T-1', { status: 'doing', live: { session: 'me' }, runs: [runBy('w1', T)] }, T)
   const w = (id: string, name = 'symcc-T-1', status = 'running') => ({ id, name, type: 'symcc:worker', status, description: 'A' })
   // the reloaded copy knows no workers: the running one of its own task is kept
   expect(orphanMove(w('w1'), b, 'me', 'me')).toEqual({ move: 'adopt', task: 'T-1' })
@@ -2804,7 +2804,7 @@ test('after a plugin reload, a worker of this session is adopted, not stopped (T
   // no task for it at all: stop
   expect(orphanMove(w('w3', 'symcc-T-99'), b, 'me', 'me')).toEqual({ move: 'stop' })
   // the task belongs to another session that drives the board now: leave it alone
-  const theirs = patchTask(b, 'T-1', { session: 'other' }, T)
+  const theirs = patchTask(b, 'T-1', { live: { session: 'other' } }, T)
   expect(orphanMove(w('w1'), theirs, 'me', 'other')).toEqual({ move: 'leave' })
   // the task names a session that no longer drives but this very agent (listed here, so this
   // process's own worker; e.g. the session id changed over the reload): adopted (T-376)
@@ -2817,7 +2817,7 @@ test('after a plugin reload, a worker of this session is adopted, not stopped (T
   expect(orphanMove({ id: '', status: 'running' }, b, 'me', 'me')).toEqual({ move: 'leave' })
   expect(orphanMove(w('w1'), { ...b, tasks: undefined as never }, 'me', 'me')).toEqual({ move: 'stop' })
   // no session id known: never adopt
-  expect(orphanMove(w('w1'), patchTask(b, 'T-1', { session: '' }, T), '', null)).toEqual({ move: 'stop' })
+  expect(orphanMove(w('w1'), patchTask(b, 'T-1', { live: { session: '' } }, T), '', null)).toEqual({ move: 'stop' })
 })
 
 test('the panel sections: needs you, doing, to do by run order then paused, backlog, done and dropped finished-last first', () => {
@@ -2838,7 +2838,7 @@ test('the panel sections: needs you, doing, to do by run order then paused, back
   expect(s.needsYou.map(t => t.id)).toEqual(['T-6', 'T-5'])
   expect(s.doing.map(t => t.id)).toEqual(['T-7'])
   // a task asking for more time waits for the owner: under NEEDS YOU (with the waiting ones), not with the running ones
-  const asking = panelSections(tasks.map(t => (t.id === 'T-7' ? { ...t, time_ask: '2026-11-11T11:00:00Z' } : t)), NOW, 0)
+  const asking = panelSections(tasks.map(t => (t.id === 'T-7' ? { ...t, live: { time_ask: '2026-11-11T11:00:00Z' } } : t)), NOW, 0)
   expect(asking.needsYou.map(t => t.id)).toEqual(['T-6', 'T-7', 'T-5'])
   expect(asking.doing.map(t => t.id)).toEqual([])
   expect(s.todo.map(t => t.id)).toEqual(['T-4', 'T-2', 'T-3'])
@@ -2900,7 +2900,7 @@ test('the workers and scouts parts (crewParts, withCrew) and the next scout', ()
   // a task symcc is only testing and merging (a fresh finishing mark) is "merging", not a worker
   const fresh = new Date(now - 10_000).toISOString()
   const working = { status: 'doing' as const }
-  const at = (step: 'prep' | 'checker' | 'queue' | 'testing' | 'merging') => ({ status: 'doing' as const, finishing: fresh, checking: { step, at: fresh } })
+  const at = (step: 'prep' | 'checker' | 'queue' | 'testing' | 'merging') => ({ status: 'doing' as const, live: { checking: { step, at: fresh } }, })
   const merging = at('merging')
   expect(crewParts({ max_parallel: 3, tasks: [working], scouts: [] }, now).workers).toBe('1/3 workers')
   expect(crewParts({ max_parallel: 3, tasks: [merging], scouts: [] }, now).workers).toBe('1 merging')
@@ -2911,12 +2911,12 @@ test('the workers and scouts parts (crewParts, withCrew) and the next scout', ()
   expect(crewParts({ tasks: [at('testing')], scouts: [] }, now).workers).toBe('1 testing')
   expect(crewParts({ tasks: [at('prep')], scouts: [] }, now).workers).toBe('1 in prep')
   // handed back, no check step on the board yet: in prep
-  expect(crewParts({ tasks: [{ status: 'doing', finishing: fresh }], scouts: [] }, now).workers).toBe('1 in prep')
+  expect(crewParts({ tasks: [{ status: 'doing', live: { checking: { step: 'prep', at: fresh } }, }], scouts: [] }, now).workers).toBe('1 in prep')
   expect(crewParts({ max_parallel: 3, tasks: [merging, at('testing'), working, at('queue'), at('checker'), at('queue')], scouts: [] }, now).workers).toBe('1/3 workers · 1 in checker · 2 in queue · 1 testing · 1 merging')
   // a running approve (a task in review with a fresh check step) counts at its own step
-  expect(crewParts({ tasks: [{ status: 'review', checking: { step: 'checker', at: fresh } }], scouts: [] }, now).workers).toBe('1 in checker')
+  expect(crewParts({ tasks: [{ status: 'review', live: { checking: { step: 'checker', at: fresh } }, }], scouts: [] }, now).workers).toBe('1 in checker')
   // a stale mark (the copy that merged it is gone) is not merging now
-  expect(crewParts({ max_parallel: 3, tasks: [{ status: 'doing', finishing: new Date(now - 3_600_000).toISOString() }], scouts: [] }, now).workers).toBe('1/3 workers')
+  expect(crewParts({ max_parallel: 3, tasks: [{ status: 'doing', live: { checking: { step: 'prep', at: new Date(now - 3_600_000).toISOString() } }, }], scouts: [] }, now).workers).toBe('1/3 workers')
   expect(withCrew((w, s) => [w, s].join('|'), undefined, now)).toBe('|')
   expect(nextScoutText([{ name: 'bugs', running: true }, ...scouts], now)).toBe('running: bugs')
   expect(nextScoutText([], now)).toBe('')
@@ -2925,9 +2925,9 @@ test('the workers and scouts parts (crewParts, withCrew) and the next scout', ()
 test("T-542: symcc's own pre-merge step is \"prep\", a running checker is \"checker\"; the merge queue is a step too (T-612)", () => {
   const now = Date.parse('2026-11-11T12:00:00Z')
   const stamp = new Date(now - 10_000).toISOString()
-  expect(statusCell({ status: 'doing', runs: [], checking: { step: 'prep', at: stamp } }, now)).toBe('prep')
-  expect(statusCell({ status: 'doing', runs: [], checking: { step: 'checker', at: stamp } }, now)).toBe('checker')
-  expect(statusCell({ status: 'doing', runs: [], checking: { step: 'queue', place: 2, at: stamp } }, now)).toBe('queue')
+  expect(statusCell({ status: 'doing', runs: [], live: { checking: { step: 'prep', at: stamp } }, }, now)).toBe('prep')
+  expect(statusCell({ status: 'doing', runs: [], live: { checking: { step: 'checker', at: stamp } }, }, now)).toBe('checker')
+  expect(statusCell({ status: 'doing', runs: [], live: { checking: { step: 'queue', place: 2, at: stamp } }, }, now)).toBe('queue')
   expect(STEP_WORD).toEqual({ prep: 'prep', testing: 'test', checker: 'checker', queue: 'queue', merging: 'merge' })
   // T-612: the old step value "checking" is no longer read (no backward compatibility), the queue keeps its place
   expect(asChecking({ step: 'checking', at: stamp })).toBeUndefined()
@@ -2957,20 +2957,20 @@ test('T-542: the lead\'s text board shows the same step words ("prep", "checker"
   const [b0] = addTask(emptyBoard(), { origin: W, title: 'Fix it' }, stamp)
   const doing = patchTask(b0, 'T-1', { status: 'doing' }, stamp)
   const row = (b: typeof doing) => boardText(b, now).split('\n').find(l => l.startsWith('T-1'))!
-  expect(row(patchTask(doing, 'T-1', { checking: { step: 'prep', at: stamp } }, stamp))).toContain('doing   prep · Fix it')
-  expect(row(patchTask(doing, 'T-1', { checking: { step: 'checker', at: stamp } }, stamp))).toContain('doing   checker · Fix it')
+  expect(row(patchTask(doing, 'T-1', { live: { checking: { step: 'prep', at: stamp } }, }, stamp))).toContain('doing   prep · Fix it')
+  expect(row(patchTask(doing, 'T-1', { live: { checking: { step: 'checker', at: stamp } }, }, stamp))).toContain('doing   checker · Fix it')
   // no step (e.g. the checker setting off and no pre-merge step running): no step word at all
   const plain = row(doing)
   expect(plain).toContain('doing   Fix it')
   expect(plain).not.toContain('checker')
   expect(plain).not.toContain('prep')
   // a later try: one separator between the step word and the try mark ("prep · try 2", not "prep · · try 2")
-  const later = row(patchTask(patchTask(doing, 'T-1', { attempts: 2 }, stamp), 'T-1', { checking: { step: 'prep', at: stamp } }, stamp))
+  const later = row(patchTask(patchTask(doing, 'T-1', { attempts: 2 }, stamp), 'T-1', { live: { checking: { step: 'prep', at: stamp } }, }, stamp))
   expect(later).toMatch(/doing {3}prep · try 2\S* Fix it/)
   expect(later).not.toContain('· ·')
   expect(row(patchTask(doing, 'T-1', { attempts: 2 }, stamp))).toMatch(/doing {3}· try 2\S* Fix it/)
   // a stale step (its copy is gone) shows no word
-  expect(row(patchTask(doing, 'T-1', { checking: { step: 'checker', at: new Date(now - 3_600_000).toISOString() } }, stamp))).not.toContain('checker')
+  expect(row(patchTask(doing, 'T-1', { live: { checking: { step: 'checker', at: new Date(now - 3_600_000).toISOString() } }, }, stamp))).not.toContain('checker')
 })
 
 test('task rows: a short status column and an inactive-colored extra; the extra goes first when the row is narrow', () => {
@@ -2982,17 +2982,17 @@ test('task rows: a short status column and an inactive-colored extra; the extra 
   expect(statusCell({ ...base, runs: [] }, now)).toBe('')
   // while symcc checks the finished work, the step shows instead of the time; a stale step (its copy is gone) does not
   const stamp = new Date(now - 10_000).toISOString()
-  expect(statusCell({ status: 'doing', runs: [{ started: new Date(now - 240_000).toISOString(), ended: stamp }], checking: { step: 'testing', at: stamp } }, now)).toBe('test')
-  expect(statusCell({ status: 'doing', runs: [], checking: { step: 'merging', at: stamp } }, now)).toBe('merge')
-  expect(statusCell({ status: 'review', checking: { step: 'testing', at: stamp } }, now)).toBe('test')
-  expect(statusCell({ status: 'review', checking: { step: 'testing', at: new Date(now - 3_600_000).toISOString() } }, now)).toBe('review')
+  expect(statusCell({ status: 'doing', runs: [{ started: new Date(now - 240_000).toISOString(), ended: stamp }], live: { checking: { step: 'testing', at: stamp } }, }, now)).toBe('test')
+  expect(statusCell({ status: 'doing', runs: [], live: { checking: { step: 'merging', at: stamp } }, }, now)).toBe('merge')
+  expect(statusCell({ status: 'review', live: { checking: { step: 'testing', at: stamp } }, }, now)).toBe('test')
+  expect(statusCell({ status: 'review', live: { checking: { step: 'testing', at: new Date(now - 3_600_000).toISOString() } }, }, now)).toBe('review')
   // a task with a running worker still shows its time
   expect(statusCell(base, now)).toBe('4m')
   // the step goes when the task leaves the status it was checked in
   const [b0] = addTask(emptyBoard(), { origin: W, title: 'x' }, new Date(now).toISOString())
-  const b1 = patchTask(patchTask(b0, 'T-1', { status: 'review' }, stamp), 'T-1', { checking: { step: 'testing', at: stamp } }, stamp)
-  expect(b1.tasks[0]!.checking).toEqual({ step: 'testing', at: stamp })
-  expect(patchTask(b1, 'T-1', { status: 'done' }, stamp).tasks[0]!.checking).toBeUndefined()
+  const b1 = patchTask(patchTask(b0, 'T-1', { status: 'review' }, stamp), 'T-1', { live: { checking: { step: 'testing', at: stamp } }, }, stamp)
+  expect(b1.tasks[0]!.live?.checking).toEqual({ step: 'testing', at: stamp })
+  expect(patchTask(b1, 'T-1', { status: 'done' }, stamp).tasks[0]!.live?.checking).toBeUndefined()
   expect(['review', 'waiting', 'failed', 'paused', 'todo', 'done'].map(status => statusCell({ status: status as never }, now))).toEqual(['review', 'waiting', 'failed', 'paused', '', ''])
   // the try is not in the extra: it shows after the row's time (rowStates, T-604)
   // the role is never in the extra (T-722: only the kind, on the task page the role)
@@ -3005,10 +3005,10 @@ test('task rows: a short status column and an inactive-colored extra; the extra 
   expect(rowExtra(tasks[3]!, tasks)).toBe('Enter to review')
   expect(rowExtra(tasks[2]!, tasks)).toBe('')
   // a worker over its time limit asking the owner for more time: "more time?" and the question, not its time and try
-  const asking = { ...base, time_ask: '2026-11-11T11:59:00Z', extra_minutes: 10 }
+  const asking = { ...base, live: { time_ask: '2026-11-11T11:59:00Z', extra_minutes: 10 } }
   expect(statusCell(asking, now)).toBe('more time?')
   expect(rowExtra(asking, tasks, '', 45)).toBe('T-5 has run 55 min. Give it more time?')
-  expect(rowExtra({ ...asking, extra_minutes: undefined }, tasks)).toBe(`T-5 has run ${emptyBoard().max_minutes} min. Give it more time?`)
+  expect(rowExtra({ ...asking, live: { time_ask: asking.live.time_ask } }, tasks)).toBe(`T-5 has run ${emptyBoard().max_minutes} min. Give it more time?`)
   // the extra sits at the right end; when the whole title does not fit beside it, the title is cut first (down to
   // TITLE_ROOM), then the extra is cut (keeping its start), and only at a very narrow width does the extra go (T-696)
   const wide = fitRow(20, 'Secrets scout example', 'frontend · try 2', 60)
@@ -3711,6 +3711,7 @@ test('backToTodo of a running task says in its history why it restarts', async (
 import { cutLine, reportText, reportFile, taskReports, researchNotes, reportPreview, REPORT_MAX_CHARS } from '../hooks/board'
 import { fakeHost } from './fake-host'
 import { hist } from './history-fixture'
+const CHECKER_NOTE = STEP_NOTE.checker
 
 test('cutLine keeps short text as it is and cuts long text at a word or sentence end, with "…"', () => {
   expect(cutLine('  short\n text  ', 50)).toBe('short text')
@@ -3862,10 +3863,10 @@ test('a doing row shows one time, the total work time of all tries without the g
   expect(core.rowDuration(180 * 60_000)).toBe('3h')
   expect(core.rowDuration(40 * 60_000)).toBe('40m')
   // in a step: the total of all tries, and the step's icon as the row's mark in place of ▶ and the word (T-581)
-  const testing = { id: 'T-3', status: 'doing' as const, attempts: 1, runs: [{ started: at(985), ended: at(994) }] as SymccTask['runs'], checking: { step: 'testing' as const, at: new Date(now).toISOString() } }
+  const testing = { id: 'T-3', status: 'doing' as const, attempts: 1, runs: [{ started: at(985), ended: at(994) }] as SymccTask['runs'], live: { checking: { step: 'testing' as const, at: new Date(now).toISOString() } }, }
   expect(core.rowCell(testing, now)).toBe('9m')
   expect(core.rowCell(testing, now, undefined, 'none')).toBe('')
-  const prep = { ...testing, id: 'T-4', runs: [{ started: at(0), ended: at(80) }, { started: at(900), ended: at(945) }] as SymccTask['runs'], checking: { step: 'prep' as const, at: new Date(now).toISOString() } }
+  const prep = { ...testing, id: 'T-4', runs: [{ started: at(0), ended: at(80) }, { started: at(900), ended: at(945) }] as SymccTask['runs'], live: { checking: { step: 'prep' as const, at: new Date(now).toISOString() } }, }
   expect(core.rowCell(prep, now)).toBe('2h5m')
   expect(bandLeads([testing], now).get('T-3')).toBe('T-3  ⊛ 9m')
   // the band: lined up, the try after the one time
@@ -3914,18 +3915,18 @@ test('T-605/T-612: the merge queue\'s waiting note is "queue (n)"; a saved board
   const task = (id: string, extra: object) => ({ id, title: 'x', status: 'doing', attempts: 1, note: 'queue (3)', merge_into: 'main', origin: { by: 'lead', why: 'w', at: '' }, created_at: '', updated_at: '', ...extra })
   const read = readOld(JSON.stringify({ version: 1, tasks: [task('T-1', { checking: { step: 'prep', at } }), task('T-2', {}), task('T-3', { checking: { step: 'queue', place: 3, at } })] }))
   const [one, two, three] = read.board.tasks
-  expect(one!.checking).toEqual({ step: 'queue', place: 3, at })
+  expect(one!.live?.checking).toEqual({ step: 'queue', place: 3, at })
   expect(one!.note).toBe('queue (3)')
-  expect(two!.checking).toBeUndefined()
+  expect(two!.live?.checking).toBeUndefined()
   expect(two!.note).toBe('')
   // a task already in the queue step (saved by this version) is left as it is
-  expect(three!.checking).toEqual({ step: 'queue', place: 3, at })
+  expect(three!.live?.checking).toEqual({ step: 'queue', place: 3, at })
   // once saved, nothing changes again
   expect(stillOld(read.board)).toBe(false)
   // the old "in line (n)" note (T-605) and the old step name "checking" are no longer read
   const old = readOld(JSON.stringify({ version: 1, tasks: [task('T-1', { note: 'in line (3)', checking: { step: 'checking', at } })] }))
   expect(old.board.tasks[0]!.note).toBe('in line (3)')
-  expect(old.board.tasks[0]!.checking).toBeUndefined()
+  expect(old.board.tasks[0]!.live?.checking).toBeUndefined()
 })
 
 test('T-581: a row in a check step or the merge line shows one icon in place of "▶ <word>", then the time; each icon is one column; the worker row keeps ▶', () => {
@@ -3944,7 +3945,7 @@ test('T-581: a row in a check step or the merge line shows one icon in place of 
     expect(icon).not.toMatch(ambiguous)
   }
   const ran = [{ started: at(985), ended: at(994) }] as SymccTask['runs']
-  const inStep = (id: string, step: 'prep' | 'testing' | 'checker' | 'queue' | 'merging', note = '') => ({ id, status: 'doing' as const, attempts: 1, note, runs: ran, checking: { step, at: fresh, ...(step === 'queue' ? { place: 2 } : {}) } })
+  const inStep = (id: string, step: 'prep' | 'testing' | 'checker' | 'queue' | 'merging', note = '') => ({ id, status: 'doing' as const, attempts: 1, note, runs: ran, live: { checking: { step, at: fresh, ...(step === 'queue' ? { place: 2 } : {}) } }, })
   const rows = [inStep('T-1', 'prep'), inStep('T-2', 'testing'), inStep('T-3', 'checker'), inStep('T-4', 'merging'), inStep('T-5', 'queue', 'queue (2)')]
   const worker = { id: 'T-6', status: 'doing' as const, attempts: 1, runs: [{ started: at(985) }] as SymccTask['runs'] }
   const leads = bandLeads([...rows, worker], now)
@@ -3955,14 +3956,14 @@ test('T-581: a row in a check step or the merge line shows one icon in place of 
   expect(rows.map(t => core.rowMark(t, now))).toEqual(['✎', '⊛', '⌕', '⇢', '⧗'])
   expect(core.rowMark(worker, now)).toBe('▶')
   // a stale step: back to ▶
-  expect(core.rowMark({ ...inStep('T-7', 'checker'), checking: { step: 'checker' as const, at: at(0) } }, now)).toBe('▶')
+  expect(core.rowMark({ ...inStep('T-7', 'checker'), live: { checking: { step: 'checker' as const, at: at(0) } }, }, now)).toBe('▶')
   // the step's word stays on the task page, with the legend
   expect(core.stepNowWord(inStep('T-3', 'checker'), now)).toBe('⌕ checker')
   expect(core.stepNowWord(inStep('T-5', 'queue', 'queue (2)'), now)).toBe('⧗ queue')
   expect(core.stepNowWord(worker, now)).toBe('')
   expect(core.STEP_LEGEND).toBe('▶ working · ⧗ queue · ✎ prep · ⊛ test · ⌕ checker · ⇢ merge')
   const [b0] = addTask(emptyBoard(), { origin: W, title: 'Fix it' }, fresh)
-  const b = { ...b0, tasks: [{ ...b0.tasks[0]!, status: 'doing' as const, note: 'running the tests', runs: ran, checking: { step: 'testing' as const, at: fresh } }] }
+  const b = { ...b0, tasks: [{ ...b0.tasks[0]!, status: 'doing' as const, note: 'running the tests', runs: ran, live: { checking: { step: 'testing' as const, at: fresh } }, }] }
   const page = core.detailRows(b.tasks[0]!, { roles: [], all: b.tasks, when: () => '', nowMs: now })
   // the header's state line names the state, the step and the time (T-751); the Steps row the way to the merge
   expect(headState(b.tasks[0]!, now).text).toBe('▶ doing · test · 9m')
@@ -3977,9 +3978,9 @@ test('T-587: the task page badge and Status row name the step a task is in; the 
   const now = Date.parse(T) + 1000 * 60_000
   const fresh = new Date(now - 10_000).toISOString()
   const ran = [{ started: at(985), ended: at(994) }] as SymccTask['runs']
-  const inStep = (step: 'prep' | 'testing' | 'checker' | 'merging', note = '') => ({ id: 'T-1', status: 'doing' as const, attempts: 1, note, runs: ran, checking: { step, at: fresh } })
+  const inStep = (step: 'prep' | 'testing' | 'checker' | 'merging', note = '') => ({ id: 'T-1', status: 'doing' as const, attempts: 1, note, runs: ran, live: { checking: { step, at: fresh } }, })
   const worker = { id: 'T-1', status: 'doing' as const, attempts: 1, runs: [{ started: at(985) }] as SymccTask['runs'] }
-  const inLine = { id: 'T-1', status: 'doing' as const, attempts: 1, note: 'queue (2)', runs: ran, checking: { step: 'queue' as const, place: 2, at: fresh } }
+  const inLine = { id: 'T-1', status: 'doing' as const, attempts: 1, note: 'queue (2)', runs: ran, live: { checking: { step: 'queue' as const, place: 2, at: fresh } }, }
   // the badge: the step's icon, its word and the time
   expect(core.statusBadge(worker, now).text).toBe('▶ worker · 15m')
   expect(core.statusBadge(inStep('prep'), now).text).toBe('✎ prep · 9m')
@@ -3991,7 +3992,7 @@ test('T-587: the task page badge and Status row name the step a task is in; the 
   expect(core.statusBadge({ status: 'todo' }, now).text).toBe('○ to do')
   expect(core.statusBadge({ status: 'review' }, now).text).toBe('◆ ready for review')
   // an approved task being merged: the step, no time
-  expect(core.statusBadge({ status: 'review', checking: { step: 'merging', at: fresh } }, now).text).toBe('⇢ merge')
+  expect(core.statusBadge({ status: 'review', live: { checking: { step: 'merging', at: fresh } }, }, now).text).toBe('⇢ merge')
   // the Stage line (auto mode, checker off: no checker, no review)
   const auto = { mode: 'auto' as const }
   const on = { mode: 'auto' as const, checker: true }
@@ -4009,22 +4010,22 @@ test('T-587: the task page badge and Status row name the step a task is in; the 
   // a task in review passed every step before review; a done task every step
   expect(core.stageText(core.taskStage({ status: 'review', runs: ran }, now, on)!)).toBe('worker ✓ → prep ✓ → checker ✓ → queue ✓ → test ✓ → ● review → merge')
   // an approved task in review running prep / test / merge again: the Stage line agrees with the badge
-  const approving = (step: 'prep' | 'testing' | 'merging') => ({ status: 'review' as const, runs: ran, checking: { step, at: fresh } })
+  const approving = (step: 'prep' | 'testing' | 'merging') => ({ status: 'review' as const, runs: ran, live: { checking: { step, at: fresh } }, })
   expect(core.statusBadge(approving('testing'), now).text).toBe('⊛ test')
   expect(core.stageText(core.taskStage(approving('testing'), now, { mode: 'review' })!)).toBe('worker ✓ → prep ✓ → queue ✓ → test ✓ → review ✓ → ● test → merge')
   expect(core.statusBadge(approving('prep'), now).text).toBe('✎ prep')
   expect(core.stageText(core.taskStage(approving('prep'), now, { mode: 'review' })!)).toBe('worker ✓ → prep ✓ → queue ✓ → test ✓ → review ✓ → ● prep → merge')
   expect(core.stageText(core.taskStage(approving('merging'), now, { mode: 'review' })!)).toBe('worker ✓ → prep ✓ → queue ✓ → test ✓ → review ✓ → ● merge')
   // an approved task in review waiting in the merge line (its step the queue, kept fresh while it waits): "queue" on both
-  const queued = { status: 'review' as const, runs: ran, note: 'queue (2)', checking: { step: 'queue' as const, place: 2, at: fresh } }
+  const queued = { status: 'review' as const, runs: ran, note: 'queue (2)', live: { checking: { step: 'queue' as const, place: 2, at: fresh } }, }
   expect(core.statusBadge(queued, now).text).toBe('⧗ queue (2)')
   expect(core.stageText(core.taskStage(queued, now, { mode: 'review' })!)).toBe('worker ✓ → prep ✓ → queue ✓ → test ✓ → review ✓ → ● queue → merge')
   // its step gone stale (the copy merging it is gone, T-611): it waits for review on both, like its row
-  const leftover = { ...queued, checking: { ...queued.checking, at: new Date(now - 10 * 60_000).toISOString() } }
+  const leftover = { ...queued, live: { checking: { ...queued.live.checking, at: new Date(now - 10 * 60_000).toISOString() } }, }
   expect(core.statusBadge(leftover, now).text).toBe('◆ ready for review')
   expect(core.stageText(core.taskStage(leftover, now, { mode: 'review' })!)).toBe('worker ✓ → prep ✓ → queue ✓ → test ✓ → ● review → merge')
   // after "review ✓": exactly one "review ✓", no step name twice, the current step the badge's
-  const queuedAt = { status: 'review' as const, runs: ran, note: 'queue (1)', checking: { step: 'queue' as const, place: 1, at: fresh } }
+  const queuedAt = { status: 'review' as const, runs: ran, note: 'queue (1)', live: { checking: { step: 'queue' as const, place: 1, at: fresh } }, }
   for (const [t, word] of [[approving('prep'), 'prep'], [queuedAt, 'queue'], [approving('testing'), 'test'], [approving('merging'), 'merge']] as const) {
     const stage = core.taskStage(t, now, { mode: 'review' })!
     const text = core.stageText(stage)
@@ -4067,14 +4068,14 @@ test('T-647: the task page\'s Status row shows the state with its time ("▶ doi
     return { status: headState(t, now), stage: page.find(r => r.label === 'Steps')?.segs.map(g => g.text).join('') ?? null }
   }
   // a doing task in the test step: the state on Status, the step on Stage; the page's badge keeps the step
-  const testing = rows({ status: 'doing', attempts: 1, runs: ran, checking: { step: 'testing', at: fresh } })
+  const testing = rows({ status: 'doing', attempts: 1, runs: ran, live: { checking: { step: 'testing', at: fresh } }, })
   expect(testing.status).toMatchObject({ text: '▶ doing · test · 48m', color: core.STATUS_BADGE.doing })
   expect(testing.stage).toBe('worker ✓ → prep ✓ → queue ✓ → ● test → review → merge')
-  expect(core.statusBadge({ status: 'doing', attempts: 1, runs: ran, checking: { step: 'testing', at: fresh } }, now).text).toBe('⊛ test · 48m')
+  expect(core.statusBadge({ status: 'doing', attempts: 1, runs: ran, live: { checking: { step: 'testing', at: fresh } }, }, now).text).toBe('⊛ test · 48m')
   // its worker still working: doing too
   expect(rows({ status: 'doing', attempts: 1, runs: [{ started: at(952) }] }).status.text).toBe('▶ doing · worker · 48m')
   // an approved task whose approve runs shows doing (shownStatus), the approve's step on Stage
-  const approving = rows({ status: 'review', attempts: 1, runs: ran, checking: { step: 'merging', at: fresh } })
+  const approving = rows({ status: 'review', attempts: 1, runs: ran, live: { checking: { step: 'merging', at: fresh } }, })
   expect(approving.status).toMatchObject({ text: '▶ doing · merge · 48m', color: core.STATUS_BADGE.doing })
   expect(approving.stage).toContain('review ✓ → ● merge')
   // the states that run nothing: their mark and word
@@ -4121,7 +4122,7 @@ test('T-596: an approved task in review whose approve runs is counted and listed
   const [b0] = addTask(emptyBoard(), { origin: W, title: 'Fix it' }, fresh)
   const idle = { ...b0.tasks[0]!, status: 'review' as const, runs: [{ started: new Date(now - 20 * 60_000).toISOString(), ended: new Date(now - 5 * 60_000).toISOString() }] }
   for (const [checking, note, icon] of [[{ step: 'prep', at: fresh }, PREP_NOTE, '✎'], [{ step: 'queue', place: 2, at: fresh }, 'queue (2)', '⧗'], [{ step: 'testing', at: fresh }, STEP_NOTE.testing, '⊛'], [{ step: 'merging', at: fresh }, STEP_NOTE.merging, '⇢']] as const) {
-    const t = { ...idle, checking, note }
+    const t = { ...idle, live: { checking }, note }
     expect(core.approveRunning(t, now)).toBe(true)
     expect(core.needsYou(t, now)).toBe(false)
     expect(core.rowMark(t, now)).toBe(icon)
@@ -4134,7 +4135,7 @@ test('T-596: an approved task in review whose approve runs is counted and listed
     expect(boardText({ ...emptyBoard(), tasks: [t] }, now)).toMatch(new RegExp(`T-1 +${icon} review`))
   }
   // no approve (or a stale mark, its copy gone): it needs the owner, "to review"
-  for (const t of [idle, { ...idle, checking: { step: 'testing' as const, at: new Date(now - 3_600_000).toISOString() } }]) {
+  for (const t of [idle, { ...idle, live: { checking: { step: 'testing' as const, at: new Date(now - 3_600_000).toISOString() } }, }]) {
     expect(core.needsYou(t, now)).toBe(true)
     expect(statusLine({ tasks: [t], mode: 'review' }, true, { nowMs: now })).toBe('⏸ approve merge · drives here · today ✓ 0')
     expect(rowExtra(t, [t], '', 45, now)).toBe('Enter to review')
@@ -4150,13 +4151,13 @@ test("T-606: ownersTurn is review, waiting or failed with no approve running; ne
   const running = { step: 'testing' as const, at: fresh }
   const cases: [string, typeof base, boolean, boolean][] = [
     ['review', { ...base, status: 'review' }, true, true],
-    ['review, approve running', { ...base, status: 'review', checking: running }, false, false],
+    ['review, approve running', { ...base, status: 'review', live: { checking: running } }, false, false],
     ['waiting', { ...base, status: 'waiting' }, true, true],
-    ['waiting, approve running', { ...base, status: 'waiting', checking: running }, false, false],
+    ['waiting, approve running', { ...base, status: 'waiting', live: { checking: running } }, false, false],
     ['failed', { ...base, status: 'failed' }, true, true],
     ['doing', { ...base, status: 'doing' }, false, false],
-    ['doing, in a check step', { ...base, status: 'doing', checking: running }, false, false],
-    ['doing, asking for more time', { ...base, status: 'doing', time_ask: fresh }, false, true],
+    ['doing, in a check step', { ...base, status: 'doing', live: { checking: running } }, false, false],
+    ['doing, asking for more time', { ...base, status: 'doing', live: { time_ask: fresh } }, false, true],
     ['todo', { ...base, status: 'todo' }, false, false],
   ]
   for (const [name, t, turn, needs] of cases) {

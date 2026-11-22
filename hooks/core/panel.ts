@@ -71,7 +71,7 @@ export function nextScoutText(scouts: (Pick<SymccScout, 'name' | 'running' | 'ne
 
 /** What the workers and scouts part of the line above the prompt needs. Busy workers are the tasks being worked on;
  *  a doing task whose work symcc is checking and merging now (see finishingNow) is counted at its step, not as a worker. */
-export type CrewBoard = { mode?: SymccMode; plan_mode?: boolean; max_parallel?: number; tasks: (Pick<BoardTask, 'status' | 'finishing'> & Partial<Pick<BoardTask, 'checking'>>)[]; scouts: (Pick<SymccScout, 'name' | 'running' | 'next_run' | 'paused'> & { every_minutes?: number })[] }
+export type CrewBoard = { mode?: SymccMode; plan_mode?: boolean; max_parallel?: number; tasks: (Pick<BoardTask, 'status' | 'live'> & Partial<Pick<BoardTask, 'live'>>)[]; scouts: (Pick<SymccScout, 'name' | 'running' | 'next_run' | 'paused'> & { every_minutes?: number })[] }
 
 /** The check steps in the order a task goes through them, and how the line above the prompt counts each: "1 in checker". */
 const CREW_STEPS = ['prep', 'checker', 'queue', 'test', 'merge'] as const
@@ -132,7 +132,7 @@ export const STEP_LEGEND = `▶ working · ${IN_LINE_ICON} queue · ${STEP_ICON.
 
 /** The mark at the front of a task's row: ⧗ while it waits in the merge line, its step's icon (STEP_ICON) during a
  *  check step, else its own mark (statusMark: ▶ while its worker works). */
-export function rowMark(t: Pick<SymccTask, 'status'> & { note?: string; runs?: readonly unknown[]; attempts?: number } & Pick<BoardTask, 'checking'>, nowMs: number): string {
+export function rowMark(t: Pick<SymccTask, 'status'> & { note?: string; runs?: readonly unknown[]; attempts?: number } & Pick<BoardTask, 'live'>, nowMs: number): string {
   const step = stageStep(taskPhase(t as PhaseTask, nowMs).stage)
   return step ? STEP_ICON[step] : statusMark(t)
 }
@@ -154,14 +154,12 @@ export const STEP_NOTE: Record<TurnStep, string> = {
 /** The note of a finished task in symcc's own pre-merge step (step "prep"); set at the hand-back and on approve. */
 export const PREP_NOTE = STEP_NOTE.prep
 
-/** The note of a task while its checker runs; a reloaded copy finds a task whose checker it lost by it (see restartCheckers in workers.ts). */
-export const CHECKER_NOTE = STEP_NOTE.checker
 
 /** Whether `note` is one of the notes a task shows during its merge turn or while it waits for it (see STEP_NOTE). */
 export const isMergeNote = (note: string | undefined): boolean => !!note && (Object.values(STEP_NOTE).includes(note) || /^queue \(\d+\)$/.test(note))
 
 /** The note task `note` gets when check step `step` begins: the step's note (STEP_NOTE) in place of any other merge note;
- *  the checker step keeps it (runChecker then sets CHECKER_NOTE), and a note that is not a merge note stays. */
+ *  the checker step keeps it (runChecker then sets STEP_NOTE.checker), and a note that is not a merge note stays. */
 export function stepNote(step: TurnStep, note: string | undefined): string | undefined {
   if (step === 'checker') return note
   return isMergeNote(note) ? STEP_NOTE[step] : note
@@ -172,7 +170,7 @@ export function stepNote(step: TurnStep, note: string | undefined): string | und
  *  worked on ("more time?" while its worker, over its time limit, waits for the owner's answer), "review", "waiting",
  *  "failed" or "paused", and '' for the rest (the mark says enough). `since` is when
  *  this session's worker started, used when the task has no open try. */
-export function statusCell(t: Pick<SymccTask, 'status' | 'runs'> & Pick<BoardTask, 'checking' | 'time_ask' | 'kind'>, nowMs: number, since?: number | string): string {
+export function statusCell(t: Pick<SymccTask, 'status' | 'runs'> & Pick<BoardTask, 'live' | 'kind'>, nowMs: number, since?: number | string): string {
   const p = taskPhase(t, nowMs)
   const step = stageStep(p.stage)
   if (step) return STEP_WORD[step]
@@ -203,7 +201,7 @@ export const rowDuration = (ms: number): string => fmtDuration(ms).replace(/h 0?
  * tries is not counted. With no open try, `since` (when this session's worker started) counts as the running try.
  * '' for a task not doing, or with nothing to count.
  */
-export function rowTime(t: Pick<SymccTask, 'status' | 'runs'> & Pick<BoardTask, 'checking'>, nowMs: number, since?: number | string): string {
+export function rowTime(t: Pick<SymccTask, 'status' | 'runs'> & Pick<BoardTask, 'live'>, nowMs: number, since?: number | string): string {
   if (shownStatus(t, nowMs) !== 'doing') return ''
   const runs = t.runs ?? []
   const last = runs[runs.length - 1]
@@ -340,12 +338,12 @@ function rowExtraOf(t: BoardTask, tasks: Pick<SymccTask, 'id' | 'status'>[], max
   }
 }
 
-/** What a task whose finished work waits only for the owner's files (BoardTask.merge_wait) says, in the board list,
+/** What a task whose finished work waits only for the owner's files (BoardTask.live?.merge_wait) says, in the board list,
  *  on its page and above the prompt: "waiting for your files on main: a.ts, b.ts; commit or stash them, it merges on
  *  its own" (or "move or rename them" for untracked or ignored files, as the task's note says). '' for any other task. */
-export function fileWaitText(t: Pick<BoardTask, 'status' | 'merge_wait' | 'merge_into'>): string {
+export function fileWaitText(t: Pick<BoardTask, 'status' | 'live' | 'merge_into'>): string {
   if (!waitsForFiles(t)) return ''
-  return `${waitFilesNote(intoOf(t), asBlockers(t.merge_wait)!)}, it merges on its own`
+  return `${waitFilesNote(intoOf(t), asBlockers(t.live?.merge_wait)!)}, it merges on its own`
 }
 
 /** Cuts text to `n` columns, ending with "…" when cut. */

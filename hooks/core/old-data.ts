@@ -135,9 +135,45 @@ export function withoutTestRerun(t: Raw): Raw | null {
   if (!('test_rerun' in t) && !('rerun_minutes' in t)) return null
   const { test_rerun, rerun_minutes: _m, ...rest } = t
   if (test_rerun === undefined || test_rerun === null || (t.status !== 'waiting' && t.status !== 'doing')) return rest
-  const { session: _s, finishing: _f, checking: _c, options: _o, asked_files: _a, ...todo } = rest
+  const { session: _s, finishing: _f, checking: _c, live: _l, options: _o, asked_files: _a, ...todo } = rest
   const hist = Array.isArray(t.history) ? (t.history as SymccHistoryEntry[]) : []
   return { ...todo, status: 'todo', question: null, note: TEST_RERUN_GONE_NOTE, history: withHistory(hist, typeof t.updated_at === 'string' ? t.updated_at : '', ['step', TEST_RERUN_GONE_NOTE]) }
+}
+
+/** The old loose try-only fields of a task, now kept in `live` (T-807): the old name, and the name in `live`. */
+const OLD_LIVE: [string, string][] = [['session', 'session'], ['checking', 'checking'], ['merge_wait', 'merge_wait'], ['extra_minutes', 'extra_minutes'], ['time_ask', 'time_ask'], ['wrap_up', 'wrap_up'], ['try_question', 'question'], ['try_refused', 'refused']]
+
+/** The note texts a "doing" task had before `live.phase` (T-807): claimed (queued, or being started), and the worker on it. */
+const OLD_CLAIM_NOTES = ['starting at the next turn', 'worker starting']
+
+/**
+ * Task `t` with its loose try-only fields (session, finishing, checking, merge_wait, extra_minutes, time_ask, wrap_up,
+ * try_question, try_refused) moved into `live` (finishing becomes the check mark, step "prep", unless it has a step),
+ * the phase read from the old claim note, merge_main only when true, and failed_on read from the clash note (T-807).
+ * Null when it has none of those.
+ */
+export function withLive(t: Raw): Raw | null {
+  const old = OLD_LIVE.some(([k]) => k in t) || 'finishing' in t
+  const doing = t.status === 'doing'
+  const phased = doing && !isObj(t.live) && typeof t.note === 'string' && (OLD_CLAIM_NOTES.includes(t.note) || t.note === 'worker on it')
+  const falseMain = 'merge_main' in t && t.merge_main !== true
+  const clash = t.status === 'failed' && !('failed_on' in t) && typeof t.note === 'string' && /^conflicts with the latest /.test(t.note)
+  if (!old && !phased && !falseMain && !clash) return null
+  const out: Raw = { ...t }
+  const live: Raw = isObj(t.live) ? { ...t.live } : {}
+  for (const [from, to] of OLD_LIVE) {
+    if (from in out) live[to] = out[from]
+    delete out[from]
+  }
+  if ('finishing' in out) {
+    if (typeof out.finishing === 'string' && out.finishing && !live.checking) live.checking = { step: 'prep', at: out.finishing }
+    delete out.finishing
+  }
+  if (phased) live.phase = OLD_CLAIM_NOTES.includes(t.note as string) ? 'claimed' : 'worker'
+  if (Object.keys(live).length) out.live = live
+  if (falseMain) delete out.merge_main
+  if (clash) out.failed_on = 'clash'
+  return out
 }
 
 /** Old lines that are not about a try, by how they start: [kind, start]. */
@@ -347,9 +383,12 @@ export function upgradeTask(t: Raw, into = 'main'): Raw | null {
   if (rerun) out = rerun
   const clash = withoutConflictTries(out)
   if (clash) out = clash
+  const live = withLive(out)
+  if (live) out = live
   const queue = typeof out.note === 'string' ? /^queue \((\d+)\)$/.exec(out.note) : null
-  const checking = out.checking as Raw | undefined
-  if (queue && (!isObj(checking) || checking.step !== 'queue')) out = isObj(checking) ? { ...out, checking: { ...checking, step: 'queue', place: Number(queue[1]) } } : { ...out, note: '' }
+  const lv = isObj(out.live) ? out.live : {}
+  const checking = lv.checking as Raw | undefined
+  if (queue && (!isObj(checking) || checking.step !== 'queue')) out = isObj(checking) ? { ...out, live: { ...lv, checking: { ...checking, step: 'queue', place: Number(queue[1]) } } } : { ...out, note: '' }
   return out === t ? null : out
 }
 
@@ -431,7 +470,7 @@ export type OldInput = {
 
 /** The count of everything in old shape, as lines; rows with n = 0 are left out. */
 export function oldDataRows(i: OldInput): OldRow[] {
-  const c = { unsplit: 0, numTok: 0, strHist: 0, badKind: 0, facts: 0, other: 0, attempts: 0, chk: 0, queue: 0, role: 0, stage: 0, origin: 0, openRun: 0, conflict: 0, rerun: 0, noInto: 0 }
+  const c = { unsplit: 0, numTok: 0, strHist: 0, badKind: 0, facts: 0, other: 0, attempts: 0, chk: 0, queue: 0, role: 0, stage: 0, origin: 0, openRun: 0, conflict: 0, rerun: 0, noInto: 0, live: 0 }
   const task = (t: Raw, board: boolean) => {
     const runs = (Array.isArray(t.runs) ? t.runs : []).filter(isObj) as Raw[]
     for (const r of runs) {
@@ -449,6 +488,7 @@ export function oldDataRows(i: OldInput): OldRow[] {
       else if (lacksFacts(e as unknown as SymccHistoryEntry)) c.facts++
     }
     if (!board) return
+    if (withLive(t)) c.live++
     if (isNum(t.attempts) && Array.isArray(t.runs) && t.attempts !== t.runs.length) c.attempts++
     if (typeof t.note === 'string' && /^queue \(\d+\)$/.test(t.note)) c.queue++
     if (typeof t.role === 'string' && OLD_ROLES[t.role.trim().toLowerCase()]) c.role++
@@ -488,6 +528,7 @@ export function oldDataRows(i: OldInput): OldRow[] {
     { n: c.openRun, text: 'tasks with a try left open', fix: true },
     { n: c.rerun, text: 'tasks with test_rerun / rerun_minutes fields', fix: true },
     { n: c.conflict, text: 'tasks with a conflict_tries field', fix: true },
+    { n: c.live, text: 'tasks with try-only fields outside `live` (session, finishing, checking, merge_wait, extra_minutes, time_ask, wrap_up, try_question, try_refused), a merge_main that is false, or a clash failure known only from its note', fix: true },
     { n: settings, text: 'old board settings (mode off, notify sound / sound_set, target_branch)', fix: true },
     { n: lastReport, text: 'scouts whose last report is not yet in a runs file', fix: true },
     { n: unsafe.length, text: `scouts whose name can't be a file name; rename them (${unsafe.join(', ')})`, fix: false },

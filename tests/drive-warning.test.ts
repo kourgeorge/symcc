@@ -72,7 +72,7 @@ test('T-643: the status line says "driven by another session" right after the mo
 })
 
 test('T-643: a claimed doing task says it runs in the other session when this one does not drive', () => {
-  const t = { ...claimed(60_000), runs: [], checking: undefined, time_ask: undefined, kind: undefined }
+  const t = { ...claimed(60_000), runs: [], live: { checking: undefined, time_ask: undefined }, kind: undefined }
   expect(bandNote(t as never, NOW, undefined, false)).toBe(OTHER_SESSION_NOTE)
   expect(bandNote({ ...t, note: 'worker starting' } as never, NOW, undefined, false)).toBe('runs in the other session')
   expect(bandNote(t as never, NOW, undefined, true)).toBe('starting at the next turn')

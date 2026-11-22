@@ -243,12 +243,12 @@ export function statText(id: string, files: DiffFile[], name: string = DEFAULT_N
 export const NEEDS_YOU: SymccStatus[] = ['review', 'waiting', 'failed']
 
 /** A task being worked on whose worker ran over its time limit while the owner is asked "give it more time?" (time_ask set). */
-export const asksMoreTime = (t: Pick<SymccTask, 'status'> & { time_ask?: string }): boolean => t.status === 'doing' && !!t.time_ask
+export const asksMoreTime = (t: Pick<SymccTask, 'status'> & Pick<BoardTask, 'live'>): boolean => t.status === 'doing' && !!t.live?.time_ask
 
 /** Whether it is the owner's turn on task `t`: it is in review, waiting or failed (NEEDS_YOU) and no approve of it runs
  *  at `nowMs` (approveRunning: prep, in line, test, merge). The lists show such a task's title in bold; VS Code shows how
  *  long it has waited. */
-export const ownersTurn = (t: Pick<SymccTask, 'status'> & Pick<BoardTask, 'checking'>, nowMs: number = Date.now()): boolean => {
+export const ownersTurn = (t: Pick<SymccTask, 'status'> & Pick<BoardTask, 'live'>, nowMs: number = Date.now()): boolean => {
   const w = taskPhase(t, nowMs).waitsFor
   return !!w && w !== 'time'
 }
@@ -256,13 +256,13 @@ export const ownersTurn = (t: Pick<SymccTask, 'status'> & Pick<BoardTask, 'check
 /** Whether a task needs the owner: its owner's turn (ownersTurn), or a running task asking for more time. A task
  *  in review (or waiting) whose approve runs at `nowMs` does not: it is listed and counted with the running tasks
  *  until the approve ends. */
-export const needsYou = (t: Pick<SymccTask, 'status'> & { time_ask?: string } & Pick<BoardTask, 'checking'>, nowMs: number = Date.now()): boolean =>
+export const needsYou = (t: Pick<SymccTask, 'status'> & { time_ask?: string } & Pick<BoardTask, 'live'>, nowMs: number = Date.now()): boolean =>
   ownersTurn(t, nowMs) || asksMoreTime(t)
 
 /** Whether a task waits for the owner's answer ("waiting"), and no merge of it runs at `nowMs` (approveRunning).
  *  Every view uses this for "waiting for you". */
-export const waitsForYou = (t: { status?: unknown } & Pick<BoardTask, 'checking'>, nowMs: number = Date.now()): boolean =>
-  t.status === 'waiting' && !taskPhase(t as Pick<BoardTask, 'status' | 'checking'>, nowMs).stage
+export const waitsForYou = (t: { status?: unknown } & Pick<BoardTask, 'live'>, nowMs: number = Date.now()): boolean =>
+  t.status === 'waiting' && !taskPhase(t as Pick<BoardTask, 'status' | 'live'>, nowMs).stage
 
 /** The lead's line after the owner answered task `t`'s question with `answer` on a board panel. */
 export const answeredLeadLine = (t: { id: string }, answer: string, brief: (s: string) => string = s => s): string => `The owner answered ${t.id} ("${brief(answer)}"); it went back to work.`

@@ -1,6 +1,6 @@
 import type { SymccTask } from '../../types'
 import type { Host } from '../host'
-import { type BoardTask, MERGE_LINE_FILE, type LineEntry, parseMergeLine, mergeLineText, mergeLineStaleMs, lineEntryStale, testMinutesOf, find, checkStepNow, inLineNote, patchTask } from '../board'
+import { type BoardTask, type Checking, MERGE_LINE_FILE, type LineEntry, parseMergeLine, mergeLineText, mergeLineStaleMs, lineEntryStale, testMinutesOf, find, checkStepNow, inLineNote, patchTask } from '../board'
 import { S } from './state'
 import { change, load, locked, now, path, safeWrite } from './store'
 
@@ -153,7 +153,7 @@ async function place($: Host, me: Mine): Promise<{ ahead: number; others: number
 }
 
 /** What a task in the merge line shows of its wait: its note and its check step. */
-type LineMark = Pick<BoardTask, 'note' | 'checking'>
+type LineMark = { note: string; checking?: Checking }
 
 /**
  * Sets task `t`'s note and check step to what `mark` makes of them (like markStep in review.ts, for the queue step),
@@ -163,9 +163,11 @@ async function markLine($: Host, t: Pick<SymccTask, 'id' | 'status' | 'attempts'
   await change($, x => {
     const cur = find(x, t.id)
     if (!cur || cur.status !== t.status || cur.attempts !== t.attempts || stopped?.() !== undefined) return x
-    const next = mark(cur)
-    const changed = ('note' in next && next.note !== cur.note) || ('checking' in next && next.checking !== cur.checking)
-    return changed ? patchTask(x, t.id, next, now()) : x
+    const next = mark({ note: cur.note, checking: cur.live?.checking })
+    const changed = ('note' in next && next.note !== cur.note) || ('checking' in next && next.checking !== cur.live?.checking)
+    if (!changed) return x
+    const { checking, ...rest } = next
+    return patchTask(x, t.id, { ...rest, ...('checking' in next ? { live: { checking } } : {}) }, now())
   }).catch(() => undefined)
 }
 

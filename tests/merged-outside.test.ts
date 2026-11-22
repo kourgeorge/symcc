@@ -148,7 +148,7 @@ test('a rebased branch whose commits are all in main as equal changes is marked 
 test('a running task is marked done: its worker is stopped and its open try ends as finished with the note "merged"', async () => {
   const w = world()
   const runs = [{ started: ISO, ended: ISO, end: 'failed', commits: [C1] }, { started: ISO }]
-  await seed(w, 'doing', { runs, session: S.me })
+  await seed(w, 'doing', { runs, live: { session: S.me } })
   workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: 0 })
   const out = await runTool(w.$, 'merged', { task: 'T-1' })
   expect(out).toMatch(/; its worker was stopped$/)

@@ -369,8 +369,8 @@ export const FRESH_TRY_MS = 60_000
  * step (not finishing, not being checked), e.g. the retry symcc started at once after a checker send-back. A change
  * then (the lead's note) starts that try again on the same try number, with no "restarted" line.
  */
-export function freshTry(t: Pick<SymccTask, 'status' | 'runs'> & { finishing?: string; checking?: unknown }, nowMs: number): boolean {
-  if (t.status !== 'doing' || t.finishing || t.checking) return false
+export function freshTry(t: Pick<SymccTask, 'status' | 'runs'> & { live?: { checking?: unknown } }, nowMs: number): boolean {
+  if (t.status !== 'doing' || t.live?.checking) return false
   const last = t.runs?.at(-1)
   if (!last || last.ended) return false
   // T-743: a try that went on after a restart symcc did itself (goOnRun) is a whole round already under way: taking it

@@ -155,9 +155,6 @@ export const STARTING_NOTE = 'worker starting'
 /** The note of a task whose worker is being started: QUEUED_NOTE on a host with the start queue, else STARTING_NOTE. */
 export const claimNote = (host: Host) => (host.features.startQueue ? QUEUED_NOTE : STARTING_NOTE)
 
-/** Whether `note` is one a task gets when claimed, before its worker started (either claimNote). */
-export const isClaimNote = (note: string | undefined) => note === QUEUED_NOTE || note === STARTING_NOTE
-
 /** The lead's turn started (`busy`) or ended: while it runs, a queued start needs no wake-up (the turn's end starts it). */
 export function leadTurn(busy: boolean) {
   leadBusy = busy

@@ -21,7 +21,7 @@ export type TaskEvent = { task: string; kind: TaskEventKind; from: string | null
  * (to the worker, or to none), and a stale step left on the board changes nothing.
  */
 function savedPhase(t: BoardTask, nowMs: number) {
-  const marked = t.checking?.at ? Date.parse(t.checking.at) : NaN
+  const marked = t.live?.checking?.at ? Date.parse(t.live?.checking.at) : NaN
   return taskPhase(t, Number.isFinite(marked) ? marked : nowMs)
 }
 

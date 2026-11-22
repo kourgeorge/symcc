@@ -29,7 +29,7 @@ test('core reads a role\'s tools: line in symcc\'s words (web), the same in ever
 })
 
 test('core finds live workers from AgentState; the Claude adapter makes HostAgents from $.agent.list() entries, and the host those AgentState', () => {
-  const b = patchTask(addTask(emptyBoard(), { origin: { why: 'a test' }, title: 'A' }, T)[0], 'T-1', { status: 'doing', session: 'me', runs: [runBy('w1', T)] }, T)
+  const b = patchTask(addTask(emptyBoard(), { origin: { why: 'a test' }, title: 'A' }, T)[0], 'T-1', { status: 'doing', live: { session: 'me' }, runs: [runBy('w1', T)] }, T)
   const live: AgentState = { id: 'w1', worker: true, alive: true, name: 'symcc-T-1' }
   expect(liveWorkersFor({ id: 'T-1' }, [live, { ...live, id: 'w2', alive: false }, { ...live, id: 'w3', worker: false }]).map(a => a.id)).toEqual(['w1'])
   expect(mayStart(patchTask(b, 'T-1', { status: 'todo' }, T).tasks[0], [live])).toBe(false)

@@ -99,17 +99,17 @@ test('health: a task waiting on the owner over an hour is told once, again only 
 
 test('health: a task waiting over an hour only for the owner\'s files says to commit or stash them, not to answer', () => {
   const old = new Date(NOW - OWNER_IDLE_MS - 60_000).toISOString()
-  const files = boardHealth(board([{ ...task('T-4', { status: 'waiting', updated_at: old }), merge_wait: { dirty: ['src/a.ts'], untracked: [], ignored: [] } }]), NOW)
+  const files = boardHealth(board([{ ...task('T-4', { status: 'waiting', updated_at: old }), live: { merge_wait: { dirty: ['src/a.ts'], untracked: [], ignored: [] } }, }]), NOW)
   expect(files.length).toBe(1)
   expect(files[0]!.text).toContain("T-4 waits for the owner's files on main")
   expect(files[0]!.consider).toContain('commit or stash src/a.ts on main')
   expect(files[0]!.consider).not.toContain('answer it')
   // a changed tracked file still says commit or stash; a git-ignored or untracked one says move or rename
-  const tracked = boardHealth(board([{ ...task('T-4', { status: 'waiting', updated_at: old }), merge_wait: { dirty: ['src/a.ts'], untracked: [], ignored: [] } }]), NOW)
+  const tracked = boardHealth(board([{ ...task('T-4', { status: 'waiting', updated_at: old }), live: { merge_wait: { dirty: ['src/a.ts'], untracked: [], ignored: [] } }, }]), NOW)
   expect(tracked[0]!.consider).toContain('commit or stash src/a.ts on main')
-  const ignored = boardHealth(board([{ ...task('T-4', { status: 'waiting', updated_at: old }), merge_wait: { dirty: [], untracked: [], ignored: ['.env'] } }]), NOW)
+  const ignored = boardHealth(board([{ ...task('T-4', { status: 'waiting', updated_at: old }), live: { merge_wait: { dirty: [], untracked: [], ignored: ['.env'] } }, }]), NOW)
   expect(ignored[0]!.consider).toBe("remind the owner to move or rename .env on main; T-4 then merges on its own (no answer needed)")
-  const untracked = boardHealth(board([{ ...task('T-4', { status: 'waiting', updated_at: old }), merge_wait: { dirty: [], untracked: ['b.ts'], ignored: [] } }]), NOW)
+  const untracked = boardHealth(board([{ ...task('T-4', { status: 'waiting', updated_at: old }), live: { merge_wait: { dirty: [], untracked: ['b.ts'], ignored: [] } }, }]), NOW)
   expect(untracked[0]!.consider).toContain('move, rename or commit b.ts on main')
   expect(untracked[0]!.consider).not.toContain('stash')
   // a waiting task with a question is unchanged

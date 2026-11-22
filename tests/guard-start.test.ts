@@ -22,7 +22,7 @@ function inWorktree(gitAnswers = true, dir = WT, common = `${ROOT}/.git`) {
   const statuses: (string | undefined)[] = []
   const at = '2026-11-18T00:00:00.000Z'
   const [added] = addTask(emptyBoard(), { origin: { why: 'a test' }, title: 'a change', files: ['src/a.ts'] }, at)
-  const b = patchTask(added, 'T-1', { status: 'doing', runs: [runBy('ag1', at)], session: 'driver' }, at)
+  const b = patchTask(added, 'T-1', { status: 'doing', runs: [runBy('ag1', at)], live: { session: 'driver' } }, at)
   files.set(`${ROOT}/.symcc/board.json`, JSON.stringify(b))
   const writes: string[] = []
   const runs: string[][] = []

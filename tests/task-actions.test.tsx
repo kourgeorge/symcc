@@ -16,7 +16,7 @@ const keyed = (a: TaskAction[]) => a.filter(x => x.key).map(x => `${x.key} ${x.w
 const main = (a: TaskAction[]) => a.filter(x => x.main).map(x => x.id)
 const groups = (a: TaskAction[]) => a.map(x => `${x.group} ${x.id}`)
 const hints = (t: BoardTask, worker = false) => taskKeys(taskActions(t, { worker })).map(k => `${k.key} ${k.word}`)
-const FILE_WAIT = { merge_wait: { dirty: ['a.ts'], untracked: [], ignored: [] } }
+const FILE_WAIT = { live: { merge_wait: { dirty: ['a.ts'], untracked: [], ignored: [] } }, }
 
 test('taskActions: the buttons of each status, in order, with their keys and at most one main action', () => {
   expect(ids(taskActions(tk('todo')))).toEqual(['pause', 'stash', 'role', 'drop', 'needs-review', 'copy'])
@@ -44,7 +44,7 @@ test('taskActions: the buttons of each status, in order, with their keys and at 
   expect(ids(taskActions(tk('backlog')))).toEqual(['to-todo', 'role', 'drop', 'needs-review', 'copy'])
   expect(ids(taskActions(tk('done')))).toEqual(['copy'])
   // a running worker over its time limit asks, so nothing is the main action
-  expect(main(taskActions(tk('doing', { time_ask: T })))).toEqual([])
+  expect(main(taskActions(tk('doing', { live: { time_ask: T } })))).toEqual([])
   // needs review is a checkbox
   expect(taskActions(tk('todo', { needs_review: true })).find(x => x.id === 'needs-review')?.label).toBe('☑ Needs review')
   // the button words never say their key (T-751)
@@ -72,7 +72,7 @@ test('T-751: taskActions come in the header groups: the next step, the task acti
   // Ask more keeps the investigation going: not a danger action
   expect(groups(taskActions(tk('review', { kind: 'investigation' })))).toEqual(['main done', 'task keep-note', 'task ask-more', 'danger drop', 'page needs-review', 'page copy'])
   // while it asks something there is no next step: Pause is a task action then
-  expect(groups(taskActions(tk('doing', { time_ask: T })))).toEqual(['task pause', 'danger drop', 'page needs-review', 'page copy'])
+  expect(groups(taskActions(tk('doing', { live: { time_ask: T } })))).toEqual(['task pause', 'danger drop', 'page needs-review', 'page copy'])
   expect(groups(taskActions(tk('dropped')))).toEqual(['task retry', 'task already-merged', 'page copy'])
   // every list is in group order
   const order = ['main', 'task', 'danger', 'page']
@@ -85,7 +85,7 @@ test('T-751: taskActions come in the header groups: the next step, the task acti
 test('taskActions keys: none is j or k (they always move), none clashes on one page, stash is z and keep as a note v (T-592)', () => {
   // the page's own keys beside its actions: b back, l t s c the views, the number keys of the answer buttons
   const pageKeys = ['b', 't', 's', 'c', 'j', 'k', '1', '2', '3', '4', '5', '6', '7', '8', '9']
-  const all = [tk('todo'), tk('doing'), tk('doing', { time_ask: T }), tk('paused'), tk('waiting', { question: 'Which?' }), tk('waiting', FILE_WAIT), tk('review'), tk('review', { kind: 'investigation' }), tk('failed'), tk('failed', { attempts: 0 }), tk('dropped'), tk('backlog'), tk('done')]
+  const all = [tk('todo'), tk('doing'), tk('doing', { live: { time_ask: T } }), tk('paused'), tk('waiting', { question: 'Which?' }), tk('waiting', FILE_WAIT), tk('review'), tk('review', { kind: 'investigation' }), tk('failed'), tk('failed', { attempts: 0 }), tk('dropped'), tk('backlog'), tk('done')]
   for (const t of all) for (const ctx of [{}, { worker: true }, { merging: true }]) {
     const keys = taskActions(t, ctx).flatMap(x => (x.key ? [x.key] : []))
     expect(keys.filter(k => k === 'j' || k === 'k')).toEqual([])
@@ -108,7 +108,7 @@ test('taskAsks: what a task asks and its choices, for each status', () => {
   expect(taskAsks(tk('waiting'))?.text).toBe('it waits for your answer')
   // finished work waiting only for the owner's files asks nothing (it merges on its own)
   expect(taskAsks(tk('waiting', { ...FILE_WAIT, question: 'x' }))).toBeNull()
-  expect(taskAsks(tk('doing', { time_ask: T, extra_minutes: 30 }), 45)).toEqual({ text: 'T-1 has run 75 min. Give it more time?', choices: ['+30 min', '+60 min', 'Stop it', 'Answer…'], files: [], overtime: true })
+  expect(taskAsks(tk('doing', { live: { time_ask: T, extra_minutes: 30 } }), 45)).toEqual({ text: 'T-1 has run 75 min. Give it more time?', choices: ['+30 min', '+60 min', 'Stop it', 'Answer…'], files: [], overtime: true })
   for (const s of ['todo', 'doing', 'paused', 'review', 'failed', 'dropped', 'backlog', 'done']) expect(taskAsks(tk(s))).toBeNull()
 })
 

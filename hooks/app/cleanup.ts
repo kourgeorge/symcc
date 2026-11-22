@@ -62,7 +62,7 @@ export async function stopOrphans(host: Host, leadNow?: string | null): Promise<
         // T-743: the time limit counts from this worker's own start, not the first start of a try that went on after a reopen
         workers.set(a.id, { task: t.id, worktree: worktreeDir(t.id), branch: taskBranch(t), since: workerSince(t.runs?.at(-1)) ?? Date.now() })
         // The task is recorded as this session's, with this agent (its session id may have changed over the reload).
-        if (workerIdOf(t) !== a.id || t.session !== S.me) await change(host, x => (find(x, t.id)?.status === 'doing' && (workerIdOf(find(x, t.id)) ?? a.id) === a.id ? patchTask(x, t.id, { runs: withAgentStart(find(x, t.id)!.runs, 'worker', a.id, now()), session: S.me }, now()) : x)).catch((e: Error) => host.ui.toast(S.N.toast(`kept ${t.id}'s worker after a reload but couldn't record it on the board: ${String(e?.message ?? e).slice(0, 150)}`)))
+        if (workerIdOf(t) !== a.id || t.live?.session !== S.me) await change(host, x => (find(x, t.id)?.status === 'doing' && (workerIdOf(find(x, t.id)) ?? a.id) === a.id ? patchTask(x, t.id, { runs: withAgentStart(find(x, t.id)!.runs, 'worker', a.id, now()), live: { session: S.me } }, now()) : x)).catch((e: Error) => host.ui.toast(S.N.toast(`kept ${t.id}'s worker after a reload but couldn't record it on the board: ${String(e?.message ?? e).slice(0, 150)}`)))
         continue
       }
     }
@@ -98,7 +98,7 @@ async function waitingOnOld(host: Host, agents: HostAgent[]): Promise<boolean> {
   if (!(await host.fs.exists(path(S.N.boardFile)).catch(() => false))) return false
   const b = await load(host).catch(() => emptyBoard())
   const mine = new Set([...workers.values()].map(w => w.task))
-  return b.tasks.some(t => t.status === 'doing' && t.session === S.me && !t.finishing && !mine.has(t.id) && !starting.has(t.id) && !finishing.has(t.id) && !liveWorkersFor(t, agents.map(agentState), S.N.name).length)
+  return b.tasks.some(t => t.status === 'doing' && t.live?.session === S.me && !t.live.checking && !mine.has(t.id) && !starting.has(t.id) && !finishing.has(t.id) && !liveWorkersFor(t, agents.map(agentState), S.N.name).length)
 }
 
 /**
@@ -158,8 +158,8 @@ export const overtimeLeadText = (id: string, title: string, limit: number) =>
 export async function askOvertime(host: Host, b: Board, id: string, limit: number) {
   const t = await change(host, x => {
     const cur = find(x, id)
-    if (cur?.status !== 'doing' || cur.time_ask || cur.wrap_up) return [x, null] as [Board, null]
-    return [patchTask(x, id, { time_ask: now(), note: OVERTIME_NOTE, history: withHistory(cur.history, now(), tryEntry(cur, 'out-of-time', `ran ${limit} min, over its time limit; asked the owner for more time`)) }, now()), cur] as [Board, BoardTask]
+    if (cur?.status !== 'doing' || cur.live?.time_ask || cur.live?.wrap_up) return [x, null] as [Board, null]
+    return [patchTask(x, id, { live: { time_ask: now() }, note: OVERTIME_NOTE, history: withHistory(cur.history, now(), tryEntry(cur, 'out-of-time', `ran ${limit} min, over its time limit; asked the owner for more time`)) }, now()), cur] as [Board, BoardTask]
   })
   if (!t) return
   sayNeedsYou(host, b, t, overtimeQuestion(id, limit))
@@ -170,8 +170,8 @@ export async function askOvertime(host: Host, b: Board, id: string, limit: numbe
 export async function wrapUp(host: Host, id: string, why: string) {
   const t = await change(host, x => {
     const cur = find(x, id)
-    if (cur?.status !== 'doing' || cur.wrap_up) return [x, null] as [Board, null]
-    return [patchTask(x, id, { time_ask: undefined, wrap_up: now(), note: 'time is up: the worker was told to hand back', history: withHistory(cur.history, now(), tryEntry(cur, 'out-of-time', `time is up (${why}); the worker was told to write down what it has and hand back`)) }, now()), cur] as [Board, BoardTask]
+    if (cur?.status !== 'doing' || cur.live?.wrap_up) return [x, null] as [Board, null]
+    return [patchTask(x, id, { live: { time_ask: undefined, wrap_up: now() }, note: 'time is up: the worker was told to hand back', history: withHistory(cur.history, now(), tryEntry(cur, 'out-of-time', `time is up (${why}); the worker was told to write down what it has and hand back`)) }, now()), cur] as [Board, BoardTask]
   })
   if (!t) return false
   for (const [agentId, w] of workers) if (w.task === id) await host.agents.send(agentId, WRAP_UP_TEXT).catch(() => undefined)
@@ -186,7 +186,7 @@ export async function wrapUp(host: Host, id: string, why: string) {
 export async function answerOvertime(host: Host, id: string, answer: string): Promise<string | undefined> {
   const b = await load(host)
   const t = find(b, id)
-  if (t?.status !== 'doing' || !t.time_ask) return undefined
+  if (t?.status !== 'doing' || !t.live?.time_ask) return undefined
   const pick = parseOvertimeAnswer(answer)
   if (!pick) throw new Error(`Nothing changed: ${t.id} asks for more time; answer one of ${OVERTIME_OPTIONS.join(', ')} (or "+N min").`)
   if ('stop' in pick) {
@@ -195,9 +195,9 @@ export async function answerOvertime(host: Host, id: string, answer: string): Pr
   }
   const out = await change(host, x => {
     const cur = find(x, t.id)
-    if (cur?.status !== 'doing' || !cur.time_ask) return [x, null] as [Board, null]
-    const extra = (cur.extra_minutes ?? 0) + pick.add
-    return [patchTask(x, t.id, { extra_minutes: extra, time_ask: undefined, note: '', history: withHistory(cur.history, now(), tryEntry(cur, 'step', `the owner gave it ${pick.add} more min (limit now ${timeLimitOf(x.max_minutes, { extra_minutes: extra })} min)`)) }, now()), timeLimitOf(x.max_minutes, { extra_minutes: extra })] as [Board, number]
+    if (cur?.status !== 'doing' || !cur.live?.time_ask) return [x, null] as [Board, null]
+    const extra = (cur.live?.extra_minutes ?? 0) + pick.add
+    return [patchTask(x, t.id, { live: { extra_minutes: extra, time_ask: undefined }, note: '', history: withHistory(cur.history, now(), tryEntry(cur, 'step', `the owner gave it ${pick.add} more min (limit now ${timeLimitOf(x.max_minutes, { live: { extra_minutes: extra } })} min)`)) }, now()), timeLimitOf(x.max_minutes, { live: { extra_minutes: extra } })] as [Board, number]
   })
   if (out === null) return undefined
   return `${t.id} has ${pick.add} more minutes: its limit is now ${out} min, and its worker goes on.`

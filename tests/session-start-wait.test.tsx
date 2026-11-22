@@ -79,7 +79,7 @@ function board(maxParallel: number): Board {
   let b: Board = { ...emptyBoard(), mode: 'auto', max_parallel: maxParallel }
   b = addTask(b, { origin: { why: 'a test' }, title: 'Change a', files: ['src/'], merge_into: 'main' }, ISO)[0]
   b = addTask(b, { origin: { why: 'a test' }, title: 'Change b', files: ['docs/'], merge_into: 'main' }, ISO)[0]
-  return patchTask(b, 'T-1', { status: 'doing', attempts: 1, session: 'me', branch: 'symcc/T-1', runs: [runBy('ag9', ISO)] } as never, ISO)
+  return patchTask(b, 'T-1', { status: 'doing', attempts: 1, live: { session: 'me' }, branch: 'symcc/T-1', runs: [runBy('ag9', ISO)] } as never, ISO)
 }
 
 /** The lead's next turn starts (the wake-up symcc sent, or the owner's prompt): queued workers start there (T-391). */

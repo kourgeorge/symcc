@@ -21,7 +21,7 @@ const STALE = iso(NOW - 10 * 60_000)
 const task = (status: BoardTask['status'], extra: Partial<BoardTask> = {}): BoardTask =>
   ({ id: 'T-1', title: 'Do it', details: '', files: [], status, attempts: 1, note: '', updated_at: iso(NOW - 60_000), history: [], ...extra }) as BoardTask
 const ev = (kind: TaskEvent['kind'], from: string | null, to: string | null, more: Partial<TaskEvent> = {}): TaskEvent => ({ task: 'T-1', kind, from, to, at: AT, try: 1, ...more })
-const step = (s: 'prep' | 'checker' | 'testing' | 'merging', at = FRESH) => ({ checking: { step: s, at } })
+const step = (s: 'prep' | 'checker' | 'testing' | 'merging', at = FRESH) => ({ live: { checking: { step: s, at } } })
 
 test('phaseEvents: one event for each kind of change, and none when nothing changed', () => {
   const rows: [string, BoardTask | undefined, BoardTask | undefined, TaskEvent[]][] = [
@@ -31,8 +31,8 @@ test('phaseEvents: one event for each kind of change, and none when nothing chan
     ['state and stage: todo → doing', task('todo'), task('doing'), [ev('state', 'todo', 'doing'), ev('stage', null, 'worker')]],
     ['stage: worker → prep', task('doing'), task('doing', step('prep')), [ev('stage', 'worker', 'prep')]],
     ['stage: prep → checker', task('doing', step('prep')), task('doing', step('checker')), [ev('stage', 'prep', 'checker')]],
-    ['stage: checker → queue, with its place', task('doing', step('checker')), task('doing', { checking: { step: 'queue', place: 2, at: FRESH } }), [ev('stage', 'checker', 'queue', { place: 2 })]],
-    ['a new place in the queue is no stage change', task('doing', { checking: { step: 'queue', place: 2, at: FRESH } }), task('doing', { checking: { step: 'queue', place: 1, at: FRESH } }), []],
+    ['stage: checker → queue, with its place', task('doing', step('checker')), task('doing', { live: { checking: { step: 'queue', place: 2, at: FRESH } }, }), [ev('stage', 'checker', 'queue', { place: 2 })]],
+    ['a new place in the queue is no stage change', task('doing', { live: { checking: { step: 'queue', place: 2, at: FRESH } }, }), task('doing', { live: { checking: { step: 'queue', place: 1, at: FRESH } }, }), []],
     ['wait: a question', task('doing'), task('waiting', { question: 'A or B?' }), [ev('state', 'doing', 'waiting'), ev('stage', 'worker', null), ev('wait', null, 'answer')]],
     ['wait: answered', task('waiting', { question: 'A or B?' }), task('todo'), [ev('state', 'waiting', 'todo'), ev('wait', 'answer', null)]],
     ['a stale step (an approve) taken away: one stage change to none, and it waits for a review again', task('review', step('checker', STALE)), task('review'), [ev('stage', 'checker', null), ev('wait', null, 'review')]],

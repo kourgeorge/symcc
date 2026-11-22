@@ -331,7 +331,7 @@ test("session.start with a board.json that isn't JSON finishes quietly, tells th
 /** A board in auto mode with T-1 "doing" for this session, worked on by the live worker a1. */
 function doingBoard(): Board {
   const [b] = addTask({ ...emptyBoard(), mode: 'auto' }, { origin: { why: 'a test' }, title: 'Change b', files: ['src/'], merge_into: 'main' }, ISO)
-  return patchTask(b, 'T-1', { status: 'doing', attempts: 1, session: 'me', branch: 'symcc/T-1', runs: [runBy('a1', ISO)] }, ISO)
+  return patchTask(b, 'T-1', { status: 'doing', attempts: 1, live: { session: 'me' }, branch: 'symcc/T-1', runs: [runBy('a1', ISO)] }, ISO)
 }
 
 test('/symcc-mode paused then review: work starts again, T-1 gets a worker, and the lead hears the owner set review', async ($, on) => {

@@ -140,7 +140,7 @@ export function rejectTask(b: Board, id: string, reason: string, now: string): B
   const t = reviewTask(b, id, 'reject')
   const why = clean(reason, 1000)
   if (!why) throw new Error('give a reason for rejecting, so the next worker knows what to fix')
-  return patchTask(b, t.id, { status: 'todo', note: `rejected: ${why.slice(0, 280)}`, test_tries: 0, test_output: undefined, merge_main: false, history: withHistory(t.history, now, ['rejected', `try ${t.attempts}: rejected by the owner: ${why}`, { try: Number(t.attempts) || 0, reason: 'rejected' }]) }, now)
+  return patchTask(b, t.id, { status: 'todo', note: `rejected: ${why.slice(0, 280)}`, test_tries: 0, test_output: undefined, merge_main: undefined, history: withHistory(t.history, now, ['rejected', `try ${t.attempts}: rejected by the owner: ${why}`, { try: Number(t.attempts) || 0, reason: 'rejected' }]) }, now)
 }
 
 // ---------------- looking at a task's changes (review) ----------------

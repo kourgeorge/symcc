@@ -71,7 +71,7 @@ async function world(root: string, lsFiles: { exitCode?: number; stdout?: string
   S.root = root
   S.me = 'me'
   const [b0, t] = addTask(emptyBoard(), { origin: { why: 'a test' }, title: 'Do it', details: 'Do it.\nDone when: done.', files: ['src/'] }, ISO)
-  const b = patchTask(b0, t.id, { status: 'doing', attempts: 1, session: 'me', branch: 'symcc/T-1', runs: [runBy('w9', ISO)] }, ISO)
+  const b = patchTask(b0, t.id, { status: 'doing', attempts: 1, live: { session: 'me' }, branch: 'symcc/T-1', runs: [runBy('w9', ISO)] }, ISO)
   files.set(`${root}/${S.N.boardFile}`, JSON.stringify(b))
   return { host, gitCalls }
 }
@@ -83,7 +83,7 @@ for (const root of ['/tmp/x1/repo', REAL_ROOT]) {
   test(`a worker's new file in its own .scratch/ by its absolute path is allowed (project at ${root})`, async () => {
     const { host } = await world(root)
     expect(await checkEdit(host, 'w9', { path: `${wt}/.scratch/x.py` })).toBeUndefined()
-    expect(find(await load(host), 'T-1')!.try_refused).toBeUndefined()
+    expect(find(await load(host), 'T-1')!.live?.refused).toBeUndefined()
   })
 
   test(`a worker's .scratch/ file by a relative path is allowed (project at ${root})`, async () => {
@@ -95,7 +95,7 @@ for (const root of ['/tmp/x1/repo', REAL_ROOT]) {
   test(`a worker's .scratch/ file by the folder's other macOS name (/private or not) is allowed (project at ${root})`, async () => {
     const { host } = await world(root)
     expect(await checkEdit(host, 'w9', { path: `${other}/.scratch/x.py` })).toBeUndefined()
-    expect(find(await load(host), 'T-1')!.try_refused).toBeUndefined()
+    expect(find(await load(host), 'T-1')!.live?.refused).toBeUndefined()
   })
 
   test(`edits next to .scratch/ are still judged by the task's files (project at ${root})`, async () => {
@@ -118,7 +118,7 @@ test('scratchOn asks git once per worker folder, by the name the board gives it'
 test('where git keeps files under .scratch/, an edit there is refused as outside the task\'s files and recorded', async () => {
   const { host } = await world('/tmp/x1/repo', { stdout: '.scratch/keep.txt\n' })
   expect(await checkEdit(host, 'w9', { path: '.scratch/x.py' })).toBe(blockedEditText('.scratch/x.py'))
-  expect(find(await load(host), 'T-1')!.try_refused).toEqual(['.scratch/x.py'])
+  expect(find(await load(host), 'T-1')!.live?.refused).toEqual(['.scratch/x.py'])
 })
 
 test('when git cannot tell whether .scratch/ is kept, an edit there is refused (never let through on a guess)', async () => {

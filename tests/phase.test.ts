@@ -15,12 +15,12 @@ const STARTED = iso(NOW - 20 * 60_000)
 const ASKED = iso(NOW - 2 * 60_000)
 
 const task = (status: PhaseTask['status'], extra: Partial<PhaseTask> & Record<string, unknown> = {}): PhaseTask => ({ status, updated_at: CHANGED, note: '', ...extra }) as PhaseTask
-const at = (step: CheckStep, when = FRESH) => ({ checking: { step, at: when } })
+const at = (step: CheckStep, when = FRESH) => ({ live: { checking: { step, at: when } }, })
 /** waiting in the merge queue at `place` (T-612: a check step of its own; the note only says it for people) */
-const inQueue = (place: number, when = FRESH) => ({ checking: { step: 'queue' as const, place, at: when }, note: `queue (${place})` })
+const inQueue = (place: number, when = FRESH) => ({ live: { checking: { step: 'queue' as const, place, at: when } }, note: `queue (${place})` })
 const openRun = { runs: [{ started: STARTED }] }
 const endedRun = { runs: [{ started: STARTED, ended: CHANGED }] }
-const files = { merge_wait: { dirty: ['a.ts'], untracked: [], ignored: [] } }
+const files = { live: { merge_wait: { dirty: ['a.ts'], untracked: [], ignored: [] } }, }
 
 const idle = (state: PhaseTask['status'], waitsFor: TaskPhase['waitsFor'] = null): TaskPhase =>
   ({ state, shown: state, stage: null, waitsFor, approved: false, ...(waitsFor ? { since: CHANGED } : {}) })
@@ -69,8 +69,8 @@ const TABLE: [string, PhaseTask, TaskPhase, { merging?: boolean }?][] = [
   ['review, leftover queue note, no step', task('review', { ...endedRun, note: 'queue (2)' }), idle('review', 'review')],
   ['review, leftover queue note, stale step', task('review', { ...endedRun, ...inQueue(2, STALE) }), idle('review', 'review')],
   // more time asked: only in the worker stage; in a check step the step wins
-  ['doing, asks for more time', task('doing', { ...openRun, time_ask: ASKED }), runs('doing', 'worker', { waitsFor: 'time', since: ASKED })],
-  ['doing, asks for more time in a check step', task('doing', { ...endedRun, ...at('testing'), time_ask: ASKED }), runs('doing', 'test')],
+  ['doing, asks for more time', task('doing', { ...openRun, live: { time_ask: ASKED } }), runs('doing', 'worker', { waitsFor: 'time', since: ASKED })],
+  ['doing, asks for more time in a check step', task('doing', { ...endedRun, live: { checking: { step: 'testing', at: FRESH }, time_ask: ASKED } }), runs('doing', 'test')],
   // an answered investigation in review: nothing merges, the owner reads its answer
   ['answered investigation', task('review', { ...endedRun, kind: 'investigation', answer: 'It is X.' }), idle('review', 'review')],
 ]

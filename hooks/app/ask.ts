@@ -5,7 +5,7 @@
 //   host.ts; for Claude Code, its Edit, Write and NotebookEdit, and Bash: claude/tools.ts), so no tool name is read here.
 // Both are written to the task's current try on the board at once (try_question, try_refused), so a plugin reload
 // before the hand-back doesn't lose them; finishWork (workers.ts) decides from the board.
-import { type Board, type BoardTask, ASK_TOOL, ASK_SCHEMA, ASK_SENT, OPTIONS_MIN, OPTIONS_MAX, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, bashPathsToCheck, bashTooManyText, BASH_TOO_MANY, gitWriteIn, gitWriteText, workerGitWriteText, scoutGitWriteText, editInProject, scoutEditText, mergeStepAllow, scratchGitAllow, scratchTemps, eitherAllow, type GitAllow, intoOf, editTarget, find, isInvestigation, patchTask, realPathOf, brokenLinkText, guardReason, guardFailedText, type PathLookup } from '../board'
+import { type Board, type BoardTask, type Live, ASK_TOOL, ASK_SCHEMA, ASK_SENT, OPTIONS_MIN, OPTIONS_MAX, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, bashPathsToCheck, bashTooManyText, BASH_TOO_MANY, gitWriteIn, gitWriteText, workerGitWriteText, scoutGitWriteText, editInProject, scoutEditText, mergeStepAllow, scratchGitAllow, scratchTemps, eitherAllow, type GitAllow, intoOf, editTarget, find, isInvestigation, patchTask, realPathOf, brokenLinkText, guardReason, guardFailedText, type PathLookup } from '../board'
 import { S, toolName, type Worker, workers, scoutRuns, checkerRuns, stopped, isOwnAgent, boardAgents, rememberOnBoard, movedAgents, movedRefused, DRIVING_MOVED } from './state'
 import { drivenElsewhere } from './lead'
 import type { FileTouch, Host } from '../host'
@@ -15,11 +15,11 @@ import { scratchOn } from './git'
 import { logRefusal, logAsked, type Refusal, type Who } from './evidence'
 
 /** Writes `patch` (from the task as it is now) to worker `w`'s task, only while it is still "doing" on the same try. */
-function recordOnTry($: Host, w: Worker, attempts: number, patch: (cur: BoardTask) => Partial<BoardTask> | null): Promise<boolean> {
+function recordOnTry($: Host, w: Worker, attempts: number, patch: (cur: BoardTask) => Live | null): Promise<boolean> {
   return change($, (b: Board) => {
     const cur = find(b, w.task)
     const p = cur && cur.status === 'doing' && cur.attempts === attempts ? patch(cur) : null
-    return p ? ([patchTask(b, w.task, p, now()), true] as [Board, boolean]) : ([b, false] as [Board, boolean])
+    return p ? ([patchTask(b, w.task, { live: p }, now()), true] as [Board, boolean]) : ([b, false] as [Board, boolean])
   })
 }
 
@@ -67,7 +67,7 @@ async function askAnswer($: Host, agentId: string | undefined, a: Record<string,
   who.try = t.attempts
   const q = parseAsk(a)
   if (typeof q === 'string') return `Refused: ${q}. Nothing was sent; call ${tool} again with a valid question.`
-  if (!(await recordOnTry($, w, t.attempts, () => ({ try_question: q })))) return `Refused: your task ${w.task} is not running any more. Stop and hand back.`
+  if (!(await recordOnTry($, w, t.attempts, () => ({ question: q })))) return `Refused: your task ${w.task} is not running any more. Stop and hand back.`
   return ASK_SENT
 }
 
@@ -241,7 +241,7 @@ async function judgeEdit($: Host, agentId: string, touch: FileTouch, who: Who, c
   // the throwaway .scratch/ is free to edit only where the project keeps no file there in git (T-456)
   const path = blockedEdit(real.path, real.worktree, t.files, S.N.dir, await scratchOn($, w.worktree))
   if (!path) return undefined
-  if (!t.try_refused?.includes(path)) await recordOnTry($, w, t.attempts, cur => (cur.try_refused?.includes(path) ? null : { try_refused: [...(cur.try_refused ?? []), path] })).catch(() => false)
+  if (!t.live?.refused?.includes(path)) await recordOnTry($, w, t.attempts, cur => (cur.live?.refused?.includes(path) ? null : { refused: [...(cur.live?.refused ?? []), path] })).catch(() => false)
   return { text: blockedEditText(path), guard: 'files', what: path }
 }
 

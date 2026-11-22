@@ -42,7 +42,7 @@ const BUG = {
   question: null, order: 691, after: ['T-690'], attempts: 2, branch: 'symcc/T-691', created_at: iso(T0 - 86_400_000), updated_at: iso(T0 - 60_000),
   origin: { by: 'owner', request: 'fix the history timeline', why: 'the owner sees loose bars between the events' },
   runs: [{ started: iso(T0 - 3_600_000), ended: iso(T0 - 3_000_000) }, { started: iso(T0 - 900_000), ended: fresh, checkers: [{ started: fresh }] }],
-  checking: { step: 'checker', at: fresh },
+  live: { checking: { step: 'checker', at: fresh } }, 
   history: [historyEntry('created', 'created by the owner because the timeline is broken', iso(T0 - 86_400_000)), historyEntry('failed', 'try 1: first fix → tests failed: x', iso(T0 - 3_000_000))],
 }
 /** A plain change in to do. */

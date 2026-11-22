@@ -163,7 +163,7 @@ export async function answerCommand(host: Host, _command: string, args: string):
   // the lead hears of it only when the call really answered something: the task was waiting (or had a "more time?"
   // question) and isn't any more; the change tool's plain "already answered … nothing changed" texts change nothing
   const after = (await load(host)).tasks.find(x => x.id === id) as typeof t | undefined
-  const answered = (t.status === 'waiting' && after?.status !== 'waiting') || (!!t.time_ask && !after?.time_ask)
-  if (answered && !r.result.startsWith('error')) noteForLead(t.time_ask ? `The owner answered ${id}'s "more time?" question: "${brief(text)}".` : answeredLeadLine(t, text, brief))
+  const answered = (t.status === 'waiting' && after?.status !== 'waiting') || (!!t.live?.time_ask && !after?.live?.time_ask)
+  if (answered && !r.result.startsWith('error')) noteForLead(t.live?.time_ask ? `The owner answered ${id}'s "more time?" question: "${brief(text)}".` : answeredLeadLine(t, text, brief))
   return say(r.result)
 }

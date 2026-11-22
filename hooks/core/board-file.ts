@@ -106,28 +106,41 @@ export const testsWithChangesOf = (b: { tests_with_changes?: unknown } | null | 
 export type ArchivedTotals = { done: number; dropped: number; tries: number; ms: number; tokens?: SymccTokens; cost?: number }
 
 /**
- * A task as the board file keeps it: while it is "doing", `session` names the session whose
- * worker owns it; `agent` is the agent id of the last worker started on it. `finishing`: while
- * its finished work is being tested and merged, when that copy of the plugin last said it is
- * still at it (an ISO time, refreshed often), so a reloaded copy doesn't send the task back meanwhile.
- * `merge_wait`: its work is finished and checked (on its branch), and only the merge waits for these
- * files of the owner on the branch it merges into (uncommitted changes, untracked or ignored files in
- * the way); only while "waiting" (a finished worker's try) or "review" (an approve). The regular
- * check, a retry or an approve then only merges it, with no new worker.
- * `checking`: the step symcc is in while it checks the task's finished work (a finished try, an approve
- * or a merge that waited for the owner's files), with when that was last said (refreshed like `finishing`);
- * the board list shows the step instead of the time. Only while "doing", "review" or "waiting".
+ * What a task keeps only while one try of it lives (T-807), all in `task.live`, which patchTask cleans in one place
+ * (the task's status or try changed: what no longer holds is dropped):
+ * `session`: while "doing", the session whose worker owns it.
+ * `phase`: while "doing", how far the try got before its hand-back: "claimed" (claimed, the worker is queued or being
+ * started), "worker" (the worker is on it). After the hand-back it is "checker" while the task's
+ * checker runs (it stays when the check mark is cleared, so a reloaded copy finds a task whose checker it lost), else none; the step is `checking.step`.
+ * `checking`: the step symcc is in while it checks the task's finished work (a finished try, an approve or a merge that
+ * waited for the owner's files), with `at`: when that copy of the plugin last said it is still at it (an ISO time,
+ * refreshed often), so a reloaded copy doesn't send the task back meanwhile. A "doing" task with `checking` is one
+ * whose worker handed back. Only while "doing", "review" or "waiting", on the same try.
+ * `merge_wait`: its work is finished and checked (on its branch), and only the merge waits for these files of the
+ * owner on the branch it merges into (uncommitted changes, untracked or ignored files in the way); only while
+ * "waiting" (a finished worker's try) or "review" (an approve). The regular check, a retry or an approve then only
+ * merges it, with no new worker.
  * Over time (a worker running past max_minutes, see overtimeQuestion), all only while "doing" on one try:
  * `extra_minutes`: the minutes the owner added to this try's limit; `time_ask`: when the owner was asked
  * for more time (the worker keeps working meanwhile); `wrap_up`: when the worker was told its time is up
  * and to hand back (it is stopped WRAP_UP_GRACE_MS later).
  * What the running try recorded for its hand-back, kept here (not only in the plugin's memory) so a plugin
- * reload mid-try doesn't lose it; only while "doing" on one try: `try_question`: its worker's ask_owner call
- * (the last one wins); `try_refused`: the paths of its edits refused as outside the task's files.
- * `checker`: the agent id of the checker running on this try now (the checker setting), so the guards of any copy
- * of the plugin know it, not only the copy that started it (T-471); its folder is the task's own. Only while "doing" on one try.
+ * reload mid-try doesn't lose it; only while "doing" on one try: `question`: its worker's ask_owner call
+ * (the last one wins); `refused`: the paths of its edits refused as outside the task's files.
  */
-export type BoardTask = SymccTask & { session?: string; finishing?: string; checking?: Checking; merge_wait?: Blockers; extra_minutes?: number; time_ask?: string; wrap_up?: string; answer?: string; try_question?: WorkerQuestion; try_refused?: string[]; suggested?: string[] }
+export type Live = { session?: string; phase?: Phase; checking?: Checking; merge_wait?: Blockers; extra_minutes?: number; time_ask?: string; wrap_up?: string; question?: WorkerQuestion; refused?: string[] }
+/** How far a "doing" try got before its worker handed back (see Live). */
+export type Phase = 'claimed' | 'worker' | 'checker'
+const PHASES: readonly Phase[] = ['claimed', 'worker', 'checker']
+
+/**
+ * A task as the board file keeps it: `live`: what only one running try holds (see Live). `failed_on`: why a "failed" task failed, when a later step needs to
+ * know (only "clash": its branch conflicts with the one it merges into, so its next try merges that in first).
+ */
+export type BoardTask = SymccTask & { live?: Live; failed_on?: 'clash'; answer?: string; suggested?: string[] }
+
+/** What `t` keeps for its running try (see Live): an empty object when nothing. */
+export const liveOf = (t: { live?: Live } | undefined): Live => t?.live ?? {}
 
 /**
  * What a task is for: the name of a kind file (see core/kinds.ts), e.g. "bug" or "docs". Every kind ends in a
@@ -192,10 +205,10 @@ export function asBlockers(v: unknown): Blockers | undefined {
   return dirty && untracked && ignored ? { dirty, untracked, ignored } : undefined
 }
 
-/** Whether task `t` only waits for the owner's files before its finished work is merged (see BoardTask.merge_wait). */
-export const waitsForFiles = (t: { status?: unknown; merge_wait?: unknown } | undefined): boolean => {
+/** Whether task `t` only waits for the owner's files before its finished work is merged (see Live.merge_wait). */
+export const waitsForFiles = (t: { status?: unknown; live?: { merge_wait?: unknown } } | undefined): boolean => {
   if (!t || (t.status !== 'waiting' && t.status !== 'review')) return false
-  const b = asBlockers(t.merge_wait)
+  const b = asBlockers(t.live?.merge_wait)
   return !!b && blockerFiles(b).length > 0
 }
 
@@ -417,16 +430,31 @@ function cleanTask(t: unknown, fixed: string[] = []): BoardTask | null {
   if ('answer' in x && typeof x.answer !== 'string') delete x.answer
   // T-632: org-mem suggestions from its reports (see addSuggestions), kept until it is done or dropped
   if ('suggested' in x && !(strings(x.suggested) && (x.suggested as string[]).length)) delete x.suggested
-  if ('merge_wait' in x) {
-    const mw = asBlockers(x.merge_wait)
-    if (mw) x.merge_wait = mw
-    else delete x.merge_wait
-  }
-  if ('merge_wait' in x && !waitsForFiles(x)) delete x.merge_wait
-  const { session, finishing, checking: rawChecking, ...rest } = cleanCommitFields(x) as BoardTask
-  const doing = x.status === 'doing'
-  const checking = CHECKED_STATUSES.includes(x.status as SymccStatus) ? asChecking(rawChecking) : undefined
-  return { ...rest, ...(typeof session === 'string' && session && doing ? { session } : {}), ...(typeof finishing === 'string' && finishing && doing ? { finishing } : {}), ...(checking ? { checking } : {}) } as BoardTask
+  if (x.merge_main !== true) delete x.merge_main
+  if (x.failed_on !== 'clash' || x.status !== 'failed') delete x.failed_on
+  const live = cleanLive(x.live, x.status as SymccStatus)
+  if (live) x.live = live
+  else delete x.live
+  return cleanCommitFields(x) as BoardTask
+}
+
+/** `v` as a task's live object (see Live) for a task in `status`, with only what holds there; undefined when nothing does. */
+export function cleanLive(v: unknown, status: SymccStatus): Live | undefined {
+  if (!isObj(v)) return undefined
+  const out: Live = {}
+  const doing = status === 'doing'
+  if (doing && typeof v.session === 'string' && v.session) out.session = v.session
+  if (doing && PHASES.includes(v.phase as Phase)) out.phase = v.phase as Phase
+  const checking = CHECKED_STATUSES.includes(status) ? asChecking(v.checking) : undefined
+  if (checking) out.checking = checking
+  const mw = asBlockers(v.merge_wait)
+  if (mw && (status === 'waiting' || status === 'review') && blockerFiles(mw).length) out.merge_wait = mw
+  if (doing && isNum(v.extra_minutes) && v.extra_minutes > 0) out.extra_minutes = v.extra_minutes
+  if (doing && typeof v.time_ask === 'string' && v.time_ask) out.time_ask = v.time_ask
+  if (doing && typeof v.wrap_up === 'string' && v.wrap_up) out.wrap_up = v.wrap_up
+  if (doing && isObj(v.question) && typeof v.question.question === 'string') out.question = v.question as WorkerQuestion
+  if (doing && strings(v.refused) && v.refused.length) out.refused = v.refused
+  return Object.keys(out).length ? out : undefined
 }
 
 /** The branch a task merges into (see SymccTask.merge_into); "main" for a task that has none (made by hand or in a test). */

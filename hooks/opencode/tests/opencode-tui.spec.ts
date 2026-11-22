@@ -201,8 +201,8 @@ test('T-581: a doing row in a check step or the merge line shows its icon and th
   const base = f0.view.tasks.find(t => t.id === 'T-1')!
   const tasks = [
     ...f0.view.tasks.filter(t => t.id !== 'T-1'),
-    ...steps.map(([id, step]) => ({ ...base, id, title: `In ${step}`, attempts: 1, note: '', runs, checking: { step, at: fresh } })),
-    { ...base, id: 'T-9', title: 'In line', attempts: 1, note: 'queue (2)', runs, checking: { step: 'queue' as const, place: 2, at: fresh } },
+    ...steps.map(([id, step]) => ({ ...base, id, title: `In ${step}`, attempts: 1, note: '', runs, live: { checking: { step, at: fresh } }, })),
+    { ...base, id: 'T-9', title: 'In line', attempts: 1, note: 'queue (2)', runs, live: { checking: { step: 'queue' as const, place: 2, at: fresh } }, },
     { ...base, id: 'T-10', title: 'Working', attempts: 1, note: '', runs: [{ started: new Date(NOW - 15 * 60_000).toISOString() }] },
   ]
   const f = { ...f0, view: { ...f0.view, tasks, working: [] } }
@@ -296,12 +296,12 @@ test('the panel: the banner, then the list grouped by state (NEEDS YOU, what run
   expect(answerOptions(f, 'T-3')).toEqual(['mysql', 'postgres', OWN_ANSWER])
   expect(panelKeys(f, 'T-3').map(k => k.word)).toEqual(['answer', 'drop', 'needs review', 'back'])
   // a running worker whose time is up: its page asks for more time, with Claude's +30 min / +60 min / Stop it
-  const over = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => (t.id === 'T-1' ? { ...t, time_ask: AT, note: 'time is up' } : t)) } }
+  const over = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => (t.id === 'T-1' ? { ...t, live: { time_ask: AT }, note: 'time is up' } : t)) } }
   expect(panelKeys(over, 'T-1').map(k => k.word)).toEqual(['answer', 'pause', 'drop', 'needs review', 'back'])
   expect(answerOptions(over, 'T-1')).toEqual(['+30 min', '+60 min', 'Stop it', OWN_ANSWER])
   expect(panelLines(over, { opened: 'T-1', cursor: 0 }, NOW, 100).lines.map(lineText)).toContain('  1. +30 min')
   // a waiting task whose finished work only waits for the owner's files: nothing to answer
-  const files = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => (t.id === 'T-3' ? { ...t, merge_wait: { dirty: ['src/a.ts'] } } : t)) } }
+  const files = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => (t.id === 'T-3' ? { ...t, live: { merge_wait: { dirty: ['src/a.ts'] } }, } : t)) } }
   expect(panelKeys(files, 'T-3').map(k => k.word)).toEqual(['merge now', 'drop', 'needs review', 'back'])
   expect(answerOptions(files, 'T-3')).toEqual([])
   expect(panelLines(files, { opened: 'T-3', cursor: 0 }, NOW, 100).lines.map(lineText).some(l => l.includes('asks:'))).toBe(false)
@@ -1588,7 +1588,7 @@ test('T-583: on a waiting task\'s and a question\'s page each choice is a clicka
   const f0 = viewFile()
   // T-3 asks a question with options, T-1 is over its time, T-4 asks for files; Q-3 is the owner's question
   const tasks = f0.view.tasks.map(t =>
-    t.id === 'T-1' ? { ...t, time_ask: AT, note: 'time is up' } : t.id === 'T-4' ? { ...t, status: 'waiting' as const, question: 'May I change docs/?', asked_files: ['docs/'] } : t,
+    t.id === 'T-1' ? { ...t, live: { time_ask: AT }, note: 'time is up' } : t.id === 'T-4' ? { ...t, status: 'waiting' as const, question: 'May I change docs/?', asked_files: ['docs/'] } : t,
   )
   const f: ViewFile = { ...f0, view: { ...f0.view, tasks, questions: [{ id: 'Q-3', text: 'How often?', options: ['Once a day', 'Once a week'], asked_at: AT }] } }
   const page = (id: string) => panelLines(f, { opened: id, cursor: 0 }, NOW, 100)
@@ -1851,10 +1851,10 @@ test('T-596: an approved task in review whose approve runs leaves NEEDS YOU: lis
     return lines.slice(at + 1, end < 0 ? undefined : end)
   }
   const cases = [
-    [{ checking: { step: 'prep', at: fresh } }, '✎', '✎ prep', '1 in prep'],
-    [{ checking: { step: 'queue', place: 2, at: fresh }, note: 'queue (2)' }, '⧗', '⧗ queue (2)', '1 in queue'],
-    [{ checking: { step: 'testing', at: fresh } }, '⊛', '⊛ test', '1 testing'],
-    [{ checking: { step: 'merging', at: fresh } }, '⇢', '⇢ merge', '1 merging'],
+    [{ live: { checking: { step: 'prep', at: fresh } }, }, '✎', '✎ prep', '1 in prep'],
+    [{ live: { checking: { step: 'queue', place: 2, at: fresh } }, note: 'queue (2)' }, '⧗', '⧗ queue (2)', '1 in queue'],
+    [{ live: { checking: { step: 'testing', at: fresh } }, }, '⊛', '⊛ test', '1 testing'],
+    [{ live: { checking: { step: 'merging', at: fresh } }, }, '⇢', '⇢ merge', '1 merging'],
   ] as const
   for (const [extra, icon, badge, crew] of cases) {
     const f = withT2(extra)
@@ -1874,7 +1874,7 @@ test('T-596: an approved task in review whose approve runs leaves NEEDS YOU: lis
     expect(page).not.toContain('ready for review')
   }
   // no approve running (or it ended, failed: its step is cleared, or its mark went stale): back under NEEDS YOU
-  for (const extra of [{}, { checking: { step: 'testing', at: new Date(NOW - 3_600_000).toISOString() } }]) {
+  for (const extra of [{}, { live: { checking: { step: 'testing', at: new Date(NOW - 3_600_000).toISOString() } }, }]) {
     const f = withT2(extra)
     expect(needsBlock(list(f)).some(l => /T-2 /.test(l))).toBe(true)
     expect(bandLines(f, NOW, 200, 20).map(lineText)[0]).toContain('1 ready for review')
@@ -1905,7 +1905,7 @@ test('T-614: right after the panel sends an approve, the page badge and the Stag
     expect(ls.join('\n')).toMatch(/● review/)
   }
   // a step on the board: the board carries the phase (the panel drops its flag)
-  const testing = withT2({ checking: { step: 'testing', at: new Date(NOW - 10_000).toISOString() } })
+  const testing = withT2({ live: { checking: { step: 'testing', at: new Date(NOW - 10_000).toISOString() } }, })
   expect(approveSent(testing, sent, NOW)).toBe(false)
   expect(page(testing, sent).find(l => l.trim().startsWith('Steps:'))).toContain('● test')
   // the task left review (merged): no flag either
@@ -1926,7 +1926,7 @@ test('T-615: while a task\'s approve is in progress its page offers no approve o
   // just pressed: approveSent
   expect(keys(f, { id: 'T-2', at: NOW })).toEqual(['show changes', 'needs review', 'prev/next', 'back'])
   // its first step is on the board: the phase says approved
-  const running = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => (t.id === 'T-2' ? { ...t, checking: { step: 'testing' as const, at: new Date(NOW - 5_000).toISOString() } } : t)) } }
+  const running = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => (t.id === 'T-2' ? { ...t, live: { checking: { step: 'testing' as const, at: new Date(NOW - 5_000).toISOString() } }, } : t)) } }
   expect(keys(running)).toEqual(['show changes', 'needs review', 'prev/next', 'back'])
   // an approve sent for another task, or one long gone, leaves them
   expect(keys(f, { id: 'T-3', at: NOW })).toContain('approve')
@@ -2705,8 +2705,8 @@ function liveTasks(): SymccTask[] {
   const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', question: null, order: Number(id.slice(2)), after: [], attempts: 1, history: [], branch: null, created_at: ago(300), updated_at: ago(1), ...x }) as unknown as SymccTask
   return [
     task('T-610', 'Organizational memory search', { runs: [{ started: ago(4) }] }),
-    task('T-611', '/symcc-doctor checks the hooks', { attempts: 2, runs: [{ started: ago(60), ended: ago(50), agents: [{ kind: 'worker' as const, started: ago(60), ended: ago(50), tokens: { input: 1_100_000 } }] }, { started: ago(30), ended: ago(10), agents: [{ kind: 'worker' as const, started: ago(30), ended: ago(10), tokens: { input: 1_100_000 } }] }], checking: { step: 'queue', at: ago(0), place: 2 }, history: [{ kind: 'checker-problems', at: ago(40), text: 'try 1: checker: problems' }, { kind: 'stage', at: ago(5), text: 'try 2: waits in the merge queue (place 2)', try: 2, step: 'queue' }] }),
-    task('T-612', 'Scout page: drop the first line', { runs: [{ started: ago(20), ended: ago(2), agents: [{ kind: 'worker' as const, started: ago(20), ended: ago(2), tokens: { input: 540_000 } }, { id: 'agent-c', kind: 'checker' as const, started: ago(2) }] }], checking: { step: 'checker', at: ago(0) }, history: [{ kind: 'stage', at: ago(2), text: 'try 1: prep started', try: 1, step: 'prep' }] }),
+    task('T-611', '/symcc-doctor checks the hooks', { attempts: 2, runs: [{ started: ago(60), ended: ago(50), agents: [{ kind: 'worker' as const, started: ago(60), ended: ago(50), tokens: { input: 1_100_000 } }] }, { started: ago(30), ended: ago(10), agents: [{ kind: 'worker' as const, started: ago(30), ended: ago(10), tokens: { input: 1_100_000 } }] }], live: { checking: { step: 'queue', at: ago(0), place: 2 } }, history: [{ kind: 'checker-problems', at: ago(40), text: 'try 1: checker: problems' }, { kind: 'stage', at: ago(5), text: 'try 2: waits in the merge queue (place 2)', try: 2, step: 'queue' }] }),
+    task('T-612', 'Scout page: drop the first line', { runs: [{ started: ago(20), ended: ago(2), agents: [{ kind: 'worker' as const, started: ago(20), ended: ago(2), tokens: { input: 540_000 } }, { id: 'agent-c', kind: 'checker' as const, started: ago(2) }] }], live: { checking: { step: 'checker', at: ago(0) } }, history: [{ kind: 'stage', at: ago(2), text: 'try 1: prep started', try: 1, step: 'prep' }] }),
     task('T-600', 'A merged one', { status: 'done', merged: 'abc1234', updated_at: ago(1), runs: [{ started: ago(200), ended: ago(100), agents: [{ kind: 'worker' as const, started: ago(200), ended: ago(100), tokens: { input: 800_000 } }] }], history: [{ kind: 'checker-problems', at: ago(90), text: 'try 1: checker: problems, a long reason' }, { kind: 'merged', at: ago(30), text: 'try 2 → merged into main' }] }),
     task('T-601', 'A failed one', { status: 'failed', updated_at: ago(20) }),
     task('T-620', 'Live tab part 1', { status: 'todo', order: 5 }),
@@ -2825,11 +2825,11 @@ test('T-757: the OpenCode Live tab shows the whole task\'s tokens, the bar full 
   const tasks = [
     task('T-800', 'Done at 4M', { status: 'done', merged: 'abc1234', runs: [{ started: ago(300), ended: ago(200), agents: [{ kind: 'worker' as const, started: ago(300), ended: ago(200), tokens: { input: 4_000_000 } }] }], history: [{ kind: 'merged', at: ago(30), text: 'try 1 → merged into main' }] }),
     task('T-801', 'Try 2 running', { attempts: 2, runs: [{ started: ago(60), ended: ago(50), agents: [{ kind: 'worker' as const, started: ago(60), ended: ago(50), tokens: { input: 4_000_000 } }] }, { started: ago(20) }] }),
-    task('T-802', 'Try 2 handed back', { attempts: 2, runs: [{ started: ago(60), ended: ago(50), agents: [{ kind: 'worker' as const, started: ago(60), ended: ago(50), tokens: { input: 4_000_000 } }] }, { started: ago(20), ended: ago(2), agents: [{ kind: 'worker' as const, started: ago(20), ended: ago(2), tokens: { input: 1_000_000 } }, { id: 'agent-c', kind: 'checker' as const, started: ago(2) }] }], checking: { step: 'checker', at: ago(0) } }),
+    task('T-802', 'Try 2 handed back', { attempts: 2, runs: [{ started: ago(60), ended: ago(50), agents: [{ kind: 'worker' as const, started: ago(60), ended: ago(50), tokens: { input: 4_000_000 } }] }, { started: ago(20), ended: ago(2), agents: [{ kind: 'worker' as const, started: ago(20), ended: ago(2), tokens: { input: 1_000_000 } }, { id: 'agent-c', kind: 'checker' as const, started: ago(2) }] }], live: { checking: { step: 'checker', at: ago(0) } }, }),
     task('T-803', 'Try 1 running', { runs: [{ started: ago(10) }] }),
-    task('T-804', 'At the usual', { runs: [{ started: ago(40), ended: ago(3), agents: [{ kind: 'worker' as const, started: ago(40), ended: ago(3), tokens: { input: 4_000_000 } }] }], checking: { step: 'testing', at: ago(0) } }),
-    task('T-805', 'At half the usual', { runs: [{ started: ago(40), ended: ago(3), agents: [{ kind: 'worker' as const, started: ago(40), ended: ago(3), tokens: { input: 2_000_000 } }] }], checking: { step: 'testing', at: ago(0) } }),
-    task('T-806', 'Past twice the usual', { runs: [{ started: ago(40), ended: ago(3), agents: [{ kind: 'worker' as const, started: ago(40), ended: ago(3), tokens: { input: 9_000_000 } }] }], checking: { step: 'testing', at: ago(0) } }),
+    task('T-804', 'At the usual', { runs: [{ started: ago(40), ended: ago(3), agents: [{ kind: 'worker' as const, started: ago(40), ended: ago(3), tokens: { input: 4_000_000 } }] }], live: { checking: { step: 'testing', at: ago(0) } }, }),
+    task('T-805', 'At half the usual', { runs: [{ started: ago(40), ended: ago(3), agents: [{ kind: 'worker' as const, started: ago(40), ended: ago(3), tokens: { input: 2_000_000 } }] }], live: { checking: { step: 'testing', at: ago(0) } }, }),
+    task('T-806', 'Past twice the usual', { runs: [{ started: ago(40), ended: ago(3), agents: [{ kind: 'worker' as const, started: ago(40), ended: ago(3), tokens: { input: 9_000_000 } }] }], live: { checking: { step: 'testing', at: ago(0) } }, }),
   ]
   const f: ViewFile = { ...f0, view: { ...f0.view, tasks: tasks.map(t => viewTask(t)), checker: true, max_parallel: 3 } }
   const d = panelLines(parseViewFile(viewFileText(f)), { tab: 'live', opened: '', cursor: 0 }, NOW, 120)
@@ -2859,7 +2859,7 @@ test('T-757: the OpenCode Live tab shows the whole task\'s tokens, the bar full 
 test('T-709: the Live tab shows a lane for an approved task in review while its tests run (as the Tasks tab counts it in doing)', () => {
   const f0 = viewFile()
   const ago = (s: number) => new Date(NOW - s * 1000).toISOString()
-  const approved = { id: 'T-630', title: 'Approved, in its tests', details: '', files: [], status: 'review', note: '', question: null, order: 30, after: [], attempts: 1, history: [], branch: null, created_at: ago(9000), updated_at: ago(60), runs: [{ started: ago(2400), ended: ago(1200) }], checking: { step: 'testing', at: ago(5) } } as unknown as SymccTask
+  const approved = { id: 'T-630', title: 'Approved, in its tests', details: '', files: [], status: 'review', note: '', question: null, order: 30, after: [], attempts: 1, history: [], branch: null, created_at: ago(9000), updated_at: ago(60), runs: [{ started: ago(2400), ended: ago(1200) }], live: { checking: { step: 'testing', at: ago(5) } }, } as unknown as SymccTask
   const tasks = [...liveTasks().filter(t => t.status !== 'doing'), approved]
   const f: ViewFile = { ...f0, view: { ...f0.view, tasks: tasks.map(t => viewTask(t)), checker: true, max_parallel: 3 } }
   const d = panelLines(parseViewFile(viewFileText(f)), { tab: 'live', opened: '', cursor: 0 }, NOW, 120)
@@ -2869,7 +2869,7 @@ test('T-709: the Live tab shows a lane for an approved task in review while its 
   const lane = liveLanes({ ...f.view, tasks }, NOW)
   expect(lane.map(l => l.station)).toEqual(['tests'])
   // its check step gone stale: no lane, the empty state again
-  const stale: ViewFile = { ...f, view: { ...f.view, tasks: tasks.map(t => (t.id === 'T-630' ? ({ ...t, checking: { step: 'testing', at: ago(3600) } } as unknown as SymccTask) : t)).map(t => viewTask(t)) } }
+  const stale: ViewFile = { ...f, view: { ...f.view, tasks: tasks.map(t => (t.id === 'T-630' ? ({ ...t, live: { checking: { step: 'testing', at: ago(3600) } }, } as unknown as SymccTask) : t)).map(t => viewTask(t)) } }
   expect(panelLines(parseViewFile(viewFileText(stale)), { tab: 'live', opened: '', cursor: 0 }, NOW, 120).lines.map(lineText)).toContain(LIVE_INDENT + LIVE_EMPTY)
 })
 
@@ -2944,7 +2944,7 @@ const trainTasks = (): SymccTask[] => {
   const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', question: null, order: Number(id.slice(2)), after: [], attempts: 1, history: [], branch: null, created_at: ago(300), updated_at: ago(1), ...x }) as unknown as SymccTask
   return [
     task('T-712', 'Scout ordering fix', { runs: [{ started: ago(2) }] }),
-    task('T-690', 'Live tab first part', { attempts: 2, runs: [{ started: ago(30), ended: ago(3), agents: [{ kind: 'worker' as const, started: ago(30), ended: ago(3), tokens: { input: 1_400_000 } }, { id: 'agent-c', kind: 'checker' as const, started: ago(3) }] }], checking: { step: 'checker', at: ago(0) }, history: [{ kind: 'stage', at: ago(3), text: 'try 2: prep started', try: 2, step: 'prep' }] }),
+    task('T-690', 'Live tab first part', { attempts: 2, runs: [{ started: ago(30), ended: ago(3), agents: [{ kind: 'worker' as const, started: ago(30), ended: ago(3), tokens: { input: 1_400_000 } }, { id: 'agent-c', kind: 'checker' as const, started: ago(3) }] }], live: { checking: { step: 'checker', at: ago(0) } }, history: [{ kind: 'stage', at: ago(3), text: 'try 2: prep started', try: 2, step: 'prep' }] }),
     task('T-701', 'A failed one', { status: 'failed', updated_at: ago(20) }),
     task('T-713', 'Task files: no silent drops', { status: 'todo', after: ['T-712'] }),
     task('T-714', 'Help: /symcc-help shows all', { status: 'todo', after: ['T-713'] }),
@@ -3811,7 +3811,7 @@ test('T-786: the OpenCode Live tab has ▍Needs you first (above ▍Tasks) with 
 
 test('T-786: a doing task that asks for more time has separate cursor stops for its ▍Needs you row and its lane', () => {
   const f0 = viewFile()
-  const f = parseViewFile(viewFileText({ ...f0, view: { ...f0.view, tasks: f0.view.tasks.filter(t => t.id === 'T-1' || t.id === 'T-2').map(t => (t.id === 'T-1' ? { ...t, time_ask: AT, note: 'time is up' } : t)) } }))
+  const f = parseViewFile(viewFileText({ ...f0, view: { ...f0.view, tasks: f0.view.tasks.filter(t => t.id === 'T-1' || t.id === 'T-2').map(t => (t.id === 'T-1' ? { ...t, live: { time_ask: AT }, note: 'time is up' } : t)) } }))
   const d0 = panelLines(f, { tab: 'live', opened: '', cursor: 0 }, NOW, 100)
   expect(d0.ids.slice(0, 3)).toEqual(['need:T-2', 'need:T-1', 'T-1'])
   for (let c = 0; c < 3; c++) {

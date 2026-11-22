@@ -42,7 +42,7 @@ async function world(extra: Partial<BoardTask> & { agent?: string | null; checke
   S.root = ROOT
   S.me = 'me'
   const [b0, t] = addTask(emptyBoard(), { origin: { why: 'a test' }, title: 'Do it', details: 'Do it.\nDone when: done.', files: ['src/'] }, ISO)
-  const b1 = patchTask(b0, t.id, { status: 'doing', attempts: 1, session: 'another-session', branch: 'symcc/T-1', runs: [{ started: ISO }] }, ISO)
+  const b1 = patchTask(b0, t.id, { status: 'doing', attempts: 1, live: { session: 'another-session' }, branch: 'symcc/T-1', runs: [{ started: ISO }] }, ISO)
   // `extra` on the running try; its worker (`agent`, w9 unless null) and its checker are entries of the last try (T-805)
   const { agent = 'w9', checker, ...rest } = extra
   const b2: Board = patchTask(b1, t.id, rest, ISO)
@@ -56,7 +56,7 @@ async function world(extra: Partial<BoardTask> & { agent?: string | null; checke
 test("another session's worker: an edit outside its task's files is refused and recorded on its try; inside them it is allowed", async () => {
   const { host } = await world()
   expect(await checkEdit(host, 'w9', { path: `${WT}/README.md` })).toBe(blockedEditText('README.md'))
-  expect(find(await load(host), 'T-1')!.try_refused).toEqual(['README.md'])
+  expect(find(await load(host), 'T-1')!.live?.refused).toEqual(['README.md'])
   expect(await checkEdit(host, 'w9', { path: `${WT}/src/a.ts` })).toBeUndefined()
   // the owner's copy is refused too, and so is a git write
   expect(await checkEdit(host, 'w9', { path: `${ROOT}/README.md` })).toMatch(/^Refused: README\.md is in the owner's copy/)
@@ -69,13 +69,13 @@ test("another session's worker: an edit outside its task's files is refused and 
 test("another session's worker's ask_owner is taken and written to its try", async () => {
   const { host } = await world()
   expect(await askCall(host, 'w9', { question: 'Which file?' })).toBe(ASK_SENT)
-  expect(find(await load(host), 'T-1')!.try_question?.question).toBe('Which file?')
+  expect(find(await load(host), 'T-1')!.live?.question?.question).toBe('Which file?')
   expect(await toolCall(host, toolName(ASK_TOOL), 'w9', { question: 'Again?' })).toEqual({ result: ASK_SENT })
   expect(workers.size).toBe(0)
 })
 
 test("another session's checker (named on the board): its git write, an edit outside its folder and the lead's tools are refused", async () => {
-  const { host } = await world({ checker: 'c9', finishing: ISO })
+  const { host } = await world({ checker: 'c9', live: { checking: { step: 'prep', at: ISO } }, })
   const commit = 'git commit -am "x"'
   expect(await checkEdit(host, 'c9', { command: commit })).toBe(gitWriteText(gitWriteIn(commit)!))
   expect(await checkEdit(host, 'c9', { path: `${ROOT}/README.md` })).toMatch(/^Refused: README\.md is in the owner's copy/)
@@ -95,7 +95,7 @@ test('a checker id is kept on the board only while its task is "doing" on that t
 })
 
 test('an agent whose task no longer runs it (another status, or its try handed back) is refused every tool, from the board', async () => {
-  for (const extra of [{ status: 'todo' as const }, { status: 'done' as const }, { runs: [{ started: ISO, ended: ISO }] }, { finishing: ISO }]) {
+  for (const extra of [{ status: 'todo' as const }, { status: 'done' as const }, { runs: [{ started: ISO, ended: ISO }] }, { live: { checking: { step: 'prep' as const, at: ISO } }, }]) {
     const { host } = await world(extra)
     expect(await toolCall(host, 'Bash', 'w9', {})).toEqual({ deny: stoppedText() })
     expect(await checkEdit(host, 'w9', { path: `${WT}/src/a.ts` })).toBe(stoppedText())
@@ -105,7 +105,7 @@ test('an agent whose task no longer runs it (another status, or its try handed b
 
 test("an earlier try's agent, while this copy has the new try waiting to start, is refused: its ask_owner, its edit and a refused-edit record, with nothing written onto the new try", async () => {
   for (const wait of ['starting', 'queued'] as const) {
-    const { host } = await world({ attempts: 2, session: 'me', agent: null, note: 'queued', runs: [{ started: ISO, ended: ISO, agents: [{ id: 'w-old', kind: 'worker' as const, started: ISO, ended: ISO }] }, { started: ISO }] })
+    const { host } = await world({ attempts: 2, live: { session: 'me' }, agent: null, note: 'queued', runs: [{ started: ISO, ended: ISO, agents: [{ id: 'w-old', kind: 'worker' as const, started: ISO, ended: ISO }] }, { started: ISO }] })
     if (wait === 'starting') starting.add('T-1')
     else queuedWorkers.set('T-1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: Date.now() })
     expect((await agentOnBoard(host, 'w-old'))?.kind).toBe('ended')
@@ -113,8 +113,8 @@ test("an earlier try's agent, while this copy has the new try waiting to start, 
     expect(await checkEdit(host, 'w-old', { path: `${WT}/src/a.ts` })).toBe(stoppedText())
     expect(await checkEdit(host, 'w-old', { path: `${WT}/README.md` })).toBe(stoppedText())
     const t = find(await load(host), 'T-1')!
-    expect(t.try_question).toBeUndefined()
-    expect(t.try_refused).toBeUndefined()
+    expect(t.live?.question).toBeUndefined()
+    expect(t.live?.refused).toBeUndefined()
     starting.clear()
     queuedWorkers.clear()
   }
@@ -222,7 +222,7 @@ test('with no project folder known, nothing is looked up', async () => {
 // ---------------- T-479: ended agents stay on their try ----------------
 
 test("T-479: a checker named on a try, once the task was dropped, is refused every tool by another copy", async () => {
-  const { host, files } = await world({ checker: 'c9', finishing: ISO })
+  const { host, files } = await world({ checker: 'c9', live: { checking: { step: 'prep', at: ISO } }, })
   const b = patchTask(await load(host), 'T-1', { status: 'dropped' }, ISO)
   expect(checkerIdOf(find(b, 'T-1'))).toBeUndefined()
   expect(agentsOf(find(b, 'T-1')!.runs!.at(-1)).filter(a => a.kind === 'checker').map(a => [a.id, !!a.ended])).toEqual([['c9', true]])
@@ -237,14 +237,14 @@ test("T-479: an earlier try's worker is refused after a new try is claimed (its 
   const { host, files } = await world()
   // the try of w9 ends, and a new try is claimed: the board then names no worker (workers.ts clears agent)
   const b0 = patchTask(await load(host), 'T-1', { status: 'todo' }, ISO)
-  const b1 = patchTask(b0, 'T-1', { status: 'doing', attempts: 2, session: 'another-session', runs: [...find(b0, 'T-1')!.runs!, { started: ISO }] }, ISO)
+  const b1 = patchTask(b0, 'T-1', { status: 'doing', attempts: 2, live: { session: 'another-session' }, runs: [...find(b0, 'T-1')!.runs!, { started: ISO }] }, ISO)
   expect(find(b1, 'T-1')!.runs!.map(r => agentsOf(r).map(a => a.id))).toEqual([['w9'], []])
   files.set(`${ROOT}/${S.N.boardFile}`, JSON.stringify(b1))
   expect((await agentOnBoard(host, 'w9'))?.kind).toBe('ended')
   expect(await toolCall(host, 'Bash', 'w9', {})).toEqual({ deny: stoppedText() })
   expect(await checkEdit(host, 'w9', { path: `${WT}/src/a.ts` })).toBe(stoppedText())
   expect(await askCall(host, 'w9', { question: 'x' })).toMatch(/^Refused/)
-  expect(find(await load(host), 'T-1')!.try_question).toBeUndefined()
+  expect(find(await load(host), 'T-1')!.live?.question).toBeUndefined()
   // the new try's worker, once recorded, runs as usual
   const b2 = patchTask(b1, 'T-1', { runs: withAgentStart(find(b1, 'T-1')!.runs, 'worker', 'w10', ISO) }, ISO)
   expect(find(b2, 'T-1')!.runs!.map(r => agentsOf(r).map(a => a.id))).toEqual([['w9'], ['w10']])

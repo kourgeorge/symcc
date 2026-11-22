@@ -636,7 +636,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       // Refused, not saved for later: the lead sees the result of the check first, then changes it.
       if (checkingNow(t.id)) throw new Error(`${CHECKING_TEXT(t.id)}; try again in a moment`)
       // An answer to a running worker's "give it more time?" question: only that, nothing else changes.
-      const overtime = str(a.answer)?.trim() && (t as BoardTask).time_ask ? await answerOvertime($, t.id, str(a.answer)!) : undefined
+      const overtime = str(a.answer)?.trim() && (t as BoardTask).live?.time_ask ? await answerOvertime($, t.id, str(a.answer)!) : undefined
       if (overtime) return overtime
       // An answer to a task that no longer waits (the owner answered on the board first): change nothing at all.
       if (str(a.answer)?.trim() && t.status !== 'waiting') return alreadyAnsweredText(t, a)
@@ -757,7 +757,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       await change($, x => {
         const cur = find(x, t.id)
         const history = fromDropped && cur ? withHistory(cur.history, now(), ['retried', 'brought back from dropped']) : undefined
-        return patchTask(x, t.id, { status: 'todo', note: fromDropped ? 'brought back from dropped; queued' : 'queued', test_tries: 0, merge_main: clashed, ...(history ? { history } : {}) }, now())
+        return patchTask(x, t.id, { status: 'todo', note: fromDropped ? 'brought back from dropped; queued' : 'queued', test_tries: 0, merge_main: clashed || undefined, ...(history ? { history } : {}) }, now())
       })
       void pump($)
       return fromDropped ? `${t.id} brought back from dropped and queued` : `${t.id} queued${clashed ? '; its new worker merges the latest main first' : ''}`

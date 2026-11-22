@@ -250,7 +250,7 @@ function world(g: Partial<Git> = {}, tests: Record<string, Res> = {}) {
 /** What a try recorded for its hand-back: an ask_owner call (`question`) and edits refused as outside its files (`requested`). */
 type Rec = { question?: WorkerQuestion; requested?: string[] }
 /** Board `b` with T-1's current try holding `rec`, as ask_owner and the tool.check hook write it. */
-const recorded = (b: Board, rec: Rec = {}) => (rec.question || rec.requested ? patchTask(b, 'T-1', { ...(rec.question ? { try_question: rec.question } : {}), ...(rec.requested ? { try_refused: rec.requested } : {}) }, ISO) : b)
+const recorded = (b: Board, rec: Rec = {}) => (rec.question || rec.requested ? patchTask(b, 'T-1', { live: { ...(rec.question ? { question: rec.question } : {}), ...(rec.requested ? { refused: rec.requested } : {}) } }, ISO) : b)
 
 function boardWith(mode: 'auto' | 'review', test_commands: string[] = [], extra: Partial<BoardTask> & { agent?: string } = {}): [Board, BoardTask] {
   const [b, t] = addTask({ ...emptyBoard(), mode, test_commands }, { origin: { why: 'a test' }, title: 'Do it', files: ['src/'] }, ISO)
@@ -1437,14 +1437,14 @@ test('approve that is blocked by the owner\'s uncommitted changes in a file it c
   let t = find(await load(w.$), 'T-1')!
   expect(t.status).toBe('review')
   expect(t.note).toBe('waiting for your files on main: src/a.ts; commit or stash them')
-  expect((t as BoardTask).merge_wait).toEqual({ dirty: ['src/a.ts'], untracked: [], ignored: [] })
+  expect((t as BoardTask).live?.merge_wait).toEqual({ dirty: ['src/a.ts'], untracked: [], ignored: [] })
   expect(w.git.main).toBe(M1)
   // once the file is committed, approving again only merges it
   w.git.status = ''
   expect(await runTool(w.$, 'approve', { task: 'T-1' })).toBe(`T-1 approved and merged: merged into main (${H1.slice(0, 8)}); approved by the owner`)
   t = find(await load(w.$), 'T-1')!
   expect(t.status).toBe('done')
-  expect((t as BoardTask).merge_wait).toBeUndefined()
+  expect((t as BoardTask).live?.merge_wait).toBeUndefined()
 })
 
 test('approve with no edits since review adds no "owner edited" line', async () => {
@@ -1506,17 +1506,17 @@ test('T-596: while an approve runs its tests the task in review does not need th
   await runTool(w.$, 'approve', { task: 'T-1' })
   const mid = during!
   expect(mid.status).toBe('review')
-  const at = Date.parse(mid.checking!.at)
+  const at = Date.parse(mid.live!.checking!.at)
   expect(approveRunning(mid, at)).toBe(true)
   expect(needsYou(mid, at)).toBe(false)
   expect(panelSections([mid], at, 0).needsYou).toEqual([])
   expect(panelSections([mid], at, 0).doing.map(t => t.id)).toEqual(['T-1'])
-  expect(statusBadge(mid, at).text).toBe(`${STEP_ICON[mid.checking!.step]} ${STEP_WORD[mid.checking!.step]}`)
+  expect(statusBadge(mid, at).text).toBe(`${STEP_ICON[mid.live!.checking!.step]} ${STEP_WORD[mid.live!.checking!.step]}`)
   expect(statusCounts([mid], ['doing', 'review'], at)).toEqual(['1 doing'])
   // the approve failed (tests): its step is cleared and it is back under NEEDS YOU, "ready for review"
   const t = find(await load(w.$), 'T-1')!
   expect(t.status).toBe('review')
-  expect(t.checking).toBeUndefined()
+  expect(t.live?.checking).toBeUndefined()
   expect(needsYou(t, at)).toBe(true)
   expect(panelSections([t], at, 0).needsYou.map(x => x.id)).toEqual(['T-1'])
   expect(statusBadge(t, at).text).toBe('◆ ready for review')
@@ -1895,7 +1895,7 @@ async function liveWorld() {
   x.agents.spawn = async e => (spawned.push(String(e.name)), { agentId: `ag${spawned.length + 1}` })
   x.plugin = { name: 'symcc', root: '/plugin' }
   x.fs.list = async () => []
-  const [b] = boardWith('auto', [], { session: 'me', agent: 'ag1', branch: 'symcc/T-1', history: [], runs: [{ started: ISO }] })
+  const [b] = boardWith('auto', [], { live: { session: 'me' }, agent: 'ag1', branch: 'symcc/T-1', history: [], runs: [{ started: ISO }] })
   await saveBoard(w.$, b)
   workers.clear()
   workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
@@ -2140,7 +2140,7 @@ test('T-548: clashes and failing tests share auto_retries; when they are used up
     cleanUp()
     ;({ t } = await clashing({ test_tries: 2 }))
     expect(t.status).toBe('failed')
-    expect(t.merge_main).toBe(false)
+    expect(t.merge_main).toBeUndefined()
     expect(t.test_tries).toBe(2)
     expect(t.note).toBe('conflicts with the latest main (after 2 automatic retries)')
     expect(t.history.at(-1)!.text).toContain('→ conflicts with the latest main (after 2 automatic retries)')
@@ -2157,7 +2157,7 @@ test('T-548: clashes and failing tests share auto_retries; when they are used up
 
 test('retry after a clash with main gives the task its auto retries again, starting with a merge', async () => {
   const w = world()
-  const [b] = boardWith('auto', [], { status: 'failed', note: 'conflicts with the latest main (after 2 automatic retries)', test_tries: 2, merge_main: false })
+  const [b] = boardWith('auto', [], { status: 'failed', note: 'conflicts with the latest main (after 2 automatic retries)', failed_on: 'clash', test_tries: 2 })
   await saveBoard(w.$, b)
   const out = await runTool(w.$, 'retry', { task: 'T-1' })
   expect(out).toBe('T-1 queued; its new worker merges the latest main first')
@@ -2168,7 +2168,7 @@ test('retry after a clash with main gives the task its auto retries again, start
 
 test('retry after a failure that was not a clash resets the auto retries but does not ask for a merge', async () => {
   const w = world()
-  const [b] = boardWith('auto', [], { status: 'failed', note: 'tests failed', test_tries: 2, merge_main: false })
+  const [b] = boardWith('auto', [], { status: 'failed', note: 'tests failed', test_tries: 2, merge_main: undefined })
   await saveBoard(w.$, b)
   expect(await runTool(w.$, 'retry', { task: 'T-1' })).toBe('T-1 queued')
   const t = find(await load(w.$), 'T-1')!
@@ -2180,7 +2180,7 @@ test('retry after a failure that was not a clash resets the auto retries but doe
 async function failedLive(note = 'conflicts with the latest main (after 2 automatic retries)') {
   const { w, spawned } = await liveWorld()
   await setSymcc(w.$, false)
-  await change(w.$, b => [patchTask(b, 'T-1', { status: 'failed', note, test_tries: 2, merge_main: false }, ISO), null])
+  await change(w.$, b => [patchTask(b, 'T-1', { status: 'failed', note, test_tries: 2, ...(note.startsWith('conflicts') ? { failed_on: 'clash' as const } : {}) }, ISO), null])
   const start = async () => {
     await setSymcc(w.$, true)
     await settle(w, () => workerOn('T-1'))
@@ -2232,7 +2232,7 @@ test('T-703: a task that failed on its tests still gets a normal try after a not
 test('T-703: a task that failed on a clash keeps its merge-main-in try through the backlog, pause and resume, drop and retry, and a question to the owner', async () => {
   for (const moves of [[{ backlog: true }, { backlog: false }], [{ pause: true }, { resume: true }], [{ drop: true }, { retry: true }], [{ ask: true }, { answer: 'yes' }], [{ ask: true }, { retry: true }]] as const) {
     const w = world()
-    const [b] = boardWith('auto', [], { status: 'failed', note: 'conflicts with the latest main (after 2 automatic retries)', test_tries: 2, merge_main: false })
+    const [b] = boardWith('auto', [], { status: 'failed', note: 'conflicts with the latest main (after 2 automatic retries)', failed_on: 'clash', test_tries: 2 })
     await saveBoard(w.$, b)
     for (const m of moves) {
       if ('pause' in m) await runTool(w.$, 'pause', { task: 'T-1' })
@@ -2477,7 +2477,7 @@ test("ask_owner from a scout is refused; from a running worker it is written to 
   workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
   expect(await askCall(w.$, 'ag1', { question: 'First?' })).toBe('Sent to the owner. Stop now and hand back.')
   expect(await askCall(w.$, 'ag1', { question: 'Which?', options: ['a', 'b'] })).toBe('Sent to the owner. Stop now and hand back.')
-  expect((find(await load(w.$), 'T-1') as BoardTask).try_question).toEqual({ question: 'Which?', options: ['a', 'b'] })
+  expect((find(await load(w.$), 'T-1') as BoardTask).live?.question).toEqual({ question: 'Which?', options: ['a', 'b'] })
   workers.delete('ag1')
 })
 
@@ -2485,7 +2485,7 @@ test("a question and a refused edit survive a plugin reload before the hand-back
   // the question: recorded, then the plugin reloads (its memory starts over), then the late hand-back arrives
   S.me = 'me'
   const q = world()
-  const [b] = boardWith('auto', ['npm test'], { agent: 'ag1', session: 'me', runs: [{ started: ISO }] } as Partial<BoardTask>)
+  const [b] = boardWith('auto', ['npm test'], { agent: 'ag1', live: { session: 'me' }, runs: [{ started: ISO }] } as Partial<BoardTask>)
   await saveBoard(q.$, b)
   q.put(`${WT}/.git`, 'gitdir: x')
   workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
@@ -2495,7 +2495,7 @@ test("a question and a refused edit survive a plugin reload before the hand-back
   await workerFinished(q.$, 'ag1', 'I asked the owner.')
   const asked = find(await load(q.$), 'T-1') as BoardTask
   expect(asked).toMatchObject({ status: 'waiting', question: 'Red or blue?', options: ['red', 'blue'] })
-  expect(asked.try_question).toBeUndefined()
+  expect(asked.live?.question).toBeUndefined()
   expect(movedMain(q)).toBe(false)
   // a refused edit: the same, through the tool.check hook's part
   const f = world()
@@ -2503,13 +2503,13 @@ test("a question and a refused edit survive a plugin reload before the hand-back
   f.put(`${WT}/.git`, 'gitdir: x')
   workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
   expect(await checkEdit(f.$, 'ag1', { path: `${WT}/README.md` })).toMatch(/README\.md is outside this task's files/)
-  expect((find(await load(f.$), 'T-1') as BoardTask).try_refused).toEqual(['README.md'])
+  expect((find(await load(f.$), 'T-1') as BoardTask).live?.refused).toEqual(['README.md'])
   workers.clear()
   expect(await lateHandBack(f.$, 'ag1')).toBe(true)
   await workerFinished(f.$, 'ag1', 'README.md was refused.')
   const files = find(await load(f.$), 'T-1') as BoardTask
   expect(files).toMatchObject({ status: 'waiting', asked_files: ['README.md'] })
-  expect(files.try_refused).toBeUndefined()
+  expect(files.live?.refused).toBeUndefined()
   expect(movedMain(f)).toBe(false)
   workers.clear()
 })
@@ -2517,13 +2517,13 @@ test("a question and a refused edit survive a plugin reload before the hand-back
 test('what a try recorded for its hand-back is cleared when a new try starts, and when the task leaves "doing"', () => {
   const [b] = boardWith('auto')
   const rec = recorded(b, { question: { question: 'Which?' }, requested: ['README.md'] })
-  expect(find(rec, 'T-1')).toMatchObject({ try_question: { question: 'Which?' }, try_refused: ['README.md'] })
+  expect(find(rec, 'T-1')).toMatchObject({ live: { question: { question: 'Which?' }, refused: ['README.md'] }, })
   for (const next of [patchTask(rec, 'T-1', { attempts: 2 }, ISO), patchTask(rec, 'T-1', { status: 'todo' }, ISO)]) {
     expect(find(next, 'T-1')).not.toHaveProperty('try_question')
     expect(find(next, 'T-1')).not.toHaveProperty('try_refused')
   }
   // a change on the same try keeps them
-  expect(find(patchTask(rec, 'T-1', { note: 'x' }, ISO), 'T-1')).toMatchObject({ try_refused: ['README.md'] })
+  expect(find(patchTask(rec, 'T-1', { note: 'x' }, ISO), 'T-1')).toMatchObject({ live: { refused: ['README.md'] } })
 })
 
 test('the worker prompts say how to ask and what a refused edit means, with no QUESTION / OPTIONS / NEED FILES wording', () => {
@@ -3280,7 +3280,7 @@ test('at the time limit the worker is not stopped: the task stays doing and the 
   })
   expect(r.t.status).toBe('doing')
   expect(r.t.note).toBe('over time; asked the owner')
-  expect((r.t as BoardTask).time_ask).toBeDefined()
+  expect((r.t as BoardTask).live?.time_ask).toBeDefined()
   expect(r.r.ended).toBeUndefined()
   expect(sent).toEqual([])
   expect(r.t.history.filter(h => h.text.includes('asked the owner for more time')).map(h => h.text)).toEqual(['try 1: ran 45 min, over its time limit; asked the owner for more time'])
@@ -3299,8 +3299,8 @@ test('"+30 min" moves the limit later: the worker goes on, is not asked again be
     runFor(70) // past 45, not past 75
     await check(w.$)
     const t = find(await load(w.$), 'T-1') as BoardTask
-    expect(t.extra_minutes).toBe(30)
-    expect(t.time_ask).toBeUndefined()
+    expect(t.live?.extra_minutes).toBe(30)
+    expect(t.live?.time_ask).toBeUndefined()
     expect(t.status).toBe('doing')
     expect(workers.has('ag1')).toBe(true)
     await workerFinished(w.$, 'ag1', 'made the change')
@@ -3309,7 +3309,7 @@ test('"+30 min" moves the limit later: the worker goes on, is not asked again be
   expect(r.t.history.map(h => h.text)).toContain('try 1: the owner gave it 30 more min (limit now 75 min)')
   expect(r.t.status).toBe('done')
   expect(r.end).toEqual(['finished', 'merged'])
-  expect((r.t as BoardTask).extra_minutes).toBeUndefined()
+  expect((r.t as BoardTask).live?.extra_minutes).toBeUndefined()
 })
 
 test('"Stop it" tells the worker to wrap up; its hand-back is saved as the report and the task fails with its work kept', async () => {
@@ -3323,8 +3323,8 @@ test('"Stop it" tells the worker to wrap up; its hand-back is saved as the repor
     expect(await runTool(w.$, 'change', { task: 'T-1', answer: 'Stop it' })).toMatch(/^T-1: its worker was told to write down what it has and hand back/)
     const t = find(await load(w.$), 'T-1') as BoardTask
     expect(t.status).toBe('doing')
-    expect(t.wrap_up).toBeDefined()
-    expect(t.time_ask).toBeUndefined()
+    expect(t.live?.wrap_up).toBeDefined()
+    expect(t.live?.time_ask).toBeUndefined()
     await check(w.$) // within the grace: not stopped yet
     expect(workers.has('ag1')).toBe(true)
     await workerFinished(w.$, 'ag1', 'Did half of it; notes are in docs/notes.md. Left: the tests.')
@@ -3351,7 +3351,7 @@ test('no answer by the hard cap (twice the limit) does the same: wrap-up message
     expect(sent).toEqual([{ to: 'ag1', text: WRAP_UP_TEXT }])
     expect((find(await load(w.$), 'T-1') as BoardTask).status).toBe('doing')
     // the grace is over: the worker is stopped
-    await change(w.$, x => patchTask(x, 'T-1', { wrap_up: new Date(Date.now() - 4 * 60_000).toISOString() }, ISO))
+    await change(w.$, x => patchTask(x, 'T-1', { live: { wrap_up: new Date(Date.now() - 4 * 60_000).toISOString() } }, ISO))
     await check(w.$)
     expect(workers.has('ag1')).toBe(false)
   })
@@ -3484,7 +3484,7 @@ test('a worker may write and run a throwaway script under .scratch/ with no file
       return undefined
     },
   })
-  const [b] = boardWith('auto', ['npm test'], { agent: 'ag1', session: 'me', runs: [{ started: ISO }] } as Partial<BoardTask>)
+  const [b] = boardWith('auto', ['npm test'], { agent: 'ag1', live: { session: 'me' }, runs: [{ started: ISO }] } as Partial<BoardTask>)
   await saveBoard(w.$, b)
   w.put(`${WT}/.git`, 'gitdir: x')
   workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
@@ -3494,14 +3494,14 @@ test('a worker may write and run a throwaway script under .scratch/ with no file
   expect(await checkEdit(w.$, 'ag1', { command: 'python3 .scratch/edit.py' }, WT)).toBeUndefined()
   expect(await checkEdit(w.$, 'ag1', { command: `python3 ${WT}/.scratch/edit.py && rm ${WT}/.scratch/edit.py` }, WT)).toBeUndefined()
   // no file request was recorded
-  expect((find(await load(w.$), 'T-1') as BoardTask).try_refused).toBeUndefined()
+  expect((find(await load(w.$), 'T-1') as BoardTask).live?.refused).toBeUndefined()
   // elsewhere outside the task's files is still refused: a look-alike folder, a climb out of .scratch/, a top-level script
   expect(await checkEdit(w.$, 'ag1', { path: `${WT}/.t448-edit.py` })).toMatch(/^\.t448-edit\.py is outside this task's files/)
   expect(await checkEdit(w.$, 'ag1', { path: `${WT}/.scratchy/edit.py` })).toMatch(/^\.scratchy\/edit\.py is outside this task's files/)
   expect(await checkEdit(w.$, 'ag1', { path: `${WT}/.scratch/../README.md` })).toMatch(/^README\.md is outside this task's files/)
-  expect((find(await load(w.$), 'T-1') as BoardTask).try_refused).toEqual(['.t448-edit.py', '.scratchy/edit.py', 'README.md'])
+  expect((find(await load(w.$), 'T-1') as BoardTask).live?.refused).toEqual(['.t448-edit.py', '.scratchy/edit.py', 'README.md'])
   // the try, without those refusals: its commit never stages .scratch/, it merges, and the folder is emptied afterwards
-  await change(w.$, x => patchTask(x, 'T-1', { try_refused: undefined }, ISO))
+  await change(w.$, x => patchTask(x, 'T-1', { live: { refused: undefined } }, ISO))
   await workerFinished(w.$, 'ag1', 'made the change')
   const t = find(await load(w.$), 'T-1')!
   expect(t.status).toBe('done')
@@ -3524,13 +3524,13 @@ test('a worker may write and run a throwaway script under .scratch/ with no file
 test('a project that keeps files under .scratch/ in git: an edit there gets the normal file check, git add has no exclude, and the folder is not emptied (T-456)', async () => {
   S.me = 'me'
   const w = world({ answer: a => (a[0] === 'ls-files' && a.includes('.scratch') ? ok('.scratch/keep.txt') : undefined) })
-  const [b] = boardWith('auto', ['npm test'], { agent: 'ag1', session: 'me', runs: [{ started: ISO }] } as Partial<BoardTask>)
+  const [b] = boardWith('auto', ['npm test'], { agent: 'ag1', live: { session: 'me' }, runs: [{ started: ISO }] } as Partial<BoardTask>)
   await saveBoard(w.$, b)
   w.put(`${WT}/.git`, 'gitdir: x')
   workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
   expect(await checkEdit(w.$, 'ag1', { path: `${WT}/.scratch/keep.txt` })).toMatch(/^\.scratch\/keep\.txt is outside this task's files/)
-  expect((find(await load(w.$), 'T-1') as BoardTask).try_refused).toEqual(['.scratch/keep.txt'])
-  await change(w.$, x => patchTask(x, 'T-1', { try_refused: undefined }, ISO))
+  expect((find(await load(w.$), 'T-1') as BoardTask).live?.refused).toEqual(['.scratch/keep.txt'])
+  await change(w.$, x => patchTask(x, 'T-1', { live: { refused: undefined } }, ISO))
   await workerFinished(w.$, 'ag1', 'made the change')
   expect(find(await load(w.$), 'T-1')!.status).toBe('done')
   expect(w.calls).toContain('wt: git add -A -- .')
@@ -3542,7 +3542,7 @@ test('a project that keeps files under .scratch/ in git: an edit there gets the 
 test("a worker's edit in the owner's copy of the project is refused without a file request; its own folder works as before (T-299)", async () => {
   S.me = 'me'
   const f = world()
-  const [b] = boardWith('auto', ['npm test'], { agent: 'ag1', session: 'me', runs: [{ started: ISO }] } as Partial<BoardTask>)
+  const [b] = boardWith('auto', ['npm test'], { agent: 'ag1', live: { session: 'me' }, runs: [{ started: ISO }] } as Partial<BoardTask>)
   await saveBoard(f.$, b)
   f.put(`${WT}/.git`, 'gitdir: x')
   const wt5 = `${ROOT}/.symcc/worktrees/T-5`
@@ -3552,19 +3552,19 @@ test("a worker's edit in the owner's copy of the project is refused without a fi
   expect(await checkEdit(f.$, 'ag1', { path: '../../README.md' })).toMatch(/^Refused: \.symcc\/README\.md is symcc's own data.*not yours to edit/)
   expect(await checkEdit(f.$, 'ag1', { path: '/tmp/scratch.txt' })).toBeUndefined()
   // none of these became a file request
-  expect((find(await load(f.$), 'T-1') as BoardTask).try_refused).toBeUndefined()
+  expect((find(await load(f.$), 'T-1') as BoardTask).live?.refused).toBeUndefined()
   // inside its own folder: in scope is allowed, out of scope is still a file request
   expect(await checkEdit(f.$, 'ag1', { path: `${wt5}/src/a.ts` })).toBeUndefined()
   expect(await checkEdit(f.$, 'ag1', { path: 'src/b.ts' })).toBeUndefined()
   expect(await checkEdit(f.$, 'ag1', { path: `${wt5}/README.md` })).toMatch(/README\.md is outside this task's files/)
-  expect((find(await load(f.$), 'T-1') as BoardTask).try_refused).toEqual(['README.md'])
+  expect((find(await load(f.$), 'T-1') as BoardTask).live?.refused).toEqual(['README.md'])
   workers.clear()
 })
 
 test("with a data folder other than .symcc, a worker's edit under it is refused as not yours to edit (T-312)", async () => {
   S.me = 'me'
   const f = world()
-  const [b] = boardWith('auto', ['npm test'], { agent: 'ag1', session: 'me', runs: [{ started: ISO }] } as Partial<BoardTask>)
+  const [b] = boardWith('auto', ['npm test'], { agent: 'ag1', live: { session: 'me' }, runs: [{ started: ISO }] } as Partial<BoardTask>)
   await saveBoard(f.$, b)
   const was = S.N
   S.N = { ...was, dir: '.other' }
@@ -3581,7 +3581,7 @@ test("with a data folder other than .symcc, a worker's edit under it is refused 
 test("a worker's edit through a symbolic link into the owner's copy is refused; links elsewhere are judged by where they lead (T-303)", async () => {
   S.me = 'me'
   const f = world()
-  const [b] = boardWith('auto', ['npm test'], { agent: 'ag1', session: 'me', runs: [{ started: ISO }] } as Partial<BoardTask>)
+  const [b] = boardWith('auto', ['npm test'], { agent: 'ag1', live: { session: 'me' }, runs: [{ started: ISO }] } as Partial<BoardTask>)
   await saveBoard(f.$, b)
   const wt5 = `${ROOT}/.symcc/worktrees/T-5`
   const disk = fakeDisk({
@@ -3613,7 +3613,7 @@ test("a worker's edit through a symbolic link into the owner's copy is refused; 
   expect(await checkEdit(f.$, 'ag1', { path: `${wt5}/scratch/notes.txt` })).toBeUndefined()
   expect(await checkEdit(f.$, 'ag1', { path: `${wt5}/src/new/b.ts` })).toBeUndefined()
   expect(await checkEdit(f.$, 'ag1', { path: `${wt5}/README.md` })).toMatch(/README\.md is outside this task's files/)
-  expect((find(await load(f.$), 'T-1') as BoardTask).try_refused).toEqual(['README.md'])
+  expect((find(await load(f.$), 'T-1') as BoardTask).live?.refused).toEqual(['README.md'])
   // the same links in Bash: a read through a link inside the worker's folder is refused like the edit (T-436)
   const bash = (command: string, cwd?: string) => checkEdit(f.$, 'ag1', { command }, cwd)
   expect(await bash(`cat ${wt5}/link/README.md`)).toMatch(/^Refused: this command names README\.md in the owner's copy/)
@@ -3662,7 +3662,7 @@ test("a worker's edit through a symbolic link into the owner's copy is refused; 
 test("a worker's Bash naming the owner's copy through a symbolic link elsewhere is refused; a link into its own folder or elsewhere is not (T-417)", async () => {
   S.me = 'me'
   const f = world()
-  const [b] = boardWith('auto', ['npm test'], { agent: 'ag1', session: 'me', runs: [{ started: ISO }] } as Partial<BoardTask>)
+  const [b] = boardWith('auto', ['npm test'], { agent: 'ag1', live: { session: 'me' }, runs: [{ started: ISO }] } as Partial<BoardTask>)
   await saveBoard(f.$, b)
   const wt5 = `${ROOT}/.symcc/worktrees/T-5`
   const disk = fakeDisk({
@@ -3708,7 +3708,7 @@ test("a worker's Bash naming the owner's copy through a symbolic link elsewhere 
 test("a worker's Bash command reaching the owner's copy is refused; its own folder, /tmp and the lead are not (T-302)", async () => {
   S.me = 'me'
   const f = world()
-  const [b] = boardWith('auto', ['npm test'], { agent: 'ag1', session: 'me', runs: [{ started: ISO }] } as Partial<BoardTask>)
+  const [b] = boardWith('auto', ['npm test'], { agent: 'ag1', live: { session: 'me' }, runs: [{ started: ISO }] } as Partial<BoardTask>)
   await saveBoard(f.$, b)
   const wt5 = `${ROOT}/.symcc/worktrees/T-5`
   workers.set('ag1', { task: 'T-1', worktree: wt5, branch: 'symcc/T-1', since: T0 })
@@ -3717,7 +3717,7 @@ test("a worker's Bash command reaching the owner's copy is refused; its own fold
     expect(await bash('ag1', c)).toMatch(/^Refused: this command names .* outside your own folder/)
   for (const c of ['echo x > /tmp/a', 'echo x > src/a.ts', 'bun test', `cat ${wt5}/src/a.ts`]) expect(await bash('ag1', c)).toBeUndefined()
   // no file request was recorded for any of them
-  expect((find(await load(f.$), 'T-1') as BoardTask).try_refused).toBeUndefined()
+  expect((find(await load(f.$), 'T-1') as BoardTask).live?.refused).toBeUndefined()
   // the lead (no agent) and an agent that is not a worker are never refused
   expect(await bash(undefined, `echo x > ${ROOT}/README.md`)).toBeUndefined()
   expect(await bash('nobody', `echo x > ${ROOT}/README.md`)).toBeUndefined()
@@ -3727,7 +3727,7 @@ test("a worker's Bash command reaching the owner's copy is refused; its own fold
 test("a worker's git writes in its own folder are refused like a checker's; read-only git and the merge-it-in step still work (T-432)", async () => {
   S.me = 'me'
   const f = world()
-  const [b] = boardWith('auto', ['npm test'], { agent: 'ag1', session: 'me', runs: [{ started: ISO }] } as Partial<BoardTask>)
+  const [b] = boardWith('auto', ['npm test'], { agent: 'ag1', live: { session: 'me' }, runs: [{ started: ISO }] } as Partial<BoardTask>)
   await saveBoard(f.$, b)
   const wt5 = `${ROOT}/.symcc/worktrees/T-5`
   workers.set('ag1', { task: 'T-1', worktree: wt5, branch: 'symcc/T-1', since: T0 })
@@ -3773,7 +3773,7 @@ test("a worker's git writes in its own folder are refused like a checker's; read
   expect(await bash('git merge dev')).toBeUndefined()
   expect(await bash('git merge main')).toBe(workerGitWriteText('git merge', 'dev'))
   // no file request was recorded for any of them
-  expect((find(await load(f.$), 'T-1') as BoardTask).try_refused).toBeUndefined()
+  expect((find(await load(f.$), 'T-1') as BoardTask).live?.refused).toBeUndefined()
   // the lead and agents that are not workers are never refused
   expect(await checkEdit(f.$, undefined, { command: 'git commit -am x' })).toBeUndefined()
   expect(await checkEdit(f.$, 'nobody', { command: 'git commit -am x' })).toBeUndefined()
@@ -3784,11 +3784,11 @@ test('after a reload (no worker in memory), an edit outside the files is still r
   S.me = 'me'
   workers.clear()
   const f = world()
-  const [b] = boardWith('auto', ['npm test'], { agent: 'ag1', session: 'me', runs: [{ started: ISO }] } as Partial<BoardTask>)
+  const [b] = boardWith('auto', ['npm test'], { agent: 'ag1', live: { session: 'me' }, runs: [{ started: ISO }] } as Partial<BoardTask>)
   await saveBoard(f.$, b)
   f.put(`${WT}/.git`, 'gitdir: x')
   expect(await checkEdit(f.$, 'ag1', { path: `${WT}/README.md` })).toMatch(/README\.md is outside this task's files/)
-  expect((find(await load(f.$), 'T-1') as BoardTask).try_refused).toEqual(['README.md'])
+  expect((find(await load(f.$), 'T-1') as BoardTask).live?.refused).toEqual(['README.md'])
   // an agent the board doesn't know: nothing refused, no failure
   expect(await checkEdit(f.$, 'nobody', { path: `${WT}/README.md` })).toBeUndefined()
   workers.clear()
@@ -3831,10 +3831,10 @@ test('a finishing task\'s row says "test" while its tests run and "merge" while 
   const a = await finishing(cell)
   expect(a.said[0]).toBe('test')
   expect(a.t.status).toBe('done')
-  expect(a.t.checking).toBeUndefined()
+  expect(a.t.live?.checking).toBeUndefined()
   const b = await finishing(cell, {}, /git update-ref/)
   expect(b.said[0]).toBe('merge')
-  expect(b.t.checking).toBeUndefined()
+  expect(b.t.live?.checking).toBeUndefined()
 })
 
 test('T-542: a finishing task\'s row says "prep" with a plain note in symcc\'s own pre-merge step; with the checker off no step is ever "checker"', async () => {
@@ -3863,7 +3863,7 @@ test('T-542: a finishing task\'s row says "prep" with a plain note in symcc\'s o
 test('the check step is cleared when the tests fail', async () => {
   const { t } = await finishing(async () => undefined, { 'npm test': { exitCode: 1, stdout: 'FAIL a.test', stderr: '' } })
   expect(t.status).not.toBe('doing')
-  expect(t.checking).toBeUndefined()
+  expect(t.live?.checking).toBeUndefined()
 })
 
 test('approve shows "merge" while it moves main, and the step is gone once it is done', async () => {
@@ -3876,7 +3876,7 @@ test('approve shows "merge" while it moves main, and the step is gone once it is
   expect(seen).toBe('merge')
   const t = find(await load(w.$), 'T-1')!
   expect(t.status).toBe('done')
-  expect(t.checking).toBeUndefined()
+  expect(t.live?.checking).toBeUndefined()
 })
 
 // ---------------- a plugin reload while a task's work is tested and merged (T-169) ----------------
@@ -3901,10 +3901,10 @@ test('a reload while a task is being tested and merged leaves it "doing"; it mer
     await startWorker(w.$, 'T-1')
   })
   expect(during!.status).toBe('doing')
-  expect(during!.finishing).toBeDefined()
+  expect(during!.live?.checking?.at).toBeDefined()
   expect(spawned).toBe(0)
   expect(t.status).toBe('done')
-  expect(t.finishing).toBeUndefined()
+  expect(t.live?.checking?.at).toBeUndefined()
   expect(w.calls.filter(c => / git update-ref .*refs\/heads\/main/.test(c)).length).toBe(1)
   expect(t.history.map(h => h.text).join('\n')).not.toMatch(/restarted|too late/)
   expect(t.attempts).toBe(1)
@@ -3913,7 +3913,7 @@ test('a reload while a task is being tested and merged leaves it "doing"; it mer
 test('a reload with the old worker really gone and no merge going on sends the task back to "todo" as before', async () => {
   S.me = 'me'
   const w = world()
-  const [b] = boardWith('auto', [], { session: 'me', history: [], runs: [{ started: ISO }] })
+  const [b] = boardWith('auto', [], { live: { session: 'me' }, history: [], runs: [{ started: ISO }] })
   await saveBoard(w.$, b)
   w.put(LEAD, leadText('me', Date.now()))
   await claimLead(w.$, true)
@@ -3924,8 +3924,8 @@ test('a reload with the old worker really gone and no merge going on sends the t
 
 test('resetDoing keeps a task with a fresh finishing mark, sends back one with a stale mark, and marks a try that merged done', () => {
   const nowMs = Date.parse(ISO)
-  const [b0] = boardWith('auto', [], { session: 'me', history: [] })
-  let b = patchTask(b0, 'T-1', { finishing: ISO }, ISO)
+  const [b0] = boardWith('auto', [], { live: { session: 'me' }, history: [] })
+  let b = patchTask(b0, 'T-1', { live: { checking: { step: 'prep', at: ISO } }, }, ISO)
   expect(resetDoing(b, 'me', null, nowMs + 60_000, 'restarted: x', ISO).tasks[0]!.status).toBe('doing')
   expect(resetDoing(b, 'me', null, nowMs + 10 * 60_000, 'restarted: x', ISO).tasks[0]!.status).toBe('todo')
   b = patchTask(b0, 'T-1', { merged: H1, runs: [{ started: ISO, commits: [H1] }] }, ISO)
@@ -3945,14 +3945,14 @@ test('the regular check: a finishing mark no longer refreshed (its copy is gone)
       if (args[0] === 'merge-base' && args[1] === '--is-ancestor' && args[2] === H1) return merged ? ok() : fail()
       return undefined
     } })
-    const [b] = boardWith('auto', ['npm test'], { session: 'other-dead-session', branch: 'symcc/T-1', history: [], runs: [{ started: ISO, ended: ISO }], finishing: old })
+    const [b] = boardWith('auto', ['npm test'], { live: { session: 'other-dead-session', checking: { step: 'prep', at: old } }, branch: 'symcc/T-1', history: [], runs: [{ started: ISO, ended: ISO }] })
     await saveBoard(w.$, b)
     S.driving = true
     await check(w.$)
     if (!merged) await turns(w, () => !finishingSet.has('T-1'))
     const t = find(await load(w.$), 'T-1')!
     expect(t.status).toBe('done')
-    expect(t.finishing).toBeUndefined()
+    expect(t.live?.checking?.at).toBeUndefined()
     expect(t.attempts).toBe(1)
     if (merged) expect(t.merged).toBe(H1)
     else {
@@ -3969,7 +3969,7 @@ test('T-733: a task cut off by a reload that already went back into the merge li
   S.me = 'me'
   const old = new Date(Date.now() - 10 * 60_000).toISOString()
   const w = world()
-  const [b] = boardWith('auto', ['npm test'], { session: 'other-dead-session', branch: 'symcc/T-1', history: hist('try 1: tests cut off by a reload; testing again', 'try 1: tests cut off by a reload; testing again'), runs: [{ started: ISO, ended: ISO }], finishing: old })
+  const [b] = boardWith('auto', ['npm test'], { live: { session: 'other-dead-session', checking: { step: 'prep', at: old } }, branch: 'symcc/T-1', history: hist('try 1: tests cut off by a reload; testing again', 'try 1: tests cut off by a reload; testing again'), runs: [{ started: ISO, ended: ISO }] })
   await saveBoard(w.$, b)
   S.driving = true
   await check(w.$)
@@ -3984,7 +3984,7 @@ test('T-733: a board save that fails while a task cut off by a reload is put bac
   S.me = 'me'
   const old = new Date(Date.now() - 10 * 60_000).toISOString()
   const w = world()
-  const [b] = boardWith('auto', ['npm test'], { session: 'other-dead-session', branch: 'symcc/T-1', history: [], runs: [{ started: ISO, ended: ISO }], finishing: old })
+  const [b] = boardWith('auto', ['npm test'], { live: { session: 'other-dead-session', checking: { step: 'prep', at: old } }, branch: 'symcc/T-1', history: [], runs: [{ started: ISO, ended: ISO }] })
   await saveBoard(w.$, b)
   S.driving = true
   w.failSaves(p => p.startsWith(BOARD) && p !== BOARD)
@@ -4005,7 +4005,7 @@ test('T-733: an investigation cut off by a reload is never tested or merged: it 
   const old = new Date(Date.now() - 10 * 60_000).toISOString()
   const w = world()
   const main0 = w.git.main
-  const [b] = boardWith('auto', ['npm test'], { kind: 'investigation', session: 'other-dead-session', branch: 'symcc/T-1', history: [], runs: [{ started: ISO, ended: ISO }], finishing: old } as Partial<BoardTask>)
+  const [b] = boardWith('auto', ['npm test'], { kind: 'investigation', live: { session: 'other-dead-session', checking: { step: 'prep', at: old } }, branch: 'symcc/T-1', history: [], runs: [{ started: ISO, ended: ISO }], } as Partial<BoardTask>)
   await saveBoard(w.$, b)
   S.driving = true
   await check(w.$)
@@ -4022,7 +4022,7 @@ test('T-733: an investigation cut off by a reload is never tested or merged: it 
 test('the regular check leaves a task alone while its finishing mark is fresh', async () => {
   S.me = 'me'
   const w = world()
-  const [b] = boardWith('auto', [], { session: 'me', history: [], runs: [{ started: ISO }], finishing: new Date().toISOString() })
+  const [b] = boardWith('auto', [], { live: { session: 'me', checking: { step: 'prep', at: new Date().toISOString() } }, history: [], runs: [{ started: ISO }] })
   await saveBoard(w.$, b)
   S.driving = true
   await check(w.$)
@@ -4040,7 +4040,7 @@ test('a task sent back after its try already merged is done, not started again (
     return undefined
   } })
   ;w.$.agents.spawn = async () => (spawned++, { agentId: 'ag2' })
-  const [b0] = boardWith('auto', [], { session: 'me', branch: 'symcc/T-1', history: [], runs: [{ started: ISO }] })
+  const [b0] = boardWith('auto', [], { live: { session: 'me' }, branch: 'symcc/T-1', history: [], runs: [{ started: ISO }] })
   const b = { ...b0, tasks: [backToTodo(b0.tasks[0]!, 'restarted: the plugin reloaded and the old worker was gone', ISO)] }
   await saveBoard(w.$, b)
   await startWorker(w.$, 'T-1')
@@ -4067,7 +4067,7 @@ test('a try that finds no change while its own earlier work is already on main i
 test("a late report from a worker this copy lost in a reload is still taken when its task is doing for it", async () => {
   S.me = 'me'
   const w = world()
-  const [b] = boardWith('auto', [], { session: 'me', agent: 'ag9', history: [] })
+  const [b] = boardWith('auto', [], { live: { session: 'me' }, agent: 'ag9', history: [] })
   await saveBoard(w.$, b)
   expect(await lateHandBack(w.$, 'ag9')).toBe(true)
   expect(workers.get('ag9')?.task).toBe('T-1')
@@ -4099,7 +4099,7 @@ test('T-228: a try that merged but was left "doing" (its copy of the plugin stop
       a.agents.spawn = async () => (spawned++, { agentId: 'ag2' })
       a.agents.send = a.agents.stop = async (_to, text) => void sent.push(text)
       // started long ago (far over max_minutes), handed back, merged and recorded; but never marked done
-      const [b] = boardWith('auto', ['npm test'], { session: 'me', agent: 'ag1', branch: 'symcc/T-1', history: hist('created by the lead'), merged: H1, runs: [{ started: ISO, ended: ISO, commits: [H1] }], ...(mark === 'stale' ? { finishing: new Date(Date.now() - 10 * 60_000).toISOString() } : {}) })
+      const [b] = boardWith('auto', ['npm test'], { live: { session: 'me' }, agent: 'ag1', branch: 'symcc/T-1', history: hist('created by the lead'), merged: H1, runs: [{ started: ISO, ended: ISO, commits: [H1] }], ...(mark === 'stale' ? { live: { checking: { step: 'prep', at: new Date(Date.now() - 10 * 60_000).toISOString() } }, } : {}) })
       await saveBoard(w.$, b)
       S.driving = true
       if (via === 'reload') {
@@ -4148,7 +4148,7 @@ test('T-237: a worker hands back, the merge takes a while and the clock passes m
     // after the merge, the regular check again: still nothing stops it
     await check(w.$)
     S.driving = false
-  }, { extra: { session: 'me', agent: 'ag1', branch: 'symcc/T-1' } })
+  }, { extra: { live: { session: 'me' }, agent: 'ag1', branch: 'symcc/T-1' } })
   expect(r.t.status).toBe('done')
   expect(r.t.merged).toBe(H1)
   expect(r.end).toEqual(['finished', 'merged'])
@@ -4249,7 +4249,7 @@ async function turns(w: ReturnType<typeof world>, done: () => boolean) {
 test('a merge turn that never ends fails as one normal try after the limit: back to todo with one automatic retry used; the lead is told once; its late end writes nothing', async () => {
   S.me = 'me'
   const { w, free, limit, hungNow } = stuckFinish()
-  const [b] = boardWith('auto', ['npm test'], { session: 'me', branch: 'symcc/T-1', history: hist('created by the lead'), runs: [{ started: ISO }] })
+  const [b] = boardWith('auto', ['npm test'], { live: { session: 'me' }, branch: 'symcc/T-1', history: hist('created by the lead'), runs: [{ started: ISO }] })
   await saveBoard(w.$, b)
   w.put(`${WT}/.git`, 'gitdir: x')
   workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
@@ -4266,9 +4266,9 @@ test('a merge turn that never ends fails as one normal try after the limit: back
   await turns(w, () => ended)
   let t = find(await load(w.$), 'T-1')!
   expect(t.status).toBe('todo')
-  expect(t.finishing).toBeUndefined()
-  expect(t.checking).toBeUndefined()
-  expect(t.session).toBeUndefined()
+  expect(t.live?.checking?.at).toBeUndefined()
+  expect(t.live?.checking).toBeUndefined()
+  expect(t.live?.session).toBeUndefined()
   expect(t.note).toBe('its checking and merging ran over 15 min and was stopped; a new try will look at it (1 of 2)')
   expect(t.test_tries).toBe(1)
   expect(t.history.at(-1)?.text).toBe(`try 1: ${t.note}`)
@@ -4300,7 +4300,7 @@ test('a step given up after the limit whose work already reached main is done, n
     if (args[0] === 'merge-base' && args[1] === '--is-ancestor' && args[2] === H1) return ok()
     return undefined
   } })
-  const [b] = boardWith('auto', ['npm test'], { session: 'me', branch: 'symcc/T-1', history: [], runs: [{ started: ISO }] })
+  const [b] = boardWith('auto', ['npm test'], { live: { session: 'me' }, branch: 'symcc/T-1', history: [], runs: [{ started: ISO }] })
   await saveBoard(w.$, b)
   w.put(`${WT}/.git`, 'gitdir: x')
   workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
@@ -4336,7 +4336,7 @@ test('a normal checking and merging step is untouched by the limit: merged, done
   S.me = 'me'
   const { w, free, limit } = stuckFinish()
   free()
-  const [b] = boardWith('auto', ['npm test'], { session: 'me', branch: 'symcc/T-1', history: [], runs: [{ started: ISO }] })
+  const [b] = boardWith('auto', ['npm test'], { live: { session: 'me' }, branch: 'symcc/T-1', history: [], runs: [{ started: ISO }] })
   await saveBoard(w.$, b)
   w.put(`${WT}/.git`, 'gitdir: x')
   workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
@@ -4382,7 +4382,7 @@ test('a stuck approve is given up after the limit: it stays in review with a not
   expect(out).toBe('T-1 was not merged and stays in review: its checking and merging ran over 15 minutes and was given up. Approve it again.')
   let t = find(await load(w.$), 'T-1')!
   expect(t.status).toBe('review')
-  expect(t.checking).toBeUndefined()
+  expect(t.live?.checking).toBeUndefined()
   expect(statusCell(t, Date.now())).toBe('review')
   expect(t.note).toBe('approved, but the merge ran over 15 min and was given up; approve it again')
   expect(t.history.at(-1)?.text).toBe('try 1: approved by the owner → its checking and merging ran over 15 min and was given up; nothing written, it stays in review')
@@ -4410,7 +4410,7 @@ test('T-549: a finish step waiting for its merge turn has no time limit running;
   S.me = 'me'
   const { w, free, limit } = stuckFinish()
   free()
-  const [b] = boardWith('auto', ['npm test'], { session: 'me', branch: 'symcc/T-1', history: [], runs: [{ started: ISO }] })
+  const [b] = boardWith('auto', ['npm test'], { live: { session: 'me' }, branch: 'symcc/T-1', history: [], runs: [{ started: ISO }] })
   await saveBoard(w.$, b)
   w.put(`${WT}/.git`, 'gitdir: x')
   workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
@@ -4446,7 +4446,7 @@ async function finishedOnDirtyMain(status: string, test_commands = ['npm test'])
   x.agents.spawn = async e => (spawned.push(String(e.name)), { agentId: `ag${spawned.length + 1}` })
   x.plugin = { name: 'symcc', root: '/plugin' }
   x.fs.list = async () => []
-  const [b0] = boardWith('auto', test_commands, { session: 'me', agent: 'ag1', branch: 'symcc/T-1', history: hist('created by the lead'), runs: [{ started: ISO }] })
+  const [b0] = boardWith('auto', test_commands, { live: { session: 'me' }, agent: 'ag1', branch: 'symcc/T-1', history: hist('created by the lead'), runs: [{ started: ISO }] })
   await saveBoard(w.$, b0)
   w.put(`${WT}/.git`, 'gitdir: x')
   workers.clear()
@@ -4480,7 +4480,7 @@ test('an uncommitted change in a file the task changes: the task waits with a no
     let x = await t()
     expect(x.status).toBe('waiting')
     expect(x.note).toBe('waiting for your files on main: src/a.ts; commit or stash them')
-    expect(x.merge_wait).toEqual({ dirty: ['src/a.ts'], untracked: [], ignored: [] })
+    expect(x.live?.merge_wait).toEqual({ dirty: ['src/a.ts'], untracked: [], ignored: [] })
     expect(x.question).toBeNull()
     expect(x.runs!.at(-1)!.ended_note).toBe('waiting for your files')
     expect(w.git.main).toBe(M1)
@@ -4499,7 +4499,7 @@ test('an uncommitted change in a file the task changes: the task waits with a no
     x = await t()
     expect(x.status).toBe('done')
     expect(x.merged).toBe(H1)
-    expect(x.merge_wait).toBeUndefined()
+    expect(x.live?.merge_wait).toBeUndefined()
     expect(x.runs!.at(-1)!.ended_note).toBe('merged')
     expect(w.git.main).toBe(H1)
     expect(ranTests(w)).toEqual(['/bin/sh -c npm test'])
@@ -4542,7 +4542,7 @@ test('a waiting merge that now conflicts with a moved main gets a new try with a
     const x = await t()
     expect(x.status === 'todo' || x.status === 'doing').toBe(true)
     expect(x.merge_main).toBe(true)
-    expect(x.merge_wait).toBeUndefined()
+    expect(x.live?.merge_wait).toBeUndefined()
   } finally {
     cleanUp()
   }
@@ -4593,15 +4593,15 @@ test('an approve blocked by the owner\'s files is merged by the regular check on
 test('merge_wait is kept only while the task stays waiting or in review', () => {
   const [b] = boardWith('auto')
   const mw = { dirty: [], untracked: [], ignored: ['a.txt'] }
-  const w = patchTask(b, 'T-1', { status: 'waiting', merge_wait: mw, note: 'waiting for your files' } as Partial<BoardTask>, ISO)
-  expect((find(w, 'T-1') as BoardTask).merge_wait).toEqual(mw)
-  expect((find(patchTask(w, 'T-1', { note: 'x' }, ISO), 'T-1') as BoardTask).merge_wait).toEqual(mw)
-  expect((find(patchTask(w, 'T-1', { status: 'todo' }, ISO), 'T-1') as BoardTask).merge_wait).toBeUndefined()
-  expect((find(parseBoard(JSON.stringify(w)), 'T-1') as BoardTask).merge_wait).toEqual(mw)
+  const w = patchTask(b, 'T-1', { status: 'waiting', live: { merge_wait: mw }, note: 'waiting for your files' } as Partial<BoardTask>, ISO)
+  expect((find(w, 'T-1') as BoardTask).live?.merge_wait).toEqual(mw)
+  expect((find(patchTask(w, 'T-1', { note: 'x' }, ISO), 'T-1') as BoardTask).live?.merge_wait).toEqual(mw)
+  expect((find(patchTask(w, 'T-1', { status: 'todo' }, ISO), 'T-1') as BoardTask).live?.merge_wait).toBeUndefined()
+  expect((find(parseBoard(JSON.stringify(w)), 'T-1') as BoardTask).live?.merge_wait).toEqual(mw)
   const done = { ...w, tasks: w.tasks.map(t => ({ ...t, status: 'done' as const })) }
-  expect((find(parseBoard(JSON.stringify(done)), 'T-1') as BoardTask).merge_wait).toBeUndefined()
-  const bad = { ...w, tasks: w.tasks.map(t => ({ ...t, merge_wait: { dirty: [1] } })) }
-  expect((find(parseBoard(JSON.stringify(bad)), 'T-1') as BoardTask).merge_wait).toBeUndefined()
+  expect((find(parseBoard(JSON.stringify(done)), 'T-1') as BoardTask).live?.merge_wait).toBeUndefined()
+  const bad = { ...w, tasks: w.tasks.map(t => ({ ...t, live: { merge_wait: { dirty: [1] } }, })) }
+  expect((find(parseBoard(JSON.stringify(bad)), 'T-1') as BoardTask).live?.merge_wait).toBeUndefined()
 })
 
 test("a merge waiting for the owner's files whose turn runs over is one normal failed try: a new try with one automatic retry used, then failed when none are left", async () => {
@@ -4632,7 +4632,7 @@ test("a merge waiting for the owner's files whose turn runs over is one normal f
     expect(out).toBe('T-1 was not merged: its checking and merging ran over 15 minutes and was stopped, so it counts as a failed try; a new try starts on its own.')
     const x = await t()
     expect(x.status).toBe('todo')
-    expect(x.merge_wait).toBeUndefined()
+    expect(x.live?.merge_wait).toBeUndefined()
     expect(x.test_tries).toBe(1)
     expect(x.note).toBe('its checking and merging ran over 15 min and was stopped; a new try will look at it (1 of 2)')
     expect(x.history.at(-1)?.text).toBe(`try 1: ${x.note}`)
@@ -4659,7 +4659,7 @@ function catchLimits(w: ReturnType<typeof world>) {
 
 /** T-1 "doing" in auto mode with `test_commands`, its worker ag1 just about to finish. */
 async function aboutToFinish(w: ReturnType<typeof world>, test_commands = ['npm test']) {
-  const [b] = boardWith('auto', test_commands, { session: 'me', agent: 'ag1', branch: 'symcc/T-1', history: hist('created by the lead'), runs: [{ started: ISO }] })
+  const [b] = boardWith('auto', test_commands, { live: { session: 'me' }, agent: 'ag1', branch: 'symcc/T-1', history: hist('created by the lead'), runs: [{ started: ISO }] })
   await saveBoard(w.$, b)
   w.put(`${WT}/.git`, 'gitdir: x')
   workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
@@ -4747,8 +4747,8 @@ test('a task whose merge turns run over fails like failing tests once its automa
     expect(t.status).toBe('failed')
     expect(t.note).toBe('its checking and merging ran over 15 min and was stopped; nothing was merged (after 2 automatic retries)')
     expect(t.history.at(-1)?.text).toBe(`try 3: ${t.note}`)
-    expect(t.session).toBeUndefined()
-    expect(t.finishing).toBeUndefined()
+    expect(t.live?.session).toBeUndefined()
+    expect(t.live?.checking?.at).toBeUndefined()
     expect(t.runs!.at(-1)!.ended_by).toBe('stopped')
     const told = leadQueue.filter(m => m.startsWith('✗ T-1') && m.includes('ran over 15 minutes'))
     expect(told.length).toBe(1)
@@ -5005,7 +5005,7 @@ function stepsOf(w: ReturnType<typeof world>) {
   const look = () => {
     const text = w.files.get(BOARD)
     const t = text ? find(parseBoard(text), 'T-1') : undefined
-    const c = t?.checking
+    const c = t?.live?.checking
     const s = c ? (c.place ? `${c.step} ${c.place}` : c.step) : ''
     if (s && seen.at(-1) !== s) seen.push(s)
     const g = t && c && taskStage(t, Date.parse(c.at))
@@ -5026,9 +5026,9 @@ test('T-612: a task waiting in the merge queue has the check step "queue" with i
   void workerFinished(w.$, 'ag1', 'made the change').then(() => (ended = true))
   await turns(w, () => (look(), ran.length === 1 && seen.includes('queue 2')))
   const waiting = find(await load(w.$), 'T-1')!
-  expect(waiting.checking).toEqual({ step: 'queue', place: 2, at: expect.any(String) })
+  expect(waiting.live?.checking).toEqual({ step: 'queue', place: 2, at: expect.any(String) })
   expect(waiting.note).toBe(inLineNote(2))
-  const now = Date.parse(waiting.checking!.at)
+  const now = Date.parse(waiting.live!.checking!.at)
   expect(taskPhase(waiting, now)).toMatchObject({ stage: 'queue', place: 2 })
   // the queue goes stale like every other step: its copy gone, the task is back in its worker stage
   expect(taskPhase(waiting, now + FINISH_STALE_MS + 1).stage).toBe('worker')
@@ -5045,7 +5045,7 @@ test('T-613: a task that asked for more time and then handed back is not in need
   S.me = 'me'
   const w = world()
   await aboutToFinish(w)
-  await change(w.$, x => patchTask(x, 'T-1', { time_ask: ISO, note: 'over time; asked the owner' }, ISO))
+  await change(w.$, x => patchTask(x, 'T-1', { live: { time_ask: ISO }, note: 'over time; asked the owner' }, ISO))
   const asked = find(await load(w.$), 'T-1') as BoardTask
   expect(needsYou(asked, Date.now())).toBe(true)
   expect(taskAsks(asked, 45)?.overtime).toBe(true)
@@ -5054,11 +5054,11 @@ test('T-613: a task that asked for more time and then handed back is not in need
   const look = () => {
     const text = w.files.get(BOARD)
     const t = text ? (find(parseBoard(text), 'T-1') as BoardTask | undefined) : undefined
-    const c = t?.checking
+    const c = t?.live?.checking
     if (!t || !c) return
     if (steps.at(-1) !== c.step) steps.push(c.step)
     const at = Date.parse(c.at)
-    if (t.time_ask || needsYou(t, at) || taskAsks(t, 45) || taskPhase(t, at).waitsFor === 'time') bad.push(c.step)
+    if (t.live?.time_ask || needsYou(t, at) || taskAsks(t, 45) || taskPhase(t, at).waitsFor === 'time') bad.push(c.step)
   }
   w.onRun(async () => look())
   const { free, ran, all } = earlierMerges(w, 1)
@@ -5072,7 +5072,7 @@ test('T-613: a task that asked for more time and then handed back is not in need
   expect(bad).toEqual([])
   const t = find(await load(w.$), 'T-1') as BoardTask
   expect(t.status).toBe('done')
-  expect(t.time_ask).toBeUndefined()
+  expect(t.live?.time_ask).toBeUndefined()
 })
 
 test('T-550: an approve shows the same small set of notes as a worker\'s hand-back, then its outcome', async () => {
@@ -5209,12 +5209,12 @@ test("a long investigation answer is cut on the task; the report keeps it all", 
 
 for (const mode of ['auto', 'review'] as const)
   test(`an investigation told to wrap up (time ran out) goes to review with its answer so far, not failed (mode ${mode})`, async () => {
-    const { w, t } = await investigationAnswers(mode, 'So far: the cache is never cleared.', { wrap_up: new Date().toISOString(), time_ask: new Date().toISOString() })
+    const { w, t } = await investigationAnswers(mode, 'So far: the cache is never cleared.', { live: { wrap_up: new Date().toISOString(), time_ask: new Date().toISOString() }  })
     expect(t.status).toBe('review')
     expect(t.note).toBe('answered (time ran out); waiting for you to read it')
     expect(t.answer).toBe('So far: the cache is never cleared.')
-    expect(t.wrap_up).toBeUndefined()
-    expect(t.time_ask).toBeUndefined()
+    expect(t.live?.wrap_up).toBeUndefined()
+    expect(t.live?.time_ask).toBeUndefined()
     expect(t.history.at(-1)?.text).toMatch(/^try 1: answered \(time ran out after \d+ min\): So far/)
     expect(w.files.get(REPORT1)).toContain('So far: the cache is never cleared.')
     expect(w.calls.some(c => / git commit/.test(c))).toBe(false)
@@ -5634,14 +5634,14 @@ const STOP = '2026-11-13T00:10:00.000Z'
 
 /** T-743: T-1 back in todo after a reopen stopped its try 1 worker ag9 at STOP (it started at ISO and used 1000 input tokens). */
 function reopenedT1(): BoardTask {
-  const [b0] = boardWith('auto', [], { session: 'me', agent: 'ag9', branch: 'symcc/T-1', history: [], runs: [{ started: ISO, agents: [{ id: 'ag9', kind: 'worker' as const, started: ISO, tokens: { input: 1000 } }] }] })
+  const [b0] = boardWith('auto', [], { live: { session: 'me' }, agent: 'ag9', branch: 'symcc/T-1', history: [], runs: [{ started: ISO, agents: [{ id: 'ag9', kind: 'worker' as const, started: ISO, tokens: { input: 1000 } }] }] })
   return backToTodo(b0.tasks[0]!, REOPEN, STOP)
 }
 const restartFields = (t: BoardTask): Partial<BoardTask> => ({ attempts: t.attempts, runs: t.runs, history: t.history, note: t.note, branch: t.branch })
 /** T-743: a board with `back` (reopenedT1) claimed again for the same try, as queueWorker claims it: "doing", no agent named yet. */
 function claimedSameTry(back: BoardTask): Board {
   const [b0] = boardWith('auto')
-  const b = patchTask(b0, 'T-1', { ...restartFields(back), status: 'doing', session: 'me', note: QUEUED_NOTE, runs: goOnRun(back.runs, STOP)! }, STOP)
+  const b = patchTask(b0, 'T-1', { ...restartFields(back), status: 'doing', live: { session: 'me', phase: 'claimed' }, note: QUEUED_NOTE, runs: goOnRun(back.runs, STOP)! }, STOP)
   return b
 }
 
@@ -5704,7 +5704,7 @@ test('T-743: after a reopen only one worker works on the try: the old worker is 
   expect(workers.has('ag9')).toBe(false)
   expect(workerIdOf(find(await load(w.$), 'T-1'))).toBeUndefined()
   // a task whose try still names that worker (it kept running over the reopen) keeps it: no second worker starts
-  const [b1] = boardWith('auto', [], { session: 'me', agent: 'ag7', runs: [runBy('ag7', ISO)] })
+  const [b1] = boardWith('auto', [], { live: { session: 'me' }, agent: 'ag7', runs: [runBy('ag7', ISO)] })
   await saveBoard(w.$, b1)
   w.$.agents.list = async () => [{ id: 'ag7', kind: 'worker', status: 'running', name: 'symcc-T-1' }]
   expect(await stopOrphans(w.$, null)).toEqual([])
@@ -5723,10 +5723,10 @@ test('T-743: a worker on a try that went on after a reopen counts its time limit
   const first = new Date(Date.now() - 20 * 3600_000).toISOString()
   const stop = new Date(Date.now() - 2 * 3600_000).toISOString()
   const fresh = new Date(Date.now() - 60_000).toISOString()
-  const [b0] = boardWith('auto', [], { session: 'me', agent: 'ag9', branch: 'symcc/T-1', history: [], runs: [runBy('ag9', first)] })
+  const [b0] = boardWith('auto', [], { live: { session: 'me' }, agent: 'ag9', branch: 'symcc/T-1', history: [], runs: [runBy('ag9', first)] })
   const back = backToTodo(b0.tasks[0]!, REOPEN, stop)
   const runs = withAgentStart(goOnRun(back.runs, fresh)!, 'worker', 'ag10', fresh)!
-  const [b1] = boardWith('auto', [], { session: 'me', branch: 'symcc/T-1', history: [], attempts: 1, runs })
+  const [b1] = boardWith('auto', [], { live: { session: 'me' }, branch: 'symcc/T-1', history: [], attempts: 1, runs })
   await saveBoard(w.$, b1)
   workers.clear()
   w.$.agents.list = async () => [{ id: 'ag10', kind: 'worker', status: 'running', name: 'symcc-T-1' }]
@@ -5742,8 +5742,8 @@ test('T-743: a worker on a try that went on after a reopen counts its time limit
   // the regular check asks nobody for more time
   await check(w.$)
   const after = find(await load(w.$), 'T-1')!
-  expect(after.time_ask).toBeUndefined()
-  expect(after.wrap_up).toBeUndefined()
+  expect(after.live?.time_ask).toBeUndefined()
+  expect(after.live?.wrap_up).toBeUndefined()
   workers.clear()
 })
 
@@ -5766,7 +5766,7 @@ test('T-743: a real send-back (failing tests, the checker, a change) still start
   // failing tests: back to todo with one auto retry used, and the next worker starts try 2 in a run of its own
   S.me = 'me'
   const w = world({}, { 'npm test': { exitCode: 1, stdout: 'FAIL a.test', stderr: '' } })
-  const [b] = boardWith('auto', ['npm test'], { session: 'me', agent: 'ag1', branch: 'symcc/T-1', history: [], runs: [runBy('ag1', ISO)] })
+  const [b] = boardWith('auto', ['npm test'], { live: { session: 'me' }, agent: 'ag1', branch: 'symcc/T-1', history: [], runs: [runBy('ag1', ISO)] })
   await saveBoard(w.$, b)
   w.put(`${WT}/.git`, 'gitdir: x')
   workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
@@ -6120,7 +6120,7 @@ async function twoChecking(w: ReturnType<typeof world>, t2: Partial<BoardTask> =
   // status first: a check mark given with a change of status is dropped (patchTask)
   for (const id of ['T-1', 'T-2']) {
     b = patchTask(b, id, { status: 'doing', attempts: 1 }, ISO)
-    b = patchTask(b, id, { note: CHECKING_NOTE, checking: { step: 'merging', at: new Date().toISOString() }, ...(id === 'T-2' ? t2 : {}) }, ISO)
+    b = patchTask(b, id, { note: CHECKING_NOTE, live: { checking: { step: 'merging', at: new Date().toISOString() } }, ...(id === 'T-2' ? t2 : {}) }, ISO)
   }
   await saveBoard(w.$, b)
   return [find(b, 'T-1')!, find(b, 'T-2')!]
@@ -6150,7 +6150,7 @@ test('two tasks in the merge line take turns; the second waits noted "queue (2)"
   expect(turn2).toEqual([])
   expect(inLineNote(3)).toBe('queue (3)')
   // T-612: its check step is the queue with its place while it waits
-  expect(find(await load(w.$), 'T-2')!.checking).toMatchObject({ step: 'queue', place: 2 })
+  expect(find(await load(w.$), 'T-2')!.live?.checking).toMatchObject({ step: 'queue', place: 2 })
   open()
   expect(await one).toBe('one')
   expect(await two).toBe('two')
@@ -6161,7 +6161,7 @@ test('two tasks in the merge line take turns; the second waits noted "queue (2)"
   expect(turn2).toEqual(['start', 'stop'])
   expect(noteOf(w, 'T-2')).toBe(CHECKING_NOTE)
   // its step is not put back to the one it had (no step back from the queue): its turn's first step replaces it
-  expect(find(await load(w.$), 'T-2')!.checking).toMatchObject({ step: 'queue', place: 2 })
+  expect(find(await load(w.$), 'T-2')!.live?.checking).toMatchObject({ step: 'queue', place: 2 })
   expect(w.files.has(LINE)).toBe(false)
 })
 
@@ -6241,7 +6241,7 @@ test('a merge line entry older than 20 minutes is stale: it is cleared and the t
 test('a fresh merge line entry whose task is no longer being checked is stale: cleared at once', async () => {
   S.me = 'me'
   const w = world()
-  const [t1] = await twoChecking(w, { status: 'todo', checking: undefined })
+  const [t1] = await twoChecking(w, { status: 'todo', live: { checking: undefined } })
   w.put(LINE, mergeLineText([lineEntry('T-2')]))
   expect(await inMergeLine(w.$, 'T-1', async () => lineTasks(w), { t: t1 })).toEqual(['T-1'])
   expect(w.sleeps).toEqual([])
@@ -6411,7 +6411,7 @@ test('a task stopped while it waits in the merge line stops waiting, runs nothin
   expect(parseMergeLine(w.files.get(LINE)!)).toEqual([theirs])
   expect(noteOf(w, 'T-1')).toBe(CHECKING_NOTE)
   // T-612: leaving the line without its turn, its step goes back to the one it had, fresh
-  expect(find(await load(w.$), 'T-1')!.checking).toEqual({ step: 'merging', at: expect.any(String) })
+  expect(find(await load(w.$), 'T-1')!.live?.checking).toEqual({ step: 'merging', at: expect.any(String) })
 })
 
 test("a finished task waiting a long time in the merge line behind another session's task still merges: the wait counts neither as running over nor as hung", async () => {
@@ -6423,7 +6423,7 @@ test("a finished task waiting a long time in the merge line behind another sessi
   await change(w.$, x => {
     const [y] = addTask(x, { origin: { why: 'a test' }, title: 'Other', files: ['lib/'] }, ISO)
     const z = patchTask(y, 'T-2', { status: 'doing', attempts: 1 }, ISO)
-    return patchTask(z, 'T-2', { checking: { step: 'testing', at: new Date().toISOString() } }, ISO)
+    return patchTask(z, 'T-2', { live: { checking: { step: 'testing', at: new Date().toISOString() } }, }, ISO)
   })
   w.put(LINE, mergeLineText([lineEntry('T-2')]))
   const notes: (string | undefined)[] = []
@@ -6654,7 +6654,7 @@ test("T-510: a finished worker's checking and merging gets its limit from test_m
   const w = world()
   const timers: number[] = []
   ;(w.$ as unknown as { clock: { after: unknown } }).clock.after = (ms: number) => (timers.push(ms), { cancel() {} })
-  const [b] = boardWith('auto', ['npm test'], { session: 'me', branch: 'symcc/T-1', runs: [{ started: ISO }] })
+  const [b] = boardWith('auto', ['npm test'], { live: { session: 'me' }, branch: 'symcc/T-1', runs: [{ started: ISO }] })
   await saveBoard(w.$, { ...b, test_minutes: 20 })
   w.put(`${WT}/.git`, 'gitdir: x')
   workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })

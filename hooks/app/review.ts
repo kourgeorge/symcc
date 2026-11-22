@@ -138,7 +138,7 @@ export const goneResult = (target: string): CheckResult => ({ ok: false, gone: t
  */
 export type BeforeLine = { result: CheckResult } | { noVerdict: string } | undefined
 
-/** How checkAndMerge runs: 'finish' (a worker just finished), 'approve' (the owner approved), 'merge' (finished work that waited only for the owner's files is merged again, see BoardTask.merge_wait). */
+/** How checkAndMerge runs: 'finish' (a worker just finished), 'approve' (the owner approved), 'merge' (finished work that waited only for the owner's files is merged again, see BoardTask.live?.merge_wait). */
 export type CheckMode = 'finish' | 'approve' | 'merge'
 
 /**
@@ -374,7 +374,7 @@ async function commitTry($: Host, t: SymccTask, dir: string, made: string[], sub
 }
 
 /**
- * Says on the board which step of checking task `t` is going on now (BoardTask.checking), so the list
+ * Says on the board which step of checking task `t` is going on now (Live.checking), so the list
  * shows it; only while the task is still as it was when the check began and the check was not
  * stopped or given up; the prep step also says it in the note (stepNote). Never fails the check: a board that can't be written only misses the word.
  */
@@ -382,9 +382,11 @@ export async function markStep($: Host, t: SymccTask, step: TurnStep, stopped: (
   if (stopped()) return
   await change($, x => {
     const cur = find(x, t.id)
-    if (!cur || cur.status !== t.status || cur.attempts !== t.attempts || stopped() || cur.checking?.step === step) return x
+    if (!cur || cur.status !== t.status || cur.attempts !== t.attempts || stopped()) return x
     const note = stepNote(step, cur.note)
-    return patchTask(x, t.id, { checking: { step, at: now() }, ...(note !== cur.note ? { note } : {}) }, cur.updated_at)
+    const phase = step === 'checker' ? 'checker' as const : undefined
+    if (cur.live?.checking?.step === step && note === cur.note && cur.live.phase === phase) return x
+    return patchTask(x, t.id, { live: { checking: { step, at: now() }, ...(cur.status === 'doing' ? { phase } : {}) }, ...(note !== cur.note ? { note } : {}) }, cur.updated_at)
   }).catch(() => undefined)
 }
 

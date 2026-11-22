@@ -563,8 +563,8 @@ test('T-648: in VS Code a task in the queue shows â§— and one in the test step â
   const fresh = new Date(T0 - 10_000).toISOString()
   const base = BOARD_TASKS.find(t => t.id === 'T-401')!
   const ran = [{ started: new Date(T0 - 600_000).toISOString(), ended: fresh }]
-  const queued = { ...base, id: 'T-493', title: 'Queued one', status: 'doing', note: 'queue (2)', runs: ran, checking: { step: 'queue', place: 2, at: fresh } }
-  const tested = { ...base, id: 'T-494', title: 'Tested one', status: 'doing', note: 'running the tests', runs: ran, checking: { step: 'testing', at: fresh } }
+  const queued = { ...base, id: 'T-493', title: 'Queued one', status: 'doing', note: 'queue (2)', runs: ran, live: { checking: { step: 'queue', place: 2, at: fresh } }, }
+  const tested = { ...base, id: 'T-494', title: 'Tested one', status: 'doing', note: 'running the tests', runs: ran, live: { checking: { step: 'testing', at: fresh } }, }
   seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, tasks: [...BOARD_TASKS, queued, tested] } } as never })
   on('ui.toast', () => ({ value: undefined }))
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
@@ -577,8 +577,8 @@ test('T-648: in VS Code a task in the queue shows â§— and one in the test step â
 test("T-542: in VS Code symcc's own pre-merge step shows \"prep\" and a running checker \"checker\"; the page says what each does", async ($, on) => {
   const fresh = new Date(T0 - 10_000).toISOString()
   const base = BOARD_TASKS.find(t => t.id === 'T-401')!
-  const prep = { ...base, id: 'T-497', title: 'In the prep step', note: 'preparing to merge: committing and checking files', runs: [{ started: new Date(T0 - 600_000).toISOString(), ended: fresh }], checking: { step: 'prep', at: fresh } }
-  const checker = { ...prep, id: 'T-498', title: 'Checker on it', note: 'a checker agent is trying to break it before it merges', checking: { step: 'checker', at: fresh } }
+  const prep = { ...base, id: 'T-497', title: 'In the prep step', note: 'preparing to merge: committing and checking files', runs: [{ started: new Date(T0 - 600_000).toISOString(), ended: fresh }], live: { checking: { step: 'prep', at: fresh } }, }
+  const checker = { ...prep, id: 'T-498', title: 'Checker on it', note: 'a checker agent is trying to break it before it merges', live: { checking: { step: 'checker', at: fresh } }, }
   seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, tasks: [...BOARD_TASKS, prep, checker] } } })
   on('ui.toast', () => ({ value: undefined }))
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
@@ -600,7 +600,7 @@ test("T-542: in VS Code symcc's own pre-merge step shows \"prep\" and a running 
 test('T-587: in VS Code the task page state chip names the state (T-647, T-751) and the Steps row the step, with checker only when it runs; a task in review passed every step before review', async ($, on) => {
   const fresh = new Date(T0 - 10_000).toISOString()
   const base = BOARD_TASKS.find(t => t.id === 'T-401')!
-  const checker = { ...base, id: 'T-498', title: 'Checker on it', status: 'doing', note: 'a checker agent is trying to break it before it merges', runs: [{ started: new Date(T0 - 600_000).toISOString(), ended: fresh }], checking: { step: 'checker', at: fresh } }
+  const checker = { ...base, id: 'T-498', title: 'Checker on it', status: 'doing', note: 'a checker agent is trying to break it before it merges', runs: [{ started: new Date(T0 - 600_000).toISOString(), ended: fresh }], live: { checking: { step: 'checker', at: fresh } }, }
   const done = { ...base, id: 'T-499', title: 'Passed, waits for review', status: 'review', note: '', runs: [{ started: new Date(T0 - 600_000).toISOString(), ended: fresh }] }
   seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, mode: 'auto', checker: true, tasks: [...BOARD_TASKS, checker, done] } } })
   on('ui.toast', () => ({ value: undefined }))
@@ -815,7 +815,7 @@ test('T-644: in VS Code a wide panel shows a long title whole on one line with i
 })
 
 test('T-644: in VS Code a running task that asks for more time sits under a needs-you heading, not in the running list, so the states stay in one column', async ($, on) => {
-  const tasks = BOARD_TASKS.map(t => (t.id === 'T-402' ? { ...t, time_ask: 'need 10 more minutes' } : t))
+  const tasks = BOARD_TASKS.map(t => (t.id === 'T-402' ? { ...t, live: { time_ask: 'need 10 more minutes' } } : t))
   seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, tasks } } })
   on('ui.toast', () => ({ value: undefined }))
   for (const bodyColumns of [40, 100]) {

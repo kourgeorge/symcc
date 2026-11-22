@@ -195,7 +195,7 @@ function doingBoard(mode: 'auto' | 'review', tasks: { agent: string; files: stri
   let b: Board = { ...emptyBoard(), mode }
   for (const [i, t] of tasks.entries()) {
     b = addTask(b, { origin: { why: 'a test' }, title: `Change ${i + 1}`, files: t.files, merge_into: 'main' }, ISO)[0]
-    b = patchTask(b, `T-${i + 1}`, { status: 'doing', attempts: 1, session: 'me', branch: `symcc/T-${i + 1}`, runs: [runBy(t.agent, ISO)] } as never, ISO)
+    b = patchTask(b, `T-${i + 1}`, { status: 'doing', attempts: 1, live: { session: 'me' }, branch: `symcc/T-${i + 1}`, runs: [runBy(t.agent, ISO)] } as never, ISO)
   }
   return b
 }
@@ -246,7 +246,7 @@ test('a late report for a task "doing" in another session is not taken', async (
   const w = world(on, { work: { 'T-1': ['src/a.ts'] } })
   await $.session.start({ cwd: ROOT } as never)
   const b = doingBoard('auto', [{ agent: 'ag9', files: ['src/'] }])
-  const text = JSON.stringify({ ...b, tasks: b.tasks.map(t => ({ ...t, session: 'someone-else' })) })
+  const text = JSON.stringify({ ...b, tasks: b.tasks.map(t => ({ ...t, live: { session: 'someone-else' } })) })
   w.files.set(BOARD, text)
   await finish($, 'ag9', 'done')
   await w.clock.settle()

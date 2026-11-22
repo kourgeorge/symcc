@@ -39,13 +39,13 @@ export const statusMark = (t: Pick<SymccTask, 'status'> & { runs?: readonly unkn
   t.status === 'todo' && ((t.runs?.length ?? 0) > 0 || (t.attempts ?? 0) > 0) ? TRIED_TODO_MARK : STATUS_MARK[t.status]
 
 /** The step a task is in on its page, its row icon and its word ("⊛ test", "⧗ queue"); '' when it is in none. */
-export function stepNowWord(t: Pick<BoardTask, 'status' | 'checking'> & { note?: string }, nowMs: number): string {
+export function stepNowWord(t: Pick<BoardTask, 'status' | 'live'> & { note?: string }, nowMs: number): string {
   const step = stageStep(taskPhase(t, nowMs).stage)
   return step ? `${STEP_ICON[step]} ${STEP_WORD[step]}` : ''
 }
 
 /** What the task page's badge and Status line need of a task. */
-type BadgeTask = Pick<SymccTask, 'status' | 'runs'> & { note?: string; attempts?: number } & Pick<BoardTask, 'checking'>
+type BadgeTask = Pick<SymccTask, 'status' | 'runs'> & { note?: string; attempts?: number } & Pick<BoardTask, 'live'>
 
 /** The notes a task gets when claimed, before its worker started (app/starts.ts: QUEUED_NOTE and STARTING_NOTE). */
 export const CLAIM_NOTES = new Set(['starting at the next turn', 'worker starting'])

@@ -60,7 +60,7 @@ test('a new entry\'s mark comes from its saved kind, whatever words its text hol
   // T-723: a drive hand-over gives the try its number back too, but it is no change: no "same try number" mark,
   // even with a note earlier in that try (its own "restarted" line already says why)
   const started = withHistory([], at, workerStartedEntry({ attempts: 2, role: 'tester', history: [] }, false), ['note', 'Note added: x'])
-  const off = handedOff({ id: 'T-1', title: 'x', details: '', status: 'doing', attempts: 2, role: 'tester', note: 'worker on it', session: 's', runs: [{ started: at }, { started: at }], history: started } as BoardTask, at)
+  const off = handedOff({ id: 'T-1', title: 'x', details: '', status: 'doing', attempts: 2, role: 'tester', note: 'worker on it', live: { session: 's' }, runs: [{ started: at }, { started: at }], history: started } as BoardTask, at)
   expect(workerStartedEntry({ ...off, attempts: off.attempts + 1 }, false)).toEqual(['stage', 'try 2: worker started (role tester)', { try: 2, step: 'worker-start' }])
   expect(workerStartedEntry({ attempts: 2, role: 'tester', history: started }, false)[1]).toBe('try 2: worker started (role tester) · same try number (note joined)')
   // a kind symcc doesn't know is drawn as "anything else"

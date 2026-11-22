@@ -176,7 +176,7 @@ export async function driveHere(host: Host): Promise<string> {
     return drives ? 'This session drives the board now.' : 'Another session took the board just now; type it again to ask it to hand over.'
   }
   const driver = parseLead(text)!.session
-  const running = (await load(host).catch(() => null))?.tasks.filter(t => t.status === 'doing' && t.session === driver).map(t => t.id) ?? []
+  const running = (await load(host).catch(() => null))?.tasks.filter(t => t.status === 'doing' && t.live?.session === driver).map(t => t.id) ?? []
   const restart = running.length ? ` Its ${running.length} running ${running.length === 1 ? 'worker' : 'workers'} (${running.join(', ')}) ${running.length === 1 ? 'stops' : 'stop'} and ${running.length === 1 ? 'is' : 'are'} restarted here from the kept folder and branch; that doesn't use up a try.` : ''
   const head = ask === 'asked' ? `Already asked session ${shortSession(driver)} to hand over` : `Asked session ${shortSession(driver)} to hand over`
   return `${head}; it will within 30 s, and this session drives the board within 30 s after that.${restart} If it doesn't answer within a few minutes, this session takes over anyway.`

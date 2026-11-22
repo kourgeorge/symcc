@@ -118,7 +118,7 @@ export const HANDOVER_NOTE = 'restarted: the owner moved driving to another sess
  */
 export function handedOff(t: BoardTask, now: string): BoardTask {
   if (t.status !== 'doing') return t
-  const { session: _s, finishing: _f, checking: _c, runs: _r, ...rest } = t
+  const { live: _l, runs: _r, ...rest } = t
   const last = t.runs?.at(-1)
   const runs = last && !last.ended ? t.runs!.slice(0, -1) : t.runs
   return { ...rest, status: 'todo' as const, note: HANDOVER_NOTE, attempts: Math.max(0, t.attempts - 1), updated_at: now, history: withHistory(t.history, now, stoppedEntry(t, HANDOVER_NOTE)), ...(runs?.length ? { runs } : {}) }
@@ -139,12 +139,13 @@ export function liveDriver(text: string | null, nowMs: number, staleMs = LEAD_ST
  * A task owned by the live driver, another session, is never touched.
  */
 export function ownedHere(t: BoardTask, me: string, live: string | null): boolean {
-  return !t.session || t.session === me || t.session !== live
+  const s = t.live?.session
+  return !s || s === me || s !== live
 }
 
 // ---------------- a task whose work is being tested and merged ----------------
 // After a worker finishes, its task stays "doing" while the tests and the merge run. That copy of
-// the plugin marks the task (BoardTask.finishing) and refreshes the mark every FINISH_BEAT_MS, so a
+// the plugin marks the task (Live.live?.checking, its `at`) and refreshes the mark every FINISH_BEAT_MS, so a
 // reloaded copy (whose own memory is empty) sees the merge is still going and leaves the task alone.
 // A mark not refreshed for FINISH_STALE_MS means that copy is gone: the task is then recovered.
 
@@ -172,42 +173,43 @@ export const finishLimitMs = (tests: number, testMinutes: number = DEFAULT_TEST_
 export const ranOverNote = (min: number) => `its checking and merging ran over ${min} min and was stopped`
 
 /** Whether task `t`'s work is being tested and merged right now by some copy of the plugin (its mark is fresh). */
-export function finishingNow(t: Pick<BoardTask, 'status' | 'finishing'>, nowMs: number, staleMs = FINISH_STALE_MS): boolean {
-  if (t.status !== 'doing' || typeof t.finishing !== 'string') return false
-  const at = Date.parse(t.finishing)
+export function finishingNow(t: Pick<BoardTask, 'status' | 'live'>, nowMs: number, staleMs = FINISH_STALE_MS): boolean {
+  if (t.status !== 'doing' || typeof t.live?.checking?.at !== 'string') return false
+  const at = Date.parse(t.live.checking.at)
   return Number.isFinite(at) && isFresh(at, nowMs, staleMs)
 }
 
 /** The step symcc is in while it checks task `t`'s finished work ("prep", "testing", "checker", "merging"), or '' when none is going on (or its mark is stale). */
-export function checkStepNow(t: Pick<BoardTask, 'status' | 'checking'>, nowMs: number, staleMs = FINISH_STALE_MS): CheckStep | '' {
-  if (!t.checking || !CHECKED_STATUSES.includes(t.status)) return ''
-  const at = Date.parse(t.checking.at)
-  return Number.isFinite(at) && isFresh(at, nowMs, staleMs) ? t.checking.step : ''
+export function checkStepNow(t: Pick<BoardTask, 'status' | 'live'>, nowMs: number, staleMs = FINISH_STALE_MS): CheckStep | '' {
+  const c = t.live?.checking
+  if (!c || !CHECKED_STATUSES.includes(t.status)) return ''
+  const at = Date.parse(c.at)
+  return Number.isFinite(at) && isFresh(at, nowMs, staleMs) ? c.step : ''
 }
 
 /** Whether task `t` waits in review (or waiting) while the owner's approve (or a merge once their files are clear) runs:
  *  its check step is set and fresh (prep, in line, test, merge). The owner has nothing to do on it then: every board
  *  lists and counts it with the running tasks, not under NEEDS YOU. Once the approve ends (merged, or failed and back in
  *  review) its step is cleared, so it needs the owner again. */
-export const approveRunning = (t: Pick<BoardTask, 'status' | 'checking'>, nowMs: number): boolean => {
+export const approveRunning = (t: Pick<BoardTask, 'status' | 'live'>, nowMs: number): boolean => {
   const p = taskPhase(t, nowMs)
   return p.shown !== p.state
 }
 
 /** The status task `t` is grouped and counted under on every board: "doing" while its approve runs (approveRunning), else its own (taskPhase's `shown`). */
-export const shownStatus = <S extends BoardTask['status']>(t: { status: S; checking?: BoardTask['checking'] }, nowMs: number): S | 'doing' => taskPhase(t, nowMs).shown as S | 'doing'
+export const shownStatus = <S extends BoardTask['status']>(t: { status: S; live?: BoardTask['live'] }, nowMs: number): S | 'doing' => taskPhase(t, nowMs).shown as S | 'doing'
 
 /**
- * Whether task `t`'s worker has already handed back its try: it is "doing" and has a finishing mark,
+ * Whether task `t`'s worker has already handed back its try: it is "doing" and has a check mark (live.checking),
  * or its last try has an end time (set at the hand-back). Its agent may still be listed (idle), but it
  * no longer works on the task: it must not be tracked as a worker again, nor timed by max_minutes.
  */
-export function handedBack(t: Pick<BoardTask, 'status' | 'finishing' | 'runs'>): boolean {
-  return t.status === 'doing' && (!!t.finishing || !!t.runs?.[t.runs.length - 1]?.ended)
+export function handedBack(t: Pick<BoardTask, 'status' | 'live' | 'runs'>): boolean {
+  return t.status === 'doing' && (!!t.live?.checking || !!t.runs?.[t.runs.length - 1]?.ended)
 }
 
 /** Whether task `t` has a finishing mark that is no longer refreshed (the copy that merged it is gone). */
-export const finishingStale = (t: Pick<BoardTask, 'status' | 'finishing'>, nowMs: number, staleMs = FINISH_STALE_MS) => t.status === 'doing' && !!t.finishing && !finishingNow(t, nowMs, staleMs)
+export const finishingStale = (t: Pick<BoardTask, 'status' | 'live'>, nowMs: number, staleMs = FINISH_STALE_MS) => t.status === 'doing' && !!t.live?.checking && !finishingNow(t, nowMs, staleMs)
 
 /** The commit task `t`'s current try merged, as the board recorded it; null when this try merged nothing (yet). */
 export function mergedThisTry(t: Pick<BoardTask, 'merged' | 'runs'>): string | null {
@@ -224,9 +226,9 @@ export const alreadyMergedLine = (t: Pick<BoardTask, 'role' | 'attempts' | 'merg
  * not be tried again or failed. Its last try ends as finished, merged.
  */
 export function mergedDone(t: BoardTask, sha: string, when: string, now: string): BoardTask {
-  const { session: _s, finishing: _f, checking: _c, test_output: _o, ...rest } = t
+  const { live: _l, test_output: _o, ...rest } = t
   const runs = t.status === 'doing' ? endedBy(t, now, 'finished', 'merged').runs : t.runs?.length ? withEnd(t.runs, 'finished', 'merged', true) : undefined
-  return { ...rest, status: 'done' as const, note: `merged into ${intoOf(t)} (${shortSha(sha)})`, merged: sha, merge_main: false, updated_at: now, history: withHistory(t.history, now, ['merged', alreadyMergedLine(t, sha, when), { try: Number(t.attempts) || 0 }]), ...(runs ? { runs } : {}) }
+  return { ...rest, status: 'done' as const, note: `merged into ${intoOf(t)} (${shortSha(sha)})`, merged: sha, merge_main: undefined, updated_at: now, history: withHistory(t.history, now, ['merged', alreadyMergedLine(t, sha, when), { try: Number(t.attempts) || 0 }]), ...(runs ? { runs } : {}) }
 }
 
 // ---------------- merged outside the board (T-514) ----------------
@@ -252,10 +254,10 @@ export const notMergedText = (id: string, n: number, into: string) => `${id}'s b
  * it had are cleared.
  */
 export function mergedOutside(t: BoardTask, sha: string, by: string, commits: readonly string[], now: string): BoardTask {
-  const { session: _s, finishing: _f, checking: _c, test_output: _o, merge_wait: _w, time_ask: _a, wrap_up: _u, options: _p, asked_files: _af, question_lead: _ql, options_lead: _ol, ...rest } = t
+  const { live: _l, test_output: _o, options: _p, asked_files: _af, question_lead: _ql, options_lead: _ol, ...rest } = t
   const ended = t.status === 'doing' ? endedBy(t, now, 'finished', 'merged').runs : t.runs?.length ? withEnd(t.runs, 'finished', 'merged', true) : undefined
   const runs = ended ? addCommits(ended, [...commits, sha]) : undefined
-  return { ...rest, status: 'done' as const, question: null, note: `merged into ${intoOf(t)} outside the board (${shortSha(sha)})`, merged: sha, merge_main: false, updated_at: now, history: withHistory(t.history, now, ['merged', mergedOutsideLine(sha, by), { how: 'outside' }]), ...(runs ? { runs } : {}) }
+  return { ...rest, status: 'done' as const, question: null, note: `merged into ${intoOf(t)} outside the board (${shortSha(sha)})`, merged: sha, merge_main: undefined, updated_at: now, history: withHistory(t.history, now, ['merged', mergedOutsideLine(sha, by), { how: 'outside' }]), ...(runs ? { runs } : {}) }
 }
 
 /**
@@ -287,12 +289,12 @@ export function relabelSession(b: Board, oldId: string, newId: string): Board {
   if (!oldId || !newId || oldId === newId) return b
   return {
     ...b,
-    tasks: b.tasks.map(t => (t.status === 'doing' && t.session === oldId ? { ...t, session: newId } : t)),
+    tasks: b.tasks.map(t => (t.status === 'doing' && t.live?.session === oldId ? { ...t, live: { ...t.live, session: newId } } : t)),
   }
 }
 
 /** Task `t` back to "todo" with `note`, no longer tied to a session; a running one gets a history line saying why (the next try starts for that reason). */
 export function backToTodo(t: BoardTask, note: string, now: string): BoardTask {
-  const { session: _gone, finishing: _f, checking: _c, ...rest } = t
+  const { live: _l, ...rest } = t
   return { ...rest, status: 'todo' as const, note, updated_at: now, ...(t.status === 'doing' ? { history: withHistory(t.history, now, stoppedEntry(t, note)), ...endedBy(t, now, ...stopEnd(note)) } : {}) }
 }

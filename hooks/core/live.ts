@@ -187,14 +187,14 @@ function stationSince(t: BoardTask, station: LiveStation, startMs: number | unde
     return hits.length ? (first ? Math.min(...hits) : Math.max(...hits)) : undefined
   }
   const found = station === 'check' ? stageAt(['prep', 'checker'], true) : station === 'queue' ? stageAt(['queue'], false) : station === 'tests' ? stageAt(['tests'], false) : stageAt(['merge'], false)
-  return found ?? (station === 'check' ? ms(t.runs?.[t.runs.length - 1]?.ended) : undefined) ?? ms(t.checking?.at)
+  return found ?? (station === 'check' ? ms(t.runs?.[t.runs.length - 1]?.ended) : undefined) ?? ms(t.live?.checking?.at)
 }
 
 /** When the approve (or files-merge) running on task `t` (in review or waiting) started: its last "prep started" line
  *  after its try ended, else its check step's mark. */
 function approveSince(t: BoardTask, endMs: number | undefined): number | undefined {
   const preps = (t.history ?? []).filter(h => h.kind === 'stage' && h.step === 'prep').map(h => ms(h.at)).filter((n): n is number => n !== undefined && (endMs === undefined || n >= endMs))
-  return preps.length ? Math.max(...preps) : ms(t.checking?.at)
+  return preps.length ? Math.max(...preps) : ms(t.live?.checking?.at)
 }
 
 /** The lanes of the Live tab: one per task the board shows as doing (shownStatus: a task in doing, or one in review or
@@ -218,7 +218,7 @@ export function liveLanes(view: LiveView, nowMs: number): LiveLane[] {
       const sinceMs = stationSince(t, station, approving ? enteredMs : startMs)
       const tryNo = Math.max(1, Number(t.attempts) || 1)
       const auto = Number(t.test_tries ?? 0) || 0
-      const place = stage === 'queue' ? t.checking?.place : undefined
+      const place = stage === 'queue' ? t.live?.checking?.place : undefined
       // T-757: the whole task's tokens (every try); the current try's are known only once it hands back
       const runs = t.runs ?? []
       const more = !!run && !tryTokens(run)

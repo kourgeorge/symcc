@@ -76,7 +76,7 @@ export function toArchive(b: Board, nowMs: number): BoardTask[] {
 /** The archive with `tasks` added (a task already in it is replaced, so an id is never there twice). */
 export function addToArchive(a: Archive, tasks: BoardTask[]): Archive {
   const ids = new Set(tasks.map(t => t.id))
-  return { version: 1, tasks: [...a.tasks.filter(t => !ids.has(t.id)), ...tasks.map(({ session: _s, ...t }) => t as BoardTask)] }
+  return { version: 1, tasks: [...a.tasks.filter(t => !ids.has(t.id)), ...tasks.map(({ live: _l, ...t }) => t as BoardTask)] }
 }
 
 /** Totals with one task's tries added (`sign` 1) or taken away (`sign` -1). */

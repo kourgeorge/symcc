@@ -69,13 +69,13 @@ test('a hand-over never leaves two drivers: at every step of lead.json, at most 
 
 test("a task stopped by the owner's hand-over goes back to todo without using up a try", () => {
   let b: Board = addTask(emptyBoard(), { origin: { why: 'a test' }, title: 'Work', files: ['src/'] }, T)[0]
-  b = patchTask(b, 'T-1', { status: 'doing', session: 'a', attempts: 2, runs: startRun(startRun(undefined, T), '2026-11-18T10:05:00Z') }, T)
+  b = patchTask(b, 'T-1', { status: 'doing', live: { session: 'a' }, attempts: 2, runs: startRun(startRun(undefined, T), '2026-11-18T10:05:00Z') }, T)
   // the first try ended earlier
   b = patchTask(b, 'T-1', { runs: [{ ...find(b, 'T-1')!.runs![0]!, ended: '2026-11-18T10:04:00Z' }, find(b, 'T-1')!.runs![1]!] }, T)
   const t = handedOff(find(b, 'T-1')!, '2026-11-18T10:10:00Z')
   expect(t.status).toBe('todo')
   expect(t.attempts).toBe(1)
-  expect(t.session).toBeUndefined()
+  expect(t.live?.session).toBeUndefined()
   expect(t.note).toBe(HANDOVER_NOTE)
   expect(t.runs?.length).toBe(1)
   expect(t.history.at(-1)?.text).toBe('try 2: restarted: the owner moved driving to another session')
@@ -120,7 +120,7 @@ function world(id = 'me') {
 
 async function boardWithWork(w: ReturnType<typeof world>) {
   let b: Board = addTask(emptyBoard(), { origin: { why: 'a test' }, title: 'Work', files: ['src/'] }, T)[0]
-  b = patchTask(b, 'T-1', { status: 'doing', session: 'a', attempts: 1, runs: startRun(undefined, T) }, T)
+  b = patchTask(b, 'T-1', { status: 'doing', live: { session: 'a' }, attempts: 1, runs: startRun(undefined, T) }, T)
   await saveBoard(w.host, b)
 }
 

@@ -195,7 +195,7 @@ function owner(b: Board, nowMs: number): HealthFinding[] {
     .map(t => {
       const h = Math.floor((nowMs - Date.parse(t.updated_at)) / 3_600_000)
       const files = waitsForFiles(t)
-      const mw = files ? asBlockers(t.merge_wait)! : undefined
+      const mw = files ? asBlockers(t.live?.merge_wait)! : undefined
       const what = files ? `waits for the owner's files on ${intoOf(t)}` : t.status === 'review' ? 'is ready for review' : 'waits for the owner'
       const consider = files ? `remind the owner to ${fixWays(mw!)} ${blockerFiles(mw!).join(', ')} on ${intoOf(t)}; ${t.id} then merges on its own (no answer needed)` : t.status === 'review' ? `remind the owner to approve or reject ${t.id}` : `remind the owner of ${t.id}'s question, or answer it yourself if you can`
       return finding(b, 'owner', [t.id], `${t.id} ${what} and nothing happened for ${h}+ hour${h > 1 ? 's' : ''}`, consider)

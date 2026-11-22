@@ -16,13 +16,13 @@ export function rowEndBoard(): Board {
   for (const title of ['a question', 'a file request', 'your files', 'a review', 'approved', 'a failure', 'more time']) b = addTask(b, { origin: { why: 'a test' }, title, files: ['src/'] }, AT)[0]
   b = patchTask(b, 'T-1', { status: 'waiting', question: 'Which database?', note: 'waiting for you' }, AT)
   b = patchTask(b, 'T-2', { status: 'waiting', question: 'May I also change docs/a.md?', asked_files: ['docs/a.md'], note: 'waiting for you' } as Partial<BoardTask>, AT)
-  b = patchTask(b, 'T-3', { status: 'review', merge_wait: { dirty: ['src/a.ts'] }, note: 'waiting for your files' } as Partial<BoardTask>, AT)
+  b = patchTask(b, 'T-3', { status: 'review', live: { merge_wait: { dirty: ['src/a.ts'] } }, note: 'waiting for your files' } as Partial<BoardTask>, AT)
   b = patchTask(b, 'T-4', { status: 'review', note: 'ready for review' }, AT)
   b = patchTask(b, 'T-5', { status: 'review', note: 'running the tests' }, AT)
   // patchTask leaves the check step alone (the engine sets it), so it is set here
-  b = { ...b, tasks: b.tasks.map(t => (t.id === 'T-5' ? { ...t, checking: { step: 'testing', at: FRESH } } : t)) }
+  b = { ...b, tasks: b.tasks.map(t => (t.id === 'T-5' ? { ...t, live: { checking: { step: 'testing', at: FRESH } }, } : t)) }
   b = patchTask(b, 'T-6', { status: 'failed', note: 'the worker made no change' }, AT)
-  b = patchTask(b, 'T-7', { status: 'doing', note: 'time is up', time_ask: AT, runs: [{ started: AT }] } as Partial<BoardTask>, AT)
+  b = patchTask(b, 'T-7', { status: 'doing', note: 'time is up', live: { time_ask: AT }, runs: [{ started: AT }] } as Partial<BoardTask>, AT)
   return b
 }
 

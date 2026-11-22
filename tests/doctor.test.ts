@@ -221,7 +221,7 @@ test('T-676: fix with ids cleans up only those; an id no longer offered is skipp
 
 test('T-684: during a merge the doctor still lists (leaving out the merging task) and changes nothing', async () => {
   // T-7 is being merged on the board: its folder and branch are marked "being merged", never offered
-  const tasks = [task('T-2', 'done'), task('T-5', 'done'), task('T-7', 'doing', { finishing: new Date().toISOString() })]
+  const tasks = [task('T-2', 'done'), task('T-5', 'done'), task('T-7', 'doing', { live: { checking: { step: 'prep', at: new Date().toISOString() } }, })]
   const w = world({ tasks })
   const text = await doctor(w.host, '')
   expect(text).toContain("A merge is in progress (T-7's work is being checked and merged): this is only the list; /symcc-doctor fix waits until it is done.")
@@ -250,7 +250,7 @@ test('T-684: during a merge the doctor still lists (leaving out the merging task
 })
 
 test('T-684: during a merge, fix changes nothing and says which merge runs (the list is still shown)', async () => {
-  const w = world({ tasks: [task('T-2', 'done'), task('T-9', 'doing', { finishing: new Date().toISOString() })] })
+  const w = world({ tasks: [task('T-2', 'done'), task('T-9', 'doing', { live: { checking: { step: 'prep', at: new Date().toISOString() } }, })] })
   const said = await doctor(w.host, 'fix')
   expect(said).toContain("doesn't fix anything while a merge is in progress (T-9's work is being checked and merged); nothing was changed. Try /symcc-doctor fix again when it is done.")
   expect(said).toContain('b-T-2  branch symcc/T-2')

@@ -3,7 +3,7 @@
 // Like merge.test.ts, these run the real finish, merge and board code against a small scripted git and in-memory files.
 import { expect } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { type Board, addTask, emptyBoard, patchTask, find, checkerVerdict, checkerOutput, isCheckerOutput, docsOnly, checkerOn, applySettings, parseSettingValue, settingValue, finishedNote, bashOutsideText, gitWriteText, gitWriteIn, workerGitWriteText, untestedChange, testTail, statusCell, PREP_NOTE, CHECKER_NOTE } from '../hooks/board'
+import { type Board, addTask, emptyBoard, patchTask, find, checkerVerdict, checkerOutput, isCheckerOutput, docsOnly, checkerOn, applySettings, parseSettingValue, settingValue, finishedNote, bashOutsideText, gitWriteText, gitWriteIn, workerGitWriteText, untestedChange, testTail, statusCell, PREP_NOTE, STEP_NOTE } from '../hooks/board'
 import { S, leadQueue, meanwhile, workers, checkerRuns, stopped } from '../hooks/app/state'
 import { workerFinished, WORKER_PROMPT, checkingNow, stopAsked, check, stoppedHandBack } from '../hooks/app/workers'
 import { setBoardMode, setSymcc } from '../hooks/app/board-mode'
@@ -29,6 +29,7 @@ import type { EvidenceEvent } from '../hooks/core/evidence'
 import { evidenceWritten } from '../hooks/app/evidence'
 import { agentsOf, checkerIdOf, checkerTokensOf, sumTokens, tryCost, tryTokens } from '../hooks/core/runs'
 import { runBy } from './agent-fixture'
+const CHECKER_NOTE = STEP_NOTE.checker
 
 const ROOT = '/repo'
 const WT = `${ROOT}/.symcc/worktrees/T-1`
@@ -253,7 +254,7 @@ test('with the checker on, a passing change waits for a checker (shown as checki
     expect(w.git.main).toBe(M1)
     const now = find(await load(w.$), 'T-1')!
     expect(now.status).toBe('doing')
-    expect(now.checking?.step).toBe('checker')
+    expect(now.live?.checking?.step).toBe('checker')
     checkerFinished(id, 'I tried empty input and the old path.\nOK', false, { output: 500 })
   })
   expect(w.spawns.length).toBe(1)
@@ -957,7 +958,7 @@ test('T-386: a reload stops the running checker; at the next check the task gets
   expect(w.spawns[1]!.name).toBe('symcc-T-1-checker')
   const mid = find(await load(w.$), 'T-1')!
   expect(mid.status).toBe('doing')
-  expect(mid.checking?.step).toBe('checker')
+  expect(mid.live?.checking?.step).toBe('checker')
   expect(w.git.head).toBe(sha)
   const told = leadQueue.filter(m => m.includes('its checker stopped when the plugin reloaded'))
   expect(told.length).toBe(1)
@@ -1009,8 +1010,8 @@ test('T-386: a checker shown as ended after the reload: the next check starts a 
 
 test('T-386: a reload after the checker said OK and the work reached main (before the outcome was written): the task ends done, no new checker', async () => {
   const w = world()
-  // finishing: the old copy's mark (its merge was under way); a board field not in SymccTask
-  const left = { note: 'a checker agent is trying to break it before it merges', finishing: ISO, runs: [{ started: ISO, ended: ISO, commits: [H1] }] }
+  // live.checking: the old copy's mark (its merge was under way)
+  const left = { note: 'a checker agent is trying to break it before it merges', live: { checking: { step: 'checker' as const, at: ISO } }, runs: [{ started: ISO, ended: ISO, commits: [H1] }] }
   await saveBoard(w.$, boardWith(true, left))
   w.git.head = H1
   w.git.main = H1
@@ -1161,7 +1162,7 @@ test("T-740: a hand-back from an earlier try's worker while the new try's worker
   await turns(200)
   const t = find(await load(w.$), 'T-1')!
   expect(t.status).toBe('doing')
-  expect(t.finishing).toBe(undefined)
+  expect(t.live?.checking?.at).toBe(undefined)
   expect(t.runs!.at(-1)!.ended).toBe(undefined)
   expect(t.history.some(h => h.text.includes('worker handed back'))).toBe(false)
   expect(w.spawns.length).toBe(0)

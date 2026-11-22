@@ -1,6 +1,6 @@
 // Adding and changing tasks, which ones may start, and the backlog.
 import type { SymccTask } from '../../types'
-import { BACKLOG_FROM, type Board, type BoardTask, cleanFiles, DEFAULT_KIND, INVESTIGATION, isInvestigation, isKind, kindOf, type TaskKind, DATA_DIR, find, intoOf, normId, STATUS_WORD, waitsForFiles } from './board-file'
+import { BACKLOG_FROM, type Board, type BoardTask, cleanFiles, cleanLive, type Live, DEFAULT_KIND, INVESTIGATION, isInvestigation, isKind, kindOf, type TaskKind, DATA_DIR, find, intoOf, normId, STATUS_WORD, waitsForFiles } from './board-file'
 import { depDone } from './archive'
 import { historyEntry, withHistory } from './history'
 import { createdLine, makeOrigin, type OriginInput } from './origin'
@@ -56,21 +56,39 @@ export function addTask(b: Board, f: { title: string; details?: string; files?: 
   return [{ ...b, next_id: b.next_id + 1, tasks: [...b.tasks, t] }, t]
 }
 
-export function patchTask(b: Board, id: string, patch: Partial<BoardTask>, now: string, dir: string = DATA_DIR): Board {
+/** A patch of a task: its fields as they are, except `live`, which is merged into the task's own (a field set to undefined is dropped; null clears all of it). */
+export type TaskPatch = Omit<Partial<BoardTask>, 'live'> & { live?: Live | null }
+
+/** The live object of `t` after `patch`, as the new `next` (its status and try) may keep it; undefined when it holds nothing. */
+function liveFor(t: BoardTask, patch: TaskPatch, next: BoardTask): Live | undefined {
+  const sameTry = next.status === t.status && next.attempts === t.attempts
+  const kept: Live = patch.live === null ? {} : { ...(t.live ?? {}) }
+  // the over-time marks, the hand-back record and the check step belong to one try, and to the status it was in
+  if (!sameTry) for (const k of ['extra_minutes', 'time_ask', 'wrap_up', 'question', 'refused', 'checking'] as const) delete kept[k]
+  // waiting only for the owner's files to merge: kept while the task stays where it is (or the patch sets it again)
+  if (next.status !== t.status) delete kept.merge_wait
+  const set = patch.live ? patch.live : {}
+  const merged = { ...kept, ...set } as Record<string, unknown>
+  for (const k of Object.keys(merged)) if (merged[k] === undefined) delete merged[k]
+  return cleanLive(merged, next.status)
+}
+
+export function patchTask(b: Board, id: string, patch: TaskPatch, now: string, dir: string = DATA_DIR): Board {
   const t = find(b, id)
   if (!t) throw new Error(`${id} is not on the board`)
-  const next: BoardTask = { ...t, ...patch, updated_at: now }
+  const { live: _l, ...plain } = patch
+  const next: BoardTask = { ...t, ...plain, updated_at: now }
   // Leaving "doing" ends the worker's try, however it ended (finished, stopped, over time, lost).
   if (t.status === 'doing' && next.status !== 'doing' && next.runs?.length && !next.runs[next.runs.length - 1]!.ended) next.runs = endRun(next.runs, now)
   // T-479: each try keeps its agents' ids, after it ends too, so every copy of the plugin refuses them then (the old tries' ids are cut)
   if (next.runs?.length) next.runs = keepAgentIds(next.runs)
-  if (next.status !== 'doing' || !next.session) delete next.session
-  // the "being tested and merged" mark only means something while the task is "doing"
-  if (next.status !== 'doing' || !next.finishing) delete next.finishing
-  // the over-time marks, and what the try recorded for its hand-back, belong to one try while it runs
-  for (const k of ['extra_minutes', 'time_ask', 'wrap_up', 'try_question', 'try_refused'] as const) if (next.status !== 'doing' || next.attempts !== t.attempts || !next[k]) delete next[k]
-  // the step of a check only means something while the task stays as it was when checked
-  if (!next.checking || next.status !== t.status || next.attempts !== t.attempts) delete next.checking
+  // Everything that belongs to one running try (see Live) is kept or dropped here, in one place.
+  const live = liveFor(t, patch, next)
+  if (live) next.live = live
+  else delete next.live
+  // "merge it in first" is stored only when true; why a task failed only while it is failed
+  if (!next.merge_main) delete next.merge_main
+  if (next.status !== 'failed' || !next.failed_on) delete next.failed_on
   // Where a task came from never changes once it is made.
   if ('origin' in patch) {
     if (t.origin) next.origin = t.origin
@@ -98,10 +116,8 @@ export function patchTask(b: Board, id: string, patch: Partial<BoardTask>, now: 
   // The worker's file request and choices belong to the question they came with.
   for (const k of ['asked_files', 'options'] as const) if (next.status !== 'waiting' || (patch.question !== undefined && !(k in patch)) || !next[k]?.length) delete next[k]
   // T-801: the lead's wording of the open question goes with the question (kept only while it stays as it was, or set by the patch)
-  const sameAsk = next.status === t.status && patch.question === undefined && patch.time_ask === undefined && (next.status === 'waiting' || (next.status === 'doing' && !!next.time_ask))
+  const sameAsk = next.status === t.status && patch.question === undefined && patch.live?.time_ask === undefined && (next.status === 'waiting' || (next.status === 'doing' && !!next.live?.time_ask))
   for (const k of ['question_lead', 'options_lead'] as const) if (!(k in patch) && !sameAsk) delete next[k]
-  // Waiting only for the owner's files to merge: kept while the task stays where it is (or the patch sets it again).
-  if (!waitsForFiles(next) || (next.status !== t.status && !('merge_wait' in patch))) delete next.merge_wait
   return putTask(b, next)
 }
 
@@ -121,7 +137,7 @@ export function ready(b: Board): SymccTask[] {
  * T-703: a task that failed because its branch clashes with the branch it merges into. Whatever moves it
  * back (a change, a retry, the backlog) keeps that: its next try is a "merge it in" try (merge_main).
  */
-export const failedOnClash = (t: Pick<BoardTask, 'status' | 'note'>): boolean => t.status === 'failed' && /^conflicts with the latest /.test(t.note ?? '')
+export const failedOnClash = (t: Pick<BoardTask, 'status' | 'failed_on'>): boolean => t.status === 'failed' && t.failed_on === 'clash'
 
 /**
  * "Stash": task `id` goes to the backlog, from todo, paused or failed (or doing, once its worker
@@ -233,13 +249,13 @@ export const OVERTIME_OPTIONS = ['+30 min', '+60 min', 'Stop it'] as const
 export const WRAP_UP_GRACE_MS = 3 * 60_000
 
 /** The minutes task `t`'s worker may run now: max_minutes plus what the owner added for this try. */
-export const timeLimitOf = (max: number, t: { extra_minutes?: number } | undefined) => max + (t?.extra_minutes ?? 0)
+export const timeLimitOf = (max: number, t: { live?: { extra_minutes?: number } } | undefined) => max + (t?.live?.extra_minutes ?? 0)
 
 /**
  * With no answer from the owner, a worker over its limit is told to wrap up once it ran this long:
  * its limit plus max_minutes again (so twice max_minutes when no time was added).
  */
-export const hardCapOf = (max: number, t: { extra_minutes?: number } | undefined) => timeLimitOf(max, t) + max
+export const hardCapOf = (max: number, t: { live?: { extra_minutes?: number } } | undefined) => timeLimitOf(max, t) + max
 
 /** The question a task shows while its worker runs over its limit of `limit` minutes. */
 export const overtimeQuestion = (id: string, limit: number) => `${id} has run ${limit} min. Give it more time?`
@@ -315,7 +331,7 @@ function answeredTask(b: Board, id: string, what: string): BoardTask {
 export function investigationDone(b: Board, id: string, now: string, kept?: string): Board {
   const t = answeredTask(b, id, 'marked done')
   const line = `try ${t.attempts}: the owner read the answer → done (nothing merged)${kept ? `; kept as a note by ${kept}` : ''}`
-  return patchTask(b, t.id, { status: 'done', note: kept ? `answered; kept as a note by ${kept}` : 'answered', merge_main: false, test_output: undefined, history: withHistory(t.history, now, ['done', line, { try: Number(t.attempts) || 0, result: `done (nothing merged)${kept ? `; kept as a note by ${kept}` : ''}` }]) }, now)
+  return patchTask(b, t.id, { status: 'done', note: kept ? `answered; kept as a note by ${kept}` : 'answered', merge_main: undefined, test_output: undefined, history: withHistory(t.history, now, ['done', line, { try: Number(t.attempts) || 0, result: `done (nothing merged)${kept ? `; kept as a note by ${kept}` : ''}` }]) }, now)
 }
 
 /** `s` in lower case with every run of other characters turned into one "-", and no "-" at either end. */
@@ -431,5 +447,5 @@ export function askMoreTask(b: Board, id: string, question: string, answer: stri
   const body = answer.trim() || t.answer?.trim() || ''
   const fits = body && t.details.length + head.length + body.length + where.length + 40 <= DETAILS_MAX
   const added = fits ? `${head}${report ? ` (in full in ${report})` : ''}:\n${body}` : `${head}${where || ' was not saved'}.`
-  return patchTask(b, t.id, { status: 'todo', note: `asked more: ${q.slice(0, 280)}`, details: withAsk(t.details.trimEnd(), added), answer: undefined, test_tries: 0, test_output: undefined, merge_main: false, history: withHistory(t.history, now, ['asked', `try ${t.attempts}: the owner asked more: ${q}`, { try: Number(t.attempts) || 0 }]) }, now)
+  return patchTask(b, t.id, { status: 'todo', note: `asked more: ${q.slice(0, 280)}`, details: withAsk(t.details.trimEnd(), added), answer: undefined, test_tries: 0, test_output: undefined, merge_main: undefined, history: withHistory(t.history, now, ['asked', `try ${t.attempts}: the owner asked more: ${q}`, { try: Number(t.attempts) || 0 }]) }, now)
 }
