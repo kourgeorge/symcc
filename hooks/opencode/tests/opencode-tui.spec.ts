@@ -3753,7 +3753,7 @@ test('T-770: the Live tab\'s mode line ends in "⌕ gaps-bot 4m" while scouts ru
   const base = { ...f0.view, tasks: liveTasks(), checker: true, max_parallel: 3 }
   const runs = [{ name: 'board-review', since: NOW - 60_000 }, { name: 'gaps-bot', since: NOW - 4 * 60_000 }]
   const draw = (running: typeof runs | undefined, w: number) => {
-    const scouts = (running ?? []).map(r => ({ name: r.name, every_minutes: 0, running: true, last_run: new Date(r.since).toISOString() }))
+    const scouts = (running ?? []).map(r => ({ name: r.name, every_minutes: 0, running: true, started: true, last_run: new Date(r.since).toISOString() }))
     const f = parseViewFile(viewFileText({ ...f0, view: { ...base, scouts } }))!
     const d = panelLines(f, { tab: 'live', opened: '', cursor: 0 }, NOW, w)
     const i = d.lines.findIndex(l => lineText(l).includes(' busy'))
