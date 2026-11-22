@@ -36,3 +36,12 @@ test("the owner's settings text (when the panel can't be shown) is grouped the s
   const got = sections(text, l => (/^\S.*:$/.test(l) ? l.slice(0, -1) : null), l => /^ {2}(\w+)\s/.exec(l)?.[1] ?? null)
   expect(got.map(([t, names]) => [t, names.filter(n => n !== 'roles')])).toEqual(expected)
 })
+
+test('T-800: the owner reads approve merge in the settings text; the lead sees the stored values', () => {
+  const line = (t: string, start: RegExp) => t.split('\n').find(l => start.test(l)) ?? ''
+  const owner = line(settingsText({ mode: 'review' }), /^ {2}mode\s/)
+  expect(owner).toContain('approve merge')
+  expect(owner).not.toMatch(/\breview\b/)
+  const lead = line(leadSettingsText({ mode: 'review' }, { sound: false, voice: false }), /^mode:/)
+  expect(lead).toContain('mode: review (default auto, can be paused / review / auto)')
+})

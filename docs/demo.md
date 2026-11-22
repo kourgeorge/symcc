@@ -29,7 +29,7 @@ merge), and the agents are proactive (workers build on their own, scouts find th
 
 The status line, the banner and the Scouts view use the plugin's real text (see
 `statusLine`, `modeLabel`, `bannerLines` and `scoutRow` in `hooks/core/`, and the Scouts
-view in `hooks/claude/ui/scouts-page.tsx`), e.g. `⏸ review merge · T-1, T-3 doing · 1 to do`. The banner
+view in `hooks/claude/ui/scouts-page.tsx`), e.g. `⏸ approve merge · T-1, T-3 doing · 1 to do`. The banner
 counts and the status line are worked out from the `tasks` list in the script, so they always
 match the board.
 
@@ -201,7 +201,7 @@ for (let i = 0; i + 1 < marks.length; i++) {
   // the status line
   const parts = [n('doing') && `${ids('doing').join(', ')} doing`, n('review') && `${n('review')} to review (${ids('review').join(', ')})`, n('todo') && `${n('todo')} to do`].filter(Boolean)
   if (on.length && !parts.length) parts.push('all done')
-  push(show([[a, b]], text(LX, 500, [['symcc: ', C.dim], ['⏸ review merge', C.accent], ...parts.map(p => [' · ' + p, C.text])])))
+  push(show([[a, b]], text(LX, 500, [['symcc: ', C.dim], ['⏸ approve merge', C.accent], ...parts.map(p => [' · ' + p, C.text])])))
 }
 
 // tabs
