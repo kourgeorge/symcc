@@ -1126,7 +1126,7 @@ export function liveTodayLines(v: Pick<LiveView, 'tasks' | 'today_team'>, nowMs:
   const first = todayLines({ ...d, tokens }, width, triesOnly).map((text): LiveSeg[] =>
     text.endsWith(TRIES_ONLY) ? [{ text: text.slice(0, -TRIES_ONLY.length), tone: 'text' }, { text: TRIES_ONLY, tone: 'dim' }] : [{ text, tone: 'text' }])
   // T-855: with no lane there is no key line, so the dim note that ⌀ means tokens ends the section
-  return [...first, ...todayMoreLines(more, width), ...(note ? [[{ text: TOKENS_NOTE, tone: 'dim' as const }]] : [])]
+  return [...first, ...todayMoreLines(more, width), ...(note ? wrapLine(TOKENS_NOTE, width).map((text): LiveSeg[] => [{ text, tone: 'dim' }]) : [])]
 }
 
 // ---------------- T-718: the Organizational memory section at the bottom of the Live tab ----------------
