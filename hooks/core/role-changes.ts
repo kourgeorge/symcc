@@ -1,6 +1,6 @@
 // What the owner's version of a built-in role changed (T-871): each difference as before -> after, for the role's
 // page ("Changed from built-in") and the Roles list ("replaced · model"). Plain data; every board draws it.
-import type { RoleDef } from './roles'
+import { type RoleDef, isCheckerRole } from './roles'
 import type { DefSource } from './def-files'
 import type { Seg } from './details'
 
@@ -22,11 +22,17 @@ export const CHANGED_HEADING = 'Changed from built-in'
 const NONE = '(none)'
 const SESSION_MODEL = "(session's model)"
 
+/** A text's lines, without Windows line ends ("\r\n" says the same as "\n") or blank lines at its ends. */
+function lines(text: string): string[] {
+  const t = text.replace(/\r\n?/g, '\n').trim()
+  return t ? t.split('\n') : []
+}
+
 /** The lines of `after` that are not in `before` (`+`) and of `before` not in `after` (`-`), in order, by the longest
  *  common run of lines (blank lines at the ends don't count). */
 export function lineChanges(before: string, after: string): LineChange[] {
-  const a = before.trim() ? before.trim().split('\n') : []
-  const b = after.trim() ? after.trim().split('\n') : []
+  const a = lines(before)
+  const b = lines(after)
   // lcs[i][j]: the common length of a[i..] and b[j..]
   const lcs = Array.from({ length: a.length + 1 }, () => new Array<number>(b.length + 1).fill(0))
   for (let i = a.length - 1; i >= 0; i--) for (let j = b.length - 1; j >= 0; j--) lcs[i]![j] = a[i] === b[j] ? lcs[i + 1]![j + 1]! + 1 : Math.max(lcs[i + 1]![j]!, lcs[i]![j + 1]!)
@@ -51,8 +57,9 @@ export function roleChanges(builtIn: RoleDef, mine: RoleDef): RoleChange[] {
   if ((builtIn.model ?? '') !== (mine.model ?? '')) out.push({ field: 'model', before: builtIn.model || SESSION_MODEL, after: mine.model || SESSION_MODEL })
   if (list(builtIn.skills) !== list(mine.skills)) out.push({ field: 'skills', before: list(builtIn.skills), after: list(mine.skills) })
   if (list(builtIn.tools) !== list(mine.tools)) out.push({ field: 'tools', before: list(builtIn.tools), after: list(mine.tools) })
-  if (builtIn.prompt.trim() !== mine.prompt.trim()) out.push({ field: 'checklist', before: '', after: '', lines: lineChanges(builtIn.prompt, mine.prompt) })
-  if (!!builtIn.off !== !!mine.off) out.push({ field: 'off', before: builtIn.off ? 'off' : 'on', after: mine.off ? 'off' : 'on' })
+  if (lines(builtIn.prompt).join('\n') !== lines(mine.prompt).join('\n')) out.push({ field: 'checklist', before: '', after: '', lines: lineChanges(builtIn.prompt, mine.prompt) })
+  // the checker role can't be turned on or off (the checker setting decides), so its off: line is no change
+  if (!isCheckerRole(builtIn.name) && !!builtIn.off !== !!mine.off) out.push({ field: 'off', before: builtIn.off ? 'off' : 'on', after: mine.off ? 'off' : 'on' })
   return out
 }
 

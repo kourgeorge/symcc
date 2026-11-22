@@ -5,7 +5,8 @@ import type { On } from 'claude-code'
 import { ICON } from '../hooks/name'
 import { inProject } from './project'
 import { ran, entry } from './fakes'
-import { emptyBoard } from '../hooks/board'
+import { emptyBoard, parseRole } from '../hooks/board'
+import { roleChanges, roleListLabel } from '../hooks/core/role-changes'
 
 /** Seeds the plugin's state values; once the plugin writes one, the kit's own store answers it (and redraws). */
 function stateOf(on: On, seed: Record<string, unknown>) {
@@ -401,4 +402,22 @@ test('T-871: a role page has the shared header and no key line; a replaced role 
   expect(await ui.find({ type: 'Text', text: 'added' })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: '  added: no built-in to compare' })).toBeDefined()
   await ui.unmount()
+})
+
+test('T-871: Windows line ends are no change, and the checker role off: line is no change', async () => {
+  const text = '---\ndescription: checks the work\nmodel: sonnet\noff: true\n---\n- run the tests\n- read the diff\n'
+  const builtIn = parseRole('checker', text)!
+  // the same file saved with Windows line ends says the same
+  const crlf = parseRole('checker', text.replace(/\n/g, '\r\n'))!
+  expect(roleChanges(builtIn, crlf)).toEqual([])
+  // the checker can't be turned on or off here, so leaving out its off: line is no change
+  const noOff = parseRole('checker', text.replace('off: true\n', ''))!
+  expect(roleChanges(builtIn, noOff)).toEqual([])
+  expect(roleListLabel('replaced', false, roleChanges(builtIn, noOff))).toBe('replaced')
+  // another role's off: line still counts
+  const docs = parseRole('docs', text)!
+  expect(roleChanges(docs, parseRole('docs', text.replace('off: true\n', ''))!).map(c => c.field)).toEqual(['off'])
+  // a changed line with Windows line ends shows only that line
+  const changed = parseRole('checker', text.replace('read the diff', 'read every file').replace(/\n/g, '\r\n'))!
+  expect(roleChanges(builtIn, changed)[0]?.lines).toEqual([{ sign: '-', text: '- read the diff' }, { sign: '+', text: '- read every file' }])
 })
