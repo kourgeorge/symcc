@@ -156,7 +156,8 @@ test('the band: the header, then the tasks that need you or run with the list\'s
   // nothing on the board, or symcc off: no band
   expect(bandLines({ ...f, view: { ...f.view, tasks: [] } }, NOW, 120)).toEqual([])
   expect(bandLines({ ...f, view: { ...f.view, on_here: false } }, NOW, 120)).toEqual([])
-  expect(bandLines(null, NOW, 120)).toEqual([])
+  // T-860: no view file (no board in this folder): the one quiet hint
+  expect(bandLines(null, NOW, 120).map(lineText)).toEqual(['no board here · /symcc-init'])
 })
 
 test('a doing row shows only the total work time of all tries in the band and the list, no Σ, never "in all"; a narrow row drops the time (T-557)', () => {

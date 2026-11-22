@@ -2191,7 +2191,7 @@ started in. It never looks in a parent folder and never in the git top folder: s
 subfolder of a project and symcc is not there. With no board in that folder, symcc stays off until you run
 `/symcc-init`. There it acts like plain Claude: no band above the prompt, no board panel, no lead instructions, no "[symcc] Board
 update" messages, no sounds, no timers, no example scouts, no git-setup
-offer. The only trace is the status line under the prompt, "symcc: no board here · /symcc-init" (OpenCode shows the same hint and
+offer. The only trace is the status line under the prompt, "symcc: no board here · /symcc-init" (OpenCode shows the same hint, "no board here · /symcc-init", in its strip, and
 nothing else). `/symcc-init` and help work; every other symcc command and tool answers "no symcc board in this folder ·
 /symcc-init to create one here". Nothing is written (no `.symcc/` folder). Type `/symcc-init` (it works like the command that starts a repo): it creates the board in the
 folder Claude started in, even when a parent folder has a `.symcc`; a parent's board never matters. A task's worker folder

@@ -230,6 +230,9 @@ export type BandHit = { board: true } | { open: string }
 /** The hint at the header's end that it is a button; dropped first when the line has no room for it. */
 export const BAND_CLICK_HINT = ' (click: board)'
 
+/** What OpenCode's strip says in a folder with no board. */
+export const NO_BOARD_HINT = 'no board here · /symcc-init'
+
 /** The band above the prompt (bandDraw's lines). */
 export function bandLines(f: ViewFile | null, nowMs: number, width: number, rows = 6): Line[] {
   return bandDraw(f, nowMs, width, rows).lines
@@ -248,7 +251,9 @@ export function bandDraw(f: ViewFile | null, nowMs: number, width: number, rows 
   const v = f?.view
   const tasks = v?.tasks ?? []
   const questions = v?.questions ?? []
-  if (!f || !v || (!tasks.length && !questions.length) || v.on_here === false) return { lines: [], hits: [] }
+  // T-860: no view file means no board in this folder: the one quiet hint
+  if (!f) return { lines: [[{ text: NO_BOARD_HINT, color: 'inactive' }]], hits: [null] }
+  if ( !v || (!tasks.length && !questions.length) || v.on_here === false) return { lines: [], hits: [] }
   // an approved task whose approve runs counts and shows as doing (shownStatus)
   const summary = statusCounts(tasks, ['doing', 'todo', 'paused', 'review', 'waiting', 'failed', 'done'], nowMs).join(' · ')
   const order = ['review', 'waiting', 'failed', 'doing']

@@ -127,7 +127,9 @@ test('a Windows worker folder maps to the main project and goes guard-only', asy
   const win = 'C:\\proj\\.symcc\\worktrees\\T-1'
   const w = inWorktree(true, win, 'C:\\proj\\.git')
   expect(await projectRoot(w.host, win)).toBe('C:\\proj')
-  await guardStart(w.host)
+  // the session's own folder is the worker folder: sessionStart's folder check must send it to guard-only
+  S.guardOnly = false
+  await sessionStart(w.host)
   expect(S.root).toBe('C:\\proj')
   expect(S.guardOnly).toBe(true)
   expect(w.timers).toEqual([])
