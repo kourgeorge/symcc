@@ -1948,7 +1948,8 @@ sizes. It changes nothing until you say so.
 - **Old data shapes (`migrate-data`):** symcc no longer converts old-shaped files when it reads
   them. If `board.json`, its `tasks/` files, the archive, `scouts.json`, a scout's last report
   or `field-guide.md` still hold an old shape (history lines as plain strings, tokens saved as
-  one number, old roles, `mode: off`, `target_branch`, a "queue (n)" note, ...), the doctor lists
+  one number, old roles, `mode: off`, `target_branch`, a "queue (n)" note, a question kept in
+  several fields instead of one `ask` record, `last_run` / `last_report` in `scouts.json`, ...), the doctor lists
   how many of each. `/symcc-doctor fix migrate-data` keeps a
   dated copy of the data files first (`.symcc/data.before-migrate-<time>/`, cleaned up later
   like the other backups), saves every file once in today's shape and says what it changed.
@@ -2171,7 +2172,7 @@ your-project/
     ├── board.lock        held for a moment while a window saves the board
     ├── lead.json         which window drives the board (with a heartbeat)
     ├── scouts/           your scout files (*.md) and each scout's recent runs (*.runs.json)
-    ├── scouts.json       each scout's last run and report, and whether it is paused
+    ├── scouts.json       whether each scout is paused, and the scouts' usage totals (a scout's last run and report are read from the newest run in its runs file)
     ├── roles/            your own worker roles (*.md), see Worker roles
     ├── reports/          each try's full worker report (T-3-try-2.md), and scouts/ with
     │                     each scout run's full report (bugs-2026-11-18T10-20-30-000Z.md)

@@ -19,7 +19,7 @@ import { readOld, stillOld } from './old-data-fixture'
 import { upgradeArchiveTask } from '../hooks/core/old-data'
 import { rowEndBoard, ROW_END, LEAD_BEFORE, ROW_END_NOW } from './row-end-cases'
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
-import { STEP_WORD, asChecking, shownNote, STEP_NOTE, inLineNote, PREP_NOTE, everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, goneBranchQuestion, goneBranchOptions, parseGoneBranch, saysMergeInstead, crossBranchNotes, intoOf, branchesToDelete, worktreesToRemove, cleanupText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, notifyOf, notifyChoices, notifyRefusal, unplayableNote, bestNotify, startRun, endRun, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_NOT_READY, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, needFilesQuestion, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, bashPathsToCheck, CWD_LOST, BASH_LOST, shellCwd, bashTooManyText, BASH_TOO_MANY, BASH_PATHS_MAX, pathAliases, resolvePath, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, panelSections, sectionHeader, foldedRow, crewParts, withCrew, statusRoom, STATUS_WIDTH, nextScoutText, statusCell, rowExtra, fileWaitText, fitRow, hintLines, hintLineText, hintText, packRows, listKeys, taskKeys, diffKeys, scoutKeys, scoutListKeys, scoutIcon, scoutTone, scoutLastText, countFindings, scoutListRows, scoutListText, scoutPausedText, scoutMayRun, scoutWhyNot, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, rolesLeadText, BUILT_IN_ROLES, WEB_SAFETY_LINE, leftoverTmpFiles, tmpName, normId, dayOf, runMs, isNothing, agentSafeName, onDemand, readBoard } from '../hooks/board'
+import { lastRunOf, STEP_WORD, asChecking, shownNote, STEP_NOTE, inLineNote, PREP_NOTE, everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, goneBranchQuestion, goneBranchOptions, parseGoneBranch, saysMergeInstead, crossBranchNotes, intoOf, branchesToDelete, worktreesToRemove, cleanupText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, notifyOf, notifyChoices, notifyRefusal, unplayableNote, bestNotify, startRun, endRun, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_NOT_READY, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, needFilesQuestion, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, bashPathsToCheck, CWD_LOST, BASH_LOST, shellCwd, bashTooManyText, BASH_TOO_MANY, BASH_PATHS_MAX, pathAliases, resolvePath, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, panelSections, sectionHeader, foldedRow, crewParts, withCrew, statusRoom, STATUS_WIDTH, nextScoutText, statusCell, rowExtra, fileWaitText, fitRow, hintLines, hintLineText, hintText, packRows, listKeys, taskKeys, diffKeys, scoutKeys, scoutListKeys, scoutIcon, scoutTone, scoutLastText, countFindings, scoutListRows, scoutListText, scoutPausedText, scoutMayRun, scoutWhyNot, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, rolesLeadText, BUILT_IN_ROLES, WEB_SAFETY_LINE, leftoverTmpFiles, tmpName, normId, dayOf, runMs, isNothing, agentSafeName, onDemand, readBoard } from '../hooks/board'
 import { usageTokens } from '../hooks/claude/usage'
 import { EXTRA_TOOLS, ROLE_TOOL_MAP, claudeRoleTools, BASE_WORKER_TOOLS, workerTypeFor, workerTypeSuffix, workerAgentTypes, isWorkerType, asBaseWorkers, claudeNames } from '../hooks/claude/agent-types'
 import { type AgentInfo, hostAgent, isNotReady } from '../hooks/claude/agents'
@@ -89,10 +89,10 @@ test('a task can never be allowed to touch the board, Git internals or files out
 
 test('waiting tasks show their question; other statuses drop it', async () => {
   let [b, t] = addTask(emptyBoard(), { origin: W, title: 'mode' }, T)
-  b = patchTask(b, t.id, { status: 'waiting', question: 'half up or to even?' }, T)
+  b = patchTask(b, t.id, { status: 'waiting', ask: { by: 'lead', text: 'half up or to even?', asked_at: '' } }, T)
   expect(boardText(b)).toContain('asks: half up or to even?')
   b = patchTask(b, t.id, { status: 'todo' }, T)
-  expect(b.tasks[0]!.question).toBe(null)
+  expect(b.tasks[0]!.ask).toBeUndefined()
 })
 
 test('a scout file: front matter sets how often, the body is its instructions', async () => {
@@ -449,7 +449,7 @@ test('the icon: one treble clef character for one-line spots, a small clef drawi
 })
 
 test('the banner: the clef drawing beside the name, where, who drives and the settings', () => {
-  const b = { ...emptyBoard(), branch: 'main', test_commands: ['claude plugin test .'] }
+  const b = { ...emptyBoard(), home_branch: 'main', test_commands: ['claude plugin test .'] }
   const lines = bannerLines(b, '/Users/me/repositories/symcc', '/Users/me', true, 80)
   const [a0, a1, a2, a3] = ICON_ART.map(l => ` ${l}  `)
   expect(lines.map(l => l.art)).toEqual(ICON_ART.map(l => ` ${l}  `))
@@ -474,7 +474,7 @@ test('the banner: the clef drawing beside the name, where, who drives and the se
   // driven elsewhere, no test command, and a counts line under the drawing, at full width
   const run = { started: '2026-01-01T00:00:00.000Z', ended: '2026-01-01T00:08:00.000Z', agents: [{ kind: 'worker' as const, started: '2026-01-01T00:00:00.000Z', ended: '2026-01-01T00:08:00.000Z', tokens: { cache_read: 600_000, input: 43_700 } }] }
   const tasks = [{ status: 'doing', runs: [run] }, { status: 'doing' }, { status: 'todo' }, { status: 'done' }] as never[]
-  const more = bannerLines({ ...emptyBoard(), branch: 'main', mode: 'paused', auto_retries: 1, tasks }, '/Users/me/repositories/symcc', '/Users/me', false, 80)
+  const more = bannerLines({ ...emptyBoard(), home_branch: 'main', mode: 'paused', auto_retries: 1, tasks }, '/Users/me/repositories/symcc', '/Users/me', false, 80)
   // mode paused: a warning on the first line, as nothing starts (the workers/scouts strip is gone from the banner)
   expect(more.map(bannerText)).toEqual([
     `${a0}symcc board · symcc · ⏸ paused: nothing starts`,
@@ -489,7 +489,7 @@ test('the banner: the clef drawing beside the name, where, who drives and the se
   expect(more[2]!.parts[0]).toEqual({ text: 'no test command', tone: 'warning' })
   expect(more[0]!.parts.at(-1)).toEqual({ text: '⏸ paused: nothing starts', tone: 'warning' })
   // disabled: the header says how to turn it back on in words, the command in the accent color (as the name), the rest a warning
-  const offLine = bannerLines({ ...b, enabled: false }, '', '', true, 80, undefined, 'symcc', undefined, '0.4.1')[0]!
+  const offLine = bannerLines({ ...b, on_here: false }, '', '', true, 80, undefined, 'symcc', undefined, '0.4.1')[0]!
   expect(offLine.parts.slice(-3)).toEqual([
     { text: 'symcc is disabled · ', tone: 'warning' },
     { text: '/symcc-enable', tone: 'accent', bold: true },
@@ -503,7 +503,7 @@ test('the banner: the clef drawing beside the name, where, who drives and the se
 })
 
 test('a narrow banner drops the drawing and cuts lines to fit', () => {
-  const b = { ...emptyBoard(), branch: 'main', test_commands: ['claude plugin test .'] }
+  const b = { ...emptyBoard(), home_branch: 'main', test_commands: ['claude plugin test .'] }
   const lines = bannerLines(b, '/Users/me/repositories/symcc', '/Users/me', true, 30)
   const text = lines.map(bannerText)
   expect(text[0]).toBe('symcc board · symcc')
@@ -559,11 +559,11 @@ test('a new task merges into the branch the owner is on, else the repo main bran
 })
 
 test('the banner shows the branch checked out now', async () => {
-  const l2 = bannerLines({ ...emptyBoard(), tasks: [], branch: 'my-feature' }, '/Users/me/app', '/Users/me', true, 120)[1]!
+  const l2 = bannerLines({ ...emptyBoard(), tasks: [], home_branch: 'my-feature' }, '/Users/me/app', '/Users/me', true, 120)[1]!
   expect(bannerText(l2)).toContain('my-feature')
   expect(l2.parts.find(p => p.text === 'my-feature')!.tone).toBe('plain')
   // a warning (e.g. no git) takes its place
-  const w = bannerLines({ ...emptyBoard(), branch: 'main', branch_note: 'no git repo here' }, '/Users/me/app', '/Users/me', true, 120)[1]!
+  const w = bannerLines({ ...emptyBoard(), home_branch: 'main', branch_note: 'no git repo here' }, '/Users/me/app', '/Users/me', true, 120)[1]!
   expect(w.parts.find(p => p.text === 'no git repo here')!.tone).toBe('warning')
   expect(bannerText(w)).not.toContain('main ·')
 })
@@ -603,7 +603,7 @@ test('the board list shows "→ branch" only for a task that merges into another
 })
 
 test("a task waiting only for the owner's files: its row and keys say to commit or stash them; a question is unchanged", () => {
-  const base: SymccTask = { id: 'T-2', title: 'x', details: '', files: [], status: 'waiting', note: 'waiting for your files on dev: a.ts; commit or stash them', question: null, order: 0, after: [], attempts: 1, history: [], branch: null, created_at: '', updated_at: '' }
+  const base: SymccTask = { id: 'T-2', title: 'x', details: '', files: [], status: 'waiting', note: 'waiting for your files on dev: a.ts; commit or stash them', order: 0, after: [], attempts: 1, history: [], branch: null, created_at: '', updated_at: '' }
   const files = { ...base, live: { merge_wait: { dirty: ['a.ts'], untracked: [], ignored: [] } }, merge_into: 'dev' } as SymccTask
   expect(fileWaitText(files)).toBe('waiting for your files on dev: a.ts; commit or stash them, it merges on its own')
   expect(rowExtra(files, [files])).toBe('waiting for your files on dev: a.ts; commit or stash them, it merges on its own')
@@ -617,7 +617,7 @@ test("a task waiting only for the owner's files: its row and keys say to commit 
   expect(fileWaitText(untracked)).toBe('waiting for your files on dev: b.ts; move, rename or commit them, it merges on its own')
   const tracked = { ...files, live: { merge_wait: { dirty: ['a.ts'], untracked: [], ignored: [] } }, } as SymccTask
   expect(fileWaitText(tracked)).toBe('waiting for your files on dev: a.ts; commit or stash them, it merges on its own')
-  const asked = { ...base, question: 'Which one?' }
+  const asked = { ...base, ask: { by: 'worker' as const, text: 'Which one?', asked_at: '' } }
   expect(fileWaitText(asked)).toBe('')
   expect(rowExtra(asked, [asked])).toBe('Which one?')
   expect(keysFor('waiting', { extra: { live: { merge_wait: { dirty: ['a.ts'], untracked: [], ignored: [] } }, } }).map(k => `${k.key} ${k.word}`)).toContain('r merge now')
@@ -625,7 +625,7 @@ test("a task waiting only for the owner's files: its row and keys say to commit 
 })
 
 test('an old board: each task without its own branch gets the old target_branch, and target_branch is dropped', () => {
-  const task = (id: string, extra: object = {}) => ({ id, title: id, details: '', files: [], status: 'todo', note: '', question: null, order: 0, after: [], attempts: 0, history: [], branch: null, created_at: T, updated_at: T, origin: { by: 'lead', why: 'x', at: T }, ...extra })
+  const task = (id: string, extra: object = {}) => ({ id, title: id, details: '', files: [], status: 'todo', note: '', order: 0, after: [], attempts: 0, history: [], branch: null, created_at: T, updated_at: T, origin: { by: 'lead', why: 'x', at: T }, ...extra })
   const old = { version: 1, next_id: 3, mode: 'auto', test_commands: [], target_branch: 'main', max_parallel: 3, tasks: [task('T-1'), task('T-2', { merge_into: 'feature-x' })] }
   const r = readOld(JSON.stringify(old))
   expect(r.board.tasks.map(t => t.merge_into)).toEqual(['main', 'feature-x'])
@@ -642,7 +642,7 @@ test('an old board: each task without its own branch gets the old target_branch,
 // ---------------- today in full, older days folded ----------------
 
 const at = (id: string, status: string, updated: string, created = updated) =>
-  ({ id, title: id, details: '', files: [], status, note: '', question: null, order: 0, after: [], attempts: 0, history: [], branch: null, created_at: created, updated_at: updated }) as SymccTask
+  ({ id, title: id, details: '', files: [], status, note: '', order: 0, after: [], attempts: 0, history: [], branch: null, created_at: created, updated_at: updated }) as SymccTask
 const NOW = Date.parse('2026-11-11T12:00:00Z')
 
 test('open tasks from old days stay on top, today in full, older days grouped newest day first', () => {
@@ -913,7 +913,7 @@ test('T-748: the status line says the mode, who drives, the branch, the next sco
   const merged = (id: string) => ({ id, status: 'done' as const, history: [{ kind: 'merged', at: ago(1), text: 'merged' }], runs: [{ started: ago(30), ended: ago(5), agents: [{ kind: 'worker' as const, started: ago(30), ended: ago(5), cost: 150.4 }] }] })
   const tasks = [merged('T-1'), merged('T-2'), { id: 'T-740', status: 'doing' as const, attempts: 3, runs: [{ started: ago(4), agents: [{ kind: 'worker' as const, started: ago(4), cost: 11.2 }] }] }, { id: 'T-743', status: 'todo' as const }]
   const scouts = [{ name: 'bugs', running: false, next_run: new Date(now + 38.2 * 60_000).toISOString() }, { name: 'docs', running: false, next_run: new Date(now + 90 * 60_000).toISOString() }]
-  const b = { tasks, scouts, branch: 'main', mode: 'auto' as const }
+  const b = { tasks, scouts, home_branch: 'main', mode: 'auto' as const }
   expect(statusLine(b, true, { nowMs: now })).toBe('⏵ auto merge · drives here · main · next scout bugs in 38m · today ✓ 2 · $312')
   // no task counts and no task ids
   const line = statusLine(b, true, { nowMs: now })!
@@ -926,11 +926,11 @@ test('T-748: the status line says the mode, who drives, the branch, the next sco
   expect(statusLine({ ...b, mode: 'paused' }, true, { nowMs: now })).toBe('⏸ paused · drives here · main · today ✓ 2 · $312')
   expect(statusLine(b, true, { nowMs: now, plan: true })).toBe(`${PLAN_NOTE} · ⏵ auto merge · drives here · main · today ✓ 2 · $312`)
   // nothing merged today, no cost: "today ✓ 0", no cost part
-  expect(statusLine({ tasks: [{ id: 'T-1', status: 'todo' }], branch: 'main' }, true, { nowMs: now })).toBe('⏵ auto merge · drives here · main · today ✓ 0')
+  expect(statusLine({ tasks: [{ id: 'T-1', status: 'todo' }], home_branch: 'main' }, true, { nowMs: now })).toBe('⏵ auto merge · drives here · main · today ✓ 0')
   // a fresh project (empty board, auto, no scouts) stays quiet; any other mode says it
-  expect(statusLine({ tasks: [], branch: 'main' }, true, { nowMs: now })).toBeUndefined()
-  expect(statusLine({ tasks: [], branch: 'main', mode: 'review' }, true, { nowMs: now })).toBe('⏸ approve merge · drives here · main')
-  expect(statusLine({ tasks: [], branch: 'main' }, false, { nowMs: now })).toBe('⏵ auto merge · driven by another session · main')
+  expect(statusLine({ tasks: [], home_branch: 'main' }, true, { nowMs: now })).toBeUndefined()
+  expect(statusLine({ tasks: [], home_branch: 'main', mode: 'review' }, true, { nowMs: now })).toBe('⏸ approve merge · drives here · main')
+  expect(statusLine({ tasks: [], home_branch: 'main' }, false, { nowMs: now })).toBe('⏵ auto merge · driven by another session · main')
   // no "<name> board" and no folder name
   expect(line).not.toContain(namesFor(DEFAULT_NAME).boardName)
   expect(line).not.toContain(DEFAULT_NAME)
@@ -938,7 +938,7 @@ test('T-748: the status line says the mode, who drives, the branch, the next sco
 
 test('T-748: symcc adds no "⚠" of its own to the status line (Claude Code draws one), even when something needs you', () => {
   const now = Date.now()
-  const base = { branch: 'main', scouts: [] }
+  const base = { home_branch: 'main', scouts: [] }
   expect(statusLine({ ...base, tasks: [{ id: 'T-1', status: 'doing' }] }, true, { nowMs: now })).toBe('⏵ auto merge · drives here · main · today ✓ 0')
   for (const st of ['review', 'waiting', 'failed'] as const) expect(statusLine({ ...base, tasks: [{ id: 'T-1', status: st }] }, true, { nowMs: now })).toBe('⏵ auto merge · drives here · main · today ✓ 0')
   expect(statusLine({ ...base, tasks: [], questions: [{}] }, true, { nowMs: now })).toBe('⏵ auto merge · drives here · main')
@@ -950,7 +950,7 @@ test('T-748: on a narrow line the status line drops parts from the end, cleanly;
   const now = todayAt(12)
   const ago = (min: number) => new Date(now - min * 60_000).toISOString()
   const tasks = [{ id: 'T-1', status: 'done' as const, history: [{ kind: 'merged', at: ago(1), text: 'merged' }], runs: [{ started: ago(30), ended: ago(5), agents: [{ kind: 'worker' as const, started: ago(30), ended: ago(5), cost: 312 }] }] }]
-  const b = { tasks, scouts: [{ name: 'bugs', running: false, next_run: new Date(now + 38.2 * 60_000).toISOString() }], branch: 'main' }
+  const b = { tasks, scouts: [{ name: 'bugs', running: false, next_run: new Date(now + 38.2 * 60_000).toISOString() }], home_branch: 'main' }
   const full = '⏵ auto merge · drives here · main · next scout bugs in 38m · today ✓ 1 · $312'
   expect(statusLine(b, true, { nowMs: now })).toBe(full)
   expect(statusLine(b, true, { nowMs: now, width: full.length })).toBe(full)
@@ -969,7 +969,7 @@ test('T-792: the status line counts today\'s merge and cost just after midnight 
     // the run and the merge between local midnight and now: always today
     const at = (share: number) => new Date(inToday(now, share)).toISOString()
     const tasks = [{ id: 'T-1', status: 'done' as const, history: [{ kind: 'merged', at: at(0.9), text: 'merged' }], runs: [{ started: at(0.1), ended: at(0.5), agents: [{ kind: 'worker' as const, started: at(0.1), ended: at(0.5), cost: 312 }] }] }]
-    expect([`${h}:${m}`, statusLine({ tasks, branch: 'main' }, true, { nowMs: now })]).toEqual([`${h}:${m}`, '⏵ auto merge · drives here · main · today ✓ 1 · $312'])
+    expect([`${h}:${m}`, statusLine({ tasks, home_branch: 'main' }, true, { nowMs: now })]).toEqual([`${h}:${m}`, '⏵ auto merge · drives here · main · today ✓ 1 · $312'])
   }
 })
 
@@ -978,7 +978,7 @@ test('T-792: the status line counts today\'s merge and cost just after midnight 
 test('the status line has no control characters, so no ANSI color codes, even while another session drives', () => {
   const t = (status: SymccTask['status'], id: string) => ({ id, status })
   for (const driving of [true, false]) {
-    const line = statusLine({ tasks: [t('doing', 'T-1'), t('todo', 'T-2')], branch: 'main' }, driving) ?? ''
+    const line = statusLine({ tasks: [t('doing', 'T-1'), t('todo', 'T-2')], home_branch: 'main' }, driving) ?? ''
     expect(line).not.toBe('')
     expect([...line].some(c => c.charCodeAt(0) < 32 || c === '\x7f')).toBe(false)
   }
@@ -1095,11 +1095,11 @@ test('T-748: a branch note (git or file-size warning) comes right after the mode
   const room = statusRoom('symcc')
   const near = sizeWarnText('board.json', 3.8 * 1024 * 1024)
   expect(near.length).toBeGreaterThan(room)
-  const line = statusLine({ tasks, branch: 'main', branch_note: near, mode: 'auto' }, true, { width: room })!
+  const line = statusLine({ tasks, home_branch: 'main', branch_note: near, mode: 'auto' }, true, { width: room })!
   expect(line).toBe('⏵ auto merge · board.json 3.8 MB, near the 4 MB limit · drives here')
   expect(line.length).toBeLessThanOrEqual(room)
   // with room enough the whole warning shows
-  expect(statusLine({ tasks, branch: 'main', branch_note: near }, true)).toBe(`⏵ auto merge · ${near} · drives here · main · today ✓ 0`)
+  expect(statusLine({ tasks, home_branch: 'main', branch_note: near }, true)).toBe(`⏵ auto merge · ${near} · drives here · main · today ✓ 0`)
   // over the limit has its own short form
   expect(statusLine({ tasks, branch_note: sizeWarnText('board.json', 4.2 * 1024 * 1024) }, true, { width: room })).toBe("⏵ auto merge · board.json 4.2 MB: too big, can't read it · drives here")
   // a git note joined with a size note: the size one goes short, and what is still too wide is cut with "…"; the other parts drop
@@ -1107,10 +1107,10 @@ test('T-748: a branch note (git or file-size warning) comes right after the mode
   expect(both).toBe('⏵ auto merge · no commits yet; set up git (g); board.jso… · drives here')
   expect(both.length).toBeLessThanOrEqual(room)
   // a narrow line: the note stays, the rest drops
-  expect(statusLine({ tasks, branch: 'main', branch_note: 'no git' }, true, { width: 10 })).toBe('⏵ auto merge · no git · drives here')
+  expect(statusLine({ tasks, home_branch: 'main', branch_note: 'no git' }, true, { width: 10 })).toBe('⏵ auto merge · no git · drives here')
   // T-763: a refused read or write (tooBigText) has a short form that fits whole, "symcc can't read/write it" first
   for (const doing of ['read', 'write'] as const) {
-    const big = statusLine({ tasks, branch: 'main', branch_note: tooBigText('.symcc/board.json', 4.2 * 1024 * 1024, doing), mode: 'auto' }, true, { width: room })!
+    const big = statusLine({ tasks, home_branch: 'main', branch_note: tooBigText('.symcc/board.json', 4.2 * 1024 * 1024, doing), mode: 'auto' }, true, { width: room })!
     expect(big.length).toBeLessThanOrEqual(room)
     expect(big).toContain(`can't ${doing} it`)
     expect(big).toBe(`⏵ auto merge · board.json 4.2 MB: too big, can't ${doing} it · drives here`)
@@ -1920,7 +1920,7 @@ test('a typed test_commands line is one whole command; several go in a list or o
 })
 
 test('the board shows several test commands short, not joined with && (T-607: no JSON list in the header)', () => {
-  const b = { ...emptyBoard(), branch: 'main', test_commands: ['cd web && npm test', 'npm run lint'] }
+  const b = { ...emptyBoard(), home_branch: 'main', test_commands: ['cd web && npm test', 'npm run lint'] }
   const banner = bannerLines(b, '/Users/me/repositories/symcc', '/Users/me', true, 120).map(bannerText).join('\n')
   expect(banner).toContain('tests: npm, npm ·')
   expect(banner).not.toContain('npm test && npm run lint')
@@ -1948,7 +1948,7 @@ test('T-607: the header shows 0, 1 and 5 long test commands short, without brack
     const p = part(cmds)
     expect(p.length).toBeLessThan(30)
     expect(p).not.toMatch(/[\["']/)
-    const banner = bannerLines({ ...emptyBoard(), branch: 'main', test_commands: cmds }, '/r', '/h', true, 200).map(bannerText).join('\n')
+    const banner = bannerLines({ ...emptyBoard(), home_branch: 'main', test_commands: cmds }, '/r', '/h', true, 200).map(bannerText).join('\n')
     expect(banner).not.toMatch(/tests: .*[\["]/)
   }
   expect(testsShort([long])).toBe('node')
@@ -2177,7 +2177,7 @@ test('the worker prompt for a role with web tools has the web safety line; other
 })
 
 test('a board with old roles is migrated once: tests becomes tester, backend and frontend general', () => {
-  const task = (id: string, role?: string) => ({ id, title: id, details: '', files: [], status: 'todo', note: '', question: null, order: 1, after: [], attempts: 0, history: [], branch: null, origin: W, created_at: T, updated_at: T, ...(role ? { role } : {}) })
+  const task = (id: string, role?: string) => ({ id, title: id, details: '', files: [], status: 'todo', note: '', order: 1, after: [], attempts: 0, history: [], branch: null, origin: W, created_at: T, updated_at: T, ...(role ? { role } : {}) })
   const r = readOld(JSON.stringify({ version: 1, next_id: 6, tasks: [task('T-1', 'tests'), task('T-2', 'backend'), task('T-3', 'Frontend'), task('T-4', 'docs'), task('T-5')] }))
   expect(r.board.tasks.map(t => t.role)).toEqual(['tester', 'general', 'general', 'docs', undefined])
   // saved and upgraded again, nothing more changes
@@ -2442,7 +2442,7 @@ test('a task without a why, or with a wrong origin, is refused with a clear erro
 
 test('T-348: a task with the removed stage engine\'s stage, stages and backs loads without them, once (board.json and archive.json)', () => {
   const origin = { by: 'lead', why: 'w', at: T }
-  const base = { title: 'A', details: 'A', files: [], note: '', question: null, order: 1, after: [], attempts: 1, history: [], branch: null, created_at: T, updated_at: T, merge_into: 'main', origin }
+  const base = { title: 'A', details: 'A', files: [], note: '', order: 1, after: [], attempts: 1, history: [], branch: null, created_at: T, updated_at: T, merge_into: 'main', origin }
   const staged = { stage: 'code', stages: [{ name: 'code', result: 'passed', at: T, try: 1 }], backs: { tests: 1 }, runs: [{ started: T, ended: T, stage: 'code' }] }
   const board = { version: 1, next_id: 3, mode: 'auto', test_commands: [], max_parallel: 3, max_minutes: 45, auto_retries: 2, tasks: [
     { ...base, id: 'T-1', status: 'todo', ...staged },
@@ -2465,7 +2465,7 @@ test('T-348: a task with the removed stage engine\'s stage, stages and backs loa
 
 test('a board whose tasks have no origin is migrated once: the lead made them before origins were kept', () => {
   const old = { version: 1, next_id: 2, mode: 'auto', test_commands: [], target_branch: 'main', max_parallel: 3, max_minutes: 45, auto_retries: 2, tasks: [
-    { id: 'T-1', title: 'A', details: 'A', files: [], status: 'todo', note: '', question: null, order: 1, after: [], attempts: 0, history: [], branch: null, created_at: T, updated_at: T },
+    { id: 'T-1', title: 'A', details: 'A', files: [], status: 'todo', note: '', order: 1, after: [], attempts: 0, history: [], branch: null, created_at: T, updated_at: T },
   ] }
   const r = readOld(JSON.stringify(old))
   expect(r.board.tasks[0]!.origin).toEqual({ by: 'lead', why: 'made before origins were kept', at: T })
@@ -2571,16 +2571,21 @@ test('wrapSegs breaks between words within the width and keeps every word', () =
   expect(wrapSegs([], 10)).toEqual([[]])
 })
 
-test('scout memory: last run and report survive a save and load', async () => {
+test('scout memory: only the pause is saved; the last run and report come from the runs file (T-808)', async () => {
   const text = scoutMemoryText([
-    { name: 'recent-changes', last_run: T, last_report: 'found T-1' },
-    { name: 'docs', last_run: T },
-    { name: 'never', last_run: null },
-    { name: 'gone', last_run: T, last_report: 'old' },
-  ], ['recent-changes', 'docs', 'never'])
-  const m = parseScoutMemory(text)
-  expect(m).toEqual({ 'recent-changes': { last_run: T, last_report: 'found T-1' }, docs: { last_run: T } })
-  expect(parseScoutMemory(scoutMemoryText([{ name: 'a', last_run: T, last_report: 'x'.repeat(SCOUT_REPORT_CHARS + 50) }])).a!.last_report!.length).toBe(SCOUT_REPORT_CHARS)
+    { name: 'recent-changes', paused: true },
+    { name: 'docs' },
+    { name: 'gone', paused: true },
+  ], ['recent-changes', 'docs'])
+  expect(parseScoutMemory(text)).toEqual({ 'recent-changes': { paused: true } })
+  expect(text).not.toContain('last_run')
+  // an old file's last_run and last_report are not read
+  expect(parseScoutMemory(JSON.stringify({ scouts: { a: { last_run: T, last_report: 'x' } } }))).toEqual({})
+  // the newest run that reported gives the last run (its start) and the report file
+  const run = (o: object) => ({ started: null, ended: T, outcome: 'found' as const, findings: 1, ...o })
+  expect(lastRunOf([])).toBe(null)
+  expect(lastRunOf([run({ ended: '2026-11-12T08:00:00.000Z', report: 'r1.md' }), run({ started: '2026-11-12T09:00:00.000Z', ended: '2026-11-12T09:05:00.000Z', report: 'r2.md' }), run({ outcome: 'aborted' })])).toEqual({ last_run: '2026-11-12T09:00:00.000Z', report: 'r2.md' })
+  expect(lastRunOf([run({ outcome: 'nothing', ended: '2026-11-12T08:00:00.000Z' })])).toEqual({ last_run: '2026-11-12T08:00:00.000Z' })
 })
 
 test('scout memory: a missing file means no scout has run yet', async () => {
@@ -2594,7 +2599,7 @@ test('scout memory: a broken file is treated as never run, bad entries are skipp
   expect(parseScoutMemory('[1,2]')).toEqual({})
   expect(parseScoutMemory('{"scouts": []}')).toEqual({})
   expect(parseScoutMemory('null')).toEqual({})
-  expect(parseScoutMemory(JSON.stringify({ scouts: { a: 5, b: { last_run: 'not a date' }, c: { last_run: 7, last_report: 'r' }, d: { last_run: T } } }))).toEqual({ c: { last_run: null, last_report: 'r' }, d: { last_run: T } })
+  expect(parseScoutMemory(JSON.stringify({ scouts: { a: 5, b: { paused: 'yes' }, c: { paused: true } } }))).toEqual({ c: { paused: true } })
 })
 
 test('a hand-broken task origin does not break the board or the task page', () => {
@@ -2687,7 +2692,7 @@ test('run.commits and merged are saved on the task and kept through a board save
 })
 
 test('broken commit fields are dropped, not fatal', () => {
-  const old = { version: 1, next_id: 2, tasks: [{ id: 'T-1', title: 'old', details: '', files: [], status: 'done', note: 'merged into main (47d4b71c)', question: null, order: 1, after: [], attempts: 1, history: [], runs: [{ started: T, ended: T }], branch: null, created_at: T, updated_at: T }] }
+  const old = { version: 1, next_id: 2, tasks: [{ id: 'T-1', title: 'old', details: '', files: [], status: 'done', note: 'merged into main (47d4b71c)', order: 1, after: [], attempts: 1, history: [], runs: [{ started: T, ended: T }], branch: null, created_at: T, updated_at: T }] }
   const t = parseBoard(JSON.stringify(old)).tasks[0]!
   expect(t.runs).toEqual([{ started: T, ended: T }])
   expect('merged' in t).toBe(false)
@@ -3069,27 +3074,22 @@ test('packRows keeps order, fills each row, and gives a too-wide item a row of i
 
 test('a paused scout is saved in scouts.json and read back; old files without it are not paused', () => {
   const text = scoutMemoryText([
-    { name: 'bugs', last_run: '2026-11-12T08:00:00.000Z', last_report: 'NOTHING', paused: true },
-    { name: 'docs', last_run: null, paused: true },
-    { name: 'tests', last_run: '2026-11-12T09:00:00.000Z' },
-    { name: 'never', last_run: null, paused: false },
+    { name: 'bugs', paused: true },
+    { name: 'docs', paused: true },
+    { name: 'tests' },
+    { name: 'never', paused: false },
   ])
   const m = parseScoutMemory(text)
-  expect(m.bugs).toEqual({ last_run: '2026-11-12T08:00:00.000Z', last_report: 'NOTHING', paused: true })
-  // a scout that never ran is still kept when it is paused
-  expect(m.docs).toEqual({ last_run: null, paused: true })
-  expect(m.tests).toEqual({ last_run: '2026-11-12T09:00:00.000Z' })
-  expect(m.never).toBeUndefined()
+  expect(m).toEqual({ bugs: { paused: true }, docs: { paused: true } })
   // an old file (no paused key) and odd values mean "not paused"
-  expect(parseScoutMemory('{"scouts":{"a":{"last_run":"2026-11-12T08:00:00.000Z"},"b":{"last_run":"2026-11-12T08:00:00.000Z","paused":"yes"}}}')).toEqual({ a: { last_run: '2026-11-12T08:00:00.000Z' }, b: { last_run: '2026-11-12T08:00:00.000Z' } })
+  expect(parseScoutMemory('{"scouts":{"a":{"last_run":"2026-11-12T08:00:00.000Z"},"b":{"paused":"yes"}}}')).toEqual({})
   // pausing and resuming one scout keeps the others as they are
   const paused = parseScoutMemory(scoutPausedText(m, 'tests', true))
-  expect(paused.tests).toEqual({ last_run: '2026-11-12T09:00:00.000Z', paused: true })
+  expect(paused.tests).toEqual({ paused: true })
   expect(paused.bugs).toEqual(m.bugs)
-  expect(parseScoutMemory(scoutPausedText({}, 'new', true))).toEqual({ new: { last_run: null, paused: true } })
-  const resumed = parseScoutMemory(scoutPausedText(paused, 'tests', false))
-  expect(resumed.tests).toEqual({ last_run: '2026-11-12T09:00:00.000Z' })
-  expect(parseScoutMemory(scoutPausedText({ x: { last_run: null, paused: true } }, 'x', false))).toEqual({})
+  expect(parseScoutMemory(scoutPausedText({}, 'new', true))).toEqual({ new: { paused: true } })
+  expect(parseScoutMemory(scoutPausedText(paused, 'tests', false)).tests).toBeUndefined()
+  expect(parseScoutMemory(scoutPausedText({ x: { paused: true } }, 'x', false))).toEqual({})
 })
 
 test('a pause does not stop run now (only the timer checks it)', () => {
@@ -4072,7 +4072,7 @@ test('T-647: the task page\'s Status row shows the state with its time ("▶ doi
   // the states that run nothing: their mark and word
   expect(rows({ status: 'review', runs: ran }).status).toMatchObject({ text: `◆ ${STATUS_WORD.review}`, color: core.STATUS_BADGE.review })
   expect(rows({ status: 'review', runs: ran }).stage).toContain('● review')
-  expect(rows({ status: 'waiting', runs: ran, question: 'Which one?' }).status).toMatchObject({ text: `? ${STATUS_WORD.waiting}`, color: core.STATUS_BADGE.waiting })
+  expect(rows({ status: 'waiting', runs: ran, ask: { by: 'worker', text: 'Which one?', asked_at: '' } }).status).toMatchObject({ text: `? ${STATUS_WORD.waiting}`, color: core.STATUS_BADGE.waiting })
   expect(rows({ status: 'failed', runs: ran }).status).toMatchObject({ text: `✗ ${STATUS_WORD.failed}`, color: core.STATUS_BADGE.failed })
 })
 

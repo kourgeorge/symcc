@@ -14,6 +14,7 @@ import { inProject } from './project'
 import { ran, readText, entry, slash, print } from './fakes'
 import { hist } from './history-fixture'
 import { rowEndBoard, ROW_END, ROW_END_NOW } from './row-end-cases'
+import { askShape } from './ask-shape'
 
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
@@ -45,7 +46,7 @@ function keyLines(texts: string[], hints: KeyHint[], width: number): string[] {
   return want
 }
 
-const task = (id: string, status: string, title: string, extra: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status, note: '', question: null, order: Number(id.slice(2)), after: [], attempts: 0, history: [], branch: null, created_at: '', updated_at: '', origin: { by: 'owner', why: 'x', at: '' }, merge_into: 'main', ...extra })
+const task = (id: string, status: string, title: string, extra: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status, note: '', order: Number(id.slice(2)), after: [], attempts: 0, history: [], branch: null, created_at: '', updated_at: '', origin: { by: 'owner', why: 'x', at: '' }, merge_into: 'main', ...askShape(extra) })
 
 test('the panel shows the board, newest task first, with their question', async ($, on) => {
   on('state.get', () => ({
@@ -1766,7 +1767,7 @@ test('T-696: a long-title row in the terminal list keeps "waits for T-1" / "[fea
 })
 
 const OFF_CASES = [
-  ['symcc is disabled', { enabled: false }, /^symcc is disabled · $/],
+  ['symcc is disabled', { on_here: false }, /^symcc is disabled · $/],
   ['the board is paused', { mode: 'paused' }, /^⏸ paused: nothing starts$/],
 ] as const
 for (const [when, extra, want] of OFF_CASES)
@@ -1782,7 +1783,7 @@ for (const [when, extra, want] of OFF_CASES)
 
 for (const surface of ['terminal', 'vscode'] as const)
   test(`symcc disabled (${surface}): the header says "symcc is disabled · /symcc-enable to turn it back on", the command in the accent color`, async ($, on) => {
-    stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'Write it up')], working: [], scouts: [], mode: 'auto', test_commands: [], enabled: false } } })
+    stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'Write it up')], working: [], scouts: [], mode: 'auto', test_commands: [], on_here: false } } })
     const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 100 }, surface })
     const all = (await ui.findAll({ type: 'Text' })).map(t => t.text)
     expect(all.some(t => /symcc is disabled · \/symcc-enable to turn it back on/.test(t))).toBe(true)
@@ -1900,7 +1901,7 @@ function scoutFiles(on: On, memory: string | null, more: Record<string, string> 
 
 test('"p" on a scout\'s page pauses it (saved in scouts.json, its file untouched), and again resumes it', async ($, on) => {
   stateOf(on, { tab: 'scouts', scout: 'bugs', view: { shape: 'view-1', value: { tasks: [], working: [], scouts: [scout('bugs', { prompt: 'Look for crashes.' })], mode: 'auto', test_commands: [] } } })
-  const files = scoutFiles(on, JSON.stringify({ scouts: { bugs: { last_run: '2026-11-12T08:00:00.000Z', last_report: 'NOTHING' } } }))
+  const files = scoutFiles(on, JSON.stringify({ scouts: {} }))
   const toasts: string[] = []
   on('ui.toast', (_, e) => (toasts.push(JSON.stringify(e)), { value: undefined }))
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
@@ -1910,7 +1911,7 @@ test('"p" on a scout\'s page pauses it (saved in scouts.json, its file untouched
   expect((await ui.find({ key: 'scout-pause-key' }))?.props.hotkey).toBe('p')
   expect((await ui.find({ key: 'scout-pause' }))?.props.label).toBe('Pause')
   await ui.press({ key: 'scout-pause' })
-  expect(JSON.parse(files['/scouts.json']!).scouts.bugs).toEqual({ last_run: '2026-11-12T08:00:00.000Z', last_report: 'NOTHING', paused: true })
+  expect(JSON.parse(files['/scouts.json']!).scouts.bugs).toEqual({ paused: true })
   expect(files['/scouts/bugs.md']).toBe('---\nevery_minutes: 30\n---\nLook for crashes.\n')
   expect(toasts.some(t => /bugs paused: it doesn't run on its timer until you resume it \(run now still runs it\)/.test(t))).toBe(true)
   // paused is said as a fact at the end of the buttons line
@@ -1924,7 +1925,7 @@ test('"p" on a scout\'s page pauses it (saved in scouts.json, its file untouched
   expect(toasts.some(t => /is paused/.test(t))).toBe(false)
   expect(JSON.parse(files['/scouts.json']!).scouts.bugs.paused).toBe(true)
   await ui.press({ key: 'scout-pause' })
-  expect(JSON.parse(files['/scouts.json']!).scouts.bugs.paused).toBeUndefined()
+  expect(JSON.parse(files['/scouts.json']!).scouts.bugs?.paused).toBeUndefined()
   expect(toasts.some(t => /bugs resumed: it runs every 30 min again/.test(t))).toBe(true)
   expect((await ui.find({ key: 'scout-pause' }))?.props.label).toBe('Pause')
   await ui.unmount()
@@ -1945,11 +1946,11 @@ test('/symcc-scout <name> pause and resume, and run now not refused while paused
   stateOf(on, {})
   const run = async (args: string) => String((await $.command.run(slash('symcc-scout', args))).text)
   expect(await run('bugs pause')).toMatch(/^bugs paused: it doesn't run on its timer until you resume it/)
-  expect(JSON.parse(files['/scouts.json']!).scouts.bugs).toEqual({ last_run: null, paused: true })
+  expect(JSON.parse(files['/scouts.json']!).scouts.bugs).toEqual({ paused: true })
   expect(await run('bugs pause')).toMatch(/^bugs is already paused/)
   // a pause only stops the timer: run now goes on to the other checks (this session doesn't drive the board)
   expect(await run('bugs')).toBe('scouts run in the session that drives the board; run /symcc-scout bugs there')
-  expect(JSON.parse(files['/scouts.json']!).scouts.bugs).toEqual({ last_run: null, paused: true })
+  expect(JSON.parse(files['/scouts.json']!).scouts.bugs).toEqual({ paused: true })
   expect(await run('bugs resume')).toBe('bugs resumed: it runs every 30 min again')
   expect(JSON.parse(files['/scouts.json']!).scouts.bugs).toBeUndefined()
   expect(await run('bugs')).not.toMatch(/paused/)

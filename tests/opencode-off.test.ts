@@ -17,7 +17,7 @@ const viewFile = (view: Partial<PaneView>): ViewFile => ({
 })
 
 test('OpenCode panel, symcc disabled: the header reads "symcc is disabled · /symcc-enable to turn it back on", the command in its own color', () => {
-  const f = viewFile({ enabled: false, tasks: [{ id: 'T-1', title: 'Add search', status: 'todo' }] as never[] })
+  const f = viewFile({ on_here: false, tasks: [{ id: 'T-1', title: 'Add search', status: 'todo' }] as never[] })
   const head = panelLines(f, { cursor: 0, opened: '' }, NOW, 100).lines[0]!
   expect(lineText(head)).toMatch(/symcc is disabled · \/symcc-enable to turn it back on$/)
   expect(lineText(head)).not.toMatch(/symcc off|symcc: symcc/)
@@ -29,6 +29,6 @@ test('OpenCode panel, symcc disabled: the header reads "symcc is disabled · /sy
   // the band above the prompt shows nothing while symcc is disabled
   expect(bandLines(f, NOW, 100)).toEqual([])
   // enabled: no disabled words in the header
-  const on = panelLines(viewFile({ enabled: true }), { cursor: 0, opened: '' }, NOW, 100).lines[0]!
+  const on = panelLines(viewFile({ on_here: true }), { cursor: 0, opened: '' }, NOW, 100).lines[0]!
   expect(lineText(on)).not.toMatch(/is disabled|symcc-enable/)
 })

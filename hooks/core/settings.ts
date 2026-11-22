@@ -363,8 +363,15 @@ export function settingChoices(name: string, notifyChoices?: readonly string[]):
 }
 
 /** True when notify is set to something this machine can't play (nothing plays then). */
-export const cantPlayNotify = (v: { notify?: string; notify_choices?: readonly string[] }): boolean =>
-  !!v.notify_choices && !!v.notify && !v.notify_choices.includes(v.notify)
+export const cantPlayNotify = (v: { notify_now?: string; notify_choices?: readonly string[] }): boolean =>
+  !!v.notify_choices && !!v.notify_now && !v.notify_choices.includes(v.notify_now)
+
+/**
+ * T-808: the published view as the board-shaped object the settings helpers read: the view's `on_here` is the value of
+ * the "enabled" setting there (the board is on and this window is not turned off) and its `notify_now` the notify one.
+ */
+export const viewAsBoard = <V extends { on_here?: boolean; notify_now?: string }>(v: V): Omit<V, 'enabled' | 'notify'> & Partial<Pick<Board, 'enabled' | 'notify'>> =>
+  ({ ...v, ...(v.on_here !== undefined ? { enabled: v.on_here } : {}), ...(v.notify_now !== undefined ? { notify: v.notify_now as Board['notify'] } : {}) }) as never
 
 /** One setting's value in a few words, for a closed group's summary line ("3 at once", "45 min"); '' leaves it out. */
 function shortValue(b: Partial<Board>, name: SettingName): string {

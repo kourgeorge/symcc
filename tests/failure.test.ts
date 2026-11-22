@@ -4,7 +4,7 @@ import { whyFailed, failedHow, failingLines, failCount, testTail, failBlocks, fa
 import { hist } from './history-fixture'
 
 const T = '2026-11-18T10:00:00.000Z'
-const failed = (over: Partial<SymccTask> = {}): BoardTask => ({ id: 'T-9', title: 'Fix it', details: '', files: ['src/a.ts'], status: 'failed', note: '', question: null, order: 9, after: [], attempts: 1, history: [], branch: null, created_at: T, updated_at: T, ...over })
+const failed = (over: Partial<SymccTask> = {}): BoardTask => ({ id: 'T-9', title: 'Fix it', details: '', files: ['src/a.ts'], status: 'failed', note: '', order: 9, after: [], attempts: 1, history: [], branch: null, created_at: T, updated_at: T, ...over })
 
 // The notes and fields the plugin writes for each way a task fails (hooks/plugin/workers.ts, review.ts, checker.ts).
 const CASES: [string, BoardTask, RegExp][] = [

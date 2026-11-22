@@ -254,10 +254,10 @@ export const notMergedText = (id: string, n: number, into: string) => `${id}'s b
  * it had are cleared.
  */
 export function mergedOutside(t: BoardTask, sha: string, by: string, commits: readonly string[], now: string): BoardTask {
-  const { live: _l, test_output: _o, options: _p, asked_files: _af, question_lead: _ql, options_lead: _ol, ...rest } = t
+  const { live: _l, test_output: _o, ask: _ak, ...rest } = t
   const ended = t.status === 'doing' ? endedBy(t, now, 'finished', 'merged').runs : t.runs?.length ? withEnd(t.runs, 'finished', 'merged', true) : undefined
   const runs = ended ? addCommits(ended, [...commits, sha]) : undefined
-  return { ...rest, status: 'done' as const, question: null, note: `merged into ${intoOf(t)} outside the board (${shortSha(sha)})`, merged: sha, merge_main: undefined, updated_at: now, history: withHistory(t.history, now, ['merged', mergedOutsideLine(sha, by), { how: 'outside' }]), ...(runs ? { runs } : {}) }
+  return { ...rest, status: 'done' as const, note: `merged into ${intoOf(t)} outside the board (${shortSha(sha)})`, merged: sha, merge_main: undefined, updated_at: now, history: withHistory(t.history, now, ['merged', mergedOutsideLine(sha, by), { how: 'outside' }]), ...(runs ? { runs } : {}) }
 }
 
 /**

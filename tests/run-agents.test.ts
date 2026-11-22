@@ -116,7 +116,7 @@ test("T-774: a checker still running counts up on its Runs line (the try ended a
 
 /** Task `id`, done or doing, with `runs`. */
 const withRuns = (id: string, status: SymccTask['status'], runs: SymccRun[]): SymccTask =>
-  ({ id, title: id, details: '', files: [], status, note: '', question: null, order: 1, after: [], attempts: runs.length, history: [], branch: null, created_at: iso(60 * MIN), updated_at: iso(MIN), runs }) as SymccTask
+  ({ id, title: id, details: '', files: [], status, note: '', order: 1, after: [], attempts: runs.length, history: [], branch: null, created_at: iso(60 * MIN), updated_at: iso(MIN), runs }) as SymccTask
 
 test("T-774: the Runs heading sums this task's own tries, with and without the board's usual figure", () => {
   // 3 tries: 7m each; the last one's checkers used 2.4M, the first one's 0.3M (a stand-in checker entry of an old try)

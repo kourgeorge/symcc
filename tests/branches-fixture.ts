@@ -10,7 +10,7 @@ export const sha = (name: string) => name.repeat(40 / name.length)
 /** The sample tasks at `now` (ms). */
 export function branchTasks(now: number) {
   const iso = (sec: number) => new Date(now - sec * 1000).toISOString()
-  const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', question: null, order: Number(id.slice(2)), after: [], attempts: 1, history: [], branch: null, created_at: iso(9000), updated_at: iso(60), ...x })
+  const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', order: Number(id.slice(2)), after: [], attempts: 1, history: [], branch: null, created_at: iso(9000), updated_at: iso(60), ...x })
   return [
     task('T-721', 'Record which test failed', { branch: 'symcc/T-721', runs: [{ started: iso(600) }] }),
     task('T-725', 'Guide: Live tab', { status: 'review', branch: 'symcc/T-725' }),
@@ -68,7 +68,7 @@ export function taskBranchLong(now: number): TaskBranchFacts {
 /** The tasks the samples are for: T-733 doing (tries 2, 4, 6), T-734 merged, T-735 long, T-736 to do with no branch. */
 export function taskBranchTasks(now: number) {
   const iso = (m: number) => new Date(now - m * min).toISOString()
-  const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', question: null, order: Number(id.slice(2)), after: [], attempts: 6, history: [], branch: `symcc/${id}`, created_at: iso(200), updated_at: iso(1), ...x })
+  const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', order: Number(id.slice(2)), after: [], attempts: 6, history: [], branch: `symcc/${id}`, created_at: iso(200), updated_at: iso(1), ...x })
   return [
     task('T-733', 'Draw the branch on the task page'),
     task('T-734', 'Merged branch', { status: 'done', merged: sha('cd'), history: [{ kind: 'merged', at: iso(5), text: 'try 6 → merged into main' }] }),

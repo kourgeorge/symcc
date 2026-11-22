@@ -6,6 +6,7 @@ import type { SymccHistoryEntry, SymccRun } from '../../types'
 import { type FailReason, type HistoryFacts, type HistoryKind, AFTER_CHANGED, historyEntryOk, isHistoryKind, onPurposeStop, tryParts, withHistory } from './history'
 import { addTokens, cleanTokens, isAgentId, sumTokens, tokenCount } from './runs'
 import { isSoundSet, soundNotify, soundSetFor } from './board-file'
+import { parseGoneBranch } from './git-setup'
 import { countFindings, isNothing } from './scouts'
 import type { ScoutRunOutcome, ScoutRunRecord } from './scouts'
 
@@ -135,9 +136,9 @@ export function withoutTestRerun(t: Raw): Raw | null {
   if (!('test_rerun' in t) && !('rerun_minutes' in t)) return null
   const { test_rerun, rerun_minutes: _m, ...rest } = t
   if (test_rerun === undefined || test_rerun === null || (t.status !== 'waiting' && t.status !== 'doing')) return rest
-  const { session: _s, finishing: _f, checking: _c, live: _l, options: _o, asked_files: _a, ...todo } = rest
+  const { session: _s, finishing: _f, checking: _c, live: _l, options: _o, asked_files: _a, question: _q, ask: _k, ...todo } = rest
   const hist = Array.isArray(t.history) ? (t.history as SymccHistoryEntry[]) : []
-  return { ...todo, status: 'todo', question: null, note: TEST_RERUN_GONE_NOTE, history: withHistory(hist, typeof t.updated_at === 'string' ? t.updated_at : '', ['step', TEST_RERUN_GONE_NOTE]) }
+  return { ...todo, status: 'todo', note: TEST_RERUN_GONE_NOTE, history: withHistory(hist, typeof t.updated_at === 'string' ? t.updated_at : '', ['step', TEST_RERUN_GONE_NOTE]) }
 }
 
 /** The old loose try-only fields of a task, now kept in `live` (T-807): the old name, and the name in `live`. */
@@ -175,6 +176,51 @@ export function withLive(t: Raw): Raw | null {
   if (Object.keys(live).length) out.live = live
   if (falseMain) delete out.merge_main
   if (clash) out.failed_on = 'clash'
+  return out
+}
+
+const strs = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [])
+
+/** Who asked, for an old question that did not say: read from its words and the task's last history line. */
+function oldAskBy(text: string, files: readonly string[], opts: readonly string[], history: unknown): 'worker' | 'lead' | 'symcc' {
+  if (files.length || parseGoneBranch(text) || /secret/i.test(text)) return 'symcc'
+  const last = Array.isArray(history) ? history.at(-1) : undefined
+  const said = isObj(last) && typeof last.text === 'string' ? last.text : typeof last === 'string' ? last : ''
+  if (/the lead asked the owner a question/.test(said)) return 'lead'
+  if (/worker asked/.test(said) || opts.length) return 'worker'
+  return 'lead'
+}
+
+/**
+ * Task `t` with its question fields (question, options, asked_files, question_lead, options_lead, and `live.question`) made one
+ * Ask record (T-808): `ask` on the task while it waits (the lead's wording as `lead`), `live.ask` on a running try; a
+ * "doing" task with only the lead's wording of its "more time?" question keeps it as `ask.lead`. Null when it has none of those fields.
+ */
+export function withAsk(t: Raw): Raw | null {
+  const liveQ = isObj(t.live) && 'question' in t.live
+  if (!(['question', 'options', 'asked_files', 'question_lead', 'options_lead'] as const).some(k => k in t) && !liveQ) return null
+  const { question, options, asked_files, question_lead, options_lead, ...out } = t
+  const at = typeof t.updated_at === 'string' ? t.updated_at : ''
+  const text = typeof question === 'string' ? question : ''
+  const files = strs(asked_files)
+  const opts = strs(options)
+  const lead = typeof question_lead === 'string' ? question_lead.trim() : ''
+  const lopts = strs(options_lead)
+  if (!isObj(t.ask) && t.status === 'waiting' && (text || files.length)) {
+    out.ask = { by: oldAskBy(text, files, opts, t.history), text, asked_at: at, ...(opts.length ? { options: opts } : {}), ...(files.length ? { files } : {}), ...(lead ? { lead: { text: lead, ...(lopts.length ? { options: lopts } : {}) } } : {}) }
+  } else if (!isObj(t.ask) && t.status === 'doing' && lead && isObj(t.live) && typeof t.live.time_ask === 'string') {
+    out.ask = { by: 'symcc', text: 'more time?', asked_at: t.live.time_ask, lead: { text: lead } }
+  }
+  if (liveQ) {
+    const { question: q, ...rest } = t.live as Raw
+    const live: Raw = { ...rest }
+    if (isObj(q) && typeof q.question === 'string' && t.status === 'doing') {
+      const qo = strs(q.options)
+      live.ask = { by: 'worker', text: q.question, asked_at: at, ...(qo.length ? { options: qo } : {}) }
+    }
+    if (Object.keys(live).length) out.live = live
+    else delete out.live
+  }
   return out
 }
 
@@ -387,6 +433,8 @@ export function upgradeTask(t: Raw, into = 'main'): Raw | null {
   if (clash) out = clash
   const live = withLive(out)
   if (live) out = live
+  const ask = withAsk(out)
+  if (ask) out = ask
   const queue = typeof out.note === 'string' ? /^queue \((\d+)\)$/.exec(out.note) : null
   const lv = isObj(out.live) ? out.live : {}
   const checking = lv.checking as Raw | undefined
@@ -401,8 +449,12 @@ export function upgradeArchiveTask(t0: Raw): Raw | null {
   const split = migrateRunTokens(clash.runs)
   const history = migrateHistory(clash as Parameters<typeof migrateHistory>[0])
   const agents = migrateRunAgents({ ...clash, ...(split ? { runs: split } : {}) })
-  if (clash === t0 && !split && !history && !agents) return null
-  return { ...(agents ?? clash), ...(split && !agents ? { runs: split } : {}), ...(history ? { history } : {}) }
+  const asked = withAsk(clash)
+  if (clash === t0 && !split && !history && !agents && !asked) return null
+  const out: Raw = { ...(agents ?? clash), ...(split && !agents ? { runs: split } : {}), ...(history ? { history } : {}) }
+  if (!asked) return out
+  const { question: _q, options: _o, asked_files: _a, question_lead: _l, options_lead: _p, ...kept } = out
+  return kept
 }
 
 /** board.json's content (already joined with its parts, parsed) in today's shape: old settings renamed, every task upgraded. */
@@ -439,6 +491,46 @@ export function upgradeScoutUsage(text: string | null | undefined): string | nul
   return changed ? JSON.stringify({ ...raw, usage }, null, 2) + '\n' : null
 }
 
+/** How many days of a scout's usage per day scouts.json keeps (T-808). */
+export const USAGE_DAYS_KEPT = 365
+
+/**
+ * scouts.json's text without each scout's last_run and last_report (T-808: they are read from its runs file; only `paused` stays) for the
+ * names `strip` accepts, and with the usage days older than USAGE_DAYS_KEPT days cut. Null when nothing needs it.
+ */
+export function upgradeScoutFile(text: string | null | undefined, strip: (name: string) => boolean, nowMs: number): string | null {
+  let raw: unknown
+  try { raw = JSON.parse(text ?? '') } catch { return null }
+  if (!isObj(raw)) return null
+  let changed = false
+  const out: Raw = { ...raw }
+  if (isObj(raw.scouts)) {
+    const scouts: Raw = {}
+    for (const [name, v] of Object.entries(raw.scouts)) {
+      if (isObj(v) && strip(name) && ('last_run' in v || 'last_report' in v)) {
+        changed = true
+        if (v.paused === true) scouts[name] = { paused: true }
+        continue
+      }
+      scouts[name] = v
+    }
+    out.scouts = scouts
+  }
+  if (isObj(raw.usage)) {
+    const cutoff = new Date(nowMs - USAGE_DAYS_KEPT * 86_400_000).toISOString().slice(0, 10)
+    const usage: Raw = {}
+    for (const [name, v] of Object.entries(raw.usage)) {
+      if (isObj(v) && isObj(v.days)) {
+        const days = Object.fromEntries(Object.entries(v.days).filter(([d]) => d >= cutoff))
+        if (Object.keys(days).length !== Object.keys(v.days).length) changed = true
+        usage[name] = { ...v, days }
+      } else usage[name] = v
+    }
+    out.usage = usage
+  }
+  return changed ? JSON.stringify(out, null, 2) + '\n' : null
+}
+
 /** A scout's saved last report becomes its first run (ended at its last run, or `nowIso`), its report going to the file `report` names. Null when there is none. */
 export function migratedScoutRun(mem: { last_run: string | null; last_report?: string } | undefined, report: (ended: string) => string, nowIso: string): { run: ScoutRunRecord; text: string } | null {
   if (!mem || mem.last_report === undefined) return null
@@ -468,11 +560,13 @@ export type OldInput = {
   orgMem: boolean
   /** scout names that can't be a file name (the migration can't move their last report; only shown) */
   unsafeScouts?: readonly string[]
+  /** the time now (ms), for the usage days to cut */
+  nowMs?: number
 }
 
 /** The count of everything in old shape, as lines; rows with n = 0 are left out. */
 export function oldDataRows(i: OldInput): OldRow[] {
-  const c = { unsplit: 0, numTok: 0, strHist: 0, badKind: 0, facts: 0, other: 0, attempts: 0, chk: 0, queue: 0, role: 0, stage: 0, origin: 0, openRun: 0, conflict: 0, rerun: 0, noInto: 0, live: 0 }
+  const c = { unsplit: 0, numTok: 0, strHist: 0, badKind: 0, facts: 0, other: 0, attempts: 0, chk: 0, queue: 0, role: 0, stage: 0, origin: 0, openRun: 0, conflict: 0, rerun: 0, noInto: 0, live: 0, ask: 0, qBy: 0 }
   const task = (t: Raw, board: boolean) => {
     const runs = (Array.isArray(t.runs) ? t.runs : []).filter(isObj) as Raw[]
     for (const r of runs) {
@@ -480,6 +574,7 @@ export function oldDataRows(i: OldInput): OldRow[] {
       if (isNum(tok)) c.numTok++
       else if (isObj(tok) && 'unsplit' in tok) c.unsplit++
     }
+    if (withAsk(t)) c.ask++
     if (hasOldAgents(t)) c.chk++
     if (withoutStages(t)) c.stage++
     if (withoutConflictTries(t)) c.conflict++
@@ -501,6 +596,7 @@ export function oldDataRows(i: OldInput): OldRow[] {
     if (rs.some((r, k) => isObj(r) && typeof r.started === 'string' && !r.ended && !(k === rs.length - 1 && t.status === 'doing'))) c.openRun++
   }
   const b = isObj(i.board) ? i.board : {}
+  c.qBy = (Array.isArray(b.questions) ? b.questions : []).filter(q => isObj(q) && !('by' in q)).length
   for (const t of Array.isArray(b.tasks) ? b.tasks : []) if (isObj(t)) task(t, true)
   for (const t of i.archive) if (isObj(t)) task(t, false)
   const archTok = isObj(b.archived) && isNum(b.archived.tokens) ? 1 : 0
@@ -510,6 +606,7 @@ export function oldDataRows(i: OldInput): OldRow[] {
   const memory = isObj(i.scouts) && isObj(i.scouts.scouts) ? i.scouts.scouts : {}
   const lastReport = Object.entries(memory).filter(([name, v]) => isObj(v) && typeof v.last_report === 'string' && !i.withRuns.has(name) && !(i.unsafeScouts ?? []).includes(name)).length
   const unsafe = (i.unsafeScouts ?? []).filter(name => isObj(memory[name]) && typeof memory[name].last_report === 'string')
+  const scoutFile = upgradeScoutFile(JSON.stringify(i.scouts ?? null), n => !(i.unsafeScouts ?? []).includes(n), i.nowMs ?? Date.now()) !== null
   const settings = (b.mode === 'off' ? 1 : 0) + (b.notify === 'sound' || 'sound_set' in b ? 1 : 0) + ('target_branch' in b ? 1 : 0)
   const rows: OldRow[] = [
     { n: c.unsplit, text: 'tries with `unsplit` tokens (counts saved before the kinds were kept apart; shown as they are)', fix: false },
@@ -531,6 +628,9 @@ export function oldDataRows(i: OldInput): OldRow[] {
     { n: c.rerun, text: 'tasks with test_rerun / rerun_minutes fields', fix: true },
     { n: c.conflict, text: 'tasks with a conflict_tries field', fix: true },
     { n: c.live, text: 'tasks with try-only fields outside `live` (session, finishing, checking, merge_wait, extra_minutes, time_ask, wrap_up, try_question, try_refused), a merge_main that is false, or a clash failure known only from its note', fix: true },
+    { n: c.ask, text: 'tasks with their question in several fields (question, options, asked_files, question_lead, options_lead, live.question) instead of one `ask` record', fix: true },
+    { n: scoutFile ? 1 : 0, text: 'scouts.json with last_run / last_report entries or usage days older than a year', fix: true },
+    { n: c.qBy, text: 'board questions with no `by`', fix: true },
     { n: settings, text: 'old board settings (mode off, notify sound / sound_set, target_branch)', fix: true },
     { n: lastReport, text: 'scouts whose last report is not yet in a runs file', fix: true },
     { n: unsafe.length, text: `scouts whose name can't be a file name; rename them (${unsafe.join(', ')})`, fix: false },

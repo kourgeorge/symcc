@@ -38,6 +38,8 @@ function setup(on: On, files: Record<string, string | null>) {
 
 const scoutFile = (every: number, body = 'Look around.') => `---\nevery_minutes: ${every}\n---\n${body}\n`
 const memory = (m: Record<string, object>) => JSON.stringify({ scouts: m })
+/** T-808: a scout's runs file with one run that started at `at` (its last run is read from the newest run) */
+const ranAt = (at: string) => JSON.stringify({ runs: [{ started: at, ended: at, outcome: 'nothing', findings: 0 }] })
 
 /** Writes scout `name`'s file through the (fake) Write tool and waits for the board to show it with that text. */
 async function write($: { tool: { call(a: never): Promise<unknown> } }, views: unknown[], name: string, text: string) {
@@ -50,7 +52,7 @@ const nextAt = (views: { scouts?: { name: string; next_run?: string }[] }[], nam
 test('after a restart the next run is last_run + every_minutes, not now + every_minutes', async ($, on) => {
   const start = Date.now()
   const last = new Date(start - 30 * MIN).toISOString()
-  const files: Record<string, string | null> = { '/.symcc/scouts/docs.md': scoutFile(120), '/scouts.json': memory({ docs: { last_run: last } }), '/board.json': JSON.stringify({ tasks: [] }), '/board.lock': null }
+  const files: Record<string, string | null> = { '/.symcc/scouts/docs.md': scoutFile(120), '/scouts.json': memory({}), '/.symcc/scouts/docs.runs.json': ranAt(last), '/board.json': JSON.stringify({ tasks: [] }), '/board.lock': null }
   const { views } = setup(on, files)
   await write($, views, 'docs', scoutFile(120))
   expect(nextAt(views, 'docs')).toBe(Date.parse(last) + 120 * MIN)
@@ -61,7 +63,8 @@ test('an overdue scout runs at the first check, and a scout that never ran runs 
   const files: Record<string, string | null> = {
     '/.symcc/scouts/a-old.md': scoutFile(2880),
     '/.symcc/scouts/b-new.md': scoutFile(2880),
-    '/scouts.json': memory({ 'a-old': { last_run: new Date(start - 5 * 2880 * MIN).toISOString() } }),
+    '/scouts.json': memory({}),
+    '/.symcc/scouts/a-old.runs.json': ranAt(new Date(start - 5 * 2880 * MIN).toISOString()),
     '/board.json': JSON.stringify({ tasks: [] }),
     '/board.lock': null,
   }
@@ -92,7 +95,9 @@ test("editing scout A leaves scout B's next run alone; changing A's every_minute
   const files: Record<string, string | null> = {
     '/.symcc/scouts/a.md': scoutFile(60),
     '/.symcc/scouts/b.md': scoutFile(60),
-    '/scouts.json': memory({ a: { last_run: last }, b: { last_run: last } }),
+    '/scouts.json': memory({}),
+    '/.symcc/scouts/a.runs.json': ranAt(last),
+    '/.symcc/scouts/b.runs.json': ranAt(last),
     '/board.json': JSON.stringify({ tasks: [] }),
     '/board.lock': null,
   }
@@ -112,7 +117,7 @@ test("editing scout A leaves scout B's next run alone; changing A's every_minute
 test('a paused scout keeps its next run but does not run', async ($, on) => {
   const start = Date.now()
   const last = new Date(start - 50 * MIN).toISOString()
-  const files: Record<string, string | null> = { '/.symcc/scouts/p.md': scoutFile(60), '/scouts.json': memory({ p: { last_run: last, paused: true } }), '/board.json': JSON.stringify({ tasks: [] }), '/board.lock': null }
+  const files: Record<string, string | null> = { '/.symcc/scouts/p.md': scoutFile(60), '/scouts.json': memory({ p: { paused: true } }), '/.symcc/scouts/p.runs.json': ranAt(last), '/board.json': JSON.stringify({ tasks: [] }), '/board.lock': null }
   const { views, clock } = setup(on, files)
   await write($, views, 'p', scoutFile(60))
   expect(nextAt(views, 'p')).toBe(Date.parse(last) + 60 * MIN)

@@ -48,18 +48,18 @@ test('two overlapping saves of scouts.json both succeed and both changes are kep
   const files = new Map<string, string>()
   const { $, temps } = fakeFiles(files)
   const T = new Date(Date.now() - 60_000).toISOString()
-  // a run's totals and a last_run change, started together
+  // a run's totals and a pause change, started together
   const run = recordScoutRun($, 'docs-check', { endMs: Date.now(), ms: 5_000 })
   const timer = changeScoutMemory($, old => {
     const m = parseScoutMemory(old)
     const raw = old ? JSON.parse(old) : {}
-    return JSON.stringify({ ...raw, scouts: { ...m, 'docs-check': { last_run: T } } }, null, 2) + '\n'
+    return JSON.stringify({ ...raw, scouts: { ...m, 'docs-check': { paused: true } } }, null, 2) + '\n'
   })
   await Promise.all([run, timer])
   const file = [...files.keys()].find(f => f.endsWith('scouts.json'))!
   expect(file).toBeTruthy()
   const text = files.get(file)!
-  expect(parseScoutMemory(text)['docs-check']?.last_run).toBe(T)
+  expect(parseScoutMemory(text)['docs-check']?.paused).toBe(true)
   expect(JSON.stringify(parseScoutUsage(text))).toContain('docs-check')
   // every save used its own temp file, and none is left behind
   expect(new Set(temps).size).toBe(temps.length)

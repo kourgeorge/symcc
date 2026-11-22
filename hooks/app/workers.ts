@@ -1,5 +1,5 @@
 import type { SymccTask, SymccTokens } from '../../types'
-import { PREP_NOTE, type Board, type BoardTask, type RoleDef, roleSection, mayStart, liveWorkersFor, modeOf, symccOn, ready, patchTask, putTask, find, startRun, findRole, roleOf, workerName, workerDescription, onNotReady, endRun, tryLabel, needFilesQuestion, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, liveDriver, emptyBoard, ownedHere, backToTodo, stoppedEntry, withHistory, historyEntry, type HistoryAdd, type HistoryFacts, tryEntry, resultEntry, notUsedEntry, taskWasResult, type HistoryKind, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, testMinutesOf, ranOverNote, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, WRAP_UP_GRACE_MS, outOfTimeNote, checkerOn, docsOnly, checkerOutput, isCheckerOutput, checkerLine, checkerRetryText, kindOf, isInvestigation, kindSection, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt, shortSha, secretsLeftText, gaveUpTestsText, endedEarlyLine, endedEarlyNote, ENDED_EARLY_NOTE, workerStartedEntry, workerHandedBackEntry, withFailedTests, withAgentUsed, withStoppedUsed, goOnRun, undoGoOn, restartsOf, restartedAgent, workerIdOf, checkerIdOf, onTask, withAgentStart, DEFAULT_ROLE, workerSince } from '../board'
+import { PREP_NOTE, makeAsk, type Board, type BoardTask, type RoleDef, roleSection, mayStart, liveWorkersFor, modeOf, symccOn, ready, patchTask, putTask, find, startRun, findRole, roleOf, workerName, workerDescription, onNotReady, endRun, tryLabel, needFilesQuestion, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, liveDriver, emptyBoard, ownedHere, backToTodo, stoppedEntry, withHistory, historyEntry, type HistoryAdd, type HistoryFacts, tryEntry, resultEntry, notUsedEntry, taskWasResult, type HistoryKind, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, testMinutesOf, ranOverNote, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, WRAP_UP_GRACE_MS, outOfTimeNote, checkerOn, docsOnly, checkerOutput, isCheckerOutput, checkerLine, checkerRetryText, kindOf, isInvestigation, kindSection, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt, shortSha, secretsLeftText, gaveUpTestsText, endedEarlyLine, endedEarlyNote, ENDED_EARLY_NOTE, workerStartedEntry, workerHandedBackEntry, withFailedTests, withAgentUsed, withStoppedUsed, goOnRun, undoGoOn, restartsOf, restartedAgent, workerIdOf, checkerIdOf, onTask, withAgentStart, DEFAULT_ROLE, workerSince } from '../board'
 import { archiveOld } from './archive'
 import { checkHealth } from './health'
 import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch, clearScratch, taskBranch, copyReports, deleteMergedBranch, type BehindWhy } from './git'
@@ -241,7 +241,7 @@ export async function waitIfBranchGone(host: Host, b: Board, t: SymccTask, when:
     const cur = find(x, t.id)
     if (!cur || cur.status !== t.status || cur.attempts !== t.attempts) return [x, false] as [Board, boolean]
     const line = `${when === 'start' ? 'not started' : 'not merged'}: branch ${into} is gone; asked the owner whether to merge into ${instead} instead`
-    return [patchTask(x, t.id, { status: 'waiting', question, options, live: { merge_wait: undefined }, note: 'waiting for you', history: withHistory(cur.history, now(), ['not-merged', line, { owner: true }]), ...endedBy(cur, now(), 'asked', `branch ${into} is gone`) }, now()), true] as [Board, boolean]
+    return [patchTask(x, t.id, { status: 'waiting', ask: makeAsk('symcc', question, now(), { options }), live: { merge_wait: undefined }, note: 'waiting for you', history: withHistory(cur.history, now(), ['not-merged', line, { owner: true }]), ...endedBy(cur, now(), 'asked', `branch ${into} is gone`) }, now()), true] as [Board, boolean]
   })
   if (asked) {
     sayNeedsYou(host, b, t, question)
@@ -862,17 +862,18 @@ async function finishTry(host: Host, agentId: string, w: Pick<Worker, 'task' | '
     tellLead(host, `${t.id} "${t.title}": its time (${limit} minutes) was up, so its worker wrote down what it had and handed back, and the task failed. Its work so far is kept in its folder and branch, and its report (${S.N.name} board task ${t.id}); a retry (${S.N.name} retry) continues from there. Or split it, or drop it.`)
     return true
   }
-  const q = t.live?.question
+  const q = t.live?.ask
   const need = isInvestigation(t) ? [] : (t.live?.refused ?? [])
   if (q) {
     // Straight to the owner: the task waits with the question; their answer sends it back to work.
-    const { question, options } = q
-    if (await writeIfSame(host, t, cur => ({ status: 'waiting', question: question.slice(0, 1000), ...(options ? { options } : {}), note: 'waiting for you', history: withHistory(cur.history, now(), tryEntry(t, 'asked', `worker asked: ${question}`)), ...endedBy(cur, now(), 'asked', 'question') }))) return false
+    const question = q.text
+    const options = q.options
+    if (await writeIfSame(host, t, cur => ({ status: 'waiting', ask: { ...q, text: question.slice(0, 1000), asked_at: now() }, note: 'waiting for you', history: withHistory(cur.history, now(), tryEntry(t, 'asked', `worker asked: ${question}`)), ...endedBy(cur, now(), 'asked', 'question') }))) return false
     sayNeedsYou(host, b, t, question)
     tellLead(host, workerQuestionText(t.id, question, options), { urgent: true })
   } else if (need.length) {
     const question = needFilesQuestion(t.id, need)
-    if (await writeIfSame(host, t, cur => ({ status: 'waiting', question: question.slice(0, 1000), asked_files: need, note: 'waiting for you', history: withHistory(cur.history, now(), tryEntry(t, 'asked', `worker asked for more files: ${need.join(', ')}`)), ...endedBy(cur, now(), 'asked', 'files outside its list') }))) return false
+    if (await writeIfSame(host, t, cur => ({ status: 'waiting', ask: makeAsk('symcc', question.slice(0, 1000), now(), { files: need }), note: 'waiting for you', history: withHistory(cur.history, now(), tryEntry(t, 'asked', `worker asked for more files: ${need.join(', ')}`)), ...endedBy(cur, now(), 'asked', 'files outside its list') }))) return false
     logNeedsFiles(host, t.id, Number(t.attempts) || 0, need)
     sayNeedsYou(host, b, t, question)
     tellLead(host, `${question}\nThe task now waits for the owner, who can allow the files from the board (Allow on its page). If they agree here instead, ${S.N.name} change ${t.id} with the wider files (that sends it back to work; what the worker already changed is kept). Otherwise ${S.N.name} drop it, or change it to a narrower plan that fits its files.`, { urgent: true })
@@ -1293,7 +1294,7 @@ export async function settle(host: Host, t: SymccTask, b: Board, r: CheckResult,
   if (r.ask) {
     // The change was only files whose names look like secrets (see checkAndMerge): nothing merged, the task waits for the owner.
     const ask = r.ask
-    const moved = await writeIfSame(host, t, cur => ({ status: 'waiting', question: ask.slice(0, 1000), note: 'waiting for you', merge_main: undefined, test_output: undefined, history: withHistory(cur.history, now(), line), ...endedBy(cur, now(), 'asked', 'only secret-looking files') }))
+    const moved = await writeIfSame(host, t, cur => ({ status: 'waiting', ask: makeAsk('symcc', ask.slice(0, 1000), now()), note: 'waiting for you', merge_main: undefined, test_output: undefined, history: withHistory(cur.history, now(), line), ...endedBy(cur, now(), 'asked', 'only secret-looking files') }))
     if (moved) {
       if (moved !== 'gone') await changedMeanwhile(host, t, b, r, line, worktree, agentId)
       return

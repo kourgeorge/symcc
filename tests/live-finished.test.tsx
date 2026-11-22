@@ -9,7 +9,7 @@ import { trackSvg } from '../hooks/claude/ui/vscode-live'
 import { PANE, T0, seedBoard } from './board-fixture'
 
 const iso = (minAgo: number) => new Date(T0 - minAgo * 60_000).toISOString()
-const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', question: null, order: Number(id.slice(2)), after: [], attempts: 1, history: [], branch: null, created_at: iso(300), updated_at: iso(1), ...x })
+const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', order: Number(id.slice(2)), after: [], attempts: 1, history: [], branch: null, created_at: iso(300), updated_at: iso(1), ...x })
 const merged = (id: string, title: string, minAgo: number) =>
   task(id, title, { status: 'done', runs: [{ started: iso(minAgo + 20), ended: iso(minAgo + 2), agents: [{ kind: 'worker' as const, started: iso(minAgo + 20), ended: iso(minAgo + 2), tokens: { input: 900_000 } }] }], history: [{ kind: 'merged', at: iso(minAgo), text: 'try 1 → merged into main' }] })
 
@@ -22,7 +22,7 @@ const TASKS = [
   task('T-743', 'An answered question', { status: 'done', kind: 'investigation', runs: [{ started: iso(9), ended: iso(6) }], history: [] }),
 ]
 const view = (tasks: unknown[]) => ({ tasks: tasks as never[], checker: true, mode: 'auto' as const, max_parallel: 3 })
-const liveView = (tasks: unknown[]) => ({ shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', branch: 'main', test_commands: ['npm test'], driving: true, checker: true, max_parallel: 3 } })
+const liveView = (tasks: unknown[]) => ({ shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', home_branch: 'main', test_commands: ['npm test'], driving: true, checker: true, max_parallel: 3 } })
 
 test('T-771: a task merged 3m ago keeps a finished lane under the running ones; one merged 11m ago, failed or dropped ones get none', () => {
   const lanes = liveTaskLanes(view(TASKS), T0)

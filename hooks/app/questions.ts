@@ -1,6 +1,6 @@
 // The lead's questions for the owner on the board (see core/questions.ts): the lead's question tool, and the
 // owner's answer from the board panel's question page.
-import { type Board, type BoardTask, type OwnerQuestion, type QuestionClose, addQuestion, answerQuestion, dropQuestion, normQid, questionsText, closedText, boardAnswerLine, openQuestions, questionsForYou, QUESTION_MAX, QUESTION_OPTIONS, OPTION_MAX, taskAsks, asksOwner, isAnswered, find, patchTask, putTask } from '../board'
+import { type Board, type BoardTask, type OwnerQuestion, makeAsk, type QuestionClose, addQuestion, answerQuestion, dropQuestion, normQid, questionsText, closedText, boardAnswerLine, openQuestions, questionsForYou, QUESTION_MAX, QUESTION_OPTIONS, OPTION_MAX, taskAsks, asksOwner, isAnswered, find, patchTask, putTask } from '../board'
 import { clean, squash } from '../core/text'
 import { S } from './state'
 import type { Host } from '../host'
@@ -171,7 +171,7 @@ async function linkQuestions(host: Host, qs: PopupQuestion[]): Promise<(PopupLin
 /**
  * T-801: the lead's own wording of a task's question goes on the task, so the board shows it instead of symcc's text:
  * its question text, and (for a worker's own question, not a file request or more time) its options as the buttons.
- * It goes away with the question (patchTask).
+ * It is the `lead` part of the task's ask record, so it goes away with the question (patchTask).
  */
 async function leadWording(host: Host, tied: { q: PopupQuestion; link: PopupLink }[]): Promise<void> {
   const mine = tied.filter(x => x.link.kind === 'task')
@@ -183,12 +183,13 @@ async function leadWording(host: Host, tied: { q: PopupQuestion; link: PopupLink
       if (!t || !asksOwner(t)) continue
       const text = clean(squash(q.question), 1000)
       const opts = labels(q)
-      const plain = t.status === 'waiting' && !t.asked_files?.length
-      const patched = find(patchTask(y, link.id, { question_lead: text, ...(plain && opts.length ? { options_lead: opts } : {}) }, now()), link.id) as BoardTask
-      // the task itself did not change for the owner: its waiting time stays, and an older pop-up's buttons go
-      const next: BoardTask = { ...patched, updated_at: t.updated_at }
-      if (!(plain && opts.length)) delete next.options_lead
-      y = putTask(y, next)
+      const plain = t.status === 'waiting' && !t.ask?.files?.length
+      // more time: the task has no question of its own, so its ask holds only the lead's wording
+      const base = t.ask ?? makeAsk('symcc', 'more time?', t.live?.time_ask ?? now())
+      const ask = { ...base, lead: { text, ...(plain && opts.length ? { options: opts } : {}) } }
+      const patched = find(patchTask(y, link.id, { ask }, now()), link.id) as BoardTask
+      // the task itself did not change for the owner: its waiting time stays
+      y = putTask(y, { ...patched, updated_at: t.updated_at })
     }
     return y
   }).catch(() => undefined)

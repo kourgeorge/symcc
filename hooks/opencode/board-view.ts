@@ -27,7 +27,7 @@ import {
   rowStates, rowMark, TITLE_ROOM, fitRow, rowExtra, questionsLabel, archivedOf, archivedNote, statusMark, detailRows, detailRowLines, wrapSegs, hintLineText,
   type KeyHint, type Seg, type BoardTask, intoOf, taskActions, taskAsks, actionButtonLabel, packRows, type TaskAction, type TaskActionId,
   ownersTurn, shownStatus, sortScouts, scoutListRows, scoutHowTo, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem, scoutFile,
-  SETTING_GROUPS, SETTINGS, isSettingPage, settingInfo, settingShown, settingValue, cantPlayNotify, groupSummaryParts,
+  SETTING_GROUPS, SETTINGS, isSettingPage, settingInfo, settingShown, settingValue, viewAsBoard, cantPlayNotify, groupSummaryParts,
   type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction, type DefEditField, type TaskVerb, settingsKeys, rolesKeys, kindsKeys, roleEditKeys, defEditFields, roleTools, roleFileText, roleSkipReason, kindFileText, kindSkipReason,
   DEFAULT_ROLE, isCheckerRole, ALWAYS_ON_KINDS, checkerOn, roleNameError, kindNameError, leadScoutNameError, checkStepNow, rowEndText, taskPhase, choiceLines, driveWarning,
   searchTasks, showsHeader, type BoardPage,
@@ -163,11 +163,6 @@ export function parseViewFile(text: string | null | undefined): ViewFile | null 
     // T-769: ▍Today's lead, scout and cost figures; a broken value is left out
     const team = rest.today_team as Partial<NonNullable<PaneView['today_team']>> | undefined
     if (!team || typeof team !== 'object' || typeof team.day !== 'string') delete rest.today_team
-    // T-770: the scout runs going now; a broken one is left out
-    if (Array.isArray(rest.scouts_running)) {
-      rest.scouts_running = rest.scouts_running.filter(x => !!x && typeof x === 'object' && typeof x.name === 'string' && Number.isFinite(x.since))
-      if (!rest.scouts_running.length) delete rest.scouts_running
-    } else delete rest.scouts_running
     if (!rest.changes || typeof rest.changes !== 'object' || Array.isArray(rest.changes)) delete rest.changes
     // T-761: each task page's Branch section facts; a broken one is left out (that task's page has no section)
     if (rest.task_branches && typeof rest.task_branches === 'object' && !Array.isArray(rest.task_branches)) {
@@ -248,7 +243,7 @@ export function bandDraw(f: ViewFile | null, nowMs: number, width: number, rows 
   const v = f?.view
   const tasks = v?.tasks ?? []
   const questions = v?.questions ?? []
-  if (!f || !v || (!tasks.length && !questions.length) || v.enabled === false) return { lines: [], hits: [] }
+  if (!f || !v || (!tasks.length && !questions.length) || v.on_here === false) return { lines: [], hits: [] }
   // an approved task whose approve runs counts and shows as doing (shownStatus)
   const summary = statusCounts(tasks, ['doing', 'todo', 'paused', 'review', 'waiting', 'failed', 'done'], nowMs).join(' · ')
   const order = ['review', 'waiting', 'failed', 'doing']
@@ -1263,7 +1258,7 @@ function settingsBody(f: ViewFile, cursor: number, open: readonly string[], w: n
     const front = { text: settingGroupId(g.title) === selected ? '› ' : '  ', color: 'ide', bold: true }
     const hit = { settingGroup: g.title }
     if (!isOpen) {
-      const sum = groupSummaryParts(g, v, Math.max(20, w - 4), pages)
+      const sum = groupSummaryParts(g, viewAsBoard(v), Math.max(20, w - 4), pages)
       b.add([front, { text: `▸ ${sum.title}`, color: 'text', bold: true }, ...(sum.values ? [{ text: sum.values, color: 'inactive' }] : [])], hit)
       continue
     }
@@ -1291,7 +1286,7 @@ function settingsBody(f: ViewFile, cursor: number, open: readonly string[], w: n
         [
           { text: sel ? '› ' : '  ', color: 'ide', bold: true },
           { text: x.name.padEnd(nameWidth), color: 'claude', bold: true },
-          { text: ` ${settingShown(x.name, settingValue(v, x.name))}`, color: 'text', bold: true },
+          { text: ` ${settingShown(x.name, settingValue(viewAsBoard(v), x.name))}`, color: 'text', bold: true },
           ...(unplayable ? [{ text: " (can't play here: nothing plays)", color: 'warning' }] : []),
           { text: ` · default ${x.default} · ${x.range}`, color: 'inactive' },
         ],
@@ -1359,7 +1354,7 @@ function listBody(f: ViewFile, cursor: number, open0: Record<PanelGroup, boolean
   const row = (x: SymccTask, indent: number): Line => {
     const closed = x.status === 'done' || x.status === 'dropped' || x.status === 'backlog'
     const lead = indent + idWidth + 3 + cellWidth + 2
-    const fit = fitRow(lead, x.title, rowExtra(x, v.tasks, v.branch ?? '', v.max_minutes, nowMs), w, x.status === 'failed')
+    const fit = fitRow(lead, x.title, rowExtra(x, v.tasks, v.home_branch ?? '', v.max_minutes, nowMs), w, x.status === 'failed')
     const state = states.get(x.id) ?? { front: '', tag: '', back: '' }
     const sel = x.id === selected
     return [

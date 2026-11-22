@@ -16,7 +16,7 @@ import { type PhaseStage, type TaskPhase, taskPhase } from './phase'
 import { whyFailed } from './failure'
 import { CLAIM_NOTES, sessionNote, shownNote, STATUS_MARK } from './details'
 import { newestFirst, offStatusParts, testsShort, type OffHere } from './settings'
-import { type OwnerQuestion, openQuestions, questionLine, questionsLabel } from './questions'
+import { type OwnerQuestion, askText, openQuestions, questionLine, questionsLabel } from './questions'
 import { needsYou } from './commands'
 import { fmtCost } from './runs'
 import { shortSizeWarns } from './board-parts'
@@ -251,10 +251,10 @@ export function driveWarning(driving: boolean, tasks: readonly DriveTask[], nowM
  * why it failed (whyFailed), else `note` (the task's note; the bands pass bandNote, which leaves out what the row's
  * state already says). '' when there is nothing to say.
  */
-export function rowEndText(t: Pick<SymccTask, 'note' | 'history'> & Partial<Pick<SymccTask, 'question' | 'test_output' | 'runs'>> & Partial<Pick<BoardTask, 'question_lead'>> & Pick<BoardTask, 'status' | 'live' | 'merge_into'>, phase: Pick<TaskPhase, 'waitsFor' | 'approved' | 'stage'>, note: string = shownNote(t)): string {
+export function rowEndText(t: Pick<SymccTask, 'note' | 'history'> & Partial<Pick<SymccTask, 'test_output' | 'runs'>> & Partial<Pick<BoardTask, 'ask'>> & Pick<BoardTask, 'status' | 'live' | 'merge_into'>, phase: Pick<TaskPhase, 'waitsFor' | 'approved' | 'stage'>, note: string = shownNote(t)): string {
   if (phase.waitsFor === 'your-files') return fileWaitText(t)
   if (phase.approved && phase.stage) return APPROVED_NOTE
-  if (phase.waitsFor === 'answer' || phase.waitsFor === 'files') return t.question_lead ?? t.question ?? t.note ?? ''
+  if (phase.waitsFor === 'answer' || phase.waitsFor === 'files') return askText(t.ask) || (t.note ?? '')
   if (phase.waitsFor === 'failed') return whyFailed(t)
   return note
 }
@@ -283,7 +283,7 @@ export type StatusBoard = {
   tasks: (Pick<SymccTask, 'id' | 'status'> & Partial<Pick<SymccTask, 'runs' | 'history' | 'note' | 'updated_at'>> & Partial<Pick<BoardTask, 'live'>>)[]
   questions?: readonly Pick<OwnerQuestion, 'answered_at' | 'dropped'>[]
   scouts?: CrewBoard['scouts']
-  branch?: string
+  home_branch?: string
   branch_note?: string
   mode?: SymccMode
 }
@@ -321,7 +321,7 @@ export function statusLine(b: StatusBoard, driving: boolean, o: { plan?: boolean
   const fixed = [...head, note, drive].filter(Boolean)
   const today = b.tasks.length ? liveToday(b.tasks as SymccTask[], nowMs, o.offsetMin).merged : 0
   const rest = [
-    b.branch || '',
+    b.home_branch || '',
     nextScoutPart(scouts, nowMs, !!o.plan || m === 'paused'),
     b.tasks.length ? `today ✓ ${today}` : '',
     shortCost(todayCost(b.tasks, nowMs, o.offsetMin)),
@@ -346,7 +346,7 @@ export type BannerLine = { art: string; parts: BannerPart[] }
 /** What the banner needs from the board. */
 /** `branch`: the branch checked out in the project now (new tasks merge into it); `branch_note`: a warning (e.g. no git), shown in place of it.
  *  `enabled` false (symcc disabled) or `mode` 'paused' puts a warning on the first line, after the name. */
-export type BannerBoard = Pick<Board, 'test_commands' | 'max_parallel' | 'max_minutes' | 'auto_retries'> & Partial<Pick<Board, 'archived'>> & { tasks: (Pick<SymccTask, 'status' | 'runs'> & Partial<Pick<SymccTask, 'note' | 'updated_at'>> & Pick<BoardTask, 'live'>)[]; branch?: string; branch_note?: string; mode?: SymccMode; enabled?: boolean; off_here?: OffHere }
+export type BannerBoard = Pick<Board, 'test_commands' | 'max_parallel' | 'max_minutes' | 'auto_retries'> & Partial<Pick<Board, 'archived'>> & { tasks: (Pick<SymccTask, 'status' | 'runs'> & Partial<Pick<SymccTask, 'note' | 'updated_at'>> & Pick<BoardTask, 'live'>)[]; home_branch?: string; branch_note?: string; mode?: SymccMode; on_here?: boolean; off_here?: OffHere }
 
 /** "2 doing", "1 to do", ... for each status in `order` that has tasks, in that order. */
 export function statusCounts(tasks: (Pick<SymccTask, 'status'> & Pick<BoardTask, 'live'>)[], order: SymccStatus[], nowMs: number = Date.now()): string[] {
@@ -404,7 +404,7 @@ export function bannerLines(b: BannerBoard, root: string, home: string, driving:
   // nothing starts while symcc is disabled or the board is paused: say so on the first line, in the warning color
   // disabled: "symcc is disabled · /symcc-enable to turn it back on", the command in the accent color (bold) so it stands out
   const off: BannerPart[] =
-    b.enabled === false
+    b.on_here === false
       ? offStatusParts(name, true, b.off_here).map(p => (p.command ? { text: p.text, tone: 'accent' as const, bold: true } : { text: p.text, tone: 'warning' as const }))
       : b.mode && modeOf({ mode: b.mode }) === 'paused'
         ? [{ text: `${modeLabel('paused')}: nothing starts`, tone: 'warning' }]
@@ -418,7 +418,7 @@ export function bannerLines(b: BannerBoard, root: string, home: string, driving:
   ]
   const l2 = join([
     ...(root ? [fact(shortHome(root, home))] : []),
-    ...(b.branch_note ? [[{ text: b.branch_note, tone: 'warning' as const }]] : b.branch ? [fact(b.branch)] : []),
+    ...(b.branch_note ? [[{ text: b.branch_note, tone: 'warning' as const }]] : b.home_branch ? [fact(b.home_branch)] : []),
     fact(driving ? 'this session drives' : 'driven by another session'),
   ])
   const l3 = join([
@@ -487,7 +487,7 @@ function boardRow(t: SymccTask, autoRetries: number | undefined, nowMs: number, 
   const phase = taskPhase(t, nowMs)
   // in a session that doesn't drive the board a claim note says the worker runs in the other session (sessionNote)
   const end = rowEndText(t, phase, sessionNote(t, driving, nowMs))
-  const asks = (phase.waitsFor === 'answer' || phase.waitsFor === 'files') && (t.question_lead || t.question) ? 'asks: ' : ''
+  const asks = (phase.waitsFor === 'answer' || phase.waitsFor === 'files') && askText(t.ask) ? 'asks: ' : ''
   const extra = end ? ` — ${asks}${end}` : t.status === 'review' ? ` — ${STATUS_WORD.review}` : ''
   const after = t.after.length && (t.status === 'todo' || t.status === 'backlog') ? ` (after ${t.after.join(', ')})` : ''
   // the kind and the role, e.g. " [bug · tester]" (a plain change with the general role shows nothing)

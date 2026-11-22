@@ -20,7 +20,7 @@ const D = `${ROOT}/.symcc`
 const T = '2026-11-01T08:00:00.000Z'
 const E = '2026-11-01T09:00:00.000Z'
 
-const base = { details: '', files: [], question: null, order: 1, after: [], branch: null, created_at: T, updated_at: E }
+const base = { details: '', files: [], order: 1, after: [], branch: null, created_at: T, updated_at: E }
 
 function world() {
   forgetMigrationFailure()
@@ -352,7 +352,7 @@ test('T-807: fix migrate-data moves a task\'s try-only fields into live, drops a
   expect(await doctor(w.host, 'fix migrate-data')).toContain('✓ migrate-data')
   const b = await load(w.host)
   const t5 = b.tasks.find(x => x.id === 'T-5')!
-  expect(t5.live).toEqual({ session: 'me', phase: 'worker', time_ask: E, extra_minutes: 10, refused: ['a.ts'], question: { question: 'Which?' } })
+  expect(t5.live).toMatchObject({ session: 'me', phase: 'worker', time_ask: E, extra_minutes: 10, refused: ['a.ts'], ask: { by: 'worker', text: 'Which?' } })
   expect('merge_main' in t5).toBe(false)
   const t6 = b.tasks.find(x => x.id === 'T-6')!
   expect(t6.live).toEqual({ session: 'me', phase: 'claimed', checking: { step: 'prep', at: E } })
@@ -383,4 +383,43 @@ test('T-805: ids kept alone on an old try show no made-up agent lines, and the t
   expect(agentLines(r)).toEqual([])
   expect(tryTokens(r)).toEqual({ input: 150 })
   expect(checkerTokensOf(r)).toEqual({ input: 40 })
+})
+
+test('T-808: fix migrate-data makes a task\'s question fields one `ask` record, gives board questions a `by`, and drops last_run / last_report and old usage days from scouts.json', async () => {
+  const w = world()
+  const board = JSON.parse(w.files.get(`${D}/board.json`)!)
+  const origin = { by: 'lead', why: 'w', at: T }
+  const mk = (id: string, x: Record<string, unknown>) => ({ ...base, id, title: id, status: 'waiting', note: 'waiting for you', attempts: 1, origin, merge_into: 'main', history: [], runs: [], question: null, ...x })
+  board.tasks.push(
+    mk('T-10', { question: 'Red or blue?', options: ['Red', 'Blue'], question_lead: 'Which colour do you want?', options_lead: ['Crimson', 'Navy'], history: [{ at: T, kind: 'asked', text: 'worker asked: Red or blue?' }] }),
+    mk('T-11', { question: 'T-11 needs to change files outside its list: a.ts. Allow them?', asked_files: ['a.ts'] }),
+    mk('T-12', { question: 'Which one?', history: [{ at: T, kind: 'asked', text: 'the lead asked the owner a question' }] }),
+    mk('T-13', { status: 'doing', note: '', question: null, live: { session: 'me', phase: 'worker', question: { question: 'Left or right?', options: ['Left', 'Right'] } }, runs: [{ started: T }] }),
+  )
+  board.questions = [{ id: 'Q-1', text: 'Raise the version?', options: ['Yes', 'No'], asked_at: T }]
+  board.next_question = 2
+  w.files.set(`${D}/board.json`, JSON.stringify(board, null, 2))
+  const day = (ago: number) => new Date(Date.now() - ago * 86_400_000).toISOString().slice(0, 10)
+  const figs = { runs: 1, tokens: { input: 5 }, ms: 10 }
+  w.files.set(`${D}/scouts.json`, JSON.stringify({ scouts: { bugs: { last_run: E, last_report: '1. Old crash.' }, docs: { last_run: E, paused: true } }, usage: { bugs: { ...figs, days: { [day(2)]: figs, [day(400)]: figs } } } }))
+  const text = await doctor(w.host, '')
+  expect(text).toContain('instead of one `ask` record')
+  expect(text).toContain('board questions with no `by`')
+  expect(text).toContain('last_run / last_report entries or usage days older than a year')
+  expect(await doctor(w.host, 'fix migrate-data')).toContain('✓ migrate-data')
+  const b = await load(w.host)
+  const t = (id: string) => b.tasks.find(x => x.id === id)! as unknown as Record<string, unknown>
+  expect(t('T-10').ask).toEqual({ by: 'worker', text: 'Red or blue?', options: ['Red', 'Blue'], asked_at: E, lead: { text: 'Which colour do you want?', options: ['Crimson', 'Navy'] } })
+  expect(t('T-11').ask).toMatchObject({ by: 'symcc', files: ['a.ts'] })
+  expect(t('T-12').ask).toMatchObject({ by: 'lead', text: 'Which one?' })
+  expect((t('T-13').live as { ask?: unknown }).ask).toMatchObject({ by: 'worker', text: 'Left or right?', options: ['Left', 'Right'] })
+  for (const id of ['T-10', 'T-11', 'T-12', 'T-13']) expect(['question', 'options', 'asked_files', 'question_lead', 'options_lead'].filter(k => k in t(id))).toEqual([])
+  expect(b.questions?.[0]).toMatchObject({ id: 'Q-1', by: 'lead', text: 'Raise the version?', options: ['Yes', 'No'] })
+  // scouts.json keeps the pause and the usage (a year of days); the report moved to the scout's runs file
+  const sc = JSON.parse(w.files.get(`${D}/scouts.json`)!)
+  expect(sc.scouts).toEqual({ docs: { paused: true } })
+  expect(Object.keys(sc.usage.bugs.days)).toEqual([day(2)])
+  expect(sc.usage.bugs.runs).toBe(1)
+  expect(JSON.parse(w.files.get(`${D}/scouts/bugs.runs.json`)!).runs[0]).toMatchObject({ ended: E, outcome: 'found' })
+  expect(await doctor(w.host, '')).not.toContain('migrate-data')
 })

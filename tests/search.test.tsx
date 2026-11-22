@@ -5,7 +5,7 @@ import type { SymccTask } from '../types'
 import { taskMatches, searchLine, searchBoxHint } from '../hooks/board'
 
 const task = (id: string, status: string, title: string, extra: Record<string, unknown> = {}) =>
-  ({ id, title, details: '', files: [], status, note: '', question: null, order: Number(id.slice(2)), after: [], attempts: 0, history: [], branch: null, created_at: '', updated_at: '', ...extra }) as unknown as SymccTask
+  ({ id, title, details: '', files: [], status, note: '', order: Number(id.slice(2)), after: [], attempts: 0, history: [], branch: null, created_at: '', updated_at: '', ...extra }) as unknown as SymccTask
 
 test('taskMatches: the id with or without "T-", and not a longer id', () => {
   const t = task('T-12', 'todo', 'Parser')

@@ -489,15 +489,7 @@ export async function publish(host: Host, b: Board) {
   const team = todayTeam(host, [...scoutState.keys()]).team
   // T-761: each task page's Branch section, read the same way (OpenCode's panel draws only what the view holds)
   const task_branches = taskBranchesView(host, b).facts
-  // T-770: the scout runs going now (in scoutRuns once started; a queued one isn't there yet), since their start (last_run)
-  const scouts_running = [...new Set(scoutRuns.values())]
-    .flatMap(name => {
-      const st = scoutState.get(name)
-      const since = Date.parse(st?.last_run ?? '')
-      return st?.running && Number.isFinite(since) ? [{ name, since }] : []
-    })
-    .sort((x, y) => x.since - y.since)
-  const v: PaneView = { tasks: b.tasks, working, scouts: [...scoutState.values()], mode: modeOf(b), test_commands: b.test_commands, branch, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, test_minutes: testMinutesOf(b), archive_days: b.archive_days, ...(b.archived ? { archived: b.archived } : {}), ...(b.archived_done?.length ? { archived_done: b.archived_done } : {}), open_on_start: openOnStart(b), notify: notifyOf(b, can, S.root), scout_findings: b.scout_findings, tests_with_changes: b.tests_with_changes, checker: b.checker, notify_choices: notifyChoices(can), enabled: onHere(b), ...(S.offHere ? { off_here: S.offWhy } : S.fresh ? { off_here: 'new' as const } : {}), driving: S.driving, branch_note, ...(size_note ? { size_note } : {}), git_state: S.gitState, plan_mode: inPlan(S.plan), ...(branches ? { branches } : {}), ...(team ? { today_team: team } : {}), ...(Object.keys(task_branches).length ? { task_branches } : {}), ...(openQuestions(b).length ? { questions: openQuestions(b) } : {}), ...(scouts_running.length ? { scouts_running } : {}) }
+  const v: PaneView = { tasks: b.tasks, working, scouts: [...scoutState.values()], mode: modeOf(b), test_commands: b.test_commands, home_branch: branch, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, test_minutes: testMinutesOf(b), archive_days: b.archive_days, ...(b.archived ? { archived: b.archived } : {}), ...(b.archived_done?.length ? { archived_done: b.archived_done } : {}), open_on_start: openOnStart(b), notify_now: notifyOf(b, can, S.root), scout_findings: b.scout_findings, tests_with_changes: b.tests_with_changes, checker: b.checker, notify_choices: notifyChoices(can), on_here: onHere(b), ...(S.offHere ? { off_here: S.offWhy } : S.fresh ? { off_here: 'new' as const } : {}), driving: S.driving, branch_note, ...(size_note ? { size_note } : {}), git_state: S.gitState, plan_mode: inPlan(S.plan), ...(branches ? { branches } : {}), ...(team ? { today_team: team } : {}), ...(Object.keys(task_branches).length ? { task_branches } : {}), ...(openQuestions(b).length ? { questions: openQuestions(b) } : {}) }
   // the view as it is stored (trimmed by slimView): the owner is told when trimming had to leave tasks out of the panel
   try {
     const note = viewTrimNote(host, v)
@@ -520,7 +512,7 @@ export async function publish(host: Host, b: Board) {
   // no task counts (the band above the prompt shows the work, T-748); redrawn every minute while scouts are timed, see refreshStatus.
   // Disabled: "disabled · /symcc-enable to turn it back on" without the name, as Claude Code puts "symcc: " in front; its status line
   // takes plain text only (no colors), so the command can't stand out there.
-  const facts = { tasks: b.tasks, questions: b.questions, scouts: v.scouts, branch, branch_note, mode: modeOf(b) }
+  const facts = { tasks: b.tasks, questions: b.questions, scouts: v.scouts, home_branch: branch, branch_note, mode: modeOf(b) }
   showStatus(host, () => (onHere(b) ? statusLine(facts, S.driving, { plan: inPlan(S.plan), nowMs: Date.now(), width: statusRoom(S.N.name) }) : offStatusLine(S.N.name, false, S.offHere ? S.offWhy : S.fresh ? 'new' : false)))
 }
 

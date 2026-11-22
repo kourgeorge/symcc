@@ -4,12 +4,13 @@ import { mock, type MockClock } from 'claude-code/testing'
 import type { On } from 'claude-code'
 import { inProject } from './project'
 import { hist } from './history-fixture'
+import { askShape } from './ask-shape'
 
 /** The clock the board is seen at. */
 export const T0 = Date.UTC(2026, 10, 18, 12, 0, 0)
 const iso = (ms: number) => new Date(ms).toISOString()
 
-const task = (id: string, status: string, title: string, extra: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status, note: '', question: null, order: Number(id.slice(2)), after: [], attempts: 0, history: [], branch: null, created_at: iso(T0 - 3_600_000), updated_at: iso(T0 - 60_000), ...extra })
+const task = (id: string, status: string, title: string, extra: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status, note: '', order: Number(id.slice(2)), after: [], attempts: 0, history: [], branch: null, created_at: iso(T0 - 3_600_000), updated_at: iso(T0 - 60_000), ...askShape(extra) })
 
 export const BOARD_TASKS = [
   task('T-401', 'doing', 'Show the plugin version in the board title and the band above the prompt', { role: 'worker', kind: 'docs' }), // T-722: only its kind shows in the row
@@ -41,7 +42,7 @@ export const BOARD_VIEW = {
     working: [{ task: 'T-401', since: T0 - 120_000 }],
     scouts: [{ name: 'tests', every_minutes: 30, last_run: null, running: false }],
     mode: 'auto',
-    branch: 'main',
+    home_branch: 'main',
     test_commands: ['claude plugin test .', 'sh scripts/typecheck.sh'],
     // this session drives, so the saved pictures have no "another session drives" warning line (T-643)
     driving: true,
