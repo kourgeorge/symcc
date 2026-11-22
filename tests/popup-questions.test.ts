@@ -6,9 +6,10 @@ import { fakeHost, memoryFs, done } from './fake-host'
 import { pause } from './fakes'
 import { type Board, readBoard, openQuestions } from '../hooks/board'
 import { S } from '../hooks/app/state'
-import { runTool } from '../hooks/app/tools'
+import { runTool, allowAskedFiles } from '../hooks/app/tools'
 import { answerOnBoard, boardAnswered, popupCall } from '../hooks/app/questions'
 import { change } from '../hooks/app/store'
+import { taskAsks, rowExtra, liveNeeds } from '../hooks/board'
 import { CLAUDE_WORDS } from '../hooks/claude/host'
 
 const ROOT = '/repo'
@@ -484,4 +485,48 @@ test("T-753: a task-tied pop-up answered with the refusal words puts the answer 
   const t = w.board().tasks[0]!
   expect(t.status).not.toBe('waiting')
   expect(t.history.map(h => h.text).join('\n')).toContain(said)
+})
+
+// T-801: the lead's wording of a task's question goes on the task and shows on the board in place of symcc's text
+test("a tied pop-up for a file request puts the lead's wording on the task: it shows alone, the buttons stay, and it goes with the question", async () => {
+  const w = world()
+  await waitingTask(w.host as never, { question: 'T-1 needs to change files outside its list: b.ts. Allow them?', asked_files: ['b.ts'], note: 'asks to change b.ts' })
+  const d = dialog()
+  const r = popupCall(w.host, undefined, { questions: [ask('May T-1 touch b.ts?', ['Allow', "Don't allow"], { header: 'T-1' })] }, d.open, w.notice)
+  await pause(0)
+  const t = w.board().tasks[0]!
+  // symcc's own text stays in the data; the lead's is next to it
+  expect(t.question).toContain('needs to change files')
+  expect(t.question_lead).toBe('May T-1 touch b.ts?')
+  const asks = taskAsks(t)!
+  expect(asks.text).toBe('May T-1 touch b.ts?')
+  expect(asks.choices).toEqual(['Allow', "Don't allow", 'Answer…'])
+  expect(rowExtra(t, [t])).toBe('May T-1 touch b.ts?')
+  const need = liveNeeds({ tasks: [t], questions: [] } as never, Date.now(), 200).find(x => x.id === 'T-1')!
+  expect(need.segs.map(s => s.text).join('')).toContain('May T-1 touch b.ts?')
+  // the Allow button's action still works, and the lead's text goes with the question
+  d.answer({})
+  void r
+  await allowAskedFiles(w.host, 'T-1')
+  const after = w.board().tasks[0]!
+  expect(after.files).toContain('b.ts')
+  expect(after.question_lead).toBeUndefined()
+})
+
+test("a worker's question with options shows the lead's question and options, an answer is that option's text, and the lead's text goes when answered", async () => {
+  const w = world()
+  await waitingTask(w.host as never, { question: 'Red or blue?', options: ['Red', 'Blue'] })
+  const d = dialog()
+  void popupCall(w.host, undefined, { questions: [ask('Which color do you want for it?', ['Crimson', 'Navy'], { header: 'T-1' })] }, d.open, w.notice)
+  await pause(0)
+  const t = w.board().tasks[0]!
+  const asks = taskAsks(t)!
+  expect(asks.text).toBe('Which color do you want for it?')
+  expect(asks.choices).toEqual(['Crimson', 'Navy', 'Answer…'])
+  await runTool(w.host, 'change', { task: 'T-1', answer: 'Navy' })
+  const after = w.board().tasks[0]!
+  expect(after.status).not.toBe('waiting')
+  expect(after.question_lead).toBeUndefined()
+  expect(after.options_lead).toBeUndefined()
+  expect(after.history.map(h => h.text).join('\n')).toContain('Navy')
 })

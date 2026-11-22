@@ -270,7 +270,12 @@ question on the board by itself:
 - A question about a task that waits for you (a review, an answered investigation, a
   worker's question or file request, more time) has the task's id (T-5) as its header and is
   tied to that task's own board question: no extra `Q-` entry. A task id only mentioned in
-  the question's text doesn't tie it.
+  the question's text doesn't tie it. The board then shows the lead's wording of the question
+  (alone) in place of symcc's own text, on the task page, in NEEDS YOU and in the band. For a
+  worker's own question the lead's choices are the board's buttons (an answer is put into the
+  task as that choice's text). For symcc's fixed questions (file request, more time, review) the
+  buttons stay symcc's own, since they run board actions. The lead's wording goes away when the
+  question is answered or changes.
 - Any other question becomes a `Q-` question with the same text and choices (or, when the
   lead already put that exact question on the board, that one is used).
 
