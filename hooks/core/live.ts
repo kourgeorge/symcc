@@ -315,11 +315,11 @@ export function liveHeader(view: LiveView, lanes: readonly LiveLane[]): string {
 
 /** T-770: a scout run going now (started, not queued for a slot): its name and when it started (ms). */
 export type LiveScoutRun = { name: string; since: number }
-/** T-808: the scout runs going now, worked out from the scouts: those running, since their last run started (their last_run). */
-export function scoutsRunning(scouts: readonly { name: string; running?: boolean; last_run?: string | null }[] | undefined): LiveScoutRun[] {
+/** T-808: the scout runs going now, worked out from the scouts: those started (not only queued), since their last run started (their last_run). */
+export function scoutsRunning(scouts: readonly { name: string; running?: boolean; started?: boolean; last_run?: string | null }[] | undefined): LiveScoutRun[] {
   return (Array.isArray(scouts) ? scouts : []).flatMap(s => {
     const since = Date.parse(s?.last_run ?? '')
-    return s?.running && Number.isFinite(since) ? [{ name: s.name, since }] : []
+    return s?.running && s.started && Number.isFinite(since) ? [{ name: s.name, since }] : []
   }).sort((x, y) => x.since - y.since)
 }
 /** T-770: the mark in front of the running scouts at the end of the mode line, drawn in the scout color. */
@@ -346,7 +346,7 @@ export function liveScoutMark(runs: readonly LiveScoutRun[] | undefined, nowMs: 
 
 /** T-770: the mode line with its scout mark as segments, within `width` columns: the line ('text'), then the gap
  *  ('text'), the mark ('scouts') and the names ('dim') while scouts run. */
-export function liveHeaderSegs(view: LiveView & { scouts?: readonly { name: string; running?: boolean; last_run?: string | null }[] }, lanes: readonly LiveLane[], nowMs: number, width = Infinity): LiveSeg[] {
+export function liveHeaderSegs(view: LiveView & { scouts?: readonly { name: string; running?: boolean; started?: boolean; last_run?: string | null }[] }, lanes: readonly LiveLane[], nowMs: number, width = Infinity): LiveSeg[] {
   const head = liveHeader(view, lanes)
   const m = liveScoutMark(scoutsRunning(view.scouts), nowMs, width - textWidth(head))
   return [{ text: head, tone: 'text' }, ...(m ? [{ text: m.gap, tone: 'text' as const }, { text: m.mark, tone: 'scouts' as const }, { text: m.text, tone: 'dim' as const }] : [])]

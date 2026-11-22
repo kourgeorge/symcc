@@ -685,7 +685,7 @@ test('T-715: Enter on a train (terminal) or a click on it (VS Code) opens that t
 // as running scouts in the view (T-808); a click on the mark opens the Scouts tab.
 const RUNS = [{ name: 'board-review', since: T0 - 60_000 }, { name: 'gaps-bot', since: T0 - 4 * 60_000 }]
 /** T-808: the running scouts as the view holds them (the header works the runs out from these) */
-const asScouts = (runs: readonly { name: string; since: number }[]) => runs.map(r => ({ name: r.name, running: true, last_run: new Date(r.since).toISOString() }))
+const asScouts = (runs: readonly { name: string; since: number }[]) => runs.map(r => ({ name: r.name, running: true, started: true, last_run: new Date(r.since).toISOString() }))
 test('T-770: liveScoutMark shows the names and times, then "N scouts", then "N", then nothing as the room shrinks', () => {
   expect(liveScoutMark(undefined, T0)).toBe(null)
   expect(liveScoutMark([], T0)).toBe(null)
@@ -747,8 +747,9 @@ for (const [runs, w, want] of [
 test('T-808: scoutsRunning works out the scout runs going now from the scouts, oldest first', () => {
   const at = (minAgo: number) => new Date(Date.now() - minAgo * 60_000).toISOString()
   const scouts = [
-    { name: 'board-review', last_run: at(1), running: true },
-    { name: 'gaps-bot', last_run: at(4), running: true },
+    { name: 'board-review', last_run: at(1), running: true, started: true },
+    { name: 'gaps-bot', last_run: at(4), running: true, started: true },
+    { name: 'queued', last_run: at(90), running: true },
     { name: 'idle', last_run: at(9), running: false },
     { name: 'never', last_run: null, running: true },
   ]
@@ -756,4 +757,21 @@ test('T-808: scoutsRunning works out the scout runs going now from the scouts, o
   expect(runs.map(r => r.name)).toEqual(['gaps-bot', 'board-review'])
   expect(runs[0]?.since).toBe(Date.parse(scouts[1]!.last_run!))
   expect(scoutsRunning(undefined)).toEqual([])
+})
+
+test('T-808: publish marks a scout started only when its agent runs; a queued one (running, not started yet) is left out of the live list', async () => {
+  S.root = '/repo'
+  const g = fakeHost()
+  const at = (minAgo: number) => new Date(Date.now() - minAgo * 60_000).toISOString()
+  scoutState.set('gaps-bot', { name: 'gaps-bot', every_minutes: 0, last_run: at(4), running: true })
+  scoutState.set('queued', { name: 'queued', every_minutes: 0, last_run: at(90), running: true })
+  scoutRuns.set('agent-g', 'gaps-bot')
+  try {
+    await publish(g.host, emptyBoard())
+    const scouts = (g.panel.view() as PaneView).scouts
+    expect(scoutsRunning(scouts).map(r => r.name)).toEqual(['gaps-bot'])
+  } finally {
+    scoutRuns.clear()
+    scoutState.clear()
+  }
 })

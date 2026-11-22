@@ -210,6 +210,8 @@ export type SymccScout = {
   warning?: string
   last_run: string | null
   running: boolean
+  /** set in the view while a running scout's agent has really started (not only queued) */
+  started?: boolean
   /** the model from the scout file's front matter, if set */
   model?: string
   /** the one-line subheader from the scout file's front matter (`summary:`), if set; else the page shows the first line of the instructions */
