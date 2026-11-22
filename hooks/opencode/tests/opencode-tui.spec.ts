@@ -1440,7 +1440,8 @@ test('T-562: the Settings tab opens the Roles and Kinds pages from view.json; a 
   expect(l).toContain('Roles')
   expect(list.ids).toEqual(['role:general', 'role:checker', 'role:tester', 'role:oops'])
   expect(list.selected).toBe('role:tester')
-  expect(l.find(x => x.includes('tester'))).toMatch(/^› tester  replaced, off · My tester/)
+  // T-871: a replaced role says what it changed
+  expect(l.find(x => x.includes('tester'))).toMatch(/^› tester  replaced, off · description, model, skills, checklist · My tester/)
   expect(l.find(x => x.includes('general'))).toContain('built-in · Any task')
   expect(l.find(x => x.includes('oops'))).toContain("— your file can't be read: no description")
   expect(list.hits[l.findIndex(x => x.includes('tester'))]).toEqual({ page: 'role:tester' })
@@ -1448,16 +1449,26 @@ test('T-562: the Settings tab opens the Roles and Kinds pages from view.json; a 
   // a role's page: its model, skills, checklist and file; o turns it on (it is off), r resets it
   const page = panelLines(f, { tab: 'settings', opened: 'role:tester', cursor: 0 }, NOW, 140)
   const p = page.lines.map(lineText)
-  expect(p).toContain('tester · replaced, off')
-  expect(p).toContain('My tester')
+  // T-871: the shared page header (‹ [Roles] and its place, its name and description, its state, its buttons, a rule)
+  expect(p[0]).toMatch(/^‹ \[Roles\] +tester · ‹ 3 of 3 ›$/)
+  expect(p[1]).toBe('tester  My tester')
+  expect(p[2]).toMatch(/^replaced · 5 changes +off$/)
+  expect(p[3]).toMatch(/^\[Edit\] \[Prompt\] +\[Reset to built-in\] +\[Turn on\]$/)
+  expect(p).toContain('Changed from built-in')
+  expect(p).toContain("  model: (session's model) → opus")
+  expect(p).toContain('  checklist: 3 lines changed')
+  expect(p).toContain('    − Test it.')
+  expect(p).toContain('    + Run them twice.')
   expect(p).toContain('  opus')
   expect(p).toContain('  tdd')
   expect(p).toContain('  Run them twice.')
   expect(p).toContain('  .symcc/roles/tester.md')
-  expect(panelKeys(f, 'role:tester', 'settings').map(k => k.word)).toEqual(['edit', 'the prompt it goes in', 'turn on', 'reset to built-in', 'back'])
-  expect(page.lines.at(-1)!.find(x => x.text === 'o turn on')?.hit).toEqual({ key: 'o' })
+  // no key line at the bottom: the header's buttons press the keys
+  expect(panelKeys(f, 'role:tester', 'settings')).toEqual([])
+  expect(page.lines.flat().find(x => x.text === '[Turn on]')?.hit).toEqual({ key: 'o' })
+  expect(page.lines.flat().find(x => x.text === '[Reset to built-in]')?.hit).toEqual({ key: 'r' })
   // general can't be turned off; the checker role says the checker setting runs it; a broken one can only be fixed
-  expect(panelKeys(f, 'role:general', 'settings').map(k => k.word)).toEqual(['edit', 'the prompt it goes in', 'back'])
+  expect(panelKeys(f, 'role:general', 'settings')).toEqual([])
   expect(panelLines(f, { tab: 'settings', opened: 'role:checker', cursor: 0 }, NOW, 200).lines.map(lineText).some(x => x.includes('the checker setting runs it (Settings → checker, now on)'))).toBe(true)
   expect(panelLines(f, { tab: 'settings', opened: 'role:oops', cursor: 0 }, NOW, 140).lines.map(lineText)).toContain('Fix the file by hand: .symcc/roles/oops.md.')
   // the Kinds page and a kind's page
@@ -1515,6 +1526,10 @@ test('T-562: startTui: Settings opens Roles, a role\'s page turns it on and rese
   expect(board.state().opened).toBe('role:tester')
   expect(lines()).toContain('  Run them twice.')
   await board.press('o', 'ses_1')
+  // T-871: r asks first; Cancel sends nothing, Yes resets
+  answers.select.push('no')
+  await board.press('r', 'ses_1')
+  answers.select.push('yes')
   await board.press('r', 'ses_1')
   // b: back to the Roles page, then to the Settings list
   await board.press('back', 'ses_1')
@@ -2544,17 +2559,20 @@ test('T-685: every board screen has Claude Code\'s buttons: the tab row, the lis
 
   // a role's and a kind's page: Claude Code's buttons in its order (Back, Edit, See the prompt, Turn off / on, Reset to built-in, Remove)
   const buttonRow = (opened: string) => texts({ tab: 'settings', opened }).find(l => l.startsWith('[ Back ]'))
-  expect(buttonRow('role:tester')).toBe('[ Back ] [ Edit ] [ See the prompt ] [ Turn on ] [ Reset to built-in ]')
-  expect(buttonRow('role:general')).toBe('[ Back ] [ Edit ] [ See the prompt ]')
-  expect(buttonRow('role:checker')).toBe('[ Back ] [ Edit ] [ See the prompt ]')
+  // T-871: a role's page has the shared page header: ‹ [Roles] is its Back, its buttons are one row under its state
+  const headRow = (opened: string) => texts({ tab: 'settings', opened }).find(l => l.startsWith('[Edit]'))?.replace(/ {2,}/g, ' ')
+  expect(headRow('role:tester')).toBe('[Edit] [Prompt] [Reset to built-in] [Turn on]')
+  expect(headRow('role:general')).toBe('[Edit] [Prompt]')
+  expect(headRow('role:checker')).toBe('[Edit] [Prompt]')
+  expect(texts({ tab: 'settings', opened: 'role:tester' })[0]).toMatch(/^‹ \[Roles\]/)
   // a broken file with no built-in's name: only Remove (T-706)
   expect(buttonRow('role:oops')).toBe('[ Back ] [ Remove ]')
   expect(buttonRow('kind:bug')).toBe('[ Back ] [ Edit ] [ Turn off ] [ Reset to built-in ]')
   expect(buttonRow('kind:change')).toBe('[ Back ] [ Edit ]')
   // the buttons stay at the top with the page's name
   const role = draw({ tab: 'settings', opened: 'role:tester' })
-  expect(role.lines.slice(0, role.fixed).map(lineText)).toContain('[ Back ] [ Edit ] [ See the prompt ] [ Turn on ] [ Reset to built-in ]')
-  expect(role.lines.flat().filter(s => s.text.startsWith('[ ') && s.hit).map(s => s.hit)).toEqual([{ key: 'back' }, { key: 'e' }, { key: 'p' }, { key: 'o' }, { key: 'r' }])
+  expect(role.lines.slice(0, role.fixed).map(lineText).some(l => l.startsWith('[Edit] [Prompt]'))).toBe(true)
+  expect(role.lines.flat().filter(s => /^\[(Edit|Prompt|Turn on|Reset to built-in)\]$/.test(s.text) && s.hit).map(s => s.hit)).toEqual([{ key: 'e' }, { key: 'p' }, { key: 'r' }, { key: 'o' }])
   // the prompt page (Claude Code's See the prompt): view only, Back and the role's other prompts, its text with the slot marked
   const prompt = draw({ tab: 'settings', opened: 'prompt:tester:change' })
   const pt = prompt.lines.map(lineText)
@@ -2672,14 +2690,15 @@ test('T-685: in the TUI a click on each of those buttons does exactly what its k
   expect((await same(toOrgMem, '[Live]', 'back')).state).toEqual({ ...board.state(), tab: 'live', opened: '' })
   // org-mem's Delete (x): asks, then deletes the note under the cursor (the newest)
   expect((await same(toOrgMem, '[Delete]', 'x', { select: ['yes'] })).sent).toEqual([{ sessionID: 's', name: 'symcc-settings', text: `orgmem delete 3 ${orgMemNoteKey('the type check is separate')}` }])
-  // a role's page: Back, See the prompt, Turn on, Reset to built-in
+  // a role's page (T-871: the shared page header): ‹ [Roles], Prompt, Turn on, Reset to built-in (asks first)
   const tester = () => toSettings('4 roles', 'My tester')
   await tester()
   expect(board.state().opened).toBe('role:tester')
-  expect((await same(tester, '[ Back ]', 'back')).state.opened).toBe('roles')
-  expect((await same(tester, '[ See the prompt ]', 'p')).state.opened).toBe('prompt:tester:change')
-  expect((await same(tester, '[ Turn on ]', 'o')).sent).toEqual([{ sessionID: 's', name: 'symcc-settings', text: 'role tester on' }])
-  expect((await same(tester, '[ Reset to built-in ]', 'r')).sent).toEqual([{ sessionID: 's', name: 'symcc-settings', text: 'role tester reset' }])
+  expect((await same(tester, '[Roles]', 'back')).state.opened).toBe('roles')
+  expect((await same(tester, '[Prompt]', 'p')).state.opened).toBe('prompt:tester:change')
+  expect((await same(tester, '[Turn on]', 'o')).sent).toEqual([{ sessionID: 's', name: 'symcc-settings', text: 'role tester on' }])
+  expect((await same(tester, '[Reset to built-in]', 'r', { select: ['yes'] })).sent).toEqual([{ sessionID: 's', name: 'symcc-settings', text: 'role tester reset' }])
+  expect((await same(tester, '[Reset to built-in]', 'r', { select: ['no'] })).sent).toEqual([])
   // a kind's page: Back, Turn off, Reset to built-in
   const bug = () => toSettings('2 kinds', 'A bug to fix')
   expect((await same(bug, '[ Back ]', 'back')).state.opened).toBe('kinds')
@@ -3186,10 +3205,11 @@ test('T-700: the board header (banner, tests/limits line, drive warning, tabs) s
     const t = texts(c)
     expect([c, header(t)]).toEqual([c, none])
     // a task's, scout's or org-mem page starts with its header (T-751, T-790): "‹ [Tasks]", "‹ [Scouts]" or "‹ [Live]" (its Back), then its title
-    const head = page === 'task' || page === 'scout' || page === 'orgmem' ? 1 : 0
+    // (T-871: and a role's page, "‹ [Roles]")
+    const head = page === 'task' || page === 'scout' || page === 'orgmem' || page === 'role' ? 1 : 0
     if (title) expect([c, t[head]!.includes(title)]).toEqual([c, true])
     // the footer (its rule and key hints) and the page's Back button stay
-    expect([c, t.some(l => /^─+$/.test(l)), t.some(l => l.startsWith('[ Back') || l.includes(' [ Back') || /^‹ \[(Tasks|Scouts|Live)\]/.test(l))]).toEqual([c, true, true])
+    expect([c, t.some(l => /^─+$/.test(l)), t.some(l => l.startsWith('[ Back') || l.includes(' [ Back') || /^‹ \[(Tasks|Scouts|Live|Roles)\]/.test(l))]).toEqual([c, true, true])
   }
 })
 
@@ -3210,13 +3230,14 @@ test('T-706: a role\'s and a kind\'s page draw Claude Code\'s Edit and Remove (i
   const W = 140
   const texts = (c: Partial<PanelChoice>) => panelLines(f, { opened: '', cursor: 0, ...c }, NOW, W)
   const buttons = (opened: string) => texts({ tab: 'settings', opened }).lines.find(l => lineText(l).startsWith('[ Back ]'))!
-  // an added role: Claude Code's rolePage with source "added": Back, Edit, See the prompt, Turn off, Remove
-  expect(lineText(buttons('role:docs'))).toBe('[ Back ] [ Edit ] [ See the prompt ] [ Turn off ] [ Remove ]')
-  expect(buttons('role:docs').filter(s => s.hit).map(s => s.hit)).toEqual([{ key: 'back' }, { key: 'e' }, { key: 'p' }, { key: 'o' }, { key: 'd' }])
-  // its keys are core's roleKeys with what Claude Code's page passes for it
-  expect(panelKeys(f, 'role:docs', 'settings')).toEqual(roleKeys({ canEdit: true, canOff: true, off: false, canReset: false, canRemove: true, canSeePrompt: true }))
+  // an added role (T-871: the shared page header, as Claude Code's rolePage): Edit, Prompt, Remove, Turn off; no key line
+  const head = (opened: string) => texts({ tab: 'settings', opened }).lines.find(l => lineText(l).startsWith('[Edit]'))!
+  expect(lineText(head('role:docs')).replace(/ {2,}/g, ' ')).toBe('[Edit] [Prompt] [Remove] [Turn off]')
+  expect(head('role:docs').filter(s => s.hit).map(s => s.hit)).toEqual([{ key: 'e' }, { key: 'p' }, { key: 'd' }, { key: 'o' }])
+  expect(texts({ tab: 'settings', opened: 'role:docs' }).lines.map(lineText)).toContain('  added: no built-in to compare')
+  expect(panelKeys(f, 'role:docs', 'settings')).toEqual([])
   // a replaced built-in has no Remove (Reset instead), as on Claude Code
-  expect(panelKeys(f, 'role:tester', 'settings')).toEqual(roleKeys({ canEdit: true, canOff: true, off: true, canReset: true, canRemove: false, canSeePrompt: true }))
+  expect(lineText(head('role:tester')).replace(/ {2,}/g, ' ')).toBe('[Edit] [Prompt] [Reset to built-in] [Turn on]')
   // a broken role file with no built-in's name: Claude Code's brokenRolePage: Back and Remove
   expect(panelKeys(f, 'role:oops', 'settings')).toEqual(roleKeys({ canEdit: false, canOff: false, off: false, canReset: false, canRemove: true }))
   // an added kind: Back, Edit, Turn off, Remove
@@ -3282,7 +3303,7 @@ test('T-706: Edit opens Claude Code\'s edit page: "<name> editing", where Save w
   expect(k.ids).toEqual(['edit:save', 'edit:cancel', 'box:description', 'box:body'])
   expect(k.lines.map(lineText).slice(0, 3)).toEqual(['chore editing', 'save writes .symcc/kinds/chore.md', '[ Save ] [ Cancel (x) ]'])
   // an edit mode for another page is not drawn
-  expect(panelLines(f, { tab: 'settings', opened: 'role:docs', cursor: 0, edit }, NOW, 140).lines.map(lineText)).toContain('[ Back ] [ Edit ] [ See the prompt ] [ Turn off ] [ Remove ]')
+  expect(panelLines(f, { tab: 'settings', opened: 'role:docs', cursor: 0, edit }, NOW, 140).lines.map(lineText).some(l => l.startsWith('[Edit] [Prompt]'))).toBe(true)
   // the commands they send
   expect(actionCommand({ kind: 'def', def: 'role', name: 'docs', action: 'remove' })).toEqual({ name: 'symcc-settings', text: 'role docs remove' })
   expect(actionCommand({ kind: 'def-add', def: 'kind', name: 'chore' })).toEqual({ name: 'symcc-settings', text: 'kind chore add' })
@@ -3351,11 +3372,11 @@ test('T-706: startTui: Remove (d, or a click) asks Claude Code\'s question first
     t.asked.length = 0
     t.answers.select.push('no')
     if (how === 'key') await t.board.press('d', 's')
-    else await t.click('[ Remove ]')
+    else await t.click('[Remove]')
     expect([how, t.asked, t.sent, t.board.state().opened]).toEqual([how, ['Remove role docs and delete .symcc/roles/docs.md?'], [], 'role:docs'])
     t.answers.select.push('yes')
     if (how === 'key') await t.board.press('d', 's')
-    else await t.click('[ Remove ]')
+    else await t.click('[Remove]')
     expect([how, t.sent, t.board.state().opened]).toEqual([how, [{ sessionID: 's', name: 'symcc-settings', text: 'role docs remove' }], 'roles'])
   }
   // a kind the same way; a replaced built-in has no Remove: d does nothing
@@ -3376,7 +3397,7 @@ test('T-706: startTui: Edit (e, or a click) opens the edit page; Enter or a clic
   const t = await tuiOn(addedViewFile())
   const tester = () => t.toSettings('5 roles', 'My tester')
   await tester()
-  await t.click('[ Edit ]')
+  await t.click('[Edit]')
   expect(t.lines()[0]).toBe('tester editing')
   // down to Model, Enter: a new model; a click on the Checklist box: a new checklist; Save
   await t.board.press('down', 's')

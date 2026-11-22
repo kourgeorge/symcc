@@ -17,6 +17,8 @@ import type { PaneParts } from './parts'
 import { row } from './arrows'
 import { claudeHost } from '../host'
 import { vsBadge, vsCallout, vsFooter, vsHref, vsLink, mdLink, vsSection } from './vscode'
+import { type PageHeader, vsPageHeader } from './page-header'
+import { type RolePageFacts, CHANGED_HEADING, changeLines, changesOfRole, roleListLabel } from '../../core/role-changes'
 
 /** The color of a "where it comes from" badge. */
 const SOURCE_TONE: Record<DefSource, string> = { 'built-in': 'inactive', replaced: 'suggestion', added: 'success' }
@@ -44,32 +46,33 @@ function kit($: $, pane: PaneParts) {
     const href = vsHref('page', `back/${key}`)
     return vsLink(vs, key, mdLink(`← ${to}`, href), [[href, onPress]])
   }
-  /** Where it comes from as small badges: " replaced " " off ", or " can't be read " for a broken file. */
-  const badges = (key: string, source: DefSource | undefined, off: boolean, broken = false) => (
+  /** Where it comes from as small badges: " replaced " " off ", or " can't be read " for a broken file; `said`: the source
+   *  badge's words when they say more ("replaced · model", T-871). */
+  const badges = (key: string, source: DefSource | undefined, off: boolean, broken = false, said?: string) => (
     <Text key={key} wrap="wrap">
-      {broken ? vsBadge(vs, `${key}-broken`, "can't be read", 'error') : source ? vsBadge(vs, `${key}-source`, source, SOURCE_TONE[source]) : null}
+      {broken ? vsBadge(vs, `${key}-broken`, "can't be read", 'error') : source ? vsBadge(vs, `${key}-source`, said ?? source, SOURCE_TONE[source]) : null}
       {off ? <Text key={`${key}-gap`}> </Text> : null}
       {off ? vsBadge(vs, `${key}-off`, 'off', 'warning') : null}
     </Text>
   )
   /** One row of a list: the name a link (dim when off), its badges, then dim wrapped lines. */
-  const listRow = (noun: 'role' | 'kind', name: string, source: DefSource | undefined, off: boolean, lines: RenderLine[], onPress: () => void, broken = false) => {
+  const listRow = (noun: 'role' | 'kind', name: string, source: DefSource | undefined, off: boolean, lines: RenderLine[], onPress: () => void, broken = false, said?: string) => {
     const href = vsHref(noun, name)
     return (
       <Box key={`vs-${noun}-${name}`} flexDirection="column">
         <Box key={`vs-${noun}-${name}-top`} flexDirection="row" flexWrap="wrap" columnGap={2}>
           {vsLink(vs, row(`${noun}Row:${name}`), off || broken ? mdLink(name, href) : `**${mdLink(name, href)}**`, [[href, onPress]], off || broken)}
-          {badges(`vs-${noun}-${name}-badges`, source, off, broken)}
+          {badges(`vs-${noun}-${name}-badges`, source, off, broken, said)}
         </Box>
         {(lines.filter(l => l && l[1]) as Exclude<RenderLine, false>[]).map(([k, text, color]) => plain(k, text, color))}
       </Box>
     )
   }
-  /** The confirm step of Remove: a box in the warning color, the one "Yes, remove" Button, and a Cancel link. */
-  const confirm = (key: string, what: string, yes: () => void, no: () => void) =>
+  /** The confirm step of Remove (or Reset): a box in the warning color, the one "Yes, remove" Button, and a Cancel link. */
+  const confirm = (key: string, what: string, yes: () => void, no: () => void, yesLabel = 'Yes, remove') =>
     vsCallout(vs, key, '⚠', what, 'warning', [
       <Box key={`${key}-yes-row`} flexDirection="row">
-        <pane.Button key={`${key.replace(/-box$/, '')}-yes`} label="Yes, remove" variant="primary" autoFocus onPress={yes} />
+        <pane.Button key={`${key.replace(/-box$/, '')}-yes`} label={yesLabel} variant="primary" autoFocus onPress={yes} />
       </Box>,
       links(`${key.replace(/-box$/, '')}-cancel`, [['Cancel', 'cancel', no]]),
     ])
@@ -142,7 +145,10 @@ export function rolesPageVs($: $, pane: PaneParts, roles: RoleDef[], builtIn: Ro
           const bad = brokenNamed(broken, r.name)
           if (bad) return brokenRow(bad)
           const off = !!r.off && !isCheckerRole(r.name)
-          return k.listRow('role', r.name, defSource(r.name, builtIn, project), off, [['about', r.description], !!r.warning && ['warning', r.warning!, 'warning'], isCheckerRole(r.name) && ['checker', 'run by the checker setting, never a task\'s role']], open(r.name))
+          const source = defSource(r.name, builtIn, project)
+          // T-871: a replaced role's badge says what it changed ("replaced · model")
+          const said = source ? roleListLabel(source, false, changesOfRole(r.name, builtIn, project)) : undefined
+          return k.listRow('role', r.name, source, off, [['about', r.description], !!r.warning && ['warning', r.warning!, 'warning'], isCheckerRole(r.name) && ['checker', 'run by the checker setting, never a task\'s role']], open(r.name), false, said)
         })}
         {broken.filter(b => !defNamed(roles, b.name)).map(brokenRow)}
       </Box>
@@ -155,44 +161,34 @@ export function rolesPageVs($: $, pane: PaneParts, roles: RoleDef[], builtIn: Ro
   )
 }
 
-/** One role's page in VS Code (`checker`: whether the checker setting is on, for the checker role's note). */
-export function rolePageVs($: $, pane: PaneParts, r: RoleDef, source: DefSource, checker: boolean) {
+/** One role's page in VS Code (T-871): the shared page header (vsPageHeader, made by settings.tsx's roleHeader), what its
+ *  file changed from the built-in role (each difference as before → after, a checklist's changed lines only, the file's
+ *  date; Reset to built-in asks first), then its front matter and checklist. `run` sends a change and redraws. */
+export function rolePageVs($: $, pane: PaneParts, r: RoleDef, source: DefSource, facts: RolePageFacts, header: PageHeader, run: (input: Parameters<typeof changeRole>[1], after?: () => void) => () => void) {
   const k = kit($, pane)
   const { Box, Text, C, vs } = k
   const { Markdown } = vs
-  const run = (input: Parameters<typeof changeRole>[1], after?: () => void) => pane.act(async () => {
-    const res = await changeRole(claudeHost($), input)
-    if (res.ok && after) after()
-    roleView.confirmRemove = false
-    $.ui.toast(S.N.toast(res.text))
-    k.redraw()
-  })
   const isChecker = isCheckerRole(r.name)
-  const off = !!r.off && !isChecker
-  const canOff = r.name.toLowerCase() !== DEFAULT_ROLE && !isChecker
   const canReset = source === 'replaced'
   const canRemove = source === 'added'
   const set = (f: () => void) => () => (f(), k.redraw())
+  const cancel = set(() => ((roleView.confirmRemove = false), (roleView.confirmReset = false)))
   return (
     <Box key="vs-role-page" flexDirection="column" gap={1}>
-      <Box key="vs-role-top" flexDirection="column">
-        {k.back('role-back', 'Roles', set(() => ((roleView.open = ''), (roleView.confirmRemove = false))))}
-        <Box key="vs-role-title" flexDirection="row" flexWrap="wrap" columnGap={2}>
-          <Text key="name" wrap="wrap" bold color={C(off ? 'inactive' : 'claude')}>{r.name}</Text>
-          {k.badges('vs-role-badges', source, off)}
+      {vsPageHeader(pane, header)}
+      {r.warning || isChecker ? (
+        <Box key="vs-role-notes" flexDirection="column">
+          {r.warning ? k.plain('vs-role-warning', r.warning, 'warning') : null}
+          {isChecker ? k.plain('role-checker-setting', `Never a task's role, and not turned on or off here: the checker setting runs it (Settings → checker, now ${facts.checker ? 'on' : 'off'}).`) : null}
         </Box>
-        {k.plain('vs-role-about', r.description, 'text', true)}
-        {r.warning ? k.plain('vs-role-warning', r.warning, 'warning') : null}
-        {isChecker ? k.plain('role-checker-setting', `Never a task's role, and not turned on or off here: the checker setting runs it (Settings → checker, now ${checker ? 'on' : 'off'}).`) : null}
-      </Box>
-      {k.links('role-actions', [
-        ['Edit', 'edit', set(() => ((roleView.draft = roleDraftOf(r)), (roleView.confirmRemove = false)))],
-        ['See the prompt', 'prompt', set(() => ((roleView.prompt = promptsOfRole(r.name)[0]!), (roleView.confirmRemove = false)))],
-        canOff && [r.off ? 'Turn on' : 'Turn off', 'off', run({ action: r.off ? 'on' : 'off', name: r.name })],
-        canReset && ['Reset to built-in', 'reset', run({ action: 'reset', name: r.name })],
-        canRemove && ['Remove', 'remove', set(() => (roleView.confirmRemove = true))],
-      ])}
-      {roleView.confirmRemove && canRemove ? k.confirm('role-remove-box', `Remove role ${r.name} and delete ${roleFileOf(r.name)}?`, run({ action: 'remove', name: r.name }, () => (roleView.open = '')), set(() => (roleView.confirmRemove = false))) : null}
+      ) : null}
+      {roleView.confirmRemove && canRemove ? k.confirm('role-remove-box', `Remove role ${r.name} and delete ${roleFileOf(r.name)}?`, run({ action: 'remove', name: r.name }, () => (roleView.open = '')), cancel) : null}
+      {source !== 'built-in'
+        ? k.section('role-changes', CHANGED_HEADING, [
+            ...changeLines(source, facts.changes, facts.at).map((l, i) => k.plain(`role-change-${i}`, l.text.trim(), l.tone)),
+            roleView.confirmReset && canReset ? k.confirm('role-reset-box', `Reset role ${r.name} to the built-in one and delete ${roleFileOf(r.name)}?`, run({ action: 'reset', name: r.name }), cancel, 'Yes, reset') : null,
+          ])
+        : null}
       {k.section('model', 'Model', [k.plain('vs-model', r.model || "(none: the session's model)", r.model ? 'text' : 'inactive')])}
       {k.section('skills', 'Skills', [k.plain('vs-skills', r.skills.join(', ') || '(none)', r.skills.length ? 'text' : 'inactive')])}
       {k.section('tools', 'Tools', [k.plain('vs-tools', (r.tools ?? []).join(', ') || '(none: the base tools only)', r.tools?.length ? 'text' : 'inactive')])}

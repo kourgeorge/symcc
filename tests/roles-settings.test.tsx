@@ -141,9 +141,9 @@ test('Settings lists every role: built-in, replaced, added and off, each with it
   const label = async (name: string) => (await ui.find({ key: `roleRow:${name}` }))?.props.label
   expect(await label('general')).toBe('general: built-in')
   expect(await label('security')).toBe('security: built-in')
-  expect(await label('tester')).toBe('tester: replaced')
+  expect(await label('tester')).toBe('tester: replaced · description, model, checklist')
   expect(await label('mobile')).toBe('mobile: added')
-  expect(await label('docs')).toBe('docs: replaced, off')
+  expect(await label('docs')).toBe('docs: replaced, off · checklist')
   expect(await ui.find({ type: 'Text', text: /^ · my own tests$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /^ · phone apps$/ })).toBeDefined()
   expect(await ui.find({ key: 'role-new' })).toBeDefined()
@@ -185,7 +185,13 @@ test('Reset shows only for a replaced built-in, Remove only for an added role (a
   const ui = await settings($)
   await ui.press({ key: 'roleRow:tester' })
   expect(await ui.find({ key: 'role-remove' })).toBeUndefined()
+  // T-871: Reset asks first; Cancel keeps the file
   await ui.press({ key: 'role-reset' })
+  expect('tester.md' in mine).toBe(true)
+  await ui.press({ key: 'role-reset-cancel' })
+  expect(await ui.find({ key: 'role-reset-yes' })).toBeUndefined()
+  await ui.press({ key: 'role-reset' })
+  await ui.press({ key: 'role-reset-yes' })
   expect('tester.md' in mine).toBe(false)
   expect(await ui.find({ key: 'role-reset' })).toBeUndefined()
   await ui.press({ key: 'role-back' })
@@ -282,7 +288,7 @@ test("a role whose name: line differs from its file name shows a mark on its row
   stateOf(on, VIEW)
   fakeRoles(on, { 'tester.md': '---\nname: qa\ndescription: my own tests\n---\n' })
   const ui = await settings($)
-  expect((await ui.find({ key: 'roleRow:tester' }))?.props.label).toBe('tester: replaced ⚠')
+  expect((await ui.find({ key: 'roleRow:tester' }))?.props.label).toBe('tester: replaced · description, model, checklist ⚠')
   expect((await ui.find({ key: 'roleRow:docs' }))?.props.label).toBe('docs: built-in')
   expect(await ui.find({ type: 'Text', text: /^ ⚠$/ })).toBeDefined()
   await ui.press({ key: 'roleRow:tester' })
@@ -344,7 +350,9 @@ test('a role page lists the placeholders its checklist can use, and shows the bu
   for (const p of ['task_id', 'title', 'files', 'test_command', 'folder', 'branch', 'kind']) expect(await ui.find({ type: 'Text', text: `{{${p}}}` })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /the "these must pass" line/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: '{{role}}' })).toBeUndefined()
-  expect(await ui.find({ type: 'Text', text: /p the prompt it goes in/ })).toBeDefined()
+  // T-871: no key line at the bottom; the header's [Prompt] opens it
+  expect(await ui.find({ type: 'Text', text: /p the prompt it goes in/ })).toBeUndefined()
+  expect((await ui.find({ key: 'role-prompt' }))?.props.label).toBe('Prompt')
   // See the prompt: the change prompt, view only, with the {{role}} slot marked; it can switch to the investigation prompt
   await ui.press({ key: 'role-prompt' })
   expect(await ui.find({ type: 'Text', text: /built-in, view only/ })).toBeDefined()
@@ -356,5 +364,41 @@ test('a role page lists the placeholders its checklist can use, and shows the bu
   expect(await ui.find({ type: 'Text', text: /role tester's checklist goes here/ })).toBeDefined()
   await ui.press({ key: 'role-prompt-back' })
   expect(await ui.find({ key: 'role-edit' })).toBeDefined()
+  await ui.unmount()
+})
+
+test('T-871: a role page has the shared header and no key line; a replaced role says what changed from the built-in one, a checklist only its changed lines', PANEL, async ($, on) => {
+  stateOf(on, VIEW)
+  fakeRoles(on, {
+    'docs.md': '---\ndescription: writes the docs\nmodel: sonnet\n---\n- plain words\n',
+    'tester.md': '---\ndescription: writes tests\nmodel: sonnet\n---\n- cover errors\n- cover empty input\n',
+    'mobile.md': '---\ndescription: phone apps\n---\n',
+  })
+  const ui = await settings($)
+  // the Roles list says what a replaced role changed
+  expect((await ui.find({ key: 'roleRow:docs' }))?.props.label).toBe('docs: replaced · model')
+  expect((await ui.find({ key: 'roleRow:tester' }))?.props.label).toBe('tester: replaced · checklist')
+  await ui.press({ key: 'roleRow:docs' })
+  // the shared page header: Back to Roles, its state, its buttons; no key line at the bottom
+  expect(await ui.find({ key: 'page-header' })).toBeDefined()
+  expect((await ui.find({ key: 'role-back' }))?.props.label).toBe('Roles')
+  expect(await ui.find({ type: 'Text', text: 'replaced · 1 change' })).toBeDefined()
+  expect((await ui.find({ key: 'role-reset' }))?.props.label).toBe('Reset to built-in')
+  expect(await ui.find({ type: 'Text', text: /b back/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /r reset to built-in/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: '▍Changed from built-in' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: "  model: (session's model) → sonnet" })).toBeDefined()
+  // a changed checklist: only its changed line, not the whole text
+  await ui.press({ key: 'role-back' })
+  await ui.press({ key: 'roleRow:tester' })
+  expect(await ui.find({ type: 'Text', text: 'replaced · 1 change' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '  checklist: 1 line changed' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '    + - cover empty input' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^ {4}[−+] - cover errors$/ })).toBeUndefined()
+  // an added role has nothing to compare
+  await ui.press({ key: 'role-back' })
+  await ui.press({ key: 'roleRow:mobile' })
+  expect(await ui.find({ type: 'Text', text: 'added' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '  added: no built-in to compare' })).toBeDefined()
   await ui.unmount()
 })

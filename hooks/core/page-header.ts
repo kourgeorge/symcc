@@ -26,8 +26,8 @@ export type { ActionGroup }
 export { GROUP_ORDER }
 
 /** The tab a page was opened from: its Back button names it ("‹ [Tasks]", "‹ [Live]", "‹ [Scouts]"). */
-export type PageFrom = 'tasks' | 'live' | 'scouts'
-export const FROM_WORD: Record<PageFrom, string> = { tasks: 'Tasks', live: 'Live', scouts: 'Scouts' }
+export type PageFrom = 'tasks' | 'live' | 'scouts' | 'roles'
+export const FROM_WORD: Record<PageFrom, string> = { tasks: 'Tasks', live: 'Live', scouts: 'Scouts', roles: 'Roles' }
 /** The Back button's words, the tab's name: "Tasks" (drawn "[Tasks]" after the arrow, see whereLine). */
 export const backText = (from: PageFrom): string => FROM_WORD[from]
 /** The arrow before the Back button: "‹ " (not part of the button, T-775). */
@@ -262,6 +262,18 @@ export function scoutButtons(sc: Pick<SymccScout, 'running' | 'paused'>): Header
     { id: 'scout-edit', label: EDIT_WORD, group: 'task', key: 'e' },
     { id: 'scout-pause', label: sc.paused ? 'Resume' : 'Pause', group: 'page', key: 'p' },
     ...(sc.paused ? [{ id: 'scout-paused', label: '⏸ paused', group: 'page' as const, fact: true }] : []),
+  ]
+}
+
+/** The buttons of a role's page header (T-871): Edit and Prompt, Turn off or on, Reset to built-in (a replaced role) and
+ *  Remove (an added one); the keys are the ones the page has always had (e, p, o, r, d). */
+export function roleButtons(o: { canOff: boolean; off: boolean; canReset: boolean; canRemove: boolean; canSeePrompt: boolean }): HeaderButton[] {
+  return [
+    { id: 'role-edit', label: EDIT_WORD, group: 'task', key: 'e' },
+    ...(o.canSeePrompt ? [{ id: 'role-prompt', label: 'Prompt', group: 'task' as const, key: 'p' }] : []),
+    ...(o.canOff ? [{ id: 'role-off', label: o.off ? 'Turn on' : 'Turn off', group: 'page' as const, key: 'o' }] : []),
+    ...(o.canReset ? [{ id: 'role-reset', label: 'Reset to built-in', group: 'danger' as const, key: 'r' }] : []),
+    ...(o.canRemove ? [{ id: 'role-remove', label: 'Remove', group: 'danger' as const, key: 'd' }] : []),
   ]
 }
 
