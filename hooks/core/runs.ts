@@ -101,7 +101,7 @@ export function keepAgentIds<T extends SymccRun[] | undefined>(runs: T): T {
 
 const isIso = (v: unknown): v is string => typeof v === 'string' && Number.isFinite(Date.parse(v))
 
-const END_REASONS: readonly string[] = ['finished', 'restarted', 'stopped', 'timed out', 'asked']
+const END_REASONS: readonly string[] = ['finished', 'restarted', 'stopped', 'timed out', 'asked', 'dropped']
 
 /** T-774: `a` as a good agent entry (its bad parts dropped; its id too when `old` or bad), or null when it can't be one (no good kind or start). */
 function cleanAgent(a: unknown, old: boolean): SymccRunAgent | null {
@@ -138,7 +138,7 @@ export const agentsOnTask = (t: { runs?: SymccRun[] } | undefined): SymccRunAgen
 export const onTask = (t: { runs?: SymccRun[] } | undefined, id: string): boolean => !!id && agentsOnTask(t).some(a => a.id === id)
 
 /** T-805: try `r`'s worker: its last worker entry that a restart symcc did itself did not stop. */
-const workerOf = (r: SymccRun | undefined): SymccRunAgent | undefined => agentsOf(r).findLast(a => a.kind === 'worker' && a.ended_by !== 'restarted')
+const workerOf = (r: SymccRun | undefined): SymccRunAgent | undefined => agentsOf(r).findLast(a => a.kind === 'worker' && a.ended_by !== 'restarted' && a.ended_by !== 'dropped')
 
 /** T-805: the agent id of the last worker started on task `t` (its last try's worker; none after a restart until the next worker starts). */
 export const workerIdOf = (t: { runs?: SymccRun[] } | undefined): string | undefined => workerOf(t?.runs?.at(-1))?.id
@@ -255,7 +255,8 @@ export const AGENT_MARK: Record<SymccRunAgent['kind'], string> = { worker: '▸'
  */
 export function agentLines(r: SymccRun, nowMs?: number): string[] {
   // an entry with no id (a stand-in made from an old try's sums, or on a try older than AGENT_TRIES_KEPT) has no line
-  return agentsOf(r).filter(a => a.id).map(a => {
+  // an entry marked "dropped" is an id kept from a try that was taken off (withoutOpenRun); it did not work on this one
+  return agentsOf(r).filter(a => a.id && a.ended_by !== 'dropped').map(a => {
     // A checker starts after the worker's hand-back ended the try, so the try's end only caps an agent that began before it.
     const end = a.ended ?? (r.ended && Date.parse(r.ended) >= Date.parse(a.started) ? r.ended : undefined)
     const ms = runMs({ started: a.started, ...(end ? { ended: end } : {}) }, nowMs)
@@ -390,7 +391,7 @@ export function withoutOpenRun(runs: SymccRun[] | undefined): SymccRun[] | undef
   const open = runs.at(-1)!
   const out = runs.slice(0, -1)
   const prev = out.at(-1)
-  const moved = agentsOf(open).filter(a => isAgentId(a.id) && !agentsOf(prev).some(b => b.id === a.id)).map((a): SymccRunAgent => ({ id: a.id!, kind: a.kind, started: a.started, ended: a.ended ?? prev?.ended ?? a.started, ...(a.ended_by ? { ended_by: a.ended_by } : {}) }))
+  const moved = agentsOf(open).filter(a => isAgentId(a.id) && !agentsOf(prev).some(b => b.id === a.id)).map((a): SymccRunAgent => ({ id: a.id!, kind: a.kind, started: a.started, ended: a.started, ended_by: 'dropped' }))
   if (!prev || !moved.length) return out
   return keepAgentIds([...out.slice(0, -1), { ...prev, agents: [...agentsOf(prev), ...moved] }])
 }

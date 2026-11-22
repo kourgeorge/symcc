@@ -7,7 +7,8 @@ import { doctor } from '../hooks/app/doctor'
 import { load, change } from '../hooks/app/store'
 import { migrateIfOld, forgetMigrationFailure } from '../hooks/app/migrate-data'
 import { S, leadQueue } from'../hooks/app/state'
-import { oldDataRows } from '../hooks/core/old-data'
+import { oldDataRows, migrateRunAgents } from '../hooks/core/old-data'
+import type { SymccRun } from '../types'
 import { stillOld } from './old-data-fixture'
 import type { HostFileEntry, HostRunResult } from '../hooks/host'
 import { test } from './reset'
@@ -333,4 +334,11 @@ test('T-805: fix migrate-data gives an old try its agent entries (worker: tokens
   for (const r of saved.runs) expect(['tokens', 'checker_tokens', 'cost', 'agent', 'checkers'].filter(k => k in r)).toEqual([])
   // once migrated, nothing is old any more
   expect(await doctor(w.host, '')).not.toContain('keep tokens, cost or agent ids')
+})
+
+test('T-805: migrating an old try keeps a cost of 0', () => {
+  const m = migrateRunAgents({ id: 'T-2', status: 'done', runs: [{ started: T, ended: E, tokens: { input: 100 }, cost: 0 }] })!
+  const r = (m.runs as SymccRun[])[0]!
+  expect(tryCost(r)).toBe(0)
+  expect(tryTokens(r)).toEqual({ input: 100 })
 })

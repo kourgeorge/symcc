@@ -89,7 +89,7 @@ export function migrateRunAgents(t: Raw): Raw | null {
     const workerTok = restTok && restChk ? addTokens(restTok, restChk, -1) : restTok
     const give = (kind: OldAgent['kind'], tok: ReturnType<typeof cleanTokens>, usd?: number) => {
       const has = !!tok && tokenCount(tok) > 0
-      if (!has && !usd) return
+      if (!has && usd === undefined) return
       let i = agents.findLastIndex(a => a.kind === kind && a.ended_by !== 'restarted')
       if (i < 0) i = agents.findLastIndex(a => a.kind === kind)
       if (i < 0) {
@@ -97,7 +97,7 @@ export function migrateRunAgents(t: Raw): Raw | null {
         i = agents.length - 1
       }
       const a = agents[i]!
-      agents = agents.map((x, k) => (k === i ? { ...a, ...(has ? { tokens: addTokens(a.tokens, tok) } : {}), ...(usd ? { cost: (a.cost ?? 0) + usd } : {}) } : x))
+      agents = agents.map((x, k) => (k === i ? { ...a, ...(has ? { tokens: addTokens(a.tokens, tok) } : {}), ...(usd !== undefined ? { cost: (a.cost ?? 0) + usd } : {}) } : x))
     }
     give('worker', workerTok, restCost)
     give('checker', restChk && tokenCount(restChk) > 0 ? restChk : undefined)

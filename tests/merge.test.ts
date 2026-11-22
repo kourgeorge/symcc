@@ -16,7 +16,7 @@ import { tellLead, noteForLead, meanwhileText } from '../hooks/app/tell'
 import { saidNeedsYou, findPlayers, playable, playsFor, sayNext, sayDone, WIN_TEXT_VAR } from '../hooks/app/voice'
 import { workerFinished, check, pump, startWorker, lateHandBack, WORKER_PROMPT, workerQuestionText, type TurnEnd, notThisTry, unclaimed } from '../hooks/app/workers'
 import { stopOrphans, formerWorker } from '../hooks/app/cleanup'
-import { goOnRun, selfRestart, endRun, runMs, freshTry, withoutOpenRun, type TryRun } from '../hooks/core/runs'
+import { goOnRun, selfRestart, endRun, runMs, freshTry, withoutOpenRun, agentLines, type TryRun } from '../hooks/core/runs'
 import { statsData } from '../hooks/core/stats'
 import { setSymcc, setBoardMode } from '../hooks/app/board-mode'
 import { taskStage, stageText } from '../hooks/core/details'
@@ -6704,4 +6704,13 @@ test('T-547: a board with test_rerun set is converted once: a task waiting for i
   const done = readOld(JSON.stringify({ tasks: [{ ...base, id: 'T-4', status: 'done', question: null, note: 'merged', test_rerun: 1 }] }))
   expect(find(done.board, 'T-4')!.status).toBe('done')
   expect('test_rerun' in find(done.board, 'T-4')!).toBe(false)
+})
+
+test('T-805: taking off a fresh try keeps its worker id on the try before, with no line and no say in who the worker is', () => {
+  const o1 = endRun(withAgentStart(startRun([], '2026-11-20T10:00:00.000Z'), 'worker', 'w1', '2026-11-20T10:00:01.000Z'), '2026-11-20T10:30:00.000Z')
+  const o2 = withAgentStart(startRun(o1, '2026-11-20T12:00:00.000Z'), 'worker', 'wx', '2026-11-20T12:00:01.000Z')
+  const back = withoutOpenRun(o2)!
+  expect(onTask({ runs: back }, 'wx')).toBe(true)
+  expect(workerIdOf({ runs: back })).toBe('w1')
+  expect(agentLines(back[0]!).join('|')).not.toContain('wx')
 })

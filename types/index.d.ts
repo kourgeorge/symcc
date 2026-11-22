@@ -79,7 +79,7 @@ export type SymccRunAgent = {
 export type SymccTokens = { input?: number; output?: number; cache_write?: number; cache_read?: number; unsplit?: number }
 
 /** How a try ended: its work was checked, it was stopped and sent back to work, stopped, ran too long, or the worker asked something. */
-export type SymccRunEnd = 'finished' | 'restarted' | 'stopped' | 'timed out' | 'asked'
+export type SymccRunEnd = 'finished' | 'restarted' | 'stopped' | 'timed out' | 'asked' | 'dropped'
 
 /**
  * One event in a task's history: when it happened (`at`, an ISO time; missing on an entry converted from an old board
