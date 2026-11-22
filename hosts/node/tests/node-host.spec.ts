@@ -122,6 +122,11 @@ async function filesUnder(dir: string): Promise<string[]> {
   return out
 }
 
+test('T-870: runCommand gives 127 only for a command that does not exist, and 124 for a timeout', async () => {
+  expect((await runCommand(['symcc-no-such-command-t870'], { cwd: '/' })).exitCode).toBe(127)
+  expect((await runCommand(['sleep', '5'], { cwd: '/', timeoutMs: 100 })).exitCode).toBe(124)
+})
+
 test('hosts/node/ imports nothing from Claude Code or hooks/claude/', async () => {
   // the check itself catches each kind of import (the samples are built, so this file holds none of them as an import)
   const imp = (names: string, from: string) => `import ${names} from '${from}'`
