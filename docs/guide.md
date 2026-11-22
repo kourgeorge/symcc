@@ -595,8 +595,9 @@ always says what happened ("T-743 merged", not "Good news: …").
   whole chat. If the helper can't start, or does not finish within 60 seconds, symcc wakes the
   lead with the short "Starting ..." update above instead. Claude Code also sends the helper's
   "OK" to the lead's chat like an agent's hand-back, which would wake the lead; symcc drops that
-  one message (a `prompt.submit` hook, matched on the helper's name). Claude Code has no
-  option to silence an agent's completion notice, so this is the only way. Workers', checkers'
+  one message (a `prompt.submit` hook, matched on the helper's name). To avoid even that dropped
+  line, symcc stops the helper right after it starts (the TaskStop tool); its end still starts
+  the waiting agents, and the drop stays as a fallback if the stop comes too late. Workers', checkers'
   and scouts' hand-backs still arrive. OpenCode and the Node client start
   agents at once and need none of this.
 - **A new task:** "Added T-n  <short title>", then one line for what waits on what, if anything.
