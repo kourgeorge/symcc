@@ -68,13 +68,15 @@ export function migrateRunAgents(t: Raw): Raw | null {
 
     const ids = (id: unknown) => isAgentId(id) && agents.some(a => a.id === id)
     const last = ri === runs.length - 1
-    const mark = (kind: OldAgent['kind'], id: unknown, end?: string, by?: string) => {
+    // The times of an id kept alone are not known, so its entry is marked "dropped": the guard still finds the id, but
+    // the task page shows no made-up line for it.
+    const mark = (kind: OldAgent['kind'], id: unknown, end?: string) => {
       if (!isAgentId(id) || ids(id)) return
-      agents = [...agents, { id, kind, started, ...(end ? { ended: end } : {}), ...(by ? { ended_by: by } : {}) }]
+      agents = [...agents, { id, kind, started, ...(end ? { ended: end } : {}), ended_by: 'dropped' }]
     }
     const stops = (Array.isArray(restarts) ? restarts : []).filter(isObj)
-    for (const e of stops) mark('worker', e.agent, typeof e.at === 'string' ? e.at : ended, 'restarted')
     for (const id of stops.map(e => e.agent)) if (isAgentId(id)) agents = agents.map(a => (a.id === id ? { ...a, ended_by: 'restarted' } : a))
+    for (const e of stops) mark('worker', e.agent, typeof e.at === 'string' ? e.at : ended)
     mark('worker', agent, ended)
     for (const c of Array.isArray(checkers) ? checkers : []) mark('checker', c, ended)
     if (last && t.status === 'doing') {
@@ -90,7 +92,8 @@ export function migrateRunAgents(t: Raw): Raw | null {
     const give = (kind: OldAgent['kind'], tok: ReturnType<typeof cleanTokens>, usd?: number) => {
       const has = !!tok && tokenCount(tok) > 0
       if (!has && usd === undefined) return
-      let i = agents.findLastIndex(a => a.kind === kind && a.ended_by !== 'restarted')
+      let i = agents.findLastIndex(a => a.kind === kind && a.ended_by !== 'restarted' && a.ended_by !== 'dropped')
+      if (i < 0) i = agents.findLastIndex(a => a.kind === kind && a.ended_by !== 'restarted')
       if (i < 0) i = agents.findLastIndex(a => a.kind === kind)
       if (i < 0) {
         agents = [...agents, { kind, started: kind === 'worker' ? started : ended ?? started, ...(ended ? { ended } : {}) }]

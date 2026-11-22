@@ -7,6 +7,7 @@ import { doctor } from '../hooks/app/doctor'
 import { load, change } from '../hooks/app/store'
 import { migrateIfOld, forgetMigrationFailure } from '../hooks/app/migrate-data'
 import { S, leadQueue } from'../hooks/app/state'
+import { agentLines } from '../hooks/core/runs'
 import { oldDataRows, migrateRunAgents } from '../hooks/core/old-data'
 import type { SymccRun } from '../types'
 import { stillOld } from './old-data-fixture'
@@ -324,7 +325,7 @@ test('T-805: fix migrate-data gives an old try its agent entries (worker: tokens
   // a try that had agents keeps them, and what its sum held beyond them goes on its last worker
   expect(tryTokens(r2)).toEqual({ input: 70 })
   expect(r2!.agents!.find(a => a.id === 'ag5')!.tokens).toEqual({ input: 70 })
-  expect(r2!.agents!.find(a => a.id === 'ag3')).toMatchObject({ kind: 'worker', ended_by: 'restarted' })
+  expect(r2!.agents!.find(a => a.id === 'ag3')).toMatchObject({ kind: 'worker', ended_by: 'dropped' })
   expect(r2!.restarts).toEqual([{ at: E, why: 'after a reopen', started: E }])
   // the current worker and checker are the last open entries; no old field is left
   expect(workerIdOf(t)).toBe('ag5')
@@ -341,4 +342,12 @@ test('T-805: migrating an old try keeps a cost of 0', () => {
   const r = (m.runs as SymccRun[])[0]!
   expect(tryCost(r)).toBe(0)
   expect(tryTokens(r)).toEqual({ input: 100 })
+})
+
+test('T-805: ids kept alone on an old try show no made-up agent lines, and the tokens still count', () => {
+  const m = migrateRunAgents({ id: 'T-1', status: 'done', runs: [{ started: T, ended: E, tokens: { input: 150 }, checker_tokens: { input: 40 }, agent: 'w1', checkers: ['c1', 'c2'] }] })!
+  const r = (m.runs as SymccRun[])[0]!
+  expect(agentLines(r)).toEqual([])
+  expect(tryTokens(r)).toEqual({ input: 150 })
+  expect(checkerTokensOf(r)).toEqual({ input: 40 })
 })
