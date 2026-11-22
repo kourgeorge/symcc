@@ -40,3 +40,20 @@ test('a view still too big after slimming old tasks slims every finished task', 
   expect(JSON.stringify(v).length).toBeLessThan(VIEW_MAX_CHARS)
   expect((v.tasks as unknown as { details: string }[]).every(t => t.details === '')).toBe(true)
 })
+
+test('a view over the limit is trimmed, oldest finished tasks first, instead of failing', () => {
+  const tasks = Array.from({ length: 4000 }, (_, i) => ({ ...task(`T-${i}`, 'done', 60_000 + i * 1000), details: long.repeat(10), title: long.repeat(10) }))
+  const v = { ...viewOf(tasks), archived: Array.from({ length: 200 }, () => ({ id: 'A', details: long.repeat(20) })) }
+  const out = slimView(v as unknown as SymccView, now)
+  expect(JSON.stringify(out).length).toBeLessThan(VIEW_MAX_CHARS)
+  const ids = (out.tasks as unknown as { id: string }[]).map(t => t.id)
+  expect(ids.includes('T-0')).toBe(true)
+  expect(ids.includes('T-3999')).toBe(false)
+})
+
+test('open tasks stay while finished ones go', () => {
+  const tasks = [task('T-open', 'todo', 60_000), ...Array.from({ length: 4000 }, (_, i) => ({ ...task(`T-${i}`, 'done', 60_000 + i), title: long.repeat(10) }))]
+  const out = slimView(viewOf(tasks), now)
+  expect((out.tasks as unknown as { id: string }[]).some(t => t.id === 'T-open')).toBe(true)
+  expect(JSON.stringify(out).length).toBeLessThan(VIEW_MAX_CHARS)
+})

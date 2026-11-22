@@ -2,7 +2,8 @@ import { settingShown, testMinutesOf, openQuestions, liveWorkersFor, whoDrives, 
 import { homeBranch } from './git'
 import { S, onHere, workers, queuedWorkers, scoutRuns, type PaneView, scoutState, updateView, sizeNotes, MOVED_WHY, TAKEN_WHY } from './state'
 import { type Host, agentState } from '../host'
-import { path, locked, change, now, load, safeWrite, boardMtime } from './store'
+import { path, locked, change, now, load, safeWrite, boardMtime, noteSize } from './store'
+import { utf8Bytes } from '../core/board-parts'
 import { openPane } from './open'
 import { playable, sayGone } from './voice'
 import { logoIdle, logoOnPublish } from './logo'
@@ -498,6 +499,12 @@ export async function publish(host: Host, b: Board) {
     })
     .sort((x, y) => x.since - y.since)
   const v: PaneView = { tasks: b.tasks, working, scouts: [...scoutState.values()], mode: modeOf(b), test_commands: b.test_commands, branch, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, test_minutes: testMinutesOf(b), archive_days: b.archive_days, ...(b.archived ? { archived: b.archived } : {}), ...(b.archived_done?.length ? { archived_done: b.archived_done } : {}), open_on_start: openOnStart(b), notify: notifyOf(b, can, S.root), scout_findings: b.scout_findings, tests_with_changes: b.tests_with_changes, checker: b.checker, notify_choices: notifyChoices(can), enabled: onHere(b), ...(S.offHere ? { off_here: S.offWhy } : S.fresh ? { off_here: 'new' as const } : {}), driving: S.driving, branch_note, ...(size_note ? { size_note } : {}), git_state: S.gitState, plan_mode: inPlan(S.plan), ...(branches ? { branches } : {}), ...(team ? { today_team: team } : {}), ...(Object.keys(task_branches).length ? { task_branches } : {}), ...(openQuestions(b).length ? { questions: openQuestions(b) } : {}), ...(scouts_running.length ? { scouts_running } : {}) }
+  // the view as built here is warned about when it nears Claude Code's 4 MB value limit (the panel trims what it keeps, see slimView)
+  try {
+    noteSize(host, 'the board view', utf8Bytes(JSON.stringify(v)))
+  } catch {
+    // a warning only
+  }
   await updateView(host, () => v)
   // the banner logo plays a move when something happened (a merge, a worker start, a scout finding, all done)
   void logoOnPublish(host, v).catch(() => undefined)

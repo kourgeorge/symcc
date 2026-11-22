@@ -22,17 +22,53 @@ export const VIEW_MAX_CHARS = 4 * 1024 * 1024
 /** A done or dropped task changed within this long is kept whole in the view; older ones are slimmed (viewTask). */
 export const VIEW_WHOLE_MS = 2 * 24 * 60 * 60_000
 
+/** The view is kept under this many characters (a share of the limit, as Claude Code may count differently). */
+export const VIEW_TARGET_CHARS = Math.floor(VIEW_MAX_CHARS * 0.7)
+/** A long text in a view task is cut to this many characters in the last trimming steps. */
+const CUT_TEXT = 1500
+
+const size = (v: unknown) => JSON.stringify(v).length
+
+/** `x` with every string over CUT_TEXT characters cut (deep), and every array of more than 20 history lines cut to the last 20. */
+function cutTexts(x: unknown): unknown {
+  if (typeof x === 'string') return x.length > CUT_TEXT ? x.slice(0, CUT_TEXT) : x
+  if (Array.isArray(x)) return x.map(cutTexts)
+  if (x && typeof x === 'object') return Object.fromEntries(Object.entries(x).map(([k, val]) => [k, k === 'history' && Array.isArray(val) && val.length > 20 ? val.slice(-20).map(cutTexts) : cutTexts(val)]))
+  return x
+}
+
 /**
- * The view as the panel keeps it, under Claude Code's 4 MB limit on one value: a done or dropped task changed more
- * than VIEW_WHOLE_MS ago is slimmed like OpenCode's view file (viewTask: no history, details or long parts; its page
- * then shows them empty), and if the view is still near the limit every finished task is slimmed.
+ * The view as the panel keeps it, under Claude Code's 4 MB limit on one value. Steps, each only when the view is
+ * still over VIEW_TARGET_CHARS: slim done or dropped tasks changed more than VIEW_WHOLE_MS ago (viewTask: no history,
+ * details or long parts; their pages then show them empty); slim every finished task; cut long texts everywhere;
+ * leave out the archive copies; drop the oldest finished tasks. Never throws, never gives back a view over the limit
+ * unless open tasks alone are that big.
  */
 export function slimView(v: SymccView, nowMs = Date.now()): SymccView {
   const finished = (t: SymccView['tasks'][number]) => t.status === 'done' || t.status === 'dropped'
   const slim = (old: (t: SymccView['tasks'][number]) => boolean) => ({ ...v, tasks: (v.tasks ?? []).map(t => (finished(t) && old(t) ? viewStubFilled(viewTask(t)) : t)) })
-  const some = slim(t => nowMs - Date.parse(t.updated_at ?? '') > VIEW_WHOLE_MS || !t.updated_at)
-  if (JSON.stringify(some).length < VIEW_MAX_CHARS * 0.9) return some
-  return slim(() => true)
+  const ok = (x: SymccView) => size(x) <= VIEW_TARGET_CHARS
+  let cur = slim(t => nowMs - Date.parse(t.updated_at ?? '') > VIEW_WHOLE_MS || !t.updated_at)
+  if (ok(cur)) return cur
+  cur = slim(() => true)
+  if (ok(cur)) return cur
+  cur = cutTexts(cur) as SymccView
+  if (ok(cur)) return cur
+  const { archived: _a, archived_done: _d, ...rest } = cur as SymccView & { archived?: unknown; archived_done?: unknown }
+  cur = rest as SymccView
+  // oldest finished tasks first
+  const order = cur.tasks
+    .map((t, i) => ({ t, i }))
+    .filter(x => finished(x.t))
+    .sort((x, y) => Date.parse(x.t.updated_at ?? '') - Date.parse(y.t.updated_at ?? '') || x.i - y.i)
+  const gone = new Set<number>()
+  let total = size(cur)
+  for (const { t, i } of order) {
+    if (total <= VIEW_TARGET_CHARS) break
+    total -= size(t) + 1
+    gone.add(i)
+  }
+  return { ...cur, tasks: cur.tasks.filter((_t, i) => !gone.has(i)) }
 }
 
 const view = atom({ plugin: 'symcc', key: 'view' } as const, { tasks: [], working: [], scouts: [], mode: 'auto', test_commands: [] } as SymccView, { shape: 'view-1' })
@@ -47,6 +83,13 @@ export function panelValues($: $): PanelValues {
     readScoutOpen: () => read($, scoutOpen),
     updateScoutOpen: change => update($, scoutOpen, change),
     readView: () => read($, view),
-    updateView: change => update($, view, v => slimView(change(v))),
+    // a refused value (too big) must never fail a board change or a worker start: say nothing, the next publish tries again
+    updateView: async change => {
+      try {
+        await update($, view, v => slimView(change(v)))
+      } catch {
+        // dropped on purpose, see above
+      }
+    },
   }
 }
