@@ -23,7 +23,7 @@ import { findArchived } from './archive'
 import { moveOldOrgMem, deleteOrgMem } from './org-mem'
 import { migrateIfOld } from './migrate-data'
 import { askCall, checkEdit, guardFailed, stoppedText, stoppedTextFor, movedAway, movedText, listedKind, type AgentKindOf } from './ask'
-import { gitReady, setupGit, initGitIn } from './git'
+import { gitReady, setupGit, initGitIn, recheckGit } from './git'
 import { claimLead, publish, handOver, releaseLead, driveHere, startOffHere, disableHere, enableHere, offHereBeat } from './lead'
 import { changedFiles, changesText } from './review'
 import { loadRoles, changeRole } from './roles'
@@ -90,6 +90,7 @@ export function sessionStarting() {
 /** The watchdog's timer went off (every 2 minutes): look for stuck workers and tasks. */
 export function watchdogTick(host: Host) {
   if (S.guardOnly) return // a worker folder only guards: the timers touch nothing
+  if (!S.fresh && S.gitState !== 'ok') void recheckGit(host).catch(() => undefined) // installing git or git init by hand clears the notice
   void check(host).catch(() => undefined)
 }
 
@@ -638,6 +639,8 @@ export async function runCommand(host: Host, command: string, args: string): Pro
       }
       return say(r.text)
     }
+    case 'check-git':
+      return say(await recheckGit(host))
     case 'setup-git':
       // the lead's setup_git; it publishes the board and tells the lead itself
       return say(await setupGit(host, 'you'))

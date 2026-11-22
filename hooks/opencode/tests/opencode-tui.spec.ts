@@ -12,7 +12,7 @@ import { LIVE_TABS, tabRow as coreTabRow, roleKeys, rolesKeys, kindsKeys, scoutH
 import type { PaneView } from '../../app/state'
 import type { SymccTask } from '../../../types'
 import { ICON } from '../../name'
-import { hasPage, bandLines, bandDraw, BAND_CLICK_HINT, panelLines, panelKeys, parseViewFile, viewFileText, lineText, actionCommand, answerOptions, OWN_ANSWER, viewDefs, panelTaskActions, TASK_ACTION_COMMANDS, SETTINGS_OPEN, approveSent, APPROVE_SENT_MS, drawnLines, boardPageOf, defDraftOf, defEditKeys, noDescriptionText, draftError, SETUP_GIT_ASK, EDIT_FIRST_BOX, newNameError, type ViewFile, type PanelChoice } from '../board-view'
+import { hasPage, bandLines, bandDraw, BAND_CLICK_HINT, panelLines, panelKeys, parseViewFile, viewFileText, lineText, actionCommand, answerOptions, OWN_ANSWER, viewDefs, panelTaskActions, TASK_ACTION_COMMANDS, SETTINGS_OPEN, approveSent, APPROVE_SENT_MS, drawnLines, gitRowLines, boardPageOf, defDraftOf, defEditKeys, noDescriptionText, draftError, SETUP_GIT_ASK, EDIT_FIRST_BOX, newNameError, type ViewFile, type PanelChoice } from '../board-view'
 import { readFile } from 'node:fs/promises'
 import { rowEndBoard, ROW_END, ROW_END_NOW } from '../../../tests/row-end-cases'
 import { BRANCH_LINES_100, branchFactsAt, branchTasks, taskBranchDoing, taskBranchLong, taskBranchMerged, taskBranchTasks } from '../../../tests/branches-fixture'
@@ -123,8 +123,15 @@ test('T-517, T-706: with no git repo the banner warns with Claude Code\'s "set u
   }
   // T-861: git missing: the notice gives the install step and has no button
   const missing = panelLines({ ...f, view: { ...f.view, git_state: 'no-git', git_install: 'brew install git', branch_note: gitNote('no-git') } }, { opened: '', cursor: 0 }, NOW, 100).lines.map(lineText)
-  expect(missing).toContain('Git is not installed: brew install git. No worker starts until it is.')
+  expect(missing.join(' ')).toContain('Git is not installed: brew install git. No worker starts until it is.')
   expect(missing.some(l => l.includes('Set up git'))).toBe(false)
+  expect(missing.some(l => l.includes('[ Check again (g) ]'))).toBe(true)
+  // the panel clips lines: at 80 columns (inner 78) the notice wraps and no line is wider
+  for (const git_state of ['no-repo', 'no-commits', 'no-git'] as const) {
+    const rows = gitRowLines({ git_state, git_install: 'sudo apt install git' }, 78)
+    expect(rows.length).toBeGreaterThan(1)
+    for (const r of rows) expect(lineText(r).length).toBeLessThan(79)
+  }
   // git set up: no row
   expect(panelLines(f, { opened: '', cursor: 0 }, NOW, 100).lines.map(lineText).some(l => l.includes('Set up git'))).toBe(false)
 })

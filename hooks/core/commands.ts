@@ -43,6 +43,8 @@ export type Command =
   | { kind: 'def-save'; def: 'role' | 'kind'; name: string; fields: Partial<Record<DefEditField, string>> }
   /** /<name>-settings git setup: sets up git as the lead's setup_git does (the boards ask for a yes first) */
   | { kind: 'setup-git' }
+  /** look at git again (the board's Check again button while git is missing) */
+  | { kind: 'check-git' }
   /** /<name>-settings orgmem delete <n> [key]: deletes note n (its place in the file) from organizational memory
    *  (T-619); `key`: the note's check word (orgMemNoteKey), so a number that moved deletes nothing */
   | { kind: 'orgmem-delete'; n: number; key?: string }
@@ -208,7 +210,7 @@ export function parseCommand(command: string, args: string, current: SymccMode =
         }
         return use(defUsage(def, name))
       }
-      if (def === 'git') return words.length === 2 && words[1]!.toLowerCase() === 'setup' ? { kind: 'setup-git' } : use(`/${name}-settings git setup (git init on main if there is no repo, a .gitignore and a first commit; never pushes)`)
+      if (def === 'git') return words.length === 2 && words[1]!.toLowerCase() === 'check' ? { kind: 'check-git' } : words.length === 2 && words[1]!.toLowerCase() === 'setup' ? { kind: 'setup-git' } : use(`/${name}-settings git check (look at git again), or git setup (git init on main if there is no repo, a .gitignore and a first commit; never pushes)`)
       if (def === 'orgmem') {
         const n = Number(words[2])
         const key = words[3]

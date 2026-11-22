@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { liveWorkersFor, startBranch, type Board, intoOf, type GitState, gitStateOf, noGitText, setupAskText, gitInstallStep, type InstallFacts, gitignoreWith, gitignoreBase, riskyFiles, parseLsTree, ignoreLineFor, setupDoneText, find, worktreesToRemove, branchesToDelete, cleanupText, namedReports, SCRATCH_DIR, SCRATCH_EXCLUDE, commitMessage, isSha, isTaskCommit } from '../board'
+import { liveWorkersFor, startBranch, type Board, intoOf, type GitState, gitStateOf, noGitText, setupAskText, gitInstallStep, gitNotice, type InstallFacts, gitignoreWith, gitignoreBase, riskyFiles, parseLsTree, ignoreLineFor, setupDoneText, find, worktreesToRemove, branchesToDelete, cleanupText, namedReports, SCRATCH_DIR, SCRATCH_EXCLUDE, commitMessage, isSha, isTaskCommit } from '../board'
 import { publish } from './lead'
 import { S, workers, starting, finishing, approving, keptDirty, scratchUse } from './state'
 import { type Host, agentState } from '../host'
@@ -71,6 +71,14 @@ export async function installStepOf($: Host): Promise<string> {
   if (f.os === 'mac') f.brew = await has('brew')
   if (f.os === 'linux') for (const m of ['apt', 'dnf', 'pacman'] as const) if (await has(m === 'apt' ? 'apt-get' : m)) { f.linux = m; break }
   return gitInstallStep(f)
+}
+
+/** Looks at git again while it is not ready (the watchdog, the panel opening, the Check again button); when it just became ready, work starts. Returns a short answer. */
+export async function recheckGit($: Host): Promise<string> {
+  const was = S.gitState
+  const ok = await gitReady($)
+  if (ok && was !== 'ok') void pump($).catch(() => undefined)
+  return ok ? 'git is ready: this folder is a git repo with commits' : gitNotice(S.gitState, S.gitInstall, S.N.name)
 }
 
 /**

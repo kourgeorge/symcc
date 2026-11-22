@@ -3,7 +3,7 @@ import { drawNow } from './now'
 import type { MatchedHook } from 'claude-code'
 import type { SymccMode } from '../../../types'
 import { STATUS_WORD, sortScouts, modeOf, nextMode, emptyBoard, type BannerTone, bannerLines, modeLabel, modeButton, bannerRule, footerRule, type KeyHint, hintLines, packRows, showsHeader, gitNotice, type BoardPage } from '../../board'
-import { setupGit } from '../../app/git'
+import { setupGit, recheckGit } from '../../app/git'
 import { logoNow, noteLogoWidth } from '../../app/logo'
 import { type PaneView, S } from '../../app/state'
 import { type $, panelValues } from '../panel'
@@ -100,7 +100,7 @@ export async function paneParts($: $, e: PaneEvent) {
       ? [
           <Box key="banner-git" flexDirection="row" {...(vscode ? { flexWrap: 'wrap' as const } : {})}>
             <Text wrap={vscode ? 'wrap' : 'truncate'} color={C('warning')}>{`${gitNotice(v.git_state, v.git_install ?? '', S.N.name)} `}</Text>
-            {v.git_state === 'no-git' ? null : <Button key="setup-git" label="Set up git (g)" hotkey="g" onPress={act(async () => $.ui.toast(S.N.toast(await setupGit(claudeHost($), 'you'))))} />}
+            {v.git_state === 'no-git' ? <Button key="check-git" label="Check again (g)" hotkey="g" onPress={act(async () => $.ui.toast(S.N.toast(await recheckGit(claudeHost($)))))} /> : <Button key="setup-git" label="Set up git (g)" hotkey="g" onPress={act(async () => $.ui.toast(S.N.toast(await setupGit(claudeHost($), 'you'))))} />}
           </Box>,
         ]
       : []
