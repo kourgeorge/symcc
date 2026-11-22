@@ -89,14 +89,14 @@ export function sessionStarting() {
 
 /** The watchdog's timer went off (every 2 minutes): look for stuck workers and tasks. */
 export function watchdogTick(host: Host) {
-  if (S.guardOnly) return // T-844: /init borrows S.root for another folder for a moment; the timers touch nothing meanwhile
+  if (S.guardOnly) return // a worker folder only guards: the timers touch nothing
   void check(host).catch(() => undefined)
 }
 
 /** The lead heartbeat's timer went off: the driver refreshes its heartbeat; the others look whether it went stale and take over. */
 export function leadBeat(host: Host) {
   // T-793: a window off here drives nothing; it only looks whether the window with symcc on is gone
-  if (S.fresh || S.guardOnly) return // guardOnly: T-844 /init borrows S.root for a moment; the beat must not claim that board
+  if (S.fresh || S.guardOnly) return // guardOnly: a worker folder never claims a lead
   if (S.offHere) return void offHereBeat(host).catch(() => undefined)
   void claimLead(host)
     .then(async d => (d ? pump(host) : undefined))

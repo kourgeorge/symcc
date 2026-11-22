@@ -143,6 +143,20 @@ export async function setupGit($: Host, who: string): Promise<string> {
  * everywhere and never reads or sets the session's state (S.root, S.gitState, ...). Throws with git's error on failure.
  */
 export async function initGitIn($: Host, dir: string): Promise<void> {
+  const ignoreFile = `${dir}/.gitignore`
+  const before = (await $.fs.exists(ignoreFile)) ? await $.fs.read(ignoreFile) : null
+  try {
+    await initGitSteps($, dir)
+  } catch (err) {
+    // nothing may be left behind, so a second try starts from the same folder (no .git, the old .gitignore)
+    await $.run(['rm', '-rf', `${dir}/.git`], { cwd: dir }).catch(() => undefined)
+    if (before === null) await $.run(['rm', '-f', ignoreFile], { cwd: dir }).catch(() => undefined)
+    else await $.fs.write(ignoreFile, before).catch(() => undefined)
+    throw err
+  }
+}
+
+async function initGitSteps($: Host, dir: string): Promise<void> {
   const r = await git($, ['init', '-q', '-b', 'main'], dir)
   if (r.exitCode !== 0) {
     await gitOk($, ['init', '-q'], dir)

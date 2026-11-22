@@ -4,7 +4,7 @@
 import { expect } from 'claude-code/testing'
 import { emptyBoard, parseCommand, notSetUpAnswer, offStatusLine, offStatusParts, parseLead, type Board } from '../hooks/board'
 import { S, toolName } from '../hooks/app/state'
-import { leadGuideText, sessionStart, sessionEnd, toolCall, runCommand } from '../hooks/app/symcc'
+import { leadBeat, leadGuideText, sessionStart, sessionEnd, toolCall, runCommand } from '../hooks/app/symcc'
 import { tellLead, takeBoardUpdate } from '../hooks/app/tell'
 import { test } from './reset'
 import { fakeHost, memoryFs, done } from './fake-host'
@@ -251,6 +251,51 @@ test('T-844: a failing git init creates nothing; /symcc-init git again retries',
   const again = await runCommand(w.host, 'symcc-init', 'git')
   expect(again?.text).toContain('is on in this project')
   expect(w.files.has('/home/me/proj/.symcc/board.json')).toBe(true)
+})
+
+test('T-844: a git step that fails after git init leaves no .git or .gitignore; the retry runs git again', async () => {
+  const w = world('a', '/home/me/proj', '/home/me')
+  const run = w.host.run
+  let failAdd = true
+  const host = {
+    ...w.host,
+    run: async (argv: string[], init?: { cwd?: string }) => {
+      if (argv[0] === 'git' && argv[1] === 'init') w.files.set('/home/me/proj/.git', '')
+      if (argv[0] === 'rm' && argv.includes('/home/me/proj/.git')) w.files.delete('/home/me/proj/.git')
+      if (argv[0] === 'git' && argv[1] === 'add' && failAdd) return done({ exitCode: 1, stderr: 'Permission denied' })
+      return (run as (a: string[], i?: unknown) => ReturnType<typeof run>)(argv, init)
+    },
+  } as typeof w.host
+  await sessionStart(host)
+  const r = await runCommand(host, 'symcc-init', 'git')
+  expect(r?.text).toContain('Permission denied')
+  expect(w.files.has('/home/me/proj/.git')).toBe(false)
+  expect(w.files.has('/home/me/proj/.gitignore')).toBe(false)
+  expect([...w.files.keys()].filter(k => k.includes('.symcc'))).toEqual([])
+  failAdd = false
+  const again = await runCommand(host, 'symcc-init', 'git')
+  expect(again?.text).toContain('is on in this project')
+  expect(w.ran.filter(x => x.args.startsWith('init')).length).toBe(2)
+})
+
+test('T-844: the lead heartbeat cannot claim the new board\'s lead during or after /symcc-init in a subfolder', async () => {
+  let open!: () => void
+  const gate = new Promise<void>(r => (open = r))
+  const v = slowGit('a', '/repo/src', '/repo', { gate })
+  v.files.set('/repo/.git', '')
+  v.files.set('/repo/.symcc/board.json', JSON.stringify(emptyBoard()))
+  await sessionStart(v.host)
+  const parentLead = v.files.get('/repo/.symcc/lead.json')
+  const init = runCommand(v.host, 'symcc-init', 'git')
+  for (let i = 0; i < 20; i++) await Promise.resolve()
+  leadBeat(v.host)
+  open()
+  await init
+  leadBeat(v.host)
+  for (let i = 0; i < 50; i++) await Promise.resolve()
+  expect([...v.files.keys()].filter(k => k.startsWith('/repo/src/.symcc') && k.includes('lead'))).toEqual([])
+  expect(JSON.parse(v.files.get('/repo/.symcc/lead.json')!).session).toBe(JSON.parse(parentLead!).session)
+  expect(S.root).toBe('/repo')
 })
 
 test('T-844: a broken board above does not stop /symcc-init in a subfolder with its own .git', async () => {
