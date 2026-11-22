@@ -3970,7 +3970,7 @@ test('T-581: a row in a check step or the merge line shows one icon in place of 
   const b = { ...b0, tasks: [{ ...b0.tasks[0]!, status: 'doing' as const, note: 'running the tests', runs: ran, live: { checking: { step: 'testing' as const, at: fresh } }, }] }
   const page = core.detailRows(b.tasks[0]!, { roles: [], all: b.tasks, when: () => '', nowMs: now })
   // the header's state line names the state, the step and the time (T-751); the Steps row the way to the merge
-  expect(headState(b.tasks[0]!, now).text).toBe('▶ doing · test · 9m')
+  expect(headState(b.tasks[0]!, now).text).toBe('▶ doing · test · ⏱ 9m')
   expect(page.some(r => r.label === 'Status')).toBe(false)
   expect(page.find(r => r.label === 'Steps')!.segs.map(g => g.text).join('')).toContain('● test')
   // the lead's text board: the icon as the mark, the word kept for the lead
@@ -4054,7 +4054,7 @@ test('T-587: the task page badge and Status row name the step a task is in; the 
   const [b0] = addTask(emptyBoard(), { origin: W, title: 'Fix it' }, fresh)
   const t = { ...b0.tasks[0]!, ...inStep('checker', 'a checker agent is trying to break it before it merges') }
   const page = core.detailRows(t, { roles: [], all: [t], when: () => '', nowMs: now, board: on })
-  expect(headState(t, now).text).toBe('▶ doing · checker · 9m')
+  expect(headState(t, now).text).toBe('▶ doing · checker · ⏱ 9m')
   expect(page[0]!.label).toBe('Steps')
   expect(page[0]!.segs.map(g => g.text).join('')).toBe('worker ✓ → prep ✓ → ● checker → queue → test → merge')
 })
@@ -4073,14 +4073,14 @@ test('T-647: the task page\'s Status row shows the state with its time ("▶ doi
   }
   // a doing task in the test step: the state on Status, the step on Stage; the page's badge keeps the step
   const testing = rows({ status: 'doing', attempts: 1, runs: ran, live: { checking: { step: 'testing', at: fresh } }, })
-  expect(testing.status).toMatchObject({ text: '▶ doing · test · 48m', color: core.STATUS_BADGE.doing })
+  expect(testing.status).toMatchObject({ text: '▶ doing · test · ⏱ 48m', color: core.STATUS_BADGE.doing })
   expect(testing.stage).toBe('worker ✓ → prep ✓ → queue ✓ → ● test → review → merge')
   expect(core.statusBadge({ status: 'doing', attempts: 1, runs: ran, live: { checking: { step: 'testing', at: fresh } }, }, now).text).toBe('⊛ test · 48m')
   // its worker still working: doing too
-  expect(rows({ status: 'doing', attempts: 1, runs: [{ started: at(952) }] }).status.text).toBe('▶ doing · worker · 48m')
+  expect(rows({ status: 'doing', attempts: 1, runs: [{ started: at(952) }] }).status.text).toBe('▶ doing · worker · ⏱ 48m')
   // an approved task whose approve runs shows doing (shownStatus), the approve's step on Stage
   const approving = rows({ status: 'review', attempts: 1, runs: ran, live: { checking: { step: 'merging', at: fresh } }, })
-  expect(approving.status).toMatchObject({ text: '▶ doing · merge · 48m', color: core.STATUS_BADGE.doing })
+  expect(approving.status).toMatchObject({ text: '▶ doing · merge · ⏱ 48m', color: core.STATUS_BADGE.doing })
   expect(approving.stage).toContain('review ✓ → ● merge')
   // the states that run nothing: their mark and word
   expect(rows({ status: 'review', runs: ran }).status).toMatchObject({ text: `◆ ${STATUS_WORD.review}`, color: core.STATUS_BADGE.review })

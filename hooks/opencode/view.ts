@@ -14,7 +14,7 @@ import { safeWrite } from '../app/store'
 import { loadScoutResults } from '../app/scouts'
 import { parseScoutRuns, safeScoutFile, scoutRunsFile, scoutRunTasks, mergeRoles, mergeKinds, intoOf, isAnswered, type BoardTask } from '../board'
 import { changedFiles } from '../app/review'
-import { roleLists } from '../app/roles'
+import { roleLists, roleFileDay } from '../app/roles'
 import { kindLists } from '../app/kinds'
 import { orgMemNow } from '../app/org-mem'
 import { viewTask } from '../core/board-parts'
@@ -109,7 +109,7 @@ export async function defsOf(host: Host): Promise<{ roles: ViewDef[]; kinds: Vie
   const r = await roleLists(host)
   const k = await kindLists(host)
   return {
-    roles: viewDefs('role', mergeRoles(r.builtIn, r.project), r.builtIn, r.project, r.broken, r.dir),
+    roles: viewDefs('role', mergeRoles(r.builtIn, r.project), r.builtIn, r.project, r.broken, r.dir, Object.fromEntries(await Promise.all(r.project.map(async p => [p.name, await roleFileDay(host, p.name)] as const)))),
     kinds: viewDefs('kind', mergeKinds(k.builtIn, k.project), k.builtIn, k.project, k.broken, k.dir),
   }
 }

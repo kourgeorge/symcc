@@ -138,7 +138,7 @@ const T504_LATER: [string, string][] = [
   ['"Runs   2 tries · 25m · 4.6k tokens (0.4× the usual task)"', '"Runs   2 tries · 35m · 4.6k tokens (0.4× the usual task)"'],
   ['"  total: 25m · 4.6k', '"  total: 35m · 4.6k'],
   // the header's state line: the total work time (T-751)
-  ['"children":["25m"]', '"children":["35m"]'],
+  ['"children":["⏱ 25m"]', '"children":["⏱ 35m"]'],
 ]
 
 test("T-504's task page follows the host clock: 10 minutes later only its running times change", async ($, on) => {
@@ -237,7 +237,7 @@ for (const surface of ['terminal', 'vscode'] as const)
 // its color, tags on one line, clear sections, the less-used ones folded (closed by default, with a count), what needs
 // you boxed at the top in its tone with its buttons right there, at most one primary button, no "…" and no key hints.
 const CARDS: Record<string, { badge: string; tone: string; callout?: [string, string, string] }> = {
-  'T-504': { badge: '▶ doing · worker · 25m', tone: 'ide' },
+  'T-504': { badge: '▶ doing · worker · ⏱ 25m', tone: 'ide' },
   // T-751: Retry is the header's next step, no longer inside the callout
   'T-502': { badge: '✗ failed', tone: 'error', callout: ['vs-sec-why-failed', 'error', ''] },
   'T-503': { badge: '? waiting for you', tone: 'warning', callout: ['vs-sec-question', 'warning', 'choice-1'] },
