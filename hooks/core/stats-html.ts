@@ -4,7 +4,7 @@
 
 import type { SymccTokens } from '../../types'
 import { fmtCost, fmtDuration, fmtTokenKinds, fmtTokens, billedTokens, tokenCount } from './runs'
-import { BILLED_FOOTNOTE, STAGES_NOTE, countingText, durOr, failedCountsNote, failedShown, pctText, plural, rangeText, scoutResultsText, statsTitle, tokOr, unlinkedText, unreadText, type StatsData, type StatsGroup, type StatsTop } from './stats'
+import { BILLED_FOOTNOTE, STAGES_NOTE, countingText, durOr, failedCountsNote, failedShown, pctText, plural, rangeText, scoutResultsText, statsTitle, tokOr, unlinkedText, unreadText, type Spread, type SpreadRow, type StatsData, type StatsGroup, type StatsTop } from './stats'
 
 /** `s` safe inside HTML text and attribute values. */
 export const escapeHtml = (s: unknown): string =>
@@ -22,6 +22,14 @@ const CYCLE = ['var(--blue)', 'var(--teal)', 'var(--purple)', 'var(--orange)', '
 function barRow(label: string, value: number, max: number, text: string, colour: string, sub = ''): string {
   const w = max > 0 ? Math.max(value > 0 ? 1.5 : 0, (value / max) * 100) : 0
   return `<div class="row"><div class="lab">${E(label)}${sub ? `<small>${E(sub)}</small>` : ''}</div><svg class="bar" viewBox="0 0 100 10" preserveAspectRatio="none" role="img" aria-label="${E(`${label}: ${text}`)}"><rect width="100" height="10" rx="2" class="track"/><rect width="${w.toFixed(2)}" height="10" rx="2" style="fill:${colour}"/></svg><div class="num">${E(text)}</div></div>`
+}
+
+/** T-845: a spread chart: 6 bars centered on the median, a median line between the 3rd and 4th. */
+function spreadHtml(sp: Spread, colour: string): string {
+  if (!sp.rows) return `<h3>${E(sp.title)}</h3><p class="muted">${E(sp.tooFew ?? '')}</p>`
+  const max = Math.max(...sp.rows.map(r => r.n))
+  const row = (r: SpreadRow) => barRow(r.label, r.n, max, String(r.n), colour, r.note ?? '')
+  return `<h3>${E(`${sp.title} · median ${sp.medianText} · ${plural(sp.n, 'task')}`)}</h3>${sp.rows.slice(0, 3).map(row).join('')}<p class="muted median-line">── median ${E(sp.medianText ?? '')} ──</p>${sp.rows.slice(3).map(row).join('')}`
 }
 
 const card = (label: string, value: string, note = '', colour = 'var(--blue)') =>
@@ -185,7 +193,7 @@ export function statsHtml(d: StatsData, project: string): string {
     ['tries', `avg ${(p.avgTries ?? 0).toFixed(1)} per task`],
     ['first try', `${pctText(d.first, d.doneWithData)} (${d.first} of ${d.doneWithData})`],
     ['lead time', d.leadTime.n ? `avg ${durOr(d.leadTime.avgMs)} · median ${durOr(d.leadTime.medianMs)} · total ${durOr(d.leadTime.sumMs)} (made to done)` : '-'],
-  ]) : '<p class="muted">No done tasks with data.</p>')
+  ]) + spreadHtml(d.spreadTime, 'var(--teal)') + spreadHtml(d.spreadTok, 'var(--purple)') : '<p class="muted">No done tasks with data.</p>')
   const perTry = section(`Per try (${plural(d.perTry.n, 'try', 'tries')})`, kv([['time', `avg ${durOr(d.perTry.avgMs)} · total ${durOr(d.perTry.sumMs)}`], ['tokens', `avg ${tokOr(d.perTry.avgTok)} in all · total ${tokOr(d.perTry.sumTok)}`], ['worker time', fmtDuration(d.workMs)], ['tokens in all', d.tokKnown ? fmtTokens(tokenCount(d.tokens)) : '-'], ...(kinds(d.tokens) ? [['kinds', kinds(d.tokens)] as [string, string]] : [])]))
 
   // T-719: time per stage, each with its total, its average per done task and its share of the lifetime

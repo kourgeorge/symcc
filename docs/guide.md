@@ -2036,6 +2036,17 @@ its read-only `stats` tool.
   range, e.g. `/symcc-stats full 7d`) adds them back: the billed-equivalent lines with how they
   are weighed, where the lead's tokens come from, and how the stage times are read. The lead's
   `stats` tool gets the full text, unless it asks for the short one.
+- **Spread of time and tokens:** under "Per done task" two charts show how the done tasks are
+  spread (the same tasks the averages and medians use; investigations left out): time per done
+  task and tokens per done task. There are 6 rows centered on the median, each step double:
+  edges at the median divided by 4, divided by 2, the median, times 2 and times 4 (rounded to
+  readable values, e.g. 2m, 5m, 18m; 300k, 1.2M), with a median line between the 3rd and 4th
+  rows. Each row has its range, a bar scaled to the biggest row, and the count. A task exactly
+  on an edge goes in the upper row. The two outer rows are the odd ones out: the top one names
+  its 3 biggest tasks by id with their value ("slowest: T-496 3h 45m · ..."), the bottom one is
+  marked "very fast" or "very small". With fewer than 10 tasks (or a median of 0) there is no
+  chart, just one line saying so. The text report, the colored chat view and the web page all
+  have both charts.
 - **Web page:** `/symcc-stats html` (also with a range, e.g. `/symcc-stats html 7d`) writes the
   same figures as one page with charts, `.symcc/stats.html`. The page is self-contained: no outside
   links, so it works offline. It follows light and dark, fits a phone and prints well. symcc says

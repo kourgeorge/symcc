@@ -514,6 +514,9 @@ export type StatsData = {
   /** the "Whole team" part, when team input was given */
   team?: { label: string; data: TeamData }
   perDone: { avgMs?: number; medianMs?: number; avgTok?: number; medianTok?: number; avgTries?: number; sumMs?: number; sumTok?: number }
+  /** T-845: the spread of time and of tokens over the done tasks (the same ones the averages use) */
+  spreadTime: Spread
+  spreadTok: Spread
   leadTime: { n: number; avgMs?: number; medianMs?: number; sumMs?: number }
   perTry: { n: number; avgMs?: number; avgTok?: number; sumMs?: number; sumTok?: number }
   /** T-719: the done change tasks' time per stage (see stageFigures) */
@@ -679,6 +682,8 @@ export function statsData(input: StatsInput & { full?: boolean }): StatsData {
     },
     ...(input.team ? { team: { label: teamLabel, data: teamData(input.team, span, { tokens: totalTok, tries: withData.reduce((s, t) => s + F(t).tries, 0) }, doneAll.length) } } : {}),
     perDone: { ...opt('avgMs', mean(doneMs)), ...opt('medianMs', median(doneMs)), ...opt('avgTok', mean(doneTok)), ...opt('medianTok', median(doneTok)), ...opt('avgTries', mean(done.map(t => F(t).tries))), ...opt('sumMs', sumOf(doneMs)), ...opt('sumTok', sumOf(doneTok)) },
+    spreadTime: spreadOf('Time per done task', done.map(t => ({ id: t.id, value: F(t).ms })), fmtDuration, roundTimeEdge, 'very fast', 'slowest'),
+    spreadTok: spreadOf('Tokens per done task', done.filter(t => F(t).tok !== undefined).map(t => ({ id: t.id, value: F(t).tok! })), fmtTokens, roundTokEdge, 'very small', 'biggest'),
     leadTime: { n: lead.length, ...opt('avgMs', mean(lead)), ...opt('medianMs', median(lead)), ...opt('sumMs', sumOf(lead)) },
     perTry: { n: runs.length, ...opt('avgMs', mean(runs.map(r => runMs(r, nowMs)))), ...opt('avgTok', mean(tryTok)), ...opt('sumMs', sumOf(runs.map(r => runMs(r, nowMs)))), ...opt('sumTok', sumOf(tryTok)) },
     stages,
@@ -695,6 +700,47 @@ export function statsData(input: StatsInput & { full?: boolean }): StatsData {
     today,
     days: last.map(([d, v]) => ({ day: d, label: d === today ? 'Today' : dayLabel(d, today), ...v })),
   }
+}
+
+/** T-845: one row of a spread chart: its range, how many tasks fall in it, and a note (the outer rows: "very fast", or the 3 biggest tasks). */
+export type SpreadRow = { label: string; n: number; note?: string; top?: { id: string; value: number }[] }
+/** A spread chart: 6 rows centered on the median, edges at median ÷4, ÷2, ×1, ×2, ×4. No rows when there are too few tasks. */
+export type Spread = { title: string; n: number; median?: number; medianText?: string; rows?: SpreadRow[]; tooFew?: string }
+/** The fewest tasks a spread chart is drawn for. */
+export const SPREAD_MIN = 10
+
+/** An edge in whole seconds (under a minute) or whole minutes. */
+const roundTimeEdge = (ms: number) => (ms < 60_000 ? Math.round(ms / 1000) * 1000 : Math.round(ms / 60_000) * 60_000)
+/** An edge to 2 significant figures. */
+const roundTokEdge = (n: number) => Number(n.toPrecision(2))
+
+function spreadOf(title: string, items: { id: string; value: number }[], fmt: (n: number) => string, round: (n: number) => number, low: string, high: string): Spread {
+  const m = median(items.map(i => i.value))
+  if (items.length < SPREAD_MIN || m === undefined || !(m > 0)) return { title, n: items.length, tooFew: `${title}: too few tasks for a chart (${items.length}${m === 0 ? ', median 0' : ''}; it needs ${SPREAD_MIN})` }
+  const e = [m / 4, m / 2, m, m * 2, m * 4].map(round)
+  const f = e.map(fmt)
+  const labels = [`< ${f[0]}`, `${f[0]} – ${f[1]}`, `${f[1]} – ${f[2]}`, `${f[2]} – ${f[3]}`, `${f[3]} – ${f[4]}`, `> ${f[4]}`]
+  const buckets: { id: string; value: number }[][] = labels.map(() => [])
+  // a value exactly on an edge goes to the upper bucket
+  for (const i of items) buckets[e.filter(x => i.value >= x).length]!.push(i)
+  const rows: SpreadRow[] = buckets.map((b, i) => ({ label: labels[i]!, n: b.length }))
+  rows[0]!.note = low
+  const top = [...buckets[5]!].sort((a, b) => b.value - a.value || a.id.localeCompare(b.id)).slice(0, 3)
+  rows[5]!.top = top
+  if (top.length) rows[5]!.note = `${high}: ${top.map(t => `${t.id} ${fmt(t.value)}`).join(' · ')}`
+  return { title, n: items.length, median: m, medianText: fmt(m), rows }
+}
+
+/** The text lines of a spread chart (same bars and columns as the other bar rows). */
+export function spreadLines(sp: Spread): string[] {
+  if (!sp.rows) return [`  ${sp.tooFew}`]
+  const w = Math.max(...sp.rows.map(r => r.label.length))
+  const max = Math.max(...sp.rows.map(r => r.n))
+  const line = (r: SpreadRow) => `  ${r.label.padEnd(w)} ${bar(r.n, max).padEnd(BAR_WIDTH)} ${String(r.n).padStart(4)}${r.note ? `  ${r.note}` : ''}`
+  const mid = `median ${sp.medianText}`
+  const width = w + 1 + BAR_WIDTH + 5
+  const dash = Math.max(3, Math.floor((width - mid.length - 2) / 2))
+  return [`${sp.title} · median ${sp.medianText} · ${plural(sp.n, 'task')}`, ...sp.rows.slice(0, 3).map(line), `  ${'─'.repeat(dash)} ${mid} ${'─'.repeat(dash)}`, ...sp.rows.slice(3).map(line)]
 }
 
 /** A percentage in words: "39%", "-" out of nothing. */
@@ -792,6 +838,7 @@ export function statsReport(input: StatsInput & { full?: boolean }): string {
     out.push(row('tokens', p.avgTok !== undefined ? `avg ${tokOr(p.avgTok)} · median ${tokOr(p.medianTok)} · total ${tokOr(p.sumTok)} (in all)` : '-'))
     out.push(row('tries', `avg ${(p.avgTries ?? 0).toFixed(1)} per task`))
     out.push(row('first try', `${pct(d.first, d.doneWithData)} of done tasks (${d.first} of ${d.doneWithData})`))
+    out.push('', ...spreadLines(d.spreadTime), '', ...spreadLines(d.spreadTok))
   } else out.push('  no done tasks with data')
   out.push(row('lead time', d.leadTime.n ? `avg ${durOr(d.leadTime.avgMs)} · median ${durOr(d.leadTime.medianMs)} · total ${durOr(d.leadTime.sumMs)} (made to done, ${plural(d.leadTime.n, 'task')})` : '-'))
   out.push('', `Per try (${plural(d.perTry.n, 'try', 'tries')})`)

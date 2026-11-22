@@ -6,7 +6,7 @@
 import { ICON } from '../name'
 import { ORIGIN_MARK } from '../core/origin'
 import { fmtCost, fmtDuration, fmtTokenKinds, fmtTokens, billedTokens, tokenCount } from '../core/runs'
-import { BILLED_FOOTNOTE, countingText, cutTitle, durOr, failedCountsNote, failedShown, pctText, plural, rangeText, scoutResultsText, textWidth, tokOr, unlinkedText, unreadText, type StatsData, type StatsGroup, type StatsScout, type StatsTop, type Stage, type FailReason } from '../core/stats'
+import { BILLED_FOOTNOTE, countingText, cutTitle, durOr, failedCountsNote, failedShown, pctText, plural, rangeText, scoutResultsText, textWidth, tokOr, unlinkedText, unreadText, type StatsData, type StatsGroup, type StatsScout, type StatsTop, type SpreadRow, type Stage, type FailReason } from '../core/stats'
 import type { SymccTokens } from '../../types'
 
 /** A run of text in one style: a theme color name, bold, or dim. */
@@ -305,6 +305,15 @@ export function statsLines(d: StatsData, width: number): StatLine[] {
     L.kv('tokens', p.avgTok !== undefined ? [...mixed('avg ', tokOr(p.avgTok), ' · median ', tokOr(p.medianTok), ' · total ', tokOr(p.sumTok)), dim(' (in all)')] : [dim('-')])
     L.kv('tries', mixed('avg ', (p.avgTries ?? 0).toFixed(1), ' per task'))
     L.kv('first try', [strong(pctText(d.first, d.doneWithData), firstTryColor(d.first, d.doneWithData)), dim(` of done tasks (${d.first} of ${d.doneWithData})`)])
+    for (const [sp, color] of [[d.spreadTime, 'ide'], [d.spreadTok, 'claude']] as const) {
+      L.blank()
+      if (!sp.rows) L.small(sp.tooFew ?? '', 2)
+      else {
+        L.line([strong(`${sp.title}`), dim(` · median ${sp.medianText} · ${plural(sp.n, 'task')}`)])
+        const row = (r: SpreadRow): BarRow => ({ label: r.label, value: r.n, barColor: color, cols: [num(String(r.n))], ...(r.note ? { rest: r.note } : {}) })
+        L.bars([...sp.rows.slice(0, 3).map(row), { label: `── median ${sp.medianText} ──`, dimRow: true, cols: [] }, ...sp.rows.slice(3).map(row)])
+      }
+    }
   } else L.small('no done tasks with data', 2)
   L.kv('lead time', d.leadTime.n ? [...mixed('avg ', durOr(d.leadTime.avgMs), ' · median ', durOr(d.leadTime.medianMs), ' · total ', durOr(d.leadTime.sumMs)), dim(` (made to done, ${plural(d.leadTime.n, 'task')})`)] : [dim('-')])
   L.heading('Per try', plural(d.perTry.n, 'try', 'tries'))
