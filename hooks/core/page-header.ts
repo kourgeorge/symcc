@@ -3,7 +3,7 @@
 //
 //    ‹ [Tasks]                                              T-738 · ‹ 2 of 6 ›     1. where you are
 //    T-738  Live tab: an empty line before each section                           2. the title
-//    ▶ doing · worker · 4m   change · general · try 1/3   ♟ from you              3. the state
+//    ▶ doing · worker · ⏱ 4m   change · general · try 1/3   ♟ from you            3. the state
 //    [Pause]   [Role] [Watch worker]   [Drop]   [☐ Needs review] [Copy]           4. the buttons, in groups
 //   ───────────────────────────────────────────────────────────────────────────────  then a thin rule (T-790)
 //
@@ -134,7 +134,7 @@ const dot = (): Seg => ({ text: ' · ', color: 'inactive' })
 
 /**
  * Line 3 of a task's page, in groups (a narrow page wraps between them): the status mark and word in its color, the
- * step it is in and its work time ("▶ doing · worker · 4m", "◆ ready for review", "✗ failed"); its kind · role ·
+ * step it is in and its work time ("▶ doing · worker · ⏱ 4m", "◆ ready for review", "✗ failed"); its kind · role ·
  * try n/m; where it came from (originShort); and its note, when it has one (dim). `merging`: an approve this page
  * started (shown doing at once, as on the board); `note`: the note as this session shows it (sessionNote).
  */
