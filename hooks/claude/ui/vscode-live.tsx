@@ -15,7 +15,7 @@
 // T-727: under the lanes, the Branches section (core's liveBranches) drawn with real lines: see branchesVs.
 // T-747: each section has a bold heading with the terminal's names (core's LIVE_SECTIONS): Tasks, Today, Branches,
 // Organizational memory (that one a link to all notes).
-import { LIVE_DIVIDER, type BranchRow, type LiveBranches, liveBranches, LIVE_EMPTY, LIVE_AGENT_MARK, LIVE_RUN_MARK, liveLegend, LIVE_SECTIONS, type LiveLane, liveInner, liveRuleText, type LiveLayout, type LiveSeg, LIVE_TONE, laneLines, liveHeader, liveHeaderSegs, liveNeeds, liveTaskLanes, liveLayout, liveOrgMem, liveStations, liveTodayLines, liveTrains, segText, trainRows } from '../../core/live'
+import { LIVE_DIVIDER, type BranchRow, type LiveBranches, liveBranches, LIVE_EMPTY, LIVE_AGENT_MARK, LIVE_RUN_MARK, liveLegend, LIVE_SECTIONS, type LiveLane, liveInner, liveRuleText, type LiveLayout, type LiveSeg, LIVE_TONE, laneLines, liveHeader, liveHeaderSegs, liveNeeds, liveTaskLanes, liveLayout, liveOrgMem, liveColumns, liveTodayLines, liveTrains, segText, trainRows } from '../../core/live'
 import { panelValues, type $ } from '../panel'
 import type { PaneParts } from './parts'
 import { LIVE_TICK_MS, branchKey, needKey, laneKey, liveTick, newestKey, openOrgMemPage, topicKey, trainKey } from './live'
@@ -32,7 +32,7 @@ export const BLINK_CSS = '@keyframes symcc-blink{50%{opacity:.25}}.cur{animation
 
 /** A lane's track as an Svg document: a dot per station (passed filled green, the current one blue and blinking, future
  *  hollow grey), lines between them (bold up to the current one), the station names (layout.labels) under the dots. */
-export function trackSvg(lane: Pick<LiveLane, 'at'> & Partial<Pick<LiveLane, 'done'>>, l: LiveLayout): { source: string; width: number; height: number } {
+export function trackSvg(lane: Pick<LiveLane, 'at'> & Partial<Pick<LiveLane, 'done' | 'stations' | 'skipped'>>, l: LiveLayout): { source: string; width: number; height: number } {
   const step = (l.gap + 1) * COL_PX
   const r = 5
   const x0 = r + 2
@@ -40,15 +40,27 @@ export function trackSvg(lane: Pick<LiveLane, 'at'> & Partial<Pick<LiveLane, 'do
   const height = 30
   const y = 9
   const parts: string[] = [`<style>${BLINK_CSS}</style>`]
-  l.stations.forEach((_, i) => {
-    const x = x0 + i * step
-    if (i) parts.push(i <= lane.at ? `<line x1="${x - step + r}" y1="${y}" x2="${x - r}" y2="${y}" stroke="${INK.passed}" stroke-width="3"/>` : `<line x1="${x - step + r}" y1="${y}" x2="${x - r}" y2="${y}" stroke="${INK.future}" stroke-width="1.5"/>`)
-    if (i < lane.at) parts.push(`<circle cx="${x}" cy="${y}" r="${r}" fill="${INK.passed}"/>`)
+  // T-846: the lane's own stations on the shared columns; the line runs through columns it has no station at
+  const own = lane.stations ?? l.stations
+  l.stations.forEach((s, col) => {
+    const x = x0 + col * step
+    let i = -1
+    for (let j = col; j < l.stations.length && i < 0; j++) i = own.indexOf(l.stations[j]!)
+    const mine = own.indexOf(s)
+    const through = mine < 0
+    if (col && i >= 0) parts.push(i <= lane.at ? `<line x1="${x - step + r}" y1="${y}" x2="${x - r}" y2="${y}" stroke="${INK.passed}" stroke-width="3"/>` : `<line x1="${x - step + r}" y1="${y}" x2="${x - r}" y2="${y}" stroke="${INK.future}" stroke-width="1.5"/>`)
+    if (through) {
+      if (i >= 0) parts.push(`<line x1="${x - r}" y1="${y}" x2="${x + r}" y2="${y}" stroke="${i <= lane.at ? INK.passed : INK.future}" stroke-width="${i <= lane.at ? 3 : 1.5}"/>`)
+      return
+    }
+    i = mine
+    if (lane.skipped?.includes(s)) parts.push(`<line x1="${x - r}" y1="${y}" x2="${x + r}" y2="${y}" stroke="${INK.label}" stroke-width="2"/>`)
+    else if (i < lane.at) parts.push(`<circle cx="${x}" cy="${y}" r="${r}" fill="${INK.passed}"/>`)
     // T-771: a finished lane: a green ✓ at its last station, nothing blinks
     else if (i === lane.at && lane.done) parts.push(`<path d="M${x - r} ${y} L${x - 1} ${y + r - 1} L${x + r + 1} ${y - r}" fill="none" stroke="${INK.passed}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`)
     else if (i === lane.at) parts.push(`<circle class="cur" cx="${x}" cy="${y}" r="${r + 1}" fill="${INK.current}" stroke="${INK.current}" stroke-width="2" fill-opacity=".85"/>`)
     else parts.push(`<circle cx="${x}" cy="${y}" r="${r - 1}" fill="none" stroke="${INK.future}" stroke-width="1.5"/>`)
-    parts.push(`<text x="${x}" y="${height - 2}" text-anchor="${i ? (i === l.stations.length - 1 ? 'end' : 'middle') : 'start'}" font-family="sans-serif" font-size="10" fill="${i === lane.at ? (lane.done ? INK.passed : INK.current) : INK.label}"${i === lane.at ? ' font-weight="bold"' : ''}>${(l.labels[i] ?? '').split(LIVE_AGENT_MARK).join(`<tspan fill="${INK.mark}">${LIVE_AGENT_MARK}</tspan>`)}</text>`)
+    parts.push(`<text x="${x}" y="${height - 2}" text-anchor="${col ? (col === l.stations.length - 1 ? 'end' : 'middle') : 'start'}" font-family="sans-serif" font-size="10" fill="${i === lane.at ? (lane.done ? INK.passed : INK.current) : INK.label}"${i === lane.at ? ' font-weight="bold"' : ''}>${(l.labels[col] ?? '').split(LIVE_AGENT_MARK).join(`<tspan fill="${INK.mark}">${LIVE_AGENT_MARK}</tspan>`)}</text>`)
   })
   return { source: `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${parts.join('')}</svg>`, width, height }
 }
@@ -156,7 +168,7 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
   const running = lanes.filter(l => !l.done)
   // the terminal's words at its width under a heading (liveInner), so both say the same
   const inner = liveInner(width)
-  const layout = liveLayout(lanes, liveStations(v.checker === true), inner)
+  const layout = liveLayout(lanes, liveColumns(lanes, v.checker === true), inner)
   const trains = liveTrains(v, nowMs, lanes)
   const open = (id: string) => act(() => panelValues($).updateOpened(() => id))
   /** A line of text in a Box of its own: VS Code keeps a Box's key (a Text's it drops), so each line can be found by it. */
@@ -209,7 +221,7 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
           </Box>
           {right ? line(`live-right:${lane.id}`, right, 'inactive') : null}
         </Box>
-        <Svg key={`live-track:${lane.id}`} source={track.source} width={track.width} height={track.height} alt={`${lane.id} at ${layout.labels[lane.at] ?? lane.station}: ${segText(first.filter(isTrack))}`} />
+        <Svg key={`live-track:${lane.id}`} source={track.source} width={track.width} height={track.height} alt={`${lane.id} at ${layout.labels[layout.stations.indexOf(lane.station)] ?? lane.station}: ${segText(first.filter(isTrack))}`} />
         <Box key={`live-sub:${lane.id}`} flexDirection="row" gap={1} alignItems="center">
           {(() => {
             // the terminal's line, its lead and the padding that lines it up under the track left out; the bar (if any) drawn

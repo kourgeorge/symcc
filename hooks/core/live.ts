@@ -7,12 +7,13 @@ import { type BoardTask, DEFAULT_AUTO_RETRIES, emptyBoard, kindOf, isInvestigati
 import { taskPhase, type PhaseStage } from './phase'
 import { handedBack, shownStatus } from './lead'
 import { cutTitle, median, padWidth, taskFigures, textWidth, wrapLine } from './stats'
-import { checkerIdOf, checkerTokensOf, tryCost, tryTokens, fmtCost, fmtDuration, fmtTokens, sumTokens, tokenCount } from './runs'
+import { agentsOf, checkerIdOf, checkerTokensOf, tryCost, tryTokens, fmtCost, fmtDuration, fmtTokens, sumTokens, tokenCount } from './runs'
 import { type KeyHint, LIVE_VIEW_KEYS, hintLineText, hintLines, rowDuration, waitOrder } from './panel'
 import { ORG_MEM_EMPTY, ORG_MEM_MAX_LINES, TOPIC_UNSORTED, orgMemNewest, orgMemSectionKeys, orgMemShortDay, orgMemTopicCounts, type OrgMemNote } from './org-mem'
 import { depDone } from './archive'
 import { dayOf, localOffset } from './days'
-import { modeLabel } from './review'
+import { modeLabel, needsReview } from './review'
+import { docsOnly } from './checker'
 import { num } from './text'
 import { asksMoreTime, needsYou } from './commands'
 import { fileWaitText, taskAsks } from './panel'
@@ -45,8 +46,10 @@ function sentBackOf(t: { history?: readonly { kind: string; at?: string; reason?
 }
 
 /** The stations of a lane, in the order a task passes them. */
-export type LiveStation = 'work' | 'check' | 'queue' | 'tests' | 'merged'
-export const LIVE_STATIONS: readonly LiveStation[] = ['work', 'check', 'queue', 'tests', 'merged']
+export type LiveStation = 'work' | 'check' | 'queue' | 'tests' | 'you' | 'merged' | 'answer'
+/** T-846: every station, in the order the lanes' columns have them. 'you' (the owner reads and approves) sits before 'merged' on
+ *  a task that needs review; 'answer' ends an investigation's lane (work → answer). */
+export const LIVE_STATIONS: readonly LiveStation[] = ['work', 'check', 'queue', 'tests', 'you', 'merged', 'answer']
 /** T-760: the mark after a station name where an agent works (work, check): those stations need an agent slot. */
 export const LIVE_AGENT_MARK = '✧'
 /** The line under the lanes that says what LIVE_AGENT_MARK after a station name means. */
@@ -70,8 +73,18 @@ export function liveLegend(lanes: readonly Pick<LiveLane, 'usual'>[], width: num
 }
 /** What the Live tab says when no task is in doing. */
 export const LIVE_EMPTY = 'No task is running right now.'
-/** The stations shown: check only when the checker setting is on. */
-export const liveStations = (checker: boolean): LiveStation[] => LIVE_STATIONS.filter(s => s !== 'check' || checker)
+/** The stations of a normal code task that merges on its own: check only when the checker setting is on. */
+export const liveStations = (checker: boolean): LiveStation[] => LIVE_STATIONS.filter(s => s !== 'you' && s !== 'answer' && (s !== 'check' || checker))
+/** T-846: the stations of one task's real path: an investigation goes work → answer; a task that needs review has "you" before merged. */
+export function laneStations(t: { kind?: unknown }, checker: boolean, review: boolean): LiveStation[] {
+  if (isInvestigation(t as SymccTask)) return ['work', 'answer']
+  return LIVE_STATIONS.filter(s => s !== 'answer' && (s !== 'check' || checker) && (s !== 'you' || review))
+}
+/** T-846: the columns the lanes share (the label line over them): every station any lane has, in order; the usual stations when no lane runs. */
+export function liveColumns(lanes: readonly Pick<LiveLane, 'stations'>[], checker: boolean): LiveStation[] {
+  if (!lanes.length) return liveStations(checker)
+  return LIVE_STATIONS.filter(s => lanes.some(l => l.stations.includes(s)))
+}
 
 /** The terminal panel's tabs in order, with their keys: Live, Tasks, Scouts, Settings. */
 export const LIVE_TABS = [
@@ -128,7 +141,10 @@ export type LiveLane = {
   kind: string
   stations: LiveStation[]
   station: LiveStation
+  /** the place of `station` in this lane's own `stations` */
   at: number
+  /** T-846: stations on this lane that the task skips (check, for a docs-only change): drawn as a dim "–" */
+  skipped?: LiveStation[]
   stage: PhaseStage
   sinceMs?: number
   place?: number
@@ -199,25 +215,41 @@ function approveSince(t: BoardTask, endMs: number | undefined): number | undefin
   return preps.length ? Math.max(...preps) : ms(t.live?.checking?.at)
 }
 
+/**
+ * T-846: whether task `t`'s checker is skipped, so its lane draws "check –": no checker ran on this try and the
+ * task's files are docs only (the checker skips such a change; known once it handed back). Before its hand-back nothing
+ * is known, so nothing is skipped.
+ */
+function checkSkipped(t: BoardTask, stage: PhaseStage): boolean {
+  if (stage === 'worker' || stage === 'checker') return false
+  const ran = agentsOf(t.runs?.[t.runs.length - 1]).some(a => a.kind === 'checker') || (t.history ?? []).some(h => h.kind === 'stage' && h.step === 'checker')
+  if (ran) return false
+  return docsOnly(t.files ?? [])
+}
+
 /** The lanes of the Live tab: one per task the board shows as doing (shownStatus: a task in doing, or one in review or
  *  waiting whose approve or merge runs, with a fresh check step), the one that entered doing (or whose approve began) first at the top. */
 export function liveLanes(view: LiveView, nowMs: number): LiveLane[] {
   const checker = view.checker === true
-  const stations = liveStations(checker)
   const usual = usualTokens(view.tasks)
   const retries = view.auto_retries ?? DEFAULT_AUTO_RETRIES
   const lanes = view.tasks
-    .filter(t => shownStatus(t as BoardTask, nowMs) === 'doing')
+    // T-846: a task in review (tests passed, waits for the owner) keeps its lane, sitting at "you"
+    .filter(t => shownStatus(t as BoardTask, nowMs) === 'doing' || (t.status === 'review' && !isInvestigation(t)))
     .map((x): LiveLane => {
       const t = x as BoardTask
+      const waiting = shownStatus(t, nowMs) !== 'doing'
+      const stations = laneStations(t, checker, waiting || needsReview(view, t))
       let stage: PhaseStage = taskPhase(t, nowMs).stage ?? 'worker'
       if (stage === 'worker' && handedBack(t)) stage = 'prep'
-      const station = stationOf(stage, checker)
+      const investigation = stations.includes('answer')
+      const station: LiveStation = waiting ? 'you' : investigation ? (stage === 'worker' ? 'work' : 'answer') : stationOf(stage, checker)
+      const skipped = checker && !investigation && !waiting && checkSkipped(t, stage)
       const run = t.runs?.[t.runs.length - 1]
       const startMs = ms(run?.started)
-      const approving = t.status !== 'doing'
-      const enteredMs = (approving ? approveSince(t, ms(run?.ended)) : startMs) ?? ms(t.updated_at) ?? ms(t.created_at) ?? 0
-      const sinceMs = stationSince(t, station, approving ? enteredMs : startMs)
+      const approving = t.status !== 'doing' && !waiting
+      const enteredMs = (waiting ? ms(run?.ended) : approving ? approveSince(t, ms(run?.ended)) : startMs) ?? ms(t.updated_at) ?? ms(t.created_at) ?? 0
+      const sinceMs = waiting ? enteredMs : stationSince(t, station, approving ? enteredMs : startMs)
       const tryNo = Math.max(1, Number(t.attempts) || 1)
       const auto = Number(t.test_tries ?? 0) || 0
       const place = stage === 'queue' ? t.live?.checking?.place : undefined
@@ -232,7 +264,8 @@ export function liveLanes(view: LiveView, nowMs: number): LiveLane[] {
         stations,
         station,
         at: stations.indexOf(station),
-        stage,
+        ...(skipped ? { skipped: ['check' as const] } : {}),
+        stage: waiting ? 'test' : stage,
         ...(sinceMs !== undefined ? { sinceMs } : {}),
         ...(place ? { place } : {}),
         tryNo,
@@ -242,7 +275,7 @@ export function liveLanes(view: LiveView, nowMs: number): LiveLane[] {
         ...(usual ? { usual } : {}),
         sentBack: (t.history ?? []).filter(h => h.kind === 'checker-problems').length,
         enteredMs,
-        agent: stage === 'worker' || (stage === 'checker' && !!checkerIdOf(t)),
+        agent: !waiting && stage === 'worker' || (stage === 'checker' && !!checkerIdOf(t)),
       }
     })
   return lanes.sort((a, b) => a.enteredMs - b.enteredMs || num(a.id) - num(b.id))
@@ -268,10 +301,8 @@ function finishedAt(t: SymccTask): { atMs: number; word: 'merged' } | undefined 
  * at its right. Failed or dropped tasks get none.
  */
 export function liveFinishedLanes(view: LiveView, nowMs: number): LiveLane[] {
-  const stations = liveStations(view.checker === true)
   const usual = usualTokens(view.tasks)
   const retries = view.auto_retries ?? DEFAULT_AUTO_RETRIES
-  const at = stations.length - 1
   return view.tasks
     .filter(t => t.status === 'done')
     .map(t => ({ t, done: finishedAt(t) }))
@@ -279,6 +310,8 @@ export function liveFinishedLanes(view: LiveView, nowMs: number): LiveLane[] {
     .sort((a, b) => b.done.atMs - a.done.atMs || num(b.t.id) - num(a.t.id))
     .slice(0, LIVE_FINISHED_MAX)
     .map(({ t, done }): LiveLane => {
+      const stations = laneStations(t, view.checker === true, needsReview(view, t))
+      const at = stations.length - 1
       const tryNo = Math.max(1, Number(t.attempts) || 1)
       const auto = Number(t.test_tries ?? 0) || 0
       const total = tokenCount(sumTokens((t.runs ?? []).map(tryTokens)))
@@ -367,6 +400,8 @@ export type LiveSeg = { text: string; tone: LiveTone }
 export const LIVE_TONE: Record<LiveTone, string> = { id: 'claude', title: 'text', passed: 'success', current: 'ide', future: 'inactive', text: 'text', dim: 'inactive', warning: 'warning', bar: 'ide', heading: 'suggestion', mark: 'suggestion', run: 'claude', now: 'claude', wait: 'inactive', topic: 'ide', workers: 'ide', checkers: 'autoAccept', scouts: 'suggestion', lead: 'success' }
 /** Whether a tone is drawn bold. */
 export const liveBold = (tone: LiveTone): boolean => tone === 'id' || tone === 'current' || tone === 'heading' || tone === 'run'
+/** T-846: the mark at a station the task skips. */
+export const LIVE_SKIP_MARK = '–'
 /** T-771: the mark at a finished lane's last station. */
 export const LIVE_DONE_MARK = '✓'
 /** T-767: what a running lane's first line starts with (before its id). */
@@ -424,9 +459,9 @@ export const liveIndented = (xs: readonly LiveSeg[]): LiveSeg[] => [{ text: LIVE
 export type LiveLayout = { width: number; idW: number; titleW: number; gap: number; labels: string[]; rightW: number; sep: number; stations: LiveStation[] }
 
 const LABELS: Record<LiveStation, string>[] = [
-  { work: 'work✧', check: 'check✧', queue: 'queue', tests: 'tests', merged: 'merged' },
-  { work: 'wrk✧', check: 'chk✧', queue: 'que', tests: 'tst', merged: 'mrg' },
-  { work: 'w✧', check: 'c✧', queue: 'q', tests: 't', merged: 'm' },
+  { work: 'work✧', check: 'check✧', queue: 'queue', tests: 'tests', you: 'you', merged: 'merged', answer: 'answer' },
+  { work: 'wrk✧', check: 'chk✧', queue: 'que', tests: 'tst', you: 'you', merged: 'mrg', answer: 'ans' },
+  { work: 'w✧', check: 'c✧', queue: 'q', tests: 't', you: 'y', merged: 'm', answer: 'a' },
 ]
 const MAX_GAP = 8
 const MIN_GAP = 2
@@ -521,10 +556,25 @@ export function laneLines(lane: LiveLane, l: LiveLayout, o: { nowMs: number; fra
   const sep = ' '.repeat(l.sep)
   const track: LiveSeg[] = []
   const done = !!lane.done
-  l.stations.forEach((_, i) => {
-    if (i) track.push(i <= lane.at ? { text: '━'.repeat(l.gap), tone: 'passed' } : { text: '─'.repeat(l.gap), tone: 'future' })
+  // T-846: the columns are shared by all lanes; a lane draws its own stations (lane.stations) on them, and its line runs
+  // through the columns it has no station at (an investigation has no check, queue, tests or merge)
+  const own = lane.stations ?? l.stations
+  const ahead = (i: number): number | null => {
+    for (let j = i; j < l.stations.length; j++) {
+      const k = own.indexOf(l.stations[j]!)
+      if (k >= 0) return k
+    }
+    return null
+  }
+  l.stations.forEach((s, i) => {
+    const next = ahead(i)
+    if (i) track.push(next === null ? { text: ' '.repeat(l.gap), tone: 'text' } : next <= lane.at ? { text: '━'.repeat(l.gap), tone: 'passed' } : { text: '─'.repeat(l.gap), tone: 'future' })
+    const k = own.indexOf(s)
+    if (k < 0) track.push(next === null ? { text: ' ', tone: 'text' } : next <= lane.at ? { text: '━', tone: 'passed' } : { text: '─', tone: 'future' })
+    // T-846: a station this task skips (check, for a docs-only change) is a dim "–"
+    else if (lane.skipped?.includes(s)) track.push({ text: LIVE_SKIP_MARK, tone: 'dim' })
     // T-771: a finished lane has ✓ (done color) at its last station instead of the blinking mark
-    track.push(i < lane.at ? { text: '●', tone: 'passed' } : i === lane.at ? (done ? { text: LIVE_DONE_MARK, tone: 'passed' } : { text: liveBlink(o.frame, o.steady), tone: 'current' }) : { text: '○', tone: 'future' })
+    else track.push(k < lane.at ? { text: '●', tone: 'passed' } : k === lane.at ? (done ? { text: LIVE_DONE_MARK, tone: 'passed' } : { text: liveBlink(o.frame, o.steady), tone: 'current' }) : { text: '○', tone: 'future' })
   })
   // T-767: "▶ " before the id; the mark and id bold in the accent color ('run'), the title normal text; T-771: a finished lane's dim, no mark
   const nameTone: LiveTone = done ? 'dim' : 'run'
@@ -616,7 +666,7 @@ export function liveTrains(view: LiveView, nowMs: number, lanes: readonly LiveLa
     const la = laneOf.get(a)
     const lb = laneOf.get(b)
     if (!la || !lb) return la ? 1 : lb ? -1 : (rank.get(b) ?? 0) - (rank.get(a) ?? 0)
-    return la.at - lb.at || lb.enteredMs - la.enteredMs || num(b) - num(a)
+    return LIVE_STATIONS.indexOf(la.station) - LIVE_STATIONS.indexOf(lb.station) || lb.enteredMs - la.enteredMs || num(b) - num(a)
   }
   // a task can hang once its todo blocker hangs: go over them until nothing changes (a chain settles in its length's passes)
   for (let pass = 0, changed = true; changed && pass <= todo.length; pass++) {

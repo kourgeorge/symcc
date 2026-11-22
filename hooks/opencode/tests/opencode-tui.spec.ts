@@ -779,10 +779,10 @@ test('T-751: [ and ] (and a click on ‹ or › in the header) go to the previou
   await board.press('open', 's')
   expect([board.state().tab, board.state().opened]).toEqual(['tasks', 'T-1'])
   const live = panelLines(f, { opened: 'T-1', cursor: 0, from: 'live' }, NOW, 100)
-  expect(lineText(live.lines[0]!)).toMatch(/^‹ \[Live\] +T-1$/)
-  expect(live.keys.map(k => k.word)).not.toContain('prev/next')
+  // T-846: T-2 (in review) keeps a lane at "you", so Live has two lanes
+  expect(lineText(live.lines[0]!)).toMatch(/^‹ \[Live\] +T-1 · ‹ 1 of 2 ›$/)
   await board.press('next', 's')
-  expect(board.state().opened).toBe('T-1')
+  expect(board.state().opened).toBe('T-2')
   await board.press('back', 's')
   expect(board.state().tab).toBe('live')
   board.stop()
@@ -2736,6 +2736,32 @@ test('T-760: the OpenCode Live tab ends work and check in ✧ (in the heading co
   }
 })
 
+test('T-846: the OpenCode Live tab draws an investigation as work → answer, a docs-only check as "–", and a needs-review task at "you"', () => {
+  const f0 = viewFile()
+  const ago = (min: number) => new Date(NOW - min * 60_000).toISOString()
+  const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', order: Number(id.slice(2)), after: [], attempts: 1, history: [], branch: null, created_at: ago(300), updated_at: ago(1), ...x }) as unknown as SymccTask
+  const handed = { runs: [{ started: ago(20), ended: ago(2), agents: [{ kind: 'worker' as const, started: ago(20), ended: ago(2), tokens: { input: 300_000 } }] }] }
+  const tasks = [
+    task('T-801', 'Why is it slow', { kind: 'investigation', runs: [{ started: ago(4) }] }),
+    task('T-803', 'Docs: fix the readme', { files: ['README.md'], ...handed, live: { checking: { step: 'prep', at: ago(0) } } }),
+    task('T-805', 'Waits for you', { needs_review: true, status: 'review', ...handed }),
+    task('T-806', 'A normal change', { files: ['hooks/a.ts'], ...handed, live: { checking: { step: 'testing', at: ago(0) } } }),
+  ]
+  const f: ViewFile = { ...f0, view: { ...f0.view, tasks: tasks.map(t => viewTask(t)), checker: true, max_parallel: 3 } }
+  const lanes = liveLanes(f.view, NOW)
+  expect(lanes.map(l => `${l.id} ${l.station} ${l.stations.length}`).sort()).toEqual(['T-801 work 2', 'T-803 check 5', 'T-805 you 6', 'T-806 tests 5'])
+  const d = panelLines(parseViewFile(viewFileText(f)), { tab: 'live', opened: '', cursor: 0 }, NOW, 120)
+  const texts = d.lines.map(lineText)
+  const row = (id: string) => texts.find(t => t.includes(`▶ ${id} `))!
+  const marks = (s: string) => s.replace(/◎/g, '◉').match(/[●○◉–][━─●○◉–]*/g)!.join('').replace(/[━─]+/g, '-')
+  expect(marks(row('T-801'))).toBe('◉-○')
+  expect(row('T-803')).toContain('–')
+  expect(row('T-806')).not.toContain('–')
+  expect(marks(row('T-806'))).toBe('●-●-●-◉-○')
+  expect(marks(row('T-805'))).toBe('●-●-●-●-◉-○')
+  expect(texts.some(t => t.includes('you') && t.includes('answer'))).toBe(true)
+})
+
 test('T-769: the Live tab\'s ▍Today has 4 lines (medians per task, work time, cost, the stacked bar with shares, the hour sparkline with its figures) from the slim view file; narrow drops parts, never wider', () => {
   const f0 = viewFile()
   const tasks = todayTasks(NOW) as unknown as SymccTask[]
@@ -2869,9 +2895,10 @@ test('T-709: the Live tab shows a lane for an approved task in review while its 
   expect(d.ids).toEqual(['need:T-601', 'T-630'])
   const lane = liveLanes({ ...f.view, tasks }, NOW)
   expect(lane.map(l => l.station)).toEqual(['tests'])
-  // its check step gone stale: no lane, the empty state again
+  // its check step gone stale: it only waits for the owner (T-846), so its lane sits at "you"
   const stale: ViewFile = { ...f, view: { ...f.view, tasks: tasks.map(t => (t.id === 'T-630' ? ({ ...t, live: { checking: { step: 'testing', at: ago(3600) } }, } as unknown as SymccTask) : t)).map(t => viewTask(t)) } }
-  expect(panelLines(parseViewFile(viewFileText(stale)), { tab: 'live', opened: '', cursor: 0 }, NOW, 120).lines.map(lineText)).toContain(LIVE_INDENT + LIVE_EMPTY)
+  expect(liveLanes({ ...f.view, tasks: tasks.map(t => (t.id === 'T-630' ? ({ ...t, live: { checking: { step: 'testing', at: ago(3600) } }, } as unknown as SymccTask) : t)) }, NOW).map(l => l.station)).toEqual(['you'])
+  expect(panelLines(parseViewFile(viewFileText(stale)), { tab: 'live', opened: '', cursor: 0 }, NOW, 120).lines.map(lineText)).not.toContain(LIVE_INDENT + LIVE_EMPTY)
 })
 
 test('T-692: in the TUI, l (or a click on the Live tab) shows the Live tab; ↓ and Enter, or a click on a lane, open that task\'s page', async () => {

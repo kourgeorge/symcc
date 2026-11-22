@@ -67,9 +67,9 @@ test('T-709: an approved task in review, or a waiting one whose merge runs, gets
   expect(testing.map(l => [l.id, l.station])).toEqual([['T-1', 'tests']])
   const queued = lanes(task('T-1', 'Approved', { status: 'review', ...tried, live: { checking: { step: 'queue', at: sec(5), place: 2 } }, }))
   expect(queued.map(l => [l.station, l.place])).toEqual([['queue', 2]])
-  // (2) a stale check step, or none: no lane
-  expect(lanes(task('T-1', 'Approved', { status: 'review', ...tried, live: { checking: { step: 'testing', at: new Date(T0 - FINISH_STALE_MS - 1000).toISOString() } }, }))).toEqual([])
-  expect(lanes(task('T-1', 'Approved', { status: 'review', ...tried }))).toEqual([])
+  // (2) a stale check step, or none: the task only waits for the owner, so its lane (T-846) sits at "you"
+  expect(lanes(task('T-1', 'Approved', { status: 'review', ...tried, live: { checking: { step: 'testing', at: new Date(T0 - FINISH_STALE_MS - 1000).toISOString() } }, })).map(l => l.station)).toEqual(['you'])
+  expect(lanes(task('T-1', 'Approved', { status: 'review', ...tried })).map(l => l.station)).toEqual(['you'])
   // (3) a waiting task whose merge runs once its files are clear
   const merging = lanes(task('T-2', 'Files cleared', { status: 'waiting', ...tried, live: { checking: { step: 'merging', at: sec(5) } }, }))
   expect(merging.map(l => [l.id, l.station])).toEqual([['T-2', 'merged']])
