@@ -10,7 +10,7 @@ import { inProject } from './project'
 import { ran, slash } from './fakes'
 import { vsHref } from '../hooks/claude/ui/vscode'
 import { emptyBoard, showsHeader,type BoardPage } from '../hooks/board'
-import { textWidth } from '../hooks/core/stats'
+import { textWidth } from '../hooks/core/width'
 
 /** Seeds the plugin's state values; once the plugin writes one, the kit's own store answers it (and redraws). */
 function stateOf(on: On, seed: Record<string, unknown>) {

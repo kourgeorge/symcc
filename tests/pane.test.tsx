@@ -2,7 +2,7 @@ import { expect, mock, type Engine, type Mounted as TestMounted } from 'claude-c
 import { test } from './reset'
 import type { On } from 'claude-code'
 import { ICON, ICON_ART } from '../hooks/name'
-import { textWidth } from '../hooks/core/stats'
+import { textWidth } from '../hooks/core/width'
 import { SETTING_GROUPS, groupSummary, hintLines, hintLineText, listKeys, scoutKeys, scoutListKeys, settingsKeys, rolesKeys, statusCell, STATUS_MARK, PREP_NOTE, bandLeads, type KeyHint } from '../hooks/board'
 import { keysFor } from './task-keys'
 import { STEP_NOTE } from '../hooks/board'

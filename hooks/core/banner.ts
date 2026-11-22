@@ -2,7 +2,7 @@
 import type { SymccMode, SymccStatus, SymccTask } from '../../types'
 import { DEFAULT_NAME, ICON, ICON_ART, namesFor } from '../name'
 import { type Board, type BoardTask, emptyBoard, kindOf, modeOf, OPEN, STATUS_WORD } from './board-file'
-import { cutTitle, padWidth, textWidth } from './stats'
+import { cutTitle, padWidth, textWidth } from './width'
 import { boardSections, type BoardSections, localOffset } from './days'
 import { fromText } from './origin'
 import { modeLabel, modeText } from './review'

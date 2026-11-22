@@ -2,7 +2,7 @@
 // VS Code and OpenCode lists) and the lead.json read (readLeadText, readLead).
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { fitSegs, textWidth } from '../hooks/core/stats'
+import { fitSegs, textWidth } from '../hooks/core/width'
 import { LIST_TONE } from '../hooks/core/details'
 import { leadText } from '../hooks/core/lead'
 import { readLead, readLeadText } from '../hooks/app/lead'

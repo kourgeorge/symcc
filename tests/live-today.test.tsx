@@ -5,7 +5,7 @@
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { LIVE_INDENT, LIVE_TONE, liveTodayLines, segText, squeezeHours, todayBar, todayMore, todayMoreLines, type LiveSeg, type TodayTeam } from '../hooks/core/live'
-import { textWidth } from '../hooks/core/stats'
+import { textWidth } from '../hooks/core/width'
 import { dayOf, localOffset } from '../hooks/core/days'
 import { publish, readTodayTeam, resetTodayTeam, todayTeam } from '../hooks/app/lead'
 import { S } from '../hooks/app/state'

@@ -16,7 +16,7 @@
 import type { SymccTask } from '../../types'
 import type { Seg } from './details'
 import { agoText, type BranchCommit, LIVE_INDENT, LIVE_TONE, liveInner } from './live'
-import { cutTitle, fitSegs, padWidth, textWidth } from './stats'
+import { cutTitle, fitSegs, padWidth, textWidth } from './width'
 import { historyTime } from './history'
 import { taskCommits } from './commits'
 

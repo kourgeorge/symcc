@@ -15,7 +15,7 @@ import { agentLines, fmtRun, fmtTotal, runsSummary, sumRuns } from './runs'
 import { usualTokens } from './live'
 import { type DiffFile, YOUR_EDITS } from './review'
 import { taskBranchLines, taskBranchTitle, type TaskBranchFacts } from './task-branch'
-import { cutTitle } from './stats'
+import { cutTitle } from './width'
 
 /** The sections, in the page's order. */
 export type TaskSectionId = 'why' | 'answer' | 'details' | 'branch' | 'changes' | 'what' | 'history' | 'report' | 'runs'
