@@ -24,7 +24,7 @@ test('T-727: the Branches section at 100 and 40 columns: main\'s commits, a row 
   expect(wide.rows.map(r => [r.id, r.kind])).toEqual([['T-724', 'merged'], ['T-721', 'branch'], ['T-725', 'branch'], ['T-726', 'new']])
   const narrow = liveBranches(sample(), T0, 40)!
   expect(linesOf(narrow)).toEqual([
-    'BRANCHES',
+    `BRANCHES ${'─'.repeat(31)}`,
     '  main   ●─●─●─●   c1c1c1c · 2 min ago',
     '         │   │ ╰─◀ T-724  merged 3m ago',
     '         │   ╰───○ T-721  +3 · 1 behind',
@@ -160,7 +160,7 @@ test('T-727: the VS Code Live tab draws the Branches section with real lines, an
   seedBoard(on, { view: liveView() })
   const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 100 }, surface: 'vscode' })
   await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'live') } })
-  expect((await ui.find({ key: 'live-br-head' }))?.text).toBe('BRANCHES')
+  expect((await ui.find({ key: 'live-br-head' }))?.text).toMatch(/^BRANCHES─+$/)
   expect((await ui.find({ key: 'live-br-main-text' }))?.text).toBe('main  c1c1c1c · 2 min ago')
   const svgs = await ui.findAll({ type: 'Svg' })
   const main = svgs.find(x => x.props.alt === BRANCH_LINES_100[1]!.trim())
@@ -199,11 +199,14 @@ for (const surface of ['terminal', 'desktop', 'mobile'] as const)
     expect(first).toBeGreaterThan(0)
     expect(lines[first - 1]!.trim() === '').toBe(false)
     const live = lines.slice(first)
-    expect(live[1]).toBe('TASKS')
+    expect(live[1]).toMatch(/^TASKS ─+$/)
     expect(live.some(l => l.includes('▍'))).toBe(false)
-    const heads = live.filter(l => LIVE_HEADS.some(h => h(l)) || l === 'TASKS')
-    expect(heads.slice(0, 3)).toEqual(['TASKS', 'TODAY', 'BRANCHES'])
-    expect([heads.length, /^ORGANIZATIONAL MEMORY {3}\d+ \/ 60 ▕/.test(heads[3] ?? '')]).toEqual([4, true])
+    const heads = live.filter(l => LIVE_HEADS.some(h => h(l)) || l.startsWith('TASKS '))
+    expect(heads.slice(0, 3).map(h => h.split(' ')[0])).toEqual(['TASKS', 'TODAY', 'BRANCHES'])
+    // T-810: every heading ends in a thin rule to the page width (80); the org-mem one has the count and no bar
+    for (const h of heads) expect([h, textWidth(h)]).toEqual([h, 80])
+    expect(heads[3]).not.toContain('▕')
+    expect([heads.length, /^ORGANIZATIONAL MEMORY {3}\d+ \/ 60 ─+$/.test(heads[3] ?? '')]).toEqual([4, true])
     expect(live.filter(l => l.includes('── ') || /^─+$/.test(l)).length).toBe(1)
     // the lines under a heading are indented by 1 (T-767; a running lane starts "▶ ")
     for (const l of [' ▶ T-7', '  main ', ' ✓ ', '   newest']) expect([l, live.some(x => x.startsWith(l))]).toEqual([l, true])
@@ -238,8 +241,8 @@ test('T-738: the VS Code Live tab spaces its sections with one empty line (the p
   const keys = ((page.children ?? []) as VsNode[]).map(k => String(k?.key ?? k?.props?.key ?? ''))
   for (const k of ['live-head', 'live-tasks', 'live-br', 'live-bottom', 'live-om']) expect([k, keys.includes(k)]).toEqual([k, true])
   // T-747: each section's heading, the terminal's names
-  expect((await ui.find({ key: 'live-tasks-head' }))?.text).toBe('TASKS')
-  expect((await ui.find({ key: 'live-today-head' }))?.text).toBe('TODAY')
+  expect((await ui.find({ key: 'live-tasks-head' }))?.text).toMatch(/^TASKS─+$/)
+  expect((await ui.find({ key: 'live-today-head' }))?.text).toMatch(/^TODAY─+$/)
   // T-789: one empty line under each heading (padding under it), not a blank Text
   for (const k of ['live-tasks-head', 'live-today-head', 'live-br-head', 'live-om-head']) expect([k, (await ui.find({ key: k }))?.props.paddingBottom]).toEqual([k, 1])
   // no blank Text lines of its own (the gap is the one empty line), and no padding on top of the gap
@@ -255,7 +258,7 @@ test('T-773: a freshly opened VS Code board (no tab saved) shows the Live tab an
   expect(tabs.indexOf('Live')).toBeGreaterThanOrEqual(0)
   expect(tabs.indexOf('Live')).toBeLessThan(tabs.indexOf('Tasks'))
   expect(tabs).toMatch(/\*\*[^*]*Live[^*]*\*\*/)
-  expect((await ui.find({ key: 'live-br-head' }))?.text).toBe('BRANCHES')
+  expect((await ui.find({ key: 'live-br-head' }))?.text).toMatch(/^BRANCHES─+$/)
   await ui.unmount()
 })
 

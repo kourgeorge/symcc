@@ -20,7 +20,7 @@ import type { TaskBranchFacts } from '../../core/task-branch'
 import { TODAY_BAR_START, TODAY_LINE_3, todayTasks, todayTeamOf } from '../../../tests/live-today-fixture'
 import { localOffset } from '../../core/days'
 import { textWidth as textWidthOf } from '../../core/stats'
-import { LIVE_INDENT, liveBranches, liveInner } from '../../core/live'
+import { LIVE_INDENT, liveBranches, liveHeading, liveInner } from '../../core/live'
 import { taskSections } from '../../core/task-sections'
 import { viewTask, viewStubFilled } from '../../core/board-parts'
 import { orgMemNotes, orgMemNoteKey } from '../../core/org-mem'
@@ -2057,8 +2057,9 @@ test('T-718: OpenCode: the Live tab\'s org-mem section draws the header, the 3 n
     const ls = d.lines.map(lineText)
     for (const l of ls) expect([w, l, l.length <= w]).toEqual([w, l, true])
     // T-747: the "▍Organizational memory" heading with the count and bar on it, the lines under it indented
-    const head = ls.findIndex(l => l.startsWith('ORGANIZATIONAL MEMORY   8 / 60 ▕'))
+    const head = ls.findIndex(l => l.startsWith('ORGANIZATIONAL MEMORY   8 / 60 ─'))
     expect(head > 0).toBe(true)
+    expect(textWidthOf(ls[head]!)).toBe(w)
     expect(ls[head + 1]!.trim()).toBe('')
     expect(ls[head + 2]).toBe('   newest')
     expect(ls[head + 3]).toMatch(/^[ ›] {3}— +unsorted {2}a note written/)
@@ -2711,7 +2712,7 @@ test('T-760: the OpenCode Live tab ends work and check in ✧ (in the heading co
   const f: ViewFile = { ...f0, view: { ...f0.view, tasks: whole.map(t => viewTask(t)), checker: true, max_parallel: 3 } }
   for (const w of [120, 50]) {
     const d = panelLines(parseViewFile(viewFileText(f)), { tab: 'live', opened: '', cursor: 0 }, NOW, w)
-    const at = d.lines.findIndex(l => lineText(l) === 'TASKS')
+    const at = d.lines.findIndex(l => lineText(l).startsWith('TASKS ─'))
     expect(lineText(d.lines[at + 1]!).trim()).toBe('')
     const labels = d.lines[at + 2]!
     const lanes = liveLanes(f.view, NOW)
@@ -2736,7 +2737,7 @@ test('T-769: the Live tab\'s ▍Today has 4 lines (medians per task, work time, 
   const today = (w: number) => {
     const texts = panelLines(parsed, { tab: 'live', opened: '', cursor: 0 }, NOW, w).lines.map(lineText)
     for (const t of texts) expect([w, t, textWidthOf(t) <= w]).toEqual([w, t, true])
-    const at = texts.indexOf('TODAY')
+    const at = texts.findIndex(x => x.startsWith('TODAY ─'))
     expect(texts[at + 1]!.trim()).toBe('')
     return { texts, lines: texts.slice(at + 2, at + 6) }
   }
@@ -2772,7 +2773,7 @@ test('T-692: the Live tab draws the terminal panel\'s lanes and today (core/live
     const layout = liveLayout(lanes, liveStations(true), inner)
     const frame = Math.floor(NOW / 1000)
     const under = (x: string) => LIVE_INDENT + x
-    return [liveHeader(view, lanes), 'TASKS', ' ', under(liveLabelLine(layout)), ...lanes.flatMap(l => laneLines(l, layout, { nowMs: NOW, frame }).map(x => under(segText(x)))), ' ', 'TODAY', ' ', ...todayLines(liveToday(whole, NOW), inner, true).map(under), ...liveLegend(lanes, inner).map(under)]
+    return [liveHeader(view, lanes), segText(liveHeading('Tasks', w)), ' ', under(liveLabelLine(layout)), ...lanes.flatMap(l => laneLines(l, layout, { nowMs: NOW, frame }).map(x => under(segText(x)))), ' ', segText(liveHeading('Today', w)), ' ', ...todayLines(liveToday(whole, NOW), inner, true).map(under), ...liveLegend(lanes, inner).map(under)]
   }
   // OpenCode reads the view file, whose done task comes slim (no history): the today row must still match
   const f: ViewFile = { ...f0, view: { ...view, tasks: whole.map(t => viewTask(t)) } }
@@ -2892,7 +2893,7 @@ test('T-692: in the TUI, l (or a click on the Live tab) shows the Live tab; ↓ 
   // T-758: ▍Today holds only the figures line (no "next up", no "today" label)
   const liveRows = rowEls(panel).map(r => r.text)
   expect(liveRows.some(r => r.includes('next up'))).toBe(false)
-  expect(liveRows[liveRows.findIndex(r => r.trim() === 'TODAY') + 2]?.trimStart().startsWith('✓ ')).toBe(true)
+  expect(liveRows[liveRows.findIndex(r => r.startsWith('TODAY ─')) + 2]?.trimStart().startsWith('✓ ')).toBe(true)
   await board.press('down', 's')
   await board.press('down', 's')
   await board.press('open', 's')
@@ -2967,7 +2968,7 @@ test('T-715: the Live tab hangs the waiting trains under their lanes as the term
     expect(d.ids).toEqual(['need:T-701', ...lanes.flatMap(l => [l.id, ...trainRows(t.lanes[l.id]!, liveInner(w)).flatMap(r => (r.id ? [r.id] : []))])])
     expect(d.hits[d.lines.findIndex(l => lineText(l).includes('└─◇ T-714'))]).toEqual({ open: 'T-714' })
     expect(texts.some(x => x.includes('next up'))).toBe(false)
-    expect(texts[texts.findIndex(x => x.trim() === 'TODAY') + 2]?.startsWith(`${LIVE_INDENT}✓ `)).toBe(true)
+    expect(texts[texts.findIndex(x => x.startsWith('TODAY ─')) + 2]?.startsWith(`${LIVE_INDENT}✓ `)).toBe(true)
   }
 })
 
@@ -2989,7 +2990,7 @@ test('T-767: the OpenCode Live tab indents by 1 under the headings; a running la
     expect(run.map(x => [x.color, !!x.bold])).toEqual([['claude', true], ['claude', true], ['text', false]])
     const train = d.lines[texts.findIndex(x => x.includes('└─◇ T-714'))]!.filter(x => x.text.trim())
     expect(train.map(x => [x.text, x.color, !!x.bold])).toEqual(train.map(x => [x.text, 'inactive', false]))
-    expect(texts[texts.findIndex(x => x.trim() === 'TODAY') + 2]?.startsWith(' ✓ ')).toBe(true)
+    expect(texts[texts.findIndex(x => x.startsWith('TODAY ─')) + 2]?.startsWith(' ✓ ')).toBe(true)
   }
 })
 
@@ -3603,14 +3604,17 @@ test('T-738, T-747: the OpenCode Live tab has a ▍heading for each section, one
     const lines = d.lines.map(lineText)
     expect(lines[0]!.trim() === '').toBe(false)
     const mode = lines.findIndex(l => l.includes('agents ') && l.includes(' busy'))
-    expect([mode >= 0, lines[mode + 1]]).toEqual([true, 'TASKS'])
-    const heads = lines.filter(l => ['TASKS', 'TODAY', 'BRANCHES'].includes(l) || l.startsWith('ORG'))
-    expect(heads.slice(0, 3)).toEqual(['TASKS', 'TODAY', 'BRANCHES'])
+    expect([mode >= 0, lines[mode + 1]]).toEqual([true, `TASKS ${'─'.repeat(w - 6)}`])
+    const heads = lines.filter(l => ['TASKS ─', 'TODAY ─', 'BRANCHES ─'].some(h => l.startsWith(h)) || l.startsWith('ORG'))
+    expect(heads.slice(0, 3).map(h => h.split(' ')[0])).toEqual(['TASKS', 'TODAY', 'BRANCHES'])
+    // T-810: each heading runs to the page width with its thin rule; the org-mem one has no bar
+    for (const h of heads) expect([h, textWidthOf(h)]).toEqual([h, w])
+    expect(heads[3]).not.toContain('▕')
     expect([heads.length, heads[3]!.startsWith(w === 100 ? 'ORGANIZATIONAL MEMORY   ' : 'ORG')]).toEqual([4, true])
     // no section rules in the body (the footer's rule is under it)
     expect(lines.slice(mode, lines.length - d.footer).filter(l => l.includes('── ') || /^─+$/.test(l))).toEqual([])
     // the heading's bar and name are drawn in the task page's heading color, bold
-    expect(d.lines[mode + 1]!.map(x => [x.color, x.bold])).toEqual([['suggestion', true]])
+    expect(d.lines[mode + 1]!.map(x => [x.color, x.bold]).slice(0, 1)).toEqual([['suggestion', true]])
     const isHeads = [(l: string) => l.startsWith('TODAY'), (l: string) => l.startsWith('BRANCHES'), (l: string) => l.startsWith('ORG')]
     for (const isHead of isHeads) {
       const at = lines.findIndex(isHead)
@@ -3759,10 +3763,10 @@ test('T-772: the OpenCode Live tab draws the org-mem meter at 30 / 60 and 60 / 6
     const live = panelLines(f, { tab: 'live', opened: '', cursor: 0 }, NOW, 140)
     const head = live.lines.find(l => lineText(l).startsWith('ORGANIZATIONAL MEMORY'))!
     const count = head.find(x => x.text === `${n} / 60`)
-    const bar = head.find(x => /^ ▕[█░]+▏$/.test(x.text))
-    expect([n, count?.color, bar?.color]).toEqual([n, 'inactive', 'ide'])
+    expect(head.some(x => x.text.includes('▕'))).toBe(false)
+    expect([n, count?.color]).toEqual([n, 'inactive'])
     expect(head.some(x => x.color === 'warning')).toBe(false)
-    looks.push(`${count?.color} ${bar?.color}`)
+    looks.push(`${count?.color}`)
   }
   expect(looks[0]).toBe(looks[1]!)
 })
@@ -3774,10 +3778,10 @@ test('T-786: the OpenCode Live tab has ▍Needs you first (above ▍Tasks) with 
     const d = panelLines(parseViewFile(viewFileText(f)), { tab: 'live', opened: '', cursor: 0 }, NOW, w)
     const texts = d.lines.map(lineText).map(x => x.replace(/^›/, ' '))
     for (const x of texts) expect([w, x, x.length <= w]).toEqual([w, x, true])
-    const head = texts.indexOf('NEEDS YOU')
+    const head = texts.findIndex(x => x.startsWith('NEEDS YOU ─'))
     expect(head).toBeGreaterThan(-1)
-    expect(head).toBeLessThan(texts.indexOf('TASKS'))
-    const rows = texts.slice(head + 2, texts.indexOf('TASKS') - 1)
+    expect(head).toBeLessThan(texts.findIndex(x => x.startsWith('TASKS ─')))
+    const rows = texts.slice(head + 2, texts.findIndex(x => x.startsWith('TASKS ─')) - 1)
     expect(texts[head + 1]!.trim()).toBe('')
     expect(rows.length).toBe(3)
     expect(rows[0]!.startsWith(' ⚠ Q-88')).toBe(true)

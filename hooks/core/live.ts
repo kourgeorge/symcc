@@ -401,9 +401,19 @@ export function liveNeeds(view: LiveView & { questions?: readonly { id: string; 
 export const LIVE_INDENT = ' '
 /** The width left for a section's lines in `width` columns (after LIVE_INDENT). */
 export const liveInner = (width: number): number => Math.max(1, Math.floor(width) - LIVE_INDENT.length)
-/** T-789: a section's heading in `width` columns: the name in UPPERCASE ("TASKS", cut when narrow), bold, no bar and no rule.
- *  The client puts one empty line above it (none above the first) and one under it. */
-export const liveHeading = (name: string, width: number): LiveSeg[] => [{ text: fitText(name.toUpperCase(), Math.max(1, Math.floor(width))), tone: 'heading' }]
+/** T-810: the thin rule (─) after a heading that used `used` columns of `width`: a space, then ─ to the right edge
+ *  (shorter when narrow, none in under 4 columns). */
+export const liveRuleText = (used: number, width: number): string => {
+  const room = Math.floor(width) - used - 1
+  return Math.floor(width) < 4 || room < 1 ? '' : ` ${'─'.repeat(room)}`
+}
+/** T-789/T-810: a section's heading in `width` columns: the name in UPPERCASE ("TASKS", cut when narrow), bold, then a thin
+ *  dim rule to the right edge. The client puts one empty line above it (none above the first) and one under it. */
+export const liveHeading = (name: string, width: number): LiveSeg[] => {
+  const text = fitText(name.toUpperCase(), Math.max(1, Math.floor(width)))
+  const rule = liveRuleText(textWidth(text), width)
+  return [{ text, tone: 'heading' }, ...(rule ? [{ text: rule, tone: 'dim' as const }] : [])]
+}
 /** A line under a section heading: LIVE_INDENT, then its segments. */
 export const liveIndented = (xs: readonly LiveSeg[]): LiveSeg[] => [{ text: LIVE_INDENT, tone: 'text' }, ...xs]
 
@@ -1037,18 +1047,16 @@ const GRID_LEAD = '   '
 const GRID_GAP = '    '
 const NEWEST_TOPIC_MAX = 16
 
-/** The section's heading in `width` columns: "▍Organizational memory   57 / 60 ▕█████████░▏" (T-747), the count of
- *  the cap and a fill bar on the heading line (the bar shorter, then left out, then the title shorter, when narrow).
- *  T-772: one calm look at every fill (the count dim, the bar the quiet 'bar' tone), never a warning; the lead is told
- *  when org-mem is full (the add is refused). */
+/** The section's heading in `width` columns: "ORGANIZATIONAL MEMORY   57 / 60 ────" (T-810: the count of the cap, no bar,
+ *  then the thin rule; the title shorter when narrow). T-772: the count is dim, never a warning. */
 function orgMemHead(n: number, width: number): LiveSeg[] {
   const count = `${n} / ${ORG_MEM_MAX_LINES}`
-  for (const title of [LIVE_SECTIONS.orgMem.toUpperCase(), 'ORG-MEM'])
-    for (const cells of [10, 6, 0]) {
-      const bar = cells ? ` ${tokenBar(n, ORG_MEM_MAX_LINES, cells)}` : ''
-      if (textWidth(`${title}   ${count}${bar}`) > width) continue
-      return segs({ text: title, tone: 'heading' }, { text: '   ', tone: 'text' }, { text: count, tone: 'dim' }, { text: bar, tone: 'bar' })
-    }
+  for (const title of [LIVE_SECTIONS.orgMem.toUpperCase(), 'ORG-MEM']) {
+    const used = textWidth(`${title}   ${count}`)
+    if (used > width) continue
+    const rule = liveRuleText(used, width)
+    return segs({ text: title, tone: 'heading' }, { text: '   ', tone: 'text' }, { text: count, tone: 'dim' }, { text: rule, tone: 'dim' })
+  }
   return liveHeading('Org-mem', width)
 }
 

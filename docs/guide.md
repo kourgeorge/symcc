@@ -1061,20 +1061,20 @@ the open tasks with a branch, the 5 latest merged ones and the 5 latest dropped 
 
 The Live tab (`l`) shows the tasks that run now as "railway lanes", one lane per task the board counts as running (a task in doing, or an approved or files-cleared task while its tests and merge run).
 Under the mode line it has up to five sections, each starting with a heading that is a plain bold
-UPPERCASE word (no bar, no rule): `NEEDS YOU` (only while something waits), `TASKS` (the lanes), `TODAY` (today's numbers),
+UPPERCASE word followed on the same line by a thin dim rule (`─`) to the right edge (shorter on a narrow panel, none under 4 columns): `NEEDS YOU` (only while something waits), `TASKS` (the lanes), `TODAY` (today's numbers),
 `BRANCHES` and `ORGANIZATIONAL MEMORY` (`ORG-MEM` on a narrow panel). One empty line sits above each heading (none above the first)
 and one under it, and the lines under a heading are indented by 1 space (VS Code shows the same
 words as bold headings with the same spacing):
 
 ```
-NEEDS YOU
+NEEDS YOU ──────────────────────────────────────────────────
 
  ⚠ Q-88  Which figures should go on TODAY's 4th line?
  ⚠ T-749 ready for review: Website home page: a live, played-out demo…
  ⚠ T-751 asks: Claude Code only lets a button key be one letter…
  ⚠ T-751 has run 45 min: more time?
 
-TASKS
+TASKS ──────────────────────────────────────────────────────
 
                        work✧    check✧   queue    tests    merged
  ▶ T-684 /symcc-doc…   ●━━━━━━━━●━━━━━━━━◉────────○────────○      #2
@@ -1178,12 +1178,12 @@ TASKS
   opens the Scouts tab; this works on every board. Under the `TODAY` heading, four lines about today:
 
   ```
-  TODAY
+  TODAY ──────────────────────────────────────────────────
 
    ✓ 67 merged   ↺ 76 sent back   ✗ 0 failed   Σ 320.7M tokens
-   ████████████▓▓▒░ workers 84% · checkers 8% · scouts 5% · lead 3%
+   █████████████▓▒░ workers 84% · checkers 8% · scouts 5% · lead 3%
    ⌀ per task 2.8M · 9m work · 23m start-to-merge   first try 34% · ⌀ 2.4 tries   ⌕ 68 sent back by the checker
-   ⏱ 13h 06m agent work · ≈ $64 this session   busiest hour 14:00 · 42M   08 ▁▂▃▅▇▆▅▃▅▇█▆▃ 20
+   ⏱ 13h 06m agent work · ≈ $64 this session   busiest hour 14:00 · 42M   08 ▁▂▃▅▆▅█▆▅▃▃▂▂ 20
   ```
 
   The first line: merged, sent back (every send-back today: the checker's problems, tests failed, a clash with main), failed, and the tokens of everyone today (workers, checkers, scouts and the lead: the same total the bar's shares are out of, so it is never smaller than the busiest hour; when the lead's and the scouts' tokens aren't known it is the tries only and says a dim `(tries only)`). The second: a bar of who spent today's tokens (workers, checkers, scouts, the lead; each in
@@ -1206,7 +1206,7 @@ TASKS
   [Organizational memory](#organizational-memory-org-mem)):
 
   ```
-  ORGANIZATIONAL MEMORY   57 / 60 ▕█████████░▏
+  ORGANIZATIONAL MEMORY   57 / 60 ──────────────────────────────
 
      newest
       11-21  tests      In tests, put dates relative to now, never a…

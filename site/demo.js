@@ -94,9 +94,10 @@
     return tabs.map(([k, n]) => sp(`[${k}] ${n}`, n === active ? 'tab-on' : 'dim')).join(sp(' │ ', 'dim'))
   }
   const heading = (name, rest = '') => sp('▍', 'heading') + sp(name, 'heading') + rest
-  // (T-789) the Live tab's section heading: the name in UPPERCASE, bold, no bar and no rule; an empty line above it
-  // (none above the first) and one under it
-  const liveHead = (name, rest = '') => sp(name.toUpperCase(), 'heading') + rest
+  // (T-789, T-810) the Live tab's section heading: the name in UPPERCASE, bold, then a thin dim rule to the right edge
+  // (the demo panel is 64 columns wide); an empty line above it (none above the first) and one under it
+  const PANEL_W = 64
+  const liveHead = (name, rest = '', plain = '') => sp(name.toUpperCase(), 'heading') + rest + sp(' ' + '─'.repeat(Math.max(0, PANEL_W - name.length - plain.length - 1)), 'dim')
 
   function laneLines(s, l) {
     let track = ''
@@ -180,7 +181,7 @@
     L.push(...branchLines(s))
     if (wide) {
       L.push('')
-      L.push(liveHead('Organizational memory', '   ' + sp('60 / 60', 'dim') + ' ' + sp('▕██████████▏', 'bar')), '')
+      L.push(liveHead('Organizational memory', '   ' + sp('60 / 60', 'dim'), '   60 / 60'), '')
       L.push(sp('   newest', 'dim'))
       L.push('    ' + sp('11-21', 'dim') + '  ' + sp('ui · surfaces', 'id') + '  ' + cut('VS Code board pages space their children with the page Box\'s gap={1}', 42))
       L.push('    ' + sp('11-21', 'dim') + '  ' + sp('probes       ', 'id') + '  ' + cut('Draw the OpenCode panel from /tmp with bun: panelLines(view, …)', 42))
