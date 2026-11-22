@@ -5680,8 +5680,9 @@ test('T-743: the restarted round merges: its time spans the restart, its tokens 
   expect(tryTokens(r)?.input).toBe(1500)
   // from its first start (ISO) to its end, not only the last worker's part
   expect(r.started).toBe(ISO)
-  expect(runMs(r)).toBe(Date.parse(r.ended!) - Date.parse(ISO))
-  expect(runMs(r)).toBeGreaterThan(Date.parse(STOP) - Date.parse(ISO))
+  // T-863: without the stretch between the stop and the restart (nobody worked then)
+  expect(runMs(r)).toBe(Date.parse(r.ended!) - Date.parse(ISO) - (Date.parse(r.restarts![0]!.started!) - Date.parse(STOP)))
+  expect(runMs(r)).toBeGreaterThanOrEqual(Date.parse(STOP) - Date.parse(ISO))
   expect(t.history.map(h => h.text)).toContain(`try 1: ${REOPEN}`)
   const d = statsData({ tasks: [t], nowMs: Date.now() })
   expect(d.first).toBe(1)
