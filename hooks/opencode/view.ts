@@ -34,6 +34,8 @@ export function viewFilePanel(host: Pick<Host, 'fs' | 'run' | 'ui' | 'plugin'>):
   let scout = ''
   let view = emptyView()
   let writing: Promise<unknown> = Promise.resolve()
+  /** T-841: the session that ran /enable last (the TUI window showing it opens the board once) */
+  let openNow: { session: string; at: number } | undefined
   const write = (v: SymccView) => {
     if (!S.root || S.guardOnly) return writing
     const root = S.root
@@ -48,7 +50,7 @@ export function viewFilePanel(host: Pick<Host, 'fs' | 'run' | 'ui' | 'plugin'>):
         const defs = await defsOf(host as Host).catch(() => ({}))
         const changes = await changesOf(host as Host, v)
         const org_mem = await orgMemNow(host as Host).then(r => r.notes).catch(() => [])
-        const text = viewFileText({ root, home: S.home, name: S.N.name, version: S.version, written_at: at, view: { ...(v as PaneView), tasks: (v.tasks ?? []).map(viewTask), ...(Object.keys(scout_runs).length ? { scout_runs } : {}), ...(Object.keys(scout_results).length ? { scout_results } : {}), ...defs, ...(Object.keys(changes).length ? { changes } : {}), org_mem } })
+        const text = viewFileText({ root, home: S.home, name: S.N.name, version: S.version, written_at: at, ...(openNow ? { open_now: openNow } : {}), view: { ...(v as PaneView), tasks: (v.tasks ?? []).map(viewTask), ...(Object.keys(scout_runs).length ? { scout_runs } : {}), ...(Object.keys(scout_results).length ? { scout_results } : {}), ...defs, ...(Object.keys(changes).length ? { changes } : {}), org_mem } })
         await safeWrite(host as Host, file, text, 'the board view')
       })
       .catch((err: Error) => host.ui.log(`couldn't write ${file}: ${err?.message ?? err}`))
@@ -62,6 +64,10 @@ export function viewFilePanel(host: Pick<Host, 'fs' | 'run' | 'ui' | 'plugin'>):
     readScoutOpen: async () => scout,
     updateScoutOpen: async change => (scout = change(scout)),
     readView: async () => view,
+    openNow: async session => {
+      openNow = { session, at: Date.now() }
+      await write(view)
+    },
     updateView: async change => {
       view = change(view)
       await write(view)

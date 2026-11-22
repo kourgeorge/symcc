@@ -3647,8 +3647,15 @@ test('T-738, T-747: the OpenCode Live tab has a ▍heading for each section, one
 function startCtx(view: Partial<PaneView>) {
   const f = viewFile()
   let text = viewFileText({ ...f, view: { ...f.view, ...view } })
-  const setView = (v: Partial<PaneView>) => void (text = viewFileText({ ...f, view: { ...f.view, ...v } }))
+  let mark: { session: string; at: number } | undefined
+  let cur: Partial<PaneView> = view
+  const write = () => void (text = viewFileText({ ...f, ...(mark ? { open_now: mark } : {}), view: { ...f.view, ...cur } }))
+  const setView = (v: Partial<PaneView>) => void ((cur = v), write())
+  /** T-841: /symcc-enable ran in this session (the engine writes the one-time mark) */
+  const enableIn = (session: string, v: Partial<PaneView>) => void ((mark = { session, at: (mark?.at ?? NOW) + 1 }), (cur = v), write())
   const fc = fakeCtx({})
+  /** T-841: the window shows this session (its composer slot is drawn with the id) */
+  const showSession = (id: string) => void (fc.slots.find(x => x.append === 'session.composer.top')!.render({ sessionID: id } as never))
   const shown = { session: false }
   const opens: string[] = []
   let current: { name: string; sessionID: string } | undefined
@@ -3658,7 +3665,7 @@ function startCtx(view: Partial<PaneView>) {
     current: () => current,
   }
   const board = startTui({ ...fc.ctx, ui: { ...fc.ctx.ui, panel } }, { runtime: fakeRuntime(), readText: async () => text, every: () => () => undefined, now: () => NOW })
-  return { board, shown, opens, toasts: fc.toasts, current: () => current, panel, setView }
+  return { board, shown, opens, toasts: fc.toasts, current: () => current, panel, setView, enableIn, showSession }
 }
 
 test('T-756: with open_on_start on, the board panel opens by itself once a session is shown (no toast before), and not again after it is closed', async () => {
@@ -3681,7 +3688,7 @@ test('T-756: with open_on_start on, the board panel opens by itself once a sessi
   s.board.stop()
 })
 
-test('T-756: with open_on_start off, or symcc off, the board panel does not open by itself; T-841: turning symcc on (/symcc-enable) opens it once, unless open_on_start is off', async () => {
+test('T-756: with open_on_start off, or symcc off, the board panel never opens by itself', async () => {
   for (const view of [{ open_on_start: false, enabled: true }, { open_on_start: true, enabled: false }]) {
     const s = startCtx(view)
     s.shown.session = true
@@ -3690,14 +3697,6 @@ test('T-756: with open_on_start off, or symcc off, the board panel does not open
     expect(s.opens.length).toBe(0)
     expect(s.current()).toBe(undefined)
     expect(s.toasts.length).toBe(0)
-    // T-841: /symcc-enable turns symcc on
-    s.setView({ ...view, enabled: true })
-    await s.board.refresh()
-    expect(s.current()?.name).toBe(view.open_on_start ? BOARD_PANEL : undefined)
-    // an open panel is not opened twice
-    const n = s.opens.length
-    await s.board.refresh()
-    expect(s.opens.length).toBe(n)
     s.board.stop()
   }
 })
@@ -3710,28 +3709,55 @@ test('T-756: open_on_start turned off, or symcc turned off, while it waits for a
     s.setView(later)
     s.shown.session = true
     await s.board.refresh()
-    // turned back on later in the same run: only symcc being turned on (T-841) opens it
+    // turned back on later in the same run: still not by itself
     s.setView({ open_on_start: true, enabled: true })
     await s.board.refresh()
-    expect(s.current()?.name).toBe(later.enabled ? undefined : BOARD_PANEL)
+    expect(s.current()).toBe(undefined)
     expect(s.toasts.length).toBe(0)
     s.board.stop()
   }
 })
 
-test('T-841: symcc turned off and on again opens the board, even after it opened by itself earlier in the run', async () => {
-  const s = startCtx({ open_on_start: true, enabled: true })
+test('T-841: /symcc-enable in this window\'s session opens the board; other windows\' writes never reopen a closed one', async () => {
+  // symcc off in a new project: nothing opens; then /symcc-enable runs in this window's session
+  const s = startCtx({ open_on_start: true, enabled: false })
   s.shown.session = true
+  s.showSession('me')
+  await s.board.refresh()
+  expect(s.current()).toBe(undefined)
+  s.enableIn('me', { open_on_start: true, enabled: true })
   await s.board.refresh()
   expect(s.current()?.name).toBe(BOARD_PANEL)
-  s.panel.close()
-  s.setView({ open_on_start: true, enabled: false })
+  // already open: not opened twice
+  const n = s.opens.length
   await s.board.refresh()
-  expect(s.current()?.name).toBe(undefined)
+  expect(s.opens.length).toBe(n)
+  // the owner closes it; another window (off here, then on) writes the file: nothing reopens
+  s.panel.close()
+  s.setView({ open_on_start: true, enabled: false, off_here: 'other' } as never)
+  await s.board.refresh()
   s.setView({ open_on_start: true, enabled: true })
   await s.board.refresh()
-  expect(s.current()?.name).toBe(BOARD_PANEL)
+  expect(s.current()).toBe(undefined)
+  expect(s.opens.length).toBe(n)
   s.board.stop()
+})
+
+test('T-841: /symcc-enable in another session, or with open_on_start off, opens nothing', async () => {
+  const a = startCtx({ open_on_start: true, enabled: false })
+  a.shown.session = true
+  a.showSession('me')
+  a.enableIn('someone-else', { open_on_start: true, enabled: true })
+  await a.board.refresh()
+  expect(a.current()).toBe(undefined)
+  a.board.stop()
+  const b = startCtx({ open_on_start: false, enabled: false })
+  b.shown.session = true
+  b.showSession('me')
+  b.enableIn('me', { open_on_start: false, enabled: true })
+  await b.board.refresh()
+  expect(b.current()).toBe(undefined)
+  b.board.stop()
 })
 
 // ---------------- T-761: the task page's Branch section ----------------

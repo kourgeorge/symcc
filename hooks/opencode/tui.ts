@@ -395,6 +395,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     readTaskReport()
     openMade()
     openOnStart(f)
+    openNow(f)
   }
   /** T-756: opens the board panel by itself once per TUI run, as Claude Code does at session start when open_on_start is
    *  on (and symcc is on). Each view file read checks the setting again and tries until a session is shown
@@ -403,15 +404,23 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
    *  itself again in this run, so a closed board stays closed. */
   let startDone = false
   const openOnStart = (f: ViewFile | null) => {
-    if (!f) return
-    // T-841: symcc off (a new project, or /symcc-disable) waits and re-arms; /symcc-enable turns it on and the board then opens
-    if (f.view.enabled === false && f.view.open_on_start !== false) {
-      startDone = false
-      return
-    }
-    if (startDone) return
-    if (f.view.open_on_start === false) startDone = true
+    if (startDone || !f) return
+    if (f.view.open_on_start === false || f.view.enabled === false) startDone = true
     else if (ctx.ui.panel.current()?.name === BOARD_PANEL || ctx.ui.panel.open(BOARD_PANEL)) startDone = true
+  }
+  /** T-841: /symcc-enable (or enable here) writes a one-time "open now" mark with its session's id into the view file.
+   *  Only the TUI window showing that session opens the board for it (unless open_on_start is off or it is open
+   *  already); a mark from before this run, or one for another window's session, opens nothing. A write by another
+   *  window (enabled false or true) never counts. */
+  const startedAt = d.now()
+  let shownSession = ''
+  let openNowDone = 0
+  const openNow = (f: ViewFile | null) => {
+    const m = f?.open_now
+    if (!f || !m || m.at <= openNowDone || m.at < startedAt || !shownSession || m.session !== shownSession) return
+    openNowDone = m.at
+    if (f.view.open_on_start === false || f.view.enabled === false) return
+    if (ctx.ui.panel.current()?.name !== BOARD_PANEL) ctx.ui.panel.open(BOARD_PANEL)
   }
   /** Opens the page of the role, kind or scout just made here once the view file has it (a new role or kind in its
    *  edit mode, as Claude Code's New role does). */
@@ -996,7 +1005,8 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   disposers.push(
     ctx.ui.slot({
       append: 'session.composer.top',
-      render: () => {
+      render: input => {
+        shownSession = input?.sessionID ?? shownSession
         const col = r.createElement('box')
         r.setProp(col, 'flexDirection', 'column')
         // a click on the header (or the "+N more" line) opens the board panel, or closes it when it is open, as

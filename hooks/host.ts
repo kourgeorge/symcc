@@ -196,6 +196,8 @@ export type PanelValues = {
   updateScoutOpen: (change: (value: string) => string) => Promise<unknown>
   readView: () => Promise<SymccView>
   updateView: (change: (value: SymccView) => SymccView) => Promise<unknown>
+  /** T-841 (OpenCode): /enable ran in this session; its window opens the board once. */
+  openNow?: (sessionID: string) => Promise<unknown>
   /** A warning when this host's panel has to trim `view` to fit; '' or absent: it keeps every task. */
   trimNote?: (view: SymccView) => string
 }

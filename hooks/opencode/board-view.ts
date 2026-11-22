@@ -57,6 +57,8 @@ export type ViewFile = {
   version: string
   /** when it was written (ms) */
   written_at: number
+  /** T-841: /enable ran in this session: its TUI window opens the board once (at: when, ms) */
+  open_now?: { session: string; at: number }
   view: PaneView & { scout_runs?: ScoutRuns; scout_results?: Record<string, string>; roles?: ViewDef[]; kinds?: ViewDef[]; changes?: ViewChanges; org_mem?: OrgMemNote[] }
 }
 
@@ -175,7 +177,9 @@ export function parseViewFile(text: string | null | undefined): ViewFile | null 
       rest.task_branches = Object.fromEntries(Object.entries(rest.task_branches).filter(([, x]) => ok(x as Partial<TaskBranchFacts> | null)))
     } else delete rest.task_branches
     const view ={ ...rest, ...runs, working: Array.isArray(f.view.working) ? f.view.working : [], scouts: Array.isArray(f.view.scouts) ? f.view.scouts : [], test_commands: Array.isArray(f.view.test_commands) ? f.view.test_commands : [] }
-    return { root: s(f.root), home: s(f.home), name: s(f.name) || DEFAULT_NAME, version: s(f.version), written_at: Number(f.written_at) || 0, view }
+    const om = f.open_now
+    const open_now = om && typeof om === 'object' && typeof om.session === 'string' && Number.isFinite(om.at) ? { open_now: { session: om.session, at: om.at } } : {}
+    return { root: s(f.root), home: s(f.home), name: s(f.name) || DEFAULT_NAME, version: s(f.version), written_at: Number(f.written_at) || 0, ...open_now, view }
   } catch {
     return null
   }

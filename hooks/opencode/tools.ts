@@ -125,6 +125,8 @@ export function opencodeCommands(host: Host, session: Pick<OcSessionApi, 'prompt
       const run = c.name === ANSWER_COMMAND().name ? answerCommand : runCommand
       const answer: CommandAnswer | null = await run(host, c.name, commandArgs(c.name, inv.prompt.text)).catch((err: Error) => ({ text: `${S.N.name}: /${c.name} failed: ${err?.message ?? err}`, isTextDisplayOnly: true as const }))
       if (!answer) return
+      // T-841: /enable turned symcc on here: this session's window opens the board (the view file carries the mark)
+      if (c.name === `${S.N.name}-enable` && S.root && !S.guardOnly) await host.ui.panel?.openNow?.(inv.sessionID).catch(() => undefined)
       if (answer.isTextDisplayOnly) await session.synthetic({ sessionID: inv.sessionID, text: answer.text, description: `/${c.name}`, delivery: inv.delivery, resume: false })
       else await session.prompt({ sessionID: inv.sessionID, text: answer.text, delivery: inv.delivery })
     },
