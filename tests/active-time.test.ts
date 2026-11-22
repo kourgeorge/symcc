@@ -145,3 +145,20 @@ test('T-863: after a reopen the check step shows the time since its own prep lin
   expect(lane.station).toBe('check')
   expect(laneRight(lane, NOW)).toBe('9m')
 })
+
+test('T-863: the stage chart counts the steps that ran before the close under their own names', () => {
+  const t = task('T-52', {
+    status: 'done',
+    created_at: at(1860),
+    runs: [{ started: at(1850), ended: at(10), ended_by: 'finished', restarts: [{ at: at(1800), why: REOPEN, started: at(12) }] }],
+    history: [
+      { kind: 'created', at: at(1860), text: 'created by the owner' },
+      { kind: 'stage', at: at(1835), text: 'try 1: tests started', try: 1, step: 'tests' },
+      { kind: 'stage', at: at(9), text: 'try 1: tests started', try: 1, step: 'tests' },
+      { kind: 'merged', at: at(4), text: 'try 1: did it → merged into main (abc)' },
+    ],
+  })
+  const s = taskStages(t, () => undefined)!
+  expect(s.ms.tests).toBeGreaterThanOrEqual(35 * MIN)
+  expect(s.ms.work).toBeLessThanOrEqual(20 * MIN)
+})

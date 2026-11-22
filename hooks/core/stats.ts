@@ -207,6 +207,8 @@ export function taskStages(t: SymccTask, doneAt: (id: string) => number | undefi
   // T-863: a try that went on after a restart symcc did itself has idle stretches (no session was open): there nothing
   // runs, so the time is waiting, never work
   const idle = runs.flatMap(r => gapsOf(r).filter(g => g.from >= Date.parse(r.started) && g.to <= Date.parse(r.ended!)))
+  // steps that ran before such a stretch began (prep, queue, tests before Claude Code closed) count under their own name
+  const early = runs.flatMap(r => gapsOf(r).map(g => ({ s: Date.parse(r.started), from: g.from })))
   const points: Point[] = [
     ...runs.flatMap(r => [{ ms: Date.parse(r.started), prio: 2, run: 'start' as const }, { ms: Date.parse(r.ended!), prio: 0, run: 'end' as const }]),
     ...idle.flatMap(g => [{ ms: g.from, prio: 0, idle: 'from' as const }, { ms: g.to, prio: 0, idle: 'to' as const }]),
@@ -269,7 +271,7 @@ export function taskStages(t: SymccTask, doneAt: (id: string) => number | undefi
       inRun = false
       pending = null
     } else if (p.to && p.to !== 'end') {
-      if (inRun) pending = p.to
+      if (inRun && !early.some(e => p.ms >= e.s && p.ms < e.from)) pending = p.to
       else {
         close(p.ms)
         cur = p.to
