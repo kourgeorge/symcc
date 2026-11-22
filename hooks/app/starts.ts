@@ -118,6 +118,28 @@ export async function starterEnded(_host: Host, agentId: string | undefined): Pr
   return true
 }
 
+/** T-884: the oldest queued start the last regular check saw (rewakeStarts). */
+let lastSeen: Waiting | undefined
+
+/**
+ * T-884: called by the regular check (every 2 minutes). When the oldest queued start was already waiting at the check
+ * before (so for one whole check interval: its wake-up was lost, or the lead's turn end never came), the "already
+ * woken" and "lead busy" marks are cleared and the queue is woken again, so a start never waits for the owner's next
+ * prompt. A running hidden starter has its own timeout, so nothing is done then. Returns whether it woke the queue.
+ */
+export function rewakeStarts(host: Host): boolean {
+  const first = waiting[0]
+  if (!first || !host.features.startQueue) return ((lastSeen = undefined), false)
+  if (first !== lastSeen) return ((lastSeen = first), false)
+  if (starter || !S.enabledNow) return false
+  // the next wake-up comes at the earliest two checks later
+  lastSeen = undefined
+  leadBusy = false
+  woke = true
+  wake(host, first.input)
+  return true
+}
+
 /** How many starts wait in the queue. */
 export const queuedStarts = () => waiting.length
 
@@ -168,4 +190,5 @@ export function resetStarts() {
   starterIds.clear()
   leadBusy = false
   woke = false
+  lastSeen = undefined
 }
