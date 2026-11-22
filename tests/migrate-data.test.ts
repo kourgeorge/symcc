@@ -405,7 +405,7 @@ test('T-808: fix migrate-data makes a task\'s question fields one `ask` record, 
   const text = await doctor(w.host, '')
   expect(text).toContain('instead of one `ask` record')
   expect(text).toContain('board questions with no `by`')
-  expect(text).toContain('last_run / last_report entries or usage days older than a year')
+  expect(text).toContain('last_run / last_report entries')
   expect(await doctor(w.host, 'fix migrate-data')).toContain('✓ migrate-data')
   const b = await load(w.host)
   const t = (id: string) => b.tasks.find(x => x.id === id)! as unknown as Record<string, unknown>
@@ -422,4 +422,11 @@ test('T-808: fix migrate-data makes a task\'s question fields one `ask` record, 
   expect(sc.usage.bugs.runs).toBe(1)
   expect(JSON.parse(w.files.get(`${D}/scouts/bugs.runs.json`)!).runs[0]).toMatchObject({ ended: E, outcome: 'found' })
   expect(await doctor(w.host, '')).not.toContain('migrate-data')
+})
+
+test('T-808: usage days that only aged past a year are not old data', () => {
+  const figs = { runs: 1, tokens: { input: 5, output: 1 }, ms: 10 }
+  const scouts = { scouts: { bugs: { paused: true } }, usage: { bugs: { ...figs, days: { '2026-11-30': figs } } } }
+  const rows = oldDataRows({ board: null, archive: [], scouts, withRuns: new Set(), fieldGuide: false, orgMem: false, nowMs: Date.parse('2027-12-01') })
+  expect(rows.filter(r => r.fix).length).toBe(0)
 })

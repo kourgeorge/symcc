@@ -496,9 +496,9 @@ export const USAGE_DAYS_KEPT = 365
 
 /**
  * scouts.json's text without each scout's last_run and last_report (T-808: they are read from its runs file; only `paused` stays) for the
- * names `strip` accepts, and with the usage days older than USAGE_DAYS_KEPT days cut. Null when nothing needs it.
+ * names `strip` accepts, and (when `cutDays`) with the usage days older than USAGE_DAYS_KEPT days cut. Null when nothing needs it.
  */
-export function upgradeScoutFile(text: string | null | undefined, strip: (name: string) => boolean, nowMs: number): string | null {
+export function upgradeScoutFile(text: string | null | undefined, strip: (name: string) => boolean, nowMs: number, cutDays = true): string | null {
   let raw: unknown
   try { raw = JSON.parse(text ?? '') } catch { return null }
   if (!isObj(raw)) return null
@@ -516,7 +516,7 @@ export function upgradeScoutFile(text: string | null | undefined, strip: (name: 
     }
     out.scouts = scouts
   }
-  if (isObj(raw.usage)) {
+  if (cutDays && isObj(raw.usage)) {
     const cutoff = new Date(nowMs - USAGE_DAYS_KEPT * 86_400_000).toISOString().slice(0, 10)
     const usage: Raw = {}
     for (const [name, v] of Object.entries(raw.usage)) {
@@ -606,7 +606,7 @@ export function oldDataRows(i: OldInput): OldRow[] {
   const memory = isObj(i.scouts) && isObj(i.scouts.scouts) ? i.scouts.scouts : {}
   const lastReport = Object.entries(memory).filter(([name, v]) => isObj(v) && typeof v.last_report === 'string' && !i.withRuns.has(name) && !(i.unsafeScouts ?? []).includes(name)).length
   const unsafe = (i.unsafeScouts ?? []).filter(name => isObj(memory[name]) && typeof memory[name].last_report === 'string')
-  const scoutFile = upgradeScoutFile(JSON.stringify(i.scouts ?? null), n => !(i.unsafeScouts ?? []).includes(n), i.nowMs ?? Date.now()) !== null
+  const scoutFile = upgradeScoutFile(JSON.stringify(i.scouts ?? null), n => !(i.unsafeScouts ?? []).includes(n), i.nowMs ?? Date.now(), false) !== null
   const settings = (b.mode === 'off' ? 1 : 0) + (b.notify === 'sound' || 'sound_set' in b ? 1 : 0) + ('target_branch' in b ? 1 : 0)
   const rows: OldRow[] = [
     { n: c.unsplit, text: 'tries with `unsplit` tokens (counts saved before the kinds were kept apart; shown as they are)', fix: false },
@@ -629,7 +629,7 @@ export function oldDataRows(i: OldInput): OldRow[] {
     { n: c.conflict, text: 'tasks with a conflict_tries field', fix: true },
     { n: c.live, text: 'tasks with try-only fields outside `live` (session, finishing, checking, merge_wait, extra_minutes, time_ask, wrap_up, try_question, try_refused), a merge_main that is false, or a clash failure known only from its note', fix: true },
     { n: c.ask, text: 'tasks with their question in several fields (question, options, asked_files, question_lead, options_lead, live.question) instead of one `ask` record', fix: true },
-    { n: scoutFile ? 1 : 0, text: 'scouts.json with last_run / last_report entries or usage days older than a year', fix: true },
+    { n: scoutFile ? 1 : 0, text: 'scouts.json with last_run / last_report entries', fix: true },
     { n: c.qBy, text: 'board questions with no `by`', fix: true },
     { n: settings, text: 'old board settings (mode off, notify sound / sound_set, target_branch)', fix: true },
     { n: lastReport, text: 'scouts whose last report is not yet in a runs file', fix: true },
