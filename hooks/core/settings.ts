@@ -310,7 +310,7 @@ export const SETTINGS: SettingInfo[] = [
   { name: 'archive_days', kind: 'number', min: 0, max: 3650, default: String(DEFAULT_ARCHIVE_DAYS), range: '0-3650 (0 = never)', meaning: 'done and dropped tasks older than this move to archive.json' },
   { name: 'open_on_start', kind: 'onoff', default: 'on', range: 'on / off', meaning: 'open the board panel when a session starts' },
   { name: 'notify', kind: 'notify', default: 'voice (else sound N, N picked from the project name, else off)', range: 'voice / sound 1 / sound 2 / sound 3 / off', meaning: 'when a task is merged or a worker asks you something: "symcc: T-3 done" / "symcc: T-5 needs you" out loud, the project name first (voice), or a chime from sound set N, so you can tell which project chimed (on macOS sound 1: Glass and Ping, sound 2: Hero and Pop, sound 3: Submarine and Funk; the second one when a question waits); picking a sound plays its chime' },
-  { name: 'scout_findings', kind: 'findings', default: 'auto', range: 'auto / backlog', meaning: 'auto: the lead decides, a scout finding it adds goes to todo and runs; backlog: every task added from a scout finding goes to the backlog and waits for you' },
+  { name: 'scout_findings', kind: 'findings', default: 'auto', range: 'auto / backlog', meaning: 'the default for scouts without their own findings choice. auto: the lead decides, a scout finding it adds goes to todo and runs; backlog: every task added from a scout finding goes to the backlog and waits for you' },
   { name: 'tests_with_changes', kind: 'untested', default: 'ask', range: 'off / ask / review', meaning: 'a change task that edits code but no test file: ask: it merges and the lead is told "T-3 changed code but no test"; review: it waits for your review instead; off: nothing (test files are in test/, tests/, __tests__/, spec/, e2e/ or cypress/ folders or have a test name like a.test.ts, a-test.ts, a.cy.ts, login.e2e.ts, FooTest.java; docs-only changes such as .md files, images and non-code files under docs/ are never flagged)' },
   { name: 'checker', kind: 'onoff', default: 'off', range: 'off / on', meaning: 'on: after the prep step and before a change joins the merge queue (where its tests run), a fresh checker tries to break it; OK goes on, a list of problems sends it back to its worker (counts as a retry); investigations and docs-only changes skip it' },
   { name: 'mode', kind: 'mode', default: 'auto merge', range: 'paused / approve merge / auto merge', meaning: 'paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own' },
@@ -541,8 +541,8 @@ export function applySettings(b: Board, a: SettingsInput): { board: Board; chang
   return { board: y, changes }
 }
 
-/** With scout_findings backlog, a task added from a scout finding (origin_by scout) always goes to the backlog. */
-export const findingToBacklog = (b: Partial<Pick<Board, 'scout_findings'>>, originBy: unknown): boolean => originBy === 'scout' && scoutFindingsOf(b) === 'backlog'
+/** With findings backlog, a task added from a scout finding (origin_by scout) always goes to the backlog. The scout's own choice (`own`) decides; without one, the board's scout_findings. */
+export const findingToBacklog = (b: Partial<Pick<Board, 'scout_findings'>>, originBy: unknown, own?: 'auto' | 'backlog'): boolean => originBy === 'scout' && (own ?? scoutFindingsOf(b)) === 'backlog'
 
 /** The owner's wording of a change: "max_parallel set to 5", plus the cut note. */
 export const settingSetText = (c: SettingChange) => `${c.name} set to ${c.value}${c.cut}`

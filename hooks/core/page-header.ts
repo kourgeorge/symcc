@@ -18,7 +18,7 @@ import { originOf } from './origin'
 import { roleOf } from './roles'
 import { type ActionGroup, GROUP_ORDER, rowTime, STEP_WORD, panelSections, searchTasks } from './panel'
 import { stageStep, taskPhase } from './phase'
-import { everyText, scoutRanText, scoutStateText, type ScoutRunRecord, sortScouts } from './scouts'
+import { everyText, findingsMark, scoutRanText, scoutStateText, type ScoutRunRecord, sortScouts } from './scouts'
 import { liveLanes, liveTrains, type LiveTrain, type LiveView } from './live'
 import { localOffset } from './days'
 
@@ -166,6 +166,7 @@ export function scoutStateGroups(sc: SymccScout, nowMs: number, last?: { run: Sc
   const first: Seg[] = sc.running ? [{ text: '◉ running now', color: 'ide', bold: true }, dot(), { text: everyText(sc.every_minutes), color: 'text' }] : [{ text: `◷ ${everyText(sc.every_minutes)}`, color: 'text' }]
   if (!sc.running && state && state !== 'paused') first.push(dot(), { text: state, color: 'inactive' })
   if (sc.model) first.push(dot(), { text: sc.model, color: 'inactive' })
+  if (sc.findings) first.push(dot(), { text: `findings ${findingsMark(sc.findings)}`, color: 'inactive' })
   const ran = scoutRanText(sc, nowMs)
   const lastSegs: Seg[] = [{ text: ran.startsWith('ran ') ? `last ${ran}` : ran, color: 'inactive' }]
   if (last && ran.startsWith('ran ')) {

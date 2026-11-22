@@ -72,6 +72,20 @@ test('scouts add writes a valid scout file, the board shows it, and list shows i
   expect(await call($, { action: 'add', name: 'bugs', every_minutes: 5, prompt: 'x' })).toContain('already exists')
 })
 
+test('T-862: the scouts tool shows and changes a scout\'s findings choice', async ($, on) => {
+  const files = base()
+  setup(on, files)
+  expect(await call($, {})).toContain('findings: default (the board setting)')
+  expect(await call($, { action: 'edit', name: 'bugs', findings: 'backlog' })).toContain('findings → backlog')
+  expect(files['/.symcc/scouts/bugs.md']).toContain('findings: backlog')
+  expect(parseScout('bugs', files['/.symcc/scouts/bugs.md']!)).toMatchObject({ findings: 'backlog', every_minutes: 30 })
+  expect(await call($, {})).toContain('findings: backlog (own choice)')
+  expect(await call($, { action: 'edit', name: 'bugs', findings: 'maybe' })).toContain('findings must be')
+  expect(await call($, { action: 'edit', name: 'bugs', findings: 'default' })).toContain('saved scout bugs')
+  expect(files['/.symcc/scouts/bugs.md']).not.toContain('findings:')
+  expect(await call($, { action: 'add', name: 'docs', every_minutes: 5, findings: 'auto', prompt: 'Look.' })).toContain('findings → auto')
+})
+
 test('scouts add refuses a bad name and writes nothing', async ($, on) => {
   const files = base()
   setup(on, files)

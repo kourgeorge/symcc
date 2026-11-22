@@ -4,6 +4,7 @@ import { DEFAULT_NAME, namesFor } from '../name'
 import { originOf } from './origin'
 import { fmtDuration } from './runs'
 import { offAnswer } from './settings'
+import { isScoutFindings, type ScoutFindings } from './board-file'
 import { planScoutText } from './plan'
 import { frontMatterLine, splitFrontMatter } from './text'
 
@@ -22,7 +23,13 @@ export function scoutToolRefusal(tool: string, name: string = DEFAULT_NAME): str
 /** `every_minutes` 0 means "only on demand" (never on the timer). A bad value in the file also gives 0, with
  *  `warning` saying so and `bad_every` holding the value as written. */
 /** `summary` is the optional one-line subheader shown on the scout's page (front matter `summary:`). */
-export type ScoutDef = { name: string; every_minutes: number; model?: string; summary?: string; prompt: string; warning?: string; bad_every?: string }
+export type ScoutDef = { name: string; every_minutes: number; model?: string; summary?: string; findings?: ScoutFindings; prompt: string; warning?: string; bad_every?: string }
+
+/** The scout's own findings choice (front matter `findings:` auto or backlog; anything else or nothing: the board's scout_findings decides). */
+export const scoutFindingsChoice = (v: unknown): ScoutFindings | undefined => (isScoutFindings(typeof v === 'string' ? v.trim().toLowerCase() : v) ? ((v as string).trim().toLowerCase() as ScoutFindings) : undefined)
+
+/** The short mark for a scout's own findings choice: "→ backlog" or "→ auto"; '' when it follows the board's setting. */
+export const findingsMark = (f: ScoutFindings | undefined): string => (f ? `→ ${f}` : '')
 
 /** The warning for a scout file whose every_minutes can't be used. */
 export const badEveryWarning = (value: string): string => `every_minutes "${value}" is not valid: runs only on demand until fixed`
@@ -40,8 +47,10 @@ export function parseScout(name: string, text: string): ScoutDef | null {
   const prompt = fm.body.trim()
   if (!prompt) return null
   const raw = (meta.every_minutes ?? '').trim()
-  const base: Pick<ScoutDef, 'name' | 'model' | 'summary' | 'prompt'> = { name: meta.name || name, model: meta.model || undefined, prompt }
+  const base: Pick<ScoutDef, 'name' | 'model' | 'summary' | 'findings' | 'prompt'> = { name: meta.name || name, model: meta.model || undefined, prompt }
   if (meta.summary?.trim()) base.summary = meta.summary.trim()
+  const findings = scoutFindingsChoice(meta.findings)
+  if (findings) base.findings = findings
   // missing: every hour; a whole number (0 = only on demand); anything else: only on demand, with a warning
   if (!raw) return { ...base, every_minutes: 60 }
   const every = everyMinutesOf(raw)
@@ -55,11 +64,12 @@ export function parseScout(name: string, text: string): ScoutDef | null {
  * as it was, except every_minutes, model and summary (dropped when empty). A `summary` left out of `set`
  * (undefined) keeps the file's summary line as it was.
  */
-export function scoutText(old: string | null, set: { every_minutes: number; model?: string; summary?: string }, body: string): string {
+export function scoutText(old: string | null, set: { every_minutes: number; model?: string; summary?: string; findings?: ScoutFindings | '' }, body: string): string {
   const lines: string[] = []
   let everyDone = false
   let modelDone = false
   let summaryDone = set.summary === undefined
+  let findingsDone = set.findings === undefined
   const model = (set.model ?? '').trim()
   const summary = (set.summary ?? '').replace(/\s+/g, ' ').trim()
   for (const line of (old ? splitFrontMatter(old).lines : null) ?? []) {
@@ -70,6 +80,9 @@ export function scoutText(old: string | null, set: { every_minutes: number; mode
     } else if (key === 'model') {
       if (!modelDone && model) lines.push(`model: ${model}`)
       modelDone = true
+    } else if (key === 'findings' && set.findings !== undefined) {
+      if (!findingsDone && set.findings) lines.push(`findings: ${set.findings}`)
+      findingsDone = true
     } else if (key === 'summary' && set.summary !== undefined) {
       if (!summaryDone && summary) lines.push(`summary: ${summary}`)
       summaryDone = true
@@ -78,6 +91,7 @@ export function scoutText(old: string | null, set: { every_minutes: number; mode
   if (!everyDone) lines.push(`every_minutes: ${set.every_minutes}`)
   if (!modelDone && model) lines.push(`model: ${model}`)
   if (!summaryDone && summary) lines.push(`summary: ${summary}`)
+  if (!findingsDone && set.findings) lines.push(`findings: ${set.findings}`)
   return `---\n${lines.join('\n')}\n---\n\n${body.trim()}\n`
 }
 
@@ -99,7 +113,8 @@ export function everyMinutesOf(text: string): number | null {
 }
 
 /** Why a scout's edit can't be saved ('' when it can). */
-export function scoutDraftError(d: { every: string; body: string }): string {
+export function scoutDraftError(d: { every: string; body: string; findings?: string }): string {
+  if (d.findings?.trim() && !/^(auto|backlog|default)$/i.test(d.findings.trim())) return 'Findings must be auto, backlog or default (empty = default: the board setting)'
   if (everyMinutesOf(d.every) === null) return 'Runs every must be a whole number of minutes: 0 for only on demand, or 1 or more'
   if (!d.body.trim()) return 'write what the scout looks for'
   return ''
@@ -135,6 +150,7 @@ export function leadScoutText(s: SymccScout, nowMs: number, full = false, runs: 
   const next = onDemand(s) ? 'only when run' : s.paused ? 'none while paused' : fromNow(s.next_run, nowMs) || 'not planned'
   parts.push(`next run: ${next}`, `last run: ${fromNow(s.last_run, nowMs) || 'never'}`)
   if (s.model) parts.push(`model: ${s.model}`)
+  parts.push(`findings: ${s.findings ? `${s.findings} (own choice)` : 'default (the board setting)'}`)
   const lines = [`${s.name}: ${parts.join(' · ')}`]
   if (s.warning) lines.push(`  warning: ${s.warning}`)
   const report = String(s.last_report ?? '').trim()
@@ -324,7 +340,7 @@ export function scoutListRows(scouts: SymccScout[], nowMs: number, width: number
     every: everyText(s.every_minutes),
     state: s.warning && !s.running && !s.paused ? BAD_EVERY_STATE : scoutStateText(s, nowMs),
     last: s.running ? { text: '', tone: 'inactive' } : scoutLastText(s),
-    model: s.model ?? '',
+    model: [s.model ?? '', findingsMark(s.findings)].filter(Boolean).join('  '),
   }))
   const w = (f: (r: (typeof raw)[number]) => string) => Math.max(0, ...raw.map(r => f(r).length))
   const cols = { name: w(r => r.s.name), every: w(r => r.every), state: w(r => r.state), last: w(r => r.last.text), model: w(r => r.model) }

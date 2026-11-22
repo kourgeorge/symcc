@@ -608,7 +608,7 @@ export async function runCommand(host: Host, command: string, args: string): Pro
       return say(await setScoutPaused(host, cmd.name, cmd.paused))
     case 'scout-edit': {
       // the same edit as the lead's scouts tool: the other parts of the file are kept, the scouts are rescheduled
-      const part = cmd.field === 'every' ? { every_minutes: cmd.value } : cmd.field === 'model' ? { model: cmd.value } : { prompt: cmd.value }
+      const part = cmd.field === 'every' ? { every_minutes: cmd.value } : cmd.field === 'model' ? { model: cmd.value } : cmd.field === 'findings' ? { findings: cmd.value } : { prompt: cmd.value }
       return say(await leadScouts(host, { action: 'edit', name: cmd.name, ...part }))
     }
     case 'scout-new': {

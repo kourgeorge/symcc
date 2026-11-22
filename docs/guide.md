@@ -1462,11 +1462,23 @@ A checker gets the same read-only tools.
 
 When it is done, its whole report (up to 2000 characters) goes to the lead, which adds tasks,
 tells you what matters, or ignores it. A scout that answers `NOTHING` sends no message.
-The `scout_findings` setting says where the tasks it adds go: `auto` (the default) lets the
+The `scout_findings` setting says where the tasks it adds go, for every scout that has no
+choice of its own: `auto` (the default) lets the
 lead decide, so a finding it adds goes to `todo` and runs; `backlog` puts every task added
 from a scout finding in the backlog, whatever the lead asks, until you (or the lead, on your
 word) move it to `todo`. The lead still tells you what the scout found. Change it with
-`/symcc-settings scout_findings backlog`, in the Settings view, or by telling the lead. A
+`/symcc-settings scout_findings backlog`, in the Settings view, or by telling the lead.
+
+Each scout can have its own choice instead. Put `findings: backlog` (or `findings: auto`) in
+its file's top lines and that scout's tasks follow it, whatever the board setting says: a
+scout set to `backlog` always sends its tasks to the backlog (the lead is told "<scout>'s
+findings go to the backlog"), and one set to `auto` lets the lead decide even when the board
+setting is `backlog`. A scout without the line (or with `findings: default`) follows the board
+setting, so nothing changes for existing scouts. Set it in the scout's edit page (the
+Findings box: `auto`, `backlog`, or empty for the default), in OpenCode with `e` on the scout's
+page (sent as `/symcc-scout <name> findings auto|backlog|default`), or through the lead's
+`scouts` tool (`findings`). The Scouts list marks a scout that has its own choice with
+`→ backlog` or `→ auto`, and its page shows `findings → backlog` next to its model. A
 run's report shows when you open that run on the scout's page in the board panel. [`examples/scouts/`](../examples/scouts/)
 has examples that work in most code projects:
 - [`bugs.md`](../examples/scouts/bugs.md): wrong logic, such as bad conditions and off-by-one errors.
@@ -1520,7 +1532,7 @@ last run ended on an API error, so nothing was reported."). Each scout keeps its
 You can also make and change scouts right in the board panel: on the Scouts view, "New
 scout" asks for a name, and "Edit" on a scout's page opens its edit page. It shows the same
 header line, then the same names in the same order, one box each: **Runs every** (in
-minutes, 0 = only on demand), **Model**, **Summary** (empty: the first line of the
+minutes, 0 = only on demand), **Model**, **Findings** (`auto`, `backlog` or empty for the board setting), **Summary** (empty: the first line of the
 instructions is used) and **Instructions**. The name is the file's name, so the edit page
 can't change it: to rename a scout, rename its file. Save writes the file (other front
 matter keys are kept) and the new timing applies at once. `/symcc-scout <name>` runs a scout now.
@@ -1531,7 +1543,8 @@ Or just ask the lead. It has a `scouts` tool that can:
   or running, its next and last run, and the first lines of its last report;
 - **show** one in full: its instructions, its whole last report and its last few runs;
 - **add or change** one: a name of lowercase letters, digits and dashes, `every_minutes` (0 for
-  only on demand), an optional model, and the instructions;
+  only on demand), an optional model, an optional `findings` choice (`auto`, `backlog` or
+  `default`: where the tasks from its findings go), and the instructions;
 - **remove** one (it checks with you first);
 - **run** one now, like "run now". A paused scout runs once and stays paused. The run is refused,
   with the reason, when the scout is already running or the project has no git yet.

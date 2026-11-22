@@ -218,6 +218,8 @@ export type SymccScout = {
   started?: boolean
   /** the model from the scout file's front matter, if set */
   model?: string
+  /** the scout's own choice for the tasks its findings become (front matter `findings:`): auto = the lead decides, backlog = they go to the backlog; not set = the board's scout_findings setting decides */
+  findings?: 'auto' | 'backlog'
   /** the one-line subheader from the scout file's front matter (`summary:`), if set; else the page shows the first line of the instructions */
   summary?: string
   /** the scout's instructions: the body of its file */
