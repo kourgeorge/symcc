@@ -780,9 +780,9 @@ are about changes; under "How tasks ended" a read investigation shows as
 
   ```
   𝄞 symcc  ⏵ auto merge · 2/3 agents busy · 3 tasks waiting · 12 completed today  [ open board ] [-]
-   ⌕ T-740  8m · try 3  After a reopen, one hand-back…
-   ▶ T-745  19m         Live tab: a compact view…
-   ○ T-743  next up             A try counts only real…
+   ⌕ T-740 8m (try 3) After a reopen, one hand-back…
+   ▶ T-745 19m        Live tab: a compact view…
+   ○ T-743 next up    A try counts only real…
    ⚠ 1 question for you: Q-71 Raise the version?
   ```
 
@@ -1812,8 +1812,8 @@ change shows no tag.
 **Which try is it?** When a task is doing and this is not its first try, the board says so. A
 first try shows no mark.
 
-- In Claude Code's band above the prompt: `· try 3` after the step and its time
-  (`T-5 ▶ 12m · try 3`).
+- In Claude Code's band above the prompt: `(try 3)` after the step and its time
+  (`T-5 ▶ 12m (try 3)`).
 - In OpenCode's strip above the prompt: `(3)` right after the time (`T-5 ▶ 1h40m (3)`).
 - On the task's page: `try 3/4`.
 - In the lead's board: `T-5 doing · try 2/3`. The `/3` shows the limit while the try is an
