@@ -309,10 +309,13 @@ function laterEnd(p: { runs?: BoardTask['runs'] }, at: string): { runs?: BoardTa
 /**
  * T-863: the last moment the old session was known to be alive while task `t` ran: the old lead.json heartbeat, else the
  * latest of the task's updated_at, last history time and checking time. Never after `now`, never before the try started.
+ * T-885: a heartbeat later than `now` (a wrong clock) is ignored, as if there were none.
  */
 function lastAlive(t: BoardTask, leadBefore: string | null, now: string): string {
   const nowMs = Date.parse(now)
-  const times = [parseLead(leadBefore)?.heartbeat, ...(parseLead(leadBefore)?.heartbeat === undefined ? [t.updated_at, t.live?.checking?.at, ...(t.history ?? []).map(h => h.at)].map(s => Date.parse(s ?? '')) : [])]
+  const beat = parseLead(leadBefore)?.heartbeat
+  const heartbeat = typeof beat === 'number' && Number.isFinite(beat) && !(beat > nowMs) ? beat : undefined
+  const times = [heartbeat, ...(heartbeat === undefined ?[t.updated_at, t.live?.checking?.at, ...(t.history ?? []).map(h => h.at)].map(s => Date.parse(s ?? '')) : [])]
   const known = times.filter((n): n is number => typeof n === 'number' && Number.isFinite(n))
   if (!known.length) return now
   const started = Date.parse(t.runs?.at(-1)?.started ?? '')

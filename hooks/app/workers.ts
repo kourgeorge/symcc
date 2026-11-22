@@ -1,5 +1,5 @@
 import type { SymccTask, SymccTokens } from '../../types'
-import { PREP_NOTE, makeAsk, type Board, type BoardTask, type RoleDef, roleSection, mayStart, liveWorkersFor, modeOf, symccOn, ready, patchTask, putTask, find, startRun, findRole, roleOf, workerName, workerDescription, onNotReady, endRun, tryLabel, needFilesQuestion, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, liveDriver, emptyBoard, ownedHere, backToTodo, stoppedEntry, withHistory, historyEntry, type HistoryAdd, type HistoryFacts, tryEntry, resultEntry, notUsedEntry, taskWasResult, type HistoryKind, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, testMinutesOf, ranOverNote, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, WRAP_UP_GRACE_MS, outOfTimeNote, checkerOn, docsOnly, checkerOutput, isCheckerOutput, checkerLine, checkerRetryText, kindOf, isInvestigation, kindSection, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt, shortSha, secretsLeftText, gaveUpTestsText, endedEarlyLine, endedEarlyNote, ENDED_EARLY_NOTE, workerStartedEntry, workerHandedBackEntry, withFailedTests, withAgentUsed, withStoppedUsed, goOnRun, undoGoOn, restartsOf, restartedAgent, workerIdOf, checkerIdOf, onTask, withAgentStart, withWorkerStart, DEFAULT_ROLE, workerSince, workerActiveMs } from '../board'
+import { PREP_NOTE, makeAsk, type Board, type BoardTask, type RoleDef, roleSection, mayStart, liveWorkersFor, modeOf, symccOn, ready, patchTask, putTask, find, startRun, findRole, roleOf, workerName, workerDescription, onNotReady, endRun, tryLabel, needFilesQuestion, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, liveDriver, emptyBoard, ownedHere, backToTodo, stoppedEntry, withHistory, historyEntry, type HistoryAdd, type HistoryFacts, tryEntry, resultEntry, notUsedEntry, taskWasResult, type HistoryKind, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, testMinutesOf, ranOverNote, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, WRAP_UP_GRACE_MS, WRAP_UP_TEXT, outOfTimeNote, checkerOn, docsOnly, checkerOutput, isCheckerOutput, checkerLine, checkerRetryText, kindOf, isInvestigation, kindSection, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt, shortSha, secretsLeftText, gaveUpTestsText, endedEarlyLine, endedEarlyNote, ENDED_EARLY_NOTE, workerStartedEntry, workerHandedBackEntry, withFailedTests, withAgentUsed, withStoppedUsed, goOnRun, undoGoOn, restartsOf, restartedAgent, workerIdOf, checkerIdOf, onTask, withAgentStart, withWorkerStart, DEFAULT_ROLE, workerSince, workerActiveMs } from '../board'
 import { archiveOld } from './archive'
 import { checkHealth } from './health'
 import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch, clearScratch, taskBranch, copyReports, deleteMergedBranch, type BehindWhy } from './git'
@@ -21,7 +21,7 @@ import { optionsVia, popupTied } from './questions'
 import { changeValues, investigationValues } from './prompt-values'
 import { debriefing, learnedAsk, startDebrief } from './debrief'
 import { orgMemText, keepSuggestions } from './org-mem'
-import { cleanLeftoverTmp, stopOrphans, timedOut, askOvertime, wrapUp, ownerAddedMinutes } from './cleanup'
+import { cleanLeftoverTmp, stopOrphans, timedOut, askOvertime, wrapUp, ownerAddedMinutes, ownerTimeState } from './cleanup'
 
 // ---------------- workers ----------------
 
@@ -144,7 +144,9 @@ async function queueWorker(host: Host, id: string): Promise<{ started: Promise<v
       const clash = why === 'clash' && !cur!.merge_main ? { merge_main: true as const } : {}
       // T-873: the same try going on keeps the minutes the owner gave it (the reopen dropped its live record)
       const added = goOn ? ownerAddedMinutes(cur!.history, attempts) : 0
-      const y = patchTask(x, id, { status: 'doing', live: { session: S.me, phase: 'claimed', ...(added > 0 ? { extra_minutes: added } : {}) }, attempts, branch, note: claimNote(host), runs: addCommits(goOn ?? startRun(cur!.runs, at, !!cur!.merge_main || why === 'clash'), commit ? [commit] : []), ...upToDate, ...clash }, at)
+      // T-885: and stays stopped after a "Stop it" (or keeps its open "more time?" question)
+      const time = goOn ? ownerTimeState(cur!.history, attempts, at) : {}
+      const y = patchTask(x, id, { status: 'doing', live: { session: S.me, phase: 'claimed', ...(added > 0 ? { extra_minutes: added } : {}), ...time }, attempts, branch, note: claimNote(host), runs: addCommits(goOn ?? startRun(cur!.runs, at, !!cur!.merge_main || why === 'clash'), commit ? [commit] : []), ...upToDate, ...clash }, at)
       return [y, find(y, id)!]
     })
     if (!t) return null
@@ -216,6 +218,9 @@ async function workerStarted(host: Host, id: string, before: BoardTask, dir: str
     const line = cur.attempts === claimed ? { history: withHistory(cur.history, at, entry) } : {}
     return patchTask(x, id, { runs: withWorkerStart(cur.runs, agentId, at), ...(cur.live?.phase === 'claimed' ? { note: 'worker on it', live: { phase: 'worker' as const } } : {}), ...line }, at)
   })
+  // T-885: a try whose time was up before a reopen goes on stopped: its new worker is told to hand back too
+  const cur = find(await load(host), id)
+  if (cur?.status === 'doing' && cur.attempts === claimed && cur.live?.wrap_up) await host.agents.send(agentId, WRAP_UP_TEXT).catch(() => undefined)
 }
 
 /**
