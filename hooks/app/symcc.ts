@@ -89,13 +89,14 @@ export function sessionStarting() {
 
 /** The watchdog's timer went off (every 2 minutes): look for stuck workers and tasks. */
 export function watchdogTick(host: Host) {
+  if (S.guardOnly) return // T-844: /init borrows S.root for another folder for a moment; the timers touch nothing meanwhile
   void check(host).catch(() => undefined)
 }
 
 /** The lead heartbeat's timer went off: the driver refreshes its heartbeat; the others look whether it went stale and take over. */
 export function leadBeat(host: Host) {
   // T-793: a window off here drives nothing; it only looks whether the window with symcc on is gone
-  if (S.fresh) return
+  if (S.fresh || S.guardOnly) return // guardOnly: T-844 /init borrows S.root for a moment; the beat must not claim that board
   if (S.offHere) return void offHereBeat(host).catch(() => undefined)
   void claimLead(host)
     .then(async d => (d ? pump(host) : undefined))
@@ -213,7 +214,7 @@ async function initProject(host: Host, tell: (text: string) => void, withGit: bo
   // this session already runs on a board in a folder above: the new board is made here, but the session keeps the old one
   const above = !S.fresh && !!S.root && S.root !== own ? S.root : ''
   if (above) {
-    const saved = { root: S.root, fresh: S.fresh, guardOnly: S.guardOnly }
+    const saved = { root: S.root, fresh: S.fresh, guardOnly: S.guardOnly, gitState: S.gitState, toldGit: S.toldGit }
     S.root = own
     S.guardOnly = true
     try {
@@ -226,6 +227,8 @@ async function initProject(host: Host, tell: (text: string) => void, withGit: bo
       S.root = saved.root
       S.fresh = saved.fresh
       S.guardOnly = saved.guardOnly
+      S.gitState = saved.gitState
+      S.toldGit = saved.toldGit
     }
     return `${S.N.name} board created in ${shortHome(own, S.home)} (the nearest board wins there). This session still runs on the board in ${shortHome(above, S.home)}: start a new session in this folder to use the new one.`
   }
