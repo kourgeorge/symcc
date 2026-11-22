@@ -7,6 +7,7 @@ import { type Board, addTask, emptyBoard, patchTask, find, parseCommand, TASK_VE
 import { S, leadQueue, meanwhile } from '../hooks/app/state'
 import { saveBoard, load } from '../hooks/app/store'
 import { COMMANDS, runCommand, taskDoTool } from '../hooks/app/symcc'
+import { SCOUT_EDIT_FIELDS } from '../hooks/core/commands'
 import { manual } from '../hooks/app/tools'
 import { test } from './reset'
 import { fakeHost, memoryFs } from './fake-host'
@@ -90,6 +91,16 @@ test('/symcc-task T-5 <word> is parsed: each word with its reason, role or on/of
   const desc = COMMANDS().find(c => c.name === 'symcc-task')!
   for (const verb of TASK_VERBS) expect(desc.description).toContain(verb)
   expect(manual('', { panel: true, band: true, wakeLead: 'now', planMode: true, leadUsage: true, startQueue: true } as never)).toContain('/symcc-task T-3 WORD')
+})
+
+test('the scout command list names every field it can change, findings too', () => {
+  const scout = COMMANDS().find(c => c.name === 'symcc-scout')!
+  for (const field of SCOUT_EDIT_FIELDS) {
+    expect(scout.description).toContain(field)
+    expect(scout.argumentHint).toContain(field)
+  }
+  expect(scout.description).toContain('findings auto|backlog|default')
+  expect(scout.argumentHint).toContain('findings auto|backlog|default')
 })
 
 test('each word calls the same lead tool with the same input as the task page\'s button', () => {
