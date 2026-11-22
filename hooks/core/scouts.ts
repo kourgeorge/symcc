@@ -4,9 +4,9 @@ import { DEFAULT_NAME, namesFor } from '../name'
 import { originOf } from './origin'
 import { fmtDuration } from './runs'
 import { offAnswer } from './settings'
-import { isScoutFindings, type ScoutFindings } from './board-file'
+import { isFinished, isScoutFindings, type ScoutFindings } from './board-file'
 import { planScoutText } from './plan'
-import { frontMatterLine, splitFrontMatter } from './text'
+import { frontMatterLine, isObj, splitFrontMatter } from './text'
 
 /**
  * The symcc tools a scout (and a checker, which runs as the scout type) may call, in symcc's own words: both only read
@@ -196,8 +196,8 @@ export function parseScoutMemory(text: string | null | undefined): Record<string
   } catch {
     return out
   }
-  const scouts = raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as { scouts?: unknown }).scouts : undefined
-  if (!scouts || typeof scouts !== 'object' || Array.isArray(scouts)) return out
+  const scouts = isObj(raw) ? raw.scouts : undefined
+  if (!isObj(scouts)) return out
   for (const [name, v] of Object.entries(scouts as Record<string, unknown>)) {
     if (!name || !v || typeof v !== 'object' || Array.isArray(v)) continue
     if ((v as { paused?: unknown }).paused === true) out[name] = { paused: true }
@@ -436,7 +436,7 @@ export function recentClosed(tasks: Pick<SymccTask, 'id' | 'title' | 'status' | 
     return Number.isFinite(v) ? v : -Infinity
   }
   return tasks
-    .filter(t => t.status === 'done' || t.status === 'dropped')
+    .filter(isFinished)
     .sort((a, b) => at(b) - at(a))
     .slice(0, Math.max(0, Math.floor(Number.isFinite(n) ? n : SCOUT_CLOSED_SHOWN)))
     .map(t => `${t.id} ${t.title} (${t.status})`)
@@ -600,11 +600,11 @@ export function parseScoutRuns(text: string | null | undefined): ScoutRunRecord[
   } catch {
     return []
   }
-  const list = raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as { runs?: unknown }).runs : undefined
+  const list = isObj(raw) ? raw.runs : undefined
   if (!Array.isArray(list)) return []
   const out: ScoutRunRecord[] = []
   for (const v of list) {
-    if (!v || typeof v !== 'object' || Array.isArray(v)) continue
+    if (!isObj(v)) continue
     const e = v as Record<string, unknown>
     if (typeof e.ended !== 'string' || !Number.isFinite(Date.parse(e.ended)) || !OUTCOMES.includes(e.outcome as ScoutRunOutcome)) continue
     const r: ScoutRunRecord = {
@@ -613,7 +613,7 @@ export function parseScoutRuns(text: string | null | undefined): ScoutRunRecord[
       outcome: e.outcome as ScoutRunOutcome,
       findings: typeof e.findings === 'number' && Number.isSafeInteger(e.findings) && e.findings >= 0 ? e.findings : 0,
     }
-    if (e.tokens && typeof e.tokens === 'object' && !Array.isArray(e.tokens)) r.tokens = e.tokens as SymccTokens
+    if (isObj(e.tokens)) r.tokens = e.tokens as SymccTokens
     if (isScoutRunReport(e.report)) r.report = e.report
     if (typeof e.why === 'string' && e.why) r.why = e.why
     if (Array.isArray(e.tasks)) r.tasks = [...new Set(e.tasks.filter((x): x is string => typeof x === 'string' && /^[\w-]{1,40}$/.test(x)))]

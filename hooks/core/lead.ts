@@ -208,9 +208,6 @@ export function handedBack(t: Pick<BoardTask, 'status' | 'live' | 'runs'>): bool
   return t.status === 'doing' && (!!t.live?.checking || !!t.runs?.[t.runs.length - 1]?.ended)
 }
 
-/** Whether task `t` has a finishing mark that is no longer refreshed (the copy that merged it is gone). */
-export const finishingStale = (t: Pick<BoardTask, 'status' | 'live'>, nowMs: number, staleMs = FINISH_STALE_MS) => t.status === 'doing' && !!t.live?.checking && !finishingNow(t, nowMs, staleMs)
-
 /** The commit task `t`'s current try merged, as the board recorded it; null when this try merged nothing (yet). */
 export function mergedThisTry(t: Pick<BoardTask, 'merged' | 'runs'>): string | null {
   const last = t.runs?.[t.runs.length - 1]
@@ -240,9 +237,6 @@ export const MERGED_OUTSIDE_FROM: readonly BoardTask['status'][] = ['todo', 'doi
 
 /** The history line of a task marked done because its work was merged outside the board (`sha`), by `by` ("the owner", "the lead"). */
 export const mergedOutsideLine = (sha: string, by: string) => `merged outside the board (${shortSha(sha)}); marked done by ${by}`
-
-/** Whether history line `l` says the task was merged outside the board (see mergedOutsideLine). */
-export const isMergedOutsideLine = (l: string) => /^merged outside the board\b/.test(l)
 
 /** The refusal when task `id`'s branch has `n` commits that `into` doesn't have. */
 export const notMergedText = (id: string, n: number, into: string) => `${id}'s branch has ${n} commit${n === 1 ? '' : 's'} that ${n === 1 ? "isn't" : "aren't"} in ${into} yet`

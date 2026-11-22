@@ -22,7 +22,7 @@ import type { SymccTask, SymccScout, SymccMode } from '../../types'
 import type { PaneView } from '../app/state'
 import type { OwnerQuestion } from '../core/questions'
 import {
-  gitNotice, statusCounts, newestFirst, bandLeads, bandNote, bandBrand, bandWhere, boardBrand, modeLabel, modeOf, planBandText, withCrew, questionsForYou,
+  gitNotice, isFinished, statusCounts, newestFirst, bandLeads, bandNote, bandBrand, bandWhere, boardBrand, modeLabel, modeOf, planBandText, withCrew, questionsForYou,
   bannerLines, bannerRule, footerRule, type BannerTone, panelSections, localOffset, when, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, ALL_CLEAR,
   rowStates, rowMark, TITLE_ROOM, fitRow, rowExtra, questionsLabel, archivedOf, archivedNote, statusMark, detailRows, detailRowLines, wrapSegs, hintLineText,
   type KeyHint, type Seg, type BoardTask, intoOf, taskActions, taskAsks, actionButtonLabel, packRows, type TaskAction, type TaskActionId,
@@ -1442,7 +1442,7 @@ function listBody(f: ViewFile, cursor: number, open0: Record<PanelGroup, boolean
     for (const q of questions) add(questionRow(q, pointer(q.id, 2), idWidth, w), { open: q.id })
   }
   const row = (x: SymccTask, indent: number): Line => {
-    const closed = x.status === 'done' || x.status === 'dropped' || x.status === 'backlog'
+    const closed = isFinished(x) || x.status === 'backlog'
     const lead = indent + idWidth + 3 + cellWidth + 2
     const fit = fitRow(lead, x.title, rowExtra(x, v.tasks, v.home_branch ?? '', v.max_minutes, nowMs), w, x.status === 'failed')
     const state = states.get(x.id) ?? { front: '', tag: '', back: '' }

@@ -1,8 +1,7 @@
 // Old finished tasks: moving done and dropped tasks out of board.json into archive.json.
 // Every function here is pure; the plugin (app/archive.ts) reads and writes the files.
-import type { SymccStatus } from '../../types'
 import { DEFAULT_NAME, namesFor } from '../name'
-import { type ArchivedTotals, type Board, type BoardTask, cleanCommitFields, find, normId } from './board-file'
+import { type ArchivedTotals, type Board, type BoardTask, cleanCommitFields, find, isFinished, normId } from './board-file'
 import { withHistory } from './history'
 import { addTokens, sumRuns } from './runs'
 
@@ -23,8 +22,6 @@ export const archivedOf = (b: Partial<Pick<Board, 'archived'>>): ArchivedTotals 
 /** How many tasks were archived. */
 export const archivedCount = (b: Partial<Pick<Board, 'archived'>>): number => archivedOf(b).done + archivedOf(b).dropped
 
-const FINISHED: SymccStatus[] = ['done', 'dropped']
-
 /**
  * What reading archive.json found: the archive, or `broken` (the reason) when the text is not an
  * archive. A broken archive must never be written over (keep a copy, tell the owner, stop archiving).
@@ -40,7 +37,7 @@ export function readArchive(text: string | null): { archive: Archive; broken?: s
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { archive: emptyArchive(), broken: 'it is not an archive (the file holds no JSON object)' }
   const tasks = (raw as { tasks?: unknown }).tasks
   if (!Array.isArray(tasks)) return { archive: emptyArchive(), broken: '"tasks" is not a list' }
-  const ok = tasks.filter((t): t is BoardTask => !!t && typeof t === 'object' && typeof (t as BoardTask).id === 'string' && FINISHED.includes((t as BoardTask).status))
+  const ok = tasks.filter((t): t is BoardTask => !!t && typeof t === 'object' && typeof (t as BoardTask).id === 'string' && isFinished(t as BoardTask))
   const clean = ok.map(t => ({ ...cleanCommitFields(t), after: Array.isArray(t.after) ? t.after : [], history: Array.isArray(t.history) ? t.history : [], files: Array.isArray(t.files) ? t.files : [] }))
   return { archive: { version: 1, tasks: clean } }
 }
@@ -54,7 +51,7 @@ export const brokenArchiveText = (file: string, reason: string, copy?: string) =
 
 /** Task ids that an unfinished task (todo, doing, review, waiting, paused, failed, backlog) still lists in its `after`. */
 function waitedOn(b: Board): Set<string> {
-  return new Set(b.tasks.filter(t => !FINISHED.includes(t.status)).flatMap(t => t.after.map(normId)))
+  return new Set(b.tasks.filter(t => !isFinished(t)).flatMap(t => t.after.map(normId)))
 }
 
 /**
@@ -67,7 +64,7 @@ export function toArchive(b: Board, nowMs: number): BoardTask[] {
   const cut = nowMs - days * 24 * 60 * 60_000
   const keep = waitedOn(b)
   return b.tasks.filter(t => {
-    if (!FINISHED.includes(t.status) || keep.has(t.id)) return false
+    if (!isFinished(t) || keep.has(t.id)) return false
     const at = Date.parse(t.updated_at || t.created_at || '')
     return Number.isFinite(at) && at < cut
   })

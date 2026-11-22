@@ -4,7 +4,7 @@ export function parseStamp<K extends string>(text: string | null, key: K, emptyO
   try {
     const l = JSON.parse(text ?? '') as Record<string, unknown>
     const n = l[key]
-    if (typeof l.session !== 'string' || (!emptyOk && !l.session) || typeof n !== 'number' || !Number.isFinite(n)) return null
+    if (typeof l.session !== 'string' || (!emptyOk && !l.session) || !isNum(n)) return null
     return { session: l.session, [key]: n } as { session: string } & Record<K, number>
   } catch {
     return null
@@ -41,11 +41,16 @@ export function frontMatterLine(line: string): { key: string; value: string } | 
   return kv ? { key: kv[1]!.toLowerCase(), value: kv[2]! } : null
 }
 
+/** Whether `x` is a plain object (not null, not an array). */
+export const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x)
+/** Whether `x` is a finite number. */
+export const isNum = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x)
+
 /** `text` read as a JSON object, or null when it isn't one. */
 export const jsonObj = (text: string | null | undefined): Record<string, unknown> | null => {
   try {
     const raw = JSON.parse(String(text ?? ''))
-    return raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : null
+    return isObj(raw) ? raw : null
   } catch {
     return null
   }

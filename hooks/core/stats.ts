@@ -8,7 +8,7 @@ import { DEFAULT_NAME } from '../name'
 import { isInvestigation, STATUS_WORD } from './board-file'
 import { dayLabel, dayOf } from './days'
 import { ORIGIN_MARK } from './origin'
-import { jsonObj } from './text'
+import { isObj, jsonObj } from './text'
 import { gapsOf, addTokens, billedTokens, cleanTokens, fmtCost, fmtDuration, fmtTokenKinds, fmtTokens, isAnsweredRun, PRICE_WEIGHT, runMs, sumTokens, tokenCount, tryTokens } from './runs'
 
 // ---------------- the range ----------------
@@ -999,13 +999,13 @@ const figs = (v: unknown): ScoutUsageFigures | null => {
 export function parseScoutUsage(text: string | null | undefined): Record<string, ScoutUsage> {
   const u = jsonObj(text)?.usage
   const out: Record<string, ScoutUsage> = Object.create(null)
-  if (!u || typeof u !== 'object' || Array.isArray(u)) return out
+  if (!isObj(u)) return out
   for (const [name, v] of Object.entries(u as Record<string, unknown>)) {
     const f = figs(v)
     if (!name || !f) continue
     const days: Record<string, ScoutUsageFigures> = {}
     const d = (v as { days?: unknown }).days
-    if (d && typeof d === 'object' && !Array.isArray(d))
+    if (isObj(d))
       for (const [k, x] of Object.entries(d as Record<string, unknown>)) {
         const g = figs(x)
         if (g && /^\d{4}-\d{2}-\d{2}$/.test(k)) days[k] = g

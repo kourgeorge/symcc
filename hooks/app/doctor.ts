@@ -3,7 +3,7 @@
 // again right before it acts, so nothing unmerged, uncommitted or in use is ever deleted. Reports, org-mem, scouts,
 // roles and kinds are never touched: only migration backups, task folders of finished tasks, stale git worktree
 // entries and task branches already in their branch can be cleaned up.
-import { type BoardTask, type Board, liveWorkersFor, intoOf, finishingNow, checkStepNow, parseLead, isFresh, liveDriver, activeFrom } from '../board'
+import { isFinished, type BoardTask, type Board, liveWorkersFor, intoOf, finishingNow, checkStepNow, parseLead, isFresh, liveDriver, activeFrom } from '../board'
 import { type DoctorItem, oldBackups, backupIds, branchId, folderId, PRUNE_ID, parseDoctorArgs, doctorText, fixedText, type DoctorFixed, mergeRunsText, mergeNoteText, pruneLines, STRAY_DIRS, DOCTOR_STUCK_MIN, BACKUP_MARK, MIGRATE_ID } from '../core/doctor'
 import { SIZE_WARN_BYTES, READ_LIMIT_BYTES, PARTS_DIR, mbText } from '../core/board-parts'
 import { type Host, agentState } from '../host'
@@ -15,8 +15,6 @@ import { oldDataFound, oldRowsText, migrateData } from './migrate-data'
 
 /** A found item with its fix (fixable ones): answers '' when done, else why it was not done. */
 type Found = DoctorItem & { fix?: () => Promise<string>; done?: string[] }
-
-const FINISHED = ['done', 'dropped']
 
 /** A merge going on now: `id` is the task whose work is being merged (none for a git merge in the project folder). */
 type Merging = { id?: string }
@@ -167,7 +165,7 @@ async function findAll(host: Host, b: Board | null, mergingId: string | undefine
       keptDirs.set(wt, 'is being merged')
       continue
     }
-    if (t && !FINISHED.includes(t.status)) continue
+    if (t && !isFinished(t)) continue
     if (!t) {
       listed.push({ kind: 'worktree', fixable: false, text: `folder ${shown(wt)}/ (${id} is not on the board), kept; remove it by hand if you don't need it` })
       keptDirs.set(wt, 'is not on the board')
@@ -202,7 +200,7 @@ async function findAll(host: Host, b: Board | null, mergingId: string | undefine
         const nb = await load(host).catch(() => null)
         if (!nb) return "the board can't be read now"
         const nt = nb.tasks.find(x => x.id === id)
-        if (nt && !FINISHED.includes(nt.status)) return `${id} is ${nt.status} now`
+        if (nt && !isFinished(nt)) return `${id} is ${nt.status} now`
         if (inUse(id, nt ?? taskOf(id), await agentsNow(host))) return 'an agent may still use it'
         if (await dirty(host, wt)) return 'it has uncommitted changes now'
         if (!(await headKept(host, wt, into))) return 'it holds commits on no branch now'
@@ -244,7 +242,7 @@ async function findAll(host: Host, b: Board | null, mergingId: string | undefine
       listed.push({ kind: 'branch', fixable: false, text: `branch ${br} (${id} is being merged), left alone` })
       continue
     }
-    if (!t || !FINISHED.includes(t.status)) continue
+    if (!t || !isFinished(t)) continue
     const into = intoOf(t)
     const anc = await git(host, ['merge-base', '--is-ancestor', sha, `refs/heads/${into}`]).catch(() => null)
     if (anc?.exitCode === 0) {

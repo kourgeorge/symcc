@@ -11,6 +11,7 @@ import { readArchive, archiveText } from '../core/archive'
 import { safeScoutFile, scoutRunReportFile, scoutRunsText } from '../core/scouts'
 import { type OldInput, migratedScoutRun, oldDataRows, upgradeArchiveTask, upgradeBoard, upgradeScoutFile, upgradeScoutUsage } from '../core/old-data'
 import { BACKUP_MARK } from '../core/doctor'
+import { isObj } from '../core/text'
 import type { Host } from '../host'
 import { S, loadVersion } from './state'
 import { fileName, isStubbed, locked, now, path, readBoardRaw, readWhole, safeWrite, saveBoard } from './store'
@@ -282,7 +283,7 @@ export async function migrateData(host: Host, reuseBackup?: string): Promise<{ f
     let n = 0
     for (const f of files)
       for (const t of f.tasks) {
-        const up = t && typeof t === 'object' && !Array.isArray(t) ? upgradeArchiveTask(t as Record<string, unknown>) : null
+        const up = isObj(t) ? upgradeArchiveTask(t) : null
         if (up) n++
         changed.set(String((t as { id?: unknown })?.id), up ?? t)
       }

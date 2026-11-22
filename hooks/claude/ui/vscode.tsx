@@ -271,8 +271,6 @@ export function cutEnd(text: string, max: number): string {
   const space = head.lastIndexOf(' ')
   return `${(space > (max - 1) * 0.6 ? head.slice(0, space) : head).trimEnd()}…`
 }
-/** The fewest title characters an open row keeps before its state part is cut too (see vscode-list.tsx). */
-export const MIN_TITLE = 12
 /** What a cut title ends with (see twoLines). */
 export const MORE = ' (more)'
 /** What a row with an empty title (or question text) shows, dim, beside its id: never "****" from empty bold marks. */

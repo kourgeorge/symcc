@@ -9,10 +9,9 @@ import { isSoundSet, soundNotify, soundSetFor } from './board-file'
 import { parseGoneBranch } from './git-setup'
 import { countFindings, isNothing } from './scouts'
 import type { ScoutRunOutcome, ScoutRunRecord } from './scouts'
+import { isNum, isObj } from './text'
 
 type Raw = Record<string, unknown>
-const isObj = (x: unknown): x is Raw => !!x && typeof x === 'object' && !Array.isArray(x)
-const isNum = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x)
 /** Whether `t` holds field `k` with a value (T-854): a key set to null, undefined, "" or [] is not old data, only a writer's empty default. */
 const has = (t: object, k: string): boolean => {
   const v = (t as Raw)[k]

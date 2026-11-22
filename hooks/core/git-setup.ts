@@ -1,7 +1,7 @@
 // Which branch work is merged into, cleaning up after merged tasks, and a folder without git.
 import type { SymccTask } from '../../types'
 import { DEFAULT_NAME } from '../name'
-import { DATA_DIR, intoOf } from './board-file'
+import { DATA_DIR, intoOf, isFinished } from './board-file'
 
 // ---------------- which branch work is merged into ----------------
 
@@ -72,7 +72,7 @@ export function branchesToDelete(tasks: Pick<SymccTask, 'id' | 'status' | 'branc
 /** The tasks whose leftover worktree may be removed: done or dropped, with a folder still there (`existing` = task ids with a worktree). */
 export function worktreesToRemove(tasks: Pick<SymccTask, 'id' | 'status'>[], existing: string[]): string[] {
   const has = new Set(existing)
-  return tasks.filter(t => (t.status === 'done' || t.status === 'dropped') && has.has(t.id)).map(t => t.id)
+  return tasks.filter(t => isFinished(t) && has.has(t.id)).map(t => t.id)
 }
 
 /** The one line for the lead after a cleanup, or '' when it cleaned only a few (`few` or less). */

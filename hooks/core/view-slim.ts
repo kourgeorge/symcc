@@ -2,6 +2,7 @@
 // through slimView; the app measures the same trimmed view for its size warning).
 import type { SymccView } from '../../types'
 import { viewTask, viewStubFilled } from './board-parts'
+import { isFinished } from './board-file'
 
 /** Claude Code refuses a plugin value over this many characters (4 MB). */
 export const VIEW_MAX_CHARS = 4 * 1024 * 1024
@@ -37,8 +38,7 @@ export const trimNote = (step: SlimStep, left: number) =>
  * the limit unless open tasks alone are that big. `step` says how far it went, `left` how many tasks it left out.
  */
 export function slimViewStep(v: SymccView, nowMs = Date.now()): { view: SymccView; step: SlimStep; left: number } {
-  const finished = (t: SymccView['tasks'][number]) => t.status === 'done' || t.status === 'dropped'
-  const slim = (old: (t: SymccView['tasks'][number]) => boolean) => ({ ...v, tasks: (v.tasks ?? []).map(t => (finished(t) && old(t) ? viewStubFilled(viewTask(t)) : t)) })
+  const slim = (old: (t: SymccView['tasks'][number]) => boolean) => ({ ...v, tasks: (v.tasks ?? []).map(t => (isFinished(t) && old(t) ? viewStubFilled(viewTask(t)) : t)) })
   const ok = (x: SymccView) => size(x) <= VIEW_TARGET_CHARS
   let cur = slim(t => nowMs - Date.parse(t.updated_at ?? '') > VIEW_WHOLE_MS || !t.updated_at)
   if (ok(cur)) return { view: cur, step: 0, left: 0 }
@@ -50,7 +50,7 @@ export function slimViewStep(v: SymccView, nowMs = Date.now()): { view: SymccVie
   // oldest finished tasks first
   const order = cur.tasks
     .map((t, i) => ({ t, i }))
-    .filter(x => finished(x.t))
+    .filter(x => isFinished(x.t))
     .sort((x, y) => Date.parse(x.t.updated_at ?? '') - Date.parse(y.t.updated_at ?? '') || x.i - y.i)
   const gone = new Set<number>()
   let total = size(cur)

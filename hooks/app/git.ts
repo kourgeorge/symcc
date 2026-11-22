@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { liveWorkersFor, startBranch, type Board, intoOf, type GitState, gitStateOf, noGitText, setupAskText, gitInstallStep, gitNotice, type InstallFacts, gitignoreWith, gitignoreBase, riskyFiles, parseLsTree, ignoreLineFor, setupDoneText, find, worktreesToRemove, branchesToDelete, cleanupText, namedReports, SCRATCH_DIR, SCRATCH_EXCLUDE, commitMessage, isSha, isTaskCommit } from '../board'
+import { isFinished, liveWorkersFor, startBranch, type Board, intoOf, type GitState, gitStateOf, noGitText, setupAskText, gitInstallStep, gitNotice, type InstallFacts, gitignoreWith, gitignoreBase, riskyFiles, parseLsTree, ignoreLineFor, setupDoneText, find, worktreesToRemove, branchesToDelete, cleanupText, namedReports, SCRATCH_DIR, SCRATCH_EXCLUDE, commitMessage, isSha, isTaskCommit } from '../board'
 import { publish } from './lead'
 import { S, workers, starting, finishing, approving, keptDirty, scratchUse } from './state'
 import { type Host, agentState } from '../host'
@@ -175,7 +175,7 @@ export async function setupGit($: Host, who: string): Promise<string> {
     const files = (await gitOk($, ['ls-files', '--cached'], top)).split('\n').filter(Boolean).length
     await gitOk($, [...asSymcc(), 'commit', '-q', '--no-verify', '--allow-empty', '-m', `Initial commit (by ${S.N.name})`], top)
     // There was no branch before, so every open task's branch was a guess: it merges into this one.
-    await change($, b => ({ ...b, tasks: b.tasks.map(t => (t.status === 'done' || t.status === 'dropped' ? t : { ...t, merge_into: branch })) }))
+    await change($, b => ({ ...b, tasks: b.tasks.map(t => (isFinished(t) ? t : { ...t, merge_into: branch })) }))
     S.toldGit = 'ok'
     S.gitState = 'ok'
     await publish($, await load($))
@@ -503,7 +503,7 @@ export async function cleanupMerged($: Host, b: Board) {
   if (!agents) return
   const busy = new Set([...workers.values()].map(w => w.task))
   const existing: string[] = []
-  for (const t of b.tasks) if ((t.status === 'done' || t.status === 'dropped') && (await $.fs.exists(`${worktreeDir(t.id)}/.git`))) existing.push(t.id)
+  for (const t of b.tasks) if (isFinished(t) && (await $.fs.exists(`${worktreeDir(t.id)}/.git`))) existing.push(t.id)
   let dirs = 0
   for (const id of worktreesToRemove(b.tasks, existing)) {
     const t = find(b, id)

@@ -7,7 +7,7 @@
 // it does, its state as chips, Run now / Edit / Pause as buttons, a divider), then the instructions, and its Runs (newest first; a press opens that run's full report, with a "← <scout>" button back;
 // the page itself shows no report text). It says when its last run ended on an API error or a refusal. No key hints.
 import type { SymccScout } from '../../../types'
-import { scoutRow, scoutFile, scoutHowTo, scoutListRows, type ScoutListRow, everyText, isNothing, BAD_EVERY_STATE, scoutRunTasks, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem } from '../../board'
+import { scoutRow, scoutFile, scoutHowTo, scoutListRows, type ScoutListRow, isNothing, scoutRunTasks, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem } from '../../board'
 import { cancelScoutEdit, saveScout, runScoutNow, editScout, setScoutPaused, newScout, loadScoutRunHistory, loadScoutResults, readScoutRunReport, scoutPlaceValue } from '../../app/scouts'
 import { S } from '../../app/state'
 import { type $, panelValues } from '../panel'
@@ -18,14 +18,6 @@ import { claudeHost } from '../host'
 import { vsBadge, vsFooter, vsHref, vsLink, mdLink, vsSection, cutEnd } from './vscode'
 import { vsRowRoom } from './vscode-list'
 import { type PageHeader, vsPageHeader } from './page-header'
-
-/** A scout's state in words, whole ("running now", "paused", "next in 3h", "on demand", "bad every_minutes"). */
-export function vsScoutState(s: SymccScout, nowMs: number): string {
-  if (s.running) return s.paused ? 'running now, then paused' : 'running now'
-  if (s.paused) return 'paused'
-  if (s.warning) return BAD_EVERY_STATE
-  return scoutRow(s, nowMs).state || (everyText(s.every_minutes) === 'on demand' ? 'on demand' : 'waiting')
-}
 
 /** The first line of a report that says something (a heading or "1." taken off), whole; '' when there is none. */
 export function reportStart(report: string | undefined): string {

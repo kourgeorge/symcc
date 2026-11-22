@@ -7,7 +7,8 @@
 // archive.json is split the same way, by size (archiveChunks): archive.json, archive-2.json, ... each kept under
 // ARCHIVE_FILE_BYTES. Every function here is pure; app/store.ts and app/archive.ts read and write the files.
 import type { SymccStatus } from '../../types'
-import type { Board, BoardTask } from './board-file'
+import { type Board, type BoardTask, isFinished } from './board-file'
+import { isObj } from './text'
 
 /** The folder (inside the data folder) that holds the finished tasks' parts files. */
 export const PARTS_DIR = 'tasks'
@@ -25,10 +26,8 @@ export const READ_LIMIT_BYTES = 4 * 1024 * 1024
 /** One archive file is kept under this; a bigger archive goes on in archive-2.json, archive-3.json, ... */
 export const ARCHIVE_FILE_BYTES = 2 * 1024 * 1024
 
-const FINISHED: SymccStatus[] = ['done', 'dropped']
-
 /** Whether task `t` keeps only a stub in board.json (done and dropped tasks). */
-export const splits = (t: { status?: unknown }): boolean => FINISHED.includes(t?.status as SymccStatus)
+export const splits = (t: { status?: unknown }): boolean => isFinished(t)
 
 /** The parts file of task `id`, relative to the data folder ("tasks/T-600.json" for T-600 to T-649); '' for an id with no number. */
 export function partsFileOf(id: string): string {
@@ -38,9 +37,6 @@ export function partsFileOf(id: string): string {
   return `${PARTS_DIR}/T-${start}.json`
 }
 
-/** A parts file's content: each task's parts by id. */
-export type PartsFile = { version: 1; tasks: Record<string, Record<string, unknown>> }
-
 /** A parts file's text: one line, the ids in order. */
 export function partsText(tasks: Record<string, Record<string, unknown>>): string {
   const ids = Object.keys(tasks).sort((a, b) => idNum(a) - idNum(b) || a.localeCompare(b))
@@ -48,7 +44,6 @@ export function partsText(tasks: Record<string, Record<string, unknown>>): strin
 }
 
 const idNum = (id: string) => Number(/^T-(\d+)$/.exec(id)?.[1] ?? Number.MAX_SAFE_INTEGER)
-const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x)
 
 /** A parts file's text read: its tasks' parts, or `broken` (the reason) when it is not a parts file. */
 export function readParts(text: string): { tasks: Record<string, Record<string, unknown>>; broken?: string } {

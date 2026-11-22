@@ -2,7 +2,7 @@
 import type { SymccAsk, SymccMode, SymccRun, SymccStatus, SymccTask, SymccTokens } from '../../types'
 import { dataDir } from '../name'
 import { cleanTokens, keepAgentIds } from './runs'
-import { parseStamp } from './text'
+import { isNum, isObj, parseStamp } from './text'
 import { historyEntryOk } from './history'
 import { type OwnerQuestion, cleanAsk, cleanQuestions } from './questions'
 
@@ -178,6 +178,10 @@ export type Checking = { step: CheckStep; at: string; place?: number }
 export const CHECK_STEPS: readonly CheckStep[] = ['prep', 'testing', 'checker', 'queue', 'merging']
 /** The statuses a task may be checked in: a finished try ("doing"), an approve ("review"), a merge waiting for the owner's files ("waiting"). */
 export const CHECKED_STATUSES: readonly SymccStatus[] = ['doing', 'review', 'waiting']
+/** The statuses of a finished task: done or dropped. */
+export const FINISHED: readonly SymccStatus[] = ['done', 'dropped']
+/** Whether task `t` is finished (done or dropped). */
+export const isFinished = (t: { status?: unknown } | null | undefined): boolean => FINISHED.includes(t?.status as SymccStatus)
 
 /** `c` when it is a proper checking step, else undefined. */
 export function asChecking(c: unknown): Checking | undefined {
@@ -226,8 +230,7 @@ export function parseLock(text: string | null): Lock | null {
   const l = parseStamp(text, 'at', true)
   if (!l) return null
   const o = JSON.parse(text ?? '') as { pid?: unknown; started?: unknown }
-  const ok = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n)
-  return ok(o.pid) && Number.isInteger(o.pid) && o.pid > 0 && ok(o.started) ? { ...l, pid: o.pid, started: o.started } : l
+  return isNum(o.pid) && Number.isInteger(o.pid) && o.pid > 0 && isNum(o.started) ? { ...l, pid: o.pid, started: o.started } : l
 }
 
 /** The process lock text `text` names as its holder, or undefined (an older lock, or one from a host that can't see processes). */
@@ -341,8 +344,6 @@ export type BoardRead = {
 
 const STATUSES: SymccStatus[] = ['backlog', 'todo', 'doing', 'paused', 'waiting', 'review', 'failed', 'done', 'dropped']
 
-const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x)
-const isNum = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x)
 
 /** Each setting with the test its value must pass; a value that fails is replaced by the default. */
 const SETTING_OK: { [K in Exclude<keyof Board, 'version' | 'tasks' | 'next_id' | 'archived' | 'archived_done' | 'questions' | 'next_question'>]: (v: unknown) => boolean } = {
@@ -572,7 +573,7 @@ export function cleanCommitFields<T extends { runs?: unknown; merged?: unknown }
   if ('merged' in out && !isSha(out.merged)) delete out.merged
   if (Array.isArray(out.runs)) {
     // a run that is not an object (hand-edited) is dropped: totals and the task page read every run
-    out.runs = out.runs.filter(r => r && typeof r === 'object' && !Array.isArray(r)).map(r => {
+    out.runs = out.runs.filter(r => isObj(r)).map(r => {
       if (!('commits' in r)) return r
       const { commits, ...rest } = r as SymccRun
       const ok = Array.isArray(commits) ? commits.filter(isSha) : []

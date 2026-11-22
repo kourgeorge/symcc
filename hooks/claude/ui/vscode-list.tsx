@@ -13,7 +13,7 @@
 // No key hints: the mode switch is a link and the search a box in the footer. An empty board says so, with one
 // primary button that starts a message to the lead in the prompt box.
 import type { SymccStatus, SymccTask } from '../../../types'
-import { statusMark, archivedNote, archivedOf, localOffset, panelSections, BACKLOG_SHOWN, ALL_CLEAR, statusCell, rowCell, rowMark, rowStates, stateText, TITLE_ROOM, rowExtra, fitRow, WAITS_FOR, kindTag, searchTasks, SEARCH_WORDS, isInvestigation, needsYou, kindMark, fmtDuration, ownersTurn, shownStatus } from '../../board'
+import { isFinished, statusMark, archivedNote, archivedOf, localOffset, panelSections, BACKLOG_SHOWN, ALL_CLEAR, statusCell, rowCell, rowMark, rowStates, stateText, TITLE_ROOM, rowExtra, fitRow, WAITS_FOR, kindTag, searchTasks, SEARCH_WORDS, isInvestigation, needsYou, kindMark, fmtDuration, ownersTurn, shownStatus } from '../../board'
 import { openDays, S } from '../../app/state'
 import { type $, panelValues } from '../panel'
 import type { PaneParts } from './parts'
@@ -112,9 +112,9 @@ export function listPageVs($: $, pane: PaneParts) {
    *  "…" (the whole title is on the task's page). A done or dropped task: its mark, the ID and the title, no state.
    *  Text, not a Button (VS Code draws a Button as a blue box). */
   const taskRow = (x: SymccTask, depth = 0, col?: Column) => {
-    const closed = x.status === 'done' || x.status === 'dropped' || x.status === 'backlog'
+    const closed = isFinished(x) || x.status === 'backlog'
     // a done or dropped task is one line: its mark (the terminal list's), the ID link, the dim title; no status line
-    const ended = x.status === 'done' || x.status === 'dropped'
+    const ended = isFinished(x)
     const needs = needsYou(x, nowMs)
     const extra = rowExtra(x, v.tasks, v.home_branch ?? '', v.max_minutes, nowMs).replace(/^Enter to review$/, isInvestigation(x) ? '' : 'ready for your review')
     let body = extra
