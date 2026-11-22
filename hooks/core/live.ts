@@ -9,7 +9,7 @@ import { handedBack, shownStatus } from './lead'
 import { cutTitle, median, padWidth, taskFigures, textWidth, wrapLine } from './stats'
 import { activeFrom, restartsOf, gapsOf, agentsOf, checkerIdOf, checkerTokensOf, tryCost, tryTokens, fmtCost, fmtDuration, fmtTokens, sumTokens, tokenCount, TOKEN_SIGN, fmtTok } from './runs'
 import { type KeyHint, LIVE_VIEW_KEYS, hintLineText, hintLines, rowDuration, waitOrder } from './panel'
-import { ORG_MEM_EMPTY, ORG_MEM_MAX_LINES, TOPIC_UNSORTED, orgMemNewest, orgMemSectionKeys, orgMemShortDay, orgMemTopicCounts, type OrgMemNote } from './org-mem'
+import { ORG_MEM_EMPTY, ORG_MEM_MAX_LINES, TOPIC_UNSORTED, ORG_MEM_ALL, orgMemNewest, orgMemShortDay, orgMemTopicCounts, type OrgMemNote } from './org-mem'
 import { depDone } from './archive'
 import { dayOf, localOffset } from './days'
 import { modeLabel, needsReview } from './review'
@@ -99,7 +99,6 @@ export const liveKeys = (): KeyHint[] => [
   { key: '↑↓', word: 'move' },
   { key: 'Enter', word: 'open task' },
   { key: 'w', word: 'watch worker' },
-  { key: 'm', word: 'org-mem' },
   { key: LIVE_VIEW_KEYS, word: 'views' },
   { key: 'Esc', word: 'close' },
 ]
@@ -1146,25 +1145,26 @@ export function liveTodayLines(v: Pick<LiveView, 'tasks' | 'today_team'>, nowMs:
 
 // ---------------- T-718: the Organizational memory section at the bottom of the Live tab ----------------
 //  ▍Organizational memory   57 / 60 ▕█████████░▏
-//   newest
+//   newest [all]
 //    11-21  tests      In tests, put dates relative to now, never a…
 //   topics
 //    tests · snapshots   14    git & guards       11    OpenCode   9
-//   ↑↓ move · Enter open topic · m all notes
+// T-866: no key hint line and no m key; the "[all]" button next to "newest" opens all notes (a click, or Enter on it).
 
 /** One topic cell of the section's grid: its topic, count and text (with the indent or gap before it, padded to its column). */
 export type OrgMemCell = { topic: string; count: number; segs: LiveSeg[] }
 
-/** The section as lines in a width: the header, the newest notes (each with its note), the topic grid (rows of cells), the key hints. */
+/** The section as lines in a width: the header, the newest notes (each with its note), the topic grid (rows of cells). */
 export type LiveOrgMem = {
   head: LiveSeg[]
   newestLabel: string
+  /** T-866: the button after newestLabel that opens all notes: its label ("all") and how the terminal draws it ("[all]") */
+  all: { label: string; text: string }
   newest: { note: OrgMemNote; segs: LiveSeg[] }[]
   /** '' or what is said in place of the newest notes (no notes yet) */
   empty: string
   topicsLabel: string
   grid: OrgMemCell[][]
-  keys: string[]
 }
 
 /** The most columns of the topic grid. */
@@ -1247,15 +1247,14 @@ export function topicGrid(topics: readonly { topic: string; count: number }[], w
 export function liveOrgMem(notes: readonly OrgMemNote[], width: number): LiveOrgMem {
   const full = Math.max(1, Math.floor(width))
   const w = liveInner(full)
-  const keys = hintLines(orgMemSectionKeys(), w - 2).map(l => `  ${hintLineText(l)}`)
   return {
     head: orgMemHead(notes.length, full),
     newestLabel: '  newest',
+    all: { label: ORG_MEM_ALL, text: `[${ORG_MEM_ALL}]` },
     newest: newestLines(orgMemNewest(notes), w),
     empty: notes.length ? '' : `  ${ORG_MEM_EMPTY}`,
     topicsLabel: '  topics',
     grid: topicGrid(orgMemTopicCounts(notes), w),
-    keys: keys.map(k => fitText(k, w)),
   }
 }
 

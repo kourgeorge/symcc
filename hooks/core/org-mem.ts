@@ -443,8 +443,8 @@ export const ORG_MEM_EMPTY = 'No notes yet.'
 export const orgMemCount = (n: number) => `${n} note${n === 1 ? '' : 's'}`
 
 
-/** The Live tab's key for the page with all notes (free there: m is the board mode only on the Tasks page). */
-export const ORG_MEM_KEY = 'm'
+/** T-866: the label of the button next to the Live tab's "newest" that opens the page with all notes (drawn "[all]"). */
+export const ORG_MEM_ALL = 'all'
 
 /** The page's one-line explanation: where the file is, who adds to it, and its limit. */
 export const orgMemAbout = (file: string) =>
@@ -553,13 +553,6 @@ export const orgMemPageTitle = (topic?: string | null) => (topic ? `Organization
 
 /** What a topic's page says when it has no notes (its last one was deleted). */
 export const orgMemTopicEmpty = (topic: string) => `No notes with topic "${topic}" now.`
-
-/** The key hints under the Live tab's section: "↑↓ move · Enter open topic · m all notes". */
-export const orgMemSectionKeys = (): KeyHint[] => [
-  { key: '↑↓', word: 'move' },
-  { key: 'Enter', word: 'open topic' },
-  { key: ORG_MEM_KEY, word: 'all notes' },
-]
 
 /** A note's day as the section shows it: "11-21" (month and day); "—" for a line written by hand without one. */
 export const orgMemShortDay = (date: string) => (/^\d{4}-\d{2}-\d{2}$/.test(date) ? date.slice(5) : '—')

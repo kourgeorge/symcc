@@ -18,7 +18,7 @@
 import { LIVE_DIVIDER, type BranchRow, type LiveBranches, liveBranches, LIVE_EMPTY, LIVE_AGENT_MARK, LIVE_RUN_MARK, liveLegend, LIVE_SECTIONS, type LiveLane, liveInner, liveRuleText, type LiveLayout, type LiveSeg, LIVE_TONE, laneLines, liveHeader, liveHeaderSegs, liveNeeds, liveTaskLanes, liveLayout, liveOrgMem, liveColumns, liveTodayLines, liveTrains, segText, trainRows } from '../../core/live'
 import { panelValues, type $ } from '../panel'
 import type { PaneParts } from './parts'
-import { LIVE_TICK_MS, branchKey, needKey, laneKey, liveTick, newestKey, openOrgMemPage, topicKey, trainKey } from './live'
+import { LIVE_TICK_MS, ORG_MEM_ALL_KEY, branchKey, needKey, laneKey, liveTick, newestKey, openOrgMemPage, topicKey, trainKey } from './live'
 import { mdLink, vsFooter, vsHref, vsLink } from './vscode'
 import { ORG_MEM_MAX_LINES, orgMemCount, orgMemShortDay, type OrgMemNote } from '../../core/org-mem'
 
@@ -303,7 +303,7 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
 
 /** T-718: the Live tab's Organizational memory section in VS Code (see the top of this file). */
 function orgMemSectionVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
-  const { Box, Text, C, width, vs } = pane
+  const { Box, Text, Button, C, width, vs } = pane
   const om = liveOrgMem(notes, width)
   const all = vsHref('page', 'orgmem')
   const label = (key: string, text: string) => (
@@ -318,7 +318,11 @@ function orgMemSectionVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
         <Text key="live-om-count" color={C('inactive')}>{`${notes.length} / ${ORG_MEM_MAX_LINES}`}</Text>
         <Text key="live-om-rule" color={C('text')}>{liveRuleText(LIVE_SECTIONS.orgMem.length + 3 + `${notes.length} / ${ORG_MEM_MAX_LINES}`.length, width).trim()}</Text>
       </Box>
-      {label('live-om-newest', om.newestLabel)}
+      {/* T-866: "newest [all]": the all button opens all notes */}
+      <Box key="live-om-newest-row" flexDirection="row" gap={1} alignItems="center">
+        {label('live-om-newest', om.newestLabel)}
+        <Button key={ORG_MEM_ALL_KEY} label={om.all.label} variant="secondary" onPress={openOrgMemPage($)} />
+      </Box>
       {om.empty ? label('live-om-empty', om.empty) : null}
       {om.newest.map(x => {
         const href = vsHref('do', `orgmem-note/${x.note.n}`)
