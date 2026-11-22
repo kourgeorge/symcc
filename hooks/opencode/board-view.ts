@@ -33,6 +33,7 @@ import {
   searchTasks, showsHeader, type BoardPage,
   LIVE_TABS, LIVE_DIVIDER, LIVE_EMPTY, LIVE_INDENT, liveLegend, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, liveBold, liveHeading, liveIndented, liveInner, tabRow, LIVE_VIEW_KEYS, liveKeys, liveBranches, liveTaskLanes, liveLayout, liveColumns, liveHeader, liveHeaderSegs, liveLabelSegs, liveNeeds, laneLines, liveOrgMem, liveTrains, trainRows, liveTodayLines, searchLine, modeButton, hintLines, roleKeys, rolePromptKeys, ROLE_PROMPTS, ROLE_SLOT, promptsOfRole, type RolePromptKind,
 } from '../board'
+import { notSetUpAnswer } from '../core/settings'
 import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, brokenLabel, defNamed } from '../core/def-files'
 import { restFrame } from '../core/logo'
 import { taskSections, type TaskSection } from '../core/task-sections'
@@ -622,7 +623,7 @@ export function approveInProgress(f: ViewFile | null, t: BoardTask, approving: A
 export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: number, width: number): PanelDraw {
   const w = Math.max(20, Math.floor(width))
   if (!f) {
-    const lines: Line[] = [[{ text: `${boardBrand(DEFAULT_NAME)}`, color: 'ide', bold: true }], [{ text: 'No board yet: start symcc in this project (the board is written by the server part).', color: 'inactive' }]]
+    const lines: Line[] = [[{ text: `${boardBrand(DEFAULT_NAME)}`, color: 'ide', bold: true }], [{ text: notSetUpAnswer(), color: 'inactive' }]]
     return { lines, hits: lines.map(() => null), ids: [], selected: '', keys: [], scroll: 0, fixed: lines.length, bodyLines: 0, footer: 0 }
   }
   // the shared note says "set up git (g)": this panel has the g key and the Set up git button too (T-706)

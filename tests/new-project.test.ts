@@ -197,6 +197,7 @@ test('T-858: a bare .symcc folder with no board.json does not stop the search fo
   const w = world('a', '/repo/sub', '/repo')
   w.files.set('/repo/.symcc/board.json', JSON.stringify(emptyBoard()))
   w.files.set('/repo/sub/.symcc/stray.txt', '')
+  w.files.set('/repo/sub/.symcc', '')
   await sessionStart(w.host)
   expect(S.fresh).toBe(false)
   expect(S.root).toBe('/repo')
