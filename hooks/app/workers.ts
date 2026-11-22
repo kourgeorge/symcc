@@ -1274,8 +1274,9 @@ const resultKind = (r: CheckResult): HistoryKind => (r.blocked || r.ask || r.rev
  * The lead is told only the outcome: the worker's own report already reached it as the agent's hand-back.
  * A merge the owner approved (`approved`) wakes nobody: it waits as a "Meanwhile" line.
  */
-export async function settle(host: Host, t: SymccTask, b: Board, r: CheckResult, summary: string, worktree: string, agentId?: string, approved = false, mergedBy?: 'approved') {
-  const facts: HistoryFacts = { ...(r.reason ? { reason: r.reason } : {}), ...(resultKind(r) === 'merged' && !r.earlier ? { how: mergedBy ?? 'own' } : {}) }
+export async function settle(host: Host, t: SymccTask, b: Board, r: CheckResult, summary: string, worktree: string, agentId?: string, approved = false, mergedBy?: 'approved', fromMerge = false) {
+  // T-736: an approve (or the merge once the owner's files are out of the way) is not a try of its own: its line keeps no fail reason
+  const facts: HistoryFacts = { ...(r.reason && !fromMerge ? { reason: r.reason } : {}), ...(resultKind(r) === 'merged' && !r.earlier ? { how: mergedBy ?? 'own' } : {}) }
   const line: HistoryAdd = resultEntry(t, resultKind(r), cutLine(summary, 300), r.detail, facts)
   // Every write below reads the task again and is skipped when it was dropped, paused or changed meanwhile.
   // A finished worker's try ends with the check's outcome (an approve is not a try: its task is in review, so nothing is set).
@@ -1514,7 +1515,7 @@ async function mergeWork(host: Host, t: SymccTask, b: Board, kind: 'approve' | '
         tellLead(host, `${t.id} "${t.title}" was merged into ${intoOf(t)} (${sha}), but it is no longer on the board.`)
         return `${t.id} was merged into ${intoOf(t)} (${sha}), but it is no longer on the board`
       }
-      await settle(host, t, b, r, by, dir, undefined, kind === 'approve', kind === 'approve' ? 'approved' : undefined)
+      await settle(host, t, b, r, by, dir, undefined, kind === 'approve', kind === 'approve' ? 'approved' : undefined, true)
       const off = offAsked.get(t.id)
       if (off && cur.status === status) {
         await change(host, x => {
@@ -1559,7 +1560,7 @@ async function mergeWork(host: Host, t: SymccTask, b: Board, kind: 'approve' | '
       const next = /approve \S+ again$/.test(r.detail) ? '.' : '. Fix that, then approve it again.'
       return `${t.id} was not merged and stays in review: ${r.detail}${next}`
     }
-    await settle(host, cur, b, r, by, dir, undefined, false, kind === 'approve' ? 'approved' : undefined)
+    await settle(host, cur, b, r, by, dir, undefined, false, kind === 'approve' ? 'approved' : undefined, true)
     if (r.ok) outcomes.set(t.id, 'merged')
     const label = kind === 'approve' ? 'approved, but not merged' : 'not merged'
     return r.ok ? `${t.id} ${kind === 'approve' ? 'approved and merged' : 'merged'}: ${r.detail}` : `${t.id} ${label}: ${r.detail}${r.conflict || r.testOutput !== undefined ? ' (see the board for what happens next)' : ''}`

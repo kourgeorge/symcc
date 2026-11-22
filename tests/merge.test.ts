@@ -31,7 +31,7 @@ import { SYMCC_WORDS } from '../hooks/host'
 import { change, load, saveBoard, saveMigrated, takeLock, dropLock } from '../hooks/app/store'
 import { TOOLS, runTool, ownerSettings, allowAskedFiles, refuseAskedFiles } from '../hooks/app/tools'
 import { archiveOld } from '../hooks/app/archive'
-import { TEST_RERUN_GONE_NOTE, upgradeArchiveTask } from '../hooks/core/old-data'
+import { TEST_RERUN_GONE_NOTE, oldHistoryFacts, upgradeArchiveTask } from '../hooks/core/old-data'
 import { readOld, stillOld } from './old-data-fixture'
 import { commandsOf, pause } from './fakes'
 import { runCommand, agentFinished } from '../hooks/app/symcc'
@@ -1423,6 +1423,10 @@ test('approve when main moved runs the tests again; failing, nothing merges and 
   expect(t.status).toBe('todo')
   expect(t.test_tries).toBe(1)
   expect(t.test_output).toContain('FAIL a.test')
+  // T-806: an approve is not a try of its own: its failed line carries no reason, the same as the old text read by the doctor
+  const line = t.history.find(h => h.text.startsWith('try 1: approved by the owner → tests failed'))!
+  expect(line.reason).toBe(undefined)
+  expect(oldHistoryFacts({ kind: line.kind, text: line.text }).reason).toBe(undefined)
 })
 
 test('approve that is blocked by the owner\'s uncommitted changes in a file it changes keeps the task in review, waiting for that file', async () => {

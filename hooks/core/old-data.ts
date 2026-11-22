@@ -275,10 +275,13 @@ export function guessHistoryKind(line: string): HistoryKind {
   return 'step'
 }
 
-/** Whether the old patterns find a fact in entry `e` that it doesn't carry yet (T-806). */
+/** The fact fields of a history entry (T-806): one of them set means today's code wrote the line. */
+const FACT_FIELDS = ['try', 'step', 'place', 'result', 'reason', 'how', 'owner', 'backlog']
+
+/** Whether entry `e` is from before the facts: it has no fact field at all, and the old patterns find a fact in its text. Never true for a line today's code wrote (T-806). */
 function lacksFacts(e: SymccHistoryEntry): boolean {
-  const facts = oldHistoryFacts(e) as Record<string, unknown>
-  return Object.keys(facts).some(k => (e as Record<string, unknown>)[k] === undefined)
+  if (FACT_FIELDS.some(k => (e as Record<string, unknown>)[k] !== undefined)) return false
+  return Object.keys(oldHistoryFacts(e)).length > 0
 }
 
 /** An old history line (a plain string) as a record: kind guessed (guessHistoryKind), time guessed from the try it names or the task's created_at. */
@@ -305,7 +308,8 @@ export function migrateHistory(t: { history?: unknown; runs?: readonly SymccRun[
     const kind = r.kind === 'approved' ? 'approve-failed' : isHistoryKind(r.kind) ? r.kind : 'other'
     // the facts the old patterns read out of the line fill the ones it doesn't have (never replacing a saved one)
     const { at: _at, ...saved } = r
-    out.push({ ...(typeof r.at === 'string' && r.at ? { at: r.at } : {}), ...oldHistoryFacts({ kind, text: r.text }), ...saved, kind, text: r.text })
+    const old = lacksFacts({ ...r, kind }) ? oldHistoryFacts({ kind, text: r.text }) : {}
+    out.push({ ...(typeof r.at === 'string' && r.at ? { at: r.at } : {}), ...old, ...saved, kind, text: r.text })
   }
   return out
 }

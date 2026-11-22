@@ -3,9 +3,9 @@
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { addTask, afterChanges, emptyBoard, mergedHow, patchTask, promoteTask, readArchive, archiveText, readBoard, rejectTask, stashTask, statsReport, find, type Board } from '../hooks/board'
-import { type HistoryAdd, type HistoryKind, HISTORY_KINDS, historyEntry, historyLineText, historyTime, notUsedEntry, resultEntry, stoppedEntry, withHistory, workerHandedBackEntry, workerStartedEntry } from '../hooks/core/history'
+import { tryEntry, type HistoryAdd, type HistoryKind, HISTORY_KINDS, historyEntry, historyLineText, historyTime, notUsedEntry, resultEntry, stoppedEntry, withHistory, workerHandedBackEntry, workerStartedEntry } from '../hooks/core/history'
 import { taskWasResult } from '../hooks/core/review'
-import { guessHistoryKind, migrateHistory, oldHistoryFacts, oldHistoryEntry, upgradeArchiveTask } from '../hooks/core/old-data'
+import { oldDataRows, guessHistoryKind, migrateHistory, oldHistoryFacts, oldHistoryEntry, upgradeArchiveTask } from '../hooks/core/old-data'
 import { readOld, stillOld } from './old-data-fixture'
 import { taskText } from '../hooks/app/tools'
 
@@ -129,7 +129,7 @@ test('T-806: the doctor fills the facts of old lines once (try, step, place, res
   ])
   // done once: nothing left to fill, and a fact already saved is never replaced
   expect(migrateHistory({ history: fixed })).toBe(null)
-  expect(migrateHistory({ history: [{ at: T, kind: 'failed', text: 'try 1: x → tests failed: y', reason: 'clash' }] })![0]!.reason).toBe('clash')
+  expect(migrateHistory({ history: [{ at: T, kind: 'failed', text: 'try 1: x → tests failed: y', reason: 'clash' }] })).toBe(null)
 })
 
 test('T-806: the writers set the facts, and they match what the doctor reads out of the same lines', () => {
@@ -158,4 +158,22 @@ test('T-806: the writers set the facts, and they match what the doctor reads out
   expect(taskWasResult('stopped because the board was paused').reason).toBe(undefined)
   expect(taskWasResult('sent to the owner').reason).toBe(undefined)
   expect(taskWasResult('stopped because the command line stopped waiting').reason).toBe('notmerged')
+})
+
+test('T-806: lines today\'s helpers wrote are never read as old text: no reason, not counted, no migration', () => {
+  const t = { attempts: 2, role: 'general' }
+  const lines: HistoryAdd[] = [
+    tryEntry(t, 'asked', 'worker asked: why → tests failed?'),
+    tryEntry(t, 'answered', 'answered: x → conflicts with the latest main'),
+    resultEntry(t, 'try-result', 'summary → tests failed: x', 'checks passed'),
+    notUsedEntry(resultEntry(t, 'failed', 'did it', 'not merged: x', { reason: 'notmerged' }), 'paused'),
+  ]
+  const history = lines.map(e => historyEntry(e[0], e[1], T, e[2]))
+  expect(history.every(e => e.reason === undefined || e.reason === 'notmerged')).toBe(true)
+  expect(history.slice(0, 2).map(e => e.reason)).toEqual([undefined, undefined])
+  expect(migrateHistory({ history })).toBe(null)
+  const rows = oldDataRows({ board: { tasks: [{ id: 'T-1', history }] }, archive: [], scouts: null, withRuns: new Set(), fieldGuide: false, orgMem: false } as Parameters<typeof oldDataRows>[0])
+  expect(rows.find(r => r.text.startsWith('history entries without their facts'))?.n ?? 0).toBe(0)
+  // an old line with the same words and no fact field at all is still old
+  expect(migrateHistory({ history: [{ at: T, kind: 'failed', text: 'try 1: x → tests failed: y' }] })![0]!.reason).toBe('tests')
 })
