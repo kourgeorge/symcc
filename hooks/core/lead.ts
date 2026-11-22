@@ -296,7 +296,14 @@ export function relabelSession(b: Board, oldId: string, newId: string): Board {
 /** Task `t` back to "todo" with `note`, no longer tied to a session; a running one gets a history line saying why (the next try starts for that reason). */
 export function backToTodo(t: BoardTask, note: string, now: string, stoppedAt: string = now): BoardTask {
   const { live: _l, ...rest } = t
-  return { ...rest, status: 'todo' as const, note, updated_at: now, ...(t.status === 'doing' ? { history: withHistory(t.history, now, stoppedEntry(t, note)), ...endedBy(t, stoppedAt, ...stopEnd(note)) } : {}) }
+  return { ...rest, status: 'todo' as const, note, updated_at: now, ...(t.status === 'doing' ? { history: withHistory(t.history, now, stoppedEntry(t, note)), ...laterEnd(endedBy(t, stoppedAt, ...stopEnd(note)), stoppedAt) } : {}) }
+}
+
+/** T-863: a try that handed back before the close (prep, queue, tests ran after) ends at the later last-alive time, so those minutes count as active and the gap starts there. */
+function laterEnd(p: { runs?: BoardTask['runs'] }, at: string): { runs?: BoardTask['runs'] } {
+  const last = p.runs?.at(-1)
+  if (!p.runs || !last?.ended || !(Date.parse(at) > Date.parse(last.ended))) return p
+  return { runs: [...p.runs.slice(0, -1), { ...last, ended: at }] }
 }
 
 /**

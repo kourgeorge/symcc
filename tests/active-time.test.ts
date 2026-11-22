@@ -112,3 +112,36 @@ test('T-863: a worker still running when Claude Code closed: the stop is stamped
   expect(runMs(r, NOW)).toBe(32 * MIN)
   expect(agentLines(r, NOW).join('\n')).toContain('20m')
 })
+
+test('T-863: a try that handed back before the close: the gap starts at the last heartbeat, so prep and tests before it count', () => {
+  const t = task('T-52', {
+    live: { session: 'me' },
+    runs: [{ started: at(1850), ended: at(1840), agents: [{ id: 'ag1', kind: 'worker' as const, started: at(1850), ended: at(1840) }] }],
+    history: [{ kind: 'stage', at: at(1835), text: 'try 1: tests started', try: 1, step: 'tests' }],
+  })
+  const board = { tasks: [t] } as unknown as Parameters<typeof resetDoing>[0]
+  const back = resetDoing(board, 'new', leadText('me', NOW - 1800 * MIN), NOW - 12 * MIN, REOPEN, at(12)).tasks[0]!
+  const r = goOnRun(back.runs, at(12))!.at(-1)!
+  const g = gapsOf(r)
+  expect(g.length).toBe(1)
+  expect(g[0]!.from).toBe(NOW - 1800 * MIN)
+  expect(g[0]!.to).toBe(NOW - 12 * MIN)
+  // 50 min before the close, 12 min since the reopen
+  expect(runMs(r, NOW)).toBe(62 * MIN)
+})
+
+test('T-863: after a reopen the check step shows the time since its own prep line, not an older one', () => {
+  const t = task('T-52', {
+    runs: [{ started: at(31 * 60), restarts: [{ at: at(31 * 60 - 20), why: REOPEN, started: at(12) }], ended: at(10), ended_by: 'finished' }],
+    live: { checking: { step: 'checker', at: at(8) } },
+    history: [
+      { kind: 'stage', at: at(31 * 60 - 25), text: 'try 1: prep started', try: 1, step: 'prep' },
+      { kind: 'stage', at: at(9), text: 'try 1: prep started', try: 1, step: 'prep' },
+      { kind: 'stage', at: at(8), text: 'try 1: checker started', try: 1, step: 'checker' },
+    ],
+  })
+  const v = { tasks: [t], checker: true, mode: 'auto' as const, max_parallel: 3 }
+  const lane = liveLanes(v, NOW)[0]!
+  expect(lane.station).toBe('check')
+  expect(laneRight(lane, NOW)).toBe('9m')
+})
