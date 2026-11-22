@@ -54,7 +54,7 @@ export function trackSvg(lane: Pick<LiveLane, 'at'> & Partial<Pick<LiveLane, 'do
       return
     }
     i = mine
-    if (lane.skipped?.includes(s)) parts.push(`<line x1="${x - r}" y1="${y}" x2="${x + r}" y2="${y}" stroke="${INK.label}" stroke-width="2"/>`)
+    if (lane.skipped?.includes(s) && i !== lane.at) parts.push(`<line x1="${x - r}" y1="${y}" x2="${x + r}" y2="${y}" stroke="${INK.label}" stroke-width="2"/>`)
     else if (i < lane.at) parts.push(`<circle cx="${x}" cy="${y}" r="${r}" fill="${INK.passed}"/>`)
     // T-771: a finished lane: a green ✓ at its last station, nothing blinks
     else if (i === lane.at && lane.done) parts.push(`<path d="M${x - r} ${y} L${x - 1} ${y + r - 1} L${x + r + 1} ${y - r}" fill="none" stroke="${INK.passed}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`)

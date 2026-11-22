@@ -2749,7 +2749,7 @@ test('T-846: the OpenCode Live tab draws an investigation as work → answer, a 
   ]
   const f: ViewFile = { ...f0, view: { ...f0.view, tasks: tasks.map(t => viewTask(t)), checker: true, max_parallel: 3 } }
   const lanes = liveLanes(f.view, NOW)
-  expect(lanes.map(l => `${l.id} ${l.station} ${l.stations.length}`).sort()).toEqual(['T-801 work 2', 'T-803 check 5', 'T-805 you 6', 'T-806 tests 5'])
+  expect(lanes.map(l => `${l.id} ${l.station} ${l.stations.length}`).sort()).toEqual(['T-801 work 2', 'T-803 queue 5', 'T-805 you 6', 'T-806 tests 5'])
   const d = panelLines(parseViewFile(viewFileText(f)), { tab: 'live', opened: '', cursor: 0 }, NOW, 120)
   const texts = d.lines.map(lineText)
   const row = (id: string) => texts.find(t => t.includes(`▶ ${id} `))!

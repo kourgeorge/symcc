@@ -103,3 +103,17 @@ test('T-846: the VS Code Live tab draws the same paths', async ($, on) => {
   await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'tasks') } })
   await ui.unmount()
 })
+
+test('T-846: an approved auto-mode review task keeps "you" and sits past it; a docs-only lane in prep has a current mark', () => {
+  const at = { step: 'merging', at: iso(0) }
+  const auto = task('T-807', 'Review by hand', { status: 'review', ...handed, live: { checking: at } })
+  const l = liveLanes(view([auto]), T0)[0]!
+  expect(l.stations).toContain('you')
+  expect(l.station).toBe('merged')
+  const tests = liveLanes(view([task('T-808', 'Again', { status: 'review', needs_review: true, ...handed, live: { checking: { step: 'testing', at: iso(0) } } })]), T0)[0]!
+  expect(tests.station).toBe('merged')
+  const prep = liveLanes(view([DOCS_HANDED]), T0)
+  const lines = (frame: number) => segText(laneLines(prep[0]!, liveLayout(prep, liveColumns(prep, true), 140), { nowMs: T0, frame })[0]!)
+  expect(lines(0)).toMatch(/◉|◎/)
+  expect(lines(0)).toContain('–')
+})

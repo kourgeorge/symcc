@@ -239,12 +239,15 @@ export function liveLanes(view: LiveView, nowMs: number): LiveLane[] {
     .map((x): LiveLane => {
       const t = x as BoardTask
       const waiting = shownStatus(t, nowMs) !== 'doing'
-      const stations = laneStations(t, checker, waiting || needsReview(view, t))
+      const stations = laneStations(t, checker, waiting || t.status === 'review' || needsReview(view, t))
       let stage: PhaseStage = taskPhase(t, nowMs).stage ?? 'worker'
       if (stage === 'worker' && handedBack(t)) stage = 'prep'
       const investigation = stations.includes('answer')
-      const station: LiveStation = waiting ? 'you' : investigation ? (stage === 'worker' ? 'work' : 'answer') : stationOf(stage, checker)
+      // an approve running on a task with a "you" station: the owner said yes, so it sits at merged, never back at tests
+      let station: LiveStation = waiting ? 'you' : investigation ? (stage === 'worker' ? 'work' : 'answer') : t.status !== 'doing' && stations.includes('you') ? 'merged' : stationOf(stage, checker)
       const skipped = checker && !investigation && !waiting && checkSkipped(t, stage)
+      // a docs-only change has no check to sit at: in prep it is already waiting for the queue
+      if (skipped && station === 'check') station = 'queue'
       const run = t.runs?.[t.runs.length - 1]
       const startMs = ms(run?.started)
       const approving = t.status !== 'doing' && !waiting
@@ -572,7 +575,7 @@ export function laneLines(lane: LiveLane, l: LiveLayout, o: { nowMs: number; fra
     const k = own.indexOf(s)
     if (k < 0) track.push(next === null ? { text: ' ', tone: 'text' } : next <= lane.at ? { text: '━', tone: 'passed' } : { text: '─', tone: 'future' })
     // T-846: a station this task skips (check, for a docs-only change) is a dim "–"
-    else if (lane.skipped?.includes(s)) track.push({ text: LIVE_SKIP_MARK, tone: 'dim' })
+    else if (lane.skipped?.includes(s) && k !== lane.at) track.push({ text: LIVE_SKIP_MARK, tone: 'dim' })
     // T-771: a finished lane has ✓ (done color) at its last station instead of the blinking mark
     else track.push(k < lane.at ? { text: '●', tone: 'passed' } : k === lane.at ? (done ? { text: LIVE_DONE_MARK, tone: 'passed' } : { text: liveBlink(o.frame, o.steady), tone: 'current' }) : { text: '○', tone: 'future' })
   })
