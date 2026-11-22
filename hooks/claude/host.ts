@@ -63,7 +63,13 @@ export function claudeAgents($: EngineInterface): Host['agents'] {
     async startTrigger() {
       const spawned = await $.agent.spawn({ prompt: 'Reply OK', name: `${S.N.name}-starter`, description: `${S.N.name} start trigger`, subagentType: claudeNames(S.N.name).starter })
       if ('deny' in spawned && spawned.deny) throw new Error(spawned.deny)
-      return 'agentId' in spawned && spawned.agentId ? { agentId: spawned.agentId } : {}
+      if (!('agentId' in spawned) || !spawned.agentId) return {}
+      // T-857: stop the starter at once so its hand-back never reaches the lead's chat (no "Prompt dropped by a hook" line);
+      // its turn.complete still fires. A failed stop changes nothing: the T-837 drop in register.tsx catches a late hand-back.
+      try {
+        await $.tool.call({ tool: 'TaskStop', task_id: spawned.agentId })
+      } catch {}
+      return { agentId: spawned.agentId }
     },
     // Every worker type (worker, worker-web, ...) is listed as a 'worker', the scout type as a 'scout' (see HostAgent).
     list: async () => (await $.agent.list()).filter(a => a.type !== claudeNames(S.N.name).starter).map(a => hostAgent(a, S.N.name)),
