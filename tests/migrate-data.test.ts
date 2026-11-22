@@ -176,3 +176,34 @@ test('T-804: migrateIfOld at session start migrates once, tells once, and keeps 
   await migrateIfOld(w.host)
   expect(told()).toBe(1)
 })
+
+test('T-804: an automatic migration names the real backup folder once, and makes no false before-fix notice or copy', async () => {
+  const w = world()
+  S.enabledNow = true
+  leadQueue.length = 0
+  expect(await migrateIfOld(w.host)).toBe('')
+  const folder = [...w.files.keys()].find(f => f.includes('/data.before-migrate-') && f.endsWith('/board.json'))!.replace(/\/board\.json$/, '').replace(ROOT + '/', '')
+  expect(leadQueue).toEqual([`symcc moved your old data to the current shape; a backup is in ${folder}/`])
+  expect(folder.startsWith('.symcc/data.before-migrate-')).toBe(true)
+  expect([...w.files.keys()].filter(f => f.includes('.before-fix-'))).toEqual([])
+})
+
+test('T-804: when the backup can not be written, a change is refused and board.json stays byte for byte', async () => {
+  const w = world()
+  S.enabledNow = true
+  leadQueue.length = 0
+  const write = w.host.fs.write
+  w.host.fs.write = async (p, text) => {
+    if (p.includes('data.before-migrate')) throw new Error('disk full')
+    return write(p, text)
+  }
+  const before = new Map(w.files)
+  let error = ''
+  await change(w.host, b => b).catch((e: Error) => void (error = e.message))
+  expect(error).toContain("symcc couldn't move your old data to the current shape")
+  expect(error).toContain('nothing was saved. Run /symcc-doctor.')
+  expect(w.files.get(`${D}/board.json`)).toBe(before.get(`${D}/board.json`))
+  // session start: told once, and the caller learns of the failure
+  expect(await migrateIfOld(w.host)).toContain('nothing was saved')
+  expect(leadQueue.filter(t => t.includes("couldn't move")).length).toBe(1)
+})

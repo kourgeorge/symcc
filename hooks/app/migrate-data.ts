@@ -11,7 +11,7 @@ import { type OldInput, migratedScoutRun, oldDataRows, upgradeArchiveTask, upgra
 import { BACKUP_MARK } from '../core/doctor'
 import type { Host } from '../host'
 import { S } from './state'
-import { fileName, load, locked, now, path, readBoardRaw, readWhole, safeWrite, saveBoard } from './store'
+import { fileName, isStubbed, locked, now, path, readBoardRaw, readWhole, safeWrite, saveBoard } from './store'
 import { saveArchive } from './archive'
 import { changeScoutMemory, runsPath, scoutMemoryFile, writeRunReport } from './scouts'
 import { tellLead } from './tell'
@@ -35,16 +35,24 @@ async function archiveRaw(host: Host): Promise<{ file: string; text: string; tas
   return out
 }
 
+/** board.json joined with its parts, without the tasks that loaded as bare stubs (their parts file is missing: nothing of them to count). */
+async function boardForCount(host: Host): Promise<unknown | null> {
+  const raw = await readBoardRaw(host)
+  const b = raw as { tasks?: unknown } | null
+  if (!b || !Array.isArray(b.tasks)) return raw
+  return { ...b, tasks: b.tasks.filter(t => !(t && typeof t === 'object' && isStubbed(String((t as { id?: unknown }).id)))) }
+}
+
 /** Everything the count reads (read-only). */
 async function oldInput(host: Host, all = true): Promise<OldInput> {
-  if (!all) return { board: await readBoardRaw(host), archive: [], scouts: null, withRuns: new Set<string>(), fieldGuide: false, orgMem: false }
+  if (!all) return { board: await boardForCount(host), archive: [], scouts: null, withRuns: new Set<string>(), fieldGuide: false, orgMem: false }
   const scoutsText = await host.fs.read(scoutMemoryFile()).catch(() => null)
   const scouts = jsonOf(scoutsText)
   const names = Object.keys((scouts as { scouts?: Record<string, unknown> } | null)?.scouts ?? {})
   const withRuns = new Set<string>()
   for (const n of names) if (safeScoutFile(n, S.N.name) !== null && (await host.fs.exists(runsPath(n)).catch(() => false))) withRuns.add(n)
   return {
-    board: await readBoardRaw(host),
+    board: await boardForCount(host),
     archive: (await archiveRaw(host)).flatMap(a => a.tasks),
     scouts,
     withRuns,
@@ -65,23 +73,37 @@ export const oldRowsText = (rows: ReturnType<typeof oldDataRows>): string => row
 /**
  * Brings old data shapes up to date before anything saves over them (T-804): when the board (and with `all`, the archive,
  * scouts.json and the old files too) is still in an old shape, it runs the migration (backup first) and tells the owner
- * and the lead once what it did. Nothing happens for data already current. Never throws.
+ * and the lead once what it did. Nothing happens for data already current. Never throws; answers '' when all is well, or
+ * the text of why the data could not be moved (then the caller must not save anything).
  */
-export async function migrateIfOld(host: Host, all = true): Promise<void> {
+export async function migrateIfOld(host: Host, all = true): Promise<string> {
+  let why = ''
   try {
-    if (S.guardOnly || !S.root) return
+    if (S.guardOnly || !S.root) return ''
     const input = await oldInput(host, all)
-    if (!oldDataRows(input).some(r => r.fix)) return
+    if (!oldDataRows(input).some(r => r.fix)) return ''
     const r = await migrateData(host)
-    const msg = r.failed
-      ? `symcc could not move your old data to the current shape: ${r.failed}. Run /${S.N.name}-doctor fix migrate-data after looking at it.`
-      : `symcc moved your old data to the current shape; a backup is in ${S.N.dir}/${r.backup}/`
+    if (r.failed) why = r.failed
+    else {
+      const msg = `symcc moved your old data to the current shape; a backup is in ${r.backup}/`
+      host.ui.toast(S.N.toast(msg))
+      tellLead(host, msg)
+      return ''
+    }
+  } catch (e) {
+    why = String((e as Error)?.message ?? e).slice(0, 150)
+  }
+  const msg = `symcc couldn't move your old data to the current shape (${why}); nothing was saved. Run /${S.N.name}-doctor.`
+  if (msg !== toldFailure) {
+    toldFailure = msg
     host.ui.toast(S.N.toast(msg))
     tellLead(host, msg)
-  } catch {
-    // never stops the caller
   }
+  return msg
 }
+
+/** The last failure text told to the owner, so a repeated failure is told once. */
+let toldFailure = ''
 
 /** Copies the data files into a dated backup folder (data.before-migrate-<time>/) beside them. Throws when one can't be copied. */
 async function backUp(host: Host): Promise<string> {
@@ -121,7 +143,6 @@ export async function migrateData(host: Host): Promise<{ failed: string; done: s
     if (raw !== null) {
       const read = readBoardValue(upgradeBoard(raw, S.root))
       if (read.broken) return `board.json: ${read.broken}`
-      await load(host)
       await saveBoard(host, read.board)
       done.push(`board.json: ${read.board.tasks.length} tasks saved in the current shape`)
       if (read.skipped || read.fixed.length) done.push(`board.json: ${read.skipped} entries skipped, fixed: ${read.fixed.join('; ') || 'none'}`)

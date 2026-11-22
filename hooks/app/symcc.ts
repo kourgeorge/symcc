@@ -137,11 +137,13 @@ export async function sessionStart(host: Host) {
       return
     }
     // T-804: old data shapes are brought up to date first (backup kept), before anything below can save over them.
-    await migrateIfOld(host)
-    // Finished tasks kept whole in board.json move to their parts files once (T-675).
-    await saveMigrated(host).catch(() => undefined)
-    await scoutOriginsFixed(host).catch(() => undefined)
-    await moveOldOrgMem(host).catch(() => undefined)
+    // If that fails, nothing below that saves runs (the owner was told once).
+    if (!(await migrateIfOld(host))) {
+      // Finished tasks kept whole in board.json move to their parts files once (T-675).
+      await saveMigrated(host).catch(() => undefined)
+      await scoutOriginsFixed(host).catch(() => undefined)
+      await moveOldOrgMem(host).catch(() => undefined)
+    }
     // T-793: another live window with symcc on makes this one start off here (plain), before it can claim the lead
     await startOffHere(host).catch(() => undefined)
     // Become the driver if nobody drives the board. As the driver, old workers still running

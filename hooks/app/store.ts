@@ -562,7 +562,8 @@ const boardStamp = async (host: Host) => {
 async function migratedBoard(host: Host) {
   const m = await boardStamp(host)
   if (m !== null && m === currentStamp) return
-  await migrateIfOld(host, false)
+  const failed = await migrateIfOld(host, false)
+  if (failed) throw new Error(failed)
   currentStamp = await boardStamp(host)
 }
 
