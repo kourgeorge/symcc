@@ -12,7 +12,7 @@
 // scout's page edits the scout (how often, model, instructions); the roles and kinds come in the view file too.
 // The Live tab's Organizational memory section at its bottom (T-718, core's liveOrgMem: the count and a fill bar, the
 // 3 newest notes, the topics with their counts) opens the Organizational memory page (T-619): Enter on a topic its
-// notes only ("orgmem:tests"), on a newest note all notes with the cursor on it, m (or a click on the header) all notes.
+// notes only ("orgmem:tests"), on a newest note all notes with the cursor on it, (T-866) the "[all]" button next to "newest" all notes.
 // x deletes one (after a yes) with /<name>-settings orgmem delete N; Back returns to the Live tab; the notes come in the
 // view file too (org_mem). Every screen has the
 // Claude Code panel's buttons (T-680, T-685): its tab row, the list's [m] mode and [f] search buttons, Back (b) on the
@@ -44,7 +44,7 @@ import { type ActionGroup, groupSegLines, headerRule, inGroups, navHint, navRow,
 import { sessionNote } from '../core/details'
 import type { DiffFile } from '../core/review'
 import { DEFAULT_NAME, dataDir } from '../name'
-import { ORG_MEM_EMPTY, ORG_MEM_KEY, ORG_MEM_SUBTITLE, orgMemPageCount, orgMemAbout, orgMemKeys, orgMemNoteHead, orgMemFile, orgMemOfTopic, orgMemPageTitle, orgMemTopicEmpty, type OrgMemNote } from '../core/org-mem'
+import { ORG_MEM_EMPTY, ORG_MEM_SUBTITLE, orgMemPageCount, orgMemAbout, orgMemKeys, orgMemNoteHead, orgMemFile, orgMemOfTopic, orgMemPageTitle, orgMemTopicEmpty, type OrgMemNote } from '../core/org-mem'
 
 /** The view file's name, in the data folder (.<name>/view.json). */
 export const VIEW_FILE = 'view.json'
@@ -483,6 +483,8 @@ export const liveNeedId = (id: string) => `need:${id}`
 /** T-718: the cursor ids of the Live tab's org-mem section: a newest note's ("om-note:3") and a topic's ("om-topic:tests"). */
 export const liveNoteId = (n: number) => `om-note:${n}`
 export const liveTopicId = (topic: string) => `om-topic:${topic}`
+/** T-866: the Live tab's id of the "[all]" button next to the org-mem section's "newest" (opens all notes). */
+export const LIVE_OM_ALL_ID = 'om-all'
 /** T-727: the cursor id of a Branches row on the Live tab ("br:T-721"); Enter or a click on it opens the task. */
 export const liveBranchId = (id: string) => `br:${id}`
 /** The task of a Branches row's cursor id, else null. */
@@ -867,6 +869,7 @@ function liveBody(f: ViewFile, cursor: number, nowMs: number, w: number): Body {
     ...needs.map(n => liveNeedId(n.id)),
     ...lanes.flatMap(l => [l.id, ...rows.get(l.id)!.flatMap(r => (r.id ? [r.id] : []))]),
     ...(br?.rows ?? []).flatMap(r => (r.id ? [liveBranchId(r.id)] : [])),
+    LIVE_OM_ALL_ID,
     ...om.newest.map(x => liveNoteId(x.note.n)),
     ...om.grid.flatMap(r => r.map(c => liveTopicId(c.topic))),
   ]
@@ -913,12 +916,10 @@ function liveBody(f: ViewFile, cursor: number, nowMs: number, w: number): Body {
   b.add(liveSegs(liveHeading(LIVE_SECTIONS.today, w)))
   b.blank()
   for (const t of liveTodayLines(v, nowMs, inner, undefined, !lanes.length)) b.add(under(t))
-  // T-718: the Organizational memory section, just above the footer (a click on its header opens all notes)
+  // T-718: the Organizational memory section, just above the footer
   b.blank()
-  b.add(liveSegs(om.head, { key: ORG_MEM_KEY }), { key: ORG_MEM_KEY })
+  b.add(liveSegs(om.head))
   b.blank()
-  b.add([{ text: LIVE_INDENT + om.newestLabel, color: 'inactive' }])
-  if (om.empty) b.add([{ text: LIVE_INDENT + om.empty, color: 'inactive' }])
   /** A cell's segments with "›" in its first column when the cursor is on it (the first cell of a row indented). */
   const marked = (xs: readonly LiveSeg[], id: string, first = true): Line => {
     const line = first ? under(xs, { open: id }) : liveSegs(xs, { open: id })
@@ -926,10 +927,15 @@ function liveBody(f: ViewFile, cursor: number, nowMs: number, w: number): Body {
     if (id === selected && head?.text.startsWith(' ')) line.splice(0, 1, { text: '›', color: 'ide', bold: true, hit: { open: id } }, { ...head, text: head.text.slice(1) })
     return line
   }
+  // T-866: "  newest [all]": the [all] button (a click, or Enter with the cursor on it) opens all notes; no key hint line, no m key
+  const allHit: PanelHit = { open: LIVE_OM_ALL_ID }
+  const newest = LIVE_INDENT + om.newestLabel + ' '
+  const mark: Line = LIVE_OM_ALL_ID === selected ? [{ text: '›', color: 'ide', bold: true }, { text: newest.slice(1), color: 'inactive' }] : [{ text: newest, color: 'inactive' }]
+  b.add([...mark, { text: om.all.text, color: PILL_COLOR, hit: allHit }], allHit)
+  if (om.empty) b.add([{ text: LIVE_INDENT + om.empty, color: 'inactive' }])
   for (const x of om.newest) b.add(marked(x.segs, liveNoteId(x.note.n)), { open: liveNoteId(x.note.n) })
   if (om.grid.length) b.add([{ text: LIVE_INDENT + om.topicsLabel, color: 'inactive' }])
   for (const r of om.grid) b.add(r.flatMap((c, j) => marked(c.segs, liveTopicId(c.topic), j === 0)), r.length === 1 ? { open: liveTopicId(r[0]!.topic) } : null)
-  for (const k of om.keys) b.add([{ text: LIVE_INDENT + k, color: 'inactive' }])
   return { ...b, ids, selected }
 }
 
