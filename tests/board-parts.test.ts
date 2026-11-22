@@ -52,7 +52,7 @@ function bigBoard(): Board {
   for (let i = 1; i <= 700; i++) {
     const at = iso(NOW - (700 - i) * 15 * 60_000)
     const history: SymccHistoryEntry[] = Array.from({ length: 30 }, (_, k) => ({ at, kind: k % 3 ? 'step' : 'stage', text: `try ${1 + (k % 3)}: ${words(14, `h${k}`)}` }))
-    const runs: SymccRun[] = [0, 1, 2].map(k => ({ started: at, ended: iso(Date.parse(at) + (k + 1) * 60_000), tokens: { input: 1200 + k, output: 30_000 + i, cache_write: 90_000, cache_read: 1_500_000 }, cost: 1.25, commits: ['a'.repeat(40)], report: `.symcc/reports/T-${i}-try-${k + 1}.md`, ended_by: 'finished', ended_note: 'merged into main (aaaaaaa); tests passed', agent: `agent-${i}-${k}` }))
+    const runs: SymccRun[] = [0, 1, 2].map(k => ({ started: at, ended: iso(Date.parse(at) + (k + 1) * 60_000), commits: ['a'.repeat(40)], report: `.symcc/reports/T-${i}-try-${k + 1}.md`, ended_by: 'finished', ended_note: 'merged into main (aaaaaaa); tests passed', agents: [{ id: `agent-${i}-${k}`, kind: 'worker' as const, started: at, ended: iso(Date.parse(at) + (k + 1) * 60_000), tokens: { input: 1200 + k, output: 30_000 + i, cache_write: 90_000, cache_read: 1_500_000 }, cost: 1.25 }] }))
     const status: BoardTask['status'] = i > 660 ? (i % 2 ? 'todo' : 'backlog') : i % 10 === 0 ? 'dropped' : 'done'
     const open = status !== 'done' && status !== 'dropped'
     b.tasks.push({

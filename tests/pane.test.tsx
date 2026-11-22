@@ -833,8 +833,8 @@ test('a paused task shows as paused and can be resumed from the board', async ($
 })
 
 const RUNS = [
-  { started: '2026-11-09T10:00:00.000Z', ended: '2026-11-09T10:12:00.000Z', tokens: { input: 40_000 } },
-  { started: '2026-11-09T11:00:00.000Z', ended: '2026-11-09T12:00:00.000Z', cost: 0.42 },
+  { started: '2026-11-09T10:00:00.000Z', ended: '2026-11-09T10:12:00.000Z', agents: [{ kind: 'worker' as const, started: '2026-11-09T10:00:00.000Z', ended: '2026-11-09T10:12:00.000Z', tokens: { input: 40_000 } }] },
+  { started: '2026-11-09T11:00:00.000Z', ended: '2026-11-09T12:00:00.000Z', agents: [{ kind: 'worker' as const, started: '2026-11-09T11:00:00.000Z', ended: '2026-11-09T12:00:00.000Z', cost: 0.42 }] },
 ]
 
 test('an opened task shows the time of each try and the total', async ($, on) => {
@@ -2169,8 +2169,8 @@ test('a research task shows its note as a row in Details', async ($, on) => {
 
 const ENDED_RUNS = [
   { started: '2026-11-09T10:00:00.000Z', ended: '2026-11-09T10:00:24.000Z', ended_by: 'restarted', ended_note: 'the task was changed (after, details)' },
-  { started: '2026-11-09T11:00:00.000Z', ended: '2026-11-09T11:17:00.000Z', tokens: { cache_read: 5_000_000, input: 600_000 }, ended_by: 'finished', ended_note: 'clash with main' },
-  { started: '2026-11-09T12:00:00.000Z', ended: '2026-11-09T12:03:00.000Z', tokens: { input: 232_500 }, merge_main: true, ended_by: 'finished', ended_note: 'merged' },
+  { started: '2026-11-09T11:00:00.000Z', ended: '2026-11-09T11:17:00.000Z', ended_by: 'finished', ended_note: 'clash with main', agents: [{ kind: 'worker' as const, started: '2026-11-09T11:00:00.000Z', ended: '2026-11-09T11:17:00.000Z', tokens: { cache_read: 5_000_000, input: 600_000 } }] },
+  { started: '2026-11-09T12:00:00.000Z', ended: '2026-11-09T12:03:00.000Z', merge_main: true, ended_by: 'finished', ended_note: 'merged', agents: [{ kind: 'worker' as const, started: '2026-11-09T12:00:00.000Z', ended: '2026-11-09T12:03:00.000Z', tokens: { input: 232_500 } }] },
   { started: '2026-11-09T13:00:00.000Z', ended: '2026-11-09T13:01:00.000Z' },
 ]
 

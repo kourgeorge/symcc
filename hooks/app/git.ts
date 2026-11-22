@@ -378,7 +378,7 @@ export async function removeWorktree($: Host, taskId: string, dir: string, excep
   const agents = await agentsNow($)
   if (!agents) return false
   const t = find(await load($), taskId)
-  if (liveWorkersFor({ id: taskId, agent: t?.agent }, agents.map(agentState), S.N.name).some(a => a.id !== except)) return false
+  if (liveWorkersFor({ id: taskId, runs: t?.runs }, agents.map(agentState), S.N.name).some(a => a.id !== except)) return false
   await git($, ['worktree', 'remove', '--force', dir])
   await git($, ['worktree', 'prune'])
   return true
@@ -415,7 +415,7 @@ export async function cleanupMerged($: Host, b: Board) {
   let dirs = 0
   for (const id of worktreesToRemove(b.tasks, existing)) {
     const t = find(b, id)
-    if (busy.has(id) || starting.has(id) || finishing.has(id) || approving.has(id) || liveWorkersFor({ id, agent: t?.agent }, agents.map(agentState), S.N.name).length) continue
+    if (busy.has(id) || starting.has(id) || finishing.has(id) || approving.has(id) || liveWorkersFor({ id, runs: t?.runs }, agents.map(agentState), S.N.name).length) continue
     const dir = worktreeDir(id)
     const st = await git($, ['status', '--porcelain'], dir)
     if (st.exitCode !== 0) continue

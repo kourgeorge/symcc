@@ -7,7 +7,7 @@
 // try. No answer within DEBRIEF_MS: nothing is kept, and the agent is told to stop. A host with no followUp gets
 // LEARNED_ASK at the end of the main prompts instead (learnedAsk).
 import type { SymccTokens } from '../../types'
-import { addTokens, find, patchTask, type Board, type BoardTask } from '../board'
+import { withAgentExtra, find, patchTask, type Board, type BoardTask } from '../board'
 import { addSuggestions, suggestedText, DEBRIEF_MS, DEBRIEF_TEXT, LEARNED_ASK } from '../core/org-mem'
 import type { Host, HostTimer } from '../host'
 import { toolName } from './state'
@@ -101,19 +101,12 @@ async function applyDebrief(host: Host, agentId: string, d: Debrief, run: Debrie
     // the agent's own try, even when a new try started since: the run that names the agent, else the one as many
     // runs back from the last as tries started since (each new try adds one run and one to attempts)
     const runs = cur.runs ?? []
-    let i = runs.findLastIndex(r => r?.agent === agentId || (Array.isArray(r?.checkers) && r.checkers.includes(agentId)))
+    let i = runs.findLastIndex(r => r?.agents?.some(a => a.id === agentId))
     if (i < 0) i = runs.length - 1 - (cur.attempts - d.attempts)
     const mine = i >= 0 && i < runs.length ? runs[i] : undefined
     if (mine && (run.tokens || run.cost !== undefined)) {
-      const out = [...runs]
-      // T-769: a checker's debrief tokens are its own, so they also go into checker_tokens (kept apart from the worker's)
-      const isChecker = mine.agent !== agentId && Array.isArray(mine.checkers) && mine.checkers.includes(agentId)
-      // T-774: the debrief's tokens and cost also go to the agent's own entry (found by its id), so the try's sum and its agents' agree
-      const agents = Array.isArray(mine.agents) && mine.agents.some(a => a.id === agentId)
-        ? { agents: mine.agents.map(a => (a.id !== agentId ? a : { ...a, ...(run.tokens ? { tokens: addTokens(a.tokens, run.tokens) } : {}), ...(run.cost !== undefined ? { cost: (a.cost ?? 0) + run.cost } : {}) })) }
-        : {}
-      out[i] = { ...mine, ...(run.tokens ? { tokens: addTokens(mine.tokens, run.tokens), ...(isChecker ? { checker_tokens: addTokens(mine.checker_tokens, run.tokens) } : {}) } : {}), ...(run.cost !== undefined ? { cost: (mine.cost ?? 0) + run.cost } : {}), ...agents }
-      patch.runs = out
+      // T-805: the debrief's tokens and cost go only on the agent's own entry (found by its id); the try's sums come from its entries
+      patch.runs = withAgentExtra(runs, agentId, i, { ...(run.tokens ? { tokens: run.tokens } : {}), ...(run.cost !== undefined ? { cost: run.cost } : {}) })
     }
     let told: string[] = []
     if (answered && cur.status !== 'dropped') {

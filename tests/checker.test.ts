@@ -27,7 +27,8 @@ import { debriefs, learnedAsk } from '../hooks/app/debrief'
 import { DEBRIEF_MS, DEBRIEF_TEXT, LEARNED_ASK } from '../hooks/core/org-mem'
 import type { EvidenceEvent } from '../hooks/core/evidence'
 import { evidenceWritten } from '../hooks/app/evidence'
-import { checkerTokensOf, sumTokens } from '../hooks/core/runs'
+import { agentsOf, checkerIdOf, checkerTokensOf, sumTokens, tryCost, tryTokens } from '../hooks/core/runs'
+import { runBy } from './agent-fixture'
 
 const ROOT = '/repo'
 const WT = `${ROOT}/.symcc/worktrees/T-1`
@@ -259,15 +260,15 @@ test('with the checker on, a passing change waits for a checker (shown as checki
   expect(t.status).toBe('done')
   expect(w.git.main).toBe(H1)
   expect(t.history.map(h => h.text)).toContain('try 1: checker: OK')
-  expect(t.runs!.at(-1)!.tokens).toEqual({ output: 500 })
-  // T-769: the checker's part is also kept apart, so the Live tab can tell checkers from workers
-  expect(t.runs!.at(-1)!.checker_tokens).toEqual({ output: 500 })
+  expect(tryTokens(t.runs!.at(-1))).toEqual({ output: 500 })
+  // T-769, T-805: the checker's part is read from its own entry, so the Live tab can tell checkers from workers
+  expect(checkerTokensOf(t.runs!.at(-1))).toEqual({ output: 500 })
 })
 
 test("T-774: the worker's hand-back and the checker's end each put their tokens on their own agent entry of the try, and the try's tokens are their sum", async () => {
   const w = world()
   // its worker ag1 started on the try (patchTask gives it its entry, as workerStarted's write does)
-  await saveBoard(w.$, patchTask(boardWith(true), 'T-1', { agent: 'ag1' }, ISO))
+  await saveBoard(w.$, patchTask(boardWith(true), 'T-1', { runs: [runBy('ag1', ISO)] }, ISO))
   workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: 0 })
   const done = withStarts(w.$, workerFinished(w.$, 'ag1', 'made the change', { reason: 'answer' }, { input: 4_000 }))
   await until(() => checkerRuns.size > 0)
@@ -278,7 +279,7 @@ test("T-774: the worker's hand-back and the checker's end each put their tokens 
     ['worker', 'ag1', { input: 4_000 }, true],
     ['checker', 'chk1', { output: 500 }, true],
   ])
-  expect(r.tokens).toEqual({ input: 4_000, output: 500 })
+  expect(tryTokens(r)).toEqual({ input: 4_000, output: 500 })
 })
 
 test('T-440: the target branch deleted while the checker runs: after its OK the task waits with the branch-gone question, not failed', async () => {
@@ -712,11 +713,11 @@ test("T-479: a checker that timed out stays on its try, so a copy that doesn't h
   let cid = ''
   const t = await finish(w, async id => {
     cid = id
-    for (let i = 0; i < 200 && find(await load(w.$), 'T-1')?.checker !== id; i++) await turn()
+    for (let i = 0; i < 200 && checkerIdOf(find(await load(w.$), 'T-1')) !== id; i++) await turn()
     fire!()
   })
-  expect(t.checker).toBeUndefined()
-  expect(t.runs!.at(-1)!.checkers).toEqual([cid])
+  expect(checkerIdOf(t)).toBeUndefined()
+  expect(agentsOf(t.runs!.at(-1)).filter(a => a.kind === 'checker').map(a => a.id)).toEqual([cid])
   // as another session's copy sees it: neither in its checkerRuns nor in its stopped list
   checkerRuns.delete(cid)
   stopped.delete(cid)
@@ -731,11 +732,11 @@ test("T-479: a checker stopped by a drop (haltChecker) is refused every tool by 
   let cid = ''
   const t = await finish(w, async id => {
     cid = id
-    for (let i = 0; i < 200 && find(await load(w.$), 'T-1')?.checker !== id; i++) await turn()
+    for (let i = 0; i < 200 && checkerIdOf(find(await load(w.$), 'T-1')) !== id; i++) await turn()
     await runTool(w.$, 'drop', { task: 'T-1' })
   })
   expect(t.status).toBe('dropped')
-  expect(t.checker).toBeUndefined()
+  expect(checkerIdOf(t)).toBeUndefined()
   checkerRuns.delete(cid)
   stopped.delete(cid)
   expect(await toolCall(w.$, 'Bash', cid, {})).toEqual({ deny: stoppedText() })
@@ -828,8 +829,8 @@ test("T-471: the board names the running checker, so a copy that doesn't hold it
   const w = world()
   await saveBoard(w.$, boardWith(true))
   const t = await finish(w, async id => {
-    for (let i = 0; i < 200 && find(await load(w.$), 'T-1')?.checker !== id; i++) await turn()
-    expect(find(await load(w.$), 'T-1')!.checker).toBe(id)
+    for (let i = 0; i < 200 && checkerIdOf(find(await load(w.$), 'T-1')) !== id; i++) await turn()
+    expect(checkerIdOf(find(await load(w.$), 'T-1'))).toBe(id)
     // as another session's copy sees it: not in its checkerRuns
     const run = checkerRuns.get(id)!
     checkerRuns.delete(id)
@@ -838,7 +839,7 @@ test("T-471: the board names the running checker, so a copy that doesn't hold it
     checkerRuns.set(id, run)
     checkerFinished(id, 'OK')
   })
-  expect(t.checker).toBeUndefined()
+  expect(checkerIdOf(t)).toBeUndefined()
 })
 
 test('the checker prompt tells it not to run git commands that change anything', async () => {
@@ -1129,7 +1130,7 @@ for (const second of ['the same worker again', "the earlier try's worker"]) {
     const w = world()
     S.driving = true
     // try 2 runs with worker ag1; ag0 was try 1's worker (still alive after a reopen, and taken back by this copy)
-    await saveBoard(w.$, boardWith(true, { attempts: 2, agent: 'ag1', runs: [{ started: ISO, ended: ISO, agent: 'ag0' }, { started: ISO, agent: 'ag1' }] }))
+    await saveBoard(w.$, boardWith(true, { attempts: 2, runs: [runBy('ag0', ISO, { ended: ISO }), runBy('ag1', ISO)] }))
     workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: 0 })
     const done = withStarts(w.$, workerFinished(w.$, 'ag1', 'made the change'))
     await until(() => checkerRuns.size > 0)
@@ -1154,7 +1155,7 @@ for (const second of ['the same worker again', "the earlier try's worker"]) {
 test("T-740: a hand-back from an earlier try's worker while the new try's worker runs is not taken as the new try's", async () => {
   const w = world()
   S.driving = true
-  await saveBoard(w.$, boardWith(true, { attempts: 2, agent: 'ag1', runs: [{ started: ISO, ended: ISO, agent: 'ag0' }, { started: ISO, agent: 'ag1' }] }))
+  await saveBoard(w.$, boardWith(true, { attempts: 2, runs: [runBy('ag0', ISO, { ended: ISO }), runBy('ag1', ISO)] }))
   workers.set('ag0', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: 0 })
   await withStarts(w.$, workerFinished(w.$, 'ag0', 'old work'))
   await turns(200)
@@ -1332,7 +1333,7 @@ test('T-656: after a hand-back one debrief goes to the same worker and checker; 
   expect(follow.map(f => f.to)).toEqual(['ag1', chk])
   const t = find(await load(w.$), 'T-1')!
   expect(t.status).toBe('done')
-  expect(t.runs!.at(-1)!.tokens).toEqual({ input: 107, output: 13 })
+  expect(tryTokens(t.runs!.at(-1))).toEqual({ input: 107, output: 13 })
   expect(leadQueue.join('\n')).toContain('T-1: Suggested for org-mem')
   expect(leadQueue.join('\n')).toContain('- Run one test file with sh scripts/test-files.sh.')
   // the checker's answer comes after the task is done: its suggestion goes to the lead at once; "none" adds nothing
@@ -1340,20 +1341,19 @@ test('T-656: after a hand-back one debrief goes to the same worker and checker; 
   const before = t.runs!.at(-1)!
   agentFinished(w.$, chk, { answer: '- Snapshot files live in tests/*-snapshot.ts.', end: { reason: 'answer' }, isAborted: false, tokens: { input: 20, output: 5 } })
   await turns(50)
-  // T-769: the checker's debrief tokens are a checker's: they go into checker_tokens too, not only the try's tokens
+  // T-769, T-805: the checker's debrief tokens go on the checker's own entry, so they count as a checker's and in the try's tokens
   const after = find(await load(w.$), 'T-1')!.runs!.at(-1)!
-  expect(after.tokens).toEqual({ input: (before.tokens?.input ?? 0) + 20, output: (before.tokens?.output ?? 0) + 5 })
-  expect(after.checker_tokens).toEqual({ input: (before.checker_tokens?.input ?? 0) + 20, output: (before.checker_tokens?.output ?? 0) + 5 })
-  // T-774: each debrief also goes to its own agent's entry, so the try's tokens are its agents' sum and checkerTokensOf counts the checker's debrief
+  expect(tryTokens(after)).toEqual({ input: (tryTokens(before)?.input ?? 0) + 20, output: (tryTokens(before)?.output ?? 0) + 5 })
+  expect(checkerTokensOf(after)).toEqual({ input: (checkerTokensOf(before)?.input ?? 0) + 20, output: (checkerTokensOf(before)?.output ?? 0) + 5 })
+  // T-774: each debrief goes to its own agent's entry
   const ag = after.agents ?? []
   const wEntry = ag.find(a => a.id === 'ag1')!
   const cEntry = ag.find(a => a.id === chk)!
   expect(wEntry.kind).toBe('worker')
   expect(wEntry.tokens).toEqual({ input: 107, output: 13 })
   expect(cEntry.kind).toBe('checker')
-  expect(cEntry.tokens).toEqual({ input: (before.checker_tokens?.input ?? 0) + 20, output: (before.checker_tokens?.output ?? 0) + 5 })
-  expect(sumTokens(ag.map(a => a.tokens))).toEqual(after.tokens)
-  expect(checkerTokensOf(after)).toEqual(after.checker_tokens)
+  expect(cEntry.tokens).toEqual({ input: (checkerTokensOf(before)?.input ?? 0) + 20, output: (checkerTokensOf(before)?.output ?? 0) + 5 })
+  expect(sumTokens(ag.map(a => a.tokens))).toEqual(tryTokens(after))
   expect(leadQueue.join('\n')).toContain('T-1: Suggested for org-mem')
   expect(leadQueue.join('\n')).toContain('- Snapshot files live in tests/*-snapshot.ts.')
   expect((find(await load(w.$), 'T-1') as { suggested?: string[] }).suggested).toBe(undefined)
@@ -1443,10 +1443,10 @@ test('T-656: an agent only answering its debrief holds no task: a fast retry sta
   await until(() => !debriefs.has('ag1'))
   await turns(50)
   const after = find(await load(w.$), 'T-1')!.runs!
-  expect(after[0]!.tokens).toEqual(addTokens(before[0]!.tokens, { input: 50, output: 5 }))
-  expect(after[0]!.cost).toBe((before[0]!.cost ?? 0) + 0.25)
-  expect(after[1]!.tokens).toEqual(before[1]!.tokens)
-  expect(after[1]!.cost).toBe(before[1]!.cost)
+  expect(tryTokens(after[0])).toEqual(addTokens(tryTokens(before[0]), { input: 50, output: 5 }))
+  expect(tryCost(after[0])).toBe((tryCost(before[0]) ?? 0) + 0.25)
+  expect(tryTokens(after[1])).toEqual(tryTokens(before[1]))
+  expect(tryCost(after[1])).toBe(tryCost(before[1]))
   resetPlugin()
   // nothing pumped at the checker's end (start not done yet); the debrief answer pumps, so the retry starts then
   const w2 = await failFastWithDebrief(false)

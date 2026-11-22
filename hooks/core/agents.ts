@@ -2,6 +2,7 @@
 import { DEFAULT_NAME } from '../name'
 import { type Board, type BoardTask, normId } from './board-file'
 import { ownedHere } from './lead'
+import { workerIdOf } from './runs'
 
 // ---------------- never two workers on one task ----------------
 
@@ -52,14 +53,14 @@ export function scoutDescription(scout: string, instructions = ''): string {
 export type AgentState = { id: string; worker: boolean; alive: boolean; description?: string; name?: string }
 
 /**
- * The plugin's live workers for task `id`: the one recorded on the task (`agent`), or any
+ * The plugin's live workers for task `id`: the one recorded on the task's last try (workerIdOf), or any
  * whose name is workerName (e.g. "symcc-T-3") or the bare task id, maybe with a suffix the
  * host added ("symcc-T-3-2"), or whose description starts with the task id (older workers).
  */
-export function liveWorkersFor<A extends AgentState>(t: Pick<BoardTask, 'id' | 'agent'>, agents: A[], name: string = DEFAULT_NAME): A[] {
+export function liveWorkersFor<A extends AgentState>(t: Pick<BoardTask, 'id' | 'runs'>, agents: A[], name: string = DEFAULT_NAME): A[] {
   return agents.filter(a => {
     if (!a.alive) return false
-    if (t.agent && a.id === t.agent) return true
+    if (workerIdOf(t) && a.id === workerIdOf(t)) return true
     if (!a.worker) return false
     const n = String(a.name ?? '')
     const full = workerName(name, t.id)
@@ -87,14 +88,14 @@ export function orphanMove(a: AgentState, b: Board, me: string, live: string | n
   if (!a || typeof a.id !== 'string' || !a.id) return { move: 'leave' }
   if (!a.alive) return { move: 'leave' }
   const tasks = Array.isArray(b?.tasks) ? b.tasks : []
-  const t = tasks.find(x => x.agent === a.id) ?? tasks.find(x => x.status === 'doing' && liveWorkersFor({ id: x.id }, [a], name).length > 0)
+  const t = tasks.find(x => workerIdOf(x) === a.id) ?? tasks.find(x => x.status === 'doing' && liveWorkersFor({ id: x.id }, [a], name).length > 0)
   if (!t || t.status !== 'doing') return { move: 'stop' }
   if (!ownedHere(t, me, live)) return { move: 'leave' }
   if (!me || taken.includes(t.id)) return { move: 'stop' }
-  if (t.session === me && (!t.agent || t.agent === a.id)) return { move: 'adopt', task: t.id }
+  if (t.session === me && (!workerIdOf(t) || workerIdOf(t) === a.id)) return { move: 'adopt', task: t.id }
   // The task names this very agent but a session that doesn't drive the board (e.g. this process's
   // session id changed over the reload): the agent is listed here, so it is this process's own worker.
-  if (t.agent === a.id) return { move: 'adopt', task: t.id }
+  if (workerIdOf(t) === a.id) return { move: 'adopt', task: t.id }
   return { move: 'stop' }
 }
 

@@ -7,20 +7,21 @@ export type SymccMode = 'paused' | 'review' | 'auto'
 export type SymccStatus = 'backlog' | 'todo' | 'doing' | 'paused' | 'waiting' | 'review' | 'failed' | 'done' | 'dropped'
 
 /**
- * One worker try on a task: when it started and ended (ISO times), and what it used.
- * `tokens` comes from the worker's turn result, each kind kept apart (see SymccTokens).
- * `cost` (US dollars) is filled when the host reports it (OpenCode does; Claude Code's turn result gives token counts only).
+ * One worker try on a task: when it started and ended (ISO times), and who worked on it.
+ * T-805: `agents` is the only place a try's agents, tokens and cost are kept; the try's sums are worked out from it
+ * (tryTokens, checkerTokensOf, tryCost in hooks/core/runs.ts). Tokens come from each agent's turn result, each kind
+ * kept apart (see SymccTokens); cost (US dollars) is filled when the host reports it (OpenCode does; Claude Code's turn
+ * result gives token counts only).
  */
 export type SymccRun = {
   started: string
   ended?: string
-  tokens?: SymccTokens
   /**
-   * T-769: the part of `tokens` this try's checkers used (added into `tokens` too), so the Live tab can tell checkers
-   * from workers. Missing on tries from before it, and on tries no checker looked at.
+   * Each agent that worked on this try (its workers: one more after each restart symcc did itself; its checkers),
+   * oldest first, with what each used. The current worker and checker are the last open worker / checker entries.
+   * Only the last few tries (AGENT_TRIES_KEPT) keep the agents' ids (for the guard); every try keeps its entries' tokens.
    */
-  checker_tokens?: SymccTokens
-  cost?: number
+  agents?: SymccRunAgent[]
   /**
    * The full SHAs of the commits symcc made for this try, oldest first: the task's own commit
    * and, if main had moved, the "bring up to date with main" merge commit. Missing on old boards.
@@ -41,27 +42,29 @@ export type SymccRun = {
   failed_tests?: string[]
   /** set when this try first had to merge main into the branch, after a clash with main */
   merge_main?: true
-  /**
-   * The agent id of this try's worker, and of each checker it had (oldest first), kept when the try ends, so every copy
-   * of the plugin refuses an agent that has ended (T-479). Only the last few tries keep them (see AGENT_TRIES_KEPT).
-   */
-  agent?: string
-  checkers?: string[]
-  /**
-   * T-774: each agent that worked on this try (its workers: one more after each restart symcc did itself; its checkers),
-   * oldest first, with what each used. The try's `tokens` and `cost` are their sum (plus what their follow-up debrief
-   * turns used). Only the latest few agents (AGENTS_KEPT) and only on the last few tries (AGENT_TRIES_KEPT); older tries
-   * keep only their sums, and tries from before T-774 have none.
-   */
-  agents?: SymccRunAgent[]
+  /** T-743: the restarts symcc did itself on this try (oldest first), see RunRestart */
+  restarts?: RunRestart[]
 }
 
-/** T-774: one agent of a try: its agent id, worker or checker, when it started and ended, and what it used (when the host said). */
+/**
+ * T-743: one restart symcc did itself on a try: when (the end time it took off the try), why (the try's end note then),
+ * and when the next worker's part of the try started (its time limit counts from then). The worker it stopped is the
+ * agent entry ended with ended_by "restarted".
+ */
+export type RunRestart = { at: string; why: string; started?: string }
+/** A try as kept on the board (the restarts are part of SymccRun now). */
+export type TryRun = SymccRun
+
+/**
+ * T-774, T-805: one agent of a try: its agent id (cut on old tries), worker or checker, when it started and ended, why
+ * it ended (a worker symcc stopped to restart it: "restarted"), and what it used (when the host said).
+ */
 export type SymccRunAgent = {
-  id: string
+  id?: string
   kind: 'worker' | 'checker'
   started: string
   ended?: string
+  ended_by?: SymccRunEnd
   tokens?: SymccTokens
   cost?: number
 }
@@ -149,8 +152,6 @@ export type SymccTask = {
   merge_into?: string
   /** the task's own work branch (its worker's copy), e.g. "symcc/T-3"; null until a worker starts */
   branch: string | null
-  /** the agent id of the last worker started on this task */
-  agent?: string
   /** the files a worker asked for (its edits refused as outside the task's files) while the task waits (the owner can allow them from the board); only while waiting */
   asked_files?: string[]
   /** the choices a worker gave with its ask_owner question, shown as buttons; only while waiting */

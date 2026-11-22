@@ -12,6 +12,7 @@ import type { On } from 'claude-code'
 import { type Board, addTask, emptyBoard, patchTask } from '../hooks/board'
 import { entry, ran } from './fakes'
 import type { ProcessRunResult } from 'claude-code'
+import { runBy } from './agent-fixture'
 
 const T0 = 1_800_000_000_000
 const ISO = new Date(T0 - 60_000).toISOString()
@@ -194,7 +195,7 @@ function doingBoard(mode: 'auto' | 'review', tasks: { agent: string; files: stri
   let b: Board = { ...emptyBoard(), mode }
   for (const [i, t] of tasks.entries()) {
     b = addTask(b, { origin: { why: 'a test' }, title: `Change ${i + 1}`, files: t.files, merge_into: 'main' }, ISO)[0]
-    b = patchTask(b, `T-${i + 1}`, { status: 'doing', attempts: 1, session: 'me', agent: t.agent, branch: `symcc/T-${i + 1}`, runs: [{ started: ISO }] } as never, ISO)
+    b = patchTask(b, `T-${i + 1}`, { status: 'doing', attempts: 1, session: 'me', branch: `symcc/T-${i + 1}`, runs: [runBy(t.agent, ISO)] } as never, ISO)
   }
   return b
 }
@@ -658,7 +659,7 @@ test("an approve and a worker's merge at the same moment both land on main", asy
   // T-1 waits in review (the owner approves it), T-2 is a worker finishing; T-1's commit waits until T-2's has run
   const w = world(on, { work: { 'T-1': ['src/a.ts'], 'T-2': ['docs/b.md'] }, agents: [{ id: 'a2', type: 'symcc:worker' }], holdCommitOf: 'T-1' })
   const b = doingBoard('auto', [{ agent: 'a1', files: ['src/'] }, { agent: 'a2', files: ['docs/'] }])
-  w.files.set(BOARD, JSON.stringify(patchTask(b, 'T-1', { status: 'review', note: 'ready for review', agent: undefined, runs: [{ started: ISO, ended: ISO }] } as never, ISO)))
+  w.files.set(BOARD, JSON.stringify(patchTask(b, 'T-1', { status: 'review', note: 'ready for review', runs: [{ started: ISO, ended: ISO }] } as never, ISO)))
   w.files.set('/.symcc/worktrees/T-1/.git', 'gitdir: x')
   await $.session.start({ cwd: ROOT } as never)
   expect(w.task('T-1').status).toBe('review')

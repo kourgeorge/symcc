@@ -12,9 +12,9 @@ export function todayTasks(t0: number) {
   const task = (id: string, x: Record<string, unknown>) => ({ id, title: id, details: '', files: [], status: 'done', note: '', question: null, order: 1, after: [], attempts: 1, history: [], branch: null, created_at: iso(200), updated_at: iso(1), ...x })
   const merged = (minAgo: number) => [{ kind: 'merged', at: iso(minAgo), text: 'try 1 → merged into main' }]
   return [
-    task('T-1', { runs: [{ started: iso(100), ended: iso(90), tokens: { input: 1_000_000 }, checker_tokens: { input: 100_000 } }], history: merged(80) }),
-    task('T-2', { attempts: 2, runs: [{ started: iso(200), ended: iso(190), tokens: { input: 2_000_000 } }, { started: iso(60), ended: iso(40), tokens: { input: 1_000_000 }, checker_tokens: { input: 200_000 } }], history: merged(30) }),
-    task('T-3', { runs: [{ started: iso(50), ended: iso(45), tokens: { input: 2_000_000 } }], history: merged(20) }),
+    task('T-1', { runs: [{ started: iso(100), ended: iso(90), agents: [{ kind: 'worker' as const, started: iso(100), ended: iso(90), tokens: { input: 900_000 } }, { kind: 'checker', started: iso(95), ended: iso(90), tokens: { input: 100_000 } }] }], history: merged(80) }),
+    task('T-2', { attempts: 2, runs: [{ started: iso(200), ended: iso(190), agents: [{ kind: 'worker' as const, started: iso(200), ended: iso(190), tokens: { input: 2_000_000 } }] }, { started: iso(60), ended: iso(40), agents: [{ kind: 'worker' as const, started: iso(60), ended: iso(40), tokens: { input: 800_000 } }, { kind: 'checker', started: iso(50), ended: iso(40), tokens: { input: 200_000 } }] }], history: merged(30) }),
+    task('T-3', { runs: [{ started: iso(50), ended: iso(45), agents: [{ kind: 'worker' as const, started: iso(50), ended: iso(45), tokens: { input: 2_000_000 } }] }], history: merged(20) }),
   ]
 }
 

@@ -4,7 +4,7 @@ import { BACKLOG_FROM, type Board, type BoardTask, cleanFiles, DEFAULT_KIND, INV
 import { depDone } from './archive'
 import { historyEntry, withHistory } from './history'
 import { createdLine, makeOrigin, type OriginInput } from './origin'
-import { endRun, keepAgentIds, withAgentId, withAgentStart } from './runs'
+import { endRun, keepAgentIds } from './runs'
 import { clean, num, shownPath } from './text'
 
 /** The most a task's details may hold (addTask and patchTask cut the rest). */
@@ -62,20 +62,13 @@ export function patchTask(b: Board, id: string, patch: Partial<BoardTask>, now: 
   const next: BoardTask = { ...t, ...patch, updated_at: now }
   // Leaving "doing" ends the worker's try, however it ended (finished, stopped, over time, lost).
   if (t.status === 'doing' && next.status !== 'doing' && next.runs?.length && !next.runs[next.runs.length - 1]!.ended) next.runs = endRun(next.runs, now)
-  // T-479: each try keeps its worker's and its checkers' ids, after it ends too, so every copy of the plugin refuses them then
-  if (next.runs?.length) {
-    // a new try: the worker of the one before (from a board older than T-479) is kept on that try
-    if (next.attempts !== t.attempts && t.agent && t.runs?.length && !next.runs[t.runs.length - 1]?.agent) next.runs = withAgentId(next.runs, 'agent', t.agent, t.runs.length - 1)!
-    // T-774: and each worker and checker gets its own entry on the try (what it used is added when it ends)
-    if (next.status === 'doing' && typeof patch.agent === 'string') next.runs = withAgentStart(withAgentId(next.runs, 'agent', patch.agent), 'worker', patch.agent, now)!
-    if (next.status === 'doing' && next.attempts === t.attempts && typeof patch.checker === 'string') next.runs = withAgentStart(withAgentId(next.runs, 'checker', patch.checker), 'checker', patch.checker, now)!
-    next.runs = keepAgentIds(next.runs)
-  }
+  // T-479: each try keeps its agents' ids, after it ends too, so every copy of the plugin refuses them then (the old tries' ids are cut)
+  if (next.runs?.length) next.runs = keepAgentIds(next.runs)
   if (next.status !== 'doing' || !next.session) delete next.session
   // the "being tested and merged" mark only means something while the task is "doing"
   if (next.status !== 'doing' || !next.finishing) delete next.finishing
   // the over-time marks, and what the try recorded for its hand-back, belong to one try while it runs
-  for (const k of ['extra_minutes', 'time_ask', 'wrap_up', 'try_question', 'try_refused', 'checker'] as const) if (next.status !== 'doing' || next.attempts !== t.attempts || !next[k]) delete next[k]
+  for (const k of ['extra_minutes', 'time_ask', 'wrap_up', 'try_question', 'try_refused'] as const) if (next.status !== 'doing' || next.attempts !== t.attempts || !next[k]) delete next[k]
   // the step of a check only means something while the task stays as it was when checked
   if (!next.checking || next.status !== t.status || next.attempts !== t.attempts) delete next.checking
   // Where a task came from never changes once it is made.

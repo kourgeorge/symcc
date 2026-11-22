@@ -26,6 +26,7 @@ import INVESTIGATION from '../../../prompts/investigation'
 import CHECKER from '../../../prompts/checker'
 import { SYMCC_WORDS } from '../../../hooks/host'
 import { scoutPrompt } from '../../../hooks/core/scouts'
+import { tryCost, tryTokens } from '../../../hooks/core/runs'
 import { DEBRIEF_TEXT } from '../../../hooks/core/org-mem'
 
 /** T-795: a new project is off until the owner runs /symcc-enable; a real one does that first. */
@@ -257,8 +258,8 @@ test('one task end to end on the Node host: add, a fake claude -p worker edits i
     expect(await readFile(`${log}.resume.prompt`, 'utf8')).toBe(DEBRIEF_TEXT)
     expect(prompt).not.toContain('"Learned:" section')
     expect(tick.stdout).toContain('- Run one test file with sh check.sh.')
-    expect(Math.round(t.runs[0].cost * 1e6)).toBe(13300)
-    expect(t.runs[0].tokens).toEqual({ input: 110, output: 23, cache_write: 7, cache_read: 5 })
+    expect(Math.round(tryCost(t.runs[0])! * 1e6)).toBe(13300)
+    expect(tryTokens(t.runs[0])).toEqual({ input: 110, output: 23, cache_write: 7, cache_read: 5 })
 
     const board = await cli('board')
     expect(board.stdout).toContain('1 done')

@@ -1001,8 +1001,10 @@ the board's usual merged task (left out while no task is merged yet), and how ma
 were the checkers' (left out when not known). A try keeps each agent's own tokens: a worker
 restarted after a reopen gets a second line on the same try, and a stopped checker keeps the
 tokens it had, when the host says them. The try's tokens are its agents' added up (plus their
-short follow-up turns for organizational memory). Only the latest 10 agents of a try and only the
-last 5 tries keep these lines; older tries, and tries from before this, keep only their sums.
+short follow-up turns for organizational memory). The agent list is the only place a try's tokens,
+cost and agent ids are kept: the sums are worked out from it. Only the last 5 tries keep their
+agents' ids (and so their lines); older tries keep every agent's tokens but no ids, so they show
+no lines.
 In VS Code the folded `▸ Time and cost` row says the same sum.
 
 A scout's page has the same shape:
@@ -1930,8 +1932,11 @@ sizes. It changes nothing until you say so.
   dated copy of the data files first (`.symcc/data.before-migrate-<time>/`, cleaned up later
   like the other backups), saves every file once in today's shape and says what it changed.
   Some counts are only information and are left as they are: `unsplit` tokens, history entries
-  of kind `other`, tasks where `attempts` differs from the number of tries, and tries with
-  `checker_tokens` but no checker agent entry.
+  of kind `other`, and tasks where `attempts` differs from the number of tries. A try that still
+  keeps its tokens, cost or agent ids outside its agent list (`tokens`, `checker_tokens`, `cost`,
+  `agent`, `checkers`, a task's `agent` and `checker`, a restart's `agent`) is moved onto the list:
+  a try with no agents gets a worker entry with its tokens minus the checkers' and a checker entry
+  with the checkers' tokens.
   Nothing old is ever saved over first: at session start, and before a board or archive change
   would save an old-shaped file, symcc runs this same step itself (backup first) and tells you
   once what it moved.

@@ -127,7 +127,7 @@ export type ArchivedTotals = { done: number; dropped: number; tries: number; ms:
  * `checker`: the agent id of the checker running on this try now (the checker setting), so the guards of any copy
  * of the plugin know it, not only the copy that started it (T-471); its folder is the task's own. Only while "doing" on one try.
  */
-export type BoardTask = SymccTask & { session?: string; finishing?: string; checking?: Checking; merge_wait?: Blockers; extra_minutes?: number; time_ask?: string; wrap_up?: string; answer?: string; try_question?: WorkerQuestion; try_refused?: string[]; checker?: string; suggested?: string[] }
+export type BoardTask = SymccTask & { session?: string; finishing?: string; checking?: Checking; merge_wait?: Blockers; extra_minutes?: number; time_ask?: string; wrap_up?: string; answer?: string; try_question?: WorkerQuestion; try_refused?: string[]; suggested?: string[] }
 
 /**
  * What a task is for: the name of a kind file (see core/kinds.ts), e.g. "bug" or "docs". Every kind ends in a
@@ -416,7 +416,6 @@ function cleanTask(t: unknown, fixed: string[] = []): BoardTask | null {
   if ('answer' in x && typeof x.answer !== 'string') delete x.answer
   // T-632: org-mem suggestions from its reports (see addSuggestions), kept until it is done or dropped
   if ('suggested' in x && !(strings(x.suggested) && (x.suggested as string[]).length)) delete x.suggested
-  if ('checker' in x && !(x.status === 'doing' && typeof x.checker === 'string' && x.checker)) delete x.checker
   if ('merge_wait' in x) {
     const mw = asBlockers(x.merge_wait)
     if (mw) x.merge_wait = mw

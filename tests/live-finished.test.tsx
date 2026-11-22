@@ -11,7 +11,7 @@ import { PANE, T0, seedBoard } from './board-fixture'
 const iso = (minAgo: number) => new Date(T0 - minAgo * 60_000).toISOString()
 const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', question: null, order: Number(id.slice(2)), after: [], attempts: 1, history: [], branch: null, created_at: iso(300), updated_at: iso(1), ...x })
 const merged = (id: string, title: string, minAgo: number) =>
-  task(id, title, { status: 'done', runs: [{ started: iso(minAgo + 20), ended: iso(minAgo + 2), tokens: { input: 900_000 } }], history: [{ kind: 'merged', at: iso(minAgo), text: 'try 1 → merged into main' }] })
+  task(id, title, { status: 'done', runs: [{ started: iso(minAgo + 20), ended: iso(minAgo + 2), agents: [{ kind: 'worker' as const, started: iso(minAgo + 20), ended: iso(minAgo + 2), tokens: { input: 900_000 } }] }], history: [{ kind: 'merged', at: iso(minAgo), text: 'try 1 → merged into main' }] })
 
 const TASKS = [
   task('T-760', 'A running one', { runs: [{ started: iso(4) }] }),
