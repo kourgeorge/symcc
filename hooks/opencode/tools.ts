@@ -123,9 +123,11 @@ export function opencodeCommands(host: Host, session: Pick<OcSessionApi, 'prompt
     async execute(inv) {
       useName(host)
       const run = c.name === ANSWER_COMMAND().name ? answerCommand : runCommand
-      const isEnable = c.name === `${S.N.name}-enable`
+      const isInit = c.name === `${S.N.name}-init`
+      const isEnable = c.name === `${S.N.name}-enable` || isInit
       // T-841: was symcc on in this window before the command? (a board that can't be read counts as on: nothing to open)
-      const wasOn = isEnable ? await load(host).then(b => onHere(b), () => true) : true
+      // T-844: /init in a folder with no board counts as off before (S.fresh); where a board is found it opens nothing
+      const wasOn = isInit ? !S.fresh : isEnable ? await load(host).then(b => onHere(b), () => true) : true
       const answer: CommandAnswer | null = await run(host, c.name, commandArgs(c.name, inv.prompt.text)).catch((err: Error) => ({ text: `${S.N.name}: /${c.name} failed: ${err?.message ?? err}`, isTextDisplayOnly: true as const }))
       if (!answer) return
       // T-841: /enable really turned symcc on here: this session's window opens the board (the view file carries the mark)

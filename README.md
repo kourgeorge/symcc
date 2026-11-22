@@ -117,7 +117,7 @@ Other ways (try it from a clone, two steps, update, uninstall) and fixes for com
 
 ## Quick start
 
-1. **Install** symcc (see above), then start Claude Code in your project. In a new project symcc stays off (the line under the prompt says so) until you type `/symcc-enable`; that creates the board and opens the panel (run `/symcc` to open it again).
+1. **Install** symcc (see above), then start Claude Code in your project. In a new project symcc stays off (the line under the prompt says so) until you type `/symcc-init` in the folder you want it in; that creates the board there and opens the panel (run `/symcc` to open it again).
 2. **Keep the board local:** `echo ".symcc/" >> .gitignore`
 3. **Set your tests:** tell the lead "set the test command to `npm test`". Without one, changes merge without tests.
 4. **Optional, a scout:** a new project starts with example scouts, all paused. Try one with `/symcc-scout <name>`. See [scouts](docs/guide.md#scouts).
@@ -182,7 +182,7 @@ You never have to type a command. Just talk to the lead:
 - "stash this idea" · "show the backlog" · "move T-5 to todo"
 - "use the security role for T-12"
 
-A few things are slash commands: `/symcc` opens the board, `/symcc-disable` and `/symcc-enable` disable and enable symcc, and `/symcc-drive` makes the window you type it in drive the board (when several windows have the project open). `/symcc-help` lists them all.
+A few things are slash commands: `/symcc` opens the board, `/symcc-init` creates the board in the current folder, `/symcc-disable` and `/symcc-enable` switch an existing board off and on, and `/symcc-drive` makes the window you type it in drive the board (when several windows have the project open). `/symcc-help` lists them all.
 
 ## More
 

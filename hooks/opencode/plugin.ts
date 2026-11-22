@@ -22,7 +22,7 @@
 import type { Host, HostAgentKind } from '../host'
 import { sessionStarting, sessionStart, guardStart, sessionEnd, agentFinished, leadGuideText } from '../app/symcc'
 import { useName, scoutRuns } from '../app/state'
-import { mainRoot, isWorkerFolder } from '../app/store'
+import { projectRoot, isWorkerFolder } from '../app/store'
 import { agentOnBoard } from '../app/workers'
 import type { OcContext, OcRegistration, OcServerPlugin } from './ctx'
 import { opencodeHost, type OpencodeHostOptions } from './host'
@@ -200,7 +200,7 @@ export function symccServer(o: ServerOptions = {}): OcServerPlugin {
           if (guide) e.system.push({ type: 'text', text: guide, metadata: { symcc: 'lead-guide' } })
         }),
       )
-      const main = await mainRoot(host, dir).catch(() => dir)
+      const main = await projectRoot(host, dir).catch(() => dir)
       const realMain = await realPathOf(main || dir)
       // the main folder or any folder inside it (not a worker's folder) is a main copy, as Claude Code's sessionStart
       // treats it; the owner's own worktree outside the project has itself as its main root

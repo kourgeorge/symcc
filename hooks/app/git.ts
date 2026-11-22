@@ -55,7 +55,9 @@ export async function probeGit($: Host): Promise<GitState> {
   const run = (args: string[]) => git($, args, S.root, 15_000).catch(() => null)
   const v = await run(['--version'])
   const hasGit = !!v && v.exitCode === 0
-  const inside = hasGit && (await run(['rev-parse', '--is-inside-work-tree']))?.stdout.trim() === 'true'
+  // T-844: the project's own repo only: a repo above the project folder (its show-cdup is "../") is not used
+  const [inRepo, up] = hasGit ? await Promise.all([run(['rev-parse', '--is-inside-work-tree']), run(['rev-parse', '--show-cdup'])]) : [null, null]
+  const inside = hasGit && inRepo?.stdout.trim() === 'true' && !up?.stdout.trim()
   const hasHead = inside && (await run(['rev-parse', '--verify', '-q', 'HEAD']))?.exitCode === 0
   return gitStateOf({ hasGit, inside, hasHead })
 }

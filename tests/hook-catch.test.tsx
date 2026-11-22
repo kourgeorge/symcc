@@ -122,18 +122,18 @@ test("T-390 tool.call: when the hook itself fails (findRoot throws), a worker's 
   } catch (err) {
     thrown = (err as Error).message
   }
-  expect(thrown).toBe('no repo')
+  expect(thrown).toBe('no root')
   // what the engine then asks the .catch
   const worker = caughtNext({ result: 'ran' }, { message: thrown })
-  expect(await call.caught!($, ask, worker.next)).toEqual({ deny: "symcc couldn't check this call, so it was refused: it failed (no repo)" })
+  expect(await call.caught!($, ask, worker.next)).toEqual({ deny: "symcc couldn't check this call, so it was refused: it failed (no root)" })
   expect(worker.calls).toEqual([])
   const board = caughtNext({ result: 'ran' }, { message: thrown })
-  expect(await call.caught!($, { tool: 'mcp__symcc__board' }, board.next)).toEqual({ result: "error: symcc couldn't run this tool: it failed (no repo)" })
+  expect(await call.caught!($, { tool: 'mcp__symcc__board' }, board.next)).toEqual({ result: "error: symcc couldn't run this tool: it failed (no root)" })
   expect(board.calls).toEqual([])
   const read = caughtNext({ result: 'file text' }, { message: thrown })
   expect(await call.caught!($, { tool: 'Read', file_path: '/repo/a.ts' }, read.next)).toEqual({ result: 'file text' })
   expect(read.calls.length).toBe(1)
   // once the failed hook had passed the call on, that answer stands, even for a worker
   expect(await call.caught!($, ask, caughtNext({ result: 'ran' }, { called: true }).next)).toEqual({ result: 'ran' })
-  expect(logs.filter(l => /the tool\.call hook it failed \(no repo\)/.test(l)).length).toBe(1)
+  expect(logs.filter(l => /the tool\.call hook it failed \(no root\)/.test(l)).length).toBe(1)
 })
