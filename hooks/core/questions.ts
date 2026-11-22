@@ -37,7 +37,7 @@ export function cleanAsk(v: unknown): SymccAsk | undefined {
   if (typeof r.answer === 'string') a.answer = r.answer
   if (typeof r.answered_at === 'string' && r.answered_at) a.answered_at = r.answered_at
   const lead = r.lead
-  if (lead && typeof lead === 'object' && !Array.isArray(lead) && typeof (lead as { text?: unknown }).text === 'string' && (lead as { text: string }).text.trim()) {
+  if (isObj(lead) && typeof (lead as { text?: unknown }).text === 'string' && (lead as { text: string }).text.trim()) {
     const lo = strs((lead as { options?: unknown }).options)
     a.lead = { text: (lead as { text: string }).text, ...(lo?.length ? { options: lo } : {}) }
   }

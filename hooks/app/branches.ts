@@ -6,7 +6,7 @@
 // A git command that fails leaves out only what it was for: a task's row, or (the main line's log) the whole section.
 import type { Board } from '../board'
 import { BRANCH_COMMITS, BRANCH_STATUSES, liveFinishedLanes, type BranchFacts, type BranchFigures } from '../core/live'
-import { intoOf, isSha } from '../core/board-file'
+import { intoOf, isFinished, isSha } from '../core/board-file'
 import { TASK_BRANCH_COMMITS, TASK_BRANCH_MAIN, type TaskBranchCommit, type TaskBranchFacts } from '../core/task-branch'
 import { trailerPrefix } from '../core/commits'
 import type { BranchCommit } from '../core/live'
@@ -267,7 +267,7 @@ export function taskBranchFacts(host: Host, t: Pick<SymccTask, 'id' | 'status' |
 /** The tasks publish() reads the branch of: the open ones with a branch, and the TASK_BRANCH_MERGED latest merged and
  *  latest dropped ones (a dropped task keeps its branch, drawn dim; capped since they pile up). */
 export function viewBranchTasks<T extends Pick<SymccTask, 'id' | 'status' | 'branch' | 'merged' | 'updated_at'>>(tasks: readonly T[]): T[] {
-  const open = tasks.filter(t => t.status !== 'done' && t.status !== 'dropped' && hasTaskBranch(t))
+  const open = tasks.filter(t => !isFinished(t) && hasTaskBranch(t))
   const latest = (status: string) =>
     tasks
       .filter(t => t.status === status && hasTaskBranch(t))

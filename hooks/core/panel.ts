@@ -1,6 +1,6 @@
 // The Tasks view of the board panel: sections, rows and key hints; and the workers and scouts of the line above the prompt.
 import type { SymccMode, SymccScout, SymccStatus, SymccTask } from '../../types'
-import { asBlockers, type BoardTask, type CheckStep, type TurnStep, emptyBoard, OPEN, intoOf, isInvestigation, kindOf, STATUS_WORD, waitsForFiles } from './board-file'
+import { asBlockers, type BoardTask, type CheckStep, type TurnStep, emptyBoard, OPEN, intoOf, isFinished, isInvestigation, kindOf, STATUS_WORD, waitsForFiles } from './board-file'
 import { asksMoreTime, needsYou, needsYouFirst } from './commands'
 import { boardSections, type DayGroup, dayLabel, dayOf, localOffset, taskDay } from './days'
 import { approveRunning, checkStepNow, finishingNow, shownStatus } from './lead'
@@ -670,7 +670,7 @@ export function taskAsks(t: BoardTask, maxMinutes?: number): { text: string; cho
  *  Done, Keep as a note and Ask more instead of Approve, Reject and Show changes. */
 export function taskActions(t: BoardTask, ctx: TaskActionCtx = {}): TaskAction[] {
   const s = t.status
-  const open = s !== 'done' && s !== 'dropped'
+  const open = !isFinished(t)
   const inReview = s === 'review'
   const fileWait = !!fileWaitText(t)
   const a = (id: TaskActionId, label: string, word: string, key?: string, more: Partial<TaskAction> = {}): TaskAction => ({ id, label, word, ...(key ? { key } : {}), group: 'task', ...more })

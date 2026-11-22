@@ -4,7 +4,7 @@
 // done (a dropped task's are thrown away; see the task event listener below). Only the lead changes org-mem, with its
 // orgmem tool (orgMemTool); the owner may delete notes on the org-mem page (its button is at the bottom of the Live tab) or edit the file by hand.
 import { addSuggestions, cleanTopic, deleteOrgMemNote, dropTaskIds, orgMemAdd, orgMemFile, orgMemList, orgMemNotes, orgMemRemove, orgMemReplace, orgMemSection, orgMemSetTopic, suggestedText, BAD_TOPIC, ORG_MEM_MAX_LINES, type OrgMemNewNote, type OrgMemNote } from '../core/org-mem'
-import { find, type Board, type BoardTask } from '../core/board-file'
+import { find, isFinished, type Board, type BoardTask } from '../core/board-file'
 import { patchTask } from '../core/task'
 import type { Host } from '../host'
 import { onTaskEvent } from './events'
@@ -52,7 +52,7 @@ export async function keepSuggestions(host: Host, id: string, answer: string): P
  */
 async function onDoneOrDropped(events: readonly { task: string; kind: string; to: string | null }[], host: Host): Promise<void> {
   if (S.guardOnly || !S.root) return
-  const ends = events.filter(e => e.kind === 'state' && (e.to === 'done' || e.to === 'dropped'))
+  const ends = events.filter(e => e.kind === 'state' && isFinished({ status: e.to }))
   if (!ends.length) return
   const b = await load(host)
   const ids = ends.map(e => e.task).filter(id => ((find(b, id) as BoardTask | undefined)?.suggested?.length ?? 0) > 0)
@@ -62,7 +62,7 @@ async function onDoneOrDropped(events: readonly { task: string; kind: string; to
     let y = x
     for (const id of ids) {
       const t = find(y, id) as BoardTask | undefined
-      if (!t?.suggested?.length || (t.status !== 'done' && t.status !== 'dropped')) continue
+      if (!t?.suggested?.length || !isFinished(t)) continue
       if (t.status === 'done') out.push([id, t.suggested])
       y = { ...y, tasks: y.tasks.map(z => (z.id === id ? (({ suggested: _, ...rest }) => rest)(z as BoardTask) : z)) }
     }

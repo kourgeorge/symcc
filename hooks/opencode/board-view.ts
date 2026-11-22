@@ -166,7 +166,7 @@ export function parseViewFile(text: string | null | undefined): ViewFile | null 
     if (!f || typeof f !== 'object' || !f.view || !Array.isArray(f.view.tasks)) return null
     const s = (x: unknown) => (typeof x === 'string' ? x : '')
     const { scout_runs, ...rest } = f.view
-    const runs = scout_runs && typeof scout_runs === 'object' && !Array.isArray(scout_runs) ? { scout_runs } : {}
+    const runs = isObj(scout_runs) ? { scout_runs } : {}
     if (!rest.scout_results || typeof rest.scout_results !== 'object' || Array.isArray(rest.scout_results)) delete rest.scout_results
     if (!Array.isArray(rest.roles)) delete rest.roles
     if (!Array.isArray(rest.kinds)) delete rest.kinds
@@ -179,7 +179,7 @@ export function parseViewFile(text: string | null | undefined): ViewFile | null 
     if (!team || typeof team !== 'object' || typeof team.day !== 'string') delete rest.today_team
     if (!isObj(rest.changes)) delete rest.changes
     // T-761: each task page's Branch section facts; a broken one is left out (that task's page has no section)
-    if (rest.task_branches && typeof rest.task_branches === 'object' && !Array.isArray(rest.task_branches)) {
+    if (isObj(rest.task_branches)) {
       const ok = (x: Partial<TaskBranchFacts> | null) => !!x && typeof x === 'object' && typeof x.branch === 'string' && typeof x.into === 'string' && !!x.tip && typeof x.tip.sha === 'string' && Array.isArray(x.main) && Array.isArray(x.commits)
       rest.task_branches = Object.fromEntries(Object.entries(rest.task_branches).filter(([, x]) => ok(x as Partial<TaskBranchFacts> | null)))
     } else delete rest.task_branches

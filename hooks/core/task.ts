@@ -1,6 +1,6 @@
 // Adding and changing tasks, which ones may start, and the backlog.
 import type { SymccTask } from '../../types'
-import { BACKLOG_FROM, type Board, type BoardTask, cleanFiles, cleanLive, type Live, DEFAULT_KIND, INVESTIGATION, isInvestigation, isKind, kindOf, type TaskKind, DATA_DIR, find, intoOf, normId, STATUS_WORD, waitsForFiles } from './board-file'
+import { BACKLOG_FROM, type Board, type BoardTask, cleanFiles, cleanLive, type Live, DEFAULT_KIND, INVESTIGATION, isInvestigation, isKind, kindOf, type TaskKind, DATA_DIR, find, intoOf, isFinished, normId, STATUS_WORD, waitsForFiles } from './board-file'
 import { depDone } from './archive'
 import { historyEntry, withHistory } from './history'
 import { createdLine, makeOrigin, type OriginInput } from './origin'
@@ -344,7 +344,7 @@ export function noteTopic(title: string, id = ''): string {
 }
 
 /** The docs/research files an open task on board `b` (not done or dropped) is to write, so a new note doesn't pick them too. */
-export const noteFilesInUse = (b: Board): string[] => b.tasks.filter(t => t.status !== 'done' && t.status !== 'dropped').flatMap(t => t.files.filter(f => f.startsWith('docs/research/')))
+export const noteFilesInUse = (b: Board): string[] => b.tasks.filter(t => !isFinished(t)).flatMap(t => t.files.filter(f => f.startsWith('docs/research/')))
 
 /** docs/research/<topic>.md for task `t`, with -2, -3… added when `taken` (files that exist or open tasks write) has it. */
 export function noteFile(t: Pick<BoardTask, 'id' | 'title'>, taken: readonly string[] = []): string {

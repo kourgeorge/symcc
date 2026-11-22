@@ -23,7 +23,7 @@
 // Each finding has a key made of its reason, its tasks and their updated_at, so the same
 // problem is told once, and told again only when one of its tasks changes.
 import type { Board, BoardTask } from './board-file'
-import { asBlockers, blockerFiles, find, intoOf, waitsForFiles } from './board-file'
+import { asBlockers, blockerFiles, find, intoOf, isFinished, waitsForFiles } from './board-file'
 import { AFTER_CHANGED } from './history'
 import { fixWays } from './review'
 import { num } from './text'
@@ -93,7 +93,7 @@ function stuck(b: Board): HealthFinding[] {
 
 /** Loops in the after lists among tasks not done yet (each loop once, starting from its lowest id). */
 function loops(b: Board): HealthFinding[] {
-  const open = new Map(b.tasks.filter(t => t.status !== 'done' && t.status !== 'dropped').map(t => [t.id, t]))
+  const open = new Map(b.tasks.filter(t => !isFinished(t)).map(t => [t.id, t]))
   const seen = new Set<string>()
   const out: HealthFinding[] = []
   const state = new Map<string, 'on' | 'off'>()
