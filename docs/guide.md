@@ -2309,8 +2309,8 @@ test, a trap, where something is).
 - **Seeing and deleting notes:** at the bottom of the board's Live tab, the **Organizational
   memory** section shows the count (out of 60, with a fill bar), the 3 newest notes and every topic
   with its note count ([Live tab](#live-tab)). Enter (or a click) on a topic opens the
-  "Organizational memory · tests" page with only that topic's notes; on a newest note, or with `m`
-  (in VS Code the section's title is a link; in OpenCode a click on its header), the
+  "Organizational memory · tests" page with only that topic's notes; on a newest note, or on the
+  `[all]` button next to "newest" (Enter or a click; in VS Code the section's title is a link too), the
   "Organizational memory (org-mem)" page with every note. The page starts with the same header
   as a task's page: `‹ [Live]` (Back; `b` too) with the note count on the right, the title, the line
   "Notes shared with workers, checkers and scouts", a `[Delete]` button (no key in it; the keys are in the
