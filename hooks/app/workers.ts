@@ -3,7 +3,7 @@ import { PREP_NOTE, makeAsk, type Board, type BoardTask, type RoleDef, roleSecti
 import { archiveOld } from './archive'
 import { checkHealth } from './health'
 import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch, clearScratch, taskBranch, copyReports, deleteMergedBranch, type BehindWhy } from './git'
-import { publish, drivesHere } from './lead'
+import { publish, drivesHere, drivenElsewhere } from './lead'
 import { type BeforeLine, type CheckResult, checkAndMerge, recordCommits, ownerEdits, alreadyMerged, AGAIN_MAX, RELOAD_AGAIN, againsThisTry, noteAgain } from './review'
 import type { TurnLimit } from './merge-line'
 import { timedOutRetryNote } from '../core/test-timeout'
@@ -11,7 +11,7 @@ import { logNeedsFiles } from './evidence'
 import { loadRoles } from './roles'
 import { runChecker, checkerName, cleanFolder, STOPPED_AGAIN } from './checker'
 import { loadKinds } from './kinds'
-import { S, onHere, workers, starting, queuedWorkers, type Worker, notReady, checkerNotReady, heard, finishing, approving, stopped, isOwnAgent, rememberOnBoard, halt, checkerRuns, meanwhile, reminded, timers } from './state'
+import { S, onHere, workers, starting, queuedWorkers, type Worker, notReady, checkerNotReady, heard, finishing, approving, stopped, isOwnAgent, rememberOnBoard, halt, checkerRuns, meanwhile, reminded, timers, haltedAnywhere, movedRefused } from './state'
 import { type Host, type HostAgent, type HostAgentStarted, ENDED_STATUSES, agentState, notReadyYet } from '../host'
 import { startAgent, startCancelled, claimNote } from './starts'
 import { load, change, now, path, safeWrite, aboutToWait } from './store'
@@ -325,6 +325,10 @@ export async function workerFinished(host: Host, agentId: string, answer: string
   // T-613: its worker has handed back, so a "more time?" question still open is dropped: a task in a check step
   // never waits for the owner's time answer.
   const ended = now()
+  // T-883: its session ended on an error (or was cut off) because symcc itself stopped it (a reload, a takeover, driving
+  // moved): the try is not failed, it ends as restarted and the next worker goes on with the same try
+  const bySymcc = await stoppedBySymcc(host, agentId, end)
+  let restarted = false
   try {
     tryNo = await change(host, x => {
       const t = find(x, w.task)
@@ -332,6 +336,12 @@ export async function workerFinished(host: Host, agentId: string, answer: string
       // T-740: this try already handed back (another copy checks it), or the agent is not this try's worker (an
       // earlier try's worker, still alive after a reopen): nothing is written and nothing is checked
       if (handedBack(t) || notThisTry(t, agentId)) return [x, null] as [Board, null]
+      // (a question it asked or edits refused before the stop still make it wait, below; a time-up stop still fails)
+      if (bySymcc && !t.live?.wrap_up && !t.live?.ask && !t.live?.refused?.length) {
+        restarted = true
+        const runs = t.runs?.length ? withAgentUsed(t.runs, 'worker', agentId, ended, { tokens, ...(cost !== undefined ? { cost } : {}) }) : t.runs
+        return [putTask(x, backToTodo({ ...t, ...(runs ? { runs } : {}) }, SYMCC_STOPPED_NOTE, ended)), null] as [Board, null]
+      }
       limitMs = finishLimitMs(x.test_commands.length, testMinutesOf(x))
       // T-723: its history says the worker handed back (its own line, just before the "prep started" the check writes)
       return [patchTask(x, w.task, { live: { checking: { step: 'prep', at: ended }, phase: undefined, time_ask: undefined }, history: withHistory(t.history, ended, workerHandedBackEntry(t)), ...(t.runs?.length ? { runs: endRun(withAgentUsed(t.runs, 'worker', agentId, ended, { tokens, ...(cost !== undefined ? { cost } : {}) }), ended) } : {}) }, ended), t.attempts] as [Board, number]
@@ -346,6 +356,7 @@ export async function workerFinished(host: Host, agentId: string, answer: string
   }
   if (tryNo === null) {
     finishing.delete(w.task)
+    if (restarted) await pump(host)
     return
   }
   // T-656: the same agent is asked for org-mem suggestions in one follow-up turn; nothing below waits for its answer
@@ -370,6 +381,21 @@ export async function workerFinished(host: Host, agentId: string, answer: string
   }
   await checkerAgainNow(host, w.task)
   await pump(host)
+}
+
+/** T-883: the "restarted" note of a task whose worker's session ended because symcc itself stopped it. */
+export const SYMCC_STOPPED_NOTE = `restarted: its worker was stopped by a reload or a takeover`
+
+/**
+ * T-883: whether a worker's session that ended with `end` ended because symcc itself stopped it: it ended on an error or
+ * was cut off (never a real answer or a refusal), and some copy of symcc in this process told it to stop (haltedAnywhere,
+ * movedRefused), or lead.json says another session drives the board now (a takeover or hand-over). A real API error with
+ * no such stop is not one: it fails the try as before.
+ */
+export async function stoppedBySymcc(host: Host, agentId: string, end: TurnEnd): Promise<boolean> {
+  if (end.reason !== 'error' && end.reason !== 'aborted') return false
+  if (stopped.has(agentId) || haltedAnywhere().has(agentId) || movedRefused().has(agentId)) return true
+  return drivenElsewhere(host).catch(() => false)
 }
 
 /**
