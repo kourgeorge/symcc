@@ -2,7 +2,7 @@
 // numbers; claude/ui/live.tsx draws them on the terminal panel).
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { liveLanes, liveLayout, laneLines, liveLabelLine, liveLabelSegs, LIVE_AGENT_MARK, LIVE_TONE, liveStations, liveTrains, trainRows, type LiveTrain, liveToday, todayLines, segText, liveBlink, liveHeader, liveHeaderSegs, liveScoutMark, tabRow, LIVE_TABS, LIVE_EMPTY, LIVE_LEGEND, LIVE_INDENT, liveInner, liveBarLegend, liveLegend } from '../hooks/core/live'
+import { liveLanes, liveLayout, laneLines, liveLabelLine, liveLabelSegs, LIVE_AGENT_MARK, LIVE_TONE, liveStations, liveTrains, trainRows, type LiveTrain, liveToday, todayLines, segText, liveBlink, liveHeader, liveHeaderSegs, liveScoutMark, tabRow, LIVE_TABS, LIVE_EMPTY, LIVE_LEGEND, LIVE_DIVIDER, LIVE_INDENT, liveInner, liveBarLegend, liveLegend } from '../hooks/core/live'
 import { textWidth } from '../hooks/core/stats'
 import { FINISH_STALE_MS } from '../hooks/core/lead'
 import { listKeys } from '../hooks/board'
@@ -397,6 +397,8 @@ test('T-690: the Live tab draws at a normal and a narrow width with nothing cut,
     const legendAt = lines.findIndex(l => l.trimStart().startsWith('✧ = an agent works here'))
     const branchesAt = lines.findIndex(l => l.startsWith('BRANCHES ─'))
     expect(legendAt).toBeGreaterThan(lines.findIndex(l => l.startsWith(`${LIVE_INDENT}▶ T-688 `)))
+    // T-836: a short divider right above the key line
+    expect(lines[legendAt - 1]).toBe(LIVE_INDENT + LIVE_DIVIDER)
     if (branchesAt >= 0) expect(legendAt).toBeLessThan(branchesAt)
     expect(lines.some(l => l.includes('l t s c views'))).toBe(true)
     // T-760: the lane header ends the agent stations in ✧ (over their marks, as liveLabelLine), each ✧ in the heading's color
@@ -433,6 +435,7 @@ test('T-690, T-758: with no task in doing, the Live tab says so and shows no nex
   expect(lines[0]).toBe('⏵ auto merge · agents 0/3 busy')
   expect([lines[1]!.replace(/ ─+$/, ''), lines[2]!.trim(), lines[3]]).toEqual(['TASKS', '', LIVE_INDENT + LIVE_EMPTY])
   expect(lines.some(l => l.includes('next up'))).toBe(false)
+  expect(lines.includes(LIVE_INDENT + LIVE_DIVIDER)).toBe(false)
   expect(lines[lines.findIndex(l => l.startsWith('TODAY ─')) + 2]?.startsWith(`${LIVE_INDENT}✓ `)).toBe(true)
   await ui.press({ key: 'tab-tasks' })
   await ui.unmount()
@@ -546,6 +549,7 @@ test('T-691, T-758: with no task in doing, the VS Code Live tab says so and show
   expect((await ui.find({ key: 'live-head' }))?.text).toBe('⏵ auto merge · agents 0/3 busy')
   expect((await ui.find({ key: 'live-empty' }))?.text).toBe(LIVE_EMPTY)
   expect(await ui.find({ key: 'live-legend' })).toBeUndefined()
+  expect(await ui.find({ key: 'live-divider' })).toBeUndefined()
   expect(await ui.find({ key: 'live-next' })).toBeUndefined()
   expect((await ui.find({ key: 'live-today-0' }))?.text).toMatch(/^✓ \d+ merged/)
   await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'tasks') } })

@@ -2816,6 +2816,7 @@ test('T-692: the Live tab draws the terminal panel\'s lanes and today (core/live
   // no task in doing: the empty state
   const none: ViewFile = { ...f, view: { ...f.view, tasks: f.view.tasks.filter(t => t.status !== 'doing') } }
   expect(panelLines(none, { tab: 'live', opened: '', cursor: 0 }, NOW, 100).lines.map(lineText)).toContain(LIVE_INDENT + LIVE_EMPTY)
+  expect(panelLines(none, { tab: 'live', opened: '', cursor: 0 }, NOW, 100).lines.map(lineText)).not.toContain(' ' + '─'.repeat(12))
 })
 
 test('T-757: the OpenCode Live tab shows the whole task\'s tokens, the bar full at the usual per task, the warning past twice it, and the bar legend', () => {
@@ -3622,6 +3623,8 @@ test('T-738, T-747: the OpenCode Live tab has a ▍heading for each section, one
     // T-823: the key line sits right under the lanes, before BRANCHES
     const keyAt = lines.findIndex(l => l.trimStart().startsWith('✧ = an agent works here'))
     expect([keyAt > mode, keyAt < lines.findIndex(l => l.startsWith('BRANCHES ─'))]).toEqual([true, true])
+    // T-836: a short dim divider right above the key line
+    expect(lines[keyAt - 1]).toBe(' ' + '─'.repeat(12))
     expect([heads.length, heads[3]!.startsWith(w === 100 ? 'ORGANIZATIONAL MEMORY   ' : 'ORG')]).toEqual([4, true])
     // no section rules in the body (the footer's rule is under it)
     expect(lines.slice(mode, lines.length - d.footer).filter(l => l.includes('── ') || /^─+$/.test(l))).toEqual([])
