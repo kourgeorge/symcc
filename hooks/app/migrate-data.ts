@@ -1,6 +1,8 @@
 // T-804: /<name>-doctor's `migrate-data` item. symcc no longer brings old data shapes up to date when it reads a file;
 // this counts what is still in an old shape (read-only, core/old-data.ts has the rules) and, on `fix`, keeps a dated
-// backup of the data files and saves every file once in today's shape. At session start the count is only reported.
+// backup of the data files and saves every file once in today's shape. migrateIfOld does the same on its own (at session
+// start, before every board save and in the hourly archive step) when it finds old data, with at most one backup an hour;
+// old data that comes back soon after a migration means an older symcc copy writes to the board, and the owner is told (T-886).
 import { readBoardValue } from '../core/board-file'
 import { archiveChunkFile, PARTS_DIR } from '../core/board-parts'
 import { orgMemFile } from '../core/org-mem'
@@ -90,14 +92,33 @@ export async function migrateIfOld(host: Host, all = true): Promise<string> {
     // after a failure the last backup is kept and reused (the data it holds is the old shape anyway)
     // (only when the folder is still there: the doctor or the owner may have deleted it)
     let reuse = failedBackup?.backup
+    const failedOne = reuse
     if (reuse && (await host.fs.list(path(reuse)).catch(() => [])).length === 0) {
       failedBackup = null
       reuse = undefined
     }
+    // T-886: at most one automatic backup an hour (an older symcc copy writing old data would make one on every run)
+    const newest = await newestBackup(host)
+    const nowMs = Date.parse(now())
+    if (!reuse && newest && nowMs - newest.ms < BACKUP_EVERY_MS) reuse = newest.backup
+    // old data again soon after a migration: an older symcc copy is writing to this board
+    // (a backup left by this copy's own failed try is no sign of that)
+    const lastMs = Math.max(migratedAt, newest && newest.backup !== failedOne ? newest.ms : 0)
+    const cameBack = lastMs > 0 && nowMs - lastMs < CAME_BACK_MS
     const r = await migrateData(host, reuse)
     if (r.failed) why = r.failed
     else {
       failedBackup = null
+      migratedAt = nowMs
+      if (cameBack) {
+        if (!toldOlderCopy) {
+          toldOlderCopy = true
+          const msg = `an older symcc copy is writing to this board (old-shaped data came back after it was moved to the current shape; close windows still on an older symcc and restart any long-running server that loads symcc); a backup is in ${r.backup}/`
+          host.ui.toast(S.N.toast(msg))
+          tellLead(host, msg)
+        }
+        return ''
+      }
       const msg = `symcc moved your old data to the current shape; a backup is in ${r.backup}/`
       host.ui.toast(S.N.toast(msg))
       tellLead(host, msg)
@@ -138,6 +159,36 @@ export function forgetMigrationFailure(): void {
   failedBackup = null
   lastFailure = null
   toldFailure = ''
+  migratedAt = 0
+  toldOlderCopy = false
+}
+
+/** An automatic migration reuses a backup folder younger than this (T-886). */
+const BACKUP_EVERY_MS = 60 * 60_000
+/** Old data found again within this time of a migration (or its backup) means an older symcc copy writes to the board. */
+const CAME_BACK_MS = 24 * 60 * 60_000
+/** When this copy last migrated old data successfully (ms), 0 for never. */
+let migratedAt = 0
+/** Whether the owner was told an older symcc copy writes to the board (told once). */
+let toldOlderCopy = false
+
+/** The time in a backup folder's name (data.before-migrate-2026-11-01T08-00-00-000Z), as ms; NaN when it has none. */
+export const backupTimeMs = (name: string): number => {
+  const m = /(\d{4}-\d\d-\d\d)T(\d\d)-(\d\d)-(\d\d)-(\d{3})Z$/.exec(name)
+  return m ? Date.parse(`${m[1]}T${m[2]}:${m[3]}:${m[4]}.${m[5]}Z`) : NaN
+}
+
+/** The newest backup folder that still holds files, with its time (from its name). */
+async function newestBackup(host: Host): Promise<{ backup: string; ms: number } | null> {
+  const dir = path(S.N.dir)
+  let best: { name: string; ms: number } | null = null
+  for (const f of await host.fs.list(dir).catch(() => [])) {
+    if (f.kind !== 'dir' || !f.name.startsWith(`data${BACKUP_MARK}`)) continue
+    const ms = backupTimeMs(f.name)
+    if (Number.isFinite(ms) && (!best || ms > best.ms)) best = { name: f.name, ms }
+  }
+  if (!best || (await host.fs.list(`${dir}/${best.name}`).catch(() => [])).length === 0) return null
+  return { backup: fileName(`${dir}/${best.name}`), ms: best.ms }
 }
 
 /** The last failed migration: what the data files looked like then, and the message. */

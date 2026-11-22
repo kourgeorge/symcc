@@ -3920,11 +3920,12 @@ test('T-605/T-612: the merge queue\'s waiting note is "queue (n)"; a saved board
   const read = readOld(JSON.stringify({ version: 1, tasks: [task('T-1', { checking: { step: 'prep', at } }), task('T-2', {}), task('T-3', { checking: { step: 'queue', place: 3, at } })] }))
   const [one, two, three] = read.board.tasks
   expect(one!.live?.checking).toEqual({ step: 'queue', place: 3, at })
-  expect(one!.note).toBe('queue (3)')
+  expect(one!.note).toBe('')
   expect(two!.live?.checking).toBeUndefined()
   expect(two!.note).toBe('')
-  // a task already in the queue step (saved by this version) is left as it is
+  // a task already in the queue step keeps its step; its leftover note is cleared too (T-886: else it is counted as old forever)
   expect(three!.live?.checking).toEqual({ step: 'queue', place: 3, at })
+  expect(three!.note).toBe('')
   // once saved, nothing changes again
   expect(stillOld(read.board)).toBe(false)
   // the old "in line (n)" note (T-605) and the old step name "checking" are no longer read
