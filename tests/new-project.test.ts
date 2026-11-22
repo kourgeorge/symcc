@@ -88,7 +88,7 @@ test('T-844: a window that started with no board looks again: /symcc-enable here
     w.files.set(w.lead, JSON.stringify({ session: 'a', heartbeat: Date.now() }))
     const r = await runCommand(w.host, cmd, cmd === 'symcc-enable' ? 'here' : '')
     expect(r?.text).toContain(cmd === 'symcc-enable' ? 'is on in this window' : 'already set up here')
-    if (cmd === 'symcc-init') expect(r?.text).toContain('/symcc-enable here turns it on in this one too')
+    if (cmd === 'symcc-init') expect(r?.text).toContain('/symcc-enable turns it on in this one too')
     expect(S.fresh).toBe(false)
     if (cmd === 'symcc-enable') {
       expect(S.offHere).toBe(false)
@@ -232,7 +232,7 @@ test('T-856: /symcc-init in a window turned off with /symcc-disable here does no
   const r = await runCommand(w.host, 'symcc-init', '')
   expect(r?.text).toContain('already set up here')
   expect(r?.text).not.toContain('another window')
-  expect(r?.text).toContain('/symcc-enable here turns it back on')
+  expect(r?.text).toContain('/symcc-enable turns it back on')
 })
 
 test('T-860: /symcc-init in a subfolder of a project makes the subfolder\'s own board, with no parent-board message; later sessions there use it', async () => {
