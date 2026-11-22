@@ -27,6 +27,10 @@ export const stateLabelLower = () => STATE_LABEL.toLowerCase()
 /** The label of the Details row with a task's way to the merge (taskStage): "worker ✓ → ● prep → …". */
 export const STEPS_LABEL = 'Steps'
 
+/** The board list's own colors per status, the same on the terminal, VS Code and OpenCode lists: failed red, review
+ *  and waiting yellow, doing blue, done green. */
+export const LIST_TONE: Record<string, string> = { backlog: 'inactive', review: 'warning', waiting: 'warning', failed: 'error', doing: 'ide', paused: 'permission', todo: 'text', done: 'success', dropped: 'inactive' }
+
 /** The status badge colors on the task page: doing blue, review and waiting yellow, done green, failed red, the rest dim. */
 export const STATUS_BADGE: Record<SymccStatus, string> = { backlog: 'inactive', todo: 'inactive', doing: 'ide', review: 'warning', waiting: 'warning', paused: 'suggestion', failed: 'error', done: 'success', dropped: 'inactive' }
 export const STATUS_MARK: Record<SymccStatus, string> = { backlog: '◇', review: '◆', waiting: '?', failed: '✗', doing: '▶', paused: '‖', todo: '○', done: '✓', dropped: '–' }

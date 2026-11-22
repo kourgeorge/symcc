@@ -9,6 +9,7 @@ import { SIZE_WARN_BYTES, READ_LIMIT_BYTES, PARTS_DIR, mbText } from '../core/bo
 import { type Host, agentState } from '../host'
 import { S, workers, starting, finishing, approving } from './state'
 import { load, path } from './store'
+import { readLeadText } from './lead'
 import { readArchiveFile } from './archive'
 import { git, deleteMergedBranch } from './git'
 import { oldDataFound, oldRowsText, migrateData } from './migrate-data'
@@ -66,7 +67,7 @@ async function headKept(host: Host, dir: string, into: string): Promise<boolean>
 /** Lists a lead file held by a session that stopped (into `listed`); gives back the file's text. */
 async function leadCheck(host: Host, listed: Found[]): Promise<string | null> {
   const nowMs = Date.now()
-  const leadText = await host.fs.read(path(S.N.leadFile)).catch(() => null)
+  const leadText = await readLeadText(host)
   const lead = parseLead(leadText)
   if (lead && !isFresh(lead.heartbeat, nowMs))
     listed.push({ kind: 'board', fixable: false, text: `${S.N.leadFile} names a session that stopped ${Math.round((nowMs - lead.heartbeat) / 60_000)} min ago, so no session drives the board: /${S.N.name}-drive makes this one drive it` })

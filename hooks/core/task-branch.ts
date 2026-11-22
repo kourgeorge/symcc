@@ -16,7 +16,7 @@
 import type { SymccTask } from '../../types'
 import type { Seg } from './details'
 import { agoText, type BranchCommit, LIVE_INDENT, LIVE_TONE, liveInner } from './live'
-import { cutTitle, padWidth, textWidth } from './stats'
+import { cutTitle, fitSegs, padWidth, textWidth } from './stats'
 import { historyTime } from './history'
 import { taskCommits } from './commits'
 
@@ -64,24 +64,6 @@ function cellSegs(cells: { ch: string; color: string }[]): Seg[] {
     const last = out[out.length - 1]
     if (last && last.color === c.color) last.text += c.ch
     else out.push({ text: c.ch, color: c.color })
-  }
-  return out
-}
-
-/** Pieces cut to `width` columns (the one that crosses the edge ends in "…"). */
-function fitSegs(xs: readonly Seg[], width: number): Seg[] {
-  const out: Seg[] = []
-  let used = 0
-  for (const x of xs) {
-    const w = textWidth(x.text)
-    if (used + w <= width) {
-      out.push(x)
-      used += w
-      continue
-    }
-    const room = width - used
-    if (room > 0) out.push({ ...x, text: cutTitle(x.text, room) })
-    break
   }
   return out
 }

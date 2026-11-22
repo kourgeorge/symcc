@@ -6,7 +6,7 @@ import type { SymccMode, SymccTask } from '../../types'
 import { type BoardTask, DEFAULT_AUTO_RETRIES, emptyBoard, kindOf, isInvestigation, modeOf } from './board-file'
 import { taskPhase, type PhaseStage } from './phase'
 import { handedBack, shownStatus } from './lead'
-import { cutTitle, median, padWidth, taskFigures, textWidth, wrapLine } from './stats'
+import { cutTitle, fitSegs, median, padWidth, taskFigures, textWidth, wrapLine } from './stats'
 import { activeFrom, restartsOf, gapsOf, agentsOf, agentsOnTask, sumRuns,checkerIdOf, checkerTokensOf, tryCost, tryTokens, fmtCost, fmtDuration, fmtTokens, sumTokens, tokenCount, TOKEN_SIGN, fmtTok } from './runs'
 import { type KeyHint, LIVE_VIEW_KEYS, hintLineText, hintLines, rowDuration, waitOrder } from './panel'
 import { ORG_MEM_EMPTY, ORG_MEM_MAX_LINES, TOPIC_UNSORTED, ORG_MEM_ALL, orgMemNewest, orgMemShortDay, orgMemTopicCounts, type OrgMemNote } from './org-mem'
@@ -1383,24 +1383,6 @@ export function agoText(ms: number): string {
   return h < 24 ? `${h} h ago` : `${Math.floor(h / 24)} d ago`
 }
 
-/** Cuts segments to `width` columns, the one that crosses the edge ending in "…". */
-function fitSegs(xs: readonly LiveSeg[], width: number): LiveSeg[] {
-  const out: LiveSeg[] = []
-  let used = 0
-  for (const x of xs) {
-    const w = textWidth(x.text)
-    if (used + w <= width) {
-      out.push(x)
-      used += w
-      continue
-    }
-    const room = width - used
-    if (room > 0) out.push({ text: cutTitle(x.text, room), tone: x.tone })
-    break
-  }
-  return out
-}
-
 type BranchItem = { id: string; kind: 'branch' | 'merged' | 'new'; fig?: BranchFigures; merged?: string; atMs?: number }
 
 /** The tasks the section shows, in the order they are kept when there are too many: the open tasks with a branch git
@@ -1503,7 +1485,7 @@ export function liveBranches(view: LiveView, nowMs: number, width: number): Live
     if (i) track.push({ text: '─'.repeat(step - 1), tone: 'dim' })
     track.push({ text: '●', tone: 'bar' })
   })
-  const main = fitSegs([{ text: ` ${padWidth(name, indent - 1)}`, tone: 'title' }, ...track, ...(right ? [{ text: right, tone: 'dim' as const }] : [])], w)
+  const main = fitSegs<LiveSeg>([{ text: ` ${padWidth(name, indent - 1)}`, tone: 'title' }, ...track, ...(right ? [{ text: right, tone: 'dim' as const }] : [])], w)
   // the rows
   const rows: BranchRow[] = placed.map(({ x, col }, i) => {
     const below = placed.slice(i + 1).map(p => p.col)

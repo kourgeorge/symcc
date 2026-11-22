@@ -13,11 +13,12 @@
 // No key hints: the mode switch is a link and the search a box in the footer. An empty board says so, with one
 // primary button that starts a message to the lead in the prompt box.
 import type { SymccStatus, SymccTask } from '../../../types'
-import { statusMark, archivedNote, archivedOf, localOffset, panelSections, BACKLOG_SHOWN, ALL_CLEAR, statusCell, rowCell, rowMark, rowStates, stateText, TITLE_ROOM, rowExtra, fitRow, WAITS_FOR, kindTag, searchTasks, SEARCH_WORDS, isInvestigation, needsYou, kindMark, fmtDuration, ownersTurn, shownStatus } from '../../board'
-import { openDays, S } from '../../app/state'
+import { statusMark, archivedNote, archivedOf, BACKLOG_SHOWN, ALL_CLEAR, statusCell, rowCell, rowMark, rowStates, stateText, TITLE_ROOM, rowExtra, fitRow, WAITS_FOR, kindTag, SEARCH_WORDS, isInvestigation, needsYou, kindMark, fmtDuration, ownersTurn, shownStatus, LIST_TONE } from '../../board'
+import { S } from '../../app/state'
 import { type $, panelValues } from '../panel'
 import type { PaneParts } from './parts'
 import { row } from './arrows'
+import { listState } from './list'
 import { vsFold, vsFooter, vsHeading, vsHref, vsLink, mdLink, mdText, twoLines, MORE, NO_TITLE } from './vscode'
 
 /** The groups of what needs you, top to bottom, each under its heading; what runs and what waits to run follow them
@@ -67,20 +68,11 @@ export function listPageVs($: $, pane: PaneParts) {
   /** The characters an open row is fitted to: more than the reported columns (see VS_ROW_SCALE). */
   const room = vsRowRoom(width)
   const { nowMs } = pane
-  const query = S.search?.text.trim() ?? ''
-  const filtering = query !== ''
-  const matching = filtering ? searchTasks(v.tasks, query, nowMs, v.archived_done) : v.tasks
-  const parts = panelSections(matching, nowMs, localOffset(nowMs))
-  if (!filtering) for (const d of [...openDays]) if (!parts.doneDays.some(g => g.day === d)) openDays.delete(d)
+  const { query, filtering, matching, parts, backlogOpen, doneOpen, droppedOpen, dayOpen, toggleDay } = listState($, pane)
   const redraw = () => $.ui.invalidate('ui.render')
-  const backlogOpen = filtering || S.backlogOpen
-  const doneOpen = filtering || S.doneOpen
-  const droppedOpen = filtering || S.droppedOpen
-  const dayOpen = (day: string) => filtering || openDays.has(day)
-  const toggleDay = (day: string) => () => (openDays.has(day) ? openDays.delete(day) : openDays.add(day), redraw())
   const since = (id: string) => v.working.find(w => w.task === id)?.since
   // the status colors, on the mark only (the same as the terminal list's)
-  const tone: Record<string, string> = { backlog: 'inactive', review: 'warning', waiting: 'warning', failed: 'error', doing: 'ide', paused: 'permission', todo: 'text', done: 'success', dropped: 'inactive' }
+  const tone = LIST_TONE
   let first = true
   const focusFirst = (): true | undefined => (first ? ((first = false), true) : undefined)
 
