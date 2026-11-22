@@ -13,7 +13,9 @@ import { ALL_FEATURES, noUi } from '../hooks/host'
 import { S, leadQueue } from '../hooks/app/state'
 import { takeBoardUpdate, tellLead } from '../hooks/app/tell'
 import { queuedNeverStarted, unclaimQueued } from '../hooks/app/workers'
-import { startAgent, drainStarts, leadTurn, queuedStarts, cancelStarts, startCancelled, QUEUED_NOTE, STARTING_NOTE } from '../hooks/app/starts'
+import { agentFinished } from '../hooks/app/symcc'
+import { claudeAgents } from '../hooks/claude/host'
+import { starterEnded, isStarter, resetStarts, STARTER_TIMEOUT_MS, startAgent, drainStarts, leadTurn, queuedStarts, cancelStarts, startCancelled, QUEUED_NOTE, STARTING_NOTE } from '../hooks/app/starts'
 import { ran } from './fakes'
 import { fakeHost as sharedFakeHost } from './fake-host'
 
@@ -170,7 +172,8 @@ function world(on: On) {
   on('ui.status', () => ({ value: undefined }))
   on('ui.toast', () => ({ value: undefined }))
   // the test kit can't hand back a new agent's id, so each start then counts as failed: what matters is when it is asked for
-  on('agent.spawn', (_, e) => (spawned.push(String((e as unknown as { name?: string }).name)), { model: 'sonnet' }) as never)
+  // (T-831: the hidden starter is not one of them; here it answers no id, so the lead is woken as before)
+  on('agent.spawn', (_, e) => ((e as unknown as { name?: string }).name === 'symcc-starter' || spawned.push(String((e as unknown as { name?: string }).name)), { model: 'sonnet' }) as never)
   on('process.run', (_, e) => {
     const [cmd, ...rest] = (e as unknown as { argv: string[] }).argv
     if (cmd === 'git') return { value: rest[0] === 'rev-parse' && rest[1] === '--is-inside-work-tree' ? ran({ stdout: 'true\n' }) : ran({}) }
@@ -404,4 +407,95 @@ test('T-470: a claim cut off before its worker started on a host with no start q
   expect(u.status).toBe('todo')
   expect(u.attempts).toBe(0)
   expect(u.runs).toBeUndefined()
+})
+
+// ---------------- T-831: the hidden starter agent ----------------
+
+/** A host with startTrigger: `triggers` counts its starts; `mode` makes it refuse or answer no id. Timers are kept. */
+function starterHost(mode: 'ok' | 'refuse' | 'noid' = 'ok') {
+  const { host, spawned, timers } = fakeHost()
+  let triggers = 0
+  const fires: (() => void)[] = []
+  const h = host as unknown as { agents: Record<string, unknown>; clock: { after: (ms: number, f: () => void) => { cancel(): void } } }
+  h.agents.startTrigger = async () => {
+    triggers++
+    if (mode === 'refuse') throw new Error('refused')
+    return mode === 'noid' ? {} : { agentId: `starter-${triggers}` }
+  }
+  h.clock.after = (ms, f) => (timers.push({ ms, f }), fires.push(f), { cancel() {} })
+  return { host, spawned, timers, triggers: () => triggers }
+}
+
+test('T-831: a queued start while the lead is idle starts the hidden starter, with no wake-up for the lead; its end drains the queue', async () => {
+  const { host, spawned, triggers } = starterHost()
+  const p = startAgent(host, worker('symcc-T-1'))
+  void startAgent(host, worker('symcc-T-2'))
+  await Promise.resolve()
+  expect(triggers()).toBe(1)
+  expect(leadQueue).toEqual([])
+  expect(spawned).toEqual([])
+  // the starter's turn.complete: it is recognised (no worker bookkeeping), then the queue is drained
+  expect(await starterEnded(host, 'starter-1')).toBe(true)
+  expect(isStarter('starter-1')).toBe(true)
+  expect(await starterEnded(host, 'some-worker')).toBe(false)
+  await drainStarts(host)
+  expect(await p).toEqual({ agentId: 'id-symcc-T-1' })
+  expect(spawned).toEqual(['symcc-T-1', 'symcc-T-2'])
+  expect(leadQueue).toEqual([])
+  // a new start later uses a new starter
+  void startAgent(host, worker('symcc-T-3'))
+  await Promise.resolve()
+  expect(triggers()).toBe(2)
+})
+
+test('T-831: the starter is never a worker: its end changes no task and records nothing', async () => {
+  const { host } = starterHost()
+  void startAgent(host, worker('symcc-T-1'))
+  await Promise.resolve()
+  expect(await starterEnded(host, 'starter-1')).toBe(true)
+  const before = JSON.stringify(leadQueue)
+  agentFinished(host, 'starter-1', { answer: 'OK', end: { reason: 'end_turn' } as never, isAborted: false, tokens: { input: 5, output: 1 } as never })
+  expect(JSON.stringify(leadQueue)).toBe(before)
+})
+
+test('T-831: when the starter can not start (refused or no id) the lead is woken as before and the agent still starts', async () => {
+  for (const mode of ['refuse', 'noid'] as const) {
+    resetStarts()
+    leadQueue.length = 0
+    const { host, spawned } = starterHost(mode)
+    void startAgent(host, worker('symcc-T-1'))
+    for (let i = 0; i < 5; i++) await Promise.resolve()
+    expect(leadQueue.length).toBe(1)
+    expect(leadQueue[0]).toContain('Starting worker symcc-T-1')
+    await drainStarts(host)
+    expect(spawned).toEqual(['symcc-T-1'])
+  }
+})
+
+test('T-831: a starter that ends without draining in STARTER_TIMEOUT_MS wakes the lead; the agent still starts', async () => {
+  const { host, spawned, timers } = starterHost()
+  void startAgent(host, worker('symcc-T-1'))
+  await Promise.resolve()
+  await Promise.resolve()
+  expect(leadQueue).toEqual([])
+  const t = timers.find(x => x.ms === STARTER_TIMEOUT_MS)
+  expect(t).toBeDefined()
+  t!.f()
+  expect(leadQueue.length).toBe(1)
+  expect(leadQueue[0]).toContain('Starting worker symcc-T-1')
+  await drainStarts(host)
+  expect(spawned).toEqual(['symcc-T-1'])
+})
+
+test('T-831: a host without startTrigger wakes the lead as before', async () => {
+  const { host } = fakeHost()
+  void startAgent(host, worker('symcc-T-1'))
+  expect(leadQueue.length).toBe(1)
+})
+
+test('T-831: the Claude host never lists the starter as an agent, and offers no starter type', async () => {
+  const $ = { agent: { list: async () => [{ id: 'a', type: 'symcc:starter', status: 'completed' }, { id: 'b', type: 'symcc:worker', status: 'running' }] } }
+  S.enabledNow = true
+  const list = await claudeAgents($ as never).list()
+  expect(list.map(a => a.id)).toEqual(['b'])
 })

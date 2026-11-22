@@ -59,8 +59,14 @@ export function claudeAgents($: EngineInterface): Host['agents'] {
       if ('deny' in spawned && spawned.deny) throw startError(a, new Error(spawned.deny))
       return 'agentId' in spawned && spawned.agentId ? { agentId: spawned.agentId } : {}
     },
+    // T-831: starts the hidden starter agent (see app/starts.ts); it is never listed, so it never shows as an agent
+    async startTrigger() {
+      const spawned = await $.agent.spawn({ prompt: 'Reply OK', name: `${S.N.name}-starter`, description: `${S.N.name} start trigger`, subagentType: claudeNames(S.N.name).starter })
+      if ('deny' in spawned && spawned.deny) throw new Error(spawned.deny)
+      return 'agentId' in spawned && spawned.agentId ? { agentId: spawned.agentId } : {}
+    },
     // Every worker type (worker, worker-web, ...) is listed as a 'worker', the scout type as a 'scout' (see HostAgent).
-    list: async () => (await $.agent.list()).map(a => hostAgent(a, S.N.name)),
+    list: async () => (await $.agent.list()).filter(a => a.type !== claudeNames(S.N.name).starter).map(a => hostAgent(a, S.N.name)),
     send: (agentId, text) => $.session.send({ to: { agentId }, text }),
     stop: (agentId, text) => $.session.send({ to: { agentId }, text }),
     // T-656: a message to a subagent that has handed back resumes it with its whole context; its answer comes as another turn.complete

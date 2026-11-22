@@ -588,6 +588,13 @@ always says what happened ("T-743 merged", not "Good news: …").
   short line at most, e.g. "▶ T-751 retrying (2/4)." Each board update symcc sends the lead
   reminds it of this. An update that holds only "Starting ..." lines (sent just to let symcc start
   an agent) says "No reply needed; end the turn without a message." instead.
+- **How agents get started (Claude Code):** Claude Code only keeps symcc's guards for an agent
+  started inside a turn hook. So when work waits and the lead is idle, symcc starts a tiny hidden
+  helper agent (`symcc:starter`, haiku, no tools, never on the board or in the stats); its end is
+  the hook that starts the waiting agents, so the lead is not woken and does not re-read its
+  whole chat. If the helper can't start, or does not finish within 60 seconds, symcc wakes the
+  lead with the short "Starting ..." update above instead. OpenCode and the Node client start
+  agents at once and need none of this.
 - **A new task:** "Added T-n  <short title>", then one line for what waits on what, if anything.
 - **A question for you:** the question in one sentence, the choices numbered, then "(or answer on
   the board)". In Claude Code it is the AskUserQuestion pop-up, as before.

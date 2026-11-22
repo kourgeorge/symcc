@@ -41,6 +41,7 @@ import { check, pump, workerFinished, lateHandBack, agentOnBoard, stoppedHandBac
 import { setSymcc, setBoardMode } from './board-mode'
 import { cleanLeftoverTmp } from './cleanup'
 import { doctor } from './doctor'
+import { isStarter } from './starts'
 import { logRefusal, type Who } from './evidence'
 
 /** What /symcc and /symcc-tasks answer after opening the board. No Esc hint: Esc doesn't reach the panel (T-158). */
@@ -438,6 +439,8 @@ export type AgentRunEnd = { answer: string; end: TurnEnd; isAborted: boolean; to
 
 /** An agent's run ended (a worker, scout or checker of symcc's, or one this copy lost track of in a reload); other agents are left alone. */
 export function agentFinished(host: Host, agentId: string | undefined, run: AgentRunEnd) {
+  // T-831: the hidden starter is no worker, scout or checker: nothing is kept of it
+  if (agentId && isStarter(agentId)) return
   // T-656: the answer to a debrief (the follow-up after a hand-back) only brings org-mem suggestions
   // (and, like any agent's end, it runs pump: a fast retry of its task, held back by nothing now, starts at once)
   if (agentId && debriefFinished(host, agentId, run)) {

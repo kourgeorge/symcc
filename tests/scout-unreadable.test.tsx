@@ -48,7 +48,7 @@ function world(on: On) {
     return { value: ran() }
   })
   on('agent.list', () => (state.lists++, { value: [{ id: 'w1', type: 'symcc:worker', name: 'symcc-T-1', status: 'running' }] }) as never)
-  on('agent.spawn', (_, e) => (spawned.push(String((e as unknown as { name?: string }).name)), { model: 'sonnet' }) as never)
+  on('agent.spawn', (_, e) => ((e as unknown as { name?: string }).name === 'symcc-starter' || spawned.push(String((e as unknown as { name?: string }).name)), { model: 'sonnet' }) as never) // T-831: the hidden starter is no agent here
   on('turn.start', (_, e) => ({ turnId: e.turnId }))
   on('session.send', () => ({ isDelivered: true }) as never)
   on('session.start', (_, e) => ({ cwd: e.cwd }) as never)

@@ -18,7 +18,7 @@ import { hookFailed } from './app/ask'
 import { popupCall } from './app/questions'
 import { spawnFailedText, shellCwd } from './core/path-guard'
 import { DEFAULT_NAME, cleanName } from './name'
-import { drainStarts, leadTurn } from './app/starts'
+import { drainStarts, leadTurn, starterEnded } from './app/starts'
 import { findRoot } from './app/store'
 import { renderAbovePrompt } from './claude/ui/above-prompt'
 import { arrowMove, noteFocus } from './claude/ui/arrows'
@@ -48,7 +48,7 @@ export function symccAgentType($: $, agent: unknown): boolean {
     // no plugin name to read
   }
   const type = typeof agent === 'string' ? agent : ''
-  return [...names].some(n => isWorkerType(type, n) || type === claudeNames(n).scout)
+  return [...names].some(n => isWorkerType(type, n) || type === claudeNames(n).scout || type === claudeNames(n).starter)
 }
 
 /** The plugin's name in use, or the default one when even that can't be read. */
@@ -124,7 +124,7 @@ export const register: Register = on => {
   // Workers and scouts only reach the agents through the plugin itself (the name is only known once a hook runs).
   on('agent.offer', ($, e, next) => {
     useName(claudeHost($))
-    return isWorkerType(e.agent, S.N.name) || e.agent === claudeNames(S.N.name).scout ? { isOffered: false } : next(e)
+    return isWorkerType(e.agent, S.N.name) || e.agent === claudeNames(S.N.name).scout || e.agent === claudeNames(S.N.name).starter ? { isOffered: false } : next(e)
   }).catch(($, e, next) => {
     // Failed: symcc's types are still hidden (else the lead's model could start a "worker" itself); any other is offered as usual.
     const ours = symccAgentType($, e?.agent)
@@ -196,7 +196,8 @@ export const register: Register = on => {
     const host = claudeHost($)
     useName(host)
     const r = await next(e)
-    agentFinished(host, e.agentId, { answer: e.answer, end: turnEnd(e, takeBackground(e.agentId)), isAborted: e.isAborted, tokens: usageTokens(e.usage) })
+    // T-831: the hidden starter's end only gives this hook: no bookkeeping, then the queue below
+    if (!(await starterEnded(host, e.agentId))) agentFinished(host, e.agentId, { answer: e.answer, end: turnEnd(e, takeBackground(e.agentId)), isAborted: e.isAborted, tokens: usageTokens(e.usage) })
     if (!e.agentId) leadTurn(false)
     // any turn's end (the lead's or an agent's) starts the queued agents (see app/starts.ts)
     await drainStarts(host)

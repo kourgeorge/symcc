@@ -55,7 +55,7 @@ function world(on: On, o: { agents?: { id: string; type: string }[] } = {}) {
   on('ui.toast', (_, e) => (toasts.push(JSON.stringify(e)), { value: undefined }))
   // the workers asked for (by name). This hook only sees a spawn about to happen; nothing in the test kit
   // really starts an agent, so each start then fails ("no implementation for agent.spawn").
-  on('agent.spawn', (_, e) => (spawned.push(String((e as unknown as { name?: string }).name)), { model: 'sonnet' }) as never)
+  on('agent.spawn', (_, e) => ((e as unknown as { name?: string }).name === 'symcc-starter' || spawned.push(String((e as unknown as { name?: string }).name)), { model: 'sonnet' }) as never) // T-831: the hidden starter is no agent here
   on('process.run', (_, e) => {
     const [cmd, ...rest] = (e as unknown as { argv: string[] }).argv
     if (cmd === 'git') return { value: git(rest) }

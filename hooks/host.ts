@@ -282,6 +282,11 @@ export interface Host {
      * agent's answer comes back like a run end, for the same `agentId` (symcc's agentFinished). Without it, the prompts
      * ask for org-mem suggestions at the end of the report instead (see app/debrief.ts).
      */
+    /**
+     * T-831: only Claude Code: starts a tiny hidden agent whose turn.complete is a hook where symcc may start agents
+     * (like a turn of the lead, without reading the lead's whole context). Rejects when it can't start.
+     */
+    startTrigger?: () => Promise<HostAgentStarted>
     followUp?: (agentId: string, text: string) => Promise<unknown>
     /**
      * Only a host that runs agents as processes and records them (hooks/process/, T-474): stops the recorded agent

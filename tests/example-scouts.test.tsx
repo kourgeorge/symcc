@@ -68,7 +68,7 @@ function world(on: On, o: { files?: Record<string, string>; dirs?: string[]; fai
   })
   on('ui.status', () => ({ value: undefined }))
   on('ui.toast', (_, e) => (toasts.push(String((e as unknown as { text?: string; message?: string }).text ?? (e as unknown as { message?: string }).message ?? JSON.stringify(e))), { value: undefined }) as never)
-  on('agent.spawn', (_, e) => (spawned.push(String((e as unknown as { name?: string }).name)), { model: 'sonnet' }) as never)
+  on('agent.spawn', (_, e) => ((e as unknown as { name?: string }).name === 'symcc-starter' || spawned.push(String((e as unknown as { name?: string }).name)), { model: 'sonnet' }) as never) // T-831: the hidden starter is no agent here
   on('turn.start', (_, e) => ({ turnId: e.turnId }))
   on('turn.complete', () => ({ text: '' }))
   on('process.run', (_, e) => {
