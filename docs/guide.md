@@ -498,8 +498,8 @@ doing test · title"). Legend: `▶` working · `⧗` queue · `✎` prep · `�
 
 A doing task's page (terminal, VS Code and OpenCode) names its
 state, its step and the total work time on the state line of its header (see [the task page
-and the scout page](#the-task-page-and-the-scout-page)): `▶ doing · worker · 15m`,
-`▶ doing · prep`, `▶ doing · checker · 5m`, `▶ doing · queue (2)`, `▶ doing · test · 9m`,
+and the scout page](#the-task-page-and-the-scout-page)): `▶ doing · worker · ⏱ 15m`,
+`▶ doing · prep`, `▶ doing · checker · ⏱ 5m`, `▶ doing · queue (2)`, `▶ doing · test · ⏱ 9m`,
 `▶ doing · merge`. Other tasks show their status (`○ to do`, `◆ ready for review`, ...). In
 Details, a **Steps** row shows the
 whole way to the merge, the steps done marked ✓, the current one bold with ●, the later ones
@@ -961,7 +961,7 @@ only; the Organizational memory page has the same header shape, see below):
 ```
  ‹ [Tasks]                                            T-738 · ‹ 2 of 6 ›
  T-738  Live tab: an empty line before each section (all boards)
- ▶ doing · worker · 4m   change · general · try 1/3   ♟ from you
+ ▶ doing · worker · ⏱ 4m   change · general · try 1/3   ♟ from you
  [Pause]   [Role] [Watch worker]   [Drop]   [☐ Needs review] [Copy]
 ────────────────────────────────────────────────────────────────────────
 ▍Details

@@ -148,7 +148,7 @@ export function taskStateGroups(t: BoardTask, o: { nowMs: number; merging?: bool
     const step = stageStep(p.stage)
     status.push(dot(), { text: step ? `${STEP_WORD[step]}${p.stage === 'queue' && p.place ? ` (${p.place})` : ''}` : 'worker', color: 'text' })
     const time = rowTime(t, o.nowMs)
-    if (time) status.push(dot(), { text: time, color: 'inactive' })
+    if (time) status.push(dot(), { text: `⏱ ${time}`, color: 'inactive' })
   }
   const what: Seg[] = [{ text: kindOf(t), color: 'suggestion' }, dot(), { text: roleOf(t), color: 'ide' }]
   const tries = tryText(t, o.autoRetries)

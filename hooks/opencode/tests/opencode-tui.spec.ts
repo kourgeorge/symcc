@@ -236,7 +236,7 @@ test('T-581: a doing row in a check step or the merge line shows its icon and th
     const p = page(id)
     // no status badge under the title (T-693): the header's state line and the Steps row say it; no Status row
     expect(p).not.toContain(`[${badge}]`)
-    expect(state(p)).toContain(`▶ doing · ${badge.slice(2)}`)
+    expect(state(p)).toContain(`▶ doing · ${badge.slice(2).replace(/ · (\d)/, " · ⏱ $1")}`)
     expect(p.some(l => l.startsWith('Status:'))).toBe(false)
     expect(p.find(l => l.startsWith('Steps:'))?.replace(/^Steps:\s+/, '')).toBe(stage)
   }
