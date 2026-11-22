@@ -6,7 +6,8 @@ import { joinedText } from '../hooks/core/board-parts'
 import { expect, mock, type Engine } from 'claude-code/testing'
 import { test } from './reset'
 import type { On } from 'claude-code'
-import { type Board, addTask, emptyBoard, patchTask, startRun } from '../hooks/board'
+import { type Board, addTask, emptyBoard, patchTask, startRun, workerIdOf } from '../hooks/board'
+import { runBy } from './agent-fixture'
 import type { Host, HostAgentStart } from '../hooks/host'
 import { ALL_FEATURES, noUi } from '../hooks/host'
 import { S, leadQueue } from '../hooks/app/state'
@@ -225,14 +226,14 @@ test('loaded: work found by a timer (the start-up pump) is queued, the idle lead
 test('T-471 loaded: claiming a new try clears the agent of the try before, so that old agent is never taken as the new try\'s worker', async ($, on) => {
   const w = world(on)
   const b = todo(1)
-  b.tasks[0] = { ...b.tasks[0]!, attempts: 1, agent: 'w-old' }
+  b.tasks[0] = { ...b.tasks[0]!, attempts: 1, runs: [runBy('w-old', ISO, { ended: ISO })] }
   w.files.set(BOARD, JSON.stringify(b))
   await $.session.start({ cwd: '/repo' } as never)
   await w.clock.settle()
   expect(w.task('T-1').status).toBe('doing')
   expect(w.task('T-1').note).toBe(QUEUED_NOTE)
   expect(w.task('T-1').attempts).toBe(2)
-  expect(w.task('T-1').agent).toBeUndefined()
+  expect(workerIdOf(w.task('T-1'))).toBeUndefined()
 })
 
 test('loaded: a worker asked for by a lead tool call (add) is queued, wakes nobody (the lead is in its turn), and starts at that turn\'s end', async ($, on) => {

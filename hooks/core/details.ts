@@ -6,7 +6,7 @@ import { shortSha, taskCommits } from './commits'
 import { originMark, originOf } from './origin'
 import { findKind, type KindDef, kindMark } from './kinds'
 import { findRole, type RoleDef, roleOf } from './roles'
-import { triesSummary } from './runs'
+import { agentsOf, triesSummary } from './runs'
 import { squash } from './text'
 import { checkStepNow } from './lead'
 import { IN_LINE_ICON, rowTime, STEP_ICON, STEP_WORD } from './panel'
@@ -96,11 +96,11 @@ export type StageMark = { step: StageStep; state: 'done' | 'now' | 'later' }
  * approve's step it is in now and the merge ("… test ✓ → review ✓ → ● test → merge", "… review ✓ → ● merge"); a done task: all done. null for the
  * other statuses and for an investigation (nothing is merged).
  */
-export function taskStage(t: BadgeTask & Pick<SymccTask, 'needs_review'> & { kind?: unknown; checker?: string }, nowMs: number, board: { mode?: unknown; checker?: unknown } = {}, merging = false): StageMark[] | null {
+export function taskStage(t: BadgeTask & Pick<SymccTask, 'needs_review'> & { kind?: unknown }, nowMs: number, board: { mode?: unknown; checker?: unknown } = {}, merging = false): StageMark[] | null {
   const p = taskPhase(t, nowMs, undefined, { merging })
   // a files-merge running (a waiting task shown doing) has a Stage line too, like an approve
   if (!['doing', 'review', 'done'].includes(p.shown) || isInvestigation(t)) return null
-  const hadChecker = (t.runs?.[t.runs.length - 1]?.checkers?.length ?? 0) > 0 || !!t.checker || checkStepNow(t, nowMs) === 'checker'
+  const hadChecker = agentsOf(t.runs?.at(-1)).some(a => a.kind === 'checker') || checkStepNow(t, nowMs) === 'checker'
   const review = t.status === 'review' || modeOf(board) !== 'auto' || t.needs_review === true
   const first: StageStep[] = ['worker', 'prep', ...(board.checker === true || hadChecker ? ['checker' as const] : []), 'queue', 'test']
   // an approved task in review runs prep → queue → test → merge again (its status stays review), and so does a

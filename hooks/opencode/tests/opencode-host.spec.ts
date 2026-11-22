@@ -16,7 +16,7 @@
 import { partsText, splitBoard } from '../../core/board-parts'
 import { test, expect } from 'bun:test'
 import { mkdtemp, mkdir, readFile, lstat, readdir, realpath, rm, writeFile } from 'node:fs/promises'
-import { addTask, emptyBoard, patchTask, blockedEditText, parseLead, whoDrives, leadText as symccLeadText, LEAD_STALE_MS } from '../../board'
+import { addTask, emptyBoard, patchTask, find, withAgentStart, workerIdOf, tryTokens, blockedEditText, parseLead, whoDrives, leadText as symccLeadText, LEAD_STALE_MS } from '../../board'
 import { claimLead, enableHere } from '../../app/lead'
 import { S, startS, timers, workers, stopped, boardAgents, starting, queuedWorkers, scoutRuns, checkerRuns, meanwhile, leadQueue } from '../../app/state'
 import { resetStore, change } from '../../app/store'
@@ -260,8 +260,8 @@ async function project() {
   await git(main, 'worktree', 'add', '-q', '-b', 'symcc/T-1', wt)
   const at = '2026-11-18T00:00:00.000Z'
   const [b1] = addTask(emptyBoard(), { origin: { why: 'a test' }, title: 'a change in src', files: ['src/'] }, at)
-  const [b2] = addTask(patchTask(b1, 'T-1', { status: 'doing', agent: 'ses_worker', session: 'driver' }, at), { origin: { why: 'a test' }, title: 'an old one', files: ['src/'] }, at)
-  const board = patchTask(b2, 'T-2', { status: 'todo', agent: 'ses_old' }, at)
+  const [b2] = addTask(patchTask(b1, 'T-1', { status: 'doing', session: 'driver', runs: [{ started: at, agents: [{ id: 'ses_worker', kind: 'worker' as const, started: at }] }] }, at), { origin: { why: 'a test' }, title: 'an old one', files: ['src/'] }, at)
+  const board = patchTask(b2, 'T-2', { status: 'todo', runs: [{ started: at, ended: at, agents: [{ id: 'ses_old', kind: 'worker' as const, started: at, ended: at }] }] }, at)
   await writeFile(`${main}/.symcc/board.json`, JSON.stringify(board))
   const link = base.startsWith('/private/tmp/') ? main.slice('/private'.length) : main
   return { base, main, wt, link, done: () => rm(base, { recursive: true, force: true }) }
@@ -824,14 +824,14 @@ test('the main folder\'s copy starts a worker as an OpenCode session: the role\'
     f.hooks.onSubagent = id => void c.hooks.prompt!({ sessionID: id })
     const t = (await load(host!)).tasks.find(x => x.id === 'T-3')!
     expect(t.status).toBe('doing')
-    expect(t.agent).toBe('ses_2')
+    expect(workerIdOf(t)).toBe('ses_2')
     expect(workers.has('ses_2')).toBe(true)
     // its prompt is the worker prompt for T-3, with the role's checklist
     expect(String(f.sessions.get('ses_2')!.messages[0]!.content![0]!.text)).toContain('Be quick.')
     // it ends: agentFinished takes its tokens onto the try
     f.end('ses_2', 'Nothing to change.')
-    await until(async () => !!(await load(host!)).tasks.find(x => x.id === 'T-3')!.runs?.at(-1)?.tokens)
-    expect((await load(host!)).tasks.find(x => x.id === 'T-3')!.runs!.at(-1)!.tokens).toEqual({ input: 10, output: 814, cache_read: 154787, cache_write: 2261 })
+    await until(async () => !!tryTokens((await load(host!)).tasks.find(x => x.id === 'T-3')!.runs?.at(-1)))
+    expect(tryTokens((await load(host!)).tasks.find(x => x.id === 'T-3')!.runs!.at(-1))).toEqual({ input: 10, output: 814, cache_read: 154787, cache_write: 2261 })
     expect(f.subagent).toEqual([`ses_2 -> ${lead}`])
     // symcc's board update about T-3 reaches the lead once, queued, labelled so the automatic message isn't a second report
     await until(() => f.prompts.some(x => x.sessionID === lead))
@@ -1105,7 +1105,7 @@ test('every lead tool and ask_owner is added as a normal tool (codemode false) w
     // came before the stopped-agent check below (the call was then let through as the lead's)
     const at = '2026-11-18T00:00:00.000Z'
     const b0 = JSON.parse(await readFile(`${p.main}/.symcc/board.json`, 'utf8'))
-    await writeFile(`${p.main}/.symcc/board.json`, JSON.stringify(patchTask(b0, 'T-2', { runs: [{ started: at, ended: at, agent: 'ses_old' }] }, at)))
+    await writeFile(`${p.main}/.symcc/board.json`, JSON.stringify(patchTask(b0, 'T-2', { runs: [{ started: at, ended: at, agents: [{ id: 'ses_old', kind: 'worker' as const, started: at, ended: at }] }] }, at)))
     const f = fakeSessions()
     let host: Host | undefined
     const plugin = symccServer({ engine: SYMCC_ENGINE, host: o => (host = opencodeHost(o)), hostOptions: { say: () => undefined, sessionId: 'opencode-tools' } })
@@ -1145,7 +1145,7 @@ test('every lead tool and ask_owner is added as a normal tool (codemode false) w
     // (T-515) through the engine's own one-at-a-time board write (change), not a plain file write: the add above makes
     // the engine start T-2's and T-3's workers, and on a busy machine their board write could land between a load
     // and a writeFile here and undo this patch (the question was then refused: the board no longer named ses_w2)
-    await change(host!, b => patchTask(b, 'T-1', { status: 'doing', agent: 'ses_w2', session: S.me }, at))
+    await change(host!, b => patchTask(b, 'T-1', { status: 'doing', runs: withAgentStart(find(b, 'T-1')?.runs?.length ? find(b, 'T-1')!.runs : [{ started: at }], 'worker', 'ses_w2', at), session: S.me }, at))
     workers.set('ses_w2', { task: 'T-1', worktree: p.wt, branch: 'symcc/T-1', since: Date.now() })
     expect(await call('symcc_add', 'ses_w2', { title: 'x', details: 'y', why: 'z', origin_by: 'owner' })).toEqual({ refused: workerToolRefusal('add') })
     const asked = await call('symcc_ask_owner', 'ses_w2', { question: 'Which one?' })

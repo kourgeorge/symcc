@@ -56,7 +56,7 @@ test('the view file round-trips, and a broken or foreign one reads as none', () 
 
 test('T-630: the panel and the band show no all-time total of the tries ("total: … tokens in all over N tries"); a task page keeps its own', () => {
   const f = viewFile()
-  const runs = [{ started: '2026-11-19T10:00:00.000Z', ended: '2026-11-19T10:12:00.000Z', tokens: { input: 40_000 } }]
+  const runs = [{ started: '2026-11-19T10:00:00.000Z', ended: '2026-11-19T10:12:00.000Z', agents: [{ kind: 'worker' as const, started: '2026-11-19T10:00:00.000Z', ended: '2026-11-19T10:12:00.000Z', tokens: { input: 40_000 } }] }]
   const g: ViewFile = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => ({ ...t, runs })) } }
   const list = panelLines(g, { opened: '', cursor: 0 }, NOW, 120).lines.map(lineText).join('\n')
   const band = bandLines(g, NOW, 120).map(lineText).join('\n')
@@ -66,18 +66,18 @@ test('T-630: the panel and the band show no all-time total of the tries ("total:
 
 test('T-631: the task page Tries row shows the last try and the sum (one try: just that try; no tokens: no token parts)', () => {
   const f = viewFile()
-  const page = (attempts: number, runs: { started: string; ended?: string; tokens?: { input: number } }[]) => {
+  const page = (attempts: number, runs: { started: string; ended?: string; agents?: { kind: 'worker'; started: string; ended?: string; tokens?: { input: number } }[] }[]) => {
     const g: ViewFile = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => (t.id === 'T-5' ? { ...t, attempts, runs } : t)) } }
     return panelLines(g, { opened: 'T-5', cursor: 0 }, NOW, 120).lines.map(lineText).find(l => /^Tries:/.test(l))!
   }
-  const r1 = { started: '2026-11-19T10:00:00.000Z', ended: '2026-11-19T10:05:00.000Z', tokens: { input: 1_200_000 } }
-  const r2 = { started: '2026-11-19T11:00:00.000Z', ended: '2026-11-19T11:06:00.000Z', tokens: { input: 1_200_000 } }
-  const r3 = { started: '2026-11-19T12:00:00.000Z', ended: '2026-11-19T12:06:00.000Z', tokens: { input: 1_200_000 } }
+  const r1 = { started: '2026-11-19T10:00:00.000Z', ended: '2026-11-19T10:05:00.000Z', agents: [{ kind: 'worker' as const, started: '2026-11-19T10:00:00.000Z', ended: '2026-11-19T10:05:00.000Z', tokens: { input: 1_200_000 } }] }
+  const r2 = { started: '2026-11-19T11:00:00.000Z', ended: '2026-11-19T11:06:00.000Z', agents: [{ kind: 'worker' as const, started: '2026-11-19T11:00:00.000Z', ended: '2026-11-19T11:06:00.000Z', tokens: { input: 1_200_000 } }] }
+  const r3 = { started: '2026-11-19T12:00:00.000Z', ended: '2026-11-19T12:06:00.000Z', agents: [{ kind: 'worker' as const, started: '2026-11-19T12:00:00.000Z', ended: '2026-11-19T12:06:00.000Z', tokens: { input: 1_200_000 } }] }
   expect(page(1, [r1])).toMatch(/^Tries:\s+1 · 5m · 1\.2M tokens$/)
   expect(page(3, [r1, r2, r3])).toMatch(/^Tries:\s+3 · last: 6m · 1\.2M tokens · all: 17m · 3\.6M tokens$/)
-  const running = { started: new Date(NOW - 4 * 60_000).toISOString(), tokens: { input: 300_000 } }
+  const running = { started: new Date(NOW - 4 * 60_000).toISOString(), agents: [{ kind: 'worker' as const, started: new Date(NOW - 4 * 60_000).toISOString(), tokens: { input: 300_000 } }] }
   expect(page(2, [r1, running])).toMatch(/^Tries:\s+2 · last: 4m \(running\) · 300k tokens · all: 9m · 1\.5M tokens$/)
-  const bare = [r1, r2, r3].map(({ tokens: _, ...r }) => r)
+  const bare = [r1, r2, r3].map(({ agents: _, ...r }) => r)
   expect(page(3, bare)).toMatch(/^Tries:\s+3 · last: 6m · all: 17m$/)
 })
 
@@ -2705,9 +2705,9 @@ function liveTasks(): SymccTask[] {
   const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', question: null, order: Number(id.slice(2)), after: [], attempts: 1, history: [], branch: null, created_at: ago(300), updated_at: ago(1), ...x }) as unknown as SymccTask
   return [
     task('T-610', 'Organizational memory search', { runs: [{ started: ago(4) }] }),
-    task('T-611', '/symcc-doctor checks the hooks', { attempts: 2, runs: [{ started: ago(60), ended: ago(50), tokens: { input: 1_100_000 } }, { started: ago(30), ended: ago(10), tokens: { input: 1_100_000 } }], checking: { step: 'queue', at: ago(0), place: 2 }, history: [{ kind: 'checker-problems', at: ago(40), text: 'try 1: checker: problems' }, { kind: 'stage', at: ago(5), text: 'try 2: waits in the merge queue (place 2)' }] }),
-    task('T-612', 'Scout page: drop the first line', { runs: [{ started: ago(20), ended: ago(2), tokens: { input: 540_000 } }], checking: { step: 'checker', at: ago(0) }, checker: 'agent-c', history: [{ kind: 'stage', at: ago(2), text: 'try 1: prep started' }] }),
-    task('T-600', 'A merged one', { status: 'done', merged: 'abc1234', updated_at: ago(1), runs: [{ started: ago(200), ended: ago(100), tokens: { input: 800_000 } }], history: [{ kind: 'checker-problems', at: ago(90), text: 'try 1: checker: problems, a long reason' }, { kind: 'merged', at: ago(30), text: 'try 2 → merged into main' }] }),
+    task('T-611', '/symcc-doctor checks the hooks', { attempts: 2, runs: [{ started: ago(60), ended: ago(50), agents: [{ kind: 'worker' as const, started: ago(60), ended: ago(50), tokens: { input: 1_100_000 } }] }, { started: ago(30), ended: ago(10), agents: [{ kind: 'worker' as const, started: ago(30), ended: ago(10), tokens: { input: 1_100_000 } }] }], checking: { step: 'queue', at: ago(0), place: 2 }, history: [{ kind: 'checker-problems', at: ago(40), text: 'try 1: checker: problems' }, { kind: 'stage', at: ago(5), text: 'try 2: waits in the merge queue (place 2)' }] }),
+    task('T-612', 'Scout page: drop the first line', { runs: [{ started: ago(20), ended: ago(2), agents: [{ kind: 'worker' as const, started: ago(20), ended: ago(2), tokens: { input: 540_000 } }, { id: 'agent-c', kind: 'checker' as const, started: ago(2) }] }], checking: { step: 'checker', at: ago(0) }, history: [{ kind: 'stage', at: ago(2), text: 'try 1: prep started' }] }),
+    task('T-600', 'A merged one', { status: 'done', merged: 'abc1234', updated_at: ago(1), runs: [{ started: ago(200), ended: ago(100), agents: [{ kind: 'worker' as const, started: ago(200), ended: ago(100), tokens: { input: 800_000 } }] }], history: [{ kind: 'checker-problems', at: ago(90), text: 'try 1: checker: problems, a long reason' }, { kind: 'merged', at: ago(30), text: 'try 2 → merged into main' }] }),
     task('T-601', 'A failed one', { status: 'failed', updated_at: ago(20) }),
     task('T-620', 'Live tab part 1', { status: 'todo', order: 5 }),
     task('T-621', 'Live tab in VS Code', { status: 'todo', after: ['T-620'], order: 1 }),
@@ -2823,13 +2823,13 @@ test('T-757: the OpenCode Live tab shows the whole task\'s tokens, the bar full 
   const ago = (min: number) => new Date(NOW - min * 60_000).toISOString()
   const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', question: null, order: Number(id.slice(2)), after: [], attempts: 1, history: [], branch: null, created_at: ago(300), updated_at: ago(1), ...x }) as unknown as SymccTask
   const tasks = [
-    task('T-800', 'Done at 4M', { status: 'done', merged: 'abc1234', runs: [{ started: ago(300), ended: ago(200), tokens: { input: 4_000_000 } }], history: [{ kind: 'merged', at: ago(30), text: 'try 1 → merged into main' }] }),
-    task('T-801', 'Try 2 running', { attempts: 2, runs: [{ started: ago(60), ended: ago(50), tokens: { input: 4_000_000 } }, { started: ago(20) }] }),
-    task('T-802', 'Try 2 handed back', { attempts: 2, runs: [{ started: ago(60), ended: ago(50), tokens: { input: 4_000_000 } }, { started: ago(20), ended: ago(2), tokens: { input: 1_000_000 } }], checking: { step: 'checker', at: ago(0) }, checker: 'agent-c' }),
+    task('T-800', 'Done at 4M', { status: 'done', merged: 'abc1234', runs: [{ started: ago(300), ended: ago(200), agents: [{ kind: 'worker' as const, started: ago(300), ended: ago(200), tokens: { input: 4_000_000 } }] }], history: [{ kind: 'merged', at: ago(30), text: 'try 1 → merged into main' }] }),
+    task('T-801', 'Try 2 running', { attempts: 2, runs: [{ started: ago(60), ended: ago(50), agents: [{ kind: 'worker' as const, started: ago(60), ended: ago(50), tokens: { input: 4_000_000 } }] }, { started: ago(20) }] }),
+    task('T-802', 'Try 2 handed back', { attempts: 2, runs: [{ started: ago(60), ended: ago(50), agents: [{ kind: 'worker' as const, started: ago(60), ended: ago(50), tokens: { input: 4_000_000 } }] }, { started: ago(20), ended: ago(2), agents: [{ kind: 'worker' as const, started: ago(20), ended: ago(2), tokens: { input: 1_000_000 } }, { id: 'agent-c', kind: 'checker' as const, started: ago(2) }] }], checking: { step: 'checker', at: ago(0) } }),
     task('T-803', 'Try 1 running', { runs: [{ started: ago(10) }] }),
-    task('T-804', 'At the usual', { runs: [{ started: ago(40), ended: ago(3), tokens: { input: 4_000_000 } }], checking: { step: 'testing', at: ago(0) } }),
-    task('T-805', 'At half the usual', { runs: [{ started: ago(40), ended: ago(3), tokens: { input: 2_000_000 } }], checking: { step: 'testing', at: ago(0) } }),
-    task('T-806', 'Past twice the usual', { runs: [{ started: ago(40), ended: ago(3), tokens: { input: 9_000_000 } }], checking: { step: 'testing', at: ago(0) } }),
+    task('T-804', 'At the usual', { runs: [{ started: ago(40), ended: ago(3), agents: [{ kind: 'worker' as const, started: ago(40), ended: ago(3), tokens: { input: 4_000_000 } }] }], checking: { step: 'testing', at: ago(0) } }),
+    task('T-805', 'At half the usual', { runs: [{ started: ago(40), ended: ago(3), agents: [{ kind: 'worker' as const, started: ago(40), ended: ago(3), tokens: { input: 2_000_000 } }] }], checking: { step: 'testing', at: ago(0) } }),
+    task('T-806', 'Past twice the usual', { runs: [{ started: ago(40), ended: ago(3), agents: [{ kind: 'worker' as const, started: ago(40), ended: ago(3), tokens: { input: 9_000_000 } }] }], checking: { step: 'testing', at: ago(0) } }),
   ]
   const f: ViewFile = { ...f0, view: { ...f0.view, tasks: tasks.map(t => viewTask(t)), checker: true, max_parallel: 3 } }
   const d = panelLines(parseViewFile(viewFileText(f)), { tab: 'live', opened: '', cursor: 0 }, NOW, 120)
@@ -2944,7 +2944,7 @@ const trainTasks = (): SymccTask[] => {
   const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', question: null, order: Number(id.slice(2)), after: [], attempts: 1, history: [], branch: null, created_at: ago(300), updated_at: ago(1), ...x }) as unknown as SymccTask
   return [
     task('T-712', 'Scout ordering fix', { runs: [{ started: ago(2) }] }),
-    task('T-690', 'Live tab first part', { attempts: 2, runs: [{ started: ago(30), ended: ago(3), tokens: { input: 1_400_000 } }], checking: { step: 'checker', at: ago(0) }, checker: 'agent-c', history: [{ kind: 'stage', at: ago(3), text: 'try 2: prep started' }] }),
+    task('T-690', 'Live tab first part', { attempts: 2, runs: [{ started: ago(30), ended: ago(3), agents: [{ kind: 'worker' as const, started: ago(30), ended: ago(3), tokens: { input: 1_400_000 } }, { id: 'agent-c', kind: 'checker' as const, started: ago(3) }] }], checking: { step: 'checker', at: ago(0) }, history: [{ kind: 'stage', at: ago(3), text: 'try 2: prep started' }] }),
     task('T-701', 'A failed one', { status: 'failed', updated_at: ago(20) }),
     task('T-713', 'Task files: no silent drops', { status: 'todo', after: ['T-712'] }),
     task('T-714', 'Help: /symcc-help shows all', { status: 'todo', after: ['T-713'] }),
@@ -3046,7 +3046,7 @@ test('T-715: in the TUI, ↓ to a train and Enter (or a click on it) opens that 
 const finishedTasks = (): SymccTask[] => {
   const ago = (min: number) => new Date(NOW - min * 60_000).toISOString()
   const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', question: null, order: Number(id.slice(2)), after: [], attempts: 1, history: [], branch: null, created_at: ago(300), updated_at: ago(1), ...x }) as unknown as SymccTask
-  const merged = (id: string, title: string, min: number) => task(id, title, { status: 'done', runs: [{ started: ago(min + 20), ended: ago(min + 2), tokens: { input: 900_000 } }], history: [{ kind: 'merged', at: ago(min), text: 'try 1 → merged into main' }] })
+  const merged = (id: string, title: string, min: number) => task(id, title, { status: 'done', runs: [{ started: ago(min + 20), ended: ago(min + 2), agents: [{ kind: 'worker' as const, started: ago(min + 20), ended: ago(min + 2), tokens: { input: 900_000 } }] }], history: [{ kind: 'merged', at: ago(min), text: 'try 1 → merged into main' }] })
   return [
     task('T-760', 'A running one', { runs: [{ started: ago(4) }] }),
     merged('T-747', 'Live tab: each section starts with a heading', 3),

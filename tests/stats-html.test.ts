@@ -14,7 +14,7 @@ const NOW = Date.now()
 const iso = (minAgo: number) => new Date(NOW - minAgo * 60_000).toISOString()
 
 function task(id: string, title: string, over: Partial<SymccTask> = {}, tries: [number, number][] = [], ageMin = 60): SymccTask {
-  const runs = tries.map(([min, tokens]) => ({ started: iso(ageMin), ended: iso(ageMin - min), tokens: { input: tokens, output: tokens / 10 } }))
+  const runs = tries.map(([min, tokens]) => ({ started: iso(ageMin), ended: iso(ageMin - min), agents: [{ kind: 'worker' as const, started: iso(ageMin), ended: iso(ageMin - min), tokens: { input: tokens, output: tokens / 10 } }] }))
   return { id, title, details: '', files: [], status: 'done', note: '', question: null, order: 0, after: [], attempts: tries.length, history: [], branch: null, created_at: iso(ageMin), updated_at: iso(0), ...(runs.length ? { runs } : {}), ...over }
 }
 

@@ -22,11 +22,11 @@ const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ 
 /** Four tasks in doing, one at each place: a worker running (T-687), a checker (T-686), the tests (T-685), the merge queue (T-684). */
 const TASKS = [
   task('T-687', 'Organizational memory search', { runs: [{ started: iso(4) }] }),
-  task('T-684', '/symcc-doctor checks the hooks', { attempts: 2, runs: [{ started: iso(60), ended: iso(50), tokens: { input: 1_100_000 } }, { started: iso(30), ended: iso(10), tokens: { input: 1_100_000 } }], checking: { step: 'queue', at: iso(0), place: 2 }, history: [{ kind: 'checker-problems', at: iso(40), text: 'try 1: checker: problems' }, { kind: 'stage', at: iso(5), text: 'try 2: waits in the merge queue (place 2)' }] }),
-  task('T-686', 'Scout page: drop the first line', { runs: [{ started: iso(20), ended: iso(2), tokens: { input: 540_000 } }], checking: { step: 'checker', at: iso(0) }, checker: 'agent-c', history: [{ kind: 'stage', at: iso(2), text: 'try 1: prep started' }] }),
-  task('T-685', 'OpenCode: give every board screen buttons', { runs: [{ started: iso(25), ended: iso(9), tokens: { input: 3_400_000 } }], checking: { step: 'testing', at: iso(0) }, history: [{ kind: 'stage', at: iso(3), text: 'try 1: tests started' }] }),
-  task('T-688', 'Handed back, in prep', { runs: [{ started: iso(15), ended: iso(1), tokens: { input: 200_000 } }], finishing: iso(0), checking: { step: 'prep', at: iso(0) } }),
-  task('T-600', 'A merged one', { status: 'done', runs: [{ started: iso(300), ended: iso(200), tokens: { input: 800_000 } }], history: [{ kind: 'merged', at: iso(30), text: 'try 1 → merged into main' }] }),
+  task('T-684', '/symcc-doctor checks the hooks', { attempts: 2, runs: [{ started: iso(60), ended: iso(50), agents: [{ kind: 'worker' as const, started: iso(60), ended: iso(50), tokens: { input: 1_100_000 } }] }, { started: iso(30), ended: iso(10), agents: [{ kind: 'worker' as const, started: iso(30), ended: iso(10), tokens: { input: 1_100_000 } }] }], checking: { step: 'queue', at: iso(0), place: 2 }, history: [{ kind: 'checker-problems', at: iso(40), text: 'try 1: checker: problems' }, { kind: 'stage', at: iso(5), text: 'try 2: waits in the merge queue (place 2)' }] }),
+  task('T-686', 'Scout page: drop the first line', { runs: [{ started: iso(20), ended: iso(2), agents: [{ kind: 'worker' as const, started: iso(20), ended: iso(2), tokens: { input: 540_000 } }, { id: 'agent-c', kind: 'checker' as const, started: iso(2) }] }], checking: { step: 'checker', at: iso(0) }, history: [{ kind: 'stage', at: iso(2), text: 'try 1: prep started' }] }),
+  task('T-685', 'OpenCode: give every board screen buttons', { runs: [{ started: iso(25), ended: iso(9), agents: [{ kind: 'worker' as const, started: iso(25), ended: iso(9), tokens: { input: 3_400_000 } }] }], checking: { step: 'testing', at: iso(0) }, history: [{ kind: 'stage', at: iso(3), text: 'try 1: tests started' }] }),
+  task('T-688', 'Handed back, in prep', { runs: [{ started: iso(15), ended: iso(1), agents: [{ kind: 'worker' as const, started: iso(15), ended: iso(1), tokens: { input: 200_000 } }] }], finishing: iso(0), checking: { step: 'prep', at: iso(0) } }),
+  task('T-600', 'A merged one', { status: 'done', runs: [{ started: iso(300), ended: iso(200), agents: [{ kind: 'worker' as const, started: iso(300), ended: iso(200), tokens: { input: 800_000 } }] }], history: [{ kind: 'merged', at: iso(30), text: 'try 1 → merged into main' }] }),
   task('T-601', 'A failed one', { status: 'failed', updated_at: iso(20) }),
   task('T-690', 'Live tab part 1', { status: 'todo', order: 5 }),
   task('T-691', 'Live tab in VS Code', { status: 'todo', after: ['T-690'], order: 1 }),
@@ -60,7 +60,7 @@ test('T-690: liveLanes puts each doing task at its station, and leaves check out
 
 test('T-709: an approved task in review, or a waiting one whose merge runs, gets a lane at its real station while its check step is fresh', () => {
   const sec = (s: number) => new Date(T0 - s * 1000).toISOString()
-  const tried = { runs: [{ started: iso(40), ended: iso(20), tokens: { input: 300_000 } }] }
+  const tried = { runs: [{ started: iso(40), ended: iso(20), agents: [{ kind: 'worker' as const, started: iso(40), ended: iso(20), tokens: { input: 300_000 } }] }] }
   const lanes = (...tasks: unknown[]) => liveLanes({ tasks: tasks as never[], checker: true, mode: 'auto', max_parallel: 3 }, T0)
   // (1) a review task whose approve is in its tests, then in the merge queue at place 2
   const testing = lanes(task('T-1', 'Approved', { status: 'review', ...tried, checking: { step: 'testing', at: sec(5) } }))
@@ -100,7 +100,7 @@ test('T-690, T-715: next up lists only the todo tasks free to start, in start or
 // failed task; one free and one waiting for the free one.
 const TRAINS = [
   task('T-712', 'Scout ordering fix', { runs: [{ started: iso(2) }] }),
-  task('T-690', 'Live tab first part', { attempts: 2, runs: [{ started: iso(30), ended: iso(3), tokens: { input: 1_400_000 } }], checking: { step: 'checker', at: iso(0) }, checker: 'agent-c', history: [{ kind: 'stage', at: iso(3), text: 'try 2: prep started' }] }),
+  task('T-690', 'Live tab first part', { attempts: 2, runs: [{ started: iso(30), ended: iso(3), agents: [{ kind: 'worker' as const, started: iso(30), ended: iso(3), tokens: { input: 1_400_000 } }, { id: 'agent-c', kind: 'checker' as const, started: iso(3) }] }], checking: { step: 'checker', at: iso(0) }, history: [{ kind: 'stage', at: iso(3), text: 'try 2: prep started' }] }),
   task('T-701', 'A failed one', { status: 'failed', updated_at: iso(20) }),
   task('T-713', 'Task files: no silent drops', { status: 'todo', after: ['T-712'] }),
   task('T-714', 'Help: /symcc-help shows all', { status: 'todo', after: ['T-713'] }),
@@ -214,13 +214,13 @@ const C_WARNING = '"color":"warning"'
 /** T-757: the usual tokens per merged task is 4M (one done task); lanes: try 2 running after a 4M try 1 (T-801), try 2
  *  handed back with 1M (T-802), try 1 running (T-803), at the usual (T-804), at half (T-805), past twice it (T-806). */
 const T757 = [
-  task('T-800', 'Done at 4M', { status: 'done', runs: [{ started: iso(300), ended: iso(200), tokens: { input: 4_000_000 } }], history: [{ kind: 'merged', at: iso(30), text: 'try 1 → merged into main' }] }),
-  task('T-801', 'Try 2 running', { attempts: 2, runs: [{ started: iso(60), ended: iso(50), tokens: { input: 4_000_000 } }, { started: iso(20) }] }),
-  task('T-802', 'Try 2 handed back', { attempts: 2, runs: [{ started: iso(60), ended: iso(50), tokens: { input: 4_000_000 } }, { started: iso(20), ended: iso(2), tokens: { input: 1_000_000 } }], checking: { step: 'checker', at: iso(0) }, checker: 'agent-c' }),
+  task('T-800', 'Done at 4M', { status: 'done', runs: [{ started: iso(300), ended: iso(200), agents: [{ kind: 'worker' as const, started: iso(300), ended: iso(200), tokens: { input: 4_000_000 } }] }], history: [{ kind: 'merged', at: iso(30), text: 'try 1 → merged into main' }] }),
+  task('T-801', 'Try 2 running', { attempts: 2, runs: [{ started: iso(60), ended: iso(50), agents: [{ kind: 'worker' as const, started: iso(60), ended: iso(50), tokens: { input: 4_000_000 } }] }, { started: iso(20) }] }),
+  task('T-802', 'Try 2 handed back', { attempts: 2, runs: [{ started: iso(60), ended: iso(50), agents: [{ kind: 'worker' as const, started: iso(60), ended: iso(50), tokens: { input: 4_000_000 } }] }, { started: iso(20), ended: iso(2), agents: [{ kind: 'worker' as const, started: iso(20), ended: iso(2), tokens: { input: 1_000_000 } }, { id: 'agent-c', kind: 'checker' as const, started: iso(2) }] }], checking: { step: 'checker', at: iso(0) } }),
   task('T-803', 'Try 1 running', { runs: [{ started: iso(10) }] }),
-  task('T-804', 'At the usual', { runs: [{ started: iso(40), ended: iso(3), tokens: { input: 4_000_000 } }], checking: { step: 'testing', at: iso(0) } }),
-  task('T-805', 'At half the usual', { runs: [{ started: iso(40), ended: iso(3), tokens: { input: 2_000_000 } }], checking: { step: 'testing', at: iso(0) } }),
-  task('T-806', 'Past twice the usual', { runs: [{ started: iso(40), ended: iso(3), tokens: { input: 9_000_000 } }], checking: { step: 'testing', at: iso(0) } }),
+  task('T-804', 'At the usual', { runs: [{ started: iso(40), ended: iso(3), agents: [{ kind: 'worker' as const, started: iso(40), ended: iso(3), tokens: { input: 4_000_000 } }] }], checking: { step: 'testing', at: iso(0) } }),
+  task('T-805', 'At half the usual', { runs: [{ started: iso(40), ended: iso(3), agents: [{ kind: 'worker' as const, started: iso(40), ended: iso(3), tokens: { input: 2_000_000 } }] }], checking: { step: 'testing', at: iso(0) } }),
+  task('T-806', 'Past twice the usual', { runs: [{ started: iso(40), ended: iso(3), agents: [{ kind: 'worker' as const, started: iso(40), ended: iso(3), tokens: { input: 9_000_000 } }] }], checking: { step: 'testing', at: iso(0) } }),
 ]
 /** What each T-757 lane's second line must show (the bar's cells: full, empty). */
 const T757_WANT = (bar: string) => {

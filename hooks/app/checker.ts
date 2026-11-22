@@ -2,7 +2,7 @@
 // finishWork (workers.ts) runs a checker here after the prep step and before the task joins the merge line, and waits
 // for its verdict; turn.complete (agentFinished in app/symcc.ts) hands the checker's answer back through checkerFinished.
 import type { SymccTask, SymccTokens } from '../../types'
-import { type Board, CHECKER_NOTE, CHECKER_ROLE, type CheckerVerdict, roleSection, addTokens, agentSafeName, checkerDiff, checkerChangedFiles, checkerTestsText, checkerEntry, checkerPrompt, checkerVerdict, cutLine, find, findRole, intoOf, patchTask, tryLabel, withHistory, withAgentUsed, type HistoryAdd } from '../board'
+import { type Board, CHECKER_NOTE, CHECKER_ROLE, type CheckerVerdict, roleSection, checkerIdOf, withAgentStart, agentSafeName, checkerDiff, checkerChangedFiles, checkerTestsText, checkerEntry, checkerPrompt, checkerVerdict, cutLine, find, findRole, intoOf, patchTask, tryLabel, withHistory, withAgentUsed, type HistoryAdd } from '../board'
 import { git, taskBranch } from './git'
 import { markStep } from './review'
 import { loadRoles } from './roles'
@@ -146,8 +146,10 @@ async function markChecker($: Host, t: SymccTask, agentId: string, on: boolean) 
   await change($, x => {
     const cur = find(x, t.id)
     if (!cur || cur.status !== 'doing' || cur.attempts !== t.attempts) return x
-    if (on ? cur.checker === agentId : cur.checker !== agentId) return x
-    return patchTask(x, t.id, { checker: on ? agentId : undefined }, cur.updated_at)
+    if (on ? checkerIdOf(cur) === agentId : checkerIdOf(cur) !== agentId) return x
+    // T-805: the checker is the try's last open checker entry: started here, ended when it is taken off
+    const runs = on ? withAgentStart(cur.runs, 'checker', agentId, now()) : withAgentUsed(cur.runs, 'checker', agentId, now())
+    return runs === cur.runs ? x : patchTask(x, t.id, { runs }, cur.updated_at)
   }).catch(() => undefined)
 }
 
@@ -156,11 +158,8 @@ async function record($: Host, t: SymccTask, v: CheckerVerdict | null, why?: str
   await change($, x => {
     const cur = find(x, t.id)
     if (!cur || cur.attempts !== t.attempts) return x
-    // T-769: the checker's tokens are also kept apart (checker_tokens), so the Live tab can tell them from the worker's;
-    // T-774: and on the checker's own agent entry, ended now (a stopped checker keeps the tokens it had)
-    const last = cur.runs?.at(-1)
-    const added = last && tokens ? [...cur.runs!.slice(0, -1), { ...last, tokens: addTokens(last.tokens, tokens), checker_tokens: addTokens(last.checker_tokens, tokens) }] : cur.runs
-    const runs = last && agentId ? withAgentUsed(added, 'checker', agentId, now(), tokens ? { tokens } : {}) : added !== cur.runs ? added : undefined
+    // T-774, T-805: the checker's tokens go only on its own agent entry, ended now (a stopped checker keeps the tokens it had)
+    const runs = cur.runs?.length && (agentId || tokens) ? withAgentUsed(cur.runs, 'checker', agentId, now(), tokens ? { tokens } : {}) : undefined
     return patchTask(x, t.id, { history: withHistory(cur.history, now(), ...(before ? [['step', before] as HistoryAdd] : []), checkerEntry(tryLabel(cur), v, why)), ...(runs ? { runs } : {}) }, now())
   }).catch(() => undefined)
 }

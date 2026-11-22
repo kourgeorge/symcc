@@ -4,7 +4,7 @@
 // Pure functions on parsed JSON. Delete this file when the owner has run the fix.
 import type { SymccHistoryEntry, SymccRun } from '../../types'
 import { type HistoryKind, AFTER_CHANGED, RESULT_BAD, RESULT_GOOD, historyEntryOk, isHistoryKind, resultArrow, tryParts, withHistory } from './history'
-import { cleanTokens } from './runs'
+import { addTokens, cleanTokens, isAgentId, sumTokens, tokenCount } from './runs'
 import { isSoundSet, soundNotify, soundSetFor } from './board-file'
 import { countFindings, isNothing } from './scouts'
 import type { ScoutRunOutcome, ScoutRunRecord } from './scouts'
@@ -33,8 +33,88 @@ export function withoutStages<T extends object>(t: T): T | null {
 
 /** Tries whose tokens were saved as one number become { unsplit: n }. Null when no try needs it. */
 export function migrateRunTokens(runs: unknown): SymccRun[] | null {
-  if (!Array.isArray(runs) || !runs.some(r => isNum((r as SymccRun)?.tokens))) return null
-  return runs.map(r => (isNum(r?.tokens) ? { ...r, tokens: { unsplit: Math.max(0, r.tokens) } } : r))
+  if (!Array.isArray(runs) || !runs.some(r => isObj(r) && isNum(r.tokens))) return null
+  return runs.map(r => (isObj(r) && isNum(r.tokens) ? { ...r, tokens: { unsplit: Math.max(0, r.tokens) } } : r))
+}
+
+/** The run fields T-805 moved onto the agent entries (and the task's agent and checker, and restarts[].agent). */
+const RUN_SUMS = ['tokens', 'checker_tokens', 'cost', 'agent', 'checkers'] as const
+
+type OldAgent = { id?: string; kind: 'worker' | 'checker'; started: string; ended?: string; ended_by?: string; tokens?: ReturnType<typeof cleanTokens>; cost?: number }
+
+/** Whether a task (parsed JSON) still has what T-805 moved onto the agent entries of its tries. */
+export function hasOldAgents(t: Raw): boolean {
+  return 'agent' in t || 'checker' in t || (Array.isArray(t.runs) && t.runs.some(r => isObj(r) && (RUN_SUMS.some(k => k in r) || (Array.isArray(r.restarts) && r.restarts.some(e => isObj(e) && 'agent' in e)))))
+}
+
+/**
+ * T-805: a task (parsed JSON) with each try's agents as the only store of its agents, tokens and cost. A try with no
+ * agents gets a worker entry with tokens - checker_tokens (and the cost) and a checker entry with checker_tokens; a
+ * try that has agents gets what its sums hold beyond them (debrief turns, dropped entries) added to its last worker.
+ * The old ids (run.agent, run.checkers, restarts[].agent, task.agent, task.checker) become entries without tokens when
+ * no entry names them. Null when the task has none of the old fields.
+ */
+export function migrateRunAgents(t: Raw): Raw | null {
+  if (!hasOldAgents(t)) return null
+  const runs = (Array.isArray(t.runs) ? t.runs : []) as unknown[]
+  const out = runs.map((r0, ri) => {
+    if (!isObj(r0)) return r0
+    const { tokens: rawTok, checker_tokens: rawChk, cost, agent, checkers, restarts, agents: rawAgents, ...rest } = r0 as Raw
+    const started = typeof rest.started === 'string' ? rest.started : ''
+    const ended = typeof rest.ended === 'string' ? rest.ended : undefined
+    const tokens = cleanTokens(rawTok)
+    const chk = cleanTokens(rawChk)
+    let agents = (Array.isArray(rawAgents) ? rawAgents : []).filter(isObj) as unknown as OldAgent[]
+
+    const ids = (id: unknown) => isAgentId(id) && agents.some(a => a.id === id)
+    const last = ri === runs.length - 1
+    // The times of an id kept alone are not known, so its entry is marked "dropped": the guard still finds the id, but
+    // the task page shows no made-up line for it.
+    const mark = (kind: OldAgent['kind'], id: unknown, end?: string, open = false) => {
+      if (!isAgentId(id) || ids(id)) return
+      agents = [...agents, open ? { id, kind, started } : { id, kind, started, ...(end ? { ended: end } : {}), ended_by: 'dropped' }]
+    }
+    const stops = (Array.isArray(restarts) ? restarts : []).filter(isObj)
+    for (const id of stops.map(e => e.agent)) if (isAgentId(id)) agents = agents.map(a => (a.id === id ? { ...a, ended_by: 'restarted' } : a))
+    for (const e of stops) mark('worker', e.agent, typeof e.at === 'string' ? e.at : ended)
+    const doing = last && t.status === 'doing'
+    // the current worker of a task still doing stays open, so workerIdOf finds it
+    const current = doing && !ended ? (isAgentId(t.agent) ? t.agent : agent) : undefined
+    mark('worker', agent, ended, doing && !ended && agent === current)
+    for (const c of Array.isArray(checkers) ? checkers : []) mark('checker', c, ended)
+    if (doing) {
+      mark('worker', t.agent, ended, !ended)
+      mark('checker', t.checker, undefined, true)
+    }
+    // what the sums hold that the entries do not
+    const sum = sumTokens(agents.map(a => a.tokens))
+    const restTok = tokens ? addTokens(tokens, sum, -1) : undefined
+    const restChk = chk ? addTokens(chk, sumTokens(agents.filter(a => a.kind === 'checker').map(a => a.tokens)), -1) : undefined
+    const restCost = typeof cost === 'number' ? Math.max(0, cost - agents.reduce((s, a) => s + (a.cost ?? 0), 0)) : undefined
+    const workerTok = restTok && restChk ? addTokens(restTok, restChk, -1) : restTok
+    const give = (kind: OldAgent['kind'], tok: ReturnType<typeof cleanTokens>, usd?: number) => {
+      const has = !!tok && tokenCount(tok) > 0
+      if (!has && usd === undefined) return
+      let i = agents.findLastIndex(a => a.kind === kind && a.ended_by !== 'restarted' && a.ended_by !== 'dropped')
+      if (i < 0) i = agents.findLastIndex(a => a.kind === kind && a.ended_by !== 'restarted')
+      if (i < 0) i = agents.findLastIndex(a => a.kind === kind)
+      if (i < 0) {
+        agents = [...agents, { kind, started: kind === 'worker' ? started : ended ?? started, ...(ended ? { ended } : {}) }]
+        i = agents.length - 1
+      }
+      const a = agents[i]!
+      agents = agents.map((x, k) => (k === i ? { ...a, ...(has ? { tokens: addTokens(a.tokens, tok) } : {}), ...(usd !== undefined ? { cost: (a.cost ?? 0) + usd } : {}) } : x))
+    }
+    give('worker', workerTok, restCost)
+    give('checker', restChk && tokenCount(restChk) > 0 ? restChk : undefined)
+    const left = stops.map(e => {
+      const { agent: _a, ...keep } = e
+      return keep
+    })
+    return { ...rest, ...(agents.length ? { agents } : {}), ...(left.length ? { restarts: left } : {}) }
+  })
+  const { agent: _a, checker: _c, ...task } = t
+  return { ...task, ...(runs.length ? { runs: out } : {}) }
 }
 
 /** Roles that were built in before and are gone now, and the role a task with one gets. */
@@ -137,6 +217,8 @@ export function upgradeTask(t: Raw, into = 'main'): Raw | null {
   if (!(typeof t.merge_into === 'string' && t.merge_into.trim())) out = { ...out, merge_into: into }
   const split = migrateRunTokens(out.runs)
   if (split) out = { ...out, runs: split }
+  const agents = migrateRunAgents(out)
+  if (agents) out = agents
   if (!('origin' in t)) out = { ...out, origin: { by: 'lead', why: 'made before origins were kept', at: typeof t.created_at === 'string' ? t.created_at : '' } }
   const role = typeof t.role === 'string' ? OLD_ROLES[t.role.trim().toLowerCase()] : undefined
   if (role) out = { ...out, role }
@@ -170,8 +252,9 @@ export function upgradeArchiveTask(t0: Raw): Raw | null {
   const clash = withoutConflictTries(stageless) ?? stageless
   const split = migrateRunTokens(clash.runs)
   const history = migrateHistory(clash as Parameters<typeof migrateHistory>[0])
-  if (clash === t0 && !split && !history) return null
-  return { ...clash, ...(split ? { runs: split } : {}), ...(history ? { history } : {}) }
+  const agents = migrateRunAgents({ ...clash, ...(split ? { runs: split } : {}) })
+  if (clash === t0 && !split && !history && !agents) return null
+  return { ...(agents ?? clash), ...(split && !agents ? { runs: split } : {}), ...(history ? { history } : {}) }
 }
 
 /** board.json's content (already joined with its parts, parsed) in today's shape: old settings renamed, every task upgraded. */
@@ -248,8 +331,8 @@ export function oldDataRows(i: OldInput): OldRow[] {
       const tok = r.tokens
       if (isNum(tok)) c.numTok++
       else if (isObj(tok) && 'unsplit' in tok) c.unsplit++
-      if (board && r.checker_tokens && !(Array.isArray(r.agents) && r.agents.some(a => isObj(a) && a.kind === 'checker'))) c.chk++
     }
+    if (hasOldAgents(t)) c.chk++
     if (withoutStages(t)) c.stage++
     if (withoutConflictTries(t)) c.conflict++
     for (const e of Array.isArray(t.history) ? t.history : []) {
@@ -287,7 +370,7 @@ export function oldDataRows(i: OldInput): OldRow[] {
     { n: c.badKind, text: 'history entries with a kind symcc does not know', fix: true },
     { n: c.other, text: 'history entries of kind `other` (shown as they are)', fix: false },
     { n: c.attempts, text: 'tasks where attempts is not the number of tries (shown as they are)', fix: false },
-    { n: c.chk, text: 'tries with checker_tokens but no checker agent entry (shown as they are)', fix: false },
+    { n: c.chk, text: 'tasks whose tries keep tokens, cost or agent ids outside their agent entries (agent, checker, tokens, checker_tokens, cost, checkers)', fix: true },
     { n: c.queue, text: 'tasks whose note is "queue (n)"', fix: true },
     { n: c.role, text: 'tasks with an old role (tests, backend, frontend)', fix: true },
     { n: c.stage, text: 'tasks with the removed stage engine\'s fields', fix: true },

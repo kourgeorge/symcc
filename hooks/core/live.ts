@@ -8,7 +8,7 @@ import { taskPhase, type PhaseStage } from './phase'
 import { handedBack, shownStatus } from './lead'
 import { STAGE_LINE } from './events'
 import { cutTitle, failReason, median, padWidth, taskFigures, textWidth, wrapLine } from './stats'
-import { checkerTokensOf, fmtCost, fmtDuration, fmtTokens, sumTokens, tokenCount } from './runs'
+import { checkerIdOf, checkerTokensOf, tryCost, tryTokens, fmtCost, fmtDuration, fmtTokens, sumTokens, tokenCount } from './runs'
 import { type KeyHint, LIVE_VIEW_KEYS, hintLineText, hintLines, rowDuration, waitOrder } from './panel'
 import { ORG_MEM_EMPTY, ORG_MEM_MAX_LINES, TOPIC_UNSORTED, orgMemNewest, orgMemSectionKeys, orgMemShortDay, orgMemTopicCounts, type OrgMemNote } from './org-mem'
 import { depDone } from './archive'
@@ -173,8 +173,8 @@ function stationOf(stage: PhaseStage, checker: boolean): LiveStation {
 /** The board's usual tokens per merged task: the middle value over the done tasks (not investigations) with tokens. */
 export function usualTokens(tasks: readonly SymccTask[]): number | undefined {
   const xs = tasks
-    .filter(t => t.status === 'done' && !isInvestigation(t) && (t.runs ?? []).some(r => r.tokens))
-    .map(t => tokenCount(sumTokens((t.runs ?? []).map(r => r.tokens))))
+    .filter(t => t.status === 'done' && !isInvestigation(t) && (t.runs ?? []).some(r => tryTokens(r)))
+    .map(t => tokenCount(sumTokens((t.runs ?? []).map(tryTokens))))
     .filter(n => n > 0)
   return median(xs)
 }
@@ -228,8 +228,8 @@ export function liveLanes(view: LiveView, nowMs: number): LiveLane[] {
       const place = stage === 'queue' ? t.checking?.place : undefined
       // T-757: the whole task's tokens (every try); the current try's are known only once it hands back
       const runs = t.runs ?? []
-      const more = !!run && !run.tokens
-      const total = tokenCount(sumTokens(runs.map(r => r.tokens)))
+      const more = !!run && !tryTokens(run)
+      const total = tokenCount(sumTokens(runs.map(tryTokens)))
       return {
         id: t.id,
         title: t.title,
@@ -247,7 +247,7 @@ export function liveLanes(view: LiveView, nowMs: number): LiveLane[] {
         ...(usual ? { usual } : {}),
         sentBack: (t.history ?? []).filter(h => h.kind === 'checker-problems').length,
         enteredMs,
-        agent: stage === 'worker' || (stage === 'checker' && !!t.checker),
+        agent: stage === 'worker' || (stage === 'checker' && !!checkerIdOf(t)),
       }
     })
   return lanes.sort((a, b) => a.enteredMs - b.enteredMs || num(a.id) - num(b.id))
@@ -286,7 +286,7 @@ export function liveFinishedLanes(view: LiveView, nowMs: number): LiveLane[] {
     .map(({ t, done }): LiveLane => {
       const tryNo = Math.max(1, Number(t.attempts) || 1)
       const auto = Number(t.test_tries ?? 0) || 0
-      const total = tokenCount(sumTokens((t.runs ?? []).map(r => r.tokens)))
+      const total = tokenCount(sumTokens((t.runs ?? []).map(tryTokens)))
       return {
         id: t.id,
         title: t.title,
@@ -714,7 +714,7 @@ export function liveToday(tasks: readonly SymccTask[], nowMs: number, offsetMin:
     if (history.some(h => h.kind === 'merged' && isToday(h.at))) merged++
     sentBack += sentBackOf(t, isToday).all
     if (t.status === 'failed' && isToday(t.updated_at)) failed++
-    for (const r of t.runs ?? []) if (r.tokens && isToday(r.ended ?? r.started)) tokens += tokenCount(r.tokens)
+    for (const r of t.runs ?? []) if (tryTokens(r) && isToday(r.ended ?? r.started)) tokens += tokenCount(tryTokens(r))
   }
   return { merged, sentBack, failed, tokens }
 }
@@ -727,7 +727,8 @@ export function todayCost(tasks: readonly Pick<SymccTask, 'runs'>[], nowMs: numb
   for (const t of tasks) {
     for (const r of t.runs ?? []) {
       const at = ms(r.ended ?? r.started)
-      if (typeof r.cost === 'number' && Number.isFinite(r.cost) && at !== undefined && dayOf(at, offsetMin) === today) usd += r.cost
+      const cost = tryCost(r)
+      if (typeof cost === 'number' && Number.isFinite(cost) && at !== undefined && dayOf(at, offsetMin) === today) usd += cost
     }
   }
   return usd
@@ -826,9 +827,9 @@ export function todayMore(tasks: readonly SymccTask[], team: TodayTeam | undefin
         if (to > from) workMs += to - from
       }
       const at = end ?? start
-      if (!r.tokens || !isToday(at)) continue
-      const all = tokenCount(r.tokens)
-      // T-785: the checkers' part from the try's checker_tokens first, from its agent entries (their kinds) only when that is missing
+      if (!tryTokens(r) || !isToday(at)) continue
+      const all = tokenCount(tryTokens(r))
+      // T-785: the checkers' part from the try's checker entries
       const chkTok = checkerTokensOf(r)
       const chk = Math.min(all, chkTok ? tokenCount(chkTok) : 0)
       workers += all - chk

@@ -1,7 +1,7 @@
 // Leftover and overtime cleanup for the regular check: stopping orphan agents after a reload, removing leftover
 // temp files, and a worker that runs over its time limit (ask the owner, wrap up, time out). Split out of
 // workers.ts (T-603); workers.ts's check() imports it, and it never imports workers.ts.
-import { type Board, type BoardTask, orphanMove, liveWorkersFor, putTask, find, patchTask, tryLabel, liveDriver, emptyBoard, leftoverTmpFiles, withHistory, endedBy, mergedThisTry, mergedDone, handedBack, timeLimitOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, shortSha, onRuns, restartedAgent, workerSince } from '../board'
+import { type Board, type BoardTask, orphanMove, liveWorkersFor, putTask, find, patchTask, tryLabel, liveDriver, emptyBoard, leftoverTmpFiles, withHistory, endedBy, mergedThisTry, mergedDone, handedBack, timeLimitOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, shortSha, onTask, restartedAgent, workerIdOf, withAgentStart, workerSince } from '../board'
 import { worktreeDir, taskBranch } from './git'
 import { alreadyMerged } from './review'
 import { S, workers, starting, finishing, stopped, isOwnAgent, halt, tmpWarned } from './state'
@@ -62,7 +62,7 @@ export async function stopOrphans(host: Host, leadNow?: string | null): Promise<
         // T-743: the time limit counts from this worker's own start, not the first start of a try that went on after a reopen
         workers.set(a.id, { task: t.id, worktree: worktreeDir(t.id), branch: taskBranch(t), since: workerSince(t.runs?.at(-1)) ?? Date.now() })
         // The task is recorded as this session's, with this agent (its session id may have changed over the reload).
-        if (t.agent !== a.id || t.session !== S.me) await change(host, x => (find(x, t.id)?.status === 'doing' && (find(x, t.id)?.agent ?? a.id) === a.id ? patchTask(x, t.id, { agent: a.id, session: S.me }, now()) : x)).catch((e: Error) => host.ui.toast(S.N.toast(`kept ${t.id}'s worker after a reload but couldn't record it on the board: ${String(e?.message ?? e).slice(0, 150)}`)))
+        if (workerIdOf(t) !== a.id || t.session !== S.me) await change(host, x => (find(x, t.id)?.status === 'doing' && (workerIdOf(find(x, t.id)) ?? a.id) === a.id ? patchTask(x, t.id, { runs: withAgentStart(find(x, t.id)!.runs, 'worker', a.id, now()), session: S.me }, now()) : x)).catch((e: Error) => host.ui.toast(S.N.toast(`kept ${t.id}'s worker after a reload but couldn't record it on the board: ${String(e?.message ?? e).slice(0, 150)}`)))
         continue
       }
     }
@@ -86,8 +86,8 @@ export async function stopOrphans(host: Host, leadNow?: string | null): Promise<
  */
 export function formerWorker(t: BoardTask, id: string): boolean {
   const last = t.runs?.at(-1)
-  if (t.agent === id && (!last || last.agent === undefined || last.agent === id)) return false
-  return restartedAgent(last, id) || onRuns(t.runs?.slice(0, -1), id)
+  if (workerIdOf(t) === id) return false
+  return restartedAgent(last, id) || onTask({ runs: t.runs?.slice(0, -1) }, id)
 }
 
 /** How long a fresh copy of the plugin waits before deciding a "doing" task's old worker is gone. */

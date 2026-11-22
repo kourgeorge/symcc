@@ -6,7 +6,8 @@ import { YOUR_EDITS } from '../hooks/core/review'
 import { inMergeLine, MERGE_LINE_POLL_MS, resetMergeLine } from '../hooks/app/merge-line'
 import { joinedText } from '../hooks/core/board-parts'
 import { mergeLineText, parseMergeLine, inLineNote, MERGE_LINE_STALE_MS, mergeLineStaleMs, type LineEntry, testMinutesOf, testTimeoutMs, lineEntryStale, readBoard, DEFAULT_TEST_MINUTES, BASH_PATHS_MAX, bashTooManyText, failedTestNames, FAILED_TESTS_KEPT, FAILED_TEST_CHARS } from '../hooks/board'
-import { PREP_NOTE, STEP_NOTE, isMergeNote, type Board, type Notify, soundSetFor, type BoardTask, workerGitWriteText, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, readArchive, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, untestedChange, isTestFile, isPlainRelPath, parseSettingValue, type WorkerQuestion, isAnswered, boardText, taskMatches, onRuns } from '../hooks/board'
+import { PREP_NOTE, STEP_NOTE, isMergeNote, type Board, type Notify, soundSetFor, type BoardTask, workerGitWriteText, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, readArchive, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, untestedChange, isTestFile, isPlainRelPath, parseSettingValue, type WorkerQuestion, isAnswered, boardText, taskMatches, withAgentStart, workerIdOf, tryTokens, tryCost, onTask } from '../hooks/board'
+import { usedRun, runBy } from './agent-fixture'
 import { removeWorktree, cleanupMerged, deleteMergedBranch } from '../hooks/app/git'
 import { addPassedTree, parsePassedTrees, passedTreesText, treePassed, PASSED_TREES_MAX } from '../hooks/core/passed-trees'
 import { S, leadQueue, workers, sayQueue, meanwhile, scoutRuns } from '../hooks/app/state'
@@ -15,7 +16,7 @@ import { tellLead, noteForLead, meanwhileText } from '../hooks/app/tell'
 import { saidNeedsYou, findPlayers, playable, playsFor, sayNext, sayDone, WIN_TEXT_VAR } from '../hooks/app/voice'
 import { workerFinished, check, pump, startWorker, lateHandBack, WORKER_PROMPT, workerQuestionText, type TurnEnd, notThisTry, unclaimed } from '../hooks/app/workers'
 import { stopOrphans, formerWorker } from '../hooks/app/cleanup'
-import { goOnRun, selfRestart, endRun, runMs, freshTry, withoutOpenRun, type TryRun } from '../hooks/core/runs'
+import { goOnRun, selfRestart, endRun, runMs, freshTry, withoutOpenRun, agentLines, type TryRun } from '../hooks/core/runs'
 import { statsData } from '../hooks/core/stats'
 import { setSymcc, setBoardMode } from '../hooks/app/board-mode'
 import { taskStage, stageText } from '../hooks/core/details'
@@ -251,9 +252,12 @@ type Rec = { question?: WorkerQuestion; requested?: string[] }
 /** Board `b` with T-1's current try holding `rec`, as ask_owner and the tool.check hook write it. */
 const recorded = (b: Board, rec: Rec = {}) => (rec.question || rec.requested ? patchTask(b, 'T-1', { ...(rec.question ? { try_question: rec.question } : {}), ...(rec.requested ? { try_refused: rec.requested } : {}) }, ISO) : b)
 
-function boardWith(mode: 'auto' | 'review', test_commands: string[] = [], extra: Partial<BoardTask> = {}): [Board, BoardTask] {
+function boardWith(mode: 'auto' | 'review', test_commands: string[] = [], extra: Partial<BoardTask> & { agent?: string } = {}): [Board, BoardTask] {
   const [b, t] = addTask({ ...emptyBoard(), mode, test_commands }, { origin: { why: 'a test' }, title: 'Do it', files: ['src/'] }, ISO)
-  const b2 = patchTask(b, t.id, { status: 'doing', attempts: 1, ...extra }, ISO)
+  // T-805: the worker `agent` is an entry of the last try (a try is made when it has none)
+  const { agent, ...fields } = extra
+  const runs = agent ? withAgentStart(fields.runs?.length ? fields.runs : [{ started: ISO }], 'worker', agent, ISO) : fields.runs
+  const b2 = patchTask(b, t.id, { status: 'doing', attempts: 1, ...fields, ...(runs ? { runs } : {}) }, ISO)
   return [b2, b2.tasks[0]!]
 }
 
@@ -918,7 +922,7 @@ test("T-492: a hand-back kept while board.json can't be read keeps the try's dol
   }
   const t = find(await load(w.$), 'T-1')!
   expect(t.status).toBe('done')
-  expect(t.runs?.at(-1)?.cost).toBe(0.42)
+  expect(tryCost(t.runs?.at(-1))).toBe(0.42)
 })
 
 test('tests_with_changes ask (the default): a code change with no test file merges and the lead is told', async () => {
@@ -1990,7 +1994,7 @@ test('a queued worker: its task shows "starting at the next turn" and no agent u
     const t = find(await load(w.$), 'T-1')!
     expect(spawned.length).toBe(1)
     expect(t.note).toBe('worker on it')
-    expect(t.agent).toBe('ag2')
+    expect(workerIdOf(t)).toBe('ag2')
   } finally {
     cleanUp()
   }
@@ -2172,7 +2176,7 @@ test('retry after a failure that was not a clash resets the auto retries but doe
 async function failedLive(note = 'conflicts with the latest main (after 2 automatic retries)') {
   const { w, spawned } = await liveWorld()
   await setSymcc(w.$, false)
-  await change(w.$, b => [patchTask(b, 'T-1', { status: 'failed', note, test_tries: 2, merge_main: false, agent: undefined }, ISO), null])
+  await change(w.$, b => [patchTask(b, 'T-1', { status: 'failed', note, test_tries: 2, merge_main: false }, ISO), null])
   const start = async () => {
     await setSymcc(w.$, true)
     await settle(w, () => workerOn('T-1'))
@@ -2265,7 +2269,7 @@ async function archiveWorld() {
   const w = world()
   let b: Board = emptyBoard()
   for (const title of ['old done', 'old dropped', 'new done', 'to do']) b = addTask(b, { origin: { why: 'a test' }, title }, ISO)[0]
-  b = patchTask(b, 'T-1', { status: 'done', runs: [{ started: LONG_AGO, ended: '2026-01-01T00:10:00.000Z', tokens: { output: 500 } }] }, LONG_AGO)
+  b = patchTask(b, 'T-1', { status: 'done', runs: [usedRun({ started: LONG_AGO, ended: '2026-01-01T00:10:00.000Z' }, { output: 500 })] }, LONG_AGO)
   b = patchTask(b, 'T-2', { status: 'dropped' }, LONG_AGO)
   b = patchTask(b, 'T-3', { status: 'done' }, new Date(T0).toISOString())
   await saveBoard(w.$, b)
@@ -2687,8 +2691,7 @@ function sentBackBoard(ageMs: number): Board {
   const started = new Date(Date.now() - ageMs).toISOString()
   const [b] = boardWith('review', [], {
     attempts: 2,
-    runs: [{ started: ISO, ended: ISO, ended_by: 'finished', ended_note: 'checker found problems', agent: 'agent-one' }, { started, agent: 'agent-two' }],
-    agent: 'agent-two',
+    runs: [runBy('agent-one', ISO, { ended: ISO, ended_by: 'finished', ended_note: 'checker found problems' }), runBy('agent-two', started)],
     history: hist('created by the lead', 'try 1: checker found problems'),
   })
   return { ...b, mode: 'paused' }
@@ -2711,12 +2714,12 @@ test('T-678: a note within a minute of the retry after a checker send-back joins
   // T-479: the stopped try's worker id is still kept on the board after the next claim, so every copy refuses it
   const at = new Date().toISOString()
   const y = patchTask(await load(w.$), 'T-1', { status: 'doing', attempts: t.attempts + 1, runs: startRun(t.runs, at) }, at)
-  const z = patchTask(y, 'T-1', { agent: 'agent-three' }, at)
+  const z = patchTask(y, 'T-1', { runs: withAgentStart(find(y, 'T-1')!.runs, 'worker', 'agent-three', at) }, at)
   const c = find(z, 'T-1')!
   expect(c.attempts).toBe(2)
-  expect(onRuns(c.runs, 'agent-two')).toBe(true)
-  expect(onRuns(c.runs, 'agent-one')).toBe(true)
-  expect(c.runs![1]!.agent).toBe('agent-three')
+  expect(onTask(c, 'agent-two')).toBe(true)
+  expect(onTask(c, 'agent-one')).toBe(true)
+  expect(workerIdOf(c)).toBe('agent-three')
 })
 
 test('T-678: a note on a try that has run over a minute still restarts it as before', async () => {
@@ -3087,7 +3090,7 @@ test('T-695: the settings tool schema takes notify voice / sound 1 / sound 2 / s
 // ---------------- how each try ended ----------------
 
 /** T-1 is "doing" (try 1, one open run) with worker ag1; `then` ends it. Gives back the run as saved. */
-async function tryEnds(then: (w: ReturnType<typeof world>) => Promise<unknown>, o: { g?: Partial<Git>; tests?: Record<string, Res>; extra?: Partial<BoardTask> } = {}) {
+async function tryEnds(then: (w: ReturnType<typeof world>) => Promise<unknown>, o: { g?: Partial<Git>; tests?: Record<string, Res>; extra?: Partial<BoardTask> & { agent?: string } } = {}) {
   const w = world(o.g, o.tests)
   const [b0] = boardWith('auto', ['npm test'], { history: hist('created by the lead'), runs: [{ started: ISO }], ...o.extra })
   await saveBoard(w.$, b0)
@@ -3202,8 +3205,8 @@ test('T-784: a worker stopped by a pause or a change keeps the tokens the host r
       for (let i = 0; i < 100; i++) await Promise.resolve()
     }, { extra: withAgent })
     expect(r.ended).toBeDefined()
-    expect(r.tokens).toEqual({ input: 1000, output: 50 })
-    expect(r.cost).toBe(0.5)
+    expect(tryTokens(r)).toEqual({ input: 1000, output: 50 })
+    expect(tryCost(r)).toBe(0.5)
     expect(r.agents![0]!.tokens).toEqual({ input: 1000, output: 50 })
     expect(r.agents![0]!.cost).toBe(0.5)
   }
@@ -5437,7 +5440,7 @@ test('T-470: on a host with no start queue (features.startQueue off) a worker st
   expect(queuedStarts()).toBe(0)
   const t = find(await load(w.$), 'T-1')!
   expect(t.status).toBe('doing')
-  expect(t.agent).toBe('ag1')
+  expect(workerIdOf(t)).toBe('ag1')
   expect(t.note).toBe('worker on it')
   expect(notes[0]).not.toBe(QUEUED_NOTE)
   expect(leadQueue).toEqual([])
@@ -5627,16 +5630,14 @@ const STOP = '2026-11-13T00:10:00.000Z'
 
 /** T-743: T-1 back in todo after a reopen stopped its try 1 worker ag9 at STOP (it started at ISO and used 1000 input tokens). */
 function reopenedT1(): BoardTask {
-  const [b0] = boardWith('auto', [], { session: 'me', agent: 'ag9', branch: 'symcc/T-1', history: [], runs: [{ started: ISO, agent: 'ag9', tokens: { input: 1000 } }] })
+  const [b0] = boardWith('auto', [], { session: 'me', agent: 'ag9', branch: 'symcc/T-1', history: [], runs: [{ started: ISO, agents: [{ id: 'ag9', kind: 'worker' as const, started: ISO, tokens: { input: 1000 } }] }] })
   return backToTodo(b0.tasks[0]!, REOPEN, STOP)
 }
-const restartFields = (t: BoardTask): Partial<BoardTask> => ({ attempts: t.attempts, runs: t.runs, history: t.history, agent: t.agent, note: t.note, branch: t.branch })
+const restartFields = (t: BoardTask): Partial<BoardTask> => ({ attempts: t.attempts, runs: t.runs, history: t.history, note: t.note, branch: t.branch })
 /** T-743: a board with `back` (reopenedT1) claimed again for the same try, as queueWorker claims it: "doing", no agent named yet. */
 function claimedSameTry(back: BoardTask): Board {
   const [b0] = boardWith('auto')
-  const { agent: _a, ...fields } = restartFields(back)
-  const b = patchTask(b0, 'T-1', { ...fields, status: 'doing', session: 'me', note: QUEUED_NOTE, runs: goOnRun(back.runs, STOP)! }, STOP)
-  delete find(b, 'T-1')!.agent
+  const b = patchTask(b0, 'T-1', { ...restartFields(back), status: 'doing', session: 'me', note: QUEUED_NOTE, runs: goOnRun(back.runs, STOP)! }, STOP)
   return b
 }
 
@@ -5650,15 +5651,16 @@ test('T-743: a worker restarted after a reopen keeps the same try: no new try nu
   expect(r.started).toBe(ISO)
   expect(r.ended).toBeUndefined()
   expect(r.ended_by).toBeUndefined()
-  expect(r.agent).toBe('ag1')
-  expect(r.restarts!.map(({ started: _s, ...e }) => e)).toEqual([{ at: STOP, why: 'after Claude Code was reopened', agent: 'ag9' }])
+  expect(workerIdOf(t)).toBe('ag1')
+  expect(r.agents!.map(a => [a.id, a.ended_by])).toEqual([['ag9', 'restarted'], ['ag1', undefined]])
+  expect(r.restarts!.map(({ started: _s, ...e }) => e)).toEqual([{ at: STOP, why: 'after Claude Code was reopened' }])
   // when the new worker's part started: its time limit counts from there, not from ISO
   expect(Date.parse(r.restarts![0]!.started ?? '')).toBeGreaterThan(Date.parse(ISO))
   expect(stageTexts(t)).toEqual(['try 1: worker restarted after Claude Code was reopened'])
   // the old worker is not this try's worker any more (its hand-back is ignored), but it is still refused as a known agent
   expect(notThisTry(t, 'ag9')).toBe(true)
   expect(notThisTry(t, 'ag1')).toBe(false)
-  expect(onRuns(t.runs, 'ag9')).toBe(true)
+  expect(onTask(t, 'ag9')).toBe(true)
   workers.clear()
 })
 
@@ -5671,7 +5673,7 @@ test('T-743: the restarted round merges: its time spans the restart, its tokens 
   expect(t.attempts).toBe(1)
   expect(t.runs!.length).toBe(1)
   const r = t.runs![0]!
-  expect(r.tokens?.input).toBe(1500)
+  expect(tryTokens(r)?.input).toBe(1500)
   // from its first start (ISO) to its end, not only the last worker's part
   expect(r.started).toBe(ISO)
   expect(runMs(r)).toBe(Date.parse(r.ended!) - Date.parse(ISO))
@@ -5696,9 +5698,9 @@ test('T-743: after a reopen only one worker works on the try: the old worker is 
   w.$.agents.list = async () => [{ id: 'ag9', kind: 'worker', status: 'running', name: 'symcc-T-1' }]
   expect(await stopOrphans(w.$, null)).toEqual(['ag9'])
   expect(workers.has('ag9')).toBe(false)
-  expect(find(await load(w.$), 'T-1')!.agent).toBeUndefined()
+  expect(workerIdOf(find(await load(w.$), 'T-1'))).toBeUndefined()
   // a task whose try still names that worker (it kept running over the reopen) keeps it: no second worker starts
-  const [b1] = boardWith('auto', [], { session: 'me', agent: 'ag7', runs: [{ started: ISO, agent: 'ag7' }] })
+  const [b1] = boardWith('auto', [], { session: 'me', agent: 'ag7', runs: [runBy('ag7', ISO)] })
   await saveBoard(w.$, b1)
   w.$.agents.list = async () => [{ id: 'ag7', kind: 'worker', status: 'running', name: 'symcc-T-1' }]
   expect(await stopOrphans(w.$, null)).toEqual([])
@@ -5707,8 +5709,8 @@ test('T-743: after a reopen only one worker works on the try: the old worker is 
   // the rule itself: a worker a restart stopped, or one of an earlier try, is a former worker; the current one is not
   const t = find(claimed, 'T-1')!
   expect(formerWorker(t, 'ag9')).toBe(true)
-  expect(formerWorker({ ...t, agent: 'ag1', runs: [{ ...t.runs![0]!, agent: 'ag1' }] }, 'ag1')).toBe(false)
-  expect(formerWorker({ ...t, runs: [{ started: ISO, agent: 'ag8' }, { started: STOP }] }, 'ag8')).toBe(true)
+  expect(formerWorker({ ...t, runs: [{ ...t.runs![0]!, agents: [...t.runs![0]!.agents!, { id: 'ag1', kind: 'worker' as const, started: STOP }] }] }, 'ag1')).toBe(false)
+  expect(formerWorker({ ...t, runs: [runBy('ag8', ISO, { ended: STOP }), { started: STOP }] }, 'ag8')).toBe(true)
 })
 
 test('T-743: a worker on a try that went on after a reopen counts its time limit from its own start, not the try\'s first start', async () => {
@@ -5717,10 +5719,10 @@ test('T-743: a worker on a try that went on after a reopen counts its time limit
   const first = new Date(Date.now() - 20 * 3600_000).toISOString()
   const stop = new Date(Date.now() - 2 * 3600_000).toISOString()
   const fresh = new Date(Date.now() - 60_000).toISOString()
-  const [b0] = boardWith('auto', [], { session: 'me', agent: 'ag9', branch: 'symcc/T-1', history: [], runs: [{ started: first, agent: 'ag9' }] })
+  const [b0] = boardWith('auto', [], { session: 'me', agent: 'ag9', branch: 'symcc/T-1', history: [], runs: [runBy('ag9', first)] })
   const back = backToTodo(b0.tasks[0]!, REOPEN, stop)
-  const runs = goOnRun(back.runs, fresh)!.map(r => ({ ...r, agent: 'ag10' }))
-  const [b1] = boardWith('auto', [], { session: 'me', agent: 'ag10', branch: 'symcc/T-1', history: [], attempts: 1, runs })
+  const runs = withAgentStart(goOnRun(back.runs, fresh)!, 'worker', 'ag10', fresh)!
+  const [b1] = boardWith('auto', [], { session: 'me', branch: 'symcc/T-1', history: [], attempts: 1, runs })
   await saveBoard(w.$, b1)
   workers.clear()
   w.$.agents.list = async () => [{ id: 'ag10', kind: 'worker', status: 'running', name: 'symcc-T-1' }]
@@ -5760,7 +5762,7 @@ test('T-743: a real send-back (failing tests, the checker, a change) still start
   // failing tests: back to todo with one auto retry used, and the next worker starts try 2 in a run of its own
   S.me = 'me'
   const w = world({}, { 'npm test': { exitCode: 1, stdout: 'FAIL a.test', stderr: '' } })
-  const [b] = boardWith('auto', ['npm test'], { session: 'me', agent: 'ag1', branch: 'symcc/T-1', history: [], runs: [{ started: ISO, agent: 'ag1' }] })
+  const [b] = boardWith('auto', ['npm test'], { session: 'me', agent: 'ag1', branch: 'symcc/T-1', history: [], runs: [runBy('ag1', ISO)] })
   await saveBoard(w.$, b)
   w.put(`${WT}/.git`, 'gitdir: x')
   workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
@@ -5780,20 +5782,21 @@ test('T-743: a real send-back (failing tests, the checker, a change) still start
 test('T-743: a change right after a reopen never takes off the try that went on: its round and the stopped worker stay on the board', () => {
   const t0 = Date.now() - 40_000
   const at = (ms: number) => new Date(t0 + ms).toISOString()
-  const go = goOnRun(withEnd(endRun([{ started: at(0), agent: 'ag9', tokens: { input: 100 } }], at(30_000)), 'restarted', 'after Claude Code was reopened'), at(30_000))!
+  const go = goOnRun(withEnd(endRun([usedRun(runBy('ag9', at(0)), { input: 100 })], at(30_000)), 'restarted', 'after Claude Code was reopened'), at(30_000))!
   expect(freshTry({ status: 'doing', runs: go }, t0 + 35_000)).toBe(false)
-  const go2 = goOnRun(withEnd(endRun([{ started: at(-90_000), ended: at(-60_000), ended_by: 'finished', ended_note: 'tests failed' }, { started: at(0), agent: 'ag9' }], at(30_000)), 'restarted', 'after Claude Code was reopened'), at(30_000))!
-  expect(freshTry({ status: 'doing', runs: [...go2.slice(0, -1), { ...go2.at(-1)!, agent: 'ag10' }] }, t0 + 35_000)).toBe(false)
+  const go2 = goOnRun(withEnd(endRun([{ started: at(-90_000), ended: at(-60_000), ended_by: 'finished', ended_note: 'tests failed' }, runBy('ag9', at(0))], at(30_000)), 'restarted', 'after Claude Code was reopened'), at(30_000))!
+  expect(freshTry({ status: 'doing', runs: [...go2.slice(0, -1), withAgentStart([go2.at(-1)!], 'worker', 'ag10', at(31_000))![0]!] }, t0 + 35_000)).toBe(false)
   // even if one were taken off, the stopped worker's id moves to the try before it, so its late hand-back is still refused
-  expect(onRuns(withoutOpenRun(go2), 'ag9')).toBe(true)
+  expect(onTask({ runs: withoutOpenRun(go2) }, 'ag9')).toBe(true)
   // a fresh try with no restart still joins (T-678)
   expect(freshTry({ status: 'doing', runs: [{ started: at(-90_000), ended: at(-60_000) }, { started: at(30_000) }] }, t0 + 35_000)).toBe(true)
 })
 
 test('T-743: endRun adds a going-on try\'s new tokens to the ones it had; a try already ended only gets missing ones filled in', () => {
-  expect(endRun([{ started: ISO, tokens: { input: 10 }, cost: 1 }], STOP, { tokens: { input: 5, output: 2 }, cost: 0.5 })[0]).toEqual({ started: ISO, ended: STOP, tokens: { input: 15, output: 2 }, cost: 1.5 })
-  expect(endRun([{ started: ISO, ended: STOP, tokens: { input: 10 } }], STOP, { tokens: { input: 5 } })[0]!.tokens).toEqual({ input: 10 })
-  expect(endRun([{ started: ISO }], STOP, { tokens: { input: 5 } })[0]!.tokens).toEqual({ input: 5 })
+  const going = endRun([usedRun({ started: ISO }, { input: 10 }, 1)], STOP, { tokens: { input: 5, output: 2 }, cost: 0.5 })[0]!
+  expect([going.ended, tryTokens(going), tryCost(going)]).toEqual([STOP, { input: 15, output: 2 }, 1.5])
+  expect(tryTokens(endRun([usedRun({ started: ISO, ended: STOP }, { input: 10 })], STOP, { tokens: { input: 5 } })[0])).toEqual({ input: 10 })
+  expect(tryTokens(endRun([{ started: ISO }], STOP, { tokens: { input: 5 } })[0])).toEqual({ input: 5 })
 })
 
 test('T-600: a worker started by startWorker gets the lines of .symcc/org-mem.md in its prompt; no file: no guide heading', async () => {
@@ -6701,4 +6704,13 @@ test('T-547: a board with test_rerun set is converted once: a task waiting for i
   const done = readOld(JSON.stringify({ tasks: [{ ...base, id: 'T-4', status: 'done', question: null, note: 'merged', test_rerun: 1 }] }))
   expect(find(done.board, 'T-4')!.status).toBe('done')
   expect('test_rerun' in find(done.board, 'T-4')!).toBe(false)
+})
+
+test('T-805: taking off a fresh try keeps its worker id on the try before, with no line and no say in who the worker is', () => {
+  const o1 = endRun(withAgentStart(startRun([], '2026-11-20T10:00:00.000Z'), 'worker', 'w1', '2026-11-20T10:00:01.000Z'), '2026-11-20T10:30:00.000Z')
+  const o2 = withAgentStart(startRun(o1, '2026-11-20T12:00:00.000Z'), 'worker', 'wx', '2026-11-20T12:00:01.000Z')
+  const back = withoutOpenRun(o2)!
+  expect(onTask({ runs: back }, 'wx')).toBe(true)
+  expect(workerIdOf({ runs: back })).toBe('w1')
+  expect(agentLines(back[0]!).join('|')).not.toContain('wx')
 })
