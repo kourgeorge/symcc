@@ -8,11 +8,11 @@
 // OpenTUI (T-500): opencode/tui.ts imports them by their written-out names (what OpenCode swaps for its own copies),
 // and loadTuiRuntime names a package that is missing or lacks a function instead of failing with a bare import error.
 import { test, expect } from 'bun:test'
-import { LIVE_TABS, tabRow as coreTabRow, roleKeys, rolesKeys, kindsKeys, scoutHowTo, LIVE_EMPTY, liveLegend, liveBarLegend, liveLanes, liveLayout, liveStations, liveHeader, liveLabelLine, laneLines, segText, liveTrains, trainRows, liveToday, todayLines, modeLabel, modeButton, promptsOfRole, ROLE_SLOT, SETTING_GROUPS, groupSummaryParts, taskActions, actionButtonLabel, settingsKeys, mergeRoles, mergeKinds, when, addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, showsHeader, roleTools, roleNameError, leadScoutNameError, type BoardPage, type Board } from '../../board'
+import { LIVE_TABS, tabRow as coreTabRow, roleKeys, rolesKeys, kindsKeys, scoutHowTo, LIVE_EMPTY, liveLegend, liveLanes, liveLayout, liveStations, liveHeader, liveLabelLine, laneLines, segText, liveTrains, trainRows, liveToday, todayLines, modeLabel, modeButton, promptsOfRole, ROLE_SLOT, SETTING_GROUPS, groupSummaryParts, taskActions, actionButtonLabel, settingsKeys, mergeRoles, mergeKinds, when, addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, showsHeader, roleTools, roleNameError, leadScoutNameError, type BoardPage, type Board } from '../../board'
 import type { PaneView } from '../../app/state'
 import type { SymccTask } from '../../../types'
 import { ICON } from '../../name'
-import { hasPage, bandLines, bandDraw, BAND_CLICK_HINT, panelLines, panelKeys, parseViewFile, viewFileText, lineText, actionCommand, answerOptions, OWN_ANSWER, viewDefs, panelTaskActions, TASK_ACTION_COMMANDS, SETTINGS_OPEN, approveSent, APPROVE_SENT_MS, drawnLines, boardPageOf, defDraftOf, defEditKeys, noDescriptionText, draftError, SETUP_GIT_ASK, EDIT_FIRST_BOX, newNameError, type ViewFile, type PanelChoice } from '../board-view'
+import { hasPage, bandLines, bandDraw, BAND_CLICK_HINT, panelLines, panelKeys, parseViewFile, viewFileText, lineText, actionCommand, answerOptions, OWN_ANSWER, viewDefs, panelTaskActions, TASK_ACTION_COMMANDS, SETTINGS_OPEN, approveSent, APPROVE_SENT_MS, drawnLines, gitRowLines, boardPageOf, defDraftOf, defEditKeys, noDescriptionText, draftError, SETUP_GIT_ASK, EDIT_FIRST_BOX, newNameError, type ViewFile, type PanelChoice } from '../board-view'
 import { readFile } from 'node:fs/promises'
 import { rowEndBoard, ROW_END, ROW_END_NOW } from '../../../tests/row-end-cases'
 import { BRANCH_LINES_100, branchFactsAt, branchTasks, taskBranchDoing, taskBranchLong, taskBranchMerged, taskBranchTasks } from '../../../tests/branches-fixture'
@@ -113,13 +113,24 @@ test('T-643: a session that does not drive: a warning line under the banner and 
 test('T-517, T-706: with no git repo the banner warns with Claude Code\'s "set up git (g)" and its git row with the [ Set up git (g) ] button', () => {
   const f = viewFile()
   for (const git_state of ['no-repo', 'no-commits'] as const) {
-    const d = panelLines({ ...f, view: { ...f.view, git_state, branch_note: gitNote(git_state) } }, { opened: '', cursor: 0 }, NOW, 100)
+    const d = panelLines({ ...f, view: { ...f.view, git_state, branch_note: gitNote(git_state) } }, { opened: '', cursor: 0 }, NOW, 140)
     const lines = d.lines.map(lineText)
     expect(lines.join('\n')).toContain(git_state === 'no-repo' ? 'no git repo here; set up git (g)' : 'no commits yet; set up git (g)')
     expect(lines.join('\n')).not.toContain('ask the lead')
     // Claude Code's git row (parts.tsx gitRow): the warning, then the button
-    expect(lines).toContain(`${git_state === 'no-repo' ? 'No git repo here; nothing starts. ' : 'No commits yet; nothing starts. '}[ Set up git (g) ]`)
+    expect(lines).toContain(`${git_state === 'no-repo' ? 'No git repo here: symcc needs git for task branches. No worker starts until it is set up. ' : 'No commits yet: symcc needs a first commit for task branches. No worker starts until it is set up. '}[ Set up git (g) ]`)
     expect(d.lines.flat().find(s => s.text === '[ Set up git (g) ]')?.hit).toEqual({ key: 'g' })
+  }
+  // T-861: git missing: the notice gives the install step and has no button
+  const missing = panelLines({ ...f, view: { ...f.view, git_state: 'no-git', git_install: 'brew install git', branch_note: gitNote('no-git') } }, { opened: '', cursor: 0 }, NOW, 100).lines.map(lineText)
+  expect(missing.join(' ')).toContain('Git is not installed: brew install git. No worker starts until it is.')
+  expect(missing.some(l => l.includes('Set up git'))).toBe(false)
+  expect(missing.some(l => l.includes('[ Check again (g) ]'))).toBe(true)
+  // the panel clips lines: at 80 columns (inner 78) the notice wraps and no line is wider
+  for (const git_state of ['no-repo', 'no-commits', 'no-git'] as const) {
+    const rows = gitRowLines({ git_state, git_install: 'sudo apt install git' }, 78)
+    expect(rows.length).toBeGreaterThan(1)
+    for (const r of rows) expect(lineText(r).length).toBeLessThan(79)
   }
   // git set up: no row
   expect(panelLines(f, { opened: '', cursor: 0 }, NOW, 100).lines.map(lineText).some(l => l.includes('Set up git'))).toBe(false)
@@ -2785,7 +2796,9 @@ test('T-760: the OpenCode Live tab ends work and check in ✧ (in the heading co
     expect(labels.filter(x => x.text === '✧').map(x => x.color)).toEqual([heading, heading])
     expect(labels.filter(x => /[a-z]/.test(x.text)).every(x => x.color === 'inactive')).toBe(true)
     const texts = d.lines.map(lineText)
-    if (w === 120) expect(texts).toContain(LIVE_INDENT + '✧ = an agent works here (needs an agent slot) · ⌀ = tokens   ' + liveBarLegend(lanes.find(l => l.usual)!.usual!))
+    expect(texts.some(t => t.includes('bar:') || t.includes('usual per task'))).toBe(false)
+    // T-867: the key line has no bar text any more
+    if (w === 120) expect(texts).toContain(LIVE_INDENT + '✧ = an agent works here (needs an agent slot) · ⌀ = tokens')
     else expect(texts.some(t => t.startsWith(LIVE_INDENT + '✧ = an agent works here'))).toBe(true)
   }
 })
@@ -2868,7 +2881,7 @@ test('T-692: the Live tab draws the terminal panel\'s lanes and today (core/live
     const layout = liveLayout(lanes, liveStations(true), inner)
     const frame = Math.floor(NOW / 1000)
     const under = (x: string) => LIVE_INDENT + x
-    return [liveHeader(view, lanes), segText(liveHeading('Tasks', w)), ' ', under(liveLabelLine(layout)), ...lanes.flatMap(l => laneLines(l, layout, { nowMs: NOW, frame }).map(x => under(segText(x)))), ...liveLegend(lanes, inner).map(under), ' ', segText(liveHeading('Today', w)), ' ', ...todayLines(liveToday(whole, NOW), inner, true).map(under)]
+    return [liveHeader(view, lanes), segText(liveHeading('Tasks', w)), ' ', under(liveLabelLine(layout)), ...lanes.flatMap(l => laneLines(l, layout, { nowMs: NOW, frame }).map(x => under(segText(x)))), ...liveLegend(inner).map(under), ' ', segText(liveHeading('Today', w)), ' ', ...todayLines(liveToday(whole, NOW), inner, true).map(under)]
   }
   // OpenCode reads the view file, whose done task comes slim (no history): the today row must still match
   const f: ViewFile = { ...f0, view: { ...view, tasks: whole.map(t => viewTask(t)) } }
@@ -2906,7 +2919,7 @@ test('T-692: the Live tab draws the terminal panel\'s lanes and today (core/live
   expect(panelLines(none, { tab: 'live', opened: '', cursor: 0 }, NOW, 100).lines.map(lineText)).not.toContain(' ' + '─'.repeat(12))
 })
 
-test('T-757: the OpenCode Live tab shows the whole task\'s tokens, the bar full at the usual per task, the warning past twice it, and the bar legend', () => {
+test('T-757, T-867: the OpenCode Live tab shows the whole task\'s tokens × the median (warning from twice it), its time and who spent them, no bar, and the key line without the bar', () => {
   const f0 = viewFile()
   const ago = (min: number) => new Date(NOW - min * 60_000).toISOString()
   const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', order: Number(id.slice(2)), after: [], attempts: 1, history: [], branch: null, created_at: ago(300), updated_at: ago(1), ...x }) as unknown as SymccTask
@@ -2925,23 +2938,27 @@ test('T-757: the OpenCode Live tab shows the whole task\'s tokens, the bar full 
   const at = (id: string) => texts.findIndex(t => t.includes(` ${id} `)) + 1
   const sub = (id: string) => texts[at(id)] ?? ''
   const warn = (id: string) => (d.lines[at(id)] ?? []).some(s => s.color === 'warning')
-  const cells = (id: string) => { const b = /▕([█░]+)▏/.exec(sub(id))?.[1] ?? ''; return { full: [...b].filter(c => c === '█').length, empty: [...b].filter(c => c === '░').length } }
-  // (a) try 2 running: try 1's 4M, more coming, the bar full at the usual 4M
-  expect(sub('T-801')).toContain('⌀ 4M + …')
-  expect([cells('T-801').full > 0, cells('T-801').empty]).toEqual([true, 0])
-  // (b) handed back with 1M: the sum
-  expect(sub('T-802')).toContain('⌀ 5M')
-  expect(sub('T-802')).not.toContain('+ …')
+  // T-867: no bar
+  for (const x of tasks.slice(1)) expect([x.id, /[▕▏█░]/.test(sub(x.id))]).toEqual([x.id, false])
+  // (a) try 2 running: try 1's 4M, more coming, 1× the median 4M
+  expect(sub('T-801')).toContain('⌀ 4M + … (1× median)')
+  // (b) handed back with 1M: the sum, its active time and the worker's share (the checker's 0 left out)
+  expect(sub('T-802')).toMatch(/^ {2,}change try 2\/\d+  ⌀ 5M \(1\.3× median\) · ⏱ 28m · worker ⌀ 5M$/)
   // (c) try 1 running
   expect(sub('T-803')).toContain('⌀ at hand-back')
-  // (d) the usual fills the bar, half fills half
-  expect(cells('T-804').empty).toBe(0)
-  expect(Math.abs(cells('T-805').full - cells('T-805').empty) <= 1).toBe(true)
+  // (d) at the median and at half
+  expect(sub('T-804')).toContain('⌀ 4M (1× median)')
+  expect(sub('T-805')).toContain('⌀ 2M (0.5× median)')
   expect([warn('T-802'), warn('T-804')]).toEqual([false, false])
-  // (e) past twice the usual: the warning color and ⚠
-  expect(sub('T-806')).toContain('⌀ 9M ⚠')
+  // (e) past twice the median: the warning color, no ⚠
+  expect(sub('T-806')).toContain('⌀ 9M (2.3× median)')
+  expect(sub('T-806')).not.toContain('⚠')
   expect(warn('T-806')).toBe(true)
-  expect(texts.some(t => t.includes(liveBarLegend(4_000_000)))).toBe(true)
+  expect(texts.some(t => t.includes('usual per task'))).toBe(false)
+  // narrow: the worker/checker split and ⏱ go first, ⌀ and the try stay
+  const narrow = panelLines(parseViewFile(viewFileText(f)), { tab: 'live', opened: '', cursor: 0 }, NOW, 44).lines.map(lineText)
+  const n802 = narrow[narrow.findIndex(t => t.includes(' T-802 ')) + 1] ?? ''
+  expect([n802.includes('⌀ 5M'), n802.includes('worker'), /try 2\//.test(n802)]).toEqual([true, false, true])
 })
 
 test('T-709: the Live tab shows a lane for an approved task in review while its tests run (as the Tasks tab counts it in doing)', () => {
@@ -3611,6 +3628,23 @@ test('T-706: startTui: Set up git (g, or the banner\'s button) asks a yes first,
   await ok.board.press('g', 's')
   expect(ok.asked).toEqual([])
   ok.board.stop()
+})
+
+test('T-861: opening the board (/symcc-board) while git is not ok sends /symcc-settings git check; with git ok it sends nothing', async () => {
+  for (const [state, want] of [['no-repo', 1], [undefined, 0]] as const) {
+    const f = fakeCtx({})
+    const sent: { name: string; text: string }[] = []
+    const ctx: TuiContext = { ...f.ctx, client: { session: { command: async i => void sent.push(i) } } }
+    const board = startTui(ctx, { runtime: fakeRuntime(), readText: async () => viewFileText(addedViewFile(state)), every: () => () => undefined, now: () => NOW })
+    await board.refresh()
+    f.slots.find(s => s.append === 'session.composer.top')!.render({ sessionID: 's' } as never)
+    const open = f.layers.flatMap(l => l.commands ?? []).find(c => c.id === 'symcc.board.open')!
+    if (f.current()) await open.run() // the board came up on its own (open_now): close it, then open it by hand
+    await open.run()
+    for (let i = 0; i < 6; i++) await new Promise<void>(res => setTimeout(res, 0))
+    expect(sent.filter(s => s.name === 'symcc-settings' && s.text === 'git check').length).toBe(want)
+    board.stop()
+  }
 })
 
 // ---------------- T-727: the Live tab's Branches section ----------------

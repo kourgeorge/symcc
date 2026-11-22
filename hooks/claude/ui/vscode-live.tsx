@@ -3,7 +3,7 @@
 // only draws them richer. Each lane is:
 //   ▶ T-684 /symcc-doctor…               #2      (the id and cut title a link: a click, or Enter on it, opens the task)
 //   ●━━━━━●━━━━━◉─────○─────○                    (real lines and dots in an Svg, the station names under the dots)
-//   change try 2/3  [██████░░░░] 1.1M  ↺×1      (the token bar an Svg bar that fills)
+//   change try 2/3  ⌀ 1.1M (0.3× median) · ⏱ 12m · worker ⌀ 1.1M · ↺×1   (T-867: plain numbers, no bar)
 // The current station blinks with a CSS animation inside the Svg, and stays steady when VS Code (the person's system)
 // asks for reduced motion (`prefers-reduced-motion`). Each drawing's `alt` is the terminal's text for it.
 // T-687, T-718: at its bottom, above the footer, the Organizational memory section (core's liveOrgMem): its title a link
@@ -63,21 +63,6 @@ export function trackSvg(lane: Pick<LiveLane, 'at'> & Partial<Pick<LiveLane, 'do
     parts.push(`<text x="${x}" y="${height - 2}" text-anchor="${col ? (col === l.stations.length - 1 ? 'end' : 'middle') : 'start'}" font-family="sans-serif" font-size="10" fill="${i === lane.at ? (lane.done ? INK.passed : INK.current) : INK.label}"${i === lane.at ? ' font-weight="bold"' : ''}>${(l.labels[col] ?? '').split(LIVE_AGENT_MARK).join(`<tspan fill="${INK.mark}">${LIVE_AGENT_MARK}</tspan>`)}</text>`)
   })
   return { source: `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${parts.join('')}</svg>`, width, height }
-}
-
-/** A token bar (core's "▕████░░░░▏" text) as an Svg bar filled as far as the text's blocks are. */
-export function barSvg(text: string, warning: boolean): { source: string; width: number; height: number } {
-  const full = [...text].filter(c => c === '█').length
-  const cells = full + [...text].filter(c => c === '░').length
-  const width = Math.max(4, cells) * COL_PX
-  const height = 10
-  const fill = cells ? Math.round((full / cells) * width) : 0
-  const ink = warning ? INK.warning : INK.bar
-  return {
-    source: `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect x="0.5" y="0.5" width="${width - 1}" height="${height - 1}" rx="3" fill="none" stroke="${INK.empty}"/><rect x="0" y="0" width="${fill}" height="${height}" rx="3" fill="${ink}"/></svg>`,
-    width,
-    height,
-  }
 }
 
 /** T-727: the pixels from one commit's dot to the next in the Branches drawings, and each drawing's height. */
@@ -226,20 +211,9 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
         <Svg key={`live-track:${lane.id}`} source={track.source} width={track.width} height={track.height} alt={`${lane.id} at ${layout.labels[layout.stations.indexOf(lane.station)] ?? lane.station}: ${segText(first.filter(isTrack))}`} />
         <Box key={`live-sub:${lane.id}`} flexDirection="row" gap={1} alignItems="center">
           {(() => {
-            // the terminal's line, its lead and the padding that lines it up under the track left out; the bar (if any) drawn
-            const at = second.findIndex(s => s.text.startsWith('▕'))
-            const words = (xs: LiveSeg[], key: string) => {
-              const parts = xs.map((s, i) => ({ ...s, text: !s.text.trim() ? '  ' : i === 0 ? s.text.trimStart() : s.text })).filter((s, i, all) => s.text.trim() || (i > 0 && i < all.length - 1))
-              return parts.length ? <Text key={key}>{parts.map(s => <Text color={C(LIVE_TONE[s.tone])}>{s.text}</Text>)}</Text> : null
-            }
-            if (at < 0) return [words(second, 'w0')]
-            const barSeg = second[at]!
-            const bar = barSvg(barSeg.text, barSeg.tone === 'warning')
-            return [
-              words(second.slice(0, at), 'w0'),
-              <Svg key={`live-bar:${lane.id}`} source={bar.source} width={bar.width} height={bar.height} alt={barSeg.text.trim()} />,
-              words(second.slice(at + 1), 'w1'),
-            ]
+            // the terminal's line (T-867: plain numbers, no bar), its leading spaces left out
+            const parts = second.map((s, i) => ({ ...s, text: !s.text.trim() ? '  ' : i === 0 ? s.text.trimStart() : s.text })).filter((s, i, all) => s.text.trim() || (i > 0 && i < all.length - 1))
+            return parts.length ? [<Text key="w0">{parts.map(s => <Text color={C(LIVE_TONE[s.tone])}>{s.text}</Text>)}</Text>] : []
           })()}
         </Box>
         {trainRows(trains.lanes[lane.id] ?? [], inner).map(r => {
@@ -285,7 +259,7 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
         {running.length ? null : line('live-empty', LIVE_EMPTY, 'inactive')}
         {lanes.length ? <Box key="live-lanes" flexDirection="column" gap={1}>{laneRows}</Box> : null}
       </Box>
-      {lanes.length ? <Box key="live-key" flexDirection="column">{line('live-divider', LIVE_DIVIDER, 'inactive')}{line('live-legend', liveLegend(lanes, Infinity).join(' '), 'inactive')}</Box> : null}
+      {lanes.length ? <Box key="live-key" flexDirection="column">{line('live-divider', LIVE_DIVIDER, 'inactive')}{line('live-legend', liveLegend(Infinity).join(' '), 'inactive')}</Box> : null}
       {branchesVs(pane, open)}
       <Box key="live-bottom" flexDirection="column">
         {headLine('live-today-head', LIVE_SECTIONS.today)}
