@@ -1746,7 +1746,7 @@ skills: [code-review]
   roles are the one place to shape what a worker does. A role's page in the panel shows the
   prompt it goes in (See the prompt, `p`).
 - A prompt is sections under markdown headings, the task first and the rules last. A change
-  worker gets: the task (`# Task T-3 · bug · tester`), **Why, in the owner's words** (the why
+  worker gets: the task (`# Task T-3: <title>` with the kind and role under it), **Why, in the owner's words** (the why
   line and your own request, quoted), **What to do** (the details), **Notes from the lead** (the
   lead's `Note (lead, <date>)` lines, oldest first; where a note and the text differ, the newest
   note wins), the role, **Files you may change**, **Where you work** (folder and branch; after

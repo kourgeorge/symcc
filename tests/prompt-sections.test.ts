@@ -21,11 +21,11 @@ const headings = (p: string) => [...p.matchAll(/^#{1,2} (.*)$/gm)].map(m => m[1]
 test('(a) a change prompt has its sections in the fixed order, and an empty section is left out', () => {
   const t = task({ history: hist('try 1: Fixed it. → tests failed: 2 failed') , test_output: '$ npm test (exit 1)\nboom' })
   const p = fillPrompt('change', { ...values(t), org_mem: 'Organizational memory (org-mem): notes\n- a', role: '## Your role: tester\n- check' }, t)
-  expect(headings(p)).toEqual(['Task T-7 · change · general', "Why, in the owner's words", 'What to do', 'Your role: tester', 'Files you may change', 'Where you work', 'Earlier tries', 'Last failure in full', 'Tests', 'Rules', 'Notes from earlier agents', "When you're done"])
+  expect(headings(p)).toEqual(['Task T-7: Do it', "Why, in the owner's words", 'What to do', 'Your role: tester', 'Files you may change', 'Where you work', 'Earlier tries', 'Last failure in full', 'Tests', 'Rules', 'Notes from earlier agents', "When you're done"])
   // no lead notes, no commits, no org-mem, no failure, no tries, no role: those sections are not there at all (no empty heading)
   const bare = task({ origin: undefined })
   const q = fillPrompt('change', values(bare), bare)
-  expect(headings(q)).toEqual(['Task T-7 · change · general', 'What to do', 'Files you may change', 'Where you work', 'Tests', 'Rules', "When you're done"])
+  expect(headings(q)).toEqual(['Task T-7: Do it', 'What to do', 'Files you may change', 'Where you work', 'Tests', 'Rules', "When you're done"])
   expect(q).not.toMatch(/^## .*\n\n(##|$)/m)
 })
 
@@ -124,9 +124,9 @@ test('(g) the investigation and checker prompts get their sections too', () => {
   const t = task({ kind: 'investigation' } as Partial<SymccTask>)
   const v = { ...values(t), kind_name: 'investigation' }
   const q = fillPrompt('investigation', { ...v, ask_more: '' }, t)
-  expect(headings(q)).toEqual(['Task T-7 · investigation · general', "Why, in the owner's words", 'What to do', 'Where you work', 'Rules', "When you're done"])
+  expect(headings(q)).toEqual(['Task T-7: Do it', "Why, in the owner's words", 'What to do', 'Where you work', 'Rules', "When you're done"])
   const c = buildPrompt({ kind: 'checker', task: t, values: { ...v, into: 'main', diff: 'D', changed_files: '  a.ts', tests: 'T' } })
-  expect(headings(c)).toEqual(['Task T-7 · investigation · general', "Why, in the owner's words", 'What to do', 'What to look for', 'Where you work', 'Files it changed', 'Tests', 'The change', 'Rules', "When you're done"])
+  expect(headings(c)).toEqual(['Task T-7: Do it', "Why, in the owner's words", 'What to do', 'What to look for', 'Where you work', 'Files it changed', 'Tests', 'The change', 'Rules', "When you're done"])
   expect(c).toContain('## The change\n\nThe change (from where it left main')
   // the Roles page lists the sections
   expect(promptSectionLines('change')[0]).toContain('who the agent is')

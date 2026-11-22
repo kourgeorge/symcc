@@ -229,7 +229,7 @@ test('one task end to end on the Node host: add, a fake claude -p worker edits i
     // the prompt starts with the worker's base prompt (T-473), in symcc's own words, then the task's prompt
     const prompt = await readFile(`${log}.prompt`, 'utf8')
     expect(prompt.startsWith(`${WORKER_BASE('symcc', t => SYMCC_WORDS.tool('symcc', t), false, false)}\n\n`)).toBe(true)
-    expect(prompt).toContain('# Task T-1 · ')
+    expect(prompt).toContain('# Task T-1: ')
     // T-474: it names no tool its permission flags (the arguments) don't allow: no ask_owner, no board tools
     const allowedArgs = args.split('\n').slice(args.split('\n').indexOf('--allowedTools') + 1, args.split('\n').indexOf('--disallowedTools'))
     expect(namedTools(prompt).filter(n => !allows(allowedArgs, n))).toEqual([])

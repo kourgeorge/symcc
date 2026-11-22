@@ -62,12 +62,12 @@ export const PROMPT_SECTIONS: readonly PromptSection[] = [
     kinds: ALL,
     heading: null,
     about: 'who the agent is, then the task\'s id, kind and role, its title and what its kind is for',
-    template: k => `${TEXTS[k]!.intro}\n\n# Task {{task_id}} · {{kind_name}} · {{role_name}}${k === 'checker' ? '' : '\n\n{{kind}}'}`,
+    template: k => `${TEXTS[k]!.intro}\n\n# Task {{task_id}}: {{title}}\nKind: {{kind_name}} · Role: {{role_name}}${k === 'checker' ? '' : '\n\n{{kind}}'}`,
     text: c => {
       const v = c.values
       const kindName = v.kind_name || (c.kind === 'checker' ? 'change' : c.kind)
       const roleName = v.role_name || (c.kind === 'checker' ? 'checker' : 'general')
-      return [fixed(c, 'intro'), `# Task ${v.task_id ?? ''} · ${kindName} · ${roleName}`, c.kind === 'checker' ? '' : (v.kind ?? '').trim()].filter(Boolean).join('\n\n')
+      return [fixed(c, 'intro'), `# Task ${v.task_id ?? ''}: ${v.title ?? ''}\nKind: ${kindName} · Role: ${roleName}`, c.kind === 'checker' ? '' : (v.kind ?? '').trim()].filter(Boolean).join('\n\n')
     },
   },
   {
