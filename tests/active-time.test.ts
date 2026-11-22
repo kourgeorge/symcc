@@ -1,0 +1,100 @@
+// T-863: board times count only real work. A try that went on after a reopen (T-743) has a long stretch when no session was
+// open; that stretch is not work time. A step (queue, tests, ...) shows the time since the step began.
+import { expect, test } from 'claude-code/testing'
+import type { SymccTask } from '../types'
+import { activeFrom, agentLines, gapsOf, runMs, runsSummary, triesSummary } from '../hooks/core/runs'
+import { liveLanes, liveToday, laneRight } from '../hooks/core/live'
+import { bandItems } from '../hooks/core/banner'
+import { statsData, taskStages } from '../hooks/board'
+
+const MIN = 60_000
+const NOW = Date.now()
+const at = (minAgo: number) => new Date(NOW - minAgo * MIN).toISOString()
+const REOPEN = 'restarted after Claude Code was reopened'
+
+/** Started 31h ago, the worker stopped 20 min later (Claude Code closed), the new worker started 12 min ago. */
+const gapRun = (over: Record<string, unknown> = {}) => ({
+  started: at(31 * 60),
+  restarts: [{ at: at(31 * 60 - 20), why: REOPEN, started: at(12) }],
+  agents: [
+    { id: 'ag1', kind: 'worker' as const, started: at(31 * 60), ended: at(31 * 60 - 20), ended_by: 'restarted' as const },
+    { id: 'ag2', kind: 'worker' as const, started: at(12) },
+  ],
+  ...over,
+})
+
+const task = (id: string, x: Record<string, unknown> = {}): SymccTask =>
+  ({ id, title: `task ${id}`, details: '', files: [], status: 'doing', note: '', order: Number(id.slice(2)), after: [], attempts: 1, history: [], branch: null, created_at: at(32 * 60), updated_at: at(1), ...x }) as SymccTask
+
+test('T-863: a try with a 30-hour gap between a reopen stop and its restart counts only its active minutes', () => {
+  const r = gapRun()
+  expect(gapsOf(r).length).toBe(1)
+  // 20 min before the stop + 12 min since the restart
+  expect(runMs(r, NOW)).toBe(32 * MIN)
+  // a try that ended 2 min after the restart: 20 + 2
+  expect(runMs({ ...r, ended: at(10) }, NOW)).toBe(22 * MIN)
+  // a time since a point before the gap leaves the gap out; after it nothing changes
+  expect(NOW - activeFrom(r, Date.parse(r.started))).toBe(32 * MIN)
+  expect(activeFrom(r, NOW - 5 * MIN)).toBe(NOW - 5 * MIN)
+  // a try with no restart counts as before
+  expect(runMs({ started: at(50) }, NOW)).toBe(50 * MIN)
+})
+
+test('T-863: the task page lines (Tries, Runs, per-agent times) and the stats work time use the active time', () => {
+  const t = task('T-52', { runs: [gapRun()] })
+  const r = t.runs![0]!
+  expect(triesSummary(t.runs, NOW)).toContain('32m (running)')
+  expect(runsSummary(t.runs, NOW)).toContain('32m')
+  expect(runsSummary(t.runs, NOW)).not.toMatch(/\d\d h|\d+h /)
+  // each worker shows its own time; the stopped one ran 20 min, the new one 12
+  const lines = agentLines(r, NOW).join('\n')
+  expect(lines).toContain('20m')
+  expect(lines).toContain('12m')
+  const d = statsData({ tasks: [t], nowMs: NOW })
+  expect(JSON.stringify(d)).not.toContain('31h')
+  expect(d.perTry.sumMs).toBe(32 * MIN)
+})
+
+test('T-863: the Live lane and the band row show the active time of a worker that went on after a reopen', () => {
+  const t = task('T-52', { runs: [gapRun()] })
+  const v = { tasks: [t], checker: false, mode: 'auto' as const, max_parallel: 3 }
+  const lane = liveLanes(v, NOW)[0]!
+  expect(lane.station).toBe('work')
+  expect(laneRight(lane, NOW)).toBe('32m')
+  const row = bandItems(v, NOW)[0]!
+  expect(row.forms[0]).toBe('32m')
+})
+
+test('T-863: a task waiting in the queue shows the time since it entered the queue, not since its try started', () => {
+  const t = task('T-52', {
+    runs: [gapRun({ ended: at(2) })],
+    live: { checking: { step: 'queue', at: at(1), place: 4 } },
+    history: [{ kind: 'stage', at: at(1), text: 'try 1: waits in the merge queue (place 4)', try: 1, step: 'queue' }],
+  })
+  const v = { tasks: [t], checker: false, mode: 'auto' as const, max_parallel: 3 }
+  const lane = liveLanes(v, NOW)[0]!
+  expect(lane.station).toBe('queue')
+  const form = bandItems(v, NOW)[0]!.forms[0]!
+  expect(form).toMatch(/queue 1m$/)
+})
+
+test('T-863: the stage chart does not count the idle stretch as work; lifetime and lead time stay wall-clock', () => {
+  const t = task('T-52', {
+    status: 'done',
+    created_at: at(40 * 60),
+    runs: [{ ...gapRun(), ended: at(10), ended_by: 'finished' }],
+    history: [
+      { kind: 'created', at: at(40 * 60), text: 'created by the owner' },
+      { kind: 'stage', at: at(10), text: 'try 1: prep started', try: 1, step: 'prep' },
+      { kind: 'stage', at: at(8), text: 'try 1: merge started', try: 1, step: 'merge' },
+      { kind: 'merged', at: at(6), text: 'try 1: did it → merged into main (abc)' },
+    ],
+  })
+  const s = taskStages(t, () => undefined)!
+  expect(s.ms.work).toBe(22 * MIN)
+  // the whole life from creation to done is still counted
+  expect(s.lifetime).toBe(40 * 60 * MIN - 6 * MIN)
+  // today's work time (liveToday's neighbour) never counts the gap either
+  const today = liveToday([task('T-53', { runs: [gapRun()] })], NOW, 0)
+  expect(today).toBeDefined()
+})
