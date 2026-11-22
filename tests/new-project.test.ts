@@ -192,6 +192,19 @@ test('T-844: /symcc-init where a board exists changes nothing and says so', asyn
   expect(JSON.stringify([...w.files.entries()])).toBe(before)
 })
 
+test('T-856: /symcc-init in a window turned off with /symcc-disable here does not claim another window runs symcc', async () => {
+  const w = world('a')
+  w.files.set(w.board, JSON.stringify(emptyBoard()))
+  await sessionStart(w.host)
+  await runCommand(w.host, 'symcc-disable', 'here')
+  expect(S.offHere).toBe(true)
+  expect(S.offWhy).toBe('off')
+  const r = await runCommand(w.host, 'symcc-init', '')
+  expect(r?.text).toContain('already set up here')
+  expect(r?.text).not.toContain('another window')
+  expect(r?.text).toContain('/symcc-enable here turns it back on')
+})
+
 test('T-844: /symcc-init in a subfolder of a folder with .symcc makes the subfolder\'s own board; later sessions there use it', async () => {
   const v = world('a', '/repo/src', '/repo')
   v.files.set('/repo/.git', '')
