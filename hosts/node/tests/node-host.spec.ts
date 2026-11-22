@@ -377,7 +377,9 @@ test('T-869: a tick whose session start finishes late still starts the ready tas
     await git('commit', '-qm', 'init')
     await enableHere(repo)
     let starts = 0
-    const runner: AgentRunner = { name: 'none', command: () => ((starts++, { argv: ['true'] })), result: () => ({ answer: '' }) as never }
+    // the real Claude runner on the fake `claude -p`, counting the worker starts
+    const real = claudeRunner(nodeProcessSystem, { bin: FAKE })
+    const runner: AgentRunner = { ...real, command: a => (starts++, real.command(a)) }
     const s = await openSession({ root: repo, runner, say: () => undefined, sessionId: 'node-t869' })
     try {
       expect(await leadTool(s, 'add', { title: 'Say hello', details: 'Done when: hello.txt says hello.', files: ['hello.txt'], why: 'a test', origin_by: 'owner' })).toContain('T-1')
