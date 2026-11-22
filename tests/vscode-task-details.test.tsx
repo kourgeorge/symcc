@@ -9,6 +9,7 @@ import { historyEntry, historyEvent, HISTORY_COLOR } from '../hooks/core/history
 import { detailRows, type DetailRow } from '../hooks/core/details'
 import { when } from '../hooks/core/days'
 import { HISTORY_FIRST, VS_LABEL_WIDTH, vsRowKeys } from '../hooks/claude/ui/vscode-task'
+import { vsHref } from '../hooks/claude/ui/vscode'
 import { RICH_TASKS, seedRich } from './task-page-fixture'
 
 type Node = { type?: string; key?: string; props?: Record<string, unknown>; children?: unknown[] }
@@ -187,3 +188,12 @@ for (const id of ['T-504', 'T-502', 'T-508'])
       expect(order.indexOf('vs-sec-details'), at).toBeGreaterThan(order.indexOf('vs-actions'))
       await ui.unmount()
     })
+
+test("T-855: VS Code's task page draws each agent line of a try with ⌀ before its token count", async ($, on) => {
+  const agent = { kind: 'worker' as const, id: 'ses_worker_one_Qr2', started: iso(T0 - 900_000), ended: iso(T0 - 300_000), tokens: { input: 4_100_000 } }
+  const t = { ...BUG, runs: [{ started: iso(T0 - 900_000), ended: iso(T0 - 300_000), agents: [agent] }], live: undefined }
+  seed(on, t.id, [t, DEP])
+  const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
+  await ui.press({ key: 'fold-time', link: { href: vsHref('fold', 'fold-time') } })
+  expect(textOf(await ui.find({ key: 'vs-sec-time-body' }))).toContain('ses…Qr2  10m · ⌀ 4.1M')
+})

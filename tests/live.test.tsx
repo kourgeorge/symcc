@@ -230,11 +230,11 @@ const T757_WANT = (bar: string) => {
 const t757Check = (sub: (id: string) => string, warn: (id: string) => boolean) => {
   const bar = (id: string) => T757_WANT(/▕[█░]+▏/.exec(sub(id))?.[0] ?? '')
   // (a) try 2 running: try 1's 4M with "+ …", the bar full (4M against the usual 4M)
-  expect(sub('T-801')).toContain('4M + …')
+  expect(sub('T-801')).toContain('⌀ 4M + …')
   expect(bar('T-801').empty).toBe(0)
   expect(bar('T-801').full).toBeGreaterThan(0)
   // (b) handed back: the whole sum, no "+ …"
-  expect(sub('T-802')).toContain('5M')
+  expect(sub('T-802')).toContain('⌀ 5M')
   expect(sub('T-802')).not.toContain('+ …')
   expect(sub('T-802')).not.toContain('⚠')
   // (c) try 1 running
@@ -245,7 +245,7 @@ const t757Check = (sub: (id: string) => string, warn: (id: string) => boolean) =
   expect(Math.abs(half.full - half.empty)).toBeLessThanOrEqual(1)
   expect(warn('T-804')).toBe(false)
   // (e) past twice the usual: the warning color and ⚠
-  expect(sub('T-806')).toContain('9M ⚠')
+  expect(sub('T-806')).toContain('⌀ 9M ⚠')
   expect(warn('T-806')).toBe(true)
 }
 

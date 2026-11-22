@@ -1009,11 +1009,11 @@ The last section of a task's page sums the task's own tries in its heading, and 
 with one dim line per agent under it (every worker and checker the try had):
 
 ```
-▍Runs   3 tries · 21m · 10.1M tokens (3.6× the usual task) · checkers 2.4M
+▍Runs   3 tries · 21m · 10.1M tokens (3.6× the usual task) · checkers ⌀ 2.4M
   try 1: …
   try 2: 14m · 6.2M tokens in all · finished: merged
-    ▸ worker  ses…Qr2  11m · 4.1M
-    ⌕ checker a01…c3b  3m · 2.1M
+    ▸ worker  ses…Qr2  11m · ⌀ 4.1M
+    ⌕ checker a01…c3b  3m · ⌀ 2.1M
   total: 21m · 10.1M tokens in all
 ```
 

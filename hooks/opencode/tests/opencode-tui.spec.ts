@@ -2868,10 +2868,10 @@ test('T-757: the OpenCode Live tab shows the whole task\'s tokens, the bar full 
   const warn = (id: string) => (d.lines[at(id)] ?? []).some(s => s.color === 'warning')
   const cells = (id: string) => { const b = /▕([█░]+)▏/.exec(sub(id))?.[1] ?? ''; return { full: [...b].filter(c => c === '█').length, empty: [...b].filter(c => c === '░').length } }
   // (a) try 2 running: try 1's 4M, more coming, the bar full at the usual 4M
-  expect(sub('T-801')).toContain('4M + …')
+  expect(sub('T-801')).toContain('⌀ 4M + …')
   expect([cells('T-801').full > 0, cells('T-801').empty]).toEqual([true, 0])
   // (b) handed back with 1M: the sum
-  expect(sub('T-802')).toContain('5M')
+  expect(sub('T-802')).toContain('⌀ 5M')
   expect(sub('T-802')).not.toContain('+ …')
   // (c) try 1 running
   expect(sub('T-803')).toContain('⌀ at hand-back')
@@ -2880,7 +2880,7 @@ test('T-757: the OpenCode Live tab shows the whole task\'s tokens, the bar full 
   expect(Math.abs(cells('T-805').full - cells('T-805').empty) <= 1).toBe(true)
   expect([warn('T-802'), warn('T-804')]).toEqual([false, false])
   // (e) past twice the usual: the warning color and ⚠
-  expect(sub('T-806')).toContain('9M ⚠')
+  expect(sub('T-806')).toContain('⌀ 9M ⚠')
   expect(warn('T-806')).toBe(true)
   expect(texts.some(t => t.includes(liveBarLegend(4_000_000)))).toBe(true)
 })
@@ -3947,4 +3947,12 @@ test('T-786: a doing task that asks for more time has separate cursor stops for 
   expect(lane).toEqual({ open: 'T-1' })
   expect(d0.ids.indexOf((lane as { open: string }).open)).toBe(2)
   expect(d0.ids.indexOf('T-1')).not.toBe(d0.ids.indexOf('need:T-1'))
+})
+
+test('T-855: OpenCode\'s task page draws an agent line of a try with ⌀ before its token count', () => {
+  const f = sectionsViewFile()
+  const agent = { kind: 'worker' as const, id: 'ses_worker_one_Qr2', started: AT, ended: AT, tokens: { input: 4_100_000 } }
+  const tasks = f.view.tasks.map(t => (t.id === 'T-2' ? { ...t, runs: [{ started: AT, ended: AT, agents: [agent] }] } : t)) as ViewFile['view']['tasks']
+  const lines = panelLines({ ...f, view: { ...f.view, tasks } }, { opened: 'T-2', cursor: 0 }, NOW, 100).lines.map(lineText)
+  expect(lines.some(l => /▸ worker +ses…Qr2 .*· ⌀ 4\.1M$/.test(l.trim()))).toBe(true)
 })
