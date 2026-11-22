@@ -1742,15 +1742,18 @@ change shows no tag.
 **Which try is it?** When a task is doing and this is not its first try, the board says so. A
 first try shows no mark.
 
-- In a task's row (the board's task list in the terminal, VS Code and OpenCode, and
-  OpenCode's band): `(2)` right after the time. It is dim, and from `(3)` on it uses the
-  warning colour. Claude Code's band above the prompt says `· try 2`.
+- In Claude Code's band above the prompt: `· try 3` after the step and its time
+  (`T-5 ▶ work 12m · try 3`).
+- In OpenCode's strip above the prompt: `(3)` right after the time (`T-5 ▶ 1h40m (3)`).
+- On the task's page: `try 3/4`.
 - In the lead's board: `T-5 doing · try 2/3`. The `/3` shows the limit while the try is an
   automatic retry after failing tests.
 
-**How long has it worked?** The time in a doing task's row is the total work time of all its
-tries, so a task that is really stuck stands out: `T-5 ▶ 1h40m (3)` is 1 hour 40 over three
-tries. On the first try it is just that try's time, `T-5 ▶ 15m`. During a check step the
+The board's task list (in the terminal, VS Code and OpenCode) shows no try number.
+
+**How long has it worked?** The time in a doing task's row on the board list is the total
+work time of all its tries, so a task that is really stuck stands out: `T-5 ▶ 1h40m` is 1 hour
+40 over all its tries. On the first try it is just that try's time, `T-5 ▶ 15m`. During a check step the
 step's icon takes the place of `▶`: `T-5 ⊛ 9m` (see "What a task shows on its way to the
 merge").
 
