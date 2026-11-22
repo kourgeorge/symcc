@@ -4,7 +4,7 @@
 import { drawNow } from './now'
 import type { MatchedHook } from 'claude-code'
 import { bandBrand, bandWhere, bandItems, bandFronts, bandNote, bandSummary, BAND_INDENT, type BandSummaryView, planBandText, questionsForYou, driveWarning, type BandItem, type LiveView, type BoardTask } from '../../board'
-import { cutTitle, padWidth, textWidth } from '../../core/stats'
+import { cutTitle, padWidth, textWidth } from '../../core/width'
 import { type PaneView, S } from '../../app/state'
 import { type $, panelValues } from '../panel'
 import { openPane } from '../../app/open'

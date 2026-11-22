@@ -3,7 +3,7 @@
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { BRANCH_ROWS_MAX, LIVE_INDENT, liveBranches, liveFinishedLanes, segText } from '../hooks/core/live'
-import { textWidth } from '../hooks/core/stats'
+import { textWidth } from '../hooks/core/width'
 import { branchFacts, readBranches, BRANCH_CACHE_MS } from '../hooks/app/branches'
 import { publish } from '../hooks/app/lead'
 import { S } from '../hooks/app/state'

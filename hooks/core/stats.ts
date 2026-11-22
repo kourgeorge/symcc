@@ -9,6 +9,9 @@ import { isInvestigation, STATUS_WORD } from './board-file'
 import { dayLabel, dayOf } from './days'
 import { ORIGIN_MARK } from './origin'
 import { jsonObj } from './text'
+import { cutTitle, padWidth, wrapLine } from './width'
+// hooks/claude/stats-lines.ts still reads these two from here.
+export { cutTitle, textWidth } from './width'
 import { gapsOf, addTokens, billedTokens, cleanTokens, fmtCost, fmtDuration, fmtTokenKinds, fmtTokens, isAnsweredRun, PRICE_WEIGHT, runMs, sumTokens, tokenCount, tryTokens } from './runs'
 
 // ---------------- the range ----------------
@@ -343,41 +346,12 @@ export function countingText(r: StatsRange, counting: StatsCounting, asked: bool
   return null
 }
 
-/** The text split into whole characters (graphemes where the runtime knows them, else code points), never half of one. */
-const chars = (s: string): string[] => {
-  const Seg = (Intl as { Segmenter?: new (l?: string, o?: { granularity: 'grapheme' }) => { segment(s: string): Iterable<{ segment: string }> } }).Segmenter
-  return Seg ? Array.from(new Seg(undefined, { granularity: 'grapheme' }).segment(s), x => x.segment) : Array.from(s)
-}
-/** Wide characters (CJK, full-width forms, emoji) take two screen columns. */
-const WIDE = /[\u1100-\u115F\u2E80-\u303E\u3041-\u33FF\u3400-\u4DBF\u4E00-\u9FFF\uA000-\uA4CF\uAC00-\uD7A3\uF900-\uFAFF\uFE30-\uFE4F\uFF00-\uFF60\uFFE0-\uFFE6\u{1F000}-\u{1FAFF}\u{20000}-\u{3FFFD}]|\p{Extended_Pictographic}\uFE0F|\p{Emoji_Presentation}/u
-/** Marks that take no column of their own (combining marks, joiners, variation selectors). */
-const ZERO = /^[\p{M}\u200B-\u200F\uFE00-\uFE0F]+$/u
-const charWidth = (c: string) => (ZERO.test(c) ? 0 : WIDE.test(c) ? 2 : 1)
-/** How many screen columns the text takes. */
-export const textWidth = (s: string) => chars(s).reduce((w, c) => w + charWidth(c), 0)
-/** The text padded with spaces on the right to `n` screen columns. */
-export const padWidth = (s: string, n: number) => s + ' '.repeat(Math.max(0, n - textWidth(s)))
-/** The text cut to at most `n` screen columns, ending in "…" when cut; whole characters only. */
-export function cutTitle(s: string, n = 35): string {
-  if (textWidth(s) <= n) return s
-  let out = ''
-  let w = 0
-  for (const c of chars(s)) {
-    const cw = charWidth(c)
-    if (w + cw > n - 1) break
-    out += c
-    w += cw
-  }
-  return `${out}…`
-}
 const pct = (a: number, b: number) => (b ? `${Math.round((a / b) * 100)}%` : '-')
 const avgDur = (xs: number[]) => (xs.length ? fmtDuration(mean(xs)!) : '-')
 const avgTok = (xs: number[]) => (xs.length ? fmtTokens(mean(xs)!) : '-')
 const row = (label: string, text: string, w = 12) => `  ${label.padEnd(w)} ${text}`
 export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
 
-/** The widest a line of the report may be. */
-export const STATS_WIDTH = 80
 /** The widest a bar may be, in blocks. */
 export const BAR_WIDTH = 16
 
@@ -396,22 +370,6 @@ export function bar(value: number, max: number, width = BAR_WIDTH): string {
 /** One bar row: "  label  ▇▇▇▇  81  39%" plus any `rest`; the bar padded so the numbers line up. */
 const barRow = (label: string, w: number, value: number, max: number, total: number | null, rest = '') =>
   `  ${label.padEnd(w)} ${bar(value, max).padEnd(BAR_WIDTH)} ${String(value).padStart(4)}${total === null ? '' : ` ${pct(value, total).padStart(4)}`}${rest ? `  ${rest}` : ''}`
-
-/** Line `l` cut into lines of at most `width` columns at spaces; the next lines start under its text (after a label), else 4 further in. */
-export function wrapLine(l: string, width = STATS_WIDTH): string[] {
-  if (l.length <= width || textWidth(l) <= width) return [l]
-  const gap = /^ *\S.*?\S {2,}(?=\S)/.exec(l)?.[0].length ?? 0
-  const pad = ' '.repeat(gap && gap <= 30 ? gap : Math.min(20, (/^ */.exec(l)?.[0].length ?? 0) + 4))
-  const out: string[] = []
-  let rest = l
-  while (rest.length > width) {
-    const cut = rest.lastIndexOf(' ', width)
-    if (cut <= pad.length) break
-    out.push(rest.slice(0, cut).trimEnd())
-    rest = pad + rest.slice(cut + 1).trimStart()
-  }
-  return [...out, rest]
-}
 
 /** How the billed-equivalent figure is made, said next to it in the full view. */
 export const BILLED_NOTE = `an estimate: each kind weighed by its usual price compared with input (input ${PRICE_WEIGHT.input}, cache write ${PRICE_WEIGHT.cache_write}, cache read ${PRICE_WEIGHT.cache_read}, output ${PRICE_WEIGHT.output})`

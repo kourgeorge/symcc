@@ -3,7 +3,7 @@
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { LIVE_SECTIONS, liveNeeds, segText } from '../hooks/core/live'
-import { textWidth } from '../hooks/core/stats'
+import { textWidth } from '../hooks/core/width'
 import { vsHref } from '../hooks/claude/ui/vscode'
 import { PANE, T0, seedBoard } from './board-fixture'
 import { askShape } from './ask-shape'

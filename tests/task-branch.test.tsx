@@ -4,7 +4,7 @@
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { LIVE_INDENT } from '../hooks/core/live'
-import { textWidth } from '../hooks/core/stats'
+import { textWidth } from '../hooks/core/width'
 import { branchTime, taskBranchLines, taskBranchTitle, type TaskBranchFacts } from '../hooks/core/task-branch'
 import { readTaskBranch, taskBranchFacts, viewBranchTasks, BRANCH_CACHE_MS } from '../hooks/app/branches'
 import { publish } from '../hooks/app/lead'
