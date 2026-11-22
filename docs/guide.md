@@ -1125,7 +1125,8 @@ TASKS ────────────────────────�
   ```
 - Waiting trains: a todo task that waits (its `after`) for a task that has not finished hangs
   under the lane of the running task it waits for, indented with `└─◇`, its id and cut title,
-  then `waits`. The whole row of a waiting train is dim gray:
+  then `waits`. The waiting train's id is in the accent color (orange) and the rest of the row
+  is dim gray. Topic labels in the organizational memory rows and topic grid are blue:
 
   ```
    ▶ T-712 Scout or… ●━━━━━━◉──────○──────○──────○  2m
