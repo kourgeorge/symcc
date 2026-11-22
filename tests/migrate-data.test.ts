@@ -344,6 +344,7 @@ test('T-807: fix migrate-data moves a task\'s try-only fields into live, drops a
   old.tasks.push(
     { ...base, id: 'T-5', title: 'five', status: 'doing', note: 'worker on it', attempts: 1, origin, merge_into: 'main', history: [], session: 'me', time_ask: E, extra_minutes: 10, try_refused: ['a.ts'], try_question: { question: 'Which?' }, merge_main: false, runs: [{ started: T }] },
     { ...base, id: 'T-6', title: 'six', status: 'doing', note: 'worker starting', attempts: 1, origin, merge_into: 'main', history: [], session: 'me', finishing: E, runs: [{ started: T, ended: E }] },
+    { ...base, id: 'T-8', title: 'eight', status: 'doing', note: 'a checker agent is trying to break it before it merges', attempts: 1, origin, merge_into: 'main', history: [], session: 'me', checking: { step: 'checker', at: E }, runs: [{ started: T, ended: E }] },
     { ...base, id: 'T-7', title: 'seven', status: 'failed', note: 'conflicts with the latest main (after 2 automatic retries)', attempts: 3, origin, merge_into: 'main', history: [], runs: [] },
   )
   w.files.set(`${D}/board.json`, JSON.stringify(old, null, 2))
@@ -355,6 +356,7 @@ test('T-807: fix migrate-data moves a task\'s try-only fields into live, drops a
   expect('merge_main' in t5).toBe(false)
   const t6 = b.tasks.find(x => x.id === 'T-6')!
   expect(t6.live).toEqual({ session: 'me', phase: 'claimed', checking: { step: 'prep', at: E } })
+  expect(b.tasks.find(x => x.id === 'T-8')!.live).toEqual({ session: 'me', phase: 'checker', checking: { step: 'checker', at: E } })
   expect(b.tasks.find(x => x.id === 'T-7')!.failed_on).toBe('clash')
   const saved = JSON.parse(w.files.get(`${D}/board.json`)!).tasks.find((x: { id: string }) => x.id === 'T-5')
   expect(['session', 'finishing', 'time_ask', 'extra_minutes', 'try_refused', 'try_question'].filter(k => k in saved)).toEqual([])

@@ -3,7 +3,7 @@
 // Like merge.test.ts, these run the real finish, merge and board code against a small scripted git and in-memory files.
 import { expect } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { type Board, addTask, emptyBoard, patchTask, find, checkerVerdict, checkerOutput, isCheckerOutput, docsOnly, checkerOn, applySettings, parseSettingValue, settingValue, finishedNote, bashOutsideText, gitWriteText, gitWriteIn, workerGitWriteText, untestedChange, testTail, statusCell, PREP_NOTE, STEP_NOTE } from '../hooks/board'
+import { type Board, addTask, emptyBoard, patchTask, find, checkerVerdict, checkerOutput, isCheckerOutput, docsOnly, checkerOn, applySettings, parseSettingValue, settingValue, finishedNote, bashOutsideText, gitWriteText, gitWriteIn, workerGitWriteText, untestedChange, testTail, statusCell, PREP_NOTE, STEP_NOTE, shownNote } from '../hooks/board'
 import { S, leadQueue, meanwhile, workers, checkerRuns, stopped } from '../hooks/app/state'
 import { workerFinished, WORKER_PROMPT, checkingNow, stopAsked, check, stoppedHandBack } from '../hooks/app/workers'
 import { setBoardMode, setSymcc } from '../hooks/app/board-mode'
@@ -307,14 +307,14 @@ test('T-542: after the checker says OK, the prep and merge steps no longer say a
     const sub = argv[0] === 'git' ? argv.slice(1).filter((x, i, a) => x !== '-c' && a[i - 1] !== '-c')[0] : ''
     if (sub === 'add' || sub === 'update-ref') {
       const t = find(await load(w.$), 'T-1')!
-      seen.push(`${sub}: ${statusCell(t, Date.now())} | ${t.note}`)
+      seen.push(`${sub}: ${statusCell(t, Date.now())} | ${shownNote(t)}`)
     }
     return run(argv as never, o as never)
   }) as typeof w.$.run
   let during = ''
   const t = await finish(w, async id => {
     const c = find(await load(w.$), 'T-1')!
-    during = `${statusCell(c, Date.now())} | ${c.note}`
+    during = `${statusCell(c, Date.now())} | ${shownNote(c)}`
     checkerFinished(id, 'OK')
   })
   expect(t.status).toBe('done')
@@ -937,7 +937,7 @@ async function reloadDuringChecker(w: ReturnType<typeof world>, status: string) 
   workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: 0 })
   void workerFinished(w.$, 'ag1', 'made the change')
   await until(() => checkerRuns.size > 0)
-  expect(find(await load(w.$), 'T-1')!.note).toBe('a checker agent is trying to break it before it merges')
+  expect(shownNote(find(await load(w.$), 'T-1')!)).toBe(CHECKER_NOTE)
   resetPlugin()
   S.root = ROOT
   S.driving = true
@@ -1011,7 +1011,7 @@ test('T-386: a checker shown as ended after the reload: the next check starts a 
 test('T-386: a reload after the checker said OK and the work reached main (before the outcome was written): the task ends done, no new checker', async () => {
   const w = world()
   // live.checking: the old copy's mark (its merge was under way)
-  const left = { note: 'a checker agent is trying to break it before it merges', live: { checking: { step: 'checker' as const, at: ISO } }, runs: [{ started: ISO, ended: ISO, commits: [H1] }] }
+  const left = { live: { phase: 'checker' as const, checking: { step: 'checker' as const, at: ISO } }, runs: [{ started: ISO, ended: ISO, commits: [H1] }] }
   await saveBoard(w.$, boardWith(true, left))
   w.git.head = H1
   w.git.main = H1
@@ -1057,7 +1057,7 @@ test("T-386: a restarted checker whose agent type isn't loaded yet: the task sta
   expect(checkerRuns.size).toBe(0)
   const mid = find(await load(w.$), 'T-1')!
   expect(mid.status).toBe('doing')
-  expect(mid.note).toBe('a checker agent is trying to break it before it merges')
+  expect(mid.live?.phase).toBe('checker')
   expect(mid.history.some(l => l.text.includes('no verdict'))).toBe(false)
   await check(w.$)
   await until(() => checkerRuns.size > 0)

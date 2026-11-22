@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { type Blockers, type BoardTask, type TurnStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, testTimeoutMs, isInvestigation, testsWithChangesOf, untestedChange, untestedText, shortSha, secretFiles, secretsLeftText, onlySecretsQuestion, nameList, isPlainRelPath, SCRATCH_DIR, stepNote, movedText, tryLabel, tryEntry, taskWasResult, type FailReason, withHistory } from '../board'
+import { type Blockers, type BoardTask, type TurnStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, testTimeoutMs, isInvestigation, testsWithChangesOf, untestedChange, untestedText, shortSha, secretFiles, secretsLeftText, onlySecretsQuestion, nameList, isPlainRelPath, SCRATCH_DIR, movedText, tryLabel, tryEntry, taskWasResult, type FailReason, withHistory } from '../board'
 import { gitOk, git, worktreeDir, asSymcc, taskBranch, branchExists, scratchOn } from './git'
 import { S, changesCache } from './state'
 import type { Host } from '../host'
@@ -376,17 +376,16 @@ async function commitTry($: Host, t: SymccTask, dir: string, made: string[], sub
 /**
  * Says on the board which step of checking task `t` is going on now (Live.checking), so the list
  * shows it; only while the task is still as it was when the check began and the check was not
- * stopped or given up; the prep step also says it in the note (stepNote). Never fails the check: a board that can't be written only misses the word.
+ * stopped or given up; its words are built when drawing (shownNote). Never fails the check: a board that can't be written only misses the word.
  */
 export async function markStep($: Host, t: SymccTask, step: TurnStep, stopped: () => CheckResult | undefined) {
   if (stopped()) return
   await change($, x => {
     const cur = find(x, t.id)
     if (!cur || cur.status !== t.status || cur.attempts !== t.attempts || stopped()) return x
-    const note = stepNote(step, cur.note)
     const phase = step === 'checker' ? 'checker' as const : undefined
-    if (cur.live?.checking?.step === step && note === cur.note && cur.live.phase === phase) return x
-    return patchTask(x, t.id, { live: { checking: { step, at: now() }, ...(cur.status === 'doing' ? { phase } : {}) }, ...(note !== cur.note ? { note } : {}) }, cur.updated_at)
+    if (cur.live?.checking?.step === step && cur.live.phase === phase) return x
+    return patchTask(x, t.id, { live: { checking: { step, at: now() }, ...(cur.status === 'doing' ? { phase } : {}) } }, cur.updated_at)
   }).catch(() => undefined)
 }
 

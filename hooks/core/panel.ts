@@ -155,16 +155,6 @@ export const STEP_NOTE: Record<TurnStep, string> = {
 export const PREP_NOTE = STEP_NOTE.prep
 
 
-/** Whether `note` is one of the notes a task shows during its merge turn or while it waits for it (see STEP_NOTE). */
-export const isMergeNote = (note: string | undefined): boolean => !!note && (Object.values(STEP_NOTE).includes(note) || /^queue \(\d+\)$/.test(note))
-
-/** The note task `note` gets when check step `step` begins: the step's note (STEP_NOTE) in place of any other merge note;
- *  the checker step keeps it (runChecker then sets STEP_NOTE.checker), and a note that is not a merge note stays. */
-export function stepNote(step: TurnStep, note: string | undefined): string | undefined {
-  if (step === 'checker') return note
-  return isMergeNote(note) ? STEP_NOTE[step] : note
-}
-
 /** The short status column of a task row in the board list: the step while symcc checks its finished work
  *  ("prep", "test", "checker", "merge", the short words for checkStepNow's steps), else the time of the running try ("4m") for a task being
  *  worked on ("more time?" while its worker, over its time limit, waits for the owner's answer), "review", "waiting",

@@ -284,7 +284,7 @@ test("T-748: a running row shows its stage's icon and name, the time in that sta
   const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 140 }, surface: 'terminal' })
   // "⌕" + "checker 8m · try 2": the checker started when the try handed back, 8 minutes ago
   // one line each, the one that started first at the top
-  const rows = [['⊛', 'T-41', 'test 10s', 'Being tested'], ['⌕', 'T-42', 'checker 8m · try 2', 'Being checked'], ['⇢', 'T-43', 'merge 10s', 'Being merged'], ['▶', 'T-40', 'work 12m', 'Running worker'], ['▶', 'T-44', 'work 5m · try 3', 'Third try']]
+  const rows = [['⊛', 'T-41', 'test 10s', 'Being tested'], ['⌕', 'T-42', 'checker 8m · try 2', `Being checked — ${STEP_NOTE.checker}`], ['⇢', 'T-43', 'merge 10s', 'Being merged'], ['▶', 'T-40', 'work 12m', 'Running worker'], ['▶', 'T-44', 'work 5m · try 3', 'Third try']]
   const width = 'checker 8m · try 2'.length
   const want = rows.map(([icon, id, state, title]) => ` ${icon} ${id}  ${state!.padEnd(width)}  ${title}`)
   expect((await bandLines(ui)).slice(1)).toEqual(want)
@@ -295,13 +295,13 @@ test("T-748: a running row shows its stage's icon and name, the time in that sta
   // narrow: the time goes first, then the try, so the titles keep their room
   const narrow = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 48 }, surface: 'terminal' })
   const n = await bandLines(narrow)
-  expect(n, 'narrow 42').toContain(' ⌕ T-42  checker · try 2  Being checked')
+  expect(n.some(l => l.startsWith(' ⌕ T-42  checker · try 2  Being checked')), 'narrow 42').toBe(true)
   expect(n, 'narrow 40').toContain(' ▶ T-40  work             Running worker')
   expect(n.some(l => /12m/.test(l))).toBe(false)
   await narrow.unmount()
   const tight = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 44 }, surface: 'terminal' })
   const t = await bandLines(tight)
-  expect(t, 'tight').toContain(' ⌕ T-42  checker  Being checked')
+  expect(t.some(l => l.startsWith(' ⌕ T-42  checker  Being checked')), 'tight').toBe(true)
   expect(t.some(l => /· try/.test(l))).toBe(false)
   await tight.unmount()
   // the time follows the host clock

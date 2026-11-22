@@ -6,7 +6,7 @@ import { YOUR_EDITS } from '../hooks/core/review'
 import { inMergeLine, MERGE_LINE_POLL_MS, resetMergeLine } from '../hooks/app/merge-line'
 import { joinedText } from '../hooks/core/board-parts'
 import { mergeLineText, parseMergeLine, inLineNote, MERGE_LINE_STALE_MS, mergeLineStaleMs, type LineEntry, testMinutesOf, testTimeoutMs, lineEntryStale, readBoard, DEFAULT_TEST_MINUTES, BASH_PATHS_MAX, bashTooManyText, failedTestNames, FAILED_TESTS_KEPT, FAILED_TEST_CHARS } from '../hooks/board'
-import { PREP_NOTE, STEP_NOTE, isMergeNote, type Board, type Notify, soundSetFor, type BoardTask, workerGitWriteText, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, readArchive, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, untestedChange, isTestFile, isPlainRelPath, parseSettingValue, type WorkerQuestion, isAnswered, boardText, taskMatches, withAgentStart, workerIdOf, tryTokens, tryCost, onTask } from '../hooks/board'
+import { PREP_NOTE, STEP_NOTE, shownNote, type Board, type Notify, soundSetFor, type BoardTask, workerGitWriteText, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, readArchive, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, untestedChange, isTestFile, isPlainRelPath, parseSettingValue, type WorkerQuestion, isAnswered, boardText, taskMatches, withAgentStart, workerIdOf, tryTokens, tryCost, onTask } from '../hooks/board'
 import { usedRun, runBy } from './agent-fixture'
 import { removeWorktree, cleanupMerged, deleteMergedBranch } from '../hooks/app/git'
 import { addPassedTree, parsePassedTrees, passedTreesText, treePassed, PASSED_TREES_MAX } from '../hooks/core/passed-trees'
@@ -4372,7 +4372,7 @@ test('a stuck approve is given up after the limit: it stays in review with a not
   let out: string | undefined
   void runTool(w.$, 'approve', { task: 'T-1' }).then(x => (out = String(x)))
   await turns(w, () => hung)
-  expect(find(await load(w.$), 'T-1')!.note).toBe(STEP_NOTE.testing)
+  expect(shownNote(find(await load(w.$), 'T-1')!)).toBe(STEP_NOTE.testing)
   // the list row says which step the approve is in
   expect(statusCell(find(await load(w.$), 'T-1')!, Date.now())).toBe('test')
   expect(await runTool(w.$, 'approve', { task: 'T-1' })).toBe('T-1 is already being merged')
@@ -4962,7 +4962,8 @@ function notesOf(w: ReturnType<typeof world>) {
   const look = () => {
     const text = w.files.get(BOARD)
     // a done task keeps its note in its parts file (T-675)
-    const n = text ? find(parseBoard(joinedText(text, rel => w.files.get(`${ROOT}/.symcc/${rel}`) ?? null)), 'T-1')?.note : undefined
+    const x = text ? find(parseBoard(joinedText(text, rel => w.files.get(`${ROOT}/.symcc/${rel}`) ?? null)), 'T-1') : undefined
+    const n = x ? shownNote(x) : undefined
     if (n !== undefined && seen.at(-1) !== n) seen.push(n)
   }
   w.onRun(async () => look())
@@ -4990,12 +4991,11 @@ test('T-550: every note symcc sets between a hand-back and its merge is in the o
   // the first note is the one the worker had before it handed back
   const before = seen.slice(1, -1)
   // T-612: the catch-up with main at the start of its turn is part of the test step, so it goes straight on to the tests
-  expect(before).toEqual([STEP_NOTE.prep, inLineNote(2), STEP_NOTE.prep, STEP_NOTE.testing, STEP_NOTE.merging])
+  expect(before).toEqual([STEP_NOTE.prep, inLineNote(2), STEP_NOTE.testing, STEP_NOTE.merging])
   expect(before.filter(n => !SMALL_SET.includes(n))).toEqual([])
-  expect(before.every(isMergeNote)).toBe(true)
   // the outcome note is not one of them
   expect(seen.at(-1)).toBe(t.note)
-  expect(isMergeNote(t.note)).toBe(false)
+  expect(SMALL_SET).not.toContain(t.note)
 })
 
 /** Records the check steps task T-1 has on the board (with the queue's place), like notesOf. */
@@ -5027,7 +5027,7 @@ test('T-612: a task waiting in the merge queue has the check step "queue" with i
   await turns(w, () => (look(), ran.length === 1 && seen.includes('queue 2')))
   const waiting = find(await load(w.$), 'T-1')!
   expect(waiting.live?.checking).toEqual({ step: 'queue', place: 2, at: expect.any(String) })
-  expect(waiting.note).toBe(inLineNote(2))
+  expect(shownNote(waiting)).toBe(inLineNote(2))
   const now = Date.parse(waiting.live!.checking!.at)
   expect(taskPhase(waiting, now)).toMatchObject({ stage: 'queue', place: 2 })
   // the queue goes stale like every other step: its copy gone, the task is back in its worker stage
@@ -6125,7 +6125,7 @@ async function twoChecking(w: ReturnType<typeof world>, t2: Partial<BoardTask> =
   await saveBoard(w.$, b)
   return [find(b, 'T-1')!, find(b, 'T-2')!]
 }
-const noteOf = (w: ReturnType<typeof world>, id: string) => find(parseBoard(w.files.get(BOARD)!), id)!.note
+const noteOf = (w: ReturnType<typeof world>, id: string) => shownNote(find(parseBoard(w.files.get(BOARD)!), id)!)
 /** The tasks in the merge line file, front first. */
 const lineTasks = (w: ReturnType<typeof world>) => parseMergeLine(w.files.get(LINE) ?? null).map(e => e.task)
 /** A merge line entry of task `task` from session `session` (by default another one), dated `at`. */
@@ -6159,7 +6159,8 @@ test('two tasks in the merge line take turns; the second waits noted "queue (2)"
   // each time limit runs only during its own turn: the waiting one's starts once its turn begins
   expect(turn1).toEqual(['start', 'stop'])
   expect(turn2).toEqual(['start', 'stop'])
-  expect(noteOf(w, 'T-2')).toBe(CHECKING_NOTE)
+  // its queue step stays until its turn's first step replaces it, and its words are built from it
+  expect(noteOf(w, 'T-2')).toBe(inLineNote(2))
   // its step is not put back to the one it had (no step back from the queue): its turn's first step replaces it
   expect(find(await load(w.$), 'T-2')!.live?.checking).toMatchObject({ step: 'queue', place: 2 })
   expect(w.files.has(LINE)).toBe(false)
@@ -6284,6 +6285,22 @@ test('when the merge line file cannot be written, this copy\'s tasks still take 
   expect(w.sleeps).toEqual([])
 })
 
+test('T-807: a task that passed its checker leaves the checker phase when it waits in line, so a reload finds nothing for restartCheckers', async () => {
+  S.me = 'me'
+  const w = world()
+  const [t1] = await twoChecking(w)
+  await change(w.$, x => patchTask(x, 'T-1', { live: { phase: 'checker', checking: { step: 'checker', at: new Date().toISOString() } } }, ISO))
+  w.put(LINE, mergeLineText([lineEntry('T-2')]))
+  let phase: string | undefined = 'unset'
+  w.onSleep(() => {
+    if (w.sleeps.at(-1) !== MERGE_LINE_POLL_MS || phase !== 'unset') return
+    phase = find(parseBoard(w.files.get(BOARD)!), 'T-1')!.live?.phase
+    w.put(LINE, mergeLineText([]))
+  })
+  await inMergeLine(w.$, 'T-1', async () => undefined, { t: t1 })
+  expect(phase).toBeUndefined()
+})
+
 test('the merge line file survives a reload; a task that was in line joins again (its old entry goes), behind the ones still in front', async () => {
   S.me = 'me'
   const w = world()
@@ -6311,7 +6328,7 @@ test('the merge line file survives a reload; a task that was in line joins again
   expect(notes.every(n => n === inLineNote(2))).toBe(true)
   expect(ran.map(e => e.task)).toEqual(['T-1'])
   expect(ran[0]!.key).not.toBe(old.key)
-  expect(noteOf(w, 'T-1')).toBe(CHECKING_NOTE)
+  expect(noteOf(w, 'T-1')).toBe(inLineNote(2))
   expect(w.files.has(LINE)).toBe(false)
 })
 

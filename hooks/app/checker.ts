@@ -2,7 +2,7 @@
 // finishWork (workers.ts) runs a checker here after the prep step and before the task joins the merge line, and waits
 // for its verdict; turn.complete (agentFinished in app/symcc.ts) hands the checker's answer back through checkerFinished.
 import type { SymccTask, SymccTokens } from '../../types'
-import { type Board, STEP_NOTE, CHECKER_ROLE, type CheckerVerdict, roleSection, checkerIdOf, withAgentStart, agentSafeName, checkerDiff, checkerChangedFiles, checkerTestsText, checkerEntry, checkerPrompt, checkerVerdict, cutLine, find, findRole, intoOf, patchTask, tryLabel, withHistory, withAgentUsed, type HistoryAdd } from '../board'
+import { type Board, CHECKER_ROLE, type CheckerVerdict, roleSection, checkerIdOf, withAgentStart, agentSafeName, checkerDiff, checkerChangedFiles, checkerTestsText, checkerEntry, checkerPrompt, checkerVerdict, cutLine, find, findRole, intoOf, patchTask, tryLabel, withHistory, withAgentUsed, type HistoryAdd } from '../board'
 import { git, taskBranch } from './git'
 import { markStep } from './review'
 import { loadRoles } from './roles'
@@ -26,8 +26,6 @@ export const STOPPED_AGAIN = 'it was stopped; a new checker starts'
 /** The agent name of task `id`'s checker: "symcc-T-3-checker". */
 export const checkerName = (name: string, id: string) => agentSafeName(`${name}-${id}-checker`)
 
-/** The note of a task while its checker runs (kept in core/panel.ts, as stepNote swaps it back once the verdict is in). */
-
 /**
  * Runs a checker on task `t`'s finished work in its folder `dir` (everything is committed there) and waits for its
  * verdict. The board shows the task's step as "checker" meanwhile. The checker runs as the read-only scout type
@@ -42,7 +40,6 @@ export const checkerName = (name: string, id: string) => agentSafeName(`${name}-
  */
 export async function runChecker($: Host, t: SymccTask, b: Board, dir: string, stop: () => string | undefined = () => undefined, tryLater?: () => boolean): Promise<CheckerOutcome> {
   await markStep($, t, 'checker', () => undefined)
-  await change($, x => (find(x, t.id)?.status === t.status && find(x, t.id)?.attempts === t.attempts ? patchTask(x, t.id, { note: STEP_NOTE.checker }, now()) : x)).catch(() => undefined)
   const into = intoOf(t)
   const roles = await loadRoles($).catch(() => S.roles)
   const role = findRole(roles, CHECKER_ROLE)

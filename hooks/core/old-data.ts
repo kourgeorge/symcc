@@ -144,6 +144,7 @@ export function withoutTestRerun(t: Raw): Raw | null {
 const OLD_LIVE: [string, string][] = [['session', 'session'], ['checking', 'checking'], ['merge_wait', 'merge_wait'], ['extra_minutes', 'extra_minutes'], ['time_ask', 'time_ask'], ['wrap_up', 'wrap_up'], ['try_question', 'question'], ['try_refused', 'refused']]
 
 /** The note texts a "doing" task had before `live.phase` (T-807): claimed (queued, or being started), and the worker on it. */
+const OLD_CHECKER_NOTE = 'a checker agent is trying to break it before it merges'
 const OLD_CLAIM_NOTES = ['starting at the next turn', 'worker starting']
 
 /**
@@ -155,7 +156,8 @@ const OLD_CLAIM_NOTES = ['starting at the next turn', 'worker starting']
 export function withLive(t: Raw): Raw | null {
   const old = OLD_LIVE.some(([k]) => k in t) || 'finishing' in t
   const doing = t.status === 'doing'
-  const phased = doing && !isObj(t.live) && typeof t.note === 'string' && (OLD_CLAIM_NOTES.includes(t.note) || t.note === 'worker on it')
+  const inChecker = doing && !isObj(t.live) && (t.note === OLD_CHECKER_NOTE || (isObj(t.checking) && t.checking.step === 'checker'))
+  const phased = inChecker || (doing && !isObj(t.live) && typeof t.note === 'string' && (OLD_CLAIM_NOTES.includes(t.note) || t.note === 'worker on it'))
   const falseMain = 'merge_main' in t && t.merge_main !== true
   const clash = t.status === 'failed' && !('failed_on' in t) && typeof t.note === 'string' && /^conflicts with the latest /.test(t.note)
   if (!old && !phased && !falseMain && !clash) return null
@@ -169,7 +171,7 @@ export function withLive(t: Raw): Raw | null {
     if (typeof out.finishing === 'string' && out.finishing && !live.checking) live.checking = { step: 'prep', at: out.finishing }
     delete out.finishing
   }
-  if (phased) live.phase = OLD_CLAIM_NOTES.includes(t.note as string) ? 'claimed' : 'worker'
+  if (phased) live.phase = inChecker ? 'checker' : OLD_CLAIM_NOTES.includes(t.note as string) ? 'claimed' : 'worker'
   if (Object.keys(live).length) out.live = live
   if (falseMain) delete out.merge_main
   if (clash) out.failed_on = 'clash'

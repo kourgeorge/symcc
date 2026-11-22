@@ -14,7 +14,7 @@ import { type CrewBoard, nextScoutText, STEP_ICON, rowDuration, parseSearch, sea
 import { checkStepNow, shownStatus } from './lead'
 import { type PhaseStage, type TaskPhase, taskPhase } from './phase'
 import { whyFailed } from './failure'
-import { CLAIM_NOTES, sessionNote, STATUS_MARK } from './details'
+import { CLAIM_NOTES, sessionNote, shownNote, STATUS_MARK } from './details'
 import { newestFirst, offStatusParts, testsShort, type OffHere } from './settings'
 import { type OwnerQuestion, openQuestions, questionLine, questionsLabel } from './questions'
 import { needsYou } from './commands'
@@ -140,7 +140,7 @@ export function bandSummary(view: BandSummaryView, nowMs: number, width = Infini
  * tasks that need the owner (needsYou: "?" + "waiting", "◆" + "review", "✗" + "failed", "▶" + "more time?"). `since(id)`:
  * when this session's worker started (for a worker with no open try yet). The counts are on the band's first line (bandSummary).
  */
-export function bandItems(view: LiveView, nowMs: number, since: (id: string) => number | string | undefined = () => undefined, note: (t: BoardTask) => string = t => t.note ?? ''): BandItem[] {
+export function bandItems(view: LiveView, nowMs: number, since: (id: string) => number | string | undefined = () => undefined, note: (t: BoardTask) => string = t => shownNote(t, nowMs)): BandItem[] {
   const tasks = view.tasks as BoardTask[]
   const you = tasks.filter(t => needsYou(t, nowMs)).sort(newestFirst)
   const youIds = new Set(you.map(t => t.id))
@@ -205,7 +205,7 @@ const STATE_NOTES = new Set(['worker on it', STEP_NOTE.testing, STEP_NOTE.mergin
  *  `driving` false (another session drives the board): a claim note ("starting at the next turn") becomes
  *  OTHER_SESSION_NOTE, as that task's worker starts in the driving session, not here (T-643). */
 export const bandNote = (t: Pick<SymccTask, 'status' | 'runs' | 'note'> & Pick<BoardTask, 'live' | 'kind'>, nowMs: number, since?: number | string, driving = true): string =>
-  !t.note || (STATE_NOTES.has(t.note) && bandHasState(t, nowMs, since)) ? '' : sessionNote(t, driving)
+  !shownNote(t, nowMs) || (STATE_NOTES.has(shownNote(t, nowMs)) && bandHasState(t, nowMs, since)) ? '' : sessionNote(t, driving, nowMs)
 
 // ---------------- another session drives the board (T-643) ----------------
 
@@ -251,7 +251,7 @@ export function driveWarning(driving: boolean, tasks: readonly DriveTask[], nowM
  * why it failed (whyFailed), else `note` (the task's note; the bands pass bandNote, which leaves out what the row's
  * state already says). '' when there is nothing to say.
  */
-export function rowEndText(t: Pick<SymccTask, 'note' | 'history'> & Partial<Pick<SymccTask, 'question' | 'test_output' | 'runs'>> & Partial<Pick<BoardTask, 'question_lead'>> & Pick<BoardTask, 'status' | 'live' | 'merge_into'>, phase: Pick<TaskPhase, 'waitsFor' | 'approved' | 'stage'>, note: string = t.note ?? ''): string {
+export function rowEndText(t: Pick<SymccTask, 'note' | 'history'> & Partial<Pick<SymccTask, 'question' | 'test_output' | 'runs'>> & Partial<Pick<BoardTask, 'question_lead'>> & Pick<BoardTask, 'status' | 'live' | 'merge_into'>, phase: Pick<TaskPhase, 'waitsFor' | 'approved' | 'stage'>, note: string = shownNote(t)): string {
   if (phase.waitsFor === 'your-files') return fileWaitText(t)
   if (phase.approved && phase.stage) return APPROVED_NOTE
   if (phase.waitsFor === 'answer' || phase.waitsFor === 'files') return t.question_lead ?? t.question ?? t.note ?? ''
@@ -486,7 +486,7 @@ function boardRow(t: SymccTask, autoRetries: number | undefined, nowMs: number, 
   // the end text every view shows (rowEndText); the lead also reads "asks:" before a question, and "review" when nothing else is said
   const phase = taskPhase(t, nowMs)
   // in a session that doesn't drive the board a claim note says the worker runs in the other session (sessionNote)
-  const end = rowEndText(t, phase, sessionNote(t, driving))
+  const end = rowEndText(t, phase, sessionNote(t, driving, nowMs))
   const asks = (phase.waitsFor === 'answer' || phase.waitsFor === 'files') && (t.question_lead || t.question) ? 'asks: ' : ''
   const extra = end ? ` — ${asks}${end}` : t.status === 'review' ? ` — ${STATUS_WORD.review}` : ''
   const after = t.after.length && (t.status === 'todo' || t.status === 'backlog') ? ` (after ${t.after.join(', ')})` : ''

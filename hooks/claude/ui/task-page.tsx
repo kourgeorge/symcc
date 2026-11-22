@@ -343,7 +343,7 @@ export async function taskPage($: $, pane: PaneParts, viewTask: SymccTask) {
   const place = taskPlace(v, t.id, from, pane.nowMs, S.search?.text ?? '')
   const header: PageHeader = {
     from, label: t.id, place, title: t.title, color: taskColor(t as BoardTask, pane.nowMs, pageMerging),
-    state: taskStateGroups(t as BoardTask, { nowMs: pane.nowMs, merging: pageMerging, ...(v.auto_retries !== undefined ? { autoRetries: v.auto_retries } : {}), note: sessionNote(t, v.driving ?? S.driving) }),
+    state: taskStateGroups(t as BoardTask, { nowMs: pane.nowMs, merging: pageMerging, ...(v.auto_retries !== undefined ? { autoRetries: v.auto_retries } : {}), note: sessionNote(t, v.driving ?? S.driving, pane.nowMs) }),
     buttons: actions.map(x => ({ id: x.id, label: x.label, group: x.group, ...(x.key ? { key: x.key } : {}), onPress: press[x.id] })),
     onBack: goBack, onPrev: place ? openTask(place.prev) : () => undefined, onNext: place ? openTask(place.next) : () => undefined,
     backFocus: !(answerable || rejectBox), nav: NAV_KEYS.claude,

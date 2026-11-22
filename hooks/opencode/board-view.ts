@@ -1435,7 +1435,7 @@ function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = ''
   // the title, the state, the buttons in groups (core's taskActions), a thin rule; it stays at the top while the rest scrolls
   addAll(headerLines({
     from, label: t.id, place: taskPlace(v, t.id, from, nowMs, search), title: t.title, color: taskColor(t, nowMs, merging),
-    state: taskStateGroups(t, { nowMs, merging, ...(v.auto_retries !== undefined ? { autoRetries: v.auto_retries } : {}), note: sessionNote(t, v.driving ?? false) }),
+    state: taskStateGroups(t, { nowMs, merging, ...(v.auto_retries !== undefined ? { autoRetries: v.auto_retries } : {}), note: sessionNote(t, v.driving ?? false, nowMs) }),
     buttons: taskButtons(t, busy),
   }, w))
   const head = b.lines.length

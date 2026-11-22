@@ -9,7 +9,7 @@ import { findRole, type RoleDef, roleOf } from './roles'
 import { agentsOf, triesSummary } from './runs'
 import { squash } from './text'
 import { checkStepNow } from './lead'
-import { IN_LINE_ICON, rowTime, STEP_ICON, STEP_WORD } from './panel'
+import { IN_LINE_ICON, rowTime, STEP_ICON, STEP_NOTE, STEP_WORD } from './panel'
 import { stageStep, taskPhase } from './phase'
 
 /** A piece of text on the task page with its theme color name (see C() in claude/ui/parts.tsx). */
@@ -53,8 +53,15 @@ export const CLAIM_NOTES = new Set(['starting at the next turn', 'worker startin
 export const OTHER_SESSION_NOTE = 'runs in the other session'
 /** A task's note as a session shows it: `driving` false (another session drives the board) turns a doing task's claim
  *  note ("starting at the next turn") into OTHER_SESSION_NOTE, as its worker starts in the driving session, not here (T-643). */
-export const sessionNote = (t: Pick<SymccTask, 'status'> & { note?: string }, driving = true): string =>
-  !driving && t.status === 'doing' && CLAIM_NOTES.has(t.note ?? '') ? OTHER_SESSION_NOTE : t.note ?? ''
+export const sessionNote = (t: Pick<SymccTask, 'status'> & { note?: string } & Partial<Pick<BoardTask, 'live'>>, driving = true, nowMs = Date.now()): string =>
+  !driving && t.status === 'doing' && !t.live?.checking && CLAIM_NOTES.has(t.note ?? '') ? OTHER_SESSION_NOTE : shownNote(t, nowMs)
+
+/** The words a task shows for itself (T-807): while it is in a fresh check step, the step's words built from `live.checking`
+ *  ("queue (2)", "running the tests", ...), else its note. Code never reads these words back; they are for the owner. */
+export const shownNote = (t: Pick<SymccTask, 'status'> & { note?: string } & Partial<Pick<BoardTask, 'live'>>, nowMs = Date.now()): string => {
+  const step = checkStepNow(t as Pick<BoardTask, 'status' | 'live'>, nowMs)
+  return step ? (step === 'queue' ? inLineNote(t.live?.checking?.place ?? 0) : STEP_NOTE[step]) : t.note ?? ''
+}
 
 /**
  * The task page's status badge: the step a doing task is in, with the same icon as its row
@@ -290,7 +297,7 @@ export function taskCopyText(t: SymccTask, o: { roles?: RoleDef[]; report?: stri
   const kind = kindMark(t)
   const L = [`${t.id}  ${t.title}`, `${STATUS_WORD[t.status]} · ${kind ? `${kind} · ` : ''}${role} · from: ${from}`]
   if (og?.why) L.push(`why: ${squash(og.why)}`)
-  if (t.note) L.push(`${stateLabelLower()}: ${t.note}`)
+  if (shownNote(t)) L.push(`${stateLabelLower()}: ${shownNote(t)}`)
   L.push('What to do:', t.details.trim() ? t.details.trimEnd() : '(no details)')
   L.push(`May change: ${t.files.length ? t.files.join(', ') : 'anywhere in the project'}`)
   if (t.after.length) L.push(`Waits for: ${t.after.join(', ')}`)
