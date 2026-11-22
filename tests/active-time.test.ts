@@ -2,10 +2,10 @@
 // open; that stretch is not work time. A step (queue, tests, ...) shows the time since the step began.
 import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { activeFrom, agentLines, gapsOf, runMs, runsSummary, triesSummary } from '../hooks/core/runs'
+import { goOnRun, activeFrom, agentLines, gapsOf, runMs, runsSummary, triesSummary } from '../hooks/core/runs'
 import { liveLanes, liveToday, laneRight } from '../hooks/core/live'
 import { bandItems } from '../hooks/core/banner'
-import { statsData, taskStages } from '../hooks/board'
+import { resetDoing, leadText, statsData, taskStages } from '../hooks/board'
 
 const MIN = 60_000
 const NOW = Date.now()
@@ -97,4 +97,18 @@ test('T-863: the stage chart does not count the idle stretch as work; lifetime a
   // today's work time (liveToday's neighbour) never counts the gap either
   const today = liveToday([task('T-53', { runs: [gapRun()] })], NOW, 0)
   expect(today).toBeDefined()
+})
+
+test('T-863: a worker still running when Claude Code closed: the stop is stamped at the last heartbeat, so the closed hours do not count', () => {
+  const t = task('T-52', { live: { session: 'me' }, runs: [{ started: at(31 * 60), agents: [{ id: 'ag1', kind: 'worker' as const, started: at(31 * 60) }] }] })
+  const board = { tasks: [t] } as unknown as Parameters<typeof resetDoing>[0]
+  const lead = leadText('me', NOW - (31 * 60 - 20) * MIN)
+  const back = resetDoing(board, 'new', lead, NOW - 12 * MIN, REOPEN, at(12)).tasks[0]!
+  expect(back.status).toBe('todo')
+  const runs = goOnRun(back.runs, at(12))!
+  const r = runs.at(-1)!
+  expect(gapsOf(r).length).toBe(1)
+  // 20 min before the close, 12 min since the reopen is not yet worked: the new worker started at the reopen
+  expect(runMs(r, NOW)).toBe(32 * MIN)
+  expect(agentLines(r, NOW).join('\n')).toContain('20m')
 })
