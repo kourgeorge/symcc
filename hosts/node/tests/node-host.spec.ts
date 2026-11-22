@@ -17,7 +17,7 @@ import { lockText, LOCK_STALE_MS } from '../../../hooks/core/board-file'
 import { openSession, leadTool, closeSession, settle } from '../session'
 import { toolCall, notLeadText } from '../../../hooks/app/symcc'
 import { TOOLS } from '../../../hooks/app/tools'
-import { toolName, starting } from '../../../hooks/app/state'
+import { S, toolName, starting } from '../../../hooks/app/state'
 import { pump } from '../../../hooks/app/workers'
 import { WORKER_BASE, SCOUT_BASE, NO_TOOLS_ASK } from '../../../hooks/core/prompts'
 import { ASK_LINE, ASK_TOOL } from '../../../hooks/core/ask'
@@ -367,6 +367,41 @@ test('T-652: a session that closes while a worker start is still on its way ends
   }
 }, 300_000)
 
+test('T-869: a tick whose session start finishes late still starts the ready task, even when the start\'s own pump is slow', async () => {
+  const repo = await mkdtemp('/tmp/symcc-node-late-')
+  try {
+    const git = (...args: string[]) => runCommand(['git', '-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd: repo })
+    await git('init', '-q', '-b', 'main')
+    await writeFile(`${repo}/.gitignore`, '.symcc/\n')
+    await git('add', '.')
+    await git('commit', '-qm', 'init')
+    await enableHere(repo)
+    let starts = 0
+    const runner: AgentRunner = { name: 'none', command: () => ((starts++, { argv: ['true'] })), result: () => ({ answer: '' }) as never }
+    const s = await openSession({ root: repo, runner, say: () => undefined, sessionId: 'node-t869' })
+    try {
+      expect(await leadTool(s, 'add', { title: 'Say hello', details: 'Done when: hello.txt says hello.', files: ['hello.txt'], why: 'a test', origin_by: 'owner' })).toContain('T-1')
+      expect(await settle(s, false)).toBe(true)
+      expect(starts).toBe(0)
+      // as when claimLead waited (old workers from the record, the reload settle): the start isn't done when the tick
+      // begins, and when it ends it fires its own pump without waiting for it, as sessionStart does. Quiet looks 1 ms
+      // apart are far quicker than that pump's board read and git check, as 200 ms ones are on a busy machine
+      S.startupDone = false
+      const tick = settle(s, true, 120_000, 1)
+      await new Promise<void>(r => void setTimeout(r, 20))
+      S.startupDone = true
+      void pump(s.host).catch(() => undefined)
+      expect(await tick).toBe(true)
+      expect(starts).toBe(1)
+    } finally {
+      S.startupDone = true
+      await closeSession(s).catch(() => undefined)
+    }
+  } finally {
+    await rm(repo, { recursive: true, force: true })
+  }
+}, 300_000)
+
 /**
  * Whether process group `group` has no process left, looking every 100 ms for at most `ms` (an ended process can
  * take a moment to be reaped on a busy machine). A live group answers false only after `ms`.
@@ -471,7 +506,9 @@ test('T-474: a worker process left running by a CLI that was killed is in the re
     await git('add', '.')
     await git('commit', '-qm', 'init')
     await enableHere(repo)
-    const cli = (...args: string[]) => runCommand(['bun', MAIN, '--root', repo, '--claude', FAKE, ...args], { cwd: repo, timeoutMs: 120_000 })
+    // T-869: generous time limits, so a busy machine (the full test run next to `claude plugin test .`) is no failure:
+    // the last tick runs a whole worker, its checks and its merge
+    const cli = (...args: string[]) => runCommand(['bun', MAIN, '--root', repo, '--claude', FAKE, ...args], { cwd: repo, timeoutMs: 400_000 })
     expect((await cli('add', 'Say hello', '--files', 'hello.txt')).stdout).toContain('added T-1')
 
     // a tick whose worker waits 600 s; once the worker runs, the CLI is killed outright (no clean stop of its agents).
@@ -485,9 +522,11 @@ test('T-474: a worker process left running by a CLI that was killed is in the re
       group = Number((await readFile(pidFile, 'utf8').catch(() => '')).trim())
     }
     expect(group).toBeGreaterThan(1)
-    // the record has the worker (written when it started)
+    // the record has the worker (written when it started). T-869: the worker writes its pid itself, while the CLI
+    // writes the record a moment later; wait (up to 120 s, not 10 s) until the record names this worker, so a busy
+    // machine doesn't kill the CLI before it wrote it
     let entries = parseEntries(await readFile(recordFile, 'utf8').catch(() => null))
-    for (const end = Date.now() + 10_000; !entries.length && Date.now() < end; await new Promise<void>(r => void setTimeout(r, 100))) entries = parseEntries(await readFile(recordFile, 'utf8').catch(() => null))
+    for (const end = Date.now() + 120_000; !entries.some(e => e.pid === group) && Date.now() < end; await new Promise<void>(r => void setTimeout(r, 100))) entries = parseEntries(await readFile(recordFile, 'utf8').catch(() => null))
     // killed at any moment, maybe while it holds board.lock: T-659, the lock has the CLI's pid, so the runs below
     // take it over at once (they don't wait out LOCK_STALE_MS)
     tick.kill('SIGKILL')
@@ -507,6 +546,8 @@ test('T-474: a worker process left running by a CLI that was killed is in the re
     expect(await readFile(`${repo}/.symcc/worktrees/T-1/hello.txt`, 'utf8').catch(() => 'none')).toBe('none')
     // and the task is not stuck "doing" for the stopped worker: the next tick runs it again to the end
     const again = await cli('tick')
+    // exit code 124: the tick ran past cli's time limit (and was killed), not a task left stuck
+    expect(again.exitCode).toBe(0)
     expect(again.stdout).toContain('1 done')
     expect(parseEntries(await readFile(recordFile, 'utf8'))).toEqual([])
   } finally {
@@ -514,7 +555,7 @@ test('T-474: a worker process left running by a CLI that was killed is in the re
     if (group > 1) await runCommand(['sh', '-c', 'kill -s KILL -- -"$1"', 'sh', String(group)])
     await rm(repo, { recursive: true, force: true })
   }
-}, 300_000)
+}, 900_000)
 
 test('T-474: processAgents records a process while it runs, and stopLeftovers leaves this copy\'s own entries alone', async () => {
   const dir = await mkdtemp('/tmp/symcc-node-rec-')
