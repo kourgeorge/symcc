@@ -102,7 +102,7 @@ for (const [name, t] of [['board', board], ['Live tab', live]]) {
   const after = t.slice(t.indexOf('\n', t.indexOf('TODAY'))).split('\n').filter(l => l.trim())
   if (!/^ ⌀ [█▒]{16} workers and checkers 90% · scouts 10% \(⌀ 54\.7M of 530\.1M\)$/.test(after[1] ?? '')) bad(`still frame: the ${name}'s ▍Today line 2 is not the bar alone with the scouts' share ("${after[1] ?? ''}")`)
   if (after[2] !== ' avg ⌀ 3M/task · 9m work · 41m start-to-merge   first try 34% · avg 2.4 tries/task   ⌕ 47 sent back by the checker' && !/^ avg ⌀ 3M\/task · 9m work · 41m start-to-merge   first try 34% · avg 2\.4 tries\/task   ⌕ \d+ sent back by the checker$/.test(after[2] ?? '')) bad(`still frame: the ${name}'s ▍Today line 3 does not show the real medians, first try and tries ("${after[2] ?? ''}")`)
-  if (!/^ ⏱ 16h 56m agent work {3}⌀\/h 00 {9}[▁▂▃▄▅▆▇█]+·{7} 24$/.test(after[3] ?? '')) bad(`still frame: the ${name}'s ▍Today line 4 is not the agent work time then the hour sparkline with its labels at the end ("${after[3] ?? ''}")`)
+  if (!/^ ⏱ 16h 56m agent work {3}⌀\/h 00 ▕▁{8}[▁▂▃▄▅▆▇█]+·{7}▏ 24$/.test(after[3] ?? '')) bad(`still frame: the ${name}'s ▍Today line 4 is not the agent work time then the hour sparkline with its labels at the end ("${after[3] ?? ''}")`)
 }
 if (/≈ \$/.test(live + board)) bad('still frame: ▍Today shows a "≈ $" figure')
 for (const w of ['workers', 'scouts']) {
@@ -112,8 +112,8 @@ for (const w of ['workers', 'scouts']) {
 // (T-776, T-787) the band above the prompt: line 1 has no task id; each running task is on its own line
 const band = text(view('band')).split('\n').filter(l => l.trim())
 if (!band[0]?.startsWith('𝄞 symcc') || !band[0].includes('[ open board ]') || /T-\d+/.test(band[0])) bad(`still frame: the band's first line is not "𝄞 symcc ... [ open board ]" without a task id ("${band[0] ?? ''}")`)
-if (!band.some(l => /^ ▶ T-740 {2}\d+m · try 2 {2}After a reopen/.test(l))) bad('still frame: the band has no running-task line for T-740')
-if (!/<span class="t-passed">\d+m · try/.test(view('band'))) bad('still frame: the band\'s "Nm · try N" is not green')
+if (!band.some(l => /^ [▶⌕] T-740 \d+m \(try \d\) After a reopen/.test(l))) bad('still frame: the band has no running-task line for T-740')
+if (!/<span class="t-passed">\d+m \(try/.test(view('band'))) bad('still frame: the band\'s "Nm (try N)" is not green')
 // (T-773) Live is the first tab
 if (!live.startsWith('[l] Live │ [t] Tasks │ [s] Scouts │ [c] Settings')) bad('still frame: the tab row is not "[l] Live │ [t] Tasks │ [s] Scouts │ [c] Settings"')
 if (!/<span class="t-run">▶ T-740 *<\/span> /.test(view('board'))) bad('still frame: the running lane "▶ T-740" (mark and id only) is not drawn in the t-run tone')

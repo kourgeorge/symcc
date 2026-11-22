@@ -179,7 +179,7 @@
     const shares = ' ' + sp(`workers and checkers ${100 - TODAY_MORE.scoutsPct}%`, 'who-workers') + sp(' · ', 'dim') + sp(`scouts ${TODAY_MORE.scoutsPct}%`, 'who-scouts') + sp(` (⌀ ${TODAY_MORE.scoutsTokens})`, 'dim')
     L.push(' ' + sp('⌀ ', 'dim') + bar + shares)
     L.push(' ' + sp('avg ', 'dim') + sp(`⌀ ${TODAY_MORE.perTask.replace(' · ', '/task · ')}`, 'text') + sp(`   first try ${TODAY_MORE.firstTry}% · avg ${TODAY_MORE.avgTries} tries/task   ⌕ ${d.back} sent back by the checker`, 'dim'))
-    L.push(' ' + sp('⏱ ', 'dim') + sp(`${TODAY_MORE.work} agent work`, 'text') + sp('   ⌀/h 00 ', 'dim') + sp(' '.repeat(8) + TODAY_MORE.spark.slice(0, -1), 'bar') + sp(TODAY_MORE.spark.slice(-1), 'now') + sp('·'.repeat(24 - 8 - TODAY_MORE.spark.length), 'dim') + sp(' 24', 'dim'))
+    L.push(' ' + sp('⏱ ', 'dim') + sp(`${TODAY_MORE.work} agent work`, 'text') + sp('   ⌀/h 00 ', 'dim') + sp('▕', 'dim') + sp('▁'.repeat(8), 'dim') + sp(TODAY_MORE.spark.slice(0, -1), 'bar') + sp(TODAY_MORE.spark.slice(-1), 'now') + sp('·'.repeat(24 - 8 - TODAY_MORE.spark.length) + '▏ 24', 'dim'))
     if (!s.lanes.length) L.push(' ' + sp('⌀ = tokens', 'dim'))
     if (wide) {
       L.push('')
@@ -199,14 +199,14 @@
 
   // ---------- the band above the prompt (T-776, T-787) ----------
   // Line 1: "𝄞 symcc", the dim summary and [ open board ]; then each running task on its own line: the id in the accent
-  // color, "10m · try 1" green, the title normal text.
+  // color, "10m (try 2)" green, the title normal text.
   const STAGE = ['', '', 'queue', 'tests', 'merge']
   function band(s) {
     const running = s.lanes.filter(l => !l.done)
     const busy = s.lanes.filter(l => l.agent).length
     const waiting = 2 + (s.t736 === 'todo' ? 1 : 0)
     const L = [sp('𝄞 symcc', 'heading') + '  ' + sp(`⏵ auto merge · ${busy}/${MAX_AGENTS} agents busy · ${waiting} ${waiting === 1 ? 'task' : 'tasks'} waiting · ${s.today.merged} completed today`, 'dim') + '  ' + sp('[ open board ]', 'text')]
-    for (const l of running) L.push(' ' + sp((l.at === 1 ? '⌕ ' : '▶ ') + l.id, 'run') + '  ' + sp(`${STAGE[l.at] ? STAGE[l.at] + ' ' : ''}${dur(s.now - l.since)} · try ${l.tryNo}`, 'passed') + '  ' + esc(cut(TITLES[l.id], 60)))
+    for (const l of running) L.push(' ' + sp((l.at === 1 ? '⌕ ' : '▶ ') + l.id, 'run') + ' ' + sp(`${STAGE[l.at] ? STAGE[l.at] + ' ' : ''}${dur(s.now - l.since)}${l.tryNo > 1 ? ` (try ${l.tryNo})` : ''}`, 'passed') + ' ' + esc(cut(TITLES[l.id], 60)))
     return L.join('\n')
   }
 
