@@ -7,7 +7,7 @@ import { evidenceWritten } from '../hooks/app/evidence'
 import { addTask, emptyBoard, patchTask, blockedEditText } from '../hooks/board'
 import { runBy } from './agent-fixture'
 import { S, workers } from '../hooks/app/state'
-import { findRoot, mainRoot, isAbsolute, normalPath } from '../hooks/app/store'
+import { findRoot, mainRoot, projectRoot, isAbsolute, normalPath } from '../hooks/app/store'
 import { guardStart, sessionStart, sessionCleared, sessionEnd, toolCheck, toolCall, runCommand } from '../hooks/app/symcc'
 import { test } from './reset'
 import { fakeHost, memoryFs, done } from './fake-host'
@@ -121,6 +121,17 @@ test('mainRoot: a Windows git folder (drive or share) is kept as git wrote it', 
   expect(isAbsolute('../.git')).toBe(false)
   expect(normalPath('C:/proj/a/../b/./')).toBe('C:/proj/b')
   expect(normalPath('/')).toBe('/')
+})
+
+test('a Windows worker folder maps to the main project and goes guard-only', async () => {
+  const win = 'C:\\proj\\.symcc\\worktrees\\T-1'
+  const w = inWorktree(true, win, 'C:\\proj\\.git')
+  expect(await projectRoot(w.host, win)).toBe('C:\\proj')
+  await guardStart(w.host)
+  expect(S.root).toBe('C:\\proj')
+  expect(S.guardOnly).toBe(true)
+  expect(w.timers).toEqual([])
+  expect(w.statuses).toEqual([])
 })
 
 test('a guard-only refusal saves the main board but never publishes: no status line, no panel change', async () => {

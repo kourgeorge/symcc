@@ -475,10 +475,10 @@ test('T-474: a worker process left running by a CLI that was killed is in the re
     expect((await cli('add', 'Say hello', '--files', 'hello.txt')).stdout).toContain('added T-1')
 
     // a tick whose worker waits 600 s; once the worker runs, the CLI is killed outright (no clean stop of its agents).
-    // T-588: it runs from a subfolder, yet its record goes next to board.json (the project's top folder), so the run
+    // T-588: it runs with its cwd in a subfolder, yet its record goes next to board.json (the project folder), so the run
     // below from the top folder finds it
     await mkdir(`${repo}/sub`, { recursive: true })
-    const tick = spawn('bun', [MAIN, '--root', `${repo}/sub`, '--claude', FAKE, 'tick'], { cwd: `${repo}/sub`, env: { ...process.env, FAKE_SLEEP: '600', FAKE_PID: pidFile }, stdio: ['ignore', 'ignore', 'ignore'] })
+    const tick = spawn('bun', [MAIN, '--root', repo, '--claude', FAKE, 'tick'], { cwd: `${repo}/sub`, env: { ...process.env, FAKE_SLEEP: '600', FAKE_PID: pidFile }, stdio: ['ignore', 'ignore', 'ignore'] })
     const tickClosed = new Promise<void>(r => tick.on('close', () => r()))
     let group = 0
     for (const end = Date.now() + 120_000; !group && Date.now() < end; await new Promise<void>(r => void setTimeout(r, 100))) {
