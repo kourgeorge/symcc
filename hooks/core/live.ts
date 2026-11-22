@@ -360,22 +360,45 @@ export function scoutsRunning(scouts: readonly { name: string; running?: boolean
     return s?.running && s.started && Number.isFinite(since) ? [{ name: s.name, since }] : []
   }).sort((x, y) => x.since - y.since)
 }
+/** T-847: the scout whose timer fires soonest: its name and when (ms). */
+export type LiveScoutNext = { name: string; at: number }
+type ScoutLike = { name: string; running?: boolean; started?: boolean; last_run?: string | null; next_run?: string; paused?: boolean; every_minutes?: number }
+/** T-847: the next scout due: not paused, not on demand, not running, with a next run time; the soonest one. null when none. */
+export function scoutNext(scouts: readonly ScoutLike[] | undefined): LiveScoutNext | null {
+  let best: LiveScoutNext | null = null
+  for (const s of Array.isArray(scouts) ? scouts : []) {
+    if (!s || s.paused || s.running) continue
+    if (s.every_minutes !== undefined && !(Number.isFinite(s.every_minutes) && s.every_minutes >= 1)) continue
+    const at = Date.parse(s.next_run ?? '')
+    if (Number.isFinite(at) && (!best || at < best.at)) best = { name: s.name, at }
+  }
+  return best
+}
 /** T-770: the mark in front of the running scouts at the end of the mode line, drawn in the scout color. */
 export const LIVE_SCOUT_MARK = '⌕'
 /** What goes between the mode line and the scout mark. */
 export const LIVE_SCOUT_GAP = ' · '
 
 /**
- * T-770: the scout mark at the end of the Live tab's mode line ("⌕ gaps-bot 4m, board-review 1m"), or null when no
- * scout runs. `room`: the columns left after the mode line. The names and times when they fit (oldest run first),
- * else "⌕ 3 scouts", else "⌕ 3", else nothing. `text` is what comes after the mark (with its leading space), drawn dim.
+ * T-770: the scout mark at the end of the Live tab's mode line ("⌕ gaps-bot 4m, board-review 1m · next: simplify in 40m"), or null when no
+ * scout runs and none is due. `room`: the columns left after the mode line. The names and times when they fit (oldest run first),
+ * else "⌕ 3 scouts", else "⌕ 3", else nothing. T-847: `next` (the scout due soonest) is added at the end while it fits, and dropped first.
+ * `text` is what comes after the mark (with its leading space, '' when only "next" shows), drawn dim; `next` is the "next" part (with its leading separator), drawn dim.
  */
-export function liveScoutMark(runs: readonly LiveScoutRun[] | undefined, nowMs: number, room = Infinity): { gap: string; mark: string; text: string } | null {
+export function liveScoutMark(runs: readonly LiveScoutRun[] | undefined, nowMs: number, room = Infinity, next?: LiveScoutNext | null): { gap: string; mark: string; text: string; next?: string } | null {
   const list = (Array.isArray(runs) ? runs : []).filter(r => r && typeof r.name === 'string' && Number.isFinite(r.since)).slice().sort((a, b) => a.since - b.since)
-  if (!list.length) return null
   const n = list.length
-  const forms = [list.map(r => `${r.name} ${fmtDuration(nowMs - r.since)}`).join(', '), `${n} scout${n === 1 ? '' : 's'}`, `${n}`]
-  for (const f of forms) {
+  const nextText = next && Number.isFinite(next.at) ? `next: ${next.name} in ${fmtDuration(next.at - nowMs)}` : ''
+  if (!n) {
+    const text = nextText ? ` ${nextText}` : ''
+    return text && textWidth(LIVE_SCOUT_GAP + LIVE_SCOUT_MARK + text) <= room ? { gap: LIVE_SCOUT_GAP, mark: LIVE_SCOUT_MARK, text } : null
+  }
+  const names = list.map(r => `${r.name} ${fmtDuration(nowMs - r.since)}`).join(', ')
+  if (nextText) {
+    const text = ` ${names}`, tail = ` · ${nextText}`
+    if (textWidth(LIVE_SCOUT_GAP + LIVE_SCOUT_MARK + text + tail) <= room) return { gap: LIVE_SCOUT_GAP, mark: LIVE_SCOUT_MARK, text, next: tail }
+  }
+  for (const f of [names, `${n} scout${n === 1 ? '' : 's'}`, `${n}`]) {
     const text = ` ${f}`
     if (textWidth(LIVE_SCOUT_GAP + LIVE_SCOUT_MARK + text) <= room) return { gap: LIVE_SCOUT_GAP, mark: LIVE_SCOUT_MARK, text }
   }
@@ -383,11 +406,11 @@ export function liveScoutMark(runs: readonly LiveScoutRun[] | undefined, nowMs: 
 }
 
 /** T-770: the mode line with its scout mark as segments, within `width` columns: the line ('text'), then the gap
- *  ('text'), the mark ('scouts') and the names ('dim') while scouts run. */
-export function liveHeaderSegs(view: LiveView & { scouts?: readonly { name: string; running?: boolean; started?: boolean; last_run?: string | null }[] }, lanes: readonly LiveLane[], nowMs: number, width = Infinity): LiveSeg[] {
+ *  ('text'), the mark ('scouts') and the names ('dim') while scouts run; T-847: then the next scout due ('dim'). */
+export function liveHeaderSegs(view: LiveView & { scouts?: readonly ScoutLike[] }, lanes: readonly LiveLane[], nowMs: number, width = Infinity): LiveSeg[] {
   const head = liveHeader(view, lanes)
-  const m = liveScoutMark(scoutsRunning(view.scouts), nowMs, width - textWidth(head))
-  return [{ text: head, tone: 'text' }, ...(m ? [{ text: m.gap, tone: 'text' as const }, { text: m.mark, tone: 'scouts' as const }, { text: m.text, tone: 'dim' as const }] : [])]
+  const m = liveScoutMark(scoutsRunning(view.scouts), nowMs, width - textWidth(head), scoutNext(view.scouts))
+  return [{ text: head, tone: 'text' }, ...(m ? [{ text: m.gap, tone: 'text' as const }, { text: m.mark, tone: 'scouts' as const }, { text: m.text, tone: 'dim' as const }, ...(m.next ? [{ text: m.next, tone: 'dim' as const }] : [])] : [])]
 }
 
 /** The current station's mark on redraw number `frame`: ◉ and ◎ in turn; always ◉ when `steady` (reduced motion). */

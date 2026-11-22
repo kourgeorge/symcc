@@ -1205,7 +1205,11 @@ TASKS ────────────────────────�
   in the scout color, then each running scout's name and how long it has run, dim
   (`⏵ auto merge · agents 2/3 busy · ⌕ gaps-bot 4m, board-review 1m`). When the names don't fit, it
   says `⌕ 3 scouts`, and on a very narrow panel just `⌕ 3`. A scout still waiting to start
-  isn't shown, and with no scout running there is no mark. A click on it (or the `s` key)
+  isn't shown. After the running scouts the line also names the next scout due, the one whose
+  timer fires soonest (`⌕ gaps-bot 4m · next: simplify in 40m`); with no scout running it is
+  just `⌕ next: gaps-bot in 12m`. Paused scouts and scouts that run only on demand are never
+  the next one, and with none due there is no "next" part. On a narrow panel the "next" part
+  goes first, then the names shrink. With nothing running and nothing due there is no mark. A click on it (or the `s` key)
   opens the Scouts tab; this works on every board. Under the `TODAY` heading, four lines about today:
 
   ```

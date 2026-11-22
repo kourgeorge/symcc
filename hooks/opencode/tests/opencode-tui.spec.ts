@@ -3865,6 +3865,30 @@ test('T-770: the Live tab\'s mode line ends in "⌕ gaps-bot 4m" while scouts ru
   expect(segs.find(s => s.text === ' gaps-bot 4m')?.color).toBe('inactive')
 })
 
+test('T-847: the OpenCode Live tab\'s mode line shows the next scout due, after the running ones, and drops it first on a narrow panel; paused and on-demand scouts are never next', () => {
+  const f0 = viewFile()
+  const base = { ...f0.view, tasks: liveTasks(), checker: true, max_parallel: 3 }
+  const min = (m: number) => new Date(NOW + m * 60_000).toISOString()
+  const idle = [
+    { name: 'simplify', every_minutes: 60, running: false, last_run: null, next_run: min(40) },
+    { name: 'gaps-bot', every_minutes: 30, running: false, last_run: null, next_run: min(12) },
+    { name: 'paused-one', every_minutes: 30, paused: true, running: false, last_run: null, next_run: min(1) },
+    { name: 'manual', every_minutes: 0, running: false, last_run: null, next_run: min(2) },
+  ]
+  const running = { name: 'board-review', every_minutes: 30, running: true, started: true, last_run: new Date(NOW - 60_000).toISOString(), next_run: min(30) }
+  const draw = (scouts: unknown[], w: number) => {
+    const f = parseViewFile(viewFileText({ ...f0, view: { ...base, scouts } as never }))!
+    const d = panelLines(f, { tab: 'live', opened: '', cursor: 0 }, NOW, w)
+    return lineText(d.lines[d.lines.findIndex(l => lineText(l).includes(' busy'))]!)
+  }
+  const head = liveHeader(base, liveLanes(base, NOW))
+  expect(draw(idle, 80)).toBe(`${head} · ⌕ next: gaps-bot in 12m`)
+  expect(draw([running, ...idle], 100)).toBe(`${head} · ⌕ board-review 1m · next: gaps-bot in 12m`)
+  expect(draw([running, ...idle], head.length + 24)).toBe(`${head} · ⌕ board-review 1m`)
+  expect(draw(idle, head.length + 5)).toBe(head)
+  expect(draw(idle.slice(2), 80)).toBe(head)
+})
+
 test('T-772: the OpenCode Live tab draws the org-mem meter at 30 / 60 and 60 / 60 in the same calm colors (dim count, the quiet bar color), never the warning color', () => {
   const looks: string[] = []
   for (const n of [30, 60]) {

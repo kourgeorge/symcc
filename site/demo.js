@@ -148,7 +148,7 @@
     const busy = s.lanes.filter(l => l.agent).length
     const L = []
     L.push(tabRow('Live'))
-    L.push(sp(`⏵ auto merge · agents ${busy}/${MAX_AGENTS} busy` + (s.scout ? ` · ⌕ gaps-bot ${dur(s.now - s.scout)}` : ''), 'dim'))
+    L.push(sp(`⏵ auto merge · agents ${busy}/${MAX_AGENTS} busy` + (s.scout ? ` · ⌕ gaps-bot ${dur(s.now - s.scout)} · next: simplify in 40m` : ' · ⌕ next: gaps-bot in 12m'), 'dim'))
     // T-786: NEEDS YOU first, only while something waits, every row in the warning color
     if (s.q) {
       L.push(liveHead('Needs you'), '')
