@@ -26,7 +26,7 @@ function cutTexts(x: unknown): unknown {
 export type SlimStep = 0 | 1 | 2 | 3 | 4
 /** The warning text when trimming went past slimming finished tasks (step 2 or more), else ''. */
 export const trimNote = (step: SlimStep, left: number) =>
-  step < 2 ? '' : `the board view was trimmed to fit the 4 MB limit: ${left} old task${left === 1 ? '' : 's'} left out of the panel`
+  step < 2 ? '' : step === 2 ? 'the board view was trimmed to fit the 4 MB limit: archive totals left out of the panel' : `the board view was trimmed to fit the 4 MB limit: ${left} old task${left === 1 ? '' : 's'} left out of the panel`
 
 /**
  * The view as the panel keeps it, under Claude Code's 4 MB limit on one value. Steps, each only when the view is

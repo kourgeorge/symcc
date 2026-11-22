@@ -4,6 +4,7 @@
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { slimView, VIEW_MAX_CHARS, VIEW_WHOLE_MS } from '../hooks/claude/panel'
+import { slimViewStep, trimNote } from '../hooks/core/view-slim'
 import { depDone } from '../hooks/core/archive'
 import type { SymccView } from '../types'
 import { addTask, emptyBoard } from '../hooks/board'
@@ -78,6 +79,10 @@ function refusingWorld() {
       if (text.length > VIEW_MAX_CHARS) throw new Error('$.state.set: the value is over the 4194304 limit')
       stored = text
     },
+    trimNote: (v: SymccView) => {
+      const r = slimViewStep(v, now)
+      return trimNote(r.step, r.left)
+    },
   }
   S.root = '/repo'
   S.writing = Promise.resolve()
@@ -147,4 +152,22 @@ test('publish warns when tasks were left out of the view', async () => {
   await publish(w.host, b)
   expect(w.stored().length).toBeLessThan(VIEW_MAX_CHARS)
   expect([...sizeNotes.values()].some(n => n.includes('trimmed to fit') && n.includes('left out'))).toBe(true)
+})
+
+test('trimNote gives its own words when only the archive totals were left out', () => {
+  const r = slimViewStep({ ...viewOf([task('T-1', 'todo', 60_000)]), archived: { big: 'y'.repeat(3_200_000) } } as unknown as SymccView, now)
+  expect(r.step).toBe(2)
+  expect(trimNote(r.step, r.left)).toBe('the board view was trimmed to fit the 4 MB limit: archive totals left out of the panel')
+})
+
+test('a host whose panel keeps every task gets no trim note for a big view', async () => {
+  const w = fakeHost({ fs: memoryFs(new Map()) })
+  S.root = '/repo'
+  S.writing = Promise.resolve()
+  S.enabledNow = true
+  const b = emptyBoard()
+  const base = addTask(emptyBoard(), { origin: { why: 't' }, title: 'base' }, at(0))[0].tasks[0]!
+  for (let i = 1; i <= 4000; i++) b.tasks.push({ ...base, id: `T-${i}`, status: 'done', title: long.repeat(2), updated_at: at(VIEW_WHOLE_MS * 2) } as never)
+  await publish(w.host, b)
+  expect([...sizeNotes.values()].some(n => n.includes('left out'))).toBe(false)
 })
