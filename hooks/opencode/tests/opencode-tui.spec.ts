@@ -2731,7 +2731,7 @@ test('T-760: the OpenCode Live tab ends work and check in ✧ (in the heading co
     expect(labels.filter(x => x.text === '✧').map(x => x.color)).toEqual([heading, heading])
     expect(labels.filter(x => /[a-z]/.test(x.text)).every(x => x.color === 'inactive')).toBe(true)
     const texts = d.lines.map(lineText)
-    if (w === 120) expect(texts).toContain(LIVE_INDENT + '✧ = an agent works here (needs an agent slot)   ' + liveBarLegend(lanes.find(l => l.usual)!.usual!))
+    if (w === 120) expect(texts).toContain(LIVE_INDENT + '✧ = an agent works here (needs an agent slot) · ⌀ = tokens   ' + liveBarLegend(lanes.find(l => l.usual)!.usual!))
     else expect(texts.some(t => t.startsWith(LIVE_INDENT + '✧ = an agent works here'))).toBe(true)
   }
 })
@@ -2776,19 +2776,21 @@ test('T-769: the Live tab\'s ▍Today has 4 lines (medians per task, work time, 
     return { texts, lines: texts.slice(at + 2, at + 6) }
   }
   const wide = today(140)
-  expect(wide.lines[0]).toBe(`${LIVE_INDENT}✓ 3 merged   ↺ 0 sent back   ✗ 0 failed   Σ 10M tokens`)
+  expect(wide.lines[0]).toBe(`${LIVE_INDENT}✓ 3 merged   ↺ 0 sent back   ✗ 0 failed   Σ ⌀ 10M`)
   expect(wide.lines[1]!.startsWith(LIVE_INDENT + TODAY_BAR_START)).toBe(true)
   expect(/[▁▂▃▄▅▆▇]/.test(wide.lines[1]!)).toBe(false)
   expect(wide.lines[2]).toBe(LIVE_INDENT + TODAY_LINE_3)
   // (the hours depend on the machine's time zone)
-  expect(/^ ⏱ 1h 15m agent work · ≈ \$12 this session   busiest hour \d\d:00 · \S+   00 [▁▂▃▄▅▆▇█ ]+·* 24$/.test(wide.lines[3]!.replace(LIVE_INDENT, ' '))).toBe(true)
+  expect(/^ ⏱ 1h 15m agent work · ≈ \$12 this session   busiest hour \d\d:00 · ⌀ \S+   ⌀\/h 00 [▁▂▃▄▅▆▇█ ]+·* 24$/.test(wide.lines[3]!.replace(LIVE_INDENT, ' '))).toBe(true)
+  // T-855: no lane here, so no key line: the dim note ends ▍Today
+  expect(wide.texts.at(-1) === undefined || wide.texts.some(t => t === `${LIVE_INDENT}⌀ = tokens`)).toBe(true)
   // a broken today_team is left out: no lead, scouts or cost
   const broken = parseViewFile(viewFileText({ ...f, view: { ...f.view, today_team: 'x' as never } }))!
   expect('today_team' in broken.view).toBe(false)
   // narrow: the cost goes; at 40 only the bar is left on the third line
   expect(today(45).texts.some(t => t.includes('≈ $'))).toBe(false)
   const narrow = today(40)
-  expect(narrow.texts.some(t => t === `${LIVE_INDENT}░░████████▓▒▒▒▒▒`)).toBe(true)
+  expect(narrow.texts.some(t => t === `${LIVE_INDENT}⌀ ░░████████▓▒▒▒▒▒`)).toBe(true)
   // line 4 keeps both hour labels and a sparkline, its figures cut from the end
   const four = narrow.texts.find(t => / 00 [▁▂▃▄▅▆▇█ ]+·* 24$/.test(t))
   expect(four === undefined).toBe(false)
@@ -2872,7 +2874,7 @@ test('T-757: the OpenCode Live tab shows the whole task\'s tokens, the bar full 
   expect(sub('T-802')).toContain('5M')
   expect(sub('T-802')).not.toContain('+ …')
   // (c) try 1 running
-  expect(sub('T-803')).toContain('tokens at hand-back')
+  expect(sub('T-803')).toContain('⌀ at hand-back')
   // (d) the usual fills the bar, half fills half
   expect(cells('T-804').empty).toBe(0)
   expect(Math.abs(cells('T-805').full - cells('T-805').empty) <= 1).toBe(true)

@@ -893,7 +893,7 @@ function liveBody(f: ViewFile, cursor: number, nowMs: number, w: number): Body {
   b.blank()
   b.add(liveSegs(liveHeading(LIVE_SECTIONS.today, w)))
   b.blank()
-  for (const t of liveTodayLines(v, nowMs, inner)) b.add(under(t))
+  for (const t of liveTodayLines(v, nowMs, inner, undefined, !lanes.length)) b.add(under(t))
   // T-718: the Organizational memory section, just above the footer (a click on its header opens all notes)
   b.blank()
   b.add(liveSegs(om.head, { key: ORG_MEM_KEY }), { key: ORG_MEM_KEY })

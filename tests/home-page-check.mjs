@@ -53,7 +53,7 @@ for (const w of ['T-740', '▍History', '▍Runs', '‹ [Tasks]', '[Try 1] [● 
 for (const w of ['1 Same heading for all', '2 Colored headings', '3 Boxes', '4 Side bar', '❯ 4'])
   if (!chat.includes(w)) bad(`still frame: the chat has no "${w}" (the real looks and pick)`)
 if (chat.includes('❯ 2')) bad('still frame: the chat shows "❯ 2"; the owner picked look 4')
-for (const w of ['agents 1/3 busy', '✓ 56 merged', '↺ 47 sent back', '✗ 0 failed', 'Σ 530.1M tokens', '39c7f96'])
+for (const w of ['agents 1/3 busy', '✓ 56 merged', '↺ 47 sent back', '✗ 0 failed', 'Σ ⌀ 530.1M', '39c7f96'])
   if (!board.includes(w)) bad(`still frame: the board has no "${w}" (the real board)`)
 const live = text(view('live'))
 // (T-758) ▍Today holds only the figures line: no "next up" line and no "today" label
@@ -84,11 +84,11 @@ for (const w of ['16:28', '16:50', 'try 1: 22m · 4.0M tokens in all'])
 if (!text(view('scouts')).includes('gaps-bot')) bad('still frame: the scouts view has no gaps-bot')
 // (T-757) T-740 on try 2: its lane shows the whole task's tokens (try 1's 4.0M, more coming), the bar full at the
 // usual tokens per merged task (268.6M / 56 = 4.8M, so 4.0M fills 11 of 13 cells), and the legend says so
-if (!board.includes('▕███████████░░▏ 4.0M + …')) bad('still frame: T-740\'s lane does not show "▕███████████░░▏ 4.0M + …" (bar full = the usual per task)')
-if (!board.includes('bar: tokens of the task so far, full = usual per task (4.8M)')) bad('still frame: the board has no bar legend')
+if (!board.includes('▕███████████░░▏ ⌀ 4.0M + …')) bad('still frame: T-740\'s lane does not show "▕███████████░░▏ ⌀ 4.0M + …" (bar full = the usual per task)')
+if (!board.includes('⌀ = tokens   bar: ⌀ of the task so far, full = usual per task (⌀ 4.8M)')) bad('still frame: the board has no bar legend')
 // (T-757) the hand-drawn Live tab card tells the same story: whole-task tokens, full bar = the usual per task
 if (/tokens of each try|T-740[\s\S]{0,80}tokens at hand-back/.test(page)) bad('home page: the Live tab card still shows tokens per try ("tokens at hand-back" on T-740\'s try 2)')
-if (!page.includes('▕███████████░░▏ 4.0M + …')) bad('home page: the Live tab card\'s T-740 lane does not show "4.0M + …"')
+if (!page.includes('▕███████████░░▏ ⌀ 4.0M + …')) bad('home page: the Live tab card\'s T-740 lane does not show "4.0M + …"')
 // (T-767) the lines under a ▍heading start with 1 space; a running lane with "▶ ", its id in the accent color, its title normal text
 for (const [name, t] of [['board', board], ['Live tab', live]]) {
   const lines = t.split('\n')
@@ -100,9 +100,9 @@ for (const [name, t] of [['board', board], ['Live tab', live]]) {
 // the bar with the scouts' share; then the hour sparkline with its labels and the figures (no cost)
 for (const [name, t] of [['board', board], ['Live tab', live]]) {
   const after = t.slice(t.indexOf('\n', t.indexOf('TODAY'))).split('\n').filter(l => l.trim())
-  if (!/^ [█▒]{16} workers and checkers 90% · scouts 10% \(54\.7M of 530\.1M tokens\)$/.test(after[1] ?? '')) bad(`still frame: the ${name}'s ▍Today line 2 is not the bar alone with the scouts' share ("${after[1] ?? ''}")`)
-  if (after[2] !== ' ⌀ per task 3M · 9m work · 41m start-to-merge   first try 34% · ⌀ 2.4 tries   ⌕ 47 sent back by the checker' && !/^ ⌀ per task 3M · 9m work · 41m start-to-merge   first try 34% · ⌀ 2\.4 tries   ⌕ \d+ sent back by the checker$/.test(after[2] ?? '')) bad(`still frame: the ${name}'s ▍Today line 3 does not show the real medians, first try and tries ("${after[2] ?? ''}")`)
-  if (!/^ ⏱ 16h 56m agent work {3}00 {9}[▁▂▃▄▅▆▇█]+·{7} 24$/.test(after[3] ?? '')) bad(`still frame: the ${name}'s ▍Today line 4 is not the agent work time then the hour sparkline with its labels at the end ("${after[3] ?? ''}")`)
+  if (!/^ ⌀ [█▒]{16} workers and checkers 90% · scouts 10% \(⌀ 54\.7M of 530\.1M\)$/.test(after[1] ?? '')) bad(`still frame: the ${name}'s ▍Today line 2 is not the bar alone with the scouts' share ("${after[1] ?? ''}")`)
+  if (after[2] !== ' avg ⌀ 3M/task · 9m work · 41m start-to-merge   first try 34% · avg 2.4 tries/task   ⌕ 47 sent back by the checker' && !/^ avg ⌀ 3M\/task · 9m work · 41m start-to-merge   first try 34% · avg 2\.4 tries\/task   ⌕ \d+ sent back by the checker$/.test(after[2] ?? '')) bad(`still frame: the ${name}'s ▍Today line 3 does not show the real medians, first try and tries ("${after[2] ?? ''}")`)
+  if (!/^ ⏱ 16h 56m agent work {3}⌀\/h 00 {9}[▁▂▃▄▅▆▇█]+·{7} 24$/.test(after[3] ?? '')) bad(`still frame: the ${name}'s ▍Today line 4 is not the agent work time then the hour sparkline with its labels at the end ("${after[3] ?? ''}")`)
 }
 if (/≈ \$/.test(live + board)) bad('still frame: ▍Today shows a "≈ $" figure')
 for (const w of ['workers', 'scouts']) {

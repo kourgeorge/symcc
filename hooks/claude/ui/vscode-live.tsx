@@ -289,7 +289,7 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
       {branchesVs(pane, open)}
       <Box key="live-bottom" flexDirection="column">
         {headLine('live-today-head', LIVE_SECTIONS.today)}
-        {liveTodayLines(v, nowMs, inner).map((x, i) => (
+        {liveTodayLines(v, nowMs, inner, undefined, !lanes.length).map((x, i) => (
           <Box key={`live-today-${i}`} flexDirection="column">
             <Text wrap="wrap">{x.map(s => <Text color={C(LIVE_TONE[s.tone])}>{s.text}</Text>)}</Text>
           </Box>

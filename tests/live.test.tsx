@@ -174,7 +174,7 @@ test('T-690: today counts merges, send-backs, failures and tokens of today', () 
   const d = liveToday(TASKS as never[], T0, 0)
   expect(d).toEqual({ merged: 1, sentBack: 1, failed: 1, tokens: 1_100_000 + 1_100_000 + 540_000 + 3_400_000 + 200_000 + 800_000 })
   // T-758: no "today" label (the ▍Today heading says it)
-  expect(todayLines(d, 80)).toEqual(['✓ 1 merged   ↺ 1 sent back   ✗ 1 failed   Σ 7.1M tokens'])
+  expect(todayLines(d, 80)).toEqual(['✓ 1 merged   ↺ 1 sent back   ✗ 1 failed   Σ ⌀ 7.1M'])
   for (const l of todayLines(d, 30)) expect(textWidth(l)).toBeLessThanOrEqual(30)
 })
 
@@ -207,7 +207,7 @@ test('T-690: lane lines fit the width with nothing cut, and the current station 
   const over = laneLines(lanes.find(x => x.id === 'T-685')!, l, { nowMs: T0, frame: 0 })[1]
   expect(segText(over)).toContain('3.4M ⚠')
   expect(over.some(s => s.tone === 'warning')).toBe(true)
-  expect(segText(laneLines(lanes.find(x => x.id === 'T-687')!, l, { nowMs: T0, frame: 0 })[1])).toContain('tokens at hand-back')
+  expect(segText(laneLines(lanes.find(x => x.id === 'T-687')!, l, { nowMs: T0, frame: 0 })[1])).toContain('⌀ at hand-back')
 })
 
 const C_WARNING = '"color":"warning"'
@@ -238,7 +238,7 @@ const t757Check = (sub: (id: string) => string, warn: (id: string) => boolean) =
   expect(sub('T-802')).not.toContain('+ …')
   expect(sub('T-802')).not.toContain('⚠')
   // (c) try 1 running
-  expect(sub('T-803')).toContain('tokens at hand-back')
+  expect(sub('T-803')).toContain('⌀ at hand-back')
   // (d) at the usual: full; at half: half
   expect(bar('T-804').empty).toBe(0)
   const half = bar('T-805')
@@ -252,7 +252,7 @@ const t757Check = (sub: (id: string) => string, warn: (id: string) => boolean) =
 test('T-760: the agent stations end in ✧ (accent color), each name still starts over its mark, and the legend says what ✧ means', () => {
   expect(LIVE_AGENT_MARK).toBe('✧')
   expect(textWidth(LIVE_AGENT_MARK)).toBe(1)
-  expect(LIVE_LEGEND).toBe('✧ = an agent works here (needs an agent slot)')
+  expect(LIVE_LEGEND).toBe('✧ = an agent works here (needs an agent slot) · ⌀ = tokens')
   expect(LIVE_TONE.mark).toBe(LIVE_TONE.heading)
   for (const checker of [true, false])
     for (const width of [100, 80, 60, 50, 40, 32]) {
@@ -283,7 +283,9 @@ test('T-757: lanes show the whole task\'s tokens, the bar full at the usual per 
   const l = liveLayout(lanes, liveStations(true), 80)
   const second = (id: string) => laneLines(lane(id), l, { nowMs: T0, frame: 0 })[1]
   t757Check(id => segText(second(id)), id => second(id).some(s => s.tone === 'warning'))
-  expect(liveLegend(lanes, 200)).toEqual([`${LIVE_LEGEND}   bar: tokens of the task so far, full = usual per task (4M)`])
+  // T-855: the count has the token sign in front
+  expect(segText(second('T-801'))).toMatch(/▏ ⌀ 4M/)
+  expect(liveLegend(lanes, 200)).toEqual([`${LIVE_LEGEND}   bar: ⌀ of the task so far, full = usual per task (⌀ 4M)`])
   // narrow: on more lines, none wider
   for (const x of liveLegend(lanes, 30)) expect(textWidth(x)).toBeLessThanOrEqual(30)
 })
@@ -311,7 +313,9 @@ test('T-757: the terminal and VS Code Live tabs show the whole task\'s tokens on
     warns[x.id] = JSON.stringify(n).includes(C_WARNING)
   }
   t757Check(id => subs[id]!, id => warns[id]!)
-  expect(lines.some(x => x.includes('bar: tokens of the task so far, full = usual per task (4M)'))).toBe(true)
+  expect(lines.some(x => x.includes('bar: ⌀ of the task so far, full = usual per task (⌀ 4M)'))).toBe(true)
+  expect(lines.some(x => x.includes('⌀ = tokens'))).toBe(true)
+  expect(lines.filter(x => x.includes('⌀ = tokens')).length).toBe(1)
   await t.press({ key: 'tab-tasks' })
   await t.unmount()
 
@@ -519,7 +523,7 @@ for (const checker of [true, false])
     // the token bars are Svg bars (alt: the terminal's bar), one for each lane that knows its tokens
     expect(svgs.filter(x => String(x.props.alt).startsWith('▕')).length).toBe(ids.length - 1)
     expect((await ui.find({ key: 'live-sub:T-685' }))?.text).toContain('3.4M ⚠')
-    expect((await ui.find({ key: 'live-sub:T-687' }))?.text).toContain('tokens at hand-back')
+    expect((await ui.find({ key: 'live-sub:T-687' }))?.text).toContain('⌀ at hand-back')
     // today: the terminal's words; no next up line (T-758)
     expect(await ui.find({ key: 'live-next' })).toBeUndefined()
     expect((await ui.find({ key: 'live-today-0' }))?.text).toBe(today)

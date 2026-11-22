@@ -113,7 +113,7 @@ export function livePage($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
     if (agentId) await $.ui.view({ agentId })
     else $.ui.toast(S.N.toast(target ? `${target.id} has no worker running now.` : 'No worker is running now.'))
   })
-  const today = liveTodayLines(v, nowMs, inner)
+  const today = liveTodayLines(v, nowMs, inner, undefined, !lanes.length)
   const headSegs = liveHeaderSegs(v, running, nowMs, width)
   const needs = liveNeeds(v, nowMs, inner)
   const om = liveOrgMem(notes, width)

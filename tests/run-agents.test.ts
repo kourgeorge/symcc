@@ -98,12 +98,12 @@ test("T-774: the task page's Runs part shows one dim line per agent under its tr
   const runs = taskSections(t, facts()).find(s => s.id === 'runs')!
   expect(text(runs)).toEqual([
     '  try 1: 11m · 6.2M tokens in all · finished: merged',
-    '    ▸ worker  ses…Qr2  11m · 4.1M',
-    '    ⌕ checker a01…c3b  3m · 2.1M',
+    '    ▸ worker  ses…Qr2  11m · ⌀ 4.1M',
+    '    ⌕ checker a01…c3b  3m · ⌀ 2.1M',
     '  total: 11m · 6.2M tokens in all',
   ])
   expect(runs.lines[1]!.segs.every(g => g.color === 'inactive')).toBe(true)
-  expect(agentLines(t.runs![0]!, NOW)).toEqual(['▸ worker  ses…Qr2  11m · 4.1M', '⌕ checker a01…c3b  3m · 2.1M'])
+  expect(agentLines(t.runs![0]!, NOW)).toEqual(['▸ worker  ses…Qr2  11m · ⌀ 4.1M', '⌕ checker a01…c3b  3m · ⌀ 2.1M'])
 })
 
 test("T-774: a checker still running counts up on its Runs line (the try ended at the worker's hand-back, before it began)", () => {
@@ -111,7 +111,7 @@ test("T-774: a checker still running counts up on its Runs line (the try ended a
   b = workerHandsBack(b, W1, iso(10 * MIN), { input: 1_000 })
   b = patchTask(b, 'T-1', { runs: withAgentStart(runsOf(b), 'checker', C1, iso(8 * MIN)) }, iso(8 * MIN))
   const r = runsOf(b)[0]!
-  expect(agentLines(r, NOW)).toEqual(['▸ worker  ses…Qr2  10m · 1k', '⌕ checker a01…c3b  8m'])
+  expect(agentLines(r, NOW)).toEqual(['▸ worker  ses…Qr2  10m · ⌀ 1k', '⌕ checker a01…c3b  8m'])
 })
 
 /** Task `id`, done or doing, with `runs`. */
@@ -128,11 +128,11 @@ test("T-774: the Runs heading sums this task's own tries, with and without the b
   const t = withRuns('T-9', 'doing', runs)
   // no usual figure (no merged task on the board): no "× the usual" part
   const alone = taskSections(t, facts([t])).find(s => s.id === 'runs')!
-  expect(alone.title).toBe('Runs   3 tries · 21m · 10.1M tokens · checkers 2.7M')
-  expect(alone.summary).toBe('3 tries · 21m · 10.1M tokens · checkers 2.7M')
+  expect(alone.title).toBe('Runs   3 tries · 21m · 10.1M tokens · checkers ⌀ 2.7M')
+  expect(alone.summary).toBe('3 tries · 21m · 10.1M tokens · checkers ⌀ 2.7M')
   // with merged tasks of 2.8M tokens each, the usual task: 10.1M is 3.6 times it
   const done = ['T-1', 'T-2', 'T-3'].map(id => withRuns(id, 'done', [{ started: iso(100 * MIN), ended: iso(90 * MIN), agents: [{ kind: 'worker' as const, started: iso(100 * MIN), ended: iso(90 * MIN), tokens: { input: 2_800_000 } }] }]))
-  expect(taskSections(t, facts([...done, t])).find(s => s.id === 'runs')!.title).toBe('Runs   3 tries · 21m · 10.1M tokens (3.6× the usual task) · checkers 2.7M')
+  expect(taskSections(t, facts([...done, t])).find(s => s.id === 'runs')!.title).toBe('Runs   3 tries · 21m · 10.1M tokens (3.6× the usual task) · checkers ⌀ 2.7M')
   // no checker tokens known: that part is left out; one try says "try"
   expect(runsSummary([runs[1]!], NOW, 1_000_000)).toBe('1 try · 7m · 3M tokens (3× the usual task)')
   expect(runsSummary([{ started: iso(5 * MIN) }], NOW)).toBe('1 try · 5m')
@@ -191,7 +191,7 @@ test('T-785, T-805: a try with many checkers still counts every one of them, in 
     const kept = keepAgentIds([run])
     expect(kept[0]!.agents!.length).toBe(13)
     expect(checkerTokensOf(kept[0])).toEqual({ input: 12_000_000 })
-    expect([`${h}:${m}`, runsSummary(kept, now).includes('checkers 12M')]).toEqual([`${h}:${m}`, true])
+    expect([`${h}:${m}`, runsSummary(kept, now).includes('checkers ⌀ 12M')]).toEqual([`${h}:${m}`, true])
     const who = todayMore([withRuns('T-5', 'done', kept)], undefined, now).who
     expect([`${h}:${m}`, who]).toEqual([`${h}:${m}`, [{ who: 'workers', tokens: 2_000_000 }, { who: 'checkers', tokens: 12_000_000 }]])
   }

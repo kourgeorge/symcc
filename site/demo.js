@@ -114,11 +114,11 @@
     // the whole task's tokens (every try); the running try's are known only at its hand-back
     const total = (l.prior || 0) + (l.tokens || 0)
     let rest
-    if (!total) rest = sp('tokens at hand-back', 'dim')
+    if (!total) rest = sp('⌀ at hand-back', 'dim')
     else {
       const n = Math.max(0, Math.min(13, Math.round((total / USUAL) * 13)))
       const over = total > 2 * USUAL
-      rest = sp(`▕${'█'.repeat(n)}${'░'.repeat(13 - n)}▏ `, l.done ? 'dim' : over ? 'warning' : 'bar') + sp(tok(total), l.done ? 'dim' : over ? 'warning' : 'text') + (l.tokens === null ? sp(' + …', 'dim') : '') + (over ? sp(' ⚠', 'warning') : '')
+      rest = sp(`▕${'█'.repeat(n)}${'░'.repeat(13 - n)}▏ `, l.done ? 'dim' : over ? 'warning' : 'bar') + sp('⌀ ' + tok(total), l.done ? 'dim' : over ? 'warning' : 'text') + (l.tokens === null ? sp(' + …', 'dim') : '') + (over ? sp(' ⚠', 'warning') : '')
     }
     const two = sp(pad(lead, LEAD_W), 'dim') + rest + (l.back ? sp(`  ↺×${l.back}`, 'dim') : '')
     return [one, two]
@@ -164,22 +164,23 @@
       for (const l of [...s.lanes.filter(l => !l.done), ...kept]) L.push(...laneLines(s, l))
     } else L.push(' No task is running right now.')
     if (s.lanes.length) L.push(' ' + sp('─'.repeat(12), 'dim'))
-    if (s.lanes.length) L.push(' ' + sp(`✧ = an agent works here (needs an agent slot)   bar: tokens of the task so far, full = usual per task (${tok(USUAL)})`, 'dim'))
+    if (s.lanes.length) L.push(' ' + sp(`✧ = an agent works here (needs an agent slot) · ⌀ = tokens   bar: ⌀ of the task so far, full = usual per task (⌀ ${tok(USUAL)})`, 'dim'))
     L.push('')
     L.push(liveHead('Branches'), '')
     L.push(...branchLines(s))
     L.push('')
     L.push(liveHead('Today'), '')
     const d = s.today
-    L.push(' ' + sp(`✓ ${d.merged} merged`, 'passed') + sp(`   ↺ ${d.back} sent back   ✗ ${d.failed} failed   Σ ${tok(d.tokens + OTHERS_TOKENS)} tokens`, 'dim'))
+    L.push(' ' + sp(`✓ ${d.merged} merged`, 'passed') + sp(`   ↺ ${d.back} sent back   ✗ ${d.failed} failed   Σ ⌀ ${tok(d.tokens + OTHERS_TOKENS)}`, 'dim'))
     // (T-809) line 2: the bar alone (16 cells in the board colors) with the scouts' share; line 3: the medians per merged task, first try,
     // tries and the checker's send-backs; line 4: the agent work time, then the tokens per hour over the whole day, 00 to 24, at the very end (hours to come are dim dots)
     const cells = Math.round((TODAY_MORE.scoutsPct / 100) * 16)
     const bar = sp(WHO_CELL.workers.repeat(16 - cells), 'who-workers') + sp(WHO_CELL.scouts.repeat(cells), 'who-scouts')
-    const shares = ' ' + sp(`workers and checkers ${100 - TODAY_MORE.scoutsPct}%`, 'who-workers') + sp(' · ', 'dim') + sp(`scouts ${TODAY_MORE.scoutsPct}%`, 'who-scouts') + sp(` (${TODAY_MORE.scoutsTokens} tokens)`, 'dim')
-    L.push(' ' + bar + shares)
-    L.push(' ' + sp('⌀ ', 'dim') + sp(`per task ${TODAY_MORE.perTask}`, 'text') + sp(`   first try ${TODAY_MORE.firstTry}% · ⌀ ${TODAY_MORE.avgTries} tries   ⌕ ${d.back} sent back by the checker`, 'dim'))
-    L.push(' ' + sp('⏱ ', 'dim') + sp(`${TODAY_MORE.work} agent work`, 'text') + sp('   00 ', 'dim') + sp(' '.repeat(8) + TODAY_MORE.spark.slice(0, -1), 'bar') + sp(TODAY_MORE.spark.slice(-1), 'now') + sp('·'.repeat(24 - 8 - TODAY_MORE.spark.length), 'dim') + sp(' 24', 'dim'))
+    const shares = ' ' + sp(`workers and checkers ${100 - TODAY_MORE.scoutsPct}%`, 'who-workers') + sp(' · ', 'dim') + sp(`scouts ${TODAY_MORE.scoutsPct}%`, 'who-scouts') + sp(` (⌀ ${TODAY_MORE.scoutsTokens})`, 'dim')
+    L.push(' ' + sp('⌀ ', 'dim') + bar + shares)
+    L.push(' ' + sp('avg ', 'dim') + sp(`⌀ ${TODAY_MORE.perTask.replace(' · ', '/task · ')}`, 'text') + sp(`   first try ${TODAY_MORE.firstTry}% · avg ${TODAY_MORE.avgTries} tries/task   ⌕ ${d.back} sent back by the checker`, 'dim'))
+    L.push(' ' + sp('⏱ ', 'dim') + sp(`${TODAY_MORE.work} agent work`, 'text') + sp('   ⌀/h 00 ', 'dim') + sp(' '.repeat(8) + TODAY_MORE.spark.slice(0, -1), 'bar') + sp(TODAY_MORE.spark.slice(-1), 'now') + sp('·'.repeat(24 - 8 - TODAY_MORE.spark.length), 'dim') + sp(' 24', 'dim'))
+    if (!s.lanes.length) L.push(' ' + sp('⌀ = tokens', 'dim'))
     if (wide) {
       L.push('')
       L.push(liveHead('Organizational memory', '   ' + sp('60 / 60', 'dim'), '   60 / 60'), '')

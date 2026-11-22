@@ -249,7 +249,7 @@ export function shortAgentId(id: string): string {
 export const AGENT_MARK: Record<SymccRunAgent['kind'], string> = { worker: '▸', checker: '⌕' }
 
 /**
- * T-774: try `r`'s agents, one line each, for the task page's Runs part: "▸ worker  ses…Qr2  11m · 4.1M" (its time,
+ * T-774: try `r`'s agents, one line each, for the task page's Runs part: "▸ worker  ses…Qr2  11m · ⌀ 4.1M" (its time,
  * and its tokens and cost when known). An agent still at work counts up to `nowMs` (to the try's end once that ended).
  * [] for a try with no entries (or none with an id).
  */
@@ -260,7 +260,7 @@ export function agentLines(r: SymccRun, nowMs?: number): string[] {
     // A checker starts after the worker's hand-back ended the try, so the try's end only caps an agent that began before it.
     const end = a.ended ?? (r.ended && Date.parse(r.ended) >= Date.parse(a.started) ? r.ended : undefined)
     const ms = runMs({ started: a.started, ...(end ? { ended: end } : {}) }, nowMs)
-    const used = [fmtDuration(ms), a.tokens && fmtTokens(tokenCount(a.tokens)), a.cost !== undefined && `~${fmtCost(a.cost)}`].filter(Boolean).join(' · ')
+    const used = [fmtDuration(ms), a.tokens && fmtTok(tokenCount(a.tokens)), a.cost !== undefined && `~${fmtCost(a.cost)}`].filter(Boolean).join(' · ')
     return `${AGENT_MARK[a.kind]} ${a.kind.padEnd(7)} ${shortAgentId(a.id!).padEnd(8)} ${used}`
   })
 }
@@ -278,7 +278,7 @@ export function runsSummary(runs: SymccRun[] | undefined, nowMs?: number, usual?
   const times = all !== undefined && usual !== undefined && usual > 0 ? ` (${(all / usual).toFixed(1).replace(/\.0$/, '')}× the usual task)` : ''
   const chk = rs.map(checkerTokensOf).filter((x): x is SymccTokens => !!x)
   const chkN = chk.length ? tokenCount(sumTokens(chk)) : 0
-  return [`${rs.length} ${rs.length === 1 ? 'try' : 'tries'}`, fmtDuration(t.ms), all !== undefined && `${fmtTokens(all)} tokens${times}`, chkN > 0 && `checkers ${fmtTokens(chkN)}`].filter(Boolean).join(' · ')
+  return [`${rs.length} ${rs.length === 1 ? 'try' : 'tries'}`, fmtDuration(t.ms), all !== undefined && `${fmtTokens(all)} tokens${times}`, chkN > 0 && `checkers ${fmtTok(chkN)}`].filter(Boolean).join(' · ')
 }
 
 /** T-743: how many restarts one try keeps (the latest). */
@@ -568,6 +568,11 @@ export function fmtTokens(n: number): string {
   if (n < 999_950) return `${one(n / 1000)}k`
   return `${one(n / 1_000_000)}M`
 }
+
+/** T-855: the sign for tokens on the boards (not in /symcc-stats): a bare count gets it in front, "⌀ 1.2M"; "avg" marks averages. */
+export const TOKEN_SIGN = '⌀'
+/** T-855: a token count with the sign in front: "⌀ 1.2M". */
+export const fmtTok = (n: number): string => `${TOKEN_SIGN} ${fmtTokens(n)}`
 
 /**
  * One total in words: "1h 12m · 1.2M tokens in all · ~$3.40" (tokens and cost only when known).

@@ -1129,16 +1129,17 @@ TASKS ────────────────────────�
   plugins about reduced motion, so it always blinks; the tab redraws itself every second while
   it is shown). The `✧` after work and check (in the headings' color) means an agent works there, so
   those stations need an agent slot (a worker or a checker); the legend under the lanes (below a short dim divider line) says
-  `✧ = an agent works here (needs an agent slot)`; queue and tests use none, so there can be more lanes than
+  `✧ = an agent works here (needs an agent slot) · ⌀ = tokens`; queue and tests use none, so there can be more lanes than
   `max_parallel`.
 - On the right: the time at the current station, or the place in the merge queue (`#2`).
 - The second row: the kind, the try (`try 2/3`, auto retries after failing tests included),
   the whole task's tokens (every try so far) with a bar that the board's usual tokens per merged
   task fill (half full at half the usual; it stays full past it, and turns yellow with `⚠` past
   twice the usual), and `↺×N` for the checker's send-backs. The legend under the lanes says
-  this, with the usual figure: `bar: tokens of the task so far, full = usual per task (2.8M)`. A
+  this, with the usual figure: `bar: ⌀ of the task so far, full = usual per task (⌀ 2.8M)`. A
   running worker's tokens are only known when it hands back, so until then the row shows the
-  earlier tries' sum with `+ …` (`4.0M + …`), or `tokens at hand-back` on a first try.
+  earlier tries' sum with `+ …` (`⌀ 4.0M + …`), or `⌀ at hand-back` on a first try.
+- **Signs on the boards:** `⌀` = tokens (a count has `⌀` in front: `⌀ 716.1k`; the legend under the lanes says so, and with no lane the same dim note, `⌀ = tokens`, ends TODAY). `avg` marks an average (`avg ⌀ 2M/task`). Task pages (the agent lines, the Tries summary's checker part) use it too. `/symcc-stats` and its HTML page keep the word "tokens".
 - Just merged: a task that merged in the last 10 minutes keeps its lane for a while, under the
   running ones, drawn as finished: the track filled up to `merged` with `✓` there (green), a dim `✓ `
   where a running lane has `▶ `, the id in the accent color, the title and second row dim, and `merged 3m ago` on the right (`3m ago` on a narrow panel).
@@ -1148,9 +1149,9 @@ TASKS ────────────────────────�
 
   ```
    ▶ T-760 A running one ●━━━━━━━━◉────────○────────○────────○      2m
-     change try 1/3      tokens at hand-back
+     change try 1/3      ⌀ at hand-back
    ✓ T-747 Live tab: e…  ●━━━━━━━━●━━━━━━━━●━━━━━━━━●━━━━━━━━✓  merged 3m ago
-     change try 1/3      ▕█████████████▏ 5.7M
+     change try 1/3      ▕█████████████▏ ⌀ 5.7M
   ```
 - Waiting trains: a todo task that waits (its `after`) for a task that has not finished hangs
   under the lane of the running task it waits for, indented with `└─◇`, its id and cut title,
@@ -1159,7 +1160,7 @@ TASKS ────────────────────────�
 
   ```
    ▶ T-712 Scout or… ●━━━━━━◉──────○──────○──────○  2m
-     bug  try 1/3    tokens at hand-back
+     bug  try 1/3    ⌀ at hand-back
      └─◇ T-713 Task files: no si…  waits
         └─◇ T-714 Help: /symcc-h…  waits
      └─◇ T-716 Live deps…  waits  + also T-690
@@ -1215,25 +1216,25 @@ TASKS ────────────────────────�
   ```
   TODAY ──────────────────────────────────────────────────
 
-   ✓ 67 merged   ↺ 76 sent back   ✗ 0 failed   Σ 320.7M tokens
-   ░█████████████▓▒ lead 3% · workers 84% · checkers 8% · scouts 5%
-   ⌀ per task 2.8M · 9m work · 23m start-to-merge   first try 34% · ⌀ 2.4 tries   ⌕ 68 sent back by the checker
-   ⏱ 13h 06m agent work · ≈ $64 this session   busiest hour 14:00 · 42M   00         ▁▂▃▅▆▅█········· 24
+   ✓ 67 merged   ↺ 76 sent back   ✗ 0 failed   Σ ⌀ 320.7M
+   ⌀ ░█████████████▓▒ lead 3% · workers 84% · checkers 8% · scouts 5%
+   avg ⌀ 2.8M/task · 9m work · 23m start-to-merge   first try 34% · avg 2.4 tries/task   ⌕ 68 sent back by the checker
+   ⏱ 13h 06m agent work · ≈ $64 this session   busiest hour 14:00 · ⌀ 42M   ⌀/h 00         ▁▂▃▅▆▅█········· 24
   ```
 
-  The first line: merged, sent back (every send-back today: the checker's problems, tests failed, a clash with main), failed, and the tokens of everyone today (workers, checkers, scouts and the lead: the same total the bar's shares are out of, so it is never smaller than the busiest hour; when the lead's and the scouts' tokens aren't known it is the tries only and says a dim `(tries only)`). The second: a bar of who spent today's tokens (the lead, workers, checkers, scouts; each in
+  The first line: merged, sent back (every send-back today: the checker's problems, tests failed, a clash with main), failed, and the tokens of everyone today (`Σ ⌀ 320.7M`; workers, checkers, scouts and the lead: the same total the bar's shares are out of, so it is never smaller than the busiest hour; when the lead's and the scouts' tokens aren't known it is the tries only and says a dim `(tries only)`). The second: a bar of who spent today's tokens (with a dim `⌀` in front; the lead, workers, checkers, scouts; each in
   its board color and its own shade), with the shares; it is the only bar in the section. The third:
   for the tasks merged today, the middle value (median) of their tokens, their work time and the time
   from their first try's start to the merge; then today's share of merged tasks that went through on the first try, the
   average tries per merged task (the same figures `/symcc-stats` shows), and how many times the checker
   sent a task back (left out when none). The fourth: all agent work today (the tries' time today and the
   scouts'); then `≈ $N this session`, the whole session's cost (not just today's) as `/cost` says it, only when symcc knows it (never a
-  guess); then `busiest hour HH:00 · NM`; and at the very end the tokens per
-  hour as a sparkline that always spans the whole day, `00` to `24` (the labels are dim and always stay): the hours so far are bars, the current hour's bar is in the accent color, and the hours still to come are dim dots (`·`). A line with nothing to show is left out. A checker's tokens are counted apart from its worker's from now on (older tries count as the
+  guess); then `busiest hour HH:00 · ⌀ N`; and at the very end the tokens per
+  hour as a sparkline that always spans the whole day, `00` to `24`, with a dim `⌀/h` in front (the labels are dim; the `00` and `24` always stay, `⌀/h` goes first on a narrow panel): the hours so far are bars, the current hour's bar is in the accent color, and the hours still to come are dim dots (`·`). A line with nothing to show is left out. A checker's tokens are counted apart from its worker's from now on (older tries count as the
   worker's), and the lead's part shows only where symcc can read the lead's usage. The lead's,
   scouts' and cost figures are read in the background at most every two minutes. On a narrow panel
   parts drop from the ends: line 3 loses the checker send-backs first, then the tries, the first try and the per-task figures;
-  line 4 loses the busiest hour, then the cost; the hour labels and the sparkline stay longest after the agent work time:
+  line 4 loses the `⌀/h` label first, then the busiest hour, then the cost; the hour labels and the sparkline stay longest after the agent work time:
   when the sparkline itself is too wide, neighbouring hours are merged (2, 3 or 4 to a bar) so the whole day still fits. Nothing goes past the panel's width. The task that starts next shows in the band above the
   prompt (`○ next up`), and the tasks that wait hang under their lanes. With nothing running it
   says `No task is running right now.`
