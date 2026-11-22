@@ -391,8 +391,13 @@ test('T-690: the Live tab draws at a normal and a narrow width with nothing cut,
     expect(lines[lines.findIndex(l => l.startsWith('TODAY ─')) + 2]?.startsWith(`${LIVE_INDENT}✓ 1 merged`)).toBe(true)
     expect(lines.some(l => l.trimStart().startsWith('next up') || l.trimStart().startsWith('today'))).toBe(false)
     // (T-760: a narrow panel wraps the mark's legend line, cut at a space)
-    if (bodyColumns === 80) expect(lines).toContain(LIVE_LEGEND)
-    else expect(lines.some(l => l.startsWith('✧ = an agent works here'))).toBe(true)
+    if (bodyColumns === 80) expect(lines).toContain(LIVE_INDENT + LIVE_LEGEND)
+    else expect(lines.some(l => l.trimStart().startsWith('✧ = an agent works here'))).toBe(true)
+    // T-823: the key line sits right under the lanes, before the BRANCHES heading
+    const legendAt = lines.findIndex(l => l.trimStart().startsWith('✧ = an agent works here'))
+    const branchesAt = lines.findIndex(l => l.startsWith('BRANCHES ─'))
+    expect(legendAt).toBeGreaterThan(lines.findIndex(l => l.startsWith(`${LIVE_INDENT}▶ T-688 `)))
+    if (branchesAt >= 0) expect(legendAt).toBeLessThan(branchesAt)
     expect(lines.some(l => l.includes('l t s c views'))).toBe(true)
     // T-760: the lane header ends the agent stations in ✧ (over their marks, as liveLabelLine), each ✧ in the heading's color
     const tree = (await ui.drawn()) as Node

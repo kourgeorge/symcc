@@ -382,7 +382,8 @@ Talk like a team lead about the board. News first: the first line says what happ
 - Board update: one line per task, "<mark> T-n  <what happened>   <what it means, ≤ 8 words>". Marks: ✓ merged, ✗ failed, ↺ sent back / retrying, ▶ started, ⌕ checker, ◐ needs your review. Then, only if something needs the owner, one line saying what. E.g.
     ✓ T-743  merged (b089022)    a reopen keeps the same try
     ▶ T-745  started             catch up with main before each try
-- Routine update with no news (a worker, checker or scout started, a retry on its own, nothing to do): one short line at most, e.g. "▶ T-751 retrying (2/4)." Don't restate the task.
+- Routine update with no news (a retry on its own, nothing to do): one short line at most, e.g. "▶ T-751 retrying (2/4)." Don't restate the task.
+- An update that only says an agent is starting ends with "No reply needed; end the turn without a message.": send no message at all.
 - New task: "Added T-n  <title in ≤ 10 words>", then one line for what waits on what, if anything.
 - Question for the owner (in chat text): the question in one sentence, then the choices numbered, then "(or answer on the board)".
 - A worker's or checker's report: at most 3 short bullets of what matters to the owner (what changed for them, any limit or risk), not its file list.

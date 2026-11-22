@@ -10,7 +10,7 @@
 // the agent at once, with no wake-up and no "starting at the next turn" note, and nothing needs draining.
 import type { Host, HostAgentStart, HostAgentStarted } from '../host'
 import { S } from './state'
-import { tellLead } from './tell'
+import { START_LINE_END, tellLead } from './tell'
 
 type Waiting = { input: HostAgentStart; resolve: (r: HostAgentStarted) => void; reject: (err: unknown) => void; still?: () => boolean | Promise<boolean> }
 
@@ -33,7 +33,7 @@ let leadBusy = false
 let woke = false
 
 /** The line of the lead's wake-up for a start (the board update the wake-up is). */
-export const wakeLine = (a: HostAgentStart) => `Starting ${a.kind} ${a.name} (${a.description}): ${S.N.name} starts agents only when a turn starts or ends, so this short update lets it start now. Nothing to do for it.`
+export const wakeLine = (a: HostAgentStart) => `Starting ${a.kind} ${a.name} (${a.description}): ${S.N.name} starts agents only when a turn starts or ends, so this short update lets it start now.${START_LINE_END}`
 
 /** The note of a task whose worker is queued: it starts when a turn starts or ends (see drainStarts). */
 export const QUEUED_NOTE = 'starting at the next turn'

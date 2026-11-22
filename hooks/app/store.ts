@@ -1,5 +1,5 @@
 import { type Board, type BoardRead, parseBoard, readBoard, readBoardValue, brokenBoardText, emptyBoard, symccOn, lockText, lockHolder, isLockStale, tmpName } from '../board'
-import { PARTS_DIR, READ_LIMIT_BYTES, SIZE_WARN_BYTES, hasWholeFinished, joinParts, partsFileOf, partsFilesNamed, partsText, readParts, sizeWarnText, splitBoard, tooBigText, utf8Bytes } from '../core/board-parts'
+import { VIEW_LEFT_OUT, PARTS_DIR, PARTS_KEY, safePartsFile, viewStubFilled, withViewParts, READ_LIMIT_BYTES, SIZE_WARN_BYTES, hasWholeFinished, joinParts, partsFileOf, partsFilesNamed, partsText, readParts, sizeWarnText, splitBoard, tooBigText, utf8Bytes } from '../core/board-parts'
 import { checkHealth } from './health'
 import { publish } from './lead'
 import { tellLead } from './tell'
@@ -342,6 +342,21 @@ let missingParts = new Set<string>()
 
 /** A parts file's path, from its name in board.json ("tasks/T-600.json"). */
 const partsPath = (rel: string) => path(`${S.N.dir}/${rel}`)
+
+/**
+ * View task `t` for a task page (T-829): a task the view slimmed (it has `parts`) comes back with its details, history
+ * and the other left-out parts read from its parts file; the stored view is not touched. When the file can't be read,
+ * `t` comes back with empty details and history (so the page can still draw). Any other task comes back as it is.
+ */
+export async function taskWithParts<T extends object>(host: Host, t: T): Promise<T> {
+  const rel = (t as Record<string, unknown>)[PARTS_KEY]
+  if (!safePartsFile(rel)) return viewStubFilled(t)
+  const text = await host.fs.read(partsPath(rel)).catch(() => null)
+  // the stored view carries empty stand-ins (viewStubFilled) for details and history; they must not win over the real ones
+  const bare = { ...(t as Record<string, unknown>) }
+  for (const k of VIEW_LEFT_OUT) delete bare[k]
+  return viewStubFilled(withViewParts(bare as T, text))
+}
 
 /**
  * Reads board.json and joins each done or dropped task's stub with its parts from .<name>/tasks/ (T-675, see

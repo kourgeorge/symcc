@@ -3619,6 +3619,9 @@ test('T-738, T-747: the OpenCode Live tab has a ▍heading for each section, one
     // T-810: each heading runs to the page width with its thin rule; the org-mem one has no bar
     for (const h of heads) expect([h, textWidthOf(h)]).toEqual([h, w])
     expect(heads[3]).not.toContain('▕')
+    // T-823: the key line sits right under the lanes, before BRANCHES
+    const keyAt = lines.findIndex(l => l.trimStart().startsWith('✧ = an agent works here'))
+    expect([keyAt > mode, keyAt < lines.findIndex(l => l.startsWith('BRANCHES ─'))]).toEqual([true, true])
     expect([heads.length, heads[3]!.startsWith(w === 100 ? 'ORGANIZATIONAL MEMORY   ' : 'ORG')]).toEqual([4, true])
     // no section rules in the body (the footer's rule is under it)
     expect(lines.slice(mode, lines.length - d.footer).filter(l => l.includes('── ') || /^─+$/.test(l))).toEqual([])
