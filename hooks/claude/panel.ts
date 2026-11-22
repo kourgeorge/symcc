@@ -6,6 +6,8 @@
 import { type EngineInterface, atom, read, update } from 'claude-code'
 import type { SymccView } from '../../types'
 import type { PanelValues } from '../host'
+import { slimView, slimViewStep, trimNote, VIEW_MAX_CHARS, VIEW_WHOLE_MS, VIEW_TARGET_CHARS } from '../core/view-slim'
+export { slimView, VIEW_MAX_CHARS, VIEW_WHOLE_MS, VIEW_TARGET_CHARS }
 
 /** Claude Code's `$`, as one hook hands it to the plugin. */
 export type $ = EngineInterface
@@ -28,6 +30,17 @@ export function panelValues($: $): PanelValues {
     readScoutOpen: () => read($, scoutOpen),
     updateScoutOpen: change => update($, scoutOpen, change),
     readView: () => read($, view),
-    updateView: change => update($, view, change),
+    trimNote: v => {
+      const r = slimViewStep(v)
+      return trimNote(r.step, r.left)
+    },
+    // a refused value (too big) must never fail a board change or a worker start: say nothing, the next publish tries again
+    updateView: async change => {
+      try {
+        await update($, view, v => slimView(change(v)))
+      } catch {
+        // dropped on purpose, see above
+      }
+    },
   }
 }
