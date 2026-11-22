@@ -31,23 +31,23 @@ const REASON_WORDS: Record<string, string> = {
 export function firstSentence(s: string, max = 200): string {
   const one = String(s ?? '').replace(/\s+/g, ' ').trim()
   // A sentence ends at . ! ? before a capital letter (or the end), not at "e.g." or "etc." mid-thought.
-  const m = /^(.*?(?<!\b(?:e\.g|i\.e|etc|vs|approx|cf))[.!?])(?=\s+[A-Z`"'(\[]|$)/.exec(one)
+  const m = /^(.*?(?<!\b(?:e\.g|i\.e|etc|vs|approx|cf))[.!?])(?=\s+[A-Z`"'(\[*]|$)/.exec(one)
   const sentence = m ? m[1]! : one
   if (sentence.length <= max) return sentence
   const cut = sentence.slice(0, max)
   return `${cut.slice(0, Math.max(cut.lastIndexOf(' '), max / 2))}…`
 }
 
-/** The first problem of a checker's report: its first list line, else what follows "Problems:", else its first sentence. */
-export function firstFinding(report: string): string {
-  const r = String(report ?? '')
-  const item = /^\s*(?:[-*•]|\d+[.)])\s+(.+)$/m.exec(r)
-  if (item) return firstSentence(item[1]!)
-  // The history line has the report squashed onto one line: find the first list marker inside it.
-  const flat = /(?:^|\s)(?:[-*•]|\d+[.)])\s+(\S.*?)(?=\s+(?:[-*•]|\d+[.)])\s+\S|$)/.exec(r.replace(/\s+/g, ' '))
-  if (flat) return firstSentence(flat[1]!)
-  const after = /\bproblems?:\s*(\S[\s\S]*)$/i.exec(r)
-  return firstSentence(after ? after[1]! : r)
+/**
+ * The first problem of an old checker line (T-859): the text after "problem: " / "problems: ", cut at its first
+ * sentence. Never a list item from a "What works" part; '' when the line has no such text.
+ */
+export function firstFinding(line: string): string {
+  const after = /\bproblems?:\s*(?:[-*•]|\d+[.)])?\s*(\S[\s\S]*)$/i.exec(String(line ?? ''))
+  if (after) return firstSentence(after[1]!)
+  // No "problem:" text: a short report with no "What works" / "What I checked" part is its own problem line.
+  const one = String(line ?? '').trim()
+  return one && !/what (?:works|i checked)/i.test(one) ? firstSentence(one.replace(/^(?:[-*•]|\d+[.)])\s+/, '')) : ''
 }
 
 const tryNo = (e: SymccHistoryEntry): number => e.try ?? tryParts(e.text)?.[1] ?? 0
@@ -91,7 +91,7 @@ export function triesRows(t: Pick<SymccTask, 'history'>, max = TRIES_SHOWN): Try
     const problems = lines.findLast(e => e.kind === 'checker-problems')
     const ended = endedWord(end)
     const checkerSent = end.reason === 'checker' || end.kind === 'checker-problems' || (!!problems && end.kind === 'failed' && !end.reason)
-    const finding = checkerSent ? firstFinding(problems ? bodyOf(problems).replace(/^checker found problems:\s*/, '') : resultOf(end).replace(/^the checker found problems:?\s*/, '')) : ''
+    const finding = checkerSent ? (problems?.problems?.[0] ? firstSentence(problems.problems[0]) : firstFinding(problems ? bodyOf(problems).replace(/^checker found problems:\s*/, '') : resultOf(end).replace(/^the checker found problems:?\s*/, ''))) : ''
     const reason = checkerSent ? 'the checker found problems' : ended === 'merged' ? '' : firstSentence(resultOf(end))
     rows.push({ try: n, ended: checkerSent ? REASON_WORDS.checker! : ended, reason, said: firstSentence(saidOf(end)), finding })
   }

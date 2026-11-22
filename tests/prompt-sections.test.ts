@@ -7,6 +7,7 @@ import { fillPlaceholders, taskValue } from '../hooks/core/prompt-fill'
 import { fillPrompt, fillRole, ROLE_PLACEHOLDERS, promptSectionLines } from '../hooks/core/prompts'
 import { roleSection, leadRoleText } from '../hooks/core/roles'
 import { splitLeadNotes, leadNotesText } from '../hooks/core/lead-notes'
+import { checkerEntry, checkerProblems } from '../hooks/core/checker'
 import { triesRows, triesTable } from '../hooks/core/tries-table'
 import { addDetailsText } from '../hooks/core/history'
 import { hist } from './history-fixture'
@@ -146,11 +147,33 @@ test('T-851: an owner follow-up question after a lead note stays in the text; a 
   expect(rows[1]!.reason).toBe('stopped before finishing')
 })
 
-test('T-851: the first finding of a squashed checker line is the first list item; abbreviations do not cut a sentence', () => {
-  const report = 'I read the diff and ran probes in /tmp.\n\n- hooks/core/a.ts:12 crashes on an empty list\n- hooks/core/b.ts:4 lost the old rule'
+test('T-859: an old squashed line with only list items and no problem text gives an empty finding; abbreviations do not cut a sentence', () => {
+  const report = 'I read the diff and ran probes in /tmp.\n\n**What works:**\n- **Band line:** `bandSummary` gives the right text\n- hooks/core/b.ts:4 is fine'
   const squashed = report.replace(/\s+/g, ' ')
   const t = task({ history: [({ kind: 'checker-problems', text: `try 1: checker found problems: ${squashed}`, try: 1 })] as never })
-  expect(triesRows(t)[0]!.finding).toBe('hooks/core/a.ts:12 crashes on an empty list')
+  expect(triesRows(t)[0]!.finding).toBe('')
   const u = task({ history: [({ kind: 'failed', text: 'try 1: Changed X (e.g. the Y part) and Z. Then more. → tests failed: x', try: 1, result: 'tests failed: x', reason: 'tests' })] as never })
   expect(triesRows(u)[0]!.said).toBe('Changed X (e.g. the Y part) and Z.')
+})
+
+const T800 = 'I found one real problem: the /symcc-settings text still shows the stored mode value.\n\n**What works:**\n- **Band line:** `bandSummary` gives the right text\n- Tests pass\n\nsrc/settings.ts:40 still shows the stored mode value; run /symcc-settings'
+
+test('T-859: a T-800 shaped report gives its problem, not a "what works" bullet', () => {
+  expect(checkerProblems(T800)).toEqual(['src/settings.ts:40 still shows the stored mode value; run /symcc-settings'])
+  const flat = `try 1: checker found problems: ${T800.replace(/\s+/g, ' ')}`
+  const t = task({ history: [({ kind: 'checker-problems', text: flat, try: 1 })] as never })
+  expect(triesRows(t)[0]!.finding).toBe('the /symcc-settings text still shows the stored mode value.')
+})
+
+test('T-859: a recorded checker result saves its problems on the entry and the table reads them', () => {
+  const [kind, text, facts] = checkerEntry('try 1', { ok: false, report: T800 }, '', 1)
+  expect(kind).toBe('checker-problems')
+  expect(facts!.problems).toEqual(['src/settings.ts:40 still shows the stored mode value; run /symcc-settings'])
+  expect(checkerProblems('Looked.\n\nProblems:\n- a.ts:1 bad\n- b.ts:2 worse')).toEqual(['a.ts:1 bad', 'b.ts:2 worse'])
+  const t = task({ history: [({ kind, text, try: 1, ...facts })] as never })
+  expect(triesRows(t)[0]!.finding).toBe('src/settings.ts:40 still shows the stored mode value; run /symcc-settings')
+})
+
+test('T-859: a report that ends in a "What works" list saves no problems', () => {
+  expect(checkerProblems('Mostly fine.\n\n**What works:**\n- one\n- two')).toEqual([])
 })

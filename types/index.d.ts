@@ -100,6 +100,8 @@ export type SymccHistoryEntry = {
   place?: number
   /** a try's result line: the words after its " → " */
   result?: string
+  /** T-859: a checker-problems line's problems, one short line each, taken from the checker's report when it was recorded */
+  problems?: string[]
   /** why the try counts as sent back or failed (see FailReason in hooks/core/stats.ts) */
   reason?: SymccFailReason
   /** a merged line: by its own try, by the owner's approve, or outside the board */

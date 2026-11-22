@@ -135,8 +135,45 @@ export const checkerPrompt = (v: CheckerValues, task?: SymccTask): string => {
 export const checkerLine = (tryLabel: string, v: CheckerVerdict | null, why = ''): string =>
   !v ? `${tryLabel}: checker gave no verdict${why ? ` (${why})` : ''}` : 'report' in v ? `${tryLabel}: checker found problems: ${oneLine(v.report, 300)}` : `${tryLabel}: checker: OK`
 
-/** checkerLine as a history entry to add: "checker-ok", "checker-problems", or "checker" with no verdict. */
-export const checkerEntry = (tryLabel: string, v: CheckerVerdict | null, why = '', tryNo = 0): HistoryAdd => [!v ? 'checker' : 'report' in v ? 'checker-problems' : 'checker-ok', checkerLine(tryLabel, v, why), { try: tryNo }]
+/** The most problem lines saved on a checker's history entry. */
+export const CHECKER_PROBLEMS_MAX = 5
+
+const NOT_PROBLEMS = /^\W*(?:what (?:works|i checked|i did|i ran)|checked|works)\b/i
+const stripMark = (l: string) => l.replace(/^\s*(?:[-*•]|\d+[.)])\s+/, '').trim()
+
+/**
+ * The problem lines of a checker's report (T-859): what follows a "Problems:" heading, else the closing block of the
+ * report (its last run of lines with no blank line between; the prompt asks for one problem per line there), unless
+ * that block is a "What works" or "What I checked" part. [] when neither is found.
+ */
+export function checkerProblems(report: string): string[] {
+  const lines = String(report ?? '').split('\n').map(l => l.trimEnd())
+  const clean = (ls: string[]) => ls.map(stripMark).filter(Boolean).slice(0, CHECKER_PROBLEMS_MAX).map(l => oneLine(l, 300))
+  const h = lines.findLastIndex(l => /^\W*problems?\W*:\W*$/i.test(l))
+  if (h >= 0) {
+    const rest = lines.slice(h + 1)
+    const end = rest.findIndex((l, i) => !l.trim() && rest.slice(i + 1).some(x => /^\W*(?:what\b|\w[\w ]*:\W*$)/i.test(x)))
+    const got = clean(end >= 0 ? rest.slice(0, end) : rest)
+    if (got.length) return got
+  }
+  let end = lines.length
+  while (end > 0 && !lines[end - 1]!.trim()) end--
+  let start = end
+  while (start > 0 && lines[start - 1]!.trim()) start--
+  const block = lines.slice(start, end)
+  if (!block.length) return []
+  let before = start - 1
+  while (before >= 0 && !lines[before]!.trim()) before--
+  const heading = before >= 0 && /:\W*$/.test(lines[before]!) ? lines[before]! : ''
+  if (NOT_PROBLEMS.test(block[0]!) || NOT_PROBLEMS.test(heading)) return []
+  return clean(block)
+}
+
+/** checkerLine as a history entry to add: "checker-ok", "checker-problems" (with its `problems` fact), or "checker" with no verdict. */
+export const checkerEntry = (tryLabel: string, v: CheckerVerdict | null, why = '', tryNo = 0): HistoryAdd => {
+  const problems = v && 'report' in v ? checkerProblems(v.report) : []
+  return [!v ? 'checker' : 'report' in v ? 'checker-problems' : 'checker-ok', checkerLine(tryLabel, v, why), { try: tryNo, ...(problems.length ? { problems } : {}) }]
+}
 
 const oneLine = (s: string, max: number) => {
   const t = s.replace(/\s+/g, ' ').trim()
