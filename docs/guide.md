@@ -1216,12 +1216,12 @@ TASKS ────────────────────────�
   TODAY ──────────────────────────────────────────────────
 
    ✓ 67 merged   ↺ 76 sent back   ✗ 0 failed   Σ 320.7M tokens
-   █████████████▓▒░ workers 84% · checkers 8% · scouts 5% · lead 3%
+   ░█████████████▓▒ lead 3% · workers 84% · checkers 8% · scouts 5%
    ⌀ per task 2.8M · 9m work · 23m start-to-merge   first try 34% · ⌀ 2.4 tries   ⌕ 68 sent back by the checker
    ⏱ 13h 06m agent work · ≈ $64 this session   busiest hour 14:00 · 42M   00         ▁▂▃▅▆▅█········· 24
   ```
 
-  The first line: merged, sent back (every send-back today: the checker's problems, tests failed, a clash with main), failed, and the tokens of everyone today (workers, checkers, scouts and the lead: the same total the bar's shares are out of, so it is never smaller than the busiest hour; when the lead's and the scouts' tokens aren't known it is the tries only and says a dim `(tries only)`). The second: a bar of who spent today's tokens (workers, checkers, scouts, the lead; each in
+  The first line: merged, sent back (every send-back today: the checker's problems, tests failed, a clash with main), failed, and the tokens of everyone today (workers, checkers, scouts and the lead: the same total the bar's shares are out of, so it is never smaller than the busiest hour; when the lead's and the scouts' tokens aren't known it is the tries only and says a dim `(tries only)`). The second: a bar of who spent today's tokens (the lead, workers, checkers, scouts; each in
   its board color and its own shade), with the shares; it is the only bar in the section. The third:
   for the tasks merged today, the middle value (median) of their tokens, their work time and the time
   from their first try's start to the merge; then today's share of merged tasks that went through on the first try, the
