@@ -3678,7 +3678,7 @@ test('T-756: with open_on_start on, the board panel opens by itself once a sessi
   s.board.stop()
 })
 
-test('T-756: with open_on_start off, or symcc off, the board panel never opens by itself', async () => {
+test('T-756: with open_on_start off, or symcc off, the board panel does not open by itself; T-841: turning symcc on (/symcc-enable) opens it once, unless open_on_start is off', async () => {
   for (const view of [{ open_on_start: false, enabled: true }, { open_on_start: true, enabled: false }]) {
     const s = startCtx(view)
     s.shown.session = true
@@ -3687,6 +3687,14 @@ test('T-756: with open_on_start off, or symcc off, the board panel never opens b
     expect(s.opens.length).toBe(0)
     expect(s.current()).toBe(undefined)
     expect(s.toasts.length).toBe(0)
+    // T-841: /symcc-enable turns symcc on
+    s.setView({ ...view, enabled: true })
+    await s.board.refresh()
+    expect(s.current()?.name).toBe(view.open_on_start ? BOARD_PANEL : undefined)
+    // an open panel is not opened twice
+    const n = s.opens.length
+    await s.board.refresh()
+    expect(s.opens.length).toBe(n)
     s.board.stop()
   }
 })
@@ -3699,10 +3707,10 @@ test('T-756: open_on_start turned off, or symcc turned off, while it waits for a
     s.setView(later)
     s.shown.session = true
     await s.board.refresh()
-    // turned back on later in the same run: still not by itself
+    // turned back on later in the same run: only symcc being turned on (T-841) opens it
     s.setView({ open_on_start: true, enabled: true })
     await s.board.refresh()
-    expect(s.current()).toBe(undefined)
+    expect(s.current()?.name).toBe(later.enabled ? undefined : BOARD_PANEL)
     expect(s.toasts.length).toBe(0)
     s.board.stop()
   }

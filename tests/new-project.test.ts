@@ -118,3 +118,17 @@ test('/symcc-enable without "here" with another window on stays off here, with i
   expect(S.offHere).toBe(true)
   expect(S.beat !== undefined).toBe(true)
 })
+
+// T-841: /symcc-enable on a project with a board that is off opens the panel; not with open_on_start off, nor twice
+test('T-841: /symcc-enable turning symcc back on opens the panel, unless open_on_start is off or it is open already', async () => {
+  const cases: [Record<string, unknown>, boolean, number][] = [[{}, false, 1], [{ open_on_start: false }, false, 0], [{}, true, 0]]
+  for (const [extra, isOpen, want] of cases) {
+    const w = world('a')
+    w.files.set(w.board, JSON.stringify({ ...emptyBoard(), enabled: false, ...extra }))
+    const host = { ...w.host, ui: { ...w.host.ui, panes: async () => (isOpen ? [{ id: S.N.pane, title: '', isShown: true, isFocused: false, isPlaced: true }] : []) } } as typeof w.host
+    await sessionStart(host)
+    w.opened.length = 0
+    await runCommand(host, 'symcc-enable', '')
+    expect(w.opened.length).toBe(want)
+  }
+})

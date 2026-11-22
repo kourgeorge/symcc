@@ -222,7 +222,7 @@ async function startNewProject(host: Host, tell: (text: string) => void, here = 
     const b = await load(host)
     await gitReady(host, b).catch(() => undefined)
     await publish(host, b)
-    if (openOnStart(b)) await openPane(host, { tab: 'live', focus: false, quiet: true }).catch(() => undefined)
+    if (openOnStart(b) && !(await host.ui.panes().then(ps => ps.some(p => p.id === S.N.pane && p.isShown), () => false))) await openPane(host, { tab: 'live', focus: false, quiet: true }).catch(() => undefined)
     tell(`The owner enabled ${S.N.name} in this new project with /${S.N.name}-enable. You are the lead now; the board is in mode ${modeOf(b)}.${S.driving ? '' : ' Another window drives the board.'}`)
     return `${S.N.name} is on in this project, in mode ${settingShown('mode', modeOf(b))}: ${modeText(modeOf(b))}.`
   } finally {

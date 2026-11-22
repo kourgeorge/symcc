@@ -1,11 +1,12 @@
 // Board mode and stopping: pausing / resuming the board, disabling / enabling symcc, stopping workers (one, all, or
 // before the host quits). Split out of workers.ts (T-603); it imports from workers.ts, never the other way.
 import type { SymccMode } from '../../types'
-import { settingShown, type Board, modeOf, symccOn, patchTask, find, workerName, setMode, modeText, setEnabled, stoppedEntry, withHistory, endedBy } from '../board'
+import { settingShown, type Board, modeOf, symccOn, patchTask, find, workerName, setMode, modeText, setEnabled, openOnStart, stoppedEntry, withHistory, endedBy } from '../board'
 import { haltCheckers } from './checker'
 import { publish } from './lead'
 import { S, workers, queuedWorkers, type Worker, halt, scoutRuns, scoutState, leadQueue, meanwhile, sayQueue } from './state'
 import type { Host } from '../host'
+import { openPane } from './open'
 import { cancelStarts } from './starts'
 import { load, change, now } from './store'
 import { tellLead } from './tell'
@@ -129,6 +130,11 @@ export async function setSymcc(host: Host, on: boolean): Promise<string> {
   }
   await publish(host, b)
   void pump(host)
+  // T-841: turning symcc back on opens the board panel by itself (unless open_on_start is off or it is open already)
+  if (!before && !S.offHere && openOnStart(b)) {
+    const open = await host.ui.panes().then(ps => ps.some(p => p.id === S.N.pane && p.isShown), () => false)
+    if (!open) await openPane(host, { tab: 'live', focus: false, quiet: true })
+  }
   if (!before) tellLead(host, `The owner enabled ${S.N.name} again with /${S.N.name}-enable. You are the lead again; the board is in mode ${modeOf(b)}.`)
   // (T-571) a paused board (/<name>-mode paused) is not the same as a disabled symcc: the strip shows "⏸ paused"
   // for it, and /<name>-enable (which only enables symcc itself) keeps the mode, so say plainly why nothing starts yet
