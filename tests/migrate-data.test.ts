@@ -430,3 +430,56 @@ test('T-808: usage days that only aged past a year are not old data', () => {
   const rows = oldDataRows({ board: null, archive: [], scouts, withRuns: new Set(), fieldGuide: false, orgMem: false, nowMs: Date.parse('2027-12-01') })
   expect(rows.filter(r => r.fix).length).toBe(0)
 })
+
+test('T-854: a board written by today\'s code (empty question fields from a writer) is not old data, and a second migration does nothing', async () => {
+  const w = world()
+  S.enabledNow = true
+  leadQueue.length = 0
+  const origin = { by: 'lead', why: 'w', at: T }
+  const mk = (id: string, x: Record<string, unknown>) => ({ ...base, id, title: id, status: 'todo', note: '', attempts: 0, origin, merge_into: 'main', history: [], runs: [], ...x })
+  const nulls = { question: null, options: [], asked_files: [], question_lead: '', options_lead: [], conflict_tries: null, test_rerun: null, rerun_minutes: null }
+  const board = { ...emptyBoard(), tasks: [
+    mk('T-1', { ...nulls }),
+    mk('T-2', { status: 'waiting', note: 'waiting for you', ask: { by: 'worker', text: 'Red or blue?', asked_at: E }, ...nulls }),
+    mk('T-3', { status: 'doing', live: { phase: 'worker', question: null }, runs: [{ started: T, agents: [{ kind: 'worker', started: T }] }], ...nulls }),
+  ] }
+  w.files.set(`${D}/board.json`, JSON.stringify(board, null, 2))
+  w.files.set(`${D}/archive.json`, JSON.stringify({ version: 1, tasks: [mk('T-4', { status: 'done', ...nulls })] }))
+  w.files.set(`${D}/scouts.json`, JSON.stringify({ scouts: {}, usage: {} }))
+  w.files.delete(`${D}/field-guide.md`)
+  const rows = oldDataRows({ board, archive: [mk('T-4', { status: 'done', ...nulls })], scouts: null, withRuns: new Set(), fieldGuide: false, orgMem: false })
+  expect(rows.filter(r => r.text.includes('instead of one `ask` record'))).toEqual([])
+  expect(await migrateIfOld(w.host)).toBe('')
+  expect(backups(w).size).toBe(0)
+})
+
+test('T-854: after one migration of truly old data, a second migrateIfOld makes no backup', async () => {
+  const w = world()
+  S.enabledNow = true
+  leadQueue.length = 0
+  const board = JSON.parse(w.files.get(`${D}/board.json`)!)
+  board.tasks.push({ ...base, id: 'T-10', title: 'ten', status: 'waiting', note: 'waiting for you', attempts: 1, origin: { by: 'lead', why: 'w', at: T }, merge_into: 'main', history: [], runs: [], question: 'Red or blue?', options: ['Red', 'Blue'] })
+  w.files.set(`${D}/board.json`, JSON.stringify(board, null, 2))
+  expect(await migrateIfOld(w.host)).toBe('')
+  expect(backups(w).size).toBe(1)
+  const toasts = leadQueue.length
+  expect(await migrateIfOld(w.host)).toBe('')
+  expect(await migrateIfOld(w.host)).toBe('')
+  expect(backups(w).size).toBe(1)
+  expect(leadQueue.length).toBe(toasts)
+})
+
+test('T-854: the doctor shows a migration backup folder\'s real size', async () => {
+  const w = world()
+  w.files.set(`${D}/data.before-migrate-1`, '')
+  w.files.delete(`${D}/data.before-migrate-1`)
+  for (const n of ['a', 'b']) w.files.set(`${D}/data.before-migrate-${n}/board.json`, 'x')
+  w.files.set(`${D}/data.before-migrate-b/board.json`, 'x')
+  const run0 = w.host.run
+  w.host.run = async (argv, o) => (argv[0] === 'du' ? done({ stdout: `5000\t${argv[2]}\n` }) : run0(argv, o))
+  const text = await doctor(w.host, '')
+  const line = text.split('\n').find(l => l.includes('data.before-migrate-a'))!
+  expect(line).toBeDefined()
+  expect(line).not.toContain('0 B')
+  expect(line).toMatch(/4\.[89] MB|5(\.0)? MB/)
+})

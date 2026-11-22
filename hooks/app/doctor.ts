@@ -125,8 +125,10 @@ async function findAll(host: Host, b: Board | null, mergingId: string | undefine
   const ids = backupIds(top.filter(isBackup).map(e => e.name))
   for (const f of oldBackups(top.filter(e => e.kind === 'file' || isBackup(e)))) {
     const file = `${dir}/${f.name}`
+    // a folder's own size is not its files' (T-854): ask du, and fall back to the listing
+    const bytes = f.kind === 'dir' ? ((await folderBytes(host, file)) ?? f.size) : f.size
     backups.push({
-      kind: 'backup', fixable: true, id: ids.get(f.name)!, bytes: f.size, text: `old migration backup ${shown(file)} (a newer one is kept)`,
+      kind: 'backup', fixable: true, id: ids.get(f.name)!, bytes, text: `old migration backup ${shown(file)} (a newer one is kept)`,
       fix: async () => {
         if (!f.name.includes(BACKUP_MARK)) return 'not a backup'
         const r = await host.run(f.kind === 'dir' ? ['rm', '-rf', file] : ['rm', '-f', file]).catch((e: unknown) => ({ exitCode: 1, stdout: '', stderr: String(e) }))
