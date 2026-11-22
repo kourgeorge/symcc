@@ -18,6 +18,7 @@ import { rowEndBoard, ROW_END, ROW_END_NOW } from '../../../tests/row-end-cases'
 import { BRANCH_LINES_100, branchFactsAt, branchTasks, taskBranchDoing, taskBranchLong, taskBranchMerged, taskBranchTasks } from '../../../tests/branches-fixture'
 import type { TaskBranchFacts } from '../../core/task-branch'
 import { TODAY_BAR_START, TODAY_LINE_3, todayTasks, todayTeamOf } from '../../../tests/live-today-fixture'
+import { PAST_WEEK, PAST_YESTERDAY, pastTasks } from '../../../tests/live-past-fixture'
 import { localOffset } from '../../core/days'
 import { textWidth as textWidthOf } from '../../core/stats'
 import { LIVE_INDENT, liveBranches, liveHeading, liveInner } from '../../core/live'
@@ -2901,6 +2902,24 @@ test('T-769: the Live tab\'s ▍Today has 4 lines (medians per task, work time, 
     const l4 = today(w).texts.find(t => / 00 ▕[▁▂▃▄▅▆▇█]+·*▏ 24$/.test(t)) ?? ''
     expect([w, l4, / ⌀(?:\/h)? 00 ▕/.test(l4), l4.includes('busiest')]).toEqual([w, l4, true, false])
   }
+})
+
+test('T-889: the Live tab\'s ▍Today ends with the dim yesterday and last 7 days lines (today left out) from the slim view file; narrow drops ⏱, then ⌀', () => {
+  const now = Date.now()
+  const f0 = viewFile()
+  const tasks = pastTasks(now) as unknown as SymccTask[]
+  const parsed = parseViewFile(viewFileText({ ...f0, view: { ...f0.view, tasks: tasks.map(t => viewTask(t)) } }))!
+  const texts = (w: number) => panelLines(parsed, { tab: 'live', opened: '', cursor: 0 }, now, w).lines.map(lineText)
+  const wide = texts(140)
+  const at = wide.findIndex(x => x === LIVE_INDENT + PAST_YESTERDAY)
+  expect(at > wide.findIndex(x => x.startsWith('TODAY ─'))).toBe(true)
+  expect(wide[at + 1]).toBe(LIVE_INDENT + PAST_WEEK)
+  const narrow = texts(LIVE_INDENT.length + 30)
+  expect(narrow.includes(`${LIVE_INDENT}yesterday:   ✓ 1 merged · ⌀ 3M`)).toBe(true)
+  expect(narrow.includes(`${LIVE_INDENT}last 7 days: ✓ 2 merged · ⌀ 5M`)).toBe(true)
+  const tight = texts(LIVE_INDENT.length + 25)
+  expect(tight.includes(`${LIVE_INDENT}yesterday:   ✓ 1 merged`)).toBe(true)
+  expect(tight.includes(`${LIVE_INDENT}last 7 days: ✓ 2 merged`)).toBe(true)
 })
 
 test('T-692: the Live tab draws the terminal panel\'s lanes and today (core/live.ts) for the same board, from the slim view file; a narrow panel cuts nothing', () => {

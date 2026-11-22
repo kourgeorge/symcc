@@ -1139,6 +1139,69 @@ export function todayMoreLines(m: TodayMore, width: number): LiveSeg[][] {
   return [two, three, four].filter(x => x.length)
 }
 
+// ---------------- T-889: ▍Today's dim "yesterday" and "last 7 days" lines ----------------
+//   yesterday:   ✓ 77 merged · ⌀ 355M · ⏱ 34h
+//   last 7 days: ✓ 176 merged · ⌀ 854M · ⏱ 53h
+
+/** One earlier stretch of days: tasks merged in it, the tries' tokens in it, the tries' worker time in it (closed-app time left out). */
+export type PastDays = { merged: number; tokens: number; workMs: number }
+
+/**
+ * T-889: the figures of the `days` whole local days before `nowMs`'s day (today left out), counted as ▍Today counts:
+ * a task with a merge in them, the tokens of the tries that ended (or started, when not ended) in them, and the tries'
+ * time inside them without their closed-app stretches.
+ */
+export function pastDays(tasks: readonly SymccTask[], nowMs: number, days: number, offsetMin: number = localOffset(nowMs)): PastDays {
+  const shifted = nowMs + offsetMin * 60_000
+  const to = nowMs - (((shifted % 86_400_000) + 86_400_000) % 86_400_000)
+  const from = to - Math.max(0, Math.floor(days)) * 86_400_000
+  const inside = (at: number | undefined): at is number => at !== undefined && at >= from && at < to
+  let merged = 0
+  let tokens = 0
+  let workMs = 0
+  for (const t of tasks) {
+    if (marksOf(t).some(h => h.kind === 'merged' && inside(ms(h.at)))) merged++
+    for (const r of t.runs ?? []) {
+      const start = ms(r.started)
+      const end = ms(r.ended)
+      if (tryTokens(r) && inside(end ?? start)) tokens += tokenCount(tryTokens(r))
+      if (start === undefined) continue
+      const a = Math.max(start, from)
+      const b = Math.min(end ?? nowMs, to)
+      if (b > a) workMs += b - a - gapsOf(r).reduce((n, g) => n + Math.max(0, Math.min(g.to, b) - Math.max(g.from, a)), 0)
+    }
+  }
+  return { merged, tokens, workMs: Math.max(0, workMs) }
+}
+
+/** T-889: a worker time, short: "45m", "3h 05m" under 10 hours, else whole hours ("34h"). */
+const pastTime = (n: number) => (n >= 10 * HOUR ? `${Math.round(n / HOUR)}h` : fmtDuration(n))
+
+/** T-889: the labels of the two lines, padded to the same width when there is room. */
+export const PAST_LABELS = { yesterday: 'yesterday:', week: 'last 7 days:' } as const
+
+/**
+ * T-889: the dim "yesterday" and "last 7 days" lines in `width` columns. A part that is 0 is left out, and a line with
+ * nothing is left out. When narrow, ⏱ goes first, then ⌀, then the labels' padding; still too wide, the line is cut.
+ */
+export function pastLines(yesterday: PastDays, week: PastDays, width: number): LiveSeg[][] {
+  const w = Math.max(1, Math.floor(width))
+  const padTo = Math.max(textWidth(PAST_LABELS.yesterday), textWidth(PAST_LABELS.week)) + 1
+  const line = (label: string, d: PastDays): LiveSeg[] => {
+    const parts = (keep: number) => [d.merged > 0 && `✓ ${d.merged} merged`, keep >= 2 && d.tokens > 0 && fmtTok(d.tokens), keep >= 3 && d.workMs >= 1000 && `⏱ ${pastTime(d.workMs)}`].filter((x): x is string => !!x)
+    if (!parts(3).length) return []
+    let text = ''
+    for (const [keep, pad] of [[3, true], [2, true], [1, true], [1, false]] as const) {
+      const p = parts(keep)
+      if (!p.length) continue
+      text = `${pad ? padWidth(label, padTo) : `${label} `}${p.join(' · ')}`
+      if (textWidth(text) <= w) break
+    }
+    return [{ text: fitText(text, w), tone: 'dim' }]
+  }
+  return [line(PAST_LABELS.yesterday, yesterday), line(PAST_LABELS.week, week)].filter(x => x.length)
+}
+
 /** All of ▍Today's lines in `width` columns (each under LIVE_INDENT): the figures (todayLines), then todayMoreLines. */
 export function liveTodayLines(v: Pick<LiveView, 'tasks' | 'today_team'>, nowMs: number, width: number, offsetMin: number = localOffset(nowMs), note = false): LiveSeg[][] {
   const more = todayMore(v.tasks, v.today_team, nowMs, offsetMin)
@@ -1149,7 +1212,9 @@ export function liveTodayLines(v: Pick<LiveView, 'tasks' | 'today_team'>, nowMs:
   const first = todayLines({ ...d, tokens }, width, triesOnly).map((text): LiveSeg[] =>
     text.endsWith(TRIES_ONLY) ? [{ text: text.slice(0, -TRIES_ONLY.length), tone: 'text' }, { text: TRIES_ONLY, tone: 'dim' }] : [{ text, tone: 'text' }])
   // T-855: with no lane there is no key line, so the dim note that ⌀ means tokens ends the section
-  return [...first, ...todayMoreLines(more, width), ...(note ? wrapLine(TOKENS_NOTE, width).map((text): LiveSeg[] => [{ text, tone: 'dim' }]) : [])]
+  // T-889: then the dim yesterday and last 7 days lines
+  const past = pastLines(pastDays(v.tasks, nowMs, 1, offsetMin), pastDays(v.tasks, nowMs, 7, offsetMin), width)
+  return [...first, ...todayMoreLines(more, width), ...past, ...(note ? wrapLine(TOKENS_NOTE, width).map((text): LiveSeg[] => [{ text, tone: 'dim' }]) : [])]
 }
 
 // ---------------- T-718: the Organizational memory section at the bottom of the Live tab ----------------
