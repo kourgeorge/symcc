@@ -453,9 +453,33 @@ test('T-831: the starter is never a worker: its end changes no task and records 
   void startAgent(host, worker('symcc-T-1'))
   await Promise.resolve()
   expect(await starterEnded(host, 'starter-1')).toBe(true)
-  const before = JSON.stringify(leadQueue)
-  agentFinished(host, 'starter-1', { answer: 'OK', end: { reason: 'end_turn' } as never, isAborted: false, tokens: { input: 5, output: 1 } as never })
-  expect(JSON.stringify(leadQueue)).toBe(before)
+  // any look at the board or the agent list means agentFinished treated it as an unknown agent (a late hand-back)
+  let looks = 0
+  Object.defineProperty(host, 'fs', { get: () => (looks++, undefined) })
+  const run = { answer: 'OK', end: { reason: 'end_turn' } as never, isAborted: false, tokens: { input: 5, output: 1 } as never }
+  agentFinished(host, 'starter-1', run)
+  for (let i = 0; i < 10; i++) await Promise.resolve()
+  expect(looks).toBe(0)
+  // control: an agent that is no starter does look at the board
+  agentFinished(host, 'other-agent', run)
+  for (let i = 0; i < 10; i++) await Promise.resolve()
+  expect(looks).toBeGreaterThan(0)
+})
+
+test('T-831: a starter whose start never answers does not hold other agents turn ends after the timeout', async () => {
+  const { host, timers } = starterHost()
+  const h = host as unknown as { agents: Record<string, unknown> }
+  h.agents.startTrigger = () => new Promise(() => {})
+  void startAgent(host, worker('symcc-T-1'))
+  await Promise.resolve()
+  let done = false
+  void starterEnded(host, 'worker-1').then(() => (done = true))
+  for (let i = 0; i < 5; i++) await Promise.resolve()
+  expect(done).toBe(false)
+  timers.find(x => x.ms === STARTER_TIMEOUT_MS)!.f()
+  for (let i = 0; i < 5; i++) await Promise.resolve()
+  expect(done).toBe(true)
+  expect(leadQueue.length).toBe(1)
 })
 
 test('T-831: when the starter can not start (refused or no id) the lead is woken as before and the agent still starts', async () => {

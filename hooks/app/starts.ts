@@ -84,18 +84,22 @@ function wake(host: Host, input: HostAgentStart) {
   if (starter) return // the running starter's end drains whatever is queued by then
   const mine: Starter = { spawning: Promise.resolve() }
   starter = mine
+  let release = () => {}
+  const released = new Promise<void>(r => (release = r))
   const giveUp = () => {
+    release() // lets turn ends that wait for a start that never answers go on
     if (starter !== mine) return
     mine.timer?.cancel()
     starter = null
     if (waiting.length) wakeLeadFor(host)
   }
   mine.timer = host.clock.after(STARTER_TIMEOUT_MS, giveUp)
-  mine.spawning = host.agents.startTrigger().then(r => {
+  const started = host.agents.startTrigger().then(r => {
     if (!r.agentId) return giveUp()
     starterIds.add(r.agentId)
     mine.id = r.agentId
   }, giveUp)
+  mine.spawning = Promise.race([started, released])
 }
 
 /**
