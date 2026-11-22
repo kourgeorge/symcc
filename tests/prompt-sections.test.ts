@@ -190,6 +190,11 @@ test('T-859: only the final "Problems:" block counts; other shapes before it are
   expect(checkerProblems('Looked.\n\n## Problems\n- a.ts:1 bad')).toEqual([])
 })
 
+test('T-859: the Problems heading may have bold or italic marks and trailing spaces', () => {
+  for (const h of ['Problems:', '**Problems:**', '__Problems:__', '*Problems:*', '_Problems:_', '**Problems:**  '])
+    expect(checkerProblems(`x\n\n${h}\n- a.ts:1 bad`)).toEqual(['a.ts:1 bad'])
+})
+
 test('T-859: the checker prompt asks for the fixed Problems block', () => {
   expect(checkerText).toContain('a line that is only "Problems:"')
 })

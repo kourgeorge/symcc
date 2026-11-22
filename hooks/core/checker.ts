@@ -145,7 +145,7 @@ export const CHECKER_PROBLEMS_MAX = 5
  */
 export function checkerProblems(report: string): string[] {
   const lines = String(report ?? '').split('\n').map(l => l.trimEnd())
-  const h = lines.findLastIndex(l => l === 'Problems:')
+  const h = lines.findLastIndex(l => /^(\*\*|__|\*|_)?Problems:(\*\*|__|\*|_)?$/.test(l))
   if (h < 0) return []
   const out: string[] = []
   for (const l of lines.slice(h + 1)) {
