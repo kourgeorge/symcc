@@ -1,6 +1,6 @@
 import { settingShown, testMinutesOf, openQuestions, liveWorkersFor, whoDrives, drivesAfter, driveAsk, handRequest, noHandRequest, handedText, handedOff, HANDOVER_NOTE, putTask, leadText, resetDoing, find, parseLead, relabelSession, openOnStart, type Board, gitNote, modeOf, notifyOf, notifyChoices, symccOn, statusLine, statusRoom, offHereAnswer, modeText, offStatusLine, inPlan, liveDriver, backToTodo, restartsOf, type TodayTeam, dayOf, localOffset, tokenCount, safeScoutFile, parseScoutRuns, scoutRunsFile } from '../board'
 import { homeBranch } from './git'
-import { S, onHere, workers, queuedWorkers, scoutRuns, type PaneView, scoutState, updateView, viewTrimNote, sizeNotes, MOVED_WHY, TAKEN_WHY } from './state'
+import { S, onHere, workers, queuedWorkers, scoutRuns, type PaneView, scoutState, updateView, fitView, sizeNotes, MOVED_WHY, TAKEN_WHY } from './state'
 import { type Host, agentState } from '../host'
 import { path, locked, change, now, load, safeWrite, boardMtime } from './store'
 import { openPane } from './open'
@@ -510,22 +510,21 @@ export async function publish(host: Host, b: Board) {
   // T-761: each task page's Branch section, read the same way (OpenCode's panel draws only what the view holds)
   const task_branches = taskBranchesView(host, b).facts
   const v: PaneView = { tasks: b.tasks, working, scouts: [...scoutState.values()].map(s => (s.running && [...scoutRuns.values()].includes(s.name) ? { ...s, started: true } : s)), mode: modeOf(b), test_commands: b.test_commands, home_branch: branch, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, test_minutes: testMinutesOf(b), archive_days: b.archive_days, ...(b.archived ? { archived: b.archived } : {}), ...(b.archived_done?.length ? { archived_done: b.archived_done } : {}), open_on_start: openOnStart(b), notify_now: notifyOf(b, can, S.root), scout_findings: b.scout_findings, tests_with_changes: b.tests_with_changes, checker: b.checker, notify_choices: notifyChoices(can), on_here: onHere(b), ...(S.offHere ? { off_here: S.offWhy } : S.fresh ? { off_here: 'new' as const } : {}), driving: S.driving, branch_note, ...(size_note ? { size_note } : {}), git_state: S.gitState, ...(S.gitInstall ? { git_install: S.gitInstall } : {}), plan_mode: inPlan(S.plan), ...(branches ? { branches } : {}), ...(team ? { today_team: team } : {}), ...(Object.keys(task_branches).length ? { task_branches } : {}), ...(openQuestions(b).length ? { questions: openQuestions(b) } : {}) }
-  // the view as it is stored (trimmed by slimView): the owner is told when trimming had to leave tasks out of the panel
-  try {
-    const note = viewTrimNote(host, v)
-    if (note) sizeNotes.set('the board view', note)
-    else sizeNotes.delete('the board view')
-  } catch {
-    // a warning only
-  }
+  // T-891: the view as it is stored (trimmed by slimView), worked out once here and written as it is: the owner is
+  // told when trimming had to leave tasks out of the panel
+  const fit = fitView(host, v)
+  if (fit.note) sizeNotes.set('the board view', fit.note)
+  else sizeNotes.delete('the board view')
   // the view's own size note may have just changed: show it now, not at the next publish
   const size_now = [...sizeNotes.values()].join('; ')
   if (size_now !== size_note) {
-    v.branch_note = [gitNote(S.gitState), size_now].filter(Boolean).join('; ')
-    if (size_now) v.size_note = size_now
-    else delete v.size_note
+    for (const x of new Set([v, fit.view as PaneView])) {
+      x.branch_note = [gitNote(S.gitState), size_now].filter(Boolean).join('; ')
+      if (size_now) x.size_note = size_now
+      else delete x.size_note
+    }
   }
-  await updateView(host, () => v)
+  await updateView(host, () => fit.view, fit.fitted)
   // the banner logo plays a move when something happened (a merge, a worker start, a scout finding, all done)
   void logoOnPublish(host, v).catch(() => undefined)
   // the status line under the prompt: the board's facts (mode, who drives, branch, next scout, today's merged and cost),

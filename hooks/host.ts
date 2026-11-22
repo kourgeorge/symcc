@@ -195,11 +195,15 @@ export type PanelValues = {
   readScoutOpen: () => Promise<string>
   updateScoutOpen: (change: (value: string) => string) => Promise<unknown>
   readView: () => Promise<SymccView>
-  updateView: (change: (value: SymccView) => SymccView) => Promise<unknown>
+  /** Sets the view; `fitted`: `change` gives back a view this panel's fitView already made, kept as it is (T-891). */
+  updateView: (change: (value: SymccView) => SymccView, fitted?: boolean) => Promise<unknown>
   /** T-841 (OpenCode): /enable ran in this session; its window opens the board once. */
   openNow?: (sessionID: string) => Promise<unknown>
-  /** A warning when this host's panel has to trim `view` to fit; '' or absent: it keeps every task. */
-  trimNote?: (view: SymccView) => string
+  /**
+   * `view` as this host's panel keeps it (trimmed to fit), and the warning when trimming left something out ('' when
+   * not). Absent: the panel keeps every task as it is given.
+   */
+  fitView?: (view: SymccView) => { view: SymccView; note: string }
 }
 
 /** A process as the board lock records it: its id and when it started (ms since 1970). */

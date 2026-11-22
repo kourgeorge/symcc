@@ -61,18 +61,22 @@ export function updateScoutOpen(host: Host, change: (value: string) => string) {
 export function readView(host: Host) {
   return panelOf(host).readView()
 }
-/** The warning for a view the host's panel would have to trim ('' on a host that keeps every task, or when nothing was left out). */
-export function viewTrimNote(host: Host, v: SymccView) {
+/**
+ * T-891: `v` as the host's panel keeps it, worked out once (`fitted`: it was, so updateView may keep it as it is), and
+ * the warning when the panel had to trim it ('' on a host that keeps every task, or when nothing was left out).
+ */
+export function fitView(host: Host, v: SymccView): { view: SymccView; note: string; fitted: boolean } {
   try {
-    return panelOf(host).trimNote?.(v) ?? ''
+    const r = panelOf(host).fitView?.(v)
+    return r ? { ...r, fitted: true } : { view: v, note: '', fitted: false }
   } catch {
-    return ''
+    return { view: v, note: '', fitted: false }
   }
 }
-/** Sets the published view. A refused value (too big, or any failure) never fails a board change or a worker start: the next publish tries again. */
-export async function updateView(host: Host, change: (value: SymccView) => SymccView) {
+/** Sets the published view (`fitted`: `change` gives back a view fitView made). A refused value (too big, or any failure) never fails a board change or a worker start: the next publish tries again. */
+export async function updateView(host: Host, change: (value: SymccView) => SymccView, fitted = false) {
   try {
-    await panelOf(host).updateView(change)
+    await panelOf(host).updateView(change, fitted)
   } catch {
     // dropped on purpose, see above
   }

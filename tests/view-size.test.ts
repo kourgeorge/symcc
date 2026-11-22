@@ -1,9 +1,8 @@
-// The board panel's view stays under Claude Code's 4 MB limit on one plugin value: old done and dropped tasks are
-// slimmed (no history, details or long parts), recent ones and open ones stay whole, and a view that is still too
-// big slims every finished task.
+// The board panel's view stays under Claude Code's 4 MB limit on one plugin value: every done and dropped task is
+// slimmed (no history, details or long parts, T-891), open ones stay whole, and a view still too big is trimmed.
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { slimView, VIEW_MAX_CHARS, VIEW_WHOLE_MS } from '../hooks/claude/panel'
+import { slimView, VIEW_MAX_CHARS } from '../hooks/claude/panel'
 import { slimViewStep, trimNote } from '../hooks/core/view-slim'
 import { depDone } from '../hooks/core/archive'
 import type { SymccView } from '../types'
@@ -16,6 +15,8 @@ import { fakeHost, memoryFs } from './fake-host'
 const now = Date.parse('2026-11-22T12:00:00Z')
 const at = (msAgo: number) => new Date(now - msAgo).toISOString()
 const long = 'x'.repeat(5000)
+/** Two days: before T-891, finished tasks changed within this long were kept whole. */
+const VIEW_WHOLE_MS = 2 * 24 * 60 * 60_000
 
 function task(id: string, status: string, msAgo: number) {
   return { id, title: id, status, details: long, note: '', after: [], files: [], attempts: 1, created_at: at(msAgo), updated_at: at(msAgo), history: [{ at: at(msAgo), kind: 'merged', text: long }] }
@@ -25,25 +26,26 @@ function viewOf(tasks: unknown[]): SymccView {
   return { tasks, working: [], scouts: [], mode: 'auto', test_commands: [] } as unknown as SymccView
 }
 
-test('old finished tasks are slimmed, recent and open ones stay whole', () => {
-  const v = slimView(viewOf([task('T-1', 'done', VIEW_WHOLE_MS + 60_000), task('T-2', 'done', 60_000), task('T-3', 'todo', VIEW_WHOLE_MS * 3), task('T-4', 'dropped', VIEW_WHOLE_MS * 2)]), now)
+test('T-891: every finished task is slimmed, old or just finished; open ones stay whole', () => {
+  const v = slimView(viewOf([task('T-1', 'done', VIEW_WHOLE_MS + 60_000), task('T-2', 'done', 60_000), task('T-3', 'todo', VIEW_WHOLE_MS * 3), task('T-4', 'dropped', VIEW_WHOLE_MS * 2)]))
   const byId = Object.fromEntries((v.tasks as unknown as { id: string; details: string; history: unknown[] }[]).map(t => [t.id, t]))
   expect(byId['T-1']?.details).toBe('')
   expect(byId['T-1']?.history).toEqual([])
   expect(byId['T-4']?.details).toBe('')
-  expect(byId['T-2']?.details).toBe(long)
+  expect(byId['T-2']?.details).toBe('')
+  expect(byId['T-2']?.history).toEqual([])
   expect(byId['T-3']?.details).toBe(long)
 })
 
 test('a board with many long finished tasks makes a view under the 4 MB limit', () => {
   const tasks = Array.from({ length: 1000 }, (_, i) => task(`T-${i}`, 'done', i < 900 ? VIEW_WHOLE_MS * 2 : 60_000))
   expect(JSON.stringify(viewOf(tasks)).length).toBeGreaterThan(VIEW_MAX_CHARS)
-  expect(JSON.stringify(slimView(viewOf(tasks), now)).length).toBeLessThan(VIEW_MAX_CHARS)
+  expect(JSON.stringify(slimView(viewOf(tasks))).length).toBeLessThan(VIEW_MAX_CHARS)
 })
 
-test('a view still too big after slimming old tasks slims every finished task', () => {
+test('a view of many just-finished tasks slims every one of them', () => {
   const tasks = Array.from({ length: 1000 }, (_, i) => task(`T-${i}`, 'done', 60_000))
-  const v = slimView(viewOf(tasks), now)
+  const v = slimView(viewOf(tasks))
   expect(JSON.stringify(v).length).toBeLessThan(VIEW_MAX_CHARS)
   expect((v.tasks as unknown as { details: string }[]).every(t => t.details === '')).toBe(true)
 })
@@ -51,7 +53,7 @@ test('a view still too big after slimming old tasks slims every finished task', 
 test('a view over the limit is trimmed, oldest finished tasks first, instead of failing', () => {
   const tasks = Array.from({ length: 4000 }, (_, i) => ({ ...task(`T-${i}`, 'done', 60_000 + i * 1000), details: long.repeat(10), title: long.repeat(10) }))
   const v = { ...viewOf(tasks), archived: Array.from({ length: 200 }, () => ({ id: 'A', details: long.repeat(20) })) }
-  const out = slimView(v as unknown as SymccView, now)
+  const out = slimView(v as unknown as SymccView)
   expect(JSON.stringify(out).length).toBeLessThan(VIEW_MAX_CHARS)
   const ids = (out.tasks as unknown as { id: string }[]).map(t => t.id)
   expect(ids.includes('T-0')).toBe(true)
@@ -61,7 +63,7 @@ test('a view over the limit is trimmed, oldest finished tasks first, instead of 
 test('open tasks are cut only after old finished tasks have gone', () => {
   const open = { ...task('T-open', 'todo', 60_000), details: long.repeat(4), history: Array.from({ length: 40 }, () => ({ at: at(0), kind: 'step', text: 'line' })) }
   const tasks = [open, ...Array.from({ length: 20000 }, (_, i) => ({ ...task(`T-${i}`, 'done', VIEW_WHOLE_MS * 2 + i), details: '', history: [] }))]
-  const out = slimView(viewOf(tasks), now)
+  const out = slimView(viewOf(tasks))
   const o = (out.tasks as unknown as { id: string; details: string; history: unknown[] }[]).find(t => t.id === 'T-open')
   expect(o?.details).toBe(long.repeat(4))
   expect(o?.history.length).toBe(40)
@@ -74,14 +76,14 @@ function refusingWorld() {
   const w = fakeHost({ fs: memoryFs(new Map()) })
   const panel = {
     ...w.panel,
-    updateView: async (f: (v: SymccView) => SymccView) => {
-      const text = JSON.stringify(slimView(f(w.panel.view()), now))
+    updateView: async (f: (v: SymccView) => SymccView, fitted?: boolean) => {
+      const text = JSON.stringify(fitted ? f(w.panel.view()) : slimView(f(w.panel.view())))
       if (text.length > VIEW_MAX_CHARS) throw new Error('$.state.set: the value is over the 4194304 limit')
       stored = text
     },
-    trimNote: (v: SymccView) => {
-      const r = slimViewStep(v, now)
-      return trimNote(r.step, r.left)
+    fitView: (v: SymccView) => {
+      const r = slimViewStep(v)
+      return { view: r.view, note: trimNote(r.step, r.left) }
     },
   }
   S.root = '/repo'
@@ -115,7 +117,7 @@ test('publish and a board change survive a view the host refuses', async () => {
 
 test('open tasks stay while finished ones go', () => {
   const tasks = [task('T-open', 'todo', 60_000), ...Array.from({ length: 4000 }, (_, i) => ({ ...task(`T-${i}`, 'done', 60_000 + i), title: long.repeat(10) }))]
-  const out = slimView(viewOf(tasks), now)
+  const out = slimView(viewOf(tasks))
   expect((out.tasks as unknown as { id: string }[]).some(t => t.id === 'T-open')).toBe(true)
   expect(JSON.stringify(out).length).toBeLessThan(VIEW_MAX_CHARS)
 })
@@ -138,7 +140,7 @@ function bigView(n: number) {
 }
 
 test('tasks left out of the view still count as done for tasks waiting on them', () => {
-  const out = slimView(bigView(4000), now) as unknown as { tasks: { id: string }[]; archived_done?: string[] }
+  const out = slimView(bigView(4000)) as unknown as { tasks: { id: string }[]; archived_done?: string[] }
   expect(out.tasks.some(t => t.id === 'T-0')).toBe(false)
   expect(depDone({ tasks: out.tasks as never, archived_done: out.archived_done }, 'T-0')).toBe(true)
   expect(depDone({ tasks: out.tasks as never, archived_done: out.archived_done }, 'T-9999')).toBe(true)
@@ -155,8 +157,8 @@ test('publish warns when tasks were left out of the view', async () => {
 })
 
 test('trimNote gives its own words when only the archive totals were left out', () => {
-  const r = slimViewStep({ ...viewOf([task('T-1', 'todo', 60_000)]), archived: { big: 'y'.repeat(3_200_000) } } as unknown as SymccView, now)
-  expect(r.step).toBe(2)
+  const r = slimViewStep({ ...viewOf([task('T-1', 'todo', 60_000)]), archived: { big: 'y'.repeat(3_200_000) } } as unknown as SymccView)
+  expect(r.step).toBe(1)
   expect(trimNote(r.step, r.left)).toBe('the board view was trimmed to fit the 4 MB limit: archive totals left out of the panel')
 })
 
