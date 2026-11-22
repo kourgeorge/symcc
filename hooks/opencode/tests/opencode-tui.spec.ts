@@ -2781,7 +2781,7 @@ test('T-692: the Live tab draws the terminal panel\'s lanes and today (core/live
     const layout = liveLayout(lanes, liveStations(true), inner)
     const frame = Math.floor(NOW / 1000)
     const under = (x: string) => LIVE_INDENT + x
-    return [liveHeader(view, lanes), segText(liveHeading('Tasks', w)), ' ', under(liveLabelLine(layout)), ...lanes.flatMap(l => laneLines(l, layout, { nowMs: NOW, frame }).map(x => under(segText(x)))), ' ', segText(liveHeading('Today', w)), ' ', ...todayLines(liveToday(whole, NOW), inner, true).map(under), ...liveLegend(lanes, inner).map(under)]
+    return [liveHeader(view, lanes), segText(liveHeading('Tasks', w)), ' ', under(liveLabelLine(layout)), ...lanes.flatMap(l => laneLines(l, layout, { nowMs: NOW, frame }).map(x => under(segText(x)))), ...liveLegend(lanes, inner).map(under), ' ', segText(liveHeading('Today', w)), ' ', ...todayLines(liveToday(whole, NOW), inner, true).map(under)]
   }
   // OpenCode reads the view file, whose done task comes slim (no history): the today row must still match
   const f: ViewFile = { ...f0, view: { ...view, tasks: whole.map(t => viewTask(t)) } }
@@ -3614,8 +3614,8 @@ test('T-738, T-747: the OpenCode Live tab has a ▍heading for each section, one
     expect(lines[0]!.trim() === '').toBe(false)
     const mode = lines.findIndex(l => l.includes('agents ') && l.includes(' busy'))
     expect([mode >= 0, lines[mode + 1]]).toEqual([true, `TASKS ${'─'.repeat(w - 6)}`])
-    const heads = lines.filter(l => ['TASKS ─', 'TODAY ─', 'BRANCHES ─'].some(h => l.startsWith(h)) || l.startsWith('ORG'))
-    expect(heads.slice(0, 3).map(h => h.split(' ')[0])).toEqual(['TASKS', 'TODAY', 'BRANCHES'])
+    const heads = lines.filter(l => ['TASKS ─', 'BRANCHES ─', 'TODAY ─'].some(h => l.startsWith(h)) || l.startsWith('ORG'))
+    expect(heads.slice(0, 3).map(h => h.split(' ')[0])).toEqual(['TASKS', 'BRANCHES', 'TODAY'])
     // T-810: each heading runs to the page width with its thin rule; the org-mem one has no bar
     for (const h of heads) expect([h, textWidthOf(h)]).toEqual([h, w])
     expect(heads[3]).not.toContain('▕')
@@ -3624,7 +3624,9 @@ test('T-738, T-747: the OpenCode Live tab has a ▍heading for each section, one
     expect(lines.slice(mode, lines.length - d.footer).filter(l => l.includes('── ') || /^─+$/.test(l))).toEqual([])
     // the heading's bar and name are drawn in the task page's heading color, bold
     expect(d.lines[mode + 1]!.map(x => [x.color, x.bold]).slice(0, 1)).toEqual([['suggestion', true]])
-    const isHeads = [(l: string) => l.startsWith('TODAY'), (l: string) => l.startsWith('BRANCHES'), (l: string) => l.startsWith('ORG')]
+    // T-820: the rule after the title has the title's color, not dim
+    expect(d.lines[mode + 1]!.map(x => x.color)).toEqual(['suggestion', 'suggestion'])
+    const isHeads = [(l: string) => l.startsWith('BRANCHES'), (l: string) => l.startsWith('TODAY'), (l: string) => l.startsWith('ORG')]
     for (const isHead of isHeads) {
       const at = lines.findIndex(isHead)
       expect(at > 1).toBe(true)

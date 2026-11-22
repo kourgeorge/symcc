@@ -115,7 +115,7 @@ function branchesVs(pane: PaneParts, open: (id: string) => () => void) {
     <Box key="live-br" flexDirection="column">
       <Box key="live-br-head" flexDirection="row" gap={1} paddingBottom={1}>
         <Text bold color={C('text')}>{LIVE_SECTIONS.branches.toUpperCase()}</Text>
-        <Text key="live-br-rule" color={C('inactive')}>{liveRuleText(LIVE_SECTIONS.branches.length, width).trim()}</Text>
+        <Text key="live-br-rule" color={C('text')}>{liveRuleText(LIVE_SECTIONS.branches.length, width).trim()}</Text>
       </Box>
       <Box key="live-br-main" flexDirection="row" gap={1} alignItems="center">
         <Svg key="live-br-main-svg" source={main.source} width={main.width} height={main.height} alt={segText(br.main).trim()} />
@@ -169,7 +169,7 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
   const headLine = (key: string, name: string) => (
     <Box key={key} flexDirection="row" gap={1} paddingBottom={1}>
       <Text bold color={C('text')}>{name.toUpperCase()}</Text>
-      <Text key={`${key}-rule`} color={C('inactive')}>{liveRuleText(name.length, width).trim()}</Text>
+      <Text key={`${key}-rule`} color={C('text')}>{liveRuleText(name.length, width).trim()}</Text>
     </Box>
   )
   const headSegs = liveHeaderSegs(v, running, nowMs, width)
@@ -272,6 +272,7 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
         {lanes.length ? <Box key="live-lanes" flexDirection="column" gap={1}>{laneRows}</Box> : null}
       </Box>
       {lanes.length ? line('live-legend', liveLegend(lanes, Infinity).join(' '), 'inactive') : null}
+      {branchesVs(pane, open)}
       <Box key="live-bottom" flexDirection="column">
         {headLine('live-today-head', LIVE_SECTIONS.today)}
         {liveTodayLines(v, nowMs, inner).map((x, i) => (
@@ -280,7 +281,6 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
           </Box>
         ))}
       </Box>
-      {branchesVs(pane, open)}
       {orgMemSectionVs($, pane, notes)}
       {vsFooter(vs, 'live-hint')}
     </Box>
@@ -302,7 +302,7 @@ function orgMemSectionVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
       <Box key="live-om-head" flexDirection="row" gap={1} alignItems="center" paddingBottom={1}>
         {vsLink(vs, 'live-orgmem', `**${mdLink(LIVE_SECTIONS.orgMem.toUpperCase(), all)}**`, [[all, openOrgMemPage($)]])}
         <Text key="live-om-count" color={C('inactive')}>{`${notes.length} / ${ORG_MEM_MAX_LINES}`}</Text>
-        <Text key="live-om-rule" color={C('inactive')}>{liveRuleText(LIVE_SECTIONS.orgMem.length + 3 + `${notes.length} / ${ORG_MEM_MAX_LINES}`.length, width).trim()}</Text>
+        <Text key="live-om-rule" color={C('text')}>{liveRuleText(LIVE_SECTIONS.orgMem.length + 3 + `${notes.length} / ${ORG_MEM_MAX_LINES}`.length, width).trim()}</Text>
       </Box>
       {label('live-om-newest', om.newestLabel)}
       {om.empty ? label('live-om-empty', om.empty) : null}
