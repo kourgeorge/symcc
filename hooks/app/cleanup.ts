@@ -178,6 +178,25 @@ export async function wrapUp(host: Host, id: string, why: string) {
   return true
 }
 
+/** The history line (after "try N: ") written when the owner gives a try `add` more minutes, its limit now `limit`. */
+const ownerAddedText = (add: number, limit: number) => `the owner gave it ${add} more min (limit now ${limit} min)`
+const OWNER_ADDED = /^the owner gave it (\d+) more min \(limit now \d+ min\)$/
+
+/**
+ * T-873: the minutes the owner gave try `attempt` of a task with `history` (its "+N min" answers, added up).
+ * A reopen of Claude Code drops the task's `live` (and its extra_minutes); when the same try goes on, its limit
+ * comes back from these lines, so the try's earlier minutes and the owner's added time both still count.
+ */
+export function ownerAddedMinutes(history: BoardTask['history'], attempt: number): number {
+  let sum = 0
+  for (const h of history ?? []) {
+    if (h.kind !== 'step' || h.try !== attempt) continue
+    const m = OWNER_ADDED.exec(h.text.slice(h.text.indexOf(': ') + 2))
+    if (m) sum += Number(m[1])
+  }
+  return sum
+}
+
 /**
  * The owner's answer (`answer`) to task `id`'s over-time question (see overtimeQuestion): "+N min" moves its
  * limit N minutes later and the worker goes on; "Stop it" tells the worker to wrap up. Returns what to say,
@@ -197,7 +216,7 @@ export async function answerOvertime(host: Host, id: string, answer: string): Pr
     const cur = find(x, t.id)
     if (cur?.status !== 'doing' || !cur.live?.time_ask) return [x, null] as [Board, null]
     const extra = (cur.live?.extra_minutes ?? 0) + pick.add
-    return [patchTask(x, t.id, { live: { extra_minutes: extra, time_ask: undefined }, note: '', history: withHistory(cur.history, now(), tryEntry(cur, 'step', `the owner gave it ${pick.add} more min (limit now ${timeLimitOf(x.max_minutes, { live: { extra_minutes: extra } })} min)`)) }, now()), timeLimitOf(x.max_minutes, { live: { extra_minutes: extra } })] as [Board, number]
+    return [patchTask(x, t.id, { live: { extra_minutes: extra, time_ask: undefined }, note: '', history: withHistory(cur.history, now(), tryEntry(cur, 'step', ownerAddedText(pick.add, timeLimitOf(x.max_minutes, { live: { extra_minutes: extra } })))) }, now()), timeLimitOf(x.max_minutes, { live: { extra_minutes: extra } })] as [Board, number]
   })
   if (out === null) return undefined
   return `${t.id} has ${pick.add} more minutes: its limit is now ${out} min, and its worker goes on.`

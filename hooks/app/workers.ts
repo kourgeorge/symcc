@@ -21,7 +21,7 @@ import { optionsVia, popupTied } from './questions'
 import { changeValues, investigationValues } from './prompt-values'
 import { debriefing, learnedAsk, startDebrief } from './debrief'
 import { orgMemText, keepSuggestions } from './org-mem'
-import { cleanLeftoverTmp, stopOrphans, timedOut, askOvertime, wrapUp } from './cleanup'
+import { cleanLeftoverTmp, stopOrphans, timedOut, askOvertime, wrapUp, ownerAddedMinutes } from './cleanup'
 
 // ---------------- workers ----------------
 
@@ -142,7 +142,9 @@ async function queueWorker(host: Host, id: string): Promise<{ started: Promise<v
       const upToDate = merged ? { history: withHistory(cur!.history, at, tryEntry({ ...cur!, attempts }, 'stage', `brought up to date with ${intoOf(cur!)} (${merged} commit${merged === 1 ? '' : 's'})`)) } : {}
       // and when merging it in clashed, this try merges it in itself (its prompt asks, the git guard lets it), as the clash retry does
       const clash = why === 'clash' && !cur!.merge_main ? { merge_main: true as const } : {}
-      const y = patchTask(x, id, { status: 'doing', live: { session: S.me, phase: 'claimed' }, attempts, branch, note: claimNote(host), runs: addCommits(goOn ?? startRun(cur!.runs, at, !!cur!.merge_main || why === 'clash'), commit ? [commit] : []), ...upToDate, ...clash }, at)
+      // T-873: the same try going on keeps the minutes the owner gave it (the reopen dropped its live record)
+      const added = goOn ? ownerAddedMinutes(cur!.history, attempts) : 0
+      const y = patchTask(x, id, { status: 'doing', live: { session: S.me, phase: 'claimed', ...(added > 0 ? { extra_minutes: added } : {}) }, attempts, branch, note: claimNote(host), runs: addCommits(goOn ?? startRun(cur!.runs, at, !!cur!.merge_main || why === 'clash'), commit ? [commit] : []), ...upToDate, ...clash }, at)
       return [y, find(y, id)!]
     })
     if (!t) return null

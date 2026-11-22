@@ -547,7 +547,7 @@ export function workerActiveMs(r: Pick<SymccRun, 'started' | 'restarts'> | undef
   return runMs({ started: r.started, ...(r.restarts ? { restarts: r.restarts } : {}) }, nowMs)
 }
 
-export type RunTotal ={ ms: number; tokens?: SymccTokens; cost?: number; tries: number }
+export type RunTotal = { ms: number; tokens?: SymccTokens; cost?: number; tries: number }
 
 /** Adds up tries: their time, and their tokens and cost where any try reports them. */
 export function sumRuns(runs: SymccRun[] | undefined, nowMs?: number): RunTotal {

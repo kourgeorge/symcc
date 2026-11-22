@@ -5809,6 +5809,45 @@ test('T-743: a worker on a try that went on after a reopen counts its time limit
   workers.clear()
 })
 
+test('T-873: the owner\'s "+30 min" still counts after Claude Code is reopened and the same try goes on: not asked again at 51 active minutes', async () => {
+  // ran 50 min, asked, the owner gave 30 more (limit 75)
+  const r = await overTime(async w => {
+    await runFor(w, 50)
+    await check(w.$)
+    await runTool(w.$, 'change', { task: 'T-1', answer: '+30 min' })
+  })
+  expect((r.t as BoardTask).live?.extra_minutes).toBe(30)
+  // Claude Code closed: the reopen drops the task's live record; the same try goes on with a new worker
+  const back = backToTodo(r.t as BoardTask, REOPEN, STOP)
+  expect(back.live).toBeUndefined()
+  const { w, t } = await startedT1(restartFields(back))
+  expect(t.attempts).toBe(1)
+  expect(t.live?.extra_minutes).toBe(30)
+  // 50 min before the overnight gap, 1 min after: under 75, so nobody is asked
+  sentTo(w)
+  w.$.agents.list = async () => (workers.has('ag1') ? [{ id: 'ag1', kind: 'worker', status: 'running', description: 'T-1' }] : [])
+  await goneOnFor(w, 50, 1)
+  await check(w.$)
+  const after = find(await load(w.$), 'T-1') as BoardTask
+  expect(after.live?.extra_minutes).toBe(30)
+  expect(after.live?.time_ask).toBeUndefined()
+  // past 75 active minutes it is asked again
+  await goneOnFor(w, 50, 26)
+  await check(w.$)
+  expect((find(await load(w.$), 'T-1') as BoardTask).live?.time_ask).toBeDefined()
+  S.driving = false
+  workers.clear()
+})
+
+test('T-873: a new try does not take the minutes the owner gave an earlier try', async () => {
+  const history = [{ at: ISO, kind: 'step', text: 'try 1: the owner gave it 30 more min (limit now 75 min)', try: 1 }]
+  const { t } = await startedT1({ attempts: 1, history, runs: [{ started: ISO, ended: ISO, ended_by: 'finished', ended_note: 'tests failed' }] })
+  expect(t.attempts).toBe(2)
+  expect(t.live?.extra_minutes).toBeUndefined()
+  S.driving = false
+  workers.clear()
+})
+
 test('T-743: a claim that went on with the same try but never started is undone back to the ended try, with no try number taken off', () => {
   const back = reopenedT1()
   const claimed = find(claimedSameTry(back), 'T-1')!
