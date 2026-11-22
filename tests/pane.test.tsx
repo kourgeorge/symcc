@@ -765,7 +765,7 @@ test('T-651: the choices are numbered lines like the question pop-up; a long one
   stateOf(on, { opened: 'T-2', view: { shape: 'view-1', value: { ...board, working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const written = fakeFiles(on, { '/board.json': JSON.stringify(board), '/board.lock': null })
   on('ui.toast', () => ({ value: undefined }))
-  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 33 }, surface: 'terminal' })
+  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 44 }, surface: 'terminal' })
   // each choice in its own Box, one line under the other (a column), numbered, wrapped to the 40 columns inside the box
   const rows = await ui.find({ key: 'answer-choices' })
   expect(rows?.props.flexDirection).toBe('column')
@@ -1532,7 +1532,7 @@ test('the task page shows one labelled row per fact, From and Why on their own r
   const seen = L.findIndex(l => l.startsWith('Seen:'))
   const wrapped = L.slice(at, seen).map(l => l.slice(10))
   expect(wrapped.length).toBeGreaterThan(1)
-  expect(L.slice(at + 1, seen).every(l => l.startsWith(' '.repeat(9)))).toBe(true)
+  expect(L.slice(at + 1, seen).every(l => l.startsWith(' '.repeat(10)))).toBe(true)
   expect(wrapped.join(' ')).toBe(`“${request}”`)
   for (const l of L.slice(at, seen)) expect(l.length).toBeLessThanOrEqual(50)
   expect(L.some(l => /^Seen:\s+last owner prompt/.test(l))).toBe(true)
