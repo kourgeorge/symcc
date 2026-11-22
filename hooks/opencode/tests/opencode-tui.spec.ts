@@ -3716,6 +3716,21 @@ test('T-756: open_on_start turned off, or symcc turned off, while it waits for a
   }
 })
 
+test('T-841: symcc turned off and on again opens the board, even after it opened by itself earlier in the run', async () => {
+  const s = startCtx({ open_on_start: true, enabled: true })
+  s.shown.session = true
+  await s.board.refresh()
+  expect(s.current()?.name).toBe(BOARD_PANEL)
+  s.panel.close()
+  s.setView({ open_on_start: true, enabled: false })
+  await s.board.refresh()
+  expect(s.current()?.name).toBe(undefined)
+  s.setView({ open_on_start: true, enabled: true })
+  await s.board.refresh()
+  expect(s.current()?.name).toBe(BOARD_PANEL)
+  s.board.stop()
+})
+
 // ---------------- T-761: the task page's Branch section ----------------
 test('T-761: the OpenCode task page draws the Branch section from the view file: tries, a catch-up, a merge, a cut history; none for a task with no branch', () => {
   const f = viewFile()

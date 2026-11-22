@@ -403,10 +403,14 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
    *  itself again in this run, so a closed board stays closed. */
   let startDone = false
   const openOnStart = (f: ViewFile | null) => {
-    if (startDone || !f) return
+    if (!f) return
+    // T-841: symcc off (a new project, or /symcc-disable) waits and re-arms; /symcc-enable turns it on and the board then opens
+    if (f.view.enabled === false && f.view.open_on_start !== false) {
+      startDone = false
+      return
+    }
+    if (startDone) return
     if (f.view.open_on_start === false) startDone = true
-    // T-841: symcc off (a new project, or /symcc-disable) waits; /symcc-enable turns it on and the board then opens
-    else if (f.view.enabled === false) return
     else if (ctx.ui.panel.current()?.name === BOARD_PANEL || ctx.ui.panel.open(BOARD_PANEL)) startDone = true
   }
   /** Opens the page of the role, kind or scout just made here once the view file has it (a new role or kind in its
