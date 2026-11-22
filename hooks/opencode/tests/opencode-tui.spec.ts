@@ -2747,7 +2747,7 @@ test('T-769: the Live tab\'s ▍Today has 4 lines (medians per task, work time, 
   expect(/[▁▂▃▄▅▆▇]/.test(wide.lines[1]!)).toBe(false)
   expect(wide.lines[2]).toBe(LIVE_INDENT + TODAY_LINE_3)
   // (the hours depend on the machine's time zone)
-  expect(/^ ⏱ 1h 15m agent work · ≈ \$12 this session   busiest hour \d\d:00 · \S+   \d\d [▁▂▃▄▅▆▇█ ]+ \d\d$/.test(wide.lines[3]!.replace(LIVE_INDENT, ' '))).toBe(true)
+  expect(/^ ⏱ 1h 15m agent work · ≈ \$12 this session   busiest hour \d\d:00 · \S+   00 [▁▂▃▄▅▆▇█ ]+·* 24$/.test(wide.lines[3]!.replace(LIVE_INDENT, ' '))).toBe(true)
   // a broken today_team is left out: no lead, scouts or cost
   const broken = parseViewFile(viewFileText({ ...f, view: { ...f.view, today_team: 'x' as never } }))!
   expect('today_team' in broken.view).toBe(false)
@@ -2756,7 +2756,7 @@ test('T-769: the Live tab\'s ▍Today has 4 lines (medians per task, work time, 
   const narrow = today(40)
   expect(narrow.texts.some(t => t === `${LIVE_INDENT}████████▓▒▒▒▒▒░░`)).toBe(true)
   // line 4 keeps both hour labels and a sparkline, its figures cut from the end
-  const four = narrow.texts.find(t => / \d\d [▁▂▃▄▅▆▇█ ]+ \d\d$/.test(t))
+  const four = narrow.texts.find(t => / 00 [▁▂▃▄▅▆▇█ ]+·* 24$/.test(t))
   expect(four === undefined).toBe(false)
   expect(four!.includes('busiest')).toBe(false)
 })

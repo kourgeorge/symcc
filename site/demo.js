@@ -168,13 +168,13 @@
     const d = s.today
     L.push(' ' + sp(`✓ ${d.merged} merged`, 'passed') + sp(`   ↺ ${d.back} sent back   ✗ ${d.failed} failed   Σ ${tok(d.tokens + OTHERS_TOKENS)} tokens`, 'dim'))
     // (T-809) line 2: the bar alone (16 cells in the board colors) with the scouts' share; line 3: the medians per merged task, first try,
-    // tries and the checker's send-backs; line 4: the agent work time, then the tokens per hour from 08:00 to now at the very end
+    // tries and the checker's send-backs; line 4: the agent work time, then the tokens per hour over the whole day, 00 to 24, at the very end (hours to come are dim dots)
     const cells = Math.round((TODAY_MORE.scoutsPct / 100) * 16)
     const bar = sp(WHO_CELL.workers.repeat(16 - cells), 'who-workers') + sp(WHO_CELL.scouts.repeat(cells), 'who-scouts')
     const shares = ' ' + sp(`workers and checkers ${100 - TODAY_MORE.scoutsPct}%`, 'who-workers') + sp(' · ', 'dim') + sp(`scouts ${TODAY_MORE.scoutsPct}%`, 'who-scouts') + sp(` (${TODAY_MORE.scoutsTokens} tokens)`, 'dim')
     L.push(' ' + bar + shares)
     L.push(' ' + sp('⌀ ', 'dim') + sp(`per task ${TODAY_MORE.perTask}`, 'text') + sp(`   first try ${TODAY_MORE.firstTry}% · ⌀ ${TODAY_MORE.avgTries} tries   ⌕ ${d.back} sent back by the checker`, 'dim'))
-    L.push(' ' + sp('⏱ ', 'dim') + sp(`${TODAY_MORE.work} agent work`, 'text') + sp('   08 ', 'dim') + sp(TODAY_MORE.spark, 'bar') + sp(` ${clock(s.now).slice(0, 2)}`, 'dim'))
+    L.push(' ' + sp('⏱ ', 'dim') + sp(`${TODAY_MORE.work} agent work`, 'text') + sp('   00 ', 'dim') + sp(' '.repeat(8) + TODAY_MORE.spark.slice(0, -1), 'bar') + sp(TODAY_MORE.spark.slice(-1), 'now') + sp('·'.repeat(24 - 8 - TODAY_MORE.spark.length), 'dim') + sp(' 24', 'dim'))
     if (s.lanes.length) L.push(' ' + sp(`✧ = an agent works here (needs an agent slot)   bar: tokens of the task so far, full = usual per task (${tok(USUAL)})`, 'dim'))
     L.push('')
     L.push(liveHead('Branches'), '')
