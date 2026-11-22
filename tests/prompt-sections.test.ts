@@ -145,3 +145,12 @@ test('T-851: an owner follow-up question after a lead note stays in the text; a 
   expect(rows[0]!.finding).toBe('hooks/a.ts:12 crashes on empty input; run X.')
   expect(rows[1]!.reason).toBe('stopped before finishing')
 })
+
+test('T-851: the first finding of a squashed checker line is the first list item; abbreviations do not cut a sentence', () => {
+  const report = 'I read the diff and ran probes in /tmp.\n\n- hooks/core/a.ts:12 crashes on an empty list\n- hooks/core/b.ts:4 lost the old rule'
+  const squashed = report.replace(/\s+/g, ' ')
+  const t = task({ history: [({ kind: 'checker-problems', text: `try 1: checker found problems: ${squashed}`, try: 1 })] as never })
+  expect(triesRows(t)[0]!.finding).toBe('hooks/core/a.ts:12 crashes on an empty list')
+  const u = task({ history: [({ kind: 'failed', text: 'try 1: Changed X (e.g. the Y part) and Z. Then more. → tests failed: x', try: 1, result: 'tests failed: x', reason: 'tests' })] as never })
+  expect(triesRows(u)[0]!.said).toBe('Changed X (e.g. the Y part) and Z.')
+})

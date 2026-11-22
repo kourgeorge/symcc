@@ -30,7 +30,8 @@ const REASON_WORDS: Record<string, string> = {
 /** The first sentence of `s` on one line; a very long one is cut at a word with "…". */
 export function firstSentence(s: string, max = 200): string {
   const one = String(s ?? '').replace(/\s+/g, ' ').trim()
-  const m = /^(.*?[.!?])(?:\s|$)/.exec(one)
+  // A sentence ends at . ! ? before a capital letter (or the end), not at "e.g." or "etc." mid-thought.
+  const m = /^(.*?(?<!\b(?:e\.g|i\.e|etc|vs|approx|cf))[.!?])(?=\s+[A-Z`"'(\[]|$)/.exec(one)
   const sentence = m ? m[1]! : one
   if (sentence.length <= max) return sentence
   const cut = sentence.slice(0, max)
@@ -42,6 +43,9 @@ export function firstFinding(report: string): string {
   const r = String(report ?? '')
   const item = /^\s*(?:[-*•]|\d+[.)])\s+(.+)$/m.exec(r)
   if (item) return firstSentence(item[1]!)
+  // The history line has the report squashed onto one line: find the first list marker inside it.
+  const flat = /(?:^|\s)(?:[-*•]|\d+[.)])\s+(\S.*?)(?=\s+(?:[-*•]|\d+[.)])\s+\S|$)/.exec(r.replace(/\s+/g, ' '))
+  if (flat) return firstSentence(flat[1]!)
   const after = /\bproblems?:\s*(\S[\s\S]*)$/i.exec(r)
   return firstSentence(after ? after[1]! : r)
 }
