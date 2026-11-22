@@ -2066,6 +2066,14 @@ test('T-718: OpenCode: the Live tab\'s org-mem section draws the header, the 3 n
     expect(ls[head + 4]).toMatch(/^ {4}11-21 {2}git +Use a plain path/)
     expect(ls[head + 5]).toMatch(/^ {4}11-21 {2}tests +In tests, put/)
     expect(ls[head + 6]).toBe('   topics')
+    // T-819: the topic labels (newest rows and the grid) are in the info blue, not green; "unsorted" stays dim
+    const colorOfText = (row: number, text: string) => d.lines[row]!.find(s => s.text.trim() === text)?.color
+    expect(colorOfText(head + 4, 'git')).toBe('ide')
+    expect(colorOfText(head + 5, 'tests')).toBe('ide')
+    expect(colorOfText(head + 3, 'unsorted')).toBe('inactive')
+    const gridSegs = d.lines.slice(head + 7, head + 7 + ls.slice(head + 7).findIndex(l => l.startsWith('   ↑↓ move'))).flat()
+    expect(gridSegs.find(s => s.text.trim() === 'tests')?.color).toBe('ide')
+    expect(gridSegs.find(s => s.text.trim() === 'unsorted')?.color).toBe('inactive')
     const grid = ls.slice(head + 7, ls.findIndex(l => l.startsWith('   ↑↓ move')))
     expect(grid.join(' ')).toMatch(/tests +3/)
     expect(grid.join(' ')).toMatch(/git +2/)
@@ -2989,7 +2997,8 @@ test('T-767: the OpenCode Live tab indents by 1 under the headings; a running la
     // T-777: only "▶ " and the id are bold accent; the title is normal text
     expect(run.map(x => [x.color, !!x.bold])).toEqual([['claude', true], ['claude', true], ['text', false]])
     const train = d.lines[texts.findIndex(x => x.includes('└─◇ T-714'))]!.filter(x => x.text.trim())
-    expect(train.map(x => [x.text, x.color, !!x.bold])).toEqual(train.map(x => [x.text, 'inactive', false]))
+    // T-819: a waiting train's id is accent, the rest of its row dim
+    expect(train.map(x => [x.text, x.color, !!x.bold])).toEqual(train.map(x => (x.text.trim() === 'T-714' ? [x.text, 'claude', true] : [x.text, 'inactive', false])))
     expect(texts[texts.findIndex(x => x.startsWith('TODAY ─')) + 2]?.startsWith(' ✓ ')).toBe(true)
   }
 })
