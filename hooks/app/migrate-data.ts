@@ -179,17 +179,21 @@ export const backupTimeMs = (name: string): number => {
   return m ? Date.parse(`${m[1]}T${m[2]}:${m[3]}:${m[4]}.${m[5]}Z`) : NaN
 }
 
-/** The newest backup folder that still holds files, with its time (from its name). */
+/** The file backUp writes last into a backup folder: the folder holds every data file. */
+const COMPLETE_FILE = 'backup-complete.json'
+
+/** The newest whole backup folder (one backUp finished, or a migration succeeded with), with its time (from its name). */
 async function newestBackup(host: Host): Promise<{ backup: string; ms: number } | null> {
   const dir = path(S.N.dir)
   let best: { name: string; ms: number } | null = null
   for (const f of await host.fs.list(dir).catch(() => [])) {
     if (f.kind !== 'dir' || !f.name.startsWith(`data${BACKUP_MARK}`)) continue
     const ms = backupTimeMs(f.name)
-    if (Number.isFinite(ms) && (!best || ms > best.ms)) best = { name: f.name, ms }
+    if (!Number.isFinite(ms) || (best && ms <= best.ms)) continue
+    const names = new Set((await host.fs.list(`${dir}/${f.name}`).catch(() => [])).map(e => e.name))
+    if (names.has(COMPLETE_FILE) || names.has(MIGRATED_FILE)) best = { name: f.name, ms }
   }
-  if (!best || (await host.fs.list(`${dir}/${best.name}`).catch(() => [])).length === 0) return null
-  return { backup: fileName(`${dir}/${best.name}`), ms: best.ms }
+  return best ? { backup: fileName(`${dir}/${best.name}`), ms: best.ms } : null
 }
 
 /** The file a successful migration leaves in its backup folder: { at, version } (T-886). */
@@ -239,6 +243,8 @@ async function backUp(host: Host): Promise<string> {
   for (const f of top) if (f.kind === 'file' && /^(board|archive(-\d+)?|scouts)\.json$|^(org-mem|field-guide)\.md$/.test(f.name)) await copy(`${dir}/${f.name}`, f.name)
   for (const f of await host.fs.list(`${dir}/${PARTS_DIR}`).catch(() => [])) if (f.kind === 'file' && f.name.endsWith('.json')) await copy(`${dir}/${PARTS_DIR}/${f.name}`, `${PARTS_DIR}/${f.name}`)
   for (const f of await host.fs.list(path(S.N.scouts)).catch(() => [])) if (f.kind === 'file' && f.name.endsWith('.runs.json')) await copy(`${path(S.N.scouts)}/${f.name}`, `scouts/${f.name}`)
+  // written last: only a folder holding every file has it, so a half-made backup is never reused (T-886)
+  await host.fs.write(`${to}/${COMPLETE_FILE}`, JSON.stringify({ at: now() }))
   return fileName(to)
 }
 

@@ -577,6 +577,29 @@ test('T-886: a backup not left by a successful migration (a failed try, before a
   }
 })
 
+test('T-886: a half-made backup (a copy failed part way) is never reused: the next run makes a whole new one', async () => {
+  const w = world()
+  S.enabledNow = true
+  leadQueue.length = 0
+  let fail = true
+  const write = w.host.fs.write
+  w.host.fs.write = async (p, text) => {
+    if (fail && p.includes('before-migrate') && p.endsWith('/archive.json')) throw new Error('disk full')
+    return write(p, text)
+  }
+  const archiveBefore = w.files.get(`${D}/archive.json`)
+  expect(await migrateIfOld(w.host)).toContain('the backup could not be made')
+  fail = false
+  w.files.set(`${D}/scouts.json`, w.files.get(`${D}/scouts.json`)! + ' ')
+  expect(await migrateIfOld(w.host)).toBe('')
+  // the folder the success names holds the archive as it was, and is marked whole
+  const told = leadQueue.find(t => t.includes('moved your old data'))!
+  const used = [...backups(w)].find(b => told.includes(`data.before-migrate-${b}/`))!
+  expect(typeof used).toBe('string')
+  expect(w.files.get(`${D}/data.before-migrate-${used}/archive.json`)).toBe(archiveBefore)
+  expect(w.files.has(`${D}/data.before-migrate-${used}/backup-complete.json`)).toBe(true)
+})
+
 test('T-886: a task already in the queue step with a leftover "queue (n)" note migrates to no old rows', async () => {
   const w = world()
   S.enabledNow = true
