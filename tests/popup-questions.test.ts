@@ -547,3 +547,10 @@ test("a tied pop-up keeps the task's waiting time, and a second one without opti
   expect(t.options_lead).toBeUndefined()
   expect(t.updated_at).toBe(ISO)
 })
+
+// T-801: the NEEDS YOU row keeps the lead's wording whole (the task id is not cut out of it)
+test("the NEEDS YOU row for a more-time task shows the lead's text whole", () => {
+  const t = { id: 'T-1', title: 'x', status: 'doing', time_ask: 'over', question_lead: 'Give T-1 more time?', started_at: new Date(Date.now() - 3600_000).toISOString(), created_at: new Date().toISOString(), updated_at: new Date().toISOString() } as never
+  const need = liveNeeds({ tasks: [t], questions: [] } as never, Date.now(), 200).find(x => x.id === 'T-1')
+  expect(need?.segs.map(s => s.text).join('')).toBe('⚠ T-1 Give T-1 more time?')
+})
