@@ -1120,7 +1120,7 @@ TASKS ────────────────────────�
 
                        work✧    check✧   queue    tests    merged
  ▶ T-684 /symcc-doc…   ●━━━━━━━━●━━━━━━━━◉────────○────────○      #2
-   change try 2/3      ▕████████░░░░░▏ 1.1M  ↺×1
+   change try 2/3  ⌀ 1.1M (0.9× median) · ⏱ 24m · worker ⌀ 812.4k · checker ⌀ 287.6k · ↺×1
 ```
 
 - `NEEDS YOU` is the first section, shown only while something waits for you, and hidden (no
@@ -1166,7 +1166,7 @@ TASKS ────────────────────────�
    ▶ T-760 A running one ●━━━━━━━━◉────────○────────○────────○      2m
      change try 1/3      ⌀ at hand-back
    ✓ T-747 Live tab: e…  ●━━━━━━━━●━━━━━━━━●━━━━━━━━●━━━━━━━━✓  merged 3m ago
-     change try 1/3      ▕█████████████▏ ⌀ 5.7M
+     change try 1/3  ⌀ 5.7M (4.6× median) · ⏱ 38m · worker ⌀ 4.1M · checker ⌀ 1.6M
   ```
 - Waiting trains: a todo task that waits (its `after`) for a task that has not finished hangs
   under the lane of the running task it waits for, indented with `└─◇`, its id and cut title,
