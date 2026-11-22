@@ -55,6 +55,12 @@ export function scoutEditPage($: $, pane: PaneParts) {
       </Box>
 
       <Box flexDirection="column">
+        {heading('Findings')}
+        <Input key="scout-findings" value={d.findings} placeholder="empty: follow the board's scout_findings setting" submitLabel="keep" onInput={value => void (d.findings = value)} onSubmit={value => void (d.findings = value)} />
+        <Text color={C('inactive')}>auto: the lead decides where its tasks go · backlog: they all go to the backlog · empty or default: the board setting</Text>
+      </Box>
+
+      <Box flexDirection="column">
         {heading('Summary')}
         <Input key="scout-summary" value={d.summary} placeholder="empty: the scouts list shows the first line of the instructions" submitLabel="keep" onInput={value => void (d.summary = value)} onSubmit={value => void (d.summary = value)} />
       </Box>

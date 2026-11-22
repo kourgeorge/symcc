@@ -238,7 +238,7 @@ export function scoutEditPageVs($: $, pane: PaneParts) {
     </Text>
   )
   const cancelHref = vsHref('do', 'scout-edit/cancel')
-  const box = (key: 'every' | 'model' | 'summary' | 'body', label: string, placeholder: string, more: Record<string, unknown> = {}) => (
+  const box = (key: 'every' | 'model' | 'findings' | 'summary' | 'body', label: string, placeholder: string, more: Record<string, unknown> = {}) => (
     <Input key={`scout-${key}`} label={label} value={d[key]} placeholder={placeholder} submitLabel="Keep" {...more} onInput={value => void (d[key] = value)} onSubmit={value => void (d[key] = value)} />
   )
   return (
@@ -260,6 +260,8 @@ export function scoutEditPageVs($: $, pane: PaneParts) {
       {box('every', 'Runs every', 'minutes: a whole number, 0 or more', { autoFocus: true })}
       {plain('vs-every-about', 'in minutes · 0 = only on demand')}
       {box('model', 'Model', "empty: the session's model")}
+      {box('findings', 'Findings', "empty: follow the board's scout_findings setting")}
+      {plain('vs-findings-about', 'auto: the lead decides where its tasks go · backlog: they all go to the backlog · empty or default: the board setting')}
       {box('summary', 'Summary', 'empty: the first line of the instructions')}
       {box('body', 'Instructions', 'what to look for, in plain words', { rows: 8 })}
       {vsFooter(vs, 'scout-edit-keys')}

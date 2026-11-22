@@ -1543,6 +1543,9 @@ test('T-562: startTui: Settings opens Roles, a role\'s page turns it on and rese
   answers.prompt.push('15', 'none', 'Check the lock file too.', 'often')
   for (let i = 0; i < 4; i++) await board.press('e', 'ses_1')
   expect(toasts.some(t => t.includes('whole number'))).toBe(true)
+  // T-862: e on a scout's page can pick the scout's own findings choice
+  answers.select.push('findings', 'backlog')
+  await board.press('e', 'ses_1')
   expect(sent).toEqual([
     { sessionID: 'ses_1', name: 'symcc-settings', text: 'role tester on' },
     { sessionID: 'ses_1', name: 'symcc-settings', text: 'role tester reset' },
@@ -1550,8 +1553,20 @@ test('T-562: startTui: Settings opens Roles, a role\'s page turns it on and rese
     { sessionID: 'ses_1', name: 'symcc-scout', text: 'deps every 15' },
     { sessionID: 'ses_1', name: 'symcc-scout', text: 'deps model none' },
     { sessionID: 'ses_1', name: 'symcc-scout', text: 'deps prompt Check the lock file too.' },
+    { sessionID: 'ses_1', name: 'symcc-scout', text: 'deps findings backlog' },
   ])
   board.stop()
+})
+
+test('T-862: OpenCode shows a scout\'s own findings choice in the Scouts list and on its page; none shows nothing', () => {
+  const f = scoutsViewFile()
+  const own = { ...f, view: { ...f.view, scouts: f.view.scouts!.map(s => (s.name === 'deps' ? { ...s, findings: 'backlog' as const } : s)) } }
+  const list = panelLines(own, { tab: 'scouts', opened: '', cursor: 0 }, NOW, 120).lines.map(lineText)
+  expect(list.find(l => l.includes('deps'))).toContain('→ backlog')
+  expect(list.find(l => l.includes('docs-check'))).not.toContain('→')
+  expect(panelLines(own, { tab: 'scouts', opened: 'deps', cursor: 0 }, NOW, 120).lines.map(lineText).some(l => l.includes('findings → backlog'))).toBe(true)
+  expect(panelLines(f, { tab: 'scouts', opened: 'deps', cursor: 0 }, NOW, 120).lines.map(lineText).some(l => l.includes('findings'))).toBe(false)
+  expect(actionCommand({ kind: 'scout-edit', scout: 'deps', field: 'findings', value: 'default' })).toEqual({ name: 'symcc-scout', text: 'deps findings default' })
 })
 
 test('T-574: OpenCode\'s task page shows local times with the shared when, and the role and kind info from view.json', () => {

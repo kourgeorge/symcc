@@ -1,5 +1,6 @@
 import type { SymccScout, SymccTask, SymccTokens } from '../../types'
-import { type ScoutDef, parseScout, modeOf, symccOn, OPEN, scoutPrompt, recentClosed, scoutAgentName, scoutDescription, parseScoutMemory, lastRunOf, scoutMemoryText, scoutPausedText, everyText, SCOUT_REPORT_CHARS, scoutLeadMessage, scoutWhyNot, scoutFile, scoutNameError, scoutDraftError, scoutText, everyMinutesOf, onDemand, onNotReady, SCOUT_RETRY_MS, inPlan, addScoutRun, keepScoutUsage, leadScoutNameError, leadScoutText, leadScoutsText, safeScoutFile, SCOUT_FILE_NAME, SCOUT_FILE_NAME_RULE, scoutFileNameError, type ScoutRunRecord, parseScoutRuns, scoutRunsText, addScoutRunRecord, scoutRunsFile, scoutRunReportFile, isScoutRunReport, scoutRunOutcome, scoutRunTasks, linkScoutRunTask, countFindings, reportText, parseScoutUsage, scoutResultsLine, renameScoutOrigins, linkScoutRunTaskAt, type Board } from '../board'
+import { type ScoutFindings } from '../board'
+import { type ScoutDef, scoutFindingsChoice, parseScout, modeOf, symccOn, OPEN, scoutPrompt, recentClosed, scoutAgentName, scoutDescription, parseScoutMemory, lastRunOf, scoutMemoryText, scoutPausedText, everyText, SCOUT_REPORT_CHARS, scoutLeadMessage, scoutWhyNot, scoutFile, scoutNameError, scoutDraftError, scoutText, everyMinutesOf, onDemand, onNotReady, SCOUT_RETRY_MS, inPlan, addScoutRun, keepScoutUsage, leadScoutNameError, leadScoutText, leadScoutsText, safeScoutFile, SCOUT_FILE_NAME, SCOUT_FILE_NAME_RULE, scoutFileNameError, type ScoutRunRecord, parseScoutRuns, scoutRunsText, addScoutRunRecord, scoutRunsFile, scoutRunReportFile, isScoutRunReport, scoutRunOutcome, scoutRunTasks, linkScoutRunTask, countFindings, reportText, parseScoutUsage, scoutResultsLine, renameScoutOrigins, linkScoutRunTaskAt, type Board } from '../board'
 import { publish, refreshStatus, drivesHere } from './lead'
 import { S, onHere, scoutState, scoutRuns, heard, timers, updateScoutOpen, stopped, movedAgents, movedRefused, DRIVING_MOVED } from './state'
 import { type FileTouch, type Host, type HostAgentStarted, notReadyYet } from '../host'
@@ -557,6 +558,7 @@ export async function scheduleScouts(host: Host) {
     }
     if (s.model) st.model = s.model
     if (s.summary) st.summary = s.summary
+    if (s.findings) st.findings = s.findings
     if (s.warning) st.warning = s.warning
     if (old?.last_report !== undefined) st.last_report = old.last_report
     if (old?.paused) st.paused = true
@@ -600,7 +602,7 @@ export async function readScoutFile(host: Host, scout: string): Promise<string |
 export async function editScout(host: Host, sc: SymccScout) {
   const text = await readScoutFile(host, sc.name)
   const def = text === null ? null : parseScout(sc.name, text)
-  S.draft = { scout: sc.name, isNew: false, every: def?.bad_every ?? String(def?.every_minutes ?? sc.every_minutes), model: def?.model ?? sc.model ?? '', summary: def?.summary ?? sc.summary ?? '', body: def?.prompt ?? sc.prompt ?? '', error: '' }
+  S.draft = { scout: sc.name, isNew: false, every: def?.bad_every ?? String(def?.every_minutes ?? sc.every_minutes), model: def?.model ?? sc.model ?? '', summary: def?.summary ?? sc.summary ?? '', findings: def?.findings ?? sc.findings ?? '', body: def?.prompt ?? sc.prompt ?? '', error: '' }
   host.ui.refresh()
 }
 
@@ -614,7 +616,7 @@ export async function newScout(host: Host, name: string, shown: string[] = []) {
     S.naming = { name: s, error: err }
   } else {
     S.naming = null
-    S.draft = { scout: s, isNew: true, every: '60', model: '', summary: '', body: '', error: '' }
+    S.draft = { scout: s, isNew: true, every: '60', model: '', summary: '', findings: '', body: '', error: '' }
   }
   host.ui.refresh()
 }
@@ -641,7 +643,7 @@ export async function saveScout(host: Host) {
     host.ui.refresh()
     return
   }
-  const text = scoutText(old, { every_minutes: everyMinutesOf(d.every)!, model: d.model, summary: d.summary }, d.body)
+  const text = scoutText(old, { every_minutes: everyMinutesOf(d.every)!, model: d.model, summary: d.summary, findings: findingsOf(d.findings) }, d.body)
   await host.run(['mkdir', '-p', path(S.N.scouts)])
   await host.fs.write(path(rel), text)
   S.draft = null
@@ -654,7 +656,16 @@ export async function saveScout(host: Host) {
 }
 
 /** What the lead's scouts tool gets: action (list by default), name, every_minutes, model, prompt. */
-export type LeadScoutInput = { action?: unknown; name?: unknown; every_minutes?: unknown; model?: unknown; prompt?: unknown }
+export type LeadScoutInput = { action?: unknown; name?: unknown; every_minutes?: unknown; model?: unknown; findings?: unknown; prompt?: unknown }
+
+/** A findings choice as typed: auto or backlog; empty or "default" means none (follow the board setting). */
+const findingsOf = (v: string): ScoutFindings | '' => scoutFindingsChoice(v) ?? ''
+
+/** Scout `name`'s own findings choice, read from its file now (undefined: it follows the board's scout_findings). */
+export async function scoutFindingsFor(host: Host, name: string): Promise<ScoutFindings | undefined> {
+  const text = await readScoutFile(host, name)
+  return text === null ? undefined : parseScout(name, text)?.findings
+}
 
 /** every_minutes as the lead gave it (a whole number, 0 or more), or null. */
 const leadEvery = (v: unknown): number | null => (typeof v === 'number' ? (Number.isSafeInteger(v) && v >= 0 ? v : null) : typeof v === 'string' ? everyMinutesOf(v) : null)
@@ -715,12 +726,14 @@ export async function leadScouts(host: Host, a: LeadScoutInput): Promise<string>
   const prompt = typeof a.prompt === 'string' && a.prompt.trim() ? a.prompt : (def?.prompt ?? '')
   if (!prompt.trim()) return 'prompt is missing: say in plain words what the scout looks for'
   const model = typeof a.model === 'string' ? a.model.trim() : (def?.model ?? '')
+  if (a.findings !== undefined && a.findings !== null && !/^(auto|backlog|default|)$/i.test(String(a.findings).trim())) return 'findings must be auto, backlog or default (default: follow the board setting)'
+  const findings: ScoutFindings | '' = a.findings === undefined || a.findings === null ? (def?.findings ?? '') : findingsOf(String(a.findings))
   await host.run(['mkdir', '-p', path(S.N.scouts)])
-  await host.fs.write(path(file), scoutText(old, { every_minutes: every, model }, prompt))
+  await host.fs.write(path(file), scoutText(old, { every_minutes: every, model, findings }, prompt))
   await scheduleScouts(host)
   await publish(host, await load(host))
   host.ui.refresh()
-  return `${action === 'add' ? 'added' : 'saved'} scout ${name} (${file}): runs ${everyText(every)}${model ? `, model ${model}` : ''}`
+  return `${action === 'add' ? 'added' : 'saved'} scout ${name} (${file}): runs ${everyText(every)}${model ? `, model ${model}` : ''}${findings ? `, findings → ${findings}` : ''}`
 }
 
 /** Leaves the edit mode (and the new scout name box) without saving. */

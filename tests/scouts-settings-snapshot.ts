@@ -5143,9 +5143,10 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "props": {
           "key": "setting:scout_findings",
           "label": "scout_findings     backlog · default auto · auto / backlog ·" +
-            " auto: the lead decides, a scout finding it adds goes to tod" +
-            "o and runs; backlog: every task added from a scout finding g" +
-            "oes to the backlog and waits for you",
+            " the default for scouts without their own findings choice. a" +
+            "uto: the lead decides, a scout finding it adds goes to todo " +
+            "and runs; backlog: every task added from a scout finding goe" +
+            "s to the backlog and waits for you",
           "plain": true
         },
         "press": {"plugin":"symcc"},
@@ -5161,9 +5162,10 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
               " · ",
               "auto / backlog",
               " · ",
-              "auto: the lead decides, a scout finding it adds goes to todo" +
-                " and runs; backlog: every task added from a scout finding go" +
-                "es to the backlog and waits for you"
+              "the default for scouts without their own findings choice. au" +
+                "to: the lead decides, a scout finding it adds goes to todo a" +
+                "nd runs; backlog: every task added from a scout finding goes" +
+                " to the backlog and waits for you"
             ]
           }
         ]
@@ -5618,9 +5620,10 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "props": {
           "key": "setting:scout_findings",
           "label": "scout_findings     backlog · default auto · auto / backlog ·" +
-            " auto: the lead decides, a scout finding it adds goes to tod" +
-            "o and runs; backlog: every task added from a scout finding g" +
-            "oes to the backlog and waits for you",
+            " the default for scouts without their own findings choice. a" +
+            "uto: the lead decides, a scout finding it adds goes to todo " +
+            "and runs; backlog: every task added from a scout finding goe" +
+            "s to the backlog and waits for you",
           "plain": true
         },
         "press": {"plugin":"symcc"},
@@ -5636,9 +5639,10 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
               " · ",
               "auto / backlog",
               " · ",
-              "auto: the lead decides, a scout finding it adds goes to todo" +
-                " and runs; backlog: every task added from a scout finding go" +
-                "es to the backlog and waits for you"
+              "the default for scouts without their own findings choice. au" +
+                "to: the lead decides, a scout finding it adds goes to todo a" +
+                "nd runs; backlog: every task added from a scout finding goes" +
+                " to the backlog and waits for you"
             ]
           }
         ]
@@ -6101,9 +6105,10 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "props": {
           "key": "setting:scout_findings",
           "label": "scout_findings     backlog · default auto · auto / backlog ·" +
-            " auto: the lead decides, a scout finding it adds goes to tod" +
-            "o and runs; backlog: every task added from a scout finding g" +
-            "oes to the backlog and waits for you",
+            " the default for scouts without their own findings choice. a" +
+            "uto: the lead decides, a scout finding it adds goes to todo " +
+            "and runs; backlog: every task added from a scout finding goe" +
+            "s to the backlog and waits for you",
           "plain": true
         },
         "press": {"plugin":"symcc"},
@@ -6119,9 +6124,10 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
               " · ",
               "auto / backlog",
               " · ",
-              "auto: the lead decides, a scout finding it adds goes to todo" +
-                " and runs; backlog: every task added from a scout finding go" +
-                "es to the backlog and waits for you"
+              "the default for scouts without their own findings choice. au" +
+                "to: the lead decides, a scout finding it adds goes to todo a" +
+                "nd runs; backlog: every task added from a scout finding goes" +
+                " to the backlog and waits for you"
             ]
           }
         ]
@@ -6610,9 +6616,10 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "props": {
           "key": "setting:scout_findings",
           "label": "scout_findings     backlog · default auto · auto / backlog ·" +
-            " auto: the lead decides, a scout finding it adds goes to tod" +
-            "o and runs; backlog: every task added from a scout finding g" +
-            "oes to the backlog and waits for you",
+            " the default for scouts without their own findings choice. a" +
+            "uto: the lead decides, a scout finding it adds goes to todo " +
+            "and runs; backlog: every task added from a scout finding goe" +
+            "s to the backlog and waits for you",
           "plain": true
         },
         "press": {"plugin":"symcc"},
@@ -6628,9 +6635,10 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
               " · ",
               "auto / backlog",
               " · ",
-              "auto: the lead decides, a scout finding it adds goes to todo" +
-                " and runs; backlog: every task added from a scout finding go" +
-                "es to the backlog and waits for you"
+              "the default for scouts without their own findings choice. au" +
+                "to: the lead decides, a scout finding it adds goes to todo a" +
+                "nd runs; backlog: every task added from a scout finding goes" +
+                " to the backlog and waits for you"
             ]
           }
         ]
@@ -7111,9 +7119,10 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "props": {
           "key": "setting:scout_findings",
           "label": "scout_findings     backlog · default auto · auto / backlog ·" +
-            " auto: the lead decides, a scout finding it adds goes to tod" +
-            "o and runs; backlog: every task added from a scout finding g" +
-            "oes to the backlog and waits for you",
+            " the default for scouts without their own findings choice. a" +
+            "uto: the lead decides, a scout finding it adds goes to todo " +
+            "and runs; backlog: every task added from a scout finding goe" +
+            "s to the backlog and waits for you",
           "plain": true
         },
         "press": {"plugin":"symcc"},
@@ -7129,9 +7138,10 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
               " · ",
               "auto / backlog",
               " · ",
-              "auto: the lead decides, a scout finding it adds goes to todo" +
-                " and runs; backlog: every task added from a scout finding go" +
-                "es to the backlog and waits for you"
+              "the default for scouts without their own findings choice. au" +
+                "to: the lead decides, a scout finding it adds goes to todo a" +
+                "nd runs; backlog: every task added from a scout finding goes" +
+                " to the backlog and waits for you"
             ]
           }
         ]
@@ -7620,9 +7630,10 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "props": {
           "key": "setting:scout_findings",
           "label": "scout_findings     backlog · default auto · auto / backlog ·" +
-            " auto: the lead decides, a scout finding it adds goes to tod" +
-            "o and runs; backlog: every task added from a scout finding g" +
-            "oes to the backlog and waits for you",
+            " the default for scouts without their own findings choice. a" +
+            "uto: the lead decides, a scout finding it adds goes to todo " +
+            "and runs; backlog: every task added from a scout finding goe" +
+            "s to the backlog and waits for you",
           "plain": true
         },
         "press": {"plugin":"symcc"},
@@ -7638,9 +7649,10 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
               " · ",
               "auto / backlog",
               " · ",
-              "auto: the lead decides, a scout finding it adds goes to todo" +
-                " and runs; backlog: every task added from a scout finding go" +
-                "es to the backlog and waits for you"
+              "the default for scouts without their own findings choice. au" +
+                "to: the lead decides, a scout finding it adds goes to todo a" +
+                "nd runs; backlog: every task added from a scout finding goes" +
+                " to the backlog and waits for you"
             ]
           }
         ]
@@ -8103,9 +8115,10 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "props": {
           "key": "setting:scout_findings",
           "label": "scout_findings     backlog · default auto · auto / backlog ·" +
-            " auto: the lead decides, a scout finding it adds goes to tod" +
-            "o and runs; backlog: every task added from a scout finding g" +
-            "oes to the backlog and waits for you",
+            " the default for scouts without their own findings choice. a" +
+            "uto: the lead decides, a scout finding it adds goes to todo " +
+            "and runs; backlog: every task added from a scout finding goe" +
+            "s to the backlog and waits for you",
           "plain": true
         },
         "press": {"plugin":"symcc"},
@@ -8121,9 +8134,10 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
               " · ",
               "auto / backlog",
               " · ",
-              "auto: the lead decides, a scout finding it adds goes to todo" +
-                " and runs; backlog: every task added from a scout finding go" +
-                "es to the backlog and waits for you"
+              "the default for scouts without their own findings choice. au" +
+                "to: the lead decides, a scout finding it adds goes to todo a" +
+                "nd runs; backlog: every task added from a scout finding goes" +
+                " to the backlog and waits for you"
             ]
           }
         ]
@@ -8616,9 +8630,10 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "props": {
           "key": "setting:scout_findings",
           "label": "scout_findings     backlog · default auto · auto / backlog ·" +
-            " auto: the lead decides, a scout finding it adds goes to tod" +
-            "o and runs; backlog: every task added from a scout finding g" +
-            "oes to the backlog and waits for you",
+            " the default for scouts without their own findings choice. a" +
+            "uto: the lead decides, a scout finding it adds goes to todo " +
+            "and runs; backlog: every task added from a scout finding goe" +
+            "s to the backlog and waits for you",
           "plain": true
         },
         "press": {"plugin":"symcc"},
@@ -8634,9 +8649,10 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
               " · ",
               "auto / backlog",
               " · ",
-              "auto: the lead decides, a scout finding it adds goes to todo" +
-                " and runs; backlog: every task added from a scout finding go" +
-                "es to the backlog and waits for you"
+              "the default for scouts without their own findings choice. au" +
+                "to: the lead decides, a scout finding it adds goes to todo a" +
+                "nd runs; backlog: every task added from a scout finding goes" +
+                " to the backlog and waits for you"
             ]
           }
         ]
@@ -9137,9 +9153,10 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "props": {
           "key": "setting:scout_findings",
           "label": "scout_findings     backlog · default auto · auto / backlog ·" +
-            " auto: the lead decides, a scout finding it adds goes to tod" +
-            "o and runs; backlog: every task added from a scout finding g" +
-            "oes to the backlog and waits for you",
+            " the default for scouts without their own findings choice. a" +
+            "uto: the lead decides, a scout finding it adds goes to todo " +
+            "and runs; backlog: every task added from a scout finding goe" +
+            "s to the backlog and waits for you",
           "plain": true
         },
         "press": {"plugin":"symcc"},
@@ -9155,9 +9172,10 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
               " · ",
               "auto / backlog",
               " · ",
-              "auto: the lead decides, a scout finding it adds goes to todo" +
-                " and runs; backlog: every task added from a scout finding go" +
-                "es to the backlog and waits for you"
+              "the default for scouts without their own findings choice. au" +
+                "to: the lead decides, a scout finding it adds goes to todo a" +
+                "nd runs; backlog: every task added from a scout finding goes" +
+                " to the backlog and waits for you"
             ]
           }
         ]
@@ -9671,9 +9689,10 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "props": {
           "key": "setting:scout_findings",
           "label": "scout_findings     backlog · default auto · auto / backlog ·" +
-            " auto: the lead decides, a scout finding it adds goes to tod" +
-            "o and runs; backlog: every task added from a scout finding g" +
-            "oes to the backlog and waits for you",
+            " the default for scouts without their own findings choice. a" +
+            "uto: the lead decides, a scout finding it adds goes to todo " +
+            "and runs; backlog: every task added from a scout finding goe" +
+            "s to the backlog and waits for you",
           "plain": true
         },
         "press": {"plugin":"symcc"},
@@ -9689,9 +9708,10 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
               " · ",
               "auto / backlog",
               " · ",
-              "auto: the lead decides, a scout finding it adds goes to todo" +
-                " and runs; backlog: every task added from a scout finding go" +
-                "es to the backlog and waits for you"
+              "the default for scouts without their own findings choice. au" +
+                "to: the lead decides, a scout finding it adds goes to todo a" +
+                "nd runs; backlog: every task added from a scout finding goes" +
+                " to the backlog and waits for you"
             ]
           }
         ]
@@ -10159,9 +10179,10 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "props": {
           "key": "setting:scout_findings",
           "label": "scout_findings     backlog · default auto · auto / backlog ·" +
-            " auto: the lead decides, a scout finding it adds goes to tod" +
-            "o and runs; backlog: every task added from a scout finding g" +
-            "oes to the backlog and waits for you",
+            " the default for scouts without their own findings choice. a" +
+            "uto: the lead decides, a scout finding it adds goes to todo " +
+            "and runs; backlog: every task added from a scout finding goe" +
+            "s to the backlog and waits for you",
           "plain": true
         },
         "press": {"plugin":"symcc"},
@@ -10177,9 +10198,10 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
               " · ",
               "auto / backlog",
               " · ",
-              "auto: the lead decides, a scout finding it adds goes to todo" +
-                " and runs; backlog: every task added from a scout finding go" +
-                "es to the backlog and waits for you"
+              "the default for scouts without their own findings choice. au" +
+                "to: the lead decides, a scout finding it adds goes to todo a" +
+                "nd runs; backlog: every task added from a scout finding goes" +
+                " to the backlog and waits for you"
             ]
           }
         ]
@@ -10655,9 +10677,10 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "props": {
           "key": "setting:scout_findings",
           "label": "scout_findings     backlog · default auto · auto / backlog ·" +
-            " auto: the lead decides, a scout finding it adds goes to tod" +
-            "o and runs; backlog: every task added from a scout finding g" +
-            "oes to the backlog and waits for you",
+            " the default for scouts without their own findings choice. a" +
+            "uto: the lead decides, a scout finding it adds goes to todo " +
+            "and runs; backlog: every task added from a scout finding goe" +
+            "s to the backlog and waits for you",
           "plain": true
         },
         "press": {"plugin":"symcc"},
@@ -10673,9 +10696,10 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
               " · ",
               "auto / backlog",
               " · ",
-              "auto: the lead decides, a scout finding it adds goes to todo" +
-                " and runs; backlog: every task added from a scout finding go" +
-                "es to the backlog and waits for you"
+              "the default for scouts without their own findings choice. au" +
+                "to: the lead decides, a scout finding it adds goes to todo a" +
+                "nd runs; backlog: every task added from a scout finding goes" +
+                " to the backlog and waits for you"
             ]
           }
         ]
@@ -11162,9 +11186,10 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "props": {
           "key": "setting:scout_findings",
           "label": "scout_findings     backlog · default auto · auto / backlog ·" +
-            " auto: the lead decides, a scout finding it adds goes to tod" +
-            "o and runs; backlog: every task added from a scout finding g" +
-            "oes to the backlog and waits for you",
+            " the default for scouts without their own findings choice. a" +
+            "uto: the lead decides, a scout finding it adds goes to todo " +
+            "and runs; backlog: every task added from a scout finding goe" +
+            "s to the backlog and waits for you",
           "plain": true
         },
         "press": {"plugin":"symcc"},
@@ -11180,9 +11205,10 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
               " · ",
               "auto / backlog",
               " · ",
-              "auto: the lead decides, a scout finding it adds goes to todo" +
-                " and runs; backlog: every task added from a scout finding go" +
-                "es to the backlog and waits for you"
+              "the default for scouts without their own findings choice. au" +
+                "to: the lead decides, a scout finding it adds goes to todo a" +
+                "nd runs; backlog: every task added from a scout finding goes" +
+                " to the backlog and waits for you"
             ]
           }
         ]
@@ -11661,9 +11687,10 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "props": {
           "key": "setting:scout_findings",
           "label": "scout_findings     backlog · default auto · auto / backlog ·" +
-            " auto: the lead decides, a scout finding it adds goes to tod" +
-            "o and runs; backlog: every task added from a scout finding g" +
-            "oes to the backlog and waits for you",
+            " the default for scouts without their own findings choice. a" +
+            "uto: the lead decides, a scout finding it adds goes to todo " +
+            "and runs; backlog: every task added from a scout finding goe" +
+            "s to the backlog and waits for you",
           "plain": true
         },
         "press": {"plugin":"symcc"},
@@ -11679,9 +11706,10 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
               " · ",
               "auto / backlog",
               " · ",
-              "auto: the lead decides, a scout finding it adds goes to todo" +
-                " and runs; backlog: every task added from a scout finding go" +
-                "es to the backlog and waits for you"
+              "the default for scouts without their own findings choice. au" +
+                "to: the lead decides, a scout finding it adds goes to todo a" +
+                "nd runs; backlog: every task added from a scout finding goes" +
+                " to the backlog and waits for you"
             ]
           }
         ]
@@ -12168,9 +12196,10 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "props": {
           "key": "setting:scout_findings",
           "label": "scout_findings     backlog · default auto · auto / backlog ·" +
-            " auto: the lead decides, a scout finding it adds goes to tod" +
-            "o and runs; backlog: every task added from a scout finding g" +
-            "oes to the backlog and waits for you",
+            " the default for scouts without their own findings choice. a" +
+            "uto: the lead decides, a scout finding it adds goes to todo " +
+            "and runs; backlog: every task added from a scout finding goe" +
+            "s to the backlog and waits for you",
           "plain": true
         },
         "press": {"plugin":"symcc"},
@@ -12186,9 +12215,10 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
               " · ",
               "auto / backlog",
               " · ",
-              "auto: the lead decides, a scout finding it adds goes to todo" +
-                " and runs; backlog: every task added from a scout finding go" +
-                "es to the backlog and waits for you"
+              "the default for scouts without their own findings choice. au" +
+                "to: the lead decides, a scout finding it adds goes to todo a" +
+                "nd runs; backlog: every task added from a scout finding goes" +
+                " to the backlog and waits for you"
             ]
           }
         ]

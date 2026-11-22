@@ -561,10 +561,16 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
       options: [
         { title: `How often: ${everyText(sc.every_minutes)}`, value: 'every' },
         { title: `Model: ${sc.model || "the session's model"}`, value: 'model' },
+        { title: `Findings: ${sc.findings ?? 'default (the board setting)'}`, value: 'findings' },
         { title: 'Instructions', value: 'prompt' },
       ],
     })
     if (!field) return
+    if (field === 'findings') {
+      const pick = await ctx.ui.dialog.select<string>({ title: `${sc.name}: where its findings' tasks go`, options: [{ title: 'auto: the lead decides', value: 'auto' }, { title: 'backlog: every task waits for you', value: 'backlog' }, { title: 'default: the board setting', value: 'default' }] })
+      if (pick) await send(sessionID, { kind: 'scout-edit', scout: sc.name, field, value: pick })
+      return
+    }
     const ask =
       field === 'every'
         ? { title: `${sc.name}: runs every how many minutes (now ${sc.every_minutes})`, description: '0 = only on demand', placeholder: 'minutes: a whole number, 0 or more' }

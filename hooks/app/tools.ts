@@ -1,6 +1,6 @@
 import type { SymccTask } from '../../types'
 import { makeAsk, settingShown, allowFiles, refuseFiles, waitsForFiles, filesRefusedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, ROLE_TOOL_WORDS, DEFAULT_ROLE, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, failedOnClash, patchTask, promoteTask, rejectTask, changeLines, stoppedEntry, waitsForOwner, withHistory, type HistoryAdd, historyLineText, type SettingsInput, type SettingChange, testMinutesRefusal, isMode, readNotify, notifySet, notifyRefusal, applySettings, intoOf, crossBranchNotes, parseGoneBranch, saysMergeInstead, type Board, settingSetText, taskReports, reportPreview, statsReport, statsData, parseStatsRange, parseStatsArgs, archivedCount, localOffset, endedBy, freshTry, withoutOpenRun, stopEnd, changeRestartWhy, changedFields, addDetailsText, noteAddedLine, detailsBothRefusal, dayOf, inPlan, planBacklog, planAdded, planAddText, parseScoutUsage, parseStatusFilter, BOARD_STATUSES, type TeamInput, SETTING_NAMES, leadSettingsText, findingToBacklog, isScoutFindings, isTestsWithChanges, kindFor, isAnswered, askMoreTask, isInvestigation, checkKind, kindsLeadText, kindNames, BUILT_IN_KINDS, originOf, stateLabelLower, shownNote, modeOf, when, scoutNameOf, unknownScoutText } from '../board'
-import { scoutMemoryFile, leadScouts, linkTaskToScoutRun, knownScouts, isKnownScout, loadScoutRunHistory } from './scouts'
+import { scoutMemoryFile, scoutFindingsFor, leadScouts, linkTaskToScoutRun, knownScouts, isKnownScout, loadScoutRunHistory } from './scouts'
 import { archivedText, bringBackArchived, findArchived, readArchiveFile } from './archive'
 import { removeWorktree, worktreeDir, setupGit, branchExists, branchList, homeBranch, taskWork, resetScratch } from './git'
 import { loadRoles, leadRoles } from './roles'
@@ -424,8 +424,8 @@ export const TOOLS = () => [
   { name: 'resume', description: 'Continue a paused task: it goes back to "todo" and a fresh worker picks it up.', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' } } } },
   {
     name: 'scouts',
-    description: `List, add, edit, remove or run the ${S.N.name} scouts (files in ${S.N.dir}/scouts/). action "list" (the default): every scout with how often it runs (e.g. "every 2 days", "on demand"), paused or not, running or not, its next and last run and the first lines of its last report; with name, that one scout in full (its prompt, whole last report and its last few runs: when, outcome, findings, tasks made from it and its report file). "add" / "edit": writes ${S.N.dir}/scouts/<name>.md (name: lowercase letters, digits and dashes; every_minutes: 0 = only on demand; optional model; prompt = what it looks for); edit keeps what you leave out. "remove" deletes the scout's file (confirm with the owner first). "run": runs it now, like the owner's "run now" (a paused scout runs too, once, and stays paused; refused with the reason when it is already running, or git isn't set up). The board shows every change at once. Pause and resume are for the owner only.`,
-    inputSchema: { type: 'object', properties: { action: { type: 'string', enum: ['list', 'add', 'edit', 'remove', 'run'], description: 'What to do; list when left out.' }, name: { type: 'string', description: 'The scout, e.g. docs-check (lowercase letters, digits and dashes).' }, every_minutes: { type: 'number', description: 'For add / edit: how often it runs, in minutes (60 = every hour, 2880 = every 2 days); 0 = only on demand.' }, model: { type: 'string', description: 'For add / edit: optional model, e.g. sonnet; an empty text removes it.' }, prompt: { type: 'string', description: 'For add / edit: what the scout looks for, in plain words.' } } },
+    description: `List, add, edit, remove or run the ${S.N.name} scouts (files in ${S.N.dir}/scouts/). action "list" (the default): every scout with how often it runs (e.g. "every 2 days", "on demand"), paused or not, running or not, its next and last run and the first lines of its last report; with name, that one scout in full (its prompt, whole last report and its last few runs: when, outcome, findings, tasks made from it and its report file). "add" / "edit": writes ${S.N.dir}/scouts/<name>.md (name: lowercase letters, digits and dashes; every_minutes: 0 = only on demand; optional model; optional findings: auto = you decide where its tasks go, backlog = every task from its findings goes to the backlog, default (or left out) = follow the board's scout_findings setting; prompt = what it looks for); edit keeps what you leave out. "remove" deletes the scout's file (confirm with the owner first). "run": runs it now, like the owner's "run now" (a paused scout runs too, once, and stays paused; refused with the reason when it is already running, or git isn't set up). The board shows every change at once. Pause and resume are for the owner only.`,
+    inputSchema: { type: 'object', properties: { action: { type: 'string', enum: ['list', 'add', 'edit', 'remove', 'run'], description: 'What to do; list when left out.' }, name: { type: 'string', description: 'The scout, e.g. docs-check (lowercase letters, digits and dashes).' }, every_minutes: { type: 'number', description: 'For add / edit: how often it runs, in minutes (60 = every hour, 2880 = every 2 days); 0 = only on demand.' }, model: { type: 'string', description: 'For add / edit: optional model, e.g. sonnet; an empty text removes it.' }, findings: { type: 'string', enum: ['auto', 'backlog', 'default'], description: "For add / edit: where the tasks from this scout's findings go: auto (you decide), backlog (always the backlog), or default (follow the board's scout_findings setting)." }, prompt: { type: 'string', description: 'For add / edit: what the scout looks for, in plain words.' } } },
   },
   {
     name: 'roles',
@@ -606,13 +606,14 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       // it merges into the branch checked out now (on a detached checkout, the repo's main branch)
       const merge_into = await homeBranch($)
       let forced = false
+      const own = scout && a.origin_by === 'scout' ? await scoutFindingsFor($, scout) : undefined
       let reviewMode = false
       const [t, all] = await change($, b => {
         reviewMode = modeOf(b) === 'review'
         // check what the lead said first, then add the plugin's own evidence next to it
         const o = makeOrigin(said, now(), b)
         // scout_findings backlog: a scout's finding goes to the backlog, whatever the lead asked
-        forced = findingToBacklog(b, a.origin_by) && a.backlog !== true
+        forced = findingToBacklog(b, a.origin_by, own) && a.backlog !== true
         const [y, added] = addTask(b, { title: str(a.title) ?? '', details: str(a.details), files: a.files, after: a.after, order: typeof a.order === 'number' ? a.order : undefined, needs_review: a.needs_review === true, backlog: planBacklog(a.backlog === true || forced, S.plan), role, kind, origin: { ...said, evidence: evidenceText(o, heard) }, merge_into }, now(), S.N.dir)
         return [y, [added, y.tasks]] as [Board, [SymccTask, SymccTask[]]]
       })
@@ -627,7 +628,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
         return planAddText(t.id, t.title) + notes
       }
       void pump($)
-      if (forced && t.status === 'backlog') return `scout_findings is backlog: added to the backlog: ${t.id} ${t.title} (it starts only when the owner moves it to todo; still tell the owner what the scout found)${notes}`
+      if (forced && t.status === 'backlog') return `${own === 'backlog' ? `${scout}'s findings go to the backlog` : 'scout_findings is backlog'}: added to the backlog: ${t.id} ${t.title} (it starts only when the owner moves it to todo; still tell the owner what the scout found)${notes}`
       return `added ${t.id} ${t.title}${t.status === 'backlog' ? ' (in the backlog; it starts only when moved to todo)' : ''}${notes}`
     }
     case 'change': {

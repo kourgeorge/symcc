@@ -313,7 +313,7 @@ export const checkerNotReady = new Map<string, number>()
 /** the older days ("YYYY-MM-DD") the owner has opened in the board panel; kept only while the panel is open */
 export const openDays = new Set<string>()
 /** the scout being edited in the board panel (its edit mode), or null; `isNew` for one made with "new scout" */
-export type ScoutDraft = { scout: string; isNew: boolean; every: string; model: string; summary: string; body: string; error: string }
+export type ScoutDraft = { scout: string; isNew: boolean; every: string; model: string; summary: string; findings: string; body: string; error: string }
 
 /**
  * What reached the lead in this session, for a new task's evidence (see evidenceText): the owner's

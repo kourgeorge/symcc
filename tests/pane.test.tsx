@@ -1055,7 +1055,7 @@ test('"Edit" on a scout\'s page opens its edit mode, and "Cancel" goes back', as
   expect(await ui.find({ type: 'Text', text: /^in minutes · 0 = only on demand$/ })).toBeDefined()
   // the same section names, in the same order, as the scout's page
   const heads = (await ui.findAll({ type: 'Text', text: /^▍/ })).map(x => x.text)
-  expect(heads).toEqual(['▍Runs every', '▍Model', '▍Summary', '▍Instructions'])
+  expect(heads).toEqual(['▍Runs every', '▍Model', '▍Findings', '▍Summary', '▍Instructions'])
   // no summary in the file: its box is empty and says the scouts list uses the first line of the instructions
   const summary = await ui.find({ key: 'scout-summary' })
   expect(summary?.props.value).toBe('')
@@ -1071,6 +1071,27 @@ test('"Edit" on a scout\'s page opens its edit mode, and "Cancel" goes back', as
   expect(await ui.find({ key: 'scout-save' })).toBeUndefined()
   expect(await ui.find({ key: 'scout-edit' })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /Instructions/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('T-862: a scout\'s own findings choice shows in the list and on its page, and the edit box saves it in the file', async ($, on) => {
+  stateOf(on, { tab: 'scouts', scout: 'bugs', view: { shape: 'view-1', value: { tasks: [], working: [], scouts: [scout('bugs', { findings: 'backlog', prompt: 'Look.' }), scout('docs', { prompt: 'Docs.' })], mode: 'auto', test_commands: [] } } })
+  on('ui.toast', () => ({ value: undefined }))
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ type: 'Text', text: /findings → backlog/ })).toBeDefined()
+  await ui.press({ key: 'scout-edit' })
+  expect((await ui.find({ key: 'scout-findings' }))?.props.value).toBe('backlog')
+  await ui.input({ key: 'scout-findings', text: 'sometimes' })
+  await ui.press({ key: 'scout-save' })
+  expect(await ui.find({ type: 'Text', text: /^Findings must be auto, backlog or default/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('T-862: the Scouts list marks a scout with its own findings choice, and only that one', async ($, on) => {
+  stateOf(on, { tab: 'scouts', view: { shape: 'view-1', value: { tasks: [], working: [], scouts: [scout('bugs', { findings: 'backlog', prompt: 'Look.' }), scout('docs', { prompt: 'Docs.' })], mode: 'auto', test_commands: [] } } })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal', props: { ...PANE.props, bodyColumns: 100 } })
+  expect((await ui.find({ key: 'scout:bugs' }))?.text).toContain('→ backlog')
+  expect((await ui.find({ key: 'scout:docs' }))?.text).not.toContain('→')
   await ui.unmount()
 })
 

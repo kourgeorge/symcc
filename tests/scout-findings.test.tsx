@@ -7,8 +7,8 @@ import { inProject } from './project'
 import { ran, readText } from './fakes'
 
 /** A fake board.json: a save (write to a temp file, then mv over it) is kept, so the next read sees it. */
-function setup(on: On, board: Record<string, unknown>) {
-  const files: Record<string, string | null> = { '/board.json': JSON.stringify(board), '/board.lock': null, '/scouts.json': null, '/scouts/bugs.md': '---\nevery_minutes: 30\n---\nLook for crashes.\n' }
+function setup(on: On, board: Record<string, unknown>, scoutFile = '---\nevery_minutes: 30\n---\nLook for crashes.\n') {
+  const files: Record<string, string | null> = { '/board.json': JSON.stringify(board), '/board.lock': null, '/scouts.json': null, '/scouts/bugs.md': scoutFile }
   const fileOf = (p: string) => Object.keys(files).find(f => p.endsWith(f))
   on('fs.exists', (_, e, next) => (fileOf(e.path) ? { value: files[fileOf(e.path)!] !== null } : next(e)))
   on('fs.read', (_, e, next) => (fileOf(e.path) ? readText(files[fileOf(e.path)!]) : next(e)))
@@ -77,6 +77,30 @@ test('backlog: a scout-origin add goes to the backlog and says so; owner and lea
   expect(statusOf(files, 'T-2')).toBe('todo')
   expect(await call($, 'add', { title: 'Lead idea', details: 'd', why: 'mine', origin_by: 'lead' })).toContain('added T-3 Lead idea')
   expect(statusOf(files, 'T-3')).toBe('todo')
+})
+
+const WITH = (findings: string) => `---\nevery_minutes: 30\nfindings: ${findings}\n---\nLook for crashes.\n`
+
+test('T-862: a scout set to backlog sends its task to the backlog even with the board on auto', async ($, on) => {
+  const files = setup(on, { tasks: [], scout_findings: 'auto' }, WITH('backlog'))
+  const out = await call($, 'add', scoutAdd('Fix the crash'))
+  expect(out).toContain("bugs's findings go to the backlog: added to the backlog")
+  expect(statusOf(files, 'T-1')).toBe('backlog')
+})
+
+test('T-862: a scout set to auto lets its task go to todo even with the board on backlog', async ($, on) => {
+  const files = setup(on, { tasks: [], scout_findings: 'backlog' }, WITH('auto'))
+  expect(await call($, 'add', scoutAdd('Fix the crash'))).toContain('added T-1 Fix the crash')
+  expect(statusOf(files, 'T-1')).toBe('todo')
+})
+
+test('T-862: a scout with no choice follows the board setting', async ($, on) => {
+  const files = setup(on, { tasks: [], scout_findings: 'backlog' }, WITH('default'))
+  await call($, 'add', scoutAdd('One'))
+  expect(statusOf(files, 'T-1')).toBe('backlog')
+  files['/board.json'] = JSON.stringify({ ...JSON.parse(files['/board.json']!), scout_findings: 'auto' })
+  await call($, 'add', scoutAdd('Two'))
+  expect(statusOf(files, 'T-2')).toBe('todo')
 })
 
 test('the settings tool reads and changes scout_findings', async ($, on) => {
