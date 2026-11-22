@@ -45,9 +45,7 @@ export function firstSentence(s: string, max = 200): string {
 export function firstFinding(line: string): string {
   const after = /\bproblems?:\s*(?:[-*•]|\d+[.)])?\s*(\S[\s\S]*)$/i.exec(String(line ?? ''))
   if (after) return firstSentence(after[1]!)
-  // No "problem:" text: a short report with no "What works" / "What I checked" part is its own problem line.
-  const one = String(line ?? '').trim()
-  return one && !/what (?:works|i checked)/i.test(one) ? firstSentence(one.replace(/^(?:[-*•]|\d+[.)])\s+/, '')) : ''
+  return ''
 }
 
 const tryNo = (e: SymccHistoryEntry): number => e.try ?? tryParts(e.text)?.[1] ?? 0

@@ -138,35 +138,22 @@ export const checkerLine = (tryLabel: string, v: CheckerVerdict | null, why = ''
 /** The most problem lines saved on a checker's history entry. */
 export const CHECKER_PROBLEMS_MAX = 5
 
-const NOT_PROBLEMS = /^\W*(?:what (?:works|i checked|i did|i ran)|checked|works)\b/i
-const stripMark = (l: string) => l.replace(/^\s*(?:[-*•]|\d+[.)])\s+/, '').trim()
-
 /**
- * The problem lines of a checker's report (T-859): what follows a "Problems:" heading, else the closing block of the
- * report (its last run of lines with no blank line between; the prompt asks for one problem per line there), unless
- * that block is a "What works" or "What I checked" part. [] when neither is found.
+ * The problem lines of a checker's report (T-859): the report ends with one fixed block, a line that is exactly
+ * "Problems:" and then one "- " line per problem (the checker prompt asks for it). Reads only the last such block: the
+ * "- " lines right under the last "Problems:" line, up to CHECKER_PROBLEMS_MAX, with the "- " removed. [] when there is no block.
  */
 export function checkerProblems(report: string): string[] {
   const lines = String(report ?? '').split('\n').map(l => l.trimEnd())
-  const clean = (ls: string[]) => ls.map(stripMark).filter(Boolean).slice(0, CHECKER_PROBLEMS_MAX).map(l => oneLine(l, 300))
-  const h = lines.findLastIndex(l => /^[#*_>\s]*(?:\w+ )?problems?(?: found| remaining)?(?:\s*\(\d+\))?[\s:*_]*$/i.test(l))
-  if (h >= 0) {
-    const rest = lines.slice(h + 1)
-    const end = rest.findIndex((l, i) => !l.trim() && rest.slice(i + 1).some(x => /^\W*(?:what\b|\w[\w ]*:\W*$)/i.test(x)))
-    const got = clean(end >= 0 ? rest.slice(0, end) : rest)
-    if (got.length) return got
+  const h = lines.findLastIndex(l => l === 'Problems:')
+  if (h < 0) return []
+  const out: string[] = []
+  for (const l of lines.slice(h + 1)) {
+    if (!l.startsWith('- ') || out.length >= CHECKER_PROBLEMS_MAX) break
+    const t = l.slice(2).trim()
+    if (t) out.push(oneLine(t, 300))
   }
-  let end = lines.length
-  while (end > 0 && !lines[end - 1]!.trim()) end--
-  let start = end
-  while (start > 0 && lines[start - 1]!.trim()) start--
-  const block = lines.slice(start, end)
-  if (!block.length) return []
-  let before = start - 1
-  while (before >= 0 && !lines[before]!.trim()) before--
-  const heading = before >= 0 && /:\W*$/.test(lines[before]!) ? lines[before]! : ''
-  if (NOT_PROBLEMS.test(block[0]!) || NOT_PROBLEMS.test(heading)) return []
-  return clean(block)
+  return out
 }
 
 /** checkerLine as a history entry to add: "checker-ok", "checker-problems" (with its `problems` fact), or "checker" with no verdict. */

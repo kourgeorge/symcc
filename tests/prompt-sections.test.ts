@@ -8,7 +8,8 @@ import { fillPrompt, fillRole, ROLE_PLACEHOLDERS, promptSectionLines } from '../
 import { roleSection, leadRoleText } from '../hooks/core/roles'
 import { splitLeadNotes, leadNotesText } from '../hooks/core/lead-notes'
 import { checkerEntry, checkerProblems } from '../hooks/core/checker'
-import { triesRows, triesTable } from '../hooks/core/tries-table'
+import checkerText from '../prompts/checker'
+import { triesRows,triesTable } from '../hooks/core/tries-table'
 import { addDetailsText } from '../hooks/core/history'
 import { hist } from './history-fixture'
 
@@ -35,7 +36,7 @@ test('(b) the tries table gives one row per try with its ending and reason, and 
     attempts: 3,
     history: [
       ...hist('created by the lead because x', 'try 1: Added the parser. Then more words. → the checker found problems: the save button is never enabled'),
-      { kind: 'checker-problems', text: 'try 1: checker found problems: the save button is never enabled. Also no test.', try: 1 },
+      { kind: 'checker-problems', text: 'try 1: checker found problems: Problem: the save button is never enabled. Also no test.', try: 1 },
       ...hist('try 2: Fixed the button. → tests failed: 2 failed in a.test.ts', 'try 3: Merged main by hand. → conflicts with the latest main (after 1 automatic retry)'),
       { kind: 'note', text: 'the lead added a note: “NOTE-SECRET”' },
       { kind: 'stage', text: 'try 3: checker started', try: 3, step: 'checker' },
@@ -156,7 +157,7 @@ test('T-859: an old squashed line with only list items and no problem text gives
   expect(triesRows(u)[0]!.said).toBe('Changed X (e.g. the Y part) and Z.')
 })
 
-const T800 = 'I found one real problem: the /symcc-settings text still shows the stored mode value.\n\n**What works:**\n- **Band line:** `bandSummary` gives the right text\n- Tests pass\n\nsrc/settings.ts:40 still shows the stored mode value; run /symcc-settings'
+const T800 = 'I found one real problem: the /symcc-settings text still shows the stored mode value.\n\n**What works:**\n- **Band line:** `bandSummary` gives the right text\n- Tests pass\n\nProblems:\n- src/settings.ts:40 still shows the stored mode value; run /symcc-settings'
 
 test('T-859: a T-800 shaped report gives its problem, not a "what works" bullet', () => {
   expect(checkerProblems(T800)).toEqual(['src/settings.ts:40 still shows the stored mode value; run /symcc-settings'])
@@ -174,8 +175,14 @@ test('T-859: a recorded checker result saves its problems on the entry and the t
   expect(triesRows(t)[0]!.finding).toBe('src/settings.ts:40 still shows the stored mode value; run /symcc-settings')
 })
 
-test('T-859: a report that ends in a "What works" list saves no problems', () => {
+test('T-859: only the final "Problems:" block counts; other shapes before it are ignored; no block saves nothing', () => {
   expect(checkerProblems('Mostly fine.\n\n**What works:**\n- one\n- two')).toEqual([])
-  for (const head of ['## Problems', 'Problems found:', 'Problems (2):', 'The problems:'])
-    expect(checkerProblems(`I found one real problem: X.\n\n**What works:**\n- a\n\n${head}\n- hooks/x.ts:12 X is wrong`)).toEqual(['hooks/x.ts:12 X is wrong'])
+  for (const pre of ['I found two problems:', '## Problems\n', 'No other problems found.', '```\n- fenced\n```', '**What works:**\n- a\n- b'])
+    expect(checkerProblems(`${pre}\n- x.ts:1 not this\n\nProblems:\n- hooks/x.ts:12 X is wrong\n- y.ts:2 Y too`)).toEqual(['hooks/x.ts:12 X is wrong', 'y.ts:2 Y too'])
+  expect(checkerProblems('Problems:\n' + [1, 2, 3, 4, 5, 6, 7].map(i => `- p${i}`).join('\n'))).toHaveLength(5)
+  expect(checkerProblems('Looked.\n\n## Problems\n- a.ts:1 bad')).toEqual([])
+})
+
+test('T-859: the checker prompt asks for the fixed Problems block', () => {
+  expect(checkerText).toContain('a line that is only "Problems:"')
 })
