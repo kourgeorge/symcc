@@ -94,6 +94,14 @@ for (const surface of ['terminal', 'desktop', 'mobile'] as const)
     await ui.unmount()
   })
 
+test('T-850: a narrow VS Code panel still gives the finished lane a clickable link', async ($, on) => {
+  seedBoard(on, { view: liveView(TASKS) })
+  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 30 }, surface: 'vscode' })
+  await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'live') } })
+  expect(await ui.find({ key: 'live:T-747' })).toBeDefined()
+  await ui.unmount()
+})
+
 test('T-771: the VS Code Live tab shows the finished lane (dim link, no ▶, "merged 3m ago"), and a click on it opens its page', async ($, on) => {
   seedBoard(on, { view: liveView(TASKS) })
   const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 100 }, surface: 'vscode' })

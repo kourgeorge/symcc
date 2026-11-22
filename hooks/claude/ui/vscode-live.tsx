@@ -218,7 +218,7 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
         <Box key={`live-top:${lane.id}`} flexDirection="row" gap={2}>
           <Box key={`live-run:${lane.id}`} flexDirection="row" gap={1}>
             {done ? line(`live-done-mark:${lane.id}`, '✓', 'inactive') : null}
-            {done ? line(`live-run-mark:${lane.id}`, runId, LIVE_TONE.run, true) : line(`live-run-mark:${lane.id}`, `${LIVE_RUN_MARK}${name ? runId : ''}`.trim(), LIVE_TONE.run, true)}
+            {done ? (name ? line(`live-run-mark:${lane.id}`, runId, LIVE_TONE.run, true) : vsLink(vs, laneKey(lane.id), mdLink(runId || lane.id, href), [[href, open(lane.id)]], true)) : line(`live-run-mark:${lane.id}`, `${LIVE_RUN_MARK}${name ? runId : ''}`.trim(), LIVE_TONE.run, true)}
             {done ? (name ? vsLink(vs, laneKey(lane.id), mdLink(name, href), [[href, open(lane.id)]], true) : null) : vsLink(vs, laneKey(lane.id), mdLink(name || lane.id, href), [[href, open(lane.id)]])}
           </Box>
           {right ? line(`live-right:${lane.id}`, right, 'inactive') : null}
