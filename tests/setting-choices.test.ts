@@ -18,9 +18,9 @@ test('settingChoices gives the pick list of each kind of setting, [] for on/off 
 })
 
 test('cantPlayNotify is true only when notify is set to something this machine does not list', () => {
-  expect(cantPlayNotify({ notify: 'sound 2', notify_choices: ['off'] })).toBe(true)
-  expect(cantPlayNotify({ notify: 'sound 2', notify_choices: ['sound 1', 'sound 2', 'sound 3', 'off'] })).toBe(false)
-  expect(cantPlayNotify({ notify: 'sound 2' })).toBe(false)
+  expect(cantPlayNotify({ notify_now: 'sound 2', notify_choices: ['off'] })).toBe(true)
+  expect(cantPlayNotify({ notify_now: 'sound 2', notify_choices: ['sound 1', 'sound 2', 'sound 3', 'off'] })).toBe(false)
+  expect(cantPlayNotify({ notify_now: 'sound 2' })).toBe(false)
   expect(cantPlayNotify({ notify_choices: ['off'] })).toBe(false)
   expect(cantPlayNotify({})).toBe(false)
 })

@@ -145,7 +145,7 @@ test('there is no logo_motion setting: an old board.json with logo_motion false 
   const b = parseBoard(old)
   expect(mayMove({ ...b, width: 80, shown: true })).toBe(true)
   noteLogoWidth(80)
-  expect(await playLogo(fake$() as never, 'check', { ...(b as object), enabled: true, mode: 'auto' } as never)).toBe(true)
+  expect(await playLogo(fake$() as never, 'check', { ...(b as object), on_here: true, mode: 'auto' } as never)).toBe(true)
 })
 
 /** A stand-in for the plugin's $ with just what the player uses: the open panes, a frame timer to tick by hand, and redraws counted. */
@@ -166,7 +166,7 @@ const reset = () => noteLogoWidth(80)
 test('the player: a worker start plays the robot once on the frame timer, then the timer stops and the logo rests', async () => {
   reset()
   const $ = fake$()
-  const view = (status: string) => ({ tasks: [{ id: 'T-1', status }], scouts: [], enabled: true, mode: 'auto' }) as never
+  const view = (status: string) => ({ tasks: [{ id: 'T-1', status }], scouts: [], on_here: true, mode: 'auto' }) as never
   await logoOnPublish($ as never, view('todo'))
   expect(logo.play).toBe(null)
   await logoOnPublish($ as never, view('doing'))
@@ -182,7 +182,7 @@ test('the player: a worker start plays the robot once on the frame timer, then t
 
 test('the player plays nothing on a narrow or hidden panel, and drops a move while one plays', async () => {
   reset()
-  const v = { enabled: true, mode: 'auto' } as never
+  const v = { on_here: true, mode: 'auto' } as never
   expect(await playLogo(fake$(false) as never, 'check', v)).toBe(false)
   noteLogoWidth(BANNER_NARROW - 1)
   expect(await playLogo(fake$() as never, 'check', v)).toBe(false)

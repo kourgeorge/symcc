@@ -6,8 +6,8 @@ import { archiveChunkFile, PARTS_DIR } from '../core/board-parts'
 import { orgMemFile } from '../core/org-mem'
 import { reportText } from '../core/reports'
 import { readArchive, archiveText } from '../core/archive'
-import { parseScoutMemory, safeScoutFile, scoutRunReportFile, scoutRunsText } from '../core/scouts'
-import { type OldInput, migratedScoutRun, oldDataRows, upgradeArchiveTask, upgradeBoard, upgradeScoutUsage } from '../core/old-data'
+import { safeScoutFile, scoutRunReportFile, scoutRunsText } from '../core/scouts'
+import { type OldInput, migratedScoutRun, oldDataRows, upgradeArchiveTask, upgradeBoard, upgradeScoutFile, upgradeScoutUsage } from '../core/old-data'
 import { BACKUP_MARK } from '../core/doctor'
 import type { Host } from '../host'
 import { S } from './state'
@@ -228,8 +228,9 @@ export async function migrateData(host: Host, reuseBackup?: string): Promise<{ f
     return next
   })
   if (usage) done.push('scouts.json: usage totals with one-number tokens made unsplit')
-  const memory = parseScoutMemory(await host.fs.read(scoutMemoryFile()).catch(() => null))
-  for (const [name, mem] of Object.entries(memory)) {
+  const saved = jsonOf(await host.fs.read(scoutMemoryFile()).catch(() => null)) as { scouts?: Record<string, { last_run?: unknown; last_report?: unknown }> } | null
+  for (const [name, v] of Object.entries(saved?.scouts ?? {})) {
+    const mem = { last_run: typeof v?.last_run === 'string' ? v.last_run : null, ...(typeof v?.last_report === 'string' ? { last_report: v.last_report } : {}) }
     if (safeScoutFile(name, S.N.name) === null || (await host.fs.exists(runsPath(name)).catch(() => false))) continue
     const m = migratedScoutRun(mem, ended => scoutRunReportFile(name, ended, S.N.name), now())
     if (!m) continue
@@ -238,6 +239,14 @@ export async function migrateData(host: Host, reuseBackup?: string): Promise<{ f
     await safeWrite(host, runsPath(name), scoutRunsText([m.run]), `${name}'s runs file`)
     done.push(`scout ${name}: its last report is now its first run`)
   }
+  // then the last run and report leave scouts.json (they are read from the runs file), and old usage days are cut
+  let stripped = false
+  await changeScoutMemory(host, old => {
+    const next = upgradeScoutFile(old, name => safeScoutFile(name, S.N.name) !== null, Date.now())
+    stripped = next !== null
+    return next
+  })
+  if (stripped) done.push('scouts.json: last_run and last_report left out (read from the runs files), usage days older than a year cut')
   // 4. field-guide.md → org-mem.md
   const from = path(`${S.N.dir}/field-guide.md`)
   const to = path(orgMemFile(S.N.dir))

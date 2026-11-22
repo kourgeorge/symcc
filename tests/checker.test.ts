@@ -291,7 +291,7 @@ test('T-440: the target branch deleted while the checker runs: after its OK the 
     checkerFinished(id, 'OK')
   })
   expect(t.status).toBe('waiting')
-  expect(t.question).toMatch(/^branch main is gone: merge into \S+ instead\?$/)
+  expect(t.ask?.text).toMatch(/^branch main is gone: merge into \S+ instead\?$/)
   expect(t.history.at(-1)?.text).toMatch(/^not merged: branch main is gone; asked the owner/)
   expect(t.test_tries ?? 0).toBe(0)
   expect(w.git.main).toBe(M1)

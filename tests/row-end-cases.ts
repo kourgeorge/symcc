@@ -14,8 +14,8 @@ const FRESH = '2026-11-20T11:59:50.000Z'
 export function rowEndBoard(): Board {
   let b: Board = emptyBoard()
   for (const title of ['a question', 'a file request', 'your files', 'a review', 'approved', 'a failure', 'more time']) b = addTask(b, { origin: { why: 'a test' }, title, files: ['src/'] }, AT)[0]
-  b = patchTask(b, 'T-1', { status: 'waiting', question: 'Which database?', note: 'waiting for you' }, AT)
-  b = patchTask(b, 'T-2', { status: 'waiting', question: 'May I also change docs/a.md?', asked_files: ['docs/a.md'], note: 'waiting for you' } as Partial<BoardTask>, AT)
+  b = patchTask(b, 'T-1', { status: 'waiting', ask: { by: 'lead', text: 'Which database?', asked_at: '' }, note: 'waiting for you' }, AT)
+  b = patchTask(b, 'T-2', { status: 'waiting', ask: { by: 'symcc', text: 'May I also change docs/a.md?', files: ['docs/a.md'], asked_at: AT }, note: 'waiting for you' } as Partial<BoardTask>, AT)
   b = patchTask(b, 'T-3', { status: 'review', live: { merge_wait: { dirty: ['src/a.ts'] } }, note: 'waiting for your files' } as Partial<BoardTask>, AT)
   b = patchTask(b, 'T-4', { status: 'review', note: 'ready for review' }, AT)
   b = patchTask(b, 'T-5', { status: 'review', note: 'running the tests' }, AT)

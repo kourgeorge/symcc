@@ -161,7 +161,7 @@ export function listPage($: $, pane: PaneParts) {
         const closed = x.status === 'done' || x.status === 'dropped' || x.status === 'backlog'
         const lead = r.indent + idWidth + 3 + cellWidth + 2
         const state = states.get(x.id) ?? { front: '', tag: '', back: '' }
-        const fit = fitRow(lead, x.title, rowExtra(x, v.tasks, v.branch ?? '', v.max_minutes, nowMs), width, x.status === 'failed')
+        const fit = fitRow(lead, x.title, rowExtra(x, v.tasks, v.home_branch ?? '', v.max_minutes, nowMs), width, x.status === 'failed')
         return (
           <Button key={row(x.id)} plain autoFocus={i === firstButton ? true : undefined} onPress={act(() => panelValues($).updateOpened(() => x.id))}>
             {r.indent ? <Text>{' '.repeat(r.indent)}</Text> : null}

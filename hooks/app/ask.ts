@@ -3,9 +3,9 @@
 // - more files: an edit outside the task's files is refused in the tool.check hook, and the path is recorded as a
 //   request to the owner. The host tells what a call would touch (a file path, or a shell command: FileTouch in
 //   host.ts; for Claude Code, its Edit, Write and NotebookEdit, and Bash: claude/tools.ts), so no tool name is read here.
-// Both are written to the task's current try on the board at once (try_question, try_refused), so a plugin reload
+// Both are written to the task's current try on the board at once (live.ask, live.refused), so a plugin reload
 // before the hand-back doesn't lose them; finishWork (workers.ts) decides from the board.
-import { type Board, type BoardTask, type Live, ASK_TOOL, ASK_SCHEMA, ASK_SENT, OPTIONS_MIN, OPTIONS_MAX, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, bashPathsToCheck, bashTooManyText, BASH_TOO_MANY, gitWriteIn, gitWriteText, workerGitWriteText, scoutGitWriteText, editInProject, scoutEditText, mergeStepAllow, scratchGitAllow, scratchTemps, eitherAllow, type GitAllow, intoOf, editTarget, find, isInvestigation, patchTask, realPathOf, brokenLinkText, guardReason, guardFailedText, type PathLookup } from '../board'
+import { type Board, type BoardTask, type Live, ASK_TOOL, ASK_SCHEMA, ASK_SENT, OPTIONS_MIN, OPTIONS_MAX, parseAsk, makeAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, bashPathsToCheck, bashTooManyText, BASH_TOO_MANY, gitWriteIn, gitWriteText, workerGitWriteText, scoutGitWriteText, editInProject, scoutEditText, mergeStepAllow, scratchGitAllow, scratchTemps, eitherAllow, type GitAllow, intoOf, editTarget, find, isInvestigation, patchTask, realPathOf, brokenLinkText, guardReason, guardFailedText, type PathLookup } from '../board'
 import { S, toolName, type Worker, workers, scoutRuns, checkerRuns, stopped, isOwnAgent, boardAgents, rememberOnBoard, movedAgents, movedRefused, DRIVING_MOVED } from './state'
 import { drivenElsewhere } from './lead'
 import type { FileTouch, Host } from '../host'
@@ -67,7 +67,7 @@ async function askAnswer($: Host, agentId: string | undefined, a: Record<string,
   who.try = t.attempts
   const q = parseAsk(a)
   if (typeof q === 'string') return `Refused: ${q}. Nothing was sent; call ${tool} again with a valid question.`
-  if (!(await recordOnTry($, w, t.attempts, () => ({ question: q })))) return `Refused: your task ${w.task} is not running any more. Stop and hand back.`
+  if (!(await recordOnTry($, w, t.attempts, () => ({ ask: makeAsk('worker', q.question, now(), { options: q.options }) })))) return `Refused: your task ${w.task} is not running any more. Stop and hand back.`
   return ASK_SENT
 }
 

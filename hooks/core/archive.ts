@@ -110,7 +110,7 @@ export function removeArchived(b: Board, tasks: BoardTask[]): Board {
 export function bringBack(b: Board, t: BoardTask, now: string): Board {
   if (find(b, t.id)) throw new Error(`${t.id} is already on the board`)
   if (t.status !== 'dropped') throw new Error(`${t.id} is archived and done; add a new task instead`)
-  const back: BoardTask = { ...t, status: 'todo', note: 'brought back from the archive; queued', question: null, test_tries: 0, history: withHistory(t.history, now, ['retried', 'brought back from the archive (was dropped)']), updated_at: now }
+  const back: BoardTask = { ...t, status: 'todo', note: 'brought back from the archive; queued', test_tries: 0, history: withHistory(t.history, now, ['retried', 'brought back from the archive (was dropped)']), updated_at: now }
   return { ...b, archived: addTotals(archivedOf(b), t, -1), tasks: [...b.tasks, back] }
 }
 

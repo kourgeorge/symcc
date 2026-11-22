@@ -233,7 +233,7 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
 
   // a question that waits: shown plainly, its answers as numbered lines you click (vsChoices) and a box for your own answer
   const answers = x.choices.slice(0, -1) // the last one is "Answer…": the box below is always there
-  const askedFiles = !x.overtime ? ((t as { asked_files?: string[] }).asked_files ?? []) : []
+  const askedFiles = !x.overtime ? (t.ask?.files ?? []) : []
   const question = x.answerable
     ? vsCallout(vs, 'vs-sec-question', '?', x.overtime ? 'Time is up' : 'Question for you', 'warning', [
         plain('vs-question', x.askedQuestion ?? '', 'text', { bold: true }),

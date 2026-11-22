@@ -1,5 +1,5 @@
 // The board panel's Settings view.
-import { SETTINGS, SETTING_GROUPS, groupSummaryParts, isSettingPage, settingChoices, settingShown, cantPlayNotify, type SettingsInput, type SettingName, type SettingPage, settingValue, parseSettingValue, settingsKeys, boxHint, pickHint, type RoleDef, DEFAULT_ROLE, mergeRoles, roleKeys, roleEditKeys, rolesKeys, roleNameError, rolePromptKeys, ROLE_PLACEHOLDERS, ROLE_SLOT, ROLE_PROMPTS, promptsOfRole, type RolePromptKind, type KindDef, mergeKinds, kindsKeys, findKind, kindNameError, ALWAYS_ON_KINDS, isCheckerRole, checkerOn } from '../../board'
+import { SETTINGS, SETTING_GROUPS, groupSummaryParts, isSettingPage, settingChoices, settingShown, cantPlayNotify, type SettingsInput, type SettingName, type SettingPage, settingValue, viewAsBoard, parseSettingValue, settingsKeys, boxHint, pickHint, type RoleDef, DEFAULT_ROLE, mergeRoles, roleKeys, roleEditKeys, rolesKeys, roleNameError, rolePromptKeys, ROLE_PLACEHOLDERS, ROLE_SLOT, ROLE_PROMPTS, promptsOfRole, type RolePromptKind, type KindDef, mergeKinds, kindsKeys, findKind, kindNameError, ALWAYS_ON_KINDS, isCheckerRole, checkerOn } from '../../board'
 import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, brokenLabel, defNamed } from '../../core/def-files'
 import { S } from '../../app/state'
 import { type $ } from '../panel'
@@ -519,7 +519,7 @@ export async function settingsPage($: $, pane: PaneParts) {
   /** Enter on a row: on/off flips, mode, notify, scout_findings and tests_with_changes open a pick list, the rest an edit box. */
   const pressRow = (name: SettingName) => act(async () => {
     const info = SETTINGS.find(x => x.name === name)!
-    const now = settingValue(v, name)
+    const now = settingValue(viewAsBoard(v), name)
     if (info.kind === 'onoff') return saveIt({ [name]: now !== 'on' })()
     S.settingEdit = null
     S.settingPick = null
@@ -557,7 +557,7 @@ export async function settingsPage($: $, pane: PaneParts) {
   }
   const pickBox = (name: SettingName) => {
     if (S.settingPick?.name !== name) return null
-    const now = settingValue(v, name)
+    const now = settingValue(viewAsBoard(v), name)
     return (
       <Box key={`setting-pick-${name}`} flexDirection="column" borderStyle="round" borderColor={C('ide')} paddingX={1}>
         {S.settingPick.options.map(o => (
@@ -584,7 +584,7 @@ export async function settingsPage($: $, pane: PaneParts) {
     return [
       <Button key={row(`setting:${x.name}`)} plain onPress={pressRow(x.name)}>
         <Text bold color={C('claude')}>{x.name.padEnd(nameWidth)}</Text>
-        <Text bold color={C('text')}> {settingShown(x.name, settingValue(v, x.name))}</Text>
+        <Text bold color={C('text')}> {settingShown(x.name, settingValue(viewAsBoard(v), x.name))}</Text>
         {x.name === 'notify' && cantPlayNotify(v) ? <Text color={C('warning')}> (can't play here: nothing plays)</Text> : null}
         <Text color={C('inactive')}> · default {x.default} · {x.range} · {x.meaning}</Text>
       </Button>,
@@ -614,7 +614,7 @@ export async function settingsPage($: $, pane: PaneParts) {
       {header('settings')}
       {SETTING_GROUPS.flatMap((g, gi) => {
         const open = S.settingsOpen.includes(g.title)
-        const sum = groupSummaryParts(g, v, Math.max(20, pane.width - 4), { roles: rolesCount, kinds: kindsCount })
+        const sum = groupSummaryParts(g, viewAsBoard(v), Math.max(20, pane.width - 4), { roles: rolesCount, kinds: kindsCount })
         const label = open ? `▾ ${g.title}` : `▸ ${sum.title}${sum.values}`
         return [
           ...(gi ? [<Text key={`group-blank:${g.title}`}> </Text>] : []),

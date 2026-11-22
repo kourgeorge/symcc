@@ -5,6 +5,7 @@
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { taskPhase, type TaskPhase, type PhaseTask, type CheckStep, rowMark, rowCell, shownStatus, approveRunning, needsYou, ownersTurn, waitsForYou, statusBadge, stepNowWord, taskStage, stageText, STATUS_BADGE } from '../hooks/board'
+import { askShape } from './ask-shape'
 
 const NOW = Date.parse('2026-11-20T12:00:00.000Z')
 const iso = (ms: number) => new Date(ms).toISOString()
@@ -14,7 +15,7 @@ const CHANGED = iso(NOW - 60_000)
 const STARTED = iso(NOW - 20 * 60_000)
 const ASKED = iso(NOW - 2 * 60_000)
 
-const task = (status: PhaseTask['status'], extra: Partial<PhaseTask> & Record<string, unknown> = {}): PhaseTask => ({ status, updated_at: CHANGED, note: '', ...extra }) as PhaseTask
+const task = (status: PhaseTask['status'], extra: Partial<PhaseTask> & Record<string, unknown> = {}): PhaseTask => ({ status, updated_at: CHANGED, note: '', ...askShape(extra) }) as PhaseTask
 const at = (step: CheckStep, when = FRESH) => ({ live: { checking: { step, at: when } }, })
 /** waiting in the merge queue at `place` (T-612: a check step of its own; the note only says it for people) */
 const inQueue = (place: number, when = FRESH) => ({ live: { checking: { step: 'queue' as const, place, at: when } }, note: `queue (${place})` })

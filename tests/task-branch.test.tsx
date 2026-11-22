@@ -170,7 +170,7 @@ const pageLines = (n: unknown): string[] => {
   }
   return [textOf(x)]
 }
-const view = () => ({ shape: 'view-1', value: { tasks: taskBranchTasks(T0), working: [], scouts: [], mode: 'auto', branch: 'main', test_commands: ['npm test'], driving: true, task_branches: { 'T-733': taskBranchDoing(T0), 'T-734': taskBranchMerged(T0), 'T-735': taskBranchLong(T0) } } })
+const view = () => ({ shape: 'view-1', value: { tasks: taskBranchTasks(T0), working: [], scouts: [], mode: 'auto', home_branch: 'main', test_commands: ['npm test'], driving: true, task_branches: { 'T-733': taskBranchDoing(T0), 'T-734': taskBranchMerged(T0), 'T-735': taskBranchLong(T0) } } })
 
 for (const surface of ['terminal', 'desktop', 'mobile'] as const)
   for (const [id, w] of [['T-733', 100], ['T-734', 100], ['T-735', 60], ['T-736', 100]] as const)

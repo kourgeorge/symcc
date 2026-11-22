@@ -141,7 +141,7 @@ test('T-687, T-718: the Live tab ends with the Organizational memory section (co
 /** T-704: walks one surface's board through its pages, from the Tasks list to a task's page and back, the tabs, the org-mem
  *  page and back, and checks that each draws the board header exactly when core's showsHeader says so. */
 async function headerWalk($: Engine, on: On, surface: 'terminal' | 'vscode') {
-  const task = { id: 'T-1', title: 'A task', details: '', files: [], status: 'todo', note: '', question: null, order: 1, after: [], attempts: 0, history: [], branch: null, created_at: '', updated_at: '' }
+  const task = { id: 'T-1', title: 'A task', details: '', files: [], status: 'todo', note: '', order: 1, after: [], attempts: 0, history: [], branch: null, created_at: '', updated_at: '' }
   // only the view is seeded: the tab and the opened task start empty (the Tasks list) and are changed by pressing
   stateOf(on, { view: { ...VIEW.view, value: { ...VIEW.view.value, tasks: [task] } } })
   fakeOrgMem(on, NOTES)

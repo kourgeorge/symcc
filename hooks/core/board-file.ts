@@ -1,11 +1,10 @@
 // The board file itself: its shape, loading it safely, the lock, and finding a task.
-import type { SymccMode, SymccRun, SymccStatus, SymccTask, SymccTokens } from '../../types'
+import type { SymccAsk, SymccMode, SymccRun, SymccStatus, SymccTask, SymccTokens } from '../../types'
 import { dataDir } from '../name'
 import { cleanTokens, keepAgentIds } from './runs'
 import { parseStamp } from './text'
 import { historyEntryOk } from './history'
-import type { WorkerQuestion } from './ask'
-import { type OwnerQuestion, cleanQuestions } from './questions'
+import { type OwnerQuestion, cleanAsk, cleanQuestions } from './questions'
 
 export type Board = {
   version: 1
@@ -125,10 +124,10 @@ export type ArchivedTotals = { done: number; dropped: number; tries: number; ms:
  * for more time (the worker keeps working meanwhile); `wrap_up`: when the worker was told its time is up
  * and to hand back (it is stopped WRAP_UP_GRACE_MS later).
  * What the running try recorded for its hand-back, kept here (not only in the plugin's memory) so a plugin
- * reload mid-try doesn't lose it; only while "doing" on one try: `question`: its worker's ask_owner call
+ * reload mid-try doesn't lose it; only while "doing" on one try: `ask`: its worker's ask_owner call (an Ask record by 'worker')
  * (the last one wins); `refused`: the paths of its edits refused as outside the task's files.
  */
-export type Live = { session?: string; phase?: Phase; checking?: Checking; merge_wait?: Blockers; extra_minutes?: number; time_ask?: string; wrap_up?: string; question?: WorkerQuestion; refused?: string[] }
+export type Live = { session?: string; phase?: Phase; checking?: Checking; merge_wait?: Blockers; extra_minutes?: number; time_ask?: string; wrap_up?: string; ask?: SymccAsk; refused?: string[] }
 /** How far a "doing" try got before its worker handed back (see Live). */
 export type Phase = 'claimed' | 'worker' | 'checker'
 const PHASES: readonly Phase[] = ['claimed', 'worker', 'checker']
@@ -418,11 +417,13 @@ function cleanTask(t: unknown, fixed: string[] = []): BoardTask | null {
   }
   if (!isNum(x.order)) x.order = 0
   if (!isNum(x.attempts)) x.attempts = 0
-  if (x.question !== null && typeof x.question !== 'string') x.question = null
   if (x.branch !== null && typeof x.branch !== 'string') x.branch = null
-  if ('question_lead' in x && !(typeof x.question_lead === 'string' && x.question_lead.trim())) delete x.question_lead
+  if ('ask' in x) {
+    const ask = cleanAsk(x.ask)
+    if (ask) x.ask = ask
+    else delete x.ask
+  }
   if ('merge_into' in x && !(typeof x.merge_into === 'string' && x.merge_into.trim())) delete x.merge_into
-  for (const k of ['asked_files', 'options', 'options_lead']) if (k in x && !strings(x[k])) delete x[k]
   if ('kind' in x) {
     if (kindOf(x) === DEFAULT_KIND) delete x.kind
     else x.kind = kindOf(x)
@@ -452,7 +453,8 @@ export function cleanLive(v: unknown, status: SymccStatus): Live | undefined {
   if (doing && isNum(v.extra_minutes) && v.extra_minutes > 0) out.extra_minutes = v.extra_minutes
   if (doing && typeof v.time_ask === 'string' && v.time_ask) out.time_ask = v.time_ask
   if (doing && typeof v.wrap_up === 'string' && v.wrap_up) out.wrap_up = v.wrap_up
-  if (doing && isObj(v.question) && typeof v.question.question === 'string') out.question = v.question as WorkerQuestion
+  const ask = doing ? cleanAsk(v.ask) : undefined
+  if (ask) out.ask = ask
   if (doing && strings(v.refused) && v.refused.length) out.refused = v.refused
   return Object.keys(out).length ? out : undefined
 }

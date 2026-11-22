@@ -15,7 +15,7 @@ test('T-713: addTask with 31 files keeps all 31', () => {
 
 test('T-713: allowFiles on a task with 30 files adds the asked file and says so', () => {
   const [b0, t] = addTask(emptyBoard(), { origin: { why: 'a test' }, title: 'big', files: many(30) }, NOW)
-  const b1 = patchTask(b0, t.id, { status: 'waiting', asked_files: ['src/f30.ts'] }, NOW)
+  const b1 = patchTask(b0, t.id, { status: 'waiting', ask: { by: 'symcc', text: 'files?', asked_at: '', files: ['src/f30.ts'] } }, NOW)
   const b2 = allowFiles(b1, t.id, NOW)
   const after = find(b2, t.id)!
   expect(after.files.length).toBe(31)
@@ -27,7 +27,7 @@ test('T-713: allowFiles on a task with 30 files adds the asked file and says so'
 test('T-713: allowFiles refuses asked files a task cannot hold: no "allowed" line, still waiting', () => {
   for (const bad of ['.symcc/x.md', '.git/config', '.git', '../x.ts', '/abs.ts', '.']) {
     const [b0, t] = addTask(emptyBoard(), { origin: { why: 'a test' }, title: 'guarded', files: ['src/a.ts'] }, NOW)
-    const b1 = patchTask(b0, t.id, { status: 'waiting', asked_files: ['src/b.ts', bad] }, NOW)
+    const b1 = patchTask(b0, t.id, { status: 'waiting', ask: { by: 'symcc', text: 'files?', asked_at: '', files: ['src/b.ts', bad] } }, NOW)
     let said = ''
     try {
       allowFiles(b1, t.id, NOW, '.symcc')
@@ -44,7 +44,7 @@ test('T-713: allowFiles refuses asked files a task cannot hold: no "allowed" lin
 
 test('T-713: allowFiles writes the cleaned names it really added', () => {
   const [b0, t] = addTask(emptyBoard(), { origin: { why: 'a test' }, title: 'dot', files: ['src/a.ts'] }, NOW)
-  const b1 = patchTask(b0, t.id, { status: 'waiting', asked_files: ['./src/b.ts'] }, NOW)
+  const b1 = patchTask(b0, t.id, { status: 'waiting', ask: { by: 'symcc', text: 'files?', asked_at: '', files: ['./src/b.ts'] } }, NOW)
   const after = find(allowFiles(b1, t.id, NOW, '.symcc'), t.id)!
   expect(after.files).toEqual(['src/a.ts', 'src/b.ts'])
   expect(after.history[after.history.length - 1]!.text).toBe('the owner allowed files: + src/b.ts')

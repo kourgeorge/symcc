@@ -69,7 +69,7 @@ test("another session's worker: an edit outside its task's files is refused and 
 test("another session's worker's ask_owner is taken and written to its try", async () => {
   const { host } = await world()
   expect(await askCall(host, 'w9', { question: 'Which file?' })).toBe(ASK_SENT)
-  expect(find(await load(host), 'T-1')!.live?.question?.question).toBe('Which file?')
+  expect(find(await load(host), 'T-1')!.live?.ask?.text).toBe('Which file?')
   expect(await toolCall(host, toolName(ASK_TOOL), 'w9', { question: 'Again?' })).toEqual({ result: ASK_SENT })
   expect(workers.size).toBe(0)
 })
@@ -113,7 +113,7 @@ test("an earlier try's agent, while this copy has the new try waiting to start, 
     expect(await checkEdit(host, 'w-old', { path: `${WT}/src/a.ts` })).toBe(stoppedText())
     expect(await checkEdit(host, 'w-old', { path: `${WT}/README.md` })).toBe(stoppedText())
     const t = find(await load(host), 'T-1')!
-    expect(t.live?.question).toBeUndefined()
+    expect(t.live?.ask).toBeUndefined()
     expect(t.live?.refused).toBeUndefined()
     starting.clear()
     queuedWorkers.clear()
@@ -244,7 +244,7 @@ test("T-479: an earlier try's worker is refused after a new try is claimed (its 
   expect(await toolCall(host, 'Bash', 'w9', {})).toEqual({ deny: stoppedText() })
   expect(await checkEdit(host, 'w9', { path: `${WT}/src/a.ts` })).toBe(stoppedText())
   expect(await askCall(host, 'w9', { question: 'x' })).toMatch(/^Refused/)
-  expect(find(await load(host), 'T-1')!.live?.question).toBeUndefined()
+  expect(find(await load(host), 'T-1')!.live?.ask).toBeUndefined()
   // the new try's worker, once recorded, runs as usual
   const b2 = patchTask(b1, 'T-1', { runs: withAgentStart(find(b1, 'T-1')!.runs, 'worker', 'w10', ISO) }, ISO)
   expect(find(b2, 'T-1')!.runs!.map(r => agentsOf(r).map(a => a.id))).toEqual([['w9'], ['w10']])
@@ -265,7 +265,7 @@ test('T-479, T-805: only the last few tries keep agent ids (their entries and to
   // a bad id is never kept
   for (const bad of ['', 'a b', 'x'.repeat(201), 'new\nline', 7, null]) expect(withAgentStart([{ started: ISO }], 'worker', bad, ISO)).toEqual([{ started: ISO }])
   // from the file: a bad id is cut from its entry, a bad entry is dropped
-  const text = JSON.stringify({ tasks: [{ id: 'T-1', status: 'todo', title: 'x', details: '', note: '', files: [], after: [], history: [], order: 1, attempts: 1, question: null, branch: null, created_at: ISO, updated_at: ISO, runs: [{ started: ISO, agents: [{ id: 5, kind: 'worker' as const, started: ISO }, { id: 'ok', kind: 'checker', started: ISO }, { id: 'has space', kind: 'checker', started: ISO }, { id: 'x', kind: 'other', started: ISO }] }, { started: ISO, agents: [{ id: 'w2', kind: 'worker' as const, started: ISO }] }] }] })
+  const text = JSON.stringify({ tasks: [{ id: 'T-1', status: 'todo', title: 'x', details: '', note: '', files: [], after: [], history: [], order: 1, attempts: 1, branch: null, created_at: ISO, updated_at: ISO, runs: [{ started: ISO, agents: [{ id: 5, kind: 'worker' as const, started: ISO }, { id: 'ok', kind: 'checker', started: ISO }, { id: 'has space', kind: 'checker', started: ISO }, { id: 'x', kind: 'other', started: ISO }] }, { started: ISO, agents: [{ id: 'w2', kind: 'worker' as const, started: ISO }] }] }] })
   const read = readBoard(text)
   expect(read.board.tasks[0]!.runs!.map(r => agentsOf(r).map(a => [a.id, a.kind]))).toEqual([[[undefined, 'worker'], ['ok', 'checker'], [undefined, 'checker']], [['w2', 'worker']]])
   expect(read.fixed.some(f => /bad agent ids/.test(f))).toBe(true)

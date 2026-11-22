@@ -341,8 +341,8 @@ test("a worker's ask_owner call is recorded, and when it hands back the task wai
   await w.clock.settle()
   const t = w.task('T-1')
   expect(t.status).toBe('waiting')
-  expect(t.question).toBe('Which colour?')
-  expect((t as { options?: string[] }).options).toEqual(['red', 'blue'])
+  expect(t.ask?.text).toBe('Which colour?')
+  expect(t.ask?.options).toEqual(['red', 'blue'])
   expect(w.git.state.main).toBe(main)
 })
 
@@ -377,7 +377,7 @@ test("an Edit outside a worker's files is refused with the reason and recorded; 
   await w.clock.settle()
   const t = w.task('T-1')
   expect(t.status).toBe('waiting')
-  expect((t as { asked_files?: string[] }).asked_files).toEqual(['README.md', 'nb/x.ipynb', 'docs/m.md'])
+  expect(t.ask?.files).toEqual(['README.md', 'nb/x.ipynb', 'docs/m.md'])
   expect(w.git.state.main).toBe(main)
 })
 

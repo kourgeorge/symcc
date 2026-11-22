@@ -44,7 +44,7 @@ export async function renderAbovePrompt($: $, e: Parameters<AbovePromptHook>[1],
   const tasks = v?.tasks ?? []
   // the lead's open questions for the owner (see core/questions.ts)
   const questions = v?.questions ?? []
-  if ((!tasks.length && !questions.length) || v?.enabled === false) return next(e)
+  if ((!tasks.length && !questions.length) || v?.on_here === false) return next(e)
   const { Box, Text, Button } = $.ui.resolve(e)
   const nowMs = await drawNow($)
   const columns = e.props.bodyColumns ?? 80

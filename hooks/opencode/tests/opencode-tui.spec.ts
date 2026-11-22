@@ -41,9 +41,9 @@ function viewFile(): ViewFile {
   for (const title of ['a change in src', 'a reviewed change', 'which database', 'a later one', 'an old one']) b = addTask(b, { origin: { why: 'a test' }, title, files: ['src/'] }, AT)[0]
   b = patchTask(b, 'T-1', { status: 'doing', note: 'worker starting' }, AT)
   b = patchTask(b, 'T-2', { status: 'review' }, AT)
-  b = patchTask(b, 'T-3', { status: 'waiting', question: 'Which database?', options: ['mysql', 'postgres'] }, AT)
+  b = patchTask(b, 'T-3', { status: 'waiting', ask: { by: 'worker', text: 'Which database?', options: ['mysql', 'postgres'], asked_at: AT } }, AT)
   b = patchTask(b, 'T-5', { status: 'done' }, AT)
-  const view: PaneView = { tasks: b.tasks, working: [{ task: 'T-1', since: NOW - 3 * 60_000 }], scouts: [], mode: 'auto', test_commands: ['bun test'], max_parallel: 2, max_minutes: 30, auto_retries: 1, driving: true, branch: 'main', branch_note: '' }
+  const view: PaneView = { tasks: b.tasks, working: [{ task: 'T-1', since: NOW - 3 * 60_000 }], scouts: [], mode: 'auto', test_commands: ['bun test'], max_parallel: 2, max_minutes: 30, auto_retries: 1, driving: true, home_branch: 'main', branch_note: '' }
   return { root: '/work/proj', home: '/work', name: 'symcc', version: '0.9.0', written_at: NOW, view }
 }
 
@@ -155,7 +155,7 @@ test('the band: the header, then the tasks that need you or run with the list\'s
   expect(lines.some(l => l.startsWith('T-4') || l.startsWith('T-5'))).toBe(false)
   // nothing on the board, or symcc off: no band
   expect(bandLines({ ...f, view: { ...f.view, tasks: [] } }, NOW, 120)).toEqual([])
-  expect(bandLines({ ...f, view: { ...f.view, enabled: false } }, NOW, 120)).toEqual([])
+  expect(bandLines({ ...f, view: { ...f.view, on_here: false } }, NOW, 120)).toEqual([])
   expect(bandLines(null, NOW, 120)).toEqual([])
 })
 
@@ -287,7 +287,7 @@ test('the panel: the banner, then the list grouped by state (NEEDS YOU, what run
   expect(invStatus.find(s => s.text.includes('answered: read it'))?.color).toBe('success')
   expect(lineText(invStatus)).not.toContain('ready for review')
   // a waiting task with no question text says its note, else that it waits (core's taskAsks)
-  const noQ = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => (t.id === 'T-3' ? { ...t, question: null, options: undefined, note: '' } : t)) } } as ViewFile
+  const noQ = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => (t.id === 'T-3' ? { ...t, ask: undefined, note: '' } : t)) } } as ViewFile
   expect(panelLines(noQ, { opened: 'T-3', cursor: 0 }, NOW, 100).lines.map(lineText).some(l => l.includes('asks: it waits for your answer'))).toBe(true)
   // a waiting task: its question and the numbered choices, the last one the owner's own answer
   const asks = panelLines(f, { opened: 'T-3', cursor: 0 }, NOW, 100).lines.map(lineText)
@@ -485,7 +485,7 @@ test('T-584: a task page offers every one of core\'s taskActions with a key (but
   b = patchTask(b, 'T-2', { status: 'review', kind: 'investigation' }, AT)
   b = patchTask(b, 'T-3', { status: 'failed', attempts: 1, needs_review: true }, AT)
   b = patchTask(b, 'T-4', { status: 'backlog' }, AT)
-  const view: PaneView = { tasks: b.tasks, working: [{ task: 'T-1', since: NOW - 60_000 }], scouts: [], mode: 'auto', test_commands: [], max_parallel: 2, max_minutes: 30, auto_retries: 1, driving: true, branch: 'main', branch_note: '' }
+  const view: PaneView = { tasks: b.tasks, working: [{ task: 'T-1', since: NOW - 60_000 }], scouts: [], mode: 'auto', test_commands: [], max_parallel: 2, max_minutes: 30, auto_retries: 1, driving: true, home_branch: 'main', branch_note: '' }
   const f: ViewFile = { root: '/work/proj', home: '/work', name: 'symcc', version: '0.9.0', written_at: NOW, view }
   const task = (id: string) => f.view.tasks.find(t => t.id === id)!
   // the same actions as taskActions, in its order, with its keys and words; only Copy (no clipboard here) is left out
@@ -608,7 +608,7 @@ test('T-680, T-751: a task page header has the buttons in groups, words only (th
     { name: 'deps', every_minutes: 30, last_run: null, running: true, prompt: 'Check the dependencies.' },
     { name: 'docs', every_minutes: 60, last_run: null, running: false, paused: true, prompt: 'Look for stale docs.' },
   ]
-  const view: PaneView = { tasks: b.tasks, working: [{ task: 'T-1', since: NOW - 60_000 }], scouts, mode: 'auto', test_commands: [], max_parallel: 2, max_minutes: 30, auto_retries: 1, driving: true, branch: 'main', branch_note: '', questions: [{ id: 'Q-1', text: 'How often?', options: ['daily'], asked_at: AT }] }
+  const view: PaneView = { tasks: b.tasks, working: [{ task: 'T-1', since: NOW - 60_000 }], scouts, mode: 'auto', test_commands: [], max_parallel: 2, max_minutes: 30, auto_retries: 1, driving: true, home_branch: 'main', branch_note: '', questions: [{ id: 'Q-1', by: 'lead' as const, text: 'How often?', options: ['daily'], asked_at: AT }] }
   const f: ViewFile = { root: '/work/proj', home: '/work', name: 'symcc', version: '0.9.0', written_at: NOW, view }
   const task = (id: string) => f.view.tasks.find(t => t.id === id)!
   // the header's button line: the line right above its heavy rule
@@ -1191,7 +1191,7 @@ function scoutsViewFile(): ViewFile {
       { run: { started: '2026-11-19T10:45:00.000Z', ended: '2026-11-19T10:50:00.000Z', outcome: 'nothing' as const, findings: 0 }, tasks: [] },
     ],
   }
-  return { ...f, view: { ...f.view, scouts, scout_runs, notify_choices: ['voice', 'sound 1', 'sound 2', 'sound 3', 'off'], notify: 'sound 2' } }
+  return { ...f, view: { ...f.view, scouts, scout_runs, notify_choices: ['voice', 'sound 1', 'sound 2', 'sound 3', 'off'], notify_now: 'sound 2' } }
 }
 
 test('T-559: the Scouts tab lists the scouts from view.json, a scout\'s page shows its prompt and runs, a run its report; the Settings tab shows every setting in its group with its value and default', () => {
@@ -1588,9 +1588,9 @@ test('T-583: on a waiting task\'s and a question\'s page each choice is a clicka
   const f0 = viewFile()
   // T-3 asks a question with options, T-1 is over its time, T-4 asks for files; Q-3 is the owner's question
   const tasks = f0.view.tasks.map(t =>
-    t.id === 'T-1' ? { ...t, live: { time_ask: AT }, note: 'time is up' } : t.id === 'T-4' ? { ...t, status: 'waiting' as const, question: 'May I change docs/?', asked_files: ['docs/'] } : t,
+    t.id === 'T-1' ? { ...t, live: { time_ask: AT }, note: 'time is up' } : t.id === 'T-4' ? { ...t, status: 'waiting' as const, ask: { by: 'symcc' as const, text: 'May I change docs/?', files: ['docs/'], asked_at: AT } } : t,
   )
-  const f: ViewFile = { ...f0, view: { ...f0.view, tasks, questions: [{ id: 'Q-3', text: 'How often?', options: ['Once a day', 'Once a week'], asked_at: AT }] } }
+  const f: ViewFile = { ...f0, view: { ...f0.view, tasks, questions: [{ id: 'Q-3', by: 'lead' as const, text: 'How often?', options: ['Once a day', 'Once a week'], asked_at: AT }] } }
   const page = (id: string) => panelLines(f, { opened: id, cursor: 0 }, NOW, 100)
   // the choices are numbered lines, each with its click
   const d = page('Q-3')
@@ -1600,7 +1600,7 @@ test('T-583: on a waiting task\'s and a question\'s page each choice is a clicka
   expect(d.lines.map(lineText)).toContain(`  3. ${OWN_ANSWER}`)
   expect(page('T-4').lines.map(lineText)).toContain("  2. Don't allow")
   // T-651: a long choice wraps under its text inside the width, and a click on any of its lines picks it
-  const long = { ...f, view: { ...f.view, questions: [{ id: 'Q-4', text: 'Cap?', options: ["Invalid: doctor and run reject it (scout's suggestion)", 'Unlimited: run until another cap stops it'], asked_at: AT }] } }
+  const long = { ...f, view: { ...f.view, questions: [{ id: 'Q-4', by: 'lead' as const, text: 'Cap?', options: ["Invalid: doctor and run reject it (scout's suggestion)", 'Unlimited: run until another cap stops it'], asked_at: AT }] } }
   const narrow = panelLines(long, { opened: 'Q-4', cursor: 0 }, NOW, 40)
   const first = narrow.lines.map(lineText).indexOf('  1. Invalid: doctor and run reject it')
   expect(first).toBeGreaterThan(0)
@@ -2702,7 +2702,7 @@ test('T-696: a long-title row in the list keeps "waits for T-1" / "[feature]" at
  *  merged today after a send-back, a failed one, two to do (one waiting on the other). Times are minutes before NOW. */
 function liveTasks(): SymccTask[] {
   const ago = (min: number) => new Date(NOW - min * 60_000).toISOString()
-  const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', question: null, order: Number(id.slice(2)), after: [], attempts: 1, history: [], branch: null, created_at: ago(300), updated_at: ago(1), ...x }) as unknown as SymccTask
+  const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', order: Number(id.slice(2)), after: [], attempts: 1, history: [], branch: null, created_at: ago(300), updated_at: ago(1), ...x }) as unknown as SymccTask
   return [
     task('T-610', 'Organizational memory search', { runs: [{ started: ago(4) }] }),
     task('T-611', '/symcc-doctor checks the hooks', { attempts: 2, runs: [{ started: ago(60), ended: ago(50), agents: [{ kind: 'worker' as const, started: ago(60), ended: ago(50), tokens: { input: 1_100_000 } }] }, { started: ago(30), ended: ago(10), agents: [{ kind: 'worker' as const, started: ago(30), ended: ago(10), tokens: { input: 1_100_000 } }] }], live: { checking: { step: 'queue', at: ago(0), place: 2 } }, history: [{ kind: 'checker-problems', at: ago(40), text: 'try 1: checker: problems' }, { kind: 'stage', at: ago(5), text: 'try 2: waits in the merge queue (place 2)', try: 2, step: 'queue' }] }),
@@ -2822,7 +2822,7 @@ test('T-692: the Live tab draws the terminal panel\'s lanes and today (core/live
 test('T-757: the OpenCode Live tab shows the whole task\'s tokens, the bar full at the usual per task, the warning past twice it, and the bar legend', () => {
   const f0 = viewFile()
   const ago = (min: number) => new Date(NOW - min * 60_000).toISOString()
-  const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', question: null, order: Number(id.slice(2)), after: [], attempts: 1, history: [], branch: null, created_at: ago(300), updated_at: ago(1), ...x }) as unknown as SymccTask
+  const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', order: Number(id.slice(2)), after: [], attempts: 1, history: [], branch: null, created_at: ago(300), updated_at: ago(1), ...x }) as unknown as SymccTask
   const tasks = [
     task('T-800', 'Done at 4M', { status: 'done', merged: 'abc1234', runs: [{ started: ago(300), ended: ago(200), agents: [{ kind: 'worker' as const, started: ago(300), ended: ago(200), tokens: { input: 4_000_000 } }] }], history: [{ kind: 'merged', at: ago(30), text: 'try 1 → merged into main' }] }),
     task('T-801', 'Try 2 running', { attempts: 2, runs: [{ started: ago(60), ended: ago(50), agents: [{ kind: 'worker' as const, started: ago(60), ended: ago(50), tokens: { input: 4_000_000 } }] }, { started: ago(20) }] }),
@@ -2860,7 +2860,7 @@ test('T-757: the OpenCode Live tab shows the whole task\'s tokens, the bar full 
 test('T-709: the Live tab shows a lane for an approved task in review while its tests run (as the Tasks tab counts it in doing)', () => {
   const f0 = viewFile()
   const ago = (s: number) => new Date(NOW - s * 1000).toISOString()
-  const approved = { id: 'T-630', title: 'Approved, in its tests', details: '', files: [], status: 'review', note: '', question: null, order: 30, after: [], attempts: 1, history: [], branch: null, created_at: ago(9000), updated_at: ago(60), runs: [{ started: ago(2400), ended: ago(1200) }], live: { checking: { step: 'testing', at: ago(5) } }, } as unknown as SymccTask
+  const approved = { id: 'T-630', title: 'Approved, in its tests', details: '', files: [], status: 'review', note: '', order: 30, after: [], attempts: 1, history: [], branch: null, created_at: ago(9000), updated_at: ago(60), runs: [{ started: ago(2400), ended: ago(1200) }], live: { checking: { step: 'testing', at: ago(5) } }, } as unknown as SymccTask
   const tasks = [...liveTasks().filter(t => t.status !== 'doing'), approved]
   const f: ViewFile = { ...f0, view: { ...f0.view, tasks: tasks.map(t => viewTask(t)), checker: true, max_parallel: 3 } }
   const d = panelLines(parseViewFile(viewFileText(f)), { tab: 'live', opened: '', cursor: 0 }, NOW, 120)
@@ -2942,7 +2942,7 @@ test('T-692: in the TUI, l (or a click on the Live tab) shows the Live tab; ↓ 
 // them, for each other and for a failed task; one free, one waiting for the free one.
 const trainTasks = (): SymccTask[] => {
   const ago = (min: number) => new Date(NOW - min * 60_000).toISOString()
-  const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', question: null, order: Number(id.slice(2)), after: [], attempts: 1, history: [], branch: null, created_at: ago(300), updated_at: ago(1), ...x }) as unknown as SymccTask
+  const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', order: Number(id.slice(2)), after: [], attempts: 1, history: [], branch: null, created_at: ago(300), updated_at: ago(1), ...x }) as unknown as SymccTask
   return [
     task('T-712', 'Scout ordering fix', { runs: [{ started: ago(2) }] }),
     task('T-690', 'Live tab first part', { attempts: 2, runs: [{ started: ago(30), ended: ago(3), agents: [{ kind: 'worker' as const, started: ago(30), ended: ago(3), tokens: { input: 1_400_000 } }, { id: 'agent-c', kind: 'checker' as const, started: ago(3) }] }], live: { checking: { step: 'checker', at: ago(0) } }, history: [{ kind: 'stage', at: ago(3), text: 'try 2: prep started', try: 2, step: 'prep' }] }),
@@ -3046,7 +3046,7 @@ test('T-715: in the TUI, ↓ to a train and Enter (or a click on it) opens that 
 // running ones, at most 3, newest first; one merged 11 minutes ago, failed or dropped tasks get none.
 const finishedTasks = (): SymccTask[] => {
   const ago = (min: number) => new Date(NOW - min * 60_000).toISOString()
-  const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', question: null, order: Number(id.slice(2)), after: [], attempts: 1, history: [], branch: null, created_at: ago(300), updated_at: ago(1), ...x }) as unknown as SymccTask
+  const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', order: Number(id.slice(2)), after: [], attempts: 1, history: [], branch: null, created_at: ago(300), updated_at: ago(1), ...x }) as unknown as SymccTask
   const merged = (id: string, title: string, min: number) => task(id, title, { status: 'done', runs: [{ started: ago(min + 20), ended: ago(min + 2), agents: [{ kind: 'worker' as const, started: ago(min + 20), ended: ago(min + 2), tokens: { input: 900_000 } }] }], history: [{ kind: 'merged', at: ago(min), text: 'try 1 → merged into main' }] })
   return [
     task('T-760', 'A running one', { runs: [{ started: ago(4) }] }),
@@ -3106,7 +3106,7 @@ test('T-771: the OpenCode Live tab keeps up to 3 just-merged lanes (dim, ✓ at 
 test('T-700: the board header (banner, tests/limits line, drive warning, tabs) shows on the list pages only, as on the terminal panel (core\'s showsHeader); a task, question, scout, scout run, role, kind, prompt or (T-704) org-mem page starts with its own title and keeps its footer and buttons', () => {
   const f0 = orgMemViewFile()
   // a session that does not drive, so the banner has its drive warning too
-  const f: ViewFile = { ...f0, view: { ...f0.view, driving: false, questions: [{ id: 'Q-9', text: 'How often?', options: ['daily'], asked_at: AT }] } }
+  const f: ViewFile = { ...f0, view: { ...f0.view, driving: false, questions: [{ id: 'Q-9', by: 'lead' as const, text: 'How often?', options: ['daily'], asked_at: AT }] } }
   const W = 140
   const texts = (c: Partial<PanelChoice>) => panelLines(f, { opened: '', cursor: 0, ...c }, NOW, W).lines.map(lineText)
   const header = (t: string[]) => ({
@@ -3669,7 +3669,7 @@ function startCtx(view: Partial<PaneView>) {
 }
 
 test('T-756: with open_on_start on, the board panel opens by itself once a session is shown (no toast before), and not again after it is closed', async () => {
-  const s = startCtx({ open_on_start: true, enabled: true })
+  const s = startCtx({ open_on_start: true, on_here: true })
   await s.board.refresh()
   // no session yet: it waits, with no toast
   expect(s.current()).toBe(undefined)
@@ -3689,7 +3689,7 @@ test('T-756: with open_on_start on, the board panel opens by itself once a sessi
 })
 
 test('T-756: with open_on_start off, or symcc off, the board panel never opens by itself', async () => {
-  for (const view of [{ open_on_start: false, enabled: true }, { open_on_start: true, enabled: false }]) {
+  for (const view of [{ open_on_start: false, on_here: true }, { open_on_start: true, on_here: false }]) {
     const s = startCtx(view)
     s.shown.session = true
     await s.board.refresh()
@@ -3702,15 +3702,15 @@ test('T-756: with open_on_start off, or symcc off, the board panel never opens b
 })
 
 test('T-756: open_on_start turned off, or symcc turned off, while it waits for a session: the board does not open', async () => {
-  for (const later of [{ open_on_start: false, enabled: true }, { open_on_start: true, enabled: false }]) {
-    const s = startCtx({ open_on_start: true, enabled: true })
+  for (const later of [{ open_on_start: false, on_here: true }, { open_on_start: true, on_here: false }]) {
+    const s = startCtx({ open_on_start: true, on_here: true })
     await s.board.refresh()
     expect(s.current()).toBe(undefined)
     s.setView(later)
     s.shown.session = true
     await s.board.refresh()
     // turned back on later in the same run: still not by itself
-    s.setView({ open_on_start: true, enabled: true })
+    s.setView({ open_on_start: true, on_here: true })
     await s.board.refresh()
     expect(s.current()).toBe(undefined)
     expect(s.toasts.length).toBe(0)
@@ -3818,8 +3818,9 @@ test('T-770: the Live tab\'s mode line ends in "⌕ gaps-bot 4m" while scouts ru
   const f0 = viewFile()
   const base = { ...f0.view, tasks: liveTasks(), checker: true, max_parallel: 3 }
   const runs = [{ name: 'board-review', since: NOW - 60_000 }, { name: 'gaps-bot', since: NOW - 4 * 60_000 }]
-  const draw = (scouts_running: typeof runs | undefined, w: number) => {
-    const f = parseViewFile(viewFileText({ ...f0, view: { ...base, ...(scouts_running ? { scouts_running } : {}) } }))!
+  const draw = (running: typeof runs | undefined, w: number) => {
+    const scouts = (running ?? []).map(r => ({ name: r.name, every_minutes: 0, running: true, started: true, last_run: new Date(r.since).toISOString() }))
+    const f = parseViewFile(viewFileText({ ...f0, view: { ...base, scouts } }))!
     const d = panelLines(f, { tab: 'live', opened: '', cursor: 0 }, NOW, w)
     const i = d.lines.findIndex(l => lineText(l).includes(' busy'))
     return { text: lineText(d.lines[i]!), segs: d.lines[i]! }
@@ -3834,9 +3835,6 @@ test('T-770: the Live tab\'s mode line ends in "⌕ gaps-bot 4m" while scouts ru
   expect(segs.find(s => s.text === '⌕')?.color).toBe('suggestion')
   expect(segs.find(s => s.text === '⌕')?.hit).toEqual({ tab: 'scouts' })
   expect(segs.find(s => s.text === ' gaps-bot 4m')?.color).toBe('inactive')
-  // a broken scouts_running is left out
-  const broken = parseViewFile(viewFileText({ ...f0, view: { ...base, scouts_running: 'x' as never } }))!
-  expect('scouts_running' in broken.view).toBe(false)
 })
 
 test('T-772: the OpenCode Live tab draws the org-mem meter at 30 / 60 and 60 / 60 in the same calm colors (dim count, the quiet bar color), never the warning color', () => {
@@ -3856,7 +3854,7 @@ test('T-772: the OpenCode Live tab draws the org-mem meter at 30 / 60 and 60 / 6
 
 test('T-786: the OpenCode Live tab has ▍Needs you first (above ▍Tasks) with a warning row each for a question, a waiting and a review task; the cursor starts on them; none when nothing waits; never wider than the page', () => {
   const f0 = viewFile()
-  const f: ViewFile = { ...f0, view: { ...f0.view, questions: [{ id: 'Q-88', text: 'Which figures should go on the Today 4th line?', options: [], asked_at: AT }] } }
+  const f: ViewFile = { ...f0, view: { ...f0.view, questions: [{ id: 'Q-88', by: 'lead' as const, text: 'Which figures should go on the Today 4th line?', options: [], asked_at: AT }] } }
   for (const w of [120, 40]) {
     const d = panelLines(parseViewFile(viewFileText(f)), { tab: 'live', opened: '', cursor: 0 }, NOW, w)
     const texts = d.lines.map(lineText).map(x => x.replace(/^›/, ' '))

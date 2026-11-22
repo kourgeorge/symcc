@@ -471,7 +471,7 @@ test('mdText keeps a title plain in markdown', () => {
 
 test('in VS Code a row keeps its kind when its question or reason has the same word, and one option is "1 choice"', async ($, on) => {
   const base = BOARD_TASKS.find(t => t.id === 'T-404')!
-  const DOCS = { ...base, id: 'T-501', order: 501, kind: 'docs', question: 'Should the docs page list every setting?' }
+  const DOCS = { ...base, id: 'T-501', order: 501, kind: 'docs', ask: { by: 'worker', text: 'Should the docs page list every setting?', asked_at: '' } }
   const BUG = { ...BOARD_TASKS.find(t => t.id === 'T-405')!, id: 'T-502', order: 502, kind: 'bug', note: 'the bug is still there', history: hist('try 1: the bug is still there') }
   const ONE = { ...QUESTION, id: 'Q-4', options: ['Yes'] }
   seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, tasks: [...BOARD_TASKS, DOCS, BUG], questions: [ONE] } } })
@@ -743,7 +743,7 @@ test('T-702: in VS Code a row waiting on another task says "waits for T-…" and
 
 test('T-590: a waiting question that starts with "after you …" is a normal long text, not an "after T-…" list', async ($, on) => {
   const question = 'after you look at the earlier task, should I also update the docs page and the readme?'
-  const tasks = BOARD_TASKS.map(t => (t.id === 'T-404' ? { ...t, title: 'Pick the colors for the review mark on light themes', question } : t))
+  const tasks = BOARD_TASKS.map(t => (t.id === 'T-404' ? { ...t, title: 'Pick the colors for the review mark on light themes', ask: { by: 'worker', text: question, asked_at: '' } } : t))
   seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, tasks } } })
   // "● T-404  " takes 9 columns: bodyColumns 82 leaves the row 73
   const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: colsFor(82) }, surface: 'vscode' })

@@ -1,5 +1,5 @@
 import type { SymccScout, SymccTask, SymccTokens } from '../../types'
-import { type ScoutDef, parseScout, modeOf, symccOn, OPEN, scoutPrompt, recentClosed, scoutAgentName, scoutDescription, parseScoutMemory, scoutMemoryText, scoutPausedText, everyText, SCOUT_REPORT_CHARS, scoutLeadMessage, scoutWhyNot, scoutFile, scoutNameError, scoutDraftError, scoutText, everyMinutesOf, onDemand, onNotReady, SCOUT_RETRY_MS, inPlan, addScoutRun, keepScoutUsage, leadScoutNameError, leadScoutText, leadScoutsText, safeScoutFile, SCOUT_FILE_NAME, SCOUT_FILE_NAME_RULE, scoutFileNameError, type ScoutRunRecord, parseScoutRuns, scoutRunsText, addScoutRunRecord, scoutRunsFile, scoutRunReportFile, isScoutRunReport, scoutRunOutcome, scoutRunTasks, linkScoutRunTask, countFindings, reportText, parseScoutUsage, scoutResultsLine, renameScoutOrigins, linkScoutRunTaskAt, type Board } from '../board'
+import { type ScoutDef, parseScout, modeOf, symccOn, OPEN, scoutPrompt, recentClosed, scoutAgentName, scoutDescription, parseScoutMemory, lastRunOf, scoutMemoryText, scoutPausedText, everyText, SCOUT_REPORT_CHARS, scoutLeadMessage, scoutWhyNot, scoutFile, scoutNameError, scoutDraftError, scoutText, everyMinutesOf, onDemand, onNotReady, SCOUT_RETRY_MS, inPlan, addScoutRun, keepScoutUsage, leadScoutNameError, leadScoutText, leadScoutsText, safeScoutFile, SCOUT_FILE_NAME, SCOUT_FILE_NAME_RULE, scoutFileNameError, type ScoutRunRecord, parseScoutRuns, scoutRunsText, addScoutRunRecord, scoutRunsFile, scoutRunReportFile, isScoutRunReport, scoutRunOutcome, scoutRunTasks, linkScoutRunTask, countFindings, reportText, parseScoutUsage, scoutResultsLine, renameScoutOrigins, linkScoutRunTaskAt, type Board } from '../board'
 import { publish, refreshStatus, drivesHere } from './lead'
 import { S, onHere, scoutState, scoutRuns, heard, timers, updateScoutOpen, stopped, movedAgents, movedRefused, DRIVING_MOVED } from './state'
 import { type FileTouch, type Host, type HostAgentStarted, notReadyYet } from '../host'
@@ -303,7 +303,7 @@ async function scoutStarted(host: Host, s: ScoutDef, st: SymccScout, spawn: Prom
   return ''
 }
 
-/** <dir>/scouts.json: each scout's last run time and last report, so a restart doesn't make it "first run" again. */
+/** <dir>/scouts.json: which scouts are paused, and the scouts' usage totals (the last run and report are in each scout's runs file). */
 export const scoutMemoryFile = () => path(`${S.N.dir}/scouts.json`)
 
 /** The saved scout memory; a missing or broken file counts as "no scout has run yet". */
@@ -375,6 +375,14 @@ export async function saveScoutMemory(host: Host) {
       .map(n => ({ name: n, ...saved[n]! }))
     return scoutMemoryText([...scoutState.values(), ...kept])
   })
+}
+
+/** Scout `name`'s last run (when it started) and last report, read from its newest reported run and that run's report file (cut to SCOUT_REPORT_CHARS). */
+async function lastFromRuns(host: Host, name: string): Promise<{ last_run: string | null; last_report?: string }> {
+  const last = lastRunOf(await loadScoutRunHistory(host, name))
+  if (!last) return { last_run: null }
+  const text = last.report ? await readScoutRunReport(host, { report: last.report }) : null
+  return { last_run: last.last_run, ...(text !== null ? { last_report: text.trim().slice(0, SCOUT_REPORT_CHARS) } : {}) }
 }
 
 /** True when scout `st` is paused, as scouts.json says now (st.paused is brought up to date). */
@@ -462,7 +470,8 @@ export async function scoutFinished(host: Host, agentId: string, answer: string,
   if (st) {
     st.running = false
     st.last_report = answer.trim().slice(0, SCOUT_REPORT_CHARS)
-    await saveScoutMemory(host).catch((e: Error) => tellLead(host, `Note: scout ${name}'s last run was not saved (${e.message}); after a restart it will start as a first run.`))
+    // scouts.json (the owner's pauses, usage) is brought up to date here: a pause set meanwhile is read, a removed scout's entry goes
+    await saveScoutMemory(host).catch(() => undefined)
   }
   // a broken board.json must not lose the report: telling the lead still happens
   await load(host).then(b => publish(host, b)).catch(() => undefined)
@@ -538,7 +547,8 @@ export async function scheduleScouts(host: Host) {
   const soon = () => startedAt + SCOUT_SOON_MS + SCOUT_SPREAD_MS * soonCount++
   for (const s of [...defs].sort((a, b) => a.name.localeCompare(b.name))) {
     const known = scoutState.get(s.name)
-    const old: Pick<SymccScout, 'last_run' | 'running' | 'last_report' | 'paused'> | undefined = known ?? (saved[s.name] ? { ...saved[s.name]!, running: false } : undefined)
+    // after a restart a scout's last run and report come from its newest run (T-808)
+    const old: Pick<SymccScout, 'last_run' | 'running' | 'last_report' | 'paused'> | undefined = known ?? { ...(await lastFromRuns(host, s.name)), running: false, ...(saved[s.name]?.paused ? { paused: true } : {}) }
     const timed = !onDemand(s)
     const st: SymccScout = { name: s.name, every_minutes: s.every_minutes, last_run: old?.last_run ?? null, running: old?.running ?? false, prompt: s.prompt }
     if (timed) {

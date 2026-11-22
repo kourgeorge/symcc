@@ -33,8 +33,8 @@ test('phaseEvents: one event for each kind of change, and none when nothing chan
     ['stage: prep → checker', task('doing', step('prep')), task('doing', step('checker')), [ev('stage', 'prep', 'checker')]],
     ['stage: checker → queue, with its place', task('doing', step('checker')), task('doing', { live: { checking: { step: 'queue', place: 2, at: FRESH } }, }), [ev('stage', 'checker', 'queue', { place: 2 })]],
     ['a new place in the queue is no stage change', task('doing', { live: { checking: { step: 'queue', place: 2, at: FRESH } }, }), task('doing', { live: { checking: { step: 'queue', place: 1, at: FRESH } }, }), []],
-    ['wait: a question', task('doing'), task('waiting', { question: 'A or B?' }), [ev('state', 'doing', 'waiting'), ev('stage', 'worker', null), ev('wait', null, 'answer')]],
-    ['wait: answered', task('waiting', { question: 'A or B?' }), task('todo'), [ev('state', 'waiting', 'todo'), ev('wait', 'answer', null)]],
+    ['wait: a question', task('doing'), task('waiting', { ask: { by: 'lead', text: 'A or B?', asked_at: '' } }), [ev('state', 'doing', 'waiting'), ev('stage', 'worker', null), ev('wait', null, 'answer')]],
+    ['wait: answered', task('waiting', { ask: { by: 'lead', text: 'A or B?', asked_at: '' } }), task('todo'), [ev('state', 'waiting', 'todo'), ev('wait', 'answer', null)]],
     ['a stale step (an approve) taken away: one stage change to none, and it waits for a review again', task('review', step('checker', STALE)), task('review'), [ev('stage', 'checker', null), ev('wait', null, 'review')]],
     ['a stale step left on the board changes nothing', task('review', step('checker', STALE)), task('review', { ...step('checker', STALE), note: 'x' }), []],
   ]

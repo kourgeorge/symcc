@@ -5,6 +5,7 @@ import type { MockClock } from 'claude-code/testing'
 import { T0, seedBoard } from './board-fixture'
 import { ran, readText } from './fakes'
 import { hist } from './history-fixture'
+import { askShape } from './ask-shape'
 
 const iso = (ms: number) => new Date(ms).toISOString()
 
@@ -38,7 +39,7 @@ const task = (id: string, status: string, extra: Record<string, unknown> = {}) =
   files: ['hooks/plugin/ui/task-page.tsx', 'tests/', 'docs/guide.md'],
   status,
   note: '',
-  question: null,
+ 
   order: Number(id.slice(2)),
   after: ['T-499', 'T-498'],
   attempts: 2,
@@ -49,7 +50,7 @@ const task = (id: string, status: string, extra: Record<string, unknown> = {}) =
   role: 'worker',
   origin: ORIGIN,
   runs: RUNS,
-  ...extra,
+  ...askShape(extra),
 })
 
 /** One rich task per status (and an answered investigation), opened one by one in the tests. */
@@ -64,9 +65,9 @@ export const RICH_TASKS = [
   task('T-508', 'done'),
   task('T-509', 'dropped'),
   task('T-510', 'review', { kind: 'investigation', answer: 'Use the full width.', note: 'answered; waiting for you to read it' }),
-  task('T-511', 'waiting', { question: null, asked_files: ['hooks/board.ts'], options: undefined }),
-  { id: 'T-499', title: 'The first VS Code board task', details: '', files: [], status: 'done', note: '', question: null, order: 499, after: [], attempts: 1, history: [], branch: null, created_at: iso(T0), updated_at: iso(T0) },
-  { id: 'T-498', title: 'Another task it waits for', details: '', files: [], status: 'todo', note: '', question: null, order: 498, after: [], attempts: 0, history: [], branch: null, created_at: iso(T0), updated_at: iso(T0) },
+  task('T-511', 'waiting', { asked_files: ['hooks/board.ts'], options: undefined }),
+  { id: 'T-499', title: 'The first VS Code board task', details: '', files: [], status: 'done', note: '', order: 499, after: [], attempts: 1, history: [], branch: null, created_at: iso(T0), updated_at: iso(T0) },
+  { id: 'T-498', title: 'Another task it waits for', details: '', files: [], status: 'todo', note: '', order: 498, after: [], attempts: 0, history: [], branch: null, created_at: iso(T0), updated_at: iso(T0) },
 ]
 
 /** The ids of the rich tasks the tests open. */
@@ -77,7 +78,7 @@ export function seedRich(on: On, opened: string, run: (argv: string[]) => Proces
   const clock = seedBoard(on, {
     ...more,
     ...(opened ? { opened } : {}),
-    view: { shape: 'view-1', value: { tasks: RICH_TASKS, working: [], scouts: [], mode: 'auto', branch: 'main', test_commands: ['claude plugin test .'] } },
+    view: { shape: 'view-1', value: { tasks: RICH_TASKS, working: [], scouts: [], mode: 'auto', home_branch: 'main', test_commands: ['claude plugin test .'] } },
   })
   on('fs.read', (_, e, next) => (/reports\/T-5\d\d-try-1\.md$/.test(e.path) ? readText('First try: the tests failed.\n') : /reports\/T-5\d\d-try-2\.md$/.test(e.path) ? readText(REPORT) : next(e)))
   on('process.run', (_, e) => ({ value: run((e as { argv?: string[] }).argv ?? []) }))

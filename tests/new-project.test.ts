@@ -46,7 +46,7 @@ test('a session in a folder with no board: no lead prompt, no board update, tool
   expect(takeBoardUpdate()).toBeUndefined()
   expect(await toolCall(w.host, toolName('board'), undefined, {})).toEqual({ result: notSetUpAnswer(S.N.name) })
   expect(notSetUpAnswer('symcc')).toBe('symcc is not set up here. The owner can start it with /symcc-enable.')
-  expect(w.panel.view()).toMatchObject({ enabled: false, off_here: 'new' })
+  expect(w.panel.view()).toMatchObject({ on_here: false, off_here: 'new' })
   expect(offStatusLine('symcc', true, 'new')).toBe('symcc is not set up here · /symcc-enable to start it')
   expect(offStatusParts('symcc', true, 'new').find(p => p.command)?.text).toBe('/symcc-enable')
   expect(w.opened).toEqual([])
@@ -69,7 +69,7 @@ test('/symcc-enable in a new project creates board.json with symcc on, the sessi
   expect(w.opened.length).toBe(1)
   expect(w.toLead.length + (takeBoardUpdate() ? 1 : 0)).toBeGreaterThan(0)
   expect(await leadGuideText(w.host)).toBeDefined()
-  expect(w.panel.view()).toMatchObject({ enabled: true })
+  expect(w.panel.view()).toMatchObject({ on_here: true })
 })
 
 test('a folder with an existing board still starts on, with or without `enabled`', async () => {
@@ -80,7 +80,7 @@ test('a folder with an existing board still starts on, with or without `enabled`
     expect(S.fresh).toBe(false)
     expect(S.driving).toBe(true)
     expect(await leadGuideText(w.host)).toBeDefined()
-    expect(w.panel.view()).toMatchObject({ enabled: true })
+    expect(w.panel.view()).toMatchObject({ on_here: true })
     await sessionEnd(w.host)
   }
 })

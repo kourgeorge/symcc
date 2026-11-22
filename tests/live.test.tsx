@@ -2,7 +2,7 @@
 // numbers; claude/ui/live.tsx draws them on the terminal panel).
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { liveLanes, liveLayout, laneLines, liveLabelLine, liveLabelSegs, LIVE_AGENT_MARK, LIVE_TONE, liveStations, liveTrains, trainRows, type LiveTrain, liveToday, todayLines, segText, liveBlink, liveHeader, liveHeaderSegs, liveScoutMark, tabRow, LIVE_TABS, LIVE_EMPTY, LIVE_LEGEND, LIVE_DIVIDER, LIVE_INDENT, liveInner, liveBarLegend, liveLegend } from '../hooks/core/live'
+import { liveLanes, liveLayout, laneLines, liveLabelLine, liveLabelSegs, LIVE_AGENT_MARK, LIVE_TONE, liveStations, liveTrains, trainRows, type LiveTrain, liveToday, todayLines, segText, liveBlink, liveHeader, liveHeaderSegs, liveScoutMark, scoutsRunning, tabRow, LIVE_TABS, LIVE_EMPTY, LIVE_LEGEND, LIVE_DIVIDER, LIVE_INDENT, liveInner, liveBarLegend, liveLegend } from '../hooks/core/live'
 import { textWidth } from '../hooks/core/stats'
 import { FINISH_STALE_MS } from '../hooks/core/lead'
 import { listKeys } from '../hooks/board'
@@ -17,7 +17,7 @@ import { emptyBoard } from '../hooks/core/board-file'
 import { fakeHost } from './fake-host'
 
 const iso = (minAgo: number) => new Date(T0 - minAgo * 60_000).toISOString()
-const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', question: null, order: Number(id.slice(2)), after: [], attempts: 1, history: [], branch: null, created_at: iso(300), updated_at: iso(1), ...x })
+const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', order: Number(id.slice(2)), after: [], attempts: 1, history: [], branch: null, created_at: iso(300), updated_at: iso(1), ...x })
 
 /** Four tasks in doing, one at each place: a worker running (T-687), a checker (T-686), the tests (T-685), the merge queue (T-684). */
 const TASKS = [
@@ -344,7 +344,7 @@ test('T-690: the tab row has a Live tab with key l, and the views hint says "l t
   expect(listKeys().map(h => h.key)).toContain('l t s c')
 })
 
-const liveView = (tasks: unknown[], checker = true) => ({ shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', branch: 'main', test_commands: ['npm test'], driving: true, checker, max_parallel: 3 } })
+const liveView = (tasks: unknown[], checker = true) => ({ shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', home_branch: 'main', test_commands: ['npm test'], driving: true, checker, max_parallel: 3 } })
 
 /** T-786: the tasks that wait for nobody (▍Needs you has its own tests, tests/live-needs.test.tsx). */
 const calm = (tasks: { status: string }[]) => tasks.filter(t => !['review', 'waiting', 'failed'].includes(t.status))
@@ -686,8 +686,10 @@ test('T-715: Enter on a train (terminal) or a click on it (VS Code) opens that t
 })
 
 // T-770: while scouts run, the Live tab's mode line ends in a small scout mark ("⌕ gaps-bot 4m"); a queued one isn't
-// in scouts_running (publish puts only started runs there); a click on the mark opens the Scouts tab.
+// as running scouts in the view (T-808); a click on the mark opens the Scouts tab.
 const RUNS = [{ name: 'board-review', since: T0 - 60_000 }, { name: 'gaps-bot', since: T0 - 4 * 60_000 }]
+/** T-808: the running scouts as the view holds them (the header works the runs out from these) */
+const asScouts = (runs: readonly { name: string; since: number }[]) => runs.map(r => ({ name: r.name, running: true, started: true, last_run: new Date(r.since).toISOString() }))
 test('T-770: liveScoutMark shows the names and times, then "N scouts", then "N", then nothing as the room shrinks', () => {
   expect(liveScoutMark(undefined, T0)).toBe(null)
   expect(liveScoutMark([], T0)).toBe(null)
@@ -697,15 +699,15 @@ test('T-770: liveScoutMark shows the names and times, then "N scouts", then "N",
   expect(liveScoutMark([RUNS[1]!], T0, 12)?.text).toBe(' 1 scout')
   expect(liveScoutMark(RUNS, T0, 6)?.text).toBe(' 2')
   expect(liveScoutMark(RUNS, T0, 4)).toBe(null)
-  const head = (runs: typeof RUNS, w: number) => segText(liveHeaderSegs({ ...view(true), scouts_running: runs }, liveLanes(view(true), T0), T0, w))
+  const head = (runs: typeof RUNS, w: number) => segText(liveHeaderSegs({ ...view(true), scouts: asScouts(runs) }, liveLanes(view(true), T0), T0, w))
   expect(head([], 80)).toBe('⏵ auto merge · agents 2/3 busy')
   expect(head(RUNS, 80)).toBe('⏵ auto merge · agents 2/3 busy · ⌕ gaps-bot 4m, board-review 1m')
   expect(head(RUNS, 44)).toBe('⏵ auto merge · agents 2/3 busy · ⌕ 2 scouts')
   for (const w of [80, 40, 30, 26]) expect(textWidth(head(RUNS, w))).toBeLessThanOrEqual(Math.max(w, textWidth(head([], w))))
-  expect(liveHeaderSegs({ ...view(true), scouts_running: RUNS }, [], T0).map(s => s.tone)).toEqual(['text', 'text', 'scouts', 'dim'])
+  expect(liveHeaderSegs({ ...view(true), scouts: asScouts(RUNS) }, [], T0).map(s => s.tone)).toEqual(['text', 'text', 'scouts', 'dim'])
 })
 
-const scoutView = (runs: unknown[]) => ({ ...liveView(calm(TASKS)), value: { ...liveView(calm(TASKS)).value, ...(runs.length ? { scouts_running: runs } : {}) } })
+const scoutView = (runs: unknown[]) => ({ ...liveView(calm(TASKS)), value: { ...liveView(calm(TASKS)).value, ...(runs.length ? { scouts: asScouts(runs as typeof RUNS) } : {}) } })
 for (const [runs, w, want] of [
   [[], 80, '⏵ auto merge · agents 2/3 busy'],
   [[RUNS[1]], 80, '⏵ auto merge · agents 2/3 busy · ⌕ gaps-bot 4m'],
@@ -746,23 +748,32 @@ for (const [runs, w, want] of [
     await ui.unmount()
   })
 
-test('T-770: publish lists the started scout runs in scouts_running, oldest first; a queued one (running, not started yet) is left out', async () => {
+test('T-808: scoutsRunning works out the scout runs going now from the scouts, oldest first', () => {
+  const at = (minAgo: number) => new Date(Date.now() - minAgo * 60_000).toISOString()
+  const scouts = [
+    { name: 'board-review', last_run: at(1), running: true, started: true },
+    { name: 'gaps-bot', last_run: at(4), running: true, started: true },
+    { name: 'queued', last_run: at(90), running: true },
+    { name: 'idle', last_run: at(9), running: false },
+    { name: 'never', last_run: null, running: true },
+  ]
+  const runs = scoutsRunning(scouts)
+  expect(runs.map(r => r.name)).toEqual(['gaps-bot', 'board-review'])
+  expect(runs[0]?.since).toBe(Date.parse(scouts[1]!.last_run!))
+  expect(scoutsRunning(undefined)).toEqual([])
+})
+
+test('T-808: publish marks a scout started only when its agent runs; a queued one (running, not started yet) is left out of the live list', async () => {
   S.root = '/repo'
   const g = fakeHost()
   const at = (minAgo: number) => new Date(Date.now() - minAgo * 60_000).toISOString()
   scoutState.set('gaps-bot', { name: 'gaps-bot', every_minutes: 0, last_run: at(4), running: true })
-  scoutState.set('board-review', { name: 'board-review', every_minutes: 0, last_run: at(1), running: true })
   scoutState.set('queued', { name: 'queued', every_minutes: 0, last_run: at(90), running: true })
-  scoutRuns.set('agent-b', 'board-review')
   scoutRuns.set('agent-g', 'gaps-bot')
   try {
     await publish(g.host, emptyBoard())
-    const runs = (g.panel.view() as PaneView).scouts_running
-    expect(runs?.map(r => r.name)).toEqual(['gaps-bot', 'board-review'])
-    expect(runs?.[0]?.since).toBe(Date.parse(scoutState.get('gaps-bot')!.last_run!))
-    scoutRuns.clear()
-    await publish(g.host, emptyBoard())
-    expect('scouts_running' in (g.panel.view() as PaneView)).toBe(false)
+    const scouts = (g.panel.view() as PaneView).scouts
+    expect(scoutsRunning(scouts).map(r => r.name)).toEqual(['gaps-bot'])
   } finally {
     scoutRuns.clear()
     scoutState.clear()

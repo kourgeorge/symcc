@@ -59,7 +59,9 @@ const ask = (question: string, labels: string[], more: Record<string, unknown> =
 
 /** A task waiting for the owner with `extra` (a question, a file request), put on the board. */
 async function waitingTask(host: never, extra: Record<string, unknown>) {
-  const t = { id: 'T-1', title: 'Pick the color', details: '', files: ['a.ts'], status: 'waiting', note: '', question: null, order: 1, after: [], attempts: 1, history: [], branch: null, created_at: ISO, updated_at: ISO, ...extra }
+  const { question, options, asked_files, ...rest } = extra as { question?: string; options?: string[]; asked_files?: string[] }
+  const ask = question !== undefined || asked_files ? { by: asked_files ? 'symcc' : 'worker', text: question ?? 'files?', asked_at: ISO, ...(options ? { options } : {}), ...(asked_files ? { files: asked_files } : {}) } : undefined
+  const t = { id: 'T-1', title: 'Pick the color', details: '', files: ['a.ts'], status: 'waiting', note: '', order: 1, after: [], attempts: 1, history: [], branch: null, created_at: ISO, updated_at: ISO, ...rest, ...(ask ? { ask } : {}) }
   await change(host, x => ({ ...x, tasks: [...x.tasks, t as never], next_id: 2 }))
 }
 
@@ -496,8 +498,8 @@ test("a tied pop-up for a file request puts the lead's wording on the task: it s
   await pause(0)
   const t = w.board().tasks[0]!
   // symcc's own text stays in the data; the lead's is next to it
-  expect(t.question).toContain('needs to change files')
-  expect(t.question_lead).toBe('May T-1 touch b.ts?')
+  expect(t.ask?.text).toContain('needs to change files')
+  expect(t.ask?.lead?.text).toBe('May T-1 touch b.ts?')
   const asks = taskAsks(t)!
   expect(asks.text).toBe('May T-1 touch b.ts?')
   expect(asks.choices).toEqual(['Allow', "Don't allow", 'Answer…'])
@@ -510,7 +512,7 @@ test("a tied pop-up for a file request puts the lead's wording on the task: it s
   await allowAskedFiles(w.host, 'T-1')
   const after = w.board().tasks[0]!
   expect(after.files).toContain('b.ts')
-  expect(after.question_lead).toBeUndefined()
+  expect(after.ask).toBeUndefined()
 })
 
 test("a worker's question with options shows the lead's question and options, an answer is that option's text, and the lead's text goes when answered", async () => {
@@ -526,8 +528,7 @@ test("a worker's question with options shows the lead's question and options, an
   await runTool(w.host, 'change', { task: 'T-1', answer: 'Navy' })
   const after = w.board().tasks[0]!
   expect(after.status).not.toBe('waiting')
-  expect(after.question_lead).toBeUndefined()
-  expect(after.options_lead).toBeUndefined()
+  expect(after.ask).toBeUndefined()
   expect(after.history.map(h => h.text).join('\n')).toContain('Navy')
 })
 
@@ -538,19 +539,19 @@ test("a tied pop-up keeps the task's waiting time, and a second one without opti
   void popupCall(w.host, undefined, { questions: [ask('Which color?', ['Crimson', 'Navy'], { header: 'T-1' })] }, d.open, w.notice)
   await pause(0)
   expect(w.board().tasks[0]!.updated_at).toBe(ISO)
-  expect(w.board().tasks[0]!.options_lead).toEqual(['Crimson', 'Navy'])
+  expect(w.board().tasks[0]!.ask?.lead?.options).toEqual(['Crimson', 'Navy'])
   const d2 = dialog()
   void popupCall(w.host, undefined, { questions: [{ question: 'Tell me in your words', header: 'T-1', options: [], multiSelect: false }] }, d2.open, w.notice)
   await pause(0)
   const t = w.board().tasks[0]!
-  expect(t.question_lead).toBe('Tell me in your words')
-  expect(t.options_lead).toBeUndefined()
+  expect(t.ask?.lead?.text).toBe('Tell me in your words')
+  expect(t.ask?.lead?.options).toBeUndefined()
   expect(t.updated_at).toBe(ISO)
 })
 
 // T-801: the NEEDS YOU row keeps the lead's wording whole (the task id is not cut out of it)
 test("the NEEDS YOU row for a more-time task shows the lead's text whole", () => {
-  const t = { id: 'T-1', title: 'x', status: 'doing', live: { time_ask: 'over' }, question_lead: 'Give T-1 more time?', started_at: new Date(Date.now() - 3600_000).toISOString(), created_at: new Date().toISOString(), updated_at: new Date().toISOString() } as never
+  const t = { id: 'T-1', title: 'x', status: 'doing', live: { time_ask: 'over' }, ask: { by: 'symcc', text: 'more time?', asked_at: 'over', lead: { text: 'Give T-1 more time?' } }, started_at: new Date(Date.now() - 3600_000).toISOString(), created_at: new Date().toISOString(), updated_at: new Date().toISOString() } as never
   const need = liveNeeds({ tasks: [t], questions: [] } as never, Date.now(), 200).find(x => x.id === 'T-1')
   expect(need?.segs.map(s => s.text).join('')).toBe('⚠ T-1 Give T-1 more time?')
 })

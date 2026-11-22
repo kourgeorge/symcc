@@ -6,14 +6,15 @@ import { LIVE_SECTIONS, liveNeeds, segText } from '../hooks/core/live'
 import { textWidth } from '../hooks/core/stats'
 import { vsHref } from '../hooks/claude/ui/vscode'
 import { PANE, T0, seedBoard } from './board-fixture'
+import { askShape } from './ask-shape'
 
 const iso = (minAgo: number) => new Date(T0 - minAgo * 60_000).toISOString()
-const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', question: null, order: Number(id.slice(2)), after: [], attempts: 1, history: [], branch: null, created_at: iso(300), updated_at: iso(1), ...x })
+const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', order: Number(id.slice(2)), after: [], attempts: 1, history: [], branch: null, created_at: iso(300), updated_at: iso(1), ...askShape(x) })
 const QUESTION = { id: 'Q-88', text: "Which figures should go on the Today section's 4th line?", options: [], asked_at: iso(5) }
 const RUNNING = task('T-760', 'A running one', { runs: [{ started: iso(4) }] })
 const REVIEW = task('T-749', 'Website home page: a live, played-out demo of the board with a long title that has to be cut', { status: 'review', updated_at: iso(3), runs: [{ started: iso(20), ended: iso(3) }] })
 const ASKS = task('T-751', 'A button key', { status: 'waiting', question: 'Claude Code only lets a button key be one letter, which one?', updated_at: iso(2), runs: [{ started: iso(20), ended: iso(2) }] })
-const liveView = (tasks: unknown[], questions: unknown[] = []) => ({ shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', branch: 'main', test_commands: ['npm test'], driving: true, checker: true, max_parallel: 3, ...(questions.length ? { questions } : {}) } })
+const liveView = (tasks: unknown[], questions: unknown[] = []) => ({ shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', home_branch: 'main', test_commands: ['npm test'], driving: true, checker: true, max_parallel: 3, ...(questions.length ? { questions } : {}) } })
 const ALL = [RUNNING, REVIEW, ASKS]
 
 type Node = { type?: string; props?: Record<string, unknown>; children?: unknown[] }

@@ -2,18 +2,18 @@
 // the board file (board.questions), so they don't scroll away in the chat. Open ones show in the board panel's
 // "Questions for you" list, in the band and in the status line; an answer (on the board or in the chat) closes one,
 // and it stays in the file as history.
+import type { SymccAsk } from '../../types'
 import { clean, squash } from './text'
 
-/** One question for the owner. `answer` and `answered_at` are set once it is closed; `dropped` when the lead took it back. */
-export type OwnerQuestion = {
+/**
+ * One question for the owner: the one Ask record (see SymccAsk in types) with an id. `by` is 'lead'. `answer` and
+ * `answered_at` are set once it is closed; `dropped` when the lead took it back.
+ */
+export type OwnerQuestion = SymccAsk & {
   /** "Q-3" */
   id: string
-  text: string
-  /** 2 to 6 short choices; the owner may also type their own answer */
+  /** 2 to 6 short choices (always a list here, maybe empty in an old file); the owner may also type their own answer */
   options: string[]
-  asked_at: string
-  answer?: string
-  answered_at?: string
   /** where the answer came from: the board's buttons or box, or the chat (the lead put it in) */
   answered_by?: 'board' | 'chat'
   /** the lead took the question back (action drop) */
@@ -21,6 +21,36 @@ export type OwnerQuestion = {
   /** why it was dropped, when it wasn't the lead's own drop (T-753: "the owner turned the question down in the chat") */
   drop_note?: string
 }
+
+const strs = (v: unknown): string[] | undefined => (Array.isArray(v) && v.every(x => typeof x === 'string') ? (v as string[]) : undefined)
+
+/** `v` as one Ask record (see SymccAsk), with only the fields it may hold; undefined when it is not one. */
+export function cleanAsk(v: unknown): SymccAsk | undefined {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return undefined
+  const r = v as Record<string, unknown>
+  if (typeof r.text !== 'string' || !(r.by === 'worker' || r.by === 'lead' || r.by === 'symcc')) return undefined
+  const a: SymccAsk = { by: r.by, text: r.text, asked_at: typeof r.asked_at === 'string' ? r.asked_at : '' }
+  const options = strs(r.options)
+  if (options?.length) a.options = options
+  const files = strs(r.files)
+  if (files?.length) a.files = files
+  if (typeof r.answer === 'string') a.answer = r.answer
+  if (typeof r.answered_at === 'string' && r.answered_at) a.answered_at = r.answered_at
+  const lead = r.lead
+  if (lead && typeof lead === 'object' && !Array.isArray(lead) && typeof (lead as { text?: unknown }).text === 'string' && (lead as { text: string }).text.trim()) {
+    const lo = strs((lead as { options?: unknown }).options)
+    a.lead = { text: (lead as { text: string }).text, ...(lo?.length ? { options: lo } : {}) }
+  }
+  return a
+}
+
+/** An Ask record (see SymccAsk) made by `by` at `at`; empty options and files are left out. */
+export function makeAsk(by: SymccAsk['by'], text: string, at: string, extra: { options?: readonly string[]; files?: readonly string[] } = {}): SymccAsk {
+  return { by, text, asked_at: at, ...(extra.options?.length ? { options: [...extra.options] } : {}), ...(extra.files?.length ? { files: [...extra.files] } : {}) }
+}
+
+/** What the owner is shown of an ask: the lead's own wording (T-801) when it has one, else the asker's text. */
+export const askText = (a: Pick<SymccAsk, 'text' | 'lead'> | null | undefined): string => a?.lead?.text || a?.text || ''
 
 /** The fewest and most choices a question may have. */
 export const QUESTION_OPTIONS = { min: 2, max: 6 } as const
@@ -65,7 +95,8 @@ export function cleanQuestions(v: unknown): OwnerQuestion[] | undefined {
     const id = normQid(r.id)
     if (!/^Q-\d+$/.test(id) || seen.has(id) || typeof r.text !== 'string') continue
     seen.add(id)
-    const q: OwnerQuestion = { id, text: r.text, options: Array.isArray(r.options) ? r.options.filter((o): o is string => typeof o === 'string') : [], asked_at: typeof r.asked_at === 'string' ? r.asked_at : '' }
+    const base = cleanAsk({ ...r, by: 'lead' }) ?? { by: 'lead' as const, text: r.text, asked_at: '' }
+    const q: OwnerQuestion = { ...base, id, options: base.options ?? [] }
     if (typeof r.answer === 'string') q.answer = r.answer
     if (typeof r.answered_at === 'string' && r.answered_at) q.answered_at = r.answered_at
     if (r.answered_by === 'board' || r.answered_by === 'chat') q.answered_by = r.answered_by
@@ -101,7 +132,7 @@ export function addQuestion<B extends WithQuestions>(b: B, text: unknown, option
   if (opts.length < QUESTION_OPTIONS.min || opts.length > QUESTION_OPTIONS.max)
     throw new Error(`options: give ${QUESTION_OPTIONS.min} to ${QUESTION_OPTIONS.max} short choices (the owner can always type their own answer too); got ${opts.length}`)
   const n = nextNumber(b)
-  const q: OwnerQuestion = { id: `Q-${n}`, text: words, options: opts, asked_at: at }
+  const q: OwnerQuestion = { id: `Q-${n}`, by: 'lead', text: words, options: opts, asked_at: at }
   return [{ ...b, questions: trimmed([...(b.questions ?? []), q]), next_question: n + 1 }, q]
 }
 
@@ -132,7 +163,7 @@ export function dropQuestion<B extends WithQuestions>(b: B, id: unknown, at: str
 }
 
 /** One question as a line: "Q-3 Raise the version? (Yes | No)". */
-export const questionLine = (q: OwnerQuestion) => `${q.id} ${q.text}${q.options.length ? ` (${q.options.join(' | ')})` : ''}`
+export const questionLine = (q: OwnerQuestion) => `${q.id} ${q.text}${q.options?.length ? ` (${q.options.join(' | ')})` : ''}`
 
 /** How a closed question ended, in a few words: 'answered on the board: "Yes"', 'dropped'. */
 export function closedText(q: OwnerQuestion): string {

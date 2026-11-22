@@ -16,7 +16,7 @@ const R2 = '.symcc/reports/T-1-try-2.md'
 
 const task = (status: SymccTask['status'], extra: Partial<SymccTask> & Record<string, unknown> = {}): SymccTask =>
   ({
-    id: 'T-1', title: 'Fix the login', details: '## Goal\n- Check `hooks/a.ts`\nDone when: T-2 passes', files: ['hooks/'], status, note: '', question: null, order: 1, after: [], attempts: 0,
+    id: 'T-1', title: 'Fix the login', details: '## Goal\n- Check `hooks/a.ts`\nDone when: T-2 passes', files: ['hooks/'], status, note: '', order: 1, after: [], attempts: 0,
     history: [], branch: null, created_at: iso(NOW - 3_600_000), updated_at: iso(NOW - 60_000), ...extra,
   }) as SymccTask
 
