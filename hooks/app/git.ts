@@ -50,6 +50,9 @@ export async function homeBranch($: Host): Promise<string> {
   return startBranch(await currentBranch($), origin, await branchList($))
 }
 
+/** Whether `git --version` output says the Mac's command-line tools are missing (the /usr/bin/git stub). */
+export const macToolsMissing = (out: string) => /xcrun: error: invalid active developer path|No developer tools were found|requires the command line developer tools/i.test(out)
+
 /** Looks whether git is installed, the project is inside a git work tree, and it has a commit. */
 export async function probeGit($: Host): Promise<GitState> {
   if (!S.root) return 'ok'
@@ -66,7 +69,8 @@ export async function probeGit($: Host): Promise<GitState> {
   let missing = false
   try {
     v = await git($, ['--version'], S.root, 15_000)
-    missing = v.exitCode === 127
+    // T-861: the macOS /usr/bin/git stub without the command-line tools exits 1 with an xcrun message: git is missing too
+    missing = v.exitCode === 127 || (v.exitCode !== 0 && v.exitCode !== 124 && macToolsMissing(`${v.stderr}\n${v.stdout}`))
     if (v.exitCode === 124) v = null
   } catch (err) {
     const msg = err instanceof Error ? `${(err as { code?: string }).code ?? ''} ${err.message}` : String(err)

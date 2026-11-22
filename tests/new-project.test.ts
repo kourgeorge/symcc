@@ -13,7 +13,7 @@ import { fakeHost, memoryFs, done } from './fake-host'
 
 const ROOT = '/repo'
 
-function world(id: string, root = ROOT, repoRoot = root, machine: { uname?: string; noGit?: boolean; repo?: { on: boolean } } = {}) {
+function world(id: string, root = ROOT, repoRoot = root, machine: { uname?: string; noGit?: boolean; macStub?: boolean; noBrew?: boolean; repo?: { on: boolean } } = {}) {
   const files = new Map<string, string>()
   const opened: string[] = []
   const ran: { args: string; cwd?: string }[] = []
@@ -23,8 +23,9 @@ function world(id: string, root = ROOT, repoRoot = root, machine: { uname?: stri
     run: async (argv, init) => {
       const [cmd, ...rest] = argv
       if (cmd === 'uname') return machine.uname ? done({ stdout: machine.uname + '\n' }) : done({ exitCode: 127 })
-      if (cmd === 'sh' && machine.uname) return done({ exitCode: ['brew', 'apt-get'].includes(rest[rest.length - 1]!) ? 0 : 1 })
+      if (cmd === 'sh' && machine.uname) return done({ exitCode: (machine.noBrew ? ['apt-get'] : ['brew', 'apt-get']).includes(rest[rest.length - 1]!) ? 0 : 1 })
       if (cmd === 'git' && machine.noGit) return done({ exitCode: 127, stderr: 'git: command not found' })
+      if (cmd === 'git' && machine.macStub) return done({ exitCode: 1, stderr: 'xcrun: error: invalid active developer path (/Library/Developer/CommandLineTools), missing xcrun at: /Library/Developer/CommandLineTools/usr/bin/xcrun\n' })
       if (cmd === 'git' && machine.repo?.on && rest[0] === 'rev-parse') return done({ stdout: rest.includes('--show-toplevel') ? `${root}\n` : rest.includes('--show-cdup') ? '\n' : rest.includes('HEAD') ? 'abc\n' : 'true\n' })
       if (cmd === 'git' && rest[0] === 'init') machine.repo = { on: true }
       if (cmd === 'git') ran.push({ args: argv.slice(1).join(' '), cwd: init?.cwd })
@@ -198,6 +199,21 @@ test('T-861: with git missing the board says git is not installed and gives the 
   expect(gitInstallStep({ os: 'windows' })).toBe('winget install --id Git.Git')
   expect(gitInstallStep({ os: 'linux', linux: 'dnf' })).toBe('sudo dnf install git')
   expect(gitInstallStep({ os: 'linux', linux: 'pacman' })).toBe('sudo pacman -S git')
+})
+
+test('T-861: on a Mac without the command-line tools, the /usr/bin/git stub (exit 1, xcrun message) counts as git not installed, with the xcode-select step', async () => {
+  const w = world('a', '/home/me/proj', '/home/me', { uname: 'Darwin', macStub: true, noBrew: true })
+  S.gitState = 'ok'
+  S.toldGit = 'ok'
+  S.gitInstall = ''
+  await sessionStart(w.host)
+  await runCommand(w.host, 'symcc-init', '')
+  expect(w.files.has('/home/me/proj/.symcc/board.json')).toBe(true)
+  expect(S.gitState).toBe('no-git')
+  const view = w.panel.view() as unknown as { git_state: string; git_install: string }
+  expect(view.git_state).toBe('no-git')
+  expect(view.git_install).toBe('xcode-select --install')
+  expect(w.toLead.join('\n') + (takeBoardUpdate() ?? '')).toContain('xcode-select --install')
 })
 
 test('T-861: with no tasks, the regular check sees git come back: not installed, then no repo here, then clear; Check again does the same', async () => {
