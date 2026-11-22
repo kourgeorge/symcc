@@ -2989,7 +2989,8 @@ test('T-767: the OpenCode Live tab indents by 1 under the headings; a running la
     // T-777: only "▶ " and the id are bold accent; the title is normal text
     expect(run.map(x => [x.color, !!x.bold])).toEqual([['claude', true], ['claude', true], ['text', false]])
     const train = d.lines[texts.findIndex(x => x.includes('└─◇ T-714'))]!.filter(x => x.text.trim())
-    expect(train.map(x => [x.text, x.color, !!x.bold])).toEqual(train.map(x => [x.text, 'inactive', false]))
+    // T-819: a waiting train's id is accent, the rest of its row dim
+    expect(train.map(x => [x.text, x.color, !!x.bold])).toEqual(train.map(x => (x.text.trim() === 'T-714' ? [x.text, 'claude', true] : [x.text, 'inactive', false])))
     expect(texts[texts.findIndex(x => x.startsWith('TODAY ─')) + 2]?.startsWith(' ✓ ')).toBe(true)
   }
 })

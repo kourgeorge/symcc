@@ -356,13 +356,13 @@ export function liveHeaderSegs(view: LiveView & { scouts_running?: readonly Live
 export const liveBlink = (frame: number, steady = false): string => (steady || frame % 2 === 0 ? '◉' : '◎')
 
 /** How a lane's text is colored: each client picks its own colors for these. */
-export type LiveTone = 'id' | 'title' | 'passed' | 'current' | 'future' | 'text' | 'dim' | 'warning' | 'bar' | 'heading' | 'mark' | 'run' | 'wait' | 'now' | TodayWho
+export type LiveTone = 'id' | 'title' | 'passed' | 'current' | 'future' | 'text' | 'dim' | 'warning' | 'bar' | 'heading' | 'mark' | 'run' | 'wait' | 'topic' | 'now' | TodayWho
 /** A piece of a lane's line in one tone. */
 export type LiveSeg = { text: string; tone: LiveTone }
 /** Each tone's color name, the same in every client; a section heading ("▍Tasks") and (T-760) the agent mark "✧" have
  *  the task page's heading color. T-767: a running lane's "▶ " and id are 'run' (bold, the accent color; its title is normal text); a
- *  waiting train's id and title are 'wait' (dim, as the rest of its row). */
-export const LIVE_TONE: Record<LiveTone, string> = { id: 'claude', title: 'text', passed: 'success', current: 'ide', future: 'inactive', text: 'text', dim: 'inactive', warning: 'warning', bar: 'ide', heading: 'suggestion', mark: 'suggestion', run: 'claude', now: 'claude', wait: 'inactive', workers: 'ide', checkers: 'autoAccept', scouts: 'suggestion', lead: 'success' }
+ *  waiting train's id is 'run' too (T-819) and its title 'wait' (dim, as the rest of its row); an org-mem topic is 'topic' (blue, T-819). */
+export const LIVE_TONE: Record<LiveTone, string> = { id: 'claude', title: 'text', passed: 'success', current: 'ide', future: 'inactive', text: 'text', dim: 'inactive', warning: 'warning', bar: 'ide', heading: 'suggestion', mark: 'suggestion', run: 'claude', now: 'claude', wait: 'inactive', topic: 'ide', workers: 'ide', checkers: 'autoAccept', scouts: 'suggestion', lead: 'success' }
 /** Whether a tone is drawn bold. */
 export const liveBold = (tone: LiveTone): boolean => tone === 'id' || tone === 'current' || tone === 'heading' || tone === 'run'
 /** T-771: the mark at a finished lane's last station. */
@@ -681,7 +681,7 @@ function trainLine(x: LiveTrain, depth: number, width: number): LiveSeg[] {
   const tries: { also: string; waits: string }[] = []
   for (const waits of ['  waits', '']) for (const also of alsos) tries.push({ also, waits })
   const make = (t: { also: string; waits: string }, titleW: number): LiveSeg[] =>
-    segs({ text: lead, tone: 'dim' }, { text: x.id, tone: 'wait' }, titleW > 0 && { text: ` ${cutTitle(x.title, titleW)}`, tone: 'wait' }, { text: t.waits, tone: 'dim' }, { text: t.also, tone: 'dim' })
+    segs({ text: lead, tone: 'dim' }, { text: x.id, tone: 'run' }, titleW > 0 && { text: ` ${cutTitle(x.title, titleW)}`, tone: 'wait' }, { text: t.waits, tone: 'dim' }, { text: t.also, tone: 'dim' })
   for (const least of [8, 3])
     for (const t of tries) {
       const room = width - textWidth(lead + x.id + t.waits + t.also) - 1
@@ -1095,7 +1095,7 @@ function newestLines(notes: readonly OrgMemNote[], width: number): { note: OrgMe
     segs: segs(
       { text: lead, tone: 'text' },
       { text: padWidth(orgMemShortDay(note.date), dayW), tone: 'dim' },
-      { text: `  ${padWidth(fitText(note.topic, topicW), topicW)}`, tone: note.topic === TOPIC_UNSORTED ? 'dim' : 'id' },
+      { text: `  ${padWidth(fitText(note.topic, topicW), topicW)}`, tone: note.topic === TOPIC_UNSORTED ? 'dim' : 'topic' },
       { text: `  ${fitText(note.text, textW)}`, tone: 'text' },
     ),
   }))
@@ -1129,7 +1129,7 @@ export function topicGrid(topics: readonly { topic: string; count: number }[], w
       topic: x.topic,
       count: x.count,
       segs: [
-        { text: `${c ? GRID_GAP : GRID_LEAD}${padWidth(fitText(x.topic, nameW[c]!), nameW[c]!)}`, tone: x.topic === TOPIC_UNSORTED ? 'dim' : 'text' },
+        { text: `${c ? GRID_GAP : GRID_LEAD}${padWidth(fitText(x.topic, nameW[c]!), nameW[c]!)}`, tone: x.topic === TOPIC_UNSORTED ? 'dim' : 'topic' },
         { text: `  ${String(x.count).padStart(countW[c]!)}`, tone: 'dim' },
       ],
     })
