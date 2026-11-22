@@ -4,10 +4,11 @@
 // file only draws its segments and wires the keys (↑↓ between lanes, Enter opens the task, w watches its worker).
 // Claude Code doesn't say whether the person asked for reduced motion, so the current station always blinks: it
 // changes between ◉ and ◎ every LIVE_TICK_MS, and while the tab is shown it is redrawn that often.
-// T-687, T-718: at its bottom, just above the key hints, the Organizational memory section (core's liveOrgMem): a
+// T-687, T-718: at its bottom, just above the footer, the Organizational memory section (core's liveOrgMem): a
 // header with the count and a fill bar, the 3 newest notes and the topics with their counts. Enter on a topic opens
 // the Organizational memory page (orgmem.tsx; VS Code's: vscode-orgmem.tsx) filtered to it, Enter on a newest note
-// opens all notes with that note focused, m opens all notes; the page's Back comes back here.
+// opens all notes with that note focused, the "[all]" button next to "newest" opens all notes (T-866: no key hint
+// line and no m key); the page's Back comes back here.
 // T-715: under each lane hang its waiting trains (core's liveTrains and trainRows), each one a row Button that opens its task.
 // T-727: under the lanes, the Branches section (core's liveBranches): main's latest commits and a row per open task's
 // branch (commits ahead, how far behind), each task row a row Button that opens its task.
@@ -19,7 +20,7 @@ import { S, workers } from '../../app/state'
 import { type $, panelValues } from '../panel'
 import type { PaneParts } from './parts'
 import { arrows, row, saysArrowsMove } from './arrows'
-import { ORG_MEM_KEY, type OrgMemNote } from '../../core/org-mem'
+import type { OrgMemNote } from '../../core/org-mem'
 import { orgMemView } from '../../app/org-mem'
 
 /** How often the Live tab is redrawn while it is shown (its blink and its times). */
@@ -73,6 +74,8 @@ export const orgMemPick = { topic: null as string | null, note: null as OrgMemNo
 /** The key of a newest note's row in the Live tab's org-mem section, and of a topic's cell (T-718). */
 export const newestKey = (n: number) => `live-om-note:${n}`
 export const topicKey = (topic: string) => `live-om-topic:${topic}`
+/** T-866: the key of the "[all]" button next to the section's "newest" (opens all notes). */
+export const ORG_MEM_ALL_KEY = 'live-om-all'
 
 /** Opens the Organizational memory page over the Live tab (its Back, resetOrgMemView, comes back to the tab): all
  *  notes, or (T-718) topic `topic`'s, with the focus on note `note` when given. */
@@ -185,12 +188,17 @@ export function livePage($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
       ))}
       <Box key="live-keys" display="none">
         <Button key="live-watch" label="w" hotkey="w" onPress={watch} />
-        <Button key="live-orgmem" label={ORG_MEM_KEY} hotkey={ORG_MEM_KEY} onPress={openOrgMemPage($)} />
       </Box>
       <Text key="live-om-blank"> </Text>
       <Text key="live-om-head">{draw(om.head)}</Text>
       <Text key="live-om-under"> </Text>
-      <Text key="live-om-newest" color={C('inactive')}>{LIVE_INDENT + om.newestLabel}</Text>
+      {/* T-866: "  newest [all]": the [all] header button (plain, framed like the board's others) opens all notes; ↑↓ reach it */}
+      <Box key="live-om-newest-row" flexDirection="row">
+        <Text key="live-om-newest" color={C('inactive')}>{LIVE_INDENT + om.newestLabel + ' '}</Text>
+        <Button key={row(ORG_MEM_ALL_KEY)} plain label={om.all.label} onPress={openOrgMemPage($)}>
+          <Text color={C('text')}>{om.all.text}</Text>
+        </Button>
+      </Box>
       {om.empty ? <Text key="live-om-empty" color={C('inactive')}>{LIVE_INDENT + om.empty}</Text> : null}
       {om.newest.map(x => (
         <Button key={row(newestKey(x.note.n))} plain onPress={openOrgMemPage($, null, x.note)}>
@@ -206,9 +214,6 @@ export function livePage($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
             </Button>
           ))}
         </Box>
-      ))}
-      {om.keys.map((k, i) => (
-        <Text key={`live-om-keys-${i}`} color={C('inactive')}>{LIVE_INDENT + k}</Text>
       ))}
       <Text key="live-foot-rule" color={C('subtle')}>{footerRule(width)}</Text>
       {keyLines(liveKeys(), 'live-hint')}

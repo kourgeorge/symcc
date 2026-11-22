@@ -1957,7 +1957,7 @@ function orgMemViewFile(text = `- 2026-11-18: run one test file\n- written by ha
   return { ...f, view: { ...f.view, org_mem: orgMemNotes(text) } }
 }
 
-test('T-619, T-687: the Settings tab has no org-mem row; the Live tab ends with the Organizational memory button (count, key m) just above the footer; its page lists the notes newest first with their date; an empty one says "No notes yet."', () => {
+test('T-619, T-687: the Settings tab has no org-mem row; the Live tab ends with the Organizational memory section (count, "newest [all]"; T-866: no key hint line, no m key) just above the footer; its page lists the notes newest first with their date; an empty one says "No notes yet."', () => {
   const f = orgMemViewFile()
   // the notes ride in the view file
   expect(parseViewFile(viewFileText(f))!.view.org_mem).toEqual(f.view.org_mem)
@@ -1968,14 +1968,19 @@ test('T-619, T-687: the Settings tab has no org-mem row; the Live tab ends with 
   expect(settings.ids).not.toContain('orgmem')
   expect(panelLines(f, { tab: 'settings', opened: '', cursor: 0 }, NOW, 200).lines.map(lineText).find(l => l.includes('Workers'))).not.toContain('org-mem')
   expect(hasPage(f, 'orgmem', 'settings')).toBe(false)
-  // the Live tab (T-718): the org-mem section ends the body, right above the footer; a click on its header presses m
+  // the Live tab (T-718): the org-mem section ends the body, right above the footer
   const live = panelLines(f, { tab: 'live', opened: '', cursor: 0 }, NOW, 140)
   const ll = live.lines.map(lineText)
   const head = ll.findIndex(l => l.startsWith('ORGANIZATIONAL MEMORY'))
   expect(ll[head]).toContain('3 / 60')
-  expect(live.lines[head]!.find(x => x.text === 'ORGANIZATIONAL MEMORY')?.hit).toEqual({ key: 'm' })
-  expect(ll[live.lines.length - live.footer - 1]).toBe(`${LIVE_INDENT}  ↑↓ move · Enter open topic · m all notes`)
-  expect(panelKeys(f, '', 'live').map(k => `${k.key} ${k.word}`)).toContain('m org-mem')
+  // T-866: no key hint line ("↑↓ move · Enter open topic · m all notes") and no m key; "[all]" next to "newest" opens all notes
+  expect(ll.some(l => l.includes('Enter open topic') || l.includes('m all notes'))).toBe(false)
+  expect(panelKeys(f, '', 'live').map(k => `${k.key} ${k.word}`)).not.toContain('m org-mem')
+  expect(panelKeys(f, '', 'live').some(k => k.key === 'm')).toBe(false)
+  const newestRow = ll.findIndex(l => l.endsWith('newest [all]'))
+  expect(newestRow).toBe(head + 2)
+  expect(live.lines[newestRow]!.find(x => x.text === '[all]')?.hit).toEqual({ open: 'om-all' })
+  expect(live.ids.filter(x => x.startsWith('om-'))[0]).toBe('om-all')
   expect(hasPage(f, 'orgmem', 'live')).toBe(true)
   // the page: title, what it is, the notes newest first (number, task id, date, then the text)
   const page = panelLines(f, { tab: 'live', opened: 'orgmem', cursor: 0 }, NOW, 140)
@@ -2002,7 +2007,7 @@ test('T-619, T-687: the Settings tab has no org-mem row; the Live tab ends with 
   expect(actionCommand({ kind: 'orgmem-delete', n: 3, key: 'a1b2c3' })).toEqual({ name: 'symcc-settings', text: 'orgmem delete 3 a1b2c3' })
 })
 
-test('T-619, T-687: startTui: the Live tab\'s Organizational memory button (and m) opens the page; x on a note asks, Yes sends /symcc-settings orgmem delete N, Cancel sends nothing; b returns to the Live tab', async () => {
+test('T-619, T-687: startTui: the Live tab\'s "[all]" button (T-866: not m) opens the page; x on a note asks, Yes sends /symcc-settings orgmem delete N, Cancel sends nothing; b returns to the Live tab', async () => {
   const f = orgMemViewFile()
   const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)]])
   const sent: { sessionID: string; name: string; text: string }[] = []
@@ -2027,14 +2032,11 @@ test('T-619, T-687: startTui: the Live tab\'s Organizational memory button (and 
   const panel = slots.find(s => s.append === 'session.panel')!.render({ name: BOARD_PANEL, sessionID: 'ses_1', width: 142, focused: true, close: () => undefined } as never) as El
   const lines = () => rowEls(panel).map(r => r.text)
   const clickRow = (has: string) => (rowEls(panel).find(r => r.text.includes(has))!.el.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0 })
-  // the key m on the Live tab opens it, and so does a click on the section's header (T-718)
+  // T-866: the key m on the Live tab no longer opens it; a click on the "[all]" next to "newest" does
   await board.press('l', 'ses_1')
   await board.press('m', 'ses_1')
-  expect([board.state().tab, board.state().opened]).toEqual(['live', 'orgmem'])
-  await board.press('back', 'ses_1')
   expect([board.state().tab, board.state().opened]).toEqual(['live', ''])
-  // the header's title is a piece of its line that a click presses
-  const seg = rowEls(panel).flatMap(r => r.segs).find(x => x.kids?.join('') === 'ORGANIZATIONAL MEMORY')
+  const seg = rowEls(panel).flatMap(r => r.segs).find(x => x.kids?.join('') === '[all]')
   ;(seg!.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0, stopPropagation: () => undefined })
   expect([board.state().tab, board.state().opened]).toEqual(['live', 'orgmem'])
   expect(lines().some(l => l.includes('#3 · 2026-11-20'))).toBe(true)
@@ -2077,7 +2079,7 @@ test('T-718: OpenCode: the Live tab\'s org-mem section draws the header, the 3 n
     expect(head > 0).toBe(true)
     expect(textWidthOf(ls[head]!)).toBe(w)
     expect(ls[head + 1]!.trim()).toBe('')
-    expect(ls[head + 2]).toBe('   newest')
+    expect(ls[head + 2]).toMatch(/^[ ›] {2}newest \[all\]$/)
     expect(ls[head + 3]).toMatch(/^[ ›] {3}— +unsorted {2}a note written/)
     expect(ls[head + 4]).toMatch(/^ {4}11-21 {2}git +Use a plain path/)
     expect(ls[head + 5]).toMatch(/^ {4}11-21 {2}tests +In tests, put/)
@@ -2087,17 +2089,18 @@ test('T-718: OpenCode: the Live tab\'s org-mem section draws the header, the 3 n
     expect(colorOfText(head + 4, 'git')).toBe('ide')
     expect(colorOfText(head + 5, 'tests')).toBe('ide')
     expect(colorOfText(head + 3, 'unsorted')).toBe('inactive')
-    const gridSegs = d.lines.slice(head + 7, head + 7 + ls.slice(head + 7).findIndex(l => l.startsWith('   ↑↓ move'))).flat()
+    const gridEnd = ls.findIndex((l, i) => i >= head + 7 && !l.startsWith('    '))
+    const gridSegs = d.lines.slice(head + 7, gridEnd).flat()
     expect(gridSegs.find(s => s.text.trim() === 'tests')?.color).toBe('ide')
     expect(gridSegs.find(s => s.text.trim() === 'unsorted')?.color).toBe('inactive')
-    const grid = ls.slice(head + 7, ls.findIndex(l => l.startsWith('   ↑↓ move')))
+    const grid = ls.slice(head + 7, gridEnd)
     expect(grid.join(' ')).toMatch(/tests +3/)
     expect(grid.join(' ')).toMatch(/git +2/)
     expect(grid.join(' ')).toMatch(/vs code · panel +1/)
     // unsorted last
     expect(grid.at(-1)).toMatch(/unsorted +1$/)
     if (w === 100) expect(grid.length).toBeLessThan(5)
-    expect(d.ids.filter(x => x.startsWith('om-'))).toEqual(['om-note:8', 'om-note:7', 'om-note:6', 'om-topic:tests', 'om-topic:git', 'om-topic:opencode', 'om-topic:vs code · panel', 'om-topic:unsorted'])
+    expect(d.ids.filter(x => x.startsWith('om-'))).toEqual(['om-all', 'om-note:8', 'om-note:7', 'om-note:6', 'om-topic:tests', 'om-topic:git', 'om-topic:opencode', 'om-topic:vs code · panel', 'om-topic:unsorted'])
   }
   // a topic's page: its title and only its notes, newest first
   const page = panelLines(f, { tab: 'live', opened: 'orgmem:tests', cursor: 0 }, NOW, 100)
@@ -2162,6 +2165,20 @@ test('T-718: startTui: Enter on a topic opens its notes\' page, b returns to the
   await board.press('open', 'ses_1')
   expect(board.state().opened).toBe('orgmem')
   expect(lines().some(l => l.startsWith('› #7 ·'))).toBe(true)
+  // T-866: m no longer opens all notes; Enter on "[all]" (next to "newest") and a click on it do
+  await board.press('back', 'ses_1')
+  for (let i = 0; i < ids.length; i++) await board.press('up', 'ses_1')
+  await board.press('m', 'ses_1')
+  expect([board.state().tab, board.state().opened]).toEqual(['live', ''])
+  expect(lines().some(l => l.includes('Enter open topic'))).toBe(false)
+  for (let i = 0; i < ids.indexOf('om-all'); i++) await board.press('down', 'ses_1')
+  await board.press('open', 'ses_1')
+  expect(board.state().opened).toBe('orgmem')
+  expect(lines()).toContain('Organizational memory (org-mem)')
+  await board.press('back', 'ses_1')
+  const allSeg = rowEls(panel).flatMap(r => r.segs).find(x => (x.kids?.join('') ?? '') === '[all]')
+  ;(allSeg!.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0, stopPropagation: () => undefined })
+  expect(board.state().opened).toBe('orgmem')
   board.stop()
 })
 
@@ -2667,8 +2684,10 @@ test('T-685: in the TUI a click on each of those buttons does exactly what its k
   expect((await same(async () => (await toList(), await board.press('s', 's')), '[ Back (b) ]', 'back')).state.tab).toBe('tasks')
   expect((await same(() => toSettings(), '[ Back (b) ]', 'back')).state.tab).toBe('tasks')
   for (const row of ['4 roles', '2 kinds']) expect((await same(() => toSettings(row), '[ Back (b) ]', 'back')).state).toEqual({ ...board.state(), tab: 'settings', opened: '' })
-  const toOrgMem = async () => (await board.press('t', 's'), await board.press('l', 's'), await click('ORGANIZATIONAL MEMORY'))
-  expect((await same(async () => (await board.press('t', 's'), await board.press('l', 's')), 'ORGANIZATIONAL MEMORY', 'm')).state).toEqual({ ...board.state(), tab: 'live', opened: 'orgmem' })
+  // T-866: org-mem's "[all]" (no key: m is gone) opens all notes
+  const toOrgMem = async () => (await board.press('t', 's'), await board.press('l', 's'), await click('[all]'))
+  await toOrgMem()
+  expect(board.state()).toEqual({ ...board.state(), tab: 'live', opened: 'orgmem' })
   expect((await same(toOrgMem, '[Live]', 'back')).state).toEqual({ ...board.state(), tab: 'live', opened: '' })
   // org-mem's Delete (x): asks, then deletes the note under the cursor (the newest)
   expect((await same(toOrgMem, '[Delete]', 'x', { select: ['yes'] })).sent).toEqual([{ sessionID: 's', name: 'symcc-settings', text: `orgmem delete 3 ${orgMemNoteKey('the type check is separate')}` }])
@@ -2852,12 +2871,12 @@ test('T-692: the Live tab draws the terminal panel\'s lanes and today (core/live
       at = i
     }
     for (const t of texts) expect([w, t, t.length <= w]).toEqual([w, t, true])
-    expect(d.ids).toEqual(['need:T-601', 'T-611', 'T-612', 'T-610'])
+    expect(d.ids).toEqual(['need:T-601', 'T-611', 'T-612', 'T-610', 'om-all'])
     expect(texts.some(t => t.startsWith('▶ T-611') || t.includes('▶ T-611'))).toBe(true)
     // each lane's first line is a click on its task
     const lane = d.lines.findIndex((l, i) => lineText(l).includes('T-612') && !!d.hits[i])
     expect(d.hits[lane]).toEqual({ open: 'T-612' })
-    expect(d.keys.map(k => k.key)).toEqual(['↑↓', 'Enter', 'm', 'l t s c', 'Esc'])
+    expect(d.keys.map(k => k.key)).toEqual(['↑↓', 'Enter', 'l t s c', 'Esc'])
   }
   // the current station blinks with the clock
   const lineOf = (now: number) => panelLines(f, { tab: 'live', opened: '', cursor: 0 }, now, 120).lines.map(lineText).find(t => t.includes('T-611'))!
@@ -2915,7 +2934,7 @@ test('T-709: the Live tab shows a lane for an approved task in review while its 
   const d = panelLines(parseViewFile(viewFileText(f)), { tab: 'live', opened: '', cursor: 0 }, NOW, 120)
   const texts = d.lines.map(lineText)
   expect(texts.includes(LIVE_INDENT + LIVE_EMPTY)).toBe(false)
-  expect(d.ids).toEqual(['need:T-601', 'T-630'])
+  expect(d.ids).toEqual(['need:T-601', 'T-630', 'om-all'])
   const lane = liveLanes({ ...f.view, tasks }, NOW)
   // T-846: a task in review has a "you" station; once approved its lane sits past it, at merged
   expect(lane.map(l => l.station)).toEqual(['merged'])
@@ -3025,7 +3044,7 @@ test('T-715: the Live tab hangs the waiting trains under their lanes as the term
     const at = texts.findIndex(x => x.startsWith(`${LIVE_INDENT}▶ T-712 `))
     expect([w, texts.slice(at + 2, at + 2 + rows.length)]).toEqual([w, rows.map(r => LIVE_INDENT + segText(r.segs))])
     // the cursor stops: each lane, then its trains; a click on a train opens it
-    expect(d.ids).toEqual(['need:T-701', ...lanes.flatMap(l => [l.id, ...trainRows(t.lanes[l.id]!, liveInner(w)).flatMap(r => (r.id ? [r.id] : []))])])
+    expect(d.ids).toEqual(['need:T-701', ...lanes.flatMap(l => [l.id, ...trainRows(t.lanes[l.id]!, liveInner(w)).flatMap(r => (r.id ? [r.id] : []))]), 'om-all'])
     expect(d.hits[d.lines.findIndex(l => lineText(l).includes('└─◇ T-714'))]).toEqual({ open: 'T-714' })
     expect(texts.some(x => x.includes('next up'))).toBe(false)
     expect(texts[texts.findIndex(x => x.startsWith('TODAY ─')) + 2]?.startsWith(`${LIVE_INDENT}✓ `)).toBe(true)

@@ -184,7 +184,7 @@
     if (wide) {
       L.push('')
       L.push(liveHead('Organizational memory', '   ' + sp('60 / 60', 'dim'), '   60 / 60'), '')
-      L.push(sp('   newest', 'dim'))
+      L.push(sp('   newest ', 'dim') + '[all]')
       L.push('    ' + sp('11-21', 'dim') + '  ' + sp('ui · surfaces', 'topic') + '  ' + cut('VS Code board pages space their children with the page Box\'s gap={1}', 42))
       L.push('    ' + sp('11-21', 'dim') + '  ' + sp('probes       ', 'topic') + '  ' + cut('Draw the OpenCode panel from /tmp with bun: panelLines(view, …)', 42))
       L.push('    ' + sp('11-21', 'dim') + '  ' + sp('tests        ', 'topic') + '  ' + cut('In tests, put dates relative to now, never a fixed date', 42))
@@ -193,7 +193,7 @@
       L.push('    ' + sp('engine · hosts', 'topic') + ' ' + sp('5', 'dim') + '   ' + sp('snapshots', 'topic') + ' ' + sp('5', 'dim') + '   ' + sp('board data', 'topic') + ' ' + sp('3', 'dim') + '   ' + sp('site', 'topic') + ' ' + sp('3', 'dim'))
     }
     L.push('')
-    L.push(sp('↑↓ move · Enter open task · w watch worker · m org-mem · Esc close', 'dim'))
+    L.push(sp('↑↓ move · Enter open task · w watch worker · Esc close', 'dim'))
     return L.join('\n')
   }
 
