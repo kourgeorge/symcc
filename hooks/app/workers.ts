@@ -3,7 +3,7 @@ import { PREP_NOTE, makeAsk, type Board, type BoardTask, type RoleDef, roleSecti
 import { archiveOld } from './archive'
 import { checkHealth } from './health'
 import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch, clearScratch, taskBranch, copyReports, deleteMergedBranch, type BehindWhy } from './git'
-import { publish, drivesHere, drivenElsewhere } from './lead'
+import { publish, drivesHere, drivenElsewhere, readLeadText } from './lead'
 import { type BeforeLine, type CheckResult, checkAndMerge, recordCommits, ownerEdits, alreadyMerged, AGAIN_MAX, RELOAD_AGAIN, againsThisTry, noteAgain } from './review'
 import type { TurnLimit } from './merge-line'
 import { timedOutRetryNote } from '../core/test-timeout'
@@ -988,7 +988,7 @@ async function finishTail(host: Host, t: SymccTask, b: Board, r: CheckResult, ma
 export async function restartCheckers(host: Host, agents: HostAgent[]) {
   const b = await load(host).catch(() => null)
   if (!b || !onHere(b)) return
-  const live = liveDriver(await host.fs.read(path(S.N.leadFile)).catch(() => null), Date.now())
+  const live = liveDriver(await readLeadText(host), Date.now())
   const running = new Set([...checkerRuns.values()].map(r => r.task))
   const checkerAlive = (id: string) => agents.some(a => a.name === checkerName(S.N.name, id) && !stopped.has(a.id) && !ENDED_STATUSES.includes(a.status))
   const lost = b.tasks.filter(t => t.status === 'doing' && t.live?.phase === 'checker' && handedBack(t) && ownedHere(t, S.me, live) && !finishing.has(t.id) && !approving.has(t.id) && !starting.has(t.id) && !running.has(t.id) && !onPurpose.has(t.id) && ![...workers.values()].some(w => w.task === t.id) && !checkerAlive(t.id))
@@ -1720,7 +1720,7 @@ export function unclaimQueued(b: Board, me: string, live: string | null, at: str
 
 export async function sendBackIdle(host: Host, agents: HostAgent[]) {
   const mine = new Set([...workers.values()].map(w => w.task))
-  const live = liveDriver(await host.fs.read(path(S.N.leadFile)).catch(() => null), Date.now())
+  const live = liveDriver(await readLeadText(host), Date.now())
   const working = agents.filter(a => !stopped.has(a.id))
   const free = (t: BoardTask) => t.status === 'doing' && !mine.has(t.id) && !keptFor(t.id) && !starting.has(t.id) && !finishing.has(t.id) && !onPurpose.has(t.id) && !finishingNow(t, Date.now())
   // A handed-back worker's agent may stay listed (idle): it doesn't hold its task any more.

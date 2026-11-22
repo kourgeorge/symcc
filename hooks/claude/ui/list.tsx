@@ -1,10 +1,38 @@
 // The board panel's Tasks view: the list of tasks by section.
 import type { SymccTask } from '../../../types'
-import { isFinished, statusMark, archivedNote, archivedOf, localOffset, panelSections, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, groupLabel, ALL_CLEAR, rowStates, stateText, rowMark, TITLE_ROOM, fitRow, rowExtra, listKeys, searchTasks, SEARCH_WORDS, searchLine, searchBoxHint, questionsLabel, type OwnerQuestion, ownersTurn, shownStatus } from '../../board'
+import { isFinished, statusMark, archivedNote, archivedOf, localOffset, panelSections, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, groupLabel, ALL_CLEAR, rowStates, stateText, rowMark, TITLE_ROOM, fitRow, rowExtra, listKeys, searchTasks, SEARCH_WORDS, searchLine, searchBoxHint, questionsLabel, type OwnerQuestion, ownersTurn, shownStatus, LIST_TONE } from '../../board'
 import { openDays, S } from '../../app/state'
 import { type $, panelValues } from '../panel'
 import type { PaneParts } from './parts'
 import { row } from './arrows'
+
+/** What the terminal and VS Code lists both start from: the search (S.search) and the tasks it matches, split into
+ *  sections (old days of Done no longer listed leave openDays), and which folded groups are open (while filtering,
+ *  every group with a match is open, and the backlog shows all its matches). */
+export function listState($: $, pane: PaneParts) {
+  const { v, nowMs } = pane
+  const query = S.search?.text.trim() ?? ''
+  const filtering = query !== ''
+  const matching = filtering ? searchTasks(v.tasks, query, nowMs, v.archived_done) : v.tasks
+  const parts = panelSections(matching, nowMs, localOffset(nowMs))
+  if (!filtering) for (const d of [...openDays]) if (!parts.doneDays.some(g => g.day === d)) openDays.delete(d)
+  const toggleDay = (day: string) => () => {
+    if (openDays.has(day)) openDays.delete(day)
+    else openDays.add(day)
+    $.ui.invalidate('ui.render')
+  }
+  return {
+    query,
+    filtering,
+    matching,
+    parts,
+    backlogOpen: filtering || S.backlogOpen,
+    doneOpen: filtering || S.doneOpen,
+    droppedOpen: filtering || S.droppedOpen,
+    dayOpen: (day: string) => filtering || openDays.has(day),
+    toggleDay,
+  }
+}
 
 /** The Tasks view: the tasks (needs you under its label, then doing and to do as one list,
  *  then the folded groups). Rows are plain Buttons: no "[ ]" around them; the focus inverts the row instead.
@@ -15,24 +43,9 @@ import { row } from './arrows'
 export function listPage($: $, pane: PaneParts) {
   const { Box, Text, Button, Input, v, width, mark, act, C, header, footer } = pane
   const { nowMs } = pane
-  const offset = localOffset(nowMs)
   const search = S.search
-  const query = search?.text.trim() ?? ''
-  const filtering = query !== ''
   const typing = !!search?.typing
-  const matching = filtering ? searchTasks(v.tasks, query, nowMs, v.archived_done) : v.tasks
-  const parts = panelSections(matching, nowMs, offset)
-  if (!filtering) for (const d of [...openDays]) if (!parts.doneDays.some(g => g.day === d)) openDays.delete(d)
-  // while filtering, every group with a match is open (and the backlog shows all its matches)
-  const backlogOpen = filtering || S.backlogOpen
-  const doneOpen = filtering || S.doneOpen
-  const droppedOpen = filtering || S.droppedOpen
-  const dayOpen = (day: string) => filtering || openDays.has(day)
-  const toggleDay = (day: string) => () => {
-    if (openDays.has(day)) openDays.delete(day)
-    else openDays.add(day)
-    $.ui.invalidate('ui.render')
-  }
+  const { query, filtering, matching, parts, backlogOpen, doneOpen, droppedOpen, dayOpen, toggleDay } = listState($, pane)
   const toggleBacklog = () => ((S.backlogOpen = !S.backlogOpen), $.ui.invalidate('ui.render'))
   const toggleDone = () => ((S.doneOpen = !S.doneOpen), $.ui.invalidate('ui.render'))
   const toggleDropped = () => ((S.droppedOpen = !S.droppedOpen), $.ui.invalidate('ui.render'))
@@ -91,7 +104,7 @@ export function listPage($: $, pane: PaneParts) {
   // with no try mark (T-628: the band and the task page show it); narrow, the time is left out (see rowStates)
   const { states, width: cellWidth } = rowStates(shown, nowMs, since, w => w <= width - (4 + idWidth + 3 + 2) - TITLE_ROOM, false)
   // the list's own colors: failed red, review and waiting yellow, doing blue, done green
-  const tone: Record<string, string> = { backlog: 'inactive', review: 'warning', waiting: 'warning', failed: 'error', doing: 'ide', paused: 'permission', todo: 'text', done: 'success', dropped: 'inactive' }
+  const tone = LIST_TONE
   const pressDay = (day: string) => (day === 'backlog' ? toggleBacklog : day === 'backlog-more' ? showAllBacklog : day === 'done' ? toggleDone : day === 'dropped' ? toggleDropped : toggleDay(day))
   const redraw = () => $.ui.invalidate('ui.render')
   const openSearch = () => ((S.search = { text: S.search?.text ?? '', typing: true }), redraw())

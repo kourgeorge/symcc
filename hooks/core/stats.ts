@@ -370,6 +370,23 @@ export function cutTitle(s: string, n = 35): string {
   }
   return `${out}…`
 }
+/** Pieces cut to `width` columns (the one that crosses the edge ends in "…"). */
+export function fitSegs<S extends { text: string }>(xs: readonly S[], width: number): S[] {
+  const out: S[] = []
+  let used = 0
+  for (const x of xs) {
+    const w = textWidth(x.text)
+    if (used + w <= width) {
+      out.push(x)
+      used += w
+      continue
+    }
+    const room = width - used
+    if (room > 0) out.push({ ...x, text: cutTitle(x.text, room) })
+    break
+  }
+  return out
+}
 const pct = (a: number, b: number) => (b ? `${Math.round((a / b) * 100)}%` : '-')
 const avgDur = (xs: number[]) => (xs.length ? fmtDuration(mean(xs)!) : '-')
 const avgTok = (xs: number[]) => (xs.length ? fmtTokens(mean(xs)!) : '-')

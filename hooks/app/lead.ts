@@ -19,6 +19,11 @@ export async function writeLead(host: Host, text: string) {
   await safeWrite(host, path(S.N.leadFile), text, S.N.leadFile)
 }
 
+/** lead.json's text, or null when it can't be read (no file yet). */
+export const readLeadText = (host: Host): Promise<string | null> => host.fs.read(path(S.N.leadFile)).catch(() => null)
+/** lead.json read and parsed (parseLead), null when it is missing or broken. */
+export const readLead = async (host: Host) => parseLead(await readLeadText(host))
+
 /**
  * Looks at lead.json and acts on it: becomes the driver if nobody drives, refreshes the
  * heartbeat if this session drives, takes over if the driver's heartbeat went stale, and
@@ -33,7 +38,7 @@ export async function claimLead(host: Host, fresh = false): Promise<boolean> {
   }
   const was = S.driving
   const [move, leadBefore] = await locked(host, async () => {
-    const text = await host.fs.read(path(S.N.leadFile)).catch(() => null)
+    const text = await readLeadText(host)
     const m = whoDrives(text, S.me, Date.now())
     if (drivesAfter(m)) await writeLead(host, leadText(S.me, Date.now()))
     return [m, text] as const
@@ -93,7 +98,7 @@ let handing = false
  * hasn't run yet, or an older copy still running in this session) sees it too. No (or a broken) lead.json: false.
  */
 export async function drivenElsewhere(host: Host): Promise<boolean> {
-  const l = parseLead(await host.fs.read(path(S.N.leadFile)).catch(() => null))
+  const l = await readLead(host)
   if (!l) return false
   return l.session !== S.me || (!!l.handTo && l.handTo !== S.me)
 }
@@ -139,7 +144,7 @@ async function stepDown(host: Host, leadBefore: string | null) {
   try {
     await stopDriving(host)
     await locked(host, async () => {
-      const l = parseLead(await host.fs.read(path(S.N.leadFile)).catch(() => null))
+      const l = await readLead(host)
       // still ours and still asked for by `to` (nobody took over meanwhile): hand it over
       if (l && l.session === S.me && l.handTo === to) await writeLead(host, handedText(to, S.me, Date.now()))
     })
@@ -163,7 +168,7 @@ export async function driveHere(host: Host): Promise<string> {
   if (S.offHere) return offHereAnswer(S.N.name)
   if (handing) return 'This session is handing the board over to another session right now; type it again in a minute.'
   const [ask, text] = await locked(host, async () => {
-    const t = await host.fs.read(path(S.N.leadFile)).catch(() => null)
+    const t = await readLeadText(host)
     const a = driveAsk(t, S.me, Date.now())
     if (a === 'ask' || a === 'asked') await writeLead(host, handRequest(t, S.me, Date.now()))
     if (a === 'cancel') await writeLead(host, noHandRequest(t)!)
@@ -210,7 +215,7 @@ export async function startOffHere(host: Host) {
   S.missingSince = null
   const b = await load(host).catch(() => null)
   if (!b || b.enabled === false) return
-  const live = liveDriver(await host.fs.read(path(S.N.leadFile)).catch(() => null), Date.now())
+  const live = liveDriver(await readLeadText(host), Date.now())
   if (!live || live === S.me) return
   S.offHere = true
   S.offWhy = 'other'
@@ -235,7 +240,7 @@ export async function disableHere(host: Host): Promise<string> {
     try {
       await stopDriving(host)
       await locked(host, async () => {
-        const l = parseLead(await host.fs.read(path(S.N.leadFile)).catch(() => null))
+        const l = await readLead(host)
         if (l && l.session === S.me) await host.run(['rm', '-f', path(S.N.leadFile)])
       })
     } finally {
@@ -244,7 +249,7 @@ export async function disableHere(host: Host): Promise<string> {
   } else {
     // a hand-over this window asked for earlier (/drive) or was given (handFrom) must not land on an off-here window
     await locked(host, async () => {
-      const text = await host.fs.read(path(S.N.leadFile)).catch(() => null)
+      const text = await readLeadText(host)
       const l = parseLead(text)
       if (!l) return
       if (l.session === S.me && l.handFrom) await host.run(['rm', '-f', path(S.N.leadFile)])
@@ -322,10 +327,10 @@ export const GONE_GRACE_MS = 90_000
 export async function offHereBeat(host: Host, nowMs = Date.now()) {
   // a hand-over that landed on this window (it asked with /drive before turning off): give the board straight back
   await locked(host, async () => {
-    const l = parseLead(await host.fs.read(path(S.N.leadFile)).catch(() => null))
+    const l = await readLead(host)
     if (l && l.session === S.me && l.handFrom) await host.run(['rm', '-f', path(S.N.leadFile)])
   }).catch(() => undefined)
-  const live = liveDriver(await host.fs.read(path(S.N.leadFile)).catch(() => null), nowMs)
+  const live = liveDriver(await readLeadText(host), nowMs)
   const was = S.offWhy
   if (live && live !== S.me) {
     S.sawOther = true
@@ -353,12 +358,11 @@ export async function releaseLead(host: Host) {
   const was = S.driving
   S.driving = false
   await locked(host, async () => {
-    const file = path(S.N.leadFile)
-    const text = await host.fs.read(file).catch(() => null)
+    const text = await readLeadText(host)
     const l = parseLead(text)
     if (!l) return
     // the driver, or a session the board was just handed to (before its heartbeat claimed it): let go at once
-    if (l.session === S.me && (was || l.handFrom)) await host.run(['rm', '-f', file])
+    if (l.session === S.me && (was || l.handFrom)) await host.run(['rm', '-f', path(S.N.leadFile)])
     // a hand-over this session asked for (/<name>-drive) is dropped: the driver keeps driving
     else if (l.handTo === S.me) await writeLead(host, noHandRequest(text)!)
   }).catch(() => undefined)
@@ -379,7 +383,7 @@ export async function handOver(host: Host) {
   if (fresh && fresh !== old) {
     S.me = fresh
     await locked(host, async () => {
-      const l = parseLead(await host.fs.read(path(S.N.leadFile)).catch(() => null))
+      const l = await readLead(host)
       if (S.driving) {
         if (!l || l.session === old) await writeLead(host, leadText(S.me, Date.now(), l?.handTo ? { handTo: l.handTo, ...(l.handAt !== undefined ? { handAt: l.handAt } : {}) } : {}))
         return

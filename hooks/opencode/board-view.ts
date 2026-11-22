@@ -41,7 +41,7 @@ import type { TaskBranchFacts } from '../core/task-branch'
 import { type RoleChange, CHANGED_HEADING, changeLines, changesOfRole, roleListLabel, roleStateGroups } from '../core/role-changes'
 import { roleButtons as headerRoleButtons } from '../core/page-header'
 import { type ActionGroup, groupSegLines, headerRule, inGroups, navHint, navRow, packGroups, type PageFrom, PILL_COLOR, pillText, placeIn, scoutAbout, scoutButtons as headerScoutButtons, scoutListNames, scoutStateGroups, taskColor, taskPlace, taskStateGroups, titleLines, whereLine } from '../core/page-header'
-import { sessionNote } from '../core/details'
+import { LIST_TONE, sessionNote } from '../core/details'
 import { isObj } from '../core/text'
 import type { DiffFile } from '../core/review'
 import { DEFAULT_NAME, dataDir } from '../name'
@@ -448,9 +448,6 @@ export function hintSegs(keys: KeyHint[]): Line {
 
 /** The banner's tones in core's color names. */
 const TONE: Record<BannerTone, string> = { accent: 'ide', plain: 'text', dim: 'inactive', warning: 'warning' }
-
-/** The list's own colors per status (as Claude Code's list): failed red, review and waiting yellow, doing blue, done green. */
-const LIST_TONE: Record<string, string> = { backlog: 'inactive', review: 'warning', waiting: 'warning', failed: 'error', doing: 'ide', paused: 'permission', todo: 'text', done: 'success', dropped: 'inactive' }
 
 /** Whether the view still has a page for this id (a task or a question); an open task that left the view
  *  (archived, removed, or the view file gone) falls back to the list. */
