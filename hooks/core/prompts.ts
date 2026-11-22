@@ -15,8 +15,29 @@ export { fillPlaceholders, placeholdersIn }
 export type PromptKind = 'change' | 'investigation'
 export const PROMPT_KINDS: readonly PromptKind[] = ['change', 'investigation']
 
+/**
+ * A table whose values are made the first time each is read, then kept (T-853). The tables below are built from
+ * prompt-sections.ts, which (through board-file.ts, history.ts and roles.ts) imports this file, so building them at load
+ * would read PROMPT_SECTIONS before it exists when prompt-sections.ts is the first module loaded.
+ */
+const lazyTable = <K extends string, V>(keys: readonly K[], make: (k: K) => V): Record<K, V> => {
+  const table = {} as Record<K, V>
+  for (const k of keys) {
+    Object.defineProperty(table, k, {
+      enumerable: true,
+      configurable: true,
+      get: () => {
+        const v = make(k)
+        Object.defineProperty(table, k, { value: v, enumerable: true, writable: true, configurable: true })
+        return v
+      },
+    })
+  }
+  return table
+}
+
 /** The built-in prompts as the Roles page shows them: the sections in order, with {{placeholders}} where a task's facts go. */
-export const BUILT_IN_PROMPTS: Record<PromptKind, string> = { change: promptTemplate('change'), investigation: promptTemplate('investigation') }
+export const BUILT_IN_PROMPTS: Record<PromptKind, string> = lazyTable(PROMPT_KINDS, promptTemplate)
 
 const SHARED_PLACEHOLDERS: Record<string, string> = {
   name: 'the plugin\'s name (symcc)',
@@ -42,27 +63,29 @@ const sectionPlaceholders = (kind: PromptKind, registry: readonly PromptSection[
     }),
   )
 
+const FILES_ABOUT = 'the "Files you may change" lines (the task\'s files, or "whatever the task needs")'
+const TEST_COMMAND_ABOUT = 'the "these must pass" line with the test commands (or "There is no test command")'
+
 /** The placeholders of each prompt and what they become; any other {{word}} is left as written. {{task.<path>}} works everywhere. */
-export const PROMPT_PLACEHOLDERS: Record<PromptKind, Record<string, string>> = {
-  change: {
+export const PROMPT_PLACEHOLDERS: Record<PromptKind, Record<string, string>> = lazyTable(PROMPT_KINDS, kind => kind === 'change'
+  ? {
     ...SHARED_PLACEHOLDERS,
     ...sectionPlaceholders('change'),
     file_tools: 'what the worker uses on files, as the host names it (e.g. "Read, Edit and Write")',
-    files: 'the "Files you may change" lines (the task\'s files, or "whatever the task needs")',
-    test_command: 'the "these must pass" line with the test commands (or "There is no test command")',
+    files: FILES_ABOUT,
+    test_command: TEST_COMMAND_ABOUT,
     merge_main: 'only when the branch it merges into moved and conflicts: how to merge it first',
     earlier_work: 'only when earlier tries left commits on the branch: that their work is already in the folder, and the commits',
     ask: 'how to ask the owner and what a refused edit means',
     [TASK_PLACEHOLDER]: TASK_PLACEHOLDER_ABOUT,
-  },
-  investigation: {
+  }
+  : {
     ...SHARED_PLACEHOLDERS,
     ...sectionPlaceholders('investigation'),
     ask_more: 'only after the owner pressed Ask more: hand back the whole updated answer',
     ask: 'how to ask the owner and what a refused edit means',
     [TASK_PLACEHOLDER]: TASK_PLACEHOLDER_ABOUT,
-  },
-}
+  })
 
 /**
  * The text a worker is started with: the sections of `kind`'s prompt (see buildPrompt) made from `values` and, for the task's own
@@ -79,8 +102,8 @@ export function fillPrompt(kind: PromptKind, values: Record<string, string>, tas
 export const ROLE_PLACEHOLDERS: Record<string, string> = {
   task_id: SHARED_PLACEHOLDERS.task_id!,
   title: SHARED_PLACEHOLDERS.title!,
-  files: PROMPT_PLACEHOLDERS.change.files!,
-  test_command: PROMPT_PLACEHOLDERS.change.test_command!,
+  files: FILES_ABOUT,
+  test_command: TEST_COMMAND_ABOUT,
   folder: SHARED_PLACEHOLDERS.folder!,
   branch: SHARED_PLACEHOLDERS.branch!,
   kind: SHARED_PLACEHOLDERS.kind!,
@@ -93,7 +116,7 @@ export const fillRole = (checklist: string, values: Record<string, string>, task
 
 /** The built-in prompts a role can be put into, to look at from its page: a worker's two, and the checker's. */
 export type RolePromptKind = PromptKind | 'checker'
-export const ROLE_PROMPTS: Record<RolePromptKind, string> = { ...BUILT_IN_PROMPTS, checker: promptTemplate('checker') }
+export const ROLE_PROMPTS: Record<RolePromptKind, string> = lazyTable([...PROMPT_KINDS, 'checker'], k => (k === 'checker' ? promptTemplate('checker') : BUILT_IN_PROMPTS[k]))
 
 /** The sections a prompt has, in order: "name: what it holds" for each, as the Roles page lists them. */
 export const promptSectionLines = (kind: RolePromptKind): string[] =>
