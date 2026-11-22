@@ -530,3 +530,20 @@ test("a worker's question with options shows the lead's question and options, an
   expect(after.options_lead).toBeUndefined()
   expect(after.history.map(h => h.text).join('\n')).toContain('Navy')
 })
+
+test("a tied pop-up keeps the task's waiting time, and a second one without options drops the first one's buttons", async () => {
+  const w = world()
+  await waitingTask(w.host as never, { question: 'Red or blue?', options: ['Red', 'Blue'] })
+  const d = dialog()
+  void popupCall(w.host, undefined, { questions: [ask('Which color?', ['Crimson', 'Navy'], { header: 'T-1' })] }, d.open, w.notice)
+  await pause(0)
+  expect(w.board().tasks[0]!.updated_at).toBe(ISO)
+  expect(w.board().tasks[0]!.options_lead).toEqual(['Crimson', 'Navy'])
+  const d2 = dialog()
+  void popupCall(w.host, undefined, { questions: [{ question: 'Tell me in your words', header: 'T-1', options: [], multiSelect: false }] }, d2.open, w.notice)
+  await pause(0)
+  const t = w.board().tasks[0]!
+  expect(t.question_lead).toBe('Tell me in your words')
+  expect(t.options_lead).toBeUndefined()
+  expect(t.updated_at).toBe(ISO)
+})

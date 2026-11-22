@@ -1,6 +1,6 @@
 // The lead's questions for the owner on the board (see core/questions.ts): the lead's question tool, and the
 // owner's answer from the board panel's question page.
-import { type Board, type BoardTask, type OwnerQuestion, type QuestionClose, addQuestion, answerQuestion, dropQuestion, normQid, questionsText, closedText, boardAnswerLine, openQuestions, questionsForYou, QUESTION_MAX, QUESTION_OPTIONS, OPTION_MAX, taskAsks, asksOwner, isAnswered, find, patchTask } from '../board'
+import { type Board, type BoardTask, type OwnerQuestion, type QuestionClose, addQuestion, answerQuestion, dropQuestion, normQid, questionsText, closedText, boardAnswerLine, openQuestions, questionsForYou, QUESTION_MAX, QUESTION_OPTIONS, OPTION_MAX, taskAsks, asksOwner, isAnswered, find, patchTask, putTask } from '../board'
 import { clean, squash } from '../core/text'
 import { S } from './state'
 import type { Host } from '../host'
@@ -184,7 +184,11 @@ async function leadWording(host: Host, tied: { q: PopupQuestion; link: PopupLink
       const text = clean(squash(q.question), 1000)
       const opts = labels(q)
       const plain = t.status === 'waiting' && !t.asked_files?.length
-      y = patchTask(y, link.id, { question_lead: text, ...(plain && opts.length ? { options_lead: opts } : {}) }, now())
+      const patched = find(patchTask(y, link.id, { question_lead: text, ...(plain && opts.length ? { options_lead: opts } : {}) }, now()), link.id) as BoardTask
+      // the task itself did not change for the owner: its waiting time stays, and an older pop-up's buttons go
+      const next: BoardTask = { ...patched, updated_at: t.updated_at }
+      if (!(plain && opts.length)) delete next.options_lead
+      y = putTask(y, next)
     }
     return y
   }).catch(() => undefined)
