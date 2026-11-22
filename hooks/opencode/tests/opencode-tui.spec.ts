@@ -3579,6 +3579,23 @@ test('T-706: startTui: Set up git (g, or the banner\'s button) asks a yes first,
   ok.board.stop()
 })
 
+test('T-861: opening the board (/symcc-board) while git is not ok sends /symcc-settings git check; with git ok it sends nothing', async () => {
+  for (const [state, want] of [['no-repo', 1], [undefined, 0]] as const) {
+    const f = fakeCtx({})
+    const sent: { name: string; text: string }[] = []
+    const ctx: TuiContext = { ...f.ctx, client: { session: { command: async i => void sent.push(i) } } }
+    const board = startTui(ctx, { runtime: fakeRuntime(), readText: async () => viewFileText(addedViewFile(state)), every: () => () => undefined, now: () => NOW })
+    await board.refresh()
+    f.slots.find(s => s.append === 'session.composer.top')!.render({ sessionID: 's' } as never)
+    const open = f.layers.flatMap(l => l.commands ?? []).find(c => c.id === 'symcc.board.open')!
+    if (f.current()) await open.run() // the board came up on its own (open_now): close it, then open it by hand
+    await open.run()
+    for (let i = 0; i < 6; i++) await new Promise<void>(res => setTimeout(res, 0))
+    expect(sent.filter(s => s.name === 'symcc-settings' && s.text === 'git check').length).toBe(want)
+    board.stop()
+  }
+})
+
 // ---------------- T-727: the Live tab's Branches section ----------------
 /** The Branches sample (tests/branches-fixture.ts) as a view file at NOW. */
 function branchesViewFile(): ViewFile {
