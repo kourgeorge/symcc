@@ -151,11 +151,11 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {"key":"roleRow:tester","label":"tester: replaced","plain":true},
+        "props": {"key":"roleRow:tester","label":"tester: replaced · description, skills, checklist","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude"},"children":["  tester                            "]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" replaced"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" replaced · description, skills, checklist"]},
           {"type":"Text","props":{"color":"text"},"children":[" · writes tests that try hard to break the change, with every edge case found"]}
         ]
       },
@@ -378,11 +378,11 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {"key":"roleRow:tester","label":"tester: replaced","plain":true},
+        "props": {"key":"roleRow:tester","label":"tester: replaced · description, skills, checklist","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["  tester                            "]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" replaced"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" replaced · description, skills, checklist"]},
           {"type":"Text","props":{"color":"text"},"children":[" · writes tests that try hard to break the change, with every edge case found"]}
         ]
       },
@@ -617,11 +617,11 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {"key":"roleRow:tester","label":"tester: replaced","plain":true},
+        "props": {"key":"roleRow:tester","label":"tester: replaced · description, skills, checklist","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["  tester                            "]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" replaced"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" replaced · description, skills, checklist"]},
           {"type":"Text","props":{"color":"text"},"children":[" · writes tests that try hard to break the change, with every edge case found"]}
         ]
       },
@@ -715,30 +715,96 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
-        "children": [
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"claude"},"children":["general"]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · ","built-in"]}
-            ]
-          },
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":["a plain worker for any task; use it when no other role fits"]}
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"role-buttons","flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
             "type": "Box",
-            "props": {"key":"role-buttons-0","flexDirection":"row","gap":1},
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"role-back","label":"Back","hotkey":"b","autoFocus":true},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role-edit","label":"Edit","hotkey":"e"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role-prompt","label":"See the prompt","hotkey":"p"},"press":{"plugin":"symcc"}}
+              {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
+              {
+                "type": "Button",
+                "props": {"key":"role-back","label":"Roles","plain":true,"autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Roles]"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["                     "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["general · "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 1 of 5 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-title","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"claude"},"children":["general"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["a plain worker for any task; use it when"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["         "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["no other role fits"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [{"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"inactive"},"children":["built-in"]}]}]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"role-edit","label":"Edit","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Edit]"]}]
+              },
+              {"type":"Text","children":[" "]},
+              {
+                "type": "Button",
+                "props": {"key":"role-prompt","label":"Prompt","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Prompt]"]}]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"role-back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-edit-key","label":"e","hotkey":"e"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-prompt-key","label":"p","hotkey":"p"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["──────────────────────────────────────────────────"]}]
           }
         ]
       },
@@ -890,35 +956,6 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
             "children": ["  ",{"type":"Text","props":{"color":"autoAccept"},"children":["roles/general.md (in the plugin; Edit copies it to .symcc/roles/general.md)"]}]
           }
         ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"role-keys-footer","flexDirection":"column"},
-        "children": [
-          {"type":"Text","props":{"wrap":"truncate","color":"subtle"},"children":["──────────────────────────────────────────────────"]},
-          {
-            "type": "Text",
-            "props": {"color":"subtle"},
-            "children": [
-              {
-                "type": "Text",
-                "children": ["",{"type":"Text","props":{"bold":true,"color":"text"},"children":["e"]},{"type":"Text","props":{"color":"inactive"},"children":[" edit"]}]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["p"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" the prompt it goes in"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [" · ",{"type":"Text","props":{"bold":true,"color":"text"},"children":["b"]},{"type":"Text","props":{"color":"inactive"},"children":[" back"]}]
-              }
-            ]
-          }
-        ]
       }
     ],
     "part": {"plugin":"symcc"}
@@ -929,30 +966,81 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
-        "children": [
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["general"]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · ","built-in"]}
-            ]
-          },
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["a plain worker for any task; use it when no other role fits"]}
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"role-buttons","flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
             "type": "Box",
-            "props": {"key":"role-buttons-0","flexDirection":"row","gap":1},
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"role-back","label":"Back","hotkey":"b","autoFocus":true},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role-edit","label":"Edit","hotkey":"e"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role-prompt","label":"See the prompt","hotkey":"p"},"press":{"plugin":"symcc"}}
+              {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
+              {"type":"Button","props":{"key":"role-back","label":"Roles","variant":"secondary","autoFocus":true},"press":{"plugin":"symcc"}},
+              {"type":"Text","props":{"color":"inactive"},"children":["                     "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["general · "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 1 of 5 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-title","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["general"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["a plain worker for any task; use it when"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["         "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["no other role fits"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [{"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"inactive","weight":"semibold"},"children":["built-in"]}]}]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [
+              {"type":"Button","props":{"key":"role-edit","label":"Edit","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":[" "]},
+              {"type":"Button","props":{"key":"role-prompt","label":"Prompt","variant":"secondary"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"role-back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-edit-key","label":"e","hotkey":"e"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-prompt-key","label":"p","hotkey":"p"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["──────────────────────────────────────────────────"]}]
           }
         ]
       },
@@ -1102,43 +1190,6 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": ["  ",{"type":"Text","props":{"color":"autoAccept"},"children":["roles/general.md (in the plugin; Edit copies it to .symcc/roles/general.md)"]}]
-          }
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"role-keys-footer","flexDirection":"column"},
-        "children": [
-          {"type":"Text","props":{"wrap":"truncate","color":"subtle"},"children":["──────────────────────────────────────────────────"]},
-          {
-            "type": "Text",
-            "props": {"color":"subtle"},
-            "children": [
-              {
-                "type": "Text",
-                "children": [
-                  "",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["e"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" edit"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["p"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" the prompt it goes in"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["b"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" back"]}
-                ]
-              }
-            ]
           }
         ]
       }
@@ -1151,30 +1202,81 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
-        "children": [
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["general"]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · ","built-in"]}
-            ]
-          },
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["a plain worker for any task; use it when no other role fits"]}
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"role-buttons","flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
             "type": "Box",
-            "props": {"key":"role-buttons-0","flexDirection":"row","gap":1},
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"role-back","label":"Back","hotkey":"b","autoFocus":true},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role-edit","label":"Edit","hotkey":"e"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role-prompt","label":"See the prompt","hotkey":"p"},"press":{"plugin":"symcc"}}
+              {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
+              {"type":"Button","props":{"key":"role-back","label":"Roles","variant":"secondary","autoFocus":true},"press":{"plugin":"symcc"}},
+              {"type":"Text","props":{"color":"inactive"},"children":["                     "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["general · "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 1 of 5 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-title","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["general"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["a plain worker for any task; use it when"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["         "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["no other role fits"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [{"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"inactive","weight":"semibold"},"children":["built-in"]}]}]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [
+              {"type":"Button","props":{"key":"role-edit","label":"Edit","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":[" "]},
+              {"type":"Button","props":{"key":"role-prompt","label":"Prompt","variant":"secondary"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"role-back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-edit-key","label":"e","hotkey":"e"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-prompt-key","label":"p","hotkey":"p"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["──────────────────────────────────────────────────"]}]
           }
         ]
       },
@@ -1326,43 +1428,6 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
             "children": ["  ",{"type":"Text","props":{"color":"autoAccept"},"children":["roles/general.md (in the plugin; Edit copies it to .symcc/roles/general.md)"]}]
           }
         ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"role-keys-footer","flexDirection":"column"},
-        "children": [
-          {"type":"Text","props":{"wrap":"truncate","color":"subtle"},"children":["──────────────────────────────────────────────────"]},
-          {
-            "type": "Text",
-            "props": {"color":"subtle"},
-            "children": [
-              {
-                "type": "Text",
-                "children": [
-                  "",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["e"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" edit"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["p"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" the prompt it goes in"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["b"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" back"]}
-                ]
-              }
-            ]
-          }
-        ]
       }
     ],
     "part": {"plugin":"symcc"}
@@ -1373,37 +1438,128 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
-            "type": "Text",
+            "type": "Box",
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"claude"},"children":["tester"]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · ","replaced"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
+              {
+                "type": "Button",
+                "props": {"key":"role-back","label":"Roles","plain":true,"autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Roles]"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["                      "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["tester · "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 5 of 5 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
           },
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":["writes tests that try hard to break the change, with every edge case found"]}
+          {
+            "type": "Box",
+            "props": {"key":"hdr-title","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"claude"},"children":["tester"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["writes tests that try hard to break the"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["        "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["change, with every edge case found"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [{"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["replaced · 3 changes"]}]}]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"role-edit","label":"Edit","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Edit]"]}]
+              },
+              {"type":"Text","children":[" "]},
+              {
+                "type": "Button",
+                "props": {"key":"role-prompt","label":"Prompt","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Prompt]"]}]
+              },
+              {"type":"Text","children":["   "]},
+              {
+                "type": "Button",
+                "props": {"key":"role-reset","label":"Reset to built-in","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Reset to built-in]"]}]
+              },
+              {"type":"Text","children":["   "]},
+              {
+                "type": "Button",
+                "props": {"key":"role-off","label":"Turn off","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Turn off]"]}]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"role-back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-edit-key","label":"e","hotkey":"e"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-prompt-key","label":"p","hotkey":"p"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-off-key","label":"o","hotkey":"o"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-reset-key","label":"r","hotkey":"r"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["──────────────────────────────────────────────────"]}]
+          }
         ]
       },
       {
         "type": "Box",
-        "props": {"key":"role-buttons","flexDirection":"column"},
+        "props": {"key":"role-changes","flexDirection":"column"},
         "children": [
+          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Changed from built-in"]},
           {
-            "type": "Box",
-            "props": {"key":"role-buttons-0","flexDirection":"row","gap":1},
-            "children": [
-              {"type":"Button","props":{"key":"role-back","label":"Back","hotkey":"b","autoFocus":true},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role-edit","label":"Edit","hotkey":"e"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role-prompt","label":"See the prompt","hotkey":"p"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role-off","label":"Turn off","hotkey":"o"},"press":{"plugin":"symcc"}}
-            ]
+            "type": "Text",
+            "props": {"color":"text"},
+            "children": ["  description: writes tests → writes tests that try hard to break the change, with every edge case found"]
           },
-          {
-            "type": "Box",
-            "props": {"key":"role-buttons-1","flexDirection":"row","gap":1},
-            "children": [{"type":"Button","props":{"key":"role-reset","label":"Reset to built-in","hotkey":"r"},"press":{"plugin":"symcc"}}]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  skills: (none) → testing, review"]},
+          {"type":"Text","props":{"color":"text"},"children":["  checklist: 1 line changed"]},
+          {"type":"Text","props":{"color":"success"},"children":["    + - cover empty input"]}
         ]
       },
       {
@@ -1555,57 +1711,6 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
           {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","File"]},
           {"type":"Text","children":["  ",{"type":"Text","props":{"color":"autoAccept"},"children":[".symcc/roles/tester.md"]}]}
         ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"role-keys-footer","flexDirection":"column"},
-        "children": [
-          {"type":"Text","props":{"wrap":"truncate","color":"subtle"},"children":["──────────────────────────────────────────────────"]},
-          {
-            "type": "Text",
-            "props": {"color":"subtle"},
-            "children": [
-              {
-                "type": "Text",
-                "children": ["",{"type":"Text","props":{"bold":true,"color":"text"},"children":["e"]},{"type":"Text","props":{"color":"inactive"},"children":[" edit"]}]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["p"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" the prompt it goes in"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["o"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" turn off"]}
-                ]
-              }
-            ]
-          },
-          {
-            "type": "Text",
-            "props": {"color":"subtle"},
-            "children": [
-              {
-                "type": "Text",
-                "children": [
-                  "",
-                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["r"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" reset to built-in"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [" · ",{"type":"Text","props":{"bold":true,"color":"text"},"children":["b"]},{"type":"Text","props":{"color":"inactive"},"children":[" back"]}]
-              }
-            ]
-          }
-        ]
       }
     ],
     "part": {"plugin":"symcc"}
@@ -1616,41 +1721,103 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
-            "type": "Text",
+            "type": "Box",
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["tester"]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · ","replaced"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
+              {"type":"Button","props":{"key":"role-back","label":"Roles","variant":"secondary","autoFocus":true},"press":{"plugin":"symcc"}},
+              {"type":"Text","props":{"color":"inactive"},"children":["                      "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["tester · "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 5 of 5 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
           },
           {
-            "type": "Text",
-            "props": {"bold":true,"color":"text","weight":"semibold"},
-            "children": ["writes tests that try hard to break the change, with every edge case found"]
+            "type": "Box",
+            "props": {"key":"hdr-title","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["tester"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["writes tests that try hard to break the"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["        "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["change, with every edge case found"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [{"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["replaced · 3 changes"]}]}]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [
+              {"type":"Button","props":{"key":"role-edit","label":"Edit","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":[" "]},
+              {"type":"Button","props":{"key":"role-prompt","label":"Prompt","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"role-reset","label":"Reset to built-in","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"role-off","label":"Turn off","variant":"secondary"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"role-back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-edit-key","label":"e","hotkey":"e"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-prompt-key","label":"p","hotkey":"p"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-off-key","label":"o","hotkey":"o"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-reset-key","label":"r","hotkey":"r"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["──────────────────────────────────────────────────"]}]
           }
         ]
       },
       {
         "type": "Box",
-        "props": {"key":"role-buttons","flexDirection":"column"},
+        "props": {"key":"role-changes","flexDirection":"column"},
         "children": [
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Changed from built-in"]},
           {
-            "type": "Box",
-            "props": {"key":"role-buttons-0","flexDirection":"row","gap":1},
-            "children": [
-              {"type":"Button","props":{"key":"role-back","label":"Back","hotkey":"b","autoFocus":true},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role-edit","label":"Edit","hotkey":"e"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role-prompt","label":"See the prompt","hotkey":"p"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role-off","label":"Turn off","hotkey":"o"},"press":{"plugin":"symcc"}}
-            ]
+            "type": "Text",
+            "props": {"color":"text"},
+            "children": ["  description: writes tests → writes tests that try hard to break the change, with every edge case found"]
           },
-          {
-            "type": "Box",
-            "props": {"key":"role-buttons-1","flexDirection":"row","gap":1},
-            "children": [{"type":"Button","props":{"key":"role-reset","label":"Reset to built-in","hotkey":"r"},"press":{"plugin":"symcc"}}]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  skills: (none) → testing, review"]},
+          {"type":"Text","props":{"color":"text"},"children":["  checklist: 1 line changed"]},
+          {"type":"Text","props":{"color":"success"},"children":["    + - cover empty input"]}
         ]
       },
       {
@@ -1804,65 +1971,6 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
         "children": [
           {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","File"]},
           {"type":"Text","children":["  ",{"type":"Text","props":{"color":"autoAccept"},"children":[".symcc/roles/tester.md"]}]}
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"role-keys-footer","flexDirection":"column"},
-        "children": [
-          {"type":"Text","props":{"wrap":"truncate","color":"subtle"},"children":["──────────────────────────────────────────────────"]},
-          {
-            "type": "Text",
-            "props": {"color":"subtle"},
-            "children": [
-              {
-                "type": "Text",
-                "children": [
-                  "",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["e"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" edit"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["p"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" the prompt it goes in"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["o"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" turn off"]}
-                ]
-              }
-            ]
-          },
-          {
-            "type": "Text",
-            "props": {"color":"subtle"},
-            "children": [
-              {
-                "type": "Text",
-                "children": [
-                  "",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["r"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" reset to built-in"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["b"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" back"]}
-                ]
-              }
-            ]
-          }
         ]
       }
     ],
@@ -1874,41 +1982,103 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
-            "type": "Text",
+            "type": "Box",
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["tester"]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · ","replaced"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
+              {"type":"Button","props":{"key":"role-back","label":"Roles","variant":"secondary","autoFocus":true},"press":{"plugin":"symcc"}},
+              {"type":"Text","props":{"color":"inactive"},"children":["                      "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["tester · "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 5 of 5 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
           },
           {
-            "type": "Text",
-            "props": {"bold":true,"color":"text","weight":"semibold"},
-            "children": ["writes tests that try hard to break the change, with every edge case found"]
+            "type": "Box",
+            "props": {"key":"hdr-title","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["tester"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["writes tests that try hard to break the"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["        "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["change, with every edge case found"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [{"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["replaced · 3 changes"]}]}]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [
+              {"type":"Button","props":{"key":"role-edit","label":"Edit","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":[" "]},
+              {"type":"Button","props":{"key":"role-prompt","label":"Prompt","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"role-reset","label":"Reset to built-in","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"role-off","label":"Turn off","variant":"secondary"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"role-back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-edit-key","label":"e","hotkey":"e"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-prompt-key","label":"p","hotkey":"p"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-off-key","label":"o","hotkey":"o"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-reset-key","label":"r","hotkey":"r"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["──────────────────────────────────────────────────"]}]
           }
         ]
       },
       {
         "type": "Box",
-        "props": {"key":"role-buttons","flexDirection":"column"},
+        "props": {"key":"role-changes","flexDirection":"column"},
         "children": [
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Changed from built-in"]},
           {
-            "type": "Box",
-            "props": {"key":"role-buttons-0","flexDirection":"row","gap":1},
-            "children": [
-              {"type":"Button","props":{"key":"role-back","label":"Back","hotkey":"b","autoFocus":true},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role-edit","label":"Edit","hotkey":"e"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role-prompt","label":"See the prompt","hotkey":"p"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role-off","label":"Turn off","hotkey":"o"},"press":{"plugin":"symcc"}}
-            ]
+            "type": "Text",
+            "props": {"color":"text"},
+            "children": ["  description: writes tests → writes tests that try hard to break the change, with every edge case found"]
           },
-          {
-            "type": "Box",
-            "props": {"key":"role-buttons-1","flexDirection":"row","gap":1},
-            "children": [{"type":"Button","props":{"key":"role-reset","label":"Reset to built-in","hotkey":"r"},"press":{"plugin":"symcc"}}]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  skills: (none) → testing, review"]},
+          {"type":"Text","props":{"color":"text"},"children":["  checklist: 1 line changed"]},
+          {"type":"Text","props":{"color":"success"},"children":["    + - cover empty input"]}
         ]
       },
       {
@@ -2063,65 +2233,6 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
           {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","File"]},
           {"type":"Text","children":["  ",{"type":"Text","props":{"color":"autoAccept"},"children":[".symcc/roles/tester.md"]}]}
         ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"role-keys-footer","flexDirection":"column"},
-        "children": [
-          {"type":"Text","props":{"wrap":"truncate","color":"subtle"},"children":["──────────────────────────────────────────────────"]},
-          {
-            "type": "Text",
-            "props": {"color":"subtle"},
-            "children": [
-              {
-                "type": "Text",
-                "children": [
-                  "",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["e"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" edit"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["p"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" the prompt it goes in"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["o"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" turn off"]}
-                ]
-              }
-            ]
-          },
-          {
-            "type": "Text",
-            "props": {"color":"subtle"},
-            "children": [
-              {
-                "type": "Text",
-                "children": [
-                  "",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["r"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" reset to built-in"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["b"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" back"]}
-                ]
-              }
-            ]
-          }
-        ]
       }
     ],
     "part": {"plugin":"symcc"}
@@ -2132,37 +2243,123 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
-            "type": "Text",
+            "type": "Box",
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"inactive"},"children":["docs"]},
-              {"type":"Text","props":{"color":"warning"},"children":[" · ","replaced, off"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
+              {
+                "type": "Button",
+                "props": {"key":"role-back","label":"Roles","plain":true,"autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Roles]"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["                        "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["docs · "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 3 of 5 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
           },
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":["writes the docs"]}
+          {
+            "type": "Box",
+            "props": {"key":"hdr-title","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"inactive"},"children":["docs"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["writes the docs"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["replaced · 1 change"]},
+                  {"type":"Text","props":{"color":"text"},"children":["   "]},
+                  {"type":"Text","props":{"bold":true,"color":"warning"},"children":["off"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"role-edit","label":"Edit","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Edit]"]}]
+              },
+              {"type":"Text","children":[" "]},
+              {
+                "type": "Button",
+                "props": {"key":"role-prompt","label":"Prompt","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Prompt]"]}]
+              },
+              {"type":"Text","children":["   "]},
+              {
+                "type": "Button",
+                "props": {"key":"role-reset","label":"Reset to built-in","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Reset to built-in]"]}]
+              },
+              {"type":"Text","children":["   "]},
+              {
+                "type": "Button",
+                "props": {"key":"role-off","label":"Turn on","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Turn on]"]}]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"role-back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-edit-key","label":"e","hotkey":"e"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-prompt-key","label":"p","hotkey":"p"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-off-key","label":"o","hotkey":"o"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-reset-key","label":"r","hotkey":"r"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["──────────────────────────────────────────────────"]}]
+          }
         ]
       },
       {
         "type": "Box",
-        "props": {"key":"role-buttons","flexDirection":"column"},
+        "props": {"key":"role-changes","flexDirection":"column"},
         "children": [
-          {
-            "type": "Box",
-            "props": {"key":"role-buttons-0","flexDirection":"row","gap":1},
-            "children": [
-              {"type":"Button","props":{"key":"role-back","label":"Back","hotkey":"b","autoFocus":true},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role-edit","label":"Edit","hotkey":"e"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role-prompt","label":"See the prompt","hotkey":"p"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role-off","label":"Turn on","hotkey":"o"},"press":{"plugin":"symcc"}}
-            ]
-          },
-          {
-            "type": "Box",
-            "props": {"key":"role-buttons-1","flexDirection":"row","gap":1},
-            "children": [{"type":"Button","props":{"key":"role-reset","label":"Reset to built-in","hotkey":"r"},"press":{"plugin":"symcc"}}]
-          }
+          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Changed from built-in"]},
+          {"type":"Text","props":{"color":"text"},"children":["  off: on → off"]}
         ]
       },
       {
@@ -2312,57 +2509,6 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
         "children": [
           {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","File"]},
           {"type":"Text","children":["  ",{"type":"Text","props":{"color":"autoAccept"},"children":[".symcc/roles/docs.md"]}]}
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"role-keys-footer","flexDirection":"column"},
-        "children": [
-          {"type":"Text","props":{"wrap":"truncate","color":"subtle"},"children":["──────────────────────────────────────────────────"]},
-          {
-            "type": "Text",
-            "props": {"color":"subtle"},
-            "children": [
-              {
-                "type": "Text",
-                "children": ["",{"type":"Text","props":{"bold":true,"color":"text"},"children":["e"]},{"type":"Text","props":{"color":"inactive"},"children":[" edit"]}]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["p"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" the prompt it goes in"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["o"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" turn on"]}
-                ]
-              }
-            ]
-          },
-          {
-            "type": "Text",
-            "props": {"color":"subtle"},
-            "children": [
-              {
-                "type": "Text",
-                "children": [
-                  "",
-                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["r"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" reset to built-in"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [" · ",{"type":"Text","props":{"bold":true,"color":"text"},"children":["b"]},{"type":"Text","props":{"color":"inactive"},"children":[" back"]}]
-              }
-            ]
-          }
         ]
       }
     ],
@@ -2374,37 +2520,98 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
-            "type": "Text",
+            "type": "Box",
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"inactive","weight":"semibold"},"children":["docs"]},
-              {"type":"Text","props":{"color":"warning"},"children":[" · ","replaced, off"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
+              {"type":"Button","props":{"key":"role-back","label":"Roles","variant":"secondary","autoFocus":true},"press":{"plugin":"symcc"}},
+              {"type":"Text","props":{"color":"inactive"},"children":["                        "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["docs · "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 3 of 5 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
           },
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["writes the docs"]}
+          {
+            "type": "Box",
+            "props": {"key":"hdr-title","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"inactive","weight":"semibold"},"children":["docs"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["writes the docs"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["replaced · 1 change"]},
+                  {"type":"Text","props":{"color":"text"},"children":["   "]},
+                  {"type":"Text","props":{"bold":true,"color":"warning","weight":"semibold"},"children":["off"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [
+              {"type":"Button","props":{"key":"role-edit","label":"Edit","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":[" "]},
+              {"type":"Button","props":{"key":"role-prompt","label":"Prompt","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"role-reset","label":"Reset to built-in","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"role-off","label":"Turn on","variant":"secondary"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"role-back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-edit-key","label":"e","hotkey":"e"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-prompt-key","label":"p","hotkey":"p"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-off-key","label":"o","hotkey":"o"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-reset-key","label":"r","hotkey":"r"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["──────────────────────────────────────────────────"]}]
+          }
         ]
       },
       {
         "type": "Box",
-        "props": {"key":"role-buttons","flexDirection":"column"},
+        "props": {"key":"role-changes","flexDirection":"column"},
         "children": [
-          {
-            "type": "Box",
-            "props": {"key":"role-buttons-0","flexDirection":"row","gap":1},
-            "children": [
-              {"type":"Button","props":{"key":"role-back","label":"Back","hotkey":"b","autoFocus":true},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role-edit","label":"Edit","hotkey":"e"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role-prompt","label":"See the prompt","hotkey":"p"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role-off","label":"Turn on","hotkey":"o"},"press":{"plugin":"symcc"}}
-            ]
-          },
-          {
-            "type": "Box",
-            "props": {"key":"role-buttons-1","flexDirection":"row","gap":1},
-            "children": [{"type":"Button","props":{"key":"role-reset","label":"Reset to built-in","hotkey":"r"},"press":{"plugin":"symcc"}}]
-          }
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Changed from built-in"]},
+          {"type":"Text","props":{"color":"text"},"children":["  off: on → off"]}
         ]
       },
       {
@@ -2554,65 +2761,6 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
         "children": [
           {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","File"]},
           {"type":"Text","children":["  ",{"type":"Text","props":{"color":"autoAccept"},"children":[".symcc/roles/docs.md"]}]}
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"role-keys-footer","flexDirection":"column"},
-        "children": [
-          {"type":"Text","props":{"wrap":"truncate","color":"subtle"},"children":["──────────────────────────────────────────────────"]},
-          {
-            "type": "Text",
-            "props": {"color":"subtle"},
-            "children": [
-              {
-                "type": "Text",
-                "children": [
-                  "",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["e"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" edit"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["p"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" the prompt it goes in"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["o"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" turn on"]}
-                ]
-              }
-            ]
-          },
-          {
-            "type": "Text",
-            "props": {"color":"subtle"},
-            "children": [
-              {
-                "type": "Text",
-                "children": [
-                  "",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["r"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" reset to built-in"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["b"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" back"]}
-                ]
-              }
-            ]
-          }
         ]
       }
     ],
@@ -2624,37 +2772,98 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
-            "type": "Text",
+            "type": "Box",
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"inactive","weight":"semibold"},"children":["docs"]},
-              {"type":"Text","props":{"color":"warning"},"children":[" · ","replaced, off"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
+              {"type":"Button","props":{"key":"role-back","label":"Roles","variant":"secondary","autoFocus":true},"press":{"plugin":"symcc"}},
+              {"type":"Text","props":{"color":"inactive"},"children":["                        "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["docs · "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 3 of 5 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
           },
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["writes the docs"]}
+          {
+            "type": "Box",
+            "props": {"key":"hdr-title","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"inactive","weight":"semibold"},"children":["docs"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["writes the docs"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["replaced · 1 change"]},
+                  {"type":"Text","props":{"color":"text"},"children":["   "]},
+                  {"type":"Text","props":{"bold":true,"color":"warning","weight":"semibold"},"children":["off"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [
+              {"type":"Button","props":{"key":"role-edit","label":"Edit","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":[" "]},
+              {"type":"Button","props":{"key":"role-prompt","label":"Prompt","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"role-reset","label":"Reset to built-in","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"role-off","label":"Turn on","variant":"secondary"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"role-back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-edit-key","label":"e","hotkey":"e"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-prompt-key","label":"p","hotkey":"p"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-off-key","label":"o","hotkey":"o"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-reset-key","label":"r","hotkey":"r"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["──────────────────────────────────────────────────"]}]
+          }
         ]
       },
       {
         "type": "Box",
-        "props": {"key":"role-buttons","flexDirection":"column"},
+        "props": {"key":"role-changes","flexDirection":"column"},
         "children": [
-          {
-            "type": "Box",
-            "props": {"key":"role-buttons-0","flexDirection":"row","gap":1},
-            "children": [
-              {"type":"Button","props":{"key":"role-back","label":"Back","hotkey":"b","autoFocus":true},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role-edit","label":"Edit","hotkey":"e"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role-prompt","label":"See the prompt","hotkey":"p"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role-off","label":"Turn on","hotkey":"o"},"press":{"plugin":"symcc"}}
-            ]
-          },
-          {
-            "type": "Box",
-            "props": {"key":"role-buttons-1","flexDirection":"row","gap":1},
-            "children": [{"type":"Button","props":{"key":"role-reset","label":"Reset to built-in","hotkey":"r"},"press":{"plugin":"symcc"}}]
-          }
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Changed from built-in"]},
+          {"type":"Text","props":{"color":"text"},"children":["  off: on → off"]}
         ]
       },
       {
@@ -2805,65 +3014,6 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
           {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","File"]},
           {"type":"Text","children":["  ",{"type":"Text","props":{"color":"autoAccept"},"children":[".symcc/roles/docs.md"]}]}
         ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"role-keys-footer","flexDirection":"column"},
-        "children": [
-          {"type":"Text","props":{"wrap":"truncate","color":"subtle"},"children":["──────────────────────────────────────────────────"]},
-          {
-            "type": "Text",
-            "props": {"color":"subtle"},
-            "children": [
-              {
-                "type": "Text",
-                "children": [
-                  "",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["e"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" edit"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["p"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" the prompt it goes in"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["o"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" turn on"]}
-                ]
-              }
-            ]
-          },
-          {
-            "type": "Text",
-            "props": {"color":"subtle"},
-            "children": [
-              {
-                "type": "Text",
-                "children": [
-                  "",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["r"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" reset to built-in"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["b"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" back"]}
-                ]
-              }
-            ]
-          }
-        ]
       }
     ],
     "part": {"plugin":"symcc"}
@@ -2874,37 +3024,169 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
-            "type": "Text",
+            "type": "Box",
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"claude"},"children":["mobile-apps-and-tablets-everywhere"]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · ","added"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
+              {
+                "type": "Button",
+                "props": {"key":"role-back","label":"Roles","plain":true,"autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Roles]"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["                               "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 4 of 5 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
           },
           {
-            "type": "Text",
-            "props": {"bold":true,"color":"text"},
-            "children": ["builds and fixes phone and tablet apps, on every platform, with the shop listings and screenshots too"]
+            "type": "Box",
+            "props": {"key":"hdr-title","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"claude"},"children":["mobile-apps-and-tablets-everywhere"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["builds and"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["                                    "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["fixes phone"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["                                    "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["and tablet"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["                                    "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["apps, on every"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["                                    "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["platform, with"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["                                    "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["the shop"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["                                    "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["listings and"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["                                    "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["screenshots"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["                                    "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["too"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [{"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"success"},"children":["added"]}]}]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"role-edit","label":"Edit","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Edit]"]}]
+              },
+              {"type":"Text","children":[" "]},
+              {
+                "type": "Button",
+                "props": {"key":"role-prompt","label":"Prompt","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Prompt]"]}]
+              },
+              {"type":"Text","children":["   "]},
+              {
+                "type": "Button",
+                "props": {"key":"role-remove","label":"Remove","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Remove]"]}]
+              },
+              {"type":"Text","children":["   "]},
+              {
+                "type": "Button",
+                "props": {"key":"role-off","label":"Turn off","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Turn off]"]}]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"role-back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-edit-key","label":"e","hotkey":"e"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-prompt-key","label":"p","hotkey":"p"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-off-key","label":"o","hotkey":"o"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-remove-key","label":"d","hotkey":"d"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["──────────────────────────────────────────────────"]}]
           }
         ]
       },
       {
         "type": "Box",
-        "props": {"key":"role-buttons","flexDirection":"column"},
+        "props": {"key":"role-changes","flexDirection":"column"},
         "children": [
-          {
-            "type": "Box",
-            "props": {"key":"role-buttons-0","flexDirection":"row","gap":1},
-            "children": [
-              {"type":"Button","props":{"key":"role-back","label":"Back","hotkey":"b","autoFocus":true},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role-edit","label":"Edit","hotkey":"e"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role-prompt","label":"See the prompt","hotkey":"p"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role-off","label":"Turn off","hotkey":"o"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role-remove","label":"Remove","hotkey":"d"},"press":{"plugin":"symcc"}}
-            ]
-          }
+          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Changed from built-in"]},
+          {"type":"Text","props":{"color":"inactive"},"children":["  added: no built-in to compare"]}
         ]
       },
       {
@@ -3055,53 +3337,6 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
           {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","File"]},
           {"type":"Text","children":["  ",{"type":"Text","props":{"color":"autoAccept"},"children":[".symcc/roles/mobile-apps-and-tablets-everywhere.md"]}]}
         ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"role-keys-footer","flexDirection":"column"},
-        "children": [
-          {"type":"Text","props":{"wrap":"truncate","color":"subtle"},"children":["──────────────────────────────────────────────────"]},
-          {
-            "type": "Text",
-            "props": {"color":"subtle"},
-            "children": [
-              {
-                "type": "Text",
-                "children": ["",{"type":"Text","props":{"bold":true,"color":"text"},"children":["e"]},{"type":"Text","props":{"color":"inactive"},"children":[" edit"]}]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["p"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" the prompt it goes in"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["o"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" turn off"]}
-                ]
-              }
-            ]
-          },
-          {
-            "type": "Text",
-            "props": {"color":"subtle"},
-            "children": [
-              {
-                "type": "Text",
-                "children": ["",{"type":"Text","props":{"bold":true,"color":"text"},"children":["d"]},{"type":"Text","props":{"color":"inactive"},"children":[" remove"]}]
-              },
-              {
-                "type": "Text",
-                "children": [" · ",{"type":"Text","props":{"bold":true,"color":"text"},"children":["b"]},{"type":"Text","props":{"color":"inactive"},"children":[" back"]}]
-              }
-            ]
-          }
-        ]
       }
     ],
     "part": {"plugin":"symcc"}
@@ -3112,37 +3347,144 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
-            "type": "Text",
+            "type": "Box",
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["mobile-apps-and-tablets-everywhere"]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · ","added"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
+              {"type":"Button","props":{"key":"role-back","label":"Roles","variant":"secondary","autoFocus":true},"press":{"plugin":"symcc"}},
+              {"type":"Text","props":{"color":"inactive"},"children":["                               "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 4 of 5 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
           },
           {
-            "type": "Text",
-            "props": {"bold":true,"color":"text","weight":"semibold"},
-            "children": ["builds and fixes phone and tablet apps, on every platform, with the shop listings and screenshots too"]
+            "type": "Box",
+            "props": {"key":"hdr-title","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["mobile-apps-and-tablets-everywhere"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["builds and"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["                                    "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["fixes phone"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["                                    "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["and tablet"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["                                    "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["apps, on every"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["                                    "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["platform, with"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["                                    "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["the shop"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["                                    "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["listings and"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["                                    "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["screenshots"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["                                    "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["too"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [{"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"success","weight":"semibold"},"children":["added"]}]}]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [
+              {"type":"Button","props":{"key":"role-edit","label":"Edit","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":[" "]},
+              {"type":"Button","props":{"key":"role-prompt","label":"Prompt","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"role-remove","label":"Remove","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"role-off","label":"Turn off","variant":"secondary"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"role-back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-edit-key","label":"e","hotkey":"e"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-prompt-key","label":"p","hotkey":"p"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-off-key","label":"o","hotkey":"o"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-remove-key","label":"d","hotkey":"d"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["──────────────────────────────────────────────────"]}]
           }
         ]
       },
       {
         "type": "Box",
-        "props": {"key":"role-buttons","flexDirection":"column"},
+        "props": {"key":"role-changes","flexDirection":"column"},
         "children": [
-          {
-            "type": "Box",
-            "props": {"key":"role-buttons-0","flexDirection":"row","gap":1},
-            "children": [
-              {"type":"Button","props":{"key":"role-back","label":"Back","hotkey":"b","autoFocus":true},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role-edit","label":"Edit","hotkey":"e"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role-prompt","label":"See the prompt","hotkey":"p"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role-off","label":"Turn off","hotkey":"o"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role-remove","label":"Remove","hotkey":"d"},"press":{"plugin":"symcc"}}
-            ]
-          }
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Changed from built-in"]},
+          {"type":"Text","props":{"color":"inactive"},"children":["  added: no built-in to compare"]}
         ]
       },
       {
@@ -3292,65 +3634,6 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
         "children": [
           {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","File"]},
           {"type":"Text","children":["  ",{"type":"Text","props":{"color":"autoAccept"},"children":[".symcc/roles/mobile-apps-and-tablets-everywhere.md"]}]}
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"role-keys-footer","flexDirection":"column"},
-        "children": [
-          {"type":"Text","props":{"wrap":"truncate","color":"subtle"},"children":["──────────────────────────────────────────────────"]},
-          {
-            "type": "Text",
-            "props": {"color":"subtle"},
-            "children": [
-              {
-                "type": "Text",
-                "children": [
-                  "",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["e"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" edit"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["p"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" the prompt it goes in"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["o"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" turn off"]}
-                ]
-              }
-            ]
-          },
-          {
-            "type": "Text",
-            "props": {"color":"subtle"},
-            "children": [
-              {
-                "type": "Text",
-                "children": [
-                  "",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["d"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" remove"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["b"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" back"]}
-                ]
-              }
-            ]
-          }
         ]
       }
     ],
@@ -3362,37 +3645,144 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
-            "type": "Text",
+            "type": "Box",
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["mobile-apps-and-tablets-everywhere"]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · ","added"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
+              {"type":"Button","props":{"key":"role-back","label":"Roles","variant":"secondary","autoFocus":true},"press":{"plugin":"symcc"}},
+              {"type":"Text","props":{"color":"inactive"},"children":["                               "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 4 of 5 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
           },
           {
-            "type": "Text",
-            "props": {"bold":true,"color":"text","weight":"semibold"},
-            "children": ["builds and fixes phone and tablet apps, on every platform, with the shop listings and screenshots too"]
+            "type": "Box",
+            "props": {"key":"hdr-title","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["mobile-apps-and-tablets-everywhere"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["builds and"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["                                    "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["fixes phone"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["                                    "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["and tablet"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["                                    "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["apps, on every"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["                                    "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["platform, with"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["                                    "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["the shop"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["                                    "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["listings and"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["                                    "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["screenshots"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["                                    "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["too"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [{"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"success","weight":"semibold"},"children":["added"]}]}]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [
+              {"type":"Button","props":{"key":"role-edit","label":"Edit","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":[" "]},
+              {"type":"Button","props":{"key":"role-prompt","label":"Prompt","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"role-remove","label":"Remove","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"role-off","label":"Turn off","variant":"secondary"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"role-back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-edit-key","label":"e","hotkey":"e"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-prompt-key","label":"p","hotkey":"p"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-off-key","label":"o","hotkey":"o"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-remove-key","label":"d","hotkey":"d"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["──────────────────────────────────────────────────"]}]
           }
         ]
       },
       {
         "type": "Box",
-        "props": {"key":"role-buttons","flexDirection":"column"},
+        "props": {"key":"role-changes","flexDirection":"column"},
         "children": [
-          {
-            "type": "Box",
-            "props": {"key":"role-buttons-0","flexDirection":"row","gap":1},
-            "children": [
-              {"type":"Button","props":{"key":"role-back","label":"Back","hotkey":"b","autoFocus":true},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role-edit","label":"Edit","hotkey":"e"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role-prompt","label":"See the prompt","hotkey":"p"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role-off","label":"Turn off","hotkey":"o"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role-remove","label":"Remove","hotkey":"d"},"press":{"plugin":"symcc"}}
-            ]
-          }
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Changed from built-in"]},
+          {"type":"Text","props":{"color":"inactive"},"children":["  added: no built-in to compare"]}
         ]
       },
       {
@@ -3543,65 +3933,6 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
           {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","File"]},
           {"type":"Text","children":["  ",{"type":"Text","props":{"color":"autoAccept"},"children":[".symcc/roles/mobile-apps-and-tablets-everywhere.md"]}]}
         ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"role-keys-footer","flexDirection":"column"},
-        "children": [
-          {"type":"Text","props":{"wrap":"truncate","color":"subtle"},"children":["──────────────────────────────────────────────────"]},
-          {
-            "type": "Text",
-            "props": {"color":"subtle"},
-            "children": [
-              {
-                "type": "Text",
-                "children": [
-                  "",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["e"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" edit"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["p"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" the prompt it goes in"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["o"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" turn off"]}
-                ]
-              }
-            ]
-          },
-          {
-            "type": "Text",
-            "props": {"color":"subtle"},
-            "children": [
-              {
-                "type": "Text",
-                "children": [
-                  "",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["d"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" remove"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["b"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" back"]}
-                ]
-              }
-            ]
-          }
-        ]
       }
     ],
     "part": {"plugin":"symcc"}
@@ -3612,39 +3943,114 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
-            "type": "Text",
+            "type": "Box",
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"claude"},"children":["checker"]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · ","built-in"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
+              {
+                "type": "Button",
+                "props": {"key":"role-back","label":"Roles","plain":true,"autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Roles]"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["                     "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["checker · "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 2 of 5 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
           },
           {
-            "type": "Text",
-            "props": {"bold":true,"color":"text"},
-            "children": ["checks a finished change before it merges and tries to break it (used only by the checker setting, never for a task)"]
+            "type": "Box",
+            "props": {"key":"hdr-title","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"claude"},"children":["checker"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["checks a finished change before it merges"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["         "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["and tries to break it (used only by the"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["         "]},
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["checker setting, never for a task)"]}
+                ]
+              }
+            ]
           },
           {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": ["never a task's role, and not turned on or off here: the checker setting runs it (Settings → checker, now off)"]
+            "type": "Box",
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [{"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"inactive"},"children":["built-in"]}]}]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"role-edit","label":"Edit","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Edit]"]}]
+              },
+              {"type":"Text","children":[" "]},
+              {
+                "type": "Button",
+                "props": {"key":"role-prompt","label":"Prompt","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Prompt]"]}]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"role-back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-edit-key","label":"e","hotkey":"e"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-prompt-key","label":"p","hotkey":"p"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["──────────────────────────────────────────────────"]}]
           }
         ]
       },
       {
         "type": "Box",
-        "props": {"key":"role-buttons","flexDirection":"column"},
+        "props": {"flexDirection":"column"},
         "children": [
           {
-            "type": "Box",
-            "props": {"key":"role-buttons-0","flexDirection":"row","gap":1},
-            "children": [
-              {"type":"Button","props":{"key":"role-back","label":"Back","hotkey":"b","autoFocus":true},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role-edit","label":"Edit","hotkey":"e"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role-prompt","label":"See the prompt","hotkey":"p"},"press":{"plugin":"symcc"}}
-            ]
+            "type": "Text",
+            "props": {"color":"inactive"},
+            "children": ["never a task's role, and not turned on or off here: the checker setting runs it (Settings → checker, now off)"]
           }
         ]
       },
@@ -3797,35 +4203,6 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": ["  ",{"type":"Text","props":{"color":"autoAccept"},"children":["roles/checker.md (in the plugin; Edit copies it to .symcc/roles/checker.md)"]}]
-          }
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"role-keys-footer","flexDirection":"column"},
-        "children": [
-          {"type":"Text","props":{"wrap":"truncate","color":"subtle"},"children":["──────────────────────────────────────────────────"]},
-          {
-            "type": "Text",
-            "props": {"color":"subtle"},
-            "children": [
-              {
-                "type": "Text",
-                "children": ["",{"type":"Text","props":{"bold":true,"color":"text"},"children":["e"]},{"type":"Text","props":{"color":"inactive"},"children":[" edit"]}]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["p"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" the prompt it goes in"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [" · ",{"type":"Text","props":{"bold":true,"color":"text"},"children":["b"]},{"type":"Text","props":{"color":"inactive"},"children":[" back"]}]
-              }
-            ]
           }
         ]
       }
@@ -3838,39 +4215,99 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
-            "type": "Text",
+            "type": "Box",
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["checker"]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · ","built-in"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
+              {"type":"Button","props":{"key":"role-back","label":"Roles","variant":"secondary","autoFocus":true},"press":{"plugin":"symcc"}},
+              {"type":"Text","props":{"color":"inactive"},"children":["                     "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["checker · "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 2 of 5 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
           },
           {
-            "type": "Text",
-            "props": {"bold":true,"color":"text","weight":"semibold"},
-            "children": ["checks a finished change before it merges and tries to break it (used only by the checker setting, never for a task)"]
+            "type": "Box",
+            "props": {"key":"hdr-title","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["checker"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["checks a finished change before it merges"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["         "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["and tries to break it (used only by the"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["         "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["checker setting, never for a task)"]}
+                ]
+              }
+            ]
           },
           {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": ["never a task's role, and not turned on or off here: the checker setting runs it (Settings → checker, now off)"]
+            "type": "Box",
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [{"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"inactive","weight":"semibold"},"children":["built-in"]}]}]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [
+              {"type":"Button","props":{"key":"role-edit","label":"Edit","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":[" "]},
+              {"type":"Button","props":{"key":"role-prompt","label":"Prompt","variant":"secondary"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"role-back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-edit-key","label":"e","hotkey":"e"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-prompt-key","label":"p","hotkey":"p"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["──────────────────────────────────────────────────"]}]
           }
         ]
       },
       {
         "type": "Box",
-        "props": {"key":"role-buttons","flexDirection":"column"},
+        "props": {"flexDirection":"column"},
         "children": [
           {
-            "type": "Box",
-            "props": {"key":"role-buttons-0","flexDirection":"row","gap":1},
-            "children": [
-              {"type":"Button","props":{"key":"role-back","label":"Back","hotkey":"b","autoFocus":true},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role-edit","label":"Edit","hotkey":"e"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role-prompt","label":"See the prompt","hotkey":"p"},"press":{"plugin":"symcc"}}
-            ]
+            "type": "Text",
+            "props": {"color":"inactive"},
+            "children": ["never a task's role, and not turned on or off here: the checker setting runs it (Settings → checker, now off)"]
           }
         ]
       },
@@ -4023,43 +4460,6 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": ["  ",{"type":"Text","props":{"color":"autoAccept"},"children":["roles/checker.md (in the plugin; Edit copies it to .symcc/roles/checker.md)"]}]
-          }
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"role-keys-footer","flexDirection":"column"},
-        "children": [
-          {"type":"Text","props":{"wrap":"truncate","color":"subtle"},"children":["──────────────────────────────────────────────────"]},
-          {
-            "type": "Text",
-            "props": {"color":"subtle"},
-            "children": [
-              {
-                "type": "Text",
-                "children": [
-                  "",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["e"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" edit"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["p"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" the prompt it goes in"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["b"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" back"]}
-                ]
-              }
-            ]
           }
         ]
       }
@@ -4072,39 +4472,99 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
     "children": [
       {
         "type": "Box",
-        "props": {"flexDirection":"column"},
+        "props": {"key":"page-header","flexDirection":"column"},
         "children": [
           {
-            "type": "Text",
+            "type": "Box",
+            "props": {"key":"hdr-where","flexDirection":"row"},
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["checker"]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · ","built-in"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["‹ "]},
+              {"type":"Button","props":{"key":"role-back","label":"Roles","variant":"secondary","autoFocus":true},"press":{"plugin":"symcc"}},
+              {"type":"Text","props":{"color":"inactive"},"children":["                     "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["checker · "]},
+              {
+                "type": "Button",
+                "props": {"key":"prev","label":"Previous","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["‹"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":[" 2 of 5 "]},
+              {
+                "type": "Button",
+                "props": {"key":"next","label":"Next","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"inactive"},"children":["›"]}]
+              }
             ]
           },
           {
-            "type": "Text",
-            "props": {"bold":true,"color":"text","weight":"semibold"},
-            "children": ["checks a finished change before it merges and tries to break it (used only by the checker setting, never for a task)"]
+            "type": "Box",
+            "props": {"key":"hdr-title","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["checker"]},
+                  {"type":"Text","props":{"color":"text"},"children":["  "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["checks a finished change before it merges"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["         "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["and tries to break it (used only by the"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  {"type":"Text","props":{"color":"text"},"children":["         "]},
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["checker setting, never for a task)"]}
+                ]
+              }
+            ]
           },
           {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": ["never a task's role, and not turned on or off here: the checker setting runs it (Settings → checker, now off)"]
+            "type": "Box",
+            "props": {"key":"hdr-state","flexDirection":"column"},
+            "children": [{"type":"Text","children":[{"type":"Text","props":{"bold":true,"color":"inactive","weight":"semibold"},"children":["built-in"]}]}]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-0","flexDirection":"row"},
+            "children": [
+              {"type":"Button","props":{"key":"role-edit","label":"Edit","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":[" "]},
+              {"type":"Button","props":{"key":"role-prompt","label":"Prompt","variant":"secondary"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-keys","display":"none"},
+            "children": [
+              {"type":"Button","props":{"key":"role-back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-edit-key","label":"e","hotkey":"e"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"role-prompt-key","label":"p","hotkey":"p"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-rule","flexDirection":"column"},
+            "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["──────────────────────────────────────────────────"]}]
           }
         ]
       },
       {
         "type": "Box",
-        "props": {"key":"role-buttons","flexDirection":"column"},
+        "props": {"flexDirection":"column"},
         "children": [
           {
-            "type": "Box",
-            "props": {"key":"role-buttons-0","flexDirection":"row","gap":1},
-            "children": [
-              {"type":"Button","props":{"key":"role-back","label":"Back","hotkey":"b","autoFocus":true},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role-edit","label":"Edit","hotkey":"e"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"role-prompt","label":"See the prompt","hotkey":"p"},"press":{"plugin":"symcc"}}
-            ]
+            "type": "Text",
+            "props": {"color":"inactive"},
+            "children": ["never a task's role, and not turned on or off here: the checker setting runs it (Settings → checker, now off)"]
           }
         ]
       },
@@ -4257,43 +4717,6 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": ["  ",{"type":"Text","props":{"color":"autoAccept"},"children":["roles/checker.md (in the plugin; Edit copies it to .symcc/roles/checker.md)"]}]
-          }
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"key":"role-keys-footer","flexDirection":"column"},
-        "children": [
-          {"type":"Text","props":{"wrap":"truncate","color":"subtle"},"children":["──────────────────────────────────────────────────"]},
-          {
-            "type": "Text",
-            "props": {"color":"subtle"},
-            "children": [
-              {
-                "type": "Text",
-                "children": [
-                  "",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["e"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" edit"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["p"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" the prompt it goes in"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["b"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" back"]}
-                ]
-              }
-            ]
           }
         ]
       }

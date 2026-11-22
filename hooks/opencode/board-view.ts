@@ -38,6 +38,8 @@ import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, br
 import { restFrame } from '../core/logo'
 import { taskSections, type TaskSection } from '../core/task-sections'
 import type { TaskBranchFacts } from '../core/task-branch'
+import { type RoleChange, CHANGED_HEADING, changeLines, changesOfRole, roleListLabel, roleStateGroups } from '../core/role-changes'
+import { roleButtons as headerRoleButtons } from '../core/page-header'
 import { type ActionGroup, groupSegLines, headerRule, inGroups, navHint, navRow, packGroups, type PageFrom, PILL_COLOR, pillText, placeIn, scoutAbout, scoutButtons as headerScoutButtons, scoutListNames, scoutStateGroups, taskColor, taskPlace, taskStateGroups, titleLines, whereLine } from '../core/page-header'
 import { sessionNote } from '../core/details'
 import type { DiffFile } from '../core/review'
@@ -92,11 +94,15 @@ export type ViewDef = {
   canReset: boolean
   /** whether Remove works (T-706, as on Claude Code's page): an added one, or a broken file with no built-in's name */
   canRemove: boolean
+  /** T-871: a replaced role's differences from the built-in role (core's roleChanges) */
+  changes?: RoleChange[]
+  /** T-871: the day the owner's file was last changed ("2026-11-22") */
+  changed_at?: string
 }
 
 /** The roles or kinds as the view file carries them: each merged one (built-in, or the owner's over it) in order, then
  *  the owner's files that can't be read. `dir` is the owner's folder for them (".symcc/roles"). */
-export function viewDefs(def: 'role' | 'kind', all: readonly (RoleDef | KindDef)[], builtIn: readonly { name: string }[], project: readonly { name: string }[], broken: readonly BrokenDef[], dir: string): ViewDef[] {
+export function viewDefs(def: 'role' | 'kind', all: readonly (RoleDef | KindDef)[], builtIn: readonly { name: string }[], project: readonly { name: string }[], broken: readonly BrokenDef[], dir: string, days: Record<string, string> = {}): ViewDef[] {
   const nameError = def === 'role' ? roleNameError : kindNameError
   const brokenRow = (b: BrokenDef): ViewDef => {
     const okName = !nameError(b.name)
@@ -112,6 +118,8 @@ export function viewDefs(def: 'role' | 'kind', all: readonly (RoleDef | KindDef)
     const plugin = def === 'role' ? `roles/${d.name}.md` : `kinds/${d.name}.ts`
     const file = source === 'built-in' ? `${plugin} (in the plugin)` : `${dir}/${d.name}.md`
     const role = def === 'role' ? (d as RoleDef) : null
+    const changes = role && source === 'replaced' ? changesOfRole(d.name, builtIn as readonly RoleDef[], project as readonly RoleDef[]) : null
+    const at = role && source !== 'built-in' ? days[d.name] : ''
     return {
       name: d.name,
       description: d.description,
@@ -124,6 +132,8 @@ export function viewDefs(def: 'role' | 'kind', all: readonly (RoleDef | KindDef)
       canOff,
       canReset: source === 'replaced',
       canRemove: source === 'added',
+      ...(changes ? { changes } : {}),
+      ...(at ? { changed_at: at } : {}),
     }
   })
   return [...rows, ...broken.filter(b => !defNamed(all, b.name)).map(brokenRow)]
@@ -599,8 +609,10 @@ function tabKeys(f: ViewFile | null, opened: string, tab: PanelTab, run: string,
     // the Roles and Kinds lists: Claude Code's keys (n makes a new one)
     if (!place.def) return place.list === 'roles' ? rolesKeys() : kindsKeys()
     if (place.prompt) return rolePromptKeys()
-    // core's keys of Claude Code's role page (T-706: with Edit and Remove)
+    // core's keys of Claude Code's role page (T-706: with Edit and Remove); a role's page has none (T-871: its header
+    // has the buttons, as Claude Code's)
     const d = place.def
+    if (place.list === 'roles' && !d.broken) return []
     return roleKeys({ canEdit: !d.broken, canOff: d.canOff, off: d.off, canReset: d.canReset, canRemove: d.canRemove, canSeePrompt: place.list === 'roles' && !d.broken })
   }
   if (tab === 'scouts') {
@@ -720,6 +732,7 @@ export function pagePlace(f: ViewFile | null, choice: Pick<PanelChoice, 'tab' | 
   if (!f) return null
   if (page === 'task') return taskPlace(f.view, choice.opened, choice.from ?? 'tasks', nowMs, choice.search ?? '')
   if (page === 'scout') return placeIn(scoutListNames(f.view.scouts ?? []), choice.opened)
+  if (page === 'role') return placeIn(roleListIds(f), choice.opened)
   return null
 }
 
@@ -1084,7 +1097,8 @@ function defsList(f: ViewFile, list: DefList, cursor: number, w: number): Body {
       b.add([front, { text: x.name.padEnd(nameW), color: 'inactive', bold: true }, { text: ` — ${x.broken}`, color: 'error' }], { page: id })
       continue
     }
-    const label = sourceLabel(x.source as DefSource, x.off)
+    // T-871: a replaced role says what it changed ("replaced · model")
+    const label = list === 'roles' ? roleListLabel(x.source as DefSource, x.off, x.changes) : sourceLabel(x.source as DefSource, x.off)
     const fit = fitRow(2 + nameW + 1 + label.length, ` · ${x.description}`, '', w)
     b.add(
       [
@@ -1108,6 +1122,7 @@ function defsList(f: ViewFile, list: DefList, cursor: number, w: number): Body {
 /** One role's or kind's page: its name, where it comes from and whether it is off, what it is for; a role's model,
  *  skills and tools; its checklist (a role) or body (a kind); its file. A file that can't be read says why. */
 function defPage(f: ViewFile, list: DefList, x: ViewDef, w: number): Body {
+  if (list === 'roles' && !x.broken) return rolePage(f, x, w)
   const b = bodyMaker()
   const role = list === 'roles'
   // T-685: its title and what it is, then its buttons (as Claude Code's page), all staying at the top
@@ -1141,6 +1156,54 @@ function defPage(f: ViewFile, list: DefList, x: ViewDef, w: number): Body {
     if (x.text.trim()) for (const l of textLines(x.text.trim(), 'text', w)) b.add(l)
     else b.add([{ text: role ? '  (none: a plain worker)' : '  (none)', color: 'inactive' }])
   }
+  b.blank()
+  b.heading('File')
+  b.add([{ text: `  ${x.file}`, color: 'autoAccept' }])
+  b.blank()
+  b.add([{ text: 'To change what it says: ask the lead, or edit its file (your own edit shows here at the next board change)', color: 'inactive' }])
+  return { ...b, ids: [], selected: '', head }
+}
+
+/** The roles a role's page goes through with prev/next: the Roles list's, but the files that can't be read. */
+export const roleListIds = (f: ViewFile): string[] => defsIn(f, 'roles').filter(x => !x.broken).map(x => defPageId('roles', x.name))
+
+/** The buttons of role `x`'s page header, as Claude Code's (core's roleButtons): Edit, Prompt, Turn off or on, Reset to
+ *  built-in (asks first), Remove (asks first); each presses its key. */
+export const roleButtons = (x: ViewDef): HeadButton[] =>
+  headerRoleButtons({ canOff: x.canOff, off: x.off, canReset: x.canReset, canRemove: x.canRemove, canSeePrompt: true }).map(b => ({ label: b.label, group: b.group, hit: { key: b.key as PanelKey } }))
+
+/** "Reset role tester to the built-in one and delete .symcc/roles/tester.md?" (the confirm step of Reset to built-in). */
+export const resetAsk = (d: ViewDef) => `Reset role ${d.name} to the built-in one and delete ${d.file}?`
+
+/** One role's page (T-871, as Claude Code's): the shared page header (‹ [Roles] and its place, its name and description,
+ *  its state "replaced · 1 change", its buttons, a thin rule), then what its file changed from the built-in role (each
+ *  difference as before → after, a checklist's changed lines only, the file's date), its model, skills, tools,
+ *  checklist and file. No key line at the bottom (panelKeys): the keys are the header's. */
+function rolePage(f: ViewFile, x: ViewDef, w: number): Body {
+  const b = bodyMaker()
+  const source = x.source as DefSource
+  const place = placeIn(roleListIds(f), defPageId('roles', x.name))
+  for (const l of headerLines({ from: 'roles', label: x.name, place, title: x.description, color: x.off ? 'inactive' : 'claude', state: roleStateGroups(source, x.off, x.changes ?? (source === 'replaced' ? [] : null)), buttons: roleButtons(x) }, w)) b.add(l)
+  const head = b.lines.length
+  if (x.warning) b.add([{ text: x.warning, color: 'warning' }])
+  if (isCheckerRole(x.name)) for (const l of wrapSegs([{ text: `never a task's role, and not turned on or off here: the checker setting runs it (Settings → checker, now ${checkerOn(f.view) ? 'on' : 'off'})`, color: 'inactive' }], w)) b.add(l)
+  if (source !== 'built-in') {
+    b.blank()
+    b.heading(CHANGED_HEADING)
+    for (const l of changeLines(source, x.changes ?? (source === 'replaced' ? [] : null), x.changed_at ?? '')) b.add([{ text: l.text, color: l.tone }])
+  }
+  const section = (title: string, value: string, none: string) => {
+    b.blank()
+    b.heading(title)
+    b.add([{ text: `  ${value || none}`, color: value ? 'text' : 'inactive' }])
+  }
+  section('Model', x.model ?? '', "(none: the session's model)")
+  section('Skills', (x.skills ?? []).join(', '), '(none)')
+  section('Tools', (x.tools ?? []).join(', '), '(none: the base tools only)')
+  b.blank()
+  b.heading('Checklist')
+  if (x.text.trim()) for (const l of textLines(x.text.trim(), 'text', w)) b.add(l)
+  else b.add([{ text: '  (none: a plain worker)', color: 'inactive' }])
   b.blank()
   b.heading('File')
   b.add([{ text: `  ${x.file}`, color: 'autoAccept' }])

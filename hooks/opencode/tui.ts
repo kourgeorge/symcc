@@ -26,7 +26,7 @@
 // modules (Solid and OpenTUI's Solid renderer) are passed in (TuiRuntime), so this file type-checks and its tests
 // run without them. The names and shapes below are @opencode/plugin 2.3.0's tui Context (only what is used).
 import { DEFAULT_NAME, dataDir } from '../name'
-import { VIEW_FILE, parseViewFile, bandDraw, panelLines, pagePlace, panelKeys, panelTaskActions, approveInProgress, panelRoleChoices, TASK_ACTION_COMMANDS, LETTER_KEYS, type LetterKey, hasPage, answerOptions, actionCommand, moveCursor, OWN_ANSWER, GROUPS_OPEN, groupOf, groupId, scoutRunsIn, settingsPlace, orgMemNoteOf, ORG_MEM_PAGE, orgMemPageId, orgMemPageTopic, LIVE_OM_ALL_ID, liveNoteId, liveTopicId, branchIdTask, orgMemIn, defPageId, rolePromptId, SETTINGS_OPEN, settingGroupOf, settingGroupId, PANEL_TABS, CHOICE_KEYS, approveSent, editOf, defDraftOf, draftChanges, draftError, editBoxId, boardPageOf, removeAsk, DEF_EDIT_BOXES, SETUP_GIT_ASK, newNameError, NEW_OPEN_MS, EDIT_SAVE_ID, EDIT_CANCEL_ID, EDIT_FIRST_BOX, type DefDraft, type ApproveSent, type ChoiceKey, type ViewFile, type Line, type PanelAction, type PanelHit, type PanelKey, type PanelGroup, type PanelTab, type BandHit } from './board-view'
+import { VIEW_FILE, parseViewFile, bandDraw, panelLines, pagePlace, panelKeys, panelTaskActions, approveInProgress, panelRoleChoices, TASK_ACTION_COMMANDS, LETTER_KEYS, type LetterKey, hasPage, answerOptions, actionCommand, moveCursor, OWN_ANSWER, GROUPS_OPEN, groupOf, groupId, scoutRunsIn, settingsPlace, orgMemNoteOf, ORG_MEM_PAGE, orgMemPageId, orgMemPageTopic, LIVE_OM_ALL_ID, liveNoteId, liveTopicId, branchIdTask, orgMemIn, defPageId, rolePromptId, SETTINGS_OPEN, settingGroupOf, settingGroupId, PANEL_TABS, CHOICE_KEYS, approveSent, editOf, defDraftOf, draftChanges, draftError, editBoxId, boardPageOf, removeAsk, resetAsk, DEF_EDIT_BOXES, SETUP_GIT_ASK, newNameError, NEW_OPEN_MS, EDIT_SAVE_ID, EDIT_CANCEL_ID, EDIT_FIRST_BOX, type DefDraft, type ApproveSent, type ChoiceKey, type ViewFile, type Line, type PanelAction, type PanelHit, type PanelKey, type PanelGroup, type PanelTab, type BandHit } from './board-view'
 import { SETTING_GROUPS, isScoutRunReport, taskReports, taskActions, type TaskAction, type TaskActionId, parseSettingValue, settingChoices, settingInfo, settingShown, settingValue, viewAsBoard, isSettingPage, everyText, everyMinutesOf, nextMode, modeOf, promptsOfRole, SEARCH_WORDS, NEW_SCOUT_EVERY, showsHeader, defEditFields, type SettingName, type ScoutEditField, type DefEditField } from '../board'
 import type { SymccScout } from '../../types'
 import { orgMemDeleteAsk, orgMemFile, orgMemNoteKey, orgMemTopicCounts } from '../core/org-mem'
@@ -402,7 +402,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     if (f.view.open_on_start === false || f.view.on_here === false) startDone = true
     else if (ctx.ui.panel.current()?.name === BOARD_PANEL || ctx.ui.panel.open(BOARD_PANEL)) startDone = true
   }
-  /** T-841: /symcc-enable (or enable here) writes a one-time "open now" mark with its session's id into the view file.
+  /** T-841: /symcc-enable (also spelled enable here) writes a one-time "open now" mark with its session's id into the view file.
    *  Only the TUI window showing that session opens the board for it (unless open_on_start is off or it is open
    *  already); a mark from before this run, or one for another window's session, opens nothing. A write by another
    *  window (enabled false or true) never counts. */
@@ -687,7 +687,13 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
       return
     }
     if (key === 'o' && d.canOff) return send(sessionID, { kind: 'def', def, name: d.name, action: d.off ? 'on' : 'off' })
-    if (key === 'r' && d.canReset) return send(sessionID, { kind: 'def', def, name: d.name, action: 'reset' })
+    if (key === 'r' && d.canReset) {
+      // T-871: a role's Reset to built-in asks first, as on Claude Code's page
+      if (def === 'role' && !(await yes(resetAsk(d), 'Yes, reset'))) return
+      return send(sessionID, { kind: 'def', def, name: d.name, action: 'reset' })
+    }
+    // T-871: ‹ › (and [ ]) on a role's page go to the role before or after it in the Roles list
+    if ((key === 'prev' || key === 'next') && def === 'role' && !d.broken) return goNext(key)
     // See the prompt (T-685): the first built-in prompt the role goes in
     if (key === 'p' && def === 'role' && !d.broken) return openPage(rolePromptId(d.name, promptsOfRole(d.name)[0]!))
   }

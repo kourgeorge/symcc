@@ -5,7 +5,10 @@ import { S } from '../../app/state'
 import { type $ } from '../panel'
 import { resetPane } from '../../app/open'
 import { ownerSettings } from '../../app/tools'
-import { roleLists, roleView, roleDraftOf, saveRoleDraft, newRoleFile, changeRole } from '../../app/roles'
+import { roleLists, roleView, roleDraftOf, saveRoleDraft, newRoleFile, changeRole, roleFileDay } from '../../app/roles'
+import { type RolePageFacts, CHANGED_HEADING, changeLines, changesOfRole, roleListLabel, roleStateGroups } from '../../core/role-changes'
+import { NAV_KEYS, placeIn, roleButtons } from '../../core/page-header'
+import { type PageHeader, pageHeader } from './page-header'
 import { kindLists, kindView, kindDraftOf, saveKindDraft, newKindFile, changeKind } from '../../app/kinds'
 import type { PaneParts } from './parts'
 import { arrows, headingFocused, row } from './arrows'
@@ -58,59 +61,88 @@ function roleEditPage($: $, pane: PaneParts, source: DefSource | undefined) {
   )
 }
 
-/** One role's page (opened from the Roles page; Back returns there): its front matter and checklist, with Back, Edit, Turn off / on (not for general,
- *  nor for the checker role: its page says the checker setting runs it and whether that is on, `checker`), Reset to built-in (a replaced built-in only)
- *  and Remove (an added role only, after a confirm step). */
-function rolePage($: $, pane: PaneParts, r: RoleDef, source: DefSource, checker: boolean) {
-  // VS Code's side panel draws its own page (vscode-roles.tsx)
-  if (pane.vscode) return rolePageVs($, pane, r, source, checker)
-  const { Box, Text, Button, act, C, heading, footer, buttonRows, paragraphs } = pane
-  const run = (input: Parameters<typeof changeRole>[1], after?: () => void) => act(async () => {
-    const res = await changeRole(claudeHost($), input)
-    if (res.ok && after) after()
-    roleView.confirmRemove = false
-    $.ui.toast(S.N.toast(res.text))
-    $.ui.invalidate('ui.render')
-  })
+/** The shared page header of role `r`'s page (T-751's, as on task and scout pages; T-871): ‹ [Roles] and its place in
+ *  the list, its name and description, its state ("replaced · 1 change", "off"), its buttons (Edit, Prompt, Turn off or on,
+ *  Reset to built-in, Remove). Used by the terminal, desktop, mobile and VS Code pages. */
+export function roleHeader($: $, r: RoleDef, source: DefSource, facts: RolePageFacts, run: (input: Parameters<typeof changeRole>[1]) => () => void): PageHeader {
+  const redraw = () => $.ui.invalidate('ui.render')
   const isChecker = isCheckerRole(r.name)
   // the checker role's off: true only keeps it out of the task roles, so it is not shown as off
   const off = !!r.off && !isChecker
   const canOff = r.name.toLowerCase() !== DEFAULT_ROLE && !isChecker
+  const at = placeIn(facts.names, r.name)
+  const go = (name: string) => () => ((roleView.open = name), (roleView.confirmRemove = false), (roleView.confirmReset = false), redraw())
+  const onPress: Record<string, () => void> = {
+    'role-edit': () => ((roleView.draft = roleDraftOf(r)), (roleView.confirmRemove = false), (roleView.confirmReset = false), redraw()),
+    'role-prompt': () => ((roleView.prompt = promptsOfRole(r.name)[0]!), (roleView.confirmRemove = false), (roleView.confirmReset = false), redraw()),
+    'role-off': run({ action: r.off ? 'on' : 'off', name: r.name }),
+    'role-reset': () => ((roleView.confirmReset = true), (roleView.confirmRemove = false), redraw()),
+    'role-remove': () => ((roleView.confirmRemove = true), (roleView.confirmReset = false), redraw()),
+  }
+  const buttons = roleButtons({ canOff, off: !!r.off, canReset: source === 'replaced', canRemove: source === 'added', canSeePrompt: true })
+  return {
+    from: 'roles', label: r.name, place: at, title: r.description, color: off ? 'inactive' : 'claude',
+    state: roleStateGroups(source, off, facts.changes),
+    buttons: buttons.map(b => ({ ...b, onPress: onPress[b.id] ?? (() => undefined) })),
+    onBack: go(''), onPrev: at ? go(at.prev) : () => undefined, onNext: at ? go(at.next) : () => undefined,
+    backFocus: !roleView.confirmRemove && !roleView.confirmReset, nav: NAV_KEYS.claude, backKey: 'role-back',
+  }
+}
+
+/** One role's page (opened from the Roles page; Back returns there): the shared page header (roleHeader), then what its file
+ *  changed from the built-in role (T-871: each difference as before → after, a checklist's changed lines only, the file's
+ *  date; Reset to built-in asks first), then its front matter and checklist. No key line at the bottom: the keys are the
+ *  header's (e, p, o, r, d, b, k j). The checker role's page says the checker setting runs it and whether that is on. */
+function rolePage($: $, pane: PaneParts, r: RoleDef, source: DefSource, facts: RolePageFacts) {
+  const run = (input: Parameters<typeof changeRole>[1], after?: () => void) => pane.act(async () => {
+    const res = await changeRole(claudeHost($), input)
+    if (res.ok && after) after()
+    roleView.confirmRemove = false
+    roleView.confirmReset = false
+    $.ui.toast(S.N.toast(res.text))
+    $.ui.invalidate('ui.render')
+  })
+  const header = roleHeader($, r, source, facts, input => run(input))
+  // VS Code's side panel draws its own page (vscode-roles.tsx), with the same header
+  if (pane.vscode) return rolePageVs($, pane, r, source, facts, header, run)
+  const { Box, Text, Button, C, heading, paragraphs } = pane
+  const isChecker = isCheckerRole(r.name)
   const canReset = source === 'replaced'
   const canRemove = source === 'added'
-  // one section per part of the file, named as the edit page's boxes; the description is the subheader
+  // one section per part of the file, named as the edit page's boxes; the description is the header's title
   const section = (title: string, value: string | undefined, none: string) => (
     <Box flexDirection="column">
       {heading(title)}
       {value ? <Text color={C('text')}>{`  ${value}`}</Text> : <Text color={C('inactive')}>{`  ${none}`}</Text>}
     </Box>
   )
+  const confirm = (key: string, what: string, yes: string, onYes: () => void, onNo: () => void) => (
+    <Box key={`${key}-box`} flexDirection="column" borderStyle="round" borderColor={C('warning')} paddingX={1}>
+      <Text color={C('warning')}>{what}</Text>
+      <Box flexDirection="row" gap={1}>
+        <Button key={`${key}-yes`} label={`${yes} (y)`} hotkey="y" autoFocus onPress={onYes} />
+        <Button key={`${key}-cancel`} label="Cancel (x)" hotkey="x" onPress={onNo} />
+      </Box>
+    </Box>
+  )
+  const cancel = () => ((roleView.confirmRemove = false), (roleView.confirmReset = false), $.ui.invalidate('ui.render'))
   return (
     <Box flexDirection="column" gap={1}>
-      <Box flexDirection="column">
-        <Text>
-          <Text bold color={C(off ? 'inactive' : 'claude')}>{r.name}</Text>
-          <Text color={C(off ? 'warning' : 'inactive')}> · {sourceLabel(source, off)}</Text>
-        </Text>
-        <Text bold color={C('text')}>{r.description}</Text>
-        {r.warning ? <Text color={C('warning')}>{r.warning}</Text> : null}
-        {isChecker ? <Text key="role-checker-setting" color={C('inactive')}>{`never a task's role, and not turned on or off here: the checker setting runs it (Settings → checker, now ${checker ? 'on' : 'off'})`}</Text> : null}
-      </Box>
-      {buttonRows([
-        <Button key="role-back" label="Back" hotkey="b" autoFocus={roleView.confirmRemove ? undefined : true} onPress={() => ((roleView.open = ''), (roleView.confirmRemove = false), $.ui.invalidate('ui.render'))} />,
-        <Button key="role-edit" label="Edit" hotkey="e" onPress={() => ((roleView.draft = roleDraftOf(r)), (roleView.confirmRemove = false), $.ui.invalidate('ui.render'))} />,
-        <Button key="role-prompt" label="See the prompt" hotkey="p" onPress={() => ((roleView.prompt = promptsOfRole(r.name)[0]!), (roleView.confirmRemove = false), $.ui.invalidate('ui.render'))} />,
-        canOff && <Button key="role-off" label={r.off ? 'Turn on' : 'Turn off'} hotkey="o" onPress={run({ action: r.off ? 'on' : 'off', name: r.name })} />,
-        canReset && <Button key="role-reset" label="Reset to built-in" hotkey="r" onPress={run({ action: 'reset', name: r.name })} />,
-        canRemove && <Button key="role-remove" label="Remove" hotkey="d" onPress={() => ((roleView.confirmRemove = true), $.ui.invalidate('ui.render'))} />,
-      ], 'role-buttons')}
-      {roleView.confirmRemove && canRemove ? (
-        <Box key="role-remove-box" flexDirection="column" borderStyle="round" borderColor={C('warning')} paddingX={1}>
-          <Text color={C('warning')}>Remove role {r.name} and delete {roleFileOf(r.name)}?</Text>
-          <Box flexDirection="row" gap={1}>
-            <Button key="role-remove-yes" label="Yes, remove (y)" hotkey="y" autoFocus onPress={run({ action: 'remove', name: r.name }, () => (roleView.open = ''))} />
-            <Button key="role-remove-cancel" label="Cancel (x)" hotkey="x" onPress={() => ((roleView.confirmRemove = false), $.ui.invalidate('ui.render'))} />
-          </Box>
+      {pageHeader(pane, header)}
+      {r.warning || isChecker ? (
+        <Box flexDirection="column">
+          {r.warning ? <Text color={C('warning')}>{r.warning}</Text> : null}
+          {isChecker ? <Text key="role-checker-setting" color={C('inactive')}>{`never a task's role, and not turned on or off here: the checker setting runs it (Settings → checker, now ${facts.checker ? 'on' : 'off'})`}</Text> : null}
+        </Box>
+      ) : null}
+      {roleView.confirmRemove && canRemove ? confirm('role-remove', `Remove role ${r.name} and delete ${roleFileOf(r.name)}?`, 'Yes, remove', run({ action: 'remove', name: r.name }, () => (roleView.open = '')), cancel) : null}
+      {source !== 'built-in' ? (
+        <Box key="role-changes" flexDirection="column">
+          {heading(CHANGED_HEADING)}
+          {changeLines(source, facts.changes, facts.at).map((l, i) => (
+            <Text key={`role-change-${i}`} color={C(l.tone)}>{l.text}</Text>
+          ))}
+          {roleView.confirmReset && canReset ? confirm('role-reset', `Reset role ${r.name} to the built-in one and delete ${roleFileOf(r.name)}?`, 'Yes, reset', run({ action: 'reset', name: r.name }), cancel) : null}
         </Box>
       ) : null}
       {section('Model', r.model, "(none: the session's model)")}
@@ -138,7 +170,6 @@ function rolePage($: $, pane: PaneParts, r: RoleDef, source: DefSource, checker:
           <Text color={C('autoAccept')}>{source === 'built-in' ? `roles/${r.name}.md (in the plugin; Edit copies it to ${roleFileOf(r.name)})` : roleFileOf(r.name)}</Text>
         </Text>
       </Box>
-      {footer(roleKeys({ canEdit: true, canOff, off: !!r.off, canReset, canRemove, canSeePrompt: true }), 'role-keys')}
     </Box>
   )
 }
@@ -286,10 +317,12 @@ function rolesPage($: $, pane: PaneParts, roles: RoleDef[], builtIn: RoleDef[], 
         if (bad) return brokenRow(bad, i === 0)
         const source = defSource(r.name, builtIn, project)!
         const off = !!r.off && !isCheckerRole(r.name)
+        // T-871: a replaced role says what it changed ("replaced · model")
+        const label = roleListLabel(source, off, changesOfRole(r.name, builtIn, project))
         return (
-          <Button key={row(`roleRow:${r.name}`)} plain label={`${r.name}: ${sourceLabel(source, off)}${r.warning ? ' ⚠' : ''}`} autoFocus={i === 0 && !roleView.naming ? true : undefined} onPress={openRow(r.name)}>
+          <Button key={row(`roleRow:${r.name}`)} plain label={`${r.name}: ${label}${r.warning ? ' ⚠' : ''}`} autoFocus={i === 0 && !roleView.naming ? true : undefined} onPress={openRow(r.name)}>
             <Text bold={!off} color={C(off ? 'inactive' : 'claude')}>{`  ${r.name.padEnd(nameW)}`}</Text>
-            <Text color={C(off ? 'warning' : 'inactive')}>{` ${sourceLabel(source, off)}`}</Text>
+            <Text color={C(off ? 'warning' : 'inactive')}>{` ${label}`}</Text>
             <Text color={C(off ? 'inactive' : 'text')}>{` · ${r.description}`}</Text>
             {r.warning ? <Text color={C('warning')}>{' ⚠'}</Text> : null}
           </Button>
@@ -492,7 +525,7 @@ export async function settingsPage($: $, pane: PaneParts) {
   if (roleView.open && !opened) resetRoleOpen()
   if (opened && roleView.draft) return roleEditPage($, pane, defSource(opened.name, builtIn, project))
   if (opened && roleView.prompt) return rolePromptPage($, pane, opened, roleView.prompt)
-  if (opened) return rolePage($, pane, opened, defSource(opened.name, builtIn, project)!, checkerOn(v))
+  if (opened) return rolePage($, pane, opened, defSource(opened.name, builtIn, project)!, { names: roles.map(r => r.name), changes: changesOfRole(opened.name, builtIn, project), at: await roleFileDay(claudeHost($), opened.name), checker: checkerOn(v) })
   if (roleView.list) return rolesPage($, pane, roles, builtIn, project, broken)
   const kl = await kindLists(claudeHost($))
   const kinds = mergeKinds(kl.builtIn, kl.project)

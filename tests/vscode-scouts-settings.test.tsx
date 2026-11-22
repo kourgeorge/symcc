@@ -339,7 +339,8 @@ test('a report start loses only Markdown markers, not the _ and ` inside names',
  *  such a row overlaps or runs off the edge at a narrow width). */
 const crowdedRows = (tree: unknown) =>
   elements(tree)
-    .filter(n => n.type === 'Box' && n.props?.flexDirection === 'row' && n.props?.flexWrap !== 'wrap')
+    // the shared page header's ‹ n of m › (T-751, on a role's page since T-871) is two small arrows, not a crowded row
+    .filter(n => n.type === 'Box' && n.props?.flexDirection === 'row' && n.props?.flexWrap !== 'wrap' && n.props?.key !== 'vs-pager')
     .filter(n => (n.children ?? []).filter(c => (c as Node)?.type === 'Button').length > 1)
     .map(n => String(n.props?.key))
 
@@ -373,7 +374,8 @@ for (const bodyColumns of [40, 80]) {
     // the badges sit beside the name, in the row's top line
     const badges = async (key: string) => elements(await ui.find({ key })).filter(n => n.type === 'Text' && n.props?.backgroundColor).map(n => texts(n).join('').trim())
     expect(await badges('vs-role-general-top')).toEqual(['built-in'])
-    expect(await badges('vs-role-tester-top')).toEqual(['replaced'])
+    // T-871: a replaced role's badge says what it changed
+    expect(await badges('vs-role-tester-top')).toEqual(['replaced · description, skills, checklist'])
     expect(await badges('vs-role-docs-top')).toEqual(['replaced', 'off'])
     expect(await badges('vs-role-mobile-apps-and-tablets-everywhere-top')).toEqual(['added'])
     expect(await badges('vs-role-bad-top')).toEqual(["can't be read"])
@@ -389,35 +391,57 @@ for (const bodyColumns of [40, 80]) {
     for (const name of ROLE_KIND_PAGES.roles) {
       await follow(ui, `roleRow:${name}`, vsHref('role', name))
       tidy(await ui.drawn(), at(`role ${name}`))
-      expect((await ui.find({ key: 'role-back' }))?.type, name).toBe('Markdown')
-      await follow(ui, 'role-back', vsHref('page', 'back/role-back'))
+      // a file that can't be read keeps its own page with a Back link
+      if (name === 'bad') {
+        expect((await ui.find({ key: 'role-back' }))?.type, name).toBe('Markdown')
+        await follow(ui, 'role-back', vsHref('page', 'back/role-back'))
+        expect(await ui.find({ key: `roleRow:${name}` }), name).toBeDefined()
+        continue
+      }
+      // T-871: the shared page header (as a task's or scout's page): its Back is a Button
+      expect((await ui.find({ key: 'vs-page-header' })), name).toBeDefined()
+      expect((await ui.find({ key: 'role-back' }))?.props.label, name).toBe('Roles')
+      await ui.press({ key: 'role-back' })
       expect(await ui.find({ key: `roleRow:${name}` }), name).toBeDefined()
     }
-    // an added role: Edit, See the prompt, Turn off and Remove are links on one line that wraps
+    // an added role: the header's Edit, Prompt, Turn off and Remove; nothing to compare
+    const actions = async () => elements(await ui.find({ key: 'vs-actions' })).filter(n => n.type === 'Button').map(n => n.props?.label)
     await follow(ui, 'roleRow:mobile-apps-and-tablets-everywhere', vsHref('role', 'mobile-apps-and-tablets-everywhere'))
-    expect((await ui.find({ key: 'role-actions' }))?.props.pressableLinks).toEqual(['edit', 'prompt', 'off', 'remove'].map(id => act('role-actions', id)))
+    expect(await actions()).toEqual(['Edit', 'Prompt', 'Remove', 'Turn off'])
+    expect(await ui.find({ type: 'Text', text: 'added: no built-in to compare' })).toBeDefined()
     // Remove asks first: one "Yes, remove" Button and a Cancel link
-    await follow(ui, 'role-actions', act('role-actions', 'remove'))
+    await ui.press({ key: 'role-remove' })
     tidy(await ui.drawn(), at('role remove'))
     expect((await ui.find({ key: 'role-remove-yes' }))?.props.variant).toBe('primary')
     await follow(ui, 'role-remove-cancel', act('role-remove-cancel', 'cancel'))
     expect(await ui.find({ key: 'role-remove-yes' })).toBeUndefined()
     // the prompt page and the edit page
-    await follow(ui, 'role-actions', act('role-actions', 'prompt'))
+    await ui.press({ key: 'role-prompt' })
     tidy(await ui.drawn(), at('role prompt'))
     await follow(ui, 'role-prompt-back', vsHref('page', 'back/role-prompt-back'))
-    await follow(ui, 'role-actions', act('role-actions', 'edit'))
+    await ui.press({ key: 'role-edit' })
     tidy(await ui.drawn(), at('role edit'))
     expect((await ui.find({ key: 'role-save' }))?.type).toBe('Button')
     expect((await ui.find({ key: 'role-description' }))?.props.label).toBe('Description')
     await follow(ui, 'role-edit-cancel', act('role-edit-cancel', 'cancel'))
     expect(await ui.find({ key: 'role-save' })).toBeUndefined()
     // a built-in role has no Remove; a replaced one has Reset to built-in
-    await follow(ui, 'role-back', vsHref('page', 'back/role-back'))
+    await ui.press({ key: 'role-back' })
     await follow(ui, 'roleRow:tester', vsHref('role', 'tester'))
-    expect((await ui.find({ key: 'role-actions' }))?.props.pressableLinks).toEqual(['edit', 'prompt', 'off', 'reset'].map(id => act('role-actions', id)))
+    expect(await actions()).toEqual(['Edit', 'Prompt', 'Reset to built-in', 'Turn off'])
+    // T-871: its state says how many changes; Changed from built-in lists them, a checklist only its changed lines
+    expect(await ui.find({ type: 'Text', text: 'replaced · 3 changes' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: 'skills: (none) → testing, review' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: 'checklist: 1 line changed' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: '+ - cover empty input' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /[−+] - cover errors$/ })).toBeUndefined()
+    // Reset to built-in asks first
+    await ui.press({ key: 'role-reset' })
+    expect((await ui.find({ key: 'role-reset-yes' }))?.props.label).toBe('Yes, reset')
+    await follow(ui, 'role-reset-cancel', act('role-reset-cancel', 'cancel'))
+    expect(await ui.find({ key: 'role-reset-yes' })).toBeUndefined()
     // back to Settings
-    await follow(ui, 'role-back', vsHref('page', 'back/role-back'))
+    await ui.press({ key: 'role-back' })
     await follow(ui, 'roles-back', vsHref('page', 'back/roles-back'))
     expect(await ui.find({ key: 'settings-roles' })).toBeDefined()
     await ui.unmount()

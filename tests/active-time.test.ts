@@ -2,7 +2,8 @@
 // open; that stretch is not work time. A step (queue, tests, ...) shows the time since the step began.
 import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { goOnRun, activeFrom, agentLines, gapsOf, runMs, runsSummary, triesSummary } from '../hooks/core/runs'
+import { goOnRun, activeFrom, agentLines, gapsOf, runMs, runsSummary, triesSummary, workerActiveMs } from '../hooks/core/runs'
+import { timeLimitOf, hardCapOf } from '../hooks/core/task'
 import { liveLanes, liveToday, laneRight } from '../hooks/core/live'
 import { bandItems } from '../hooks/core/banner'
 import { resetDoing, leadText, statsData, taskStages } from '../hooks/board'
@@ -161,4 +162,30 @@ test('T-863: the stage chart counts the steps that ran before the close under th
   const s = taskStages(t, () => undefined)!
   expect(s.ms.tests).toBeGreaterThanOrEqual(35 * MIN)
   expect(s.ms.work).toBeLessThanOrEqual(20 * MIN)
+})
+
+test('T-873: the over-time check counts the try\'s active time from its first start, not the time since the restart', () => {
+  const limit = timeLimitOf(45, undefined)
+  // ran 40 min, Claude Code closed overnight, then the same try went on 10 min ago (its new worker's since)
+  const r = {
+    started: at(16 * 60 + 50),
+    restarts: [{ at: at(16 * 60 + 10), why: REOPEN, started: at(10) }],
+  }
+  const since = NOW - 10 * MIN
+  expect(workerActiveMs(r, since, NOW)).toBe(50 * MIN)
+  expect(workerActiveMs(r, since, NOW) / MIN > limit).toBe(true)
+  // at 44 active minutes (4 min after the restart) it is not asked yet; past 45 it is
+  expect(workerActiveMs(r, since, NOW - 6 * MIN) / MIN > limit).toBe(false)
+  expect(workerActiveMs(r, since, NOW - 4 * MIN) / MIN > limit).toBe(true)
+  // the hard cap counts the same way, and time the owner added stays on top
+  const t = { live: { extra_minutes: 10 } }
+  expect(workerActiveMs(r, since, NOW) / MIN > timeLimitOf(45, t)).toBe(false)
+  expect(workerActiveMs(r, since, NOW + 6 * MIN) / MIN > timeLimitOf(45, t)).toBe(true)
+  expect(workerActiveMs(r, since, NOW + 51 * MIN) / MIN > hardCapOf(45, undefined)).toBe(true)
+  // a try with no restart is asked at 45 min as before
+  const plain = { started: at(44) }
+  expect(workerActiveMs(plain, NOW - 44 * MIN, NOW) / MIN > limit).toBe(false)
+  expect(workerActiveMs(plain, NOW - 44 * MIN, NOW + 2 * MIN) / MIN > limit).toBe(true)
+  // no start on the board: the worker's own start
+  expect(workerActiveMs(undefined, NOW - 46 * MIN, NOW) / MIN > limit).toBe(true)
 })

@@ -439,7 +439,7 @@ test('a lead.json left by an OpenCode server stopped without its cleanup (T-467)
     expect(S.beat !== null).toBe(true)
     // ...and its own heartbeat (every 30 s) takes over once nobody refreshed lead.json for LEAD_STALE_MS
     await writeFile(leadFile, symccLeadText('opencode-gone', Date.now() - LEAD_STALE_MS - 1000))
-    // T-793: that copy started while another window was live, so it is off here: it takes over only on /symcc-enable here
+    // T-793: that copy started while another window was live, so it is off here: it takes over only on /symcc-enable
     expect(S.offHere).toBe(true)
     expect(await claimLead(next.host)).toBe(false)
     await enableHere(next.host, () => undefined)
@@ -1356,7 +1356,7 @@ test('/symcc-disable then /symcc-enable through OpenCode\'s commands in the lead
     expect((await run('symcc-disable')).startsWith('symcc is now disabled')).toBe(true)
     expect(JSON.parse(await readFile(`${p.main}/.symcc/board.json`, 'utf8')).enabled).toBe(false)
     const on = await run('symcc-enable')
-    expect(on.startsWith('symcc is enabled, in mode ')).toBe(true)
+    expect(on.startsWith('symcc is on in this window, in mode ')).toBe(true)
     expect(on).not.toContain('the board is paused')
     expect(JSON.parse(await readFile(`${p.main}/.symcc/board.json`, 'utf8')).enabled !== false).toBe(true)
     // T-841: turning symcc on writes the one-time "open now" mark for this session; an "already enabled" answer does not
@@ -1366,6 +1366,11 @@ test('/symcc-disable then /symcc-enable through OpenCode\'s commands in the lead
     await new Promise<void>(r => setTimeout(() => r(), 15))
     expect((await run('symcc-enable')).startsWith('symcc is already enabled, in mode ')).toBe(true)
     expect(await mark()).toEqual(first)
+    // T-875: in a window turned off here, plain /symcc-enable turns this window back on (no "here" needed)
+    expect((await run('symcc-disable', 'here')).startsWith('symcc is now off in this window')).toBe(true)
+    expect(S.offHere).toBe(true)
+    expect((await run('symcc-enable')).startsWith('symcc is on in this window, in mode ')).toBe(true)
+    expect(S.offHere).toBe(false)
     // the owner's case: the strip says "⏸ paused" because the board is paused (not symcc disabled)
     expect(await run('symcc-mode', 'paused')).toContain('⏸ paused')
     const paused = await run('symcc-enable')
