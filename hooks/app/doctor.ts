@@ -4,16 +4,17 @@
 // roles and kinds are never touched: only migration backups, task folders of finished tasks, stale git worktree
 // entries and task branches already in their branch can be cleaned up.
 import { type BoardTask, type Board, liveWorkersFor, intoOf, finishingNow, checkStepNow, parseLead, isFresh, liveDriver } from '../board'
-import { type DoctorItem, oldBackups, backupIds, branchId, folderId, PRUNE_ID, parseDoctorArgs, doctorText, fixedText, type DoctorFixed, mergeRunsText, mergeNoteText, pruneLines, STRAY_DIRS, DOCTOR_STUCK_MIN, BACKUP_MARK } from '../core/doctor'
+import { type DoctorItem, oldBackups, backupIds, branchId, folderId, PRUNE_ID, parseDoctorArgs, doctorText, fixedText, type DoctorFixed, mergeRunsText, mergeNoteText, pruneLines, STRAY_DIRS, DOCTOR_STUCK_MIN, BACKUP_MARK, MIGRATE_ID } from '../core/doctor'
 import { SIZE_WARN_BYTES, READ_LIMIT_BYTES, PARTS_DIR, mbText } from '../core/board-parts'
 import { type Host, agentState } from '../host'
 import { S, workers, starting, finishing, approving } from './state'
 import { load, path } from './store'
 import { readArchiveFile } from './archive'
 import { git, deleteMergedBranch } from './git'
+import { oldDataFound, oldRowsText, migrateData } from './migrate-data'
 
 /** A found item with its fix (fixable ones): answers '' when done, else why it was not done. */
-type Found = DoctorItem & { fix?: () => Promise<string> }
+type Found = DoctorItem & { fix?: () => Promise<string>; done?: string[] }
 
 const FINISHED = ['done', 'dropped']
 
@@ -99,6 +100,7 @@ async function findAll(host: Host, b: Board | null, mergingId: string | undefine
   const taskOf = (id: string): BoardTask | undefined => b?.tasks.find(t => t.id === id) ?? archived.find(t => t.id === id)
   const agents = await agentsNow(host)
   const backups: Found[] = []
+  const data: Found[] = []
   const trees: Found[] = []
   const prunes: Found[] = []
   const branches: Found[] = []
@@ -106,14 +108,28 @@ async function findAll(host: Host, b: Board | null, mergingId: string | undefine
 
   // 1. the data folder: old migration backups, files near the read limit, stray files
   const top = await host.fs.list(dir).catch(() => [])
-  const ids = backupIds(top.filter(e => e.kind === 'file' && e.name.includes(BACKUP_MARK)).map(e => e.name))
-  for (const f of oldBackups(top.filter(e => e.kind === 'file'))) {
+  // T-804: what is still in an old shape (read-only count); `fix` saves every data file once in today's shape, after a backup
+  const old = await oldDataFound(host).catch(() => null)
+  if (old?.rows.length) {
+    const item: Found = {
+      kind: 'data', fixable: old.fixable, id: MIGRATE_ID, text: `old data shapes: ${oldRowsText(old.rows)}`,
+      fix: async () => {
+        const r = await migrateData(host)
+        item.done = r.done
+        return r.failed
+      },
+    }
+    data.push(item)
+  }
+  const isBackup = (e: { kind: string; name: string }) => (e.kind === 'file' || e.kind === 'dir') && e.name.includes(BACKUP_MARK)
+  const ids = backupIds(top.filter(isBackup).map(e => e.name))
+  for (const f of oldBackups(top.filter(e => e.kind === 'file' || isBackup(e)))) {
     const file = `${dir}/${f.name}`
     backups.push({
       kind: 'backup', fixable: true, id: ids.get(f.name)!, bytes: f.size, text: `old migration backup ${shown(file)} (a newer one is kept)`,
       fix: async () => {
         if (!f.name.includes(BACKUP_MARK)) return 'not a backup'
-        const r = await host.run(['rm', '-f', file]).catch((e: unknown) => ({ exitCode: 1, stdout: '', stderr: String(e) }))
+        const r = await host.run(f.kind === 'dir' ? ['rm', '-rf', file] : ['rm', '-f', file]).catch((e: unknown) => ({ exitCode: 1, stdout: '', stderr: String(e) }))
         return r.exitCode === 0 ? '' : `rm failed: ${(r.stderr || r.stdout).trim().slice(0, 120)}`
       },
     })
@@ -133,7 +149,7 @@ async function findAll(host: Host, b: Board | null, mergingId: string | undefine
   if (!b) {
     listed.push({ kind: 'board', fixable: false, text: `the board can't be read, so folders and branches are left alone (${S.N.boardFile} needs fixing first)` })
     await leadCheck(host, listed)
-    return [...backups, ...listed]
+    return [...data, ...backups, ...listed]
   }
 
   // 2. task folders (.<name>/worktrees/T-n) of tasks that are done or dropped (a folder of a task not on the board is only listed)
@@ -264,7 +280,7 @@ async function findAll(host: Host, b: Board | null, mergingId: string | undefine
       listed.push({ kind: 'board', fixable: false, text: `${t.id} is running but has no live worker (for ${min} min): /${S.N.name}-task ${t.id} retry${driver ? '' : `, or /${S.N.name}-drive so the regular check takes it back`}` })
     }
 
-  return [...backups, ...trees, ...prunes, ...branches, ...listed]
+  return [...data, ...backups, ...trees, ...prunes, ...branches, ...listed]
 }
 
 /**
@@ -291,7 +307,7 @@ export async function doctor(host: Host, args: string): Promise<string> {
   // in list order: task folders go before their branches, so a branch freed by its folder's removal can go too
   for (const f of picked) {
     const failed = await f.fix!().catch((e: Error) => String(e?.message ?? e).slice(0, 150))
-    done.push({ id: f.id!, text: f.text, ...(f.bytes !== undefined ? { bytes: f.bytes } : {}), failed })
+    done.push({ id: f.id!, text: f.text, ...(f.bytes !== undefined ? { bytes: f.bytes } : {}), failed, ...(f.done ? { done: f.done } : {}) })
   }
   return fixedText(done, S.N.name, gone)
 }

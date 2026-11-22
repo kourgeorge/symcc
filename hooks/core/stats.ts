@@ -976,7 +976,8 @@ const num = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) && x >=
 const figs = (v: unknown): ScoutUsageFigures | null => {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return null
   const o = v as Record<string, unknown>
-  return { runs: num(o.runs), tokens: cleanTokens(o.tokens) ?? {}, ms: num(o.ms) }
+  // a total saved before the kinds were kept apart (one number) is kept as `unsplit` until /<name>-doctor fix migrate-data saves it so
+  return { runs: num(o.runs), tokens: cleanTokens(typeof o.tokens === 'number' ? { unsplit: o.tokens } : o.tokens) ?? {}, ms: num(o.ms) }
 }
 
 /** The scouts' tokens and time kept in scouts.json under "usage" (scout name → totals); {} for a missing or broken file. */
@@ -1009,28 +1010,6 @@ export function addScoutRun(text: string | null | undefined, name: string, run: 
   const day = dayOf(run.endMs, 0)
   usage[name] = { ...add(cur), days: { ...(cur?.days ?? {}), ...(day ? { [day]: add(cur?.days[day]) } : {}) } }
   return JSON.stringify({ ...raw, usage }, null, 2) + '\n'
-}
-
-/**
- * Migration: scouts.json's text with every usage total whose tokens were saved as one number
- * (before the kinds were kept apart) kept as-is, marked unsplit: { unsplit: n }. Null when nothing needs it.
- */
-export function migrateScoutUsage(text: string | null | undefined): string | null {
-  const raw = jsonObj(text)
-  const u = raw?.usage
-  if (!raw || !u || typeof u !== 'object' || Array.isArray(u)) return null
-  let changed = false
-  const fix = (v: unknown): unknown => {
-    if (!v || typeof v !== 'object' || Array.isArray(v) || typeof (v as { tokens?: unknown }).tokens !== 'number') return v
-    changed = true
-    return { ...(v as object), tokens: cleanTokens({ unsplit: (v as { tokens: number }).tokens }) ?? {} }
-  }
-  const usage = Object.fromEntries(Object.entries(u as Record<string, unknown>).map(([k, v]) => {
-    const top = fix(v) as Record<string, unknown>
-    const d = top && typeof top === 'object' ? top.days : undefined
-    return [k, d && typeof d === 'object' && !Array.isArray(d) ? { ...top, days: Object.fromEntries(Object.entries(d as Record<string, unknown>).map(([day, x]) => [day, fix(x)])) } : top]
-  }))
-  return changed ? JSON.stringify({ ...raw, usage }, null, 2) + '\n' : null
 }
 
 /** New scouts.json text `next` with the "usage" of the file's text before (`prev`) kept, when `next` carries none. */

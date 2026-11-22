@@ -3,6 +3,7 @@ import { PARTS_DIR, READ_LIMIT_BYTES, SIZE_WARN_BYTES, hasWholeFinished, joinPar
 import { checkHealth } from './health'
 import { publish } from './lead'
 import { tellLead } from './tell'
+import { migrateIfOld } from './migrate-data'
 import { S, onHere, sizeNotes } from './state'
 import { boardEvents, withStageHistory } from '../core/events'
 import { emitTaskEvents, logTaskEvents, type TaskEvent } from './events'
@@ -305,18 +306,16 @@ export async function load(host: Host): Promise<Board> {
 }
 
 /**
- * Saves board.json once in the current shape when reading it brought old tasks up to date (see
- * migrateTask), keeping a copy of the file as it was. Nothing happens for a board already current.
+ * Moves done and dropped tasks kept whole in board.json to their parts files once (T-675), keeping a copy of the file
+ * as it was. Nothing happens for a board already current. (Old data shapes are not changed here: /<name>-doctor fix migrate-data does that.)
  */
 export async function saveMigrated(host: Host): Promise<void> {
   if (!(await host.fs.exists(path(S.N.boardFile)).catch(() => false))) return
   const got = await readJoined(host).catch(() => null)
   if (!got) return
   const { text, read: r, whole } = got
-  // T-675: done and dropped tasks kept whole in board.json (from before their parts went to .<name>/tasks/) count too
-  const n = r.migrated + (whole ? 1 : 0)
-  if (r.broken || !n) return
-  const what = [r.migrated ? `${r.migrated} older entr${r.migrated > 1 ? 'ies' : 'y'} (tasks or archived totals) ${r.migrated > 1 ? 'were' : 'was'} brought to the current shape` : '', whole ? `the done and dropped tasks' history, tries and details were moved to ${S.N.dir}/${PARTS_DIR}/, so the board file stays small` : ''].filter(Boolean).join('; ')
+  if (r.broken || !whole) return
+  const what = `the done and dropped tasks' history, tries and details were moved to ${S.N.dir}/${PARTS_DIR}/, so the board file stays small`
   await keepCopy(host, text, 'before-migrate', c => `${S.N.boardFile}: ${what}${c ? `. The file as it was is kept in ${c}` : ''}.`)
   await change(host, b => b)
 }
@@ -355,7 +354,7 @@ const partsPath = (rel: string) => path(`${S.N.dir}/${rel}`)
  * the parts files already trimmed for the new one), so parts found missing are read once more (board.json and all)
  * before they count as missing.
  */
-async function readJoined(host: Host, again = true): Promise<{ text: string; read: BoardRead; whole: boolean; missing: { text: string; file: string }[]; missingFiles: Set<string> }> {
+async function readJoined(host: Host, again = true): Promise<{ text: string; raw?: unknown; read: BoardRead; whole: boolean; missing: { text: string; file: string }[]; missingFiles: Set<string> }> {
   const file = path(S.N.boardFile)
   const text = await readWhole(host, file, true)
   let raw: unknown
@@ -363,7 +362,7 @@ async function readJoined(host: Host, again = true): Promise<{ text: string; rea
     raw = JSON.parse(text)
   } catch {
     noteRead(host, file, text)
-    return { text, read: readBoard(text, S.root), whole: false, missing: [], missingFiles: new Set<string>() }
+    return { text, read: readBoard(text), whole: false, missing: [], missingFiles: new Set<string>() }
   }
   const files = new Map<string, Record<string, Record<string, unknown>>>()
   const missingNow = new Set<string>()
@@ -392,8 +391,14 @@ async function readJoined(host: Host, again = true): Promise<{ text: string; rea
   // a finished task kept whole only because its parts file is missing is not one to migrate (see missingParts)
   const whole = hasWholeFinished(raw, missingNow)
   if (!whole) noteRead(host, file, text)
-  const read = readBoardValue(j.raw, S.root)
-  return { text, read, whole, missing: j.missing.map((text, i) => ({ text, file: j.stubbed[i]!.file })), missingFiles: missingNow }
+  const read = readBoardValue(j.raw)
+  return { text, raw: j.raw, read, whole, missing: j.missing.map((text, i) => ({ text, file: j.stubbed[i]!.file })), missingFiles: missingNow }
+}
+
+/** board.json joined with its parts files, as parsed JSON and in whatever shape the files have (for /<name>-doctor's migrate-data); null when it can't be read. */
+export async function readBoardRaw(host: Host): Promise<unknown | null> {
+  const got = await readJoined(host).catch(() => null)
+  return got && !got.read.broken && got.raw !== undefined ? got.raw : null
 }
 
 /**
@@ -521,6 +526,7 @@ export async function saveBoard(host: Host, b: Board) {
     await host.run(['rm', '-f', file]).catch(() => undefined)
   }
   await noteMtime(host, true)
+  currentStamp = await boardStamp(host)
 }
 
 /**
@@ -539,11 +545,34 @@ export async function writeBoard(host: Host, before: Board, after: Board): Promi
   return { board: saved, events }
 }
 
+/** board.json's mtime when it was last seen in today's shape (our own save, or a check that found nothing to migrate). */
+let currentStamp: string | null = null
+
+/** board.json's identity for that check: project, mtime and size. */
+const boardStamp = async (host: Host) => {
+  const st = await host.fs.stat(path(S.N.boardFile)).catch(() => null)
+  return st ? `${S.root}|${st.mtimeMs}|${st.size}` : null
+}
+
+/**
+ * T-804: a board still in an old shape is migrated (backup first) before a change saves it; reading never changes the
+ * file, so without this a save would write bad-value fallbacks (mode 'off' as 'auto', target_branch dropped, ...).
+ * Checked again only when board.json changed since the last check or save.
+ */
+async function migratedBoard(host: Host) {
+  const m = await boardStamp(host)
+  if (m !== null && m === currentStamp) return
+  const failed = await migrateIfOld(host, false)
+  if (failed) throw new Error(failed)
+  currentStamp = await boardStamp(host)
+}
+
 /**
  * Every change goes through here, one at a time, so two workers finishing together
  * never lose an update; the lock file does the same between sessions.
  */
-export function change<T>(host: Host, fn: (b: Board) => [Board, T] | Board): Promise<T> {
+export async function change<T>(host: Host, fn: (b: Board) => [Board, T] | Board): Promise<T> {
+  await migratedBoard(host)
   return locked(host, async () => {
     const before = await load(host)
     const out = fn(before)

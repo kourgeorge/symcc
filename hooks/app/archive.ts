@@ -6,6 +6,7 @@ import type { Host } from '../host'
 import { fileName, isStubbed, load, locked, now, path, readWhole, safeWrite, writeBoard } from './store'
 import { emitTaskEvents } from './events'
 import { tellLead } from './tell'
+import { migrateIfOld } from './migrate-data'
 
 // ---------------- old tasks: archive.json ----------------
 // Done and dropped tasks older than archive_days move from board.json to archive.json, so the board
@@ -20,11 +21,10 @@ const MOST_ARCHIVE_FILES = 1000
  * file's text) when one can't be read. An id in two files (a save cut short) counts once, the later one.
  * `texts`: each file read, in order.
  */
-export async function readArchiveFile(host: Host): Promise<{ archive: Archive; text: string | null; texts: { file: string; text: string }[]; broken?: string; migrated?: number }> {
+export async function readArchiveFile(host: Host): Promise<{ archive: Archive; text: string | null; texts: { file: string; text: string }[]; broken?: string }> {
   const base = path(S.N.archiveFile)
   const texts: { file: string; text: string }[] = []
   const tasks = new Map<string, BoardTask>()
-  let migrated = 0
   for (let i = 0; i < MOST_ARCHIVE_FILES; i++) {
     const file = archiveChunkFile(base, i)
     if (!(await host.fs.exists(file).catch(() => false))) break
@@ -32,13 +32,12 @@ export async function readArchiveFile(host: Host): Promise<{ archive: Archive; t
     texts.push({ file, text })
     const r = readArchive(text)
     if (r.broken) return { archive: emptyArchive(), text, texts, broken: i ? `${fileName(file)}: ${r.broken}` : r.broken }
-    migrated += r.migrated ?? 0
     for (const t of r.archive.tasks) {
       tasks.delete(t.id)
       tasks.set(t.id, t)
     }
   }
-  return { archive: { version: 1, tasks: [...tasks.values()] }, text: texts[0]?.text ?? null, texts, ...(migrated ? { migrated } : {}) }
+  return { archive: { version: 1, tasks: [...tasks.values()] }, text: texts[0]?.text ?? null, texts }
 }
 
 /** Keeps a copy of a broken archive.json beside it and tells the owner and the lead, once per text. */
@@ -74,28 +73,12 @@ export async function saveArchive(host: Host, a: Archive) {
 }
 
 /**
- * Saves archive.json once in the current shape when reading it brought old tasks up to date (see readArchive's `migrated`),
- * keeping a copy of the file as it was beside it (archive.json.before-migrate-<time>); when that copy can't be written,
- * nothing is saved (it is tried again the next time).
- */
-export async function saveArchiveMigrated(host: Host): Promise<void> {
-  await locked(host, async () => {
-    const r = await readArchiveFile(host)
-    if (r.broken || !r.migrated) return
-    for (const { file, text } of r.texts) {
-      const copy = `${fileName(file)}.before-migrate-${now().replace(/[:.]/g, '-')}`
-      if (!(await host.fs.write(path(copy), text).then(() => true, () => false))) return
-    }
-    await saveArchive(host, r.archive)
-  })
-}
-
-/**
  * The archive part of the one-time scout origin fix (T-712, see migrateScoutOrigins): archived tasks whose origin
  * names a scout by its agent name get the scout's own name. A broken archive, or one already current, is left as
  * it is. Returns the tasks renamed.
  */
 export async function renameArchivedScoutOrigins(host: Host, known: readonly string[]): Promise<{ id: string; scout: string; at: string }[]> {
+  if (await migrateIfOld(host)) return []
   return locked(host, async () => {
     const r = await readArchiveFile(host)
     if (r.broken) return []
@@ -114,6 +97,7 @@ export async function archiveOld(host: Host, nowMs = Date.now(), force = false):
   if (!S.driving) return []
   if (!force && nowMs - S.lastArchive < ARCHIVE_EVERY_MS) return []
   S.lastArchive = nowMs
+  if (await migrateIfOld(host)) return []
   const moved = await locked(host, async () => {
     const b = await load(host)
     if (!onHere(b)) return null
@@ -158,6 +142,8 @@ export const archivedText = (id: string) => `${id} is archived (in ${S.N.archive
  * saved first, then the task leaves the archive (so it is never lost on the way). Throws for a done one.
  */
 export async function bringBackArchived(host: Host, id: string): Promise<string> {
+  const failed = await migrateIfOld(host)
+  if (failed) throw new Error(failed)
   const t = await findArchived(host, id)
   if (!t) throw new Error(`${normId(id)} is not on the board`)
   if (t.status !== 'dropped') throw new Error(archivedText(t.id))

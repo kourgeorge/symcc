@@ -6,6 +6,7 @@ import { fakeHost } from './fake-host'
 import { S, type PaneView } from '../hooks/app/state'
 import { publish } from '../hooks/app/lead'
 import { type Players, findPlayers, playsFor, playSample, sayDone, sayNext, MAC_SETS, FD_SETS } from '../hooks/app/voice'
+import { readOld } from './old-data-fixture'
 import { type SoundSet, SOUND_SETS, SETTING_GROUPS, SETTING_NAMES, applySettings, emptyBoard, groupSummary, leadSettingsText, notifyChoices, notifyOf, parseBoard, readBoard, parseSettingValue, settingChoices, settingValue, settingsText, soundNotify, soundSetFor } from '../hooks/board'
 
 const MAC = '/System/Library/Sounds'
@@ -144,25 +145,24 @@ test('T-695: notify takes voice, sound 1, sound 2, sound 3 or off, and nothing e
   expect(files).toEqual(SOUND_SETS.map(set => `${MAC}/${MAC_SETS[set][0]}.aiff`))
 })
 
-test('T-695: an old board with notify "sound" loads as "sound N": its sound_set, else the project set', async () => {
+test('T-695: an old board with notify "sound" is upgraded by migrate-data to "sound N": its sound_set, else the project set', async () => {
   const b = emptyBoard()
-  const old = (x: object) => readBoard(JSON.stringify({ ...b, ...x }), '/x/web')
+  const old = (x: object) => readOld(JSON.stringify({ ...b, ...x }), '/x/web')
   expect(old({ notify: 'sound', sound_set: 2 }).board.notify).toBe('sound 2')
   expect(old({ notify: 'sound', sound_set: 3 }).board.notify).toBe('sound 3')
   expect(old({ notify: 'sound' }).board.notify).toBe(`sound ${soundSetFor('/x/web')}`)
-  expect(readBoard(JSON.stringify({ ...b, notify: 'sound' }), '/x/symcc').board.notify).toBe(`sound ${soundSetFor('/x/symcc')}`)
+  expect(readOld(JSON.stringify({ ...b, notify: 'sound' }), '/x/symcc').board.notify).toBe(`sound ${soundSetFor('/x/symcc')}`)
   // a bad old sound_set: the project's set
   expect(old({ notify: 'sound', sound_set: 9 }).board.notify).toBe('sound 2')
-  // counted as migrated, so the board is saved once in the new shape; not a fixed (bad) value
-  expect(old({ notify: 'sound', sound_set: 2 }).migrated).toBe(1)
+  // not a fixed (bad) value
   expect(old({ notify: 'sound', sound_set: 2 }).fixed).toEqual([])
   // an old sound_set next to voice or off is dropped
   const v = old({ notify: 'voice', sound_set: 3 })
   expect(v.board.notify).toBe('voice')
   expect('sound_set' in v.board).toBe(false)
-  expect(v.migrated).toBe(1)
   expect(old({ notify: 'off', sound_set: 1 }).board.notify).toBe('off')
-  expect(old({ notify: 'voice' }).migrated).toBe(0)
+  // read without the upgrade (a plain load), the old "sound" is a bad value: the default
+  expect(readBoard(JSON.stringify({ ...b, notify: 'sound' })).fixed).toEqual(['notify'])
 })
 
 test("playing a sample plays the set's done chime once, and nothing where there is no player", async () => {

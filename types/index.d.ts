@@ -9,8 +9,7 @@ export type SymccStatus = 'backlog' | 'todo' | 'doing' | 'paused' | 'waiting' | 
 /**
  * One worker try on a task: when it started and ended (ISO times), and what it used.
  * `tokens` comes from the worker's turn result, each kind kept apart (see SymccTokens).
- * `cost` (US dollars) is kept for when a result reports it: the worker's turn result in the
- * Claude Code types gives token counts but no dollar cost, so today only time and tokens are filled.
+ * `cost` (US dollars) is filled when the host reports it (OpenCode does; Claude Code's turn result gives token counts only).
  */
 export type SymccRun = {
   started: string
@@ -121,7 +120,6 @@ export type SymccTask = {
   order: number
   after: string[]
   attempts: number
-  /** how many times a new try was started because the branch conflicted with main */
   /** set when the next try must first merge main into the branch and resolve conflicts */
   merge_main?: boolean
   /** how many times a new try was started on its own because the tests failed */

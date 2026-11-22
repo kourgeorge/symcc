@@ -5,7 +5,7 @@ import { isTaskCommit } from '../hooks/core/commits'
 import { YOUR_EDITS } from '../hooks/core/review'
 import { inMergeLine, MERGE_LINE_POLL_MS, resetMergeLine } from '../hooks/app/merge-line'
 import { joinedText } from '../hooks/core/board-parts'
-import { mergeLineText, parseMergeLine, inLineNote, MERGE_LINE_STALE_MS, mergeLineStaleMs, type LineEntry, testMinutesOf, testTimeoutMs, lineEntryStale, readBoard, TEST_RERUN_GONE_NOTE, DEFAULT_TEST_MINUTES, BASH_PATHS_MAX, bashTooManyText, failedTestNames, FAILED_TESTS_KEPT, FAILED_TEST_CHARS } from '../hooks/board'
+import { mergeLineText, parseMergeLine, inLineNote, MERGE_LINE_STALE_MS, mergeLineStaleMs, type LineEntry, testMinutesOf, testTimeoutMs, lineEntryStale, readBoard, DEFAULT_TEST_MINUTES, BASH_PATHS_MAX, bashTooManyText, failedTestNames, FAILED_TESTS_KEPT, FAILED_TEST_CHARS } from '../hooks/board'
 import { PREP_NOTE, STEP_NOTE, isMergeNote, type Board, type Notify, soundSetFor, type BoardTask, workerGitWriteText, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, readArchive, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, untestedChange, isTestFile, isPlainRelPath, parseSettingValue, type WorkerQuestion, isAnswered, boardText, taskMatches, onRuns } from '../hooks/board'
 import { removeWorktree, cleanupMerged, deleteMergedBranch } from '../hooks/app/git'
 import { addPassedTree, parsePassedTrees, passedTreesText, treePassed, PASSED_TREES_MAX } from '../hooks/core/passed-trees'
@@ -29,7 +29,9 @@ import { CLAUDE_WORDS } from '../hooks/claude/host'
 import { SYMCC_WORDS } from '../hooks/host'
 import { change, load, saveBoard, saveMigrated, takeLock, dropLock } from '../hooks/app/store'
 import { TOOLS, runTool, ownerSettings, allowAskedFiles, refuseAskedFiles } from '../hooks/app/tools'
-import { archiveOld, saveArchiveMigrated } from '../hooks/app/archive'
+import { archiveOld } from '../hooks/app/archive'
+import { TEST_RERUN_GONE_NOTE, upgradeArchiveTask } from '../hooks/core/old-data'
+import { readOld, stillOld } from './old-data-fixture'
 import { commandsOf, pause } from './fakes'
 import { runCommand, agentFinished } from '../hooks/app/symcc'
 // test() from ./reset starts each test with the plugin's memory empty, whatever ran before it (T-291)
@@ -2240,18 +2242,15 @@ test('T-703: a task that failed on a clash keeps its merge-main-in try through t
 
 test('T-548: the old conflict_tries field is dropped from the board (once) and from the archive', () => {
   const [b, x] = boardWith('auto', [], { status: 'todo', merge_main: true })
-  const r = readBoard(JSON.stringify({ ...b, tasks: [{ ...x, conflict_tries: 2 }] }))
+  const r = readOld(JSON.stringify({ ...b, tasks: [{ ...x, conflict_tries: 2 }] }))
   const t = find(r.board, 'T-1')!
   expect('conflict_tries' in t).toBe(false)
   expect(t.merge_main).toBe(true)
   expect(t.status).toBe('todo')
-  expect(r.migrated).toBeGreaterThan(0)
-  const again = readBoard(JSON.stringify(r.board))
-  expect(again.board.tasks).toEqual(r.board.tasks)
-  expect(again.migrated).toBe(0)
-  const a = readArchive(JSON.stringify({ version: 1, tasks: [{ ...x, status: 'done', conflict_tries: 1 }] }))
-  expect('conflict_tries' in a.archive.tasks[0]!).toBe(false)
-  expect(a.migrated).toBe(1)
+  expect(stillOld(r.board)).toBe(false)
+  const a = upgradeArchiveTask({ ...x, status: 'done', conflict_tries: 1 })!
+  expect('conflict_tries' in a).toBe(false)
+  expect(upgradeArchiveTask(a)).toBe(null)
 })
 
 // ---------------- old tasks: archive.json ----------------
@@ -2321,29 +2320,6 @@ test('when archive.json cannot be written, nothing leaves the board', async () =
   expect((await load(w.$)).tasks.length).toBe(4)
   expect((await load(w.$)).archived).toBeUndefined()
   expect(w.toasts.some(t => /not archived: disk full/.test(t))).toBe(true)
-})
-
-test('T-522: an old board.json and archive.json with string history are converted once, each with a copy kept first', async () => {
-  const w = world()
-  const task = (id: string, status: string, history: string[]) => ({ id, title: id, details: '', files: [], status, note: '', question: null, order: 1, after: [], attempts: 1, branch: null, merge_into: 'main', created_at: LONG_AGO, updated_at: LONG_AGO, origin: { by: 'lead', why: 'x', at: LONG_AGO }, runs: [{ started: LONG_AGO, ended: '2026-01-01T00:10:00.000Z' }], history })
-  const boardOld = JSON.stringify({ version: 1, next_id: 3, tasks: [task('T-1', 'failed', ['created by the lead because x', 'try 1: did it → tests failed: y'])] })
-  const archiveOldText = JSON.stringify({ version: 1, tasks: [task('T-2', 'done', ['created by the lead because x', 'try 1: did it → merged into main (abc1234)'])] })
-  w.put(BOARD, boardOld)
-  w.put(ARCHIVE, archiveOldText)
-  // it loads before it is saved: the entries are records already
-  expect((await load(w.$)).tasks[0]!.history).toEqual([{ at: LONG_AGO, kind: 'created', text: 'created by the lead because x' }, { at: '2026-01-01T00:10:00.000Z', kind: 'failed', text: 'try 1: did it → tests failed: y' }])
-  await saveMigrated(w.$)
-  await saveArchiveMigrated(w.$)
-  const copies = (file: string) => [...w.files.entries()].filter(([p]) => p.startsWith(`${file}.before-migrate-`)).map(([, t]) => t)
-  expect(copies(BOARD)).toEqual([boardOld])
-  expect(copies(ARCHIVE)).toEqual([archiveOldText])
-  expect(JSON.parse(w.files.get(BOARD)!).tasks[0].history[1]).toEqual({ at: '2026-01-01T00:10:00.000Z', kind: 'failed', text: 'try 1: did it → tests failed: y' })
-  expect(JSON.parse(w.files.get(ARCHIVE)!).tasks[0].history[1]).toEqual({ at: '2026-01-01T00:10:00.000Z', kind: 'merged', text: 'try 1: did it → merged into main (abc1234)' })
-  // once only: the next start finds nothing to convert and keeps no new copy
-  await saveMigrated(w.$)
-  await saveArchiveMigrated(w.$)
-  expect(copies(BOARD).length).toBe(1)
-  expect(copies(ARCHIVE).length).toBe(1)
 })
 
 test('a broken archive.json is never written over: a copy is kept, the owner is told, nothing is archived', async () => {
@@ -3097,19 +3073,6 @@ test('T-695: the owner and the lead pick notify "sound N"; the owner hears the p
   const list = String(await runTool(m.$, 'settings', {}))
   expect(list).toContain('notify: sound 2 (default voice')
   expect(list).not.toContain('sound_set')
-})
-
-test('T-695: an old board.json with notify "sound" and sound_set is saved once as notify "sound N", without sound_set', async () => {
-  const w = world()
-  w.put(BOARD, JSON.stringify({ version: 1, next_id: 1, tasks: [], notify: 'sound', sound_set: 2 }))
-  expect((await load(w.$)).notify).toBe('sound 2')
-  await saveMigrated(w.$)
-  const saved = JSON.parse(w.files.get(BOARD)!)
-  expect(saved.notify).toBe('sound 2')
-  expect('sound_set' in saved).toBe(false)
-  // no sound_set: the set picked from the project folder's name
-  w.put(BOARD, JSON.stringify({ version: 1, next_id: 1, tasks: [], notify: 'sound' }))
-  expect((await load(w.$)).notify).toBe(`sound ${soundSetFor(S.root)}`)
 })
 
 test('T-695: the settings tool schema takes notify voice / sound 1 / sound 2 / sound 3 / off and has no sound_set', () => {
@@ -6718,8 +6681,7 @@ test('T-547: a board with test_rerun set is converted once: a task waiting for i
       { ...base, id: 'T-3', status: 'waiting', question: 'Which one?', note: 'waiting for you' },
     ],
   }
-  const r = readBoard(JSON.stringify(raw))
-  expect(r.migrated).toBeGreaterThanOrEqual(2)
+  const r = readOld(JSON.stringify(raw))
   for (const id of ['T-1', 'T-2']) {
     const t = find(r.board, id)! as BoardTask & Record<string, unknown>
     expect(t.status).toBe('todo')
@@ -6734,10 +6696,9 @@ test('T-547: a board with test_rerun set is converted once: a task waiting for i
   expect(find(r.board, 'T-3')!.status).toBe('waiting')
   expect(find(r.board, 'T-3')!.question).toBe('Which one?')
   // once saved, reading it again changes nothing more
-  const again = readBoard(JSON.stringify(r.board))
-  expect(again.board.tasks).toEqual(r.board.tasks)
+  expect(stillOld(r.board)).toBe(false)
   // a stray test_rerun on a task in another status is only dropped
-  const done = readBoard(JSON.stringify({ tasks: [{ ...base, id: 'T-4', status: 'done', question: null, note: 'merged', test_rerun: 1 }] }))
+  const done = readOld(JSON.stringify({ tasks: [{ ...base, id: 'T-4', status: 'done', question: null, note: 'merged', test_rerun: 1 }] }))
   expect(find(done.board, 'T-4')!.status).toBe('done')
   expect('test_rerun' in find(done.board, 'T-4')!).toBe(false)
 })
