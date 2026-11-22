@@ -168,7 +168,7 @@ once you have cleared them and its merge runs.
 | merge | `⇢` | The branch moves forward |
 
 The board row shows the stage icon instead of `▶`, then the time. In Claude Code the band above
-the prompt shows the stage's icon, then the time in that stage: `⌕ T-740  8m` (the icons ▶ and ⌕ already say work and checker, so those two words are left out; the other stages keep theirs, like `queue 10s`). A doing task's page names the stage on the state line of its header
+the prompt shows the stage's icon, then the time in that stage: `⌕ T-740 8m`, or `⌕ T-740 8m (try 2)` from the second try on (the icons ▶ and ⌕ already say work and checker, so those two words are left out; the other stages keep theirs, like `queue 10s`). A doing task's page names the stage on the state line of its header
 (see [The task page and the scout page](#the-task-page-and-the-scout-page)) and has a **Steps** row in Details
 for the whole way, such as `worker ✓ → prep ✓ → ● checker → queue → test → merge` (see
 [What a task shows on its way to the merge](#what-a-task-shows-on-its-way-to-the-merge)). A task
