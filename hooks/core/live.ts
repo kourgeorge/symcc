@@ -843,12 +843,12 @@ export function todayLines(d: LiveToday, width: number, triesOnly = false): stri
 
 // ---------------- T-769: ▍Today's second and third lines ----------------
 //   ⌀ per task 2.8M · 9m work · 23m start-to-merge   ⏱ 13h 06m agent work · ≈ $64
-//   ████████████▓▓▒░ workers 84% · checkers 8% · scouts 5% · lead 3%
+//   ░░█████████████▓▓▒ lead 3% · workers 84% · checkers 8% · scouts 5%
 //   08 ▁▂▃▅▇▆▅▃▅▇█▆▃ 20   busiest 14:00 · 42.1M tokens   first try 34%   ⌀ 2.4 tries   ⌕ 68 sent back by the checker
 
 /** Who spent today's tokens, in the bar's order. */
 export type TodayWho = 'workers' | 'checkers' | 'scouts' | 'lead'
-export const TODAY_WHO: readonly TodayWho[] = ['workers', 'checkers', 'scouts', 'lead']
+export const TODAY_WHO: readonly TodayWho[] = ['lead', 'workers', 'checkers', 'scouts']
 /** The bar's cell for each, so the parts can be told apart without colors too. */
 export const TODAY_WHO_CELL: Record<TodayWho, string> = { workers: '█', checkers: '▓', scouts: '▒', lead: '░' }
 /** How many cells the stacked bar has. */

@@ -29,10 +29,20 @@ import { cleanLeftoverTmp, stopOrphans, timedOut, askOvertime, wrapUp } from './
  *  The role's checklist goes in {{role}}, with its own placeholders filled in from the same values. `guide`: organizational memory (org-mem) as
  *  the prompt shows it (orgMemText; '' for none). `learned`: the end-of-report ask for org-mem suggestions, only on a host
  *  with no debrief (learnedAsk, T-656); '' by default: the debrief asks after the hand-back instead. */
-export const WORKER_PROMPT = (t: BoardTask, b: Board, dir: string, role?: RoleDef, guide = '', learned = '') => {
+export const WORKER_PROMPT = (t: BoardTask, b: Board, dir: string, role?: RoleDef, guide = '', learned = '', commits: readonly string[] = []) => {
   const kind = isInvestigation(t) ? 'investigation' : 'change'
   const values = { ...(kind === 'investigation' ? investigationValues(t, dir) : changeValues(t, b, dir)), learned }
-  return fillPrompt(kind, { ...values, role: roleSection(role, values), org_mem: guide })
+  return fillPrompt(kind, { ...values, role: roleSection(role, values, t), org_mem: guide }, t, b, commits)
+}
+
+/**
+ * T-851: the commits earlier tries left on the task's branch (not yet on the branch it merges into), one line each
+ * ("abc1234 subject", newest first, at most 10), for the prompt's "Where you work". [] when no try made a commit or git can't say.
+ */
+export async function earlierCommits(host: Host, t: BoardTask, dir: string): Promise<string[]> {
+  if (!t.runs?.some(r => r.commits?.length)) return []
+  const r = await git(host, ['log', '--format=%h %s', '-n', '10', `refs/heads/${intoOf(t)}..HEAD`], dir).catch(() => null)
+  return r && r.exitCode === 0 ? r.stdout.split('\n').map(l => l.trim()).filter(Boolean) : []
 }
 
 /**
@@ -147,7 +157,7 @@ async function queueWorker(host: Host, id: string): Promise<{ started: Promise<v
       const cur = find(await load(host), id)
       return cur?.status === 'doing' && cur.live?.session === S.me && cur.attempts === t.attempts
     }
-    const spawn = startAgent(host, { kind: 'worker', prompt: WORKER_PROMPT(t, b, dir, role, await orgMemText(host), learnedAsk(host)) + behindNote(behind, intoOf(t), why), name: workerName(S.N.name, t.id), description: workerDescription(t.title), ...(role?.tools ? { tools: role.tools } : {}), ...(!isInvestigation(t) && t.files?.length ? { files: t.files } : {}), cwd: dir, ...(role?.model ? { model: role.model } : {}) }, still)
+    const spawn = startAgent(host, { kind: 'worker', prompt: WORKER_PROMPT(t, b, dir, role, await orgMemText(host), learnedAsk(host), await earlierCommits(host, t, dir)) + behindNote(behind, intoOf(t), why), name: workerName(S.N.name, t.id), description: workerDescription(t.title), ...(role?.tools ? { tools: role.tools } : {}), ...(!isInvestigation(t) && t.files?.length ? { files: t.files } : {}), cwd: dir, ...(role?.model ? { model: role.model } : {}) }, still)
     queued = true
     queuedWorkers.set(id, { task: id, worktree: dir, branch, since: Date.now() })
     return { started: workerStarted(host, id, before, dir, branch, spawn, t.attempts).finally(() => (starting.delete(id), queuedWorkers.delete(id))) }

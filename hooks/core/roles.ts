@@ -2,7 +2,7 @@
 import type { SymccTask } from '../../types'
 import { DEFAULT_NAME, namesFor } from '../name'
 import { frontMatterLine, splitFrontMatter } from './text'
-import { ROLE_PLACEHOLDERS, fillRole } from './prompts'
+import { ROLE_PLACEHOLDERS, fillRole, promptSectionLines } from './prompts'
 import { type DefSource, type BrokenDef, DEF_NAME, brokenNamed, defSource, defNamed, defNameError, leadBrokenDefLine, sourceLabel } from './def-files'
 
 // ---------------- worker roles ----------------
@@ -211,11 +211,11 @@ export const tryTone = (t: Pick<SymccTask, 'attempts'>): 'inactive' | 'warning' 
  * for a role with web tools, the web safety line. Empty for a role with none of these (general: today's worker).
  * The checklist's {{placeholders}} are filled in from `values`, the prompt's own (see fillRole).
  */
-export function roleSection(r: RoleDef | undefined, values: Record<string, string>): string {
+export function roleSection(r: RoleDef | undefined, values: Record<string, string>, task?: unknown): string {
   if (!r || (!r.prompt && !r.skills.length && !r.tools?.length)) return ''
   const skills = r.skills.length ? `Use these skills if they are available: ${r.skills.join(', ')}.` : ''
   const web = r.tools?.some(t => WEB_WORDS.includes(t)) ? WEB_SAFETY_LINE : ''
-  return `\nYour role: ${r.name}\n${[fillRole(r.prompt, values), skills, web].filter(Boolean).join('\n')}\n`
+  return `## Your role: ${r.name}\n${[fillRole(r.prompt, values, task), skills, web].filter(Boolean).join('\n')}`
 }
 
 /** The lead's paragraph about roles: each one with its description, and how to pick. */
@@ -282,6 +282,8 @@ export function leadRoleText(r: RoleDef, source: DefSource, file: string): strin
     `${leadRoleLine(r, source).slice(2)}\nfile: ${file}\n${roleFileText(r).trim()}`,
     'The checklist fills the {{role}} slot of the built-in worker prompt (prompts/change.ts, prompts/investigation.ts); it may use these placeholders, filled in for each task (any other {{word}} is left as written):',
     ...rolePlaceholderLines(),
+    `The built-in prompts are sections in a fixed order; a worker on a change task is told:`,
+    ...promptSectionLines('change').map(l => `  ${l}`),
   ].join('\n')
 }
 

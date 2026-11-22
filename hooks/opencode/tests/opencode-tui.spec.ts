@@ -2788,7 +2788,7 @@ test('T-769: the Live tab\'s ▍Today has 4 lines (medians per task, work time, 
   // narrow: the cost goes; at 40 only the bar is left on the third line
   expect(today(45).texts.some(t => t.includes('≈ $'))).toBe(false)
   const narrow = today(40)
-  expect(narrow.texts.some(t => t === `${LIVE_INDENT}████████▓▒▒▒▒▒░░`)).toBe(true)
+  expect(narrow.texts.some(t => t === `${LIVE_INDENT}░░████████▓▒▒▒▒▒`)).toBe(true)
   // line 4 keeps both hour labels and a sparkline, its figures cut from the end
   const four = narrow.texts.find(t => / 00 [▁▂▃▄▅▆▇█ ]+·* 24$/.test(t))
   expect(four === undefined).toBe(false)
