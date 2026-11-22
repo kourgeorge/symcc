@@ -80,15 +80,18 @@ export const oldRowsText = (rows: ReturnType<typeof oldDataRows>): string => row
  */
 export async function migrateIfOld(host: Host, all = true): Promise<string> {
   let why = ''
+  backupOfThisTry = undefined
   try {
     if (S.guardOnly || !S.root) return ''
     const input = await oldInput(host, all)
     if (!oldDataRows(input).some(r => r.fix)) return ''
     // A migration that failed once is not tried again until the data files change (or the owner runs the doctor's fix).
     if (lastFailure && lastFailure.sig === (await filesSignature(host))) return lastFailure.msg
-    const r = await migrateData(host)
+    // after a failure the last backup is kept and reused (the data it holds is the old shape anyway)
+    const r = await migrateData(host, failedBackup?.backup)
     if (r.failed) why = r.failed
     else {
+      failedBackup = null
       const msg = `symcc moved your old data to the current shape; a backup is in ${r.backup}/`
       host.ui.toast(S.N.toast(msg))
       tellLead(host, msg)
@@ -97,6 +100,7 @@ export async function migrateIfOld(host: Host, all = true): Promise<string> {
   } catch (e) {
     why = String((e as Error)?.message ?? e).slice(0, 150)
   }
+  const failBackup = backupOfThisTry
   const msg = `symcc couldn't move your old data to the current shape (${why}); nothing was saved. Run /${S.N.name}-doctor.`
   lastFailure = { sig: await filesSignature(host), msg }
   // told once: the same reason, whatever the time or backup folder in it
@@ -104,6 +108,8 @@ export async function migrateIfOld(host: Host, all = true): Promise<string> {
     .replace(/\S*data\.before-migrate-\S*?\//g, '<backup>')
     .replace(/[^\s/'"()]*\.\d+-[a-z0-9]+\.tmp/g, '<tmp>')
     .replace(/(^|[\s'"(])\/[^\s'"()]*/g, '$1<path>')
+  // a changed reason gets a fresh backup next time
+  failedBackup = failBackup && (!failedBackup || failedBackup.plain === plain) ? { plain, backup: failBackup } : null
   if (plain !== toldFailure) {
     toldFailure = plain
     host.ui.toast(S.N.toast(msg))
@@ -114,6 +120,19 @@ export async function migrateIfOld(host: Host, all = true): Promise<string> {
 
 /** The last failure text told to the owner (without the backup folder), so a repeated failure is told once. */
 let toldFailure = ''
+
+/** The backup folder the current migration try uses (set by migrateData, also when it throws later). */
+let backupOfThisTry: string | undefined
+
+/** The backup folder of the last failed migration and its cleaned reason: reused while the same failure repeats. */
+let failedBackup: { plain: string; backup: string } | null = null
+
+/** Forgets what the last failed migration left (tests start each world clean). */
+export function forgetMigrationFailure(): void {
+  failedBackup = null
+  lastFailure = null
+  toldFailure = ''
+}
 
 /** The last failed migration: what the data files looked like then, and the message. */
 let lastFailure: { sig: string; msg: string } | null = null
@@ -152,16 +171,17 @@ async function backUp(host: Host): Promise<string> {
  * (usage totals, each scout's last report into its runs file) and field-guide.md as org-mem.md. Answers '' failed and
  * the lines of what it changed in `done`; a failure before the backup is complete changes nothing.
  */
-export async function migrateData(host: Host): Promise<{ failed: string; done: string[]; backup?: string }> {
+export async function migrateData(host: Host, reuseBackup?: string): Promise<{ failed: string; done: string[]; backup?: string }> {
   if (S.guardOnly) return { failed: 'this window only guards a worker folder', done: [] }
   lastFailure = null // the owner (or a changed file) asks for it: try again
   const done: string[] = []
   let backup: string
   try {
-    backup = await backUp(host)
+    backup = reuseBackup ?? (await backUp(host))
   } catch (e) {
     return { failed: `the backup could not be made, nothing was changed (${String((e as Error)?.message ?? e).slice(0, 120)})`, done: [] }
   }
+  backupOfThisTry = backup
   done.push(`backup of the data files kept in ${backup}/`)
   const before = oldDataRows(await oldInput(host))
   const failed = await locked(host, async () => {
