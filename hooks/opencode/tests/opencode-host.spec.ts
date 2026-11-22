@@ -315,6 +315,35 @@ test('one copy runs the engine: the main folder\'s first copy; a second copy for
   }
 }, TEST_MS)
 
+test('T-886: a newer plugin copy loaded in the same process stops the older engine copy (its timers end) and runs the engine; a same-version copy only waits', async () => {
+  reset()
+  const p = await project()
+  try {
+    const { calls, engine } = recordingEngine()
+    const roles: string[] = []
+    const onRole = (dir: string, role: CopyRole) => void roles.push(`${dir} ${role}`)
+    const old = symccServer({ engine, onRole, version: '0.5.27', hostOptions: { say: () => undefined } })
+    const same = symccServer({ engine, onRole, version: '0.5.27', hostOptions: { say: () => undefined } })
+    const newer = symccServer({ engine, onRole, version: '0.5.30', hostOptions: { say: () => undefined } })
+    const endOld = await old.setup(fakeCtx(p.main).ctx)
+    const endSame = await same.setup(fakeCtx(p.link).ctx)
+    expect(calls).toEqual([`start ${p.main}`, `guard ${p.link} -> ${p.link === p.main ? p.main : p.link}`])
+    // the newer copy: the old engine ends (its timers stop) before the newer one starts
+    const endNew = await newer.setup(fakeCtx(p.main).ctx)
+    expect(calls.slice(2)).toEqual([`end ${p.main}`, `start ${p.main}`])
+    expect(roles).toEqual([`${p.main} engine`, `${p.link} waiting`, `${p.main} engine`])
+    // the old copy unloaded later ends nothing more, and the newer copy keeps the engine
+    await endOld!()
+    expect(calls.length).toBe(4)
+    await endNew!()
+    expect(calls.slice(4)).toEqual([`end ${p.main}`, `start ${p.link}`])
+    await endSame!()
+    expect(owners().size).toBe(0)
+  } finally {
+    await p.done()
+  }
+}, TEST_MS)
+
 test('a worktree\'s copy refuses a worker\'s edit outside its files through permission.evaluate, lets an allowed one pass, and refuses a shell write into the owner\'s copy', async () => {
   reset()
   const p = await project()

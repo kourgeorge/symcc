@@ -176,6 +176,24 @@ export function withAgentStart(runs: SymccRun[] | undefined, kind: SymccRunAgent
   return keepAgentIds([...runs.slice(0, -1), { ...last, agents: [...before, { id, kind, started: now }] }])
 }
 
+/**
+ * T-884: withAgentStart for the worker `id` that just started (at `now`) on the last try. When it is the first worker
+ * since the try (or its latest restart) was claimed, that start moves to `now`: the time the start waited in the queue
+ * is not work, so the try's time (runMs), its worker's time limit (workerSince, workerActiveMs) and the board count
+ * from the worker's real start.
+ */
+export function withWorkerStart(runs: SymccRun[] | undefined, id: unknown, now: string): SymccRun[] | undefined {
+  const last = runs?.at(-1)
+  if (!runs || !last || last.ended || !isAgentId(id) || agentsOf(last).some(a => a.id === id)) return withAgentStart(runs, 'worker', id, now)
+  const rs = restartsOf(last)
+  const from = Date.parse(rs.at(-1)?.started ?? last.started)
+  const nowMs = Date.parse(now)
+  const first = !agentsOf(last).some(a => a.kind === 'worker' && Date.parse(a.started) >= from)
+  if (!first || !Number.isFinite(from) || !(nowMs > from)) return withAgentStart(runs, 'worker', id, now)
+  const moved: SymccRun = rs.length ? { ...last, restarts: [...rs.slice(0, -1), { ...rs.at(-1)!, started: now }] } : { ...last, started: now }
+  return withAgentStart([...runs.slice(0, -1), moved], 'worker', id, now)
+}
+
 /** T-805: `agents` with `used` added to entry `i` (not ended). */
 const withUse = (agents: SymccRunAgent[], i: number, used: { tokens?: SymccTokens; cost?: number }): SymccRunAgent[] => {
   const a = agents[i]!

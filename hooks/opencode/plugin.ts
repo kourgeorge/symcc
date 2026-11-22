@@ -19,7 +19,7 @@
 // owner talks to: the last one in a main copy's folder given a prompt that is no child session and none of symcc's
 // agents. It is kept per board owner (by real main folder, see leads), so a copy that takes over the engine, or one
 // loaded again, still knows it; board updates sent before it was known go to it then.
-import type { Host, HostAgentKind } from '../host'
+import { manifestVersion, type Host, type HostAgentKind } from '../host'
 import { sessionStarting, sessionStart, guardStart, sessionEnd, agentFinished, leadGuideText } from '../app/symcc'
 import { useName, scoutRuns } from '../app/state'
 import { projectRoot, isWorkerFolder } from '../app/store'
@@ -57,8 +57,25 @@ export const SYMCC_ENGINE: Engine = {
 
 /** A copy waiting to run the engine for a main folder, and how it takes over. */
 type Waiting = { token: object; takeOver: () => Promise<void> }
-/** Who runs the engine for one real main folder, and who waits to. */
-type Slot = { owner?: object; waiting: Waiting[] }
+/**
+ * Who runs the engine for one real main folder, and who waits to. `stop` ends the owner's engine and timers, and
+ * `version` is its plugin version: a newer copy loaded in the same process (an update while `opencode serve` keeps
+ * running, the old copy never unloaded) stops the older one and runs the engine itself (T-886).
+ */
+type Slot = { owner?: object; version?: string; stop?: () => Promise<void>; waiting: Waiting[] }
+
+/** Whether version `a` is newer than `b` ("0.5.30" > "0.5.27"); false when either is not known. */
+export function isNewerVersion(a: string, b: string): boolean {
+  const parts = (v: string) => v.split(/[.+-]/).map(x => Number(x))
+  if (!a || !b) return false
+  const [x, y] = [parts(a), parts(b)]
+  for (let i = 0; i < Math.max(x.length, y.length); i++) {
+    const [p, q] = [x[i] ?? 0, y[i] ?? 0]
+    if (!Number.isFinite(p) || !Number.isFinite(q)) return false
+    if (p !== q) return p > q
+  }
+  return false
+}
 
 const OWNERS_KEY = '__symccOpencodeOwners'
 
@@ -95,6 +112,8 @@ export type ServerOptions = {
   onRole?: (dir: string, role: CopyRole) => void
   /** passed on to the agents (opencodeAgents), e.g. shorter waits in the tests */
   agentOptions?: Pick<OpencodeAgentsOptions, 'waitMs' | 'pollMs' | 'sleep'>
+  /** this copy's plugin version (default: the host's, else its manifest); tests pass one */
+  version?: string
 }
 
 /**
@@ -208,9 +227,23 @@ export function symccServer(o: ServerOptions = {}): OcServerPlugin {
       placed({ main: main || dir, realMain, inMain })
       const token = {}
       let slot: Slot | undefined
+      const version = o.version ?? (await (host.plugin.version ?? (() => manifestVersion(host.fs, host.plugin.root)))().catch(() => ''))
+      // ends this copy's engine and timers (cleanup, or a newer copy taking over)
+      const stop = async () => {
+        if (!running) return
+        running = false
+        await engine.end(host).catch(() => undefined)
+        if (slot?.owner === token) {
+          slot.owner = undefined
+          slot.version = undefined
+          slot.stop = undefined
+        }
+      }
       const takeOver = async () => {
         running = true
         slot!.owner = token
+        slot!.version = version
+        slot!.stop = stop
         o.onRole?.(dir, 'engine')
         await engine.start(host).catch(err => say(`couldn't start the board: ${(err as Error)?.message ?? err}`))
       }
@@ -219,6 +252,12 @@ export function symccServer(o: ServerOptions = {}): OcServerPlugin {
         owners().set(realMain, slot)
         leadKey = realMain
         if (ownLead) leads().set(realMain, ownLead)
+        // an older copy still runs the engine here (it was never unloaded): stop its timers, this copy takes over
+        if (slot.owner && slot.stop && isNewerVersion(version, slot.version ?? '')) {
+          const old = slot.stop
+          await old().catch(() => undefined)
+          slot.owner = undefined
+        }
         if (!slot.owner) await takeOver()
         else {
           slot.waiting.push({ token, takeOver })
@@ -233,10 +272,8 @@ export function symccServer(o: ServerOptions = {}): OcServerPlugin {
         for (const r of regs.splice(0)) await r.dispose().catch(() => undefined)
         if (!slot) return
         if (running) {
-          running = false
-          await engine.end(host).catch(() => undefined)
-          if (slot.owner === token) slot.owner = undefined
-          const next = slot.waiting.shift()
+          await stop()
+          const next = slot.owner ? undefined : slot.waiting.shift()
           if (next) await next.takeOver()
         } else slot.waiting = slot.waiting.filter(w => w.token !== token)
         if (!slot.owner && !slot.waiting.length && owners().get(realMain) === slot) owners().delete(realMain)
