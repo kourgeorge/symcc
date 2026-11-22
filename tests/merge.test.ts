@@ -5779,9 +5779,10 @@ test('T-743: after a reopen only one worker works on the try: the old worker is 
   expect(formerWorker({ ...t, runs: [runBy('ag8', ISO, { ended: STOP }), { started: STOP }] }, 'ag8')).toBe(true)
 })
 
-test('T-743: a worker on a try that went on after a reopen counts its time limit from its own start, not the try\'s first start', async () => {
+test('T-743/T-873: a try that went on after a reopen with 18 active hours (a closed-app gap left out) is asked for more time, then told to wrap up', async () => {
   S.me = 'me'
   const w = world()
+  const sent = sentTo(w)
   const first = new Date(Date.now() - 20 * 3600_000).toISOString()
   const stop = new Date(Date.now() - 2 * 3600_000).toISOString()
   const fresh = new Date(Date.now() - 60_000).toISOString()
@@ -5801,12 +5802,26 @@ test('T-743: a worker on a try that went on after a reopen counts its time limit
   workers.clear()
   expect(await lateHandBack(w.$, 'ag10')).toBe(true)
   expect(Math.abs(workers.get('ag10')!.since - Date.parse(fresh))).toBeLessThan(1000)
-  // the regular check asks nobody for more time
-  await check(w.$)
-  const after = find(await load(w.$), 'T-1')!
-  expect(after.live?.time_ask).toBeUndefined()
-  expect(after.live?.wrap_up).toBeUndefined()
-  workers.clear()
+  // T-873: the limit counts the try's active time: 18 h before the stop, the 2 h the app was closed
+  // left out, 1 min since the restart. Far past the 45 min limit, so the check (it only runs while
+  // driving) asks the owner first; the worker is not told anything yet.
+  S.driving = true
+  try {
+    await check(w.$)
+    const asked = find(await load(w.$), 'T-1')!
+    expect(asked.status).toBe('doing')
+    expect(asked.live?.time_ask).toBeDefined()
+    expect(asked.live?.wrap_up).toBeUndefined()
+    expect(leadQueue.filter(x => x.includes('T-1 has run 45 min. Give it more time?')).length).toBe(1)
+    expect(sent).toEqual([])
+    // with no answer and past the hard cap, the next check tells the worker to wrap up
+    await check(w.$)
+    expect(find(await load(w.$), 'T-1')!.live?.wrap_up).toBeDefined()
+    expect(sent).toEqual([{ to: 'ag10', text: WRAP_UP_TEXT }])
+  } finally {
+    S.driving = false
+    workers.clear()
+  }
 })
 
 test('T-873: the owner\'s "+30 min" still counts after Claude Code is reopened and the same try goes on: not asked again at 51 active minutes', async () => {
