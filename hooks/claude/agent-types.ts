@@ -12,6 +12,8 @@ export function claudeNames(raw: string = DEFAULT_NAME) {
   return {
     worker: `${name}:worker`,
     scout: `${name}:scout`,
+    /** T-831: the hidden agent whose end gives symcc a hook to start agents in (see app/starts.ts) */
+    starter: `${name}:starter`,
     /** "mcp__<name>__board" */
     tool: (t: string) => `mcp__${name}__${t}`,
   }

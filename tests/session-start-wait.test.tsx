@@ -38,7 +38,7 @@ function world(on: On, o: { agents?: { id: string; type: string }[] } = {}) {
   on('fs.list', () => ({ value: [] }))
   on('ui.status', () => ({ value: undefined }))
   on('ui.toast', () => ({ value: undefined }))
-  on('agent.spawn', (_, e) => (spawned.push({ name: String((e as unknown as { name?: string }).name) }), { model: 'sonnet' }) as never)
+  on('agent.spawn', (_, e) => ((e as unknown as { name?: string }).name === 'symcc-starter' || spawned.push({ name: String((e as unknown as { name?: string }).name) }), { model: 'sonnet' }) as never) // T-831: the hidden starter is no agent here
   on('process.run', (_, e) => {
     const [cmd, ...rest] = (e as unknown as { argv: string[] }).argv
     if (cmd === 'git') return { value: rest[0] === 'rev-parse' && rest[1] === '--is-inside-work-tree' ? ok('true\n') : ok() }

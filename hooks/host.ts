@@ -284,6 +284,11 @@ export interface Host {
      */
     followUp?: (agentId: string, text: string) => Promise<unknown>
     /**
+     * T-831: only Claude Code: starts a tiny hidden agent whose turn.complete is a hook where symcc may start agents
+     * (like a turn of the lead, without reading the lead's whole context). Rejects when it can't start.
+     */
+    startTrigger?: () => Promise<HostAgentStarted>
+    /**
      * Only a host that runs agents as processes and records them (hooks/process/, T-474): stops the recorded agent
      * processes an earlier run of the host left running (still alive, not started by this copy), drops the entries of
      * ended ones, and answers the stopped agents' ids. symcc's orphan pass (stopOrphans) calls it.

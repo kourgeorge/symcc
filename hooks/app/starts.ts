@@ -51,9 +51,71 @@ export function startAgent(host: Host, input: HostAgentStart, still?: () => bool
     waiting.push({ input, resolve, reject, ...(still ? { still } : {}) })
     if (leadBusy || woke) return
     woke = true
-    if (S.enabledNow) tellLead(host, wakeLine(input))
+    if (S.enabledNow) wake(host, input)
     else host.ui.toast(S.N.toast(`${input.kind} ${input.name} starts at the next turn`))
   })
+}
+
+/** T-831: how long the hidden starter may take to end before the lead is woken instead. */
+export const STARTER_TIMEOUT_MS = 60_000
+
+/** The running starter: its id once known, the start that answers it, and its timeout timer. Only one at a time. */
+type Starter = { id?: string; spawning: Promise<unknown>; timer?: { cancel(): void } }
+let starter = null as Starter | null
+/** Every starter's id this copy started (a late one must still be told apart from a worker). */
+const starterIds = new Set<string>()
+
+/** Whether `agentId` is a hidden starter this copy started. */
+export const isStarter = (agentId: string) => starterIds.has(agentId)
+
+/** Wakes the lead for the queue (a board update), as before the starter. */
+function wakeLeadFor(host: Host) {
+  const first = waiting[0]
+  if (first && S.enabledNow) tellLead(host, wakeLine(first.input))
+}
+
+/**
+ * T-831: gets the queue started without waking the lead. A host with startTrigger (Claude Code) starts a tiny hidden
+ * agent; its end (starterEnded, in turn.complete) is a hook where drainStarts runs. If it can't start, or its end
+ * doesn't come within STARTER_TIMEOUT_MS, the lead is woken (tellLead) as always, so a start is never lost.
+ */
+function wake(host: Host, input: HostAgentStart) {
+  if (!host.agents.startTrigger) return tellLead(host, wakeLine(input))
+  if (starter) return // the running starter's end drains whatever is queued by then
+  const mine: Starter = { spawning: Promise.resolve() }
+  starter = mine
+  let release = () => {}
+  const released = new Promise<void>(r => (release = r))
+  const giveUp = () => {
+    release() // lets turn ends that wait for a start that never answers go on
+    if (starter !== mine) return
+    mine.timer?.cancel()
+    starter = null
+    if (waiting.length) wakeLeadFor(host)
+  }
+  mine.timer = host.clock.after(STARTER_TIMEOUT_MS, giveUp)
+  const started = host.agents.startTrigger().then(r => {
+    if (!r.agentId) return giveUp()
+    starterIds.add(r.agentId)
+    mine.id = r.agentId
+  }, giveUp)
+  mine.spawning = Promise.race([started, released])
+}
+
+/**
+ * T-831: whether the turn that ended for `agentId` is the hidden starter's (then it is no agent of the board: nothing
+ * else looks at it). The caller then runs drainStarts as at any turn's end.
+ */
+export async function starterEnded(_host: Host, agentId: string | undefined): Promise<boolean> {
+  if (!agentId) return false
+  const cur = starter
+  if (cur && !cur.id) await cur.spawning // its end can come before the start answered
+  if (!starterIds.has(agentId)) return false
+  if (starter && starter.id === agentId) {
+    starter.timer?.cancel()
+    starter = null
+  }
+  return true
 }
 
 /** How many starts wait in the queue. */
@@ -104,6 +166,9 @@ export function leadTurn(busy: boolean) {
 /** Empties the queue (its waiting starts never settle) and the lead's turn state, as a reload does; for the tests' resetPlugin() only. */
 export function resetStarts() {
   waiting.length = 0
+  starter?.timer?.cancel()
+  starter = null
+  starterIds.clear()
   leadBusy = false
   woke = false
 }

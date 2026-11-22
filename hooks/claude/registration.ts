@@ -29,6 +29,15 @@ export async function registerAll($: $) {
     tools: scoutAgentTools(S.N.name),
     background: true,
   }))
+  // T-831: the hidden starter agent: it only says OK; its end is a hook where symcc starts the queued agents (app/starts.ts)
+  await ok($.agent.register({
+    name: 'starter',
+    description: `${S.N.name} start trigger: does nothing. Started by ${S.N.name} only.`,
+    prompt: 'Reply OK',
+    tools: [],
+    model: 'haiku',
+    background: true,
+  }))
   for (const t of TOOLS()) await ok($.tool.register({ ...t, isDeferred: false }))
   // the workers' question tool, next to the lead's tools (only a running worker's call is taken; see askCall)
   await ok($.tool.register({ ...ASK_TOOL_DEF(), isDeferred: false }))
