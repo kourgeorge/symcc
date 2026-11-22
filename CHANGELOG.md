@@ -2,11 +2,147 @@
 
 When a set of user-facing changes is ready to release, bump the version in both `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` and add an entry here.
 
-## Unreleased
+## 0.5.26 (2026-11-22)
 
 ### Added
-- A new project (a folder with no `.symcc/board.json`) starts with symcc off, like plain Claude, and writes nothing, until you run `/symcc-enable`. The band and status line say `symcc is not set up here · /symcc-enable to start it`. Projects that already have a board start on as before.
-- `/symcc-disable here` and `/symcc-enable here`: turn symcc off (plain Claude) or on in one window only, kept in that window's session, not in `board.json`. A window opened while another live window has symcc on starts off here; when that window closes, the off-here windows say so once and wait for `/symcc-enable here`; if nobody does within 15 minutes, one of them plays the "needs you" notice once.
+- One lead per project: a window opened while another live window has symcc on starts without symcc (plain Claude). `/symcc-disable here` and `/symcc-enable here` turn symcc off or on in one window only, kept in that window's session, not in `board.json`. When the symcc window closes, the off-here windows say so once and wait for `/symcc-enable here`; if nobody does within 15 minutes, one of them plays the "needs you" notice once.
+- A new project (a folder with no `.symcc/board.json`) starts with symcc off, like plain Claude, and writes nothing, until you run `/symcc-enable`, which creates the board there. The band and status line say `symcc is not set up here · /symcc-enable to start it`. Projects that already have a board start on as before.
+- Live tab: a NEEDS YOU section at the top while something waits for you.
+
+### Changed
+- The board opens on the Live tab, now the first tab.
+- Live tab: section titles are plain UPPERCASE words (NEEDS YOU, TASKS, TODAY, BRANCHES, ORGANIZATIONAL MEMORY) with space around them. TODAY gets a 4th line with tokens by the hour, plus first-try and tries-per-task figures. Only a running task's id is in the accent color, and waiting rows are dimmer. A just-merged task's branch row stays for 10 minutes, like its lane.
+- Task, scout and org-mem pages share one header: where you are, the title, the status, one row of buttons and a thin rule.
+
+### Fixed
+- `/symcc-stats` in Claude Code now really shows its colored layout.
+
+## 0.5.25 (2026-11-21)
+
+### Changed
+- The band above the prompt: the task id in orange, the step, time and try in green, the title in normal text.
+- Task and scout pages: every header button is drawn the same way, "[Label]", Back too ("‹ [Scouts]").
+- Live tab: a just-merged task's lane stays for 10 minutes (dim, with ✓ at "merged"); the org-mem "N / 60" count is in one calm color, never yellow.
+
+### Fixed
+- Tokens: each worker and checker keeps its own count and a try's tokens are their sum; a stopped worker (pause, drop, change, time limit, restart) keeps the tokens it used; every checker is counted; the lead no longer shows 0 tokens in the stats.
+
+## 0.5.24 (2026-11-21)
+
+### Added
+- Task page: a Branch section that draws the task's branch against main (where it forked, commits per try, catch-ups, how far behind, the merge).
+- Live tab: a small mark on the mode line while scouts run ("⌕ gaps-bot 4m").
+
+### Changed
+- The band above the prompt: "𝄞 symcc" and a short board summary on the first line, the running tasks on the lines under it.
+- Live tab TODAY: a short 3-line view with averages per task, who spent the tokens, time and cost, and tokens by the hour. Running tasks are bold with ▶, waiting ones dim.
+
+## 0.5.23 (2026-11-21)
+
+### Added
+- OpenCode: the board panel opens by itself when a session is first shown, as in Claude Code; the `open_on_start` setting turns it off.
+
+### Changed
+- Task and scout pages: one 4-line header (where you are, the title, the state, the buttons in groups) above a heavy rule, on all boards.
+- `/symcc-stats` in Claude Code: a clearer look (colors, headings, lined-up bars), with the same content.
+- Live tab: TODAY comes before BRANCHES and has no "next up" line; a lane's token figure counts the whole task (all tries so far); agent steps are marked with ✧ ("work✧ check✧").
+- The lead answers in short, fixed shapes for board updates, new tasks and questions.
+
+### Fixed
+- After driving moved to another session, scout runs were refused and wasted.
+- The stats count the lead's tokens from session logs over 4 MiB.
+- The status line's "board too big" warning fits in 71 columns.
+
+## 0.5.22 (2026-11-21)
+
+### Changed
+- A new try starts from today's main: main is merged into the task's branch before the worker starts.
+- A try counts only real send-backs: a reopen or restart goes on with the same try.
+- The band above the prompt shows the work, and the line below it shows the board's facts, with no counts shown twice.
+- Live tab: each section has a heading, like the task page.
+- Turning down a pop-up question also drops its board questions (Q-n), and the lead is told.
+- The website's home page plays a demo of a real symcc session.
+
+### Fixed
+- After a reopen, one hand-back could start two checkers, and a checker that symcc stopped was read as "found problems" and cost a try.
+
+## 0.5.21 (2026-11-21)
+
+### Added
+- The `/symcc-stats html` page has "Each failed try" and "Tests that failed most" sections.
+
+### Changed
+- When main moves by an outside commit, or a reload cuts off a test run, the merge tests and merges the same branch again instead of failing the try.
+- Stats: one failed-tries count; checker send-backs, time-outs and empty hand-backs are their own reasons; pauses and questions on to-do tasks count as "waiting for you".
+- Live tab: an empty line before each section. Org-mem page: Delete and Back right under the title.
+- Status line: "⚠ driven by another session" in yellow.
+
+## 0.5.20 (2026-11-21)
+
+### Added
+- Live tab: a BRANCHES section under the lanes, with main's latest merges and each open task's branch (commits ahead, how far behind main), on all three boards.
+
+## 0.5.19 (2026-11-21)
+
+### Added
+- Live tab: an ORGANIZATIONAL MEMORY section (the newest notes with their topic, then the topics with counts; Enter opens a topic's notes), on all three boards. Each note has one topic, given by the lead.
+- Board search: `waits-on:T-n`, `blocks:T-n` and `stuck`.
+- Stats: time per stage (waiting and work, check, queue, tests, merge), totals next to averages, an `inside` option to count only the work inside the days asked for, and which test command failed on each failed try.
+
+### Changed
+- Waiting tasks hang under the lane of the task they wait for on the Live tab.
+- Task rows show only the task's kind as their tag ("[docs]", "[bug]"), never the role.
+- A task's history has a line when its worker starts and when it hands back.
+- Task files are never cut silently at 30.
+
+### Fixed
+- A worker that hands back while a background command still runs no longer fails its try: the command is stopped and the hand-back goes on.
+- A scout's agent name (symcc-scout-X) is taken as X, and unknown scout names are refused.
+
+## 0.5.18 (2026-11-21)
+
+### Added
+- The Live tab: one lane per running task, with its step, time and tokens, and a TODAY summary, on the terminal, VS Code and OpenCode boards. The organizational memory moved there from Settings, as a button at the bottom.
+- OpenCode: the buttons it still lacked (Edit and Remove for roles and kinds, New role, kind and scout, Set up git) and the slash commands behind them.
+
+### Changed
+- Board lists keep a row's end ("waits for T-…", "[feature]") in view by cutting the title instead; VS Code says "waits for" too, and its Scouts list is one line per scout.
+- OpenCode hides the board header on task, question, scout and other pages, like Claude Code and VS Code.
+- An answered investigation's Status row says "answered: read it".
+- The README, guide and commands reference caught up (OpenCode, Live tab, `/symcc-board`, `/symcc-doctor`).
+
+### Fixed
+- A note on a task that failed on a clash with main no longer loses its "merge it in" try.
+
+## 0.5.17 (2026-11-21)
+
+### Changed
+- One `notify` setting: `voice`, `sound 1`, `sound 2`, `sound 3` or `off`; it replaces `sound_set`.
+- `/symcc-doctor` always checks, even during a merge; only the fixes wait for the merge to end.
+- OpenCode: every board screen has Claude Code's buttons (tabs, list search, the Settings, Roles, Kinds and org-mem pages, the task page's toolbar).
+- VS Code: a line under the header, task rows the full width, and a cleaner task page with a working History timeline.
+- Task page: no status badge under the title; scout page: the Results figures moved down, just before File.
+- The "another session drives" warning is shorter, in yellow, right under the tests and limits line.
+- A lead note right after a checker send-back joins the retry instead of restarting it.
+
+### Fixed
+- A board part that can't be checked counts as broken, not missing, and a save never writes empty parts over real ones.
+
+## 0.5.16 (2026-11-20)
+
+### Added
+- `/symcc-stats html`: writes the same figures as a self-contained web page with charts (`.symcc/stats.html`) and opens it.
+- `/symcc-doctor`: checks `.symcc/` and git (old backups, branches already in main, leftover task folders, files near 4 MB, a stuck board) and lists them; `/symcc-doctor fix all` or `fix <id> ...` cleans up.
+- After a worker or checker hands back, symcc asks it one short follow-up question, only for org-mem suggestions.
+
+### Changed
+- Changing only a running task's order or its after-list no longer restarts its try; `/symcc-stats` shows "restarted by a change" apart from real stops.
+- `board.json` stays well under Claude Code's 4 MiB file limit.
+- The guide was read through and made plainer.
+
+### Fixed
+- In Claude Code too, a board lock left by a process that is gone is taken at once.
+- The Bash guard refuses a relative path that climbs above the worker's folder when the shell's folder can't be read.
 
 ## 0.5.15 (2026-11-20)
 
@@ -20,7 +156,7 @@ When a set of user-facing changes is ready to release, bump the version in both 
 ## 0.5.14 (2026-11-20)
 
 ### Added
-- Three notify sound sets, so you can tell projects apart by ear (macOS: Glass / Ping, Hero / Pop, Submarine / Funk; Linux and Windows use their own sounds). A `sound_set` setting (1, 2, 3) on every Settings page; by default it is picked from the project's folder name; picking a set plays it once.
+- Three notify sound sets, so you can tell projects apart by ear (macOS: Glass / Ping, Hero / Pop, Submarine / Funk; Linux and Windows use their own sounds). A `sound_set` setting (1, 2, 3) on every Settings page; by default it is picked from the project's folder name; picking a set plays it once. (In 0.5.17, T-695 replaced `sound_set` with the `notify` setting's `sound 1` / `sound 2` / `sound 3` choices.)
 
 ### Changed
 - Question pages list the answers one per line, numbered ("1. …"), wrapping inside the box; click a line or press its number (terminal, VS Code, OpenCode; one native button per answer on desktop and mobile).
