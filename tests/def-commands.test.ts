@@ -101,7 +101,7 @@ test('T-706: the new command forms parse: role|kind <name> add, <name> remove, <
     expect([a, p(c, a)!.kind]).toEqual([a, 'bad'])
   }
   expect((p('symcc-settings', 'role docs edit') as { message: string }).message).toContain('/symcc-settings role <name> add')
-  expect((p('symcc-settings', 'git') as { message: string }).message).toContain('git setup')
+  expect((p('symcc-settings', 'git') as { message: string }).message).toContain('/symcc-settings git setup')
   expect((p('symcc-scout', 'lint new') as { message: string }).message).toContain('/symcc-scout <name> new <instructions>')
 })
 

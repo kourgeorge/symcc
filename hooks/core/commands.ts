@@ -210,7 +210,7 @@ export function parseCommand(command: string, args: string, current: SymccMode =
         }
         return use(defUsage(def, name))
       }
-      if (def === 'git') return words.length === 2 && words[1]!.toLowerCase() === 'check' ? { kind: 'check-git' } : words.length === 2 && words[1]!.toLowerCase() === 'setup' ? { kind: 'setup-git' } : use(`/${name}-settings git check (look at git again), or git setup (git init on main if there is no repo, a .gitignore and a first commit; never pushes)`)
+      if (def === 'git') return words.length === 2 && words[1]!.toLowerCase() === 'check' ? { kind: 'check-git' } : words.length === 2 && words[1]!.toLowerCase() === 'setup' ? { kind: 'setup-git' } : use(`/${name}-settings git setup (git init on main if there is no repo, a .gitignore and a first commit; never pushes), or /${name}-settings git check (look at git again)`)
       if (def === 'orgmem') {
         const n = Number(words[2])
         const key = words[3]
