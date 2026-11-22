@@ -113,14 +113,18 @@ test('T-643: a session that does not drive: a warning line under the banner and 
 test('T-517, T-706: with no git repo the banner warns with Claude Code\'s "set up git (g)" and its git row with the [ Set up git (g) ] button', () => {
   const f = viewFile()
   for (const git_state of ['no-repo', 'no-commits'] as const) {
-    const d = panelLines({ ...f, view: { ...f.view, git_state, branch_note: gitNote(git_state) } }, { opened: '', cursor: 0 }, NOW, 100)
+    const d = panelLines({ ...f, view: { ...f.view, git_state, branch_note: gitNote(git_state) } }, { opened: '', cursor: 0 }, NOW, 140)
     const lines = d.lines.map(lineText)
     expect(lines.join('\n')).toContain(git_state === 'no-repo' ? 'no git repo here; set up git (g)' : 'no commits yet; set up git (g)')
     expect(lines.join('\n')).not.toContain('ask the lead')
     // Claude Code's git row (parts.tsx gitRow): the warning, then the button
-    expect(lines).toContain(`${git_state === 'no-repo' ? 'No git repo here; nothing starts. ' : 'No commits yet; nothing starts. '}[ Set up git (g) ]`)
+    expect(lines).toContain(`${git_state === 'no-repo' ? 'No git repo here: symcc needs git for task branches. No worker starts until it is set up. ' : 'No commits yet: symcc needs a first commit for task branches. No worker starts until it is set up. '}[ Set up git (g) ]`)
     expect(d.lines.flat().find(s => s.text === '[ Set up git (g) ]')?.hit).toEqual({ key: 'g' })
   }
+  // T-861: git missing: the notice gives the install step and has no button
+  const missing = panelLines({ ...f, view: { ...f.view, git_state: 'no-git', git_install: 'brew install git', branch_note: gitNote('no-git') } }, { opened: '', cursor: 0 }, NOW, 100).lines.map(lineText)
+  expect(missing).toContain('Git is not installed: brew install git. No worker starts until it is.')
+  expect(missing.some(l => l.includes('Set up git'))).toBe(false)
   // git set up: no row
   expect(panelLines(f, { opened: '', cursor: 0 }, NOW, 100).lines.map(lineText).some(l => l.includes('Set up git'))).toBe(false)
 })

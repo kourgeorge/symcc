@@ -22,7 +22,7 @@ import type { SymccTask, SymccScout, SymccMode } from '../../types'
 import type { PaneView } from '../app/state'
 import type { OwnerQuestion } from '../core/questions'
 import {
-  statusCounts, newestFirst, bandLeads, bandNote, bandBrand, bandWhere, boardBrand, modeLabel, modeOf, planBandText, withCrew, questionsForYou,
+  gitNotice, statusCounts, newestFirst, bandLeads, bandNote, bandBrand, bandWhere, boardBrand, modeLabel, modeOf, planBandText, withCrew, questionsForYou,
   bannerLines, bannerRule, footerRule, type BannerTone, panelSections, localOffset, when, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, ALL_CLEAR,
   rowStates, rowMark, TITLE_ROOM, fitRow, rowExtra, questionsLabel, archivedOf, archivedNote, statusMark, detailRows, detailRowLines, wrapSegs, hintLineText,
   type KeyHint, type Seg, type BoardTask, intoOf, taskActions, taskAsks, actionButtonLabel, packRows, type TaskAction, type TaskActionId,
@@ -545,9 +545,10 @@ export const NEW_SCOUT_BUTTON: PanelButton = { label: '+ New scout', hit: { key:
 
 /** The banner's git row (T-706, as Claude Code's): with no git repo or no commit yet, what is wrong and the
  *  "[ Set up git (g) ]" button, which asks for a yes before /<name>-settings git setup; no row otherwise. */
-export function gitRowLines(v: Pick<PaneView, 'git_state'>, w: number): Line[] {
+export function gitRowLines(v: Pick<PaneView, 'git_state'> & Partial<Pick<PaneView, 'git_install'>>, w: number): Line[] {
+  if (v.git_state === 'no-git') return [[{ text: gitNotice('no-git', v.git_install ?? '', 'symcc'), color: 'warning' }]]
   if (v.git_state !== 'no-repo' && v.git_state !== 'no-commits') return []
-  const text = v.git_state === 'no-repo' ? 'No git repo here; nothing starts. ' : 'No commits yet; nothing starts. '
+  const text = `${gitNotice(v.git_state, '', 'symcc')} `
   const button = buttonText(SETUP_GIT_BUTTON)
   const pieces: DrawSeg[] = [{ text, color: 'warning' }, { text: button, color: 'ide', hit: SETUP_GIT_BUTTON.hit }]
   return text.length + button.length <= w ? [pieces] : [[pieces[0]!], [pieces[1]!]]

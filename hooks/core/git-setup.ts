@@ -107,9 +107,33 @@ export function gitNote(s: GitState, how = 'g'): string {
   return ''
 }
 
-/** The one message the lead gets when the git program is missing. */
-export function noGitText(name: string = DEFAULT_NAME): string {
-  return `No work can start: git is not installed. ${name} needs git to give each worker its own copy of the project (git worktrees), so it can't work without it. Tell the owner how to install it: on macOS run \`xcode-select --install\` (or get it from https://git-scm.com); on Linux use the package manager (e.g. \`sudo apt install git\`). Then start a new session.`
+/** What the machine offers for installing git (see gitInstallStep). */
+export type InstallFacts = { os: 'mac' | 'linux' | 'windows' | 'other'; brew?: boolean; linux?: 'apt' | 'dnf' | 'pacman' }
+
+/** The install step for this machine, as one command line (or a web address when nothing fits); '' never. */
+export function gitInstallStep(f: InstallFacts): string {
+  if (f.os === 'mac') return f.brew ? 'brew install git' : 'xcode-select --install'
+  if (f.os === 'windows') return 'winget install --id Git.Git'
+  if (f.os === 'linux') {
+    if (f.linux === 'apt') return 'sudo apt install git'
+    if (f.linux === 'dnf') return 'sudo dnf install git'
+    if (f.linux === 'pacman') return 'sudo pacman -S git'
+  }
+  return 'get git from https://git-scm.com'
+}
+
+/** The notice the board shows at the top for a git state ('' when git is fine); `step` = gitInstallStep when git is missing. */
+export function gitNotice(s: GitState, step = '', name: string = DEFAULT_NAME): string {
+  if (s === 'no-git') return `Git is not installed: ${step || 'get it from https://git-scm.com'}. No worker starts until it is.`
+  if (s === 'no-repo') return `No git repo here: ${name} needs git for task branches. No worker starts until it is set up.`
+  if (s === 'no-commits') return `No commits yet: ${name} needs a first commit for task branches. No worker starts until it is set up.`
+  return ''
+}
+
+/** The one message the lead gets when the git program is missing; `step` = how to install it on this machine (gitInstallStep). */
+export function noGitText(name: string = DEFAULT_NAME, step = ''): string {
+  const how = step ? `The install step for this machine is \`${step}\`.` : 'On macOS run `xcode-select --install` (or `brew install git`); on Linux use the package manager (e.g. `sudo apt install git`); on Windows `winget install --id Git.Git`; or get it from https://git-scm.com.'
+  return `No work can start: git is not installed. ${name} needs git to give each worker its own copy of the project (git worktrees), so it can't work without it. Ask the owner whether to install it. ${how} Only on their yes run it yourself, and only if it needs no sudo and no installer window; otherwise tell them to run it. Then ${name} sees git on its own and the next step is setting up the repo.`
 }
 
 /** The question the lead passes on to the owner when the folder has no repo (or no commits); `setup` = how to say yes. */

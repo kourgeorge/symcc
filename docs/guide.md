@@ -1862,11 +1862,15 @@ one `general` task: each extra task costs a worker run, a test run and a merge.
 symcc needs **git** (the program) and a git repo with at least one commit: each worker
 gets its own git worktree. It checks this when a session starts and before a worker starts.
 
-- **git not installed**: nothing starts; the banner and status line say
-  `git is not installed`, and the lead tells you how to install it (macOS:
-  `xcode-select --install`, or https://git-scm.com).
-- **No git repo, or no commits yet**: a git repo is set up for you, but symcc asks
-  first. The lead asks you; say yes, or press **g** ("Set up git") in the board panel.
+- **git not installed**: no worker starts; the board shows a notice at the top ("Git is not
+  installed: <the install step for your machine>"), the status line says `git is not installed`,
+  and the lead offers to run the step on your yes (macOS: `brew install git` when Homebrew is
+  there, else `xcode-select --install`; Linux: `sudo apt install git`, `dnf` or `pacman`; Windows:
+  `winget install --id Git.Git`). It never runs something that needs sudo or opens an installer
+  without asking. Once git is there, the notice moves on to the next case.
+- **No git repo, or no commits yet**: the board still works, and shows "No git repo here: symcc
+  needs git for task branches. No worker starts until it is set up." with a **Set up git** button.
+  The lead asks you too; say yes, or press **g** in the board panel.
   Nothing starts until it's done. The setup:
   - runs `git init -b main` (skipped if a repo is already there);
   - writes a `.gitignore` (or adds to yours, never twice) with `.symcc/`,
@@ -2209,8 +2213,8 @@ nothing else). `/symcc-init` and help work; every other symcc command and tool a
 /symcc-init to create one here". Nothing is written (no `.symcc/` folder). Type `/symcc-init` (it works like the command that starts a repo): it creates the board in the
 folder Claude started in, even when a parent folder has a `.symcc`; a parent's board never matters. A task's worker folder
 (under `.symcc/worktrees/`) is the one exception: it only guards, using the main project's board. Where `.symcc/` already exists it changes nothing and says "already set up
-here" (when another window drives it, it adds that `/symcc-enable here` turns symcc on in this window too). If this folder has no repository of its own, it asks first; `/symcc-init git` then sets up a
-repository and a first commit here (a parent's repository is never used). It turns symcc on, opens the board panel by itself on the Live tab (unless `open_on_start` is off, and not again if it is already open), and tells the lead it is the lead now. `/symcc-enable` and
+here" (when another window drives it, it adds that `/symcc-enable here` turns symcc on in this window too). If this folder has no repository of its own, it still makes the board, which then shows a "No git repo here" notice with a **Set up git** button (a parent's repository is never used); `/symcc-init git` sets up the
+repository and a first commit here first, then makes the board. It turns symcc on, opens the board panel by itself on the Live tab (unless `open_on_start` is off, and not again if it is already open), and tells the lead it is the lead now. `/symcc-enable` and
 `/symcc-disable` only switch an existing board on or off; with no board they point to `/symcc-init`. Projects
 that already have a board start on as before. With several windows (see above), the first window
 you enable is the lead and later windows start off here.

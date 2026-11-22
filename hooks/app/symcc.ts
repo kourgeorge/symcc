@@ -230,17 +230,18 @@ async function refreshFresh(host: Host) {
  * T-844: /<name>-init, like the git command that starts a repo: creates the board in the folder the session started in,
  * turns symcc on, and starts what a normal start does (the lead claim, example scouts, timers, git check, the panel); the
  * lead is told it is the lead now. Where a board is found (here or above) it changes nothing. A folder with no .git of its
- * own is asked about first (the answer is /<name>-init git): then git is set up in this folder (never a parent folder's
- * repo). If another window already runs symcc here, this one stays off (see startOffHere).
+ * own still gets its board (T-861): the board shows a "no git" notice with a Set up git button (never a parent folder's
+ * repo), and no worker starts until git is set up. /<name>-init git sets git up here first, then makes the board.
+ * If another window already runs symcc here, this one stays off (see startOffHere).
  */
 async function initProject(host: Host, tell: (text: string) => void, withGit: boolean): Promise<string> {
   const own = (await sessionFolder(host)).replace(/[\\/]+$/, '') || '/'
   // like git init: only a board in this exact folder stops it; one in a folder above does not
   if (await host.fs.exists(`${own}/${S.N.boardFile}`).catch(() => false)) return S.offHere ? (S.offWhy === 'other' ? `${S.N.name} is already set up here. It runs in another window; /${S.N.name}-enable here turns it on in this one too.` : `${S.N.name} is already set up here, but it is off in this window. /${S.N.name}-enable here turns it back on.`) :`${S.N.name} is already set up here.`
   const hasGit = await host.fs.exists(`${own}/.git`).catch(() => false)
-  if (!hasGit && !withGit) return `This folder has no git repo of its own (a folder above is never used). ${S.N.name} needs git for its task branches. /${S.N.name}-init git sets up git here (a repo on main, a .gitignore and a first commit; never pushes) and creates the ${S.N.name} board here.`
-  const failed = await createBoardIn(host, own, !hasGit)
-  if (failed) return `${S.N.name} was not set up here: ${failed}${hasGit ? '' : ` (nothing was created; /${S.N.name}-init git tries again)`}`
+  // T-861: plain init always makes the board; with no git the board shows a notice and its Set up git button does the git part
+  const failed = await createBoardIn(host, own, !hasGit && withGit)
+  if (failed) return `${S.N.name} was not set up here: ${failed}${hasGit || !withGit ? '' : ` (nothing was created; /${S.N.name}-init git tries again)`}`
   // the session's own folder with no board: it switches itself on, like a new start
   S.root = own
   S.fresh = false

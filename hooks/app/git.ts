@@ -1,11 +1,12 @@
 import type { SymccTask } from '../../types'
-import { liveWorkersFor, startBranch, type Board, intoOf, type GitState, gitStateOf, noGitText, setupAskText, gitignoreWith, gitignoreBase, riskyFiles, parseLsTree, ignoreLineFor, setupDoneText, find, worktreesToRemove, branchesToDelete, cleanupText, namedReports, SCRATCH_DIR, SCRATCH_EXCLUDE, commitMessage, isSha, isTaskCommit } from '../board'
+import { liveWorkersFor, startBranch, type Board, intoOf, type GitState, gitStateOf, noGitText, setupAskText, gitInstallStep, type InstallFacts, gitignoreWith, gitignoreBase, riskyFiles, parseLsTree, ignoreLineFor, setupDoneText, find, worktreesToRemove, branchesToDelete, cleanupText, namedReports, SCRATCH_DIR, SCRATCH_EXCLUDE, commitMessage, isSha, isTaskCommit } from '../board'
 import { publish } from './lead'
 import { S, workers, starting, finishing, approving, keptDirty, scratchUse } from './state'
 import { type Host, agentState } from '../host'
 import { load, change, path } from './store'
 import { tellLead, noteForLead, brief } from './tell'
 import { pump, agentsNow } from './workers'
+import { systemOf } from './voice'
 
 // ---------------- git ----------------
 
@@ -62,6 +63,16 @@ export async function probeGit($: Host): Promise<GitState> {
   return gitStateOf({ hasGit, inside, hasHead })
 }
 
+/** The install step for this machine (what the notice and the lead say when git is missing); looks programs up, runs none. */
+export async function installStepOf($: Host): Promise<string> {
+  const has = async (name: string) => (await $.run(['sh', '-c', 'command -v "$1" >/dev/null 2>&1', 'sh', name], { timeoutMs: 5000 }).catch(() => null))?.exitCode === 0
+  const os = await systemOf($).catch(() => 'other' as const)
+  const f: InstallFacts = { os: os === 'mac' || os === 'linux' || os === 'windows' ? os : 'other' }
+  if (f.os === 'mac') f.brew = await has('brew')
+  if (f.os === 'linux') for (const m of ['apt', 'dnf', 'pacman'] as const) if (await has(m === 'apt' ? 'apt-get' : m)) { f.linux = m; break }
+  return gitInstallStep(f)
+}
+
 /**
  * Whether git is ready for work (a repo with a commit). If not, nothing starts or fails: the
  * banner and status line say so, and the lead (only the driver) is told once per state: how
@@ -69,6 +80,8 @@ export async function probeGit($: Host): Promise<GitState> {
  */
 export async function gitReady($: Host, b?: Board): Promise<boolean> {
   const s = await probeGit($)
+  if (s === 'no-git' && (s !== S.gitState || !S.gitInstall)) S.gitInstall = await installStepOf($).catch(() => '')
+  if (s !== 'no-git') S.gitInstall = ''
   if (s !== S.gitState) {
     S.gitState = s
     await publish($, b ?? (await load($)))
@@ -76,7 +89,7 @@ export async function gitReady($: Host, b?: Board): Promise<boolean> {
   if (s === 'ok') S.toldGit = 'ok'
   else if (S.driving && S.toldGit !== s) {
     S.toldGit = s
-    tellLead($, s === 'no-git' ? noGitText(S.N.name) : setupAskText(s, S.N.name))
+    tellLead($, s === 'no-git' ? noGitText(S.N.name, S.gitInstall) : setupAskText(s, S.N.name))
   }
   return s === 'ok'
 }
@@ -91,7 +104,7 @@ export async function setupGit($: Host, who: string): Promise<string> {
   if (S.settingUp) return 'git is being set up already'
   const s = await probeGit($)
   if (s === 'ok') return 'git is set up already: this folder is a git repo with commits'
-  if (s === 'no-git') return noGitText(S.N.name)
+  if (s === 'no-git') return noGitText(S.N.name, S.gitInstall)
   S.settingUp = true
   try {
     const init = s === 'no-repo'
