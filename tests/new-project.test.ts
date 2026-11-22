@@ -201,6 +201,70 @@ test('T-844: /symcc-init opens the panel once, not when it is open already', asy
   }
 })
 
+// T-844: a world whose first `git init` waits (slow) or fails
+function slowGit(id: string, root: string, repoRoot: string, mode: { fail?: boolean; gate?: Promise<void> }) {
+  const w = world(id, root, repoRoot)
+  const run = w.host.run
+  const host = {
+    ...w.host,
+    run: async (argv: string[], init?: { cwd?: string }) => {
+      if (argv[0] === 'git' && argv[1] === 'init') {
+        await mode.gate
+        if (mode.fail) return done({ exitCode: 1, stderr: 'disk full' })
+      }
+      return (run as (a: string[], i?: unknown) => ReturnType<typeof run>)(argv, init)
+    },
+  } as typeof w.host
+  return { ...w, host }
+}
+
+test('T-844: while /symcc-init sets up a subfolder, the session keeps answering from the parent board', async () => {
+  let open!: () => void
+  const gate = new Promise<void>(r => (open = r))
+  const v = slowGit('a', '/repo/src', '/repo', { gate })
+  v.files.set('/repo/.git', '')
+  v.files.set('/repo/.symcc/board.json', JSON.stringify(emptyBoard()))
+  await sessionStart(v.host)
+  const init = runCommand(v.host, 'symcc-init', 'git')
+  for (let i = 0; i < 20; i++) await Promise.resolve()
+  const mode = await runCommand(v.host, 'symcc-mode', 'review')
+  expect(mode?.text).not.toContain('only guards')
+  expect(S.root).toBe('/repo')
+  expect(S.guardOnly).toBe(false)
+  open()
+  const r = await init
+  expect(r?.text).toContain('board created')
+  expect(JSON.parse(v.files.get('/repo/.symcc/board.json')!).mode).toBe('review')
+  expect(JSON.parse(v.files.get('/repo/src/.symcc/board.json')!).mode).toBe('auto')
+  expect(S.root).toBe('/repo')
+})
+
+test('T-844: a failing git init creates nothing; /symcc-init git again retries', async () => {
+  const mode = { fail: true } as { fail?: boolean }
+  const w = slowGit('a', '/home/me/proj', '/home/me', mode)
+  await sessionStart(w.host)
+  const r = await runCommand(w.host, 'symcc-init', 'git')
+  expect(r?.text).toContain('disk full')
+  expect([...w.files.keys()].filter(k => k.includes('.symcc'))).toEqual([])
+  expect(S.fresh).toBe(true)
+  mode.fail = false
+  const again = await runCommand(w.host, 'symcc-init', 'git')
+  expect(again?.text).toContain('is on in this project')
+  expect(w.files.has('/home/me/proj/.symcc/board.json')).toBe(true)
+})
+
+test('T-844: a broken board above does not stop /symcc-init in a subfolder with its own .git', async () => {
+  const v = world('a', '/repo/src', '/repo')
+  v.files.set('/repo/.git', '')
+  v.files.set('/repo/src/.git', '')
+  v.files.set('/repo/.symcc/board.json', '{bad')
+  await sessionStart(v.host)
+  const r = await runCommand(v.host, 'symcc-init', '')
+  expect(r?.text).not.toContain('Then try again')
+  expect(v.files.has('/repo/src/.symcc/board.json')).toBe(true)
+  expect(v.files.get('/repo/.symcc/board.json')).toBe('{bad')
+})
+
 // T-841: /symcc-enable on a project with a board that is off opens the panel; not with open_on_start off, nor twice
 test('T-841: /symcc-enable turning symcc back on opens the panel, unless open_on_start is off or it is open already', async () => {
   const cases: [Record<string, unknown>, boolean, number][] = [[{}, false, 1], [{ open_on_start: false }, false, 0], [{}, true, 0]]

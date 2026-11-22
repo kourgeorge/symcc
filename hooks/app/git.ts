@@ -138,7 +138,33 @@ export async function setupGit($: Host, who: string): Promise<string> {
   }
 }
 
-export const worktreeDir = (id: string) => `${S.root}/${S.N.worktrees}/${id}`
+/**
+ * T-844: git init and a first commit in `dir` (a folder with no .git of its own), for /<name>-init. It names `dir`
+ * everywhere and never reads or sets the session's state (S.root, S.gitState, ...). Throws with git's error on failure.
+ */
+export async function initGitIn($: Host, dir: string): Promise<void> {
+  const r = await git($, ['init', '-q', '-b', 'main'], dir)
+  if (r.exitCode !== 0) {
+    await gitOk($, ['init', '-q'], dir)
+    await gitOk($, ['symbolic-ref', 'HEAD', 'refs/heads/main'], dir)
+  }
+  const ignoreFile = `${dir}/.gitignore`
+  const old = (await $.fs.exists(ignoreFile)) ? await $.fs.read(ignoreFile) : null
+  let text = gitignoreWith(old, gitignoreBase(S.N.dir))
+  if (text !== (old ?? '')) await $.fs.write(ignoreFile, text)
+  await gitOk($, ['add', '-A'], dir)
+  const tree = await gitOk($, ['write-tree'], dir)
+  const left = riskyFiles(parseLsTree((await git($, ['ls-tree', '-r', '-l', '-z', tree], dir)).stdout))
+  if (left.length) {
+    text = gitignoreWith(text, left.map(x => ignoreLineFor(x.file)))
+    await $.fs.write(ignoreFile, text)
+    for (let i = 0; i < left.length; i += 100) await gitOk($, ['rm', '-q', '--cached', '--ignore-unmatch', '--', ...left.slice(i, i + 100).map(x => x.file)], dir)
+    await gitOk($, ['add', '--', '.gitignore'], dir)
+  }
+  await gitOk($, [...asSymcc(), 'commit', '-q', '--no-verify', '--allow-empty', '-m', `Initial commit (by ${S.N.name})`], dir)
+}
+
+export const worktreeDir =(id: string) => `${S.root}/${S.N.worktrees}/${id}`
 
 /** The branch task `t` works on: its own, or the usual one for its id. */
 export const taskBranch = (t: Pick<SymccTask, 'id' | 'branch'>) => t.branch ?? S.N.branch(t.id)
