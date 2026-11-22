@@ -170,8 +170,8 @@ test('T-776: the band\'s first line has the brand, the board summary and the but
     expect(lines[0]).not.toMatch(/T-\d/)
     expect(await ui.find({ key: 'open-board' })).toBeDefined()
     // then the running task, next up (only the next task to start) and what needs you, each on its own line, indented 1 space
-    expect(lines.slice(1)).toEqual([' ▶ T-3            Search command — worker on it',' ○ T-4   next up  Docs', ' ? T-2   waiting  Search mode — Case-sensitive?'])
-    expect((await ui.find({ type: 'Text', text: /^T-2   waiting  $/ }))?.props.color).toBe('warning')
+    expect(lines.slice(1)).toEqual([' ▶ T-3          Search command — worker on it',' ○ T-4  next up Docs', ' ? T-2  waiting Search mode — Case-sensitive?'])
+    expect((await ui.find({ type: 'Text', text: /^T-2  waiting $/ }))?.props.color).toBe('warning')
     expect((await ui.find({ type: 'Text', text: /^▶$/ }))?.props.color).toBe('green')
     await ui.unmount()
   }
@@ -218,9 +218,9 @@ test('T-748: the band lists the questions for you and the NEEDS YOU tasks in the
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
   const q = await ui.find({ type: 'Text', text: /^ ⚠ 1 question for you: Q-71 Raise the version\?$/ })
   expect(q?.props.color).toBe('warning')
-  expect((await ui.find({ type: 'Text', text: /^T-6   review  $/ }))?.props.color).toBe('warning')
-  expect((await ui.find({ type: 'Text', text: /^T-7   failed  $/ }))?.props.color).toBe('warning')
-  expect(await ui.find({ type: 'Text', text: /^ ✗ T-7   failed  Broke — / })).toBeDefined()
+  expect((await ui.find({ type: 'Text', text: /^T-6  review $/ }))?.props.color).toBe('warning')
+  expect((await ui.find({ type: 'Text', text: /^T-7  failed $/ }))?.props.color).toBe('warning')
+  expect(await ui.find({ type: 'Text', text: /^ ✗ T-7  failed Broke — / })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /next up/ })).toBeUndefined()
   await ui.unmount()
   // nothing runs, nothing is next and nothing needs you: line 1, and "nothing running" dim under it
@@ -285,9 +285,9 @@ test("T-748: a running row shows its stage's icon and name, the time in that sta
   const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 140 }, surface: 'terminal' })
   // "⌕" + "checker 8m · try 2": the checker started when the try handed back, 8 minutes ago
   // one line each, the one that started first at the top
-  const rows = [['⊛', 'T-41', 'test 10s', 'Being tested'], ['⌕', 'T-42', '8m · try 2', `Being checked — ${STEP_NOTE.checker}`], ['⇢', 'T-43', 'merge 10s', 'Being merged'], ['▶', 'T-40', '12m', 'Running worker'], ['▶', 'T-44', '5m · try 3', 'Third try']]
-  const width = 'merge 10s'.length > '8m · try 2'.length ? 'merge 10s'.length : '8m · try 2'.length
-  const want = rows.map(([icon, id, state, title]) => ` ${icon} ${id}  ${state!.padEnd(width)}  ${title}`)
+  const rows = [['⊛', 'T-41', 'test 10s', 'Being tested'], ['⌕', 'T-42', '8m (try 2)', `Being checked — ${STEP_NOTE.checker}`], ['⇢', 'T-43', 'merge 10s', 'Being merged'], ['▶', 'T-40', '12m', 'Running worker'], ['▶', 'T-44', '5m (try 3)', 'Third try']]
+  const width = 'merge 10s'.length > '8m (try 2)'.length ? 'merge 10s'.length : '8m (try 2)'.length
+  const want = rows.map(([icon, id, state, title]) => ` ${icon} ${id} ${state!.padEnd(width)} ${title}`)
   expect((await bandLines(ui)).slice(1)).toEqual(want)
   // no "doing" word and no "— worker on it" tail: the state says it
   expect(await ui.find({ type: 'Text', text: /doing/ })).toBeUndefined()
@@ -296,19 +296,19 @@ test("T-748: a running row shows its stage's icon and name, the time in that sta
   // narrow: the time goes first, then the try, so the titles keep their room
   const narrow = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 38 }, surface: 'terminal' })
   const n = await bandLines(narrow)
-  expect(n.some(l => l.startsWith(' ⌕ T-42  try 2  Being checked')), 'narrow 42').toBe(true)
+  expect(n.some(l => l.startsWith(' ⌕ T-42 (try 2) Being checked')), 'narrow 42').toBe(true)
   expect(n, 'narrow 40').toContain(' ▶ T-40' + ' '.repeat(9) + 'Running worker')
   expect(n.some(l => /12m/.test(l))).toBe(false)
   await narrow.unmount()
   const tight = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 26 }, surface: 'terminal' })
   const t = await bandLines(tight)
-  expect(t.some(l => l.startsWith(' ⌕ T-42  ') && !l.includes('try 2')), 'tight').toBe(true)
-  expect(t.some(l => /· try/.test(l))).toBe(false)
+  expect(t.some(l => l.startsWith(' ⌕ T-42 ') && !l.includes('try 2')), 'tight').toBe(true)
+  expect(t.some(l => /\(try/.test(l))).toBe(false)
   await tight.unmount()
   // the time follows the host clock
   await clock.set(T0 + 3 * 60_000)
   const later = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 140 }, surface: 'terminal' })
-  expect(await later.find({ type: 'Text', text: /^T-40  15m +$/ }), 'later').toBeDefined()
+  expect(await later.find({ type: 'Text', text: /^T-40 15m +$/ }), 'later').toBeDefined()
   await later.unmount()
 })
 
@@ -325,8 +325,8 @@ test("T-542: the band shows symcc's own pre-merge step as \"prep\" with its plai
   on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 160 }, surface: 'terminal' })
   // the step's icon and its name; the note still says the step
-  expect(await ui.find({ type: 'Text', text: new RegExp(`^ ✎ T-50  prep 10s +Prep one — ${esc(PREP_NOTE)}`, 'u') })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: new RegExp(`^ ⌕ T-51  10s +Checked one — ${esc(CHECKER_NOTE)}`, 'u') })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: new RegExp(`^ ✎ T-50 prep 10s +Prep one — ${esc(PREP_NOTE)}`, 'u') })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: new RegExp(`^ ⌕ T-51 10s +Checked one — ${esc(CHECKER_NOTE)}`, 'u') })).toBeDefined()
   await ui.unmount()
 })
 
@@ -343,7 +343,7 @@ test('T-648: a task in the queue shows ⧗ and one in the test step ⊛, on the 
   on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [] } }, version: 1 } }))
   on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   // the list's row is keyed by its id, with the total work time; the band's is one Text line, with the stage's name and time
-  const want = { pane: [/^T-71 ⧗ 20m +Queued one/, /^T-72 ⊛ 20m +Tested one/], band: [/^ ⧗ T-71  queue 10s +Queued one/, /^ ⊛ T-72  test 10s +Tested one/] }
+  const want = { pane: [/^T-71 ⧗ 20m +Queued one/, /^T-72 ⊛ 20m +Tested one/], band: [/^ ⧗ T-71 queue 10s +Queued one/, /^ ⊛ T-72 test 10s +Tested one/] }
   for (const [name, where] of [['pane', { ...PANE, props: { ...PANE.props, bodyColumns: 160 } }], ['band', { ...BAND, props: { ...BAND.props, bodyColumns: 160 } }]] as const) {
     const ui = await $.ui.mount({ ...where, surface: 'terminal' } as never) as TestMounted<"terminal", "AbovePrompt">
     const line = async (id: string) => (await ui.find({ key: id }))?.text ?? (await ui.find({ type: 'Text', text: new RegExp(`^ . ${id} `, 'u') }))?.text
@@ -363,7 +363,7 @@ test('T-787: a running band row has its id in the accent color, its stage part i
   const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 140 }, surface: 'terminal' })
   const colorOf = async (text: RegExp) => (await ui.find({ type: 'Text', text }))?.props?.color
   expect(await colorOf(/^T-73$/)).toBe('claude')
-  expect(await colorOf(/^7m · try 4$/)).toBe('green')
+  expect(await colorOf(/^7m \(try 4\)$/)).toBe('green')
   expect(await colorOf(/^Run title$/)).toBeUndefined()
   await ui.unmount()
 })
@@ -382,7 +382,7 @@ test("every band row lines up in one title column: running rows, then the rows t
   on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [], driving: true } }, version: 1 } }))
   on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 140 }, surface: 'terminal' })
-  const leads = [['T-62', '12m'], ['T-63', '3m · try 2'], ['T-60', 'waiting'], ['T-61', 'review'], ['T-59', 'failed']].map(([id, state]) => `${id}  ${state!.padEnd(10)}  `)
+  const leads = [['T-62', '12m'], ['T-63', '3m (try 2)'], ['T-60', 'waiting'], ['T-61', 'review'], ['T-59', 'failed']].map(([id, state]) => `${id} ${state!.padEnd(10)} `)
   for (const lead of leads) expect(await ui.find({ type: 'Text', text: new RegExp(`^${esc(lead)}$`, 'u') }), lead).toBeDefined()
   // so every title starts in the same column, right after a lead of one width
   expect(new Set(leads.map(l => l.length)).size).toBe(1)
@@ -409,11 +409,11 @@ test("the band hides only the notes a doing row's state says; other notes stay a
   on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 140 }, surface: 'terminal' })
   expect(await ui.find({ type: 'Text', text: /^ — time is up: the worker was told to hand back$/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /^T-50  1h2m *$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^T-50 1h2m *$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /running the tests/ })).toBeUndefined()
   expect(await ui.find({ type: 'Text', text: /starting at the next turn/ })).toBeUndefined()
   expect(await ui.find({ type: 'Text', text: /worker starting/ })).toBeUndefined()
-  expect(await ui.find({ type: 'Text', text: /^T-53  1m/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^T-53 1m/ })).toBeDefined()
   await ui.unmount()
 })
 
