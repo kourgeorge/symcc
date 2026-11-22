@@ -42,7 +42,8 @@ export function runCommand(argv: readonly string[], init: { cwd?: string; env?: 
     const timer = init.timeoutMs ? setTimeout(() => (child.kill('SIGKILL'), finish({ exitCode: 124, stdout, stderr: `${stderr}\ntimed out after ${init.timeoutMs} ms` })), init.timeoutMs) : null
     child.stdout.on('data', c => void (stdout += c.toString()))
     child.stderr.on('data', c => void (stderr += c.toString()))
-    child.on('error', err => finish({ exitCode: 127, stdout, stderr: err.message }))
+    // 127 only when the command does not exist (ENOENT); another start failure is 126, so a caller can tell "not found" from "could not run"
+    child.on('error', err => finish({ exitCode: (err as { code?: string }).code === 'ENOENT' ? 127 : 126, stdout, stderr: err.message }))
     child.on('close', code => finish({ exitCode: code ?? 1, stdout, stderr }))
   })
 }
