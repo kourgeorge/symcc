@@ -1086,7 +1086,8 @@ The Live tab (`l`) shows the tasks that run now as "railway lanes", one lane per
 Each lane shows the path that task really takes: a normal code task goes `work → check → queue → tests → merged` (`check` only
 when the checker setting is on); an investigation goes `work → answer` only (no check, queue, tests or merge) and leaves the lanes when
 it hands back, then waits under NEEDS YOU as "answer to read"; a docs-only change shows `check` as a dim `–` once it has handed
-back (the checker skips it); a task that needs review (it has "needs review" on, or the board is in approve-merge mode) has a
+back and symcc has seen that its commit changed only docs files (the checker skips it; the dash stays until it merges, also
+while it waits at `you`); a task that needs review (it has "needs review" on, or the board is in approve-merge mode) has a
 `you` station before `merged`, and its lane stays at `you` while it waits for you and goes on to `merged` when you approve. Lanes
 that skip stations are drawn as a plain line through those columns, so the station names over the lanes stay lined up.
 Under the mode line it has up to five sections, each starting with a heading that is a plain bold

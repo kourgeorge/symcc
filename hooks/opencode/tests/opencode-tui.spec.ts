@@ -2743,7 +2743,7 @@ test('T-846: the OpenCode Live tab draws an investigation as work → answer, a 
   const handed = { runs: [{ started: ago(20), ended: ago(2), agents: [{ kind: 'worker' as const, started: ago(20), ended: ago(2), tokens: { input: 300_000 } }] }] }
   const tasks = [
     task('T-801', 'Why is it slow', { kind: 'investigation', runs: [{ started: ago(4) }] }),
-    task('T-803', 'Docs: fix the readme', { files: ['README.md'], ...handed, live: { checking: { step: 'prep', at: ago(0) } } }),
+    task('T-803', 'Docs: fix the readme', { files: ['README.md'], runs: [{ ...handed.runs[0]!, docs_only: true as const }], live: { checking: { step: 'prep', at: ago(0) } } }),
     task('T-805', 'Waits for you', { needs_review: true, status: 'review', ...handed }),
     task('T-806', 'A normal change', { files: ['hooks/a.ts'], ...handed, live: { checking: { step: 'testing', at: ago(0) } } }),
   ]
@@ -2894,7 +2894,8 @@ test('T-709: the Live tab shows a lane for an approved task in review while its 
   expect(texts.includes(LIVE_INDENT + LIVE_EMPTY)).toBe(false)
   expect(d.ids).toEqual(['need:T-601', 'T-630'])
   const lane = liveLanes({ ...f.view, tasks }, NOW)
-  expect(lane.map(l => l.station)).toEqual(['tests'])
+  // T-846: a task in review has a "you" station; once approved its lane sits past it, at merged
+  expect(lane.map(l => l.station)).toEqual(['merged'])
   // its check step gone stale: it only waits for the owner (T-846), so its lane sits at "you"
   const stale: ViewFile = { ...f, view: { ...f.view, tasks: tasks.map(t => (t.id === 'T-630' ? ({ ...t, live: { checking: { step: 'testing', at: ago(3600) } }, } as unknown as SymccTask) : t)).map(t => viewTask(t)) } }
   expect(liveLanes({ ...f.view, tasks: tasks.map(t => (t.id === 'T-630' ? ({ ...t, live: { checking: { step: 'testing', at: ago(3600) } }, } as unknown as SymccTask) : t)) }, NOW).map(l => l.station)).toEqual(['you'])

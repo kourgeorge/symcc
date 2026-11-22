@@ -1096,7 +1096,16 @@ async function reportSummary(host: Host, t: SymccTask): Promise<string> {
  * `restarted`: a checker started again after a reload (see afterChecker).
  */
 const checkerFirst = (host: Host, t: SymccTask, b: Board, dir: string, made: string[], stop: () => string | undefined, restarted = false) => async (changed: readonly string[]): Promise<BeforeLine> => {
-  if (docsOnly(changed)) return undefined
+  if (docsOnly(changed)) {
+    // T-846: the board's Live lanes draw check as skipped once they know this try's commit changed only docs
+    await change(host, x => {
+      const cur = find(x, t.id)
+      const runs = cur?.runs
+      if (!cur || !runs?.length) return x
+      return patchTask(x, t.id, { runs: runs.map((r, i) => (i === runs.length - 1 ? { ...r, docs_only: true as const } : r)) }, cur.updated_at)
+    }).catch(() => undefined)
+    return undefined
+  }
   const why = stop()
   if (why) return { result: taskWasResult(why) }
   return afterChecker(host, t, b, dir, made, stop, restarted)

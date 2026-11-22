@@ -13,7 +13,6 @@ import { ORG_MEM_EMPTY, ORG_MEM_MAX_LINES, TOPIC_UNSORTED, orgMemNewest, orgMemS
 import { depDone } from './archive'
 import { dayOf, localOffset } from './days'
 import { modeLabel, needsReview } from './review'
-import { docsOnly } from './checker'
 import { num } from './text'
 import { asksMoreTime, needsYou } from './commands'
 import { fileWaitText, taskAsks } from './panel'
@@ -220,11 +219,12 @@ function approveSince(t: BoardTask, endMs: number | undefined): number | undefin
  * task's files are docs only (the checker skips such a change; known once it handed back). Before its hand-back nothing
  * is known, so nothing is skipped.
  */
-function checkSkipped(t: BoardTask, stage: PhaseStage): boolean {
-  if (stage === 'worker' || stage === 'checker') return false
+function checkSkipped(t: BoardTask, stage: PhaseStage, waiting: boolean): boolean {
+  if (!waiting && (stage === 'worker' || stage === 'checker')) return false
   const ran = agentsOf(t.runs?.[t.runs.length - 1]).some(a => a.kind === 'checker') || (t.history ?? []).some(h => h.kind === 'stage' && h.step === 'checker')
   if (ran) return false
-  return docsOnly(t.files ?? [])
+  // the files this try's commit really changed (saved on the try by the prep step); until prep knows, check is drawn as usual
+  return t.runs?.[t.runs.length - 1]?.docs_only === true
 }
 
 /** The lanes of the Live tab: one per task the board shows as doing (shownStatus: a task in doing, or one in review or
@@ -245,7 +245,7 @@ export function liveLanes(view: LiveView, nowMs: number): LiveLane[] {
       const investigation = stations.includes('answer')
       // an approve running on a task with a "you" station: the owner said yes, so it sits at merged, never back at tests
       let station: LiveStation = waiting ? 'you' : investigation ? (stage === 'worker' ? 'work' : 'answer') : t.status !== 'doing' && stations.includes('you') ? 'merged' : stationOf(stage, checker)
-      const skipped = checker && !investigation && !waiting && checkSkipped(t, stage)
+      const skipped = checker && !investigation && checkSkipped(t, stage, waiting)
       // a docs-only change has no check to sit at: in prep it is already waiting for the queue
       if (skipped && station === 'check') station = 'queue'
       const run = t.runs?.[t.runs.length - 1]
@@ -465,6 +465,7 @@ const LABELS: Record<LiveStation, string>[] = [
   { work: 'work✧', check: 'check✧', queue: 'queue', tests: 'tests', you: 'you', merged: 'merged', answer: 'answer' },
   { work: 'wrk✧', check: 'chk✧', queue: 'que', tests: 'tst', you: 'you', merged: 'mrg', answer: 'ans' },
   { work: 'w✧', check: 'c✧', queue: 'q', tests: 't', you: 'y', merged: 'm', answer: 'a' },
+  { work: 'w', check: 'c', queue: 'q', tests: 't', you: 'y', merged: 'm', answer: 'a' },
 ]
 const MAX_GAP = 8
 const MIN_GAP = 2
@@ -507,7 +508,11 @@ export function liveLayout(lanes: readonly (Pick<LiveLane, 'id' | 'title'> & Par
   }
   for (let titleW = base - 1; titleW >= 3; titleW--) if (laneWidth(idW, titleW, k, MIN_GAP, 2) <= width) return make(titleW, MIN_GAP, 2)
   if (laneWidth(idW, 0, k, MIN_GAP, 2) <= width) return make(0, MIN_GAP, 2)
-  return make(0, MIN_GAP, 1)
+  // T-846: with many shared columns even that is too wide: the spacing between columns shrinks first (gap 1, then the
+  // spaces around the stations, then gap 0), only then the labels (the one-letter set picks itself)
+  if (laneWidth(idW, 0, k, 1, 2) <= width) return make(0, 1, 2)
+  if (laneWidth(idW, 0, k, 1, 1) <= width) return make(0, 1, 1)
+  return make(0, 0, 1)
 }
 
 /** The width of the name column (id, space, title) of a layout. */

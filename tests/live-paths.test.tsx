@@ -15,7 +15,8 @@ const handed = { runs: [{ started: iso(20), ended: iso(2), agents: [worker] }] }
 
 const INVESTIGATION = task('T-801', 'Why is the board slow', { kind: 'investigation', runs: [{ started: iso(4) }] })
 const DOCS_RUNNING = task('T-802', 'Docs: write the guide', { files: ['docs/guide.md'], runs: [{ started: iso(4) }] })
-const DOCS_HANDED = task('T-803', 'Docs: fix the readme', { files: ['README.md'], ...handed, live: { checking: { step: 'prep', at: iso(0) } } })
+const handedDocs = { runs: [{ started: iso(20), ended: iso(2), agents: [worker], docs_only: true as const }] }
+const DOCS_HANDED = task('T-803', 'Docs: fix the readme', { files: ['README.md'], ...handedDocs, live: { checking: { step: 'prep', at: iso(0) } } })
 const REVIEW_TESTS = task('T-804', 'Needs a look', { needs_review: true, ...handed, live: { checking: { step: 'testing', at: iso(0) } }, history: [{ kind: 'stage', at: iso(1), text: 'try 1: tests started', try: 1, step: 'tests' }] })
 const REVIEW_WAITING = task('T-805', 'Waits for you', { needs_review: true, status: 'review', ...handed })
 const NORMAL = task('T-806', 'A normal change', { files: ['hooks/a.ts'], ...handed, live: { checking: { step: 'testing', at: iso(0) } }, history: [{ kind: 'stage', at: iso(1), text: 'try 1: tests started', try: 1, step: 'tests' }] })
@@ -116,4 +117,28 @@ test('T-846: an approved auto-mode review task keeps "you" and sits past it; a d
   const lines = (frame: number) => segText(laneLines(prep[0]!, liveLayout(prep, liveColumns(prep, true), 140), { nowMs: T0, frame })[0]!)
   expect(lines(0)).toMatch(/◉|◎/)
   expect(lines(0)).toContain('–')
+})
+
+test('T-846: docs-only is judged from the files the try changed, and holds while the task waits at "you"', () => {
+  const checking = { step: 'prep', at: iso(0) }
+  // lists a docs file and a code file, but its commit changed only docs: skipped
+  const mixedDocs = liveLanes(view([task('T-810', 'Mixed', { files: ['docs/a.md', 'hooks/a.ts'], ...handedDocs, live: { checking } })]), T0)[0]!
+  expect(mixedDocs.skipped).toEqual(['check'])
+  // lists only a docs file, but the commit changed code: not skipped; and before prep knows nothing is skipped either
+  const codeChanged = liveLanes(view([task('T-811', 'Code', { files: ['docs/a.md'], ...handed, live: { checking } })]), T0)[0]!
+  expect(codeChanged.skipped).toBeUndefined()
+  // waiting at "you": the dash stays
+  const waiting = liveLanes(view([task('T-812', 'Waits', { files: ['README.md'], needs_review: true, status: 'review', ...handedDocs })]), T0)[0]!
+  expect([waiting.station, waiting.skipped]).toEqual(['you', ['check']])
+  const layout = liveLayout([waiting], liveColumns([waiting], true), 140)
+  expect(segText(laneLines(waiting, layout, { nowMs: T0, frame: 0 })[0]!)).toMatch(/●━+–━+●━+●━+◉/)
+})
+
+test('T-846: lane lines never run wider than the room, at narrow panel widths', () => {
+  const lanes = liveLanes(view([INVESTIGATION, REVIEW_WAITING, NORMAL]), T0)
+  for (const width of [30, 34, 40]) {
+    const inner = liveInner(width)
+    const layout = liveLayout(lanes, liveColumns(lanes, true), inner)
+    for (const l of lanes) for (const line of laneLines(l, layout, { nowMs: T0, frame: 0 })) expect(segText(line).length).toBeLessThanOrEqual(inner)
+  }
 })
