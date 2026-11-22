@@ -274,7 +274,8 @@ question on the board by itself:
   the question's text doesn't tie it. For a worker's question, a file request and a "more
   time?" question the board then shows the lead's wording (alone) in place of symcc's own
   text, on the task page and in NEEDS YOU. Review tasks and answered investigations keep
-  symcc's own text, and the band keeps its short note. For a
+  symcc's own text. The band also shows the lead's wording for a waiting task's question or
+  file request. For a
   worker's own question the lead's choices are the board's buttons (an answer is put into the
   task as that choice's text). For symcc's fixed questions (file request, more time, review) the
   buttons stay symcc's own, since they run board actions. The lead's wording goes away when the
