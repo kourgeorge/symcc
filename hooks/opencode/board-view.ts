@@ -22,7 +22,7 @@ import type { SymccTask, SymccScout, SymccMode } from '../../types'
 import type { PaneView } from '../app/state'
 import type { OwnerQuestion } from '../core/questions'
 import {
-  statusCounts, newestFirst, bandLeads, bandNote, bandBrand, bandWhere, boardBrand, modeLabel, modeOf, planBandText, withCrew, questionsForYou,
+  gitNotice, statusCounts, newestFirst, bandLeads, bandNote, bandBrand, bandWhere, boardBrand, modeLabel, modeOf, planBandText, withCrew, questionsForYou,
   bannerLines, bannerRule, footerRule, type BannerTone, panelSections, localOffset, when, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, ALL_CLEAR,
   rowStates, rowMark, TITLE_ROOM, fitRow, rowExtra, questionsLabel, archivedOf, archivedNote, statusMark, detailRows, detailRowLines, wrapSegs, hintLineText,
   type KeyHint, type Seg, type BoardTask, intoOf, taskActions, taskAsks, actionButtonLabel, packRows, type TaskAction, type TaskActionId,
@@ -557,13 +557,23 @@ export const NEW_SCOUT_BUTTON: PanelButton = { label: '+ New scout', hit: { key:
 
 /** The banner's git row (T-706, as Claude Code's): with no git repo or no commit yet, what is wrong and the
  *  "[ Set up git (g) ]" button, which asks for a yes before /<name>-settings git setup; no row otherwise. */
-export function gitRowLines(v: Pick<PaneView, 'git_state'>, w: number): Line[] {
-  if (v.git_state !== 'no-repo' && v.git_state !== 'no-commits') return []
-  const text = v.git_state === 'no-repo' ? 'No git repo here; nothing starts. ' : 'No commits yet; nothing starts. '
-  const button = buttonText(SETUP_GIT_BUTTON)
-  const pieces: DrawSeg[] = [{ text, color: 'warning' }, { text: button, color: 'ide', hit: SETUP_GIT_BUTTON.hit }]
-  return text.length + button.length <= w ? [pieces] : [[pieces[0]!], [pieces[1]!]]
+export function gitRowLines(v: Pick<PaneView, 'git_state'> & Partial<Pick<PaneView, 'git_install'>>, w: number, name: string = DEFAULT_NAME): Line[] {
+  const missing = v.git_state === 'no-git'
+  if (!missing && v.git_state !== 'no-repo' && v.git_state !== 'no-commits') return []
+  // the panel clips long lines, so the notice wraps; the button goes at the end of the last line when it fits, else on its own line
+  const lines: Line[] = wrapSegs([{ text: gitNotice(v.git_state!, v.git_install ?? '', name), color: 'warning' }], w)
+  const b = missing ? CHECK_GIT_BUTTON : SETUP_GIT_BUTTON
+  const button = buttonText(b)
+  const last = lines[lines.length - 1]
+  const used = last ? last.reduce((n, p) => n + p.text.length, 0) + 1 : 0
+  const piece: DrawSeg = { text: button, color: 'ide', hit: b.hit }
+  if (last && used + button.length <= w) last.push({ text: ' ', color: 'warning' }, piece)
+  else lines.push([piece])
+  return lines
 }
+
+/** The banner's Check again button (g) while git is not installed: looks again, so installing git by hand moves the notice on. */
+export const CHECK_GIT_BUTTON: PanelButton = { label: 'Check again (g)', hit: { key: 'g' } }
 
 /** The banner's Set up git button (g). */
 export const SETUP_GIT_BUTTON: PanelButton = { label: 'Set up git (g)', hit: { key: 'g' } }
@@ -651,7 +661,7 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
     ...(l.art ? [{ text: l.art, color: 'ide' }] : []),
     ...l.parts.map(p => ({ text: p.text, color: TONE[p.tone], ...(p.bold ? { bold: true } : {}) })),
   ])
-  banner.push(...gitRowLines(v, w))
+  banner.push(...gitRowLines(v, w, f.name))
   const tab = choice.tab ?? 'tasks'
   // T-700: the header (banner, tabs, rule) only on a list page, as on the terminal panel and VS Code (core's showsHeader)
   const top = showsHeader(boardPageOf(f, choice)) ? [...banner, ...tabsLines(tab, w, v.tasks.length, (v.scouts ?? []).length), [{ text: bannerRule(w), color: 'ide' }]] : []
@@ -1669,6 +1679,7 @@ export type PanelAction =
   | { kind: 'def-save'; def: 'role' | 'kind'; name: string; fields: Partial<Record<DefEditField, string>> }
   | { kind: 'scout-new'; scout: string; prompt: string }
   | { kind: 'setup-git' }
+  | { kind: 'check-git' }
 
 /** The slash command (its name, without the slash, and its text) that does `a` for plugin `name`. */
 export function actionCommand(a: PanelAction, name: string = DEFAULT_NAME): { name: string; text: string } {
@@ -1686,6 +1697,7 @@ export function actionCommand(a: PanelAction, name: string = DEFAULT_NAME): { na
   if (a.kind === 'def-save') return { name: `${name}-settings`, text: `${a.def} ${a.name} save ${JSON.stringify(a.fields)}` }
   if (a.kind === 'scout-new') return { name: `${name}-scout`, text: `${a.scout} new ${a.prompt.trim()}` }
   if (a.kind === 'setup-git') return { name: `${name}-settings`, text: 'git setup' }
+  if (a.kind === 'check-git') return { name: `${name}-settings`, text: 'git check' }
   return { name: `${name}-answer`, text: `${a.id} ${a.answer.trim()}` }
 }
 

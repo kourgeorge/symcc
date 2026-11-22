@@ -138,6 +138,8 @@ export const startS = () => ({
   settingsOpen: [] as string[],
   /** what the last git check found (see probeGit); work starts only when 'ok' */
   gitState: 'ok' as GitState,
+  /** the install step for this machine while git is missing (see installStepOf) */
+  gitInstall: '',
   /** the git state the lead was last told about, so it is told once, not every check */
   toldGit: 'ok' as GitState,
   /** set while setupGit runs, so a second press waits */
@@ -223,7 +225,7 @@ export async function loadVersion(host: Pick<Host, 'plugin' | 'fs'>) {
 export const toolName = (tool: string): string => S.W.tool(S.N.name, tool)
 
 /** The view as published: SymccView plus the facts the panel's banner shows. */
-export type PaneView = SymccView & Partial<Pick<Board, 'max_parallel' | 'max_minutes' | 'auto_retries' | 'test_minutes' | 'archive_days' | 'archived' | 'archived_done' | 'open_on_start' | 'scout_findings' | 'tests_with_changes' | 'checker'> & { /** T-808: the board is on and this window is not turned off (not the board's own `enabled`) */ on_here: boolean; /** T-808: the notify choice in use now (not the saved one) */ notify_now: Notify; /** T-793: this window is turned off with /<name>-disable here (enabled is false too) */ off_here: OffHere; /** the lead's open questions for the owner (see core/questions.ts), oldest first; absent when none */ questions: OwnerQuestion[]; driving: boolean; /** the branch checked out now: new tasks merge into it (see homeBranch); T-808: not a task's work branch */ home_branch: string; notify_choices: Notify[]; branch_note: string; /** T-675: the data files close to the 4 MB read limit, in words (also in branch_note) */ size_note: string; git_state: GitState; plan_mode: boolean; /** T-727: the Live tab's Branches figures (app/branches.ts); absent until read, or with no git or no task branch */ branches: BranchFacts; /** T-769: ▍Today's lead, scout and cost figures (app/lead.ts todayTeam); absent until read or when there are none */ today_team: TodayTeam; /** T-761: the task pages' Branch section facts by task id (app/branches.ts's taskBranchesView): the open tasks with a branch and the latest merged ones */ task_branches: Record<string, TaskBranchFacts>; }>
+export type PaneView = SymccView & Partial<Pick<Board, 'max_parallel' | 'max_minutes' | 'auto_retries' | 'test_minutes' | 'archive_days' | 'archived' | 'archived_done' | 'open_on_start' | 'scout_findings' | 'tests_with_changes' | 'checker'> & { /** T-808: the board is on and this window is not turned off (not the board's own `enabled`) */ on_here: boolean; /** T-808: the notify choice in use now (not the saved one) */ notify_now: Notify; /** T-793: this window is turned off with /<name>-disable here (enabled is false too) */ off_here: OffHere; /** the lead's open questions for the owner (see core/questions.ts), oldest first; absent when none */ questions: OwnerQuestion[]; driving: boolean; /** the branch checked out now: new tasks merge into it (see homeBranch); T-808: not a task's work branch */ home_branch: string; notify_choices: Notify[]; branch_note: string; /** T-675: the data files close to the 4 MB read limit, in words (also in branch_note) */ size_note: string; git_state: GitState; /** the install step while git is missing */ git_install: string; plan_mode: boolean; /** T-727: the Live tab's Branches figures (app/branches.ts); absent until read, or with no git or no task branch */ branches: BranchFacts; /** T-769: ▍Today's lead, scout and cost figures (app/lead.ts todayTeam); absent until read or when there are none */ today_team: TodayTeam; /** T-761: the task pages' Branch section facts by task id (app/branches.ts's taskBranchesView): the open tasks with a branch and the latest merged ones */ task_branches: Record<string, TaskBranchFacts>; }>
 
 /** the role files already reported as skipped (file → reason), so the owner and the lead hear it once */
 export const skippedRoles = new Map<string, string>()
@@ -270,6 +272,24 @@ export function movedRefused(): Set<string> {
   if (!(g[MOVED_REFUSED_KEY] instanceof Set)) g[MOVED_REFUSED_KEY] = new Set<string>()
   return g[MOVED_REFUSED_KEY] as Set<string>
 }
+const HALTED_KEY = '__symccHalted'
+const HALTED_MAX = 500
+/**
+ * T-883: the agents any copy of symcc loaded in this process told to stop (halt), kept on globalThis so every copy sees
+ * them: after a reload or a takeover, the copy that still tracks such a worker is often not the one that stopped it, and
+ * its session then ends on an error that is no real API error (see stoppedBySymcc in workers.ts). Kept small.
+ */
+export function haltedAnywhere(): Set<string> {
+  const g = globalThis as unknown as Record<string, unknown>
+  if (!(g[HALTED_KEY] instanceof Set)) g[HALTED_KEY] = new Set<string>()
+  return g[HALTED_KEY] as Set<string>
+}
+function rememberHalted(agentId: string) {
+  const s = haltedAnywhere()
+  if (s.has(agentId)) return
+  if (s.size >= HALTED_MAX) s.delete(s.values().next().value!)
+  s.add(agentId)
+}
 /** Whether agent `agentId` is one of symcc's own that this copy tracks now: a worker, a checker, a scout, or one it stopped. */
 export const isOwnAgent = (agentId: string | undefined): agentId is string =>
   !!agentId && (workers.has(agentId) || checkerRuns.has(agentId) || scoutRuns.has(agentId) || stopped.has(agentId))
@@ -292,6 +312,7 @@ export function rememberOnBoard(agentId: string) {
  */
 export async function halt(host: Host, agentId: string, why: string) {
   stopped.add(agentId)
+  rememberHalted(agentId)
   if (why === MOVED_WHY || why === TAKEN_WHY) movedAgents.add(agentId)
   await host.agents.stop(agentId, `Stop now: ${why}. Don't change anything else; answer "stopped" and end.`).catch(() => undefined)
 }

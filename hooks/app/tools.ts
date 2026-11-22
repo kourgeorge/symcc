@@ -18,7 +18,7 @@ import { answerOvertime } from './cleanup'
 import { haltChecker } from './checker'
 import { questionTool } from './questions'
 import { markMerged } from './merged'
-import { publish } from './lead'
+import { publish, enableHere } from './lead'
 import { orgMemTool } from './org-mem'
 import { ORG_MEM_MAX_LINES, TOPIC_MAX_CHARS } from '../core/org-mem'
 
@@ -147,7 +147,8 @@ ${features.panel ? '' : `  /${S.N.name}-board               the board panel, as 
                        if it was disabled and this window on if it was off here, in the mode the
                        board had (it never makes a board)
   /${S.N.name}-init [git]          set up ${S.N.name} in this folder, like git init: makes ${S.N.dir}/ here, turns it on and opens the board; with no .git of its
-                       own the folder is asked about first, then /${S.N.name}-init git sets up git here too (never a parent folder's repo)
+                       own the board still opens and shows a "No git repo here" notice (workers wait until git is set up);
+                       /${S.N.name}-init git sets up git here first (never a parent folder's repo)
   /${S.N.name}-drive               make this session drive the board (start workers, merge, run scouts);
                        a session that drives now hands over within 30 s, its running workers
                        restart here without using up a try
@@ -313,10 +314,10 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
     change the project; changes only go through board tasks.
   • Test commands are run by ${S.N.name} itself, without a permission prompt.
   • Add ${S.N.dir}/ to the project's .gitignore.
-  • A folder with no git repo (or no commits yet): nothing starts. ${S.N.name} asks first, then
+  • A folder with no git repo (or no commits yet): no worker starts. The board shows a "No git repo here" notice; on your yes
     (${features.panel ? 'press g in the board, or ' : ''}the lead's setup_git) runs git init on main, writes a .gitignore
     and makes a first commit of your files, leaving out secrets (.env, *.pem, id_rsa; templates like .env.example are kept) and files
-    over 50 MB. It never pushes or adds a remote. With git not installed nothing starts at all.`,
+    over 50 MB. It never pushes or adds a remote. With git not installed the notice says so and gives the install step for your machine.`,
 })
 
 export function manual(arg: string, features: HostFeatures = ALL_FEATURES): string {
@@ -905,7 +906,8 @@ export async function ownerSettings($: Host, a: SettingsInput, where: string): P
   // the on/off switch is the owner's alone and works like /<name>-disable and /<name>-enable
   if (typeof a.enabled === 'boolean') {
     const { enabled, ...rest } = a
-    const said = await setSymcc($, enabled)
+    // T-880: on goes the same way as /<name>-enable (enableHere): the project AND this window, when it was off here
+    const said = enabled ? await enableHere($, t => tellLead($, t)) : await setSymcc($, false)
     return Object.keys(rest).length ? `${said}; ${await ownerSettings($, rest, where)}` : said
   }
   const r = await saveSettings($, a, 'you')

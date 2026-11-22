@@ -45,8 +45,8 @@ time: "do T-3 first", "T-2 should wait for T-3".
 **Requirements.** Claude Code with plugin function hooks (the `$.tool`, `$.agent` and
 `$.clock` plugin API, and panels). This API is early access and can change. symcc is
 built and tested with Claude Code **2.1.319** (`claude --version`); Option B needs 2.1.275
-or later. You also need **git**; if it is missing, nothing starts and symcc tells you how
-to install it. With no git repo yet, symcc offers to run `git init` on `main`, write a
+or later. You also need **git**; if it is missing, nothing starts and the board and the lead tell you the
+install step for your machine. With no git repo yet, symcc offers to run `git init` on `main`, write a
 `.gitignore` and make a first commit. It never pushes. There is no build step.
 
 **Option A: try it from a clone** is in the [README](../README.md#install). Update it with `git -C ~/symcc pull`, then start Claude Code again.
@@ -137,12 +137,13 @@ Type these in the chat. `/symcc` opens everything; `/symcc-<word>` does one thin
 | `/symcc-stats [full\|html] [7d [inside]\|T-100..T-130]` | Time and token stats from the board (archived tasks too), easy to read with plain bar charts: a one-line summary, totals, the whole team, averages and medians per task and per try with their totals next to them, time per stage (waiting to start, waiting on tasks, work, prep, check, merge queue, tests, merge, waiting for you; active vs waiting), the biggest tasks, how tasks ended (merged, approved or answered), investigations counted on their own, by role, origin (with each scout's tasks not linked to a run) and day. `7d` limits it to the tasks changed in the last 7 days (whole tries), `7d inside` counts only the work inside those days (tries and stages cut to them), `T-100..T-130` to an id range; `full` adds the long explanations; `html` writes the same figures as a self-contained web page with charts (`.symcc/stats.html`) and opens it |
 | `/symcc-settings role <name> add` / `edit <field> <value>` / `save {...}` / `remove` | Make a role, change one part of it (`description`, `model`, `skills`, `tools`, `checklist`), change several parts at once with JSON, or delete one you added. `kind` works the same (its parts are `description` and `body`) |
 | `/symcc-scout <name> new <instructions>` | Make a new scout (it runs every 60 minutes at first) |
+| `/symcc-settings git check` | Look at git again (the **Check again** button while git is not installed). symcc also looks again by itself every 2 minutes and when the panel opens, so installing git or running `git init` by hand clears the notice |
 | `/symcc-settings git setup` | Set up git when the folder has no repo or no commit: `git init` on main, a `.gitignore` and a first commit; never pushes |
 | `/symcc-settings orgmem delete N` | Delete note N from the organizational memory (its number on the Organizational memory page) |
 | `/symcc-doctor [fix [all\|id ...]]` | Check `.symcc/` and git (old backups, merged branches, leftover task folders, files near 4 MB, a stuck board). It only lists them; `fix all` or `fix <id> ...` cleans up |
 | `/symcc-disable` | Disable symcc for this project: Claude works as normal (no lead guide, workers, scouts, updates, sounds or voice); the board is kept |
 | `/symcc-enable` | Turn symcc on in this window: the project too if it was disabled, and this window if it was off here (it becomes a lead again), in the mode the board had. It says "already enabled" only when both were on. It never creates a board; with no `.symcc` in the folder the session started in, it points to `/symcc-init` |
-| `/symcc-init [git]` | Create `.symcc/` with the board in the folder Claude started in (a board in a parent folder does not matter), turn symcc on, become the lead, add the example scouts and open the panel. With no repository of its own it asks first; `/symcc-init git` sets one up here. Where `.symcc/` already exists it changes nothing |
+| `/symcc-init [git]` | Create `.symcc/` with the board in the folder Claude started in (a board in a parent folder does not matter), turn symcc on, become the lead, add the example scouts and open the panel. With no repository of its own the board still opens, with a "No git repo here" notice and a Set up git button; `/symcc-init git` sets git up here first. Where `.symcc/` already exists it changes nothing |
 | `/symcc-disable here` | Turn symcc off in this window only (plain Claude here). It is kept in this session, not in `board.json`; other windows are not changed. If this window drives the board, it hands driving over |
 | `/symcc-enable here` | The same as `/symcc-enable` (kept as another spelling). A window opened while another live window has symcc on starts off here; `/symcc-enable` opts in |
 | `/symcc-drive` | Make this session drive the board (start workers, merge, run scouts). If another session drives, it hands over within 30 s: its running workers stop and restart here from their kept folders and branches, without using up a try. If it doesn't answer within 3 minutes, this session takes over anyway |

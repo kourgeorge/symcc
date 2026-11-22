@@ -1,11 +1,12 @@
 import type { SymccTask } from '../../types'
-import { liveWorkersFor, startBranch, type Board, intoOf, type GitState, gitStateOf, noGitText, setupAskText, gitignoreWith, gitignoreBase, riskyFiles, parseLsTree, ignoreLineFor, setupDoneText, find, worktreesToRemove, branchesToDelete, cleanupText, namedReports, SCRATCH_DIR, SCRATCH_EXCLUDE, commitMessage, isSha, isTaskCommit } from '../board'
+import { liveWorkersFor, startBranch, type Board, intoOf, type GitState, gitStateOf, noGitText, setupAskText, gitInstallStep, gitNotice, type InstallFacts, gitignoreWith, gitignoreBase, riskyFiles, parseLsTree, ignoreLineFor, setupDoneText, find, worktreesToRemove, branchesToDelete, cleanupText, namedReports, SCRATCH_DIR, SCRATCH_EXCLUDE, commitMessage, isSha, isTaskCommit } from '../board'
 import { publish } from './lead'
 import { S, workers, starting, finishing, approving, keptDirty, scratchUse } from './state'
 import { type Host, agentState } from '../host'
 import { load, change, path } from './store'
 import { tellLead, noteForLead, brief } from './tell'
 import { pump, agentsNow } from './workers'
+import { systemOf } from './voice'
 
 // ---------------- git ----------------
 
@@ -49,6 +50,9 @@ export async function homeBranch($: Host): Promise<string> {
   return startBranch(await currentBranch($), origin, await branchList($))
 }
 
+/** Whether `git --version` output says the Mac's command-line tools are missing (the /usr/bin/git stub). */
+export const macToolsMissing = (out: string) => /xcrun: error: invalid active developer path|No developer tools were found|requires the command line developer tools/i.test(out)
+
 /** Looks whether git is installed, the project is inside a git work tree, and it has a commit. */
 export async function probeGit($: Host): Promise<GitState> {
   if (!S.root) return 'ok'
@@ -65,7 +69,8 @@ export async function probeGit($: Host): Promise<GitState> {
   let missing = false
   try {
     v = await git($, ['--version'], S.root, 15_000)
-    missing = v.exitCode === 127
+    // T-861: the macOS /usr/bin/git stub without the command-line tools exits 1 with an xcrun message: git is missing too
+    missing = v.exitCode === 127 || (v.exitCode !== 0 && v.exitCode !== 124 && macToolsMissing(`${v.stderr}\n${v.stdout}`))
     if (v.exitCode === 124) v = null
   } catch (err) {
     const msg = err instanceof Error ? `${(err as { code?: string }).code ?? ''} ${err.message}` : String(err)
@@ -87,6 +92,24 @@ export async function probeGit($: Host): Promise<GitState> {
   return gitStateOf({ hasGit, inside, hasHead })
 }
 
+/** The install step for this machine (what the notice and the lead say when git is missing); looks programs up, runs none. */
+export async function installStepOf($: Host): Promise<string> {
+  const has = async (name: string) => (await $.run(['sh', '-c', 'command -v "$1" >/dev/null 2>&1', 'sh', name], { timeoutMs: 5000 }).catch(() => null))?.exitCode === 0
+  const os = await systemOf($).catch(() => 'other' as const)
+  const f: InstallFacts = { os: os === 'mac' || os === 'linux' || os === 'windows' ? os : 'other' }
+  if (f.os === 'mac') f.brew = await has('brew')
+  if (f.os === 'linux') for (const m of ['apt', 'dnf', 'pacman'] as const) if (await has(m === 'apt' ? 'apt-get' : m)) { f.linux = m; break }
+  return gitInstallStep(f)
+}
+
+/** Looks at git again while it is not ready (the watchdog, the panel opening, the Check again button); when it just became ready, work starts. Returns a short answer. */
+export async function recheckGit($: Host): Promise<string> {
+  const was = S.gitState
+  const ok = await gitReady($)
+  if (ok && was !== 'ok') void pump($).catch(() => undefined)
+  return ok ? 'git is ready: this folder is a git repo with commits' : gitNotice(S.gitState, S.gitInstall, S.N.name)
+}
+
 /**
  * Whether git is ready for work (a repo with a commit). If not, nothing starts or fails: the
  * banner and status line say so, and the lead (only the driver) is told once per state: how
@@ -94,6 +117,8 @@ export async function probeGit($: Host): Promise<GitState> {
  */
 export async function gitReady($: Host, b?: Board): Promise<boolean> {
   const s = await probeGit($)
+  if (s === 'no-git' && (s !== S.gitState || !S.gitInstall)) S.gitInstall = await installStepOf($).catch(() => '')
+  if (s !== 'no-git') S.gitInstall = ''
   if (s !== S.gitState) {
     S.gitState = s
     await publish($, b ?? (await load($)))
@@ -101,7 +126,7 @@ export async function gitReady($: Host, b?: Board): Promise<boolean> {
   if (s === 'ok') S.toldGit = 'ok'
   else if (S.driving && S.toldGit !== s) {
     S.toldGit = s
-    tellLead($, s === 'no-git' ? noGitText(S.N.name) : setupAskText(s, S.N.name))
+    tellLead($, s === 'no-git' ? noGitText(S.N.name, S.gitInstall) : setupAskText(s, S.N.name))
   }
   return s === 'ok'
 }
@@ -116,7 +141,7 @@ export async function setupGit($: Host, who: string): Promise<string> {
   if (S.settingUp) return 'git is being set up already'
   const s = await probeGit($)
   if (s === 'ok') return 'git is set up already: this folder is a git repo with commits'
-  if (s === 'no-git') return noGitText(S.N.name)
+  if (s === 'no-git') return noGitText(S.N.name, S.gitInstall)
   S.settingUp = true
   try {
     const init = s === 'no-repo'

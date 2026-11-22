@@ -2,8 +2,8 @@
 import { drawNow } from './now'
 import type { MatchedHook } from 'claude-code'
 import type { SymccMode } from '../../../types'
-import { STATUS_WORD, sortScouts, modeOf, nextMode, emptyBoard, type BannerTone, bannerLines, modeLabel, modeButton, bannerRule, footerRule, type KeyHint, hintLines, packRows, showsHeader, type BoardPage } from '../../board'
-import { setupGit } from '../../app/git'
+import { STATUS_WORD, sortScouts, modeOf, nextMode, emptyBoard, type BannerTone, bannerLines, modeLabel, modeButton, bannerRule, footerRule, type KeyHint, hintLines, packRows, showsHeader, gitNotice, type BoardPage } from '../../board'
+import { setupGit, recheckGit } from '../../app/git'
 import { logoNow, noteLogoWidth } from '../../app/logo'
 import { type PaneView, S } from '../../app/state'
 import { type $, panelValues } from '../panel'
@@ -96,11 +96,11 @@ export async function paneParts($: $, e: PaneEvent) {
   }
   /** The warning row under the banner when there is no git repo or no commit yet, with its "Set up git" button. */
   const gitRow = () =>
-    v.git_state === 'no-repo' || v.git_state === 'no-commits'
+    v.git_state === 'no-repo' || v.git_state === 'no-commits' || v.git_state === 'no-git'
       ? [
           <Box key="banner-git" flexDirection="row" {...(vscode ? { flexWrap: 'wrap' as const } : {})}>
-            <Text wrap={vscode ? 'wrap' : 'truncate'} color={C('warning')}>{v.git_state === 'no-repo' ? 'No git repo here; nothing starts. ' : 'No commits yet; nothing starts. '}</Text>
-            <Button key="setup-git" label="Set up git (g)" hotkey="g" onPress={act(async () => $.ui.toast(S.N.toast(await setupGit(claudeHost($), 'you'))))} />
+            <Text wrap={vscode ? 'wrap' : 'truncate'} color={C('warning')}>{`${gitNotice(v.git_state, v.git_install ?? '', S.N.name)} `}</Text>
+            {v.git_state === 'no-git' ? <Button key="check-git" label="Check again (g)" hotkey="g" onPress={act(async () => $.ui.toast(S.N.toast(await recheckGit(claudeHost($)))))} /> : <Button key="setup-git" label="Set up git (g)" hotkey="g" onPress={act(async () => $.ui.toast(S.N.toast(await setupGit(claudeHost($), 'you'))))} />}
           </Box>,
         ]
       : []
