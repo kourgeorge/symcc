@@ -207,8 +207,9 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
     // T-771: a finished lane's id and title are dim, with no mark before them
     const done = !!lane.done
     const idAt = first.findIndex(s => s.tone === 'run' && s.text !== LIVE_RUN_MARK)
-    const runId = done ? '' : (first[idAt]?.text.trim() ?? '')
-    const name = (done ? first.filter(s => s.tone === 'dim' && s !== first[first.length - 1]) : first[idAt + 1]?.tone === 'text' ? [first[idAt + 1]!] : []).map(s => s.text.trim()).filter(Boolean).join(' ')
+    const runId = first[idAt]?.text.trim() ?? ''
+    // T-850: a finished lane has a dim "✓" before its id (still the accent color), then its dim title
+    const name = (done ? first.slice(idAt + 1, -1).filter(s => s.tone === 'dim') : first[idAt + 1]?.tone === 'text' ? [first[idAt + 1]!] : []).map(s => s.text.trim()).filter(Boolean).join(' ')
     const right = first[first.length - 1]?.tone === 'dim' ? first[first.length - 1]!.text.trim() : ''
     const track = trackSvg(lane, layout)
     const href = vsHref('task', lane.id)
@@ -216,8 +217,9 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
       <Box key={`live-lane:${lane.id}`} flexDirection="column">
         <Box key={`live-top:${lane.id}`} flexDirection="row" gap={2}>
           <Box key={`live-run:${lane.id}`} flexDirection="row" gap={1}>
-            {done ? null : line(`live-run-mark:${lane.id}`, `${LIVE_RUN_MARK}${name ? runId : ''}`.trim(), LIVE_TONE.run, true)}
-            {done ? vsLink(vs, laneKey(lane.id), mdLink(name, href), [[href, open(lane.id)]], true) : vsLink(vs, laneKey(lane.id), mdLink(name || lane.id, href), [[href, open(lane.id)]])}
+            {done ? line(`live-done-mark:${lane.id}`, '✓', 'inactive') : null}
+            {done ? line(`live-run-mark:${lane.id}`, runId, LIVE_TONE.run, true) : line(`live-run-mark:${lane.id}`, `${LIVE_RUN_MARK}${name ? runId : ''}`.trim(), LIVE_TONE.run, true)}
+            {done ? (name ? vsLink(vs, laneKey(lane.id), mdLink(name, href), [[href, open(lane.id)]], true) : null) : vsLink(vs, laneKey(lane.id), mdLink(name || lane.id, href), [[href, open(lane.id)]])}
           </Box>
           {right ? line(`live-right:${lane.id}`, right, 'inactive') : null}
         </Box>
