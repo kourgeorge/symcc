@@ -2195,7 +2195,7 @@ the same. Type `/symcc-init` (it works like the command that starts a repo): it 
 folder Claude started in, never in a parent folder, even when that is a repository or already has a
 `.symcc` (the nearest board then wins there; a session already running on the parent's board keeps it,
 so start a new one here). Where `.symcc/` already exists it changes nothing and says "already set up
-here". If this folder has no repository of its own, it asks first; `/symcc-init git` then sets up a
+here" (when another window drives it, it adds that `/symcc-enable here` turns symcc on in this window too). If this folder has no repository of its own, it asks first; `/symcc-init git` then sets up a
 repository and a first commit here (a parent's repository is never used). It turns symcc on, opens the board panel by itself on the Live tab (unless `open_on_start` is off, and not again if it is already open), and tells the lead it is the lead now. `/symcc-enable` and
 `/symcc-disable` only switch an existing board on or off; with no board they point to `/symcc-init`. Projects
 that already have a board start on as before. With several windows (see above), the first window
