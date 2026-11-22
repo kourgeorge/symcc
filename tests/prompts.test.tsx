@@ -58,7 +58,7 @@ test('the built-in prompts are filled in for the task: no placeholder is left, a
   expect(p).not.toContain('{{')
   expect(p).toContain('You are a symcc worker. Do exactly this one task, then stop.')
   expect(p).toContain(`own copy of the project on branch symcc/T-1:\n  ${WT}\n`)
-  expect(p).toContain('# Task T-1 · change · general\n\nTask T-1: Do it\n\nKind of task: change')
+  expect(p).toContain('# Task T-1 · change · general\n\nKind of task: change')
   expect(p).toContain('## What to do\n\nMake it work.')
   expect(p).toContain('## Files you may change\n\nsrc/. This is the full list')
   expect(p).toContain('These test commands must pass. symcc runs them all, each one on its own from your folder, before merging, and sends you the output if any fail:\n  npm test\n')

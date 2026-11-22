@@ -134,3 +134,14 @@ test('(g) the investigation and checker prompts get their sections too', () => {
   expect(leadRoleText(role, 'built-in', 'roles/tester.md')).toContain('{{task.<path>}}')
   expect(leadRoleText(role, 'built-in', 'roles/tester.md')).toContain('Files you may change: ')
 })
+
+test('T-851: an owner follow-up question after a lead note stays in the text; a finding is the first problem, not the opening sentence; "stopped" keeps its reason', () => {
+  const d = `Find out why X is slow.\n\nNote (lead, 2026-11-21): look in hooks/y.ts first\n\nFollow-up question (owner, 2026-11-22): And W?\nThe earlier answer (try 1): ok`
+  const s = splitLeadNotes(d)
+  expect(s.notes).toEqual([{ day: '2026-11-21', text: 'look in hooks/y.ts first' }])
+  expect(s.text).toContain('Follow-up question (owner, 2026-11-22)')
+  const t = task({ history: [({ kind: 'checker-problems', text: 'try 1: checker found problems: I probed it carefully. Problems:\n- hooks/a.ts:12 crashes on empty input; run X.', try: 1 }), ({ kind: 'stopped', text: 'try 2: stopped before finishing', try: 2, reason: 'stopped' })] as never })
+  const rows = triesRows(t)
+  expect(rows[0]!.finding).toBe('hooks/a.ts:12 crashes on empty input; run X.')
+  expect(rows[1]!.reason).toBe('stopped before finishing')
+})

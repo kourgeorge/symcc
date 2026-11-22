@@ -5,7 +5,7 @@
 export type LeadNote = { day: string; text: string }
 
 const NOTE_START = /^Note \(lead(?:, ([^)]*))?\):\s*/
-const ANSWER_START = /^Owner's answer\b/
+const ANSWER_START = /^(?:Owner's answer\b|Follow-up question \(owner\b)/
 
 /**
  * `details` split into the task's own text and the lead's notes (oldest first). A note is a paragraph that starts

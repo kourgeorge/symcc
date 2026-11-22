@@ -37,6 +37,15 @@ export function firstSentence(s: string, max = 200): string {
   return `${cut.slice(0, Math.max(cut.lastIndexOf(' '), max / 2))}…`
 }
 
+/** The first problem of a checker's report: its first list line, else what follows "Problems:", else its first sentence. */
+export function firstFinding(report: string): string {
+  const r = String(report ?? '')
+  const item = /^\s*(?:[-*•]|\d+[.)])\s+(.+)$/m.exec(r)
+  if (item) return firstSentence(item[1]!)
+  const after = /\bproblems?:\s*(\S[\s\S]*)$/i.exec(r)
+  return firstSentence(after ? after[1]! : r)
+}
+
 const tryNo = (e: SymccHistoryEntry): number => e.try ?? tryParts(e.text)?.[1] ?? 0
 const bodyOf = (e: SymccHistoryEntry): string => tryParts(e.text)?.[2] ?? e.text
 
@@ -48,7 +57,7 @@ function saidOf(e: SymccHistoryEntry): string {
 }
 
 /** The result words of an ending line: its result fact, else what follows the kind's own words. */
-const resultOf = (e: SymccHistoryEntry): string => e.result ?? bodyOf(e).replace(/^(stopped|restarted|rejected|rejected by the owner):?\s*/, '')
+const resultOf = (e: SymccHistoryEntry): string => e.result ?? bodyOf(e).replace(/^(?:stopped|restarted|rejected(?: by the owner)?):\s*/, '')
 
 function endedWord(e: SymccHistoryEntry): string {
   if (e.kind === 'merged' || e.kind === 'done') return 'merged'
@@ -78,7 +87,7 @@ export function triesRows(t: Pick<SymccTask, 'history'>, max = TRIES_SHOWN): Try
     const problems = lines.findLast(e => e.kind === 'checker-problems')
     const ended = endedWord(end)
     const checkerSent = end.reason === 'checker' || end.kind === 'checker-problems' || (!!problems && end.kind === 'failed' && !end.reason)
-    const finding = checkerSent ? firstSentence((problems ? bodyOf(problems).replace(/^checker found problems:\s*/, '') : resultOf(end).replace(/^the checker found problems:?\s*/, ''))) : ''
+    const finding = checkerSent ? firstFinding(problems ? bodyOf(problems).replace(/^checker found problems:\s*/, '') : resultOf(end).replace(/^the checker found problems:?\s*/, '')) : ''
     const reason = checkerSent ? 'the checker found problems' : ended === 'merged' ? '' : firstSentence(resultOf(end))
     rows.push({ try: n, ended: checkerSent ? REASON_WORDS.checker! : ended, reason, said: firstSentence(saidOf(end)), finding })
   }
