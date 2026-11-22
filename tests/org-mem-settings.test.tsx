@@ -374,9 +374,10 @@ test('T-718: the terminal Live tab draws the org-mem section (header, 3 newest, 
     const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns } })
     const lines = pageLines(await ui.drawn())
     for (const l of lines) expect([bodyColumns, l, textWidth(l) <= bodyColumns]).toEqual([bodyColumns, l, true])
-    // T-747, T-789: an "ORGANIZATIONAL MEMORY" heading with the count and bar on it, an empty line under it, the lines under that indented (T-767: by 1)
-    const head = lines.findIndex(l => l.startsWith('ORGANIZATIONAL MEMORY   8 / 60 ▕'))
+    // T-747, T-789: an "ORGANIZATIONAL MEMORY" heading with the count and a thin rule (no bar) on it, an empty line under it, the lines under that indented (T-767: by 1)
+    const head = lines.findIndex(l => l.startsWith('ORGANIZATIONAL MEMORY   8 / 60 ─'))
     expect(head).toBeGreaterThan(0)
+    expect(textWidth(lines[head]!)).toBe(bodyColumns)
     expect(lines[head - 1]!.trim()).toBe('')
     expect(lines[head + 1]!.trim()).toBe('')
     expect(lines[head + 2]).toBe('   newest')
@@ -438,7 +439,7 @@ test('T-718: Enter on a topic opens the page of its notes only, Back returns to 
   await ui.unmount()
 })
 
-test('T-718: VS Code draws the org-mem section (title link, count, bar, 3 newest, topic links with counts) at 40 and 100 columns; a topic link opens its page, delete there deletes the right note, "← Live" returns', async ($, on) => {
+test('T-718: VS Code draws the org-mem section (title link, count and a thin rule but no bar, 3 newest, topic links with counts) at 40 and 100 columns; a topic link opens its page, delete there deletes the right note, "← Live" returns', async ($, on) => {
   stateOf(on, VIEW)
   const files = fakeOrgMem(on, TOPIC_NOTES)
   await $.session.start({ cwd: '/proj' } as never)
@@ -446,7 +447,8 @@ test('T-718: VS Code draws the org-mem section (title link, count, bar, 3 newest
     const ui = await $.ui.mount({ ...PANE, surface: 'vscode', props: { ...PANE.props, bodyColumns } })
     expect(shown(String((await ui.find({ key: 'live-orgmem' }))?.props.text))).toBe('ORGANIZATIONAL MEMORY')
     expect(await pageText(ui as never)).toContain('8 / 60')
-    expect((await ui.findAll({ type: 'Svg' })).some(x => String(x.props.alt) === '8 notes of at most 60')).toBe(true)
+    expect((await ui.findAll({ type: 'Svg' })).some(x => String(x.props.alt) === '8 notes of at most 60')).toBe(false)
+    expect((await ui.findAll({ type: 'Text' })).some(t => /^─+$/.test((t.children ?? []).join('')))).toBe(true)
     for (const k of ['live-om-note:8', 'live-om-note:7', 'live-om-note:6']) expect(await ui.find({ key: k })).toBeDefined()
     expect(shown(String((await ui.find({ key: 'live-om-note:7' }))?.props.text))).toMatch(/^Use a plain path/)
     expect((await ui.findAll({ type: 'Markdown' })).filter(m => String(m.key ?? '').startsWith('live-om-topic:')).length).toBe(5)
@@ -500,15 +502,16 @@ test('T-772: the terminal Live tab draws the org-mem meter at 30 / 60 and 60 / 6
     const ui = await $.ui.mount(PANE)
     const texts = await ui.findAll({ type: 'Text' })
     const count = texts.find(t => (t.children ?? []).join('') === `${n} / 60`)
-    const bar = texts.find(t => /^ ▕[█░]+▏$/.test((t.children ?? []).join('')))
-    expect([n, count?.props.color, bar?.props.color]).toEqual([n, 'inactive', 'ide'])
-    looks.push(`${count?.props.color} ${bar?.props.color}`)
+    // T-810: no bar any more
+    expect(texts.some(t => /▕[█░]+▏/.test((t.children ?? []).join('')))).toBe(false)
+    expect([n, count?.props.color]).toEqual([n, 'inactive'])
+    looks.push(`${count?.props.color}`)
     await ui.unmount()
   }
   expect(looks[0]).toBe(looks[1]!)
 })
 
-test('T-772: VS Code draws the org-mem meter at 30 / 60 and 60 / 60 in the same calm colors: dim count, the bar filled with the quiet bar ink, never the warning ink', async ($, on) => {
+test('T-772: VS Code draws the org-mem meter at 30 / 60 and 60 / 60 in the same calm color: dim count, no bar (T-810), never the warning ink', async ($, on) => {
   stateOf(on, VIEW)
   const files = fakeOrgMem(on, manyNotes(30))
   await $.session.start({ cwd: '/proj' } as never)
@@ -517,8 +520,7 @@ test('T-772: VS Code draws the org-mem meter at 30 / 60 and 60 / 60 in the same 
     const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
     const count = (await ui.findAll({ type: 'Text' })).find(t => (t.children ?? []).join('') === `${n} / 60`)
     expect([n, count?.props.color]).toEqual([n, 'inactive'])
-    const svg = String((await ui.findAll({ type: 'Svg' })).find(x => String(x.props.alt).endsWith('of at most 60'))?.props.source)
-    expect([n, svg.includes('fill="#3794ff"'), svg.includes('#d29922')]).toEqual([n, true, false])
+    expect((await ui.findAll({ type: 'Svg' })).some(x => String(x.props.alt).endsWith('of at most 60'))).toBe(false)
     await ui.unmount()
   }
 })

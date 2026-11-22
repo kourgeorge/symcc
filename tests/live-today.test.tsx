@@ -205,7 +205,7 @@ test('T-769: the terminal and VS Code Live tabs show ▍Today\'s 4 lines, and a 
     const t = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'terminal' })
     await t.press({ key: 'tab-live' })
     const all = pageLines(await t.drawn())
-    const at = all.indexOf('TODAY')
+    const at = all.findIndex(l => l.startsWith('TODAY ─'))
     expect(all[at + 1]!.trim()).toBe('')
     const today = all.slice(at + 2, at + 6)
     for (const l of all) expect([bodyColumns, l, textWidth(l) <= bodyColumns]).toEqual([bodyColumns, l, true])

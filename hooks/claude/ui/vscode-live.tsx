@@ -15,7 +15,7 @@
 // T-727: under the lanes, the Branches section (core's liveBranches) drawn with real lines: see branchesVs.
 // T-747: each section has a bold heading with the terminal's names (core's LIVE_SECTIONS): Tasks, Today, Branches,
 // Organizational memory (that one a link to all notes).
-import { type BranchRow, type LiveBranches, liveBranches, LIVE_EMPTY, LIVE_AGENT_MARK, LIVE_RUN_MARK, liveLegend, LIVE_SECTIONS, type LiveLane, liveInner, type LiveLayout, type LiveSeg, LIVE_TONE, laneLines, liveHeader, liveHeaderSegs, liveNeeds, liveTaskLanes, liveLayout, liveOrgMem, liveStations, liveTodayLines, liveTrains, segText, trainRows } from '../../core/live'
+import { type BranchRow, type LiveBranches, liveBranches, LIVE_EMPTY, LIVE_AGENT_MARK, LIVE_RUN_MARK, liveLegend, LIVE_SECTIONS, type LiveLane, liveInner, liveRuleText, type LiveLayout, type LiveSeg, LIVE_TONE, laneLines, liveHeader, liveHeaderSegs, liveNeeds, liveTaskLanes, liveLayout, liveOrgMem, liveStations, liveTodayLines, liveTrains, segText, trainRows } from '../../core/live'
 import { panelValues, type $ } from '../panel'
 import type { PaneParts } from './parts'
 import { LIVE_TICK_MS, branchKey, needKey, laneKey, liveTick, newestKey, openOrgMemPage, topicKey, trainKey } from './live'
@@ -113,8 +113,9 @@ function branchesVs(pane: PaneParts, open: (id: string) => () => void) {
   const words = (xs: LiveSeg[]) => xs.map(s => <Text color={C(LIVE_TONE[s.tone])}>{s.text}</Text>)
   return (
     <Box key="live-br" flexDirection="column">
-      <Box key="live-br-head" flexDirection="column" paddingBottom={1}>
+      <Box key="live-br-head" flexDirection="row" gap={1} paddingBottom={1}>
         <Text bold color={C('text')}>{LIVE_SECTIONS.branches.toUpperCase()}</Text>
+        <Text key="live-br-rule" color={C('inactive')}>{liveRuleText(LIVE_SECTIONS.branches.length, width).trim()}</Text>
       </Box>
       <Box key="live-br-main" flexDirection="row" gap={1} alignItems="center">
         <Svg key="live-br-main-svg" source={main.source} width={main.width} height={main.height} alt={segText(br.main).trim()} />
@@ -166,8 +167,9 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
   )
   /** T-789: a section heading: the name in UPPERCASE, bold, one empty line under it. */
   const headLine = (key: string, name: string) => (
-    <Box key={key} flexDirection="column" paddingBottom={1}>
-      <Text wrap="wrap" bold color={C('text')}>{name.toUpperCase()}</Text>
+    <Box key={key} flexDirection="row" gap={1} paddingBottom={1}>
+      <Text bold color={C('text')}>{name.toUpperCase()}</Text>
+      <Text key={`${key}-rule`} color={C('inactive')}>{liveRuleText(name.length, width).trim()}</Text>
     </Box>
   )
   const headSegs = liveHeaderSegs(v, running, nowMs, width)
@@ -287,12 +289,8 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
 /** T-718: the Live tab's Organizational memory section in VS Code (see the top of this file). */
 function orgMemSectionVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
   const { Box, Text, C, width, vs } = pane
-  const { Svg } = vs
   const om = liveOrgMem(notes, width)
   const all = vsHref('page', 'orgmem')
-  // T-772: one calm look at every fill (dim count, the quiet bar ink), never the warning color
-  const full = Math.max(0, Math.min(10, Math.round((notes.length / ORG_MEM_MAX_LINES) * 10)))
-  const bar = barSvg(`▕${'█'.repeat(full)}${'░'.repeat(10 - full)}▏`, false)
   const label = (key: string, text: string) => (
     <Text key={key} color={C('inactive')}>
       {text.trim()}
@@ -303,7 +301,7 @@ function orgMemSectionVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
       <Box key="live-om-head" flexDirection="row" gap={1} alignItems="center" paddingBottom={1}>
         {vsLink(vs, 'live-orgmem', `**${mdLink(LIVE_SECTIONS.orgMem.toUpperCase(), all)}**`, [[all, openOrgMemPage($)]])}
         <Text key="live-om-count" color={C('inactive')}>{`${notes.length} / ${ORG_MEM_MAX_LINES}`}</Text>
-        <Svg key="live-om-bar" source={bar.source} width={bar.width} height={bar.height} alt={`${orgMemCount(notes.length)} of at most ${ORG_MEM_MAX_LINES}`} />
+        <Text key="live-om-rule" color={C('inactive')}>{liveRuleText(LIVE_SECTIONS.orgMem.length + 3 + `${notes.length} / ${ORG_MEM_MAX_LINES}`.length, width).trim()}</Text>
       </Box>
       {label('live-om-newest', om.newestLabel)}
       {om.empty ? label('live-om-empty', om.empty) : null}
