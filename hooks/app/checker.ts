@@ -50,7 +50,7 @@ export async function runChecker($: Host, t: SymccTask, b: Board, dir: string, s
   const tests = checkerTestsText(S.N.name, b.test_commands)
   // the checker role's checklist gets the same placeholders a change worker's role does (the task's files, kind, ...); its {{test_command}} is the checker's own tests line
   const facts = { ...changeValues(t, b, dir), test_command: tests }
-  const prompt = checkerPrompt({ name: S.N.name, task_id: t.id, title: t.title, branch: taskBranch(t), folder: dir, details: t.details, into, role: roleSection(role, facts), diff: checkerDiff(d && d.exitCode === 0 ? d.stdout : ''), changed_files: checkerChangedFiles(changed), tests, org_mem: await orgMemText($), learned: learnedAsk($) })
+  const prompt = checkerPrompt({ name: S.N.name, task_id: t.id, title: t.title, branch: taskBranch(t), folder: dir, details: t.details, into, role: roleSection(role, facts, t), kind_name: t.kind ?? 'change', diff: checkerDiff(d && d.exitCode === 0 ? d.stdout : ''), changed_files: checkerChangedFiles(changed), tests, org_mem: await orgMemText($), learned: learnedAsk($) }, t)
   const early = stop()
   if (early) {
     const why = `not started: the task was ${early}`

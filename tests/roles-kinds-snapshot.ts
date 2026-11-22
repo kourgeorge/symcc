@@ -859,6 +859,24 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
               {"type":"Text","props":{"bold":true,"color":"ide"},"children":["{{name}}"]},
               {"type":"Text","props":{"color":"inactive"},"children":[" ","the plugin's name (symcc)"]}
             ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              "  ",
+              {"type":"Text","props":{"bold":true,"color":"ide"},"children":["{{task.<path>}}"]},
+              {
+                "type": "Text",
+                "props": {"color":"inactive"},
+                "children": [
+                  " ",
+                  "any field of the task, by its path (e.g. {{task.origin.reque" +
+                    "st}}, {{task.files}}): text as it is, a list one item per li" +
+                    "ne, an object as \"key: value\" lines, a missing one as nothin" +
+                    "g"
+                ]
+              }
+            ]
           }
         ]
       },
@@ -1054,6 +1072,24 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
               "  ",
               {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["{{name}}"]},
               {"type":"Text","props":{"color":"inactive"},"children":[" ","the plugin's name (symcc)"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              "  ",
+              {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["{{task.<path>}}"]},
+              {
+                "type": "Text",
+                "props": {"color":"inactive"},
+                "children": [
+                  " ",
+                  "any field of the task, by its path (e.g. {{task.origin.reque" +
+                    "st}}, {{task.files}}): text as it is, a list one item per li" +
+                    "ne, an object as \"key: value\" lines, a missing one as nothin" +
+                    "g"
+                ]
+              }
             ]
           }
         ]
@@ -1258,6 +1294,24 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
               "  ",
               {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["{{name}}"]},
               {"type":"Text","props":{"color":"inactive"},"children":[" ","the plugin's name (symcc)"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              "  ",
+              {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["{{task.<path>}}"]},
+              {
+                "type": "Text",
+                "props": {"color":"inactive"},
+                "children": [
+                  " ",
+                  "any field of the task, by its path (e.g. {{task.origin.reque" +
+                    "st}}, {{task.files}}): text as it is, a list one item per li" +
+                    "ne, an object as \"key: value\" lines, a missing one as nothin" +
+                    "g"
+                ]
+              }
             ]
           }
         ]
@@ -1472,6 +1526,24 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
               "  ",
               {"type":"Text","props":{"bold":true,"color":"ide"},"children":["{{name}}"]},
               {"type":"Text","props":{"color":"inactive"},"children":[" ","the plugin's name (symcc)"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              "  ",
+              {"type":"Text","props":{"bold":true,"color":"ide"},"children":["{{task.<path>}}"]},
+              {
+                "type": "Text",
+                "props": {"color":"inactive"},
+                "children": [
+                  " ",
+                  "any field of the task, by its path (e.g. {{task.origin.reque" +
+                    "st}}, {{task.files}}): text as it is, a list one item per li" +
+                    "ne, an object as \"key: value\" lines, a missing one as nothin" +
+                    "g"
+                ]
+              }
             ]
           }
         ]
@@ -1704,6 +1776,24 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
               "  ",
               {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["{{name}}"]},
               {"type":"Text","props":{"color":"inactive"},"children":[" ","the plugin's name (symcc)"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              "  ",
+              {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["{{task.<path>}}"]},
+              {
+                "type": "Text",
+                "props": {"color":"inactive"},
+                "children": [
+                  " ",
+                  "any field of the task, by its path (e.g. {{task.origin.reque" +
+                    "st}}, {{task.files}}): text as it is, a list one item per li" +
+                    "ne, an object as \"key: value\" lines, a missing one as nothin" +
+                    "g"
+                ]
+              }
             ]
           }
         ]
@@ -1945,6 +2035,24 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
               {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["{{name}}"]},
               {"type":"Text","props":{"color":"inactive"},"children":[" ","the plugin's name (symcc)"]}
             ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              "  ",
+              {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["{{task.<path>}}"]},
+              {
+                "type": "Text",
+                "props": {"color":"inactive"},
+                "children": [
+                  " ",
+                  "any field of the task, by its path (e.g. {{task.origin.reque" +
+                    "st}}, {{task.files}}): text as it is, a list one item per li" +
+                    "ne, an object as \"key: value\" lines, a missing one as nothin" +
+                    "g"
+                ]
+              }
+            ]
           }
         ]
       },
@@ -2177,6 +2285,24 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
               {"type":"Text","props":{"bold":true,"color":"ide"},"children":["{{name}}"]},
               {"type":"Text","props":{"color":"inactive"},"children":[" ","the plugin's name (symcc)"]}
             ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              "  ",
+              {"type":"Text","props":{"bold":true,"color":"ide"},"children":["{{task.<path>}}"]},
+              {
+                "type": "Text",
+                "props": {"color":"inactive"},
+                "children": [
+                  " ",
+                  "any field of the task, by its path (e.g. {{task.origin.reque" +
+                    "st}}, {{task.files}}): text as it is, a list one item per li" +
+                    "ne, an object as \"key: value\" lines, a missing one as nothin" +
+                    "g"
+                ]
+              }
+            ]
           }
         ]
       },
@@ -2400,6 +2526,24 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
               "  ",
               {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["{{name}}"]},
               {"type":"Text","props":{"color":"inactive"},"children":[" ","the plugin's name (symcc)"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              "  ",
+              {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["{{task.<path>}}"]},
+              {
+                "type": "Text",
+                "props": {"color":"inactive"},
+                "children": [
+                  " ",
+                  "any field of the task, by its path (e.g. {{task.origin.reque" +
+                    "st}}, {{task.files}}): text as it is, a list one item per li" +
+                    "ne, an object as \"key: value\" lines, a missing one as nothin" +
+                    "g"
+                ]
+              }
             ]
           }
         ]
@@ -2633,6 +2777,24 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
               {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["{{name}}"]},
               {"type":"Text","props":{"color":"inactive"},"children":[" ","the plugin's name (symcc)"]}
             ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              "  ",
+              {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["{{task.<path>}}"]},
+              {
+                "type": "Text",
+                "props": {"color":"inactive"},
+                "children": [
+                  " ",
+                  "any field of the task, by its path (e.g. {{task.origin.reque" +
+                    "st}}, {{task.files}}): text as it is, a list one item per li" +
+                    "ne, an object as \"key: value\" lines, a missing one as nothin" +
+                    "g"
+                ]
+              }
+            ]
           }
         ]
       },
@@ -2865,6 +3027,24 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
               {"type":"Text","props":{"bold":true,"color":"ide"},"children":["{{name}}"]},
               {"type":"Text","props":{"color":"inactive"},"children":[" ","the plugin's name (symcc)"]}
             ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              "  ",
+              {"type":"Text","props":{"bold":true,"color":"ide"},"children":["{{task.<path>}}"]},
+              {
+                "type": "Text",
+                "props": {"color":"inactive"},
+                "children": [
+                  " ",
+                  "any field of the task, by its path (e.g. {{task.origin.reque" +
+                    "st}}, {{task.files}}): text as it is, a list one item per li" +
+                    "ne, an object as \"key: value\" lines, a missing one as nothin" +
+                    "g"
+                ]
+              }
+            ]
           }
         ]
       },
@@ -3084,6 +3264,24 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
               "  ",
               {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["{{name}}"]},
               {"type":"Text","props":{"color":"inactive"},"children":[" ","the plugin's name (symcc)"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              "  ",
+              {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["{{task.<path>}}"]},
+              {
+                "type": "Text",
+                "props": {"color":"inactive"},
+                "children": [
+                  " ",
+                  "any field of the task, by its path (e.g. {{task.origin.reque" +
+                    "st}}, {{task.files}}): text as it is, a list one item per li" +
+                    "ne, an object as \"key: value\" lines, a missing one as nothin" +
+                    "g"
+                ]
+              }
             ]
           }
         ]
@@ -3316,6 +3514,24 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
               "  ",
               {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["{{name}}"]},
               {"type":"Text","props":{"color":"inactive"},"children":[" ","the plugin's name (symcc)"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              "  ",
+              {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["{{task.<path>}}"]},
+              {
+                "type": "Text",
+                "props": {"color":"inactive"},
+                "children": [
+                  " ",
+                  "any field of the task, by its path (e.g. {{task.origin.reque" +
+                    "st}}, {{task.files}}): text as it is, a list one item per li" +
+                    "ne, an object as \"key: value\" lines, a missing one as nothin" +
+                    "g"
+                ]
+              }
             ]
           }
         ]
@@ -3552,6 +3768,24 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
               {"type":"Text","props":{"bold":true,"color":"ide"},"children":["{{name}}"]},
               {"type":"Text","props":{"color":"inactive"},"children":[" ","the plugin's name (symcc)"]}
             ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              "  ",
+              {"type":"Text","props":{"bold":true,"color":"ide"},"children":["{{task.<path>}}"]},
+              {
+                "type": "Text",
+                "props": {"color":"inactive"},
+                "children": [
+                  " ",
+                  "any field of the task, by its path (e.g. {{task.origin.reque" +
+                    "st}}, {{task.files}}): text as it is, a list one item per li" +
+                    "ne, an object as \"key: value\" lines, a missing one as nothin" +
+                    "g"
+                ]
+              }
+            ]
           }
         ]
       },
@@ -3759,6 +3993,24 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
               "  ",
               {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["{{name}}"]},
               {"type":"Text","props":{"color":"inactive"},"children":[" ","the plugin's name (symcc)"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              "  ",
+              {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["{{task.<path>}}"]},
+              {
+                "type": "Text",
+                "props": {"color":"inactive"},
+                "children": [
+                  " ",
+                  "any field of the task, by its path (e.g. {{task.origin.reque" +
+                    "st}}, {{task.files}}): text as it is, a list one item per li" +
+                    "ne, an object as \"key: value\" lines, a missing one as nothin" +
+                    "g"
+                ]
+              }
             ]
           }
         ]
@@ -3975,6 +4227,24 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
               "  ",
               {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["{{name}}"]},
               {"type":"Text","props":{"color":"inactive"},"children":[" ","the plugin's name (symcc)"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              "  ",
+              {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["{{task.<path>}}"]},
+              {
+                "type": "Text",
+                "props": {"color":"inactive"},
+                "children": [
+                  " ",
+                  "any field of the task, by its path (e.g. {{task.origin.reque" +
+                    "st}}, {{task.files}}): text as it is, a list one item per li" +
+                    "ne, an object as \"key: value\" lines, a missing one as nothin" +
+                    "g"
+                ]
+              }
             ]
           }
         ]

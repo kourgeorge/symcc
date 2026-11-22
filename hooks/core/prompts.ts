@@ -1,69 +1,81 @@
-// Worker prompts: the fixed text a worker is started with, one per task kind: prompts/change.ts and
-// prompts/investigation.ts in the plugin. They are built-in only; roles (roles/*.md, the Roles page) fill
-// their {{role}} slot and are how the owner shapes what a worker does. {{placeholders}} in the text are
-// filled in for each task. Everything here is pure.
-import CHANGE from '../../prompts/change'
-import INVESTIGATION from '../../prompts/investigation'
-import CHECKER from '../../prompts/checker'
+// Worker prompts: what a worker is started with, one per task kind (a change, an investigation), and the checker's. Each is put
+// together from sections in a fixed order (prompt-sections.ts, T-851), the fixed words in prompts/*.ts in the plugin. They are
+// built-in only; roles (roles/*.md, the Roles page) fill their role section and are how the owner shapes what a worker does.
+// {{placeholders}} in the text are filled in for each task, and {{task.<path>}} gives any field of the task. Everything here is pure.
+import type { SymccTask } from '../../types'
+import type { Board } from './board-file'
 import { ASK_TOOL, ASK_LINE } from './ask'
 import { WEB_SAFETY_LINE } from './roles'
+import { fillPlaceholders, placeholdersIn, TASK_PLACEHOLDER, TASK_PLACEHOLDER_ABOUT } from './prompt-fill'
+import { PROMPT_SECTIONS, PROMPT_ORDER, buildPrompt, promptTemplate, type PromptSection } from './prompt-sections'
+
+export { fillPlaceholders, placeholdersIn }
 
 /** The prompts there are: one per task kind. */
 export type PromptKind = 'change' | 'investigation'
 export const PROMPT_KINDS: readonly PromptKind[] = ['change', 'investigation']
 
-/** The built-in prompts, as the plugin ships them. */
-export const BUILT_IN_PROMPTS: Record<PromptKind, string> = { change: CHANGE, investigation: INVESTIGATION }
+/** The built-in prompts as the Roles page shows them: the sections in order, with {{placeholders}} where a task's facts go. */
+export const BUILT_IN_PROMPTS: Record<PromptKind, string> = { change: promptTemplate('change'), investigation: promptTemplate('investigation') }
 
 const SHARED_PLACEHOLDERS: Record<string, string> = {
   name: 'the plugin\'s name (symcc)',
   task_id: 'the task\'s id, e.g. T-12',
   title: 'the task\'s title',
-  details: 'the task\'s details',
+  details: 'the task\'s details, without the lead\'s notes (they are in their own section)',
   branch: 'the worker\'s branch, e.g. symcc/T-12',
   folder: 'the worker\'s own folder (its copy of the project)',
   role: 'the role\'s checklist, skills and web rule (empty for general)',
   kind: 'the task\'s kind and what it is for, e.g. "Kind of task: bug (something that works wrongly)."',
+  kind_name: 'the task\'s kind, e.g. bug',
+  role_name: 'the task\'s role, e.g. tester',
   org_mem: 'only when organizational memory (.symcc/org-mem.md) has lines: "Organizational memory (org-mem): notes earlier agents left about this project", then its lines',
   learned: 'how to end the report with an optional "Learned:" section for organizational memory (org-mem); only on a host that can\'t send the debrief after the hand-back (T-656), else empty',
 }
 
-/** The placeholders of each prompt and what they become; any other {{word}} is left as written. */
+/** The placeholder each section of a prompt stands for, and what it becomes (the sections' own `about`, unless one is told above). */
+const sectionPlaceholders = (kind: PromptKind, registry: readonly PromptSection[] = PROMPT_SECTIONS): Record<string, string> =>
+  Object.fromEntries(
+    PROMPT_ORDER[kind].flatMap(n => {
+      const s = registry.find(x => x.name === n && x.kinds.includes(kind))
+      return s && !(s.name in SHARED_PLACEHOLDERS) && !['title', 'what', 'where', 'tests', 'rules', 'done'].includes(s.name) ? [[s.name, s.about]] : []
+    }),
+  )
+
+/** The placeholders of each prompt and what they become; any other {{word}} is left as written. {{task.<path>}} works everywhere. */
 export const PROMPT_PLACEHOLDERS: Record<PromptKind, Record<string, string>> = {
   change: {
     ...SHARED_PLACEHOLDERS,
+    ...sectionPlaceholders('change'),
     file_tools: 'what the worker uses on files, as the host names it (e.g. "Read, Edit and Write")',
     files: 'the "Files you may change" lines (the task\'s files, or "whatever the task needs")',
     test_command: 'the "these must pass" line with the test commands (or "There is no test command")',
     merge_main: 'only when the branch it merges into moved and conflicts: how to merge it first',
-    test_output: 'only after a try failed its tests: its failing tests with their errors (when the output was long), then the end of the test output',
-    earlier_tries: 'only when there were earlier tries: the last ones, and "Don\'t repeat those mistakes."',
+    earlier_work: 'only when earlier tries left commits on the branch: that their work is already in the folder, and the commits',
     ask: 'how to ask the owner and what a refused edit means',
+    [TASK_PLACEHOLDER]: TASK_PLACEHOLDER_ABOUT,
   },
   investigation: {
     ...SHARED_PLACEHOLDERS,
-    earlier_tries: 'only when there were earlier tries: the last ones',
+    ...sectionPlaceholders('investigation'),
     ask_more: 'only after the owner pressed Ask more: hand back the whole updated answer',
     ask: 'how to ask the owner and what a refused edit means',
+    [TASK_PLACEHOLDER]: TASK_PLACEHOLDER_ABOUT,
   },
 }
 
-const PLACEHOLDER = /\{\{\s*([A-Za-z_]+)\s*\}\}/g
-
-/** `text` with every placeholder named in `known` replaced by its value from `values`, in one pass (so a value that holds "{{...}}",
- *  e.g. in the task's details, is never filled again). Any other {{word}}, or one without a value, is left as written. */
-export function fillPlaceholders(text: string, known: Record<string, unknown>, values: Record<string, string>): string {
-  return text.replace(PLACEHOLDER, (all, p: string) => (Object.hasOwn(known, p) && Object.hasOwn(values, p) ? values[p]! : all))
-}
-
-/** The text a worker is started with: the built-in prompt of `kind` with its placeholders filled in (see fillPlaceholders). */
-export function fillPrompt(kind: PromptKind, values: Record<string, string>): string {
-  return fillPlaceholders(BUILT_IN_PROMPTS[kind], PROMPT_PLACEHOLDERS[kind], values).trimEnd()
+/**
+ * The text a worker is started with: the sections of `kind`'s prompt (see buildPrompt) made from `values` and, for the task's own
+ * facts (why, the tries, the files, the last failure), from `task` and `board`. `commits`: the earlier tries' commits, one line each.
+ */
+export function fillPrompt(kind: PromptKind, values: Record<string, string>, task?: SymccTask, board?: Board, commits?: readonly string[]): string {
+  return buildPrompt({ kind, values, ...(task ? { task } : {}), ...(board ? { board } : {}), ...(commits ? { commits } : {}) })
 }
 
 /** The placeholders a role's checklist may use and what they become: the task's own facts from the prompt, not its
  *  bigger parts (not {{role}} itself, {{details}}, {{ask}} and the like). {{files}} and {{test_command}} are only filled for
- *  a change task and its checker (an investigation has neither, so they are left as written there). */
+ *  a change task and its checker (an investigation has neither, so they are left as written there). {{task.<path>}} gives any
+ *  field of the task. */
 export const ROLE_PLACEHOLDERS: Record<string, string> = {
   task_id: SHARED_PLACEHOLDERS.task_id!,
   title: SHARED_PLACEHOLDERS.title!,
@@ -73,14 +85,22 @@ export const ROLE_PLACEHOLDERS: Record<string, string> = {
   branch: SHARED_PLACEHOLDERS.branch!,
   kind: SHARED_PLACEHOLDERS.kind!,
   name: SHARED_PLACEHOLDERS.name!,
+  [TASK_PLACEHOLDER]: TASK_PLACEHOLDER_ABOUT,
 }
 
-/** A role's checklist with its placeholders filled in for the task (see ROLE_PLACEHOLDERS). */
-export const fillRole = (checklist: string, values: Record<string, string>): string => fillPlaceholders(checklist, ROLE_PLACEHOLDERS, values)
+/** A role's checklist with its placeholders filled in for the task (see ROLE_PLACEHOLDERS); `task` fills {{task.<path>}}. */
+export const fillRole = (checklist: string, values: Record<string, string>, task?: unknown): string => fillPlaceholders(checklist, ROLE_PLACEHOLDERS, values, task)
 
-/** The built-in prompts a role can be put into, to look at from its page: a worker's two, and the checker's (prompts/checker.ts). */
+/** The built-in prompts a role can be put into, to look at from its page: a worker's two, and the checker's. */
 export type RolePromptKind = PromptKind | 'checker'
-export const ROLE_PROMPTS: Record<RolePromptKind, string> = { ...BUILT_IN_PROMPTS, checker: CHECKER }
+export const ROLE_PROMPTS: Record<RolePromptKind, string> = { ...BUILT_IN_PROMPTS, checker: promptTemplate('checker') }
+
+/** The sections a prompt has, in order: "name: what it holds" for each, as the Roles page lists them. */
+export const promptSectionLines = (kind: RolePromptKind): string[] =>
+  PROMPT_ORDER[kind].flatMap(n => {
+    const s = PROMPT_SECTIONS.find(x => x.name === n && x.kinds.includes(kind))
+    return s ? [`${s.heading ?? 'Your role'}: ${s.about}`] : []
+  })
 
 /** The built-in prompts role `name` goes into: the checker role (see CHECKER_ROLE) only into the checker's prompt, any other
  *  role into a worker's prompt, one per task kind. */
@@ -89,10 +109,6 @@ export const promptsOfRole = (name: string): RolePromptKind[] => (name.toLowerCa
 /** Where the role goes in a prompt. */
 export const ROLE_SLOT = '{{role}}'
 
-/** The placeholder names written in `text`, in order, each once. */
-export function placeholdersIn(text: string): string[] {
-  return [...new Set([...text.matchAll(PLACEHOLDER)].map(m => m[1]!))]
-}
 
 /**
  * What an agent started with no symcc tools does instead of calling ask_owner (T-474): e.g. a `claude -p` process,

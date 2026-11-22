@@ -3,17 +3,18 @@
 // diff and tries to break it, side by side with other tasks; its answer is either OK (the task joins the merge line:
 // catch up, tests, merge or review) or a list of problems (the task goes back to its worker with that report, like a
 // failed test run). Investigations and docs-only changes skip it. Everything here is pure.
-import CHECKER_PROMPT from '../../prompts/checker'
+import type { SymccTask } from '../../types'
 import type { Board } from './board-file'
 import type { HistoryAdd } from './history'
 import { DOC_NAMES, MEDIA_EXTS } from './review'
 import { CHECKER_ROLE } from './roles'
 import { DEFAULT_NAME, namesFor } from '../name'
 import { TEST_OUTPUT_CHARS } from './settings'
-import { fillPlaceholders } from './prompts'
+import { buildPrompt } from './prompt-sections'
+import { CHECKER_MARK, isCheckerOutput } from './checker-mark'
 import { splitLearned } from './org-mem'
 
-export { CHECKER_ROLE }
+export { CHECKER_ROLE, CHECKER_MARK, isCheckerOutput }
 
 /** Whether the checker setting is on (off unless the board says on). */
 export const checkerOn = (b: Partial<Pick<Board, 'checker'>> | null | undefined): boolean => b?.checker === true
@@ -77,8 +78,6 @@ export function checkerVerdict(answer: string): CheckerVerdict | null {
   return OK_LINE.test(lines.at(-1) ?? '') ? { ok: true } : { ok: false, report: text }
 }
 
-/** The first line of a task's test_output when it holds a checker's report rather than test output. */
-export const CHECKER_MARK = 'The checker found these problems:'
 
 /**
  * The checker's report as the task keeps it in test_output: its last TEST_OUTPUT_CHARS characters, so it fits in
@@ -90,8 +89,6 @@ export const checkerOutput = (report: string): string => {
   return `${CHECKER_MARK}\n${s.length <= TEST_OUTPUT_CHARS ? s : '…' + s.slice(-TEST_OUTPUT_CHARS)}`
 }
 
-/** Whether test_output `s` holds a checker's report (see checkerOutput). */
-export const isCheckerOutput = (s: string | undefined): boolean => typeof s === 'string' && s.startsWith(CHECKER_MARK)
 
 /** {{test_output}} of a change prompt after the checker sent the last try back: its report, to fix. */
 export const checkerRetryText = (output: string): string =>
@@ -104,7 +101,7 @@ export const checkerDiff = (diff: string): string => {
 }
 
 /** The values of a checker's prompt. */
-export type CheckerValues = { name: string; task_id: string; title: string; details: string; branch: string; folder: string; into: string; role: string; diff: string; changed_files: string; tests: string; org_mem?: string; learned?: string }
+export type CheckerValues = { name: string; task_id: string; title: string; details: string; branch: string; folder: string; into: string; role: string; kind_name?: string; diff: string; changed_files: string; tests: string; org_mem?: string; learned?: string }
 
 /** The most changed files a checker's prompt lists; the rest it reads with git diff --name-only. */
 export const CHECKER_FILES_MAX = 200
@@ -129,9 +126,9 @@ export function checkerTestsText(name: string, commands: readonly string[]): str
 }
 
 /** A checker's prompt (prompts/checker.ts) with `v` filled in; {{learned}} and {{org_mem}} '' unless given (T-656: LEARNED_ASK only on a host with no debrief; see orgMemSection). */
-export const checkerPrompt = (v: CheckerValues): string => {
-  const all = { ...v, org_mem: v.org_mem ?? '', learned: v.learned ?? '' }
-  return fillPlaceholders(CHECKER_PROMPT, all, all).trimEnd()
+export const checkerPrompt = (v: CheckerValues, task?: SymccTask): string => {
+  const all: Record<string, string> = { ...v, org_mem: v.org_mem ?? '', learned: v.learned ?? '' }
+  return buildPrompt({ kind: 'checker', values: all, ...(task ? { task } : {}) })
 }
 
 /** The history line of a checker's verdict. */

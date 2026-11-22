@@ -1751,10 +1751,25 @@ skills: [code-review]
   you get a note once, for example `symcc: skipped .symcc/roles/x.md: no description`.
 - Every role gets the same safety checks: its own copy of the code, the scope check, the
   tests and (if set) your review.
-- The worker prompts (the fixed text every worker gets: its folder, its files, the tests, how to
-  ask you) are built in (`prompts/change.ts`, `prompts/investigation.ts`) and can't be changed; a
-  role fills the `{{role}}` slot of that fixed prompt, so roles are the one place to shape what a
-  worker does. A role's page in the panel shows the prompt it goes in (See the prompt, `p`).
+- The worker prompts (what every worker gets: its folder, its files, the tests, how to ask you)
+  are built in (the fixed words are in `prompts/change.ts`, `prompts/investigation.ts` and
+  `prompts/checker.ts`) and can't be changed; a role fills the role section of that prompt, so
+  roles are the one place to shape what a worker does. A role's page in the panel shows the
+  prompt it goes in (See the prompt, `p`).
+- A prompt is sections under markdown headings, the task first and the rules last. A change
+  worker gets: the task (`# Task T-3: <title>` with the kind and role under it), **Why, in the owner's words** (the why
+  line and your own request, quoted), **What to do** (the details), **Notes from the lead** (the
+  lead's `Note (lead, <date>)` lines, oldest first; where a note and the text differ, the newest
+  note wins), the role, **Files you may change**, **Where you work** (folder and branch; after
+  earlier tries, that their work is already in the folder, with its commits), **Earlier tries**
+  (a table with one row per try, the last 5: how it ended, the reason, what its worker said it did
+  and, after a checker send-back, the checker's first finding), **Last failure in full** (the
+  failing tests or the checker's report), **Tests**, **Rules**, **Notes from earlier agents**
+  (org-mem) and **When you're done**. A section with nothing to say is left out. An
+  investigation and a checker get the sections that fit them.
+- To add a task fact to a prompt later, add one entry to the section registry
+  (`hooks/core/prompt-sections.ts`: a name, the prompt kinds, a heading and a function from the
+  task and board to its text, or `null` to leave it out) and its place in the order.
 - A checklist may use these placeholders; symcc fills them in for each task when it builds the
   worker's prompt, and for the `checker` role the checker's prompt, from the task it checks (any
   other `{{word}}` is left as written):
@@ -1767,6 +1782,11 @@ skills: [code-review]
   | `{{folder}}`, `{{branch}}` | the worker's own folder and its branch (`symcc/T-3`) |
   | `{{kind}}` | the task's kind and what it is for |
   | `{{name}}` | the plugin's name (`symcc`) |
+  | `{{task.<path>}}` | any field of the task, by its path, e.g. `{{task.origin.request}}` or `{{task.files}}`: text as it is, a list one item per line, an object as `key: value` lines, a missing field as nothing |
+
+  `{{task.<path>}}` also works in the built-in prompts, so a role can pull in a task fact with no
+  code. Placeholders are filled in one pass: text in a task's details that looks like `{{...}}` is
+  never filled. `symcc roles list <name>` and the role's page list the placeholders and the sections.
 
 You can change a task's role yourself: say "use the security role for T-12", or open the task
 in the board panel and press `l` (Role) to pick one. That works on a task to do, paused,
