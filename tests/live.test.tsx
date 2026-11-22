@@ -643,6 +643,11 @@ test('T-767: in VS Code a running lane starts with "▶" in the accent color and
   // T-819: the waiting train's id is its own accent-colored text
   const trainId = await ui.find({ key: 'live-train-id:T-713' })
   expect(trainId?.text).toBe('T-713')
+  const texts = await ui.findAll({ type: 'Text' })
+  const idText = texts.find(t => (t.children ?? []).join('') === 'T-713')
+  const markText = texts.find(t => (t.children ?? []).join('') === '▶ T-712')
+  expect(typeof markText?.props.color).toBe('string')
+  expect([idText?.props.color, idText?.props.bold]).toEqual([markText?.props.color, true])
   await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'tasks') } })
   await ui.unmount()
 })

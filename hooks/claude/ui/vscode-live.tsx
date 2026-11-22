@@ -237,8 +237,8 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
           return (
             <Box key={`live-train-row:${r.id}`} flexDirection="row" gap={1} paddingLeft={2 * r.depth}>
               {line(`live-train-mark:${r.id}`, '└─◇', 'inactive')}
-              {line(`live-train-id:${r.id}`, r.id, LIVE_TONE.run, true)}
-              {vsLink(vs, trainKey(r.id), mdLink(name, href), [[href, open(r.id)]], true)}
+              {name ? line(`live-train-id:${r.id}`, r.id, LIVE_TONE.run, true) : null}
+              {vsLink(vs, trainKey(r.id), mdLink(name || r.id, href), [[href, open(r.id)]], true)}
               {rest ? line(`live-train-note:${r.id}`, rest, 'inactive') : null}
             </Box>
           )
