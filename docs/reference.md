@@ -140,7 +140,7 @@ Type these in the chat. `/symcc` opens everything; `/symcc-<word>` does one thin
 | `/symcc-settings orgmem delete N` | Delete note N from the organizational memory (its number on the Organizational memory page) |
 | `/symcc-doctor [fix [all\|id ...]]` | Check `.symcc/` and git (old backups, merged branches, leftover task folders, files near 4 MB, a stuck board). It only lists them; `fix all` or `fix <id> ...` cleans up |
 | `/symcc-disable` | Disable symcc for this project: Claude works as normal (no lead guide, workers, scouts, updates, sounds or voice); the board is kept |
-| `/symcc-enable` | Turn symcc back on, in the mode the board had |
+| `/symcc-enable` | Turn symcc back on, in the mode the board had. In a new project (no `.symcc/board.json` yet, so symcc is off there) it starts symcc: it creates the board, turns symcc on and opens the panel |
 | `/symcc-disable here` | Turn symcc off in this window only (plain Claude here). It is kept in this session, not in `board.json`; other windows are not changed. If this window drives the board, it hands driving over |
 | `/symcc-enable here` | Turn symcc on again in this window (it becomes a lead again). A window opened while another live window has symcc on starts off here; this opts in. If the whole project is disabled, use `/symcc-enable` |
 | `/symcc-drive` | Make this session drive the board (start workers, merge, run scouts). If another session drives, it hands over within 30 s: its running workers stop and restart here from their kept folders and branches, without using up a try. If it doesn't answer within 3 minutes, this session takes over anyway |
