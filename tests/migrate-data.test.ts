@@ -264,6 +264,23 @@ test('T-821: the same write error with changing files keeps one backup folder an
   expect(leadQueue.filter(t => t.includes("couldn't move")).length).toBe(1)
 })
 
+test('T-821: a reused backup folder that was deleted is made again', async () => {
+  const w = world()
+  S.enabledNow = true
+  const write = w.host.fs.write
+  w.host.fs.write = async (p, text) => {
+    if (p.includes('.runs.json')) throw new Error('EACCES: permission denied')
+    return write(p, text)
+  }
+  await migrateIfOld(w.host)
+  const first = [...backups(w)][0]!
+  for (const f of [...w.files.keys()]) if (f.includes(`/data.before-migrate-${first}/`)) w.files.delete(f)
+  expect(backups(w).size).toBe(0)
+  w.files.set(`${D}/scouts.json`, w.files.get(`${D}/scouts.json`)! + ' ')
+  await migrateIfOld(w.host)
+  expect(backups(w).size).toBe(1)
+})
+
 test('T-804: the same write error naming a random temp file is told once, even when the files change', async () => {
   const w = world()
   S.enabledNow = true

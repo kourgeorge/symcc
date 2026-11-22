@@ -88,7 +88,13 @@ export async function migrateIfOld(host: Host, all = true): Promise<string> {
     // A migration that failed once is not tried again until the data files change (or the owner runs the doctor's fix).
     if (lastFailure && lastFailure.sig === (await filesSignature(host))) return lastFailure.msg
     // after a failure the last backup is kept and reused (the data it holds is the old shape anyway)
-    const r = await migrateData(host, failedBackup?.backup)
+    // (only when the folder is still there: the doctor or the owner may have deleted it)
+    let reuse = failedBackup?.backup
+    if (reuse && (await host.fs.list(path(reuse)).catch(() => [])).length === 0) {
+      failedBackup = null
+      reuse = undefined
+    }
+    const r = await migrateData(host, reuse)
     if (r.failed) why = r.failed
     else {
       failedBackup = null
@@ -242,5 +248,6 @@ export async function migrateData(host: Host, reuseBackup?: string): Promise<{ f
   const after = oldDataRows(await oldInput(host)).filter(r => r.fix)
   if (after.length) return { failed: `still in an old shape: ${oldRowsText(after)} (the backup is in ${backup}/)`, done, backup }
   if (!before.length) done.push('nothing was in an old shape')
+  failedBackup = null // a success: the next failure makes a new backup
   return { failed: '', done, backup }
 }
