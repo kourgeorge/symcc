@@ -251,10 +251,10 @@ export function driveWarning(driving: boolean, tasks: readonly DriveTask[], nowM
  * why it failed (whyFailed), else `note` (the task's note; the bands pass bandNote, which leaves out what the row's
  * state already says). '' when there is nothing to say.
  */
-export function rowEndText(t: Pick<SymccTask, 'note' | 'history'> & Partial<Pick<SymccTask, 'question' | 'test_output' | 'runs'>> & Pick<BoardTask, 'status' | 'merge_wait' | 'merge_into'>, phase: Pick<TaskPhase, 'waitsFor' | 'approved' | 'stage'>, note: string = t.note ?? ''): string {
+export function rowEndText(t: Pick<SymccTask, 'note' | 'history'> & Partial<Pick<SymccTask, 'question' | 'test_output' | 'runs'>> & Partial<Pick<BoardTask, 'question_lead'>> & Pick<BoardTask, 'status' | 'merge_wait' | 'merge_into'>, phase: Pick<TaskPhase, 'waitsFor' | 'approved' | 'stage'>, note: string = t.note ?? ''): string {
   if (phase.waitsFor === 'your-files') return fileWaitText(t)
   if (phase.approved && phase.stage) return APPROVED_NOTE
-  if (phase.waitsFor === 'answer' || phase.waitsFor === 'files') return t.question ?? t.note ?? ''
+  if (phase.waitsFor === 'answer' || phase.waitsFor === 'files') return t.question_lead ?? t.question ?? t.note ?? ''
   if (phase.waitsFor === 'failed') return whyFailed(t)
   return note
 }
@@ -487,7 +487,7 @@ function boardRow(t: SymccTask, autoRetries: number | undefined, nowMs: number, 
   const phase = taskPhase(t, nowMs)
   // in a session that doesn't drive the board a claim note says the worker runs in the other session (sessionNote)
   const end = rowEndText(t, phase, sessionNote(t, driving))
-  const asks = (phase.waitsFor === 'answer' || phase.waitsFor === 'files') && t.question ? 'asks: ' : ''
+  const asks = (phase.waitsFor === 'answer' || phase.waitsFor === 'files') && (t.question_lead || t.question) ? 'asks: ' : ''
   const extra = end ? ` — ${asks}${end}` : t.status === 'review' ? ` — ${STATUS_WORD.review}` : ''
   const after = t.after.length && (t.status === 'todo' || t.status === 'backlog') ? ` (after ${t.after.join(', ')})` : ''
   // the kind and the role, e.g. " [bug · tester]" (a plain change with the general role shows nothing)

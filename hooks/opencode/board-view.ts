@@ -881,11 +881,6 @@ function liveBody(f: ViewFile, cursor: number, nowMs: number, w: number): Body {
     b.add(under(second))
     for (const r of rows.get(l.id)!) r.id ? opens(r.segs, r.id) : b.add(under(r.segs))
   }
-  // T-738: one empty line above each section after the first (Today, Branches, Organizational memory)
-  b.blank()
-  b.add(liveSegs(liveHeading(LIVE_SECTIONS.today, w)))
-  b.blank()
-  for (const t of liveTodayLines(v, nowMs, inner)) b.add(under(t))
   if (lanes.length) for (const x of liveLegend(lanes, inner)) b.add([{ text: LIVE_INDENT + x, color: 'inactive' }])
   if (br) {
     b.blank()
@@ -894,6 +889,11 @@ function liveBody(f: ViewFile, cursor: number, nowMs: number, w: number): Body {
     b.add(under(br.main))
     for (const r of br.rows) r.id ? opens(r.segs, liveBranchId(r.id)) : b.add(under(r.segs))
   }
+  // T-738: one empty line above each section after the first (Today, Branches, Organizational memory)
+  b.blank()
+  b.add(liveSegs(liveHeading(LIVE_SECTIONS.today, w)))
+  b.blank()
+  for (const t of liveTodayLines(v, nowMs, inner)) b.add(under(t))
   // T-718: the Organizational memory section, just above the footer (a click on its header opens all notes)
   b.blank()
   b.add(liveSegs(om.head, { key: ORG_MEM_KEY }), { key: ORG_MEM_KEY })

@@ -144,6 +144,8 @@ main.home h3 { font-size: 1.1rem; }
 .t-current { color: var(--t-cur); font-weight: 700; }
 .t-future, .t-dim { color: var(--t-off); }
 .t-bar { color: var(--t-cur); }
+.t-now { color: var(--t-id); }
+.t-topic { color: var(--t-cur); }
 .t-warning { color: var(--t-warn); }
 .t-heading { color: var(--t-head); font-weight: 700; }
 .t-mark { color: var(--t-head); }

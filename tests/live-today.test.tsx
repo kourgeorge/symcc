@@ -31,8 +31,8 @@ test('T-769: todayMore: the medians per merged task, the agent work time, who sp
   expect(m.usd).toBe(12.4)
   // the workers' part is the tries' tokens without the checkers'
   expect(m.who).toEqual([{ who: 'workers', tokens: 5_700_000 }, { who: 'checkers', tokens: 300_000 }, { who: 'scouts', tokens: 3_000_000 }, { who: 'lead', tokens: 1_000_000 }])
-  // each try's tokens at its end hour, plus the lead's and scouts' hours: 08 to now (12)
-  expect([m.firstHour, m.hours]).toEqual([8, [2_000_000, 0, 1_000_000, 4_000_000, 0]])
+  // each try's tokens at its end hour, plus the lead's and scouts' hours: 00 to now (12)
+  expect(m.hours).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 2_000_000, 0, 1_000_000, 4_000_000, 0])
   // figures of another day are not shown; no team: no cost, no lead or scouts (no guessing)
   const old = todayMore(TASKS as never[], { ...TEAM, day: '2001-01-01' }, T0, 0)
   expect([old.usd, old.who.map(w => w.who)]).toEqual([undefined, ['workers', 'checkers']])
@@ -45,21 +45,23 @@ test('T-769: ▍Today in 4 lines at a wide panel: the figures, the per-task medi
     '✓ 3 merged   ↺ 0 sent back   ✗ 0 failed   Σ 10M tokens',
     '████████▓▒▒▒▒▒░░ workers 57% · checkers 3% · scouts 30% · lead 10%',
     '⌀ per task 2M · 10m work · 30m start-to-merge   first try 67% · ⌀ 1.3 tries',
-    '⏱ 1h 15m agent work · ≈ $12 this session   busiest hour 11:00 · 4M   08 ▄ ▂█  12',
+    '⏱ 1h 15m agent work · ≈ $12 this session   busiest hour 11:00 · 4M   00         ▄ ▂█ ··········· 24',
   ])
   // T-809: the bar is not directly above the sparkline; the sparkline and its labels end line 4
   expect(/[▁▂▃▄▅▆▇]/.test(texts(lines)[1]!)).toBe(false)
   expect(/[▁▂▃▄▅▆▇]/.test(texts(lines)[2]!)).toBe(false)
-  expect(/ 08 [▁▂▃▄▅▆▇█ ]+ 12$/.test(texts(lines)[3]!)).toBe(true)
+  expect(/ 00 [▁▂▃▄▅▆▇█ ]+·{11} 24$/.test(texts(lines)[3]!)).toBe(true)
   // the bar's parts and the shares in their board colors
   const bar = lines[1]!.filter(s => /^[█▓▒░]+$/.test(s.text))
   expect(bar.map(s => [s.text[0], LIVE_TONE[s.tone]])).toEqual([['█', 'ide'], ['▓', 'autoAccept'], ['▒', 'suggestion'], ['░', 'success']])
   expect(lines[1]!.find(s => s.text === 'checkers 3%')?.tone).toBe('checkers')
   // the hour labels dim
-  expect(lines[3]!.filter(s => s.text.trim() === '08' || s.text.trim() === '12').map(s => s.tone)).toEqual(['dim', 'dim'])
+  expect(lines[3]!.filter(s => s.text.trim() === '00' || s.text.trim() === '24').map(s => s.tone)).toEqual(['dim', 'dim'])
+  // T-817: the current hour's bar (12, blank here: no tokens yet) is in the accent tone, the hours to come are dim dots
+  expect(lines[3]!.filter(s => s.tone === 'now' || /^·+$/.test(s.text)).map(s => [s.text, s.tone])).toEqual([[' ', 'now'], ['···········', 'dim']])
   // no cost known: none shown
   const free = liveTodayLines({ tasks: TASKS as never[], today_team: { ...TEAM, usd: undefined } }, T0, 140, 0)
-  expect(segText(free[3]!)).toBe('⏱ 1h 15m agent work   busiest hour 11:00 · 4M   08 ▄ ▂█  12')
+  expect(segText(free[3]!)).toBe('⏱ 1h 15m agent work   busiest hour 11:00 · 4M   00         ▄ ▂█ ··········· 24')
   // a part with few tokens still gets a cell
   expect(segText(todayBar([{ who: 'workers', tokens: 999 }, { who: 'lead', tokens: 1 }]))).toBe(`${'█'.repeat(15)}░`)
 })
@@ -71,22 +73,35 @@ test('T-809: on a narrower panel line 4 drops busiest, then the cost, then squee
     for (const l of [two, three, four]) expect([w, segText(l), textWidth(segText(l)) <= w]).toEqual([w, segText(l), true])
     const s4 = segText(four)
     // both hour labels and a sparkline end the line
-    expect([w, s4, /08 [▁▂▃▄▅▆▇█ ]+ 12$/.test(s4)]).toEqual([w, s4, true])
+    expect([w, s4, /00 [▁▂▃▄▅▆▇█ ]+·* 24$/.test(s4)]).toEqual([w, s4, true])
     expect([w, /[▁▂▃▄▅▆▇]/.test(segText(two)) || /[▁▂▃▄▅▆▇]/.test(segText(three))]).toEqual([w, false])
     expect([w, /^[█▓▒░]+/.test(segText(two))]).toEqual([w, true])
     // busiest goes before the cost
     expect([w, s4.includes('busiest') && !s4.includes('≈ $')]).toEqual([w, false])
   }
   const t = (w: number) => segText(todayMoreLines(m, w)[2]!)
-  expect(t(100)).toBe('⏱ 1h 15m agent work · ≈ $12 this session   busiest hour 11:00 · 4M   08 ▄ ▂█  12')
-  expect(t(60)).toBe('⏱ 1h 15m agent work · ≈ $12 this session   08 ▄ ▂█  12')
-  expect(t(40)).toBe('⏱ 1h 15m agent work   08 ▄ ▂█  12')
+  expect(t(100)).toBe('⏱ 1h 15m agent work · ≈ $12 this session   busiest hour 11:00 · 4M   00         ▄ ▂█ ··········· 24')
+  expect(t(60)).toBe('⏱ 1h 15m agent work   00         ▄ ▂█ ··········· 24')
+  expect(t(40)).toBe('⏱ 1h 15m agent work   00     ▄█ ····· 24')
   expect(segText(todayMoreLines(m, 40)[1]!)).toBe('⌀ per task 2M · 10m work')
-  // a long day is squeezed: neighbouring hours merged
-  expect(squeezeHours([1, 2, 3, 4, 5, 6], 3)).toEqual([3, 7, 11])
-  expect(squeezeHours([1, 2], 5)).toEqual([1, 2])
-  const long = { ...m, hours: Array.from({ length: 20 }, (_, i) => i + 1), firstHour: 0 }
-  expect(segText(todayMoreLines({ ...long, workMs: 0, usd: undefined }, 14)[2]!)).toBe('00 ▁▃▄▆▇█▇ 19')
+  // a squeezed day: neighbouring hours merged, `per` hours to a cell (the last cell of the past is the current hour)
+  expect(squeezeHours([1, 2, 3, 4, 5, 6], 3)).toEqual([6, 15])
+  expect(squeezeHours([1, 2], 5)).toEqual([3])
+  // at 07:30 and 23:30 the sparkline spans 00 to 24 whatever the width: dots after the current hour, none at 23
+  for (const [h, now] of [[7, todayAt(7, 30)], [23, todayAt(23, 30)]] as const) {
+    const day = todayMore(todayTasks(now) as never[], undefined, now, localOffset(now))
+    expect(day.hours.length).toBe(h + 1)
+    for (const w of [140, 60, 40, 30, 20, 10]) {
+      const four = todayMoreLines({ ...day, workMs: 0, usd: undefined }, w).at(-1)!
+      const text = segText(four)
+      expect([w, textWidth(text) <= w, /(^| )00 .+ 24$/.test(text)]).toEqual([w, true, true])
+      expect([w, four.filter(x => x.tone === 'now').length]).toEqual([w, 1])
+      // dim dots for the hours to come: none at 23:30
+      expect([w, four.some(x => x.tone === 'dim' && /^·+$/.test(x.text))]).toEqual([w, h === 7])
+    }
+    // wide: one cell an hour, 24 cells
+    expect(segText(todayMoreLines({ ...day, workMs: 0, usd: undefined }, 140).at(-1)!).split('00 ').pop()!.length).toBe(24 + 3)
+  }
   // all of ▍Today fits a tiny panel too
   for (const w of [30, 12, 4]) for (const l of liveTodayLines({ tasks: TASKS as never[], today_team: TEAM }, T0, w, 0)) expect([w, textWidth(segText(l)) <= w]).toEqual([w, true])
 })
@@ -118,7 +133,7 @@ test('T-769: line 3 keeps the parts that fit its own width, whatever line 2 had 
     expect([w, three.includes('workers 84% · checkers 8% · scouts 5% · lead 3%'), textWidth(three) <= w]).toEqual([w, true, true])
   }
   const solo = { ...example, who: [{ who: 'workers' as const, tokens: 10 }], hours: [10] }
-  expect(todayMoreLines(solo, 40).map(segText)).toEqual(['████████████████ workers 100%', '⌀ per task 2.8M · 9m work', '⏱ 13h 06m agent work   08 █ 08'])
+  expect(todayMoreLines(solo, 40).map(segText)).toEqual(['████████████████ workers 100%', '⌀ per task 2.8M · 9m work', '⏱ 13h 06m agent work   00 █······· 24'])
 })
 
 // T-792: the host for readTodayTeam at `now`: a scout run and a lead answer inside today (placed between local midnight
@@ -215,12 +230,12 @@ test('T-769: the terminal and VS Code Live tabs show ▍Today\'s 4 lines, and a 
       expect(today[2]).toBe(`${LIVE_INDENT}${TODAY_LINE_3}`)
       // (the hours depend on the machine's time zone: only the sparkline's end is compared)
       expect(today[3]!.startsWith(`${LIVE_INDENT}⏱ 1h 15m agent work · ≈ $12 this session   busiest hour `)).toBe(true)
-      expect(/ \d\d [▁▂▃▄▅▆▇█ ]+ \d\d$/.test(today[3]!)).toBe(true)
+      expect(/ 00 [▁▂▃▄▅▆▇█ ]+·* 24$/.test(today[3]!)).toBe(true)
     } else {
       // narrow: no cost, the bar kept, the sparkline with its labels still ends line 4
       expect(all.some(l => l.includes('≈ $'))).toBe(false)
       expect(all.some(l => l.startsWith(`${LIVE_INDENT}████████▓▒▒▒▒▒░░`))).toBe(true)
-      expect(/ \d\d [▁▂▃▄▅▆▇█ ]+ \d\d$/.test(today[3] ?? '')).toBe(true)
+      expect(/ 00 [▁▂▃▄▅▆▇█ ]+·* 24$/.test(today[3] ?? '')).toBe(true)
       expect(today[3]?.includes('busiest')).toBe(false)
     }
     await t.press({ key: 'tab-tasks' })
@@ -231,7 +246,7 @@ test('T-769: the terminal and VS Code Live tabs show ▍Today\'s 4 lines, and a 
   expect((await ui.find({ key: 'live-today-0' }))?.text).toBe('✓ 3 merged   ↺ 0 sent back   ✗ 0 failed   Σ 10M tokens')
   expect((await ui.find({ key: 'live-today-1' }))?.text).toBe('████████▓▒▒▒▒▒░░ workers 57% · checkers 3% · scouts 30% · lead 10%')
   expect((await ui.find({ key: 'live-today-2' }))?.text).toBe(TODAY_LINE_3)
-  expect(/^⏱ 1h 15m agent work · ≈ \$12 this session   busiest hour \d\d:00 · \S+   \d\d [▁▂▃▄▅▆▇█ ]+ \d\d$/.test((await ui.find({ key: 'live-today-3' }))?.text ?? '')).toBe(true)
+  expect(/^⏱ 1h 15m agent work · ≈ \$12 this session   busiest hour \d\d:00 · \S+   00 [▁▂▃▄▅▆▇█ ]+·* 24$/.test((await ui.find({ key: 'live-today-3' }))?.text ?? '')).toBe(true)
   await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'tasks') } })
   await ui.unmount()
 })

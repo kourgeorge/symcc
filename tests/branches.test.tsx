@@ -183,9 +183,9 @@ test('T-727: the VS Code Live tab draws the Branches section with real lines, an
 })
 
 // T-738, T-747, T-789: each section of the Live tab starts with a bold UPPERCASE heading, no "▍" (Tasks right under the mode line, then
-// Today, Branches, Organizational memory; T-750 put Today above Branches), with one empty line just above it, none above the first, never two, and one under it; no
+// Branches, Today, Organizational memory; T-820: Branches, then Today), with one empty line just above it, none above the first, never two, and one under it; no
 // "── Name ──" rules and no full-width rule between the sections (only the footer's, under the last one).
-const LIVE_HEADS = ['TODAY', 'BRANCHES', 'ORGANIZATIONAL MEMORY'].map(h => (l: string) => l.startsWith(h))
+const LIVE_HEADS = ['BRANCHES', 'TODAY', 'ORGANIZATIONAL MEMORY'].map(h => (l: string) => l.startsWith(h))
 for (const surface of ['terminal', 'desktop', 'mobile'] as const)
   test(`T-738, T-747: the ${surface} Live tab has an UPPERCASE heading for each section, one empty line above and under each, none above the first`, async ($, on) => {
     const all = liveView()
@@ -202,7 +202,7 @@ for (const surface of ['terminal', 'desktop', 'mobile'] as const)
     expect(live[1]).toMatch(/^TASKS ─+$/)
     expect(live.some(l => l.includes('▍'))).toBe(false)
     const heads = live.filter(l => LIVE_HEADS.some(h => h(l)) || l.startsWith('TASKS '))
-    expect(heads.slice(0, 3).map(h => h.split(' ')[0])).toEqual(['TASKS', 'TODAY', 'BRANCHES'])
+    expect(heads.slice(0, 3).map(h => h.split(' ')[0])).toEqual(['TASKS', 'BRANCHES', 'TODAY'])
     // T-810: every heading ends in a thin rule to the page width (80); the org-mem one has the count and no bar
     for (const h of heads) expect([h, textWidth(h)]).toEqual([h, 80])
     expect(heads[3]).not.toContain('▕')
@@ -243,6 +243,11 @@ test('T-738: the VS Code Live tab spaces its sections with one empty line (the p
   // T-747: each section's heading, the terminal's names
   expect((await ui.find({ key: 'live-tasks-head' }))?.text).toMatch(/^TASKS─+$/)
   expect((await ui.find({ key: 'live-today-head' }))?.text).toMatch(/^TODAY─+$/)
+  // T-820: the rule has the title's color, not the dim one
+  for (const k of ['live-tasks-head', 'live-today-head']) {
+    const [title, rule] = (await ui.find({ key: k }))!.children as { props: { color: unknown } }[]
+    expect([k, rule!.props.color]).toEqual([k, title!.props.color])
+  }
   // T-789: one empty line under each heading (padding under it), not a blank Text
   for (const k of ['live-tasks-head', 'live-today-head', 'live-br-head', 'live-om-head']) expect([k, (await ui.find({ key: k }))?.props.paddingBottom]).toEqual([k, 1])
   // no blank Text lines of its own (the gap is the one empty line), and no padding on top of the gap

@@ -524,3 +524,21 @@ test('T-772: VS Code draws the org-mem meter at 30 / 60 and 60 / 60 in the same 
     await ui.unmount()
   }
 })
+
+test('T-819: the org-mem topic labels (the newest rows, and the topic grid on the terminal) are in the info blue "ide", not green or the accent; "unsorted" stays dim', async ($, on) => {
+  stateOf(on, VIEW)
+  fakeOrgMem(on, '- 2026-11-18 [tests] run one test file with scripts/test-files.sh\n- 2026-11-20 [git] the guard refuses a repo in the folder\n- a note by hand\n')
+  await $.session.start({ cwd: '/proj' } as never)
+  const textColors = async (ui: { findAll: (q: { type: string }) => Promise<{ props: Record<string, unknown>; children?: unknown[] }[]> }, word: string) =>
+    (await ui.findAll({ type: 'Text' })).filter(t => (t.children ?? []).join('').trim() === word).map(t => t.props.color)
+  const term = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  // the newest row and the grid cell of each topic
+  expect(await textColors(term, 'git')).toEqual(['ide', 'ide'])
+  expect(await textColors(term, 'tests')).toEqual(['ide', 'ide'])
+  expect(await textColors(term, 'unsorted')).toEqual(['inactive', 'inactive'])
+  await term.unmount()
+  const vs = await $.ui.mount({ ...PANE, surface: 'vscode' })
+  expect(await textColors(vs, 'git')).toEqual(['ide'])
+  expect(await textColors(vs, 'tests')).toEqual(['ide'])
+  await vs.unmount()
+})

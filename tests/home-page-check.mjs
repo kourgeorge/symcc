@@ -41,7 +41,7 @@ if (!board.includes('✧ = an agent works here (needs an agent slot)')) bad('sti
 if (!view('board').includes('<span class="t-mark">✧</span>')) bad('still frame: the ✧ marks are not drawn in the accent color')
 if (!text(view('live')).includes('ORGANIZATIONAL MEMORY')) bad('still frame: the Live tab has no ▍Organizational memory')
 // (T-810) each Live tab heading is followed by a thin rule; the org-mem heading has the count and no bar
-for (const h of ['TASKS', 'TODAY', 'BRANCHES', 'ORGANIZATIONAL MEMORY'])
+for (const h of ['TASKS', 'BRANCHES', 'TODAY', 'ORGANIZATIONAL MEMORY'])
   if (!new RegExp(`^${h}( +60 / 60)? ─+$`, 'm').test(text(view('live')))) bad(`still frame: the Live tab's ${h} heading has no thin rule after it`)
 if (/ORGANIZATIONAL MEMORY.*▕/.test(text(view('live')))) bad('still frame: the org-mem heading still has a bar')
 const chat = text(view('chat'))
@@ -63,7 +63,7 @@ for (const [name, t] of [['board', board], ['Live tab', live]]) {
   if (/next up {2}|today {4}/.test(t)) bad(`still frame: the ${name} still shows a "next up" or "today" label in ▍Today`)
 }
 // (T-754) the Live tab's sections come in the real order: ▍Tasks, ▍Today, ▍Branches, ▍Organizational memory
-const order = ['TASKS', 'TODAY', 'BRANCHES', 'ORGANIZATIONAL MEMORY']
+const order = ['TASKS', 'BRANCHES', 'TODAY', 'ORGANIZATIONAL MEMORY']
 // (T-789) the section headings are plain UPPERCASE words: no ▍ bar on the Live tab, and an empty line under each
 if (live.includes('▍') || board.includes('▍')) bad('still frame: the Live tab or the board still has a ▍ heading')
 for (const h of order) for (const [name, t] of [['board', board], ['Live tab', live]]) {
@@ -102,7 +102,7 @@ for (const [name, t] of [['board', board], ['Live tab', live]]) {
   const after = t.slice(t.indexOf('\n', t.indexOf('TODAY'))).split('\n').filter(l => l.trim())
   if (!/^ [█▒]{16} workers and checkers 90% · scouts 10% \(54\.7M of 530\.1M tokens\)$/.test(after[1] ?? '')) bad(`still frame: the ${name}'s ▍Today line 2 is not the bar alone with the scouts' share ("${after[1] ?? ''}")`)
   if (after[2] !== ' ⌀ per task 3M · 9m work · 41m start-to-merge   first try 34% · ⌀ 2.4 tries   ⌕ 47 sent back by the checker' && !/^ ⌀ per task 3M · 9m work · 41m start-to-merge   first try 34% · ⌀ 2\.4 tries   ⌕ \d+ sent back by the checker$/.test(after[2] ?? '')) bad(`still frame: the ${name}'s ▍Today line 3 does not show the real medians, first try and tries ("${after[2] ?? ''}")`)
-  if (!/^ ⏱ 16h 56m agent work {3}08 [▁▂▃▄▅▆▇█]+ \d\d$/.test(after[3] ?? '')) bad(`still frame: the ${name}'s ▍Today line 4 is not the agent work time then the hour sparkline with its labels at the end ("${after[3] ?? ''}")`)
+  if (!/^ ⏱ 16h 56m agent work {3}00 {9}[▁▂▃▄▅▆▇█]+·{7} 24$/.test(after[3] ?? '')) bad(`still frame: the ${name}'s ▍Today line 4 is not the agent work time then the hour sparkline with its labels at the end ("${after[3] ?? ''}")`)
 }
 if (/≈ \$/.test(live + board)) bad('still frame: ▍Today shows a "≈ $" figure')
 for (const w of ['workers', 'scouts']) {

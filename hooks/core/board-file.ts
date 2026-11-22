@@ -407,8 +407,9 @@ function cleanTask(t: unknown, fixed: string[] = []): BoardTask | null {
   if (!isNum(x.attempts)) x.attempts = 0
   if (x.question !== null && typeof x.question !== 'string') x.question = null
   if (x.branch !== null && typeof x.branch !== 'string') x.branch = null
+  if ('question_lead' in x && !(typeof x.question_lead === 'string' && x.question_lead.trim())) delete x.question_lead
   if ('merge_into' in x && !(typeof x.merge_into === 'string' && x.merge_into.trim())) delete x.merge_into
-  for (const k of ['asked_files', 'options']) if (k in x && !strings(x[k])) delete x[k]
+  for (const k of ['asked_files', 'options', 'options_lead']) if (k in x && !strings(x[k])) delete x[k]
   if ('kind' in x) {
     if (kindOf(x) === DEFAULT_KIND) delete x.kind
     else x.kind = kindOf(x)
