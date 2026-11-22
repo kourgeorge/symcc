@@ -603,25 +603,25 @@ export function parseScoutRuns(text: string | null | undefined): ScoutRunRecord[
     if (Array.isArray(e.tasks)) r.tasks = [...new Set(e.tasks.filter((x): x is string => typeof x === 'string' && /^[\w-]{1,40}$/.test(x)))]
     out.push(r)
   }
-  return out.slice(-SCOUT_RUNS_KEPT)
+  return trimScoutRuns(out, SCOUT_RUNS_KEPT).runs
 }
 
 /** The text of a scout's runs file. */
 export const scoutRunsText = (runs: ScoutRunRecord[]): string => JSON.stringify({ runs }, null, 2) + '\n'
 
-/** `runs` with `run` added at the end, only the last `keep` kept; `dropped` are the ones that fell out (their report files go too). */
-export function addScoutRunRecord(runs: ScoutRunRecord[], run: ScoutRunRecord, keep = SCOUT_RUNS_KEPT): { runs: ScoutRunRecord[]; dropped: ScoutRunRecord[] } {
-  const all = [...runs, run]
+/** `all` cut to the newest `keep`, plus the newest run that reported (found or nothing) when it is older: that one is the scout's "last run". `dropped` fell out. Used when adding and when reading. */
+export function trimScoutRuns(all: ScoutRunRecord[], keep = SCOUT_RUNS_KEPT): { runs: ScoutRunRecord[]; dropped: ScoutRunRecord[] } {
   const max = Math.max(1, keep)
   if (all.length <= max) return { runs: all, dropped: [] }
-  // The newest run that reported (found or nothing) is the scout's "last run": it stays even when older than the newest `keep`.
   let pin = -1
   for (let i = all.length - 1; i >= 0; i--) if (all[i]!.outcome === 'found' || all[i]!.outcome === 'nothing') { pin = i; break }
   const recent = all.length - max
   if (pin < 0 || pin >= recent) return { runs: all.slice(recent), dropped: all.slice(0, recent) }
-  const kept = [all[pin]!, ...all.slice(all.length - max)]
-  return { runs: kept, dropped: all.slice(0, recent).filter((_, i) => i !== pin) }
+  return { runs: [all[pin]!, ...all.slice(recent)], dropped: all.slice(0, recent).filter((_, i) => i !== pin) }
 }
+
+/** `runs` with `run` added at the end, trimmed as trimScoutRuns does; `dropped` are the ones that fell out (their report files go too). */
+export const addScoutRunRecord = (runs: ScoutRunRecord[], run: ScoutRunRecord, keep = SCOUT_RUNS_KEPT) => trimScoutRuns([...runs, run], keep)
 
 const reported = (r: ScoutRunRecord) => r.outcome === 'found' || r.outcome === 'nothing'
 const byNumber = (ids: string[]) => {
