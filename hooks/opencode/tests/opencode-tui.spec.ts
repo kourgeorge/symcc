@@ -2811,6 +2811,11 @@ test('T-769: the Live tab\'s ▍Today has 4 lines (medians per task, work time, 
   const four = narrow.texts.find(t => / ⌀(?:\/h)? 00 ▕[▁▂▃▄▅▆▇█]+·*▏ 24$/.test(t))
   expect(four === undefined).toBe(false)
   expect(four!.includes('busiest')).toBe(false)
+  // T-864: at the owner's 60-80 columns the busiest hour goes first; the ⌀ label stays with the bordered sparkline
+  for (const w of [80, 70, 60]) {
+    const l4 = today(w).texts.find(t => / 00 ▕[▁▂▃▄▅▆▇█]+·*▏ 24$/.test(t)) ?? ''
+    expect([w, l4, / ⌀(?:\/h)? 00 ▕/.test(l4), l4.includes('busiest')]).toEqual([w, l4, true, false])
+  }
 })
 
 test('T-692: the Live tab draws the terminal panel\'s lanes and today (core/live.ts) for the same board, from the slim view file; a narrow panel cuts nothing', () => {

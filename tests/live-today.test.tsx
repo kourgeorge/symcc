@@ -227,7 +227,7 @@ const localTeam = (): TodayTeam => ({ ...TEAM, day: dayOf(T0, localOffset(T0)), 
 test('T-769: the terminal and VS Code Live tabs show ▍Today\'s 4 lines, and a narrow terminal panel drops parts without going past its width', async ($, on) => {
   seedBoard(on, { view: liveView(TASKS, localTeam()) })
   on('ui.toast', () => ({ value: undefined }))
-  for (const bodyColumns of [140, 50]) {
+  for (const bodyColumns of [140, 80, 70, 60, 50]) {
     const t = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'terminal' })
     await t.press({ key: 'tab-live' })
     const all = pageLines(await t.drawn())
@@ -243,11 +243,12 @@ test('T-769: the terminal and VS Code Live tabs show ▍Today\'s 4 lines, and a 
       expect(today[3]!.startsWith(`${LIVE_INDENT}⏱ 1h 15m agent work · ≈ $12 this session   busiest hour `)).toBe(true)
       expect(/ ⌀(?:\/h)? 00 ▕[▁▂▃▄▅▆▇█]+·*▏ 24$/.test(today[3]!)).toBe(true)
     } else {
-      // narrow: no cost, the bar kept, the sparkline with its labels still ends line 4
-      expect(all.some(l => l.includes('≈ $'))).toBe(false)
+      // narrow (T-864: the owner's 60-80 columns too): the busiest hour goes first, then the cost; the bar kept,
+      // and the sparkline always keeps its ⌀ label and borders at the end of line 4
+      if (bodyColumns <= 60) expect(all.some(l => l.includes('≈ $'))).toBe(false)
       expect(all.some(l => l.startsWith(`${LIVE_INDENT}⌀ ░░████████▓▒▒▒▒▒`))).toBe(true)
-      expect(/ ⌀(?:\/h)? 00 ▕[▁▂▃▄▅▆▇█]+·*▏ 24$/.test(today[3] ?? '')).toBe(true)
-      expect(today[3]?.includes('busiest')).toBe(false)
+      expect([bodyColumns, today[3], / ⌀(?:\/h)? 00 ▕[▁▂▃▄▅▆▇█]+·*▏ 24$/.test(today[3] ?? '')]).toEqual([bodyColumns, today[3], true])
+      expect([bodyColumns, today[3]?.includes('busiest')]).toEqual([bodyColumns, false])
     }
     // T-855: no lane, so no key line: the dim note ends ▍Today
     expect(all[at + 6]).toBe(`${LIVE_INDENT}⌀ = tokens`)
@@ -264,6 +265,15 @@ test('T-769: the terminal and VS Code Live tabs show ▍Today\'s 4 lines, and a 
   expect((await ui.find({ key: 'live-today-4' }))?.text).toBe('⌀ = tokens')
   await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'tasks') } })
   await ui.unmount()
+  // T-864: a narrow VS Code panel drops the busiest hour and cost first; the ⌀ label stays with the bordered sparkline
+  for (const bodyColumns of [80, 70, 60]) {
+    const v = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'vscode' })
+    await v.press({ key: 'tabs', link: { href: vsHref('tab', 'live') } })
+    const four = (await v.find({ key: 'live-today-3' }))?.text ?? ''
+    expect([bodyColumns, four, / ⌀(?:\/h)? 00 ▕[▁▂▃▄▅▆▇█]+·*▏ 24$/.test(four), four.includes('busiest')]).toEqual([bodyColumns, four, true, false])
+    await v.press({ key: 'tabs', link: { href: vsHref('tab', 'tasks') } })
+    await v.unmount()
+  }
 })
 
 test('T-799: Σ is everyone\'s tokens (never below the busiest hour); without the lead and scouts it is the tries only, marked dim', () => {
