@@ -22,24 +22,31 @@ function cutTexts(x: unknown): unknown {
   return x
 }
 
+/** How far slimView had to go: 0 slimmed old finished tasks, 1 slimmed all finished, 2 left out archive totals, 3 left out tasks, 4 cut texts. */
+export type SlimStep = 0 | 1 | 2 | 3 | 4
+/** The warning text when trimming went past slimming finished tasks (step 2 or more), else ''. */
+export const trimNote = (step: SlimStep, left: number) =>
+  step < 2 ? '' : `the board view was trimmed to fit the 4 MB limit: ${left} old task${left === 1 ? '' : 's'} left out of the panel`
+
 /**
  * The view as the panel keeps it, under Claude Code's 4 MB limit on one value. Steps, each only when the view is
  * still over VIEW_TARGET_CHARS: slim done or dropped tasks changed more than VIEW_WHOLE_MS ago (viewTask: no history,
- * details or long parts; their pages then show them empty); slim every finished task; leave out the archive copies;
- * drop the oldest finished tasks; and only last cut long texts (open tasks stay whole as long as possible). Never
- * throws, never gives back a view over the limit unless open tasks alone are that big.
+ * details or long parts; their pages then show them empty); slim every finished task; leave out the archive totals;
+ * drop the oldest finished tasks (their done ids go into archived_done, so waiting tasks still see them done); and
+ * only last cut long texts (open tasks stay whole as long as possible). Never throws, never gives back a view over
+ * the limit unless open tasks alone are that big. `step` says how far it went, `left` how many tasks it left out.
  */
-export function slimView(v: SymccView, nowMs = Date.now()): SymccView {
+export function slimViewStep(v: SymccView, nowMs = Date.now()): { view: SymccView; step: SlimStep; left: number } {
   const finished = (t: SymccView['tasks'][number]) => t.status === 'done' || t.status === 'dropped'
   const slim = (old: (t: SymccView['tasks'][number]) => boolean) => ({ ...v, tasks: (v.tasks ?? []).map(t => (finished(t) && old(t) ? viewStubFilled(viewTask(t)) : t)) })
   const ok = (x: SymccView) => size(x) <= VIEW_TARGET_CHARS
   let cur = slim(t => nowMs - Date.parse(t.updated_at ?? '') > VIEW_WHOLE_MS || !t.updated_at)
-  if (ok(cur)) return cur
+  if (ok(cur)) return { view: cur, step: 0, left: 0 }
   cur = slim(() => true)
-  if (ok(cur)) return cur
-  const { archived: _a, archived_done: _d, ...rest } = cur as SymccView & { archived?: unknown; archived_done?: unknown }
+  if (ok(cur)) return { view: cur, step: 1, left: 0 }
+  const { archived: _a, ...rest } = cur as SymccView & { archived?: unknown }
   cur = rest as SymccView
-  if (ok(cur)) return cur
+  if (ok(cur)) return { view: cur, step: 2, left: 0 }
   // oldest finished tasks first
   const order = cur.tasks
     .map((t, i) => ({ t, i }))
@@ -49,9 +56,14 @@ export function slimView(v: SymccView, nowMs = Date.now()): SymccView {
   let total = size(cur)
   for (const { t, i } of order) {
     if (total <= VIEW_TARGET_CHARS) break
-    total -= size(t) + 1
+    total -= size(t) + 1 - (t.status === 'done' ? size(t.id) + 1 : 0)
     gone.add(i)
   }
-  cur = { ...cur, tasks: cur.tasks.filter((_t, i) => !gone.has(i)) }
-  return ok(cur) ? cur : (cutTexts(cur) as SymccView)
+  const doneIds = cur.tasks.filter((t, i) => gone.has(i) && t.status === 'done').map(t => t.id)
+  const kept = [...new Set([...((cur as { archived_done?: string[] }).archived_done ?? []), ...doneIds])]
+  cur = { ...cur, tasks: cur.tasks.filter((_t, i) => !gone.has(i)), ...(kept.length ? { archived_done: kept } : {}) } as SymccView
+  return ok(cur) ? { view: cur, step: 3, left: gone.size } : { view: cutTexts(cur) as SymccView, step: 4, left: gone.size }
 }
+
+/** The view as the panel keeps it (see slimViewStep). */
+export const slimView = (v: SymccView, nowMs = Date.now()): SymccView => slimViewStep(v, nowMs).view

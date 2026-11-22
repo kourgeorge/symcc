@@ -4,6 +4,7 @@
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { slimView, VIEW_MAX_CHARS, VIEW_WHOLE_MS } from '../hooks/claude/panel'
+import { depDone } from '../hooks/core/archive'
 import type { SymccView } from '../types'
 import { addTask, emptyBoard } from '../hooks/board'
 import { change } from '../hooks/app/store'
@@ -84,7 +85,7 @@ function refusingWorld() {
   return { ...w, host: { ...w.host, ui: { ...w.host.ui, panel } }, stored: () => stored }
 }
 
-test('publish of a board with many long recent finished tasks stores a view under 4 MB and warns about nothing', async () => {
+test('publish of a board with many long recent finished tasks stores a view under 4 MB and stays silent when only finished tasks were slimmed', async () => {
   const w = refusingWorld()
   const b = emptyBoard()
   const base = addTask(emptyBoard(), { origin: { why: 't' }, title: 'base' }, at(0))[0].tasks[0]!
@@ -122,4 +123,28 @@ test('the view size is counted in characters, not bytes', async () => {
   await publish(w.host, b)
   expect(w.stored().length).toBeLessThan(VIEW_MAX_CHARS)
   expect([...sizeNotes.values()].some(n => n.includes('over the 4 MB'))).toBe(false)
+})
+
+/** A view of `n` old done tasks (T-0 the oldest) plus a todo task waiting on T-0 and on archived T-OLD. */
+function bigView(n: number) {
+  const done = Array.from({ length: n }, (_, i) => ({ ...task(`T-${i}`, 'done', VIEW_WHOLE_MS * 2 + (n - i) * 1000), title: long.repeat(2) }))
+  const waiting = { ...task('T-5000', 'todo', 60_000), after: ['T-0', 'T-9999'] }
+  return { ...viewOf([...done, waiting]), archived_done: ['T-9999'] } as unknown as SymccView
+}
+
+test('tasks left out of the view still count as done for tasks waiting on them', () => {
+  const out = slimView(bigView(4000), now) as unknown as { tasks: { id: string }[]; archived_done?: string[] }
+  expect(out.tasks.some(t => t.id === 'T-0')).toBe(false)
+  expect(depDone({ tasks: out.tasks as never, archived_done: out.archived_done }, 'T-0')).toBe(true)
+  expect(depDone({ tasks: out.tasks as never, archived_done: out.archived_done }, 'T-9999')).toBe(true)
+})
+
+test('publish warns when tasks were left out of the view', async () => {
+  const w = refusingWorld()
+  const b = emptyBoard()
+  const base = addTask(emptyBoard(), { origin: { why: 't' }, title: 'base' }, at(0))[0].tasks[0]!
+  for (let i = 1; i <= 4000; i++) b.tasks.push({ ...base, id: `T-${i}`, status: 'done', title: long.repeat(2), updated_at: at(VIEW_WHOLE_MS * 2) } as never)
+  await publish(w.host, b)
+  expect(w.stored().length).toBeLessThan(VIEW_MAX_CHARS)
+  expect([...sizeNotes.values()].some(n => n.includes('trimmed to fit') && n.includes('left out'))).toBe(true)
 })

@@ -2,8 +2,8 @@ import { settingShown, testMinutesOf, openQuestions, liveWorkersFor, whoDrives, 
 import { homeBranch } from './git'
 import { S, onHere, workers, queuedWorkers, scoutRuns, type PaneView, scoutState, updateView, sizeNotes, MOVED_WHY, TAKEN_WHY } from './state'
 import { type Host, agentState } from '../host'
-import { path, locked, change, now, load, safeWrite, boardMtime, noteSize } from './store'
-import { slimView } from '../core/view-slim'
+import { path, locked, change, now, load, safeWrite, boardMtime } from './store'
+import { slimViewStep, trimNote } from '../core/view-slim'
 import { openPane } from './open'
 import { playable, sayGone } from './voice'
 import { logoIdle, logoOnPublish } from './logo'
@@ -499,9 +499,12 @@ export async function publish(host: Host, b: Board) {
     })
     .sort((x, y) => x.since - y.since)
   const v: PaneView = { tasks: b.tasks, working, scouts: [...scoutState.values()], mode: modeOf(b), test_commands: b.test_commands, branch, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, test_minutes: testMinutesOf(b), archive_days: b.archive_days, ...(b.archived ? { archived: b.archived } : {}), ...(b.archived_done?.length ? { archived_done: b.archived_done } : {}), open_on_start: openOnStart(b), notify: notifyOf(b, can, S.root), scout_findings: b.scout_findings, tests_with_changes: b.tests_with_changes, checker: b.checker, notify_choices: notifyChoices(can), enabled: onHere(b), ...(S.offHere ? { off_here: S.offWhy } : S.fresh ? { off_here: 'new' as const } : {}), driving: S.driving, branch_note, ...(size_note ? { size_note } : {}), git_state: S.gitState, plan_mode: inPlan(S.plan), ...(branches ? { branches } : {}), ...(team ? { today_team: team } : {}), ...(Object.keys(task_branches).length ? { task_branches } : {}), ...(openQuestions(b).length ? { questions: openQuestions(b) } : {}), ...(scouts_running.length ? { scouts_running } : {}) }
-  // the view as it is stored (trimmed by slimView) is warned about (counted in characters, as Claude Code's limit is) when it nears the 4 MB value limit
+  // the view as it is stored (trimmed by slimView): the owner is told when trimming had to leave tasks out of the panel
   try {
-    noteSize(host, 'the board view', JSON.stringify(slimView(v)).length)
+    const r = slimViewStep(v)
+    const note = trimNote(r.step, r.left)
+    if (note) sizeNotes.set('the board view', note)
+    else sizeNotes.delete('the board view')
   } catch {
     // a warning only
   }
