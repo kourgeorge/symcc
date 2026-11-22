@@ -419,7 +419,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     const m = f?.open_now
     if (!f || !m || m.at <= openNowDone || m.at < startedAt || !shownSession || m.session !== shownSession) return
     openNowDone = m.at
-    if (f.view.open_on_start === false || f.view.enabled === false) return
+    if (f.view.open_on_start === false || f.view.on_here === false) return
     if (ctx.ui.panel.current()?.name !== BOARD_PANEL) {
       ctx.ui.panel.open(BOARD_PANEL)
       showTab('live')

@@ -3720,12 +3720,12 @@ test('T-756: open_on_start turned off, or symcc turned off, while it waits for a
 
 test('T-841: /symcc-enable in this window\'s session opens the board; other windows\' writes never reopen a closed one', async () => {
   // symcc off in a new project: nothing opens; then /symcc-enable runs in this window's session
-  const s = startCtx({ open_on_start: true, enabled: false })
+  const s = startCtx({ open_on_start: true, on_here: false })
   s.shown.session = true
   s.showSession('me')
   await s.board.refresh()
   expect(s.current()).toBe(undefined)
-  s.enableIn('me', { open_on_start: true, enabled: true })
+  s.enableIn('me', { open_on_start: true, on_here: true })
   await s.board.refresh()
   expect(s.current()?.name).toBe(BOARD_PANEL)
   // already open: not opened twice
@@ -3734,9 +3734,9 @@ test('T-841: /symcc-enable in this window\'s session opens the board; other wind
   expect(s.opens.length).toBe(n)
   // the owner closes it; another window (off here, then on) writes the file: nothing reopens
   s.panel.close()
-  s.setView({ open_on_start: true, enabled: false, off_here: 'other' } as never)
+  s.setView({ open_on_start: true, on_here: false, off_here: 'other' } as never)
   await s.board.refresh()
-  s.setView({ open_on_start: true, enabled: true })
+  s.setView({ open_on_start: true, on_here: true })
   await s.board.refresh()
   expect(s.current()).toBe(undefined)
   expect(s.opens.length).toBe(n)
@@ -3744,16 +3744,16 @@ test('T-841: /symcc-enable in this window\'s session opens the board; other wind
 })
 
 test('T-841: /symcc-enable opens the board on the Live tab, not the last used tab', async () => {
-  const s = startCtx({ open_on_start: true, enabled: true })
+  const s = startCtx({ open_on_start: true, on_here: true })
   s.shown.session = true
   s.showSession('me')
   await s.board.refresh()
   await s.board.press('t', 'me')
   expect(s.board.state().tab).toBe('tasks')
   s.panel.close()
-  s.setView({ open_on_start: true, enabled: false })
+  s.setView({ open_on_start: true, on_here: false })
   await s.board.refresh()
-  s.enableIn('me', { open_on_start: true, enabled: true })
+  s.enableIn('me', { open_on_start: true, on_here: true })
   await s.board.refresh()
   expect(s.current()?.name).toBe(BOARD_PANEL)
   expect(s.board.state().tab).toBe('live')
@@ -3761,17 +3761,17 @@ test('T-841: /symcc-enable opens the board on the Live tab, not the last used ta
 })
 
 test('T-841: /symcc-enable in another session, or with open_on_start off, opens nothing', async () => {
-  const a = startCtx({ open_on_start: true, enabled: false })
+  const a = startCtx({ open_on_start: true, on_here: false })
   a.shown.session = true
   a.showSession('me')
-  a.enableIn('someone-else', { open_on_start: true, enabled: true })
+  a.enableIn('someone-else', { open_on_start: true, on_here: true })
   await a.board.refresh()
   expect(a.current()).toBe(undefined)
   a.board.stop()
-  const b = startCtx({ open_on_start: false, enabled: false })
+  const b = startCtx({ open_on_start: false, on_here: false })
   b.shown.session = true
   b.showSession('me')
-  b.enableIn('me', { open_on_start: false, enabled: true })
+  b.enableIn('me', { open_on_start: false, on_here: true })
   await b.board.refresh()
   expect(b.current()).toBe(undefined)
   b.board.stop()
