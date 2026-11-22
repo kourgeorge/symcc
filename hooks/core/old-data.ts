@@ -235,6 +235,8 @@ export type OldInput = {
   /** whether .<name>/field-guide.md is there, and whether org-mem.md is */
   fieldGuide: boolean
   orgMem: boolean
+  /** scout names that can't be a file name (the migration can't move their last report; only shown) */
+  unsafeScouts?: readonly string[]
 }
 
 /** The count of everything in old shape, as lines; rows with n = 0 are left out. */
@@ -273,7 +275,8 @@ export function oldDataRows(i: OldInput): OldRow[] {
   const u = isObj(i.scouts) ? i.scouts.usage : undefined
   if (isObj(u)) for (const v of Object.values(u)) if (isObj(v)) usage += (typeof v.tokens === 'number' ? 1 : 0) + (isObj(v.days) ? Object.values(v.days).filter(x => isObj(x) && typeof x.tokens === 'number').length : 0)
   const memory = isObj(i.scouts) && isObj(i.scouts.scouts) ? i.scouts.scouts : {}
-  const lastReport = Object.entries(memory).filter(([name, v]) => isObj(v) && typeof v.last_report === 'string' && !i.withRuns.has(name)).length
+  const lastReport = Object.entries(memory).filter(([name, v]) => isObj(v) && typeof v.last_report === 'string' && !i.withRuns.has(name) && !(i.unsafeScouts ?? []).includes(name)).length
+  const unsafe = (i.unsafeScouts ?? []).filter(name => isObj(memory[name]) && typeof memory[name].last_report === 'string')
   const settings = (b.mode === 'off' ? 1 : 0) + (b.notify === 'sound' || 'sound_set' in b ? 1 : 0) + ('target_branch' in b ? 1 : 0)
   const rows: OldRow[] = [
     { n: c.unsplit, text: 'tries with `unsplit` tokens (counts saved before the kinds were kept apart; shown as they are)', fix: false },
@@ -295,6 +298,7 @@ export function oldDataRows(i: OldInput): OldRow[] {
     { n: c.conflict, text: 'tasks with a conflict_tries field', fix: true },
     { n: settings, text: 'old board settings (mode off, notify sound / sound_set, target_branch)', fix: true },
     { n: lastReport, text: 'scouts whose last report is not yet in a runs file', fix: true },
+    { n: unsafe.length, text: `scouts whose name can't be a file name; rename them (${unsafe.join(', ')})`, fix: false },
     { n: i.fieldGuide && !i.orgMem ? 1 : 0, text: 'field-guide.md not yet moved to org-mem.md', fix: true },
   ]
   return rows.filter(r => r.n > 0)

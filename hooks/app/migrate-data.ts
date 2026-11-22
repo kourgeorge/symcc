@@ -50,12 +50,14 @@ async function oldInput(host: Host, all = true): Promise<OldInput> {
   const scouts = jsonOf(scoutsText)
   const names = Object.keys((scouts as { scouts?: Record<string, unknown> } | null)?.scouts ?? {})
   const withRuns = new Set<string>()
+  const unsafeScouts = names.filter(n => safeScoutFile(n, S.N.name) === null)
   for (const n of names) if (safeScoutFile(n, S.N.name) !== null && (await host.fs.exists(runsPath(n)).catch(() => false))) withRuns.add(n)
   return {
     board: await boardForCount(host),
     archive: (await archiveRaw(host)).flatMap(a => a.tasks),
     scouts,
     withRuns,
+    unsafeScouts,
     fieldGuide: await host.fs.exists(path(`${S.N.dir}/field-guide.md`)).catch(() => false),
     orgMem: await host.fs.exists(path(orgMemFile(S.N.dir))).catch(() => false),
   }
@@ -82,6 +84,8 @@ export async function migrateIfOld(host: Host, all = true): Promise<string> {
     if (S.guardOnly || !S.root) return ''
     const input = await oldInput(host, all)
     if (!oldDataRows(input).some(r => r.fix)) return ''
+    // A migration that failed once is not tried again until the data files change (or the owner runs the doctor's fix).
+    if (lastFailure && lastFailure.sig === (await filesSignature(host))) return lastFailure.msg
     const r = await migrateData(host)
     if (r.failed) why = r.failed
     else {
@@ -94,16 +98,35 @@ export async function migrateIfOld(host: Host, all = true): Promise<string> {
     why = String((e as Error)?.message ?? e).slice(0, 150)
   }
   const msg = `symcc couldn't move your old data to the current shape (${why}); nothing was saved. Run /${S.N.name}-doctor.`
-  if (msg !== toldFailure) {
-    toldFailure = msg
+  lastFailure = { sig: await filesSignature(host), msg }
+  // told once: the same reason, whatever the time or backup folder in it
+  const plain = msg.replace(/\S*data\.before-migrate-\S*?\//g, '<backup>')
+  if (plain !== toldFailure) {
+    toldFailure = plain
     host.ui.toast(S.N.toast(msg))
     tellLead(host, msg)
   }
   return msg
 }
 
-/** The last failure text told to the owner, so a repeated failure is told once. */
+/** The last failure text told to the owner (without the backup folder), so a repeated failure is told once. */
 let toldFailure = ''
+
+/** The last failed migration: what the data files looked like then, and the message. */
+let lastFailure: { sig: string; msg: string } | null = null
+
+/** Names, sizes and times of the data files: it changes when a file is written. Backup folders are not part of it. */
+async function filesSignature(host: Host): Promise<string> {
+  const dir = path(S.N.dir)
+  const out: string[] = []
+  const add = async (folder: string, keep: (n: string) => boolean) => {
+    for (const f of await host.fs.list(folder).catch(() => [])) if (f.kind === 'file' && keep(f.name)) out.push(`${folder}/${f.name}:${f.size}:${f.mtimeMs}`)
+  }
+  await add(dir, n => /^(board|archive(-\d+)?|scouts)\.json$|^(org-mem|field-guide)\.md$/.test(n))
+  await add(`${dir}/${PARTS_DIR}`, n => n.endsWith('.json'))
+  await add(path(S.N.scouts), n => n.endsWith('.runs.json'))
+  return out.sort().join('\n')
+}
 
 /** Copies the data files into a dated backup folder (data.before-migrate-<time>/) beside them. Throws when one can't be copied. */
 async function backUp(host: Host): Promise<string> {
@@ -128,6 +151,7 @@ async function backUp(host: Host): Promise<string> {
  */
 export async function migrateData(host: Host): Promise<{ failed: string; done: string[]; backup?: string }> {
   if (S.guardOnly) return { failed: 'this window only guards a worker folder', done: [] }
+  lastFailure = null // the owner (or a changed file) asks for it: try again
   const done: string[] = []
   let backup: string
   try {

@@ -207,3 +207,41 @@ test('T-804: when the backup can not be written, a change is refused and board.j
   expect(await migrateIfOld(w.host)).toContain('nothing was saved')
   expect(leadQueue.filter(t => t.includes("couldn't move")).length).toBe(1)
 })
+
+const backups = (w: { files: Map<string, string> }) => new Set([...w.files.keys()].filter(f => f.includes('/data.before-migrate-')).map(f => f.split('/data.before-migrate-')[1]!.split('/')[0]))
+
+test('T-804: a scout whose name is not a file name is an information row, and three migrations make one backup and one message', async () => {
+  const w = world()
+  S.enabledNow = true
+  leadQueue.length = 0
+  w.files.set(`${D}/scouts.json`, JSON.stringify({ scouts: { 'Bad Name': { last_run: E, last_report: 'x' } } }))
+  const text = await doctor(w.host, '')
+  expect(text).toContain("scouts whose name can't be a file name")
+  expect(text).not.toContain('scouts whose last report is not yet in a runs file')
+  for (let i = 0; i < 3; i++) expect(await migrateIfOld(w.host)).toBe('')
+  expect(backups(w).size).toBe(1)
+  expect(leadQueue.filter(t => t.includes('moved your old data')).length).toBe(1)
+  expect(JSON.parse(w.files.get(`${D}/board.json`)!).mode).toBe('paused')
+})
+
+test('T-804: a failed runs-file write is told once and not retried until the files change', async () => {
+  const w = world()
+  S.enabledNow = true
+  leadQueue.length = 0
+  const write = w.host.fs.write
+  w.host.fs.write = async (p, text) => {
+    if (p.includes('.runs.json')) throw new Error('disk full')
+    return write(p, text)
+  }
+  const first = await migrateIfOld(w.host)
+  expect(first).toContain("couldn't move")
+  expect(await migrateIfOld(w.host)).toBe(first)
+  expect(await migrateIfOld(w.host)).toBe(first)
+  expect(backups(w).size).toBe(1)
+  expect(leadQueue.filter(t => t.includes("couldn't move")).length).toBe(1)
+  // the files change: it tries again
+  w.files.set(`${D}/scouts.json`, w.files.get(`${D}/scouts.json`)! + ' ')
+  await migrateIfOld(w.host)
+  expect(backups(w).size).toBe(2)
+  expect(leadQueue.filter(t => t.includes("couldn't move")).length).toBe(1)
+})
