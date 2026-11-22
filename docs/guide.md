@@ -1932,11 +1932,11 @@ once. If the other window doesn't answer within 3 minutes, yours takes over anyw
 
 **Only one window with symcc.** A window you open while another live window already has symcc
 on starts with symcc off *here*: it works as plain Claude, the panel does not open, and the band
-says `symcc runs in another window · /symcc-enable here`. Type `/symcc-enable here` to make it
+says `symcc runs in another window · /symcc-enable`. Type `/symcc-enable` to make it
 a second lead on purpose (driving still follows the one-driver rules above). A window that
 crashed and left an old marker does not count: "live" uses the same stale rule as the hand-over.
 If the symcc window closes and only off-here windows remain, none takes over by itself: each says
-once `the symcc window closed · /symcc-enable here to take over`, and no worker runs until you do.
+once `the symcc window closed · /symcc-enable to take over`, and no worker runs until you do.
 If nobody has done so 15 minutes later, one of them (never all) plays the "needs you" notice once
 (your notify setting; nothing when notify is off).
 You can also turn one window off yourself with `/symcc-disable here` (see
@@ -2214,7 +2214,8 @@ your next message, no restart needed:
 - the symcc tools answer "symcc is disabled. The owner can turn it back on with /symcc-enable." and change nothing.
 
 The board, its tasks, its mode and the scouts are kept. `/symcc-enable` turns everything back
-on, in the mode the board had, and opens the board panel (as above). The switch is kept per project, as `enabled` in
+on, in the mode the board had, and opens the board panel (as above). It also turns symcc on in the window you
+type it in if that window was off there (see "Off in one window only" below). The switch is kept per project, as `enabled` in
 `.symcc/board.json` (a board without it is on).
 
 **New projects (getting started).** symcc runs only where `.symcc/board.json` is in the folder Claude
@@ -2227,7 +2228,7 @@ nothing else). `/symcc-init` and help work; every other symcc command and tool a
 /symcc-init to create one here". Nothing is written (no `.symcc/` folder). Type `/symcc-init` (it works like the command that starts a repo): it creates the board in the
 folder Claude started in, even when a parent folder has a `.symcc`; a parent's board never matters. A task's worker folder
 (under `.symcc/worktrees/`) is the one exception: it only guards, using the main project's board. Where `.symcc/` already exists it changes nothing and says "already set up
-here" (when another window drives it, it adds that `/symcc-enable here` turns symcc on in this window too). If this folder has no repository of its own, it asks first; `/symcc-init git` then sets up a
+here" (when another window drives it, it adds that `/symcc-enable` turns symcc on in this window too). If this folder has no repository of its own, it asks first; `/symcc-init git` then sets up a
 repository and a first commit here (a parent's repository is never used). It turns symcc on, opens the board panel by itself on the Live tab (unless `open_on_start` is off, and not again if it is already open), and tells the lead it is the lead now. `/symcc-enable` and
 `/symcc-disable` only switch an existing board on or off; with no board they point to `/symcc-init`. Projects
 that already have a board start on as before. With several windows (see above), the first window
@@ -2236,13 +2237,20 @@ you enable is the lead and later windows start off here.
 **Off in one window only.** `/symcc-disable here` turns symcc off in the window you type it in; the
 other windows on the project keep symcc fully on and see no change. From your next message that
 window gets no lead instructions, no "[symcc] Board update" messages, no sounds or voice, its panel
-does not open by itself, and the symcc tools answer "symcc is off in this window. /symcc-enable here
+does not open by itself, and the symcc tools answer "symcc is off in this window. /symcc-enable
 turns it back on." and change nothing. The band and status line say `symcc is off in this window ·
-/symcc-enable here`. If that window drove the board it hands driving over to another window (as
-`/symcc-drive` does there); with no other window open, work waits until one is. `/symcc-enable
-here` turns it back on, tells the lead, opens the panel as on start, and the window may drive again by
-the normal rules. If the whole project is disabled, it says so and points to `/symcc-enable`. This
+/symcc-enable`. If that window drove the board it hands driving over to another window (as
+`/symcc-drive` does there); with no other window open, work waits until one is. This
 switch lives in the window's session only, not in `board.json`.
+
+**Two off switches, one on switch.** Turning off has two forms: `/symcc-disable` turns symcc off for
+the whole project (saved as `enabled` in `board.json`), and `/symcc-disable here` turns it off in one
+window only. Turning on has one rule: `/symcc-enable` means "symcc on, in this window". It turns the
+project on if it was disabled and this window on if it was off here, tells the lead, opens the panel as
+on start, and the window may drive again by the normal rules. Its answer says what it did and names the
+mode, for example "symcc is on in this window, in mode paused: ..." with a hint to start work with
+`/symcc-mode auto`; it says "already enabled" only when both were on already. `/symcc-enable here` still
+works and does the same.
 
 ---
 

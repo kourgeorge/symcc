@@ -402,7 +402,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     if (f.view.open_on_start === false || f.view.on_here === false) startDone = true
     else if (ctx.ui.panel.current()?.name === BOARD_PANEL || ctx.ui.panel.open(BOARD_PANEL)) startDone = true
   }
-  /** T-841: /symcc-enable (or enable here) writes a one-time "open now" mark with its session's id into the view file.
+  /** T-841: /symcc-enable (also spelled enable here) writes a one-time "open now" mark with its session's id into the view file.
    *  Only the TUI window showing that session opens the board for it (unless open_on_start is off or it is open
    *  already); a mark from before this run, or one for another window's session, opens nothing. A write by another
    *  window (enabled false or true) never counts. */
