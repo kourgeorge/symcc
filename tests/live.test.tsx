@@ -2,7 +2,7 @@
 // numbers; claude/ui/live.tsx draws them on the terminal panel).
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { liveLanes, liveLayout, laneLines, liveLabelLine, liveLabelSegs, LIVE_AGENT_MARK, LIVE_TONE, liveStations, liveTrains, trainRows, type LiveTrain, liveToday, todayLines, segText, liveBlink, liveHeader, liveHeaderSegs, liveScoutMark, scoutsRunning, scoutNext, tabRow, LIVE_TABS, LIVE_EMPTY, LIVE_LEGEND, LIVE_DIVIDER, LIVE_INDENT, liveInner, liveLegend, LANE_WARN_TIMES } from '../hooks/core/live'
+import { liveLanes, liveLayout, laneLines, liveLabelLine, liveLabelSegs, LIVE_AGENT_MARK, LIVE_TONE, liveStations, liveTrains, trainRows, type LiveTrain, liveToday, todayLines, segText, liveBlink, liveHeader, liveHeaderSegs, liveScoutMark, scoutsRunning, scoutNext, tabRow, LIVE_TABS, LIVE_EMPTY, LIVE_LEGEND, LIVE_DIVIDER, LIVE_INDENT, liveInner, liveLegend, LANE_WARN_TIMES, laneTimes } from '../hooks/core/live'
 import { textWidth } from '../hooks/core/stats'
 import { FINISH_STALE_MS } from '../hooks/core/lead'
 import { listKeys } from '../hooks/board'
@@ -280,6 +280,10 @@ test('T-757, T-867: lanes show the whole task\'s tokens, × the median per task 
   // T-855: the count has the token sign in front
   expect(segText(second('T-801'))).toMatch(/^  change try 2\/\d+  ⌀ 4M/)
   expect(LANE_WARN_TIMES).toBe(2)
+  // T-867: the tone is decided on the number as shown, so 1.96× reads "2" and warns; a tiny task reads "<0.1", never "0"
+  expect([laneTimes(1.96), laneTimes(1.94), laneTimes(7.6), laneTimes(1), laneTimes(0.03)]).toEqual([
+    { text: '2', warn: true }, { text: '1.9', warn: false }, { text: '7.6', warn: true }, { text: '1', warn: false }, { text: '<0.1', warn: false },
+  ])
   // T-867: the key line has no bar text any more
   expect(liveLegend(200)).toEqual([LIVE_LEGEND])
   // narrow: on more lines, none wider

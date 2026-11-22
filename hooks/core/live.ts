@@ -568,8 +568,12 @@ export function liveLabelSegs(l: LiveLayout): LiveSeg[] {
 
 /** T-867: from this many times the board's median tokens per task, a lane's "(n× median)" is in the warning tone. */
 export const LANE_WARN_TIMES = 2
-/** "7.6", "1", "0.4": how many times the median, one decimal. */
-const laneTimes = (x: number): string => x.toFixed(1).replace(/\.0$/, '')
+/** How many times the median, rounded to one decimal as shown ("7.6", "1", "0.4"); the tone is decided on this
+ *  rounded number, so "(2× median)" is always in the warning tone. Under 0.05 it reads "<0.1", never "0". */
+export function laneTimes(x: number): { text: string; warn: boolean } {
+  const r = Math.round(x * 10) / 10
+  return { text: r < 0.1 ? '<0.1' : r.toFixed(1).replace(/\.0$/, ''), warn: r >= LANE_WARN_TIMES }
+}
 
 /** The text at a lane's right: its place in the queue ("#2"), else the time at its station ("2m"); '' when not known. */
 export function laneRight(lane: Pick<LiveLane, 'station' | 'place' | 'sinceMs'> & Partial<Pick<LiveLane, 'done'>>, nowMs: number, room = Infinity): string {
@@ -631,7 +635,8 @@ export function laneLines(lane: LiveLane, l: LiveLayout, o: { nowMs: number; fra
   const fits = (xs: LiveSeg[]) => textWidth(segText(xs)) <= l.width
   // "(7.6× median)": against the board's usual tokens per merged task; the warning tone from twice it
   const times = lane.tokens !== undefined && lane.usual ? lane.tokens / lane.usual : undefined
-  const median: LiveSeg | false = times !== undefined && { text: ` (${laneTimes(times)}× median)`, tone: times >= LANE_WARN_TIMES ? 'warning' : 'dim' }
+  const shown = times !== undefined && laneTimes(times)
+  const median: LiveSeg | false = shown && { text: ` (${shown.text}× median)`, tone: shown.warn ? 'warning' : 'dim' }
   const tokens = (withMedian: boolean): LiveSeg[] =>
     lane.tokens === undefined
       ? done ? [] : [{ text: `${TOKEN_SIGN} at hand-back`, tone: 'dim' }]

@@ -117,13 +117,15 @@
     // times the median per task (the warning tone from twice it), its time so far, who spent them, the send-backs.
     // When the line is too wide, parts go from the end: the worker/checker split, then ⏱, then "(× median)", then the kind
     const total = (l.prior || 0) + (l.tokens || 0)
-    const times = total / USUAL
+    // rounded as shown, and the tone decided on the rounded number (so "(2× median)" is always the warning tone)
+    const times = Math.round((total / USUAL) * 10) / 10
+    const timesText = times < 0.1 ? '<0.1' : times.toFixed(1).replace(/\.0$/, '')
     const tone = t => (l.done ? 'dim' : t)
     const mins = Math.max(0, (l.done || s.now) - l.began)
     const tokens = withMedian =>
       !total
         ? [['⌀ at hand-back', 'dim']]
-        : [['⌀ ' + tok(total), tone('text')], ...(l.tokens === null ? [[' + …', 'dim']] : []), ...(withMedian ? [[` (${times.toFixed(1).replace(/\.0$/, '')}× median)`, tone(times >= 2 ? 'warning' : 'dim')]] : [])]
+        : [['⌀ ' + tok(total), tone('text')], ...(l.tokens === null ? [[' + …', 'dim']] : []), ...(withMedian ? [[` (${timesText}× median)`, tone(times >= 2 ? 'warning' : 'dim')]] : [])]
     const split = [l.worker && [[`worker ⌀ ${tok(l.worker)}`, 'dim']], l.checker && [[`checker ⌀ ${tok(l.checker)}`, 'dim']]].filter(Boolean)
     const line = (level, withKind) => {
       const parts = [tokens(level >= 1), ...(level >= 2 ? [[[`⏱ ${dur(mins)}`, 'dim']]] : []), ...(level >= 3 ? split : []), ...(l.back ? [[[`↺×${l.back}`, 'dim']]] : [])]
