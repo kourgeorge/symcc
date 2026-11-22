@@ -197,6 +197,27 @@ export function ownerAddedMinutes(history: BoardTask['history'], attempt: number
   return sum
 }
 
+const ASKED_MORE = /^ran \d+ min, over its time limit; asked the owner for more time$/
+const TIME_IS_UP = /^time is up \(.*\); the worker was told to write down what it has and hand back$/
+
+/**
+ * T-885: the over-time state of try `attempt` of a task with `history`, read back from its out-of-time lines. A reopen
+ * of Claude Code drops the task's `live`; when the same try goes on, a try told its time is up ("Stop it", or no answer
+ * by the hard cap) stays stopped (wrap_up, stamped `at` so the new worker gets its own short grace), and a "more time?"
+ * still open stays open (time_ask, from when it was asked), instead of being asked again.
+ */
+export function ownerTimeState(history: BoardTask['history'], attempt: number, at: string): { wrap_up?: string; time_ask?: string } {
+  let ask: string | undefined
+  for (const h of history ?? []) {
+    if (h.try !== attempt) continue
+    const body = h.text.slice(h.text.indexOf(': ') + 2)
+    if (h.kind === 'out-of-time' && TIME_IS_UP.test(body)) return { wrap_up: at }
+    if (h.kind === 'out-of-time' && ASKED_MORE.test(body)) ask = h.at
+    else if (h.kind === 'step' && OWNER_ADDED.test(body)) ask = undefined
+  }
+  return ask ? { time_ask: ask } : {}
+}
+
 /**
  * The owner's answer (`answer`) to task `id`'s over-time question (see overtimeQuestion): "+N min" moves its
  * limit N minutes later and the worker goes on; "Stop it" tells the worker to wrap up. Returns what to say,

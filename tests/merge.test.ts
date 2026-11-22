@@ -15,7 +15,7 @@ import { askCall, checkEdit } from '../hooks/app/ask'
 import { tellLead, noteForLead, meanwhileText } from '../hooks/app/tell'
 import { saidNeedsYou, findPlayers, playable, playsFor, sayNext, sayDone, WIN_TEXT_VAR } from '../hooks/app/voice'
 import { workerFinished, check, pump, startWorker, lateHandBack, WORKER_PROMPT, workerQuestionText, type TurnEnd, notThisTry, unclaimed, SYMCC_STOPPED_NOTE } from '../hooks/app/workers'
-import { stopOrphans, formerWorker } from '../hooks/app/cleanup'
+import { stopOrphans, formerWorker, ownerTimeState } from '../hooks/app/cleanup'
 import { goOnRun, selfRestart, endRun, runMs, freshTry, withoutOpenRun, agentLines, type TryRun } from '../hooks/core/runs'
 import { statsData } from '../hooks/core/stats'
 import { setSymcc, setBoardMode } from '../hooks/app/board-mode'
@@ -5920,6 +5920,93 @@ test('T-873: the owner\'s "+30 min" still counts after Claude Code is reopened a
   expect((find(await load(w.$), 'T-1') as BoardTask).live?.time_ask).toBeDefined()
   S.driving = false
   workers.clear()
+})
+
+/** T-885: T-1 back in todo with `back`'s try (reopenedT1-like), started again as startedT1 does, with what is sent to agents recorded. */
+async function startedAgainT1(back: BoardTask) {
+  const w = world({ current: 'main' })
+  const [b0] = boardWith('auto')
+  await saveBoard(w.$, patchTask(b0, 'T-1', { status: 'todo', ...restartFields(back) }, ISO))
+  S.me = 'me'
+  S.startupDone = true
+  S.driving = true
+  workers.clear()
+  const sent = sentTo(w)
+  const x = w.$
+  x.features = { ...x.features, startQueue: false }
+  x.agents.spawn = async () => ({ agentId: 'ag1' })
+  x.agents.list = async () => (workers.has('ag1') ? [{ id: 'ag1', kind: 'worker', status: 'running', description: 'T-1' }] : [])
+  x.plugin = { name: 'symcc', root: '/plugin' }
+  x.fs.list = async () => []
+  await startWorker(w.$, 'T-1')
+  return { w, sent, t: find(await load(w.$), 'T-1')! as BoardTask }
+}
+
+test('T-885: "Stop it", then Claude Code is reopened and the same try goes on: it stays stopped, and its hand-back fails the task with nothing merged', async () => {
+  const r = await overTime(async w => {
+    await runFor(w, 50)
+    await check(w.$)
+    await runTool(w.$, 'change', { task: 'T-1', answer: 'Stop it' })
+  })
+  expect((r.t as BoardTask).live?.wrap_up).toBeDefined()
+  // closed within the grace: the reopen drops the live record (wrap_up with it)
+  const back = backToTodo(r.t as BoardTask, REOPEN, STOP)
+  expect(back.live).toBeUndefined()
+  leadQueue.length = 0
+  const { w, sent, t } = await startedAgainT1(back)
+  try {
+    expect(t.attempts).toBe(1)
+    expect(t.live?.wrap_up).toBeDefined()
+    expect(t.live?.time_ask).toBeUndefined()
+    // the new worker is told its time is up too
+    expect(sent).toEqual([{ to: 'ag1', text: WRAP_UP_TEXT }])
+    // within its grace the check neither stops it nor asks "more time?" again
+    await check(w.$)
+    expect(leadQueue.some(x => x.includes('Give it more time?'))).toBe(false)
+    const main = w.git.main
+    await workerFinished(w.$, 'ag1', 'Did half of it. Left: the tests.')
+    const end = find(await load(w.$), 'T-1')!
+    expect(end.status).toBe('failed')
+    expect(end.history.some(h => h.kind === 'out-of-time' && h.try === 1 && h.text.includes('out of time; handed back'))).toBe(true)
+    expect(end.history.some(h => h.kind === 'merged')).toBe(false)
+    expect(w.git.main).toBe(main)
+  } finally {
+    S.driving = false
+    workers.clear()
+  }
+})
+
+test('T-885: an unanswered "more time?" survives a reopen: the same try keeps the question and is not asked again', async () => {
+  const r = await overTime(async w => {
+    await runFor(w, 50)
+    await check(w.$)
+  })
+  const asked = (r.t as BoardTask).live?.time_ask
+  expect(asked).toBeDefined()
+  const back = backToTodo(r.t as BoardTask, REOPEN, STOP)
+  leadQueue.length = 0
+  const { w, t } = await startedAgainT1(back)
+  try {
+    expect(t.live?.time_ask).toBe(asked)
+    expect(t.live?.wrap_up).toBeUndefined()
+    await goneOnFor(w, 50, 1)
+    await check(w.$)
+    expect(leadQueue.some(x => x.includes('Give it more time?'))).toBe(false)
+    expect(find(await load(w.$), 'T-1')!.history.filter(h => h.text.includes('asked the owner for more time')).length).toBe(1)
+  } finally {
+    S.driving = false
+    workers.clear()
+  }
+})
+
+test('T-885: after a "+30 min" answer the question is not brought back by a reopen', () => {
+  const history = [
+    { at: ISO, kind: 'out-of-time' as const, text: 'try 1: ran 45 min, over its time limit; asked the owner for more time', try: 1 },
+    { at: ISO, kind: 'step' as const, text: 'try 1: the owner gave it 30 more min (limit now 75 min)', try: 1 },
+  ]
+  expect(ownerTimeState(history, 1, STOP)).toEqual({})
+  expect(ownerTimeState(history.slice(0, 1), 1, STOP)).toEqual({ time_ask: ISO })
+  expect(ownerTimeState(history.slice(0, 1), 2, STOP)).toEqual({})
 })
 
 test('T-873: a new try does not take the minutes the owner gave an earlier try', async () => {

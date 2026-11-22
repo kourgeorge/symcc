@@ -114,6 +114,17 @@ test('T-863: a worker still running when Claude Code closed: the stop is stamped
   expect(agentLines(r, NOW).join('\n')).toContain('20m')
 })
 
+test('T-885: a lead.json heartbeat dated in the future is ignored: the gap starts at the board\'s updated_at, so the closed hours do not count', () => {
+  const t = task('T-52', { live: { session: 'me' }, updated_at: at(31 * 60 - 20), runs: [{ started: at(31 * 60), agents: [{ id: 'ag1', kind: 'worker' as const, started: at(31 * 60) }] }] })
+  const board = { tasks: [t] } as unknown as Parameters<typeof resetDoing>[0]
+  const back = resetDoing(board, 'new', leadText('me', NOW + 99 * MIN), NOW - 12 * MIN, REOPEN, at(12)).tasks[0]!
+  const r = goOnRun(back.runs, at(12))!.at(-1)!
+  const g = gapsOf(r)
+  expect(g.length).toBe(1)
+  expect(g[0]!.from).toBe(NOW - (31 * 60 - 20) * MIN)
+  expect(runMs(r, NOW)).toBe(32 * MIN)
+})
+
 test('T-863: a try that handed back before the close: the gap starts at the last heartbeat, so prep and tests before it count', () => {
   const t = task('T-52', {
     live: { session: 'me' },
