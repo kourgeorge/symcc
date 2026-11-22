@@ -490,6 +490,40 @@ test('startTui on a fake OpenCode TUI: reads the view file in its folder, draws 
   expect(stopped).toBe(true)
 })
 
+test('T-887: opening the board while git is not ok posts nothing into the session (no /symcc-settings git check in the chat)', async () => {
+  for (const git_state of ['no-git', 'no-repo', 'no-commits'] as const) {
+    const f = viewFile()
+    const files = new Map([['/work/proj/.symcc/view.json', viewFileText({ ...f, view: { ...f.view, open_on_start: false, git_state, branch_note: gitNote(git_state) } })]])
+    const sent: { sessionID: string; name: string; text: string }[] = []
+    const slots: { append: string; render: (input: never) => unknown }[] = []
+    const layers: TuiKeyLayer[] = []
+    let current: { name: string; sessionID: string } | undefined
+    const ctx: TuiContext = {
+      location: { directory: '/work/proj' },
+      theme: { primary: 'blue' },
+      renderer: { width: 120, height: 200 },
+      client: { session: { command: async input => void sent.push(input) } },
+      keymap: { layer: factory => void layers.push(factory()) },
+      ui: {
+        toast: { show: () => undefined },
+        dialog: { prompt: async () => undefined, select: async <V,>() => undefined as V | undefined },
+        panel: { open: name => ((current = { name, sessionID: 'ses_1' }), true), close: () => (current = undefined), current: () => current },
+        slot: claim => (slots.push(claim as never), () => undefined),
+      },
+    }
+    const board = startTui(ctx, { runtime: fakeRuntime(), readText: async p => files.get(p) ?? Promise.reject(new Error('missing')), every: () => () => undefined, now: () => NOW })
+    await board.refresh()
+    // the band seen in a session: that is the session a check would have been posted into
+    shown(slots.find(s => s.append === 'session.composer.top')!.render({ sessionID: 'ses_1' } as never))
+    const open = layers.find(l => l.commands?.some(c => c.id === 'symcc.board.open'))!.commands!.find(c => c.id === 'symcc.board.open')!
+    await open.run()
+    expect(current?.name).toBe(BOARD_PANEL)
+    for (let i = 0; i < 20; i++) await Promise.resolve()
+    expect([git_state, sent]).toEqual([git_state, []])
+    board.stop()
+  }
+})
+
 test('T-584: a task page offers every one of core\'s taskActions with a key (but Copy) for a failed, doing, backlog and answered-investigation task, and each key sends its slash command', async () => {
   let b: Board = emptyBoard()
   for (const title of ['running', 'what is slow', 'broke', 'later']) b = addTask(b, { origin: { why: 'a test' }, title, files: ['src/'] }, AT)[0]

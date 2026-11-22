@@ -33,7 +33,8 @@ export async function resetPane($: Host, which?: PaneTab, task = '') {
 export async function openPane($: Host, o: { tab?: PaneTab; task?: string; focus?: boolean; quiet?: boolean } = {}) {
   if (!$.features.panel) return { isPlaced: false }
   const go = async () => {
-    if (!S.fresh && S.gitState !== 'ok') await recheckGit($).catch(() => undefined) // the notice is fresh when the panel opens
+    // the notice is fresh when the panel opens; not while git is missing (T-887: the Mac's git stand-in opens Apple's install pop-up)
+    if (!S.fresh && S.gitState !== 'ok' && S.gitState !== 'no-git') await recheckGit($).catch(() => undefined)
     await resetPane($, o.tab, o.task)
     return $.ui.open(paneArgs(o.focus !== false))
   }

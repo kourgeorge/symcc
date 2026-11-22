@@ -90,7 +90,9 @@ export function sessionStarting() {
 /** The watchdog's timer went off (every 2 minutes): look for stuck workers and tasks. */
 export function watchdogTick(host: Host) {
   if (S.guardOnly) return // a worker folder only guards: the timers touch nothing
-  if (!S.fresh && S.gitState !== 'ok') void recheckGit(host).catch(() => undefined) // installing git or git init by hand clears the notice
+  // git init by hand clears the notice. T-887: not while git is missing: on a Mac without the command-line tools,
+  // running the /usr/bin/git stand-in opens Apple's install pop-up each time; Check again or a new session looks then
+  if (!S.fresh && S.gitState !== 'ok' && S.gitState !== 'no-git') void recheckGit(host).catch(() => undefined)
   void check(host).catch(() => undefined)
 }
 
