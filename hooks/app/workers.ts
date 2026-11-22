@@ -70,6 +70,10 @@ export async function pump(host: Host) {
   const b = await load(host)
   if (modeOf(b) === 'paused' || !onHere(b)) return
   if (!ready(b).length) return
+  // T-887: while git is missing, pump (every 30 s from the lead heartbeat, every 2 min from the watchdog) runs no git:
+  // on a Mac without the command-line tools the /usr/bin/git stand-in opens Apple's install pop-up each time.
+  // Check again or a new session looks again, and Check again pumps when git is there.
+  if (S.gitState === 'no-git') return
   if (!(await gitReady(host, b))) return // no git, no repo or no commit yet: nothing starts until it is set up
   const failed = (id: string) => async (err: Error) => {
     await change(host, x => patchTask(x, id, { status: 'failed', note: `couldn't start: ${err.message.slice(0, 200)}`, ...endedBy(find(x, id), now(), 'stopped', "couldn't start") }, now()))

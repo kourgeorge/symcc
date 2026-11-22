@@ -1888,7 +1888,8 @@ gets its own git worktree. It checks this when a session starts and before a wor
   and the lead offers to run the step on your yes (macOS: `brew install git` when Homebrew is
   there, else `xcode-select --install`; Linux: `sudo apt install git`, `dnf` or `pacman`; Windows:
   `winget install --id Git.Git`). It never runs something that needs sudo or opens an installer
-  without asking. While git is missing, symcc does not try git again by itself (on a Mac without
+  without asking. While git is missing, symcc does not try git again by itself, not even to start
+  a task that is ready (on a Mac without
   the command-line tools, each try would bring up Apple's install pop-up again): after you install
   it, press **Check again** (g), run `/symcc-settings git check` or start a new session. Then the
   notice moves on to the next case.

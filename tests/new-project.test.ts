@@ -9,6 +9,8 @@ import { tellLead, takeBoardUpdate } from '../hooks/app/tell'
 import { setupGit, gitReady } from '../hooks/app/git'
 import { MANUAL } from '../hooks/app/tools'
 import { openPane } from '../hooks/app/open'
+import { change, load } from '../hooks/app/store'
+import { addTask } from '../hooks/board'
 import { test } from './reset'
 import { fakeHost, memoryFs, done } from './fake-host'
 
@@ -248,6 +250,25 @@ test('T-861, T-887: git missing is looked at again only on Check again, never by
   expect(w.gits.n > before).toBe(true)
   expect(S.gitState).toBe('ok')
   expect(w.panel.view()).toMatchObject({ git_state: 'ok' })
+})
+
+test('T-887: with a task ready to start and git missing, the lead heartbeat and the regular check run no git (pump skips git while it is missing)', async () => {
+  const machine: { uname?: string; macStub?: boolean } = { uname: 'Darwin', macStub: true }
+  const w = world('a', '/home/me/proj', '/home/me', machine)
+  await sessionStart(w.host)
+  await runCommand(w.host, 'symcc-init', '')
+  expect(S.gitState).toBe('no-git')
+  await change(w.host, b => addTask(b, { origin: { why: 'a test' }, title: 'Do it', details: 'Do it.\nDone when: done.', files: ['src/'] }, new Date().toISOString()))
+  const wait = async () => { for (let i = 0; i < 300; i++) await Promise.resolve() }
+  await wait()
+  const before = w.gits.n
+  watchdogTick(w.host)
+  await wait()
+  leadBeat(w.host)
+  await wait()
+  expect(w.gits.n - before).toBe(0)
+  expect(S.gitState).toBe('no-git')
+  expect((await load(w.host)).tasks.filter(t => t.status === 'todo').length).toBe(1)
 })
 
 test('T-844, T-861: /symcc-init git sets up git in that folder first, even with a parent repo, then the board', async () => {
