@@ -507,6 +507,7 @@ test('T-886: after a reload (memory empty) a backup under an hour old is reused 
   const name = (ms: number) => `data.before-migrate-${new Date(ms).toISOString().replace(/[:.]/g, '-')}`
   const recent = name(Date.now() - 10 * 60_000)
   w.files.set(`${D}/${recent}/board.json`, 'older')
+  w.files.set(`${D}/${recent}/migrated.json`, JSON.stringify({ at: new Date(Date.now() - 10 * 60_000).toISOString(), version: S.version }))
   expect(await migrateIfOld(w.host)).toBe('')
   expect(backups(w).size).toBe(1)
   expect(leadQueue.filter(t => t.includes('an older symcc copy is writing to this board')).length).toBe(1)
@@ -517,6 +518,63 @@ test('T-886: after a reload (memory empty) a backup under an hour old is reused 
   v.files.set(`${D}/${name(Date.now() - 2 * 60 * 60_000)}/board.json`, 'older')
   expect(await migrateIfOld(v.host)).toBe('')
   expect(backups(v).size).toBe(2)
+})
+
+test('T-886: a backup not left by a successful migration (a failed try, before a reload, or another symcc version) gives the usual message, not the older-copy warning', async () => {
+  const name = (ms: number) => `data.before-migrate-${new Date(ms).toISOString().replace(/[:.]/g, '-')}`
+  const older = (_w: unknown) => leadQueue.filter(t => t.includes('an older symcc copy')).length
+  const moved = () => leadQueue.filter(t => t.includes('moved your old data')).length
+  // writing board.json fails with why() while it is not ''
+  const failBoard = (w: ReturnType<typeof world>, why: () => string) => {
+    const write = w.host.fs.write
+    w.host.fs.write = async (p, text) => {
+      if (why() && p.endsWith('board.json') && !p.includes('before-migrate')) throw new Error(why())
+      return write(p, text)
+    }
+    const run = w.host.run
+    w.host.run = async (argv, opts) => (why() && argv[0] === 'mv' && String(argv[argv.length - 1]).endsWith('board.json') ? done({ exitCode: 1, stderr: why() }) : run(argv, opts))
+  }
+  // 1. the failure reason changes, then it works (one process)
+  {
+    const w = world()
+    S.enabledNow = true
+    leadQueue.length = 0
+    let why = 'disk A'
+    failBoard(w, () => why)
+    expect(await migrateIfOld(w.host)).toContain("couldn't move")
+    why = 'disk B'
+    w.files.set(`${D}/scouts.json`, w.files.get(`${D}/scouts.json`)! + ' ')
+    expect(await migrateIfOld(w.host)).toContain("couldn't move")
+    why = ''
+    w.files.set(`${D}/scouts.json`, w.files.get(`${D}/scouts.json`)! + ' ')
+    expect(await migrateIfOld(w.host)).toBe('')
+    expect(older(w)).toBe(0)
+    expect(moved()).toBe(1)
+  }
+  // 2. a failure, a reload (memory empty), then it works
+  {
+    const w = world()
+    leadQueue.length = 0
+    let fail = true
+    failBoard(w, () => (fail ? 'disk A' : ''))
+    expect(await migrateIfOld(w.host)).toContain("couldn't move")
+    forgetMigrationFailure()
+    fail = false
+    expect(await migrateIfOld(w.host)).toBe('')
+    expect(older(w)).toBe(0)
+    expect(moved()).toBe(1)
+  }
+  // 3. a recent success by another symcc version (an update added an old-shape rule)
+  {
+    const w = world()
+    leadQueue.length = 0
+    const recent = name(Date.now() - 10 * 60_000)
+    w.files.set(`${D}/${recent}/board.json`, 'older')
+    w.files.set(`${D}/${recent}/migrated.json`, JSON.stringify({ at: new Date(Date.now() - 10 * 60_000).toISOString(), version: `${S.version}-other` }))
+    expect(await migrateIfOld(w.host)).toBe('')
+    expect(older(w)).toBe(0)
+    expect(moved()).toBe(1)
+  }
 })
 
 test('T-886: a task already in the queue step with a leftover "queue (n)" note migrates to no old rows', async () => {

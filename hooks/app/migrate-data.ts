@@ -12,7 +12,7 @@ import { safeScoutFile, scoutRunReportFile, scoutRunsText } from '../core/scouts
 import { type OldInput, migratedScoutRun, oldDataRows, upgradeArchiveTask, upgradeBoard, upgradeScoutFile, upgradeScoutUsage } from '../core/old-data'
 import { BACKUP_MARK } from '../core/doctor'
 import type { Host } from '../host'
-import { S } from './state'
+import { S, loadVersion } from './state'
 import { fileName, isStubbed, locked, now, path, readBoardRaw, readWhole, safeWrite, saveBoard } from './store'
 import { saveArchive } from './archive'
 import { changeScoutMemory, runsPath, scoutMemoryFile, writeRunReport } from './scouts'
@@ -92,7 +92,6 @@ export async function migrateIfOld(host: Host, all = true): Promise<string> {
     // after a failure the last backup is kept and reused (the data it holds is the old shape anyway)
     // (only when the folder is still there: the doctor or the owner may have deleted it)
     let reuse = failedBackup?.backup
-    const failedOne = reuse
     if (reuse && (await host.fs.list(path(reuse)).catch(() => [])).length === 0) {
       failedBackup = null
       reuse = undefined
@@ -101,9 +100,11 @@ export async function migrateIfOld(host: Host, all = true): Promise<string> {
     const newest = await newestBackup(host)
     const nowMs = Date.parse(now())
     if (!reuse && newest && nowMs - newest.ms < BACKUP_EVERY_MS) reuse = newest.backup
-    // old data again soon after a migration: an older symcc copy is writing to this board
-    // (a backup left by this copy's own failed try is no sign of that)
-    const lastMs = Math.max(migratedAt, newest && newest.backup !== failedOne ? newest.ms : 0)
+    // old data again soon after a successful migration by this same symcc version: an older symcc copy is writing to
+    // this board. Only backups marked by a success count (a failed try's or an older migration's backup is no sign of
+    // that), and a mark left by another version means an update brought a new old-shape rule.
+    await loadVersion(host)
+    const lastMs = Math.max(migratedAt, await lastMigratedMs(host, nowMs))
     const cameBack = lastMs > 0 && nowMs - lastMs < CAME_BACK_MS
     const r = await migrateData(host, reuse)
     if (r.failed) why = r.failed
@@ -189,6 +190,24 @@ async function newestBackup(host: Host): Promise<{ backup: string; ms: number } 
   }
   if (!best || (await host.fs.list(`${dir}/${best.name}`).catch(() => [])).length === 0) return null
   return { backup: fileName(`${dir}/${best.name}`), ms: best.ms }
+}
+
+/** The file a successful migration leaves in its backup folder: { at, version } (T-886). */
+const MIGRATED_FILE = 'migrated.json'
+
+/** When this symcc version last migrated successfully (ms, from the marks in backup folders under a day old), 0 for none. */
+async function lastMigratedMs(host: Host, nowMs: number): Promise<number> {
+  const dir = path(S.N.dir)
+  let best = 0
+  for (const f of await host.fs.list(dir).catch(() => [])) {
+    if (f.kind !== 'dir' || !f.name.startsWith(`data${BACKUP_MARK}`)) continue
+    const named = backupTimeMs(f.name)
+    if (!Number.isFinite(named) || nowMs - named >= CAME_BACK_MS) continue
+    const mark = jsonOf(await host.fs.read(`${dir}/${f.name}/${MIGRATED_FILE}`).catch(() => null)) as { at?: unknown; version?: unknown } | null
+    const at = typeof mark?.at === 'string' ? Date.parse(mark.at) : NaN
+    if (Number.isFinite(at) && mark?.version === S.version && at > best) best = at
+  }
+  return best
 }
 
 /** The last failed migration: what the data files looked like then, and the message. */
@@ -309,5 +328,7 @@ export async function migrateData(host: Host, reuseBackup?: string): Promise<{ f
   if (after.length) return { failed: `still in an old shape: ${oldRowsText(after)} (the backup is in ${backup}/)`, done, backup }
   if (!before.length) done.push('nothing was in an old shape')
   failedBackup = null // a success: the next failure makes a new backup
+  // the mark that tells a later run (also after a reload) old data came back after a success (T-886)
+  await host.fs.write(path(`${backup}/${MIGRATED_FILE}`), JSON.stringify({ at: now(), version: S.version })).catch(() => {})
   return { failed: '', done, backup }
 }
