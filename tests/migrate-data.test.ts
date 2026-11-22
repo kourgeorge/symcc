@@ -5,7 +5,7 @@ import { expect } from 'claude-code/testing'
 import { emptyBoard, readBoard, readArchive } from '../hooks/board'
 import { doctor } from '../hooks/app/doctor'
 import { load, change } from '../hooks/app/store'
-import { migrateIfOld } from '../hooks/app/migrate-data'
+import { migrateIfOld, forgetMigrationFailure } from '../hooks/app/migrate-data'
 import { S, leadQueue } from'../hooks/app/state'
 import { oldDataRows } from '../hooks/core/old-data'
 import { stillOld } from './old-data-fixture'
@@ -21,6 +21,7 @@ const E = '2026-11-01T09:00:00.000Z'
 const base = { details: '', files: [], question: null, order: 1, after: [], branch: null, created_at: T, updated_at: E }
 
 function world() {
+  forgetMigrationFailure()
   const files = new Map<string, string>()
   const old = {
     ...emptyBoard(), mode: 'off', notify: 'sound', sound_set: 2, target_branch: 'dev', archived: { done: 1, dropped: 0, tries: 1, ms: 1000, tokens: 300 },
@@ -242,8 +243,42 @@ test('T-804: a failed runs-file write is told once and not retried until the fil
   // the files change: it tries again
   w.files.set(`${D}/scouts.json`, w.files.get(`${D}/scouts.json`)! + ' ')
   await migrateIfOld(w.host)
-  expect(backups(w).size).toBe(2)
+  expect(backups(w).size).toBe(1)
   expect(leadQueue.filter(t => t.includes("couldn't move")).length).toBe(1)
+})
+
+test('T-821: the same write error with changing files keeps one backup folder and one message', async () => {
+  const w = world()
+  S.enabledNow = true
+  leadQueue.length = 0
+  const write = w.host.fs.write
+  w.host.fs.write = async (p, text) => {
+    if (p.includes('.runs.json')) throw new Error(`EACCES: permission denied, open '${p}'`)
+    return write(p, text)
+  }
+  for (let i = 0; i < 3; i++) {
+    await migrateIfOld(w.host)
+    w.files.set(`${D}/scouts.json`, w.files.get(`${D}/scouts.json`)! + ' ')
+  }
+  expect(backups(w).size).toBe(1)
+  expect(leadQueue.filter(t => t.includes("couldn't move")).length).toBe(1)
+})
+
+test('T-821: a reused backup folder that was deleted is made again', async () => {
+  const w = world()
+  S.enabledNow = true
+  const write = w.host.fs.write
+  w.host.fs.write = async (p, text) => {
+    if (p.includes('.runs.json')) throw new Error('EACCES: permission denied')
+    return write(p, text)
+  }
+  await migrateIfOld(w.host)
+  const first = [...backups(w)][0]!
+  for (const f of [...w.files.keys()]) if (f.includes(`/data.before-migrate-${first}/`)) w.files.delete(f)
+  expect(backups(w).size).toBe(0)
+  w.files.set(`${D}/scouts.json`, w.files.get(`${D}/scouts.json`)! + ' ')
+  await migrateIfOld(w.host)
+  expect(backups(w).size).toBe(1)
 })
 
 test('T-804: the same write error naming a random temp file is told once, even when the files change', async () => {

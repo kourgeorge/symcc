@@ -56,7 +56,11 @@ test('the checker texts say it runs before the merge queue, not after the tests 
   expect(help).not.toContain('merge line')
   expect(help).not.toContain('tester · try 2')
   // T-642: since T-628 only the band (and the task page) show the try, not the list rows
-  expect(help).toContain('The list rows show no try number; the band above the prompt shows a later try as "(n)" right after the row\'s time ("T-5 ⊛ 3m (3)")')
+  // T-814: Claude Code's band writes "· try 3" (bandItems); only OpenCode's strip writes "(3)" (bandLeads)
+  expect(help).toContain('The list rows show no try number; the band above the prompt shows a later try as "· try 3" after the step\'s time ("T-5 ⊛ test 3m · try 3")')
+  expect(help).toContain('OpenCode\'s strip above the prompt shows it as "(3)" right after the time ("T-5 ⊛ 3m (3)")')
+  expect(help).not.toContain('shows a later try as "(n)"')
+  expect(help).not.toContain('Claude') // T-814: the manual names no host's band by its host name (tests/host-words.test.ts)
   expect(help).toContain('the task page shows "try 3/4"')
   expect(help).not.toContain('A later try shows as "(n)"')
   const minutes = tool.description.slice(tool.description.indexOf('test_minutes ('), tool.description.indexOf('max_parallel'))
