@@ -3664,8 +3664,8 @@ test('T-706: startTui: Set up git (g, or the banner\'s button) asks a yes first,
   ok.board.stop()
 })
 
-test('T-861: opening the board (/symcc-board) while git is not ok sends /symcc-settings git check; with git ok it sends nothing', async () => {
-  for (const [state, want] of [['no-repo', 1], [undefined, 0]] as const) {
+test('T-861/T-887: opening the board (/symcc-board) sends no /symcc-settings git check, with git ok or not', async () => {
+  for (const [state, want] of [['no-repo', 0], ['no-commits', 0], [undefined, 0]] as const) {
     const f = fakeCtx({})
     const sent: { name: string; text: string }[] = []
     const ctx: TuiContext = { ...f.ctx, client: { session: { command: async i => void sent.push(i) } } }
