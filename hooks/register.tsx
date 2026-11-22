@@ -112,12 +112,15 @@ export const register: Register = on => {
     return text === undefined ? r : { sections: [...r.sections, { id: `${S.N.name}:lead`, text, scope: 'session' as const }] }
   })
 
+  // Only the message's own opening frame counts (a report that quotes the starter's frame must still arrive).
+  const starterFrame = (text: string) => text.replace(/^\s*Another Claude session sent a message:\s*/, '').trimStart().startsWith(`<agent-message from="${S.N.name}-starter"`)
+
   // The owner's typed prompt (terminal or phone/web bridge); slash commands, hidden prompts and symcc's own board updates are left out.
   on('prompt.submit', async ($, e, next) => {
     useName(claudeHost($))
     const kind = e.origin?.kind
     // T-837: the hidden starter's end ("OK") reaches the lead's chat as a message; dropped here so it wakes no turn
-    if (kind !== 'composer' && kind !== 'bridge' && !e.command && e.text.includes(`from="${S.N.name}-starter"`)) return { drop: 'the starter agent finished' }
+    if (kind !== 'composer' && kind !== 'bridge' && !e.command && starterFrame(e.text)) return { drop: 'the starter agent finished' }
     const r = await next(e)
     if ((kind === 'composer' || kind === 'bridge') && !e.command && !e.isMeta && 'text' in r && typeof r.text === 'string') ownerTyped(r.text)
     return r

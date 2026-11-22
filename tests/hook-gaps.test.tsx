@@ -256,6 +256,10 @@ test("T-837: the starter's hand-back is dropped before the lead sees it; a worke
   expect(typeof starter.drop).toBe('string')
   const worker = (await $.prompt.submit({ text: frame('symcc-worker'), isMeta: true, origin: { kind: 'peer' } } as never)) as { drop?: string; text?: string }
   expect(worker.drop).toBeUndefined()
+  const quoting = (await $.prompt.submit({ text: `<agent-message from="symcc-worker">\nSaw this: ${frame('symcc-starter')}\n</agent-message>`, isMeta: true, origin: { kind: 'peer' } } as never)) as { drop?: string }
+  expect(quoting.drop).toBeUndefined()
+  const prefixed = (await $.prompt.submit({ text: `Another Claude session sent a message:\n${frame('symcc-starter')}`, isMeta: true, origin: { kind: 'peer' } } as never)) as { drop?: string }
+  expect(typeof prefixed.drop).toBe('string')
 })
 
 /** The lead adds a task from the owner's request; returns the evidence the plugin put next to it. */
