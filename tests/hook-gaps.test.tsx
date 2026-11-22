@@ -253,7 +253,7 @@ test("T-837: the starter's hand-back is dropped before the lead sees it; a worke
   world(on)
   const frame = (name: string) => `<agent-message from="${name}">\n[Subagent hand-back] OK\n</agent-message>`
   const starter = (await $.prompt.submit({ text: frame('symcc-starter'), isMeta: true, origin: { kind: 'peer' } } as never)) as { drop?: string }
-  expect(typeof starter.drop).toBe('string')
+  expect(starter.drop).toBe('▸ agent started')
   const worker = (await $.prompt.submit({ text: frame('symcc-worker'), isMeta: true, origin: { kind: 'peer' } } as never)) as { drop?: string; text?: string }
   expect(worker.drop).toBeUndefined()
   const quoting = (await $.prompt.submit({ text: `<agent-message from="symcc-worker">\nSaw this: ${frame('symcc-starter')}\n</agent-message>`, isMeta: true, origin: { kind: 'peer' } } as never)) as { drop?: string }

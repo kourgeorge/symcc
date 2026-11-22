@@ -120,7 +120,7 @@ export const register: Register = on => {
     useName(claudeHost($))
     const kind = e.origin?.kind
     // T-837: the hidden starter's end ("OK") reaches the lead's chat as a message; dropped here so it wakes no turn
-    if (kind !== 'composer' && kind !== 'bridge' && !e.command && starterFrame(e.text)) return { drop: 'the starter agent finished' }
+    if (kind !== 'composer' && kind !== 'bridge' && !e.command && starterFrame(e.text)) return { drop: '▸ agent started' }
     const r = await next(e)
     if ((kind === 'composer' || kind === 'bridge') && !e.command && !e.isMeta && 'text' in r && typeof r.text === 'string') ownerTyped(r.text)
     return r
