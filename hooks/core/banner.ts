@@ -88,11 +88,11 @@ export function bandLeads(tasks: (Pick<SymccTask, 'id' | 'status' | 'runs'> & Pa
 
 // ---------------- Claude Code's band above the prompt (T-748) ----------------
 
-/** The icon and the name of each stage in a running band row: "▶ work", "⌕ checker", "⧗ queue" (STEP_ICON, STEP_WORD). */
+/** The icon and the name of each stage in a running band row: "▶" (no name: the icon says work), "⌕" (same), "⧗ queue" (STEP_ICON, STEP_WORD). */
 export const BAND_STAGE: Record<PhaseStage, { icon: string; name: string }> = {
-  worker: { icon: STATUS_MARK.doing, name: 'work' },
+  worker: { icon: STATUS_MARK.doing, name: '' },
   prep: { icon: STEP_ICON.prep, name: STEP_WORD.prep },
-  checker: { icon: STEP_ICON.checker, name: STEP_WORD.checker },
+  checker: { icon: STEP_ICON.checker, name: '' },
   queue: { icon: STEP_ICON.queue, name: STEP_WORD.queue },
   test: { icon: STEP_ICON.testing, name: STEP_WORD.testing },
   merge: { icon: STEP_ICON.merging, name: STEP_WORD.merging },
@@ -155,7 +155,7 @@ export function bandItems(view: LiveView, nowMs: number, since: (id: string) => 
     const at = l.stage === 'worker' ? (ended === undefined ? (l.sinceMs ?? toMs(since(l.id))) : (toMs(since(l.id)) ?? l.sinceMs)) :l.station === 'work' ? (ended ?? l.sinceMs) : l.sinceMs
     const time = at !== undefined ? rowDuration(Math.max(0, nowMs - at)) : ''
     const tries = l.tryNo > 1 ? ` · try ${l.tryNo}` : ''
-    return { id: l.id, title: l.title, kind: 'run', icon: s.icon, forms: [`${s.name}${time ? ` ${time}` : ''}${tries}`, `${s.name}${tries}`, s.name], tail: tail(byId.get(l.id)!) }
+    return { id: l.id, title: l.title, kind: 'run', icon: s.icon, forms: [[s.name, time].filter(Boolean).join(' ') + tries, s.name + tries, s.name].map(f => f.replace(/^ · /, '')), tail: tail(byId.get(l.id)!) }
   })
   const next = liveTrains(view, nowMs).next.find(x => !x.stuck.length)
   const nextRow: BandItem[] = next ? [{ id: next.id, title: next.title, kind: 'next', icon: STATUS_MARK.todo, forms: [NEXT_UP_STATE], tail: '' }] : []
