@@ -12,7 +12,7 @@ import type { Host } from '../host'
 import { TOOLS } from '../app/tools'
 import { ASK_TOOL_DEF } from '../app/ask'
 import { COMMANDS, runCommand, toolCall, toolCallFailed, type CommandAnswer } from '../app/symcc'
-import { S, useName, toolName, workers, scoutRuns, checkerRuns } from '../app/state'
+import { S, onHere, useName, toolName, workers, scoutRuns, checkerRuns } from '../app/state'
 import { agentOnBoard } from '../app/workers'
 import { ASK_TOOL } from '../core/ask'
 import { SCOUT_BOARD_TOOLS } from '../core/scouts'
@@ -123,10 +123,14 @@ export function opencodeCommands(host: Host, session: Pick<OcSessionApi, 'prompt
     async execute(inv) {
       useName(host)
       const run = c.name === ANSWER_COMMAND().name ? answerCommand : runCommand
+      const isEnable = c.name === `${S.N.name}-enable`
+      // T-841: was symcc on in this window before the command? (a board that can't be read counts as on: nothing to open)
+      const wasOn = isEnable ? await load(host).then(b => onHere(b), () => true) : true
       const answer: CommandAnswer | null = await run(host, c.name, commandArgs(c.name, inv.prompt.text)).catch((err: Error) => ({ text: `${S.N.name}: /${c.name} failed: ${err?.message ?? err}`, isTextDisplayOnly: true as const }))
       if (!answer) return
-      // T-841: /enable turned symcc on here: this session's window opens the board (the view file carries the mark)
-      if (c.name === `${S.N.name}-enable` && S.root && !S.guardOnly) await host.ui.panel?.openNow?.(inv.sessionID).catch(() => undefined)
+      // T-841: /enable really turned symcc on here: this session's window opens the board (the view file carries the mark)
+      const nowOn = isEnable && !wasOn && S.root && !S.guardOnly ? await load(host).then(b => onHere(b), () => false) : false
+      if (nowOn) await host.ui.panel?.openNow?.(inv.sessionID).catch(() => undefined)
       if (answer.isTextDisplayOnly) await session.synthetic({ sessionID: inv.sessionID, text: answer.text, description: `/${c.name}`, delivery: inv.delivery, resume: false })
       else await session.prompt({ sessionID: inv.sessionID, text: answer.text, delivery: inv.delivery })
     },

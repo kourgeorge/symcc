@@ -1364,7 +1364,13 @@ test('/symcc-disable then /symcc-enable through OpenCode\'s commands in the lead
     expect(on.startsWith('symcc is enabled, in mode ')).toBe(true)
     expect(on).not.toContain('the board is paused')
     expect(JSON.parse(await readFile(`${p.main}/.symcc/board.json`, 'utf8')).enabled !== false).toBe(true)
+    // T-841: turning symcc on writes the one-time "open now" mark for this session; an "already enabled" answer does not
+    const mark = async () => parseViewFile(await readFile(`${p.main}/.symcc/view.json`, 'utf8').catch(() => null))?.open_now
+    const first = await mark()
+    expect(first?.session).toBe(lead)
+    await new Promise<void>(r => setTimeout(() => r(), 15))
     expect((await run('symcc-enable')).startsWith('symcc is already enabled, in mode ')).toBe(true)
+    expect(await mark()).toEqual(first)
     // the owner's case: the strip says "⏸ paused" because the board is paused (not symcc disabled)
     expect(await run('symcc-mode', 'paused')).toContain('⏸ paused')
     const paused = await run('symcc-enable')
