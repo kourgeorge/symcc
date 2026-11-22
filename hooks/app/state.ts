@@ -61,8 +61,21 @@ export function updateScoutOpen(host: Host, change: (value: string) => string) {
 export function readView(host: Host) {
   return panelOf(host).readView()
 }
-export function updateView(host: Host, change: (value: SymccView) => SymccView) {
-  return panelOf(host).updateView(change)
+/** The warning for a view the host's panel would have to trim ('' on a host that keeps every task, or when nothing was left out). */
+export function viewTrimNote(host: Host, v: SymccView) {
+  try {
+    return panelOf(host).trimNote?.(v) ?? ''
+  } catch {
+    return ''
+  }
+}
+/** Sets the published view. A refused value (too big, or any failure) never fails a board change or a worker start: the next publish tries again. */
+export async function updateView(host: Host, change: (value: SymccView) => SymccView) {
+  try {
+    await panelOf(host).updateView(change)
+  } catch {
+    // dropped on purpose, see above
+  }
 }
 
 // ---------------- what this module holds while it is loaded ----------------
