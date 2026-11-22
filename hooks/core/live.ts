@@ -7,7 +7,7 @@ import { type BoardTask, DEFAULT_AUTO_RETRIES, emptyBoard, kindOf, isInvestigati
 import { taskPhase, type PhaseStage } from './phase'
 import { handedBack, shownStatus } from './lead'
 import { cutTitle, median, padWidth, taskFigures, textWidth, wrapLine } from './stats'
-import { agentsOf, checkerIdOf, checkerTokensOf, tryCost, tryTokens, fmtCost, fmtDuration, fmtTokens, sumTokens, tokenCount, TOKEN_SIGN, fmtTok } from './runs'
+import { activeFrom, restartsOf, gapsOf, agentsOf, checkerIdOf, checkerTokensOf, tryCost, tryTokens, fmtCost, fmtDuration, fmtTokens, sumTokens, tokenCount, TOKEN_SIGN, fmtTok } from './runs'
 import { type KeyHint, LIVE_VIEW_KEYS, hintLineText, hintLines, rowDuration, waitOrder } from './panel'
 import { ORG_MEM_EMPTY, ORG_MEM_MAX_LINES, TOPIC_UNSORTED, orgMemNewest, orgMemSectionKeys, orgMemShortDay, orgMemTopicCounts, type OrgMemNote } from './org-mem'
 import { depDone } from './archive'
@@ -201,8 +201,11 @@ const ms = (iso: string | undefined): number | undefined => {
 /** When task `t` got to `station` in its try that started at `startMs`: the history's stage lines (T-616), else the hand-back, else the check step's mark. */
 function stationSince(t: BoardTask, station: LiveStation, startMs: number | undefined): number | undefined {
   if (station === 'work') return startMs
+  // T-863: the check step starts at the first prep or checker line after the last restart (older lines belong to the closed session's hand-back)
+  const restartMs = ms(restartsOf(t.runs?.[t.runs.length - 1]).at(-1)?.started)
+  const from = station === 'check' && restartMs !== undefined ? Math.max(restartMs, startMs ?? restartMs) : startMs
   const stageAt = (steps: string[], first: boolean) => {
-    const hits = (t.history ?? []).filter(h => h.kind === 'stage' && h.step !== undefined && steps.includes(h.step)).map(h => ms(h.at)).filter((n): n is number => n !== undefined && (startMs === undefined || n >= startMs))
+    const hits = (t.history ?? []).filter(h => h.kind === 'stage' && h.step !== undefined && steps.includes(h.step)).map(h => ms(h.at)).filter((n): n is number => n !== undefined && (from === undefined || n >= from))
     return hits.length ? (first ? Math.min(...hits) : Math.max(...hits)) : undefined
   }
   const found = station === 'check' ? stageAt(['prep', 'checker'], true) : station === 'queue' ? stageAt(['queue'], false) : station === 'tests' ? stageAt(['tests'], false) : stageAt(['merge'], false)
@@ -254,7 +257,9 @@ export function liveLanes(view: LiveView, nowMs: number): LiveLane[] {
       const startMs = ms(run?.started)
       const approving = t.status !== 'doing' && !waiting
       const enteredMs = (waiting ? ms(run?.ended) : approving ? approveSince(t, ms(run?.ended)) : startMs) ?? ms(t.updated_at) ?? ms(t.created_at) ?? 0
-      const sinceMs = waiting ? enteredMs : stationSince(t, station, approving ? enteredMs : startMs)
+      // T-863: a step's time is the active time since the step began: stretches when no session was open (a try goes on after a reopen) are left out
+      const stepMs = waiting ? enteredMs : stationSince(t, station, approving ? enteredMs : startMs)
+      const sinceMs = stepMs !== undefined && !waiting ? activeFrom(run, stepMs) : stepMs
       const tryNo = Math.max(1, Number(t.attempts) || 1)
       const auto = Number(t.test_tries ?? 0) || 0
       const place = stage === 'queue' ? t.live?.checking?.place : undefined
@@ -909,7 +914,7 @@ export function todayMore(tasks: readonly SymccTask[], team: TodayTeam | undefin
       if (start !== undefined) {
         const from = Math.max(start, dayStart)
         const to = Math.min(end ?? nowMs, nowMs)
-        if (to > from) workMs += to - from
+        if (to > from) workMs += to - from - gapsOf(r).reduce((n, g) => n + Math.max(0, Math.min(g.to, to) - Math.max(g.from, from)), 0)
       }
       const at = end ?? start
       if (!tryTokens(r) || !isToday(at)) continue
