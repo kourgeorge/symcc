@@ -53,13 +53,38 @@ export async function homeBranch($: Host): Promise<string> {
 /** Looks whether git is installed, the project is inside a git work tree, and it has a commit. */
 export async function probeGit($: Host): Promise<GitState> {
   if (!S.root) return 'ok'
-  const run = (args: string[]) => git($, args, S.root, 15_000).catch(() => null)
-  const v = await run(['--version'])
-  const hasGit = !!v && v.exitCode === 0
+  // T-870: a timeout or any other failure is "unknown" (null): the last known state stays, and the next check tries again
+  const run = async (args: string[]) => {
+    try {
+      const r = await git($, args, S.root, 15_000)
+      return r.exitCode === 124 ? null : r
+    } catch {
+      return null
+    }
+  }
+  let v: Awaited<ReturnType<typeof git>> | null = null
+  let missing = false
+  try {
+    v = await git($, ['--version'], S.root, 15_000)
+    missing = v.exitCode === 127
+    if (v.exitCode === 124) v = null
+  } catch (err) {
+    const msg = err instanceof Error ? `${(err as { code?: string }).code ?? ''} ${err.message}` : String(err)
+    missing = /ENOENT|not found|no such file/i.test(msg) && !/time(d)? ?out/i.test(msg)
+  }
+  if (missing) return gitStateOf({ hasGit: false, inside: false, hasHead: false })
+  if (!v || v.exitCode !== 0) return S.gitState
+  const hasGit = true
   // T-844: the project's own repo only: a repo above the project folder (its show-cdup is "../") is not used
   const [inRepo, up] = hasGit ? await Promise.all([run(['rev-parse', '--is-inside-work-tree']), run(['rev-parse', '--show-cdup'])]) : [null, null]
+  if (hasGit && (!inRepo || !up)) return S.gitState
   const inside = hasGit && inRepo?.stdout.trim() === 'true' && !up?.stdout.trim()
-  const hasHead = inside && (await run(['rev-parse', '--verify', '-q', 'HEAD']))?.exitCode === 0
+  let hasHead = false
+  if (inside) {
+    const h = await run(['rev-parse', '--verify', '-q', 'HEAD'])
+    if (!h) return S.gitState
+    hasHead = h.exitCode === 0
+  }
   return gitStateOf({ hasGit, inside, hasHead })
 }
 

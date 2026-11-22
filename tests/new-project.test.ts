@@ -24,7 +24,7 @@ function world(id: string, root = ROOT, repoRoot = root, machine: { uname?: stri
       const [cmd, ...rest] = argv
       if (cmd === 'uname') return machine.uname ? done({ stdout: machine.uname + '\n' }) : done({ exitCode: 127 })
       if (cmd === 'sh' && machine.uname) return done({ exitCode: ['brew', 'apt-get'].includes(rest[rest.length - 1]!) ? 0 : 1 })
-      if (cmd === 'git' && machine.noGit) return done({ exitCode: 1, stderr: 'git: command not found' })
+      if (cmd === 'git' && machine.noGit) return done({ exitCode: 127, stderr: 'git: command not found' })
       if (cmd === 'git' && machine.repo?.on && rest[0] === 'rev-parse') return done({ stdout: rest.includes('--show-toplevel') ? `${root}\n` : rest.includes('--show-cdup') ? '\n' : rest.includes('HEAD') ? 'abc\n' : 'true\n' })
       if (cmd === 'git' && rest[0] === 'init') machine.repo = { on: true }
       if (cmd === 'git') ran.push({ args: argv.slice(1).join(' '), cwd: init?.cwd })
