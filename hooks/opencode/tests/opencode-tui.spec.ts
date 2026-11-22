@@ -2816,6 +2816,7 @@ test('T-692: the Live tab draws the terminal panel\'s lanes and today (core/live
   // no task in doing: the empty state
   const none: ViewFile = { ...f, view: { ...f.view, tasks: f.view.tasks.filter(t => t.status !== 'doing') } }
   expect(panelLines(none, { tab: 'live', opened: '', cursor: 0 }, NOW, 100).lines.map(lineText)).toContain(LIVE_INDENT + LIVE_EMPTY)
+  expect(panelLines(none, { tab: 'live', opened: '', cursor: 0 }, NOW, 100).lines.map(lineText)).not.toContain(' ' + '─'.repeat(12))
 })
 
 test('T-757: the OpenCode Live tab shows the whole task\'s tokens, the bar full at the usual per task, the warning past twice it, and the bar legend', () => {
