@@ -1205,19 +1205,23 @@ TASKS ────────────────────────�
   in the scout color, then each running scout's name and how long it has run, dim
   (`⏵ auto merge · agents 2/3 busy · ⌕ gaps-bot 4m, board-review 1m`). When the names don't fit, it
   says `⌕ 3 scouts`, and on a very narrow panel just `⌕ 3`. A scout still waiting to start
-  isn't shown, and with no scout running there is no mark. A click on it (or the `s` key)
+  isn't shown. After the running scouts the line also names the next scout due, the one whose
+  timer fires soonest (`⌕ gaps-bot 4m · next: simplify in 40m`); with no scout running it is
+  just `⌕ next: gaps-bot in 12m`. Paused scouts and scouts that run only on demand are never
+  the next one, and with none due there is no "next" part. On a narrow panel the "next" part
+  goes first, then the names shrink. With nothing running and nothing due there is no mark. A click on it (or the `s` key)
   opens the Scouts tab; this works on every board. Under the `TODAY` heading, four lines about today:
 
   ```
   TODAY ──────────────────────────────────────────────────
 
    ✓ 67 merged   ↺ 76 sent back   ✗ 0 failed   Σ 320.7M tokens
-   █████████████▓▒░ workers 84% · checkers 8% · scouts 5% · lead 3%
+   ░█████████████▓▒ lead 3% · workers 84% · checkers 8% · scouts 5%
    ⌀ per task 2.8M · 9m work · 23m start-to-merge   first try 34% · ⌀ 2.4 tries   ⌕ 68 sent back by the checker
    ⏱ 13h 06m agent work · ≈ $64 this session   busiest hour 14:00 · 42M   00         ▁▂▃▅▆▅█········· 24
   ```
 
-  The first line: merged, sent back (every send-back today: the checker's problems, tests failed, a clash with main), failed, and the tokens of everyone today (workers, checkers, scouts and the lead: the same total the bar's shares are out of, so it is never smaller than the busiest hour; when the lead's and the scouts' tokens aren't known it is the tries only and says a dim `(tries only)`). The second: a bar of who spent today's tokens (workers, checkers, scouts, the lead; each in
+  The first line: merged, sent back (every send-back today: the checker's problems, tests failed, a clash with main), failed, and the tokens of everyone today (workers, checkers, scouts and the lead: the same total the bar's shares are out of, so it is never smaller than the busiest hour; when the lead's and the scouts' tokens aren't known it is the tries only and says a dim `(tries only)`). The second: a bar of who spent today's tokens (the lead, workers, checkers, scouts; each in
   its board color and its own shade), with the shares; it is the only bar in the section. The third:
   for the tasks merged today, the middle value (median) of their tokens, their work time and the time
   from their first try's start to the merge; then today's share of merged tasks that went through on the first try, the

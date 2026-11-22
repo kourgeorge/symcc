@@ -267,7 +267,7 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
         <Box key="live-head" flexDirection="row" flexWrap="wrap">
           <Text bold color={C('text')}>{headSegs[0]!.text + headSegs[1]!.text}</Text>
           <Text color={C(LIVE_TONE.scouts)}>{headSegs[2]!.text + ' '}</Text>
-          {vsLink(vs, 'live-scouts', mdLink(headSegs[3]!.text.trim(), vsHref('tab', 'scouts')), [[vsHref('tab', 'scouts'), goTab('scouts')]], true)}
+          {vsLink(vs, 'live-scouts', mdLink(headSegs.slice(3).map(x => x.text).join('').trim(), vsHref('tab', 'scouts')), [[vsHref('tab', 'scouts'), goTab('scouts')]], true)}
         </Box>
       ) : (
         line('live-head', liveHeader(v, running), 'text', true)

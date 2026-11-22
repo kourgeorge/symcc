@@ -2,7 +2,7 @@
 // numbers; claude/ui/live.tsx draws them on the terminal panel).
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { liveLanes, liveLayout, laneLines, liveLabelLine, liveLabelSegs, LIVE_AGENT_MARK, LIVE_TONE, liveStations, liveTrains, trainRows, type LiveTrain, liveToday, todayLines, segText, liveBlink, liveHeader, liveHeaderSegs, liveScoutMark, scoutsRunning, tabRow, LIVE_TABS, LIVE_EMPTY, LIVE_LEGEND, LIVE_DIVIDER, LIVE_INDENT, liveInner, liveBarLegend, liveLegend } from '../hooks/core/live'
+import { liveLanes, liveLayout, laneLines, liveLabelLine, liveLabelSegs, LIVE_AGENT_MARK, LIVE_TONE, liveStations, liveTrains, trainRows, type LiveTrain, liveToday, todayLines, segText, liveBlink, liveHeader, liveHeaderSegs, liveScoutMark, scoutsRunning, scoutNext, tabRow, LIVE_TABS, LIVE_EMPTY, LIVE_LEGEND, LIVE_DIVIDER, LIVE_INDENT, liveInner, liveBarLegend, liveLegend } from '../hooks/core/live'
 import { textWidth } from '../hooks/core/stats'
 import { FINISH_STALE_MS } from '../hooks/core/lead'
 import { listKeys } from '../hooks/board'
@@ -707,15 +707,43 @@ test('T-770: liveScoutMark shows the names and times, then "N scouts", then "N",
   expect(liveHeaderSegs({ ...view(true), scouts: asScouts(RUNS) }, [], T0).map(s => s.tone)).toEqual(['text', 'text', 'scouts', 'dim'])
 })
 
-const scoutView = (runs: unknown[]) => ({ ...liveView(calm(TASKS)), value: { ...liveView(calm(TASKS)).value, ...(runs.length ? { scouts: asScouts(runs as typeof RUNS) } : {}) } })
-for (const [runs, w, want] of [
+// T-847: the mode line also names the next scout due ("⌕ next: gaps-bot in 12m"), after the running ones; paused and on-demand scouts never
+const inMin = (m: number) => new Date(T0 + m * 60_000).toISOString()
+const NEXT_SCOUTS = [
+  { name: 'simplify', every_minutes: 60, next_run: inMin(40) },
+  { name: 'gaps-bot', every_minutes: 30, next_run: inMin(12) },
+  { name: 'paused-one', every_minutes: 30, paused: true, next_run: inMin(1) },
+  { name: 'manual', every_minutes: 0, next_run: inMin(2) },
+]
+test('T-847: scoutNext picks the soonest timer, never a paused, on-demand or running scout', () => {
+  expect(scoutNext(NEXT_SCOUTS)).toEqual({ name: 'gaps-bot', at: T0 + 12 * 60_000 })
+  expect(scoutNext([NEXT_SCOUTS[2]!, NEXT_SCOUTS[3]!])).toBe(null)
+  expect(scoutNext([{ ...NEXT_SCOUTS[1]!, running: true }])).toBe(null)
+  expect(scoutNext(undefined)).toBe(null)
+})
+test('T-847: liveHeaderSegs shows next alone, running plus next, and drops next first on a narrow width', () => {
+  const head = (extra: unknown[], w: number) => segText(liveHeaderSegs({ ...view(true), scouts: [...extra, ...NEXT_SCOUTS] } as never, liveLanes(view(true), T0), T0, w))
+  const base = '⏵ auto merge · agents 2/3 busy'
+  expect(head([], 80)).toBe(`${base} · ⌕ next: gaps-bot in 12m`)
+  expect(head(asScouts([RUNS[0]!]), 80)).toBe(`${base} · ⌕ board-review 1m · next: gaps-bot in 12m`)
+  expect(head(asScouts([RUNS[0]!]), 56)).toBe(`${base} · ⌕ board-review 1m`)
+  expect(head([], 40)).toBe(base)
+  expect(segText(liveHeaderSegs({ ...view(true), scouts: [NEXT_SCOUTS[2]!, NEXT_SCOUTS[3]!] } as never, liveLanes(view(true), T0), T0, 80))).toBe(base)
+})
+
+const scoutView = (runs: unknown[], more: unknown[] = []) => ({ ...liveView(calm(TASKS)), value: { ...liveView(calm(TASKS)).value, ...(runs.length || more.length ? { scouts: [...asScouts(runs as typeof RUNS), ...more] } : {}) } })
+for (const [runs, w, want, more] of [
   [[], 80, '⏵ auto merge · agents 2/3 busy'],
   [[RUNS[1]], 80, '⏵ auto merge · agents 2/3 busy · ⌕ gaps-bot 4m'],
   [RUNS, 80, '⏵ auto merge · agents 2/3 busy · ⌕ gaps-bot 4m, board-review 1m'],
   [RUNS, 44, '⏵ auto merge · agents 2/3 busy · ⌕ 2 scouts'],
-] as const)
-  test(`T-770: the terminal and VS Code Live tabs' mode line at ${w} columns with ${runs.length} scout(s) running`, async ($, on) => {
-    seedBoard(on, { view: scoutView([...runs]) })
+  [[], 80, '⏵ auto merge · agents 2/3 busy · ⌕ next: gaps-bot in 12m', NEXT_SCOUTS],
+  [[RUNS[0]], 100, '⏵ auto merge · agents 2/3 busy · ⌕ board-review 1m · next: gaps-bot in 12m', NEXT_SCOUTS],
+  [[RUNS[0]], 56, '⏵ auto merge · agents 2/3 busy · ⌕ board-review 1m', NEXT_SCOUTS],
+  [[], 40, '⏵ auto merge · agents 2/3 busy', NEXT_SCOUTS],
+] as [unknown[], number, string, unknown[]?][])
+  test(`T-770: the terminal and VS Code Live tabs' mode line at ${w} columns with ${runs.length} scout(s) running${more ? ' and a next scout' : ''}`, async ($, on) => {
+    seedBoard(on, { view: scoutView([...runs], [...(more ?? [])]) })
     on('ui.toast', () => ({ value: undefined }))
     const t = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: w }, surface: 'terminal' })
     await t.press({ key: 'tab-live' })
@@ -724,8 +752,9 @@ for (const [runs, w, want] of [
     expect(textWidth(lines[0]!)).toBeLessThanOrEqual(w)
     expect(lines[1]).toMatch(/^TASKS ─+$/)
     const mark = await t.find({ key: 'live-scouts' })
-    expect(mark?.type).toBe(runs.length ? 'Button' : undefined)
-    if (runs.length) {
+    const marked = want.includes('⌕')
+    expect(mark?.type).toBe(marked ? 'Button' : undefined)
+    if (marked) {
       await t.press({ key: 'live-scouts' })
       expect(await t.find({ key: 'live-head' })).toBeUndefined()
       expect((await t.find({ key: 'tab-scouts' }))?.text).toContain('Scouts')
@@ -739,8 +768,8 @@ for (const [runs, w, want] of [
     // (the names are a markdown link: its words only)
     expect((await ui.find({ key: 'live-head' }))?.text.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')).toBe(want)
     const link = await ui.find({ key: 'live-scouts' })
-    expect(link?.props.pressableLinks).toEqual(runs.length ? [vsHref('tab', 'scouts')] : undefined)
-    if (runs.length) {
+    expect(link?.props.pressableLinks).toEqual(marked ? [vsHref('tab', 'scouts')] : undefined)
+    if (marked) {
       await ui.press({ key: 'live-scouts', link: { href: vsHref('tab', 'scouts') } })
       expect((await ui.find({ key: 'tabs' }))?.props.text).toContain('**Scouts')
     }
