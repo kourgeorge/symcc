@@ -12,7 +12,7 @@ const AGE = 600
 
 function task(id: string, min: number, tokens: number, over: Partial<SymccTask> = {}): SymccTask {
   const run = { started: iso(AGE), ended: iso(AGE - min), agents: [{ kind: 'worker' as const, started: iso(AGE), ended: iso(AGE - min), tokens: { input: tokens } }] }
-  return { id, title: `task ${id}`, details: '', files: [], status: 'done', note: '', question: null, order: 0, after: [], attempts: 1, history: [], branch: null, created_at: iso(AGE), updated_at: iso(0), runs: [run], ...over }
+  return { id, title: `task ${id}`, details: '', files: [], status: 'done', note: '', order: 0, after: [], attempts: 1, history: [], branch: null, created_at: iso(AGE), updated_at: iso(0), runs: [run], ...over }
 }
 
 // times (minutes): median 8; tokens: median 1200
