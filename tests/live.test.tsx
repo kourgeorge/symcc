@@ -2,7 +2,8 @@
 // numbers; claude/ui/live.tsx draws them on the terminal panel).
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { liveLanes, liveLayout, laneLines, liveLabelLine, liveLabelSegs, LIVE_AGENT_MARK, LIVE_TONE, liveStations, liveTrains, trainRows, type LiveTrain, liveToday, todayLines, segText, liveBlink, liveHeader, liveHeaderSegs, liveScoutMark, scoutsRunning, scoutNext, tabRow, LIVE_TABS, LIVE_EMPTY, LIVE_LEGEND, LIVE_DIVIDER, LIVE_INDENT, liveInner, liveLegend, LANE_WARN_TIMES, laneTimes } from '../hooks/core/live'
+import { liveLanes, liveLayout, laneLines, liveLabelLine, liveLabelSegs, LIVE_AGENT_MARK, LIVE_TONE, liveStations, liveTrains, trainRows, type LiveTrain, liveToday, todayLines, segText, liveBlink, liveHeader, liveHeaderSegs, liveScoutMark, scoutsRunning, scoutNext, tabRow, LIVE_TABS, LIVE_EMPTY, LIVE_LEGEND, LIVE_DIVIDER, LIVE_INDENT, liveInner, liveLegend, LANE_WARN_TIMES, laneTimes, liveTodayLines, pastDays, pastLines } from '../hooks/core/live'
+import { PAST_WEEK, PAST_YESTERDAY, pastTasks } from './live-past-fixture'
 import { textWidth } from '../hooks/core/stats'
 import { FINISH_STALE_MS } from '../hooks/core/lead'
 import { listKeys } from '../hooks/board'
@@ -833,4 +834,30 @@ test('T-808: publish marks a scout started only when its agent runs; a queued on
     scoutRuns.clear()
     scoutState.clear()
   }
+})
+
+// T-889: under ▍Today, a dim "yesterday" line and a "last 7 days" line (today left out)
+test('T-889: Today ends with dim yesterday and last 7 days lines, without today\'s work; ⏱ goes first, then ⌀, when narrow', () => {
+  const now = Date.now()
+  const tasks = pastTasks(now) as never[]
+  expect(pastDays(tasks, now, 1)).toEqual({ merged: 1, tokens: 3_000_000, workMs: 140 * 60_000 })
+  expect(pastDays(tasks, now, 7)).toEqual({ merged: 2, tokens: 5_000_000, workMs: 200 * 60_000 })
+  const lines = liveTodayLines({ tasks, today_team: undefined }, now, 140)
+  const texts = lines.map(l => segText(l))
+  // the section's last two lines, dim; today's T-3 (5M) and the 9-day-old T-4 are in neither
+  expect(texts.slice(-2)).toEqual([PAST_YESTERDAY, PAST_WEEK])
+  expect(lines.slice(-2).every(l => l.every(s => s.tone === 'dim'))).toBe(true)
+  expect(texts[0]!.startsWith('✓ 1 merged')).toBe(true)
+  // narrow: ⏱ goes first, then ⌀
+  const y = pastDays(tasks, now, 1)
+  const w = pastDays(tasks, now, 7)
+  expect(pastLines(y, w, 30).map(l => segText(l))).toEqual(['yesterday:   ✓ 1 merged · ⌀ 3M', 'last 7 days: ✓ 2 merged · ⌀ 5M'])
+  expect(pastLines(y, w, 25).map(l => segText(l))).toEqual(['yesterday:   ✓ 1 merged', 'last 7 days: ✓ 2 merged'])
+  for (const n of [20, 8, 1]) for (const l of pastLines(y, w, n)) expect([n, textWidth(segText(l)) <= n]).toEqual([n, true])
+  // a part that is 0 is left out; a line with nothing is left out
+  const none = { merged: 0, tokens: 0, workMs: 0 }
+  expect(pastLines({ merged: 0, tokens: 4_000_000, workMs: 0 }, none, 80).map(l => segText(l))).toEqual(['yesterday:   ⌀ 4M'])
+  expect(pastLines(none, none, 80)).toEqual([])
+  // whole hours from 10h on
+  expect(segText(pastLines({ merged: 77, tokens: 355e6, workMs: 34 * 3_600_000 }, none, 80)[0]!)).toBe('yesterday:   ✓ 77 merged · ⌀ 355M · ⏱ 34h')
 })
