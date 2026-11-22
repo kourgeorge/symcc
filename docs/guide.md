@@ -1140,8 +1140,8 @@ TASKS ────────────────────────�
   running worker's tokens are only known when it hands back, so until then the row shows the
   earlier tries' sum with `+ …` (`4.0M + …`), or `tokens at hand-back` on a first try.
 - Just merged: a task that merged in the last 10 minutes keeps its lane for a while, under the
-  running ones, drawn as finished: the track filled up to `merged` with `✓` there (green), the id,
-  title and second row dim, no `▶ `, and `merged 3m ago` on the right (`3m ago` on a narrow panel).
+  running ones, drawn as finished: the track filled up to `merged` with `✓` there (green), a dim `✓ `
+  where a running lane has `▶ `, the id in the accent color, the title and second row dim, and `merged 3m ago` on the right (`3m ago` on a narrow panel).
   At most 3 such lanes show, newest first; after 10 minutes, or when a 4th task merges, the oldest
   goes. Only merged tasks get one: answered investigations,
   failed or dropped tasks don't. Enter (or a click) on a finished lane opens its task page.
@@ -1149,7 +1149,7 @@ TASKS ────────────────────────�
   ```
    ▶ T-760 A running one ●━━━━━━━━◉────────○────────○────────○      2m
      change try 1/3      tokens at hand-back
-     T-747 Live tab: e…  ●━━━━━━━━●━━━━━━━━●━━━━━━━━●━━━━━━━━✓  merged 3m ago
+   ✓ T-747 Live tab: e…  ●━━━━━━━━●━━━━━━━━●━━━━━━━━●━━━━━━━━✓  merged 3m ago
      change try 1/3      ▕█████████████▏ 5.7M
   ```
 - Waiting trains: a todo task that waits (its `after`) for a task that has not finished hangs

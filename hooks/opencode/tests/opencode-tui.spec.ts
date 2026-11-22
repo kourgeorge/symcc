@@ -3097,11 +3097,14 @@ test('T-771: the OpenCode Live tab keeps up to 3 just-merged lanes (dim, ✓ at 
     for (const x of texts) expect([w, x, x.length <= w]).toEqual([w, x, true])
     expect(d.ids.slice(0, 5)).toEqual(['need:T-741', 'T-760', 'T-748', 'T-747', 'T-749'])
     expect(d.ids.includes('T-750') || d.ids.includes('T-740') || d.ids.slice(1).includes('T-741') || d.ids.includes('T-742')).toBe(false)
-    const at = texts.findIndex(x => x.startsWith(`${LIVE_INDENT}  T-747 `))
+    const at = texts.findIndex(x => x.startsWith(`${LIVE_INDENT}✓ T-747 `))
     expect(at > texts.findIndex(x => x.startsWith(`${LIVE_INDENT}▶ T-760 `))).toBe(true)
     if (w === 120) expect(texts[at]!).toMatch(/●━+●━+●━+●━+✓ +merged 3m ago$/)
     const lane = d.lines[at]!
-    expect(lane.filter(x => x.text.includes('T-747')).map(x => x.color)).toEqual(['inactive'])
+    // T-850: "✓ " dim before the id, the id in the accent color, the title dim
+    expect(lane.find(x => x.text.includes('✓ '))?.color).toBe('inactive')
+    expect(lane.find(x => x.text.includes('T-747'))?.color).toBe('claude')
+    expect(lane.filter(x => x.text.includes('Live tab') || x.text.includes('Merged')).every(x => x.color === 'inactive')).toBe(true)
     expect(lane.find(x => x.text === '✓')?.color).toBe('success')
     expect(d.lines[at + 1]!.filter(x => x.text.trim()).every(x => x.color === 'inactive')).toBe(true)
   }
