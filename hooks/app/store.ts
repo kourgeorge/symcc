@@ -1,5 +1,5 @@
 import { type Board, type BoardRead, parseBoard, readBoard, readBoardValue, brokenBoardText, emptyBoard, symccOn, lockText, lockHolder, isLockStale, tmpName } from '../board'
-import { PARTS_DIR, PARTS_KEY, safePartsFile, viewStubFilled, withViewParts, READ_LIMIT_BYTES, SIZE_WARN_BYTES, hasWholeFinished, joinParts, partsFileOf, partsFilesNamed, partsText, readParts, sizeWarnText, splitBoard, tooBigText, utf8Bytes } from '../core/board-parts'
+import { VIEW_LEFT_OUT, PARTS_DIR, PARTS_KEY, safePartsFile, viewStubFilled, withViewParts, READ_LIMIT_BYTES, SIZE_WARN_BYTES, hasWholeFinished, joinParts, partsFileOf, partsFilesNamed, partsText, readParts, sizeWarnText, splitBoard, tooBigText, utf8Bytes } from '../core/board-parts'
 import { checkHealth } from './health'
 import { publish } from './lead'
 import { tellLead } from './tell'
@@ -352,7 +352,10 @@ export async function taskWithParts<T extends object>(host: Host, t: T): Promise
   const rel = (t as Record<string, unknown>)[PARTS_KEY]
   if (!safePartsFile(rel)) return viewStubFilled(t)
   const text = await host.fs.read(partsPath(rel)).catch(() => null)
-  return viewStubFilled(withViewParts(t, text))
+  // the stored view carries empty stand-ins (viewStubFilled) for details and history; they must not win over the real ones
+  const bare = { ...(t as Record<string, unknown>) }
+  for (const k of VIEW_LEFT_OUT) delete bare[k]
+  return viewStubFilled(withViewParts(bare as T, text))
 }
 
 /**
