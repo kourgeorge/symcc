@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { isFinished, liveWorkersFor, startBranch, type Board, intoOf, type GitState, gitStateOf, noGitText, setupAskText, gitInstallStep, gitNotice, type InstallFacts, gitignoreWith, gitignoreBase, riskyFiles, parseLsTree, ignoreLineFor, setupDoneText, find, worktreesToRemove, branchesToDelete, cleanupText, namedReports, SCRATCH_DIR, SCRATCH_EXCLUDE, commitMessage, isSha, isTaskCommit } from '../board'
+import { isFinished, liveWorkersFor, startBranch, type Board, intoOf, type GitState, gitStateOf, noGitText, setupAskText, gitInstallStep, gitNotice, type InstallFacts, gitignoreWith, gitignoreBase, riskyFiles, parseLsTree, ignoreLineFor, setupDoneText, find, worktreesToRemove, branchesToDelete, cleanupText, namedReports, latestReportPattern, latestReportOf,SCRATCH_DIR, SCRATCH_EXCLUDE, commitMessage, isSha, isTaskCommit } from '../board'
 import { publish } from './lead'
 import { S, workers, starting, finishing, approving, keptDirty, scratchUse } from './state'
 import { type Host, agentState } from '../host'
@@ -407,16 +407,32 @@ export async function copyTypes($: Host, dir: string): Promise<boolean> {
 
 /**
  * Copies the report files task `t`'s details name (<data dir>/reports/<id>-try-<N>.md, e.g. a keep-note task's
- * earlier answers) from the main project into its folder `dir`, at the same path: the data dir is git-ignored, so a
+ * earlier answers; "<id>-try-*.md" or "T-920's answer" means that task's latest report), plus, for a task with
+ * from_task, the latest report of the task it comes from (T-927), from the main project into its folder `dir`, at
+ * the same path: the data dir is git-ignored, so a
  * new worktree has none, and its worker may not read the main project folder. A .gitignore of "*" in the copied data
  * dir keeps them out of the commit even where the project's .gitignore lacks it. Returns the files copied; a report
  * that can't be read is skipped.
  */
-export async function copyReports($: Host, t: Pick<SymccTask, 'details'>, dir: string): Promise<string[]> {
-  const files = namedReports(t.details, S.N.dir)
-  if (!files.length) return []
+export async function copyReports($: Host, t: Pick<SymccTask, 'details'> & { origin?: SymccTask['origin'] }, dir: string): Promise<string[]> {
+  // T-927: a split or follow-up (from_task) gets the task it comes from's latest report too
+  const named = namedReports(t.details, S.N.dir)
+  const wanted = t.origin?.task ? [latestReportPattern(S.N.dir, t.origin.task), ...named] : named
+  if (!wanted.length) return []
+  const reports = `${S.N.dir}/reports`
+  let names: string[] | null = null
+  const files: string[] = []
+  for (const w of wanted) {
+    if (!w.endsWith('-try-*.md')) {
+      files.push(w)
+      continue
+    }
+    names ??= (await Promise.resolve().then(() => $.fs.list(path(reports))).catch(() => [])).filter(e => e.kind === 'file').map(e => e.name)
+    const latest = latestReportOf(w.slice(reports.length + 1, -'-try-*.md'.length), names)
+    if (latest) files.push(`${reports}/${latest}`)
+  }
   const copied: string[] = []
-  for (const f of files) {
+  for (const f of [...new Set(files)]) {
     const text = await Promise.resolve().then(() => $.fs.read(path(f))).then(x => String(x), () => null)
     if (text === null) continue
     if (!copied.length) {
