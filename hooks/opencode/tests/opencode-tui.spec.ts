@@ -4136,3 +4136,75 @@ test('T-894: a task waiting for your files shows which files and that r merges i
     expect(q.every(l => l.length <= w)).toBe(true)
   }
 })
+
+test('T-904: the Tasks search finds done tasks (one a minute ago, one 5 days ago) by a word in their details and in their request, read from their parts file only while a search is on; the task page\'s "n of m" and [ ] follow the matches', async () => {
+  const f0 = viewFile()
+  const ago = (ms: number) => new Date(NOW - ms).toISOString()
+  const extra = addTask(emptyBoard(), { origin: { why: 'a test' }, title: 'a week old one', files: ['src/'] }, AT)[0].tasks[0]!
+  const whole = [
+    ...f0.view.tasks.map(t => (t.id === 'T-5' ? { ...t, details: 'about the zebrafish tank and the shared pump', origin: { ...t.origin, request: 'please fix the kumquat page' }, updated_at: ago(60_000) } : t)),
+    { ...extra, id: 'T-6', status: 'done' as const, details: 'about the narwhal tusk and the shared pump', origin: { ...extra.origin, request: 'please fix the okapi page' }, created_at: ago(6 * 86_400_000), updated_at: ago(5 * 86_400_000) },
+  ]
+  // as the engine writes it: the done tasks slim (no details, no request), naming their parts file
+  const slim = whole.map(t => viewTask(t))
+  const f: ViewFile = { ...f0, view: { ...f0.view, tasks: slim as ViewFile['view']['tasks'] } }
+  for (const word of ['zebrafish', 'kumquat', 'narwhal', 'okapi']) expect(viewFileText(f)).not.toContain(word)
+  const parts = Object.fromEntries(whole.filter(t => t.status === 'done').map(t => [t.id, { details: t.details, origin: t.origin, history: t.history }]))
+  const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)], ['/work/proj/.symcc/tasks/T-0.json', JSON.stringify({ version: 1, tasks: parts })]])
+  const partsReads: string[] = []
+  const readText = async (p: string) => (p.includes('/tasks/') && partsReads.push(p), files.get(p) ?? Promise.reject(new Error('missing')))
+  const slots: { append: string; render: (input: never) => unknown }[] = []
+  const answers = { prompt: [] as (string | undefined)[] }
+  const ctx: TuiContext = {
+    location: { directory: '/work/proj' },
+    theme: {},
+    renderer: { width: 120, height: 200 },
+    client: { session: { command: async () => undefined } },
+    keymap: { layer: () => undefined },
+    ui: {
+      toast: { show: () => undefined },
+      dialog: { prompt: async () => answers.prompt.shift(), select: async () => undefined },
+      panel: { open: () => true, close: () => undefined, current: () => undefined },
+      slot: claim => (slots.push(claim as never), () => undefined),
+    },
+  }
+  const board = startTui(ctx, { runtime: fakeRuntime(), readText, every: () => () => undefined, now: () => NOW })
+  await board.refresh()
+  const panel = slots.find(s => s.append === 'session.panel')!.render({ name: BOARD_PANEL, sessionID: 's', width: 120, focused: true, close: () => undefined, focus: () => undefined } as never)
+  const settle = () => new Promise<void>(res => setTimeout(res, 0))
+  // a list drawn (and read again) with no search reads no parts file
+  expect(shown(panel).some(l => l.includes('a later one'))).toBe(true)
+  await board.refresh()
+  await settle()
+  expect(partsReads).toEqual([])
+  const searchFor = async (word: string) => {
+    await board.press('x', 's')
+    answers.prompt.push(word)
+    await board.press('f', 's')
+    await settle()
+    return shown(panel)
+  }
+  for (const [word, title] of [['zebrafish', 'an old one'], ['kumquat', 'an old one'], ['narwhal', 'a week old one'], ['okapi', 'a week old one']] as const) {
+    const lines = await searchFor(word)
+    expect([word, lines.some(l => l.includes(`search: ${word} · 1 of 6 tasks`)), lines.some(l => l.includes(title))]).toEqual([word, true, true])
+  }
+  // each search read the parts file once; more refreshes while it is on read nothing again
+  const reads = partsReads.length
+  expect(reads).toBe(4)
+  await board.refresh()
+  await settle()
+  expect(partsReads.length).toBe(reads)
+  // both match "pump": the task page's place counts the 2 matches, as the list does, and ] goes to the other one
+  const lines = await searchFor('pump')
+  expect(lines.some(l => l.includes('search: pump · 2 of 6 tasks'))).toBe(true)
+  const ids = panelLines(f, { opened: '', cursor: 0, tab: 'tasks', search: 'pump', searchMore: t => (t.id === 'T-5' || t.id === 'T-6' ? 'pump' : '') }, NOW, 120).ids
+  expect(ids.filter(id => /^T-\d+$/.test(id))).toEqual(['T-5', 'T-6'])
+  for (let i = 0; i < ids.indexOf('T-5'); i++) await board.press('down', 's')
+  await board.press('open', 's')
+  expect(board.state().opened).toBe('T-5')
+  await settle()
+  expect(shown(panel).some(l => l.includes(' 1 of 2 '))).toBe(true)
+  await board.press('next', 's')
+  expect(board.state().opened).toBe('T-6')
+  board.stop()
+})
