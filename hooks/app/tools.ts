@@ -173,7 +173,7 @@ On the board list a task's kind shows at the right end of its row ("[bug]", "[do
 The board list goes top to bottom: NEEDS YOU (with its title); then the tasks doing and to do in one list without a title (running first, then to do, then paused); a blank line; then the folded rows "▸ Backlog  N", "▸ Done  N" and "▸ Dropped  N". Enter on a folded row opens it (the backlog shows 5 items, then "… N more").
 Backlog tasks are ideas and unclear work; they start only when you move them to todo (o).
 In a task ready for review: a approve · x reject (asks for a reason) · d show changes.
-In an answered investigation: a done · v keep as a note (adds a docs task) · x ask more (asks for a follow-up question).
+In an answered investigation: Done and Keep as a note (adds a docs task) are buttons with no letter key, so typing can't press them by accident · x ask more (opens a box for the follow-up question; while it is open, typed letters go only to the box).
 On the board list: m switches the mode between approve merge and auto merge (never to paused).` : `There is no board panel here: the commands above answer as text, and the lead
   can show the board too ("show the board", "show T-3").`}
 Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",

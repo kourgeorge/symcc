@@ -199,6 +199,12 @@ async function leadWording(host: Host, tied: { q: PopupQuestion; link: PopupLink
 const picks = (answer: string, label: string) => answer.trim().toLowerCase().startsWith(label.toLowerCase())
 
 /**
+ * The follow-up question in a pop-up answer of the form "Ask more: <question>", or '' for any other answer: a label
+ * written a little differently ("Ask more?", "Ask more (…)", "Ask more — …", "Ask moreover") is a bare Ask more.
+ */
+export const askMoreQuestion = (answer: string): string => /^ask more\s*:\s*(\S[\s\S]*)$/i.exec(answer.trim())?.[1]?.trim() ?? ''
+
+/**
  * The owner answered task `id`'s question in the pop-up with `answer`: it is put into the task as the board's buttons
  * would (Allow, Don't allow, an answer, more time; Approve, Done, Keep as a note). What the lead reads about it.
  */
@@ -223,6 +229,13 @@ export async function popupToTask(host: Host, id: string, answer: string): Promi
         (err: Error) => noteForLead(`The owner's pop-up answer "${brief(answer)}" on ${id} failed: ${brief(err.message)}`),
       )
       return `${n} is applying the owner's answer to ${id} (${keep ? 'approve with keep_note' : 'approve'}); a board update says how it ends. Don't approve it again.`
+    }
+    // T-899: Ask more needs the owner's follow-up question: with it ("Ask more: why …") the task goes back to todo with
+    // it, as the board's Ask more box sends it; without it the task stays in review (never Done) and the lead asks for it
+    if (answered && picks(answer, 'Ask more')) {
+      const question = askMoreQuestion(answer)
+      if (question) return `${n} put the owner's answer into ${id}: ${await runTool(host, 'reject', { task: id, reason: question })} Don't send it again with ${n} reject.`
+      return `The owner picked Ask more on ${id}: ${n} left it in review (it is not done). Ask the owner for their follow-up question now, in the chat (they can also type it in the Ask more box on ${id}'s board page), then send it with ${n} reject ${id} and their question as the reason. Don't approve ${id}.`
     }
   } catch (err) {
     return `${n} could not put the owner's answer into ${id} (${(err as Error).message}): do it yourself.`

@@ -29,6 +29,8 @@ export type PageHeader = {
   nav: { prev: string; next: string }
   /** the Back button's element key ('back' when not given) */
   backKey?: string
+  /** T-899: a text box on the page is open: no key presses a header button (the keys belong to the box) */
+  noKeys?: boolean
 }
 
 /** The header on the terminal, desktop and mobile. */
@@ -87,14 +89,16 @@ export function pageHeader(pane: PaneParts, hd: PageHeader): RenderChildren {
           {row.flatMap(({ g, i: j, gap }) => [...(gap ? [<Text key={`hdr-gap-${g}-${j}`}>{' '.repeat(gap)}</Text>] : []), pill(groups[g]![j]!)])}
         </Box>
       ))}
-      <Box key="hdr-keys" display="none">
-        <Button key={`${hd.backKey ?? 'back'}-key`} label="b" hotkey="b" onPress={hd.onBack} />
-        {hd.place && hd.place.of > 1 ? <Button key="prev-key" label={hd.nav.prev} hotkey={hd.nav.prev} onPress={hd.onPrev} /> : null}
-        {hd.place && hd.place.of > 1 ? <Button key="next-key" label={hd.nav.next} hotkey={hd.nav.next} onPress={hd.onNext} /> : null}
-        {keyed.map(b => (
-          <Button key={`${b.id}-key`} label={b.key!} hotkey={b.key!} onPress={b.onPress} />
-        ))}
-      </Box>
+      {hd.noKeys ? null : (
+        <Box key="hdr-keys" display="none">
+          <Button key={`${hd.backKey ?? 'back'}-key`} label="b" hotkey="b" onPress={hd.onBack} />
+          {hd.place && hd.place.of > 1 ? <Button key="prev-key" label={hd.nav.prev} hotkey={hd.nav.prev} onPress={hd.onPrev} /> : null}
+          {hd.place && hd.place.of > 1 ? <Button key="next-key" label={hd.nav.next} hotkey={hd.nav.next} onPress={hd.onNext} /> : null}
+          {keyed.map(b => (
+            <Button key={`${b.id}-key`} label={b.key!} hotkey={b.key!} onPress={b.onPress} />
+          ))}
+        </Box>
+      )}
       <Box key="hdr-rule" flexDirection="column">
         <Text wrap="truncate" color={C('ide')}>{headerRule(width)}</Text>
       </Box>
