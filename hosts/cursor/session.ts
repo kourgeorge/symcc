@@ -19,6 +19,7 @@ import type { Sdk, SdkImage, SdkModelInfo, SdkStep, SdkTool } from './sdk'
 import { panelView } from './view'
 import { LEAD_AGENT, addStep, isWords, sessionPath } from './steps'
 import { listSkills, skillMessage } from './skills'
+import { projectWorktrees, type Worktrees } from './worktrees'
 import type { PanelActionId, PanelMode, PanelStep, PanelView, SlashItem } from './protocol'
 import { appendFile, mkdir } from 'node:fs/promises'
 import { dirname } from 'node:path'
@@ -114,6 +115,8 @@ export type CursorSession = {
   mode: (mode: PanelMode) => Promise<string>
   /** the owner ran a scout now */
   runScout: (name: string) => Promise<string>
+  /** the project's git worktrees: the workers' folders, the project itself and the owner's other checkouts */
+  worktrees: Worktrees
   /** whether nothing of symcc's runs or waits now (no agent, start, check or merge; the lead's turn done) */
   quiet: () => boolean
   close: (why?: string) => Promise<void>
@@ -250,6 +253,7 @@ export async function openCursorSession(o: CursorSessionOptions): Promise<Cursor
   const ticks = host.clock.every(30_000, redraw)
   const command = async (name: string, args = '') => (await runCommand(host, name, args))?.text ?? `/${name} is not one of ${S.N.name}'s commands`
   const skills = () => listSkills(o.root, o.home ?? homedir())
+  const worktrees = projectWorktrees(host, o.root, () => published.tasks ?? [], () => (published as PaneView).home_branch ?? '')
   let models: Promise<SdkModelInfo[]> | undefined
   ref.host = host
   useName(host)
@@ -307,6 +311,7 @@ export async function openCursorSession(o: CursorSessionOptions): Promise<Cursor
     answer: async (id, text) => (await answerCommand(host, `${S.N.name}-answer`, `${id} ${text}`)).text,
     mode: mode => command(`${S.N.name}-mode`, mode),
     runScout: name => command(`${S.N.name}-scout`, name),
+    worktrees,
     quiet: () =>
       (S.startupDone || S.guardOnly) && agents.running() === 0 && !lead.busy() && workers.size === 0 && starting.size === 0 && queuedWorkers.size === 0 && finishing.size === 0 && approving.size === 0 && scoutRuns.size === 0 && checkerRuns.size === 0,
     close: why =>

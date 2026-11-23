@@ -16,6 +16,9 @@
 //           {"op":"slash"} answers {"slash":SlashItem[]}; {"op":"models"} answers {"models":ModelInfo[]};
 //           {"op":"lead-set","model":{"id":...,"params":[...]}|null,"mode":"agent"|"plan"} answers {"lead":LeadChoice};
 //           {"op":"lead-stop"} ends the lead's running turn; {"op":"summarize"} condenses the lead's chat
+// The Worktrees page's: {"op":"worktrees"} answers {"worktrees":PanelWorktree[]}; {"op":"worktree-diff","path":"..."}
+//           its changes as diff text; {"op":"worktree-base","path":"...","file":"src/a.ts"} answers {"text","ref"}, the
+//           file where it is compared from; {"op":"worktree-remove","path":"..."} removes a finished task's folder
 // In a terminal (stdin is a TTY) it is a small chat instead: a line goes to the lead, "/tool <name> [json]" runs one of
 // the lead's tools, "/<command> [args]" a slash command (e.g. /symcc-init), and "/quit" ends.
 import { createInterface } from 'node:readline'
@@ -42,7 +45,7 @@ export function parseOptions(argv: readonly string[]): Record<string, string> {
   return opts
 }
 
-type Request = { id?: unknown; op?: unknown; name?: unknown; input?: unknown; args?: unknown; text?: unknown; task?: unknown; action?: unknown; need?: unknown; mode?: unknown; model?: unknown; images?: unknown }
+type Request = { id?: unknown; op?: unknown; name?: unknown; input?: unknown; args?: unknown; text?: unknown; task?: unknown; action?: unknown; need?: unknown; mode?: unknown; model?: unknown; images?: unknown; path?: unknown; file?: unknown }
 
 const PANEL_ACTIONS: readonly PanelActionId[] = ['approve', 'reject', 'done', 'keep-note', 'ask-more', 'retry', 'drop', 'pause', 'resume', 'show-changes', 'to-todo', 'merge-now']
 const MODES: readonly PanelMode[] = ['paused', 'review', 'auto']
@@ -79,6 +82,10 @@ async function handle(s: CursorSession, r: Request, stop: () => void): Promise<s
       return 'stopped'
     case 'summarize':
       return (await s.lead.summarize()) ?? 'summarizing'
+    case 'worktree-diff':
+      return s.worktrees.diff(word(r.path, 'path'))
+    case 'worktree-remove':
+      return s.worktrees.remove(word(r.path, 'path'))
     case 'stop':
       stop()
       return 'stopping'
@@ -164,6 +171,8 @@ async function main() {
       }
       if (r.op === 'slash') return answer(s.slash().then(slash => ({ slash })))
       if (r.op === 'models') return answer(s.models().then(models => ({ models })))
+      if (r.op === 'worktrees') return answer(s.worktrees.list().then(worktrees => ({ worktrees })))
+      if (r.op === 'worktree-base') return answer(Promise.resolve().then(() => s.worktrees.base(word(r.path, 'path'), word(r.file, 'file'))))
       if (r.op === 'lead-set') return answer(Promise.resolve({ lead: s.lead.configure(choiceOf(r)) }))
       handle(s, r, () => stop())
         .then(text => out({ id: r.id ?? null, ok: true, text }))

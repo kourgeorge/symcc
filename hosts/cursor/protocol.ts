@@ -137,6 +137,40 @@ export type LeadSettings = { model?: LeadModel; modelLabel?: string; mode: 'agen
 /** A slash command of the lead chat: one of symcc's, a skill (the project's or the user's), or the chat's own. */
 export type SlashItem = { name: string; description: string; hint?: string; kind: 'symcc' | 'skill' | 'chat'; scope?: 'project' | 'user' }
 
+/**
+ * A git worktree of the project: a worker's folder (<dir>/worktrees/<task>, `task` set), the project itself (`main`)
+ * or another checkout of the repo (`other`, the owner's own), with where it stands against `base`.
+ */
+export type PanelWorktree = {
+  /** the folder (absolute) and the same as the owner reads it (".symcc/worktrees/T-12", "~/src/x") */
+  path: string
+  where: string
+  kind: 'main' | 'task' | 'other'
+  task?: string
+  /** the branch checked out ('' for a detached HEAD) and its tip */
+  branch: string
+  head: string
+  /** what it is compared with: a task's branch it merges into, else the branch's upstream (origin/main) */
+  base?: string
+  ahead: number
+  behind: number
+  /** a task's folder: what changed since it left `base`, committed or not; any other: what isn't committed yet */
+  files: PanelFile[]
+  /** files not committed yet, of which `untracked` are new ones git doesn't track */
+  dirty: number
+  untracked: number
+  /** its newest commits that `base` lacks, newest first */
+  commits: { sha: string; subject: string; atMs: number }[]
+  lastCommitMs?: number
+  locked?: boolean
+  /** the folder is gone from the disk (git still lists it) */
+  missing?: boolean
+  error?: string
+}
+
+/** What the owner can do with a worktree on the Worktrees page. */
+export type WorktreeAction = 'window' | 'terminal' | 'reveal' | 'copy' | 'changes' | 'file' | 'remove'
+
 export type EngineState = { state: 'starting' | 'ready' | 'stopped' | 'failed'; text?: string }
 
 /** One step of an agent's turn (hosts/cursor/sdk.ts SdkStep), with when it happened. */
@@ -158,6 +192,7 @@ export type ToWebview =
   | { type: 'models'; models: ModelInfo[] }
   | { type: 'slash'; items: SlashItem[] }
   | { type: 'lead'; settings: LeadSettings }
+  | { type: 'worktrees'; list: PanelWorktree[]; atMs: number; error?: string }
 
 /** From the webview to the extension; `id` comes back on the reply. */
 export type FromWebview =
@@ -176,3 +211,5 @@ export type FromWebview =
   | { type: 'session'; agent: string; title: string }
   | { type: 'restart' }
   | { type: 'open-file'; path: string; line?: number }
+  | { type: 'worktrees' }
+  | { type: 'worktree'; id: number; path: string; action: WorktreeAction; file?: string }

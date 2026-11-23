@@ -1,4 +1,4 @@
-// The board panel: a rail (Now, Board, Scouts), the header with the mode switch, and the page. Now is one stream:
+// The board panel: a rail (Now, Board, Worktrees, Scouts), the header with the mode switch, and the page. Now is one stream:
 // what needs you pinned on top as cards you decide in place, the lead's chat and the board's news in one timeline
 // with the message box under it, and the running work beside it.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
@@ -8,8 +8,9 @@ import { ask, onMessage, tell } from './bridge'
 import { Icon, Linked, Mark, Markdown, Staff, STATION_WORD, ago, clock, dayWord, duration, tokensWord, useNow } from './parts'
 import { TaskSession, latestStep, openSession, stepIcon, stepWords } from './session'
 import { LeadChat } from './chat'
+import { Worktrees, type WorktreeList } from './worktrees'
 
-type Page = 'now' | 'board' | 'scouts'
+type Page = 'now' | 'board' | 'trees' | 'scouts'
 type Notice = { text: string; bad: boolean; at: number }
 type Say = (text: string, bad?: boolean) => void
 type Steps = Record<string, PanelStep[]>
@@ -30,6 +31,7 @@ export function App() {
   const [network, setNetwork] = useState<NetworkProblem | null>(null)
   const [steps, setSteps] = useState<Steps>({})
   const [lead, setLead] = useState<Lead>({ settings: { mode: 'agent' }, models: [], slash: [] })
+  const [trees, setTrees] = useState<WorktreeList | null>(null)
 
   useEffect(() => {
     const off = onMessage(m => {
@@ -42,6 +44,7 @@ export function App() {
       else if (m.type === 'lead') setLead(l => ({ ...l, settings: m.settings }))
       else if (m.type === 'models') setLead(l => ({ ...l, models: m.models }))
       else if (m.type === 'slash') setLead(l => ({ ...l, slash: m.items }))
+      else if (m.type === 'worktrees') setTrees({ list: m.list, atMs: m.atMs, ...(m.error ? { error: m.error } : {}) })
     })
     tell({ type: 'ready' })
     return off
@@ -81,6 +84,8 @@ export function App() {
             <Now view={view} chat={chat} busy={busy} steps={steps} lead={lead} ready={engine.state === 'ready'} onSay={say} onTask={openTask} />
           ) : page === 'board' ? (
             <Board view={view} steps={steps} focus={focus} onSay={say} onTask={openTask} />
+          ) : page === 'trees' ? (
+            <Worktrees view={view} steps={steps} trees={trees} onSay={say} onTask={openTask} />
           ) : (
             <Scouts scouts={view.scouts} onSay={say} />
           )
@@ -105,6 +110,7 @@ function Rail({ page, onPage, needs }: { page: Page; onPage: (p: Page) => void; 
       <Mark />
       {item('now', 'pulse', 'Now', needs)}
       {item('board', 'checklist', 'Board')}
+      {item('trees', 'repo-forked', 'Worktrees')}
       {item('scouts', 'telescope', 'Scouts')}
     </nav>
   )

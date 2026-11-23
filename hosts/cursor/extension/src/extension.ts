@@ -6,7 +6,7 @@ import * as path from 'node:path'
 import * as fs from 'node:fs'
 import * as os from 'node:os'
 import { Engine } from './engine'
-import type { ChatItem, EngineState, FromWebview, LeadSettings, ModelInfo, NetworkProblem, PanelStep, PanelView, SlashItem, ToWebview } from '../../protocol'
+import type { ChatItem, EngineState, FromWebview, LeadSettings, ModelInfo, NetworkProblem, PanelStep, PanelView, PanelWorktree, SlashItem, ToWebview, WorktreeAction } from '../../protocol'
 import { LEAD_AGENT, addStep, readSteps, sessionMarkdown, sessionPath, turnSteps } from '../../steps'
 
 /** A lead error that means the engine could not reach Cursor's servers. */
@@ -17,6 +17,8 @@ const CHAT_KEPT = 300
 const CHAT_KEY = 'symcc.chat'
 const LEAD_KEY = 'symcc.lead'
 const SESSION_SCHEME = 'symcc-session'
+/** A file as it was where a worktree is compared from (the left side of its diff). */
+const BASE_SCHEME = 'symcc-base'
 /** A lead answer keeps its turn's newest steps, each at most this long; only the newest answers keep them when saved. */
 const TURN_STEPS_KEPT = 120
 const STEP_TEXT_KEPT = 4000
@@ -202,6 +204,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     if (m.type === 'restart') return void engine.restart()
     if (m.type === 'log') return out.show()
     if (m.type === 'open-file') return void openFile(m.path, m.line).catch(err => vscode.window.showWarningMessage((err as Error).message))
+    if (m.type === 'worktrees') return void sendWorktrees()
     const reply = (ok: boolean, text: string) => post({ type: 'reply', id: m.id, ok, text })
     try {
       if (m.type === 'proxy') {
@@ -222,6 +225,7 @@ export function activate(ctx: vscode.ExtensionContext) {
       if (m.type === 'mode') return reply(true, await engine.text({ op: 'mode', mode: m.mode }))
       if (m.type === 'scout') return reply(true, await engine.text({ op: 'scout', name: m.name }))
       if (m.type === 'command') return reply(true, await engine.text({ op: 'command', name: m.name, args: m.args ?? '' }))
+      if (m.type === 'worktree') return reply(true, await worktreeAction(m.path, m.action, m.file))
       if (m.type === 'act') {
         const text = await engine.text({ op: 'act', task: m.task, action: m.action, ...(m.text ? { text: m.text } : {}) })
         if (m.action === 'show-changes') {
@@ -234,6 +238,53 @@ export function activate(ctx: vscode.ExtensionContext) {
     } catch (err) {
       reply(false, (err as Error).message)
     }
+  }
+
+  /** Reads the project's worktrees and hands them to the page. */
+  async function sendWorktrees() {
+    const atMs = Date.now()
+    if (engine.state.state !== 'ready') return post({ type: 'worktrees', list: [], atMs, error: 'symcc is starting' })
+    await engine.request({ op: 'worktrees' }).then(
+      a => post({ type: 'worktrees', list: (a.worktrees as PanelWorktree[]) ?? [], atMs }),
+      err => post({ type: 'worktrees', list: [], atMs, error: (err as Error).message }),
+    )
+  }
+
+  /** Does `action` on worktree `path`; answers a word for the owner ('' when what happened shows by itself). */
+  async function worktreeAction(dir: string, action: WorktreeAction, file?: string): Promise<string> {
+    const uri = vscode.Uri.file(dir)
+    const name = path.basename(dir)
+    if (action === 'window') await vscode.commands.executeCommand('vscode.openFolder', uri, { forceNewWindow: true })
+    else if (action === 'terminal') vscode.window.createTerminal({ name: `${name} worktree`, cwd: dir }).show()
+    else if (action === 'reveal') await vscode.commands.executeCommand('revealFileInOS', uri)
+    else if (action === 'copy') {
+      await vscode.env.clipboard.writeText(dir)
+      return "Copied the folder's path."
+    }
+    if (action === 'changes') {
+      const doc = await vscode.workspace.openTextDocument({ language: 'diff', content: await engine.text({ op: 'worktree-diff', path: dir }) })
+      await vscode.window.showTextDocument(doc, { viewColumn: vscode.ViewColumn.Beside, preview: true })
+      return ''
+    }
+    if (action === 'file' && file) {
+      const here = vscode.Uri.file(path.join(dir, file))
+      const base = vscode.Uri.from({ scheme: BASE_SCHEME, path: `/${file}`, query: JSON.stringify({ dir }) })
+      const there = await fs.promises.stat(here.fsPath).then(() => true, () => false)
+      if (there) await vscode.commands.executeCommand('vscode.diff', base, here, `${file} (${name}: its base ↔ now)`, { viewColumn: vscode.ViewColumn.Beside, preview: true })
+      else await vscode.window.showTextDocument(base, { viewColumn: vscode.ViewColumn.Beside, preview: true })
+      return ''
+    }
+    if (action === 'remove') {
+      const w = ((await engine.request({ op: 'worktrees' })).worktrees as PanelWorktree[] | undefined)?.find(x => x.path === dir)
+      if (!w) return `${dir} is not one of this project's worktrees any more.`
+      const lose = w.dirty ? ` Its ${w.dirty} uncommitted file${w.dirty === 1 ? '' : 's'} will be lost.` : ''
+      const pick = await vscode.window.showWarningMessage(`Remove the folder ${w.where}?${lose}`, { modal: true, detail: w.branch ? `Its branch ${w.branch} stays, with its commits.` : undefined }, 'Remove')
+      if (pick !== 'Remove') return ''
+      const said = await engine.text({ op: 'worktree-remove', path: dir })
+      void sendWorktrees()
+      return said
+    }
+    return ''
   }
 
   /** Opens a file the lead named: in the project, else in the one worker's folder that has it; at its line. */
@@ -271,6 +322,16 @@ export function activate(ctx: vscode.ExtensionContext) {
   const sessions = new Map<string, string>()
   const sessionChanged = new vscode.EventEmitter<vscode.Uri>()
   ctx.subscriptions.push(sessionChanged, vscode.workspace.registerTextDocumentContentProvider(SESSION_SCHEME, { onDidChange: sessionChanged.event, provideTextDocumentContent: uri => sessions.get(uri.path) ?? '' }))
+  ctx.subscriptions.push(
+    vscode.workspace.registerTextDocumentContentProvider(BASE_SCHEME, {
+      provideTextDocumentContent: async uri => {
+        const { dir } = JSON.parse(uri.query) as { dir: string }
+        const a = await engine.request({ op: 'worktree-base', path: dir, file: uri.path.slice(1) })
+        return typeof a.text === 'string' ? a.text : ''
+      },
+    }),
+  )
+
   function openPanel(quiet = false) {
     if (panel) return panel.reveal(undefined, quiet)
     panel = vscode.window.createWebviewPanel('symcc.board', 'symcc', { viewColumn: vscode.ViewColumn.Active, preserveFocus: quiet }, { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [vscode.Uri.file(path.join(ctx.extensionPath, 'dist'))] })

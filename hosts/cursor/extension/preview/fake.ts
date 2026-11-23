@@ -1,6 +1,6 @@
 // A stand-in for the extension in a plain browser: demo data (made up, for looking at the panel) and replies that
 // act like the engine's, so every card and button can be tried. Loaded before the webview's bridge.
-import type { ChatItem, FromWebview, LeadSettings, ModelInfo, PanelLane, PanelNeed, PanelNews, PanelStep, PanelTask, PanelView, SlashItem, ToWebview } from '../../protocol'
+import type { ChatItem, FromWebview, LeadSettings, ModelInfo, PanelLane, PanelNeed, PanelNews, PanelStep, PanelTask, PanelView, PanelWorktree, SlashItem, ToWebview } from '../../protocol'
 
 const now = Date.now()
 const m = (min: number) => now - min * 60_000
@@ -219,6 +219,19 @@ function view(): PanelView {
   }
 }
 
+const ROOT = '/home/dana/src/billing-service'
+const tree = (task: string, more: Partial<PanelWorktree>): PanelWorktree => ({ path: `${ROOT}/.symcc/worktrees/${task}`, where: `.symcc/worktrees/${task}`, kind: 'task', task, branch: `symcc/${task}`, head: 'a1b2c3d4e', base: 'main', ahead: 0, behind: 0, files: [], dirty: 0, untracked: 0, commits: [], lastCommitMs: m(12), ...more })
+let worktrees: PanelWorktree[] = [
+  tree('T-42', { ahead: 2, behind: 1, dirty: 3, untracked: 1, files: [{ file: 'src/invoices/csv.ts', added: 148, removed: 0 }, { file: 'src/invoices/routes.ts', added: 31, removed: 6 }, { file: 'test/invoices/csv.test.ts', added: 33, removed: 2 }], commits: [{ sha: '9f1c2ab', subject: 'Add the CSV writer for invoices', atMs: m(9) }, { sha: '4d7e0aa', subject: 'Route GET /invoices.csv', atMs: m(3) }] }),
+  tree('T-43', { ahead: 1, files: [{ file: 'test/dates.test.ts', added: 6, removed: 4 }], commits: [{ sha: '17bd2e0', subject: 'Build “today” from UTC in the date test', atMs: m(1) }] }),
+  tree('T-45', { ahead: 1, behind: 4, dirty: 2, files: [{ file: 'src/webhooks/retry.ts', added: 29, removed: 5 }, { file: 'test/webhooks/retry.test.ts', added: 8, removed: 0 }], commits: [{ sha: 'c0ffee1', subject: 'Back off webhook retries exponentially', atMs: m(14) }] }),
+  tree('T-39', { ahead: 3, files: [{ file: 'src/auth/limit.ts', added: 61, removed: 0 }, { file: 'src/auth/login.ts', added: 9, removed: 12 }, { file: 'test/auth/limit.test.ts', added: 14, removed: 0 }], commits: [{ sha: 'b16b00b', subject: 'Limit login attempts to 5 a minute', atMs: m(11) }, { sha: '0ddba11', subject: 'Answer 429 with Retry-After', atMs: m(10) }, { sha: 'facade1', subject: 'Test the login limit', atMs: m(9) }] }),
+  tree('T-40', { ahead: 1, behind: 7, files: [{ file: 'package.json', added: 1, removed: 1 }, { file: 'package-lock.json', added: 40, removed: 38 }], commits: [{ sha: 'deadbe7', subject: 'Upgrade undici to 7', atMs: m(17) }], lastCommitMs: m(17) }),
+  tree('T-31', { dirty: 2, files: [{ file: 'notes/csv-ideas.md', added: 12, removed: 0 }], lastCommitMs: m(60 * 26) }),
+  { path: ROOT, where: 'billing-service', kind: 'main', branch: 'main', head: '3e4f5a6b7', base: 'origin/main', ahead: 2, behind: 0, files: [{ file: 'README.md', added: 3, removed: 1 }], dirty: 1, untracked: 0, commits: [{ sha: '3e4f5a6', subject: 'Merge T-38: Dark mode toggle', atMs: m(4) }, { sha: '8a9b0c1', subject: 'Merge T-37: Cache tax rates', atMs: m(70) }], lastCommitMs: m(4) },
+  { path: '/home/dana/orca/billing-service/pricing-page', where: '~/orca/billing-service/pricing-page', kind: 'other', branch: 'dana/pricing-page', head: '5566778', base: 'origin/dana/pricing-page', ahead: 0, behind: 0, files: [], dirty: 0, untracked: 0, commits: [], lastCommitMs: m(60 * 5) },
+]
+
 const send = (msg: ToWebview) => window.dispatchEvent(new MessageEvent('message', { data: msg }))
 const later = (ms: number, fn: () => void) => setTimeout(fn, ms)
 let busy = state === 'busy'
@@ -239,6 +252,13 @@ window.acquireVsCodeApi = () => ({
       return
     }
     if (msg.type === 'restart' || msg.type === 'log' || msg.type === 'session' || msg.type === 'open-file') return
+    if (msg.type === 'worktrees') return void later(250, () => send({ type: 'worktrees', list: worktrees, atMs: Date.now() }))
+    if (msg.type === 'worktree') {
+      const w = worktrees.find(x => x.path === msg.path)
+      const text = msg.action === 'copy' ? "Copied the folder's path." : msg.action === 'remove' ? `Removed ${w?.where}. Its branch ${w?.branch} is kept.` : ''
+      if (msg.action === 'remove') later(500, () => ((worktrees = worktrees.filter(x => x.path !== msg.path)), send({ type: 'worktrees', list: worktrees, atMs: Date.now() })))
+      return void later(300, () => send({ type: 'reply', id: msg.id, ok: true, text }))
+    }
     if (msg.type === 'lead-set') return void ((lead = msg.settings), send({ type: 'lead', settings: lead }))
     if (msg.type === 'lead-stop') {
       if (!busy) return

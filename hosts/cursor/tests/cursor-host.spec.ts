@@ -13,6 +13,7 @@ import { addStep, readSteps, sessionMarkdown } from '../steps'
 import { taskSessions } from '../view'
 import { modelInfos } from '../sdk'
 import { skillOf } from '../skills'
+import { parseLog, parseNumstat, parseWorktreeList } from '../worktrees'
 import { fakeSdk, until, type Turn } from './fake-sdk'
 
 const PLUGIN_ROOT = new URL('../../..', import.meta.url).pathname.replace(/\/$/, '')
@@ -247,6 +248,74 @@ test('the lead chat: Stop ends the running turn, summarize waits for an idle lea
   expect(ev.filter(e => e.type === 'summarized')).toEqual([{ type: 'summarized', text: 'Summarized the chat.' }])
   expect(ev.filter(e => e.type === 'busy').map(e => (e as { busy: boolean }).busy)).toEqual([true, false, true, false])
   await lead.close()
+})
+
+test("the Worktrees page: a worker's folder against the branch it merges into, the project and another checkout; only a finished task's folder can be removed", async () => {
+  const repo = await scratchRepo()
+  const other = `${repo}-mine`
+  const s = await openCursorSession({ root: repo, sdk: fakeSdk(async () => ({ status: 'finished', result: 'ok' })), pluginRoot: PLUGIN_ROOT, sessionId: 'cursor-trees' })
+  try {
+    await s.command('symcc-init')
+    await s.mode('paused')
+    expect(await s.tool('add', { title: 'Waits', details: 'Stays to do', why: 'a test', origin_by: 'owner', request: 'Waits' })).toContain('added T-1')
+    const leftover = `${repo}/.symcc/worktrees/T-7`
+    await git(repo, 'worktree', 'add', '-q', '-b', 'symcc/T-7', leftover, 'main')
+    await writeFile(`${leftover}/a.txt`, 'one\n')
+    await git(leftover, 'add', 'a.txt')
+    await git(leftover, 'commit', '-qm', 'Add a.txt')
+    await writeFile(`${leftover}/check.sh`, 'echo changed\n')
+    await writeFile(`${leftover}/new.txt`, 'new\n')
+    await writeFile(`${repo}/b.txt`, 'main moved on\n')
+    await git(repo, 'add', 'b.txt')
+    await git(repo, 'commit', '-qm', 'Add b.txt')
+    await git(repo, 'worktree', 'add', '-q', '-b', 'mine', other, 'main')
+    await git(repo, 'worktree', 'add', '-q', '-b', 'symcc/T-1', `${repo}/.symcc/worktrees/T-1`, 'main')
+
+    const list = await s.worktrees.list()
+    expect(list.map(w => [w.kind, w.task ?? w.branch])).toEqual([
+      ['task', 'T-1'],
+      ['task', 'T-7'],
+      ['main', 'main'],
+      ['other', 'mine'],
+    ])
+    const t7 = list.find(w => w.task === 'T-7')!
+    expect([t7.where, t7.branch, t7.base, t7.ahead, t7.behind, t7.dirty, t7.untracked]).toEqual(['.symcc/worktrees/T-7', 'symcc/T-7', 'main', 1, 1, 2, 1])
+    expect(t7.files.map(f => f.file).sort()).toEqual(['a.txt', 'check.sh'])
+    expect(t7.commits.map(c => c.subject)).toEqual(['Add a.txt'])
+    expect(list.find(w => w.kind === 'other')!.base).toBe('main')
+
+    const diff = await s.worktrees.diff(t7.path)
+    expect(diff).toContain('+one')
+    expect(diff).toContain('#   new.txt')
+    expect((await s.worktrees.base(t7.path, 'check.sh')).text).toBe('test "$(cat hello.txt)" = "hello from the fake worker"\n')
+    expect((await s.worktrees.base(t7.path, 'a.txt')).text).toBe('')
+    expect(await s.worktrees.diff('/tmp').then(() => '', (e: Error) => e.message)).toContain("not one of this project's worktrees")
+
+    expect(await s.worktrees.remove(other)).toContain("isn't a worker's folder")
+    expect(await s.worktrees.remove(list[0]!.path)).toBe('T-1 is still todo, so its folder stays.')
+    expect(await s.worktrees.remove(t7.path)).toBe('Removed .symcc/worktrees/T-7. Its branch symcc/T-7 is kept.')
+    expect((await s.worktrees.list()).map(w => w.task ?? w.branch)).toEqual(['T-1', 'main', 'mine'])
+    expect((await git(repo, 'rev-parse', '--verify', '-q', 'refs/heads/symcc/T-7')).exitCode).toBe(0)
+  } finally {
+    await s.close()
+    await rm(repo, { recursive: true, force: true })
+    await rm(other, { recursive: true, force: true })
+  }
+}, 60_000)
+
+test("git's worktree list, numstat and log as the Worktrees page reads them", () => {
+  expect(parseWorktreeList('worktree /p\nHEAD abc\nbranch refs/heads/main\n\nworktree /p/.symcc/worktrees/T-2\nHEAD def\ndetached\nlocked\n\nworktree /gone\nHEAD 123\nbranch refs/heads/x\nprunable gitdir file points to non-existent location\n')).toEqual([
+    { path: '/p', head: 'abc', branch: 'main', locked: false, prunable: false, bare: false },
+    { path: '/p/.symcc/worktrees/T-2', head: 'def', branch: '', locked: true, prunable: false, bare: false },
+    { path: '/gone', head: '123', branch: 'x', locked: false, prunable: true, bare: false },
+  ])
+  expect(parseNumstat('3\t1\tsrc/a.ts\n-\t-\tlogo.png\n2\t0\tsrc/{old => new}/b.ts\n1\t1\tc.ts => d.ts\n')).toEqual([
+    { file: 'src/a.ts', added: 3, removed: 1 },
+    { file: 'logo.png', added: 0, removed: 0 },
+    { file: 'src/new/b.ts', added: 2, removed: 0 },
+    { file: 'd.ts', added: 1, removed: 1 },
+  ])
+  expect(parseLog('abc1234\x1f1700000000\x1fFix: a\x1fb\n')).toEqual([{ sha: 'abc1234', atMs: 1_700_000_000_000, subject: 'Fix: a\x1fb' }])
 })
 
 test("models and skills: a model's options and variants, a skill file's name and folded description", () => {
