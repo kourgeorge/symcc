@@ -63,12 +63,12 @@ async function askLead($: $) {
   if (!box.text.trim()) await $.prompt.fill({ text: ASK_LEAD_DRAFT }).catch(() => undefined)
 }
 
-export function listPageVs($: $, pane: PaneParts) {
+export async function listPageVs($: $, pane: PaneParts) {
   const { Box, Text, Button, Input, v, mark, word, act, C, header, vs, switchMode, mode, width } = pane
   /** The characters an open row is fitted to: more than the reported columns (see VS_ROW_SCALE). */
   const room = vsRowRoom(width)
   const { nowMs } = pane
-  const { query, filtering, matching, parts, backlogOpen, doneOpen, droppedOpen, dayOpen, toggleDay } = listState($, pane)
+  const { query, filtering, matching, parts, backlogOpen, doneOpen, droppedOpen, dayOpen, toggleDay } = await listState($, pane)
   const redraw = () => $.ui.invalidate('ui.render')
   const since = (id: string) => v.working.find(w => w.task === id)?.since
   // the status colors, on the mark only (the same as the terminal list's)

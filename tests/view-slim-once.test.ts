@@ -10,15 +10,29 @@ import { addTask, emptyBoard } from '../hooks/board'
 import { publish } from '../hooks/app/lead'
 import { S } from '../hooks/app/state'
 import { fakeHost, memoryFs } from './fake-host'
-import { T0 } from './board-fixture'
 import { todayTasks } from './live-today-fixture'
 import { pastTasks } from './live-past-fixture'
 import { inToday } from './day-clock'
-import { searchTasks } from '../hooks/core/panel'
+import { searchReads } from '../hooks/app/search-parts'
 
 const now = Date.now()
 const iso = (msAgo: number) => new Date(now - msAgo).toISOString()
-const text = (n: number, w = 'word ') => w.repeat(Math.ceil(n / w.length)).slice(0, n)
+/** Varied text, as real details and requests are (not one repeated word): words of 2 to 11 letters made from
+ *  syllables by a seeded random walk, with commas and full stops, so most of them differ. */
+let seedNo = 891
+const rnd = () => ((seedNo = (seedNo * 1103515245 + 12345) % 2147483648), seedNo / 2147483648)
+const SYLLABLES = ['ba', 'ke', 'lo', 'mi', 'nu', 'pre', 'st', 'ar', 'en', 'ti', 'on', 'qu', 'ra', 'sh', 'ul', 'vo', 'wy', 'xe', 'zo', 'ch', 'th', 'or', 'il', 'em', 'ad', 'ex']
+function text(n: number) {
+  let out = ''
+  while (out.length < n) {
+    let w = ''
+    const len = 1 + Math.floor(rnd() * 4)
+    for (let i = 0; i < len; i++) w += SYLLABLES[Math.floor(rnd() * SYLLABLES.length)]
+    const end = rnd()
+    out += w + (end < 0.06 ? '. ' : end < 0.12 ? ', ' : ' ')
+  }
+  return out.slice(0, n)
+}
 
 /** A board like T-890's: 200 tasks finished in the last 2 days (each about 6 KB whole) and 20 open ones. */
 function bigBoard() {
@@ -77,6 +91,8 @@ function slimmingWorld() {
 
 test('T-891: 200 tasks finished in the last 2 days give a view at most a third of the whole one', async () => {
   const b = bigBoard()
+  // the texts are varied: a long details text has many different words
+  expect(new Set(String(b.tasks[0]!.details).split(/\s+/)).size).toBeGreaterThan(200)
   // the view as it was before T-891: a panel that keeps every task whole
   const whole = fakeHost({ fs: memoryFs(new Map()) })
   startS()
@@ -87,6 +103,9 @@ test('T-891: 200 tasks finished in the last 2 days give a view at most a third o
   await publish(w.host, b)
   expect(w.seen.stored.length).toBeGreaterThan(0)
   expect(w.seen.stored.length).toBeLessThan(wholeSize / 3)
+  // a finished task's view entry is a plain stub: none of its details or request words are kept
+  const t1 = b.tasks.find(t => t.id === 'T-1')!
+  for (const word of String(t1.details).split(/[\s.,]+/).filter(x => x.length > 8).slice(0, 20)) expect(JSON.stringify(JSON.parse(w.seen.stored).tasks.find((t: { id: string }) => t.id === 'T-1')).includes(word)).toBe(false)
   // the open tasks stay whole
   expect(w.seen.stored.includes(`"id":"T-201"`)).toBe(true)
   const stored = JSON.parse(w.seen.stored) as { tasks: { id: string; details: string; history: unknown[] }[] }
@@ -101,14 +120,26 @@ test('T-891: publish slims the view once and writes that same view', async () =>
   expect([w.seen.slims, w.seen.fittedWrites, w.seen.otherWrites]).toEqual([1, 1, 0])
 })
 
+test('T-891: publish never reads a parts file (only a typed search does)', async () => {
+  const w = slimmingWorld()
+  const reads: string[] = []
+  const host = { ...w.host, fs: { ...w.host.fs, read: (p: string) => (reads.push(p), w.host.fs.read(p)) } }
+  const before = searchReads.files
+  await publish(host as typeof w.host, bigBoard())
+  expect(reads.filter(p => /\/tasks\/T-\d+\.json$/.test(p))).toEqual([])
+  expect(searchReads.files).toBe(before)
+})
+
 test('T-891: ▍Today, yesterday and last 7 days show the same numbers from the slim view as from the whole tasks', () => {
   const view = (tasks: unknown[]) => ({ tasks, working: [], scouts: [], mode: 'auto', test_commands: [] }) as unknown as SymccView
   const lines = (tasks: unknown[], at: number) => liveTodayLines({ tasks: tasks as never[], today_team: undefined }, at, 140, 0).map(segText)
-  // tasks finished just now (minutes ago): before T-891 they were kept whole
-  const today = todayTasks(T0)
+  // tasks finished just now (updated a minute before the real now): before T-891 they were kept whole
+  const t0 = Date.now()
+  const today = todayTasks(t0)
   const slimToday = slimView(view(today)).tasks
   expect((slimToday as unknown as { history: unknown[] }[]).every(t => t.history.length === 0)).toBe(true)
-  expect(lines(slimToday, T0)).toEqual(lines(today, T0))
+  expect(lines(slimToday, t0)).toEqual(lines(today, t0))
+  expect(lines(today, t0).join('\n')).toContain('3')
   const n = inToday(Date.now(), 0.5)
   const past = pastTasks(n)
   const slimPast = slimView(view(past)).tasks
@@ -119,31 +150,15 @@ test('T-891: ▍Today, yesterday and last 7 days show the same numbers from the 
 test('T-891: slimming an already slim view again (a non-publish panel update) keeps the history marks', () => {
   const view = (tasks: unknown[]) => ({ tasks, working: [], scouts: [], mode: 'auto', test_commands: [] }) as unknown as SymccView
   const lines = (tasks: unknown[], at: number) => liveTodayLines({ tasks: tasks as never[], today_team: undefined }, at, 140, 0).map(segText)
-  const today = todayTasks(T0)
+  const t0 = Date.now()
+  const today = todayTasks(t0)
   const once = slimView(view(today))
   const twice = slimView({ ...once, branches: {} } as SymccView)
   const marks = (v: SymccView) => JSON.stringify(v.tasks.map(t => (t as unknown as { history_marks?: unknown }).history_marks))
   expect(marks(twice)).toBe(marks(once))
-  expect(lines(twice.tasks, T0)).toEqual(lines(today, T0))
+  expect(lines(twice.tasks, t0)).toEqual(lines(today, t0))
   const n = inToday(Date.now(), 0.5)
   const past = pastTasks(n)
   const pastTwice = slimView(slimView(view(past))).tasks
   for (const days of [1, 7]) expect(pastDays(pastTwice as never[], n, days)).toEqual(pastDays(past as never[], n, days))
-})
-
-test('T-891: the board search still finds a task finished in the last 2 days by its details and request words', () => {
-  const view = (tasks: unknown[]) => ({ tasks, working: [], scouts: [], mode: 'auto', test_commands: [] }) as unknown as SymccView
-  const task = (id: string, msAgo: number) => ({ id, title: 'Fix it', status: 'done', details: 'the zebrafish banana', note: '', after: [], files: [], attempts: 1, origin: { why: 'x', by: 'owner', request: 'some pelican words' }, created_at: iso(msAgo), updated_at: iso(msAgo), history: [{ at: iso(msAgo), kind: 'merged', text: 'm' }] })
-  const fresh = task('T-5', 60_000)
-  const old = task('T-6', 3 * 24 * 60 * 60_000)
-  const hits = (tasks: unknown[], q: string) => searchTasks(tasks as SymccView["tasks"], q, now).map(t => t.id)
-  const once = slimView(view([fresh, old]), now).tasks
-  const twice = slimView(slimView(view([fresh, old]), now), now).tasks
-  for (const tasks of [once, twice]) {
-    expect(hits(tasks, 'zebrafish')).toEqual(['T-5'])
-    expect(hits(tasks, 'elica')).toEqual(['T-5'])
-    expect(hits(tasks, 'banana pelican')).toEqual(['T-5'])
-    expect(hits(tasks, 'giraffe')).toEqual([])
-  }
-  expect(hits([fresh, old], 'zebrafish')).toEqual(['T-5', 'T-6'])
 })

@@ -8,6 +8,7 @@ import { type PaneView, S, workers } from '../../app/state'
 import { taskBranchFacts } from '../../app/branches'
 import { type $, panelValues } from '../panel'
 import { path, taskWithParts } from '../../app/store'
+import { searchMore } from '../../app/search-parts'
 import { noteForLead, brief, tellLead } from '../../app/tell'
 import { when } from '../../core/days'
 import { runTool, allowAskedFiles, refuseAskedFiles } from '../../app/tools'
@@ -340,7 +341,7 @@ export async function taskPage($: $, pane: PaneParts, viewTask: SymccTask) {
   // the page header (T-751): where you are (the tab it was opened from, its place in that list), the title, the state,
   // the buttons in groups (core's taskActions), then a thin rule
   const from: PageFrom = pane.onLive ? 'live' : 'tasks'
-  const place = taskPlace(v, t.id, from, pane.nowMs, S.search?.text ?? '')
+  const place = taskPlace(v, t.id, from, pane.nowMs, S.search?.text ?? '', searchMore)
   const header: PageHeader = {
     from, label: t.id, place, title: t.title, color: taskColor(t as BoardTask, pane.nowMs, pageMerging),
     state: taskStateGroups(t as BoardTask, { nowMs: pane.nowMs, merging: pageMerging, ...(v.auto_retries !== undefined ? { autoRetries: v.auto_retries } : {}), note: sessionNote(t, v.driving ?? S.driving, pane.nowMs) }),

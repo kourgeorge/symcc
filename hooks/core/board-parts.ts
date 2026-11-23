@@ -135,26 +135,6 @@ export const VIEW_LEFT_OUT = ['history', 'details', 'test_output', 'answer', 'su
 export const VIEW_MARKS_KEY = 'history_marks'
 /** The history kinds whose times a finished view task keeps (merges, the checker's send-backs and the 'failed' lines of tests failed or a clash with main, see core/live.ts liveToday). */
 export const VIEW_MARK_KINDS: readonly string[] = ['merged', 'checker-problems', 'failed']
-/**
- * The view task's field with the words of its details and the owner's request (lowercase, each word once, joined by
- * spaces), kept for a task finished in the last 2 days so the board search still finds it by them (T-891). A search
- * word has no spaces, so it is part of the text exactly when it is part of one of these words.
- */
-export const VIEW_SEARCH_KEY = 'search_words'
-
-/** A search word is kept to this many characters (a long run without spaces, like a link, stays small). */
-const SEARCH_WORD_CHARS = 80
-
-/** The search words (VIEW_SEARCH_KEY) of `texts`. */
-export const searchWordsOf = (...texts: unknown[]): string =>
-  [...new Set(texts.filter((s): s is string => typeof s === 'string').join('\n').toLowerCase().split(/\s+/).filter(Boolean).map(w => w.slice(0, SEARCH_WORD_CHARS)))].join(' ')
-
-/** View task `t`'s kept search words, or '' when it has none. */
-export function viewSearchWords(t: object): string {
-  const s = (t as Record<string, unknown>)[VIEW_SEARCH_KEY]
-  return typeof s === 'string' ? s : ''
-}
-
 /** A history line's kind and time, as a finished view task keeps it. */
 export type ViewMark = { kind: string; at?: string; reason?: string }
 
@@ -202,7 +182,7 @@ export function withViewParts<T extends object>(t: T, text: string | null): T {
   const r = readParts(text)
   const parts = r.tasks[String((t as Record<string, unknown>).id)]
   if (!parts) return t
-  const { [PARTS_KEY]: _f, [VIEW_MARKS_KEY]: _m, [VIEW_SEARCH_KEY]: _s, ...own } = t as Record<string, unknown>
+  const { [PARTS_KEY]: _f, [VIEW_MARKS_KEY]: _m, ...own } = t as Record<string, unknown>
   return { ...parts, ...own, ...(isObj(parts.origin) && isObj(own.origin) ? { origin: { ...parts.origin, ...own.origin } } : {}) } as T
 }
 

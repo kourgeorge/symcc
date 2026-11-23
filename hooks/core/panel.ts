@@ -5,7 +5,6 @@ import { asksMoreTime, needsYou, needsYouFirst } from './commands'
 import { boardSections, type DayGroup, dayLabel, dayOf, localOffset, taskDay } from './days'
 import { approveRunning, checkStepNow, finishingNow, shownStatus } from './lead'
 import { originOf } from './origin'
-import { viewSearchWords } from './board-parts'
 import { askText } from './questions'
 import { isAnswered, OVERTIME_OPTIONS, overtimeQuestion, timeLimitOf } from './task'
 import { waitFilesNote } from './review'
@@ -542,6 +541,9 @@ function dependencyHits(tasks: readonly SymccTask[], q: SearchQuery, archivedDon
   return hits
 }
 
+/** More text a task's search words may match (T-891: a slimmed finished task's details and request), '' for none. */
+export type SearchMore = (t: SymccTask) => string
+
 /** When a task last changed (its updated_at, else created_at), in ms; NaN when neither can be read. */
 export const changedMs = (t: Pick<SymccTask, 'updated_at' | 'created_at'>) => {
   const u = Date.parse(t.updated_at || '')
@@ -554,9 +556,10 @@ export const changedMs = (t: Pick<SymccTask, 'updated_at' | 'created_at'>) => {
  *  shaped like a task id ("T-12", "t12" or just "12") matches that task's id exactly (not T-120), or the word in its
  *  text; any other
  *  word matches part of the id, title, details, role, status (its word too, e.g. "waiting for you"), origin (owner,
- *  scout or worker, the scout's name, the task it came from) or the owner's request (for a finished task
- *  slimmed in the view, its kept search words, VIEW_SEARCH_KEY). An empty query matches every task. */
-export function taskMatches(t: SymccTask, query: string | SearchQuery, nowMs: number = Date.now()): boolean {
+ *  scout or worker, the scout's name, the task it came from), the owner's request, or `more(t)` (T-891: a finished
+ *  task the view slimmed has no details or request; the list gives them from its parts file, see app/search-parts.ts).
+ *  An empty query matches every task. */
+export function taskMatches(t: SymccTask, query: string | SearchQuery, nowMs: number = Date.now(), more?: SearchMore): boolean {
   const q = typeof query === 'string' ? parseSearch(query, nowMs) : query
   if (q.status && !q.status.includes(t.status)) return false
   if (q.kinds && !q.kinds.includes(kindOf(t))) return false
@@ -565,7 +568,7 @@ export function taskMatches(t: SymccTask, query: string | SearchQuery, nowMs: nu
   const words = q.words
   if (!words.length) return true
   const o = originOf(t)
-  const text = [t.title, t.details, roleOf(t), kindOf(t), t.status, STATUS_WORD[t.status] ?? '', o?.by ?? '', o?.scout ?? '', o?.task ?? '', o?.request ?? '', viewSearchWords(t)].join('\n').toLowerCase()
+  const text = [t.title, t.details, roleOf(t), kindOf(t), t.status, STATUS_WORD[t.status] ?? '', o?.by ?? '', o?.scout ?? '', o?.task ?? '', o?.request ?? '', more?.(t) ?? ''].join('\n').toLowerCase()
   const id = num(t.id)
   return words.every(w => {
     const asId = /^(?:t-?)?(\d+)$/.exec(w)
@@ -584,10 +587,10 @@ const byRunOrder = (x: SymccTask, y: SymccTask) => x.order - y.order || num(x.id
  *  directly or through a chain), blocks:T-n (the not-done tasks T-n still waits for, a dropped one too) and stuck
  *  (todo tasks held back by a failed, paused, waiting or dropped task, or by an id not in `tasks`). `archivedDone`,
  *  the board's archived done ids (board.archived_done): they count as done there, not missing. */
-export function searchTasks<T extends SymccTask>(tasks: T[], query: string | SearchQuery, nowMs: number = Date.now(), archivedDone: readonly string[] = []): T[] {
+export function searchTasks<T extends SymccTask>(tasks: T[], query: string | SearchQuery, nowMs: number = Date.now(), archivedDone: readonly string[] = [], more?: SearchMore): T[] {
   const q = typeof query === 'string' ? parseSearch(query, nowMs) : query
   const deps = dependencyHits(tasks, q, archivedDone)
-  const hits = tasks.filter(t => (!deps || deps.has(t.id)) && taskMatches(t, q, nowMs))
+  const hits = tasks.filter(t => (!deps || deps.has(t.id)) && taskMatches(t, q, nowMs, more))
   if (!q.pick) return hits
   const sorted = q.pick.by === 'newest'
     ? [...hits].sort((x, y) => (changedMs(y) || 0) - (changedMs(x) || 0) || num(y.id) - num(x.id))

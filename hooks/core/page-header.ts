@@ -16,7 +16,7 @@ import { type BoardTask, DEFAULT_AUTO_RETRIES, isInvestigation, kindOf, STATUS_W
 import { type Seg, STATUS_BADGE, STATUS_MARK, statusMark, wrapSegs } from './details'
 import { originOf } from './origin'
 import { roleOf } from './roles'
-import { type ActionGroup, GROUP_ORDER, rowTime, STEP_WORD, panelSections, searchTasks } from './panel'
+import { type ActionGroup, GROUP_ORDER, rowTime, STEP_WORD, panelSections, searchTasks, type SearchMore } from './panel'
 import { stageStep, taskPhase } from './phase'
 import { everyText, findingsMark, scoutRanText, scoutStateText, type ScoutRunRecord, sortScouts } from './scouts'
 import { liveLanes, liveTrains, type LiveTrain, type LiveView } from './live'
@@ -53,8 +53,8 @@ export function placeIn(ids: readonly string[], id: string): Place | null {
 
 /** The Tasks list's tasks in its order (with the search `query` on, only the matches): what needs the owner, what
  *  runs, what waits to run, the backlog, done, dropped; folded groups count too. */
-export function taskListIds(tasks: SymccTask[], nowMs: number, query = '', archivedDone: readonly string[] = []): string[] {
-  const matching = query.trim() ? searchTasks(tasks, query, nowMs, archivedDone) : tasks
+export function taskListIds(tasks: SymccTask[], nowMs: number, query = '', archivedDone: readonly string[] = [], more?: SearchMore): string[] {
+  const matching = query.trim() ? searchTasks(tasks, query, nowMs, archivedDone, more) : tasks
   const s = panelSections(matching, nowMs, localOffset(nowMs))
   return [...s.needsYou, ...s.doing, ...s.todo, ...s.backlog, ...s.doneToday, ...s.doneDays.flatMap(g => g.tasks), ...s.dropped].map(t => t.id)
 }
@@ -69,12 +69,12 @@ export function liveListIds(view: LiveView, nowMs: number): string[] {
 
 /** The list a task's page goes through with prev/next: the Live tab's when it was opened from there and is on it,
  *  else the Tasks list's (with its search). */
-export function taskPlace(view: LiveView, id: string, from: PageFrom, nowMs: number, query = ''): Place | null {
+export function taskPlace(view: LiveView, id: string, from: PageFrom, nowMs: number, query = '', more?: SearchMore): Place | null {
   if (from === 'live') {
     const live = placeIn(liveListIds(view, nowMs), id)
     if (live) return live
   }
-  return placeIn(taskListIds(view.tasks, nowMs, from === 'live' ? '' : query, view.archived_done ?? []), id)
+  return placeIn(taskListIds(view.tasks, nowMs, from === 'live' ? '' : query, view.archived_done ?? [], more), id)
 }
 
 /** The scouts in the Scouts list's order. */

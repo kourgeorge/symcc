@@ -13,8 +13,12 @@ import type { SymccView } from '../types'
 const DETAILS_WORDS = 'Group the details under clear headings'
 const HISTORY_WORDS = 'fixed the headings and wrapped every line'
 
-async function open(on: On, $: Engine, id: string, slim: boolean | 'view', surface: 'terminal' | 'vscode') {
-  const whole = RICH_TASKS.find(t => t.id === id)!
+/** The task updated a minute before the real now (T-891: before it, the view kept such a finished task whole). */
+const JUST = new Date(Date.now() - 60_000).toISOString()
+
+async function open(on: On, $: Engine, id: string, slim: boolean | 'view', surface: 'terminal' | 'vscode', fresh = false) {
+  const given = RICH_TASKS.find(t => t.id === id)!
+  const whole = fresh ? { ...given, updated_at: JUST } : given
   // 'view': the task as the published view keeps it (slimView), finished just now
   const shown = slim === 'view' ? slimView({ tasks: [whole], working: [], scouts: [], mode: 'auto', test_commands: [] } as unknown as SymccView).tasks[0]! : slim ? viewStubFilled(viewTask(whole as never)) : whole
   const view = { shape: 'view-1', value: { tasks: [shown], working: [], scouts: [], mode: 'auto', home_branch: 'main', test_commands: [] } }
@@ -48,11 +52,12 @@ for (const surface of ['terminal', 'vscode'] as const) {
   // (a page can be mounted once per test: the whole task's page is drawn in a test of its own, just before)
   for (const id of ['T-508', 'T-509']) {
     test(`${surface}: the page of ${id} drawn from the whole task`, async ($, on) => {
-      wholePage.set(`${surface} ${id}`, (await open(on, $, id, false, surface)).text)
+      wholePage.set(`${surface} ${id}`, (await open(on, $, id, false, surface, true)).text)
       expect(wholePage.get(`${surface} ${id}`)).toContain(DETAILS_WORDS)
     })
     test(`${surface}: the page of ${id}, just finished, is the same from the slim view as from the whole task`, async ($, on) => {
-      const r = await open(on, $, id, 'view', surface)
+      const r = await open(on, $, id, 'view', surface, true)
+      expect(Date.now() - Date.parse(String((r.shown as { updated_at?: string }).updated_at))).toBeLessThan(10 * 60_000)
       expect((r.shown as { details?: string }).details).toBe('')
       expect(r.stored.join('\n')).not.toContain(DETAILS_WORDS)
       expect(r.text).toContain(DETAILS_WORDS)

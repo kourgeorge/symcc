@@ -3,17 +3,22 @@ import type { SymccTask } from '../../../types'
 import { isFinished, statusMark, archivedNote, archivedOf, localOffset, panelSections, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, groupLabel, ALL_CLEAR, rowStates, stateText, rowMark, TITLE_ROOM, fitRow, rowExtra, listKeys, searchTasks, SEARCH_WORDS, searchLine, searchBoxHint, questionsLabel, type OwnerQuestion, ownersTurn, shownStatus, LIST_TONE } from '../../board'
 import { openDays, S } from '../../app/state'
 import { type $, panelValues } from '../panel'
+import { claudeHost } from '../host'
+import { loadSearchParts, searchMore } from '../../app/search-parts'
 import type { PaneParts } from './parts'
 import { row } from './arrows'
 
 /** What the terminal and VS Code lists both start from: the search (S.search) and the tasks it matches, split into
  *  sections (old days of Done no longer listed leave openDays), and which folded groups are open (while filtering,
- *  every group with a match is open, and the backlog shows all its matches). */
-export function listState($: $, pane: PaneParts) {
+ *  every group with a match is open, and the backlog shows all its matches; T-891: the search also matches a slim
+ *  finished task's details and request, read from its parts file, app/search-parts.ts). */
+export async function listState($: $, pane: PaneParts) {
   const { v, nowMs } = pane
   const query = S.search?.text.trim() ?? ''
   const filtering = query !== ''
-  const matching = filtering ? searchTasks(v.tasks, query, nowMs, v.archived_done) : v.tasks
+  // T-891: a slim finished task's details and request come from its parts file, read only while a search is on
+  await loadSearchParts(claudeHost($), v.tasks, query)
+  const matching = filtering ? searchTasks(v.tasks, query, nowMs, v.archived_done, searchMore) : v.tasks
   const parts = panelSections(matching, nowMs, localOffset(nowMs))
   if (!filtering) for (const d of [...openDays]) if (!parts.doneDays.some(g => g.day === d)) openDays.delete(d)
   const toggleDay = (day: string) => () => {
@@ -40,12 +45,12 @@ export function listState($: $, pane: PaneParts) {
  *  Done and Dropped too), groups with a match open and groups without one hidden; a line under the header says so.
  *  No way out needs Esc (it doesn't reach the panel from a text box): Enter on an empty box clears the search, and
  *  while a filter is on (not typing) [x] clear search, next to [f] change search, takes it off. */
-export function listPage($: $, pane: PaneParts) {
+export async function listPage($: $, pane: PaneParts) {
   const { Box, Text, Button, Input, v, width, mark, act, C, header, footer } = pane
   const { nowMs } = pane
   const search = S.search
   const typing = !!search?.typing
-  const { query, filtering, matching, parts, backlogOpen, doneOpen, droppedOpen, dayOpen, toggleDay } = listState($, pane)
+  const { query, filtering, matching, parts, backlogOpen, doneOpen, droppedOpen, dayOpen, toggleDay } = await listState($, pane)
   const toggleBacklog = () => ((S.backlogOpen = !S.backlogOpen), $.ui.invalidate('ui.render'))
   const toggleDone = () => ((S.doneOpen = !S.doneOpen), $.ui.invalidate('ui.render'))
   const toggleDropped = () => ((S.droppedOpen = !S.droppedOpen), $.ui.invalidate('ui.render'))
