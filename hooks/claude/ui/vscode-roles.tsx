@@ -7,7 +7,7 @@
 // links that wraps (Edit · See the prompt · Turn off · Reset to built-in · Remove), then its parts under headings.
 // Removing asks first in a box with one "Yes, remove" Button and a Cancel link. The edit pages have one Save Button and a
 // Cancel link. No key hints.
-import { DEFAULT_ROLE, ROLE_PLACEHOLDERS, ROLE_SLOT, ROLE_PROMPTS, promptsOfRole, roleNameError, kindNameError, isCheckerRole, findKind, ALWAYS_ON_KINDS, type RoleDef, type KindDef, type RolePromptKind } from '../../board'
+import { DEFAULT_ROLE, ROLE_PLACEHOLDERS, ROLE_SLOT, ROLE_PROMPTS, promptsOfRole, roleNameError, kindNameError, isCheckerRole, findKind, ALWAYS_ON_KINDS, roleCodeText, type RoleDef, type KindDef, type RolePromptKind } from '../../board'
 import { type DefSource, type BrokenDef, defSource, brokenNamed, brokenLabel, defNamed } from '../../core/def-files'
 import { S } from '../../app/state'
 import { type $ } from '../panel'
@@ -192,6 +192,7 @@ export function rolePageVs($: $, pane: PaneParts, r: RoleDef, source: DefSource,
       {k.section('model', 'Model', [k.plain('vs-model', r.model || "(none: the session's model)", r.model ? 'text' : 'inactive')])}
       {k.section('skills', 'Skills', [k.plain('vs-skills', r.skills.join(', ') || '(none)', r.skills.length ? 'text' : 'inactive')])}
       {k.section('tools', 'Tools', [k.plain('vs-tools', (r.tools ?? []).join(', ') || '(none: the base tools only)', r.tools?.length ? 'text' : 'inactive')])}
+      {roleCodeText(r) ? k.section('code', 'Code', [k.plain('vs-code', roleCodeText(r))]) : null}
       {k.section('checklist', 'Checklist', [r.prompt.trim() ? <Markdown key="vs-checklist" text={r.prompt.trim()} /> : k.plain('vs-checklist-none', '(none: a plain worker)')])}
       {k.section('placeholders', 'Placeholders', [
         k.plain('vs-holders-about', 'The checklist may use these; each is filled in for the task (any other {{word}} is left as written).'),

@@ -198,6 +198,10 @@ T-747 try 1 → merged into main
       <p>Nothing merges until your tests pass, and each task may change only its listed files. These checks catch honest mistakes; they are not a security boundary. The <a href="guide.html#why-it-is-built-this-way">guide</a> explains why each part is there.</p>
     </details>
     <details class="faq">
+      <summary>Can it write things that aren't code?</summary>
+      <p>Yes. Give the task the built-in <code>writer</code> role (guides, plans, articles, notes), or mark any role <code>code: false</code>. Such a task may only change prose files: a change to code, tests or agent instructions is refused before it can merge, so the test commands are skipped and its history says "tests skipped: only prose changed". Its worker checks its facts and links instead. See <a href="guide.html#worker-roles">Worker roles</a> in the guide.</p>
+    </details>
+    <details class="faq">
       <summary>Is the demo above real?</summary>
       <p>Yes. It is symcc building symcc: the task numbers, titles and steps come from its own board and history. It is drawn with HTML so you can read it, pause it and switch views.</p>
     </details>

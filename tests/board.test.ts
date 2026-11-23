@@ -24,6 +24,7 @@ import { usageTokens } from '../hooks/claude/usage'
 import { EXTRA_TOOLS, ROLE_TOOL_MAP, claudeRoleTools, BASE_WORKER_TOOLS, workerTypeFor, workerTypeSuffix, workerAgentTypes, isWorkerType, asBaseWorkers, claudeNames } from '../hooks/claude/agent-types'
 import { type AgentInfo, hostAgent, isNotReady } from '../hooks/claude/agents'
 import * as core from '../hooks/board'
+import { roleChanges } from '../hooks/core/role-changes'
 import { taskStateGroups } from '../hooks/core/page-header'
 
 /** The page header's status (T-751: its state line's first group): its text and color. */
@@ -2084,8 +2085,8 @@ test('the role mark: the role name, nothing for general; the open task\'s role l
   expect(boardText(b2)).not.toContain('[general]')
 })
 
-test('the built-in roles are general, docs, refactor, researcher, security and tester', async () => {
-  expect([...BUILT_IN_ROLES]).toEqual(['general', 'docs', 'refactor', 'researcher', 'security', 'tester'])
+test('the built-in roles are general, docs, refactor, researcher, security, tester and writer', async () => {
+  expect([...BUILT_IN_ROLES]).toEqual(['general', 'docs', 'refactor', 'researcher', 'security', 'tester', 'writer'])
   for (const old of ['tests', 'backend', 'frontend']) expect(BUILT_IN_ROLES).not.toContain(old)
 })
 
@@ -2154,7 +2155,7 @@ test('a researcher task spawns as the web worker type; other roles keep the base
   expect(workerTypeSuffix([])).toBe('worker')
   // the registered types: the base worker with the base tools, and one per set of role tool words
   const types = workerAgentTypes()
-  expect(types.map(t => t.suffix)).toEqual(['worker', 'worker-web'])
+  expect(types.map(t => t.suffix)).toEqual(['worker', 'worker-web', 'worker-prose', 'worker-web-prose'])
   // every worker type also gets the workers' question tool
   expect(types.find(t => t.suffix === 'worker')?.tools).toEqual([...BASE_WORKER_TOOLS, 'mcp__symcc__ask_owner'])
   expect(types.find(t => t.suffix === 'worker-web')?.tools).toEqual([...BASE_WORKER_TOOLS, 'WebSearch', 'WebFetch', 'mcp__symcc__ask_owner'])
@@ -2166,6 +2167,39 @@ test('a researcher task spawns as the web worker type; other roles keep the base
   expect(isWorkerType('symcc:scout')).toBe(false)
   expect(asBaseWorkers([{ id: 'a', type: 'symcc:worker-web', status: 'running' }])[0]!.type).toBe('symcc:worker')
   expect(isNotReady("Agent type 'symcc:worker-web' not found")).toBe(true)
+})
+
+/** A copy of roles/writer.md (tests can't read the plugin's files; the OpenCode host test reads the real one); keep the two the same. */
+const WRITER_MD = "---\ndescription: plain-English writing - guides, plans, articles and notes; prose only, never code\ntools: web\ncode: false\n---\n- Write in plain English: short sentences, everyday words, explain any term you must use.\n"
+
+test('T-900: a role\'s code: false makes it prose only: read from its file, written back, shown to the lead, and its worker gets the prose agent type and prompt', async () => {
+  const w = parseRole('writer', WRITER_MD)!
+  expect(w).toMatchObject({ name: 'writer', tools: ['web'], code: false })
+  expect(core.isProseRole(w)).toBe(true)
+  expect(parseRole('r', '---\ndescription: d\ncode: no\n---\n')?.code).toBe(false)
+  // code: true, or no code line, is a normal role (no code key at all)
+  expect(parseRole('r', '---\ndescription: d\ncode: true\n---\n')).not.toHaveProperty('code')
+  expect(parseRole('r', '---\ndescription: d\n---\n')).not.toHaveProperty('code')
+  expect(core.roleFileText(w)).toContain('\ncode: false\n')
+  expect(parseRole('writer', core.roleFileText(w))).toEqual(w)
+  expect(rolesLeadText([w])).toContain('writer (plain-English writing - guides, plans, articles and notes; prose only, never code; code: false)')
+  expect(rolesLeadText([w])).toContain(`A role marked code: false is ${core.PROSE_ROLE_TEXT}`)
+  expect(roleLine({ role: 'writer' }, [w])).toContain(' · code: false')
+  expect(core.roleCodeText(w)).toBe(`false: ${core.PROSE_ROLE_TEXT}`)
+  expect(core.roleCodeText(parseRole('r', '---\ndescription: d\n---\n')!)).toBe('')
+  // Claude Code: the prose worker types, whose base prompt checks facts and links instead of running tests
+  expect(workerTypeFor(w)).toBe('symcc:worker-web-prose')
+  expect(workerTypeFor({ code: false })).toBe('symcc:worker-prose')
+  expect(isWorkerType('symcc:worker-web-prose')).toBe(true)
+  expect(workerAgentTypes().find(t => t.suffix === 'worker-web-prose')).toEqual({ suffix: 'worker-web-prose', tools: [...BASE_WORKER_TOOLS, 'WebSearch', 'WebFetch', 'mcp__symcc__ask_owner'], prose: true })
+  const tool = (t: string) => `mcp__symcc__${t}`
+  expect(core.WORKER_BASE('symcc', tool, true, true, true)).toContain('keep the change small and inside the task\'s files, check your facts and links, and finish')
+  expect(core.WORKER_BASE('symcc', tool, true, true, true)).not.toContain('run the tests')
+  expect(core.basePromptFor('worker', 'symcc', tool, { prose: true })).toContain('check your facts and links')
+  expect(core.WORKER_BASE('symcc', tool)).toContain('run the tests you were given')
+  // the owner's role differing only in code: false shows as a change from the built-in
+  const plain = parseRole('writer', WRITER_MD.replace('code: false\n', ''))!
+  expect(roleChanges(plain, w).map(c => [c.field, c.before, c.after])).toEqual([['code', 'true', 'false']])
 })
 
 test('the worker prompt for a role with web tools has the web safety line; others don\'t', async () => {

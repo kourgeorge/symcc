@@ -14,10 +14,21 @@ import { type DefSource, type BrokenDef, DEF_NAME, brokenNamed, defSource, defNa
  * tools lists extra tools the role's workers get on top of the base ones, in symcc's words (only ROLE_TOOL_WORDS, e.g. web);
  * each host maps a word to its own tools (Claude Code: web is WebSearch and WebFetch, see claude/agent-types.ts).
  * off: true turns the role off: the lead never picks it and it isn't offered on the task page (a task that has it keeps it).
+ * code: false makes it a prose-only role (T-900, see isProseRole): its change tasks may only change prose files (the
+ * checker's strict rule, isCheckerDocFile), so their tests are skipped, and its workers check facts and links instead of running tests.
  * The role's name is always its file name; a name: line in the front matter is ignored, and when it says something else
  * the role gets a `warning` (shown in the lead's roles list), but still works.
  */
-export type RoleDef = { name: string; description: string; model?: string; skills: string[]; tools?: string[]; off?: boolean; prompt: string; warning?: string }
+export type RoleDef = { name: string; description: string; model?: string; skills: string[]; tools?: string[]; off?: boolean; code?: false; prompt: string; warning?: string }
+
+/** Whether role `r` is a prose-only role (its front matter says `code: false`). */
+export const isProseRole = (r: Pick<RoleDef, 'code'> | undefined): boolean => r?.code === false
+
+/** What a prose-only role (code: false) means, in a few words, for the lead and the pages. */
+export const PROSE_ROLE_TEXT = 'prose only: its change tasks may only change prose files (.md, not agent instructions), and their tests are skipped'
+
+/** A role page's Code section ("false: prose only ..."), or '' for a normal role, whose pages show no Code section. */
+export const roleCodeText = (r: Pick<RoleDef, 'code'> | undefined): string => (isProseRole(r) ? `false: ${PROSE_ROLE_TEXT}` : '')
 
 /** The warning for a role file whose name: line differs from its file name: "name: qa is ignored; the role's name is its file name, tester". */
 export const ignoredNameWarning = (said: string, name: string): string => `name: ${said} is ignored; the role's name is its file name, ${name}`
@@ -120,7 +131,8 @@ function readRole(name: string, text: string): RoleDef | string {
   const tools = roleTools(frontMatterList(meta.tools ?? ''))
   if (typeof tools === 'string') return tools
   const off = /^(true|yes)$/i.test(unquote(meta.off))
-  return { name: roleName, description: description.slice(0, 200), ...(model ? { model } : {}), skills: frontMatterList(meta.skills ?? ''), ...(tools.length ? { tools } : {}), ...(off ? { off: true } : {}), prompt: fm.body.trim(), ...(warning ? { warning } : {}) }
+  const prose = /^(false|no)$/i.test(unquote(meta.code))
+  return { name: roleName, description: description.slice(0, 200), ...(model ? { model } : {}), skills: frontMatterList(meta.skills ?? ''), ...(tools.length ? { tools } : {}), ...(off ? { off: true } : {}), ...(prose ? { code: false as const } : {}), prompt: fm.body.trim(), ...(warning ? { warning } : {}) }
 }
 
 /** The built-in roles with the project's added: a project role replaces a built-in one with the same name. Sorted by name, general first. */
@@ -131,7 +143,7 @@ export function mergeRoles(builtIn: RoleDef[], project: RoleDef[]): RoleDef[] {
 }
 
 /** The roles that come with the plugin (one file each in its roles/ folder). */
-export const BUILT_IN_ROLES: readonly string[] = [DEFAULT_ROLE, 'docs', 'refactor', 'researcher', 'security', 'tester']
+export const BUILT_IN_ROLES: readonly string[] = [DEFAULT_ROLE, 'docs', 'refactor', 'researcher', 'security', 'tester', 'writer']
 
 /** A task's role name: its role, or general when none is set. */
 export const roleOf = (t: Pick<SymccTask, 'role'>): string => t.role?.trim() || DEFAULT_ROLE
@@ -165,7 +177,7 @@ export function roleMark(t: Pick<SymccTask, 'role'>): string {
 export function roleLine(t: Pick<SymccTask, 'role'>, roles: RoleDef[]): string {
   const name = roleOf(t)
   const r = findRole(roles, name)
-  return `Role: ${r?.name ?? name}${r ? ` — ${r.description}` : ''}${r?.model ? ` · model ${r.model}` : ''}${r?.tools?.length ? ` · tools ${r.tools.join(', ')}` : ''}`
+  return `Role: ${r?.name ?? name}${r ? ` — ${r.description}` : ''}${r?.model ? ` · model ${r.model}` : ''}${r?.tools?.length ? ` · tools ${r.tools.join(', ')}` : ''}${isProseRole(r) ? ' · code: false' : ''}`
 }
 
 /** The roles to pick from in the board panel: the known ones, general first (general alone when none are loaded). */
@@ -221,8 +233,8 @@ export function roleSection(r: RoleDef | undefined, values: Record<string, strin
 /** The lead's paragraph about roles: each one with its description, and how to pick. */
 export function rolesLeadText(roles: RoleDef[], name: string = DEFAULT_NAME): string {
   const on = onRoles(roles)
-  const list = on.length ? on.map(r => `${r.name} (${r.description})`).join('; ') : `${DEFAULT_ROLE} (a plain worker)`
-  return `- Worker roles: ${list}. Pick the role that fits each task (role in ${name} add / change); ${DEFAULT_ROLE} when unsure; the owner can override. Use researcher for "find out whether / how ..." tasks whose result is an answer, not code. A researcher task is an investigation unless you add it with kind: change (then its result is a lasting note, usually docs/research/<topic>.md). Put the task's own focus in its details. To add, change, reset or turn off a role when the owner asks, use ${name} roles (never write ${namesFor(name).dir}/roles/ files by hand).
+  const list = on.length ? on.map(r => `${r.name} (${r.description}${isProseRole(r) ? '; code: false' : ''})`).join('; ') : `${DEFAULT_ROLE} (a plain worker)`
+  return `- Worker roles: ${list}. Pick the role that fits each task (role in ${name} add / change); ${DEFAULT_ROLE} when unsure; the owner can override. Use researcher for "find out whether / how ..." tasks whose result is an answer, not code. A researcher task is an investigation unless you add it with kind: change (then its result is a lasting note, usually docs/research/<topic>.md). A role marked code: false is ${PROSE_ROLE_TEXT}; give it only writing tasks (guides, plans, notes), never code. Put the task's own focus in its details. To add, change, reset or turn off a role when the owner asks, use ${name} roles (never write ${namesFor(name).dir}/roles/ files by hand).
 - One task, one role. When a request needs several kinds of work (e.g. code, tests, docs) and each part is big enough to stand alone, or a role really helps (security, a careful test suite, a refactor with no behavior change), split it into one task per role and link them with after (tests and docs wait for the code they cover; parts with different files run in parallel). When the request is small, keep it as one task with the ${DEFAULT_ROLE} role: each extra task costs a worker run, a test run and a merge.`
 }
 
@@ -243,19 +255,20 @@ export function roleTools(tools: string[]): string[] | string {
   return out
 }
 
-/** A role's file text: the front matter (description, then model, skills, tools and off when set), then the checklist. */
+/** A role's file text: the front matter (description, then model, skills, tools, off and code: false when set), then the checklist. */
 export function roleFileText(r: Omit<RoleDef, 'name'>): string {
   const lines = [`description: ${r.description.replace(/\s+/g, ' ').trim()}`]
   if (r.model) lines.push(`model: ${r.model}`)
   if (r.skills.length) lines.push(`skills: [${r.skills.join(', ')}]`)
   if (r.tools?.length) lines.push(`tools: ${r.tools.join(', ')}`)
   if (r.off) lines.push('off: true')
+  if (r.code === false) lines.push('code: false')
   return `---\n${lines.join('\n')}\n---\n${r.prompt.trim() ? `${r.prompt.trim()}\n` : ''}`
 }
 
 /** One role's line for the lead's roles list: "tester (built-in): writes tests · model sonnet", with ", off" when it is off and its warning, if any, at the end. */
 function leadRoleLine(r: RoleDef, source: DefSource): string {
-  return `- ${r.name} (${sourceLabel(source, r.off && !isCheckerRole(r.name))}): ${r.description}${r.model ? ` · model ${r.model}` : ''}${r.skills.length ? ` · skills ${r.skills.join(', ')}` : ''}${r.tools?.length ? ` · tools ${r.tools.join(', ')}` : ''}${r.warning ? ` · warning: ${r.warning}` : ''}`
+  return `- ${r.name} (${sourceLabel(source, r.off && !isCheckerRole(r.name))}): ${r.description}${r.model ? ` · model ${r.model}` : ''}${r.skills.length ? ` · skills ${r.skills.join(', ')}` : ''}${r.tools?.length ? ` · tools ${r.tools.join(', ')}` : ''}${isProseRole(r) ? ' · code: false' : ''}${r.warning ? ` · warning: ${r.warning}` : ''}`
 }
 
 /** The lead's line for a broken role file: what it is, why, and the way out (reset for a built-in's name, remove for an added role). */

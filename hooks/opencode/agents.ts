@@ -83,7 +83,7 @@ export const AGENT_PERMISSIONS = [{ action: 'question', resource: '*', effect: '
 const ocTool = (name: string, tool: string) => `${name}_${tool}`
 
 /** The prompt agent `a` is given: its base prompt (WORKER_BASE or SCOUT_BASE, with OpenCode's tool names), then its task's prompt. */
-export const sessionPrompt = (a: Pick<HostAgentStart, 'kind' | 'prompt'>, name: string): string => `${basePromptFor(a.kind, name, t => ocTool(name, t))}\n\n${a.prompt}`
+export const sessionPrompt = (a: Pick<HostAgentStart, 'kind' | 'prompt' | 'prose'>, name: string): string => `${basePromptFor(a.kind, name, t => ocTool(name, t), a.prose ? { prose: true } : {})}\n\n${a.prompt}`
 
 /** The text of a session's final answer: the text parts of its last assistant message that has any. */
 export function finalText(messages: ReadonlyArray<OcSessionMessage>): string {

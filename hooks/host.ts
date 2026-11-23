@@ -54,6 +54,9 @@ export function agentState(a: HostAgent): AgentState {
  * for in symcc's words (a worker's, e.g. ['web']; the host maps them to its own tools), the folder it works in and its model. The host picks how to run it (for Claude Code,
  * a background subagent of the agent type that fits; elsewhere a child session, or a process of its own).
  *
+ * `prose`: a worker on a change task whose role says code: false (T-900); its base prompt says to check facts and links
+ * instead of running tests (basePromptFor's `prose`; Claude Code: the "-prose" worker agent types).
+ *
  * `files`: for a worker on a change task with a file list, the files and folders it may change (relative to `cwd`; a
  * folder ends with "/"). Claude Code's adapter doesn't need it (its tool hook asks symcc, see toolCheck); a host with
  * no such hook (e.g. hosts/node/, a `claude -p` process) turns it into its own permission rules. Absent: anywhere in `cwd`.
@@ -63,7 +66,7 @@ export function agentState(a: HostAgent): AgentState {
  * `words.tool`. Claude Code's adapter gives them as its agent types' prompts (claude/registration.ts); a host with no
  * agent types puts the base in front of `prompt` (hooks/process/agents.ts withBasePrompt, which also leaves out symcc's tools: a process agent has none).
  */
-export type HostAgentStart = { kind: HostAgentKind; prompt: string; name: string; description: string; tools?: readonly string[]; files?: readonly string[]; cwd?: string; model?: string }
+export type HostAgentStart = { kind: HostAgentKind; prompt: string; name: string; description: string; tools?: readonly string[]; prose?: true; files?: readonly string[]; cwd?: string; model?: string }
 
 /** What starting an agent answers: its id (none: it didn't start). */
 export type HostAgentStarted = { agentId?: string }

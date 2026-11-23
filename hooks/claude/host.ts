@@ -17,9 +17,9 @@ import { useTaskStop } from './background'
 /** The Host register.tsx hands the logic (the board panel's values are its ui.panel). */
 export type ClaudeHost = Host
 
-/** The Claude Code agent type an agent of this kind is started as: a worker's fits its role's tool words (web: "<name>:worker-web", which has WebSearch and WebFetch); scouts and checkers are scouts. */
-export function agentTypeFor(a: Pick<HostAgentStart, 'kind' | 'tools'>, name: string = S.N.name): string {
-  return a.kind === 'worker' ? workerTypeFor({ tools: a.tools ? [...a.tools] : undefined }, name) : claudeNames(name).scout
+/** The Claude Code agent type an agent of this kind is started as: a worker's fits its role's tool words (web: "<name>:worker-web", which has WebSearch and WebFetch) and a prose-only one gets "-prose" (T-900); scouts and checkers are scouts. */
+export function agentTypeFor(a: Pick<HostAgentStart, 'kind' | 'tools' | 'prose'>, name: string = S.N.name): string {
+  return a.kind === 'worker' ? workerTypeFor({ tools: a.tools ? [...a.tools] : undefined, ...(a.prose ? { code: false as const } : {}) }, name) : claudeNames(name).scout
 }
 
 /**

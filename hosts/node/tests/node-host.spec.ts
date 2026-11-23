@@ -37,6 +37,9 @@ test('withBasePrompt puts WORKER_BASE in front of a worker\'s prompt, and SCOUT_
   const no = { symccTools: false }
   expect(withBasePrompt({ kind: 'worker', prompt: 'Task T-1' })).toBe(`${WORKER_BASE('symcc', tool, false, false)}\n\nTask T-1`)
   expect(withBasePrompt({ kind: 'worker', prompt: 'Task T-1', tools: ['web'] })).toBe(`${WORKER_BASE('symcc', tool, true, false)}\n\nTask T-1`)
+  // T-900: a worker of a code: false role checks its facts and links instead of running tests
+  expect(withBasePrompt({ kind: 'worker', prompt: 'Task T-1', prose: true })).toBe(`${WORKER_BASE('symcc', tool, false, false, true)}\n\nTask T-1`)
+  expect(withBasePrompt({ kind: 'worker', prompt: 'Task T-1', prose: true })).toContain('check your facts and links')
   expect(withBasePrompt({ kind: 'scout', prompt: 'Look' })).toBe(`${SCOUT_BASE('symcc', tool, no)}\n\nLook`)
   expect(withBasePrompt({ kind: 'checker', prompt: 'Check' })).toBe(`${SCOUT_BASE('symcc', tool, no)}\n\nCheck`)
   // the task prompt's "call the ask_owner tool" line becomes "write the question in your report"

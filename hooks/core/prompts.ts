@@ -145,7 +145,12 @@ export type BaseOptions = {
   symccTools?: boolean
   /** the agent has web tools (its role's `tools: web`): a worker gets WEB_SAFETY_LINE, a scout is told it may use the web */
   web?: boolean
+  /** a worker whose role says code: false (T-900): it checks its facts and links instead of running tests */
+  prose?: boolean
 }
+
+/** What a worker is told to check before it hands back: the tests, or for a prose-only role (code: false) its facts and links. */
+export const workerCheckText = (prose = false): string => (prose ? 'check your facts and links' : 'run the tests you were given')
 
 /**
  * The base prompt every worker gets, before its task's prompt: who it is and how it hands back. `name` is the plugin's
@@ -153,9 +158,10 @@ export type BaseOptions = {
  * WEB_SAFETY_LINE (a worker whose role has web tools). Claude Code's adapter gives it as the worker agent types' prompt
  * (claude/registration.ts); a host with no agent types puts it in front of the task prompt (see basePromptFor).
  * `symccTools` false: the worker has no ask_owner tool, so it writes its question in its report (NO_TOOLS_ASK).
+ * `prose`: a worker whose role says code: false is told to check its facts and links instead of running tests (workerCheckText).
  */
-export const WORKER_BASE = (name: string, tool: (t: string) => string, web = false, symccTools = true): string =>
-  `You are a ${name} worker. You get exactly one task and the folder (your own copy of the project) to do it in. Do it there, keep the change small and inside the task's files, run the tests you were given, and finish with a one or two sentence summary. ${symccTools ? `To ask the owner something, call the ${tool(ASK_TOOL)} tool` : NO_TOOLS_ASK}; if an edit is refused as outside your files, stop and hand back.${web ? ` ${WEB_SAFETY_LINE}` : ''}`
+export const WORKER_BASE = (name: string, tool: (t: string) => string, web = false, symccTools = true, prose = false): string =>
+  `You are a ${name} worker. You get exactly one task and the folder (your own copy of the project) to do it in. Do it there, keep the change small and inside the task's files, ${workerCheckText(prose)}, and finish with a one or two sentence summary. ${symccTools ? `To ask the owner something, call the ${tool(ASK_TOOL)} tool` : NO_TOOLS_ASK}; if an edit is refused as outside your files, stop and hand back.${web ? ` ${WEB_SAFETY_LINE}` : ''}`
 
 /**
  * The base prompt every scout and checker gets (checkers run as scouts), before its own prompt; see WORKER_BASE.
@@ -177,7 +183,7 @@ export const SCOUT_BASE = (name: string, tool: (t: string) => string, o: BaseOpt
  * hooks/process/) passes `symccTools: false`.
  */
 export const basePromptFor = (kind: 'worker' | 'scout' | 'checker', name: string, tool: (t: string) => string, o: BaseOptions = {}): string =>
-  kind === 'worker' ? WORKER_BASE(name, tool, o.web === true, o.symccTools !== false) : SCOUT_BASE(name, tool, o, kind)
+  kind === 'worker' ? WORKER_BASE(name, tool, o.web === true, o.symccTools !== false, o.prose === true) : SCOUT_BASE(name, tool, o, kind)
 
 /**
  * A task prompt for an agent with no symcc tools: its "call the ask_owner tool" line (ASK_LINE, as the prompt was

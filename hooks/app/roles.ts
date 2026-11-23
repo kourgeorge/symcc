@@ -10,7 +10,10 @@ import { type DefKind, loadDefs, defLists, manageDefs, newDefFile } from './def-
 // ---------------- worker roles ----------------
 
 /** What the lead's roles tool gets. */
-export type LeadRoleInput = { action?: unknown; name?: unknown; description?: unknown; model?: unknown; skills?: unknown; tools?: unknown; checklist?: unknown }
+export type LeadRoleInput = { action?: unknown; name?: unknown; description?: unknown; model?: unknown; skills?: unknown; tools?: unknown; code?: unknown; checklist?: unknown }
+
+/** A roles tool `code` value: false (or "false", "no") makes a prose-only role, true (or "true", "yes") a normal one, anything else says nothing. */
+const codeOf = (v: unknown): boolean | undefined => (v === false || /^(false|no)$/i.test(String(v ?? '').trim()) ? false : v === true || /^(true|yes)$/i.test(String(v ?? '').trim()) ? true : undefined)
 
 /** A list given as an array or as "a, b". */
 const listOf = (v: unknown): string[] | undefined =>
@@ -44,7 +47,7 @@ const ROLES: DefKind<RoleDef, LeadRoleInput> = {
     const tools = roleTools(listOf(a.tools) ?? [])
     if (typeof tools === 'string') return tools
     const model = typeof a.model === 'string' ? a.model.trim() : ''
-    return { description, ...(model ? { model } : {}), skills: listOf(a.skills) ?? [], ...(tools.length ? { tools } : {}), prompt: typeof a.checklist === 'string' ? a.checklist : '' }
+    return { description, ...(model ? { model } : {}), skills: listOf(a.skills) ?? [], ...(tools.length ? { tools } : {}), ...(codeOf(a.code) === false ? { code: false as const } : {}), prompt: typeof a.checklist === 'string' ? a.checklist : '' }
   },
   edited(cur, a, description) {
     const tools = a.tools === undefined ? cur.tools ?? [] : roleTools(listOf(a.tools) ?? [])
@@ -52,7 +55,8 @@ const ROLES: DefKind<RoleDef, LeadRoleInput> = {
     const model = typeof a.model === 'string' ? a.model.trim() : cur.model ?? ''
     const skills = a.skills === undefined ? cur.skills : listOf(a.skills) ?? cur.skills
     const prompt = typeof a.checklist === 'string' ? a.checklist : cur.prompt
-    return { description, ...(model ? { model } : {}), skills, ...(tools.length ? { tools } : {}), ...(cur.off ? { off: true } : {}), prompt }
+    const prose = codeOf(a.code) ?? cur.code ?? true
+    return { description, ...(model ? { model } : {}), skills, ...(tools.length ? { tools } : {}), ...(cur.off ? { off: true } : {}), ...(prose === false ? { code: false as const } : {}), prompt }
   },
   turned(cur, off) {
     const { name: _n, warning: _w, ...rest } = cur

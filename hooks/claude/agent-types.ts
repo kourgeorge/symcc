@@ -40,14 +40,21 @@ export const SCOUT_TOOLS: readonly string[] = ['Read', 'Glob', 'Grep', 'Bash', '
  */
 export const scoutAgentTools = (name: string = DEFAULT_NAME): string[] => [...SCOUT_TOOLS, ...[...SCOUT_BOARD_TOOLS, SCOUT_LIST_TOOL].map(t => claudeNames(name).tool(t))]
 
-/** The agent type (without the "<name>:" part) for a role's tool words: "worker" for none, "worker-web" for web (more words join with "-"). */
-export function workerTypeSuffix(words: readonly string[] | undefined): string {
-  const set = ROLE_TOOL_WORDS.filter(w => words?.includes(w))
+/** The agent type (without the "<name>:" part) for a role's tool words: "worker" for none, "worker-web" for web (more words join with "-");
+ *  `prose` (a role with code: false, T-900) adds "-prose": "worker-prose", "worker-web-prose", whose base prompt says to check facts and links instead of running tests. */
+export function workerTypeSuffix(words: readonly string[] | undefined, prose = false): string {
+  const set = [...ROLE_TOOL_WORDS.filter(w => words?.includes(w)), ...(prose ? [PROSE_SUFFIX] : [])]
   return set.length ? `worker-${set.join('-')}` : 'worker'
 }
 
-/** The agent type a role's task is spawned as: "<name>:worker", or "<name>:worker-web" for a role with web tools. */
-export const workerTypeFor = (r: Pick<RoleDef, 'tools'> | undefined, name: string = DEFAULT_NAME): string => `${name}:${workerTypeSuffix(r?.tools)}`
+/** The last part of a prose-only worker's agent type ("worker-prose", "worker-web-prose"). */
+const PROSE_SUFFIX = 'prose'
+
+/** Whether a worker agent type suffix (from workerAgentTypes) is a prose-only one. */
+export const isProseType = (suffix: string): boolean => suffix.endsWith(`-${PROSE_SUFFIX}`)
+
+/** The agent type a role's task is spawned as: "<name>:worker", "<name>:worker-web" for a role with web tools, "-prose" at the end for a role with code: false. */
+export const workerTypeFor = (r: Pick<RoleDef, 'tools' | 'code'> | undefined, name: string = DEFAULT_NAME): string => `${name}:${workerTypeSuffix(r?.tools, r?.code === false)}`
 
 /** Whether agent type `type` is one of the plugin's worker types ("<name>:worker", "<name>:worker-web", ...). */
 export function isWorkerType(type: string | undefined, name: string = DEFAULT_NAME): boolean {
@@ -62,12 +69,13 @@ export function asBaseWorkers<A extends { type?: string }>(agents: A[], name: st
 
 /**
  * Every worker agent type to register: the base one, and one per set of tool words a role can ask for, with the
- * Claude Code tools those words map to.
+ * Claude Code tools those words map to; then each of those again as a prose-only type (`prose`, "-prose", T-900).
  * Each also gets the workers' question tool (mcp__<name>__ask_owner), last, since Claude Code takes
  * AskUserQuestion away from every subagent.
  */
-export function workerAgentTypes(name: string = DEFAULT_NAME): { suffix: string; tools: string[] }[] {
+export function workerAgentTypes(name: string = DEFAULT_NAME): { suffix: string; tools: string[]; prose: boolean }[] {
   const sets: string[][] = [[]]
   for (const w of ROLE_TOOL_WORDS) for (const s of [...sets]) sets.push([...s, w])
-  return sets.map(s => ({ suffix: workerTypeSuffix(s), tools: [...BASE_WORKER_TOOLS, ...claudeRoleTools(s), claudeNames(name).tool(ASK_TOOL)] }))
+  const tools = (s: string[]) => [...BASE_WORKER_TOOLS, ...claudeRoleTools(s), claudeNames(name).tool(ASK_TOOL)]
+  return [false, true].flatMap(prose => sets.map(s => ({ suffix: workerTypeSuffix(s, prose), tools: tools(s), prose })))
 }

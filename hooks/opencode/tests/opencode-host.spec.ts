@@ -39,6 +39,9 @@ import { COMMANDS, toolCall, notLeadText, runCommand as symccCommand } from '../
 import { scoutToolRefusal } from '../../core/scouts'
 import { workerToolRefusal, ownerAnswerText } from '../tools'
 import { parseViewFile, PANEL_MARK } from '../board-view'
+import { checkAndMerge } from '../../app/review'
+import { loadRoles } from '../../app/roles'
+import { sessionPrompt } from '../agents'
 
 // T-509: limits far above a normal run, for a machine at load 200-500 where one git command or a copy's start can take
 // seconds. Every wait below ends as soon as what it waits for happens, so a larger limit never slows a passing run;
@@ -1622,3 +1625,55 @@ test('the repo-root package.json (T-497) lets `opencode plugin add github:kourge
   // no packages and no install scripts: adding it never downloads or runs anything
   for (const key of ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies', 'scripts']) expect(key in pkg).toBe(false)
 })
+
+test('T-900: on OpenCode the built-in writer role loads with web and code: false; its prose-only change merges with no test command run, a .ts or roles/*.md change is refused at the scope check, and a normal role\'s docs change still runs the tests', async () => {
+  reset()
+  const p = await project()
+  try {
+    const host = opencodeHost({ dir: p.main, say: () => undefined, sessionId: 'opencode-prose' })
+    S.root = p.main
+    // the real roles/writer.md of this plugin copy
+    const writer = (await loadRoles(host)).find(r => r.name === 'writer')!
+    expect([writer.tools, writer.code]).toEqual([['web'], false])
+    expect(sessionPrompt({ kind: 'worker', prompt: 'Task T-1', prose: true }, 'symcc')).toContain('check your facts and links')
+    expect(sessionPrompt({ kind: 'worker', prompt: 'Task T-1' }, 'symcc')).toContain('run the tests you were given')
+    // a test command that fails if it ever runs
+    const boardOf = async (role: string, files: string[]) => {
+      const b = { ...JSON.parse(await readFile(`${p.main}/.symcc/board.json`, 'utf8')), test_commands: ['exit 7'] }
+      const b2 = patchTask(b, 'T-1', { role, files, attempts: 1 }, '2026-11-18T00:00:00.000Z')
+      await writeFile(`${p.main}/.symcc/board.json`, JSON.stringify(b2))
+      return [b2, find(b2, 'T-1')!] as const
+    }
+    // a .ts file next to a note: refused, nothing merged, and the tests never ran
+    await mkdir(`${p.wt}/docs`, { recursive: true })
+    await writeFile(`${p.wt}/docs/plan.md`, '# Plan\n')
+    await writeFile(`${p.wt}/src/b.ts`, 'export const b = 2\n')
+    let [b, t] = await boardOf('writer', ['docs/', 'src/', 'roles/'])
+    let r = await checkAndMerge(host, t, p.wt, b, 'finish', [])
+    expect(r.ok).toBe(false)
+    expect(r.ok ? '' : r.reason).toBe('scope')
+    expect(r.detail).toContain('role writer is prose only (code: false)')
+    expect(r.detail).toContain('src/b.ts')
+    // an agent-instruction .md (roles/*.md) is code too
+    await mkdir(`${p.wt}/roles`, { recursive: true })
+    await writeFile(`${p.wt}/roles/x.md`, '---\ndescription: x\n---\n')
+    ;[b, t] = await boardOf('writer', ['docs/', 'src/', 'roles/'])
+    r = await checkAndMerge(host, t, p.wt, b, 'finish', [])
+    expect(r.ok ? '' : r.reason).toBe('scope')
+    expect(r.detail).toContain('roles/x.md')
+    // only the note left (the refused files were undone on the branch): it merges with no test run
+    await writeFile(`${p.wt}/docs/plan.md`, '# Plan\n\nMore.\n')
+    ;[b, t] = await boardOf('writer', ['docs/'])
+    r = await checkAndMerge(host, t, p.wt, b, 'finish', [])
+    expect(r.detail).toContain('; tests skipped: only prose changed')
+    expect(r.ok && 'merged' in r && !!r.merged).toBe(true)
+    expect(await readFile(`${p.main}/docs/plan.md`, 'utf8')).toBe('# Plan\n\nMore.\n')
+    // a normal role's docs-only change runs the (failing) test command
+    await writeFile(`${p.wt}/docs/plan.md`, '# Plan\n\nEven more.\n')
+    ;[b, t] = await boardOf('general', ['docs/'])
+    r = await checkAndMerge(host, t, p.wt, b, 'finish', [])
+    expect(r.ok ? '' : r.reason).toBe('tests')
+  } finally {
+    await finish(p)
+  }
+}, TEST_MS)

@@ -2,6 +2,7 @@ import { expect } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 import { checkAndMerge, changedFiles, changesText, ownerEdits, alreadyMerged } from '../hooks/app/review'
 import { isTaskCommit } from '../hooks/core/commits'
+import { notProseText } from '../hooks/core/checker'
 import { YOUR_EDITS } from '../hooks/core/review'
 import { inMergeLine, MERGE_LINE_POLL_MS, resetMergeLine } from '../hooks/app/merge-line'
 import { joinedText } from '../hooks/core/board-parts'
@@ -543,6 +544,54 @@ test('checkAndMerge refuses a change to a file outside the task, before testing 
   expect(r.detail).not.toContain('To fix')
   expect(ranTests(w)).toEqual([])
   expect(w.git.main).toBe(M1)
+})
+
+// ---------------- T-900: a role with code: false (prose only) ----------------
+
+/** World `w` with one project role, `.symcc/roles/<name>.md` holding `text` (the fake fs lists no folders by itself). */
+function withProjectRole(w: ReturnType<typeof world>, name: string, text: string) {
+  const dir = `${ROOT}/.symcc/roles`
+  w.put(`${dir}/${name}.md`, text)
+  const fs = w.$.fs
+  const exists = fs.exists
+  const list = fs.list
+  Object.assign(fs, {
+    exists: async (p: string) => p === dir || exists(p),
+    list: async (p: string) => (p === dir ? [{ name: `${name}.md`, kind: 'file' as const }] : list(p)),
+  })
+}
+const PROSE_ROLE = '---\ndescription: writes prose\ncode: false\n---\n- check every claim\n'
+
+test('T-900: a code: false task that changes only .md files merges with no test command run, and says "tests skipped"', async () => {
+  const w = world({ changed: ['docs/plan.md', 'docs/notes.md'] })
+  withProjectRole(w, 'scribe', PROSE_ROLE)
+  const [b, t] = boardWith('auto', ['npm test'], { files: ['docs/'], role: 'scribe' })
+  const r = await checkAndMerge(w.$, t, WT, b, 'finish', [])
+  expect(r).toEqual({ ok: true, merged: H1, detail: `merged into main (${H1.slice(0, 8)}); tests skipped: only prose changed` })
+  expect(ranTests(w)).toEqual([])
+  expect(w.git.main).toBe(H1)
+})
+
+test('T-900: a code: false task that changes a .ts file or an agent-instruction .md (roles/*.md) is refused at the scope check', async () => {
+  for (const code of ['src/a.ts', 'roles/x.md', 'CLAUDE.md']) {
+    const w = world({ changed: ['docs/plan.md', code] })
+    withProjectRole(w, 'scribe', PROSE_ROLE)
+    const [b, t] = boardWith('auto', ['npm test'], { files: ['docs/', 'src/', 'roles/', 'CLAUDE.md'], role: 'scribe' })
+    const r = await checkAndMerge(w.$, t, WT, b, 'finish', [])
+    expect(r).toEqual({ ok: false, reason: 'scope', detail: notProseText('scribe', [code], true) })
+    expect(r.detail).toContain('is prose only (code: false)')
+    expect(ranTests(w)).toEqual([])
+    expect(w.git.main).toBe(M1)
+  }
+})
+
+test('T-900: a normal role\'s docs-only change still runs the tests', async () => {
+  const w = world({ changed: ['docs/plan.md'] })
+  withProjectRole(w, 'plain', '---\ndescription: a normal one\n---\n')
+  const [b, t] = boardWith('auto', ['npm test'], { files: ['docs/'], role: 'plain' })
+  const r = await checkAndMerge(w.$, t, WT, b, 'finish', [])
+  expect(r.detail).toBe(`merged into main (${H1.slice(0, 8)}); tests passed`)
+  expect(ranTests(w)).toEqual(['/bin/sh -c npm test'])
 })
 
 test('checkAndMerge undoes files outside the task on the branch, so the next try passes and keeps the work inside it', async () => {

@@ -7,7 +7,7 @@ import type { Seg } from './details'
 /** One changed line of a checklist: removed (`-`) or added (`+`). */
 export type LineChange = { sign: '-' | '+'; text: string }
 
-/** One difference: the part of the file (description, model, skills, tools, checklist, off), its value in the built-in
+/** One difference: the part of the file (description, model, skills, tools, code, checklist, off), its value in the built-in
  *  role and in the owner's. A checklist has `lines` (only the changed ones) instead of the whole text. */
 export type RoleChange = { field: string; before: string; after: string; lines?: LineChange[] }
 
@@ -57,6 +57,7 @@ export function roleChanges(builtIn: RoleDef, mine: RoleDef): RoleChange[] {
   if ((builtIn.model ?? '') !== (mine.model ?? '')) out.push({ field: 'model', before: builtIn.model || SESSION_MODEL, after: mine.model || SESSION_MODEL })
   if (list(builtIn.skills) !== list(mine.skills)) out.push({ field: 'skills', before: list(builtIn.skills), after: list(mine.skills) })
   if (list(builtIn.tools) !== list(mine.tools)) out.push({ field: 'tools', before: list(builtIn.tools), after: list(mine.tools) })
+  if ((builtIn.code === false) !== (mine.code === false)) out.push({ field: 'code', before: builtIn.code === false ? 'false' : 'true', after: mine.code === false ? 'false' : 'true' })
   if (lines(builtIn.prompt).join('\n') !== lines(mine.prompt).join('\n')) out.push({ field: 'checklist', before: '', after: '', lines: lineChanges(builtIn.prompt, mine.prompt) })
   // the checker role can't be turned on or off (the checker setting decides), so its off: line is no change
   if (!isCheckerRole(builtIn.name) && !!builtIn.off !== !!mine.off) out.push({ field: 'off', before: builtIn.off ? 'off' : 'on', after: mine.off ? 'off' : 'on' })

@@ -60,6 +60,19 @@ export function isCheckerDocFile(path: string): boolean {
 /** Whether changed files `changed` are only prose or media (see isCheckerDocFile): such a change skips the checker. */
 export const docsOnly = (changed: readonly string[]): boolean => changed.length > 0 && changed.every(isCheckerDocFile)
 
+/** The changed files that are not prose (see isCheckerDocFile): a task whose role says code: false may not change them (T-900). */
+export const notProse = (changed: readonly string[]): string[] => changed.filter(f => !isCheckerDocFile(f))
+
+/** Why a prose-only role's try failed at the scope check: it changed files that are not prose. `undone`: they were undone on the task's branch. */
+export function notProseText(role: string, bad: readonly string[], undone = false): string {
+  const more = bad.length > 5 ? ` and ${bad.length - 5} more` : ''
+  const head = `role ${role} is prose only (code: false), but the try changed files that are not prose (${bad.slice(0, 5).join(', ')}${more}); only .md files that are not agent instructions (and images or media) may change`
+  return undone ? `${head}. Those changes were undone on the task's branch, so the next try starts without them; a task that needs code needs another role` : `${head}. To fix: give the task another role with change`
+}
+
+/** The history's words when a prose-only role's change skipped the tests (T-900). */
+export const PROSE_TESTS_SKIPPED = 'tests skipped: only prose changed'
+
 /** The most of the diff a checker's prompt holds; the rest it reads with git diff itself. */
 export const CHECKER_DIFF_CHARS = 40_000
 

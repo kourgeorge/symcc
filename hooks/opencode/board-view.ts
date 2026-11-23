@@ -28,7 +28,7 @@ import {
   type KeyHint, type Seg, type BoardTask, intoOf, taskActions, taskAsks, fileWaitText, actionButtonLabel, packRows, type TaskAction, type TaskActionId,
   ownersTurn, shownStatus, sortScouts, scoutListRows, scoutHowTo, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem, scoutFile,
   SETTING_GROUPS, SETTINGS, isSettingPage, settingInfo, settingShown, settingValue, viewAsBoard, cantPlayNotify, groupSummaryParts,
-  type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction, type DefEditField, type TaskVerb, settingsKeys, rolesKeys, kindsKeys, roleEditKeys, defEditFields, roleTools, roleFileText, roleSkipReason, kindFileText, kindSkipReason,
+  type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction, type DefEditField, type TaskVerb, settingsKeys, rolesKeys, kindsKeys, roleEditKeys, defEditFields, roleTools, roleFileText, roleSkipReason, roleCodeText, kindFileText, kindSkipReason,
   DEFAULT_ROLE, isCheckerRole, ALWAYS_ON_KINDS, checkerOn, roleNameError, kindNameError, leadScoutNameError, checkStepNow, rowEndText, taskPhase, choiceLines, driveWarning,
   searchTasks, showsHeader, type BoardPage,
   LIVE_TABS, LIVE_DIVIDER, LIVE_EMPTY, LIVE_INDENT, liveLegend, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, liveBold, liveHeading, liveIndented, liveInner, tabRow, LIVE_VIEW_KEYS, liveKeys, liveBranches, liveTaskLanes, liveLayout, liveColumns, liveHeader, liveHeaderSegs, liveLabelSegs, liveNeeds, laneLines, liveOrgMem, liveTrains, trainRows, liveTodayLines, searchLine, modeButton, hintLines, roleKeys, rolePromptKeys, ROLE_PROMPTS, ROLE_SLOT, promptsOfRole, type RolePromptKind,
@@ -82,6 +82,8 @@ export type ViewDef = {
   model?: string
   skills?: string[]
   tools?: string[]
+  /** a prose-only role (code: false, T-900) */
+  code?: false
   /** a role's checklist, or a kind's body */
   text: string
   warning?: string
@@ -126,7 +128,7 @@ export function viewDefs(def: 'role' | 'kind', all: readonly (RoleDef | KindDef)
       description: d.description,
       source,
       off: !!d.off && !checker,
-      ...(role ? { model: role.model ?? '', skills: [...role.skills], tools: [...(role.tools ?? [])] } : {}),
+      ...(role ? { model: role.model ?? '', skills: [...role.skills], tools: [...(role.tools ?? [])], ...(role.code === false ? { code: false as const } : {}) } : {}),
       text: role ? role.prompt : (d as KindDef).body,
       ...(role?.warning ? { warning: role.warning } : {}),
       file,
@@ -1158,6 +1160,7 @@ function defPage(f: ViewFile, list: DefList, x: ViewDef, w: number): Body {
       section('Model', x.model ?? '', "(none: the session's model)")
       section('Skills', (x.skills ?? []).join(', '), '(none)')
       section('Tools', (x.tools ?? []).join(', '), '(none: the base tools only)')
+      if (x.code === false) section('Code', roleCodeText(x), '')
     }
     b.blank()
     b.heading(role ? 'Checklist' : 'Body')
@@ -1208,6 +1211,7 @@ function rolePage(f: ViewFile, x: ViewDef, w: number): Body {
   section('Model', x.model ?? '', "(none: the session's model)")
   section('Skills', (x.skills ?? []).join(', '), '(none)')
   section('Tools', (x.tools ?? []).join(', '), '(none: the base tools only)')
+  if (x.code === false) section('Code', roleCodeText(x), '')
   b.blank()
   b.heading('Checklist')
   if (x.text.trim()) for (const l of textLines(x.text.trim(), 'text', w)) b.add(l)

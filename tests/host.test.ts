@@ -317,11 +317,14 @@ test("host.agents.spawn starts a Claude Code subagent of the agent type that fit
   const w = claudeAgentsWorld()
   expect(await w.host.agents.spawn({ kind: 'worker', prompt: 'p', name: 'symcc-T-1', description: 'Do it', cwd: '/wt/T-1' })).toEqual({ agentId: 'ag1' })
   await w.host.agents.spawn({ kind: 'worker', prompt: 'p', name: 'symcc-T-2', description: 'Look', tools: ['web'], cwd: '/wt/T-2', model: 'sonnet' })
+  // T-900: a worker of a code: false role is the prose type of its tools
+  await w.host.agents.spawn({ kind: 'worker', prompt: 'p', name: 'symcc-T-3', description: 'Write', tools: ['web'], prose: true, cwd: '/wt/T-3' })
   await w.host.agents.spawn({ kind: 'scout', prompt: 'p', name: 'symcc-scout-bugs', description: 'Look for bugs' })
   await w.host.agents.spawn({ kind: 'checker', prompt: 'p', name: 'symcc-check-T-1', description: 'symcc checker for T-1', cwd: '/wt/T-1' })
   expect(w.spawns).toEqual([
     { prompt: 'p', name: 'symcc-T-1', description: 'Do it', subagentType: 'symcc:worker', cwd: '/wt/T-1' },
     { prompt: 'p', name: 'symcc-T-2', description: 'Look', subagentType: 'symcc:worker-web', cwd: '/wt/T-2', model: 'sonnet' },
+    { prompt: 'p', name: 'symcc-T-3', description: 'Write', subagentType: 'symcc:worker-web-prose', cwd: '/wt/T-3' },
     { prompt: 'p', name: 'symcc-scout-bugs', description: 'Look for bugs', subagentType: 'symcc:scout' },
     { prompt: 'p', name: 'symcc-check-T-1', description: 'symcc checker for T-1', subagentType: 'symcc:scout', cwd: '/wt/T-1' },
   ])
