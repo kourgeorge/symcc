@@ -51,6 +51,18 @@ export async function earlierCommits(host: Host, t: BoardTask, dir: string): Pro
  * told: its branch has commits from an earlier try, its folder has uncommitted work from one, or moving the branch
  * failed. '' when it is up to date.
  */
+/**
+ * T-927: the prompt line naming the earlier answers copied into the worker's folder (`copied`, see copyReports) that
+ * its `details` don't already name by file: the task it comes from's latest report, or one asked for as
+ * "T-920's answer". '' when there are none.
+ */
+export const reportsNote = (copied: readonly string[], details: string) => {
+  const extra = copied.filter(f => !details.includes(f))
+  if (!extra.length) return ''
+  const many = extra.length > 1
+  return `\n\nEarlier answer${many ? 's' : ''} for this task: ${extra.join(', ')}. ${many ? 'They are' : 'It is'} copied into your own folder at that path (git-ignored, never committed): read ${many ? 'them' : 'it'} there before you start, not in the main project folder.`
+}
+
 export const behindNote = (behind: number, into: string, why: BehindWhy = 'commits') => {
   if (behind <= 0) return ''
   const n = `${behind} commit${behind === 1 ? '' : 's'}`
@@ -131,7 +143,8 @@ async function queueWorker(host: Host, id: string): Promise<{ started: Promise<v
     const tryNo = t0!.attempts > 0 && goOnRun(t0!.runs, now()) ? t0!.attempts : t0!.attempts + 1
     const { dir, branch, behind, why, merged, commit } = await prepareWorktree(host, { ...t0!, attempts: tryNo }, intoOf(t0!), true)
     // the earlier answers its details name (a keep-note task's reports) are read inside its own folder
-    await copyReports(host, t0!, dir).catch(() => [])
+    // (and, T-927, the latest answer of the task it comes from); the prompt names the ones its details don't
+    const reports = await copyReports(host, t0!, dir).catch(() => [] as string[])
     const roles = await loadRoles(host)
     // the kind files are read again too, so the prompt has the kind's description as it is now
     await loadKinds(host).catch(() => undefined)
@@ -165,7 +178,7 @@ async function queueWorker(host: Host, id: string): Promise<{ started: Promise<v
       const cur = find(await load(host), id)
       return cur?.status === 'doing' && cur.live?.session === S.me && cur.attempts === t.attempts
     }
-    const spawn = startAgent(host, { kind: 'worker', prompt: WORKER_PROMPT(t, b, dir, role, await orgMemText(host), learnedAsk(host), await earlierCommits(host, t, dir)) + behindNote(behind, intoOf(t), why), name: workerName(S.N.name, t.id), description: workerDescription(t.title), ...(role?.tools ? { tools: role.tools } : {}), ...(isProseRole(role) && !isInvestigation(t) ? { prose: true as const } : {}), ...(!isInvestigation(t) && t.files?.length ? { files: t.files } : {}), cwd: dir, ...(role?.model ? { model: role.model } : {}) }, still)
+    const spawn = startAgent(host, { kind: 'worker', prompt: WORKER_PROMPT(t, b, dir, role, await orgMemText(host), learnedAsk(host), await earlierCommits(host, t, dir)) + reportsNote(reports, t.details) + behindNote(behind, intoOf(t), why), name: workerName(S.N.name, t.id), description: workerDescription(t.title), ...(role?.tools ? { tools: role.tools } : {}), ...(isProseRole(role) && !isInvestigation(t) ? { prose: true as const } : {}), ...(!isInvestigation(t) && t.files?.length ? { files: t.files } : {}), cwd: dir, ...(role?.model ? { model: role.model } : {}) }, still)
     queued = true
     queuedWorkers.set(id, { task: id, worktree: dir, branch, since: Date.now() })
     return { started: workerStarted(host, id, before, dir, branch, spawn, t.attempts).finally(() => (starting.delete(id), queuedWorkers.delete(id))) }
