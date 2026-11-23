@@ -13,7 +13,7 @@ const merged = (id: string, minAgo: number) => task(id, 'done', { history: [{ ki
 
 /** The four boards, and the lines each one shows. */
 const CASES: { name: string; mode: 'auto' | 'paused'; tasks: unknown[]; lines: string[] }[] = [
-  { name: 'paused', mode: 'paused', tasks: [task('T-1', 'todo')], lines: ['Paused: nothing starts. m changes the mode.'] },
+  { name: 'paused', mode: 'paused', tasks: [task('T-1', 'todo')], lines: ['Paused: nothing starts. /symcc-mode auto starts work again.'] },
   {
     name: 'waiting',
     mode: 'auto',
@@ -33,6 +33,10 @@ const viewOf = (c: (typeof CASES)[number]) => ({ shape: 'view-1', value: { tasks
 
 test('T-903: liveIdle picks the line by why nothing runs, and keeps to the width', () => {
   for (const c of CASES) expect([c.name, liveIdle({ tasks: c.tasks as never[], mode: c.mode }, T0, 100)]).toEqual([c.name, c.lines])
+  // T-910: the paused line names a way out that works everywhere it shows (band, chat, Live tab), not a bare "m" key
+  const pausedLine = liveIdle({ tasks: [task('T-1', 'todo')] as never[], mode: 'paused' }, T0, 100).join(' ')
+  expect(pausedLine).toContain('/symcc-mode auto')
+  expect(/(^|\s)m(\s|$)/.test(pausedLine)).toBe(false)
   // no backlog: no backlog part; nothing merged yet: no "last merged" part
   expect(liveIdle({ tasks: [task('T-1', 'done')] as never[], mode: 'auto' }, T0)).toEqual(['All done', "Tell the lead what's next."])
   expect(liveIdle({ tasks: [task('T-1', 'backlog')] as never[], mode: 'auto' }, T0)).toEqual(['All done', "Tell the lead what's next, or move the backlog item to todo."])

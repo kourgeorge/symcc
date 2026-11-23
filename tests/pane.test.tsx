@@ -236,7 +236,9 @@ test('T-748: the band lists the questions for you and the NEEDS YOU tasks in the
   // paused: the band says so, and how to change it
   mode = 'paused'
   const paused = await $.ui.mount({ ...BAND, surface: 'terminal' })
-  expect((await bandLines(paused)).slice(1)).toEqual([' Paused: nothing starts. m changes the mode.'])
+  expect((await bandLines(paused)).slice(1)).toEqual([' Paused: nothing starts. /symcc-mode auto starts work again.'])
+  // T-910: the band has no keys, so no bare "m" hint
+  expect((await bandLines(paused)).slice(1).some(l => /(^|\s)m(\s|$)/.test(l))).toBe(false)
   await paused.unmount()
 })
 

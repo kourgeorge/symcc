@@ -66,7 +66,7 @@ export function liveLegend(width: number): string[] {
 }
 /** T-903: what the Live tab's TASKS section says, dim, when no task runs: why nothing runs and what to do next. */
 export const LIVE_IDLE = {
-  paused: 'Paused: nothing starts. m changes the mode.',
+  paused: 'Paused: nothing starts. /symcc-mode auto starts work again.',
   fresh: 'No tasks yet. Tell the lead what you want built.',
   done: 'All done',
   next: "Tell the lead what's next",

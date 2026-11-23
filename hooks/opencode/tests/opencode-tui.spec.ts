@@ -4219,7 +4219,7 @@ test('T-903: with no task running, the OpenCode Live tab says why (paused, waiti
   const ago = (min: number) => new Date(NOW - min * 60_000).toISOString()
   const task = (id: string, status: string, x: Record<string, unknown> = {}) => ({ id, title: `Task ${id}`, details: '', files: [], status, note: '', order: Number(id.slice(2)), after: [], attempts: 1, history: [], branch: null, created_at: ago(300), updated_at: ago(1), ...x }) as unknown as SymccTask
   const cases: [SymccMode, SymccTask[], string[]][] = [
-    ['paused', [task('T-1', 'todo')], ['Paused: nothing starts. m changes the mode.']],
+    ['paused', [task('T-1', 'todo')], ['Paused: nothing starts. /symcc-mode auto starts work again.']],
     ['auto', [task('T-6', 'paused'), task('T-7', 'todo', { after: ['T-6'] }), task('T-5', 'waiting', { ask: { by: 'worker', text: 'Which one?', asked_at: ago(2) } })], ['Nothing running · 3 waiting: T-5 needs you, T-6 paused, T-7 waits for T-6']],
     ['auto', [task('T-891', 'done', { history: [{ kind: 'merged', at: ago(12), text: 'try 1 → merged into main' }] }), task('T-893', 'backlog'), task('T-894', 'backlog')], ['All done · last merged T-891, 12m ago', "Tell the lead what's next, or move one of 2 backlog items to todo."]],
     ['auto', [], ['No tasks yet. Tell the lead what you want built.']],
@@ -4231,5 +4231,7 @@ test('T-903: with no task running, the OpenCode Live tab says why (paused, waiti
     const at = texts.findIndex(t => t.startsWith('TASKS'))
     expect(texts.slice(at + 2, at + 2 + want.length)).toEqual(want.map(l => LIVE_INDENT + l))
     expect(d.lines[at + 2]!.every(x => x.color === 'inactive')).toBe(true)
+    // T-910: the Live tab has no m key, so no bare "m" hint
+    expect(texts.slice(at + 2, at + 2 + want.length).some(t => /(^|\s)m(\s|$)/.test(t))).toBe(false)
   }
 })

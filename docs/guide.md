@@ -1285,7 +1285,7 @@ TASKS ────────────────────────�
   prompt (`○ next up`), and the tasks that wait hang under their lanes. With nothing running,
   TASKS says in one or two dim lines why, and what to do next (the band above the prompt and
   `/symcc-status` show the same):
-  - the mode is paused: `Paused: nothing starts. m changes the mode.`
+  - the mode is paused: `Paused: nothing starts. /symcc-mode auto starts work again.`
   - open tasks wait on something: `Nothing running · 3 waiting: T-5 needs you, T-7 waits for T-6`
     (the first reasons that fit: `needs you`, `waits for T-6`, `paused`, `ready` ...; a task
     that waits on several open tasks names the first and counts the rest: `waits for T-2 +3`)
