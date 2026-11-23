@@ -2,13 +2,19 @@
 // what needs you pinned on top as cards you decide in place, the lead's chat and the board's news in one timeline
 // with the message box under it, and the running work beside it.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
-import type { ChatItem, EngineState, NetworkProblem, PanelAction, PanelLane, PanelMode, PanelNeed, PanelNews, PanelScout, PanelTask, PanelView } from '../../protocol'
+import type { ChatItem, EngineState, LeadSettings, ModelInfo, NetworkProblem, PanelAction, PanelLane, PanelMode, PanelNeed, PanelScout, PanelStep, PanelTask, PanelView, SlashItem } from '../../protocol'
+import { LEAD_AGENT, addStep } from '../../steps'
 import { ask, onMessage, tell } from './bridge'
 import { Icon, Linked, Mark, Markdown, Staff, STATION_WORD, ago, clock, dayWord, duration, tokensWord, useNow } from './parts'
+import { TaskSession, latestStep, openSession, stepIcon, stepWords } from './session'
+import { LeadChat } from './chat'
 
 type Page = 'now' | 'board' | 'scouts'
 type Notice = { text: string; bad: boolean; at: number }
 type Say = (text: string, bad?: boolean) => void
+type Steps = Record<string, PanelStep[]>
+/** The lead chat's model and mode, the account's models, and the slash commands. */
+type Lead = { settings: LeadSettings; models: ModelInfo[]; slash: SlashItem[] }
 
 /** The words of the board's empty list (hooks/core/panel.ts ALL_CLEAR). */
 const ALL_CLEAR = ['All clear. Nothing running or waiting.', 'Tell the lead what you want next.'] as const
@@ -22,6 +28,8 @@ export function App() {
   const [focus, setFocus] = useState<string | null>(null)
   const [notice, setNotice] = useState<Notice | null>(null)
   const [network, setNetwork] = useState<NetworkProblem | null>(null)
+  const [steps, setSteps] = useState<Steps>({})
+  const [lead, setLead] = useState<Lead>({ settings: { mode: 'agent' }, models: [], slash: [] })
 
   useEffect(() => {
     const off = onMessage(m => {
@@ -29,6 +37,11 @@ export function App() {
       else if (m.type === 'chat') (setChat(m.items), setBusy(m.busy))
       else if (m.type === 'engine') setEngine(m.engine)
       else if (m.type === 'network') setNetwork(m.problem)
+      else if (m.type === 'steps') setSteps(m.all)
+      else if (m.type === 'step') setSteps(s => ({ ...s, [m.agent]: addStep(s[m.agent] ?? [], m.step) }))
+      else if (m.type === 'lead') setLead(l => ({ ...l, settings: m.settings }))
+      else if (m.type === 'models') setLead(l => ({ ...l, models: m.models }))
+      else if (m.type === 'slash') setLead(l => ({ ...l, slash: m.items }))
     })
     tell({ type: 'ready' })
     return off
@@ -65,9 +78,9 @@ export function App() {
           <OffScreen view={view} onSay={say} />
         ) : view ? (
           page === 'now' ? (
-            <Now view={view} chat={chat} busy={busy} ready={engine.state === 'ready'} onSay={say} onTask={openTask} />
+            <Now view={view} chat={chat} busy={busy} steps={steps} lead={lead} ready={engine.state === 'ready'} onSay={say} onTask={openTask} />
           ) : page === 'board' ? (
-            <Board view={view} focus={focus} onSay={say} onTask={openTask} />
+            <Board view={view} steps={steps} focus={focus} onSay={say} onTask={openTask} />
           ) : (
             <Scouts scouts={view.scouts} onSay={say} />
           )
@@ -301,20 +314,19 @@ function OffScreen({ view, onSay }: { view: PanelView; onSay: Say }) {
 
 /* ---------- Now: needs, stream, composer, running ---------- */
 
-function Now({ view, chat, busy, ready, onSay, onTask }: { view: PanelView; chat: ChatItem[]; busy: boolean; ready: boolean; onSay: Say; onTask: (id: string) => void }) {
+function Now({ view, chat, busy, steps, lead, ready, onSay, onTask }: { view: PanelView; chat: ChatItem[]; busy: boolean; steps: Steps; lead: Lead; ready: boolean; onSay: Say; onTask: (id: string) => void }) {
   return (
     <div className="now">
       <div className="center">
-        <Needs needs={view.needs} onSay={onSay} onTask={onTask} />
-        <Stream chat={chat} news={view.news} lanes={view.lanes} busy={busy} onTask={onTask} />
-        <Composer ready={ready} busy={busy} onSay={onSay} />
+        <Needs needs={view.needs} tasks={view.tasks} onSay={onSay} onTask={onTask} />
+        <LeadChat chat={chat} news={view.news} lanes={view.lanes} busy={busy} lead={steps[LEAD_AGENT] ?? []} ready={ready} settings={lead.settings} models={lead.models} slash={lead.slash} onSay={onSay} onTask={onTask} />
       </div>
-      <Side view={view} onTask={onTask} />
+      <Side view={view} steps={steps} onTask={onTask} />
     </div>
   )
 }
 
-function Needs({ needs, onSay, onTask }: { needs: PanelNeed[]; onSay: Say; onTask: (id: string) => void }) {
+function Needs({ needs, tasks, onSay, onTask }: { needs: PanelNeed[]; tasks: PanelTask[]; onSay: Say; onTask: (id: string) => void }) {
   if (!needs.length)
     return (
       <section className="needs clear" aria-label="Needs you">
@@ -330,7 +342,7 @@ function Needs({ needs, onSay, onTask }: { needs: PanelNeed[]; onSay: Say; onTas
       </h2>
       <div className="cards">
         {needs.map(n => (
-          <NeedCard key={n.id} need={n} onSay={onSay} onTask={onTask} />
+          <NeedCard key={n.id} need={n} task={tasks.find(t => t.id === n.id)} onSay={onSay} onTask={onTask} />
         ))}
       </div>
     </section>
@@ -339,7 +351,7 @@ function Needs({ needs, onSay, onTask }: { needs: PanelNeed[]; onSay: Say; onTas
 
 const NEED_ICON: Record<PanelNeed['kind'], string> = { question: 'comment-discussion', asks: 'question', files: 'file-add', time: 'watch', review: 'git-pull-request', answer: 'book', failed: 'error' }
 
-function NeedCard({ need, onSay, onTask }: { need: PanelNeed; onSay: Say; onTask: (id: string) => void }) {
+function NeedCard({ need, task: of, onSay, onTask }: { need: PanelNeed; task?: PanelTask; onSay: Say; onTask: (id: string) => void }) {
   const now = useNow(30_000)
   const [box, setBox] = useState<{ action?: PanelAction; hint: string } | null>(null)
   const [text, setText] = useState('')
@@ -385,8 +397,15 @@ function NeedCard({ need, onSay, onTask }: { need: PanelNeed; onSay: Say; onTask
         ) : (
           <span className="id">{need.id}</span>
         )}
-        <span>{need.meta.replace(`${need.id} · `, '')}</span>
-        {need.sinceMs !== undefined && <span className="since">{ago(need.sinceMs, now)}</span>}
+        <span>
+          {need.meta.replace(`${need.id} · `, '')}
+          {need.sinceMs !== undefined && <span className="since">{ago(need.sinceMs, now)}</span>}
+        </span>
+        {of?.sessions[0] && (
+          <button type="button" className="link card-session" onClick={() => openSession(of, of.sessions[0]!)}>
+            What the agent did
+          </button>
+        )}
       </p>
       {need.text && <p className={`card-text${need.kind === 'failed' ? ' bad' : ''}`}>{need.text}</p>}
       {need.files && need.files.length > 1 && (
@@ -420,7 +439,7 @@ function NeedCard({ need, onSay, onTask }: { need: PanelNeed; onSay: Say; onTask
       ) : !choices.length && !need.actions.length ? null : (
         <div className="card-actions">
           {choices.map(c => (
-            <button key={c} type="button" className="btn" disabled={!!sending} onClick={() => answer(c)}>
+            <button key={c} type="button" className="btn choice" disabled={!!sending} onClick={() => answer(c)}>
               {sending === c ? <Icon name="loading" /> : null}
               {c}
             </button>
@@ -458,135 +477,7 @@ function NeedCard({ need, onSay, onTask }: { need: PanelNeed; onSay: Say; onTask
   )
 }
 
-const NEWS: Record<string, { icon: string; word: string }> = {
-  created: { icon: 'add', word: 'added' },
-  merged: { icon: 'git-merge', word: 'merged' },
-  done: { icon: 'check', word: 'done' },
-  failed: { icon: 'error', word: 'failed' },
-  'checker-problems': { icon: 'warning', word: 'sent back by the checker' },
-  rejected: { icon: 'close', word: 'rejected' },
-  'approve-failed': { icon: 'error', word: 'could not merge' },
-  stopped: { icon: 'debug-stop', word: 'stopped' },
-}
-
-type Line = { key: string; atMs: number } & ({ chat: ChatItem } | { news: PanelNews })
-
-function Stream({ chat, news, lanes, busy, onTask }: { chat: ChatItem[]; news: PanelNews[]; lanes: PanelLane[]; busy: boolean; onTask: (id: string) => void }) {
-  const now = useNow(60_000)
-  const box = useRef<HTMLDivElement>(null)
-  const stuck = useRef(true)
-  const lines = useMemo<Line[]>(() => [...chat.map(c => ({ key: c.key, atMs: c.atMs, chat: c })), ...news.map(n => ({ key: n.key, atMs: n.atMs, news: n }))].sort((a, b) => a.atMs - b.atMs), [chat, news])
-  useLayoutEffect(() => {
-    const el = box.current
-    if (el && stuck.current) el.scrollTop = el.scrollHeight
-  }, [lines.length, busy])
-  const onScroll = () => {
-    const el = box.current
-    if (el) stuck.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40
-  }
-  let day = ''
-  return (
-    <section className="stream" ref={box} onScroll={onScroll} aria-label="The lead and the board" aria-live="polite" aria-relevant="additions">
-      {!lines.length && (
-        <div className="stream-empty">
-          <p>{ALL_CLEAR[0]}</p>
-          <p className="quiet">{ALL_CLEAR[1]} It plans the work as tasks, and you see them here as they run and merge.</p>
-        </div>
-      )}
-      {lines.map(l => {
-        const d = dayWord(l.atMs, now)
-        const head = d !== day ? ((day = d), <p className="day" key={`d-${d}`}>{d}</p>) : null
-        return [head, 'chat' in l ? <ChatLine key={l.key} c={l.chat} onTask={onTask} /> : <NewsLine key={l.key} n={l.news} lane={l.news.kind === 'merged' ? lanes.find(x => x.id === l.news.task && x.doneMs !== undefined) : undefined} onTask={onTask} />]
-      })}
-      {busy && (
-        <p className="working">
-          <Icon name="loading" /> The lead is working…
-        </p>
-      )}
-    </section>
-  )
-}
-
-function ChatLine({ c, onTask }: { c: ChatItem; onTask: (id: string) => void }) {
-  if (c.who === 'error')
-    return (
-      <div className="msg error" role="alert">
-        <Icon name="error" />
-        <p>{c.text}</p>
-      </div>
-    )
-  const lead = c.who === 'lead'
-  return (
-    <div className={`msg ${c.who}`}>
-      <div className="who">
-        {lead ? <Mark size={22} /> : <span className="you" aria-hidden><Icon name="account" /></span>}
-        <b>{lead ? 'Lead' : 'You'}</b>
-        <time>{clock(c.atMs)}</time>
-      </div>
-      {lead ? <Markdown text={c.text} onTask={onTask} /> : <p className="said"><Linked text={c.text} onTask={onTask} /></p>}
-    </div>
-  )
-}
-
-function NewsLine({ n, lane, onTask }: { n: PanelNews; lane?: PanelLane; onTask: (id: string) => void }) {
-  const k = NEWS[n.kind] ?? { icon: 'circle-small', word: n.kind }
-  return (
-    <p className={`news ${n.tone}`}>
-      <Icon name={k.icon} />
-      <button type="button" className="task-ref" onClick={() => onTask(n.task)}>
-        {n.task}
-      </button>
-      <span className="news-title">{n.title}</span>
-      <span className="news-word">{k.word}</span>
-      {lane && (
-        <span className="news-more">
-          {lane.tryNo === 1 ? 'first try' : `${lane.tryNo} tries`}
-          {!!lane.tokens && ` · ${tokensWord(lane.tokens)} tokens`}
-        </span>
-      )}
-      <time>{clock(n.atMs)}</time>
-    </p>
-  )
-}
-
-function Composer({ ready, busy, onSay }: { ready: boolean; busy: boolean; onSay: Say }) {
-  const [text, setText] = useState('')
-  const [sending, setSending] = useState(false)
-  const area = useRef<HTMLTextAreaElement>(null)
-  useLayoutEffect(() => {
-    const el = area.current
-    if (!el) return
-    el.style.height = 'auto'
-    el.style.height = `${Math.min(el.scrollHeight, 200)}px`
-  }, [text])
-  const send = (e?: FormEvent) => {
-    e?.preventDefault()
-    const words = text.trim()
-    if (!words || sending) return
-    setSending(true)
-    ask({ type: 'send', text: words })
-      .then(() => setText(''), (err: Error) => onSay(err.message, true))
-      .finally(() => (setSending(false), area.current?.focus()))
-  }
-  const keys = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) send(e)
-  }
-  return (
-    <form className="composer" onSubmit={send}>
-      <label className="sr" htmlFor="composer">
-        Message the lead
-      </label>
-      <textarea id="composer" ref={area} rows={1} placeholder="Tell the lead what you want next…" value={text} onChange={e => setText(e.target.value)} onKeyDown={keys} disabled={!ready} />
-      <button type="submit" className="btn primary send" disabled={!ready || sending || !text.trim()}>
-        {sending ? <Icon name="loading" /> : <Icon name="send" />}
-        <span>Send</span>
-      </button>
-      <p className="composer-hint">{busy ? 'The lead is working; your message goes into its next turn.' : 'Enter sends · Shift+Enter for a new line'}</p>
-    </form>
-  )
-}
-
-function Side({ view, onTask }: { view: PanelView; onTask: (id: string) => void }) {
+function Side({ view, steps, onTask }: { view: PanelView; steps: Steps; onTask: (id: string) => void }) {
   const running = view.lanes.filter(l => l.doneMs === undefined && l.stations[l.at] !== 'you')
   const merged = view.lanes.filter(l => l.doneMs !== undefined)
   const shown = view.next.slice(0, 6)
@@ -596,7 +487,7 @@ function Side({ view, onTask }: { view: PanelView; onTask: (id: string) => void 
         <h2>
           Running <span className="count">{view.counts.running}</span>
         </h2>
-        {running.length ? running.map(l => <LaneCard key={l.id} lane={l} onTask={onTask} />) : <p className="quiet">Nothing running.</p>}
+        {running.length ? running.map(l => <LaneCard key={l.id} lane={l} step={l.agentId ? latestStep(steps[l.agentId]) : undefined} onTask={onTask} />) : <p className="quiet">Nothing running.</p>}
       </section>
       {!!merged.length && (
         <section>
@@ -626,16 +517,49 @@ function Side({ view, onTask }: { view: PanelView; onTask: (id: string) => void 
           <p className="quiet">Nothing waits to start.</p>
         )}
       </section>
-      {!!view.counts.backlog && (
-        <p className="quiet side-foot">
-          <Icon name="archive" /> {view.counts.backlog} in the backlog
-        </p>
-      )}
+      {!!view.counts.backlog && <Backlog tasks={view.tasks.filter(t => t.status === 'backlog')} count={view.counts.backlog} onTask={onTask} />}
     </aside>
   )
 }
 
-function LaneCard({ lane, onTask }: { lane: PanelLane; onTask: (id: string) => void }) {
+/** The backlog, folded to its count; open, its tasks, each a way to the task on the board. */
+function Backlog({ tasks, count, onTask }: { tasks: PanelTask[]; count: number; onTask: (id: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const shown = tasks.slice(0, 8)
+  return (
+    <section className="backlog">
+      <h2>
+        <button type="button" className="fold" aria-expanded={open} onClick={() => setOpen(o => !o)}>
+          <Icon name={open ? 'chevron-down' : 'chevron-right'} />
+          Backlog <span className="count">{count}</span>
+        </button>
+      </h2>
+      {open && (
+        <ul className="next">
+          {shown.map(t => (
+            <li key={t.id}>
+              <button type="button" className="row-btn" onClick={() => onTask(t.id)}>
+                <span className="id">{t.id}</span>
+                <span className="title">{t.title}</span>
+                {t.kind && <span className="tag">{t.kind}</span>}
+              </button>
+            </li>
+          ))}
+          {tasks.length > shown.length && (
+            <li>
+              <button type="button" className="row-btn quiet" onClick={() => onTask(tasks[shown.length]!.id)}>
+                and {tasks.length - shown.length} more on the board
+              </button>
+            </li>
+          )}
+          {!tasks.length && <li className="quiet">They show on the board.</li>}
+        </ul>
+      )}
+    </section>
+  )
+}
+
+function LaneCard({ lane, step, onTask }: { lane: PanelLane; step?: PanelStep; onTask: (id: string) => void }) {
   const now = useNow(1000)
   const station = lane.stations[lane.at]
   const done = lane.doneMs !== undefined
@@ -656,6 +580,12 @@ function LaneCard({ lane, onTask }: { lane: PanelLane; onTask: (id: string) => v
         )}
         {!!lane.tokens && <span>{tokensWord(lane.tokens)} tokens</span>}
       </span>
+      {step && !done && (
+        <span className="lane-step" title={stepWords(step)}>
+          <Icon name={step.kind === 'tool' && step.status === 'running' ? 'loading' : stepIcon(step)} />
+          <span>{stepWords(step)}</span>
+        </span>
+      )}
     </button>
   )
 }
@@ -672,7 +602,7 @@ const GROUPS: { key: string; title: string; has: (t: PanelTask) => boolean; open
   { key: 'dropped', title: 'Dropped', has: t => !t.needsYou && (t.status === 'dropped' || t.status === 'failed'), open: false },
 ]
 
-function Board({ view, focus, onSay, onTask }: { view: PanelView; focus: string | null; onSay: Say; onTask: (id: string) => void }) {
+function Board({ view, steps, focus, onSay, onTask }: { view: PanelView; steps: Steps; focus: string | null; onSay: Say; onTask: (id: string) => void }) {
   const [filter, setFilter] = useState('')
   const f = filter.trim().toLowerCase()
   const tasks = f ? view.tasks.filter(t => `${t.id} ${t.title} ${t.kind} ${t.role}`.toLowerCase().includes(f)) : view.tasks
@@ -692,14 +622,14 @@ function Board({ view, focus, onSay, onTask }: { view: PanelView; focus: string 
         if (!xs.length) return null
         const open = g.open || !!f || xs.some(t => t.id === focus)
         return (
-          <details key={g.key} className="group" open={open}>
+          <details key={g.key} className={`group is-${g.key}`} open={open}>
             <summary>
               <h3>{g.title}</h3>
               <span className="count">{xs.length}</span>
             </summary>
             <ul>
               {xs.map(t => (
-                <TaskRow key={t.id} task={t} focused={t.id === focus} onSay={onSay} onTask={onTask} />
+                <TaskRow key={t.id} task={t} steps={steps} focused={t.id === focus} onSay={onSay} onTask={onTask} />
               ))}
             </ul>
           </details>
@@ -711,7 +641,7 @@ function Board({ view, focus, onSay, onTask }: { view: PanelView; focus: string 
 
 const STATUS_TONE: Record<PanelTask['status'], string> = { backlog: 'other', todo: 'other', doing: 'run', paused: 'wait', waiting: 'you', review: 'you', failed: 'bad', done: 'good', dropped: 'other' }
 
-function TaskRow({ task, focused, onSay, onTask }: { task: PanelTask; focused: boolean; onSay: Say; onTask: (id: string) => void }) {
+function TaskRow({ task, steps, focused, onSay, onTask }: { task: PanelTask; steps: Steps; focused: boolean; onSay: Say; onTask: (id: string) => void }) {
   const [open, setOpen] = useState(focused)
   const [box, setBox] = useState<PanelAction | null>(null)
   const [text, setText] = useState('')
@@ -750,6 +680,7 @@ function TaskRow({ task, focused, onSay, onTask }: { task: PanelTask; focused: b
               <Markdown text={task.details} onTask={onTask} />
             </div>
           )}
+          <TaskSession task={task} steps={steps} />
           {box ? (
             <form
               className="card-box"

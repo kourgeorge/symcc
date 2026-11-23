@@ -1,6 +1,11 @@
 // What the Cursor extension's board panel draws and sends: the panel view the engine process works out from the board
 // (./view.ts), and the messages between the webview, the extension and the engine. Plain data only: the webview
 // bundle imports this file too, so nothing here may pull in the engine.
+import type { SdkImage, SdkModel, SdkModelInfo } from './sdk'
+
+export type ChatImage = SdkImage
+export type LeadModel = SdkModel
+export type ModelInfo = SdkModelInfo
 
 export type PanelMode = 'paused' | 'review' | 'auto'
 
@@ -45,6 +50,8 @@ export type PanelLane = {
   tokens?: number
   /** an agent works on it now */
   agent: boolean
+  /** the id of the agent on its try now (its steps come as step messages) */
+  agentId?: string
   /** set on a lane whose task merged a moment ago */
   doneMs?: number
 }
@@ -63,10 +70,14 @@ export type PanelTask = {
   details?: string
   needsYou: boolean
   actions: PanelAction[]
+  /** the agents that worked on it, newest first ("Try 5", "Try 4 checker"), for their sessions */
+  sessions: PanelSession[]
 }
 
+export type PanelSession = { label: string; agent: string; running: boolean }
+
 /** A board event for the stream: a merge, a failure, the checker's problems, a new task. */
-export type PanelNews = { key: string; task: string; title: string; tone: 'good' | 'bad' | 'other'; kind: string; text: string; atMs: number }
+export type PanelNews = { key: string; task: string; title: string; tone: 'good' | 'bad' | 'other'; kind: string; text: string; atMs: number; why?: string }
 
 export type PanelScout = { name: string; summary?: string; every: string; running: boolean; paused: boolean; lastRunMs?: number; nextRunMs?: number; lastReport?: string; warning?: string }
 
@@ -89,6 +100,8 @@ export type PanelView = {
   counts: { needs: number; running: number; next: number; doneToday: number; backlog: number }
   /** a note about the board itself (git missing, a data file near its size limit) */
   note?: string
+  /** the data folder in the project (".symcc"), where each agent's session is kept: <dir>/sessions/<agent>.jsonl */
+  dir: string
   nowMs: number
 }
 
@@ -98,11 +111,36 @@ export type PanelLeadEvent =
   | { type: 'answer'; text: string }
   | { type: 'error'; text: string }
   | { type: 'busy'; busy: boolean }
+  | { type: 'stopped' }
+  | { type: 'summarized'; text: string }
 
-/** A line of the stream that the extension keeps (the chat's side; the board's news comes with each view). */
-export type ChatItem = { key: string; who: 'owner' | 'lead' | 'error'; text: string; atMs: number }
+/**
+ * A line of the stream that the extension keeps (the chat's side; the board's news comes with each view). `note`: a
+ * command's answer or a word about the chat (stopped, summarized), not from the lead. A lead answer keeps the turn's
+ * steps (what it thought and the tools it used) and the model it ran on; an owner's message the pictures sent with it
+ * (`images` while the window is open, `pictures` their count after).
+ */
+export type ChatItem = {
+  key: string
+  who: 'owner' | 'lead' | 'error' | 'note'
+  text: string
+  atMs: number
+  steps?: PanelStep[]
+  model?: string
+  images?: string[]
+  pictures?: number
+}
+
+/** The model and mode the lead's turns run on (`model` none: the chat's own, `modelLabel` its name). */
+export type LeadSettings = { model?: LeadModel; modelLabel?: string; mode: 'agent' | 'plan' }
+
+/** A slash command of the lead chat: one of symcc's, a skill (the project's or the user's), or the chat's own. */
+export type SlashItem = { name: string; description: string; hint?: string; kind: 'symcc' | 'skill' | 'chat'; scope?: 'project' | 'user' }
 
 export type EngineState = { state: 'starting' | 'ready' | 'stopped' | 'failed'; text?: string }
+
+/** One step of an agent's turn (hosts/cursor/sdk.ts SdkStep), with when it happened. */
+export type PanelStep = { atMs: number; kind: 'text' | 'thinking' | 'tool' | 'status'; text: string; tool?: string; callId?: string; status?: 'running' | 'completed' | 'error' }
 
 /** The engine could not reach Cursor's servers: `text` is the error, `proxy` the proxy it ran with ('' for none). */
 export type NetworkProblem = { text: string; proxy: string }
@@ -113,13 +151,21 @@ export type ToWebview =
   | { type: 'chat'; items: ChatItem[]; busy: boolean }
   | { type: 'engine'; engine: EngineState }
   | { type: 'network'; problem: NetworkProblem | null }
+  | { type: 'steps'; all: Record<string, PanelStep[]> }
+  | { type: 'step'; agent: string; step: PanelStep }
   | { type: 'reply'; id: number; ok: boolean; text: string }
   | { type: 'scouts'; text: string }
+  | { type: 'models'; models: ModelInfo[] }
+  | { type: 'slash'; items: SlashItem[] }
+  | { type: 'lead'; settings: LeadSettings }
 
 /** From the webview to the extension; `id` comes back on the reply. */
 export type FromWebview =
   | { type: 'ready' }
-  | { type: 'send'; id: number; text: string }
+  | { type: 'send'; id: number; text: string; images?: ChatImage[] }
+  | { type: 'lead-set'; settings: LeadSettings }
+  | { type: 'lead-stop' }
+  | { type: 'summarize'; id: number }
   | { type: 'act'; id: number; task: string; action: PanelActionId; text?: string }
   | { type: 'answer'; id: number; need: string; text: string }
   | { type: 'mode'; id: number; mode: PanelMode }
@@ -127,4 +173,6 @@ export type FromWebview =
   | { type: 'scout'; id: number; name: string }
   | { type: 'proxy'; id: number; proxy: string }
   | { type: 'log' }
+  | { type: 'session'; agent: string; title: string }
   | { type: 'restart' }
+  | { type: 'open-file'; path: string; line?: number }

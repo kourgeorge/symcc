@@ -1,7 +1,10 @@
 // Small pieces every page uses: the mark, icons, time words, the staff (a task's stations as notes on one line) and
 // the lead's Markdown, drawn as elements (never as HTML).
-import { useEffect, useState, type ReactNode } from 'react'
+import { memo, useEffect, useState, type ReactNode } from 'react'
+import ReactMarkdown, { type Components } from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import type { PanelLane, PanelStation } from '../../protocol'
+import { tell } from './bridge'
 
 const CLEF =
   'M164,138 C150,132 140,144 150,152 C162,160 184,152 184,132 C184,110 160,104 146,114 C126,128 124,160 150,170 C178,180 200,160 192,128 C186,104 160,90 152,70 C146,52 154,30 166,30 C178,30 180,52 166,70 C150,90 160,170 162,190 C164,206 142,210 136,198'
@@ -115,58 +118,126 @@ export function Linked({ text, onTask }: { text: string; onTask?: (id: string) =
   )
 }
 
-/** Inline Markdown: `code`, **bold**, [links](https://…) and task ids. */
-function inline(text: string, onTask?: (id: string) => void): ReactNode[] {
-  const out: ReactNode[] = []
-  const re = /(`[^`]+`)|(\*\*[^*]+\*\*)|(\[[^\]]+\]\((https?:\/\/[^)\s]+)\))/g
-  let last = 0
-  let m: RegExpExecArray | null
-  while ((m = re.exec(text))) {
-    if (m.index > last) out.push(<Linked key={`t${last}`} text={text.slice(last, m.index)} onTask={onTask} />)
-    if (m[1]) out.push(<code key={m.index}>{m[1].slice(1, -1)}</code>)
-    else if (m[2]) out.push(<strong key={m.index}>{m[2].slice(2, -2)}</strong>)
-    else if (m[3]) out.push(<a key={m.index} href={m[4]}>{m[3].slice(1, m[3].indexOf(']'))}</a>)
-    last = m.index + m[0].length
+type MdNode = { type: string; value?: string; url?: string; children?: MdNode[]; tagName?: string; properties?: { className?: unknown } }
+
+const TASK_ID = /\b(T-\d+)\b/
+
+/** A remark step: each task id in the text (never in code or a link) becomes a link to the task. */
+const taskLinks = () => (tree: MdNode) => {
+  const walk = (n: MdNode) => {
+    if (!n.children || n.type === 'link') return
+    n.children = n.children.flatMap(c => {
+      if (c.type !== 'text' || !c.value || !TASK_ID.test(c.value)) return (walk(c), [c])
+      return c.value.split(TASK_ID).map((part, i): MdNode => (i % 2 ? { type: 'link', url: `#task:${part}`, children: [{ type: 'text', value: part }] } : { type: 'text', value: part })).filter(p => p.type === 'link' || p.value)
+    })
   }
-  if (last < text.length) out.push(<Linked key={`t${last}`} text={text.slice(last)} onTask={onTask} />)
-  return out
+  walk(tree)
 }
 
-/** The lead's Markdown as elements: paragraphs, lists, fenced code, headings (drawn as bold lines). */
-export function Markdown({ text, onTask }: { text: string; onTask?: (id: string) => void }) {
-  const blocks: ReactNode[] = []
-  const lines = text.replace(/\r/g, '').split('\n')
-  for (let i = 0; i < lines.length; ) {
-    const line = lines[i]!
-    if (line.startsWith('```')) {
-      const body: string[] = []
-      for (i++; i < lines.length && !lines[i]!.startsWith('```'); i++) body.push(lines[i]!)
-      i++
-      blocks.push(<pre key={i}>{body.join('\n')}</pre>)
-      continue
-    }
-    if (/^\s*([-*]|\d+\.)\s+/.test(line)) {
-      const ordered = /^\s*\d+\./.test(line)
-      const items: string[] = []
-      for (; i < lines.length && /^\s*([-*]|\d+\.)\s+/.test(lines[i]!); i++) items.push(lines[i]!.replace(/^\s*([-*]|\d+\.)\s+/, ''))
-      const List = ordered ? 'ol' : 'ul'
-      blocks.push(
-        <List key={i}>
-          {items.map((t, j) => (
-            <li key={j}>{inline(t, onTask)}</li>
-          ))}
-        </List>,
+const textOf = (n: MdNode | undefined): string => (!n ? '' : n.type === 'text' ? (n.value ?? '') : (n.children ?? []).map(textOf).join(''))
+
+/** A file path (src/a.ts, ./x/y.md:12, README.md#L4) the owner can open, with its line; null for anything else. */
+export function pathOf(text: string): { path: string; line?: number } | null {
+  const m = /^((?:~|\.{1,2})?\/?(?:[\w@.+-]+\/)*[\w@.+-]+)(?::(\d+)(?::\d+)?|#L(\d+))?$/.exec(text.trim())
+  if (!m || /:\/\//.test(text)) return null
+  const path = m[1]!
+  const last = path.split('/').pop() ?? ''
+  // a branch (origin/main, symcc/T-4) has a slash too: a path names a file with its extension, or starts like one
+  const named = path.includes('/') ? /\.\w{1,10}$/.test(last) || /^(?:~|\.{1,2}|\.[\w-]+)?\//.test(path) : /^[\w.-]+\.(?:[cm]?[jt]sx?|json[c5]?|md|mdx|css|s[ac]ss|html?|py|go|rs|java|kt|rb|php|sh|ya?ml|toml|lock|txt|sql|c|h|cc|cpp|hpp|cs|swift|vue|svelte|xml|ini|env|gradle)$/i.test(path)
+  if (!named || /^[.\d]+$/.test(path) || path.length > 240) return null
+  const line = Number(m[2] ?? m[3])
+  return { path, ...(Number.isFinite(line) && line > 0 ? { line } : {}) }
+}
+
+function CodeBlock({ lang, text }: { lang: string; text: string }) {
+  const [copied, setCopied] = useState(false)
+  const copy = () => void navigator.clipboard?.writeText(text).then(() => (setCopied(true), setTimeout(() => setCopied(false), 1500)))
+  const lines = text.replace(/\n$/, '').split('\n')
+  const diff = lang === 'diff' || lang === 'patch'
+  return (
+    <div className="md-code">
+      <div className="md-code-head">
+        <span>{lang || 'text'}</span>
+        <button type="button" className="icon-btn" onClick={copy} aria-label={copied ? 'Copied' : 'Copy the code'} title={copied ? 'Copied' : 'Copy'}>
+          <Icon name={copied ? 'check' : 'copy'} />
+        </button>
+      </div>
+      <pre>
+        {diff ? (
+          <code className="diff">
+            {lines.map((l, i) => (
+              <span key={i} className={/^\+(?!\+\+)/.test(l) ? 'add' : /^-(?!--)/.test(l) ? 'del' : l.startsWith('@@') ? 'hunk' : undefined}>
+                {l || ' '}
+              </span>
+            ))}
+          </code>
+        ) : (
+          <code>{lines.join('\n')}</code>
+        )}
+      </pre>
+    </div>
+  )
+}
+
+/** The lead's Markdown (GitHub's flavour: tables, task lists, struck text) as elements, never as HTML. */
+export const Markdown = memo(function Markdown({ text, onTask }: { text: string; onTask?: (id: string) => void }) {
+  const components: Components = {
+    a: ({ href = '', children }) => {
+      if (href.startsWith('#task:')) {
+        const id = href.slice(6)
+        return onTask ? (
+          <button type="button" className="task-ref" onClick={() => onTask(id)}>
+            {children}
+          </button>
+        ) : (
+          <span className="id">{children}</span>
+        )
+      }
+      const file = /^[a-z][\w+.-]*:/i.test(href) ? null : pathOf(decodeURI(href))
+      if (file) return <FileLink file={file}>{children}</FileLink>
+      return (
+        <a href={href} title={href}>
+          {children}
+        </a>
       )
-      continue
-    }
-    if (!line.trim()) {
-      i++
-      continue
-    }
-    const para: string[] = []
-    for (; i < lines.length && lines[i]!.trim() && !lines[i]!.startsWith('```') && !/^\s*([-*]|\d+\.)\s+/.test(lines[i]!); i++) para.push(lines[i]!)
-    const head = /^#{1,6}\s+(.*)$/.exec(para[0] ?? '')
-    blocks.push(head ? <p key={i} className="md-head">{inline(head[1]!, onTask)}</p> : <p key={i}>{inline(para.join(' '), onTask)}</p>)
+    },
+    pre: ({ node }) => {
+      const code = (node as MdNode | undefined)?.children?.find(c => c.tagName === 'code')
+      const lang = (Array.isArray(code?.properties?.className) ? (code.properties.className as string[]) : []).find(c => c.startsWith('language-'))?.slice(9) ?? ''
+      return <CodeBlock lang={lang} text={textOf(code)} />
+    },
+    code: ({ children }) => {
+      const file = typeof children === 'string' ? pathOf(children) : null
+      return file ? (
+        <FileLink file={file}>
+          <code>{children}</code>
+        </FileLink>
+      ) : (
+        <code>{children}</code>
+      )
+    },
+    table: ({ children }) => (
+      <div className="md-table">
+        <table>{children}</table>
+      </div>
+    ),
+    img: ({ alt }) => <span className="quiet">[{alt || 'picture'}]</span>,
+    input: ({ checked }) => <input type="checkbox" checked={!!checked} disabled readOnly />,
   }
-  return <div className="md">{blocks}</div>
+  return (
+    <div className="md">
+      <ReactMarkdown remarkPlugins={[remarkGfm, taskLinks]} components={components}>
+        {text}
+      </ReactMarkdown>
+    </div>
+  )
+})
+
+/** A file path the owner can open in the editor (relative to the project). */
+function FileLink({ file, children }: { file: { path: string; line?: number }; children: ReactNode }) {
+  return (
+    <button type="button" className="md-file" title={`Open ${file.path}${file.line ? ` at line ${file.line}` : ''}`} onClick={() => tell({ type: 'open-file', path: file.path, ...(file.line ? { line: file.line } : {}) })}>
+      {children}
+    </button>
+  )
 }

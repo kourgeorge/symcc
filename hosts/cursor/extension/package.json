@@ -6,28 +6,80 @@
   "publisher": "symcc",
   "private": true,
   "license": "MIT",
-  "engines": { "vscode": "^1.90.0" },
-  "categories": ["Other"],
-  "extensionKind": ["workspace"],
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
   "main": "./dist/extension.js",
-  "activationEvents": ["onStartupFinished"],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "contributes": {
     "commands": [
-      { "command": "symcc.open", "title": "Open the board", "category": "symcc" },
-      { "command": "symcc.message", "title": "Message the lead", "category": "symcc" },
-      { "command": "symcc.init", "title": "Set up symcc in this project", "category": "symcc" },
-      { "command": "symcc.restart", "title": "Restart the engine", "category": "symcc" },
-      { "command": "symcc.showLog", "title": "Show the engine log", "category": "symcc" }
+      {
+        "command": "symcc.open",
+        "title": "Open the board",
+        "category": "symcc"
+      },
+      {
+        "command": "symcc.message",
+        "title": "Message the lead",
+        "category": "symcc"
+      },
+      {
+        "command": "symcc.init",
+        "title": "Set up symcc in this project",
+        "category": "symcc"
+      },
+      {
+        "command": "symcc.restart",
+        "title": "Restart the engine",
+        "category": "symcc"
+      },
+      {
+        "command": "symcc.showLog",
+        "title": "Show the engine log",
+        "category": "symcc"
+      }
     ],
     "configuration": {
       "title": "symcc",
       "properties": {
-        "symcc.leadModel": { "type": "string", "default": "", "description": "The model the lead chat runs on (empty: symcc's default)." },
-        "symcc.workerModel": { "type": "string", "default": "", "description": "The model for workers whose role names none (empty: symcc's default)." },
-        "symcc.enginePath": { "type": "string", "default": "", "description": "The engine to run (empty: the one next to this extension, hosts/cursor/dist/engine.mjs)." },
-        "symcc.nodePath": { "type": "string", "default": "", "description": "The Node.js to run the engine with (empty: the editor's own)." },
-        "symcc.proxy": { "type": "string", "default": "", "description": "The proxy the engine reaches Cursor through, e.g. http://proxy.example.com:912 (empty: the editor's http.proxy setting, then HTTPS_PROXY)." },
-        "symcc.notify": { "type": "boolean", "default": true, "description": "Show a notification when something new needs you while the board is not in view." }
+        "symcc.leadModel": {
+          "type": "string",
+          "default": "",
+          "description": "The model the lead chat runs on (empty: symcc's default)."
+        },
+        "symcc.workerModel": {
+          "type": "string",
+          "default": "",
+          "description": "The model for workers whose role names none (empty: symcc's default)."
+        },
+        "symcc.enginePath": {
+          "type": "string",
+          "default": "",
+          "description": "The engine to run (empty: the one next to this extension, hosts/cursor/dist/engine.mjs)."
+        },
+        "symcc.nodePath": {
+          "type": "string",
+          "default": "",
+          "description": "The Node.js to run the engine with (empty: the editor's own)."
+        },
+        "symcc.proxy": {
+          "type": "string",
+          "default": "",
+          "description": "The proxy the engine reaches Cursor through, e.g. http://proxy.example.com:912 (empty: the editor's http.proxy setting, then HTTPS_PROXY)."
+        },
+        "symcc.notify": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show a notification when something new needs you while the board is not in view."
+        }
       }
     }
   },
@@ -37,15 +89,18 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@assistant-ui/react": "0.15.38",
     "@vscode/codicons": "0.0.36",
     "react": "19.1.1",
-    "react-dom": "19.1.1"
+    "react-dom": "19.1.1",
+    "react-markdown": "10.1.0",
+    "remark-gfm": "4.0.1"
   },
   "devDependencies": {
+    "@types/node": "^22.10.0",
     "@types/react": "19.1.12",
     "@types/react-dom": "19.1.9",
     "@types/vscode": "1.90.0",
-    "@types/node": "^22.10.0",
     "esbuild": "^0.25.0",
     "typescript": "5.9.3"
   }

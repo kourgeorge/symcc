@@ -2,7 +2,8 @@
 // the project folder with symcc's lead tools served from this process. A message to an idle lead starts its turn at
 // once (wakeLead 'now'); messages for a busy lead wait and go together as its next turn, except an urgent one, which
 // is put into the running turn (steer). The lead guide comes in front of the chat's first message while symcc is on.
-import type { Sdk, SdkAgent, SdkRun, SdkTool } from './sdk'
+// The owner picks the model and mode of the lead's turns from the chat (configure), and can stop or summarize it.
+import type { Sdk, SdkAgent, SdkImage, SdkModel, SdkRun, SdkSettingSource, SdkStep, SdkTool } from './sdk'
 
 /** Who a lead message is from: the owner typed it, or symcc sent it (a board update). */
 export type LeadFrom = 'owner' | 'symcc'
@@ -12,6 +13,11 @@ export type LeadEvent =
   | { type: 'answer'; text: string }
   | { type: 'error'; text: string }
   | { type: 'busy'; busy: boolean }
+  | { type: 'stopped' }
+  | { type: 'summarized'; text: string }
+
+/** The model and mode of the lead's turns from now on (`model` undefined: the chat's own). */
+export type LeadChoice = { model?: SdkModel; mode: 'agent' | 'plan' }
 
 export type LeadChatOptions = {
   sdk: Sdk
@@ -22,13 +28,24 @@ export type LeadChatOptions = {
   /** the lead guide, put in front of the first message sent while there is one (none while symcc is off) */
   guide: () => Promise<string | undefined>
   onEvent: (e: LeadEvent) => void
+  /** each step of the lead's turns as it happens */
+  onStep?: (s: SdkStep) => void
+  /** which of Cursor's settings the lead loads (none when absent) */
+  settings?: readonly SdkSettingSource[]
 }
 
 export type LeadChat = {
   /** gives the lead a message; resolves once it is started, queued or put into the running turn */
-  send: (text: string, from: LeadFrom, how?: { urgent?: boolean }) => Promise<void>
+  send: (text: string, from: LeadFrom, how?: { urgent?: boolean; images?: readonly SdkImage[] }) => Promise<void>
   /** whether a turn runs now */
   busy: () => boolean
+  /** the model and mode of the turns that start from now on */
+  configure: (c: Partial<LeadChoice>) => LeadChoice
+  choice: () => LeadChoice
+  /** ends the running turn (what waits still goes, as the next turn) */
+  stop: () => Promise<void>
+  /** condenses the chat so far to free the lead's context; answers why not when it can't (a turn runs, nothing to condense) */
+  summarize: () => Promise<string | undefined>
   /** resolves once no turn runs and nothing waits */
   idle: () => Promise<void>
   /** ends the running turn and lets go of the agent */
@@ -41,10 +58,11 @@ export function leadChat(o: LeadChatOptions): LeadChat {
   let running = false
   let guided = false
   let closed = false
-  const waiting: { text: string; from: LeadFrom }[] = []
+  const waiting: { text: string; from: LeadFrom; images?: readonly SdkImage[] }[] = []
   let idleWaiters: (() => void)[] = []
+  let choice: LeadChoice = { mode: 'agent' }
 
-  const getAgent = () => (agent ??= o.sdk.create({ model: o.model, cwd: o.cwd, tools: o.tools(), disallowedTools: ['task'] }))
+  const getAgent = () => (agent ??= o.sdk.create({ model: o.model, cwd: o.cwd, tools: o.tools(), disallowedTools: ['task'], ...(o.settings ? { settings: o.settings } : {}) }))
 
   function settled() {
     if (running || waiting.length) return
@@ -53,7 +71,7 @@ export function leadChat(o: LeadChatOptions): LeadChat {
     for (const f of w) f()
   }
 
-  async function start(text: string, from: LeadFrom) {
+  async function start(text: string, from: LeadFrom, images?: readonly SdkImage[]) {
     running = true
     o.onEvent({ type: 'busy', busy: true })
     o.onEvent({ type: 'message', from, text })
@@ -61,10 +79,12 @@ export function leadChat(o: LeadChatOptions): LeadChat {
       const guide = guided ? undefined : await o.guide()
       if (guide) guided = true
       const message = guide ? `${guide}\n\n---\n\n${text}` : text
-      run = await (await getAgent()).send(message)
+      const how = { ...(o.onStep ? { onStep: o.onStep } : {}), ...(choice.model ? { model: choice.model } : {}), ...(choice.mode === 'plan' ? { mode: 'plan' as const } : {}), ...(images?.length ? { images } : {}) }
+      run = await (await getAgent()).send(message, Object.keys(how).length ? how : undefined)
       const r = await run.wait()
       if (r.status === 'finished') o.onEvent({ type: 'answer', text: r.result ?? '' })
-      else if (r.status !== 'cancelled') o.onEvent({ type: 'error', text: `the lead's turn ended with status ${r.status}${r.error ? `: ${JSON.stringify(r.error).slice(0, 300)}` : ''}` })
+      else if (r.status === 'cancelled') o.onEvent({ type: 'stopped' })
+      else o.onEvent({ type: 'error', text: `the lead's turn ended with status ${r.status}${r.error ? `: ${JSON.stringify(r.error).slice(0, 300)}` : ''}` })
     } catch (err) {
       o.onEvent({ type: 'error', text: `the lead could not run: ${(err as Error).message}` })
     }
@@ -78,21 +98,51 @@ export function leadChat(o: LeadChatOptions): LeadChat {
     if (closed || running || !waiting.length) return settled()
     const batch = waiting.splice(0)
     const from: LeadFrom = batch.some(m => m.from === 'owner') ? 'owner' : 'symcc'
-    void start(batch.map(m => m.text).join('\n\n'), from)
+    void start(
+      batch.map(m => m.text).join('\n\n'),
+      from,
+      batch.flatMap(m => m.images ?? []),
+    )
   }
 
   return {
     async send(text, from, how) {
       if (closed) throw new Error('the lead chat is closed')
-      if (!running) return void start(text, from)
-      if (how?.urgent && run?.steer) {
+      if (!running) return void start(text, from, how?.images)
+      // a steered message carries no pictures: one with pictures waits for the next turn
+      if (how?.urgent && run?.steer && !how.images?.length) {
         const outcome = await run.steer(text).catch(() => 'failed')
         if (outcome === 'complete_delivered') return void o.onEvent({ type: 'message', from, text })
       }
-      waiting.push({ text, from })
+      waiting.push({ text, from, ...(how?.images?.length ? { images: how.images } : {}) })
       if (!running) next()
     },
     busy: () => running,
+    configure: c => (choice = { ...choice, ...c }),
+    choice: () => choice,
+    stop: async () => void (await run?.cancel().catch(() => undefined)),
+    async summarize() {
+      if (running) return 'the lead is working: summarize once its turn is done'
+      if (!agent) return 'there is nothing to summarize yet'
+      const a = await agent.catch(() => undefined)
+      if (!a?.summarize) return "the lead's chat can't be summarized here"
+      running = true
+      o.onEvent({ type: 'busy', busy: true })
+      let why: string | undefined
+      try {
+        const r = await (run = await a.summarize()).wait()
+        if (r.status === 'finished') o.onEvent({ type: 'summarized', text: r.result ?? '' })
+        else if (r.status === 'cancelled') o.onEvent({ type: 'stopped' })
+        else why = `summarizing ended with status ${r.status}`
+      } catch (err) {
+        why = `couldn't summarize: ${(err as Error).message}`
+      }
+      run = undefined
+      running = false
+      o.onEvent({ type: 'busy', busy: false })
+      next()
+      return why
+    },
     idle: () => (running || waiting.length ? new Promise<void>(r => idleWaiters.push(r)) : Promise.resolve()),
     async close() {
       closed = true

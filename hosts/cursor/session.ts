@@ -5,19 +5,24 @@
 import type { SymccView } from '../../types'
 import type { Host, HostFeatures, PanelValues } from '../../hooks/host'
 import { noUi } from '../../hooks/host'
-import { sessionStarting, sessionStart, sessionEnd, toolCall, runCommand, agentFinished, ownerTyped, leadGuideText } from '../../hooks/app/symcc'
+import { sessionStarting, sessionStart, sessionEnd, toolCall, runCommand, agentFinished, ownerTyped, leadGuideText, COMMANDS } from '../../hooks/app/symcc'
 import { S, useName, toolName, workers, starting, finishing, approving, queuedWorkers, scoutRuns, checkerRuns, type PaneView } from '../../hooks/app/state'
 import { stopForQuit } from '../../hooks/app/board-mode'
 import { TOOLS } from '../../hooks/app/tools'
-import { answerCommand } from '../../hooks/app/answer'
+import { ANSWER_COMMAND, answerCommand } from '../../hooks/app/answer'
 import { changedFiles } from '../../hooks/app/review'
 import { type DiffFile, intoOf, isAnswered, type BoardTask } from '../../hooks/board'
 import { nodeHost } from '../node/host'
 import { sdkAgents, type SdkAgents } from './agents'
-import { leadChat, type LeadChat, type LeadEvent } from './lead'
-import type { Sdk, SdkTool } from './sdk'
+import { leadChat, type LeadChat, type LeadChoice, type LeadEvent } from './lead'
+import type { Sdk, SdkImage, SdkModelInfo, SdkStep, SdkTool } from './sdk'
 import { panelView } from './view'
-import type { PanelActionId, PanelMode, PanelView } from './protocol'
+import { LEAD_AGENT, addStep, isWords, sessionPath } from './steps'
+import { listSkills, skillMessage } from './skills'
+import type { PanelActionId, PanelMode, PanelStep, PanelView, SlashItem } from './protocol'
+import { appendFile, mkdir } from 'node:fs/promises'
+import { dirname } from 'node:path'
+import { homedir } from 'node:os'
 
 /** What this host can do: it runs the lead chat itself, so updates wake it at once; the extension's webview is its
  *  board panel (the engine hands it every published view). */
@@ -72,8 +77,12 @@ export type CursorSessionOptions = {
   onView?: (view: PanelView) => void
   /** symcc asks for the board panel to be shown (a session start with open_on_start, /<name>) */
   onOpen?: () => void
+  /** a step of an agent's turn (`agent` is its id, or "lead" for the lead chat) */
+  onStep?: (agent: string, step: PanelStep) => void
   /** debug lines */
   log?: (line: string) => void
+  /** the user's home folder, for the user's skills (the process's when absent) */
+  home?: string
 }
 
 export type CursorSession = {
@@ -84,10 +93,19 @@ export type CursorSession = {
   tool: (name: string, input: Record<string, unknown>) => Promise<string>
   /** runs a slash command (without the slash, e.g. "symcc-init") and answers its text */
   command: (name: string, args?: string) => Promise<string>
-  /** the owner typed a message to the lead */
-  message: (text: string) => Promise<void>
+  /**
+   * the owner typed a message to the lead, with pictures. A /command of symcc's runs: its answer for the owner comes
+   * back as `said` (nothing goes to the lead), any other goes to the lead; /<skill> tells the lead to use the skill.
+   */
+  message: (text: string, images?: readonly SdkImage[]) => Promise<{ said?: string }>
+  /** the slash commands the lead chat offers: symcc's and the skills */
+  slash: () => Promise<SlashItem[]>
+  /** the models the account can use (none where the SDK can't list them) */
+  models: () => Promise<SdkModelInfo[]>
   /** the board panel's view now */
   view: () => PanelView
+  /** the newest steps of each agent this session ran (the lead's under "lead") */
+  steps: () => Record<string, PanelStep[]>
   /** the owner pressed a task action on the panel; answers what happened (for Show changes: the diff) */
   act: (task: string, action: PanelActionId, text?: string) => Promise<string>
   /** the owner answered a waiting task (T-5) or a board question (Q-3) on the panel */
@@ -107,14 +125,60 @@ function answerText(tool: string, r: { deny: string } | { result: string } | nul
   return 'deny' in r ? `Refused: ${r.deny}` : r.result
 }
 
+
 export async function openCursorSession(o: CursorSessionOptions): Promise<CursorSession> {
   const log = o.log ?? (() => undefined)
   const ref: { host?: Host } = {}
+  // each agent's steps: the newest in memory for the board, every one in <dir>/sessions/<agent>.jsonl (written once a second)
+  const steps = new Map<string, PanelStep[]>()
+  const unwritten = new Map<string, PanelStep[]>()
+  const unsent = new Map<string, PanelStep[]>()
+  let writing: Promise<void> = Promise.resolve()
+  let writeTimer: ReturnType<typeof setTimeout> | undefined
+  let sendTimer: ReturnType<typeof setTimeout> | undefined
+  const sessionFile = (agent: string) => `${o.root}/${sessionPath(S.N.dir, agent)}`
+  const writeSteps = () => {
+    writeTimer = undefined
+    const batch = [...unwritten]
+    unwritten.clear()
+    writing = writing
+      .then(async () => {
+        for (const [agent, list] of batch) {
+          const file = sessionFile(agent)
+          await mkdir(dirname(file), { recursive: true })
+          await appendFile(file, list.map(x => `${JSON.stringify(x)}\n`).join(''))
+        }
+      })
+      .catch(err => log(`couldn't write an agent's session: ${(err as Error).message}`))
+  }
+  // words go out joined, a few times a second; any other step goes at once, after the words before it
+  const sendWords = (only?: string) => {
+    for (const [agent, list] of [...unsent]) {
+      if (only !== undefined && agent !== only) continue
+      unsent.delete(agent)
+      for (const x of list) o.onStep?.(agent, x)
+    }
+    if (!unsent.size && sendTimer) (clearTimeout(sendTimer), (sendTimer = undefined))
+  }
+  const onStep = (agent: string, s: SdkStep) => {
+    const step: PanelStep = { ...s, atMs: Date.now() }
+    steps.set(agent, addStep(steps.get(agent) ?? [], step))
+    unwritten.set(agent, addStep(unwritten.get(agent) ?? [], step))
+    writeTimer ??= setTimeout(writeSteps, 1000)
+    if (isWords(step)) {
+      unsent.set(agent, addStep(unsent.get(agent) ?? [], step))
+      sendTimer ??= setTimeout(() => ((sendTimer = undefined), sendWords()), 300)
+      return
+    }
+    sendWords(agent)
+    o.onStep?.(agent, step)
+  }
   const agents = sdkAgents({
     sdk: o.sdk,
     model: o.workerModel ?? DEFAULT_MODEL,
     onEnd: (agentId, end) => agentFinished(ref.host!, agentId, end),
     onTool: async (agentId, tool, input) => answerText(tool, await toolCall(ref.host!, toolName(tool), agentId, input)),
+    onStep,
     log,
   })
   const leadTools = (): Record<string, SdkTool> =>
@@ -124,6 +188,8 @@ export async function openCursorSession(o: CursorSessionOptions): Promise<Cursor
         { description: d.description, inputSchema: d.inputSchema as Record<string, unknown>, execute: async (input: Record<string, unknown>) => answerText(d.name, await toolCall(ref.host!, toolName(d.name), undefined, input)) },
       ]),
     )
+  // the lead loads the project's settings (AGENTS.md, rules, skills, MCP servers) and the plugins', never the user's
+  // own: the user's hooks are for their editor's agents and don't run on it
   const lead = leadChat({
     sdk: o.sdk,
     cwd: o.root,
@@ -131,13 +197,15 @@ export async function openCursorSession(o: CursorSessionOptions): Promise<Cursor
     tools: leadTools,
     guide: () => leadGuideText(ref.host!),
     onEvent: e => o.onLead?.(e),
+    onStep: s => onStep(LEAD_AGENT, s),
+    settings: ['project', 'plugins'],
   })
   const base = nodeHost({ root: o.root, agents, say: line => log(line), ...(o.sessionId ? { sessionId: o.sessionId } : {}), ...(o.pluginRoot ? { pluginRoot: o.pluginRoot } : {}) })
   // the board panel: the published view in memory, and the panel's view of it handed on after each publish; the
   // changed files of each task in review are read with git once per change of the task
   const project = o.root.split('/').filter(Boolean).pop() ?? o.root
   let published: SymccView = emptyView()
-  let shown = panelView(published as PaneView, { project, nowMs: Date.now() })
+  let shown = panelView(published as PaneView, { project, dir: S.N.dir, nowMs: Date.now() })
   const changes = new Map<string, { at: string; files: DiffFile[] }>()
   const draw = async () => {
     const v = published as PaneView
@@ -145,7 +213,7 @@ export async function openCursorSession(o: CursorSessionOptions): Promise<Cursor
       if (t.status !== 'review' || isAnswered(t as BoardTask) || changes.get(t.id)?.at === t.updated_at) continue
       changes.set(t.id, { at: t.updated_at, files: await changedFiles(ref.host!, intoOf(t), t).catch(() => []) })
     }
-    shown = panelView(v, { project, nowMs: Date.now(), changes: Object.fromEntries([...changes].map(([id, c]) => [id, c.files])) })
+    shown = panelView(v, { project, dir: S.N.dir, nowMs: Date.now(), changes: Object.fromEntries([...changes].map(([id, c]) => [id, c.files])) })
     o.onView?.(shown)
   }
   let drawing: Promise<void> = Promise.resolve()
@@ -181,6 +249,8 @@ export async function openCursorSession(o: CursorSessionOptions): Promise<Cursor
   // what a waiting task shows depends on the time too (a merge that just ended, a lane that has been merged a while)
   const ticks = host.clock.every(30_000, redraw)
   const command = async (name: string, args = '') => (await runCommand(host, name, args))?.text ?? `/${name} is not one of ${S.N.name}'s commands`
+  const skills = () => listSkills(o.root, o.home ?? homedir())
+  let models: Promise<SdkModelInfo[]> | undefined
   ref.host = host
   useName(host)
   sessionStarting()
@@ -192,11 +262,39 @@ export async function openCursorSession(o: CursorSessionOptions): Promise<Cursor
     lead,
     tool: async (name, input) => answerText(name, await toolCall(host, toolName(name), undefined, input)),
     command,
-    async message(text) {
+    async message(text, images) {
+      const how = images?.length ? { images } : undefined
+      const slash = /^\/([\w.:-]+)(?:\s+([\s\S]*))?$/.exec(text.trim())
+      if (slash) {
+        const [, name, rest = ''] = slash as unknown as [string, string, string | undefined]
+        if (name === ANSWER_COMMAND().name) return { said: (await answerCommand(host, name, rest)).text }
+        const answer = await runCommand(host, name, rest)
+        if (answer?.isTextDisplayOnly) return { said: answer.text }
+        const skill = answer ? undefined : (await skills()).find(s => s.name === name)
+        if (answer || skill) {
+          ownerTyped(text)
+          await lead.send(answer ? answer.text : skillMessage(skill!, rest.trim()), 'owner', how)
+          return {}
+        }
+      }
       ownerTyped(text)
-      await lead.send(text, 'owner')
+      await lead.send(text, 'owner', how)
+      return {}
     },
+    async slash() {
+      const listed: { name: string; description: string; argumentHint?: string }[] = [...COMMANDS(host.features), ANSWER_COMMAND()]
+      const own = listed.map((c): SlashItem => ({ name: c.name, description: c.description, kind: 'symcc', ...(c.argumentHint ? { hint: c.argumentHint } : {}) }))
+      const taken = new Set(own.map(c => c.name))
+      const mine = (await skills()).filter(k => !taken.has(k.name)).map((k): SlashItem => ({ name: k.name, description: k.description, kind: 'skill', scope: k.scope, ...(k.argumentHint ? { hint: k.argumentHint } : {}) }))
+      return [...own, ...mine]
+    },
+    models: () =>
+      (models ??= (o.sdk.models?.() ?? Promise.resolve([])).catch(err => {
+        models = undefined
+        throw err
+      })),
     view: () => shown,
+    steps: () => Object.fromEntries(steps),
     act: async (task, action, text) => {
       const c = actionCommand(S.N.name, task, action, text)
       const said = await command(c.command, c.args)
@@ -219,6 +317,10 @@ export async function openCursorSession(o: CursorSessionOptions): Promise<Cursor
         await stopForQuit(host, why ?? 'the Cursor session ended').catch(() => [] as string[])
         await agents.stopAll()
         await lead.close()
+        sendWords()
+        if (writeTimer) clearTimeout(writeTimer)
+        writeSteps()
+        await writing
         await sessionEnd(host)
       })()),
   }

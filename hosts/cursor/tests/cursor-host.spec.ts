@@ -2,13 +2,17 @@
 // its worker as an SDK agent, a running worker takes messages, its question tool reaches the board, and the lead chat
 // wakes at once for an update. Run with `npx -y bun test ./tests/` in hosts/cursor/ (or `npm test` there).
 import { test, expect } from 'bun:test'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { runCommand } from '../../node/host'
 import type { AgentRunEnd } from '../../../hooks/app/symcc'
 import { agentToolDefs, disallowedFor, runEnd, sdkAgents, withCursorPrompt } from '../agents'
 import { leadChat, type LeadEvent } from '../lead'
 import { actionCommand, openCursorSession } from '../session'
-import type { PanelView } from '../protocol'
+import type { PanelStep, PanelView } from '../protocol'
+import { addStep, readSteps, sessionMarkdown } from '../steps'
+import { taskSessions } from '../view'
+import { modelInfos } from '../sdk'
+import { skillOf } from '../skills'
 import { fakeSdk, until, type Turn } from './fake-sdk'
 
 const PLUGIN_ROOT = new URL('../../..', import.meta.url).pathname.replace(/\/$/, '')
@@ -63,7 +67,7 @@ test('one task end to end on Cursor: the worker is an SDK agent in its worktree,
     expect((await git(repo, 'show', 'main:hello.txt')).stdout).toBe('hello from the fake worker\n')
 
     // the lead was woken with the news: a turn of its own, from symcc, with the lead guide in front of the first one
-    await until(() => lead.some(e => e.type === 'message' && e.from === 'symcc' && e.text.includes('T-1')), 20_000, 'the lead to be told')
+    await until(() => lead.some(e => e.type === 'message' && e.from === 'symcc' && e.text.includes('T-1')) && !!sdk.agents.find(a => 'add' in a.tools)?.turns.length, 20_000, 'the lead to be told')
     const leadAgent = sdk.agents.find(a => 'add' in a.tools)!
     expect(leadAgent.turns[0]!.text).toContain('you are the lead')
     expect(leadAgent.options.cwd).toBe(repo)
@@ -176,6 +180,95 @@ test('the lead chat: an idle lead starts at once, messages for a busy lead go to
   expect(sdk.agents[0]!.closed).toBe(true)
 })
 
+test("the lead chat on Cursor: it loads the project's and plugins' settings, a typed command answers the owner itself, a skill and the chosen model, mode and pictures go to the lead", async () => {
+  const repo = await scratchRepo()
+  const home = await mkdtemp('/tmp/symcc-cursor-home-')
+  await mkdir(`${repo}/.cursor/skills/tidy`, { recursive: true })
+  await writeFile(`${repo}/.cursor/skills/tidy/SKILL.md`, '---\nname: tidy\ndescription: >-\n  Tidy the code\n  before a review.\n---\nTidy it.\n')
+  await mkdir(`${home}/.agents/skills/grill-me`, { recursive: true })
+  await writeFile(`${home}/.agents/skills/grill-me/SKILL.md`, '---\nname: grill-me\ndescription: "A relentless interview."\nargument-hint: "the plan"\ndisable-model-invocation: true\n---\n')
+  const sdk = fakeSdk(async t => {
+    if (isWorker(t)) return await t.onCancel.then(() => ({ status: 'cancelled' }))
+    return { status: 'finished', result: 'ok' }
+  })
+  const s = await openCursorSession({ root: repo, sdk, pluginRoot: PLUGIN_ROOT, sessionId: 'cursor-t9', home })
+  const leadTurns = () => sdk.agents.flatMap(a => a.turns).filter(isLead)
+  try {
+    await s.command('symcc-init')
+    const tasks = await s.message('/symcc-tasks')
+    expect(!!tasks.said).toBe(true)
+    expect(leadTurns().some(t => t.text.includes('symcc-tasks'))).toBe(false)
+
+    const slash = await s.slash()
+    expect(slash.find(c => c.name === 'symcc-tasks')?.kind).toBe('symcc')
+    expect(slash.some(c => c.name === 'symcc-answer')).toBe(true)
+    expect(slash.find(c => c.name === 'tidy')).toEqual({ name: 'tidy', description: 'Tidy the code before a review.', kind: 'skill', scope: 'project' })
+    expect(slash.find(c => c.name === 'grill-me')).toEqual({ name: 'grill-me', description: 'A relentless interview.', kind: 'skill', scope: 'user', hint: 'the plan' })
+
+    await s.lead.idle()
+    s.lead.configure({ model: { id: 'gpt-x', params: [{ id: 'reasoning', value: 'high' }] }, mode: 'plan' })
+    expect(await s.message('/tidy src only', [{ data: 'AAAA', mimeType: 'image/png' }])).toEqual({})
+    await until(() => leadTurns().some(t => t.text.includes('"tidy"')), 20_000, "the skill's turn")
+    const turn = leadTurns().find(t => t.text.includes('"tidy"'))!
+    expect(turn.text).toContain(`Use the skill "tidy": read ${repo}/.cursor/skills/tidy/SKILL.md and follow it.`)
+    expect(turn.text.endsWith('\n\nsrc only')).toBe(true)
+    expect([turn.model, turn.mode, turn.images]).toEqual([{ id: 'gpt-x', params: [{ id: 'reasoning', value: 'high' }] }, 'plan', [{ data: 'AAAA', mimeType: 'image/png' }]])
+    // a message that only starts with a slash is the owner's words
+    await s.lead.idle()
+    await s.message('/tmp/x is full')
+    await until(() => leadTurns().some(t => t.text.endsWith('/tmp/x is full')), 20_000, 'the plain message')
+
+    // the lead loads the project's and plugins' settings; a worker loads none, as before
+    s.lead.configure({ model: undefined, mode: 'agent' })
+    await s.tool('add', { title: 'Say hello', details: 'Write hello.txt', files: ['hello.txt'], why: 'a test', origin_by: 'owner', request: 'Say hello' })
+    await until(() => sdk.agents.some(a => 'ask_owner' in a.tools), 60_000, 'the worker')
+    expect(sdk.agents.filter(a => 'add' in a.tools).map(a => a.options.settings)).toEqual([['project', 'plugins']])
+    expect(sdk.agents.filter(a => 'ask_owner' in a.tools).map(a => a.options.settings)).toEqual([undefined])
+  } finally {
+    await s.close()
+    await rm(repo, { recursive: true, force: true })
+    await rm(home, { recursive: true, force: true })
+  }
+}, 120_000)
+
+test('the lead chat: Stop ends the running turn, summarize waits for an idle lead', async () => {
+  const sdk = fakeSdk(async t => (t.text.includes('long') ? await t.onCancel.then(() => ({ status: 'cancelled' })) : { status: 'finished', result: 'ok' }))
+  const ev: LeadEvent[] = []
+  const lead = leadChat({ sdk, cwd: '/tmp', model: 'm', tools: () => ({}), guide: async () => undefined, onEvent: e => void ev.push(e) })
+  expect(await lead.summarize()).toBe('there is nothing to summarize yet')
+  await lead.send('a long job', 'owner')
+  await until(() => sdk.agents[0]?.turns.length === 1)
+  expect(await lead.summarize()).toContain('the lead is working')
+  await lead.stop()
+  await lead.idle()
+  expect(ev.some(e => e.type === 'stopped')).toBe(true)
+  expect(await lead.summarize()).toBe(undefined)
+  expect(sdk.agents[0]!.summarized).toBe(1)
+  expect(ev.filter(e => e.type === 'summarized')).toEqual([{ type: 'summarized', text: 'Summarized the chat.' }])
+  expect(ev.filter(e => e.type === 'busy').map(e => (e as { busy: boolean }).busy)).toEqual([true, false, true, false])
+  await lead.close()
+})
+
+test("models and skills: a model's options and variants, a skill file's name and folded description", () => {
+  expect(
+    modelInfos([
+      { id: 'default', displayName: 'Auto', variants: [{ params: [], isDefault: true }] },
+      {
+        id: 'gpt-x',
+        displayName: 'GPT X',
+        parameters: [{ id: 'fast', displayName: 'Fast', values: [{ value: 'false' }, { value: 'true', displayName: 'Fast' }] }],
+        variants: [{ params: [{ id: 'fast', value: 'false' }], isDefault: true }, { params: [{ id: 'fast', value: 'true' }], isMaxMode: true }],
+      },
+    ]),
+  ).toEqual([
+    { id: 'default', label: 'Auto', options: [], variants: [{ params: {}, isDefault: true }] },
+    { id: 'gpt-x', label: 'GPT X', options: [{ id: 'fast', label: 'Fast', values: [{ value: 'false', label: 'Off' }, { value: 'true', label: 'Fast' }] }], variants: [{ params: { fast: 'false' }, isDefault: true }, { params: { fast: 'true' }, maxMode: true }] },
+  ])
+  expect(skillOf('---\nname: pr\ndescription: "Use when writing a PR body."\nmetadata:\n  credits: x\n---\nbody', 'pr')).toEqual({ name: 'pr', description: 'Use when writing a PR body.' })
+  expect(skillOf('---\ndescription: |\n  Two\n  lines\nargument-hint: <file>\n---\n', 'folder')).toEqual({ name: 'folder', description: 'Two lines', argumentHint: '<file>' })
+  expect(skillOf('no front matter', 'plain')).toEqual({ name: 'plain', description: '' })
+})
+
 test("the board panel: a task in review is a card with Approve first, Approve on the panel merges it, and the stream's news says so", async () => {
   const repo = await scratchRepo()
   const sdk = fakeSdk(async t => {
@@ -215,8 +308,9 @@ test("the board panel: a task in review is a card with Approve first, Approve on
 test("the board panel: a worker's question is a card with its options, and an answer on the panel sends the task back to work", async () => {
   const repo = await scratchRepo()
   const answers: string[] = []
+  // the worker asks on its first turn only: asked again on the turn after the answer, the card would be back at once
   const sdk = fakeSdk(async t => {
-    if (isWorker(t) && t.mode !== 'plan') {
+    if (isWorker(t) && t.mode !== 'plan' && !answers.length) {
       answers.push(await t.agent.tools.ask_owner!.execute({ question: 'Which greeting should hello.txt hold?', options: ['hello', 'hi'] }))
       return { status: 'finished', result: 'asked' }
     }
@@ -231,7 +325,8 @@ test("the board panel: a worker's question is a card with its options, and an an
     expect(need.kind).toBe('asks')
     expect(need.title).toContain('Which greeting should hello.txt hold?')
     expect(need.choices).toEqual(['hello', 'hi', 'Answer…'])
-    await s.answer('T-1', 'hi')
+    // the card shows while the worker's hand-back still runs; until it ends, an answer is refused as "try again in a moment"
+    await until(async () => !/try again/.test(await s.answer('T-1', 'hi')), 20_000, 'the answer to be taken')
     await until(() => !s.view().needs.some(n => n.id === 'T-1'), 20_000, 'the card to go')
     expect((await board(repo)).tasks[0]?.status).not.toBe('waiting')
   } finally {
@@ -239,6 +334,78 @@ test("the board panel: a worker's question is a card with its options, and an an
     await rm(repo, { recursive: true, force: true })
   }
 }, 120_000)
+
+test("a worker's steps reach the panel as they come, its lane and task name its agent, and its session is saved", async () => {
+  const repo = await scratchRepo()
+  const sdk = fakeSdk(async t => {
+    if (isWorker(t) && t.mode !== 'plan') {
+      t.step({ kind: 'status', text: 'running' })
+      t.step({ kind: 'thinking', text: 'Write the ' })
+      t.step({ kind: 'thinking', text: 'greeting.' })
+      t.step({ kind: 'tool', tool: 'shell', callId: 'c1', status: 'running', text: 'ls' })
+      t.step({ kind: 'tool', tool: 'shell', callId: 'c1', status: 'completed', text: 'ls' })
+      await t.onCancel
+      return { status: 'cancelled' }
+    }
+    return { status: 'finished', result: 'none' }
+  })
+  const got: [string, PanelStep][] = []
+  const s = await openCursorSession({ root: repo, sdk, pluginRoot: PLUGIN_ROOT, sessionId: 'cursor-t8', onStep: (agent, step) => void got.push([agent, step]) })
+  try {
+    await s.command('symcc-init')
+    await s.tool('add', { title: 'Say hello', details: 'Write hello.txt with a greeting', files: ['hello.txt'], why: 'a test', origin_by: 'owner', request: 'Say hello' })
+    await until(() => got.some(([, x]) => x.kind === 'tool' && x.status === 'completed'), 60_000, 'the tool step')
+    const agent = got[0]![0]
+    // the thinking came in two pieces and goes out as one, before the tool call that came after it
+    expect(got.map(([a, x]) => `${a === agent ? '' : a}${x.kind}:${x.status ?? ''}:${x.text}`)).toEqual(['status::running', 'thinking::Write the greeting.', 'tool:running:ls', 'tool:completed:ls'])
+    expect(s.steps()[agent]!.map(x => x.kind)).toEqual(['status', 'thinking', 'tool'])
+    await until(() => s.view().lanes.some(l => l.id === 'T-1' && l.agentId === agent), 20_000, 'the lane to name its agent')
+    expect(s.view().tasks.find(t => t.id === 'T-1')!.sessions).toEqual([{ label: 'Try 1', agent, running: true }])
+    await until(async () => readSteps(await readFile(`${repo}/.symcc/sessions/${agent}.jsonl`, 'utf8').catch(() => '')).length === 3, 5000, 'the saved session')
+    const saved = readSteps(await readFile(`${repo}/.symcc/sessions/${agent}.jsonl`, 'utf8'))
+    expect(saved.map(x => [x.kind, x.text, x.status])).toEqual([['status', 'running', undefined], ['thinking', 'Write the greeting.', undefined], ['tool', 'ls', 'completed']])
+  } finally {
+    await s.close()
+    await rm(repo, { recursive: true, force: true })
+  }
+}, 120_000)
+
+test('steps: words join the words before them, a tool call is replaced by its end, and a session reads as Markdown', () => {
+  let list: PanelStep[] = []
+  for (const s of [
+    { atMs: 1, kind: 'text', text: 'Hel' },
+    { atMs: 2, kind: 'text', text: 'lo, ' },
+    { atMs: 3, kind: 'tool', tool: 'shell', callId: 'a', status: 'running', text: 'npm test' },
+    { atMs: 4, kind: 'text', text: 'world' },
+    { atMs: 5, kind: 'tool', tool: 'shell', callId: 'a', status: 'error', text: 'npm test → exit 1' },
+  ] as PanelStep[])
+    list = addStep(list, s)
+  expect(list).toEqual([
+    { atMs: 1, kind: 'text', text: 'Hello, ' },
+    { atMs: 3, kind: 'tool', tool: 'shell', callId: 'a', status: 'error', text: 'npm test → exit 1' },
+    { atMs: 4, kind: 'text', text: 'world' },
+  ])
+  const file = `${list.map(x => JSON.stringify(x)).join('\n')}\n{"kind":"te`
+  expect(readSteps(file)).toEqual(list)
+  const page = sessionMarkdown('T-1 Say hello: Try 1', list)
+  expect(page.startsWith('# T-1 Say hello: Try 1')).toBe(true)
+  expect(page).toContain('**shell** (failed)')
+  expect(page).toContain('npm test → exit 1')
+  expect(sessionMarkdown('x', [])).toContain('No steps were saved')
+})
+
+test("a task's sessions: one per agent of each try, newest first, the running one marked", () => {
+  const runs = [
+    { started: 'a', ended: 'b', agents: [{ kind: 'worker', started: 'a', ended: 'b' }] },
+    { started: 'c', ended: 'd', agents: [{ id: 'w2', kind: 'worker', started: 'c', ended: 'd' }] },
+    { started: 'e', agents: [{ id: 'w3', kind: 'worker', started: 'e', ended: 'f' }, { id: 'w4', kind: 'worker', started: 'f' }] },
+  ]
+  expect(taskSessions({ id: 'T-1', runs } as unknown as Parameters<typeof taskSessions>[0])).toEqual([
+    { label: 'Try 3 (2)', agent: 'w4', running: true },
+    { label: 'Try 3 (1)', agent: 'w3', running: false },
+    { label: 'Try 2', agent: 'w2', running: false },
+  ])
+})
 
 test('panel actions are sent as the owner’s own commands', () => {
   expect(actionCommand('symcc', 'T-5', 'approve')).toEqual({ command: 'symcc-approve', args: 'T-5' })

@@ -1,17 +1,18 @@
 // A stand-in for the extension in a plain browser: demo data (made up, for looking at the panel) and replies that
 // act like the engine's, so every card and button can be tried. Loaded before the webview's bridge.
-import type { ChatItem, FromWebview, PanelLane, PanelNeed, PanelNews, PanelTask, PanelView, ToWebview } from '../../protocol'
+import type { ChatItem, FromWebview, LeadSettings, ModelInfo, PanelLane, PanelNeed, PanelNews, PanelStep, PanelTask, PanelView, SlashItem, ToWebview } from '../../protocol'
 
 const now = Date.now()
 const m = (min: number) => now - min * 60_000
 const theme = new URLSearchParams(location.search).get('theme')
 document.body.classList.add(theme === 'light' ? 'vscode-light' : 'vscode-dark')
-if (new URLSearchParams(location.search).get('state') === 'off') (window as unknown as { __off: boolean }).__off = true
+const state = new URLSearchParams(location.search).get('state')
+if (state === 'off') (window as unknown as { __off: boolean }).__off = true
 
 const stations4 = ['work', 'check', 'queue', 'tests', 'merged'] as const
 const lane = (id: string, title: string, at: number, sinceMin: number, more: Partial<PanelLane> = {}): PanelLane => ({ id, title, kind: '', stations: [...stations4], at, skipped: [], sinceMs: m(sinceMin), tryNo: 1, tries: 3, agent: at === 0 || at === 1, ...more })
 
-const task = (id: string, title: string, status: PanelTask['status'], word: string, more: Partial<PanelTask> = {}): PanelTask => ({ id, title, status, word, kind: '', role: 'general', attempts: status === 'todo' || status === 'backlog' ? 0 : 1, needsYou: false, actions: [], ...more })
+const task = (id: string, title: string, status: PanelTask['status'], word: string, more: Partial<PanelTask> = {}): PanelTask => ({ id, title, status, word, kind: '', role: 'general', attempts: status === 'todo' || status === 'backlog' ? 0 : 1, needsYou: false, actions: [], sessions: [], ...more })
 
 let needs: PanelNeed[] = [
   { id: 'T-44', kind: 'asks', title: 'Which date format should the invoice CSV use for issued_at?', meta: 'T-44 · CSV export for invoices · question from the worker', choices: ['ISO 8601 (2026-11-23)', 'Locale (23/11/2026)', 'Answer…'], actions: [], sinceMs: m(4) },
@@ -34,9 +35,9 @@ let needs: PanelNeed[] = [
 ]
 
 const lanes: PanelLane[] = [
-  lane('T-42', 'CSV export for invoices', 0, 4.2),
+  lane('T-42', 'CSV export for invoices', 0, 4.2, { agentId: 'cursor-1-a' }),
   lane('T-43', 'Fix the flaky date test', 3, 0.6, { agent: false, tokens: 48_200 }),
-  lane('T-45', 'Webhook retry backoff', 1, 1.1, { tokens: 31_900 }),
+  lane('T-45', 'Webhook retry backoff', 0, 1.1, { tokens: 31_900, agentId: 'cursor-2-b', tryNo: 2 }),
   { ...lane('T-38', 'Dark mode toggle', 4, 0), doneMs: m(3), agent: false, tokens: 72_400 },
 ]
 
@@ -45,15 +46,138 @@ const next = [task('T-46', 'Paginate the customer list', 'todo', 'up next'), tas
 const news: PanelNews[] = [
   { key: 'n1', task: 'T-42', title: 'CSV export for invoices', tone: 'other', kind: 'created', text: 'created by the owner', atMs: m(31) },
   { key: 'n2', task: 'T-39', title: 'Rate-limit login attempts', tone: 'other', kind: 'created', text: 'created by the owner', atMs: m(31) },
-  { key: 'n3', task: 'T-40', title: 'Upgrade undici to 7', tone: 'bad', kind: 'failed', text: 'tests failed', atMs: m(17) },
+  { key: 'n3', task: 'T-40', title: 'Upgrade undici to 7', tone: 'bad', kind: 'failed', text: 'tests failed', why: 'tests failed: `…` (exit 1): 2 proxy tests time out after 5000 ms', atMs: m(17) },
   { key: 'n4', task: 'T-38', title: 'Dark mode toggle', tone: 'good', kind: 'merged', text: 'merged', atMs: m(3) },
 ]
 
 let chat: ChatItem[] = [
   { key: 'c1', who: 'owner', text: 'Add CSV export to invoices, and make the login rate limit 5 tries a minute.', atMs: m(32) },
-  { key: 'c2', who: 'lead', text: 'Two tasks:\n- **T-42** CSV export for invoices\n- **T-39** rate-limit login attempts\n\nThey touch different files, so both run now. I set T-39 to wait for your review before it merges.', atMs: m(31) },
+  {
+    key: 'c2',
+    who: 'lead',
+    text: 'Two tasks:\n- **T-42** CSV export for invoices\n- **T-39** rate-limit login attempts\n\nThey touch different files, so both run now. I set T-39 to wait for your review before it merges.',
+    atMs: m(31),
+    model: 'Composer 2.5',
+    steps: [
+      { atMs: m(31.9), kind: 'thinking', text: 'Two separate asks. Check the board for anything on invoices or login first, so I do not add a duplicate.' },
+      { atMs: m(31.85), kind: 'tool', tool: 'symcc_board', callId: 'b0', status: 'completed', text: 'list' },
+      { atMs: m(31.8), kind: 'tool', tool: 'read', callId: 'r0', status: 'completed', text: 'src/auth/login.ts' },
+      { atMs: m(31.75), kind: 'tool', tool: 'symcc_add_task', callId: 'a1', status: 'completed', text: 'CSV export for invoices' },
+      { atMs: m(31.7), kind: 'tool', tool: 'symcc_add_task', callId: 'a2', status: 'completed', text: 'Rate-limit login attempts' },
+    ],
+  },
+  { key: 'c2b', who: 'owner', text: '/symcc-tasks', atMs: m(30) },
+  { key: 'c2c', who: 'note', text: '**Needs you** (1)\n- T-44 CSV export for invoices: a question\n\n**Running** (2)\n- T-42 CSV export for invoices\n- T-39 Rate-limit login attempts', atMs: m(30) },
+  {
+    key: 'c2d',
+    who: 'lead',
+    model: 'Claude Opus 5.5 · Extra High',
+    text: [
+      '## Where the invoice work stands',
+      '',
+      'Three pieces, in the order they merge:',
+      '',
+      '1. **CSV export** (T-42): the writer is in `src/invoices/csv.ts`; it waits on your date-format answer.',
+      '',
+      '2. **Rate limit** (T-39): 5 tries a minute per account, kept in `src/auth/limit.ts:18`. Ready for review.',
+      '   - the counter resets on a successful login',
+      '   - a locked account gets a `429` with `Retry-After`',
+      '',
+      '3. **Backoff** (T-45): second try; the first one hit the flaky date test.',
+      '',
+      '| Task | Files | Lines | Tests |',
+      '| --- | --- | ---: | --- |',
+      '| T-42 | 4 | +212 −8 | running |',
+      '| T-39 | 3 | +84 −12 | passed |',
+      '| T-45 | 2 | +37 −5 | not yet |',
+      '',
+      'The limit itself is one line:',
+      '',
+      '```ts',
+      'export const LOGIN_LIMIT = { tries: 5, perMs: 60_000 } as const',
+      '```',
+      '',
+      '```diff',
+      '@@ -12,3 +12,4 @@ export async function login(req: Request) {',
+      '-  const user = await users.find(req.body.email)',
+      '+  await limiter.take(req.body.email)',
+      '+  const user = await users.find(req.body.email)',
+      '   if (!user) return unauthorized()',
+      '```',
+      '',
+      '> Nothing else needs you right now. See [the rate-limit RFC](https://datatracker.ietf.org/doc/html/rfc6585) for 429.',
+    ].join('\n'),
+    atMs: m(20),
+  },
   { key: 'c3', who: 'lead', text: 'T-39 is ready for your review. T-40 failed its tests twice: the proxy tests time out on undici 7. Retry it with a longer timeout, or drop it?', atMs: m(8) },
 ]
+
+const SESSIONS: Record<string, PanelTask['sessions']> = {
+  'T-45': [
+    { label: 'Try 2', agent: 'cursor-2-b', running: true },
+    { label: 'Try 1', agent: 'cursor-0-y', running: false },
+  ],
+  'T-40': [
+    { label: 'Try 2', agent: 'cursor-3-c', running: false },
+    { label: 'Try 1', agent: 'cursor-0-z', running: false },
+  ],
+  'T-39': [{ label: 'Try 1', agent: 'cursor-4-d', running: false }],
+}
+
+const step = (min: number, kind: PanelStep['kind'], text: string, more: Partial<PanelStep> = {}): PanelStep => ({ atMs: m(min), kind, text, ...more })
+const tool = (min: number, name: string, text: string, status: PanelStep['status'] = 'completed') => step(min, 'tool', text, { tool: name, status, callId: `${name}-${min}` })
+const steps: Record<string, PanelStep[]> = {
+  'cursor-1-a': [step(4.2, 'status', 'running'), step(4.1, 'thinking', 'The invoice model has issued_at as a Date; the CSV needs one format. I should ask the owner which one.'), tool(4, 'read', 'src/invoices/model.ts'), tool(3.9, 'grep', 'issued_at'), step(3.8, 'text', 'Asked the owner which date format the CSV uses.'), tool(3.7, 'symcc_ask', 'Which date format should the invoice CSV use for issued_at?')],
+  'cursor-2-b': [
+    step(1.1, 'status', 'running'),
+    step(1.05, 'thinking', 'Try 1 retried at once and hammered the endpoint. Read the retry loop first, then add exponential backoff with jitter.'),
+    tool(1, 'read', 'src/webhooks/deliver.ts'),
+    tool(0.9, 'grep', 'retryDelay'),
+    tool(0.7, 'edit', 'src/webhooks/deliver.ts'),
+    step(0.5, 'text', 'Backoff is in: 1s, 2s, 4s up to 5 tries, with up to 20% jitter. Running the webhook tests now.'),
+    tool(0.2, 'shell', 'npm test -- test/webhooks', 'running'),
+  ],
+  'cursor-3-c': [step(20, 'status', 'running'), tool(19, 'shell', 'npm install undici@7'), tool(18, 'shell', 'npm test', 'error'), step(17.5, 'text', 'Two proxy tests time out after 5000 ms on undici 7; I could not make them pass.'), step(17.4, 'status', 'finished')],
+  lead: [step(32, 'status', 'running'), tool(31.8, 'symcc_add_task', 'CSV export for invoices'), tool(31.7, 'symcc_add_task', 'Rate-limit login attempts'), step(31.6, 'status', 'finished')],
+}
+const models: ModelInfo[] = [
+  { id: 'default', label: 'Auto', options: [], variants: [{ params: {}, isDefault: true }] },
+  { id: 'composer-2.5', label: 'Composer 2.5', options: [{ id: 'fast', label: 'Fast', values: [{ value: 'false', label: 'Off' }, { value: 'true', label: 'Fast' }] }], variants: [{ params: { fast: 'true' }, isDefault: true }, { params: { fast: 'false' } }] },
+  {
+    id: 'claude-opus-5-5',
+    label: 'Claude Opus 5.5',
+    options: [
+      { id: 'context', label: 'Context', values: [{ value: '300k', label: '300K' }, { value: '1m', label: '1M' }] },
+      { id: 'effort', label: 'Effort', values: ['low', 'medium', 'high', 'xhigh', 'max'].map(v => ({ value: v, label: v === 'xhigh' ? 'Extra High' : v[0]!.toUpperCase() + v.slice(1) })) },
+    ],
+    variants: ['300k', '1m'].flatMap(c => ['low', 'medium', 'high', 'xhigh', 'max'].map(e => ({ params: { context: c, effort: e }, ...(c === '1m' ? { maxMode: true } : {}), ...(c === '300k' && e === 'high' ? { isDefault: true } : {}) }))),
+  },
+  { id: 'gpt-5.6-sol', label: 'GPT-5.6 Sol', options: [{ id: 'reasoning', label: 'Reasoning', values: ['low', 'medium', 'high'].map(v => ({ value: v, label: v[0]!.toUpperCase() + v.slice(1) })) }], variants: ['low', 'medium', 'high'].map(v => ({ params: { reasoning: v }, ...(v === 'medium' ? { isDefault: true } : {}) })) },
+  { id: 'gemini-4-neon', label: 'Gemini 4 Neon', options: [], variants: [{ params: {}, isDefault: true }] },
+  { id: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5', options: [], variants: [{ params: {}, isDefault: true }] },
+]
+const slash: SlashItem[] = [
+  { name: 'symcc', description: 'Open the symcc board panel: tasks and scouts', kind: 'symcc' },
+  { name: 'symcc-tasks', description: 'List the open symcc tasks in the chat, grouped as on the board', kind: 'symcc' },
+  { name: 'symcc-status', description: 'Show the symcc Live tab as text in the chat', kind: 'symcc' },
+  { name: 'symcc-approve', description: 'Approve a symcc task that is ready for review (merge it)', kind: 'symcc', hint: '<T-id>' },
+  { name: 'symcc-stats', description: 'Show symcc time and token stats: the whole team, totals, averages per task and per try', kind: 'symcc', hint: '[full|html] [7d]' },
+  { name: 'tdd', description: 'Test-driven development. Use when the user wants to build features or fix bugs test-first', kind: 'skill', scope: 'user' },
+  { name: 'grill-me', description: 'A relentless interview to sharpen a plan or design.', kind: 'skill', scope: 'user' },
+  { name: 'release-notes', description: 'Write the release notes for the next tag from the merged tasks', kind: 'skill', scope: 'project' },
+]
+let lead: LeadSettings = { mode: 'agent', model: { id: 'claude-opus-5-5', params: [{ id: 'context', value: '300k' }, { id: 'effort', value: 'high' }] }, modelLabel: 'Claude Opus 5.5' }
+
+const leadTurn = (): PanelStep[] => {
+  const t = Date.now()
+  return [
+    { atMs: t - 9000, kind: 'status', text: 'running' },
+    { atMs: t - 8000, kind: 'thinking', text: 'The owner wants a status page. Check what the board has on monitoring first.' },
+    { atMs: t - 6000, kind: 'tool', tool: 'symcc_board', callId: 'b1', status: 'completed', text: 'list' },
+    { atMs: t - 4000, kind: 'tool', tool: 'read', callId: 'r1', status: 'completed', text: 'src/health/index.ts' },
+    { atMs: t - 2000, kind: 'tool', tool: 'shell', callId: 's1', status: 'running', text: 'rg -n "uptime" src' },
+  ]
+}
 
 function view(): PanelView {
   const off = (window as unknown as { __off?: boolean }).__off
@@ -73,26 +197,31 @@ function view(): PanelView {
     lanes,
     next,
     tasks: [
-      ...needs.filter(n => n.id.startsWith('T-')).map(n => task(n.id, n.id === 'T-44' ? 'CSV export for invoices' : n.title, n.kind === 'failed' ? 'failed' : n.kind === 'review' ? 'review' : 'waiting', n.kind === 'failed' ? 'failed' : n.kind === 'review' ? 'ready for review' : 'waits for you', { needsYou: true, actions: n.actions })),
+      ...needs.filter(n => n.id.startsWith('T-')).map(n => task(n.id, n.id === 'T-44' ? 'CSV export for invoices' : n.title, n.kind === 'failed' ? 'failed' : n.kind === 'review' ? 'review' : 'waiting', n.kind === 'failed' ? 'failed' : n.kind === 'review' ? 'ready for review' : 'waits for you', { needsYou: true, actions: n.actions, sessions: SESSIONS[n.id] ?? [] })),
+      task('T-42', 'CSV export for invoices', 'doing', 'running'),
       task('T-43', 'Fix the flaky date test', 'doing', 'running', { kind: 'bug', details: 'The date test fails around midnight UTC because it builds “today” from the local clock.' }),
-      task('T-45', 'Webhook retry backoff', 'doing', 'running', { actions: [{ id: 'pause', label: 'Pause', primary: true }, { id: 'drop', label: 'Drop', ask: 'Why (optional)' }] }),
+      task('T-45', 'Webhook retry backoff', 'doing', 'running', { attempts: 2, sessions: SESSIONS['T-45']!, actions: [{ id: 'pause', label: 'Pause', primary: true }, { id: 'drop', label: 'Drop', ask: 'Why (optional)' }] }),
       ...next,
       task('T-38', 'Dark mode toggle', 'done', 'done'),
       task('T-50', 'Try a faster CSV writer', 'backlog', 'backlog', { kind: 'investigation' }),
+      task('T-52', 'Export invoices as PDF too', 'backlog', 'backlog'),
+      task('T-53', 'Remember the last CSV filter per user', 'backlog', 'backlog'),
+      task('T-31', 'Sketch CSV ideas', 'done', 'done'),
     ],
     news,
     scouts: [
       { name: 'test-gaps', summary: 'Looks for modules with no tests and suggests the ones worth covering.', every: 'every day', running: false, paused: false, lastRunMs: m(190), nextRunMs: now + 21 * 3_600_000 },
       { name: 'secrets', summary: 'Looks for keys and tokens committed by mistake.', every: 'every 2 days', running: true, paused: false, lastRunMs: m(2900) },
     ],
-    counts: { needs: needs.length, running: 3, next: next.length, doneToday: 6, backlog: 1 },
+    counts: { needs: needs.length, running: 3, next: next.length, doneToday: 6, backlog: 3 },
+    dir: '.symcc',
     nowMs: Date.now(),
   }
 }
 
 const send = (msg: ToWebview) => window.dispatchEvent(new MessageEvent('message', { data: msg }))
 const later = (ms: number, fn: () => void) => setTimeout(fn, ms)
-let busy = false
+let busy = state === 'busy'
 let mode: PanelView['mode'] = 'review'
 const net = new URLSearchParams(location.search).get('state') === 'net'
 
@@ -102,19 +231,42 @@ window.acquireVsCodeApi = () => ({
       send({ type: 'engine', engine: { state: 'ready' } })
       send({ type: 'chat', items: chat, busy })
       send({ type: 'view', view: view() })
+      send({ type: 'steps', all: busy ? { ...steps, lead: [...steps.lead!, ...leadTurn()] } : steps })
+      send({ type: 'lead', settings: lead })
+      send({ type: 'models', models })
+      send({ type: 'slash', items: slash })
       if (net) send({ type: 'network', problem: { text: 'the lead could not run: Network request failed', proxy: '' } })
       return
     }
-    if (msg.type === 'restart' || msg.type === 'log') return
+    if (msg.type === 'restart' || msg.type === 'log' || msg.type === 'session' || msg.type === 'open-file') return
+    if (msg.type === 'lead-set') return void ((lead = msg.settings), send({ type: 'lead', settings: lead }))
+    if (msg.type === 'lead-stop') {
+      if (!busy) return
+      busy = false
+      chat = [...chat, { key: `s${Date.now()}`, who: 'note', text: 'You stopped the lead.', atMs: Date.now() }]
+      return send({ type: 'chat', items: chat, busy })
+    }
     const reply = (text: string) => later(450, () => send({ type: 'reply', id: msg.id, ok: true, text }))
+    if (msg.type === 'summarize') {
+      reply('')
+      return later(900, () => ((chat = [...chat, { key: `z${Date.now()}`, who: 'note', text: 'The lead summarized the chat so far to free its memory.', atMs: Date.now() }]), send({ type: 'chat', items: chat, busy })))
+    }
     if (msg.type === 'send') {
-      chat = [...chat, { key: `o${Date.now()}`, who: 'owner', text: msg.text, atMs: Date.now() }]
+      chat = [...chat, { key: `o${Date.now()}`, who: 'owner', text: msg.text, atMs: Date.now(), ...(msg.images?.length ? { images: msg.images.map(i => `data:${i.mimeType};base64,${i.data}`) } : {}) }]
+      if (msg.text.startsWith('/symcc')) {
+        chat = [...chat, { key: `n${Date.now()}`, who: 'note', text: `${msg.text.split(' ')[0]}: the board has 4 tasks open.`, atMs: Date.now() }]
+        send({ type: 'chat', items: chat, busy })
+        return reply('')
+      }
       busy = true
       send({ type: 'chat', items: chat, busy })
       reply('sent')
-      later(1800, () => {
+      const turn = leadTurn()
+      turn.forEach((s, i) => later(300 + i * 500, () => send({ type: 'step', agent: 'lead', step: { ...s, atMs: Date.now() } })))
+      later(3400, () => {
+        if (!busy) return
         busy = false
-        chat = [...chat, { key: `l${Date.now()}`, who: 'lead', text: 'Got it. I added it to the board as **T-51**; it starts once a worker is free.', atMs: Date.now() }]
+        chat = [...chat, { key: `l${Date.now()}`, who: 'lead', text: 'Got it. I added it to the board as **T-51**; it starts once a worker is free.', atMs: Date.now(), steps: turn.filter(x => x.kind !== 'status').map(x => ({ ...x, status: x.status === 'running' ? 'completed' : x.status })), ...(lead.modelLabel ? { model: lead.modelLabel } : {}) }]
         send({ type: 'chat', items: chat, busy })
       })
       return

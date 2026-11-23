@@ -2,7 +2,7 @@
 // Node (ELECTRON_RUN_AS_NODE) unless a Node is set, spoken to in JSON lines. A crash restarts it, a few times at most.
 import { spawn, type ChildProcess } from 'node:child_process'
 import { createInterface } from 'node:readline'
-import type { EngineState, PanelLeadEvent, PanelView } from '../../protocol'
+import type { EngineState, PanelLeadEvent, PanelStep, PanelView } from '../../protocol'
 
 export type EngineEvents = {
   state: (s: EngineState) => void
@@ -10,6 +10,7 @@ export type EngineEvents = {
   lead: (e: PanelLeadEvent) => void
   toast: (text: string) => void
   open: () => void
+  step: (agent: string, step: PanelStep) => void
   log: (line: string) => void
 }
 
@@ -79,6 +80,7 @@ export class Engine {
       if (m.event === 'lead') return this.on.lead(m as unknown as PanelLeadEvent)
       if (m.event === 'toast' && typeof m.text === 'string') return this.on.toast(m.text)
       if (m.event === 'open') return this.on.open()
+      if (m.event === 'step' && typeof m.agent === 'string' && m.step) return this.on.step(m.agent, m.step as PanelStep)
       return
     }
     const p = typeof m.id === 'number' ? this.pending.get(m.id) : undefined

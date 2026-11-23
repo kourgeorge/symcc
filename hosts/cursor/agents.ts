@@ -11,7 +11,7 @@ import { TOOLS } from '../../hooks/app/tools'
 import { SCOUT_BOARD_TOOLS, SCOUT_LIST_TOOL } from '../../hooks/core/scouts'
 import { cleanTokens } from '../../hooks/core/runs'
 import { S } from '../../hooks/app/state'
-import type { Sdk, SdkAgent, SdkRun, SdkRunResult, SdkTool } from './sdk'
+import type { Sdk, SdkAgent, SdkRun, SdkRunResult, SdkStep, SdkTool } from './sdk'
 
 /** A tool's definition as symcc lists it (TOOLS, ASK_TOOL_DEF). */
 export type ToolDef = { name: string; description: string; inputSchema: unknown }
@@ -58,6 +58,8 @@ export type SdkAgentsOptions = {
   onEnd: (agentId: string, end: AgentRunEnd) => void
   /** agent `agentId` called symcc's tool `tool`; answers the text it gets back */
   onTool: (agentId: string, tool: string, input: Record<string, unknown>) => Promise<string>
+  /** each step of agent `agentId`'s turns as it happens */
+  onStep?: (agentId: string, s: SdkStep) => void
   /** a line for the debug log */
   log?: (line: string) => void
 }
@@ -91,7 +93,7 @@ export function sdkAgents(o: SdkAgentsOptions): SdkAgents {
     e.ended = new Promise<void>(r => (done = r))
     let end: AgentRunEnd
     try {
-      e.run = await e.sdk!.send(text, mode ? { mode } : undefined)
+      e.run = await e.sdk!.send(text, { ...(mode ? { mode } : {}), ...(o.onStep ? { onStep: (s: SdkStep) => o.onStep!(id, s) } : {}) })
       if (e.killed) await e.run.cancel().catch(() => undefined)
       end = runEnd(await e.run.wait(), e.killed)
     } catch (err) {

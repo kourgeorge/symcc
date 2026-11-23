@@ -6,7 +6,7 @@ import type { PaneView } from '../../hooks/app/state'
 import { type BoardTask, type DiffFile, type TaskAction, isAnswered, kindOf, isFinished, needsYou, newestFirst, taskAsks, taskActions, whyFailed, liveLanes, liveFinishedLanes, onDemand, everyText, shownStatus, roleOf, HISTORY_KINDS, isHistoryKind, MODE_NAME, MODE_MEANING } from '../../hooks/board'
 import { isOpenQuestion } from '../../hooks/core/questions'
 import { viewMarks } from '../../hooks/core/board-parts'
-import type { PanelAction, PanelActionId, PanelLane, PanelNeed, PanelNews, PanelScout, PanelTask, PanelView } from './protocol'
+import type { PanelAction, PanelActionId, PanelLane, PanelNeed, PanelNews, PanelScout, PanelSession, PanelTask, PanelView } from './protocol'
 
 const ms = (iso: unknown): number | undefined => {
   const n = typeof iso === 'string' ? Date.parse(iso) : NaN
@@ -72,6 +72,16 @@ function taskNeed(t: BoardTask, v: PaneView, changes: Record<string, DiffFile[]>
   }
 }
 
+/** The agents that worked on task `t`, newest first: "Try 5", and "Try 4 (2)" for a try's second agent (a restart). */
+export function taskSessions(t: BoardTask): PanelSession[] {
+  const out: PanelSession[] = []
+  ;(t.runs ?? []).forEach((r, i) => {
+    const agents = (r.agents ?? []).filter((a): a is typeof a & { id: string } => typeof a.id === 'string' && !!a.id)
+    agents.forEach((a, j) => out.push({ label: `Try ${i + 1}${agents.length > 1 ? ` (${j + 1})` : ''}${a.kind && a.kind !== 'worker' ? ` ${a.kind}` : ''}`, agent: a.id, running: !r.ended && !a.ended }))
+  })
+  return out.reverse()
+}
+
 function panelTask(t: BoardTask, nowMs: number): PanelTask {
   return {
     id: t.id,
@@ -86,6 +96,7 @@ function panelTask(t: BoardTask, nowMs: number): PanelTask {
     ...(t.details?.trim() ? { details: t.details.trim() } : {}),
     needsYou: needsYou(t, nowMs),
     actions: actionsOf(t),
+    sessions: taskSessions(t),
   }
 }
 
@@ -105,13 +116,16 @@ function newsOf(tasks: readonly BoardTask[], nowMs: number): PanelNews[] {
       const at = ms(h.at)
       if (at === undefined || at < from || !NEWS_KINDS.has(h.kind)) return
       const tone = isHistoryKind(h.kind) ? HISTORY_KINDS[h.kind] : 'other'
-      out.push({ key: `${t.id}:${i}:${h.kind}`, task: t.id, title: t.title, tone: tone === 'good' ? 'good' : tone === 'bad' ? 'bad' : 'other', kind: h.kind, text: h.text, atMs: at })
+      // a long command in it (the test command that failed) is the board's own setting, not news
+      const why = typeof (h as { result?: unknown }).result === 'string' ? (h as { result: string }).result.replace(/`[^`]{60,}`/g, '`…`') : undefined
+      out.push({ key: `${t.id}:${i}:${h.kind}`, task: t.id, title: t.title, tone: tone === 'good' ? 'good' : tone === 'bad' ? 'bad' : 'other', kind: h.kind, text: h.text, atMs: at, ...(why ? { why } : {}) })
     })
   }
   return out.sort((a, b) => a.atMs - b.atMs).slice(-NEWS_MAX)
 }
 
-function panelLane(l: ReturnType<typeof liveLanes>[number]): PanelLane {
+function panelLane(l: ReturnType<typeof liveLanes>[number], t: BoardTask | undefined): PanelLane {
+  const now = t ? taskSessions(t).find(x => x.running) : undefined
   return {
     id: l.id,
     title: l.title,
@@ -124,6 +138,7 @@ function panelLane(l: ReturnType<typeof liveLanes>[number]): PanelLane {
     tries: l.tries,
     ...(l.tokens ? { tokens: l.tokens } : {}),
     agent: l.agent,
+    ...(now ? { agentId: now.agent } : {}),
     ...(l.done ? { doneMs: l.done.atMs } : {}),
   }
 }
@@ -138,7 +153,7 @@ const startOfDay = (nowMs: number) => {
  * The panel's view of published view `v` at `nowMs`. `changes` holds the changed files of each task in review (read
  * with git by the caller, see session.ts); `project` is the project folder's name.
  */
-export function panelView(v: PaneView, o: { project: string; nowMs: number; changes?: Record<string, DiffFile[]> }): PanelView {
+export function panelView(v: PaneView, o: { project: string; dir: string; nowMs: number; changes?: Record<string, DiffFile[]> }): PanelView {
   const nowMs = o.nowMs
   const tasks = (v.tasks ?? []) as BoardTask[]
   const questions = (v.questions ?? []).filter(q => isOpenQuestion(q))
@@ -147,7 +162,8 @@ export function panelView(v: PaneView, o: { project: string; nowMs: number; chan
     ...tasks.filter(t => needsYou(t, nowMs)).sort(newestFirst as (a: SymccTask, b: SymccTask) => number).map(t => taskNeed(t, v, o.changes ?? {})),
   ]
   const view = { tasks, checker: v.checker, auto_retries: v.auto_retries, max_parallel: v.max_parallel, mode: v.mode, ...(v.archived_done ? { archived_done: v.archived_done } : {}) }
-  const lanes = [...liveLanes(view, nowMs), ...liveFinishedLanes(view, nowMs)].map(panelLane)
+  const byId = new Map(tasks.map(t => [t.id, t]))
+  const lanes = [...liveLanes(view, nowMs), ...liveFinishedLanes(view, nowMs)].map(l => panelLane(l, byId.get(l.id)))
   const open = tasks.filter(t => !isFinished(t) || (ms(t.updated_at) ?? 0) >= startOfDay(nowMs))
   const next = tasks.filter(t => t.status === 'todo').sort((a, b) => a.order - b.order)
   const scouts = (v.scouts ?? []).map(
@@ -186,6 +202,7 @@ export function panelView(v: PaneView, o: { project: string; nowMs: number; chan
       backlog: tasks.filter(t => t.status === 'backlog').length,
     },
     ...(v.branch_note ? { note: v.branch_note } : {}),
+    dir: o.dir,
     nowMs,
   }
 }

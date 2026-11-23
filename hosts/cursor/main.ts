@@ -9,12 +9,20 @@
 // Answers:  {"id":1,"ok":true,"text":"..."}  or  {"id":1,"ok":false,"error":"..."} (op view: "view" instead of "text")
 // Events:   {"event":"ready"}  {"event":"lead",...LeadEvent}  {"event":"toast","text":"..."}  {"event":"status","text":"..."}
 //           {"event":"view","view":PanelView}  {"event":"open"} (show the board panel)
+//           {"event":"step","agent":"cursor-1-...","step":PanelStep} (a step of an agent's turn; the lead's agent is "lead")
+//           and {"op":"steps"} answers {"steps":{agent: PanelStep[]}}, the newest steps of each agent
+// The lead chat's: {"op":"message","text":"...","images":[{"data":"<base64>","mimeType":"image/png"}]} answers
+//           {"said":"..."} when a /command answered the owner itself (nothing went to the lead), else {"said":null};
+//           {"op":"slash"} answers {"slash":SlashItem[]}; {"op":"models"} answers {"models":ModelInfo[]};
+//           {"op":"lead-set","model":{"id":...,"params":[...]}|null,"mode":"agent"|"plan"} answers {"lead":LeadChoice};
+//           {"op":"lead-stop"} ends the lead's running turn; {"op":"summarize"} condenses the lead's chat
 // In a terminal (stdin is a TTY) it is a small chat instead: a line goes to the lead, "/tool <name> [json]" runs one of
 // the lead's tools, "/<command> [args]" a slash command (e.g. /symcc-init), and "/quit" ends.
 import { createInterface } from 'node:readline'
 import { openCursorSession, type CursorSession } from './session'
 import { cursorSdk } from './sdk'
-import type { LeadEvent } from './lead'
+import type { LeadChoice, LeadEvent } from './lead'
+import type { SdkImage, SdkModel } from './sdk'
 import type { PanelActionId, PanelMode } from './protocol'
 
 /** The symcc folder this file ships in: hosts/cursor/main.ts, or its bundle in hosts/cursor/dist/. */
@@ -34,7 +42,7 @@ export function parseOptions(argv: readonly string[]): Record<string, string> {
   return opts
 }
 
-type Request = { id?: unknown; op?: unknown; name?: unknown; input?: unknown; args?: unknown; text?: unknown; task?: unknown; action?: unknown; need?: unknown; mode?: unknown }
+type Request = { id?: unknown; op?: unknown; name?: unknown; input?: unknown; args?: unknown; text?: unknown; task?: unknown; action?: unknown; need?: unknown; mode?: unknown; model?: unknown; images?: unknown }
 
 const PANEL_ACTIONS: readonly PanelActionId[] = ['approve', 'reject', 'done', 'keep-note', 'ask-more', 'retry', 'drop', 'pause', 'resume', 'show-changes', 'to-todo', 'merge-now']
 const MODES: readonly PanelMode[] = ['paused', 'review', 'auto']
@@ -66,10 +74,11 @@ async function handle(s: CursorSession, r: Request, stop: () => void): Promise<s
     case 'command':
       if (typeof r.name !== 'string') throw new Error('command needs a name')
       return s.command(r.name, typeof r.args === 'string' ? r.args : '')
-    case 'message':
-      if (typeof r.text !== 'string' || !r.text.trim()) throw new Error('message needs text')
-      await s.message(r.text)
-      return 'sent'
+    case 'lead-stop':
+      await s.lead.stop()
+      return 'stopped'
+    case 'summarize':
+      return (await s.lead.summarize()) ?? 'summarizing'
     case 'stop':
       stop()
       return 'stopping'
@@ -78,10 +87,28 @@ async function handle(s: CursorSession, r: Request, stop: () => void): Promise<s
   }
 }
 
+/** The pictures of a message request (base64 data with its type); anything else in the list is left out. */
+const imagesOf = (v: unknown): SdkImage[] =>
+  Array.isArray(v) ? v.filter((i): i is SdkImage => !!i && typeof i.data === 'string' && typeof i.mimeType === 'string' && i.mimeType.startsWith('image/')) : []
+
+/** The lead's model and mode in a lead-set request: a model is an id with its options; null goes back to the chat's own. */
+function choiceOf(r: Request): Partial<LeadChoice> {
+  const c: Partial<LeadChoice> = {}
+  if (r.mode === 'agent' || r.mode === 'plan') c.mode = r.mode
+  if (r.model === null) c.model = undefined
+  else if (r.model && typeof r.model === 'object' && typeof (r.model as SdkModel).id === 'string') {
+    const m = r.model as SdkModel
+    c.model = { id: m.id, ...(Array.isArray(m.params) ? { params: m.params.filter(p => typeof p?.id === 'string' && typeof p?.value === 'string') } : {}), ...(m.maxMode ? { maxMode: true } : {}) }
+  }
+  return c
+}
+
 /** A lead event as a terminal line. */
 function leadLine(e: LeadEvent): string | undefined {
   if (e.type === 'answer') return `\nlead> ${e.text}\n`
   if (e.type === 'error') return `\n[lead error] ${e.text}\n`
+  if (e.type === 'stopped') return '\n[lead stopped]\n'
+  if (e.type === 'summarized') return `\n[lead summarized] ${e.text}\n`
   if (e.type === 'message' && e.from === 'symcc') return `\n[symcc -> lead] ${e.text.length > 400 ? `${e.text.slice(0, 400)}...` : e.text}`
   return undefined
 }
@@ -104,6 +131,7 @@ async function main() {
     onStatus: text => (tty ? text && say(`[status] ${text}`) : out({ event: 'status', text: text ?? null })),
     onView: view => (tty ? undefined : out({ event: 'view', view })),
     onOpen: () => (tty ? undefined : out({ event: 'open' })),
+    onStep: (agent, step) => (tty ? undefined : out({ event: 'step', agent, step })),
     ...(debug ? { log: debug } : {}),
   })
   let stopping: Promise<void> | undefined
@@ -128,6 +156,15 @@ async function main() {
         return out({ ok: false, error: 'not JSON' })
       }
       if (r.op === 'view') return out({ id: r.id ?? null, ok: true, view: s.view() })
+      if (r.op === 'steps') return out({ id: r.id ?? null, ok: true, steps: s.steps() })
+      const answer = (p: Promise<Record<string, unknown>>) => void p.then(a => out({ id: r.id ?? null, ok: true, ...a })).catch(err => out({ id: r.id ?? null, ok: false, error: (err as Error).message }))
+      if (r.op === 'message') {
+        if (typeof r.text !== 'string' || !r.text.trim()) return out({ id: r.id ?? null, ok: false, error: 'message needs text' })
+        return answer(s.message(r.text, imagesOf(r.images)).then(m => ({ text: m.said ?? 'sent', said: m.said ?? null })))
+      }
+      if (r.op === 'slash') return answer(s.slash().then(slash => ({ slash })))
+      if (r.op === 'models') return answer(s.models().then(models => ({ models })))
+      if (r.op === 'lead-set') return answer(Promise.resolve({ lead: s.lead.configure(choiceOf(r)) }))
       handle(s, r, () => stop())
         .then(text => out({ id: r.id ?? null, ok: true, text }))
         .catch(err => out({ id: r.id ?? null, ok: false, error: (err as Error).message }))
@@ -144,8 +181,7 @@ async function main() {
       if (tool) return s.tool(tool[1]!, tool[2] ? (JSON.parse(tool[2]) as Record<string, unknown>) : {})
       const cmd = /^\/(\S+)\s*(.*)$/.exec(t)
       if (cmd) return s.command(cmd[1]!, cmd[2] ?? '')
-      await s.message(t)
-      return undefined
+      return (await s.message(t)).said
     }
     run()
       .then(text => text && say(text))
