@@ -167,6 +167,8 @@ function envGet($: EngineInterface, name: string): Promise<string | undefined> {
   if (name === 'CLAUDE_CONFIG_DIR') return $.env.get('CLAUDE_CONFIG_DIR')
   // T-922: DAM_ENV (core/dam.ts), set when the session runs under DAM
   if (name === 'PLATFORM_HARNESS') return $.env.get('PLATFORM_HARNESS')
+  // T-929: DAM_EXE_ENV (core/dam.ts), DAM's chat program in a DAM Slack session
+  if (name === 'CLAUDE_CODE_EXECUTABLE') return $.env.get('CLAUDE_CODE_EXECUTABLE')
   // app/ask.ts: the temp folder (macOS /var/folders/...) where scratch git is allowed
   if (name === 'TMPDIR') return $.env.get('TMPDIR')
   // app/tools.ts: tells Windows apart when uname says nothing

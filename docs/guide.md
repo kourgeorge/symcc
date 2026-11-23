@@ -2504,8 +2504,11 @@ test, a trap, where something is).
 
 ### Using symcc from Slack through DAM
 
-DAM runs a Claude Code session from a Slack thread (one thread is one session). symcc
-knows it runs there when DAM sets `PLATFORM_HARNESS=claude-code`.
+DAM runs a Claude Code session from a Slack thread (one thread is one session). DAM sets
+`PLATFORM_HARNESS=claude-code` everywhere in its image, terminal windows too, so that alone
+is not enough: symcc treats a session as a Slack session only when it also runs through
+DAM's chat program (`CLAUDE_CODE_EXECUTABLE` ends in `harness-claude`), or once a Slack
+message from you has arrived in it. A DAM terminal window gets plain board updates.
 
 What works:
 
