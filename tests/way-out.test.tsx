@@ -86,8 +86,11 @@ test('the reject reason box: Enter on empty cancels it (nothing is sent), and so
   // T-899: while the box is open over the changes, their buttons have no keys either
   expect((await ui.find({ key: 'diff-back' }))?.props.hotkey).toBeUndefined()
   expect((await ui.find({ key: 'approve' }))?.props.hotkey).toBeUndefined()
+  // and the footer names only the box's way out, not the a / x / b keys that don't work now
+  expect((await ui.find({ key: 'diff-keys-footer' }))?.text).toMatch(/[─-]+ *Enter sends to todo · Enter on empty cancels$/)
   await ui.input({ key: 'reject-reason', text: '' })
   expect(await ui.find({ key: 'reject-reason' })).toBeUndefined()
+  expect((await ui.find({ key: 'diff-keys-footer' }))?.text).toContain('a approve')
   expect((await ui.find({ key: 'diff-back' }))?.props.hotkey).toBe('b')
   expect((await ui.find({ key: 'approve' }))?.props.hotkey).toBe('a')
   await ui.press({ key: 'diff-back' })

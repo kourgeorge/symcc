@@ -735,10 +735,11 @@ The life of an investigation:
    mode `auto`**: an answer is for you, so it never ends on its own. The lead tells you the
    answer in the chat, short and plain, and offers the three choices.
 4. You pick one of three buttons (on the task page, or tell the lead):
-   - **Done** (`a`, "T-5 is done", tool `symcc approve`): the task ends `done` with the note
+   - **Done** ("T-5 is done", tool `symcc approve`; on the Claude Code board a button with
+     no letter key, so a word typed while a box is open can't press it; `a` in OpenCode): the task ends `done` with the note
      "answered". Nothing is merged; its folder is removed, and its branch too, unless it
      has commits from earlier tries: then the branch is kept (the reply says so).
-   - **Keep as a note** (`v`, tool `symcc approve` with `keep_note: true`): Done, plus a
+   - **Keep as a note** (a button with no key on the Claude Code board, `v` in OpenCode; tool `symcc approve` with `keep_note: true`): Done, plus a
      new small docs task that writes the answer to `docs/research/<topic>.md`. That task is
      a normal change: tested and merged as usual.
    - **Ask more** (`x`, tool `symcc reject` with your follow-up question): the task goes
@@ -811,7 +812,10 @@ are about changes; under "How tasks ended" a read investigation shows as
   - a text box (the search, "Your answer", the reject reason, a new scout's name, a
     setting's value): **Enter on the empty box** cancels it (the search: clears it). The
     reject reason, "Your answer" (opened with Answer…), the new scout's name and a
-    setting's box also have a **Cancel** button under them (↓ to it, or its letter);
+    setting's box also have a **Cancel** button under them (↓ to it, or its letter; the
+    reject / Ask more box's Cancel has no letter, and while that box is open no letter
+    key presses anything on the page: what you type goes only into the box, and the
+    footer says just `Enter sends to todo · Enter on empty cancels`);
   - a pick list (a task's role, a setting's choices): its **Cancel** button, `c` for the
     role list, `x` in Settings;
   - a scout's edit page: its **Cancel** button (`x`);

@@ -63,6 +63,8 @@ for (const surface of ['terminal', 'vscode'] as const)
     expect((await ui.find({ key: 'reject-reason' }))?.props.label).toBe('Your follow-up question')
     // while the box is open, no Button on the page has a key: every typed letter belongs to the box
     expect(await hotkeys(ui)).toEqual([])
+    // and the footer names only the box's way out, no page key that no longer works
+    if (surface === 'terminal') expect((await ui.find({ key: 'task-keys-footer' }))?.text).toMatch(/[─-]+ *Enter sends to todo · Enter on empty cancels$/)
     const words = 'a test question with a'
     await ui.input({ key: 'reject-reason', text: words, kind: 'change' })
     expect(await ui.find({ key: 'reject-reason' })).toBeDefined()

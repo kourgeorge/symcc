@@ -1,6 +1,6 @@
 // The board panel's page for one task: details, actions, and for a task in review its changes.
 import type { SymccTask } from '../../../types'
-import { cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, roleOf, findRole, type DiffFile, type Seg, detailRows, taskKeys, YOUR_EDITS, intoOf, taskReports, type BoardTask, boxHint, pickHint, taskCopyText, copyToast, fileWaitText, isAnswered, showsAnswer, answerText, whyFailed, taskActions, taskAsks, canPickRole as canPickRoleOf, canMarkMerged as canMarkMergedOf, type TaskActionId, type TaskAction, failNext, failAsks, answeredLeadLine, sessionNote } from '../../board'
+import { cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, roleOf, findRole, type DiffFile, type Seg, detailRows, taskKeys, YOUR_EDITS, intoOf, taskReports, type BoardTask, boxHint, pickHint, taskCopyText, copyToast, fileWaitText, isAnswered, showsAnswer, answerText, whyFailed, taskActions, taskAsks, canPickRole as canPickRoleOf, canMarkMerged as canMarkMergedOf, type TaskActionId, type TaskAction, type KeyHint, failNext, failAsks, answeredLeadLine, sessionNote } from '../../board'
 import { folderDiff, changedFiles } from '../../app/review'
 import { loadRoles } from '../../app/roles'
 import { loadKinds } from '../../app/kinds'
@@ -101,6 +101,8 @@ export async function taskPage($: $, pane: PaneParts, viewTask: SymccTask) {
   // T-899: while the Ask more / Reject box is open, no letter or digit key on the page presses anything: every key
   // belongs to the box (the box may have lost the focus, e.g. to the lead's pop-up question)
   const boxOpen = inReview && !merging && S.rejecting?.task === t.id
+  // T-899: the page's other keys don't work while the box is open, so its footer names only the box's way out
+  const boxKeys: KeyHint[] = [{ key: 'Enter', word: 'sends to todo' }, { key: 'Enter on empty', word: 'cancels' }]
   // the diff view keeps its own row of review buttons (Approve, Reject; Back there goes back to the task)
   const reviewButtons = actions.filter(x => x.id === 'approve' || x.id === 'reject').map(x => <Button key={x.id} label={x.label} hotkey={boxOpen ? undefined : x.key} onPress={x.id === 'approve' ? approveIt : askReason} />)
   const submitReject = (value: string) =>
@@ -177,7 +179,7 @@ export async function taskPage($: $, pane: PaneParts, viewTask: SymccTask) {
             </Text>
           ))}
         </Box>
-        {footer(diffKeys(inReview && !merging, !!d.file), 'diff-keys')}
+        {footer(boxOpen ? boxKeys : diffKeys(inReview && !merging, !!d.file), 'diff-keys')}
       </Box>
     )
   }
@@ -464,7 +466,7 @@ export async function taskPage($: $, pane: PaneParts, viewTask: SymccTask) {
       {sectionEl('report')}
       {sectionEl('runs')}
 
-      {footer(taskKeys(actions, reports.map(r => r.try), choices.length > 0, place && place.of > 1 ? navHint('claude') : null), 'task-keys')}
+      {footer(boxOpen ? boxKeys : taskKeys(actions, reports.map(r => r.try), choices.length > 0, place && place.of > 1 ? navHint('claude') : null), 'task-keys')}
     </Box>
   )
 }
