@@ -44,6 +44,8 @@ import { setSymcc, setBoardMode } from './board-mode'
 import { cleanLeftoverTmp } from './cleanup'
 import { doctor } from './doctor'
 import { isStarter } from './starts'
+import { isDamSession } from './dam'
+import { DAM_POST_LINE, notDrivingText } from '../core/dam'
 import { logRefusal, type Who } from './evidence'
 
 /** What /symcc and /symcc-board answer after opening the board. No Esc hint: Esc doesn't reach the panel (T-158). */
@@ -140,6 +142,7 @@ export async function sessionStart(host: Host) {
     S.root = main || own
     S.home = (await host.env('HOME').catch(() => undefined)) ?? ''
     S.me = await host.session.id().catch(() => `session-${Math.random().toString(36).slice(2, 10)}`)
+    S.dam = await isDamSession(host)
     // T-795: a new project (no board.json) stays off, like plain Claude, until the owner runs /<name>-init (T-844: no .<name> in this folder or above): nothing is
     // written, no lead is claimed, no scouts are seeded and no timer starts; only the band and status line say so.
     S.fresh = !(await host.fs.exists(path(S.N.boardFile)).catch(() => false))
@@ -338,7 +341,10 @@ export async function leadGuideText(host: Host): Promise<string | undefined> {
   if (S.guardOnly) return undefined
   // Read on every call, so /<name>-disable and /<name>-enable count from the next message.
   if (!(await isOn(host))) return undefined
-  return leadGuide(host.features)
+  // T-922: a window that doesn't drive gets no board updates and starts no work; the lead says so plainly
+  const notDriving = S.driving ? '' : `\n\nThis window does not drive the board now. When the owner asks about board work here, tell them plainly: "${notDrivingText(S.N.name)}".`
+  const dam = S.dam ? `\n\n${DAM_POST_LINE}` : ''
+  return `${leadGuide(host.features)}${notDriving}${dam}`
 }
 
 /**

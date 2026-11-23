@@ -284,6 +284,13 @@ test("a prompt from the phone or web bridge counts as the owner's request too", 
   expect(await ownerAdd($, w, 'add dark mode')).toContain('“add dark mode”')
 })
 
+test("T-922: an sdk prompt (a Slack message through DAM) counts as the owner's request; symcc's own board update does not", async ($, on) => {
+  const w = world(on)
+  await say($, 'add a search box', { origin: { kind: 'sdk' } })
+  await say($, '[symcc] Board update:\n\nT-1 merged.', { origin: { kind: 'sdk' } })
+  expect(await ownerAdd($, w, 'add a search box')).toContain('“add a search box”')
+})
+
 test('with no owner prompt seen, an owner task says so', async ($, on) => {
   const w = world(on)
   expect(await ownerAdd($, w, 'fix the login bug')).toBe('no owner prompt was seen by the plugin in this session')

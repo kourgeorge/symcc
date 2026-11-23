@@ -2484,6 +2484,28 @@ test, a trap, where something is).
   retry it: it goes back to `todo`, with "brought back from dropped" in its history.
   `done` is final: a done task can't be retried or sent a question.
 
+### Using symcc from Slack through DAM
+
+DAM runs a Claude Code session from a Slack thread (one thread is one session). symcc
+knows it runs there when DAM sets `PLATFORM_HARNESS=claude-code`.
+
+What works:
+
+- **Board news reaches Slack.** DAM only sends to Slack what the lead posts with DAM's own
+  tools; a plain reply is dropped. So in a DAM session every board update (merges, failures,
+  and every "needs you": a worker's question, a review, more time, an answered
+  investigation) ends with a line telling the lead to post its short reply to the Slack
+  thread with DAM's reply tool (or DAM's post tool when there is no thread).
+- **The lead knows its job.** DAM may skip the hook that gives the lead its guide, so each
+  board update there also carries a short core of it: the reply shape and the main rules.
+- **Your Slack messages count as yours.** A task the lead adds after your Slack message
+  links back to your words, like a message typed at the terminal.
+- **A window that doesn't drive says so.** If another window drives the board, the lead
+  there tells you "this window doesn't drive the board; /symcc-drive makes it drive".
+
+What doesn't work yet: while DAM's session sleeps between messages, nothing runs on its
+own there: no scouts and no two-minute check. Work moves on when the next message wakes it.
+
 ---
 
 ## Renaming the plugin

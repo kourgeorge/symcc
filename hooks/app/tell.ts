@@ -1,4 +1,5 @@
 import { cutLine } from '../core/reports'
+import { DAM_POST_LINE, damGuideCore } from '../core/dam'
 import { S, leadQueue, meanwhile } from './state'
 import type { Host } from '../host'
 
@@ -84,8 +85,14 @@ export function takeBoardUpdate(): string | undefined {
   const ending = startOnly
     ? 'No reply needed; end the turn without a message.'
     : `Lead: decide what happens next on the board (use the ${S.N.name} tools), then tell the owner briefly.\nReply shape: one line per task ("✓ T-5  merged   what it means"); a routine update with no news is one short line at most.`
-  return `[${S.N.name}] Board update:\n\n${before ? `${before}\n\n` : ''}${body}\n\n${ending}`
+  return `[${S.N.name}] Board update:\n\n${before ? `${before}\n\n` : ''}${body}\n\n${ending}${startOnly ? '' : damEnding()}`
 }
+
+/**
+ * T-922: in a DAM session (run from Slack) a board update that wants a reply also carries the guide's core (prompt.compose
+ * may be skipped there) and ends with the line telling the lead to post its reply to Slack; '' in any other session.
+ */
+const damEnding = () => (S.dam ? `\n\n${damGuideCore(S.N.name)}\n\n${DAM_POST_LINE}` : '')
 
 /** An answer cut to one short line, for a "Meanwhile" line. */
 export const brief = (text: string) => cutLine(text, 200)

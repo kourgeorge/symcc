@@ -119,10 +119,12 @@ export const register: Register = on => {
   on('prompt.submit', async ($, e, next) => {
     useName(claudeHost($))
     const kind = e.origin?.kind
+    // T-922: an "sdk" prompt is the owner's too (a Slack message through DAM), unless it is symcc's own board update or an agent's message
+    const owners = kind === 'composer' || kind === 'bridge' || (kind === 'sdk' && !e.text.trimStart().startsWith(`[${S.N.name}] Board update`) && !/^\s*(Another Claude session sent a message:\s*)?<agent-message /.test(e.text))
     // T-837: the hidden starter's end ("OK") reaches the lead's chat as a message; dropped here so it wakes no turn
-    if (kind !== 'composer' && kind !== 'bridge' && !e.command && starterFrame(e.text)) return { drop: '▸ agent started' }
+    if (!owners && !e.command && starterFrame(e.text)) return { drop: '▸ agent started' }
     const r = await next(e)
-    if ((kind === 'composer' || kind === 'bridge') && !e.command && !e.isMeta && 'text' in r && typeof r.text === 'string') ownerTyped(r.text)
+    if (owners && !e.command && !e.isMeta && 'text' in r && typeof r.text === 'string') ownerTyped(r.text)
     return r
   }).catch(($, e, next) => passOn($, 'prompt.submit', e, next))
 
