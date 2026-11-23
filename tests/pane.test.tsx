@@ -268,7 +268,7 @@ test('T-643: the band of a session that does not drive has a yellow "driven by a
   expect(all.some(t => t.text === ' — starting at the next turn')).toBe(true)
 })
 
-test("T-748: a running row shows its stage's icon and name, the time in that stage and the try from try 2 on, lined up", async ($, on) => {
+test("T-748: a running row shows its stage's icon (no stage name, T-893), the time in that stage and the try from try 2 on, lined up", async ($, on) => {
   const T0 = Date.parse('2026-03-02T10:00:00Z')
   const clock = mock.clock(on, { now: T0 })
   const iso = (ms: number) => new Date(ms).toISOString()
@@ -285,8 +285,8 @@ test("T-748: a running row shows its stage's icon and name, the time in that sta
   const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 140 }, surface: 'terminal' })
   // "⌕" + "checker 8m · try 2": the checker started when the try handed back, 8 minutes ago
   // one line each, the one that started first at the top
-  const rows = [['⊛', 'T-41', 'test 10s', 'Being tested'], ['⌕', 'T-42', '8m (try 2)', `Being checked — ${STEP_NOTE.checker}`], ['⇢', 'T-43', 'merge 10s', 'Being merged'], ['▶', 'T-40', '12m', 'Running worker'], ['▶', 'T-44', '5m (try 3)', 'Third try']]
-  const width = 'merge 10s'.length > '8m (try 2)'.length ? 'merge 10s'.length : '8m (try 2)'.length
+  const rows = [['⊛', 'T-41', '10s', 'Being tested'], ['⌕', 'T-42', '8m (try 2)', `Being checked — ${STEP_NOTE.checker}`], ['⇢', 'T-43', '10s', 'Being merged'], ['▶', 'T-40', '12m', 'Running worker'], ['▶', 'T-44', '5m (try 3)', 'Third try']]
+  const width = '8m (try 2)'.length
   const want = rows.map(([icon, id, state, title]) => ` ${icon} ${id} ${state!.padEnd(width)} ${title}`)
   expect((await bandLines(ui)).slice(1)).toEqual(want)
   // no "doing" word and no "— worker on it" tail: the state says it
@@ -312,7 +312,7 @@ test("T-748: a running row shows its stage's icon and name, the time in that sta
   await later.unmount()
 })
 
-test("T-542: the band shows symcc's own pre-merge step as \"prep\" with its plain note, and a running checker as \"checker\"", async ($, on) => {
+test("T-542: the band shows symcc's own pre-merge step as its icon with its plain note, and a running checker as its icon", async ($, on) => {
   const T0 = Date.parse('2026-03-02T10:00:00Z')
   mock.clock(on, { now: T0 })
   const iso = (ms: number) => new Date(ms).toISOString()
@@ -324,8 +324,8 @@ test("T-542: the band shows symcc's own pre-merge step as \"prep\" with its plai
   on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [] } }, version: 1 } }))
   on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 160 }, surface: 'terminal' })
-  // the step's icon and its name; the note still says the step
-  expect(await ui.find({ type: 'Text', text: new RegExp(`^ ✎ T-50 prep 10s +Prep one — ${esc(PREP_NOTE)}`, 'u') })).toBeDefined()
+  // the step's icon, no stage name (T-893); the note still says the step
+  expect(await ui.find({ type: 'Text', text: new RegExp(`^ ✎ T-50 10s +Prep one — ${esc(PREP_NOTE)}`, 'u') })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: new RegExp(`^ ⌕ T-51 10s +Checked one — ${esc(CHECKER_NOTE)}`, 'u') })).toBeDefined()
   await ui.unmount()
 })
@@ -342,8 +342,8 @@ test('T-648: a task in the queue shows ⧗ and one in the test step ⊛, on the 
   ]
   on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [] } }, version: 1 } }))
   on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
-  // the list's row is keyed by its id, with the total work time; the band's is one Text line, with the stage's name and time
-  const want = { pane: [/^T-71 ⧗ 20m +Queued one/, /^T-72 ⊛ 20m +Tested one/], band: [/^ ⧗ T-71 queue 10s +Queued one/, /^ ⊛ T-72 test 10s +Tested one/] }
+  // the list's row is keyed by its id, with the total work time; the band's is one Text line, with the stage's time (no stage name, T-893); one space before the title
+  const want = { pane: [/^T-71 ⧗ 20m Queued one/, /^T-72 ⊛ 20m Tested one/], band: [/^ ⧗ T-71 10s Queued one/, /^ ⊛ T-72 10s Tested one/] }
   for (const [name, where] of [['pane', { ...PANE, props: { ...PANE.props, bodyColumns: 160 } }], ['band', { ...BAND, props: { ...BAND.props, bodyColumns: 160 } }]] as const) {
     const ui = await $.ui.mount({ ...where, surface: 'terminal' } as never) as TestMounted<"terminal", "AbovePrompt">
     const line = async (id: string) => (await ui.find({ key: id }))?.text ?? (await ui.find({ type: 'Text', text: new RegExp(`^ . ${id} `, 'u') }))?.text
@@ -1778,11 +1778,12 @@ test('T-696: a long-title row in the terminal list keeps "waits for T-1" / "[fea
     await ui.unmount()
   }
   // very narrow: the title keeps 20 columns and the extra is cut, then left out
-  for (const w of [45, 30]) {
+  // (44: one column short of the whole "waits for T-1" since T-893 put one space, not two, before the title)
+  for (const w of [44, 30]) {
     const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: w }, surface: 'terminal' })
     const t2 = (await ui.find({ key: 'T-2' }))!.text
     expect(t2.length).toBeLessThanOrEqual(w)
-    expect(t2).toMatch(w === 45 ? /^T-2\s+○\s+Board list: keep th…  waits.*…$/ : /^T-2\s+○\s+Board list: [^…]*…$/)
+    expect(t2).toMatch(w === 44 ? /^T-2\s+○\s+Board list: keep th…  waits.*…$/ : /^T-2\s+○\s+Board list: [^…]*…$/)
     await ui.unmount()
   }
 })

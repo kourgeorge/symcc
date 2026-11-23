@@ -147,7 +147,7 @@ export async function listPageVs($: $, pane: PaneParts) {
     // the state cell between the ID and the title, lined up with the other rows' (see cellsOf)
     const cell = col?.cells.get(x.id) ?? soloCell(x)
     const idWidth = col?.idWidth ?? x.id.length
-    const lead = (needs ? 2 : 0) + idWidth + 1 + cell.length + 2
+    const lead = (needs ? 2 : 0) + idWidth + 1 + cell.length + 1
     const fit = vsFit(depth + lead, x.title.trim() || NO_TITLE, rowEnd, room, x.status === 'failed')
     const words = x.title.trim() ? mdText(fit.title) : ''
     const rest = fit.rest
@@ -159,8 +159,8 @@ export async function listPageVs($: $, pane: PaneParts) {
             {vsLink(vs, row(x.id), `${mdLink(x.id, href)}${' '.repeat(Math.max(0, idWidth - x.id.length))}`, [[href, open]], closed)}
           </Box>
           {/* an approved task whose approve runs is shown as running (shownStatus): the doing tone */}
-          <Box key="state" flexShrink={0} minWidth={1 + cell.length + 2}>
-            <Text key={`vs-task-${x.id}-state`} color={C(tone[shownStatus(x, nowMs)]!)}>{hard(` ${cell}  `)}</Text>
+          <Box key="state" flexShrink={0} minWidth={1 + cell.length + 1}>
+            <Text key={`vs-task-${x.id}-state`} color={C(tone[shownStatus(x, nowMs)]!)}>{hard(` ${cell} `)}</Text>
           </Box>
           <Box key="title" flexDirection="column" flexGrow={0} flexShrink={1}>
             {words ? vsLink(vs, `${x.id}-title`, needs ? `**${words}**` : words, [], closed) : <Text key="no-title" color={C('inactive')}>{NO_TITLE}</Text>}
@@ -185,8 +185,9 @@ export async function listPageVs($: $, pane: PaneParts) {
   const cellsOf = (ts: SymccTask[], terminal: boolean): Column => {
     const idWidth = Math.max(0, ...ts.map(x => x.id.length))
     if (terminal) {
-      const { states } = rowStates(ts, nowMs, since, w => w <= room - (2 + idWidth + 3 + 2) - TITLE_ROOM, false)
-      return { cells: new Map(ts.map(x => [x.id, `${rowMark(x, nowMs)} ${stateText(states.get(x.id))}`])), idWidth }
+      // T-893: one space between the state and the title, like the band; no state at all: just the mark ("○")
+      const { states, width: stateWidth } = rowStates(ts, nowMs, since, w => w <= room - (2 + idWidth + 3 + 1) - TITLE_ROOM, false)
+      return { cells: new Map(ts.map(x => [x.id, stateWidth ? `${rowMark(x, nowMs)} ${stateText(states.get(x.id))}` : rowMark(x, nowMs)])), idWidth }
     }
     const cells = new Map(ts.map(x => [x.id, statusText(x)]))
     const w = Math.max(0, ...[...cells.values()].map(c => c.length))
@@ -219,7 +220,7 @@ export async function listPageVs($: $, pane: PaneParts) {
             const href = vsHref('question', q.id)
             const cell = qCells.get(q.id)!.padEnd(qCell)
             const more = choices ? `${choices} ${choices === 1 ? 'choice' : 'choices'}` : ''
-            const fit = vsFit(2 + qId + 1 + cell.length + 2, q.text.trim() || NO_TITLE, more, room)
+            const fit = vsFit(2 + qId + 1 + cell.length + 1, q.text.trim() || NO_TITLE, more, room)
             const words = q.text.trim() ? mdText(fit.title) : ''
             return (
               <Box key={`vs-question-${q.id}`} flexDirection="column">
@@ -228,8 +229,8 @@ export async function listPageVs($: $, pane: PaneParts) {
                   <Box key="id" flexShrink={0} minWidth={qId}>
                     {vsLink(vs, row(q.id), `${mdLink(q.id, href)}${' '.repeat(Math.max(0, qId - q.id.length))}`, [[href, act(() => panelValues($).updateOpened(() => q.id))]])}
                   </Box>
-                  <Box key="state" flexShrink={0} minWidth={1 + cell.length + 2}>
-                    <Text key={`vs-question-${q.id}-state`} color={C('warning')}>{hard(` ${cell}  `)}</Text>
+                  <Box key="state" flexShrink={0} minWidth={1 + cell.length + 1}>
+                    <Text key={`vs-question-${q.id}-state`} color={C('warning')}>{hard(` ${cell} `)}</Text>
                   </Box>
                   <Box key="title" flexDirection="column" flexGrow={0} flexShrink={1}>
                     {words ? vsLink(vs, `${q.id}-title`, `**${words}**`, []) : <Text key="no-title" color={C('inactive')}>{NO_TITLE}</Text>}

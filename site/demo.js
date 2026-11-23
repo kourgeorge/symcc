@@ -216,14 +216,14 @@
 
   // ---------- the band above the prompt (T-776, T-787) ----------
   // Line 1: "𝄞 symcc", the dim summary and [ open board ]; then each running task on its own line: the id in the accent
-  // color, "10m (try 2)" green, the title normal text.
-  const STAGE = ['', '', 'queue', 'tests', 'merge']
+  // color, "10m (try 2)" green, the title normal text. Each stage shows only its icon, no stage name (T-893).
+  const STAGE_ICON = ['▶', '⌕', '⧗', '⊛', '⇢']
   function band(s) {
     const running = s.lanes.filter(l => !l.done)
     const busy = s.lanes.filter(l => l.agent).length
     const waiting = 2 + (s.t736 === 'todo' ? 1 : 0)
     const L = [sp('𝄞 symcc', 'heading') + '  ' + sp(`⏵ auto merge · ${busy}/${MAX_AGENTS} agents busy · ${waiting} ${waiting === 1 ? 'task' : 'tasks'} waiting · ${s.today.merged} completed today`, 'dim') + '  ' + sp('[ open board ]', 'text')]
-    for (const l of running) L.push(' ' + sp((l.at === 1 ? '⌕ ' : '▶ ') + l.id, 'run') + ' ' + sp(`${STAGE[l.at] ? STAGE[l.at] + ' ' : ''}${dur(s.now - l.since)}${l.tryNo > 1 ? ` (try ${l.tryNo})` : ''}`, 'passed') + ' ' + esc(cut(TITLES[l.id], 60)))
+    for (const l of running) L.push(' ' + sp((STAGE_ICON[l.at] || '▶') + ' ' + l.id, 'run') + ' ' + sp(`${dur(s.now - l.since)}${l.tryNo > 1 ? ` (try ${l.tryNo})` : ''}`, 'passed') + ' ' + esc(cut(TITLES[l.id], 60)))
     return L.join('\n')
   }
 

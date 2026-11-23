@@ -1422,7 +1422,9 @@ function listBody(f: ViewFile, cursor: number, open0: Record<PanelGroup, boolean
   const idWidth = Math.max(4, ...ids.filter(id => !groupOf(id)).map(id => id.length))
   // a doing task: the total work time of all tries, "1h40m", "⊛ 9m", with no try mark (T-628: the band and the task
   // page show it); narrow, the time is left out (see rowStates)
-  const { states, width: cellWidth } = rowStates(listed, nowMs, since, cw => cw <= w - (4 + idWidth + 3 + 2) - TITLE_ROOM, false)
+  // T-893: one space between the state and the title ("T-888 ⊛ 1m title"), none when no row has a state
+  const { states, width: cellWidth } = rowStates(listed, nowMs, since, cw => cw <= w - (4 + idWidth + 3 + 1) - TITLE_ROOM, false)
+  const gap = cellWidth ? ' ' : ''
   const pointer = (id: string, indent: number) => (id === selected ? `${' '.repeat(Math.max(0, indent - 2))}› ` : ' '.repeat(indent))
   const lines: Line[] = []
   const hits: (PanelHit | null)[] = []
@@ -1441,7 +1443,7 @@ function listBody(f: ViewFile, cursor: number, open0: Record<PanelGroup, boolean
   }
   const row = (x: SymccTask, indent: number): Line => {
     const closed = isFinished(x) || x.status === 'backlog'
-    const lead = indent + idWidth + 3 + cellWidth + 2
+    const lead = indent + idWidth + 3 + cellWidth + gap.length
     const fit = fitRow(lead, x.title, rowExtra(x, v.tasks, v.home_branch ?? '', v.max_minutes, nowMs), w, x.status === 'failed')
     const state = states.get(x.id) ?? { front: '', tag: '', back: '' }
     const sel = x.id === selected
@@ -1449,7 +1451,7 @@ function listBody(f: ViewFile, cursor: number, open0: Record<PanelGroup, boolean
       { text: pointer(x.id, indent), color: 'ide', bold: true },
       { text: x.id.padEnd(idWidth), color: closed ? 'inactive' : 'claude', bold: !closed || sel },
       // an approved task whose approve runs is shown as running (shownStatus): the doing tone, not bold
-      { text: ` ${rowMark(x, nowMs)} ${state.front}${state.back}  `, color: LIST_TONE[shownStatus(x, nowMs)]! },
+      { text: ` ${rowMark(x, nowMs)} ${state.front}${state.back}${gap}`, color: LIST_TONE[shownStatus(x, nowMs)]! },
       { text: fit.title, color: closed ? 'inactive' : 'text', ...(sel || ownersTurn(x, nowMs) ? { bold: true } : {}) },
       ...(fit.extra ? [{ text: `${fit.pad}${fit.extra}`, color: 'inactive' }] : []),
     ]

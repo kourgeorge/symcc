@@ -88,14 +88,15 @@ export function bandLeads(tasks: (Pick<SymccTask, 'id' | 'status' | 'runs'> & Pa
 
 // ---------------- Claude Code's band above the prompt (T-748) ----------------
 
-/** The icon and the name of each stage in a running band row: "▶" (no name: the icon says work), "⌕" (same), "⧗ queue" (STEP_ICON, STEP_WORD). */
-export const BAND_STAGE: Record<PhaseStage, { icon: string; name: string }> = {
-  worker: { icon: STATUS_MARK.doing, name: '' },
-  prep: { icon: STEP_ICON.prep, name: STEP_WORD.prep },
-  checker: { icon: STEP_ICON.checker, name: '' },
-  queue: { icon: STEP_ICON.queue, name: STEP_WORD.queue },
-  test: { icon: STEP_ICON.testing, name: STEP_WORD.testing },
-  merge: { icon: STEP_ICON.merging, name: STEP_WORD.merging },
+/** The icon of each stage in a running band row: "▶", "⌕", "⧗" (STEP_ICON). No stage name: the icon says it (T-893,
+ *  the owner: "the icon is enough"). */
+export const BAND_STAGE: Record<PhaseStage, { icon: string }> = {
+  worker: { icon: STATUS_MARK.doing },
+  prep: { icon: STEP_ICON.prep },
+  checker: { icon: STEP_ICON.checker },
+  queue: { icon: STEP_ICON.queue },
+  test: { icon: STEP_ICON.testing },
+  merge: { icon: STEP_ICON.merging },
 }
 /** What the band's next up row says after the task's id (its icon is STATUS_MARK.todo, "○"). */
 export const NEXT_UP_STATE = 'next up'
@@ -135,7 +136,7 @@ export function bandSummary(view: BandSummaryView, nowMs: number, width = Infini
 
 /**
  * The task rows of Claude Code's band above the prompt (T-748, T-776), in this order: one per running task (the Live
- * tab's lanes: its stage's icon, then its name, the time in that stage, the try from try 2 on: "⌕" + "checker 8m (try 3)"),
+ * tab's lanes: its stage's icon, then the time in that stage, the try from try 2 on: "⌕" + "8m (try 3)"),
  * the next task to start ("○" + "next up", the first task of the Live tab's next up that waits for nothing), then the
  * tasks that need the owner (needsYou: "?" + "waiting", "◆" + "review", "✗" + "failed", "▶" + "more time?"). `since(id)`:
  * when this session's worker started (for a worker with no open try yet). The counts are on the band's first line (bandSummary).
@@ -155,7 +156,7 @@ export function bandItems(view: LiveView, nowMs: number, since: (id: string) => 
     const at = l.stage === 'worker' ? (ended === undefined ? (l.sinceMs ?? toMs(since(l.id))) : (toMs(since(l.id)) ?? l.sinceMs)) :l.station === 'work' ? (ended ?? l.sinceMs) : l.sinceMs
     const time = at !== undefined ? rowDuration(Math.max(0, nowMs - at)) : ''
     const tries = l.tryNo > 1 ? `(try ${l.tryNo})` : ''
-    return { id: l.id, title: l.title, kind: 'run', icon: s.icon, forms: [[s.name, time, tries].filter(Boolean).join(' '), [s.name, tries].filter(Boolean).join(' '), s.name], tail: tail(byId.get(l.id)!) }
+    return { id: l.id, title: l.title, kind: 'run', icon: s.icon, forms: [[time, tries].filter(Boolean).join(' '), tries, ''], tail: tail(byId.get(l.id)!) }
   })
   const next = liveTrains(view, nowMs).next.find(x => !x.stuck.length)
   const nextRow: BandItem[] = next ? [{ id: next.id, title: next.title, kind: 'next', icon: STATUS_MARK.todo, forms: [NEXT_UP_STATE], tail: '' }] : []
@@ -173,7 +174,7 @@ export const BAND_INDENT = 3
 
 /**
  * The fronts of band rows (bandItems) after their icon, lined up: the id padded to one width, a space, then the
- * state padded to one width and a space, so every title starts in one column: "T-740 checker 8m (try 3) ". The
+ * state padded to one width and a space, so every title starts in one column: "T-740 8m (try 3) ". The
  * first state form that leaves TITLE_ROOM for the title in `width` columns (the whole row, BAND_INDENT included) is
  * used (the time goes first, then the try).
  */

@@ -198,6 +198,10 @@ test('a doing row shows only the total work time of all tries in the band and th
   const starts = f.view.tasks.filter(t => ['T-1', 'T-2', 'T-3', 'T-4'].includes(t.id)).map(t => list.find(l => l.includes(` ${t.id} `))!.indexOf(t.title))
   expect(starts.every(n => n > 0)).toBe(true)
   expect(new Set(starts).size).toBe(1)
+  // T-893: one space between the widest state and the title, like the band (not two)
+  const fronts = f.view.tasks.filter(t => ['T-1', 'T-2', 'T-3', 'T-4'].includes(t.id)).map(t => list.find(l => l.includes(` ${t.id} `))!.slice(0, starts[0]!))
+  expect(Math.max(...fronts.map(s => s.trimEnd().length)) + 1).toBe(starts[0]!)
+  expect(row(list)).toMatch(/T-1 +▶ 1h40m +\S/)
   // try 1: nothing
   const first = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => (t.id === 'T-1' ? { ...t, attempts: 1 } : t)) } }
   expect(row(bandLines(first, NOW, 120).map(lineText))).not.toMatch(/\(1\)|try/)

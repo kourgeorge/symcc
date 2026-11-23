@@ -95,7 +95,7 @@ test('the board follows the host clock: 10 minutes later only the running time c
   await clock.set(T0 + TEN_MIN)
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...PANE, surface })
-    expect(drawnData(await ui.drawn()), surface).toEqual(changedTree(BEFORE[`${surface} 50`], [['▶ 2m       ', '▶ 12m      ']]))
+    expect(drawnData(await ui.drawn()), surface).toEqual(changedTree(BEFORE[`${surface} 50`], [['▶ 2m      ', '▶ 12m     ']]))
     await ui.unmount()
   }
 })
@@ -108,7 +108,7 @@ test('the board snapshot comparison still fails when the drawn tree really chang
   expect(drawn).toEqual(BEFORE['terminal 50'])
   // one word of one title, one running time, one color: each alone is caught
   expect(drawn).not.toEqual(changedTree(BEFORE['terminal 50'], [['Show the plugin version', 'Show the plugin release']]))
-  expect(drawn).not.toEqual(changedTree(BEFORE['terminal 50'], [['▶ 2m       ', '▶ 3m       ']]))
+  expect(drawn).not.toEqual(changedTree(BEFORE['terminal 50'], [['▶ 2m      ', '▶ 3m      ']]))
   expect(drawn).not.toEqual(changedTree(BEFORE['terminal 50'], [['"color":"ide"', '"color":"text"']]))
   await ui.unmount()
 })
@@ -641,7 +641,7 @@ test('T-590: in VS Code each open task and question is one line: id, state, then
   const ask = { ...QUESTION, text: 'Should the board open by itself when a session starts, or only when the owner asks for it?' }
   seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, tasks, questions: [ask] } } })
   on('ui.toast', () => ({ value: undefined }))
-  for (const bodyColumns of [42, 63, 80]) {
+  for (const bodyColumns of [42, 62, 80]) {
     const at = `width ${bodyColumns}`
     const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: colsFor(bodyColumns) }, surface: 'vscode' })
     await ui.drawn()
@@ -661,10 +661,10 @@ test('T-590: in VS Code each open task and question is one line: id, state, then
     expect(await rowText(ui, 'T-406'), at).toMatch(/^T-406 ○\s+Write the guide/)
     expect(await rowText(ui, 'T-404'), at).toMatch(/^● T-404 \? waiting for 1m\s+Pick the/)
     // a long title is cut with "…" and "waits for T-406 · feature" stays on the line (fitRow, T-702): whole at 80, cut
-    // from its end at 63; at 42 there is no room for both the title's floor and the end, so the end goes, as on the
+    // from its end at 62 (63 before T-893 took one space out of the row); at 42 there is no room for both the title's floor and the end, so the end goes, as on the
     // terminal list
     const line = await rowText(ui, 'T-578')
-    expect(line, at).toMatch(bodyColumns === 42 ? /^T-578 ○\s+Let[^·]*…$/ : bodyColumns === 63 ? /^T-578 ○\s+Let.*… · waits for T-406 · featu…$/ : /^T-578 ○\s+Let.*… · waits for T-406 · feature$/)
+    expect(line, at).toMatch(bodyColumns === 42 ? /^T-578 ○\s+Let[^·]*…$/ : bodyColumns === 62 ? /^T-578 ○\s+Let.*… · waits for T-406 · f\S*…$/ : /^T-578 ○\s+Let.*… · waits for T-406 · feature$/)
     expect(line.length, at).toBeLessThanOrEqual(bodyColumns)
     const q = await rowText(ui, 'Q-3')
     expect(q, at).toMatch(bodyColumns === 42 ? /^● Q-3 \? 5m\s+Sh\S*( \S+)*…( · 2 choices)?$/ : /^● Q-3 \? 5m\s+Should the.*… · 2 choices$/)

@@ -105,128 +105,128 @@ export const BEFORE: Record<string, unknown> = {
       {"type":"Text","props":{"bold":true,"color":"text"},"children":["NEEDS YOU"]},
       {
         "type": "Button",
-        "props": {"key":"T-420","label":"T-420 ◆ answer   Research how other…   [investiga…","plain":true,"autoFocus":true},
+        "props": {"key":"T-420","label":"T-420 ◆ answer  Research how other…   [investigat…","plain":true,"autoFocus":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude"},"children":["T-420"]},
-          {"type":"Text","props":{"color":"warning"},"children":[" ◆ answer   "]},
+          {"type":"Text","props":{"color":"warning"},"children":[" ◆ answer  "]},
           {"type":"Text","props":{"bold":true,"color":"text"},"children":["Research how other…"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["   [investiga…"]}
+          {"type":"Text","props":{"color":"inactive"},"children":["   [investigat…"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-403","label":"T-403 ◆ review   Make the settings p…  Enter to r…","plain":true},
+        "props": {"key":"T-403","label":"T-403 ◆ review  Make the settings p…  Enter to re…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude"},"children":["T-403"]},
-          {"type":"Text","props":{"color":"warning"},"children":[" ◆ review   "]},
+          {"type":"Text","props":{"color":"warning"},"children":[" ◆ review  "]},
           {"type":"Text","props":{"bold":true,"color":"text"},"children":["Make the settings p…"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  Enter to r…"]}
+          {"type":"Text","props":{"color":"inactive"},"children":["  Enter to re…"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-404","label":"T-404 ? waiting  Pick the colors for…   Yellow or…","plain":true},
+        "props": {"key":"T-404","label":"T-404 ? waiting Pick the colors for…  Yellow or b…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude"},"children":["T-404"]},
-          {"type":"Text","props":{"color":"warning"},"children":[" ? waiting  "]},
+          {"type":"Text","props":{"color":"warning"},"children":[" ? waiting "]},
           {"type":"Text","props":{"bold":true,"color":"text"},"children":["Pick the colors for…"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["   Yellow or…"]}
+          {"type":"Text","props":{"color":"inactive"},"children":["  Yellow or b…"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-405","label":"T-405 ✗ failed   Rename the scouts p…   The tests…","plain":true},
+        "props": {"key":"T-405","label":"T-405 ✗ failed  Rename the scouts p…  The tests f…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude"},"children":["T-405"]},
-          {"type":"Text","props":{"color":"error"},"children":[" ✗ failed   "]},
+          {"type":"Text","props":{"color":"error"},"children":[" ✗ failed  "]},
           {"type":"Text","props":{"bold":true,"color":"text"},"children":["Rename the scouts p…"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["   The tests…"]}
+          {"type":"Text","props":{"color":"inactive"},"children":["  The tests f…"]}
         ]
       },
       {"type":"Text","children":[" "]},
       {
         "type": "Button",
-        "props": {"key":"T-402","label":"T-402 ▶          Keep the search box open while t…","plain":true},
+        "props": {"key":"T-402","label":"T-402 ▶         Keep the search box open while ty…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude"},"children":["T-402"]},
-          {"type":"Text","props":{"color":"ide"},"children":[" ▶          "]},
-          {"type":"Text","props":{"bold":false,"color":"text"},"children":["Keep the search box open while t…"]}
+          {"type":"Text","props":{"color":"ide"},"children":[" ▶         "]},
+          {"type":"Text","props":{"bold":false,"color":"text"},"children":["Keep the search box open while ty…"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-401","label":"T-401 ▶ 2m       Show the plugin version…   [docs]","plain":true},
+        "props": {"key":"T-401","label":"T-401 ▶ 2m      Show the plugin version i…  [docs]","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude"},"children":["T-401"]},
-          {"type":"Text","props":{"color":"ide"},"children":[" ▶ 2m       "]},
-          {"type":"Text","props":{"bold":false,"color":"text"},"children":["Show the plugin version…"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["   [docs]"]}
+          {"type":"Text","props":{"color":"ide"},"children":[" ▶ 2m      "]},
+          {"type":"Text","props":{"bold":false,"color":"text"},"children":["Show the plugin version i…"]},
+          {"type":"Text","props":{"color":"inactive"},"children":["  [docs]"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-406","label":"T-406 ○          Write the guide section about ad…","plain":true},
+        "props": {"key":"T-406","label":"T-406 ○         Write the guide section about add…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude"},"children":["T-406"]},
-          {"type":"Text","props":{"color":"text"},"children":[" ○          "]},
-          {"type":"Text","props":{"bold":false,"color":"text"},"children":["Write the guide section about ad…"]}
+          {"type":"Text","props":{"color":"text"},"children":[" ○         "]},
+          {"type":"Text","props":{"bold":false,"color":"text"},"children":["Write the guide section about add…"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-407","label":"T-407 ○          Let the lead read t…   waits for…","plain":true},
+        "props": {"key":"T-407","label":"T-407 ○         Let the lead read t…  waits for T…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude"},"children":["T-407"]},
-          {"type":"Text","props":{"color":"text"},"children":[" ○          "]},
+          {"type":"Text","props":{"color":"text"},"children":[" ○         "]},
           {"type":"Text","props":{"bold":false,"color":"text"},"children":["Let the lead read t…"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["   waits for…"]}
+          {"type":"Text","props":{"color":"inactive"},"children":["  waits for T…"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-408","label":"T-408 ○          Add a short CHANGELOG line for e…","plain":true},
+        "props": {"key":"T-408","label":"T-408 ○         Add a short CHANGELOG line for ev…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude"},"children":["T-408"]},
-          {"type":"Text","props":{"color":"text"},"children":[" ○          "]},
-          {"type":"Text","props":{"bold":false,"color":"text"},"children":["Add a short CHANGELOG line for e…"]}
+          {"type":"Text","props":{"color":"text"},"children":[" ○         "]},
+          {"type":"Text","props":{"bold":false,"color":"text"},"children":["Add a short CHANGELOG line for ev…"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-410","label":"T-410 ○          Show which branch a task merges…","plain":true},
+        "props": {"key":"T-410","label":"T-410 ○         Show which branch a task merges i…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude"},"children":["T-410"]},
-          {"type":"Text","props":{"color":"text"},"children":[" ○          "]},
-          {"type":"Text","props":{"bold":false,"color":"text"},"children":["Show which branch a task merges…"]}
+          {"type":"Text","props":{"color":"text"},"children":[" ○         "]},
+          {"type":"Text","props":{"bold":false,"color":"text"},"children":["Show which branch a task merges i…"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-419","label":"T-419 ○          Clean up the old stage engine na…","plain":true},
+        "props": {"key":"T-419","label":"T-419 ○         Clean up the old stage engine nam…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude"},"children":["T-419"]},
-          {"type":"Text","props":{"color":"text"},"children":[" ○          "]},
-          {"type":"Text","props":{"bold":false,"color":"text"},"children":["Clean up the old stage engine na…"]}
+          {"type":"Text","props":{"color":"text"},"children":[" ○         "]},
+          {"type":"Text","props":{"bold":false,"color":"text"},"children":["Clean up the old stage engine nam…"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-409","label":"T-409 ‖ paused   Stop a worker that runs past its…","plain":true},
+        "props": {"key":"T-409","label":"T-409 ‖ paused  Stop a worker that runs past its…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude"},"children":["T-409"]},
-          {"type":"Text","props":{"color":"permission"},"children":[" ‖ paused   "]},
+          {"type":"Text","props":{"color":"permission"},"children":[" ‖ paused  "]},
           {"type":"Text","props":{"bold":false,"color":"text"},"children":["Stop a worker that runs past its…"]}
         ]
       },
@@ -403,128 +403,128 @@ export const BEFORE: Record<string, unknown> = {
       {"type":"Text","props":{"bold":true,"color":"text"},"children":["NEEDS YOU"]},
       {
         "type": "Button",
-        "props": {"key":"T-420","label":"T-420 ◆ answer   Research how other tools draw a task board in an editor…  [investigation]","plain":true,"autoFocus":true},
+        "props": {"key":"T-420","label":"T-420 ◆ answer  Research how other tools draw a task board in an editor…   [investigation]","plain":true,"autoFocus":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude"},"children":["T-420"]},
-          {"type":"Text","props":{"color":"warning"},"children":[" ◆ answer   "]},
+          {"type":"Text","props":{"color":"warning"},"children":[" ◆ answer  "]},
           {"type":"Text","props":{"bold":true,"color":"text"},"children":["Research how other tools draw a task board in an editor…"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  [investigation]"]}
+          {"type":"Text","props":{"color":"inactive"},"children":["   [investigation]"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-403","label":"T-403 ◆ review   Make the settings page show every group with its own sh…  Enter to review","plain":true},
+        "props": {"key":"T-403","label":"T-403 ◆ review  Make the settings page show every group with its own sho…  Enter to review","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude"},"children":["T-403"]},
-          {"type":"Text","props":{"color":"warning"},"children":[" ◆ review   "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":["Make the settings page show every group with its own sh…"]},
+          {"type":"Text","props":{"color":"warning"},"children":[" ◆ review  "]},
+          {"type":"Text","props":{"bold":true,"color":"text"},"children":["Make the settings page show every group with its own sho…"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  Enter to review"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-404","label":"T-404 ? waiting  Pick the colors for the review mark on light…  Yellow or blue for review?","plain":true},
+        "props": {"key":"T-404","label":"T-404 ? waiting Pick the colors for the review mark on light…   Yellow or blue for review?","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude"},"children":["T-404"]},
-          {"type":"Text","props":{"color":"warning"},"children":[" ? waiting  "]},
+          {"type":"Text","props":{"color":"warning"},"children":[" ? waiting "]},
           {"type":"Text","props":{"bold":true,"color":"text"},"children":["Pick the colors for the review mark on light…"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  Yellow or blue for review?"]}
+          {"type":"Text","props":{"color":"inactive"},"children":["   Yellow or blue for review?"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-405","label":"T-405 ✗ failed   Rename the scouts page heading and move its buttons u…  The tests failed.","plain":true},
+        "props": {"key":"T-405","label":"T-405 ✗ failed  Rename the scouts page heading and move its buttons un…  The tests failed.","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude"},"children":["T-405"]},
-          {"type":"Text","props":{"color":"error"},"children":[" ✗ failed   "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":["Rename the scouts page heading and move its buttons u…"]},
+          {"type":"Text","props":{"color":"error"},"children":[" ✗ failed  "]},
+          {"type":"Text","props":{"bold":true,"color":"text"},"children":["Rename the scouts page heading and move its buttons un…"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  The tests failed."]}
         ]
       },
       {"type":"Text","children":[" "]},
       {
         "type": "Button",
-        "props": {"key":"T-402","label":"T-402 ▶          Keep the search box open while typing several words in a row","plain":true},
+        "props": {"key":"T-402","label":"T-402 ▶         Keep the search box open while typing several words in a row","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude"},"children":["T-402"]},
-          {"type":"Text","props":{"color":"ide"},"children":[" ▶          "]},
+          {"type":"Text","props":{"color":"ide"},"children":[" ▶         "]},
           {"type":"Text","props":{"bold":false,"color":"text"},"children":["Keep the search box open while typing several words in a row"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-401","label":"T-401 ▶ 2m       Show the plugin version in the board title and the band above th…  [docs]","plain":true},
+        "props": {"key":"T-401","label":"T-401 ▶ 2m      Show the plugin version in the board title and the band above the…  [docs]","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude"},"children":["T-401"]},
-          {"type":"Text","props":{"color":"ide"},"children":[" ▶ 2m       "]},
-          {"type":"Text","props":{"bold":false,"color":"text"},"children":["Show the plugin version in the board title and the band above th…"]},
+          {"type":"Text","props":{"color":"ide"},"children":[" ▶ 2m      "]},
+          {"type":"Text","props":{"bold":false,"color":"text"},"children":["Show the plugin version in the board title and the band above the…"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  [docs]"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-406","label":"T-406 ○          Write the guide section about adding a new scout from the board panel","plain":true},
+        "props": {"key":"T-406","label":"T-406 ○         Write the guide section about adding a new scout from the board panel","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude"},"children":["T-406"]},
-          {"type":"Text","props":{"color":"text"},"children":[" ○          "]},
+          {"type":"Text","props":{"color":"text"},"children":[" ○         "]},
           {"type":"Text","props":{"bold":false,"color":"text"},"children":["Write the guide section about adding a new scout from the board panel"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-407","label":"T-407 ○          Let the lead read the archived tasks when the owner ask…  waits for T-406","plain":true},
+        "props": {"key":"T-407","label":"T-407 ○         Let the lead read the archived tasks when the owner asks…  waits for T-406","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude"},"children":["T-407"]},
-          {"type":"Text","props":{"color":"text"},"children":[" ○          "]},
-          {"type":"Text","props":{"bold":false,"color":"text"},"children":["Let the lead read the archived tasks when the owner ask…"]},
+          {"type":"Text","props":{"color":"text"},"children":[" ○         "]},
+          {"type":"Text","props":{"bold":false,"color":"text"},"children":["Let the lead read the archived tasks when the owner asks…"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  waits for T-406"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-408","label":"T-408 ○          Add a short CHANGELOG line for every merged task automatically","plain":true},
+        "props": {"key":"T-408","label":"T-408 ○         Add a short CHANGELOG line for every merged task automatically","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude"},"children":["T-408"]},
-          {"type":"Text","props":{"color":"text"},"children":[" ○          "]},
+          {"type":"Text","props":{"color":"text"},"children":[" ○         "]},
           {"type":"Text","props":{"bold":false,"color":"text"},"children":["Add a short CHANGELOG line for every merged task automatically"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-410","label":"T-410 ○          Show which branch a task merges into when it is not the current one","plain":true},
+        "props": {"key":"T-410","label":"T-410 ○         Show which branch a task merges into when it is not the current one","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude"},"children":["T-410"]},
-          {"type":"Text","props":{"color":"text"},"children":[" ○          "]},
+          {"type":"Text","props":{"color":"text"},"children":[" ○         "]},
           {"type":"Text","props":{"bold":false,"color":"text"},"children":["Show which branch a task merges into when it is not the current one"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-419","label":"T-419 ○          Clean up the old stage engine names left in the comments of the hooks","plain":true},
+        "props": {"key":"T-419","label":"T-419 ○         Clean up the old stage engine names left in the comments of the hooks","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude"},"children":["T-419"]},
-          {"type":"Text","props":{"color":"text"},"children":[" ○          "]},
+          {"type":"Text","props":{"color":"text"},"children":[" ○         "]},
           {"type":"Text","props":{"bold":false,"color":"text"},"children":["Clean up the old stage engine names left in the comments of the hooks"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-409","label":"T-409 ‖ paused   Stop a worker that runs past its time limit and ask the owner first","plain":true},
+        "props": {"key":"T-409","label":"T-409 ‖ paused  Stop a worker that runs past its time limit and ask the owner first","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude"},"children":["T-409"]},
-          {"type":"Text","props":{"color":"permission"},"children":[" ‖ paused   "]},
+          {"type":"Text","props":{"color":"permission"},"children":[" ‖ paused  "]},
           {"type":"Text","props":{"bold":false,"color":"text"},"children":["Stop a worker that runs past its time limit and ask the owner first"]}
         ]
       },
@@ -693,128 +693,128 @@ export const BEFORE: Record<string, unknown> = {
       {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["NEEDS YOU"]},
       {
         "type": "Button",
-        "props": {"key":"T-420","label":"T-420 ◆ answer   Research how other…   [investiga…","plain":true,"autoFocus":true},
+        "props": {"key":"T-420","label":"T-420 ◆ answer  Research how other…   [investigat…","plain":true,"autoFocus":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-420"]},
-          {"type":"Text","props":{"color":"warning"},"children":[" ◆ answer   "]},
+          {"type":"Text","props":{"color":"warning"},"children":[" ◆ answer  "]},
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Research how other…"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["   [investiga…"]}
+          {"type":"Text","props":{"color":"inactive"},"children":["   [investigat…"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-403","label":"T-403 ◆ review   Make the settings p…  Enter to r…","plain":true},
+        "props": {"key":"T-403","label":"T-403 ◆ review  Make the settings p…  Enter to re…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-403"]},
-          {"type":"Text","props":{"color":"warning"},"children":[" ◆ review   "]},
+          {"type":"Text","props":{"color":"warning"},"children":[" ◆ review  "]},
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Make the settings p…"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  Enter to r…"]}
+          {"type":"Text","props":{"color":"inactive"},"children":["  Enter to re…"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-404","label":"T-404 ? waiting  Pick the colors for…   Yellow or…","plain":true},
+        "props": {"key":"T-404","label":"T-404 ? waiting Pick the colors for…  Yellow or b…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-404"]},
-          {"type":"Text","props":{"color":"warning"},"children":[" ? waiting  "]},
+          {"type":"Text","props":{"color":"warning"},"children":[" ? waiting "]},
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Pick the colors for…"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["   Yellow or…"]}
+          {"type":"Text","props":{"color":"inactive"},"children":["  Yellow or b…"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-405","label":"T-405 ✗ failed   Rename the scouts p…   The tests…","plain":true},
+        "props": {"key":"T-405","label":"T-405 ✗ failed  Rename the scouts p…  The tests f…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-405"]},
-          {"type":"Text","props":{"color":"error"},"children":[" ✗ failed   "]},
+          {"type":"Text","props":{"color":"error"},"children":[" ✗ failed  "]},
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Rename the scouts p…"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["   The tests…"]}
+          {"type":"Text","props":{"color":"inactive"},"children":["  The tests f…"]}
         ]
       },
       {"type":"Text","children":[" "]},
       {
         "type": "Button",
-        "props": {"key":"T-402","label":"T-402 ▶          Keep the search box open while t…","plain":true},
+        "props": {"key":"T-402","label":"T-402 ▶         Keep the search box open while ty…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-402"]},
-          {"type":"Text","props":{"color":"ide"},"children":[" ▶          "]},
-          {"type":"Text","props":{"bold":false,"color":"text"},"children":["Keep the search box open while t…"]}
+          {"type":"Text","props":{"color":"ide"},"children":[" ▶         "]},
+          {"type":"Text","props":{"bold":false,"color":"text"},"children":["Keep the search box open while ty…"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-401","label":"T-401 ▶ 2m       Show the plugin version…   [docs]","plain":true},
+        "props": {"key":"T-401","label":"T-401 ▶ 2m      Show the plugin version i…  [docs]","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-401"]},
-          {"type":"Text","props":{"color":"ide"},"children":[" ▶ 2m       "]},
-          {"type":"Text","props":{"bold":false,"color":"text"},"children":["Show the plugin version…"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["   [docs]"]}
+          {"type":"Text","props":{"color":"ide"},"children":[" ▶ 2m      "]},
+          {"type":"Text","props":{"bold":false,"color":"text"},"children":["Show the plugin version i…"]},
+          {"type":"Text","props":{"color":"inactive"},"children":["  [docs]"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-406","label":"T-406 ○          Write the guide section about ad…","plain":true},
+        "props": {"key":"T-406","label":"T-406 ○         Write the guide section about add…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-406"]},
-          {"type":"Text","props":{"color":"text"},"children":[" ○          "]},
-          {"type":"Text","props":{"bold":false,"color":"text"},"children":["Write the guide section about ad…"]}
+          {"type":"Text","props":{"color":"text"},"children":[" ○         "]},
+          {"type":"Text","props":{"bold":false,"color":"text"},"children":["Write the guide section about add…"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-407","label":"T-407 ○          Let the lead read t…   waits for…","plain":true},
+        "props": {"key":"T-407","label":"T-407 ○         Let the lead read t…  waits for T…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-407"]},
-          {"type":"Text","props":{"color":"text"},"children":[" ○          "]},
+          {"type":"Text","props":{"color":"text"},"children":[" ○         "]},
           {"type":"Text","props":{"bold":false,"color":"text"},"children":["Let the lead read t…"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["   waits for…"]}
+          {"type":"Text","props":{"color":"inactive"},"children":["  waits for T…"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-408","label":"T-408 ○          Add a short CHANGELOG line for e…","plain":true},
+        "props": {"key":"T-408","label":"T-408 ○         Add a short CHANGELOG line for ev…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-408"]},
-          {"type":"Text","props":{"color":"text"},"children":[" ○          "]},
-          {"type":"Text","props":{"bold":false,"color":"text"},"children":["Add a short CHANGELOG line for e…"]}
+          {"type":"Text","props":{"color":"text"},"children":[" ○         "]},
+          {"type":"Text","props":{"bold":false,"color":"text"},"children":["Add a short CHANGELOG line for ev…"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-410","label":"T-410 ○          Show which branch a task merges…","plain":true},
+        "props": {"key":"T-410","label":"T-410 ○         Show which branch a task merges i…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-410"]},
-          {"type":"Text","props":{"color":"text"},"children":[" ○          "]},
-          {"type":"Text","props":{"bold":false,"color":"text"},"children":["Show which branch a task merges…"]}
+          {"type":"Text","props":{"color":"text"},"children":[" ○         "]},
+          {"type":"Text","props":{"bold":false,"color":"text"},"children":["Show which branch a task merges i…"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-419","label":"T-419 ○          Clean up the old stage engine na…","plain":true},
+        "props": {"key":"T-419","label":"T-419 ○         Clean up the old stage engine nam…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-419"]},
-          {"type":"Text","props":{"color":"text"},"children":[" ○          "]},
-          {"type":"Text","props":{"bold":false,"color":"text"},"children":["Clean up the old stage engine na…"]}
+          {"type":"Text","props":{"color":"text"},"children":[" ○         "]},
+          {"type":"Text","props":{"bold":false,"color":"text"},"children":["Clean up the old stage engine nam…"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-409","label":"T-409 ‖ paused   Stop a worker that runs past its…","plain":true},
+        "props": {"key":"T-409","label":"T-409 ‖ paused  Stop a worker that runs past its…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-409"]},
-          {"type":"Text","props":{"color":"permission"},"children":[" ‖ paused   "]},
+          {"type":"Text","props":{"color":"permission"},"children":[" ‖ paused  "]},
           {"type":"Text","props":{"bold":false,"color":"text"},"children":["Stop a worker that runs past its…"]}
         ]
       },
@@ -1003,128 +1003,128 @@ export const BEFORE: Record<string, unknown> = {
       {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["NEEDS YOU"]},
       {
         "type": "Button",
-        "props": {"key":"T-420","label":"T-420 ◆ answer   Research how other tools draw a task board in an editor…  [investigation]","plain":true,"autoFocus":true},
+        "props": {"key":"T-420","label":"T-420 ◆ answer  Research how other tools draw a task board in an editor…   [investigation]","plain":true,"autoFocus":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-420"]},
-          {"type":"Text","props":{"color":"warning"},"children":[" ◆ answer   "]},
+          {"type":"Text","props":{"color":"warning"},"children":[" ◆ answer  "]},
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Research how other tools draw a task board in an editor…"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  [investigation]"]}
+          {"type":"Text","props":{"color":"inactive"},"children":["   [investigation]"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-403","label":"T-403 ◆ review   Make the settings page show every group with its own sh…  Enter to review","plain":true},
+        "props": {"key":"T-403","label":"T-403 ◆ review  Make the settings page show every group with its own sho…  Enter to review","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-403"]},
-          {"type":"Text","props":{"color":"warning"},"children":[" ◆ review   "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Make the settings page show every group with its own sh…"]},
+          {"type":"Text","props":{"color":"warning"},"children":[" ◆ review  "]},
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Make the settings page show every group with its own sho…"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  Enter to review"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-404","label":"T-404 ? waiting  Pick the colors for the review mark on light…  Yellow or blue for review?","plain":true},
+        "props": {"key":"T-404","label":"T-404 ? waiting Pick the colors for the review mark on light…   Yellow or blue for review?","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-404"]},
-          {"type":"Text","props":{"color":"warning"},"children":[" ? waiting  "]},
+          {"type":"Text","props":{"color":"warning"},"children":[" ? waiting "]},
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Pick the colors for the review mark on light…"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  Yellow or blue for review?"]}
+          {"type":"Text","props":{"color":"inactive"},"children":["   Yellow or blue for review?"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-405","label":"T-405 ✗ failed   Rename the scouts page heading and move its buttons u…  The tests failed.","plain":true},
+        "props": {"key":"T-405","label":"T-405 ✗ failed  Rename the scouts page heading and move its buttons un…  The tests failed.","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-405"]},
-          {"type":"Text","props":{"color":"error"},"children":[" ✗ failed   "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Rename the scouts page heading and move its buttons u…"]},
+          {"type":"Text","props":{"color":"error"},"children":[" ✗ failed  "]},
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Rename the scouts page heading and move its buttons un…"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  The tests failed."]}
         ]
       },
       {"type":"Text","children":[" "]},
       {
         "type": "Button",
-        "props": {"key":"T-402","label":"T-402 ▶          Keep the search box open while typing several words in a row","plain":true},
+        "props": {"key":"T-402","label":"T-402 ▶         Keep the search box open while typing several words in a row","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-402"]},
-          {"type":"Text","props":{"color":"ide"},"children":[" ▶          "]},
+          {"type":"Text","props":{"color":"ide"},"children":[" ▶         "]},
           {"type":"Text","props":{"bold":false,"color":"text"},"children":["Keep the search box open while typing several words in a row"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-401","label":"T-401 ▶ 2m       Show the plugin version in the board title and the band above th…  [docs]","plain":true},
+        "props": {"key":"T-401","label":"T-401 ▶ 2m      Show the plugin version in the board title and the band above the…  [docs]","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-401"]},
-          {"type":"Text","props":{"color":"ide"},"children":[" ▶ 2m       "]},
-          {"type":"Text","props":{"bold":false,"color":"text"},"children":["Show the plugin version in the board title and the band above th…"]},
+          {"type":"Text","props":{"color":"ide"},"children":[" ▶ 2m      "]},
+          {"type":"Text","props":{"bold":false,"color":"text"},"children":["Show the plugin version in the board title and the band above the…"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  [docs]"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-406","label":"T-406 ○          Write the guide section about adding a new scout from the board panel","plain":true},
+        "props": {"key":"T-406","label":"T-406 ○         Write the guide section about adding a new scout from the board panel","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-406"]},
-          {"type":"Text","props":{"color":"text"},"children":[" ○          "]},
+          {"type":"Text","props":{"color":"text"},"children":[" ○         "]},
           {"type":"Text","props":{"bold":false,"color":"text"},"children":["Write the guide section about adding a new scout from the board panel"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-407","label":"T-407 ○          Let the lead read the archived tasks when the owner ask…  waits for T-406","plain":true},
+        "props": {"key":"T-407","label":"T-407 ○         Let the lead read the archived tasks when the owner asks…  waits for T-406","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-407"]},
-          {"type":"Text","props":{"color":"text"},"children":[" ○          "]},
-          {"type":"Text","props":{"bold":false,"color":"text"},"children":["Let the lead read the archived tasks when the owner ask…"]},
+          {"type":"Text","props":{"color":"text"},"children":[" ○         "]},
+          {"type":"Text","props":{"bold":false,"color":"text"},"children":["Let the lead read the archived tasks when the owner asks…"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  waits for T-406"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-408","label":"T-408 ○          Add a short CHANGELOG line for every merged task automatically","plain":true},
+        "props": {"key":"T-408","label":"T-408 ○         Add a short CHANGELOG line for every merged task automatically","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-408"]},
-          {"type":"Text","props":{"color":"text"},"children":[" ○          "]},
+          {"type":"Text","props":{"color":"text"},"children":[" ○         "]},
           {"type":"Text","props":{"bold":false,"color":"text"},"children":["Add a short CHANGELOG line for every merged task automatically"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-410","label":"T-410 ○          Show which branch a task merges into when it is not the current one","plain":true},
+        "props": {"key":"T-410","label":"T-410 ○         Show which branch a task merges into when it is not the current one","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-410"]},
-          {"type":"Text","props":{"color":"text"},"children":[" ○          "]},
+          {"type":"Text","props":{"color":"text"},"children":[" ○         "]},
           {"type":"Text","props":{"bold":false,"color":"text"},"children":["Show which branch a task merges into when it is not the current one"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-419","label":"T-419 ○          Clean up the old stage engine names left in the comments of the hooks","plain":true},
+        "props": {"key":"T-419","label":"T-419 ○         Clean up the old stage engine names left in the comments of the hooks","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-419"]},
-          {"type":"Text","props":{"color":"text"},"children":[" ○          "]},
+          {"type":"Text","props":{"color":"text"},"children":[" ○         "]},
           {"type":"Text","props":{"bold":false,"color":"text"},"children":["Clean up the old stage engine names left in the comments of the hooks"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-409","label":"T-409 ‖ paused   Stop a worker that runs past its time limit and ask the owner first","plain":true},
+        "props": {"key":"T-409","label":"T-409 ‖ paused  Stop a worker that runs past its time limit and ask the owner first","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-409"]},
-          {"type":"Text","props":{"color":"permission"},"children":[" ‖ paused   "]},
+          {"type":"Text","props":{"color":"permission"},"children":[" ‖ paused  "]},
           {"type":"Text","props":{"bold":false,"color":"text"},"children":["Stop a worker that runs past its time limit and ask the owner first"]}
         ]
       },
@@ -2699,128 +2699,128 @@ export const BEFORE: Record<string, unknown> = {
       {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["NEEDS YOU"]},
       {
         "type": "Button",
-        "props": {"key":"T-420","label":"T-420 ◆ answer   Research how other…   [investiga…","plain":true,"autoFocus":true},
+        "props": {"key":"T-420","label":"T-420 ◆ answer  Research how other…   [investigat…","plain":true,"autoFocus":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-420"]},
-          {"type":"Text","props":{"color":"warning"},"children":[" ◆ answer   "]},
+          {"type":"Text","props":{"color":"warning"},"children":[" ◆ answer  "]},
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Research how other…"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["   [investiga…"]}
+          {"type":"Text","props":{"color":"inactive"},"children":["   [investigat…"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-403","label":"T-403 ◆ review   Make the settings p…  Enter to r…","plain":true},
+        "props": {"key":"T-403","label":"T-403 ◆ review  Make the settings p…  Enter to re…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-403"]},
-          {"type":"Text","props":{"color":"warning"},"children":[" ◆ review   "]},
+          {"type":"Text","props":{"color":"warning"},"children":[" ◆ review  "]},
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Make the settings p…"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  Enter to r…"]}
+          {"type":"Text","props":{"color":"inactive"},"children":["  Enter to re…"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-404","label":"T-404 ? waiting  Pick the colors for…   Yellow or…","plain":true},
+        "props": {"key":"T-404","label":"T-404 ? waiting Pick the colors for…  Yellow or b…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-404"]},
-          {"type":"Text","props":{"color":"warning"},"children":[" ? waiting  "]},
+          {"type":"Text","props":{"color":"warning"},"children":[" ? waiting "]},
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Pick the colors for…"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["   Yellow or…"]}
+          {"type":"Text","props":{"color":"inactive"},"children":["  Yellow or b…"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-405","label":"T-405 ✗ failed   Rename the scouts p…   The tests…","plain":true},
+        "props": {"key":"T-405","label":"T-405 ✗ failed  Rename the scouts p…  The tests f…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-405"]},
-          {"type":"Text","props":{"color":"error"},"children":[" ✗ failed   "]},
+          {"type":"Text","props":{"color":"error"},"children":[" ✗ failed  "]},
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Rename the scouts p…"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["   The tests…"]}
+          {"type":"Text","props":{"color":"inactive"},"children":["  The tests f…"]}
         ]
       },
       {"type":"Text","children":[" "]},
       {
         "type": "Button",
-        "props": {"key":"T-402","label":"T-402 ▶          Keep the search box open while t…","plain":true},
+        "props": {"key":"T-402","label":"T-402 ▶         Keep the search box open while ty…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-402"]},
-          {"type":"Text","props":{"color":"ide"},"children":[" ▶          "]},
-          {"type":"Text","props":{"bold":false,"color":"text"},"children":["Keep the search box open while t…"]}
+          {"type":"Text","props":{"color":"ide"},"children":[" ▶         "]},
+          {"type":"Text","props":{"bold":false,"color":"text"},"children":["Keep the search box open while ty…"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-401","label":"T-401 ▶ 2m       Show the plugin version…   [docs]","plain":true},
+        "props": {"key":"T-401","label":"T-401 ▶ 2m      Show the plugin version i…  [docs]","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-401"]},
-          {"type":"Text","props":{"color":"ide"},"children":[" ▶ 2m       "]},
-          {"type":"Text","props":{"bold":false,"color":"text"},"children":["Show the plugin version…"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["   [docs]"]}
+          {"type":"Text","props":{"color":"ide"},"children":[" ▶ 2m      "]},
+          {"type":"Text","props":{"bold":false,"color":"text"},"children":["Show the plugin version i…"]},
+          {"type":"Text","props":{"color":"inactive"},"children":["  [docs]"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-406","label":"T-406 ○          Write the guide section about ad…","plain":true},
+        "props": {"key":"T-406","label":"T-406 ○         Write the guide section about add…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-406"]},
-          {"type":"Text","props":{"color":"text"},"children":[" ○          "]},
-          {"type":"Text","props":{"bold":false,"color":"text"},"children":["Write the guide section about ad…"]}
+          {"type":"Text","props":{"color":"text"},"children":[" ○         "]},
+          {"type":"Text","props":{"bold":false,"color":"text"},"children":["Write the guide section about add…"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-407","label":"T-407 ○          Let the lead read t…   waits for…","plain":true},
+        "props": {"key":"T-407","label":"T-407 ○         Let the lead read t…  waits for T…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-407"]},
-          {"type":"Text","props":{"color":"text"},"children":[" ○          "]},
+          {"type":"Text","props":{"color":"text"},"children":[" ○         "]},
           {"type":"Text","props":{"bold":false,"color":"text"},"children":["Let the lead read t…"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["   waits for…"]}
+          {"type":"Text","props":{"color":"inactive"},"children":["  waits for T…"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-408","label":"T-408 ○          Add a short CHANGELOG line for e…","plain":true},
+        "props": {"key":"T-408","label":"T-408 ○         Add a short CHANGELOG line for ev…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-408"]},
-          {"type":"Text","props":{"color":"text"},"children":[" ○          "]},
-          {"type":"Text","props":{"bold":false,"color":"text"},"children":["Add a short CHANGELOG line for e…"]}
+          {"type":"Text","props":{"color":"text"},"children":[" ○         "]},
+          {"type":"Text","props":{"bold":false,"color":"text"},"children":["Add a short CHANGELOG line for ev…"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-410","label":"T-410 ○          Show which branch a task merges…","plain":true},
+        "props": {"key":"T-410","label":"T-410 ○         Show which branch a task merges i…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-410"]},
-          {"type":"Text","props":{"color":"text"},"children":[" ○          "]},
-          {"type":"Text","props":{"bold":false,"color":"text"},"children":["Show which branch a task merges…"]}
+          {"type":"Text","props":{"color":"text"},"children":[" ○         "]},
+          {"type":"Text","props":{"bold":false,"color":"text"},"children":["Show which branch a task merges i…"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-419","label":"T-419 ○          Clean up the old stage engine na…","plain":true},
+        "props": {"key":"T-419","label":"T-419 ○         Clean up the old stage engine nam…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-419"]},
-          {"type":"Text","props":{"color":"text"},"children":[" ○          "]},
-          {"type":"Text","props":{"bold":false,"color":"text"},"children":["Clean up the old stage engine na…"]}
+          {"type":"Text","props":{"color":"text"},"children":[" ○         "]},
+          {"type":"Text","props":{"bold":false,"color":"text"},"children":["Clean up the old stage engine nam…"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-409","label":"T-409 ‖ paused   Stop a worker that runs past its…","plain":true},
+        "props": {"key":"T-409","label":"T-409 ‖ paused  Stop a worker that runs past its…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-409"]},
-          {"type":"Text","props":{"color":"permission"},"children":[" ‖ paused   "]},
+          {"type":"Text","props":{"color":"permission"},"children":[" ‖ paused  "]},
           {"type":"Text","props":{"bold":false,"color":"text"},"children":["Stop a worker that runs past its…"]}
         ]
       },
@@ -3009,128 +3009,128 @@ export const BEFORE: Record<string, unknown> = {
       {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["NEEDS YOU"]},
       {
         "type": "Button",
-        "props": {"key":"T-420","label":"T-420 ◆ answer   Research how other tools draw a task board in an editor…  [investigation]","plain":true,"autoFocus":true},
+        "props": {"key":"T-420","label":"T-420 ◆ answer  Research how other tools draw a task board in an editor…   [investigation]","plain":true,"autoFocus":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-420"]},
-          {"type":"Text","props":{"color":"warning"},"children":[" ◆ answer   "]},
+          {"type":"Text","props":{"color":"warning"},"children":[" ◆ answer  "]},
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Research how other tools draw a task board in an editor…"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  [investigation]"]}
+          {"type":"Text","props":{"color":"inactive"},"children":["   [investigation]"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-403","label":"T-403 ◆ review   Make the settings page show every group with its own sh…  Enter to review","plain":true},
+        "props": {"key":"T-403","label":"T-403 ◆ review  Make the settings page show every group with its own sho…  Enter to review","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-403"]},
-          {"type":"Text","props":{"color":"warning"},"children":[" ◆ review   "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Make the settings page show every group with its own sh…"]},
+          {"type":"Text","props":{"color":"warning"},"children":[" ◆ review  "]},
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Make the settings page show every group with its own sho…"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  Enter to review"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-404","label":"T-404 ? waiting  Pick the colors for the review mark on light…  Yellow or blue for review?","plain":true},
+        "props": {"key":"T-404","label":"T-404 ? waiting Pick the colors for the review mark on light…   Yellow or blue for review?","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-404"]},
-          {"type":"Text","props":{"color":"warning"},"children":[" ? waiting  "]},
+          {"type":"Text","props":{"color":"warning"},"children":[" ? waiting "]},
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Pick the colors for the review mark on light…"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  Yellow or blue for review?"]}
+          {"type":"Text","props":{"color":"inactive"},"children":["   Yellow or blue for review?"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-405","label":"T-405 ✗ failed   Rename the scouts page heading and move its buttons u…  The tests failed.","plain":true},
+        "props": {"key":"T-405","label":"T-405 ✗ failed  Rename the scouts page heading and move its buttons un…  The tests failed.","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-405"]},
-          {"type":"Text","props":{"color":"error"},"children":[" ✗ failed   "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Rename the scouts page heading and move its buttons u…"]},
+          {"type":"Text","props":{"color":"error"},"children":[" ✗ failed  "]},
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Rename the scouts page heading and move its buttons un…"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  The tests failed."]}
         ]
       },
       {"type":"Text","children":[" "]},
       {
         "type": "Button",
-        "props": {"key":"T-402","label":"T-402 ▶          Keep the search box open while typing several words in a row","plain":true},
+        "props": {"key":"T-402","label":"T-402 ▶         Keep the search box open while typing several words in a row","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-402"]},
-          {"type":"Text","props":{"color":"ide"},"children":[" ▶          "]},
+          {"type":"Text","props":{"color":"ide"},"children":[" ▶         "]},
           {"type":"Text","props":{"bold":false,"color":"text"},"children":["Keep the search box open while typing several words in a row"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-401","label":"T-401 ▶ 2m       Show the plugin version in the board title and the band above th…  [docs]","plain":true},
+        "props": {"key":"T-401","label":"T-401 ▶ 2m      Show the plugin version in the board title and the band above the…  [docs]","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-401"]},
-          {"type":"Text","props":{"color":"ide"},"children":[" ▶ 2m       "]},
-          {"type":"Text","props":{"bold":false,"color":"text"},"children":["Show the plugin version in the board title and the band above th…"]},
+          {"type":"Text","props":{"color":"ide"},"children":[" ▶ 2m      "]},
+          {"type":"Text","props":{"bold":false,"color":"text"},"children":["Show the plugin version in the board title and the band above the…"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  [docs]"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-406","label":"T-406 ○          Write the guide section about adding a new scout from the board panel","plain":true},
+        "props": {"key":"T-406","label":"T-406 ○         Write the guide section about adding a new scout from the board panel","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-406"]},
-          {"type":"Text","props":{"color":"text"},"children":[" ○          "]},
+          {"type":"Text","props":{"color":"text"},"children":[" ○         "]},
           {"type":"Text","props":{"bold":false,"color":"text"},"children":["Write the guide section about adding a new scout from the board panel"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-407","label":"T-407 ○          Let the lead read the archived tasks when the owner ask…  waits for T-406","plain":true},
+        "props": {"key":"T-407","label":"T-407 ○         Let the lead read the archived tasks when the owner asks…  waits for T-406","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-407"]},
-          {"type":"Text","props":{"color":"text"},"children":[" ○          "]},
-          {"type":"Text","props":{"bold":false,"color":"text"},"children":["Let the lead read the archived tasks when the owner ask…"]},
+          {"type":"Text","props":{"color":"text"},"children":[" ○         "]},
+          {"type":"Text","props":{"bold":false,"color":"text"},"children":["Let the lead read the archived tasks when the owner asks…"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  waits for T-406"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-408","label":"T-408 ○          Add a short CHANGELOG line for every merged task automatically","plain":true},
+        "props": {"key":"T-408","label":"T-408 ○         Add a short CHANGELOG line for every merged task automatically","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-408"]},
-          {"type":"Text","props":{"color":"text"},"children":[" ○          "]},
+          {"type":"Text","props":{"color":"text"},"children":[" ○         "]},
           {"type":"Text","props":{"bold":false,"color":"text"},"children":["Add a short CHANGELOG line for every merged task automatically"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-410","label":"T-410 ○          Show which branch a task merges into when it is not the current one","plain":true},
+        "props": {"key":"T-410","label":"T-410 ○         Show which branch a task merges into when it is not the current one","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-410"]},
-          {"type":"Text","props":{"color":"text"},"children":[" ○          "]},
+          {"type":"Text","props":{"color":"text"},"children":[" ○         "]},
           {"type":"Text","props":{"bold":false,"color":"text"},"children":["Show which branch a task merges into when it is not the current one"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-419","label":"T-419 ○          Clean up the old stage engine names left in the comments of the hooks","plain":true},
+        "props": {"key":"T-419","label":"T-419 ○         Clean up the old stage engine names left in the comments of the hooks","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-419"]},
-          {"type":"Text","props":{"color":"text"},"children":[" ○          "]},
+          {"type":"Text","props":{"color":"text"},"children":[" ○         "]},
           {"type":"Text","props":{"bold":false,"color":"text"},"children":["Clean up the old stage engine names left in the comments of the hooks"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"T-409","label":"T-409 ‖ paused   Stop a worker that runs past its time limit and ask the owner first","plain":true},
+        "props": {"key":"T-409","label":"T-409 ‖ paused  Stop a worker that runs past its time limit and ask the owner first","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-409"]},
-          {"type":"Text","props":{"color":"permission"},"children":[" ‖ paused   "]},
+          {"type":"Text","props":{"color":"permission"},"children":[" ‖ paused  "]},
           {"type":"Text","props":{"bold":false,"color":"text"},"children":["Stop a worker that runs past its time limit and ask the owner first"]}
         ]
       },

@@ -107,7 +107,9 @@ export async function listPage($: $, pane: PaneParts) {
   const idWidth = Math.max(4, ...shown.map(x => x.id.length))
   // a doing task: the total work time of all tries, "1h40m", after its step's icon in a check step (rowMark): "⊛ 9m",
   // with no try mark (T-628: the band and the task page show it); narrow, the time is left out (see rowStates)
-  const { states, width: cellWidth } = rowStates(shown, nowMs, since, w => w <= width - (4 + idWidth + 3 + 2) - TITLE_ROOM, false)
+  // T-893: one space between the state and the title ("T-888 ⊛ 1m title"), none when no row has a state
+  const { states, width: cellWidth } = rowStates(shown, nowMs, since, w => w <= width - (4 + idWidth + 3 + 1) - TITLE_ROOM, false)
+  const gap = cellWidth ? ' ' : ''
   // the list's own colors: failed red, review and waiting yellow, doing blue, done green
   const tone = LIST_TONE
   const pressDay = (day: string) => (day === 'backlog' ? toggleBacklog : day === 'backlog-more' ? showAllBacklog : day === 'done' ? toggleDone : day === 'dropped' ? toggleDropped : toggleDay(day))
@@ -177,7 +179,7 @@ export async function listPage($: $, pane: PaneParts) {
         }
         const x = r.task
         const closed = isFinished(x) || x.status === 'backlog'
-        const lead = r.indent + idWidth + 3 + cellWidth + 2
+        const lead = r.indent + idWidth + 3 + cellWidth + gap.length
         const state = states.get(x.id) ?? { front: '', tag: '', back: '' }
         const fit = fitRow(lead, x.title, rowExtra(x, v.tasks, v.home_branch ?? '', v.max_minutes, nowMs), width, x.status === 'failed')
         return (
@@ -187,7 +189,7 @@ export async function listPage($: $, pane: PaneParts) {
               {x.id.padEnd(idWidth)}
             </Text>
             {/* an approved task whose approve runs is shown as running (shownStatus): the doing tone, not bold */}
-            <Text color={C(tone[shownStatus(x, nowMs)]!)}>{` ${rowMark(x, nowMs)} ${stateText(state)}  `}</Text>
+            <Text color={C(tone[shownStatus(x, nowMs)]!)}>{` ${rowMark(x, nowMs)} ${stateText(state)}${gap}`}</Text>
             <Text bold={ownersTurn(x, nowMs)} color={C(closed ? 'inactive' : 'text')}>
               {fit.title}
             </Text>

@@ -76,7 +76,7 @@ test('T-863: a task waiting in the queue shows the time since it entered the que
   const lane = liveLanes(v, NOW)[0]!
   expect(lane.station).toBe('queue')
   const form = bandItems(v, NOW)[0]!.forms[0]!
-  expect(form).toMatch(/queue 1m$/)
+  expect(form).toBe('1m')
 })
 
 test('T-863: the stage chart does not count the idle stretch as work; lifetime and lead time stay wall-clock', () => {

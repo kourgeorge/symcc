@@ -168,7 +168,7 @@ once you have cleared them and its merge runs.
 | merge | `⇢` | The branch moves forward |
 
 The board row shows the stage icon instead of `▶`, then the time. In Claude Code the band above
-the prompt shows the stage's icon, then the time in that stage: `⌕ T-740 8m`, or `⌕ T-740 8m (try 2)` from the second try on (the icons ▶ and ⌕ already say work and checker, so those two words are left out; the other stages keep theirs, like `queue 10s`). A doing task's page names the stage on the state line of its header
+the prompt shows the stage's icon, then the time in that stage: `⌕ T-740 8m`, or `⌕ T-740 8m (try 2)` from the second try on (the icon says the stage, so no stage name is written: `⧗ T-741 10s`, not `queue 10s`). One space sits between the parts of a row, on the band and in the Tasks list (`T-740 ⌕ 8m Title`); the states are padded to one width so the titles still line up. A doing task's page names the stage on the state line of its header
 (see [The task page and the scout page](#the-task-page-and-the-scout-page)) and has a **Steps** row in Details
 for the whole way, such as `worker ✓ → prep ✓ → ● checker → queue → test → merge` (see
 [What a task shows on its way to the merge](#what-a-task-shows-on-its-way-to-the-merge)). A task
@@ -1851,7 +1851,7 @@ counted: when Claude Code was closed for a day and reopened, the try goes on (it
 and only the stretches when its worker, checker or tests really ran count. The same active time
 is used for the band, the Live tab, the task page's Tries and Runs lines, `/symcc-stats` work
 time, the over-time check (`max_minutes`) and the stage charts. A task in prep, queue, tests or
-merge shows the time since that step began (`queue 1m`), not the time since the try started.
+merge shows the time since that step began (`⧗ 1m`), not the time since the try started.
 Totals since the task was made (the lead time, `/symcc-stats` lifetime) stay wall-clock time.
 
 When a row is short of room, the time is left out first, then the try.
