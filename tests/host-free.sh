@@ -67,6 +67,11 @@ if [ -f hooks/engine.ts ] && [ -f tests/engine-names.mjs ]; then
   fi
 fi
 
+# T-926: every host.env / $.env name read in hooks/ is written out in the Claude host's envGet
+if [ -f tests/env-names.sh ] && [ -f hooks/claude/host.ts ]; then
+  sh tests/env-names.sh "$root" >/dev/null || bad "tests/env-names.sh: an env read is missing from envGet in hooks/claude/host.ts (see above)"
+fi
+
 # Claude Code's tool names, quoted. Role files use symcc's words (tools: web); only hooks/claude/ maps them.
 TOOLS='Read|Edit|Write|MultiEdit|NotebookEdit|Bash|BashOutput|KillShell|Glob|Grep|LS|WebSearch|WebFetch|TodoWrite|Task|Agent|AskUserQuestion|ExitPlanMode|EnterPlanMode|Skill'
 hits=$(code | grep -E "['\"\`]($TOOLS)['\"\`]|mcp__")

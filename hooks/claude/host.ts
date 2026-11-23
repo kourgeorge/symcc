@@ -157,13 +157,20 @@ export function claudeProcesses($: EngineInterface): HostProcesses {
 }
 
 /**
- * The environment variables symcc reads (claude/lead-usage.ts, app/symcc.ts). Claude Code's loader wants each name
- * `$.env.get` reads written out, so the modules' reads can be listed: one more name means one more line here.
+ * The environment variables symcc reads (claude/lead-usage.ts, app/symcc.ts, app/dam.ts, app/ask.ts, app/tools.ts).
+ * Claude Code's loader wants each name `$.env.get` reads written out, so the modules' reads can be listed: one more
+ * name means one more line here. tests/env-names.sh fails when a host.env / $.env read in hooks/ names one not listed.
  */
 function envGet($: EngineInterface, name: string): Promise<string | undefined> {
   if (name === 'HOME') return $.env.get('HOME')
   if (name === 'USERPROFILE') return $.env.get('USERPROFILE')
   if (name === 'CLAUDE_CONFIG_DIR') return $.env.get('CLAUDE_CONFIG_DIR')
+  // T-922: DAM_ENV (core/dam.ts), set when the session runs under DAM
+  if (name === 'PLATFORM_HARNESS') return $.env.get('PLATFORM_HARNESS')
+  // app/ask.ts: the temp folder (macOS /var/folders/...) where scratch git is allowed
+  if (name === 'TMPDIR') return $.env.get('TMPDIR')
+  // app/tools.ts: tells Windows apart when uname says nothing
+  if (name === 'OS') return $.env.get('OS')
   return Promise.resolve(undefined)
 }
 
