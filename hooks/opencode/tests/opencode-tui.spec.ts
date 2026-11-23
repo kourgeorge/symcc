@@ -4116,3 +4116,23 @@ test('T-855: OpenCode\'s task page draws an agent line of a try with ⌀ before 
   const lines = panelLines({ ...f, view: { ...f.view, tasks } }, { opened: 'T-2', cursor: 0 }, NOW, 100).lines.map(lineText)
   expect(lines.some(l => /▸ worker +ses…Qr2 .*· ⌀ 4\.1M$/.test(l.trim()))).toBe(true)
 })
+
+test('T-894: a task waiting for your files shows which files and that r merges it now; a question page has its title and "asked by the lead" line', () => {
+  const f0 = viewFile()
+  const tasks = f0.view.tasks.map(t => (t.id === 'T-3' ? { ...t, live: { merge_wait: { dirty: ['src/a.ts', 'src/b.ts'] } }, } : t))
+  const f: ViewFile = { ...f0, view: { ...f0.view, tasks, questions: [{ id: 'Q-3', by: 'lead' as const, text: 'How often?', options: ['Once a day'], asked_at: AT }] } }
+  for (const w of [100, 40]) {
+    const page = panelLines(f, { opened: 'T-3', cursor: 0 }, NOW, w).lines.map(lineText)
+    expect(page).toContain('▍⧗ Waiting for your files')
+    const text = page.map(l => l.trim()).join(' ')
+    expect(text).toContain('src/a.ts, src/b.ts')
+    expect(text).toContain('commit or stash them, it merges on its own')
+    expect(page).toContain('  r (Merge now) merges it now')
+    expect(page.every(l => l.length <= w)).toBe(true)
+    const q = panelLines(f, { opened: 'Q-3', cursor: 0 }, NOW, w).lines.map(lineText)
+    expect(q[0]).toBe('Q-3 Question for you')
+    expect(q).toContain(`asked by the lead · ${when(AT)}`)
+    expect(q).toContain('How often?')
+    expect(q.every(l => l.length <= w)).toBe(true)
+  }
+})

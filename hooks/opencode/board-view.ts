@@ -25,7 +25,7 @@ import {
   gitNotice, isFinished, statusCounts, newestFirst, bandLeads, bandNote, bandBrand, bandWhere, boardBrand, modeLabel, modeOf, planBandText, withCrew, questionsForYou,
   bannerLines, bannerRule, footerRule, type BannerTone, panelSections, localOffset, when, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, ALL_CLEAR,
   rowStates, rowMark, TITLE_ROOM, fitRow, rowExtra, questionsLabel, archivedOf, archivedNote, statusMark, detailRows, detailRowLines, wrapSegs, hintLineText,
-  type KeyHint, type Seg, type BoardTask, intoOf, taskActions, taskAsks, actionButtonLabel, packRows, type TaskAction, type TaskActionId,
+  type KeyHint, type Seg, type BoardTask, intoOf, taskActions, taskAsks, fileWaitText, actionButtonLabel, packRows, type TaskAction, type TaskActionId,
   ownersTurn, shownStatus, sortScouts, scoutListRows, scoutHowTo, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem, scoutFile,
   SETTING_GROUPS, SETTINGS, isSettingPage, settingInfo, settingShown, settingValue, viewAsBoard, cantPlayNotify, groupSummaryParts,
   type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction, type DefEditField, type TaskVerb, settingsKeys, rolesKeys, kindsKeys, roleEditKeys, defEditFields, roleTools, roleFileText, roleSkipReason, kindFileText, kindSkipReason,
@@ -1506,11 +1506,14 @@ function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = ''
   }
   const q = v.questions?.find(x => x.id === id)
   if (q) {
-    addAll(wrapSegs([{ text: q.id, color: 'claude', bold: true }, { text: `  ${q.text}`, color: 'text', bold: true }], w))
+    // T-894: the title and the dim "asked by the lead · <when>" line, as on Claude Code's question page
+    addAll(wrapSegs([{ text: q.id, color: 'claude', bold: true }, { text: '  Question for you', color: 'text', bold: true }], w))
+    addAll(wrapSegs([{ text: `asked by the lead · ${when(q.asked_at)}`, color: 'inactive' }], w))
     // its Back button, as Claude Code's question page has; it stays at the top with the question
     addAll(buttonLines([BACK_BUTTON], w))
     const head = b.lines.length
     b.add([{ text: ' ', color: 'text' }])
+    addAll(wrapSegs([{ text: q.text, color: 'text', bold: true }], w))
     choices()
     return { ...b, ids: [], selected: id, head }
   }
@@ -1524,6 +1527,15 @@ function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = ''
     buttons: taskButtons(t, busy),
   }, w))
   const head = b.lines.length
+  // T-894: finished work waiting only for the owner's files says which files and what to do, like the terminal's
+  // yellow box and VS Code's "Waiting for your files" callout; r runs just the merge now
+  const fileWait = fileWaitText(t)
+  if (fileWait) {
+    b.add([{ text: ' ', color: 'text' }])
+    b.add([{ text: '▍⧗ Waiting for your files', color: 'warning', bold: true }])
+    addAll(wrapSegs([{ text: fileWait, color: 'text' }], w - 2).map(l => [{ text: '  ', color: 'text' }, ...l]))
+    if (!merging) b.add([{ text: '  r (Merge now) merges it now', color: 'inactive' }])
+  }
   const asked = taskAsks(t, v.max_minutes)
   if (asked) {
     b.add([{ text: ' ', color: 'text' }])
