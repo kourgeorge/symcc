@@ -279,9 +279,12 @@ test('T-738: the VS Code Live tab spaces its sections with one empty line (the p
   expect((await ui.find({ key: 'live-tasks-head' }))?.text).toMatch(/^─── ❯TASKS─+$/)
   expect((await ui.find({ key: 'live-today-head' }))?.text).toMatch(/^─── ❯TODAY─+$/)
   // T-820: the rule has the title's color, not the dim one
-  for (const k of ['live-tasks-head', 'live-today-head']) {
-    const [title, rule] = (await ui.find({ key: k }))!.children as { props: { color: unknown } }[]
-    expect([k, rule!.props.color]).toEqual([k, title!.props.color])
+  // T-915: the lead ("─── ❯"), the title and the rule, all three in the title's color
+  for (const k of ['live-tasks-head', 'live-today-head', 'live-br-head']) {
+    const kids = (await ui.find({ key: k }))!.children as { props: { color: unknown } }[]
+    expect([k, kids.length]).toEqual([k, 3])
+    const [lead, title, rule] = kids
+    expect([k, lead!.props.color, rule!.props.color]).toEqual([k, title!.props.color, title!.props.color])
   }
   // T-789: one empty line under each heading (padding under it), not a blank Text
   for (const k of ['live-tasks-head', 'live-today-head', 'live-br-head', 'live-om-head']) expect([k, (await ui.find({ key: k }))?.props.paddingBottom]).toEqual([k, 1])
@@ -289,6 +292,47 @@ test('T-738: the VS Code Live tab spaces its sections with one empty line (the p
   for (const c of (page.children ?? []) as VsNode[]) expect([String(c?.props?.key), c?.props?.paddingTop ?? 0, c?.props?.marginTop ?? 0]).toEqual([String(c?.props?.key), 0, 0])
   await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'tasks') } })
   await ui.unmount()
+})
+
+/** A VS Code heading's cells as text, and the columns they take in their Box's gap={1} row. */
+const vsHeadCells = (n: { children?: unknown[] } | undefined) => {
+  const textOf = (x: unknown): string => typeof x === 'string' || typeof x === 'number' ? String(x) : !x || typeof x !== 'object' ? '' : typeof (x as { text?: unknown }).text === 'string' ? (x as { text: string }).text : ((x as { children?: unknown[] }).children ?? []).map(textOf).join('')
+  // a link cell (the org-mem title) is markdown in its text prop: "**[TITLE](href)**", only TITLE is seen
+  const md = (x: unknown) => String((x as { props?: { text?: unknown } })?.props?.text ?? '').replace(/\]\([^)]*\)/g, '').replace(/\*\*|\[/g, '')
+  const cells = (n?.children ?? []).map(c => textOf(c) || md(c))
+  return { cells, cols: cells.reduce((w, c) => w + textWidth(c), 0) + Math.max(0, cells.length - 1) }
+}
+test('T-915: the VS Code Live headings at 80 and narrow widths: "─── ❯", the name, the rule to the right edge; "─ ❯" and the name cut when narrow', async ($, on) => {
+  seedBoard(on, { view: liveView() })
+  for (const w of [80, 30, 20]) {
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: w }, surface: 'vscode' })
+    await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'live') } })
+    const tasks = vsHeadCells(await ui.find({ key: 'live-tasks-head' }))
+    const br = vsHeadCells(await ui.find({ key: 'live-br-head' }))
+    const om = vsHeadCells(await ui.find({ key: 'live-om-head' }))
+    if (w === 80) {
+      expect(tasks.cells).toEqual(['─── ❯', 'TASKS', '─'.repeat(80 - 12)])
+      expect(br.cells).toEqual(['─── ❯', 'BRANCHES', '─'.repeat(80 - 15)])
+      expect(om.cells.slice(0, 2)).toEqual(['─── ❯', 'ORGANIZATIONAL MEMORY'])
+      expect(om.cells[2]).toMatch(/^\d+ \/ 60$/)
+    }
+    if (w === 30) {
+      expect(tasks.cells).toEqual(['─── ❯', 'TASKS', '─'.repeat(30 - 12)])
+      expect(om.cells.slice(0, 2)).toEqual(['─── ❯', 'ORG-MEM'])
+    }
+    if (w === 20) {
+      // the narrowest VS Code page (paneWidth never goes under 20): no room for the count, so "ORG-MEM" alone, as the terminal
+      expect(tasks.cells).toEqual(['─── ❯', 'TASKS', '─'.repeat(20 - 12)])
+      expect(om.cells).toEqual(['─── ❯', 'ORG-MEM', '─'.repeat(20 - 14)])
+    }
+    // every heading reaches the right edge exactly while it has a rule, and is never wider than the panel
+    for (const [k, h] of [['tasks', tasks], ['br', br], ['om', om]] as const) {
+      expect([w, k, h.cols <= w]).toEqual([w, k, true])
+      if (h.cells[h.cells.length - 1]!.startsWith('─') && h.cells.length > 2) expect([w, k, h.cols]).toEqual([w, k, w])
+    }
+    await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'tasks') } })
+    await ui.unmount()
+  }
 })
 
 test('T-773: a freshly opened VS Code board (no tab saved) shows the Live tab and draws the Live page', async ($, on) => {

@@ -15,12 +15,13 @@
 // T-727: under the lanes, the Branches section (core's liveBranches) drawn with real lines: see branchesVs.
 // T-747: each section has a bold heading with the terminal's names (core's LIVE_SECTIONS): Tasks, Today, Branches,
 // Organizational memory (that one a link to all notes).
-import { LIVE_DIVIDER, type BranchRow, type LiveBranches, liveBranches, liveIdle, LIVE_AGENT_MARK, LIVE_RUN_MARK, liveLegend, LIVE_SECTIONS, type LiveLane, liveInner, LIVE_HEAD_LEAD, liveRuleText, type LiveLayout, type LiveSeg, LIVE_TONE, laneLines, liveHeader, liveHeaderSegs, liveNeeds, liveTaskLanes, liveLayout, liveOrgMem, liveColumns, liveTodayLines, liveTrains, segText, trainRows } from '../../core/live'
+import { LIVE_DIVIDER, type BranchRow, type LiveBranches, liveBranches, liveIdle, LIVE_AGENT_MARK, LIVE_RUN_MARK, liveLegend, LIVE_SECTIONS, type LiveLane, liveInner, liveHeadParts, liveOrgMemHeadParts, liveRuleDash, type LiveLayout, type LiveSeg, LIVE_TONE, laneLines, liveHeader, liveHeaderSegs, liveNeeds, liveTaskLanes, liveLayout, liveOrgMem, liveColumns, liveTodayLines, liveTrains, segText, trainRows } from '../../core/live'
 import { panelValues, type $ } from '../panel'
 import type { PaneParts } from './parts'
 import { LIVE_TICK_MS, ORG_MEM_ALL_KEY, branchKey, needKey, laneKey, liveTick, newestKey, openOrgMemPage, topicKey, trainKey } from './live'
 import { mdLink, vsFooter, vsHref, vsLink } from './vscode'
 import { ORG_MEM_MAX_LINES, orgMemCount, orgMemShortDay, type OrgMemNote } from '../../core/org-mem'
+import { textWidth } from '../../core/width'
 
 /** The pixels per text column in the drawings (about one character of VS Code's panel font). */
 const COL_PX = 8
@@ -99,6 +100,21 @@ export function branchRowSvg(r: Pick<BranchRow, 'col' | 'lines' | 'tee' | 'kind'
   return { source: `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${BR_H}" viewBox="0 0 ${width} ${BR_H}">${parts.join('')}</svg>`, width, height: BR_H }
 }
 
+/** T-789/T-915: a section heading in VS Code, the terminal's words at this width (core's liveHeadParts): "─── ❯", the name
+ *  in UPPERCASE, bold, then the thin rule to the right edge; when narrow "─ ❯" and the name cut. The Box's gap={1} is the
+ *  lead's space and the one before the rule. One empty line under it. */
+function vsHeadLine(pane: PaneParts, key: string, name: string) {
+  const { Box, Text, C, width } = pane
+  const p = liveHeadParts(name, width, 1)
+  return (
+    <Box key={key} flexDirection="row" gap={1} paddingBottom={1}>
+      {p.lead ? <Text key={`${key}-lead`} color={C('text')}>{p.lead.trim()}</Text> : null}
+      <Text key={`${key}-name`} bold color={C('text')}>{p.name}</Text>
+      {p.rule ? <Text key={`${key}-rule`} color={C('text')}>{p.rule}</Text> : null}
+    </Box>
+  )
+}
+
 /** T-727: the Live tab's Branches section in VS Code: core's liveBranches drawn with real lines (an Svg per line, each
  *  one's `alt` the terminal's text), each task's id a link that opens it, its figures after it. */
 function branchesVs(pane: PaneParts, open: (id: string) => () => void) {
@@ -110,11 +126,7 @@ function branchesVs(pane: PaneParts, open: (id: string) => () => void) {
   const words = (xs: LiveSeg[]) => xs.map(s => <Text color={C(LIVE_TONE[s.tone])}>{s.text}</Text>)
   return (
     <Box key="live-br" flexDirection="column">
-      <Box key="live-br-head" flexDirection="row" gap={1} paddingBottom={1}>
-        <Text key="live-br-lead" color={C('text')}>{LIVE_HEAD_LEAD.trim()}</Text>
-        <Text bold color={C('text')}>{LIVE_SECTIONS.branches.toUpperCase()}</Text>
-        <Text key="live-br-rule" color={C('text')}>{liveRuleText(LIVE_HEAD_LEAD.length + LIVE_SECTIONS.branches.length, width).trim()}</Text>
-      </Box>
+      {vsHeadLine(pane, 'live-br-head', LIVE_SECTIONS.branches)}
       <Box key="live-br-main" flexDirection="row" gap={1} alignItems="center">
         <Svg key="live-br-main-svg" source={main.source} width={main.width} height={main.height} alt={segText(br.main).trim()} />
         <Box key="live-br-main-text" flexDirection="column">
@@ -164,13 +176,7 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
     </Box>
   )
   /** T-789/T-915: a section heading: "─── ❯", the name in UPPERCASE, bold, a thin rule, one empty line under it. */
-  const headLine = (key: string, name: string) => (
-    <Box key={key} flexDirection="row" gap={1} paddingBottom={1}>
-      <Text key={`${key}-lead`} color={C('text')}>{LIVE_HEAD_LEAD.trim()}</Text>
-      <Text bold color={C('text')}>{name.toUpperCase()}</Text>
-      <Text key={`${key}-rule`} color={C('text')}>{liveRuleText(LIVE_HEAD_LEAD.length + name.length, width).trim()}</Text>
-    </Box>
-  )
+  const headLine = (key: string, name: string) => vsHeadLine(pane, key, name)
   const headSegs = liveHeaderSegs(v, running, nowMs, width)
   // T-786: ▍Needs you rows: the warning mark and text, the id a link that opens the task or question
   const needs = liveNeeds(v, nowMs, Infinity)
@@ -282,6 +288,11 @@ function orgMemSectionVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
   const { Box, Text, Button, C, width, vs } = pane
   const om = liveOrgMem(notes, width)
   const all = vsHref('page', 'orgmem')
+  // T-915: the terminal's words at this width (shorter title, cut name when narrow); the Box's gap={1} puts one column
+  // after the lead, the title and the count, so the rule takes what is left to the right edge
+  const head = liveOrgMemHeadParts(notes.length, width)
+  const headUsed = head.lead.length + textWidth(head.title) + (head.count ? 1 + textWidth(head.count) : 0)
+  const headRule = liveRuleDash(headUsed, width, 1)
   const label = (key: string, text: string) => (
     <Text key={key} color={C('inactive')}>
       {text.trim()}
@@ -290,10 +301,10 @@ function orgMemSectionVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
   return (
     <Box key="live-om" flexDirection="column">
       <Box key="live-om-head" flexDirection="row" gap={1} alignItems="center" paddingBottom={1}>
-        <Text key="live-om-lead" color={C('text')}>{LIVE_HEAD_LEAD.trim()}</Text>
-        {vsLink(vs, 'live-orgmem', `**${mdLink(LIVE_SECTIONS.orgMem.toUpperCase(), all)}**`, [[all, openOrgMemPage($)]])}
-        <Text key="live-om-count" color={C('inactive')}>{`${notes.length} / ${ORG_MEM_MAX_LINES}`}</Text>
-        <Text key="live-om-rule" color={C('text')}>{liveRuleText(LIVE_HEAD_LEAD.length + LIVE_SECTIONS.orgMem.length + 3 + `${notes.length} / ${ORG_MEM_MAX_LINES}`.length, width).trim()}</Text>
+        {head.lead ? <Text key="live-om-lead" color={C('text')}>{head.lead.trim()}</Text> : null}
+        {vsLink(vs, 'live-orgmem', `**${mdLink(head.title, all)}**`, [[all, openOrgMemPage($)]])}
+        {head.count ? <Text key="live-om-count" color={C('inactive')}>{head.count}</Text> : null}
+        {headRule ? <Text key="live-om-rule" color={C('text')}>{headRule}</Text> : null}
       </Box>
       {/* T-866: "newest [all]": the all button opens all notes */}
       <Box key="live-om-newest-row" flexDirection="row" gap={1} alignItems="center">

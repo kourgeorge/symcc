@@ -557,11 +557,18 @@ export function liveNeeds(view: LiveView & { questions?: readonly { id: string; 
 export const LIVE_INDENT = ' '
 /** The width left for a section's lines in `width` columns (after LIVE_INDENT). */
 export const liveInner = (width: number): number => Math.max(1, Math.floor(width) - LIVE_INDENT.length)
+/** T-810/T-915: the thin dashes that take a heading line in `width` columns from `used` to the right edge, after the
+ *  `gapCols` columns a client's own gaps take between its cells (one that writes a space into the text passes 1):
+ *  none in under 4 columns, or when there is no room. */
+export const liveRuleDash = (used: number, width: number, gapCols = 1): string => {
+  const room = Math.floor(width) - used - gapCols
+  return Math.floor(width) < 4 || room < 1 ? '' : '─'.repeat(room)
+}
 /** T-810: the thin rule (─) after a heading that used `used` columns of `width`: a space, then ─ to the right edge
  *  (shorter when narrow, none in under 4 columns). */
 export const liveRuleText = (used: number, width: number): string => {
-  const room = Math.floor(width) - used - 1
-  return Math.floor(width) < 4 || room < 1 ? '' : ` ${'─'.repeat(room)}`
+  const dashes = liveRuleDash(used, width, 1)
+  return dashes ? ` ${dashes}` : ''
 }
 /** T-915: what a section heading starts with: three thin rule characters, a space, ❯ and a space. */
 export const LIVE_HEAD_LEAD = '─── ❯ '
@@ -573,16 +580,23 @@ export const liveHeadLead = (nameW: number, width: number): string => {
   const w = Math.floor(width)
   return nameW + LIVE_HEAD_LEAD.length <= w ? LIVE_HEAD_LEAD : w >= LIVE_HEAD_LEAD_NARROW.length + 1 ? LIVE_HEAD_LEAD_NARROW : ''
 }
-/** T-789/T-810/T-915: a section's heading in `width` columns: "─── ❯ ", the name in UPPERCASE ("TASKS"), bold, then a thin
- *  rule to the right edge, all in the heading color ("─── ❯ TASKS ─────…"). When narrow: "─ ❯ " and the name cut.
- *  The client puts one empty line above it (none above the first) and one under it. */
-export const liveHeading = (name: string, width: number): LiveSeg[] => {
+/** T-915: a section heading in parts, so every client draws the same words: the lead (with its space), the name in
+ *  UPPERCASE (cut when narrow) and the rule's dashes (none when there is no room). `gapCols`: the columns the client puts
+ *  after the name before the dashes (the terminal's space; VS Code's Box gap={1}, its lead drawn without its space). */
+export type LiveHeadParts = { lead: string; name: string; rule: string }
+export const liveHeadParts = (name: string, width: number, gapCols = 1): LiveHeadParts => {
   const w = Math.max(1, Math.floor(width))
   const upper = name.toUpperCase()
   const lead = liveHeadLead(textWidth(upper), w)
   const text = fitText(upper, Math.max(1, w - lead.length))
-  const rule = liveRuleText(lead.length + textWidth(text), w)
-  return [...(lead ? [{ text: lead, tone: 'heading' as const }] : []), { text, tone: 'heading' }, ...(rule ? [{ text: rule, tone: 'heading' as const }] : [])]
+  return { lead, name: text, rule: liveRuleDash(lead.length + textWidth(text), w, gapCols) }
+}
+/** T-789/T-810/T-915: a section's heading in `width` columns: "─── ❯ ", the name in UPPERCASE ("TASKS"), bold, then a thin
+ *  rule to the right edge, all in the heading color ("─── ❯ TASKS ─────…"). When narrow: "─ ❯ " and the name cut.
+ *  The client puts one empty line above it (none above the first) and one under it. */
+export const liveHeading = (name: string, width: number): LiveSeg[] => {
+  const p = liveHeadParts(name, width, 1)
+  return [...(p.lead ? [{ text: p.lead, tone: 'heading' as const }] : []), { text: p.name, tone: 'heading' }, ...(p.rule ? [{ text: ` ${p.rule}`, tone: 'heading' as const }] : [])]
 }
 /** A line under a section heading: LIVE_INDENT, then its segments. */
 export const liveIndented = (xs: readonly LiveSeg[]): LiveSeg[] => [{ text: LIVE_INDENT, tone: 'text' }, ...xs]
@@ -1339,17 +1353,32 @@ const GRID_LEAD = '   '
 const GRID_GAP = '    '
 const NEWEST_TOPIC_MAX = 16
 
-/** The section's heading in `width` columns: "ORGANIZATIONAL MEMORY   57 / 60 ────" (T-810: the count of the cap, no bar,
- *  then the thin rule; the title shorter when narrow). T-772: the count is dim, never a warning. */
-function orgMemHead(n: number, width: number): LiveSeg[] {
+/** The spaces between an Organizational memory heading's title and its count. */
+export const ORG_MEM_COUNT_GAP = '   '
+/** T-915: the Organizational memory heading in parts, so every client draws the same words: the lead (with its space),
+ *  the title ("ORGANIZATIONAL MEMORY", else "ORG-MEM"), the spaces before the count, and the count ('' when even
+ *  "ORG-MEM" and the count don't fit; the name is then cut as liveHeading cuts it). */
+export type LiveOrgMemHeadParts = { lead: string; title: string; gap: string; count: string }
+export function liveOrgMemHeadParts(n: number, width: number): LiveOrgMemHeadParts {
+  const w = Math.max(1, Math.floor(width))
   const count = `${n} / ${ORG_MEM_MAX_LINES}`
   for (const title of [LIVE_SECTIONS.orgMem.toUpperCase(), 'ORG-MEM']) {
-    const used = textWidth(`${LIVE_HEAD_LEAD}${title}   ${count}`)
-    if (used > width) continue
-    const rule = liveRuleText(used, width)
-    return segs({ text: LIVE_HEAD_LEAD, tone: 'heading' }, { text: title, tone: 'heading' },{ text: '   ', tone: 'text' }, { text: count, tone: 'dim' }, { text: rule, tone: 'heading' })
+    const used = textWidth(`${LIVE_HEAD_LEAD}${title}${ORG_MEM_COUNT_GAP}${count}`)
+    if (used > w) continue
+    return { lead: LIVE_HEAD_LEAD, title, gap: ORG_MEM_COUNT_GAP, count }
   }
-  return liveHeading('Org-mem', width)
+  const p = liveHeadParts('Org-mem', w, 1)
+  return { lead: p.lead, title: p.name, gap: '', count: '' }
+}
+/** The columns an Organizational memory heading's words take, drawn as one line (its lead's trailing space included). */
+export const liveOrgMemHeadUsed = (p: LiveOrgMemHeadParts): number => p.lead.length + textWidth(p.title) + (p.count ? textWidth(p.gap) + textWidth(p.count) : 0)
+
+/** The section's heading in `width` columns: "─── ❯ ORGANIZATIONAL MEMORY   57 / 60 ────" (T-810: the count of the cap, no
+ *  bar, then the thin rule; the title shorter when narrow). T-772: the count is dim, never a warning. */
+function orgMemHead(n: number, width: number): LiveSeg[] {
+  const p = liveOrgMemHeadParts(n, width)
+  const rule = liveRuleText(liveOrgMemHeadUsed(p), width)
+  return segs({ text: p.lead, tone: 'heading' }, { text: p.title, tone: 'heading' }, { text: p.gap, tone: 'text' }, { text: p.count, tone: 'dim' }, { text: rule, tone: 'heading' })
 }
 
 /** The newest notes' lines: "   11-21  tests      text cut with …", the topic column as wide as the longest topic shown (cut when narrow). */
