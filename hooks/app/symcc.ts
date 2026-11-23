@@ -365,7 +365,7 @@ export function isSymccTool(tool: string): boolean {
  * A tool is called (by the lead or by one of symcc's agents). Answers a refusal (`deny`) or symcc's tool's answer
  * (`result`); null: not symcc's call, the host runs it as usual and then calls otherToolDone.
  * A worker or scout symcc stopped can't do anything more, so every tool it tries is refused. A scout or checker may
- * only read the board (board and stats); its call of any other symcc tool is refused. The lead's own tools
+ * only read the board (board and stats; a scout also scouts with action list, T-895); its call of any other symcc tool is refused. The lead's own tools
  * and the workers' question tool (it knows the calling worker from `agentId`) run here.
  * An agent this copy doesn't hold is looked up on the board (agentOnBoard, T-471), so a checker or a stopped agent
  * of another session's copy is treated as here; an unreadable board throws (toolCallFailed then decides).
@@ -383,11 +383,12 @@ export async function toolCall(host: Host, tool: string, agentId: string | undef
   if (agentId && stopped.has(agentId)) return refuse(stoppedTextFor(agentId), 'stopped', { role: 'agent' })
   const on = agentId && !isOwnAgent(agentId) && (await findRoot(host)) ? await agentOnBoard(host, agentId) : undefined
   if (on?.kind === 'ended') return refuse(stoppedText(), 'stopped', { role: 'agent', task: on.task })
-  // a scout or checker only reads the board: board and stats run, every other symcc tool (ask_owner too) is refused
+  // a scout or checker only reads the board: board and stats run (and, for a scout, scouts with action list), every other symcc tool (ask_owner too) is refused
   if (agentId && (scoutRuns.has(agentId) || checkerRuns.has(agentId) || on?.kind === 'checker')) {
     const short = tool === toolName(ASK_TOOL) ? ASK_TOOL : toolNames().find(t => tool === toolName(t))
-    const why = short ? scoutToolRefusal(short, S.N.name) : null
     const scout = scoutRuns.get(agentId)
+    // T-895: a scout (not a checker) may also list the scouts (the scouts tool with action list)
+    const why = short ? scoutToolRefusal(short, S.N.name, input, scout !== undefined ? 'scout' : 'checker') : null
     const task = checkerRuns.get(agentId)?.task ?? (on?.kind === 'checker' ? on.task : undefined)
     if (why) return refuse(why, 'tools', scout !== undefined ? { role: 'scout', scout } : { role: 'checker', ...(task ? { task } : {}) })
   } else if (agentId) {

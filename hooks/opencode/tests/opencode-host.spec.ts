@@ -1164,6 +1164,17 @@ test('every lead tool and ask_owner is added as a normal tool (codemode false) w
     expect(await call('symcc_add', 'ses_scout', { title: 'x', details: 'y', why: 'z', origin_by: 'scout' })).toEqual({ refused: scoutToolRefusal('add', 'symcc') })
     expect('ok' in (await call('symcc_board', 'ses_scout'))).toBe(true)
     expect('ok' in (await call('symcc_stats', 'ses_scout'))).toBe(true)
+    // T-895: a scout may list the scouts (action list, with or without a name); any other action is refused
+    expect(await call('symcc_scouts', 'ses_scout', { action: 'list' })).toEqual({ ok: ((await toolCall(host!, 'symcc_scouts', undefined, { action: 'list' })) as { result: string }).result })
+    expect('ok' in (await call('symcc_scouts', 'ses_scout', { action: 'list', name: 'tests' }))).toBe(true)
+    for (const action of ['add', 'edit', 'remove', 'run']) {
+      const input = { action, name: 'tests', every_minutes: 5, prompt: 'x' }
+      expect(await call('symcc_scouts', 'ses_scout', input)).toEqual({ refused: scoutToolRefusal('scouts', 'symcc', input, 'scout') })
+    }
+    // a checker's scouts call is still refused, list too
+    checkerRuns.set('ses_chk', { task: 'T-1', worktree: p.wt, end: () => undefined })
+    expect(await call('symcc_scouts', 'ses_chk', { action: 'list' })).toEqual({ refused: scoutToolRefusal('scouts', 'symcc', { action: 'list' }, 'checker') })
+    checkerRuns.delete('ses_chk')
     // a worker (ses_w2 runs T-1; the engine stopped the board's old ses_worker at its start) has only ask_owner:
     // a lead tool is refused, its question is taken
     // (T-515) through the engine's own one-at-a-time board write (change), not a plain file write: the add above makes
@@ -1212,13 +1223,17 @@ test('each session is offered only the symcc tools it may call, and the lead get
     expect(toLead.system.map(x => x.text)).toEqual([leadGuide(OPENCODE_FEATURES)])
     scoutRuns.set('ses_scout', 'tests')
     const toScout = await ask('ses_scout')
-    expect(Object.keys(toScout.tools)).toEqual(['symcc_board', 'symcc_stats', 'edit'])
+    expect(Object.keys(toScout.tools)).toEqual([...TOOLS().map(t => t.name).filter(n => ['board', 'stats', 'scouts'].includes(n)).map(n => `symcc_${n}`), 'edit'])
     expect(toScout.system).toEqual([])
     workers.set('ses_w2', { task: 'T-1', worktree: p.wt, branch: 'symcc/T-1', since: Date.now() })
     expect(Object.keys((await ask('ses_w2')).tools)).toEqual(['symcc_ask_owner', 'edit'])
     // a session OpenCode made for one of symcc's agents is known by its metadata too
     f.sessions.set('ses_meta', { info: { id: 'ses_meta', metadata: { symcc: 'checker' }, location: { directory: p.main } }, looksLeft: 0, messages: [] })
+    // T-895: a checker is offered board and stats only, not scouts (that one is a scout's)
     expect(Object.keys((await ask('ses_meta')).tools)).toEqual(['symcc_board', 'symcc_stats', 'edit'])
+    checkerRuns.set('ses_chk2', { task: 'T-1', worktree: p.wt, end: () => undefined })
+    expect(Object.keys((await ask('ses_chk2')).tools)).toEqual(['symcc_board', 'symcc_stats', 'edit'])
+    checkerRuns.delete('ses_chk2')
     // T-525: a session nothing knows (not the lead, none of symcc's agents on record) is offered none of symcc's tools
     f.sessions.set('ses_gone', { info: { id: 'ses_gone', location: { directory: p.main } }, looksLeft: 0, messages: [] })
     expect(Object.keys((await ask('ses_gone')).tools)).toEqual(['edit'])

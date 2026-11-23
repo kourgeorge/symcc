@@ -159,20 +159,25 @@ export const WORKER_BASE = (name: string, tool: (t: string) => string, web = fal
 
 /**
  * The base prompt every scout and checker gets (checkers run as scouts), before its own prompt; see WORKER_BASE.
- * `o.symccTools` false: no board and stats tools are named, and the web only when `o.web` (the agent's permissions
- * are all it has).
+ * T-895: `kind` 'scout' also names the scouts tool (action list: a scout sees the other scouts). 'checker' or none
+ * given (Claude Code's one scout agent type, which checkers run as too) does not, as a checker may not call it; a
+ * scout there learns it from its run prompt (scoutToolLines in core/scouts.ts). `o.symccTools` false: no board, stats or scouts tools are named, and the web only when `o.web` (the
+ * agent's permissions are all it has).
  */
-export const SCOUT_BASE = (name: string, tool: (t: string) => string, o: BaseOptions = {}): string =>
-  o.symccTools === false
-    ? `You are a ${name} scout. You do the job your scout file gives you, using the project and the shell${o.web ? ' and the web' : ''}, and end with a short plain report (or exactly NOTHING). You never change, create or delete files in the project.`
-    : `You are a ${name} scout. You do the job your scout file gives you, using the project, the shell and the web, and end with a short plain report (or exactly NOTHING). You never change, create or delete files in the project. To look at the board, use the ${tool('board')} and ${tool('stats')} tools (they only read), not the board file.`
+export const SCOUT_BASE = (name: string, tool: (t: string) => string, o: BaseOptions = {}, kind?: 'scout' | 'checker'): string => {
+  if (o.symccTools === false)
+    return `You are a ${name} scout. You do the job your scout file gives you, using the project and the shell${o.web ? ' and the web' : ''}, and end with a short plain report (or exactly NOTHING). You never change, create or delete files in the project.`
+  const list = kind === 'scout' ? ` To see the other scouts, use the ${tool('scouts')} tool with action list (it only reads too).` : ''
+  return `You are a ${name} scout. You do the job your scout file gives you, using the project, the shell and the web, and end with a short plain report (or exactly NOTHING). You never change, create or delete files in the project. To look at the board, use the ${tool('board')} and ${tool('stats')} tools (they only read), not the board file.${list}`
+}
 
 /**
- * The base prompt for an agent of `kind`: WORKER_BASE for a worker, SCOUT_BASE for a scout or a checker. A host whose
- * agents can't call symcc's tools (a `claude -p` process, hooks/process/) passes `symccTools: false`.
+ * The base prompt for an agent of `kind`: WORKER_BASE for a worker, SCOUT_BASE for a scout or a checker (only a
+ * scout's names the scouts tool, T-895). A host whose agents can't call symcc's tools (a `claude -p` process,
+ * hooks/process/) passes `symccTools: false`.
  */
 export const basePromptFor = (kind: 'worker' | 'scout' | 'checker', name: string, tool: (t: string) => string, o: BaseOptions = {}): string =>
-  kind === 'worker' ? WORKER_BASE(name, tool, o.web === true, o.symccTools !== false) : SCOUT_BASE(name, tool, o)
+  kind === 'worker' ? WORKER_BASE(name, tool, o.web === true, o.symccTools !== false) : SCOUT_BASE(name, tool, o, kind)
 
 /**
  * A task prompt for an agent with no symcc tools: its "call the ask_owner tool" line (ASK_LINE, as the prompt was

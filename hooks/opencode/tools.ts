@@ -15,7 +15,7 @@ import { COMMANDS, runCommand, toolCall, toolCallFailed, type CommandAnswer } fr
 import { S, onHere, useName, toolName, workers, scoutRuns, checkerRuns } from '../app/state'
 import { agentOnBoard } from '../app/workers'
 import { ASK_TOOL } from '../core/ask'
-import { SCOUT_BOARD_TOOLS } from '../core/scouts'
+import { SCOUT_BOARD_TOOLS, SCOUT_LIST_TOOL } from '../core/scouts'
 import { allowAskedFiles, refuseAskedFiles } from '../app/tools'
 import { answerOnBoard } from '../app/questions'
 import { noteForLead, brief } from '../app/tell'
@@ -32,18 +32,23 @@ import { PANEL_MARK } from './board-view'
  * other session ('other': OpenCode's own subagents, the owner's other chats, or an agent of symcc's that the board no
  * longer names, T-525), which gets none of symcc's tools.
  */
-export type Caller = 'lead' | 'worker' | 'scout' | 'other'
+export type Caller = 'lead' | 'worker' | 'scout' | 'checker' | 'other'
 
 /** symcc's tools in its plain names, with their JSON schemas: the lead's, then the workers' question tool. */
 export function symccTools(): { name: string; description: string; inputSchema: Readonly<Record<string, unknown>> }[] {
   return [...TOOLS(), ASK_TOOL_DEF()]
 }
 
-/** Whether a `caller` may call symcc tool `tool` (plain name): a worker only ask_owner, a scout or checker board and stats, the lead the rest, any other session none. */
+/**
+ * Whether a `caller` may call symcc tool `tool` (plain name): a worker only ask_owner, a checker board and stats, a
+ * scout those and scouts too (T-895: toolCall lets only its action list through), the lead the rest, any other
+ * session none.
+ */
 export function mayCall(caller: Caller, tool: string): boolean {
   if (caller === 'other') return false
   if (caller === 'worker') return tool === ASK_TOOL
-  if (caller === 'scout') return SCOUT_BOARD_TOOLS.includes(tool)
+  if (caller === 'checker') return SCOUT_BOARD_TOOLS.includes(tool)
+  if (caller === 'scout') return SCOUT_BOARD_TOOLS.includes(tool) || tool === SCOUT_LIST_TOOL
   return tool !== ASK_TOOL
 }
 
@@ -59,13 +64,14 @@ export const workerToolRefusal = (tool: string) =>
  */
 export async function callerOf(host: Host, id: string, kind: () => Promise<unknown> = async () => undefined): Promise<Caller> {
   if (workers.has(id)) return 'worker'
-  if (scoutRuns.has(id) || checkerRuns.has(id)) return 'scout'
+  if (scoutRuns.has(id)) return 'scout'
+  if (checkerRuns.has(id)) return 'checker'
   const on = await agentOnBoard(host, id).catch(() => undefined)
   if (on?.kind === 'worker') return 'worker'
-  if (on?.kind === 'checker') return 'scout'
+  if (on?.kind === 'checker') return 'checker'
   const k = await kind().catch(() => undefined)
   if (k === 'worker') return 'worker'
-  if (k === 'scout' || k === 'checker') return 'scout'
+  if (k === 'scout' || k === 'checker') return k
   return 'other'
 }
 
