@@ -742,7 +742,9 @@ The life of an investigation:
    - **Keep as a note** (a button with no key on the Claude Code board, `v` in OpenCode; tool `symcc approve` with `keep_note: true`): Done, plus a
      new small docs task that writes the answer to `docs/research/<topic>.md`. That task is
      a normal change: tested and merged as usual.
-   - **Ask more** (`x`, tool `symcc reject` with your follow-up question): the task goes
+   - **Ask more** (`x`, tool `symcc reject` with your follow-up question; in the lead's
+     pop-up, only an answer written `Ask more: <your question>` sends it back, any other
+     "Ask more" answer leaves it in review and the lead asks you for the question): the task goes
      back to `todo`, and a fresh try gets your question and the earlier answer in its
      details.
 

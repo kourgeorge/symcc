@@ -573,6 +573,19 @@ test('T-899: Ask more picked in the pop-up of an answered investigation never en
   expect(w.board().tasks[0]!.status).toBe('review')
 })
 
+for (const label of ['Ask more?', 'Ask more (send it back with a question)', 'Ask more — a fresh try with your question', 'Ask moreover'])
+  test(`T-899: the pop-up answer "${label}" is a bare Ask more: the task stays in review and the lead asks for the question`, async () => {
+    const w = world()
+    await answeredTask(w.host as never)
+    const q = 'T-1 is answered: what now?'
+    const out = (await popupCall(w.host, undefined, { questions: [ask(q, ['Done', 'Keep as a note', label], { header: 'T-1' })] }, answeredWith({ [q]: label }), w.notice)) as { context: string[] }
+    expect(out.context[0]).toMatch(/^The owner picked Ask more on T-1: symcc left it in review \(it is not done\)/)
+    await pause(0)
+    const t = w.board().tasks[0]!
+    expect(t.status).toBe('review')
+    expect(t.details).toBe('Find out why.')
+  })
+
 test('T-899: Ask more with a question typed after it in the pop-up sends the task to todo with that question', async () => {
   const w = world()
   await answeredTask(w.host as never)

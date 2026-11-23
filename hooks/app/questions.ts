@@ -198,8 +198,11 @@ async function leadWording(host: Host, tied: { q: PopupQuestion; link: PopupLink
 /** Does `answer` pick option `label` (its words at the start, any case)? */
 const picks = (answer: string, label: string) => answer.trim().toLowerCase().startsWith(label.toLowerCase())
 
-/** The follow-up question after "Ask more" in a pop-up answer ("Ask more: why is it slow?"), or '' when there is none. */
-export const askMoreQuestion = (answer: string): string => answer.trim().slice('Ask more'.length).replace(/^[\s:,.;\-–—]+/, '').trim()
+/**
+ * The follow-up question in a pop-up answer of the form "Ask more: <question>", or '' for any other answer: a label
+ * written a little differently ("Ask more?", "Ask more (…)", "Ask more — …", "Ask moreover") is a bare Ask more.
+ */
+export const askMoreQuestion = (answer: string): string => /^ask more\s*:\s*(\S[\s\S]*)$/i.exec(answer.trim())?.[1]?.trim() ?? ''
 
 /**
  * The owner answered task `id`'s question in the pop-up with `answer`: it is put into the task as the board's buttons

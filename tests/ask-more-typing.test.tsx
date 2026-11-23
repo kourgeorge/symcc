@@ -51,7 +51,9 @@ const hotkeys = async (ui: { findAll: (q: { type: string }) => Promise<Found[]> 
 /** The boards saved so far, oldest first. */
 const saved = (written: Record<string, string>) => Object.entries(written).filter(([p]) => /board\.json\..*\.tmp$/.test(p)).map(([, text]) => JSON.parse(text) as { tasks: { id: string; status: string; details: string }[] })
 
-for (const surface of ['terminal', 'vscode'] as const)
+// Terminal only: the VS Code task page (hooks/claude/ui/vscode-task.tsx) gives its Buttons no letter keys at all, on
+// main as well, so typed letters there can never press Done; a VS Code run of this test would pass without the fix.
+for (const surface of ['terminal'] as const)
   test(`T-899 ${surface}: Ask more opens the box; typing "a test question with a" fills it and presses nothing; Enter sends it to todo with the question`, async ($, on) => {
     const written = seed(on)
     const ui = await $.ui.mount({ ...PANE, surface })
