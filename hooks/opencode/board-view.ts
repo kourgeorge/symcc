@@ -42,6 +42,7 @@ import { type RoleChange, CHANGED_HEADING, changeLines, changesOfRole, roleListL
 import { roleButtons as headerRoleButtons } from '../core/page-header'
 import { type ActionGroup, groupSegLines, headerRule, inGroups, navHint, navRow, packGroups, type PageFrom, PILL_COLOR, pillText, placeIn, scoutAbout, scoutButtons as headerScoutButtons, scoutListNames, scoutStateGroups, taskColor, taskPlace, taskStateGroups, titleLines, whereLine } from '../core/page-header'
 import { LIST_TONE, sessionNote } from '../core/details'
+import type { SearchMore } from '../core/panel'
 import { isObj } from '../core/text'
 import type { DiffFile } from '../core/review'
 import { DEFAULT_NAME, dataDir } from '../name'
@@ -328,6 +329,9 @@ export type PanelChoice = {
   approving?: ApproveSent
   /** the task list's search (T-685, core's searchTasks words, as Claude Code's [f] search); '' or left out = none */
   search?: string
+  /** T-904: what the search may match beyond a view task's own fields (a slim finished task's details and request,
+   *  read from its parts file while a search is on, core's searchParts); none when left out */
+  searchMore?: SearchMore
   /** the open role's or kind's edit mode (T-706, Claude Code's Edit), when it is for the open page */
   edit?: DefDraft
   /** the tab the open task's page was opened from (T-751: its Back link says "‹ Live", and prev/next go through the
@@ -686,8 +690,8 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
     const t = choice.opened ? f.view.tasks.find(x => x.id === choice.opened) : undefined
     // the approve in progress takes the same buttons and keys away (approveInProgress)
     const busy = !!t && approveInProgress(f, t, choice.approving, nowMs)
-    const page = choice.opened ? openedPage(f, choice.opened, nowMs, w, choice.sent?.id === choice.opened ? choice.sent.answer : '', choice.taskReport, choice.approving?.id === choice.opened && approveSent(f, choice.approving, nowMs), busy, choice.from ?? 'tasks', choice.search ?? '') : null
-    body = page ?? listBody(f, choice.cursor, { ...GROUPS_OPEN, ...choice.groups }, nowMs, w, choice.search ?? '')
+    const page = choice.opened ? openedPage(f, choice.opened, nowMs, w, choice.sent?.id === choice.opened ? choice.sent.answer : '', choice.taskReport, choice.approving?.id === choice.opened && approveSent(f, choice.approving, nowMs), busy, choice.from ?? 'tasks', choice.search ?? '', choice.searchMore) : null
+    body = page ?? listBody(f, choice.cursor, { ...GROUPS_OPEN, ...choice.groups }, nowMs, w, choice.search ?? '', choice.searchMore)
     keys = panelKeys(f, page ? choice.opened : '', 'tasks', '', false, !!page && busy)
     if (!page) modeRow = modeLines(f, !!choice.search?.trim(), w)
   }
@@ -737,10 +741,10 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
 
 /** The place of the open task's or scout's page in the list it was opened from (core's taskPlace, placeIn): what
  *  prev and next ([ and ]) go through; null on any other page. */
-export function pagePlace(f: ViewFile | null, choice: Pick<PanelChoice, 'tab' | 'opened' | 'run' | 'search' | 'from'>, nowMs: number) {
+export function pagePlace(f: ViewFile | null, choice: Pick<PanelChoice, 'tab' | 'opened' | 'run' | 'search' | 'from' | 'searchMore'>, nowMs: number) {
   const page = boardPageOf(f, choice)
   if (!f) return null
-  if (page === 'task') return taskPlace(f.view, choice.opened, choice.from ?? 'tasks', nowMs, choice.search ?? '')
+  if (page === 'task') return taskPlace(f.view, choice.opened, choice.from ?? 'tasks', nowMs, choice.search ?? '', choice.searchMore)
   if (page === 'scout') return placeIn(scoutListNames(f.view.scouts ?? []), choice.opened)
   if (page === 'role') return placeIn(roleListIds(f), choice.opened)
   return null
@@ -1399,11 +1403,11 @@ function settingsBody(f: ViewFile, cursor: number, open: readonly string[], w: n
  *  With a search on (`search`, core's searchTasks words, T-685) only the matching tasks are listed, as on Claude Code's
  *  list: no questions, every group with a match open (the whole backlog), none without one; the search line and the
  *  [f] change search and [x] clear search buttons stay at the top. */
-function listBody(f: ViewFile, cursor: number, open0: Record<PanelGroup, boolean>, nowMs: number, w: number, search = ''): Body {
+function listBody(f: ViewFile, cursor: number, open0: Record<PanelGroup, boolean>, nowMs: number, w: number, search = '', more?: SearchMore): Body {
   const v = f.view
   const query = search.trim()
   const filtering = query !== ''
-  const matching = filtering ? searchTasks(v.tasks, query, nowMs, v.archived_done) : v.tasks
+  const matching = filtering ? searchTasks(v.tasks, query, nowMs, v.archived_done, more) : v.tasks
   const parts = panelSections(matching, nowMs, localOffset(nowMs))
   const questions = filtering ? [] : (v.questions ?? [])
   const open: Record<PanelGroup, boolean> = filtering ? { backlog: true, done: true, dropped: true } : open0
@@ -1500,7 +1504,7 @@ export const SECTION_LINES: Partial<Record<TaskSection['id'], number>> = { histo
  *  and the answer just sent (`sent`); then a task's sections as on Claude Code's task page (core's taskSections,
  *  T-580: Why it failed, Answer, Details, Changes, What to do, History, Report, Runs), with the latest report's text
  *  (`report`, read by the TUI) and the changed files from the view file; null when it is gone. */
-function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = '', report?: PanelChoice['taskReport'], merging = false, busy = false, from: PageFrom = 'tasks', search = ''): Body | null {
+function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = '', report?: PanelChoice['taskReport'], merging = false, busy = false, from: PageFrom = 'tasks', search = '', more?: SearchMore): Body | null {
   const v = f.view
   const b = bodyMaker()
   const addAll = (ls: Line[]) => ls.forEach(l => b.add(l))
@@ -1526,7 +1530,7 @@ function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = ''
   // T-751: the page header, as on Claude Code's task page: where you are (‹ Tasks or ‹ Live, its place in that list),
   // the title, the state, the buttons in groups (core's taskActions), a thin rule; it stays at the top while the rest scrolls
   addAll(headerLines({
-    from, label: t.id, place: taskPlace(v, t.id, from, nowMs, search), title: t.title, color: taskColor(t, nowMs, merging),
+    from, label: t.id, place: taskPlace(v, t.id, from, nowMs, search, more), title: t.title, color: taskColor(t, nowMs, merging),
     state: taskStateGroups(t, { nowMs, merging, ...(v.auto_retries !== undefined ? { autoRetries: v.auto_retries } : {}), note: sessionNote(t, v.driving ?? false, nowMs) }),
     buttons: taskButtons(t, busy),
   }, w))

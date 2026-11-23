@@ -31,6 +31,7 @@ import { SETTING_GROUPS, isScoutRunReport, taskReports, taskActions, type TaskAc
 import type { SymccScout } from '../../types'
 import { orgMemDeleteAsk, orgMemFile, orgMemNoteKey, orgMemTopicCounts } from '../core/org-mem'
 import { PARTS_KEY, safePartsFile, viewStubFilled, withViewParts } from '../core/board-parts'
+import { searchParts } from '../core/search-parts'
 
 export type { PanelKey, PanelHit, PanelTab }
 
@@ -335,6 +336,12 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   const [approving, setApproving] = r.createSignal<ApproveSent | undefined>(undefined)
   // the task list's search (T-685, Claude Code's [f] search: core's searchTasks words; '' = none)
   const [search, setSearch] = r.createSignal('')
+  // T-904: the finished tasks' details and request for the search on (as Claude Code's list: core's searchParts, read
+  // from their parts files only while a search is on, once per search); `searchSeen` goes up when new ones were read
+  const searchCache = searchParts()
+  const [searchSeen, setSearchSeen] = r.createSignal(0)
+  /** What the search gives panelLines: its words and, while it is on, the read details and request. */
+  const searchChoice = () => (search() ? { search: search(), searchMore: (searchSeen(), searchCache.more) } : {})
   // the open role's or kind's edit mode (T-706, Claude Code's Edit page; undefined = none)
   const [edit, setEdit] = r.createSignal<DefDraft | undefined>(undefined)
   // a role, kind or scout just made from this panel: its page opens once the view file has it (T-706)
@@ -374,11 +381,23 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
       () => undefined,
     )
   }
+  /** T-904: reads the slim tasks' details and request for the search on (nothing without one; each file once per
+   *  search), then draws again when new ones came. */
+  const loadSearch = () => {
+    const f = rawFile
+    const q = search()
+    if (!f) return
+    void searchCache.load(f.view.tasks, q, rel => d.readText(`${f.root}/${dataDir(f.name || name)}/${rel}`)).then(
+      news => void (news && search() === q && setSearchSeen(searchSeen() + 1)),
+      () => undefined,
+    )
+  }
   const refresh = async () => {
     const f = await readViewFile(dir, d.readText, name)
     rawFile = f
     setFile(withParts(f))
     readTaskParts()
+    loadSearch()
     setNow(d.now())
     // a page that got shorter keeps its scroll within its new length
     setScroll(draw().scroll)
@@ -506,16 +525,17 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   /** Whether the cursor is on a page's own rows (a scout's runs, the Roles or Kinds list), not the tab's list. */
   const onPage = () => tab() !== 'tasks' && !!opened()
   const draw = () => {
-    return panelLines(file(), { tab: tab(), opened: opened(), run: run(), report: report(), cursor: onPage() ? runCursor() : cursor(), groups: groups(), settingsOpen: settingsOpen(), scroll: scroll(), ...(rows() ? { rows: rows()! } : {}), ...(sent() ? { sent: sent()! } : {}), ...(taskReport() ? { taskReport: taskReport()! } : {}), ...(approving() ? { approving: approving()! } : {}), ...(search() ? { search: search() } : {}), ...(edit() ? { edit: edit()! } : {}), ...(fromLive() ? { from: 'live' as const } : {}) }, now(), width)
+    return panelLines(file(), { tab: tab(), opened: opened(), run: run(), report: report(), cursor: onPage() ? runCursor() : cursor(), groups: groups(), settingsOpen: settingsOpen(), scroll: scroll(), ...(rows() ? { rows: rows()! } : {}), ...(sent() ? { sent: sent()! } : {}), ...(taskReport() ? { taskReport: taskReport()! } : {}), ...(approving() ? { approving: approving()! } : {}), ...searchChoice(), ...(edit() ? { edit: edit()! } : {}), ...(fromLive() ? { from: 'live' as const } : {}) }, now(), width)
   }
   /** The rows of the Tasks tab's list, even while a task's page is open (whose draw has no rows), so "open this id"
    *  can put the list cursor on that task and b comes back to it (T-568). */
-  const listIds = () => panelLines(file(), { tab: 'tasks', opened: '', cursor: cursor(), groups: groups(), scroll: 0, ...(search() ? { search: search() } : {}) }, now(), width).ids
+  const listIds = () => panelLines(file(), { tab: 'tasks', opened: '', cursor: cursor(), groups: groups(), scroll: 0, ...searchChoice() }, now(), width).ids
   /** Sets the list's search ('' = none), from the list's top. */
   const searchFor = (text: string) => {
     setSearch(text.trim())
     setCursor(0)
     setScroll(0)
+    loadSearch()
   }
   /** f on the list ([f] search, [f] change search): asks for the search words; Enter on an empty box clears it, Esc
    *  keeps it as it was. */
@@ -733,7 +753,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   /** [ or ] (`key` prev or next) on a task's or scout's page: the previous or next one of the list it was opened from
    *  (going round at the ends); a task's page keeps where b goes back to. */
   const goNext = (key: 'prev' | 'next') => {
-    const place = pagePlace(file(), { tab: tab(), opened: opened(), run: run(), search: search(), ...(fromLive() ? { from: 'live' as const } : {}) }, now())
+    const place = pagePlace(file(), { tab: tab(), opened: opened(), run: run(), ...searchChoice(), ...(fromLive() ? { from: 'live' as const } : {}) }, now())
     if (!place || place.of < 2) return
     const to = place[key]
     const keep = backTo
