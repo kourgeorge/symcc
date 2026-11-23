@@ -1,0 +1,177 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-23T13:30:00Z",
+  "title": "Design System: symcc board in Cursor",
+  "extensions": {
+    "colorMeta": {
+      "coral": { "role": "primary", "displayName": "Clef Coral", "canonical": "#d97757", "tonalRamp": ["oklch(15% 0.03 40)", "oklch(26% 0.06 40)", "oklch(37% 0.09 40)", "oklch(48% 0.12 40)", "oklch(60% 0.14 40)", "oklch(67% 0.13 40)", "oklch(83% 0.08 40)", "oklch(95% 0.025 40)"] },
+      "coral-soft": { "role": "primary", "displayName": "Coral Soft", "canonical": "#f2a58a", "tonalRamp": ["oklch(15% 0.03 40)", "oklch(26% 0.06 40)", "oklch(37% 0.09 40)", "oklch(48% 0.12 40)", "oklch(60% 0.14 40)", "oklch(71% 0.12 40)", "oklch(79% 0.09 40)", "oklch(95% 0.025 40)"] },
+      "coral-text-dark": { "role": "primary", "displayName": "Coral Text (dark themes)", "canonical": "var(--coral-text) = #f2a58a", "tonalRamp": ["oklch(15% 0.03 40)", "oklch(26% 0.06 40)", "oklch(37% 0.09 40)", "oklch(48% 0.12 40)", "oklch(60% 0.14 40)", "oklch(71% 0.12 40)", "oklch(79% 0.09 40)", "oklch(95% 0.025 40)"] },
+      "coral-text-light": { "role": "primary", "displayName": "Coral Text (light themes)", "canonical": "body.vscode-light var(--coral-text) = #a8482a", "tonalRamp": ["oklch(15% 0.03 38)", "oklch(26% 0.06 38)", "oklch(37% 0.09 38)", "oklch(50% 0.13 38)", "oklch(60% 0.14 38)", "oklch(71% 0.12 38)", "oklch(83% 0.07 38)", "oklch(95% 0.02 38)"] },
+      "coral-ink": { "role": "primary", "displayName": "Clef Ink", "canonical": "#1b1f2a", "tonalRamp": ["oklch(15% 0.015 270)", "oklch(23% 0.02 270)", "oklch(37% 0.025 270)", "oklch(48% 0.025 270)", "oklch(60% 0.02 270)", "oklch(71% 0.015 270)", "oklch(83% 0.01 270)", "oklch(95% 0.005 270)"] },
+      "coral-wash": { "role": "primary", "displayName": "Coral Wash", "canonical": "color-mix(in srgb, var(--coral) 8%, var(--bg)); 9% in light themes", "tonalRamp": ["oklch(15% 0.01 40)", "oklch(26% 0.015 40)", "oklch(37% 0.02 40)", "oklch(48% 0.02 40)", "oklch(60% 0.02 40)", "oklch(71% 0.02 40)", "oklch(83% 0.015 40)", "oklch(95% 0.01 40)"] },
+      "coral-edge": { "role": "primary", "displayName": "Coral Edge", "canonical": "color-mix(in srgb, var(--coral) 45%, var(--line)); high contrast: var(--vscode-contrastActiveBorder)", "tonalRamp": ["oklch(15% 0.02 40)", "oklch(26% 0.04 40)", "oklch(37% 0.06 40)", "oklch(48% 0.07 40)", "oklch(60% 0.07 40)", "oklch(71% 0.06 40)", "oklch(83% 0.04 40)", "oklch(95% 0.015 40)"] },
+      "rail-navy": { "role": "secondary", "displayName": "Rail Navy", "canonical": "#1b1f2a", "tonalRamp": ["oklch(15% 0.015 270)", "oklch(23% 0.02 270)", "oklch(37% 0.03 270)", "oklch(48% 0.035 270)", "oklch(60% 0.03 270)", "oklch(71% 0.025 270)", "oklch(83% 0.015 270)", "oklch(95% 0.005 270)"] },
+      "rail-plum": { "role": "secondary", "displayName": "Rail Plum", "canonical": "#2a2233", "tonalRamp": ["oklch(15% 0.02 315)", "oklch(26% 0.03 315)", "oklch(37% 0.04 315)", "oklch(48% 0.045 315)", "oklch(60% 0.04 315)", "oklch(71% 0.03 315)", "oklch(83% 0.02 315)", "oklch(95% 0.008 315)"] },
+      "rail-fg": { "role": "secondary", "displayName": "Rail Mist", "canonical": "#c8ccda", "tonalRamp": ["oklch(15% 0.01 275)", "oklch(26% 0.012 275)", "oklch(37% 0.015 275)", "oklch(48% 0.018 275)", "oklch(60% 0.018 275)", "oklch(71% 0.017 275)", "oklch(84% 0.017 275)", "oklch(95% 0.006 275)"] },
+      "host-ground": { "role": "neutral", "displayName": "Editor Ground", "canonical": "var(--vscode-editor-background, #1f1f1f)", "tonalRamp": ["oklch(15% 0 0)", "oklch(23% 0 0)", "oklch(37% 0 0)", "oklch(48% 0 0)", "oklch(60% 0 0)", "oklch(71% 0 0)", "oklch(83% 0 0)", "oklch(95% 0 0)"] },
+      "host-ink": { "role": "neutral", "displayName": "Editor Ink", "canonical": "var(--vscode-editor-foreground, #cccccc)", "tonalRamp": ["oklch(15% 0 0)", "oklch(26% 0 0)", "oklch(37% 0 0)", "oklch(48% 0 0)", "oklch(60% 0 0)", "oklch(71% 0 0)", "oklch(85% 0 0)", "oklch(95% 0 0)"] },
+      "host-muted": { "role": "neutral", "displayName": "Description Gray", "canonical": "var(--vscode-descriptionForeground, #9d9d9d)", "tonalRamp": ["oklch(15% 0 0)", "oklch(26% 0 0)", "oklch(37% 0 0)", "oklch(48% 0 0)", "oklch(60% 0 0)", "oklch(70% 0 0)", "oklch(83% 0 0)", "oklch(95% 0 0)"] },
+      "host-line": { "role": "neutral", "displayName": "Panel Line", "canonical": "var(--vscode-panel-border, var(--vscode-widget-border, #2b2b2b)); high contrast: var(--vscode-contrastBorder)", "tonalRamp": ["oklch(15% 0 0)", "oklch(27% 0 0)", "oklch(37% 0 0)", "oklch(48% 0 0)", "oklch(60% 0 0)", "oklch(71% 0 0)", "oklch(83% 0 0)", "oklch(95% 0 0)"] },
+      "raised": { "role": "neutral", "displayName": "Raised", "canonical": "color-mix(in srgb, var(--fg) 4%, var(--bg)); 3% in light themes", "tonalRamp": ["oklch(15% 0 0)", "oklch(25% 0 0)", "oklch(37% 0 0)", "oklch(48% 0 0)", "oklch(60% 0 0)", "oklch(71% 0 0)", "oklch(83% 0 0)", "oklch(95% 0 0)"] },
+      "raised-2": { "role": "neutral", "displayName": "Raised 2", "canonical": "color-mix(in srgb, var(--fg) 7%, var(--bg)); 6% in light themes", "tonalRamp": ["oklch(15% 0 0)", "oklch(27% 0 0)", "oklch(37% 0 0)", "oklch(48% 0 0)", "oklch(60% 0 0)", "oklch(71% 0 0)", "oklch(83% 0 0)", "oklch(95% 0 0)"] },
+      "host-input": { "role": "neutral", "displayName": "Input Ground", "canonical": "var(--vscode-input-background, #313131)", "tonalRamp": ["oklch(15% 0 0)", "oklch(29% 0 0)", "oklch(37% 0 0)", "oklch(48% 0 0)", "oklch(60% 0 0)", "oklch(71% 0 0)", "oklch(83% 0 0)", "oklch(95% 0 0)"] },
+      "host-input-line": { "role": "neutral", "displayName": "Input Line", "canonical": "var(--vscode-input-border, #3c3c3c)", "tonalRamp": ["oklch(15% 0 0)", "oklch(26% 0 0)", "oklch(33% 0 0)", "oklch(48% 0 0)", "oklch(60% 0 0)", "oklch(71% 0 0)", "oklch(83% 0 0)", "oklch(95% 0 0)"] },
+      "host-focus": { "role": "neutral", "displayName": "Focus Blue", "canonical": "var(--vscode-focusBorder, #0078d4)", "tonalRamp": ["oklch(15% 0.04 252)", "oklch(26% 0.08 252)", "oklch(37% 0.12 252)", "oklch(48% 0.15 252)", "oklch(56% 0.16 252)", "oklch(71% 0.12 252)", "oklch(83% 0.07 252)", "oklch(95% 0.02 252)"] },
+      "host-link": { "role": "neutral", "displayName": "Link Blue", "canonical": "var(--vscode-textLink-foreground, #4daafc)", "tonalRamp": ["oklch(15% 0.04 250)", "oklch(26% 0.07 250)", "oklch(37% 0.1 250)", "oklch(48% 0.13 250)", "oklch(60% 0.14 250)", "oklch(71% 0.14 250)", "oklch(83% 0.08 250)", "oklch(95% 0.02 250)"] },
+      "good": { "role": "tertiary", "displayName": "Merged Green", "canonical": "var(--vscode-charts-green, #57ab5a)", "tonalRamp": ["oklch(15% 0.03 145)", "oklch(26% 0.06 145)", "oklch(37% 0.09 145)", "oklch(48% 0.11 145)", "oklch(65% 0.13 145)", "oklch(71% 0.12 145)", "oklch(83% 0.08 145)", "oklch(95% 0.03 145)"] },
+      "bad": { "role": "tertiary", "displayName": "Failed Red", "canonical": "var(--vscode-charts-red, #e5534b)", "tonalRamp": ["oklch(15% 0.04 27)", "oklch(26% 0.08 27)", "oklch(37% 0.12 27)", "oklch(48% 0.16 27)", "oklch(63% 0.18 27)", "oklch(71% 0.14 27)", "oklch(83% 0.08 27)", "oklch(95% 0.025 27)"] },
+      "wait": { "role": "tertiary", "displayName": "Waiting Amber", "canonical": "var(--vscode-charts-yellow, #d7a54a)", "tonalRamp": ["oklch(15% 0.03 80)", "oklch(26% 0.05 80)", "oklch(37% 0.07 80)", "oklch(48% 0.09 80)", "oklch(60% 0.11 80)", "oklch(74% 0.12 80)", "oklch(83% 0.09 80)", "oklch(95% 0.03 80)"] },
+      "run": { "role": "tertiary", "displayName": "Running Blue", "canonical": "var(--vscode-charts-blue, #539bf5)", "tonalRamp": ["oklch(15% 0.04 258)", "oklch(26% 0.07 258)", "oklch(37% 0.1 258)", "oklch(48% 0.13 258)", "oklch(60% 0.15 258)", "oklch(68% 0.15 258)", "oklch(83% 0.08 258)", "oklch(95% 0.02 258)"] }
+    },
+    "typographyMeta": {
+      "headline": { "displayName": "Headline", "purpose": "Empty and setup screen headings only." },
+      "title": { "displayName": "Title", "purpose": "Project name in the header; Board and Scouts page headings." },
+      "card-title": { "displayName": "Card Title", "purpose": "Decision card and scout headings, clamped to three lines." },
+      "body": { "displayName": "Body", "purpose": "Stream text and the default for everything; messages to 72ch." },
+      "body-small": { "displayName": "Body Small", "purpose": "Card text, buttons, header counts, news rows, side lists." },
+      "label": { "displayName": "Label", "purpose": "Section headings: Needs you, Running, Up next, Board groups. Sentence case." },
+      "caption": { "displayName": "Caption", "purpose": "Timestamps, day dividers, composer hint, tags." },
+      "micro": { "displayName": "Micro", "purpose": "Rail labels and staff station words." },
+      "mono": { "displayName": "Mono", "purpose": "Task ids, file paths, inline and fenced code; 11.5px in file lists." }
+    },
+    "shadows": [
+      { "name": "notice-float", "value": "0 6px 20px #0000004d", "purpose": "The transient notice under the header. The only shadow in the system." }
+    ],
+    "motion": [
+      { "name": "ease", "value": "cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "Exponential ease-out for the staff slide and the notice rise." },
+      { "name": "staff-slide", "value": "left 0.7s var(--ease), width 0.7s var(--ease)", "purpose": "The current note and the passed segment move to the next station." },
+      { "name": "breathe", "value": "2.4s ease-in-out infinite; opacity 0.15 to 0.7, scale 0.85 to 1.1", "purpose": "The ring around the current note while an agent works." },
+      { "name": "notice-rise", "value": "0.35s var(--ease); from opacity 0, 6px up", "purpose": "The notice appearing." },
+      { "name": "button-fill", "value": "background-color 0.15s", "purpose": "Button hover fill." },
+      { "name": "reduced-motion", "value": "@media (prefers-reduced-motion: reduce)", "purpose": "No slide, no breathing (ring held at 45%), no notice rise." }
+    ],
+    "breakpoints": [
+      { "name": "fold-side", "value": "980px", "purpose": "Side column becomes a Running strip above the stream; Now scrolls as one column; composer sticky." },
+      { "name": "rail-top", "value": "640px", "purpose": "Rail becomes a 44px top bar; cards one column; 14px gutters." }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one main action on a decision card, and Send.",
+      "html": "<button class=\"ds-btn ds-btn-primary\">Approve</button>",
+      "css": ".ds-btn { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; min-height: 28px; border-radius: 6px; border: 1px solid var(--vscode-input-border, #3c3c3c); font: 12.5px/1.5 var(--vscode-font-family, system-ui, sans-serif); cursor: pointer; transition: background-color 0.15s; } .ds-btn-primary { background: #d97757; border-color: #d97757; color: #1b1f2a; font-weight: 600; } .ds-btn-primary:hover { background: color-mix(in srgb, #d97757 88%, #fff); } .ds-btn-primary:focus-visible { outline: 1px solid var(--vscode-focusBorder, #0078d4); outline-offset: 2px; } .ds-btn-primary:disabled { opacity: 0.55; cursor: default; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Every other action, in the host's secondary button colors.",
+      "html": "<button class=\"ds-btn-secondary\">Reject</button>",
+      "css": ".ds-btn-secondary { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; min-height: 28px; border-radius: 6px; border: 1px solid var(--vscode-input-border, #3c3c3c); background: var(--vscode-button-secondaryBackground, #2b2b2b); color: var(--vscode-button-secondaryForeground, #cccccc); font: 12.5px/1.5 var(--vscode-font-family, system-ui, sans-serif); cursor: pointer; transition: background-color 0.15s; } .ds-btn-secondary:hover { background: var(--vscode-button-secondaryHoverBackground, #3c3c3c); } .ds-btn-secondary:focus-visible { outline: 1px solid var(--vscode-focusBorder, #0078d4); outline-offset: 2px; }"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Low-weight actions such as Later or Details.",
+      "html": "<button class=\"ds-btn-ghost\">Later</button>",
+      "css": ".ds-btn-ghost { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; min-height: 28px; border-radius: 6px; border: 1px solid transparent; background: none; color: var(--vscode-descriptionForeground, #9d9d9d); font: 12.5px/1.5 var(--vscode-font-family, system-ui, sans-serif); cursor: pointer; transition: background-color 0.15s; } .ds-btn-ghost:hover { color: var(--vscode-editor-foreground, #cccccc); background: color-mix(in srgb, var(--vscode-editor-foreground, #cccccc) 4%, var(--vscode-editor-background, #1f1f1f)); } .ds-btn-ghost:focus-visible { outline: 1px solid var(--vscode-focusBorder, #0078d4); outline-offset: 2px; }"
+    },
+    {
+      "name": "Decision Card",
+      "kind": "card",
+      "refersTo": "decision-card",
+      "description": "Something that needs the owner, decided in place.",
+      "html": "<article class=\"ds-card\"><h3>Merge T-12: retry on flaky upload</h3><p class=\"ds-card-meta\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 16 16\" aria-hidden=\"true\"><circle cx=\"8\" cy=\"8\" r=\"6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\"/><path d=\"M8 5v3.5l2 1.5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\" stroke-linecap=\"round\"/></svg><span>T-12 · review</span><span class=\"ds-since\">4m</span></p><p class=\"ds-card-text\">Tests passed. The checker found the change in scope.</p><div class=\"ds-card-actions\"><button class=\"ds-card-primary\">Approve</button><button class=\"ds-card-secondary\">Reject</button></div></article>",
+      "css": ".ds-card { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; max-width: 320px; background: color-mix(in srgb, #d97757 8%, var(--vscode-editor-background, #1f1f1f)); border: 1px solid color-mix(in srgb, #d97757 45%, var(--vscode-panel-border, #2b2b2b)); border-radius: 8px; color: var(--vscode-editor-foreground, #cccccc); font: 13px/1.5 var(--vscode-font-family, system-ui, sans-serif); } .ds-card h3 { margin: 0; font-size: 13.5px; font-weight: 600; line-height: 1.4; } .ds-card-meta { margin: 0; display: flex; align-items: center; gap: 2px 8px; color: var(--vscode-descriptionForeground, #9d9d9d); font-size: 12px; } .ds-card-meta svg { color: #f2a58a; } .ds-since::before { content: '·'; margin-right: 8px; } .ds-card-text { margin: 0; font-size: 12.5px; color: color-mix(in srgb, var(--vscode-editor-foreground, #cccccc) 82%, var(--vscode-editor-background, #1f1f1f)); } .ds-card-actions { display: flex; gap: 6px; padding-top: 4px; } .ds-card-primary, .ds-card-secondary { padding: 5px 12px; min-height: 28px; border-radius: 6px; font: inherit; font-size: 12.5px; cursor: pointer; transition: background-color 0.15s; } .ds-card-primary { background: #d97757; border: 1px solid #d97757; color: #1b1f2a; font-weight: 600; } .ds-card-primary:hover { background: color-mix(in srgb, #d97757 88%, #fff); } .ds-card-secondary { background: var(--vscode-button-secondaryBackground, #2b2b2b); border: 1px solid var(--vscode-input-border, #3c3c3c); color: var(--vscode-button-secondaryForeground, #cccccc); } .ds-card-secondary:hover { background: var(--vscode-button-secondaryHoverBackground, #3c3c3c); } .ds-card-primary:focus-visible, .ds-card-secondary:focus-visible { outline: 1px solid var(--vscode-focusBorder, #0078d4); outline-offset: 2px; }"
+    },
+    {
+      "name": "Running Lane with Staff",
+      "kind": "custom",
+      "refersTo": "lane",
+      "description": "The signature: a running task's stations as notes on one line, the current note coral and breathing.",
+      "html": "<button class=\"ds-lane\"><span class=\"ds-lane-head\"><span class=\"ds-id\">T-14</span><span class=\"ds-title\">Add export to CSV</span></span><span class=\"ds-staff\" role=\"img\" aria-label=\"T-14 is at tests, step 4 of 6\"><span class=\"ds-track\"><span class=\"ds-line\"></span><span class=\"ds-passed\" style=\"width:60%\"></span><span class=\"ds-note ds-on\" style=\"left:0%\"></span><span class=\"ds-note ds-on\" style=\"left:20%\"></span><span class=\"ds-note ds-on\" style=\"left:40%\"></span><span class=\"ds-note\" style=\"left:60%\"></span><span class=\"ds-note\" style=\"left:80%\"></span><span class=\"ds-note\" style=\"left:100%\"></span><span class=\"ds-now\" style=\"left:60%\"></span></span><span class=\"ds-words\"><span style=\"left:0%\">work</span><span style=\"left:20%\">checker</span><span style=\"left:40%\">queue</span><span class=\"ds-here\" style=\"left:60%\">tests</span><span style=\"left:80%\">you</span><span style=\"left:100%\">merge</span></span></span><span class=\"ds-lane-meta\">6m 12s · 41.2k tokens</span></button>",
+      "css": ".ds-lane { width: 280px; text-align: left; display: flex; flex-direction: column; gap: 4px; padding: 10px 12px 8px; border: 1px solid var(--vscode-panel-border, #2b2b2b); border-radius: 8px; background: color-mix(in srgb, var(--vscode-editor-foreground, #cccccc) 4%, var(--vscode-editor-background, #1f1f1f)); color: var(--vscode-editor-foreground, #cccccc); font: 13px/1.5 var(--vscode-font-family, system-ui, sans-serif); cursor: pointer; } .ds-lane:hover { border-color: color-mix(in srgb, var(--vscode-editor-foreground, #cccccc) 25%, var(--vscode-panel-border, #2b2b2b)); } .ds-lane:focus-visible { outline: 1px solid var(--vscode-focusBorder, #0078d4); outline-offset: 2px; } .ds-lane-head { display: flex; gap: 8px; align-items: baseline; min-width: 0; } .ds-id { font-family: var(--vscode-editor-font-family, ui-monospace, monospace); font-size: 12px; color: var(--vscode-descriptionForeground, #9d9d9d); } .ds-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ds-staff { display: block; padding: 6px 7px 0; } .ds-track { position: relative; display: block; height: 14px; } .ds-line, .ds-passed { position: absolute; top: 50%; left: 0; height: 1px; } .ds-line { right: 0; background: color-mix(in srgb, var(--vscode-editor-foreground, #cccccc) 22%, var(--vscode-editor-background, #1f1f1f)); } .ds-passed { background: var(--vscode-charts-green, #57ab5a); transition: width 0.7s cubic-bezier(0.16, 1, 0.3, 1); } .ds-note, .ds-now { position: absolute; top: 50%; width: 9px; height: 9px; border-radius: 50%; translate: -50% -50%; } .ds-note { background: var(--vscode-editor-background, #1f1f1f); border: 1.5px solid color-mix(in srgb, var(--vscode-editor-foreground, #cccccc) 35%, var(--vscode-editor-background, #1f1f1f)); } .ds-note.ds-on { background: var(--vscode-charts-green, #57ab5a); border-color: var(--vscode-charts-green, #57ab5a); } .ds-now { width: 11px; height: 11px; background: #d97757; z-index: 1; transition: left 0.7s cubic-bezier(0.16, 1, 0.3, 1); } .ds-now::after { content: ''; position: absolute; inset: -4px; border-radius: 50%; border: 1.5px solid #d97757; animation: ds-breathe 2.4s ease-in-out infinite; } @keyframes ds-breathe { 0%, 100% { opacity: 0.15; scale: 0.85; } 50% { opacity: 0.7; scale: 1.1; } } .ds-words { position: relative; display: block; height: 16px; margin-top: 2px; font-size: 10.5px; color: var(--vscode-descriptionForeground, #9d9d9d); } .ds-words span { position: absolute; translate: -50% 0; white-space: nowrap; } .ds-words span:first-child { translate: -7px 0; } .ds-words span:last-child { translate: calc(-100% + 7px) 0; } .ds-here { color: #f2a58a; font-weight: 600; } .ds-lane-meta { font-size: 11.5px; color: var(--vscode-descriptionForeground, #9d9d9d); font-variant-numeric: tabular-nums; } @media (prefers-reduced-motion: reduce) { .ds-now, .ds-passed { transition: none; } .ds-now::after { animation: none; opacity: 0.45; } }"
+    },
+    {
+      "name": "Composer",
+      "kind": "input",
+      "refersTo": "composer",
+      "description": "The message box pinned at the bottom of the stream; the page's main action.",
+      "html": "<form class=\"ds-composer\"><textarea rows=\"1\" placeholder=\"Tell the lead what to do next\"></textarea><button class=\"ds-send\" type=\"button\" aria-label=\"Send\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M2 2.5l12 5.5-12 5.5 2-5.5z M4 8h6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.3\" stroke-linejoin=\"round\"/></svg>Send</button><p class=\"ds-hint\">Enter sends · Shift+Enter for a new line</p></form>",
+      "css": ".ds-composer { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 4px 8px; padding: 8px; max-width: 560px; border: 1px solid var(--vscode-input-border, #3c3c3c); border-radius: 10px; background: var(--vscode-input-background, #313131); font: 13px/1.5 var(--vscode-font-family, system-ui, sans-serif); } .ds-composer:focus-within { border-color: var(--vscode-focusBorder, #0078d4); } .ds-composer textarea { width: 100%; border: 0; background: none; padding: 4px 6px; resize: none; font: inherit; color: var(--vscode-input-foreground, #cccccc); outline: none; } .ds-composer textarea::placeholder { color: var(--vscode-input-placeholderForeground, #9d9d9d); } .ds-send { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 5px 12px; border-radius: 6px; border: 1px solid #d97757; background: #d97757; color: #1b1f2a; font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; transition: background-color 0.15s; } .ds-send:hover { background: color-mix(in srgb, #d97757 88%, #fff); } .ds-send:focus-visible { outline: 1px solid var(--vscode-focusBorder, #0078d4); outline-offset: 2px; } .ds-hint { grid-column: 1 / -1; margin: 0; padding: 0 6px; font-size: 11px; color: var(--vscode-descriptionForeground, #9d9d9d); }"
+    },
+    {
+      "name": "Rail",
+      "kind": "nav",
+      "refersTo": "rail-item",
+      "description": "The navy-to-plum rail with the clef mark, page items and the coral count.",
+      "html": "<nav class=\"ds-rail\" aria-label=\"symcc\"><svg class=\"ds-mark\" width=\"32\" height=\"32\" viewBox=\"0 0 32 32\" role=\"img\" aria-label=\"symcc\"><rect width=\"32\" height=\"32\" rx=\"8\" fill=\"#d97757\"/><g transform=\"translate(16 16.5) scale(0.125) translate(-162 -120)\"><path fill=\"none\" stroke=\"#1b1f2a\" stroke-width=\"15\" stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M164,138 C150,132 140,144 150,152 C162,160 184,152 184,132 C184,110 160,104 146,114 C126,128 124,160 150,170 C178,180 200,160 192,128 C186,104 160,90 152,70 C146,52 154,30 166,30 C178,30 180,52 166,70 C150,90 160,170 162,190 C164,206 142,210 136,198\"/></g></svg><button class=\"ds-rail-item\" aria-current=\"page\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 16 16\" aria-hidden=\"true\"><circle cx=\"8\" cy=\"8\" r=\"6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.2\"/><path d=\"M8 4.5V8l2.5 1.5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.2\" stroke-linecap=\"round\"/></svg>Now<b class=\"ds-rail-count\">2</b></button><button class=\"ds-rail-item\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 16 16\" aria-hidden=\"true\"><rect x=\"2\" y=\"2.5\" width=\"3.5\" height=\"11\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"6.25\" y=\"2.5\" width=\"3.5\" height=\"7\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.2\"/><rect x=\"10.5\" y=\"2.5\" width=\"3.5\" height=\"9\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.2\"/></svg>Board</button></nav>",
+      "css": ".ds-rail { width: 56px; height: 240px; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 0; background: linear-gradient(180deg, #1b1f2a, #2a2233); font: 10.5px/1.5 var(--vscode-font-family, system-ui, sans-serif); } .ds-mark { margin-bottom: 14px; } .ds-rail-item { position: relative; width: 46px; padding: 7px 0 6px; display: flex; flex-direction: column; align-items: center; gap: 2px; border: 0; border-radius: 7px; background: none; color: color-mix(in srgb, #c8ccda 78%, transparent); font: inherit; cursor: pointer; } .ds-rail-item:hover { background: #ffffff0f; color: #fff; } .ds-rail-item[aria-current='page'] { background: #ffffff17; color: #fff; } .ds-rail-item[aria-current='page'] svg { color: #f2a58a; } .ds-rail-item:focus-visible { outline: 1px solid var(--vscode-focusBorder, #0078d4); outline-offset: 2px; } .ds-rail-count { position: absolute; top: 3px; right: 6px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: #d97757; color: #1b1f2a; font-size: 10px; line-height: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }"
+    },
+    {
+      "name": "Mode Switch",
+      "kind": "nav",
+      "refersTo": "mode-active",
+      "description": "Off / Review / Auto, a segmented control in the header.",
+      "html": "<div class=\"ds-modes\" role=\"group\" aria-label=\"Board mode\"><button aria-pressed=\"false\">Off</button><button aria-pressed=\"true\">Review</button><button aria-pressed=\"false\">Auto</button></div>",
+      "css": ".ds-modes { display: inline-flex; border: 1px solid var(--vscode-input-border, #3c3c3c); border-radius: 7px; overflow: hidden; font: 12px/1.5 var(--vscode-font-family, system-ui, sans-serif); } .ds-modes button { padding: 4px 11px; border: 0; background: none; color: var(--vscode-descriptionForeground, #9d9d9d); font: inherit; cursor: pointer; } .ds-modes button + button { border-left: 1px solid var(--vscode-input-border, #3c3c3c); } .ds-modes button:hover:not([aria-pressed='true']) { color: var(--vscode-editor-foreground, #cccccc); background: color-mix(in srgb, var(--vscode-editor-foreground, #cccccc) 4%, var(--vscode-editor-background, #1f1f1f)); } .ds-modes button[aria-pressed='true'] { background: color-mix(in srgb, var(--vscode-editor-foreground, #cccccc) 7%, var(--vscode-editor-background, #1f1f1f)); color: var(--vscode-editor-foreground, #cccccc); font-weight: 600; } .ds-modes button:focus-visible { outline: 1px solid var(--vscode-focusBorder, #0078d4); outline-offset: -1px; }"
+    },
+    {
+      "name": "News Row",
+      "kind": "chip",
+      "refersTo": "news-row",
+      "description": "A board event in the stream; tinted green when merged, red when failed.",
+      "html": "<div class=\"ds-news ds-news-good\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 16 16\" aria-hidden=\"true\"><path d=\"M3 8.5l3 3 7-7\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg><span class=\"ds-news-title\">Add export to CSV</span><span class=\"ds-news-word\">merged</span><time>10:42</time></div>",
+      "css": ".ds-news { display: flex; align-items: center; gap: 8px; max-width: 520px; padding: 6px 10px; border: 1px solid var(--vscode-panel-border, #2b2b2b); border-radius: 6px; background: color-mix(in srgb, var(--vscode-editor-foreground, #cccccc) 3%, transparent); color: var(--vscode-descriptionForeground, #9d9d9d); font: 12.5px/1.5 var(--vscode-font-family, system-ui, sans-serif); } .ds-news-good { border-color: color-mix(in srgb, var(--vscode-charts-green, #57ab5a) 35%, transparent); background: color-mix(in srgb, var(--vscode-charts-green, #57ab5a) 9%, transparent); } .ds-news-good svg { color: var(--vscode-charts-green, #57ab5a); } .ds-news-title { color: var(--vscode-editor-foreground, #cccccc); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; } .ds-news-good .ds-news-word { color: color-mix(in srgb, var(--vscode-charts-green, #57ab5a) 80%, var(--vscode-editor-foreground, #cccccc)); } .ds-news time { margin-left: auto; padding-left: 8px; font-size: 11px; font-variant-numeric: tabular-nums; }"
+    },
+    {
+      "name": "Answer Field",
+      "kind": "input",
+      "refersTo": "input-field",
+      "description": "A host input; nudged coral when a card is waiting for its answer.",
+      "html": "<input class=\"ds-input\" placeholder=\"Answer the worker\" /> <input class=\"ds-input ds-nudge\" placeholder=\"Type an answer first\" />",
+      "css": ".ds-input { width: 240px; background: var(--vscode-input-background, #313131); border: 1px solid var(--vscode-input-border, #3c3c3c); border-radius: 6px; padding: 7px 9px; color: var(--vscode-input-foreground, #cccccc); font: 13px/1.5 var(--vscode-font-family, system-ui, sans-serif); } .ds-input::placeholder { color: var(--vscode-input-placeholderForeground, #9d9d9d); } .ds-input:focus { outline: none; border-color: var(--vscode-focusBorder, #0078d4); } .ds-nudge { border-color: #d97757; outline: 1px solid #d97757; outline-offset: -1px; } .ds-nudge::placeholder { color: #f2a58a; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Lead Sheet",
+    "overview": "The panel is a lead sheet pinned beside the editor: the melody (what needs the owner) is written large and in coral at the top, the accompaniment (the lead's conversation and the board's news) runs underneath as one quiet timeline, and each running task is read like a bar of music on a single staff line. Everything that is not the melody belongs to the host editor. Ground, text, borders, inputs, focus rings, links, scrollbars and selection are the editor theme's own `--vscode-*` values, so the panel looks native in dark, light and high-contrast themes and only the symcc layer is fixed.\n\nThat layer is small and deliberate: a deep navy-to-plum rail carrying the treble-clef mark on its coral tile, coral reserved for what needs the owner and the one primary action on each card, and a green / amber / red / blue state vocabulary borrowed from the host's chart colors. Density is editor density (13px body, 28px controls, 8 to 20px gaps), calm and scannable rather than spacious. Depth is tonal, built by mixing a few percent of the foreground into the ground.",
+    "keyCharacteristics": [
+      "Host-themed ground and controls; symcc owns only the rail, the mark, coral and the staff.",
+      "Coral is scarce: decisions waiting, the primary action per card, the current note, the rail count.",
+      "One timeline: messages and board news share a single stream, newest at the bottom, composer pinned below.",
+      "The staff line is the signature: stations as notes, passed notes green, the current note coral and breathing.",
+      "Codicons for every icon, in the host's icon font."
+    ],
+    "rules": [
+      { "name": "The Coral Means You Rule", "body": "Coral marks only what needs the owner and the single primary action on a card. Running work, progress and success are never coral.", "section": "colors" },
+      { "name": "The Borrowed Ground Rule", "body": "Ground, text, borders, inputs, focus, links, selection and scrollbars come from `--vscode-*` variables with a fallback. symcc hard-codes only coral, the rail and the mark.", "section": "colors" },
+      { "name": "The Two Corals Rule", "body": "Coral as a fill uses `coral`; coral as text uses the theme-switched coral text value. Never set text in the fill coral.", "section": "colors" },
+      { "name": "The Host Voice Rule", "body": "Use the editor's UI font for all prose and controls and the editor's code font for ids, paths and code. Do not load a web font.", "section": "typography" },
+      { "name": "The Tabular Count Rule", "body": "Every number that updates or lines up (counts, times, line deltas, lane meta) is set with tabular numerals.", "section": "typography" },
+      { "name": "The Tonal Step Rule", "body": "To raise a surface, mix more foreground into the ground (`raised`, then `raised-2`) and give it the host line; do not add a shadow.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do take every neutral from a `--vscode-*` variable with a fallback, so dark, light and high-contrast themes all hold.",
+      "Do keep coral to what needs the owner: the Needs you heading and cards, one primary button per card, the rail count and the current note.",
+      "Do switch coral text between #f2a58a on dark and #a8482a on light; lay text on coral fills in clef ink (#1b1f2a).",
+      "Do draw every icon with a codicon (`git-branch`, `pass`, `loading`, `send`, `warning`); a busy control swaps its icon for `loading`.",
+      "Do raise surfaces tonally (4% then 7% foreground into the ground) with a 1px host line.",
+      "Do show task progress as notes on the staff, green for passed and coral for the current station, with motion turned off under reduced motion.",
+      "Do set counts, times and line deltas in tabular numerals, and ids, paths and code in the editor's code font."
+    ],
+    "donts": [
+      "Don't color running work, progress or success coral; those are blue and green.",
+      "Don't hard-code a ground, text, border or focus color outside the rail and the mark.",
+      "Don't load a web font or set prose in the code font.",
+      "Don't add shadows to cards, lanes or buttons; the notice float is the only shadow.",
+      "Don't put a bar down one side of a card or row to mark state; use the wash, the full border or the state word.",
+      "Don't place a label above a heading; headings such as \"Needs you\" and \"Running\" stand alone."
+    ]
+  }
+}

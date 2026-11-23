@@ -161,6 +161,20 @@ if [ -n "$cp_files" ]; then
   fi
 fi
 
+# The Cursor host (hosts/cursor/) may use Node and the Cursor SDK, but never imports 'claude-code' or anything in
+# hooks/claude/ or hooks/register.tsx. Its type check needs its own packages (npm install in hosts/cursor/), so it
+# runs there (npm run typecheck), not here. Its build output (dist/) and packages are not looked at.
+cursor_files=$(find hosts/cursor -type f \( -name '*.ts' -o -name '*.tsx' \) -not -path '*/node_modules/*' -not -path '*/dist/*' 2>/dev/null | sort)
+if [ -n "$cursor_files" ]; then
+  q="['\"\`]"
+  nq="[^'\"\`]"
+  hits=$(grep -nHE "(^|[^[:alnum:]_\$.])(from|import)[[:space:]]*\(?[[:space:]]*$q(claude-code(/$nq*)?|$nq*/claude(/$nq*)?|$nq*/register(\.tsx)?)$q" $cursor_files)
+  if [ -n "$hits" ]; then
+    echo "$hits" | while IFS= read -r hit; do echo "host-free: hosts/cursor/ imports Claude Code (it must run without it): $hit" >&2; done
+    fails=$((fails + 1))
+  fi
+fi
+
 # The Copilot extension's entry (copilot/entry.ts, T-960) may use Node and the Copilot SDK, never Claude Code, and it
 # type-checks with its own settings (copilot/tsconfig.json: hosts/node/env.d.ts plus copilot/sdk.d.ts).
 ce_files=$(find copilot -maxdepth 1 -type f -name '*.ts' -not -name '*.d.ts' 2>/dev/null | sort)
@@ -180,4 +194,4 @@ if [ -n "$ce_files" ]; then
   fi
 fi
 
-if [ "$fails" -eq 0 ]; then echo "host-free: hooks/app/, hooks/core/, hooks/process/, hosts/node/, hooks/opencode/ and hooks/copilot/ need no Claude Code, and hooks/engine.ts is re-exports only"; else exit 1; fi
+if [ "$fails" -eq 0 ]; then echo "host-free: hooks/app/, hooks/core/, hooks/process/, hosts/node/, hosts/cursor/, hooks/opencode/ and hooks/copilot/ need no Claude Code, and hooks/engine.ts is re-exports only"; else exit 1; fi

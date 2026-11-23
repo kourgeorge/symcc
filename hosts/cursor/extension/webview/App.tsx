@@ -1,0 +1,725 @@
+// The board panel: a rail (Now, Board, Scouts), the header with the mode switch, and the page. Now is one stream:
+// what needs you pinned on top as cards you decide in place, the lead's chat and the board's news in one timeline
+// with the message box under it, and the running work beside it.
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
+import type { ChatItem, EngineState, PanelAction, PanelLane, PanelMode, PanelNeed, PanelNews, PanelScout, PanelTask, PanelView } from '../../protocol'
+import { ask, onMessage, tell } from './bridge'
+import { Icon, Linked, Mark, Markdown, Staff, STATION_WORD, ago, clock, dayWord, duration, tokensWord, useNow } from './parts'
+
+type Page = 'now' | 'board' | 'scouts'
+type Notice = { text: string; bad: boolean; at: number }
+type Say = (text: string, bad?: boolean) => void
+
+/** The words of the board's empty list (hooks/core/panel.ts ALL_CLEAR). */
+const ALL_CLEAR = ['All clear. Nothing running or waiting.', 'Tell the lead what you want next.'] as const
+
+export function App() {
+  const [view, setView] = useState<PanelView | null>(null)
+  const [chat, setChat] = useState<ChatItem[]>([])
+  const [busy, setBusy] = useState(false)
+  const [engine, setEngine] = useState<EngineState>({ state: 'starting' })
+  const [page, setPage] = useState<Page>('now')
+  const [focus, setFocus] = useState<string | null>(null)
+  const [notice, setNotice] = useState<Notice | null>(null)
+
+  useEffect(() => {
+    const off = onMessage(m => {
+      if (m.type === 'view') setView(m.view)
+      else if (m.type === 'chat') (setChat(m.items), setBusy(m.busy))
+      else if (m.type === 'engine') setEngine(m.engine)
+    })
+    tell({ type: 'ready' })
+    return off
+  }, [])
+  useEffect(() => {
+    if (!notice) return
+    const t = setTimeout(() => setNotice(n => (n === notice ? null : n)), notice.bad ? 9000 : 5000)
+    return () => clearTimeout(t)
+  }, [notice])
+
+  const say: Say = useCallback((text, bad = false) => setNotice({ text: text.replace(/^symcc: /, ''), bad, at: Date.now() }), [])
+  const openTask = useCallback((id: string) => (setPage('board'), setFocus(id)), [])
+
+  return (
+    <div className="app">
+      <Rail page={page} onPage={setPage} needs={view?.counts.needs ?? 0} />
+      <div className="frame">
+        <Header view={view} onSay={say} />
+        <div className="notice" role="status" aria-live="polite">
+          {notice && (
+            <p className={notice.bad ? 'bad' : ''}>
+              <Icon name={notice.bad ? 'error' : 'check'} /> {notice.text}
+            </p>
+          )}
+        </div>
+        {engine.state !== 'ready' && !view ? (
+          <EngineScreen engine={engine} />
+        ) : view && !view.on ? (
+          <OffScreen view={view} onSay={say} />
+        ) : view ? (
+          page === 'now' ? (
+            <Now view={view} chat={chat} busy={busy} ready={engine.state === 'ready'} onSay={say} onTask={openTask} />
+          ) : page === 'board' ? (
+            <Board view={view} focus={focus} onSay={say} onTask={openTask} />
+          ) : (
+            <Scouts scouts={view.scouts} onSay={say} />
+          )
+        ) : (
+          <EngineScreen engine={{ state: 'starting' }} />
+        )}
+      </div>
+    </div>
+  )
+}
+
+function Rail({ page, onPage, needs }: { page: Page; onPage: (p: Page) => void; needs: number }) {
+  const item = (p: Page, icon: string, word: string, count?: number) => (
+    <button type="button" className="rail-item" aria-current={page === p ? 'page' : undefined} onClick={() => onPage(p)}>
+      <Icon name={icon} />
+      <span>{word}</span>
+      {!!count && <b className="rail-count">{count}</b>}
+    </button>
+  )
+  return (
+    <nav className="rail" aria-label="symcc">
+      <Mark />
+      {item('now', 'pulse', 'Now', needs)}
+      {item('board', 'checklist', 'Board')}
+      {item('scouts', 'telescope', 'Scouts')}
+    </nav>
+  )
+}
+
+function Header({ view, onSay }: { view: PanelView | null; onSay: Say }) {
+  const [switching, setSwitching] = useState<PanelMode | null>(null)
+  const setMode = (mode: PanelMode) => {
+    if (!view || mode === view.mode) return
+    setSwitching(mode)
+    ask({ type: 'mode', mode })
+      .then(t => onSay(t), (e: Error) => onSay(e.message, true))
+      .finally(() => setSwitching(null))
+  }
+  const c = view?.counts
+  return (
+    <header className="head">
+      <div className="head-title">
+        <h1>{view?.project ?? 'symcc'}</h1>
+        {view?.branch && (
+          <span className="branch" title="The branch new tasks merge into">
+            <Icon name="git-branch" /> {view.branch}
+          </span>
+        )}
+      </div>
+      {c && view?.on && (
+        <p className="head-counts">
+          <span>
+            <b>{c.running}</b> running
+          </span>
+          <span>
+            <b>{c.next}</b> up next
+          </span>
+          <span>
+            <b>{c.doneToday}</b> done today
+          </span>
+        </p>
+      )}
+      {view?.on && (
+        <div className="modes" role="group" aria-label="Board mode">
+          {view.modes.map(m => (
+            <button key={m.mode} type="button" aria-pressed={view.mode === m.mode} disabled={!!switching} title={m.meaning} onClick={() => setMode(m.mode)}>
+              {switching === m.mode ? <Icon name="loading" /> : null}
+              {m.name.charAt(0).toUpperCase() + m.name.slice(1)}
+            </button>
+          ))}
+        </div>
+      )}
+      {view?.note && (
+        <p className="head-note">
+          <Icon name="warning" /> {view.note}
+        </p>
+      )}
+    </header>
+  )
+}
+
+function EngineScreen({ engine }: { engine: EngineState }) {
+  if (engine.state === 'failed' || engine.state === 'stopped')
+    return (
+      <section className="screen">
+        <h2>{engine.state === 'failed' ? 'symcc stopped' : 'symcc is not running'}</h2>
+        <p>{engine.text ?? 'The engine is not running in this window.'} Its log is under “symcc: Show the engine log” in the command palette.</p>
+        <button type="button" className="btn primary" onClick={() => tell({ type: 'restart' })}>
+          <Icon name="debug-restart" /> Start symcc again
+        </button>
+      </section>
+    )
+  return (
+    <section className="screen" aria-busy="true">
+      <p className="quiet">
+        <Icon name="loading" /> Starting symcc…
+      </p>
+    </section>
+  )
+}
+
+function OffScreen({ view, onSay }: { view: PanelView; onSay: Say }) {
+  const [busy, setBusy] = useState(false)
+  const setUp = () => {
+    setBusy(true)
+    ask({ type: 'command', name: 'symcc-init' })
+      .then(t => onSay(t.split('\n')[0] ?? t), (e: Error) => onSay(e.message, true))
+      .finally(() => setBusy(false))
+  }
+  return (
+    <section className="screen">
+      <Mark size={48} />
+      <h2>Set up symcc in {view.project}</h2>
+      <p>{view.off}</p>
+      <p>symcc keeps its board in .symcc/ in this project. You tell the lead what you want; it plans tasks, and workers do each one in its own git worktree. You decide what merges.</p>
+      <button type="button" className="btn primary" disabled={busy} onClick={setUp}>
+        {busy ? <Icon name="loading" /> : <Icon name="play" />} Set up symcc here
+      </button>
+    </section>
+  )
+}
+
+/* ---------- Now: needs, stream, composer, running ---------- */
+
+function Now({ view, chat, busy, ready, onSay, onTask }: { view: PanelView; chat: ChatItem[]; busy: boolean; ready: boolean; onSay: Say; onTask: (id: string) => void }) {
+  return (
+    <div className="now">
+      <div className="center">
+        <Needs needs={view.needs} onSay={onSay} onTask={onTask} />
+        <Stream chat={chat} news={view.news} lanes={view.lanes} busy={busy} onTask={onTask} />
+        <Composer ready={ready} busy={busy} onSay={onSay} />
+      </div>
+      <Side view={view} onTask={onTask} />
+    </div>
+  )
+}
+
+function Needs({ needs, onSay, onTask }: { needs: PanelNeed[]; onSay: Say; onTask: (id: string) => void }) {
+  if (!needs.length)
+    return (
+      <section className="needs clear" aria-label="Needs you">
+        <p>
+          <Icon name="pass" /> Nothing needs you.
+        </p>
+      </section>
+    )
+  return (
+    <section className="needs" aria-labelledby="needs-h">
+      <h2 id="needs-h">
+        Needs you <span className="count">{needs.length}</span>
+      </h2>
+      <div className="cards">
+        {needs.map(n => (
+          <NeedCard key={n.id} need={n} onSay={onSay} onTask={onTask} />
+        ))}
+      </div>
+    </section>
+  )
+}
+
+const NEED_ICON: Record<PanelNeed['kind'], string> = { question: 'comment-discussion', asks: 'question', files: 'file-add', time: 'watch', review: 'git-pull-request', answer: 'book', failed: 'error' }
+
+function NeedCard({ need, onSay, onTask }: { need: PanelNeed; onSay: Say; onTask: (id: string) => void }) {
+  const now = useNow(30_000)
+  const [box, setBox] = useState<{ action?: PanelAction; hint: string } | null>(null)
+  const [text, setText] = useState('')
+  const [sending, setSending] = useState<string | null>(null)
+  const area = useRef<HTMLTextAreaElement>(null)
+  const field = useRef<HTMLInputElement>(null)
+  const [nudge, setNudge] = useState(false)
+  useEffect(() => void (box && area.current?.focus()), [box])
+
+  const run = (label: string, p: Promise<string>) => {
+    setSending(label)
+    p.then(
+      t => (t && onSay(t), setBox(null), setText('')),
+      (e: Error) => onSay(e.message, true),
+    ).finally(() => setSending(null))
+  }
+  const answer = (words: string) => run(words, ask({ type: 'answer', need: need.id, text: words }))
+  const act = (a: PanelAction, words = '') => run(a.label, ask({ type: 'act', task: need.id, action: a.id, ...(words ? { text: words } : {}) }))
+  const press = (a: PanelAction) => (a.ask ? setBox({ action: a, hint: a.ask }) : act(a))
+  const submit = (e: FormEvent) => {
+    e.preventDefault()
+    const words = text.trim()
+    if (box?.action) return box.action.id === 'drop' || words ? act(box.action, words) : undefined
+    if (words) answer(words)
+  }
+  const keys = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Escape') setBox(null)
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit(e)
+  }
+  const choices = need.choices.filter(c => c !== 'Answer…')
+  const ownAnswer = need.choices.includes('Answer…') || (!need.choices.length && !need.actions.length)
+  const task = /^T-\d+$/.test(need.id)
+
+  return (
+    <article className={`card need-${need.kind}`} aria-busy={!!sending}>
+      <h3>{need.title}</h3>
+      <p className="card-meta">
+        <Icon name={NEED_ICON[need.kind]} />
+        {task ? (
+          <button type="button" className="task-ref" onClick={() => onTask(need.id)}>
+            {need.id}
+          </button>
+        ) : (
+          <span className="id">{need.id}</span>
+        )}
+        <span>{need.meta.replace(`${need.id} · `, '')}</span>
+        {need.sinceMs !== undefined && <span className="since">{ago(need.sinceMs, now)}</span>}
+      </p>
+      {need.text && <p className={`card-text${need.kind === 'failed' ? ' bad' : ''}`}>{need.text}</p>}
+      {need.files && need.files.length > 1 && (
+        <ul className="files">
+          {need.files.slice(0, 3).map(f => (
+            <li key={f.file}>
+              <span className="file">{f.file}</span>
+              <span className="add">+{f.added}</span>
+              <span className="del">−{f.removed}</span>
+            </li>
+          ))}
+          {need.files.length > 3 && <li className="quiet">and {need.files.length - 3} more</li>}
+        </ul>
+      )}
+      {box ? (
+        <form className="card-box" onSubmit={submit}>
+          <label className="sr" htmlFor={`box-${need.id}`}>
+            {box.hint}
+          </label>
+          <textarea id={`box-${need.id}`} ref={area} rows={2} placeholder={box.hint} value={text} onChange={e => setText(e.target.value)} onKeyDown={keys} />
+          <div className="card-actions">
+            <button type="submit" className="btn primary" disabled={!!sending || (!text.trim() && box.action?.id !== 'drop')}>
+              {sending ? <Icon name="loading" /> : null}
+              {box.action ? box.action.label.replace('…', '') : 'Send answer'}
+            </button>
+            <button type="button" className="btn ghost" onClick={() => setBox(null)}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      ) : !choices.length && !need.actions.length ? null : (
+        <div className="card-actions">
+          {choices.map(c => (
+            <button key={c} type="button" className="btn" disabled={!!sending} onClick={() => answer(c)}>
+              {sending === c ? <Icon name="loading" /> : null}
+              {c}
+            </button>
+          ))}
+          {need.actions.map(a => (
+            <button key={a.id} type="button" className={`btn${a.primary ? ' primary' : ''}`} disabled={!!sending} onClick={() => press(a)}>
+              {sending === a.label ? <Icon name="loading" /> : null}
+              {a.label}
+            </button>
+          ))}
+        </div>
+      )}
+      {ownAnswer && !box && (
+        <form className="card-answer" onSubmit={submit}>
+          <label className="sr" htmlFor={`answer-${need.id}`}>
+            Your answer
+          </label>
+          <input
+            id={`answer-${need.id}`}
+            ref={field}
+            className={nudge ? 'nudge' : undefined}
+            aria-invalid={nudge || undefined}
+            placeholder={nudge ? 'Type your answer here first' : choices.length ? 'Or write your own answer' : 'Write your answer'}
+            value={text}
+            onChange={e => (setText(e.target.value), setNudge(false))}
+            disabled={!!sending}
+          />
+          <button type="submit" className="btn primary" disabled={!!sending} onClick={e => !text.trim() && (e.preventDefault(), setNudge(true), field.current?.focus())}>
+            {sending && !choices.includes(sending) ? <Icon name="loading" /> : null}
+            Answer
+          </button>
+        </form>
+      )}
+    </article>
+  )
+}
+
+const NEWS: Record<string, { icon: string; word: string }> = {
+  created: { icon: 'add', word: 'added' },
+  merged: { icon: 'git-merge', word: 'merged' },
+  done: { icon: 'check', word: 'done' },
+  failed: { icon: 'error', word: 'failed' },
+  'checker-problems': { icon: 'warning', word: 'sent back by the checker' },
+  rejected: { icon: 'close', word: 'rejected' },
+  'approve-failed': { icon: 'error', word: 'could not merge' },
+  stopped: { icon: 'debug-stop', word: 'stopped' },
+}
+
+type Line = { key: string; atMs: number } & ({ chat: ChatItem } | { news: PanelNews })
+
+function Stream({ chat, news, lanes, busy, onTask }: { chat: ChatItem[]; news: PanelNews[]; lanes: PanelLane[]; busy: boolean; onTask: (id: string) => void }) {
+  const now = useNow(60_000)
+  const box = useRef<HTMLDivElement>(null)
+  const stuck = useRef(true)
+  const lines = useMemo<Line[]>(() => [...chat.map(c => ({ key: c.key, atMs: c.atMs, chat: c })), ...news.map(n => ({ key: n.key, atMs: n.atMs, news: n }))].sort((a, b) => a.atMs - b.atMs), [chat, news])
+  useLayoutEffect(() => {
+    const el = box.current
+    if (el && stuck.current) el.scrollTop = el.scrollHeight
+  }, [lines.length, busy])
+  const onScroll = () => {
+    const el = box.current
+    if (el) stuck.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40
+  }
+  let day = ''
+  return (
+    <section className="stream" ref={box} onScroll={onScroll} aria-label="The lead and the board" aria-live="polite" aria-relevant="additions">
+      {!lines.length && (
+        <div className="stream-empty">
+          <p>{ALL_CLEAR[0]}</p>
+          <p className="quiet">{ALL_CLEAR[1]} It plans the work as tasks, and you see them here as they run and merge.</p>
+        </div>
+      )}
+      {lines.map(l => {
+        const d = dayWord(l.atMs, now)
+        const head = d !== day ? ((day = d), <p className="day" key={`d-${d}`}>{d}</p>) : null
+        return [head, 'chat' in l ? <ChatLine key={l.key} c={l.chat} onTask={onTask} /> : <NewsLine key={l.key} n={l.news} lane={l.news.kind === 'merged' ? lanes.find(x => x.id === l.news.task && x.doneMs !== undefined) : undefined} onTask={onTask} />]
+      })}
+      {busy && (
+        <p className="working">
+          <Icon name="loading" /> The lead is working…
+        </p>
+      )}
+    </section>
+  )
+}
+
+function ChatLine({ c, onTask }: { c: ChatItem; onTask: (id: string) => void }) {
+  if (c.who === 'error')
+    return (
+      <div className="msg error" role="alert">
+        <Icon name="error" />
+        <p>{c.text}</p>
+      </div>
+    )
+  const lead = c.who === 'lead'
+  return (
+    <div className={`msg ${c.who}`}>
+      <div className="who">
+        {lead ? <Mark size={22} /> : <span className="you" aria-hidden><Icon name="account" /></span>}
+        <b>{lead ? 'Lead' : 'You'}</b>
+        <time>{clock(c.atMs)}</time>
+      </div>
+      {lead ? <Markdown text={c.text} onTask={onTask} /> : <p className="said"><Linked text={c.text} onTask={onTask} /></p>}
+    </div>
+  )
+}
+
+function NewsLine({ n, lane, onTask }: { n: PanelNews; lane?: PanelLane; onTask: (id: string) => void }) {
+  const k = NEWS[n.kind] ?? { icon: 'circle-small', word: n.kind }
+  return (
+    <p className={`news ${n.tone}`}>
+      <Icon name={k.icon} />
+      <button type="button" className="task-ref" onClick={() => onTask(n.task)}>
+        {n.task}
+      </button>
+      <span className="news-title">{n.title}</span>
+      <span className="news-word">{k.word}</span>
+      {lane && (
+        <span className="news-more">
+          {lane.tryNo === 1 ? 'first try' : `${lane.tryNo} tries`}
+          {!!lane.tokens && ` · ${tokensWord(lane.tokens)} tokens`}
+        </span>
+      )}
+      <time>{clock(n.atMs)}</time>
+    </p>
+  )
+}
+
+function Composer({ ready, busy, onSay }: { ready: boolean; busy: boolean; onSay: Say }) {
+  const [text, setText] = useState('')
+  const [sending, setSending] = useState(false)
+  const area = useRef<HTMLTextAreaElement>(null)
+  useLayoutEffect(() => {
+    const el = area.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(el.scrollHeight, 200)}px`
+  }, [text])
+  const send = (e?: FormEvent) => {
+    e?.preventDefault()
+    const words = text.trim()
+    if (!words || sending) return
+    setSending(true)
+    ask({ type: 'send', text: words })
+      .then(() => setText(''), (err: Error) => onSay(err.message, true))
+      .finally(() => (setSending(false), area.current?.focus()))
+  }
+  const keys = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) send(e)
+  }
+  return (
+    <form className="composer" onSubmit={send}>
+      <label className="sr" htmlFor="composer">
+        Message the lead
+      </label>
+      <textarea id="composer" ref={area} rows={1} placeholder="Tell the lead what you want next…" value={text} onChange={e => setText(e.target.value)} onKeyDown={keys} disabled={!ready} />
+      <button type="submit" className="btn primary send" disabled={!ready || sending || !text.trim()}>
+        {sending ? <Icon name="loading" /> : <Icon name="send" />}
+        <span>Send</span>
+      </button>
+      <p className="composer-hint">{busy ? 'The lead is working; your message goes into its next turn.' : 'Enter sends · Shift+Enter for a new line'}</p>
+    </form>
+  )
+}
+
+function Side({ view, onTask }: { view: PanelView; onTask: (id: string) => void }) {
+  const running = view.lanes.filter(l => l.doneMs === undefined && l.stations[l.at] !== 'you')
+  const merged = view.lanes.filter(l => l.doneMs !== undefined)
+  const shown = view.next.slice(0, 6)
+  return (
+    <aside className="side" aria-label="The work">
+      <section>
+        <h2>
+          Running <span className="count">{view.counts.running}</span>
+        </h2>
+        {running.length ? running.map(l => <LaneCard key={l.id} lane={l} onTask={onTask} />) : <p className="quiet">Nothing running.</p>}
+      </section>
+      {!!merged.length && (
+        <section>
+          <h2>Just merged</h2>
+          {merged.map(l => (
+            <LaneCard key={l.id} lane={l} onTask={onTask} />
+          ))}
+        </section>
+      )}
+      <section>
+        <h2>
+          Up next <span className="count">{view.counts.next}</span>
+        </h2>
+        {shown.length ? (
+          <ul className="next">
+            {shown.map(t => (
+              <li key={t.id}>
+                <button type="button" className="row-btn" onClick={() => onTask(t.id)}>
+                  <span className="id">{t.id}</span>
+                  <span className="title">{t.title}</span>
+                </button>
+              </li>
+            ))}
+            {view.next.length > shown.length && <li className="quiet">and {view.next.length - shown.length} more</li>}
+          </ul>
+        ) : (
+          <p className="quiet">Nothing waits to start.</p>
+        )}
+      </section>
+      {!!view.counts.backlog && (
+        <p className="quiet side-foot">
+          <Icon name="archive" /> {view.counts.backlog} in the backlog
+        </p>
+      )}
+    </aside>
+  )
+}
+
+function LaneCard({ lane, onTask }: { lane: PanelLane; onTask: (id: string) => void }) {
+  const now = useNow(1000)
+  const station = lane.stations[lane.at]
+  const done = lane.doneMs !== undefined
+  const what = done ? `merged ${ago(lane.doneMs, now)} ago`.replace('now ago', 'just now') : station === 'you' ? 'waits for you' : `${STATION_WORD[station!]}${lane.sinceMs !== undefined ? ` · ${duration(now - lane.sinceMs)}` : ''}`
+  return (
+    <button type="button" className={`lane${done ? ' finished' : ''}`} onClick={() => onTask(lane.id)}>
+      <span className="lane-head">
+        <span className="id">{lane.id}</span>
+        <span className="title">{lane.title}</span>
+      </span>
+      <Staff lane={lane} />
+      <span className="lane-meta">
+        <span>{what}</span>
+        {lane.tries > 1 && (
+          <span>
+            try {lane.tryNo} of {lane.tries}
+          </span>
+        )}
+        {!!lane.tokens && <span>{tokensWord(lane.tokens)} tokens</span>}
+      </span>
+    </button>
+  )
+}
+
+/* ---------- Board: every task, grouped ---------- */
+
+const GROUPS: { key: string; title: string; has: (t: PanelTask) => boolean; open: boolean }[] = [
+  { key: 'needs', title: 'Needs you', has: t => t.needsYou, open: true },
+  { key: 'running', title: 'Running', has: t => !t.needsYou && t.status === 'doing', open: true },
+  { key: 'next', title: 'Up next', has: t => !t.needsYou && t.status === 'todo', open: true },
+  { key: 'paused', title: 'Paused and waiting', has: t => !t.needsYou && (t.status === 'paused' || t.status === 'waiting' || t.status === 'review'), open: true },
+  { key: 'backlog', title: 'Backlog', has: t => t.status === 'backlog', open: false },
+  { key: 'done', title: 'Done today', has: t => t.status === 'done', open: false },
+  { key: 'dropped', title: 'Dropped', has: t => !t.needsYou && (t.status === 'dropped' || t.status === 'failed'), open: false },
+]
+
+function Board({ view, focus, onSay, onTask }: { view: PanelView; focus: string | null; onSay: Say; onTask: (id: string) => void }) {
+  const [filter, setFilter] = useState('')
+  const f = filter.trim().toLowerCase()
+  const tasks = f ? view.tasks.filter(t => `${t.id} ${t.title} ${t.kind} ${t.role}`.toLowerCase().includes(f)) : view.tasks
+  return (
+    <div className="page board">
+      <div className="page-head">
+        <h2>Board</h2>
+        <label className="filter">
+          <Icon name="search" />
+          <span className="sr">Filter tasks</span>
+          <input type="search" placeholder="Filter by id, title, kind or role" value={filter} onChange={e => setFilter(e.target.value)} />
+        </label>
+      </div>
+      {!tasks.length && <p className="quiet">{f ? `No task matches “${filter}”.` : ALL_CLEAR.join(' ')}</p>}
+      {GROUPS.map(g => {
+        const xs = tasks.filter(g.has)
+        if (!xs.length) return null
+        const open = g.open || !!f || xs.some(t => t.id === focus)
+        return (
+          <details key={g.key} className="group" open={open}>
+            <summary>
+              <h3>{g.title}</h3>
+              <span className="count">{xs.length}</span>
+            </summary>
+            <ul>
+              {xs.map(t => (
+                <TaskRow key={t.id} task={t} focused={t.id === focus} onSay={onSay} onTask={onTask} />
+              ))}
+            </ul>
+          </details>
+        )
+      })}
+    </div>
+  )
+}
+
+const STATUS_TONE: Record<PanelTask['status'], string> = { backlog: 'other', todo: 'other', doing: 'run', paused: 'wait', waiting: 'you', review: 'you', failed: 'bad', done: 'good', dropped: 'other' }
+
+function TaskRow({ task, focused, onSay, onTask }: { task: PanelTask; focused: boolean; onSay: Say; onTask: (id: string) => void }) {
+  const [open, setOpen] = useState(focused)
+  const [box, setBox] = useState<PanelAction | null>(null)
+  const [text, setText] = useState('')
+  const [sending, setSending] = useState<string | null>(null)
+  const li = useRef<HTMLLIElement>(null)
+  useEffect(() => {
+    if (!focused) return
+    setOpen(true)
+    li.current?.scrollIntoView({ block: 'center' })
+    li.current?.querySelector('button')?.focus()
+  }, [focused])
+  const act = (a: PanelAction, words = '') => {
+    setSending(a.label)
+    ask({ type: 'act', task: task.id, action: a.id, ...(words ? { text: words } : {}) })
+      .then(t => (t && onSay(t), setBox(null), setText('')), (e: Error) => onSay(e.message, true))
+      .finally(() => setSending(null))
+  }
+  return (
+    <li ref={li} className={`task${open ? ' open' : ''}${focused ? ' focused' : ''}`}>
+      <button type="button" className="task-row" aria-expanded={open} onClick={() => setOpen(o => !o)}>
+        <Icon name={open ? 'chevron-down' : 'chevron-right'} />
+        <span className="id">{task.id}</span>
+        <span className="title">{task.title}</span>
+        {task.kind && <span className="tag">{task.kind}</span>}
+        <span className={`state ${STATUS_TONE[task.status]}`}>{task.word}</span>
+      </button>
+      {open && (
+        <div className="task-body">
+          <p className="task-facts">
+            <span>role {task.role}</span>
+            {task.attempts > 0 && <span>{task.attempts === 1 ? '1 try' : `${task.attempts} tries`}</span>}
+          </p>
+          {task.note && <p className="task-note">{task.note}</p>}
+          {task.details && (
+            <div className="task-details">
+              <Markdown text={task.details} onTask={onTask} />
+            </div>
+          )}
+          {box ? (
+            <form
+              className="card-box"
+              onSubmit={e => {
+                e.preventDefault()
+                if (text.trim() || box.id === 'drop') act(box, text.trim())
+              }}
+            >
+              <label className="sr" htmlFor={`row-${task.id}`}>
+                {box.ask}
+              </label>
+              <textarea id={`row-${task.id}`} rows={2} placeholder={box.ask} value={text} onChange={e => setText(e.target.value)} autoFocus />
+              <div className="card-actions">
+                <button type="submit" className="btn primary" disabled={!!sending || (!text.trim() && box.id !== 'drop')}>
+                  {box.label.replace('…', '')}
+                </button>
+                <button type="button" className="btn ghost" onClick={() => setBox(null)}>
+                  Cancel
+                </button>
+              </div>
+            </form>
+          ) : (
+            !!task.actions.length && (
+              <div className="card-actions">
+                {task.actions.map(a => (
+                  <button key={a.id} type="button" className={`btn${a.primary ? ' primary' : ''}`} disabled={!!sending} onClick={() => (a.ask ? setBox(a) : act(a))}>
+                    {sending === a.label ? <Icon name="loading" /> : null}
+                    {a.label}
+                  </button>
+                ))}
+              </div>
+            )
+          )}
+        </div>
+      )}
+    </li>
+  )
+}
+
+/* ---------- Scouts ---------- */
+
+function Scouts({ scouts, onSay }: { scouts: PanelScout[]; onSay: Say }) {
+  const now = useNow(30_000)
+  const [running, setRunning] = useState<string | null>(null)
+  const run = (name: string) => {
+    setRunning(name)
+    ask({ type: 'scout', name })
+      .then(t => onSay(t), (e: Error) => onSay(e.message, true))
+      .finally(() => setRunning(null))
+  }
+  return (
+    <div className="page scouts">
+      <div className="page-head">
+        <h2>Scouts</h2>
+        <p className="quiet">Scouts look over the project on a timer and report what they find; the lead turns findings into tasks. Ask the lead to add or change one.</p>
+      </div>
+      {!scouts.length && <p className="quiet">No scouts yet. Ask the lead to add one, for example “add a scout that looks for missing tests every day”.</p>}
+      <ul className="scout-list">
+        {scouts.map(s => (
+          <li key={s.name} className="scout">
+            <div className="scout-head">
+              <h3>{s.name}</h3>
+              <span className={`state ${s.running ? 'run' : s.paused ? 'wait' : 'other'}`}>{s.running ? 'running' : s.paused ? 'paused' : s.every}</span>
+              <button type="button" className="btn" disabled={s.running || running === s.name} onClick={() => run(s.name)}>
+                {running === s.name ? <Icon name="loading" /> : <Icon name="play" />} Run now
+              </button>
+            </div>
+            {s.summary && <p>{s.summary}</p>}
+            <p className="scout-facts">
+              <span>{s.lastRunMs ? `last run ${ago(s.lastRunMs, now)} ago`.replace('now ago', 'just now') : 'not run yet'}</span>
+              {s.nextRunMs && !s.paused && <span>{s.nextRunMs > now ? `next in ${duration(s.nextRunMs - now).replace(/ \d+s$/, '')}` : 'next: now'}</span>}
+            </p>
+            {s.warning && (
+              <p className="bad">
+                <Icon name="warning" /> {s.warning}
+              </p>
+            )}
+            {s.lastReport && (
+              <details className="report">
+                <summary>Last report</summary>
+                <Markdown text={s.lastReport} />
+              </details>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}

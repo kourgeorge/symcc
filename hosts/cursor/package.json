@@ -1,0 +1,21 @@
+{
+  "name": "symcc-cursor-host",
+  "private": true,
+  "type": "module",
+  "description": "symcc's engine on Cursor: workers, scouts, checkers and the lead chat as Cursor SDK local agents (hosts/cursor/)",
+  "scripts": {
+    "build": "esbuild main.ts --bundle --tsconfig=tsconfig.json --platform=node --format=esm --target=node20 --outfile=dist/engine.mjs --external:@cursor/sdk --external:undici --external:https-proxy-agent",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "npx -y bun test ./tests/"
+  },
+  "dependencies": {
+    "@cursor/sdk": "1.3.1",
+    "https-proxy-agent": "^7.0.6",
+    "undici": "^7.16.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "esbuild": "^0.25.0",
+    "typescript": "5.9.3"
+  }
+}

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="symcc">
+  <rect width="32" height="32" rx="8" fill="#d97757"/>
+  <g transform="translate(16 16.5) scale(0.125) translate(-162 -120)">
+    <path fill="none" stroke="#1b1f2a" stroke-width="15" stroke-linecap="round" stroke-linejoin="round" d="M164,138 C150,132 140,144 150,152 C162,160 184,152 184,132 C184,110 160,104 146,114 C126,128 124,160 150,170 C178,180 200,160 192,128 C186,104 160,90 152,70 C146,52 154,30 166,30 C178,30 180,52 166,70 C150,90 160,170 162,190 C164,206 142,210 136,198"/>
+  </g>
+</svg>
