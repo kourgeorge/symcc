@@ -96,15 +96,28 @@
     "configuration": {
       "title": "symcc",
       "properties": {
+        "symcc.agents": {
+          "type": "string",
+          "enum": [
+            "cursor",
+            "copilot"
+          ],
+          "enumDescriptions": [
+            "Cursor's agents (the Cursor SDK), on your Cursor account.",
+            "GitHub Copilot's agents (the Copilot SDK), on your GitHub account: sign in once with `copilot login` in a terminal, or set GH_TOKEN."
+          ],
+          "default": "cursor",
+          "markdownDescription": "Whose agents run the lead chat and the workers. Changing it restarts symcc: running workers stop and their tasks go back to the board."
+        },
         "symcc.leadModel": {
           "type": "string",
           "default": "",
-          "description": "The model the lead chat runs on (empty: symcc's default)."
+          "description": "The model the lead chat runs on (empty: the default of the agents in use, Composer 2.5 on Cursor, Auto on Copilot)."
         },
         "symcc.workerModel": {
           "type": "string",
           "default": "",
-          "description": "The model for workers whose role names none (empty: symcc's default)."
+          "description": "The model for workers whose role names none (empty: the default of the agents in use, Composer 2.5 on Cursor, Auto on Copilot)."
         },
         "symcc.enginePath": {
           "type": "string",

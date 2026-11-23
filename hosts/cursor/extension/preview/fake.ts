@@ -1,6 +1,7 @@
 // A stand-in for the extension in a plain browser: demo data (made up, for looking at the panel) and replies that
 // act like the engine's, so every card and button can be tried. Loaded before the webview's bridge.
 import type { ChatItem, FromWebview, LeadSettings, ModelInfo, PanelLane, PanelNeed, PanelNews, PanelStep, PanelTask, PanelView, PanelWorktree, SlashItem, ToWebview } from '../../protocol'
+import { copilotModels } from '../../copilot'
 
 const now = Date.now()
 const m = (min: number) => now - min * 60_000
@@ -9,6 +10,8 @@ document.body.classList.add(theme === 'light' ? 'vscode-light' : 'vscode-dark')
 const state = new URLSearchParams(location.search).get('state')
 if (new URLSearchParams(location.search).get('surface') === 'side') document.body.dataset.surface = 'side'
 if (state === 'off') (window as unknown as { __off: boolean }).__off = true
+// ?agents=copilot: the lead and the workers on GitHub Copilot's agents
+const copilot = new URLSearchParams(location.search).get('agents') === 'copilot'
 
 const stations4 = ['work', 'check', 'queue', 'tests', 'merged'] as const
 const lane = (id: string, title: string, at: number, sinceMin: number, more: Partial<PanelLane> = {}): PanelLane => ({ id, title, kind: '', stations: [...stations4], at, skipped: [], sinceMs: m(sinceMin), tryNo: 1, tries: 3, agent: at === 0 || at === 1, ...more })
@@ -167,7 +170,21 @@ const slash: SlashItem[] = [
   { name: 'grill-me', description: 'A relentless interview to sharpen a plan or design.', kind: 'skill', scope: 'user' },
   { name: 'release-notes', description: 'Write the release notes for the next tag from the merged tasks', kind: 'skill', scope: 'project' },
 ]
-let lead: LeadSettings = { mode: 'agent', model: { id: 'claude-opus-5-5', params: [{ id: 'context', value: '300k' }, { id: 'effort', value: 'high' }] }, modelLabel: 'Claude Opus 5.5' }
+const efforts = ['low', 'medium', 'high', 'xhigh', 'max']
+const copilotList = copilotModels([
+  { id: 'auto', name: 'Auto' },
+  { id: 'claude-sonnet-5.5', name: 'Claude Sonnet 5.5', supportedReasoningEfforts: efforts },
+  { id: 'claude-opus-5.5', name: 'Claude Opus 5.5', supportedReasoningEfforts: efforts },
+  { id: 'claude-haiku-5.5', name: 'Claude Haiku 5.5', supportedReasoningEfforts: efforts },
+  { id: 'gpt-6.2-sol', name: 'GPT-6.2 Sol', supportedReasoningEfforts: efforts },
+  { id: 'gpt-5.3-codex', name: 'GPT-5.3-Codex', supportedReasoningEfforts: ['low', 'medium', 'high', 'xhigh'] },
+  { id: 'gemini-4-carbon', name: 'Gemini 4 Carbon', supportedReasoningEfforts: ['low', 'medium', 'high'] },
+  { id: 'grok-4.7', name: 'Grok 4.7', supportedReasoningEfforts: ['low', 'medium', 'high', 'xhigh'] },
+  { id: 'mai-code-2', name: 'MAI Code 2', supportedReasoningEfforts: efforts },
+])
+let lead: LeadSettings = copilot
+  ? { mode: 'agent', model: { id: 'claude-sonnet-5.5', params: [{ id: 'reasoning', value: 'high' }] }, modelLabel: 'Claude Sonnet 5.5 · High' }
+  : { mode: 'agent', model: { id: 'claude-opus-5-5', params: [{ id: 'context', value: '300k' }, { id: 'effort', value: 'high' }] }, modelLabel: 'Claude Opus 5.5' }
 
 const leadTurn = (): PanelStep[] => {
   const t = Date.now()
@@ -247,9 +264,9 @@ window.acquireVsCodeApi = () => ({
       send({ type: 'view', view: view() })
       send({ type: 'steps', all: busy ? { ...steps, lead: [...steps.lead!, ...leadTurn()] } : steps })
       send({ type: 'lead', settings: lead })
-      send({ type: 'models', models })
+      send({ type: 'models', models: copilot ? copilotList : models })
       send({ type: 'slash', items: slash })
-      if (net) send({ type: 'network', problem: { text: 'the lead could not run: Network request failed', proxy: '' } })
+      if (net) send({ type: 'network', problem: { text: 'the lead could not run: Network request failed', proxy: '', service: copilot ? 'GitHub Copilot' : 'Cursor' } })
       return
     }
     if (msg.type === 'restart' || msg.type === 'log' || msg.type === 'session' || msg.type === 'open-file' || msg.type === 'open-board') return

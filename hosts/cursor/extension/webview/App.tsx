@@ -275,10 +275,10 @@ export function NetworkCard({ problem, onSay }: { problem: NetworkProblem; onSay
   }
   return (
     <article className="card need-failed network" role="alert">
-      <h3>symcc can't reach Cursor</h3>
+      <h3>symcc can't reach {problem.service}</h3>
       <p className="card-text bad">{problem.text}</p>
       <p className="card-text">
-        {problem.proxy ? `It ran through the proxy ${problem.proxy.replace(/\/\/[^@/]*@/, '//***@')}.` : 'It ran with no proxy.'} The lead and the workers need Cursor's servers. On a network that needs a proxy, enter it here; symcc restarts with it. In a terminal, <code>echo $HTTPS_PROXY</code> shows the one your shell uses.
+        {problem.proxy ? `It ran through the proxy ${problem.proxy.replace(/\/\/[^@/]*@/, '//***@')}.` : 'It ran with no proxy.'} The lead and the workers need {problem.service}'s servers. On a network that needs a proxy, enter it here; symcc restarts with it. In a terminal, <code>echo $HTTPS_PROXY</code> shows the one your shell uses.
       </p>
       <form className="card-answer" onSubmit={save}>
         <label className="sr" htmlFor="proxy">

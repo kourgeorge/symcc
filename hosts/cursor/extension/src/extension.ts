@@ -10,7 +10,7 @@ import { Engine } from './engine'
 import type { BoardPage, ChatItem, EngineState, FromWebview, LeadSettings, ModelInfo, NetworkProblem, PanelStep, PanelView, PanelWorktree, SlashItem, ToWebview, WorktreeAction } from '../../protocol'
 import { LEAD_AGENT, addStep, readSteps, sessionMarkdown, sessionPath, turnSteps } from '../../steps'
 
-/** A lead error that means the engine could not reach Cursor's servers. */
+/** A lead error that means the engine could not reach its agents' servers. */
 const NETWORK_ERROR = /network request failed|fetch failed|ECONNREFUSED|ECONNRESET|ENOTFOUND|ETIMEDOUT|EAI_AGAIN|getaddrinfo|socket hang up|proxy/i
 
 /** How many chat lines are kept (per project, in the workspace state). */
@@ -58,6 +58,15 @@ export function activate(ctx: vscode.ExtensionContext) {
     const no = (http().get<string[]>('noProxy') ?? []).join(',') || process.env.NO_PROXY || process.env.no_proxy || ''
     return { HTTPS_PROXY: p, https_proxy: p, HTTP_PROXY: p, http_proxy: p, ...(no ? { NO_PROXY: no, no_proxy: no } : {}) }
   }
+  /** Whose agents the engine runs: Cursor's, or GitHub Copilot's. */
+  const agents = () => (conf().get<string>('agents') === 'copilot' ? 'copilot' : 'cursor')
+  // each one keeps its own choice of the lead's model: a Cursor model is no Copilot one
+  const leadKey = () => (agents() === 'copilot' ? `${LEAD_KEY}.copilot` : LEAD_KEY)
+  const engineArgs = (): string[] => {
+    const lead = conf().get<string>('leadModel')
+    const worker = conf().get<string>('workerModel')
+    return [...(agents() === 'copilot' ? ['--agents', 'copilot'] : []), ...(lead ? ['--lead-model', lead] : []), ...(worker ? ['--worker-model', worker] : [])]
+  }
   let network: NetworkProblem | null = null
   const setNetwork = (n: NetworkProblem | null) => ((network = n), post({ type: 'network', problem: n }))
 
@@ -68,7 +77,7 @@ export function activate(ctx: vscode.ExtensionContext) {
   let busy = false
   // when the lead's newest turn started, so its answer keeps only that turn's steps
   let turnAtMs = 0
-  let lead: LeadSettings = ctx.workspaceState.get<LeadSettings>(LEAD_KEY) ?? { mode: 'agent' }
+  let lead: LeadSettings = ctx.workspaceState.get<LeadSettings>(leadKey()) ?? { mode: 'agent' }
   let models: ModelInfo[] = []
   let slash: SlashItem[] = []
   let panel: vscode.WebviewPanel | undefined
@@ -102,7 +111,7 @@ export function activate(ctx: vscode.ExtensionContext) {
   }
   const setLead = (next: LeadSettings) => {
     lead = next
-    void ctx.workspaceState.update(LEAD_KEY, lead)
+    void ctx.workspaceState.update(leadKey(), lead)
     post({ type: 'lead', settings: lead })
     if (engine.state.state === 'ready') void engine.request({ op: 'lead-set', model: lead.model ?? null, mode: lead.mode }).catch(err => out.appendLine(`couldn't set the lead's model: ${(err as Error).message}`))
   }
@@ -110,7 +119,12 @@ export function activate(ctx: vscode.ExtensionContext) {
   const leadReady = () => {
     void engine.request({ op: 'lead-set', model: lead.model ?? null, mode: lead.mode }).catch(() => undefined)
     void engine.request({ op: 'models' }).then(
-      a => ((models = (a.models as ModelInfo[]) ?? []), post({ type: 'models', models })),
+      a => {
+        models = (a.models as ModelInfo[]) ?? []
+        post({ type: 'models', models })
+        // a model the account no longer has: the lead goes back to its default
+        if (lead.model && models.length && !models.some(m => m.id === lead.model!.id)) setLead({ mode: lead.mode })
+      },
       err => out.appendLine(`couldn't list the models: ${(err as Error).message}`),
     )
     void engine.request({ op: 'slash' }).then(
@@ -151,7 +165,7 @@ export function activate(ctx: vscode.ExtensionContext) {
   }
 
   const engine = new Engine(
-    { root: folder?.uri.fsPath ?? '', engine: enginePath(), node: conf().get<string>('nodePath') || undefined, leadModel: conf().get<string>('leadModel') || undefined, workerModel: conf().get<string>('workerModel') || undefined, env: proxyEnv },
+    { root: folder?.uri.fsPath ?? '', engine: enginePath(), node: conf().get<string>('nodePath') || undefined, args: engineArgs, env: proxyEnv },
     {
       state: s => {
         drawStatus(s)
@@ -172,7 +186,7 @@ export function activate(ctx: vscode.ExtensionContext) {
         if (e.type === 'message') return
         if (e.type === 'stopped') return addChat('note', 'You stopped the lead.', leadTurn())
         if (e.type === 'summarized') return addChat('note', 'The lead summarized the chat so far to free its memory. The summary is in its session.')
-        if (e.type === 'error' && NETWORK_ERROR.test(e.text)) setNetwork({ text: e.text, proxy: proxy() })
+        if (e.type === 'error' && NETWORK_ERROR.test(e.text)) setNetwork({ text: e.text, proxy: proxy(), service: agents() === 'copilot' ? 'GitHub Copilot' : 'Cursor' })
         if (e.type === 'answer' && network) setNetwork(null)
         if (e.type === 'answer') return addChat('lead', e.text, leadTurn())
         addChat('error', e.text, leadTurn())
@@ -399,7 +413,15 @@ export function activate(ctx: vscode.ExtensionContext) {
     vscode.commands.registerCommand('symcc.restart', () => engine.restart()),
     vscode.commands.registerCommand('symcc.showLog', () => out.show()),
     vscode.workspace.onDidChangeConfiguration(e => {
-      if ((e.affectsConfiguration('symcc.proxy') || e.affectsConfiguration('http.proxy')) && engine.state.state !== 'stopped') void engine.restart()
+      if (e.affectsConfiguration('symcc.agents')) {
+        lead = ctx.workspaceState.get<LeadSettings>(leadKey()) ?? { mode: lead.mode }
+        models = []
+        post({ type: 'lead', settings: lead })
+        post({ type: 'models', models })
+        setNetwork(null)
+      }
+      const restart = ['symcc.agents', 'symcc.leadModel', 'symcc.workerModel', 'symcc.proxy', 'http.proxy'].some(k => e.affectsConfiguration(k))
+      if (restart && engine.state.state !== 'stopped') void engine.restart()
     }),
     { dispose: () => void engine.stop() },
   )

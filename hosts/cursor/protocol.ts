@@ -176,8 +176,11 @@ export type EngineState = { state: 'starting' | 'ready' | 'stopped' | 'failed'; 
 /** One step of an agent's turn (hosts/cursor/sdk.ts SdkStep), with when it happened. */
 export type PanelStep = { atMs: number; kind: 'text' | 'thinking' | 'tool' | 'status'; text: string; tool?: string; callId?: string; status?: 'running' | 'completed' | 'error' }
 
-/** The engine could not reach Cursor's servers: `text` is the error, `proxy` the proxy it ran with ('' for none). */
-export type NetworkProblem = { text: string; proxy: string }
+/**
+ * The engine could not reach its agents' servers: `text` is the error, `proxy` the proxy it ran with ('' for none),
+ * `service` whose servers they are ("Cursor", "GitHub Copilot").
+ */
+export type NetworkProblem = { text: string; proxy: string; service: string }
 
 /** A page of the board panel. */
 export type BoardPage = 'now' | 'board' | 'trees' | 'scouts'
