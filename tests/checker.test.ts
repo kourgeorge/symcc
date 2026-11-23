@@ -10,6 +10,7 @@ import { workerFinished, WORKER_PROMPT, checkingNow, stopAsked, check, stoppedHa
 import { setBoardMode, setSymcc } from '../hooks/app/board-mode'
 import { stopOrphans } from '../hooks/app/cleanup'
 import { checkerFinished } from '../hooks/app/checker'
+import { agentTypeFor } from '../hooks/claude/host'
 import { checkEdit, stoppedText } from '../hooks/app/ask'
 import { load, saveBoard } from '../hooks/app/store'
 import { runTool, leadGuide } from '../hooks/app/tools'
@@ -255,6 +256,8 @@ test('with the checker on, a passing change waits for a checker (shown as checki
     // the checker got the task and the diff, as a read-only agent in the task's folder
     const s = w.spawns[0]!
     expect(s.kind).toBe('checker')
+    // T-905: in Claude Code it starts as the checker agent type (no scouts tool), not the scout one
+    expect(agentTypeFor(s)).toBe(`${S.N.name}:checker`)
     expect(s.cwd).toBe(WT)
     expect(s.prompt).toContain('Done when: a test shows it.')
     expect(s.prompt).toContain('+the new line')

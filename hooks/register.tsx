@@ -49,7 +49,7 @@ export function symccAgentType($: $, agent: unknown): boolean {
     // no plugin name to read
   }
   const type = typeof agent === 'string' ? agent : ''
-  return [...names].some(n => isWorkerType(type, n) || type === claudeNames(n).scout || type === claudeNames(n).starter)
+  return [...names].some(n => isWorkerType(type, n) || type === claudeNames(n).scout || type === claudeNames(n).checker || type === claudeNames(n).starter)
 }
 
 /** The plugin's name in use, or the default one when even that can't be read. */
@@ -136,7 +136,8 @@ export const register: Register = on => {
   // Workers and scouts only reach the agents through the plugin itself (the name is only known once a hook runs).
   on('agent.offer', ($, e, next) => {
     useName(claudeHost($))
-    return isWorkerType(e.agent, S.N.name) || e.agent === claudeNames(S.N.name).scout || e.agent === claudeNames(S.N.name).starter ? { isOffered: false } : next(e)
+    const n = claudeNames(S.N.name)
+    return isWorkerType(e.agent, S.N.name) || e.agent === n.scout || e.agent === n.checker || e.agent === n.starter ? { isOffered: false } : next(e)
   }).catch(($, e, next) => {
     // Failed: symcc's types are still hidden (else the lead's model could start a "worker" itself); any other is offered as usual.
     const ours = symccAgentType($, e?.agent)
