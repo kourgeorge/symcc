@@ -555,3 +555,31 @@ test("the NEEDS YOU row for a more-time task shows the lead's text whole", () =>
   const need = liveNeeds({ tasks: [t], questions: [] } as never, Date.now(), 200).find(x => x.id === 'T-1')
   expect(need?.segs.map(s => s.text).join('')).toBe('⚠ T-1 Give T-1 more time?')
 })
+
+/** An answered investigation in review (T-1), put on the board. */
+async function answeredTask(host: never) {
+  const t = { id: 'T-1', title: 'Why is the cache slow', details: 'Find out why.', files: [], status: 'review', kind: 'investigation', note: 'answered; waiting for you to read it', answer: 'It is never cleared.', order: 1, after: [], attempts: 1, history: [{ at: ISO, text: 'try 1: answered: It is never cleared.' }], branch: 'symcc/T-1', created_at: ISO, updated_at: ISO }
+  await change(host, x => ({ ...x, tasks: [...x.tasks, t as never], next_id: 2 }))
+}
+
+test('T-899: Ask more picked in the pop-up of an answered investigation never ends it Done: alone it stays in review and the lead asks for the question', async () => {
+  const w = world()
+  await answeredTask(w.host as never)
+  const q = 'T-1 is answered: what now?'
+  const out = (await popupCall(w.host, undefined, { questions: [ask(q, ['Done', 'Keep as a note', 'Ask more'], { header: 'T-1' })] }, answeredWith({ [q]: 'Ask more' }), w.notice)) as { context: string[] }
+  expect(out.context[0]).toMatch(/^The owner picked Ask more on T-1: symcc left it in review \(it is not done\)\. Ask the owner for their follow-up question now/)
+  expect(out.context[0]).not.toMatch(/did not apply/)
+  await pause(0)
+  expect(w.board().tasks[0]!.status).toBe('review')
+})
+
+test('T-899: Ask more with a question typed after it in the pop-up sends the task to todo with that question', async () => {
+  const w = world()
+  await answeredTask(w.host as never)
+  const q = 'T-1 is answered: what now?'
+  const out = (await popupCall(w.host, undefined, { questions: [ask(q, ['Done', 'Keep as a note', 'Ask more'], { header: 'T-1' })] }, answeredWith({ [q]: 'Ask more: a test question with a' }), w.notice)) as { context: string[] }
+  expect(out.context[0]).toMatch(/^symcc put the owner's answer into T-1: /)
+  const t = w.board().tasks[0]!
+  expect(t.status).toBe('todo')
+  expect(t.details).toContain('a test question with a')
+})

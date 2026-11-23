@@ -5885,8 +5885,6 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
               {"type":"Button","props":{"key":"back-key","label":"b","hotkey":"b"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"done-key","label":"a","hotkey":"a"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"keep-note-key","label":"v","hotkey":"v"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"ask-more-key","label":"x","hotkey":"x"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"needs-review-key","label":"n","hotkey":"n"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"copy-key","label":"y","hotkey":"y"},"press":{"plugin":"symcc"}}
@@ -6607,36 +6605,14 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   "",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["a"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" done"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["v"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" keep as a note"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["x"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" ask more"]}
                 ]
-              }
-            ]
-          },
-          {
-            "type": "Text",
-            "props": {"color":"subtle"},
-            "children": [
+              },
               {
                 "type": "Text",
                 "children": [
-                  "",
+                  " · ",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["n"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" needs review"]}
                 ]
@@ -6648,14 +6624,6 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["1-2"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" a try's report"]}
                 ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["y"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" copy"]}
-                ]
               }
             ]
           },
@@ -6667,6 +6635,14 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   "",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["y"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" copy"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  " · ",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["k j"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
                 ]

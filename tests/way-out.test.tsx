@@ -60,13 +60,13 @@ test('the hints say the real way out, within 50 columns, and never Esc', () => {
   for (const keys of [settingsKeys(), rolesKeys(), scoutListKeys(), scoutEditKeys()]) expect(keys.some(k => k.key === 'Esc')).toBe(false)
 })
 
-test('the reject reason box: Enter on empty cancels it (nothing is sent), and so does its [Cancel] button (key c)', async ($, on) => {
+test('the reject reason box: Enter on empty cancels it (nothing is sent), and so does its [Cancel] button (no key: T-899)', async ($, on) => {
   stateOf(on, { opened: 'T-5', view: view([task('T-5', 'review', 'Blue button', { branch: 'symcc/T-5' })]) })
   const toasts: string[] = []
   on('ui.toast', (_, e) => (toasts.push(JSON.stringify(e)), { value: undefined }))
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   await ui.press({ key: 'reject' })
-  expect(await ui.find({ type: 'Text', text: /^Enter sends to todo · Enter on empty or c cancels$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^Enter sends to todo · Enter on empty cancels$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /Esc/ })).toBeUndefined()
   await ui.input({ key: 'reject-reason', text: '   ' })
   expect(await ui.find({ key: 'reject-reason' })).toBeUndefined()
@@ -75,17 +75,21 @@ test('the reject reason box: Enter on empty cancels it (nothing is sent), and so
   const cancel = await ui.find({ key: 'reject-cancel' })
   expect(cancel?.props.label).toBe('Cancel')
   expect(cancel?.text).toBe('[Cancel]')
-  // no key drawn in the button (a plain Button with a hotkey would show "c: [Cancel]"); c is on a hidden Button
+  // T-899: no key at all while the box is open: every typed letter belongs to the box
   expect(cancel?.props.hotkey).toBeUndefined()
-  expect((await ui.find({ key: 'reject-cancel-key' }))?.props.hotkey).toBe('c')
+  expect(await ui.find({ key: 'reject-cancel-key' })).toBeUndefined()
   await ui.press({ key: 'reject-cancel' })
   expect(await ui.find({ key: 'reject-reason' })).toBeUndefined()
   // the same box over the task's changes, which have their own Back (b)
   await ui.press({ key: 'show-changes' })
   await ui.press({ key: 'reject' })
+  // T-899: while the box is open over the changes, their buttons have no keys either
+  expect((await ui.find({ key: 'diff-back' }))?.props.hotkey).toBeUndefined()
+  expect((await ui.find({ key: 'approve' }))?.props.hotkey).toBeUndefined()
   await ui.input({ key: 'reject-reason', text: '' })
   expect(await ui.find({ key: 'reject-reason' })).toBeUndefined()
   expect((await ui.find({ key: 'diff-back' }))?.props.hotkey).toBe('b')
+  expect((await ui.find({ key: 'approve' }))?.props.hotkey).toBe('a')
   await ui.press({ key: 'diff-back' })
   expect(await ui.find({ key: 'show-changes' })).toBeDefined()
   // the task page's Back (b) goes to the board list
@@ -151,7 +155,8 @@ async function nativeCancel(ui: { find: (q: { key: string }) => Promise<Found>; 
   expect(b?.props.variant).toBe('secondary')
   expect(b?.props.plain).toBe(undefined)
   expect(b?.text ?? '').not.toContain('[')
-  expect((await ui.find({ key: `${key}-key` }))?.props.hotkey).toBe('c')
+  // T-899: the reject box's Cancel has no key (a typed letter must never leave the box); the others' c
+  expect((await ui.find({ key: `${key}-key` }))?.props.hotkey).toBe(key === 'reject-cancel' ? undefined : 'c')
   await ui.press({ key })
   expect(await ui.find({ key })).toBeUndefined()
 }

@@ -1,6 +1,6 @@
 // The board panel's page for one task: details, actions, and for a task in review its changes.
 import type { SymccTask } from '../../../types'
-import { cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, roleOf, findRole, type DiffFile, type Seg, detailRows, taskKeys, YOUR_EDITS, intoOf, taskReports, type BoardTask, boxHint, pickHint, taskCopyText, copyToast, fileWaitText, isAnswered, showsAnswer, answerText, whyFailed, taskActions, taskAsks, canPickRole as canPickRoleOf, canMarkMerged as canMarkMergedOf, type TaskActionId, failNext, failAsks, answeredLeadLine, sessionNote } from '../../board'
+import { cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, roleOf, findRole, type DiffFile, type Seg, detailRows, taskKeys, YOUR_EDITS, intoOf, taskReports, type BoardTask, boxHint, pickHint, taskCopyText, copyToast, fileWaitText, isAnswered, showsAnswer, answerText, whyFailed, taskActions, taskAsks, canPickRole as canPickRoleOf, canMarkMerged as canMarkMergedOf, type TaskActionId, type TaskAction, failNext, failAsks, answeredLeadLine, sessionNote } from '../../board'
 import { folderDiff, changedFiles } from '../../app/review'
 import { loadRoles } from '../../app/roles'
 import { loadKinds } from '../../app/kinds'
@@ -92,9 +92,17 @@ export async function taskPage($: $, pane: PaneParts, viewTask: SymccTask) {
   const askReason = () => ((S.rejecting = { task: t.id, reason: '' }), $.ui.invalidate('ui.render'))
   const cancelReject = () => ((S.rejecting = null), $.ui.invalidate('ui.render'))
   // the page's actions (shared with VS Code and OpenCode, see taskActions); the terminal draws each as a Button, and its key hints are the ones with a key
-  const actions = taskActions(t as BoardTask, { worker: !!agentId, merging: !!merging })
+  // T-899: on an answered investigation Done and Keep as a note end the task and nothing undoes them, so they get no
+  // letter key here (a, v are in everyday words: typing a question while the keys reach the page pressed Done); they
+  // are pressed as buttons only. Ask more (x) only opens its box.
+  const actions = taskActions(t as BoardTask, { worker: !!agentId, merging: !!merging }).map((x): TaskAction =>
+    answered && (x.id === 'done' || x.id === 'keep-note') ? (({ key: _, ...rest }) => rest)(x) : x,
+  )
+  // T-899: while the Ask more / Reject box is open, no letter or digit key on the page presses anything: every key
+  // belongs to the box (the box may have lost the focus, e.g. to the lead's pop-up question)
+  const boxOpen = inReview && !merging && S.rejecting?.task === t.id
   // the diff view keeps its own row of review buttons (Approve, Reject; Back there goes back to the task)
-  const reviewButtons = actions.filter(x => x.id === 'approve' || x.id === 'reject').map(x => <Button key={x.id} label={x.label} hotkey={x.key} onPress={x.id === 'approve' ? approveIt : askReason} />)
+  const reviewButtons = actions.filter(x => x.id === 'approve' || x.id === 'reject').map(x => <Button key={x.id} label={x.label} hotkey={boxOpen ? undefined : x.key} onPress={x.id === 'approve' ? approveIt : askReason} />)
   const submitReject = (value: string) =>
     act(async () => {
       const why = value.trim()
@@ -106,10 +114,10 @@ export async function taskPage($: $, pane: PaneParts, viewTask: SymccTask) {
       $.ui.toast(S.N.toast(r))
       noteForLead(answered ? `The owner asked more on ${t.id} ("${brief(why)}"): ${brief(r)}` : `The owner rejected ${t.id} ("${brief(why)}"): ${brief(r)}`)
     })()
-  /** The box that asks why, once Reject was pressed. Enter on it empty, or its Cancel button (c), leaves it: Esc
-   *  doesn't reach the panel from a text box. */
+  /** The box that asks why, once Reject was pressed. Enter on it empty, or its Cancel button, leaves it: Esc doesn't
+   *  reach the panel from a text box. Its Cancel has no key (T-899: a typed letter must never leave the box). */
   const rejectBox =
-    inReview && !merging && S.rejecting?.task === t.id ? (
+    boxOpen && S.rejecting ? (
       <Box flexDirection="column" borderStyle="round" borderColor={C(answered ? 'warning' : 'error')} paddingX={1}>
         <Input
           key="reject-reason"
@@ -127,11 +135,7 @@ export async function taskPage($: $, pane: PaneParts, viewTask: SymccTask) {
         ) : (
           <Button key="reject-cancel" label="Cancel" variant="secondary" onPress={cancelReject} />
         )}
-        {/* the c key sits on a hidden Button: a plain Button with a hotkey would draw "c: " before [Cancel] */}
-        <Box key="reject-cancel-keys" display="none">
-          <Button key="reject-cancel-key" label="Cancel" hotkey="c" onPress={cancelReject} />
-        </Box>
-        <Text color={C('inactive')}>{boxHint('Enter sends to todo', 'cancels', 'c')}</Text>
+        <Text color={C('inactive')}>{boxHint('Enter sends to todo', 'cancels')}</Text>
       </Box>
     ) : null
   if (inReview && !answered && S.diffOpen?.task === t.id) {
@@ -159,9 +163,9 @@ export async function taskPage($: $, pane: PaneParts, viewTask: SymccTask) {
           {mergeStatus}
         </Box>
         {buttonRows([
-          <Button key="diff-back" label="Back" hotkey="b" autoFocus={rejectBox ? undefined : true} onPress={() => ((S.diffOpen = null), $.ui.invalidate('ui.render'))} />,
+          <Button key="diff-back" label="Back" hotkey={rejectBox ? undefined : 'b'} autoFocus={rejectBox ? undefined : true} onPress={() => ((S.diffOpen = null), $.ui.invalidate('ui.render'))} />,
           ...reviewButtons,
-          d.file ? <Button key="diff-all" label="All files" hotkey="d" onPress={showDiff('')} /> : null,
+          d.file ? <Button key="diff-all" label="All files" hotkey={rejectBox ? undefined : 'd'} onPress={showDiff('')} /> : null,
         ], 'diff-buttons')}
         {rejectBox}
         <Box flexDirection="column">
@@ -347,7 +351,7 @@ export async function taskPage($: $, pane: PaneParts, viewTask: SymccTask) {
     state: taskStateGroups(t as BoardTask, { nowMs: pane.nowMs, merging: pageMerging, ...(v.auto_retries !== undefined ? { autoRetries: v.auto_retries } : {}), note: sessionNote(t, v.driving ?? S.driving, pane.nowMs) }),
     buttons: actions.map(x => ({ id: x.id, label: x.label, group: x.group, ...(x.key ? { key: x.key } : {}), onPress: press[x.id] })),
     onBack: goBack, onPrev: place ? openTask(place.prev) : () => undefined, onNext: place ? openTask(place.next) : () => undefined,
-    backFocus: !(answerable || rejectBox), nav: NAV_KEYS.claude,
+    backFocus: !(answerable || rejectBox), nav: NAV_KEYS.claude, ...(rejectBox ? { noKeys: true } : {}),
   }
   // T-761: the Branch section's git facts: the last ones read (the view's, or this page's own read); a stale read runs
   // in the background, never waited for here, and redraws the page once it is done
@@ -416,7 +420,7 @@ export async function taskPage($: $, pane: PaneParts, viewTask: SymccTask) {
               'report-buttons',
             )
           : null}
-        {sec.tries?.some(r => r.key) ? (
+        {sec.tries?.some(r => r.key) && !rejectBox ? (
           <Box key="report-try-keys" display="none">
             {sec.tries.filter(r => r.key).map(r => <Button key={`report-try-${r.try}-key`} label={r.key!} hotkey={r.key!} onPress={pickReport(r.try)} />)}
           </Box>
