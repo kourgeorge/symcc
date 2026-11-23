@@ -49,14 +49,14 @@ const putBoard = (w: ReturnType<typeof world>, b: Board) => void w.files.set(`${
 
 const oneTask = () => addTask(emptyBoard(), { origin: { why: 'a test' }, title: 'Add search', details: 'Done when: a test shows it.', files: ['src/'] }, ISO)[0]
 
-test('no panel: /symcc and /symcc-tasks answer with the text board and open nothing; with a panel they open it', async () => {
+test('no panel: /symcc answers with the text board and opens nothing; with a panel it opens it (/symcc-tasks: tests/task-list.test.ts)', async () => {
   const w = world()
   const b = oneTask()
   putBoard(w, b)
   const was = S.version
   S.version = '1.2.3'
   try {
-    for (const cmd of [S.N.name, `${S.N.name}-tasks`]) {
+    for (const cmd of [S.N.name]) {
       const r = await runCommand(w.host, cmd, '')
       expect(r?.text).toContain('T-1')
       expect(r?.text).toContain('Add search')

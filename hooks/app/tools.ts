@@ -93,9 +93,12 @@ ${features.panel ? `  /${S.N.name} opens everything; /${S.N.name}-WORD does one 
   (tasks, scouts), a singular noun acts on one named item (task, scout), a verb acts
   (approve, reject, diff), and mode and settings change how the board works.`}
 ${features.panel ? `  /${S.N.name}                     open the board panel (↑↓ move, Enter opens, f searches the tasks, t / l / s / c switch views)
-  /${S.N.name}-tasks               open the panel on the tasks view
+  /${S.N.name}-board               open the board panel (on Live), as /${S.N.name} does
+  /${S.N.name}-tasks               list the open tasks in the chat (what needs you, running, in review,
+                       failed, to do), then the backlog and today's done and dropped counts
   /${S.N.name}-scouts              open the panel on the scouts view and reload the scout files` : `  /${S.N.name}                     show the board
-  /${S.N.name}-tasks               show the tasks
+  /${S.N.name}-tasks               list the open tasks (what needs you, running, in review, failed,
+                       to do), then the backlog and today's done and dropped counts
   /${S.N.name}-scouts              show the scouts and reload the scout files`}
   /${S.N.name}-task T-3            ${features.panel ? 'open' : 'show'} one task
   /${S.N.name}-task T-3 WORD       do one of its page's actions: pause, resume, retry,
@@ -132,7 +135,8 @@ ${features.panel ? `  /${S.N.name}                     open the board panel (↑
   /${S.N.name}-settings git setup  git init on main if there is no repo, a .gitignore and a first
                        commit (never pushes)
   /${S.N.name}-settings orgmem delete N [KEY]  delete org-mem note number N
-${features.panel ? '' : `  /${S.N.name}-board               the board panel, as its own screen (OpenCode only)
+${features.panel ? '' : `  /${S.N.name}-board               show the board panel where the client has one (OpenCode's terminal);
+                       elsewhere it says there is none
 `}  /${S.N.name}-stats [full|html] [7d|T-1..T-9] [inside]  time and token stats, with bar charts:
                        tasks, worker time, tokens, the whole team (lead, workers, scouts),
                        per task and per try (averages and totals), time per stage, the

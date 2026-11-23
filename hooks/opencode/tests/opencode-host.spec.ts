@@ -39,6 +39,7 @@ import { COMMANDS, toolCall, notLeadText, runCommand as symccCommand } from '../
 import { scoutToolRefusal } from '../../core/scouts'
 import { workerToolRefusal, ownerAnswerText } from '../tools'
 import { parseViewFile, PANEL_MARK } from '../board-view'
+import { taskListBoard, TASK_LIST_TEXT, EMPTY_TASK_LIST_TEXT } from '../../../tests/task-list-fixture'
 import { checkAndMerge } from '../../app/review'
 import { loadRoles } from '../../app/roles'
 import { sessionPrompt } from '../agents'
@@ -1258,7 +1259,10 @@ test('each slash command is added and runs symcc\'s runCommand: a typed one (TUI
     const c = fakeCtx(p.main, f.api)
     const end = await plugin.setup(c.ctx)
     await until(() => S.startupDone === true)
-    expect([...c.commands.keys()]).toEqual([...COMMANDS().map(x => x.name), 'symcc-answer'])
+    expect([...c.commands.keys()]).toEqual([...COMMANDS(OPENCODE_FEATURES).map(x => x.name), 'symcc-answer'])
+    // T-901: /symcc-board is the TUI part's own command (opencode/tui.ts), not the engine's; /symcc-tasks lists the tasks
+    expect(c.commands.has('symcc-board')).toBe(false)
+    expect(c.commands.get('symcc-tasks')!.description).toBe(COMMANDS().find(x => x.name === 'symcc-tasks')!.description)
     // T-517: here /symcc prints the text board; the panel is /symcc-board
     expect(c.commands.get('symcc')!.description).toBe('Show the symcc board as text (the panel: /symcc-board)')
     const lead = f.lead(p.main)
@@ -1310,6 +1314,11 @@ test('each slash command is added and runs symcc\'s runCommand: a typed one (TUI
     expect(scouts.synthetic.length).toBe(synthBefore)
     expect(scouts.prompts.at(-1)!.delivery).toBe('steer')
     expect(scouts.prompts.at(-1)!.text).not.toContain('no reply needed')
+    // T-901: /symcc-tasks prints the grouped list (the board paused, so nothing starts meanwhile); an empty board lists none
+    await writeFile(`${p.main}/.symcc/board.json`, JSON.stringify({ ...taskListBoard(Date.now()), mode: 'paused' }))
+    expect((await run('symcc-tasks')).prompts.at(-1)!.text).toBe(ownerAnswerText('symcc-tasks', TASK_LIST_TEXT))
+    await writeFile(`${p.main}/.symcc/board.json`, JSON.stringify({ ...emptyBoard(), mode: 'paused' }))
+    expect((await run('symcc-tasks')).prompts.at(-1)!.text).toBe(ownerAnswerText('symcc-tasks', EMPTY_TASK_LIST_TEXT))
     await settle()
     await end!()
     await settle()

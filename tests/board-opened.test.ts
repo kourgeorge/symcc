@@ -1,4 +1,4 @@
-// T-167: the message after /symcc or /symcc-tasks lists the board's keys, without "Esc to close" (Esc doesn't reach the panel).
+// T-167: the message after /symcc or /symcc-board lists the board's keys, without "Esc to close" (Esc doesn't reach the panel).
 // T-475: the key that goes back to the board is the host's word (HostWords.backToBoard): Claude Code's "ctrl+x tab".
 import { expect } from 'claude-code/testing'
 import { test } from './reset'

@@ -36,6 +36,7 @@ import { noteForLead, tellLead, brief, takeBoardUpdate } from './tell'
 import { playable } from './voice'
 import { TOOLS, leadGuide, runTool, type In, manual, ownerSettings, taskText, latestReport, statsText } from './tools'
 import { openPane } from './open'
+import { tasksListText } from '../core/task-list'
 import { debriefFinished } from './debrief'
 import { check, pump, workerFinished, lateHandBack, agentOnBoard, stoppedHandBack, type TurnEnd } from './workers'
 import { setSymcc, setBoardMode } from './board-mode'
@@ -44,17 +45,22 @@ import { doctor } from './doctor'
 import { isStarter } from './starts'
 import { logRefusal, type Who } from './evidence'
 
-/** What /symcc and /symcc-tasks answer after opening the board. No Esc hint: Esc doesn't reach the panel (T-158). */
+/** What /symcc and /symcc-board answer after opening the board. No Esc hint: Esc doesn't reach the panel (T-158). */
 export const BOARD_OPENED = 'Board opened: ↑↓ to move, Enter to open, f to search, t tasks, s scouts, c settings.'
 /** BOARD_OPENED with the host's keys that go back to the board panel (HostWords.backToBoard), when it has them. */
 export const boardOpened = (): string => (S.W.backToBoard ? `${BOARD_OPENED} (${S.W.backToBoard} goes back to it.)` : BOARD_OPENED)
+
+/** What /<name>-board answers where the client has no board panel. */
+export const noPanelText = (): string => `There is no board panel here. /${S.N.name}-tasks lists the tasks; /${S.N.name} shows the whole board as text.`
 
 /** symcc's slash commands, for the host to register: name, description and the hint for its arguments. `features`: the
  * host's (every one on unless given); without a panel, /symcc shows the board as text (OpenCode's panel is /symcc-board). */
 export function COMMANDS(features: HostFeatures = ALL_FEATURES): { name: string; description: string; argumentHint?: string }[] {
   return [
     { name: S.N.name, description: features.panel ? `Open the ${S.N.name} board panel: tasks and scouts` : `Show the ${S.N.name} board as text (the panel: /${S.N.name}-board)` },
-    { name: `${S.N.name}-tasks`, description: `Open the ${S.N.name} board panel on the tasks view` },
+    { name: `${S.N.name}-tasks`, description: `List the open ${S.N.name} tasks in the chat, grouped as on the board (what needs you, running, in review, failed, to do), with the backlog and today's counts` },
+    // OpenCode's TUI part has its own /<name>-board (opencode/tui.ts), so a host with no panel doesn't list it here
+    ...(features.panel ? [{ name: `${S.N.name}-board`, description: `Open the ${S.N.name} board panel (on Live)` }] : []),
     { name: `${S.N.name}-scouts`, description: `Open the ${S.N.name} board panel on the scouts view and reload the scout files` },
     { name: `${S.N.name}-task`, description: `Open one ${S.N.name} task (/${S.N.name}-task T-3), or do one of its page's actions: /${S.N.name}-task T-3 pause, resume, retry, drop [reason], merged (already merged by hand), review on|off, stash (to the backlog), todo (out of the backlog), role <name>, or note (an answered investigation: keep it as a note)`, argumentHint: '<T-id> [pause|resume|retry|drop [reason]|merged|review on|off|stash|todo|role <name>|note]' },
     { name: `${S.N.name}-approve`, description: `Approve a ${S.N.name} task that is ready for review (merge it): /${S.N.name}-approve T-5`, argumentHint: '<T-id>' },
@@ -580,7 +586,7 @@ export async function runCommand(host: Host, command: string, args: string): Pro
   const cmd = parseCommand(command, args, loaded.board ? modeOf(loaded.board) : undefined, S.N.name)
   if (!cmd) return null
   const say = (text: string) => ({ text, isTextDisplayOnly: true as const })
-  if (!loaded.board && !['bad', 'help', 'open', 'tasks'].includes(cmd.kind)) return say(`${loaded.broken} Then try again.`)
+  if (!loaded.board && !['bad', 'help', 'open', 'board'].includes(cmd.kind)) return say(`${loaded.broken} Then try again.`)
   const b = loaded.board!
   // T-795: in a folder with no board only /<name>-init (and help) work; everything else points to it
   if (S.fresh && !['bad', 'help'].includes(cmd.kind)) return say(notSetUpAnswer(S.N.name))
@@ -589,11 +595,17 @@ export async function runCommand(host: Host, command: string, args: string): Pro
       return say(cmd.message)
     case 'help':
       return say(manual(cmd.topic, host.features))
-    case 'open':
     case 'tasks':
+      // T-901: every client prints the open tasks as a short list in the chat; no panel opens
+      return say(tasksListText(b, Date.now(), S.N.name))
+    case 'board':
+      if (!host.features.panel) return say(noPanelText())
+      await openPane(host, { tab: 'live' })
+      return say(boardOpened())
+    case 'open':
       // a host with no panel: the text board, as the board tool answers it (or why the board can't be read)
       if (!host.features.panel) return say(loaded.board ? boardText(b, Date.now(), shortHome(S.root, S.home), S.N.name, undefined, { driving: S.driving }, S.version) : `${loaded.broken} Then try again.`)
-      await openPane(host, { tab: cmd.kind === 'tasks' ? 'tasks' : 'live' })
+      await openPane(host, { tab: 'live' })
       return say(boardOpened())
     case 'scouts': {
       const defs = await scheduleScouts(host)

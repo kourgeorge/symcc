@@ -807,7 +807,16 @@ are about changes; under "How tasks ended" a read investigation shows as
   Shift+Tab reach those. On a task's or a scout's page ↑↓ scroll. An
   open task shows everything about it, with buttons to pause, resume, retry,
   drop, watch its worker live, and buttons or a box to answer it when it waits for you.
-  `/symcc-task T-3` opens one task directly; `/symcc-tasks` and `/symcc-scouts` open a view.
+  `/symcc-board` opens the board too (on Live), `/symcc-task T-3` opens one task directly and
+  `/symcc-scouts` opens the Scouts view.
+- **`/symcc-tasks`** opens nothing: it prints a short list of the open tasks in the chat, the
+  same in every client (Claude Code's terminal and VS Code, OpenCode, the Node host). It is
+  grouped like the board: Questions for you and NEEDS YOU first, then Running (with the step's
+  icon, the time and "(try 2)" from a second try), In review, Failed, and To do in run order
+  ("after T-5" when a task waits for another one). Each task is one line: its mark, id, short
+  state and title (cut to fit). Then one line of counts (`backlog 2 · done today 1 · dropped
+  today 0`) and a hint: `/symcc-board opens the board · /symcc-task T-n opens one task`. With
+  no open task it says `No open tasks.` above the counts.
 - **Nothing in the panel needs Esc.** Esc in a text box or a pick list usually just gives
   the keys to the Claude Code prompt without the panel hearing of it (see
   `docs/research/esc-in-panels.md`), so every place has its own way out:
@@ -2537,7 +2546,7 @@ As in Claude Code, the panel has four tabs under the banner: Live, Tasks, Scouts
 
 Above the prompt of an open session, a strip shows the header line and the questions and tasks that need you or run, as the band does in Claude Code. It is there by itself; there is nothing to turn on. Click its header line to open the board panel (click again to close it), or click a task's or question's row to open its page; the header ends with a dim "(click: board)" when there is room.
 
-The panel reads `.symcc/view.json` once a second; the board writes that file on every change (also when the lead's roles or kinds tool changes one), with each scout's recent runs, the roles and kinds, and the changed files of each task in review (a run's or a task's report is read from its own file when you open it). Plain `/symcc` (and `/symcc-tasks`) prints the board as text in the chat, as in a window without the panel.
+The panel reads `.symcc/view.json` once a second; the board writes that file on every change (also when the lead's roles or kinds tool changes one), with each scout's recent runs, the roles and kinds, and the changed files of each task in review (a run's or a task's report is read from its own file when you open it). Plain `/symcc` prints the board as text in the chat, as in a window without the panel; `/symcc-tasks` prints the short task list, as in Claude Code.
 
 **If you see no strip and no panel:** open a session first (the strip and the panel belong to a session, not to OpenCode's home page), and restart OpenCode's window after updating symcc. If the board screen can't start or draw, a red message from symcc says why, and `/plugins` lists symcc as failed with the error; the lead, its tools and the workers keep running either way.
 

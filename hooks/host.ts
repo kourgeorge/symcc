@@ -155,7 +155,7 @@ export const wordsOf = (words: HostWords): Required<HostWords> => ({ ...SYMCC_WO
  * a composer strip but no plan mode; a standalone app may have no screen at all, and runs the lead chat itself.
  */
 export type HostFeatures = {
-  /** a board panel symcc draws (ui.open, ui.panel); without it /<name> and /<name>-tasks answer with the text board, and no panel is opened */
+  /** a board panel symcc draws (ui.open, ui.panel); without it /<name> answers with the text board, /<name>-board says there is none, and no panel is opened */
   panel: boolean
   /** a line above the prompt (ui.status) that shows the board's status text; without it that text goes nowhere */
   band: boolean

@@ -14,8 +14,10 @@ import { PROCESSES_FILE, entriesText, parseEntries } from '../../../hooks/proces
 import { nodeProcessSystem, runsProgram, elapsedSeconds } from '../system'
 import { nodeFs, nodeProcesses, nodeProcessesWith } from '../host'
 import { lockText, LOCK_STALE_MS } from '../../../hooks/core/board-file'
-import { openSession, leadTool, closeSession, settle } from '../session'
-import { toolCall, notLeadText } from '../../../hooks/app/symcc'
+import { openSession, leadTool, closeSession, settle, slashCommand } from '../session'
+import { toolCall, notLeadText, noPanelText } from '../../../hooks/app/symcc'
+import { emptyBoard } from '../../../hooks/core/board-file'
+import { taskListBoard, TASK_LIST_TEXT, EMPTY_TASK_LIST_TEXT } from '../../../tests/task-list-fixture'
 import { TOOLS } from '../../../hooks/app/tools'
 import { S, toolName, starting } from '../../../hooks/app/state'
 import { pump } from '../../../hooks/app/workers'
@@ -326,6 +328,31 @@ test('a tick that stops waiting stops its claude -p worker: the task goes back t
     await rm(repo, { recursive: true, force: true })
   }
 }, 600_000)
+
+test('T-901: /symcc-tasks prints the open tasks grouped as on the board, an empty board only the counts; /symcc-board says there is no panel', async () => {
+  const repo = await mkdtemp('/tmp/symcc-node-tasks-')
+  try {
+    const git = (...args: string[]) => runCommand(['git', '-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd: repo })
+    await git('init', '-q', '-b', 'main')
+    await writeFile(`${repo}/.gitignore`, '.symcc/\n')
+    await git('add', '.')
+    await git('commit', '-qm', 'init')
+    await enableHere(repo)
+    const s = await openSession({ root: repo, runner: claudeRunner(nodeProcessSystem, { bin: FAKE }), say: () => undefined, sessionId: 'node-t901' })
+    try {
+      // the board is written once the session has started (paused, so nothing starts meanwhile)
+      await writeFile(`${repo}/.symcc/board.json`, JSON.stringify({ ...taskListBoard(Date.now()), mode: 'paused' }))
+      expect(await slashCommand(s, 'symcc-tasks', '')).toBe(TASK_LIST_TEXT)
+      expect(await slashCommand(s, 'symcc-board', '')).toBe(noPanelText())
+      await writeFile(`${repo}/.symcc/board.json`, JSON.stringify({ ...emptyBoard(), mode: 'paused' }))
+      expect(await slashCommand(s, 'symcc-tasks', '')).toBe(EMPTY_TASK_LIST_TEXT)
+    } finally {
+      await closeSession(s).catch(() => undefined)
+    }
+  } finally {
+    await rm(repo, { recursive: true, force: true })
+  }
+}, 180_000)
 
 test('T-652: a session that closes while a worker start is still on its way ends with the task back in todo and no worker running', async () => {
   const repo = await mkdtemp('/tmp/symcc-node-close-')
