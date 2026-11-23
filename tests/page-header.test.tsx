@@ -106,9 +106,11 @@ for (const [id, status, color, groups] of CASES)
       // line 1: Back and the place in the list
       const place = placeIn(LIST, id)!
       expect(textOf(kids(h)[0])).toMatch(new RegExp(`^‹ ${surface === 'terminal' ? '\\[Tasks\\]' : ''} +${id} · ‹ ${place.n} of ${LIST.length} ›$`))
-      // line 2: the id in its status color, the title in bold
+      // line 2: the id in the board orange whatever the status (T-914), the title in bold
       const title = kids(kids(h)[1])[0]!
-      expect(kids(title)[0]).toMatchObject({ props: { bold: true, color }, children: [id] })
+      expect(kids(title)[0]).toMatchObject({ props: { bold: true, color: 'claude' }, children: [id] })
+      // the status keeps its own color on line 3
+      expect(kids(kids(kids(h)[2])[0])[0]?.props?.color).toBe(color)
       // line 3: the state (status, step, time; kind · role · try; origin) and no Status/Stage/Now rows in Details
       const state = textOf(kids(h)[2])
       expect(state.startsWith(status)).toBe(true)
@@ -157,6 +159,18 @@ for (const [id, status, color, groups] of CASES)
       expect(foot).toContain('k j prev/next')
       // the thin rule
       expect(textOf(kids(h).at(-1))).toMatch(/^─{50}$/)
+      await ui.unmount()
+    })
+
+// T-914: the id in the title is always the board orange ('claude'), whatever the task's status, on every surface
+for (const [id, status] of [['T-506', 'todo'], ['T-504', 'doing'], ['T-502', 'failed'], ['T-508', 'done'], ['T-509', 'dropped']] as const)
+  for (const surface of ['terminal', 'vscode'] as const)
+    test(`T-914: a ${status} task's id (${id}) in its page header on ${surface} is the board orange`, async ($, on) => {
+      seedRich(on, id)
+      const ui = await $.ui.mount({ ...PANE, surface })
+      const idText = surface === 'vscode' ? kids(kids(await ui.find({ key: 'vs-head' }))[0])[0] : kids(kids(kids(await header(ui))[1])[0])[0]
+      expect(textOf(idText)).toBe(id)
+      expect(idText?.props?.color).toBe('claude')
       await ui.unmount()
     })
 

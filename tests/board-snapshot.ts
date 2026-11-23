@@ -6,6 +6,7 @@
 // T-751: the task page ("terminal task", "desktop task", "mobile task") starts with the 4-line page header and its heavy rule.
 // T-775: every header button "[Label]" in one style, Back "‹ [Tasks]".
 // T-912: the Scouts page ("terminal scouts", ...) says "scout findings by default: auto" on top and each row its findings choice.
+// T-914: the task page header's id is always the board orange ("claude"), whatever the status.
 export const BEFORE: Record<string, unknown> = {
   "terminal 50": {
     "type": "Box",
@@ -1250,7 +1251,7 @@ export const BEFORE: Record<string, unknown> = {
               {
                 "type": "Text",
                 "children": [
-                  {"type":"Text","props":{"bold":true,"color":"error"},"children":["T-405"]},
+                  {"type":"Text","props":{"bold":true,"color":"claude"},"children":["T-405"]},
                   {"type":"Text","props":{"color":"text"},"children":["  "]},
                   {"type":"Text","props":{"bold":true,"color":"text"},"children":["Rename the scouts page heading and move its"]}
                 ]
@@ -1938,7 +1939,7 @@ export const BEFORE: Record<string, unknown> = {
               {
                 "type": "Text",
                 "children": [
-                  {"type":"Text","props":{"bold":true,"color":"error","weight":"semibold"},"children":["T-405"]},
+                  {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-405"]},
                   {"type":"Text","props":{"color":"text"},"children":["  "]},
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Rename the scouts page heading and move its"]}
                 ]
@@ -3255,7 +3256,7 @@ export const BEFORE: Record<string, unknown> = {
               {
                 "type": "Text",
                 "children": [
-                  {"type":"Text","props":{"bold":true,"color":"error","weight":"semibold"},"children":["T-405"]},
+                  {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-405"]},
                   {"type":"Text","props":{"color":"text"},"children":["  "]},
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Rename the scouts page heading and move its"]}
                 ]

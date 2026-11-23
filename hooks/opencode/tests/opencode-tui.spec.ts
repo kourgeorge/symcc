@@ -660,6 +660,20 @@ test('T-584: a task page offers every one of core\'s taskActions with a key (but
   board.stop()
 })
 
+test('T-914: the task id in the page header title is always the board orange (claude), whatever the status', () => {
+  let b: Board = emptyBoard()
+  const statuses = ['todo', 'doing', 'failed', 'done', 'dropped'] as const
+  for (const title of statuses) b = addTask(b, { origin: { why: 'a test' }, title, files: ['src/'] }, AT)[0]
+  statuses.forEach((status, i) => (b = patchTask(b, `T-${i + 1}`, { status, attempts: 1 }, AT)))
+  const view: PaneView = { tasks: b.tasks, working: [], scouts: [], mode: 'auto', test_commands: [], max_parallel: 2, max_minutes: 30, auto_retries: 1, driving: true, home_branch: 'main', branch_note: '' }
+  const f: ViewFile = { root: '/work/proj', home: '/work', name: 'symcc', version: '0.9.0', written_at: NOW, view }
+  statuses.forEach((status, i) => {
+    const id = `T-${i + 1}`
+    const title = panelLines(f, { opened: id, cursor: 0 }, NOW, 140).lines[1]!
+    expect([status, title[0]!.text, title[0]!.color]).toEqual([status, id, 'claude'])
+  })
+})
+
 test('T-680, T-751: a task page header has the buttons in groups, words only (the next step, task actions, Drop, needs review), the scout page its own, a question [ Back ]; a click on a button sends what its key sends', async () => {
   let b: Board = emptyBoard()
   for (const title of ['running', 'a change', 'broke']) b = addTask(b, { origin: { why: 'a test' }, title, files: ['src/'] }, AT)[0]

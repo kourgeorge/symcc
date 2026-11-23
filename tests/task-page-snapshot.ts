@@ -11,6 +11,7 @@
 // - T-751: the 4-line page header (where you are, title, state, buttons in groups) and its heavy rule; no Status, Stage or Now rows
 // - T-774: the Runs heading sums the task's own tries
 // - T-775: every header button "[Label]" in one style, Back "‹ [Tasks]"; the try buttons "[Try 1]", their keys hidden (on desktop and mobile native Buttons "Try 1" and Back "Tasks", no brackets)
+// - T-914: the header's id always the board orange ("claude"), whatever the status
 export const TASK_BEFORE: Record<string, unknown> = {
   "desktop T-501": {
     "type": "Box",
@@ -50,7 +51,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {
                 "type": "Text",
                 "children": [
-                  {"type":"Text","props":{"bold":true,"color":"warning","weight":"semibold"},"children":["T-501"]},
+                  {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-501"]},
                   {"type":"Text","props":{"color":"text"},"children":["  "]},
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Make the task page in the editor side panel"]}
                 ]
@@ -813,7 +814,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {
                 "type": "Text",
                 "children": [
-                  {"type":"Text","props":{"bold":true,"color":"warning"},"children":["T-501"]},
+                  {"type":"Text","props":{"bold":true,"color":"claude"},"children":["T-501"]},
                   {"type":"Text","props":{"color":"text"},"children":["  "]},
                   {"type":"Text","props":{"bold":true,"color":"text"},"children":["Make the task page in the editor side panel"]}
                 ]
@@ -1589,7 +1590,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {
                 "type": "Text",
                 "children": [
-                  {"type":"Text","props":{"bold":true,"color":"error","weight":"semibold"},"children":["T-502"]},
+                  {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-502"]},
                   {"type":"Text","props":{"color":"text"},"children":["  "]},
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Make the task page in the editor side panel"]}
                 ]
@@ -2382,7 +2383,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {
                 "type": "Text",
                 "children": [
-                  {"type":"Text","props":{"bold":true,"color":"error"},"children":["T-502"]},
+                  {"type":"Text","props":{"bold":true,"color":"claude"},"children":["T-502"]},
                   {"type":"Text","props":{"color":"text"},"children":["  "]},
                   {"type":"Text","props":{"bold":true,"color":"text"},"children":["Make the task page in the editor side panel"]}
                 ]
@@ -3183,7 +3184,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {
                 "type": "Text",
                 "children": [
-                  {"type":"Text","props":{"bold":true,"color":"warning","weight":"semibold"},"children":["T-503"]},
+                  {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-503"]},
                   {"type":"Text","props":{"color":"text"},"children":["  "]},
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Make the task page in the editor side panel"]}
                 ]
@@ -3922,7 +3923,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {
                 "type": "Text",
                 "children": [
-                  {"type":"Text","props":{"bold":true,"color":"warning"},"children":["T-503"]},
+                  {"type":"Text","props":{"bold":true,"color":"claude"},"children":["T-503"]},
                   {"type":"Text","props":{"color":"text"},"children":["  "]},
                   {"type":"Text","props":{"bold":true,"color":"text"},"children":["Make the task page in the editor side panel"]}
                 ]
@@ -4688,7 +4689,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {
                 "type": "Text",
                 "children": [
-                  {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["T-504"]},
+                  {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-504"]},
                   {"type":"Text","props":{"color":"text"},"children":["  "]},
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Make the task page in the editor side panel"]}
                 ]
@@ -5195,7 +5196,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {
                 "type": "Text",
                 "children": [
-                  {"type":"Text","props":{"bold":true,"color":"ide"},"children":["T-504"]},
+                  {"type":"Text","props":{"bold":true,"color":"claude"},"children":["T-504"]},
                   {"type":"Text","props":{"color":"text"},"children":["  "]},
                   {"type":"Text","props":{"bold":true,"color":"text"},"children":["Make the task page in the editor side panel"]}
                 ]
@@ -5688,7 +5689,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {
                 "type": "Text",
                 "children": [
-                  {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["T-505"]},
+                  {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-505"]},
                   {"type":"Text","props":{"color":"text"},"children":["  "]},
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Make the task page in the editor side panel"]}
                 ]
@@ -6444,7 +6445,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {
                 "type": "Text",
                 "children": [
-                  {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["T-505"]},
+                  {"type":"Text","props":{"bold":true,"color":"claude"},"children":["T-505"]},
                   {"type":"Text","props":{"color":"text"},"children":["  "]},
                   {"type":"Text","props":{"bold":true,"color":"text"},"children":["Make the task page in the editor side panel"]}
                 ]
@@ -7208,7 +7209,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {
                 "type": "Text",
                 "children": [
-                  {"type":"Text","props":{"bold":true,"color":"inactive","weight":"semibold"},"children":["T-506"]},
+                  {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-506"]},
                   {"type":"Text","props":{"color":"text"},"children":["  "]},
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Make the task page in the editor side panel"]}
                 ]
@@ -7649,7 +7650,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {
                 "type": "Text",
                 "children": [
-                  {"type":"Text","props":{"bold":true,"color":"inactive"},"children":["T-506"]},
+                  {"type":"Text","props":{"bold":true,"color":"claude"},"children":["T-506"]},
                   {"type":"Text","props":{"color":"text"},"children":["  "]},
                   {"type":"Text","props":{"bold":true,"color":"text"},"children":["Make the task page in the editor side panel"]}
                 ]
@@ -8085,7 +8086,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {
                 "type": "Text",
                 "children": [
-                  {"type":"Text","props":{"bold":true,"color":"inactive","weight":"semibold"},"children":["T-507"]},
+                  {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-507"]},
                   {"type":"Text","props":{"color":"text"},"children":["  "]},
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Make the task page in the editor side panel"]}
                 ]
@@ -8509,7 +8510,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {
                 "type": "Text",
                 "children": [
-                  {"type":"Text","props":{"bold":true,"color":"inactive"},"children":["T-507"]},
+                  {"type":"Text","props":{"bold":true,"color":"claude"},"children":["T-507"]},
                   {"type":"Text","props":{"color":"text"},"children":["  "]},
                   {"type":"Text","props":{"bold":true,"color":"text"},"children":["Make the task page in the editor side panel"]}
                 ]
@@ -8931,7 +8932,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {
                 "type": "Text",
                 "children": [
-                  {"type":"Text","props":{"bold":true,"color":"success","weight":"semibold"},"children":["T-508"]},
+                  {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-508"]},
                   {"type":"Text","props":{"color":"text"},"children":["  "]},
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Make the task page in the editor side panel"]}
                 ]
@@ -9620,7 +9621,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {
                 "type": "Text",
                 "children": [
-                  {"type":"Text","props":{"bold":true,"color":"success"},"children":["T-508"]},
+                  {"type":"Text","props":{"bold":true,"color":"claude"},"children":["T-508"]},
                   {"type":"Text","props":{"color":"text"},"children":["  "]},
                   {"type":"Text","props":{"bold":true,"color":"text"},"children":["Make the task page in the editor side panel"]}
                 ]
@@ -10296,7 +10297,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {
                 "type": "Text",
                 "children": [
-                  {"type":"Text","props":{"bold":true,"color":"inactive","weight":"semibold"},"children":["T-509"]},
+                  {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-509"]},
                   {"type":"Text","props":{"color":"text"},"children":["  "]},
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Make the task page in the editor side panel"]}
                 ]
@@ -10988,7 +10989,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {
                 "type": "Text",
                 "children": [
-                  {"type":"Text","props":{"bold":true,"color":"inactive"},"children":["T-509"]},
+                  {"type":"Text","props":{"bold":true,"color":"claude"},"children":["T-509"]},
                   {"type":"Text","props":{"color":"text"},"children":["  "]},
                   {"type":"Text","props":{"bold":true,"color":"text"},"children":["Make the task page in the editor side panel"]}
                 ]
@@ -11678,7 +11679,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {
                 "type": "Text",
                 "children": [
-                  {"type":"Text","props":{"bold":true,"color":"success","weight":"semibold"},"children":["T-510"]},
+                  {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-510"]},
                   {"type":"Text","props":{"color":"text"},"children":["  "]},
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Make the task page in the editor side panel"]}
                 ]
@@ -12583,7 +12584,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {
                 "type": "Text",
                 "children": [
-                  {"type":"Text","props":{"bold":true,"color":"success"},"children":["T-510"]},
+                  {"type":"Text","props":{"bold":true,"color":"claude"},"children":["T-510"]},
                   {"type":"Text","props":{"color":"text"},"children":["  "]},
                   {"type":"Text","props":{"bold":true,"color":"text"},"children":["Make the task page in the editor side panel"]}
                 ]
@@ -13501,7 +13502,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {
                 "type": "Text",
                 "children": [
-                  {"type":"Text","props":{"bold":true,"color":"warning","weight":"semibold"},"children":["T-511"]},
+                  {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["T-511"]},
                   {"type":"Text","props":{"color":"text"},"children":["  "]},
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Make the task page in the editor side panel"]}
                 ]
@@ -14236,7 +14237,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {
                 "type": "Text",
                 "children": [
-                  {"type":"Text","props":{"bold":true,"color":"warning"},"children":["T-511"]},
+                  {"type":"Text","props":{"bold":true,"color":"claude"},"children":["T-511"]},
                   {"type":"Text","props":{"color":"text"},"children":["  "]},
                   {"type":"Text","props":{"bold":true,"color":"text"},"children":["Make the task page in the editor side panel"]}
                 ]

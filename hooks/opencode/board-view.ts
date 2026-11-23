@@ -40,7 +40,7 @@ import { taskSections, type TaskSection } from '../core/task-sections'
 import type { TaskBranchFacts } from '../core/task-branch'
 import { type RoleChange, CHANGED_HEADING, changeLines, changesOfRole, roleListLabel, roleStateGroups } from '../core/role-changes'
 import { roleButtons as headerRoleButtons } from '../core/page-header'
-import { type ActionGroup, groupSegLines, headerRule, inGroups, navHint, navRow, packGroups, type PageFrom, PILL_COLOR, pillText, placeIn, scoutAbout, scoutButtons as headerScoutButtons, scoutListNames, scoutStateGroups, taskColor, taskPlace, taskStateGroups, titleLines, whereLine } from '../core/page-header'
+import { type ActionGroup, groupSegLines, headerRule, inGroups, navHint, navRow, packGroups, type PageFrom, PILL_COLOR, pillText, placeIn, scoutAbout, scoutButtons as headerScoutButtons, scoutListNames, scoutStateGroups, TASK_ID_COLOR, taskPlace, taskStateGroups, titleLines, whereLine } from '../core/page-header'
 import { LIST_TONE, sessionNote } from '../core/details'
 import type { SearchMore } from '../core/panel'
 import { isObj } from '../core/text'
@@ -1537,7 +1537,7 @@ function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = ''
   // T-751: the page header, as on Claude Code's task page: where you are (‹ Tasks or ‹ Live, its place in that list),
   // the title, the state, the buttons in groups (core's taskActions), a thin rule; it stays at the top while the rest scrolls
   addAll(headerLines({
-    from, label: t.id, place: taskPlace(v, t.id, from, nowMs, search, more), title: t.title, color: taskColor(t, nowMs, merging),
+    from, label: t.id, place: taskPlace(v, t.id, from, nowMs, search, more), title: t.title, color: TASK_ID_COLOR,
     state: taskStateGroups(t, { nowMs, merging, ...(v.auto_retries !== undefined ? { autoRetries: v.auto_retries } : {}), note: sessionNote(t, v.driving ?? false, nowMs) }),
     buttons: taskButtons(t, busy),
   }, w))

@@ -95,7 +95,7 @@ export function whereLine(from: PageFrom, label: string, place: Place | null, wi
   return { left, right, pad: Math.max(1, w - len(left) - len(right)) }
 }
 
-/** Line 2: the id in its status color, two spaces, the title in bold; a long title wraps, each next line indented
+/** Line 2: the id in `color` (a task's: TASK_ID_COLOR), two spaces, the title in bold; a long title wraps, each next line indented
  *  under the title's first word. */
 export function titleLines(id: string, title: string, color: string, width: number): Seg[][] {
   const indent = id.length + 2
@@ -103,7 +103,11 @@ export function titleLines(id: string, title: string, color: string, width: numb
   return wrapSegs([{ text: title, color: 'text', bold: true }], room).map((l, i) => [...(i ? [{ text: ' '.repeat(indent), color: 'text' }] : [{ text: id, color, bold: true }, { text: '  ', color: 'text' }]), ...l])
 }
 
-/** The color of a task's id and status on its page: its status's badge color (doing's while an approve runs). */
+/** T-914: the color of a task's id in its page header's title, whatever its status: the board's orange (the 'claude'
+ *  token, as a scout's name there). The status keeps its own color on line 3 (taskColor). */
+export const TASK_ID_COLOR = 'claude'
+
+/** The color of a task's status on its page: its status's badge color (doing's while an approve runs). */
 export function taskColor(t: BoardTask, nowMs: number, merging = false): string {
   if (t.status === 'review' && isInvestigation(t) && !merging) return 'success'
   return STATUS_BADGE[taskPhase(t, nowMs, undefined, { merging }).shown]

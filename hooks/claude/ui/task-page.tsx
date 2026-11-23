@@ -16,7 +16,7 @@ import type { PaneParts } from './parts'
 import { answerBox } from './answer-box'
 import { taskPageVs } from './vscode-task'
 import { taskSections, type SectionLine, type TaskSection } from '../../core/task-sections'
-import { NAV_KEYS, navHint, taskColor, taskPlace, taskStateGroups, type PageFrom } from '../../core/page-header'
+import { NAV_KEYS, navHint, TASK_ID_COLOR, taskPlace, taskStateGroups, type PageFrom } from '../../core/page-header'
 import { pageHeader, type PageHeader } from './page-header'
 import { claudeHost } from '../host'
 import { mergingNow, mergeOutcome } from '../../app/workers'
@@ -349,7 +349,7 @@ export async function taskPage($: $, pane: PaneParts, viewTask: SymccTask) {
   const from: PageFrom = pane.onLive ? 'live' : 'tasks'
   const place = taskPlace(v, t.id, from, pane.nowMs, S.search?.text ?? '', searchMore)
   const header: PageHeader = {
-    from, label: t.id, place, title: t.title, color: taskColor(t as BoardTask, pane.nowMs, pageMerging),
+    from, label: t.id, place, title: t.title, color: TASK_ID_COLOR,
     state: taskStateGroups(t as BoardTask, { nowMs: pane.nowMs, merging: pageMerging, ...(v.auto_retries !== undefined ? { autoRetries: v.auto_retries } : {}), note: sessionNote(t, v.driving ?? S.driving, pane.nowMs) }),
     buttons: actions.map(x => ({ id: x.id, label: x.label, group: x.group, ...(x.key ? { key: x.key } : {}), onPress: press[x.id] })),
     onBack: goBack, onPrev: place ? openTask(place.prev) : () => undefined, onNext: place ? openTask(place.next) : () => undefined,
