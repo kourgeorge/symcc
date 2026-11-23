@@ -1295,7 +1295,7 @@ words as bold headings with the same spacing):
    ✓ 67 merged   ↺ 76 sent back   ✗ 0 failed   Σ ⌀ 320.7M
    ⌀ ░█████████████▓▒ lead 3% · workers 84% · checkers 8% · scouts 5%
    avg ⌀ 2.8M/task · 9m work · 23m start-to-merge   first try 34% · avg 2.4 tries/task   ⌕ 68 sent back by the checker
-   ⏱ 13h 06m agent work · ≈ $64 this session   busiest hour 14:00 · ⌀ 42M   ⌀/h 00 ▕▁▁▁▁▁▁▁▁▁▂▃▅▆▅█·········▏ 24
+   ⏱ 13h 06m agent work · ≈ $64 this session   busiest hour 14:00 · ⌀ 42M   ⌀/h 00▕▁▁▁▁▁▁▁▁▁▂▃▅▆▅█·········▏24
    yesterday:   ✓ 77 merged · ⌀ 355M · ⏱ 34h
    last 7 days: ✓ 176 merged · ⌀ 854M · ⏱ 53h
   ```
@@ -1613,6 +1613,11 @@ has examples that work in most code projects:
   it does.
 - [`big-files.md`](../examples/scouts/big-files.md): source files grown too large (or that many
   tasks keep touching at once), with a concrete way to split each one.
+- [`org-mem-review.md`](../examples/scouts/org-mem-review.md): once a day, suggests fixes to the
+  organizational memory (`.symcc/org-mem.md`): notes that are out of date, repeated, too narrow or
+  too long, and lessons it is missing.
+- [`backlog-review.md`](../examples/scouts/backlog-review.md): once a day, checks up to 10 backlog
+  tasks against the code and git history and says which to drop, rewrite or merge.
 
 A new project starts with these example scouts. The first time symcc starts in a project with
 no `.symcc/scouts/` folder yet, it copies every example there and marks each one paused (in

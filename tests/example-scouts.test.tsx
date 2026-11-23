@@ -9,7 +9,7 @@ import type { ProcessRunResult } from 'claude-code'
 import { parseScout } from '../hooks/board'
 
 const T0 = 1_800_000_000_000
-const EXAMPLES = ['big-files', 'bugs', 'deps', 'docs-check', 'gaps', 'recent-changes', 'secrets', 'simplify', 'test-gaps']
+const EXAMPLES = ['backlog-review', 'big-files', 'bugs', 'deps', 'docs-check', 'gaps', 'org-mem-review', 'recent-changes', 'secrets', 'simplify', 'test-gaps']
 const EVERY_MINUTES = 5
 const example = (n: string) => `---\nevery_minutes: ${EVERY_MINUTES}\n---\nExample ${n}.\n`
 // A copy of the shipped examples/scouts/big-files.md (plugin tests can't read the real folder). The shell check
@@ -33,7 +33,39 @@ same time; a big file that does one thing well can stay as it is.
 Skip typos, style and anything already on the board or just finished. If nothing is worth
 splitting, start your report with NOTHING.
 `
-const shipped = (file: string) => (file === 'big-files.md' ? BIG_FILES : example(file.replace(/\.md$/, '')))
+// Copies of the shipped examples/scouts/org-mem-review.md and backlog-review.md (T-940), checked the same way.
+const ORG_MEM_REVIEW = `---
+every_minutes: 1440
+---
+You are symcc's organizational memory (org-mem) reviewer. Org-mem is .symcc/org-mem.md: at most 60 one-line notes (each "- <date> [<topic>] <note>") that every worker, checker and scout gets in its prompt. Only the lead changes it; your job is to suggest what the lead should fix. Change nothing yourself.
+
+Each run, check every note:
+1. Still true: every file, folder, function, setting, command or behavior a note names still exists and still works that way in the code on main (grep and read the code; don't guess). Flag notes about code that is gone or changed. Example: a note naming a constant that a later change removed.
+2. Duplicates and overlaps: two notes that say nearly the same thing. Suggest one merged note.
+3. Too narrow: a note that only helps one old task or one file and is unlikely to help agents on other tasks.
+4. Unclear or too long: a note an agent couldn't act on, or one over about 100 characters.
+5. Topics: a note under the wrong topic; topics with only 1-2 notes to merge into a close one; a topic past about 15 notes to split. Keep about 6-10 topics.
+6. Missing: a lesson that several recent worker or checker reports (.symcc/reports/, the last few days) ran into or repeated, but org-mem doesn't have. Suggest a new note only when it would help agents on other tasks and is true beyond one task. Because org-mem is usually full, say which weaker note it should replace.
+
+Report at most 8 suggestions, most useful first. Each one names the action and the note number, gives the exact new text when there is one (one plain sentence, no task ids), and says why in one line with the evidence (file:line, or the report that shows it). For example:
+- replace #45 with "…": names parseConfig, which src/config.ts no longer has
+- remove #12: same as #32
+- topic #7 → "probes"
+- new (replaces #9): "…": three checkers this week hit this
+If nothing needs changing, answer NOTHING.
+`
+const BACKLOG_REVIEW = `---
+every_minutes: 1440
+---
+Review the backlog tasks on the board (use the board tool with status backlog, and board task T-n for each). Look at up to 10 per run. To know which you checked before, read your own last report first (the scouts tool, action list, name backlog-review): skip the tasks it lists as checked and start with the rest, oldest first; when all have been checked, start again from the ones checked longest ago. For each, check against the code and git history:
+- Do the files, functions and line numbers it names still exist? If they moved or were split (e.g. a file split into several), say where they are now.
+- Was the work already done, fully or partly, by a later merged task or commit (git log, git log -S, the done tasks on the board)?
+- Is it a duplicate of another backlog or open task?
+- Does a later owner request on the board contradict it or make it pointless?
+Report only the tasks that need action, each as one of: DROP (already done or no longer makes sense; give the proof), REWRITE (what in its details is out of date and the corrected facts: new paths, names, what is left to do, and files to add to its list), MERGE (with which task, and why). Skip tasks that are still accurate. End the report with one line "Checked: T-…, T-…" (every task you looked at this run, with the date). Change no files.
+`
+const SHIPPED: Record<string, string> = { 'big-files.md': BIG_FILES, 'org-mem-review.md': ORG_MEM_REVIEW, 'backlog-review.md': BACKLOG_REVIEW }
+const shipped = (file: string) => SHIPPED[file] ?? example(file.replace(/\.md$/, ''))
 type Res = ProcessRunResult
 const ok = (stdout = ''): Res => ran({ stdout })
 
@@ -206,7 +238,7 @@ test('examples that cannot be read: symcc still starts, and the owner is told on
 test('a copy that fails: symcc still starts, the owner is told once, and what was copied stays paused', async ($, on) => {
   const w = world(on, { files: { '/.symcc/board.json': board() }, failWrite: 'scouts/deps.md' })
   await start($)
-  expect(scoutFiles(w.files)).toEqual(['/.symcc/scouts/big-files.md', '/.symcc/scouts/bugs.md'])
+  expect(scoutFiles(w.files)).toEqual(['/.symcc/scouts/backlog-review.md', '/.symcc/scouts/big-files.md', '/.symcc/scouts/bugs.md'])
   expect(paused(w.files)).toEqual(EXAMPLES)
   expect(w.toasts.filter(t => t.includes("couldn't add the example scouts")).length).toBe(1)
   await w.clock.advance(PAST_EVERY_TIMER)
@@ -227,4 +259,25 @@ test('the shipped big-files scout is copied paused with the others on first setu
   expect(s.prompt.startsWith('Find source files that have grown too large')).toBe(true)
   expect(s.prompt).toContain('git log --name-only')
   expect(s.prompt).toContain('start your report with NOTHING')
+})
+
+test('the shipped org-mem-review and backlog-review scouts are copied paused on first setup, and parse as daily scouts', async ($, on) => {
+  const w = world(on, { files: { '/.symcc/board.json': board({ mode: 'auto' }) }, real: true })
+  await start($)
+  expect(paused(w.files)).toEqual(EXAMPLES)
+  expect(paused(w.files)).toContain('org-mem-review')
+  expect(paused(w.files)).toContain('backlog-review')
+  const org = w.files.get('/.symcc/scouts/org-mem-review.md')!
+  expect(org).toBe(ORG_MEM_REVIEW)
+  const o = parseScout('org-mem-review', org)!
+  expect(o.every_minutes).toBe(1440)
+  expect(o.warning).toBeUndefined()
+  expect(o.prompt).toContain('over about 100 characters')
+  const back = w.files.get('/.symcc/scouts/backlog-review.md')!
+  expect(back).toBe(BACKLOG_REVIEW)
+  const b = parseScout('backlog-review', back)!
+  expect(b.every_minutes).toBe(1440)
+  expect(b.warning).toBeUndefined()
+  expect(b.prompt.startsWith('Review the backlog tasks on the board')).toBe(true)
+  expect(b.prompt).toContain('Checked: T-')
 })

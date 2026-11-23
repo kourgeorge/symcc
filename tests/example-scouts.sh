@@ -1,7 +1,8 @@
 #!/bin/sh
 # Checks the shipped example scouts (T-599): every examples/scouts/*.md has front matter with a whole
 # every_minutes above 0 and instructions after it; the EXAMPLES list in tests/example-scouts.test.tsx names
-# exactly the files in the folder; and that test's copy of big-files.md (BIG_FILES) matches the real file.
+# exactly the files in the folder; and that test's copies of big-files.md, org-mem-review.md and backlog-review.md
+# (BIG_FILES, ORG_MEM_REVIEW, BACKLOG_REVIEW) match the real files.
 # Plugin tests can't read the real folder, so this is what ties them to it. Usage: sh tests/example-scouts.sh
 set -eu
 
@@ -29,11 +30,15 @@ if [ "$on_disk" != "$listed" ]; then
   fail=1
 fi
 
-copy=$(awk '/^const BIG_FILES = `/ { on = 1; sub(/^const BIG_FILES = `/, "") } on && /^`$/ { exit } on { print }' "$test_file")
-if [ "$copy" != "$(cat "$dir/big-files.md")" ]; then
-  echo "example-scouts: BIG_FILES in tests/example-scouts.test.tsx differs from examples/scouts/big-files.md"
-  fail=1
-fi
+for pair in BIG_FILES:big-files ORG_MEM_REVIEW:org-mem-review BACKLOG_REVIEW:backlog-review; do
+  const=${pair%%:*}
+  file=${pair#*:}
+  copy=$(awk -v c="$const" '$0 ~ "^const " c " = `" { on = 1; sub("^const " c " = `", "") } on && /^`$/ { exit } on { print }' "$test_file")
+  if [ "$copy" != "$(cat "$dir/$file.md")" ]; then
+    echo "example-scouts: $const in tests/example-scouts.test.tsx differs from examples/scouts/$file.md"
+    fail=1
+  fi
+done
 
 [ $fail -eq 0 ] && echo "example-scouts: ok"
 exit $fail
