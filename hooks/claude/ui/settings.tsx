@@ -323,52 +323,59 @@ function defTable($: $, pane: PaneParts, o: { noun: 'role' | 'kind'; rows: (DefR
   )
 }
 
-/** The Roles page, opened from Settings' Roles row: the table (defTable), + New role (n); b goes back to Settings.
- *  The New role box has a Cancel button (x), and Enter on it empty cancels it too. */
+/** The part of roleView / kindView the Roles or Kinds page reads and changes. */
+type DefPageView = { list: boolean; open: string; confirmRemove: boolean; naming: { name: string; error: string } | null }
+
+/** T-923: the Roles or Kinds page on the terminal (both call it): the table (defTable), + New role / kind (n); b goes
+ *  back to Settings. The New … box asks for the name; its Cancel button (x), or Enter on it empty, leaves it. */
+function defPage($: $, pane: PaneParts, o: { noun: 'role' | 'kind'; view: DefPageView; newFile: (host: ReturnType<typeof claudeHost>, name: string) => Promise<string>; rows: (DefRow & { warning?: string })[]; cols: readonly DefCol[]; keys: ReturnType<typeof rolesKeys> }) {
+  const { Box, Text, Button, Input, act, C } = pane
+  const { noun, view } = o
+  const cancel = () => ((view.naming = null), $.ui.invalidate('ui.render'))
+  const openRow = (name: string) => () => ((view.open = name), (view.confirmRemove = false), (view.naming = null), $.ui.invalidate('ui.render'))
+  const startNew = () => ((view.naming = { name: '', error: '' }), $.ui.invalidate('ui.render'))
+  const newBox = view.naming ? (
+    <Box key={`${noun}-new-box`} flexDirection="column">
+      <Input
+        key={`${noun}-new-name`}
+        label={`New ${noun}'s name`}
+        placeholder="letters, digits, - and _"
+        value={view.naming.name}
+        autoFocus
+        submitLabel="make it"
+        onInput={value => void (view.naming && (view.naming.name = value))}
+        onSubmit={value => (value.trim() ? act(async () => {
+          const said = await o.newFile(claudeHost($), value)
+          if (said) $.ui.toast(S.N.toast(said))
+        })() : cancel())}
+      />
+      {view.naming.error ? <Text color={C('error')}>{view.naming.error}</Text> : null}
+      <Button key={`${noun}-new-cancel`} label="Cancel (x)" hotkey="x" onPress={cancel} />
+      <Text color={C('inactive')}>{boxHint(`Enter makes ${S.N.dir}/${noun}s/<name>.md and opens it`)}</Text>
+    </Box>
+  ) : (
+    <Button key={`${noun}-new`} plain label={newDefText(noun)} onPress={startNew}>
+      <Text color={C('text')}>{`  ${newDefText(noun)}`}</Text>
+    </Button>
+  )
+  return defTable($, pane, {
+    noun,
+    rows: o.rows,
+    cols: o.cols,
+    naming: view.naming,
+    open: openRow,
+    startNew,
+    back: () => ((view.list = false), (view.naming = null), $.ui.invalidate('ui.render')),
+    newBox,
+    keys: o.keys,
+  })
+}
+
+/** The Roles page, opened from Settings' Roles row (defPage). */
 function rolesPage($: $, pane: PaneParts, roles: RoleDef[], builtIn: RoleDef[], project: RoleDef[], broken: BrokenDef[]) {
   // VS Code's side panel draws its own page (vscode-roles.tsx)
   if (pane.vscode) return rolesPageVs($, pane, roles, builtIn, project, broken)
-  const { Box, Text, Button, Input, act, C } = pane
-  const cancel = () => ((roleView.naming = null), $.ui.invalidate('ui.render'))
-  const openRow = (name: string) => () => ((roleView.open = name), (roleView.confirmRemove = false), (roleView.naming = null), $.ui.invalidate('ui.render'))
-  const startNew = () => ((roleView.naming = { name: '', error: '' }), $.ui.invalidate('ui.render'))
-  /** "New role": a button, or (once pressed) the box that asks for its name; Enter on it empty, or its Cancel button (x), leaves it. */
-  const newRoleBox = () =>
-    roleView.naming ? (
-      <Box key="role-new-box" flexDirection="column">
-        <Input
-          key="role-new-name"
-          label="New role's name"
-          placeholder="letters, digits, - and _"
-          value={roleView.naming.name}
-          autoFocus
-          submitLabel="make it"
-          onInput={value => void (roleView.naming && (roleView.naming.name = value))}
-          onSubmit={value => (value.trim() ? act(async () => {
-            const said = await newRoleFile(claudeHost($), value)
-            if (said) $.ui.toast(S.N.toast(said))
-          })() : cancel())}
-        />
-        {roleView.naming.error ? <Text color={C('error')}>{roleView.naming.error}</Text> : null}
-        <Button key="role-new-cancel" label="Cancel (x)" hotkey="x" onPress={cancel} />
-        <Text color={C('inactive')}>{boxHint(`Enter makes ${S.N.dir}/roles/<name>.md and opens it`)}</Text>
-      </Box>
-    ) : (
-      <Button key="role-new" plain label={newDefText('role')} onPress={startNew}>
-        <Text color={C('text')}>{`  ${newDefText('role')}`}</Text>
-      </Button>
-    )
-  return defTable($, pane, {
-    noun: 'role',
-    rows: roleRows(roles, builtIn, project, broken),
-    cols: ROLE_COLS,
-    naming: roleView.naming,
-    open: openRow,
-    startNew,
-    back: () => ((roleView.list = false), (roleView.naming = null), $.ui.invalidate('ui.render')),
-    newBox: newRoleBox(),
-    keys: rolesKeys(),
-  })
+  return defPage($, pane, { noun: 'role', view: roleView, newFile: newRoleFile, rows: roleRows(roles, builtIn, project, broken), cols: ROLE_COLS, keys: rolesKeys() })
 }
 
 // ---------------- the Kinds page (like the Roles page, with the same keys) ----------------
@@ -481,46 +488,7 @@ function kindPage($: $, pane: PaneParts, k: KindDef | undefined, source: DefSour
 function kindsPage($: $, pane: PaneParts, kinds: KindDef[], builtIn: KindDef[], project: KindDef[], broken: BrokenDef[]) {
   // VS Code's side panel draws its own page (vscode-roles.tsx)
   if (pane.vscode) return kindsPageVs($, pane, kinds, builtIn, project, broken)
-  const { Box, Text, Button, Input, act, C } = pane
-  const cancel = () => ((kindView.naming = null), $.ui.invalidate('ui.render'))
-  const openRow = (name: string) => () => ((kindView.open = name), (kindView.confirmRemove = false), (kindView.naming = null), $.ui.invalidate('ui.render'))
-  const startNew = () => ((kindView.naming = { name: '', error: '' }), $.ui.invalidate('ui.render'))
-  const newKindBox = () =>
-    kindView.naming ? (
-      <Box key="kind-new-box" flexDirection="column">
-        <Input
-          key="kind-new-name"
-          label="New kind's name"
-          placeholder="letters, digits, - and _"
-          value={kindView.naming.name}
-          autoFocus
-          submitLabel="make it"
-          onInput={value => void (kindView.naming && (kindView.naming.name = value))}
-          onSubmit={value => (value.trim() ? act(async () => {
-            const said = await newKindFile(claudeHost($), value)
-            if (said) $.ui.toast(S.N.toast(said))
-          })() : cancel())}
-        />
-        {kindView.naming.error ? <Text color={C('error')}>{kindView.naming.error}</Text> : null}
-        <Button key="kind-new-cancel" label="Cancel (x)" hotkey="x" onPress={cancel} />
-        <Text color={C('inactive')}>{boxHint(`Enter makes ${S.N.dir}/kinds/<name>.md and opens it`)}</Text>
-      </Box>
-    ) : (
-      <Button key="kind-new" plain label={newDefText('kind')} onPress={startNew}>
-        <Text color={C('text')}>{`  ${newDefText('kind')}`}</Text>
-      </Button>
-    )
-  return defTable($, pane, {
-    noun: 'kind',
-    rows: kindRows(kinds, builtIn, project, broken),
-    cols: KIND_COLS,
-    naming: kindView.naming,
-    open: openRow,
-    startNew,
-    back: () => ((kindView.list = false), (kindView.naming = null), $.ui.invalidate('ui.render')),
-    newBox: newKindBox(),
-    keys: kindsKeys(),
-  })
+  return defPage($, pane, { noun: 'kind', view: kindView, newFile: newKindFile, rows: kindRows(kinds, builtIn, project, broken), cols: KIND_COLS, keys: kindsKeys() })
 }
 
 /** The Settings view: the settings under their category headings (SETTING_GROUPS), one row each; Enter changes it.
