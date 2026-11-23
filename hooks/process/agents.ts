@@ -20,10 +20,10 @@ import { recordEditor, taskInName, type ProcessEntry, type ProcessRecord } from 
  * tools (its permissions are the runner's, e.g. claudePermissions), so neither part names them (T-474): no ask_owner (it
  * writes its question in its report), no board or stats tools, and the web only when its role gives it web tools.
  */
-export const withBasePrompt = (a: Pick<HostAgentStart, 'kind' | 'prompt' | 'tools'>): string => {
+export const withBasePrompt = (a: Pick<HostAgentStart, 'kind' | 'prompt' | 'tools' | 'prose'>): string => {
   const tool = (t: string) => SYMCC_WORDS.tool(DEFAULT_NAME, t)
   const web = a.tools?.includes('web') === true
-  const base = basePromptFor(a.kind, DEFAULT_NAME, tool, { symccTools: false, web })
+  const base = basePromptFor(a.kind, DEFAULT_NAME, tool, { symccTools: false, web, prose: a.prose === true })
   const prompt = withoutSymccTools(a.prompt, tool)
   return `${base}\n\n${a.kind === 'worker' ? prompt : scoutWithoutSymccTools(prompt, web)}`
 }
