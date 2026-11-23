@@ -5,6 +5,7 @@ import { test } from './reset'
 import { fakeHost } from './fake-host'
 import { setRoot } from './project'
 import { addTask, emptyBoard, scoutPrompt, SCOUT_BOARD_TOOLS } from '../hooks/board'
+import { scoutToolRefusal } from '../hooks/core/scouts'
 import { S, scoutRuns, checkerRuns } from '../hooks/app/state'
 import { SCOUT_TOOLS, scoutAgentTools, workerAgentTypes, BASE_WORKER_TOOLS } from '../hooks/claude/agent-types'
 import * as app from '../hooks/app/symcc'
@@ -21,12 +22,17 @@ function withBoard() {
   ;[b] = addTask(b, { origin: { why: 'a test' }, title: 'Add notify sound', details: 'Play a chime.' }, '2026-11-18T08:00:00.000Z')
   b = { ...b, tasks: b.tasks.map(t => (t.id === 'T-2' ? { ...t, status: 'done' as const } : t)) }
   files.set(`${ROOT}/${S.N.dir}/board.json`, JSON.stringify(b))
+  // T-895: two scouts, so a scout can list the others
+  files.set(`${ROOT}/${S.N.scouts}/bugs.md`, '---\nevery_minutes: 30\n---\nLook for crashes.\n')
+  files.set(`${ROOT}/${S.N.scouts}/docs-check.md`, '---\nevery_minutes: 0\n---\nCheck the docs.\n')
+  const under = (dir: string) => [...files.keys()].filter(f => f.startsWith(`${dir}/`)).map(f => f.slice(dir.length + 1))
   const { host } = fakeHost({
     session: { id: async () => 's1', root: async () => ROOT },
     fs: {
       read: async p => (files.has(p) ? files.get(p)! : Promise.reject(new Error(`no file ${p}`))),
       write: async (p, text) => void files.set(p, text),
-      exists: async p => files.has(p),
+      exists: async p => files.has(p) || under(p).length > 0,
+      list: async p => under(p).map(name => ({ name, kind: 'file' as const, size: 0, mtimeMs: 0, isLink: false })),
     },
   })
   return { host, files }
@@ -68,12 +74,46 @@ test("a scout's or checker's call of a tool that changes things is refused with 
   const changing = ['add', 'change', 'approve', 'reject', 'retry', 'ask', 'drop', 'merged', 'pause', 'resume', 'scouts', 'roles', 'kinds', 'settings', 'setup_git', 'orgmem', 'ask_owner']
   for (const id of ['scout-1', 'checker-1'])
     for (const tool of changing) {
+      // T-895: a scout's scouts call with no action is a list (see the test below); a checker's is still refused
+      if (id === 'scout-1' && tool === 'scouts') continue
       const r = await app.toolCall(host, tool, id, { task: 'T-1', title: 'x', details: 'y', why: 'z', origin_by: 'scout', mode: 'off' })
       expect(r && 'deny' in r ? r.deny : `not refused: ${tool}`).toContain('scouts can only read the board')
     }
   expect(files.get(`${ROOT}/${S.N.dir}/board.json`)).toBe(before)
   // a tool that is not symcc's is left to the host as before
   expect(await app.toolCall(host, 'Read', 'scout-1', {})).toBe(null)
+})
+
+test("T-895: a scout's scouts call with action list (and list + name) lists the scouts; add, edit, remove and run are refused and change nothing; a checker's is refused", async () => {
+  const { host, files } = withBoard()
+  scoutRuns.set('scout-1', 'bugs')
+  checkerRuns.set('checker-1', { task: 'T-1', worktree: '/w', end: () => undefined })
+  const all = resultOf(await app.toolCall(host, 'scouts', 'scout-1', { action: 'list' }))
+  expect(all).toContain('bugs')
+  expect(all).toContain('docs-check')
+  expect(resultOf(await app.toolCall(host, 'scouts', 'scout-1', {}))).toBe(all)
+  const one = resultOf(await app.toolCall(host, 'scouts', 'scout-1', { action: 'list', name: 'docs-check' }))
+  expect(one).toContain('docs-check')
+  expect(one).toContain('Check the docs.')
+  const before = new Map(files)
+  for (const action of ['add', 'edit', 'remove', 'run', 'pause']) {
+    const input = { action, name: action === 'add' ? 'new-one' : 'docs-check', every_minutes: 5, prompt: 'x' }
+    const r = await app.toolCall(host, 'scouts', 'scout-1', input)
+    expect(r && 'deny' in r ? r.deny : `not refused: ${action}`).toBe(scoutToolRefusal('scouts', S.N.name, input, 'scout')!)
+    expect(r && 'deny' in r ? r.deny : '').toContain('scouts can only read the board')
+  }
+  for (const action of ['list', 'add'])
+    expect(await app.toolCall(host, 'scouts', 'checker-1', { action })).toEqual({ deny: scoutToolRefusal('scouts', S.N.name, { action }, 'checker')! })
+  expect([...files.entries()]).toEqual([...before.entries()])
+})
+
+test("scoutToolRefusal: board and stats for both, scouts list only for a scout, by its action", () => {
+  expect(scoutToolRefusal('board')).toBe(null)
+  expect(scoutToolRefusal('stats', 'symcc', {}, 'checker')).toBe(null)
+  expect(scoutToolRefusal('scouts', 'symcc', {})).toBe(null)
+  expect(scoutToolRefusal('scouts', 'symcc', { action: ' List ', name: 'bugs' })).toBe(null)
+  for (const action of ['add', 'edit', 'remove', 'run']) expect(scoutToolRefusal('scouts', 'symcc', { action })).toContain(`scouts with action "${action}" is only for the lead`)
+  expect(scoutToolRefusal('scouts', 'symcc', { action: 'list' }, 'checker')).toContain('"scouts" is only for the lead')
 })
 
 test("the lead's calls are not refused by the scouts' rule; any other agent's lead tool is refused (T-525)", async () => {
@@ -86,10 +126,10 @@ test("the lead's calls are not refused by the scouts' rule; any other agent's le
 
 test('the scout agent type gets board and stats as mcp__ tools; the workers\' tools are unchanged', () => {
   expect(SCOUT_BOARD_TOOLS).toEqual(['board', 'stats'])
-  expect(scoutAgentTools('symcc')).toEqual([...SCOUT_TOOLS, 'mcp__symcc__board', 'mcp__symcc__stats'])
+  expect(scoutAgentTools('symcc')).toEqual([...SCOUT_TOOLS, 'mcp__symcc__board', 'mcp__symcc__stats', 'mcp__symcc__scouts'])
   for (const w of workerAgentTypes('symcc')) {
     expect(w.tools.slice(0, BASE_WORKER_TOOLS.length)).toEqual([...BASE_WORKER_TOOLS])
-    expect(w.tools.some(t => t === 'mcp__symcc__board' || t === 'mcp__symcc__stats')).toBe(false)
+    expect(w.tools.some(t => t === 'mcp__symcc__board' || t === 'mcp__symcc__stats' || t === 'mcp__symcc__scouts')).toBe(false)
     expect(w.tools.at(-1)).toBe('mcp__symcc__ask_owner')
   }
 })
@@ -97,6 +137,7 @@ test('the scout agent type gets board and stats as mcp__ tools; the workers\' to
 test('the scout prompt tells the scout to use board (no args, status, search, task) and stats instead of board.json', () => {
   const p = scoutPrompt({ scout: 'bugs', root: '/p', instructions: 'Find crashes.', open: [], name: 'symcc' })
   expect(p).toContain('use the symcc tools board and stats rather than reading .symcc/board.json')
+  expect(p).toContain('scouts with action list shows the other scouts')
   for (const w of ['no arguments lists the open tasks', 'status', 'search', 'task (e.g. "T-12") shows one task in full with its latest report', 'stats shows time and token use']) expect(p).toContain(w)
   expect(p).toContain('is refused for you')
 })
@@ -117,6 +158,7 @@ test('registerAll registers the scout agent type with mcp__<name>__board and mcp
   expect(scout).toBeTruthy()
   expect(scout!.tools).toContain(board)
   expect(scout!.tools).toContain(stats)
+  expect(scout!.tools).toContain(`mcp__${S.N.name}__scouts`)
   const workerTypes = agents.filter(a => a.name.startsWith('worker'))
   expect(workerTypes.length).toBe(workerAgentTypes(S.N.name).length)
   for (const w of workerTypes) {
@@ -141,6 +183,6 @@ test("registerAll's worker and scout agent type prompts are the base prompts, wo
   expect(agents.find(a => a.name === 'worker')!.prompt).toBe(worker)
   expect(agents.find(a => a.name === 'worker-web')!.prompt).toBe(`${worker} ${web}`)
   expect(agents.find(a => a.name === 'scout')!.prompt).toBe(
-    `You are a ${n} scout. You do the job your scout file gives you, using the project, the shell and the web, and end with a short plain report (or exactly NOTHING). You never change, create or delete files in the project. To look at the board, use the mcp__${n}__board and mcp__${n}__stats tools (they only read), not the board file.`,
+    `You are a ${n} scout. You do the job your scout file gives you, using the project, the shell and the web, and end with a short plain report (or exactly NOTHING). You never change, create or delete files in the project. To look at the board, use the mcp__${n}__board and mcp__${n}__stats tools and the mcp__${n}__scouts tool with action list (they only read), not the board file.`,
   )
 })

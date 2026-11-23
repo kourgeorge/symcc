@@ -14,9 +14,21 @@ import { frontMatterLine, isObj, splitFrontMatter } from './text'
  */
 export const SCOUT_BOARD_TOOLS: readonly string[] = ['board', 'stats']
 
-/** Why a scout's or checker's call of symcc tool `tool` is refused, or null when it may run (board and stats). */
-export function scoutToolRefusal(tool: string, name: string = DEFAULT_NAME): string | null {
-  return SCOUT_BOARD_TOOLS.includes(tool) ? null : `Refused: ${name} scouts can only read the board (board and stats); "${tool}" is only for the lead. Put what you would change in your report instead.`
+/** T-895: the tool a scout (not a checker) may also call, with action "list" only (with or without a name): it sees the other scouts. */
+export const SCOUT_LIST_TOOL = 'scouts'
+
+/** The scouts tool's action in `input` as that tool reads it: "list" when none is given. */
+const scoutsAction = (input: Record<string, unknown>): string => (typeof input.action === 'string' && input.action.trim() ? input.action.trim().toLowerCase() : 'list')
+
+/**
+ * Why a scout's or checker's call of symcc tool `tool` with `input` is refused, or null when it may run: board and
+ * stats for both; for a scout (`who` 'scout') also scouts with action list (T-895). Any other action is refused.
+ */
+export function scoutToolRefusal(tool: string, name: string = DEFAULT_NAME, input: Record<string, unknown> = {}, who: 'scout' | 'checker' = 'scout'): string | null {
+  if (SCOUT_BOARD_TOOLS.includes(tool)) return null
+  if (tool === SCOUT_LIST_TOOL && who === 'scout' && scoutsAction(input) === 'list') return null
+  const what = tool === SCOUT_LIST_TOOL && who === 'scout' ? `scouts with action "${scoutsAction(input)}"` : `"${tool}"`
+  return `Refused: ${name} scouts can only read the board (board, stats${who === 'scout' ? ' and scouts with action list' : ''}); ${what} is only for the lead. Put what you would change in your report instead.`
 }
 
 /** A scout file: `.<plugin name>/scouts/<name>.md`, front matter + instructions. */
@@ -452,7 +464,7 @@ export function scoutToolLines(name: string, o: { symccTools?: boolean; web?: bo
   const board =
     o.symccTools === false
       ? `- To look at the board, read ${namesFor(name).dir}/board.json yourself (only read it, never change it): its tasks list has each task's id, title and status, and a try's report file is named in its runs. A done or dropped task there is short: its history, runs and details are in the file its parts field names (e.g. ${namesFor(name).dir}/tasks/T-600.json, under its id).`
-      : `- To look at the board, use the ${name} tools board and stats rather than reading ${namesFor(name).dir}/board.json: board with no arguments lists the open tasks; status (e.g. ["done"]) and search (words) narrow it; task (e.g. "T-12") shows one task in full with its latest report. stats shows time and token use. They only read: every ${name} tool that changes the board (add, change, drop, approve, ...) is refused for you.`
+      : `- To look at the board, use the ${name} tools board and stats rather than reading ${namesFor(name).dir}/board.json: board with no arguments lists the open tasks; status (e.g. ["done"]) and search (words) narrow it; task (e.g. "T-12") shows one task in full with its latest report. stats shows time and token use. scouts with action list shows the other scouts (how often each runs, paused or not, last run, the start of its last report); add name for one scout in full with its last runs. They only read: every ${name} tool that changes the board (add, change, drop, approve, ...) is refused for you.`
   return { may, board }
 }
 

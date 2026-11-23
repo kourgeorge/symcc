@@ -3,7 +3,7 @@
 // Claude Code's tools (web: WebSearch and WebFetch) and to the worker agent type that has them.
 import { DEFAULT_NAME, cleanName } from '../name'
 import { ASK_TOOL } from '../core/ask'
-import { SCOUT_BOARD_TOOLS } from '../core/scouts'
+import { SCOUT_BOARD_TOOLS, SCOUT_LIST_TOOL } from '../core/scouts'
 import { type RoleDef, ROLE_TOOL_WORDS } from '../core/roles'
 
 /** Claude Code's names made from the plugin's name: its worker and scout agent types, and a tool's full name as the model sees it. */
@@ -34,8 +34,11 @@ export const claudeRoleTools = (words: readonly string[] | undefined): string[] 
 /** The tools a scout has: it reads and runs commands, and may search and read the web, but never edits. */
 export const SCOUT_TOOLS: readonly string[] = ['Read', 'Glob', 'Grep', 'Bash', 'WebSearch', 'WebFetch']
 
-/** Every tool the scout agent type gets (checkers run as it too): SCOUT_TOOLS, then symcc's read-only board tools (mcp__<name>__board, mcp__<name>__stats). */
-export const scoutAgentTools = (name: string = DEFAULT_NAME): string[] => [...SCOUT_TOOLS, ...SCOUT_BOARD_TOOLS.map(t => claudeNames(name).tool(t))]
+/**
+ * Every tool the scout agent type gets (checkers run as it too): SCOUT_TOOLS, then symcc's read-only board tools
+ * (mcp__<name>__board, mcp__<name>__stats) and mcp__<name>__scouts (T-895: only its action list runs, and only for a scout).
+ */
+export const scoutAgentTools = (name: string = DEFAULT_NAME): string[] => [...SCOUT_TOOLS, ...[...SCOUT_BOARD_TOOLS, SCOUT_LIST_TOOL].map(t => claudeNames(name).tool(t))]
 
 /** The agent type (without the "<name>:" part) for a role's tool words: "worker" for none, "worker-web" for web (more words join with "-"). */
 export function workerTypeSuffix(words: readonly string[] | undefined): string {

@@ -159,13 +159,14 @@ export const WORKER_BASE = (name: string, tool: (t: string) => string, web = fal
 
 /**
  * The base prompt every scout and checker gets (checkers run as scouts), before its own prompt; see WORKER_BASE.
- * `o.symccTools` false: no board and stats tools are named, and the web only when `o.web` (the agent's permissions
+ * T-895: it names the scouts tool too (action list: a scout sees the other scouts). `o.symccTools` false: no board,
+ * stats or scouts tools are named, and the web only when `o.web` (the agent's permissions
  * are all it has).
  */
 export const SCOUT_BASE = (name: string, tool: (t: string) => string, o: BaseOptions = {}): string =>
   o.symccTools === false
     ? `You are a ${name} scout. You do the job your scout file gives you, using the project and the shell${o.web ? ' and the web' : ''}, and end with a short plain report (or exactly NOTHING). You never change, create or delete files in the project.`
-    : `You are a ${name} scout. You do the job your scout file gives you, using the project, the shell and the web, and end with a short plain report (or exactly NOTHING). You never change, create or delete files in the project. To look at the board, use the ${tool('board')} and ${tool('stats')} tools (they only read), not the board file.`
+    : `You are a ${name} scout. You do the job your scout file gives you, using the project, the shell and the web, and end with a short plain report (or exactly NOTHING). You never change, create or delete files in the project. To look at the board, use the ${tool('board')} and ${tool('stats')} tools and the ${tool('scouts')} tool with action list (they only read), not the board file.`
 
 /**
  * The base prompt for an agent of `kind`: WORKER_BASE for a worker, SCOUT_BASE for a scout or a checker. A host whose

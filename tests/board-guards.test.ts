@@ -162,7 +162,7 @@ test("T-525: an agent the board no longer has on record (an old try past the kep
     // a checker keeps today's rule: board and stats run, the rest is refused as read-only
     const c = await toolCall(host, toolName(tool), 'c9', input)
     if (SCOUT_BOARD_TOOLS.includes(tool)) expect(c && 'result' in c ? 'ran' : JSON.stringify(c)).toBe('ran')
-    else expect(c && 'deny' in c ? c.deny : `c9 not refused: ${tool}`).toBe(scoutToolRefusal(tool, S.N.name)!)
+    else expect(c && 'deny' in c ? c.deny : `c9 not refused: ${tool}`).toBe(scoutToolRefusal(tool, S.N.name, input, 'checker')!)
   }
   expect(files.get(`${ROOT}/${S.N.boardFile}`)).toBe(before)
   // the lead (no agent id) still gets its tools
