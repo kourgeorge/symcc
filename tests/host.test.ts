@@ -383,6 +383,15 @@ test("Claude Code's adapter maps symcc's words to its `$`: run is $.process.run,
   expect(host.words.tool('symcc', 'board')).toBe('mcp__symcc__board')
 })
 
+test("T-926: Claude Code's adapter passes every name symcc reads to $.env.get (DAM's PLATFORM_HARNESS, TMPDIR, OS too)", async () => {
+  const envs: string[] = []
+  const claude = { env: { get: async (name: string) => (envs.push(name), `v-${name}`) } }
+  const host = claudeHost(claude as unknown as EngineInterface)
+  const names = ['HOME', 'USERPROFILE', 'CLAUDE_CONFIG_DIR', 'PLATFORM_HARNESS', 'TMPDIR', 'OS']
+  for (const n of names) expect(await host.env(n)).toBe(`v-${n}`)
+  expect(envs).toEqual(names)
+})
+
 test("Claude Code's adapter: host.lead.usage reads the lead's calls from Claude Code's session logs through the same host", async () => {
   const listed: string[] = []
   const claude = {
