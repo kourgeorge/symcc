@@ -7,8 +7,8 @@
 // links that wraps (Edit · See the prompt · Turn off · Reset to built-in · Remove), then its parts under headings.
 // Removing asks first in a box with one "Yes, remove" Button and a Cancel link. The edit pages have one Save Button and a
 // Cancel link. No key hints.
-import { DEFAULT_ROLE, ROLE_PLACEHOLDERS, ROLE_SLOT, ROLE_PROMPTS, promptsOfRole, roleNameError, kindNameError, isCheckerRole, findKind, ALWAYS_ON_KINDS, type RoleDef, type KindDef, type RolePromptKind } from '../../board'
-import { type DefSource, type BrokenDef, brokenLabel, defNamed } from '../../core/def-files'
+import { ROLE_PLACEHOLDERS, ROLE_SLOT, ROLE_PROMPTS, promptsOfRole, isCheckerRole, type RoleDef, type KindDef, type RolePromptKind } from '../../board'
+import { type DefSource, type BrokenDef, brokenLabel } from '../../core/def-files'
 import { S } from '../../app/state'
 import { type $ } from '../panel'
 import { roleView, newRoleFile, changeRole } from '../../app/roles'
@@ -19,6 +19,7 @@ import { vsRowRoom } from './vscode-list'
 import { claudeHost } from '../host'
 import { vsBadge, vsCallout, vsFooter, vsHref, vsLink, mdLink, vsSection } from './vscode'
 import { type PageHeader, vsPageHeader } from './page-header'
+import { defActions } from '../../core/page-header'
 import { type RolePageFacts, CHANGED_HEADING, changeLines } from '../../core/role-changes'
 import { type DefRow, type DefCol, type DefCell, type CodePick, DEF_COL_HEADS, ROLE_COLS, KIND_COLS, TABLE_GAP, CODE_PICKS, CODE_PICK_LABEL, CODE_PICK_HINT, defsCountText, defLayout, defCells, defCellTone, roleWritesLine, codePickOf } from '../../core/def-table'
 import { type CodeDraft, roleRows, kindRows, saveRoleEdit } from './role-table'
@@ -186,8 +187,7 @@ export function rolePageVs($: $, pane: PaneParts, r: RoleDef, source: DefSource,
   const { Box, Text, C, vs } = k
   const { Markdown } = vs
   const isChecker = isCheckerRole(r.name)
-  const canReset = source === 'replaced'
-  const canRemove = source === 'added'
+  const { canReset, canRemove } = defActions('role', r.name, source, false, [])
   const set = (f: () => void) => () => (f(), k.redraw())
   const cancel = set(() => ((roleView.confirmRemove = false), (roleView.confirmReset = false)))
   return (
@@ -236,9 +236,7 @@ export function brokenRolePageVs($: $, pane: PaneParts, b: BrokenDef, builtIn: R
     $.ui.toast(S.N.toast(res.text))
     k.redraw()
   })
-  const okName = !roleNameError(b.name)
-  const canReset = okName && !!defNamed(builtIn, b.name)
-  const canRemove = okName && !canReset
+  const { canReset, canRemove } = defActions('role', b.name, undefined, true, builtIn)
   const out = canReset ? 'Reset to built-in deletes it (the built-in role is used meanwhile)' : canRemove ? 'Remove deletes it' : ''
   const set = (f: () => void) => () => (f(), k.redraw())
   return (
@@ -382,11 +380,7 @@ export function kindPageVs($: $, pane: PaneParts, x: KindDef | undefined, source
     $.ui.toast(S.N.toast(res.text))
     k.redraw()
   })
-  const okName = !kindNameError(name)
-  const canEdit = !broken
-  const canOff = !broken && !ALWAYS_ON_KINDS.includes(name)
-  const canReset = broken ? okName && !!findKind(builtIn, name) : source === 'replaced'
-  const canRemove = broken ? okName && !canReset : source === 'added'
+  const { canEdit, canOff, canReset, canRemove } = defActions('kind', name, source, !!broken, builtIn)
   const file = broken ? broken.file : source === 'built-in' ? `kinds/${name}.ts (in the plugin; Edit copies it to ${kindFileOf(name)})` : kindFileOf(name)
   const off = !!x?.off
   const set = (f: () => void) => () => (f(), k.redraw())

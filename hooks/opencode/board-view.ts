@@ -29,7 +29,7 @@ import {
   ownersTurn, shownStatus, sortScouts, scoutListRows, scoutFindingsOf, findingsLine, findingsDefaultLine, scoutHowTo, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem, scoutFile,
   SETTING_GROUPS, SETTINGS, isSettingPage, settingInfo, settingShown, settingValue, viewAsBoard, cantPlayNotify, groupSummaryParts,
   type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction, type DefEditField, type TaskVerb, settingsKeys, rolesKeys, kindsKeys, roleEditKeys, defEditFields, roleTools, roleFileText, roleSkipReason, roleCodeText, kindFileText, kindSkipReason,
-  DEFAULT_ROLE, isCheckerRole, ALWAYS_ON_KINDS, checkerOn, roleNameError, kindNameError, leadScoutNameError, checkStepNow, rowEndText, taskPhase, choiceLines, driveWarning,
+  DEFAULT_ROLE, isCheckerRole, checkerOn, roleNameError, kindNameError, leadScoutNameError, checkStepNow, rowEndText, taskPhase, choiceLines, driveWarning,
   searchTasks, showsHeader, type BoardPage,
   LIVE_TABS, LIVE_DIVIDER, liveIdle, LIVE_INDENT, liveLegend, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, liveBold, liveHeading, liveIndented, liveInner, tabRow, LIVE_VIEW_KEYS, liveKeys, liveBranches, liveTaskLanes, liveLayout, liveColumns, liveHeader, liveHeaderSegs, liveLabelSegs, liveNeeds, laneLines, liveOrgMem, liveTrains, trainRows, liveTodayLines, searchLine, modeButton, hintLines, roleKeys, rolePromptKeys, ROLE_PROMPTS, ROLE_SLOT, promptsOfRole, type RolePromptKind,
 } from '../board'
@@ -40,7 +40,7 @@ import { taskSections, type TaskSection } from '../core/task-sections'
 import type { TaskBranchFacts } from '../core/task-branch'
 import { type RoleChange, CHANGED_HEADING, changeLines, changesOfRole, roleStateGroups } from '../core/role-changes'
 import { type DefRow, ROLE_COLS, KIND_COLS, CURSOR_MARK, TABLE_INDENT, CODE_PICK_LABEL, roleTableRow, kindTableRow, defsCountText, defLayout, defCells, defCellTone, newDefText, roleWritesLine, codePickOf } from '../core/def-table'
-import { roleButtons as headerRoleButtons } from '../core/page-header'
+import { defActions, roleButtons as headerRoleButtons } from '../core/page-header'
 import { type ActionGroup, groupSegLines, headerRule, inGroups, navHint, navRow, packGroups, type PageFrom, PILL_COLOR, pillText, placeIn, scoutAbout, scoutButtons as headerScoutButtons, scoutListNames, scoutStateGroups, TASK_ID_COLOR, taskPlace, taskStateGroups, titleLines, whereLine } from '../core/page-header'
 import { LIST_TONE, sessionNote } from '../core/details'
 import type { SearchMore } from '../core/panel'
@@ -108,18 +108,16 @@ export type ViewDef = {
 /** The roles or kinds as the view file carries them: each merged one (built-in, or the owner's over it) in order, then
  *  the owner's files that can't be read. `dir` is the owner's folder for them (".symcc/roles"). */
 export function viewDefs(def: 'role' | 'kind', all: readonly (RoleDef | KindDef)[], builtIn: readonly { name: string }[], project: readonly { name: string }[], broken: readonly BrokenDef[], dir: string, days: Record<string, string> = {}): ViewDef[] {
-  const nameError = def === 'role' ? roleNameError : kindNameError
   const brokenRow = (b: BrokenDef): ViewDef => {
-    const okName = !nameError(b.name)
-    const canReset = okName && !!defNamed(builtIn, b.name)
-    return { name: b.name, description: '', source: '', off: false, text: '', broken: brokenLabel(b), file: b.file, canOff: false, canReset, canRemove: okName && !canReset }
+    const { canOff, canReset, canRemove } = defActions(def, b.name, undefined, true, builtIn)
+    return { name: b.name, description: '', source: '', off: false, text: '', broken: brokenLabel(b), file: b.file, canOff, canReset, canRemove }
   }
   const rows = all.map((d): ViewDef => {
     const bad = brokenNamed(broken, d.name)
     if (bad) return brokenRow(bad)
     const source = defSource(d.name, builtIn, project) ?? 'built-in'
     const checker = def === 'role' && isCheckerRole(d.name)
-    const canOff = def === 'role' ? d.name.toLowerCase() !== DEFAULT_ROLE && !checker : !ALWAYS_ON_KINDS.includes(d.name)
+    const { canOff, canReset, canRemove } = defActions(def, d.name, source, false, builtIn)
     const plugin = def === 'role' ? `roles/${d.name}.md` : `kinds/${d.name}.ts`
     const file = source === 'built-in' ? `${plugin} (in the plugin)` : `${dir}/${d.name}.md`
     const role = def === 'role' ? (d as RoleDef) : null
@@ -135,8 +133,8 @@ export function viewDefs(def: 'role' | 'kind', all: readonly (RoleDef | KindDef)
       ...(role?.warning ? { warning: role.warning } : {}),
       file,
       canOff,
-      canReset: source === 'replaced',
-      canRemove: source === 'added',
+      canReset,
+      canRemove,
       ...(changes ? { changes } : {}),
       ...(at ? { changed_at: at } : {}),
     }
