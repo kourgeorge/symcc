@@ -31,7 +31,7 @@ import {
   type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction, type DefEditField, type TaskVerb, settingsKeys, rolesKeys, kindsKeys, roleEditKeys, defEditFields, roleTools, roleFileText, roleSkipReason, roleCodeText, kindFileText, kindSkipReason,
   DEFAULT_ROLE, isCheckerRole, checkerOn, roleNameError, kindNameError, leadScoutNameError, checkStepNow, rowEndText, taskPhase, choiceLines, driveWarning,
   searchTasks, showsHeader, type BoardPage,
-  LIVE_TABS, LIVE_DIVIDER, liveIdle, LIVE_INDENT, liveLegend, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, liveBold, liveHeading, liveIndented, liveInner, tabRow, LIVE_VIEW_KEYS, liveKeys, liveBranches, liveTaskLanes, liveLayout, liveColumns, liveHeader, liveHeaderSegs, liveLabelSegs, liveNeeds, laneLines, liveOrgMem, liveTrains, trainRows, liveTodayLines, searchLine, modeButton, hintLines, roleKeys, rolePromptKeys, ROLE_PROMPTS, ROLE_SLOT, promptsOfRole, type RolePromptKind,
+  LIVE_TABS, LIVE_DIVIDER, liveIdle, LIVE_INDENT, liveLegend, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, liveBold, liveHeading, liveIndented, liveInner, tabRow, LIVE_VIEW_KEYS, liveKeys, liveBranches, liveTaskLanes, liveLayout, liveColumns, liveNowSegs, liveLabelSegs, liveNeeds, laneLines, liveOrgMem, liveTrains, trainRows, liveTodayLines, searchLine, modeButton, hintLines, roleKeys, rolePromptKeys, ROLE_PROMPTS, ROLE_SLOT, promptsOfRole, type RolePromptKind,
 } from '../board'
 import { notSetUpAnswer } from '../core/settings'
 import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, brokenLabel, defNamed } from '../core/def-files'
@@ -889,8 +889,6 @@ function liveBody(f: ViewFile, cursor: number, nowMs: number, w: number): Body {
     ...om.grid.flatMap(r => r.map(c => liveTopicId(c.topic))),
   ]
   const selected = ids.length ? ids[Math.min(Math.max(0, cursor), ids.length - 1)]! : ''
-  // T-770: the mode line, and while scouts run their mark at its end ("⌕ gaps-bot 4m"); a click on it opens the Scouts tab
-  b.add(liveHeaderSegs(v, running, nowMs, w).map((x, i) => (i === 0 ? { text: x.text, color: 'text', bold: true } : { text: x.text, color: LIVE_TONE[x.tone], hit: { tab: 'scouts' as const } })))
   /** A line under a section heading: indented. */
   const under = (xs: readonly LiveSeg[], hit?: PanelHit) => liveSegs(liveIndented(xs), hit)
   /** A row that opens task `id`: "›" in its first column when the cursor is on it (a space there otherwise). */
@@ -930,6 +928,9 @@ function liveBody(f: ViewFile, cursor: number, nowMs: number, w: number): Body {
   b.blank()
   b.add(liveSegs(liveHeading(LIVE_SECTIONS.today, w)))
   b.blank()
+  // T-938: the first row is "Now:" the mode line; T-770: while scouts run (or one is due) their mark at its end
+  // ("⌕ gaps-bot 4m"), a click on it opens the Scouts tab
+  b.add([{ text: LIVE_INDENT, color: 'text' }, ...liveNowSegs(v, running, nowMs, inner).map((x, i) => (i === 0 ? { text: x.text, color: LIVE_TONE.dim } : i === 1 ? { text: x.text, color: 'text', bold: true } : { text: x.text, color: LIVE_TONE[x.tone], hit: { tab: 'scouts' as const } }))])
   for (const t of liveTodayLines(v, nowMs, inner, undefined, !lanes.length)) b.add(under(t))
   // T-718: the Organizational memory section, just above the footer
   b.blank()

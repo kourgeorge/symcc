@@ -4,8 +4,9 @@
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { pause, entry } from './fakes'
-import { withStarts } from './starts'
-import { emptyBoard, leadText, handRequest, parseLead } from '../hooks/board'
+import { withStarts, turnNow } from './starts'
+import { queuedStarts } from '../hooks/app/starts'
+import { emptyBoard, leadText, handRequest, parseLead, scoutsRunning, liveScoutMark } from '../hooks/board'
 import { claimLead } from '../hooks/app/lead'
 import { runScout, runScoutNow, scoutFinished, loadScoutRunHistory, scheduleScouts, stopAnswer } from '../hooks/app/scouts'
 import { checkEdit, movedText, unknownAgentText } from '../hooks/app/ask'
@@ -175,4 +176,23 @@ test('(c) a scout another copy of symcc refused with the "driving moved" note en
   scoutState.get('gaps')!.running = true
   await scoutFinished(w.host, 's2', 'Stopped workers keep their worktrees: hooks/app/git.ts:120 never removes them. Fix: remove on stop.')
   expect((await loadScoutRunHistory(w.host, 'gaps')).at(-1)?.outcome).toBe('found')
+})
+
+test("T-938: a running scout's time counts from this run's start, even when its record was made anew while the start was queued", async () => {
+  const w = world()
+  await scheduleScouts(w.host)
+  const dayAgo = new Date(Date.now() - 24 * 3600_000 - 2 * 60_000).toISOString()
+  scoutState.get('gaps')!.last_run = dayAgo
+  const p = runScout(w.host, { name: 'gaps', every_minutes: 0, prompt: 'Look for gaps.' })
+  for (let i = 0; !queuedStarts() && i < 10_000; i++) await Promise.resolve()
+  expect(queuedStarts()).toBe(1)
+  // the scouts folder is read again while the start waits: each scout gets a new record
+  await scheduleScouts(w.host)
+  await turnNow(w.host)
+  expect(await p).toBe('')
+  const shown = [...scoutState.values()].map(s => (s.running && [...scoutRuns.values()].includes(s.name) ? { ...s, started: true } : s))
+  const runs = scoutsRunning(shown)
+  expect(runs.map(r => r.name)).toEqual(['gaps'])
+  expect(Date.now() - runs[0]!.since < 60_000).toBe(true)
+  expect(liveScoutMark(runs, Date.now())?.text.includes('24h')).toBe(false)
 })

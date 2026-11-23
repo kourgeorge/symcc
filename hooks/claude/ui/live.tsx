@@ -16,7 +16,7 @@
 // branch (commits ahead, how far behind), each task row a row Button that opens its task.
 // T-747, T-789: each section (Tasks, Today, Branches, Organizational memory) starts with a bold UPPERCASE heading (core's
 // liveHeading; no bar, no rule), one empty line above it (none above the first) and one under it, its lines indented by LIVE_INDENT.
-import { LIVE_DIVIDER, liveIdle, LIVE_INDENT, liveLegend, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, laneLines, liveBold, liveHeading, liveIndented, liveInner, liveBranches, liveHeader, liveHeaderSegs, liveKeys, liveLabelSegs, liveNeeds, liveTaskLanes, liveLayout, liveOrgMem, liveColumns, liveTodayLines, liveTrains, trainRows } from '../../core/live'
+import { LIVE_DIVIDER, liveIdle, LIVE_INDENT, liveLegend, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, laneLines, liveBold, liveHeading, liveIndented, liveInner, liveBranches, liveNowSegs, liveKeys, liveLabelSegs, liveNeeds, liveTaskLanes, liveLayout, liveOrgMem, liveColumns, liveTodayLines, liveTrains, trainRows } from '../../core/live'
 import { footerRule } from '../../board'
 import { S, workers } from '../../app/state'
 import { type $, panelValues } from '../panel'
@@ -119,7 +119,7 @@ export function livePage($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
     else $.ui.toast(S.N.toast(target ? `${target.id} has no worker running now.` : 'No worker is running now.'))
   })
   const today = liveTodayLines(v, nowMs, inner, undefined, !lanes.length)
-  const headSegs = liveHeaderSegs(v, running, nowMs, width)
+  const nowSegs = liveNowSegs(v, running, nowMs, inner)
   const needs = liveNeeds(v, nowMs, inner)
   const om = liveOrgMem(notes, width)
   const br = liveBranches(v, nowMs, width)
@@ -127,17 +127,6 @@ export function livePage($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
   return (
     <Box flexDirection="column" {...(pane.bodyRows ? { minHeight: pane.bodyRows } : {})}>
       {header('live')}
-      {headSegs.length > 1 ? (
-        // T-770: while scouts run, their mark at the end of the mode line ("⌕ gaps-bot 4m"), a plain Button that opens the Scouts tab
-        <Box key="live-head" flexDirection="row">
-          <Text bold color={C('text')}>{headSegs[0]!.text + headSegs[1]!.text}</Text>
-          <Button key="live-scouts" plain label={headSegs.slice(2).map(x => x.text).join('')} onPress={goTab('scouts')}>
-            <Text>{draw(headSegs.slice(2))}</Text>
-          </Button>
-        </Box>
-      ) : (
-        <Text key="live-head" bold color={C('text')}>{liveHeader(v, running)}</Text>
-      )}
       {needs.length ? <Text key="live-needs-head">{draw(liveHeading(LIVE_SECTIONS.needs, width))}</Text> : null}
       {needs.length ? <Text key="live-needs-under"> </Text> : null}
       {needs.map((n, i) => (
@@ -186,6 +175,17 @@ export function livePage($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
       <Text key="live-today-blank"> </Text>
       <Text key="live-today-head">{draw(liveHeading(LIVE_SECTIONS.today, width))}</Text>
       <Text key="live-today-under"> </Text>
+      {/* T-938: ▍Today's first row, "Now:" the mode line (it was a line of its own above the sections); T-770: while
+          scouts run or one is due, their mark at its end ("⌕ gaps-bot 4m"), a plain Button that opens the Scouts tab */}
+      <Box key="live-head" flexDirection="row">
+        <Text color={C(LIVE_TONE.dim)}>{LIVE_INDENT + nowSegs[0]!.text}</Text>
+        <Text bold color={C('text')}>{nowSegs[1]!.text + (nowSegs[2]?.text ?? '')}</Text>
+        {nowSegs.length > 3 ? (
+          <Button key="live-scouts" plain label={nowSegs.slice(3).map(x => x.text).join('')} onPress={goTab('scouts')}>
+            <Text>{draw(nowSegs.slice(3))}</Text>
+          </Button>
+        ) : null}
+      </Box>
       {today.map((line, i) => (
         <Text key={`live-today-${i}`}>{under(line)}</Text>
       ))}

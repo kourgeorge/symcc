@@ -373,7 +373,10 @@ test('T-902: /symcc-status prints the Live tab as text (needs you, the lanes and
       expect(statusHeadings(text).filter(h => h !== 'BRANCHES')).toEqual(['NEEDS YOU', 'TASKS', 'TODAY', 'ORGANIZATIONAL MEMORY'])
       expect(statusSection(text, 'TASKS').some(l => l.startsWith(' ▶ T-2') && l.endsWith('(try 2)'))).toBe(true)
       expect(statusSection(text, 'TASKS').includes('   └─◇ T-4 Write the export  waits')).toBe(true)
-      expect(statusSection(text, 'TODAY')[0]!.split('Σ')[0]).toBe(statusTodayLines(statusBoard(now), now)[0]!.split('Σ')[0])
+      // T-938: TODAY's first row is "Now:" the mode line (no stand-alone mode line above the sections), then the figures
+      expect(statusSection(text, 'TODAY')[0]!.startsWith(' Now: ⏸ paused · agents ')).toBe(true)
+      expect(text.split('\n')[0]!.startsWith('─── ❯ ')).toBe(true)
+      expect(statusSection(text, 'TODAY')[1]!.split('Σ')[0]).toBe(statusTodayLines(statusBoard(now), now)[1]!.split('Σ')[0])
       // T-933: the ✧ / ⌀ legend is the last lines, after the hint line, never under the task rows
       expect(statusTail(text, statusHint())).toEqual(statusTailWant(statusHint()))
       expect(statusSection(text, 'TASKS').some(l => l.includes('✧ ='))).toBe(false)

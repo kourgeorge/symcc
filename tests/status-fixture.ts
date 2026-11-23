@@ -4,7 +4,7 @@
 import { addTask } from '../hooks/core/task'
 import { emptyBoard, type Board, type BoardTask } from '../hooks/core/board-file'
 import { localOffset } from '../hooks/core/days'
-import { liveTodayLines, segText, LIVE_INDENT, liveLegend, liveInner } from '../hooks/core/live'
+import { liveTodayLines, liveNowSegs, liveTaskLanes, segText, LIVE_INDENT, liveLegend, liveInner } from '../hooks/core/live'
 
 /** A moment inside nowMs's local day: `share` 0 is midnight, 1 is nowMs (tests/day-clock.ts's inToday, kept here so
  *  the bun specs need nothing more). */
@@ -39,8 +39,10 @@ export function statusBoard(nowMs: number, quiet = false): Board {
   return { ...b, tasks }
 }
 
-/** The TODAY lines the Live tab draws for `b` at `nowMs` in an 80-column chat (as /<name>-status prints them). */
-export const statusTodayLines = (b: Board, nowMs: number): string[] => liveTodayLines({ tasks: b.tasks }, nowMs, 79).map(x => (LIVE_INDENT + segText(x)).trimEnd())
+/** The TODAY lines the Live tab draws for `b` at `nowMs` in an 80-column chat (as /<name>-status prints them): T-938: first
+ *  the "Now:" row (the mode line: mode, agents; no scouts here), then the figures. */
+export const statusTodayLines = (b: Board, nowMs: number): string[] =>
+  [liveNowSegs(b as never, liveTaskLanes(b as never, nowMs).filter(l => !l.done), nowMs, 79), ...liveTodayLines({ tasks: b.tasks }, nowMs, 79)].map(x => (LIVE_INDENT + segText(x)).trimEnd())
 
 /** The section headings' words in a /<name>-status text, in order (each heading line starts with "─── ❯ " and one). */
 export const statusHeadings = (text: string): string[] =>

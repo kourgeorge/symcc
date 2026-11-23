@@ -1,11 +1,11 @@
 // /<name>-status (T-902): the board's Live tab as plain text for the chat, the same in every client. Every line is made by
 // the Live tab's own helpers (core/live.ts), so the numbers always match the panel; this file only puts them in order:
-// the mode line, NEEDS YOU (only while something waits), TASKS (one line per lane: its id, title, stations and time, with
-// "(try n)" from a second try; the waiting trains hung under it), BRANCHES (when git's figures were read), TODAY (with the
+// NEEDS YOU (only while something waits), TASKS (one line per lane: its id, title, stations and time, with
+// "(try n)" from a second try; the waiting trains hung under it), BRANCHES (when git's figures were read), TODAY (T-938: its first row "Now:" the mode line, then the figures, with the
 // yesterday and last 7 days lines) and ORGANIZATIONAL MEMORY (the count and the newest notes), then one hint line, then (when lanes show) the ✧ / ⌀ legend
 // as the last lines (T-933: never under the task rows).
 import { DEFAULT_NAME } from '../name'
-import { LIVE_INDENT, LIVE_SECTIONS, liveIdle, laneLines, liveBranches, liveColumns, liveHeaderSegs, liveHeading, liveInner, liveLabelSegs, liveLayout, liveLegend, liveNeeds, liveOrgMem, liveTaskLanes, liveTodayLines, liveTrains, segText, trainRows, type LiveSeg, type LiveView } from './live'
+import { LIVE_INDENT, LIVE_SECTIONS, liveIdle, laneLines, liveBranches, liveColumns, liveHeaderSegs, liveHeading, liveNowSegs, liveInner, liveLabelSegs, liveLayout, liveLegend, liveNeeds, liveOrgMem, liveTaskLanes, liveTodayLines, liveTrains, segText, trainRows, type LiveSeg, type LiveView } from './live'
 import type { OrgMemNote } from './org-mem'
 import { localOffset } from './days'
 
@@ -28,10 +28,10 @@ export function liveStatusText(view: StatusView, notes: readonly OrgMemNote[], n
   const out: string[] = []
   const line = (xs: readonly LiveSeg[]) => out.push(segText(xs).trimEnd())
   const under = (xs: readonly LiveSeg[]) => out.push((LIVE_INDENT + segText(xs)).trimEnd())
-  const heading = (label: string) => (out.push(''), line(liveHeading(label, w)))
+  // no empty line above the first heading
+  const heading = (label: string) => (out.length && out.push(''), line(liveHeading(label, w)))
   const lanes = liveTaskLanes(view, nowMs)
   const running = lanes.filter(l => !l.done)
-  line(liveHeaderSegs(view, running, nowMs, w))
   // NEEDS YOU: only while something waits for the owner
   const needs = liveNeeds(view, nowMs, inner)
   if (needs.length) {
@@ -64,6 +64,8 @@ export function liveStatusText(view: StatusView, notes: readonly OrgMemNote[], n
   }
   // TODAY: today's figures, then the yesterday and last 7 days lines
   heading(LIVE_SECTIONS.today)
+  // T-938: the first row is "Now:" the mode line (mode, agents, the scouts running and the next one)
+  under(liveNowSegs(view, running, nowMs, inner))
   for (const t of liveTodayLines(view, nowMs, inner, offsetMin, !lanes.length)) under(t)
   // ORGANIZATIONAL MEMORY: the count (in the heading) and the newest notes
   const om = liveOrgMem(notes, w)

@@ -51,7 +51,11 @@ test('T-902: the status text has the Live sections in order: needs you, the lane
   // TODAY: exactly the Live tab's lines (2 merged today)
   expect(statusSection(text, 'TODAY')).toEqual(statusTodayLines(b, now))
   expect(liveToday(b.tasks, now).merged).toBe(2)
-  expect(statusSection(text, 'TODAY')[0]!.startsWith(' ✓ 2 merged')).toBe(true)
+  // T-938: no mode line of its own above the sections: it is TODAY's first row, "Now:"
+  expect(text.split('\n')[0]).toMatch(/^─── ❯ NEEDS YOU /)
+  expect(text.split('\n').filter(l => l.includes(' busy'))).toEqual([' Now: ⏵ auto merge · agents 0/3 busy'])
+  expect(statusSection(text, 'TODAY')[0]).toBe(' Now: ⏵ auto merge · agents 0/3 busy')
+  expect(statusSection(text, 'TODAY')[1]!.startsWith(' ✓ 2 merged')).toBe(true)
   // the count and the 3 newest notes
   expect(text).toContain('ORGANIZATIONAL MEMORY   4 / 60')
   expect(statusSection(text, 'ORGANIZATIONAL MEMORY').length).toBe(3)

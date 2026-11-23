@@ -1342,7 +1342,9 @@ test('each slash command is added and runs symcc\'s runCommand: a typed one (TUI
     expect(statusHeadings(status).filter(h => h !== 'BRANCHES')).toEqual(['NEEDS YOU', 'TASKS', 'TODAY', 'ORGANIZATIONAL MEMORY'])
     expect(statusSection(status, 'TASKS').some(l => l.startsWith(' ▶ T-2') && l.endsWith('(try 2)'))).toBe(true)
     expect(statusSection(status, 'TASKS').includes('   └─◇ T-4 Write the export  waits')).toBe(true)
-    expect(statusSection(status, 'TODAY')[0]!.split('Σ')[0]).toBe(statusTodayLines(statusBoard(t902), t902)[0]!.split('Σ')[0])
+    // T-938: TODAY's first row is "Now:" the mode line (this board is paused), then the figures
+    expect(statusSection(status, 'TODAY')[0]).toBe(' Now: ⏸ paused · agents 0/3 busy')
+    expect(statusSection(status, 'TODAY')[1]!.split('Σ')[0]).toBe(statusTodayLines(statusBoard(t902), t902)[1]!.split('Σ')[0])
     await writeFile(`${p.main}/.symcc/board.json`, JSON.stringify({ ...statusBoard(t902, true), mode: 'paused' }))
     expect(statusHeadings((await run('symcc-status')).prompts.at(-1)!.text).includes('NEEDS YOU')).toBe(false)
     expect(c.commands.has('symcc-status')).toBe(true)

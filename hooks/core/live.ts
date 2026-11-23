@@ -512,6 +512,18 @@ export function liveHeaderSegs(view: LiveView & { scouts?: readonly ScoutLike[] 
   return [{ text: head, tone: 'text' }, ...(m ? [{ text: m.gap, tone: 'text' as const }, { text: m.mark, tone: 'scouts' as const }, { text: m.text, tone: 'dim' as const }, ...(m.next ? [{ text: m.next, tone: 'dim' as const }] : [])] : [])]
 }
 
+/** T-938: the label of ▍Today's first row, the mode line ("Now: ⏵ auto merge · agents 1/3 busy · ⌕ …"). */
+export const LIVE_NOW_LABEL = 'Now: '
+/** T-938: ▍Today's first row in `width` columns (the room under LIVE_INDENT): the dim "Now: " label, then the mode line
+ *  with its scout mark (liveHeaderSegs: the label's segment first, the mode line's second, then the scout parts). As
+ *  the old stand-alone line, when narrow the scout parts drop from the end; then (narrower than the label and the mode
+ *  line) "agents n/m busy" goes too; the mode always stays. */
+export function liveNowSegs(view: LiveView & { scouts?: readonly ScoutLike[] }, lanes: readonly LiveLane[], nowMs: number, width = Infinity): LiveSeg[] {
+  const room = width - textWidth(LIVE_NOW_LABEL)
+  const segs = textWidth(liveHeader(view, lanes)) <= room ? liveHeaderSegs(view, lanes, nowMs, room) : [{ text: modeLabel(modeOf(view)), tone: 'text' as const }]
+  return [{ text: LIVE_NOW_LABEL, tone: 'dim' }, ...segs]
+}
+
 /** The current station's mark on redraw number `frame`: ◉ and ◎ in turn; always ◉ when `steady` (reduced motion). */
 export const liveBlink = (frame: number, steady = false): string => (steady || frame % 2 === 0 ? '◉' : '◎')
 

@@ -820,7 +820,7 @@ are about changes; under "How tasks ended" a read investigation shows as
   no open task it says `No open tasks.` above the counts.
 - **`/symcc-status`** opens nothing either: it prints the Live tab's picture as plain text in
   the chat, the same in every client and made by the Live tab's own code, so its numbers always
-  match the panel. First the mode line, then the same sections in the same order: NEEDS YOU
+  match the panel. The same sections in the same order: NEEDS YOU
   (only when a question, a waiting task or a task in review waits for you), TASKS (one line per
   running task: its id, title, its steps drawn as on the Live lane with ◉ at the step it is in,
   the time there and "(try 2)" from a second try; the tasks waiting for it hang under it as
@@ -1158,10 +1158,10 @@ back and symcc has seen that its commit changed only docs files (the checker ski
 while it waits at `you`); a task that needs review (it has "needs review" on, or the board is in approve-merge mode) has a
 `you` station before `merged`, and its lane stays at `you` while it waits for you and goes on to `merged` when you approve. Lanes
 that skip stations are drawn as a plain line through those columns, so the station names over the lanes stay lined up.
-Under the mode line it has up to five sections, each starting with a heading line: three thin rule characters, a space,
+Under the tab row it has up to five sections, each starting with a heading line: three thin rule characters, a space,
 `❯`, a space, the name as a bold UPPERCASE word, then a thin rule (`─`) to the right edge, all in the same color (`─── ❯ TASKS ────…`;
 on a narrow panel `─ ❯ TASKS` with the name cut, no rule): `NEEDS YOU` (only while something waits), `TASKS` (the lanes),
-`BRANCHES`, `TODAY` (today's numbers) and `ORGANIZATIONAL MEMORY` (`ORG-MEM` on a narrow panel). One empty line sits above each heading (none above the first)
+`BRANCHES`, `TODAY` (the `Now:` row, then today's numbers) and `ORGANIZATIONAL MEMORY` (`ORG-MEM` on a narrow panel). One empty line sits above each heading (none above the first)
 and one under it, and the lines under a heading are indented by 1 space (VS Code shows the same
 words as bold headings with the same spacing):
 
@@ -1279,21 +1279,22 @@ words as bold headings with the same spacing):
   without slowing the board; a branch git can't read is left out, and with no git (or no task
   branch yet) the section isn't shown. VS Code draws it with real lines, and OpenCode shows the
   same section.
-- The header line says the board mode and `agents N/M busy` (workers and checkers running
-  against `max_parallel`). While a scout runs, a small mark goes at the end of that line: `⌕`
-  in the scout color, then each running scout's name and how long it has run, dim
-  (`⏵ auto merge · agents 2/3 busy · ⌕ gaps-bot 4m, board-review 1m`). When the names don't fit, it
+- The first row under the `TODAY` heading is `Now:`, then the board mode and `agents N/M busy` (workers and checkers running
+  against `max_parallel`); there is no line of its own for this above the sections. While a scout runs, a small mark goes at the end of that row: `⌕`
+  in the scout color, then each running scout's name and how long this run of it has gone on, dim
+  (`Now: ⏵ auto merge · agents 2/3 busy · ⌕ gaps-bot 4m, board-review 1m`). When the names don't fit, it
   says `⌕ 3 scouts`, and on a very narrow panel just `⌕ 3`. A scout still waiting to start
   isn't shown. After the running scouts the line also names the next scout due, the one whose
   timer fires soonest (`⌕ gaps-bot 4m · next: simplify in 40m`); with no scout running it is
   just `⌕ next: gaps-bot in 12m`. Paused scouts and scouts that run only on demand are never
   the next one, and with none due there is no "next" part. On a narrow panel the "next" part
-  goes first, then the names shrink. With nothing running and nothing due there is no mark. A click on it (or the `s` key)
-  opens the Scouts tab; this works on every board. Under the `TODAY` heading, four lines about today, then two dim lines about the days before:
+  goes first, then the names shrink; narrower still, `agents N/M busy` goes too and only the mode stays. With nothing running and nothing due there is no mark. A click on it (or the `s` key)
+  opens the Scouts tab; this works on every board. The status line under the prompt and the band stay as they are. Under the `Now:` row, four lines about today, then two dim lines about the days before:
 
   ```
   ─── ❯ TODAY ──────────────────────────────────────────────
 
+   Now: ⏵ auto merge · agents 1/3 busy · ⌕ org-mem-review 2m · next: version-reminder in 4m
    ✓ 67 merged   ↺ 76 sent back   ✗ 0 failed   Σ ⌀ 320.7M
    ⌀ ░█████████████▓▒ lead 3% · workers 84% · checkers 8% · scouts 5%
    avg ⌀ 2.8M/task · 9m work · 23m start-to-merge   first try 34% · avg 2.4 tries/task   ⌕ 68 sent back by the checker

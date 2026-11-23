@@ -216,7 +216,7 @@ test('T-727: the VS Code Live tab draws the Branches section with real lines, an
   await ui.unmount()
 })
 
-// T-738, T-747, T-789: each section of the Live tab starts with a bold UPPERCASE heading, no "▍" (Tasks right under the mode line, then
+// T-738, T-747, T-789: each section of the Live tab starts with a bold UPPERCASE heading, no "▍" (Tasks first, right under the tab row: T-938 put the mode line in Today as its "Now:" row; then
 // Branches, Today, Organizational memory; T-820: Branches, then Today), with one empty line just above it, none above the first, never two, and one under it; no
 // "── Name ──" rules and no full-width rule between the sections (only the footer's, under the last one).
 const LIVE_HEADS = ['BRANCHES', 'TODAY', 'ORGANIZATIONAL MEMORY'].map(h => (l: string) => l.startsWith(`─── ❯ ${h}`))
@@ -229,11 +229,14 @@ for (const surface of ['terminal', 'desktop', 'mobile'] as const)
     const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 80 }, surface })
     await ui.press({ key: 'tab-live' })
     const lines = pageLines(await ui.drawn())
-    const first = lines.findIndex(l => l.includes('agents ') && l.includes(' busy'))
+    const first = lines.findIndex(l => l.startsWith('─── ❯ TASKS '))
     expect(first).toBeGreaterThan(0)
     expect(lines[first - 1]!.trim() === '').toBe(false)
     const live = lines.slice(first)
-    expect(live[1]).toMatch(/^─── ❯ TASKS ─+$/)
+    expect(live[0]).toMatch(/^─── ❯ TASKS ─+$/)
+    // T-938: the mode line only as ▍Today's first row
+    expect(lines.filter(l => l.includes(' busy'))).toEqual([live[live.findIndex(l => l.startsWith('─── ❯ TODAY')) + 2]])
+    expect(live[live.findIndex(l => l.startsWith('─── ❯ TODAY')) + 2]).toMatch(/^ Now: ⏵ /)
     expect(live.some(l => l.includes('▍'))).toBe(false)
     const heads = live.filter(l => LIVE_HEADS.some(h => h(l)) || l.startsWith('─── ❯ TASKS '))
     expect(heads.slice(0, 3).map(h => h.split(' ')[2])).toEqual(['TASKS', 'BRANCHES', 'TODAY'])
@@ -267,13 +270,17 @@ test('T-738: the VS Code Live tab spaces its sections with one empty line (the p
     if (!x || typeof x !== 'object') return undefined
     if (Array.isArray(n)) return n.map(find).find(Boolean)
     const kids = (x.children ?? []) as VsNode[]
-    if (x.type === 'Box' && kids.some(k => k && (k.key ?? k.props?.key) === 'live-head')) return x
+    if (x.type === 'Box' && kids.some(k => k && (k.key ?? k.props?.key) === 'live-tasks')) return x
     return kids.map(find).find(Boolean)
   }
   const page = find(await ui.drawn())!
   expect(page.props?.gap).toBe(1)
   const keys = ((page.children ?? []) as VsNode[]).map(k => String(k?.key ?? k?.props?.key ?? ''))
-  for (const k of ['live-head', 'live-tasks', 'live-br', 'live-bottom', 'live-om']) expect([k, keys.includes(k)]).toEqual([k, true])
+  for (const k of ['live-tasks', 'live-br', 'live-bottom', 'live-om']) expect([k, keys.includes(k)]).toEqual([k, true])
+  // T-938: the mode line is no section of its own: it is ▍Today's first row, right under its heading
+  expect(keys.includes('live-head')).toBe(false)
+  const bottom = ((page.children ?? []) as VsNode[]).find(k => (k?.key ?? k?.props?.key) === 'live-bottom')!
+  expect(((bottom.children ?? []) as VsNode[]).slice(0, 2).map(k => String(k?.key ?? k?.props?.key))).toEqual(['live-today-head', 'live-head'])
   // T-747: each section's heading, the terminal's names
   expect((await ui.find({ key: 'live-tasks-head' }))?.text).toMatch(/^─── ❯TASKS─+$/)
   expect((await ui.find({ key: 'live-today-head' }))?.text).toMatch(/^─── ❯TODAY─+$/)

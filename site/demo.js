@@ -172,7 +172,6 @@
     const busy = s.lanes.filter(l => l.agent).length
     const L = []
     L.push(tabRow('Live'))
-    L.push(sp(`⏵ auto merge · agents ${busy}/${MAX_AGENTS} busy` + (s.scout ? ` · ⌕ gaps-bot ${dur(s.now - s.scout)} · next: simplify in 40m` : ' · ⌕ next: gaps-bot in 12m'), 'dim'))
     // T-786: NEEDS YOU first, only while something waits, every row in the warning color
     if (s.q) {
       L.push(liveHead('Needs you'), '')
@@ -192,6 +191,8 @@
     L.push(...branchLines(s))
     L.push('')
     L.push(liveHead('Today'), '')
+    // T-938: the first row is "Now:" the mode line (the mode, the agents busy, the scouts running and the next one due)
+    L.push(' ' + sp('Now: ', 'dim') + sp(`⏵ auto merge · agents ${busy}/${MAX_AGENTS} busy`, 'text') + sp(' · ', 'text') + sp('⌕', 'mark') + sp(s.scout ? ` gaps-bot ${dur(s.now - s.scout)} · next: simplify in 40m` : ' next: gaps-bot in 12m', 'dim'))
     const d = s.today
     L.push(' ' + sp(`✓ ${d.merged} merged`, 'passed') + sp(`   ↺ ${d.back} sent back   ✗ ${d.failed} failed   Σ ⌀ ${tok(d.tokens + OTHERS_TOKENS)}`, 'dim'))
     // (T-809) line 2: the bar alone (16 cells in the board colors) with the scouts' share; line 3: the medians per merged task, first try,

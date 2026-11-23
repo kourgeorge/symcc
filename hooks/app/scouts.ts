@@ -288,8 +288,11 @@ async function scoutStarted(host: Host, s: ScoutDef, st: SymccScout, spawn: Prom
     agentId = spawned.agentId
   } catch (err) {
     const msg = (err as Error)?.message ?? String(err)
-    st.running = false
-    st.last_run = lastRun
+    // T-938: on the record shown now too (see below)
+    for (const x of new Set([st, scoutState.get(s.name) ?? st])) {
+      x.running = false
+      x.last_run = lastRun
+    }
     await load(host).then(b => publish(host, b)).catch(() => undefined)
     // taken back out of the start queue (everything was stopped before it started): nothing to warn about
     if (startCancelled(err)) return `scout ${s.name} didn't start: ${msg}`
@@ -306,9 +309,15 @@ async function scoutStarted(host: Host, s: ScoutDef, st: SymccScout, spawn: Prom
     return text
   }
   startWarned.delete(s.name)
-  st.last_run = now()
-  // the next timed run counts from this one (run by hand too); the timer, when it goes off early, waits the rest
-  if (!onDemand(s)) st.next_run = new Date(Date.parse(st.last_run) + s.every_minutes * 60_000).toISOString()
+  // T-938: the scout's state may have been made anew while its start waited in the queue (scheduleScouts, after a
+  // scouts folder change or a reload, replaces each scout's record); this run's start goes on the record shown now,
+  // else the board counts the running time from the run before ("org-mem-review 24h 02m")
+  const cur = scoutState.get(s.name)
+  for (const x of cur && cur !== st ? [st, cur] : [st]) {
+    x.last_run = now()
+    // the next timed run counts from this one (run by hand too); the timer, when it goes off early, waits the rest
+    if (!onDemand(s)) x.next_run = new Date(Date.parse(x.last_run) + s.every_minutes * 60_000).toISOString()
+  }
   runBefore.set(agentId, lastRun)
   runStarted.set(agentId, Date.now())
   scoutRuns.set(agentId, s.name)

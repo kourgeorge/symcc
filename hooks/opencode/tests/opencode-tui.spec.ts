@@ -8,7 +8,7 @@
 // OpenTUI (T-500): opencode/tui.ts imports them by their written-out names (what OpenCode swaps for its own copies),
 // and loadTuiRuntime names a package that is missing or lacks a function instead of failing with a bare import error.
 import { test, expect } from 'bun:test'
-import { LIVE_TABS, tabRow as coreTabRow, roleKeys, rolesKeys, kindsKeys, scoutHowTo, LIVE_IDLE, liveLegend, liveLanes, liveLayout, liveStations, liveHeader, liveLabelLine, laneLines, segText, liveTrains, trainRows, liveToday, todayLines, modeLabel, modeButton, promptsOfRole, ROLE_SLOT, SETTING_GROUPS, groupSummaryParts, taskActions, actionButtonLabel, settingsKeys, mergeRoles, mergeKinds, when, addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, showsHeader, roleTools, roleNameError, leadScoutNameError, type BoardPage, type Board } from '../../board'
+import { LIVE_TABS, tabRow as coreTabRow, roleKeys, rolesKeys, kindsKeys, scoutHowTo, LIVE_IDLE, liveLegend, liveLanes, liveLayout, liveStations, liveHeader, liveNowSegs, liveLabelLine, laneLines, segText, liveTrains, trainRows, liveToday, todayLines, modeLabel, modeButton, promptsOfRole, ROLE_SLOT, SETTING_GROUPS, groupSummaryParts, taskActions, actionButtonLabel, settingsKeys, mergeRoles, mergeKinds, when, addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, showsHeader, roleTools, roleNameError, leadScoutNameError, type BoardPage, type Board } from '../../board'
 import type { PaneView } from '../../app/state'
 import type { SymccMode, SymccTask } from '../../../types'
 import { ICON } from '../../name'
@@ -2937,7 +2937,9 @@ test('T-769: the Live tab\'s ▍Today has 4 lines (medians per task, work time, 
     for (const t of texts) expect([w, t, textWidthOf(t) <= w]).toEqual([w, t, true])
     const at = texts.findIndex(x => x.startsWith('─── ❯ TODAY ─'))
     expect(texts[at + 1]!.trim()).toBe('')
-    return { texts, lines: texts.slice(at + 2, at + 6) }
+    // T-938: the first row is "Now:" the mode line, the figures under it
+    expect(texts[at + 2]!.startsWith(`${LIVE_INDENT}Now: ⏵ `)).toBe(true)
+    return { texts, lines: texts.slice(at + 3, at + 7) }
   }
   const wide = today(140)
   expect(wide.lines[0]).toBe(`${LIVE_INDENT}✓ 3 merged   ↺ 0 sent back   ✗ 0 failed   Σ ⌀ 10M`)
@@ -2996,7 +2998,8 @@ test('T-692: the Live tab draws the terminal panel\'s lanes and today (core/live
     const layout = liveLayout(lanes, liveStations(true), inner)
     const frame = Math.floor(NOW / 1000)
     const under = (x: string) => LIVE_INDENT + x
-    return [liveHeader(view, lanes), segText(liveHeading('Tasks', w)), ' ', under(liveLabelLine(layout)), ...lanes.flatMap(l => laneLines(l, layout, { nowMs: NOW, frame }).map(x => under(segText(x)))), ' ', segText(liveHeading('Today', w)), ' ', ...todayLines(liveToday(whole, NOW), inner, true).map(under), ...liveLegend(inner).map(under)]
+    // T-938: no mode line above the sections: it is ▍Today's first row, "Now:"
+    return [segText(liveHeading('Tasks', w)), ' ', under(liveLabelLine(layout)), ...lanes.flatMap(l => laneLines(l, layout, { nowMs: NOW, frame }).map(x => under(segText(x)))), ' ', segText(liveHeading('Today', w)), ' ', under(segText(liveNowSegs(view, lanes, NOW, inner))), ...todayLines(liveToday(whole, NOW), inner, true).map(under), ...liveLegend(inner).map(under)]
   }
   // OpenCode reads the view file, whose done task comes slim (no history): the today row must still match
   const f: ViewFile = { ...f0, view: { ...view, tasks: whole.map(t => viewTask(t)) } }
@@ -3127,7 +3130,8 @@ test('T-692: in the TUI, l (or a click on the Live tab) shows the Live tab; ↓ 
   // T-758: ▍Today holds only the figures line (no "next up", no "today" label)
   const liveRows = rowEls(panel).map(r => r.text)
   expect(liveRows.some(r => r.includes('next up'))).toBe(false)
-  expect(liveRows[liveRows.findIndex(r => r.startsWith('─── ❯ TODAY ─')) + 2]?.trimStart().startsWith('✓ ')).toBe(true)
+  expect(liveRows[liveRows.findIndex(r => r.startsWith('─── ❯ TODAY ─')) + 2]?.trimStart().startsWith('Now: ⏵ ')).toBe(true)
+  expect(liveRows[liveRows.findIndex(r => r.startsWith('─── ❯ TODAY ─')) + 3]?.trimStart().startsWith('✓ ')).toBe(true)
   await board.press('down', 's')
   await board.press('down', 's')
   await board.press('open', 's')
@@ -3202,7 +3206,7 @@ test('T-715: the Live tab hangs the waiting trains under their lanes as the term
     expect(d.ids).toEqual(['need:T-701', ...lanes.flatMap(l => [l.id, ...trainRows(t.lanes[l.id]!, liveInner(w)).flatMap(r => (r.id ? [r.id] : []))]), 'om-all'])
     expect(d.hits[d.lines.findIndex(l => lineText(l).includes('└─◇ T-714'))]).toEqual({ open: 'T-714' })
     expect(texts.some(x => x.includes('next up'))).toBe(false)
-    expect(texts[texts.findIndex(x => x.startsWith('─── ❯ TODAY ─')) + 2]?.startsWith(`${LIVE_INDENT}✓ `)).toBe(true)
+    expect(texts[texts.findIndex(x => x.startsWith('─── ❯ TODAY ─')) + 3]?.startsWith(`${LIVE_INDENT}✓ `)).toBe(true)
   }
 })
 
@@ -3225,7 +3229,8 @@ test('T-767: the OpenCode Live tab indents by 1 under the headings; a running la
     const train = d.lines[texts.findIndex(x => x.includes('└─◇ T-714'))]!.filter(x => x.text.trim())
     // T-819: a waiting train's id is accent, the rest of its row dim
     expect(train.map(x => [x.text, x.color, !!x.bold])).toEqual(train.map(x => (x.text.trim() === 'T-714' ? [x.text, 'claude', true] : [x.text, 'inactive', false])))
-    expect(texts[texts.findIndex(x => x.startsWith('─── ❯ TODAY ─')) + 2]?.startsWith(' ✓ ')).toBe(true)
+    expect(texts[texts.findIndex(x => x.startsWith('─── ❯ TODAY ─')) + 2]?.startsWith(' Now: ⏵ ')).toBe(true)
+    expect(texts[texts.findIndex(x => x.startsWith('─── ❯ TODAY ─')) + 3]?.startsWith(' ✓ ')).toBe(true)
   }
 })
 
@@ -3869,7 +3874,7 @@ test('T-727: startTui: Enter on a Branches row opens its task, b returns to the 
 })
 
 // ---------------- T-738: one empty line above each Live tab section ----------------
-// T-747: each section starts with a "▍Name" heading (Tasks right under the mode line), no "── Name ──" rules left
+// T-747: each section starts with a "▍Name" heading (Tasks first; T-938: the mode line is ▍Today's "Now:" row), no "── Name ──" rules left
 test('T-738, T-747: the OpenCode Live tab has a ▍heading for each section, one empty line above each, none above the first', () => {
   // T-786: nothing waits for the owner here (▍Needs you has its own test)
   const calm = ((f: ViewFile): ViewFile => ({ ...f, view: { ...f.view, tasks: f.view.tasks.filter(t => !['review', 'waiting', 'failed'].includes(t.status) && !(t as { time_ask?: string }).time_ask) } }))(branchesViewFile())
@@ -3879,8 +3884,12 @@ test('T-738, T-747: the OpenCode Live tab has a ▍heading for each section, one
     const d = panelLines(calm, { tab: 'live', opened: '', cursor: 0 }, NOW, w)
     const lines = d.lines.map(lineText)
     expect(lines[0]!.trim() === '').toBe(false)
-    const mode = lines.findIndex(l => l.includes('agents ') && l.includes(' busy'))
+    const mode = lines.findIndex(l => l.startsWith('─── ❯ TASKS ')) - 1
     expect([mode >= 0, lines[mode + 1]]).toEqual([true, `─── ❯ TASKS ${'─'.repeat(w - 12)}`])
+    // T-938: the mode line only as ▍Today's first row (under the heading and its empty line)
+    const todayAt = lines.findIndex(l => l.startsWith('─── ❯ TODAY '))
+    expect(lines.filter(l => l.includes(' busy'))).toEqual([lines[todayAt + 2]!])
+    expect(lines[todayAt + 2]!.startsWith(`${LIVE_INDENT}Now: ⏵ `)).toBe(true)
     const heads = lines.filter(l => ['─── ❯ TASKS ─', '─── ❯ BRANCHES ─', '─── ❯ TODAY ─'].some(h => l.startsWith(h)) || l.startsWith('─── ❯ ORG'))
     expect(heads.slice(0, 3).map(h => h.split(' ')[2])).toEqual(['TASKS', 'BRANCHES', 'TODAY'])
     // T-810: each heading runs to the page width with its thin rule; the org-mem one has no bar
@@ -4120,15 +4129,21 @@ test('T-770: the Live tab\'s mode line ends in "⌕ gaps-bot 4m" while scouts ru
     const scouts = (running ?? []).map(r => ({ name: r.name, every_minutes: 0, running: true, started: true, last_run: new Date(r.since).toISOString() }))
     const f = parseViewFile(viewFileText({ ...f0, view: { ...base, scouts } }))!
     const d = panelLines(f, { tab: 'live', opened: '', cursor: 0 }, NOW, w)
-    const i = d.lines.findIndex(l => lineText(l).includes(' busy'))
+    const i = d.lines.findIndex(l => lineText(l).includes('Now: '))
     return { text: lineText(d.lines[i]!), segs: d.lines[i]! }
   }
-  const head = liveHeader(base, liveLanes(base, NOW))
+  // T-938: the mode line is ▍Today's first row, " Now: …"
+  const head = `${LIVE_INDENT}Now: ${liveHeader(base, liveLanes(base, NOW))}`
   expect(draw(undefined, 80).text).toBe(head)
   expect(draw([runs[1]!], 80).text).toBe(`${head} · ⌕ gaps-bot 4m`)
   expect(draw(runs, 80).text).toBe(`${head} · ⌕ gaps-bot 4m, board-review 1m`)
-  expect(draw(runs, 44).text).toBe(`${head} · ⌕ 2 scouts`)
-  for (const w of [120, 80, 44, 32]) expect([w, draw(runs, w).text.length <= Math.max(w, head.length)]).toEqual([w, true])
+  expect(draw(runs, 50).text).toBe(`${head} · ⌕ 2 scouts`)
+  expect(draw(runs, 44).text).toBe(`${head} · ⌕ 2`)
+  for (const w of [120, 80, 44, 32]) expect([w, textWidthOf(draw(runs, w).text) <= w]).toEqual([w, true])
+  // narrower than the label and the mode line: "agents n/m busy" goes too, the mode stays
+  expect(draw(runs, 32).text).toBe(`${LIVE_INDENT}Now: ⏵ auto merge`)
+  // the label dim, the mode bold
+  expect(draw(undefined, 80).segs.filter(s => s.text.trim()).map(s => [s.text, s.color, !!s.bold])).toEqual([['Now: ', 'inactive', false], [liveHeader(base, liveLanes(base, NOW)), 'text', true]])
   const segs = draw([runs[1]!], 80).segs
   expect(segs.find(s => s.text === '⌕')?.color).toBe('suggestion')
   expect(segs.find(s => s.text === '⌕')?.hit).toEqual({ tab: 'scouts' })
@@ -4149,9 +4164,10 @@ test('T-847: the OpenCode Live tab\'s mode line shows the next scout due, after 
   const draw = (scouts: unknown[], w: number) => {
     const f = parseViewFile(viewFileText({ ...f0, view: { ...base, scouts } as never }))!
     const d = panelLines(f, { tab: 'live', opened: '', cursor: 0 }, NOW, w)
-    return lineText(d.lines[d.lines.findIndex(l => lineText(l).includes(' busy'))]!)
+    return lineText(d.lines[d.lines.findIndex(l => lineText(l).includes('Now: '))]!)
   }
-  const head = liveHeader(base, liveLanes(base, NOW))
+  // T-938: the mode line is ▍Today's first row, " Now: …"
+  const head = `${LIVE_INDENT}Now: ${liveHeader(base, liveLanes(base, NOW))}`
   expect(draw(idle, 80)).toBe(`${head} · ⌕ next: gaps-bot in 12m`)
   expect(draw([running, ...idle], 100)).toBe(`${head} · ⌕ board-review 1m · next: gaps-bot in 12m`)
   expect(draw([running, ...idle], head.length + 24)).toBe(`${head} · ⌕ board-review 1m`)

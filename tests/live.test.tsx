@@ -399,12 +399,15 @@ const pageLines = (n: unknown): string[] => {
   }
   return [textOf(x)]
 }
-/** The Live tab's own lines: from its header line on. */
+/** The Live tab's own lines: from its first section heading on (T-938: the mode line has no line of its own above it). */
 const liveLines = async (ui: { drawn: () => Promise<unknown> }) => {
   const all = pageLines(await ui.drawn())
-  const at = all.findIndex(l => l.includes('agents ') && l.includes(' busy'))
+  if (!all.some(l => l.includes('agents ') && l.includes(' busy'))) return []
+  const at = all.findIndex(l => l.startsWith('─── ❯ '))
   return at < 0 ? [] : all.slice(at)
 }
+/** T-938: ▍Today's first row, "Now:" the mode line (two lines under the TODAY heading: the empty line, then it). */
+const nowLine = (lines: readonly string[]) => lines[lines.findIndex(l => l.startsWith('─── ❯ TODAY ─')) + 2]
 
 test('T-690: the Live tab draws at a normal and a narrow width with nothing cut, and blinks across two redraws', async ($, on) => {
   const clock = seedBoard(on, { view: liveView(calm(TASKS)) })
@@ -413,25 +416,27 @@ test('T-690: the Live tab draws at a normal and a narrow width with nothing cut,
     const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'terminal' })
     await ui.press({ key: 'tab-live' })
     const lines = await liveLines(ui)
-    expect(lines[0]).toBe('⏵ auto merge · agents 2/3 busy')
+    // T-938: no mode line above the sections: TASKS comes first, and the mode line is ▍Today's first row, "Now:"
+    expect(pageLines(await ui.drawn()).filter(l => l.startsWith('⏵ '))).toEqual([])
+    expect(nowLine(lines)).toBe(`${LIVE_INDENT}Now: ⏵ auto merge · agents 2/3 busy`)
     // every line fits: nothing is cut or wrapped (the tab row too)
     for (const l of lines) expect(textWidth(l)).toBeLessThanOrEqual(bodyColumns)
     expect(textWidth(pageLines(await ui.drawn()).find(l => l.includes('Live'))!)).toBeLessThanOrEqual(bodyColumns)
     // the lane rows, their second rows, today, the legend and the keys
     // (T-747, T-789: under the "TASKS" and "TODAY" headings, indented; T-767: by 1, a running lane starting "▶ ")
-    expect(lines[1]).toMatch(/^─── ❯ TASKS ─+$/)
+    expect(lines[0]).toMatch(/^─── ❯ TASKS ─+$/)
     // T-915: "─── ❯ TASKS " then the thin rule to the right edge
-    expect([textWidth(lines[1]!), lines.find(l => l.startsWith('─── ❯ TODAY '))]).toEqual([bodyColumns, `─── ❯ TODAY ${'─'.repeat(bodyColumns - 12)}`])
+    expect([textWidth(lines[0]!), lines.find(l => l.startsWith('─── ❯ TODAY '))]).toEqual([bodyColumns, `─── ❯ TODAY ${'─'.repeat(bodyColumns - 12)}`])
     // T-789: an empty line under each heading, no bar; except TASKS when lanes run: its stage titles follow the heading
     // straight away, since they already set it off
-    expect(lines[2]!.trim()).not.toBe('')
-    expect(lines[2]!.includes('✧')).toBe(true)
+    expect(lines[1]!.trim()).not.toBe('')
+    expect(lines[1]!.includes('✧')).toBe(true)
     expect(lines[lines.findIndex(l => l.startsWith('─── ❯ TODAY ─')) + 1]!.trim()).toBe('')
     expect(lines.some(l => l.includes('▍'))).toBe(false)
     for (const id of ['T-684', 'T-685', 'T-686', 'T-687', 'T-688']) expect(lines.some(l => l.startsWith(`${LIVE_INDENT}▶ ${id} `))).toBe(true)
     expect(lines.filter(l => /^ {3}change try \d\/\d/.test(l)).length).toBe(5)
-    // T-758: ▍Today holds only the figures line (no "next up" line, no "today" label)
-    expect(lines[lines.findIndex(l => l.startsWith('─── ❯ TODAY ─')) + 2]?.startsWith(`${LIVE_INDENT}✓ 1 merged`)).toBe(true)
+    // T-758: ▍Today holds the Now row (T-938), then the figures line (no "next up" line, no "today" label)
+    expect(lines[lines.findIndex(l => l.startsWith('─── ❯ TODAY ─')) + 3]?.startsWith(`${LIVE_INDENT}✓ 1 merged`)).toBe(true)
     expect(lines.some(l => l.trimStart().startsWith('next up') || l.trimStart().startsWith('today'))).toBe(false)
     // (T-760: a narrow panel wraps the mark's legend line, cut at a space)
     if (bodyColumns === 80) expect(lines).toContain(LIVE_INDENT + LIVE_LEGEND)
@@ -448,7 +453,7 @@ test('T-690: the Live tab draws at a normal and a narrow width with nothing cut,
     // T-760: the lane header ends the agent stations in ✧ (over their marks, as liveLabelLine), each ✧ in the heading's color
     const tree = (await ui.drawn()) as Node
     const nodes = (n: unknown): Node[] => (!n || typeof n !== 'object' ? [] : [n as Node, ...((n as Node).children ?? []).flatMap(nodes)])
-    const labelLine = lines[2]
+    const labelLine = lines[1]
     expect(labelLine?.includes(bodyColumns === 80 ? 'work✧' : '✧')).toBe(true)
     expect(labelLine?.includes('·')).toBe(false)
     const labels = nodes(tree).find(n => n.type === 'Text' && textOf(n) === labelLine)
@@ -476,12 +481,12 @@ test('T-690, T-758: with no task in doing, the Live tab says so and shows no nex
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   await ui.press({ key: 'tab-live' })
   const lines = await liveLines(ui)
-  expect(lines[0]).toBe('⏵ auto merge · agents 0/3 busy')
+  expect(nowLine(lines)).toBe(`${LIVE_INDENT}Now: ⏵ auto merge · agents 0/3 busy`)
   // T-903: why nothing runs: the open tasks that wait, and what each waits for
-  expect([lines[1]!.replace(/ ─+$/, ''), lines[2]!.trim(), lines[3]]).toEqual(['─── ❯ TASKS', '', `${LIVE_INDENT}Nothing running · 3 waiting: T-690 ready`])
+  expect([lines[0]!.replace(/ ─+$/, ''), lines[1]!.trim(), lines[2]]).toEqual(['─── ❯ TASKS', '', `${LIVE_INDENT}Nothing running · 3 waiting: T-690 ready`])
   expect(lines.some(l => l.includes('next up'))).toBe(false)
   expect(lines.includes(LIVE_INDENT + LIVE_DIVIDER)).toBe(false)
-  expect(lines[lines.findIndex(l => l.startsWith('─── ❯ TODAY ─')) + 2]?.startsWith(`${LIVE_INDENT}✓ `)).toBe(true)
+  expect(lines[lines.findIndex(l => l.startsWith('─── ❯ TODAY ─')) + 3]?.startsWith(`${LIVE_INDENT}✓ `)).toBe(true)
   await ui.press({ key: 'tab-tasks' })
   await ui.unmount()
 })
@@ -528,7 +533,7 @@ for (const checker of [true, false])
     const tracks: string[] = []
     for (const id of ids) tracks.push(steadyMark((await t.find({ key: `live:${id}` }))!.text.match(/[●○◉◎][━─●○◉◎]*/)![0]))
     // the terminal's lines under a heading are indented (T-747); VS Code's words are the same
-    const today = lines[lines.findIndex(l => l.startsWith('─── ❯ TODAY ─')) + 2]!.slice(LIVE_INDENT.length)
+    const today = lines[lines.findIndex(l => l.startsWith('─── ❯ TODAY ─')) + 3]!.slice(LIVE_INDENT.length)
     expect(today.startsWith('✓ ')).toBe(true)
     await t.press({ key: 'tab-tasks' })
     await t.unmount()
@@ -538,7 +543,7 @@ for (const checker of [true, false])
     expect((await ui.find({ key: 'tabs' }))?.props.text).toContain(`${mdLink('Live', vsHref('tab', 'live'))}  ·  **Tasks 11**  ·  ${mdLink('Scouts 0', vsHref('tab', 'scouts'))}`)
     await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'live') } })
     expect((await ui.find({ key: 'tabs' }))?.props.text).toContain('**Live**')
-    expect((await ui.find({ key: 'live-head' }))?.text).toBe(lines[0])
+    expect((await ui.find({ key: 'live-head' }))?.text).toBe(nowLine(lines)!.slice(LIVE_INDENT.length))
     // the lanes: the same tasks in the same order, each a link that opens it
     const links = (await ui.findAll({ type: 'Markdown' })).filter(m => String(m.key).startsWith('live:'))
     expect(links.map(m => String(m.key).slice(5))).toEqual(ids)
@@ -637,7 +642,7 @@ test('T-691, T-758: with no task in doing, the VS Code Live tab says so and show
   seedBoard(on, { view: liveView(TASKS.filter(t => t.status !== 'doing')) })
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
   await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'live') } })
-  expect((await ui.find({ key: 'live-head' }))?.text).toBe('⏵ auto merge · agents 0/3 busy')
+  expect((await ui.find({ key: 'live-head' }))?.text).toBe('Now: ⏵ auto merge · agents 0/3 busy')
   expect((await ui.find({ key: 'live-empty' }))?.text).toBe('Nothing running · 4 waiting: T-601 needs you, T-690 ready, T-691 waits for T-690')
   expect(await ui.find({ key: 'live-legend' })).toBeUndefined()
   expect(await ui.find({ key: 'live-divider' })).toBeUndefined()
@@ -827,21 +832,25 @@ for (const [runs, w, want, more] of [
   [[], 80, '⏵ auto merge · agents 2/3 busy'],
   [[RUNS[1]], 80, '⏵ auto merge · agents 2/3 busy · ⌕ gaps-bot 4m'],
   [RUNS, 80, '⏵ auto merge · agents 2/3 busy · ⌕ gaps-bot 4m, board-review 1m'],
-  [RUNS, 44, '⏵ auto merge · agents 2/3 busy · ⌕ 2 scouts'],
+  [RUNS, 50, '⏵ auto merge · agents 2/3 busy · ⌕ 2 scouts'],
+  [RUNS, 44, '⏵ auto merge · agents 2/3 busy · ⌕ 2'],
   [[], 80, '⏵ auto merge · agents 2/3 busy · ⌕ next: gaps-bot in 12m', NEXT_SCOUTS],
   [[RUNS[0]], 100, '⏵ auto merge · agents 2/3 busy · ⌕ board-review 1m · next: gaps-bot in 12m', NEXT_SCOUTS],
   [[RUNS[0]], 56, '⏵ auto merge · agents 2/3 busy · ⌕ board-review 1m', NEXT_SCOUTS],
   [[], 40, '⏵ auto merge · agents 2/3 busy', NEXT_SCOUTS],
 ] as [unknown[], number, string, unknown[]?][])
-  test(`T-770: the terminal and VS Code Live tabs' mode line at ${w} columns with ${runs.length} scout(s) running${more ? ' and a next scout' : ''}`, async ($, on) => {
+  test(`T-770, T-938: the terminal and VS Code Live tabs' Now row (▍Today's first) at ${w} columns with ${runs.length} scout(s) running${more ? ' and a next scout' : ''}`, async ($, on) => {
     seedBoard(on, { view: scoutView([...runs], [...(more ?? [])]) })
     on('ui.toast', () => ({ value: undefined }))
     const t = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: w }, surface: 'terminal' })
     await t.press({ key: 'tab-live' })
     const lines = await liveLines(t)
-    expect(lines[0]).toBe(want)
-    expect(textWidth(lines[0]!)).toBeLessThanOrEqual(w)
-    expect(lines[1]).toMatch(/^─── ❯ TASKS ─+$/)
+    // T-938: no line of its own above the sections: the Now row, right under the TODAY heading and its empty line,
+    // drops the scout parts from its end when narrow (the mode stays)
+    expect(lines[0]).toMatch(/^─── ❯ TASKS ─+$/)
+    expect(pageLines(await t.drawn()).filter(l => l.includes(' busy'))).toEqual([`${LIVE_INDENT}Now: ${want}`])
+    expect(nowLine(lines)).toBe(`${LIVE_INDENT}Now: ${want}`)
+    expect(textWidth(nowLine(lines)!)).toBeLessThanOrEqual(w)
     const mark = await t.find({ key: 'live-scouts' })
     const marked = want.includes('⌕')
     expect(mark?.type).toBe(marked ? 'Button' : undefined)
@@ -857,7 +866,9 @@ for (const [runs, w, want, more] of [
     const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: w }, surface: 'vscode' })
     await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'live') } })
     // (the names are a markdown link: its words only)
-    expect((await ui.find({ key: 'live-head' }))?.text.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')).toBe(want)
+    expect((await ui.find({ key: 'live-head' }))?.text.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')).toBe(`Now: ${want}`)
+    // inside ▍Today (T-938), its first row
+    expect(await ui.find({ key: 'live-bottom' }).then(b => b && JSON.stringify(b).includes('live-head'))).toBe(true)
     const link = await ui.find({ key: 'live-scouts' })
     expect(link?.props.pressableLinks).toEqual(marked ? [vsHref('tab', 'scouts')] : undefined)
     if (marked) {

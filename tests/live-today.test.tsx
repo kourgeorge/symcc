@@ -233,7 +233,9 @@ test('T-769: the terminal and VS Code Live tabs show ▍Today\'s 4 lines, and a 
     const all = pageLines(await t.drawn())
     const at = all.findIndex(l => l.startsWith('─── ❯ TODAY ─'))
     expect(all[at + 1]!.trim()).toBe('')
-    const today = all.slice(at + 2, at + 6)
+    // T-938: the first row is "Now:" the mode line; the figures follow it
+    expect(all[at + 2]!.startsWith(`${LIVE_INDENT}Now: ⏵ `)).toBe(true)
+    const today = all.slice(at + 3, at + 7)
     for (const l of all) expect([bodyColumns, l, textWidth(l) <= bodyColumns]).toEqual([bodyColumns, l, true])
     if (bodyColumns === 140) {
       expect(today[0]).toBe(`${LIVE_INDENT}✓ 3 merged   ↺ 0 sent back   ✗ 0 failed   Σ ⌀ 10M`)
@@ -251,7 +253,7 @@ test('T-769: the terminal and VS Code Live tabs show ▍Today\'s 4 lines, and a 
       expect([bodyColumns, today[3]?.includes('busiest')]).toEqual([bodyColumns, false])
     }
     // T-855: no lane, so no key line: the dim note ends ▍Today
-    expect(all[at + 6]).toBe(`${LIVE_INDENT}⌀ = tokens`)
+    expect(all[at + 7]).toBe(`${LIVE_INDENT}⌀ = tokens`)
     await t.press({ key: 'tab-tasks' })
     await t.unmount()
   }

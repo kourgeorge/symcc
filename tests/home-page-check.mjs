@@ -59,7 +59,9 @@ const live = text(view('live'))
 // (T-758) ▍Today holds only the figures line: no "next up" line and no "today" label
 for (const [name, t] of [['board', board], ['Live tab', live]]) {
   const after = t.slice(t.indexOf('\n', t.indexOf('TODAY'))).split('\n').map(l => l.trim()).filter(Boolean)
-  if (!after[0]?.startsWith('✓ ')) bad(`still frame: the ${name}'s ▍Today does not start with the figures line ("${after[0] ?? ''}")`)
+  // (T-938) its first row is "Now:" the mode line, then the figures line
+  if (!after[0]?.startsWith('Now: ⏵ auto merge · agents ')) bad(`still frame: the ${name}'s ▍Today does not start with the "Now:" row ("${after[0] ?? ''}")`)
+  if (!after[1]?.startsWith('✓ ')) bad(`still frame: the ${name}'s ▍Today has no figures line under the "Now:" row ("${after[1] ?? ''}")`)
   if (/next up {2}|today {4}/.test(t)) bad(`still frame: the ${name} still shows a "next up" or "today" label in ▍Today`)
 }
 // (T-754) the Live tab's sections come in the real order: ▍Tasks, ▍Today, ▍Branches, ▍Organizational memory
@@ -104,7 +106,8 @@ for (const [name, t] of [['board', board], ['Live tab', live]]) {
 // (T-769, T-779) ▍Today in 4 lines: the figures; the real medians per task and agent work time (no cost);
 // the bar with the scouts' share; then the hour sparkline with its labels and the figures (no cost)
 for (const [name, t] of [['board', board], ['Live tab', live]]) {
-  const after = t.slice(t.indexOf('\n', t.indexOf('TODAY'))).split('\n').filter(l => l.trim())
+  // (T-938) past the "Now:" row, the first line under the heading
+  const after = t.slice(t.indexOf('\n', t.indexOf('TODAY'))).split('\n').filter(l => l.trim()).slice(1)
   if (!/^ ⌀ [█▒]{16} workers and checkers 90% · scouts 10% \(⌀ 54\.7M of 530\.1M\)$/.test(after[1] ?? '')) bad(`still frame: the ${name}'s ▍Today line 2 is not the bar alone with the scouts' share ("${after[1] ?? ''}")`)
   if (after[2] !== ' avg ⌀ 3M/task · 9m work · 41m start-to-merge   first try 34% · avg 2.4 tries/task   ⌕ 47 sent back by the checker' && !/^ avg ⌀ 3M\/task · 9m work · 41m start-to-merge   first try 34% · avg 2\.4 tries\/task   ⌕ \d+ sent back by the checker$/.test(after[2] ?? '')) bad(`still frame: the ${name}'s ▍Today line 3 does not show the real medians, first try and tries ("${after[2] ?? ''}")`)
   if (!/^ ⏱ 16h 56m agent work {3}⌀\/h 00▕▁{8}[▁▂▃▄▅▆▇█]+·{7}▏24$/.test(after[3] ?? '')) bad(`still frame: the ${name}'s ▍Today line 4 is not the agent work time then the hour sparkline with its labels at the end ("${after[3] ?? ''}")`)
@@ -157,7 +160,9 @@ else {
   if (demo.STEPS.length < 10) bad(`demo.js: only ${demo.STEPS.length} steps`)
   // (T-770) while the gaps-bot scout runs (from 16:40 to its finding at 16:44), the Live tab's mode line ends with its mark
   const mid = demo.views(demo.stateAfter(7)).live
-  if (!text(mid).includes('⏵ auto merge · agents 2/3 busy · ⌕ gaps-bot ')) bad('demo.js: no "· ⌕ gaps-bot" mark on the mode line while the scout runs')
+  if (!text(mid).includes('Now: ⏵ auto merge · agents 2/3 busy · ⌕ gaps-bot ')) bad('demo.js: no "· ⌕ gaps-bot" mark on the Now row while the scout runs')
+  // (T-938) no stand-alone mode line above the sections: the only one is ▍Today's "Now:" row
+  if (text(mid).split('\n').filter(l => l.includes(' busy')).some(l => !l.trim().startsWith('Now: '))) bad('demo.js: a mode line outside ▍Today\'s Now row')
   for (let n = 0; n <= demo.STEPS.length; n++) {
     try {
       const v = demo.views(demo.stateAfter(n))

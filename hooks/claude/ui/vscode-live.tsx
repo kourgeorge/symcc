@@ -15,7 +15,7 @@
 // T-727: under the lanes, the Branches section (core's liveBranches) drawn with real lines: see branchesVs.
 // T-747: each section has a bold heading with the terminal's names (core's LIVE_SECTIONS): Tasks, Today, Branches,
 // Organizational memory (that one a link to all notes).
-import { LIVE_DIVIDER, type BranchRow, type LiveBranches, liveBranches, liveIdle, LIVE_AGENT_MARK, LIVE_RUN_MARK, liveLegend, LIVE_SECTIONS, type LiveLane, liveInner, liveHeadParts, liveOrgMemHeadParts, liveRuleDash, type LiveLayout, type LiveSeg, LIVE_TONE, laneLines, liveHeader, liveHeaderSegs, liveNeeds, liveTaskLanes, liveLayout, liveOrgMem, liveColumns, liveTodayLines, liveTrains, segText, trainRows } from '../../core/live'
+import { LIVE_DIVIDER, type BranchRow, type LiveBranches, liveBranches, liveIdle, LIVE_AGENT_MARK, LIVE_RUN_MARK, liveLegend, LIVE_SECTIONS, type LiveLane, liveInner, liveHeadParts, liveOrgMemHeadParts, liveRuleDash, type LiveLayout, type LiveSeg, LIVE_TONE, laneLines, liveNowSegs, liveNeeds, liveTaskLanes, liveLayout, liveOrgMem, liveColumns, liveTodayLines, liveTrains, segText, trainRows } from '../../core/live'
 import { panelValues, type $ } from '../panel'
 import type { PaneParts } from './parts'
 import { LIVE_TICK_MS, ORG_MEM_ALL_KEY, branchKey, needKey, laneKey, liveTick, newestKey, openOrgMemPage, topicKey, trainKey } from './live'
@@ -177,7 +177,7 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
   )
   /** T-789/T-915: a section heading: "─── ❯", the name in UPPERCASE, bold, a thin rule, one empty line under it. */
   const headLine = (key: string, name: string) => vsHeadLine(pane, key, name)
-  const headSegs = liveHeaderSegs(v, running, nowMs, width)
+  const nowSegs = liveNowSegs(v, running, nowMs, inner)
   // T-786: ▍Needs you rows: the warning mark and text, the id a link that opens the task or question
   const needs = liveNeeds(v, nowMs, Infinity)
   const needRows = needs.map(n => {
@@ -245,17 +245,6 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
   return (
     <Box flexDirection="column" gap={1} flexGrow={1}>
       {header('live')}
-      {headSegs.length > 1 ? (
-        // T-770: while scouts run, their mark at the end of the mode line ("⌕ gaps-bot 4m"): the mark in the scout
-        // color, the names a dim link that opens the Scouts tab
-        <Box key="live-head" flexDirection="row" flexWrap="wrap">
-          <Text bold color={C('text')}>{headSegs[0]!.text + headSegs[1]!.text}</Text>
-          <Text color={C(LIVE_TONE.scouts)}>{headSegs[2]!.text + ' '}</Text>
-          {vsLink(vs, 'live-scouts', mdLink(headSegs.slice(3).map(x => x.text).join('').trim(), vsHref('tab', 'scouts')), [[vsHref('tab', 'scouts'), goTab('scouts')]], true)}
-        </Box>
-      ) : (
-        line('live-head', liveHeader(v, running), 'text', true)
-      )}
       {needs.length ? (
         <Box key="live-needs" flexDirection="column">
           {headLine('live-needs-head', LIVE_SECTIONS.needs)}
@@ -275,6 +264,20 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
       {branchesVs(pane, open)}
       <Box key="live-bottom" flexDirection="column">
         {headLine('live-today-head', LIVE_SECTIONS.today)}
+        {/* T-938: ▍Today's first row, "Now:" the mode line (it was a line of its own above the sections); T-770: while
+            scouts run or one is due, their mark at its end ("⌕ gaps-bot 4m"): the mark in the scout color, the names a
+            dim link that opens the Scouts tab */}
+        {nowSegs.length > 3 ? (
+          <Box key="live-head" flexDirection="row" flexWrap="wrap">
+            <Text><Text color={C(LIVE_TONE.dim)}>{nowSegs[0]!.text}</Text><Text bold color={C('text')}>{nowSegs[1]!.text + nowSegs[2]!.text}</Text></Text>
+            <Text color={C(LIVE_TONE.scouts)}>{nowSegs[3]!.text + ' '}</Text>
+            {vsLink(vs, 'live-scouts', mdLink(nowSegs.slice(4).map(x => x.text).join('').trim(), vsHref('tab', 'scouts')), [[vsHref('tab', 'scouts'), goTab('scouts')]], true)}
+          </Box>
+        ) : (
+          <Box key="live-head" flexDirection="column">
+            <Text wrap="wrap"><Text color={C(LIVE_TONE.dim)}>{nowSegs[0]!.text}</Text><Text bold color={C('text')}>{nowSegs[1]!.text}</Text></Text>
+          </Box>
+        )}
         {liveTodayLines(v, nowMs, inner, undefined, !lanes.length).map((x, i) => (
           <Box key={`live-today-${i}`} flexDirection="column">
             <Text wrap="wrap">{x.map(s => <Text color={C(LIVE_TONE[s.tone])}>{s.text}</Text>)}</Text>
