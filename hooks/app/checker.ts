@@ -90,7 +90,7 @@ export async function runChecker($: Host, t: SymccTask, b: Board, dir: string, s
       timer = $.clock.after(min * 60_000, () => {
         overTime = true
         void halt($, agentId, 'your time is up')
-        done({ answer: null, why: `it ran over ${min} min and was stopped` })
+        done(checkerTimeUp(agentId, min))
       }) ?? null
     } catch {
       timer = null
@@ -220,6 +220,18 @@ export function checkerFinished(agentId: string, answer: string, end: boolean | 
   delete run.held
   const why = checkerNoVerdict(end === true ? { reason: 'aborted' } : end === false ? { reason: 'answer' } : end)
   run.end(why ? { answer: null, why, ...(tokens ? { tokens } : {}) } : { answer, ...(tokens ? { tokens } : {}) })
+}
+
+/**
+ * How a checker's run ends when its time limit (`min` minutes) is up. T-919: a checker that already answered but left a
+ * background command running has that answer held (checkerFinished); it was never woken again, so the held answer
+ * (with its tokens) is its verdict, as when no command was left running; with nothing held there is no verdict.
+ */
+export function checkerTimeUp(agentId: string, min: number): CheckerEnd {
+  const held = checkerRuns.get(agentId)?.held
+  const tokens = held?.tokens ? { tokens: held.tokens } : {}
+  if (held?.answer.trim()) return { answer: held.answer, ...tokens }
+  return { answer: null, why: `it ran over ${min} min and was stopped`, ...tokens }
 }
 
 /** Why a checker's turn that ended this way gives no verdict, or undefined when it answered. */

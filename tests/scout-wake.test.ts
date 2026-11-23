@@ -7,6 +7,7 @@ import { test } from './reset'
 import { checkEdit, unknownAgentText } from '../hooks/app/ask'
 import { agentFinished } from '../hooks/app/symcc'
 import { SCOUT_WAKE_MS } from '../hooks/app/scouts'
+import { checkerTimeUp } from '../hooks/app/checker'
 import { emptyBoard } from '../hooks/board'
 import { S, scoutRuns, scoutState, stopped, checkerRuns, type CheckerEnd } from '../hooks/app/state'
 import { fakeHost, memoryFs, done } from './fake-host'
@@ -105,4 +106,21 @@ test('T-919: a checker whose turn ended with a background command still running 
   expect(ends[0]!.answer).toBe('VERDICT: pass')
   expect(ends[0]!.tokens?.input).toBe(15)
   expect(checkerRuns.has('c1')).toBe(false)
+})
+
+test('T-919: a checker that answered but was never woken again keeps its held verdict and tokens when its time is up', async () => {
+  const { host } = world()
+  const WT = `${ROOT}/.symcc/worktrees/T-1`
+  checkerRuns.set('c1', { task: 'T-1', worktree: WT, end: () => checkerRuns.delete('c1') })
+  agentFinished(host, 'c1', { answer: 'VERDICT: OK nothing wrong', end: { reason: 'answer', background: ['sleep 999'] }, isAborted: false, tokens: { input: 1, output: 1 } })
+  await settle()
+  expect(checkerRuns.has('c1')).toBe(true)
+  const e = checkerTimeUp('c1', 20)
+  expect(e.answer).toBe('VERDICT: OK nothing wrong')
+  expect(e.tokens?.input).toBe(1)
+  checkerRuns.delete('c1')
+  // nothing held: no verdict, as before
+  checkerRuns.set('c2', { task: 'T-1', worktree: WT, end: () => checkerRuns.delete('c2') })
+  expect(checkerTimeUp('c2', 20)).toEqual({ answer: null, why: 'it ran over 20 min and was stopped' })
+  checkerRuns.delete('c2')
 })
