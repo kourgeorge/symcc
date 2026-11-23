@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { type Blockers, type BoardTask, type TurnStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, testTimeoutMs, isInvestigation, testsWithChangesOf, untestedChange, untestedText, shortSha, secretFiles, secretsLeftText, onlySecretsQuestion, nameList, isPlainRelPath, SCRATCH_DIR, movedText, tryLabel, tryEntry, taskWasResult, type FailReason, withHistory, findRole, roleOf, isProseRole, notProse, notProseText, docsOnly, PROSE_TESTS_SKIPPED } from '../board'
+import { type Blockers, type BoardTask, type TurnStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, testTimeoutMs, isInvestigation, testsWithChangesOf, untestedChange, untestedText, shortSha, secretFiles, secretsLeftText, onlySecretsQuestion, nameList, isPlainRelPath, SCRATCH_DIR, movedText, tryLabel, tryEntry, taskWasResult, type FailReason, withHistory, findRole, roleOf, isProseRole, notProse, notProseText, docsOnly, PROSE_TESTS_SKIPPED, PROSE_DOCS_CHECKS } from '../board'
 import { loadRoles } from './roles'
 import { gitOk, git, worktreeDir, asSymcc, taskBranch, branchExists, scratchOn } from './git'
 import { S, changesCache } from './state'
@@ -429,19 +429,24 @@ async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mo
     made.push(candidate)
   }
   let testsRun = mode === 'finish' || candidate !== head || retest
-  // T-900: a prose-only role's change (it passed the scope check above, so every file is prose) runs no test command
-  const proseSkip = prose && docsOnly(changed) && b.test_commands.length > 0
+  // T-900: a prose-only role's change (it passed the scope check above, so every file is prose) runs no test command;
+  // T-908: unless the board has docs_test_commands, which then run instead of test_commands
+  const proseOnly = prose && docsOnly(changed)
+  const docsCmds = proseOnly ? (b.docs_test_commands ?? []) : []
+  const docsRun = docsCmds.length > 0
+  const cmds = docsRun ? docsCmds : b.test_commands
+  const proseSkip = proseOnly && !docsRun && b.test_commands.length > 0
   if (proseSkip) testsRun = false
   // T-527: the code about to be tested (its git tree, the target merged in). When this same tree already passed
   // these same test commands, the run is skipped. Unknown (git could not tell): the tests run as usual.
-  const tree = testsRun && b.test_commands.length ? await testedTree($, candidate, dir) : ''
-  const skipped = !!tree && treePassed(await readPassedTrees($), tree, b.test_commands)
+  const tree = testsRun && cmds.length ? await testedTree($, candidate, dir) : ''
+  const skipped = !!tree && treePassed(await readPassedTrees($), tree, cmds)
   if (skipped) testsRun = false
-  if (testsRun && b.test_commands.length) {
+  if (testsRun && cmds.length) {
     // Only this task's tests run now: it holds the front of the merge line.
     const failed = await (async (): Promise<CheckResult | undefined> => {
       await markStep($, t, 'testing', stopped)
-      for (const cmd of b.test_commands) {
+      for (const cmd of cmds) {
         await refresh()
         let thrown: string | undefined
         const r = await $.run(['/bin/sh', '-c', cmd], { cwd: dir, timeoutMs: testTimeoutMs(b) }).catch((e: Error) => ((thrown = String(e?.message ?? e)), { exitCode: 1, stdout: '', stderr: thrown }))
@@ -458,19 +463,19 @@ async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mo
         if (s) return s
       }
       // all passed: remembered during the turn, so two sessions never write the file at once; a failed, timed-out or stopped run never is
-      if (tree) await recordPassedTree($, tree, b.test_commands)
+      if (tree) await recordPassedTree($, tree, cmds)
       return undefined
     })()
     if (failed) return failed
   }
-  const passed = proseSkip ? `; ${PROSE_TESTS_SKIPPED}` : skipped ? `; ${testsSkippedText(tree)}` : '; tests passed'
+  const passed = proseSkip ? `; ${PROSE_TESTS_SKIPPED}` : skipped ? `; ${testsSkippedText(tree)}` : docsRun ? `; ${PROSE_DOCS_CHECKS}` : '; tests passed'
   // tests_with_changes: a change task's work that edits code but no test file is flagged (not on the owner's approve).
   const flag = testsWithChangesOf(b)
   const untested = mode !== 'approve' && flag !== 'off' && !isInvestigation(t) && untestedChange(changed) ? untestedText(t.id) : ''
   const flagged = untested ? { untested } : {}
   // the checker gave no verdict (it ran before the line): the task waits for the owner's review, nothing merged
   if (noVerdict) return { ok: true, review: true, noVerdict, ...flagged, detail: `checks passed, but ${noVerdict}; ready for review, nothing merged yet` }
-  if (mode === 'finish' && (needsReview(b, t) || (untested && flag === 'review'))) return { ok: true, review: true, ...flagged, detail: `checks passed${b.test_commands.length ? passed : '; no test command set'}; ready for review, nothing merged yet${untested ? ` (${untested})` : ''}` }
+  if (mode === 'finish' && (needsReview(b, t) || (untested && flag === 'review'))) return { ok: true, review: true, ...flagged, detail: `checks passed${cmds.length || proseSkip ? passed : '; no test command set'}; ready for review, nothing merged yet${untested ? ` (${untested})` : ''}` }
   // Move main forward (compare-and-swap). If the person has main checked out, update their
   // files too, but never over their uncommitted changes, untracked or ignored files in files the merge changes.
   const s = stopped()
@@ -482,7 +487,7 @@ async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mo
   const moved = await moveTarget(args => git($, args), { target, id: t.id, from: main, to: candidate, checkedOut: current === target, note: `${S.N.name} ${t.id}`, skipDir: S.N.dir, action: mode === 'approve' ? 'approve' : 'retry' })
   if (!moved.ok && !(await branchExists($, target))) return goneResult(target)
   if (!moved.ok) return { ok: false, detail: moved.detail, ...(moved.reason ? { reason: moved.reason } : {}), ...(moved.blocked ? { blocked: moved.blocked } : {}), ...(moved.detail === movedText(target) ? { moved: true } : {}) }
-  const tests = !b.test_commands.length ? '; no test command set' : skipped || testsRun || proseSkip ? passed : ''
+  const tests = !cmds.length && !proseSkip ? '; no test command set' : skipped || testsRun || proseSkip ? passed : ''
   // Research notes the merge added or changed (not deleted): asked of git only when the work touched docs/research/.
   let notes: string[] = []
   if (researchNotes(changed).length) {

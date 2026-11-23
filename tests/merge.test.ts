@@ -594,6 +594,40 @@ test('T-900: a normal role\'s docs-only change still runs the tests', async () =
   expect(ranTests(w)).toEqual(['/bin/sh -c npm test'])
 })
 
+test('T-908: a code: false task that changes only docs/*.md runs docs_test_commands (not test_commands), and says "docs checks only"', async () => {
+  const w = world({ changed: ['docs/plan.md'] })
+  withProjectRole(w, 'scribe', PROSE_ROLE)
+  const [b0, t] = boardWith('auto', ['npm test'], { files: ['docs/'], role: 'scribe' })
+  const b = { ...b0, docs_test_commands: ['sh tests/build-site.sh'] }
+  const r = await checkAndMerge(w.$, t, WT, b, 'finish', [])
+  expect(r).toEqual({ ok: true, merged: H1, detail: `merged into main (${H1.slice(0, 8)}); docs checks only: only prose changed` })
+  expect(ranTests(w)).toEqual(['/bin/sh -c sh tests/build-site.sh'])
+  expect(w.git.main).toBe(H1)
+})
+
+test('T-908: a code: false task\'s failing docs command fails the check and nothing merges', async () => {
+  const w = world({ changed: ['docs/plan.md'] }, { 'sh tests/build-site.sh': { exitCode: 1, stdout: 'broken link: docs/gone.md', stderr: '' } })
+  withProjectRole(w, 'scribe', PROSE_ROLE)
+  const [b0, t] = boardWith('auto', ['npm test'], { files: ['docs/'], role: 'scribe' })
+  const b = { ...b0, docs_test_commands: ['sh tests/build-site.sh'] }
+  const r = await checkAndMerge(w.$, t, WT, b, 'finish', [])
+  expect(r.ok).toBe(false)
+  expect(r.reason).toBe('tests')
+  expect(r.command).toBe('sh tests/build-site.sh')
+  expect(ranTests(w)).toEqual(['/bin/sh -c sh tests/build-site.sh'])
+  expect(w.git.main).toBe(M1)
+})
+
+test('T-908: a normal role\'s docs-only change runs test_commands, not docs_test_commands', async () => {
+  const w = world({ changed: ['docs/plan.md'] })
+  withProjectRole(w, 'plain', '---\ndescription: a normal one\n---\n')
+  const [b0, t] = boardWith('auto', ['npm test'], { files: ['docs/'], role: 'plain' })
+  const b = { ...b0, docs_test_commands: ['sh tests/build-site.sh'] }
+  const r = await checkAndMerge(w.$, t, WT, b, 'finish', [])
+  expect(r.detail).toBe(`merged into main (${H1.slice(0, 8)}); tests passed`)
+  expect(ranTests(w)).toEqual(['/bin/sh -c npm test'])
+})
+
 test('checkAndMerge undoes files outside the task on the branch, so the next try passes and keeps the work inside it', async () => {
   // try 1 changes src/a.ts (inside) and docs/x.md (outside)
   const w = world({ changed: ['src/a.ts', 'docs/x.md'] })

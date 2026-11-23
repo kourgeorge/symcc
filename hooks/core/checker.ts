@@ -72,6 +72,8 @@ export function notProseText(role: string, bad: readonly string[], undone = fals
 
 /** The history's words when a prose-only role's change skipped the tests (T-900). */
 export const PROSE_TESTS_SKIPPED = 'tests skipped: only prose changed'
+/** The history's words when a prose-only role's change ran the board's docs_test_commands instead of its test_commands (T-908). */
+export const PROSE_DOCS_CHECKS = 'docs checks only: only prose changed'
 
 /** The most of the diff a checker's prompt holds; the rest it reads with git diff itself. */
 export const CHECKER_DIFF_CHARS = 40_000

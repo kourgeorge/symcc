@@ -154,12 +154,13 @@ Type these in the chat. `/symcc` opens everything; `/symcc-<word>` does one thin
 
 Settings are the board's rules (how many workers, which tests, when to ask you). Change with `/symcc-settings` or by telling the lead (e.g. "give workers 90 minutes").
 The Settings tab (`c` in the panel) has one row per setting; Enter flips an on/off
-setting, opens a pick list for `mode`, `notify`, `scout_findings` and `tests_with_changes`, or an edit box for numbers and
-`test_commands`. A value over its limit is cut to it, and the answer says so.
+setting, opens a pick list for `mode`, `notify`, `scout_findings` and `tests_with_changes`, or an edit box for numbers,
+`test_commands` and `docs_test_commands`. A value over its limit is cut to it, and the answer says so.
 
 | Setting | Default | Allowed | Meaning |
 |---|---|---|---|
 | `test_commands` | none | one shell line (`cd web && npm test` is one command), or up to 5 as a list: `["npm test", "npm run lint"]` | Shell commands that must pass before anything is merged; each runs as one shell line from the task's folder. Each may run `test_minutes`; the whole check and merge may take `test_minutes` per command plus 5, not counting time waiting in the merge queue (one task at a time, across all tasks and sessions, oldest first, takes its turn: catch up with the target branch, run the tests, merge; the queue is kept in `.symcc/merge-line.json`). A merge turn that runs over is one normal failed try, using one of the `auto_retries` |
+| `docs_test_commands` | none | like `test_commands`: one shell line, or up to 5 as a list | Run instead of `test_commands` when a task of a prose-only role (`code: false`) changed only prose, for example a docs link check (`sh tests/build-site.sh`); a failing one fails the try like a failing test. None: such a change runs no test (`tests skipped: only prose changed`) |
 | `test_minutes` | 10 | 1–120 (whole minutes) | The time limit for each test command. A test command that runs out of time fails like a failing test: a new worker try starts with the output, using one of the `auto_retries` |
 | `max_parallel` | 3 | 1–8 | How many workers at once |
 | `max_minutes` | 45 | 5–600 | A worker running longer keeps working while you are asked "Give it more time?" (+30 min, +60 min or Stop it). Stop it, or no answer by twice the limit, lets the worker write down and hand back what it has (about 3 min), then stops it; the task fails with its work kept in its folder, branch and report, so a retry continues from there |

@@ -325,6 +325,10 @@ test('in VS Code a pick in a Select saves the setting, and a number box saves on
   expect(board().max_parallel).toBe(5)
   await ui.input({ key: 'setting:test_commands', text: 'npm test' })
   expect(board().test_commands).toEqual(['npm test'])
+  // T-908: docs_test_commands is a box under Checks before merging too
+  await ui.input({ key: 'setting:docs_test_commands', text: 'sh tests/build-site.sh' })
+  expect(board().docs_test_commands).toEqual(['sh tests/build-site.sh'])
+  expect(board().test_commands).toEqual(['npm test'])
   await ui.unmount()
 })
 

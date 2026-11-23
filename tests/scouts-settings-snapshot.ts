@@ -10,6 +10,7 @@
 // T-686 took the instructions' first line off the scout pages' header (a scout without a summary shows none).
 // T-751 gave the scout pages the 4-line page header (‹ Scouts and its place, name and summary, state, buttons) and its heavy rule.
 // T-775 drew every header button "[Label]" in one style, and Back "‹ [Scouts]".
+// T-908 added the docs_test_commands row under Checks before merging (after test_commands) on the Settings pages.
 export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
   "terminal scouts list": {
     "type": "Box",
@@ -4925,10 +4926,10 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "type": "Button",
         "props": {
           "key": "setting:mode",
-          "label": "mode               auto merge · default auto merge · paused /" +
-            " approve merge / auto merge · paused: nothing runs; approve m" +
-            "erge: finished work waits for your approval; auto merge: it m" +
-            "erges on its own",
+          "label": "mode               auto merge · default auto merge · paused " +
+            "/ approve merge / auto merge · paused: nothing runs; approve" +
+            " merge: finished work waits for your approval; auto merge: i" +
+            "t merges on its own",
           "plain": true
         },
         "press": {"plugin":"symcc"},
@@ -4938,7 +4939,14 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "props": {"color":"inactive"},
-            "children": [" · default ","auto merge"," · ","paused / approve merge / auto merge"," · ","paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"]
+            "children": [
+              " · default ",
+              "auto merge",
+              " · ",
+              "paused / approve merge / auto merge",
+              " · ",
+              "paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"
+            ]
           }
         ]
       },
@@ -5018,6 +5026,36 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "type": "Text",
             "props": {"color":"inactive"},
             "children": [" · default ","none"," · ","one shell line, or a list of up to 5 lines"," · ","must all pass before work is merged"]
+          }
+        ]
+      },
+      {
+        "type": "Button",
+        "props": {
+          "key": "setting:docs_test_commands",
+          "label": "docs_test_commands none · default none · one shell line, or " +
+            "a list of up to 5 lines · run instead of test_commands when " +
+            "a prose-only role (code: false) changed only prose, e.g. a d" +
+            "ocs link check; none: such a change runs no test",
+          "plain": true
+        },
+        "press": {"plugin":"symcc"},
+        "children": [
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["docs_test_commands"]},
+          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","none"]},
+          {
+            "type": "Text",
+            "props": {"color":"inactive"},
+            "children": [
+              " · default ",
+              "none",
+              " · ",
+              "one shell line, or a list of up to 5 lines",
+              " · ",
+              "run instead of test_commands when a prose-only role (code: f" +
+                "alse) changed only prose, e.g. a docs link check; none: such" +
+                " a change runs no test"
+            ]
           }
         ]
       },
@@ -5402,10 +5440,10 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "type": "Button",
         "props": {
           "key": "setting:mode",
-          "label": "mode               auto merge · default auto merge · paused /" +
-            " approve merge / auto merge · paused: nothing runs; approve m" +
-            "erge: finished work waits for your approval; auto merge: it m" +
-            "erges on its own",
+          "label": "mode               auto merge · default auto merge · paused " +
+            "/ approve merge / auto merge · paused: nothing runs; approve" +
+            " merge: finished work waits for your approval; auto merge: i" +
+            "t merges on its own",
           "plain": true
         },
         "press": {"plugin":"symcc"},
@@ -5415,7 +5453,14 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "props": {"color":"inactive"},
-            "children": [" · default ","auto merge"," · ","paused / approve merge / auto merge"," · ","paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"]
+            "children": [
+              " · default ",
+              "auto merge",
+              " · ",
+              "paused / approve merge / auto merge",
+              " · ",
+              "paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"
+            ]
           }
         ]
       },
@@ -5495,6 +5540,36 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "type": "Text",
             "props": {"color":"inactive"},
             "children": [" · default ","none"," · ","one shell line, or a list of up to 5 lines"," · ","must all pass before work is merged"]
+          }
+        ]
+      },
+      {
+        "type": "Button",
+        "props": {
+          "key": "setting:docs_test_commands",
+          "label": "docs_test_commands none · default none · one shell line, or " +
+            "a list of up to 5 lines · run instead of test_commands when " +
+            "a prose-only role (code: false) changed only prose, e.g. a d" +
+            "ocs link check; none: such a change runs no test",
+          "plain": true
+        },
+        "press": {"plugin":"symcc"},
+        "children": [
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["docs_test_commands"]},
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","none"]},
+          {
+            "type": "Text",
+            "props": {"color":"inactive"},
+            "children": [
+              " · default ",
+              "none",
+              " · ",
+              "one shell line, or a list of up to 5 lines",
+              " · ",
+              "run instead of test_commands when a prose-only role (code: f" +
+                "alse) changed only prose, e.g. a docs link check; none: such" +
+                " a change runs no test"
+            ]
           }
         ]
       },
@@ -5887,10 +5962,10 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "type": "Button",
         "props": {
           "key": "setting:mode",
-          "label": "mode               auto merge · default auto merge · paused /" +
-            " approve merge / auto merge · paused: nothing runs; approve m" +
-            "erge: finished work waits for your approval; auto merge: it m" +
-            "erges on its own",
+          "label": "mode               auto merge · default auto merge · paused " +
+            "/ approve merge / auto merge · paused: nothing runs; approve" +
+            " merge: finished work waits for your approval; auto merge: i" +
+            "t merges on its own",
           "plain": true
         },
         "press": {"plugin":"symcc"},
@@ -5900,7 +5975,14 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "props": {"color":"inactive"},
-            "children": [" · default ","auto merge"," · ","paused / approve merge / auto merge"," · ","paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"]
+            "children": [
+              " · default ",
+              "auto merge",
+              " · ",
+              "paused / approve merge / auto merge",
+              " · ",
+              "paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"
+            ]
           }
         ]
       },
@@ -5980,6 +6062,36 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "type": "Text",
             "props": {"color":"inactive"},
             "children": [" · default ","none"," · ","one shell line, or a list of up to 5 lines"," · ","must all pass before work is merged"]
+          }
+        ]
+      },
+      {
+        "type": "Button",
+        "props": {
+          "key": "setting:docs_test_commands",
+          "label": "docs_test_commands none · default none · one shell line, or " +
+            "a list of up to 5 lines · run instead of test_commands when " +
+            "a prose-only role (code: false) changed only prose, e.g. a d" +
+            "ocs link check; none: such a change runs no test",
+          "plain": true
+        },
+        "press": {"plugin":"symcc"},
+        "children": [
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["docs_test_commands"]},
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","none"]},
+          {
+            "type": "Text",
+            "props": {"color":"inactive"},
+            "children": [
+              " · default ",
+              "none",
+              " · ",
+              "one shell line, or a list of up to 5 lines",
+              " · ",
+              "run instead of test_commands when a prose-only role (code: f" +
+                "alse) changed only prose, e.g. a docs link check; none: such" +
+                " a change runs no test"
+            ]
           }
         ]
       },
@@ -6372,10 +6484,10 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "type": "Button",
         "props": {
           "key": "setting:mode",
-          "label": "mode               auto merge · default auto merge · paused /" +
-            " approve merge / auto merge · paused: nothing runs; approve m" +
-            "erge: finished work waits for your approval; auto merge: it m" +
-            "erges on its own",
+          "label": "mode               auto merge · default auto merge · paused " +
+            "/ approve merge / auto merge · paused: nothing runs; approve" +
+            " merge: finished work waits for your approval; auto merge: i" +
+            "t merges on its own",
           "plain": true
         },
         "press": {"plugin":"symcc"},
@@ -6385,7 +6497,14 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "props": {"color":"inactive"},
-            "children": [" · default ","auto merge"," · ","paused / approve merge / auto merge"," · ","paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"]
+            "children": [
+              " · default ",
+              "auto merge",
+              " · ",
+              "paused / approve merge / auto merge",
+              " · ",
+              "paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"
+            ]
           }
         ]
       },
@@ -6491,6 +6610,36 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "type": "Text",
             "props": {"color":"inactive"},
             "children": [" · default ","none"," · ","one shell line, or a list of up to 5 lines"," · ","must all pass before work is merged"]
+          }
+        ]
+      },
+      {
+        "type": "Button",
+        "props": {
+          "key": "setting:docs_test_commands",
+          "label": "docs_test_commands none · default none · one shell line, or " +
+            "a list of up to 5 lines · run instead of test_commands when " +
+            "a prose-only role (code: false) changed only prose, e.g. a d" +
+            "ocs link check; none: such a change runs no test",
+          "plain": true
+        },
+        "press": {"plugin":"symcc"},
+        "children": [
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["docs_test_commands"]},
+          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","none"]},
+          {
+            "type": "Text",
+            "props": {"color":"inactive"},
+            "children": [
+              " · default ",
+              "none",
+              " · ",
+              "one shell line, or a list of up to 5 lines",
+              " · ",
+              "run instead of test_commands when a prose-only role (code: f" +
+                "alse) changed only prose, e.g. a docs link check; none: such" +
+                " a change runs no test"
+            ]
           }
         ]
       },
@@ -6875,10 +7024,10 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "type": "Button",
         "props": {
           "key": "setting:mode",
-          "label": "mode               auto merge · default auto merge · paused /" +
-            " approve merge / auto merge · paused: nothing runs; approve m" +
-            "erge: finished work waits for your approval; auto merge: it m" +
-            "erges on its own",
+          "label": "mode               auto merge · default auto merge · paused " +
+            "/ approve merge / auto merge · paused: nothing runs; approve" +
+            " merge: finished work waits for your approval; auto merge: i" +
+            "t merges on its own",
           "plain": true
         },
         "press": {"plugin":"symcc"},
@@ -6888,7 +7037,14 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "props": {"color":"inactive"},
-            "children": [" · default ","auto merge"," · ","paused / approve merge / auto merge"," · ","paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"]
+            "children": [
+              " · default ",
+              "auto merge",
+              " · ",
+              "paused / approve merge / auto merge",
+              " · ",
+              "paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"
+            ]
           }
         ]
       },
@@ -6994,6 +7150,36 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "type": "Text",
             "props": {"color":"inactive"},
             "children": [" · default ","none"," · ","one shell line, or a list of up to 5 lines"," · ","must all pass before work is merged"]
+          }
+        ]
+      },
+      {
+        "type": "Button",
+        "props": {
+          "key": "setting:docs_test_commands",
+          "label": "docs_test_commands none · default none · one shell line, or " +
+            "a list of up to 5 lines · run instead of test_commands when " +
+            "a prose-only role (code: false) changed only prose, e.g. a d" +
+            "ocs link check; none: such a change runs no test",
+          "plain": true
+        },
+        "press": {"plugin":"symcc"},
+        "children": [
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["docs_test_commands"]},
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","none"]},
+          {
+            "type": "Text",
+            "props": {"color":"inactive"},
+            "children": [
+              " · default ",
+              "none",
+              " · ",
+              "one shell line, or a list of up to 5 lines",
+              " · ",
+              "run instead of test_commands when a prose-only role (code: f" +
+                "alse) changed only prose, e.g. a docs link check; none: such" +
+                " a change runs no test"
+            ]
           }
         ]
       },
@@ -7386,10 +7572,10 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "type": "Button",
         "props": {
           "key": "setting:mode",
-          "label": "mode               auto merge · default auto merge · paused /" +
-            " approve merge / auto merge · paused: nothing runs; approve m" +
-            "erge: finished work waits for your approval; auto merge: it m" +
-            "erges on its own",
+          "label": "mode               auto merge · default auto merge · paused " +
+            "/ approve merge / auto merge · paused: nothing runs; approve" +
+            " merge: finished work waits for your approval; auto merge: i" +
+            "t merges on its own",
           "plain": true
         },
         "press": {"plugin":"symcc"},
@@ -7399,7 +7585,14 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "props": {"color":"inactive"},
-            "children": [" · default ","auto merge"," · ","paused / approve merge / auto merge"," · ","paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"]
+            "children": [
+              " · default ",
+              "auto merge",
+              " · ",
+              "paused / approve merge / auto merge",
+              " · ",
+              "paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"
+            ]
           }
         ]
       },
@@ -7505,6 +7698,36 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "type": "Text",
             "props": {"color":"inactive"},
             "children": [" · default ","none"," · ","one shell line, or a list of up to 5 lines"," · ","must all pass before work is merged"]
+          }
+        ]
+      },
+      {
+        "type": "Button",
+        "props": {
+          "key": "setting:docs_test_commands",
+          "label": "docs_test_commands none · default none · one shell line, or " +
+            "a list of up to 5 lines · run instead of test_commands when " +
+            "a prose-only role (code: false) changed only prose, e.g. a d" +
+            "ocs link check; none: such a change runs no test",
+          "plain": true
+        },
+        "press": {"plugin":"symcc"},
+        "children": [
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["docs_test_commands"]},
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","none"]},
+          {
+            "type": "Text",
+            "props": {"color":"inactive"},
+            "children": [
+              " · default ",
+              "none",
+              " · ",
+              "one shell line, or a list of up to 5 lines",
+              " · ",
+              "run instead of test_commands when a prose-only role (code: f" +
+                "alse) changed only prose, e.g. a docs link check; none: such" +
+                " a change runs no test"
+            ]
           }
         ]
       },
@@ -7897,10 +8120,10 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "type": "Button",
         "props": {
           "key": "setting:mode",
-          "label": "mode               auto merge · default auto merge · paused /" +
-            " approve merge / auto merge · paused: nothing runs; approve m" +
-            "erge: finished work waits for your approval; auto merge: it m" +
-            "erges on its own",
+          "label": "mode               auto merge · default auto merge · paused " +
+            "/ approve merge / auto merge · paused: nothing runs; approve" +
+            " merge: finished work waits for your approval; auto merge: i" +
+            "t merges on its own",
           "plain": true
         },
         "press": {"plugin":"symcc"},
@@ -7910,7 +8133,14 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "props": {"color":"inactive"},
-            "children": [" · default ","auto merge"," · ","paused / approve merge / auto merge"," · ","paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"]
+            "children": [
+              " · default ",
+              "auto merge",
+              " · ",
+              "paused / approve merge / auto merge",
+              " · ",
+              "paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"
+            ]
           }
         ]
       },
@@ -7990,6 +8220,36 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "type": "Text",
             "props": {"color":"inactive"},
             "children": [" · default ","none"," · ","one shell line, or a list of up to 5 lines"," · ","must all pass before work is merged"]
+          }
+        ]
+      },
+      {
+        "type": "Button",
+        "props": {
+          "key": "setting:docs_test_commands",
+          "label": "docs_test_commands none · default none · one shell line, or " +
+            "a list of up to 5 lines · run instead of test_commands when " +
+            "a prose-only role (code: false) changed only prose, e.g. a d" +
+            "ocs link check; none: such a change runs no test",
+          "plain": true
+        },
+        "press": {"plugin":"symcc"},
+        "children": [
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["docs_test_commands"]},
+          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","none"]},
+          {
+            "type": "Text",
+            "props": {"color":"inactive"},
+            "children": [
+              " · default ",
+              "none",
+              " · ",
+              "one shell line, or a list of up to 5 lines",
+              " · ",
+              "run instead of test_commands when a prose-only role (code: f" +
+                "alse) changed only prose, e.g. a docs link check; none: such" +
+                " a change runs no test"
+            ]
           }
         ]
       },
@@ -8412,10 +8672,10 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "type": "Button",
         "props": {
           "key": "setting:mode",
-          "label": "mode               auto merge · default auto merge · paused /" +
-            " approve merge / auto merge · paused: nothing runs; approve m" +
-            "erge: finished work waits for your approval; auto merge: it m" +
-            "erges on its own",
+          "label": "mode               auto merge · default auto merge · paused " +
+            "/ approve merge / auto merge · paused: nothing runs; approve" +
+            " merge: finished work waits for your approval; auto merge: i" +
+            "t merges on its own",
           "plain": true
         },
         "press": {"plugin":"symcc"},
@@ -8425,7 +8685,14 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "props": {"color":"inactive"},
-            "children": [" · default ","auto merge"," · ","paused / approve merge / auto merge"," · ","paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"]
+            "children": [
+              " · default ",
+              "auto merge",
+              " · ",
+              "paused / approve merge / auto merge",
+              " · ",
+              "paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"
+            ]
           }
         ]
       },
@@ -8505,6 +8772,36 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "type": "Text",
             "props": {"color":"inactive"},
             "children": [" · default ","none"," · ","one shell line, or a list of up to 5 lines"," · ","must all pass before work is merged"]
+          }
+        ]
+      },
+      {
+        "type": "Button",
+        "props": {
+          "key": "setting:docs_test_commands",
+          "label": "docs_test_commands none · default none · one shell line, or " +
+            "a list of up to 5 lines · run instead of test_commands when " +
+            "a prose-only role (code: false) changed only prose, e.g. a d" +
+            "ocs link check; none: such a change runs no test",
+          "plain": true
+        },
+        "press": {"plugin":"symcc"},
+        "children": [
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["docs_test_commands"]},
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","none"]},
+          {
+            "type": "Text",
+            "props": {"color":"inactive"},
+            "children": [
+              " · default ",
+              "none",
+              " · ",
+              "one shell line, or a list of up to 5 lines",
+              " · ",
+              "run instead of test_commands when a prose-only role (code: f" +
+                "alse) changed only prose, e.g. a docs link check; none: such" +
+                " a change runs no test"
+            ]
           }
         ]
       },
@@ -8935,10 +9232,10 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "type": "Button",
         "props": {
           "key": "setting:mode",
-          "label": "mode               auto merge · default auto merge · paused /" +
-            " approve merge / auto merge · paused: nothing runs; approve m" +
-            "erge: finished work waits for your approval; auto merge: it m" +
-            "erges on its own",
+          "label": "mode               auto merge · default auto merge · paused " +
+            "/ approve merge / auto merge · paused: nothing runs; approve" +
+            " merge: finished work waits for your approval; auto merge: i" +
+            "t merges on its own",
           "plain": true
         },
         "press": {"plugin":"symcc"},
@@ -8948,7 +9245,14 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "props": {"color":"inactive"},
-            "children": [" · default ","auto merge"," · ","paused / approve merge / auto merge"," · ","paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"]
+            "children": [
+              " · default ",
+              "auto merge",
+              " · ",
+              "paused / approve merge / auto merge",
+              " · ",
+              "paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"
+            ]
           }
         ]
       },
@@ -9028,6 +9332,36 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "type": "Text",
             "props": {"color":"inactive"},
             "children": [" · default ","none"," · ","one shell line, or a list of up to 5 lines"," · ","must all pass before work is merged"]
+          }
+        ]
+      },
+      {
+        "type": "Button",
+        "props": {
+          "key": "setting:docs_test_commands",
+          "label": "docs_test_commands none · default none · one shell line, or " +
+            "a list of up to 5 lines · run instead of test_commands when " +
+            "a prose-only role (code: false) changed only prose, e.g. a d" +
+            "ocs link check; none: such a change runs no test",
+          "plain": true
+        },
+        "press": {"plugin":"symcc"},
+        "children": [
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["docs_test_commands"]},
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","none"]},
+          {
+            "type": "Text",
+            "props": {"color":"inactive"},
+            "children": [
+              " · default ",
+              "none",
+              " · ",
+              "one shell line, or a list of up to 5 lines",
+              " · ",
+              "run instead of test_commands when a prose-only role (code: f" +
+                "alse) changed only prose, e.g. a docs link check; none: such" +
+                " a change runs no test"
+            ]
           }
         ]
       },
@@ -9458,10 +9792,10 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "type": "Button",
         "props": {
           "key": "setting:mode",
-          "label": "mode               auto merge · default auto merge · paused /" +
-            " approve merge / auto merge · paused: nothing runs; approve m" +
-            "erge: finished work waits for your approval; auto merge: it m" +
-            "erges on its own",
+          "label": "mode               auto merge · default auto merge · paused " +
+            "/ approve merge / auto merge · paused: nothing runs; approve" +
+            " merge: finished work waits for your approval; auto merge: i" +
+            "t merges on its own",
           "plain": true
         },
         "press": {"plugin":"symcc"},
@@ -9471,7 +9805,14 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "props": {"color":"inactive"},
-            "children": [" · default ","auto merge"," · ","paused / approve merge / auto merge"," · ","paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"]
+            "children": [
+              " · default ",
+              "auto merge",
+              " · ",
+              "paused / approve merge / auto merge",
+              " · ",
+              "paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"
+            ]
           }
         ]
       },
@@ -9564,6 +9905,36 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "type": "Text",
             "props": {"color":"inactive"},
             "children": [" · default ","none"," · ","one shell line, or a list of up to 5 lines"," · ","must all pass before work is merged"]
+          }
+        ]
+      },
+      {
+        "type": "Button",
+        "props": {
+          "key": "setting:docs_test_commands",
+          "label": "docs_test_commands none · default none · one shell line, or " +
+            "a list of up to 5 lines · run instead of test_commands when " +
+            "a prose-only role (code: false) changed only prose, e.g. a d" +
+            "ocs link check; none: such a change runs no test",
+          "plain": true
+        },
+        "press": {"plugin":"symcc"},
+        "children": [
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["docs_test_commands"]},
+          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","none"]},
+          {
+            "type": "Text",
+            "props": {"color":"inactive"},
+            "children": [
+              " · default ",
+              "none",
+              " · ",
+              "one shell line, or a list of up to 5 lines",
+              " · ",
+              "run instead of test_commands when a prose-only role (code: f" +
+                "alse) changed only prose, e.g. a docs link check; none: such" +
+                " a change runs no test"
+            ]
           }
         ]
       },
@@ -9948,10 +10319,10 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "type": "Button",
         "props": {
           "key": "setting:mode",
-          "label": "mode               auto merge · default auto merge · paused /" +
-            " approve merge / auto merge · paused: nothing runs; approve m" +
-            "erge: finished work waits for your approval; auto merge: it m" +
-            "erges on its own",
+          "label": "mode               auto merge · default auto merge · paused " +
+            "/ approve merge / auto merge · paused: nothing runs; approve" +
+            " merge: finished work waits for your approval; auto merge: i" +
+            "t merges on its own",
           "plain": true
         },
         "press": {"plugin":"symcc"},
@@ -9961,7 +10332,14 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "props": {"color":"inactive"},
-            "children": [" · default ","auto merge"," · ","paused / approve merge / auto merge"," · ","paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"]
+            "children": [
+              " · default ",
+              "auto merge",
+              " · ",
+              "paused / approve merge / auto merge",
+              " · ",
+              "paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"
+            ]
           }
         ]
       },
@@ -10054,6 +10432,36 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "type": "Text",
             "props": {"color":"inactive"},
             "children": [" · default ","none"," · ","one shell line, or a list of up to 5 lines"," · ","must all pass before work is merged"]
+          }
+        ]
+      },
+      {
+        "type": "Button",
+        "props": {
+          "key": "setting:docs_test_commands",
+          "label": "docs_test_commands none · default none · one shell line, or " +
+            "a list of up to 5 lines · run instead of test_commands when " +
+            "a prose-only role (code: false) changed only prose, e.g. a d" +
+            "ocs link check; none: such a change runs no test",
+          "plain": true
+        },
+        "press": {"plugin":"symcc"},
+        "children": [
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["docs_test_commands"]},
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","none"]},
+          {
+            "type": "Text",
+            "props": {"color":"inactive"},
+            "children": [
+              " · default ",
+              "none",
+              " · ",
+              "one shell line, or a list of up to 5 lines",
+              " · ",
+              "run instead of test_commands when a prose-only role (code: f" +
+                "alse) changed only prose, e.g. a docs link check; none: such" +
+                " a change runs no test"
+            ]
           }
         ]
       },
@@ -10446,10 +10854,10 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "type": "Button",
         "props": {
           "key": "setting:mode",
-          "label": "mode               auto merge · default auto merge · paused /" +
-            " approve merge / auto merge · paused: nothing runs; approve m" +
-            "erge: finished work waits for your approval; auto merge: it m" +
-            "erges on its own",
+          "label": "mode               auto merge · default auto merge · paused " +
+            "/ approve merge / auto merge · paused: nothing runs; approve" +
+            " merge: finished work waits for your approval; auto merge: i" +
+            "t merges on its own",
           "plain": true
         },
         "press": {"plugin":"symcc"},
@@ -10459,7 +10867,14 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "props": {"color":"inactive"},
-            "children": [" · default ","auto merge"," · ","paused / approve merge / auto merge"," · ","paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"]
+            "children": [
+              " · default ",
+              "auto merge",
+              " · ",
+              "paused / approve merge / auto merge",
+              " · ",
+              "paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"
+            ]
           }
         ]
       },
@@ -10552,6 +10967,36 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "type": "Text",
             "props": {"color":"inactive"},
             "children": [" · default ","none"," · ","one shell line, or a list of up to 5 lines"," · ","must all pass before work is merged"]
+          }
+        ]
+      },
+      {
+        "type": "Button",
+        "props": {
+          "key": "setting:docs_test_commands",
+          "label": "docs_test_commands none · default none · one shell line, or " +
+            "a list of up to 5 lines · run instead of test_commands when " +
+            "a prose-only role (code: false) changed only prose, e.g. a d" +
+            "ocs link check; none: such a change runs no test",
+          "plain": true
+        },
+        "press": {"plugin":"symcc"},
+        "children": [
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["docs_test_commands"]},
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","none"]},
+          {
+            "type": "Text",
+            "props": {"color":"inactive"},
+            "children": [
+              " · default ",
+              "none",
+              " · ",
+              "one shell line, or a list of up to 5 lines",
+              " · ",
+              "run instead of test_commands when a prose-only role (code: f" +
+                "alse) changed only prose, e.g. a docs link check; none: such" +
+                " a change runs no test"
+            ]
           }
         ]
       },
@@ -10944,10 +11389,10 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "type": "Button",
         "props": {
           "key": "setting:mode",
-          "label": "mode               auto merge · default auto merge · paused /" +
-            " approve merge / auto merge · paused: nothing runs; approve m" +
-            "erge: finished work waits for your approval; auto merge: it m" +
-            "erges on its own",
+          "label": "mode               auto merge · default auto merge · paused " +
+            "/ approve merge / auto merge · paused: nothing runs; approve" +
+            " merge: finished work waits for your approval; auto merge: i" +
+            "t merges on its own",
           "plain": true
         },
         "press": {"plugin":"symcc"},
@@ -10957,7 +11402,14 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "props": {"color":"inactive"},
-            "children": [" · default ","auto merge"," · ","paused / approve merge / auto merge"," · ","paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"]
+            "children": [
+              " · default ",
+              "auto merge",
+              " · ",
+              "paused / approve merge / auto merge",
+              " · ",
+              "paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"
+            ]
           }
         ]
       },
@@ -11062,6 +11514,36 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "children": ["the line runs as one shell command · several: [\"npm test\", \"npm run lint\"] · none clears them"]
           },
           {"type":"Text","props":{"color":"inactive"},"children":["Enter saves · Enter on empty cancels"]}
+        ]
+      },
+      {
+        "type": "Button",
+        "props": {
+          "key": "setting:docs_test_commands",
+          "label": "docs_test_commands none · default none · one shell line, or " +
+            "a list of up to 5 lines · run instead of test_commands when " +
+            "a prose-only role (code: false) changed only prose, e.g. a d" +
+            "ocs link check; none: such a change runs no test",
+          "plain": true
+        },
+        "press": {"plugin":"symcc"},
+        "children": [
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["docs_test_commands"]},
+          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","none"]},
+          {
+            "type": "Text",
+            "props": {"color":"inactive"},
+            "children": [
+              " · default ",
+              "none",
+              " · ",
+              "one shell line, or a list of up to 5 lines",
+              " · ",
+              "run instead of test_commands when a prose-only role (code: f" +
+                "alse) changed only prose, e.g. a docs link check; none: such" +
+                " a change runs no test"
+            ]
+          }
         ]
       },
       {
@@ -11445,10 +11927,10 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "type": "Button",
         "props": {
           "key": "setting:mode",
-          "label": "mode               auto merge · default auto merge · paused /" +
-            " approve merge / auto merge · paused: nothing runs; approve m" +
-            "erge: finished work waits for your approval; auto merge: it m" +
-            "erges on its own",
+          "label": "mode               auto merge · default auto merge · paused " +
+            "/ approve merge / auto merge · paused: nothing runs; approve" +
+            " merge: finished work waits for your approval; auto merge: i" +
+            "t merges on its own",
           "plain": true
         },
         "press": {"plugin":"symcc"},
@@ -11458,7 +11940,14 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "props": {"color":"inactive"},
-            "children": [" · default ","auto merge"," · ","paused / approve merge / auto merge"," · ","paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"]
+            "children": [
+              " · default ",
+              "auto merge",
+              " · ",
+              "paused / approve merge / auto merge",
+              " · ",
+              "paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"
+            ]
           }
         ]
       },
@@ -11563,6 +12052,36 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "children": ["the line runs as one shell command · several: [\"npm test\", \"npm run lint\"] · none clears them"]
           },
           {"type":"Text","props":{"color":"inactive"},"children":["Enter saves · Enter on empty cancels"]}
+        ]
+      },
+      {
+        "type": "Button",
+        "props": {
+          "key": "setting:docs_test_commands",
+          "label": "docs_test_commands none · default none · one shell line, or " +
+            "a list of up to 5 lines · run instead of test_commands when " +
+            "a prose-only role (code: false) changed only prose, e.g. a d" +
+            "ocs link check; none: such a change runs no test",
+          "plain": true
+        },
+        "press": {"plugin":"symcc"},
+        "children": [
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["docs_test_commands"]},
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","none"]},
+          {
+            "type": "Text",
+            "props": {"color":"inactive"},
+            "children": [
+              " · default ",
+              "none",
+              " · ",
+              "one shell line, or a list of up to 5 lines",
+              " · ",
+              "run instead of test_commands when a prose-only role (code: f" +
+                "alse) changed only prose, e.g. a docs link check; none: such" +
+                " a change runs no test"
+            ]
+          }
         ]
       },
       {
@@ -11954,10 +12473,10 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "type": "Button",
         "props": {
           "key": "setting:mode",
-          "label": "mode               auto merge · default auto merge · paused /" +
-            " approve merge / auto merge · paused: nothing runs; approve m" +
-            "erge: finished work waits for your approval; auto merge: it m" +
-            "erges on its own",
+          "label": "mode               auto merge · default auto merge · paused " +
+            "/ approve merge / auto merge · paused: nothing runs; approve" +
+            " merge: finished work waits for your approval; auto merge: i" +
+            "t merges on its own",
           "plain": true
         },
         "press": {"plugin":"symcc"},
@@ -11967,7 +12486,14 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "props": {"color":"inactive"},
-            "children": [" · default ","auto merge"," · ","paused / approve merge / auto merge"," · ","paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"]
+            "children": [
+              " · default ",
+              "auto merge",
+              " · ",
+              "paused / approve merge / auto merge",
+              " · ",
+              "paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"
+            ]
           }
         ]
       },
@@ -12072,6 +12598,36 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
             "children": ["the line runs as one shell command · several: [\"npm test\", \"npm run lint\"] · none clears them"]
           },
           {"type":"Text","props":{"color":"inactive"},"children":["Enter saves · Enter on empty cancels"]}
+        ]
+      },
+      {
+        "type": "Button",
+        "props": {
+          "key": "setting:docs_test_commands",
+          "label": "docs_test_commands none · default none · one shell line, or " +
+            "a list of up to 5 lines · run instead of test_commands when " +
+            "a prose-only role (code: false) changed only prose, e.g. a d" +
+            "ocs link check; none: such a change runs no test",
+          "plain": true
+        },
+        "press": {"plugin":"symcc"},
+        "children": [
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["docs_test_commands"]},
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","none"]},
+          {
+            "type": "Text",
+            "props": {"color":"inactive"},
+            "children": [
+              " · default ",
+              "none",
+              " · ",
+              "one shell line, or a list of up to 5 lines",
+              " · ",
+              "run instead of test_commands when a prose-only role (code: f" +
+                "alse) changed only prose, e.g. a docs link check; none: such" +
+                " a change runs no test"
+            ]
+          }
         ]
       },
       {

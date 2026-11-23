@@ -1315,6 +1315,9 @@ test('T-559: the Scouts tab lists the scouts from view.json, a scout\'s page sho
   for (const g of ['Work', 'Checks before merging', 'Workers', 'Scouts', 'Board and alerts']) expect(s).toContain(`  ▾ ${g}`)
   expect(s.find(l => l.includes('max_parallel'))).toMatch(/max_parallel +2 · default 3 · 1-8/)
   expect(s.find(l => l.includes('test_commands'))).toContain('bun test')
+  // T-908: docs_test_commands sits right after test_commands under Checks before merging, none by default
+  expect(settings.ids[settings.ids.indexOf('test_commands') + 1]).toBe('docs_test_commands')
+  expect(s.find(l => l.includes('docs_test_commands'))).toMatch(/docs_test_commands +none · default none/)
   expect(s.find(l => /^› /.test(l))).toContain('mode')
   expect(settings.ids.slice(0, 2)).toEqual(['settings-group:Work', 'mode'])
   expect(settings.ids).toContain('notify')

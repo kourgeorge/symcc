@@ -13,6 +13,8 @@ export type Board = {
   mode: SymccMode
   /** shell commands that must pass before a task's work is merged */
   test_commands: string[]
+  /** T-908: shell commands run instead of test_commands when a prose-only role (code: false) changed only prose; absent or empty: such a change runs no test */
+  docs_test_commands?: string[]
   max_parallel: number
   /** a worker running longer than this (plus its task's extra_minutes) makes symcc ask the owner for more time (see overtimeQuestion) */
   max_minutes: number
@@ -349,6 +351,7 @@ const STATUSES: SymccStatus[] = ['backlog', 'todo', 'doing', 'paused', 'waiting'
 const SETTING_OK: { [K in Exclude<keyof Board, 'version' | 'tasks' | 'next_id' | 'archived' | 'archived_done' | 'questions' | 'next_question'>]: (v: unknown) => boolean } = {
   mode: v => isMode(v),
   test_commands: v => Array.isArray(v) && v.every(c => typeof c === 'string'),
+  docs_test_commands: v => Array.isArray(v) && v.every(c => typeof c === 'string'),
   max_parallel: v => isNum(v) && v >= 0,
   max_minutes: v => isNum(v) && v >= 0,
   auto_retries: v => isNum(v) && v >= 0,

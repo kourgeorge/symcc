@@ -3,6 +3,7 @@ import { test } from './reset'
 import type { On } from 'claude-code'
 import { inProject } from './project'
 import { ran, readText } from './fakes'
+import { parseSettingsCommand } from '../hooks/board'
 
 /** A fake board.json: a save (write to a temp file, then mv over it) is kept, so the next read sees it. */
 function setup(on: On, board: Record<string, unknown>) {
@@ -50,6 +51,22 @@ test('settings still changes a setting, and the list shows the new value', async
   expect(await call($, { max_parallel: 4 })).toContain('up to 4 at once')
   expect(JSON.parse(files['/board.json']!).max_parallel).toBe(4)
   expect(await call($, {})).toContain('max_parallel: 4 (default 3')
+})
+
+test('T-908: docs_test_commands is listed under "Checks before merging" (default none), set by the tool and by /symcc-settings', async ($, on) => {
+  const files = setup(on, { tasks: [], test_commands: ['npm test'] })
+  let out = await call($, {})
+  expect(out).toMatch(/^docs_test_commands: none \(default none/m)
+  expect(out.indexOf('docs_test_commands:')).toBeGreaterThan(out.indexOf('Checks before merging'))
+  expect(out.indexOf('docs_test_commands:')).toBeLessThan(out.indexOf('Workers'))
+  expect(await call($, { docs_test_commands: ['sh tests/build-site.sh'] })).toContain('docs checks for prose-only changes: sh tests/build-site.sh')
+  const saved = JSON.parse(files['/board.json']!)
+  expect(saved.docs_test_commands).toEqual(['sh tests/build-site.sh'])
+  expect(saved.test_commands).toEqual(['npm test'])
+  out = await call($, {})
+  expect(out).toMatch(/^docs_test_commands: sh tests\/build-site.sh \(default none/m)
+  expect(parseSettingsCommand('docs_test_commands "sh tests/build-site.sh"')).toEqual({ kind: 'set', setting: 'docs_test_commands', input: { docs_test_commands: ['sh tests/build-site.sh'] } })
+  expect(parseSettingsCommand('docs_test_commands none')).toEqual({ kind: 'set', setting: 'docs_test_commands', input: { docs_test_commands: [] } })
 })
 
 test('T-510: test_minutes is listed under "Checks before merging" (default 10), can be set, and a bad value is refused', async ($, on) => {

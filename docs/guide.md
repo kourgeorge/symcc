@@ -901,7 +901,10 @@ are about changes; under "How tasks ended" a read investigation shows as
 - The Settings view (`c`, or `/symcc-settings`) has one row per setting: its name, value,
   default, allowed range and what it means. The rows are grouped under short headings:
   - **Work**: `mode`, `max_parallel`, `max_minutes`, `auto_retries`, `enabled`
-  - **Checks before merging**: `test_commands`, `test_minutes` (how many minutes each test
+  - **Checks before merging**: `test_commands`, `docs_test_commands` (shell commands, like
+    `test_commands` and up to 5, none by default; they run instead of `test_commands` when a
+    task of a prose-only role, `code: false`, changed only prose; see
+    [Worker roles](#worker-roles)), `test_minutes` (how many minutes each test
     command may run before merging, a whole number from 1 to 120, 10 by default; any other value
     is refused), `tests_with_changes`, `checker`
   - **Workers**: the **Roles** and **Kinds** rows (org-mem is on the Live tab, see
@@ -1785,8 +1788,12 @@ skills: [code-review]
     means `.md` files (plus README-style names, images and other media), but not instructions
     for agents: `CLAUDE.md`, `AGENTS.md`, `roles/*.md`, scout files and other prompt files
     count as code. So a prose-only role can never merge code.
-  - **Tests:** the test commands are skipped, and the task's history says
-    `tests skipped: only prose changed`. (The checker already skips a change that is only
+  - **Tests:** the `test_commands` do not run. If the `docs_test_commands` setting has
+    commands (for example a docs link check like `sh tests/build-site.sh`), those run instead,
+    and a failing one fails the try like a failing test; the task's history says
+    `docs checks only: only prose changed`. With no `docs_test_commands` (the default) no test
+    runs, and the history says `tests skipped: only prose changed`. A normal role's docs-only
+    change still runs the `test_commands`. (The checker already skips a change that is only
     prose, for every role.)
   - **Prompt:** its worker is told to check its facts and links instead of running tests (in
     Claude Code it starts as a `-prose` worker type, for example `symcc:worker-web-prose`).

@@ -282,7 +282,7 @@ export const clampRetries = (n: number) => Math.max(0, Math.min(10, Math.round(N
 // ---------------- settings ----------------
 // One list of settings, used by the lead's settings tool, /<name>-settings and the panel's Settings view.
 
-export const SETTING_NAMES = ['test_commands', 'test_minutes', 'max_parallel', 'max_minutes', 'auto_retries', 'archive_days', 'open_on_start', 'notify', 'scout_findings', 'tests_with_changes', 'checker', 'mode', 'enabled'] as const
+export const SETTING_NAMES = ['test_commands', 'docs_test_commands', 'test_minutes', 'max_parallel', 'max_minutes', 'auto_retries', 'archive_days', 'open_on_start', 'notify', 'scout_findings', 'tests_with_changes', 'checker', 'mode', 'enabled'] as const
 export type SettingName = (typeof SETTING_NAMES)[number]
 /** commands: test_commands; number: a whole number within min-max; onoff: true/false; mode: paused/review/auto; notify: voice/sound 1/sound 2/sound 3/off; findings: auto/backlog; untested: off/ask/review */
 export type SettingKind = 'commands' | 'number' | 'onoff' | 'mode' | 'notify' | 'findings' | 'untested'
@@ -303,6 +303,7 @@ export function useAssistantWord(word: string) {
 
 export const SETTINGS: SettingInfo[] = [
   { name: 'test_commands', kind: 'commands', default: 'none', range: 'one shell line, or a list of up to 5 lines', meaning: 'must all pass before work is merged' },
+  { name: 'docs_test_commands', kind: 'commands', default: 'none', range: 'one shell line, or a list of up to 5 lines', meaning: 'run instead of test_commands when a prose-only role (code: false) changed only prose, e.g. a docs link check; none: such a change runs no test' },
   { name: 'test_minutes', kind: 'number', min: 1, max: MAX_TEST_MINUTES, default: String(DEFAULT_TEST_MINUTES), range: `1-${MAX_TEST_MINUTES}`, meaning: 'how long each test command may run before merging' },
   { name: 'max_parallel', kind: 'number', min: 1, max: 8, default: '3', range: '1-8', meaning: 'how many workers run at once' },
   { name: 'max_minutes', kind: 'number', min: 5, max: 600, default: '45', range: '5-600', meaning: 'a worker running longer makes symcc ask the owner for more time' },
@@ -330,7 +331,7 @@ export type SettingGroup = { title: string; items: readonly (SettingName | Setti
  */
 export const SETTING_GROUPS: readonly SettingGroup[] = [
   { title: 'Work', items: ['mode', 'max_parallel', 'max_minutes', 'auto_retries', 'enabled'] },
-  { title: 'Checks before merging', items: ['test_commands', 'test_minutes', 'tests_with_changes', 'checker'] },
+  { title: 'Checks before merging', items: ['test_commands', 'docs_test_commands', 'test_minutes', 'tests_with_changes', 'checker'] },
   { title: 'Workers', items: ['roles', 'kinds'] },
   { title: 'Scouts', items: ['scout_findings'] },
   { title: 'Board and alerts', items: ['notify', 'open_on_start', 'archive_days'] },
@@ -385,6 +386,10 @@ function shortValue(b: Partial<Board>, name: SettingName): string {
     case 'test_commands': {
       const cmds = b.test_commands ?? []
       return !cmds.length ? 'no tests' : cmds.length === 1 ? ellipsis(cmds[0]!, 24) : `${cmds.length} test commands`
+    }
+    case 'docs_test_commands': {
+      const cmds = b.docs_test_commands ?? []
+      return !cmds.length ? '' : cmds.length === 1 ? `docs: ${ellipsis(cmds[0]!, 24)}` : `${cmds.length} docs commands`
     }
     case 'tests_with_changes':
       return `untested: ${v}`
@@ -474,6 +479,8 @@ export function settingValue(b: Partial<Board>, name: SettingName, root = ''): s
   switch (name) {
     case 'test_commands':
       return testCommandsText(b.test_commands ?? [])
+    case 'docs_test_commands':
+      return testCommandsText(b.docs_test_commands ?? [])
     case 'open_on_start':
       return openOnStart(b) ? 'on' : 'off'
     case 'notify':
@@ -515,6 +522,11 @@ export function applySettings(b: Board, a: SettingsInput): { board: Board; chang
     const all = a.test_commands.map(x => String(x).trim()).filter(Boolean)
     y.test_commands = all.slice(0, MAX_TEST_COMMANDS)
     add('test_commands', `tests: ${testCommandsText(y.test_commands)}`, all.length > MAX_TEST_COMMANDS ? ` (only the first ${MAX_TEST_COMMANDS} kept: test_commands holds up to ${MAX_TEST_COMMANDS})` : '')
+  }
+  if (Array.isArray(a.docs_test_commands)) {
+    const all = a.docs_test_commands.map(x => String(x).trim()).filter(Boolean)
+    y.docs_test_commands = all.slice(0, MAX_TEST_COMMANDS)
+    add('docs_test_commands', `docs checks for prose-only changes: ${testCommandsText(y.docs_test_commands)}`, all.length > MAX_TEST_COMMANDS ? ` (only the first ${MAX_TEST_COMMANDS} kept: docs_test_commands holds up to ${MAX_TEST_COMMANDS})` : '')
   }
   for (const name of ['max_parallel', 'max_minutes', 'auto_retries', 'archive_days', 'test_minutes'] as const) {
     const n = a[name]
@@ -615,7 +627,7 @@ export function parseSettingValue(name: SettingName, raw: string): { ok: true; i
     }
     case 'commands': {
       const list = v.toLowerCase() === 'none' ? [] : commandList(v)
-      return list ? { ok: true, input: { test_commands: list } } : bad(BAD_LIST_MESSAGE)
+      return list ? { ok: true, input: { [name]: list } } : bad(BAD_LIST_MESSAGE)
     }
   }
 }
