@@ -83,7 +83,8 @@ function idleReason(t: BoardTask, view: LiveView, nowMs: number): string {
   if (t.status === 'todo') {
     const board = { tasks: view.tasks as BoardTask[], archived_done: view.archived_done ?? [] }
     const open = [...new Set((t.after ?? []).filter(a => a !== t.id && !depDone(board, a)))]
-    if (open.length) return `waits for ${open.slice(0, 2).join(', ')}${open.length > 2 ? ` +${open.length - 2}` : ''}`
+    // only the first open task, plus a count of the rest: no ", " inside one reason (", " parts the tasks' reasons)
+    if (open.length) return `waits for ${open[0]}${open.length > 1 ? ` +${open.length - 1}` : ''}`
     return 'ready'
   }
   return STUCK_WORD[t.status] ?? t.status

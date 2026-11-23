@@ -41,6 +41,11 @@ test('T-903: liveIdle picks the line by why nothing runs, and keeps to the width
   // narrow: the waiting line names fewer reasons and never goes past the width
   const narrow = liveIdle({ tasks: CASES[1]!.tasks as never[], mode: 'auto' }, T0, 44)
   expect(narrow).toEqual(['Nothing running · 3 waiting: T-5 needs you'])
+  // a task waiting on several open tasks names the first, plus a count: no ", " inside one reason
+  const many = [task('T-1', 'todo', { after: ['T-2', 'T-3', 'T-4', 'T-5'] }), ...['T-2', 'T-3', 'T-4', 'T-5'].map(id => task(id, 'todo'))]
+  const line = liveIdle({ tasks: many as never[], mode: 'auto' }, T0, 100)[0]!
+  expect(line).toBe('Nothing running · 5 waiting: T-1 waits for T-2 +3, T-2 ready, T-3 ready')
+  expect(line.split(': ')[1]!.split(', ')[0]).toBe('T-1 waits for T-2 +3')
   for (const w of [20, 30, 44]) for (const c of CASES) for (const l of liveIdle({ tasks: c.tasks as never[], mode: c.mode }, T0, w)) expect([w, l, l.length <= w]).toEqual([w, l, true])
 })
 

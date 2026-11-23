@@ -1284,7 +1284,8 @@ TASKS ────────────────────────�
   `/symcc-status` show the same):
   - the mode is paused: `Paused: nothing starts. m changes the mode.`
   - open tasks wait on something: `Nothing running · 3 waiting: T-5 needs you, T-7 waits for T-6`
-    (the first reasons that fit: `needs you`, `waits for T-6`, `paused`, `ready` ...)
+    (the first reasons that fit: `needs you`, `waits for T-6`, `paused`, `ready` ...; a task
+    that waits on several open tasks names the first and counts the rest: `waits for T-2 +3`)
   - no open task at all: `All done · last merged T-891, 12m ago`, then `Tell the lead what's next, or move one of 23 backlog items to todo.`
     (no backlog part when the backlog is empty, no "last merged" part when nothing merged yet)
   - a brand-new board: `No tasks yet. Tell the lead what you want built.`
