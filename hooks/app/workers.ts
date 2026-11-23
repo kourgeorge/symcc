@@ -337,7 +337,6 @@ export async function workerFinished(host: Host, agentId: string, answer: string
   heard.workers[w.task] = at
   heard.last = { what: `${w.task} worker report`, at }
   finishing.add(w.task)
-  let beat: { cancel(): void } | null = null
   let tryNo: number | undefined | null
   let limitMs = finishLimitMs(0)
   // The try ends now (checking and merging is not counted). The turn result gives tokens but
@@ -383,26 +382,41 @@ export async function workerFinished(host: Host, agentId: string, answer: string
   }
   // T-656: the same agent is asked for org-mem suggestions in one follow-up turn; nothing below waits for its answer
   if (tryNo !== undefined && end.reason === 'answer' && !stopped.has(agentId)) startDebrief(host, agentId, w.task, tryNo, answer)
+  await finishUnderLimit(host, w.task, tryNo, limitMs, (gaveUp, over, limit) => finishWork(host, agentId, w, answer, end, gaveUp, over, limit))
+}
+
+/**
+ * Runs task `id`'s checking and merging step `step` for try `tryNo` (a worker's hand-back, or one started again after a
+ * reload), with the finishing mark refreshed by a heartbeat meanwhile. Its merge turn has a time limit (`limitMs`, see
+ * finishLimitMs: it grows with the test commands): the heartbeat keeps going even when the step hangs, so without it a
+ * stuck turn would keep its task "doing" forever. Past the limit the step is given up (finishRanOver): it may still wake
+ * up later, but then it writes nothing (gaveUp). With no try (`tryNo` undefined) there is no heartbeat and no limit.
+ * Then the mark is removed, the check ends, and the next checker and workers are started.
+ */
+async function finishUnderLimit(host: Host, id: string, tryNo: number | undefined, limitMs: number, step: (gaveUp: () => boolean, over: Promise<unknown>, limit?: TurnLimit) => Promise<unknown>) {
+  let beat: { cancel(): void } | null = null
   try {
-    if (tryNo !== undefined) beat = everyMs(host, FINISH_BEAT_MS, () => void markFinishing(host, w.task, tryNo!).catch(() => undefined))
-    // Its merge turn has a time limit (finishLimitMs: it grows with the test commands): the heartbeat above keeps going even when
-    // the step hangs, so without it a stuck turn would keep its task "doing" forever. Past the limit
-    // the step is given up: it may still wake up later, but then it writes nothing (gaveUp).
-    const how = await withLimit(host, tryNo === undefined ? null : limitMs, (gaveUp, over, limit) => finishWork(host, agentId, w, answer, end, gaveUp, over, limit))
+    if (tryNo !== undefined) beat = everyMs(host, FINISH_BEAT_MS, () => void markFinishing(host, id, tryNo).catch(() => undefined))
+    const how = await withLimit(host, tryNo === undefined ? null : limitMs, step)
     if (how === OVER) {
       beat?.cancel()
       beat = null
-      finishing.delete(w.task)
-      await finishRanOver(host, w.task, tryNo!, limitMs)
+      finishing.delete(id)
+      await finishRanOver(host, id, tryNo!, limitMs)
     }
   } finally {
     beat?.cancel()
-    if (tryNo !== undefined) await markFinishing(host, w.task, tryNo, false).catch(() => undefined)
-    finishing.delete(w.task)
-    await endCheck(host, w.task)
+    await endFinishing(host, id, tryNo)
   }
-  await checkerAgainNow(host, w.task)
+  await checkerAgainNow(host, id)
   await pump(host)
+}
+
+/** Removes task `id`'s finishing mark (only with a try `tryNo`), lets go of it in `finishing` and ends its check. */
+async function endFinishing(host: Host, id: string, tryNo: number | undefined) {
+  if (tryNo !== undefined) await markFinishing(host, id, tryNo, false).catch(() => undefined)
+  finishing.delete(id)
+  await endCheck(host, id)
 }
 
 /** T-883: the "restarted" note of a task whose worker's session ended because symcc itself stopped it. */
@@ -1028,7 +1042,7 @@ async function checkAgain(host: Host, t0: BoardTask) {
   if (finishing.has(id)) return
   // taken at once (before any wait), so a regular check meanwhile doesn't send it back or start it twice
   finishing.add(id)
-  let beat: { cancel(): void } | null = null
+  let go: { b: Board; t: SymccTask; dir: string } | undefined
   try {
     const b = await load(host)
     const t = find(b, id)
@@ -1045,51 +1059,50 @@ async function checkAgain(host: Host, t0: BoardTask) {
       return
     }
     const dir = worktreeDir(id)
-    const head = await git(host, ['rev-parse', '-q', '--verify', 'HEAD'], dir).catch(() => null)
-    if (!head || head.exitCode !== 0 || !head.stdout.trim()) {
-      const note = "restarted: its checker stopped when the plugin reloaded, and its folder couldn't be read to start it again"
-      const back = await change(host, x => {
-        const cur = find(x, id)
-        return cur && sameTry(cur, t0) ? ([putTask(x, backToTodo(cur, note, now())), true] as [Board, boolean]) : ([x, false] as [Board, boolean])
-      })
-      if (back) tellLead(host, `${id} "${t.title}": its checker stopped when the plugin reloaded and could not be started again (its folder couldn't be read), so it goes back to todo; the next try goes on from the same branch. This is not counted as a retry.`)
-      return
-    }
+    const note = "restarted: its checker stopped when the plugin reloaded, and its folder couldn't be read to start it again"
+    if (await folderGone(host, t0, note, `${id} "${t.title}": its checker stopped when the plugin reloaded and could not be started again (its folder couldn't be read), so it goes back to todo; the next try goes on from the same branch. This is not counted as a retry.`)) return
     await markFinishing(host, id, tryNo).catch(() => undefined)
-    beat = everyMs(host, FINISH_BEAT_MS, () => void markFinishing(host, id, tryNo).catch(() => undefined))
     // told once: a start tried again because the agent type wasn't loaded yet is the same restart
     if (!checkerNotReady.has(id)) tellLead(host, `${id} "${t.title}": its checker stopped when the plugin reloaded, so I started a new checker on the same work. This is not counted as a retry; nothing to do.`)
-    const limitMs = finishLimitMs(mergeTestCount(b), testMinutesOf(b))
-    const how = await withLimit(host, limitMs, (gaveUp, over, limit) => checkerStepAgain(host, t, b, dir, gaveUp, over, limit))
-    if (how === OVER) {
-      beat?.cancel()
-      beat = null
-      finishing.delete(id)
-      await finishRanOver(host, id, tryNo, limitMs)
-    }
+    go = { b, t, dir }
   } finally {
-    beat?.cancel()
-    await markFinishing(host, id, tryNo, false).catch(() => undefined)
-    finishing.delete(id)
-    await endCheck(host, id)
+    if (!go) await endFinishing(host, id, tryNo)
   }
-  await checkerAgainNow(host, id)
-  await pump(host)
+  const { b, t, dir } = go
+  await finishUnderLimit(host, id, tryNo, finishLimitMs(mergeTestCount(b), testMinutesOf(b)), (gaveUp, over, limit) => checkerStepAgain(host, t, b, dir, true, gaveUp, over, limit))
 }
 
 /**
- * The checker step of task `t` (in folder `dir`) run again (see restartCheckers): its prep step passed before, so its
- * work is committed. Anything the old checker left in the folder is thrown away first (so the prep step commits none of
- * it); then the check runs as after a hand-back: prep, a new checker, and on its OK the merge line.
+ * Whether task `t0`'s folder can't be read any more (no commit in it). Then the task goes back to "todo" with `note`
+ * (only while it is still on the same try), and the lead is told `tell`.
  */
-async function checkerStepAgain(host: Host, t: SymccTask, b: Board, dir: string, gaveUp: () => boolean, release: Promise<unknown>, limit?: TurnLimit) {
+async function folderGone(host: Host, t0: BoardTask, note: string, tell: string): Promise<boolean> {
+  const head = await git(host, ['rev-parse', '-q', '--verify', 'HEAD'], worktreeDir(t0.id)).catch(() => null)
+  if (head && head.exitCode === 0 && head.stdout.trim()) return false
+  const back = await change(host, x => {
+    const cur = find(x, t0.id)
+    return cur && sameTry(cur, t0) ? ([putTask(x, backToTodo(cur, note, now())), true] as [Board, boolean]) : ([x, false] as [Board, boolean])
+  })
+  if (back) tellLead(host, tell)
+  return true
+}
+
+/**
+ * The checker step of task `t` (in folder `dir`) run again after a reload: its prep step passed before, so its work is
+ * committed. With `fromChecker` (its checker was lost, see restartCheckers) anything the old checker left in the folder is
+ * thrown away first (so the prep step commits none of it), and a new checker always runs; then the check runs as after a
+ * hand-back: prep, the checker, and on its OK the merge line. Without it (its test and merge was cut off, see mergeAgain)
+ * a checker runs first only when the checker setting is on and this try has no checker OK yet.
+ */
+async function checkerStepAgain(host: Host, t: SymccTask, b: Board, dir: string, fromChecker: boolean, gaveUp: () => boolean, release: Promise<unknown>, limit?: TurnLimit) {
   const stop = () => (gaveUp() ? 'given up after running too long' : stopAsked.get(t.id))
   const made: string[] = []
-  const why = stop()
-  if (!why) await cleanFolder(host, dir)
+  const why = fromChecker ? stop() : undefined
+  if (fromChecker && !why) await cleanFolder(host, dir)
+  const checker = fromChecker || (checkerOn(b) && !t.history.some(h => h.text === checkerLine(tryLabel(t), { ok: true })))
   const r: CheckResult = why
     ? taskWasResult(why)
-    : await checkAndMerge(host, t, dir, b, 'finish', made, stop, false, release, limit, checkerFirst(host, t, b, dir, made, stop, true)).catch((e: Error) => ({ ok: false, reason: 'other' as const, detail: `checking failed: ${e.message.slice(0, 300)}` }))
+    : await checkAndMerge(host, t, dir, b, 'finish', made, stop, false, release, limit, checker ? checkerFirst(host, t, b, dir, made, stop, true) : undefined).catch((e: Error) => ({ ok: false, reason: 'other' as const, detail: `checking failed: ${e.message.slice(0, 300)}` }))
   // the checker's agent type isn't loaded yet (just after a reload): the task stays "doing" in its checker step, and the next check starts it again (restartCheckers)
   if (r.again) return
   await finishTail(host, t, b, r, made, await reportSummary(host, t), dir, workerIdOf(t), gaveUp)
@@ -1105,50 +1118,23 @@ async function checkerStepAgain(host: Host, t: SymccTask, b: Board, dir: string,
 async function mergeAgain(host: Host, t0: BoardTask) {
   const id = t0.id
   const tryNo = t0.attempts
-  let beat: { cancel(): void } | null = null
+  let go: { b: Board; t: SymccTask; dir: string } | undefined
   try {
     const b = await load(host)
     const t = find(b, id)
     if (!t || !sameTry(t, t0)) return
     const dir = worktreeDir(id)
-    const head = await git(host, ['rev-parse', '-q', '--verify', 'HEAD'], dir).catch(() => null)
-    if (!head || head.exitCode !== 0 || !head.stdout.trim()) {
-      const note = "restarted: its test and merge stopped before the end (the plugin reloaded), and its folder couldn't be read to test it again"
-      const back = await change(host, x => {
-        const cur = find(x, id)
-        return cur && sameTry(cur, t0) ? ([putTask(x, backToTodo(cur, note, now())), true] as [Board, boolean]) : ([x, false] as [Board, boolean])
-      })
-      if (back) tellLead(host, `${id} "${t.title}": its test and merge stopped when the plugin reloaded and could not be started again (its folder couldn't be read), so it goes back to todo; the next worker goes on from the same folder and branch.`)
-      return
-    }
+    const note = "restarted: its test and merge stopped before the end (the plugin reloaded), and its folder couldn't be read to test it again"
+    if (await folderGone(host, t0, note, `${id} "${t.title}": its test and merge stopped when the plugin reloaded and could not be started again (its folder couldn't be read), so it goes back to todo; the next worker goes on from the same folder and branch.`)) return
     await noteAgain(host, t, RELOAD_AGAIN)
     await markFinishing(host, id, tryNo).catch(() => undefined)
-    beat = everyMs(host, FINISH_BEAT_MS, () => void markFinishing(host, id, tryNo).catch(() => undefined))
     tellLead(host, `${id} "${t.title}": its test and merge stopped when the plugin reloaded, so I put the same branch back in the merge line to test and merge it again. This is not a new try; nothing to do.`)
-    const limitMs = finishLimitMs(mergeTestCount(b), testMinutesOf(b))
-    const how = await withLimit(host, limitMs, async (gaveUp, over, limit) => {
-      const stop = () => (gaveUp() ? 'given up after running too long' : stopAsked.get(id))
-      const made: string[] = []
-      const checked = t.history.some(h => h.text === checkerLine(tryLabel(t), { ok: true }))
-      const first = checkerOn(b) && !checked ? checkerFirst(host, t, b, dir, made, stop, true) : undefined
-      const r: CheckResult = await checkAndMerge(host, t, dir, b, 'finish', made, stop, false, over, limit, first).catch((e: Error) => ({ ok: false, reason: 'other' as const, detail: `checking failed: ${e.message.slice(0, 300)}` }))
-      if (r.again) return
-      await finishTail(host, t, b, r, made, await reportSummary(host, t), dir, workerIdOf(t), gaveUp)
-    })
-    if (how === OVER) {
-      beat?.cancel()
-      beat = null
-      finishing.delete(id)
-      await finishRanOver(host, id, tryNo, limitMs)
-    }
+    go = { b, t, dir }
   } finally {
-    beat?.cancel()
-    await markFinishing(host, id, tryNo, false).catch(() => undefined)
-    finishing.delete(id)
-    await endCheck(host, id)
+    if (!go) await endFinishing(host, id, tryNo)
   }
-  await checkerAgainNow(host, id)
-  await pump(host)
+  const { b, t, dir } = go
+  await finishUnderLimit(host, id, tryNo, finishLimitMs(mergeTestCount(b), testMinutesOf(b)), (gaveUp, over, limit) => checkerStepAgain(host, t, b, dir, false, gaveUp, over, limit))
 }
 
 /** The worker's report of task `t`'s current try, cut short (from its report file), for the history line. */
