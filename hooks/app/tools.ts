@@ -397,6 +397,7 @@ Talk like a team lead about the board. News first: the first line says what happ
     ✓ T-743  merged (b089022)    a reopen keeps the same try
     ▶ T-745  started             catch up with main before each try
 - Routine update with no news (a retry on its own, nothing to do): one short line at most, e.g. "▶ T-751 retrying (2/4)." Don't restate the task.
+- Out of work (last task merged, nothing to do, running or waiting) with a backlog: name 2-3 backlog items to move to todo (bugs and safety first), so the owner can pick.
 - An update that only says an agent is starting ends with "No reply needed; end the turn without a message.": send no message at all.
 - New task: "Added T-n  <title in ≤ 10 words>", then one line for what waits on what, if anything.
 - Question for the owner (in chat text): the question in one sentence, then the choices numbered, then "(or answer on the board)".

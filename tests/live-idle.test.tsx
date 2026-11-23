@@ -24,7 +24,14 @@ const CASES: { name: string; mode: 'auto' | 'paused'; tasks: unknown[]; lines: s
     name: 'all done',
     mode: 'auto',
     tasks: [merged('T-890', 120), merged('T-891', 12), task('T-892', 'dropped'), task('T-893', 'backlog'), task('T-894', 'backlog')],
-    lines: ['All done · last merged T-891, 12m ago', "Tell the lead what's next, or move one of 2 backlog items to todo."],
+    lines: ['All done · last merged T-891, 12m ago', "Tell the lead what's next, or move one of 2 backlog items to todo.", '  ◇ T-893  Task T-893', '  ◇ T-894  Task T-894'],
+  },
+  {
+    // T-924: the next 3 backlog items (lowest order first, then oldest), then how many more
+    name: 'big backlog',
+    mode: 'auto',
+    tasks: [merged('T-891', 3), task('T-895', 'backlog', { order: 1 }), task('T-893', 'backlog', { order: 9 }), task('T-896', 'backlog', { order: 1 }), task('T-894', 'backlog', { order: 2 }), task('T-897', 'backlog', { order: 20 })],
+    lines: ['All done · last merged T-891, 3m ago', "Tell the lead what's next, or move one of 5 backlog items to todo.", '  ◇ T-895  Task T-895', '  ◇ T-896  Task T-896', '  ◇ T-894  Task T-894', '  … 2 more in the backlog'],
   },
   { name: 'empty', mode: 'auto', tasks: [], lines: ['No tasks yet. Tell the lead what you want built.'] },
 ]
@@ -39,7 +46,10 @@ test('T-903: liveIdle picks the line by why nothing runs, and keeps to the width
   expect(/(^|\s)m(\s|$)/.test(pausedLine)).toBe(false)
   // no backlog: no backlog part; nothing merged yet: no "last merged" part
   expect(liveIdle({ tasks: [task('T-1', 'done')] as never[], mode: 'auto' }, T0)).toEqual(['All done', "Tell the lead what's next."])
-  expect(liveIdle({ tasks: [task('T-1', 'backlog')] as never[], mode: 'auto' }, T0)).toEqual(['All done', "Tell the lead what's next, or move the backlog item to todo."])
+  expect(liveIdle({ tasks: [task('T-1', 'backlog')] as never[], mode: 'auto' }, T0)).toEqual(['All done', "Tell the lead what's next, or move the backlog item to todo.", '  ◇ T-1  Task T-1'])
+  // T-924: a long backlog title is cut to the width
+  const cut = liveIdle({ tasks: [task('T-1', 'backlog', { title: 'Board written by a newer symcc: say so and stop' })] as never[], mode: 'auto' }, T0, 30)
+  expect([cut.at(-1)!.startsWith('  ◇ T-1  Board'), cut.at(-1)!.endsWith('…'), cut.at(-1)!.length <= 30]).toEqual([true, true, true])
   // a board whose tasks were all archived is not new
   expect(liveIdle({ tasks: [], archived_done: ['T-1'], mode: 'auto' }, T0)).toEqual(['All done', "Tell the lead what's next."])
   // narrow: the waiting line names fewer reasons and never goes past the width
@@ -65,6 +75,11 @@ for (const c of CASES) {
     // under the TASKS heading, dim, one after the other
     expect([head >= 0, at > head]).toEqual([true, true])
     expect(texts.slice(at, at + want.length)).toEqual(want)
+    // T-924: an empty line between the idle lines and the merged trains under them
+    if (c.name === 'big backlog') {
+      expect(texts[at + want.length]?.text).toBe(' ')
+      expect(texts[at + want.length + 1]?.text).toContain('work')
+    }
     await ui.press({ key: 'tab-tasks' })
     await ui.unmount()
   })
@@ -75,6 +90,9 @@ for (const c of CASES) {
     await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'live') } })
     expect((await ui.find({ key: 'live-empty' }))?.text).toBe(c.lines[0])
     expect((await ui.find({ key: 'live-empty-1' }))?.text).toBe(c.lines[1])
+    // T-924: the backlog lines too, and an empty line (the block's paddingBottom) before the merged trains
+    for (let i = 2; i < c.lines.length; i++) expect((await ui.find({ key: `live-empty-${i}` }))?.text).toBe(c.lines[i])
+    expect((await ui.find({ key: 'live-idle' }))?.props.paddingBottom).toBe(c.name === 'big backlog' ? 1 : undefined)
     await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'tasks') } })
     await ui.unmount()
   })
@@ -94,5 +112,7 @@ test('T-903: /symcc-status shows the idle lines under TASKS', () => {
     const lines = liveStatusText({ tasks: c.tasks, mode: c.mode } as never, [], T0).split('\n')
     const at = lines.findIndex(l => l.startsWith('─── ❯ TASKS'))
     expect([c.name, lines.slice(at + 1, at + 1 + c.lines.length)]).toEqual([c.name, c.lines.map(l => LIVE_INDENT + l)])
+    // T-924: an empty line before the merged trains
+    if (c.name === 'big backlog') expect([lines[at + 1 + c.lines.length], lines[at + 2 + c.lines.length]?.includes('work')]).toEqual(['', true])
   }
 })

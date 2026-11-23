@@ -146,6 +146,7 @@ export function livePage($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
       <Text key="live-tasks-head">{draw(liveHeading(LIVE_SECTIONS.tasks, width))}</Text>
       <Text key="live-tasks-under"> </Text>
       {running.length ? null : liveIdle(v, nowMs, inner).map((x, i) => <Text key={i ? `live-empty-${i}` : 'live-empty'} color={C('inactive')}>{LIVE_INDENT + x}</Text>)}
+      {!running.length && lanes.length ? <Text key="live-empty-blank"> </Text> : null}
       {lanes.length ? <Text key="live-labels">{under(liveLabelSegs(layout))}</Text> : null}
       {lanes.flatMap((l, i) => {
         const [first, second] = laneLines(l, layout, { nowMs, frame })

@@ -37,6 +37,8 @@ for (const [name, words, features] of hosts) {
     // the question shape
     expect(part).toContain('the question in one sentence, then the choices numbered, then "(or answer on the board)"')
     expect(part).toContain('at most 3 short bullets')
+    // T-924: out of work, the lead suggests a few backlog items for the owner to pick
+    expect(part).toContain('Out of work (last task merged, nothing to do, running or waiting) with a backlog: name 2-3 backlog items to move to todo (bugs and safety first)')
     // it goes into every model call: keep it short
     expect(part.length).toBeLessThan(1500)
   })

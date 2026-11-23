@@ -1320,7 +1320,25 @@ words as bold headings with the same spacing):
     (the first reasons that fit: `needs you`, `waits for T-6`, `paused`, `ready` ...; a task
     that waits on several open tasks names the first and counts the rest: `waits for T-2 +3`)
   - no open task at all: `All done · last merged T-891, 12m ago`, then `Tell the lead what's next, or move one of 23 backlog items to todo.`
-    (no backlog part when the backlog is empty, no "last merged" part when nothing merged yet)
+    (no backlog part when the backlog is empty, no "last merged" part when nothing merged yet).
+    Under it, the next 3 backlog items (lowest order first, then oldest), one line each, then how
+    many more there are:
+
+    ```
+    All done · last merged T-922, 3m ago
+    Tell the lead what's next, or move one of 39 backlog items to todo.
+      ◇ T-744  Board written by a newer symcc: …
+      ◇ T-801  …
+      ◇ T-812  …
+      … 36 more in the backlog
+
+                                           work✧    check✧   queue    tests    merged
+    ✓ T-922 Under DAM: the lead posts bo…  ●━━━━━━━━●━━━━━━━━●━━━━━━━━●━━━━━━━━✓   merged 3m ago
+    ```
+
+    An empty line keeps these lines apart from the just-merged tasks under them. When the board
+    runs out of work like this, the lead also names 2-3 backlog items worth moving to todo (bugs
+    and safety first), so you can pick.
   - a brand-new board: `No tasks yet. Tell the lead what you want built.`
 - At the bottom, just above the key hints of the Live tab, the **Organizational memory** section (see
   [Organizational memory](#organizational-memory-org-mem)):

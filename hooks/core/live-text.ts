@@ -40,6 +40,8 @@ export function liveStatusText(view: StatusView, notes: readonly OrgMemNote[], n
   // TASKS: one line per lane (room kept for "(try n)"), its waiting trains under it
   heading(LIVE_SECTIONS.tasks)
   if (!running.length) for (const x of liveIdle(view, nowMs, inner)) out.push(LIVE_INDENT + x)
+  // T-924: one empty line between the idle lines and the lanes
+  if (!running.length && lanes.length) out.push('')
   if (lanes.length) {
     const room = Math.max(0, ...lanes.map(l => (l.done ? 0 : tryText(l.tryNo).length)))
     const layout = liveLayout(lanes, liveColumns(lanes, view.checker === true), Math.max(1, inner - room))

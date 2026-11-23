@@ -911,6 +911,8 @@ function liveBody(f: ViewFile, cursor: number, nowMs: number, w: number): Body {
   b.add(liveSegs(liveHeading(LIVE_SECTIONS.tasks, w)))
   b.blank()
   if (!running.length) for (const x of liveIdle(v, nowMs, inner)) b.add([{ text: LIVE_INDENT + x, color: 'inactive' }])
+  // T-924: one empty line between the idle lines and the trains under them
+  if (!running.length && lanes.length) b.blank()
   if (lanes.length) b.add(under(liveLabelSegs(layout)))
   for (const l of lanes) {
     const [first, second] = laneLines(l, layout, { nowMs, frame })

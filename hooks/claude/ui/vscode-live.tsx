@@ -264,7 +264,12 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
       ) : null}
       <Box key="live-tasks" flexDirection="column">
         {headLine('live-tasks-head', LIVE_SECTIONS.tasks)}
-        {running.length ? null : liveIdle(v, nowMs, Infinity).map((x, i) => line(i ? `live-empty-${i}` : 'live-empty', x, 'inactive'))}
+        {running.length ? null : (
+          // T-924: one empty line between the idle lines and the lanes under them
+          <Box key="live-idle" flexDirection="column" paddingBottom={lanes.length ? 1 : undefined}>
+            {liveIdle(v, nowMs, Infinity).map((x, i) => line(i ? `live-empty-${i}` : 'live-empty', x, 'inactive'))}
+          </Box>
+        )}
         {lanes.length ? <Box key="live-lanes" flexDirection="column" gap={1}>{laneRows}</Box> : null}
       </Box>
       {lanes.length ? <Box key="live-key" flexDirection="column">{line('live-divider', LIVE_DIVIDER, 'inactive')}{line('live-legend', liveLegend(Infinity).join(' '), 'inactive')}</Box> : null}

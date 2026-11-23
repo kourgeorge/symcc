@@ -22,6 +22,7 @@ import { whyFailed } from './failure'
 import { newestFirst } from './settings'
 import { isAnswered } from './task'
 import { viewMarks } from './board-parts'
+import { STATUS_MARK } from './details'
 
 /**
  * The kinds and times of task `t`'s history lines. A board view's done or dropped task (viewTask, e.g. OpenCode's)
@@ -73,6 +74,8 @@ export const LIVE_IDLE = {
 } as const
 /** The most reasons the "Nothing running · n waiting: ..." line names. */
 const IDLE_REASONS = 3
+/** T-924: how many backlog items the "All done" lines list. */
+export const IDLE_BACKLOG = 3
 /** "12m", "3h 05m", "2d": how long ago, short. */
 const idleAgo = (ms: number) => (ms >= 86_400_000 ? `${Math.floor(ms / 86_400_000)}d` : fmtDuration(ms))
 /** Why open task `t` does not run while nothing runs: "needs you", "waits for T-6", "paused", "ready" ... */
@@ -130,10 +133,14 @@ export function liveIdle(view: Pick<LiveView, 'tasks' | 'mode' | 'archived_done'
     .map(t => ({ t, at: finishedAt(t)?.atMs }))
     .filter((x): x is { t: BoardTask; at: number } => x.at !== undefined)
     .sort((a, b) => b.at - a.at || num(b.t.id) - num(a.t.id))[0]
-  const backlog = tasks.filter(t => t.status === 'backlog').length
+  const items = tasks.filter(t => t.status === 'backlog').sort((a, b) => a.order - b.order || num(a.id) - num(b.id))
+  const backlog = items.length
   const first = last ? `${LIVE_IDLE.done} · last merged ${last.t.id}, ${idleAgo(nowMs - last.at)} ago` : LIVE_IDLE.done
   const second = `${LIVE_IDLE.next}${backlog ? `, or move ${backlog === 1 ? 'the backlog item' : `one of ${backlog} backlog items`} to todo` : ''}.`
-  return [fitText(first, w), ...wrap(second)]
+  // T-924: the next backlog items (lowest order first, then oldest), one line each, then how many more
+  const next = items.slice(0, IDLE_BACKLOG).map(t => fitText(`  ${STATUS_MARK.backlog} ${t.id}  ${t.title}`, w))
+  const more = backlog - next.length
+  return [fitText(first, w), ...wrap(second), ...next, ...(more > 0 ? [fitText(`  … ${more} more in the backlog`, w)] : [])]
 }
 /** T-903: the one idle line the band shows: liveIdle's first line, but a sentence that does not fit is cut with "…"
  *  (never broken at a space, which would read like a broken line). */

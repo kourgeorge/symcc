@@ -4285,7 +4285,9 @@ test('T-903: with no task running, the OpenCode Live tab says why (paused, waiti
   const cases: [SymccMode, SymccTask[], string[]][] = [
     ['paused', [task('T-1', 'todo')], ['Paused: nothing starts. /symcc-mode auto starts work again.']],
     ['auto', [task('T-6', 'paused'), task('T-7', 'todo', { after: ['T-6'] }), task('T-5', 'waiting', { ask: { by: 'worker', text: 'Which one?', asked_at: ago(2) } })], ['Nothing running · 3 waiting: T-5 needs you, T-6 paused, T-7 waits for T-6']],
-    ['auto', [task('T-891', 'done', { history: [{ kind: 'merged', at: ago(12), text: 'try 1 → merged into main' }] }), task('T-893', 'backlog'), task('T-894', 'backlog')], ['All done · last merged T-891, 12m ago', "Tell the lead what's next, or move one of 2 backlog items to todo."]],
+    ['auto', [task('T-891', 'done', { history: [{ kind: 'merged', at: ago(12), text: 'try 1 → merged into main' }] }), task('T-893', 'backlog'), task('T-894', 'backlog')], ['All done · last merged T-891, 12m ago', "Tell the lead what's next, or move one of 2 backlog items to todo.", '  ◇ T-893  Task T-893', '  ◇ T-894  Task T-894']],
+    // T-924: the next 3 backlog items (lowest order first, then oldest), then how many more
+    ['auto', [task('T-891', 'done', { history: [{ kind: 'merged', at: ago(3), text: 'try 1 → merged into main' }] }), task('T-895', 'backlog', { order: 1 }), task('T-893', 'backlog', { order: 9 }), task('T-896', 'backlog', { order: 1 }), task('T-894', 'backlog', { order: 2 }), task('T-897', 'backlog', { order: 20 })], ['All done · last merged T-891, 3m ago', "Tell the lead what's next, or move one of 5 backlog items to todo.", '  ◇ T-895  Task T-895', '  ◇ T-896  Task T-896', '  ◇ T-894  Task T-894', '  … 2 more in the backlog']],
     ['auto', [], ['No tasks yet. Tell the lead what you want built.']],
   ]
   for (const [mode, tasks, want] of cases) {
@@ -4297,6 +4299,8 @@ test('T-903: with no task running, the OpenCode Live tab says why (paused, waiti
     expect(d.lines[at + 2]!.every(x => x.color === 'inactive')).toBe(true)
     // T-910: the Live tab has no m key, so no bare "m" hint
     expect(texts.slice(at + 2, at + 2 + want.length).some(t => /(^|\s)m(\s|$)/.test(t))).toBe(false)
+    // T-924: an empty line between the idle lines and the merged trains (T-891 merged 3m ago)
+    if (want[0]!.includes('3m ago')) expect([texts[at + 2 + want.length], texts[at + 3 + want.length]!.includes('work')]).toEqual([' ', true])
   }
 })
 
