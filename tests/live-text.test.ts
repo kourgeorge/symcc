@@ -96,7 +96,7 @@ test('T-902: the manual lists /symcc-status, and the entries around it start the
     const lines = manual('commands', f).split('\n')
     const col = (start: string) => lines.find(l => l.startsWith(`  /${S.N.name}${start}`))!.search(/(?<=\S {2,})\S/)
     expect(lines.some(l => l.startsWith(`  /${S.N.name}-status              the Live tab as text in the chat`))).toBe(true)
-    expect([col('-scouts '), col('-status '), col('-task T-3 '), col('-task T-3 WORD'), col('-approve ')]).toEqual([29, 29, 29, 29, 29])
+    expect([col('-scout '), col('-status '), col('-task T-3 '), col('-task T-3 WORD'), col('-approve ')]).toEqual([29, 29, 29, 29, 29])
   }
 })
 
