@@ -2013,10 +2013,10 @@ test('/symcc-scout <name> pause and resume, and run now not refused while paused
   expect(await run('bugs stop')).toMatch(/^Use: \/symcc-scout <name>/)
 })
 
-test('every_minutes 0 or a bad value: no timer, "on demand" in /symcc-scouts with the warning, and run now still works', async ($, on) => {
+test('every_minutes 0 or a bad value: no timer, "on demand" in /symcc-scout with the warning, and run now still works', async ($, on) => {
   scoutFiles(on, null, { secrets: '---\nevery_minutes: 0\n---\nLook for keys.\n', bad: '---\nevery_minutes: -5\n---\nLook around.\n' })
   stateOf(on, {})
-  const list = String((await $.command.run(slash('symcc-scouts'))).text)
+  const list = String((await $.command.run(slash('symcc-scout'))).text)
   expect(list).toMatch(/^bugs: every 30 min/m)
   expect(list).toMatch(/^secrets: on demand$/m)
   expect(list).toMatch(/^bad: on demand \(every_minutes "-5" is not valid: runs only on demand until fixed\)$/m)

@@ -1194,14 +1194,16 @@ test('diff lines are colored: added in success, removed in error, headers and hu
 })
 
 test('slash commands all start with the plugin name: open, views, one task, approve, reject, diff, scout, help', () => {
-  expect(commandNames()).toEqual(['symcc', 'symcc-tasks', 'symcc-board', 'symcc-status', 'symcc-scouts', 'symcc-task', 'symcc-approve', 'symcc-reject', 'symcc-diff', 'symcc-scout', 'symcc-mode', 'symcc-settings', 'symcc-help', 'symcc-disable', 'symcc-enable', 'symcc-init', 'symcc-drive'])
+  expect(commandNames()).toEqual(['symcc', 'symcc-tasks', 'symcc-board', 'symcc-status', 'symcc-task', 'symcc-approve', 'symcc-reject', 'symcc-diff', 'symcc-scout', 'symcc-mode', 'symcc-settings', 'symcc-help', 'symcc-disable', 'symcc-enable', 'symcc-init', 'symcc-drive'])
   expect(commandNames('crew')[0]).toBe('crew')
   expect(commandNames('crew')).toContain('crew-help')
   expect(parseCommand('symcc', '')).toEqual({ kind: 'open' })
   expect(parseCommand('symcc', 'T-3')!.kind).toBe('bad')
   expect(parseCommand('symcc-tasks', '')).toEqual({ kind: 'tasks' })
   expect(parseCommand('symcc-board', '')).toEqual({ kind: 'board' })
-  expect(parseCommand('symcc-scouts', ' ')).toEqual({ kind: 'scouts' })
+  // T-934: /symcc-scout with no name is the scouts view (/symcc-scouts is gone)
+  expect(parseCommand('symcc-scout', ' ')).toEqual({ kind: 'scouts' })
+  expect(parseCommand('symcc-scouts', '')).toBeNull()
   expect(parseCommand('symcc-task', ' t-3 ')).toEqual({ kind: 'show', id: 'T-3' })
   expect(parseCommand('symcc-approve', 'T-5')).toEqual({ kind: 'approve', id: 'T-5' })
   expect(parseCommand('symcc-approve', 't5')).toEqual({ kind: 'approve', id: 'T-5' })
@@ -1220,7 +1222,7 @@ test('slash commands all start with the plugin name: open, views, one task, appr
   expect(parseCommand('symcc-help', '')).toEqual({ kind: 'help', topic: '' })
   expect(parseCommand('symcc-help', ' scouts ')).toEqual({ kind: 'help', topic: 'scouts' })
   expect(parseCommand('symcc-mode', 'paused')).toEqual({ kind: 'mode', mode: 'paused' })
-  const bads: [string, string][] = [['symcc-tasks', 'x'], ['symcc-board', 'x'], ['symcc-scouts', 'run bugs'], ['symcc-task', ''], ['symcc-task', 'banana'], ['symcc-task', 'T-3 T-4'], ['symcc-approve', ''], ['symcc-approve', 'banana'], ['symcc-approve', 'T-5 now'], ['symcc-reject', 'T-5'], ['symcc-reject', ''], ['symcc-diff', ''], ['symcc-diff', 'x.ts'], ['symcc-scout', ''], ['symcc-scout', 'a b'], ['symcc-mode', 'later']]
+  const bads: [string, string][] = [['symcc-tasks', 'x'], ['symcc-board', 'x'], ['symcc-task', ''], ['symcc-task', 'banana'], ['symcc-task', 'T-3 T-4'], ['symcc-approve', ''], ['symcc-approve', 'banana'], ['symcc-approve', 'T-5 now'], ['symcc-reject', 'T-5'], ['symcc-reject', ''], ['symcc-diff', ''], ['symcc-diff', 'x.ts'], ['symcc-scout', 'a b'], ['symcc-mode', 'later']]
   for (const [c, a] of bads) expect(parseCommand(c, a)!.kind).toBe('bad')
   expect((parseCommand('symcc-reject', 'T-5') as { message: string }).message).toContain('/symcc-reject T-5 <reason>')
   expect((parseCommand('symcc-approve', '') as { message: string }).message).toBe('Use: /symcc-approve T-5')

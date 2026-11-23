@@ -113,7 +113,6 @@ Type these in the chat. `/symcc` opens everything; `/symcc-<word>` does one thin
 | `/symcc-answer T-5 <answer>` | OpenCode only: answer a waiting task, or a question with `Q-3 <answer>`. The board panel sends this for you |
 | `/symcc-tasks` | Print a clear list of the open tasks in the chat, grouped like the board (every client; it never opens the panel) |
 | `/symcc-status` | Print what the board's Live tab shows, as text in the chat (every client; it never opens the panel): NEEDS YOU (only when something waits for you), TASKS (each running task's steps, time and try, and what waits for it), BRANCHES, TODAY (with yesterday and the last 7 days) and ORGANIZATIONAL MEMORY (the count and the 3 newest notes) |
-| `/symcc-scouts` | Open the panel on the scouts view and reload the scout files (a text list if the panel can't be shown) |
 | `/symcc-task T-3` | Open one task |
 | `/symcc-task T-3 pause` / `resume` / `retry` | Pause a task (its worker stops), resume a paused one, or put a failed or dropped one back to `todo` (on a task whose finished work waited for your files: merge it now) |
 | `/symcc-task T-3 drop [reason]` | Drop a task, with an optional reason |
@@ -125,6 +124,7 @@ Type these in the chat. `/symcc` opens everything; `/symcc-<word>` does one thin
 | `/symcc-approve T-5` | Merge a task that is ready for review (an answered investigation: Done) |
 | `/symcc-reject T-5 <reason>` | Send a task in review back to `todo` with the reason (an answered investigation: Ask more, the reason is your follow-up question) |
 | `/symcc-diff T-5 [file]` | The files a task in review changed (+/- lines), or one file's full diff |
+| `/symcc-scout` | With no name: open the panel on the scouts view and reload the scout files (a text list if the panel can't be shown) |
 | `/symcc-scout <name>` | Run a scout now |
 | `/symcc-scout <name> pause` / `resume` | Pause a scout's timer (it doesn't run on its timer until you resume it; run now still runs it once and it stays paused), or resume it. `p` on the scout's page in the panel does the same |
 | `/symcc-scout <name> every <minutes>` | Change how often a scout runs on its timer |
@@ -143,10 +143,9 @@ Type these in the chat. `/symcc` opens everything; `/symcc-<word>` does one thin
 | `/symcc-settings orgmem delete N` | Delete note N from the organizational memory (its number on the Organizational memory page) |
 | `/symcc-doctor [fix [all\|id ...]]` | Check `.symcc/` and git (old backups, merged branches, leftover task folders, files near 4 MB, a stuck board). It only lists them; `fix all` or `fix <id> ...` cleans up |
 | `/symcc-disable` | Disable symcc for this project: Claude works as normal (no lead guide, workers, scouts, updates, sounds or voice); the board is kept |
-| `/symcc-enable` | Turn symcc on in this window: the project too if it was disabled, and this window if it was off here (it becomes a lead again), in the mode the board had. It says "already enabled" only when both were on. It never creates a board; with no `.symcc` in the folder the session started in, it points to `/symcc-init` |
+| `/symcc-enable` | Turn symcc on in this window: the project too if it was disabled, and this window if it was off here (it becomes a lead again), in the mode the board had. It says "already enabled" only when both were on. It never creates a board; with no `.symcc` in the folder the session started in, it points to `/symcc-init`. A window opened while another live window has symcc on starts off here; `/symcc-enable` opts in |
 | `/symcc-init [git]` | Create `.symcc/` with the board in the folder Claude started in (a board in a parent folder does not matter), turn symcc on, become the lead, add the example scouts and open the panel. With no repository of its own the board still opens, with a "No git repo here" notice and a Set up git button; `/symcc-init git` sets git up here first. Where `.symcc/` already exists it changes nothing |
 | `/symcc-disable here` | Turn symcc off in this window only (plain Claude here). It is kept in this session, not in `board.json`; other windows are not changed. If this window drives the board, it hands driving over |
-| `/symcc-enable here` | The same as `/symcc-enable` (kept as another spelling). A window opened while another live window has symcc on starts off here; `/symcc-enable` opts in |
 | `/symcc-drive` | Make this session drive the board (start workers, merge, run scouts). If another session drives, it hands over within 30 s: its running workers stop and restart here from their kept folders and branches, without using up a try. If it doesn't answer within 3 minutes, this session takes over anyway |
 | `/symcc-help [topic]` | The built-in manual |
 

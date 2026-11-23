@@ -194,7 +194,7 @@ export async function scoutPageVs($: $, pane: PaneParts, sc: SymccScout, run: st
           {problem ? plain('vs-scout-problem', problem, 'error') : null}
         </Box>
       ) : null}
-      {section('instructions', 'Instructions', [sc.prompt?.trim() ? <Markdown key="vs-scout-prompt" text={sc.prompt.trim()} /> : plain('vs-scout-prompt-none', `(not loaded yet: run /${S.N.name}-scouts)`)])}
+      {section('instructions', 'Instructions', [sc.prompt?.trim() ? <Markdown key="vs-scout-prompt" text={sc.prompt.trim()} /> : plain('vs-scout-prompt-none', `(not loaded yet: run /${S.N.name}-scout)`)])}
       {/* no report text here: a run's report shows on its page (a press on the run); the newest run is first */}
       {section(
         'runs',

@@ -95,8 +95,8 @@ test('T-706: the new command forms parse: role|kind <name> add, <name> remove, <
   expect(p('symcc-scout', 'new every 30')).toEqual({ kind: 'scout-edit', name: 'new', field: 'every', value: '30' })
   expect(p('symcc-scout', 'new pause')).toEqual({ kind: 'scout-pause', name: 'new', paused: true })
   expect(p('symcc-scout', 'new')).toEqual({ kind: 'scout', name: 'new' })
-  // no words at all: the usage line (it once threw)
-  expect(p('symcc-scout', '')!.kind).toBe('bad')
+  // no words at all: the scouts view (T-934: /symcc-scouts is gone, /symcc-scout with no name does it)
+  expect(p('symcc-scout', '')!.kind).toBe('scouts')
   for (const [c, a] of [['symcc-settings', 'role docs edit'], ['symcc-settings', 'role docs edit body x'], ['symcc-settings', 'kind chore edit model x'], ['symcc-settings', 'role docs edit description'], ['symcc-settings', 'role add'], ['symcc-settings', 'role docs add x'], ['symcc-settings', 'role docs save'], ['symcc-settings', 'role docs save {"body":"x"}'], ['symcc-settings', 'kind chore save {"tools":"web"}'], ['symcc-settings', 'role docs save {"description":" "}'], ['symcc-settings', 'role docs save {}'], ['symcc-settings', 'role docs save {"model":1}'], ['symcc-settings', 'role docs save [1]'], ['symcc-settings', 'role docs save {x'], ['symcc-settings', 'git'], ['symcc-settings', 'git setup now'], ['symcc-scout', 'lint new']] as const) {
     expect([a, p(c, a)!.kind]).toEqual([a, 'bad'])
   }

@@ -1,4 +1,4 @@
-// T-325: a scout file that can't be read is skipped (and named in /symcc-scouts) instead of stopping the
+// T-325: a scout file that can't be read is skipped (and named in /symcc-scout with no name) instead of stopping the
 // scheduling of the other scouts and the rest of session.start.
 import { expect, mock } from 'claude-code/testing'
 import { test } from './reset'
@@ -82,9 +82,9 @@ test('session.start with an unreadable scout file still runs the other scout, th
   expect(w.state.lists).toBeGreaterThan(lists)
 })
 
-test('/symcc-scouts with an unreadable scout file names it instead of throwing', async ($, on) => {
+test('/symcc-scout (no name) with an unreadable scout file names it instead of throwing', async ($, on) => {
   world(on)
-  const text = String((await $.command.run(slash('symcc-scouts'))).text)
+  const text = String((await $.command.run(slash('symcc-scout'))).text)
   expect(text).toMatch(/b\.md: can't be read, skipped/)
 })
 

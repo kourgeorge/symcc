@@ -20,6 +20,7 @@ export type Command =
   | { kind: 'board' }
   /** /<name>-status (T-902): the Live tab's picture as text in the chat; never opens the panel */
   | { kind: 'status' }
+  /** /<name>-scout with no name: opens the panel on the Scouts view and reloads the scout files (a text list with no panel) */
   | { kind: 'scouts' }
   | { kind: 'show'; id: string }
   /** /<name>-task T-5 <verb> [...]: one of the task page's actions, as the lead's tools do it (see TASK_VERBS) */
@@ -55,7 +56,7 @@ export type Command =
   | { kind: 'orgmem-delete'; n: number; key?: string }
   | { kind: 'mode'; mode: SymccMode }
   | { kind: 'disable'; here?: boolean }
-  | { kind: 'enable'; here?: boolean }
+  | { kind: 'enable' }
   | { kind: 'init'; git?: boolean }
   | { kind: 'drive' }
   | { kind: 'help'; topic: string }
@@ -117,7 +118,7 @@ export type TaskVerb = (typeof TASK_VERBS)[number]
 export const taskUsage = (name: string = DEFAULT_NAME) => `/${name}-task T-3 (open it), or /${name}-task T-3 pause|resume|retry|drop [reason]|merged|review on|off|stash|todo|role <name>|note`
 
 /** The words after the plugin's name, one per command: /<name>-tasks, /<name>-approve, ... */
-export const COMMAND_WORDS = ['tasks', 'board', 'status', 'scouts', 'task', 'approve', 'reject', 'diff', 'scout', 'mode', 'settings', 'help', 'disable', 'enable', 'init', 'drive'] as const
+export const COMMAND_WORDS = ['tasks', 'board', 'status', 'task', 'approve', 'reject', 'diff', 'scout', 'mode', 'settings', 'help', 'disable', 'enable', 'init', 'drive'] as const
 
 /** Every slash command's name (without the slash): "<name>" and "<name>-<word>". */
 export const commandNames = (name: string = DEFAULT_NAME): string[] => [name, ...COMMAND_WORDS.map(w => `${name}-${w}`)]
@@ -155,8 +156,6 @@ export function parseCommand(command: string, args: string, current: SymccMode =
       return s ? use(`/${name}-board`) : { kind: 'board' }
     case 'status':
       return s ? use(`/${name}-status`) : { kind: 'status' }
-    case 'scouts':
-      return s ? use(`/${name}-scouts (to run one: /${name}-scout <name>)`) : { kind: 'scouts' }
     case 'task': {
       if (!isId(id)) return use(taskUsage(name))
       if (words.length === 1) return { kind: 'show', id: normId(id!) }
@@ -186,6 +185,7 @@ export function parseCommand(command: string, args: string, current: SymccMode =
       return file ? { kind: 'diff', id: normId(id!), file } : { kind: 'diff', id: normId(id!) }
     }
     case 'scout': {
+      if (!words.length) return { kind: 'scouts' }
       if (words.length === 1) return { kind: 'scout', name: id! }
       if (words.length === 2 && /^(pause|resume)$/i.test(words[1]!)) return { kind: 'scout-pause', name: id!, paused: words[1]!.toLowerCase() === 'pause' }
       const field = (words[1] ?? '').toLowerCase() as ScoutEditField
@@ -234,7 +234,6 @@ export function parseCommand(command: string, args: string, current: SymccMode =
       if (s.toLowerCase() === 'here') return { kind: 'disable', here: true }
       return s ? use(`/${name}-disable [here] (turn ${name} off entirely, or only in this window; /${name}-enable turns it back on)`) : { kind: 'disable' }
     case 'enable':
-      if (s.toLowerCase() === 'here') return { kind: 'enable', here: true }
       return s ? use(`/${name}-enable (turn ${name} on in this window)`) : { kind: 'enable' }
     case 'init':
       if (s.toLowerCase() === 'git') return { kind: 'init', git: true }

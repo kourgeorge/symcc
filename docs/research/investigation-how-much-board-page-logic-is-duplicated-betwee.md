@@ -29,7 +29,7 @@ All `ui/` paths are under `hooks/claude/`. `board-view.ts` line numbers are in `
 
 **The same in every copy (the logic):**
 - which sections show, in what order, with what headings
-- the empty-state texts, e.g. "(no runs yet)", "(none: a plain worker)", "(not loaded yet: run /symcc-scouts)"
+- the empty-state texts, e.g. "(no runs yet)", "(none: a plain worker)", "(not loaded yet: run /symcc-scout)"
 - which actions a status offers, and their labels and keys
 - when a task "asks" you something, and the answer choices
 - the rules for whether a role can be turned off or reset, and the "6 roles · 1 off" count
