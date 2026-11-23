@@ -1,7 +1,7 @@
 // /<name>-status (T-902): the board's Live tab as plain text for the chat, the same in every client. Every line is made by
 // the Live tab's own helpers (core/live.ts), so the numbers always match the panel; this file only puts them in order:
 // NEEDS YOU (only while something waits), TASKS (one line per lane: its id, title, stations and time, with
-// "(try n)" from a second try; the waiting trains hung under it), BRANCHES (when git's figures were read), TODAY (T-938: its first row "Now:" the mode line, then the figures, with the
+// "↺n" from a second try; the waiting trains hung under it), BRANCHES (when git's figures were read), TODAY (T-938: its first row "Now:" the mode line, then the figures, with the
 // yesterday and last 7 days lines) and ORGANIZATIONAL MEMORY (the count and the newest notes), then one hint line, then (when lanes show) the ✧ / ⌀ legend
 // as the last lines (T-933: never under the task rows).
 import { DEFAULT_NAME } from '../name'
@@ -15,8 +15,8 @@ export type StatusView = LiveView & Parameters<typeof liveNeeds>[0] & Parameters
 /** The last line of /<name>-status: where to go next. */
 export const statusHint = (name: string = DEFAULT_NAME) => `/${name}-board opens the board · /${name}-tasks lists the tasks`
 
-/** The " (try n)" after a lane's line from its second try on. */
-const tryText = (n: number) => (n > 1 ? ` (try ${n})` : '')
+/** The " ↺n" after a lane's line from its second try on (↺ then the try number, T-939). */
+const tryText = (n: number) => (n > 1 ? ` ↺${n}` : '')
 
 /**
  * The Live tab of `view` as chat text in `width` columns (see the top of this file); `notes`: org-mem's notes, newest first
@@ -38,7 +38,7 @@ export function liveStatusText(view: StatusView, notes: readonly OrgMemNote[], n
     heading(LIVE_SECTIONS.needs)
     for (const n of needs) under(n.segs)
   }
-  // TASKS: one line per lane (room kept for "(try n)"), its waiting trains under it
+  // TASKS: one line per lane (room kept for "↺n"), its waiting trains under it
   heading(LIVE_SECTIONS.tasks)
   if (!running.length) for (const x of liveIdle(view, nowMs, inner)) out.push(LIVE_INDENT + x)
   // T-924: one empty line between the idle lines and the lanes

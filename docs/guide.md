@@ -1219,7 +1219,7 @@ words as bold headings with the same spacing):
   (every try so far), how many times the board's median tokens per merged task that is (yellow
   from twice the median), how its tokens split between its workers and checkers, together in
   `< >` (a part that is 0 is left out, and there is no `< >` when there is nothing to split), and
-  `⌕×N` for the checker's send-backs (`⌕` is the checker's mark; `↺` only ever means a try). On a narrow panel the parts go in this order: first the
+  `⌕×N` for the checker's send-backs (`⌕` is the checker's mark; on a task row, `↺` with a number is the try). On a narrow panel the parts go in this order: first the
   `< >` split, then `(× median)`, then the kind, then `⌀`, and the clock `⏱` last; the try stays. A
   running worker's tokens are only known when it hands back, so until then the row shows the
   earlier tries' sum with `+ …` (`⌀ 4.0M + …`), or `⌀ at hand-back` on a first try.

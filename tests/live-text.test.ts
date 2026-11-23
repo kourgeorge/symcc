@@ -40,11 +40,11 @@ test('T-902: the status text has the Live sections in order: needs you, the lane
   expect(statusHeadings(text)).toEqual(['NEEDS YOU', 'TASKS', 'TODAY', 'ORGANIZATIONAL MEMORY'])
   expect(statusSection(text, 'NEEDS YOU')).toEqual([' ⚠ T-3 ready for review: Fix the login page', ' ⚠ T-1 asks: Postgres or SQLite?'])
   const tasks = statusSection(text, 'TASKS')
-  // T-2: its second try in tests (◉ under "tests"), the time there and "(try 2)"; T-4 waits for it; T-3 sits at "you"
+  // T-2: its second try in tests (◉ under "tests"), the time there and "↺2"; T-4 waits for it; T-3 sits at "you"
   const labels = tasks[0]!
   const lane = tasks.find(l => l.includes('T-2'))!
   expect(lane.startsWith(' ▶ T-2  Add search')).toBe(true)
-  expect(lane.endsWith('2m (try 2)')).toBe(true)
+  expect(lane.endsWith('2m ↺2')).toBe(true)
   expect(lane.indexOf('◉')).toBe(labels.indexOf('tests'))
   expect(tasks[tasks.indexOf(lane) + 1]).toBe('   └─◇ T-4 Write the export  waits')
   expect(tasks.some(l => l.startsWith(' ▶ T-3') && l.indexOf('◉') === labels.indexOf('you'))).toBe(true)

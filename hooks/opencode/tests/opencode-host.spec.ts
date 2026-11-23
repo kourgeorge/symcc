@@ -1340,7 +1340,7 @@ test('each slash command is added and runs symcc\'s runCommand: a typed one (TUI
     const status = (await run('symcc-status')).prompts.at(-1)!.text
     expect(status.endsWith(ownerAnswerText('symcc-status', '').trimStart())).toBe(true)
     expect(statusHeadings(status).filter(h => h !== 'BRANCHES')).toEqual(['NEEDS YOU', 'TASKS', 'TODAY', 'ORGANIZATIONAL MEMORY'])
-    expect(statusSection(status, 'TASKS').some(l => l.startsWith(' ▶ T-2') && l.endsWith('(try 2)'))).toBe(true)
+    expect(statusSection(status, 'TASKS').some(l => l.startsWith(' ▶ T-2') && l.endsWith('↺2'))).toBe(true)
     expect(statusSection(status, 'TASKS').includes('   └─◇ T-4 Write the export  waits')).toBe(true)
     // T-938: TODAY's first row is "Now:" the mode line (this board is paused), then the figures
     expect(statusSection(status, 'TODAY')[0]).toBe(' Now: ⏸ paused · agents 0/3 busy')
