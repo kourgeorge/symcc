@@ -28,11 +28,12 @@ function boardAt(created: number, files: string[] = ['hooks/app/', 'docs/guide.m
 }
 
 /** A host whose git answers rev-list --count with `total` and git log with `lines`; the git commands are kept in `calls`. */
-function gitHost(total: number, lines: string[]) {
+function gitHost(total: number, lines: string[], tracked: string[] = []) {
   const calls: string[][] = []
   const { host } = fakeHost({
     run: async argv => {
       calls.push([...argv])
+      if (argv[1] === 'ls-files') return done({ stdout: tracked.join('\n') + '\n' })
       if (argv[1] === 'rev-list') return done({ stdout: `${total}\n` })
       if (argv[1] === 'log') return done({ stdout: lines.slice(0, Number(argv[argv.indexOf('-n') + 1])).join('\n') + '\n' })
       return done()
@@ -53,6 +54,7 @@ test('T-936: a 2-day-old task gets the section and the check-first rule, its com
   for (const c of calls) {
     expect(c).toContain(`--since=${iso(created)}`)
     expect(c).toContain('refs/heads/main')
+    expect(c).toContain('--no-merges')
     expect(c.slice(c.indexOf('--') + 1)).toEqual(['hooks/app/', 'docs/guide.md'])
   }
   expect(calls.map(c => c[1])).toEqual(['rev-list', 'log'])
@@ -105,8 +107,25 @@ test('T-936: with no files list the commits are limited to the paths the details
   const t = find(named, 'T-1')!
   const { host, calls } = gitHost(1, commits(1))
   const since = await changedSince(host, t, WT, NOW)
-  expect(calls[0]!.slice(calls[0]!.indexOf('--') + 1)).toEqual(['hooks/app/workers.ts', 'docs/guide.md'])
+  const revList = calls.find(c => c[1] === 'rev-list')!
+  expect(revList.slice(revList.indexOf('--') + 1)).toEqual(['hooks/app/workers.ts', 'docs/guide.md'])
   expect(changedSinceText(since)).toContain('Since then these commits changed files its details name:\n- abc0000 change 0')
+
+  // words with a slash that are not in the repo ("A/B", "and/or") don't count: only the count is told
+  const slashy = boardAt(NOW - 2 * DAY, [], 'Pick option A/B and/or C.')
+  const s = gitHost(172, [])
+  const sinceS = await changedSince(s.host, find(slashy, 'T-1')!, WT, NOW)
+  expect(s.calls.map(x => x[1])).toEqual(['ls-files', 'rev-list'])
+  expect(s.calls[1]!.includes('--')).toBe(false)
+  expect(changedSinceText(sinceS)).toContain('Since then 172 commits landed on the branch it merges into.')
+
+  // a named folder or extension-less file that is in the repo does count; a folder not in the repo does not
+  const real = boardAt(NOW - 2 * DAY, [], 'Look at hooks/app/ and scripts/run, not gone/.')
+  const r = gitHost(2, commits(2), ['hooks/app/workers.ts', 'scripts/run'])
+  const sinceR = await changedSince(r.host, find(real, 'T-1')!, WT, NOW)
+  const rl = r.calls.find(c => c[1] === 'rev-list')!
+  expect(rl.slice(rl.indexOf('--') + 1)).toEqual(['hooks/app/', 'scripts/run'])
+  expect(sinceR?.scope).toBe('named')
 
   const plain = boardAt(NOW - 2 * DAY, [], 'Make the board faster.')
   const c = gitHost(7, [])

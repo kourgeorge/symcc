@@ -7,7 +7,7 @@ import { publish, drivesHere, drivenElsewhere, readLeadText } from './lead'
 import { type BeforeLine, type CheckResult, checkAndMerge, recordCommits, ownerEdits, alreadyMerged, AGAIN_MAX, RELOAD_AGAIN, againsThisTry, noteAgain } from './review'
 import type { TurnLimit } from './merge-line'
 import { timedOutRetryNote } from '../core/test-timeout'
-import { mayBeStale, changedSincePaths, CHANGED_SINCE_MAX, type ChangedSince } from '../core/changed-since'
+import { mayBeStale, changedSincePaths, pathsNamed, CHANGED_SINCE_MAX, type ChangedSince } from '../core/changed-since'
 import { logNeedsFiles } from './evidence'
 import { loadRoles } from './roles'
 import { runChecker, checkerName, cleanFolder, STOPPED_AGAIN } from './checker'
@@ -43,8 +43,15 @@ export const WORKER_PROMPT = (t: BoardTask, b: Board, dir: string, role?: RoleDe
  */
 export async function changedSince(host: Host, t: BoardTask, dir: string, nowMs = Date.now()): Promise<ChangedSince | null> {
   if (!mayBeStale(t, nowMs)) return null
-  const { paths, scope } = changedSincePaths(t)
-  const range = [`--since=${t.created_at}`, `refs/heads/${intoOf(t)}`, ...(paths.length ? ['--', ...paths] : [])]
+  let tracked: string[] = []
+  const named = t.files?.length ? [] : pathsNamed(`${t.title ?? ''}\n${t.details ?? ''}`)
+  if (named.length) {
+    const r = await git(host, ['ls-files', '--', ...named], dir).catch(() => null)
+    tracked = r && r.exitCode === 0 ? r.stdout.split('\n').map(l => l.trim()).filter(Boolean) : []
+  }
+  const { paths, scope } = changedSincePaths(t, tracked)
+  // --no-merges: the "bring up to date with main" merges would fill the lines
+  const range = ['--no-merges', `--since=${t.created_at}`, `refs/heads/${intoOf(t)}`, ...(paths.length ? ['--', ...paths] : [])]
   const count = await git(host, ['rev-list', '--count', ...range], dir).catch(() => null)
   const total = count && count.exitCode === 0 ? Number(count.stdout.trim()) : NaN
   if (!Number.isFinite(total) || total <= 0) return null

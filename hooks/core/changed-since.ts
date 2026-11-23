@@ -51,11 +51,22 @@ export function pathsNamed(text: string): string[] {
   return out
 }
 
-/** The paths the commits are limited to: the task's files, else the paths its details name, else none. */
-export function changedSincePaths(t: Pick<SymccTask, 'files' | 'details' | 'title'>): { paths: string[]; scope: ChangedSince['scope'] } {
+/** The paths the commits are limited to: the task's files, else the paths its details name, else none.
+ *  `tracked`: the repository's files among the named ones (git ls-files); a named word counts only when it is one of them
+ *  (or a folder holding one), or when it looks like a file (it has a file extension), so "A/B" or "and/or" don't count. */
+export function changedSincePaths(t: Pick<SymccTask, 'files' | 'details' | 'title'>, tracked: readonly string[] = []): { paths: string[]; scope: ChangedSince['scope'] } {
   if (t.files?.length) return { paths: [...t.files], scope: 'files' }
-  const named = pathsNamed(`${t.title ?? ''}\n${t.details ?? ''}`)
+  const named = realPaths(pathsNamed(`${t.title ?? ''}\n${t.details ?? ''}`), tracked)
   return named.length ? { paths: named, scope: 'named' } : { paths: [], scope: 'none' }
+}
+
+/** The `named` paths that are real: in `tracked` (a file, or a folder holding one), or file-like (a file extension). */
+export function realPaths(named: readonly string[], tracked: readonly string[]): string[] {
+  return named.filter(p => {
+    const dir = p.endsWith('/') ? p : `${p}/`
+    if (tracked.some(f => f === p || f.startsWith(dir))) return true
+    return !p.endsWith('/') && EXT.test(p)
+  })
 }
 
 const ago = (ms: number): string => {
