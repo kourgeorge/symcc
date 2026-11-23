@@ -436,11 +436,12 @@ test('T-690: the Live tab draws at a normal and a narrow width with nothing cut,
     // (T-760: a narrow panel wraps the mark's legend line, cut at a space)
     if (bodyColumns === 80) expect(lines).toContain(LIVE_INDENT + LIVE_LEGEND)
     else expect(lines.some(l => l.trimStart().startsWith('✧ = an agent works here'))).toBe(true)
-    // T-930: the key line is the last content, after the ORGANIZATIONAL MEMORY section, right above the footer rule
+    // T-933: the key line is the very last lines of the page, below the footer's key line (none under the task rows)
     const legendAt = lines.findIndex(l => l.trimStart().startsWith('✧ = an agent works here'))
     const footAt = lines.indexOf('─'.repeat(bodyColumns))
-    expect(legendAt).toBeGreaterThan(lines.findIndex(l => l.startsWith('─── ❯ ORGANIZATIONAL MEMORY')))
-    expect(lines.slice(legendAt, footAt)).toEqual(liveLegend(liveInner(bodyColumns)).map(x => LIVE_INDENT + x))
+    expect(footAt).toBeGreaterThan(lines.findIndex(l => l.startsWith('─── ❯ ORGANIZATIONAL MEMORY')))
+    expect(legendAt).toBeGreaterThan(lines.findIndex(l => l.includes('l t s c views')))
+    expect(lines.slice(legendAt)).toEqual(liveLegend(liveInner(bodyColumns)).map(x => LIVE_INDENT + x))
     // T-836: a short divider right above the key line
     expect(lines[legendAt - 1]).toBe(LIVE_INDENT + LIVE_DIVIDER)
     expect(lines.some(l => l.includes('l t s c views'))).toBe(true)
@@ -571,7 +572,7 @@ for (const checker of [true, false])
     await ui.unmount()
   })
 
-test('T-930: the legend sits at the bottom of the screen, just above the footer, in the terminal and in VS Code', async ($, on) => {
+test('T-930, T-933: the legend is the very last lines of the page, below the footer key line; the room left goes above the footer, in the terminal and in VS Code', async ($, on) => {
   seedBoard(on, { view: liveView(calm(TASKS)) })
   on('ui.toast', () => ({ value: undefined }))
   type Keyed = Node & { key?: unknown }
@@ -585,28 +586,35 @@ test('T-930: the legend sits at the bottom of the screen, just above the footer,
     const page = all.find(n => kidsOf(n).some(k => keyOf(k) === 'live-key'))!
     const kids = kidsOf(page)
     const at = kids.findIndex(k => keyOf(k) === 'live-key')
-    return { page, key: kids[at]!, before: keyOf(kids[at - 1]), after: keyOf(kids[at + 1]), next: kids[at + 1] }
+    return { page, kids, at, key: kids[at]!, before: kids[at - 1] }
   }
   for (const placement of ['dock', 'inline'] as const) {
     const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 80, placement, scroll: { offset: 0, bodyRows: 40 } }, surface: 'terminal' })
     await ui.press({ key: 'tab-live' })
     // the page whose children hold the legend's Box: as tall as the docked pane's body (no height inline)
-    const { page, key, next } = found(await ui.drawn())
+    const { page, kids, at, key, before } = found(await ui.drawn())
     expect(page.props?.minHeight).toBe(placement === 'dock' ? 40 : undefined)
-    // the legend's Box takes the room left and puts its lines at its bottom, and is the last thing before the footer rule (a Text)
-    expect([key.props?.flexGrow, key.props?.justifyContent]).toEqual([1, 'flex-end'])
-    expect(textOf(next)).toBe('─'.repeat(80))
+    // the legend's Box is the page's last child, right after the footer's key line
+    expect(at).toBe(kids.length - 1)
+    expect(textOf(before)).toContain('l t s c views')
     expect(nodes(key).filter(n => n.type === 'Text').map(textOf)).toEqual([LIVE_INDENT + LIVE_DIVIDER, LIVE_INDENT + LIVE_LEGEND])
+    // the room left goes above the footer: a growing Box right before the footer rule
+    const rule = kids.findIndex(k => textOf(k) === '─'.repeat(80))
+    expect([keyOf(kids[rule - 1]), kids[rule - 1]?.props?.flexGrow]).toEqual(['live-fill', 1])
+    // the drawn page ends in the legend
+    const lines = pageLines(await ui.drawn())
+    expect(lines.slice(-2)).toEqual([LIVE_INDENT + LIVE_DIVIDER, LIVE_INDENT + LIVE_LEGEND])
     await ui.press({ key: 'tab-tasks' })
     await ui.unmount()
   }
   const vs = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 100 }, surface: 'vscode' })
   await vs.press({ key: 'tabs', link: { href: vsHref('tab', 'live') } })
-  const { page, key, before, after } = found(await vs.drawn())
+  const { page, kids, at, before } = found(await vs.drawn())
   expect(page.props?.flexGrow).toBe(1)
-  expect([key.props?.flexGrow, key.props?.justifyContent]).toEqual([1, 'flex-end'])
-  // after the Organizational memory section, right before the footer
-  expect([before, after]).toEqual(['live-om', 'live-hint-footer'])
+  // the footer's Box takes the room left and puts the footer at its bottom; the legend comes after it, last
+  expect([keyOf(before), before?.props?.flexGrow, before?.props?.justifyContent]).toEqual(['live-foot', 1, 'flex-end'])
+  expect(kidsOf(before).map(keyOf)).toEqual(['live-hint-footer'])
+  expect(at).toBe(kids.length - 1)
   await vs.press({ key: 'tabs', link: { href: vsHref('tab', 'tasks') } })
   await vs.unmount()
 })

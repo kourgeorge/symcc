@@ -282,10 +282,10 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
         ))}
       </Box>
       {orgMemSectionVs($, pane, notes)}
-      {/* T-930: the legend at the bottom of the panel, just above the footer: its Box takes the room left on a short page
-          and puts its lines at its bottom; on a long page it is the last content */}
-      {lanes.length ? <Box key="live-key" flexDirection="column" flexGrow={1} justifyContent="flex-end">{line('live-divider', LIVE_DIVIDER, 'inactive')}{line('live-legend', liveLegend(Infinity).join(' '), 'inactive')}</Box> : null}
-      {vsFooter(vs, 'live-hint')}
+      {/* T-930, T-933: the footer's Box takes the room left on a short page and puts the footer at its bottom; the legend
+          is the very last lines of the page, below the footer's key line */}
+      <Box key="live-foot" flexDirection="column" flexGrow={1} justifyContent="flex-end">{vsFooter(vs, 'live-hint')}</Box>
+      {lanes.length ? <Box key="live-key" flexDirection="column">{line('live-divider', LIVE_DIVIDER, 'inactive')}{line('live-legend', liveLegend(Infinity).join(' '), 'inactive')}</Box> : null}
     </Box>
   )
 }

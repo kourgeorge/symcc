@@ -1195,10 +1195,10 @@ words as bold headings with the same spacing):
   ones ahead `──○`, and the current one blinks between `◉` and `◎` (Claude Code doesn't tell
   plugins about reduced motion, so it always blinks; the tab redraws itself every second while
   it is shown). The `✧` after work and check (in the headings' color) means an agent works there, so
-  those stations need an agent slot (a worker or a checker); the legend at the bottom of the tab, just above the footer (below a short dim divider line), says
+  those stations need an agent slot (a worker or a checker); the legend, the very last lines of the tab, below the footer's key line (after a short dim divider line), says
   `✧ = an agent works here (needs an agent slot) · ⌀ = tokens`; queue and tests use none, so there can be more lanes than
-  `max_parallel`. When the page is shorter than the screen (the panel in VS Code), the empty room goes between the content
-  and the legend; when it is taller, the legend is the last lines of the page.
+  `max_parallel`. It never sits under the task rows. When the page is shorter than the screen (the panel in VS Code), the
+  empty room goes between the content and the footer. On a narrow screen the legend is cut at spaces onto more lines, never wider than the screen, still under the key line.
 - On the right: the time at the current station, or the place in the merge queue (`#2`).
 - The second row has no bar, only numbers about this task:
   `bug try 4/4 · ⏱ 41m · ⌀ 7.3M (7.6× median) · <worker 5.4M · checker 1.9M> · ↺×2`. That is
@@ -1211,7 +1211,7 @@ words as bold headings with the same spacing):
   `< >` split, then `(× median)`, then the kind, then `⌀`, and the clock `⏱` last; the try stays. A
   running worker's tokens are only known when it hands back, so until then the row shows the
   earlier tries' sum with `+ …` (`⌀ 4.0M + …`), or `⌀ at hand-back` on a first try.
-- **Signs on the boards:** `⌀` = tokens (a count has `⌀` in front: `⌀ 716.1k`; the legend under the lanes says so, and with no lane the same dim note, `⌀ = tokens`, ends TODAY). `avg` marks an average (`avg ⌀ 2M/task`). Task pages (the agent lines, the Tries summary's checker part) use it too. `/symcc-stats` and its HTML page keep the word "tokens".
+- **Signs on the boards:** `⌀` = tokens (a count has `⌀` in front: `⌀ 716.1k`; the legend at the bottom of the Live tab, below the footer, says so, and with no lane the same dim note, `⌀ = tokens`, ends TODAY). `avg` marks an average (`avg ⌀ 2M/task`). Task pages (the agent lines, the Tries summary's checker part) use it too. `/symcc-stats` and its HTML page keep the word "tokens".
 - Just merged: a task that merged in the last 10 minutes keeps its lane for a while, under the
   running ones, drawn as finished: the track filled up to `merged` with `✓` there (green), a dim `✓ `
   where a running lane has `▶ `, the id in the accent color, the title and second row dim, and `merged 3m ago` on the right (`3m ago` on a narrow panel).

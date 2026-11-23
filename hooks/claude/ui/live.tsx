@@ -9,8 +9,8 @@
 // the Organizational memory page (orgmem.tsx; VS Code's: vscode-orgmem.tsx) filtered to it, Enter on a newest note
 // opens all notes with that note focused, the "[all]" button next to "newest" opens all notes (T-866: no key hint
 // line and no m key); the page's Back comes back here.
-// T-930: the legend (a short rule, then "✧ = an agent works here ...") is the last lines, at the bottom of the screen just
-// above the footer: on a short page the empty room goes between the content and it; on a long page it follows the content.
+// T-930, T-933: the legend (a short rule, then "✧ = an agent works here ...") is the very last lines of the page, below
+// the footer's key line: on a short page the empty room goes between the content and the footer.
 // T-715: under each lane hang its waiting trains (core's liveTrains and trainRows), each one a row Button that opens its task.
 // T-727: under the lanes, the Branches section (core's liveBranches): main's latest commits and a row per open task's
 // branch (commits ahead, how far behind), each task row a row Button that opens its task.
@@ -218,16 +218,18 @@ export function livePage($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
           ))}
         </Box>
       ))}
-      {/* T-930: the legend at the bottom of the screen, just above the footer: its Box takes the room left on a short page
-          (the page is the pane's height, see fill) and puts its lines at its bottom; on a long page it is the last content */}
+      {/* T-930, T-933: on a short page (the page is the pane's height, see fill) this Box takes the room left, so the
+          footer and the legend sit at the bottom of the screen */}
+      {lanes.length ? <Box key="live-fill" flexDirection="column" flexGrow={1} /> : null}
+      <Text key="live-foot-rule"color={C('subtle')}>{footerRule(width)}</Text>
+      {keyLines(liveKeys(), 'live-hint')}
+      {/* T-933: the legend is the very last lines of the page, below the footer's key line */}
       {lanes.length ? (
-        <Box key="live-key" flexDirection="column" flexGrow={1} justifyContent="flex-end">
+        <Box key="live-key" flexDirection="column">
           <Text key="live-divider" color={C('inactive')}>{LIVE_INDENT + LIVE_DIVIDER}</Text>
           {liveLegend(inner).map((x, i) => <Text key={i ? `live-legend-${i}` : 'live-legend'} color={C('inactive')}>{LIVE_INDENT + x}</Text>)}
         </Box>
       ) : null}
-      <Text key="live-foot-rule"color={C('subtle')}>{footerRule(width)}</Text>
-      {keyLines(liveKeys(), 'live-hint')}
     </Box>
   )
 }

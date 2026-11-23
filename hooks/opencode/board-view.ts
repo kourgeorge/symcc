@@ -671,7 +671,7 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
   const top = showsHeader(boardPageOf(f, choice)) ? [...banner, ...tabsLines(tab, w, v.tasks.length, (v.scouts ?? []).length), [{ text: bannerRule(w), color: 'ide' }]] : []
   // the list's footer has Claude Code's board-mode row (T-685): the mode, its [m] button and (no search on) [f] search
   let modeRow: Line[] = []
-  let body: { lines: Line[]; hits?: (PanelHit | null)[] | null; ids: string[]; selected: string; head?: number; tail?: number }
+  let body: { lines: Line[]; hits?: (PanelHit | null)[] | null; ids: string[]; selected: string; head?: number; bottom?: Line[] }
   let keys: KeyHint[]
   if (tab === 'live') {
     // T-687: the Organizational memory page, opened from the button at the tab's bottom
@@ -698,7 +698,8 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
   // T-751: "[ ] prev/next" on a task's or scout's page with others in its list, before "b back"
   const place = pagePlace(f, choice, nowMs)
   if (place && place.of > 1 && keys.at(-1)?.key === 'b') keys = [...keys.slice(0, -1), navHint('opencode'), keys.at(-1)!]
-  const foot: Line[] = [[{ text: footerRule(w), color: 'subtle' }], ...modeRow, ...hintLines(keys, w).map(hintSegs)]
+  // T-933: the page's bottom lines (the Live tab's legend) come last, below the key line, cut to the panel's width
+  const foot: Line[] = [[{ text: footerRule(w), color: 'subtle' }], ...modeRow, ...hintLines(keys, w).map(hintSegs), ...(body.bottom ?? []).flatMap(l => drawnLines(l, w))]
   // T-627: every line is cut into the rows it really takes (drawn lines: no line wider than the panel, none with a
   // line break inside), so the scroll counts what is on screen. The page's own title stays with
   // the banner and the tabs at the top; the mouse wheel scrolls only the rest, between them and the footer, down to its
@@ -707,13 +708,10 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
   const drawnHead: Line[] = []
   const drawnBody: Line[] = []
   const bodyHits: (PanelHit | null)[] = []
-  // T-930: the drawn rows of the body's tail (its last body.tail lines)
-  let tailRows = 0
   body.lines.forEach((l, i) => {
     for (const d of drawnLines(l, w)) {
       if (i < (body.head ?? 0)) drawnHead.push(d)
       else drawnBody.push(d), bodyHits.push(hits0[i] ?? null)
-      if (i >= body.lines.length - (body.tail ?? 0)) tailRows++
     }
   })
   // a panel too low to keep the page's title and still show 3 lines of the rest: the title scrolls with the rest
@@ -729,13 +727,9 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
   // footer stays at the bottom and every row is drawn again (nothing left over from a longer page)
   const shown = room ? drawnBody.slice(scroll, scroll + room) : drawnBody.slice(scroll)
   const pad = room ? room - shown.length : 0
-  // T-930: the blank rows go before the body's tail (when all of it is shown), so the tail sits right above the footer
-  const cut = shown.length - Math.min(tailRows, shown.length)
-  const shownHits = bodyHits.slice(scroll, scroll + shown.length)
-  const blanks = Array.from({ length: pad }, (): Line => [{ text: ' ', color: 'text' }])
   return {
-    lines: [...fixed, ...shown.slice(0, cut), ...blanks, ...shown.slice(cut), ...foot],
-    hits: [...fixed.map(() => null), ...shownHits.slice(0, cut), ...blanks.map(() => null), ...shownHits.slice(cut), ...foot.map(() => null)],
+    lines: [...fixed, ...shown, ...Array.from({ length: pad }, (): Line => [{ text: ' ', color: 'text' }]), ...foot],
+    hits: [...fixed.map(() => null), ...bodyHits.slice(scroll, scroll + shown.length), ...Array.from({ length: pad }, () => null), ...foot.map(() => null)],
     ids: body.ids,
     selected: body.selected,
     keys,
@@ -863,7 +857,7 @@ export const LIVE_BLINK_MS = 1000
 /**
  * The Live tab (T-692), as the terminal panel's (T-690), all made by core/live.ts: the mode and busy agents, the
  * station names, two lines per task in doing (a click on its first line, or Enter on it, opens the task),
- * today's numbers, (T-718) the Organizational memory section and (T-930) the legend last, at the bottom of the screen; the dim idle lines (liveIdle: why nothing runs, what to do next) when none is in doing. The cursor goes over the
+ * today's numbers, (T-718) the Organizational memory section and (T-933) the legend below the footer's key line, the page's last lines; the dim idle lines (liveIdle: why nothing runs, what to do next) when none is in doing. The cursor goes over the
  * lanes; its lane's first column shows "›". The current station blinks with the clock (one step per LIVE_BLINK_MS).
  * T-715: under each lane hang its waiting trains (core's liveTrains and trainRows); the cursor goes over them too, and
  * Enter or a click on one opens its task, as on a lane.
@@ -957,18 +951,16 @@ function liveBody(f: ViewFile, cursor: number, nowMs: number, w: number): Body {
   for (const x of om.newest) b.add(marked(x.segs, liveNoteId(x.note.n)), { open: liveNoteId(x.note.n) })
   if (om.grid.length) b.add([{ text: LIVE_INDENT + om.topicsLabel, color: 'inactive' }])
   for (const r of om.grid) b.add(r.flatMap((c, j) => marked(c.segs, liveTopicId(c.topic), j === 0)), r.length === 1 ? { open: liveTopicId(r[0]!.topic) } : null)
-  // T-930: the legend last, at the bottom of the screen just above the footer (a tail: panelDraw puts the blank rows of a
-  // short page before it); on a long page it is the last lines of the page
-  const tail: Line[] = lanes.length ? [[{ text: LIVE_INDENT + LIVE_DIVIDER, color: 'inactive' }], ...liveLegend(inner).map((x): Line => [{ text: LIVE_INDENT + x, color: 'inactive' }])] : []
-  for (const l of tail) b.add(l)
-  return { ...b, ids, selected, tail: tail.length }
+  // T-930, T-933: the legend is the very last lines of the page, below the footer's key line (panelLines puts it there)
+  const bottom: Line[] = lanes.length ? [[{ text: LIVE_INDENT + LIVE_DIVIDER, color: 'inactive' }], ...liveLegend(inner).map((x): Line => [{ text: LIVE_INDENT + x, color: 'inactive' }])] : []
+  return { ...b, ids, selected, bottom }
 }
 
 /** What a body of the panel holds (between the tabs and the footer); its first `head` lines (the page's title) stay
  *  at the top while the rest scrolls. */
-/** `head`: how many first lines are the page's title (they stay put); `tail` (T-930): how many last lines stay at the
- *  bottom of the screen, just above the footer, when the page is shorter than the panel. */
-type Body = { lines: Line[]; hits: (PanelHit | null)[]; ids: string[]; selected: string; head?: number; tail?: number }
+/** `head`: how many first lines are the page's title (they stay put); `bottom` (T-933): lines drawn below the footer's
+ *  key line, the very last of the page (they stay put too). */
+type Body = { lines: Line[]; hits: (PanelHit | null)[]; ids: string[]; selected: string; head?: number; bottom?: Line[] }
 
 /** The Back (b) button at the end of a list page (Scouts, Settings, Roles, Kinds, Organizational memory), as Claude Code's. */
 const backButton = (b: ReturnType<typeof bodyMaker>, w: number) => buttonLines([LIST_BACK_BUTTON], w).forEach(l => b.add(l))
