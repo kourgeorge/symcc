@@ -388,12 +388,43 @@ export function keepNoteTask(t: BoardTask, answer: string, reports: string | rea
 }
 
 /**
- * The report files (<dir>/reports/<id>-try-<N>.md) task details `details` name, each once, in the order they come:
- * a keep-note task's earlier answers, copied into its folder when it starts (see copyReports).
+ * The report files task details `details` name, each once, in the order they come: a keep-note task's earlier
+ * answers, or an earlier task's answer, copied into its folder when it starts (see copyReports). An exact file
+ * (<dir>/reports/<id>-try-<N>.md) comes back as it is; T-927: "<id>-try-*.md" (with or without the folder) and a bare
+ * "T-920's answer" / "the answer of T-920" come back as "<dir>/reports/<id>-try-*.md", meaning that task's latest
+ * report (see latestReportOf).
  */
 export function namedReports(details: string, dir: string = DATA_DIR): string[] {
   const esc = dir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  return [...new Set(String(details ?? '').match(new RegExp(`${esc}/reports/[A-Za-z0-9_-]+-try-\\d+\\.md`, 'g')) ?? [])]
+  const id = '[A-Za-z]+-\\d+'
+  const re = new RegExp(
+    `${esc}/reports/[A-Za-z0-9_-]+-try-\\d+\\.md|(?:${esc}/reports/)?(${id})-try-\\*\\.md|\\b(${id})['’]s (?:latest |last |research )?(?:answer|report)\\b|\\b(?:answer|report) of (${id})\\b`,
+    'g',
+  )
+  const out: string[] = []
+  for (const m of String(details ?? '').matchAll(re)) {
+    const who = m[1] ?? m[2] ?? m[3]
+    out.push(who ? latestReportPattern(dir, who) : m[0])
+  }
+  return [...new Set(out)]
+}
+
+/** T-927: how namedReports writes "task `id`'s latest report": "<dir>/reports/<id>-try-*.md". */
+export const latestReportPattern = (dir: string, id: string) => `${dir}/reports/${id}-try-*.md`
+
+/**
+ * T-927: the latest report of task `id` among the file names `names` (of the reports folder): the "<id>-try-<N>.md"
+ * with the highest N, or null when there is none.
+ */
+export function latestReportOf(id: string, names: readonly string[]): string | null {
+  let best: string | null = null
+  let n = -1
+  for (const name of names) {
+    const m = /^(.+)-try-(\d+)\.md$/.exec(name)
+    if (!m || m[1] !== id) continue
+    if (Number(m[2]) > n) [best, n] = [name, Number(m[2])]
+  }
+  return best
 }
 
 /** The try number in a report file's name (…-try-<N>.md), 0 when there is none. */

@@ -7,7 +7,7 @@ import { YOUR_EDITS } from '../hooks/core/review'
 import { inMergeLine, MERGE_LINE_POLL_MS, resetMergeLine } from '../hooks/app/merge-line'
 import { joinedText } from '../hooks/core/board-parts'
 import { mergeLineText, parseMergeLine, inLineNote, MERGE_LINE_STALE_MS, mergeLineStaleMs, type LineEntry, testMinutesOf, testTimeoutMs, lineEntryStale, readBoard, DEFAULT_TEST_MINUTES, BASH_PATHS_MAX, bashTooManyText, failedTestNames, FAILED_TESTS_KEPT, FAILED_TEST_CHARS } from '../hooks/board'
-import { PREP_NOTE, STEP_NOTE, shownNote, type Board, type Notify, soundSetFor, type BoardTask, workerGitWriteText, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, readArchive, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, mergeTestCount, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, untestedChange, isTestFile, isPlainRelPath, parseSettingValue, type WorkerQuestion, isAnswered, boardText, taskMatches, withAgentStart, workerIdOf, tryTokens, tryCost, onTask } from '../hooks/board'
+import { PREP_NOTE, STEP_NOTE, shownNote, type Board, type Notify, soundSetFor, type BoardTask, workerGitWriteText, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, readArchive, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, mergeTestCount, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, untestedChange, isTestFile, isPlainRelPath, parseSettingValue, type WorkerQuestion, isAnswered, boardText, taskMatches, withAgentStart, workerIdOf, tryTokens, tryCost, onTask, namedReports, latestReportOf } from '../hooks/board'
 import { usedRun, runBy } from './agent-fixture'
 import { removeWorktree, cleanupMerged, deleteMergedBranch } from '../hooks/app/git'
 import { addPassedTree, parsePassedTrees, passedTreesText, treePassed, PASSED_TREES_MAX } from '../hooks/core/passed-trees'
@@ -30,7 +30,7 @@ import { finishing as finishingSet } from '../hooks/app/state'
 import { CLAUDE_WORDS } from '../hooks/claude/host'
 import { SYMCC_WORDS } from '../hooks/host'
 import { change, load, saveBoard, saveMigrated, takeLock, dropLock } from '../hooks/app/store'
-import { TOOLS, runTool, ownerSettings, allowAskedFiles, refuseAskedFiles } from '../hooks/app/tools'
+import { TOOLS, runTool, leadGuide, ownerSettings, allowAskedFiles, refuseAskedFiles } from '../hooks/app/tools'
 import { archiveOld } from '../hooks/app/archive'
 import { TEST_RERUN_GONE_NOTE, oldHistoryFacts, upgradeArchiveTask } from '../hooks/core/old-data'
 import { readOld, stillOld } from './old-data-fixture'
@@ -5642,6 +5642,59 @@ test('a keep-note task after two tries reads both answers inside its own folder,
   expect(r.ok).toBe(true)
   expect(w.calls).toContain(`${wt}: git add -A -- .`)
   expect(t2.files).toEqual(['docs/research/do-it.md'])
+})
+
+test('T-927: namedReports takes "<id>-try-*.md" and "T-920\'s answer" as that task\'s latest report', () => {
+  expect(namedReports('Read .symcc/reports/T-920-try-*.md first.', '.symcc')).toEqual(['.symcc/reports/T-920-try-*.md'])
+  expect(namedReports('Read T-920-try-*.md first.', '.symcc')).toEqual(['.symcc/reports/T-920-try-*.md'])
+  expect(namedReports("Build on T-920's answer, and the answer of T-919.", '.symcc')).toEqual(['.symcc/reports/T-920-try-*.md', '.symcc/reports/T-919-try-*.md'])
+  expect(namedReports('Also .symcc/reports/T-3-try-2.md.', '.symcc')).toEqual(['.symcc/reports/T-3-try-2.md'])
+  expect(latestReportOf('T-920', ['T-920-try-2.md', 'T-9200-try-5.md', 'T-920-try-10.md', 'T-920-try-3.md', 'notes.md'])).toBe('T-920-try-10.md')
+  expect(latestReportOf('T-920', ['T-921-try-1.md'])).toBe(null)
+})
+
+test("T-927: a follow-up's worker folder gets the parent's latest report and its prompt names it; \"T-n-try-*.md\" and \"T-n's answer\" in details copy the latest report", async () => {
+  const w = world({ current: 'main' })
+  const [b0] = boardWith('auto', [], { kind: 'investigation', history: hist('created by the lead') } as Partial<BoardTask>)
+  let b = patchTask(b0, 'T-1', { status: 'done', attempts: 2 }, ISO)
+  b = addTask(b, { origin: { by: 'lead', task: 'T-1', how: 'follow-up', why: 'build on the answer' }, title: 'Follow it', files: ['src/'] }, ISO)[0]
+  b = addTask(b, { origin: { why: 'a test' }, title: 'Uses answers', details: "Read T-1-try-*.md and T-9's answer.", files: ['src/'] }, ISO)[0]
+  await saveBoard(w.$, b)
+  w.put(`${ROOT}/.symcc/reports/T-1-try-1.md`, 'old answer')
+  w.put(`${ROOT}/.symcc/reports/T-1-try-2.md`, 'latest answer')
+  w.put(`${ROOT}/.symcc/reports/T-9-try-1.md`, 'nine')
+  S.me = 'me'
+  S.startupDone = true
+  S.driving = true
+  workers.clear()
+  const prompts: string[] = []
+  const x = w.$
+  x.agents.spawn = async e => (prompts.push(e.prompt), { agentId: `ag${prompts.length}` })
+  x.plugin = { name: 'symcc', root: '/plugin' }
+  x.fs.list = async (p: string) =>
+    p === `${ROOT}/.symcc/reports`
+      ? [...w.files.keys()].filter(f => f.startsWith(`${p}/`) && !f.slice(p.length + 1).includes('/')).map(f => ({ name: f.slice(p.length + 1), kind: 'file' as const, size: 1, mtimeMs: 0, isLink: false }))
+      : []
+  await withStarts(w.$, startWorker(w.$, 'T-2'))
+  const wt2 = `${ROOT}/.symcc/worktrees/T-2`
+  expect(w.files.get(`${wt2}/.symcc/reports/T-1-try-2.md`)).toBe('latest answer')
+  expect(w.files.has(`${wt2}/.symcc/reports/T-1-try-1.md`)).toBe(false)
+  expect(w.files.get(`${wt2}/.symcc/.gitignore`)).toBe('*\n')
+  expect(prompts[0]).toContain('Earlier answer for this task: .symcc/reports/T-1-try-2.md.')
+  workers.clear()
+  await withStarts(w.$, startWorker(w.$, 'T-3'))
+  const wt3 = `${ROOT}/.symcc/worktrees/T-3`
+  expect(w.files.get(`${wt3}/.symcc/reports/T-1-try-2.md`)).toBe('latest answer')
+  expect(w.files.get(`${wt3}/.symcc/reports/T-9-try-1.md`)).toBe('nine')
+  expect(prompts[1]).toContain('Earlier answers for this task: .symcc/reports/T-1-try-2.md, .symcc/reports/T-9-try-1.md.')
+  workers.clear()
+})
+
+test('T-927: the lead guide says workers cannot read the board or .symcc/, and how to hand them an answer', () => {
+  const g = leadGuide()
+  expect(g).toContain("Workers can't read the board or .symcc/")
+  expect(g).toContain('give its task from_task')
+  expect(g).toContain('paste the key facts into the details')
 })
 
 test('T-470: on a host with no start queue (features.startQueue off) a worker starts at once: no queue, no wake-up line for the lead, no "starting at the next turn" note', async () => {
