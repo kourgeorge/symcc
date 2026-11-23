@@ -14,6 +14,7 @@ import { T0 } from './board-fixture'
 import { todayTasks } from './live-today-fixture'
 import { pastTasks } from './live-past-fixture'
 import { inToday } from './day-clock'
+import { searchTasks } from '../hooks/core/panel'
 
 const now = Date.now()
 const iso = (msAgo: number) => new Date(now - msAgo).toISOString()
@@ -128,4 +129,21 @@ test('T-891: slimming an already slim view again (a non-publish panel update) ke
   const past = pastTasks(n)
   const pastTwice = slimView(slimView(view(past))).tasks
   for (const days of [1, 7]) expect(pastDays(pastTwice as never[], n, days)).toEqual(pastDays(past as never[], n, days))
+})
+
+test('T-891: the board search still finds a task finished in the last 2 days by its details and request words', () => {
+  const view = (tasks: unknown[]) => ({ tasks, working: [], scouts: [], mode: 'auto', test_commands: [] }) as unknown as SymccView
+  const task = (id: string, msAgo: number) => ({ id, title: 'Fix it', status: 'done', details: 'the zebrafish banana', note: '', after: [], files: [], attempts: 1, origin: { why: 'x', by: 'owner', request: 'some pelican words' }, created_at: iso(msAgo), updated_at: iso(msAgo), history: [{ at: iso(msAgo), kind: 'merged', text: 'm' }] })
+  const fresh = task('T-5', 60_000)
+  const old = task('T-6', 3 * 24 * 60 * 60_000)
+  const hits = (tasks: unknown[], q: string) => searchTasks(tasks as SymccView["tasks"], q, now).map(t => t.id)
+  const once = slimView(view([fresh, old]), now).tasks
+  const twice = slimView(slimView(view([fresh, old]), now), now).tasks
+  for (const tasks of [once, twice]) {
+    expect(hits(tasks, 'zebrafish')).toEqual(['T-5'])
+    expect(hits(tasks, 'elica')).toEqual(['T-5'])
+    expect(hits(tasks, 'banana pelican')).toEqual(['T-5'])
+    expect(hits(tasks, 'giraffe')).toEqual([])
+  }
+  expect(hits([fresh, old], 'zebrafish')).toEqual(['T-5', 'T-6'])
 })

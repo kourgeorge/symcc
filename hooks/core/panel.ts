@@ -5,6 +5,7 @@ import { asksMoreTime, needsYou, needsYouFirst } from './commands'
 import { boardSections, type DayGroup, dayLabel, dayOf, localOffset, taskDay } from './days'
 import { approveRunning, checkStepNow, finishingNow, shownStatus } from './lead'
 import { originOf } from './origin'
+import { viewSearchWords } from './board-parts'
 import { askText } from './questions'
 import { isAnswered, OVERTIME_OPTIONS, overtimeQuestion, timeLimitOf } from './task'
 import { waitFilesNote } from './review'
@@ -553,7 +554,8 @@ export const changedMs = (t: Pick<SymccTask, 'updated_at' | 'created_at'>) => {
  *  shaped like a task id ("T-12", "t12" or just "12") matches that task's id exactly (not T-120), or the word in its
  *  text; any other
  *  word matches part of the id, title, details, role, status (its word too, e.g. "waiting for you"), origin (owner,
- *  scout or worker, the scout's name, the task it came from) or the owner's request. An empty query matches every task. */
+ *  scout or worker, the scout's name, the task it came from) or the owner's request (for a finished task
+ *  slimmed in the view, its kept search words, VIEW_SEARCH_KEY). An empty query matches every task. */
 export function taskMatches(t: SymccTask, query: string | SearchQuery, nowMs: number = Date.now()): boolean {
   const q = typeof query === 'string' ? parseSearch(query, nowMs) : query
   if (q.status && !q.status.includes(t.status)) return false
@@ -563,7 +565,7 @@ export function taskMatches(t: SymccTask, query: string | SearchQuery, nowMs: nu
   const words = q.words
   if (!words.length) return true
   const o = originOf(t)
-  const text = [t.title, t.details, roleOf(t), kindOf(t), t.status, STATUS_WORD[t.status] ?? '', o?.by ?? '', o?.scout ?? '', o?.task ?? '', o?.request ?? ''].join('\n').toLowerCase()
+  const text = [t.title, t.details, roleOf(t), kindOf(t), t.status, STATUS_WORD[t.status] ?? '', o?.by ?? '', o?.scout ?? '', o?.task ?? '', o?.request ?? '', viewSearchWords(t)].join('\n').toLowerCase()
   const id = num(t.id)
   return words.every(w => {
     const asId = /^(?:t-?)?(\d+)$/.exec(w)

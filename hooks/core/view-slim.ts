@@ -1,8 +1,9 @@
 // Keeping the published board view under Claude Code's 4 MB limit on one plugin value (the panel stores the view
 // through slimView; the app measures the same trimmed view for its size warning).
 import type { SymccView } from '../../types'
-import { viewTask, viewStubFilled } from './board-parts'
+import { viewTask, viewStubFilled, VIEW_SEARCH_KEY, searchWordsOf, viewSearchWords } from './board-parts'
 import { isFinished } from './board-file'
+import { isObj } from './text'
 
 /** Claude Code refuses a plugin value over this many characters (4 MB). */
 export const VIEW_MAX_CHARS = 4 * 1024 * 1024
@@ -30,15 +31,24 @@ export const trimNote = (step: SlimStep, left: number) =>
 /**
  * The view as the panel keeps it, under Claude Code's 4 MB limit on one value. Every done or dropped task is always
  * slimmed (T-891, viewTask: no history, details or long parts; its page reads them back from its parts file,
- * taskWithParts; its tries and history marks stay, for the lists, the Live tab and ▍Today). Then, each only when the
+ * taskWithParts; its tries and history marks stay, for the lists, the Live tab and ▍Today; one changed in the last 2
+ * days also keeps the words of its details and request, for the board search, slimFinished). Then, each only when the
  * view is still over VIEW_TARGET_CHARS: leave out the archive totals; drop the oldest finished tasks (their done ids
  * go into archived_done, so waiting tasks still see them done); and only last cut long texts (open tasks stay whole
  * as long as possible). Never throws, never gives back a view over the limit unless open tasks alone are that big.
  * `step` says how far it went, `left` how many tasks it left out.
  */
-export function slimViewStep(v: SymccView): { view: SymccView; step: SlimStep; left: number } {
+export function slimViewStep(v: SymccView, nowMs: number = Date.now()): { view: SymccView; step: SlimStep; left: number } {
   const ok = (x: SymccView) => size(x) <= VIEW_TARGET_CHARS
-  let cur: SymccView = { ...v, tasks: (v.tasks ?? []).map(t => (isFinished(t) ? viewStubFilled(viewTask(t)) : t)) }
+  let cur: SymccView = { ...v, tasks: (v.tasks ?? []).map(t => (isFinished(t) ? slimFinished(t, nowMs) : t)) }
+  if (ok(cur)) return { view: cur, step: 0, left: 0 }
+  // too big: the search words go first (the search then works as for old finished tasks)
+  cur = { ...cur, tasks: cur.tasks.map(t => {
+    if (!(VIEW_SEARCH_KEY in t)) return t
+    const x = { ...t } as Record<string, unknown>
+    delete x[VIEW_SEARCH_KEY]
+    return x as unknown as typeof t
+  }) }
   if (ok(cur)) return { view: cur, step: 0, left: 0 }
   const { archived: _a, ...rest } = cur as SymccView & { archived?: unknown }
   cur = rest as SymccView
@@ -62,4 +72,19 @@ export function slimViewStep(v: SymccView): { view: SymccView; step: SlimStep; l
 }
 
 /** The view as the panel keeps it (see slimViewStep). */
-export const slimView = (v: SymccView): SymccView => slimViewStep(v).view
+export const slimView = (v: SymccView, nowMs: number = Date.now()): SymccView => slimViewStep(v, nowMs).view
+
+/** Finished tasks changed within this long keep the words of their details and request for the board search. */
+export const VIEW_SEARCH_MS = 2 * 24 * 60 * 60_000
+
+/** Finished task `t` slimmed (viewTask); changed in the last VIEW_SEARCH_MS, it keeps its search words (VIEW_SEARCH_KEY),
+ *  so the board search still finds it by words in its details or the owner's request (as before T-891). */
+function slimFinished<T extends SymccView['tasks'][number]>(t: T, nowMs: number): T {
+  const slim = viewStubFilled(viewTask(t)) as Record<string, unknown>
+  const changed = Date.parse(t.updated_at || t.created_at || '')
+  const fresh = Number.isFinite(changed) && nowMs - changed <= VIEW_SEARCH_MS
+  const words = fresh ? searchWordsOf(t.details, isObj(t.origin) ? (t.origin as Record<string, unknown>).request : undefined) || viewSearchWords(t) : ''
+  if (words) slim[VIEW_SEARCH_KEY] = words
+  else delete slim[VIEW_SEARCH_KEY]
+  return slim as T
+}
