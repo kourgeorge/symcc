@@ -2,7 +2,8 @@
 // the Live tab's own helpers (core/live.ts), so the numbers always match the panel; this file only puts them in order:
 // the mode line, NEEDS YOU (only while something waits), TASKS (one line per lane: its id, title, stations and time, with
 // "(try n)" from a second try; the waiting trains hung under it), BRANCHES (when git's figures were read), TODAY (with the
-// yesterday and last 7 days lines) and ORGANIZATIONAL MEMORY (the count and the newest notes), then one hint line.
+// yesterday and last 7 days lines) and ORGANIZATIONAL MEMORY (the count and the newest notes), then one hint line, then (when lanes show) the ✧ / ⌀ legend
+// as the last lines (T-933: never under the task rows).
 import { DEFAULT_NAME } from '../name'
 import { LIVE_INDENT, LIVE_SECTIONS, liveIdle, laneLines, liveBranches, liveColumns, liveHeaderSegs, liveHeading, liveInner, liveLabelSegs, liveLayout, liveLegend, liveNeeds, liveOrgMem, liveTaskLanes, liveTodayLines, liveTrains, segText, trainRows, type LiveSeg, type LiveView } from './live'
 import type { OrgMemNote } from './org-mem'
@@ -52,7 +53,6 @@ export function liveStatusText(view: StatusView, notes: readonly OrgMemNote[], n
       out.push((LIVE_INDENT + segText(first) + (l.done ? '' : tryText(l.tryNo))).trimEnd())
       for (const r of trainRows(trains.lanes[l.id] ?? [], inner)) under(r.segs)
     }
-    for (const x of liveLegend(inner)) out.push(LIVE_INDENT + x)
   }
   // BRANCHES: the last figures git gave (none until read)
   const br = liveBranches(view, nowMs, w)
@@ -72,5 +72,7 @@ export function liveStatusText(view: StatusView, notes: readonly OrgMemNote[], n
   if (om.empty) out.push(LIVE_INDENT + om.empty)
   for (const x of om.newest) under(x.segs)
   out.push('', statusHint(name))
+  // T-933: the ✧ / ⌀ legend (only when lanes show those marks) is the text's last lines, after the hint line
+  if (lanes.length) for (const x of liveLegend(inner)) out.push(LIVE_INDENT + x)
   return out.join('\n')
 }

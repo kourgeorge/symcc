@@ -162,7 +162,7 @@ for (const bodyColumns of [100, 40])
     const lines = pageLines(await ui.drawn())
     const at = lines.indexOf(want[0]!)
     expect(at).toBeGreaterThan(0)
-    // T-930: the key line sits at the bottom, after the BRANCHES section
+    // T-933: the key line is the last lines, after the BRANCHES section and the footer
     const legendAt = lines.findIndex(l => l.trimStart().startsWith('✧ = an agent works here'))
     expect(legendAt).toBeGreaterThan(at)
     // T-789: an empty line under the heading, then the section's lines
@@ -187,10 +187,10 @@ test('T-727: the VS Code Live tab draws the Branches section with real lines, an
   const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 100 }, surface: 'vscode' })
   await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'live') } })
   expect((await ui.find({ key: 'live-br-head' }))?.text).toMatch(/^─── ❯BRANCHES─+$/)
-  // T-930: the key line comes after the BRANCHES section, at the bottom just above the footer
+  // T-933: the key line comes after the BRANCHES section and after the footer, the page's last line
   const keys = (await ui.findAll({})).map(n => String(n.key))
   expect(keys.indexOf('live-legend')).toBeGreaterThan(keys.indexOf('live-br-head'))
-  expect(keys.indexOf('live-legend')).toBeLessThan(keys.indexOf('live-hint-footer'))
+  expect(keys.indexOf('live-legend')).toBeGreaterThan(keys.indexOf('live-hint-footer'))
   // T-836: the short divider sits right above the key line
   expect(keys.slice(keys.indexOf('live-divider'), keys.indexOf('live-legend')).filter(k => k.startsWith('live-') && k !== 'live-divider')).toEqual([])
   expect(keys.indexOf('live-divider')).toBeGreaterThan(0)

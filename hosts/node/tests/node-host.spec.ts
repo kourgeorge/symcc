@@ -18,7 +18,7 @@ import { openSession, leadTool, closeSession, settle, slashCommand } from '../se
 import { toolCall, notLeadText, noPanelText } from '../../../hooks/app/symcc'
 import { emptyBoard } from '../../../hooks/core/board-file'
 import { taskListBoard, TASK_LIST_TEXT, EMPTY_TASK_LIST_TEXT } from '../../../tests/task-list-fixture'
-import { statusBoard, statusHeadings, statusSection, statusTodayLines } from '../../../tests/status-fixture'
+import { statusBoard, statusHeadings, statusSection, statusTail, statusTailWant, statusTodayLines } from '../../../tests/status-fixture'
 import { statusHint } from '../../../hooks/core/live-text'
 import { TOOLS } from '../../../hooks/app/tools'
 import { S, toolName, starting } from '../../../hooks/app/state'
@@ -374,7 +374,9 @@ test('T-902: /symcc-status prints the Live tab as text (needs you, the lanes and
       expect(statusSection(text, 'TASKS').some(l => l.startsWith(' ▶ T-2') && l.endsWith('(try 2)'))).toBe(true)
       expect(statusSection(text, 'TASKS').includes('   └─◇ T-4 Write the export  waits')).toBe(true)
       expect(statusSection(text, 'TODAY')[0]!.split('Σ')[0]).toBe(statusTodayLines(statusBoard(now), now)[0]!.split('Σ')[0])
-      expect(text.split('\n').at(-1)).toBe(statusHint())
+      // T-933: the ✧ / ⌀ legend is the last lines, after the hint line, never under the task rows
+      expect(statusTail(text, statusHint())).toEqual(statusTailWant(statusHint()))
+      expect(statusSection(text, 'TASKS').some(l => l.includes('✧ ='))).toBe(false)
       await writeFile(`${repo}/.symcc/board.json`, JSON.stringify({ ...statusBoard(now, true), mode: 'paused' }))
       expect(statusHeadings(await slashCommand(s, 'symcc-status', '')).includes('NEEDS YOU')).toBe(false)
     } finally {
