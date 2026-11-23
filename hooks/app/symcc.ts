@@ -29,7 +29,7 @@ import { changedFiles, changesText } from './review'
 import { loadRoles, changeRole } from './roles'
 import { loadKinds, changeKind } from './kinds'
 import { checkerFinished } from './checker'
-import { fileToolHits, scoutOriginsFixed, scheduleScouts, seedExampleScouts, scoutFinished, runScoutNow, setScoutPaused, unreadableScoutsText, leadScouts } from './scouts'
+import { fileToolHits, scoutOriginsFixed, scheduleScouts, seedExampleScouts, scoutFinished, scoutTurnEnded, runScoutNow, setScoutPaused, unreadableScoutsText, leadScouts } from './scouts'
 import { S, onHere, loadVersion, toolName, timers, heard, stopped, workers, scoutRuns, checkerRuns, scoutState, isOwnAgent } from './state'
 import { path, load, change, isOn, now, saveMigrated, startWait, findRoot, projectRoot, sessionFolder, isWorkerFolder, startingText } from './store'
 import { noteForLead, tellLead, brief, takeBoardUpdate } from './tell'
@@ -498,7 +498,10 @@ export function agentFinished(host: Host, agentId: string | undefined, run: Agen
   // a scout's or checker's turn that ended on an API error or a refusal: its half-written last text is no report or verdict
   const broken = !isAborted && (end.reason === 'error' || end.reason === 'refusal')
   if (agentId && workers.has(agentId)) void workerFinished(host, agentId, answer, end, tokens, cost).catch(() => undefined)
-  else if (agentId && scoutRuns.has(agentId)) void scoutFinished(host, agentId, answer, broken ? end : isAborted, tokens)
+  // T-919: a scout whose turn ended while its background commands still run is woken again by the host: its run goes on
+  else if (agentId && scoutRuns.has(agentId)) {
+    if (isAborted || broken || !scoutTurnEnded(host, agentId, answer, end.background, tokens)) void scoutFinished(host, agentId, answer, broken ? end : isAborted, tokens)
+  }
   // a checker's verdict (the checker setting) goes to the finish step waiting for it
   else if (agentId && checkerRuns.has(agentId)) checkerFinished(agentId, answer, broken ? end : isAborted || end.reason === 'aborted', tokens)
   // a report from a worker this copy lost track of in a reload: still taken when its task waits for it

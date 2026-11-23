@@ -10,6 +10,7 @@ import { path, load, change, now, oneAtATime, safeWrite } from './store'
 import { tellLead } from './tell'
 import { readArchiveFile, renameArchivedScoutOrigins } from './archive'
 import { orgMemText } from './org-mem'
+import { addTokens } from '../core/runs'
 
 // ---------------- scouts ----------------
 
@@ -107,11 +108,22 @@ const runBefore = new Map<string, string | null>()
 const runStarted = new Map<string, number>()
 /** scouts whose failed start the owner was already told about (cleared once one starts) */
 const startWarned = new Set<string>()
+/**
+ * T-919: agent id of a scout whose turn ended while shell commands it sent to the background still ran → what that
+ * turn answered (and used). The host wakes such an agent again, under the same id, when its command ends, so its run
+ * is not over: it stays in scoutRuns (and its shell commands keep the scout's rules) until a turn ends with none left,
+ * or SCOUT_WAKE_MS passes with no new turn (then the answer kept here is its report).
+ */
+const waking = new Map<string, { answer: string; tokens?: SymccTokens; timer: { cancel(): void } }>()
+/** T-919: how long a scout whose turn ended with background commands still running may take to be woken again. */
+export const SCOUT_WAKE_MS = 30 * 60_000
 
 /** Empties this file's memory of scout runs (what a reload starts with); for the tests' resetPlugin() only. */
 export function resetScoutRuns() {
   runBefore.clear()
   runStarted.clear()
+  for (const w of waking.values()) w.timer.cancel()
+  waking.clear()
   startWarned.clear()
   historyWarned = false
 }
@@ -426,11 +438,41 @@ export async function recordScoutRun(host: Host, name: string, run: { endMs: num
 }
 
 /**
+ * T-919: a scout's turn ended (turn.complete) on an answer while the host saw shell commands it sent to the background
+ * still running (`background`): the host wakes it again when they end, so the run goes on and the scout stays known
+ * (scoutRuns) to the guards. Answers whether the run was kept going this way; false: it ended, call scoutFinished.
+ */
+export function scoutTurnEnded(host: Host, agentId: string, answer: string, background: readonly string[] | undefined, tokens?: SymccTokens): boolean {
+  if (!background?.length || !scoutRuns.has(agentId) || stopped.has(agentId)) return false
+  const before = waking.get(agentId)
+  before?.timer.cancel()
+  const all = before?.tokens ? addTokens(before.tokens, tokens) : tokens
+  const said = answer.trim() ? answer : (before?.answer ?? answer)
+  const timer = host.clock.after(SCOUT_WAKE_MS, () => {
+    if (waking.get(agentId)?.timer !== timer) return
+    waking.delete(agentId)
+    // never woken again: this run ends on what it said last (a stopped scout, gone from scoutRuns, ends no run here)
+    if (scoutRuns.has(agentId)) void scoutFinished(host, agentId, said, false, all).catch(() => undefined)
+  })
+  waking.set(agentId, { answer: said, ...(all ? { tokens: all } : {}), timer })
+  return true
+}
+
+/**
  * A scout's turn ended (turn.complete). `end`: why it ended (true: it was stopped). A stopped run, or one that ended
  * on an API error or a refusal, reports nothing: its last text is only half an answer, so the last real run and
  * report are kept.
  */
 export async function scoutFinished(host: Host, agentId: string, answer: string, end: boolean | TurnEnd = false, tokens?: SymccTokens) {
+  // T-919: an earlier turn of this run that ended while its background commands still ran: its tokens count too, and
+  // its answer stands in when this last turn says nothing
+  const held = waking.get(agentId)
+  if (held) {
+    held.timer.cancel()
+    waking.delete(agentId)
+    if (held.tokens) tokens = addTokens(held.tokens, tokens)
+    if (!answer.trim()) answer = held.answer
+  }
   // T-759: a run symcc stopped, or one any copy of symcc refused with the "driving moved" note (movedRefused, shared
   // by every copy in this process), is a stopped run whatever it answered, as is one whose last words are only
   // "stopped": never a finding
