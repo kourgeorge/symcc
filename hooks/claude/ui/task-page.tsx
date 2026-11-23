@@ -13,7 +13,7 @@ import { noteForLead, brief, tellLead } from '../../app/tell'
 import { when } from '../../core/days'
 import { runTool, allowAskedFiles, refuseAskedFiles } from '../../app/tools'
 import type { PaneParts } from './parts'
-import { answerBox, fieldRows } from './answer-box'
+import { answerBox, dropDraft, fieldRows } from './answer-box'
 import { taskPageVs } from './vscode-task'
 import { taskSections, type SectionLine, type TaskSection } from '../../core/task-sections'
 import { NAV_KEYS, navHint, TASK_ID_COLOR, taskPlace, taskStateGroups, type PageFrom } from '../../core/page-header'
@@ -285,6 +285,8 @@ export async function taskPage($: $, pane: PaneParts, viewTask: SymccTask) {
   const answerable = !!asks
   const askedQuestion = asks?.text
   const choices = asks?.choices ?? []
+  // nothing asked any more (answered elsewhere, or it stopped waiting): a half-typed answer must not come back on its next question (T-917)
+  if (!asks) dropDraft(t.id)
   if (S.answering !== null && S.answering !== t.id) S.answering = null
   const typing = !choices.length || S.answering === t.id
   const cancelAnswer = () => ((S.answering = null), $.ui.invalidate('ui.render'))

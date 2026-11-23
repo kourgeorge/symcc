@@ -4,9 +4,25 @@ import { boxHint, choiceLines } from '../../board'
 import { wrapSegs, type Seg } from '../../core/details'
 import type { PaneParts } from './parts'
 
-/** What is typed in an answer box, by task or question id (T-917): kept over redraws (a resize redraws the page, and
- *  a field drawn without a value would come back empty) until it is sent or cancelled. */
-export const answerDrafts = new Map<string, string>()
+/** What is typed in an answer box, by task or question id, with the question it answers (T-917): kept over redraws
+ *  (a resize redraws the page, and a field drawn without a value would come back empty) until it is sent, cancelled,
+ *  a choice is picked, or the question changes or goes away. */
+const answerDrafts = new Map<string, { question: string; text: string }>()
+
+/** The text typed for `id`'s question `question`; '' (and the old draft dropped) when the draft was for another question. */
+export function draftFor(id: string, question: string): string {
+  const d = answerDrafts.get(id)
+  if (!d) return ''
+  if (d.question === question) return d.text
+  answerDrafts.delete(id)
+  return ''
+}
+
+/** Keeps `text` as what is typed for `id`'s question `question`. */
+export const keepDraftText = (id: string, question: string, text: string) => void answerDrafts.set(id, { question, text })
+
+/** Forgets what was typed for `id` (sent, cancelled, a choice picked, or nothing asked any more). */
+export const dropDraft = (id: string) => void answerDrafts.delete(id)
 
 /** The most rows a typing box grows to; a longer text scrolls inside it, the cursor still in view. */
 export const MAX_FIELD_ROWS = 12
@@ -70,19 +86,27 @@ export function answerBox(pane: PaneParts, a: AnswerBox) {
   /** Only the terminal draws the wrapped choice lines as plain rows; desktop and mobile get one native button per choice. */
   const terminal = pane.vs.surface === 'terminal'
   const label = 'Your answer'
-  const draft = answerDrafts.get(a.id) ?? ''
+  const draft = draftFor(a.id, a.question)
   const onInput = (value: string) => {
-    const before = fieldRows(answerDrafts.get(a.id) ?? '', width, label)
-    answerDrafts.set(a.id, value)
+    const before = fieldRows(draftFor(a.id, a.question), width, label)
+    keepDraftText(a.id, a.question, value)
     if (fieldRows(value, width, label) !== before) a.redraw()
   }
   const onSubmit = (value: string) => {
-    answerDrafts.delete(a.id)
+    dropDraft(a.id)
     a.onSubmit(value)
   }
   const onCancel = () => {
-    answerDrafts.delete(a.id)
+    dropDraft(a.id)
     a.onCancel()
+  }
+  /** a picked choice answers the question, so what was typed is dropped (Answer…, the last, opens the box: kept) */
+  const onChoice = (i: number) => {
+    const press = a.onChoice(i)
+    return () => {
+      if (i !== a.choices.length - 1) dropDraft(a.id)
+      return press()
+    }
   }
   return (
     <Box flexDirection="column" borderStyle="round" borderColor={C('warning')} paddingX={1}>
@@ -110,9 +134,9 @@ export function answerBox(pane: PaneParts, a: AnswerBox) {
             <Box key={`choice-row-${i + 1}`} flexDirection="column">
               {!terminal ? (
                 // desktop and mobile draw every Button as a native button, which wraps its own label: one per choice
-                <Button key={`choice-${i + 1}`} label={`${i + 1}. ${c}`} autoFocus={i === 0 && !a.typing ? true : undefined} onPress={a.onChoice(i)} />
+                <Button key={`choice-${i + 1}`} label={`${i + 1}. ${c}`} autoFocus={i === 0 && !a.typing ? true : undefined} onPress={onChoice(i)} />
               ) : choiceLines(c, i + 1, room).map((l, j) => (
-                <Button key={j ? `choice-${i + 1}-line-${j + 1}` : `choice-${i + 1}`} plain label={c} autoFocus={i === 0 && j === 0 && !a.typing ? true : undefined} hover={{ inverse: true }} onPress={a.onChoice(i)}>
+                <Button key={j ? `choice-${i + 1}-line-${j + 1}` : `choice-${i + 1}`} plain label={c} autoFocus={i === 0 && j === 0 && !a.typing ? true : undefined} hover={{ inverse: true }} onPress={onChoice(i)}>
                   <Text color={C(c === 'Answer…' ? 'inactive' : 'text')}>{l}</Text>
                 </Button>
               ))}
@@ -120,7 +144,7 @@ export function answerBox(pane: PaneParts, a: AnswerBox) {
           ))}
           <Box key="choice-keys" display="none">
             {a.choices.slice(0, 9).map((c, i) => (
-              <Button key={`choice-key-${i + 1}`} label={c} hotkey={String(i + 1)} onPress={a.onChoice(i)} />
+              <Button key={`choice-key-${i + 1}`} label={c} hotkey={String(i + 1)} onPress={onChoice(i)} />
             ))}
           </Box>
         </Box>

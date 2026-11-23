@@ -18,7 +18,7 @@ import type { TaskSection } from '../../core/task-sections'
 import { historyEvent, historyTime, HISTORY_COLOR } from '../../core/history'
 import { S } from '../../app/state'
 import type { PaneParts } from './parts'
-import { answerDrafts, fieldRows } from './answer-box'
+import { draftFor, dropDraft, fieldRows, keepDraftText } from './answer-box'
 import type { $ } from '../panel'
 import { vsCallout, vsChoices, vsFold, vsFooter, vsHref, vsLink, mdLink, vsSection } from './vscode'
 import { type PageHeader, vsPageHeader } from './page-header'
@@ -195,11 +195,18 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
   const header: PageHeader = { ...x.header, buttons: x.header.buttons.map(b => ({ ...b, onPress: acts.find(a => a.key === b.id)?.onPress ?? b.onPress })) }
 
   // the answer and the reason being typed: kept over redraws, the field one row taller once the text needs it (T-917)
-  const draft = answerDrafts.get(t.id) ?? ''
+  // it belongs to the question asked now: another question, a picked choice or nothing asked drops it
+  const asked = x.askedQuestion ?? ''
+  if (!x.answerable) dropDraft(t.id)
+  const draft = x.answerable ? draftFor(t.id, asked) : ''
   const keepDraft = (value: string) => {
-    const before = fieldRows(answerDrafts.get(t.id) ?? '', pane.width)
-    answerDrafts.set(t.id, value)
+    const before = fieldRows(draftFor(t.id, asked), pane.width)
+    keepDraftText(t.id, asked, value)
     if (fieldRows(value, pane.width) !== before) x.redraw()
+  }
+  const pickChoice = (i: number) => {
+    const press = on.choicePress(i)
+    return () => (dropDraft(t.id), press())
   }
   const keepReason = (value: string) => {
     if (!S.rejecting) return
@@ -253,9 +260,9 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
     ? vsCallout(vs, 'vs-sec-question', '?', x.overtime ? 'Time is up' : 'Question for you', 'warning', [
         plain('vs-question', x.askedQuestion ?? '', 'text', { bold: true }),
         ...askedFiles.map(f => plain(`vs-asked-${f}`, `  ${f}`, 'autoAccept')),
-        answers.length ? vsChoices(vs, answers.map((c, i) => (askedFiles.length && i === 0 ? 'Allow files' : c)), on.choicePress) : null,
-        // the field keeps what was typed (answerDrafts) and grows with it, so a redraw (a resize) shows the same text (T-917)
-        <Input key="answer" label="Your answer" submitLabel="Send" placeholder={answers.length ? 'or type your own answer' : 'type your answer'} value={draft} rows={fieldRows(draft, pane.width)} autoFocus={answers.length ? undefined : true} onInput={keepDraft} onSubmit={value => (answerDrafts.delete(t.id), on.sendAnswer(value)())} />,
+        answers.length ? vsChoices(vs, answers.map((c, i) => (askedFiles.length && i === 0 ? 'Allow files' : c)), pickChoice) : null,
+        // the field keeps what was typed (draftFor) and grows with it, so a redraw (a resize) shows the same text (T-917)
+        <Input key="answer" label="Your answer" submitLabel="Send" placeholder={answers.length ? 'or type your own answer' : 'type your answer'} value={draft} rows={fieldRows(draft, pane.width)} autoFocus={answers.length ? undefined : true} onInput={keepDraft} onSubmit={value => (dropDraft(t.id), on.sendAnswer(value)())} />,
       ].filter(Boolean) as never[])
     : null
 

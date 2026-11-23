@@ -140,3 +140,43 @@ test('VS Code: the question wraps, and a 400-character answer stays whole in a g
   expect((field?.props.rows as number) > 1).toBe(true)
   await ui.unmount()
 })
+
+test('terminal: a half-typed answer does not come back when the task asks a new question later', async ($, on) => {
+  const seed: Record<string, unknown> = { opened: 'T-7', view: view([task('T-7', 'waiting', 'Search mode', { question: 'First question?' })]) }
+  stateOf(on, seed)
+  const ui = await $.ui.mount({ ...pane(80), surface: 'terminal' })
+  await ui.input({ key: 'answer', text: 'half typed draft', kind: 'change' })
+  await ui.redraw()
+  expect((await ui.find({ key: 'answer' }))?.props.value).toBe('half typed draft')
+  seed.view = view([task('T-7', 'doing', 'Search mode')])
+  await ui.redraw()
+  seed.view = view([task('T-7', 'waiting', 'Search mode', { question: 'A totally new question?' })])
+  await ui.redraw()
+  expect((await ui.find({ key: 'answer' }))?.props.value).toBe('')
+  await ui.unmount()
+})
+
+test('terminal: a new question on the same task opens with an empty field, even with no redraw in between', async ($, on) => {
+  const seed: Record<string, unknown> = { opened: 'T-9', view: view([task('T-9', 'waiting', 'Search mode', { question: 'First question?' })]) }
+  stateOf(on, seed)
+  const ui = await $.ui.mount({ ...pane(80), surface: 'terminal' })
+  await ui.input({ key: 'answer', text: 'half typed draft', kind: 'change' })
+  seed.view = view([task('T-9', 'waiting', 'Search mode', { question: 'A totally new question?' })])
+  await ui.redraw()
+  expect((await ui.find({ key: 'answer' }))?.props.value).toBe('')
+  await ui.unmount()
+})
+
+test('VS Code: picking a choice drops the half-typed answer, so the next question opens with an empty field', async ($, on) => {
+  const seed: Record<string, unknown> = { opened: 'T-8', view: view([task('T-8', 'waiting', 'Search mode', { question: 'Q1?', options: ['Yes', 'No'] })]) }
+  stateOf(on, seed)
+  const ui = await $.ui.mount({ ...pane(80), surface: 'vscode' })
+  await ui.input({ key: 'answer', text: 'half typed draft', kind: 'change' })
+  await ui.press({ key: 'choice-key-1' })
+  seed.view = view([task('T-8', 'doing', 'Search mode')])
+  await ui.redraw()
+  seed.view = view([task('T-8', 'waiting', 'Search mode', { question: 'Q2 new?', options: ['A', 'B'] })])
+  await ui.redraw()
+  expect((await ui.find({ key: 'answer' }))?.props.value).toBe('')
+  await ui.unmount()
+})
