@@ -2,7 +2,7 @@
 // runs and what to do next (liveIdle in core/live.ts): paused, open tasks that wait, all done, or a brand-new board.
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { LIVE_INDENT, liveIdle } from '../hooks/core/live'
+import { LIVE_INDENT, liveIdle, liveIdleLine } from '../hooks/core/live'
 import { liveStatusText } from '../hooks/core/live-text'
 import { vsHref } from '../hooks/claude/ui/vscode'
 import { PANE, T0, seedBoard } from './board-fixture'
@@ -70,6 +70,15 @@ for (const c of CASES) {
     await ui.unmount()
   })
 }
+
+test('T-903: the band line (liveIdleLine) is the first idle line, cut with "…" when narrow, never broken mid-sentence', () => {
+  for (const c of CASES) expect([c.name, liveIdleLine({ tasks: c.tasks as never[], mode: c.mode }, T0, 100)]).toEqual([c.name, c.lines[0]])
+  const paused = liveIdleLine({ tasks: [task('T-1', 'done')] as never[], mode: 'paused' }, T0, 39)
+  expect([paused, paused.length <= 39, paused.endsWith('…')]).toEqual([paused, true, true])
+  expect(liveIdleLine({ tasks: [], mode: 'auto' }, T0, 30).endsWith('…')).toBe(true)
+  // the waiting line still drops the reasons that don't fit instead of cutting one
+  expect(liveIdleLine({ tasks: CASES[1]!.tasks as never[], mode: 'auto' }, T0, 44)).toBe('Nothing running · 3 waiting: T-5 needs you')
+})
 
 test('T-903: /symcc-status shows the idle lines under TASKS', () => {
   for (const c of CASES) {

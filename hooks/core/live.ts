@@ -134,6 +134,14 @@ export function liveIdle(view: Pick<LiveView, 'tasks' | 'mode' | 'archived_done'
   const second = `${LIVE_IDLE.next}${backlog ? `, or move ${backlog === 1 ? 'the backlog item' : `one of ${backlog} backlog items`} to todo` : ''}.`
   return [fitText(first, w), ...wrap(second)]
 }
+/** T-903: the one idle line the band shows: liveIdle's first line, but a sentence that does not fit is cut with "…"
+ *  (never broken at a space, which would read like a broken line). */
+export function liveIdleLine(view: Pick<LiveView, 'tasks' | 'mode' | 'archived_done'>, nowMs: number, width = 80): string {
+  const w = Math.max(1, Math.floor(width))
+  const whole = liveIdle(view, nowMs, Infinity)[0] ?? ''
+  // the waiting line already drops the reasons that don't fit at `w`; the others are one sentence, cut with "…"
+  return textWidth(whole) <= w ? whole : whole.startsWith('Nothing running') ? (liveIdle(view, nowMs, w)[0] ?? '') : fitText(whole, w)
+}
 /** The stations of a normal code task that merges on its own: check only when the checker setting is on. */
 export const liveStations = (checker: boolean): LiveStation[] => LIVE_STATIONS.filter(s => s !== 'you' && s !== 'answer' && (s !== 'check' || checker))
 /** T-846: the stations of one task's real path: an investigation goes work → answer; a task that needs review has "you" before merged. */

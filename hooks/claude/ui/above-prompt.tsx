@@ -3,7 +3,7 @@
 // and the tasks that need you (in the warning color). The status line under the prompt has the rest of the board's facts.
 import { drawNow } from './now'
 import type { MatchedHook } from 'claude-code'
-import { bandBrand, bandWhere, bandItems, bandFronts, bandNote, bandSummary, BAND_INDENT, type BandSummaryView, planBandText, questionsForYou, driveWarning, liveIdle, type BandItem, type LiveView, type BoardTask } from '../../board'
+import { bandBrand, bandWhere, bandItems, bandFronts, bandNote, bandSummary, BAND_INDENT, type BandSummaryView, planBandText, questionsForYou, driveWarning, liveIdleLine, type BandItem, type LiveView, type BoardTask } from '../../board'
 import { cutTitle, padWidth, textWidth } from '../../core/width'
 import { type PaneView, S } from '../../app/state'
 import { type $, panelValues } from '../panel'
@@ -105,7 +105,7 @@ export async function renderAbovePrompt($: $, e: Parameters<AbovePromptHook>[1],
     ...(hidden > 0 ? [<Text wrap="truncate" color={'inactive' as never}>{line(`+${hidden} more · /${S.N.name}`)}</Text>] : []),
   ]
   // T-903: nothing runs, nothing is next and nothing needs you: the first of the Live tab's idle lines (why, what to do next)
-  if (!lines.length) lines.push(<Text wrap="truncate" color={'inactive' as never}>{line(liveIdle(v as unknown as LiveView, nowMs, Math.max(1, columns - 1))[0] ?? '')}</Text>)
+  if (!lines.length) lines.push(<Text wrap="truncate" color={'inactive' as never}>{line(liveIdleLine(v as unknown as LiveView, nowMs, Math.max(1, columns - 1)))}</Text>)
   return (
     <Box flexDirection="column">
       <Box key="band-head" flexDirection="row">
