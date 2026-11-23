@@ -37,7 +37,7 @@ export function failedHow(t: Failed): FailedHow {
  * until the owner fixes the provider. A plain rate limit or a context limit is not one.
  */
 export function isUsageLimit(error: string | null | undefined): boolean {
-  return /\busage limit\b|\bquota\b|\binsufficient (?:credits?|balance|funds|quota)\b|\bcredit balance\b|\bout of credits?\b|\bbilling\b|\bconnect a provider\b|\bsubscribe\b|\bplan limit\b|\bspending limit\b/i.test(String(error ?? ''))
+  return /\busage limits?\b|\bquotas?\b|\binsufficient (?:credits?|balance|funds|quota)\b|\bcredit balance\b|\b(?:out of|more|enough|no|add) credits?\b|\bcredits? (?:exhausted|depleted|used up|ran out)\b|\bbilling\b|\bpayment required\b|\bconnect a provider\b|\bsubscribe\b|\bplan limits?\b|\bspending limits?\b|\bspend limits?\b|\bmonthly limits?\b/i.test(String(error ?? ''))
 }
 
 /** The note of a try whose worker ended its turn while the host saw a background command of it still running (TurnEnd.background). */
