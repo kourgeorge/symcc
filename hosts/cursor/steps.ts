@@ -9,6 +9,17 @@ const WORDS_KEPT = 20_000
 /** Whether `s` is a piece of what the agent says or thinks (the SDK streams those a few words at a time). */
 export const isWords = (s: Pick<PanelStep, 'kind'>) => s.kind === 'text' || s.kind === 'thinking'
 
+/** The argument a tool call is best told by (its path, command or search), else its arguments as short JSON. */
+export function argWords(args: unknown): string {
+  if (!args || typeof args !== 'object') return typeof args === 'string' ? args : ''
+  const a = args as Record<string, unknown>
+  for (const k of ['command', 'path', 'target_file', 'file', 'filePath', 'pattern', 'query', 'glob', 'url', 'target_directory']) if (typeof a[k] === 'string' && a[k]) return a[k] as string
+  const json = JSON.stringify(a)
+  return json === '{}' ? '' : json
+}
+
+export const short = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s)
+
 /** The agent id the lead's steps go under. */
 export const LEAD_AGENT = 'lead'
 

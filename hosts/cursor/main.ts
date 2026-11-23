@@ -1,7 +1,7 @@
 // symcc on Cursor as one long-running process per project: the engine with its agents and lead chat on the Cursor SDK
-// (./session.ts), for an editor extension to start and talk to. It speaks JSON lines: requests on stdin, answers and
-// events on stdout; debug lines go to stderr (with SYMCC_DEBUG set).
-//   node dist/engine.mjs --root <project> [--plugin-root <symcc>] [--worker-model <id>] [--lead-model <id>]
+// (./session.ts), or on GitHub Copilot's (--agents copilot, ./copilot.ts), for an editor extension to start and talk
+// to. It speaks JSON lines: requests on stdin, answers and events on stdout; debug lines go to stderr (with SYMCC_DEBUG set).
+//   node dist/engine.mjs --root <project> [--plugin-root <symcc>] [--agents cursor|copilot] [--worker-model <id>] [--lead-model <id>]
 // Requests: {"id":1,"op":"tool","name":"add","input":{...}}   {"id":2,"op":"command","name":"symcc-init","args":""}
 //           {"id":3,"op":"message","text":"..."}               {"id":4,"op":"stop"}
 //           the board panel's: {"op":"view"}  {"op":"act","task":"T-5","action":"approve","text":"..."}
@@ -24,8 +24,9 @@
 import { createInterface } from 'node:readline'
 import { openCursorSession, type CursorSession } from './session'
 import { cursorSdk } from './sdk'
+import { copilotSdk } from './copilot'
 import type { LeadChoice, LeadEvent } from './lead'
-import type { SdkImage, SdkModel } from './sdk'
+import type { Sdk, SdkImage, SdkModel } from './sdk'
 import type { PanelActionId, PanelMode } from './protocol'
 
 /** The symcc folder this file ships in: hosts/cursor/main.ts, or its bundle in hosts/cursor/dist/. */
@@ -43,6 +44,13 @@ export function parseOptions(argv: readonly string[]): Record<string, string> {
     i++
   }
   return opts
+}
+
+/** Whose agents run the lead and the workers: Cursor's when nothing says. */
+export function sdkFor(agents: string | undefined): Sdk {
+  if (agents === undefined || agents === 'cursor') return cursorSdk()
+  if (agents === 'copilot') return copilotSdk()
+  throw new Error(`--agents is cursor or copilot, not ${agents}`)
 }
 
 type Request = { id?: unknown; op?: unknown; name?: unknown; input?: unknown; args?: unknown; text?: unknown; task?: unknown; action?: unknown; need?: unknown; mode?: unknown; model?: unknown; images?: unknown; path?: unknown; file?: unknown }
@@ -126,9 +134,10 @@ async function main() {
   const out = (o: Record<string, unknown>) => void process.stdout.write(`${JSON.stringify(o)}\n`)
   const say = (line: string) => void process.stdout.write(`${line}\n`)
   const debug = process.env.SYMCC_DEBUG ? (line: string) => void process.stderr.write(`[symcc] ${line}\n`) : undefined
+  const sdk = sdkFor(opts.agents)
   const s = await openCursorSession({
     root: opts.root ?? process.cwd(),
-    sdk: cursorSdk(),
+    sdk,
     pluginRoot: opts['plugin-root'] ?? PLUGIN_ROOT,
     ...(opts['worker-model'] ? { workerModel: opts['worker-model'] } : {}),
     ...(opts['lead-model'] ? { leadModel: opts['lead-model'] } : {}),
@@ -180,7 +189,7 @@ async function main() {
     })
     return
   }
-  say(`symcc on Cursor, project ${opts.root ?? process.cwd()}. Type to the lead; /tool <name> [json], /<command> [args], /quit.`)
+  say(`symcc on ${sdk.name}, project ${opts.root ?? process.cwd()}. Type to the lead; /tool <name> [json], /<command> [args], /quit.`)
   lines.on('line', line => {
     const t = line.trim()
     if (!t) return

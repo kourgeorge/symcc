@@ -29,6 +29,8 @@ export type Behave = (t: Turn) => Promise<SdkRunResult>
 export function fakeSdk(behave: Behave, models: SdkModelInfo[] = []): Sdk & { agents: FakeAgent[] } {
   const agents: FakeAgent[] = []
   return {
+    name: 'Cursor',
+    defaultModel: 'composer-2.5',
     agents,
     models: async () => models,
     async create(options) {

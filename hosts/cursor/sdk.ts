@@ -1,5 +1,7 @@
 // The few parts of the Cursor SDK (@cursor/sdk) the Cursor host uses, behind a small interface so tests can hand in a
-// fake (tests/fake-sdk.ts). cursorSdk() loads the real SDK on first use. It isn't bundled: it ships native helpers.
+// fake (tests/fake-sdk.ts) and GitHub Copilot's agents can stand in (./copilot.ts). cursorSdk() loads the real SDK on
+// first use. It isn't bundled: it ships native helpers.
+import { argWords, short } from './steps'
 
 /** A tool served from this process to an agent (the SDK's custom tools): it answers text. */
 export type SdkTool = { description: string; inputSchema: Record<string, unknown>; execute: (input: Record<string, unknown>) => Promise<string> }
@@ -53,25 +55,20 @@ export type SdkAgent = { id: string; send: (text: string, o?: SdkSendOptions) =>
 /** Which of Cursor's own settings an agent loads: the project's rules, skills, AGENTS.md and MCP servers, the plugins'. */
 export type SdkSettingSource = 'project' | 'plugins'
 
-/** `disallowedTools` in the SDK's tool names (shell, edit, delete, webSearch, task, ...); `settings`: none when absent. */
+/**
+ * `disallowedTools` in the Cursor SDK's tool names (shell, edit, delete, webSearch, task, ...), which another SDK maps to
+ * its own; `settings`: none when absent.
+ */
 export type SdkAgentOptions = { model: string; cwd: string; tools: Record<string, SdkTool>; disallowedTools: readonly string[]; settings?: readonly SdkSettingSource[] }
 
-/** `models` lists the models the account can use, where the SDK can. */
-export type Sdk = { create: (o: SdkAgentOptions) => Promise<SdkAgent>; models?: () => Promise<SdkModelInfo[]> }
+/**
+ * `name`: whose agents these are, in the owner's words ("Cursor"); `defaultModel`: the model of an agent nothing names
+ * one for; `models` lists the models the account can use, where the SDK can; `close` lets go of what the SDK started.
+ */
+export type Sdk = { name: string; defaultModel: string; create: (o: SdkAgentOptions) => Promise<SdkAgent>; models?: () => Promise<SdkModelInfo[]>; close?: () => Promise<void> }
 
 type CursorSdkModule = typeof import('@cursor/sdk')
 type SdkMessage = { type: string; [k: string]: unknown }
-
-/** The argument a tool call is best told by (its path, command or search), else its arguments as short JSON. */
-function argWords(args: unknown): string {
-  if (!args || typeof args !== 'object') return typeof args === 'string' ? args : ''
-  const a = args as Record<string, unknown>
-  for (const k of ['command', 'path', 'target_file', 'file', 'filePath', 'pattern', 'query', 'glob', 'url', 'target_directory']) if (typeof a[k] === 'string' && a[k]) return a[k] as string
-  const json = JSON.stringify(a)
-  return json === '{}' ? '' : json
-}
-
-const short = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s)
 
 type ModelListItem = {
   id: string
@@ -157,6 +154,8 @@ export function cursorSdk(env: Record<string, string | undefined> = process.env)
       return sdk
     })())
   return {
+    name: 'Cursor',
+    defaultModel: 'composer-2.5',
     async create(o) {
       const { Agent } = await load()
       const customTools = Object.fromEntries(

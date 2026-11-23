@@ -2,9 +2,9 @@
   "name": "symcc-cursor-host",
   "private": true,
   "type": "module",
-  "description": "symcc's engine on Cursor: workers, scouts, checkers and the lead chat as Cursor SDK local agents (hosts/cursor/)",
+  "description": "symcc's engine on Cursor: workers, scouts, checkers and the lead chat as Cursor SDK local agents, or as GitHub Copilot's (hosts/cursor/)",
   "scripts": {
-    "build": "esbuild main.ts --bundle --tsconfig=tsconfig.json --platform=node --format=esm --target=node20 --outfile=dist/engine.mjs --external:@cursor/sdk --external:undici --external:https-proxy-agent",
+    "build": "esbuild main.ts --bundle --tsconfig=tsconfig.json --platform=node --format=esm --target=node20 --outfile=dist/engine.mjs --external:@cursor/sdk --external:@microsoft/copilot-sdk --external:undici --external:https-proxy-agent",
     "typecheck": "tsc -p tsconfig.json",
     "test": "npx -y bun test ./tests/"
   },
@@ -17,5 +17,8 @@
     "@types/node": "^22.10.0",
     "esbuild": "^0.25.0",
     "typescript": "5.9.3"
+  },
+  "optionalDependencies": {
+    "@microsoft/copilot-sdk": "2.0.1"
   }
 }

@@ -1,7 +1,8 @@
 // One symcc session on Cursor: the Node host's files, commands and timers (hosts/node/host.ts), with the agents and the
-// lead chat on the Cursor SDK (./agents.ts, ./lead.ts). It calls the same entry points in the same order as the Node
-// host's session (hosts/node/session.ts) and holds no logic of its own. Unlike the Node CLI it stays open: agents start
-// any time, and a board update reaches the lead at once (wakeLead 'now'), so an idle lead wakes up for it.
+// lead chat on the Cursor SDK, or on GitHub Copilot's (./agents.ts, ./lead.ts, ./copilot.ts). It calls the same entry
+// points in the same order as the Node host's session (hosts/node/session.ts) and holds no logic of its own. Unlike the
+// Node CLI it stays open: agents start any time, and a board update reaches the lead at once (wakeLead 'now'), so an
+// idle lead wakes up for it.
 import type { SymccView } from '../../types'
 import type { Host, HostFeatures, PanelValues } from '../../hooks/host'
 import { noUi } from '../../hooks/host'
@@ -55,9 +56,6 @@ export function actionCommand(name: string, task: string, action: PanelActionId,
 
 /** The empty view, as a panel starts with. */
 const emptyView = (): SymccView => ({ tasks: [], working: [], scouts: [], mode: 'auto', test_commands: [] })
-
-/** The default model for the lead and for agents whose role names none. */
-export const DEFAULT_MODEL = 'composer-2.5'
 
 export type CursorSessionOptions = {
   /** the project folder */
@@ -178,7 +176,7 @@ export async function openCursorSession(o: CursorSessionOptions): Promise<Cursor
   }
   const agents = sdkAgents({
     sdk: o.sdk,
-    model: o.workerModel ?? DEFAULT_MODEL,
+    model: o.workerModel ?? o.sdk.defaultModel,
     onEnd: (agentId, end) => agentFinished(ref.host!, agentId, end),
     onTool: async (agentId, tool, input) => answerText(tool, await toolCall(ref.host!, toolName(tool), agentId, input)),
     onStep,
@@ -196,7 +194,7 @@ export async function openCursorSession(o: CursorSessionOptions): Promise<Cursor
   const lead = leadChat({
     sdk: o.sdk,
     cwd: o.root,
-    model: o.leadModel ?? DEFAULT_MODEL,
+    model: o.leadModel ?? o.sdk.defaultModel,
     tools: leadTools,
     guide: () => leadGuideText(ref.host!),
     onEvent: e => o.onLead?.(e),
@@ -319,9 +317,10 @@ export async function openCursorSession(o: CursorSessionOptions): Promise<Cursor
         ticks.cancel()
         // a worker start still on its way is waited for, so its task goes back to "todo" instead of staying "doing" (T-652)
         for (const until = Date.now() + 60_000; starting.size > 0 && Date.now() < until; ) await host.clock.sleep(50)
-        await stopForQuit(host, why ?? 'the Cursor session ended').catch(() => [] as string[])
+        await stopForQuit(host, why ?? `the ${o.sdk.name} session ended`).catch(() => [] as string[])
         await agents.stopAll()
         await lead.close()
+        await o.sdk.close?.().catch(err => log(`couldn't stop ${o.sdk.name}'s agents: ${(err as Error).message}`))
         sendWords()
         if (writeTimer) clearTimeout(writeTimer)
         writeSteps()
