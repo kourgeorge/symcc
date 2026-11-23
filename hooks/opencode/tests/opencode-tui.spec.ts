@@ -190,12 +190,12 @@ test('a doing row shows only the total work time of all tries in the band and th
   const f = { ...f0, view: { ...f0.view, tasks: f0.view.tasks.map(t => (t.id === 'T-1' ? { ...t, attempts: 3, runs, note: '' } : t)), working: [] } }
   const row = (lines: string[]) => lines.find(l => /T-1 /.test(l))!
   const band = bandLines(f, NOW, 120).map(lineText)
-  // the try "(3)" right after the time in the band (T-604); the board list shows no try mark (T-628)
-  expect(row(band)).toContain('▶ 1h40m (3)')
+  // the try "↺3" right after the time in the band (T-604); the board list shows no try mark (T-628)
+  expect(row(band)).toContain('▶ 1h40m ↺3')
   const drawn = panelLines(f, { opened: '', cursor: 0 }, NOW, 100).lines
   const list = drawn.map(lineText)
   expect(row(list)).toContain('▶ 1h40m')
-  expect(row(list)).not.toContain('(3)')
+  expect(row(list)).not.toContain('↺3')
   for (const l of [row(band), row(list)]) expect(l).not.toContain('try 3')
   // the list's titles still start in one column
   const starts = f.view.tasks.filter(t => ['T-1', 'T-2', 'T-3', 'T-4'].includes(t.id)).map(t => list.find(l => l.includes(` ${t.id} `))!.indexOf(t.title))
@@ -207,18 +207,18 @@ test('a doing row shows only the total work time of all tries in the band and th
   expect(row(list)).toMatch(/T-1 +▶ 1h40m +\S/)
   // try 1: nothing
   const first = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => (t.id === 'T-1' ? { ...t, attempts: 1 } : t)) } }
-  expect(row(bandLines(first, NOW, 120).map(lineText))).not.toMatch(/\(1\)|try/)
-  expect(row(panelLines(first, { opened: '', cursor: 0 }, NOW, 100).lines.map(lineText))).not.toMatch(/\(1\)|try/)
+  expect(row(bandLines(first, NOW, 120).map(lineText))).not.toMatch(/↺|try/)
+  expect(row(panelLines(first, { opened: '', cursor: 0 }, NOW, 100).lines.map(lineText))).not.toMatch(/↺|try/)
   for (const l of [...band, ...list]) {
     expect(l).not.toContain('in all')
     expect(l).not.toContain('Σ')
   }
   // narrow: the time is left out, then the try
-  expect(row(bandLines(f, NOW, 36).map(lineText))).not.toContain('1h40m')
-  expect(row(bandLines(f, NOW, 36).map(lineText))).toContain('▶ (3)')
-  expect(row(bandLines(f, NOW, 28).map(lineText))).not.toContain('(3)')
+  expect(row(bandLines(f, NOW, 35).map(lineText))).not.toContain('1h40m')
+  expect(row(bandLines(f, NOW, 35).map(lineText))).toContain('▶ ↺3')
+  expect(row(bandLines(f, NOW, 27).map(lineText))).not.toContain('↺3')
   expect(row(panelLines(f, { opened: '', cursor: 0 }, NOW, 30).lines.map(lineText))).not.toContain('1h40m')
-  expect(row(panelLines(f, { opened: '', cursor: 0 }, NOW, 30).lines.map(lineText))).not.toContain('(3)')
+  expect(row(panelLines(f, { opened: '', cursor: 0 }, NOW, 30).lines.map(lineText))).not.toContain('↺3')
 })
 
 test('T-581: a doing row in a check step or the merge line shows its icon and the time, no step word, in the band and the list; the worker row keeps ▶', () => {

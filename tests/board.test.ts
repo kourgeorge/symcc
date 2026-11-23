@@ -3899,8 +3899,8 @@ test('a doing task on its 2nd or later try says "try N" in the status line, the 
   expect(statusLine({ tasks: [{ id: 'T-369', status: 'doing', runs: [{ started: at }, { started: at }] }] }, true)).not.toMatch(/T-369|try/)
   // the band above the prompt
   expect(bandLeads([{ id: 'T-369', status: 'doing', attempts: 1 }], 0).get('T-369')).toBe('T-369 ▶ ')
-  expect(bandLeads([{ id: 'T-369', status: 'doing', attempts: 2 }], 0).get('T-369')).toBe('T-369 ▶ (2)')
-  expect(tryTag({ status: 'doing', attempts: 3 })).toBe('(3)')
+  expect(bandLeads([{ id: 'T-369', status: 'doing', attempts: 2 }], 0).get('T-369')).toBe('T-369 ▶ ↺2')
+  expect(tryTag({ status: 'doing', attempts: 3 })).toBe('↺3')
   expect(tryTag({ status: 'doing', attempts: 1 })).toBe('')
   expect(tryTag({ status: 'review', attempts: 3 })).toBe('')
   // the lead's text board, with the auto retry limit while the retry is automatic
@@ -3942,8 +3942,8 @@ test('a doing row shows one time, the total work time of all tries without the g
   expect(bandLeads([testing], now).get('T-3')).toBe('T-3  ⊛ 9m')
   // the band: lined up, the try after the one time
   const leads = bandLeads([first, third], now)
-  expect(leads.get('T-2')).toBe('T-2  ▶ 1h40m (3)')
-  expect(leads.get('T-1')).toBe('T-1  ▶ 15m      ')
+  expect(leads.get('T-2')).toBe('T-2  ▶ 1h40m ↺3')
+  expect(leads.get('T-1')).toBe('T-1  ▶ 15m     ')
   for (const l of [...leads.values(), ...bandLeads([testing, prep], now).values()]) {
     expect(l).not.toContain('Σ')
     expect(l).not.toContain('in all')
@@ -3951,19 +3951,21 @@ test('a doing row shows one time, the total work time of all tries without the g
   expect(leads.get('T-1')!.length).toBe(leads.get('T-2')!.length)
   // narrow: the time is left out first, then the try (T-604)
   const lead = (w: number) => bandLeads([first, third], now, () => undefined, w).get('T-2')
-  expect(lead(60)).toBe('T-2  ▶ 1h40m (3)')
-  expect(lead(37)).toBe('T-2  ▶ 1h40m (3)')
-  expect(lead(36)).toBe('T-2  ▶ (3)')
-  expect(lead(31)).toBe('T-2  ▶ (3)')
-  expect(lead(30)).toBe('T-2  ▶ ')
+  expect(lead(60)).toBe('T-2  ▶ 1h40m ↺3')
+  expect(lead(37)).toBe('T-2  ▶ 1h40m ↺3')
+  expect(lead(36)).toBe('T-2  ▶ 1h40m ↺3')
+  expect(lead(35)).toBe('T-2  ▶ ↺3')
+  expect(lead(30)).toBe('T-2  ▶ ↺3')
+  expect(lead(29)).toBe('T-2  ▶ ')
   for (const w of [60, 36, 30]) expect(lead(w)).not.toContain('try')
   // the lists' states the same way, the try tag apart so it gets its own colour
   const state = (room: number) => core.rowStates([first, third], now, () => undefined, w => w <= room).states.get('T-2')
-  expect(state(30)).toEqual({ front: '1h40m ', tag: '(3)', back: '' })
-  expect(core.stateText(core.rowStates([first, third], now, () => undefined, () => true).states.get('T-1'))).toBe('15m      ')
-  expect(state(9)).toEqual({ front: '1h40m ', tag: '(3)', back: '' })
-  expect(state(8)).toEqual({ front: '', tag: '(3)', back: '' })
-  expect(state(2)).toEqual({ front: '', tag: '', back: '' })
+  expect(state(30)).toEqual({ front: '1h40m ', tag: '↺3', back: '' })
+  expect(core.stateText(core.rowStates([first, third], now, () => undefined, () => true).states.get('T-1'))).toBe('15m     ')
+  expect(state(9)).toEqual({ front: '1h40m ', tag: '↺3', back: '' })
+  expect(state(8)).toEqual({ front: '1h40m ', tag: '↺3', back: '' })
+  expect(state(7)).toEqual({ front: '', tag: '↺3', back: '' })
+  expect(state(1)).toEqual({ front: '', tag: '', back: '' })
   // the lists' plain cells the same way
   const cells = (room: number) => core.fittedCells([first, third], now, () => undefined, room).get('T-2')
   expect(cells(5)).toBe('1h40m')
@@ -3973,7 +3975,7 @@ test('a doing row shows one time, the total work time of all tries without the g
   // a later try with no time to show (its last try ended, no fresh step): no stray " · "
   const ended = { id: 'T-9', status: 'doing' as const, attempts: 2, runs: [{ started: at(0), ended: at(50) }, { started: at(900), ended: at(990) }] as SymccTask['runs'] }
   expect(core.rowCell(ended, now)).toBe('')
-  expect(bandLeads([ended], now).get('T-9')).toMatch(/^T-9 +▶ \(2\)$/)
+  expect(bandLeads([ended], now).get('T-9')).toMatch(/^T-9 +▶ ↺2$/)
   // with no open try, the session worker's start counts as this try (added to the earlier tries)
   expect(core.rowCell(ended, now, now - 10 * 60_000)).toBe('2h30m')
 })

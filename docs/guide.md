@@ -178,7 +178,7 @@ once you have cleared them and its merge runs.
 | merge | `⇢` | The branch moves forward |
 
 The board row shows the stage icon instead of `▶`, then the time. In Claude Code the band above
-the prompt shows the stage's icon, then the time in that stage: `⌕ T-740 8m`, or `⌕ T-740 8m (try 2)` from the second try on (the icon says the stage, so no stage name is written: `⧗ T-741 10s`, not `queue 10s`). One space sits between the parts of a row, on the band and in the Tasks list (`T-740 ⌕ 8m Title`); the states are padded to one width so the titles still line up. A doing task's page names the stage on the state line of its header
+the prompt shows the stage's icon, then the time in that stage: `⌕ T-740 8m`, or `⌕ T-740 8m ↺2` from the second try on (`↺` then the try number) (the icon says the stage, so no stage name is written: `⧗ T-741 10s`, not `queue 10s`). One space sits between the parts of a row, on the band and in the Tasks list (`T-740 ⌕ 8m Title`); the states are padded to one width so the titles still line up. A doing task's page names the stage on the state line of its header
 (see [The task page and the scout page](#the-task-page-and-the-scout-page)) and has a **Steps** row in Details
 for the whole way, such as `worker ✓ → prep ✓ → ● checker → queue → test → merge` (see
 [What a task shows on its way to the merge](#what-a-task-shows-on-its-way-to-the-merge)). A task
@@ -793,9 +793,9 @@ are about changes; under "How tasks ended" a read investigation shows as
 
   ```
   𝄞 symcc  ⏵ auto merge · 2/3 agents busy · 3 tasks waiting · 12 completed today  [ open board ] [-]
-   ⌕ T-740 8m (try 3) After a reopen, one hand-back…
-   ▶ T-745 19m        Live tab: a compact view…
-   ○ T-743 next up    A try counts only real…
+   ⌕ T-740 8m ↺3   After a reopen, one hand-back…
+   ▶ T-745 19m     Live tab: a compact view…
+   ○ T-743 next up A try counts only real…
    ⚠ 1 question for you: Q-71 Raise the version?
   ```
 
@@ -823,7 +823,7 @@ are about changes; under "How tasks ended" a read investigation shows as
 - **`/symcc-tasks`** opens nothing: it prints a short list of the open tasks in the chat, the
   same in every client (Claude Code's terminal and VS Code, OpenCode, the Node host). It is
   grouped like the board: Questions for you and NEEDS YOU first, then Running (with the step's
-  icon, the time and "(try 2)" from a second try), In review, Failed, and To do in run order
+  icon, the time and "↺2" from a second try), In review, Failed, and To do in run order
   ("after T-5" when a task waits for another one). Each task is one line: its mark, id, short
   state and title (cut to fit). Then one line of counts (`backlog 2 · done today 1 · dropped
   today 0`) and a hint: `/symcc-board opens the board · /symcc-task T-n opens one task`. With
@@ -1187,7 +1187,7 @@ words as bold headings with the same spacing):
 
                        work✧    check✧   queue    tests    merged
  ▶ T-684 /symcc-doc…   ●━━━━━━━━●━━━━━━━━◉────────○────────○      #2
-   change try 2/3 · ⏱ 24m · ⌀ 1.1M (0.9× median) · <worker 812.4k · checker 287.6k> · ↺×1
+   change try 2/3 · ⏱ 24m · ⌀ 1.1M (0.9× median) · <worker 812.4k · checker 287.6k> · ⌕×1
 ```
 
 - `NEEDS YOU` is the first section, shown only while something waits for you, and hidden (no
@@ -1213,13 +1213,13 @@ words as bold headings with the same spacing):
   empty room goes between the content and the footer. On a narrow screen the legend is cut at spaces onto more lines, never wider than the screen, still under the key line.
 - On the right: the time at the current station, or the place in the merge queue (`#2`).
 - The second row has no bar, only numbers about this task:
-  `bug try 4/4 · ⏱ 41m · ⌀ 7.3M (7.6× median) · <worker 5.4M · checker 1.9M> · ↺×2`. That is
+  `bug try 4/4 · ⏱ 41m · ⌀ 7.3M (7.6× median) · <worker 5.4M · checker 1.9M> · ⌕×2`. That is
   the kind and the try (`try 2/3`, auto retries after failing tests included), the task's working
   time so far (all tries; time when Claude Code was closed is left out), the whole task's tokens
   (every try so far), how many times the board's median tokens per merged task that is (yellow
   from twice the median), how its tokens split between its workers and checkers, together in
   `< >` (a part that is 0 is left out, and there is no `< >` when there is nothing to split), and
-  `↺×N` for the checker's send-backs. On a narrow panel the parts go in this order: first the
+  `⌕×N` for the checker's send-backs (`⌕` is the checker's mark; `↺` only ever means a try). On a narrow panel the parts go in this order: first the
   `< >` split, then `(× median)`, then the kind, then `⌀`, and the clock `⏱` last; the try stays. A
   running worker's tokens are only known when it hands back, so until then the row shows the
   earlier tries' sum with `+ …` (`⌀ 4.0M + …`), or `⌀ at hand-back` on a first try.
@@ -1974,9 +1974,8 @@ change shows no tag.
 **Which try is it?** When a task is doing and this is not its first try, the board says so. A
 first try shows no mark.
 
-- In Claude Code's band above the prompt: `(try 3)` after the step and its time
-  (`T-5 ▶ 12m (try 3)`).
-- In OpenCode's strip above the prompt: `(3)` right after the time (`T-5 ▶ 1h40m (3)`).
+- In the band above the prompt (Claude Code's terminal and VS Code, and OpenCode's strip): `↺3`
+  right after the step and its time (`T-5 ▶ 12m ↺3`).
 - On the task's page: `try 3/4`.
 - In the lead's board: `T-5 doing · try 2/3`. The `/3` shows the limit while the try is an
   automatic retry after failing tests.

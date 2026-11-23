@@ -36,7 +36,7 @@ test('T-901: the tasks list groups the open tasks as the board does, then the co
   const text = tasksListText({ ...q, tasks: q.tasks.map(t => (t.id === 'T-5' ? { ...t, title: 'x'.repeat(200) } : t)) }, now, 'symcc', 60)
   expect(text.split('\n').slice(0, 3)).toEqual(['Questions for you (1)', '  ? Q-1 Raise the version? (yes | no)', ''])
   expect(text.split('\n').slice(0, -1).every(l => l.length <= 60)).toBe(true)
-  expect(text).toContain('  ○ T-5  to do       xxx')
+  expect(text).toContain('  ○ T-5  to do      xxx')
 })
 
 test('T-901: /symcc-tasks answers with the list and opens no panel, with a panel and without', async () => {

@@ -69,7 +69,7 @@ export async function renderAbovePrompt($: $, e: Parameters<AbovePromptHook>[1],
   const hidden = items.length - shown.length + questions.length - asks.length
   const fronts = bandFronts(shown, columns)
   const line = (s: string) => ` ${cutTitle(s, Math.max(1, columns - 1))}`
-  // a running row's front: the id in the accent color, the stage part ("7m (try 4)") in green
+  // a running row's front: the id in the accent color, the stage part ("7m ↺4") in green
   const runFront = (front: string) => {
     const m = /^(\S+)(\s+)(.*?)(\s*)$/u.exec(front)
     if (!m) return <Text>{front}</Text>

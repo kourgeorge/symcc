@@ -256,7 +256,7 @@ export function bandLines(f: ViewFile | null, nowMs: number, width: number, rows
  * the "+N more" line open the board panel, a question's or task's row opens its page): the header line (brand,
  * folder, mode, questions for you, workers, counts, scouts, then the " (click: board)" hint, dropped first when short
  * of room), the owner's open questions, then the tasks that need the owner or run, newest first, each with its
- * lined-up front ("T-434 ✎ 2m (2)", "T-440 ▶ 12m", see bandLeads) and its note when the state doesn't already say
+ * lined-up front ("T-434 ✎ 2m ↺2", "T-440 ▶ 12m", see bandLeads) and its note when the state doesn't already say
  * it (bandNote), and "+N more" when they don't all fit. No lines when there is nothing to show (an empty board, or
  * symcc disabled). `rows`: at most this many rows under the header.
  */

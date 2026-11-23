@@ -293,8 +293,8 @@ test("T-748: a running row shows its stage's icon (no stage name, T-893), the ti
   const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 140 }, surface: 'terminal' })
   // "⌕" + "checker 8m · try 2": the checker started when the try handed back, 8 minutes ago
   // one line each, the one that started first at the top
-  const rows = [['⊛', 'T-41', '10s', 'Being tested'], ['⌕', 'T-42', '8m (try 2)', `Being checked — ${STEP_NOTE.checker}`], ['⇢', 'T-43', '10s', 'Being merged'], ['▶', 'T-40', '12m', 'Running worker'], ['▶', 'T-44', '5m (try 3)', 'Third try']]
-  const width = '8m (try 2)'.length
+  const rows = [['⊛', 'T-41', '10s', 'Being tested'], ['⌕', 'T-42', '8m ↺2', `Being checked — ${STEP_NOTE.checker}`], ['⇢', 'T-43', '10s', 'Being merged'], ['▶', 'T-40', '12m', 'Running worker'], ['▶', 'T-44', '5m ↺3', 'Third try']]
+  const width = '8m ↺2'.length
   const want = rows.map(([icon, id, state, title]) => ` ${icon} ${id} ${state!.padEnd(width)} ${title}`)
   expect((await bandLines(ui)).slice(1)).toEqual(want)
   // no "doing" word and no "— worker on it" tail: the state says it
@@ -302,10 +302,10 @@ test("T-748: a running row shows its stage's icon (no stage name, T-893), the ti
   expect(await ui.find({ type: 'Text', text: /worker on it/ })).toBeUndefined()
   await ui.unmount()
   // narrow: the time goes first, then the try, so the titles keep their room
-  const narrow = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 38 }, surface: 'terminal' })
+  const narrow = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 32 }, surface: 'terminal' })
   const n = await bandLines(narrow)
-  expect(n.some(l => l.startsWith(' ⌕ T-42 (try 2) Being checked')), 'narrow 42').toBe(true)
-  expect(n, 'narrow 40').toContain(' ▶ T-40' + ' '.repeat(9) + 'Running worker')
+  expect(n.some(l => l.startsWith(' ⌕ T-42 ↺2 Being checked')), 'narrow 42').toBe(true)
+  expect(n, 'narrow 40').toContain(' ▶ T-40' + ' '.repeat(4) + 'Running worker')
   expect(n.some(l => /12m/.test(l))).toBe(false)
   await narrow.unmount()
   const tight = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 26 }, surface: 'terminal' })
@@ -371,9 +371,28 @@ test('T-787: a running band row has its id in the accent color, its stage part i
   const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 140 }, surface: 'terminal' })
   const colorOf = async (text: RegExp) => (await ui.find({ type: 'Text', text }))?.props?.color
   expect(await colorOf(/^T-73$/)).toBe('claude')
-  expect(await colorOf(/^7m \(try 4\)$/)).toBe('green')
+  expect(await colorOf(/^7m ↺4$/)).toBe('green')
   expect(await colorOf(/^Run title$/)).toBeUndefined()
   await ui.unmount()
+})
+
+test('T-939: a band row shows a later try as "↺3" right after its time, nothing on try 1, and no "(try " (terminal and VS Code)', async ($, on) => {
+  const T0 = Date.parse('2026-03-02T10:00:00Z')
+  mock.clock(on, { now: T0 })
+  const tasks = [
+    task('T-80', 'doing', 'First try', { note: 'worker on it', attempts: 1, runs: [{ started: new Date(T0 - 12 * 60_000).toISOString() }] }),
+    task('T-81', 'doing', 'Third try', { note: 'worker on it', attempts: 3, runs: [{ started: new Date(T0 - 3 * 60_000).toISOString() }] }),
+  ]
+  on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [], driving: true } }, version: 1 } }))
+  on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
+  for (const surface of ['terminal', 'vscode'] as const) {
+    const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 140 }, surface })
+    const rows = (await bandLines(ui)).slice(1)
+    expect(rows, surface).toContain(' ▶ T-81 3m ↺3 Third try')
+    expect(rows, surface).toContain(' ▶ T-80 12m   First try')
+    expect(rows.some(l => l.includes('(try ')), surface).toBe(false)
+    await ui.unmount()
+  }
 })
 
 test("every band row lines up in one title column: running rows, then the rows that need you (T-461)", async ($, on) => {
@@ -390,7 +409,7 @@ test("every band row lines up in one title column: running rows, then the rows t
   on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [], driving: true } }, version: 1 } }))
   on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 140 }, surface: 'terminal' })
-  const leads = [['T-62', '12m'], ['T-63', '3m (try 2)'], ['T-60', 'waiting'], ['T-61', 'review'], ['T-59', 'failed']].map(([id, state]) => `${id} ${state!.padEnd(10)} `)
+  const leads = [['T-62', '12m'], ['T-63', '3m ↺2'], ['T-60', 'waiting'], ['T-61', 'review'], ['T-59', 'failed']].map(([id, state]) => `${id} ${state!.padEnd(7)} `)
   for (const lead of leads) expect(await ui.find({ type: 'Text', text: new RegExp(`^${esc(lead)}$`, 'u') }), lead).toBeDefined()
   // so every title starts in the same column, right after a lead of one width
   expect(new Set(leads.map(l => l.length)).size).toBe(1)
@@ -1467,7 +1486,7 @@ const ROLE_FILES = {
   '/roles/security.md': '---\ndescription: checks for holes\n---\n',
 }
 
-test('a running task shows its kind (never its role, T-722) at the right end in the inactive color; the list shows no try "(n)" (T-628), the band keeps it; a plain change shows no tag', async ($, on) => {
+test('a running task shows its kind (never its role, T-722) at the right end in the inactive color; the list shows no try "↺n" (T-628), the band keeps it; a plain change shows no tag', async ($, on) => {
   const tasks = [task('T-1', 'doing', 'Plain work', { role: 'general', attempts: 2 }), task('T-12', 'doing', 'Cover the parser errors', { role: 'tester', attempts: 1 }), task('T-13', 'doing', 'Fix the parser', { kind: 'bug', role: 'tester', attempts: 3 }), task('T-14', 'todo', 'Write the guide', { kind: 'docs', role: 'docs' })]
   stateOf(on, { view: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 60 }, surface: 'terminal' })
@@ -1477,11 +1496,11 @@ test('a running task shows its kind (never its role, T-722) at the right end in 
   expect((await ui.find({ key: 'T-14' }))?.text).toMatch(/Write the guide +\[docs\]$/)
   expect((await ui.find({ key: 'T-12' }))?.text).toMatch(/Cover the parser errors$/)
   expect(await ui.find({ type: 'Text', text: /tester/ })).toBeUndefined()
-  // no try mark on any list row, not "(n)" and not "try n" (T-628: the band and the task page show it)
-  expect(await ui.find({ type: 'Text', text: /^ ?\([23]\)$/ })).toBeUndefined()
+  // no try mark on any list row, not "↺n" and not "try n" (T-628: the band and the task page show it)
+  expect(await ui.find({ type: 'Text', text: /^ ?↺[23]$/ })).toBeUndefined()
   expect((await ui.find({ key: 'T-1' }))?.text).toMatch(/T-1 +▶ +Plain work$/)
   expect((await ui.find({ key: 'T-13' }))?.text).toMatch(/T-13 ▶ +Fix the parser +\[bug\]$/)
-  for (const id of ['T-1', 'T-12', 'T-13']) expect((await ui.find({ key: id }))?.text).not.toMatch(/try|\(\d\)/)
+  for (const id of ['T-1', 'T-12', 'T-13']) expect((await ui.find({ key: id }))?.text).not.toMatch(/try|↺\d/)
   // the titles still start in one column
   const starts = await Promise.all(['T-1', 'T-12', 'T-13'].map(async id => {
     const text = (await ui.find({ key: id }))!.text
@@ -1492,8 +1511,8 @@ test('a running task shows its kind (never its role, T-722) at the right end in 
   await ui.unmount()
   // the band above the prompt keeps the try (bandLeads)
   const leads = bandLeads(tasks as Parameters<typeof bandLeads>[0], Date.now())
-  expect(leads.get('T-13')).toMatch(/^T-13 ▶ \(3\)$/)
-  expect(leads.get('T-1')).toMatch(/^T-1 +▶ \(2\) *$/)
+  expect(leads.get('T-13')).toMatch(/^T-13 ▶ ↺3$/)
+  expect(leads.get('T-1')).toMatch(/^T-1 +▶ ↺2 *$/)
 })
 
 test('an open task shows its role and model; "Role" (l) opens a pick list of the roles, and picking one sets it', async ($, on) => {

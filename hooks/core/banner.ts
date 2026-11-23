@@ -73,7 +73,7 @@ export const boardLabel = (root: string, name: string = DEFAULT_NAME) => `${name
  * state columns). Every row shows the list's own mark and short status cell (rowMark, rowCell): a doing task "▶ 1h40m" (the
  * total work time of all its tries), in a check step its icon (STEP_ICON) in place of ▶ and the step word: "⊛ 9m",
  * "✎ 2h5m", "⌕ 5m", "⇢ 40m", in the merge line "⧗ 2h5m", with its try after it from
- * try 2 on ("T-434 ▶ 1h40m (3)", see rowStates); in a row narrower than `width` the time is left out, then the try;
+ * try 2 on ("T-434 ▶ 1h40m ↺3", see rowStates); in a row narrower than `width` the time is left out, then the try;
  * the others "? waiting", "◆ review", "✗ failed". The state column has one width, so every title starts in one column. `since(id)` is when this session's worker started.
  */
 export function bandLeads(tasks: (Pick<SymccTask, 'id' | 'status' | 'runs'> & Partial<Pick<SymccTask, 'attempts' | 'note'>> & Pick<BoardTask, 'live' | 'kind'>)[], nowMs: number, since: (id: string) => number | string | undefined = () => undefined, width = Infinity): Map<string, string> {
@@ -136,7 +136,7 @@ export function bandSummary(view: BandSummaryView, nowMs: number, width = Infini
 
 /**
  * The task rows of Claude Code's band above the prompt (T-748, T-776), in this order: one per running task (the Live
- * tab's lanes: its stage's icon, then the time in that stage, the try from try 2 on: "⌕" + "8m (try 3)"),
+ * tab's lanes: its stage's icon, then the time in that stage, the try from try 2 on: "⌕" + "8m ↺3", T-939),
  * the next task to start ("○" + "next up", the first task of the Live tab's next up that waits for nothing), then the
  * tasks that need the owner (needsYou: "?" + "waiting", "◆" + "review", "✗" + "failed", "▶" + "more time?"). `since(id)`:
  * when this session's worker started (for a worker with no open try yet). The counts are on the band's first line (bandSummary).
@@ -155,7 +155,7 @@ export function bandItems(view: LiveView, nowMs: number, since: (id: string) => 
     const ended = toMs(byId.get(l.id)?.runs?.at(-1)?.ended)
     const at = l.stage === 'worker' ? (ended === undefined ? (l.sinceMs ?? toMs(since(l.id))) : (toMs(since(l.id)) ?? l.sinceMs)) :l.station === 'work' ? (ended ?? l.sinceMs) : l.sinceMs
     const time = at !== undefined ? rowDuration(Math.max(0, nowMs - at)) : ''
-    const tries = l.tryNo > 1 ? `(try ${l.tryNo})` : ''
+    const tries = l.tryNo > 1 ? `↺${l.tryNo}` : ''
     return { id: l.id, title: l.title, kind: 'run', icon: s.icon, forms: [[time, tries].filter(Boolean).join(' '), tries, ''], tail: tail(byId.get(l.id)!) }
   })
   const next = liveTrains(view, nowMs).next.find(x => !x.stuck.length)
@@ -174,7 +174,7 @@ export const BAND_INDENT = 3
 
 /**
  * The fronts of band rows (bandItems) after their icon, lined up: the id padded to one width, a space, then the
- * state padded to one width and a space, so every title starts in one column: "T-740 8m (try 3) ". The
+ * state padded to one width and a space, so every title starts in one column: "T-740 8m ↺3 ". The
  * first state form that leaves TITLE_ROOM for the title in `width` columns (the whole row, BAND_INDENT included) is
  * used (the time goes first, then the try).
  */

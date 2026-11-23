@@ -227,7 +227,7 @@ export function fittedCells<T extends Parameters<typeof statusCell>[0] & { id: s
 }
 
 /** One row's state column (see rowStates): `front` (its status cell, and the space before a try tag), `tag` (its
- *  try tag, "(3)", or ''), `back` (the padding), so a view can draw the tag in its own colour (tryTone). */
+ *  try tag, "↺3", or ''), `back` (the padding), so a view can draw the tag in its own colour (tryTone). */
 export type RowState = { front: string; tag: string; back: string }
 
 /** The forms a too narrow row's state tries, in order: the time and the try, then the try alone, then neither. */
@@ -239,7 +239,7 @@ const STATE_FORMS: readonly { form: TotalForm; tries: boolean }[] = [
 
 /**
  * The state column of list or band rows, lined up: each row's status cell (rowCell) and, on a doing row's later try,
- * its try tag right after the time ("▶ 1h40m (3)", tryTag), or right after the step icon with no time ("⊛ (3)"). The
+ * its try tag right after the time ("▶ 1h40m ↺3", tryTag), or right after the step icon with no time ("⊛ ↺3"). The
  * doing rows' cells share one width so their tags line up; every state is padded to `width`. The first form whose
  * `width` passes `fits` is used: with the time, then without it, then without the try too (narrow rows).
  * `withTries` false leaves every try tag out (the board's task lists, T-628: only the band and the task page show it).

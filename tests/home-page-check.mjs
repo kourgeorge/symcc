@@ -33,7 +33,7 @@ if (/<link\b[^>]*href="(https?:)?\/\//.test(page)) bad('home page: an outside st
 const view = name => new RegExp(`data-view="${name}" data-still>([\\s\\S]*?)(data-view=|</section>)`).exec(page)?.[1] ?? ''
 const text = html => html.replace(/<[^>]*>/g, '').replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
 const board = text(view('board'))
-for (const w of ['TASKS', 'BRANCHES', 'TODAY', 'work✧', 'check✧', 'queue', 'tests', 'merged', 'T-740', 'try 2/3', '↺×1'])
+for (const w of ['TASKS', 'BRANCHES', 'TODAY', 'work✧', 'check✧', 'queue', 'tests', 'merged', 'T-740', 'try 2/3', '⌕×1'])
   if (!board.includes(w)) bad(`still frame: the board has no "${w}"`)
 // (T-760) the agent mark is ✧ (in the accent color), not ·, and the legend says what it means
 if (/work·|check·/.test(board)) bad('still frame: the board still marks the agent stations with ·')
@@ -94,7 +94,7 @@ if (/▕[█░]+▏ ⌀/.test(board) || /▕[█░]+▏ ⌀/.test(page)) bad('
 if (board.includes('usual per task')) bad('still frame: the key line still explains the bar')
 // (T-757, T-867) the hand-drawn Live tab card tells the same story: whole-task tokens × the median, time, who spent them
 if (/tokens of each try|T-740[\s\S]{0,80}tokens at hand-back/.test(page)) bad('home page: the Live tab card still shows tokens per try ("tokens at hand-back" on T-740\'s try 2)')
-if (!page.includes('bug try 2/3 · ⏱ 22m · ⌀ 4.0M + … (0.8× median) · &lt;worker 2.6M · checker 1.4M&gt; · ↺×1')) bad('home page: the Live tab card\'s T-740 lane does not show "⏱ 22m · ⌀ 4.0M + … (0.8× median) · <worker … · checker …>"')
+if (!page.includes('bug try 2/3 · ⏱ 22m · ⌀ 4.0M + … (0.8× median) · &lt;worker 2.6M · checker 1.4M&gt; · ⌕×1')) bad('home page: the Live tab card\'s T-740 lane does not show "⏱ 22m · ⌀ 4.0M + … (0.8× median) · <worker … · checker …>"')
 if (page.includes('usual per task')) bad('home page: the Live tab card still explains the bar')
 // (T-767) the lines under a ▍heading start with 1 space; a running lane with "▶ ", its id in the accent color, its title normal text
 for (const [name, t] of [['board', board], ['Live tab', live]]) {
@@ -120,8 +120,8 @@ for (const w of ['workers', 'scouts']) {
 // (T-776, T-787) the band above the prompt: line 1 has no task id; each running task is on its own line
 const band = text(view('band')).split('\n').filter(l => l.trim())
 if (!band[0]?.startsWith('𝄞 symcc') || !band[0].includes('[ open board ]') || /T-\d+/.test(band[0])) bad(`still frame: the band's first line is not "𝄞 symcc ... [ open board ]" without a task id ("${band[0] ?? ''}")`)
-if (!band.some(l => /^ [▶⌕] T-740 \d+m \(try \d\) After a reopen/.test(l))) bad('still frame: the band has no running-task line for T-740')
-if (!/<span class="t-passed">\d+m \(try/.test(view('band'))) bad('still frame: the band\'s "Nm (try N)" is not green')
+if (!band.some(l => /^ [▶⌕] T-740 \d+m ↺\d After a reopen/.test(l))) bad('still frame: the band has no running-task line for T-740')
+if (!/<span class="t-passed">\d+m ↺\d/.test(view('band'))) bad('still frame: the band\'s "Nm ↺N" is not green')
 // (T-773) Live is the first tab
 if (!live.startsWith('[l] Live │ [t] Tasks │ [s] Scouts │ [c] Settings')) bad('still frame: the tab row is not "[l] Live │ [t] Tasks │ [s] Scouts │ [c] Settings"')
 if (!/<span class="t-run">▶ T-740 *<\/span> /.test(view('board'))) bad('still frame: the running lane "▶ T-740" (mark and id only) is not drawn in the t-run tone')

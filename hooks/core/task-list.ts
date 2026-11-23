@@ -23,14 +23,14 @@ export function tasksCounts(b: Pick<Board, 'tasks'>, nowMs: number, offsetMin: n
   return `backlog ${s.backlog.length} · done today ${done} · dropped today ${dropped}`
 }
 
-/** A task's short state on the list: its time (with "(try n)" from the second try) while it runs, "waiting",
+/** A task's short state on the list: its time (with "↺n" from the second try) while it runs, "waiting",
  *  "more time?", "review", "failed", "paused", "to do", or "after T-3" for a task to do that waits for open tasks. */
 function stateOf(t: BoardTask, all: readonly BoardTask[], nowMs: number, group: string): string {
   if (asksMoreTime(t)) return MORE_TIME_CELL
   if (group === 'run') {
     const cell = rowCell(t, nowMs)
     const n = Number(t.attempts)
-    const tries = n > 1 ? `(try ${n})` : ''
+    const tries = n > 1 ? `↺${n}` : ''
     return [cell, tries].filter(Boolean).join(' ')
   }
   if (t.status === 'todo' || t.status === 'paused') {
