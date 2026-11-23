@@ -8,6 +8,7 @@ import { ICON } from '../hooks/name'
 import { inProject } from './project'
 import { ran, readText, entry, pause } from './fakes'
 import { hist } from './history-fixture'
+import { manual } from '../hooks/app/tools'
 
 const PANE = {
   plugin: 'symcc',
@@ -84,3 +85,11 @@ for (const surface of ['terminal'] as const)
     expect(await ui.find({ key: 'reject-reason' })).toBeUndefined()
     await ui.unmount()
   })
+
+test('the help manual no longer names a or v for Done and Keep as a note on the Claude Code board; x still opens Ask more', () => {
+  const text = manual('')
+  expect(text).not.toContain('a done')
+  expect(text).not.toContain('v keep as a note')
+  expect(text).toContain('Done and Keep as a note (adds a docs task) are buttons with no letter key')
+  expect(text).toContain('x ask more')
+})
