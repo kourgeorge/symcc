@@ -15,7 +15,9 @@ import type { SymccScout, SymccTask } from '../../types'
 import { type BoardTask, DEFAULT_AUTO_RETRIES, isInvestigation, kindOf, STATUS_WORD } from './board-file'
 import { type Seg, STATUS_BADGE, STATUS_MARK, statusMark, wrapSegs } from './details'
 import { originOf } from './origin'
-import { roleOf } from './roles'
+import { DEFAULT_ROLE, isCheckerRole, roleNameError, roleOf } from './roles'
+import { ALWAYS_ON_KINDS, kindNameError } from './kinds'
+import { type DefSource, defNamed } from './def-files'
 import { type ActionGroup, GROUP_ORDER, rowTime, STEP_WORD, panelSections, searchTasks, type SearchMore } from './panel'
 import { stageStep, taskPhase } from './phase'
 import { everyText, scoutRanText, scoutStateText, type ScoutRunRecord, sortScouts } from './scouts'
@@ -266,6 +268,20 @@ export function scoutButtons(sc: Pick<SymccScout, 'running' | 'paused'>): Header
     { id: 'scout-pause', label: sc.paused ? 'Resume' : 'Pause', group: 'page', key: 'p' },
     ...(sc.paused ? [{ id: 'scout-paused', label: '⏸ paused', group: 'page' as const, fact: true }] : []),
   ]
+}
+
+/** Which buttons a role or kind page gets (the same rules on every client): Edit, Turn off or on, Reset to built-in,
+ *  Remove. A file that can't be read (`broken`) only gets Reset (when a built-in one has its name) or Remove (when not),
+ *  and neither when its name is not a valid one. Otherwise Reset is for a replaced one, Remove for an added one, and
+ *  every one can be turned off but the general role, the checker role and the always-on kinds. */
+export function defActions(def: 'role' | 'kind', name: string, source: DefSource | '' | undefined, broken: boolean, builtIn: readonly { name: string }[]): { canEdit: boolean; canReset: boolean; canRemove: boolean; canOff: boolean } {
+  if (broken) {
+    const okName = !(def === 'role' ? roleNameError : kindNameError)(name)
+    const canReset = okName && !!defNamed(builtIn, name)
+    return { canEdit: false, canReset, canRemove: okName && !canReset, canOff: false }
+  }
+  const canOff = def === 'role' ? name.toLowerCase() !== DEFAULT_ROLE && !isCheckerRole(name) : !ALWAYS_ON_KINDS.includes(name)
+  return { canEdit: true, canReset: source === 'replaced', canRemove: source === 'added', canOff }
 }
 
 /** The buttons of a role's page header (T-871): Edit and Prompt, Turn off or on, Reset to built-in (a replaced role) and
