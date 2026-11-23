@@ -10,6 +10,7 @@ import { runBy } from './agent-fixture'
 import { statsUsage } from '../hooks/core/stats'
 import { ran } from './fakes'
 import type { ProcessRunResult } from 'claude-code'
+import { DAM_POST_LINE } from '../hooks/core/dam'
 
 const T0 = 1_800_000_000_000
 const ISO = '2026-11-13T00:00:00.000Z'
@@ -23,8 +24,9 @@ const ok = (stdout = ''): Res => ran({ stdout })
  * Files in memory (keyed from "/.symcc/" on, so the project folder does not matter), a small fake git and
  * agent list, and what reached the bottom: tool calls (`tools`), prompts (`prompts`), messages to agents (`sent`).
  * `agents` are listed as running until a message reaches them (then completed). `state.gitFails` makes `git diff` fail.
+ * `env` answers $.env.get (any other name is unset).
  */
-function world(on: On, o: { agents?: { id: string; type: string }[] } = {}) {
+function world(on: On, o: { agents?: { id: string; type: string }[]; env?: Record<string, string> } = {}) {
   const files = new Map<string, string>()
   const key = (p: string) => (p.includes('/.symcc/') ? p.slice(p.indexOf('/.symcc/')) : p)
   const tools: string[] = []
@@ -88,7 +90,7 @@ function world(on: On, o: { agents?: { id: string; type: string }[] } = {}) {
   on('session.repo', () => ({ value: { root: '/repo' } }) as never)
   on('session.root', () => ({ value: '/repo' }) as never)
   on('session.id', () => ({ value: 'me' }) as never)
-  on('env.get', () => ({ value: undefined }) as never)
+  on('env.get', (_, e) => ({ value: o.env?.[(e as unknown as { name: string }).name] }) as never)
   const clock = mock.clock(on, { now: T0 })
   return { files, tools, prompts, sent, toasts, spawned, state, clock, board: () => JSON.parse(files.get(BOARD)!) as Board }
 }
@@ -315,6 +317,78 @@ test("T-925: the starter's OK sent with origin sdk is dropped, with and without 
   expect(bare.drop).toBe('▸ agent started')
   const prefixed = (await say($, PREFIX + ok, { origin: { kind: 'sdk' } })) as { drop?: string }
   expect(prefixed.drop).toBe('▸ agent started')
+})
+
+// T-943: in a DAM image (PLATFORM_HARNESS set, but not DAM's harness-claude chat program), only an owner's sdk prompt turns on the Slack line
+const DAM_IMAGE = { PLATFORM_HARNESS: 'claude-code' }
+
+const COMPOSE = { model: 'claude-opus-5-5', promptModel: 'claude-opus-5-5', surfaces: ['terminal'], tools: [], outputStyle: null, traits: [] } as never
+
+/** Whether the lead's guide in the system prompt ends with the post-to-Slack line (S.dam is on in the plugin). */
+async function slackLine($: Eng): Promise<boolean> {
+  const lead = (await $.prompt.compose(COMPOSE)).sections.find(x => x.id === 'symcc:lead')
+  expect(lead).toBeDefined()
+  return lead!.text.endsWith(DAM_POST_LINE)
+}
+
+/** A session started with a board in a DAM image (or with `env`): no Slack line until an owner's sdk prompt arrives. */
+async function damStart($: Eng, on: On, env: Record<string, string> = DAM_IMAGE) {
+  const w = world(on, { env })
+  on('prompt.compose', () => ({ sections: [] }))
+  w.files.set(BOARD, JSON.stringify(emptyBoard()))
+  await $.session.start({ cwd: '/repo' } as never)
+  expect(await slackLine($)).toBe(false)
+  return w
+}
+
+test("T-943: in a DAM image, an owner's sdk prompt through prompt.submit turns the Slack line on (S.dam)", async ($, on) => {
+  await damStart($, on)
+  await say($, 'add a search box', { origin: { kind: 'sdk' } })
+  expect(await slackLine($)).toBe(true)
+})
+
+test('T-943: in a DAM image, a composer prompt leaves the Slack line off', async ($, on) => {
+  await damStart($, on)
+  await say($, 'add a search box')
+  expect(await slackLine($)).toBe(false)
+})
+
+test('T-943: in a DAM image, a bridge prompt leaves the Slack line off', async ($, on) => {
+  await damStart($, on)
+  await say($, 'add a search box', { origin: { kind: 'bridge' } })
+  expect(await slackLine($)).toBe(false)
+})
+
+test("T-943: in a DAM image, symcc's own board update sent with origin sdk leaves the Slack line off", async ($, on) => {
+  await damStart($, on)
+  await say($, '[symcc] Board update:\n\nT-1 merged.', { origin: { kind: 'sdk' } })
+  expect(await slackLine($)).toBe(false)
+})
+
+test("T-943: in a DAM image, a worker's agent-message sent with origin sdk leaves the Slack line off, with and without the prefix", async ($, on) => {
+  await damStart($, on)
+  await say($, agentMsg('symcc-worker', '[Subagent hand-back] done'), { origin: { kind: 'sdk' } })
+  expect(await slackLine($)).toBe(false)
+  await say($, PREFIX + agentMsg('symcc-worker', '[Subagent hand-back] done'), { origin: { kind: 'sdk' } })
+  expect(await slackLine($)).toBe(false)
+})
+
+test('T-943: in a DAM image, an sdk slash command leaves the Slack line off', async ($, on) => {
+  await damStart($, on)
+  await say($, '/symcc-stats', { origin: { kind: 'sdk' }, command: { name: 'symcc-stats', args: '' } })
+  expect(await slackLine($)).toBe(false)
+})
+
+test('T-943: in a DAM image, a hidden (isMeta) sdk prompt leaves the Slack line off', async ($, on) => {
+  await damStart($, on)
+  await say($, 'a hidden reminder', { origin: { kind: 'sdk' }, isMeta: true })
+  expect(await slackLine($)).toBe(false)
+})
+
+test("T-943: with no PLATFORM_HARNESS, an owner's sdk prompt leaves the Slack line off", async ($, on) => {
+  await damStart($, on, {})
+  await say($, 'add a search box', { origin: { kind: 'sdk' } })
+  expect(await slackLine($)).toBe(false)
 })
 
 test('with no owner prompt seen, an owner task says so', async ($, on) => {
