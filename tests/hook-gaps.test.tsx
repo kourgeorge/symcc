@@ -291,6 +291,32 @@ test("T-922: an sdk prompt (a Slack message through DAM) counts as the owner's r
   expect(await ownerAdd($, w, 'add a search box')).toContain('“add a search box”')
 })
 
+const agentMsg = (name: string, body: string) => `<agent-message from="${name}">\n${body}\n</agent-message>`
+const PREFIX = 'Another Claude session sent a message:\n'
+
+test("T-925: an sdk agent-message is not taken as the owner's words; the earlier owner prompt stays the request", async ($, on) => {
+  const w = world(on)
+  await say($, 'add a search box', { origin: { kind: 'sdk' } })
+  await say($, agentMsg('symcc-worker', '[Subagent hand-back] done'), { origin: { kind: 'sdk' } })
+  expect(await ownerAdd($, w, 'add a search box')).toContain('“add a search box”')
+})
+
+test("T-925: an sdk agent-message with the \"Another Claude session sent a message:\" prefix is not taken as the owner's words either", async ($, on) => {
+  const w = world(on)
+  await say($, 'add a search box', { origin: { kind: 'sdk' } })
+  await say($, PREFIX + agentMsg('symcc-worker', '[Subagent hand-back] done'), { origin: { kind: 'sdk' } })
+  expect(await ownerAdd($, w, 'add a search box')).toContain('“add a search box”')
+})
+
+test("T-925: the starter's OK sent with origin sdk is dropped, with and without the prefix", async ($, on) => {
+  world(on)
+  const ok = agentMsg('symcc-starter', '[Subagent hand-back] OK')
+  const bare = (await say($, ok, { origin: { kind: 'sdk' } })) as { drop?: string }
+  expect(bare.drop).toBe('▸ agent started')
+  const prefixed = (await say($, PREFIX + ok, { origin: { kind: 'sdk' } })) as { drop?: string }
+  expect(prefixed.drop).toBe('▸ agent started')
+})
+
 test('with no owner prompt seen, an owner task says so', async ($, on) => {
   const w = world(on)
   expect(await ownerAdd($, w, 'fix the login bug')).toBe('no owner prompt was seen by the plugin in this session')
