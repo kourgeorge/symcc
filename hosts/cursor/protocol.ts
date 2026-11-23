@@ -179,7 +179,10 @@ export type PanelStep = { atMs: number; kind: 'text' | 'thinking' | 'tool' | 'st
 /** The engine could not reach Cursor's servers: `text` is the error, `proxy` the proxy it ran with ('' for none). */
 export type NetworkProblem = { text: string; proxy: string }
 
-/** From the extension to the webview. */
+/** A page of the board panel. */
+export type BoardPage = 'now' | 'board' | 'trees' | 'scouts'
+
+/** From the extension to the webview (the board panel and the sidebar alike; `go` only to the panel). */
 export type ToWebview =
   | { type: 'view'; view: PanelView }
   | { type: 'chat'; items: ChatItem[]; busy: boolean }
@@ -193,8 +196,9 @@ export type ToWebview =
   | { type: 'slash'; items: SlashItem[] }
   | { type: 'lead'; settings: LeadSettings }
   | { type: 'worktrees'; list: PanelWorktree[]; atMs: number; error?: string }
+  | { type: 'go'; page: BoardPage; task?: string }
 
-/** From the webview to the extension; `id` comes back on the reply. */
+/** From the webview to the extension; `id` comes back on the reply, to the webview that asked. */
 export type FromWebview =
   | { type: 'ready' }
   | { type: 'send'; id: number; text: string; images?: ChatImage[] }
@@ -213,3 +217,4 @@ export type FromWebview =
   | { type: 'open-file'; path: string; line?: number }
   | { type: 'worktrees' }
   | { type: 'worktree'; id: number; path: string; action: WorktreeAction; file?: string }
+  | { type: 'open-board'; page?: BoardPage; task?: string }

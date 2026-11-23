@@ -40,4 +40,7 @@ export function ask(m: Ask): Promise<string> {
   })
 }
 
-export const tell = (m: Extract<FromWebview, { type: 'ready' | 'restart' | 'log' | 'session' | 'lead-set' | 'lead-stop' | 'open-file' | 'worktrees' }>) => api.postMessage(m)
+export const tell = (m: Extract<FromWebview, { type: 'ready' | 'restart' | 'log' | 'session' | 'lead-set' | 'lead-stop' | 'open-file' | 'worktrees' | 'open-board' }>) => api.postMessage(m)
+
+/** Which view this webview is: the board panel, or the sidebar in the activity bar (the extension's boardHtml says). */
+export const surface: 'panel' | 'side' = document.body.dataset.surface === 'side' ? 'side' : 'panel'

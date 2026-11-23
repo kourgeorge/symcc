@@ -2495,3 +2495,261 @@ input:focus {
     padding: 14px;
   }
 }
+
+/* ---------- the sidebar: the board at a glance, in the activity bar ---------- */
+
+html:has(> body[data-surface='side']) {
+  --bg: var(--vscode-sideBar-background, var(--vscode-editor-background, #181818));
+  --fg: var(--vscode-sideBar-foreground, var(--vscode-foreground, var(--vscode-editor-foreground, #cccccc)));
+}
+.sidebar {
+  height: 100%;
+  overflow-y: auto;
+  padding: 10px 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.sidebar .screen {
+  margin: 0;
+  padding: 20px 0;
+}
+.sidebar .screen h2 {
+  font-size: 15px;
+}
+/* the toast line has no height: it takes back the gap it would add */
+.sidebar > .notice {
+  margin-top: -18px;
+}
+.sidebar .notice p {
+  max-width: 100%;
+  width: max-content;
+}
+.sidebar h2 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.sidebar h2 .count {
+  margin-left: 0;
+}
+
+.sb-head {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.sb-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.sb-title b {
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sb-title .branch {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sb-state {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sb-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 10px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.sb-counts span {
+  white-space: nowrap;
+}
+.sb-counts b {
+  color: var(--fg);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.sidebar .mode {
+  margin: 0;
+}
+.sidebar .mode-button {
+  width: 100%;
+  padding: 5px 8px 5px 10px;
+}
+.sidebar .mode-button .codicon-chevron-down {
+  margin-left: auto;
+}
+.sidebar .mode-pop {
+  left: 0;
+  right: 0;
+  width: auto;
+}
+.sidebar .btn {
+  padding: 4px 9px;
+  font-size: 12px;
+}
+.sidebar .head-note {
+  font-size: 12px;
+}
+
+.sb-clear {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.sb-clear .codicon {
+  color: var(--good);
+}
+.sb-needs h2,
+.sb-needs h2 .count {
+  color: var(--coral-text);
+}
+.sidebar .cards {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+.sidebar .card {
+  padding: 10px 12px;
+}
+.sb-more {
+  justify-content: flex-start;
+  align-items: center;
+  margin-top: 4px;
+  color: var(--coral-text);
+  font-size: 12px;
+}
+
+.sb-lead {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--raised);
+}
+.sb-lead h2 {
+  margin: 0;
+}
+.sb-lead h2 .mark {
+  flex: none;
+}
+.sb-busy,
+.sb-when {
+  font-weight: 400;
+  font-size: 11.5px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.sb-busy .codicon {
+  font-size: 12px;
+  color: var(--run);
+  vertical-align: -2px;
+}
+.sb-open {
+  margin-left: auto;
+  font-weight: 400;
+  font-size: 12px;
+}
+.sb-said {
+  max-height: 10.5em;
+  overflow: hidden;
+  font-size: 12.5px;
+}
+.sb-said.cut {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 3em), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 3em), transparent);
+}
+.sb-said .md {
+  line-height: 1.5;
+}
+.sb-said .md > * + * {
+  margin-top: 6px;
+}
+.sb-said .md :is(h1, h2, h3, h4) {
+  margin-top: 10px;
+  font-size: 13px;
+}
+.sb-said.bad {
+  color: var(--bad);
+}
+.sb-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 12px;
+  color: color-mix(in srgb, var(--fg) 78%, var(--bg));
+}
+.sb-step .codicon {
+  flex: none;
+  color: var(--run);
+}
+.sb-step span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sb-lead > .quiet {
+  font-size: 12.5px;
+}
+.sb-compose {
+  position: relative;
+}
+.sb-compose textarea {
+  display: block;
+  width: 100%;
+  min-height: 3.4em;
+  max-height: 12em;
+  field-sizing: content;
+  resize: none;
+  padding: 7px 34px 7px 9px;
+  border: 1px solid var(--input-line);
+  border-radius: 6px;
+  background: var(--input);
+  color: var(--vscode-input-foreground, var(--fg));
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+.sb-compose textarea::placeholder {
+  color: var(--vscode-input-placeholderForeground, var(--muted));
+}
+.sb-compose textarea:focus {
+  outline: none;
+  border-color: var(--focus);
+}
+.sb-compose .icon-btn {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+}
+
+.sb-part .lane {
+  margin-bottom: 6px;
+}
+.sb-part .lane:last-child {
+  margin-bottom: 0;
+}
+.sb-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}

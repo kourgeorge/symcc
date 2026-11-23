@@ -2,7 +2,7 @@
 // what needs you pinned on top as cards you decide in place, the lead's chat and the board's news in one timeline
 // with the message box under it, and the running work beside it.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
-import type { ChatItem, EngineState, LeadSettings, ModelInfo, NetworkProblem, PanelAction, PanelLane, PanelMode, PanelNeed, PanelScout, PanelStep, PanelTask, PanelView, SlashItem } from '../../protocol'
+import type { BoardPage, ChatItem, EngineState, LeadSettings, ModelInfo, NetworkProblem, PanelAction, PanelLane, PanelMode, PanelNeed, PanelScout, PanelStep, PanelTask, PanelView, SlashItem } from '../../protocol'
 import { LEAD_AGENT, addStep } from '../../steps'
 import { ask, onMessage, tell } from './bridge'
 import { Icon, Linked, Mark, Markdown, Staff, STATION_WORD, ago, clock, dayWord, duration, tokensWord, useNow } from './parts'
@@ -10,28 +10,28 @@ import { TaskSession, latestStep, openSession, stepIcon, stepWords } from './ses
 import { LeadChat } from './chat'
 import { Worktrees, type WorktreeList } from './worktrees'
 
-type Page = 'now' | 'board' | 'trees' | 'scouts'
+type Page = BoardPage
 type Notice = { text: string; bad: boolean; at: number }
-type Say = (text: string, bad?: boolean) => void
-type Steps = Record<string, PanelStep[]>
+export type Say = (text: string, bad?: boolean) => void
+export type Steps = Record<string, PanelStep[]>
 /** The lead chat's model and mode, the account's models, and the slash commands. */
 type Lead = { settings: LeadSettings; models: ModelInfo[]; slash: SlashItem[] }
 
 /** The words of the board's empty list (hooks/core/panel.ts ALL_CLEAR). */
 const ALL_CLEAR = ['All clear. Nothing running or waiting.', 'Tell the lead what you want next.'] as const
 
-export function App() {
+/** What the extension sends, kept as it comes: the board, the lead's chat, the engine, every agent's steps. */
+export function useSymcc(onGo?: (page: Page, task?: string) => void) {
   const [view, setView] = useState<PanelView | null>(null)
   const [chat, setChat] = useState<ChatItem[]>([])
   const [busy, setBusy] = useState(false)
   const [engine, setEngine] = useState<EngineState>({ state: 'starting' })
-  const [page, setPage] = useState<Page>('now')
-  const [focus, setFocus] = useState<string | null>(null)
-  const [notice, setNotice] = useState<Notice | null>(null)
   const [network, setNetwork] = useState<NetworkProblem | null>(null)
   const [steps, setSteps] = useState<Steps>({})
   const [lead, setLead] = useState<Lead>({ settings: { mode: 'agent' }, models: [], slash: [] })
   const [trees, setTrees] = useState<WorktreeList | null>(null)
+  const go = useRef(onGo)
+  go.current = onGo
 
   useEffect(() => {
     const off = onMessage(m => {
@@ -45,17 +45,43 @@ export function App() {
       else if (m.type === 'models') setLead(l => ({ ...l, models: m.models }))
       else if (m.type === 'slash') setLead(l => ({ ...l, slash: m.items }))
       else if (m.type === 'worktrees') setTrees({ list: m.list, atMs: m.atMs, ...(m.error ? { error: m.error } : {}) })
+      else if (m.type === 'go') go.current?.(m.page, m.task)
     })
     tell({ type: 'ready' })
     return off
   }, [])
+  return { view, chat, busy, engine, network, steps, lead, trees }
+}
+
+/** A short line that says how an action went, gone after a few seconds (an error stays longer). */
+export function useNotice(): [Notice | null, Say] {
+  const [notice, setNotice] = useState<Notice | null>(null)
   useEffect(() => {
     if (!notice) return
     const t = setTimeout(() => setNotice(n => (n === notice ? null : n)), notice.bad ? 9000 : 5000)
     return () => clearTimeout(t)
   }, [notice])
-
   const say: Say = useCallback((text, bad = false) => setNotice({ text: text.replace(/^symcc: /, ''), bad, at: Date.now() }), [])
+  return [notice, say]
+}
+
+export function NoticeLine({ notice }: { notice: Notice | null }) {
+  return (
+    <div className="notice" role="status" aria-live="polite">
+      {notice && (
+        <p className={notice.bad ? 'bad' : ''}>
+          <Icon name={notice.bad ? 'error' : 'check'} /> {notice.text}
+        </p>
+      )}
+    </div>
+  )
+}
+
+export function App() {
+  const [page, setPage] = useState<Page>('now')
+  const [focus, setFocus] = useState<string | null>(null)
+  const { view, chat, busy, engine, network, steps, lead, trees } = useSymcc((p, task) => (setPage(p), task && setFocus(task)))
+  const [notice, say] = useNotice()
   const openTask = useCallback((id: string) => (setPage('board'), setFocus(id)), [])
 
   return (
@@ -63,13 +89,7 @@ export function App() {
       <Rail page={page} onPage={setPage} needs={view?.counts.needs ?? 0} />
       <div className="frame">
         <Header view={view} onSay={say} />
-        <div className="notice" role="status" aria-live="polite">
-          {notice && (
-            <p className={notice.bad ? 'bad' : ''}>
-              <Icon name={notice.bad ? 'error' : 'check'} /> {notice.text}
-            </p>
-          )}
-        </div>
+        <NoticeLine notice={notice} />
         {network && (
           <div className="network-wrap">
             <NetworkCard key={network.text + network.proxy} problem={network} onSay={say} />
@@ -169,7 +189,7 @@ function modeEffect(view: PanelView, to: PanelMode): string {
 }
 
 /** The board's mode: one button that opens the three modes; a change is said and confirmed before it happens. */
-function ModeMenu({ view, onSay }: { view: PanelView; onSay: Say }) {
+export function ModeMenu({ view, onSay }: { view: PanelView; onSay: Say }) {
   const [open, setOpen] = useState(false)
   const [pick, setPick] = useState<PanelMode | null>(null)
   const [saving, setSaving] = useState(false)
@@ -243,7 +263,7 @@ function ModeMenu({ view, onSay }: { view: PanelView; onSay: Say }) {
 }
 
 /** The engine can't reach Cursor's servers: what failed, and a place to give it the proxy. */
-function NetworkCard({ problem, onSay }: { problem: NetworkProblem; onSay: Say }) {
+export function NetworkCard({ problem, onSay }: { problem: NetworkProblem; onSay: Say }) {
   const [text, setText] = useState(problem.proxy)
   const [saving, setSaving] = useState(false)
   const save = (e: FormEvent) => {
@@ -277,7 +297,7 @@ function NetworkCard({ problem, onSay }: { problem: NetworkProblem; onSay: Say }
   )
 }
 
-function EngineScreen({ engine }: { engine: EngineState }) {
+export function EngineScreen({ engine }: { engine: EngineState }) {
   if (engine.state === 'failed' || engine.state === 'stopped')
     return (
       <section className="screen">
@@ -297,7 +317,7 @@ function EngineScreen({ engine }: { engine: EngineState }) {
   )
 }
 
-function OffScreen({ view, onSay }: { view: PanelView; onSay: Say }) {
+export function OffScreen({ view, onSay }: { view: PanelView; onSay: Say }) {
   const [busy, setBusy] = useState(false)
   const setUp = () => {
     setBusy(true)
@@ -357,7 +377,7 @@ function Needs({ needs, tasks, onSay, onTask }: { needs: PanelNeed[]; tasks: Pan
 
 const NEED_ICON: Record<PanelNeed['kind'], string> = { question: 'comment-discussion', asks: 'question', files: 'file-add', time: 'watch', review: 'git-pull-request', answer: 'book', failed: 'error' }
 
-function NeedCard({ need, task: of, onSay, onTask }: { need: PanelNeed; task?: PanelTask; onSay: Say; onTask: (id: string) => void }) {
+export function NeedCard({ need, task: of, onSay, onTask }: { need: PanelNeed; task?: PanelTask; onSay: Say; onTask: (id: string) => void }) {
   const now = useNow(30_000)
   const [box, setBox] = useState<{ action?: PanelAction; hint: string } | null>(null)
   const [text, setText] = useState('')
@@ -565,7 +585,7 @@ function Backlog({ tasks, count, onTask }: { tasks: PanelTask[]; count: number; 
   )
 }
 
-function LaneCard({ lane, step, onTask }: { lane: PanelLane; step?: PanelStep; onTask: (id: string) => void }) {
+export function LaneCard({ lane, step, onTask }: { lane: PanelLane; step?: PanelStep; onTask: (id: string) => void }) {
   const now = useNow(1000)
   const station = lane.stations[lane.at]
   const done = lane.doneMs !== undefined

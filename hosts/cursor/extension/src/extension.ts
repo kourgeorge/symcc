@@ -1,12 +1,13 @@
 // symcc in Cursor: one engine process per window (./engine.ts) for the first workspace folder, the board panel (a
-// webview tab, ../webview/) and a status bar item that says what needs you. The panel only draws what the engine
-// sends; every press goes back to the engine as the owner's own command.
+// webview tab, ../webview/), the sidebar in the activity bar (the same webview, narrow; its badge counts what needs
+// you) and a status bar item that says what needs you. Both views only draw what the engine sends; every press goes
+// back to the engine as the owner's own command.
 import * as vscode from 'vscode'
 import * as path from 'node:path'
 import * as fs from 'node:fs'
 import * as os from 'node:os'
 import { Engine } from './engine'
-import type { ChatItem, EngineState, FromWebview, LeadSettings, ModelInfo, NetworkProblem, PanelStep, PanelView, PanelWorktree, SlashItem, ToWebview, WorktreeAction } from '../../protocol'
+import type { BoardPage, ChatItem, EngineState, FromWebview, LeadSettings, ModelInfo, NetworkProblem, PanelStep, PanelView, PanelWorktree, SlashItem, ToWebview, WorktreeAction } from '../../protocol'
 import { LEAD_AGENT, addStep, readSteps, sessionMarkdown, sessionPath, turnSteps } from '../../steps'
 
 /** A lead error that means the engine could not reach Cursor's servers. */
@@ -71,10 +72,15 @@ export function activate(ctx: vscode.ExtensionContext) {
   let models: ModelInfo[] = []
   let slash: SlashItem[] = []
   let panel: vscode.WebviewPanel | undefined
+  let side: vscode.WebviewView | undefined
+  // where the board panel goes once its page is up (the sidebar opened it at a task)
+  let panelGo: ToWebview | undefined
   const seenNeeds = new Set<string>()
   let firstView = true
 
-  const post = (m: ToWebview) => void panel?.webview.postMessage(m)
+  const post = (m: ToWebview) => {
+    for (const w of [panel?.webview, side?.webview]) void w?.postMessage(m)
+  }
   const addChat = (who: ChatItem['who'], text: string, more: Partial<ChatItem> = {}) => {
     const atMs = Date.now()
     chat = [...chat, { key: `${atMs}-${chat.length}`, who, text, atMs, ...more }].slice(-CHAT_KEPT)
@@ -138,7 +144,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     for (const x of v.needs) seenNeeds.add(x.id)
     for (const id of [...seenNeeds]) if (!v.needs.some(x => x.id === id)) seenNeeds.delete(id)
     // the needs there at the start were seen on the board's first draw; a board in view needs no notice
-    if (firstView || !fresh.length || !conf().get<boolean>('notify') || (panel?.visible && panel.active)) return
+    if (firstView || !fresh.length || !conf().get<boolean>('notify') || (panel?.visible && panel.active) || side?.visible) return
     const first = fresh[0]!
     const text = fresh.length === 1 ? `${first.id} needs you: ${first.title}` : `${fresh.length} things need you, first ${first.id}: ${first.title}`
     void vscode.window.showInformationMessage(text, 'Open board').then(pick => pick && openPanel())
@@ -182,22 +188,33 @@ export function activate(ctx: vscode.ExtensionContext) {
     notifyNew(v)
     firstView = false
     drawStatus(engine.state)
+    drawBadge()
     post({ type: 'view', view: v })
   }
+  const drawBadge = () => {
+    const n = view?.on ? view.counts.needs : 0
+    if (side) side.badge = n ? { value: n, tooltip: `${n} thing${n === 1 ? ' needs' : 's need'} you` } : undefined
+  }
 
-  /** Answers the webview's request `m` (its reply carries the engine's text, or the error). */
-  async function handle(m: FromWebview) {
+  /** Answers the request `m` of the webview `from` (its reply carries the engine's text, or the error). */
+  async function handle(m: FromWebview, from: vscode.Webview) {
+    const to = (x: ToWebview) => void from.postMessage(x)
     if (m.type === 'ready') {
-      post({ type: 'engine', engine: engine.state })
-      post({ type: 'chat', items: chat, busy })
-      post({ type: 'network', problem: network })
-      post({ type: 'steps', all: steps })
-      post({ type: 'lead', settings: lead })
-      if (models.length) post({ type: 'models', models })
-      if (slash.length) post({ type: 'slash', items: slash })
-      if (view) post({ type: 'view', view })
+      to({ type: 'engine', engine: engine.state })
+      to({ type: 'chat', items: chat, busy })
+      to({ type: 'network', problem: network })
+      to({ type: 'steps', all: steps })
+      to({ type: 'lead', settings: lead })
+      if (models.length) to({ type: 'models', models })
+      if (slash.length) to({ type: 'slash', items: slash })
+      if (view) to({ type: 'view', view })
+      if (panelGo && from === panel?.webview) {
+        to(panelGo)
+        panelGo = undefined
+      }
       return
     }
+    if (m.type === 'open-board') return openBoard(m.page ?? 'now', m.task)
     if (m.type === 'lead-set') return setLead(m.settings)
     if (m.type === 'lead-stop') return void engine.request({ op: 'lead-stop' }).catch(() => undefined)
     if (m.type === 'session') return void openSession(m.agent, m.title)
@@ -205,7 +222,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     if (m.type === 'log') return out.show()
     if (m.type === 'open-file') return void openFile(m.path, m.line).catch(err => vscode.window.showWarningMessage((err as Error).message))
     if (m.type === 'worktrees') return void sendWorktrees()
-    const reply = (ok: boolean, text: string) => post({ type: 'reply', id: m.id, ok, text })
+    const reply = (ok: boolean, text: string) => to({ type: 'reply', id: m.id, ok, text })
     try {
       if (m.type === 'proxy') {
         const p = m.proxy.trim()
@@ -336,11 +353,37 @@ export function activate(ctx: vscode.ExtensionContext) {
     if (panel) return panel.reveal(undefined, quiet)
     panel = vscode.window.createWebviewPanel('symcc.board', 'symcc', { viewColumn: vscode.ViewColumn.Active, preserveFocus: quiet }, { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [vscode.Uri.file(path.join(ctx.extensionPath, 'dist'))] })
     panel.iconPath = vscode.Uri.file(path.join(ctx.extensionPath, 'media', 'symcc.svg'))
-    panel.webview.html = boardHtml(panel.webview, ctx.extensionPath)
-    panel.webview.onDidReceiveMessage((m: FromWebview) => void handle(m))
+    const webview = panel.webview
+    webview.html = boardHtml(webview, ctx.extensionPath, 'panel')
+    webview.onDidReceiveMessage((m: FromWebview) => void handle(m, webview))
     panel.onDidDispose(() => (panel = undefined))
     if (engine.state.state === 'stopped') engine.start()
   }
+  /** Opens the board panel at `page` (the board at task `task`); a panel still loading goes there once it's up. */
+  function openBoard(page: BoardPage, task?: string) {
+    const go: ToWebview = { type: 'go', page, ...(task ? { task } : {}) }
+    if (panel) void panel.webview.postMessage(go)
+    else panelGo = go
+    openPanel()
+  }
+
+  ctx.subscriptions.push(
+    vscode.window.registerWebviewViewProvider(
+      'symcc.side',
+      {
+        resolveWebviewView(v) {
+          side = v
+          v.webview.options = { enableScripts: true, localResourceRoots: [vscode.Uri.file(path.join(ctx.extensionPath, 'dist'))] }
+          v.webview.html = boardHtml(v.webview, ctx.extensionPath, 'side')
+          v.webview.onDidReceiveMessage((m: FromWebview) => void handle(m, v.webview))
+          v.onDidDispose(() => side === v && (side = undefined))
+          drawBadge()
+          if (folder && engine.state.state === 'stopped') engine.start()
+        },
+      },
+      { webviewOptions: { retainContextWhenHidden: true } },
+    ),
+  )
 
   ctx.subscriptions.push(
     vscode.commands.registerCommand('symcc.open', () => openPanel()),
@@ -369,7 +412,7 @@ export function activate(ctx: vscode.ExtensionContext) {
 export function deactivate() {}
 
 /** The webview's page: the built script and styles, codicons, and a content policy that allows nothing else. */
-function boardHtml(webview: vscode.Webview, root: string): string {
+function boardHtml(webview: vscode.Webview, root: string, surface: 'panel' | 'side'): string {
   const uri = (...p: string[]) => webview.asWebviewUri(vscode.Uri.file(path.join(root, 'dist', ...p)))
   const nonce = Array.from({ length: 32 }, () => 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'.charAt(Math.floor(Math.random() * 62))).join('')
   const csp = [`default-src 'none'`, `img-src ${webview.cspSource} data:`, `style-src ${webview.cspSource}`, `font-src ${webview.cspSource}`, `script-src 'nonce-${nonce}'`].join('; ')
@@ -383,7 +426,7 @@ function boardHtml(webview: vscode.Webview, root: string): string {
 <link rel="stylesheet" href="${uri('webview.css')}">
 <title>symcc</title>
 </head>
-<body>
+<body data-surface="${surface}">
 <div id="root"></div>
 <script nonce="${nonce}" src="${uri('webview.js')}"></script>
 </body>

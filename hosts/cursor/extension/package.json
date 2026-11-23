@@ -20,16 +20,62 @@
     "onStartupFinished"
   ],
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "symcc",
+          "title": "symcc",
+          "icon": "media/activity.svg"
+        }
+      ]
+    },
+    "views": {
+      "symcc": [
+        {
+          "type": "webview",
+          "id": "symcc.side",
+          "name": "Board",
+          "icon": "media/activity.svg",
+          "contextualTitle": "symcc"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "symcc.message",
+          "when": "view == symcc.side",
+          "group": "navigation@1"
+        },
+        {
+          "command": "symcc.open",
+          "when": "view == symcc.side",
+          "group": "navigation@2"
+        },
+        {
+          "command": "symcc.restart",
+          "when": "view == symcc.side",
+          "group": "engine@1"
+        },
+        {
+          "command": "symcc.showLog",
+          "when": "view == symcc.side",
+          "group": "engine@2"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "symcc.open",
         "title": "Open the board",
-        "category": "symcc"
+        "category": "symcc",
+        "icon": "$(link-external)"
       },
       {
         "command": "symcc.message",
         "title": "Message the lead",
-        "category": "symcc"
+        "category": "symcc",
+        "icon": "$(comment-discussion)"
       },
       {
         "command": "symcc.init",

@@ -7,6 +7,7 @@ const m = (min: number) => now - min * 60_000
 const theme = new URLSearchParams(location.search).get('theme')
 document.body.classList.add(theme === 'light' ? 'vscode-light' : 'vscode-dark')
 const state = new URLSearchParams(location.search).get('state')
+if (new URLSearchParams(location.search).get('surface') === 'side') document.body.dataset.surface = 'side'
 if (state === 'off') (window as unknown as { __off: boolean }).__off = true
 
 const stations4 = ['work', 'check', 'queue', 'tests', 'merged'] as const
@@ -251,7 +252,7 @@ window.acquireVsCodeApi = () => ({
       if (net) send({ type: 'network', problem: { text: 'the lead could not run: Network request failed', proxy: '' } })
       return
     }
-    if (msg.type === 'restart' || msg.type === 'log' || msg.type === 'session' || msg.type === 'open-file') return
+    if (msg.type === 'restart' || msg.type === 'log' || msg.type === 'session' || msg.type === 'open-file' || msg.type === 'open-board') return
     if (msg.type === 'worktrees') return void later(250, () => send({ type: 'worktrees', list: worktrees, atMs: Date.now() }))
     if (msg.type === 'worktree') {
       const w = worktrees.find(x => x.path === msg.path)
