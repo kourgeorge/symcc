@@ -1406,7 +1406,9 @@ test('/symcc-disable then /symcc-enable through OpenCode\'s commands in the lead
     const run = async (name: string, text = '') => {
       const before = f.prompts.filter(x => x.sessionID === lead).length
       await c.commands.get(name)!.execute({ sessionID: lead, prompt: { text }, delivery: 'steer' })
-      const answers = f.prompts.filter(x => x.sessionID === lead).slice(before)
+      // a "Board update" for the lead (tellLead's 1.5 s timer from an earlier command) may land here on a slow
+      // machine; it is not the command's answer
+      const answers = f.prompts.filter(x => x.sessionID === lead).slice(before).filter(x => !x.text.includes('] Board update:'))
       expect(answers.length).toBe(1)
       return answers[0]!.text
     }
