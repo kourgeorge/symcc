@@ -74,6 +74,7 @@ test("symcc's agent types are known under the plugin.json name too, and odd inpu
   const $ = { plugin: { name: 'mine' } } as never
   expect(symccAgentType($, 'mine:worker')).toBe(true)
   expect(symccAgentType($, 'mine:scout')).toBe(true)
+  expect(symccAgentType($, 'mine:checker')).toBe(true)
   expect(symccAgentType($, 'symcc:worker-web')).toBe(true)
   expect(symccAgentType($, 'mine:workers')).toBe(false)
   expect(symccAgentType($, 'Explore')).toBe(false)

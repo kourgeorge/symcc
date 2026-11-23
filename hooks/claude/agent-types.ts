@@ -12,6 +12,8 @@ export function claudeNames(raw: string = DEFAULT_NAME) {
   return {
     worker: `${name}:worker`,
     scout: `${name}:scout`,
+    /** T-905: the checkers' own type, with only the read-only board and stats tools (no scouts tool) */
+    checker: `${name}:checker`,
     /** T-831: the hidden agent whose end gives symcc a hook to start agents in (see app/starts.ts) */
     starter: `${name}:starter`,
     /** "mcp__<name>__board" */
@@ -35,10 +37,13 @@ export const claudeRoleTools = (words: readonly string[] | undefined): string[] 
 export const SCOUT_TOOLS: readonly string[] = ['Read', 'Glob', 'Grep', 'Bash', 'WebSearch', 'WebFetch']
 
 /**
- * Every tool the scout agent type gets (checkers run as it too): SCOUT_TOOLS, then symcc's read-only board tools
- * (mcp__<name>__board, mcp__<name>__stats) and mcp__<name>__scouts (T-895: only its action list runs, and only for a scout).
+ * Every tool the scout agent type gets: SCOUT_TOOLS, then symcc's read-only board tools (mcp__<name>__board,
+ * mcp__<name>__stats) and mcp__<name>__scouts (T-895: only its action list runs, and only for a scout).
  */
 export const scoutAgentTools = (name: string = DEFAULT_NAME): string[] => [...SCOUT_TOOLS, ...[...SCOUT_BOARD_TOOLS, SCOUT_LIST_TOOL].map(t => claudeNames(name).tool(t))]
+
+/** Every tool the checker agent type gets (T-905): SCOUT_TOOLS and the read-only board and stats tools, but not the scouts tool (a checker's call of it is always refused). */
+export const checkerAgentTools = (name: string = DEFAULT_NAME): string[] => [...SCOUT_TOOLS, ...SCOUT_BOARD_TOOLS.map(t => claudeNames(name).tool(t))]
 
 /** The agent type (without the "<name>:" part) for a role's tool words: "worker" for none, "worker-web" for web (more words join with "-");
  *  `prose` (a role with code: false, T-900) adds "-prose": "worker-prose", "worker-web-prose", whose base prompt says to check facts and links instead of running tests. */

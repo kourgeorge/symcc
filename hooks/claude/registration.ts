@@ -1,7 +1,7 @@
 // What symcc registers with Claude Code at session start: the worker agent types (base, and one per set of extra role
 // tools), the scout agent type, the lead's tools, the workers' question tool and the slash commands (app/symcc.ts).
 import { WORKER_BASE, SCOUT_BASE } from '../core/prompts'
-import { claudeNames, workerAgentTypes, EXTRA_TOOLS, scoutAgentTools } from './agent-types'
+import { claudeNames, workerAgentTypes, EXTRA_TOOLS, scoutAgentTools, checkerAgentTools } from './agent-types'
 import { ASK_TOOL_DEF } from '../app/ask'
 import { S } from '../app/state'
 import type { $ } from './panel'
@@ -26,8 +26,16 @@ export async function registerAll($: $) {
   await ok($.agent.register({
     name: 'scout',
     description: `${S.N.name} scout: does what its scout file asks (reading the project, shell commands, the web) and reports to the lead. Started by ${S.N.name} only.`,
-    prompt: SCOUT_BASE(S.N.name, claudeNames(S.N.name).tool),
+    prompt: SCOUT_BASE(S.N.name, claudeNames(S.N.name).tool, {}, 'scout'),
     tools: scoutAgentTools(S.N.name),
+    background: true,
+  }))
+  // T-905: checkers get their own type, with board and stats but not the scouts tool (every checker call of it is refused)
+  await ok($.agent.register({
+    name: 'checker',
+    description: `${S.N.name} checker: checks one task's work in its worktree and reports to ${S.N.name}. Started by ${S.N.name} only.`,
+    prompt: SCOUT_BASE(S.N.name, claudeNames(S.N.name).tool, {}, 'checker'),
+    tools: checkerAgentTools(S.N.name),
     background: true,
   }))
   // T-831: the hidden starter agent: it only says OK; its end is a hook where symcc starts the queued agents (app/starts.ts)

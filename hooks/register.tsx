@@ -49,7 +49,7 @@ export function symccAgentType($: $, agent: unknown): boolean {
     // no plugin name to read
   }
   const type = typeof agent === 'string' ? agent : ''
-  return [...names].some(n => isWorkerType(type, n) || type === claudeNames(n).scout || type === claudeNames(n).starter)
+  return [...names].some(n => isWorkerType(type, n) || type === claudeNames(n).scout || type === claudeNames(n).checker || type === claudeNames(n).starter)
 }
 
 /** The plugin's name in use, or the default one when even that can't be read. */

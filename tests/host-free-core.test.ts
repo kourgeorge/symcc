@@ -37,12 +37,14 @@ test('core finds live workers from AgentState; the Claude adapter makes HostAgen
   expect(orphanMove({ ...live, alive: false }, b, 'me', 'me')).toEqual({ move: 'leave' })
   expect(claudeAgents.hostAgent({ id: 'w1', type: 'symcc:worker-web', status: 'running' })).toEqual({ id: 'w1', kind: 'worker', status: 'running' })
   expect(claudeAgents.hostAgent({ id: 's1', type: 'symcc:scout', status: 'running' }).kind).toBe('scout')
+  expect(claudeAgents.hostAgent({ id: 'c1', type: 'symcc:checker', status: 'running' }).kind).toBe('scout')
   expect(claudeAgents.hostAgent({ id: 'g1', type: 'general-purpose', status: 'running' }).kind).toBe('other')
   expect(agentState(claudeAgents.hostAgent({ id: 'w1', type: 'symcc:worker', status: 'killed' }))).toMatchObject({ worker: true, alive: false })
   expect(agentState(claudeAgents.hostAgent({ id: 'w1', type: 'symcc:worker-web', status: 'running' }))).toMatchObject({ worker: true, alive: true })
   expect(agentState({ id: 's1', kind: 'scout', status: 'waiting' })).toMatchObject({ worker: false, alive: true })
   expect(claudeAgents.isNotReady("Agent type 'symcc:worker' not found")).toBe(true)
   expect(claudeAgents.scoutNotReady("Agent type 'symcc:scout' not found")).toBe(true)
+  expect(claudeAgents.scoutNotReady("Agent type 'symcc:checker' not found")).toBe(true)
 })
 
 // T-242: core/ knows no Claude Code plan mode fields, usage field names or session log format either.
