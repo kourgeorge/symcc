@@ -254,7 +254,7 @@ export type CheckerEnd = { answer: string | null; why?: string; tokens?: SymccTo
  * checkers running now (the checker setting, see app/checker.ts): agentId → its task, the task's folder it runs in
  * (its Bash is kept inside it, see checkEdit), and how to hand its end to the step waiting for it
  */
-export const checkerRuns = new Map<string, { task: string; worktree: string; end: (e: CheckerEnd) => void }>()
+export const checkerRuns = new Map<string, { task: string; worktree: string; end: (e: CheckerEnd) => void; held?: { answer: string; tokens?: SymccTokens } }>()
 /** agents this plugin has stopped: every tool they try is refused, so they can't change anything and end soon */
 export const stopped = new Set<string>()
 /** Why a session stops its runs when the owner moves driving the board to another session (/<name>-drive there, see stepDown). */

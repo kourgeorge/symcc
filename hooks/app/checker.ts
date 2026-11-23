@@ -15,6 +15,7 @@ import { startAgent } from './starts'
 import { logVerdict } from './evidence'
 import { orgMemText, keepSuggestions } from './org-mem'
 import { learnedAsk, startDebrief } from './debrief'
+import { addTokens } from '../core/runs'
 
 /** What a checker came to: its verdict, or null with why there is none (it was stopped, ran over its time, or didn't start). */
 /** `stopped` (T-740): symcc itself stopped this checker (its agent is in `stopped`) before its verdict, so whatever it answered is no verdict. */
@@ -202,9 +203,21 @@ async function putBack($: Host, dir: string, saved: Place | null): Promise<'same
  * it was stopped); a turn that was stopped, or ended on an API error or a refusal, gives no verdict, as its last
  * text is only half an answer.
  */
-export function checkerFinished(agentId: string, answer: string, end: boolean | TurnEnd = false, tokens?: SymccTokens) {
+export function checkerFinished(agentId: string, answer: string, end: boolean | TurnEnd = false, tokens?: SymccTokens, background?: readonly string[]) {
   const run = checkerRuns.get(agentId)
   if (!run) return
+  // T-919: a turn that ended on an answer while shell commands it sent to the background still run is no hand-back:
+  // the host wakes the checker again (same id) when they end, so it stays in checkerRuns (known to the guards) and
+  // its verdict is its later turn's; its time limit (max_minutes) still ends it if it is never woken
+  const answered = end === false || (end !== true && end.reason === 'answer')
+  const held = run.held
+  if (held?.tokens) tokens = addTokens(held.tokens, tokens)
+  if (answered && background?.length && !stopped.has(agentId)) {
+    run.held = { answer: answer.trim() ? answer : (held?.answer ?? answer), ...(tokens ? { tokens } : {}) }
+    return
+  }
+  if (held && !answer.trim()) answer = held.answer
+  delete run.held
   const why = checkerNoVerdict(end === true ? { reason: 'aborted' } : end === false ? { reason: 'answer' } : end)
   run.end(why ? { answer: null, why, ...(tokens ? { tokens } : {}) } : { answer, ...(tokens ? { tokens } : {}) })
 }

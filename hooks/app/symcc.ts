@@ -503,7 +503,7 @@ export function agentFinished(host: Host, agentId: string | undefined, run: Agen
     if (isAborted || broken || !scoutTurnEnded(host, agentId, answer, end.background, tokens)) void scoutFinished(host, agentId, answer, broken ? end : isAborted, tokens)
   }
   // a checker's verdict (the checker setting) goes to the finish step waiting for it
-  else if (agentId && checkerRuns.has(agentId)) checkerFinished(agentId, answer, broken ? end : isAborted || end.reason === 'aborted', tokens)
+  else if (agentId && checkerRuns.has(agentId)) checkerFinished(agentId, answer, broken ? end : isAborted || end.reason === 'aborted', tokens, end.background)
   // a report from a worker this copy lost track of in a reload: still taken when its task waits for it
   // (a worker this copy stopped, e.g. an orphan after a reload: its task is put back to "todo" at once instead)
   else if (agentId) void lateHandBack(host, agentId).then(ok => (ok ? workerFinished(host, agentId, answer, end, tokens, cost) : stoppedHandBack(host, agentId, tokens, cost))).catch(() => undefined)

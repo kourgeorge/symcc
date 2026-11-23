@@ -8,7 +8,7 @@ import { checkEdit, unknownAgentText } from '../hooks/app/ask'
 import { agentFinished } from '../hooks/app/symcc'
 import { SCOUT_WAKE_MS } from '../hooks/app/scouts'
 import { emptyBoard } from '../hooks/board'
-import { S, scoutRuns, scoutState, stopped } from '../hooks/app/state'
+import { S, scoutRuns, scoutState, stopped, checkerRuns, type CheckerEnd } from '../hooks/app/state'
 import { fakeHost, memoryFs, done } from './fake-host'
 import { pause } from './fakes'
 
@@ -81,4 +81,28 @@ test('T-919: a stopped scout, or one whose turn ended with nothing in the backgr
   agentFinished(host, 's2', { answer: 'stopped', end: { reason: 'answer', background: ['sleep 999'] }, isAborted: false, tokens: undefined })
   await settle()
   expect(scoutRuns.has('s2')).toBe(false)
+})
+
+test('T-919: a checker whose turn ended with a background command still running stays known; its verdict is its later turn', async () => {
+  const { host } = world()
+  const WT = `${ROOT}/.symcc/worktrees/T-1`
+  const ends: CheckerEnd[] = []
+  const end = (e: CheckerEnd) => {
+    checkerRuns.delete('c1')
+    ends.push(e)
+  }
+  checkerRuns.set('c1', { task: 'T-1', worktree: WT, end })
+  agentFinished(host, 'c1', { answer: 'Waiting for my probe to finish.', end: { reason: 'answer', background: ['bun probe.ts'] }, isAborted: false, tokens: { input: 10, output: 2 } })
+  await settle()
+  expect(ends.length).toBe(0)
+  expect(checkerRuns.has('c1')).toBe(true)
+  // woken again: its next shell command is not refused as "no record of this agent"
+  expect(await checkEdit(host, 'c1', { command: 'git log -3' }, WT, symccKind)).not.toBe(unknownAgentText())
+  // its real hand-back (nothing left running) is the verdict, with both turns' tokens
+  agentFinished(host, 'c1', { answer: 'VERDICT: pass', end: { reason: 'answer', background: [] }, isAborted: false, tokens: { input: 5, output: 1 } })
+  await settle()
+  expect(ends.length).toBe(1)
+  expect(ends[0]!.answer).toBe('VERDICT: pass')
+  expect(ends[0]!.tokens?.input).toBe(15)
+  expect(checkerRuns.has('c1')).toBe(false)
 })
