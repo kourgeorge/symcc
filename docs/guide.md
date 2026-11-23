@@ -1295,7 +1295,7 @@ words as bold headings with the same spacing):
    ✓ 67 merged   ↺ 76 sent back   ✗ 0 failed   Σ ⌀ 320.7M
    ⌀ ░█████████████▓▒ lead 3% · workers 84% · checkers 8% · scouts 5%
    avg ⌀ 2.8M/task · 9m work · 23m start-to-merge   first try 34% · avg 2.4 tries/task   ⌕ 68 sent back by the checker
-   ⏱ 13h 06m agent work · ≈ $64 this session   busiest hour 14:00 · ⌀ 42M   ⌀/h 00 ▕▁▁▁▁▁▁▁▁▁▂▃▅▆▅█·········▏ 24
+   ⏱ 13h 06m agent work · ≈ $64 this session   busiest hour 14:00 · ⌀ 42M   ⌀/h 00▕▁▁▁▁▁▁▁▁▁▂▃▅▆▅█·········▏24
    yesterday:   ✓ 77 merged · ⌀ 355M · ⏱ 34h
    last 7 days: ✓ 176 merged · ⌀ 854M · ⏱ 53h
   ```

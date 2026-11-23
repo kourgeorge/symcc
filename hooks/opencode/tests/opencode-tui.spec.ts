@@ -2945,7 +2945,7 @@ test('T-769: the Live tab\'s ▍Today has 4 lines (medians per task, work time, 
   expect(/[▁▂▃▄▅▆▇]/.test(wide.lines[1]!)).toBe(false)
   expect(wide.lines[2]).toBe(LIVE_INDENT + TODAY_LINE_3)
   // (the hours depend on the machine's time zone)
-  expect(/^ ⏱ 1h 15m agent work · ≈ \$12 this session   busiest hour \d\d:00 · ⌀ \S+   ⌀\/h 00 ▕[▁▂▃▄▅▆▇█]+·*▏ 24$/.test(wide.lines[3]!.replace(LIVE_INDENT, ' '))).toBe(true)
+  expect(/^ ⏱ 1h 15m agent work · ≈ \$12 this session   busiest hour \d\d:00 · ⌀ \S+   ⌀\/h 00▕[▁▂▃▄▅▆▇█]+·*▏24$/.test(wide.lines[3]!.replace(LIVE_INDENT, ' '))).toBe(true)
   // T-855: no lane here, so no key line: the dim note ends ▍Today
   expect(wide.texts.at(-1) === undefined || wide.texts.some(t => t === `${LIVE_INDENT}⌀ = tokens`)).toBe(true)
   // a broken today_team is left out: no lead, scouts or cost
@@ -2956,13 +2956,13 @@ test('T-769: the Live tab\'s ▍Today has 4 lines (medians per task, work time, 
   const narrow = today(40)
   expect(narrow.texts.some(t => t === `${LIVE_INDENT}⌀ ░░████████▓▒▒▒▒▒`)).toBe(true)
   // line 4 keeps both hour labels and a sparkline, its figures cut from the end
-  const four = narrow.texts.find(t => / ⌀(?:\/h)? 00 ▕[▁▂▃▄▅▆▇█]+·*▏ 24$/.test(t))
+  const four = narrow.texts.find(t => / ⌀(?:\/h)? 00▕[▁▂▃▄▅▆▇█]+·*▏24$/.test(t))
   expect(four === undefined).toBe(false)
   expect(four!.includes('busiest')).toBe(false)
   // T-864: at the owner's 60-80 columns the busiest hour goes first; the ⌀ label stays with the bordered sparkline
   for (const w of [80, 70, 60]) {
-    const l4 = today(w).texts.find(t => / 00 ▕[▁▂▃▄▅▆▇█]+·*▏ 24$/.test(t)) ?? ''
-    expect([w, l4, / ⌀(?:\/h)? 00 ▕/.test(l4), l4.includes('busiest')]).toEqual([w, l4, true, false])
+    const l4 = today(w).texts.find(t => / 00▕[▁▂▃▄▅▆▇█]+·*▏24$/.test(t)) ?? ''
+    expect([w, l4, / ⌀(?:\/h)? 00▕/.test(l4), l4.includes('busiest')]).toEqual([w, l4, true, false])
   }
 })
 

@@ -1214,7 +1214,7 @@ export function todayMoreLines(m: TodayMore, width: number): LiveSeg[][] {
     }
     if (per > 0 && m.hours.length) {
       gap()
-      out.push({ text: label === 'long' ? `${TOKEN_SIGN}/h 00 ` : `${TOKEN_SIGN} 00 `, tone: 'dim' }, ...sparkSegs(m.hours, per), { text: ' 24', tone: 'dim' })
+      out.push({ text: label === 'long' ? `${TOKEN_SIGN}/h 00` : `${TOKEN_SIGN} 00`, tone: 'dim' }, ...sparkSegs(m.hours, per), { text: '24', tone: 'dim' })
     }
     return out
   }
@@ -1239,7 +1239,7 @@ export function todayMoreLines(m: TodayMore, width: number): LiveSeg[][] {
   // squeezed: 2, 3, 4 (and more) hours to a cell, the smallest that fits, the labels staying
   const squeezed = (work: boolean) => {
     for (let per = 2; per <= 24; per++) {
-      const x = work ? line4(false, false, per) : [{ text: `${TOKEN_SIGN} 00 `, tone: 'dim' as const }, ...sparkSegs(m.hours, per), { text: ' 24', tone: 'dim' as const }]
+      const x = work ? line4(false, false, per) : [{ text: `${TOKEN_SIGN} 00`, tone: 'dim' as const }, ...sparkSegs(m.hours, per), { text: '24', tone: 'dim' as const }]
       if (fits(x)) return x
     }
     return null
