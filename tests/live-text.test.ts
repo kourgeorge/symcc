@@ -7,6 +7,7 @@ import { type HostFeatures, ALL_FEATURES } from '../hooks/host'
 import type { Board } from '../hooks/board'
 import { S } from '../hooks/app/state'
 import { COMMANDS, runCommand } from '../hooks/app/symcc'
+import { manual } from '../hooks/app/tools'
 import { liveStatusText, statusHint } from '../hooks/core/live-text'
 import { liveToday } from '../hooks/core/live'
 import { textWidth } from '../hooks/core/width'
@@ -83,6 +84,15 @@ test('T-902: /symcc-status answers with the Live text and opens no panel, with a
     const q = world(features, statusBoard(now, true))
     expect(statusHeadings((await runCommand(q.host, `${S.N.name}-status`, ''))!.text)).toEqual(['TASKS', 'TODAY', 'ORGANIZATIONAL MEMORY'])
     expect(q.opened).toEqual([])
+  }
+})
+
+test('T-902: the manual lists /symcc-status, and the entries around it start their text in the same column', () => {
+  for (const f of [ALL_FEATURES, BARE]) {
+    const lines = manual('commands', f).split('\n')
+    const col = (start: string) => lines.find(l => l.startsWith(`  /${S.N.name}${start}`))!.search(/(?<=\S {2,})\S/)
+    expect(lines.some(l => l.startsWith(`  /${S.N.name}-status              the Live tab as text in the chat`))).toBe(true)
+    expect([col('-scouts '), col('-status '), col('-task T-3 '), col('-task T-3 WORD'), col('-approve ')]).toEqual([29, 29, 29, 29, 29])
   }
 })
 
