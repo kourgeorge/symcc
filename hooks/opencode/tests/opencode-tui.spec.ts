@@ -3046,6 +3046,7 @@ test('T-757, T-867: the OpenCode Live tab shows the whole task\'s tokens × the 
     task('T-804', 'At the usual', { runs: [{ started: ago(40), ended: ago(3), agents: [{ kind: 'worker' as const, started: ago(40), ended: ago(3), tokens: { input: 4_000_000 } }] }], live: { checking: { step: 'testing', at: ago(0) } }, }),
     task('T-805', 'At half the usual', { runs: [{ started: ago(40), ended: ago(3), agents: [{ kind: 'worker' as const, started: ago(40), ended: ago(3), tokens: { input: 2_000_000 } }] }], live: { checking: { step: 'testing', at: ago(0) } }, }),
     task('T-806', 'Past twice the usual', { runs: [{ started: ago(40), ended: ago(3), agents: [{ kind: 'worker' as const, started: ago(40), ended: ago(3), tokens: { input: 9_000_000 } }] }], live: { checking: { step: 'testing', at: ago(0) } }, }),
+    task('T-807', 'Merged with a checker', { status: 'done', merged: 'abc1235', runs: [{ started: ago(40), ended: ago(3), agents: [{ kind: 'worker' as const, started: ago(40), ended: ago(10), tokens: { input: 3_000_000 } }, { kind: 'checker' as const, started: ago(10), ended: ago(3), tokens: { input: 1_000_000 } }] }], history: [{ kind: 'merged', at: ago(2), text: 'try 1 → merged into main' }] }),
   ]
   const f: ViewFile = { ...f0, view: { ...f0.view, tasks: tasks.map(t => viewTask(t)), checker: true, max_parallel: 3 } }
   const d = panelLines(parseViewFile(viewFileText(f)), { tab: 'live', opened: '', cursor: 0 }, NOW, 120)
@@ -3058,9 +3059,10 @@ test('T-757, T-867: the OpenCode Live tab shows the whole task\'s tokens × the 
   // (a) try 2 running: try 1's 4M, more coming, 1× the median 4M
   expect(sub('T-801')).toContain('⌀ 4M + … (1× median)')
   // (b) handed back with 1M: the sum, its active time and the worker's share (the checker's 0 left out)
-  expect(sub('T-802')).toMatch(/^ {2,}change try 2\/\d+  ⌀ 5M \(1\.3× median\) · ⏱ 28m · worker ⌀ 5M$/)
-  // (c) try 1 running
-  expect(sub('T-803')).toContain('⌀ at hand-back')
+  // T-931: the clock first, " · " between parts, the per-agent tokens in < > without ⌀
+  expect(sub('T-802')).toMatch(/^ {2,}change try 2\/\d+ · ⏱ 28m · ⌀ 5M \(1\.3× median\) · <worker 5M>$/)
+  // (c) try 1 running: no < > part (no breakdown yet)
+  expect(sub('T-803')).toMatch(/^ {2,}change try 1\/\d+ · ⏱ \d+m · ⌀ at hand-back$/)
   // (d) at the median and at half
   expect(sub('T-804')).toContain('⌀ 4M (1× median)')
   expect(sub('T-805')).toContain('⌀ 2M (0.5× median)')
@@ -3069,11 +3071,13 @@ test('T-757, T-867: the OpenCode Live tab shows the whole task\'s tokens × the 
   expect(sub('T-806')).toContain('⌀ 9M (2.3× median)')
   expect(sub('T-806')).not.toContain('⚠')
   expect(warn('T-806')).toBe(true)
+  // (f) T-931: merged with worker and checker: both in one < >, no ⌀ inside
+  expect(sub('T-807')).toMatch(/try 1\/\d+ · ⏱ \d+m · ⌀ 4M \(1× median\) · <worker 3M · checker 1M>$/)
   expect(texts.some(t => t.includes('usual per task'))).toBe(false)
   // narrow: the worker/checker split and ⏱ go first, ⌀ and the try stay
   const narrow = panelLines(parseViewFile(viewFileText(f)), { tab: 'live', opened: '', cursor: 0 }, NOW, 44).lines.map(lineText)
   const n802 = narrow[narrow.findIndex(t => t.includes(' T-802 ')) + 1] ?? ''
-  expect([n802.includes('⌀ 5M'), n802.includes('worker'), /try 2\//.test(n802)]).toEqual([true, false, true])
+  expect([n802.includes('⌀ 5M'), n802.includes('worker'), n802.includes('⏱ 28m'), /try 2\//.test(n802)]).toEqual([true, false, true, true])
 })
 
 test('T-709: the Live tab shows a lane for an approved task in review while its tests run (as the Tasks tab counts it in doing)', () => {

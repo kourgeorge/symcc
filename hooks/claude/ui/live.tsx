@@ -147,7 +147,8 @@ export function livePage($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
       ))}
       {needs.length ? <Text key="live-needs-blank"> </Text> : null}
       <Text key="live-tasks-head">{draw(liveHeading(LIVE_SECTIONS.tasks, width))}</Text>
-      <Text key="live-tasks-under"> </Text>
+      {/* No empty line when the lanes' stage titles ("work✧  queue  tests …") come next: they already set the heading off. */}
+      {running.length && lanes.length ? null : <Text key="live-tasks-under"> </Text>}
       {running.length ? null : liveIdle(v, nowMs, inner).map((x, i) => <Text key={i ? `live-empty-${i}` : 'live-empty'} color={C('inactive')}>{LIVE_INDENT + x}</Text>)}
       {!running.length && lanes.length ? <Text key="live-empty-blank"> </Text> : null}
       {lanes.length ? <Text key="live-labels">{under(liveLabelSegs(layout))}</Text> : null}

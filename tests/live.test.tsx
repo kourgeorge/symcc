@@ -2,7 +2,7 @@
 // numbers; claude/ui/live.tsx draws them on the terminal panel).
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { liveLanes, liveLayout, laneLines, liveLabelLine, liveLabelSegs, LIVE_AGENT_MARK, LIVE_TONE, liveStations, liveTrains, trainRows, type LiveTrain, liveToday, todayLines, segText, liveBlink, liveHeader, liveHeaderSegs, liveScoutMark, scoutsRunning, scoutNext, tabRow, LIVE_TABS, LIVE_LEGEND, LIVE_DIVIDER, LIVE_INDENT, liveInner, liveLegend, LANE_WARN_TIMES, laneTimes, liveTodayLines, pastDays, pastLines } from '../hooks/core/live'
+import { liveLanes, liveTaskLanes, liveLayout, laneLines, liveLabelLine, liveLabelSegs, LIVE_AGENT_MARK, LIVE_TONE, liveStations, liveTrains, trainRows, type LiveTrain, liveToday, todayLines, segText, liveBlink, liveHeader, liveHeaderSegs, liveScoutMark, scoutsRunning, scoutNext, tabRow, LIVE_TABS, LIVE_LEGEND, LIVE_DIVIDER, LIVE_INDENT, liveInner, liveLegend, LANE_WARN_TIMES, laneTimes, liveTodayLines, pastDays, pastLines } from '../hooks/core/live'
 import { PAST_WEEK, PAST_YESTERDAY, pastTasks } from './live-past-fixture'
 import { textWidth } from '../hooks/core/width'
 import { FINISH_STALE_MS } from '../hooks/core/lead'
@@ -222,6 +222,8 @@ const T757 = [
   task('T-804', 'At the usual', { runs: [{ started: iso(40), ended: iso(3), agents: [{ kind: 'worker' as const, started: iso(40), ended: iso(3), tokens: { input: 4_000_000 } }] }], live: { checking: { step: 'testing', at: iso(0) } }, }),
   task('T-805', 'At half the usual', { runs: [{ started: iso(40), ended: iso(3), agents: [{ kind: 'worker' as const, started: iso(40), ended: iso(3), tokens: { input: 2_000_000 } }] }], live: { checking: { step: 'testing', at: iso(0) } }, }),
   task('T-806', 'Past twice the usual', { runs: [{ started: iso(40), ended: iso(3), agents: [{ kind: 'worker' as const, started: iso(40), ended: iso(3), tokens: { input: 9_000_000 } }] }], live: { checking: { step: 'testing', at: iso(0) } }, }),
+  // T-931: merged 2m ago with worker 3M and checker 1M (4M: the median stays 4M), a finished lane
+  task('T-807', 'Merged with a checker', { status: 'done', runs: [{ started: iso(40), ended: iso(3), agents: [{ kind: 'worker' as const, started: iso(40), ended: iso(10), tokens: { input: 3_000_000 } }, { kind: 'checker' as const, started: iso(10), ended: iso(3), tokens: { input: 1_000_000 } }] }], history: [{ kind: 'merged', at: iso(2), text: 'try 1 → merged into main' }] }),
 ]
 const t757Check = (sub: (id: string) => string, warn: (id: string) => boolean) => {
   // T-867: no bar any more
@@ -229,11 +231,15 @@ const t757Check = (sub: (id: string) => string, warn: (id: string) => boolean) =
   // (a) try 2 running: try 1's 4M with "+ …", 1× the median 4M
   expect(sub('T-801')).toContain('⌀ 4M + … (1× median)')
   // (b) handed back: the whole sum, no "+ …"; worker and checker split (the checker has no tokens yet: left out)
-  expect(sub('T-802')).toContain('⌀ 5M (1.3× median) · ⏱ 28m · worker ⌀ 5M')
+  // T-931: the clock first, then ⌀, then the per-agent tokens in < > (no ⌀ inside)
+  expect(sub('T-802')).toMatch(/try 2\/\d+ · ⏱ 28m · ⌀ 5M \(1\.3× median\) · <worker 5M>$/)
+  expect(sub('T-802')).not.toMatch(/<[^>]*⌀/)
   expect(sub('T-802')).not.toContain('+ …')
   expect(sub('T-802')).not.toContain('checker')
   // (c) try 1 running
-  expect(sub('T-803')).toContain('⌀ at hand-back')
+  expect(sub('T-803')).toMatch(/try 1\/\d+ · ⏱ \d+m · ⌀ at hand-back$/)
+  // no breakdown: no < > part
+  expect(sub('T-803')).not.toContain('<')
   // (d) at the median and at half
   expect(sub('T-804')).toContain('⌀ 4M (1× median)')
   expect(sub('T-805')).toContain('⌀ 2M (0.5× median)')
@@ -242,6 +248,9 @@ const t757Check = (sub: (id: string) => string, warn: (id: string) => boolean) =
   expect(sub('T-806')).toContain('⌀ 9M (2.3× median)')
   expect(sub('T-806')).not.toContain('⚠')
   expect(warn('T-806')).toBe(true)
+  // (f) T-931: merged with worker and checker: both in one < >, no ⌀ inside
+  expect(sub('T-807')).toMatch(/try 1\/\d+ · ⏱ 37m · ⌀ 4M \(1× median\) · <worker 3M · checker 1M>$/)
+  expect(sub('T-807')).not.toMatch(/<[^>]*⌀/)
 }
 
 test('T-760: the agent stations end in ✧ (accent color), each name still starts over its mark, and the legend says what ✧ means', () => {
@@ -271,7 +280,7 @@ test('T-760: the agent stations end in ✧ (accent color), each name still start
 })
 
 test('T-757, T-867: lanes show the whole task\'s tokens, × the median per task (warning from twice it), its time and who spent them (core)', () => {
-  const lanes = liveLanes({ tasks: T757 as never[], checker: true }, T0)
+  const lanes = liveTaskLanes({ tasks: T757 as never[], checker: true }, T0)
   const lane = (id: string) => lanes.find(x => x.id === id)!
   expect([lane('T-801').tokens, lane('T-801').more, lane('T-802').tokens, lane('T-802').more, lane('T-803').tokens]).toEqual([4_000_000, true, 5_000_000, undefined, undefined])
   expect(lane('T-801').usual).toBe(4_000_000)
@@ -279,7 +288,7 @@ test('T-757, T-867: lanes show the whole task\'s tokens, × the median per task 
   const second = (id: string) => laneLines(lane(id), l, { nowMs: T0, frame: 0 })[1]
   t757Check(id => segText(second(id)), id => second(id).some(s => s.tone === 'warning'))
   // T-855: the count has the token sign in front
-  expect(segText(second('T-801'))).toMatch(/^  change try 2\/\d+  ⌀ 4M/)
+  expect(segText(second('T-801'))).toMatch(/^  change try 2\/\d+ · ⏱ \d+m · ⌀ 4M/)
   expect(LANE_WARN_TIMES).toBe(2)
   // T-867: the tone is decided on the number as shown, so 1.96× reads "2" and warns; a tiny task reads "<0.1", never "0"
   expect([laneTimes(1.96), laneTimes(1.94), laneTimes(7.6), laneTimes(1), laneTimes(0.03)]).toEqual([
@@ -297,23 +306,25 @@ const T867 = [
   task('T-901', 'Board times count only real work', { attempts: 2, history: [{ kind: 'checker-problems', at: iso(40), text: 'sent back' }, { kind: 'checker-problems', at: iso(35), text: 'sent back' }], runs: [{ started: iso(60), ended: iso(30), agents: [{ kind: 'worker' as const, started: iso(60), ended: iso(35), tokens: { input: 5_400_000 } }, { kind: 'checker' as const, started: iso(35), ended: iso(30), tokens: { input: 1_900_000 } }] }, { started: iso(11) }] }),
 ]
 
-test('T-867: a lane\'s second line has no bar: ⌀, × median, ⏱, worker/checker split and ↺; narrow panels drop from the end', () => {
+test('T-867, T-931: a lane\'s second line has no bar: ⏱, ⌀, × median, <worker/checker split> and ↺; narrow panels drop the split first, the clock last', () => {
   const lanes = liveLanes({ tasks: T867 as never[], checker: true }, T0)
   const lane = lanes.find(x => x.id === 'T-901')!
   expect([lane.activeMs, lane.workerTokens, lane.checkerTokens]).toEqual([41 * 60_000, 5_400_000, 1_900_000])
   const l = liveLayout(lanes, liveStations(true), 120)
   const at = (width: number) => segText(laneLines(lane, { ...l, width }, { nowMs: T0, frame: 0 })[1])
   const full = '  change try 2/'
-  expect(at(120)).toMatch(/^  change try 2\/\d+  ⌀ 7\.3M \+ … \(7\.3× median\) · ⏱ 41m · worker ⌀ 5\.4M · checker ⌀ 1\.9M · ↺×2$/)
+  expect(at(120)).toMatch(/^  change try 2\/\d+ · ⏱ 41m · ⌀ 7\.3M \+ … \(7\.3× median\) · <worker 5\.4M · checker 1\.9M> · ↺×2$/)
   const w = textWidth(at(120))
-  // first the worker/checker split goes, then ⏱, then "(× median)", then the kind; ⌀ and the try stay
-  expect(at(w - 1)).toMatch(/  ⌀ 7\.3M \+ … \(7\.3× median\) · ⏱ 41m · ↺×2$/)
+  // first the < > split goes, then "(× median)", then the kind, then ⌀, then ⏱ (never before ⌀); the try stays
+  expect(at(w - 1)).toMatch(/^  change try 2\/\d+ · ⏱ 41m · ⌀ 7\.3M \+ … \(7\.3× median\) · ↺×2$/)
   const noSplit = textWidth(at(w - 1))
-  expect(at(noSplit - 1)).toMatch(/  ⌀ 7\.3M \+ … \(7\.3× median\) · ↺×2$/)
-  const noTime = textWidth(at(noSplit - 1))
-  expect(at(noTime - 1)).toMatch(/  ⌀ 7\.3M \+ … · ↺×2$/)
-  expect(at(noTime - 1).startsWith(full)).toBe(true)
-  expect(at(textWidth(at(noTime - 1)) - 1)).toMatch(/^  try 2\/\d+  ⌀ 7\.3M \+ … · ↺×2$/)
+  expect(at(noSplit - 1)).toMatch(/^  change try 2\/\d+ · ⏱ 41m · ⌀ 7\.3M \+ … · ↺×2$/)
+  const noMedian = textWidth(at(noSplit - 1))
+  expect(at(noMedian - 1)).toMatch(/^  try 2\/\d+ · ⏱ 41m · ⌀ 7\.3M \+ … · ↺×2$/)
+  const noKind = textWidth(at(noMedian - 1))
+  expect(at(noKind - 1)).toMatch(/^  try 2\/\d+ · ⏱ 41m · ↺×2$/)
+  const noTokens = textWidth(at(noKind - 1))
+  expect(at(noTokens - 1)).toMatch(/^  try 2\/\d+ · ↺×2$/)
   // 7.3× the median: the warning tone on "(× median)" only
   expect(laneLines(lane, l, { nowMs: T0, frame: 0 })[1].filter(s => s.tone === 'warning').map(s => s.text)).toEqual([' (7.3× median)'])
 })
@@ -411,8 +422,10 @@ test('T-690: the Live tab draws at a normal and a narrow width with nothing cut,
     expect(lines[1]).toMatch(/^─── ❯ TASKS ─+$/)
     // T-915: "─── ❯ TASKS " then the thin rule to the right edge
     expect([textWidth(lines[1]!), lines.find(l => l.startsWith('─── ❯ TODAY '))]).toEqual([bodyColumns, `─── ❯ TODAY ${'─'.repeat(bodyColumns - 12)}`])
-    // T-789: an empty line under each heading, no bar
-    expect(lines[2]!.trim()).toBe('')
+    // T-789: an empty line under each heading, no bar; except TASKS when lanes run: its stage titles follow the heading
+    // straight away, since they already set it off
+    expect(lines[2]!.trim()).not.toBe('')
+    expect(lines[2]!.includes('✧')).toBe(true)
     expect(lines[lines.findIndex(l => l.startsWith('─── ❯ TODAY ─')) + 1]!.trim()).toBe('')
     expect(lines.some(l => l.includes('▍'))).toBe(false)
     for (const id of ['T-684', 'T-685', 'T-686', 'T-687', 'T-688']) expect(lines.some(l => l.startsWith(`${LIVE_INDENT}▶ ${id} `))).toBe(true)
@@ -434,7 +447,7 @@ test('T-690: the Live tab draws at a normal and a narrow width with nothing cut,
     // T-760: the lane header ends the agent stations in ✧ (over their marks, as liveLabelLine), each ✧ in the heading's color
     const tree = (await ui.drawn()) as Node
     const nodes = (n: unknown): Node[] => (!n || typeof n !== 'object' ? [] : [n as Node, ...((n as Node).children ?? []).flatMap(nodes)])
-    const labelLine = lines[3]
+    const labelLine = lines[2]
     expect(labelLine?.includes(bodyColumns === 80 ? 'work✧' : '✧')).toBe(true)
     expect(labelLine?.includes('·')).toBe(false)
     const labels = nodes(tree).find(n => n.type === 'Text' && textOf(n) === labelLine)
