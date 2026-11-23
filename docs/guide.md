@@ -1680,8 +1680,9 @@ recorded time). A process that took over a reused number is never stopped.
   `README`, `CHANGELOG`, `LICENSE`-style names (no extension, `.txt` or `.rst`), `.md` files that are not
   instructions for agents, and images, video, audio, subtitles and fonts. A `.md` file is instructions
   for agents, and so is checked, when it is under `roles/`, `kinds/`, `agents/`, `commands/`, `skills/`,
-  `examples/scouts/`, `.claude/`, `.symcc/`, `.github/instructions/`, `.cursor/`, `.windsurf/`, `.clinerules/`,
-  `.opencode/`, `.gemini/`, `.codex/` or `.roo/`, or is named `CLAUDE.md`, `AGENTS.md`, `SKILL.md`, `GEMINI.md`,
+  `examples/scouts/`, `.claude/`, `.symcc/`, `.cursor/`, `.windsurf/`, `.clinerules/`,
+  `.opencode/`, `.gemini/`, `.codex/` or `.roo/`, or under a folder named `prompts/`, `prompt/`, `instructions/` or
+  `system-prompts/` at any depth (an app's own LLM prompts, like `src/prompts/agent.md`), or is named `CLAUDE.md`, `AGENTS.md`, `SKILL.md`, `GEMINI.md`,
   `CONVENTIONS.md`, `copilot-instructions.md` or `*.instructions.md` (and `.cursorrules`, `.windsurfrules` and
   `.clinerules` files are always checked). Everything else is checked, even under `docs/`:
   `.mdx` files (they hold code), and config, build and CI files such as `package.json`, `.yaml`,
@@ -1786,8 +1787,9 @@ skills: [code-review]
   task with such a role:
   - **Scope:** the merge's scope check refuses every changed file that is not prose. Prose
     means `.md` files (plus README-style names, images and other media), but not instructions
-    for agents: `CLAUDE.md`, `AGENTS.md`, `roles/*.md`, scout files and other prompt files
-    count as code. So a prose-only role can never merge code.
+    for agents: `CLAUDE.md`, `AGENTS.md`, `roles/*.md`, scout files, an app's prompt files
+    (anything under a `prompts/`, `prompt/`, `instructions/` or `system-prompts/` folder) and
+    other prompt files count as code. So a prose-only role can never merge code.
   - **Tests:** the `test_commands` do not run. If the `docs_test_commands` setting has
     commands (for example a docs link check like `sh tests/build-site.sh`), those run instead,
     and a failing one fails the try like a failing test; the task's history says

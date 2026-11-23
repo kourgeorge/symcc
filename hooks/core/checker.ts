@@ -27,8 +27,10 @@ export const checkerOn = (b: Partial<Pick<Board, 'checker'>> | null | undefined)
  * they are. AGENT_SUFFIXES: file name endings (GitHub Copilot's *.instructions.md).
  */
 const AGENT_DIRS = new Set(['roles', 'kinds', 'agents', 'commands', 'skills', '.claude', '.symcc', namesFor(DEFAULT_NAME).dir,
-  '.cursor', '.windsurf', '.clinerules', '.opencode', '.gemini', '.codex', '.roo'])
-const AGENT_SUBDIRS: readonly (readonly string[])[] = [['examples', 'scouts'], ['.github', 'instructions']]
+  '.cursor', '.windsurf', '.clinerules', '.opencode', '.gemini', '.codex', '.roo',
+  // T-911: an app's own LLM prompts (prompts/system.md, src/prompts/agent.md, llm/instructions/support.md), at any depth
+  'prompts', 'prompt', 'instructions', 'system-prompts'])
+const AGENT_SUBDIRS: readonly (readonly string[])[] = [['examples', 'scouts']]
 const AGENT_FILES = new Set(['claude.md', 'agents.md', 'skill.md', 'gemini.md', 'conventions.md', 'copilot-instructions.md',
   '.cursorrules', '.windsurfrules', '.clinerules'])
 const AGENT_SUFFIXES = ['.instructions.md']

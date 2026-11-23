@@ -573,10 +573,11 @@ test('T-900: a code: false task that changes only .md files merges with no test 
 })
 
 test('T-900: a code: false task that changes a .ts file or an agent-instruction .md (roles/*.md) is refused at the scope check', async () => {
-  for (const code of ['src/a.ts', 'roles/x.md', 'CLAUDE.md']) {
+  // T-911: an app's own LLM prompt file (prompts/system.md) is agent instructions too
+  for (const code of ['src/a.ts', 'roles/x.md', 'CLAUDE.md', 'prompts/system.md']) {
     const w = world({ changed: ['docs/plan.md', code] })
     withProjectRole(w, 'scribe', PROSE_ROLE)
-    const [b, t] = boardWith('auto', ['npm test'], { files: ['docs/', 'src/', 'roles/', 'CLAUDE.md'], role: 'scribe' })
+    const [b, t] = boardWith('auto', ['npm test'], { files: ['docs/', 'src/', 'roles/', 'CLAUDE.md', 'prompts/'], role: 'scribe' })
     const r = await checkAndMerge(w.$, t, WT, b, 'finish', [])
     expect(r).toEqual({ ok: false, reason: 'scope', detail: notProseText('scribe', [code], true) })
     expect(r.detail).toContain('is prose only (code: false)')

@@ -4,6 +4,7 @@
 import { expect } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 import { type Board, addTask, emptyBoard, patchTask, find, checkerVerdict, checkerOutput, isCheckerOutput, docsOnly, checkerOn, applySettings, parseSettingValue, settingValue, finishedNote, bashOutsideText, gitWriteText, gitWriteIn, workerGitWriteText, untestedChange, testTail, statusCell, PREP_NOTE, STEP_NOTE, shownNote } from '../hooks/board'
+import { notProse } from '../hooks/core/checker'
 import { S, leadQueue, meanwhile, workers, checkerRuns, stopped } from '../hooks/app/state'
 import { workerFinished, WORKER_PROMPT, checkingNow, stopAsked, check, stoppedHandBack } from '../hooks/app/workers'
 import { setBoardMode, setSymcc } from '../hooks/app/board-mode'
@@ -221,8 +222,15 @@ test('docs-only, for the checker, is only prose and media: agent instructions, .
     '.cursorrules', '.windsurf/rules/a.md', '.windsurfrules', '.clinerules', '.clinerules/a.md', '.opencode/agent/x.md', 'sub/examples/scouts/a.md'])
     expect([f, docsOnly([f])]).toEqual([f, false])
   expect(docsOnly(['README.md', 'roles/tester.md'])).toBe(false)
-  for (const f of ['examples/other.md', 'docs/scouts/x.md', 'docs/instructions/x.md'])
+  for (const f of ['examples/other.md', 'docs/scouts/x.md', 'docs/prompting.md', 'docs/instructions.md'])
     expect([f, docsOnly([f])]).toEqual([f, true])
+  // T-911: an app's own LLM prompt files (under prompts/, prompt/, instructions/ or system-prompts/, at any depth) are agent instructions
+  const prompts = ['prompts/system.md', 'src/prompts/agent.md', 'llm/instructions/support.md', 'prompt/a.mdx', 'app/system-prompts/x.txt',
+    'docs/instructions/x.md', 'Prompts/README.md', 'prompts/notes.txt']
+  expect(notProse(['docs/a.md', 'README.md', ...prompts])).toEqual(prompts)
+  for (const f of prompts) expect([f, docsOnly([f])]).toEqual([f, false])
+  expect(docsOnly(['docs/a.md', 'README.md'])).toBe(true)
+  expect(notProse(['docs/a.md', 'README.md', 'prompts/logo.png'])).toEqual([])
   // tests_with_changes keeps the wider rule: a role file or docs config is not code that needs a test
   expect(untestedChange(['roles/tester.md', 'docs/package.json', 'src/page.mdx'])).toBe(false)
   expect(untestedChange(['src/a.ts'])).toBe(true)
