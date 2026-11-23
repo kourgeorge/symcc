@@ -31,6 +31,15 @@ export function failedHow(t: Failed): FailedHow {
   return 'other'
 }
 
+/**
+ * T-928: whether a session's error text says a usage, quota or provider limit stopped it ("Free usage limit reached.
+ * Connect a provider or subscribe …", "insufficient credits", "quota exceeded"): a retry will likely fail the same way
+ * until the owner fixes the provider. A plain rate limit or a context limit is not one.
+ */
+export function isUsageLimit(error: string | null | undefined): boolean {
+  return /\busage limit\b|\bquota\b|\binsufficient (?:credits?|balance|funds|quota)\b|\bcredit balance\b|\bout of credits?\b|\bbilling\b|\bconnect a provider\b|\bsubscribe\b|\bplan limit\b|\bspending limit\b/i.test(String(error ?? ''))
+}
+
 /** The note of a try whose worker ended its turn while the host saw a background command of it still running (TurnEnd.background). */
 export const ENDED_EARLY_NOTE = 'the worker ended its turn before its work finished'
 
@@ -272,8 +281,14 @@ export function whyFailed(t: Failed): string {
       const min = /ran over (\d+) min/.exec(note)?.[1] ?? /ran over (\d+) min/.exec(t.runs?.at(-1)?.ended_note ?? '')?.[1]
       return `It ran out of time${min ? ` (over ${min} min)` : ''} before it finished; its work so far is kept in its folder, branch and report.`
     }
-    case 'api error':
-      return "The worker's turn ended on an API error (retries used up or the context limit), so nothing was checked or merged."
+    case 'api error': {
+      // T-928: the note keeps the session's own error ("… ended on an error (usage limit): Free usage limit reached …")
+      const said = /^the worker's turn ended on an error(?: \(usage limit\))?: (.+)$/is.exec(note)?.[1]?.trim()
+      if (!said) return "The worker's turn ended on an API error (retries used up or the context limit), so nothing was checked or merged."
+      return isUsageLimit(said) || /^the worker's turn ended on an error \(usage limit\)/i.test(note)
+        ? `The worker's turn ended on a usage limit: ${end(cutLine(said, 240))} Nothing was checked or merged; a retry will likely fail the same way until the provider is fixed.`
+        : `The worker's turn ended on an error: ${end(cutLine(said, 240))} Nothing was checked or merged.`
+    }
     case 'refused':
       return `${end(upper(note))} Nothing was checked or merged.`
     case 'no start':

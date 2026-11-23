@@ -1,5 +1,5 @@
 import type { SymccTask, SymccTokens } from '../../types'
-import { PREP_NOTE, makeAsk, type Board, type BoardTask, type RoleDef, roleSection, mayStart, liveWorkersFor, modeOf, symccOn, ready, patchTask, putTask, find, startRun, findRole, roleOf, workerName, workerDescription, onNotReady, endRun, tryLabel, needFilesQuestion, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, liveDriver, emptyBoard, ownedHere, backToTodo, stoppedEntry, withHistory, historyEntry, type HistoryAdd, type HistoryFacts, tryEntry, resultEntry, notUsedEntry, taskWasResult, type HistoryKind, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, mergeTestCount, testMinutesOf, ranOverNote, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, WRAP_UP_GRACE_MS, WRAP_UP_TEXT, outOfTimeNote, checkerOn, docsOnly, checkerOutput, isCheckerOutput, checkerLine, checkerRetryText, kindOf, isInvestigation, kindSection, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt, shortSha, secretsLeftText, gaveUpTestsText, endedEarlyLine, endedEarlyNote, ENDED_EARLY_NOTE, workerStartedEntry, workerHandedBackEntry, withFailedTests, withAgentUsed, withStoppedUsed, goOnRun, undoGoOn, restartsOf, restartedAgent, workerIdOf, checkerIdOf, onTask, withAgentStart, withWorkerStart, DEFAULT_ROLE, workerSince, workerActiveMs, isProseRole } from '../board'
+import { PREP_NOTE, makeAsk, type Board, type BoardTask, type RoleDef, roleSection, mayStart, liveWorkersFor, modeOf, symccOn, ready, patchTask, putTask, find, startRun, findRole, roleOf, workerName, workerDescription, onNotReady, endRun, tryLabel, needFilesQuestion, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, liveDriver, emptyBoard, ownedHere, backToTodo, stoppedEntry, withHistory, historyEntry, type HistoryAdd, type HistoryFacts, tryEntry, resultEntry, notUsedEntry, taskWasResult, type HistoryKind, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, mergeTestCount, testMinutesOf, ranOverNote, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, WRAP_UP_GRACE_MS, WRAP_UP_TEXT, outOfTimeNote, checkerOn, docsOnly, checkerOutput, isCheckerOutput, checkerLine, checkerRetryText, kindOf, isInvestigation, kindSection, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt, shortSha, secretsLeftText, gaveUpTestsText, endedEarlyLine, endedEarlyNote, ENDED_EARLY_NOTE, isUsageLimit, workerStartedEntry, workerHandedBackEntry, withFailedTests, withAgentUsed, withStoppedUsed, goOnRun, undoGoOn, restartsOf, restartedAgent, workerIdOf, checkerIdOf, onTask, withAgentStart, withWorkerStart, DEFAULT_ROLE, workerSince, workerActiveMs, isProseRole } from '../board'
 import { archiveOld } from './archive'
 import { checkHealth } from './health'
 import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch, clearScratch, taskBranch, copyReports, deleteMergedBranch, type BehindWhy } from './git'
@@ -318,7 +318,7 @@ export async function waitEnded(host: Host, ids: string[], ms: number): Promise<
  * (endedEarlyLine) only adds a warning (see warnEndedEarly).
  * `stopBackground`: when the host can, stops those commands of the agent (only its own, never by name) and answers how many it stopped.
  */
-export type TurnEnd = { reason: TurnEndReason; refusal?: TurnRefusal; background?: readonly string[]; stopBackground?: () => Promise<number> }
+export type TurnEnd = { reason: TurnEndReason; refusal?: TurnRefusal; error?: string; background?: readonly string[]; stopBackground?: () => Promise<number> }
 /** Why a turn ended: the model answered, it was interrupted, the model refused, or an error ended it. */
 export type TurnEndReason = 'answer' | 'aborted' | 'refusal' | 'error'
 /** What was said about a refusal that ended a turn: its category and explanation, each null when none was given. */
@@ -842,9 +842,17 @@ async function changedMeanwhile(host: Host, t: SymccTask, b: Board, r: CheckResu
   tellLead(host, `✓ ${t.id} "${t.title}" is merged: it was ${was} too late, after the merge had already happened, so it is done.`)
 }
 
-/** Why a try whose turn ended on an API error or a refusal failed: "the worker's turn ended on an error", or "the model refused: <its explanation>". */
+/**
+ * Why a try whose turn ended on an API error or a refusal failed: "the worker's turn ended on an error", or "the model refused: <its explanation>".
+ * T-928: when the host knows the session's error (`end.error`), it is said ("… ended on an error: <it>"), and a usage or provider limit is named so.
+ */
 export function endFailure(end: TurnEnd): string {
-  if (end.reason === 'error') return "the worker's turn ended on an error (retries used up or the context limit)"
+  if (end.reason === 'error') {
+    // its last full stop goes, as the note is followed by "; nothing was checked …" or ", so …"
+    const said = cutLine(String(end.error ?? '').replace(/\s+/g, ' ').trim(), 300).replace(/\.+$/, '')
+    if (!said) return "the worker's turn ended on an error (retries used up or the context limit)"
+    return `the worker's turn ended on an error${isUsageLimit(said) ? ' (usage limit)' : ''}: ${said}`
+  }
   const said = [end.refusal?.category, end.refusal?.explanation].filter(Boolean).join(': ')
   return `the model refused to go on${said ? ` (${cutLine(said, 300)})` : ''}`
 }
@@ -943,7 +951,8 @@ async function finishTry(host: Host, agentId: string, w: Pick<Worker, 'task' | '
   } else if (end.reason === 'error' || end.reason === 'refusal') {
     const why = endFailure(end)
     if (await writeIfSame(host, t, cur => ({ status: 'failed', note: why, history: withHistory(cur.history, now(), tryEntry(t, 'failed', `${why}; nothing was checked or merged`, { reason: 'other' })), ...endedBy(cur, now(), 'stopped', why) }))) return false
-    tellLead(host, `${t.id} "${t.title}": ${why}, so nothing was checked or merged and the task failed. Its work so far is kept in its folder and branch, and its report (${S.N.name} board task ${t.id}); ${S.N.name} retry ${t.id} starts a fresh try that continues from there. Or change, split or drop it.`)
+    const limited = end.reason === 'error' && isUsageLimit(end.error)
+    tellLead(host, `${t.id} "${t.title}": ${why}, so nothing was checked or merged and the task failed.${limited ? ` This is a usage or provider limit: a retry will likely fail the same way until the owner fixes the provider (or switches models), so tell the owner instead of retrying.` : ''} Its work so far is kept in its folder and branch, and its report (${S.N.name} board task ${t.id}); ${S.N.name} retry ${t.id} starts a fresh try that continues from there. Or change, split or drop it.`)
   } else if (end.background?.length && !answer.trim()) {
     // The host saw a background command of it still running when its turn ended with no report: its work isn't done.
     if (await writeIfSame(host, t, cur => ({ status: 'failed', note: ENDED_EARLY_NOTE, history: withHistory(cur.history, now(), resultEntry(t, 'failed', cutLine(summary, 300), `${ENDED_EARLY_NOTE}; nothing was checked or merged`, { reason: 'other' })), ...endedBy(cur, now(), 'stopped', ENDED_EARLY_NOTE) }))) return false

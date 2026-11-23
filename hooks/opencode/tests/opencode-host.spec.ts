@@ -25,7 +25,7 @@ import { runCommand, nodeClock } from '../../../hosts/node/host'
 import type { OcContext, OcPermissionEvaluation, OcToolBefore, OcSessionApi, OcSessionInfo, OcSessionMessage, OcSessionPrompt, OcSessionContext, OcToolInfo, OcCommandDefinition } from '../ctx'
 import { opencodeAgents, opencodeModel, leadModel, sessionEnd, DEFAULT_MODELS, AGENT_PERMISSIONS } from '../agents'
 import { toolTouches } from '../guard'
-import { pump } from '../../app/workers'
+import { pump, endFailure } from '../../app/workers'
 import { load } from '../../app/store'
 import { symccServer, owners, leads, SYMCC_ENGINE, type CopyRole, type Engine } from '../plugin'
 import { opencodeLead, leadText, SUBAGENT_LABEL, OPENCODE_LEAD_FROM, OPENCODE_LEAD_MESSAGES_FROM, NO_LEAD_YET, leadMessagesUnread, leadUndated } from '../lead'
@@ -771,10 +771,23 @@ test('stopped while its first prompt is still landing: it ends once as aborted, 
 
 test('sessionEnd: a failed run is an error with its message, a content filter a refusal', () => {
   const at = { directory: '/x' }
-  expect(sessionEnd({ id: 's', outcome: 'failed', location: at }, [{ type: 'assistant', content: [], finish: 'error', error: { message: 'rate limited' } }])).toEqual({ answer: 'rate limited', end: { reason: 'error' }, isAborted: false, tokens: undefined })
+  expect(sessionEnd({ id: 's', outcome: 'failed', location: at }, [{ type: 'assistant', content: [], finish: 'error', error: { message: 'rate limited' } }])).toEqual({ answer: 'rate limited', end: { reason: 'error', error: 'rate limited' }, isAborted: false, tokens: undefined })
+  // a failed run with no error object says nothing more than before
+  expect(sessionEnd({ id: 's', outcome: 'failed', location: at }, [{ type: 'assistant', content: [{ type: 'text', text: 'half' }] }]).end).toEqual({ reason: 'error' })
   expect(sessionEnd({ id: 's', outcome: 'succeeded', location: at, cost: 0.25 }, [{ type: 'assistant', content: [{ type: 'text', text: 'no' }], finish: 'content-filter' }]).end.reason).toBe('refusal')
   expect(sessionEnd({ id: 's', outcome: 'succeeded', location: at, cost: 0.25 }, []).cost).toBe(0.25)
   expect(AGENT_PERMISSIONS).toEqual([{ action: 'question', resource: '*', effect: 'deny' }])
+})
+
+test('T-928: a session that wrote text and then failed on a usage limit keeps that error apart from its text, and the try is told it is a usage limit', () => {
+  const at = { directory: '/x' }
+  const limit = 'Free usage limit reached. Connect a provider or subscribe to OpenCode Go to keep going, or switch models.'
+  const run = sessionEnd({ id: 's', outcome: 'failed', location: at }, [{ type: 'assistant', content: [{ type: 'text', text: 'Now I will edit the file' }], finish: 'error', error: { name: 'APIError', message: limit } }])
+  expect(run.answer).toBe('Now I will edit the file')
+  expect(run.end).toEqual({ reason: 'error', error: limit })
+  expect(endFailure(run.end)).toBe(`the worker's turn ended on an error (usage limit): ${limit.replace(/\.$/, '')}`)
+  // another error is said as it is, not named a usage limit
+  expect(endFailure({ reason: 'error', error: 'Internal server error.' })).toBe("the worker's turn ended on an error: Internal server error")
 })
 
 test('the tool backstop reads OpenCode 2.3\'s real tool inputs: edit and write {path}, patch {patchText}, shell {command, workdir}, and a multiedit\'s files', async () => {

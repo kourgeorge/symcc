@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { whyFailed, failedHow, failingLines, failCount, testTail, failBlocks, failedTestsHead, TEST_OUTPUT_CHARS, FAIL_BLOCK_CHARS, FAIL_ERROR_LINES, errorLines, firstProblem, failNext, failAsks, rowExtra, boardText, emptyBoard, fitRow, outOfScopeText, outOfTimeNote, checkerOutput, FAIL_LINES_SHOWN, FAIL_LINES_CHARS, moreFailingLine, testOutputHeading, gaveUpTestsText, endedEarly, endedEarlyLine, endedEarlyNote, ENDED_EARLY_NOTE, type BoardTask } from '../hooks/board'
+import { whyFailed, failedHow, failingLines, failCount, testTail, failBlocks, failedTestsHead, TEST_OUTPUT_CHARS, FAIL_BLOCK_CHARS, FAIL_ERROR_LINES, errorLines, firstProblem, failNext, failAsks, rowExtra, boardText, emptyBoard, fitRow, outOfScopeText, outOfTimeNote, checkerOutput, FAIL_LINES_SHOWN, FAIL_LINES_CHARS, moreFailingLine, testOutputHeading, gaveUpTestsText, endedEarly, endedEarlyLine, endedEarlyNote, ENDED_EARLY_NOTE, isUsageLimit, type BoardTask } from '../hooks/board'
 import { hist } from './history-fixture'
 
 const T = '2026-11-18T10:00:00.000Z'
@@ -30,6 +30,17 @@ test('a failed task: one plain sentence says why, for every way a task can fail'
   for (const [, t] of CASES) expect(failNext(t)).toMatch(/Retry/)
   expect(failNext(CASES[3]![1])).toBe('Read the report below; Retry if it should try again, ask the lead in the chat for a clearer plan, or Drop it.')
   expect(whyFailed(failed({ note: 'something new' }))).toBe('It failed: something new.')
+})
+
+test("T-928: a failed try's own error is said in why it failed, and a usage limit is named so", () => {
+  const lim = failed({ note: "the worker's turn ended on an error (usage limit): Free usage limit reached. Connect a provider or subscribe to OpenCode Go to keep going, or switch models" })
+  expect(failedHow(lim)).toBe('api error')
+  expect(whyFailed(lim)).toBe("The worker's turn ended on a usage limit: Free usage limit reached. Connect a provider or subscribe to OpenCode Go to keep going, or switch models. Nothing was checked or merged; a retry will likely fail the same way until the provider is fixed.")
+  expect(whyFailed(failed({ note: "the worker's turn ended on an error: Internal server error" }))).toBe("The worker's turn ended on an error: Internal server error. Nothing was checked or merged.")
+  expect(isUsageLimit('Free usage limit reached.')).toBe(true)
+  expect(isUsageLimit('Your credit balance is too low')).toBe(true)
+  expect(isUsageLimit('rate limited')).toBe(false)
+  expect(isUsageLimit('prompt is too long: context limit')).toBe(false)
 })
 
 test("a failed task's board row and the lead's text board use the same sentence as its page", () => {

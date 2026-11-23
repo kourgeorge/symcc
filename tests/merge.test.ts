@@ -2538,6 +2538,20 @@ test("a turn that ended on an API error or a refusal fails the task with the rea
   expect(movedMain(err.w)).toBe(false)
   expect(ranTests(err.w)).toEqual([])
   expect(leadQueue.join('\n')).toContain('so nothing was checked or merged and the task failed')
+  // T-928: the host's own error text (OpenCode's session error) goes into the note, the history and the lead's update
+  leadQueue.splice(0)
+  const limit = 'Free usage limit reached. Connect a provider or subscribe to OpenCode Go to keep going, or switch models.'
+  const lim = await workerAnswers('Now I will edit the file', { notify: 'off', end: { reason: 'error', error: limit } })
+  const said = "the worker's turn ended on an error (usage limit): Free usage limit reached. Connect a provider or subscribe to OpenCode Go to keep going, or switch models"
+  expect(lim.t.status).toBe('failed')
+  expect(lim.t.note).toBe(said)
+  expect(lim.t.history.at(-1)?.text).toBe(`try 1: ${said}; nothing was checked or merged`)
+  expect(leadQueue.join('\n')).toContain(`${said}, so nothing was checked or merged and the task failed. This is a usage or provider limit: a retry will likely fail the same way until the owner fixes the provider`)
+  expect(movedMain(lim.w)).toBe(false)
+  leadQueue.splice(0)
+  const other = await workerAnswers('half done', { notify: 'off', end: { reason: 'error', error: 'Internal server error' } })
+  expect(other.t.note).toBe("the worker's turn ended on an error: Internal server error")
+  expect(leadQueue.join('\n')).not.toContain('usage or provider limit')
   const refused = await workerAnswers('', { notify: 'off', end: { reason: 'refusal', refusal: { category: 'cyber', explanation: 'not allowed here' } } })
   expect(refused.t.status).toBe('failed')
   expect(refused.t.note).toBe('the model refused to go on (cyber: not allowed here)')
