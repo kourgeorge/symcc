@@ -185,8 +185,6 @@
       const kept = s.lanes.filter(l => l.done && s.now - l.done < 10 * 60).sort((a, b) => b.done - a.done).slice(0, 3)
       for (const l of [...s.lanes.filter(l => !l.done), ...kept]) L.push(...laneLines(s, l))
     } else L.push(' ' + sp('All done', 'dim'), ' ' + sp("Tell the lead what's next.", 'dim')) // T-903: why nothing runs, what to do next (core/live.ts liveIdle)
-    if (s.lanes.length) L.push(' ' + sp('─'.repeat(12), 'dim'))
-    if (s.lanes.length) L.push(' ' + sp('✧ = an agent works here (needs an agent slot) · ⌀ = tokens', 'dim'))
     L.push('')
     L.push(liveHead('Branches'), '')
     L.push(...branchLines(s))
@@ -217,6 +215,8 @@
       L.push('    ' + sp('tests', 'topic') + ' ' + sp('14', 'dim') + '   ' + sp('shell · guard', 'topic') + ' ' + sp('11', 'dim') + '   ' + sp('ui · surfaces', 'topic') + ' ' + sp('11', 'dim') + '   ' + sp('probes', 'topic') + ' ' + sp('8', 'dim'))
       L.push('    ' + sp('engine · hosts', 'topic') + ' ' + sp('5', 'dim') + '   ' + sp('snapshots', 'topic') + ' ' + sp('5', 'dim') + '   ' + sp('board data', 'topic') + ' ' + sp('3', 'dim') + '   ' + sp('site', 'topic') + ' ' + sp('3', 'dim'))
     }
+    // T-930: the legend at the bottom of the screen, just above the footer
+    if (s.lanes.length) L.push('', ' ' + sp('─'.repeat(12), 'dim'), ' ' + sp('✧ = an agent works here (needs an agent slot) · ⌀ = tokens', 'dim'))
     L.push('')
     L.push(sp('↑↓ move · Enter open task · w watch worker · Esc close', 'dim'))
     return L.join('\n')

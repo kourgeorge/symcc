@@ -2996,7 +2996,7 @@ test('T-692: the Live tab draws the terminal panel\'s lanes and today (core/live
     const layout = liveLayout(lanes, liveStations(true), inner)
     const frame = Math.floor(NOW / 1000)
     const under = (x: string) => LIVE_INDENT + x
-    return [liveHeader(view, lanes), segText(liveHeading('Tasks', w)), ' ', under(liveLabelLine(layout)), ...lanes.flatMap(l => laneLines(l, layout, { nowMs: NOW, frame }).map(x => under(segText(x)))), ...liveLegend(inner).map(under), ' ', segText(liveHeading('Today', w)), ' ', ...todayLines(liveToday(whole, NOW), inner, true).map(under)]
+    return [liveHeader(view, lanes), segText(liveHeading('Tasks', w)), ' ', under(liveLabelLine(layout)), ...lanes.flatMap(l => laneLines(l, layout, { nowMs: NOW, frame }).map(x => under(segText(x)))), ' ', segText(liveHeading('Today', w)), ' ', ...todayLines(liveToday(whole, NOW), inner, true).map(under), ...liveLegend(inner).map(under)]
   }
   // OpenCode reads the view file, whose done task comes slim (no history): the today row must still match
   const f: ViewFile = { ...f0, view: { ...view, tasks: whole.map(t => viewTask(t)) } }
@@ -3882,9 +3882,9 @@ test('T-738, T-747: the OpenCode Live tab has a ▍heading for each section, one
     // T-810: each heading runs to the page width with its thin rule; the org-mem one has no bar
     for (const h of heads) expect([h, textWidthOf(h)]).toEqual([h, w])
     expect(heads[3]).not.toContain('▕')
-    // T-823: the key line sits right under the lanes, before BRANCHES
+    // T-930: the key line is the last content, after the ORGANIZATIONAL MEMORY section, right above the footer
     const keyAt = lines.findIndex(l => l.trimStart().startsWith('✧ = an agent works here'))
-    expect([keyAt > mode, keyAt < lines.findIndex(l => l.startsWith('─── ❯ BRANCHES ─'))]).toEqual([true, true])
+    expect([keyAt > lines.findIndex(l => l.startsWith('─── ❯ ORG')), lines.slice(keyAt, lines.length - d.footer)]).toEqual([true, liveLegend(liveInner(w)).map(x => LIVE_INDENT + x)])
     // T-836: a short dim divider right above the key line
     expect(lines[keyAt - 1]).toBe(' ' + '─'.repeat(12))
     expect([heads.length, heads[3]!.startsWith(w === 100 ? '─── ❯ ORGANIZATIONAL MEMORY   ' : '─── ❯ ORG')]).toEqual([4, true])
@@ -3903,6 +3903,33 @@ test('T-738, T-747: the OpenCode Live tab has a ▍heading for each section, one
       expect([lines[at], lines[at + 1]!.trim()]).toEqual([lines[at]!, ''])
     }
   }
+})
+
+test('T-930: the OpenCode Live tab draws the legend at the bottom of the screen, just above the footer; on a long page it is the last content', () => {
+  const f = branchesViewFile()
+  const w = 80
+  const legend = [LIVE_INDENT + '─'.repeat(12), ...liveLegend(liveInner(w)).map(x => LIVE_INDENT + x)]
+  // a short page: the blank rows go between the content and the legend, the legend right above the footer
+  const short = panelLines(f, { tab: 'live', opened: '', cursor: 0, rows: 200 }, NOW, w)
+  const lines = short.lines.map(lineText)
+  expect(lines.length).toBe(200)
+  const body = lines.slice(0, lines.length - short.footer)
+  expect(body.slice(-legend.length)).toEqual(legend)
+  expect(body[body.length - legend.length - 1]!.trim()).toBe('')
+  const om = body.findIndex(l => l.startsWith('─── ❯ ORG'))
+  expect(om > 0 && body.slice(om + 1, body.length - legend.length).some(l => l.trim())).toBe(true)
+  // the hits stay with their lines (a blank row opens nothing; the footer's rows line up)
+  expect(short.hits.length).toBe(short.lines.length)
+  // a long page (a low panel): at the top the legend is out of sight; scrolled to the end it is the last lines, no blank rows before it
+  const rows = 20
+  const top = panelLines(f, { tab: 'live', opened: '', cursor: 0, rows }, NOW, w)
+  expect(top.lines.map(lineText).some(l => l.includes('✧ = an agent works here'))).toBe(false)
+  const end = panelLines(f, { tab: 'live', opened: '', cursor: 0, rows, scroll: 999 }, NOW, w)
+  const endLines = end.lines.map(lineText)
+  expect(endLines.length).toBe(rows)
+  const endBody = endLines.slice(end.fixed, endLines.length - end.footer)
+  expect(endBody.slice(-legend.length)).toEqual(legend)
+  expect(endBody[endBody.length - legend.length - 1]!.trim() === '').toBe(false)
 })
 
 /** T-756: a fake tui context whose ui.panel.open says no until `shown.session` is set (OpenCode's home page first). */

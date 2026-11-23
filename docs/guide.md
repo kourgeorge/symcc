@@ -1195,9 +1195,10 @@ words as bold headings with the same spacing):
   ones ahead `──○`, and the current one blinks between `◉` and `◎` (Claude Code doesn't tell
   plugins about reduced motion, so it always blinks; the tab redraws itself every second while
   it is shown). The `✧` after work and check (in the headings' color) means an agent works there, so
-  those stations need an agent slot (a worker or a checker); the legend under the lanes (below a short dim divider line) says
+  those stations need an agent slot (a worker or a checker); the legend at the bottom of the tab, just above the footer (below a short dim divider line), says
   `✧ = an agent works here (needs an agent slot) · ⌀ = tokens`; queue and tests use none, so there can be more lanes than
-  `max_parallel`.
+  `max_parallel`. When the page is shorter than the screen (the panel in VS Code), the empty room goes between the content
+  and the legend; when it is taller, the legend is the last lines of the page.
 - On the right: the time at the current station, or the place in the merge queue (`#2`).
 - The second row has no bar, only numbers about this task:
   `bug try 4/4  ⌀ 7.3M (7.6× median) · ⏱ 41m · worker ⌀ 5.4M · checker ⌀ 1.9M · ↺×2`. That is

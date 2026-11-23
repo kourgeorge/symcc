@@ -9,6 +9,8 @@
 // the Organizational memory page (orgmem.tsx; VS Code's: vscode-orgmem.tsx) filtered to it, Enter on a newest note
 // opens all notes with that note focused, the "[all]" button next to "newest" opens all notes (T-866: no key hint
 // line and no m key); the page's Back comes back here.
+// T-930: the legend (a short rule, then "✧ = an agent works here ...") is the last lines, at the bottom of the screen just
+// above the footer: on a short page the empty room goes between the content and it; on a long page it follows the content.
 // T-715: under each lane hang its waiting trains (core's liveTrains and trainRows), each one a row Button that opens its task.
 // T-727: under the lanes, the Branches section (core's liveBranches): main's latest commits and a row per open task's
 // branch (commits ahead, how far behind), each task row a row Button that opens its task.
@@ -121,8 +123,9 @@ export function livePage($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
   const needs = liveNeeds(v, nowMs, inner)
   const om = liveOrgMem(notes, width)
   const br = liveBranches(v, nowMs, width)
+  // T-930: fill: the page is at least the pane's height, so the legend (live-key) sits at the bottom of the screen
   return (
-    <Box flexDirection="column">
+    <Box flexDirection="column" {...(pane.bodyRows ? { minHeight: pane.bodyRows } : {})}>
       {header('live')}
       {headSegs.length > 1 ? (
         // T-770: while scouts run, their mark at the end of the mode line ("⌕ gaps-bot 4m"), a plain Button that opens the Scouts tab
@@ -166,9 +169,7 @@ export function livePage($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
           ),
         ]
       })}
-      {lanes.length ? <Text key="live-divider" color={C('inactive')}>{LIVE_INDENT + LIVE_DIVIDER}</Text> : null}
-      {lanes.length ? liveLegend(inner).map((x, i) => <Text key={i ? `live-legend-${i}` : 'live-legend'} color={C('inactive')}>{LIVE_INDENT + x}</Text>) : null}
-      {br ? <Text key="live-br-blank"> </Text> : null}
+      {br ?<Text key="live-br-blank"> </Text> : null}
       {br ? <Text key="live-br-head">{draw(br.head)}</Text> : null}
       {br ? <Text key="live-br-under"> </Text> : null}
       {br ? <Text key="live-br-main">{under(br.main)}</Text> : null}
@@ -216,7 +217,15 @@ export function livePage($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
           ))}
         </Box>
       ))}
-      <Text key="live-foot-rule" color={C('subtle')}>{footerRule(width)}</Text>
+      {/* T-930: the legend at the bottom of the screen, just above the footer: its Box takes the room left on a short page
+          (the page is the pane's height, see fill) and puts its lines at its bottom; on a long page it is the last content */}
+      {lanes.length ? (
+        <Box key="live-key" flexDirection="column" flexGrow={1} justifyContent="flex-end">
+          <Text key="live-divider" color={C('inactive')}>{LIVE_INDENT + LIVE_DIVIDER}</Text>
+          {liveLegend(inner).map((x, i) => <Text key={i ? `live-legend-${i}` : 'live-legend'} color={C('inactive')}>{LIVE_INDENT + x}</Text>)}
+        </Box>
+      ) : null}
+      <Text key="live-foot-rule"color={C('subtle')}>{footerRule(width)}</Text>
       {keyLines(liveKeys(), 'live-hint')}
     </Box>
   )
