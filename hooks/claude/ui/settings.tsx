@@ -1,13 +1,13 @@
 // The board panel's Settings view.
-import { SETTINGS, SETTING_GROUPS, groupSummaryParts, isSettingPage, settingChoices, settingShown, cantPlayNotify, type SettingsInput, type SettingName, type SettingPage, settingValue, viewAsBoard, parseSettingValue, settingsKeys, boxHint, pickHint, type RoleDef, DEFAULT_ROLE, mergeRoles, roleKeys, roleEditKeys, rolesKeys, roleNameError, rolePromptKeys, ROLE_PLACEHOLDERS, ROLE_SLOT, ROLE_PROMPTS, promptsOfRole, type RolePromptKind, type KindDef, mergeKinds, kindsKeys, findKind, kindNameError, ALWAYS_ON_KINDS, isCheckerRole, checkerOn } from '../../board'
-import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, brokenLabel, defNamed } from '../../core/def-files'
+import { SETTINGS, SETTING_GROUPS, groupSummaryParts, isSettingPage, settingChoices, settingShown, cantPlayNotify, type SettingsInput, type SettingName, type SettingPage, settingValue, viewAsBoard, parseSettingValue, settingsKeys, boxHint, pickHint, type RoleDef, mergeRoles, roleKeys, roleEditKeys, rolesKeys, rolePromptKeys, ROLE_PLACEHOLDERS, ROLE_SLOT, ROLE_PROMPTS, promptsOfRole, type RolePromptKind, type KindDef, mergeKinds, kindsKeys, findKind, isCheckerRole, checkerOn } from '../../board'
+import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, brokenLabel } from '../../core/def-files'
 import { S } from '../../app/state'
 import { type $ } from '../panel'
 import { resetPane } from '../../app/open'
 import { ownerSettings } from '../../app/tools'
 import { roleLists, roleView, roleDraftOf, newRoleFile, changeRole, roleFileDay } from '../../app/roles'
 import { type RolePageFacts, CHANGED_HEADING, changeLines, changesOfRole, roleStateGroups } from '../../core/role-changes'
-import { NAV_KEYS, placeIn, roleButtons } from '../../core/page-header'
+import { NAV_KEYS, defActions, placeIn, roleButtons } from '../../core/page-header'
 import { type PageHeader, pageHeader } from './page-header'
 import { kindLists, kindView, kindDraftOf, saveKindDraft, newKindFile, changeKind } from '../../app/kinds'
 import type { PaneParts } from './parts'
@@ -85,7 +85,7 @@ export function roleHeader($: $, r: RoleDef, source: DefSource, facts: RolePageF
   const isChecker = isCheckerRole(r.name)
   // the checker role's off: true only keeps it out of the task roles, so it is not shown as off
   const off = !!r.off && !isChecker
-  const canOff = r.name.toLowerCase() !== DEFAULT_ROLE && !isChecker
+  const { canOff, canReset, canRemove } = defActions('role', r.name, source, false, [])
   const at = placeIn(facts.names, r.name)
   const go = (name: string) => () => ((roleView.open = name), (roleView.confirmRemove = false), (roleView.confirmReset = false), redraw())
   const onPress: Record<string, () => void> = {
@@ -95,7 +95,7 @@ export function roleHeader($: $, r: RoleDef, source: DefSource, facts: RolePageF
     'role-reset': () => ((roleView.confirmReset = true), (roleView.confirmRemove = false), redraw()),
     'role-remove': () => ((roleView.confirmRemove = true), (roleView.confirmReset = false), redraw()),
   }
-  const buttons = roleButtons({ canOff, off: !!r.off, canReset: source === 'replaced', canRemove: source === 'added', canSeePrompt: true })
+  const buttons = roleButtons({ canOff, off: !!r.off, canReset, canRemove, canSeePrompt: true })
   return {
     from: 'roles', label: r.name, place: at, title: r.description, color: off ? 'inactive' : 'claude',
     state: roleStateGroups(source, off, facts.changes),
@@ -123,8 +123,7 @@ function rolePage($: $, pane: PaneParts, r: RoleDef, source: DefSource, facts: R
   if (pane.vscode) return rolePageVs($, pane, r, source, facts, header, run)
   const { Box, Text, Button, C, heading, paragraphs } = pane
   const isChecker = isCheckerRole(r.name)
-  const canReset = source === 'replaced'
-  const canRemove = source === 'added'
+  const { canReset, canRemove } = defActions('role', r.name, source, false, [])
   // one section per part of the file, named as the edit page's boxes; the description is the header's title
   const section = (title: string, value: string | undefined, none: string) => (
     <Box flexDirection="column">
@@ -243,9 +242,7 @@ function brokenRolePage($: $, pane: PaneParts, b: BrokenDef, builtIn: RoleDef[])
     $.ui.toast(S.N.toast(res.text))
     $.ui.invalidate('ui.render')
   })
-  const okName = !roleNameError(b.name)
-  const canReset = okName && !!defNamed(builtIn, b.name)
-  const canRemove = okName && !canReset
+  const { canReset, canRemove } = defActions('role', b.name, undefined, true, builtIn)
   const out = canReset ? 'Reset to built-in deletes it (the built-in role is used meanwhile)' : canRemove ? 'Remove deletes it' : ''
   return (
     <Box flexDirection="column" gap={1}>
@@ -434,11 +431,7 @@ function kindPage($: $, pane: PaneParts, k: KindDef | undefined, source: DefSour
     $.ui.toast(S.N.toast(res.text))
     $.ui.invalidate('ui.render')
   })
-  const okName = !kindNameError(name)
-  const canEdit = !broken
-  const canOff = !broken && !ALWAYS_ON_KINDS.includes(name)
-  const canReset = broken ? okName && !!findKind(builtIn, name) : source === 'replaced'
-  const canRemove = broken ? okName && !canReset : source === 'added'
+  const { canEdit, canOff, canReset, canRemove } = defActions('kind', name, source, !!broken, builtIn)
   const file = broken ? broken.file : source === 'built-in' ? `kinds/${name}.ts (in the plugin; Edit copies it to ${kindFileOf(name)})` : kindFileOf(name)
   return (
     <Box flexDirection="column" gap={1}>

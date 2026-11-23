@@ -164,10 +164,9 @@ export const WORKER_BASE = (name: string, tool: (t: string) => string, web = fal
   `You are a ${name} worker. You get exactly one task and the folder (your own copy of the project) to do it in. Do it there, keep the change small and inside the task's files, ${workerCheckText(prose)}, and finish with a one or two sentence summary. ${symccTools ? `To ask the owner something, call the ${tool(ASK_TOOL)} tool` : NO_TOOLS_ASK}; if an edit is refused as outside your files, stop and hand back.${web ? ` ${WEB_SAFETY_LINE}` : ''}`
 
 /**
- * The base prompt every scout and checker gets (checkers run as scouts), before its own prompt; see WORKER_BASE.
- * T-895: `kind` 'scout' also names the scouts tool (action list: a scout sees the other scouts). 'checker' or none
- * given (Claude Code's one scout agent type, which checkers run as too) does not, as a checker may not call it; a
- * scout there learns it from its run prompt (scoutToolLines in core/scouts.ts). `o.symccTools` false: no board, stats or scouts tools are named, and the web only when `o.web` (the
+ * The base prompt every scout and checker gets, before its own prompt; see WORKER_BASE.
+ * T-895: `kind` 'scout' also names the scouts tool (action list: a scout sees the other scouts). 'checker' (or none
+ * given) does not, as a checker may not call it; Claude Code gives checkers their own agent type without that tool (T-905). `o.symccTools` false: no board, stats or scouts tools are named, and the web only when `o.web` (the
  * agent's permissions are all it has).
  */
 export const SCOUT_BASE = (name: string, tool: (t: string) => string, o: BaseOptions = {}, kind?: 'scout' | 'checker'): string => {

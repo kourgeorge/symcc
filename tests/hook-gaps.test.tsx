@@ -238,10 +238,10 @@ test('/symcc-disable and /symcc-approve T-1 answer that board.json can\'t be rea
 
 // ---------------- symcc's own agent types are hidden from the main chat ----------------
 
-test("symcc's worker and scout types are not offered in the main chat; other agents pass on unchanged", async ($, on) => {
+test("symcc's worker, scout, checker and starter types are not offered in the main chat; other agents pass on unchanged", async ($, on) => {
   world(on)
   on('agent.offer', () => ({ isOffered: true, from: 'below' }) as never)
-  for (const agent of ['symcc:worker', 'symcc:worker-web', 'symcc:scout']) expect(await $.agent.offer({ agent } as never)).toEqual({ isOffered: false })
+  for (const agent of ['symcc:worker', 'symcc:worker-web', 'symcc:scout', 'symcc:checker', 'symcc:starter'])expect(await $.agent.offer({ agent } as never)).toEqual({ isOffered: false })
   expect(await $.agent.offer({ agent: 'general-purpose' } as never)).toEqual({ isOffered: true, from: 'below' })
 })
 

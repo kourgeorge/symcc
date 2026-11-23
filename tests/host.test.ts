@@ -313,7 +313,7 @@ function claudeAgentsWorld(answer: (input: Record<string, unknown>) => Promise<{
   return { host: claudeHost(claude as unknown as EngineInterface), spawns, sends, list: (l: typeof listed) => void (listed = l) }
 }
 
-test("host.agents.spawn starts a Claude Code subagent of the agent type that fits: a worker's by its role's tools, scouts and checkers as scouts", async () => {
+test("host.agents.spawn starts a Claude Code subagent of the agent type that fits: a worker's by its role's tools, a scout as the scout type, a checker as the checker type (T-905)", async () => {
   const w = claudeAgentsWorld()
   expect(await w.host.agents.spawn({ kind: 'worker', prompt: 'p', name: 'symcc-T-1', description: 'Do it', cwd: '/wt/T-1' })).toEqual({ agentId: 'ag1' })
   await w.host.agents.spawn({ kind: 'worker', prompt: 'p', name: 'symcc-T-2', description: 'Look', tools: ['web'], cwd: '/wt/T-2', model: 'sonnet' })
@@ -326,7 +326,7 @@ test("host.agents.spawn starts a Claude Code subagent of the agent type that fit
     { prompt: 'p', name: 'symcc-T-2', description: 'Look', subagentType: 'symcc:worker-web', cwd: '/wt/T-2', model: 'sonnet' },
     { prompt: 'p', name: 'symcc-T-3', description: 'Write', subagentType: 'symcc:worker-web-prose', cwd: '/wt/T-3' },
     { prompt: 'p', name: 'symcc-scout-bugs', description: 'Look for bugs', subagentType: 'symcc:scout' },
-    { prompt: 'p', name: 'symcc-check-T-1', description: 'symcc checker for T-1', subagentType: 'symcc:scout', cwd: '/wt/T-1' },
+    { prompt: 'p', name: 'symcc-check-T-1', description: 'symcc checker for T-1', subagentType: 'symcc:checker', cwd: '/wt/T-1' },
   ])
 })
 
