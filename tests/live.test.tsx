@@ -422,8 +422,10 @@ test('T-690: the Live tab draws at a normal and a narrow width with nothing cut,
     expect(lines[1]).toMatch(/^─── ❯ TASKS ─+$/)
     // T-915: "─── ❯ TASKS " then the thin rule to the right edge
     expect([textWidth(lines[1]!), lines.find(l => l.startsWith('─── ❯ TODAY '))]).toEqual([bodyColumns, `─── ❯ TODAY ${'─'.repeat(bodyColumns - 12)}`])
-    // T-789: an empty line under each heading, no bar
-    expect(lines[2]!.trim()).toBe('')
+    // T-789: an empty line under each heading, no bar; except TASKS when lanes run: its stage titles follow the heading
+    // straight away, since they already set it off
+    expect(lines[2]!.trim()).not.toBe('')
+    expect(lines[2]!.includes('✧')).toBe(true)
     expect(lines[lines.findIndex(l => l.startsWith('─── ❯ TODAY ─')) + 1]!.trim()).toBe('')
     expect(lines.some(l => l.includes('▍'))).toBe(false)
     for (const id of ['T-684', 'T-685', 'T-686', 'T-687', 'T-688']) expect(lines.some(l => l.startsWith(`${LIVE_INDENT}▶ ${id} `))).toBe(true)
@@ -445,7 +447,7 @@ test('T-690: the Live tab draws at a normal and a narrow width with nothing cut,
     // T-760: the lane header ends the agent stations in ✧ (over their marks, as liveLabelLine), each ✧ in the heading's color
     const tree = (await ui.drawn()) as Node
     const nodes = (n: unknown): Node[] => (!n || typeof n !== 'object' ? [] : [n as Node, ...((n as Node).children ?? []).flatMap(nodes)])
-    const labelLine = lines[3]
+    const labelLine = lines[2]
     expect(labelLine?.includes(bodyColumns === 80 ? 'work✧' : '✧')).toBe(true)
     expect(labelLine?.includes('·')).toBe(false)
     const labels = nodes(tree).find(n => n.type === 'Text' && textOf(n) === labelLine)
