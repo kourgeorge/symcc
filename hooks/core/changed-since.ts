@@ -4,7 +4,15 @@
 // task still fits (and to ask the owner when it doesn't). The git log itself is run by hooks/app/workers.ts (changedSince);
 // everything here is pure.
 import type { SymccTask } from '../../types'
-import { when } from './days'
+
+// No import of ./days here: days -> settings -> board-file pulled the prompt code into a loop (events.test.ts failed to
+// load with "Cannot access 'DEFAULT_TEST_MINUTES' before initialization"). This is the same text as days.ts's when().
+const when = (iso: string): string => {
+  const ms = Date.parse(iso || '')
+  if (!Number.isFinite(ms)) return '?'
+  const off = -new Date(ms).getTimezoneOffset()
+  return new Date(ms + off * 60_000).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })
+}
 
 /** A task written longer ago than this gets the section (when commits changed its files since). */
 export const STALE_AFTER_MS = 24 * 60 * 60 * 1000
