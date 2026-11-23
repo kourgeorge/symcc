@@ -6,6 +6,7 @@ import { fakeHost } from './fake-host'
 import { setRoot } from './project'
 import { addTask, emptyBoard, scoutPrompt, SCOUT_BOARD_TOOLS } from '../hooks/board'
 import { scoutToolRefusal } from '../hooks/core/scouts'
+import { basePromptFor, SCOUT_BASE } from '../hooks/core/prompts'
 import { S, scoutRuns, checkerRuns } from '../hooks/app/state'
 import { SCOUT_TOOLS, scoutAgentTools, workerAgentTypes, BASE_WORKER_TOOLS } from '../hooks/claude/agent-types'
 import * as app from '../hooks/app/symcc'
@@ -183,6 +184,15 @@ test("registerAll's worker and scout agent type prompts are the base prompts, wo
   expect(agents.find(a => a.name === 'worker')!.prompt).toBe(worker)
   expect(agents.find(a => a.name === 'worker-web')!.prompt).toBe(`${worker} ${web}`)
   expect(agents.find(a => a.name === 'scout')!.prompt).toBe(
-    `You are a ${n} scout. You do the job your scout file gives you, using the project, the shell and the web, and end with a short plain report (or exactly NOTHING). You never change, create or delete files in the project. To look at the board, use the mcp__${n}__board and mcp__${n}__stats tools and the mcp__${n}__scouts tool with action list (they only read), not the board file.`,
+    `You are a ${n} scout. You do the job your scout file gives you, using the project, the shell and the web, and end with a short plain report (or exactly NOTHING). You never change, create or delete files in the project. To look at the board, use the mcp__${n}__board and mcp__${n}__stats tools (they only read), not the board file.`,
   )
+})
+
+test("T-895: a scout's base prompt names the scouts tool (action list); a checker's and the shared Claude Code scout type's do not", () => {
+  const tool = (t: string) => `symcc_${t}`
+  expect(basePromptFor('scout', 'symcc', tool)).toContain('To see the other scouts, use the symcc_scouts tool with action list (it only reads too).')
+  expect(basePromptFor('checker', 'symcc', tool)).not.toContain('scouts tool')
+  expect(basePromptFor('checker', 'symcc', tool)).toContain('use the symcc_board and symcc_stats tools')
+  expect(SCOUT_BASE('symcc', tool)).not.toContain('scouts tool')
+  expect(basePromptFor('scout', 'symcc', tool, { symccTools: false })).not.toContain('scouts tool')
 })

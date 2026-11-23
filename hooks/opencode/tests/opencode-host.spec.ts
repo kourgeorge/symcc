@@ -1229,7 +1229,11 @@ test('each session is offered only the symcc tools it may call, and the lead get
     expect(Object.keys((await ask('ses_w2')).tools)).toEqual(['symcc_ask_owner', 'edit'])
     // a session OpenCode made for one of symcc's agents is known by its metadata too
     f.sessions.set('ses_meta', { info: { id: 'ses_meta', metadata: { symcc: 'checker' }, location: { directory: p.main } }, looksLeft: 0, messages: [] })
-    expect(Object.keys((await ask('ses_meta')).tools)).toEqual([...TOOLS().map(t => t.name).filter(n => ['board', 'stats', 'scouts'].includes(n)).map(n => `symcc_${n}`), 'edit'])
+    // T-895: a checker is offered board and stats only, not scouts (that one is a scout's)
+    expect(Object.keys((await ask('ses_meta')).tools)).toEqual(['symcc_board', 'symcc_stats', 'edit'])
+    checkerRuns.set('ses_chk2', { task: 'T-1', worktree: p.wt, end: () => undefined })
+    expect(Object.keys((await ask('ses_chk2')).tools)).toEqual(['symcc_board', 'symcc_stats', 'edit'])
+    checkerRuns.delete('ses_chk2')
     // T-525: a session nothing knows (not the lead, none of symcc's agents on record) is offered none of symcc's tools
     f.sessions.set('ses_gone', { info: { id: 'ses_gone', location: { directory: p.main } }, looksLeft: 0, messages: [] })
     expect(Object.keys((await ask('ses_gone')).tools)).toEqual(['edit'])
