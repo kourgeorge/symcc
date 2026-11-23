@@ -76,7 +76,7 @@ export type DefAction = (typeof DEF_ACTIONS)[number]
 
 /** The parts of a role's or kind's file /<name>-settings role|kind <name> edit <field> <value> changes (the lead's
  *  roles and kinds tools' fields, in the order the edit pages show them). */
-export const ROLE_EDIT_FIELDS = ['description', 'model', 'skills', 'tools', 'checklist'] as const
+export const ROLE_EDIT_FIELDS = ['description', 'model', 'skills', 'tools', 'code', 'checklist'] as const
 export const KIND_EDIT_FIELDS = ['description', 'body'] as const
 export type DefEditField = (typeof ROLE_EDIT_FIELDS)[number] | (typeof KIND_EDIT_FIELDS)[number]
 /** The fields whose value "none" clears them (a list or the model). */

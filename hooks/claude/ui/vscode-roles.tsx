@@ -1,24 +1,27 @@
-// The Roles and Kinds pages in VS Code's side panel (see surface.ts and vscode.tsx), opened from Settings. The terminal's
-// pages (settings.tsx) line the names up in columns of fixed width inside Buttons and put the actions in a row of
-// Buttons; VS Code draws every Button as a filled box that never wraps its label, so those ran into each other. Here:
-//   tester   replaced                       (the name a link that opens it, where it comes from as small badges)
-//   writes tests that try hard to break …  (its description, dim, wrapped)
+// The Roles and Kinds pages in VS Code's side panel (see surface.ts and vscode.tsx), opened from Settings. As on the
+// terminal (T-918), the list is a table, one line per role or kind, its columns lined up (core's def-table.ts):
+//   NAME     FROM      MODEL  WEB  WRITES  WHAT IT'S FOR
+//   tester   changed   sonnet —    code    writes tests that try hard to break the change
+// the name a link that opens it; here the description is never cut, it wraps under itself.
 // One role's or kind's page: a "← Roles" link back, the name and its badges, the description, the actions as one line of
 // links that wraps (Edit · See the prompt · Turn off · Reset to built-in · Remove), then its parts under headings.
 // Removing asks first in a box with one "Yes, remove" Button and a Cancel link. The edit pages have one Save Button and a
 // Cancel link. No key hints.
-import { DEFAULT_ROLE, ROLE_PLACEHOLDERS, ROLE_SLOT, ROLE_PROMPTS, promptsOfRole, roleNameError, kindNameError, isCheckerRole, findKind, ALWAYS_ON_KINDS, roleCodeText, type RoleDef, type KindDef, type RolePromptKind } from '../../board'
-import { type DefSource, type BrokenDef, defSource, brokenNamed, brokenLabel, defNamed } from '../../core/def-files'
+import { DEFAULT_ROLE, ROLE_PLACEHOLDERS, ROLE_SLOT, ROLE_PROMPTS, promptsOfRole, roleNameError, kindNameError, isCheckerRole, findKind, ALWAYS_ON_KINDS, type RoleDef, type KindDef, type RolePromptKind } from '../../board'
+import { type DefSource, type BrokenDef, brokenLabel, defNamed } from '../../core/def-files'
 import { S } from '../../app/state'
 import { type $ } from '../panel'
-import { roleView, roleDraftOf, saveRoleDraft, newRoleFile, changeRole } from '../../app/roles'
+import { roleView, newRoleFile, changeRole } from '../../app/roles'
 import { kindView, kindDraftOf, saveKindDraft, newKindFile, changeKind } from '../../app/kinds'
 import type { PaneParts } from './parts'
 import { row } from './arrows'
+import { vsRowRoom } from './vscode-list'
 import { claudeHost } from '../host'
 import { vsBadge, vsCallout, vsFooter, vsHref, vsLink, mdLink, vsSection } from './vscode'
 import { type PageHeader, vsPageHeader } from './page-header'
-import { type RolePageFacts, CHANGED_HEADING, changeLines, changesOfRole, roleListLabel } from '../../core/role-changes'
+import { type RolePageFacts, CHANGED_HEADING, changeLines } from '../../core/role-changes'
+import { type DefRow, type DefCol, type DefCell, type CodePick, DEF_COL_HEADS, ROLE_COLS, KIND_COLS, TABLE_GAP, CODE_PICKS, CODE_PICK_LABEL, CODE_PICK_HINT, defsCountText, defLayout, defCells, defCellTone, roleWritesLine, codePickOf } from '../../core/def-table'
+import { type CodeDraft, roleRows, kindRows, saveRoleEdit } from './role-table'
 
 /** The color of a "where it comes from" badge. */
 const SOURCE_TONE: Record<DefSource, string> = { 'built-in': 'inactive', replaced: 'suggestion', added: 'success' }
@@ -55,19 +58,6 @@ function kit($: $, pane: PaneParts) {
       {off ? vsBadge(vs, `${key}-off`, 'off', 'warning') : null}
     </Text>
   )
-  /** One row of a list: the name a link (dim when off), its badges, then dim wrapped lines. */
-  const listRow = (noun: 'role' | 'kind', name: string, source: DefSource | undefined, off: boolean, lines: RenderLine[], onPress: () => void, broken = false, said?: string) => {
-    const href = vsHref(noun, name)
-    return (
-      <Box key={`vs-${noun}-${name}`} flexDirection="column">
-        <Box key={`vs-${noun}-${name}-top`} flexDirection="row" flexWrap="wrap" columnGap={2}>
-          {vsLink(vs, row(`${noun}Row:${name}`), off || broken ? mdLink(name, href) : `**${mdLink(name, href)}**`, [[href, onPress]], off || broken)}
-          {badges(`vs-${noun}-${name}-badges`, source, off, broken, said)}
-        </Box>
-        {(lines.filter(l => l && l[1]) as Exclude<RenderLine, false>[]).map(([k, text, color]) => plain(k, text, color))}
-      </Box>
-    )
-  }
   /** The confirm step of Remove (or Reset): a box in the warning color, the one "Yes, remove" Button, and a Cancel link. */
   const confirm = (key: string, what: string, yes: () => void, no: () => void, yesLabel = 'Yes, remove') =>
     vsCallout(vs, key, '⚠', what, 'warning', [
@@ -108,50 +98,77 @@ function kit($: $, pane: PaneParts) {
     )
   /** The file a page shows at its bottom. */
   const fileSection = (file: string) => section('file', 'File', [plain('vs-file', file, 'autoAccept')])
-  return { Box, Text, C, vs, redraw, plain, links, back, badges, listRow, confirm, section, newBox, fileSection }
+  return { Box, Text, C, vs, redraw, plain, links, back, badges, confirm, section, newBox, fileSection }
 }
-/** A dim line under a list row: its key, its words, its color. */
-type RenderLine = [key: string, text: string, color?: string] | false
 
-/** The header of a list page: the banner and tabs, a link back to Settings, the heading and what the page is for. */
-function listTop(pane: PaneParts, k: ReturnType<typeof kit>, noun: 'Roles' | 'Kinds', about: string, onBack: () => void) {
-  const { Box } = pane
+/** The header of a list page: the banner and tabs, a link back to Settings, then the heading with its count beside it
+ *  ("Roles  8 roles · 2 changed by you", T-918). */
+function listTop(pane: PaneParts, k: ReturnType<typeof kit>, noun: 'Roles' | 'Kinds', count: string, onBack: () => void) {
+  const { Box, Text, C } = k
   return [
     ...pane.header(noun === 'Roles' ? 'roles' : 'kinds'),
     <Box key={`vs-${noun.toLowerCase()}-top`} flexDirection="column">
       {k.back(`${noun.toLowerCase()}-back`, 'Settings', onBack)}
-      {vsSection(k.vs, `vs-${noun.toLowerCase()}-head`, noun)}
-      {k.plain(`vs-${noun.toLowerCase()}-about`, about)}
+      <Text key={`vs-${noun.toLowerCase()}-head`} wrap="wrap">
+        <Text bold color={C('suggestion')}>{noun}</Text>
+        <Text color={C('inactive')}>{`  ${count}`}</Text>
+      </Text>
     </Box>,
   ]
+}
+
+/** T-918: the Roles or Kinds table in VS Code: the column heads (dim), then one line per role or kind, each column a
+ *  Box of its width (core's defLayout at the row room VS Code's narrower text font gives, vsRowRoom: MODEL, WEB and
+ *  WRITES go when narrow); the name a link that opens it (dim when off). As every VS Code page, nothing is cut with
+ *  "…": the description (or why a file can't be read) fills the rest of the line and wraps under itself when long. */
+function vsTable(pane: PaneParts, k: ReturnType<typeof kit>, noun: 'role' | 'kind', rows: (DefRow & { warning?: string })[], cols: readonly DefCol[], open: (name: string) => () => void) {
+  const { Box, Text, C, vs } = k
+  const layout = defLayout(rows, cols, vsRowRoom(vs.width))
+  const cell = (key: string, c: DefCol, last: boolean, child: unknown) =>
+    last ? (
+      <Box key={key} flexGrow={1} flexShrink={1}>{child as never}</Box>
+    ) : (
+      <Box key={key} width={layout.widths[c] + TABLE_GAP} flexShrink={0}>{child as never}</Box>
+    )
+  const line = (key: string, r: DefRow | 'head', parts: DefCell[]) => (
+    <Box key={key} flexDirection="row">
+      {parts.map((p, i) => {
+        const last = i === parts.length - 1
+        const text = p.col === 'about' && r !== 'head' ? (r.broken ? `— ${r.broken}` : r.cells.about ?? '') : p.text.trimEnd()
+        if (r === 'head') return cell(`${key}-${p.col}`, p.col, last, <Text key="t" bold wrap="wrap" color={C('inactive')}>{DEF_COL_HEADS[p.col]}</Text>)
+        if (p.col === 'name') {
+          const href = vsHref(noun, r.name)
+          return cell(`${key}-name`, 'name', last, vsLink(vs, row(`${noun}Row:${r.name}`), r.off || r.broken ? mdLink(r.name, href) : `**${mdLink(r.name, href)}**`, [[href, open(r.name)]], r.off || !!r.broken))
+        }
+        const tone = defCellTone(r, p.col)
+        const warn = last && 'warning' in r && r.warning ? ' ⚠' : ''
+        return cell(`${key}-${p.col}`, p.col, last, <Text key="t" wrap="wrap" bold={tone.bold} color={C(tone.color)}>{text}{warn}</Text>)
+      })}
+    </Box>
+  )
+  return (
+    <Box key={`vs-${noun}s-list`} flexDirection="column">
+      {line(`vs-${noun}s-cols`, 'head', defCells(layout, 'head'))}
+      {rows.map(r => line(`vs-${noun}-${r.name}`, r, defCells(layout, r)))}
+    </Box>
+  )
 }
 
 // ---------------- roles ----------------
 
 const roleFileOf = (name: string) => `${S.N.dir}/roles/${name}.md`
 
-/** The Roles page in VS Code. */
+/** The Roles page in VS Code (T-918): "Roles  8 roles · 2 changed by you", then the table (vsTable), then + New role. */
 export function rolesPageVs($: $, pane: PaneParts, roles: RoleDef[], builtIn: RoleDef[], project: RoleDef[], broken: BrokenDef[]) {
   const k = kit($, pane)
   const { Box } = k
   const open = (name: string) => () => ((roleView.open = name), (roleView.confirmRemove = false), (roleView.naming = null), k.redraw())
   const cancel = () => ((roleView.naming = null), k.redraw())
-  const brokenRow = (b: BrokenDef) => k.listRow('role', b.name, undefined, false, [['why', brokenLabel(b), 'error']], open(b.name), true)
+  const rows = roleRows(roles, builtIn, project, broken)
   return (
     <Box flexDirection="column" gap={1}>
-      {listTop(pane, k, 'Roles', 'The roles a worker can take. Click one to open it, edit it, turn it off or remove it; or tell the lead.', () => ((roleView.list = false), (roleView.naming = null), k.redraw()))}
-      <Box key="vs-roles-list" flexDirection="column" gap={1}>
-        {roles.map(r => {
-          const bad = brokenNamed(broken, r.name)
-          if (bad) return brokenRow(bad)
-          const off = !!r.off && !isCheckerRole(r.name)
-          const source = defSource(r.name, builtIn, project)
-          // T-871: a replaced role's badge says what it changed ("replaced · model")
-          const said = source ? roleListLabel(source, false, changesOfRole(r.name, builtIn, project)) : undefined
-          return k.listRow('role', r.name, source, off, [['about', r.description], !!r.warning && ['warning', r.warning!, 'warning'], isCheckerRole(r.name) && ['checker', 'run by the checker setting, never a task\'s role']], open(r.name), false, said)
-        })}
-        {broken.filter(b => !defNamed(roles, b.name)).map(brokenRow)}
-      </Box>
+      {listTop(pane, k, 'Roles', defsCountText('role', rows), () => ((roleView.list = false), (roleView.naming = null), k.redraw()))}
+      {vsTable(pane, k, 'role', rows, ROLE_COLS, open)}
       {k.newBox('role', roleView.naming, () => ((roleView.naming = { name: '', error: '' }), k.redraw()), name => pane.act(async () => {
         const said = await newRoleFile(claudeHost($), name)
         if (said) $.ui.toast(S.N.toast(said))
@@ -176,12 +193,12 @@ export function rolePageVs($: $, pane: PaneParts, r: RoleDef, source: DefSource,
   return (
     <Box key="vs-role-page" flexDirection="column" gap={1}>
       {vsPageHeader(pane, header)}
-      {r.warning || isChecker ? (
-        <Box key="vs-role-notes" flexDirection="column">
-          {r.warning ? k.plain('vs-role-warning', r.warning, 'warning') : null}
-          {isChecker ? k.plain('role-checker-setting', `Never a task's role, and not turned on or off here: the checker setting runs it (Settings → checker, now ${facts.checker ? 'on' : 'off'}).`) : null}
-        </Box>
-      ) : null}
+      <Box key="vs-role-notes" flexDirection="column">
+        {/* T-918: always says what the role writes */}
+        {k.plain('role-writes', roleWritesLine(r), 'text')}
+        {r.warning ? k.plain('vs-role-warning', r.warning, 'warning') : null}
+        {isChecker ? k.plain('role-checker-setting', `Never a task's role, and not turned on or off here: the checker setting runs it (Settings → checker, now ${facts.checker ? 'on' : 'off'}).`) : null}
+      </Box>
       {roleView.confirmRemove && canRemove ? k.confirm('role-remove-box', `Remove role ${r.name} and delete ${roleFileOf(r.name)}?`, run({ action: 'remove', name: r.name }, () => (roleView.open = '')), cancel) : null}
       {source !== 'built-in'
         ? k.section('role-changes', CHANGED_HEADING, [
@@ -192,7 +209,6 @@ export function rolePageVs($: $, pane: PaneParts, r: RoleDef, source: DefSource,
       {k.section('model', 'Model', [k.plain('vs-model', r.model || "(none: the session's model)", r.model ? 'text' : 'inactive')])}
       {k.section('skills', 'Skills', [k.plain('vs-skills', r.skills.join(', ') || '(none)', r.skills.length ? 'text' : 'inactive')])}
       {k.section('tools', 'Tools', [k.plain('vs-tools', (r.tools ?? []).join(', ') || '(none: the base tools only)', r.tools?.length ? 'text' : 'inactive')])}
-      {roleCodeText(r) ? k.section('code', 'Code', [k.plain('vs-code', roleCodeText(r))]) : null}
       {k.section('checklist', 'Checklist', [r.prompt.trim() ? <Markdown key="vs-checklist" text={r.prompt.trim()} /> : k.plain('vs-checklist-none', '(none: a plain worker)')])}
       {k.section('placeholders', 'Placeholders', [
         k.plain('vs-holders-about', 'The checklist may use these; each is filled in for the task (any other {{word}} is left as written).'),
@@ -297,9 +313,11 @@ function editTop(pane: PaneParts, k: ReturnType<typeof kit>, noun: 'role' | 'kin
 }
 
 /** A role's edit page in VS Code: a labelled box per part of its file. */
-export function roleEditPageVs($: $, pane: PaneParts, source: DefSource | undefined) {
+export function roleEditPageVs($: $, pane: PaneParts, r: RoleDef, source: DefSource | undefined) {
   const k = kit($, pane)
-  const d = roleView.draft!
+  const d = roleView.draft! as CodeDraft
+  const now = d.code ?? codePickOf(r)
+  const pick = (p: CodePick) => () => ((d.code = p), k.redraw())
   const box = (key: keyof typeof d, label: string, placeholder: string, more: Record<string, unknown> = {}) => (
     <pane.Input key={`role-${key}`} label={label} value={String(d[key])} placeholder={placeholder} submitLabel="Keep" {...more} onInput={value => void ((d as Record<string, string>)[key] = value)} onSubmit={value => void ((d as Record<string, string>)[key] = value)} />
   )
@@ -309,13 +327,18 @@ export function roleEditPageVs($: $, pane: PaneParts, source: DefSource | undefi
         `Save writes ${roleFileOf(d.role)}${source === 'built-in' ? ' (a copy of the built-in role; Reset to built-in undoes it).' : '.'}`,
         `The name is the file's name: to rename the role, rename ${roleFileOf(d.role)}.`,
       ], pane.act(async () => {
-        const said = await saveRoleDraft(claudeHost($))
+        const said = await saveRoleEdit(claudeHost($), r)
         if (said) $.ui.toast(S.N.toast(said))
       }), () => ((roleView.draft = null), k.redraw()), d.error)}
       {box('description', 'Description', 'what the role is for, in a few words', { autoFocus: true })}
       {box('model', 'Model', "empty: the session's model")}
       {box('skills', 'Skills', 'skill names joined with ", " (empty: none)')}
       {box('tools', 'Tools', 'extra tools: web, to search and read the web (empty: none)')}
+      {/* T-918: what the role writes, a pick of two (code: false is prose only) */}
+      {k.section('role-code', 'Writes', [
+        k.links('role-code', CODE_PICKS.map(p => [`${p === now ? '●' : '○'} ${CODE_PICK_LABEL[p]}`, p, pick(p)] as Action)),
+        k.plain('vs-role-code-hint', CODE_PICK_HINT),
+      ])}
       {box('checklist', 'Checklist', 'what a worker with this role checks, one line each', { rows: 8 })}
       {vsFooter(k.vs, 'role-edit-keys')}
     </k.Box>
@@ -326,24 +349,17 @@ export function roleEditPageVs($: $, pane: PaneParts, source: DefSource | undefi
 
 const kindFileOf = (name: string) => `${S.N.dir}/kinds/${name}.md`
 
-/** The Kinds page in VS Code. */
+/** The Kinds page in VS Code (T-918): "Kinds  6 kinds", then the table (NAME, FROM, WHAT IT'S FOR), then + New kind. */
 export function kindsPageVs($: $, pane: PaneParts, kinds: KindDef[], builtIn: KindDef[], project: KindDef[], broken: BrokenDef[]) {
   const k = kit($, pane)
   const { Box } = k
   const open = (name: string) => () => ((kindView.open = name), (kindView.confirmRemove = false), (kindView.naming = null), k.redraw())
   const cancel = () => ((kindView.naming = null), k.redraw())
-  const brokenRow = (b: BrokenDef) => k.listRow('kind', b.name, undefined, false, [['why', brokenLabel(b), 'error']], open(b.name), true)
+  const rows = kindRows(kinds, builtIn, project, broken)
   return (
     <Box flexDirection="column" gap={1}>
-      {listTop(pane, k, 'Kinds', 'The kinds a task can be. Click one to open it, edit it, turn it off or remove it; or tell the lead.', () => ((kindView.list = false), (kindView.naming = null), k.redraw()))}
-      <Box key="vs-kinds-list" flexDirection="column" gap={1}>
-        {kinds.map(x => {
-          const bad = brokenNamed(broken, x.name)
-          if (bad) return brokenRow(bad)
-          return k.listRow('kind', x.name, defSource(x.name, builtIn, project), !!x.off, [['about', x.description]], open(x.name))
-        })}
-        {broken.filter(b => !findKind(kinds, b.name)).map(brokenRow)}
-      </Box>
+      {listTop(pane, k, 'Kinds', defsCountText('kind', rows), () => ((kindView.list = false), (kindView.naming = null), k.redraw()))}
+      {vsTable(pane, k, 'kind', rows, KIND_COLS, open)}
       {k.newBox('kind', kindView.naming, () => ((kindView.naming = { name: '', error: '' }), k.redraw()), name => pane.act(async () => {
         const said = await newKindFile(claudeHost($), name)
         if (said) $.ui.toast(S.N.toast(said))

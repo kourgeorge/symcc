@@ -1,12 +1,12 @@
 // The board panel's Settings view.
-import { SETTINGS, SETTING_GROUPS, groupSummaryParts, isSettingPage, settingChoices, settingShown, cantPlayNotify, type SettingsInput, type SettingName, type SettingPage, settingValue, viewAsBoard, parseSettingValue, settingsKeys, boxHint, pickHint, type RoleDef, DEFAULT_ROLE, mergeRoles, roleKeys, roleEditKeys, rolesKeys, roleNameError, rolePromptKeys, ROLE_PLACEHOLDERS, ROLE_SLOT, ROLE_PROMPTS, promptsOfRole, type RolePromptKind, type KindDef, mergeKinds, kindsKeys, findKind, kindNameError, ALWAYS_ON_KINDS, isCheckerRole, checkerOn, roleCodeText } from '../../board'
+import { SETTINGS, SETTING_GROUPS, groupSummaryParts, isSettingPage, settingChoices, settingShown, cantPlayNotify, type SettingsInput, type SettingName, type SettingPage, settingValue, viewAsBoard, parseSettingValue, settingsKeys, boxHint, pickHint, type RoleDef, DEFAULT_ROLE, mergeRoles, roleKeys, roleEditKeys, rolesKeys, roleNameError, rolePromptKeys, ROLE_PLACEHOLDERS, ROLE_SLOT, ROLE_PROMPTS, promptsOfRole, type RolePromptKind, type KindDef, mergeKinds, kindsKeys, findKind, kindNameError, ALWAYS_ON_KINDS, isCheckerRole, checkerOn } from '../../board'
 import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, brokenLabel, defNamed } from '../../core/def-files'
 import { S } from '../../app/state'
 import { type $ } from '../panel'
 import { resetPane } from '../../app/open'
 import { ownerSettings } from '../../app/tools'
-import { roleLists, roleView, roleDraftOf, saveRoleDraft, newRoleFile, changeRole, roleFileDay } from '../../app/roles'
-import { type RolePageFacts, CHANGED_HEADING, changeLines, changesOfRole, roleListLabel, roleStateGroups } from '../../core/role-changes'
+import { roleLists, roleView, roleDraftOf, newRoleFile, changeRole, roleFileDay } from '../../app/roles'
+import { type RolePageFacts, CHANGED_HEADING, changeLines, changesOfRole, roleStateGroups } from '../../core/role-changes'
 import { NAV_KEYS, placeIn, roleButtons } from '../../core/page-header'
 import { type PageHeader, pageHeader } from './page-header'
 import { kindLists, kindView, kindDraftOf, saveKindDraft, newKindFile, changeKind } from '../../app/kinds'
@@ -15,6 +15,8 @@ import { arrows, headingFocused, row } from './arrows'
 import { settingsPageVs } from './vscode-settings'
 import { rolesPageVs, rolePageVs, brokenRolePageVs, rolePromptPageVs, roleEditPageVs, kindsPageVs, kindPageVs, kindEditPageVs } from './vscode-roles'
 import { claudeHost } from '../host'
+import { type DefRow, type DefCol, type CodePick, ROLE_COLS, KIND_COLS, CURSOR_MARK, TABLE_INDENT, CODE_PICKS, CODE_PICK_LABEL, CODE_PICK_HINT, defsCountText, defLayout, defCells, defCellTone, defLineText, newDefText, roleWritesLine, codePickOf } from '../../core/def-table'
+import { type CodeDraft, roleRows, kindRows, saveRoleEdit } from './role-table'
 
 /** A role's file as the panel names it: .<name>/roles/<role>.md. */
 const roleFileOf = (name: string) => `${S.N.dir}/roles/${name}.md`
@@ -22,11 +24,13 @@ const roleFileOf = (name: string) => `${S.N.dir}/roles/${name}.md`
 /** A role's edit mode in Settings: the same header as its page, then Save and Cancel (x), then a box per part of its
  *  file, named and ordered as the page shows them: Description, Model, Skills, Tools, Checklist. Its boxes take every letter
  *  and Esc doesn't reach the panel from a text box, so Cancel is the way out. */
-function roleEditPage($: $, pane: PaneParts, source: DefSource | undefined) {
+function roleEditPage($: $, pane: PaneParts, r: RoleDef, source: DefSource | undefined) {
   // VS Code's side panel draws its own page (vscode-roles.tsx)
-  if (pane.vscode) return roleEditPageVs($, pane, source)
+  if (pane.vscode) return roleEditPageVs($, pane, r, source)
   const { Box, Text, Button, Input, act, C, heading, footer } = pane
-  const d = roleView.draft!
+  const d = roleView.draft! as CodeDraft
+  const now = d.code ?? codePickOf(r)
+  const pickCode = (p: CodePick) => () => ((d.code = p), $.ui.invalidate('ui.render'))
   const cancel = () => ((roleView.draft = null), $.ui.invalidate('ui.render'))
   const box = (key: keyof typeof d, label: string, placeholder: string, more: Record<string, unknown> = {}) => (
     <Box flexDirection="column">
@@ -45,7 +49,7 @@ function roleEditPage($: $, pane: PaneParts, source: DefSource | undefined) {
       </Box>
       <Box flexDirection="row" gap={1}>
         <Button key="role-save" label="Save" onPress={act(async () => {
-          const said = await saveRoleDraft(claudeHost($))
+          const said = await saveRoleEdit(claudeHost($), r)
           if (said) $.ui.toast(S.N.toast(said))
         })} />
         <Button key="role-edit-cancel" label="Cancel (x)" hotkey="x" onPress={cancel} />
@@ -55,6 +59,18 @@ function roleEditPage($: $, pane: PaneParts, source: DefSource | undefined) {
       {box('model', 'Model', "empty: the session's model")}
       {box('skills', 'Skills', 'skill names joined with ", " (empty: none)')}
       {box('tools', 'Tools', 'extra tools: web, to search and read the web (empty: none)')}
+      {/* T-918: what the role writes, a pick of two (code: false is prose only) */}
+      <Box key="role-code-pick" flexDirection="column">
+        {heading('Writes')}
+        <Box flexDirection="row" gap={2}>
+          {CODE_PICKS.map(p => (
+            <Button key={`role-code-${p}`} plain label={CODE_PICK_LABEL[p]} onPress={pickCode(p)}>
+              <Text bold={p === now} color={C(p === now ? 'ide' : 'text')}>{`${p === now ? '●' : '○'} ${CODE_PICK_LABEL[p]}`}</Text>
+            </Button>
+          ))}
+        </Box>
+        <Text color={C('inactive')}>{CODE_PICK_HINT}</Text>
+      </Box>
       {box('checklist', 'Checklist', 'what a worker with this role checks, one line each', { rows: 8 })}
       {footer(roleEditKeys(), 'role-edit-keys')}
     </Box>
@@ -129,12 +145,12 @@ function rolePage($: $, pane: PaneParts, r: RoleDef, source: DefSource, facts: R
   return (
     <Box flexDirection="column" gap={1}>
       {pageHeader(pane, header)}
-      {r.warning || isChecker ? (
-        <Box flexDirection="column">
-          {r.warning ? <Text color={C('warning')}>{r.warning}</Text> : null}
-          {isChecker ? <Text key="role-checker-setting" color={C('inactive')}>{`never a task's role, and not turned on or off here: the checker setting runs it (Settings → checker, now ${facts.checker ? 'on' : 'off'})`}</Text> : null}
-        </Box>
-      ) : null}
+      <Box flexDirection="column">
+        {/* T-918: always says what the role writes */}
+        <Text key="role-writes" color={C('text')}>{roleWritesLine(r)}</Text>
+        {r.warning ? <Text color={C('warning')}>{r.warning}</Text> : null}
+        {isChecker ? <Text key="role-checker-setting" color={C('inactive')}>{`never a task's role, and not turned on or off here: the checker setting runs it (Settings → checker, now ${facts.checker ? 'on' : 'off'})`}</Text> : null}
+      </Box>
       {roleView.confirmRemove && canRemove ? confirm('role-remove', `Remove role ${r.name} and delete ${roleFileOf(r.name)}?`, 'Yes, remove', run({ action: 'remove', name: r.name }, () => (roleView.open = '')), cancel) : null}
       {source !== 'built-in' ? (
         <Box key="role-changes" flexDirection="column">
@@ -148,7 +164,6 @@ function rolePage($: $, pane: PaneParts, r: RoleDef, source: DefSource, facts: R
       {section('Model', r.model, "(none: the session's model)")}
       {section('Skills', r.skills.join(', '), '(none)')}
       {section('Tools', (r.tools ?? []).join(', '), '(none: the base tools only)')}
-      {roleCodeText(r) ? section('Code', roleCodeText(r), '') : null}
       <Box flexDirection="column">
         {heading('Checklist')}
         {r.prompt.trim() ? paragraphs(r.prompt.trim()) : <Text color={C('inactive')}>(none: a plain worker)</Text>}
@@ -267,22 +282,56 @@ function brokenRolePage($: $, pane: PaneParts, b: BrokenDef, builtIn: RoleDef[])
   )
 }
 
-/** The Roles page, opened from Settings' Roles row: one row per role (Enter opens it), + New role (n) and Back (b)
- *  to Settings. The New role box has a Cancel button (x), and Enter on it empty cancels it too. */
+/** T-918: the Roles or Kinds page on the terminal: "▍Roles  8 roles · 2 changed by you", the column heads, one line per
+ *  role or kind (core's defLayout: the columns lined up, the description cut with "…", columns dropped when narrow; the
+ *  cursor's line marked ❯), then "+ New role (n)" (or its name box) and the footer's keys. Enter opens a line; n and b
+ *  are hidden Buttons (the key line says them). */
+function defTable($: $, pane: PaneParts, o: { noun: 'role' | 'kind'; rows: (DefRow & { warning?: string })[]; cols: readonly DefCol[]; naming: { name: string; error: string } | null; open: (name: string) => () => void; startNew: () => void; back: () => void; newBox: unknown; keys: ReturnType<typeof rolesKeys> }) {
+  const { Box, Text, Button, C, header, footer } = pane
+  const { noun, rows } = o
+  const page = noun === 'role' ? 'roles' : 'kinds'
+  const layout = defLayout(rows, o.cols, pane.width)
+  const keys = rows.map(r => `${noun}Row:${r.name}`)
+  const at = keys.indexOf(arrows.focused ?? '')
+  const cursor = o.naming ? -1 : at >= 0 ? at : 0
+  return (
+    <Box flexDirection="column">
+      {header(page)}
+      <Text key={`${page}-heading`} wrap="truncate">
+        <Text bold color={C('suggestion')}>{`▍${noun === 'role' ? 'Roles' : 'Kinds'}`}</Text>
+        <Text color={C('inactive')}>{`  ${defsCountText(noun, rows)}`}</Text>
+      </Text>
+      <Text key={`${page}-cols`} wrap="truncate" color={C('inactive')}>{defLineText(layout, 'head')}</Text>
+      {rows.map((r, i) => (
+        <Button key={row(keys[i]!)} plain label={r.broken ? `${r.name} — ${r.broken}` : `${r.name}: ${r.cells.from ?? ''}${r.warning ? ' ⚠' : ''}`} autoFocus={i === 0 && !o.naming ? true : undefined} onPress={o.open(r.name)}>
+          <Text bold color={C('ide')}>{i === cursor ? CURSOR_MARK : ' '.repeat(TABLE_INDENT)}</Text>
+          {defCells(layout, r).map(c => {
+            const tone = defCellTone(r, c.col)
+            return <Text key={`${keys[i]}-${c.col}`} bold={tone.bold} color={C(tone.color)}>{c.text}</Text>
+          })}
+          {r.warning ? <Text color={C('warning')}>{' ⚠'}</Text> : null}
+        </Button>
+      ))}
+      <Text key={`${page}-page-blank`}> </Text>
+      {o.newBox as never}
+      <Box key={`${page}-hidden-keys`} display="none">
+        {o.naming ? null : <Button key={`${noun}-new-key`} label="n" hotkey="n" onPress={o.startNew} />}
+        <Button key={`${page}-back`} label="Back" hotkey="b" onPress={o.back} />
+      </Box>
+      {footer(o.keys, `${page}-keys`)}
+    </Box>
+  )
+}
+
+/** The Roles page, opened from Settings' Roles row: the table (defTable), + New role (n); b goes back to Settings.
+ *  The New role box has a Cancel button (x), and Enter on it empty cancels it too. */
 function rolesPage($: $, pane: PaneParts, roles: RoleDef[], builtIn: RoleDef[], project: RoleDef[], broken: BrokenDef[]) {
   // VS Code's side panel draws its own page (vscode-roles.tsx)
   if (pane.vscode) return rolesPageVs($, pane, roles, builtIn, project, broken)
-  const { Box, Text, Button, Input, act, C, header, footer, heading } = pane
+  const { Box, Text, Button, Input, act, C } = pane
   const cancel = () => ((roleView.naming = null), $.ui.invalidate('ui.render'))
-  const nameW = Math.max(0, ...roles.map(r => r.name.length), ...broken.map(b => b.name.length))
   const openRow = (name: string) => () => ((roleView.open = name), (roleView.confirmRemove = false), (roleView.naming = null), $.ui.invalidate('ui.render'))
-  /** A role whose file can't be read: "tester — your file can't be read: no description". */
-  const brokenRow = (b: BrokenDef, first: boolean) => (
-    <Button key={row(`roleRow:${b.name}`)} plain label={`${b.name} — ${brokenLabel(b)}`} autoFocus={first && !roleView.naming ? true : undefined} onPress={openRow(b.name)}>
-      <Text bold color={C('inactive')}>{`  ${b.name.padEnd(nameW)}`}</Text>
-      <Text color={C('error')}>{` — ${brokenLabel(b)}`}</Text>
-    </Button>
-  )
+  const startNew = () => ((roleView.naming = { name: '', error: '' }), $.ui.invalidate('ui.render'))
   /** "New role": a button, or (once pressed) the box that asks for its name; Enter on it empty, or its Cancel button (x), leaves it. */
   const newRoleBox = () =>
     roleView.naming ? (
@@ -305,38 +354,21 @@ function rolesPage($: $, pane: PaneParts, roles: RoleDef[], builtIn: RoleDef[], 
         <Text color={C('inactive')}>{boxHint(`Enter makes ${S.N.dir}/roles/<name>.md and opens it`)}</Text>
       </Box>
     ) : (
-      <Button key="role-new" label="+ New role" hotkey="n" onPress={() => ((roleView.naming = { name: '', error: '' }), $.ui.invalidate('ui.render'))}>
-        <Text color={C('text')}>{'  + New role'}</Text>
+      <Button key="role-new" plain label={newDefText('role')} onPress={startNew}>
+        <Text color={C('text')}>{`  ${newDefText('role')}`}</Text>
       </Button>
     )
-  return (
-    <Box flexDirection="column">
-      {header('roles')}
-      {heading('Roles')}
-      {roles.map((r, i) => {
-        const bad = brokenNamed(broken, r.name)
-        if (bad) return brokenRow(bad, i === 0)
-        const source = defSource(r.name, builtIn, project)!
-        const off = !!r.off && !isCheckerRole(r.name)
-        // T-871: a replaced role says what it changed ("replaced · model")
-        const label = roleListLabel(source, off, changesOfRole(r.name, builtIn, project))
-        return (
-          <Button key={row(`roleRow:${r.name}`)} plain label={`${r.name}: ${label}${r.warning ? ' ⚠' : ''}`} autoFocus={i === 0 && !roleView.naming ? true : undefined} onPress={openRow(r.name)}>
-            <Text bold={!off} color={C(off ? 'inactive' : 'claude')}>{`  ${r.name.padEnd(nameW)}`}</Text>
-            <Text color={C(off ? 'warning' : 'inactive')}>{` ${label}`}</Text>
-            <Text color={C(off ? 'inactive' : 'text')}>{` · ${r.description}`}</Text>
-            {r.warning ? <Text color={C('warning')}>{' ⚠'}</Text> : null}
-          </Button>
-        )
-      })}
-      {broken.filter(b => !defNamed(roles, b.name)).map((b, i) => brokenRow(b, !roles.length && i === 0))}
-      {newRoleBox()}
-      <Text color={C('inactive')}>Enter opens a role · n makes a new one · or tell the lead</Text>
-      <Text key="roles-page-blank"> </Text>
-      <Button key="roles-back" label="Back (b)" hotkey="b" onPress={() => ((roleView.list = false), (roleView.naming = null), $.ui.invalidate('ui.render'))} />
-      {footer(rolesKeys(), 'roles-keys')}
-    </Box>
-  )
+  return defTable($, pane, {
+    noun: 'role',
+    rows: roleRows(roles, builtIn, project, broken),
+    cols: ROLE_COLS,
+    naming: roleView.naming,
+    open: openRow,
+    startNew,
+    back: () => ((roleView.list = false), (roleView.naming = null), $.ui.invalidate('ui.render')),
+    newBox: newRoleBox(),
+    keys: rolesKeys(),
+  })
 }
 
 // ---------------- the Kinds page (like the Roles page, with the same keys) ----------------
@@ -444,20 +476,15 @@ function kindPage($: $, pane: PaneParts, k: KindDef | undefined, source: DefSour
   )
 }
 
-/** The Kinds page, opened from Settings' Kinds row: one row per kind (Enter opens it), + New kind (n) and Back (b) to Settings. */
+/** The Kinds page, opened from Settings' Kinds row: the table (defTable: NAME, FROM, WHAT IT'S FOR), + New kind (n);
+ *  b goes back to Settings. */
 function kindsPage($: $, pane: PaneParts, kinds: KindDef[], builtIn: KindDef[], project: KindDef[], broken: BrokenDef[]) {
   // VS Code's side panel draws its own page (vscode-roles.tsx)
   if (pane.vscode) return kindsPageVs($, pane, kinds, builtIn, project, broken)
-  const { Box, Text, Button, Input, act, C, header, footer, heading } = pane
+  const { Box, Text, Button, Input, act, C } = pane
   const cancel = () => ((kindView.naming = null), $.ui.invalidate('ui.render'))
-  const nameW = Math.max(0, ...kinds.map(k => k.name.length), ...broken.map(b => b.name.length))
   const openRow = (name: string) => () => ((kindView.open = name), (kindView.confirmRemove = false), (kindView.naming = null), $.ui.invalidate('ui.render'))
-  const brokenRow = (b: BrokenDef, first: boolean) => (
-    <Button key={row(`kindRow:${b.name}`)} plain label={`${b.name} — ${brokenLabel(b)}`} autoFocus={first && !kindView.naming ? true : undefined} onPress={openRow(b.name)}>
-      <Text bold color={C('inactive')}>{`  ${b.name.padEnd(nameW)}`}</Text>
-      <Text color={C('error')}>{` — ${brokenLabel(b)}`}</Text>
-    </Button>
-  )
+  const startNew = () => ((kindView.naming = { name: '', error: '' }), $.ui.invalidate('ui.render'))
   const newKindBox = () =>
     kindView.naming ? (
       <Box key="kind-new-box" flexDirection="column">
@@ -479,34 +506,21 @@ function kindsPage($: $, pane: PaneParts, kinds: KindDef[], builtIn: KindDef[], 
         <Text color={C('inactive')}>{boxHint(`Enter makes ${S.N.dir}/kinds/<name>.md and opens it`)}</Text>
       </Box>
     ) : (
-      <Button key="kind-new" label="+ New kind" hotkey="n" onPress={() => ((kindView.naming = { name: '', error: '' }), $.ui.invalidate('ui.render'))}>
-        <Text color={C('text')}>{'  + New kind'}</Text>
+      <Button key="kind-new" plain label={newDefText('kind')} onPress={startNew}>
+        <Text color={C('text')}>{`  ${newDefText('kind')}`}</Text>
       </Button>
     )
-  return (
-    <Box flexDirection="column">
-      {header('kinds')}
-      {heading('Kinds')}
-      {kinds.map((k, i) => {
-        const bad = brokenNamed(broken, k.name)
-        if (bad) return brokenRow(bad, i === 0)
-        const source = defSource(k.name, builtIn, project)!
-        return (
-          <Button key={row(`kindRow:${k.name}`)} plain label={`${k.name}: ${sourceLabel(source, k.off)}`} autoFocus={i === 0 && !kindView.naming ? true : undefined} onPress={openRow(k.name)}>
-            <Text bold={!k.off} color={C(k.off ? 'inactive' : 'claude')}>{`  ${k.name.padEnd(nameW)}`}</Text>
-            <Text color={C(k.off ? 'warning' : 'inactive')}>{` ${sourceLabel(source, k.off)}`}</Text>
-            <Text color={C(k.off ? 'inactive' : 'text')}>{` · ${k.description}`}</Text>
-          </Button>
-        )
-      })}
-      {broken.filter(b => !findKind(kinds, b.name)).map((b, i) => brokenRow(b, !kinds.length && i === 0))}
-      {newKindBox()}
-      <Text color={C('inactive')}>Enter opens a kind · n makes a new one · or tell the lead</Text>
-      <Text key="kinds-page-blank"> </Text>
-      <Button key="kinds-back" label="Back (b)" hotkey="b" onPress={() => ((kindView.list = false), (kindView.naming = null), $.ui.invalidate('ui.render'))} />
-      {footer(kindsKeys(), 'kinds-keys')}
-    </Box>
-  )
+  return defTable($, pane, {
+    noun: 'kind',
+    rows: kindRows(kinds, builtIn, project, broken),
+    cols: KIND_COLS,
+    naming: kindView.naming,
+    open: openRow,
+    startNew,
+    back: () => ((kindView.list = false), (kindView.naming = null), $.ui.invalidate('ui.render')),
+    newBox: newKindBox(),
+    keys: kindsKeys(),
+  })
 }
 
 /** The Settings view: the settings under their category headings (SETTING_GROUPS), one row each; Enter changes it.
@@ -524,7 +538,7 @@ export async function settingsPage($: $, pane: PaneParts) {
   if (openedBroken) return brokenRolePage($, pane, openedBroken, builtIn)
   const opened = roleView.open ? roles.find(r => r.name === roleView.open) : undefined
   if (roleView.open && !opened) resetRoleOpen()
-  if (opened && roleView.draft) return roleEditPage($, pane, defSource(opened.name, builtIn, project))
+  if (opened && roleView.draft) return roleEditPage($, pane, opened, defSource(opened.name, builtIn, project))
   if (opened && roleView.prompt) return rolePromptPage($, pane, opened, roleView.prompt)
   if (opened) return rolePage($, pane, opened, defSource(opened.name, builtIn, project)!, { names: roles.map(r => r.name), changes: changesOfRole(opened.name, builtIn, project), at: await roleFileDay(claudeHost($), opened.name), checker: checkerOn(v) })
   if (roleView.list) return rolesPage($, pane, roles, builtIn, project, broken)

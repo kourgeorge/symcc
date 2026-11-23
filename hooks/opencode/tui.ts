@@ -637,6 +637,8 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     const e = edit()
     const place = e ? settingsPlace(file(), e.page) : null
     if (!e || !place?.def) return
+    // T-918: the Writes pick has two choices, so Enter (or a click) switches it: code ↔ prose only (sent as code: true or false)
+    if (field === 'code') return void setEdit({ ...e, values: { ...e.values, code: e.values.code === 'false' ? 'true' : 'false' } })
     const box = DEF_EDIT_BOXES[field]
     const now = (e.values[field] ?? '').split('\n').find(l => l.trim())?.trim() ?? ''
     const value = await ctx.ui.dialog.prompt({ title: `${place.def.name}: ${box.label}${now ? ` (now: ${now})` : ''}`, description: box.placeholder(place.list === 'roles' ? 'role' : 'kind'), placeholder: box.placeholder(place.list === 'roles' ? 'role' : 'kind') })

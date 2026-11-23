@@ -1515,13 +1515,20 @@ test('T-562: the Settings tab opens the Roles and Kinds pages from view.json; a 
   // the Roles page: a row per role, the broken one with why
   const list = panelLines(f, { tab: 'settings', opened: 'roles', cursor: 2 }, NOW, 140)
   const l = list.lines.map(lineText)
-  expect(l).toContain('Roles')
+  // T-918: the heading with its count, the column heads, one line per role (the cursor's marked ❯), + New role (n)
+  expect(l).toContain('▍Roles  4 roles · 1 changed by you · 1 off')
+  expect(l).toContain("  NAME     FROM      MODEL  WEB  WRITES  WHAT IT'S FOR")
   expect(list.ids).toEqual(['role:general', 'role:checker', 'role:tester', 'role:oops'])
   expect(list.selected).toBe('role:tester')
-  // T-871: a replaced role says what it changed
-  expect(l.find(x => x.includes('tester'))).toMatch(/^› tester  replaced, off · description, model, skills, checklist · My tester/)
-  expect(l.find(x => x.includes('general'))).toContain('built-in · Any task')
-  expect(l.find(x => x.includes('oops'))).toContain("— your file can't be read: no description")
+  expect(l).toContain('❯ tester   off       opus   —    code    My tester')
+  expect(l).toContain('  general  built-in  —      —    code    Any task')
+  expect(l).toContain("  oops     — your file can't be read: no description")
+  expect(l).toContain('  + New role (n)')
+  expect(list.hits[l.indexOf('  + New role (n)')]).toEqual({ key: 'n' })
+  // no "Enter opens" line and no Back button: the key line says them
+  expect(l.some(x => x.includes('Enter opens') || x.includes('[ Back (b) ]'))).toBe(false)
+  // the off line is dim
+  expect(list.lines[l.findIndex(x => x.includes('tester'))]!.slice(1).every(x => x.color === 'inactive')).toBe(true)
   expect(list.hits[l.findIndex(x => x.includes('tester'))]).toEqual({ page: 'role:tester' })
   expect(panelKeys(f, 'roles', 'settings').map(k => k.word)).toEqual(['open', 'new role', 'move', 'views', 'back'])
   // a role's page: its model, skills, checklist and file; o turns it on (it is off), r resets it
@@ -1597,7 +1604,7 @@ test('T-562: startTui: Settings opens Roles, a role\'s page turns it on and rese
   clickRow('▸ Workers')
   clickRow('4 roles')
   expect(board.state().opened).toBe('roles')
-  expect(lines().some(l => l.includes('tester') && l.includes('replaced, off'))).toBe(true)
+  expect(lines().some(l => l.includes('tester') && l.includes('off'))).toBe(true)
   await board.press('down', 'ses_1')
   await board.press('down', 'ses_1')
   await board.press('open', 'ses_1')
@@ -2645,7 +2652,9 @@ test('T-685: every board screen has Claude Code\'s buttons: the tab row, the lis
 
   // Back (b) on each list page, as Claude Code's
   const back = (c: Partial<PanelChoice>) => draw(c).lines.flat().filter(s => s.text === '[ Back (b) ]').map(s => s.hit)
-  for (const c of [{ tab: 'scouts' }, { tab: 'settings' }, { tab: 'settings', opened: 'roles' }, { tab: 'settings', opened: 'kinds' }] as const) expect([c, back(c)]).toEqual([c, [{ key: 'back' }]])
+  for (const c of [{ tab: 'scouts' }, { tab: 'settings' }] as const) expect([c, back(c)]).toEqual([c, [{ key: 'back' }]])
+  // T-918: the Roles and Kinds tables have no Back button (their key line says b back)
+  for (const c of [{ tab: 'settings', opened: 'roles' }, { tab: 'settings', opened: 'kinds' }] as const) expect([c, back(c)]).toEqual([c, []])
   // T-790: the org-mem page has the shared detail header: "‹ [Live]" and the count, the title, the subtitle, "[Delete]" (no key in it),
   // a thin rule, kept at the top; then ▍About and ▍Notes; the old Back (b) button is gone
   const om = texts({ tab: 'live', opened: 'orgmem' })
@@ -2795,7 +2804,12 @@ test('T-685: in the TUI a click on each of those buttons does exactly what its k
   // Back (b) on the list pages: Scouts and Settings go to the task list, Roles and Kinds to Settings, org-mem to the Live tab
   expect((await same(async () => (await toList(), await board.press('s', 's')), '[ Back (b) ]', 'back')).state.tab).toBe('tasks')
   expect((await same(() => toSettings(), '[ Back (b) ]', 'back')).state.tab).toBe('tasks')
-  for (const row of ['4 roles', '2 kinds']) expect((await same(() => toSettings(row), '[ Back (b) ]', 'back')).state).toEqual({ ...board.state(), tab: 'settings', opened: '' })
+  // T-918: the Roles and Kinds tables have no Back button; b goes back to Settings
+  for (const row of ['4 roles', '2 kinds']) {
+    await toSettings(row)
+    await board.press('back', 's')
+    expect(board.state()).toEqual({ ...board.state(), tab: 'settings', opened: '' })
+  }
   // T-866: org-mem's "[all]" (no key: m is gone) opens all notes
   const toOrgMem = async () => (await board.press('t', 's'), await board.press('l', 's'), await click('[all]'))
   await toOrgMem()
@@ -3386,15 +3400,15 @@ test('T-706: a role\'s and a kind\'s page draw Claude Code\'s Edit and Remove (i
   expect(lineText(buttons('kind:chore'))).toBe('[ Back ] [ Edit ] [ Turn off ] [ Remove ]')
   expect(panelKeys(f, 'kind:chore', 'settings')).toEqual(roleKeys({ canEdit: true, canOff: true, off: false, canReset: false, canRemove: true }))
   expect(panelKeys(f, 'kind:change', 'settings')).toEqual(roleKeys({ canEdit: true, canOff: false, off: false, canReset: false, canRemove: false }))
-  // the Roles and Kinds lists: the rows, then "+ New role" (n), Claude Code's hint, Back (b); its footer keys
-  for (const [list, label, keys] of [['roles', '[ + New role ]', rolesKeys()], ['kinds', '[ + New kind ]', kindsKeys()]] as const) {
+  // the Roles and Kinds lists (T-918): the table, then one plain "+ New role (n)" line (n); no hint line and no Back
+  // button (the footer keys say them)
+  for (const [list, label, keys] of [['roles', '  + New role (n)', rolesKeys()], ['kinds', '  + New kind (n)', kindsKeys()]] as const) {
     const d = texts({ tab: 'settings', opened: list })
     const t = d.lines.map(lineText)
     const at = t.indexOf(label)
     expect([list, at > 0]).toEqual([list, true])
-    expect(t[at + 1]).toBe(`Enter opens a ${list === 'roles' ? 'role' : 'kind'} · n makes a new one · or tell the lead`)
-    expect(t.indexOf('[ Back (b) ]') > at).toBe(true)
-    expect(d.lines.flat().find(s => s.text === label)?.hit).toEqual({ key: 'n' })
+    expect(t.slice(at + 1).some(x => x.includes('Enter opens') || x.includes('Back (b)'))).toBe(false)
+    expect(d.hits[at]).toEqual({ key: 'n' })
     expect(panelKeys(f, list, 'settings')).toEqual(keys)
   }
   // the Scouts tab: "+ New scout" (n) above the scouts; with none, the how-to (all of it) and then the button
@@ -3412,15 +3426,16 @@ test('T-706: Edit opens Claude Code\'s edit page: "<name> editing", where Save w
   const tester = f.view.roles!.find(r => r.name === 'tester')!
   const general = f.view.roles!.find(r => r.name === 'general')!
   const edit = defDraftOf('roles', tester)
-  expect(edit).toEqual({ page: 'role:tester', values: { description: 'My tester', model: 'opus', skills: 'tdd', tools: '', checklist: 'Test it well.\nRun them twice.' } })
+  expect(edit).toEqual({ page: 'role:tester', values: { description: 'My tester', model: 'opus', skills: 'tdd', tools: '', code: 'true', checklist: 'Test it well.\nRun them twice.' } })
   const d = panelLines(f, { tab: 'settings', opened: 'role:tester', cursor: EDIT_FIRST_BOX + 1, edit }, NOW, 140)
   const t = d.lines.map(lineText)
   expect(t.slice(0, 4)).toEqual(['tester editing', 'save writes .symcc/roles/tester.md', "the name is the file's name: to rename the role, rename .symcc/roles/tester.md", '[ Save ] [ Cancel (x) ]'])
   expect(d.lines.flat().filter(s => s.text.startsWith('[ ')).map(s => s.hit)).toEqual([{ save: true }, { key: 'x' }])
   // the cursor goes over Save, Cancel and the boxes (as Claude Code's ↑↓): Description, Model, Skills, Tools,
-  // Checklist; it is on Model here; an empty box shows its placeholder
-  expect(d.ids).toEqual(['edit:save', 'edit:cancel', 'box:description', 'box:model', 'box:skills', 'box:tools', 'box:checklist'])
-  expect(t.filter(l => /^[› ] (Description|Model|Skills|Tools|Checklist)$/.test(l))).toEqual(['  Description', '› Model', '  Skills', '  Tools', '  Checklist'])
+  // Writes (T-918: code or prose only), Checklist; it is on Model here; an empty box shows its placeholder
+  expect(d.ids).toEqual(['edit:save', 'edit:cancel', 'box:description', 'box:model', 'box:skills', 'box:tools', 'box:code', 'box:checklist'])
+  expect(t.filter(l => /^[› ] (Description|Model|Skills|Tools|Writes|Checklist)$/.test(l))).toEqual(['  Description', '› Model', '  Skills', '  Tools', '  Writes', '  Checklist'])
+  expect(t[t.indexOf('  Writes') + 1]).toBe('    code')
   expect(t).toContain('    opus')
   expect(t).toContain('    extra tools: web, to search and read the web (empty: none)')
   expect(t).toContain('    Run them twice.')
@@ -3602,7 +3617,8 @@ test('T-706: startTui: + New role / + New kind (n, or a click) ask the name and 
   const t = await tuiOn(f)
   await t.toSettings('5 roles')
   t.answers.prompt.push('writer')
-  await t.click('[ + New role ]')
+  t.clickRow('+ New role (n)')
+  await new Promise<void>(res => setTimeout(res, 0))
   expect(t.sent).toEqual([{ sessionID: 's', name: 'symcc-settings', text: 'role writer add' }])
   expect(t.asked).toEqual(["New role's name"])
   // the engine wrote the new role: the next read opens it in the edit page
@@ -4282,4 +4298,51 @@ test('T-903: with no task running, the OpenCode Live tab says why (paused, waiti
     // T-910: the Live tab has no m key, so no bare "m" hint
     expect(texts.slice(at + 2, at + 2 + want.length).some(t => /(^|\s)m(\s|$)/.test(t))).toBe(false)
   }
+})
+
+test('T-918: the Roles table drops MODEL, then WEB, then WRITES when narrow, then cuts the description; the name never cuts', () => {
+  const f = defsViewFile()
+  const web = { name: 'researcher', description: 'finds things out and hands back an answer', skills: [], tools: ['web'], prompt: '' }
+  const prose = { name: 'writer', description: 'plain-English writing; never code', skills: [], tools: ['web'], code: false as const, prompt: '' }
+  const g: ViewFile = { ...f, view: { ...f.view, roles: [...f.view.roles!, ...viewDefs('role', [web, prose], [web, prose], [], [], '.symcc/roles')] } }
+  const at = (w: number) => panelLines(g, { tab: 'settings', opened: 'roles', cursor: 0 }, NOW, w).lines.map(lineText)
+  const row = (w: number, name: string) => at(w).find(l => l.slice(2).startsWith(`${name} `) || l.slice(2) === name)
+  expect(at(140)).toContain("  NAME        FROM      MODEL  WEB  WRITES  WHAT IT'S FOR")
+  expect(row(140, 'researcher')).toBe('  researcher  built-in  —      web  —       finds things out and hands back an answer')
+  expect(row(140, 'writer')).toBe('  writer      built-in  —      web  prose   plain-English writing; never code')
+  expect(row(60, 'writer')).toBe('  writer      built-in  —      web  prose   plain-English w…')
+  expect(row(56, 'writer')).toBe('  writer      built-in  web  prose   plain-English writ…')
+  expect(row(48, 'writer')).toBe('  writer      built-in  prose   plain-English w…')
+  expect(row(40, 'writer')).toBe('  writer      built-in  plain-English w…')
+  expect(row(24, 'researcher')).toBe('  researcher  built-in')
+  // the Kinds table: NAME, FROM, WHAT IT'S FOR
+  const kinds = panelLines(g, { tab: 'settings', opened: 'kinds', cursor: 1 }, NOW, 140).lines.map(lineText)
+  expect(kinds).toContain('▍Kinds  2 kinds · 1 changed by you')
+  expect(kinds).toContain("  NAME    FROM      WHAT IT'S FOR")
+  expect(kinds).toContain('❯ bug     changed   A bug to fix')
+  // every role's page says what it writes
+  const writes = (name: string) => panelLines(g, { tab: 'settings', opened: `role:${name}`, cursor: 0 }, NOW, 140).lines.map(lineText).find(l => l.startsWith('Writes: '))
+  expect(writes('general')).toBe('Writes: code (tests run before merging)')
+  expect(writes('writer')).toBe('Writes: prose only (code: false; only docs checks run)')
+  expect(writes('researcher')).toBe('Writes: nothing (answers questions; nothing is merged)')
+  // the edit page's Writes pick shows its words
+  const edit = defDraftOf('roles', g.view.roles!.find(r => r.name === 'writer')!)
+  expect(edit.values.code).toBe('false')
+  const e = panelLines(g, { tab: 'settings', opened: 'role:writer', cursor: EDIT_FIRST_BOX, edit }, NOW, 140).lines.map(lineText)
+  expect(e[e.indexOf('  Writes') + 1]).toBe('    prose only')
+})
+
+test('T-918: startTui: Enter on the edit page\'s Writes switches code and prose only; Save sends code with the role\'s save', async () => {
+  const t = await tuiOn(addedViewFile())
+  await t.toSettings('5 roles', '  docs ')
+  expect(t.board.state().opened).toBe('role:docs')
+  await t.board.press('e', 's')
+  // a click on its value (its label's words are also in the description, "Writes docs")
+  t.clickRow('    code')
+  await new Promise<void>(res => setTimeout(res, 0))
+  const at = t.lines().findIndex(l => /^. Writes$/.test(l))
+  expect([t.lines()[at], t.lines()[at + 1]]).toEqual(['› Writes', '    prose only'])
+  await t.click('[ Save ]')
+  expect(t.sent).toEqual([{ sessionID: 's', name: 'symcc-settings', text: 'role docs save {"code":"false"}' }])
+  t.board.stop()
 })

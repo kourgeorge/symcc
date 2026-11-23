@@ -46,12 +46,17 @@ export function focusStops(node: unknown): string[] {
  *  a focus on a tab, on any other button, or not known yet is not a heading, so the page keeps its normal hint. */
 export const headingFocused = (focused: string | undefined) => focused?.startsWith('group:') ?? false
 
+/** A line of the Roles or Kinds table (T-918), whose ❯ follows the focus. */
+const tableRow = (key: string | undefined) => !!key && /^(roleRow|kindRow):/.test(key)
+
 /** Notes that the focus moved to `to`; on the Settings page (its rows include group headings) a move between a
  *  heading and any other element redraws the page, so its key line follows the focus. */
 function focusMoved($: $, to: string | undefined) {
   const from = arrows.focused
   arrows.focused = to
   if (arrows.stops.some(k => k.startsWith('group:')) && headingFocused(from) !== headingFocused(to)) $.ui.invalidate('ui.render')
+  // T-918: the Roles and Kinds tables mark the focused line with ❯, so a move between their lines redraws
+  else if (from !== to && (tableRow(from) || tableRow(to))) $.ui.invalidate('ui.render')
 }
 
 /** `ui.focus` on the board panel: remembers which element holds the focus once it moved. */

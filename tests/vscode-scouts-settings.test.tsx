@@ -367,7 +367,7 @@ for (const bodyColumns of [40, 80]) {
   const mount = ($: Engine) => $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'vscode' })
 
   test(`T-460 Settings, Roles and one role in VS Code at width ${bodyColumns}: links to go somewhere, badges, no crowded Button rows`, async ($, on) => {
-    seedRolesKinds(on)
+    const { mine } = seedRolesKinds(on)
     const ui = await mount($)
     tidy(await ui.drawn(), at('settings'))
     // Roles is a link that opens its page
@@ -379,17 +379,20 @@ for (const bodyColumns of [40, 80]) {
       const link = await ui.find({ key: `roleRow:${name}` })
       expect([link?.type, link?.props.pressableLinks], name).toEqual(['Markdown', [vsHref('role', name)]])
     }
-    // the badges sit beside the name, in the row's top line
-    const badges = async (key: string) => elements(await ui.find({ key })).filter(n => n.type === 'Text' && n.props?.backgroundColor).map(n => texts(n).join('').trim())
-    expect(await badges('vs-role-general-top')).toEqual(['built-in'])
-    // T-871: a replaced role's badge says what it changed
-    expect(await badges('vs-role-tester-top')).toEqual(['replaced · description, skills, checklist'])
-    expect(await badges('vs-role-docs-top')).toEqual(['replaced', 'off'])
-    expect(await badges('vs-role-mobile-apps-and-tablets-everywhere-top')).toEqual(['added'])
-    expect(await badges('vs-role-bad-top')).toEqual(["can't be read"])
-    // the description dim and wrapped
+    // T-918: the heading with its count, then a table: the column heads, one line per role, its cells in columns
+    expect((await ui.find({ type: 'Text', text: /^Roles {2}/ }))?.text).toBe('Roles  6 roles · 3 changed by you · 1 off')
+    const cells = async (key: string) => (await ui.find({ key }))?.children?.map(c => texts(c).join('').replace(/\*\*|\[|\]\([^)]*\)/g, ''))
+    // wide: every column; at width 40 MODEL goes (the long name leaves less room)
+    const wide = bodyColumns === 80
+    expect(await cells('vs-roles-cols')).toEqual(wide ? ['NAME', 'FROM', 'MODEL', 'WEB', 'WRITES', "WHAT IT'S FOR"] : ['NAME', 'FROM', 'WEB', 'WRITES', "WHAT IT'S FOR"])
+    expect(await cells('vs-role-general')).toEqual(wide ? ['general', 'built-in', '—', '—', 'code', 'a plain worker for any task; use it when no other role fits'] : ['general', 'built-in', '—', 'code', 'a plain worker for any task; use it when no other role fits'])
+    expect((await cells('vs-role-tester'))?.slice(0, 3)).toEqual(['tester', 'changed', wide ? 'sonnet' : '—'])
+    expect((await cells('vs-role-docs'))?.slice(0, 2)).toEqual(['docs', 'off'])
+    expect((await cells('vs-role-mobile-apps-and-tablets-everywhere'))?.slice(0, 2)).toEqual(['mobile-apps-and-tablets-everywhere', 'added by you'])
+    expect(await cells('vs-role-bad')).toEqual(['bad', "— your file can't be read: no front matter (it starts with a --- line, then description: ..., then ---)"])
+    // the description is never cut here: it wraps under itself
     const about = elements(await ui.find({ key: 'vs-role-mobile-apps-and-tablets-everywhere' })).find(n => n.type === 'Text' && texts(n).join('').startsWith('builds and fixes'))
-    expect([about?.props?.wrap, about?.props?.color]).toEqual(['wrap', 'inactive'])
+    expect([about?.props?.wrap, about?.props?.color]).toEqual(['wrap', 'text'])
     // New role: a box for the name with a Cancel link
     await ui.press({ key: 'role-new' })
     tidy(await ui.drawn(), at('new role'))
@@ -416,6 +419,8 @@ for (const bodyColumns of [40, 80]) {
     const actions = async () => elements(await ui.find({ key: 'vs-actions' })).filter(n => n.type === 'Button').map(n => n.props?.label)
     await follow(ui, 'roleRow:mobile-apps-and-tablets-everywhere', vsHref('role', 'mobile-apps-and-tablets-everywhere'))
     expect(await actions()).toEqual(['Edit', 'Prompt', 'Remove', 'Turn off'])
+    // T-918: the page says what the role writes
+    expect(await ui.find({ type: 'Text', text: 'Writes: code (tests run before merging)' })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: 'added: no built-in to compare' })).toBeDefined()
     // Remove asks first: one "Yes, remove" Button and a Cancel link
     await ui.press({ key: 'role-remove' })
@@ -431,6 +436,14 @@ for (const bodyColumns of [40, 80]) {
     tidy(await ui.drawn(), at('role edit'))
     expect((await ui.find({ key: 'role-save' }))?.type).toBe('Button')
     expect((await ui.find({ key: 'role-description' }))?.props.label).toBe('Description')
+    // T-918: the Writes pick (two links): prose only, then Save, writes code: false, and the page says so
+    expect((await ui.find({ key: 'role-code' }))?.props.text).toContain('● code')
+    await follow(ui, 'role-code', act('role-code', 'prose'))
+    expect((await ui.find({ key: 'role-code' }))?.props.text).toContain('● prose only')
+    await ui.press({ key: 'role-save' })
+    expect(mine['mobile-apps-and-tablets-everywhere.md']).toContain('code: false')
+    expect(await ui.find({ type: 'Text', text: 'Writes: prose only (code: false; only docs checks run)' })).toBeDefined()
+    await ui.press({ key: 'role-edit' })
     await follow(ui, 'role-edit-cancel', act('role-edit-cancel', 'cancel'))
     expect(await ui.find({ key: 'role-save' })).toBeUndefined()
     // a built-in role has no Remove; a replaced one has Reset to built-in
@@ -464,6 +477,11 @@ for (const bodyColumns of [40, 80]) {
     tidy(list, at('kinds'))
     expect(elements(list).filter(n => n.type === 'Button').map(n => n.props?.key), at('kinds')).toEqual(['kind-new'])
     for (const name of ROLE_KIND_PAGES.kinds) expect((await ui.find({ key: `kindRow:${name}` }))?.props.pressableLinks, name).toEqual([vsHref('kind', name)])
+    // T-918: the same table as the Roles page: NAME, FROM, WHAT IT'S FOR
+    const cells = async (key: string) => (await ui.find({ key }))?.children?.map(c => texts(c).join('').replace(/\*\*|\[|\]\([^)]*\)/g, ''))
+    expect(await cells('vs-kinds-cols')).toEqual(['NAME', 'FROM', "WHAT IT'S FOR"])
+    expect(await cells('vs-kind-bug')).toEqual(['bug', 'off', 'something that works wrongly'])
+    expect((await cells('vs-kind-chore-and-upkeep-of-the-build'))?.slice(0, 2)).toEqual(['chore-and-upkeep-of-the-build', 'added by you'])
     for (const name of ROLE_KIND_PAGES.kinds) {
       await follow(ui, `kindRow:${name}`, vsHref('kind', name))
       tidy(await ui.drawn(), at(`kind ${name}`))

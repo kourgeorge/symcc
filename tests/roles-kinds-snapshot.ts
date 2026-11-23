@@ -100,15 +100,23 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
         ]
       },
       {"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]},
-      {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Roles"]},
+      {
+        "type": "Text",
+        "props": {"wrap":"truncate"},
+        "children": [
+          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍Roles"]},
+          {"type":"Text","props":{"color":"inactive"},"children":["  6 roles · 3 changed by you · 1 off"]}
+        ]
+      },
+      {"type":"Text","props":{"wrap":"truncate","color":"inactive"},"children":["  NAME                                FROM"]},
       {
         "type": "Button",
         "props": {"key":"roleRow:general","label":"general: built-in","plain":true,"autoFocus":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["  general                           "]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" built-in"]},
-          {"type":"Text","props":{"color":"text"},"children":[" · a plain worker for any task; use it when no other role fits"]}
+          {"type":"Text","props":{"bold":true,"color":"ide"},"children":["❯ "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["general                             "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["built-in"]}
         ]
       },
       {
@@ -116,47 +124,39 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
         "props": {"key":"roleRow:checker","label":"checker: built-in","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["  checker                           "]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" built-in"]},
-          {
-            "type": "Text",
-            "props": {"color":"text"},
-            "children": [" · checks a finished change before it merges and tries to break it (used only by the checker setting, never for a task)"]
-          }
+          {"type":"Text","props":{"bold":true,"color":"ide"},"children":["  "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["checker                             "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["built-in"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"roleRow:docs","label":"docs: replaced, off","plain":true},
+        "props": {"key":"roleRow:docs","label":"docs: off","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":false,"color":"inactive"},"children":["  docs                              "]},
-          {"type":"Text","props":{"color":"warning"},"children":[" replaced, off"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · writes the docs"]}
+          {"type":"Text","props":{"bold":true,"color":"ide"},"children":["  "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["docs                                "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["off"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"roleRow:mobile-apps-and-tablets-everywhere","label":"mobile-apps-and-tablets-everywhere: added","plain":true},
+        "props": {"key":"roleRow:mobile-apps-and-tablets-everywhere","label":"mobile-apps-and-tablets-everywhere: added by you","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["  mobile-apps-and-tablets-everywhere"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" added"]},
-          {
-            "type": "Text",
-            "props": {"color":"text"},
-            "children": [" · builds and fixes phone and tablet apps, on every platform, with the shop listings and screenshots too"]
-          }
+          {"type":"Text","props":{"bold":true,"color":"ide"},"children":["  "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["mobile-apps-and-tablets-everywhere  "]},
+          {"type":"Text","props":{"color":"success"},"children":["added by you"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"roleRow:tester","label":"tester: replaced · description, skills, checklist","plain":true},
+        "props": {"key":"roleRow:tester","label":"tester: changed","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["  tester                            "]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" replaced · description, skills, checklist"]},
-          {"type":"Text","props":{"color":"text"},"children":[" · writes tests that try hard to break the change, with every edge case found"]}
+          {"type":"Text","props":{"bold":true,"color":"ide"},"children":["  "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["tester                              "]},
+          {"type":"Text","props":{"color":"suggestion"},"children":["changed"]}
         ]
       },
       {
@@ -164,23 +164,26 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
         "props": {"key":"roleRow:bad","label":"bad — your file can't be read: no front matter (it starts with a --- line, then description: ..., then ---)","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"inactive"},"children":["  bad                               "]},
-          {
-            "type": "Text",
-            "props": {"color":"error"},
-            "children": [" — your file can't be read: no front matter (it starts with a --- line, then description: ..., then ---)"]
-          }
+          {"type":"Text","props":{"bold":true,"color":"ide"},"children":["  "]},
+          {"type":"Text","props":{"bold":true,"color":"inactive"},"children":["bad                                 "]},
+          {"type":"Text","props":{"color":"error"},"children":["— your file…"]}
         ]
       },
+      {"type":"Text","children":[" "]},
       {
         "type": "Button",
-        "props": {"key":"role-new","label":"+ New role","hotkey":"n"},
+        "props": {"key":"role-new","label":"+ New role (n)","plain":true},
         "press": {"plugin":"symcc"},
-        "children": [{"type":"Text","props":{"color":"text"},"children":["  + New role"]}]
+        "children": [{"type":"Text","props":{"color":"text"},"children":["  + New role (n)"]}]
       },
-      {"type":"Text","props":{"color":"inactive"},"children":["Enter opens a role · n makes a new one · or tell the lead"]},
-      {"type":"Text","children":[" "]},
-      {"type":"Button","props":{"key":"roles-back","label":"Back (b)","hotkey":"b"},"press":{"plugin":"symcc"}},
+      {
+        "type": "Box",
+        "props": {"key":"roles-hidden-keys","display":"none"},
+        "children": [
+          {"type":"Button","props":{"key":"role-new-key","label":"n","hotkey":"n"},"press":{"plugin":"symcc"}},
+          {"type":"Button","props":{"key":"roles-back","label":"Back","hotkey":"b"},"press":{"plugin":"symcc"}}
+        ]
+      },
       {
         "type": "Box",
         "props": {"key":"roles-keys-footer","flexDirection":"column"},
@@ -327,15 +330,23 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
         ]
       },
       {"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]},
-      {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Roles"]},
+      {
+        "type": "Text",
+        "props": {"wrap":"truncate"},
+        "children": [
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍Roles"]},
+          {"type":"Text","props":{"color":"inactive"},"children":["  6 roles · 3 changed by you · 1 off"]}
+        ]
+      },
+      {"type":"Text","props":{"wrap":"truncate","color":"inactive"},"children":["  NAME                                FROM"]},
       {
         "type": "Button",
         "props": {"key":"roleRow:general","label":"general: built-in","plain":true,"autoFocus":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["  general                           "]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" built-in"]},
-          {"type":"Text","props":{"color":"text"},"children":[" · a plain worker for any task; use it when no other role fits"]}
+          {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["❯ "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["general                             "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["built-in"]}
         ]
       },
       {
@@ -343,47 +354,39 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
         "props": {"key":"roleRow:checker","label":"checker: built-in","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["  checker                           "]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" built-in"]},
-          {
-            "type": "Text",
-            "props": {"color":"text"},
-            "children": [" · checks a finished change before it merges and tries to break it (used only by the checker setting, never for a task)"]
-          }
+          {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["  "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["checker                             "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["built-in"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"roleRow:docs","label":"docs: replaced, off","plain":true},
+        "props": {"key":"roleRow:docs","label":"docs: off","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":false,"color":"inactive"},"children":["  docs                              "]},
-          {"type":"Text","props":{"color":"warning"},"children":[" replaced, off"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · writes the docs"]}
+          {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["  "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["docs                                "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["off"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"roleRow:mobile-apps-and-tablets-everywhere","label":"mobile-apps-and-tablets-everywhere: added","plain":true},
+        "props": {"key":"roleRow:mobile-apps-and-tablets-everywhere","label":"mobile-apps-and-tablets-everywhere: added by you","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["  mobile-apps-and-tablets-everywhere"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" added"]},
-          {
-            "type": "Text",
-            "props": {"color":"text"},
-            "children": [" · builds and fixes phone and tablet apps, on every platform, with the shop listings and screenshots too"]
-          }
+          {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["  "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["mobile-apps-and-tablets-everywhere  "]},
+          {"type":"Text","props":{"color":"success"},"children":["added by you"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"roleRow:tester","label":"tester: replaced · description, skills, checklist","plain":true},
+        "props": {"key":"roleRow:tester","label":"tester: changed","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["  tester                            "]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" replaced · description, skills, checklist"]},
-          {"type":"Text","props":{"color":"text"},"children":[" · writes tests that try hard to break the change, with every edge case found"]}
+          {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["  "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["tester                              "]},
+          {"type":"Text","props":{"color":"suggestion"},"children":["changed"]}
         ]
       },
       {
@@ -391,23 +394,26 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
         "props": {"key":"roleRow:bad","label":"bad — your file can't be read: no front matter (it starts with a --- line, then description: ..., then ---)","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"inactive","weight":"semibold"},"children":["  bad                               "]},
-          {
-            "type": "Text",
-            "props": {"color":"error"},
-            "children": [" — your file can't be read: no front matter (it starts with a --- line, then description: ..., then ---)"]
-          }
+          {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["  "]},
+          {"type":"Text","props":{"bold":true,"color":"inactive","weight":"semibold"},"children":["bad                                 "]},
+          {"type":"Text","props":{"color":"error"},"children":["— your file…"]}
         ]
       },
+      {"type":"Text","children":[" "]},
       {
         "type": "Button",
-        "props": {"key":"role-new","label":"+ New role","hotkey":"n"},
+        "props": {"key":"role-new","label":"+ New role (n)","plain":true},
         "press": {"plugin":"symcc"},
-        "children": [{"type":"Text","props":{"color":"text"},"children":["  + New role"]}]
+        "children": [{"type":"Text","props":{"color":"text"},"children":["  + New role (n)"]}]
       },
-      {"type":"Text","props":{"color":"inactive"},"children":["Enter opens a role · n makes a new one · or tell the lead"]},
-      {"type":"Text","children":[" "]},
-      {"type":"Button","props":{"key":"roles-back","label":"Back (b)","hotkey":"b"},"press":{"plugin":"symcc"}},
+      {
+        "type": "Box",
+        "props": {"key":"roles-hidden-keys","display":"none"},
+        "children": [
+          {"type":"Button","props":{"key":"role-new-key","label":"n","hotkey":"n"},"press":{"plugin":"symcc"}},
+          {"type":"Button","props":{"key":"roles-back","label":"Back","hotkey":"b"},"press":{"plugin":"symcc"}}
+        ]
+      },
       {
         "type": "Box",
         "props": {"key":"roles-keys-footer","flexDirection":"column"},
@@ -566,15 +572,23 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
         ]
       },
       {"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]},
-      {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Roles"]},
+      {
+        "type": "Text",
+        "props": {"wrap":"truncate"},
+        "children": [
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍Roles"]},
+          {"type":"Text","props":{"color":"inactive"},"children":["  6 roles · 3 changed by you · 1 off"]}
+        ]
+      },
+      {"type":"Text","props":{"wrap":"truncate","color":"inactive"},"children":["  NAME                                FROM"]},
       {
         "type": "Button",
         "props": {"key":"roleRow:general","label":"general: built-in","plain":true,"autoFocus":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["  general                           "]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" built-in"]},
-          {"type":"Text","props":{"color":"text"},"children":[" · a plain worker for any task; use it when no other role fits"]}
+          {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["❯ "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["general                             "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["built-in"]}
         ]
       },
       {
@@ -582,47 +596,39 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
         "props": {"key":"roleRow:checker","label":"checker: built-in","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["  checker                           "]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" built-in"]},
-          {
-            "type": "Text",
-            "props": {"color":"text"},
-            "children": [" · checks a finished change before it merges and tries to break it (used only by the checker setting, never for a task)"]
-          }
+          {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["  "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["checker                             "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["built-in"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"roleRow:docs","label":"docs: replaced, off","plain":true},
+        "props": {"key":"roleRow:docs","label":"docs: off","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":false,"color":"inactive"},"children":["  docs                              "]},
-          {"type":"Text","props":{"color":"warning"},"children":[" replaced, off"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · writes the docs"]}
+          {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["  "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["docs                                "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["off"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"roleRow:mobile-apps-and-tablets-everywhere","label":"mobile-apps-and-tablets-everywhere: added","plain":true},
+        "props": {"key":"roleRow:mobile-apps-and-tablets-everywhere","label":"mobile-apps-and-tablets-everywhere: added by you","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["  mobile-apps-and-tablets-everywhere"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" added"]},
-          {
-            "type": "Text",
-            "props": {"color":"text"},
-            "children": [" · builds and fixes phone and tablet apps, on every platform, with the shop listings and screenshots too"]
-          }
+          {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["  "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["mobile-apps-and-tablets-everywhere  "]},
+          {"type":"Text","props":{"color":"success"},"children":["added by you"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"roleRow:tester","label":"tester: replaced · description, skills, checklist","plain":true},
+        "props": {"key":"roleRow:tester","label":"tester: changed","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["  tester                            "]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" replaced · description, skills, checklist"]},
-          {"type":"Text","props":{"color":"text"},"children":[" · writes tests that try hard to break the change, with every edge case found"]}
+          {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["  "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["tester                              "]},
+          {"type":"Text","props":{"color":"suggestion"},"children":["changed"]}
         ]
       },
       {
@@ -630,23 +636,26 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
         "props": {"key":"roleRow:bad","label":"bad — your file can't be read: no front matter (it starts with a --- line, then description: ..., then ---)","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"inactive","weight":"semibold"},"children":["  bad                               "]},
-          {
-            "type": "Text",
-            "props": {"color":"error"},
-            "children": [" — your file can't be read: no front matter (it starts with a --- line, then description: ..., then ---)"]
-          }
+          {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["  "]},
+          {"type":"Text","props":{"bold":true,"color":"inactive","weight":"semibold"},"children":["bad                                 "]},
+          {"type":"Text","props":{"color":"error"},"children":["— your file…"]}
         ]
       },
+      {"type":"Text","children":[" "]},
       {
         "type": "Button",
-        "props": {"key":"role-new","label":"+ New role","hotkey":"n"},
+        "props": {"key":"role-new","label":"+ New role (n)","plain":true},
         "press": {"plugin":"symcc"},
-        "children": [{"type":"Text","props":{"color":"text"},"children":["  + New role"]}]
+        "children": [{"type":"Text","props":{"color":"text"},"children":["  + New role (n)"]}]
       },
-      {"type":"Text","props":{"color":"inactive"},"children":["Enter opens a role · n makes a new one · or tell the lead"]},
-      {"type":"Text","children":[" "]},
-      {"type":"Button","props":{"key":"roles-back","label":"Back (b)","hotkey":"b"},"press":{"plugin":"symcc"}},
+      {
+        "type": "Box",
+        "props": {"key":"roles-hidden-keys","display":"none"},
+        "children": [
+          {"type":"Button","props":{"key":"role-new-key","label":"n","hotkey":"n"},"press":{"plugin":"symcc"}},
+          {"type":"Button","props":{"key":"roles-back","label":"Back","hotkey":"b"},"press":{"plugin":"symcc"}}
+        ]
+      },
       {
         "type": "Box",
         "props": {"key":"roles-keys-footer","flexDirection":"column"},
@@ -807,6 +816,11 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
             "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["──────────────────────────────────────────────────"]}]
           }
         ]
+      },
+      {
+        "type": "Box",
+        "props": {"flexDirection":"column"},
+        "children": [{"type":"Text","props":{"color":"text"},"children":["Writes: code (tests run before merging)"]}]
       },
       {
         "type": "Box",
@@ -1047,6 +1061,11 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
       {
         "type": "Box",
         "props": {"flexDirection":"column"},
+        "children": [{"type":"Text","props":{"color":"text"},"children":["Writes: code (tests run before merging)"]}]
+      },
+      {
+        "type": "Box",
+        "props": {"flexDirection":"column"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Model"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  (none: the session's model)"]}
@@ -1279,6 +1298,11 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
             "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["──────────────────────────────────────────────────"]}]
           }
         ]
+      },
+      {
+        "type": "Box",
+        "props": {"flexDirection":"column"},
+        "children": [{"type":"Text","props":{"color":"text"},"children":["Writes: code (tests run before merging)"]}]
       },
       {
         "type": "Box",
@@ -1549,6 +1573,11 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Box",
+        "props": {"flexDirection":"column"},
+        "children": [{"type":"Text","props":{"color":"text"},"children":["Writes: code (tests run before merging)"]}]
+      },
+      {
+        "type": "Box",
         "props": {"key":"role-changes","flexDirection":"column"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Changed from built-in"]},
@@ -1804,6 +1833,11 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
             "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["──────────────────────────────────────────────────"]}]
           }
         ]
+      },
+      {
+        "type": "Box",
+        "props": {"flexDirection":"column"},
+        "children": [{"type":"Text","props":{"color":"text"},"children":["Writes: code (tests run before merging)"]}]
       },
       {
         "type": "Box",
@@ -2065,6 +2099,11 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
             "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["──────────────────────────────────────────────────"]}]
           }
         ]
+      },
+      {
+        "type": "Box",
+        "props": {"flexDirection":"column"},
+        "children": [{"type":"Text","props":{"color":"text"},"children":["Writes: code (tests run before merging)"]}]
       },
       {
         "type": "Box",
@@ -2356,6 +2395,11 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Box",
+        "props": {"flexDirection":"column"},
+        "children": [{"type":"Text","props":{"color":"text"},"children":["Writes: code (tests run before merging)"]}]
+      },
+      {
+        "type": "Box",
         "props": {"key":"role-changes","flexDirection":"column"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Changed from built-in"]},
@@ -2608,6 +2652,11 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Box",
+        "props": {"flexDirection":"column"},
+        "children": [{"type":"Text","props":{"color":"text"},"children":["Writes: code (tests run before merging)"]}]
+      },
+      {
+        "type": "Box",
         "props": {"key":"role-changes","flexDirection":"column"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Changed from built-in"]},
@@ -2857,6 +2906,11 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
             "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["──────────────────────────────────────────────────"]}]
           }
         ]
+      },
+      {
+        "type": "Box",
+        "props": {"flexDirection":"column"},
+        "children": [{"type":"Text","props":{"color":"text"},"children":["Writes: code (tests run before merging)"]}]
       },
       {
         "type": "Box",
@@ -3183,6 +3237,11 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Box",
+        "props": {"flexDirection":"column"},
+        "children": [{"type":"Text","props":{"color":"text"},"children":["Writes: code (tests run before merging)"]}]
+      },
+      {
+        "type": "Box",
         "props": {"key":"role-changes","flexDirection":"column"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Changed from built-in"]},
@@ -3478,6 +3537,11 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
             "children": [{"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["──────────────────────────────────────────────────"]}]
           }
         ]
+      },
+      {
+        "type": "Box",
+        "props": {"flexDirection":"column"},
+        "children": [{"type":"Text","props":{"color":"text"},"children":["Writes: code (tests run before merging)"]}]
       },
       {
         "type": "Box",
@@ -3779,6 +3843,11 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Box",
+        "props": {"flexDirection":"column"},
+        "children": [{"type":"Text","props":{"color":"text"},"children":["Writes: code (tests run before merging)"]}]
+      },
+      {
+        "type": "Box",
         "props": {"key":"role-changes","flexDirection":"column"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Changed from built-in"]},
@@ -4047,6 +4116,7 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
+          {"type":"Text","props":{"color":"text"},"children":["Writes: code (tests run before merging)"]},
           {
             "type": "Text",
             "props": {"color":"inactive"},
@@ -4304,6 +4374,7 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
+          {"type":"Text","props":{"color":"text"},"children":["Writes: code (tests run before merging)"]},
           {
             "type": "Text",
             "props": {"color":"inactive"},
@@ -4561,6 +4632,7 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
+          {"type":"Text","props":{"color":"text"},"children":["Writes: code (tests run before merging)"]},
           {
             "type": "Text",
             "props": {"color":"inactive"},
@@ -5039,25 +5111,35 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
         ]
       },
       {"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]},
-      {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Kinds"]},
+      {
+        "type": "Text",
+        "props": {"wrap":"truncate"},
+        "children": [
+          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍Kinds"]},
+          {"type":"Text","props":{"color":"inactive"},"children":["  7 kinds · 2 changed by you · 1 off"]}
+        ]
+      },
+      {"type":"Text","props":{"wrap":"truncate","color":"inactive"},"children":["  NAME                           FROM          WH…"]},
       {
         "type": "Button",
         "props": {"key":"kindRow:change","label":"change: built-in","plain":true,"autoFocus":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["  change                       "]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" built-in"]},
-          {"type":"Text","props":{"color":"text"},"children":[" · a general change when no other kind fits (the default)"]}
+          {"type":"Text","props":{"bold":true,"color":"ide"},"children":["❯ "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["change                         "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["built-in      "]},
+          {"type":"Text","props":{"color":"text"},"children":["a …"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"kindRow:bug","label":"bug: replaced, off","plain":true},
+        "props": {"key":"kindRow:bug","label":"bug: off","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":false,"color":"inactive"},"children":["  bug                          "]},
-          {"type":"Text","props":{"color":"warning"},"children":[" replaced, off"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · something that works wrongly"]}
+          {"type":"Text","props":{"bold":true,"color":"ide"},"children":["  "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["bug                            "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["off           "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["so…"]}
         ]
       },
       {
@@ -5065,9 +5147,10 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
         "props": {"key":"kindRow:feature","label":"feature: built-in","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["  feature                      "]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" built-in"]},
-          {"type":"Text","props":{"color":"text"},"children":[" · new behavior for the owner"]}
+          {"type":"Text","props":{"bold":true,"color":"ide"},"children":["  "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["feature                        "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["built-in      "]},
+          {"type":"Text","props":{"color":"text"},"children":["ne…"]}
         ]
       },
       {
@@ -5075,9 +5158,10 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
         "props": {"key":"kindRow:refactor","label":"refactor: built-in","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["  refactor                     "]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" built-in"]},
-          {"type":"Text","props":{"color":"text"},"children":[" · cleaning up code without changing what it does"]}
+          {"type":"Text","props":{"bold":true,"color":"ide"},"children":["  "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["refactor                       "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["built-in      "]},
+          {"type":"Text","props":{"color":"text"},"children":["cl…"]}
         ]
       },
       {
@@ -5085,9 +5169,10 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
         "props": {"key":"kindRow:docs","label":"docs: built-in","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["  docs                         "]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" built-in"]},
-          {"type":"Text","props":{"color":"text"},"children":[" · documentation only"]}
+          {"type":"Text","props":{"bold":true,"color":"ide"},"children":["  "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["docs                           "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["built-in      "]},
+          {"type":"Text","props":{"color":"text"},"children":["do…"]}
         ]
       },
       {
@@ -5095,34 +5180,38 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
         "props": {"key":"kindRow:investigation","label":"investigation: built-in","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["  investigation                "]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" built-in"]},
-          {"type":"Text","props":{"color":"text"},"children":[" · find an answer and hand it back; nothing is merged"]}
+          {"type":"Text","props":{"bold":true,"color":"ide"},"children":["  "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["investigation                  "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["built-in      "]},
+          {"type":"Text","props":{"color":"text"},"children":["fi…"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"kindRow:chore-and-upkeep-of-the-build","label":"chore-and-upkeep-of-the-build: added","plain":true},
+        "props": {"key":"kindRow:chore-and-upkeep-of-the-build","label":"chore-and-upkeep-of-the-build: added by you","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["  chore-and-upkeep-of-the-build"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" added"]},
-          {
-            "type": "Text",
-            "props": {"color":"text"},
-            "children": [" · small upkeep: bumping versions, tidying the build, moving files, nothing the user sees at all"]
-          }
+          {"type":"Text","props":{"bold":true,"color":"ide"},"children":["  "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["chore-and-upkeep-of-the-build  "]},
+          {"type":"Text","props":{"color":"success"},"children":["added by you  "]},
+          {"type":"Text","props":{"color":"text"},"children":["sm…"]}
         ]
       },
+      {"type":"Text","children":[" "]},
       {
         "type": "Button",
-        "props": {"key":"kind-new","label":"+ New kind","hotkey":"n"},
+        "props": {"key":"kind-new","label":"+ New kind (n)","plain":true},
         "press": {"plugin":"symcc"},
-        "children": [{"type":"Text","props":{"color":"text"},"children":["  + New kind"]}]
+        "children": [{"type":"Text","props":{"color":"text"},"children":["  + New kind (n)"]}]
       },
-      {"type":"Text","props":{"color":"inactive"},"children":["Enter opens a kind · n makes a new one · or tell the lead"]},
-      {"type":"Text","children":[" "]},
-      {"type":"Button","props":{"key":"kinds-back","label":"Back (b)","hotkey":"b"},"press":{"plugin":"symcc"}},
+      {
+        "type": "Box",
+        "props": {"key":"kinds-hidden-keys","display":"none"},
+        "children": [
+          {"type":"Button","props":{"key":"kind-new-key","label":"n","hotkey":"n"},"press":{"plugin":"symcc"}},
+          {"type":"Button","props":{"key":"kinds-back","label":"Back","hotkey":"b"},"press":{"plugin":"symcc"}}
+        ]
+      },
       {
         "type": "Box",
         "props": {"key":"kinds-keys-footer","flexDirection":"column"},
@@ -5269,25 +5358,35 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
         ]
       },
       {"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]},
-      {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Kinds"]},
+      {
+        "type": "Text",
+        "props": {"wrap":"truncate"},
+        "children": [
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍Kinds"]},
+          {"type":"Text","props":{"color":"inactive"},"children":["  7 kinds · 2 changed by you · 1 off"]}
+        ]
+      },
+      {"type":"Text","props":{"wrap":"truncate","color":"inactive"},"children":["  NAME                           FROM          WH…"]},
       {
         "type": "Button",
         "props": {"key":"kindRow:change","label":"change: built-in","plain":true,"autoFocus":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["  change                       "]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" built-in"]},
-          {"type":"Text","props":{"color":"text"},"children":[" · a general change when no other kind fits (the default)"]}
+          {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["❯ "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["change                         "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["built-in      "]},
+          {"type":"Text","props":{"color":"text"},"children":["a …"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"kindRow:bug","label":"bug: replaced, off","plain":true},
+        "props": {"key":"kindRow:bug","label":"bug: off","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":false,"color":"inactive"},"children":["  bug                          "]},
-          {"type":"Text","props":{"color":"warning"},"children":[" replaced, off"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · something that works wrongly"]}
+          {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["  "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["bug                            "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["off           "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["so…"]}
         ]
       },
       {
@@ -5295,9 +5394,10 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
         "props": {"key":"kindRow:feature","label":"feature: built-in","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["  feature                      "]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" built-in"]},
-          {"type":"Text","props":{"color":"text"},"children":[" · new behavior for the owner"]}
+          {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["  "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["feature                        "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["built-in      "]},
+          {"type":"Text","props":{"color":"text"},"children":["ne…"]}
         ]
       },
       {
@@ -5305,9 +5405,10 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
         "props": {"key":"kindRow:refactor","label":"refactor: built-in","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["  refactor                     "]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" built-in"]},
-          {"type":"Text","props":{"color":"text"},"children":[" · cleaning up code without changing what it does"]}
+          {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["  "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["refactor                       "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["built-in      "]},
+          {"type":"Text","props":{"color":"text"},"children":["cl…"]}
         ]
       },
       {
@@ -5315,9 +5416,10 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
         "props": {"key":"kindRow:docs","label":"docs: built-in","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["  docs                         "]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" built-in"]},
-          {"type":"Text","props":{"color":"text"},"children":[" · documentation only"]}
+          {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["  "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["docs                           "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["built-in      "]},
+          {"type":"Text","props":{"color":"text"},"children":["do…"]}
         ]
       },
       {
@@ -5325,34 +5427,38 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
         "props": {"key":"kindRow:investigation","label":"investigation: built-in","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["  investigation                "]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" built-in"]},
-          {"type":"Text","props":{"color":"text"},"children":[" · find an answer and hand it back; nothing is merged"]}
+          {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["  "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["investigation                  "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["built-in      "]},
+          {"type":"Text","props":{"color":"text"},"children":["fi…"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"kindRow:chore-and-upkeep-of-the-build","label":"chore-and-upkeep-of-the-build: added","plain":true},
+        "props": {"key":"kindRow:chore-and-upkeep-of-the-build","label":"chore-and-upkeep-of-the-build: added by you","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["  chore-and-upkeep-of-the-build"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" added"]},
-          {
-            "type": "Text",
-            "props": {"color":"text"},
-            "children": [" · small upkeep: bumping versions, tidying the build, moving files, nothing the user sees at all"]
-          }
+          {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["  "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["chore-and-upkeep-of-the-build  "]},
+          {"type":"Text","props":{"color":"success"},"children":["added by you  "]},
+          {"type":"Text","props":{"color":"text"},"children":["sm…"]}
         ]
       },
+      {"type":"Text","children":[" "]},
       {
         "type": "Button",
-        "props": {"key":"kind-new","label":"+ New kind","hotkey":"n"},
+        "props": {"key":"kind-new","label":"+ New kind (n)","plain":true},
         "press": {"plugin":"symcc"},
-        "children": [{"type":"Text","props":{"color":"text"},"children":["  + New kind"]}]
+        "children": [{"type":"Text","props":{"color":"text"},"children":["  + New kind (n)"]}]
       },
-      {"type":"Text","props":{"color":"inactive"},"children":["Enter opens a kind · n makes a new one · or tell the lead"]},
-      {"type":"Text","children":[" "]},
-      {"type":"Button","props":{"key":"kinds-back","label":"Back (b)","hotkey":"b"},"press":{"plugin":"symcc"}},
+      {
+        "type": "Box",
+        "props": {"key":"kinds-hidden-keys","display":"none"},
+        "children": [
+          {"type":"Button","props":{"key":"kind-new-key","label":"n","hotkey":"n"},"press":{"plugin":"symcc"}},
+          {"type":"Button","props":{"key":"kinds-back","label":"Back","hotkey":"b"},"press":{"plugin":"symcc"}}
+        ]
+      },
       {
         "type": "Box",
         "props": {"key":"kinds-keys-footer","flexDirection":"column"},
@@ -5511,25 +5617,35 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
         ]
       },
       {"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]},
-      {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Kinds"]},
+      {
+        "type": "Text",
+        "props": {"wrap":"truncate"},
+        "children": [
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍Kinds"]},
+          {"type":"Text","props":{"color":"inactive"},"children":["  7 kinds · 2 changed by you · 1 off"]}
+        ]
+      },
+      {"type":"Text","props":{"wrap":"truncate","color":"inactive"},"children":["  NAME                           FROM          WH…"]},
       {
         "type": "Button",
         "props": {"key":"kindRow:change","label":"change: built-in","plain":true,"autoFocus":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["  change                       "]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" built-in"]},
-          {"type":"Text","props":{"color":"text"},"children":[" · a general change when no other kind fits (the default)"]}
+          {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["❯ "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["change                         "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["built-in      "]},
+          {"type":"Text","props":{"color":"text"},"children":["a …"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"kindRow:bug","label":"bug: replaced, off","plain":true},
+        "props": {"key":"kindRow:bug","label":"bug: off","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":false,"color":"inactive"},"children":["  bug                          "]},
-          {"type":"Text","props":{"color":"warning"},"children":[" replaced, off"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · something that works wrongly"]}
+          {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["  "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["bug                            "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["off           "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["so…"]}
         ]
       },
       {
@@ -5537,9 +5653,10 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
         "props": {"key":"kindRow:feature","label":"feature: built-in","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["  feature                      "]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" built-in"]},
-          {"type":"Text","props":{"color":"text"},"children":[" · new behavior for the owner"]}
+          {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["  "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["feature                        "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["built-in      "]},
+          {"type":"Text","props":{"color":"text"},"children":["ne…"]}
         ]
       },
       {
@@ -5547,9 +5664,10 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
         "props": {"key":"kindRow:refactor","label":"refactor: built-in","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["  refactor                     "]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" built-in"]},
-          {"type":"Text","props":{"color":"text"},"children":[" · cleaning up code without changing what it does"]}
+          {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["  "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["refactor                       "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["built-in      "]},
+          {"type":"Text","props":{"color":"text"},"children":["cl…"]}
         ]
       },
       {
@@ -5557,9 +5675,10 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
         "props": {"key":"kindRow:docs","label":"docs: built-in","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["  docs                         "]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" built-in"]},
-          {"type":"Text","props":{"color":"text"},"children":[" · documentation only"]}
+          {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["  "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["docs                           "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["built-in      "]},
+          {"type":"Text","props":{"color":"text"},"children":["do…"]}
         ]
       },
       {
@@ -5567,34 +5686,38 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
         "props": {"key":"kindRow:investigation","label":"investigation: built-in","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["  investigation                "]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" built-in"]},
-          {"type":"Text","props":{"color":"text"},"children":[" · find an answer and hand it back; nothing is merged"]}
+          {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["  "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["investigation                  "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["built-in      "]},
+          {"type":"Text","props":{"color":"text"},"children":["fi…"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"kindRow:chore-and-upkeep-of-the-build","label":"chore-and-upkeep-of-the-build: added","plain":true},
+        "props": {"key":"kindRow:chore-and-upkeep-of-the-build","label":"chore-and-upkeep-of-the-build: added by you","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["  chore-and-upkeep-of-the-build"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" added"]},
-          {
-            "type": "Text",
-            "props": {"color":"text"},
-            "children": [" · small upkeep: bumping versions, tidying the build, moving files, nothing the user sees at all"]
-          }
+          {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["  "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["chore-and-upkeep-of-the-build  "]},
+          {"type":"Text","props":{"color":"success"},"children":["added by you  "]},
+          {"type":"Text","props":{"color":"text"},"children":["sm…"]}
         ]
       },
+      {"type":"Text","children":[" "]},
       {
         "type": "Button",
-        "props": {"key":"kind-new","label":"+ New kind","hotkey":"n"},
+        "props": {"key":"kind-new","label":"+ New kind (n)","plain":true},
         "press": {"plugin":"symcc"},
-        "children": [{"type":"Text","props":{"color":"text"},"children":["  + New kind"]}]
+        "children": [{"type":"Text","props":{"color":"text"},"children":["  + New kind (n)"]}]
       },
-      {"type":"Text","props":{"color":"inactive"},"children":["Enter opens a kind · n makes a new one · or tell the lead"]},
-      {"type":"Text","children":[" "]},
-      {"type":"Button","props":{"key":"kinds-back","label":"Back (b)","hotkey":"b"},"press":{"plugin":"symcc"}},
+      {
+        "type": "Box",
+        "props": {"key":"kinds-hidden-keys","display":"none"},
+        "children": [
+          {"type":"Button","props":{"key":"kind-new-key","label":"n","hotkey":"n"},"press":{"plugin":"symcc"}},
+          {"type":"Button","props":{"key":"kinds-back","label":"Back","hotkey":"b"},"press":{"plugin":"symcc"}}
+        ]
+      },
       {
         "type": "Box",
         "props": {"key":"kinds-keys-footer","flexDirection":"column"},

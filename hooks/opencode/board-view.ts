@@ -38,7 +38,8 @@ import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, br
 import { restFrame } from '../core/logo'
 import { taskSections, type TaskSection } from '../core/task-sections'
 import type { TaskBranchFacts } from '../core/task-branch'
-import { type RoleChange, CHANGED_HEADING, changeLines, changesOfRole, roleListLabel, roleStateGroups } from '../core/role-changes'
+import { type RoleChange, CHANGED_HEADING, changeLines, changesOfRole, roleStateGroups } from '../core/role-changes'
+import { type DefRow, ROLE_COLS, KIND_COLS, CURSOR_MARK, TABLE_INDENT, CODE_PICK_LABEL, roleTableRow, kindTableRow, defsCountText, defLayout, defCells, defCellTone, newDefText, roleWritesLine, codePickOf } from '../core/def-table'
 import { roleButtons as headerRoleButtons } from '../core/page-header'
 import { type ActionGroup, groupSegLines, headerRule, inGroups, navHint, navRow, packGroups, type PageFrom, PILL_COLOR, pillText, placeIn, scoutAbout, scoutButtons as headerScoutButtons, scoutListNames, scoutStateGroups, TASK_ID_COLOR, taskPlace, taskStateGroups, titleLines, whereLine } from '../core/page-header'
 import { LIST_TONE, sessionNote } from '../core/details'
@@ -346,7 +347,7 @@ export type DefDraft = { page: string; values: Record<string, string>; error?: s
 /** The edit mode of role or kind `d`, filled from it (as Claude Code's roleDraftOf, kindDraftOf). */
 export function defDraftOf(list: DefList, d: ViewDef): DefDraft {
   const values: Record<string, string> = list === 'roles'
-    ? { description: d.description, model: d.model ?? '', skills: (d.skills ?? []).join(', '), tools: (d.tools ?? []).join(', '), checklist: d.text }
+    ? { description: d.description, model: d.model ?? '', skills: (d.skills ?? []).join(', '), tools: (d.tools ?? []).join(', '), code: codePickOf(d) === 'prose' ? 'false' : 'true', checklist: d.text }
     : { description: d.description, body: d.text }
   return { page: defPageId(list, d.name), values }
 }
@@ -357,6 +358,7 @@ export const DEF_EDIT_BOXES: Record<DefEditField, { label: string; placeholder: 
   model: { label: 'Model', placeholder: () => "empty: the session's model" },
   skills: { label: 'Skills', placeholder: () => 'skill names joined with ", " (empty: none)' },
   tools: { label: 'Tools', placeholder: () => 'extra tools: web, to search and read the web (empty: none)' },
+  code: { label: 'Writes', placeholder: () => 'Enter switches: code (its tests run before merging) or prose only (only .md files; only docs checks run)' },
   checklist: { label: 'Checklist', placeholder: () => 'what a worker with this role checks, one line each' },
   body: { label: 'Body', placeholder: () => 'free text about the kind' },
 }
@@ -391,7 +393,7 @@ export function draftError(list: DefList, name: string, draft: DefDraft): string
   const tools = roleTools(items(v.tools))
   if (typeof tools === 'string') return tools
   const model = (v.model ?? '').trim()
-  return roleSkipReason(name, roleFileText({ description, ...(model ? { model } : {}), skills: items(v.skills), ...(tools.length ? { tools } : {}), prompt: v.checklist ?? '' })) ?? ''
+  return roleSkipReason(name, roleFileText({ description, ...(model ? { model } : {}), skills: items(v.skills), ...(tools.length ? { tools } : {}), ...(v.code === 'false' ? { code: false as const } : {}), prompt: v.checklist ?? '' })) ?? ''
 }
 
 /** The keys at the bottom of the edit page: Claude Code's (roleEditKeys), with Enter, which opens a box here. */
@@ -1100,44 +1102,47 @@ function defsCount(f: ViewFile, list: DefList): string {
   return `${all.length} ${noun}${all.length === 1 ? '' : 's'}${off ? ` · ${off} off` : ''}`
 }
 
-/** The Roles or Kinds page: one row per role or kind (name, where it comes from, whether it is off, what it is for);
- *  Enter opens one. New ones are made by the lead or as files. */
+/** A role or kind of the view file as a line of the Roles or Kinds table (core's def-table.ts). */
+export function viewDefRow(list: DefList, x: ViewDef): DefRow & { warning?: string } {
+  if (x.broken) return { name: x.name, off: false, cells: {}, broken: x.broken }
+  const source = (x.source || undefined) as DefSource | undefined
+  if (list === 'kinds') return kindTableRow({ name: x.name, description: x.description, body: x.text, ...(x.off ? { off: true } : {}) }, source)
+  const r: RoleDef = { name: x.name, description: x.description, ...(x.model ? { model: x.model } : {}), skills: x.skills ?? [], ...(x.tools?.length ? { tools: x.tools } : {}), ...(x.off ? { off: true } : {}), ...(x.code === false ? { code: false as const } : {}), prompt: x.text }
+  return { ...roleTableRow(r, source), ...(x.warning ? { warning: x.warning } : {}) }
+}
+
+/** The Roles or Kinds page (T-918, as Claude Code's): "▍Roles  8 roles · 2 changed by you", the column heads, one line
+ *  per role or kind (core's defLayout: lined up, the description cut with "…", columns dropped when narrow; the
+ *  cursor's line marked ❯), then "+ New role (n)". Enter opens one; the footer's keys say n and b. */
 function defsList(f: ViewFile, list: DefList, cursor: number, w: number): Body {
   const b = bodyMaker()
   const all = defsIn(f, list)
   const noun = list === 'roles' ? 'role' : 'kind'
-  b.heading(list === 'roles' ? 'Roles' : 'Kinds')
+  const rows = all.map(x => viewDefRow(list, x))
+  b.add([{ text: `▍${list === 'roles' ? 'Roles' : 'Kinds'}`, color: 'suggestion', bold: true }, { text: `  ${defsCountText(noun, rows)}`, color: 'inactive' }])
+  const layout = defLayout(rows, list === 'roles' ? ROLE_COLS : KIND_COLS, w)
   if (!all.length) b.add([{ text: `  (none in the board's view yet)`, color: 'inactive' }])
+  else b.add([{ text: ' '.repeat(TABLE_INDENT), color: 'inactive' }, ...defCells(layout, 'head').map(c => ({ text: c.text, color: 'inactive' }))])
   const ids = all.map(x => defPageId(list, x.name))
   const selected = ids.length ? ids[Math.min(Math.max(0, cursor), ids.length - 1)]! : ''
-  const nameW = Math.max(0, ...all.map(x => x.name.length))
-  for (const x of all) {
-    const id = defPageId(list, x.name)
-    const front = { text: id === selected ? '› ' : '  ', color: 'ide', bold: true }
-    if (x.broken) {
-      b.add([front, { text: x.name.padEnd(nameW), color: 'inactive', bold: true }, { text: ` — ${x.broken}`, color: 'error' }], { page: id })
-      continue
-    }
-    // T-871: a replaced role says what it changed ("replaced · model")
-    const label = list === 'roles' ? roleListLabel(x.source as DefSource, x.off, x.changes) : sourceLabel(x.source as DefSource, x.off)
-    const fit = fitRow(2 + nameW + 1 + label.length, ` · ${x.description}`, '', w)
+  rows.forEach((r, i) => {
+    const id = ids[i]!
     b.add(
       [
-        front,
-        { text: x.name.padEnd(nameW), color: x.off ? 'inactive' : 'claude', ...(x.off ? {} : { bold: true }) },
-        { text: ` ${label}`, color: x.off ? 'warning' : 'inactive' },
-        { text: fit.title, color: x.off ? 'inactive' : 'text' },
-        ...(x.warning ? [{ text: ' ⚠', color: 'warning' }] : []),
+        { text: id === selected ? CURSOR_MARK : ' '.repeat(TABLE_INDENT), color: 'ide', bold: true },
+        ...defCells(layout, r).map(c => {
+          const tone = defCellTone(r, c.col)
+          return { text: c.text, color: tone.color, ...(tone.bold ? { bold: true } : {}) }
+        }),
+        ...(r.warning ? [{ text: ' ⚠', color: 'warning' }] : []),
       ],
       { page: id },
     )
-  }
-  // T-706: Claude Code's "+ New role" / "+ New kind" button (n), then its hint
-  for (const l of buttonLines([list === 'roles' ? NEW_ROLE_BUTTON : NEW_KIND_BUTTON], w)) b.add(l)
-  b.add([{ text: `Enter opens a ${noun} · n makes a new one · or tell the lead`, color: 'inactive' }])
+  })
   b.blank()
-  backButton(b, w)
-  return { ...b, ids, selected, head: 1 }
+  // T-706: Claude Code's "+ New role" / "+ New kind" (n), one plain line
+  b.add([{ text: `  ${newDefText(noun)}`, color: 'text' }], { key: 'n' })
+  return { ...b, ids, selected, head: 2 }
 }
 
 /** One role's or kind's page: its name, where it comes from and whether it is off, what it is for; a role's model,
@@ -1171,7 +1176,6 @@ function defPage(f: ViewFile, list: DefList, x: ViewDef, w: number): Body {
       section('Model', x.model ?? '', "(none: the session's model)")
       section('Skills', (x.skills ?? []).join(', '), '(none)')
       section('Tools', (x.tools ?? []).join(', '), '(none: the base tools only)')
-      if (x.code === false) section('Code', roleCodeText(x), '')
     }
     b.blank()
     b.heading(role ? 'Checklist' : 'Body')
@@ -1207,6 +1211,8 @@ function rolePage(f: ViewFile, x: ViewDef, w: number): Body {
   const place = placeIn(roleListIds(f), defPageId('roles', x.name))
   for (const l of headerLines({ from: 'roles', label: x.name, place, title: x.description, color: x.off ? 'inactive' : 'claude', state: roleStateGroups(source, x.off, x.changes ?? (source === 'replaced' ? [] : null)), buttons: roleButtons(x) }, w)) b.add(l)
   const head = b.lines.length
+  // T-918: always says what the role writes
+  b.add([{ text: 'Writes: ', color: 'text', bold: true }, { text: roleWritesLine({ name: x.name, ...(x.code === false ? { code: false as const } : {}) }).slice('Writes: '.length), color: 'text' }])
   if (x.warning) b.add([{ text: x.warning, color: 'warning' }])
   if (isCheckerRole(x.name)) for (const l of wrapSegs([{ text: `never a task's role, and not turned on or off here: the checker setting runs it (Settings → checker, now ${checkerOn(f.view) ? 'on' : 'off'})`, color: 'inactive' }], w)) b.add(l)
   if (source !== 'built-in') {
@@ -1222,7 +1228,6 @@ function rolePage(f: ViewFile, x: ViewDef, w: number): Body {
   section('Model', x.model ?? '', "(none: the session's model)")
   section('Skills', (x.skills ?? []).join(', '), '(none)')
   section('Tools', (x.tools ?? []).join(', '), '(none: the base tools only)')
-  if (x.code === false) section('Code', roleCodeText(x), '')
   b.blank()
   b.heading('Checklist')
   if (x.text.trim()) for (const l of textLines(x.text.trim(), 'text', w)) b.add(l)
@@ -1268,7 +1273,8 @@ function defEditPage(f: ViewFile, list: DefList, x: ViewDef, draft: DefDraft, cu
   for (const k of fields) {
     const hit = { editField: k }
     const box = DEF_EDIT_BOXES[k]
-    const value = draft.values[k] ?? ''
+    // T-918: the Writes pick shows its words ("code", "prose only"), not the true or false it sends
+    const value = k === 'code' ? CODE_PICK_LABEL[draft.values.code === 'false' ? 'prose' : 'code'] : draft.values[k] ?? ''
     b.blank()
     b.add([{ text: editBoxId(k) === selected ? '› ' : '  ', color: 'ide', bold: true }, { text: box.label, color: 'text', bold: true }], hit)
     if (value.trim()) for (const l of textLines(value, 'text', w, 4)) b.add(l, hit)
