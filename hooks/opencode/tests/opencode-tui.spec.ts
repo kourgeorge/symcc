@@ -1296,12 +1296,12 @@ test('T-559: the Scouts tab lists the scouts from view.json, a scout\'s page sho
   expect(p.find(l => l.includes('found · 1 finding · task T-4'))).toMatch(/^› 10m ago/)
   expect(p.some(l => l.includes('nothing · 0 findings · no tasks'))).toBe(true)
   expect(p).toContain('  .symcc/scouts/docs-check.md')
-  expect(panelKeys(f, 'docs-check', 'scouts').map(k => k.word)).toEqual(['run now', 'resume', 'edit', 'move', 'report', 'back'])
+  expect(panelKeys(f, 'docs-check', 'scouts').map(k => k.word)).toEqual(['run now', 'resume', 'edit', 'findings', 'move', 'report', 'back'])
   // the panel's footer also says [ ] prev/next, as there are other scouts
-  expect(page.keys.map(k => k.word)).toEqual(['run now', 'resume', 'edit', 'move', 'report', 'prev/next', 'back'])
+  expect(page.keys.map(k => k.word)).toEqual(['run now', 'resume', 'edit', 'findings', 'move', 'report', 'prev/next', 'back'])
   // a running scout has no "run now"; a waiting one pauses
   const running = { ...f, view: { ...f.view, scouts: f.view.scouts.map(s => ({ ...s, running: s.name === 'deps' })) } }
-  expect(panelKeys(running, 'deps', 'scouts').map(k => k.word)).toEqual(['pause', 'edit', 'back'])
+  expect(panelKeys(running, 'deps', 'scouts').map(k => k.word)).toEqual(['pause', 'edit', 'findings', 'back'])
   // a run's page: its line and its report (read by the TUI from its file)
   const run = (report?: string | null) => panelLines(f, { tab: 'scouts', opened: 'docs-check', run: '2026-11-19T11:50:00.000Z', report, cursor: 0 }, NOW, 100).lines.map(lineText)
   expect(run('1. README is stale\n2. no guide')).toContain('  2. no guide')
@@ -1625,6 +1625,8 @@ test('T-562: startTui: Settings opens Roles, a role\'s page turns it on and rese
   // T-862: e on a scout's page can pick the scout's own findings choice
   answers.select.push('findings', 'backlog')
   await board.press('e', 'ses_1')
+  // T-912: f moves its findings choice on (deps has none in the view file: board default → auto)
+  await board.press('f', 'ses_1')
   expect(sent).toEqual([
     { sessionID: 'ses_1', name: 'symcc-settings', text: 'role tester on' },
     { sessionID: 'ses_1', name: 'symcc-settings', text: 'role tester reset' },
@@ -1633,18 +1635,32 @@ test('T-562: startTui: Settings opens Roles, a role\'s page turns it on and rese
     { sessionID: 'ses_1', name: 'symcc-scout', text: 'deps model none' },
     { sessionID: 'ses_1', name: 'symcc-scout', text: 'deps prompt Check the lock file too.' },
     { sessionID: 'ses_1', name: 'symcc-scout', text: 'deps findings backlog' },
+    { sessionID: 'ses_1', name: 'symcc-scout', text: 'deps findings auto' },
   ])
   board.stop()
 })
 
-test('T-862: OpenCode shows a scout\'s own findings choice in the Scouts list and on its page; none shows nothing', () => {
+test('T-912: OpenCode shows the board default on the Scouts list, each scout\'s findings choice in its row and a Findings line on its page', () => {
   const f = scoutsViewFile()
-  const own = { ...f, view: { ...f.view, scouts: f.view.scouts!.map(s => (s.name === 'deps' ? { ...s, findings: 'backlog' as const } : s)) } }
-  const list = panelLines(own, { tab: 'scouts', opened: '', cursor: 0 }, NOW, 120).lines.map(lineText)
-  expect(list.find(l => l.includes('deps'))).toContain('→ backlog')
-  expect(list.find(l => l.includes('docs-check'))).not.toContain('→')
-  expect(panelLines(own, { tab: 'scouts', opened: 'deps', cursor: 0 }, NOW, 120).lines.map(lineText).some(l => l.includes('findings → backlog'))).toBe(true)
-  expect(panelLines(f, { tab: 'scouts', opened: 'deps', cursor: 0 }, NOW, 120).lines.map(lineText).some(l => l.includes('findings'))).toBe(false)
+  const withFindings = (board: 'auto' | 'backlog', deps?: 'auto' | 'backlog') => ({ ...f, view: { ...f.view, scout_findings: board, scouts: f.view.scouts!.map(s => (s.name === 'deps' && deps ? { ...s, findings: deps } : s)) } })
+  const list = (v: ViewFile) => panelLines(v, { tab: 'scouts', opened: '', cursor: 0 }, NOW, 120).lines.map(lineText)
+  const page = (v: ViewFile) => panelLines(v, { tab: 'scouts', opened: 'deps', cursor: 0 }, NOW, 120).lines.map(lineText)
+  expect(list(withFindings('auto'))).toContain('  scout findings by default: auto')
+  expect(list(withFindings('backlog'))).toContain('  scout findings by default: backlog')
+  expect(list(withFindings('auto', 'backlog')).find(l => l.includes('deps'))).toContain('→ backlog')
+  expect(list(withFindings('auto', 'auto')).find(l => l.includes('deps'))).toContain('→ todo (auto)')
+  expect(list(withFindings('auto')).find(l => l.includes('deps'))).toContain('board: auto')
+  expect(list(withFindings('backlog')).find(l => l.includes('docs-check'))).toContain('board: backlog')
+  expect(page(withFindings('auto', 'auto'))).toContain('Findings: auto: the lead decides; bugs usually go to todo  (f changes it)')
+  expect(page(withFindings('auto', 'backlog'))).toContain('Findings: backlog: every task from this scout waits in the backlog  (f changes it)')
+  expect(page(withFindings('auto'))).toContain('Findings: board default: follows the board setting (now auto)  (f changes it)')
+  expect(page(withFindings('backlog'))).toContain('Findings: board default: follows the board setting (now backlog)  (f changes it)')
+  // the old "findings →" in the header's state is gone (the Findings line says it)
+  expect(page(withFindings('auto', 'backlog')).some(l => l.includes('findings →'))).toBe(false)
+  // a click on the Findings line presses f
+  const drawn = panelLines(withFindings('auto'), { tab: 'scouts', opened: 'deps', cursor: 0 }, NOW, 120)
+  const at = drawn.lines.findIndex(l => lineText(l).startsWith('Findings: '))
+  expect(drawn.hits[at]).toEqual({ key: 'f' })
   expect(actionCommand({ kind: 'scout-edit', scout: 'deps', field: 'findings', value: 'default' })).toEqual({ name: 'symcc-scout', text: 'deps findings default' })
 })
 

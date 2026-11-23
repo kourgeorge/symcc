@@ -40,8 +40,29 @@ export type ScoutDef = { name: string; every_minutes: number; model?: string; su
 /** The scout's own findings choice (front matter `findings:` auto or backlog; anything else or nothing: the board's scout_findings decides). */
 export const scoutFindingsChoice = (v: unknown): ScoutFindings | undefined => (isScoutFindings(typeof v === 'string' ? v.trim().toLowerCase() : v) ? ((v as string).trim().toLowerCase() as ScoutFindings) : undefined)
 
-/** The short mark for a scout's own findings choice: "→ backlog" or "→ auto"; '' when it follows the board's setting. */
-export const findingsMark = (f: ScoutFindings | undefined): string => (f ? `→ ${f}` : '')
+/** A scout's findings choice in the Scouts list (T-912): "→ todo (auto)", "→ backlog", or "board: auto" /
+ *  "board: backlog" when it has none and follows the board's scout_findings (`board`). */
+export const findingsMark = (f: ScoutFindings | undefined, board: ScoutFindings = 'auto'): string => (f === 'auto' ? '→ todo (auto)' : f === 'backlog' ? '→ backlog' : `board: ${board}`)
+
+/** What a scout's findings choice means, for the Findings line of its page (T-912). */
+export const findingsMeaning = (f: ScoutFindings | undefined, board: ScoutFindings = 'auto'): string =>
+  f === 'auto' ? 'auto: the lead decides; bugs usually go to todo' : f === 'backlog' ? 'backlog: every task from this scout waits in the backlog' : `board default: follows the board setting (now ${board})`
+
+/** The choice the findings key (f) moves a scout to (T-912): board default → auto → backlog → board default. */
+export const nextFindings = (f: ScoutFindings | undefined): ScoutFindings | 'default' => (f === undefined ? 'auto' : f === 'auto' ? 'backlog' : 'default')
+
+/** The three findings choices of a scout's edit page (T-912): the value saved ('' = none: the board setting) and its words. */
+export const FINDINGS_PICKS: readonly { value: '' | ScoutFindings; label: string }[] = [
+  { value: '', label: 'board default' },
+  { value: 'auto', label: 'auto (the lead decides)' },
+  { value: 'backlog', label: 'backlog (every task waits)' },
+]
+
+/** A scout page's Findings line (T-912): "Findings: backlog: every task from this scout waits in the backlog". */
+export const findingsLine = (f: ScoutFindings | undefined, board: ScoutFindings = 'auto'): string => `Findings: ${findingsMeaning(f, board)}`
+
+/** The Scouts list's top line (T-912): where findings go for a scout with no choice of its own. */
+export const findingsDefaultLine = (board: ScoutFindings = 'auto'): string => `scout findings by default: ${board}`
 
 /** The warning for a scout file whose every_minutes can't be used. */
 export const badEveryWarning = (value: string): string => `every_minutes "${value}" is not valid: runs only on demand until fixed`
@@ -337,31 +358,34 @@ export function scoutLastText(s: Pick<SymccScout, 'last_run' | 'last_report'>): 
 
 /** One row of the Scouts list, its cells already padded so the columns line up. `stateTone` is the state's color
  *  (the warning color for a scout whose every_minutes is not valid). */
-export type ScoutListRow = { icon: string; tone: string; name: string; every: string; state: string; stateTone: string; last: string; lastTone: string; model: string }
+export type ScoutListRow = { icon: string; tone: string; name: string; every: string; state: string; stateTone: string; last: string; lastTone: string; findings: string; model: string }
 
 /** The short state shown in the Scouts list for a scout whose every_minutes is not valid. */
 export const BAD_EVERY_STATE = 'bad every_minutes'
 
 /** The cells of the Scouts list at `width` columns (`indent` columns before each row): icon, name, how often, state,
- *  "last:" and model, two spaces between columns. When a row would not fit, the model column goes first, then
- *  "last:", then the state, then how often; the name is never cut. A running scout shows no "last:" (it is
+ *  "last:", the findings choice (T-912, findingsMark with the board's scout_findings `board`) and model, two spaces
+ *  between columns. When a row would not fit, the model column goes first, then "last:", then the findings choice,
+ *  then the state, then how often; the name is never cut. A running scout shows no "last:" (it is
  *  making a new one). */
-export function scoutListRows(scouts: SymccScout[], nowMs: number, width: number, indent = 2): ScoutListRow[] {
+export function scoutListRows(scouts: SymccScout[], nowMs: number, width: number, indent = 2, board: ScoutFindings = 'auto'): ScoutListRow[] {
   const raw = scouts.map(s => ({
     s,
     every: everyText(s.every_minutes),
     state: s.warning && !s.running && !s.paused ? BAD_EVERY_STATE : scoutStateText(s, nowMs),
     last: s.running ? { text: '', tone: 'inactive' } : scoutLastText(s),
-    model: [s.model ?? '', findingsMark(s.findings)].filter(Boolean).join('  '),
+    findings: findingsMark(s.findings, board),
+    model: s.model ?? '',
   }))
   const w = (f: (r: (typeof raw)[number]) => string) => Math.max(0, ...raw.map(r => f(r).length))
-  const cols = { name: w(r => r.s.name), every: w(r => r.every), state: w(r => r.state), last: w(r => r.last.text), model: w(r => r.model) }
-  const shown = { every: cols.every > 0, state: cols.state > 0, last: cols.last > 0, model: cols.model > 0 }
-  const total = () => indent + 2 + cols.name + (['every', 'state', 'last', 'model'] as const).reduce((n, k) => n + (shown[k] ? 2 + cols[k] : 0), 0)
-  for (const k of ['model', 'last', 'state', 'every'] as const) if (total() > width) shown[k] = false
+  const cols = { name: w(r => r.s.name), every: w(r => r.every), state: w(r => r.state), last: w(r => r.last.text), findings: w(r => r.findings), model: w(r => r.model) }
+  const shown = { every: cols.every > 0, state: cols.state > 0, last: cols.last > 0, findings: cols.findings > 0, model: cols.model > 0 }
+  const ORDER = ['every', 'state', 'last', 'findings', 'model'] as const
+  const total = () => indent + 2 + cols.name + ORDER.reduce((n, k) => n + (shown[k] ? 2 + cols[k] : 0), 0)
+  for (const k of ['model', 'last', 'findings', 'state', 'every'] as const) if (total() > width) shown[k] = false
   // the last shown column is not padded, so a row has no spaces at its end
-  const lastCol = (['model', 'last', 'state', 'every'] as const).find(k => shown[k])
-  const cell = (k: 'every' | 'state' | 'last' | 'model', text: string) => (!shown[k] ? '' : `  ${k === lastCol ? text : text.padEnd(cols[k])}`)
+  const lastCol = [...ORDER].reverse().find(k => shown[k])
+  const cell = (k: (typeof ORDER)[number], text: string) => (!shown[k] ? '' : `  ${k === lastCol ? text : text.padEnd(cols[k])}`)
   return raw.map(r => ({
     icon: scoutIcon(r.s),
     tone: scoutTone(r.s),
@@ -371,12 +395,13 @@ export function scoutListRows(scouts: SymccScout[], nowMs: number, width: number
     stateTone: r.s.warning && !r.s.running && !r.s.paused ? 'warning' : scoutTone(r.s),
     last: cell('last', r.last.text),
     lastTone: r.last.tone,
+    findings: cell('findings', r.findings),
     model: cell('model', r.model),
   }))
 }
 
 /** A Scouts list row as plain text (what the panel draws). */
-export const scoutListText = (r: ScoutListRow, indent = 2): string => `${' '.repeat(indent)}${r.icon} ${r.name}${r.every}${r.state}${r.last}${r.model}`.trimEnd()
+export const scoutListText = (r: ScoutListRow, indent = 2): string => `${' '.repeat(indent)}${r.icon} ${r.name}${r.every}${r.state}${r.last}${r.findings}${r.model}`.trimEnd()
 
 /** Sorted for the panel; see scoutOrder. */
 export const sortScouts = <S extends SymccScout>(scouts: S[]): S[] => [...scouts].sort(scoutOrder)

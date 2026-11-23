@@ -137,7 +137,9 @@ test('T-697 the Scouts list in VS Code at width 50: one line per scout, the term
   expect(await ui.find({ type: 'Text', text: CLICK_HINT })).toBeDefined()
   for (const re of KEY_HINTS) expect(texts(tree).filter(s => re.test(s)), `scouts list ${re}`).toEqual([])
   const room = vsRowRoom(50)
-  const rows = scoutListRows(SCOUTS as never, T0, room)
+  const rows = scoutListRows(SCOUTS as never, T0, room, 2, 'backlog')
+  // T-912: the board default on top
+  expect(await ui.find({ type: 'Text', text: 'scout findings by default: backlog' })).toBeDefined()
   for (const [i, s] of SCOUTS.entries()) {
     const box = await ui.find({ key: `vs-scout-${s.name}` })
     expect(box?.props?.flexDirection, s.name).toBe('row')
@@ -146,9 +148,9 @@ test('T-697 the Scouts list in VS Code at width 50: one line per scout, the term
     expect(elements(box).filter(n => n.type === 'Button'), s.name).toEqual([])
     const line = vsRowText(box)
     expect(line.length, `${s.name}: ${line}`).toBeLessThanOrEqual(room)
-    // the same parts as the terminal list's row, in its order: icon, name, how often, state, "last:", model
+    // the same parts as the terminal list's row, in its order: icon, name, how often, state, "last:", findings, model
     const r = rows[i]!
-    const parts = [r.icon, s.name, r.every.trim(), r.state.trim(), r.last.trim(), r.model.trim()].filter(Boolean)
+    const parts = [r.icon, s.name, r.every.trim(), r.state.trim(), r.last.trim(), r.findings.trim(), r.model.trim()].filter(Boolean)
     let at = 0
     for (const p of parts) {
       const found = line.indexOf(p, at)
@@ -168,17 +170,19 @@ test('T-697 the Scouts list in VS Code at width 50: one line per scout, the term
     if (r.state.trim()) expect(cells.some(([text]) => text === r.state), s.name).toBe(true)
   }
   const line = (name: string) => ui.find({ key: `vs-scout-${name}` }).then(vsRowText)
-  expect(await line('dependency-updates')).toMatch(/^◉ dependency-updates +every 30 min +running now… +haiku$/)
+  expect(await line('dependency-updates')).toMatch(/^◉ dependency-updates +every 30 min +running now… +board: backlog$/)
   const stateColor = (name: string) => ui.find({ key: `vs-scout-${name}` }).then(b => ((b!.children as Node[]).filter(n => n.type === 'Text').find(n => /running|paused|bad every|next in/.test(texts(n).join('').replace(/ /g, ' '))))?.props?.color)
   expect(await stateColor('dependency-updates')).toBe('ide')
   expect(await stateColor('docs-drift')).toBe('inactive')
   expect(await stateColor('broken')).toBe('warning')
-  expect(await line('docs-drift')).toMatch(/paused +last: nothing$/)
-  // a long report: its start after "last: found 5", cut with "…" so the row stays one line
+  expect(await line('docs-drift')).toMatch(/paused +last: nothing +board: backlog$/)
+  // a long report: its start after "last: found 5", cut with "…" so the row stays one line; T-912: the findings
+  // choice keeps its place at the end, so in a narrow row the report start goes first
   const long = await line('security-advisories-for-node-packages')
-  expect(long).toMatch(/next in 3h 00m +last: found 5: The package.*…$/)
+  expect(long).toMatch(/next in 3h 00m +last: found 5 +board: backlog$/)
   expect(long.length).toBeLessThanOrEqual(room)
-  expect(scoutRowEnd(SCOUTS[1] as never, rows[1]!, 40)).toMatch(/^  last: found 5: The package left-pad…$/)
+  expect(scoutRowEnd(SCOUTS[1] as never, rows[1]!, 60)).toMatch(/^  last: found 5: The package left-pad.*…  board: backlog$/)
+  expect(scoutRowEnd(SCOUTS[1] as never, rows[1]!, 60).length).toBeLessThanOrEqual(60)
   expect(scoutRowEnd(SCOUTS[1] as never, rows[1]!, 40).length).toBeLessThanOrEqual(40)
   expect((await ui.find({ key: 'scout-new' }))?.props.variant).toBe('secondary')
   // a new scout: a button, then a box for its name with a Cancel button

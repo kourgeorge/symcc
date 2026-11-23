@@ -26,7 +26,7 @@ import {
   bannerLines, bannerRule, footerRule, type BannerTone, panelSections, localOffset, when, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, ALL_CLEAR,
   rowStates, rowMark, TITLE_ROOM, fitRow, rowExtra, questionsLabel, archivedOf, archivedNote, statusMark, detailRows, detailRowLines, wrapSegs, hintLineText,
   type KeyHint, type Seg, type BoardTask, intoOf, taskActions, taskAsks, fileWaitText, actionButtonLabel, packRows, type TaskAction, type TaskActionId,
-  ownersTurn, shownStatus, sortScouts, scoutListRows, scoutHowTo, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem, scoutFile,
+  ownersTurn, shownStatus, sortScouts, scoutListRows, scoutFindingsOf, findingsLine, findingsDefaultLine, scoutHowTo, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem, scoutFile,
   SETTING_GROUPS, SETTINGS, isSettingPage, settingInfo, settingShown, settingValue, viewAsBoard, cantPlayNotify, groupSummaryParts,
   type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction, type DefEditField, type TaskVerb, settingsKeys, rolesKeys, kindsKeys, roleEditKeys, defEditFields, roleTools, roleFileText, roleSkipReason, roleCodeText, kindFileText, kindSkipReason,
   DEFAULT_ROLE, isCheckerRole, ALWAYS_ON_KINDS, checkerOn, roleNameError, kindNameError, leadScoutNameError, checkStepNow, rowEndText, taskPhase, choiceLines, driveWarning,
@@ -634,7 +634,7 @@ function tabKeys(f: ViewFile | null, opened: string, tab: PanelTab, run: string,
     if (!sc) return [move, { key: 'Enter', word: 'open' }, views, close]
     if (run && scoutRunsIn(f, sc.name).some(x => x.run.ended === run)) return [back]
     const runs = scoutRunsIn(f, sc.name).length ? [move, { key: 'Enter', word: 'report' }] : []
-    return [...(sc.running ? [] : [{ key: 'r', word: 'run now' }]), { key: 'p', word: sc.paused ? 'resume' : 'pause' }, { key: 'e', word: 'edit' }, ...runs, back]
+    return [...(sc.running ? [] : [{ key: 'r', word: 'run now' }]), { key: 'p', word: sc.paused ? 'resume' : 'pause' }, { key: 'e', word: 'edit' }, { key: 'f', word: 'findings' }, ...runs, back]
   }
   if (!opened) return [move, { key: 'Enter', word: 'open' }, views, close]
   const t = f?.view.tasks.find(x => x.id === opened)
@@ -991,7 +991,10 @@ function scoutsBody(f: ViewFile, choice: PanelChoice, nowMs: number, w: number):
   }
   const ids = scouts.map(x => x.name)
   const selected = ids[Math.min(Math.max(0, choice.cursor), ids.length - 1)]!
-  const rows = scoutListRows(scouts, nowMs, w)
+  const board = scoutFindingsOf(f.view)
+  const rows = scoutListRows(scouts, nowMs, w, 2, board)
+  // T-912: where findings go for a scout with no choice of its own
+  b.add([{ text: `  ${findingsDefaultLine(board)}`, color: 'inactive' }])
   // T-706: Claude Code's "+ New scout" button (n) above the list
   for (const l of buttonLines([NEW_SCOUT_BUTTON], w)) b.add(l)
   b.blank()
@@ -1005,6 +1008,7 @@ function scoutsBody(f: ViewFile, choice: PanelChoice, nowMs: number, w: number):
         { text: r.every, color: 'inactive' },
         { text: r.state, color: r.stateTone },
         { text: r.last, color: r.lastTone },
+        { text: r.findings, color: 'inactive' },
         { text: r.model, color: 'inactive' },
       ],
       { scout: x.name },
@@ -1047,6 +1051,9 @@ function scoutPage(f: ViewFile, sc: SymccScout, choice: PanelChoice, nowMs: numb
   const last = shown[0]
   for (const l of headerLines({ from: 'scouts', label: sc.name, place: placeIn(scoutListNames(f.view.scouts ?? []), sc.name), title: scoutAbout(sc), color: 'claude', state: scoutStateGroups(sc, nowMs, last), buttons: scoutButtons(sc) }, w)) b.add(l)
   const headLines = b.lines.length
+  // T-912: its findings choice; f (or a click on the line) moves it on, sent as /<name>-scout <name> findings ...
+  const said = findingsLine(sc.findings, scoutFindingsOf(f.view))
+  b.add([{ text: 'Findings: ', color: 'text', bold: true }, { text: said.slice('Findings: '.length), color: 'inactive' }, { text: '  (f changes it)', color: 'inactive' }], { key: 'f' })
   // the summary from the file's front matter, if one is set (the instructions show in full below)
   if (sc.warning) b.add([{ text: sc.warning, color: 'warning' }])
   const problem = scoutLastRunProblem([...shown].reverse().map(x => x.run))

@@ -134,12 +134,12 @@ test('a scout file with every_minutes 0 runs only on demand; a bad value too, wi
     at,
     90,
   )
-  expect(rows.map(r => scoutListText(r))).toEqual(['  ◎ secrets  on demand                     last: nothing', '  ◎ bad      on demand  bad every_minutes  never ran'])
+  expect(rows.map(r => scoutListText(r))).toEqual(['  ◎ secrets  on demand                     last: nothing  board: auto', '  ◎ bad      on demand  bad every_minutes  never ran      board: auto'])
   expect(rows[1]!.stateTone).toBe('warning')
   expect(rows[0]!.stateTone).toBe('text')
   expect(rows.map(r => scoutListText(r)).some(t => /next in/.test(t))).toBe(false)
   // alone, an on-demand scout's row is just its icon, name, "on demand" and last
-  expect(scoutListText(scoutListRows([{ name: 'secrets', every_minutes: 0, last_run: '2026-11-12T09:00:00.000Z', running: false, last_report: 'NOTHING' }], at, 90)[0]!)).toBe('  ◎ secrets  on demand  last: nothing')
+  expect(scoutListText(scoutListRows([{ name: 'secrets', every_minutes: 0, last_run: '2026-11-12T09:00:00.000Z', running: false, last_report: 'NOTHING' }], at, 90)[0]!)).toBe('  ◎ secrets  on demand  last: nothing  board: auto')
 })
 
 test('the board lists the newest task at the top and the oldest at the bottom', () => {
@@ -3092,10 +3092,10 @@ test('key hints: in order for the task state, laid out at 30, 50 and 80 columns,
   expect(words(keysFor('done'))).toEqual(['y copy', '↑↓ scroll', 'b back'])
   expect(words(diffKeys(true, true))).toEqual(['a approve', 'x reject', 'd all files', '↑↓ scroll', 'b back to the task'])
   expect(words(diffKeys(false, false))).toEqual(['↑↓ scroll', 'b back to the task'])
-  expect(words(scoutKeys())).toEqual(['r run now', 'e edit', 'p pause', '↑↓ scroll', 'b back'])
-  expect(words(scoutKeys(true))).toEqual(['r run now', 'e edit', 'p resume', '↑↓ scroll', 'b back'])
+  expect(words(scoutKeys())).toEqual(['r run now', 'e edit', 'p pause', 'f findings', '↑↓ scroll', 'b back'])
+  expect(words(scoutKeys(true))).toEqual(['r run now', 'e edit', 'p resume', 'f findings', '↑↓ scroll', 'b back'])
   // while the scout runs there is no "r run now" (like the button)
-  expect(words(scoutKeys(false, true))).toEqual(['e edit', 'p pause', '↑↓ scroll', 'b back'])
+  expect(words(scoutKeys(false, true))).toEqual(['e edit', 'p pause', 'f findings', '↑↓ scroll', 'b back'])
   expect(words(scoutListKeys())).toEqual(['Enter open', '↑↓ move', 'l t s c views', 'b back'])
   const all = [keysFor('review', { worker: true }), keysFor('backlog'), keysFor('todo', { worker: true }), listKeys(), scoutKeys(), diffKeys(true, true)]
   for (const w of [30, 50, 80])
@@ -3219,15 +3219,17 @@ test('scout list rows: aligned columns; on a narrow panel the model goes first, 
   const at = Date.parse('2026-11-12T10:00:00.000Z')
   const text = (w: number) => scoutListRows(sortScouts(exampleScouts(at)), at, w).map(r => scoutListText(r))
   expect(text(90)).toEqual([
-    '  ◉ recent-changes  every 90 min    running now…',
-    '  ◎ gaps-bot        every hour      next in 59m     last: found 1',
-    '  ◎ secrets         every 4 hours   next in 3h 59m  last: nothing',
-    '  ◎ test-gaps       every 4 hours   next in 3h 59m  never ran      sonnet',
-    '  ○ simplify        every 10 hours  paused          never ran      sonnet',
+    '  ◉ recent-changes  every 90 min    running now…                   board: auto',
+    '  ◎ gaps-bot        every hour      next in 59m     last: found 1  board: auto',
+    '  ◎ secrets         every 4 hours   next in 3h 59m  last: nothing  board: auto',
+    '  ◎ test-gaps       every 4 hours   next in 3h 59m  never ran      board: auto  sonnet',
+    '  ○ simplify        every 10 hours  paused          never ran      board: auto  sonnet',
   ])
   for (const w of [90, 72, 50, 40, 20]) for (const line of text(w)) if (w >= 50) expect(line.length).toBeLessThanOrEqual(w)
-  // 66 columns: no model column
-  expect(text(66)[3]).toBe('  ◎ test-gaps       every 4 hours   next in 3h 59m  never ran')
+  // 78 columns: no model column
+  expect(text(78)[3]).toBe('  ◎ test-gaps       every 4 hours   next in 3h 59m  never ran      board: auto')
+  // 66 columns: no "last:" either; the findings choice stays (T-912)
+  expect(text(66)[3]).toBe('  ◎ test-gaps       every 4 hours   next in 3h 59m  board: auto')
   // 50 columns: no model and no "last:"
   expect(text(50)).toEqual([
     '  ◉ recent-changes  every 90 min    running now…',
@@ -3242,6 +3244,32 @@ test('scout list rows: aligned columns; on a narrow panel the model goes first, 
   const long = 'a-very-long-scout-name-that-is-wider-than-the-panel'
   expect(scoutListText(scoutListRows([{ name: long, every_minutes: 30, last_run: null, running: false }], at, 30)[0]!)).toBe(`  ◎ ${long}`)
 })
+
+test('T-912: each Scouts list row shows its findings choice: its own (auto or backlog) or the board default', () => {
+  const at = Date.parse('2026-11-12T10:00:00.000Z')
+  const scouts: SymccScout[] = [
+    { name: 'own-auto', every_minutes: 60, last_run: null, running: false, findings: 'auto' },
+    { name: 'own-backlog', every_minutes: 60, last_run: null, running: false, findings: 'backlog' },
+    { name: 'no-choice', every_minutes: 60, last_run: null, running: false },
+  ]
+  const text = (board: 'auto' | 'backlog') => scoutListRows(scouts, at, 120, 2, board).map(r => scoutListText(r))
+  expect(text('auto')).toEqual([
+    '  ◎ own-auto     every hour  never ran  → todo (auto)',
+    '  ◎ own-backlog  every hour  never ran  → backlog',
+    '  ◎ no-choice    every hour  never ran  board: auto',
+  ])
+  expect(text('backlog')[2]).toBe('  ◎ no-choice    every hour  never ran  board: backlog')
+  expect(text('backlog')[0]).toContain('→ todo (auto)')
+  // the page's Findings line and what f moves each choice to
+  expect(findingsLine('auto')).toBe('Findings: auto: the lead decides; bugs usually go to todo')
+  expect(findingsLine('backlog')).toBe('Findings: backlog: every task from this scout waits in the backlog')
+  expect(findingsLine(undefined, 'auto')).toBe('Findings: board default: follows the board setting (now auto)')
+  expect(findingsLine(undefined, 'backlog')).toBe('Findings: board default: follows the board setting (now backlog)')
+  expect([nextFindings(undefined), nextFindings('auto'), nextFindings('backlog')]).toEqual(['auto', 'backlog', 'default'])
+  expect(findingsDefaultLine('backlog')).toBe('scout findings by default: backlog')
+})
+
+import { findingsLine, nextFindings, findingsDefaultLine } from '../hooks/board'
 
 import { parseStatusZ, mergeBlockers, blockedText, waitFilesNote, stillBlocks, moveTarget, type GitRun } from '../hooks/board'
 

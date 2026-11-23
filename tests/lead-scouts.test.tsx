@@ -86,6 +86,109 @@ test('T-862: the scouts tool shows and changes a scout\'s findings choice', asyn
   expect(await call($, { action: 'add', name: 'docs', every_minutes: 5, findings: 'auto', prompt: 'Look.' })).toContain('findings → auto')
 })
 
+/** The board panel on the Scouts tab with scout bugs open (T-912). */
+function scoutPageState(on: On, findings?: string) {
+  const seed: Record<string, unknown> = {
+    tab: 'scouts',
+    scout: 'bugs',
+    view: { shape: 'view-1', value: { tasks: [], working: [], scouts: [{ name: 'bugs', every_minutes: 30, last_run: null, running: false, prompt: 'Look for crashes.', ...(findings ? { findings } : {}) }], mode: 'auto', test_commands: [] } },
+  }
+  // the page stays on scout bugs (its file is what the tests check)
+  on('state.get', (_, e, next) => (e.key in seed ? { value: { value: seed[e.key], version: 1 } } : next(e)))
+  on('ui.toast', () => ({ value: undefined }))
+}
+const PANE = { plugin: 'symcc', component: 'Pane', requestId: 'symcc-board', surface: 'terminal', props: { title: 'symcc board', isFocused: false, bodyColumns: 100, placement: 'dock', scroll: { offset: 0, bodyRows: 40 }, view: {} } } as const
+
+test('T-912: f on a scout\'s page moves its findings choice on and saves it in its file: default → auto → backlog → default', async ($, on) => {
+  const files = base()
+  setup(on, files)
+  scoutPageState(on)
+  const ui = await $.ui.mount(PANE as never)
+  expect((await ui.find({ key: 'scout-findings' }))?.props.hotkey).toBe('f')
+  await ui.press({ key: 'scout-findings' })
+  expect(files['/.symcc/scouts/bugs.md']).toContain('findings: auto')
+  await ui.press({ key: 'scout-findings' })
+  expect(files['/.symcc/scouts/bugs.md']).toContain('findings: backlog')
+  await ui.press({ key: 'scout-findings' })
+  expect(files['/.symcc/scouts/bugs.md']).not.toContain('findings:')
+  // the rest of the file is kept
+  expect(parseScout('bugs', files['/.symcc/scouts/bugs.md']!)).toMatchObject({ every_minutes: 30, prompt: 'Look for crashes.' })
+  await ui.unmount()
+})
+
+test('T-912: the scout edit page\'s findings pick list saves the picked choice (and board default removes it)', async ($, on) => {
+  const files = base()
+  setup(on, files)
+  scoutPageState(on)
+  const ui = await $.ui.mount(PANE as never)
+  await ui.press({ key: 'scout-edit' })
+  await ui.press({ key: 'scout-findings:backlog' })
+  await ui.press({ key: 'scout-save' })
+  expect(files['/.symcc/scouts/bugs.md']).toContain('findings: backlog')
+  await ui.unmount()
+})
+
+test('T-912: on the scout edit page, board default in the findings pick list takes the choice out of the file', async ($, on) => {
+  const files = { ...base(), '/.symcc/scouts/bugs.md': '---\nevery_minutes: 30\nfindings: backlog\n---\nLook for crashes.\n' }
+  setup(on, files)
+  scoutPageState(on, 'backlog')
+  const ui = await $.ui.mount(PANE as never)
+  await ui.press({ key: 'scout-edit' })
+  expect((await ui.find({ key: 'scout-findings:backlog' }))?.text).toContain('●')
+  await ui.press({ key: 'scout-findings:default' })
+  await ui.press({ key: 'scout-save' })
+  expect(files['/.symcc/scouts/bugs.md']).not.toContain('findings:')
+  expect(parseScout('bugs', files['/.symcc/scouts/bugs.md']!)).toMatchObject({ every_minutes: 30, prompt: 'Look for crashes.' })
+  await ui.unmount()
+})
+
+
+test('T-912: in VS Code a scout\'s page shows its Findings line, and its Change link moves the choice on in the file', async ($, on) => {
+  const files = base()
+  setup(on, files)
+  scoutPageState(on)
+  const ui = await $.ui.mount({ ...PANE, surface: 'vscode' } as never)
+  expect(await ui.find({ type: 'Text', text: 'Findings: board default: follows the board setting (now auto)' })).toBeDefined()
+  const link = await ui.find({ key: 'scout-findings' })
+  const href = (link?.props.pressableLinks as string[] | undefined)?.[0] ?? ''
+  expect(href).toContain('scout-findings')
+  await ui.press({ key: 'scout-findings', link: { href } } as never)
+  expect(files['/.symcc/scouts/bugs.md']).toContain('findings: auto')
+  await ui.press({ key: 'scout-findings', link: { href } } as never)
+  expect(files['/.symcc/scouts/bugs.md']).toContain('findings: backlog')
+  await ui.press({ key: 'scout-findings', link: { href } } as never)
+  expect(files['/.symcc/scouts/bugs.md']).not.toContain('findings:')
+  await ui.unmount()
+})
+
+for (const [findings, line] of [
+  ['auto', 'Findings: auto: the lead decides; bugs usually go to todo'],
+  ['backlog', 'Findings: backlog: every task from this scout waits in the backlog'],
+] as const)
+  test(`T-912: in VS Code a scout set to ${findings} says so on its page`, async ($, on) => {
+    setup(on, base())
+    scoutPageState(on, findings)
+    const ui = await $.ui.mount({ ...PANE, surface: 'vscode' } as never)
+    expect(await ui.find({ type: 'Text', text: line })).toBeDefined()
+    await ui.unmount()
+  })
+
+test('T-912: in VS Code the scout edit page has a Findings pick list of the three choices, and a pick is saved', async ($, on) => {
+  const files = base()
+  setup(on, files)
+  scoutPageState(on)
+  const ui = await $.ui.mount({ ...PANE, surface: 'vscode' } as never)
+  await ui.press({ key: 'scout-edit' })
+  const pick = await ui.find({ key: 'scout-findings' })
+  expect(pick?.type).toBe('Select')
+  expect((pick?.props.options as { value: string }[]).map(o => o.value)).toEqual(['default', 'auto', 'backlog'])
+  expect(pick?.props.value).toBe('default')
+  await ui.select({ key: 'scout-findings', value: 'auto' })
+  await ui.press({ key: 'scout-save' })
+  expect(files['/.symcc/scouts/bugs.md']).toContain('findings: auto')
+  await ui.unmount()
+})
+
 test('scouts add refuses a bad name and writes nothing', async ($, on) => {
   const files = base()
   setup(on, files)

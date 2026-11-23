@@ -1,6 +1,6 @@
 import type { SymccScout, SymccTask, SymccTokens } from '../../types'
 import { type ScoutFindings } from '../board'
-import { type ScoutDef, scoutFindingsChoice, parseScout, modeOf, symccOn, OPEN, scoutPrompt, recentClosed, scoutAgentName, scoutDescription, parseScoutMemory, lastRunOf, scoutMemoryText, scoutPausedText, everyText, SCOUT_REPORT_CHARS, scoutLeadMessage, scoutWhyNot, scoutFile, scoutNameError, scoutDraftError, scoutText, everyMinutesOf, onDemand, onNotReady, SCOUT_RETRY_MS, inPlan, addScoutRun, keepScoutUsage, leadScoutNameError, leadScoutText, leadScoutsText, safeScoutFile, SCOUT_FILE_NAME, SCOUT_FILE_NAME_RULE, scoutFileNameError, type ScoutRunRecord, parseScoutRuns, scoutRunsText, addScoutRunRecord, scoutRunsFile, scoutRunReportFile, isScoutRunReport, scoutRunOutcome, scoutRunTasks, linkScoutRunTask, countFindings, reportText, parseScoutUsage, scoutResultsLine, renameScoutOrigins, linkScoutRunTaskAt, type Board } from '../board'
+import { type ScoutDef, scoutFindingsChoice, nextFindings, parseScout, modeOf, symccOn, OPEN, scoutPrompt, recentClosed, scoutAgentName, scoutDescription, parseScoutMemory, lastRunOf, scoutMemoryText, scoutPausedText, everyText, SCOUT_REPORT_CHARS, scoutLeadMessage, scoutWhyNot, scoutFile, scoutNameError, scoutDraftError, scoutText, everyMinutesOf, onDemand, onNotReady, SCOUT_RETRY_MS, inPlan, addScoutRun, keepScoutUsage, leadScoutNameError, leadScoutText, leadScoutsText, safeScoutFile, SCOUT_FILE_NAME, SCOUT_FILE_NAME_RULE, scoutFileNameError, type ScoutRunRecord, parseScoutRuns, scoutRunsText, addScoutRunRecord, scoutRunsFile, scoutRunReportFile, isScoutRunReport, scoutRunOutcome, scoutRunTasks, linkScoutRunTask, countFindings, reportText, parseScoutUsage, scoutResultsLine, renameScoutOrigins, linkScoutRunTaskAt, type Board } from '../board'
 import { publish, refreshStatus, drivesHere } from './lead'
 import { S, onHere, scoutState, scoutRuns, heard, timers, updateScoutOpen, stopped, movedAgents, movedRefused, DRIVING_MOVED } from './state'
 import { type FileTouch, type Host, type HostAgentStarted, notReadyYet } from '../host'
@@ -665,6 +665,13 @@ const findingsOf = (v: string): ScoutFindings | '' => scoutFindingsChoice(v) ?? 
 export async function scoutFindingsFor(host: Host, name: string): Promise<ScoutFindings | undefined> {
   const text = await readScoutFile(host, name)
   return text === null ? undefined : parseScout(name, text)?.findings
+}
+
+/** The findings key (f) on scout `name`'s page (T-912): moves its own choice on (board default → auto → backlog →
+ *  board default; nextFindings), saved in its file as /<name>-scout <name> findings auto|backlog|default does. */
+export async function cycleScoutFindings(host: Host, name: string): Promise<string> {
+  const now = await scoutFindingsFor(host, name)
+  return leadScouts(host, { action: 'edit', name, findings: nextFindings(now) })
 }
 
 /** every_minutes as the lead gave it (a whole number, 0 or more), or null. */

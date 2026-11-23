@@ -1082,24 +1082,47 @@ test('"Edit" on a scout\'s page opens its edit mode, and "Cancel" goes back', as
   await ui.unmount()
 })
 
-test('T-862: a scout\'s own findings choice shows in the list and on its page, and the edit box saves it in the file', async ($, on) => {
-  stateOf(on, { tab: 'scouts', scout: 'bugs', view: { shape: 'view-1', value: { tasks: [], working: [], scouts: [scout('bugs', { findings: 'backlog', prompt: 'Look.' }), scout('docs', { prompt: 'Docs.' })], mode: 'auto', test_commands: [] } } })
+for (const board of ['auto', 'backlog'] as const)
+  test(`T-912: the Scouts list says the board default (${board}) on top and each row shows its scout's findings choice`, async ($, on) => {
+    stateOf(on, { tab: 'scouts', view: { shape: 'view-1', value: { tasks: [], working: [], scouts: [scout('bugs', { findings: 'backlog', prompt: 'Look.' }), scout('docs', { prompt: 'Docs.' }), scout('lint', { findings: 'auto', prompt: 'Lint.' })], mode: 'auto', test_commands: [], scout_findings: board } } })
+    const ui = await $.ui.mount({ ...PANE, surface: 'terminal', props: { ...PANE.props, bodyColumns: 100 } })
+    expect(await ui.find({ type: 'Text', text: `  scout findings by default: ${board}` })).toBeDefined()
+    expect((await ui.find({ key: 'scout:bugs' }))?.text).toContain('→ backlog')
+    expect((await ui.find({ key: 'scout:lint' }))?.text).toContain('→ todo (auto)')
+    expect((await ui.find({ key: 'scout:docs' }))?.text).toContain(`board: ${board}`)
+    await ui.unmount()
+  })
+
+{
+  const cases: [Record<string, unknown>, string, RegExp][] = [
+    [{ findings: 'auto' }, 'auto', /^Findings: auto: the lead decides; bugs usually go to todo  \(f changes it\)$/],
+    [{ findings: 'backlog' }, 'auto', /^Findings: backlog: every task from this scout waits in the backlog  \(f changes it\)$/],
+    [{}, 'auto', /^Findings: board default: follows the board setting \(now auto\)  \(f changes it\)$/],
+    [{}, 'backlog', /^Findings: board default: follows the board setting \(now backlog\)  \(f changes it\)$/],
+  ]
+  for (const [more, board, re] of cases)
+  test(`T-912: a scout's page has a Findings line (${JSON.stringify(more)}, board ${board})`, async ($, on) => {
+    stateOf(on, { tab: 'scouts', scout: 'bugs', view: { shape: 'view-1', value: { tasks: [], working: [], scouts: [scout('bugs', { ...more, prompt: 'Look.' })], mode: 'auto', test_commands: [], scout_findings: board } } })
+    on('ui.toast', () => ({ value: undefined }))
+    const ui = await $.ui.mount({ ...PANE, surface: 'terminal', props: { ...PANE.props, bodyColumns: 120 } })
+    const line = await ui.find({ key: 'scout-findings' })
+    expect(line?.text).toMatch(re)
+    expect(line?.props.hotkey).toBe('f')
+    await ui.unmount()
+  })
+}
+
+test('T-912: the scout edit page offers the three findings choices as a pick list, and the pick is saved', async ($, on) => {
+  stateOf(on, { tab: 'scouts', scout: 'bugs', view: { shape: 'view-1', value: { tasks: [], working: [], scouts: [scout('bugs', { findings: 'backlog', prompt: 'Look.' })], mode: 'auto', test_commands: [] } } })
   on('ui.toast', () => ({ value: undefined }))
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect(await ui.find({ type: 'Text', text: /findings → backlog/ })).toBeDefined()
   await ui.press({ key: 'scout-edit' })
-  expect((await ui.find({ key: 'scout-findings' }))?.props.value).toBe('backlog')
-  await ui.input({ key: 'scout-findings', text: 'sometimes' })
-  await ui.press({ key: 'scout-save' })
-  expect(await ui.find({ type: 'Text', text: /^Findings must be auto, backlog or default/ })).toBeDefined()
-  await ui.unmount()
-})
-
-test('T-862: the Scouts list marks a scout with its own findings choice, and only that one', async ($, on) => {
-  stateOf(on, { tab: 'scouts', view: { shape: 'view-1', value: { tasks: [], working: [], scouts: [scout('bugs', { findings: 'backlog', prompt: 'Look.' }), scout('docs', { prompt: 'Docs.' })], mode: 'auto', test_commands: [] } } })
-  const ui = await $.ui.mount({ ...PANE, surface: 'terminal', props: { ...PANE.props, bodyColumns: 100 } })
-  expect((await ui.find({ key: 'scout:bugs' }))?.text).toContain('→ backlog')
-  expect((await ui.find({ key: 'scout:docs' }))?.text).not.toContain('→')
+  expect((await ui.find({ key: 'scout-findings:backlog' }))?.text).toBe('  ● backlog (every task waits)')
+  expect((await ui.find({ key: 'scout-findings:auto' }))?.text).toBe('  ○ auto (the lead decides)')
+  expect((await ui.find({ key: 'scout-findings:default' }))?.text).toBe('  ○ board default (now auto)')
+  await ui.press({ key: 'scout-findings:default' })
+  expect((await ui.find({ key: 'scout-findings:default' }))?.text).toBe('  ● board default (now auto)')
+  expect((await ui.find({ key: 'scout-findings:backlog' }))?.text).toBe('  ○ backlog (every task waits)')
   await ui.unmount()
 })
 
@@ -1873,11 +1896,11 @@ for (const width of [50, 90]) {
     for (const r of rows) expect(r.length).toBeLessThanOrEqual(width)
     if (width === 90)
       expect(rows).toEqual([
-        '  ◉ recent-changes  every 90 min    running now…',
-        '  ◎ gaps-bot        every hour      next in 59m     last: found 1',
-        '  ◎ secrets         every 4 hours   next in 3h 59m  last: nothing',
-        '  ◎ test-gaps       every 4 hours   next in 3h 59m  never ran      sonnet',
-        '  ○ simplify        every 10 hours  paused          never ran      sonnet',
+        '  ◉ recent-changes  every 90 min    running now…                   board: auto',
+        '  ◎ gaps-bot        every hour      next in 59m     last: found 1  board: auto',
+        '  ◎ secrets         every 4 hours   next in 3h 59m  last: nothing  board: auto',
+        '  ◎ test-gaps       every 4 hours   next in 3h 59m  never ran      board: auto  sonnet',
+        '  ○ simplify        every 10 hours  paused          never ran      board: auto  sonnet',
       ])
     else
       expect(rows).toEqual([
@@ -2001,8 +2024,8 @@ test('every_minutes 0 or a bad value: no timer, "on demand" in /symcc-scouts wit
   const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 140 }, surface: 'terminal' })
   await ui.press({ key: 'tab-scouts' })
   expect(String((await ui.find({ key: 'scout:bugs' }))?.text)).toMatch(/every 30 min\s+next in 1m/)
-  expect(String((await ui.find({ key: 'scout:secrets' }))?.text).trimEnd()).toMatch(/^  ◎ secrets\s+on demand\s+never ran$/)
-  expect(String((await ui.find({ key: 'scout:bad' }))?.text).trimEnd()).toMatch(/^  ◎ bad\s+on demand\s+bad every_minutes\s+never ran$/)
+  expect(String((await ui.find({ key: 'scout:secrets' }))?.text).trimEnd()).toMatch(/^  ◎ secrets\s+on demand\s+never ran  board: auto$/)
+  expect(String((await ui.find({ key: 'scout:bad' }))?.text).trimEnd()).toMatch(/^  ◎ bad\s+on demand\s+bad every_minutes\s+never ran  board: auto$/)
   await ui.unmount()
   // run now is not refused because the scout runs only on demand
   const run = String((await $.command.run(slash('symcc-scout', 'secrets'))).text)
@@ -2014,8 +2037,8 @@ test('an on-demand scout\'s page says "on demand" with no "next in", and a bad v
   const warning = 'every_minutes "-5" is not valid: runs only on demand until fixed'
   stateOf(on, { tab: 'scouts', view: { shape: 'view-1', value: { tasks: [], working: [], scouts: [scout('secrets', { every_minutes: 0, prompt: 'Look for keys.' }), scout('bad', { every_minutes: 0, warning, prompt: 'Look around.' }), scout('bugs', { next_run: soon })], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 90 }, surface: 'terminal' })
-  expect(String((await ui.find({ key: 'scout:secrets' }))?.text).trimEnd()).toMatch(/^  ◎ secrets\s+on demand\s+never ran$/)
-  expect(String((await ui.find({ key: 'scout:bad' }))?.text).trimEnd()).toMatch(/^  ◎ bad\s+on demand\s+bad every_minutes\s+never ran$/)
+  expect(String((await ui.find({ key: 'scout:secrets' }))?.text).trimEnd()).toMatch(/^  ◎ secrets\s+on demand\s+never ran  board: auto$/)
+  expect(String((await ui.find({ key: 'scout:bad' }))?.text).trimEnd()).toMatch(/^  ◎ bad\s+on demand\s+bad every_minutes\s+never ran  board: auto$/)
   expect((await ui.find({ type: 'Text', text: /bad every_minutes/ }))?.props.color).toBe('warning')
   await ui.press({ key: 'scout:secrets' })
   const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text).join('\n')
@@ -2328,7 +2351,7 @@ const NO_MODE_PAGES: [string, Record<string, unknown>, string | null, KeyHint[]]
   ['task page', { opened: 'T-5' }, null, keysFor('review')],
   ['diff view', { opened: 'T-5' }, 'show-changes', [{ key: 'a', word: 'approve' }, { key: 'x', word: 'reject' }, { key: '↑↓', word: 'scroll' }, { key: 'b', word: 'back to the task' }]],
   ['scouts list', { tab: 'scouts' }, null, [{ key: 'Enter', word: 'open' }, { key: '↑↓', word: 'move' }, { key: 'l t s c', word: 'views' }, { key: 'b', word: 'back' }]],
-  ['scout page', { tab: 'scouts', scout: 'bugs' }, null, [{ key: 'r', word: 'run now' }, { key: 'e', word: 'edit' }, { key: 'p', word: 'pause' }, { key: '↑↓', word: 'scroll' }, { key: 'b', word: 'back' }]],
+  ['scout page', { tab: 'scouts', scout: 'bugs' }, null, [{ key: 'r', word: 'run now' }, { key: 'e', word: 'edit' }, { key: 'p', word: 'pause' }, { key: 'f', word: 'findings' }, { key: '↑↓', word: 'scroll' }, { key: 'b', word: 'back' }]],
   ['scout editor', { tab: 'scouts', scout: 'bugs' }, 'scout-edit', [{ key: '↑↓', word: 'move between boxes' }, { key: 'Cancel', word: 'leaves without saving' }]],
   ['settings', { tab: 'settings' }, null, [{ key: 'Enter', word: 'change' }, { key: '↑↓', word: 'move' }, { key: 'l t s c', word: 'views' }, { key: 'b', word: 'back' }]],
 ]

@@ -5,6 +5,7 @@
 // fixture's fixed clock (T-401 has run 2 minutes then: "▶ 2m"), so they don't depend on when the tests run (T-437).
 // T-751: the task page ("terminal task", "desktop task", "mobile task") starts with the 4-line page header and its heavy rule.
 // T-775: every header button "[Label]" in one style, Back "‹ [Tasks]".
+// T-912: the Scouts page ("terminal scouts", ...) says "scout findings by default: auto" on top and each row its findings choice.
 export const BEFORE: Record<string, unknown> = {
   "terminal 50": {
     "type": "Box",
@@ -1642,6 +1643,7 @@ export const BEFORE: Record<string, unknown> = {
         ]
       },
       {"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]},
+      {"type":"Text","props":{"color":"inactive"},"children":["  scout findings by default: auto"]},
       {
         "type": "Button",
         "props": {"key":"scout-new","label":"+ New scout","hotkey":"n"},
@@ -1659,6 +1661,7 @@ export const BEFORE: Record<string, unknown> = {
           {"type":"Text","props":{"color":"inactive"},"children":["  every 30 min"]},
           {"type":"Text","props":{"color":"text"},"children":[""]},
           {"type":"Text","props":{"color":"inactive"},"children":["  never ran"]},
+          {"type":"Text","props":{"color":"inactive"},"children":["  board: auto"]},
           {"type":"Text","props":{"color":"inactive"},"children":[""]}
         ]
       },
@@ -2325,6 +2328,7 @@ export const BEFORE: Record<string, unknown> = {
         ]
       },
       {"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]},
+      {"type":"Text","props":{"color":"inactive"},"children":["  scout findings by default: auto"]},
       {
         "type": "Button",
         "props": {"key":"scout-new","label":"+ New scout","hotkey":"n"},
@@ -2342,6 +2346,7 @@ export const BEFORE: Record<string, unknown> = {
           {"type":"Text","props":{"color":"inactive"},"children":["  every 30 min"]},
           {"type":"Text","props":{"color":"text"},"children":[""]},
           {"type":"Text","props":{"color":"inactive"},"children":["  never ran"]},
+          {"type":"Text","props":{"color":"inactive"},"children":["  board: auto"]},
           {"type":"Text","props":{"color":"inactive"},"children":[""]}
         ]
       },
@@ -3640,6 +3645,7 @@ export const BEFORE: Record<string, unknown> = {
         ]
       },
       {"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]},
+      {"type":"Text","props":{"color":"inactive"},"children":["  scout findings by default: auto"]},
       {
         "type": "Button",
         "props": {"key":"scout-new","label":"+ New scout","hotkey":"n"},
@@ -3657,6 +3663,7 @@ export const BEFORE: Record<string, unknown> = {
           {"type":"Text","props":{"color":"inactive"},"children":["  every 30 min"]},
           {"type":"Text","props":{"color":"text"},"children":[""]},
           {"type":"Text","props":{"color":"inactive"},"children":["  never ran"]},
+          {"type":"Text","props":{"color":"inactive"},"children":["  board: auto"]},
           {"type":"Text","props":{"color":"inactive"},"children":[""]}
         ]
       },

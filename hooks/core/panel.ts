@@ -812,12 +812,14 @@ export const scoutListKeys = (): KeyHint[] => [
   { key: 'b', word: 'back' },
 ]
 
-/** The keys at the bottom of a scout's page; p pauses its timer, or resumes it when `paused`. "r run now" shows
+/** The keys at the bottom of a scout's page; p pauses its timer, or resumes it when `paused`; f moves its findings
+ *  choice on (T-912). "r run now" shows
  *  for a paused scout too (run now still runs it), but not while the scout is `running` (like the button). */
 export const scoutKeys = (paused = false, running = false, nav: KeyHint | null = null): KeyHint[] => [
   ...(running ? [] : [{ key: 'r', word: 'run now' }]),
   { key: 'e', word: 'edit' },
   { key: 'p', word: paused ? 'resume' : 'pause' },
+  { key: 'f', word: 'findings' },
   ...(nav ? [nav] : []),
   { key: '↑↓', word: 'scroll' },
   { key: 'b', word: 'back' },

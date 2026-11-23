@@ -1,6 +1,6 @@
 // The board panel's Scouts view: the list, one scout's page, and its edit mode.
-import { scoutRow, scoutFile, scoutKeys, scoutListRows, scoutHowTo, scoutListKeys, scoutEditKeys, boxHint, scoutRunTasks, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem } from '../../board'
-import { saveScout, cancelScoutEdit, runScoutNow, editScout, setScoutPaused, newScout, loadScoutRunHistory, loadScoutResults, readScoutRunReport, scoutPlace, scoutPlaceValue } from '../../app/scouts'
+import { scoutRow, scoutFile, scoutKeys, scoutListRows, scoutHowTo, scoutListKeys, scoutEditKeys, boxHint, scoutRunTasks, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem, scoutFindingsOf, findingsLine, findingsDefaultLine, FINDINGS_PICKS } from '../../board'
+import { saveScout, cancelScoutEdit, runScoutNow, editScout, cycleScoutFindings, setScoutPaused, newScout, loadScoutRunHistory, loadScoutResults, readScoutRunReport, scoutPlace, scoutPlaceValue } from '../../app/scouts'
 import { S } from '../../app/state'
 import { type $, panelValues } from '../panel'
 import type { PaneParts } from './parts'
@@ -56,8 +56,17 @@ export function scoutEditPage($: $, pane: PaneParts) {
 
       <Box flexDirection="column">
         {heading('Findings')}
-        <Input key="scout-findings" value={d.findings} placeholder="empty: follow the board's scout_findings setting" submitLabel="keep" onInput={value => void (d.findings = value)} onSubmit={value => void (d.findings = value)} />
-        <Text color={C('inactive')}>auto: the lead decides where its tasks go · backlog: they all go to the backlog · empty or default: the board setting</Text>
+        {/* T-912: a pick list of the three choices (the saved value: '' = the board's scout_findings) */}
+        {FINDINGS_PICKS.map(o => {
+          const on = (d.findings || '') === o.value
+          const label = o.value ? o.label : `${o.label} (now ${scoutFindingsOf(pane.v)})`
+          return (
+            <Button key={`scout-findings:${o.value || 'default'}`} plain label={label} onPress={() => ((d.findings = o.value), $.ui.invalidate('ui.render'))}>
+              <Text bold={on} color={C(on ? 'ide' : 'text')}>{`  ${on ? '●' : '○'} ${label}`}</Text>
+            </Button>
+          )
+        })}
+        <Text color={C('inactive')}>auto: the lead decides where its tasks go · backlog: they all go to the backlog · board default: the board's scout_findings setting</Text>
       </Box>
 
       <Box flexDirection="column">
@@ -103,6 +112,9 @@ export async function scoutsPage($: $, pane: PaneParts) {
       'scout-edit': act(() => editScout(claudeHost($), sc)),
       'scout-pause': act(async () => $.ui.toast(S.N.toast(await setScoutPaused(claudeHost($), sc.name, !sc.paused)))),
     }
+    // T-912: its findings choice, near the top; f (or a press on the line) moves it on and saves it in its file
+    const board = scoutFindingsOf(pane.v)
+    const cycleFindings = act(async () => $.ui.toast(S.N.toast(await cycleScoutFindings(claudeHost($), sc.name))))
     const header: PageHeader = {
       from: 'scouts', label: sc.name, place: at, title: scoutAbout(sc), color: 'claude',
       state: scoutStateGroups(sc, nowMs, shown[0]),
@@ -145,6 +157,13 @@ export async function scoutsPage($: $, pane: PaneParts) {
     return (
       <Box flexDirection="column" gap={1}>
         {pageHeader(pane, header)}
+        <Button key="scout-findings" plain hotkey="f" label={`${findingsLine(sc.findings, board)} (f changes it)`} onPress={cycleFindings}>
+          <Text>
+            <Text bold color={C('text')}>Findings: </Text>
+            <Text color={C('inactive')}>{findingsLine(sc.findings, board).slice('Findings: '.length)}</Text>
+            <Text color={C('inactive')}>{'  (f changes it)'}</Text>
+          </Text>
+        </Button>
         {sc.warning || (problem && !sc.running) ? (
           <Box flexDirection="column">
             {sc.warning ? <Text color={C('warning')}>{sc.warning}</Text> : null}
@@ -214,10 +233,12 @@ export async function scoutsPage($: $, pane: PaneParts) {
       </Button>
     )
   // the rows: icon, name, how often, state, last report, model; columns that don't fit are left out
-  const rows = scoutListRows(scouts, nowMs, width)
+  const board = scoutFindingsOf(pane.v)
+  const rows = scoutListRows(scouts, nowMs, width, 2, board)
   return (
     <Box flexDirection="column">
       {header('scouts')}
+      {scouts.length > 0 && <Text key="scouts-findings-default" color={C('inactive')}>{`  ${findingsDefaultLine(board)}`}</Text>}
       {scouts.length === 0 && scoutHowTo(S.N.name).map((line, i) => <Text color={C(i === 0 ? 'text' : 'inactive')}>{line}</Text>)}
       {newBox()}
       {scouts.length > 0 && <Text key="scouts-blank-top"> </Text>}
@@ -230,6 +251,7 @@ export async function scoutsPage($: $, pane: PaneParts) {
             <Text color={C('inactive')}>{r.every}</Text>
             <Text color={C(r.stateTone)}>{r.state}</Text>
             <Text color={C(r.lastTone)}>{r.last}</Text>
+            <Text color={C('inactive')}>{r.findings}</Text>
             <Text color={C('inactive')}>{r.model}</Text>
           </Button>
         )

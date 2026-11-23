@@ -7,8 +7,8 @@
 // it does, its state as chips, Run now / Edit / Pause as buttons, a divider), then the instructions, and its Runs (newest first; a press opens that run's full report, with a "← <scout>" button back;
 // the page itself shows no report text). It says when its last run ended on an API error or a refusal. No key hints.
 import type { SymccScout } from '../../../types'
-import { scoutRow, scoutFile, scoutHowTo, scoutListRows, type ScoutListRow, isNothing, scoutRunTasks, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem } from '../../board'
-import { cancelScoutEdit, saveScout, runScoutNow, editScout, setScoutPaused, newScout, loadScoutRunHistory, loadScoutResults, readScoutRunReport, scoutPlaceValue } from '../../app/scouts'
+import { scoutRow, scoutFile, scoutHowTo, scoutListRows, type ScoutListRow, isNothing, scoutRunTasks, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem, scoutFindingsOf, findingsLine, findingsDefaultLine, FINDINGS_PICKS } from '../../board'
+import { cancelScoutEdit, saveScout, runScoutNow, editScout, cycleScoutFindings, setScoutPaused, newScout, loadScoutRunHistory, loadScoutResults, readScoutRunReport, scoutPlaceValue } from '../../app/scouts'
 import { S } from '../../app/state'
 import { type $, panelValues } from '../panel'
 import type { PaneParts } from './parts'
@@ -37,10 +37,10 @@ const hard = (s: string) => s.replace(/ /g, ' ')
 
 /** The end of a Scouts list row after its state, as plain text, fitted to `room` characters (never wider): the
  *  terminal row's "last:" cell with the start of the last report after it ("last: found 5: The package left-pad…"),
- *  then the model; the report start is cut with "…" first, then the whole end. */
+ *  then the findings choice (T-912) and the model; the report start is cut with "…" first, then the whole end. */
 export function scoutRowEnd(s: SymccScout, r: ScoutListRow, room: number): string {
   const last = r.last.trim()
-  const model = r.model.trim()
+  const model = [r.findings.trim(), r.model.trim()].filter(Boolean).join('  ')
   const start = last && !s.running && !isNothing(s.last_report) ? reportStart(s.last_report) : ''
   const modelPart = model ? `  ${model}` : ''
   if (!last) return room >= modelPart.length ? modelPart : ''
@@ -59,7 +59,8 @@ export function scoutsListVs($: $, pane: PaneParts) {
   const { Box, Text, Button, Input, act, C, scouts, header, vs, width } = pane
   const { nowMs } = pane
   const room = vsRowRoom(width)
-  const rows = scoutListRows(scouts, nowMs, room)
+  const board = scoutFindingsOf(pane.v)
+  const rows = scoutListRows(scouts, nowMs, room, 2, board)
   const plain = (key: string, text: string, color = 'inactive') => (
     <Text key={key} wrap="wrap" color={C(color)}>
       {text}
@@ -111,6 +112,7 @@ export function scoutsListVs($: $, pane: PaneParts) {
   return (
     <Box flexDirection="column" gap={1}>
       {header('scouts')}
+      {scouts.length ? plain('vs-scouts-findings-default', findingsDefaultLine(board)) : null}
       {scouts.length === 0 ? <Box key="vs-scouts-howto" flexDirection="column" borderStyle="round" borderColor={C('subtle')} paddingX={1}>{scoutHowTo(S.N.name).map((line, i) => plain(`howto-${i}`, line.replace(/ \([a-z]\)(?=\s|$)/g, ''), i === 0 ? 'text' : 'inactive'))}</Box> : null}
       {scouts.length ? (
         <Box key="vs-scouts-rows" flexDirection="column">
@@ -175,9 +177,17 @@ export async function scoutPageVs($: $, pane: PaneParts, sc: SymccScout, run: st
       </Box>
     )
   }
+  // T-912: its findings choice, with a Change link that moves it on (board default → auto → backlog) in its file
+  const board = scoutFindingsOf(pane.v)
+  const findingsHref = vsHref('do', 'scout-findings')
+  const cycleFindings = act(async () => $.ui.toast(S.N.toast(await cycleScoutFindings(claudeHost($), sc.name))))
   return (
     <Box key="vs-scout-page" flexDirection="column" gap={1}>
       {vsPageHeader(pane, header)}
+      <Box key="vs-scout-findings-row" flexDirection="row" flexWrap="wrap" columnGap={2}>
+        {plain('vs-scout-findings-line', findingsLine(sc.findings, board), 'text')}
+        {vsLink(vs, 'scout-findings', mdLink('Change', findingsHref), [[findingsHref, cycleFindings]])}
+      </Box>
       {sc.warning || problem ? (
         <Box key="vs-scout-top" flexDirection="column">
           {sc.warning ? plain('vs-scout-warning', sc.warning, 'warning') : null}
@@ -230,7 +240,8 @@ export function scoutEditPageVs($: $, pane: PaneParts) {
     </Text>
   )
   const cancelHref = vsHref('do', 'scout-edit/cancel')
-  const box = (key: 'every' | 'model' | 'findings' | 'summary' | 'body', label: string, placeholder: string, more: Record<string, unknown> = {}) => (
+  const { Select } = vs
+  const box = (key: 'every' | 'model' | 'summary' | 'body', label: string, placeholder: string, more: Record<string, unknown> = {}) => (
     <Input key={`scout-${key}`} label={label} value={d[key]} placeholder={placeholder} submitLabel="Keep" {...more} onInput={value => void (d[key] = value)} onSubmit={value => void (d[key] = value)} />
   )
   return (
@@ -252,8 +263,9 @@ export function scoutEditPageVs($: $, pane: PaneParts) {
       {box('every', 'Runs every', 'minutes: a whole number, 0 or more', { autoFocus: true })}
       {plain('vs-every-about', 'in minutes · 0 = only on demand')}
       {box('model', 'Model', "empty: the session's model")}
-      {box('findings', 'Findings', "empty: follow the board's scout_findings setting")}
-      {plain('vs-findings-about', 'auto: the lead decides where its tasks go · backlog: they all go to the backlog · empty or default: the board setting')}
+      {/* T-912: a pick list of the three choices ('' = the board's scout_findings) */}
+      <Select key="scout-findings" label="Findings" options={FINDINGS_PICKS.map(o => ({ value: o.value || 'default', label: o.value ? o.label : `${o.label} (now ${scoutFindingsOf(pane.v)})` }))} value={d.findings || 'default'} onSelect={value => ((d.findings = value === 'default' ? '' : value), $.ui.invalidate('ui.render'))} />
+      {plain('vs-findings-about', "auto: the lead decides where its tasks go · backlog: they all go to the backlog · board default: the board's scout_findings setting")}
       {box('summary', 'Summary', 'empty: the first line of the instructions')}
       {box('body', 'Instructions', 'what to look for, in plain words', { rows: 8 })}
       {vsFooter(vs, 'scout-edit-keys')}

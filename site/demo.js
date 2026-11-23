@@ -287,9 +287,11 @@
     const L = []
     L.push(tabRow('Scouts'))
     L.push(sp('Scouts run on a timer and only look. The lead turns what they find into tasks.', 'dim'))
+    // (T-912) the Scouts list says where findings go by default, and each scout its own choice
+    L.push(sp('scout findings by default: auto', 'dim'))
     L.push('')
     const one = (name, found, id, title, state) => {
-      L.push(heading(name))
+      L.push(heading(name, '  ' + sp('board: auto', 'dim')))
       L.push('   ' + sp('found  ', 'dim') + esc(found))
       L.push('   ' + sp('task   ', 'dim') + sp(id, 'id') + ' ' + esc(cut(title, 58)) + '  ' + state)
       L.push('')
