@@ -25,6 +25,7 @@ import { S, toolName, starting } from '../../../hooks/app/state'
 import { pump } from '../../../hooks/app/workers'
 import { WORKER_BASE, SCOUT_BASE, NO_TOOLS_ASK } from '../../../hooks/core/prompts'
 import { ASK_LINE, ASK_TOOL } from '../../../hooks/core/ask'
+import { changedSinceText, CHANGED_ASK, CHANGED_ASK_NO_TOOLS } from '../../../hooks/core/changed-since'
 import CHANGE from '../../../prompts/change'
 import INVESTIGATION from '../../../prompts/investigation'
 import CHECKER from '../../../prompts/checker'
@@ -50,6 +51,12 @@ test('withBasePrompt puts WORKER_BASE in front of a worker\'s prompt, and SCOUT_
   const p = withBasePrompt({ kind: 'worker', prompt: `Task T-1\n${ASK_LINE(tool(ASK_TOOL))}` })
   expect(p).not.toContain(ASK_TOOL)
   expect(p).toContain(NO_TOOLS_ASK)
+  // T-942: so does the stale-task check's "ask the owner with the ask_owner tool" sentence
+  const since = changedSinceText({ created: '2026-11-01T00:00:00.000Z', nowMs: Date.parse('2026-11-23T00:00:00.000Z'), total: 1, scope: 'files', commits: ['abc0000 change'] }, tool(ASK_TOOL))!
+  expect(since).toContain(CHANGED_ASK(tool(ASK_TOOL)))
+  const old = withBasePrompt({ kind: 'worker', prompt: `Task T-1\n${since}\n${ASK_LINE(tool(ASK_TOOL))}` })
+  expect(old).toContain(CHANGED_ASK_NO_TOOLS)
+  expect(old.includes(ASK_TOOL)).toBe(false)
   // the hosts with symcc's tools keep them in the base prompt
   expect(WORKER_BASE('symcc', tool)).toContain(ASK_TOOL)
   expect(SCOUT_BASE('symcc', tool)).toContain('board and stats tools')

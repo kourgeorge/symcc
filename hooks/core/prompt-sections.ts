@@ -14,6 +14,7 @@ import { fillPlaceholders } from './prompt-fill'
 import { leadNotesText, splitLeadNotes } from './lead-notes'
 import { testOutputHeading } from './test-output-heading'
 import { triesTable } from './tries-table'
+import { changedSinceText, type ChangedSince } from './changed-since'
 
 /** The prompts there are: a worker's on a change, a worker's on an investigation, and a checker's. */
 export type SectionPromptKind = 'change' | 'investigation' | 'checker'
@@ -27,6 +28,8 @@ export type PromptCtx = {
   board?: Board
   /** the commits of the earlier tries on the task's branch, one line each ("abc1234 subject"); left out when not known */
   commits?: readonly string[]
+  /** T-936: what changed on the branch it merges into since an old or backlog task was written; left out for a fresh task */
+  since?: ChangedSince | null
 }
 
 /** One section of a prompt. */
@@ -100,6 +103,14 @@ export const PROMPT_SECTIONS: readonly PromptSection[] = [
     about: 'the lead\'s notes added to the details, oldest first, and the rule that the newest note wins',
     template: () => '{{lead_notes}}',
     text: c => leadNotesText(splitLeadNotes(c.values.details ?? '').notes),
+  },
+  {
+    name: 'changed_since',
+    kinds: WORKERS,
+    heading: 'Check first: what changed since',
+    about: 'only for a task from the backlog or written over a day ago, when commits changed its files since: when it was written, those commits (at most 15), and to check first that the task still fits or ask the owner',
+    template: () => '{{changed_since}}',
+    text: c => changedSinceText(c.since, c.values.ask_tool || 'ask_owner'),
   },
   {
     name: 'role',
@@ -179,8 +190,8 @@ export const PROMPT_SECTIONS: readonly PromptSection[] = [
 
 /** Which sections each prompt has and in what order: the task first, the rules last. */
 export const PROMPT_ORDER: Record<SectionPromptKind, readonly string[]> = {
-  change: ['title', 'why', 'what', 'lead_notes', 'role', 'files', 'where', 'earlier_tries', 'test_output', 'tests', 'rules', 'org_mem', 'done'],
-  investigation: ['title', 'why', 'what', 'lead_notes', 'role', 'where', 'earlier_tries', 'rules', 'org_mem', 'done'],
+  change: ['title', 'why', 'what', 'lead_notes', 'changed_since', 'role', 'files', 'where', 'earlier_tries', 'test_output', 'tests', 'rules', 'org_mem', 'done'],
+  investigation: ['title', 'why', 'what', 'lead_notes', 'changed_since', 'role', 'where', 'earlier_tries', 'rules', 'org_mem', 'done'],
   checker: ['title', 'why', 'what', 'lead_notes', 'role', 'look_for', 'where', 'changed', 'tests', 'diff', 'rules', 'org_mem', 'done'],
 }
 
