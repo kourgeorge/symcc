@@ -13,6 +13,15 @@ export const DAM_ENV_VALUE = 'claude-code'
 /** Whether an environment value of DAM_ENV marks a DAM session. */
 export const isDamValue = (value: string | undefined) => (value ?? '').trim() === DAM_ENV_VALUE
 
+/**
+ * T-929: DAM_ENV is set for DAM's whole image (terminal windows too); only DAM's Slack (chat) path runs Claude Code
+ * through this program, so its path marks a DAM chat session.
+ */
+export const DAM_EXE_ENV = 'CLAUDE_CODE_EXECUTABLE'
+
+/** Whether a DAM_EXE_ENV value is DAM's chat program (…/harness-claude). */
+export const isDamChatExe = (value: string | undefined) => /(^|[/\\])harness-claude$/.test((value ?? '').trim())
+
 /** The last line of every board update in a DAM session: plain replies never reach Slack, so post it there. */
 export const DAM_POST_LINE = "Slack (DAM): plain replies never reach Slack. Post your short reply (same shape as above) to this Slack thread with DAM's reply tool; use DAM's post tool if there is no thread."
 

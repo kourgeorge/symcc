@@ -14,6 +14,7 @@ import { usageTokens, turnEnd } from './claude/usage'
 import { noteBackground, stopSeen, takeBackground } from './claude/background'
 import { sessionStarting, sessionStart, sessionCleared, sessionEnd, leadGuideText, ownerTyped, toolCall, otherToolDone, toolCallFailed, toolCheck, toolCheckFailed, agentFinished, runCommand } from './app/symcc'
 import { S, useName } from './app/state'
+import { damOwnerPrompt } from './app/dam'
 import { hookFailed } from './app/ask'
 import { popupCall } from './app/questions'
 import { spawnFailedText, shellCwd } from './core/path-guard'
@@ -124,7 +125,11 @@ export const register: Register = on => {
     // T-837: the hidden starter's end ("OK") reaches the lead's chat as a message; dropped here so it wakes no turn
     if (!owners && !e.command && starterFrame(e.text)) return { drop: '▸ agent started' }
     const r = await next(e)
-    if (owners && !e.command && !e.isMeta && 'text' in r && typeof r.text === 'string') ownerTyped(r.text)
+    if (owners && !e.command && !e.isMeta && 'text' in r && typeof r.text === 'string') {
+      // T-929: in a DAM image, an owner's sdk prompt means this is a Slack session (not a DAM terminal window)
+      if (kind === 'sdk') damOwnerPrompt()
+      ownerTyped(r.text)
+    }
     return r
   }).catch(($, e, next) => passOn($, 'prompt.submit', e, next))
 
