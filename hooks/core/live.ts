@@ -563,12 +563,26 @@ export const liveRuleText = (used: number, width: number): string => {
   const room = Math.floor(width) - used - 1
   return Math.floor(width) < 4 || room < 1 ? '' : ` ${'─'.repeat(room)}`
 }
-/** T-789/T-810: a section's heading in `width` columns: the name in UPPERCASE ("TASKS", cut when narrow), bold, then a thin
- *  rule in the heading color to the right edge. The client puts one empty line above it (none above the first) and one under it. */
+/** T-915: what a section heading starts with: three thin rule characters, a space, ❯ and a space. */
+export const LIVE_HEAD_LEAD = '─── ❯ '
+/** T-915: the shorter start when the full one and the name don't fit. */
+export const LIVE_HEAD_LEAD_NARROW = '─ ❯ '
+/** T-915: the start of a heading whose name (and what follows it) takes `nameW` columns of `width`: the full one when it all
+ *  fits, else the short one (the name is then cut), none in under 5 columns. */
+export const liveHeadLead = (nameW: number, width: number): string => {
+  const w = Math.floor(width)
+  return nameW + LIVE_HEAD_LEAD.length <= w ? LIVE_HEAD_LEAD : w >= LIVE_HEAD_LEAD_NARROW.length + 1 ? LIVE_HEAD_LEAD_NARROW : ''
+}
+/** T-789/T-810/T-915: a section's heading in `width` columns: "─── ❯ ", the name in UPPERCASE ("TASKS"), bold, then a thin
+ *  rule to the right edge, all in the heading color ("─── ❯ TASKS ─────…"). When narrow: "─ ❯ " and the name cut.
+ *  The client puts one empty line above it (none above the first) and one under it. */
 export const liveHeading = (name: string, width: number): LiveSeg[] => {
-  const text = fitText(name.toUpperCase(), Math.max(1, Math.floor(width)))
-  const rule = liveRuleText(textWidth(text), width)
-  return [{ text, tone: 'heading' }, ...(rule ? [{ text: rule, tone: 'heading' as const }] : [])]
+  const w = Math.max(1, Math.floor(width))
+  const upper = name.toUpperCase()
+  const lead = liveHeadLead(textWidth(upper), w)
+  const text = fitText(upper, Math.max(1, w - lead.length))
+  const rule = liveRuleText(lead.length + textWidth(text), w)
+  return [...(lead ? [{ text: lead, tone: 'heading' as const }] : []), { text, tone: 'heading' }, ...(rule ? [{ text: rule, tone: 'heading' as const }] : [])]
 }
 /** A line under a section heading: LIVE_INDENT, then its segments. */
 export const liveIndented = (xs: readonly LiveSeg[]): LiveSeg[] => [{ text: LIVE_INDENT, tone: 'text' }, ...xs]
@@ -1330,10 +1344,10 @@ const NEWEST_TOPIC_MAX = 16
 function orgMemHead(n: number, width: number): LiveSeg[] {
   const count = `${n} / ${ORG_MEM_MAX_LINES}`
   for (const title of [LIVE_SECTIONS.orgMem.toUpperCase(), 'ORG-MEM']) {
-    const used = textWidth(`${title}   ${count}`)
+    const used = textWidth(`${LIVE_HEAD_LEAD}${title}   ${count}`)
     if (used > width) continue
     const rule = liveRuleText(used, width)
-    return segs({ text: title, tone: 'heading' }, { text: '   ', tone: 'text' }, { text: count, tone: 'dim' }, { text: rule, tone: 'heading' })
+    return segs({ text: LIVE_HEAD_LEAD, tone: 'heading' }, { text: title, tone: 'heading' },{ text: '   ', tone: 'text' }, { text: count, tone: 'dim' }, { text: rule, tone: 'heading' })
   }
   return liveHeading('Org-mem', width)
 }

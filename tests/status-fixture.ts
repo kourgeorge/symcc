@@ -42,17 +42,17 @@ export function statusBoard(nowMs: number, quiet = false): Board {
 /** The TODAY lines the Live tab draws for `b` at `nowMs` in an 80-column chat (as /<name>-status prints them). */
 export const statusTodayLines = (b: Board, nowMs: number): string[] => liveTodayLines({ tasks: b.tasks }, nowMs, 79).map(x => (LIVE_INDENT + segText(x)).trimEnd())
 
-/** The section headings' words in a /<name>-status text, in order (each heading line starts with one). */
+/** The section headings' words in a /<name>-status text, in order (each heading line starts with "─── ❯ " and one). */
 export const statusHeadings = (text: string): string[] =>
   text.split('\n').flatMap(l => {
-    const m = /^(NEEDS YOU|TASKS|BRANCHES|TODAY|ORGANIZATIONAL MEMORY)\b/.exec(l)
+    const m = /^─── ❯ (NEEDS YOU|TASKS|BRANCHES|TODAY|ORGANIZATIONAL MEMORY)\b/.exec(l)
     return m ? [m[1]!] : []
   })
 
 /** The lines of section `name` (from its heading to the next blank line), heading left out. */
 export function statusSection(text: string, name: string): string[] {
   const lines = text.split('\n')
-  const i = lines.findIndex(l => l.startsWith(name))
+  const i = lines.findIndex(l => l.startsWith(`─── ❯ ${name}`))
   if (i < 0) return []
   const end = lines.findIndex((l, j) => j > i && l === '')
   return lines.slice(i + 1, end < 0 ? undefined : end)

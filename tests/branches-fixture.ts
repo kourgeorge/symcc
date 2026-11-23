@@ -79,7 +79,7 @@ export function taskBranchTasks(now: number) {
 
 /** The lines the sample draws at 100 columns: the "BRANCHES" heading (T-789, T-810: UPPERCASE, then a thin rule to the width; the Live tab puts an empty line under it), the lines under it indented by 1 (T-767). */
 export const BRANCH_LINES_100 = [
-  `BRANCHES ${'─'.repeat(91)}`,
+  `─── ❯ BRANCHES ${'─'.repeat(85)}`,
   '  main   ●───●───●───●───●───●───●   c1c1c1c · 2 min ago',
   '         │       │           │   ╰─◀ T-724  merged 3m ago (c1c1c1c)',
   '         │       │           ╰─────○ T-721 ▶ running · +3 commits · 1 behind',

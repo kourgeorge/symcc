@@ -1131,21 +1131,22 @@ back and symcc has seen that its commit changed only docs files (the checker ski
 while it waits at `you`); a task that needs review (it has "needs review" on, or the board is in approve-merge mode) has a
 `you` station before `merged`, and its lane stays at `you` while it waits for you and goes on to `merged` when you approve. Lanes
 that skip stations are drawn as a plain line through those columns, so the station names over the lanes stay lined up.
-Under the mode line it has up to five sections, each starting with a heading that is a plain bold
-UPPERCASE word followed on the same line by a thin rule (`─`, in the same color as the word) to the right edge (shorter on a narrow panel, none under 4 columns): `NEEDS YOU` (only while something waits), `TASKS` (the lanes),
+Under the mode line it has up to five sections, each starting with a heading line: three thin rule characters, a space,
+`❯`, a space, the name as a bold UPPERCASE word, then a thin rule (`─`) to the right edge, all in the same color (`─── ❯ TASKS ────…`;
+on a narrow panel `─ ❯ TASKS` with the name cut, no rule): `NEEDS YOU` (only while something waits), `TASKS` (the lanes),
 `BRANCHES`, `TODAY` (today's numbers) and `ORGANIZATIONAL MEMORY` (`ORG-MEM` on a narrow panel). One empty line sits above each heading (none above the first)
 and one under it, and the lines under a heading are indented by 1 space (VS Code shows the same
 words as bold headings with the same spacing):
 
 ```
-NEEDS YOU ──────────────────────────────────────────────────
+─── ❯ NEEDS YOU ────────────────────────────────────────────
 
  ⚠ Q-88  Which figures should go on TODAY's 4th line?
  ⚠ T-749 ready for review: Website home page: a live, played-out demo…
  ⚠ T-751 asks: Claude Code only lets a button key be one letter…
  ⚠ T-751 has run 45 min: more time?
 
-TASKS ──────────────────────────────────────────────────────
+─── ❯ TASKS ────────────────────────────────────────────────
 
                        work✧    check✧   queue    tests    merged
  ▶ T-684 /symcc-doc…   ●━━━━━━━━●━━━━━━━━◉────────○────────○      #2
@@ -1221,7 +1222,7 @@ TASKS ────────────────────────�
   against the branch the tasks merge into (usually `main`):
 
   ```
-  BRANCHES
+  ─── ❯ BRANCHES ─────────────────────────────────────────────
 
     main   ●───●───●───●───●───●───●   c11a736 · 2 min ago
            │       │           │   ╰─◀ T-724  merged 3m ago (c11a736)
@@ -1262,7 +1263,7 @@ TASKS ────────────────────────�
   opens the Scouts tab; this works on every board. Under the `TODAY` heading, four lines about today, then two dim lines about the days before:
 
   ```
-  TODAY ──────────────────────────────────────────────────
+  ─── ❯ TODAY ──────────────────────────────────────────────
 
    ✓ 67 merged   ↺ 76 sent back   ✗ 0 failed   Σ ⌀ 320.7M
    ⌀ ░█████████████▓▒ lead 3% · workers 84% · checkers 8% · scouts 5%
@@ -1300,7 +1301,7 @@ TASKS ────────────────────────�
   [Organizational memory](#organizational-memory-org-mem)):
 
   ```
-  ORGANIZATIONAL MEMORY   57 / 60 ──────────────────────────────
+  ─── ❯ ORGANIZATIONAL MEMORY   57 / 60 ────────────────────────
 
      newest [all]
       11-21  tests      In tests, put dates relative to now, never a…

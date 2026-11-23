@@ -65,7 +65,7 @@ test('T-786: the VS Code Live tab has a Needs you section first with a warning r
   seedBoard(on, { view: liveView(ALL, [QUESTION]) })
   const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 100 }, surface: 'vscode' })
   await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'live') } })
-  expect((await ui.find({ key: 'live-needs-head' }))?.text).toMatch(/^NEEDS YOU─+$/)
+  expect((await ui.find({ key: 'live-needs-head' }))?.text).toMatch(/^─── ❯NEEDS YOU─+$/)
   const drawn = JSON.stringify(await ui.drawn())
   expect(drawn.indexOf('live-needs-head')).toBeLessThan(drawn.indexOf('live-tasks-head'))
   expect((await ui.find({ key: 'live-need-text:T-749' }))?.text).toMatch(/^ready for review: Website home page/)

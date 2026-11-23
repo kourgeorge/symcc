@@ -9,7 +9,7 @@ import { S } from '../hooks/app/state'
 import { COMMANDS, runCommand } from '../hooks/app/symcc'
 import { manual } from '../hooks/app/tools'
 import { liveStatusText, statusHint } from '../hooks/core/live-text'
-import { liveToday } from '../hooks/core/live'
+import { liveHeading, liveToday, segText } from '../hooks/core/live'
 import { textWidth } from '../hooks/core/width'
 import { statusBoard, statusHeadings, statusSection, statusTodayLines } from './status-fixture'
 import { branchTasks, branchFactsAt, branchStateTasks, branchStateFactsAt } from './branches-fixture'
@@ -102,4 +102,22 @@ test('T-902: the manual lists /symcc-status, and the entries around it start the
 
 test('T-902: the command list has /symcc-status in every client', () => {
   for (const f of [ALL_FEATURES, BARE]) expect(COMMANDS(f).find(c => c.name === `${S.N.name}-status`)?.description).toBe(`Show the ${S.N.name} Live tab as text in the chat: what needs you, the running tasks and what waits for them, the branches, today's numbers and the newest notes`)
+})
+
+// T-915: every Live heading is "─── ❯ NAME ───…" to the right edge; when narrow "─ ❯ NAME", the name cut
+test('T-915: liveHeading at 80 columns and narrow, and the /symcc-status headings at 80 and 30 columns', () => {
+  const t = (name: string, w: number) => segText(liveHeading(name, w))
+  expect(t('Tasks', 80)).toBe(`─── ❯ TASKS ${'─'.repeat(68)}`)
+  expect(t('Branches', 80)).toBe(`─── ❯ BRANCHES ${'─'.repeat(65)}`)
+  expect(liveHeading('Tasks', 80).map(s => s.tone)).toEqual(['heading', 'heading', 'heading'])
+  expect(t('Tasks', 10)).toBe('─ ❯ TASKS')
+  expect(t('Branches', 8)).toBe('─ ❯ BRA…')
+  for (const w of [80, 30, 12, 8, 5, 3]) for (const n of ['Needs you', 'Tasks', 'Branches', 'Today', 'Organizational memory']) expect([n, w, textWidth(t(n, w)) <= w]).toEqual([n, w, true])
+  const now = Date.now()
+  const b = statusBoard(now)
+  for (const w of [80, 30]) {
+    const heads = liveStatusText({ tasks: b.tasks }, notes, now, 'symcc', w).split('\n').filter(l => l.startsWith('─'))
+    expect(heads.length >= 3).toBe(true)
+    for (const h of heads) expect([h, h.startsWith('─── ❯ '), textWidth(h)]).toEqual([h, true, w])
+  }
 })

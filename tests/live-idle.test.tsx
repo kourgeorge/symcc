@@ -59,7 +59,7 @@ for (const c of CASES) {
     const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 100 }, surface: 'terminal' })
     await ui.press({ key: 'tab-live' })
     const texts = (await ui.findAll({ type: 'Text' })).map(t => ({ text: t.text, color: t.props.color }))
-    const head = texts.findIndex(t => /^TASKS ─/.test(t.text ?? ''))
+    const head = texts.findIndex(t => /^─── ❯ TASKS ─/.test(t.text ?? ''))
     const want = c.lines.map(l => ({ text: LIVE_INDENT + l, color: 'inactive' }))
     const at = texts.findIndex(t => t.text === want[0]!.text)
     // under the TASKS heading, dim, one after the other
@@ -92,7 +92,7 @@ test('T-903: the band line (liveIdleLine) is the first idle line, cut with "…"
 test('T-903: /symcc-status shows the idle lines under TASKS', () => {
   for (const c of CASES) {
     const lines = liveStatusText({ tasks: c.tasks, mode: c.mode } as never, [], T0).split('\n')
-    const at = lines.findIndex(l => l.startsWith('TASKS'))
+    const at = lines.findIndex(l => l.startsWith('─── ❯ TASKS'))
     expect([c.name, lines.slice(at + 1, at + 1 + c.lines.length)]).toEqual([c.name, c.lines.map(l => LIVE_INDENT + l)])
   }
 })

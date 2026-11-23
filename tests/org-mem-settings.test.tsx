@@ -88,7 +88,7 @@ const pageLines = (n: unknown): string[] => {
   return [textOf(x)]
 }
 /** The Live tab's org-mem section header line (terminal). */
-const omHead = async (ui: { drawn: () => Promise<unknown> }) => pageLines(await ui.drawn()).find(l => l.startsWith('ORGANIZATIONAL MEMORY'))
+const omHead = async (ui: { drawn: () => Promise<unknown> }) => pageLines(await ui.drawn()).find(l => l.startsWith('─── ❯ ORGANIZATIONAL MEMORY'))
 
 /** Every drawn text of the page, joined. */
 const pageText = async (ui: { findAll: (q: { type: string }) => Promise<{ props: Record<string, unknown>; children?: unknown[] }[]> }) =>
@@ -380,7 +380,7 @@ test('T-718: the terminal Live tab draws the org-mem section (header, 3 newest, 
     const lines = pageLines(await ui.drawn())
     for (const l of lines) expect([bodyColumns, l, textWidth(l) <= bodyColumns]).toEqual([bodyColumns, l, true])
     // T-747, T-789: an "ORGANIZATIONAL MEMORY" heading with the count and a thin rule (no bar) on it, an empty line under it, the lines under that indented (T-767: by 1)
-    const head = lines.findIndex(l => l.startsWith('ORGANIZATIONAL MEMORY   8 / 60 ─'))
+    const head = lines.findIndex(l => l.startsWith('─── ❯ ORGANIZATIONAL MEMORY   8 / 60 ─'))
     expect(head).toBeGreaterThan(0)
     expect(textWidth(lines[head]!)).toBe(bodyColumns)
     expect(lines[head - 1]!.trim()).toBe('')

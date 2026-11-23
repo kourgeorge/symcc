@@ -40,9 +40,9 @@ if (/work·|check·/.test(board)) bad('still frame: the board still marks the ag
 if (!board.includes('✧ = an agent works here (needs an agent slot)')) bad('still frame: the board has no ✧ legend')
 if (!view('board').includes('<span class="t-mark">✧</span>')) bad('still frame: the ✧ marks are not drawn in the accent color')
 if (!text(view('live')).includes('ORGANIZATIONAL MEMORY')) bad('still frame: the Live tab has no ▍Organizational memory')
-// (T-810) each Live tab heading is followed by a thin rule; the org-mem heading has the count and no bar
+// (T-810, T-915) each Live tab heading is "─── ❯ NAME" followed by a thin rule; the org-mem heading has the count and no bar
 for (const h of ['TASKS', 'BRANCHES', 'TODAY', 'ORGANIZATIONAL MEMORY'])
-  if (!new RegExp(`^${h}( +60 / 60)? ─+$`, 'm').test(text(view('live')))) bad(`still frame: the Live tab's ${h} heading has no thin rule after it`)
+  if (!new RegExp(`^─── ❯ ${h}( +60 / 60)? ─+$`, 'm').test(text(view('live')))) bad(`still frame: the Live tab's ${h} heading has no thin rule after it`)
 if (/ORGANIZATIONAL MEMORY.*▕/.test(text(view('live')))) bad('still frame: the org-mem heading still has a bar')
 const chat = text(view('chat'))
 for (const w of ['❯ there is no clear visual separation between the sections of the live page, show some ideas', '⏺ Four looks', 'T-747 try 1 → checks passed', 'symcc: T-747 done', 'scout gaps-bot found'])

@@ -15,7 +15,7 @@
 // T-727: under the lanes, the Branches section (core's liveBranches) drawn with real lines: see branchesVs.
 // T-747: each section has a bold heading with the terminal's names (core's LIVE_SECTIONS): Tasks, Today, Branches,
 // Organizational memory (that one a link to all notes).
-import { LIVE_DIVIDER, type BranchRow, type LiveBranches, liveBranches, liveIdle, LIVE_AGENT_MARK, LIVE_RUN_MARK, liveLegend, LIVE_SECTIONS, type LiveLane, liveInner, liveRuleText, type LiveLayout, type LiveSeg, LIVE_TONE, laneLines, liveHeader, liveHeaderSegs, liveNeeds, liveTaskLanes, liveLayout, liveOrgMem, liveColumns, liveTodayLines, liveTrains, segText, trainRows } from '../../core/live'
+import { LIVE_DIVIDER, type BranchRow, type LiveBranches, liveBranches, liveIdle, LIVE_AGENT_MARK, LIVE_RUN_MARK, liveLegend, LIVE_SECTIONS, type LiveLane, liveInner, LIVE_HEAD_LEAD, liveRuleText, type LiveLayout, type LiveSeg, LIVE_TONE, laneLines, liveHeader, liveHeaderSegs, liveNeeds, liveTaskLanes, liveLayout, liveOrgMem, liveColumns, liveTodayLines, liveTrains, segText, trainRows } from '../../core/live'
 import { panelValues, type $ } from '../panel'
 import type { PaneParts } from './parts'
 import { LIVE_TICK_MS, ORG_MEM_ALL_KEY, branchKey, needKey, laneKey, liveTick, newestKey, openOrgMemPage, topicKey, trainKey } from './live'
@@ -111,8 +111,9 @@ function branchesVs(pane: PaneParts, open: (id: string) => () => void) {
   return (
     <Box key="live-br" flexDirection="column">
       <Box key="live-br-head" flexDirection="row" gap={1} paddingBottom={1}>
+        <Text key="live-br-lead" color={C('text')}>{LIVE_HEAD_LEAD.trim()}</Text>
         <Text bold color={C('text')}>{LIVE_SECTIONS.branches.toUpperCase()}</Text>
-        <Text key="live-br-rule" color={C('text')}>{liveRuleText(LIVE_SECTIONS.branches.length, width).trim()}</Text>
+        <Text key="live-br-rule" color={C('text')}>{liveRuleText(LIVE_HEAD_LEAD.length + LIVE_SECTIONS.branches.length, width).trim()}</Text>
       </Box>
       <Box key="live-br-main" flexDirection="row" gap={1} alignItems="center">
         <Svg key="live-br-main-svg" source={main.source} width={main.width} height={main.height} alt={segText(br.main).trim()} />
@@ -162,11 +163,12 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
       <Text wrap="wrap" bold={bold || undefined} color={C(color)}>{text}</Text>
     </Box>
   )
-  /** T-789: a section heading: the name in UPPERCASE, bold, one empty line under it. */
+  /** T-789/T-915: a section heading: "─── ❯", the name in UPPERCASE, bold, a thin rule, one empty line under it. */
   const headLine = (key: string, name: string) => (
     <Box key={key} flexDirection="row" gap={1} paddingBottom={1}>
+      <Text key={`${key}-lead`} color={C('text')}>{LIVE_HEAD_LEAD.trim()}</Text>
       <Text bold color={C('text')}>{name.toUpperCase()}</Text>
-      <Text key={`${key}-rule`} color={C('text')}>{liveRuleText(name.length, width).trim()}</Text>
+      <Text key={`${key}-rule`} color={C('text')}>{liveRuleText(LIVE_HEAD_LEAD.length + name.length, width).trim()}</Text>
     </Box>
   )
   const headSegs = liveHeaderSegs(v, running, nowMs, width)
@@ -288,9 +290,10 @@ function orgMemSectionVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
   return (
     <Box key="live-om" flexDirection="column">
       <Box key="live-om-head" flexDirection="row" gap={1} alignItems="center" paddingBottom={1}>
+        <Text key="live-om-lead" color={C('text')}>{LIVE_HEAD_LEAD.trim()}</Text>
         {vsLink(vs, 'live-orgmem', `**${mdLink(LIVE_SECTIONS.orgMem.toUpperCase(), all)}**`, [[all, openOrgMemPage($)]])}
         <Text key="live-om-count" color={C('inactive')}>{`${notes.length} / ${ORG_MEM_MAX_LINES}`}</Text>
-        <Text key="live-om-rule" color={C('text')}>{liveRuleText(LIVE_SECTIONS.orgMem.length + 3 + `${notes.length} / ${ORG_MEM_MAX_LINES}`.length, width).trim()}</Text>
+        <Text key="live-om-rule" color={C('text')}>{liveRuleText(LIVE_HEAD_LEAD.length + LIVE_SECTIONS.orgMem.length + 3 + `${notes.length} / ${ORG_MEM_MAX_LINES}`.length, width).trim()}</Text>
       </Box>
       {/* T-866: "newest [all]": the all button opens all notes */}
       <Box key="live-om-newest-row" flexDirection="row" gap={1} alignItems="center">

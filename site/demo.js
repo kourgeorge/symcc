@@ -97,10 +97,11 @@
     return tabs.map(([k, n]) => sp(`[${k}] ${n}`, n === active ? 'tab-on' : 'dim')).join(sp(' │ ', 'dim'))
   }
   const heading = (name, rest = '') => sp('▍', 'heading') + sp(name, 'heading') + rest
-  // (T-789, T-810) the Live tab's section heading: the name in UPPERCASE, bold, then a thin rule in the heading color to the right edge
+  // (T-789, T-810, T-915) the Live tab's section heading: "─── ❯ ", the name in UPPERCASE, bold, then a thin rule to the right edge, all in the heading color
   // (the demo panel is 64 columns wide); an empty line above it (none above the first) and one under it
   const PANEL_W = 64
-  const liveHead = (name, rest = '', plain = '') => sp(name.toUpperCase(), 'heading') + rest + sp(' ' + '─'.repeat(Math.max(0, PANEL_W - name.length - plain.length - 1)), 'heading')
+  const LIVE_LEAD = '─── ❯ '
+  const liveHead = (name, rest = '', plain = '') => sp(LIVE_LEAD, 'heading') + sp(name.toUpperCase(), 'heading') + rest + sp(' ' + '─'.repeat(Math.max(0, PANEL_W - LIVE_LEAD.length - name.length - plain.length - 1)), 'heading')
 
   function laneLines(s, l) {
     let track = ''
