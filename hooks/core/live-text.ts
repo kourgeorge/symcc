@@ -4,7 +4,7 @@
 // "(try n)" from a second try; the waiting trains hung under it), BRANCHES (when git's figures were read), TODAY (with the
 // yesterday and last 7 days lines) and ORGANIZATIONAL MEMORY (the count and the newest notes), then one hint line.
 import { DEFAULT_NAME } from '../name'
-import { LIVE_EMPTY, LIVE_INDENT, LIVE_SECTIONS, laneLines, liveBranches, liveColumns, liveHeaderSegs, liveHeading, liveInner, liveLabelSegs, liveLayout, liveLegend, liveNeeds, liveOrgMem, liveTaskLanes, liveTodayLines, liveTrains, segText, trainRows, type LiveSeg, type LiveView } from './live'
+import { LIVE_INDENT, LIVE_SECTIONS, liveIdle, laneLines, liveBranches, liveColumns, liveHeaderSegs, liveHeading, liveInner, liveLabelSegs, liveLayout, liveLegend, liveNeeds, liveOrgMem, liveTaskLanes, liveTodayLines, liveTrains, segText, trainRows, type LiveSeg, type LiveView } from './live'
 import type { OrgMemNote } from './org-mem'
 import { localOffset } from './days'
 
@@ -39,7 +39,7 @@ export function liveStatusText(view: StatusView, notes: readonly OrgMemNote[], n
   }
   // TASKS: one line per lane (room kept for "(try n)"), its waiting trains under it
   heading(LIVE_SECTIONS.tasks)
-  if (!running.length) out.push(LIVE_INDENT + LIVE_EMPTY)
+  if (!running.length) for (const x of liveIdle(view, nowMs, inner)) out.push(LIVE_INDENT + x)
   if (lanes.length) {
     const room = Math.max(0, ...lanes.map(l => (l.done ? 0 : tryText(l.tryNo).length)))
     const layout = liveLayout(lanes, liveColumns(lanes, view.checker === true), Math.max(1, inner - room))

@@ -797,7 +797,8 @@ are about changes; under "How tasks ended" a read investigation shows as
   try 2 on in green, then the title in the normal text color), the next task to start (`○ next up`), then the questions for you
   and the tasks that need you, in the warning color. A session that doesn't drive the board
   shows `⚠ driven by another session` here too. With nothing running and nothing waiting on
-  you, a dim `nothing running` line is under the first line. When the band is narrow, the
+  you, a dim line under the first line says why and what to do next: the first line of the Live
+  tab's TASKS section when nothing runs (see the Live tab below). When the band is narrow, the
   summary drops its parts from the end (the mode stays), and a task line cuts its title, then
   leaves out the time, then the try, so the title keeps its room. OpenCode's band is unchanged.
 - **`/symcc`** opens the interactive board: ↑↓ to move, Enter to open a task. On the
@@ -1278,8 +1279,15 @@ TASKS ────────────────────────�
   parts drop from the ends: line 3 loses the checker send-backs first, then the tries, the first try and the per-task figures;
   line 4 loses the busiest hour first, then the cost, then `⌀/h` shrinks to `⌀`; the label and the sparkline stay together, last, after the agent work time:
   when the sparkline itself is too wide, neighbouring hours are merged (2, 3 or 4 to a bar) so the whole day still fits. The two dim lines under them compare with earlier days, counted the same way: `yesterday` is the calendar day before today, `last 7 days` the seven days before today added up (today left out). Each says the tasks merged, the tries' tokens (`⌀`) and the worker time (`⏱`, closed-app time left out); a part that is 0 is left out, and so is a line with nothing. On a narrow panel `⏱` goes first, then `⌀`. Nothing goes past the panel's width. The task that starts next shows in the band above the
-  prompt (`○ next up`), and the tasks that wait hang under their lanes. With nothing running it
-  says `No task is running right now.`
+  prompt (`○ next up`), and the tasks that wait hang under their lanes. With nothing running,
+  TASKS says in one or two dim lines why, and what to do next (the band above the prompt and
+  `/symcc-status` show the same):
+  - the mode is paused: `Paused: nothing starts. m changes the mode.`
+  - open tasks wait on something: `Nothing running · 3 waiting: T-5 needs you, T-7 waits for T-6`
+    (the first reasons that fit: `needs you`, `waits for T-6`, `paused`, `ready` ...)
+  - no open task at all: `All done · last merged T-891, 12m ago`, then `Tell the lead what's next, or move one of 23 backlog items to todo.`
+    (no backlog part when the backlog is empty, no "last merged" part when nothing merged yet)
+  - a brand-new board: `No tasks yet. Tell the lead what you want built.`
 - At the bottom, just above the key hints of the Live tab, the **Organizational memory** section (see
   [Organizational memory](#organizational-memory-org-mem)):
 

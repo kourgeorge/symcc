@@ -14,7 +14,7 @@
 // branch (commits ahead, how far behind), each task row a row Button that opens its task.
 // T-747, T-789: each section (Tasks, Today, Branches, Organizational memory) starts with a bold UPPERCASE heading (core's
 // liveHeading; no bar, no rule), one empty line above it (none above the first) and one under it, its lines indented by LIVE_INDENT.
-import { LIVE_DIVIDER, LIVE_EMPTY, LIVE_INDENT, liveLegend, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, laneLines, liveBold, liveHeading, liveIndented, liveInner, liveBranches, liveHeader, liveHeaderSegs, liveKeys, liveLabelSegs, liveNeeds, liveTaskLanes, liveLayout, liveOrgMem, liveColumns, liveTodayLines, liveTrains, trainRows } from '../../core/live'
+import { LIVE_DIVIDER, liveIdle, LIVE_INDENT, liveLegend, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, laneLines, liveBold, liveHeading, liveIndented, liveInner, liveBranches, liveHeader, liveHeaderSegs, liveKeys, liveLabelSegs, liveNeeds, liveTaskLanes, liveLayout, liveOrgMem, liveColumns, liveTodayLines, liveTrains, trainRows } from '../../core/live'
 import { footerRule } from '../../board'
 import { S, workers } from '../../app/state'
 import { type $, panelValues } from '../panel'
@@ -145,7 +145,7 @@ export function livePage($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
       {needs.length ? <Text key="live-needs-blank"> </Text> : null}
       <Text key="live-tasks-head">{draw(liveHeading(LIVE_SECTIONS.tasks, width))}</Text>
       <Text key="live-tasks-under"> </Text>
-      {running.length ? null : <Text key="live-empty" color={C('inactive')}>{LIVE_INDENT + LIVE_EMPTY}</Text>}
+      {running.length ? null : liveIdle(v, nowMs, inner).map((x, i) => <Text key={i ? `live-empty-${i}` : 'live-empty'} color={C('inactive')}>{LIVE_INDENT + x}</Text>)}
       {lanes.length ? <Text key="live-labels">{under(liveLabelSegs(layout))}</Text> : null}
       {lanes.flatMap((l, i) => {
         const [first, second] = laneLines(l, layout, { nowMs, frame })

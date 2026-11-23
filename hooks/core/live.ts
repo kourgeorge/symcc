@@ -64,8 +64,76 @@ export function liveLegend(width: number): string[] {
   // T-760: the mark's line is long, so a narrow panel wraps it
   return wrapLine(LIVE_LEGEND, Math.max(1, Math.floor(width)))
 }
-/** What the Live tab says when no task is in doing. */
-export const LIVE_EMPTY = 'No task is running right now.'
+/** T-903: what the Live tab's TASKS section says, dim, when no task runs: why nothing runs and what to do next. */
+export const LIVE_IDLE = {
+  paused: 'Paused: nothing starts. m changes the mode.',
+  fresh: 'No tasks yet. Tell the lead what you want built.',
+  done: 'All done',
+  next: "Tell the lead what's next",
+} as const
+/** The most reasons the "Nothing running · n waiting: ..." line names. */
+const IDLE_REASONS = 3
+/** "12m", "3h 05m", "2d": how long ago, short. */
+const idleAgo = (ms: number) => (ms >= 86_400_000 ? `${Math.floor(ms / 86_400_000)}d` : fmtDuration(ms))
+/** Why open task `t` does not run while nothing runs: "needs you", "waits for T-6", "paused", "ready" ... */
+function idleReason(t: BoardTask, view: LiveView, nowMs: number): string {
+  if (needsYou(t, nowMs)) return 'needs you'
+  if (t.status === 'paused') return 'paused'
+  if (t.status === 'doing') return 'stopped'
+  if (t.status === 'todo') {
+    const board = { tasks: view.tasks as BoardTask[], archived_done: view.archived_done ?? [] }
+    const open = [...new Set((t.after ?? []).filter(a => a !== t.id && !depDone(board, a)))]
+    if (open.length) return `waits for ${open.slice(0, 2).join(', ')}${open.length > 2 ? ` +${open.length - 2}` : ''}`
+    return 'ready'
+  }
+  return STUCK_WORD[t.status] ?? t.status
+}
+/**
+ * T-903: the dim line or two the Live tab's TASKS section shows (and the band's first line, and /<name>-status) when no
+ * task runs, in `width` columns, by why nothing runs: a new board (no tasks ever), the paused mode, open tasks that wait
+ * ("Nothing running · 3 waiting: T-5 needs you, T-7 waits for T-6", the first reasons that fit), or no open task at all
+ * ("All done · last merged T-891, 12m ago", then what to do next, with the backlog's count when it has items).
+ */
+export function liveIdle(view: Pick<LiveView, 'tasks' | 'mode' | 'archived_done'>, nowMs: number, width = 80): string[] {
+  const w = Math.max(1, Math.floor(width))
+  // cut at spaces onto more lines when narrow, no indent on the next lines
+  const wrap = (s: string) => {
+    const out: string[] = []
+    let rest = s
+    while (textWidth(rest) > w) {
+      const cut = rest.lastIndexOf(' ', w)
+      if (cut <= 0) break
+      out.push(rest.slice(0, cut))
+      rest = rest.slice(cut + 1)
+    }
+    return [...out, fitText(rest, w)]
+  }
+  const tasks = view.tasks as BoardTask[]
+  if (!tasks.length && !(view.archived_done ?? []).length) return wrap(LIVE_IDLE.fresh)
+  if (modeOf(view) === 'paused') return wrap(LIVE_IDLE.paused)
+  const open = tasks.filter(t => t.status !== 'done' && t.status !== 'dropped' && t.status !== 'backlog')
+  if (open.length) {
+    const sorted = [...open.filter(t => needsYou(t, nowMs)), ...open.filter(t => !needsYou(t, nowMs))]
+    const head = `Nothing running · ${open.length} waiting`
+    let text = head
+    for (let i = 0; i < Math.min(IDLE_REASONS, sorted.length); i++) {
+      const t = sorted[i]!
+      const more = `${i ? ', ' : ': '}${t.id} ${idleReason(t, view as LiveView, nowMs)}`
+      if (i && textWidth(text + more) > w) break
+      text += more
+    }
+    return [fitText(text, w)]
+  }
+  const last = tasks
+    .filter(t => t.status === 'done')
+    .map(t => ({ t, at: finishedAt(t)?.atMs }))
+    .filter((x): x is { t: BoardTask; at: number } => x.at !== undefined)
+    .sort((a, b) => b.at - a.at || num(b.t.id) - num(a.t.id))[0]
+  const backlog = tasks.filter(t => t.status === 'backlog').length
+  const first = last ? `${LIVE_IDLE.done} · last merged ${last.t.id}, ${idleAgo(nowMs - last.at)} ago` : LIVE_IDLE.done
+  const second = `${LIVE_IDLE.next}${backlog ? `, or move ${backlog === 1 ? 'the backlog item' : `one of ${backlog} backlog items`} to todo` : ''}.`
+  return [fitText(first, w), ...wrap(second)]
+}
 /** The stations of a normal code task that merges on its own: check only when the checker setting is on. */
 export const liveStations = (checker: boolean): LiveStation[] => LIVE_STATIONS.filter(s => s !== 'you' && s !== 'answer' && (s !== 'check' || checker))
 /** T-846: the stations of one task's real path: an investigation goes work → answer; a task that needs review has "you" before merged. */

@@ -8,9 +8,9 @@
 // OpenTUI (T-500): opencode/tui.ts imports them by their written-out names (what OpenCode swaps for its own copies),
 // and loadTuiRuntime names a package that is missing or lacks a function instead of failing with a bare import error.
 import { test, expect } from 'bun:test'
-import { LIVE_TABS, tabRow as coreTabRow, roleKeys, rolesKeys, kindsKeys, scoutHowTo, LIVE_EMPTY, liveLegend, liveLanes, liveLayout, liveStations, liveHeader, liveLabelLine, laneLines, segText, liveTrains, trainRows, liveToday, todayLines, modeLabel, modeButton, promptsOfRole, ROLE_SLOT, SETTING_GROUPS, groupSummaryParts, taskActions, actionButtonLabel, settingsKeys, mergeRoles, mergeKinds, when, addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, showsHeader, roleTools, roleNameError, leadScoutNameError, type BoardPage, type Board } from '../../board'
+import { LIVE_TABS, tabRow as coreTabRow, roleKeys, rolesKeys, kindsKeys, scoutHowTo, LIVE_IDLE, liveLegend, liveLanes, liveLayout, liveStations, liveHeader, liveLabelLine, laneLines, segText, liveTrains, trainRows, liveToday, todayLines, modeLabel, modeButton, promptsOfRole, ROLE_SLOT, SETTING_GROUPS, groupSummaryParts, taskActions, actionButtonLabel, settingsKeys, mergeRoles, mergeKinds, when, addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, showsHeader, roleTools, roleNameError, leadScoutNameError, type BoardPage, type Board } from '../../board'
 import type { PaneView } from '../../app/state'
-import type { SymccTask } from '../../../types'
+import type { SymccMode, SymccTask } from '../../../types'
 import { ICON } from '../../name'
 import { PANEL_MARK, hasPage, bandLines, bandDraw, BAND_CLICK_HINT, panelLines, panelKeys, parseViewFile, viewFileText, lineText, actionCommand, answerOptions, OWN_ANSWER, viewDefs, panelTaskActions, TASK_ACTION_COMMANDS, SETTINGS_OPEN, approveSent, APPROVE_SENT_MS, drawnLines, gitRowLines, boardPageOf, defDraftOf, defEditKeys, noDescriptionText, draftError, SETUP_GIT_ASK, EDIT_FIRST_BOX, newNameError, type ViewFile, type PanelChoice } from '../board-view'
 import { readFile } from 'node:fs/promises'
@@ -33,6 +33,8 @@ import { startTui as startTuiLive, KEY_BINDS, viewPaths, loadTuiRuntime, BOARD_P
 const NOW = Date.parse('2026-11-19T12:00:00.000Z')
 /** Every Settings group's title (all of them open). */
 const ALL_GROUPS = SETTING_GROUPS.map(g => g.title)
+/** T-903: whether a Live tab line is one of the idle lines TASKS shows when no task runs (liveIdle). */
+const idleLine = (t: string) => t.startsWith(LIVE_INDENT + 'Nothing running') || t.startsWith(LIVE_INDENT + LIVE_IDLE.done) || [LIVE_IDLE.paused, LIVE_IDLE.fresh].some(x => t === LIVE_INDENT + x)
 const AT = '2026-11-19T11:00:00.000Z'
 
 /** A board: T-1 doing (its worker just claimed it: "worker starting", started 3 minutes ago), T-2 in review, T-3
@@ -2980,7 +2982,7 @@ test('T-692: the Live tab draws the terminal panel\'s lanes and today (core/live
   expect(lineOf(NOW)).not.toBe(lineOf(NOW + 1000))
   // no task in doing: the empty state
   const none: ViewFile = { ...f, view: { ...f.view, tasks: f.view.tasks.filter(t => t.status !== 'doing') } }
-  expect(panelLines(none, { tab: 'live', opened: '', cursor: 0 }, NOW, 100).lines.map(lineText)).toContain(LIVE_INDENT + LIVE_EMPTY)
+  expect(panelLines(none, { tab: 'live', opened: '', cursor: 0 }, NOW, 100).lines.map(lineText).some(idleLine)).toBe(true)
   expect(panelLines(none, { tab: 'live', opened: '', cursor: 0 }, NOW, 100).lines.map(lineText)).not.toContain(' ' + '─'.repeat(12))
 })
 
@@ -3034,7 +3036,7 @@ test('T-709: the Live tab shows a lane for an approved task in review while its 
   const f: ViewFile = { ...f0, view: { ...f0.view, tasks: tasks.map(t => viewTask(t)), checker: true, max_parallel: 3 } }
   const d = panelLines(parseViewFile(viewFileText(f)), { tab: 'live', opened: '', cursor: 0 }, NOW, 120)
   const texts = d.lines.map(lineText)
-  expect(texts.includes(LIVE_INDENT + LIVE_EMPTY)).toBe(false)
+  expect(texts.some(idleLine)).toBe(false)
   expect(d.ids).toEqual(['need:T-601', 'T-630', 'om-all'])
   const lane = liveLanes({ ...f.view, tasks }, NOW)
   // T-846: a task in review has a "you" station; once approved its lane sits past it, at merged
@@ -3042,7 +3044,7 @@ test('T-709: the Live tab shows a lane for an approved task in review while its 
   // its check step gone stale: it only waits for the owner (T-846), so its lane sits at "you"
   const stale: ViewFile = { ...f, view: { ...f.view, tasks: tasks.map(t => (t.id === 'T-630' ? ({ ...t, live: { checking: { step: 'testing', at: ago(3600) } }, } as unknown as SymccTask) : t)).map(t => viewTask(t)) } }
   expect(liveLanes({ ...f.view, tasks: tasks.map(t => (t.id === 'T-630' ? ({ ...t, live: { checking: { step: 'testing', at: ago(3600) } }, } as unknown as SymccTask) : t)) }, NOW).map(l => l.station)).toEqual(['you'])
-  expect(panelLines(parseViewFile(viewFileText(stale)), { tab: 'live', opened: '', cursor: 0 }, NOW, 120).lines.map(lineText)).not.toContain(LIVE_INDENT + LIVE_EMPTY)
+  expect(panelLines(parseViewFile(viewFileText(stale)), { tab: 'live', opened: '', cursor: 0 }, NOW, 120).lines.map(lineText).some(idleLine)).toBe(false)
 })
 
 test('T-692: in the TUI, l (or a click on the Live tab) shows the Live tab; ↓ and Enter, or a click on a lane, open that task\'s page', async () => {
@@ -4207,4 +4209,24 @@ test('T-904: the Tasks search finds done tasks (one a minute ago, one 5 days ago
   await board.press('next', 's')
   expect(board.state().opened).toBe('T-6')
   board.stop()
+})
+
+test('T-903: with no task running, the OpenCode Live tab says why (paused, waiting, all done, a new board) and what to do next', () => {
+  const f0 = viewFile()
+  const ago = (min: number) => new Date(NOW - min * 60_000).toISOString()
+  const task = (id: string, status: string, x: Record<string, unknown> = {}) => ({ id, title: `Task ${id}`, details: '', files: [], status, note: '', order: Number(id.slice(2)), after: [], attempts: 1, history: [], branch: null, created_at: ago(300), updated_at: ago(1), ...x }) as unknown as SymccTask
+  const cases: [SymccMode, SymccTask[], string[]][] = [
+    ['paused', [task('T-1', 'todo')], ['Paused: nothing starts. m changes the mode.']],
+    ['auto', [task('T-6', 'paused'), task('T-7', 'todo', { after: ['T-6'] }), task('T-5', 'waiting', { ask: { by: 'worker', text: 'Which one?', asked_at: ago(2) } })], ['Nothing running · 3 waiting: T-5 needs you, T-6 paused, T-7 waits for T-6']],
+    ['auto', [task('T-891', 'done', { history: [{ kind: 'merged', at: ago(12), text: 'try 1 → merged into main' }] }), task('T-893', 'backlog'), task('T-894', 'backlog')], ['All done · last merged T-891, 12m ago', "Tell the lead what's next, or move one of 2 backlog items to todo."]],
+    ['auto', [], ['No tasks yet. Tell the lead what you want built.']],
+  ]
+  for (const [mode, tasks, want] of cases) {
+    const f: ViewFile = { ...f0, view: { ...f0.view, tasks: tasks.map(t => viewTask(t)), working: [], mode } }
+    const d = panelLines(parseViewFile(viewFileText(f)), { tab: 'live', opened: '', cursor: 0 }, NOW, 100)
+    const texts = d.lines.map(lineText)
+    const at = texts.findIndex(t => t.startsWith('TASKS'))
+    expect(texts.slice(at + 2, at + 2 + want.length)).toEqual(want.map(l => LIVE_INDENT + l))
+    expect(d.lines[at + 2]!.every(x => x.color === 'inactive')).toBe(true)
+  }
 })

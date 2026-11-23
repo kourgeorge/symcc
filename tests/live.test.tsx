@@ -2,7 +2,7 @@
 // numbers; claude/ui/live.tsx draws them on the terminal panel).
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { liveLanes, liveLayout, laneLines, liveLabelLine, liveLabelSegs, LIVE_AGENT_MARK, LIVE_TONE, liveStations, liveTrains, trainRows, type LiveTrain, liveToday, todayLines, segText, liveBlink, liveHeader, liveHeaderSegs, liveScoutMark, scoutsRunning, scoutNext, tabRow, LIVE_TABS, LIVE_EMPTY, LIVE_LEGEND, LIVE_DIVIDER, LIVE_INDENT, liveInner, liveLegend, LANE_WARN_TIMES, laneTimes, liveTodayLines, pastDays, pastLines } from '../hooks/core/live'
+import { liveLanes, liveLayout, laneLines, liveLabelLine, liveLabelSegs, LIVE_AGENT_MARK, LIVE_TONE, liveStations, liveTrains, trainRows, type LiveTrain, liveToday, todayLines, segText, liveBlink, liveHeader, liveHeaderSegs, liveScoutMark, scoutsRunning, scoutNext, tabRow, LIVE_TABS, LIVE_LEGEND, LIVE_DIVIDER, LIVE_INDENT, liveInner, liveLegend, LANE_WARN_TIMES, laneTimes, liveTodayLines, pastDays, pastLines } from '../hooks/core/live'
 import { PAST_WEEK, PAST_YESTERDAY, pastTasks } from './live-past-fixture'
 import { textWidth } from '../hooks/core/width'
 import { FINISH_STALE_MS } from '../hooks/core/lead'
@@ -461,7 +461,8 @@ test('T-690, T-758: with no task in doing, the Live tab says so and shows no nex
   await ui.press({ key: 'tab-live' })
   const lines = await liveLines(ui)
   expect(lines[0]).toBe('⏵ auto merge · agents 0/3 busy')
-  expect([lines[1]!.replace(/ ─+$/, ''), lines[2]!.trim(), lines[3]]).toEqual(['TASKS', '', LIVE_INDENT + LIVE_EMPTY])
+  // T-903: why nothing runs: the open tasks that wait, and what each waits for
+  expect([lines[1]!.replace(/ ─+$/, ''), lines[2]!.trim(), lines[3]]).toEqual(['TASKS', '', `${LIVE_INDENT}Nothing running · 3 waiting: T-690 ready`])
   expect(lines.some(l => l.includes('next up'))).toBe(false)
   expect(lines.includes(LIVE_INDENT + LIVE_DIVIDER)).toBe(false)
   expect(lines[lines.findIndex(l => l.startsWith('TODAY ─')) + 2]?.startsWith(`${LIVE_INDENT}✓ `)).toBe(true)
@@ -574,7 +575,7 @@ test('T-691, T-758: with no task in doing, the VS Code Live tab says so and show
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
   await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'live') } })
   expect((await ui.find({ key: 'live-head' }))?.text).toBe('⏵ auto merge · agents 0/3 busy')
-  expect((await ui.find({ key: 'live-empty' }))?.text).toBe(LIVE_EMPTY)
+  expect((await ui.find({ key: 'live-empty' }))?.text).toBe('Nothing running · 4 waiting: T-601 needs you, T-690 ready, T-691 waits for T-690')
   expect(await ui.find({ key: 'live-legend' })).toBeUndefined()
   expect(await ui.find({ key: 'live-divider' })).toBeUndefined()
   expect(await ui.find({ key: 'live-next' })).toBeUndefined()

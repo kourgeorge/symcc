@@ -3,7 +3,7 @@
 // and the tasks that need you (in the warning color). The status line under the prompt has the rest of the board's facts.
 import { drawNow } from './now'
 import type { MatchedHook } from 'claude-code'
-import { bandBrand, bandWhere, bandItems, bandFronts, bandNote, bandSummary, BAND_INDENT, type BandSummaryView, planBandText, questionsForYou, driveWarning, type BandItem, type LiveView, type BoardTask } from '../../board'
+import { bandBrand, bandWhere, bandItems, bandFronts, bandNote, bandSummary, BAND_INDENT, type BandSummaryView, planBandText, questionsForYou, driveWarning, liveIdle, type BandItem, type LiveView, type BoardTask } from '../../board'
 import { cutTitle, padWidth, textWidth } from '../../core/width'
 import { type PaneView, S } from '../../app/state'
 import { type $, panelValues } from '../panel'
@@ -16,9 +16,6 @@ export type AbovePromptHook = MatchedHook<'ui.render', { component: 'AbovePrompt
 export function bandTitle(root: string = S.root): string {
   return `${bandBrand(S.N.name)}${bandWhere(root, S.N.name)}`
 }
-
-/** What the band says when nothing runs, nothing is next and nothing needs you. */
-export const BAND_IDLE = 'nothing running'
 
 /** The color of a band row's front, by its kind: a running task green, next up dim, a task that needs you the warning color. */
 const FRONT_COLOR: Record<BandItem['kind'], string> = { run: 'green', next: 'inactive', you: 'warning' }
@@ -107,7 +104,8 @@ export async function renderAbovePrompt($: $, e: Parameters<AbovePromptHook>[1],
     ...(plan ? [<Text wrap="truncate" color={'inactive' as never}>{line(plan)}</Text>] : []),
     ...(hidden > 0 ? [<Text wrap="truncate" color={'inactive' as never}>{line(`+${hidden} more · /${S.N.name}`)}</Text>] : []),
   ]
-  if (!lines.length) lines.push(<Text wrap="truncate" color={'inactive' as never}>{line(BAND_IDLE)}</Text>)
+  // T-903: nothing runs, nothing is next and nothing needs you: the first of the Live tab's idle lines (why, what to do next)
+  if (!lines.length) lines.push(<Text wrap="truncate" color={'inactive' as never}>{line(liveIdle(v as unknown as LiveView, nowMs, Math.max(1, columns - 1))[0] ?? '')}</Text>)
   return (
     <Box flexDirection="column">
       <Box key="band-head" flexDirection="row">

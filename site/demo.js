@@ -176,7 +176,7 @@
       // T-771: the running lanes on top, then the just-merged ones (kept 10 minutes, at most 3, newest first)
       const kept = s.lanes.filter(l => l.done && s.now - l.done < 10 * 60).sort((a, b) => b.done - a.done).slice(0, 3)
       for (const l of [...s.lanes.filter(l => !l.done), ...kept]) L.push(...laneLines(s, l))
-    } else L.push(' No task is running right now.')
+    } else L.push(' ' + sp('All done', 'dim'), ' ' + sp("Tell the lead what's next.", 'dim')) // T-903: why nothing runs, what to do next (core/live.ts liveIdle)
     if (s.lanes.length) L.push(' ' + sp('─'.repeat(12), 'dim'))
     if (s.lanes.length) L.push(' ' + sp('✧ = an agent works here (needs an agent slot) · ⌀ = tokens', 'dim'))
     L.push('')

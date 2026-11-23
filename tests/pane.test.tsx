@@ -213,7 +213,8 @@ test('T-776: running scouts show on the band\'s first line, and a narrow band dr
 test('T-748: the band lists the questions for you and the NEEDS YOU tasks in the warning color, and says when nothing runs', async ($, on) => {
   const questions = [{ id: 'Q-71', text: 'Raise the version?', options: ['Yes', 'No'], asked_at: new Date().toISOString() }]
   let tasks = [task('T-6', 'review', 'Ready one'), task('T-7', 'failed', 'Broke', { note: 'tests failed' }), task('T-1', 'done', 'Parser')]
-  on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [], questions, driving: true } }, version: 1 } }))
+  let mode = 'auto'
+  on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode, test_commands: [], questions, driving: true } }, version: 1 } }))
   on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
   const q = await ui.find({ type: 'Text', text: /^ ⚠ 1 question for you: Q-71 Raise the version\?$/ })
@@ -223,15 +224,20 @@ test('T-748: the band lists the questions for you and the NEEDS YOU tasks in the
   expect(await ui.find({ type: 'Text', text: /^ ✗ T-7  failed Broke — / })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /next up/ })).toBeUndefined()
   await ui.unmount()
-  // nothing runs, nothing is next and nothing needs you: line 1, and "nothing running" dim under it
-  tasks = [task('T-1', 'done', 'Parser')]
+  // T-903: nothing runs, nothing is next and nothing needs you: line 1, and the first of the Live tab's idle lines dim under it
+  tasks = [task('T-1', 'done', 'Parser'), task('T-2', 'backlog', 'An idea')]
   questions.length = 0
   const idle = await $.ui.mount({ ...BAND, surface: 'terminal' })
   const lines = await bandLines(idle)
   expect(lines[0]).toMatch(/\[ open board \]$/)
-  expect(lines.slice(1)).toEqual([' nothing running'])
-  expect((await idle.find({ type: 'Text', text: /^ nothing running$/ }))?.props.color).toBe('inactive')
+  expect(lines.slice(1)).toEqual([' All done'])
+  expect((await idle.find({ type: 'Text', text: /^ All done$/ }))?.props.color).toBe('inactive')
   await idle.unmount()
+  // paused: the band says so, and how to change it
+  mode = 'paused'
+  const paused = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  expect((await bandLines(paused)).slice(1)).toEqual([' Paused: nothing starts. m changes the mode.'])
+  await paused.unmount()
 })
 
 // T-643: a session that doesn't drive: a yellow warning row in the band, and a claimed doing task's row says it runs
