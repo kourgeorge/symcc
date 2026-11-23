@@ -8,6 +8,7 @@ import { ASK_TOOL, ASK_LINE } from './ask'
 import { WEB_SAFETY_LINE } from './roles'
 import { fillPlaceholders, placeholdersIn, TASK_PLACEHOLDER, TASK_PLACEHOLDER_ABOUT } from './prompt-fill'
 import { PROMPT_SECTIONS, PROMPT_ORDER, buildPrompt, promptTemplate, type PromptSection } from './prompt-sections'
+import type { ChangedSince } from './changed-since'
 
 export { fillPlaceholders, placeholdersIn }
 
@@ -91,8 +92,8 @@ export const PROMPT_PLACEHOLDERS: Record<PromptKind, Record<string, string>> = l
  * The text a worker is started with: the sections of `kind`'s prompt (see buildPrompt) made from `values` and, for the task's own
  * facts (why, the tries, the files, the last failure), from `task` and `board`. `commits`: the earlier tries' commits, one line each.
  */
-export function fillPrompt(kind: PromptKind, values: Record<string, string>, task?: SymccTask, board?: Board, commits?: readonly string[]): string {
-  return buildPrompt({ kind, values, ...(task ? { task } : {}), ...(board ? { board } : {}), ...(commits ? { commits } : {}) })
+export function fillPrompt(kind: PromptKind, values: Record<string, string>, task?: SymccTask, board?: Board, commits?: readonly string[], since?: ChangedSince | null): string {
+  return buildPrompt({ kind, values, ...(task ? { task } : {}), ...(board ? { board } : {}), ...(commits ? { commits } : {}), ...(since ? { since } : {}) })
 }
 
 /** The placeholders a role's checklist may use and what they become: the task's own facts from the prompt, not its

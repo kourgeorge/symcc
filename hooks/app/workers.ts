@@ -7,6 +7,7 @@ import { publish, drivesHere, drivenElsewhere, readLeadText } from './lead'
 import { type BeforeLine, type CheckResult, checkAndMerge, recordCommits, ownerEdits, alreadyMerged, AGAIN_MAX, RELOAD_AGAIN, againsThisTry, noteAgain } from './review'
 import type { TurnLimit } from './merge-line'
 import { timedOutRetryNote } from '../core/test-timeout'
+import { mayBeStale, changedSincePaths, CHANGED_SINCE_MAX, type ChangedSince } from '../core/changed-since'
 import { logNeedsFiles } from './evidence'
 import { loadRoles } from './roles'
 import { runChecker, checkerName, cleanFolder, STOPPED_AGAIN } from './checker'
@@ -29,10 +30,30 @@ import { cleanLeftoverTmp, stopOrphans, timedOut, askOvertime, wrapUp, ownerAdde
  *  The role's checklist goes in {{role}}, with its own placeholders filled in from the same values. `guide`: organizational memory (org-mem) as
  *  the prompt shows it (orgMemText; '' for none). `learned`: the end-of-report ask for org-mem suggestions, only on a host
  *  with no debrief (learnedAsk, T-656); '' by default: the debrief asks after the hand-back instead. */
-export const WORKER_PROMPT = (t: BoardTask, b: Board, dir: string, role?: RoleDef, guide = '', learned = '', commits: readonly string[] = []) => {
+export const WORKER_PROMPT = (t: BoardTask, b: Board, dir: string, role?: RoleDef, guide = '', learned = '', commits: readonly string[] = [], since: ChangedSince | null = null) => {
   const kind = isInvestigation(t) ? 'investigation' : 'change'
   const values = { ...(kind === 'investigation' ? investigationValues(t, dir) : changeValues(t, b, dir)), learned }
-  return fillPrompt(kind, { ...values, role: roleSection(role, values, t), org_mem: guide }, t, b, commits)
+  return fillPrompt(kind, { ...values, role: roleSection(role, values, t), org_mem: guide }, t, b, commits, since)
+}
+
+/**
+ * T-936: for a task from the backlog or written over a day before this try (mayBeStale), the commits on the branch it
+ * merges into since it was written, limited to its files (else the paths its details name; else only how many), newest
+ * first, at most CHANGED_SINCE_MAX. null for a fresh task, when no commit changed them, or when git can't say.
+ */
+export async function changedSince(host: Host, t: BoardTask, dir: string, nowMs = Date.now()): Promise<ChangedSince | null> {
+  if (!mayBeStale(t, nowMs)) return null
+  const { paths, scope } = changedSincePaths(t)
+  const range = [`--since=${t.created_at}`, `refs/heads/${intoOf(t)}`, ...(paths.length ? ['--', ...paths] : [])]
+  const count = await git(host, ['rev-list', '--count', ...range], dir).catch(() => null)
+  const total = count && count.exitCode === 0 ? Number(count.stdout.trim()) : NaN
+  if (!Number.isFinite(total) || total <= 0) return null
+  let commits: string[] = []
+  if (scope !== 'none') {
+    const r = await git(host, ['log', '--format=%h %s', '-n', String(CHANGED_SINCE_MAX), ...range], dir).catch(() => null)
+    commits = r && r.exitCode === 0 ? r.stdout.split('\n').map(l => l.trim()).filter(Boolean) : []
+  }
+  return { created: t.created_at, nowMs, commits, total, scope }
 }
 
 /**
@@ -178,7 +199,7 @@ async function queueWorker(host: Host, id: string): Promise<{ started: Promise<v
       const cur = find(await load(host), id)
       return cur?.status === 'doing' && cur.live?.session === S.me && cur.attempts === t.attempts
     }
-    const spawn = startAgent(host, { kind: 'worker', prompt: WORKER_PROMPT(t, b, dir, role, await orgMemText(host), learnedAsk(host), await earlierCommits(host, t, dir)) + reportsNote(reports, t.details) + behindNote(behind, intoOf(t), why), name: workerName(S.N.name, t.id), description: workerDescription(t.title), ...(role?.tools ? { tools: role.tools } : {}), ...(isProseRole(role) && !isInvestigation(t) ? { prose: true as const } : {}), ...(!isInvestigation(t) && t.files?.length ? { files: t.files } : {}), cwd: dir, ...(role?.model ? { model: role.model } : {}) }, still)
+    const spawn = startAgent(host, { kind: 'worker', prompt: WORKER_PROMPT(t, b, dir, role, await orgMemText(host), learnedAsk(host), await earlierCommits(host, t, dir), await changedSince(host, t, dir, Date.parse(now()))) + reportsNote(reports, t.details) + behindNote(behind, intoOf(t), why), name: workerName(S.N.name, t.id), description: workerDescription(t.title), ...(role?.tools ? { tools: role.tools } : {}), ...(isProseRole(role) && !isInvestigation(t) ? { prose: true as const } : {}), ...(!isInvestigation(t) && t.files?.length ? { files: t.files } : {}), cwd: dir, ...(role?.model ? { model: role.model } : {}) }, still)
     queued = true
     queuedWorkers.set(id, { task: id, worktree: dir, branch, since: Date.now() })
     return { started: workerStarted(host, id, before, dir, branch, spawn, t.attempts).finally(() => (starting.delete(id), queuedWorkers.delete(id))) }

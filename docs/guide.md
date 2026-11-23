@@ -148,6 +148,16 @@ then take turns in **one merge queue**. This section explains all three.
 | `review` | Approve: it merges. Reject: back to `todo` with your reason |
 | `failed` | You retry it, change it, or drop it |
 | `done` | Nothing. It is final |
+
+**Old tasks are checked first.** When a worker starts on a task that came from the backlog, or
+was written more than a day before, its prompt says when the task was written and lists the
+commits that changed the task's files since then (up to 15, newest first, "… N more" after
+that; with no files list, the files its details name, or else just how many commits landed).
+The worker first checks that the task still fits: the files, functions and lines it names
+still exist, the work isn't already done, and nothing that changed clashes with it. If the
+task no longer makes sense or needs a clearly different plan, the worker asks you (for
+example "drop it" or "do the new plan: …") instead of guessing. Nothing is added for a fresh
+task or when no commit changed its files.
 | `dropped` | Retry brings it back to `todo` |
 
 **Needs you.** A task is under NEEDS YOU when the next move is yours: it is in `review`,

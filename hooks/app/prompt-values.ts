@@ -20,6 +20,8 @@ export const sharedValues = (t: SymccTask, dir: string): Record<string, string> 
   role_name: roleOf(t),
   // How a worker asks the owner and what a refused edit means (see hooks/app/ask.ts).
   ask: ASK_LINE(toolName(ASK_TOOL)),
+  // T-936: the ask_owner tool's name, for the "what changed since" section's check-first rule
+  ask_tool: toolName(ASK_TOOL),
   // T-600: org-mem's lines go in {{org_mem}} (see WORKER_PROMPT and orgMemText); T-656: {{learned}} is '' unless the host
   // can't send the debrief (see learnedAsk), so the main prompt is only about the task
   org_mem: '',
