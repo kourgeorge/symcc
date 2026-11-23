@@ -1613,6 +1613,11 @@ has examples that work in most code projects:
   it does.
 - [`big-files.md`](../examples/scouts/big-files.md): source files grown too large (or that many
   tasks keep touching at once), with a concrete way to split each one.
+- [`org-mem-review.md`](../examples/scouts/org-mem-review.md): once a day, suggests fixes to the
+  organizational memory (`.symcc/org-mem.md`): notes that are out of date, repeated, too narrow or
+  too long, and lessons it is missing.
+- [`backlog-review.md`](../examples/scouts/backlog-review.md): once a day, checks up to 10 backlog
+  tasks against the code and git history and says which to drop, rewrite or merge.
 
 A new project starts with these example scouts. The first time symcc starts in a project with
 no `.symcc/scouts/` folder yet, it copies every example there and marks each one paused (in
