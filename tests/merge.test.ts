@@ -7,7 +7,7 @@ import { YOUR_EDITS } from '../hooks/core/review'
 import { inMergeLine, MERGE_LINE_POLL_MS, resetMergeLine } from '../hooks/app/merge-line'
 import { joinedText } from '../hooks/core/board-parts'
 import { mergeLineText, parseMergeLine, inLineNote, MERGE_LINE_STALE_MS, mergeLineStaleMs, type LineEntry, testMinutesOf, testTimeoutMs, lineEntryStale, readBoard, DEFAULT_TEST_MINUTES, BASH_PATHS_MAX, bashTooManyText, failedTestNames, FAILED_TESTS_KEPT, FAILED_TEST_CHARS } from '../hooks/board'
-import { PREP_NOTE, STEP_NOTE, shownNote, type Board, type Notify, soundSetFor, type BoardTask, workerGitWriteText, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, readArchive, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, untestedChange, isTestFile, isPlainRelPath, parseSettingValue, type WorkerQuestion, isAnswered, boardText, taskMatches, withAgentStart, workerIdOf, tryTokens, tryCost, onTask } from '../hooks/board'
+import { PREP_NOTE, STEP_NOTE, shownNote, type Board, type Notify, soundSetFor, type BoardTask, workerGitWriteText, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, readArchive, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, mergeTestCount, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, untestedChange, isTestFile, isPlainRelPath, parseSettingValue, type WorkerQuestion, isAnswered, boardText, taskMatches, withAgentStart, workerIdOf, tryTokens, tryCost, onTask } from '../hooks/board'
 import { usedRun, runBy } from './agent-fixture'
 import { removeWorktree, cleanupMerged, deleteMergedBranch } from '../hooks/app/git'
 import { addPassedTree, parsePassedTrees, passedTreesText, treePassed, PASSED_TREES_MAX } from '../hooks/core/passed-trees'
@@ -4882,6 +4882,13 @@ test('the merge time limit grows with the test commands: three get more time tha
   expect(finishLimitMs(3)).toBeGreaterThan(3 * TEST_TIMEOUT_MS)
   expect(finishLimitMs(1)).toBeGreaterThan(TEST_TIMEOUT_MS)
   expect(finishLimitMs(0)).toBe(finishLimitMs(1))
+})
+
+test('T-908: the merge time limit counts the longer of test_commands and docs_test_commands', () => {
+  expect(mergeTestCount({ test_commands: ['npm test'], docs_test_commands: ['a', 'b', 'c'] })).toBe(3)
+  expect(mergeTestCount({ test_commands: ['a', 'b'], docs_test_commands: ['d'] })).toBe(2)
+  expect(mergeTestCount({ test_commands: ['a'] })).toBe(1)
+  expect(finishLimitMs(mergeTestCount({ test_commands: ['npm test'], docs_test_commands: ['a', 'b', 'c'] }), 10)).toBe(35 * 60_000)
 })
 
 test('a finish step with three slow but finishing test commands (8 min each) is not given up: it merges under its limit', async () => {

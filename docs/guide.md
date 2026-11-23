@@ -481,7 +481,7 @@ happened to it meanwhile), or the lead is told it landed.
 | Limit | Value |
 |---|---|
 | One test command | `test_minutes` (10 by default; raise it for a slow suite, e.g. "set test_minutes to 20") |
-| The whole turn (catch up, tests, merge) | `test_minutes` for each test command (at least one) plus 5 minutes for git and the board: 15 minutes with one command by default, 35 with three |
+| The whole turn (catch up, tests, merge) | `test_minutes` for each test command (at least one; counted from `test_commands` or `docs_test_commands`, whichever list is longer) plus 5 minutes for git and the board: 15 minutes with one command by default, 35 with three |
 | Waiting in the queue | Does not count: the limit starts at the task's own turn, so each task has its own limit and the queue keeps moving |
 | A stale queue entry (left by a session that died) | Older than twice `test_minutes`: cleared by itself |
 

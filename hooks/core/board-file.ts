@@ -260,6 +260,13 @@ export const DEFAULT_TEST_MINUTES = 10
 export const testMinutesOf = (b: { test_minutes?: unknown }): number => (typeof b?.test_minutes === 'number' && Number.isFinite(b.test_minutes) && b.test_minutes >= 1 ? Math.round(b.test_minutes) : DEFAULT_TEST_MINUTES)
 
 /**
+ * How many test commands a merge turn on board `b` may run, for its time limit (finishLimitMs): a prose-only change of a
+ * code: false role runs docs_test_commands instead of test_commands (T-908), and the limit is set before that is known,
+ * so it counts the longer of the two lists.
+ */
+export const mergeTestCount = (b: { test_commands: string[]; docs_test_commands?: string[] }): number => Math.max(b.test_commands.length, b.docs_test_commands?.length ?? 0)
+
+/**
  * The project-wide merge line (<data folder>/merge-line.json, T-546): every way into a merge (a hand-back, an approve, a
  * finished work whose files are clear again, a checker's pass) joins it, across tasks and sessions, and only
  * the task at its front has its turn: catch up with the target branch, run the tests, move the branch (see inMergeLine

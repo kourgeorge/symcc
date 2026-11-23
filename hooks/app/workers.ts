@@ -1,5 +1,5 @@
 import type { SymccTask, SymccTokens } from '../../types'
-import { PREP_NOTE, makeAsk, type Board, type BoardTask, type RoleDef, roleSection, mayStart, liveWorkersFor, modeOf, symccOn, ready, patchTask, putTask, find, startRun, findRole, roleOf, workerName, workerDescription, onNotReady, endRun, tryLabel, needFilesQuestion, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, liveDriver, emptyBoard, ownedHere, backToTodo, stoppedEntry, withHistory, historyEntry, type HistoryAdd, type HistoryFacts, tryEntry, resultEntry, notUsedEntry, taskWasResult, type HistoryKind, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, testMinutesOf, ranOverNote, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, WRAP_UP_GRACE_MS, WRAP_UP_TEXT, outOfTimeNote, checkerOn, docsOnly, checkerOutput, isCheckerOutput, checkerLine, checkerRetryText, kindOf, isInvestigation, kindSection, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt, shortSha, secretsLeftText, gaveUpTestsText, endedEarlyLine, endedEarlyNote, ENDED_EARLY_NOTE, workerStartedEntry, workerHandedBackEntry, withFailedTests, withAgentUsed, withStoppedUsed, goOnRun, undoGoOn, restartsOf, restartedAgent, workerIdOf, checkerIdOf, onTask, withAgentStart, withWorkerStart, DEFAULT_ROLE, workerSince, workerActiveMs, isProseRole } from '../board'
+import { PREP_NOTE, makeAsk, type Board, type BoardTask, type RoleDef, roleSection, mayStart, liveWorkersFor, modeOf, symccOn, ready, patchTask, putTask, find, startRun, findRole, roleOf, workerName, workerDescription, onNotReady, endRun, tryLabel, needFilesQuestion, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, liveDriver, emptyBoard, ownedHere, backToTodo, stoppedEntry, withHistory, historyEntry, type HistoryAdd, type HistoryFacts, tryEntry, resultEntry, notUsedEntry, taskWasResult, type HistoryKind, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, mergeTestCount, testMinutesOf, ranOverNote, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, WRAP_UP_GRACE_MS, WRAP_UP_TEXT, outOfTimeNote, checkerOn, docsOnly, checkerOutput, isCheckerOutput, checkerLine, checkerRetryText, kindOf, isInvestigation, kindSection, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt, shortSha, secretsLeftText, gaveUpTestsText, endedEarlyLine, endedEarlyNote, ENDED_EARLY_NOTE, workerStartedEntry, workerHandedBackEntry, withFailedTests, withAgentUsed, withStoppedUsed, goOnRun, undoGoOn, restartsOf, restartedAgent, workerIdOf, checkerIdOf, onTask, withAgentStart, withWorkerStart, DEFAULT_ROLE, workerSince, workerActiveMs, isProseRole } from '../board'
 import { archiveOld } from './archive'
 import { checkHealth } from './health'
 import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch, clearScratch, taskBranch, copyReports, deleteMergedBranch, type BehindWhy } from './git'
@@ -351,7 +351,7 @@ export async function workerFinished(host: Host, agentId: string, answer: string
         const runs = t.runs?.length ? withAgentUsed(t.runs, 'worker', agentId, ended, { tokens, ...(cost !== undefined ? { cost } : {}) }) : t.runs
         return [putTask(x, backToTodo({ ...t, ...(runs ? { runs } : {}) }, SYMCC_STOPPED_NOTE, ended)), null] as [Board, null]
       }
-      limitMs = finishLimitMs(x.test_commands.length, testMinutesOf(x))
+      limitMs = finishLimitMs(mergeTestCount(x), testMinutesOf(x))
       // T-723: its history says the worker handed back (its own line, just before the "prep started" the check writes)
       return [patchTask(x, w.task, { live: { checking: { step: 'prep', at: ended }, phase: undefined, time_ask: undefined }, history: withHistory(t.history, ended, workerHandedBackEntry(t)), ...(t.runs?.length ? { runs: endRun(withAgentUsed(t.runs, 'worker', agentId, ended, { tokens, ...(cost !== undefined ? { cost } : {}) }), ended) } : {}) }, ended), t.attempts] as [Board, number]
     })
@@ -1037,7 +1037,7 @@ async function checkAgain(host: Host, t0: BoardTask) {
     beat = everyMs(host, FINISH_BEAT_MS, () => void markFinishing(host, id, tryNo).catch(() => undefined))
     // told once: a start tried again because the agent type wasn't loaded yet is the same restart
     if (!checkerNotReady.has(id)) tellLead(host, `${id} "${t.title}": its checker stopped when the plugin reloaded, so I started a new checker on the same work. This is not counted as a retry; nothing to do.`)
-    const limitMs = finishLimitMs(b.test_commands.length, testMinutesOf(b))
+    const limitMs = finishLimitMs(mergeTestCount(b), testMinutesOf(b))
     const how = await withLimit(host, limitMs, (gaveUp, over, limit) => checkerStepAgain(host, t, b, dir, gaveUp, over, limit))
     if (how === OVER) {
       beat?.cancel()
@@ -1103,7 +1103,7 @@ async function mergeAgain(host: Host, t0: BoardTask) {
     await markFinishing(host, id, tryNo).catch(() => undefined)
     beat = everyMs(host, FINISH_BEAT_MS, () => void markFinishing(host, id, tryNo).catch(() => undefined))
     tellLead(host, `${id} "${t.title}": its test and merge stopped when the plugin reloaded, so I put the same branch back in the merge line to test and merge it again. This is not a new try; nothing to do.`)
-    const limitMs = finishLimitMs(b.test_commands.length, testMinutesOf(b))
+    const limitMs = finishLimitMs(mergeTestCount(b), testMinutesOf(b))
     const how = await withLimit(host, limitMs, async (gaveUp, over, limit) => {
       const stop = () => (gaveUp() ? 'given up after running too long' : stopAsked.get(id))
       const made: string[] = []
@@ -1480,7 +1480,7 @@ async function mergeFinished(host: Host, b: Board, t: SymccTask, kind: 'approve'
   // The same time limit as a finished worker's check (finishLimitMs): past it the merge is
   // given up (mergeRanOver), so it no longer holds the task, its id or the branch's merge turn.
   // It may still wake up later, but then it merges nothing and writes nothing (gaveUp).
-  const limitMs = finishLimitMs(b.test_commands.length, testMinutesOf(b))
+  const limitMs = finishLimitMs(mergeTestCount(b), testMinutesOf(b))
   // The step shown on the board (BoardTask.live?.checking) is refreshed like a finishing mark, and removed when the merge ends or is given up.
   const beat = everyMs(host, FINISH_BEAT_MS, () => void markChecking(host, t.id, t.status, t.attempts).catch(() => undefined))
   try {
