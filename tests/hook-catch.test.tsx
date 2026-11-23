@@ -137,3 +137,41 @@ test("T-390 tool.call: when the hook itself fails (findRoot throws), a worker's 
   expect(await call.caught!($, ask, caughtNext({ result: 'ran' }, { called: true }).next)).toEqual({ result: 'ran' })
   expect(logs.filter(l => /the tool\.call hook it failed \(no root\)/.test(l)).length).toBe(1)
 })
+
+// T-909: the tool.check .catch is all that keeps a worker's edit from going through unchecked when the guard crashes
+const editReadme = (agentId?: string) => ({ tool: 'Edit', ...(agentId ? { agentId } : {}), input: { file_path: '/repo/README.md', old_string: 'a', new_string: 'b' } })
+
+test("T-909 tool.check: when the hook fails before passing it on, a worker's edit is refused with tool.check's deny shape and next is not called", async () => {
+  const check = registered().get('tool.check')!
+  workers.set('w1', { task: 'T-1', worktree: '/repo/.symcc/worktrees/T-1' } as never)
+  const { next, calls } = caughtNext({ decision: 'allow' })
+  expect(await check.caught!(fake$(), editReadme('w1'), next)).toEqual({ decision: 'deny', reason: "symcc couldn't check this call, so it was refused: it failed (boom)" })
+  expect(calls).toEqual([])
+})
+
+test("T-909 tool.check: when the hook fails, the lead's call (no agentId) is decided as usual by next", async () => {
+  const check = registered().get('tool.check')!
+  workers.set('w1', { task: 'T-1', worktree: '/repo/.symcc/worktrees/T-1' } as never)
+  const e = editReadme()
+  const { next, calls } = caughtNext({ decision: 'allow' })
+  expect(await check.caught!(fake$(), e, next)).toEqual({ decision: 'allow' })
+  expect(calls).toEqual([e])
+})
+
+test("T-909 tool.check: once the failed hook had passed a worker's call on, that answer stands", async () => {
+  const check = registered().get('tool.check')!
+  workers.set('w1', { task: 'T-1', worktree: '/repo/.symcc/worktrees/T-1' } as never)
+  const e = editReadme('w1')
+  const { next, calls } = caughtNext({ decision: 'allow' }, { called: true })
+  expect(await check.caught!(fake$(), e, next)).toEqual({ decision: 'allow' })
+  expect(calls).toEqual([e])
+})
+
+test('T-909 tool.check: the failure is logged once, however many calls it refuses', async () => {
+  const check = registered().get('tool.check')!
+  workers.set('w1', { task: 'T-1', worktree: '/repo/.symcc/worktrees/T-1' } as never)
+  const logs: string[] = []
+  for (let i = 0; i < 3; i++) await check.caught!(fake$(logs), editReadme('w1'), caughtNext({ decision: 'allow' }).next)
+  expect(logs.filter(l => /the tool\.check hook it failed \(boom\)/.test(l)).length).toBe(1)
+  expect(logs.length).toBe(1)
+})
