@@ -68,7 +68,9 @@ const order = ['TASKS', 'BRANCHES', 'TODAY', 'ORGANIZATIONAL MEMORY']
 if (live.includes('▍') || board.includes('▍')) bad('still frame: the Live tab or the board still has a ▍ heading')
 for (const h of order) for (const [name, t] of [['board', board], ['Live tab', live]]) {
   const ls = t.split('\n')
-  const i = ls.findIndex(l => l.startsWith(h))
+  // (T-915) each heading line starts with "─── ❯ ", so look for that before the name; a missing heading fails
+  const i = ls.findIndex(l => l.startsWith(`─── ❯ ${h}`))
+  if (i < 0 && (name === 'Live tab' || h !== 'ORGANIZATIONAL MEMORY')) bad(`still frame: the ${name} has no "─── ❯ ${h}" heading line`)
   if (i >= 0 && ls[i + 1]?.trim() !== '') bad(`still frame: the ${name}'s ${h} heading has no empty line under it`)
   if (i > 0 && ls[i - 1]?.trim() !== '' && h !== 'TASKS' && h !== 'NEEDS YOU') bad(`still frame: the ${name}'s ${h} heading has no empty line above it`)
 }
