@@ -87,19 +87,19 @@ export const MANUAL = (features: HostFeatures = ALL_FEATURES): Record<string, st
   Topics: /${S.N.help} commands · tasks · lead · workers · scouts · safety`,
   commands: `Commands
 ${features.panel ? `  /${S.N.name} opens everything; /${S.N.name}-WORD does one thing: a plural noun opens a view
-  (tasks, scouts), a singular noun acts on one named item (task, scout), a verb acts
+  (tasks), a singular noun acts on one named item (task, scout; with no name, scout opens the scouts), a verb acts
   (approve, reject, diff), and mode and settings change how the board works. The "board" is
   the whole panel: tasks, scouts and settings.` : `  /${S.N.name} shows the board as text; /${S.N.name}-WORD does one thing: a plural noun shows a list
-  (tasks, scouts), a singular noun acts on one named item (task, scout), a verb acts
+  (tasks), a singular noun acts on one named item (task, scout; with no name, scout lists the scouts), a verb acts
   (approve, reject, diff), and mode and settings change how the board works.`}
 ${features.panel ? `  /${S.N.name}                     open the board panel (↑↓ move, Enter opens, f searches the tasks, t / l / s / c switch views)
   /${S.N.name}-board               open the board panel (on Live), as /${S.N.name} does
   /${S.N.name}-tasks               list the open tasks in the chat (what needs you, running, in review,
                        failed, to do), then the backlog and today's done and dropped counts
-  /${S.N.name}-scouts              open the panel on the scouts view and reload the scout files` : `  /${S.N.name}                     show the board
+  /${S.N.name}-scout               open the panel on the scouts view and reload the scout files` : `  /${S.N.name}                     show the board
   /${S.N.name}-tasks               list the open tasks (what needs you, running, in review, failed,
                        to do), then the backlog and today's done and dropped counts
-  /${S.N.name}-scouts              show the scouts and reload the scout files`}
+  /${S.N.name}-scout               show the scouts and reload the scout files`}
   /${S.N.name}-status              the Live tab as text in the chat: what needs you, the running
                        tasks (step, time, try) and what waits for them, the branches,
                        today's numbers and the newest org-mem notes
@@ -286,7 +286,7 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
   It does what the file says. It can read files, run shell commands and search or fetch
   web pages, but must not change the project (no edits, installs or git changes). It sends
   its whole report to the lead, or nothing when it answers NOTHING. The lead adds tasks,
-  tells you, or ignores it. Run /${S.N.name}-scouts after adding or deleting a file.
+  tells you, or ignores it. Run /${S.N.name}-scout after adding or deleting a file.
   You can also ask the lead to list, add, change, remove or run a scout for you.
   every_minutes: 0 means only on demand: it never runs on the timer, only with run now
   or /${S.N.name}-scout NAME. A value that is not a whole number (like -5) also means only

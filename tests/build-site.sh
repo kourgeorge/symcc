@@ -87,4 +87,11 @@ bun "$here/scripts/build-site.ts" --root "$tmp/src" --out "$tmp/small" >"$tmp/lo
 bun "$here/scripts/build-site.ts" --root "$tmp/src" >"$tmp/log" 2>&1 || bad "default build (--out _site) failed: $(cat "$tmp/log")"
 [ -f "$tmp/src/_site/guide.html" ] || bad "default build did not write _site/guide.html"
 
+# 5. (T-934) the dropped commands are named nowhere: /symcc-scouts (/symcc-scout with no name does it) and
+#    /symcc-enable here (the same as /symcc-enable). Tests may name them, to check they are gone.
+for old in 'symcc-scouts' 'symcc-enable here' 'name}-scouts' 'enable here'; do
+  left="$(grep -rnF -e "$old" "$here/hooks" "$here/docs" "$here/site" "$here/README.md" | grep -v '/hooks/opencode/tests/')"
+  [ -z "$left" ] || bad "\"$old\" is still named: $left"
+done
+
 if [ "$fails" -eq 0 ]; then echo "build-site: all checks passed"; else echo "build-site: $fails check(s) failed"; exit 1; fi

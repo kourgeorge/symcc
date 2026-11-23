@@ -14,10 +14,10 @@ import { addTokens } from '../core/runs'
 
 // ---------------- scouts ----------------
 
-/** The scout files (names like "b.md") the last loadScouts could not read and skipped; /symcc-scouts names them. */
+/** The scout files (names like "b.md") the last loadScouts could not read and skipped; /symcc-scout (with no name) names them. */
 export let unreadableScouts: string[] = []
 
-/** The warning /symcc-scouts shows for the skipped files, or '' when every scout file could be read. */
+/** The warning /symcc-scout (with no name) shows for the skipped files, or '' when every scout file could be read. */
 export const unreadableScoutsText = () => unreadableScouts.map(f => `${f}: can't be read, skipped (fix or remove ${S.N.scouts}/${f})`).join('\n')
 
 /** The scouts in <dir>/scouts/*.md. A file that can't be read is skipped (and kept in unreadableScouts), so one

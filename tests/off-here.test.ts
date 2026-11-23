@@ -1,4 +1,4 @@
-// T-793: /symcc-disable here and /symcc-enable here turn symcc off or on in ONE window (kept in that session's state,
+// T-793: /symcc-disable here and /symcc-enable turn symcc off or on in ONE window (kept in that session's state,
 // never in board.json). A window opened while another live window has symcc on starts off here. An off-here window
 // gets no lead prompt, no board updates, its tools refuse, it never drives, and it tells the owner once when the
 // symcc window is gone.
@@ -44,10 +44,10 @@ function world(id: string) {
 
 const boardOf = (w: ReturnType<typeof world>) => JSON.parse(w.files.get(w.board)!) as Board
 
-test('command parsing: disable here and enable here; the plain forms and bad words as before', () => {
+test('command parsing: disable here; T-934: enable here is gone (plain enable does it); the plain forms and bad words as before', () => {
   expect(parseCommand('symcc-disable', 'here')).toEqual({ kind: 'disable', here: true })
-  expect(parseCommand('symcc-enable', 'here')).toEqual({ kind: 'enable', here: true })
-  expect(parseCommand('symcc-enable', ' Here ')).toEqual({ kind: 'enable', here: true })
+  expect(parseCommand('symcc-enable', 'here')?.kind).toBe('bad')
+  expect(parseCommand('symcc-enable', ' Here ')?.kind).toBe('bad')
   expect(parseCommand('symcc-disable', '')).toEqual({ kind: 'disable' })
   expect(parseCommand('symcc-enable', '')).toEqual({ kind: 'enable' })
   expect(parseCommand('symcc-disable', 'now')?.kind).toBe('bad')
@@ -58,6 +58,9 @@ test('command parsing: disable here and enable here; the plain forms and bad wor
   expect(parseCommand('symcc-enable', 'there')?.kind).toBe('bad')
   expect(JSON.stringify(parseCommand('symcc-enable', 'there', undefined, 'symcc')).includes('[here]')).toBe(false)
   expect(COMMANDS().find(c => c.name === 'symcc-disable')?.description).toContain('here')
+  expect(COMMANDS().find(c => c.name === 'symcc-disable')?.argumentHint).toBe('[here]')
+  expect(COMMANDS().find(c => c.name === 'symcc-enable')?.argumentHint).toBe(undefined)
+  expect(COMMANDS().some(c => c.name === 'symcc-scouts')).toBe(false)
 })
 
 test('/symcc-disable here: board.json is unchanged, this window gets no lead prompt, no board update, and its tools refuse; another window is not changed', async () => {
@@ -154,7 +157,7 @@ test('an off-here window that finds the board handed to it gives it straight bac
   expect(parseLead(w.files.get(w.lead)!)?.session).toBe('a')
 })
 
-test('/symcc-enable here turns the window back on: it tells the lead once, drives again, and the project switch is untouched', async () => {
+test('/symcc-enable turns the window back on: it tells the lead once, drives again, and the project switch is untouched', async () => {
   S.root = ROOT
   S.me = 'a'
   const w = world('a')
@@ -173,7 +176,7 @@ test('/symcc-enable here turns the window back on: it tells the lead once, drive
   expect(told).toHaveLength(1)
 })
 
-test('/symcc-enable here through the real command tells the lead with one message', async () => {
+test('/symcc-enable through the real command tells the lead with one message', async () => {
   S.root = ROOT
   S.me = 'b'
   const w = world('b')
@@ -181,7 +184,7 @@ test('/symcc-enable here through the real command tells the lead with one messag
   w.files.set(w.lead, leadText('a', Date.now()))
   await startOffHere(w.host)
   expect(S.offHere).toBe(true)
-  await runCommand(w.host, 'symcc-enable', 'here')
+  await runCommand(w.host, 'symcc-enable', '')
   expect(S.offHere).toBe(false)
   const update = takeBoardUpdate()
   expect(update).toContain('with /symcc-enable.')

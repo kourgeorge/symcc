@@ -1076,7 +1076,7 @@ function scoutPage(f: ViewFile, sc: SymccScout, choice: PanelChoice, nowMs: numb
   b.blank()
   b.heading('Instructions')
   if (sc.prompt?.trim()) for (const l of textLines(sc.prompt.trim(), 'text', w)) b.add(l)
-  else b.add([{ text: `  (not loaded yet: run /${f.name}-scouts)`, color: 'inactive' }])
+  else b.add([{ text: `  (not loaded yet: run /${f.name}-scout)`, color: 'inactive' }])
   b.blank()
   b.heading('Runs')
   const ids = shown.map(x => x.run.ended)

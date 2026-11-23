@@ -809,7 +809,7 @@ are about changes; under "How tasks ended" a read investigation shows as
   open task shows everything about it, with buttons to pause, resume, retry,
   drop, watch its worker live, and buttons or a box to answer it when it waits for you.
   `/symcc-board` opens the board too (on Live), `/symcc-task T-3` opens one task directly and
-  `/symcc-scouts` opens the Scouts view.
+  `/symcc-scout` (with no name) opens the Scouts view.
 - **`/symcc-tasks`** opens nothing: it prints a short list of the open tasks in the chat, the
   same in every client (Claude Code's terminal and VS Code, OpenCode, the Node host). It is
   grouped like the board: Questions for you and NEEDS YOU first, then Running (with the step's
@@ -1678,7 +1678,7 @@ line's next scout skips it. If `every_minutes` is left out, the scout runs every
 
 A value that is not a whole number of 0 or more (like `-5`, `1.5` or `ten`) also means
 only on demand, so a typo never makes a scout run more often than you meant. Its row shows
-`bad every_minutes`, and its page and `/symcc-scouts` show a warning such as
+`bad every_minutes`, and its page and `/symcc-scout` show a warning such as
 `every_minutes "-5" is not valid: runs only on demand until fixed`. The panel's editor
 refuses such a value.
 
@@ -2391,8 +2391,8 @@ window only. Turning on has one rule: `/symcc-enable` means "symcc on, in this w
 project on if it was disabled and this window on if it was off here, tells the lead, opens the panel as
 on start, and the window may drive again by the normal rules. Its answer says what it did and names the
 mode, for example "symcc is on in this window, in mode paused: ..." with a hint to start work with
-`/symcc-mode auto`; it says "already enabled" only when both were on already. `/symcc-enable here` still
-works and does the same, and so does setting `enabled` to on in the Settings view (on every board).
+`/symcc-mode auto`; it says "already enabled" only when both were on already. Setting `enabled` to on in
+the Settings view does the same (on every board).
 
 ---
 

@@ -1323,7 +1323,8 @@ test('each slash command is added and runs symcc\'s runCommand: a typed one (TUI
     expect(board.text).toContain('the answer to /symcc,')
     // a command that isn't only for the owner (the scouts list when no panel opens) is a prompt the lead answers
     const synthBefore = toLead(f.synthetic).length
-    const scouts = await run('symcc-scouts', PANEL_MARK)
+    // T-934: /symcc-scout with no name lists the scouts (/symcc-scouts is gone)
+    const scouts = await run('symcc-scout', PANEL_MARK)
     expect(scouts.added).toBe(1)
     expect(scouts.synthetic.length).toBe(synthBefore)
     expect(scouts.prompts.at(-1)!.delivery).toBe('steer')

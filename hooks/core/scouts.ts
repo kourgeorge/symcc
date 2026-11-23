@@ -584,7 +584,7 @@ export function scoutHowTo(name: string = DEFAULT_NAME): string[] {
     '  model: sonnet        (optional)',
     '  ---',
     '  What to do, in plain words.',
-    `examples/scouts/ in the plugin has examples to copy. Then run /${name}-scouts.`,
+    `examples/scouts/ in the plugin has examples to copy. Then run /${name}-scout.`,
     'Or press "New scout" (n) to write one right here.',
   ]
 }

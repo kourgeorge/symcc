@@ -173,7 +173,7 @@ export async function scoutsPage($: $, pane: PaneParts) {
 
         <Box flexDirection="column">
           {heading('Instructions')}
-          {sc.prompt?.trim() ? paragraphs(sc.prompt.trim()) : <Text color={C('inactive')}>(not loaded yet: run /{S.N.name}-scouts)</Text>}
+          {sc.prompt?.trim() ? paragraphs(sc.prompt.trim()) : <Text color={C('inactive')}>(not loaded yet: run /{S.N.name}-scout)</Text>}
         </Box>
 
         {/* no report text here: a run's report shows on its page (Enter on the run); the newest run is first */}
