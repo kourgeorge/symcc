@@ -41,7 +41,7 @@ export function questionPage($: $, pane: PaneParts, q: OwnerQuestion) {
         <Text color={C('inactive')}>{`asked by the lead · ${when(q.asked_at)}`}</Text>
       </Box>
       {buttonRows([<Button key="back" label="Back" hotkey="b" onPress={back} />], 'question-actions')}
-      {answerBox(pane, { question: q.text, choices, typing, onChoice: choicePress, onSubmit: value => send(value)(), onCancel: cancelAnswer })}
+      {answerBox(pane, { id: q.id, redraw: () => $.ui.invalidate('ui.render'), question: q.text, choices, typing, onChoice: choicePress, onSubmit: value => send(value)(), onCancel: cancelAnswer })}
       {footer(questionKeys(), 'question-keys')}
     </Box>
   )

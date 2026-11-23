@@ -13,7 +13,7 @@ import { noteForLead, brief, tellLead } from '../../app/tell'
 import { when } from '../../core/days'
 import { runTool, allowAskedFiles, refuseAskedFiles } from '../../app/tools'
 import type { PaneParts } from './parts'
-import { answerBox } from './answer-box'
+import { answerBox, fieldRows } from './answer-box'
 import { taskPageVs } from './vscode-task'
 import { taskSections, type SectionLine, type TaskSection } from '../../core/task-sections'
 import { NAV_KEYS, navHint, TASK_ID_COLOR, taskPlace, taskStateGroups, type PageFrom } from '../../core/page-header'
@@ -118,16 +118,25 @@ export async function taskPage($: $, pane: PaneParts, viewTask: SymccTask) {
     })()
   /** The box that asks why, once Reject was pressed. Enter on it empty, or its Cancel button, leaves it: Esc doesn't
    *  reach the panel from a text box. Its Cancel has no key (T-899: a typed letter must never leave the box). */
+  const rejectLabel = answered ? 'Your follow-up question' : 'Reason to reject'
+  /** Keeps what is typed and draws the page again when the field needs another row (T-917: it grows with the text). */
+  const growWith = (value: string) => {
+    if (!S.rejecting) return
+    const before = fieldRows(S.rejecting.reason, width, rejectLabel)
+    S.rejecting.reason = value
+    if (fieldRows(value, width, rejectLabel) !== before) $.ui.invalidate('ui.render')
+  }
   const rejectBox =
     boxOpen && S.rejecting ? (
       <Box flexDirection="column" borderStyle="round" borderColor={C(answered ? 'warning' : 'error')} paddingX={1}>
         <Input
           key="reject-reason"
-          label={answered ? 'Your follow-up question' : 'Reason to reject'}
+          label={rejectLabel}
           placeholder={answered ? 'what else to find out; Enter sends it for a fresh try' : 'what to change, for the next worker; Enter sends it back'}
           value={S.rejecting.reason}
+          rows={fieldRows(S.rejecting.reason, width, rejectLabel)}
           autoFocus
-          onInput={value => void (S.rejecting && (S.rejecting.reason = value))}
+          onInput={growWith}
           onSubmit={submitReject}
         />
         {terminal ? (
@@ -459,7 +468,7 @@ export async function taskPage($: $, pane: PaneParts, viewTask: SymccTask) {
         </Box>
       )}
 
-      {asks && answerBox(pane, { question: asks.text, choices, typing, onChoice: choicePress, onSubmit: value => sendAnswer(value)(), onCancel: cancelAnswer })}
+      {asks && answerBox(pane, { id: t.id, redraw: () => $.ui.invalidate('ui.render'), question: asks.text, choices, typing, onChoice: choicePress, onSubmit: value => sendAnswer(value)(), onCancel: cancelAnswer })}
 
       {sectionEl('what')}
       {sectionEl('history')}

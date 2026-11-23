@@ -18,6 +18,7 @@ import type { TaskSection } from '../../core/task-sections'
 import { historyEvent, historyTime, HISTORY_COLOR } from '../../core/history'
 import { S } from '../../app/state'
 import type { PaneParts } from './parts'
+import { answerDrafts, fieldRows } from './answer-box'
 import type { $ } from '../panel'
 import { vsCallout, vsChoices, vsFold, vsFooter, vsHref, vsLink, mdLink, vsSection } from './vscode'
 import { type PageHeader, vsPageHeader } from './page-header'
@@ -193,6 +194,19 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
   const acts = vsActions(t, x, on)
   const header: PageHeader = { ...x.header, buttons: x.header.buttons.map(b => ({ ...b, onPress: acts.find(a => a.key === b.id)?.onPress ?? b.onPress })) }
 
+  // the answer and the reason being typed: kept over redraws, the field one row taller once the text needs it (T-917)
+  const draft = answerDrafts.get(t.id) ?? ''
+  const keepDraft = (value: string) => {
+    const before = fieldRows(answerDrafts.get(t.id) ?? '', pane.width)
+    answerDrafts.set(t.id, value)
+    if (fieldRows(value, pane.width) !== before) x.redraw()
+  }
+  const keepReason = (value: string) => {
+    if (!S.rejecting) return
+    const before = fieldRows(S.rejecting.reason, pane.width)
+    S.rejecting.reason = value
+    if (fieldRows(value, pane.width) !== before) x.redraw()
+  }
   // the box that asks why, once Reject (or Ask more) was pressed
   const rejectBox = typingBox ? (
     <Box key="vs-reject" flexDirection="column" borderStyle="round" borderColor={C(x.answered ? 'warning' : 'error')} paddingX={1}>
@@ -202,8 +216,9 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
         submitLabel="Send"
         placeholder={x.answered ? 'what else to find out' : 'what to change, for the next worker'}
         value={S.rejecting!.reason}
+        rows={fieldRows(S.rejecting!.reason, pane.width)}
         autoFocus
-        onInput={value => void (S.rejecting && (S.rejecting.reason = value))}
+        onInput={keepReason}
         onSubmit={on.submitReject}
       />
       {plain('vs-reject-note', x.answered ? 'Send starts a fresh try with your question.' : 'Send moves it back to todo with your reason.', 'inactive')}
@@ -239,7 +254,8 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
         plain('vs-question', x.askedQuestion ?? '', 'text', { bold: true }),
         ...askedFiles.map(f => plain(`vs-asked-${f}`, `  ${f}`, 'autoAccept')),
         answers.length ? vsChoices(vs, answers.map((c, i) => (askedFiles.length && i === 0 ? 'Allow files' : c)), on.choicePress) : null,
-        <Input key="answer" label="Your answer" submitLabel="Send" placeholder={answers.length ? 'or type your own answer' : 'type your answer'} autoFocus={answers.length ? undefined : true} onSubmit={value => on.sendAnswer(value)()} />,
+        // the field keeps what was typed (answerDrafts) and grows with it, so a redraw (a resize) shows the same text (T-917)
+        <Input key="answer" label="Your answer" submitLabel="Send" placeholder={answers.length ? 'or type your own answer' : 'type your answer'} value={draft} rows={fieldRows(draft, pane.width)} autoFocus={answers.length ? undefined : true} onInput={keepDraft} onSubmit={value => (answerDrafts.delete(t.id), on.sendAnswer(value)())} />,
       ].filter(Boolean) as never[])
     : null
 

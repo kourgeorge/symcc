@@ -12,6 +12,7 @@
 // - T-774: the Runs heading sums the task's own tries
 // - T-775: every header button "[Label]" in one style, Back "‹ [Tasks]"; the try buttons "[Try 1]", their keys hidden (on desktop and mobile native Buttons "Try 1" and Back "Tasks", no brackets)
 // - T-914: the header's id always the board orange ("claude"), whatever the status
+// - T-917: on the terminal the "asks: …" question comes cut into lines that fit inside the answer box
 export const TASK_BEFORE: Record<string, unknown> = {
   "desktop T-501": {
     "type": "Box",
@@ -4176,13 +4177,11 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"warning"},"children":["asks: "]},
-              {
-                "type": "Text",
-                "props": {"color":"text"},
-                "children": ["Should the report show all of its lines at once, or only the first part with a button to show the rest?"]
-              }
+              {"type":"Text","props":{"color":"text"},"children":["Should the report show all of its lines"]}
             ]
           },
+          {"type":"Text","children":[{"type":"Text","props":{"color":"text"},"children":["at once, or only the first part with a button"]}]},
+          {"type":"Text","children":[{"type":"Text","props":{"color":"text"},"children":["to show the rest?"]}]},
           {
             "type": "Box",
             "props": {"key":"answer-choices","flexDirection":"column"},
