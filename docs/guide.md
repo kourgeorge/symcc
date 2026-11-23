@@ -833,7 +833,7 @@ are about changes; under "How tasks ended" a read investigation shows as
   match the panel. The same sections in the same order: NEEDS YOU
   (only when a question, a waiting task or a task in review waits for you), TASKS (one line per
   running task: its id, title, its steps drawn as on the Live lane with ◉ at the step it is in,
-  the time there and "(try 2)" from a second try; the tasks waiting for it hang under it as
+  the time there and "↺2" from a second try; the tasks waiting for it hang under it as
   `└─◇ T-4 … waits`), BRANCHES (once git's figures were read), TODAY (merged, sent back, failed,
   tokens, the averages and first-try share, then the yesterday and last 7 days lines) and
   ORGANIZATIONAL MEMORY (the count and the 3 newest notes), then the line
