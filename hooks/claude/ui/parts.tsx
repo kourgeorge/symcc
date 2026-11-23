@@ -49,6 +49,9 @@ export async function paneParts($: $, e: PaneEvent) {
   const open = await panelValues($).readOpened()
   const width = paneWidth(vscode, e.props.bodyColumns, e.viewport?.columns)
   noteLogoWidth(logoWidthFor(vscode, width))
+  /** T-930: the rows the terminal gives a docked pane's body (0 when unknown, inline or off the terminal): a page that
+   *  pins its last lines to the bottom of the screen is drawn at least this tall. */
+  const bodyRows = e.surface === 'terminal' && e.props.placement === 'dock' ? Math.max(0, Math.floor(e.props.scroll?.bodyRows ?? 0)) : 0
   // Theme colors, so the board reads well in both light and dark themes.
   const color: Record<string, string> = { backlog: 'inactive', review: 'suggestion', waiting: 'warning', failed: 'error', doing: 'success', paused: 'permission', todo: 'text', done: 'inactive', dropped: 'inactive' }
   const word: Record<string, string> = STATUS_WORD
@@ -243,6 +246,6 @@ export async function paneParts($: $, e: PaneEvent) {
         )
       return <Text>{rich(line)}</Text>
     })
-  return { Box, Text, Button, Input, v, nowMs, width, color, word, mark, act, onScouts, onSettings, onLive, t, q, C, scouts, mode, vscode, vs, switchMode, goTab: go, banner, tabs, header, keyLines, footer, buttonRows, rich, heading, paragraphs }
+  return { Box, Text, Button, Input, v, nowMs, width, bodyRows, color, word, mark, act, onScouts, onSettings, onLive, t, q, C, scouts, mode, vscode, vs, switchMode, goTab: go, banner, tabs, header, keyLines, footer, buttonRows, rich, heading, paragraphs }
 }
 export type PaneParts = Awaited<ReturnType<typeof paneParts>>

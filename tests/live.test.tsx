@@ -423,13 +423,13 @@ test('T-690: the Live tab draws at a normal and a narrow width with nothing cut,
     // (T-760: a narrow panel wraps the mark's legend line, cut at a space)
     if (bodyColumns === 80) expect(lines).toContain(LIVE_INDENT + LIVE_LEGEND)
     else expect(lines.some(l => l.trimStart().startsWith('✧ = an agent works here'))).toBe(true)
-    // T-823: the key line sits right under the lanes, before the BRANCHES heading
+    // T-930: the key line is the last content, after the ORGANIZATIONAL MEMORY section, right above the footer rule
     const legendAt = lines.findIndex(l => l.trimStart().startsWith('✧ = an agent works here'))
-    const branchesAt = lines.findIndex(l => l.startsWith('─── ❯ BRANCHES ─'))
-    expect(legendAt).toBeGreaterThan(lines.findIndex(l => l.startsWith(`${LIVE_INDENT}▶ T-688 `)))
+    const footAt = lines.indexOf('─'.repeat(bodyColumns))
+    expect(legendAt).toBeGreaterThan(lines.findIndex(l => l.startsWith('─── ❯ ORGANIZATIONAL MEMORY')))
+    expect(lines.slice(legendAt, footAt)).toEqual(liveLegend(liveInner(bodyColumns)).map(x => LIVE_INDENT + x))
     // T-836: a short divider right above the key line
     expect(lines[legendAt - 1]).toBe(LIVE_INDENT + LIVE_DIVIDER)
-    if (branchesAt >= 0) expect(legendAt).toBeLessThan(branchesAt)
     expect(lines.some(l => l.includes('l t s c views'))).toBe(true)
     // T-760: the lane header ends the agent stations in ✧ (over their marks, as liveLabelLine), each ✧ in the heading's color
     const tree = (await ui.drawn()) as Node
@@ -557,6 +557,46 @@ for (const checker of [true, false])
     await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'tasks') } })
     await ui.unmount()
   })
+
+test('T-930: the legend sits at the bottom of the screen, just above the footer, in the terminal and in VS Code', async ($, on) => {
+  seedBoard(on, { view: liveView(calm(TASKS)) })
+  on('ui.toast', () => ({ value: undefined }))
+  type Keyed = Node & { key?: unknown }
+  /** A node's children, nested lists flattened. */
+  const kidsOf = (n: unknown): Keyed[] => ((n as Node)?.children ?? []).flat(Infinity as 1).filter(c => c && typeof c === 'object') as Keyed[]
+  const keyOf = (n: Keyed | undefined) => n?.key ?? n?.props?.key
+  const nodes = (n: unknown): Keyed[] => (Array.isArray(n) ? n.flatMap(nodes) : !n || typeof n !== 'object' ? [] : [n as Keyed, ...kidsOf(n).flatMap(nodes)])
+  /** The legend's Box, the page Box holding it, and the page's children. */
+  const found = (tree: unknown) => {
+    const all = nodes(tree)
+    const page = all.find(n => kidsOf(n).some(k => keyOf(k) === 'live-key'))!
+    const kids = kidsOf(page)
+    const at = kids.findIndex(k => keyOf(k) === 'live-key')
+    return { page, key: kids[at]!, before: keyOf(kids[at - 1]), after: keyOf(kids[at + 1]), next: kids[at + 1] }
+  }
+  for (const placement of ['dock', 'inline'] as const) {
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 80, placement, scroll: { offset: 0, bodyRows: 40 } }, surface: 'terminal' })
+    await ui.press({ key: 'tab-live' })
+    // the page whose children hold the legend's Box: as tall as the docked pane's body (no height inline)
+    const { page, key, next } = found(await ui.drawn())
+    expect(page.props?.minHeight).toBe(placement === 'dock' ? 40 : undefined)
+    // the legend's Box takes the room left and puts its lines at its bottom, and is the last thing before the footer rule (a Text)
+    expect([key.props?.flexGrow, key.props?.justifyContent]).toEqual([1, 'flex-end'])
+    expect(textOf(next)).toBe('─'.repeat(80))
+    expect(nodes(key).filter(n => n.type === 'Text').map(textOf)).toEqual([LIVE_INDENT + LIVE_DIVIDER, LIVE_INDENT + LIVE_LEGEND])
+    await ui.press({ key: 'tab-tasks' })
+    await ui.unmount()
+  }
+  const vs = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 100 }, surface: 'vscode' })
+  await vs.press({ key: 'tabs', link: { href: vsHref('tab', 'live') } })
+  const { page, key, before, after } = found(await vs.drawn())
+  expect(page.props?.flexGrow).toBe(1)
+  expect([key.props?.flexGrow, key.props?.justifyContent]).toEqual([1, 'flex-end'])
+  // after the Organizational memory section, right before the footer
+  expect([before, after]).toEqual(['live-om', 'live-hint-footer'])
+  await vs.press({ key: 'tabs', link: { href: vsHref('tab', 'tasks') } })
+  await vs.unmount()
+})
 
 test('T-691: a click on a VS Code lane opens that task, and "‹ Live" comes back to the Live tab', async ($, on) => {
   seedBoard(on, { view: liveView(TASKS) })

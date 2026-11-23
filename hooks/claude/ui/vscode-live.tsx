@@ -243,7 +243,7 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
     )
   })
   return (
-    <Box flexDirection="column" gap={1}>
+    <Box flexDirection="column" gap={1} flexGrow={1}>
       {header('live')}
       {headSegs.length > 1 ? (
         // T-770: while scouts run, their mark at the end of the mode line ("⌕ gaps-bot 4m"): the mark in the scout
@@ -272,7 +272,6 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
         )}
         {lanes.length ? <Box key="live-lanes" flexDirection="column" gap={1}>{laneRows}</Box> : null}
       </Box>
-      {lanes.length ? <Box key="live-key" flexDirection="column">{line('live-divider', LIVE_DIVIDER, 'inactive')}{line('live-legend', liveLegend(Infinity).join(' '), 'inactive')}</Box> : null}
       {branchesVs(pane, open)}
       <Box key="live-bottom" flexDirection="column">
         {headLine('live-today-head', LIVE_SECTIONS.today)}
@@ -283,6 +282,9 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
         ))}
       </Box>
       {orgMemSectionVs($, pane, notes)}
+      {/* T-930: the legend at the bottom of the panel, just above the footer: its Box takes the room left on a short page
+          and puts its lines at its bottom; on a long page it is the last content */}
+      {lanes.length ? <Box key="live-key" flexDirection="column" flexGrow={1} justifyContent="flex-end">{line('live-divider', LIVE_DIVIDER, 'inactive')}{line('live-legend', liveLegend(Infinity).join(' '), 'inactive')}</Box> : null}
       {vsFooter(vs, 'live-hint')}
     </Box>
   )
