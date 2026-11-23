@@ -1014,8 +1014,8 @@ only; the Organizational memory page has the same header shape, see below):
    `k` and `j` on the Claude Code boards and `[` and `]` in OpenCode (where `k` and `j` move).
    A page alone in its list shows no place. A task opened from the Live tab goes through the
    Live tab's tasks.
-2. **The title**: the id in the color of its status, then the title in bold. A long title wraps,
-   indented under itself.
+2. **The title**: the id, always in the board's orange whatever the status, then the title in
+   bold. A long title wraps, indented under itself.
 3. **The state**: the status mark and word in its color, and for a running task its step and
    its work time; then kind · role · try n/m (n of the tries it may get, its automatic retries
    counted); then where it came from (`♟ from you`, `⌕ scout bugs`, `◆ lead`, `↳ from T-5`,
