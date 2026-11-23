@@ -100,7 +100,10 @@ ${features.panel ? `  /${S.N.name}                     open the board panel (↑
   /${S.N.name}-tasks               list the open tasks (what needs you, running, in review, failed,
                        to do), then the backlog and today's done and dropped counts
   /${S.N.name}-scouts              show the scouts and reload the scout files`}
-  /${S.N.name}-task T-3            ${features.panel ? 'open' : 'show'} one task
+  /${S.N.name}-status              the Live tab as text in the chat: what needs you, the running
+                       tasks (step, time, try) and what waits for them, the branches,
+                       today's numbers and the newest org-mem notes
+  /${S.N.name}-task T-3           ${features.panel ? 'open' : 'show'} one task
   /${S.N.name}-task T-3 WORD       do one of its page's actions: pause, resume, retry,
                        drop [REASON], merged (already merged by hand), review on|off,
                        stash (to the backlog), todo (out of the backlog), role NAME,

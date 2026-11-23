@@ -40,6 +40,7 @@ import { scoutToolRefusal } from '../../core/scouts'
 import { workerToolRefusal, ownerAnswerText } from '../tools'
 import { parseViewFile, PANEL_MARK } from '../board-view'
 import { taskListBoard, TASK_LIST_TEXT, EMPTY_TASK_LIST_TEXT } from '../../../tests/task-list-fixture'
+import { statusBoard, statusHeadings, statusSection, statusTodayLines } from '../../../tests/status-fixture'
 import { checkAndMerge } from '../../app/review'
 import { loadRoles } from '../../app/roles'
 import { sessionPrompt } from '../agents'
@@ -1319,6 +1320,18 @@ test('each slash command is added and runs symcc\'s runCommand: a typed one (TUI
     expect((await run('symcc-tasks')).prompts.at(-1)!.text).toBe(ownerAnswerText('symcc-tasks', TASK_LIST_TEXT))
     await writeFile(`${p.main}/.symcc/board.json`, JSON.stringify({ ...emptyBoard(), mode: 'paused' }))
     expect((await run('symcc-tasks')).prompts.at(-1)!.text).toBe(ownerAnswerText('symcc-tasks', EMPTY_TASK_LIST_TEXT))
+    // T-902: /symcc-status prints the Live tab's sections; NEEDS YOU only while something waits
+    const t902 = Date.now()
+    await writeFile(`${p.main}/.symcc/board.json`, JSON.stringify({ ...statusBoard(t902), mode: 'paused' }))
+    const status = (await run('symcc-status')).prompts.at(-1)!.text
+    expect(status.endsWith(ownerAnswerText('symcc-status', '').trimStart())).toBe(true)
+    expect(statusHeadings(status).filter(h => h !== 'BRANCHES')).toEqual(['NEEDS YOU', 'TASKS', 'TODAY', 'ORGANIZATIONAL MEMORY'])
+    expect(statusSection(status, 'TASKS').some(l => l.startsWith(' ▶ T-2') && l.endsWith('(try 2)'))).toBe(true)
+    expect(statusSection(status, 'TASKS').includes('   └─◇ T-4 Write the export  waits')).toBe(true)
+    expect(statusSection(status, 'TODAY')[0]!.split('Σ')[0]).toBe(statusTodayLines(statusBoard(t902), t902)[0]!.split('Σ')[0])
+    await writeFile(`${p.main}/.symcc/board.json`, JSON.stringify({ ...statusBoard(t902, true), mode: 'paused' }))
+    expect(statusHeadings((await run('symcc-status')).prompts.at(-1)!.text).includes('NEEDS YOU')).toBe(false)
+    expect(c.commands.has('symcc-status')).toBe(true)
     await settle()
     await end!()
     await settle()

@@ -10,6 +10,7 @@ import { pump, waitEnded, ORPHAN_WAIT_MS, unclaimQueued, queuedNeverStarted, unc
 import { haltAll, haltWorkers, dropLeadUpdates, setSymcc } from './board-mode'
 import { stopOrphans } from './cleanup'
 import { branchFacts, taskBranchesView } from './branches'
+import type { StatusView } from '../core/live-text'
 
 // ---------------- who drives the board ----------------
 // Only one session (the driver) starts workers, merges, runs scouts and the regular check.
@@ -533,6 +534,17 @@ export async function publish(host: Host, b: Board) {
   // takes plain text only (no colors), so the command can't stand out there.
   const facts = { tasks: b.tasks, questions: b.questions, scouts: v.scouts, home_branch: branch, branch_note, mode: modeOf(b) }
   showStatus(host, () => (onHere(b) ? statusLine(facts, S.driving, { plan: inPlan(S.plan), nowMs: Date.now(), width: statusRoom(S.N.name) }) : offStatusLine(S.N.name, false, S.offHere ? S.offWhy : S.fresh ? 'new' : false)))
+}
+
+/** T-902: what /<name>-status draws for board `b`: the Live tab's fields of the view publish() writes, from the same
+ *  sources (the branch and ▍Today team figures as last read; a stale read starts in the background, never waited for). */
+export async function statusView(host: Host, b: Board): Promise<StatusView> {
+  const branch = S.gitState === 'ok' ? await homeBranch(host) : ''
+  const branches = branchFacts(host, b, branch || 'main').facts
+  const team = todayTeam(host, [...scoutState.keys()]).team
+  const scouts = [...scoutState.values()].map(s => (s.running && [...scoutRuns.values()].includes(s.name) ? { ...s, started: true } : s))
+  const questions = openQuestions(b)
+  return { tasks: b.tasks, scouts, mode: modeOf(b), max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, checker: b.checker, ...(b.archived_done?.length ? { archived_done: b.archived_done } : {}), ...(branches ? { branches } : {}), ...(team ? { today_team: team } : {}), ...(questions.length ? { questions } : {}) }
 }
 
 let statusText: (() => string | undefined) | undefined

@@ -1,0 +1,91 @@
+// T-902: /symcc-status prints the Live tab's picture as text in the chat (the same sections and order, made by the Live
+// tab's own helpers, so the numbers match the panel) and never opens the panel, with a panel or without.
+import { expect } from 'claude-code/testing'
+import { test } from './reset'
+import { fakeHost, memoryFs } from './fake-host'
+import { type HostFeatures, ALL_FEATURES } from '../hooks/host'
+import type { Board } from '../hooks/board'
+import { S } from '../hooks/app/state'
+import { COMMANDS, runCommand } from '../hooks/app/symcc'
+import { liveStatusText, statusHint } from '../hooks/core/live-text'
+import { liveToday } from '../hooks/core/live'
+import { textWidth } from '../hooks/core/width'
+import { statusBoard, statusHeadings, statusSection, statusTodayLines } from './status-fixture'
+import { branchTasks, branchFactsAt } from './branches-fixture'
+
+const ROOT = '/repo'
+const BARE: HostFeatures = { panel: false, band: false, wakeLead: 'next-turn', planMode: false, leadUsage: false, startQueue: true }
+
+function world(features: Partial<HostFeatures>, b: Board) {
+  const files = new Map<string, string>()
+  const opened: { id: string }[] = []
+  const f = fakeHost({
+    features,
+    session: { repo: async () => ({ root: ROOT }), root: async () => ROOT },
+    fs: memoryFs(files),
+    ui: { open: async p => (opened.push({ id: p.id }), { isPlaced: true }) },
+  })
+  S.root = ROOT
+  files.set(`${ROOT}/${S.N.boardFile}`, JSON.stringify(b, null, 2) + '\n')
+  return { ...f, opened }
+}
+
+const notes = [1, 2, 3, 4].map(n => ({ n, date: `2026-11-2${n}`, topic: 'tests', text: `note ${n}` }))
+
+test('T-902: the status text has the Live sections in order: needs you, the lanes with their trains, today, the newest notes, the hint', () => {
+  const now = Date.now()
+  const b = statusBoard(now)
+  const text = liveStatusText(b as never, notes as never, now)
+  expect(statusHeadings(text)).toEqual(['NEEDS YOU', 'TASKS', 'TODAY', 'ORGANIZATIONAL MEMORY'])
+  expect(statusSection(text, 'NEEDS YOU')).toEqual([' ⚠ T-3 ready for review: Fix the login page', ' ⚠ T-1 asks: Postgres or SQLite?'])
+  const tasks = statusSection(text, 'TASKS')
+  // T-2: its second try in tests (◉ under "tests"), the time there and "(try 2)"; T-4 waits for it; T-3 sits at "you"
+  const labels = tasks[0]!
+  const lane = tasks.find(l => l.includes('T-2'))!
+  expect(lane.startsWith(' ▶ T-2  Add search')).toBe(true)
+  expect(lane.endsWith('2m (try 2)')).toBe(true)
+  expect(lane.indexOf('◉')).toBe(labels.indexOf('tests'))
+  expect(tasks[tasks.indexOf(lane) + 1]).toBe('   └─◇ T-4 Write the export  waits')
+  expect(tasks.some(l => l.startsWith(' ▶ T-3') && l.indexOf('◉') === labels.indexOf('you'))).toBe(true)
+  // TODAY: exactly the Live tab's lines (2 merged today)
+  expect(statusSection(text, 'TODAY')).toEqual(statusTodayLines(b, now))
+  expect(liveToday(b.tasks, now).merged).toBe(2)
+  expect(statusSection(text, 'TODAY')[0]!.startsWith(' ✓ 2 merged')).toBe(true)
+  // the count and the 3 newest notes
+  expect(text).toContain('ORGANIZATIONAL MEMORY   4 / 60')
+  expect(statusSection(text, 'ORGANIZATIONAL MEMORY').length).toBe(3)
+  expect(text.split('\n').at(-1)).toBe(statusHint())
+  expect(statusHint()).toBe('/symcc-board opens the board · /symcc-tasks lists the tasks')
+  expect(text.split('\n').every(l => textWidth(l) <= 80)).toBe(true)
+})
+
+test('T-902: NEEDS YOU is left out when nothing waits; BRANCHES comes between the tasks and today once git was read', () => {
+  const now = Date.now()
+  const quiet = liveStatusText(statusBoard(now, true) as never, [], now)
+  expect(statusHeadings(quiet)).toEqual(['TASKS', 'TODAY', 'ORGANIZATIONAL MEMORY'])
+  const br = liveStatusText({ tasks: branchTasks(now), branches: branchFactsAt(now) } as never, [], now)
+  expect(statusHeadings(br)).toEqual(['NEEDS YOU', 'TASKS', 'BRANCHES', 'TODAY', 'ORGANIZATIONAL MEMORY'])
+  expect(statusSection(br, 'BRANCHES')[0]!.startsWith('  main   ●')).toBe(true)
+  expect(statusSection(br, 'BRANCHES').some(l => l.includes('T-721  +3 commits · 1 behind'))).toBe(true)
+})
+
+test('T-902: /symcc-status answers with the Live text and opens no panel, with a panel and without', async () => {
+  for (const features of [ALL_FEATURES, BARE]) {
+    const now = Date.now()
+    const b = statusBoard(now)
+    const w = world(features, b)
+    const r = await runCommand(w.host, `${S.N.name}-status`, '')
+    expect(r?.isTextDisplayOnly).toBe(true)
+    expect(statusHeadings(r!.text)).toEqual(['NEEDS YOU', 'TASKS', 'TODAY', 'ORGANIZATIONAL MEMORY'])
+    expect(statusSection(r!.text, 'TODAY')).toEqual(statusTodayLines(b, now))
+    expect(r!.text.split('\n').at(-1)).toBe(statusHint(S.N.name))
+    expect(w.opened).toEqual([])
+    const q = world(features, statusBoard(now, true))
+    expect(statusHeadings((await runCommand(q.host, `${S.N.name}-status`, ''))!.text)).toEqual(['TASKS', 'TODAY', 'ORGANIZATIONAL MEMORY'])
+    expect(q.opened).toEqual([])
+  }
+})
+
+test('T-902: the command list has /symcc-status in every client', () => {
+  for (const f of [ALL_FEATURES, BARE]) expect(COMMANDS(f).find(c => c.name === `${S.N.name}-status`)?.description).toBe(`Show the ${S.N.name} Live tab as text in the chat: what needs you, the running tasks and what waits for them, the branches, today's numbers and the newest notes`)
+})

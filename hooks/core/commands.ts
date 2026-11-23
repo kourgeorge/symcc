@@ -18,6 +18,8 @@ export type Command =
   | { kind: 'tasks' }
   /** /<name>-board: opens the board panel (on Live), as /<name> does where there is a panel */
   | { kind: 'board' }
+  /** /<name>-status (T-902): the Live tab's picture as text in the chat; never opens the panel */
+  | { kind: 'status' }
   | { kind: 'scouts' }
   | { kind: 'show'; id: string }
   /** /<name>-task T-5 <verb> [...]: one of the task page's actions, as the lead's tools do it (see TASK_VERBS) */
@@ -115,7 +117,7 @@ export type TaskVerb = (typeof TASK_VERBS)[number]
 export const taskUsage = (name: string = DEFAULT_NAME) => `/${name}-task T-3 (open it), or /${name}-task T-3 pause|resume|retry|drop [reason]|merged|review on|off|stash|todo|role <name>|note`
 
 /** The words after the plugin's name, one per command: /<name>-tasks, /<name>-approve, ... */
-export const COMMAND_WORDS = ['tasks', 'board', 'scouts', 'task', 'approve', 'reject', 'diff', 'scout', 'mode', 'settings', 'help', 'disable', 'enable', 'init', 'drive'] as const
+export const COMMAND_WORDS = ['tasks', 'board', 'status', 'scouts', 'task', 'approve', 'reject', 'diff', 'scout', 'mode', 'settings', 'help', 'disable', 'enable', 'init', 'drive'] as const
 
 /** Every slash command's name (without the slash): "<name>" and "<name>-<word>". */
 export const commandNames = (name: string = DEFAULT_NAME): string[] => [name, ...COMMAND_WORDS.map(w => `${name}-${w}`)]
@@ -151,6 +153,8 @@ export function parseCommand(command: string, args: string, current: SymccMode =
       return s ? use(`/${name}-tasks`) : { kind: 'tasks' }
     case 'board':
       return s ? use(`/${name}-board`) : { kind: 'board' }
+    case 'status':
+      return s ? use(`/${name}-status`) : { kind: 'status' }
     case 'scouts':
       return s ? use(`/${name}-scouts (to run one: /${name}-scout <name>)`) : { kind: 'scouts' }
     case 'task': {

@@ -18,6 +18,8 @@ import { openSession, leadTool, closeSession, settle, slashCommand } from '../se
 import { toolCall, notLeadText, noPanelText } from '../../../hooks/app/symcc'
 import { emptyBoard } from '../../../hooks/core/board-file'
 import { taskListBoard, TASK_LIST_TEXT, EMPTY_TASK_LIST_TEXT } from '../../../tests/task-list-fixture'
+import { statusBoard, statusHeadings, statusSection, statusTodayLines } from '../../../tests/status-fixture'
+import { statusHint } from '../../../hooks/core/live-text'
 import { TOOLS } from '../../../hooks/app/tools'
 import { S, toolName, starting } from '../../../hooks/app/state'
 import { pump } from '../../../hooks/app/workers'
@@ -346,6 +348,35 @@ test('T-901: /symcc-tasks prints the open tasks grouped as on the board, an empt
       expect(await slashCommand(s, 'symcc-board', '')).toBe(noPanelText())
       await writeFile(`${repo}/.symcc/board.json`, JSON.stringify({ ...emptyBoard(), mode: 'paused' }))
       expect(await slashCommand(s, 'symcc-tasks', '')).toBe(EMPTY_TASK_LIST_TEXT)
+    } finally {
+      await closeSession(s).catch(() => undefined)
+    }
+  } finally {
+    await rm(repo, { recursive: true, force: true })
+  }
+}, 180_000)
+
+test('T-902: /symcc-status prints the Live tab as text (needs you, the lanes and trains, today, the notes); NEEDS YOU only while something waits', async () => {
+  const repo = await mkdtemp('/tmp/symcc-node-status-')
+  try {
+    const git = (...args: string[]) => runCommand(['git', '-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd: repo })
+    await git('init', '-q', '-b', 'main')
+    await writeFile(`${repo}/.gitignore`, '.symcc/\n')
+    await git('add', '.')
+    await git('commit', '-qm', 'init')
+    await enableHere(repo)
+    const s = await openSession({ root: repo, runner: claudeRunner(nodeProcessSystem, { bin: FAKE }), say: () => undefined, sessionId: 'node-t902' })
+    try {
+      const now = Date.now()
+      await writeFile(`${repo}/.symcc/board.json`, JSON.stringify({ ...statusBoard(now), mode: 'paused' }))
+      const text = await slashCommand(s, 'symcc-status', '')
+      expect(statusHeadings(text).filter(h => h !== 'BRANCHES')).toEqual(['NEEDS YOU', 'TASKS', 'TODAY', 'ORGANIZATIONAL MEMORY'])
+      expect(statusSection(text, 'TASKS').some(l => l.startsWith(' ▶ T-2') && l.endsWith('(try 2)'))).toBe(true)
+      expect(statusSection(text, 'TASKS').includes('   └─◇ T-4 Write the export  waits')).toBe(true)
+      expect(statusSection(text, 'TODAY')[0]!.split('Σ')[0]).toBe(statusTodayLines(statusBoard(now), now)[0]!.split('Σ')[0])
+      expect(text.split('\n').at(-1)).toBe(statusHint())
+      await writeFile(`${repo}/.symcc/board.json`, JSON.stringify({ ...statusBoard(now, true), mode: 'paused' }))
+      expect(statusHeadings(await slashCommand(s, 'symcc-status', '')).includes('NEEDS YOU')).toBe(false)
     } finally {
       await closeSession(s).catch(() => undefined)
     }

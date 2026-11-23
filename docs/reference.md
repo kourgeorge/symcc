@@ -112,6 +112,7 @@ Type these in the chat. `/symcc` opens everything; `/symcc-<word>` does one thin
 | `/symcc-board` | Open the board panel on the Live view (Claude Code and OpenCode; in OpenCode it closes the panel when it is open). Where there is no panel, it says so |
 | `/symcc-answer T-5 <answer>` | OpenCode only: answer a waiting task, or a question with `Q-3 <answer>`. The board panel sends this for you |
 | `/symcc-tasks` | Print a clear list of the open tasks in the chat, grouped like the board (every client; it never opens the panel) |
+| `/symcc-status` | Print what the board's Live tab shows, as text in the chat (every client; it never opens the panel): NEEDS YOU (only when something waits for you), TASKS (each running task's steps, time and try, and what waits for it), BRANCHES, TODAY (with yesterday and the last 7 days) and ORGANIZATIONAL MEMORY (the count and the 3 newest notes) |
 | `/symcc-scouts` | Open the panel on the scouts view and reload the scout files (a text list if the panel can't be shown) |
 | `/symcc-task T-3` | Open one task |
 | `/symcc-task T-3 pause` / `resume` / `retry` | Pause a task (its worker stops), resume a paused one, or put a failed or dropped one back to `todo` (on a task whose finished work waited for your files: merge it now) |

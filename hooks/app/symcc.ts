@@ -20,11 +20,11 @@ import { settingShown, type Command, boardText, shortHome, LEAD_BEAT_MS, openOnS
 import { type FileTouch, type Host, type HostFeatures, ALL_FEATURES } from '../host'
 import type { SymccTokens } from '../../types'
 import { findArchived } from './archive'
-import { moveOldOrgMem, deleteOrgMem } from './org-mem'
+import { moveOldOrgMem, deleteOrgMem, orgMemNow } from './org-mem'
 import { migrateIfOld } from './migrate-data'
 import { askCall, checkEdit, guardFailed, stoppedText, stoppedTextFor, movedAway, movedText, listedKind, type AgentKindOf } from './ask'
 import { gitReady, setupGit, initGitIn, recheckGit } from './git'
-import { claimLead, publish, handOver, releaseLead, driveHere, startOffHere, disableHere, enableHere, offHereBeat } from './lead'
+import { claimLead, publish, statusView, handOver, releaseLead, driveHere, startOffHere, disableHere, enableHere, offHereBeat } from './lead'
 import { changedFiles, changesText } from './review'
 import { loadRoles, changeRole } from './roles'
 import { loadKinds, changeKind } from './kinds'
@@ -37,6 +37,7 @@ import { playable } from './voice'
 import { TOOLS, leadGuide, runTool, type In, manual, ownerSettings, taskText, latestReport, statsText } from './tools'
 import { openPane } from './open'
 import { tasksListText } from '../core/task-list'
+import { liveStatusText } from '../core/live-text'
 import { debriefFinished } from './debrief'
 import { check, pump, workerFinished, lateHandBack, agentOnBoard, stoppedHandBack, type TurnEnd } from './workers'
 import { setSymcc, setBoardMode } from './board-mode'
@@ -59,6 +60,7 @@ export function COMMANDS(features: HostFeatures = ALL_FEATURES): { name: string;
   return [
     { name: S.N.name, description: features.panel ? `Open the ${S.N.name} board panel: tasks and scouts` : `Show the ${S.N.name} board as text (the panel: /${S.N.name}-board)` },
     { name: `${S.N.name}-tasks`, description: `List the open ${S.N.name} tasks in the chat, grouped as on the board (what needs you, running, in review, failed, to do), with the backlog and today's counts` },
+    { name: `${S.N.name}-status`, description: `Show the ${S.N.name} Live tab as text in the chat: what needs you, the running tasks and what waits for them, the branches, today's numbers and the newest notes` },
     // OpenCode's TUI part has its own /<name>-board (opencode/tui.ts), so a host with no panel doesn't list it here
     ...(features.panel ? [{ name: `${S.N.name}-board`, description: `Open the ${S.N.name} board panel (on Live)` }] : []),
     { name: `${S.N.name}-scouts`, description: `Open the ${S.N.name} board panel on the scouts view and reload the scout files` },
@@ -598,6 +600,9 @@ export async function runCommand(host: Host, command: string, args: string): Pro
     case 'tasks':
       // T-901: every client prints the open tasks as a short list in the chat; no panel opens
       return say(tasksListText(b, Date.now(), S.N.name))
+    case 'status':
+      // T-902: the Live tab's picture as text in the chat, in every client; no panel opens
+      return say(liveStatusText(await statusView(host, b), (await orgMemNow(host)).notes, Date.now(), S.N.name))
     case 'board':
       if (!host.features.panel) return say(noPanelText())
       await openPane(host, { tab: 'live' })
