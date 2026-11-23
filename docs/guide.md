@@ -826,8 +826,10 @@ are about changes; under "How tasks ended" a read investigation shows as
   the time there and "(try 2)" from a second try; the tasks waiting for it hang under it as
   `└─◇ T-4 … waits`), BRANCHES (once git's figures were read), TODAY (merged, sent back, failed,
   tokens, the averages and first-try share, then the yesterday and last 7 days lines) and
-  ORGANIZATIONAL MEMORY (the count and the 3 newest notes). It ends with
-  `/symcc-board opens the board · /symcc-tasks lists the tasks`.
+  ORGANIZATIONAL MEMORY (the count and the 3 newest notes), then the line
+  `/symcc-board opens the board · /symcc-tasks lists the tasks`. When tasks show, the
+  `✧ = an agent works here (needs an agent slot) · ⌀ = tokens` legend comes last, after that
+  line, never under the task rows (as on the board, where it is the page's last line).
 - **Nothing in the panel needs Esc.** Esc in a text box or a pick list usually just gives
   the keys to the Claude Code prompt without the panel hearing of it (see
   `docs/research/esc-in-panels.md`), so every place has its own way out:

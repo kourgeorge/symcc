@@ -11,7 +11,7 @@ import { manual } from '../hooks/app/tools'
 import { liveStatusText, statusHint } from '../hooks/core/live-text'
 import { liveHeading, liveToday, segText } from '../hooks/core/live'
 import { textWidth } from '../hooks/core/width'
-import { statusBoard, statusHeadings, statusSection, statusTodayLines } from './status-fixture'
+import { statusBoard, statusHeadings, statusSection, statusTail, statusTailWant, statusTodayLines } from './status-fixture'
 import { branchTasks, branchFactsAt, branchStateTasks, branchStateFactsAt } from './branches-fixture'
 
 const ROOT = '/repo'
@@ -55,7 +55,12 @@ test('T-902: the status text has the Live sections in order: needs you, the lane
   // the count and the 3 newest notes
   expect(text).toContain('ORGANIZATIONAL MEMORY   4 / 60')
   expect(statusSection(text, 'ORGANIZATIONAL MEMORY').length).toBe(3)
-  expect(text.split('\n').at(-1)).toBe(statusHint())
+  // T-933: the ✧ / ⌀ legend is never under the task rows; it is the last lines, after the hint line
+  expect(text.includes('✧ =')).toBe(true)
+  expect(tasks.some(l => l.includes('✧ ='))).toBe(false)
+  expect(statusTail(text, statusHint())).toEqual(statusTailWant(statusHint()))
+  const narrow = liveStatusText(b as never, notes as never, now, 'symcc', 30)
+  expect(statusTail(narrow, statusHint())).toEqual(statusTailWant(statusHint(), 30))
   expect(statusHint()).toBe('/symcc-board opens the board · /symcc-tasks lists the tasks')
   expect(text.split('\n').every(l => textWidth(l) <= 80)).toBe(true)
 })
@@ -83,7 +88,7 @@ test('T-902: /symcc-status answers with the Live text and opens no panel, with a
     expect(r?.isTextDisplayOnly).toBe(true)
     expect(statusHeadings(r!.text)).toEqual(['NEEDS YOU', 'TASKS', 'TODAY', 'ORGANIZATIONAL MEMORY'])
     expect(statusSection(r!.text, 'TODAY')).toEqual(statusTodayLines(b, now))
-    expect(r!.text.split('\n').at(-1)).toBe(statusHint(S.N.name))
+    expect(statusTail(r!.text, statusHint(S.N.name))).toEqual(statusTailWant(statusHint(S.N.name)))
     expect(w.opened).toEqual([])
     const q = world(features, statusBoard(now, true))
     expect(statusHeadings((await runCommand(q.host, `${S.N.name}-status`, ''))!.text)).toEqual(['TASKS', 'TODAY', 'ORGANIZATIONAL MEMORY'])

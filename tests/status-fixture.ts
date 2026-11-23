@@ -4,7 +4,7 @@
 import { addTask } from '../hooks/core/task'
 import { emptyBoard, type Board, type BoardTask } from '../hooks/core/board-file'
 import { localOffset } from '../hooks/core/days'
-import { liveTodayLines, segText, LIVE_INDENT } from '../hooks/core/live'
+import { liveTodayLines, segText, LIVE_INDENT, liveLegend, liveInner } from '../hooks/core/live'
 
 /** A moment inside nowMs's local day: `share` 0 is midnight, 1 is nowMs (tests/day-clock.ts's inToday, kept here so
  *  the bun specs need nothing more). */
@@ -56,4 +56,15 @@ export function statusSection(text: string, name: string): string[] {
   if (i < 0) return []
   const end = lines.findIndex((l, j) => j > i && l === '')
   return lines.slice(i + 1, end < 0 ? undefined : end)
+}
+
+/** T-933: the lines from the hint line to the end: the hint, then the ✧ / ⌀ legend (cut to `width`) when lanes show. */
+export function statusTail(text: string, hint: string): string[] {
+  const lines = text.split('\n')
+  return lines.slice(lines.lastIndexOf(hint))
+}
+
+/** T-933: what statusTail should be at `width` columns: the hint, then the legend lines. */
+export function statusTailWant(hint: string, width = 80): string[] {
+  return [hint, ...liveLegend(liveInner(width)).map(x => LIVE_INDENT + x)]
 }
