@@ -8,7 +8,7 @@ import { ASK_TOOL, ASK_LINE } from './ask'
 import { WEB_SAFETY_LINE } from './roles'
 import { fillPlaceholders, placeholdersIn, TASK_PLACEHOLDER, TASK_PLACEHOLDER_ABOUT } from './prompt-fill'
 import { PROMPT_SECTIONS, PROMPT_ORDER, buildPrompt, promptTemplate, type PromptSection } from './prompt-sections'
-import type { ChangedSince } from './changed-since'
+import { CHANGED_ASK, CHANGED_ASK_NO_TOOLS, type ChangedSince } from './changed-since'
 
 export { fillPlaceholders, placeholdersIn }
 
@@ -187,7 +187,9 @@ export const basePromptFor = (kind: 'worker' | 'scout' | 'checker', name: string
 
 /**
  * A task prompt for an agent with no symcc tools: its "call the ask_owner tool" line (ASK_LINE, as the prompt was
- * filled in with `tool`'s name for it) says to write the question in the report instead (NO_TOOLS_ASK).
+ * filled in with `tool`'s name for it) says to write the question in the report instead (NO_TOOLS_ASK), and so does the
+ * stale-task check's "ask the owner with the ask_owner tool" sentence (CHANGED_ASK -> CHANGED_ASK_NO_TOOLS, T-942).
  */
 export const withoutSymccTools = (prompt: string, tool: (t: string) => string): string =>
   prompt.split(ASK_LINE(tool(ASK_TOOL))).join(`${NO_TOOLS_ASK}. If an edit is refused as outside your files, stop and hand back.`)
+    .split(CHANGED_ASK(tool(ASK_TOOL))).join(CHANGED_ASK_NO_TOOLS)

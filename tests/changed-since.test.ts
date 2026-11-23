@@ -5,7 +5,8 @@ import { test } from './reset'
 import { addTask, emptyBoard, patchTask, find, promoteTask, type Board } from '../hooks/board'
 import { S } from '../hooks/app/state'
 import { WORKER_PROMPT, changedSince } from '../hooks/app/workers'
-import { pathsNamed, mayBeStale, changedSinceText } from '../hooks/core/changed-since'
+import { pathsNamed, mayBeStale, changedSinceText, CHANGED_ASK, CHANGED_ASK_NO_TOOLS } from '../hooks/core/changed-since'
+import { withoutSymccTools } from '../hooks/core/prompts'
 import { fakeHost, done } from './fake-host'
 
 const ROOT = '/proj'
@@ -150,4 +151,20 @@ test('T-936: an investigation from long ago gets the section too', async () => {
   const p = WORKER_PROMPT(t, b, WT, undefined, '', '', [], await changedSince(host, t, WT, NOW))
   expect(p).toContain('(5 days ago). Since then these commits changed files its details name:\n- abc0000 change 0')
   expect(p).toContain(CHECK)
+})
+
+test('T-942: a worker with no symcc tools is told to write the question in its report, not to call ask_owner', async () => {
+  setup()
+  const b = boardAt(NOW - 3 * DAY)
+  const t = find(b, 'T-1')!
+  const { host } = gitHost(1, commits(1))
+  const p = WORKER_PROMPT(t, b, WT, undefined, '', '', [], await changedSince(host, t, WT, NOW))
+  // a normal worker keeps its ask tool
+  expect(p).toContain(CHANGED_ASK('ask_owner'))
+  const none = withoutSymccTools(p, n => n)
+  expect(none).toContain(HEADING)
+  expect(none).toContain(CHECK)
+  expect(none).toContain(`don't guess: ${CHANGED_ASK_NO_TOOLS}`)
+  expect(none).toContain('write the question for the owner in your report, with options such as "drop it"')
+  expect(none.includes('ask_owner')).toBe(false)
 })

@@ -85,6 +85,11 @@ const ago = (ms: number): string => {
   return `${d} day${d === 1 ? '' : 's'} ago`
 }
 
+/** The section's "ask the owner" sentence end, for a worker whose ask tool is called `tool`. */
+export const CHANGED_ASK = (tool: string) => `ask the owner with the ${tool} tool, with options such as "drop it" and "do the new plan: …".`
+/** The same for a worker with no symcc tools (T-942): withoutSymccTools (hooks/core/prompts.ts) swaps CHANGED_ASK for it. */
+export const CHANGED_ASK_NO_TOOLS = 'write the question for the owner in your report, with options such as "drop it" and "do the new plan: …", and stop (you have no tool for it).'
+
 /** The section's text; null (no section) when nothing changed. `tool`: what the worker calls the ask_owner tool. */
 export function changedSinceText(s: ChangedSince | null | undefined, tool = 'ask_owner'): string | null {
   if (!s || s.total <= 0) return null
@@ -98,6 +103,6 @@ export function changedSinceText(s: ChangedSince | null | undefined, tool = 'ask
     const more = s.total - s.commits.length
     changed = `${written} ${head}\n${s.commits.map(l => `- ${l}`).join('\n')}${more > 0 ? `\n… ${more} more` : ''}`
   }
-  const check = `Before you start, check that the task still fits: the files, functions and line numbers it names still exist (adapt to small moves and say so in your report), the work isn't already done by a later commit, and it doesn't clash with what changed. If the task no longer makes sense or needs a clearly different plan, don't guess: ask the owner with the ${tool} tool, with options such as "drop it" and "do the new plan: …".`
+  const check = `Before you start, check that the task still fits: the files, functions and line numbers it names still exist (adapt to small moves and say so in your report), the work isn't already done by a later commit, and it doesn't clash with what changed. If the task no longer makes sense or needs a clearly different plan, don't guess: ${CHANGED_ASK(tool)}`
   return `${changed}\n\n${check}`
 }
