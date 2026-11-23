@@ -4,7 +4,7 @@
 // so each client (Claude Code's terminal panel now; VS Code and OpenCode later) only draws the segments.
 import type { SymccMode, SymccTask } from '../../types'
 import { type BoardTask, DEFAULT_AUTO_RETRIES, emptyBoard, kindOf, isInvestigation, modeOf } from './board-file'
-import { taskPhase, type PhaseStage } from './phase'
+import { stageStep, taskPhase, type PhaseStage } from './phase'
 import { handedBack, shownStatus } from './lead'
 import { median, taskFigures } from './stats'
 import { cutTitle, fitSegs, padWidth, textWidth, wrapLine } from './width'
@@ -16,7 +16,7 @@ import { dayOf, localOffset } from './days'
 import { modeLabel, needsReview } from './review'
 import { num } from './text'
 import { asksMoreTime, needsYou } from './commands'
-import { fileWaitText, taskAsks } from './panel'
+import { fileWaitText, rowMark, STEP_WORD, taskAsks } from './panel'
 import { isOpenQuestion } from './questions'
 import { whyFailed } from './failure'
 import { newestFirst } from './settings'
@@ -509,13 +509,13 @@ export function liveHeaderSegs(view: LiveView & { scouts?: readonly ScoutLike[] 
 export const liveBlink = (frame: number, steady = false): string => (steady || frame % 2 === 0 ? '◉' : '◎')
 
 /** How a lane's text is colored: each client picks its own colors for these. */
-export type LiveTone = 'id' | 'title' | 'passed' | 'current' | 'future' | 'text' | 'dim' | 'warning' | 'bar' | 'heading' | 'mark' | 'run' | 'wait' | 'topic' | 'now' | TodayWho
+export type LiveTone = 'id' | 'title' | 'passed' | 'current' | 'future' | 'text' | 'dim' | 'warning' | 'bar' | 'heading' | 'mark' | 'run' | 'wait' | 'topic' | 'now' | 'failed' | 'paused' | TodayWho
 /** A piece of a lane's line in one tone. */
 export type LiveSeg = { text: string; tone: LiveTone }
 /** Each tone's color name, the same in every client; a section heading ("▍Tasks") and (T-760) the agent mark "✧" have
  *  the task page's heading color. T-767: a running lane's "▶ " and id are 'run' (bold, the accent color; its title is normal text); a
  *  waiting train's id is 'run' too (T-819) and its title 'wait' (dim, as the rest of its row); an org-mem topic is 'topic' (blue, T-819). */
-export const LIVE_TONE: Record<LiveTone, string> = { id: 'claude', title: 'text', passed: 'success', current: 'ide', future: 'inactive', text: 'text', dim: 'inactive', warning: 'warning', bar: 'ide', heading: 'suggestion', mark: 'suggestion', run: 'claude', now: 'claude', wait: 'inactive', topic: 'ide', workers: 'ide', checkers: 'autoAccept', scouts: 'suggestion', lead: 'success' }
+export const LIVE_TONE: Record<LiveTone, string> = { id: 'claude', title: 'text', passed: 'success', current: 'ide', future: 'inactive', text: 'text', dim: 'inactive', warning: 'warning', bar: 'ide', heading: 'suggestion', mark: 'suggestion', run: 'claude', now: 'claude', wait: 'inactive', topic: 'ide', failed: 'error', paused: 'permission', workers: 'ide', checkers: 'autoAccept', scouts: 'suggestion', lead: 'success' }
 /** Whether a tone is drawn bold. */
 export const liveBold = (tone: LiveTone): boolean => tone === 'id' || tone === 'current' || tone === 'heading' || tone === 'run'
 /** T-846: the mark at a station the task skips. */
@@ -1461,7 +1461,23 @@ export function agoText(ms: number): string {
   return h < 24 ? `${h} h ago` : `${Math.floor(h / 24)} d ago`
 }
 
-type BranchItem = { id: string; kind: 'branch' | 'merged' | 'new'; fig?: BranchFigures; merged?: string; atMs?: number }
+type BranchItem = { id: string; kind: 'branch' | 'merged' | 'new'; fig?: BranchFigures; merged?: string; atMs?: number; state?: BranchState }
+
+/** T-913: a branch row's task state after its id, in the board list's own mark and colour (rowMark, LIST_TONE): the
+ *  mark ("‖", "✗", "?", "◆", or a running task's stage icon "▶", "⊛", ...) and a short word ("paused", "in review"). */
+export type BranchState = { mark: string; word: string; tone: LiveTone }
+/** The short word of each state a branch row shows (BRANCH_STATUSES); a running task shows its step's word instead. */
+export const BRANCH_STATE_WORD: Record<string, string> = { doing: 'running', review: 'in review', waiting: 'waiting', failed: 'failed', paused: 'paused' }
+const BRANCH_STATE_TONE: Record<string, LiveTone> = { doing: 'bar', review: 'warning', waiting: 'warning', failed: 'failed', paused: 'paused' }
+
+/** T-913: the state a branch row shows for task `t` at `nowMs`: a task shown as doing (shownStatus: also one in review or
+ *  waiting while its approve runs) has its stage's icon and word ("⊛ test", "▶ running"), the others their status. */
+export function branchState(t: LiveView['tasks'][number], nowMs: number): BranchState {
+  const shown = shownStatus(t as BoardTask, nowMs)
+  const step = stageStep(taskPhase(t as BoardTask, nowMs).stage)
+  const word = shown === 'doing' && step ? STEP_WORD[step] : BRANCH_STATE_WORD[shown] ?? shown
+  return { mark: rowMark(t as BoardTask, nowMs), word, tone: BRANCH_STATE_TONE[shown] ?? 'dim' }
+}
 
 /** The tasks the section shows, in the order they are kept when there are too many: the open tasks with a branch git
  *  answered for (by id), then (T-794) the tasks ▍Tasks keeps as finished lanes (liveFinishedLanes: merged in the last
@@ -1471,7 +1487,7 @@ function branchItems(view: LiveView, facts: BranchFacts, nowMs: number): BranchI
   for (const t of view.tasks) {
     if (t.status === 'done') continue
     const fig = facts.tasks[t.id]
-    if (BRANCH_STATUSES.includes(t.status) && t.branch && fig) open.push({ id: t.id, kind: 'branch', fig })
+    if (BRANCH_STATUSES.includes(t.status) && t.branch && fig) open.push({ id: t.id, kind: 'branch', fig, state: branchState(t, nowMs) })
   }
   const merged = liveFinishedLanes(view, nowMs).map((l): BranchItem => {
     const sha = view.tasks.find(t => t.id === l.id)?.merged
@@ -1500,13 +1516,22 @@ function branchLabels(x: BranchItem, nowMs: number): LiveSeg[][] {
   if (x.kind === 'new') return [[id, { text: '  not started', tone: 'dim' }]]
   const { ahead, behind } = x.fig!
   const late: LiveTone = behind > BRANCH_BEHIND_WARN ? 'warning' : 'dim'
+  const dot: LiveSeg = { text: ' · ', tone: 'dim' }
+  const st = x.state
+  // T-913: the state after the id ("‖ paused"); when narrow the word goes first, the mark stays
+  const word: LiveSeg[] = st ? [{ text: ` ${st.mark} ${st.word}`, tone: st.tone }, dot] : [{ text: ' ', tone: 'dim' }]
+  const mark: LiveSeg[] = st ? [{ text: ` ${st.mark}`, tone: st.tone }, { text: ' ', tone: 'dim' }] : [{ text: ' ', tone: 'dim' }]
+  const long: LiveSeg[] = [{ text: `+${ahead} commit${ahead === 1 ? '' : 's'}`, tone: 'text' }, dot, { text: `${behind} behind`, tone: late }]
+  const mid: LiveSeg[] = [{ text: `+${ahead}`, tone: 'text' }, dot, { text: `${behind} behind`, tone: late }]
   return [
-    [id, { text: `  +${ahead} commit${ahead === 1 ? '' : 's'}`, tone: 'text' }, { text: ' · ', tone: 'dim' }, { text: `${behind} behind`, tone: late }],
-    [id, { text: `  +${ahead}`, tone: 'text' }, { text: ' · ', tone: 'dim' }, { text: `${behind} behind`, tone: late }],
-    [id, { text: ` +${ahead}`, tone: 'text' }, { text: ` ↓${behind}`, tone: late }],
+    [id, ...word, ...long],
+    [id, ...mark, ...long],
+    [id, ...word, ...mid],
+    [id, ...mark, ...mid],
+    [id, ...mark, { text: `+${ahead}`, tone: 'text' }, { text: ` ↓${behind}`, tone: late }],
   ]
 }
-const LABEL_ROOM = textWidth(' T-000  +0 · 0 behind')
+const LABEL_ROOM = textWidth(' T-000 ‖ +0 · 0 behind')
 
 /**
  * The Branches section (see above) for the view's branch figures in `width` columns, or null when there are none

@@ -82,7 +82,35 @@ export const BRANCH_LINES_100 = [
   `BRANCHES ${'─'.repeat(91)}`,
   '  main   ●───●───●───●───●───●───●   c1c1c1c · 2 min ago',
   '         │       │           │   ╰─◀ T-724  merged 3m ago (c1c1c1c)',
-  '         │       │           ╰─────○ T-721  +3 commits · 1 behind',
-  '         │       ╰─────────────────○ T-725  +0 commits · 4 behind',
+  '         │       │           ╰─────○ T-721 ▶ running · +3 commits · 1 behind',
+  '         │       ╰─────────────────○ T-725 ◆ in review · +0 commits · 4 behind',
   '         ╰─────────────────────────○ T-726  not started',
+]
+
+// T-913: a branch row per state a branch row is drawn for (BRANCH_STATUSES): T-5 failed, T-6 waiting, T-7 in review,
+// T-8 running (in its test step), T-47 paused; each 1 ahead and 155 behind, forked at the newest commit.
+/** The state sample's tasks at `now` (ms). */
+export function branchStateTasks(now: number) {
+  const iso = (sec: number) => new Date(now - sec * 1000).toISOString()
+  const task = (id: string, status: string, x: Record<string, unknown> = {}) => ({ id, title: `A ${status} task`, details: '', files: [], status, note: '', order: Number(id.slice(2)), after: [], attempts: 1, history: [], branch: `symcc/${id}`, created_at: iso(9000), updated_at: iso(60), ...x })
+  return [
+    task('T-5', 'failed'),
+    task('T-6', 'waiting'),
+    task('T-7', 'review'),
+    task('T-8', 'doing', { runs: [{ started: iso(600), ended: iso(120) }], live: { checking: { step: 'testing', at: iso(30) } } }),
+    task('T-47', 'paused'),
+  ]
+}
+/** The state sample's branch figures at `now`. */
+export function branchStateFactsAt(now: number): BranchFacts {
+  const f = branchFactsAt(now)
+  return { ...f, tasks: Object.fromEntries(['T-5', 'T-6', 'T-7', 'T-8', 'T-47'].map(id => [id, { ahead: 1, behind: 155, base: sha('c1') }])) }
+}
+/** The state sample's rows at 100 columns (after the heading and the main line). */
+export const BRANCH_STATE_ROWS_100 = [
+  '                                 ├─○ T-5 ✗ failed · +1 commit · 155 behind',
+  '                                 ├─○ T-6 ? waiting · +1 commit · 155 behind',
+  '                                 ├─○ T-7 ◆ in review · +1 commit · 155 behind',
+  '                                 ├─○ T-8 ⊛ test · +1 commit · 155 behind',
+  '                                 ╰─○ T-47 ‖ paused · +1 commit · 155 behind',
 ]

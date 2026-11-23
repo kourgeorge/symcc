@@ -138,6 +138,9 @@
     return [one, two]
   }
 
+  // a running task's step on its branch row, by lane station (work, check, queue, tests, merge)
+  const BRANCH_STEP = ['▶ running', '⌕ checker', '⧗ queue', '⊛ test', '⇢ merge']
+
   function branchLines(s) {
     const main = 'main   '
     const n = s.commits
@@ -152,8 +155,12 @@
       cells[c] = '╰'
       for (let i = c + 1; i < width + 1; i++) cells[i] = '─'
       cells[width + 1] = b.merged ? '◀' : '○'
-      const label = b.merged ? ` ${b.id}  merged ${dur(s.now - b.merged)} ago (${s.head})` : b.ahead === null ? ` ${b.id}  not started` : ` ${b.id}  +${b.ahead} commit${b.ahead === 1 ? '' : 's'} · ${b.behind} behind`
-      out.push('  ' + sp(cells.join(''), 'dim') + sp(label, b.merged ? 'dim' : 'text'))
+      // T-913: an open branch's row says its task's state after the id: a running task its step (core/live.ts branchState)
+      const l = s.lanes.find(x => x.id === b.id)
+      const state = l ? BRANCH_STEP[l.at] : ''
+      const figures = ` · +${b.ahead} commit${b.ahead === 1 ? '' : 's'} · ${b.behind} behind`
+      const label = b.merged ? sp(` ${b.id}  merged ${dur(s.now - b.merged)} ago (${s.head})`, 'dim') : b.ahead === null ? sp(` ${b.id}  not started`, 'text') : sp(` ${b.id} `, 'text') + sp(state, 'bar') + sp(figures, 'text')
+      out.push('  ' + sp(cells.join(''), 'dim') + label)
     })
     return out
   }

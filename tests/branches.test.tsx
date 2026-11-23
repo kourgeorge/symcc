@@ -2,7 +2,8 @@
 // with git (here a fake git), and the terminal and VS Code Live tabs draw it (OpenCode's: hooks/opencode/tests).
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { BRANCH_ROWS_MAX, LIVE_INDENT, liveBranches, liveFinishedLanes, segText } from '../hooks/core/live'
+import { BRANCH_ROWS_MAX, LIVE_INDENT, LIVE_TONE, liveBranches, liveFinishedLanes, segText } from '../hooks/core/live'
+import { LIST_TONE } from '../hooks/core/details'
 import { textWidth } from '../hooks/core/width'
 import { branchFacts, readBranches, BRANCH_CACHE_MS } from '../hooks/app/branches'
 import { publish } from '../hooks/app/lead'
@@ -12,7 +13,7 @@ import { branchKey } from '../hooks/claude/ui/live'
 import { vsHref } from '../hooks/claude/ui/vscode'
 import { done, fakeHost } from './fake-host'
 import { PANE, T0, seedBoard } from './board-fixture'
-import { BRANCH_LINES_100, branchFactsAt, branchTasks, sha } from './branches-fixture'
+import { BRANCH_LINES_100, BRANCH_STATE_ROWS_100, branchFactsAt, branchStateFactsAt, branchStateTasks, branchTasks, sha } from './branches-fixture'
 
 const sample = (now = T0) => ({ tasks: branchTasks(now) as never[], branches: branchFactsAt(now) })
 /** The section's lines as the Live tab draws them: its heading, then the lines under it indented (T-747). */
@@ -27,8 +28,8 @@ test('T-727: the Branches section at 100 and 40 columns: main\'s commits, a row 
     `BRANCHES ${'─'.repeat(31)}`,
     '  main   ●─●─●─●   c1c1c1c · 2 min ago',
     '         │   │ ╰─◀ T-724  merged 3m ago',
-    '         │   ╰───○ T-721  +3 · 1 behind',
-    '         ├───────○ T-725  +0 · 4 behind',
+    '         │   ╰───○ T-721 ▶ +3 · 1 behind',
+    '         ├───────○ T-725 ◆ +0 · 4 behind',
     '         ╰───────○ T-726  not started',
   ])
   for (const w of [100, 60, 40, 30, 20, 12])
@@ -47,6 +48,28 @@ test('T-727: the Branches section at 100 and 40 columns: main\'s commits, a row 
   const lots = liveBranches({ tasks: many as never[], branches: { ...branchFactsAt(T0), tasks: Object.fromEntries(many.map(t => [t.id, { ahead: 1, behind: 0, base: sha('c1') }])) } }, T0, 60)!
   expect(lots.rows.filter(r => r.id).length).toBe(BRANCH_ROWS_MAX)
   expect(segText(lots.rows[lots.rows.length - 1]!.segs).trim()).toBe('+3 more')
+})
+
+test('T-913: each branch row says its task\'s state after the id, in the board\'s mark and colour; narrow rows drop the word, keep the mark and stay inside the width', () => {
+  const v = { tasks: branchStateTasks(T0) as never[], branches: branchStateFactsAt(T0) }
+  const wide = liveBranches(v, T0, 100)!
+  expect(wide.rows.map(r => LIVE_INDENT + segText(r.segs))).toEqual(BRANCH_STATE_ROWS_100)
+  // the state's colour is the board list's (LIST_TONE) for the same status
+  const color = (id: string) => LIVE_TONE[wide.rows.find(r => r.id === id)!.label[1]!.tone]
+  expect([color('T-5'), color('T-6'), color('T-7'), color('T-8'), color('T-47')]).toEqual([LIST_TONE.failed, LIST_TONE.waiting, LIST_TONE.review, LIST_TONE.doing, LIST_TONE.paused])
+  // narrow: the word goes, the mark stays, nothing wider than the panel
+  const marks: Record<string, string> = { 'T-5': '✗', 'T-6': '?', 'T-7': '◆', 'T-8': '⊛', 'T-47': '‖' }
+  for (const w of [60, 40, 30, 24]) {
+    for (const r of liveBranches(v, T0, w)!.rows) {
+      const l = LIVE_INDENT + segText(r.segs)
+      expect(textWidth(l), `${w}: ${l}`).toBeLessThanOrEqual(w)
+      expect(l, `${w}`).toContain(`${r.id} ${marks[r.id!]}`)
+    }
+  }
+  expect(liveBranches(v, T0, 40)!.rows.map(r => segText(r.label))).toEqual([' T-5 ✗ +1 · 155 behind', ' T-6 ? +1 · 155 behind', ' T-7 ◆ +1 · 155 behind', ' T-8 ⊛ +1 · 155 behind', ' T-47 ‖ +1 ↓155'])
+  // a running task without a check step: "▶ running"
+  const worker = { ...v, tasks: branchStateTasks(T0).map(t => (t.id === 'T-8' ? { ...t, live: undefined, runs: [{ started: new Date(T0 - 60_000).toISOString() }] } : t)) as never[] }
+  expect(segText(liveBranches(worker, T0, 100)!.rows.find(r => r.id === 'T-8')!.label)).toBe(' T-8 ▶ running · +1 commit · 155 behind')
 })
 
 /** A fake git for the sample: main's log, and each branch's counts and fork point; T-725's count fails. */
@@ -183,7 +206,7 @@ test('T-727: the VS Code Live tab draws the Branches section with real lines, an
     expect(String(svg?.props.source)).toContain('<path')
     expect((await ui.find({ key: branchKey(id) }))?.props.pressableLinks).toEqual([vsHref('task', id)])
   }
-  expect((await ui.find({ key: 'live-br-note:T-721' }))?.text).toBe('+3 commits · 1 behind')
+  expect((await ui.find({ key: 'live-br-note:T-721' }))?.text).toBe('▶ running · +3 commits · 1 behind')
   expect((await ui.find({ key: 'live-br-note:T-726' }))?.text).toBe('not started')
   await ui.press({ key: branchKey('T-721'), link: { href: vsHref('task', 'T-721') } })
   expect(await ui.find({ key: 'live-br-head' })).toBeUndefined()

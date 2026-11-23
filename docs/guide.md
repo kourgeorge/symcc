@@ -1225,22 +1225,26 @@ TASKS ────────────────────────�
 
     main   ●───●───●───●───●───●───●   c11a736 · 2 min ago
            │       │           │   ╰─◀ T-724  merged 3m ago (c11a736)
-           │       │           ╰─────○ T-721  +3 commits · 1 behind
-           │       ╰─────────────────○ T-725  +0 commits · 4 behind
+           │       │           ╰─────○ T-721 ▶ running · +3 commits · 1 behind
+           │       ╰─────────────────○ T-725 ◆ in review · +0 commits · 4 behind
            ╰─────────────────────────○ T-726  not started
   ```
 
   The `main` line has its last 7 commits, the newest at the right, with the newest one's short
   sha and age. Each task with a branch (doing, review, waiting, failed or paused) has a row that
   hangs from the commit its branch started from (at the left edge when that commit is older than
-  the ones shown), with `+N commits` (on the branch, not yet in main) and `N behind` (on main, not
-  yet in the branch; in the warning colour past 5). Up to 3 next-up tasks that have no branch yet
+  the ones shown). After the task's id the row says its state, with the same mark and colour as
+  the board list: `‖ paused`, `✗ failed`, `? waiting`, `◆ in review`, or for a running task the
+  step it is in (`▶ running`, `⊛ test`, `⧗ queue`, ...). So a paused task's row explains itself even
+  when the Tasks section says nothing is running. Then come `+N commits` (on the branch, not yet in
+  main) and `N behind` (on main, not yet in the branch; in the warning colour past 5). Up to 3 next-up tasks that have no branch yet
   say `not started`. A task merged in the last 10 minutes keeps its row, drawn dim, joining the
   `main` line at its merge commit (`◀ T-724  merged 5m ago (5a97873)`); these are the same tasks
   (at most 3, newest first) that the Tasks section keeps as finished lanes, and the section shows
   while only such rows are left.
   At most 8 rows show, then `+N more`. On a narrow panel the main line shows fewer, closer commits
-  and the words get shorter (`+3 · 1 behind`), cut with `…` if needed. Enter (or a click) on a row
+  and the words get shorter: the state word goes first and its mark stays (`T-47 ‖ +1 · 4 behind`),
+  then `+3 ↓1`, cut with `…` if needed. Enter (or a click) on a row
   opens its task. symcc reads these numbers with read-only git commands at most every 30 seconds,
   without slowing the board; a branch git can't read is left out, and with no git (or no task
   branch yet) the section isn't shown. VS Code draws it with real lines, and OpenCode shows the

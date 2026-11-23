@@ -15,13 +15,14 @@ import { ICON } from '../../name'
 import { PANEL_MARK, hasPage, bandLines, bandDraw, BAND_CLICK_HINT, panelLines, panelKeys, parseViewFile, viewFileText, lineText, actionCommand, answerOptions, OWN_ANSWER, viewDefs, panelTaskActions, TASK_ACTION_COMMANDS, SETTINGS_OPEN, approveSent, APPROVE_SENT_MS, drawnLines, gitRowLines, boardPageOf, defDraftOf, defEditKeys, noDescriptionText, draftError, SETUP_GIT_ASK, EDIT_FIRST_BOX, newNameError, type ViewFile, type PanelChoice } from '../board-view'
 import { readFile } from 'node:fs/promises'
 import { rowEndBoard, ROW_END, ROW_END_NOW } from '../../../tests/row-end-cases'
-import { BRANCH_LINES_100, branchFactsAt, branchTasks, taskBranchDoing, taskBranchLong, taskBranchMerged, taskBranchTasks } from '../../../tests/branches-fixture'
+import { BRANCH_LINES_100, BRANCH_STATE_ROWS_100, branchFactsAt, branchStateFactsAt, branchStateTasks, branchTasks, taskBranchDoing, taskBranchLong, taskBranchMerged, taskBranchTasks } from '../../../tests/branches-fixture'
 import type { TaskBranchFacts } from '../../core/task-branch'
 import { TODAY_BAR_START, TODAY_LINE_3, todayTasks, todayTeamOf } from '../../../tests/live-today-fixture'
 import { PAST_WEEK, PAST_YESTERDAY, pastTasks } from '../../../tests/live-past-fixture'
 import { localOffset } from '../../core/days'
 import { textWidth as textWidthOf } from '../../core/width'
 import { LIVE_INDENT, liveBranches, liveHeading, liveInner } from '../../core/live'
+import { LIST_TONE } from '../../core/details'
 import { taskSections } from '../../core/task-sections'
 import { viewTask, viewStubFilled } from '../../core/board-parts'
 import { orgMemNotes, orgMemNoteKey } from '../../core/org-mem'
@@ -3764,6 +3765,21 @@ test('T-727: the OpenCode Live tab draws the Branches section under the lanes as
   expect(none.some(l => l.includes('BRANCHES'))).toBe(false)
 })
 
+test('T-913: the OpenCode Branches rows say each task\'s state (paused, failed, waiting, in review, running) in the board\'s colour; narrow rows keep the mark', () => {
+  const f = viewFile()
+  const v = { ...f, view: { ...f.view, tasks: branchStateTasks(NOW) as never[], branches: branchStateFactsAt(NOW), checker: true } }
+  const d = panelLines(v, { tab: 'live', opened: '', cursor: 0 }, NOW, 100)
+  const lines = d.lines.map(lineText).map(x => x.replace(/^›/, ' '))
+  for (const row of BRANCH_STATE_ROWS_100) expect(lines.includes(row)).toBe(true)
+  const stateColor = (word: string) => d.lines.flat().find(s => s.text === word)?.color
+  expect([stateColor(' ✗ failed'), stateColor(' ? waiting'), stateColor(' ◆ in review'), stateColor(' ⊛ test'), stateColor(' ‖ paused')]).toEqual([LIST_TONE.failed, LIST_TONE.waiting, LIST_TONE.review, LIST_TONE.doing, LIST_TONE.paused])
+  for (const w of [40, 30]) {
+    const narrow = panelLines(v, { tab: 'live', opened: '', cursor: 0 }, NOW, w).lines.map(lineText)
+    for (const x of ['T-5 ✗', 'T-6 ?', 'T-7 ◆', 'T-8 ⊛', 'T-47 ‖']) expect(narrow.some(l => l.includes(`${x} +1`))).toBe(true)
+    for (const l of narrow) expect(textWidthOf(l) <= w).toBe(true)
+  }
+})
+
 test('T-727: tasks as the OpenCode TUI draws them (viewTask, then viewStubFilled: slim done tasks get history: []) still show the "◀ T-n merged" row and today\'s merged / sent-back counts', () => {
   const f = branchesViewFile()
   const tui = (ts: readonly unknown[]) => (ts as SymccTask[]).map(t => viewStubFilled(viewTask(t)))
@@ -3811,7 +3827,7 @@ test('T-727: startTui: Enter on a Branches row opens its task, b returns to the 
   expect([board.state().tab, board.state().opened]).toEqual(['live', ''])
   // the view file's done task is slim (viewTask): its merge still shows as joining back
   expect(rowEls(panel).some(r => r.text.includes('◀ T-724  merged 3m ago'))).toBe(true)
-  const row = rowEls(panel).find(r => r.text.includes('T-721  +3 commits'))!
+  const row = rowEls(panel).find(r => r.text.includes('T-721 ▶ running · +3 commits'))!
   const seg = row.segs.find(x => x.props.onMouseUp)!
   ;(seg.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0, stopPropagation: () => undefined })
   expect([board.state().tab, board.state().opened]).toEqual(['tasks', 'T-721'])

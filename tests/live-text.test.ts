@@ -12,7 +12,7 @@ import { liveStatusText, statusHint } from '../hooks/core/live-text'
 import { liveToday } from '../hooks/core/live'
 import { textWidth } from '../hooks/core/width'
 import { statusBoard, statusHeadings, statusSection, statusTodayLines } from './status-fixture'
-import { branchTasks, branchFactsAt } from './branches-fixture'
+import { branchTasks, branchFactsAt, branchStateTasks, branchStateFactsAt } from './branches-fixture'
 
 const ROOT = '/repo'
 const BARE: HostFeatures = { panel: false, band: false, wakeLead: 'next-turn', planMode: false, leadUsage: false, startQueue: true }
@@ -67,7 +67,11 @@ test('T-902: NEEDS YOU is left out when nothing waits; BRANCHES comes between th
   const br = liveStatusText({ tasks: branchTasks(now), branches: branchFactsAt(now) } as never, [], now)
   expect(statusHeadings(br)).toEqual(['NEEDS YOU', 'TASKS', 'BRANCHES', 'TODAY', 'ORGANIZATIONAL MEMORY'])
   expect(statusSection(br, 'BRANCHES')[0]!.startsWith('  main   ●')).toBe(true)
-  expect(statusSection(br, 'BRANCHES').some(l => l.includes('T-721  +3 commits · 1 behind'))).toBe(true)
+  expect(statusSection(br, 'BRANCHES').some(l => l.includes('T-721 ▶ running · +3 commits · 1 behind'))).toBe(true)
+  // T-913: a paused, a failed, a waiting, a review and a running task's row each say their state
+  const st = liveStatusText({ tasks: branchStateTasks(now), branches: branchStateFactsAt(now) } as never, [], now)
+  const rows = statusSection(st, 'BRANCHES')
+  for (const x of ['T-5 ✗ failed', 'T-6 ? waiting', 'T-7 ◆ in review', 'T-8 ⊛ test', 'T-47 ‖ paused']) expect(rows.some(l => l.includes(`${x} · +1 commit · 155 behind`)), x).toBe(true)
 })
 
 test('T-902: /symcc-status answers with the Live text and opens no panel, with a panel and without', async () => {
