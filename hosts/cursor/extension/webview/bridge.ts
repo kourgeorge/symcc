@@ -40,4 +40,4 @@ export function ask(m: Ask): Promise<string> {
   })
 }
 
-export const tell = (m: Extract<FromWebview, { type: 'ready' | 'restart' }>) => api.postMessage(m)
+export const tell = (m: Extract<FromWebview, { type: 'ready' | 'restart' | 'log' }>) => api.postMessage(m)

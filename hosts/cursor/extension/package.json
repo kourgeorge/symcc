@@ -26,6 +26,7 @@
         "symcc.workerModel": { "type": "string", "default": "", "description": "The model for workers whose role names none (empty: symcc's default)." },
         "symcc.enginePath": { "type": "string", "default": "", "description": "The engine to run (empty: the one next to this extension, hosts/cursor/dist/engine.mjs)." },
         "symcc.nodePath": { "type": "string", "default": "", "description": "The Node.js to run the engine with (empty: the editor's own)." },
+        "symcc.proxy": { "type": "string", "default": "", "description": "The proxy the engine reaches Cursor through, e.g. http://proxy.example.com:912 (empty: the editor's http.proxy setting, then HTTPS_PROXY)." },
         "symcc.notify": { "type": "boolean", "default": true, "description": "Show a notification when something new needs you while the board is not in view." }
       }
     }

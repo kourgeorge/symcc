@@ -268,39 +268,132 @@ time,
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
-.modes {
+.mode {
   margin-left: auto;
-  display: flex;
-  border: 1px solid var(--input-line);
-  border-radius: 7px;
-  overflow: hidden;
+  position: relative;
 }
-.modes button {
+.mode-button {
   display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 4px 11px;
-  border: 0;
-  background: none;
-  color: var(--muted);
-  font-size: 12px;
-}
-.modes button + button {
-  border-left: 1px solid var(--input-line);
-}
-.modes button:hover:not([aria-pressed='true']) {
+  gap: 6px;
+  padding: 4px 8px 4px 10px;
+  border: 1px solid var(--input-line);
+  border-radius: 6px;
+  background: var(--raised);
   color: var(--fg);
+  font-size: 12px;
+  font-weight: 600;
+}
+.mode-button:hover,
+.mode-button[aria-expanded='true'] {
+  background: var(--raised-2);
+}
+.mode-button .codicon-chevron-down {
+  color: var(--muted);
+}
+.mode-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 5;
+  width: min(340px, calc(100vw - 32px));
+  padding: 10px;
+  border: 1px solid var(--vscode-widget-border, var(--line));
+  border-radius: 8px;
+  background: var(--vscode-editorWidget-background, var(--raised-2));
+  box-shadow: 0 6px 20px #0000004d;
+}
+.mode-pop-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 2px 4px 8px;
+}
+.mode-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.mode-option {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  padding: 8px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--fg);
+  text-align: left;
+}
+.mode-option:hover:not(:disabled) {
   background: var(--raised);
 }
-.modes button[aria-pressed='true'] {
-  background: var(--raised-2);
-  color: var(--fg);
+.mode-option:disabled {
+  opacity: 1;
+  cursor: default;
+}
+.mode-option .codicon {
+  margin-top: 2px;
+  color: var(--muted);
+}
+.mode-option[aria-current] .codicon {
+  color: var(--coral-text);
+}
+.mode-option b {
   font-weight: 600;
+}
+.mode-option em {
+  font-style: normal;
+  color: var(--coral-text);
+}
+.mode-option small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.mode-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 4px 2px;
+}
+.mode-confirm .mode-pop-head {
+  color: var(--fg);
+  font-size: 13px;
+  padding: 2px 0 0;
+}
+.mode-confirm p:not(.mode-pop-head) {
+  line-height: 1.5;
 }
 .head-note {
   flex-basis: 100%;
   color: var(--wait);
   font-size: 12px;
+}
+
+.network-wrap {
+  padding: 12px 20px 0;
+}
+.network {
+  max-width: 760px;
+  border-color: color-mix(in srgb, var(--bad) 45%, var(--line));
+  background: color-mix(in srgb, var(--bad) 7%, var(--bg));
+}
+.network .card-answer {
+  flex-wrap: wrap;
+}
+.network code {
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 0.92em;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--vscode-textCodeBlock-background, var(--raised-2));
 }
 
 .notice {
@@ -1253,8 +1346,12 @@ input:focus {
   .head {
     padding: 8px 14px;
   }
-  .modes {
+  .mode {
     margin-left: 0;
+  }
+  .mode-pop {
+    right: auto;
+    left: 0;
   }
   .needs,
   .stream {

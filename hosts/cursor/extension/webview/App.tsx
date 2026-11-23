@@ -2,7 +2,7 @@
 // what needs you pinned on top as cards you decide in place, the lead's chat and the board's news in one timeline
 // with the message box under it, and the running work beside it.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
-import type { ChatItem, EngineState, PanelAction, PanelLane, PanelMode, PanelNeed, PanelNews, PanelScout, PanelTask, PanelView } from '../../protocol'
+import type { ChatItem, EngineState, NetworkProblem, PanelAction, PanelLane, PanelMode, PanelNeed, PanelNews, PanelScout, PanelTask, PanelView } from '../../protocol'
 import { ask, onMessage, tell } from './bridge'
 import { Icon, Linked, Mark, Markdown, Staff, STATION_WORD, ago, clock, dayWord, duration, tokensWord, useNow } from './parts'
 
@@ -21,12 +21,14 @@ export function App() {
   const [page, setPage] = useState<Page>('now')
   const [focus, setFocus] = useState<string | null>(null)
   const [notice, setNotice] = useState<Notice | null>(null)
+  const [network, setNetwork] = useState<NetworkProblem | null>(null)
 
   useEffect(() => {
     const off = onMessage(m => {
       if (m.type === 'view') setView(m.view)
       else if (m.type === 'chat') (setChat(m.items), setBusy(m.busy))
       else if (m.type === 'engine') setEngine(m.engine)
+      else if (m.type === 'network') setNetwork(m.problem)
     })
     tell({ type: 'ready' })
     return off
@@ -52,6 +54,11 @@ export function App() {
             </p>
           )}
         </div>
+        {network && (
+          <div className="network-wrap">
+            <NetworkCard key={network.text + network.proxy} problem={network} onSay={say} />
+          </div>
+        )}
         {engine.state !== 'ready' && !view ? (
           <EngineScreen engine={engine} />
         ) : view && !view.on ? (
@@ -91,14 +98,6 @@ function Rail({ page, onPage, needs }: { page: Page; onPage: (p: Page) => void; 
 }
 
 function Header({ view, onSay }: { view: PanelView | null; onSay: Say }) {
-  const [switching, setSwitching] = useState<PanelMode | null>(null)
-  const setMode = (mode: PanelMode) => {
-    if (!view || mode === view.mode) return
-    setSwitching(mode)
-    ask({ type: 'mode', mode })
-      .then(t => onSay(t), (e: Error) => onSay(e.message, true))
-      .finally(() => setSwitching(null))
-  }
   const c = view?.counts
   return (
     <header className="head">
@@ -123,22 +122,139 @@ function Header({ view, onSay }: { view: PanelView | null; onSay: Say }) {
           </span>
         </p>
       )}
-      {view?.on && (
-        <div className="modes" role="group" aria-label="Board mode">
-          {view.modes.map(m => (
-            <button key={m.mode} type="button" aria-pressed={view.mode === m.mode} disabled={!!switching} title={m.meaning} onClick={() => setMode(m.mode)}>
-              {switching === m.mode ? <Icon name="loading" /> : null}
-              {m.name.charAt(0).toUpperCase() + m.name.slice(1)}
-            </button>
-          ))}
-        </div>
-      )}
+      {view?.on && <ModeMenu view={view} onSay={onSay} />}
       {view?.note && (
         <p className="head-note">
           <Icon name="warning" /> {view.note}
         </p>
       )}
     </header>
+  )
+}
+
+const MODE_ICON: Record<PanelMode, string> = { paused: 'debug-pause', review: 'eye', auto: 'rocket' }
+const sentence = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+const tasks = (n: number) => `${n} task${n === 1 ? '' : 's'}`
+
+/** What switching the board from its mode to `to` does, said before it happens. */
+function modeEffect(view: PanelView, to: PanelMode): string {
+  const running = view.counts.running
+  const into = view.branch ? ` into ${view.branch}` : ''
+  if (to === 'paused')
+    return running
+      ? `The ${running === 1 ? 'agent' : `${running} agents`} working now stop${running === 1 ? 's' : ''} at once, and ${running === 1 ? 'its task goes' : 'their tasks go'} back to Up next. Nothing new starts until you switch back. You can still approve or reject what waits for review.`
+      : 'Nothing new starts until you switch back. You can still approve or reject what waits for review.'
+  const starts = view.mode === 'paused' && view.counts.next ? `Work starts: up to ${view.maxParallel || 1} of the ${tasks(view.counts.next)} up next begin at once. ` : ''
+  if (to === 'review') return `${starts}Finished tasks wait for you to approve or reject them before they merge${into}.`
+  return `${starts}Finished tasks that pass their checks merge${into} on their own, without your review.`
+}
+
+/** The board's mode: one button that opens the three modes; a change is said and confirmed before it happens. */
+function ModeMenu({ view, onSay }: { view: PanelView; onSay: Say }) {
+  const [open, setOpen] = useState(false)
+  const [pick, setPick] = useState<PanelMode | null>(null)
+  const [saving, setSaving] = useState(false)
+  const box = useRef<HTMLDivElement>(null)
+  const current = view.modes.find(m => m.mode === view.mode)
+  const close = useCallback(() => (setOpen(false), setPick(null)), [])
+  useEffect(() => {
+    if (!open) return
+    const away = (e: MouseEvent) => !box.current?.contains(e.target as Node) && close()
+    const esc = (e: globalThis.KeyboardEvent) => e.key === 'Escape' && close()
+    document.addEventListener('mousedown', away)
+    document.addEventListener('keydown', esc)
+    return () => (document.removeEventListener('mousedown', away), document.removeEventListener('keydown', esc))
+  }, [open, close])
+  const confirm = () => {
+    if (!pick) return
+    setSaving(true)
+    ask({ type: 'mode', mode: pick })
+      .then(t => (onSay(t), close()), (e: Error) => onSay(e.message, true))
+      .finally(() => setSaving(false))
+  }
+  const chosen = view.modes.find(m => m.mode === pick)
+  return (
+    <div className="mode" ref={box}>
+      <button type="button" className="mode-button" aria-haspopup="dialog" aria-expanded={open} onClick={() => (open ? close() : setOpen(true))} title={current?.meaning}>
+        <Icon name={MODE_ICON[view.mode]} />
+        <span>{sentence(current?.name ?? view.mode)}</span>
+        <Icon name="chevron-down" />
+      </button>
+      {open && (
+        <div className="mode-pop" role="dialog" aria-label="Board mode">
+          {!chosen ? (
+            <>
+              <p className="mode-pop-head">How the board runs</p>
+              <ul className="mode-list">
+                {view.modes.map(m => (
+                  <li key={m.mode}>
+                    <button type="button" className="mode-option" aria-current={m.mode === view.mode || undefined} disabled={m.mode === view.mode} onClick={() => setPick(m.mode)}>
+                      <Icon name={MODE_ICON[m.mode]} />
+                      <span>
+                        <b>{sentence(m.name)}</b>
+                        {m.mode === view.mode && <em> · now</em>}
+                        <small>{sentence(m.meaning)}.</small>
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            <div className="mode-confirm">
+              <p className="mode-pop-head">
+                <Icon name={MODE_ICON[chosen.mode]} /> Switch to {chosen.name}?
+              </p>
+              <p>{modeEffect(view, chosen.mode)}</p>
+              <div className="card-actions">
+                <button type="button" className="btn primary" disabled={saving} onClick={confirm}>
+                  {saving ? <Icon name="loading" /> : null}
+                  {chosen.mode === 'paused' ? 'Pause the board' : `Switch to ${chosen.name}`}
+                </button>
+                <button type="button" className="btn ghost" disabled={saving} onClick={() => setPick(null)} autoFocus>
+                  Back
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** The engine can't reach Cursor's servers: what failed, and a place to give it the proxy. */
+function NetworkCard({ problem, onSay }: { problem: NetworkProblem; onSay: Say }) {
+  const [text, setText] = useState(problem.proxy)
+  const [saving, setSaving] = useState(false)
+  const save = (e: FormEvent) => {
+    e.preventDefault()
+    setSaving(true)
+    ask({ type: 'proxy', proxy: text })
+      .then(t => onSay(t), (err: Error) => onSay(err.message, true))
+      .finally(() => setSaving(false))
+  }
+  return (
+    <article className="card need-failed network" role="alert">
+      <h3>symcc can't reach Cursor</h3>
+      <p className="card-text bad">{problem.text}</p>
+      <p className="card-text">
+        {problem.proxy ? `It ran through the proxy ${problem.proxy.replace(/\/\/[^@/]*@/, '//***@')}.` : 'It ran with no proxy.'} The lead and the workers need Cursor's servers. On a network that needs a proxy, enter it here; symcc restarts with it. In a terminal, <code>echo $HTTPS_PROXY</code> shows the one your shell uses.
+      </p>
+      <form className="card-answer" onSubmit={save}>
+        <label className="sr" htmlFor="proxy">
+          Proxy
+        </label>
+        <input id="proxy" placeholder="http://proxy.example.com:912" value={text} onChange={e => setText(e.target.value)} disabled={saving} />
+        <button type="submit" className="btn primary" disabled={saving}>
+          {saving ? <Icon name="loading" /> : null}
+          Use and restart
+        </button>
+        <button type="button" className="btn ghost" onClick={() => tell({ type: 'log' })}>
+          Open the log
+        </button>
+      </form>
+    </article>
   )
 }
 

@@ -5,7 +5,10 @@ import * as vscode from 'vscode'
 import * as path from 'node:path'
 import * as fs from 'node:fs'
 import { Engine } from './engine'
-import type { ChatItem, EngineState, FromWebview, PanelView, ToWebview } from '../../protocol'
+import type { ChatItem, EngineState, FromWebview, NetworkProblem, PanelView, ToWebview } from '../../protocol'
+
+/** A lead error that means the engine could not reach Cursor's servers. */
+const NETWORK_ERROR = /network request failed|fetch failed|ECONNREFUSED|ECONNRESET|ENOTFOUND|ETIMEDOUT|EAI_AGAIN|getaddrinfo|socket hang up|proxy/i
 
 /** How many chat lines are kept (per project, in the workspace state). */
 const CHAT_KEPT = 300
@@ -13,13 +16,25 @@ const CHAT_KEY = 'symcc.chat'
 
 export function activate(ctx: vscode.ExtensionContext) {
   const folder = vscode.workspace.workspaceFolders?.[0]
-  const out = vscode.window.createOutputChannel('symcc')
+  const out = vscode.window.createOutputChannel('symcc', { log: true })
   const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 50)
   status.command = 'symcc.open'
   ctx.subscriptions.push(out, status)
 
   const conf = () => vscode.workspace.getConfiguration('symcc')
   const enginePath = () => conf().get<string>('enginePath') || path.join(ctx.extensionPath, '..', 'dist', 'engine.mjs')
+  // the engine is a separate Node process, so the editor's own proxy handling never reaches it
+  const http = () => vscode.workspace.getConfiguration('http')
+  const proxy = () => conf().get<string>('proxy')?.trim() || http().get<string>('proxy')?.trim() || process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy || ''
+  const proxyEnv = (): Record<string, string> => {
+    const p = proxy()
+    out.appendLine(`proxy: ${p ? p.replace(/\/\/[^@/]*@/, '//***@') : 'none'}`)
+    if (!p) return {}
+    const no = (http().get<string[]>('noProxy') ?? []).join(',') || process.env.NO_PROXY || process.env.no_proxy || ''
+    return { HTTPS_PROXY: p, https_proxy: p, HTTP_PROXY: p, http_proxy: p, ...(no ? { NO_PROXY: no, no_proxy: no } : {}) }
+  }
+  let network: NetworkProblem | null = null
+  const setNetwork = (n: NetworkProblem | null) => ((network = n), post({ type: 'network', problem: n }))
 
   let view: PanelView | undefined
   let chat: ChatItem[] = ctx.workspaceState.get<ChatItem[]>(CHAT_KEY) ?? []
@@ -68,7 +83,7 @@ export function activate(ctx: vscode.ExtensionContext) {
   }
 
   const engine = new Engine(
-    { root: folder?.uri.fsPath ?? '', engine: enginePath(), node: conf().get<string>('nodePath') || undefined, leadModel: conf().get<string>('leadModel') || undefined, workerModel: conf().get<string>('workerModel') || undefined },
+    { root: folder?.uri.fsPath ?? '', engine: enginePath(), node: conf().get<string>('nodePath') || undefined, leadModel: conf().get<string>('leadModel') || undefined, workerModel: conf().get<string>('workerModel') || undefined, env: proxyEnv },
     {
       state: s => {
         drawStatus(s)
@@ -79,6 +94,8 @@ export function activate(ctx: vscode.ExtensionContext) {
       lead: e => {
         if (e.type === 'busy') return void ((busy = e.busy), post({ type: 'chat', items: chat, busy }))
         if (e.type === 'message') return e.from === 'owner' ? addChat('owner', e.text) : undefined
+        if (e.type === 'error' && NETWORK_ERROR.test(e.text)) setNetwork({ text: e.text, proxy: proxy() })
+        if (e.type === 'answer' && network) setNetwork(null)
         addChat(e.type === 'answer' ? 'lead' : 'error', e.text)
       },
       toast: text => void vscode.window.setStatusBarMessage(text, 6000),
@@ -99,12 +116,22 @@ export function activate(ctx: vscode.ExtensionContext) {
     if (m.type === 'ready') {
       post({ type: 'engine', engine: engine.state })
       post({ type: 'chat', items: chat, busy })
+      post({ type: 'network', problem: network })
       if (view) post({ type: 'view', view })
       return
     }
     if (m.type === 'restart') return void engine.restart()
+    if (m.type === 'log') return out.show()
     const reply = (ok: boolean, text: string) => post({ type: 'reply', id: m.id, ok, text })
     try {
+      if (m.type === 'proxy') {
+        const p = m.proxy.trim()
+        setNetwork(null)
+        // a changed setting restarts the engine (onDidChangeConfiguration below); the same one restarts it here
+        if (p === (conf().get<string>('proxy') ?? '').trim()) void engine.restart()
+        else await conf().update('proxy', p, vscode.ConfigurationTarget.Global)
+        return reply(true, p ? 'symcc restarts with the new proxy.' : 'symcc restarts without a proxy.')
+      }
       if (m.type === 'send') return reply(true, await engine.text({ op: 'message', text: m.text }))
       if (m.type === 'answer') return reply(true, await engine.text({ op: 'answer', need: m.need, text: m.text }))
       if (m.type === 'mode') return reply(true, await engine.text({ op: 'mode', mode: m.mode }))
@@ -147,6 +174,9 @@ export function activate(ctx: vscode.ExtensionContext) {
     }),
     vscode.commands.registerCommand('symcc.restart', () => engine.restart()),
     vscode.commands.registerCommand('symcc.showLog', () => out.show()),
+    vscode.workspace.onDidChangeConfiguration(e => {
+      if ((e.affectsConfiguration('symcc.proxy') || e.affectsConfiguration('http.proxy')) && engine.state.state !== 'stopped') void engine.restart()
+    }),
     { dispose: () => void engine.stop() },
   )
 

@@ -62,7 +62,7 @@ function view(): PanelView {
     ...(off ? { off: 'symcc is not set up in this project yet.' } : {}),
     project: 'billing-service',
     branch: 'main',
-    mode: 'review',
+    mode,
     modes: [
       { mode: 'paused', name: 'paused', meaning: 'no work runs; tasks in review can still be approved or rejected' },
       { mode: 'review', name: 'approve merge', meaning: 'work runs; finished tasks wait for your approve or reject' },
@@ -93,6 +93,8 @@ function view(): PanelView {
 const send = (msg: ToWebview) => window.dispatchEvent(new MessageEvent('message', { data: msg }))
 const later = (ms: number, fn: () => void) => setTimeout(fn, ms)
 let busy = false
+let mode: PanelView['mode'] = 'review'
+const net = new URLSearchParams(location.search).get('state') === 'net'
 
 window.acquireVsCodeApi = () => ({
   postMessage(msg: FromWebview) {
@@ -100,9 +102,10 @@ window.acquireVsCodeApi = () => ({
       send({ type: 'engine', engine: { state: 'ready' } })
       send({ type: 'chat', items: chat, busy })
       send({ type: 'view', view: view() })
+      if (net) send({ type: 'network', problem: { text: 'the lead could not run: Network request failed', proxy: '' } })
       return
     }
-    if (msg.type === 'restart') return
+    if (msg.type === 'restart' || msg.type === 'log') return
     const reply = (text: string) => later(450, () => send({ type: 'reply', id: msg.id, ok: true, text }))
     if (msg.type === 'send') {
       chat = [...chat, { key: `o${Date.now()}`, who: 'owner', text: msg.text, atMs: Date.now() }]
@@ -121,6 +124,17 @@ window.acquireVsCodeApi = () => ({
       if (msg.type === 'act' && msg.action === 'show-changes') return reply('')
       reply(msg.type === 'answer' ? `${id} got your answer; it went back to work.` : `${id}: ${msg.action === 'approve' ? 'approved; merging now' : msg.action}`)
       later(700, () => ((needs = needs.filter(n => n.id !== id)), send({ type: 'view', view: view() })))
+      return
+    }
+    if (msg.type === 'mode') {
+      mode = msg.mode
+      reply(`The board is now in ${msg.mode === 'paused' ? 'paused' : msg.mode === 'review' ? 'approve merge' : 'auto merge'} mode.`)
+      later(450, () => send({ type: 'view', view: view() }))
+      return
+    }
+    if (msg.type === 'proxy') {
+      reply('symcc restarted with the new proxy.')
+      later(450, () => send({ type: 'network', problem: null }))
       return
     }
     reply('done')

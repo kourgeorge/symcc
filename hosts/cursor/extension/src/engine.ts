@@ -13,7 +13,8 @@ export type EngineEvents = {
   log: (line: string) => void
 }
 
-export type EngineOptions = { root: string; engine: string; node?: string; leadModel?: string; workerModel?: string }
+/** `env`: what the engine's environment adds, read at each start (the proxy can change in between). */
+export type EngineOptions = { root: string; engine: string; node?: string; leadModel?: string; workerModel?: string; env?: () => Record<string, string> }
 
 type Pending = { resolve: (v: Record<string, unknown>) => void; reject: (e: Error) => void }
 
@@ -39,7 +40,7 @@ export class Engine {
     this.set({ state: 'starting' })
     const args = [this.o.engine, '--root', this.o.root, ...(this.o.leadModel ? ['--lead-model', this.o.leadModel] : []), ...(this.o.workerModel ? ['--worker-model', this.o.workerModel] : [])]
     const node = this.o.node || process.execPath
-    const env = { ...process.env, ...(this.o.node ? {} : { ELECTRON_RUN_AS_NODE: '1' }) }
+    const env = { ...process.env, SYMCC_DEBUG: '1', ...this.o.env?.(), ...(this.o.node ? {} : { ELECTRON_RUN_AS_NODE: '1' }) }
     this.on.log(`starting: ${node} ${args.join(' ')}`)
     const child = spawn(node, args, { cwd: this.o.root, env, stdio: ['pipe', 'pipe', 'pipe'] })
     this.child = child

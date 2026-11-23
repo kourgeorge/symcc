@@ -104,11 +104,15 @@ export type ChatItem = { key: string; who: 'owner' | 'lead' | 'error'; text: str
 
 export type EngineState = { state: 'starting' | 'ready' | 'stopped' | 'failed'; text?: string }
 
+/** The engine could not reach Cursor's servers: `text` is the error, `proxy` the proxy it ran with ('' for none). */
+export type NetworkProblem = { text: string; proxy: string }
+
 /** From the extension to the webview. */
 export type ToWebview =
   | { type: 'view'; view: PanelView }
   | { type: 'chat'; items: ChatItem[]; busy: boolean }
   | { type: 'engine'; engine: EngineState }
+  | { type: 'network'; problem: NetworkProblem | null }
   | { type: 'reply'; id: number; ok: boolean; text: string }
   | { type: 'scouts'; text: string }
 
@@ -121,4 +125,6 @@ export type FromWebview =
   | { type: 'mode'; id: number; mode: PanelMode }
   | { type: 'command'; id: number; name: string; args?: string }
   | { type: 'scout'; id: number; name: string }
+  | { type: 'proxy'; id: number; proxy: string }
+  | { type: 'log' }
   | { type: 'restart' }
