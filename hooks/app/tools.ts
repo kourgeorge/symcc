@@ -998,6 +998,9 @@ export async function saveSettings($: Host, a: SettingsInput, who: string): Prom
   return { changes, mode }
 }
 
+/** T-970: the settings whose change the lead is told of (ownerSettings): the ones that change the work. */
+const WORK_SETTINGS = new Set(['mode', 'max_parallel', 'test_commands', 'docs_test_commands', 'test_minutes', 'checker', 'scout_findings', 'max_minutes', 'auto_retries', 'tests_with_changes'])
+
 /** The owner changes settings (/<name>-settings or the Settings view): the answer to show, e.g. "max_parallel set to 5"; the lead is told too. */
 export async function ownerSettings($: Host, a: SettingsInput, where: string): Promise<string> {
   // the on/off switch is the owner's alone and works like /<name>-disable and /<name>-enable
@@ -1013,9 +1016,11 @@ export async function ownerSettings($: Host, a: SettingsInput, where: string): P
   const n = r.changes.some(c => c.name === 'notify') ? readNotify(a.notify) : null
   const set = n ? notifySet(n) : null
   if (set) void playSample($, set)
-  const parts = r.changes.map(settingSetText)
-  if (r.mode) parts.push(`mode set to ${settingShown('mode', String(a.mode))}: ${r.mode}`)
+  const modeLine = r.mode ? [`mode set to ${settingShown('mode', String(a.mode))}: ${r.mode}`] : []
+  const parts = [...r.changes.map(settingSetText), ...modeLine]
   const text = parts.join('; ') || 'nothing changed'
-  if (parts.length) noteForLead(`The owner changed the settings: ${brief(text)}`)
+  // T-970: the lead hears only of settings that change the work (not notify, open_on_start, archive_days)
+  const told = [...r.changes.filter(c => WORK_SETTINGS.has(c.name)).map(settingSetText), ...modeLine]
+  if (told.length) noteForLead(`The owner changed the settings: ${brief(told.join('; '))}`)
   return text
 }

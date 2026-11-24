@@ -10,7 +10,7 @@ import type { Host } from '../host'
 import { onTaskEvent } from './events'
 import { S, toolName } from './state'
 import { change, load, now, oneAtATime, path, safeWrite } from './store'
-import { tellLead } from './tell'
+import { brief, noteForLead, tellLead } from './tell'
 
 /** Org-mem's text, or null when it is missing or can't be read. */
 async function readGuide(host: Host): Promise<string | null> {
@@ -198,6 +198,9 @@ export async function deleteOrgMem(host: Host, n: number, expect?: string, key?:
     const { text, removed } = deleteOrgMemNote(old, n, expect, key)
     if (!removed) return { ok: false, text: `No note ${n} in ${file} (it may have changed): nothing deleted.` }
     await safeWrite(host, path(file), text, 'the organizational memory (org-mem)')
+    // T-970: only the owner deletes this way (the lead's orgmem tool removes with orgMemRemove), so the lead hears it
+    // and doesn't re-add the note or act on an old number
+    noteForLead(`The owner deleted org-mem note ${n}: "${brief(removed.text)}"; numbers after it moved up.`)
     return { ok: true, text: `Deleted note ${n} from ${file}${removed.date ? ` (${removed.date})` : ''}.` }
   }).catch((err: Error) => ({ ok: false, text: `Couldn't delete note ${n}: ${err?.message ?? err}` }))
 }
