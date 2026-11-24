@@ -1227,7 +1227,7 @@ words as bold headings with the same spacing):
 
                        work✧    check✧   queue    tests    merged
  ▶ T-684 /symcc-doc…   ●━━━━━━━━●━━━━━━━━◉────────○────────○      #2
-   change try 2/3 · ⏱ 24m · ⌀ 1.1M (0.9× median) · <worker 812.4k · checker 287.6k> · ⌕×1
+   change try 2/3 · ⏱ 24m · ⌀ 1.1M (0.9× median) · <worker 812.4k · checker 287.6k> · ⌕ × 1
 ```
 
 - `NEEDS YOU` is the first section, shown only while something waits for you, and hidden (no
@@ -1253,13 +1253,13 @@ words as bold headings with the same spacing):
   empty room goes between the content and the footer. On a narrow screen the legend is cut at spaces onto more lines, never wider than the screen, still under the key line.
 - On the right: the time at the current station, or the place in the merge queue (`#2`).
 - The second row has no bar, only numbers about this task:
-  `bug try 4/4 · ⏱ 41m · ⌀ 7.3M (7.6× median) · <worker 5.4M · checker 1.9M> · ⌕×2`. That is
+  `bug try 4/4 · ⏱ 41m · ⌀ 7.3M (7.6× median) · <worker 5.4M · checker 1.9M> · ⌕ × 2`. That is
   the kind and the try (`try 2/3`, auto retries after failing tests included), the task's working
   time so far (all tries; time when Claude Code was closed is left out), the whole task's tokens
   (every try so far), how many times the board's median tokens per merged task that is (yellow
   from twice the median), how its tokens split between its workers and checkers, together in
   `< >` (a part that is 0 is left out, and there is no `< >` when there is nothing to split), and
-  `⌕×N` for the checker's send-backs (`⌕` is the checker's mark; on a task row, `↺` with a number is the try). On a narrow panel the parts go in this order: first the
+  `⌕ × N` for how many times the checker sent the task back (`⌕` is the checker's mark; on a task row, `↺` with a number is the try). On a narrow panel the parts go in this order: first the
   `< >` split, then `(× median)`, then the kind, then `⌀`, and the clock `⏱` last; the try stays. A
   running worker's tokens are only known when it hands back, so until then the row shows the
   earlier tries' sum with `+ …` (`⌀ 4.0M + …`), or `⌀ at hand-back` on a first try.

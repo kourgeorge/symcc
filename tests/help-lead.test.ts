@@ -76,9 +76,9 @@ test('the checker texts say it runs before the merge queue, not after the tests 
   expect(help).not.toContain('merge line')
   expect(help).not.toContain('tester · try 2')
   // T-642: since T-628 only the band (and the task page) show the try, not the list rows
-  // T-939: every client's band writes a later try as "↺3"; the checker's send-backs on Live rows are "⌕×N"
+  // T-939: every client's band writes a later try as "↺3"; the checker's send-backs on Live rows are "⌕ × N"
   expect(help).toContain('The list rows show no try number; the band above the prompt (in every client) shows a later try as "↺3" right after the step\'s time ("T-5 ⊛ 3m ↺3"; nothing on try 1)')
-  expect(help).toContain('"⌕×2" means the checker sent the task back twice')
+  expect(help).toContain('"⌕ × 2" means the checker sent the task back twice')
   expect(help).not.toContain('(try 3)')
   expect(help).not.toContain('3m (3)')
   expect(help).not.toContain('shows a later try as "(n)"')
