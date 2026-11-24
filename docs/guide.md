@@ -1540,8 +1540,9 @@ unchanged.
   what the setting does (no default or range). Roles and Task types are link rows with their count
   beside them; they open their pages. No help sentence under the list, no key hints.
 - **Roles and Task types**: the page title is plain bold text (not blue), then the table. Where a
-  role or task type comes from (`built-in`, `replaced`, `added by you`) and `off` are plain dim words,
-  not pills. Remove asks inline, with no box: the question, a `Yes, remove` button and a `Cancel`
+  role or task type comes from and `off` are plain dim words, not pills: the table's FROM column says
+  `built-in`, `changed`, `added by you` or `off`, and a task type's own page says `built-in`,
+  `replaced`, `added` or `off`. Remove asks inline, with no box: the question, a `Yes, remove` button and a `Cancel`
   link on one line.
 
 ---

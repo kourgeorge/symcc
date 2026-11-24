@@ -142,7 +142,7 @@ function vsTable(pane: PaneParts, k: ReturnType<typeof kit>, noun: 'role' | 'kin
           const href = vsHref(noun, r.name)
           return cell(`${key}-name`, 'name', last, vsLink(vs, row(`${noun}Row:${r.name}`), r.off || r.broken ? mdLink(r.name, href) : `**${mdLink(r.name, href)}**`, [[href, open(r.name)]], r.off || !!r.broken))
         }
-        const tone = defCellTone(r, p.col)
+        const tone = p.col === 'from' && !r.broken ? { color: 'inactive', bold: undefined } : defCellTone(r, p.col)
         const warn = last && 'warning' in r && r.warning ? ' ⚠' : ''
         return cell(`${key}-${p.col}`, p.col, last, <Text key="t" wrap="wrap" bold={tone.bold} color={C(tone.color)}>{text}{warn}</Text>)
       })}
@@ -193,7 +193,7 @@ export function rolePageVs($: $, pane: PaneParts, r: RoleDef, source: DefSource,
   const cancel = set(() => ((roleView.confirmRemove = false), (roleView.confirmReset = false)))
   return (
     <Box key="vs-role-page" flexDirection="column" gap={1}>
-      {vsPageHeader(pane, header)}
+      {vsPageHeader(pane, { ...header, color: header.color === 'inactive' ? 'inactive' : 'text' })}
       <Box key="vs-role-notes" flexDirection="column">
         {/* T-918: always says what the role writes */}
         {k.plain('role-writes', roleWritesLine(r), 'text')}

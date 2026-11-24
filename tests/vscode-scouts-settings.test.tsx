@@ -620,6 +620,10 @@ for (const bodyColumns of [40, 64, 100])
     const list = await plain(ui, 'roles')
     const title = elements(list).find(n => n.type === 'Text' && n.props?.bold && texts(n).join('') === 'Roles')
     expect(title?.props?.color).not.toBe('suggestion')
+    // the FROM column is plain dim words (changed, added by you), not blue or green
+    const froms = elements(list).filter(n => /^vs-role-.+-from$/.test(String(n.props?.key)))
+    expect(froms.length).toBeGreaterThan(0)
+    for (const f of froms) for (const t of elements(f).filter(e => e.type === 'Text')) expect(t.props?.color, String(f.props?.key)).toBe('inactive')
     await ui.unmount()
   })
 
@@ -630,9 +634,10 @@ test('T-1008: removing asks inline: a "Yes, remove" Button and a Cancel link, no
   const name = 'mobile-apps-and-tablets-everywhere'
   await follow(ui, `roleRow:${name}`, vsHref('role', name))
   const page = await ui.drawn()
-  // the source is a plain dim word, not a pill
-  const words = elements(page).filter(n => /^vs-role-badges-(source|off)$/.test(String(n.props?.key)))
-  for (const w of words) expect([w.props?.borderStyle, w.props?.backgroundColor, texts(w).length > 0]).toEqual([undefined, undefined, true])
+  // a role's own page title is the plain text color, and nothing on it is a pill
+  const roleTitle = elements(page).find(n => n.type === 'Text' && n.props?.bold && texts(n).join('') === name)
+  expect(roleTitle?.props?.color).toBe('text')
+  expect(elements(page).filter(n => n.props?.borderStyle || n.props?.backgroundColor).map(n => n.props?.key)).toEqual([])
   await ui.press({ key: 'role-remove' })
   const tree = await ui.drawn()
   expect((await ui.find({ key: 'role-remove-yes' }))?.props.variant).toBe('primary')
