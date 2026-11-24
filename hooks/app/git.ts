@@ -4,7 +4,7 @@ import { publish } from './lead'
 import { S, workers, starting, finishing, approving, keptDirty, scratchUse } from './state'
 import { type Host, agentState } from '../host'
 import { load, change, path } from './store'
-import { tellLead, noteForLead, brief } from './tell'
+import { tellLead } from './tell'
 import { pump, agentsNow } from './workers'
 import { systemOf } from './voice'
 
@@ -123,8 +123,13 @@ export async function gitReady($: Host, b?: Board): Promise<boolean> {
     S.gitState = s
     await publish($, b ?? (await load($)))
   }
-  if (s === 'ok') S.toldGit = 'ok'
-  else if (S.driving && S.toldGit !== s) {
+  if (s === 'ok') {
+    // T-968: the lead was told git is not ready (and may be asking the owner about it): a check that finds it ready
+    // now (Check again, the owner set it up by hand) tells the lead at once, so it doesn't ask again. Not while
+    // setupGit runs: it does its own telling (or none, for the lead's own setup_git).
+    if (S.toldGit !== 'ok' && S.driving && !S.settingUp) tellLead($, gitFoundText())
+    S.toldGit = 'ok'
+  } else if (S.driving && S.toldGit !== s) {
     S.toldGit = s
     tellLead($, s === 'no-git' ? noGitText(S.N.name, S.gitInstall) : setupAskText(s, S.N.name))
   }
@@ -180,13 +185,21 @@ export async function setupGit($: Host, who: string): Promise<string> {
     S.gitState = 'ok'
     await publish($, await load($))
     const out = setupDoneText({ init, branch, files, left, gitignore: old === null ? 'made' : text === old ? 'kept' : 'added', name: S.N.name })
-    if (who !== 'the lead') noteForLead(`The owner set up git: ${brief(out)}`)
+    // T-968: the lead's own setup_git call hears it in its tool answer; anyone else's (the board, a command) wakes the lead now
+    if (who !== 'the lead') tellLead($, ownerSetGitText(branch, await gitOk($, ['rev-parse', '--short', 'HEAD'], top).catch(() => ''), out))
     void pump($)
     return out
   } finally {
     S.settingUp = false
   }
 }
+
+/** The board update when someone other than the lead set up git (the board's button, the g key, a command). */
+export const ownerSetGitText = (branch: string, sha: string, out: string) =>
+  `The owner set up git here (branch ${branch}${sha ? `, first commit ${sha}` : ''}): ${out} Tasks can start now; don't ask the owner about git again.`
+
+/** The board update when a check finds git ready after the lead was told it was not. */
+export const gitFoundText = () => 'Git is ready here now: this folder is a git repo with commits (the owner set it up, or a check found it). Tasks can start now; don\'t ask the owner about git again.'
 
 /**
  * T-844: git init and a first commit in `dir` (a folder with no .git of its own), for /<name>-init. It names `dir`

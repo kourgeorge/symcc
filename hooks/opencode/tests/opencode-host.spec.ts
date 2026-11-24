@@ -1239,6 +1239,27 @@ test('each session is offered only the symcc tools it may call, and the lead get
     const toLead = await ask(lead)
     expect(Object.keys(toLead.tools)).toEqual([...TOOLS().map(t => `symcc_${t.name}`), 'edit'])
     expect(toLead.system.map(x => x.text)).toEqual([leadGuide(OPENCODE_FEATURES)])
+    // T-968: an owner's board action waiting as a "Meanwhile" line goes with the lead's next prompt as one quiet message
+    // in its chat (not in the system prompt), and only once
+    noteForLead('The owner dropped T-6.')
+    await c.hooks.prompt!({ sessionID: lead })
+    expect(meanwhile.length).toBe(0)
+    const told = f.synthetic.filter(s => s.sessionID === lead && s.text.includes('- The owner dropped T-6.'))
+    expect(told.length).toBe(1)
+    expect(told[0]!.resume).toBe(false)
+    expect((await ask(lead)).system.map(x => x.text)).toEqual([leadGuide(OPENCODE_FEATURES)])
+    await c.hooks.prompt!({ sessionID: lead })
+    expect(f.synthetic.filter(s => s.text.includes('The owner dropped T-6.')).length).toBe(1)
+    // when the quiet message fails, the lines go back on the queue (at the front, in order) for the next board update
+    const session = c.ctx.session as { synthetic: OcSessionApi['synthetic'] }
+    const synth = session.synthetic
+    session.synthetic = async () => Promise.reject(new Error('session gone'))
+    noteForLead('The owner paused T-7.')
+    noteForLead('The owner paused T-8.')
+    await c.hooks.prompt!({ sessionID: lead })
+    expect([...meanwhile]).toEqual(['The owner paused T-7.', 'The owner paused T-8.'])
+    session.synthetic = synth
+    meanwhile.splice(0)
     scoutRuns.set('ses_scout', 'tests')
     const toScout = await ask('ses_scout')
     expect(Object.keys(toScout.tools)).toEqual([...TOOLS().map(t => t.name).filter(n => ['board', 'stats', 'scouts'].includes(n)).map(n => `symcc_${n}`), 'edit'])
