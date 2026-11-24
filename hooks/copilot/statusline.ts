@@ -5,6 +5,7 @@
 // (.symcc/board.json, .symcc/lead.json and the branch in .git/HEAD), with "symcc: " in front as Claude Code puts it.
 // Nothing here reads a file itself: band.ts (the command) hands in the file reader, the folder and the clock.
 import { parseBoard, parseLead, statusLine, offStatusLine, statusRoom, LEAD_STALE_MS, modeOf } from '../board'
+import { partsFilesNamed, readParts, joinParts } from '../core/board-parts'
 import { driverFacts } from '../core/driver-notice'
 import { namesFor, DEFAULT_NAME } from '../name'
 
@@ -73,12 +74,28 @@ export function projectRoot(d: Pick<BandDeps, 'cwd' | 'readText' | 'name'>): str
   }
 }
 
+/** board.json's text with each done task's stub joined with its parts file (as the store does), so today's merges and cost count. */
+function joinedBoard(text: string | null, read: (rel: string) => string | null): string | null {
+  if (text === null) return null
+  try {
+    const raw: unknown = JSON.parse(text)
+    const files = new Map<string, Record<string, Record<string, unknown>>>()
+    for (const rel of partsFilesNamed(raw)) {
+      const t = read(rel)
+      if (t !== null) files.set(rel, readParts(t).tasks)
+    }
+    return JSON.stringify(joinParts(raw, files).raw)
+  } catch {
+    return text
+  }
+}
+
 /** The band's line for the project around `d.cwd` ('' outside a symcc project). */
 export function bandOutput(d: BandDeps): string {
   const root = projectRoot(d)
   if (root === null) return ''
   const n = namesFor(d.name ?? DEFAULT_NAME)
   const at = (p: string) => `${root === '/' ? '' : root}/${p}`
-  const files: BandFiles = { board: d.readText(at(n.boardFile)), lead: d.readText(at(n.leadFile)), head: d.readText(at('.git/HEAD')) }
+  const files: BandFiles = { board: joinedBoard(d.readText(at(n.boardFile)), rel => d.readText(at(`${n.dir}/${rel}`))), lead: d.readText(at(n.leadFile)), head: d.readText(at('.git/HEAD')) }
   return bandLine(files, { nowMs: d.nowMs, ...(d.name ? { name: d.name } : {}), ...(d.session ? { session: d.session } : {}) })
 }
