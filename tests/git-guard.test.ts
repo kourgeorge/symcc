@@ -199,7 +199,8 @@ const WRITES: [string, string][] = [
   ['grep x <(git stash)', 'git stash'],
   ['cat <<EOF\ngit stash\nEOF', 'git stash'],
   // the checker's try-5 holes: a shell in the line runs a text tool's output without a `|`
-  ['coproc sh; grep -h "git stash" notes >&${COPROC[1]}', 'git stash'],
+  // (T-963: `>&${COPROC[1]}` is now refused first by the path guard, as a write target built from a variable)
+  ['coproc sh; grep -h "git stash" notes >&3', 'git stash'],
   ['mkfifo p; sh < p & grep -h "git stash" notes > p', 'git stash'],
   ['grep -h "git stash" notes > /tmp/s; sh /tmp/s', 'git stash'],
   ['grep -h "git stash" notes > s; . s', 'git stash'],
@@ -246,9 +247,11 @@ const WRITES: [string, string][] = [
   ['rg --hostname-bin=git stash .', 'git stash'],
   ['grep x /usr/libexec/git-core/git-stash', 'git stash'],
   // round 6: cd with anything but a plain path keeps main's rule
-  ['cd "$(git stash)"', 'git stash'],
-  ['cd $X && grep "git stash" y', 'git stash'],
-  ['cd `git stash`', 'git stash'],
+  // (T-963: `cd $X`, `cd "$(...)"` and cd with backticks are now refused first by the path guard, as cd targets built
+  // at run time, so those use other words here)
+  ['ls "$(git stash)"', 'git stash'],
+  ['cd a* && grep "git stash" y', 'git stash'],
+  ['ls `git stash`', 'git stash'],
   ['cd -P x && grep "git stash" y', 'git stash'],
   ['cd x y && grep "git stash" y', 'git stash'],
   // T-446: brace expansion makes new words (`git {stash,}` runs `git stash`), so a "{" inside a word never cuts the

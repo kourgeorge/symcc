@@ -360,3 +360,259 @@ export const braceLit = (c: string) => (/[{},]/.test(c) ? '_' : c)
  */
 export const hasBrace = (w: string) =>
   w.replace(/[@$]\{[^{}]*\}/g, '').replace(/\{\}/g, '').includes('{')
+
+/** A word of a simple command as unresolvedTarget reads it: as written, and whether the shell expands something in it. */
+type XWord = { raw: string; expands: boolean }
+
+/** A word or a redirect operator (`>`, `>>`, `&>`, `<`, `<<`, ...) of a simple command, for unresolvedTarget. */
+type XToken = XWord | { redir: string }
+
+/** Where the `close` matching an `open` (already passed) is in `s`, from `from` on (single quotes and backslashes respected); s.length when none. */
+function closeAt(s: string, from: number, open: string, close: string): number {
+  let depth = 1
+  for (let i = from; i < s.length; i++) {
+    const c = s[i]!
+    if (c === '\\') i++
+    else if (c === "'") {
+      const e = s.indexOf("'", i + 1)
+      i = e < 0 ? s.length : e
+    } else if (c === open) depth++
+    else if (c === close && --depth === 0) return i
+  }
+  return s.length
+}
+
+/** Where the backtick closing one opened before `from` is (a backslash keeps the next character); s.length when none. */
+function tickEnd(s: string, from: number): number {
+  for (let i = from; i < s.length; i++) {
+    if (s[i] === '\\') i++
+    else if (s[i] === '`') return i
+  }
+  return s.length
+}
+
+/**
+ * `command` cut into simple commands of words and redirect operators, keeping `$(...)`, backticks, `${...}`, `$NAME`
+ * and `<(...)` inside the word they are in (marked `expands`), and adding the commands inside `$(...)`, backticks and
+ * `<(...)` as commands of their own. Here-document text and comments are skipped. A best effort, not a shell parser.
+ */
+function expandCommands(s: string, out: XToken[][] = []): XToken[][] {
+  let cmd: XToken[] = []
+  let cur: XWord | undefined
+  let quote = false
+  let wantDelim = false
+  const pending: string[] = []
+  const endWord = () => {
+    if (cur) {
+      if (wantDelim) pending.push(cur.raw.replace(/['"\\]/g, ''))
+      else cmd.push(cur)
+      wantDelim = false
+    }
+    cur = undefined
+  }
+  const endCmd = () => {
+    endWord()
+    if (cmd.length) out.push(cmd)
+    cmd = []
+  }
+  const add = (t: string, x = false) => {
+    cur ??= { raw: '', expands: false }
+    cur.raw += t
+    cur.expands ||= x
+  }
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i]!
+    const n = s[i + 1]
+    if (c === '\\') {
+      add(c + (n ?? ''))
+      i++
+      continue
+    }
+    if (quote) {
+      if (c === '"') {
+        quote = false
+        add(c)
+        continue
+      }
+    } else {
+      if (c === "'") {
+        const e = s.indexOf("'", i + 1)
+        const end = e < 0 ? s.length - 1 : e
+        add(s.slice(i, end + 1))
+        i = end
+        continue
+      }
+      if (c === '"') {
+        quote = true
+        add(c)
+        continue
+      }
+      if (c === '#' && !cur) {
+        const e = s.indexOf('\n', i)
+        i = (e < 0 ? s.length : e) - 1
+        continue
+      }
+      if (c === '\n') {
+        endCmd()
+        // the here-documents started on this line: their lines are text, up to each one's end word
+        let j = i + 1
+        for (const d of pending.splice(0)) {
+          while (j < s.length) {
+            const e = s.indexOf('\n', j)
+            const line = s.slice(j, e < 0 ? s.length : e)
+            j = e < 0 ? s.length : e + 1
+            if (line.replace(/^\t+/, '') === d) break
+          }
+        }
+        i = j - 1
+        continue
+      }
+      if (/\s/.test(c)) {
+        endWord()
+        continue
+      }
+      if ((c === '<' || c === '>') && n === '(') {
+        const e = closeAt(s, i + 2, '(', ')')
+        expandCommands(s.slice(i + 2, e), out)
+        add(s.slice(i, e + 1), true)
+        i = e
+        continue
+      }
+      if (c === '<' || c === '>' || (c === '&' && n === '>')) {
+        // a number just before it is the file descriptor (`2>`), not a word
+        if (cur && /^\d+$/.test(cur.raw)) cur = undefined
+        else endWord()
+        const m = /^(&>>|&>|>>|>\||>&|<<<|<<-|<<|<>|<&|>|<)/.exec(s.slice(i))!
+        cmd.push({ redir: m[1]! })
+        i += m[1]!.length - 1
+        if (m[1] === '<<' || m[1] === '<<-') wantDelim = true
+        continue
+      }
+      if (';&|()'.includes(c)) {
+        endCmd()
+        continue
+      }
+    }
+    if (c === '`') {
+      const e = tickEnd(s, i + 1)
+      expandCommands(s.slice(i + 1, e), out)
+      add(s.slice(i, e + 1), true)
+      i = e
+      continue
+    }
+    if (c === '$') {
+      if (n === '(') {
+        const e = closeAt(s, i + 2, '(', ')')
+        // `$((...))` is arithmetic, no command
+        if (s[i + 2] !== '(') expandCommands(s.slice(i + 2, e), out)
+        add(s.slice(i, e + 1), true)
+        i = e
+        continue
+      }
+      if (n === '{') {
+        const e = closeAt(s, i + 2, '{', '}')
+        add(s.slice(i, e + 1), true)
+        i = e
+        continue
+      }
+      if (n !== undefined && /[A-Za-z_0-9@*#?$!-]/.test(n)) {
+        let j = i + 2
+        if (/[A-Za-z_]/.test(n)) while (j < s.length && /\w/.test(s[j]!)) j++
+        add(s.slice(i, j), true)
+        i = j - 1
+        continue
+      }
+      // `$'...'` and `$"..."` are not followed either
+      if (!quote && (n === "'" || n === '"')) {
+        add(c, true)
+        continue
+      }
+    }
+    add(c)
+  }
+  endCmd()
+  return out
+}
+
+/** Redirects that write to (or open for writing) the file named after them. */
+const WRITE_REDIRECTS = new Set(['>', '>>', '>|', '>&', '&>', '&>>', '<>'])
+
+/** Words before a command's name that only run it (or are shell words), skipped to find the name. */
+const RUNNERS = new Set(['{', '}', '!', 'then', 'do', 'else', 'elif', 'if', 'while', 'until', 'time', 'command', 'builtin', 'exec', 'nohup', 'sudo', 'env', 'nice', 'xargs'])
+
+/** Commands whose last plain word (and `-t` value) is where they write. */
+const COPIES = new Set(['cp', 'ln', 'install', 'rsync', 'scp'])
+
+/** Commands that change every file they are given. */
+const CHANGES = new Set(['mv', 'rm', 'rmdir', 'unlink', 'shred', 'touch', 'mkdir', 'truncate', 'tee', 'chmod', 'chown', 'chgrp', 'cd', 'pushd'])
+
+/**
+ * The first write target (or cd target) in shell `command` that holds something the shell works out only when it
+ * runs (`$X`, `${X}`, `$(...)`, backticks), as written; undefined when there is none (T-963). Write targets are files
+ * after `>`, `>>`, `&>`, `<>`..., the target of cp, ln, install, rsync and scp (last plain word, or `-t`), every file of
+ * mv, rm, touch, mkdir, tee, chmod... and cd or pushd, the files of `sed -i` and `perl -i`, and dd's `of=`. Commands
+ * inside `$(...)` and backticks are checked too. Variables anywhere else (`echo $X`, `ls $DIR`, `cat $F > out`) are
+ * not. A best effort, not a shell parser.
+ */
+export function unresolvedTarget(command: string): string | undefined {
+  for (const cmd of expandCommands(command)) {
+    const words: XWord[] = []
+    for (let k = 0; k < cmd.length; k++) {
+      const t = cmd[k]!
+      if ('redir' in t) {
+        const target = cmd[k + 1]
+        if (target && !('redir' in target)) {
+          k++
+          if (WRITE_REDIRECTS.has(t.redir) && target.expands) return target.raw
+        }
+        continue
+      }
+      words.push(t)
+    }
+    let i = 0
+    while (i < words.length && (RUNNERS.has(words[i]!.raw) || /^[A-Za-z_]\w*=/.test(words[i]!.raw) || (i > 0 && RUNNERS.has(words[i - 1]!.raw) && words[i]!.raw.startsWith('-')))) i++
+    const head = words[i]
+    if (!head || head.expands) continue
+    const name = head.raw.replace(/['"\\]/g, '').replace(/^.*\//, '')
+    const args = words.slice(i + 1)
+    // plain words (not options), and the values of the options named in `valued`
+    const split = (valued: RegExp, args = words.slice(i + 1)) => {
+      const plain: XWord[] = []
+      const values: XWord[] = []
+      let ended = false
+      for (let j = 0; j < args.length; j++) {
+        const a = args[j]!
+        if (ended || !a.raw.startsWith('-') || a.raw === '-') plain.push(a)
+        else if (a.raw === '--') ended = true
+        else if (valued.test(a.raw)) {
+          if (args[j + 1]) values.push(args[++j]!)
+        } else values.push(a)
+      }
+      return { plain, values }
+    }
+    if (COPIES.has(name)) {
+      // the target folder named by an option (`-t $D`, `--target-directory=$D`), or the last plain word
+      const { plain, values } = split(/^(-t|--target-directory)$/)
+      const last = plain[plain.length - 1]
+      const hit = values.find(v => v.expands) ?? (plain.length > 1 && last?.expands ? last : undefined)
+      if (hit) return hit.raw
+    } else if (CHANGES.has(name)) {
+      const { plain, values } = split(/^(-t|--target-directory)$/)
+      const hit = [...plain, ...values].find(v => v.expands)
+      if (hit) return hit.raw
+    } else if (name === 'dd') {
+      const hit = args.find(a => /^["']?of=/.test(a.raw) && a.expands)
+      if (hit) return hit.raw
+    } else if (name === 'sed' || name === 'gsed' || name === 'perl') {
+      if (!args.some(a => /^-[A-Za-z]*i/.test(a.raw) || a.raw.startsWith('--in-place'))) continue
+      // macOS sed's `-i ''` or `-i .bak`: the word after -i is its backup suffix, not a file
+      const own = args.filter((a, j) => !(j > 0 && args[j - 1]!.raw === '-i' && /^(''|""|['"]?\.)/.test(a.raw) && name !== 'perl'))
+      const { plain } = split(/^(-e|-f|--expression|--file)$/, own)
+      const scripted = args.some(a => /^(-e|-f|--expression|--file)/.test(a.raw) || (name === 'perl' && /^-\w*e$/.test(a.raw)))
+      const files = scripted ? plain : plain.slice(1)
+      const hit = files.find(v => v.expands)
+      if (hit) return hit.raw
+    }
+  }
+  return undefined
+}

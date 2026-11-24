@@ -1,7 +1,7 @@
 // The folder guards: where an edit or a Bash command would read or write (editOutsideFolder, blockedEdit,
 // bashOutsideFolder), the scratch folder, and the texts an agent reads when a call is refused or a guard failed.
 import { outOfScope } from './task'
-import { dropTextWords, docOnlyWritten, hasBrace, braceLit, pieceWords, rawWords, reEscape, SHADOW_FUNCTION, SHADOWS, shellPieces, shellWords, type ShellPiece } from './shell-words'
+import { dropTextWords, docOnlyWritten, hasBrace, braceLit, pieceWords, rawWords, reEscape, SHADOW_FUNCTION, SHADOWS, shellPieces, shellWords, unresolvedTarget, type ShellPiece } from './shell-words'
 
 /** The path an edit would write (as the host tells it, see FileTouch in host.ts), trimmed; undefined for none or an empty one. */
 export function editTarget(path: string | undefined): string | undefined {
@@ -169,6 +169,15 @@ export const CWD_LOST = '\u0000lost:'
  * read (T-671); bashOutsideText adds a note saying so.
  */
 export const BASH_LOST = '\u0000lost path:'
+
+/**
+ * What bashOutsideFolder answers, before the word as written, for a write or cd target built from a variable or
+ * command output (unresolvedTarget, T-963): where it lands is only known when the shell runs it, so it can't be checked.
+ */
+export const BASH_UNRESOLVED = '\u0000unresolved:'
+
+/** The longest word bashOutsideText shows for BASH_UNRESOLVED; a longer one is cut. */
+const UNRESOLVED_SHOWN = 80
 
 /**
  * The `cwd` to check a worker's shell command with (T-671): `got`, the shell's folder as read, when it is an absolute
@@ -372,7 +381,8 @@ function walkBash(command: string, wts: readonly string[], home: string | undefi
  * named through /tmp is refused like through /private/tmp (T-417). Any mention is refused, reading included: telling a
  * safe read from a write in a shell line is not reliable (`cat a > b`, `find -delete`, `git diff --output=`), and a
  * worker has its own copy of every file to read. Like editOutsideFolder, the project check ignores letter case. A best
- * effort, not a sandbox: a path built at run time (variables, base64) gets through; symbolic links elsewhere on disk
+ * effort, not a sandbox: a write or cd target built from a variable or command output is refused (unresolvedTarget,
+ * T-963), but a path built at run time elsewhere (base64, code run by perl or bun) gets through; symbolic links elsewhere on disk
  * are followed by the caller (bashPathsToCheck). It checks paths only: git writes run from the worker's own folder
  * (a commit, `git update-ref refs/heads/main`, a push) are refused by the caller with gitWriteIn. The merge-time scope
  * check only looks at which files the task's commits change, so it catches files written through the shell inside the
@@ -382,6 +392,9 @@ export function bashOutsideFolder(command: unknown, worktree: Folders, root: Fol
   const wts = folderList(worktree)
   const tops = folderList(root)
   if (typeof command !== 'string' || !wts.length || !tops.length) return undefined
+  // a write or cd target built from $X, ${X}, $(...) or backticks may land anywhere, so it is refused (T-963)
+  const unresolved = unresolvedTarget(command)
+  if (unresolved !== undefined) return BASH_UNRESOLVED + unresolved
   const check = (abs: string) => (insideAny(abs, wts, true) !== undefined ? undefined : insideAny(abs, tops, false))
   const found = walkBash(command, wts, home, cwd, check, { tops })
   if (found !== undefined) return found
@@ -441,10 +454,20 @@ export function bashPathsToCheck(command: unknown, worktree: Folders, home?: str
 export const bashTooManyText = (worktree: string) =>
   `Refused: this command has too many paths or folder changes (cd) to check where they lead (more than ${BASH_PATHS_MAX} paths, or more than ${BASH_FOLDERS_MAX} folders it may be in). Split it into shorter commands, use absolute paths inside your own folder ${worktree}, or write files with the Write tool.`
 
+/** The reason a worker reads when a write or cd target of its shell command is built from `word` (BASH_UNRESOLVED, T-963). */
+export function unresolvedText(word: string): string {
+  // eslint-disable-next-line no-control-regex
+  const w = word.replace(/[\u0000-\u001f\u007f]+/g, ' ')
+  const shown = w.length > UNRESOLVED_SHOWN ? `${w.slice(0, UNRESOLVED_SHOWN - 1)}…` : w
+  return `Refused: symcc can't check a path built from ${shown}; write the path out in full (a variable or command output in where a command writes, or in cd, may lead outside your own folder).`
+}
+
 /** The reason a worker reads when its shell command naming project path `rel` is refused for being outside its own folder `worktree` (or for BASH_TOO_MANY). */
 export const bashOutsideText = (rel: string, worktree: string): string =>
   rel === BASH_TOO_MANY
     ? bashTooManyText(worktree)
+    : rel.startsWith(BASH_UNRESOLVED)
+      ? unresolvedText(rel.slice(BASH_UNRESOLVED.length))
     : rel.startsWith(BASH_LOST)
       ? `${bashOutsideText(rel.slice(BASH_LOST.length), worktree)} symcc couldn't tell the shell's folder; use a full path.`
       : `Refused: this command names ${rel || 'the project folder'} in the owner's copy of the project, outside your own folder. Work only in your own folder ${worktree}: use paths inside it (relative paths start there), never the owner's copy, even to read.`
