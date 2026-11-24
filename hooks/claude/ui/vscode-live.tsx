@@ -188,7 +188,9 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
   const running = lanes.filter(l => !l.done)
   // the shared columns, as wide as the terminal's widest layout, with the stations in full words
   const stations = liveColumns(lanes, v.checker === true)
-  const layout = { ...liveLayout(lanes, stations, liveInner(width)), labels: stations.map(s => FULL_LABELS[s]) }
+  // the gap is at least 4 columns (40px between stations) so the full words never run into each other, at any panel width
+  const base = liveLayout(lanes, stations, liveInner(width))
+  const layout = { ...base, gap: Math.max(base.gap, 4), labels: stations.map(s => FULL_LABELS[s]) }
   const trains = liveTrains(v, nowMs, lanes)
   const open = (id: string) => act(() => panelValues($).updateOpened(() => id))
   /** A line of text in a Box of its own: VS Code keeps a Box's key (a Text's it drops), so each line can be found by it. */

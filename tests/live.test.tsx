@@ -367,6 +367,16 @@ test('T-757: the terminal and VS Code Live tabs show the whole task\'s tokens ×
   expect(await ui.find({ key: 'live-legend' })).toBeUndefined()
   await ui.press({ key: 'tab-tasks' })
   await ui.unmount()
+
+  // T-1003: on a narrow panel the full-word header still has room (at least 40px between stations)
+  const narrow = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 40 }, surface: 'vscode' })
+  await narrow.press({ key: 'tab-live' })
+  const head = (await narrow.findAll({ type: 'Svg' })).find(x => String(x.props.alt ?? '').startsWith('work check'))
+  const xs = [...String(head?.props.source ?? '').matchAll(/<text x="(\d+)"/g)].map(m => Number(m[1]))
+  expect(xs.length).toBeGreaterThan(2)
+  expect(xs[2]! - xs[1]!).toBeGreaterThanOrEqual(40)
+  await narrow.press({ key: 'tab-tasks' })
+  await narrow.unmount()
 })
 
 test('T-690: the tab row has a Live tab with key l, and the views hint says "l t s c"', () => {
