@@ -152,7 +152,7 @@ export async function paneParts($: $, e: PaneEvent) {
    *  opened page (a task, a question, a scout, a role, a kind, org-mem...), which starts with its own title. */
   const header = (p: BoardPage) =>
     !showsHeader(p) ? [] :
-    vscode ? [<Box key="vs-header" flexDirection="column">{[...banner(), tabs()]}</Box>] :
+    vscode ? [<Box key="vs-header" flexDirection="column">{[...banner(), tabs(), <Box key="tabs-rule" flexDirection="row" height={1} overflow="hidden"><Text wrap="truncate" color={C('subtle')}>{footerRule(width)}</Text></Box>]}</Box>] :
     [...banner(), tabs(), <Text key="header-rule" wrap="truncate" color={C('ide')}>{bannerRule(width)}</Text>]
   /** Key hints over as many lines as the width needs, broken only between hints: keys bold, words in the inactive color (readable on dark themes too). */
   const keyLines = (hints: KeyHint[], name: string) =>

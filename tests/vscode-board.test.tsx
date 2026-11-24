@@ -890,6 +890,9 @@ test('T-973: in VS Code every board tab has the tab bar under the header: the sh
     const drawn = JSON.stringify(drawnData(await ui.drawn()))
     expect(drawn.indexOf('"vs-counts"'), tab).toBeGreaterThan(-1)
     expect(drawn.indexOf('"vs-counts"') < drawn.indexOf('"tabs-row"'), tab).toBe(true)
+    // a thin line under the whole bar: the next thing drawn after the tab row
+    expect(drawn.indexOf('"tabs-rule"'), tab).toBeGreaterThan(drawn.indexOf('"tabs-row"'))
+    expect(texts(await ui.find({ key: 'tabs-rule' })).some(s => /^─+$/.test(s)), tab).toBe(true)
   }
   await ui.unmount()
 })
