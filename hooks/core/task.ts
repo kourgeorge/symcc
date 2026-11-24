@@ -8,7 +8,7 @@ import { endRun, keepAgentIds } from './runs'
 import { clean, num, shownPath } from './text'
 
 /** The most a task's details may hold (addTask and patchTask cut the rest). */
-const DETAILS_MAX = 8000
+export const DETAILS_MAX = 8000
 
 /** Whether `id` may stand in a task's `after`: on the board, or archived as done (it then counts as done). */
 const knownDep = (b: Board, id: string) => !!find(b, id) || (b.archived_done ?? []).includes(id)

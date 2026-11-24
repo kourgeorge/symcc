@@ -1,6 +1,8 @@
 import type { SymccTask } from '../../types'
 import { isFinished, priorityError, makeAsk, settingShown, allowFiles, refuseFiles, waitsForFiles, filesRefusedText, filesAllowedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, ROLE_TOOL_WORDS, PROSE_ROLE_TEXT, DEFAULT_ROLE, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, failedOnClash, patchTask, promoteTask, rejectTask, changeLines, stoppedEntry, waitsForOwner, withHistory, type HistoryAdd, historyLineText, type SettingsInput, type SettingChange, testMinutesRefusal, isMode, readNotify, notifySet, notifyRefusal, applySettings, intoOf, crossBranchNotes, parseGoneBranch, saysMergeInstead, type Board, settingSetText, taskReports, reportPreview, statsReport, statsData, parseStatsRange, parseStatsArgs, archivedCount, localOffset, endedBy, freshTry, withoutOpenRun, stopEnd, changeRestartWhy, changedFields, addDetailsText, noteAddedLine, detailsBothRefusal, dayOf, inPlan, planBacklog, planAdded, planAddText, parseScoutUsage, parseStatusFilter, BOARD_STATUSES, type TeamInput, SETTING_NAMES, leadSettingsText, findingToBacklog, isScoutFindings, isTestsWithChanges, kindFor, isAnswered, askMoreTask, isInvestigation, checkKind, kindsLeadText, kindNames, BUILT_IN_KINDS, originOf, stateLabelLower, shownNote, modeOf, when, scoutNameOf, unknownScoutText } from '../board'
 import { scoutMemoryFile, scoutFindingsFor, leadScouts, linkTaskToScoutRun, knownScouts, isKnownScout, loadScoutRunHistory } from './scouts'
+import { clean } from '../core/text'
+import { DETAILS_MAX } from '../core/task'
 import { archivedText, bringBackArchived, findArchived, readArchiveFile } from './archive'
 import { gitReady, removeWorktree, worktreeDir, setupGit, branchExists, branchList, homeBranch, taskWork, resetScratch } from './git'
 import { loadRoles, leadRoles } from './roles'
@@ -664,7 +666,9 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       const [t, all] = await change($, b => {
         // T-1024: a retried add (the first one timed out after it went through) must not make a second task: the same
         // title and details within a few minutes answers the task already there
-        const first = !str(a.title)?.trim() ? undefined : b.tasks.find(x => x.title === (str(a.title) ?? '').trim() && (x.details ?? '') === (str(a.details) ?? '').trim() && Date.parse(now()) - Date.parse(x.created_at) < ADD_AGAIN_MS)
+        const title = clean(a.title, 200)
+        const details = clean(str(a.details) ?? title, DETAILS_MAX)
+        const first = !title ? undefined : b.tasks.find(x => x.title === title && x.details === details && Date.parse(now()) - Date.parse(x.created_at) < ADD_AGAIN_MS)
         if (first) {
           again = true
           return [b, [first, b.tasks]] as [Board, [SymccTask, SymccTask[]]]
