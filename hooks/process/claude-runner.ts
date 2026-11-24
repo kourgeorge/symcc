@@ -27,7 +27,7 @@ export const GIT_DENIED_SUBCOMMANDS = [
  * as are the usual wrappers in front of git. With no scratch-git allowance, there are no git writes at all.
  */
 export const GIT_DENIED_OPTIONS = ['-C', '-c', '--git-dir', '--work-tree', '--namespace', '--exec-path', '--config-env', '--bare', '--no-pager', '-P', '-p', '--paginate']
-const GIT_WRAPPERS = ['env', 'command', 'exec', 'xargs', 'nohup', 'time']
+export const GIT_WRAPPERS = ['env', 'command', 'exec', 'xargs', 'nohup', 'time']
 
 /** The deny rules for git writes, given to every `claude -p` agent (a deny rule beats any allow rule). */
 export function gitDeniedRules(): string[] {
