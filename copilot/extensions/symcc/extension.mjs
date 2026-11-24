@@ -2313,6 +2313,14 @@ function resetDoing(b, me, leadBefore, nowMs, note, now, keep = []) {
     })
   };
 }
+function relabelSession(b, oldId, newId) {
+  if (!oldId || !newId || oldId === newId)
+    return b;
+  return {
+    ...b,
+    tasks: b.tasks.map((t) => t.status === "doing" && t.live?.session === oldId ? { ...t, live: { ...t.live, session: newId } } : t)
+  };
+}
 function backToTodo(t, note, now, stoppedAt = now) {
   const { live: _l, ...rest } = t;
   return { ...rest, status: "todo", note, updated_at: now, ...t.status === "doing" ? { history: withHistory(t.history, now, stoppedEntry(t, note)), ...laterEnd(endedBy(t, stoppedAt, ...stopEnd(note)), stoppedAt) } : {} };
@@ -8675,14 +8683,17 @@ function liveIdle(view, nowMs, width = 80) {
     }
     return [fitText(text, w)];
   }
-  const last = tasks.filter((t) => t.status === "done").map((t) => ({ t, at: finishedAt(t)?.atMs })).filter((x) => x.at !== undefined).sort((a, b) => b.at - a.at || num(b.t.id) - num(a.t.id))[0];
-  const items = tasks.filter((t) => t.status === "backlog").sort(byRunOrder);
+  const { last, items } = idleDone(tasks);
   const backlog = items.length;
   const first = last ? `${LIVE_IDLE.done} · last merged ${last.t.id}, ${idleAgo(nowMs - last.at)} ago` : LIVE_IDLE.done;
   const second = `${LIVE_IDLE.next}${backlog ? `, or move ${backlog === 1 ? "the backlog item" : `one of ${backlog} backlog items`} to todo` : ""}.`;
   const next = items.slice(0, IDLE_BACKLOG).map((t) => fitText(`  ${STATUS_MARK.backlog} ${t.id}  ${t.title}`, w));
   const more = backlog - next.length;
   return [fitText(first, w), ...wrap(second), ...next, ...more > 0 ? [fitText(`  … ${more} more in the backlog`, w)] : []];
+}
+function idleDone(tasks) {
+  const last = tasks.filter((t) => t.status === "done").map((t) => ({ t, at: finishedAt(t)?.atMs })).filter((x) => x.at !== undefined).sort((a, b) => b.at - a.at || num(b.t.id) - num(a.t.id))[0];
+  return { ...last ? { last } : {}, items: tasks.filter((t) => t.status === "backlog").sort(byRunOrder) };
 }
 var liveStations = (checker) => LIVE_STATIONS.filter((s) => s !== "you" && s !== "answer" && (s !== "check" || checker));
 function laneStations(t, checker, review) {
@@ -18711,7 +18722,26 @@ async function writeLead(host, text) {
 }
 var readLeadText = (host) => host.fs.read(path(S.N.leadFile)).catch(() => null);
 var readLead = async (host) => parseLead(await readLeadText(host));
+async function refreshMe(host) {
+  if (!S.me.startsWith("session-"))
+    return;
+  const id = await host.session.id().catch(() => "");
+  if (!id || id === S.me)
+    return;
+  const old = S.me;
+  S.me = id;
+  if (!S.driving || S.fresh)
+    return;
+  await locked(host, async () => {
+    const l = await readLead(host);
+    if (!l || l.session === old)
+      await writeLead(host, leadText(S.me, Date.now(), { ...driverTimes(l), ...l?.handTo ? { handTo: l.handTo, ...l.handAt !== undefined ? { handAt: l.handAt } : {} } : {} }));
+  });
+  if (await host.fs.exists(path(S.N.boardFile)))
+    await change(host, (b) => relabelSession(b, old, S.me));
+}
 async function claimLead(host, fresh = false) {
+  await refreshMe(host);
   if (S.offHere || S.fresh) {
     S.driving = false;
     return false;
@@ -18861,12 +18891,15 @@ async function startOffHere(host) {
   S.sawOther = false;
   S.takeoverTold = false;
   S.missingSince = null;
+  const id = await host.session.id().catch(() => "");
+  if (id)
+    S.me = id;
   const b = await load(host).catch(() => null);
   if (!b || b.enabled === false)
     return;
   const text = await readLeadText(host);
   const live2 = liveDriver(text, Date.now());
-  if (!live2 || live2 === S.me)
+  if (!live2 || live2 === S.me || parseLead(text)?.session === S.me)
     return;
   S.offHere = true;
   S.offWhy = "other";
@@ -18975,6 +19008,7 @@ async function goneReminder(host, live2, nowMs) {
 }
 var GONE_GRACE_MS = 90000;
 async function offHereBeat(host, nowMs = Date.now()) {
+  await refreshMe(host);
   await locked(host, async () => {
     const l = await readLead(host);
     if (l && l.session === S.me && l.handFrom)
@@ -18982,6 +19016,17 @@ async function offHereBeat(host, nowMs = Date.now()) {
   }).catch(() => {
     return;
   });
+  if (S.offWhy !== "off" && parseLead(await readLeadText(host))?.session === S.me) {
+    const b = await load(host).catch(() => null);
+    if (b && b.enabled !== false) {
+      await enableHere(host, () => {
+        return;
+      }).catch(() => {
+        return;
+      });
+      return;
+    }
+  }
   const text = await readLeadText(host);
   const live2 = liveDriver(text, nowMs);
   seeDriver(text);
@@ -20027,6 +20072,8 @@ ${skipped}` : "") };
 
 ${await driveHere(host)}`);
       }
+      if (S.offHere)
+        return say(`${S.N.name} is off in this window because you ran /${S.N.name}-disable here, so /${S.N.name}-drive leaves it off. /${S.N.name}-enable turns it on here; then /${S.N.name}-drive can make this window drive.`);
       return say(await driveHere(host));
     }
     case "mode": {
