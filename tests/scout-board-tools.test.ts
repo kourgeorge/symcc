@@ -72,7 +72,7 @@ test("a scout's or checker's call of a tool that changes things is refused with 
   scoutRuns.set('scout-1', 'bugs')
   checkerRuns.set('checker-1', { task: 'T-1', worktree: '/w', end: () => undefined })
   const before = files.get(`${ROOT}/${S.N.dir}/board.json`)
-  const changing = ['add', 'change', 'approve', 'reject', 'retry', 'ask', 'drop', 'merged', 'pause', 'resume', 'scouts', 'roles', 'kinds', 'settings', 'setup_git', 'orgmem', 'ask_owner']
+  const changing = ['add', 'change', 'approve', 'reject', 'retry', 'ask', 'drop', 'merged', 'pause', 'resume', 'run', 'scouts', 'roles', 'kinds', 'settings', 'setup_git', 'orgmem', 'ask_owner']
   for (const id of ['scout-1', 'checker-1'])
     for (const tool of changing) {
       // T-895: a scout's scouts call with no action is a list (see the test below); a checker's is still refused

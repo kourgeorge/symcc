@@ -221,6 +221,30 @@ can start. Nothing is merged and no test runs: the work is already in. Stats cou
 
 ---
 
+### Run a task now
+
+A task waits for its turn: for a free agent slot (`max_parallel`), for the tasks it waits on
+(its `after` list) and for the board to run (not paused). **Run now** skips the wait for one
+task you pick. It is on the page of a task that is to do, paused, failed, dropped or in the
+backlog: the `[Run now]` button, or the `e` key (in Claude Code's terminal, VS Code and
+OpenCode). In the chat: `/symcc-task T-5 run`, or tell the lead "run T-5 now" (its `run` tool).
+
+- **All slots busy**: it starts anyway and runs one over the limit. The board says so honestly
+  (`agents 4/3 busy`). Nothing else starts until the count is back under the limit.
+- **It waits on unfinished tasks**: it asks first, "T-5 waits on T-3 (running). Start anyway?",
+  with Start anyway and Cancel (Cancel is the default and does nothing). Start anyway starts it
+  now without waiting; its `after` list is kept for the record. In the chat:
+  `/symcc-task T-5 run anyway`.
+- **It shares files with a running task**: it starts, and its page shows a warning line
+  naming that task (their changes may clash at the merge).
+- **The board is paused**: only this task starts; everything else stays paused.
+- **From the backlog**: it moves to `todo` and starts. A failed or dropped one starts as a retry.
+
+Its history says `try 1: started now by the owner` (with what it skipped), so the health check
+does not report older tasks as "pushed back" because of it. Everything after the start is as
+always: the checker, the tests, the merge, and in approve merge mode it still waits for your
+review.
+
 ### When a worker needs you
 
 A worker that can't go on without a decision from you calls its `ask_owner` tool
@@ -816,7 +840,7 @@ are about changes; under "How tasks ended" a read investigation shows as
   keep the row in view; past the first or last row they scroll the panel (to see the banner
   or the key line). ↑↓ never land on the tabs, the mode or search buttons or Back: Tab and
   Shift+Tab reach those. On a task's or a scout's page ↑↓ scroll. An
-  open task shows everything about it, with buttons to pause, resume, retry,
+  open task shows everything about it, with buttons to pause, resume, retry, run now,
   drop, watch its worker live, and buttons or a box to answer it when it waits for you.
   `/symcc-board` opens the board too (on Live), `/symcc-task T-3` opens one task directly and
   `/symcc-scout` (with no name) opens the Scouts view.
@@ -1063,8 +1087,8 @@ only; the Organizational memory page has the same header shape, see below):
    never inside a button). Every button looks the same: `[Label]`, in the normal text color.
    The order of the groups and the gaps between them say what is what: first the one next
    step (Pause, Approve, Retry, Resume, Merge now, Move to todo or Done; none while the task
-   asks you something); then the other task actions (Role, Watch worker, Show changes, Stash
-   to backlog, Already merged, Keep as a note, Ask more); then, set apart, the ones that throw
+   asks you something); then the other task actions (Role, Watch worker, Show changes, Run now,
+   Stash to backlog, Already merged, Keep as a note, Ask more); then, set apart, the ones that throw
    work away (Reject, Drop); then, at the end, the page's own: `[☐ Needs review]` (a checkbox:
    `n` turns it on, `[☑ Needs review]`, and off) and `[Copy]` (`y`).
 

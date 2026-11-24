@@ -174,6 +174,8 @@ export const startS = () => ({
   diffOpen: null as { task: string; file: string } | null,
   /** the reason box for rejecting a task in review from the board panel, or null when it isn't shown */
   rejecting: null as { task: string; reason: string } | null,
+  /** T-954: the task whose Run now asks "T-5 waits on T-3 (running). Start anyway?" on its page, or null */
+  runNowAsk: null as string | null,
   /** the role pick list on an open task in the board panel: the task and the role names; null when it isn't shown */
   rolePick: null as { task: string; options: string[] } | null,
   /** the task whose "Your answer" box is open after Answer… was pressed (a waiting task with answer buttons); null = not open */

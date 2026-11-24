@@ -24,7 +24,7 @@ export type Command =
   | { kind: 'scouts' }
   | { kind: 'show'; id: string }
   /** /<name>-task T-5 <verb> [...]: one of the task page's actions, as the lead's tools do it (see TASK_VERBS) */
-  | { kind: 'task-do'; id: string; verb: TaskVerb; reason?: string; role?: string; on?: boolean }
+  | { kind: 'task-do'; id: string; verb: TaskVerb; reason?: string; role?: string; on?: boolean; anyway?: boolean }
   | { kind: 'approve'; id: string }
   | { kind: 'reject'; id: string; reason: string }
   | { kind: 'diff'; id: string; file?: string }
@@ -110,12 +110,13 @@ export function defSaveFields(def: 'role' | 'kind', text: string): Partial<Recor
 
 /** What /<name>-task T-5 <verb> does to the task (each the same as the lead's tool): pause, resume, retry, drop
  *  [reason], merged (its work is already merged outside the board), review on|off (needs_review), stash (to the
- *  backlog), todo (out of the backlog), role <name>, note (an answered investigation: Done and keep it as a note). */
-export const TASK_VERBS = ['pause', 'resume', 'retry', 'drop', 'merged', 'review', 'stash', 'todo', 'role', 'note'] as const
+ *  backlog), todo (out of the backlog), role <name>, note (an answered investigation: Done and keep it as a note),
+ *  run [anyway] (T-954: Run now; anyway = "Start anyway" when it waits on unfinished tasks). */
+export const TASK_VERBS = ['pause', 'resume', 'retry', 'drop', 'merged', 'review', 'stash', 'todo', 'role', 'note', 'run'] as const
 export type TaskVerb = (typeof TASK_VERBS)[number]
 
 /** The usage line of /<name>-task. */
-export const taskUsage = (name: string = DEFAULT_NAME) => `/${name}-task T-3 (open it), or /${name}-task T-3 pause|resume|retry|drop [reason]|merged|review on|off|stash|todo|role <name>|note`
+export const taskUsage = (name: string = DEFAULT_NAME) => `/${name}-task T-3 (open it), or /${name}-task T-3 pause|resume|retry|drop [reason]|merged|review on|off|stash|todo|role <name>|note|run [anyway]`
 
 /** The words after the plugin's name, one per command: /<name>-tasks, /<name>-approve, ... */
 export const COMMAND_WORDS = ['tasks', 'board', 'status', 'task', 'approve', 'reject', 'diff', 'scout', 'mode', 'settings', 'help', 'disable', 'enable', 'init', 'drive'] as const
@@ -164,6 +165,7 @@ export function parseCommand(command: string, args: string, current: SymccMode =
       const rest = s.replace(/^\S+\s+\S+\s*/, '').trim()
       const at = { kind: 'task-do' as const, id: normId(id!), verb }
       if (verb === 'drop') return rest ? { ...at, reason: rest } : at
+      if (verb === 'run') return words.length === 2 ? at : words.length === 3 && words[2]!.toLowerCase() === 'anyway' ? { ...at, anyway: true } : use(`/${name}-task ${at.id} run [anyway]`)
       if (verb === 'role') return words.length === 3 ? { ...at, role: words[2]! } : use(`/${name}-task ${at.id} role <name>`)
       if (verb === 'review') {
         const on = (words[2] ?? '').toLowerCase()

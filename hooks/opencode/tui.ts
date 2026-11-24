@@ -32,6 +32,7 @@ import type { SymccScout } from '../../types'
 import { orgMemDeleteAsk, orgMemFile, orgMemNoteKey, orgMemTopicCounts } from '../core/org-mem'
 import { PARTS_KEY, safePartsFile, viewStubFilled, withViewParts } from '../core/board-parts'
 import { searchParts } from '../core/search-parts'
+import { runNowQuestion, runNowWaits, RUN_NOW_NO, RUN_NOW_YES } from '../core/run-now'
 
 export type { PanelKey, PanelHit, PanelTab }
 
@@ -910,6 +911,15 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
       return
     }
     if (command === 'review') return send(sessionID, { kind: 'task', id: open, verb: 'review', arg: t!.needs_review ? 'off' : 'on' })
+    // T-954: Run now; a task that waits on unfinished tasks asks "Start anyway?" first (Esc or Cancel starts nothing).
+    // Cancel is listed first: OpenCode's select highlights the first option, so Enter alone cancels.
+    if (command === 'run') {
+      const waits = f && t ? runNowWaits({ tasks: f.view.tasks, ...(f.view.archived_done ? { archived_done: f.view.archived_done } : {}) }, t) : []
+      if (!waits.length) return send(sessionID, { kind: 'task', id: open, verb: 'run' })
+      const pick = await ctx.ui.dialog.select({ title: runNowQuestion(open, waits), options: [{ title: RUN_NOW_NO, value: 'no' }, { title: RUN_NOW_YES, value: 'yes' }] })
+      if (pick === 'yes') await send(sessionID, { kind: 'task', id: open, verb: 'run', arg: 'anyway' })
+      return
+    }
     if (command) return send(sessionID, { kind: 'task', id: open, verb: command })
   }
   /** Answers the open task or question with `picked` (OWN_ANSWER: the owner types it first), and the page says so. */

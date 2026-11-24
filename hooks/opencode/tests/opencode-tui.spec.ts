@@ -571,11 +571,11 @@ test('T-584: a task page offers every one of core\'s taskActions with a key (but
   const keysOf = (id: string) => panelTaskActions(task(id)).map(a => `${a.key} ${a.id}`)
   expect(keysOf('T-1')).toEqual(['p pause', 'x drop', 'n needs-review'])
   expect(keysOf('T-2')).toEqual(['a done', 'v keep-note', 'x ask-more', 'n needs-review'])
-  expect(keysOf('T-3')).toEqual(['r retry', 'z stash', 'l role', 'h already-merged', 'x drop', 'n needs-review'])
-  expect(keysOf('T-4')).toEqual(['o to-todo', 'l role', 'x drop', 'n needs-review'])
+  expect(keysOf('T-3')).toEqual(['r retry', 'e run-now', 'z stash', 'l role', 'h already-merged', 'x drop', 'n needs-review'])
+  expect(keysOf('T-4')).toEqual(['o to-todo', 'e run-now', 'l role', 'x drop', 'n needs-review'])
   // the footer's hints are buttons for their own keys (u, z, l, h, n too)
   const footer = panelLines(f, { opened: 'T-3', cursor: 0 }, NOW, 140).lines.at(-1)!
-  expect(footer.filter(x => x.hit).map(x => x.hit)).toEqual([{ key: 'r' }, { key: 'z' }, { key: 'l' }, { key: 'h' }, { key: 'x' }, { key: 'n' }, { key: 'back' }])
+  expect(footer.filter(x => x.hit).map(x => x.hit)).toEqual([{ key: 'r' }, { key: 'e' }, { key: 'z' }, { key: 'l' }, { key: 'h' }, { key: 'x' }, { key: 'n' }, { key: 'back' }])
 
   const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)]])
   const sent: { sessionID: string; name: string; text: string }[] = []
@@ -606,6 +606,7 @@ test('T-584: a task page offers every one of core\'s taskActions with a key (but
   const expected: Record<string, (id: string) => { name: string; text: string }> = {
     pause: id => ({ name: 'symcc-task', text: `${id} pause` }),
     retry: id => ({ name: 'symcc-task', text: `${id} retry` }),
+    'run-now': id => ({ name: 'symcc-task', text: `${id} run` }),
     stash: id => ({ name: 'symcc-task', text: `${id} stash` }),
     'to-todo': id => ({ name: 'symcc-task', text: `${id} todo` }),
     role: id => ({ name: 'symcc-task', text: `${id} role tester` }),
@@ -672,6 +673,47 @@ test('T-584: a task page offers every one of core\'s taskActions with a key (but
   board.stop()
 })
 
+test('T-954: Run now (e) on a task that waits on an unfinished task asks "Start anyway?": Start anyway sends run anyway, Cancel or Esc sends nothing', async () => {
+  let b: Board = emptyBoard()
+  for (const title of ['first', 'second']) b = addTask(b, { origin: { why: 'a test' }, title, files: ['src/'] }, AT)[0]
+  b = patchTask(b, 'T-1', { status: 'doing' }, AT)
+  b = patchTask(b, 'T-2', { after: ['T-1'] }, AT)
+  const view: PaneView = { tasks: b.tasks, working: [], scouts: [], mode: 'auto', test_commands: [], max_parallel: 1, max_minutes: 30, auto_retries: 1, driving: true, home_branch: 'main', branch_note: '' }
+  const f: ViewFile = { root: '/work/proj', home: '/work', name: 'symcc', version: '0.9.0', written_at: NOW, view }
+  const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)]])
+  const sent: { sessionID: string; name: string; text: string }[] = []
+  const asked: { title: string; options: string[] }[] = []
+  let answer: string | undefined
+  const ctx: TuiContext = {
+    location: { directory: '/work/proj' },
+    theme: {},
+    renderer: { width: 140, height: 200 },
+    client: { session: { command: async input => void sent.push(unmarked(input)) } },
+    keymap: { layer: () => undefined },
+    ui: {
+      toast: { show: () => undefined },
+      dialog: { prompt: async () => undefined, select: async <V,>(o: { readonly title: string; readonly options: readonly { readonly title: string; readonly value: V }[] }) => (asked.push({ title: o.title, options: o.options.map(x => x.title) }), answer as V | undefined) },
+      panel: { open: () => true, close: () => undefined, current: () => undefined },
+      slot: () => () => undefined,
+    },
+  }
+  const board = startTui(ctx, { runtime: fakeRuntime(), readText: async p => files.get(p) ?? Promise.reject(new Error('missing')), every: () => () => undefined, now: () => NOW })
+  await board.refresh()
+  const ids = panelLines(f, { opened: '', cursor: 0 }, NOW, 138).ids
+  await board.press('t', 's')
+  for (let i = 0; i < ids.indexOf('T-2'); i++) await board.press('down', 's')
+  await board.press('open', 's')
+  expect(board.state().opened).toBe('T-2')
+  for (const [pick, want] of [[undefined, []], ['no', []], ['yes', [{ sessionID: 's', name: 'symcc-task', text: 'T-2 run anyway' }]]] as const) {
+    answer = pick
+    sent.length = 0
+    await board.press('e', 's')
+    expect([pick, sent]).toEqual([pick, want])
+  }
+  expect(asked.at(-1)).toEqual({ title: 'T-2 waits on T-1 (running). Start anyway?', options: ['Cancel', 'Start anyway'] })
+  board.stop()
+})
+
 test('T-914: the task id in the page header title is always the board orange (claude), whatever the status', () => {
   let b: Board = emptyBoard()
   const statuses = ['todo', 'doing', 'failed', 'done', 'dropped'] as const
@@ -712,7 +754,7 @@ test('T-680, T-751: a task page header has the buttons in groups, words only (th
     expect(buttonRow(id)).toBe(claude.map(g => g.map(pillText).join(' ')).join('   '))
   }
   expect(buttonRow('T-2')).toBe('[Approve]   [Show changes]   [Reject] [Drop]   [☐ Needs review]')
-  expect(buttonRow('T-3')).toBe('[Retry]   [Stash to backlog] [Role] [Already merged]   [Drop]   [☐ Needs review]')
+  expect(buttonRow('T-3')).toBe('[Retry]   [Run now] [Stash to backlog] [Role] [Already merged]   [Drop]   [☐ Needs review]')
   // T-775: every button drawn the same: "[Label]" in the text color, not bold (no filled pill, no red, no dim word)
   for (const id of ['T-1', 'T-2', 'T-3']) {
     const ls = panelLines(f, { opened: id, cursor: 0 }, NOW, 140).lines
@@ -724,7 +766,7 @@ test('T-680, T-751: a task page header has the buttons in groups, words only (th
   // a narrow panel puts the buttons on more rows, between the groups when they fit, never cutting a button
   const narrow = panelLines(f, { opened: 'T-3', cursor: 0 }, NOW, 40).lines.map(lineText)
   const rule = narrow.findIndex(l => /^─+$/.test(l))
-  expect(narrow.slice(rule - 4, rule)).toEqual(['[Retry]', '[Stash to backlog] [Role]', '[Already merged]   [Drop]', '[☐ Needs review]'])
+  expect(narrow.slice(rule - 4, rule)).toEqual(['[Retry]', '[Run now] [Stash to backlog] [Role]', '[Already merged]   [Drop]', '[☐ Needs review]'])
   // the scout pages (as Claude Code's: Run now when it isn't running, Edit, Pause or Resume; paused said as a fact) and a question's
   expect(buttonRow('deps', 'scouts')).toBe('[Edit]   [Pause]')
   expect(buttonRow('docs', 'scouts')).toBe('[Run now]   [Edit]   [Resume] ⏸ paused')

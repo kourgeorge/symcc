@@ -73,8 +73,8 @@ export const RICH_TASKS = [
 /** The ids of the rich tasks the tests open. */
 export const RICH_IDS = RICH_TASKS.map(t => t.id).filter(id => id > 'T-500')
 
-/** Seeds the board with the rich tasks (`opened` the one shown; '' the list, so a press can open another), their report files and a git that answers with no changes. `more`: other saved panel values (the tab, ...). */
-export function seedRich(on: On, opened: string, run: (argv: string[]) => ProcessRunResult = () => ran(), more: Record<string, unknown> = {}): MockClock {
+/** Seeds the board with the rich tasks (`opened` the one shown; '' the list, so a press can open another), their report files and a git that answers with no changes. `more`: other saved panel values (the tab, ...); `toasts`: gets each toast (as JSON). */
+export function seedRich(on: On, opened: string, run: (argv: string[]) => ProcessRunResult = () => ran(), more: Record<string, unknown> = {}, toasts?: string[]): MockClock {
   const clock = seedBoard(on, {
     ...more,
     ...(opened ? { opened } : {}),
@@ -83,7 +83,7 @@ export function seedRich(on: On, opened: string, run: (argv: string[]) => Proces
   on('fs.read', (_, e, next) => (/reports\/T-5\d\d-try-1\.md$/.test(e.path) ? readText('First try: the tests failed.\n') : /reports\/T-5\d\d-try-2\.md$/.test(e.path) ? readText(REPORT) : next(e)))
   on('process.run', (_, e) => ({ value: run((e as { argv?: string[] }).argv ?? []) }))
   on('fs.exists', () => ({ value: false }))
-  on('ui.toast', () => ({ value: undefined }))
+  on('ui.toast', (_, e) => (toasts?.push(JSON.stringify(e)), { value: undefined }))
   on('ui.status', () => ({ value: undefined }))
   return clock
 }

@@ -1640,7 +1640,7 @@ export function answerOptions(f: ViewFile | null, id: string): string[] {
  *  panel can't copy or show a worker, so it leaves them out. */
 export const TASK_ACTION_COMMANDS: Partial<Record<TaskActionId, 'approve' | 'reject' | 'diff' | TaskVerb>> = {
   approve: 'approve', done: 'approve', reject: 'reject', 'ask-more': 'reject', 'show-changes': 'diff', 'keep-note': 'note',
-  pause: 'pause', resume: 'resume', 'merge-now': 'retry', retry: 'retry', 'to-todo': 'todo', stash: 'stash', role: 'role', 'already-merged': 'merged', drop: 'drop', 'needs-review': 'review',
+  pause: 'pause', resume: 'resume', 'merge-now': 'retry', retry: 'retry', 'run-now': 'run', 'to-todo': 'todo', stash: 'stash', role: 'role', 'already-merged': 'merged', drop: 'drop', 'needs-review': 'review',
 }
 
 /** The actions of task `t`'s page (core's taskActions, the terminal's and VS Code's buttons) this panel sends, each

@@ -1232,7 +1232,7 @@ test('slash commands all start with the plugin name: open, views, one task, appr
   // a renamed plugin gets its own prefix
   expect(parseCommand('crew-approve', 'T-5', 'auto', 'crew')).toEqual({ kind: 'approve', id: 'T-5' })
   expect(parseCommand('symcc-approve', 'T-5', 'auto', 'crew')).toBeNull()
-  expect((parseCommand('crew-task', '', 'auto', 'crew') as { message: string }).message).toBe('Use: /crew-task T-3 (open it), or /crew-task T-3 pause|resume|retry|drop [reason]|merged|review on|off|stash|todo|role <name>|note')
+  expect((parseCommand('crew-task', '', 'auto', 'crew') as { message: string }).message).toBe('Use: /crew-task T-3 (open it), or /crew-task T-3 pause|resume|retry|drop [reason]|merged|review on|off|stash|todo|role <name>|note|run [anyway]')
 })
 
 test('in the panel, tasks in review, waiting and failed come first, the rest keep their order', () => {
@@ -3087,10 +3087,10 @@ test('key hints: in order for the task state, laid out at 30, 50 and 80 columns,
   const words = (hs: { key: string; word: string }[]) => hs.map(hintText)
   expect(words(keysFor('review'))).toEqual(['a approve', 'd show changes', 'x reject', 'n needs review', 'y copy', '↑↓ scroll', 'b back'])
   expect(words(keysFor('review', { worker: true }))).toEqual(['a approve', 'd show changes', 'w watch worker', 'x reject', 'n needs review', 'y copy', '↑↓ scroll', 'b back'])
-  expect(words(keysFor('backlog'))).toEqual(['o move to todo', 'l role', 'x drop', 'n needs review', 'y copy', '↑↓ scroll', 'b back'])
-  expect(words(keysFor('todo', { worker: true }))).toEqual(['p pause', 'w watch worker', 'z stash to backlog', 'l role', 'x drop', 'n needs review', 'y copy', '↑↓ scroll', 'b back'])
+  expect(words(keysFor('backlog'))).toEqual(['o move to todo', 'e run now', 'l role', 'x drop', 'n needs review', 'y copy', '↑↓ scroll', 'b back'])
+  expect(words(keysFor('todo', { worker: true }))).toEqual(['p pause', 'w watch worker', 'e run now', 'z stash to backlog', 'l role', 'x drop', 'n needs review', 'y copy', '↑↓ scroll', 'b back'])
   // a failed task's key line lists the two actions its "Next:" text points to, and every other button with a key
-  expect(words(keysFor('failed'))).toEqual(['r retry', 'z stash to backlog', 'l role', 'h already merged', 'x drop', 'n needs review', 'y copy', '↑↓ scroll', 'b back'])
+  expect(words(keysFor('failed'))).toEqual(['r retry', 'e run now', 'z stash to backlog', 'l role', 'h already merged', 'x drop', 'n needs review', 'y copy', '↑↓ scroll', 'b back'])
   expect(words(keysFor('done'))).toEqual(['y copy', '↑↓ scroll', 'b back'])
   expect(words(diffKeys(true, true))).toEqual(['a approve', 'x reject', 'd all files', '↑↓ scroll', 'b back to the task'])
   expect(words(diffKeys(false, false))).toEqual(['↑↓ scroll', 'b back to the task'])

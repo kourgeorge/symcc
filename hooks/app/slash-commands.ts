@@ -39,7 +39,7 @@ export function COMMANDS(features: HostFeatures = ALL_FEATURES): { name: string;
     { name: `${S.N.name}-status`, description: `Show the ${S.N.name} Live tab as text in the chat: what needs you, the running tasks and what waits for them, the branches, today's numbers and the newest notes` },
     // OpenCode's TUI part has its own /<name>-board (opencode/tui.ts), so a host with no panel doesn't list it here
     ...(features.panel ? [{ name: `${S.N.name}-board`, description: `Open the ${S.N.name} board panel (on Live)` }] : []),
-    { name: `${S.N.name}-task`, description: `Open one ${S.N.name} task (/${S.N.name}-task T-3), or do one of its page's actions: /${S.N.name}-task T-3 pause, resume, retry, drop [reason], merged (already merged by hand), review on|off, stash (to the backlog), todo (out of the backlog), role <name>, or note (an answered investigation: keep it as a note)`, argumentHint: '<T-id> [pause|resume|retry|drop [reason]|merged|review on|off|stash|todo|role <name>|note]' },
+    { name: `${S.N.name}-task`, description: `Open one ${S.N.name} task (/${S.N.name}-task T-3), or do one of its page's actions: /${S.N.name}-task T-3 pause, resume, retry, drop [reason], merged (already merged by hand), review on|off, stash (to the backlog), todo (out of the backlog), role <name>, note (an answered investigation: keep it as a note), or run [anyway] (start it now, even over the agent limit or on a paused board; anyway when it waits on unfinished tasks)`, argumentHint: '<T-id> [pause|resume|retry|drop [reason]|merged|review on|off|stash|todo|role <name>|note|run [anyway]]' },
     { name: `${S.N.name}-approve`, description: `Approve a ${S.N.name} task that is ready for review (merge it): /${S.N.name}-approve T-5`, argumentHint: '<T-id>' },
     { name: `${S.N.name}-reject`, description: `Reject a ${S.N.name} task in review, with the reason: /${S.N.name}-reject T-5 <reason>`, argumentHint: '<T-id> <reason>' },
     { name: `${S.N.name}-diff`, description: `Show what a ${S.N.name} task in review changed, or one file's diff: /${S.N.name}-diff T-5 [file]`, argumentHint: '<T-id> [file]' },
@@ -79,6 +79,8 @@ export function taskDoTool(id: string, c: TaskDo): [string, In] {
       return ['change', { task: id, role: c.role ?? '' }]
     case 'note':
       return ['approve', { task: id, keep_note: true }]
+    case 'run':
+      return ['run', { task: id, ...(c.anyway ? { anyway: true } : {}) }]
   }
 }
 
@@ -95,6 +97,7 @@ function taskDoLine(id: string, c: TaskDo): string {
     case 'todo': return `The owner moved ${id} from the backlog to todo`
     case 'role': return `The owner set the role of ${id} to ${c.role}`
     case 'note': return `The owner chose Keep as a note for ${id}`
+    case 'run': return `The owner ran ${id} now${c.anyway ? ' (start anyway)' : ''}`
   }
 }
 
