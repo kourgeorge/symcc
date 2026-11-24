@@ -2773,6 +2773,41 @@ test('a task lists its commits newest first with the merged one marked', () => {
   expect(detailRows(base, { roles: [], all: [], when: s => s, nowMs: 0 }).some(r => r.label === 'Commits')).toBe(false)
 })
 
+test('T-966: the task page Priority row: the number, and a to do task its place in line (lower priority first, ties by task number)', () => {
+  let b = emptyBoard()
+  for (const title of ['a', 'b', 'c', 'd', 'e']) b = addTask(b, { origin: W, title }, T)[0]
+  // T-1 priority 5, T-2 and T-3 priority -2 (a tie: T-2 first), T-4 waits on T-1, T-5 done
+  b = patchTask(b, 'T-1', { priority: 5 }, T)
+  b = patchTask(b, 'T-2', { priority: -2 }, T)
+  b = patchTask(b, 'T-3', { priority: -2 }, T)
+  b = patchTask(b, 'T-4', { priority: -9, after: ['T-1'] }, T)
+  b = patchTask(b, 'T-5', { priority: 3, status: 'done' }, T)
+  const rowOf = (id: string) => {
+    const rows = detailRows(b.tasks.find(t => t.id === id)!, { roles: [], all: b.tasks, when: s => s, nowMs: 0 })
+    expect(rows[rows.findIndex(r => r.label === 'Priority') - 1]?.label).toBe('Added')
+    return rows.find(r => r.label === 'Priority')!
+  }
+  const text = (id: string) => rowOf(id).segs.map(s => s.text).join('')
+  expect(ready(b).map(t => t.id)).toEqual(['T-2', 'T-3', 'T-1'])
+  expect(text('T-2')).toBe('-2 · next to start')
+  expect(text('T-3')).toBe('-2 · 2nd in line')
+  expect(text('T-1')).toBe('5 · 3rd in line')
+  expect(text('T-4')).toBe('-9 · waits on T-1 first')
+  expect(text('T-5')).toBe('3')
+  // the place in line is grey, a non-zero number stands out (bold)
+  expect(rowOf('T-3').segs.map(s => s.color)).toEqual(['text', 'inactive'])
+  expect(rowOf('T-3').segs[0]!.bold).toBe(true)
+  // a doing task: only the number; a default priority is 0, not bold
+  b = patchTask(b, 'T-2', { status: 'doing' }, T)
+  expect(text('T-2')).toBe('-2')
+  expect(text('T-3')).toBe('-2 · next to start')
+  b = patchTask(b, 'T-1', { priority: 0 }, T)
+  expect(text('T-1')).toBe('0 · 2nd in line')
+  expect(rowOf('T-1').segs[0]!.bold).toBeUndefined()
+  expect(core.ordinal(11)).toBe('11th')
+  expect(core.ordinal(22)).toBe('22nd')
+})
+
 test('T-631: the Tries row shows the last try and the sum of all on one line', () => {
   const [, base] = addTask(emptyBoard(), { origin: W, title: 'x' }, T)
   const at = (m: number) => new Date(Date.parse('2026-11-20T10:00:00.000Z') + m * 60_000).toISOString()

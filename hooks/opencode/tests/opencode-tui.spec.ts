@@ -77,6 +77,18 @@ test('T-630: the panel and the band show no all-time total of the tries ("total:
   expect(panelLines(g, { opened: 'T-5', cursor: 0 }, NOW, 120).lines.map(lineText).join('\n')).toMatch(/total: 12m · 40k tokens in all/)
 })
 
+test('T-966: OpenCode\'s task page Priority row: the number, "next to start" / "2nd in line" for ready to do tasks, "waits on" for a waiting one, only the number for a done one', () => {
+  const f = viewFile()
+  const row = (g: ViewFile, id: string) => panelLines(g, { opened: id, cursor: 0 }, NOW, 120).lines.map(lineText).find(l => /^Priority:/.test(l))!
+  expect(row(f, 'T-4')).toBe('Priority: 0 · next to start')
+  expect(row(f, 'T-5')).toBe('Priority: 0')
+  // T-2 back to do with a lower priority than T-4: it starts first; T-1 back to do waiting on T-2
+  const g: ViewFile = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => (t.id === 'T-2' ? { ...t, status: 'todo' as const, priority: -2 } : t.id === 'T-1' ? { ...t, status: 'todo' as const, after: ['T-2'] } : t)) } }
+  expect(row(g, 'T-2')).toBe('Priority: -2 · next to start')
+  expect(row(g, 'T-4')).toBe('Priority: 0 · 2nd in line')
+  expect(row(g, 'T-1')).toBe('Priority: 0 · waits on T-2 first')
+})
+
 test('T-631: the task page Tries row shows the last try and the sum (one try: just that try; no tokens: no token parts)', () => {
   const f = viewFile()
   const page = (attempts: number, runs: { started: string; ended?: string; agents?: { kind: 'worker'; started: string; ended?: string; tokens?: { input: number } }[] }[]) => {
