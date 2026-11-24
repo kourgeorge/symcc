@@ -800,10 +800,10 @@ export function laneLines(lane: LiveLane, l: LiveLayout, o: { nowMs: number; fra
     const parts = [level >= 1 ? time : [], level >= 2 ? tokens(level >= 3) : [], level >= 4 ? split : [], back ? [back] : []].filter(x => x.length)
     return segs(lead, ...parts.flatMap((x, i): LiveSeg[] => [{ text: ' · ', tone: 'dim' }, ...x]))
   }
-  // T-1010: the kind at the right end of the line (dim), at the row's right edge; the meta text keeps priority,
+  // T-1010: the kind at the right end of the line (dim), under the first line's right end (the time); the meta text keeps priority,
   // so the kind is dropped (never wrapped) when it does not fit with two spaces before it
   const withKind = (xs: LiveSeg[]): LiveSeg[] => {
-    const gap = l.width - textWidth(segText(xs)) - textWidth(lane.kind)
+    const gap = Math.min(l.width, textWidth(segText(first))) - textWidth(segText(xs)) - textWidth(lane.kind)
     return gap >= 2 ? [...xs, { text: ' '.repeat(gap), tone: 'text' as const }, { text: lane.kind, tone: 'dim' as const }] : xs
   }
   const tries: LiveSeg[][] = [4, 3, 2, 1, 0].map(n => withKind(line(n)))

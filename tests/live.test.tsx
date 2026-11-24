@@ -310,18 +310,20 @@ test('T-867, T-931: a lane\'s second line has no bar: ⏱, ⌀, ×median, <worke
   expect([lane.activeMs, lane.workerTokens, lane.checkerTokens]).toEqual([41 * 60_000, 5_400_000, 1_900_000])
   const l = liveLayout(lanes, liveStations(true), 120)
   const at = (width: number) => segText(laneLines(lane, { ...l, width }, { nowMs: T0, frame: 0 })[1])
-  // T-1010: the kind at the right end, at the row's right edge, no kind at the start
-  expect(at(120)).toMatch(/^  try 2\/\d+ · ⏱ 41m · ⌀ 7\.3M \+ … \(7\.3×median\) · worker 5\.4M · checker 1\.9M · ⌕ × 2 +change$/)
-  expect(textWidth(at(120))).toBe(120)
-  expect(laneLines(lane, { ...l, width: 120 }, { nowMs: T0, frame: 0 })[1].at(-1)).toEqual({ text: 'change', tone: 'dim' })
+  // T-1010: the kind at the right end, under the first line's right end (the time); no kind at the start
+  const firstW = textWidth(segText(laneLines(lane, { ...l, width: 120 }, { nowMs: T0, frame: 0 })[0]))
   const bare = (width: number) => at(width).replace(/ +change$/, '')
   const full = bare(120)
-  // first the split goes, then "(×median)", then ⌀, then ⏱ (never before ⌀); the try stays; the kind goes before any of them
   const wFull = textWidth(full)
-  // too narrow for the kind with two spaces before it: the kind is dropped, the meta text stays whole
-  expect(at(wFull + 8)).toBe(full + '  change')
-  expect(at(wFull + 7)).toBe(full)
-  expect(at(wFull)).toBe(full)
+  // the full meta text leaves less than 2 columns before the kind (first line: 87, meta: 80): the kind is dropped, never wrapped
+  expect(firstW - wFull - 'change'.length).toBeLessThan(2)
+  expect(at(120)).toBe(full)
+  expect(full).toMatch(/^  try 2\/\d+ · ⏱ 41m · ⌀ 7\.3M \+ … \(7\.3×median\) · worker 5\.4M · checker 1\.9M · ⌕ × 2$/)
+  // a shorter meta text leaves room: the kind ends exactly at the first line's width, dim
+  const short = segText(laneLines({ ...lane, workerTokens: 0, checkerTokens: 0, sentBack: 0 }, { ...l, width: 120 }, { nowMs: T0, frame: 0 })[1])
+  expect(short).toMatch(/^  try 2\/\d+ · ⏱ 41m · ⌀ 7\.3M \+ … \(7\.3×median\) +change$/)
+  expect(textWidth(short)).toBe(firstW)
+  expect(laneLines({ ...lane, workerTokens: 0, checkerTokens: 0, sentBack: 0 }, { ...l, width: 120 }, { nowMs: T0, frame: 0 })[1].at(-1)).toEqual({ text: 'change', tone: 'dim' })
   // narrower: the parts go in order (the kind returns at the right when the shorter text leaves room)
   expect(bare(wFull - 1)).toMatch(/^  try 2\/\d+ · ⏱ 41m · ⌀ 7\.3M \+ … \(7\.3×median\) · ⌕ × 2$/)
   const noSplit = textWidth(bare(wFull - 1))
