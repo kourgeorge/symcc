@@ -9,11 +9,8 @@ import { type Board, STATUS_WORD } from './board-file'
 import { depDone } from './archive'
 import { shareFiles } from './health'
 
-/** The statuses whose page offers Run now: to do, paused, failed, dropped (as a retry) and the backlog. */
-export const RUN_NOW_FROM: readonly SymccStatus[] = ['todo', 'paused', 'failed', 'dropped', 'backlog']
-
-/** Whether task `t` can be run now (its status is one of RUN_NOW_FROM). */
-export const canRunNow = (t: Pick<SymccTask, 'status'>): boolean => RUN_NOW_FROM.includes(t.status)
+/** Whether task `t` can be run now: only a task that is to do (T-1023; retry or move others to to do first). */
+export const canRunNow = (t: Pick<SymccTask, 'status'>): boolean => t.status === 'todo'
 
 /** The Run now button's words, its key on the task pages (g is the git banner's), and its key hint's word. */
 export const RUN_NOW_LABEL = 'Run now'
@@ -52,9 +49,8 @@ export const runNowShareText = (ids: readonly string[]): string =>
   `started now while ${ids.join(', ')} ${ids.length === 1 ? 'runs' : 'run'}; they share files, so their changes may clash at the merge`
 
 /** The history line of a run now start (after the try label): "started now by the owner", with what it skipped. */
-export function runNowLine(o: { waits?: readonly RunNowWait[]; over?: { busy: number; max: number }; paused?: boolean; from?: SymccStatus }): string {
+export function runNowLine(o: { waits?: readonly RunNowWait[]; over?: { busy: number; max: number }; paused?: boolean; }): string {
   const more = [
-    o.from === 'backlog' ? 'from the backlog' : '',
     o.waits?.length ? `without waiting for ${o.waits.map(w => w.id).join(', ')}` : '',
     o.over ? `over the agent limit (${o.over.busy + 1}/${o.over.max} busy)` : '',
     o.paused ? 'on a paused board' : '',
@@ -62,9 +58,9 @@ export function runNowLine(o: { waits?: readonly RunNowWait[]; over?: { busy: nu
   return `started now by the owner${more.length ? ` (${more.join('; ')})` : ''}`
 }
 
-/** Why a task can't be run now (its status isn't one of RUN_NOW_FROM): "T-5 is in review; Run now is for ...". */
+/** Why a task can't be run now (its status isn't to do): "T-5 is in review; Run now is for ...". */
 export const runNowRefusal = (t: Pick<SymccTask, 'id' | 'status'>): string =>
-  t.status === 'doing' ? `${t.id} is already running` : `${t.id} is ${STATUS_WORD[t.status]}; Run now is for a task that is to do, paused, failed, dropped or in the backlog`
+  t.status === 'doing' ? `${t.id} is already running` : `${t.id} is ${STATUS_WORD[t.status]}; Run now is only for a task that is to do; retry it or move it to to do first`
 
 /** The reply when Run now is asked for in plan mode (nothing starts then, and nothing changes): "T-5 didn't start: plan mode: ...". */
 export const runNowPlanText = (id: string): string => `${id} didn't start: plan mode: nothing starts; run it when plan mode ends`

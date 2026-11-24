@@ -50,14 +50,14 @@ const hints = (all: string[], re: RegExp) => all.filter(s => re.test(s) && !/^[â
 const MAIN: Record<string, string> = { 'T-501': 'approve', 'T-502': 'retry', 'T-504': 'pause', 'T-505': 'resume', 'T-506': 'pause', 'T-507': 'to-todo', 'T-510': 'done' }
 const ACTIONS: Record<string, { keys: string[] }> = {
   'T-501': { keys: ['approve', 'show-changes', 'reject', 'drop', 'copy'] },
-  'T-502': { keys: ['retry', 'run-now', 'stash', 'role', 'already-merged', 'drop', 'copy'] },
+  'T-502': { keys: ['retry', 'stash', 'role', 'already-merged', 'drop', 'copy'] },
   'T-503': { keys: ['already-merged', 'drop', 'copy'] }, // its answers are numbered link lines (T-651)
   'T-504': { keys: ['pause', 'drop', 'copy'] },
-  'T-505': { keys: ['resume', 'run-now', 'stash', 'role', 'already-merged', 'drop', 'copy'] },
+  'T-505': { keys: ['resume', 'stash', 'role', 'already-merged', 'drop', 'copy'] },
   'T-506': { keys: ['pause', 'run-now', 'stash', 'role', 'drop', 'copy'] },
-  'T-507': { keys: ['to-todo', 'run-now', 'role', 'drop', 'copy'] },
+  'T-507': { keys: ['to-todo', 'role', 'drop', 'copy'] },
   'T-508': { keys: ['copy'] },
-  'T-509': { keys: ['retry', 'run-now', 'already-merged', 'copy'] },
+  'T-509': { keys: ['retry', 'already-merged', 'copy'] },
   'T-510': { keys: ['done', 'keep-note', 'ask-more', 'drop', 'copy'] },
   'T-511': { keys: ['already-merged', 'drop', 'copy'] },
 }

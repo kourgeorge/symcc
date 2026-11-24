@@ -174,7 +174,7 @@ In the settings view: Enter on a row changes it: on/off flips, mode, notify, sco
   · Cancel (x) or Enter on an empty box leaves it · b back to the tasks.
 In the panel nothing needs Esc: Enter on an empty text box cancels it (on the search it clears the
   search), and pick lists and pages have a Cancel or Back button. On the board list x clears a search.
-In an open task: b back · p pause · u resume · r retry · x drop · e run now (when it isn't running) · w watch the worker · n needs review on/off
+In an open task: b back · p pause · u resume · r retry · x drop · e run now (to do tasks) · w watch the worker · n needs review on/off
   · y copy the task's content · z stash to the backlog (a task to do, paused or failed)
   · l pick the worker role (a task to do, paused, failed or in the backlog).
   · h already merged: marks a failed, waiting, paused or dropped task done whose work was merged by hand (checked with git first; nothing is merged or tested).
@@ -919,8 +919,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
 }
 
 /**
- * T-954: Run now (the lead's run tool, the task pages' Run now, /<name>-task T-5 run [anyway]): task `id` goes to todo
- * (from paused, failed, dropped or the backlog) and its worker starts at once, past max_parallel and a paused board.
+ * T-954: Run now (the lead's run tool, the task pages' Run now, /<name>-task T-5 run [anyway]): the to-do task `id`'s worker starts at once, past max_parallel and a paused board.
  * A task that waits on unfinished tasks only starts with `anyway` (the owner's "Start anyway"); else the reply is the
  * question and nothing changes. Only in the window that drives the board, and never in plan mode.
  */
@@ -939,17 +938,12 @@ export async function runNowTool($: Host, id: string, anyway: boolean): Promise<
   const busy = workers.size + starting.size
   const over = busy >= b.max_parallel ? { busy, max: b.max_parallel } : undefined
   const paused = modeOf(b) === 'paused'
-  const from = t.status
-  // as retry: a failed or dropped task's automatic retries start over, and one that failed on a clash merges main in first
-  const again = from === 'failed' || from === 'dropped'
-  const clashed = failedOnClash(t) || (from !== 'failed' && !!t.merge_main)
   await change($, x => {
     const cur = find(x, t.id)
     if (!cur || !canRunNow(cur)) return x
-    const y = cur.status === 'backlog' ? promoteTask(x, t.id, now()) : x
-    return patchTask(y, t.id, { status: 'todo', note: 'started now by the owner', ...(again ? { test_tries: 0 } : {}), merge_main: clashed || undefined }, now())
+    return patchTask(x, t.id, { note: 'started now by the owner' }, now())
   })
-  const line = runNowLine({ waits: anyway ? waits : [], ...(over ? { over } : {}), paused, from })
+  const line = runNowLine({ waits: anyway ? waits : [], ...(over ? { over } : {}), paused })
   const claimed = await startNow($, t.id, line)
   const after = claimed ? undefined : find(await load($), t.id)
   // its start failed outright (startNow failed the task): say so, not "it starts when there is room"
@@ -960,7 +954,6 @@ export async function runNowTool($: Host, id: string, anyway: boolean): Promise<
   const shares = runNowShares((await load($)).tasks, t)
   return [
     `${t.id} started now`,
-    from === 'backlog' ? ' (moved from the backlog to todo)' : '',
     anyway && waits.length ? ` without waiting for ${waits.map(w => w.id).join(', ')}` : '',
     over ? `; it runs one over the limit (${busy + 1}/${b.max_parallel} agents busy), and nothing else starts until the count is back under` : '',
     paused ? '; the board stays paused: only this task runs' : '',
