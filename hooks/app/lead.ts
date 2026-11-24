@@ -221,11 +221,15 @@ export async function startOffHere(host: Host) {
   S.sawOther = false
   S.takeoverTold = false
   S.missingSince = null
+  // T-984: the session id as the host says it now; a window that started with a made-up id (the host could not answer
+  // yet) must still know itself in lead.json, or it would take its own fresh heartbeat for another window's
+  const id = await host.session.id().catch(() => '')
+  if (id) S.me = id
   const b = await load(host).catch(() => null)
   if (!b || b.enabled === false) return
   const text = await readLeadText(host)
   const live = liveDriver(text, Date.now())
-  if (!live || live === S.me) return
+  if (!live || live === S.me || parseLead(text)?.session === S.me) return
   S.offHere = true
   S.offWhy = 'other'
   S.enabledNow = false
@@ -340,6 +344,14 @@ export async function offHereBeat(host: Host, nowMs = Date.now()) {
     const l = await readLead(host)
     if (l && l.session === S.me && l.handFrom) await host.run(['rm', '-f', path(S.N.leadFile)])
   }).catch(() => undefined)
+  // T-984: lead.json names this very window (stale or not) and it was not turned off on purpose: it drives again
+  if (S.offWhy !== 'off' && parseLead(await readLeadText(host))?.session === S.me) {
+    const b = await load(host).catch(() => null)
+    if (b && b.enabled !== false) {
+      await enableHere(host, () => undefined).catch(() => undefined)
+      return
+    }
+  }
   const text = await readLeadText(host)
   const live = liveDriver(text, nowMs)
   seeDriver(text)

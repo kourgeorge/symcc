@@ -243,6 +243,8 @@ export async function runCommand(host: Host, command: string, args: string): Pro
         if (S.offHere) return say(on)
         return say(`${on}\n\n${await driveHere(host)}`)
       }
+      // T-984: said plainly why /<name>-drive does not turn it on
+      if (S.offHere) return say(`${S.N.name} is off in this window because you ran /${S.N.name}-disable here, so /${S.N.name}-drive leaves it off. /${S.N.name}-enable turns it on here; then /${S.N.name}-drive can make this window drive.`)
       return say(await driveHere(host))
     }
     case 'mode': {

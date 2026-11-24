@@ -441,3 +441,53 @@ test('the reminder does not play when a window took over first, or when notify i
   await offHereBeat(w2.host, t0 + GONE_REMIND_MS + 1)
   expect(sayQueue).toEqual([])
 })
+
+test('T-984: a window that starts while lead.json names its own session (stale or fresh) is not off here', async () => {
+  for (const age of [0, LEAD_STALE_MS * 10]) {
+    S.root = ROOT
+    const w = world('me')
+    await saveBoard(w.host, emptyBoard())
+    w.files.set(w.lead, leadText('me', Date.now() - age))
+    S.me = 'session-made-up' // the host could not answer at first
+    await startOffHere(w.host)
+    expect(S.offHere).toBe(false)
+    expect(S.me).toBe('me')
+    expect(w.toasts).toEqual([])
+  }
+})
+
+test('T-984: an off-here window that finds its own session in lead.json drives again on its heartbeat, unless it was turned off on purpose', async () => {
+  S.root = ROOT
+  const w = world('me')
+  await saveBoard(w.host, emptyBoard())
+  S.me = 'me'
+  S.offHere = true
+  S.offWhy = 'gone'
+  w.files.set(w.lead, leadText('me', Date.now() - LEAD_STALE_MS * 10))
+  await offHereBeat(w.host)
+  expect(S.offHere).toBe(false)
+  expect(S.driving).toBe(true)
+  // turned off on purpose: stays off
+  S.offHere = true
+  S.offWhy = 'off'
+  w.files.set(w.lead, leadText('me', Date.now() - LEAD_STALE_MS * 10))
+  await offHereBeat(w.host)
+  expect(S.offHere).toBe(true)
+})
+
+test('T-984: /symcc-drive turns an off-here window on and drives, except after /symcc-disable here, which it names', async () => {
+  S.root = ROOT
+  const w = world('me')
+  await saveBoard(w.host, emptyBoard())
+  S.me = 'me'
+  S.offHere = true
+  S.offWhy = 'gone'
+  const r = await runCommand(w.host, `${S.N.name}-drive`, '')
+  expect(S.offHere).toBe(false)
+  expect(JSON.stringify(r)).toContain('already drives the board')
+  S.offHere = true
+  S.offWhy = 'off'
+  const r2 = await runCommand(w.host, `${S.N.name}-drive`, '')
+  expect(S.offHere).toBe(true)
+  expect(JSON.stringify(r2)).toContain('disable here')
+})
