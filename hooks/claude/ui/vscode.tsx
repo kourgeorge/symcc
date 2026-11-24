@@ -316,28 +316,21 @@ export function vsFooter(k: VsKit, name: string, opts: { mode?: SymccMode; onSwi
  *  (a badge in the text color would read as a black or white block). */
 export const badgeTone = (tone: string) => (tone === 'text' ? 'inactive' : tone)
 
-/** A small filled badge in VS Code (" 3 ", " ▶ doing "), the mode pill's look: bold, in the inverse text color on `tone`. */
-export function vsBadge(k: VsKit, key: string, text: string | number, tone: string): RenderChildren {
-  const { Text, C } = k
-  return (
-    <Text key={key} bold backgroundColor={C(badgeTone(tone))} color={C('inverseText')}>
-      {` ${text} `}
-    </Text>
-  )
-}
+/** A small badge or pill in VS Code ("3", "editing", "replaced"): T-973, one look for every badge on every page: the
+ *  rounded Box of vsCount, in `tone`'s color. A Box, so it goes in a row Box, never inside a Text. */
+export const vsBadge = (k: VsKit, key: string, text: string | number, tone: string): RenderChildren => vsCount(k, key, text, tone)
 
-/** A section heading in VS Code: the status mark in its color, the name bold, then the count as a filled badge in the
- *  same color ("▶ Doing  2 "). Its text for a screen reader stays "Doing (2)" in `label`'s place. */
+/** A section heading in VS Code: the status mark in its color, the name bold, then the count as a badge in the
+ *  same color ("▶ Doing [2]"). */
 export function vsHeading(k: VsKit, key: string, mark: string, tone: string, label: string, n: number): RenderChildren {
   const { Box, Text, C } = k
   return (
-    <Box key={key} flexDirection="row">
-      <Text bold wrap="wrap">
+    <Box key={key} flexDirection="row" flexWrap="wrap" columnGap={1} alignItems="center">
+      <Text key={`${key}-name`} bold wrap="wrap">
         <Text color={C(tone)}>{`${mark} `}</Text>
         <Text color={C('text')}>{label}</Text>
-        <Text color={C('text')}> </Text>
-        {vsBadge(k, `${key}-count`, n, tone)}
       </Text>
+      {vsBadge(k, `${key}-count`, n, tone)}
     </Box>
   )
 }

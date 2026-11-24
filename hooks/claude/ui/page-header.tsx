@@ -108,12 +108,18 @@ export function pageHeader(pane: PaneParts, hd: PageHeader): RenderChildren {
 
 /** The header in VS Code's side panel: "‹" and a Tasks back button, a "‹ 2 of 6 ›" pager, the title as a heading,
  *  the state as small chips, the buttons (secondary, one style, T-775; T-973: the main action primary), then a divider. */
+/** The status pill's color: its first part's color, a neutral grey for none or the plain text color. */
+const chipTone = (g: Seg[]) => (!g[0]?.color || g[0].color === 'text' ? 'inactive' : g[0].color)
+
 export function vsPageHeader(pane: PaneParts, hd: PageHeader): RenderChildren {
   const { Box, Text, Button, C } = pane
   const chip = (key: string, g: Seg[], first: boolean) =>
     <Box key={key} flexDirection="row">
       {first ? (
-        <Text bold size="caption" backgroundColor={C(g[0]?.color ?? 'inactive')} color={C('inverseText')}>{` ${g.map(x => x.text).join('')} `}</Text>
+        // T-973: the status pill in the one badge look of the VS Code board (vsBadge in vscode.tsx): a rounded Box
+        <Box key={`${key}-pill`} flexDirection="row" flexShrink={0} paddingX={1} borderStyle="round" borderColor={C(chipTone(g))} backgroundColor={C(chipTone(g))}>
+          <Text bold size="caption" color={C('inverseText')}>{g.map(x => x.text).join('').trim()}</Text>
+        </Box>
       ) : (
         <Text size="caption" wrap="wrap">
           {g.map((x, i) => (

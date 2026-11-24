@@ -90,7 +90,7 @@ for (const [name, t] of [['a bug in doing with a role, tries and a checker step'
     // T-751: no Status, Stage or Now row (the page header's state line says the state); the Steps row first when there is one
     expect(drawn.map(r => r.label).filter(l => ['Status', 'Stage', 'Now'].includes(l))).toEqual([])
     expect(drawn[0]!.label).toBe(t.status === 'doing' ? 'Steps' : 'Added')
-    expect((await ui.find({ key: 'vs-state-status' }))?.text).toMatch(t.status === 'doing' ? /^ ▶ doing · checker · ⏱ \d+m $/ : /^ ○ to do $/)
+    expect((await ui.find({ key: 'vs-state-status' }))?.text).toMatch(t.status === 'doing' ? /^▶ doing · checker · ⏱ \d+m$/ : /^○ to do$/)
     if (t === BUG) {
       expect(drawn.map(r => r.label)).toEqual(['Steps', 'Added', 'Priority', 'Role', 'Kind', 'From', 'Why', 'Request', 'Files', 'Into', 'After', 'Branch', 'Tries'])
       expect(drawn.find(r => r.label === 'Steps')!.text).toContain('● checker')

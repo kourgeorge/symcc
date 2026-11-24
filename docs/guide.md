@@ -1463,7 +1463,8 @@ unchanged.
     its heading. Open, it lists the newest notes one row each (the date, the text cut short,
     the topic dim; click a note to open all notes on it), then the topics with their counts.
 - **Tasks**: grouped under headings (Questions for you, Waiting for you, Review, Failed, Doing,
-  To do), each with its colored mark and its count in a badge (`▶ Doing  2 `), a blank line
+  To do), each with its colored mark and its count in a small rounded badge in that color (`▶ Doing [2]`; every badge and the task page's
+  status pill on the VS Code board has this one look), a blank line
   between them. Each task is one button: the ID dim and the title (up to two lines; a longer
   one ends with "(more)", and its page has it whole), then a dim line with the status in its
   color and its time (`▶ 2m`, `? waiting for 5m`, `✗ failed 3m ago`), the kind or role, the

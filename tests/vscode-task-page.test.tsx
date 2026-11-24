@@ -91,7 +91,7 @@ for (const id of RICH_IDS) {
     expect(t.title.startsWith(LONG_TITLE)).toBe(true)
     // T-751: the page header: the id and the title, the state as chips (no Status row left in the Details), then a divider
     expect(await ui.find({ type: 'Text', text: id }), id).toBeDefined()
-    expect((await ui.find({ key: 'vs-state-status' }))?.text, id).toMatch(/^ \S+ .+ $/)
+    expect((await ui.find({ key: 'vs-state-status' }))?.text, id).toMatch(/^\S+ .+\S$/)
     for (const gone of ['vs-row-status', 'vs-row-now', 'vs-row-stage', 'vs-badge']) expect(await ui.find({ key: gone }), `${id} ${gone}`).toBeUndefined()
     expect((await ui.find({ key: 'vs-header-rule' }))?.text, id).toMatch(/^─+$/)
     // T-774: the folded Time and cost row sums the task's own tries on one line (no tries: its count, 0)
@@ -209,10 +209,10 @@ test('in VS Code a task it waits for opens by its button, and "‹ [Tasks]" goes
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
   await ui.press({ key: 'T-506', link: { href: vsHref('task', 'T-506') } })
   expect(await ui.find({ type: 'Text', text: 'T-506' })).toBeDefined()
-  expect((await ui.find({ key: 'vs-state-status' }))?.text).toBe(' ○ to do ')
+  expect((await ui.find({ key: 'vs-state-status' }))?.text).toBe('○ to do')
   await ui.press({ key: 'after-T-499', link: { href: vsHref('task', 'T-499') } })
   expect(await ui.find({ type: 'Text', text: 'T-499' })).toBeDefined()
-  expect((await ui.find({ key: 'vs-state-status' }))?.text).toBe(' ✓ done ')
+  expect((await ui.find({ key: 'vs-state-status' }))?.text).toBe('✓ done')
   await ui.press({ key: 'back' })
   expect(await ui.find({ key: 'vs-actions' })).toBeUndefined()
   expect(await ui.find({ key: 'vs-task-T-506' })).toBeDefined()
@@ -263,9 +263,12 @@ for (const [id, want] of Object.entries(CARDS))
       expect(await ui.find({ key: 'vs-badge' }), at).toBeUndefined()
       expect(await ui.find({ key: 'vs-tags-row' }), at).toBeUndefined()
       expect(await ui.find({ key: 'vs-row-status' }), at).toBeUndefined()
-      const badge = elements((await ui.find({ key: 'vs-state-status' }))!.children).find(n => n.type === 'Text')!
-      expect(badge.children, at).toEqual([` ${want.badge} `])
-      expect(badge.props, at).toMatchObject({ bold: true, backgroundColor: want.tone })
+      // T-973: the status pill is a rounded Box in the status's color (the one badge look of the VS Code board)
+      const pill = elements((await ui.find({ key: 'vs-state-status' }))!.children).find(n => n.type === 'Box')!
+      expect(pill.props, at).toMatchObject({ borderStyle: 'round', backgroundColor: want.tone, borderColor: want.tone })
+      const badge = elements(pill.children).find(n => n.type === 'Text')!
+      expect(badge.children, at).toEqual([want.badge])
+      expect(badge.props, at).toMatchObject({ bold: true, color: 'inverseText' })
       expect((await ui.find({ key: 'vs-row-role' }))?.text, at).toMatch(/^Roleworker/)
       expect((await ui.find({ key: 'vs-row-tries' }))?.text, at).toMatch(/^Tries2/)
       // the sections, with their headings

@@ -53,11 +53,10 @@ function kit($: $, pane: PaneParts) {
   /** Where it comes from as small badges: " replaced " " off ", or " can't be read " for a broken file; `said`: the source
    *  badge's words when they say more ("replaced · model", T-871). */
   const badges = (key: string, source: DefSource | undefined, off: boolean, broken = false, said?: string) => (
-    <Text key={key} wrap="wrap">
+    <Box key={key} flexDirection="row" flexWrap="wrap" columnGap={1} alignItems="center">
       {broken ? vsBadge(vs, `${key}-broken`, "can't be read", 'error') : source ? vsBadge(vs, `${key}-source`, said ?? source, SOURCE_TONE[source]) : null}
-      {off ? <Text key={`${key}-gap`}> </Text> : null}
       {off ? vsBadge(vs, `${key}-off`, 'off', 'warning') : null}
-    </Text>
+    </Box>
   )
   /** The confirm step of Remove (or Reset): a box in the warning color, the one "Yes, remove" Button, and a Cancel link. */
   const confirm = (key: string, what: string, yes: () => void, no: () => void, yesLabel = 'Yes, remove') =>
@@ -269,7 +268,7 @@ export function rolePromptPageVs($: $, pane: PaneParts, r: RoleDef, kind: RolePr
         {k.back('role-prompt-back', r.name, show(''))}
         <Box key="vs-prompt-title" flexDirection="row" flexWrap="wrap" columnGap={2}>
           <Text key="name" wrap="wrap" bold color={C('claude')}>{`${kind} prompt`}</Text>
-          <Text key="badge" wrap="wrap">{vsBadge(k.vs, 'vs-prompt-badge', 'built-in, view only', 'inactive')}</Text>
+          {vsBadge(k.vs, 'vs-prompt-badge', 'built-in, view only', 'inactive')}
         </Box>
         {k.plain('vs-prompt-about', `${kind === 'checker' ? 'What a checker is told' : `What a worker on a ${kind} task is told`}; role ${r.name}'s checklist goes where ${ROLE_SLOT} is.`)}
       </Box>
@@ -298,7 +297,7 @@ function editTop(pane: PaneParts, k: ReturnType<typeof kit>, noun: 'role' | 'kin
     <Box key={`vs-${noun}-edit-top`} flexDirection="column">
       <Box key="vs-edit-title" flexDirection="row" flexWrap="wrap" columnGap={2}>
         <Text key="name" wrap="wrap" bold color={C('claude')}>{name}</Text>
-        <Text key="badge" wrap="wrap">{vsBadge(k.vs, 'vs-edit-badge', 'editing', 'warning')}</Text>
+        {vsBadge(k.vs, 'vs-edit-badge', 'editing', 'warning')}
       </Box>
       {notes.map((n, i) => k.plain(`vs-edit-note-${i}`, n))}
     </Box>,

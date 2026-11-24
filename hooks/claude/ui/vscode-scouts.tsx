@@ -249,7 +249,7 @@ export function scoutEditPageVs($: $, pane: PaneParts) {
       <Box key="vs-scout-edit-top" flexDirection="column">
         <Box key="vs-edit-title" flexDirection="row" flexWrap="wrap" columnGap={2}>
           <Text key="name" wrap="wrap" bold color={C('claude')}>{d.scout}</Text>
-          <Text key="badge" wrap="wrap">{vsBadge(vs, 'vs-edit-badge', d.isNew ? 'new scout' : 'editing', 'warning')}</Text>
+          {vsBadge(vs, 'vs-edit-badge', d.isNew ? 'new scout' : 'editing', 'warning')}
         </Box>
         {r ? plain('vs-edit-facts', [r.every, r.model, r.ran].filter(Boolean).join(' · ')) : null}
         {plain('vs-edit-note-0', `Save writes ${file}; other front matter keys are kept.`)}

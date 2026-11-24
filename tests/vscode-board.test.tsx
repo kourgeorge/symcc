@@ -162,7 +162,7 @@ test('in VS Code the Tasks page shows whole titles, status colors on the marks, 
   expect((await ui.find({ key: 'vs-task-T-405' }))?.text).toMatch(/✗\sfailed/)
   // what needs you under headings with a count badge, doing and to do as one list with no heading (T-644), the
   // folded groups as heading rows
-  for (const [k, h] of [['Waiting for you', '? Waiting for you  1 '], ['Review', '◆ Review  2 '], ['Failed', '✗ Failed  1 ']]) {
+  for (const [k, h] of [['Waiting for you', '? Waiting for you1'], ['Review', '◆ Review2'], ['Failed', '✗ Failed1']]) {
     expect((await ui.find({ key: `vs-head-${k}` }))?.text, k).toBe(h)
   }
   for (const k of ['Doing', 'To do']) expect(await ui.find({ key: `vs-head-${k}` }), k).toBeUndefined()
@@ -338,16 +338,19 @@ test('in VS Code the Tasks list at widths 42 and 80: headings with counts, rows 
     const all = texts(tree)
     // headings: the colored mark, the name, the count as a filled badge in the same color
     const heads: [string, string, string][] = [
-      ['questions', '? Questions for you  1 ', 'warning'],
-      ['Waiting for you', '? Waiting for you  1 ', 'warning'],
-      ['Review', '◆ Review  2 ', 'warning'],
-      ['Failed', '✗ Failed  1 ', 'error'],
+      ['questions', '? Questions for you1', 'warning'],
+      ['Waiting for you', '? Waiting for you1', 'warning'],
+      ['Review', '◆ Review2', 'warning'],
+      ['Failed', '✗ Failed1', 'error'],
     ]
     for (const [k, text, tone] of heads) {
       const head = await ui.find({ key: `vs-head-${k}` })
       expect(head?.text, `${at} ${k}`).toBe(text)
-      const badge = elements(head!.children).find(n => n.type === 'Text' && n.props?.backgroundColor)
-      expect([badge?.props?.backgroundColor, badge?.props?.color, badge?.props?.bold], `${at} ${k}`).toEqual([tone, 'inverseText', true])
+      // T-973: the count is the one badge look of the VS Code board: a rounded Box in the heading's color
+      const badge = elements(head!.children).find(n => String(n.key ?? n.props?.key) === `vs-head-${k}-count`)
+      expect([badge?.type, badge?.props?.borderStyle, badge?.props?.backgroundColor], `${at} ${k}`).toEqual(['Box', 'round', tone])
+      const num = elements(badge!.children).find(n => n.type === 'Text')
+      expect([num?.props?.color, num?.props?.bold], `${at} ${k}`).toEqual(['inverseText', true])
     }
     for (const k of ['Doing', 'To do']) expect(await ui.find({ key: `vs-head-${k}` }), `${at} ${k}`).toBeUndefined()
     // no Button on the busy Tasks page but the tab bar's (T-973): rows, folds and the mode switch are links; nothing is
@@ -555,7 +558,7 @@ test('in VS Code a to do task worked on before shows ● in the list and on its 
   expect(await rowText(ui, 'T-408')).toMatch(/^T-408 ●\s+Add/)
   expect(await rowText(ui, 'T-406')).toMatch(/^T-406 ○\s+Write/)
   await ui.press({ key: 'T-408', link: { href: vsHref('task', 'T-408') } })
-  expect((await ui.find({ key: 'vs-state-status' }))?.text).toBe(' ● to do ')
+  expect((await ui.find({ key: 'vs-state-status' }))?.text).toBe('● to do')
   await ui.unmount()
 })
 
