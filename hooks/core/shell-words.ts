@@ -556,9 +556,20 @@ const RUNNER_VALUED: Record<string, RegExp> = {
   stdbuf: /^-[ioe]$/,
 }
 
+/** For a runner, its options that set the folder the command runs in (`env -C $X`, `sudo -D $X`): checked like cd. */
+const RUNNER_CHDIR: Record<string, { short: RegExp; long: RegExp; joined: RegExp }> = {
+  env: { short: /^-[A-Za-z]*C$/, long: /^--chdir$/, joined: /^(-[A-Za-z]*C.|--chdir=)/ },
+  sudo: { short: /^-[A-Za-z]*D$/, long: /^--chdir$/, joined: /^(-[A-Za-z]*D.|--chdir=)/ },
+}
+
 /** Shells, whose `-c` word is a command line they run. */
 const SHELLS = new Set(['sh', 'bash', 'zsh', 'dash', 'ksh', 'mksh', 'fish'])
 
+/** Commands that run a command line given with `-c` (`su -c '...'`, `flock f -c '...'`), but don't read one from stdin. */
+const C_RUNNERS = new Set(['su', 'runuser', 'script', 'flock'])
+
+/** Commands whose words are a command line they run (like eval). */
+const EVALS = new Set(['eval', 'trap', 'watch'])
 /** Whether shell word `raw` (as written) holds a `$` or a backtick. */
 const hasDollar = (raw: string) => /[$`]/.test(raw)
 
@@ -630,7 +641,11 @@ export function unresolvedTarget(command: string, depth = 0): string | undefined
         i++
       } else if (/^[A-Za-z_]\w*=/.test(w.raw)) i++
       else if (runner && w.raw.startsWith('-') && w.raw !== '-') {
-        const value = RUNNER_VALUED[runner]?.test(w.raw) ? words[i + 1] : undefined
+        const chdir = RUNNER_CHDIR[runner]
+        // an option cluster ending in the folder letter (`env -iC $X`) takes the next word as the folder too
+        const value = RUNNER_VALUED[runner]?.test(w.raw) || chdir?.short.test(w.raw) ? words[i + 1] : undefined
+        // `env -C $X`, `env --chdir=$X`, `sudo -D $X` run the command in that folder, like cd
+        if (chdir && (chdir.short.test(w.raw) || chdir.long.test(w.raw) ? value?.expands : chdir.joined.test(w.raw) && w.expands)) return (chdir.joined.test(w.raw) ? w : value!).raw
         // `time -o $F` writes there; `env -S '...'` is a command line
         if (runner === 'time' && (/^(-o|--output)$/.test(w.raw) ? value?.expands : /^--output=/.test(w.raw) && w.expands)) return (value ?? w).raw
         if (runner === 'env' && (/^(-S|--split-string)$/.test(w.raw) || /^(-S.|--split-string=)/.test(w.raw))) {
@@ -652,19 +667,44 @@ export function unresolvedTarget(command: string, depth = 0): string | undefined
       continue
     }
     const name = head.raw.replace(/['"\\]/g, '').replace(/^.*\//, '')
-    if (name === 'eval') {
+    if (EVALS.has(name)) {
+      // eval's words, trap's handler, watch's command: a command line, refused when it holds `$` or a backtick
       const hit = args.find(a => hasDollar(a.raw))
       if (hit) return hit.raw
-      const inner = unresolvedTarget(args.map(a => unquote(a.raw)).join(' '), depth + 1)
+      const own = name === 'eval' ? args : args.filter(a => !a.raw.startsWith('-'))
+      const inner = unresolvedTarget(own.map(a => unquote(a.raw)).join(' '), depth + 1)
       if (inner !== undefined) return inner
+      continue
+    }
+    if (name === 'source' || name === '.') {
+      // what it reads is a command line: a file built at run time (`<(...)`, `$F`), or stdin, can't be checked
+      const file = args.find(a => a.raw !== '--')
+      if (file && (file.expands || /^['"]?(-|\/dev\/(stdin|fd\/)|\/proc\/)/.test(file.raw))) return file.raw
+      continue
+    }
+    if (C_RUNNERS.has(name)) {
+      for (let j = 0; j < args.length; j++) {
+        const a = args[j]!
+        const joined = /^--command=/.test(a.raw)
+        if (!joined && !/^(-c|--command)$/.test(a.raw)) continue
+        const script = joined ? undefined : args[j + 1]
+        const hit = script ? nested(script) : hasDollar(a.raw) ? a.raw : unresolvedTarget(unquote(a.raw).replace(/^--command=/, ''), depth + 1)
+        if (hit !== undefined) return hit
+      }
       continue
     }
     if (SHELLS.has(name)) {
       const c = args.findIndex(a => /^-[A-Za-z]*c[A-Za-z]*$/.test(a.raw))
       if (c >= 0) {
-        const script = args[c + 1]
-        const hit = script && nested(script)
-        if (hit !== undefined) return hit
+        // the command line is the first word after -c that is no option (`bash -c -- '...'`, `bash -c -e '...'`); the
+        // words after it are its $0, $1...: all are checked, so an option's value (`-o posix`) can't hide the real line
+        for (let j = c + 1; j < args.length; j++) {
+          const a = args[j]!
+          if (a.raw === '--' || a.raw === '-') continue
+          if (/^[-+]/.test(a.raw) && !hasDollar(a.raw)) continue
+          const hit = nested(a)
+          if (hit !== undefined) return hit
+        }
       } else if (args.every(a => a.raw.startsWith('-')) || args.some(a => /^-[A-Za-z]*s[A-Za-z]*$/.test(a.raw))) {
         // it runs what it reads (`echo '...' | sh`, `bash <<EOF`): refused when the line has a `$` or a backtick anywhere
         const hit = /[^\s;&|<>()]*[$`][^\s;&|<>()]*/.exec(command)

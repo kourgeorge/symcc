@@ -57,6 +57,26 @@ const REFUSED: [string, string][] = [
   // a command named by a variable, given a variable; find's -exec command
   ['$CMD "$X"o/f', '$CMD'],
   ['find . -exec cp {} $D \\;', '$D'],
+  // the checker's third-try probes: `-c --`, a runner's folder option, source and trap
+  [`X=/rep; bash -c -- 'cp a $X'`, `'cp a $X'`],
+  [`sh -c -- "cp a $X"`, `"cp a $X"`],
+  [`bash -c -e 'cp a $X'`, `'cp a $X'`],
+  [`bash -o posix -c -- 'cp a $X'`, `'cp a $X'`],
+  [`X=/rep; env -C "$X"o touch README.md`, `"$X"o`],
+  ['env --chdir=$X touch f', '--chdir=$X'],
+  ['env --chdir $X touch f', '$X'],
+  ['env -iC $X touch f', '$X'],
+  ['env -C$X touch f', '-C$X'],
+  ['sudo -D $X touch f', '$X'],
+  ['sudo --chdir=$X touch f', '--chdir=$X'],
+  [`X=/rep; source <(echo "cp a $X")`, `<(echo "cp a $X")`],
+  [`. <(echo "cp a $X")`, `<(echo "cp a $X")`],
+  [`. /dev/stdin <<< "cp a $X"`, '/dev/stdin'],
+  ['source $F', '$F'],
+  [`X=/rep; trap 'cp a $X' EXIT`, `'cp a $X'`],
+  [`trap -- "cp a $X" EXIT`, `"cp a $X"`],
+  [`su -c 'cp a $X'`, `'cp a $X'`],
+  [`flock /tmp/l -c 'cp a $X'`, `'cp a $X'`],
 ]
 
 /** Variables outside write targets, and plain write targets: not refused for that. */
@@ -86,6 +106,12 @@ const ALLOWED = [
   'env X=1 ls $D',
   '$EDITOR f',
   "find . -name '*.ts' -exec grep -l x {} +",
+  "bash -c -- 'echo hi > out'",
+  'env -C src ls $D',
+  'sudo -D src ls $D',
+  'source ./env.sh',
+  '. scripts/x.sh',
+  "trap 'rm -f out' EXIT",
 ]
 
 test('T-963: a write or cd target built from a variable or command output is refused, with a clear reason', () => {
