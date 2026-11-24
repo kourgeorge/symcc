@@ -6,7 +6,7 @@ import { addTask, emptyBoard, patchTask, blockedEditText, bashOutsideText } from
 import { runBy } from './agent-fixture'
 import { S, workers, toolName } from '../hooks/app/state'
 import { ASK_TOOL } from '../hooks/core/ask'
-import { copilotTouches, patchFiles, preToolUse, knownTool, unknownToolText, splitShellText } from '../hooks/copilot/guard'
+import { copilotTouches, patchFiles, preToolUse, knownTool, unknownToolText, splitShellText, patchNoFilesText } from '../hooks/copilot/guard'
 import { test } from './reset'
 import { fakeHost, memoryFs, done } from './fake-host'
 
@@ -54,6 +54,25 @@ test("apply_patch through preToolUse: inside the task's files passes, any other 
   const out = await preToolUse(host, WT, 'ag1', { toolName: 'apply_patch', toolArgs: patch('*** Update File: /repo/README.md') })
   expect(out?.permissionDecision).toBe('deny')
   expect(out?.permissionDecisionReason).toMatch(/^Refused: README\.md is in the owner's copy/)
+  workers.clear()
+})
+
+test("apply_patch as a JSON text is read from its input/patch field; an agent's patch with no file line is refused", async () => {
+  const host = world()
+  // the checker's probe: a JSON text whose input reaches the owner's copy was allowed
+  const json = JSON.stringify({ input: patch('*** Add File: /repo/README.md', '+x') })
+  expect(copilotTouches(WT, 'apply_patch', json)).toEqual([{ path: '/repo/README.md' }])
+  const out = await preToolUse(host, WT, 'ag1', { toolName: 'apply_patch', toolArgs: json })
+  expect(out?.permissionDecisionReason).toMatch(/^Refused: README\.md is in the owner's copy/)
+  expect((await preToolUse(host, WT, 'ag1', { toolName: 'apply_patch', toolArgs: JSON.stringify({ patch: patch('*** Update File: src/b.ts') }) }))?.permissionDecisionReason).toBe(blockedEditText('src/b.ts'))
+  expect(await preToolUse(host, WT, 'ag1', { toolName: 'apply_patch', toolArgs: JSON.stringify({ input: patch('*** Update File: src/a.ts') }) })).toBe(undefined)
+  // no file line found anywhere: refused for an agent, whatever the shape
+  const none = { permissionDecision: 'deny', permissionDecisionReason: patchNoFilesText }
+  for (const toolArgs of ['', patch('+x'), JSON.stringify({ input: 'x' }), JSON.stringify({ other: patch('*** Add File: a') }), { input: 42 }, null]) {
+    expect(await preToolUse(host, WT, 'ag1', { toolName: 'apply_patch', toolArgs })).toEqual(none)
+  }
+  // the lead is unchanged
+  expect(await preToolUse(host, ROOT, undefined, { toolName: 'apply_patch', toolArgs: patch('+x') })).toBe(undefined)
   workers.clear()
 })
 

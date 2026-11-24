@@ -92,7 +92,8 @@ export function copilotTouches(dir: string, toolName: string, toolArgs: unknown)
   const raw = typeof toolArgs === 'string' ? toolArgs : ''
   const file = (p: string): FileTouch => ({ path: normalPath(isAbsolute(p) ? p : `${dir}/${p}`) })
   const shell = (c: string): FileTouch[] => (c.trim() ? [{ command: c }] : [])
-  if (toolName === 'apply_patch') return patchFiles(raw || str(f.input) || str(f.patch) || str(f.patchText)).map(file)
+  // the patch can come raw, in {input}/{patch}, or as a JSON text of those: every place is read, so none hides a file
+  if (toolName === 'apply_patch') return [...new Set([raw, str(f.input), str(f.patch), str(f.patchText)].flatMap(patchFiles))].map(file)
   if (FILE_TOOLS.has(toolName)) return toolName === 'str_replace_editor' && f.command === 'view' ? [] : str(f.path) ? [file(str(f.path))] : []
   if (SHELL_TOOLS.has(toolName)) return shell(commandOf(f.command))
   if (SHELL_INPUT_TOOLS.has(toolName)) return shell(str(f.input))
@@ -116,6 +117,9 @@ function splitShell(tool: string, args: unknown): boolean {
   return (f.shellId !== undefined && f.shellId !== null) || (f.async !== undefined && f.async !== false)
 }
 
+/** The refusal of an agent's apply_patch call whose files can't be found, so it can't be checked. */
+export const patchNoFilesText = "Refused: symcc couldn't find which files this patch changes; give each file a '*** Add File: ', '*** Update File: ' or '*** Delete File: ' line."
+
 /** Copilot's refusal answer with symcc's reason. */
 export const deny = (reason: string): CopilotDeny => ({ permissionDecision: 'deny', permissionDecisionReason: reason })
 
@@ -134,7 +138,9 @@ export async function preToolUse(host: Host, dir: string, agentId: string | unde
     if (call && 'deny' in call) return deny(call.deny)
     if (agentId && !knownTool(tool)) return deny(unknownToolText(tool))
     if (agentId && splitShell(tool, input?.toolArgs)) return deny(splitShellText)
-    for (const touch of copilotTouches(dir, tool, input?.toolArgs)) {
+    const touches = copilotTouches(dir, tool, input?.toolArgs)
+    if (agentId && tool === 'apply_patch' && !touches.length) return deny(patchNoFilesText)
+    for (const touch of touches) {
       const why = await toolCheck(host, agentId, touch, dir, kindOf)
       if (why) return deny(why)
     }
