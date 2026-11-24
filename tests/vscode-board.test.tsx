@@ -457,7 +457,14 @@ test('T-1005: in VS Code the Tasks list has the search box first, then the headi
   on('ui.toast', () => ({ value: undefined }))
   for (const bodyColumns of [40, 64, 100]) {
     const at = `width ${bodyColumns}`
-    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: colsFor(bodyColumns) }, surface: 'vscode' })
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'vscode' })
+    // width check (the T-1003 model): no open row is wider than its room; at 64 every short title shows in full
+    const room = Math.floor(bodyColumns * VS_ROW_SCALE)
+    for (const t of BOARD_TASKS.filter(t => !['backlog', 'done', 'dropped'].includes(t.status))) {
+      const line = await rowText(ui, t.id)
+      expect(line.length, `${at} ${t.id}`).toBeLessThanOrEqual(room)
+      if (bodyColumns >= 64) expect(line, `${at} ${t.id}`).toContain(String(t.title).replace(/\s+/g, ' ').trim())
+    }
     expect(await ui.find({ key: 'mode' }), at).toBeUndefined()
     expect(await ui.find({ key: 'footer-mode' }), at).toBeUndefined()
     const json = JSON.stringify(drawnData(await ui.drawn()))
