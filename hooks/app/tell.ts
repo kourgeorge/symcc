@@ -96,6 +96,20 @@ export function takeBoardUpdate(): string | undefined {
  */
 const damEnding = () => (S.dam ? `\n\n${damGuideCore(S.N.name)}\n\n${DAM_POST_LINE}` : '')
 
+/**
+ * T-995: task `id` has moved on (answered, merged, dropped): the lines still waiting for the lead that start with its id
+ * (retry, restart, earlier update) are stale and leave both queues. Call it before telling the new line.
+ */
+export function moveOn(id: string) {
+  const about = (l: string) => {
+    const s = l.replace(/^[✓✗↺▶⌕◐] /, '')
+    return s.startsWith(`${id} "`)
+  }
+  for (const q of [leadQueue, meanwhile]) {
+    for (let i = q.length - 1; i >= 0; i--) if (about(q[i] ?? '')) q.splice(i, 1)
+  }
+}
+
 /** An answer cut to one short line, for a "Meanwhile" line. */
 export const brief = (text: string) => cutLine(text, 200)
 

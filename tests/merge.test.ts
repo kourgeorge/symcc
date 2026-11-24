@@ -13,7 +13,7 @@ import { removeWorktree, cleanupMerged, deleteMergedBranch } from '../hooks/app/
 import { addPassedTree, parsePassedTrees, passedTreesText, treePassed, PASSED_TREES_MAX } from '../hooks/core/passed-trees'
 import { S, leadQueue, workers, sayQueue, meanwhile, scoutRuns, haltedAnywhere } from '../hooks/app/state'
 import { askCall, checkEdit } from '../hooks/app/ask'
-import { tellLead, noteForLead, meanwhileText } from '../hooks/app/tell'
+import { tellLead, noteForLead, meanwhileText, moveOn } from '../hooks/app/tell'
 import { saidNeedsYou, findPlayers, playable, playsFor, sayNext, sayDone, WIN_TEXT_VAR } from '../hooks/app/voice'
 import { workerFinished, check, pump, startWorker, lateHandBack, WORKER_PROMPT, workerQuestionText, type TurnEnd, notThisTry, unclaimed, SYMCC_STOPPED_NOTE } from '../hooks/app/workers'
 import { stopOrphans, formerWorker, ownerTimeState } from '../hooks/app/cleanup'
@@ -2207,7 +2207,7 @@ test('T-548: a clash with main is one normal failed try: a new try, told to merg
     expect(t.note).toBe('conflicts with the latest main; a new try will merge it in (1 of 2)')
     expect('conflict_tries' in t).toBe(false)
     expect(t.runs?.at(-1)?.ended_note).toBe('clash with main')
-    expect(leadQueue.join('\n')).toContain('conflicts with the latest main; retrying on its own, the new try merges it in first (1 of 2)')
+    expect(meanwhile.join('\n')).toContain('conflicts with the latest main; retrying on its own, the new try merges it in first (1 of 2)')
     // the next worker is told to merge main in first
     expect(WORKER_PROMPT(t, b, WT)).toContain('run `git merge main` and resolve the conflicts')
   } finally {
@@ -3029,6 +3029,28 @@ function leadWorld() {
   return { $: host, sent }
 }
 
+test('T-995: moveOn drops waiting lines about a task that moved on, and no one else\'s', () => {
+  const { $, sent } = leadWorld()
+  noteForLead('T-1 "x" failed its tests; retrying on its own (1 of 2). Nothing to do.')
+  noteForLead('T-2 "y" failed its tests; retrying on its own (1 of 2). Nothing to do.')
+  moveOn('T-1')
+  tellLead($, 'T-3 "z" is ready for review.')
+  expect(sent.length).toBe(1)
+  expect(sent[0]).not.toContain('T-1 "x"')
+  expect(sent[0]).toContain('T-2 "y"')
+})
+
+test('T-995: a retry, a reload restart and a plain merge send no update; failed for good and a question still do', async () => {
+  const { $, sent } = leadWorld()
+  noteForLead('T-1 "x" conflicts; retrying on its own (1 of 2). Nothing to do.')
+  noteForLead('✓ T-2 "y" merged into main.')
+  expect(sent).toEqual([])
+  expect(S.leadTimer).toBe(null)
+  tellLead($, '✗ T-4 "w" was not merged: tests fail')
+  expect(sent.length).toBe(1)
+  expect(sent[0]).toContain('- ✓ T-2 "y" merged into main.')
+})
+
 test("the owner's own actions are queued, not sent; the next real board update starts with them", () => {
   const { $, sent } = leadWorld()
   noteForLead('The owner approved T-127: merged.')
@@ -3085,10 +3107,10 @@ test('a merge the owner approved sends no board update; it joins the Meanwhile l
 test("a worker's result still reaches the lead, as the outcome only (its report came as the hand-back)", async () => {
   const { t } = await finishes('I changed src/a.ts and added a very particular sentence.')
   expect(t.status).toBe('done')
-  const msg = leadQueue.join('\n')
+  const msg = meanwhile.join('\n')
   expect(msg).toMatch(/^✓ T-1 "Do it" merged into main \([0-9a-f]{8}\)/)
   expect(msg).not.toContain('very particular sentence')
-  expect(meanwhile).toEqual([])
+  expect(leadQueue).toEqual([])
 })
 
 // ---------------- notify: off, sound or voice ----------------
@@ -4758,7 +4780,7 @@ test('an uncommitted change in a file the task changes: the task waits with a no
     expect(ranTests(w)).toEqual(['/bin/sh -c npm test'])
     expect(spawned).toEqual([])
     expect(x.attempts).toBe(1)
-    expect(leadQueue.some(m => m.startsWith('✓ T-1 "Do it" merged into main'))).toBe(true)
+    expect(meanwhile.some(m => m.startsWith('✓ T-1 "Do it" merged into main'))).toBe(true)
     expect(w.git.status).toBe(' M README.md\0')
   } finally {
     cleanUp()
@@ -4825,7 +4847,7 @@ test('T-951: two tasks waiting for files both merge, one after the other, in one
     expect(x2.status).toBe('done')
     expect(x1.live?.merge_wait).toBeUndefined()
     expect(x2.live?.merge_wait).toBeUndefined()
-    const merged = leadQueue.filter(m => /^✓ T-[12] "/.test(m)).map(m => m.slice(2, 5))
+    const merged = meanwhile.filter(m => /^✓ T-[12] "/.test(m)).map(m => m.slice(2, 5))
     expect(merged).toEqual(['T-1', 'T-2'])
     // git status is read again before the second merge (the first one may have changed the owner's files)
     expect(w.calls.filter(c => c.startsWith('root: git status --porcelain -z')).length).toBeGreaterThanOrEqual(2)
@@ -7131,7 +7153,7 @@ test('T-547: a timed-out test run starts a new try with the time-out in its outp
   expect('test_rerun' in t).toBe(false)
   expect(t.runs?.at(-1)?.ended_note).toBe('tests ran out of time')
   expect(c.w.git.main).toBe(M1)
-  expect(leadQueue.join('\n')).toContain('ran out of time in its tests (10 min); retrying on its own (1 of 2)')
+  expect(meanwhile.join('\n')).toContain('ran out of time in its tests (10 min); retrying on its own (1 of 2)')
   // nothing waits for the owner, and nothing runs again on its own
   expect(needsYou(t)).toBe(false)
   expect(waitsForYou(t)).toBe(false)

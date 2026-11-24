@@ -629,9 +629,11 @@ always says what happened ("T-743 merged", not "Good news: …").
 
   The marks: ✓ merged, ✗ failed, ↺ sent back / retrying, ▶ started, ⌕ checker, ◐ needs your
   review. Then, only if something needs you, one line saying what.
-- **Routine news** (a worker, checker or scout started, a retry on its own, nothing to do): one
-  short line at most, e.g. "▶ T-751 retrying (2/4)." Each board update symcc sends the lead
-  reminds it of this. An update that holds only "Starting ..." lines (sent just to let symcc start
+- **Quiet lines** (a retry on its own, a restart after a reload, a plain merge): symcc adds them
+  as "Meanwhile" lines to the next update instead of waking the lead; they need no message to
+  you. A merge with a flag (for example "changed code but no test") still wakes it. A line about
+  a task that has moved on since (answered, merged, dropped) is dropped. Each board update symcc
+  sends the lead reminds it of this. An update that holds only "Starting ..." lines (sent just to let symcc start
   an agent) says "No reply needed; end the turn without a message." instead.
 - **How agents get started (Claude Code):** Claude Code only keeps symcc's guards for an agent
   started inside a turn hook. So when work waits and the lead is idle, symcc starts a tiny hidden

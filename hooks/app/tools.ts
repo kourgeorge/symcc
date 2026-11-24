@@ -10,7 +10,7 @@ import { type Host, type HostFeatures, ALL_FEATURES } from '../host'
 import { load, change, now, path } from './store'
 import { statsHtml, openCommands } from '../core/stats-html'
 import { doctor } from './doctor'
-import { noteForLead, brief, tellLead } from './tell'
+import { noteForLead, brief, tellLead, moveOn } from './tell'
 import { playable, playSample } from './voice'
 import { pump, startNow, approve, mergeWaiting, checkingNow, stopAsked, CHECKING_TEXT, mergingNow, MERGING_TEXT, fullAnswer } from './workers'
 import { stopWorker, setBoardMode, setSymcc } from './board-mode'
@@ -403,7 +403,7 @@ Talk like a team lead about the board. News first: the first line says what happ
 - Board update: one line per task, "<mark> T-n  <what happened>   <what it means, ≤ 8 words>". Marks: ✓ merged, ✗ failed, ↺ sent back / retrying, ▶ started, ⌕ checker, ◐ needs your review. Then, only if something needs the owner, one line saying what. E.g.
     ✓ T-743  merged (b089022)    a reopen keeps the same try
     ▶ T-745  started             catch up with main before each try
-- Routine update with no news (a retry on its own, nothing to do): one short line at most, e.g. "▶ T-751 retrying (2/4)." Don't restate the task.
+- Quiet lines (own retries, reload restarts, plain merges) sit under "Meanwhile" and need no message to the owner.
 - Out of work (last task merged, nothing to do, running or waiting) with a backlog: name 2-3 backlog items to move to todo (bugs and safety first), so the owner can pick.
 - An update that only says an agent is starting ends with "No reply needed; end the turn without a message.": send no message at all.
 - New task: "Added T-n  <title in ≤ 10 words>", then one line for what waits on what, if anything.
@@ -835,6 +835,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       const checking = checkingNow(t.id)
       if (checking) stopAsked.set(t.id, 'dropped')
       else if (t.status === 'doing') await stopWorker($, t.id, 'dropped')
+      moveOn(t.id)
       await change($, x => patchTask(x, t.id, { status: 'dropped', note: str(a.reason) ?? 'dropped', ...(failedOnClash(t) ? { merge_main: true } : {}), ...endedBy(find(x, t.id), now(), 'stopped', 'dropped') }, now()))
       if (checking) await haltChecker($, t.id, 'the task was dropped')
       if (!checking) await removeWorktree($, t.id, worktreeDir(t.id)).catch(() => undefined)

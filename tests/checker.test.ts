@@ -555,7 +555,8 @@ test('a checker that finds problems sends the task back to its worker with the r
   expect(t.note).toBe('the checker found problems; a new try will fix them (1 of 2)')
   expect(t.history.some(h => h.text.startsWith('try 1: checker found problems: src/a.ts:12'))).toBe(true)
   expect(t.runs!.at(-1)!.ended_note).toBe('checker found problems')
-  expect(leadQueue.join('\n')).toContain('was sent back by the checker; retrying on its own (1 of 2)')
+  expect(meanwhile.join('\n')).toContain('was sent back by the checker; retrying on its own (1 of 2)')
+  expect(leadQueue.join('\n')).not.toContain('retrying on its own')
   const prompt = WORKER_PROMPT(t, await load(w.$), WT)
   expect(prompt).toContain('A checker reviewed your last try and found problems')
   expect(prompt).toContain(report)
@@ -971,7 +972,7 @@ test('T-386: a reload stops the running checker; at the next check the task gets
   expect(mid.status).toBe('doing')
   expect(mid.live?.checking?.step).toBe('checker')
   expect(w.git.head).toBe(sha)
-  const told = leadQueue.filter(m => m.includes('its checker stopped when the plugin reloaded'))
+  const told = meanwhile.filter(m => m.includes('its checker stopped when the plugin reloaded'))
   expect(told.length).toBe(1)
   // a check meanwhile does not start a third one
   await check(w.$)
@@ -983,7 +984,7 @@ test('T-386: a reload stops the running checker; at the next check the task gets
   expect(t.attempts).toBe(1)
   expect(t.test_tries ?? 0).toBe(0)
   expect(t.history.map(h => h.text)).toContain('try 1: checker: OK')
-  expect(leadQueue.filter(m => m.includes('its checker stopped when the plugin reloaded')).length).toBe(1)
+  expect(meanwhile.filter(m => m.includes('its checker stopped when the plugin reloaded')).length).toBe(0) // T-995: the task merged, so the restart line is stale
 })
 
 test("T-386: a checker that ended over the reload, or whose stopped hand-back arrives, gets a new run without waiting for a check", async () => {
@@ -1073,7 +1074,7 @@ test("T-386: a restarted checker whose agent type isn't loaded yet: the task sta
   await check(w.$)
   await until(() => checkerRuns.size > 0)
   expect(w.spawns.length).toBe(2)
-  expect(leadQueue.filter(m => m.includes('its checker stopped when the plugin reloaded')).length).toBe(1)
+  expect(meanwhile.filter(m => m.includes('its checker stopped when the plugin reloaded')).length).toBe(1)
   checkerFinished([...checkerRuns.keys()][0]!, 'OK')
   await until(() => checkerRuns.size === 0 && !checkingNow('T-1'))
   const t = find(await load(w.$), 'T-1')!
