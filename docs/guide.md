@@ -1481,7 +1481,7 @@ unchanged.
   - **Organizational memory** `2 / 60`: one line, with an `All notes` link that opens the page
     of notes.
 - **Tasks**: grouped under headings (Questions for you, Waiting for you, Review, Failed), each with
-  its colored mark and its count as plain dim words (`? Questions 2`); doing and to-do tasks follow as one
+  its colored mark and its count as plain dim words (`? Questions for you 2`); doing and to-do tasks follow as one
   list with no heading (the task page's
   status is plain bold words in its color too), a blank line
   between them. Each task is one line: the ID (a link), its state cell (`▶ 2m`,
