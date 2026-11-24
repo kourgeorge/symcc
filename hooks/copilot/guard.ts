@@ -10,7 +10,7 @@
 // - apply_patch: one raw patch string (the CLI also reads {input} or {patch}); its files are on its
 //   "*** Add File: ", "*** Update File: ", "*** Delete File: " and "*** Move to: " lines.
 // - bash, powershell, local_shell {command}: a shell command. write_bash, write_powershell {shellId, input}: text
-//   typed into a running shell, so judged as a command too, together with all text typed into that shell before.
+//   typed into a running shell; symcc's agents are refused those, and a shell call with a shellId or async (see splitShell).
 // - read-only ones (view, grep, rg, glob, lsp, web_fetch, read_bash, stop_bash, ...): nothing to check.
 // A tool not named here (an MCP tool, a newer built-in) has its path-like and command-like fields checked, so a file
 // tool symcc doesn't know is still kept inside the task's folder.
@@ -127,32 +127,20 @@ export function copilotTouches(dir: string, toolName: string, toolArgs: unknown)
 }
 
 /**
- * Text typed into a running shell (write_bash, write_powershell) builds up there across calls, so a command split over
- * two calls ("echo x > /re", then "po/README.md\n") would pass if each piece were judged alone. symcc keeps what each
- * agent typed into each shell so far and judges the whole of it, the new piece included; stop_bash / stop_powershell
- * forget it. Keys that edit a line already typed (escape sequences, backspace, Copilot's {left}-style key names) could
- * turn harmless-looking text into another command, so they are refused.
+ * A running shell keeps what was typed into it across calls, so a command split over two calls ("echo x > /re\\",
+ * then "po/README.md") would pass if each piece were judged alone. So symcc's agents (not the lead) may not type into a
+ * running shell (write_bash, write_powershell) nor start or reach one by id (a bash or powershell call with a shellId,
+ * or async: true): each command goes in one call and is judged whole, and no typed-text history is needed.
  */
-const typedSoFar = new Map<string, string>()
-/** The most text kept for one shell; more is refused, so a new shell is needed (the check stays whole and cheap). */
-export const TYPED_MAX = 64 * 1024
-/** The most shells kept at once; typing into one more is refused until one is stopped. */
-const TYPED_SHELLS_MAX = 200
-const STOP_TOOLS: Readonly<Record<string, string>> = { stop_bash: 'write_bash', stop_powershell: 'write_powershell' }
+export const splitShellText = 'Refused: symcc workers run each shell command on its own; send the whole command in one bash call (no shellId, no async, no write_bash).'
 
-/** Forget every shell's typed text (for tests). */
-export function forgetTypedShells() {
-  typedSoFar.clear()
+/** Whether a shell call types into, or starts, a running shell that later calls could add to. */
+function splitShell(tool: string, args: unknown): boolean {
+  if (SHELL_INPUT_TOOLS.has(tool)) return true
+  if (!SHELL_TOOLS.has(tool)) return false
+  const f = argsObject(args)
+  return (f.shellId !== undefined && f.shellId !== null) || (f.async !== undefined && f.async !== false)
 }
-
-export const typedEditKeyText = 'Refused: the text typed into the shell has keys that edit a line (escape, backspace, arrows or other control keys). Type whole commands as plain text instead.'
-export const typedTooLongText = `Refused: more than ${TYPED_MAX} characters were typed into this shell. Stop it and start a new one.`
-export const typedTooManyText = `Refused: text was typed into more than ${TYPED_SHELLS_MAX} shells. Stop the ones you no longer need first.`
-
-/** Control keys that may be typed: tab, new line, return, Ctrl-C and Ctrl-D (they end or cancel a line, never change its words). */
-const EDIT_KEYS = /[\x00-\x02\x05-\x08\x0b\x0c\x0e-\x1f\x7f]|\{(?:left|right|up|down|backspace|delete|del|home|end|tab|escape|esc)\}/i
-
-const shellKey = (agentId: string, tool: string, shellId: unknown) => `${agentId}\0${tool}\0${typeof shellId === 'string' || typeof shellId === 'number' ? String(shellId) : ''}`
 
 /** Copilot's refusal answer with symcc's reason. */
 export const deny = (reason: string): CopilotDeny => ({ permissionDecision: 'deny', permissionDecisionReason: reason })
@@ -161,8 +149,8 @@ export const deny = (reason: string): CopilotDeny => ({ permissionDecision: 'den
  * Copilot's onPreToolUse answer for agent `agentId`'s call (the session id symcc got when it started the agent;
  * undefined for the owner's own session, the lead): a deny with symcc's reason, or undefined to let Copilot go on as
  * usual. An agent symcc stopped is refused any call (toolCall, here "copilot:<tool>", so a Copilot tool is never
- * taken for one of symcc's own and run); a worker's or checker's edits and shell commands go through toolCheck from
- * the copy's folder `dir`. An error refuses the call of symcc's own agents only (toolCheckFailed); the owner's goes on.
+ * taken for one of symcc's own and run); an agent's call that types into a running shell is refused (splitShell);
+ * a worker's or checker's edits and shell commands go through toolCheck from the copy's folder `dir`. An error refuses the call of symcc's own agents only (toolCheckFailed); the owner's goes on.
  */
 export async function preToolUse(host: Host, dir: string, agentId: string | undefined, input: CopilotPreToolUse | undefined, kindOf?: AgentKindOf): Promise<CopilotDeny | undefined> {
   try {
@@ -170,8 +158,7 @@ export async function preToolUse(host: Host, dir: string, agentId: string | unde
     const tool = typeof input?.toolName === 'string' ? input.toolName : ''
     const call = await toolCall(host, `copilot:${tool || 'unknown'}`, agentId, {})
     if (call && 'deny' in call) return deny(call.deny)
-    if (agentId && STOP_TOOLS[tool]) typedSoFar.delete(shellKey(agentId, STOP_TOOLS[tool], argsObject(input?.toolArgs).shellId))
-    if (agentId && SHELL_INPUT_TOOLS.has(tool)) return await typedInput(host, dir, agentId, tool, argsObject(input?.toolArgs), kindOf)
+    if (agentId && splitShell(tool, input?.toolArgs)) return deny(splitShellText)
     for (const touch of copilotTouches(dir, tool, input?.toolArgs)) {
       const why = await toolCheck(host, agentId, touch, dir, kindOf)
       if (why) return deny(why)
@@ -181,22 +168,4 @@ export async function preToolUse(host: Host, dir: string, agentId: string | unde
     const why = toolCheckFailed(host, agentId, { kind: 'error', message: (err as Error)?.message ?? String(err) })
     return why ? deny(why) : undefined
   }
-}
-
-/** A piece of text typed into a running shell: judged together with all text typed there before (see typedSoFar). */
-async function typedInput(host: Host, dir: string, agentId: string, tool: string, f: Record<string, unknown>, kindOf?: AgentKindOf): Promise<CopilotDeny | undefined> {
-  const piece = str(f.input)
-  if (EDIT_KEYS.test(piece)) return deny(typedEditKeyText)
-  const key = shellKey(agentId, tool, f.shellId)
-  // Copilot's {enter} key name is a new line here, so the shell check sees the line end
-  const whole = (typedSoFar.get(key) ?? '') + piece.replace(/\{enter\}/gi, '\n')
-  if (whole.length > TYPED_MAX) return deny(typedTooLongText)
-  if (whole.trim()) {
-    const why = await toolCheck(host, agentId, { command: whole }, dir, kindOf)
-    if (why) return deny(why)
-  }
-  // never forget a shell to make room (its earlier text would then go unjudged): a new one past the limit is refused
-  if (!typedSoFar.has(key) && typedSoFar.size >= TYPED_SHELLS_MAX) return deny(typedTooManyText)
-  typedSoFar.set(key, whole)
-  return undefined
 }

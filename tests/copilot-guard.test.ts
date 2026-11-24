@@ -5,7 +5,7 @@ import { expect } from 'claude-code/testing'
 import { addTask, emptyBoard, patchTask, blockedEditText, bashOutsideText } from '../hooks/board'
 import { runBy } from './agent-fixture'
 import { S, workers } from '../hooks/app/state'
-import { copilotTouches, patchFiles, preToolUse, pathField, forgetTypedShells, typedEditKeyText, typedTooLongText, TYPED_MAX } from '../hooks/copilot/guard'
+import { copilotTouches, patchFiles, preToolUse, pathField, splitShellText } from '../hooks/copilot/guard'
 import { test } from './reset'
 import { fakeHost, memoryFs, done } from './fake-host'
 
@@ -65,11 +65,10 @@ test('edit, create and str_replace_editor are checked by their path; str_replace
   workers.clear()
 })
 
-test('bash: a write outside the folder is denied, one inside passes; text typed into a running shell is judged too', async () => {
+test('bash: a write outside the folder is denied, one inside passes',async () => {
   const host = world()
   expect(await preToolUse(host, WT, 'ag1', { toolName: 'bash', toolArgs: { command: 'echo x > /repo/README.md' } })).toEqual({ permissionDecision: 'deny', permissionDecisionReason: bashOutsideText('README.md', WT) })
   expect(await preToolUse(host, WT, 'ag1', { toolName: 'bash', toolArgs: { command: `echo x > ${WT}/src/a.ts` } })).toBe(undefined)
-  expect((await preToolUse(host, WT, 'ag1', { toolName: 'write_bash', toolArgs: { shellId: '1', input: 'echo x > /repo/README.md\n' } }))?.permissionDecisionReason).toBe(bashOutsideText('README.md', WT))
   expect((await preToolUse(host, WT, 'ag1', { toolName: 'powershell', toolArgs: { command: 'echo x > /repo/README.md' } }))?.permissionDecision).toBe('deny')
   // Copilot's bash session lives on between calls, so moving it out of the folder is refused in the first place
   expect((await preToolUse(host, WT, 'ag1', { toolName: 'bash', toolArgs: { command: 'cd /repo' } }))?.permissionDecision).toBe('deny')
@@ -79,27 +78,23 @@ test('bash: a write outside the folder is denied, one inside passes; text typed 
   workers.clear()
 })
 
-test('text typed into a running shell is judged with what was typed there before, so a split command is still denied', async () => {
+test("an agent may not type into a running shell or start one by id, so a command can't be split over calls", async () => {
   const host = world()
-  forgetTypedShells()
-  const write = (shellId: string, input: string) => preToolUse(host, WT, 'ag1', { toolName: 'write_bash', toolArgs: { shellId, input } })
-  expect(await write('1', 'echo x > /re')).toBe(undefined)
-  expect((await write('1', 'po/README.md\n'))?.permissionDecisionReason).toBe(bashOutsideText('README.md', WT))
-  // the same with Copilot's {enter} key name for the line end
-  expect(await write('2', 'echo x > /re')).toBe(undefined)
-  expect((await write('2', 'po/README.md{enter}'))?.permissionDecision).toBe('deny')
-  // another shell starts empty; stopping a shell forgets its text
-  expect(await write('3', 'po/README.md\n')).toBe(undefined)
-  expect(await preToolUse(host, WT, 'ag1', { toolName: 'stop_bash', toolArgs: { shellId: '1' } })).toBe(undefined)
-  expect(await write('1', 'po/README.md\n')).toBe(undefined)
-  // keys that edit a line already typed are refused: backspace, escape (arrows), {left}-style key names
-  expect((await write('4', 'echo x > /repoX\x7f/README.md\n'))?.permissionDecisionReason).toBe(typedEditKeyText)
-  expect((await write('4', '\x1b[A\n'))?.permissionDecisionReason).toBe(typedEditKeyText)
-  expect((await write('4', '{backspace}'))?.permissionDecisionReason).toBe(typedEditKeyText)
-  // Ctrl-C is fine, and so is too much text never: past the limit a new shell is needed
-  expect(await write('5', '\x03')).toBe(undefined)
-  expect((await write('6', 'x'.repeat(TYPED_MAX + 1)))?.permissionDecisionReason).toBe(typedTooLongText)
-  forgetTypedShells()
+  const refused = { permissionDecision: 'deny', permissionDecisionReason: splitShellText }
+  // write_bash / write_powershell are refused, even harmless text
+  expect(await preToolUse(host, WT, 'ag1', { toolName: 'write_bash', toolArgs: { shellId: 's1', input: 'ls\n' } })).toEqual(refused)
+  expect(await preToolUse(host, WT, 'ag1', { toolName: 'write_powershell', toolArgs: { shellId: 's1', input: 'dir\n' } })).toEqual(refused)
+  // a bash or powershell call with a shellId or async is refused: the checker's split (bash half, then write_bash half)
+  expect(await preToolUse(host, WT, 'ag1', { toolName: 'bash', toolArgs: { command: 'echo x > /re\\', shellId: 's5', async: true } })).toEqual(refused)
+  expect(await preToolUse(host, WT, 'ag1', { toolName: 'bash', toolArgs: { command: 'po/README.md', shellId: 's10' } })).toEqual(refused)
+  expect(await preToolUse(host, WT, 'ag1', { toolName: 'bash', toolArgs: { command: 'ls', async: true } })).toEqual(refused)
+  expect(await preToolUse(host, WT, 'ag1', { toolName: 'powershell', toolArgs: { command: 'dir', shellId: 0 } })).toEqual(refused)
+  // a plain bash call is checked whole as before, async: false included
+  expect(await preToolUse(host, WT, 'ag1', { toolName: 'bash', toolArgs: { command: 'ls', async: false } })).toBe(undefined)
+  expect((await preToolUse(host, WT, 'ag1', { toolName: 'bash', toolArgs: { command: 'echo x > /repo/README.md' } }))?.permissionDecisionReason).toBe(bashOutsideText('README.md', WT))
+  // the lead is unchanged
+  expect(await preToolUse(host, ROOT, undefined, { toolName: 'write_bash', toolArgs: { shellId: 's1', input: 'ls\n' } })).toBe(undefined)
+  expect(await preToolUse(host, ROOT, undefined, { toolName: 'bash', toolArgs: { command: 'ls', shellId: 's1', async: true } })).toBe(undefined)
   workers.clear()
 })
 
