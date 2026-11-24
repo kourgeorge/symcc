@@ -1228,7 +1228,7 @@ words as bold headings with the same spacing):
 
                        work✧    check✧   queue    tests    done
  ▶ T-684 /symcc-doc…   ●━━━━━━━━●━━━━━━━━◉────────○────────○      #2
-   change try 2/3 · ⏱ 24m · ⌀ 1.1M (0.9× median) · <worker 812.4k · checker 287.6k> · ⌕ × 1
+   try 2/3 · ⏱ 24m · ⌀ 1.1M (0.9×median) · worker 812.4k · checker 287.6k · ⌕ × 1  change
 ```
 
 - `NEEDS YOU` is the first section, shown only while something waits for you, and hidden (no
@@ -1261,14 +1261,14 @@ words as bold headings with the same spacing):
   and Tests rows; Organizational memory is one line with an `All notes` link. When nothing runs: `All done`, `Up next
   from the backlog`, and one primary `Tell the lead` button. On a narrow panel the train and header shrink together.
 - The second row has no bar, only numbers about this task:
-  `bug try 4/4 · ⏱ 41m · ⌀ 7.3M (7.6× median) · <worker 5.4M · checker 1.9M> · ⌕ × 2`. That is
-  the task type and the try (`try 2/3`, auto retries after failing tests included), the task's working
+  `try 4/4 · ⏱ 41m · ⌀ 7.3M (7.6×median) · worker 5.4M · checker 1.9M · ⌕ × 2` and, at the right end of the row, `bug`. That is
+  the try (`try 2/3`, auto retries after failing tests included), the task's working
   time so far (all tries; time when Claude Code was closed is left out), the whole task's tokens
   (every try so far), how many times the board's median tokens per merged task that is (yellow
-  from twice the median), how its tokens split between its workers and checkers, together in
-  `< >` (a part that is 0 is left out, and there is no `< >` when there is nothing to split), and
+  from twice the median), how its tokens split between its workers and checkers, as
+  `worker 5.4M · checker 1.9M` (a part that is 0 is left out, and nothing shows when there is nothing to split), and
   `⌕ × N` for how many times the checker sent the task back (`⌕` is the checker's mark; on a task row, `↺` with a number is the try). On a narrow panel the parts go in this order: first the
-  `< >` split, then `(× median)`, then the task type, then `⌀`, and the clock `⏱` last; the try stays. A
+  split, then `(×median)`, then `⌀`, and the clock `⏱` last; the try stays. The task type (dim) is at the right end of the row, lined up under the time on the first row; when the row is too narrow for both, the type is dropped, never wrapped. A
   running worker's tokens are only known when it hands back, so until then the row shows the
   earlier tries' sum with `+ …` (`⌀ 4.0M + …`), or `⌀ at hand-back` on a first try.
 - **Signs on the boards:** `⌀` = tokens (a count has `⌀` in front: `⌀ 716.1k`; the legend at the bottom of the Live tab, below the footer, says so, and with no lane the same dim note, `⌀ = tokens`, ends TODAY). `avg` marks an average (`avg ⌀ 2M/task`). Task pages (the agent lines, the Tries summary's checker part) use it too. `/symcc-stats` and its HTML page keep the word "tokens".
@@ -1281,9 +1281,9 @@ words as bold headings with the same spacing):
 
   ```
    ▶ T-760 A running one ●━━━━━━━━◉────────○────────○────────○      2m
-     change try 1/3 · ⏱ 2m · ⌀ at hand-back
+     try 1/3 · ⏱ 2m · ⌀ at hand-back                            change
    ✓ T-747 Live tab: e…  ●━━━━━━━━●━━━━━━━━●━━━━━━━━●━━━━━━━━✓  merged 3m ago
-     change try 1/3 · ⏱ 38m · ⌀ 5.7M (4.6× median) · <worker 4.1M · checker 1.6M>
+     try 1/3 · ⏱ 38m · ⌀ 5.7M (4.6×median) · worker 4.1M · checker 1.6M  change
   ```
 - Waiting trains: a todo task that waits (its `after`) for a task that has not finished hangs
   under the lane of the running task it waits for, indented with `└─◇`, its id and cut title,
@@ -1292,7 +1292,7 @@ words as bold headings with the same spacing):
 
   ```
    ▶ T-712 Scout or… ●━━━━━━◉──────○──────○──────○  2m
-     bug try 1/3 · ⏱ 2m · ⌀ at hand-back
+     try 1/3 · ⏱ 2m · ⌀ at hand-back               bug
      └─◇ T-713 Task files: no si…  waits
         └─◇ T-714 Help: /symcc-h…  waits
      └─◇ T-716 Live deps…  waits  + also T-690
