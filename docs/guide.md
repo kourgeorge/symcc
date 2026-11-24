@@ -2618,8 +2618,10 @@ What works:
   board update there also carries a short core of it: the reply shape and the main rules.
 - **Your Slack messages count as yours.** A task the lead adds after your Slack message
   links back to your words, like a message typed at the terminal.
-- **A window that doesn't drive says so.** If another window drives the board, the lead
-  there tells you "this window doesn't drive the board; /symcc-drive makes it drive".
+- **A window that doesn't drive still takes tasks.** If another window drives the board,
+  the lead in this one still adds, changes, drops, approves and answers tasks as usual; the
+  driving window runs the workers, scouts and merges. Use /symcc-drive only when you want
+  this window to run the work itself.
 
 What doesn't work yet: while DAM's session sleeps between messages, nothing runs on its
 own there: no scouts and no two-minute check. Work moves on when the next message wakes it.
