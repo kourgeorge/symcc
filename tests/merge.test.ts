@@ -2764,6 +2764,10 @@ test('changing only priority or after on a running task keeps its worker and sav
   expect(t.history.some(h => h.text.includes('restarted'))).toBe(false)
   expect(t.history.map(h => h.text)).toContain('waits on changed: nothing → T-2')
   expect(workers.has('ag1')).toBe(true)
+  // The old order field is refused, and the running task is not restarted.
+  await expect(runTool(w.$, 'change', { task: 'T-1', order: 1 })).rejects.toThrow('Nothing changed: order is gone; use priority (-20 to 19, lower runs first)')
+  expect(workers.has('ag1')).toBe(true)
+  expect(find(await load(w.$), 'T-1')!.history.some(h => h.text.includes('restarted'))).toBe(false)
   await runTool(w.$, 'change', { task: 'T-1', details: 'new plan' })
   const r = find(await load(w.$), 'T-1')!
   expect(r.history.map(h => h.text)).toContain('try 1: restarted: the task was changed (details)')
