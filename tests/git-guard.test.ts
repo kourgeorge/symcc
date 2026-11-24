@@ -4,7 +4,7 @@
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { checkEdit } from '../hooks/app/ask'
-import { gitWriteIn, gitWriteText, workerGitWriteText, scoutGitWriteText } from '../hooks/board'
+import { gitWriteIn, gitWriteText, workerGitWriteText, scoutGitWriteText, bashOutsideText, BASH_UNRESOLVED, unresolvedTarget } from '../hooks/board'
 import { S, scoutRuns, workers, checkerRuns } from '../hooks/app/state'
 import { fakeHost } from './fake-host'
 import { bestPairMsOf, growsSlowly } from './timing'
@@ -199,7 +199,8 @@ const WRITES: [string, string][] = [
   ['grep x <(git stash)', 'git stash'],
   ['cat <<EOF\ngit stash\nEOF', 'git stash'],
   // the checker's try-5 holes: a shell in the line runs a text tool's output without a `|`
-  ['coproc sh; grep -h "git stash" notes >&${COPROC[1]}', 'git stash'],
+  // (T-963: `>&${COPROC[1]}` is now refused first by the path guard, as a write target built from a variable)
+  ['coproc sh; grep -h "git stash" notes >&3', 'git stash'],
   ['mkfifo p; sh < p & grep -h "git stash" notes > p', 'git stash'],
   ['grep -h "git stash" notes > /tmp/s; sh /tmp/s', 'git stash'],
   ['grep -h "git stash" notes > s; . s', 'git stash'],
@@ -246,9 +247,11 @@ const WRITES: [string, string][] = [
   ['rg --hostname-bin=git stash .', 'git stash'],
   ['grep x /usr/libexec/git-core/git-stash', 'git stash'],
   // round 6: cd with anything but a plain path keeps main's rule
-  ['cd "$(git stash)"', 'git stash'],
-  ['cd $X && grep "git stash" y', 'git stash'],
-  ['cd `git stash`', 'git stash'],
+  // (T-963: `cd $X`, `cd "$(...)"` and cd with backticks are now refused first by the path guard, as cd targets built
+  // at run time, so those use other words here)
+  ['ls "$(git stash)"', 'git stash'],
+  ['cd a* && grep "git stash" y', 'git stash'],
+  ['ls `git stash`', 'git stash'],
   ['cd -P x && grep "git stash" y', 'git stash'],
   ['cd x y && grep "git stash" y', 'git stash'],
   // T-446: brace expansion makes new words (`git {stash,}` runs `git stash`), so a "{" inside a word never cuts the
@@ -305,11 +308,21 @@ test('"git" as text and read-only git pass for a worker, a scout and a checker (
   }
 })
 
+/**
+ * What a worker in WT is told for `command` when the git guard gives `want`: a command line run by eval or `sh -c` with
+ * a `$` in it is refused first by the path guard, as it may write anywhere (T-963); both refuse it. A checker's git
+ * check comes first.
+ */
+const firstRefusal = (command: string, want: string) => {
+  const word = unresolvedTarget(command)
+  return word === undefined ? want : bashOutsideText(BASH_UNRESOLVED + word, WT)
+}
+
 test('git run as a command still refuses its writes, for a worker, a scout and a checker (T-439)', async () => {
   const $ = setup()
   for (const [command, what] of WRITES) {
     expect([command, gitWriteIn(command)]).toEqual([command, what])
-    expect(await checkEdit($, 'w1', { command }, WT)).toBe(workerGitWriteText(what))
+    expect(await checkEdit($, 'w1', { command }, WT)).toBe(firstRefusal(command, workerGitWriteText(what)))
     expect(await checkEdit($, 's1', { command }, ROOT)).toBe(scoutGitWriteText(what))
     expect(await checkEdit($, 'c1', { command }, WT)).toBe(gitWriteText(what))
   }
@@ -392,7 +405,7 @@ test('braces in paths after `--` of a read-only git, and in echo, printf or `x=`
     'echo {-n,git} stash',
   ]) {
     expect([command, gitWriteIn(command)]).toEqual([command, 'git with {braces}'])
-    expect(await checkEdit($, 'w1', { command }, WT)).toBe(workerGitWriteText('git with {braces}'))
+    expect(await checkEdit($, 'w1', { command }, WT)).toBe(firstRefusal(command, workerGitWriteText('git with {braces}')))
     expect(await checkEdit($, 's1', { command }, ROOT)).toBe(scoutGitWriteText('git with {braces}'))
     expect(await checkEdit($, 'c1', { command }, WT)).toBe(gitWriteText('git with {braces}'))
   }

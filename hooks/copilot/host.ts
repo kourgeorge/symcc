@@ -5,9 +5,9 @@
 // host's nodeFs, runCommand, nodeClock, nodeProcesses), the tests a fake one, so this folder imports no Node and
 // type-checks with the rest of hooks/. The lead is the joined session (lead.ts: session.send, enqueue or immediate);
 // notices and the text board go to the chat timeline with session.log.
-// Not built yet (later tasks): the agents (workers, checkers and scouts as SDK child sessions, each in its own folder
-// with its own guard), the edit and shell guard (onPreToolUse), and a band (a statusLine script). Until then no agent
-// can start: its start is "not ready", so its task waits.
+// The agents (workers, checkers and scouts as SDK child sessions, each in its own folder with its own guard) are
+// agents.ts (T-959), given in as `agents` by extension.ts when its entry hands it the SDK; with none given (no SDK)
+// no agent can start: its start is "not ready", so its task waits. Not built yet: a band (a statusLine script).
 import { type Host, type HostFeatures, type HostWords, noUi } from '../host'
 import type { CpSession } from './sdk'
 import { copilotLead } from './lead'
@@ -28,7 +28,7 @@ export const COPILOT_WORDS: HostWords = {
   app: 'Copilot CLI',
 }
 
-/** Why agents can't start yet: the Copilot host has no agents (a later task). Marked "not ready", so a task waits. */
+/** Why agents can't start: the Copilot host was given no agents (no SDK). Marked "not ready", so a task waits. */
 export const AGENTS_NOT_BUILT = "starting an agent is not built yet in symcc's Copilot host"
 
 const notBuilt = () => Object.assign(new Error(AGENTS_NOT_BUILT), { notReady: true })
@@ -54,7 +54,7 @@ export type CopilotHostOptions = {
   say?: (line: string) => void
   /** debug lines go to the timeline (as passing notes, ephemeral); default off */
   debug?: boolean
-  /** the agents (default: a stub that can't start any) */
+  /** the agents (agents.ts copilotAgents; default: a stub that can't start any) */
   agents?: Host['agents']
 }
 
