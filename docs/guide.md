@@ -1335,7 +1335,7 @@ words as bold headings with the same spacing):
   then `+3 ↓1`, cut with `…` if needed. Enter (or a click) on a row
   opens its task. symcc reads these numbers with read-only git commands at most every 30 seconds,
   without slowing the board; a branch git can't read is left out, and with no git (or no task
-  branch yet) the section isn't shown. VS Code draws it with real lines, and OpenCode shows the
+  branch yet) the section isn't shown. VS Code draws each branch on one line (no graph), and OpenCode shows the
   same section.
 - The first row under the `TODAY` heading is `Now:`, then the board mode and `agents N/M busy` (workers and checkers running
   against `max_parallel`); there is no line of its own for this above the sections. While a scout runs, a small mark goes at the end of that row: `⌕`
