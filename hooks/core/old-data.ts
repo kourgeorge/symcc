@@ -5,7 +5,7 @@
 import type { SymccHistoryEntry, SymccRun } from '../../types'
 import { type FailReason, type HistoryFacts, type HistoryKind, AFTER_CHANGED, historyEntryOk, isHistoryKind, onPurposeStop, tryParts, withHistory } from './history'
 import { addTokens, cleanTokens, isAgentId, sumTokens, tokenCount } from './runs'
-import { isSoundSet, soundNotify, soundSetFor } from './board-file'
+import { isPriority, isSoundSet, soundNotify, soundSetFor } from './board-file'
 import { parseGoneBranch } from './git-setup'
 import { countFindings, isNothing } from './scouts'
 import type { ScoutRunOutcome, ScoutRunRecord } from './scouts'
@@ -128,10 +128,13 @@ export const MOVED_UP_ORDER = 10
 /**
  * Task `t` with its old growing `order` number made a `priority` (T-967, like Unix nice): an order of MOVED_UP_ORDER or
  * less (a task the lead or the owner moved up) becomes -1, any other 0; `order` is removed. Null when it has no `order`.
+ * A valid priority already on the task is kept and only `order` is removed: an older symcc copy writes `order: 0` back
+ * onto every task and keeps its priority.
  */
 export function withPriority(t: Raw): Raw | null {
   if (!('order' in t)) return null
   const { order, ...rest } = t
+  if (isPriority(rest.priority)) return rest
   return { ...rest, priority: isNum(order) && order <= MOVED_UP_ORDER ? -1 : 0 }
 }
 
