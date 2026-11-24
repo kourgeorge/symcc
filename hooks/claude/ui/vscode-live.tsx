@@ -400,7 +400,7 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
       {liveSection($, pane, 'today', LIVE_SECTIONS.today, today)}
       {orgMemLineVs($, pane, notes)}
       {/* T-930, T-933: the footer's Box takes the room left on a short page and puts the footer at its bottom */}
-      <Box key="live-foot" flexDirection="column" flexGrow={1} justifyContent="flex-end">{vsFooter(vs, 'live-hint', { rule: false })}</Box>
+      <Box key="live-foot" flexDirection="column" flexGrow={1} justifyContent="flex-end">{vsFooter(vs, 'live-hint')}</Box>
     </Box>
   )
 }

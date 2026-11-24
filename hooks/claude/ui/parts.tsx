@@ -173,7 +173,7 @@ export async function paneParts($: $, e: PaneEvent) {
    *  no [m] button, so m does nothing there. */
   const footer = (hints: KeyHint[], name: string, withMode = false, extra: unknown = null) => (
     (arrows.move = !vscode && saysArrowsMove(hints)),
-    vscode ? vsFooter(vs, name, withMode ? { mode, onSwitch: switchMode, extra: extra as never } : {}) :
+    vscode ? vsFooter(vs, name, withMode ? { extra: extra as never } : {}) :
     <Box key={`${name}-footer`} flexDirection="column">
       <Text key={`${name}-footer-rule`} wrap="truncate" color={C('subtle')}>{footerRule(width)}</Text>
       {withMode ? (
