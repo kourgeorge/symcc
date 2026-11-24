@@ -643,6 +643,8 @@ test('T-1008: removing asks inline: a "Yes, remove" Button and a Cancel link, no
   const stateTexts = elements(state).filter(n => n.type === 'Text' && n.props?.color)
   expect(stateTexts.length).toBeGreaterThan(0)
   expect(stateTexts.map(n => n.props?.color)).toEqual(stateTexts.map(() => 'inactive'))
+  // and not bold
+  expect(stateTexts.filter(n => n.props?.bold).map(n => n.props?.key)).toEqual([])
   await ui.press({ key: 'role-remove' })
   const tree = await ui.drawn()
   expect((await ui.find({ key: 'role-remove-yes' }))?.props.variant).toBe('primary')

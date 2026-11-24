@@ -125,7 +125,7 @@ export function vsPageHeader(pane: PaneParts, hd: PageHeader): RenderChildren {
       {first ? (
         // T-1006: the status as a colored mark, then dim words (no pill)
         <Text key={`${key}-status`} size="caption" wrap="wrap">
-          <Text key={`${key}-mark`} bold color={C(chipTone(g))}>{statusWords(g).mark}</Text>
+          <Text key={`${key}-mark`} bold={g[0]?.bold !== false} color={C(chipTone(g))}>{statusWords(g).mark}</Text>
           <Text key={`${key}-words`} color={C('inactive')}>{statusWords(g).words}</Text>
         </Text>
       ) : (
