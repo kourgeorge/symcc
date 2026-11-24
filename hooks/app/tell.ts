@@ -61,7 +61,7 @@ function sendBoardUpdate(host: Host) {
   const before = meanwhile.slice()
   const update = takeBoardUpdate()
   if (!update) return
-  void (urgent ? host.lead.send(update, { urgent: true }) : host.lead.send(update)).catch(err => {
+  void (urgent ? host.lead.send(update, { urgent: true }) : host.lead.send(update)).then(() => delivered([...lines, ...before]), err => {
     if (!S.enabledNow) return
     leadQueue.unshift(...lines)
     meanwhile.unshift(...before)
@@ -120,7 +120,11 @@ export function moveOn(id: string) {
       }
     }
   }
-  for (const k of waitingOn.keys()) if (!leadQueue.includes(k) && !meanwhile.includes(k)) waitingOn.delete(k)
+}
+
+/** A line reached the chat: its task ids are not needed any more (unless the same text waits again). */
+function delivered(texts: readonly string[]) {
+  for (const t of texts) if (!leadQueue.includes(t) && !meanwhile.includes(t)) waitingOn.delete(t)
 }
 
 /** An answer cut to one short line, for a "Meanwhile" line. */
@@ -144,10 +148,17 @@ export function meanwhileForPrompt(): { text: string; back: () => void } {
   const lines = meanwhile.splice(0)
   if (!lines.length || !S.enabledNow) return { text: '', back: () => {} }
   let put = false
+  const kept = new Map<string, string[]>()
+  for (const l of lines) {
+    const ids = waitingOn.get(l)
+    if (ids) kept.set(l, ids)
+  }
+  delivered(lines) // the prompt carries them; `back` restores their ids if it never reaches the chat
   const back = () => {
     if (put) return
     put = true
     meanwhile.unshift(...lines)
+    for (const [l, ids] of kept) if (!waitingOn.has(l)) waitingOn.set(l, ids)
   }
   return { text: `[${S.N.name}] ${meanwhileText(lines)}\n(Happened since your last message; take it into account.)`, back }
 }
