@@ -53,7 +53,7 @@ export async function leadGuideText(host: Host): Promise<string | undefined> {
   // Read on every call, so /<name>-disable and /<name>-enable count from the next message.
   if (!(await isOn(host))) return undefined
   // T-922: a window that doesn't drive gets no board updates and starts no work; the lead says so plainly
-  const notDriving = S.driving ? '' : `\n\nThis window does not drive the board now. When the owner asks about board work here, tell them plainly: "${notDrivingText(S.N.name)}".`
+  const notDriving = S.driving ? '' : `\n\n${notDrivingText(S.N.name)}`
   const dam = S.dam ? `\n\n${DAM_POST_LINE}` : ''
   return `${leadGuide(host.features)}${notDriving}${dam}`
 }
