@@ -35,5 +35,5 @@ export const damGuideCore = (name: string = DEFAULT_NAME) =>
     `- A question: the question in one sentence, then the choices numbered, then "(or answer on the board)".`,
   ].join('\n')
 
-/** What a window with the board on but not driving says (T-922): it gets no board updates and starts no work. */
-export const notDrivingText = (name: string = DEFAULT_NAME) => `this window doesn't drive the board; /${name}-drive makes it drive`
+/** The lead guide line for a window with the board on but not driving (T-922, T-999): tasks still work here; the driving window runs the work. */
+export const notDrivingText = (name: string = DEFAULT_NAME) => `This window does not drive the board, but you still add, change, drop, approve and answer tasks here as usual; the window that drives runs the workers, scouts and merges. Mention /${name}-drive only when the owner wants this window to run the work itself.`

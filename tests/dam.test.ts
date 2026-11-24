@@ -131,6 +131,9 @@ test("T-922: a window with symcc on that doesn't drive says /symcc-drive makes i
   expect(S.driving).toBe(true)
   expect(await leadGuideText(w.host)).not.toContain(notDrivingText('symcc'))
   S.driving = false
-  expect(notDrivingText('symcc')).toBe("this window doesn't drive the board; /symcc-drive makes it drive")
-  expect(await leadGuideText(w.host)).toContain(notDrivingText('symcc'))
+  const guide = await leadGuideText(w.host)
+  expect(guide).toContain(notDrivingText('symcc'))
+  expect(notDrivingText('symcc')).toContain('still add, change, drop, approve and answer tasks here')
+  expect(notDrivingText('symcc')).toContain('/symcc-drive')
+  expect(guide).not.toContain('tell them plainly')
 })
