@@ -267,7 +267,8 @@ test('T-790: VS Code: the org-mem page has the same header (back button, count, 
   const ui = await settings($, 'vscode')
   await ui.press({ key: 'live-om-all', link: { href: vsHref('page', 'orgmem') } })
   const text = await pageText(ui as never)
-  for (const w of ['Organizational memory (org-mem)', 'Notes shared with workers, checkers and scouts', '3 / 60', '▍About', '▍Notes']) expect(text).toContain(w)
+  for (const w of ['Organizational memory (org-mem)', 'Notes shared with workers, checkers and scouts', '3 / 60', 'About', 'Notes']) expect(text).toContain(w)
+  expect(text).not.toContain('▍')
   expect(await ui.find({ key: 'vs-header-rule' })).toBeUndefined()
   expect((await ui.find({ key: 'orgmem-delete' }))?.props.label).toBe('Delete')
   await ui.press({ key: 'orgmem-delete' })
@@ -523,3 +524,27 @@ test('T-819: the org-mem topic labels (the newest rows, and the topic grid on th
   expect(await textColors(term, 'unsorted')).toEqual(['inactive', 'inactive'])
   await term.unmount()
 })
+
+// T-1009: the org-mem page in VS Code has no tab header, no rule and no border; Delete asks inline
+for (const bodyColumns of [40, 64, 100])
+  test(`T-1009: VS Code org-mem page: no tab header, rules or borders, Delete asks inline, nothing wider than the panel (${bodyColumns} columns)`, async ($, on) => {
+    stateOf(on, VIEW)
+    fakeOrgMem(on, NOTES)
+    await $.session.start({ cwd: '/proj' } as never)
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'vscode' })
+    await ui.press({ key: 'live-om-all', link: { href: vsHref('page', 'orgmem') } })
+    await ui.press({ key: 'orgmemRow:3', link: { href: vsHref('do', 'orgmem-delete/3') } })
+    const all = await ui.findAll({})
+    expect(all.filter(n => n.props?.borderStyle)).toEqual([])
+    expect(all.some(n => /^(tab-|vs-header)/.test(String(n.key ?? '')))).toBe(false)
+    const texts = all.filter(n => n.type === 'Text').map(n => String(n.text ?? ''))
+    expect(texts.some(t => /[─▍]/.test(t))).toBe(false)
+    expect(texts).toContain('Delete #3?')
+    expect(await ui.find({ key: 'orgmem-delete-box' })).toBeDefined()
+    expect((await ui.find({ key: 'orgmem-delete-yes' }))?.props.label).toBe('Yes, delete')
+    expect((await ui.find({ key: 'orgmem-delete-cancel' }))?.props.text).toBe(`[Cancel](${vsHref('do', 'orgmem-delete/cancel')})`)
+    for (const n of all) {
+      if (typeof n.props?.width === 'number') expect(n.props.width / (n.type === 'Svg' ? 8 : 1), String(n.key)).toBeLessThanOrEqual(bodyColumns)
+    }
+    await ui.unmount()
+  })

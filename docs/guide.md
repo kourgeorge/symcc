@@ -289,7 +289,9 @@ changed is kept.
 - **A question with choices.** A worker may give 2 to 6 choices with its question.
   Each choice is a button with its number key, plus **Answer…**
   for your own words. Picking one is your answer (history: the owner answered: “b”) and
-  sends the task back to work.
+  sends the task back to work. In VS Code a question's page (a worker's or the lead's) has no box
+  around it: the id is dim, the question is bold, the choices are numbered links (keys 1-9 work
+  too) and a "Your answer" box follows. No hint line.
 - **Any other question** has a text box: type the answer and press Enter.
 
 ### When the lead asks you something
@@ -2596,13 +2598,14 @@ test, a trap, where something is).
   with its note count ([Live tab](#live-tab)). Enter (or a click) on a topic opens the
   "Organizational memory · tests" page with only that topic's notes; on a newest note, or on the
   `[all]` button next to "newest" (Enter or a click; in VS Code the `All notes` button on the section's heading), the
-  "Organizational memory (org-mem)" page with every note. The page starts with the same header
-  as a task's page: `‹ [Live]` (Back; `b` too) with the note count on the right, the title, the line
-  "Notes shared with workers, checkers and scouts", a `[Delete]` button (no key in it; the keys are in the
-  footer) and a thin rule; a topic's page has the same header with the topic in the title. Under
-  it come `▍About` (what org-mem is) and `▍Notes`, the notes newest first, with their number, date and text ("No notes yet." when there are none). To delete
+  "Organizational memory (org-mem)" page with every note. In VS Code the page has no tab header, only `‹ Live` with the note count on the right, then
+  the title and the line "Notes shared with workers, checkers and scouts" (and a topic's page has the topic in the title). In
+  the terminal the page starts with the same header as a task's page: `‹ [Live]` (Back; `b` too) with the note count on the right, the title, the
+  line "Notes shared with workers, checkers and scouts", a `[Delete]` button (no key in it; the keys are in the
+  footer) and a thin rule. Under it come `▍About` (what org-mem is) and `▍Notes` (plain bold `About` and `Notes` in VS Code, no
+  rule or border), the notes newest first, with their number, date and text ("No notes yet." when there are none). To delete
   a note, put the cursor on it and press `x` (or Enter; in VS Code click its Delete link), then
-  `y` to confirm: exactly that line is taken out of the file. From the prompt (and in OpenCode,
+  `y` to confirm (in VS Code the line asks inline: `Delete #3? [Yes, delete] Cancel`, no box): exactly that line is taken out of the file. From the prompt (and in OpenCode,
   where the page does it for you): `/symcc-settings orgmem delete N`, N being the note's number on the page.
 
 ---

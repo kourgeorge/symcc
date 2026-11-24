@@ -538,6 +538,10 @@ for (const bodyColumns of [40, 80]) {
       expect((await ui.find({ key: `choice-${i + 1}` }))?.props.text).toBe(mdLink(`${i + 1}. ${c}`, vsHref('choice', String(i + 1))))
     expect(elements(tree).filter(n => n.type === 'Button').map(n => [n.props?.label, n.props?.hotkey])).toEqual([['Yes', '1'], ['No', '2']])
     expect((await ui.find({ key: 'answer' }))?.type).toBe('Input')
+    // T-1009: no border, no callout, no hint; the id is dim
+    expect(elements(tree).filter(n => n.props?.borderStyle)).toEqual([])
+    expect(await ui.find({ key: 'vs-sec-question' })).toBeUndefined()
+    expect(elements(tree).find(n => n.type === 'Text' && n.children?.join?.('') === 'Q-3')?.props?.color).toBe('inactive')
     expect((await ui.find({ key: 'question-back' }))?.props.pressableLinks).toEqual([vsHref('page', 'back/question-back')])
     await follow(ui, 'question-back', vsHref('page', 'back/question-back'))
     expect(await ui.find({ key: 'vs-answers' })).toBeUndefined()
