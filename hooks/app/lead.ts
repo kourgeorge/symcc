@@ -50,6 +50,21 @@ async function refreshMe(host: Host) {
   if (await host.fs.exists(path(S.N.boardFile))) await change(host, b => relabelSession(b, old, S.me))
 }
 
+/** T-1016: session start ran again in the window that drove under `old`, and it has a new id: lead.json moves to the new id (same window). Returns whether it moved. */
+export async function carryDriver(host: Host, old: string): Promise<boolean> {
+  if (!old || old === S.me) return false
+  let moved = false
+  await locked(host, async () => {
+    const l = await readLead(host)
+    if (l && l.session === old) {
+      await writeLead(host, leadText(S.me, Date.now(), { ...driverTimes(l), ...(l.handTo ? { handTo: l.handTo, ...(l.handAt !== undefined ? { handAt: l.handAt } : {}) } : {}) }))
+      moved = true
+    }
+  })
+  if (moved && (await host.fs.exists(path(S.N.boardFile)))) await change(host, b => relabelSession(b, old, S.me)).catch(() => undefined)
+  return moved
+}
+
 export async function claimLead(host: Host, fresh = false): Promise<boolean> {
   await refreshMe(host)
   // T-793: a window turned off here never drives (nor takes driving back)

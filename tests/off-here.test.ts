@@ -604,3 +604,21 @@ test('T-1016: the driving window gets a new session id: it keeps driving, lead.j
   const r = await toolCall(w.host, toolName('board'), undefined, {})
   expect(String((r as { result?: unknown })?.result ?? '')).not.toContain('off in this window')
 })
+
+test('T-1016: session start under a new id in the driving window keeps driving (lead.json moves, tools answer)', async () => {
+  S.root = ROOT
+  S.me = 'a'
+  let id = 'a'
+  const w = world('a')
+  ;(w.host.session as { id: () => Promise<string> }).id = async () => id
+  await saveBoard(w.host, emptyBoard())
+  expect(await claimLead(w.host)).toBe(true)
+  id = 'b'
+  await sessionStart(w.host)
+  expect(S.me).toBe('b')
+  expect(S.offHere).toBe(false)
+  expect(S.driving).toBe(true)
+  expect(parseLead(w.files.get(w.lead)!)?.session).toBe('b')
+  const r = await toolCall(w.host, toolName('board'), undefined, {})
+  expect(String((r as { result?: unknown })?.result ?? '')).not.toContain('off in this window')
+})
