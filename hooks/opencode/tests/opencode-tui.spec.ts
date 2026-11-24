@@ -1235,6 +1235,61 @@ test('T-558: the mouse works like the keys: a click on a row opens its task, on 
   board.stop()
 })
 
+test('T-945: the backlog\'s "… N more (Enter to show all)" row is a cursor stop; Enter or a click on it lists the whole backlog', async () => {
+  const f0 = viewFile()
+  let b: Board = emptyBoard()
+  for (let i = 0; i < 8; i++) b = addTask(b, { origin: { why: 'a test' }, title: `an idea ${i}`, files: ['src/'] }, AT)[0]
+  for (let i = 1; i <= 8; i++) b = patchTask(b, `T-${i}`, { status: 'backlog' }, AT)
+  const f = { ...f0, view: { ...f0.view, tasks: b.tasks, questions: [] } }
+  const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)]])
+  for (const how of ['enter', 'click'] as const) {
+    const slots: { append: string; render: (input: never) => unknown }[] = []
+    const ctx: TuiContext = {
+      location: { directory: '/work/proj' },
+      theme: {},
+      renderer: { width: 120, height: 200 },
+      client: { session: { command: async () => undefined } },
+      keymap: { layer: () => undefined },
+      ui: {
+        toast: { show: () => undefined },
+        dialog: { prompt: async () => undefined, select: async () => undefined },
+        panel: { open: () => true, close: () => undefined, current: () => undefined },
+        slot: claim => (slots.push(claim as never), () => undefined),
+      },
+    }
+    const board = startTui(ctx, { runtime: fakeRuntime(), readText: async p => files.get(p) ?? Promise.reject(new Error('missing')), every: () => () => undefined, now: () => NOW })
+    await board.refresh()
+    const panel = slots.find(s => s.append === 'session.panel')!.render({ name: BOARD_PANEL, sessionID: 'ses_1', width: 100, focused: false, close: () => undefined, focus: () => undefined } as never) as El
+    const listed = () => rowEls(panel).filter(r => /^\s*›?\s*T-\d /.test(r.text)).length
+    const ids = () => panelLines(f, { opened: '', cursor: 0, groups: board.state().groups, backlogAll: board.state().backlogAll }, NOW, 98).ids
+    const more = rowEls(panel).find(r => r.text.includes('… 3 more (Enter to show all)'))!
+    expect(more.text.trim()).toBe('… 3 more (Enter to show all)')
+    expect(listed()).toBe(5)
+    expect(ids().includes('T-1')).toBe(false)
+    // the cursor can land on it
+    for (let i = 0; i < ids().indexOf('backlog-more'); i++) await board.press('down', 'ses_1')
+    expect(ids()[board.state().cursor]).toBe('backlog-more')
+    expect(rowEls(panel).find(r => r.text.includes('3 more'))!.text).toContain('› … 3 more')
+    if (how === 'enter') await board.press('open', 'ses_1')
+    else {
+      expect(typeof more.el.props.onMouseUp).toBe('function')
+      ;(more.el.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0, stopPropagation: () => undefined })
+      await Promise.resolve()
+    }
+    expect(board.state().backlogAll).toBe(true)
+    expect(board.state().opened).toBe('')
+    expect(listed()).toBe(8)
+    expect(rowEls(panel).some(r => r.text.includes('more (Enter to show all)'))).toBe(false)
+    // the cursor reaches T-1 (the last ids are the backlog's tasks)
+    for (let i = 0; i < 20; i++) await board.press('down', 'ses_1')
+    expect(ids().includes('T-1')).toBe(true)
+    expect(ids().includes('backlog-more')).toBe(false)
+    while (ids()[board.state().cursor] !== 'T-1' && board.state().cursor > 0) await board.press('up', 'ses_1')
+    expect(ids()[board.state().cursor]).toBe('T-1')
+    board.stop()
+  }
+})
+
 test('T-558: panelLines gives each list row what a click on it does, and scrolls the list between the banner and the footer', () => {
   const f = viewFile()
   const d = panelLines(f, { opened: '', cursor: 0 }, NOW, 100)

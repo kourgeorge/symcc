@@ -220,7 +220,7 @@ export type PanelGroup = 'backlog' | 'done' | 'dropped'
  *  (1 = the first of answerOptions) of the open task or question; and (T-585) open or close a Settings group (its title);
  *  and (T-680) press a task page's button that has no key (Drop in review): `action`, its id in core's taskActions;
  *  and (T-706) on a role's or kind's edit page, change one of its boxes (`editField`) or press Save (`save`). */
-export type PanelHit = { open: string } | { group: PanelGroup } | { key: PanelKey } | { tab: PanelTab } | { scout: string } | { run: string } | { setting: SettingName } | { page: string } | { choice: number } | { settingGroup: string } | { action: TaskActionId } | { editField: DefEditField } | { save: true }
+export type PanelHit = { open: string } | { group: PanelGroup } | { more: 'backlog' } | { key: PanelKey } | { tab: PanelTab } | { scout: string } | { run: string } | { setting: SettingName } | { page: string } | { choice: number } | { settingGroup: string } | { action: TaskActionId } | { editField: DefEditField } | { save: true }
 
 /** One colored piece of a line, with what a click on it does (only the footer's key hints have one). */
 export type DrawSeg = Seg & { hit?: PanelHit }
@@ -336,6 +336,8 @@ export type PanelChoice = {
   /** the tab the open task's page was opened from (T-751: its Back link says "‹ Live", and prev/next go through the
    *  Live tab's tasks); the Tasks list when left out */
   from?: PageFrom
+  /** T-945: the whole backlog is shown, not only its first BACKLOG_SHOWN rows (Enter or a click on "… N more") */
+  backlogAll?: boolean
 }
 
 /** A role's or kind's edit mode (T-706, as Claude Code's Edit page): the page it is for ("role:tester"), each box's
@@ -437,6 +439,8 @@ export const GROUPS_OPEN: Record<PanelGroup, boolean> = { backlog: true, done: f
 /** A group's row as a cursor id ("group:done"), and back (null for a task's or question's id). */
 export const groupId = (g: PanelGroup) => `group:${g}`
 export const groupOf = (id: string): PanelGroup | null => (id.startsWith('group:') ? (id.slice(6) as PanelGroup) : null)
+/** T-945: the backlog's "… N more (Enter to show all)" row as a cursor id. */
+export const BACKLOG_MORE_ID = 'backlog-more'
 
 /** The key a key hint's word stands for, so a click on the hint does what the key does ('' for "move"). */
 const HINT_KEY: Record<string, PanelKey> = { open: 'open', 'open/close': 'open', close: 'close', back: 'back', change: 'open', report: 'open' }
@@ -691,7 +695,7 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
     // the approve in progress takes the same buttons and keys away (approveInProgress)
     const busy = !!t && approveInProgress(f, t, choice.approving, nowMs)
     const page = choice.opened ? openedPage(f, choice.opened, nowMs, w, choice.sent?.id === choice.opened ? choice.sent.answer : '', choice.taskReport, choice.approving?.id === choice.opened && approveSent(f, choice.approving, nowMs), busy, choice.from ?? 'tasks', choice.search ?? '', choice.searchMore) : null
-    body = page ?? listBody(f, choice.cursor, { ...GROUPS_OPEN, ...choice.groups }, nowMs, w, choice.search ?? '', choice.searchMore)
+    body = page ?? listBody(f, choice.cursor, { ...GROUPS_OPEN, ...choice.groups }, nowMs, w, choice.search ?? '', choice.searchMore, choice.backlogAll ?? false)
     keys = panelKeys(f, page ? choice.opened : '', 'tasks', '', false, !!page && busy)
     if (!page) modeRow = modeLines(f, !!choice.search?.trim(), w)
   }
@@ -1420,7 +1424,7 @@ function settingsBody(f: ViewFile, cursor: number, open: readonly string[], w: n
  *  With a search on (`search`, core's searchTasks words, T-685) only the matching tasks are listed, as on Claude Code's
  *  list: no questions, every group with a match open (the whole backlog), none without one; the search line and the
  *  [f] change search and [x] clear search buttons stay at the top. */
-function listBody(f: ViewFile, cursor: number, open0: Record<PanelGroup, boolean>, nowMs: number, w: number, search = '', more?: SearchMore): Body {
+function listBody(f: ViewFile, cursor: number, open0: Record<PanelGroup, boolean>, nowMs: number, w: number, search = '', more?: SearchMore, backlogAll = false): Body {
   const v = f.view
   const query = search.trim()
   const filtering = query !== ''
@@ -1428,7 +1432,7 @@ function listBody(f: ViewFile, cursor: number, open0: Record<PanelGroup, boolean
   const parts = panelSections(matching, nowMs, localOffset(nowMs))
   const questions = filtering ? [] : (v.questions ?? [])
   const open: Record<PanelGroup, boolean> = filtering ? { backlog: true, done: true, dropped: true } : open0
-  const backlog = open.backlog ? (filtering ? parts.backlog : parts.backlog.slice(0, BACKLOG_SHOWN)) : []
+  const backlog = open.backlog ? (filtering || backlogAll ? parts.backlog : parts.backlog.slice(0, BACKLOG_SHOWN)) : []
   const done = open.done ? parts.done : []
   const dropped = open.dropped ? parts.dropped : []
   const gone = filtering ? 0 : archivedOf(v).done
@@ -1440,11 +1444,13 @@ function listBody(f: ViewFile, cursor: number, open0: Record<PanelGroup, boolean
   const running = [...parts.doing, ...parts.todo]
   const listed = [...parts.needsYou, ...running, ...groups.flatMap(x => x.rows)]
   // the cursor's rows in the order drawn: questions, tasks, and each group's row before its tasks
-  const ids = [...questions.map(q => q.id), ...parts.needsYou.map(t => t.id), ...running.map(t => t.id), ...groups.flatMap(x => [groupId(x.g), ...x.rows.map(t => t.id)])]
+  // T-945: the backlog's "… N more" row is a cursor stop after its tasks
+  const hasMore = (x: (typeof groups)[number]) => x.g === 'backlog' && x.rows.length > 0 && x.all.length > x.rows.length
+  const ids = [...questions.map(q => q.id), ...parts.needsYou.map(t => t.id), ...running.map(t => t.id), ...groups.flatMap(x => [groupId(x.g), ...x.rows.map(t => t.id), ...(hasMore(x) ? [BACKLOG_MORE_ID] : [])])]
   const at = ids.length ? Math.min(Math.max(0, cursor), ids.length - 1) : -1
   const selected = at >= 0 ? ids[at]! : ''
   const since = (id: string) => v.working.find(x => x.task === id)?.since
-  const idWidth = Math.max(4, ...ids.filter(id => !groupOf(id)).map(id => id.length))
+  const idWidth = Math.max(4, ...ids.filter(id => !groupOf(id) && id !== BACKLOG_MORE_ID).map(id => id.length))
   // a doing task: the total work time of all tries, "1h40m", "⊛ 9m", with no try mark (T-628: the band and the task
   // page show it); narrow, the time is left out (see rowStates)
   // T-893: one space between the state and the title ("T-888 ⊛ 1m title"), none when no row has a state
@@ -1498,7 +1504,7 @@ function listBody(f: ViewFile, cursor: number, open0: Record<PanelGroup, boolean
     const label = foldedRow(x.label, x.all.length, open[x.g], countWidth)
     add([{ text: `${pointer(groupId(x.g), 2)}${[label, x.g === 'done' ? archivedNote(gone) : ''].filter(Boolean).join(' ')}`, color: 'text', ...(groupId(x.g) === selected ? { bold: true } : {}) }], { group: x.g })
     for (const t of x.rows) task(t, 4)
-    if (x.g === 'backlog' && x.rows.length && x.all.length > x.rows.length) add([{ text: `    ${backlogMoreLabel(x.all.length - x.rows.length).replace(/ \(Enter to show all\)$/, '')}`, color: 'inactive' }])
+    if (hasMore(x)) add([{ text: `${pointer(BACKLOG_MORE_ID, 4)}${backlogMoreLabel(x.all.length - x.rows.length)}`, color: 'inactive', ...(BACKLOG_MORE_ID === selected ? { bold: true } : {}) }], { more: 'backlog' })
   }
   return { lines, hits, ids, selected, head: top }
 }

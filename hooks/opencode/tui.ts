@@ -26,7 +26,7 @@
 // modules (Solid and OpenTUI's Solid renderer) are passed in (TuiRuntime), so this file type-checks and its tests
 // run without them. The names and shapes below are @opencode/plugin 2.3.0's tui Context (only what is used).
 import { DEFAULT_NAME, dataDir } from '../name'
-import { VIEW_FILE, parseViewFile, bandDraw, panelLines, pagePlace, panelKeys, panelTaskActions, approveInProgress, panelRoleChoices, TASK_ACTION_COMMANDS, LETTER_KEYS, type LetterKey, hasPage, answerOptions, actionCommand, PANEL_MARK, moveCursor, OWN_ANSWER, GROUPS_OPEN, groupOf, groupId, scoutRunsIn, settingsPlace, orgMemNoteOf, ORG_MEM_PAGE, orgMemPageId, orgMemPageTopic, LIVE_OM_ALL_ID, liveNoteId, liveTopicId, branchIdTask, orgMemIn, defPageId, rolePromptId, SETTINGS_OPEN, settingGroupOf, settingGroupId, PANEL_TABS, CHOICE_KEYS, approveSent, editOf, defDraftOf, draftChanges, draftError, editBoxId, boardPageOf, removeAsk, resetAsk, DEF_EDIT_BOXES, SETUP_GIT_ASK, newNameError, NEW_OPEN_MS, EDIT_SAVE_ID, EDIT_CANCEL_ID, EDIT_FIRST_BOX, type DefDraft, type ApproveSent, type ChoiceKey, type ViewFile, type Line, type PanelAction, type PanelHit, type PanelKey, type PanelGroup, type PanelTab, type BandHit } from './board-view'
+import { VIEW_FILE, parseViewFile, bandDraw, panelLines, pagePlace, panelKeys, panelTaskActions, approveInProgress, panelRoleChoices, TASK_ACTION_COMMANDS, LETTER_KEYS, type LetterKey, hasPage, answerOptions, actionCommand, PANEL_MARK, moveCursor, OWN_ANSWER, GROUPS_OPEN, groupOf, groupId, BACKLOG_MORE_ID, scoutRunsIn, settingsPlace, orgMemNoteOf, ORG_MEM_PAGE, orgMemPageId, orgMemPageTopic, LIVE_OM_ALL_ID, liveNoteId, liveTopicId, branchIdTask, orgMemIn, defPageId, rolePromptId, SETTINGS_OPEN, settingGroupOf, settingGroupId, PANEL_TABS, CHOICE_KEYS, approveSent, editOf, defDraftOf, draftChanges, draftError, editBoxId, boardPageOf, removeAsk, resetAsk, DEF_EDIT_BOXES, SETUP_GIT_ASK, newNameError, NEW_OPEN_MS, EDIT_SAVE_ID, EDIT_CANCEL_ID, EDIT_FIRST_BOX, type DefDraft, type ApproveSent, type ChoiceKey, type ViewFile, type Line, type PanelAction, type PanelHit, type PanelKey, type PanelGroup, type PanelTab, type BandHit } from './board-view'
 import { SETTING_GROUPS, isScoutRunReport, taskReports, taskActions, type TaskAction, type TaskActionId, parseSettingValue, settingChoices, settingInfo, settingShown, settingValue, viewAsBoard, isSettingPage, everyText, nextFindings, everyMinutesOf, nextMode, modeOf, promptsOfRole, SEARCH_WORDS, NEW_SCOUT_EVERY, showsHeader, defEditFields, type SettingName, type ScoutEditField, type DefEditField } from '../board'
 import type { SymccScout } from '../../types'
 import { orgMemDeleteAsk, orgMemFile, orgMemNoteKey, orgMemTopicCounts } from '../core/org-mem'
@@ -290,7 +290,7 @@ export type TuiBoard = {
   refresh: () => Promise<void>
   /** the panel's state: the tab, the open task or scout ('' = the list), the open run of that scout, the cursor, the
    *  open groups, the open Settings groups (their titles) and the scroll */
-  state: () => { tab: PanelTab; opened: string; run: string; cursor: number; groups: Record<PanelGroup, boolean>; settingsOpen: string[]; scroll: number }
+  state: () => { tab: PanelTab; opened: string; run: string; cursor: number; groups: Record<PanelGroup, boolean>; backlogAll: boolean; settingsOpen: string[]; scroll: number }
   /** runs one of the panel's keys, as the keymap does */
   press: (key: PanelKey, sessionID: string) => Promise<void>
   stop: () => void
@@ -317,6 +317,8 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   const [opened, setOpened] = r.createSignal('')
   const [cursor, setCursor] = r.createSignal(0)
   const [groups, setGroups] = r.createSignal<Record<PanelGroup, boolean>>({ ...GROUPS_OPEN })
+  // T-945: the whole backlog shown (Enter or a click on its "… N more" row), as the terminal's S.backlogAll
+  const [backlogAll, setBacklogAll] = r.createSignal(false)
   const [scroll, setScroll] = r.createSignal(0)
   // the Settings groups open (T-585), and the setting whose pick list or box is open ('' = none)
   const [settingsOpen, setSettingsOpen] = r.createSignal<string[]>([...SETTINGS_OPEN])
@@ -525,11 +527,11 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   /** Whether the cursor is on a page's own rows (a scout's runs, the Roles or Kinds list), not the tab's list. */
   const onPage = () => tab() !== 'tasks' && !!opened()
   const draw = () => {
-    return panelLines(file(), { tab: tab(), opened: opened(), run: run(), report: report(), cursor: onPage() ? runCursor() : cursor(), groups: groups(), settingsOpen: settingsOpen(), scroll: scroll(), ...(rows() ? { rows: rows()! } : {}), ...(sent() ? { sent: sent()! } : {}), ...(taskReport() ? { taskReport: taskReport()! } : {}), ...(approving() ? { approving: approving()! } : {}), ...searchChoice(), ...(edit() ? { edit: edit()! } : {}), ...(fromLive() ? { from: 'live' as const } : {}) }, now(), width)
+    return panelLines(file(), { tab: tab(), opened: opened(), run: run(), report: report(), cursor: onPage() ? runCursor() : cursor(), groups: groups(), backlogAll: backlogAll(), settingsOpen: settingsOpen(), scroll: scroll(), ...(rows() ? { rows: rows()! } : {}), ...(sent() ? { sent: sent()! } : {}), ...(taskReport() ? { taskReport: taskReport()! } : {}), ...(approving() ? { approving: approving()! } : {}), ...searchChoice(), ...(edit() ? { edit: edit()! } : {}), ...(fromLive() ? { from: 'live' as const } : {}) }, now(), width)
   }
   /** The rows of the Tasks tab's list, even while a task's page is open (whose draw has no rows), so "open this id"
    *  can put the list cursor on that task and b comes back to it (T-568). */
-  const listIds = () => panelLines(file(), { tab: 'tasks', opened: '', cursor: cursor(), groups: groups(), scroll: 0, ...searchChoice() }, now(), width).ids
+  const listIds = () => panelLines(file(), { tab: 'tasks', opened: '', cursor: cursor(), groups: groups(), backlogAll: backlogAll(), scroll: 0, ...searchChoice() }, now(), width).ids
   /** Sets the list's search ('' = none), from the list's top. */
   const searchFor = (text: string) => {
     setSearch(text.trim())
@@ -837,6 +839,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
         const id = ids[moveCursor(cursor(), 0, ids.length)]
         const g = id ? groupOf(id) : null
         if (g) toggle(g)
+        else if (id === BACKLOG_MORE_ID) setBacklogAll(true)
         else if (id) openPage(id)
       }
       // T-685: Claude Code's list buttons: [f] search (or change it), [x] clear search, [m] the board mode
@@ -955,6 +958,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     }
     // a lane on the Live tab opens its task on the Tasks tab
     if ('open' in hit && tab() === 'live') return openLive(hit.open)
+    if ('more' in hit) return void setBacklogAll(true)
     const id = 'open' in hit ? hit.open : groupId(hit.group)
     const at = (tab() === 'tasks' ? listIds() : draw().ids).indexOf(id)
     if (at >= 0) setCursor(at)
@@ -1075,7 +1079,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   const stopTimer = d.every(REFRESH_MS, reread)
   return {
     refresh,
-    state: () => ({ tab: tab(), opened: opened(), run: run(), cursor: onPage() ? runCursor() : cursor(), groups: groups(), settingsOpen: settingsOpen(), scroll: scroll() }),
+    state: () => ({ tab: tab(), opened: opened(), run: run(), cursor: onPage() ? runCursor() : cursor(), groups: groups(), backlogAll: backlogAll(), settingsOpen: settingsOpen(), scroll: scroll() }),
     press,
     stop: () => {
       stopTimer()
