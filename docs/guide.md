@@ -1253,9 +1253,10 @@ words as bold headings with the same spacing):
   `max_parallel`. It never sits under the task rows. When the page is shorter than the screen (the panel in VS Code), the
   empty room goes between the content and the footer. On a narrow screen the legend is cut at spaces onto more lines, never wider than the screen, still under the key line.
 - On the right: the time at the current station, or the place in the merge queue (`#2`).
-- In VS Code (T-1003) a running lane is two lines: the mark, the id (a link) and the full title (cut with `…` only when
+- In VS Code (T-1003, T-1017) a running lane is three lines: the mark, the id (a link) and the full title (cut with `…` only when
   the panel is too narrow), then, indented under the title, the train and the time at the right (`try 2 · 12m`; "try"
-  only from the second try). One header row above all the lanes names the stations in full words (`work check queue tests
+  only from the second try), then a dim numbers line (the same text as the terminal's second row below, with the task
+  type at the right end; the `⏱` time is left out, since line 2 shows the time, and the type goes when the row is too narrow). One header row above all the lanes names the stations in full words (`work check queue tests
   done`, with `you` when a task waits for you), so every train lines up under it. VS Code has no legend line and no
   folding sections: the headings are plain bold words. Status is split into Mode (with a `change` link), Scouts, Branch
   and Tests rows; Organizational memory is one line with an `All notes` link. When nothing runs: `All done`, `Up next
@@ -1458,11 +1459,11 @@ unchanged.
   - **Status**: one row each. Mode (`⏵ auto merge · agents 0/3 busy`, with `change` as a link
     that switches the mode), Scouts (the running ones, a link to the Scouts tab; "none running"
     otherwise), Branch (and which window drives), Tests (short, then the time limit and retries).
-  - **Tasks**: what needs you first, then the running lanes, **two lines each**: the mark
+  - **Tasks**: what needs you first, then the running lanes, **three lines each**: the mark
     (`▶`, or `✓` for a just-merged one), the id (a link that opens the task) and the whole title
     (cut with `…` only when the panel is too narrow), then, indented under the title, the train
     drawn with real lines and the time at the right (`3m`, `#2` in the queue, `merged 3m ago`). `try 2 · 3m` shows the try
-    only when it is above 1. The station names ("work check queue tests done", with "you" when
+    only when it is above 1. Under it a dim numbers line (`try 1/3 · ⌀ 2.7M (1.4×median) · worker 2.7M`, as in the terminal, without the time) with the task type at the right end, lined up with the time; the type is dropped when the row is too narrow. The station names ("work check queue tests done", with "you" when
     a task waits for you) are drawn once above all the lanes, so every train lines up under
     them. There is no legend line. A waiting task hangs under its lane as one line. When nothing
     runs it says why; when all is done: "✓ All done · last merged T-93 20h ago", then **Up next

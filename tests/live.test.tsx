@@ -742,6 +742,49 @@ for (const bodyColumns of [40, 64, 100])
     await ui.unmount()
   })
 
+// T-1017: a running VS Code lane has a third dim line, core's numbers line with the task type at the right end
+for (const bodyColumns of [40, 64, 100])
+  test(`T-1017: VS Code lanes have a third line with the tokens and the task type, never wider than the panel (${bodyColumns} columns)`, async ($, on) => {
+    seedBoard(on, { view: liveView(TRAINS.map(x => (x.id === 'T-712' ? { ...x, kind: 'bug' } : x.id === 'T-690' ? { ...x, kind: 'feature' } : x))) })
+    on('ui.toast', () => ({ value: undefined }))
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'vscode' })
+    await ui.press({ key: 'tab-live' })
+    const inner = liveInner(bodyColumns)
+    // T-690 has real tokens (worker 1.4M); the type word is its own right-hand cell (the numbers text has no kind, no time)
+    for (const [id, word] of [['T-712', 'bug'], ['T-690', 'feature']] as const) {
+      const text = String((await ui.find({ key: `live-numbers-text:${id}` }))?.text ?? '')
+      const kind = await ui.find({ key: `live-kind:${id}` })
+      // at 40 columns T-690's tokens take the room, so its type goes first (like core)
+      const dropped = bodyColumns === 40 && id === 'T-690'
+      expect([bodyColumns, id, String(kind?.text)]).toEqual([bodyColumns, id, dropped ? 'undefined' : word])
+      expect(textWidth(text) + (dropped ? 0 : 2 + textWidth(word))).toBeLessThanOrEqual(inner)
+      expect(text).not.toContain('⏱')
+      expect(text).not.toContain(word)
+      expect(text).toContain('try ')
+      if (id === 'T-690') {
+        expect(text).toContain('1.4M')
+        if (bodyColumns >= 64) expect(text).toContain('worker 1.4M')
+      }
+    }
+    const pieces = (await ui.findAll({ type: 'Text' })).filter(t => String(t.text ?? '').length > 0 && !String(t.text).trim())
+    expect(pieces).toEqual([])
+    await ui.press({ key: 'tab-tasks' })
+    await ui.unmount()
+  })
+
+// T-1017: the task type goes before any numbers part (like core): a long type is dropped, the tokens stay
+test('T-1017: VS Code third line drops the task type before the tokens at 40 columns', async ($, on) => {
+  seedBoard(on, { view: liveView(TRAINS.map(x => (x.id === 'T-690' ? { ...x, kind: 'investigation-of-a-long-kind' } : x))) })
+  on('ui.toast', () => ({ value: undefined }))
+  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 40 }, surface: 'vscode' })
+  await ui.press({ key: 'tab-live' })
+  const text = String((await ui.find({ key: 'live-numbers-text:T-690' }))?.text ?? '')
+  expect(text).toContain('⌀ 1.4M')
+  expect(await ui.find({ key: 'live-kind:T-690' })).toBeUndefined()
+  await ui.press({ key: 'tab-tasks' })
+  await ui.unmount()
+})
+
 // T-767: a running lane starts "▶ ", its mark, id and title bold in the accent color; a waiting train's row is all dim.
 for (const surface of ['terminal', 'desktop', 'mobile'] as const)
   test(`T-767: on the ${surface} Live tab a running lane is "▶ " with its id and title bold in the accent color, and a waiting train is dim`, async ($, on) => {

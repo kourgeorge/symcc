@@ -13,7 +13,7 @@
 // up under them. The current station blinks with a CSS animation inside the Svg, and stays steady when VS Code asks for
 // reduced motion. T-715: under a lane hang its waiting trains, one line each, indented by their level.
 import type { RenderChildren } from 'claude-code'
-import { liveInner, liveBranches, liveIdle, liveIdleFacts, LIVE_AGENT_MARK, LIVE_IDLE, LIVE_RUN_MARK, LIVE_SECTIONS, type LiveLane, type LiveStation, type LiveLayout, type LiveSeg, LIVE_TONE, laneRight, liveNowSegs, liveNeeds, liveTaskLanes, liveLayout, liveColumns, liveTodayRows, liveTrains, segText, trainRows } from '../../core/live'
+import { laneLines, liveInner, liveBranches, liveIdle, liveIdleFacts, LIVE_AGENT_MARK, LIVE_IDLE, LIVE_RUN_MARK, LIVE_SECTIONS, type LiveLane, type LiveStation, type LiveLayout, type LiveSeg, LIVE_TONE, laneRight, liveNowSegs, liveNeeds, liveTaskLanes, liveLayout, liveColumns, liveTodayRows, liveTrains, segText, trainRows } from '../../core/live'
 import { STATUS_MARK } from '../../core/details'
 import { textWidth } from '../../core/width'
 import { nextMode } from '../../board'
@@ -248,7 +248,35 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
       </Box>
     )
   })
-  // two lines per lane (see above); under them hang the waiting trains, one line each
+  // T-1017: a running lane's third line: core's numbers line (laneLines' second line, built without the time and the kind),
+  // dim, indented like line 2; the task type is its own cell at the right end, under line 2's time. The kind keeps its room;
+  // it is dropped only when even "try 1/3" does not fit beside it.
+  const numbersLayout = liveLayout(lanes, stations, inner - TRACK_INDENT)
+  const numbersLine = (lane: LiveLane) => {
+    const kindW = lane.kind ? textWidth(lane.kind) + 1 : 0
+    const lineFor = (room: number) => {
+      const [, second] = laneLines(lane, { ...numbersLayout, width: room + 2 }, { nowMs, frame: 0, steady: true, noTime: true, noKind: true })
+      const xs = second.map(s => ({ ...s }))
+      const first = xs.findIndex(s => s.text.trim())
+      const ys = xs.map((s, i) => (i === first ? { ...s, text: s.text.replace(/^\s+/, '') } : s)).filter(s => s.text)
+      return ys.some(s => s.text.trim()) && textWidth(segText(ys)) <= room ? ys : null
+    }
+    const full = inner - TRACK_INDENT
+    // like core: the type goes before any numbers part does (each level is tried with the type, then without it)
+    const xs = lineFor(full)
+    if (!xs) return null
+    const narrow = kindW ? lineFor(full - kindW) : null
+    const withKind = narrow && segText(narrow) === segText(xs) ? narrow : null
+    return (
+      <Box key={`live-numbers:${lane.id}`} flexDirection="row" paddingLeft={TRACK_INDENT}>
+        <Box key={`live-numbers-text:${lane.id}`} flexDirection="row" flexGrow={1} flexShrink={1}>
+          {xs.map(s => <Text tabular wrap="truncate" color={C(LIVE_TONE[s.tone])}>{s.text}</Text>)}
+        </Box>
+        {withKind ? <Box key={`live-kind:${lane.id}`} flexDirection="row" justifyContent="flex-end"><Text tabular color={C('inactive')}>{lane.kind}</Text></Box> : null}
+      </Box>
+    )
+  }
+  // up to three lines per lane (see above); under them hang the waiting trains, one line each
   const head = lanes.length ? natural : null
   const laneRows = lanes.map((lane, li) => {
     const done = !!lane.done
@@ -277,6 +305,7 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
             { key: 'time', node: <Box key={`live-time:${lane.id}`} flexDirection="row" flexGrow={1} justifyContent="flex-end">{line(`live-right:${lane.id}`, when, 'inactive')}</Box> },
           ])}
         </Box>
+        {done ? null : numbersLine(lane)}
         {trainLists[li]!.map(r => {
           // a waiting train: one line, the id and title a link, "waits" and "+ also" dim
           if (!r.id) return <Box key={`live-more:${lane.id}`} flexDirection="column" paddingLeft={2}>{line(`live-more-text:${lane.id}`, segText(r.segs).trim(), 'inactive')}</Box>
