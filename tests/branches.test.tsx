@@ -209,6 +209,8 @@ for (const bodyColumns of [40, 64, 100])
       if (bodyColumns >= 64) expect(t).toBe(want)
     }
     expect(String((await row('live-br-note:T-724'))?.text)).toMatch(/^merged 3m ago/)
+    // a narrow panel gets core's shorter wording, so the "behind" count stays
+    expect(String((await row('live-br-note:T-725'))?.text)).toMatch(/\d+ behind$|↓\d+$/)
     for (const id of ['T-724', 'T-721', 'T-725', 'T-726']) expect((await ui.find({ key: branchKey(id) }))?.props.pressableLinks).toEqual([vsHref('task', id)])
   await ui.press({ key: branchKey('T-721'), link: { href: vsHref('task', 'T-721') } })
   expect(await ui.find({ key: 'live-br-head' })).toBeUndefined()
@@ -356,4 +358,17 @@ test('T-794: a task merged 3 minutes ago keeps a dim Branches row joining main; 
   const far = branchTasks(T0).map(t => (t.id === 'T-724' ? { ...t, merged: 'c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6' } : t))
   const narrow = liveBranches({ tasks: far as never[], branches: branchFactsAt(T0) }, T0, 40)!
   expect(narrow.rows.find(r => r.id === 'T-724')!.col).toBe(0)
+})
+
+test('T-1004: the VS Code branch figures keep their colors: far behind is the warning color', async ($, on) => {
+  const base = liveView()
+  const late = { ...base, value: { ...base.value, branches: { ...branchFactsAt(T0), tasks: { ...branchFactsAt(T0).tasks, 'T-725': { ahead: 2, behind: 9, base: sha('c9') } } } } }
+  seedBoard(on, { view: late })
+  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 64 }, surface: 'vscode' })
+  await ui.press({ key: 'tab-live' })
+  const texts = (await ui.findAll({ type: 'Text' })).filter(t => /9 behind/.test(String(t.text)))
+  expect(texts.length).toBe(1)
+  const dim = (await ui.findAll({ type: 'Text' })).find(t => /^\+3 commits$/.test(String(t.text)))
+  expect(dim).toBeDefined()
+  expect(texts[0]!.props.color).not.toBe(dim!.props.color)
 })
