@@ -23,7 +23,7 @@ test('taskActions: the buttons of each status, in order, with their keys and at 
   expect(ids(taskActions(tk('todo')))).toEqual(['pause', 'run-now', 'stash', 'role', 'drop', 'needs-review', 'copy'])
   expect(ids(taskActions(tk('doing'), { worker: true }))).toEqual(['pause', 'watch', 'drop', 'needs-review', 'copy'])
   expect(main(taskActions(tk('doing')))).toEqual(['pause'])
-  expect(ids(taskActions(tk('paused')))).toEqual(['resume', 'run-now', 'stash', 'role', 'already-merged', 'drop', 'needs-review', 'copy'])
+  expect(ids(taskActions(tk('paused')))).toEqual(['resume', 'stash', 'role', 'already-merged', 'drop', 'needs-review', 'copy'])
   expect(main(taskActions(tk('paused')))).toEqual(['resume'])
   expect(ids(taskActions(tk('waiting', { question: 'Which?' })))).toEqual(['already-merged', 'drop', 'needs-review', 'copy'])
   // waiting with files: the answer buttons are taskAsks' choices, not page actions
@@ -37,19 +37,19 @@ test('taskActions: the buttons of each status, in order, with their keys and at 
   expect(taskActions(tk('review')).find(x => x.id === 'drop')?.key).toBeUndefined()
   expect(ids(taskActions(tk('review'), { merging: true }))).toEqual(['show-changes', 'drop', 'needs-review', 'copy'])
   expect(ids(taskActions(tk('review', { kind: 'investigation' })))).toEqual(['done', 'keep-note', 'ask-more', 'drop', 'needs-review', 'copy'])
-  expect(ids(taskActions(tk('failed')))).toEqual(['retry', 'run-now', 'stash', 'role', 'already-merged', 'drop', 'needs-review', 'copy'])
+  expect(ids(taskActions(tk('failed')))).toEqual(['retry', 'stash', 'role', 'already-merged', 'drop', 'needs-review', 'copy'])
   expect(main(taskActions(tk('failed')))).toEqual(['retry'])
   expect(ids(taskActions(tk('failed', { attempts: 0 })))).not.toContain('already-merged')
-  expect(ids(taskActions(tk('dropped')))).toEqual(['retry', 'run-now', 'already-merged', 'copy'])
+  expect(ids(taskActions(tk('dropped')))).toEqual(['retry', 'already-merged', 'copy'])
   expect(main(taskActions(tk('dropped')))).toEqual([])
-  expect(ids(taskActions(tk('backlog')))).toEqual(['to-todo', 'run-now', 'role', 'drop', 'needs-review', 'copy'])
+  expect(ids(taskActions(tk('backlog')))).toEqual(['to-todo', 'role', 'drop', 'needs-review', 'copy'])
   expect(ids(taskActions(tk('done')))).toEqual(['copy'])
   // a running worker over its time limit asks, so nothing is the main action
   expect(main(taskActions(tk('doing', { live: { time_ask: T } })))).toEqual([])
   // needs review is a checkbox
   expect(taskActions(tk('todo', { needs_review: true })).find(x => x.id === 'needs-review')?.label).toBe('☑ Needs review')
   // the button words never say their key (T-751)
-  expect(taskActions(tk('backlog')).map(actionButtonLabel)).toEqual(['Move to todo', 'Run now', 'Role', 'Drop', '☐ Needs review', 'Copy'])
+  expect(taskActions(tk('backlog')).map(actionButtonLabel)).toEqual(['Move to todo', 'Role', 'Drop', '☐ Needs review', 'Copy'])
 })
 
 test('taskKeys: the hints are the buttons that have a key, in their order (p, u, h, n, r on dropped, x drop included)', () => {
@@ -58,8 +58,8 @@ test('taskKeys: the hints are the buttons that have a key, in their order (p, u,
     expect(taskKeys(a).map(k => `${k.key} ${k.word}`).slice(0, -3)).toEqual(keyed(a).filter(k => k !== 'y copy'))
   }
   expect(hints(tk('todo'))).toEqual(['p pause', 'e run now', 'z stash to backlog', 'l role', 'x drop', 'n needs review', 'y copy', '↑↓ scroll', 'b back'])
-  expect(hints(tk('paused'))).toEqual(['u resume', 'e run now', 'z stash to backlog', 'l role', 'h already merged', 'x drop', 'n needs review', 'y copy', '↑↓ scroll', 'b back'])
-  expect(hints(tk('dropped'))).toEqual(['r retry', 'e run now', 'h already merged', 'y copy', '↑↓ scroll', 'b back'])
+  expect(hints(tk('paused'))).toEqual(['u resume', 'z stash to backlog', 'l role', 'h already merged', 'x drop', 'n needs review', 'y copy', '↑↓ scroll', 'b back'])
+  expect(hints(tk('dropped'))).toEqual(['r retry', 'h already merged', 'y copy', '↑↓ scroll', 'b back'])
   expect(hints(tk('review'))).toEqual(['a approve', 'd show changes', 'x reject', 'n needs review', 'y copy', '↑↓ scroll', 'b back'])
   expect(hints(tk('done'))).toEqual(['y copy', '↑↓ scroll', 'b back'])
   // T-751: a page with others in its list says how to go to them, after copy
@@ -69,12 +69,12 @@ test('taskKeys: the hints are the buttons that have a key, in their order (p, u,
 test('T-751: taskActions come in the header groups: the next step, the task actions, the ones that throw work away, the page ones', () => {
   expect(groups(taskActions(tk('doing'), { worker: true }))).toEqual(['main pause', 'task watch', 'danger drop', 'page needs-review', 'page copy'])
   expect(groups(taskActions(tk('review')))).toEqual(['main approve', 'task show-changes', 'danger reject', 'danger drop', 'page needs-review', 'page copy'])
-  expect(groups(taskActions(tk('failed')))).toEqual(['main retry', 'task run-now', 'task stash', 'task role', 'task already-merged', 'danger drop', 'page needs-review', 'page copy'])
+  expect(groups(taskActions(tk('failed')))).toEqual(['main retry', 'task stash', 'task role', 'task already-merged', 'danger drop', 'page needs-review', 'page copy'])
   // Ask more keeps the investigation going: not a danger action
   expect(groups(taskActions(tk('review', { kind: 'investigation' })))).toEqual(['main done', 'task keep-note', 'task ask-more', 'danger drop', 'page needs-review', 'page copy'])
   // while it asks something there is no next step: Pause is a task action then
   expect(groups(taskActions(tk('doing', { live: { time_ask: T } })))).toEqual(['task pause', 'danger drop', 'page needs-review', 'page copy'])
-  expect(groups(taskActions(tk('dropped')))).toEqual(['task retry', 'task run-now', 'task already-merged', 'page copy'])
+  expect(groups(taskActions(tk('dropped')))).toEqual(['task retry', 'task already-merged', 'page copy'])
   // every list is in group order
   const order = ['main', 'task', 'danger', 'page']
   for (const s of ['todo', 'doing', 'paused', 'review', 'failed', 'dropped', 'backlog', 'done']) {
