@@ -338,9 +338,10 @@ export async function listPageVs($: $, pane: PaneParts) {
   return (
     <Box flexDirection="column" gap={1}>
       {header('tasks')}
+      <Box key="vs-top" flexDirection="column">{search}{clear}</Box>
       {active.length ? active : filtering ? null : empty}
       {folded.length ? <Box key="vs-folded" flexDirection="column" gap={1}>{folded}</Box> : null}
-      {vsFooter(vs, 'list-hint', { mode, onSwitch: switchMode, search, extra: clear })}
+      {vsFooter(vs, 'list-hint')}
     </Box>
   )
 }

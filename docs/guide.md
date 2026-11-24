@@ -1482,10 +1482,11 @@ unchanged.
 - **Tasks**: grouped under headings (Questions for you, Waiting for you, Review, Failed, Doing,
   To do), each with its colored mark and its count as plain dim words (`▶ Doing 2`; the task page's
   status is plain bold words in its color too), a blank line
-  between them. Each task is one button: the ID dim and the title (up to two lines; a longer
-  one ends with "(more)", and its page has it whole), then a dim line with the status in its
-  color and its time (`▶ 2m`, `? waiting for 5m`, `✗ failed 3m ago`), the task type or role, the
-  try, and the question or why it failed. A task that needs you starts with a `●` and has a
+  between them. Each task is one line: the ID (a link), its state cell (`▶ 2m`,
+  `? waiting for 5m`, `✗ failed 3m ago`, lined up in one column per group), the whole title
+  (cut with `…` only when the panel is too narrow), then dim words (the task type or role, the
+  try, the question or why it failed). The search box is at the top; there is no mode switch
+  here (it is on Live). A task that needs you starts with a `●` and has a
   bold title. The lead's questions look the same, in the warning color. Backlog, Done and
   Dropped are folded headings (`▸ Backlog  3 `), closed until you click them. With nothing
   open the list says "All clear" and has one main button, `Tell the lead what to do next`,

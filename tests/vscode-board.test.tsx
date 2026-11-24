@@ -173,12 +173,10 @@ test('in VS Code the Tasks page shows whole titles, status colors on the marks, 
   // the header: the mode as a pill (the tests line is on the Live tab's Status section now)
   expect((await ui.find({ key: 'vs-mode' }))?.text).toBe(modeLabel('auto'))
   expect(await ui.find({ type: 'Text', text: 'tests: claude, typecheck' })).toBeUndefined()
-  // no key hints; at most one primary button; the mode switch is a quiet link and the search an Input
+  // no key hints; at most one primary button; no mode switch (it is on Live); the search an Input
   for (const re of KEY_HINTS) expect(all.filter(s => re.test(s)), String(re)).toEqual([])
   expect(elements(tree).filter(n => n.type === 'Button' && n.props?.variant === 'primary').length).toBeLessThanOrEqual(1)
-  const mode = await ui.find({ key: 'mode' })
-  expect(mode?.type).toBe('Markdown')
-  expect(mode?.props.text).toBe(mdLink('Switch to approve merge', vsHref('mode', 'review')))
+  expect(await ui.find({ key: 'mode' })).toBeUndefined()
   expect((await ui.find({ key: 'search' }))?.type).toBe('Input')
   await ui.unmount()
 })
@@ -454,25 +452,29 @@ test('in VS Code a done or dropped task is one line: its mark, the ID link, the 
   await ui.unmount()
 })
 
-test('in VS Code the mode switch is a link that switches the mode', async ($, on) => {
-  seedBoard(on)
-  const toasts: string[] = []
-  on('ui.toast', () => (toasts.push('toast'), { value: undefined }))
-  const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
-  await ui.press({ key: 'mode', link: { href: vsHref('mode', 'review') } })
-  await ui.unmount()
-  expect(toasts.length).toBe(1)
+test('T-1005: in VS Code the Tasks list has the search box first, then the headings, and no mode switch, at 40, 64 and 100', async ($, on) => {
+  seedBoard(on, { view: MIXED_VIEW })
+  on('ui.toast', () => ({ value: undefined }))
+  for (const bodyColumns of [40, 64, 100]) {
+    const at = `width ${bodyColumns}`
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: colsFor(bodyColumns) }, surface: 'vscode' })
+    expect(await ui.find({ key: 'mode' }), at).toBeUndefined()
+    expect(await ui.find({ key: 'footer-mode' }), at).toBeUndefined()
+    const json = JSON.stringify(drawnData(await ui.drawn()))
+    const pos = (k: string) => json.indexOf(`"key":"${k}"`)
+    expect(pos('search'), at).toBeGreaterThan(-1)
+    expect(pos('search'), at).toBeLessThan(pos('vs-head-Failed'))
+    expect(pos('search'), at).toBeLessThan(pos('day:backlog'))
+    // headings stay plain: no pill, no border, no background
+    expect(json, at).not.toContain('"backgroundColor"')
+    await ui.unmount()
+  }
 })
 
 test('T-1002: the VS Code style: a row puts its link in a sized cell, tabs are links, no pill, border, rule or hint, labels share one width', async ($, on) => {
   seedBoard(on)
   on('ui.toast', () => ({ value: undefined }))
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
-  // the row helper: the mode link sits in a cell that grows and shrinks, so it stays on the row's one line
-  const row = (await ui.find({ key: 'footer-mode' })) as Node
-  const cell = (row.children as Node[]).find(n => n?.type === 'Box')!
-  expect([cell.props?.flexGrow, cell.props?.flexShrink]).toEqual([1, 1])
-  expect(elements(cell).some(n => n.type === 'Markdown' && n.props?.key === 'mode')).toBe(true)
   // the tabs are one Markdown line: the shown one bold, the others links with plain counts
   const bar = await tabBar(ui)
   expect(bar.text).toContain('**Tasks 20**')

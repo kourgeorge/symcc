@@ -286,16 +286,11 @@ export function vsFacts(k: VsKit, key: string, rows: readonly { key: string; lab
  *  nothing else. `rule` is ignored (the Live tab still passes it). `extra`: more beside the switch ("Clear search"). */
 export function vsFooter(k: VsKit, name: string, opts: { mode?: SymccMode; onSwitch?: () => void; search?: RenderChildren; extra?: RenderChildren; rule?: boolean } = {}): RenderChildren {
   const { Box } = k
-  const to = opts.mode ? vsHref('mode', nextMode(opts.mode)) : ''
+  // T-1005: no mode switch here (it is on Live); `mode` and `onSwitch` are accepted for the shared footer and ignored
   return (
     <Box key={`${name}-footer`} flexDirection="column">
-      {opts.mode && opts.onSwitch ? (
-        vsRow(k, 'footer-mode', [
-          { key: 'switch', node: vsLink(k, 'mode', mdLink(switchLabel(opts.mode), to), [[to, opts.onSwitch]]) },
-          ...(opts.extra ? [{ key: 'extra', node: opts.extra }] : []),
-        ])
-      ) : null}
       {opts.search ?? null}
+      {opts.extra ?? null}
     </Box>
   )
 }
