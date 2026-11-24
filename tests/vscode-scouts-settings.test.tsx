@@ -72,10 +72,10 @@ for (const sc of SCENES) {
   }
 }
 
-// T-460: the Roles and Kinds pages (and a role's and a kind's page) on the terminal, the desktop and mobile, the same
+// T-460: the Roles and Task types pages (and a role's and a kind's page) on the terminal, the desktop and mobile, the same
 for (const sc of ROLE_KIND_SCENES) {
   for (const surface of OLD_SURFACES) {
-    test(`${sc.name} on ${surface} draws exactly as before the VS Code Roles and Kinds pages`, async ($, on) => {
+    test(`${sc.name} on ${surface} draws exactly as before the VS Code Roles and Task types pages`, async ($, on) => {
       sc.seed(on)
       const ui = await $.ui.mount({ ...PANE, surface })
       await sc.go(ui as never)
@@ -271,7 +271,7 @@ test('Settings in VS Code at width 50: groups as headings, a Select for each cho
   expect((await ui.find({ key: 'setting:scout_findings' }))?.props.value).toBe('backlog')
   for (const name of BOXES) expect((await ui.find({ key: `setting:${name}` }))?.type, name).toBe('Input')
   expect((await ui.find({ key: 'setting:max_parallel' }))?.props.value).toBe('2')
-  // T-460: Roles and Kinds open their pages from links, not Buttons
+  // T-460: Roles and Task types open their pages from links, not Buttons
   expect((await ui.find({ key: 'settings-roles' }))?.props.pressableLinks).toEqual([vsHref('page', 'roles')])
   expect((await ui.find({ key: 'settings-kinds' }))?.props.pressableLinks).toEqual([vsHref('page', 'kinds')])
   await ui.unmount()
@@ -341,7 +341,7 @@ test('a report start loses only Markdown markers, not the _ and ` inside names',
   expect(reportStart('## Findings\n**2. A __big__ and *small* thing**')).toBe('A big and small thing')
 })
 
-// ---------------- T-460: Settings, Roles and Kinds in VS Code: links to go somewhere, no Button rows that run together ----------------
+// ---------------- T-460: Settings, Roles and Task types in VS Code: links to go somewhere, no Button rows that run together ----------------
 
 /** The Box rows of a tree that hold more than one Button and don't wrap (VS Code's Buttons never wrap their labels, so
  *  such a row overlaps or runs off the edge at a narrow width). */
@@ -468,7 +468,7 @@ for (const bodyColumns of [40, 80]) {
     await ui.unmount()
   })
 
-  test(`T-460 Kinds and one kind in VS Code at width ${bodyColumns}: links to go somewhere, badges, no crowded Button rows`, async ($, on) => {
+  test(`T-460 Task types and one task type in VS Code at width ${bodyColumns}: links to go somewhere, badges, no crowded Button rows`, async ($, on) => {
     const toasts: string[] = []
     const { kinds } = seedRolesKinds(on, e => void toasts.push(JSON.stringify(e)))
     const ui = await mount($)

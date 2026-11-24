@@ -21,7 +21,7 @@ export const checkerOn = (b: Partial<Pick<Board, 'checker'>> | null | undefined)
 
 /**
  * The one list of what counts as instructions for agents (so a change to it is checked, not skipped as prose).
- * AGENT_DIRS: folder names; any file under one of them counts (symcc roles and kinds, plugin agents and commands,
+ * AGENT_DIRS: folder names; any file under one of them counts (symcc roles and task types, plugin agents and commands,
  * skills, and other tools' rule folders). AGENT_SUBDIRS: folder paths that count only as a whole (examples/scouts:
  * seedExampleScouts copies them into every new project and scouts run from them). AGENT_FILES: file names, wherever
  * they are. AGENT_SUFFIXES: file name endings (GitHub Copilot's *.instructions.md).

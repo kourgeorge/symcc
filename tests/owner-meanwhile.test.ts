@@ -1,6 +1,6 @@
 // T-970: which owner board actions leave the lead a Meanwhile line: an org-mem note the owner deletes does (the
 // lead's own orgmem remove doesn't); a settings change only for settings that change the work (not notify,
-// open_on_start, archive_days); a role or kind edit by slash command doesn't (the lead's instructions show the list).
+// open_on_start, archive_days); a role or task type edit by slash command doesn't (the lead's instructions show the list).
 import { expect } from 'claude-code/testing'
 import { emptyBoard } from '../hooks/board'
 import { S, leadQueue, meanwhile } from '../hooks/app/state'

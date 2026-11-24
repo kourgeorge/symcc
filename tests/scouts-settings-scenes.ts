@@ -28,8 +28,8 @@ export const SCENES: Scene[] = [
 /** The surfaces that must draw exactly as before. */
 export const OLD_SURFACES = ['terminal', 'desktop', 'mobile'] as const
 
-/** The Roles and Kinds pages and their one-role and one-kind pages (T-460), on the terminal, the desktop and mobile:
- *  opened from Settings' Roles and Kinds rows (in the Team group), with the roles and kinds of ROLE_FILES. */
+/** The Roles and Task types pages and their one-role and one-kind pages (T-460), on the terminal, the desktop and mobile:
+ *  opened from Settings' Roles and Task types rows (in the Team group), with the roles and task types of ROLE_FILES. */
 export const ROLE_KIND_PAGES = { roles: ['general', 'tester', 'docs', 'mobile-apps-and-tablets-everywhere', 'checker', 'bad'], kinds: ['bug', 'change', 'chore-and-upkeep-of-the-build'] }
 const seedRK = (on: On) => void seedRolesKinds(on)
 export const ROLE_KIND_SCENES: Scene[] = [

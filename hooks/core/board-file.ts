@@ -141,7 +141,7 @@ const PHASES: readonly Phase[] = ['claimed', 'worker', 'checker']
 export type BoardTask = SymccTask & { live?: Live; failed_on?: 'clash'; answer?: string; suggested?: string[] }
 
 /**
- * What a task is for: the name of a kind file (see core/kinds.ts), e.g. "bug" or "docs". Every kind ends in a
+ * What a task is for: the name of a kind file (see core/kinds.ts), e.g. "bug" or "docs". Every task type ends in a
  * commit, tests and a merge like a "change" (the default), except "investigation", which ends in its worker's
  * hand-back (the answer), with nothing committed, tested or merged. Stored only when it is not "change".
  */

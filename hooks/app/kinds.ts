@@ -4,7 +4,7 @@ import { skippedKinds, S } from './state'
 import type { Host } from '../host'
 import { type DefKind, loadDefs, defLists, manageDefs, newDefFile } from './def-files'
 
-// ---------------- task kinds ----------------
+// ---------------- task types ----------------
 // The plugin's kinds are texts (kinds/<name>.ts); the project's .<name>/kinds/<name>.md files are read like the roles (see def-files.ts), over them.
 
 /** What the lead's kinds tool gets. */
@@ -12,14 +12,14 @@ export type LeadKindInput = { action?: unknown; name?: unknown; description?: un
 
 /** What makes kinds kinds for the shared code (def-files.ts): built-in texts, lowercase names, a description and a body. */
 const KINDS: DefKind<KindDef, LeadKindInput> = {
-  noun: 'kind',
+  noun: 'task type',
   plural: 'kinds',
   skipped: skippedKinds,
   parse: parseKind,
   skipReason: kindSkipReason,
   nameError: kindNameError,
   fileText: kindFileText,
-  fixHint: '(front matter with a description; a name of letters, digits, - and _); if a built-in kind has that name, it is used meanwhile.',
+  fixHint: '(front matter with a description; a name of letters, digits, - and _); if a built-in task type has that name, it is used meanwhile.',
   builtIn: builtInKinds,
   merge: mergeKinds,
   get: () => S.kinds,
@@ -30,7 +30,7 @@ const KINDS: DefKind<KindDef, LeadKindInput> = {
   brokenLine: leadBrokenKindLine,
   oneText: leadKindText,
   counts: 'for the next task on',
-  noDescription: 'description is missing: say in a few words what this kind of task is (the lead reads it to choose)',
+  noDescription: 'description is missing: say in a few words what this task type is (the lead reads it to choose)',
   added: (a, description) => ({ description, body: typeof a.body === 'string' ? a.body : '' }),
   edited: (cur, a, description) => ({ description, body: typeof a.body === 'string' ? a.body : cur.body, ...(cur.off ? { off: true } : {}) }),
   turned: (cur, off) => ({ description: cur.description, body: cur.body, off }),
@@ -94,7 +94,7 @@ export async function saveKindDraft(host: Host): Promise<string> {
   const d = kindView.draft
   if (!d) return ''
   if (!d.description.trim()) {
-    d.error = 'description is missing: say in a few words what this kind of task is'
+    d.error = 'description is missing: say in a few words what this task type is'
     host.ui.refresh()
     return ''
   }

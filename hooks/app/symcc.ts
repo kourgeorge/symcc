@@ -152,7 +152,7 @@ export const notLeadText = (tool: string) =>
 /**
  * A tool that is not symcc's ran, and touched what `touch` says (a file it wrote or edited, or a shell command it ran;
  * null: none of those, as the host tells it from its own tool names, e.g. claude/tools.ts). Writing, editing or
- * deleting a scout file reschedules the scouts, a role or kind file reloads the roles or kinds, and the board is published again.
+ * deleting a scout file reschedules the scouts, a role or task type file reloads the roles or task types, and the board is published again.
  * Runs in the background.
  */
 export function otherToolDone(host: Host, touch: FileTouch | null) {

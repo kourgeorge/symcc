@@ -13,7 +13,7 @@ import { type $ } from '../panel'
 import type { PaneParts } from './parts'
 import { vsFooter, vsHref, vsLink, mdLink, mdText, vsSection } from './vscode'
 
-/** What settings.tsx hands the VS Code page: the Roles and Kinds counts, how to save, how to open those pages. */
+/** What settings.tsx hands the VS Code page: the Roles and Task types counts, how to save, how to open those pages. */
 export type VsSettingsCtx = {
   rolesCount: string
   kindsCount: string
@@ -84,15 +84,15 @@ export function settingsPageVs($: $, pane: PaneParts, ctx: VsSettingsCtx) {
     )
   }
 
-  // Roles and Kinds open their pages: a link (VS Code draws a Button as a filled box), the count beside it
+  // Roles and Task types open their pages: a link (VS Code draws a Button as a filled box), the count beside it
   const pageRow = (page: SettingPage) => {
     const roles = page === 'roles'
     const href = vsHref('page', page)
     const count = roles ? ctx.rolesCount : ctx.kindsCount
     return (
       <Box key={`vs-setting-${page}`} flexDirection="column">
-        {vsLink(vs, roles ? 'settings-roles' : 'settings-kinds', `**${mdLink(roles ? 'Roles' : 'Kinds', href)}** \u00a0${mdText(count)}`, [[href, roles ? ctx.openRoles : ctx.openKinds]])}
-        {plain('about', roles ? 'the worker roles, to open, edit, turn off or add' : 'the task kinds, to open, edit, turn off or add')}
+        {vsLink(vs, roles ? 'settings-roles' : 'settings-kinds', `**${mdLink(roles ? 'Roles' : 'Task types', href)}** \u00a0${mdText(count)}`, [[href, roles ? ctx.openRoles : ctx.openKinds]])}
+        {plain('about', roles ? 'the worker roles, to open, edit, turn off or add' : 'the task types, to open, edit, turn off or add')}
       </Box>
     )
   }

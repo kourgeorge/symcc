@@ -55,7 +55,7 @@ function focusMoved($: $, to: string | undefined) {
   const from = arrows.focused
   arrows.focused = to
   if (arrows.stops.some(k => k.startsWith('group:')) && headingFocused(from) !== headingFocused(to)) $.ui.invalidate('ui.render')
-  // T-918: the Roles and Kinds tables mark the focused line with ❯, so a move between their lines redraws
+  // T-918: the Roles and Task types tables mark the focused line with ❯, so a move between their lines redraws
   else if (from !== to && (tableRow(from) || tableRow(to))) $.ui.invalidate('ui.render')
 }
 

@@ -1,7 +1,7 @@
 // /<name>-doctor and the lead's doctor tool (T-676): checks the project's data folder (.<name>/) and git, lists what
 // it found with sizes, and cleans up only what the owner confirms (core/doctor.ts has the pure part). Each fix checks
 // again right before it acts, so nothing unmerged, uncommitted or in use is ever deleted. Reports, org-mem, scouts,
-// roles and kinds are never touched: only migration backups, task folders of finished tasks, stale git worktree
+// roles and task types are never touched: only migration backups, task folders of finished tasks, stale git worktree
 // entries and task branches already in their branch can be cleaned up.
 import { isFinished, type BoardTask, type Board, liveWorkersFor, intoOf, finishingNow, checkStepNow, parseLead, isFresh, liveDriver, activeFrom } from '../board'
 import { type DoctorItem, oldBackups, backupIds, branchId, folderId, PRUNE_ID, parseDoctorArgs, doctorText, fixedText, type DoctorFixed, mergeRunsText, mergeNoteText, pruneLines, STRAY_DIRS, DOCTOR_STUCK_MIN, BACKUP_MARK, MIGRATE_ID } from '../core/doctor'

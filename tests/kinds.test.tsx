@@ -1,4 +1,4 @@
-// Task kinds (T-328): built-in kind texts in the plugin's kinds/ (kinds/index.ts), the owner's own in .symcc/kinds/ over them.
+// Task types (T-328): built-in kind texts in the plugin's kinds/ (kinds/index.ts), the owner's own in .symcc/kinds/ over them.
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { parseKind, kindSkipReason, mergeKinds, checkKind, kindNames, kindsLeadText, BUILT_IN_KINDS, detailRows, addTask, emptyBoard } from '../hooks/board'
@@ -14,7 +14,7 @@ const MINE = `${ROOT}/.symcc/kinds`
 const PLUGIN = '/plugin'
 const kindFile = (description: string) => `---\ndescription: ${description}\n---\n`
 
-/** A fake $ with the project's .symcc/kinds (`mine`: file name -> text); the built-in kinds are the real ones. */
+/** A fake $ with the project's .symcc/kinds (`mine`: file name -> text); the built-in task types are the real ones. */
 function setup(mine: Record<string, string> = {}) {
   const toasts: string[] = []
   const where = (p: string): [Record<string, string>, string] | null => {
@@ -48,7 +48,7 @@ function setup(mine: Record<string, string> = {}) {
   return { $, toasts }
 }
 
-test('the built-in kinds load from kinds/index.ts, change first; each built-in name has a text', async () => {
+test('the built-in task types load from kinds/index.ts, change first; each built-in name has a text', async () => {
   const { $ } = setup()
   const kinds = await loadKinds($ as never)
   expect(kinds.map(k => k.name)).toEqual([...BUILT_IN_KINDS])
@@ -58,7 +58,7 @@ test('the built-in kinds load from kinds/index.ts, change first; each built-in n
   expect(S.kinds).toBe(kinds)
 })
 
-test("the owner's .symcc/kinds/<name>.md wins over a built-in kind of the same name, and adds a new one", async () => {
+test("the owner's .symcc/kinds/<name>.md wins over a built-in task type of the same name, and adds a new one", async () => {
   const { $ } = setup({ 'bug.md': '---\ndescription: a defect the owner found\n---\nSteps go here.\n', 'chore.md': kindFile('small upkeep') })
   const kinds = await loadKinds($ as never)
   expect(kinds.find(k => k.name === 'bug')).toMatchObject({ name: 'bug', description: 'a defect the owner found', body: 'Steps go here.' })
@@ -84,12 +84,12 @@ test('a kind file needs a description and a plain name', () => {
   expect(kindSkipReason('a b', kindFile('x'))).toMatch(/^bad name/)
 })
 
-test('an unknown kind is refused naming the known ones; change and investigation are always known', () => {
+test('an unknown task type is refused naming the known ones; change and investigation are always known', () => {
   const kinds = mergeKinds([parseKind('bug', kindFile('wrong'))!], [])
   expect(kindNames(kinds)).toEqual(['change', 'bug', 'investigation'])
   expect(checkKind([], 'investigation')).toBe('investigation')
   expect(checkKind(kinds, ' BUG ')).toBe('bug')
-  expect(() => checkKind(kinds, 'chore')).toThrow('unknown kind "chore"; the kinds are: change, bug, investigation')
+  expect(() => checkKind(kinds, 'chore')).toThrow('unknown task type "chore"; the task types are: change, bug, investigation')
 })
 
 test("the lead's instructions list the kinds with their descriptions and say change when unsure", async () => {
@@ -107,10 +107,10 @@ test('the task page shows the kind next to the role; a plain change shows no kin
   const [b, t] = addTask(emptyBoard(), { origin: { why: 'a test' }, title: 'Fix', kind: 'bug', role: 'tester' }, '2026-01-01T00:00:00.000Z')
   const rows = detailRows(t, { roles: [], kinds: S.kinds, all: b.tasks, when: s => s, nowMs: 0 })
   const roleAt = rows.findIndex(r => r.label === 'Role')
-  expect(rows[roleAt + 1]!.label).toBe('Kind')
+  expect(rows[roleAt + 1]!.label).toBe('Type')
   expect(rows[roleAt + 1]!.segs.map(s => s.text).join('')).toBe('bug — something that works wrongly')
   const [, c] = addTask(b, { origin: { why: 'a test' }, title: 'Plain' }, '2026-01-01T00:00:00.000Z')
-  expect(detailRows(c, { roles: [], kinds: S.kinds, all: [c], when: s => s, nowMs: 0 }).some(r => r.label === 'Kind')).toBe(false)
+  expect(detailRows(c, { roles: [], kinds: S.kinds, all: [c], when: s => s, nowMs: 0 }).some(r => r.label === 'Type')).toBe(false)
 })
 
 test('the state line of an answered investigation says "answered: read it" in green; a change task in review still says ready for review (T-701, T-751)', () => {

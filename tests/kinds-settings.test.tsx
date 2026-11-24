@@ -25,7 +25,7 @@ const PANE = {
 const VIEW = { view: { shape: 'view-1', value: { tasks: [], working: [], scouts: [], mode: 'review', test_commands: [] } }, tab: 'settings' }
 
 /**
- * A fake kinds folder: `mine` is the project's .symcc/kinds (file name -> text); the built-in kinds are the real ones (kinds/index.ts).
+ * A fake kinds folder: `mine` is the project's .symcc/kinds (file name -> text); the built-in task types are the real ones (kinds/index.ts).
  * fs.write and `rm -f` change `mine`, so what the panel writes or deletes is seen by the next read.
  */
 function fakeKinds(on: On, mine: Record<string, string>) {
@@ -84,22 +84,22 @@ async function settingsOnly($: Eng) {
   return ui
 }
 
-/** Mounts the panel on Settings and opens its Kinds page. */
+/** Mounts the panel on Settings and opens its Task types page. */
 async function settings($: Eng) {
   const ui = await settingsOnly($)
   await ui.press({ key: 'settings-kinds' })
   return ui
 }
 
-test('Settings has a Kinds row next to Roles; its page lists the kinds with the same keys as the Roles page', async ($, on) => {
+test('Settings has a Task types row next to Roles; its page lists the task types with the same keys as the Roles page', async ($, on) => {
   stateOf(on, VIEW)
   fakeKinds(on, { 'bug.md': '---\ndescription: a defect\noff: true\n---\n', 'chore.md': '---\ndescription: small upkeep\n---\n' })
   const ui = await settingsOnly($)
-  expect((await ui.find({ key: 'settings-kinds' }))?.props.label).toBe('Kinds: 7 kinds · 1 off')
+  expect((await ui.find({ key: 'settings-kinds' }))?.props.label).toBe('Task types: 7 task types · 1 off')
   expect(await ui.find({ key: 'kindRow:change' })).toBeUndefined()
   await ui.press({ key: 'settings-kinds' })
   // T-918: the heading with its count, the column heads, one line per kind (NAME, FROM, WHAT IT'S FOR), the cursor's ❯
-  expect((await ui.find({ type: 'Text', text: /^▍Kinds/ }))?.text).toBe('▍Kinds  7 kinds · 2 changed by you · 1 off')
+  expect((await ui.find({ type: 'Text', text: /^▍Task types/ }))?.text).toBe('▍Task types  7 task types · 2 changed by you · 1 off')
   expect((await ui.find({ type: 'Text', text: /^  NAME/ }))?.text).toBe("  NAME           FROM          WHAT IT'S FOR")
   const label = async (name: string) => (await ui.find({ key: `kindRow:${name}` }))?.props.label
   expect(await label('change')).toBe('change: built-in')
@@ -108,10 +108,10 @@ test('Settings has a Kinds row next to Roles; its page lists the kinds with the 
   expect(await label('investigation')).toBe('investigation: built-in')
   expect((await ui.find({ key: 'kindRow:chore' }))?.text).toBe('  chore          added by you  small upkeep')
   expect((await ui.find({ key: 'kindRow:change' }))?.text).toMatch(/^❯ change         built-in      /)
-  expect((await ui.find({ key: 'kind-new' }))?.text).toBe('  + New kind (n)')
+  expect((await ui.find({ key: 'kind-new' }))?.text).toBe('  + New task type (n)')
   // no "Enter opens" line and no Back button: the key line says them
   expect(await ui.find({ type: 'Text', text: /Enter opens a kind/ })).toBeUndefined()
-  expect(await ui.find({ type: 'Text', text: /Enter open · n new kind · ↑↓ move · l t s c views · b back/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /Enter open · n new type · ↑↓ move · l t s c views · b back/ })).toBeDefined()
   await ui.press({ key: 'kindRow:chore' })
   await ui.press({ key: 'kind-back' })
   await ui.press({ key: 'kinds-back' })
@@ -154,9 +154,9 @@ test('New kind makes .symcc/kinds/<name>.md and opens it; Edit saves; a bad name
   const ui = await settings($)
   await ui.press({ key: 'kind-new' })
   await ui.input({ key: 'kind-new-name', text: 'a/b' })
-  expect(await ui.find({ type: 'Text', text: /not a valid kind name/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /not a valid task type name/ })).toBeDefined()
   await ui.input({ key: 'kind-new-name', text: 'chore' })
-  expect(mine['chore.md']).toContain('description: what this kind of task is')
+  expect(mine['chore.md']).toContain('description: what this task type is')
   expect(await ui.find({ key: 'kind-description' })).toBeDefined()
   await ui.input({ key: 'kind-description', text: 'small upkeep', kind: 'change' })
   await ui.press({ key: 'kind-save' })

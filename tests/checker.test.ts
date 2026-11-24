@@ -537,7 +537,7 @@ test("a checker role's checklist gets its placeholders filled in, as a worker's 
   const p = w.spawns[0]!.prompt
   expect(p).toContain('files: Files you may change: src/.')
   expect(p).toContain("tests: Don't run the project's own tests (its test files or test commands): symcc runs the project's test commands once, in the merge queue, after you.")
-  expect(p).toContain('id T-1 \nKind of task: change.')
+  expect(p).toContain('id T-1 \nThe task type is change.')
   expect(p).toContain('{{nope}}')
   expect(p).not.toContain('{{files}}')
   expect(p).not.toContain('{{test_command}}')

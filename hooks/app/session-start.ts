@@ -50,7 +50,7 @@ export function leadBeat(host: Host) {
 
 /**
  * The session started (after sessionStarting and the host's registration): learns the project, migrates old files,
- * claims the lead, loads scouts, roles and kinds, starts the timers and opens the board panel.
+ * claims the lead, loads scouts, roles and task types, starts the timers and opens the board panel.
  */
 export async function sessionStart(host: Host) {
   // A session in one of symcc's worker folders (<main project>/.<name>/worktrees/...) only guards (see guardStart);

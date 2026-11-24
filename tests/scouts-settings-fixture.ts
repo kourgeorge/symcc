@@ -47,9 +47,9 @@ export function seedScouts(on: On, tab: 'scouts' | 'settings', scout = '', toast
 /** The scout pages the tests open, one by one. */
 export const SCOUT_PAGES = SCOUTS.map(s => s.name)
 
-/** The plugin's roles (built-in) and the project's own roles and kinds the Roles and Kinds pages list (T-460): a
+/** The plugin's roles (built-in) and the project's own roles and task types the Roles and Task types pages list (T-460): a
  *  replaced role, one turned off, one added with a long name and description, one whose file can't be read, the
- *  checker role; a built-in kind turned off and an added kind. fs.write and `rm -f` change the project's files. */
+ *  checker role; a built-in task type turned off and an added kind. fs.write and `rm -f` change the project's files. */
 export const ROLE_FILES = {
   builtIn: {
     'general.md': '---\ndescription: a plain worker for any task; use it when no other role fits\n---\n',
@@ -69,7 +69,7 @@ export const ROLE_FILES = {
   } as Record<string, string>,
 }
 
-/** Seeds the board on Settings (see seedScouts) with the roles and kinds of ROLE_FILES. */
+/** Seeds the board on Settings (see seedScouts) with the roles and task types of ROLE_FILES. */
 export function seedRolesKinds(on: On, toast: (e: unknown) => void = () => {}) {
   seedScouts(on, 'settings', '', toast)
   const builtIn = { ...ROLE_FILES.builtIn }

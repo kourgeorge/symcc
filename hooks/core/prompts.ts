@@ -1,4 +1,4 @@
-// Worker prompts: what a worker is started with, one per task kind (a change, an investigation), and the checker's. Each is put
+// Worker prompts: what a worker is started with, one per task type (a change, an investigation), and the checker's. Each is put
 // together from sections in a fixed order (prompt-sections.ts, T-851), the fixed words in prompts/*.ts in the plugin. They are
 // built-in only; roles (roles/*.md, the Roles page) fill their role section and are how the owner shapes what a worker does.
 // {{placeholders}} in the text are filled in for each task, and {{task.<path>}} gives any field of the task. Everything here is pure.
@@ -12,7 +12,7 @@ import { CHANGED_ASK, CHANGED_ASK_NO_TOOLS, type ChangedSince } from './changed-
 
 export { fillPlaceholders, placeholdersIn }
 
-/** The prompts there are: one per task kind. */
+/** The prompts there are: one per task type. */
 export type PromptKind = 'change' | 'investigation'
 export const PROMPT_KINDS: readonly PromptKind[] = ['change', 'investigation']
 
@@ -48,8 +48,8 @@ const SHARED_PLACEHOLDERS: Record<string, string> = {
   branch: 'the worker\'s branch, e.g. symcc/T-12',
   folder: 'the worker\'s own folder (its copy of the project)',
   role: 'the role\'s checklist, skills and web rule (empty for general)',
-  kind: 'the task\'s kind and what it is for, e.g. "Kind of task: bug (something that works wrongly)."',
-  kind_name: 'the task\'s kind, e.g. bug',
+  kind: 'the task\'s type and what it is for, e.g. "The task type is bug (something that works wrongly)."',
+  kind_name: 'the task\'s type, e.g. bug',
   role_name: 'the task\'s role, e.g. tester',
   org_mem: 'only when organizational memory (.symcc/org-mem.md) has lines: "Organizational memory (org-mem): notes earlier agents left about this project", then its lines',
   learned: 'how to end the report with an optional "Learned:" section for organizational memory (org-mem); only on a host that can\'t send the debrief after the hand-back (T-656), else empty',
@@ -127,7 +127,7 @@ export const promptSectionLines = (kind: RolePromptKind): string[] =>
   })
 
 /** The built-in prompts role `name` goes into: the checker role (see CHECKER_ROLE) only into the checker's prompt, any other
- *  role into a worker's prompt, one per task kind. */
+ *  role into a worker's prompt, one per task type. */
 export const promptsOfRole = (name: string): RolePromptKind[] => (name.toLowerCase() === 'checker' ? ['checker'] : [...PROMPT_KINDS])
 
 /** Where the role goes in a prompt. */

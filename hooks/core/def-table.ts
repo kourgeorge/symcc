@@ -1,4 +1,4 @@
-// The Roles and Kinds pages as a table (T-918): one line per role or kind, the columns lined up, the description cut
+// The Roles and Task types pages as a table (T-918): one line per role or task type, the columns lined up, the description cut
 // to fit with "…". Every board draws it from here (the terminal, VS Code, OpenCode):
 //     NAME        FROM       MODEL   WEB  WRITES  WHAT IT'S FOR
 //   ❯ general     changed    —       —    code    a plain worker for any task
@@ -34,7 +34,7 @@ export const CURSOR_MARK = '❯ '
 /** The fewest columns of description a line keeps before a column goes. */
 export const MIN_ABOUT = 16
 
-/** Where a role or kind comes from, as its FROM cell says it: off wins. */
+/** Where a role or task type comes from, as its FROM cell says it: off wins. */
 export type DefFrom = 'built-in' | 'changed' | 'added by you' | 'off'
 export const defFrom = (source: DefSource | undefined, off: boolean): DefFrom => (off ? 'off' : source === 'replaced' ? 'changed' : source === 'added' ? 'added by you' : 'built-in')
 /** The color of a FROM cell. */
@@ -88,11 +88,14 @@ export const kindTableRow = (k: KindDef, source: DefSource | undefined): DefRow 
 /** The line of a file that can't be read: its name, then why. */
 export const brokenTableRow = (b: BrokenDef): DefRow => ({ name: b.name, off: false, cells: {}, broken: brokenLabel(b) })
 
+/** What the owner reads for a role or a kind: "role" or "task type". */
+export const defWord = (noun: 'role' | 'kind'): string => (noun === 'kind' ? 'task type' : 'role')
+
 /** The heading's count: "8 roles · 2 changed by you · 1 off" (changed: the owner's own files, changed or added, off ones too). */
 export function defsCountText(noun: 'role' | 'kind', rows: readonly DefRow[]): string {
   const changed = rows.filter(r => r.mine).length
   const off = rows.filter(r => r.off).length
-  return `${rows.length} ${noun}${rows.length === 1 ? '' : 's'}${changed ? ` · ${changed} changed by you` : ''}${off ? ` · ${off} off` : ''}`
+  return `${rows.length} ${defWord(noun)}${rows.length === 1 ? '' : 's'}${changed ? ` · ${changed} changed by you` : ''}${off ? ` · ${off} off` : ''}`
 }
 
 /** The columns that fit in `width` and each one's width (the description's is what is left). */
@@ -152,4 +155,4 @@ export function defCellTone(row: DefRow, col: DefCol): { color: string; bold?: b
 }
 
 /** The "+ New role (n)" line's words. */
-export const newDefText = (noun: 'role' | 'kind') => `+ New ${noun} (n)`
+export const newDefText = (noun: 'role' | 'kind') => `+ New ${defWord(noun)} (n)`

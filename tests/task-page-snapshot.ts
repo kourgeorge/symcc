@@ -12275,7 +12275,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Kind:     "]},
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Type:     "]},
               {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["investigation"]},
               {"type":"Text","props":{"color":"inactive"},"children":[" — nothing is merged"]}
             ]
@@ -13214,7 +13214,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"text"},"children":["Kind:     "]},
+              {"type":"Text","props":{"bold":true,"color":"text"},"children":["Type:     "]},
               {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["investigation"]},
               {"type":"Text","props":{"color":"inactive"},"children":[" — nothing is merged"]}
             ]

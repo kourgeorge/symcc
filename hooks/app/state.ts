@@ -116,7 +116,7 @@ export const startS = () => ({
   activeAt: null as number | null,
   /** the worker roles: the plugin's roles/ with the project's .<name>/roles/ over them (see loadRoles) */
   roles: [] as RoleDef[],
-  /** the task kinds: the plugin's kinds/ with the project's .<name>/kinds/ over them (see loadKinds) */
+  /** the task types: the plugin's kinds/ with the project's .<name>/kinds/ over them (see loadKinds) */
   kinds: [] as KindDef[],
   /** the home folder, to shorten it to "~" where the project's path is shown */
   home: '',

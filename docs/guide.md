@@ -11,7 +11,7 @@ The full details. For the short version, see the [README](../README.md).
 - [Tracing a task back](#tracing-a-task-back)
 - [Where to see what a task did](#where-to-see-what-a-task-did)
 - [Scouts](#scouts)
-- [Task kinds](#task-kinds)
+- [Task types](#task-types)
 - [Worker roles](#worker-roles)
 - [Which branch work goes into](#which-branch-work-goes-into)
 - [Keeping work moving on its own](#keeping-work-moving-on-its-own)
@@ -764,7 +764,7 @@ session that drives the board starts work. (Background: `docs/research/plan-mode
 Not every task should change the project. When you want an answer, or input for a decision
 you will make ("is it possible to…", "should we…", "how does X work?", "why is Y slow?"),
 the lead adds an **investigation** instead of a **change**: these are two of the
-[task kinds](#task-kinds) (the task's `kind`). When the
+[task types](#task-types) (the task's `kind` in `board.json`). When the
 answer should stay in the project as a lasting document that later tasks or people will
 read, the lead adds a change instead. Researcher tasks are investigations unless the lead
 says `kind: change`.
@@ -795,7 +795,7 @@ The life of an investigation:
 
 **On the board** an answered investigation shows `◆ answer` in the status column instead
 of `review`, and every investigation has `[investigation]` after its title. Its page says
-`Kind: investigation — nothing is merged` and shows the full answer in an **Answer**
+`Type: investigation — nothing is merged` and shows the full answer in an **Answer**
 section (from the latest worker report, or the short answer saved on the task), with Done,
 Keep as a note and Ask more in place of Approve and Reject.
 
@@ -913,7 +913,7 @@ are about changes; under "How tasks ended" a read investigation shows as
   - `last:N`: the N tasks changed most recently, newest first.
   - `top:N`: the next N to run (the to-do tasks in run order; with `status:` those instead).
   - `since:30m`, `since:2h`, `since:2d`, `since:1w` or `since:2026-11-18`: changed since then.
-  - `status:done` (or `status:open`, or several: `status:done,dropped`), `kind:bug`,
+  - `status:done` (or `status:open`, or several: `status:done,dropped`), `type:bug`,
     `role:tester`.
   - `waits-on:T-3`: the tasks that wait for T-3, directly or through a chain (T-5 waits for
     T-4, which waits for T-3).
@@ -922,7 +922,7 @@ are about changes; under "How tasks ended" a read investigation shows as
   - `stuck`: to-do tasks that can't start because something they wait for (directly or through
     a chain) is failed, paused, waiting for you, dropped, or missing from the board. A done
     task that was archived counts as done here, not missing.
-  These mix too: `waits-on:T-3 status:todo`, `stuck kind:bug`; `waits-on:T-3,T-4` takes either.
+  These mix too: `waits-on:T-3 status:todo`, `stuck type:bug`; `waits-on:T-3,T-4` takes either.
   A word like `foo:bar` that is not one of these is looked for as a plain word. The lead's
   board tool also takes `limit` and `sort` (`newest` or `order`: what runs next first, by priority), the same as `last:` and
   `top:`, and says how many matched in all (`10 of 37 matching shown`).
@@ -931,9 +931,9 @@ are about changes; under "How tasks ended" a read investigation shows as
   underlined (on a narrow panel the tabs get shorter, `[l] Live│[t] Tasks (12)…`, never cut).
   The board opens on Live. Press `l`, `t`, `s` or `c` (or click a tab) to switch.
   The header (the banner with its tests/limits line and drive warning, then the tabs) shows
-  only on the list pages: Tasks, Live, Scouts, Settings, and Settings' Roles, Kinds and
+  only on the list pages: Tasks, Live, Scouts, Settings, and Settings' Roles, Task types and
   Organizational memory lists. A page of one thing (a task, a question, a scout or one of its
-  runs, a role, a kind, a role's prompt) starts with its own title instead; its buttons and the
+  runs, a role, a task type, a role's prompt) starts with its own title instead; its buttons and the
   key line at the bottom stay. This is the same in the terminal panel, VS Code and OpenCode.
   Back from a task opened on the Live tab goes back to the Live tab. The Live tab is on all three
   boards: the Claude Code terminal panel, VS Code (which draws the lanes as real lines;
@@ -954,7 +954,7 @@ are about changes; under "How tasks ended" a read investigation shows as
     [Worker roles](#worker-roles)), `test_minutes` (how many minutes each test
     command may run before merging, a whole number from 1 to 120, 10 by default; any other value
     is refused), `tests_with_changes`, `checker`
-  - **Workers**: the **Roles** and **Kinds** rows (org-mem is on the Live tab, see
+  - **Workers**: the **Roles** and **Task types** rows (org-mem is on the Live tab, see
     [Organizational memory](#organizational-memory-org-mem))
   - **Scouts**: `scout_findings`
   - **Board and alerts**: `notify`, `open_on_start`, `archive_days`
@@ -1089,7 +1089,7 @@ only; the Organizational memory page has the same header shape, see below):
 2. **The title**: the id, always in the board's orange whatever the status, then the title in
    bold. A long title wraps, indented under itself.
 3. **The state**: the status mark and word in its color, and for a running task its step and
-   its work time; then kind · role · try n/m (n of the tries it may get, its automatic retries
+   its work time; then task type · role · try n/m (n of the tries it may get, its automatic retries
    counted); then where it came from (`♟ from you`, `⌕ scout bugs`, `◆ lead`, `↳ from T-5`,
    `▸ from T-5` for a worker's report); then its note, dim, when it has one. There are no
    Status, Stage or Now rows in Details any more: Details starts with the **Steps** row (the
@@ -1255,13 +1255,13 @@ words as bold headings with the same spacing):
 - On the right: the time at the current station, or the place in the merge queue (`#2`).
 - The second row has no bar, only numbers about this task:
   `bug try 4/4 · ⏱ 41m · ⌀ 7.3M (7.6× median) · <worker 5.4M · checker 1.9M> · ⌕ × 2`. That is
-  the kind and the try (`try 2/3`, auto retries after failing tests included), the task's working
+  the task type and the try (`try 2/3`, auto retries after failing tests included), the task's working
   time so far (all tries; time when Claude Code was closed is left out), the whole task's tokens
   (every try so far), how many times the board's median tokens per merged task that is (yellow
   from twice the median), how its tokens split between its workers and checkers, together in
   `< >` (a part that is 0 is left out, and there is no `< >` when there is nothing to split), and
   `⌕ × N` for how many times the checker sent the task back (`⌕` is the checker's mark; on a task row, `↺` with a number is the try). On a narrow panel the parts go in this order: first the
-  `< >` split, then `(× median)`, then the kind, then `⌀`, and the clock `⏱` last; the try stays. A
+  `< >` split, then `(× median)`, then the task type, then `⌀`, and the clock `⏱` last; the try stays. A
   running worker's tokens are only known when it hands back, so until then the row shows the
   earlier tries' sum with `+ …` (`⌀ 4.0M + …`), or `⌀ at hand-back` on a first try.
 - **Signs on the boards:** `⌀` = tokens (a count has `⌀` in front: `⌀ 716.1k`; the legend at the bottom of the Live tab, below the footer, says so, and with no lane the same dim note, `⌀ = tokens`, ends TODAY). `avg` marks an average (`avg ⌀ 2M/task`). Task pages (the agent lines, the Tries summary's checker part) use it too. `/symcc-stats` and its HTML page keep the word "tokens".
@@ -1468,7 +1468,7 @@ unchanged.
   status pill on the VS Code board has this one look), a blank line
   between them. Each task is one button: the ID dim and the title (up to two lines; a longer
   one ends with "(more)", and its page has it whole), then a dim line with the status in its
-  color and its time (`▶ 2m`, `? waiting for 5m`, `✗ failed 3m ago`), the kind or role, the
+  color and its time (`▶ 2m`, `? waiting for 5m`, `✗ failed 3m ago`), the task type or role, the
   try, and the question or why it failed. A task that needs you starts with a `●` and has a
   bold title. The lead's questions look the same, in the warning color. Backlog, Done and
   Dropped are folded headings (`▸ Backlog  3 `), closed until you click them. With nothing
@@ -1490,7 +1490,7 @@ unchanged.
   answers as buttons and a box for your own answer (a file request has `Allow files` and
   `Don't allow`); **Why it failed** (red); **Waiting for your files** (yellow).
   Then the sections, each under a clear heading: **Details**, the same labelled rows as the
-  terminal and OpenCode task pages (Steps, Added, Priority, Role, Kind, From, Why, Files, Into,
+  terminal and OpenCode task pages (Steps, Added, Priority, Role, Type, From, Why, Files, Into,
   After, …, Tries) as a label and value list that wraps, each task it waits for a link that
   opens it; the **Branch** (the task's branch against main, as on the terminal, in the
   monospaced font); the **Answer** of an investigation; **What to do** (the details, drawn as
@@ -1516,7 +1516,7 @@ unchanged.
   open_on_start, enabled) is a drop-down: pick a value and it is saved at once. Numbers and the
   test commands are boxes: type and press `Save` (a wrong value says why and saves nothing; an
   empty test commands box clears them). Under each row, a dim line says the default and what
-  the setting does. Roles and Kinds are buttons that open their pages. No key hints.
+  the setting does. Roles and Task types are buttons that open their pages. No key hints.
 
 ---
 
@@ -1844,18 +1844,18 @@ The checker's verdict is written in the task's history.
 
 ---
 
-## Task kinds
+## Task types
 
-Each task has a **kind**: what the task is for. It is shown next to the task (`bug`,
-`investigation`); `change` shows nothing, because it is the default. A kind you add is one
-Markdown file, like a role (see [Worker roles](#worker-roles)). The worker is told its task's kind and
+Each task has a **task type**: what the task is for. It is shown next to the task (`bug`,
+`investigation`); `change` shows nothing, because it is the default. A task type you add is one
+Markdown file, like a role (see [Worker roles](#worker-roles)); task types live in `.symcc/kinds/` (the folder keeps its old name). The worker is told its task's type and
 what it means.
 
-The built-in kinds (in the plugin, one file each: `kinds/<name>.ts`):
+The built-in task types (in the plugin, one file each: `kinds/<name>.ts`):
 
-| Kind | What it is for |
+| Task type | What it is for |
 |---|---|
-| `change` | A general change when no other kind fits (the default). |
+| `change` | A general change when no other task type fits (the default). |
 | `bug` | Something that works wrongly. The worker finds why and fixes it, with a test that fails before the fix and passes after. |
 | `feature` | New behavior for you, with tests that show it works. |
 | `refactor` | Cleaning up code without changing what it does; tests that passed still pass. |
@@ -1864,15 +1864,15 @@ The built-in kinds (in the plugin, one file each: `kinds/<name>.ts`):
 
 **Two ways a task runs.** `investigation` is one of them: its worker hands back an answer,
 nothing is committed, tested or merged, and it waits for you to read it (see
-[Investigation tasks](#investigation-tasks)). Every other kind, `change` included, runs the
+[Investigation tasks](#investigation-tasks)). Every other task type, `change` included, runs the
 same way: the worker changes files, which are committed, tested and merged (see
 [What happens when a worker finishes](#what-happens-when-a-worker-finishes)).
 
-**How the lead picks one.** The lead reads each kind's description and chooses the one that
+**How the lead picks one.** The lead reads each task type's description and chooses the one that
 fits when it adds a task; `change` when unsure. To override it, tell the lead: "make T-5 a
-bug" or "T-7 is an investigation". It changes the kind of a task that has not finished yet.
+bug" or "T-7 is an investigation". It changes the task type of a task that has not finished yet.
 
-**Your own kinds.** Put a file in `.symcc/kinds/<name>.md` in your project:
+**Your own task types.** Put a file in `.symcc/kinds/<name>.md` in your project:
 
 ```markdown
 ---
@@ -1882,28 +1882,28 @@ Keep the change small and say what you updated.
 ```
 
 `description` is required: it says what the task is, the lead reads it to choose, and the worker
-is told it. The name uses letters, digits, `-` and `_`. A file with the name of a built-in kind
+is told it. The name uses letters, digits, `-` and `_`. A file with the name of a built-in task type
 replaces it. The text under the front matter is extra advice for the worker. A file that can't be
 used is skipped, with a note.
 
-A kind is only a label with a description. It does not change how a task runs.
+A task type is only a label with a description. It does not change how a task runs.
 
-**Add, edit, reset, turn off.** The easy way is to ask the lead: "show me the kinds", "add a
-`chore` kind for dependency bumps", "turn off the feature kind", "reset the bug kind". The lead
+**Add, edit, reset, turn off.** The easy way is to ask the lead: "show me the task types", "add a
+`chore` task type for dependency bumps", "turn off the feature task type", "reset the bug task type". The lead
 uses its `kinds` tool (list, add, edit, reset, remove, off, on). Or use the board panel: the
-Settings view (`c`) has a **Kinds** row that opens the Kinds page, with the same keys as the
-Roles page (Enter opens a kind, `n` adds a new one, `b` goes back). It is the same kind of
+Settings view (`c`) has a **Task types** row that opens the Task types page, with the same keys as the
+Roles page (Enter opens a task type, `n` adds a new one, `b` goes back). It is the same sort of
 table, with three columns: **NAME**, **FROM** and **WHAT IT'S FOR**.
 
-- Each kind's FROM says `built-in`, `changed` (your file over a built-in), `added by you`
+- Each task type's FROM says `built-in`, `changed` (your file over a built-in), `added by you`
   (your own) or `off`.
-- **Edit** on a built-in kind first copies it to `.symcc/kinds/`, then changes the copy.
-- **Reset** removes your file for a built-in name, so the built-in comes back. A kind you
+- **Edit** on a built-in task type first copies it to `.symcc/kinds/`, then changes the copy.
+- **Reset** removes your file for a built-in name, so the built-in comes back. A task type you
   added has nothing to go back to: the lead removes it instead (after asking you).
-- **Off** means the lead never picks the kind for a new task. A task that already has it keeps
+- **Off** means the lead never picks the task type for a new task. A task that already has it keeps
   it. `change` and `investigation` can't be turned off. **On** turns it back.
 
-A separate workflow for each kind was designed but never built, by choice. See
+A separate workflow for each task type was designed but never built, by choice. See
 [the old design](research/task-kinds-and-workflows.md) for the history.
 
 ---
@@ -1999,7 +1999,7 @@ skills: [code-review]
   roles are the one place to shape what a worker does. A role's page in the panel shows the
   prompt it goes in ([Prompt], `p`).
 - A prompt is sections under markdown headings, the task first and the rules last. A change
-  worker gets: the task (`# Task T-3: <title>` with the kind and role under it), **Why, in the owner's words** (the why
+  worker gets: the task (`# Task T-3: <title>` with the task type and role under it), **Why, in the owner's words** (the why
   line and your own request, quoted), **What to do** (the details), **Notes from the lead** (the
   lead's `Note (lead, <date>)` lines, oldest first; where a note and the text differ, the newest
   note wins), the role, **Files you may change**, **Where you work** (folder and branch; after
@@ -2022,7 +2022,7 @@ skills: [code-review]
   | `{{files}}` | change tasks only: the "Files you may change" lines |
   | `{{test_command}}` | change tasks only: the "these must pass" line with your test commands |
   | `{{folder}}`, `{{branch}}` | the worker's own folder and its branch (`symcc/T-3`) |
-  | `{{kind}}` | the task's kind and what it is for |
+  | `{{kind}}` | the task's type and what it is for |
   | `{{name}}` | the plugin's name (`symcc`) |
   | `{{task.<path>}}` | any field of the task, by its path, e.g. `{{task.origin.request}}` or `{{task.files}}`: text as it is, a list one item per line, an object as `key: value` lines, a missing field as nothing |
 
@@ -2033,7 +2033,7 @@ skills: [code-review]
 You can change a task's role yourself: say "use the security role for T-12", or open the task
 in the board panel and press `l` (Role) to pick one. That works on a task to do, paused,
 failed or in the backlog. The role shows on the task's page (its Role row), not in the board
-list: a row's tag at its right end is only the task's kind (`[bug]`, `[docs]`), and a plain
+list: a row's tag at its right end is only the task's task type (`[bug]`, `[docs]`), and a plain
 change shows no tag.
 
 **Which try is it?** When a task is doing and this is not its first try, the board says so. A
@@ -2286,7 +2286,7 @@ sizes. It changes nothing until you say so.
   make you delete a different one: an id no longer offered is named and skipped. Each item is
   checked again right before it goes, so work added in between is kept. The same works in OpenCode and on the command line (`cmd symcc-doctor fix`), and the
   lead has a `doctor` tool, which it uses to clean up only after you said yes.
-- **Never touched:** reports, org-mem, scouts, roles and kinds, a running task's folder or
+- **Never touched:** reports, org-mem, scouts, roles and task types, a running task's folder or
   branch, and anything unmerged or uncommitted. While a merge is going on, the doctor still
   checks and shows the list (the task being merged has its folder and branch marked "being
   merged" and never offered), but `fix` changes nothing and says which merge is running; try the
@@ -2361,7 +2361,7 @@ its read-only `stats` tool.
   price compared with input (input 1, cache write 1.25, cache read 0.1, output 5), i.e. how many
   plain input tokens would cost the same. It is an estimate: real prices depend on the model.
   Elsewhere (the board, the banner, a task's page, the per-task and per-day rows) one short
-  figure is shown, "in all": every kind added up.
+  figure is shown, "in all": every task type added up.
 - **Unsplit tokens:** tries and scout runs saved before the kinds were kept apart only have one
   number. symcc changes those files once (when a session starts): the number is kept as it was,
   marked *unsplit*. They count in the "in all" figures and are shown as `unsplit`, but are left
@@ -2756,11 +2756,11 @@ Workers, scouts and checkers are OpenCode sessions of their own. Each one is a c
 
 The board opens by itself in OpenCode's session panel, next to the session, the first time a session is shown, as in Claude Code at session start; turn the `open_on_start` setting off (`/symcc-settings open_on_start off`) to stop that. `/symcc-board` (or "symcc board" in OpenCode's command palette, ctrl+p) also opens it (run it again to close it; on OpenCode's home page, with no session open, a message says to open or start one first): the banner, then the tasks grouped as in Claude Code (Questions for you, NEEDS YOU, what runs and waits, the backlog, and Done and Dropped as counts), with the same marks, short states and times. The backlog shows its first 5 tasks and then "… N more (Enter to show all)": Enter or a click on that row lists the whole backlog. Open, Done lists today's finished tasks, then one folded row per older day ("▸ Yesterday · 6 done", "▸ Sun 15 Nov · 1 done"): Enter or a click on a day row opens or folds it. ↑/↓ (or k/j, on every page, a task's page too) move, Enter opens a task or a question, b goes back, [ and ] go to the previous and the next task (or scout) of the list on its page, Esc closes the panel. On a task in review, a approves and x rejects (it asks for the reason); on a waiting task or a question, a answers (pick a choice, or Answer… to type your own). A task's page has the same sections as Claude Code's task page, with the same headings: ▍Why it failed (a failed task), ▍Answer (an answered investigation), ▍Details, ▍Branch (its branch against main, see [the Branch section](#the-branch-section)), ▍Changes (a task in review: its changed files; a click on one shows the changes, like d), ▍What to do, ▍History, ▍Report (the latest try's, read from its file when you open the page) and ▍Runs (the sum of its tries, then each try and its agents). A task whose finished work waits only for your files shows ▍⧗ Waiting for your files (in yellow) above them: which files, "commit or stash them, it merges on its own", and that r (Merge now) merges it now. A question's page starts with "Q-3 Question for you" and a dim "asked by the lead · <when>" line, then Back, the question and its choices. A long history or report is cut after its first lines with "… (n more lines)" (the whole report stays in its file); the mouse wheel scrolls the page. A task's and a scout's page start with the same header as in Claude Code ([the task page and the scout page](#the-task-page-and-the-scout-page)), which stays at the top while the page scrolls, and its thin rule sets it apart from the text. It offers the same actions as in Claude Code, with the same keys (p pause, u resume, r retry, o move to todo, z stash to backlog, v keep as a note (a button with no key on the Claude Code board), l role, h already merged, x drop, n needs review on/off); drop asks for an optional reason and role lets you pick from the roles. Only Copy and Watch worker are not there. These are sent as slash commands in your session (`/symcc-approve`, `/symcc-reject`, `/symcc-task T-5 pause` and the other `/symcc-task` words, `/symcc-answer T-5 <answer>` or `Q-3 <answer>`). You can type them yourself too, and all but `/symcc-answer` work in Claude Code as well: `/symcc-answer` is OpenCode only. In Claude Code you answer a waiting task or a question on the board (a on its page), or by telling the lead in the chat.
 
-As in Claude Code, the panel has four tabs under the banner: Live, Tasks, Scouts and Settings (it opens on Live). l, t, s and c switch between them (or click a tab). Every screen has the same buttons as Claude Code's panel, and a click on one presses its key: the tab row, the list's mode (m) and search (f) buttons, Back (b) on the list pages (on a task's or scout's page, its header's `[Tasks]` or `[Scouts]`) and the buttons of a task's, scout's, role's or kind's page. The Tasks search works as in Claude Code: done and dropped tasks are found by words in their details and request too (read from their saved files while a search is on), and a task page opened from a search counts (`1 of 3`) and steps with [ and ] through only the matches. The header (banner, tabs and rule) shows only on the list pages (Tasks, Live, Scouts, Settings); an opened page has just its own buttons and text. **Live** (l) shows the same railway lanes as [the Live tab in Claude Code](#live-tab), in the same sections: NEEDS YOU first (only while something waits for you), then TASKS (the lanes, with the waiting trains under them), BRANCHES, TODAY (today's numbers) and ORGANIZATIONAL MEMORY. The arrow keys reach the NEEDS YOU rows first, then the lanes, trains and Branches rows, and Enter (or a click) opens that row's task or question (there is no `w` key to watch a worker). Back (b) from a task opened on Live returns to Live, on its lane. At the bottom of Live, the **Organizational memory** section (the count, the 3 newest notes and the topics with their counts) opens the notes the agents keep: the arrow keys reach its notes and topics too, Enter on a topic opens only that topic's notes, Enter on a newest note opens all notes with the cursor on it, and Enter (or a click) on the `[all]` button next to `newest` opens all notes. There, x deletes the note under the cursor after a yes (sent as `/symcc-settings orgmem delete N`), and b returns to Live. **Scouts** lists each scout with how often it runs, whether it is paused or when it runs next, and its last result; Enter opens a scout's page: its instructions, its recent runs (newest first, with the tasks made from them) and its file. On it, r runs the scout now and p pauses or resumes it (sent as `/symcc-scout <name>` and `/symcc-scout <name> pause` or `resume`), f moves its findings choice on (board default → auto → backlog, sent as `/symcc-scout <name> findings auto`, `backlog` or `default`; the list's top line says the board default and each row the scout's choice), and e edits it: pick how often it runs, its model or its instructions, then type the new value (sent as `/symcc-scout <name> every 30`, `model <model>` or `model none` for the session's model, or `prompt <instructions>`; the rest of the scout's file is kept, and longer instructions are easier to write in the file itself). Enter on a run shows its report, and b goes back. **Settings** shows every setting in the same groups as Claude Code, each with its value, its default and its range, and what it does under it. Enter (or a click) changes the one under the cursor: on/off settings flip, mode, notify, scout_findings and tests_with_changes are picked from a list, and the rest are typed; it is sent as `/symcc-settings <name> <value>`. Under Workers, the Roles and Kinds rows (with how many there are, and how many are off) open their pages, as in Claude Code: a table of the roles or kinds, one line each (NAME, FROM, and for a role MODEL, WEB and WRITES, then WHAT IT'S FOR, cut to fit; the cursor's line marked `❯`), and a file that can't be read says why. Enter opens one: its description, what a role writes (`Writes: code ...`), a role's model, skills and tools, its checklist (a role) or body (a kind), and its file. On it, o turns it off or on and r resets it to the built-in one (when you changed a built-in); these are sent as `/symcc-settings role <name> off` (or `on`, `reset`; `kind <name> ...` for a kind). general, the checker role, change and investigation can't be turned off. As in Claude Code, a role's page has the shared page header (‹ [Roles], [ and ] for the role before or after it, its state such as `replaced · 1 change`, and the buttons [Edit] (e; its edit page has Save and Cancel), [Prompt] (p), [Turn off] or [Turn on] (o), [Reset to built-in] (r; it asks first) and [Remove] (d; it asks first, and only for ones you added)), then its **Changed from built-in** section; a kind's page has Back, Edit, Turn off or Turn on, Reset to built-in and Remove. The list pages have **+ New role (n)** / **+ New kind (n)**, a role's edit page has a **Writes** box that Enter switches between code and prose only (sent as `code` with the save), and the Scouts page has **+ New scout** (n). They are sent as `/symcc-settings role <name> add`, `edit <field> <value>`, `save {...}` and `remove` (the same for `kind`), and `/symcc-scout <name> new <instructions>`. When the folder has no git repo or no commit yet, the banner shows **Set up git (g)**, which asks for a yes and sends `/symcc-settings git setup`. When git is not installed it shows the install step and **Check again (g)** (`/symcc-settings git check`); while git is missing symcc does not try git again by itself (on a Mac, each try would bring up Apple's install pop-up), so press it after installing git. With no repo or no commits, symcc looks again every 2 minutes, so a `git init` and a first commit by hand clear the notice. Opening the panel sends nothing into the chat. A change you make in a file yourself shows in the panel at the next board change (OpenCode tells symcc of no finished edit). b goes back one page.
+As in Claude Code, the panel has four tabs under the banner: Live, Tasks, Scouts and Settings (it opens on Live). l, t, s and c switch between them (or click a tab). Every screen has the same buttons as Claude Code's panel, and a click on one presses its key: the tab row, the list's mode (m) and search (f) buttons, Back (b) on the list pages (on a task's or scout's page, its header's `[Tasks]` or `[Scouts]`) and the buttons of a task's, scout's, role's or task type's page. The Tasks search works as in Claude Code: done and dropped tasks are found by words in their details and request too (read from their saved files while a search is on), and a task page opened from a search counts (`1 of 3`) and steps with [ and ] through only the matches. The header (banner, tabs and rule) shows only on the list pages (Tasks, Live, Scouts, Settings); an opened page has just its own buttons and text. **Live** (l) shows the same railway lanes as [the Live tab in Claude Code](#live-tab), in the same sections: NEEDS YOU first (only while something waits for you), then TASKS (the lanes, with the waiting trains under them), BRANCHES, TODAY (today's numbers) and ORGANIZATIONAL MEMORY. The arrow keys reach the NEEDS YOU rows first, then the lanes, trains and Branches rows, and Enter (or a click) opens that row's task or question (there is no `w` key to watch a worker). Back (b) from a task opened on Live returns to Live, on its lane. At the bottom of Live, the **Organizational memory** section (the count, the 3 newest notes and the topics with their counts) opens the notes the agents keep: the arrow keys reach its notes and topics too, Enter on a topic opens only that topic's notes, Enter on a newest note opens all notes with the cursor on it, and Enter (or a click) on the `[all]` button next to `newest` opens all notes. There, x deletes the note under the cursor after a yes (sent as `/symcc-settings orgmem delete N`), and b returns to Live. **Scouts** lists each scout with how often it runs, whether it is paused or when it runs next, and its last result; Enter opens a scout's page: its instructions, its recent runs (newest first, with the tasks made from them) and its file. On it, r runs the scout now and p pauses or resumes it (sent as `/symcc-scout <name>` and `/symcc-scout <name> pause` or `resume`), f moves its findings choice on (board default → auto → backlog, sent as `/symcc-scout <name> findings auto`, `backlog` or `default`; the list's top line says the board default and each row the scout's choice), and e edits it: pick how often it runs, its model or its instructions, then type the new value (sent as `/symcc-scout <name> every 30`, `model <model>` or `model none` for the session's model, or `prompt <instructions>`; the rest of the scout's file is kept, and longer instructions are easier to write in the file itself). Enter on a run shows its report, and b goes back. **Settings** shows every setting in the same groups as Claude Code, each with its value, its default and its range, and what it does under it. Enter (or a click) changes the one under the cursor: on/off settings flip, mode, notify, scout_findings and tests_with_changes are picked from a list, and the rest are typed; it is sent as `/symcc-settings <name> <value>`. Under Workers, the Roles and Task types rows (with how many there are, and how many are off) open their pages, as in Claude Code: a table of the roles or task types, one line each (NAME, FROM, and for a role MODEL, WEB and WRITES, then WHAT IT'S FOR, cut to fit; the cursor's line marked `❯`), and a file that can't be read says why. Enter opens one: its description, what a role writes (`Writes: code ...`), a role's model, skills and tools, its checklist (a role) or body (a task type), and its file. On it, o turns it off or on and r resets it to the built-in one (when you changed a built-in); these are sent as `/symcc-settings role <name> off` (or `on`, `reset`; `type <name> ...` for a task type). general, the checker role, change and investigation can't be turned off. As in Claude Code, a role's page has the shared page header (‹ [Roles], [ and ] for the role before or after it, its state such as `replaced · 1 change`, and the buttons [Edit] (e; its edit page has Save and Cancel), [Prompt] (p), [Turn off] or [Turn on] (o), [Reset to built-in] (r; it asks first) and [Remove] (d; it asks first, and only for ones you added)), then its **Changed from built-in** section; a task type's page has Back, Edit, Turn off or Turn on, Reset to built-in and Remove. The list pages have **+ New role (n)** / **+ New task type (n)**, a role's edit page has a **Writes** box that Enter switches between code and prose only (sent as `code` with the save), and the Scouts page has **+ New scout** (n). They are sent as `/symcc-settings role <name> add`, `edit <field> <value>`, `save {...}` and `remove` (the same for `type`), and `/symcc-scout <name> new <instructions>`. When the folder has no git repo or no commit yet, the banner shows **Set up git (g)**, which asks for a yes and sends `/symcc-settings git setup`. When git is not installed it shows the install step and **Check again (g)** (`/symcc-settings git check`); while git is missing symcc does not try git again by itself (on a Mac, each try would bring up Apple's install pop-up), so press it after installing git. With no repo or no commits, symcc looks again every 2 minutes, so a `git init` and a first commit by hand clear the notice. Opening the panel sends nothing into the chat. A change you make in a file yourself shows in the panel at the next board change (OpenCode tells symcc of no finished edit). b goes back one page.
 
 Above the prompt of an open session, a strip shows the header line and the questions and tasks that need you or run, as the band does in Claude Code. It is there by itself; there is nothing to turn on. Click its header line to open the board panel (click again to close it), or click a task's or question's row to open its page; the header ends with a dim "(click: board)" when there is room.
 
-The panel reads `.symcc/view.json` once a second; the board writes that file on every change (also when the lead's roles or kinds tool changes one), with each scout's recent runs, the roles and kinds, and the changed files of each task in review (a run's or a task's report is read from its own file when you open it). Plain `/symcc` prints the board as text in the chat, as in a window without the panel; `/symcc-tasks` prints the short task list and `/symcc-status` the Live tab as text, as in Claude Code.
+The panel reads `.symcc/view.json` once a second; the board writes that file on every change (also when the lead's roles or task types tool changes one), with each scout's recent runs, the roles and task types, and the changed files of each task in review (a run's or a task's report is read from its own file when you open it). Plain `/symcc` prints the board as text in the chat, as in a window without the panel; `/symcc-tasks` prints the short task list and `/symcc-status` the Live tab as text, as in Claude Code.
 
 **If you see no strip and no panel:** open a session first (the strip and the panel belong to a session, not to OpenCode's home page), and restart OpenCode's window after updating symcc. If the board screen can't start or draw, a red message from symcc says why, and `/plugins` lists symcc as failed with the error; the lead, its tools and the workers keep running either way.
 
@@ -2798,7 +2798,7 @@ copilot plugin marketplace add kourgeorge/symcc
 copilot plugin install symcc@symcc
 ```
 
-The marketplace file is `.github/plugin/marketplace.json`, and the plugin's manifest is `.github/plugin/plugin.json`. The plugin is the whole repository: its extension, `copilot/extensions/symcc/extension.mjs`, reads symcc's roles, kinds and example scouts from the folders beside it. Copilot can also install straight from the repository (`copilot plugin install kourgeorge/symcc`), but it warns that such direct installs will stop working in a later release, so use the marketplace. For a local copy (a clone you work in), `copilot plugin marketplace add <folder>` works too: Copilot then loads symcc live from that folder, with nothing copied.
+The marketplace file is `.github/plugin/marketplace.json`, and the plugin's manifest is `.github/plugin/plugin.json`. The plugin is the whole repository: its extension, `copilot/extensions/symcc/extension.mjs`, reads symcc's roles, task types and example scouts from the folders beside it. Copilot can also install straight from the repository (`copilot plugin install kourgeorge/symcc`), but it warns that such direct installs will stop working in a later release, so use the marketplace. For a local copy (a clone you work in), `copilot plugin marketplace add <folder>` works too: Copilot then loads symcc live from that folder, with nothing copied.
 
 - **Check it:** `copilot plugin list` shows `symcc@symcc`. In a session, ask the lead to call `symcc_board`: in a folder with no board yet it answers "no symcc board in this folder · /symcc-init to create one here".
 - **The first start in a folder** asks you to trust it ("Confirm folder trust"). Say yes, or Copilot loads no extension there.

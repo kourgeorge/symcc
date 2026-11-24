@@ -1,5 +1,5 @@
-// The Roles and Kinds pages in VS Code's side panel (see surface.ts and vscode.tsx), opened from Settings. As on the
-// terminal (T-918), the list is a table, one line per role or kind, its columns lined up (core's def-table.ts):
+// The Roles and Task types pages in VS Code's side panel (see surface.ts and vscode.tsx), opened from Settings. As on the
+// terminal (T-918), the list is a table, one line per role or task type, its columns lined up (core's def-table.ts):
 //   NAME     FROM      MODEL  WEB  WRITES  WHAT IT'S FOR
 //   tester   changed   sonnet —    code    writes tests that try hard to break the change
 // the name a link that opens it; here the description is never cut, it wraps under itself.
@@ -21,7 +21,7 @@ import { vsBadge, vsCallout, vsFooter, vsHref, vsLink, mdLink, vsSection } from 
 import { type PageHeader, vsPageHeader } from './page-header'
 import { defActions } from '../../core/page-header'
 import { type RolePageFacts, CHANGED_HEADING, changeLines } from '../../core/role-changes'
-import { type DefRow, type DefCol, type DefCell, type CodePick, DEF_COL_HEADS, ROLE_COLS, KIND_COLS, TABLE_GAP, CODE_PICKS, CODE_PICK_LABEL, CODE_PICK_HINT, defsCountText, defLayout, defCells, defCellTone, roleWritesLine, codePickOf } from '../../core/def-table'
+import { type DefRow, type DefCol, type DefCell, type CodePick, DEF_COL_HEADS, ROLE_COLS, KIND_COLS, TABLE_GAP, CODE_PICKS, CODE_PICK_LABEL, CODE_PICK_HINT, defsCountText, defWord, defLayout, defCells, defCellTone, roleWritesLine, codePickOf } from '../../core/def-table'
 import { type CodeDraft, roleRows, kindRows, saveRoleEdit } from './role-table'
 
 /** The color of a "where it comes from" badge. */
@@ -30,7 +30,7 @@ const SOURCE_TONE: Record<DefSource, string> = { 'built-in': 'inactive', replace
 /** A link that does something on the page (vsHref('do', ...)): its words, its id in the href, what a press does. */
 type Action = [label: string, id: string, onPress: () => void]
 
-/** The pieces the Roles and Kinds pages draw with. */
+/** The pieces the Roles and Task types pages draw with. */
 function kit($: $, pane: PaneParts) {
   const { Box, Text, C, vs } = pane
   const redraw = () => $.ui.invalidate('ui.render')
@@ -79,7 +79,7 @@ function kit($: $, pane: PaneParts) {
       <Box key={`${noun}-new-box`} flexDirection="column">
         <pane.Input
           key={`${noun}-new-name`}
-          label={`New ${noun}'s name`}
+          label={`New ${defWord(noun)}'s name`}
           placeholder="letters, digits, - and _"
           value={naming.name}
           autoFocus
@@ -93,7 +93,7 @@ function kit($: $, pane: PaneParts) {
       </Box>
     ) : (
       <Box key={`vs-${noun}-new-row`} flexDirection="row">
-        <pane.Button key={`${noun}-new`} label={`+ New ${noun}`} variant="secondary" onPress={start} />
+        <pane.Button key={`${noun}-new`} label={`+ New ${defWord(noun)}`} variant="secondary" onPress={start} />
       </Box>
     )
   /** The file a page shows at its bottom. */
@@ -103,13 +103,14 @@ function kit($: $, pane: PaneParts) {
 
 /** The header of a list page: the banner and tabs, a link back to Settings, then the heading with its count beside it
  *  ("Roles  8 roles · 2 changed by you", T-918). */
-function listTop(pane: PaneParts, k: ReturnType<typeof kit>, noun: 'Roles' | 'Kinds', count: string, onBack: () => void) {
+function listTop(pane: PaneParts, k: ReturnType<typeof kit>, noun: 'Roles' | 'Task types', count: string, onBack: () => void) {
   const { Box, Text, C } = k
+  const slug = noun === 'Roles' ? 'roles' : 'kinds'
   return [
-    ...pane.header(noun === 'Roles' ? 'roles' : 'kinds'),
-    <Box key={`vs-${noun.toLowerCase()}-top`} flexDirection="column">
-      {k.back(`${noun.toLowerCase()}-back`, 'Settings', onBack)}
-      <Text key={`vs-${noun.toLowerCase()}-head`} wrap="wrap">
+    ...pane.header(slug),
+    <Box key={`vs-${slug}-top`} flexDirection="column">
+      {k.back(`${slug}-back`, 'Settings', onBack)}
+      <Text key={`vs-${slug}-head`} wrap="wrap">
         <Text bold color={C('suggestion')}>{noun}</Text>
         <Text color={C('inactive')}>{`  ${count}`}</Text>
       </Text>
@@ -117,7 +118,7 @@ function listTop(pane: PaneParts, k: ReturnType<typeof kit>, noun: 'Roles' | 'Ki
   ]
 }
 
-/** T-918: the Roles or Kinds table in VS Code: the column heads (dim), then one line per role or kind, each column a
+/** T-918: the Roles or Kinds table in VS Code: the column heads (dim), then one line per role or task type, each column a
  *  Box of its width (core's defLayout at the row room VS Code's narrower text font gives, vsRowRoom: MODEL, WEB and
  *  WRITES go when narrow); the name a link that opens it (dim when off). As every VS Code page, nothing is cut with
  *  "…": the description (or why a file can't be read) fills the rest of the line and wraps under itself when long. */
@@ -355,7 +356,7 @@ export function kindsPageVs($: $, pane: PaneParts, kinds: KindDef[], builtIn: Ki
   const rows = kindRows(kinds, builtIn, project, broken)
   return (
     <Box flexDirection="column" gap={1}>
-      {listTop(pane, k, 'Kinds', defsCountText('kind', rows), () => ((kindView.list = false), (kindView.naming = null), k.redraw()))}
+      {listTop(pane, k, 'Task types', defsCountText('kind', rows), () => ((kindView.list = false), (kindView.naming = null), k.redraw()))}
       {vsTable(pane, k, 'kind', rows, KIND_COLS, open)}
       {k.newBox('kind', kindView.naming, () => ((kindView.naming = { name: '', error: '' }), k.redraw()), name => pane.act(async () => {
         const said = await newKindFile(claudeHost($), name)
@@ -386,14 +387,14 @@ export function kindPageVs($: $, pane: PaneParts, x: KindDef | undefined, source
   return (
     <Box key="vs-kind-page" flexDirection="column" gap={1}>
       <Box key="vs-kind-top" flexDirection="column">
-        {k.back('kind-back', 'Kinds', set(() => ((kindView.open = ''), (kindView.confirmRemove = false))))}
+        {k.back('kind-back', 'Task types', set(() => ((kindView.open = ''), (kindView.confirmRemove = false))))}
         <Box key="vs-kind-title" flexDirection="row" flexWrap="wrap" columnGap={2}>
           <Text key="name" wrap="wrap" bold color={C(broken || off ? 'inactive' : 'claude')}>{name}</Text>
           {k.badges('vs-kind-badges', source, off, !!broken)}
         </Box>
         {broken ? k.plain('vs-kind-why', brokenLabel(broken), 'error') : null}
         {broken ? k.plain('vs-kind-fix', `Fix the file by hand: ${broken.file}.`, 'text') : k.plain('vs-kind-about', x!.description, 'text', true)}
-        {!broken && !canOff ? k.plain('vs-kind-always', 'Always on: a task needs this kind.') : null}
+        {!broken && !canOff ? k.plain('vs-kind-always', 'Always on: a task needs this task type.') : null}
       </Box>
       {k.links('kind-actions', [
         canEdit && ['Edit', 'edit', set(() => ((kindView.draft = kindDraftOf(x!)), (kindView.confirmRemove = false)))],
@@ -401,7 +402,7 @@ export function kindPageVs($: $, pane: PaneParts, x: KindDef | undefined, source
         canReset && ['Reset to built-in', 'reset', run({ action: 'reset', name }, broken ? () => (kindView.open = '') : undefined)],
         canRemove && ['Remove', 'remove', set(() => (kindView.confirmRemove = true))],
       ])}
-      {kindView.confirmRemove && canRemove ? k.confirm('kind-remove-box', `Remove kind ${name} and delete ${broken ? broken.file : kindFileOf(name)}?`, run({ action: 'remove', name }, () => (kindView.open = '')), set(() => (kindView.confirmRemove = false))) : null}
+      {kindView.confirmRemove && canRemove ? k.confirm('kind-remove-box', `Remove task type ${name} and delete ${broken ? broken.file : kindFileOf(name)}?`, run({ action: 'remove', name }, () => (kindView.open = '')), set(() => (kindView.confirmRemove = false))) : null}
       {x ? k.section('body', 'Body', [x.body.trim() ? <Markdown key="vs-kind-body" text={x.body.trim()} /> : k.plain('vs-kind-body-none', '(none)')]) : null}
       {k.fileSection(file)}
       {vsFooter(vs, 'kind-keys')}
@@ -418,12 +419,12 @@ export function kindEditPageVs($: $, pane: PaneParts, source: DefSource | undefi
   )
   return (
     <k.Box key="vs-kind-edit-page" flexDirection="column" gap={1}>
-      {editTop(pane, k, 'kind', d.kind, [`Save writes ${kindFileOf(d.kind)}${source === 'built-in' ? ' (a copy of the built-in kind; Reset to built-in undoes it).' : '.'}`], pane.act(async () => {
+      {editTop(pane, k, 'kind', d.kind, [`Save writes ${kindFileOf(d.kind)}${source === 'built-in' ? ' (a copy of the built-in task type; Reset to built-in undoes it).' : '.'}`], pane.act(async () => {
         const said = await saveKindDraft(claudeHost($))
         if (said) $.ui.toast(S.N.toast(said))
       }), () => ((kindView.draft = null), k.redraw()), d.error)}
-      {box('description', 'Description', 'what this kind of task is, in a few words', { autoFocus: true })}
-      {box('body', 'Body', 'free text about the kind', { rows: 6 })}
+      {box('description', 'Description', 'what this task type is, in a few words', { autoFocus: true })}
+      {box('body', 'Body', 'free text about the task type', { rows: 6 })}
       {vsFooter(k.vs, 'kind-edit-keys')}
     </k.Box>
   )

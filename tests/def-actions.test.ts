@@ -1,4 +1,4 @@
-// T-906: defActions (core/page-header.ts) is the one set of rules for which buttons a role or kind page gets (Edit,
+// T-906: defActions (core/page-header.ts) is the one set of rules for which buttons a role or task type page gets (Edit,
 // Turn off or on, Reset to built-in, Remove), used by the terminal, desktop, mobile, VS Code and OpenCode pages.
 import { expect } from 'claude-code/testing'
 import { test } from './reset'

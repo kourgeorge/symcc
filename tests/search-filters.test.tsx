@@ -38,12 +38,12 @@ test('since:, kind:, role: and status:open filter; filters mix with plain words'
   expect(ids(searchTasks(tasks, 'since:5d status:todo', NOW))).toEqual(['T-22'])
   expect(parseSearch('since:2026-11-19', NOW, 0).sinceMs).toBe(Date.parse('2026-11-19T00:00:00Z'))
   expect(parseSearch('since:2026-11-19', NOW, 120).sinceMs).toBe(Date.parse('2026-11-18T22:00:00Z'))
-  expect(ids(searchTasks(tasks, 'kind:bug', NOW))).toEqual(['T-2', 'T-4', 'T-6', 'T-8'])
+  expect(ids(searchTasks(tasks, 'type:bug', NOW))).toEqual(['T-2', 'T-4', 'T-6', 'T-8'])
   expect(ids(searchTasks(tasks, 'role:tester', NOW))).toEqual(['T-3'])
   expect(ids(searchTasks(tasks, 'status:open', NOW))).toEqual(['T-20', 'T-21', 'T-22', 'T-23'])
   expect(ids(searchTasks(tasks, 'notify', NOW))).toEqual(['T-1', 'T-24'])
   expect(ids(searchTasks(tasks, 'notify status:done', NOW))).toEqual(['T-1'])
-  expect(ids(searchTasks(tasks, 'kind:feature last:2 done', NOW))).toEqual(['T-1', 'T-3'])
+  expect(ids(searchTasks(tasks, 'type:feature last:2 done', NOW))).toEqual(['T-1', 'T-3'])
 })
 
 test('an unknown filter word (foo:bar) or a bad value stays a plain word', () => {
@@ -54,8 +54,8 @@ test('an unknown filter word (foo:bar) or a bad value stays a plain word', () =>
   expect(taskMatches(task('T-9', 'todo', 'about foo:bar'), 'foo:bar', NOW)).toBe(true)
   expect(searchTasks(tasks, 'foo:bar', NOW)).toEqual([])
   // a kind not in the known list is an error only when the list is given
-  expect(parseSearch('kind:nope', NOW, 0).errors).toEqual([])
-  expect(parseSearch('kind:nope', NOW, 0, ['change', 'bug']).errors[0]).toMatch(/unknown kind "nope"/)
+  expect(parseSearch('type:nope', NOW, 0).errors).toEqual([])
+  expect(parseSearch('type:nope', NOW, 0, ['change', 'bug']).errors[0]).toMatch(/unknown task type "nope"/)
 })
 
 // T-720: dependency words. A chain T-101 ← T-102 ← T-103 (T-103 waits for T-102, which waits for T-101), a done
@@ -76,7 +76,7 @@ const deps: SymccTask[] = [
 test('waits-on:T-n: tasks waiting on T-n directly or through a chain; mixes with other words', () => {
   expect(ids(searchTasks(deps, 'waits-on:T-101', NOW))).toEqual(['T-102', 'T-103', 'T-104'])
   expect(ids(searchTasks(deps, 'waits-on:t-101 status:todo', NOW))).toEqual(['T-102', 'T-103'])
-  expect(ids(searchTasks(deps, 'waits-on:101 kind:bug', NOW))).toEqual(['T-103'])
+  expect(ids(searchTasks(deps, 'waits-on:101 type:bug', NOW))).toEqual(['T-103'])
   expect(ids(searchTasks(deps, 'waits-on:T-100', NOW))).toEqual(['T-101', 'T-102', 'T-103', 'T-104'])
   expect(ids(searchTasks(deps, 'waits-on:T-110,T-102', NOW))).toEqual(['T-103', 'T-111', 'T-113', 'T-114'])
   expect(ids(searchTasks(deps, 'waits-on:T-99', NOW))).toEqual(['T-112'])
@@ -139,7 +139,7 @@ test('board tool: limit / sort are the same as last: / top:, and the line says h
   expect(show({ limit: 2, sort: 'order' })).toContain('2 of 4 matching shown')
   // an unknown status or kind gives a clear error; foo:bar is a plain word
   expect(() => show({ search: 'status:finished' })).toThrow('unknown status "finished"')
-  expect(() => show({ search: 'kind:nope', kinds: ['change', 'bug', 'feature'] })).toThrow('unknown kind "nope"')
+  expect(() => show({ search: 'type:nope', kinds: ['change', 'bug', 'feature'] })).toThrow('unknown task type "nope"')
   expect(show({ search: 'foo:bar' })).toContain('No tasks match (search: foo:bar).')
 })
 
@@ -164,13 +164,13 @@ test('terminal panel: last:2 status:done shows only those two, and the box hint 
   stateOf(on, view())
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   await ui.press({ key: 'search-open' })
-  expect(String((await ui.find({ key: 'search' }))?.props.placeholder)).toMatch(/last:N top:N since:2d status: kind: role:/)
+  expect(String((await ui.find({ key: 'search' }))?.props.placeholder)).toMatch(/last:N top:N since:2d status: type: role:/)
   await ui.input({ key: 'search', text: 'last:2 status:done' })
   for (const id of ['T-1', 'T-2']) expect(await ui.find({ key: id })).toBeDefined()
   for (const id of ['T-3', 'T-21']) expect(await ui.find({ key: id })).toBeUndefined()
   expect(await ui.find({ type: 'Text', text: /^search: last:2 status:done · 2 of 13 tasks$/ })).toBeDefined()
   await ui.press({ key: 'search-open' })
-  await ui.input({ key: 'search', text: 'kind:bug role:tester foo:bar' })
+  await ui.input({ key: 'search', text: 'type:bug role:tester foo:bar' })
   expect(await ui.find({ type: 'Text', text: /no tasks match$/ })).toBeDefined()
   await ui.unmount()
 })

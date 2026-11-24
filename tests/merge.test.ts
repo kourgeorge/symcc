@@ -6418,7 +6418,7 @@ test('a researcher task added without kind is an investigation; with kind change
   expect(kindOf(find(parseBoard(JSON.stringify(b1)), a.id))).toBe('investigation')
 })
 
-test('change sets a task kind, and refuses an unknown one', async () => {
+test('change sets a task type, and refuses an unknown one', async () => {
   const w = world()
   const [b] = addTask({ ...emptyBoard(), mode: 'auto' }, { origin: { why: 'a test' }, title: 'Do it', files: ['src/'], backlog: true }, ISO)
   await saveBoard(w.$, b)
@@ -6426,19 +6426,19 @@ test('change sets a task kind, and refuses an unknown one', async () => {
   expect(kindOf(find(await load(w.$), 'T-1'))).toBe('investigation')
   await runTool(w.$, 'change', { task: 'T-1', kind: 'change' })
   expect(find(await load(w.$), 'T-1')!.kind).toBeUndefined()
-  await expect(runTool(w.$, 'change', { task: 'T-1', kind: 'question' })).rejects.toThrow('Nothing changed: unknown kind "question"; the kinds are: change, bug, feature, refactor, docs, investigation')
+  await expect(runTool(w.$, 'change', { task: 'T-1', kind: 'question' })).rejects.toThrow('Nothing changed: unknown task type "question"; the task types are: change, bug, feature, refactor, docs, investigation')
 })
 
-// ---------------- task kinds (T-328): more kinds, all run as a change but investigation ----------------
+// ---------------- task types (T-328): more kinds, all run as a change but investigation ----------------
 
-test('add with kind bug saves kind bug; an unknown kind is refused naming the known kinds', async () => {
+test('add with kind bug saves kind bug; an unknown task type is refused naming the known kinds', async () => {
   const w = world()
   await saveBoard(w.$, { ...emptyBoard(), mode: 'auto' })
   // the kinds are read again: the built-in ones (kinds/index.ts), since this project has none of its own
   const add = (kind: string) => runTool(w.$, 'add', { title: 'Fix the cache', details: 'd', why: 'a test', origin_by: 'lead', backlog: true, kind })
   await add('Bug')
   expect(find(await load(w.$), 'T-1')!.kind).toBe('bug')
-  await expect(add('chore')).rejects.toThrow('unknown kind "chore"; the kinds are: change, bug, feature, refactor, docs, investigation')
+  await expect(add('chore')).rejects.toThrow('unknown task type "chore"; the task types are: change, bug, feature, refactor, docs, investigation')
   expect((await load(w.$)).tasks.length).toBe(1)
   // change switches it between kinds; back to change stores none
   await runTool(w.$, 'change', { task: 'T-1', kind: 'change' })
@@ -6454,7 +6454,7 @@ test('an off kind is refused by add (and by change), naming the kinds that are o
   w.put(`${mine}/bug.md`, '---\ndescription: something that works wrongly\noff: true\n---\n')
   ;(w.$ as { fs: Record<string, unknown> }).fs.list = async (p: string) => (p === mine ? [{ name: 'bug.md', kind: 'file' }] : [])
   const add = (kind: string) => runTool(w.$, 'add', { title: 'Fix the cache', details: 'd', why: 'a test', origin_by: 'lead', backlog: true, kind })
-  await expect(add('bug')).rejects.toThrow('kind "bug" is turned off (the owner can turn it on again: kinds action "on"); the kinds are: change, feature, refactor, docs, investigation')
+  await expect(add('bug')).rejects.toThrow('Nothing changed: task type "bug" is turned off (the owner can turn it on again: kinds action "on"); the task types are: change, feature, refactor, docs, investigation')
   expect((await load(w.$)).tasks.length).toBe(0)
   await add('change')
   await expect(runTool(w.$, 'change', { task: 'T-1', kind: 'bug' })).rejects.toThrow('is turned off')
@@ -6515,9 +6515,9 @@ test('a board row tag is only the kind, never the role (T-722); a plain change s
 test('the worker prompt says the task\'s kind and what it is for', () => {
   S.kinds = [{ name: 'bug', description: 'something that works wrongly', body: '' }]
   const [b] = boardWith('auto', ['npm test'], { kind: 'bug' } as Partial<BoardTask>)
-  expect(WORKER_PROMPT(b.tasks[0]!, b, WT)).toContain('Kind of task: bug (something that works wrongly).')
+  expect(WORKER_PROMPT(b.tasks[0]!, b, WT)).toContain('The task type is bug (something that works wrongly).')
   const [i] = boardWith('auto', ['npm test'], { kind: 'investigation' } as Partial<BoardTask>)
-  expect(WORKER_PROMPT(i.tasks[0]!, i, WT)).toContain('Kind of task: investigation')
+  expect(WORKER_PROMPT(i.tasks[0]!, i, WT)).toContain('Task type: investigation')
 })
 
 /** Commits on T-1's branch that main doesn't have, in the fake git (`git rev-list --count main..branch`). */

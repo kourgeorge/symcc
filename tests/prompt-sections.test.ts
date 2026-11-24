@@ -16,7 +16,7 @@ import { hist } from './history-fixture'
 const task = (over: Partial<SymccTask> = {}): SymccTask =>
   ({ id: 'T-7', title: 'Do it', details: 'Make it work.', files: ['src/a.ts', 'src/b.ts'], status: 'doing', note: '', priority: 1, after: [], attempts: 1, history: [], branch: null, created_at: '', updated_at: '', origin: { by: 'owner', why: 'the owner wants it', request: 'please make it work\nand fast', at: '' }, ...over }) as SymccTask
 
-const values = (t: SymccTask): Record<string, string> => ({ name: 'symcc', task_id: t.id, title: t.title, details: t.details, branch: 'symcc/T-7', folder: '/w/T-7', kind: '\nKind of task: change.\n', kind_name: 'change', role_name: 'general', role: '', org_mem: '', learned: '', ask: 'ASK', files: 'F', test_command: 'TESTS', file_tools: 'Edit' })
+const values = (t: SymccTask): Record<string, string> => ({ name: 'symcc', task_id: t.id, title: t.title, details: t.details, branch: 'symcc/T-7', folder: '/w/T-7', kind: '\nThe task type is change.\n', kind_name: 'change', role_name: 'general', role: '', org_mem: '', learned: '', ask: 'ASK', files: 'F', test_command: 'TESTS', file_tools: 'Edit' })
 
 const headings = (p: string) => [...p.matchAll(/^#{1,2} (.*)$/gm)].map(m => m[1]!)
 

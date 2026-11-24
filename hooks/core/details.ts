@@ -212,7 +212,7 @@ export function detailRows(t: SymccTask, o: { roles: readonly Pick<RoleDef, 'nam
   // the kind, next to the role (a plain change shows none): an investigation says nothing is merged, another kind what it is for
   const kind = kindMark(t)
   const about = isInvestigation(t) ? 'nothing is merged' : findKind(o.kinds ?? [], kind)?.description ?? ''
-  if (kind) R.push({ label: 'Kind', segs: [{ text: kind, color: 'suggestion', bold: true }, ...(about ? [{ text: ` — ${about}`, color: 'inactive' }] : [])] })
+  if (kind) R.push({ label: 'Type', segs: [{ text: kind, color: 'suggestion', bold: true }, ...(about ? [{ text: ` — ${about}`, color: 'inactive' }] : [])] })
   R.push({ label: 'From', segs: originSegs(t) })
   const og = originOf(t)
   if (og?.why) R.push({ label: 'Why', segs: [{ text: squash(og.why), color: 'text' }] })

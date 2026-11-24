@@ -52,7 +52,7 @@ may have moved.
 
 | Part | What it is | Notes |
 |---|---|---|
-| Workspace | One folder, one board, one lead | The board, org-mem, scouts, roles and kinds stay board-wide, as today. |
+| Workspace | One folder, one board, one lead | The board, org-mem, scouts, roles and task types stay board-wide, as today. |
 | Projects | The git repos below the workspace | Found by folder name. Only optional settings are stored. |
 | Work items | Tasks, each done by an agent | Code task (copy, checks, merge), research or note (no merge). |
 | Inputs | Where tasks come from | The owner and the lead, plus scouts for outside sources (decision 5). |

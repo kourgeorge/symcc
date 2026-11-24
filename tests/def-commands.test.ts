@@ -65,29 +65,32 @@ async function both(start: Record<string, string>, command: string, args: string
   return { said, told, cmd: defFiles(a.files), lead: defFiles(b.files) }
 }
 
-test('T-706: the new command forms parse: role|kind <name> add, <name> remove, <name> edit <field> <value> ("none" clears a list or the model), <name> save {json}, scout <name> new, git setup; wrong ones give the usage line', () => {
+test('T-706: the new command forms parse: role|type <name> add, <name> remove, <name> edit <field> <value> ("none" clears a list or the model), <name> save {json}, scout <name> new, git setup; wrong ones give the usage line', () => {
   const p = (c: string, a: string) => parseCommand(c, a)
   expect(p('symcc-settings', 'role docs remove')).toEqual({ kind: 'def', def: 'role', name: 'docs', action: 'remove' })
-  expect(p('symcc-settings', 'kind chore remove')).toEqual({ kind: 'def', def: 'kind', name: 'chore', action: 'remove' })
+  expect(p('symcc-settings', 'type chore remove')).toEqual({ kind: 'def', def: 'kind', name: 'chore', action: 'remove' })
   expect(p('symcc-settings', 'role docs add')).toEqual({ kind: 'def-add', def: 'role', name: 'docs' })
-  expect(p('symcc-settings', 'kind Chore add')).toEqual({ kind: 'def-add', def: 'kind', name: 'Chore' })
-  // the name always comes first: a new role or kind may be named like an action word, and a role named "add" still
+  expect(p('symcc-settings', 'type Chore add')).toEqual({ kind: 'def-add', def: 'kind', name: 'Chore' })
+  // the word is "type" now; the old "kind" is not a settings word any more, and the usage says "type"
+  expect(p('symcc-settings', 'kind Chore add')!.kind).toBe('bad')
+  expect((p('symcc-settings', 'type Chore') as { message: string }).message).toContain('/symcc-settings type <name> on, off, reset or remove')
+  // the name always comes first: a new role or task type may be named like an action word, and a role named "add" still
   // turns on and off
   for (const w of ['on', 'off', 'reset', 'remove', 'add', 'edit', 'save']) {
     expect(p('symcc-settings', `role ${w} add`)).toEqual({ kind: 'def-add', def: 'role', name: w })
-    expect(p('symcc-settings', `kind ${w} add`)).toEqual({ kind: 'def-add', def: 'kind', name: w })
+    expect(p('symcc-settings', `type ${w} add`)).toEqual({ kind: 'def-add', def: 'kind', name: w })
   }
   expect(p('symcc-settings', 'role add off')).toEqual({ kind: 'def', def: 'role', name: 'add', action: 'off' })
   expect(p('symcc-settings', 'role add remove')).toEqual({ kind: 'def', def: 'role', name: 'add', action: 'remove' })
   // save: several fields in one edit (JSON, so a checklist's lines stay one line of text)
   expect(p('symcc-settings', 'role docs save {"description":"Docs","tools":"foo","checklist":"- one\\n- two"}')).toEqual({ kind: 'def-save', def: 'role', name: 'docs', fields: { description: 'Docs', tools: 'foo', checklist: '- one\n- two' } })
-  expect(p('symcc-settings', 'kind chore save {"body":""}')).toEqual({ kind: 'def-save', def: 'kind', name: 'chore', fields: { body: '' } })
+  expect(p('symcc-settings', 'type chore save {"body":""}')).toEqual({ kind: 'def-save', def: 'kind', name: 'chore', fields: { body: '' } })
   expect(p('symcc-settings', 'role docs edit description Writes  the docs')).toEqual({ kind: 'def-edit', def: 'role', name: 'docs', field: 'description', value: 'Writes  the docs' })
   expect(p('symcc-settings', 'role docs edit checklist - one\n- two')).toEqual({ kind: 'def-edit', def: 'role', name: 'docs', field: 'checklist', value: '- one\n- two' })
   expect(p('symcc-settings', 'role docs edit checklist')).toEqual({ kind: 'def-edit', def: 'role', name: 'docs', field: 'checklist', value: '' })
   for (const f of ['model', 'skills', 'tools']) expect(p('symcc-settings', `role docs edit ${f} none`)).toEqual({ kind: 'def-edit', def: 'role', name: 'docs', field: f, value: '' })
   expect(p('symcc-settings', 'role docs edit SKILLS tdd, docs')).toEqual({ kind: 'def-edit', def: 'role', name: 'docs', field: 'skills', value: 'tdd, docs' })
-  expect(p('symcc-settings', 'kind chore edit body Do it.')).toEqual({ kind: 'def-edit', def: 'kind', name: 'chore', field: 'body', value: 'Do it.' })
+  expect(p('symcc-settings', 'type chore edit body Do it.')).toEqual({ kind: 'def-edit', def: 'kind', name: 'chore', field: 'body', value: 'Do it.' })
   expect(p('symcc-settings', 'git setup')).toEqual({ kind: 'setup-git' })
   expect(p('symcc-scout', 'lint new Look for  lint.')).toEqual({ kind: 'scout-new', name: 'lint', prompt: 'Look for  lint.' })
   // the name comes first: a new scout may be named like a scout word, and a scout named "new" keeps its own words
@@ -97,7 +100,7 @@ test('T-706: the new command forms parse: role|kind <name> add, <name> remove, <
   expect(p('symcc-scout', 'new')).toEqual({ kind: 'scout', name: 'new' })
   // no words at all: the scouts view (T-934: /symcc-scouts is gone, /symcc-scout with no name does it)
   expect(p('symcc-scout', '')!.kind).toBe('scouts')
-  for (const [c, a] of [['symcc-settings', 'role docs edit'], ['symcc-settings', 'role docs edit body x'], ['symcc-settings', 'kind chore edit model x'], ['symcc-settings', 'role docs edit description'], ['symcc-settings', 'role add'], ['symcc-settings', 'role docs add x'], ['symcc-settings', 'role docs save'], ['symcc-settings', 'role docs save {"body":"x"}'], ['symcc-settings', 'kind chore save {"tools":"web"}'], ['symcc-settings', 'role docs save {"description":" "}'], ['symcc-settings', 'role docs save {}'], ['symcc-settings', 'role docs save {"model":1}'], ['symcc-settings', 'role docs save [1]'], ['symcc-settings', 'role docs save {x'], ['symcc-settings', 'git'], ['symcc-settings', 'git setup now'], ['symcc-scout', 'lint new']] as const) {
+  for (const [c, a] of [['symcc-settings', 'role docs edit'], ['symcc-settings', 'role docs edit body x'], ['symcc-settings', 'type chore edit model x'], ['symcc-settings', 'role docs edit description'], ['symcc-settings', 'role add'], ['symcc-settings', 'role docs add x'], ['symcc-settings', 'role docs save'], ['symcc-settings', 'role docs save {"body":"x"}'], ['symcc-settings', 'type chore save {"tools":"web"}'], ['symcc-settings', 'role docs save {"description":" "}'], ['symcc-settings', 'role docs save {}'], ['symcc-settings', 'role docs save {"model":1}'], ['symcc-settings', 'role docs save [1]'], ['symcc-settings', 'role docs save {x'], ['symcc-settings', 'git'], ['symcc-settings', 'git setup now'], ['symcc-scout', 'lint new']] as const) {
     expect([a, p(c, a)!.kind]).toEqual([a, 'bad'])
   }
   expect((p('symcc-settings', 'role docs edit') as { message: string }).message).toContain('/symcc-settings role <name> add')
@@ -151,19 +154,19 @@ test('T-706: role add, edit and remove from the slash command do what the lead\'
   expect(rm.lead).toEqual({})
 })
 
-test('T-706: kind add, edit and remove from the slash command do what the lead\'s kinds tool does; a built-in kind is refused alike', async () => {
-  const add = await both({}, 'symcc-settings', 'kind chore add', 'kinds', { action: 'add', name: 'chore', ...NEW_KIND_TEMPLATE })
+test('T-706: kind add, edit and remove from the slash command do what the lead\'s kinds tool does; a built-in task type is refused alike', async () => {
+  const add = await both({}, 'symcc-settings', 'type chore add', 'kinds', { action: 'add', name: 'chore', ...NEW_KIND_TEMPLATE })
   expect(add.said).toBe(add.told)
   expect(add.cmd).toEqual(add.lead)
   expect(Object.keys(add.cmd)).toEqual(['/repo/.symcc/kinds/chore.md'])
-  const body = await both(add.cmd, 'symcc-settings', 'kind chore edit body Tidy one thing.', 'kinds', { action: 'edit', name: 'chore', body: 'Tidy one thing.' })
+  const body = await both(add.cmd, 'symcc-settings', 'type chore edit body Tidy one thing.', 'kinds', { action: 'edit', name: 'chore', body: 'Tidy one thing.' })
   expect(body.said).toBe(body.told)
   expect(body.cmd).toEqual(body.lead)
   expect(Object.values(body.cmd)[0]).toContain('Tidy one thing.')
-  const rm = await both(body.cmd, 'symcc-settings', 'kind chore remove', 'kinds', { action: 'remove', name: 'chore' })
+  const rm = await both(body.cmd, 'symcc-settings', 'type chore remove', 'kinds', { action: 'remove', name: 'chore' })
   expect(rm.said).toBe(rm.told)
   expect(rm.cmd).toEqual({})
-  const builtIn = await both({}, 'symcc-settings', 'kind change remove', 'kinds', { action: 'remove', name: 'change' })
+  const builtIn = await both({}, 'symcc-settings', 'type change remove', 'kinds', { action: 'remove', name: 'change' })
   expect(builtIn.said).toBe(builtIn.told)
   expect(builtIn.said).toContain("can't be removed")
 })

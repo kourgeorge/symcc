@@ -32,7 +32,7 @@ const HEADER_PAGES: ReadonlySet<BoardPage> = new Set(['tasks', 'live', 'scouts',
 
 /** Whether page `p` shows the board header (the banner with its tests/limits line and drive warning, then the tabs
  *  row), on every board (the terminal panel, VS Code, OpenCode): only the lists show it (Live, Tasks, Scouts, Settings,
- *  and Settings' Roles and Kinds lists). A page you open (a task, a question, a scout, a scout's run or edit, a role,
+ *  and Settings' Roles and Task types lists). A page you open (a task, a question, a scout, a scout's run or edit, a role,
  *  a kind, a role's prompt, and since T-704 the Organizational memory page opened from the Live tab) starts with its
  *  own title instead; its footer and buttons stay. */
 export const showsHeader = (p: BoardPage): boolean => HEADER_PAGES.has(p)
@@ -428,12 +428,12 @@ export type SearchQuery = {
   blocks?: string[]
   /** stuck: only todo tasks that can't start: something they wait for is failed, paused, waiting, dropped or missing. */
   stuck?: boolean
-  /** What's wrong with a status: or kind: word (an unknown status or kind); the panel ignores these and keeps the word plain. */
+  /** What's wrong with a status: or type: word (an unknown status or task type); the panel ignores these and keeps the word plain. */
   errors: string[]
 }
 
 /** The filter words a search takes, for hints and help. */
-export const SEARCH_WORDS = 'last:N top:N since:2d status: kind: role: waits-on:T-n blocks:T-n stuck'
+export const SEARCH_WORDS = 'last:N top:N since:2d status: type: role: waits-on:T-n blocks:T-n stuck'
 
 /** A search value read as a task id ("T-12", "t12" or "12" → "T-12"); undefined when it isn't one. */
 const searchId = (v: string): string | undefined => {
@@ -454,7 +454,7 @@ function sinceOf(when: string, nowMs: number, offsetMin: number): number | undef
 }
 
 /** Reads a search text: plain words, and the filter words last:N, top:N, since:<30m|2h|2d|1w|2026-11-18>,
- *  status:<word or open>, kind:<kind>, role:<role>, waits-on:<id>, blocks:<id> and stuck (case-insensitive; a value
+ *  status:<word or open>, type:<task type>, role:<role>, waits-on:<id>, blocks:<id> and stuck (case-insensitive; a value
  *  may list several, "status:done,dropped").
  *  A word that isn't a filter word, or whose value can't be read (foo:bar, last:x), stays a plain word. An unknown
  *  status (or a kind not in `kinds`, when given) is noted in `errors` and the word stays plain too. */
@@ -465,7 +465,7 @@ export function parseSearch(query: string, nowMs: number = Date.now(), offsetMin
       q.stuck = true
       continue
     }
-    const m = /^(last|top|since|status|kind|role|waits-on|blocks):(.+)$/.exec(w)
+    const m = /^(last|top|since|status|type|role|waits-on|blocks):(.+)$/.exec(w)
     if (!m) {
       q.words.push(w)
       continue
@@ -485,10 +485,10 @@ export function parseSearch(query: string, nowMs: number = Date.now(), offsetMin
         q.errors.push(`unknown status "${bad[0]}": use ${BOARD_STATUSES.join(', ')} or open`)
         q.words.push(w)
       } else q.status = [...new Set([...(q.status ?? []), ...list.flatMap(s => (s === 'open' ? OPEN : [s as SymccStatus]))])]
-    } else if (key === 'kind') {
+    } else if (key === 'type') {
       const bad = kinds ? list.filter(k => !kinds.includes(k)) : []
       if (bad.length) {
-        q.errors.push(`unknown kind "${bad[0]}"; the kinds are: ${kinds!.join(', ')}`)
+        q.errors.push(`unknown task type "${bad[0]}"; the task types are: ${kinds!.join(', ')}`)
         q.words.push(w)
       } else q.kinds = [...(q.kinds ?? []), ...list]
     } else if (key === 'waits-on' || key === 'blocks') {
@@ -552,7 +552,7 @@ export const changedMs = (t: Pick<SymccTask, 'updated_at' | 'created_at'>) => {
 }
 
 /** Whether task `t` matches the board panel's search `query` (a text, read with parseSearch, or one already read):
- *  every filter word (status:, kind:, role:, since:) and every plain word must match (AND); last: and top: pick from
+ *  every filter word (status:, type:, role:, since:) and every plain word must match (AND); last: and top: pick from
  *  the list instead (see searchTasks). Plain words are case-insensitive. A word
  *  shaped like a task id ("T-12", "t12" or just "12") matches that task's id exactly (not T-120), or the word in its
  *  text; any other
@@ -775,7 +775,7 @@ export const rolePromptKeys = (): KeyHint[] => [{ key: 'b', word: 'back' }]
  *  edit page use roleKeys and roleEditKeys. */
 export const kindsKeys = (): KeyHint[] => [
   { key: 'Enter', word: 'open' },
-  { key: 'n', word: 'new kind' },
+  { key: 'n', word: 'new type' },
   { key: '↑↓', word: 'move' },
   { key: LIVE_VIEW_KEYS, word: 'views' },
   { key: 'b', word: 'back' },

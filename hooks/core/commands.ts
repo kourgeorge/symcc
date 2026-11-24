@@ -35,16 +35,16 @@ export type Command =
   /** /<name>-scout <name> new <instructions>: a new scout (its file), run every NEW_SCOUT_EVERY minutes, as the lead's
    *  scouts tool's add (the name comes first, as in every scout form, so any name works) */
   | { kind: 'scout-new'; name: string; prompt: string }
-  /** /<name>-settings role|kind <name> on|off|reset|remove: turns a role or kind on or off, back to the built-in one, or
+  /** /<name>-settings role|type <name> on|off|reset|remove: turns a role or task type on or off, back to the built-in one, or
    *  deletes an added one (the boards ask for a yes first) */
   | { kind: 'def'; def: 'role' | 'kind'; name: string; action: DefAction }
-  /** /<name>-settings role|kind <name> add: a new role or kind, from the panel's template (NEW_ROLE_TEMPLATE,
-   *  NEW_KIND_TEMPLATE); the name comes first, as in every role|kind form, so any name works */
+  /** /<name>-settings role|type <name> add: a new role or task type, from the panel's template (NEW_ROLE_TEMPLATE,
+   *  NEW_KIND_TEMPLATE); the name comes first, as in every role|type form, so any name works */
   | { kind: 'def-add'; def: 'role' | 'kind'; name: string }
-  /** /<name>-settings role|kind <name> edit <field> <value>: changes one part of its file (a built-in is copied first);
+  /** /<name>-settings role|type <name> edit <field> <value>: changes one part of its file (a built-in is copied first);
    *  model, skills and tools "none" clear it */
   | { kind: 'def-edit'; def: 'role' | 'kind'; name: string; field: DefEditField; value: string }
-  /** /<name>-settings role|kind <name> save {"field":"value",...}: changes several parts at once, as the panel's Save
+  /** /<name>-settings role|type <name> save {"field":"value",...}: changes several parts at once, as the panel's Save
    *  (one edit of the lead's tool: a bad value saves none of them) */
   | { kind: 'def-save'; def: 'role' | 'kind'; name: string; fields: Partial<Record<DefEditField, string>> }
   /** /<name>-settings git setup: sets up git as the lead's setup_git does (the boards ask for a yes first) */
@@ -71,12 +71,12 @@ export type ScoutEditField = (typeof SCOUT_EDIT_FIELDS)[number]
 /** How often a scout made with /<name>-scout <name> new runs, in minutes (the panel's new scout starts with it too). */
 export const NEW_SCOUT_EVERY = 60
 
-/** What /<name>-settings role|kind <name> <action> does to a role or kind. */
+/** What /<name>-settings role|type <name> <action> does to a role or task type. */
 export const DEF_ACTIONS = ['on', 'off', 'reset', 'remove'] as const
 export type DefAction = (typeof DEF_ACTIONS)[number]
 
-/** The parts of a role's or kind's file /<name>-settings role|kind <name> edit <field> <value> changes (the lead's
- *  roles and kinds tools' fields, in the order the edit pages show them). */
+/** The parts of a role's or kind's file /<name>-settings role|type <name> edit <field> <value> changes (the lead's
+ *  roles and task types tools' fields, in the order the edit pages show them). */
 export const ROLE_EDIT_FIELDS = ['description', 'model', 'skills', 'tools', 'code', 'checklist'] as const
 export const KIND_EDIT_FIELDS = ['description', 'body'] as const
 export type DefEditField = (typeof ROLE_EDIT_FIELDS)[number] | (typeof KIND_EDIT_FIELDS)[number]
@@ -85,9 +85,9 @@ export const CLEARED_BY_NONE: readonly DefEditField[] = ['model', 'skills', 'too
 /** The fields of a role or a kind. */
 export const defEditFields = (def: 'role' | 'kind'): readonly DefEditField[] => (def === 'role' ? ROLE_EDIT_FIELDS : KIND_EDIT_FIELDS)
 
-/** The usage line of /<name>-settings role|kind. */
-export const defUsage = (def: 'role' | 'kind', name: string = DEFAULT_NAME) =>
-  `/${name}-settings ${def} <name> on, off, reset or remove; /${name}-settings ${def} <name> add (a new one); /${name}-settings ${def} <name> edit ${defEditFields(def).join('|')} <value>; or /${name}-settings ${def} <name> save {"<field>":"<value>",...}`
+/** The usage line of /<name>-settings role|type. */
+export const defUsage = (def: 'role' | 'kind', name: string = DEFAULT_NAME, word = def === 'kind' ? 'type' : 'role') =>
+  `/${name}-settings ${word} <name> on, off, reset or remove; /${name}-settings ${word} <name> add (a new one); /${name}-settings ${word} <name> edit ${defEditFields(def).join('|')} <value>; or /${name}-settings ${word} <name> save {"<field>":"<value>",...}`
 
 /** The fields of a save's JSON text (`{"description":"...","tools":"web"}`), or null when it is not an object of
  *  known fields with text values, or it empties the description. */
@@ -203,8 +203,9 @@ export function parseCommand(command: string, args: string, current: SymccMode =
     case 'mode':
       return parseModeCommand(s, current, name)
     case 'settings': {
-      const def = (id ?? '').toLowerCase()
-      if (def === 'role' || def === 'kind') {
+      const defWord = (id ?? '').toLowerCase()
+      if (defWord === 'role' || defWord === 'type') {
+        const def: 'role' | 'kind' = defWord === 'type' ? 'kind' : 'role'
         const action = (words[2] ?? '').toLowerCase()
         if (words.length === 3 && DEF_ACTIONS.includes(action as DefAction)) return { kind: 'def', def, name: words[1]!, action: action as DefAction }
         if (words.length === 3 && action === 'add') return { kind: 'def-add', def, name: words[1]! }
@@ -216,13 +217,13 @@ export function parseCommand(command: string, args: string, current: SymccMode =
         if (words.length >= 4 && action === 'edit' && defEditFields(def).includes(field)) {
           // the value is the rest of the text as typed (a checklist keeps its lines)
           const value = s.replace(/^\S+\s+\S+\s+\S+\s+\S+\s*/, '').trim()
-          if (field === 'description' && !value) return use(`/${name}-settings ${def} ${words[1]} edit description <a few words>`)
+          if (field === 'description' && !value) return use(`/${name}-settings ${defWord} ${words[1]} edit description <a few words>`)
           return { kind: 'def-edit', def, name: words[1]!, field, value: CLEARED_BY_NONE.includes(field) && value.toLowerCase() === 'none' ? '' : value }
         }
         return use(defUsage(def, name))
       }
-      if (def === 'git') return words.length === 2 && words[1]!.toLowerCase() === 'check' ? { kind: 'check-git' } : words.length === 2 && words[1]!.toLowerCase() === 'setup' ? { kind: 'setup-git' } : use(`/${name}-settings git setup (git init on main if there is no repo, a .gitignore and a first commit; never pushes), or /${name}-settings git check (look at git again)`)
-      if (def === 'orgmem') {
+      if (defWord === 'git') return words.length === 2 && words[1]!.toLowerCase() === 'check' ? { kind: 'check-git' } : words.length === 2 && words[1]!.toLowerCase() === 'setup' ? { kind: 'setup-git' } : use(`/${name}-settings git setup (git init on main if there is no repo, a .gitignore and a first commit; never pushes), or /${name}-settings git check (look at git again)`)
+      if (defWord === 'orgmem') {
         const n = Number(words[2])
         const key = words[3]
         const ok = (words.length === 3 || (words.length === 4 && /^[0-9a-f]{6}$/i.test(key ?? ''))) && (words[1] ?? '').toLowerCase() === 'delete' && Number.isInteger(n) && n > 0
